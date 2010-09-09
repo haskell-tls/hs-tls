@@ -1,0 +1,71 @@
+Name:                tls
+Version:             0.1
+Description:
+   Implementation of the TLS protocol, focusing on purity and more type-checking.
+   .
+   Currently implement only partially the TLS1.0 protocol. Not yet properly secure.
+   Do not yet use as replacement to more mature implementation.
+License:             BSD3
+License-file:        LICENSE
+Copyright:           Vincent Hanquez <vincent@snarc.org>
+Author:              Vincent Hanquez <vincent@snarc.org>
+Maintainer:          Vincent Hanquez <vincent@snarc.org>
+Synopsis:            TLS protocol for Server and Client sides
+Build-Type:          Simple
+Category:            Network
+stability:           experimental
+Cabal-Version:       >=1.6
+data-files:          README, TODO
+
+Flag test
+  Description:       Build unit test
+  Default:           False
+
+Flag executable
+  Description:       Build the executable
+  Default:           False
+
+Library
+  Build-Depends:     base >= 3 && < 5,
+                     mtl,
+                     cryptohash,
+                     binary >= 0.5,
+                     bytestring,
+                     vector,
+                     AES, RSA, spoon,
+                     cryptocipher,
+                     certificate >= 0.2
+  Exposed-modules:   Network.TLS.Client
+                     Network.TLS.Server
+                     Network.TLS.Struct
+  other-modules:     Network.TLS.Cipher
+                     Network.TLS.Compression
+                     Network.TLS.Crypto
+                     Network.TLS.MAC
+                     Network.TLS.Packet
+                     Network.TLS.State
+                     Network.TLS.Sending
+                     Network.TLS.Receiving
+                     Network.TLS.SRandom
+                     Network.TLS.Wire
+  ghc-options:       -Wall
+
+Executable           stunnel
+  Main-is:           Stunnel.hs
+  if flag(executable)
+    Build-Depends:   network, haskell98, RSA
+    Buildable:       True
+  else
+    Buildable:       False
+
+executable           Tests
+  Main-is:           Tests.hs
+  if flag(test)
+    Buildable:       True
+    Build-Depends:   base >= 3 && < 5, HUnit, QuickCheck, bytestring, haskell98
+  else
+    Buildable:       False
+
+source-repository head
+  type: git
+  location: git://github.com/vincenthz/hs-tls

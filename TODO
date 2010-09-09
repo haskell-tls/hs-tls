@@ -1,0 +1,44 @@
+protocol:
+
+- finish implementing renegocitiation Client and Server
+- implement Certificate Verify / Certificate Request
+- add Client Certificates
+- add check for non-self signed certificate
+- alert correctly on errors
+- process session as they should
+- put 4 bytes of time in client/server random
+- implement compression
+- proper separation for key exchange algorithm (hardcoded to RSA at the moment in differents place)
+- implements different key exchange algorithm
+
+tls v1.2:
+
+- finish implementation of extensions
+- implement finish digest generation with hmac256
+- implement finish digest generation with client/server negociated algorithm
+- proper version dispatch in marshalling packets
+- properly separate different version of the protocol
+- implement AEAD
+
+code cleanup:
+
+- remove show derivation on internal crypto state
+- opaquify differents data type through newtype
+
+security audit:
+
+- add unit tests for pure parts
+- fix SRandomGen and random usage with proper CPRNG
+- match security recommendation from the RFC
+- audit the RSA implementation and the usage in TLS (remove spoon).
+
+misc:
+
+- verify it works with gnutls
+- stunnel: use crypto secure random generator
+- stunnel: actually make it works like stunnel instead of hardcoding the data and the port.
+- investigate an iteratee interface
+- portability
+- implement more ciphers
+- check & optimize memory footprint
+- compare & optimize performance
