@@ -32,6 +32,7 @@ Library
                      binary >= 0.5,
                      bytestring,
                      vector,
+                     haskell98,
                      AES, RSA, spoon,
                      cryptocipher,
                      certificate >= 0.2
