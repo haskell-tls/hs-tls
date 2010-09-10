@@ -62,7 +62,7 @@ executable           Tests
   Main-is:           Tests.hs
   if flag(test)
     Buildable:       True
-    Build-Depends:   base >= 3 && < 5, HUnit, QuickCheck, bytestring, haskell98
+    Build-Depends:   base >= 3 && < 5, HUnit, QuickCheck >= 2 && < 2.3, bytestring, haskell98
   else
     Buildable:       False
 
