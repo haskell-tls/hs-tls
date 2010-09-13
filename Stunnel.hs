@@ -55,7 +55,7 @@ mainClient host port = do
 	ranByte <- fmap B.head $ AESRand.randBytes 1
 	_ <- AESRand.randBytes (fromIntegral ranByte)
 	clientRandom <- fmap (fromJust . clientRandom . B.unpack) $ AESRand.randBytes 32
-	premasterRandom <- fmap B.unpack $ AESRand.randBytes 46
+	premasterRandom <- (ClientKeyData . B.unpack) `fmap` AESRand.randBytes 46
 	seqInit <- fmap (conv . B.unpack) $ AESRand.randBytes 4
 
 	handle <- connectTo host (PortNumber 6061)
