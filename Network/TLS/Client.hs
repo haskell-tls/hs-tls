@@ -127,7 +127,7 @@ connectSendClientCertificate handle = do
 		clientCert <- fmap (cpCertificate . scParams) get
 		sendPacket handle $ Handshake (Certificates $ maybe [] (:[]) clientCert)
 
-connectSendClientKeyXchg :: Handle -> [Word8] -> TLSClient IO ()
+connectSendClientKeyXchg :: Handle -> ClientKeyData -> TLSClient IO ()
 connectSendClientKeyXchg handle prerand = do
 	ver <- fmap (cpConnectVersion . scParams) get
 	sendPacket handle $ Handshake (ClientKeyXchg ver prerand)
@@ -138,7 +138,7 @@ connectSendFinish handle = do
 	sendPacket handle (Handshake $ Finished $ L.unpack cf)
 
 {- | connect through a handle as a new TLS connection. -}
-connect :: Handle -> ClientRandom -> [Word8] -> TLSClient IO ()
+connect :: Handle -> ClientRandom -> ClientKeyData -> TLSClient IO ()
 connect handle crand premasterRandom = do
 	connectSendClientHello handle crand
 	recvServerHello handle
@@ -194,7 +194,7 @@ recvData handle = do
 			let (premaster, rng'') = getRandomBytes rng' 46
 			putTLSState $ st { stRandomGen = rng'' }
 			let crand = fromJust $ clientRandom bytes
-			connect handle crand premaster
+			connect handle crand (ClientKeyData premaster)
 			recvData handle
 		Left err          -> error ("error received: " ++ show err)
 		_                 -> error "unexpected item"

@@ -194,7 +194,7 @@ decodeCertVerify =
 decodeClientKeyXchg :: Get Handshake
 decodeClientKeyXchg = do
 	ver <- getVersion
-	ran <- getRandom46
+	ran <- getClientKeyData46
 	return $ ClientKeyXchg ver ran
 
 -- FIXME need to work out how we marshall an opaque number
@@ -260,7 +260,7 @@ encodeHandshakeContent (Certificates certs) =
 
 encodeHandshakeContent (ClientKeyXchg version random) = do
 	putVersion version
-	putRandom46 random
+	putClientKeyData46 random
 
 encodeHandshakeContent (ServerKeyXchg _) = do
 	-- FIXME
@@ -312,11 +312,11 @@ putClientRandom32 (ClientRandom r) = putRandom32 r
 putServerRandom32 :: ServerRandom -> Put
 putServerRandom32 (ServerRandom r) = putRandom32 r
 
-getRandom46 :: Get [Word8]
-getRandom46 = fmap B.unpack $ getBytes 46
+getClientKeyData46 :: Get ClientKeyData
+getClientKeyData46 = (ClientKeyData . B.unpack) `fmap` getBytes 46
 
-putRandom46 :: [Word8] -> Put
-putRandom46 = mapM_ putWord8
+putClientKeyData46 :: ClientKeyData -> Put
+putClientKeyData46 (ClientKeyData d) = mapM_ putWord8 d
 
 getSession :: Get Session
 getSession = do

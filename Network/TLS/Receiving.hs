@@ -109,7 +109,7 @@ processHsPacket ver dcontent = do
 			return econtent
 	hs <- case (ty, decodeHandshake ver ty content) of
 		(_, Right x)                            -> return x
-		(HandshakeType_ClientKeyXchg, Left _)   -> return $ ClientKeyXchg SSL2 []
+		(HandshakeType_ClientKeyXchg, Left _)   -> return $ ClientKeyXchg SSL2 (ClientKeyData $ replicate 0xff 46)
 		(_, Left err)                           -> throwError err
 	clientmode <- isClientContext
 	case hs of
