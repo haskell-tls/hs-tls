@@ -45,6 +45,9 @@ instance Arbitrary ClientRandom where
 instance Arbitrary ServerRandom where
 	arbitrary = ServerRandom `fmap` someWords8 32
 
+instance Arbitrary ClientKeyData where
+	arbitrary = ClientKeyData `fmap` someWords8 46
+
 instance Arbitrary Session where
 	arbitrary = do
 		i <- choose (1,2) :: Gen Int
@@ -58,12 +61,25 @@ arbitraryCiphersIDs = choose (0,200) >>= someWords16
 arbitraryCompressionIDs :: Gen [Word8]
 arbitraryCompressionIDs = choose (0,200) >>= someWords8
 
+instance Arbitrary CertificateType where
+	arbitrary = elements
+		[ CertificateType_RSA_Sign, CertificateType_DSS_Sign
+		, CertificateType_RSA_Fixed_DH, CertificateType_DSS_Fixed_DH
+		, CertificateType_RSA_Ephemeral_dh, CertificateType_DSS_Ephemeral_dh
+		, CertificateType_fortezza_dms ]
+
 instance Arbitrary Handshake where
 	arbitrary = oneof
 		[ liftM6 ClientHello arbitrary arbitrary arbitrary arbitraryCiphersIDs arbitraryCompressionIDs (return Nothing)
 		, liftM6 ServerHello arbitrary arbitrary arbitrary arbitrary arbitrary (return Nothing)
+		, return (Certificates [])
 		, return HelloRequest
 		, return ServerHelloDone
+		, liftM2 ClientKeyXchg arbitrary arbitrary
+		--, liftM  ServerKeyXchg
+		--, liftM3 CertRequest arbitrary (return Nothing) (return [])
+		--, liftM CertVerify (return [])
+		, liftM Finished (someWords8 12)
 		]
 
 {- quickcheck property -}
