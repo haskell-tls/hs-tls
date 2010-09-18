@@ -118,7 +118,7 @@ processHsPacket ver dcontent = do
 		ServerHello sver ran _ _ _ _ -> when clientmode $ do
 			setServerRandom ran
 			setVersion sver
-		Certificates [cert]          -> when clientmode $ do processCertificate cert
+		Certificates certs           -> when clientmode $ do processCertificates certs
 		ClientKeyXchg cver _         -> unless clientmode $ do
 			processClientKeyXchg cver content
 		Finished fdata               -> processClientFinished fdata
@@ -185,9 +185,9 @@ decryptData (EncryptedData econtent) = do
 			else contentpadded
 	return content
 
-processCertificate :: Certificate -> TLSRead ()
-processCertificate cert = do
-	case certPubKey cert of
+processCertificates :: [Certificate] -> TLSRead ()
+processCertificates certs = do
+	case certPubKey $ head certs of
 		PubKey _ (PubKeyRSA (lm, m, e)) -> do
 			let pk = PublicKey { public_size = fromIntegral lm, public_n = m, public_e = e }
 			setPublicKey pk
