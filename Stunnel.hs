@@ -58,7 +58,7 @@ mainClient host port = do
 	premasterRandom <- (ClientKeyData . B.unpack) `fmap` AESRand.randBytes 46
 	seqInit <- fmap (conv . B.unpack) $ AESRand.randBytes 4
 
-	handle <- connectTo host (PortNumber 6061)
+	handle <- connectTo host (PortNumber $ fromIntegral port)
 	hSetBuffering handle NoBuffering
 
 	let clientstate = C.TLSClientParams
