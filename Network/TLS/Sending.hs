@@ -97,7 +97,7 @@ encryptRSA content = do
 	let g = stRandomGen st
 	let rsakey = fromJust $ hstRSAPublicKey $ fromJust $ stHandshake st
 	case rsaEncrypt g rsakey content of
-		Nothing             -> return L.empty
+		Nothing             -> fail "no RSA key selected"
 		Just (econtent, g') -> do
 			putTLSState (st { stRandomGen = g' })
 			return econtent
