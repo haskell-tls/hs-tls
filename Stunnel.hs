@@ -1,29 +1,35 @@
 import Network
 import System.IO
 import System
+
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
 
 import Control.Applicative ((<$>))
+import Control.Concurrent (forkIO)
 import Control.Exception (bracket)
-import Network.TLS.Cipher
-import qualified Network.TLS.Client as C
-import qualified Network.TLS.Server as S
-import Network.TLS.SRandom
-import Network.TLS.Struct
-import Network.TLS.MAC
+import Control.Monad (forM_, when, replicateM)
+import Control.Monad.Trans (lift)
+
 import Data.Word
 import Data.Bits
 import Data.Maybe
-import Control.Monad (forM_, when, replicateM)
-import Control.Monad.Trans (lift)
-import Random
-import qualified Codec.Crypto.AES.Random as AESRand
-import Control.Concurrent (forkIO)
+
 import Data.Certificate.PEM
 import Data.Certificate.X509
 import Data.Certificate.Key
+
+import Network.TLS.Cipher
+import Network.TLS.SRandom
+import Network.TLS.Struct
+import Network.TLS.MAC
+
+import qualified Network.TLS.Client as C
+import qualified Network.TLS.Server as S
+
+import Random
+import qualified Codec.Crypto.AES.Random as AESRand
 
 ciphers :: [Cipher]
 ciphers =
