@@ -27,6 +27,7 @@ module Network.TLS.Client
 
 import Data.Maybe
 import Data.Word
+import Control.Applicative ((<$>))
 import Control.Monad.Trans
 import Control.Monad.State
 import Data.Certificate.X509
@@ -101,9 +102,9 @@ sendPacket handle pkt = do
 
 recvServerHello :: Handle -> TLSClient IO ()
 recvServerHello handle = do
-	ciphers <- fmap (cpCiphers . scParams) get
-	allowedvers <- fmap (cpAllowedVersions . scParams) get
-	callbacks <- fmap (cpCallbacks . scParams) get
+	ciphers <- cpCiphers . scParams <$> get
+	allowedvers <- cpAllowedVersions . scParams <$> get
+	callbacks <- cpCallbacks . scParams <$> get
 	pkt <- recvPacket handle
 	let hs = case pkt of
 		Right (Handshake h) -> h
@@ -129,20 +130,20 @@ recvServerHello handle = do
 
 connectSendClientHello :: Handle -> ClientRandom -> TLSClient IO ()
 connectSendClientHello handle crand = do
-	ver <- fmap (cpConnectVersion . scParams) get
-	ciphers <- fmap (cpCiphers . scParams) get
+	ver <- cpConnectVersion . scParams <$> get
+	ciphers <- cpCiphers . scParams <$> get
 	sendPacket handle $ Handshake (ClientHello ver crand (Session Nothing) (map cipherID ciphers) [ 0 ] Nothing)
 
 connectSendClientCertificate :: Handle -> TLSClient IO ()
 connectSendClientCertificate handle = do
-	certRequested <- fmap scCertRequested get
+	certRequested <- scCertRequested <$> get
 	when certRequested $ do
-		clientCert <- fmap (cpCertificate . scParams) get
+		clientCert <- cpCertificate . scParams <$> get
 		sendPacket handle $ Handshake (Certificates $ maybe [] (:[]) clientCert)
 
 connectSendClientKeyXchg :: Handle -> ClientKeyData -> TLSClient IO ()
 connectSendClientKeyXchg handle prerand = do
-	ver <- fmap (cpConnectVersion . scParams) get
+	ver <- cpConnectVersion . scParams <$> get
 	sendPacket handle $ Handshake (ClientKeyXchg ver prerand)
 
 connectSendFinish :: Handle -> TLSClient IO ()

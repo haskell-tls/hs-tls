@@ -40,6 +40,7 @@ import Data.Word
 import Network.TLS.Wire
 import Data.Either (partitionEithers)
 import Data.Maybe (fromJust, isNothing)
+import Control.Applicative ((<$>))
 import Control.Monad
 import Control.Monad.Error
 import Network.TLS.Struct
@@ -167,19 +168,19 @@ decodeFinished ver = do
 getSignatureHashAlgorithm :: Int -> Get [ (HashAlgorithm, SignatureAlgorithm) ]
 getSignatureHashAlgorithm 0   = return []
 getSignatureHashAlgorithm len = do
-	h <- fmap (fromJust . valToType) getWord8
-	s <- fmap (fromJust . valToType) getWord8
+	h <- fromJust . valToType <$> getWord8
+	s <- fromJust . valToType <$> getWord8
 	xs <- getSignatureHashAlgorithm (len - 2)
 	return ((h, s) : xs)
 
 decodeCertRequest :: Version -> Get Handshake
 decodeCertRequest ver = do
-	certTypes <- fmap (map (fromJust . valToType . fromIntegral)) getWords8
+	certTypes <- map (fromJust . valToType . fromIntegral) <$> getWords8
 
 	sigHashAlgs <- if ver >= TLS12
 		then do
 			sighashlen <- getWord16
-			fmap Just $ getSignatureHashAlgorithm $ fromIntegral sighashlen
+			Just <$> getSignatureHashAlgorithm (fromIntegral sighashlen)
 		else return Nothing
 	dNameLen <- getWord16
 	when (ver < TLS12 && dNameLen < 3) $ throwError (Error_Misc "certrequest distinguishname not of the correct size")
@@ -295,13 +296,13 @@ putVersion ver = putWord8 major >> putWord8 minor
 
 {- FIXME make sure it return error if not 32 available -}
 getRandom32 :: Get [Word8]
-getRandom32 = fmap B.unpack $ getBytes 32
+getRandom32 = B.unpack <$> getBytes 32
 
 getServerRandom32 :: Get ServerRandom
-getServerRandom32 = fmap ServerRandom getRandom32
+getServerRandom32 = ServerRandom <$> getRandom32
 
 getClientRandom32 :: Get ClientRandom
-getClientRandom32 = fmap ClientRandom getRandom32
+getClientRandom32 = ClientRandom <$> getRandom32
 
 putRandom32 :: [Word8] -> Put
 putRandom32 = mapM_ putWord8
@@ -313,7 +314,7 @@ putServerRandom32 :: ServerRandom -> Put
 putServerRandom32 (ServerRandom r) = putRandom32 r
 
 getClientKeyData46 :: Get ClientKeyData
-getClientKeyData46 = (ClientKeyData . B.unpack) `fmap` getBytes 46
+getClientKeyData46 = ClientKeyData . B.unpack <$> getBytes 46
 
 putClientKeyData46 :: ClientKeyData -> Put
 putClientKeyData46 (ClientKeyData d) = mapM_ putWord8 d
@@ -323,7 +324,7 @@ getSession = do
 	len8 <- getWord8
 	case fromIntegral len8 of
 		0   -> return $ Session Nothing
-		len -> fmap (Session . Just . B.unpack) $ getBytes len
+		len -> Session . Just . B.unpack <$> getBytes len
 
 putSession :: Session -> Put
 putSession (Session session) =

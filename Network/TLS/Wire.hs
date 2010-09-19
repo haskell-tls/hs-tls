@@ -39,6 +39,7 @@ import qualified Data.Binary.Get as Bin
 import Data.Binary.Put
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as L
+import Control.Applicative ((<$>))
 import Control.Monad.Error
 import Data.Word
 import Data.Bits
@@ -61,10 +62,10 @@ runGet :: Get a -> L.ByteString -> Either TLSError a
 runGet f b = Bin.runGet (runErrorT (runGE f)) b
 
 remaining :: Get Int
-remaining = fmap fromIntegral $ liftGet Bin.remaining
+remaining = fromIntegral <$> liftGet Bin.remaining
 
 bytesRead :: Get Int
-bytesRead = fmap fromIntegral $ liftGet Bin.bytesRead
+bytesRead = fromIntegral <$> liftGet Bin.bytesRead
 
 getWord8 :: Get Word8
 getWord8 = liftGet Bin.getWord8
@@ -80,9 +81,9 @@ getWords16 = getWord16 >>= \lenb -> replicateM (fromIntegral lenb `div` 2) getWo
 
 getWord24 :: Get Int
 getWord24 = do
-	a <- fmap fromIntegral getWord8
-	b <- fmap fromIntegral getWord8
-	c <- fmap fromIntegral getWord8
+	a <- fromIntegral <$> getWord8
+	b <- fromIntegral <$> getWord8
+	c <- fromIntegral <$> getWord8
 	return $ (a `shiftL` 16) .|. (b `shiftL` 8) .|. c
 
 getBytes :: Int -> Get ByteString

@@ -5,6 +5,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
 
+import Control.Applicative ((<$>))
 import Control.Exception (bracket)
 import Network.TLS.Cipher
 import qualified Network.TLS.Client as C
@@ -52,11 +53,11 @@ tlsclient handle crand prerand = do
 mainClient :: String -> Int -> IO ()
 mainClient host port = do
 	{- generate some random stuff ready to be used after skipping some byte for no particular reason -}
-	ranByte <- fmap B.head $ AESRand.randBytes 1
+	ranByte <- B.head <$> AESRand.randBytes 1
 	_ <- AESRand.randBytes (fromIntegral ranByte)
-	clientRandom <- fmap (fromJust . clientRandom . B.unpack) $ AESRand.randBytes 32
-	premasterRandom <- (ClientKeyData . B.unpack) `fmap` AESRand.randBytes 46
-	seqInit <- fmap (conv . B.unpack) $ AESRand.randBytes 4
+	clientRandom <- fromJust . clientRandom . B.unpack <$> AESRand.randBytes 32
+	premasterRandom <- (ClientKeyData . B.unpack) <$> AESRand.randBytes 46
+	seqInit <- conv . B.unpack <$> AESRand.randBytes 4
 
 	handle <- connectTo host (PortNumber $ fromIntegral port)
 	hSetBuffering handle NoBuffering
@@ -83,8 +84,8 @@ tlsserver handle srand = do
 	lift $ putStrLn "end"
 
 clientProcess ((certdata, cert), pk) (handle, src) = do
-	serverRandom <- fmap (fromJust . serverRandom . B.unpack) $ AESRand.randBytes 32
-	seqInit <- fmap (conv . B.unpack) $ AESRand.randBytes 4
+	serverRandom <- fromJust . serverRandom . B.unpack <$> AESRand.randBytes 32
+	seqInit <- conv . B.unpack <$> AESRand.randBytes 4
 
 	let serverstate = S.TLSServerParams
 		{ S.spAllowedVersions = [TLS10]

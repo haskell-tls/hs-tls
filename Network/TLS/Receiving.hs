@@ -14,6 +14,7 @@ module Network.TLS.Receiving (
 	readPacket
 	) where
 
+import Control.Applicative ((<$>))
 import Control.Monad.State
 import Control.Monad.Error
 import Data.Maybe
@@ -53,7 +54,7 @@ returnEither (Right a)  = return a
 
 readPacket :: MonadTLSState m => Header -> EncryptedData -> m (Either TLSError Packet)
 readPacket hdr@(Header ProtocolType_AppData _ _) content =
-	runTLSRead (fmap AppData $ decryptContent hdr content)
+	runTLSRead (AppData <$> decryptContent hdr content)
 
 readPacket hdr@(Header ProtocolType_Alert _ _)   content =
 	runTLSRead (decryptContent hdr content >>= returnEither . decodeAlert >>= return . Alert)
