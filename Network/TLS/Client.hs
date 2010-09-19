@@ -12,6 +12,7 @@
 --
 module Network.TLS.Client
 	( TLSClientParams(..)
+	, TLSClientCallbacks(..)
 	, TLSStateClient
 	, runTLSClient
 	-- * low level packet sending receiving.
@@ -39,6 +40,13 @@ import Network.TLS.SRandom
 import qualified Data.ByteString.Lazy as L
 import System.IO (Handle, hFlush)
 import Data.List (find)
+
+data TLSClientCallbacks = TLSClientCallbacks
+	{ cbCertificates :: Maybe ([Certificate] -> IO Bool) -- ^ optional callback to verify certificates
+	}
+
+instance Show TLSClientCallbacks where
+	show _ = "[callbacks]"
 
 data TLSClientParams = TLSClientParams
 	{ cpConnectVersion  :: Version           -- ^ client version we're sending by default
