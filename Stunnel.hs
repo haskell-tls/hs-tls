@@ -67,6 +67,9 @@ mainClient host port = do
 		, C.cpSession = Nothing
 		, C.cpCiphers = ciphers
 		, C.cpCertificate = Nothing
+		, C.cpCallbacks = C.TLSClientCallbacks
+			{ C.cbCertificates = Nothing
+			}
 		}
 	C.runTLSClient (tlsclient handle clientRandom premasterRandom) clientstate (makeSRandomGen seqInit)
 

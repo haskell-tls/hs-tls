@@ -49,11 +49,12 @@ instance Show TLSClientCallbacks where
 	show _ = "[callbacks]"
 
 data TLSClientParams = TLSClientParams
-	{ cpConnectVersion  :: Version           -- ^ client version we're sending by default
-	, cpAllowedVersions :: [Version]         -- ^ allowed versions from the server
-	, cpSession         :: Maybe [Word8]     -- ^ session for this connection
-	, cpCiphers         :: [Cipher]          -- ^ all ciphers for this connection
-	, cpCertificate     :: Maybe Certificate -- ^ an optional client certificate
+	{ cpConnectVersion  :: Version            -- ^ client version we're sending by default
+	, cpAllowedVersions :: [Version]          -- ^ allowed versions from the server
+	, cpSession         :: Maybe [Word8]      -- ^ session for this connection
+	, cpCiphers         :: [Cipher]           -- ^ all ciphers for this connection
+	, cpCertificate     :: Maybe Certificate  -- ^ an optional client certificate
+	, cpCallbacks       :: TLSClientCallbacks -- ^ user callbacks
 	} deriving (Show)
 
 data TLSStateClient = TLSStateClient
@@ -102,6 +103,7 @@ recvServerHello :: Handle -> TLSClient IO ()
 recvServerHello handle = do
 	ciphers <- fmap (cpCiphers . scParams) get
 	allowedvers <- fmap (cpAllowedVersions . scParams) get
+	callbacks <- fmap (cpCallbacks . scParams) get
 	pkt <- recvPacket handle
 	let hs = case pkt of
 		Right (Handshake h) -> h
@@ -117,10 +119,13 @@ recvServerHello handle = do
 				Nothing -> error "no cipher in common with the server"
 				Just c  -> setCipher c
 			recvServerHello handle
-		CertRequest _ _ _ -> modify (\sc -> sc { scCertRequested = True }) >> recvServerHello handle
-		Certificates _    -> recvServerHello handle
-		ServerHelloDone   -> return ()
-		_                 -> error "unexpected handshake message received in server hello messages"
+		CertRequest _ _ _  -> modify (\sc -> sc { scCertRequested = True }) >> recvServerHello handle
+		Certificates certs -> do
+			valid <- lift $ maybe (return True) (\cb -> cb certs) (cbCertificates callbacks)
+			unless valid $ error "certificates received deemed invalid by user"
+			recvServerHello handle
+		ServerHelloDone    -> return ()
+		_                  -> error "unexpected handshake message received in server hello messages"
 
 connectSendClientHello :: Handle -> ClientRandom -> TLSClient IO ()
 connectSendClientHello handle crand = do
