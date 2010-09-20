@@ -99,6 +99,8 @@ clientProcess ((certdata, cert), pk) (handle, src) = do
 		, S.spCiphers = ciphers
 		, S.spCertificate = Just (certdata, cert, pk)
 		, S.spWantClientCert = False
+		, S.spCallbacks = S.TLSServerCallbacks
+			{ S.cbCertificates = Nothing }
 		}
 
 	S.runTLSServer (tlsserver handle serverRandom) serverstate (makeSRandomGen seqInit)

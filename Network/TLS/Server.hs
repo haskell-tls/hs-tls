@@ -12,6 +12,7 @@
 
 module Network.TLS.Server
 	( TLSServerParams(..)
+	, TLSServerCallbacks(..)
 	, TLSStateServer
 	, runTLSServer
 	-- * low level packet sending receiving.
@@ -44,12 +45,20 @@ import System.IO (Handle, hFlush)
 
 type TLSServerCert = (L.ByteString, Certificate, CertificateKey.PrivateKey)
 
+data TLSServerCallbacks = TLSServerCallbacks
+	{ cbCertificates :: Maybe ([Certificate] -> IO Bool) -- ^ optional callback to verify certificates
+	}
+
+instance Show TLSServerCallbacks where
+	show _ = "[callbacks]"
+
 data TLSServerParams = TLSServerParams
 	{ spAllowedVersions :: [Version]           -- ^ allowed versions that we can use
 	, spSessions        :: [[Word8]]           -- ^ placeholder for futur known sessions
 	, spCiphers         :: [Cipher]            -- ^ all ciphers that the server side support
 	, spCertificate     :: Maybe TLSServerCert -- ^ the certificate we serve to the client
 	, spWantClientCert  :: Bool                -- ^ configure if we do a cert request to the client
+	, spCallbacks       :: TLSServerCallbacks  -- ^ user callbacks
 	}
 
 data TLSStateServer = TLSStateServer
