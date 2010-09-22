@@ -39,15 +39,15 @@ Library
   Exposed-modules:   Network.TLS.Client
                      Network.TLS.Server
                      Network.TLS.Struct
-  other-modules:     Network.TLS.Cipher
-                     Network.TLS.Compression
-                     Network.TLS.Crypto
+                     Network.TLS.Cipher
+                     Network.TLS.SRandom
                      Network.TLS.MAC
+  other-modules:     Network.TLS.Compression
+                     Network.TLS.Crypto
                      Network.TLS.Packet
                      Network.TLS.State
                      Network.TLS.Sending
                      Network.TLS.Receiving
-                     Network.TLS.SRandom
                      Network.TLS.Wire
   ghc-options:       -Wall
 

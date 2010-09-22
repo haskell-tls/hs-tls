@@ -14,6 +14,7 @@ module Network.TLS.Client
 	( TLSClientParams(..)
 	, TLSClientCallbacks(..)
 	, TLSStateClient
+	, TLSClient (..)
 	, runTLSClient
 	-- * low level packet sending receiving.
 	, recvPacket
