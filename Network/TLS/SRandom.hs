@@ -7,7 +7,7 @@ module Network.TLS.SRandom
 	, getRandomBytes
 	) where
 
-import Random
+import System.Random
 import Control.Arrow (first)
 import Data.Word
 

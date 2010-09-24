@@ -32,7 +32,7 @@ import Data.ByteString.Lazy (ByteString)
 import Codec.Crypto.RSA (PublicKey(..), PrivateKey(..))
 import qualified Codec.Crypto.RSA as RSA
 import Control.Spoon
-import Random
+import System.Random
 
 data HashCtx =
 	  SHA1 !SHA1.Ctx

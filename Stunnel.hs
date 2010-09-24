@@ -28,7 +28,7 @@ import Network.TLS.MAC
 import qualified Network.TLS.Client as C
 import qualified Network.TLS.Server as S
 
-import Random
+import System.Random
 import qualified Codec.Crypto.AES.Random as AESRand
 
 ciphers :: [Cipher]
