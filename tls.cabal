@@ -15,6 +15,7 @@ Build-Type:          Simple
 Category:            Network
 stability:           experimental
 Cabal-Version:       >=1.6
+Homepage:            http://github.com/vincenthz/hs-tls
 data-files:          README, TODO
 
 Flag test
