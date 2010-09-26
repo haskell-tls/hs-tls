@@ -263,7 +263,7 @@ getHandshakeDigest client = do
 	let hst = fromJust $ stHandshake st
 	let (sha1ctx, md5ctx) = fromJust $ hstHandshakeDigest hst
 	let msecret = fromJust $ hstMasterSecret hst
-	return $ (if client then generateClientFinished else generateServerFinished) msecret md5ctx sha1ctx
+	return $ (if client then generateClientFinished else generateServerFinished) (stVersion st) msecret md5ctx sha1ctx
 
 endHandshake :: MonadTLSState m => m ()
 endHandshake = modifyTLSState (\st -> st { stHandshake = Nothing })

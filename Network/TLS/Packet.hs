@@ -164,7 +164,8 @@ decodeFinished ver = do
 	-- so just return the remaining string.
 	len <- if ver >= TLS12
 		then remaining
-		else return 12
+		else if ver == SSL3 then return 36
+			else return 12
 	opaque <- getBytes (fromIntegral len)
 	return $ Finished $ B.unpack opaque
 
@@ -406,14 +407,26 @@ generateKeyBlock (ClientRandom c) (ServerRandom s) mastersecret kbsize =
 	where
 		seed = B.concat [ BC.pack "key expansion", s, c ]
 
-generateFinished :: Bytes -> Bytes -> HashCtx -> HashCtx -> Bytes
-generateFinished label mastersecret md5ctx sha1ctx =
+generateFinished_TLS :: Bytes -> Bytes -> HashCtx -> HashCtx -> Bytes
+generateFinished_TLS label mastersecret md5ctx sha1ctx =
 	prf_MD5SHA1 mastersecret seed 12
 	where
 		seed = B.concat [ label, finalizeHash md5ctx, finalizeHash sha1ctx ]
 
-generateClientFinished :: Bytes -> HashCtx -> HashCtx -> Bytes
-generateClientFinished = generateFinished (BC.pack "client finished")
+generateFinished_SSL :: Bytes -> Bytes -> HashCtx -> HashCtx -> Bytes
+generateFinished_SSL sender mastersecret md5ctx sha1ctx =
+	B.concat [md5hash, sha1hash]
+	where
+		md5hash = hashMD5 $ B.concat [ mastersecret, pad2, md5left ]
+		sha1hash = hashSHA1 $ B.concat [ mastersecret, pad2, sha1left ]
+		pad2 = B.empty -- FIXME
+		md5left = hashMD5 B.empty
+		sha1left = hashSHA1 B.empty
 
-generateServerFinished :: Bytes -> HashCtx -> HashCtx -> Bytes
-generateServerFinished = generateFinished (BC.pack "server finished")
+generateClientFinished :: Version -> Bytes -> HashCtx -> HashCtx -> Bytes
+generateClientFinished ver =
+	if ver < TLS10 then generateFinished_SSL "CLNT" else generateFinished_TLS (BC.pack "client finished")
+
+generateServerFinished :: Version -> Bytes -> HashCtx -> HashCtx -> Bytes
+generateServerFinished ver =
+	if ver < TLS10 then generateFinished_SSL "SRVR" else generateFinished_TLS (BC.pack "server finished")
