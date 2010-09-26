@@ -12,6 +12,7 @@ module Network.TLS.Struct
 	, Version(..)
 	, ConnectionEnd(..)
 	, CipherType(..)
+	, CipherData(..)
 	, Extension
 	, EncryptedData(..)
 	, CertificateType(..)
@@ -52,6 +53,13 @@ data Version = SSL2 | SSL3 | TLS10 | TLS11 | TLS12 deriving (Show, Eq, Ord)
 
 data ConnectionEnd = ConnectionServer | ConnectionClient
 data CipherType = CipherStream | CipherBlock | CipherAEAD
+
+data CipherData = CipherData
+	{ cipherDataContent :: Bytes
+	, cipherDataMAC     :: Maybe Bytes
+	, cipherDataPadding :: Maybe Bytes
+	} deriving (Show,Eq)
+
 data CertificateType =
 	  CertificateType_RSA_Sign         -- TLS10
 	| CertificateType_DSS_Sign         -- TLS10

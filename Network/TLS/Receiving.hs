@@ -129,31 +129,40 @@ processHsPacket ver dcontent = do
 	when (finishHandshakeTypeMaterial ty) (updateHandshakeDigest dcontent)
 	return $ Handshake hs
 
-decryptContentReally :: Header -> EncryptedData -> TLSRead ByteString
-decryptContentReally hdr e = do
-	st <- getTLSState
-	unencrypted_content <- decryptData e
-	let digestSize = cipherDigestSize $ fromJust $ stCipher st
-	let (unencrypted_msg, digest) = B.splitAt (B.length unencrypted_content - fromIntegral digestSize) unencrypted_content
-	let (Header pt ver _) = hdr
-	let new_hdr = Header pt ver (fromIntegral $ B.length unencrypted_msg)
-	expected_digest <- makeDigest False new_hdr unencrypted_msg
-
-	if expected_digest == digest
-		then return $ unencrypted_msg
-		else throwError $ Error_Digest (B.unpack expected_digest, B.unpack digest)
 
 decryptContent :: Header -> EncryptedData -> TLSRead ByteString
 decryptContent hdr e@(EncryptedData b) = do
 	st <- getTLSState
 	if stRxEncrypted st
-		then decryptContentReally hdr e
+		then decryptData e >>= getCipherData hdr
 		else return b
 
-verifyPadding :: Bytes -> Bool
-verifyPadding p = False
+getCipherData :: Header -> CipherData -> TLSRead ByteString
+getCipherData hdr cdata = do
+	-- check if the MAC is valid.
+	macValid <- case cipherDataMAC cdata of
+		Nothing     -> return True
+		Just digest -> do
+			let (Header pt ver _) = hdr
+			let new_hdr = Header pt ver (fromIntegral $ B.length $ cipherDataContent cdata)
+			expected_digest <- makeDigest False new_hdr $ cipherDataContent cdata
+			if expected_digest == digest
+				then return True
+				else return False
 
-decryptData :: EncryptedData -> TLSRead ByteString
+	-- check if the padding is filled with the correct pattern if it exists
+	paddingValid <- case cipherDataPadding cdata of
+		Nothing  -> return True
+		Just pad -> do
+			let b = B.length pad - 1
+			return $ maybe True (const False) $ B.find (/= fromIntegral b) pad
+
+	unless (and $! [ macValid, paddingValid ]) $ do
+		throwError $ Error_Digest ([], [])
+
+	return $ cipherDataContent cdata
+
+decryptData :: EncryptedData -> TLSRead CipherData
 decryptData (EncryptedData econtent) = do
 	st <- getTLSState
 
@@ -161,38 +170,44 @@ decryptData (EncryptedData econtent) = do
 		[ ("cipher", isNothing $ stCipher st)
 		, ("crypt state", isNothing $ stRxCryptState st) ]
 
-	let cipher = fromJust $ stCipher st
-	let cst = fromJust $ stRxCryptState st
+	let cipher       = fromJust $ stCipher st
+	let cst          = fromJust $ stRxCryptState st
 	let padding_size = fromIntegral $ cipherPaddingSize cipher
+	let digestSize   = fromIntegral $ cipherDigestSize cipher
+	let writekey     = cstKey cst
 
-	let writekey = cstKey cst
-
-	contentpadded <- case cipherF cipher of
+	case cipherF cipher of
 		CipherNoneF -> fail "none decrypt"
 		CipherBlockF _ decryptF -> do
 			{- update IV -}
 			let (iv, econtent') =
 				if hasExplicitBlockIV $ stVersion st
-					then
-						B.splitAt (fromIntegral $ cipherIVSize cipher) econtent
-					else
-						(cstIV cst, econtent)
+					then B.splitAt (fromIntegral $ cipherIVSize cipher) econtent
+					else (cstIV cst, econtent)
 			let newiv = fromJust $ takelast padding_size econtent'
 			putTLSState $ st { stRxCryptState = Just $ cst { cstIV = newiv } }
-			return $ decryptF writekey iv econtent'
+
+			let content' = decryptF writekey iv econtent'
+			let paddinglength = fromIntegral (B.last content') + 1
+			let contentlen = B.length content' - paddinglength - digestSize
+			let (content, mac, padding) = fromJust $ partition3 content' (contentlen, digestSize, paddinglength)
+			return $ CipherData
+				{ cipherDataContent = content
+				, cipherDataMAC     = Just mac
+				, cipherDataPadding = Just padding
+				}
 		CipherStreamF initF _ decryptF -> do
 			let iv = cstIV cst
-			let (content, newiv) = decryptF (if iv /= B.empty then iv else initF writekey) econtent
+			let (content', newiv) = decryptF (if iv /= B.empty then iv else initF writekey) econtent
 			{- update Ctx -}
+			let contentlen        = B.length content' - digestSize
+			let (content, mac, _) = fromJust $ partition3 content' (contentlen, digestSize, 0)
 			putTLSState $ st { stRxCryptState = Just $ cst { cstIV = newiv } }
-			return $ content
-	let content =
-		if cipherPaddingSize cipher > 0
-			then
-				let pb = B.last contentpadded + 1 in
-				fst $ B.splitAt ((B.length contentpadded) - fromIntegral pb) contentpadded
-			else contentpadded
-	return content
+			return $ CipherData
+				{ cipherDataContent = content
+				, cipherDataMAC     = Just mac
+				, cipherDataPadding = Nothing
+				}
 
 processCertificates :: [Certificate] -> TLSRead ()
 processCertificates certs = do
