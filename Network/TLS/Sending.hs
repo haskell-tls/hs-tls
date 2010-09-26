@@ -15,11 +15,9 @@ module Network.TLS.Sending (
 	) where
 
 import Control.Monad.State
---import Data.Binary.Put (runPut, putWord16be)
 import Data.Maybe
 
 import Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString as B
 
 import Network.TLS.Wire
@@ -110,8 +108,8 @@ encryptContent (hdr@(Header pt ver _), content) = do
 	let hdrnew = Header pt ver (fromIntegral $ B.length encrypted_msg)
 	return (hdrnew, encrypted_msg)
 
-takelast :: Int -> [a] -> [a]
-takelast i b = drop (length b - i) b
+takelast :: Int -> Bytes -> Bytes
+takelast i b = B.drop (B.length b - i) b
 
 encryptData :: MonadTLSState m => ByteString -> m ByteString
 encryptData content = do
@@ -140,7 +138,7 @@ encryptData content = do
 		CipherNoneF -> fail "none encrypt"
 		CipherBlockF encrypt _ -> do
 			let e = encrypt writekey iv (B.concat [ content, padding ])
-			let newiv = B.pack $ takelast (fromIntegral padding_size) $ B.unpack e
+			let newiv = takelast (fromIntegral padding_size) e
 			putTLSState $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
 			return e
 		CipherStreamF initF encryptF _ -> do

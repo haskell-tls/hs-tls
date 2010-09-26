@@ -148,8 +148,8 @@ decryptContent hdr e@(EncryptedData b) = do
 		then decryptContentReally hdr e
 		else return b
 
-takelast :: Int -> [a] -> [a]
-takelast i b = drop (length b - i) b
+takelast :: Int -> Bytes -> Bytes
+takelast i b = B.drop (B.length b - i) b
 
 decryptData :: EncryptedData -> TLSRead ByteString
 decryptData (EncryptedData econtent) = do
@@ -170,7 +170,7 @@ decryptData (EncryptedData econtent) = do
 		CipherNoneF -> fail "none decrypt"
 		CipherBlockF _ decryptF -> do
 			{- update IV -}
-			let newiv = B.pack $ takelast padding_size $ B.unpack econtent
+			let newiv = takelast padding_size econtent
 			putTLSState $ st { stRxCryptState = Just $ cst { cstIV = newiv } }
 			return $ decryptF writekey iv econtent
 		CipherStreamF initF _ decryptF -> do
