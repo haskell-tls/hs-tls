@@ -20,6 +20,11 @@ tls v1.2:
 - properly separate different version of the protocol
 - implement AEAD
 
+ssl3:
+
+- finish generation of stuff
+- test with popular server
+
 code cleanup:
 
 - remove show derivation on internal crypto state
@@ -27,7 +32,7 @@ code cleanup:
 
 security audit:
 
-- add unit tests for pure parts
+- add more unit tests for pure parts
 - fix SRandomGen and random usage with proper CPRNG
 - match security recommendation from the RFC
 - audit the RSA implementation and the usage in TLS (remove spoon).
@@ -35,7 +40,7 @@ security audit:
 misc:
 
 - stunnel: use crypto secure random generator
-- stunnel: actually make it works like stunnel instead of hardcoding the data and the port.
+- stunnel: actually make it works like stunnel instead of hardcoding the data received/sent
 - investigate an iteratee interface
 - portability
 - implement more ciphers
