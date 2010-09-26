@@ -23,6 +23,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString as B
 
+import Network.TLS.Util
 import Network.TLS.Cap
 import Network.TLS.Struct
 import Network.TLS.Packet
@@ -149,8 +150,8 @@ decryptContent hdr e@(EncryptedData b) = do
 		then decryptContentReally hdr e
 		else return b
 
-takelast :: Int -> Bytes -> Bytes
-takelast i b = B.drop (B.length b - i) b
+verifyPadding :: Bytes -> Bool
+verifyPadding p = False
 
 decryptData :: EncryptedData -> TLSRead ByteString
 decryptData (EncryptedData econtent) = do
@@ -176,7 +177,7 @@ decryptData (EncryptedData econtent) = do
 						B.splitAt (fromIntegral $ cipherIVSize cipher) econtent
 					else
 						(cstIV cst, econtent)
-			let newiv = takelast padding_size econtent'
+			let newiv = fromJust $ takelast padding_size econtent'
 			putTLSState $ st { stRxCryptState = Just $ cst { cstIV = newiv } }
 			return $ decryptF writekey iv econtent'
 		CipherStreamF initF _ decryptF -> do

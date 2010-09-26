@@ -37,6 +37,7 @@ module Network.TLS.State
 
 import Data.Word
 import Data.Maybe (fromJust, isNothing)
+import Network.TLS.Util
 import Network.TLS.Struct
 import Network.TLS.SRandom
 import Network.TLS.Wire
@@ -181,18 +182,15 @@ setKeyBlock = do
 	let cc = stClientContext st
 	let cipher = fromJust $ stCipher st
 	let keyblockSize = fromIntegral $ cipherKeyBlockSize cipher
-	let digestSize = cipherDigestSize cipher
-	let keySize = cipherKeySize cipher
-	let ivSize = cipherIVSize cipher
+	let digestSize = fromIntegral $ cipherDigestSize cipher
+	let keySize = fromIntegral $ cipherKeySize cipher
+	let ivSize = fromIntegral $ cipherIVSize cipher
 	let kb = generateKeyBlock (hstClientRandom hst)
 	                          (fromJust $ hstServerRandom hst)
 	                          (fromJust $ hstMasterSecret hst) keyblockSize
-	let (cMACSecret, r1) = B.splitAt (fromIntegral digestSize) kb
-	let (sMACSecret, r2) = B.splitAt (fromIntegral digestSize) r1
-	let (cWriteKey, r3)  = B.splitAt (fromIntegral keySize) r2
-	let (sWriteKey, r4)  = B.splitAt (fromIntegral keySize) r3
-	let (cWriteIV,  r5)  = B.splitAt (fromIntegral ivSize) r4
-	let (sWriteIV,  _)   = B.splitAt (fromIntegral ivSize) r5
+
+	let (cMACSecret, sMACSecret, cWriteKey, sWriteKey, cWriteIV, sWriteIV) =
+		fromJust $ partition6 kb (digestSize, digestSize, keySize, keySize, ivSize, ivSize)
 
 	let cstClient = TLSCryptState
 		{ cstKey        = cWriteKey

@@ -20,6 +20,7 @@ import Data.Maybe
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
+import Network.TLS.Util
 import Network.TLS.Cap
 import Network.TLS.Wire
 import Network.TLS.Struct
@@ -109,9 +110,6 @@ encryptContent (hdr@(Header pt ver _), content) = do
 	let hdrnew = Header pt ver (fromIntegral $ B.length encrypted_msg)
 	return (hdrnew, encrypted_msg)
 
-takelast :: Int -> Bytes -> Bytes
-takelast i b = B.drop (B.length b - i) b
-
 encryptData :: MonadTLSState m => ByteString -> m ByteString
 encryptData content = do
 	st <- getTLSState
@@ -139,7 +137,7 @@ encryptData content = do
 		CipherBlockF encrypt _ -> do
 			let iv = cstIV cst
 			let e = encrypt writekey iv (B.concat [ content, padding ])
-			let newiv = takelast (fromIntegral $ cipherIVSize cipher) e
+			let newiv = fromJust $ takelast (fromIntegral $ cipherIVSize cipher) e
 			putTLSState $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
 			return $ if hasExplicitBlockIV $ stVersion st
 				then B.concat [iv,e]
