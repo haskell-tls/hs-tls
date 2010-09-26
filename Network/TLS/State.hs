@@ -72,7 +72,6 @@ data TLSHandshakeState = TLSHandshakeState
 
 data TLSState = TLSState
 	{ stClientContext :: Bool
-	, stClientVersion :: !(Maybe Version)
 	, stVersion       :: !Version
 	, stHandshake     :: !(Maybe TLSHandshakeState)
 	, stTxEncrypted   :: Bool
@@ -92,7 +91,6 @@ class (Monad m) => MonadTLSState m where
 newTLSState :: SRandomGen -> TLSState
 newTLSState rng = TLSState
 	{ stClientContext = False
-	, stClientVersion = Nothing
 	, stVersion       = TLS10
 	, stHandshake     = Nothing
 	, stTxEncrypted   = False
