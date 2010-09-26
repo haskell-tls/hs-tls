@@ -70,7 +70,7 @@ mainClient host port = do
 
 	let clientstate = C.TLSClientParams
 		{ C.cpConnectVersion = TLS10
-		, C.cpAllowedVersions = [ TLS10 ]
+		, C.cpAllowedVersions = [ TLS10, TLS11 ]
 		, C.cpSession = Nothing
 		, C.cpCiphers = ciphers
 		, C.cpCertificate = Nothing
@@ -94,7 +94,7 @@ clientProcess ((certdata, cert), pk) (handle, src) = do
 	seqInit <- conv . B.unpack <$> AESRand.randBytes 4
 
 	let serverstate = S.TLSServerParams
-		{ S.spAllowedVersions = [TLS10]
+		{ S.spAllowedVersions = [TLS10,TLS11]
 		, S.spSessions = []
 		, S.spCiphers = ciphers
 		, S.spCertificate = Just (certdata, cert, pk)
