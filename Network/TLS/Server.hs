@@ -85,7 +85,7 @@ runTLSServerST f s = runStateT (runTLSC f) s
 
 runTLSServer :: TLSServer m a -> TLSServerParams -> SRandomGen -> m (a, TLSStateServer)
 runTLSServer f params rng = runTLSServerST f (TLSStateServer { scParams = params, scTLSState = state })
-	where state = (newTLSState rng) { stVersion = TLS10, stClientContext = False }
+	where state = (newTLSState rng) { stClientContext = False }
 
 {- | receive a single TLS packet or on error a TLSError -}
 recvPacket :: Handle -> TLSServer IO (Either TLSError Packet)
