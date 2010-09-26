@@ -50,6 +50,7 @@ Library
                      Network.TLS.State
                      Network.TLS.Sending
                      Network.TLS.Receiving
+                     Network.TLS.Util
                      Network.TLS.Wire
   ghc-options:       -Wall
 
