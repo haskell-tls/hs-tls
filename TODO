@@ -34,7 +34,6 @@ security audit:
 
 misc:
 
-- verify it works with gnutls
 - stunnel: use crypto secure random generator
 - stunnel: actually make it works like stunnel instead of hardcoding the data and the port.
 - investigate an iteratee interface
