@@ -37,13 +37,14 @@ module Network.TLS.Packet
 	) where
 
 import Data.Word
+import Network.TLS.Struct
+import Network.TLS.Cap
 import Network.TLS.Wire
 import Data.Either (partitionEithers)
 import Data.Maybe (fromJust, isNothing)
 import Control.Applicative ((<$>))
 import Control.Monad
 import Control.Monad.Error
-import Network.TLS.Struct
 import Data.Certificate.X509
 import Network.TLS.Crypto
 import Network.TLS.MAC
@@ -125,7 +126,7 @@ decodeClientHello = do
 	ciphers      <- getWords16
 	compressions <- getWords8
 	r            <- remaining
-	exts <- if ver >= TLS12 && r > 0
+	exts <- if hasHelloExtensions ver && r > 0
 		then fmap fromIntegral getWord16 >>= getExtensions >>= return . Just
 		else return Nothing
 	return $ ClientHello ver random session ciphers compressions exts
@@ -138,7 +139,7 @@ decodeServerHello = do
 	cipherid      <- getWord16
 	compressionid <- getWord8
 	r             <- remaining
-	exts <- if ver >= TLS12 && r > 0
+	exts <- if hasHelloExtensions ver && r > 0
 		then fmap fromIntegral getWord16 >>= getExtensions >>= return . Just
 		else return Nothing
 	return $ ServerHello ver random session cipherid compressionid exts
