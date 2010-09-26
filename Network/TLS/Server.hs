@@ -174,7 +174,7 @@ handshakeSendServerData handle srand = do
 	when needkeyxchg $ do
 		let skg = SKX_RSA Nothing
 		sendPacket handle (Handshake $ ServerKeyXchg skg)
-	-- FIXME we don't do this on a Anonyous server
+	-- FIXME we don't do this on a Anonymous server
 	when (spWantClientCert sp) $ do
 		let certTypes = [ CertificateType_RSA_Sign ]
 		let creq = CertRequest certTypes Nothing [0,0,0]
