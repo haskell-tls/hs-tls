@@ -20,6 +20,7 @@ import Data.Maybe
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
+import Network.TLS.Cap
 import Network.TLS.Wire
 import Network.TLS.Struct
 import Network.TLS.Packet
@@ -132,16 +133,19 @@ encryptData content = do
 		else
 			B.empty
 	let writekey = cstKey cst
-	let iv = cstIV cst
 
 	econtent <- case cipherF cipher of
 		CipherNoneF -> fail "none encrypt"
 		CipherBlockF encrypt _ -> do
+			let iv = cstIV cst
 			let e = encrypt writekey iv (B.concat [ content, padding ])
-			let newiv = takelast (fromIntegral padding_size) e
+			let newiv = takelast (fromIntegral $ cipherIVSize cipher) e
 			putTLSState $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
-			return e
+			return $ if hasExplicitBlockIV $ stVersion st
+				then B.concat [iv,e]
+				else e
 		CipherStreamF initF encryptF _ -> do
+			let iv = cstIV cst
 			let (e, newiv) = encryptF (if iv /= B.empty then iv else initF writekey) content
 			putTLSState $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
 			return e

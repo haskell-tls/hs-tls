@@ -23,6 +23,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString as B
 
+import Network.TLS.Cap
 import Network.TLS.Struct
 import Network.TLS.Packet
 import Network.TLS.State
@@ -164,16 +165,22 @@ decryptData (EncryptedData econtent) = do
 	let padding_size = fromIntegral $ cipherPaddingSize cipher
 
 	let writekey = cstKey cst
-	let iv = cstIV cst
 
 	contentpadded <- case cipherF cipher of
 		CipherNoneF -> fail "none decrypt"
 		CipherBlockF _ decryptF -> do
 			{- update IV -}
-			let newiv = takelast padding_size econtent
+			let (iv, econtent') =
+				if hasExplicitBlockIV $ stVersion st
+					then
+						B.splitAt (fromIntegral $ cipherIVSize cipher) econtent
+					else
+						(cstIV cst, econtent)
+			let newiv = takelast padding_size econtent'
 			putTLSState $ st { stRxCryptState = Just $ cst { cstIV = newiv } }
-			return $ decryptF writekey iv econtent
+			return $ decryptF writekey iv econtent'
 		CipherStreamF initF _ decryptF -> do
+			let iv = cstIV cst
 			let (content, newiv) = decryptF (if iv /= B.empty then iv else initF writekey) econtent
 			{- update Ctx -}
 			putTLSState $ st { stRxCryptState = Just $ cst { cstIV = newiv } }
