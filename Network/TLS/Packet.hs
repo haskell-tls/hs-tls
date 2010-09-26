@@ -384,11 +384,21 @@ encodeChangeCipherSpec = runPut (putWord8 1)
 {-
  - generate things for packet content
  -}
-generateMasterSecret :: Bytes -> ClientRandom -> ServerRandom -> Bytes
-generateMasterSecret premasterSecret (ClientRandom c) (ServerRandom s) =
+generateMasterSecret_TLS, generateMasterSecret_SSL :: Bytes -> ClientRandom -> ServerRandom -> Bytes
+generateMasterSecret_TLS premasterSecret (ClientRandom c) (ServerRandom s) =
 	prf_MD5SHA1 premasterSecret seed 48
 	where
 		seed = B.concat [ BC.pack "master secret", c, s ]
+
+generateMasterSecret_SSL premasterSecret (ClientRandom c) (ServerRandom s) =
+	B.concat $ map (computeMD5 . BC.pack) [ "A", "BB", "CCC" ]
+	where
+		computeMD5  label = hashMD5 $ B.concat [ premasterSecret, computeSHA1 label ]
+		computeSHA1 label = hashSHA1 $ B.concat [ label, premasterSecret, c, s ]
+
+generateMasterSecret :: Version -> Bytes -> ClientRandom -> ServerRandom -> Bytes
+generateMasterSecret ver =
+	if ver < TLS10 then generateMasterSecret_SSL else generateMasterSecret_TLS
 
 generateKeyBlock :: ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
 generateKeyBlock (ClientRandom c) (ServerRandom s) mastersecret kbsize =

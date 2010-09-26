@@ -157,7 +157,7 @@ setMasterSecret premastersecret = do
 		[ ("server random", (isNothing $ hstServerRandom $ fromJust $ stHandshake st)) ]
 
 	updateHandshake "master secret" (\hst ->
-		let ms = generateMasterSecret premastersecret (hstClientRandom hst) (fromJust $ hstServerRandom hst) in
+		let ms = generateMasterSecret (stVersion st) premastersecret (hstClientRandom hst) (fromJust $ hstServerRandom hst) in
 		hst { hstMasterSecret = Just ms } )
 	return ()
 
