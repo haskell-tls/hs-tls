@@ -37,7 +37,6 @@ module Network.TLS.Packet
 	, generateServerFinished
 	) where
 
-import Data.Word
 import Network.TLS.Struct
 import Network.TLS.Cap
 import Network.TLS.Wire
