@@ -96,6 +96,7 @@ finalizeHash (MD5 ctx)  = finalizeMD5 ctx
  need to fix the RSA package to return "Either String X".
 -}
 
+lazyToStrict :: L.ByteString -> B.ByteString
 lazyToStrict = B.concat . L.toChunks
 
 rsaEncrypt :: RandomGen g => g -> PublicKey -> B.ByteString -> Maybe (B.ByteString, g)
