@@ -3,18 +3,20 @@ import Data.Word
 import Test.QuickCheck
 import Test.QuickCheck.Test
 
+import qualified Data.ByteString as B
 import Network.TLS.Struct
 import Network.TLS.Packet
 import Control.Monad
+import Control.Applicative ((<$>))
 import System.IO
 
 liftM6 f m1 m2 m3 m4 m5 m6 = do { x1 <- m1; x2 <- m2; x3 <- m3; x4 <- m4; x5 <- m5; x6 <- m6; return (f x1 x2 x3 x4 x5 x6) }
 
 someWords8 :: Int -> Gen [Word8] 
-someWords8 i = replicateM i (fromIntegral `fmap` (choose (0,255) :: Gen Int))
+someWords8 i = replicateM i (fromIntegral <$> (choose (0,255) :: Gen Int))
 
 someWords16 :: Int -> Gen [Word16] 
-someWords16 i = replicateM i (fromIntegral `fmap` (choose (0,65535) :: Gen Int))
+someWords16 i = replicateM i (fromIntegral <$> (choose (0,65535) :: Gen Int))
 
 instance Arbitrary Version where
 	arbitrary = elements [ SSL2, SSL3, TLS10, TLS11, TLS12 ]
@@ -27,10 +29,10 @@ instance Arbitrary ProtocolType where
 		, ProtocolType_AppData ]
 
 instance Arbitrary Word8 where
-	arbitrary = fromIntegral `fmap` (choose (0,255) :: Gen Int)
+	arbitrary = fromIntegral <$> (choose (0,255) :: Gen Int)
 
 instance Arbitrary Word16 where
-	arbitrary = fromIntegral `fmap` (choose (0,65535) :: Gen Int)
+	arbitrary = fromIntegral <$> (choose (0,65535) :: Gen Int)
 
 instance Arbitrary Header where
 	arbitrary = do
@@ -40,20 +42,20 @@ instance Arbitrary Header where
 		return $ Header pt ver len
 
 instance Arbitrary ClientRandom where
-	arbitrary = ClientRandom `fmap` someWords8 32
+	arbitrary = ClientRandom . B.pack <$> someWords8 32
 
 instance Arbitrary ServerRandom where
-	arbitrary = ServerRandom `fmap` someWords8 32
+	arbitrary = ServerRandom . B.pack <$> someWords8 32
 
 instance Arbitrary ClientKeyData where
-	arbitrary = ClientKeyData `fmap` someWords8 46
+	arbitrary = ClientKeyData . B.pack <$> someWords8 46
 
 instance Arbitrary Session where
 	arbitrary = do
 		i <- choose (1,2) :: Gen Int
 		case i of
 			1 -> return $ Session Nothing
-			2 -> (Session . Just) `fmap` someWords8 32
+			2 -> Session . Just . B.pack <$> someWords8 32
 
 arbitraryCiphersIDs :: Gen [Word16]
 arbitraryCiphersIDs = choose (0,200) >>= someWords16

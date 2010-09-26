@@ -43,8 +43,7 @@ import Network.TLS.Wire
 import Network.TLS.Packet
 import Network.TLS.Crypto
 import Network.TLS.Cipher
-import Data.ByteString.Lazy (ByteString)
-import qualified Data.ByteString.Lazy as L
+import qualified Data.ByteString as B
 import Control.Monad
 
 assert :: Monad m => String -> [(String,Bool)] -> m ()
@@ -52,9 +51,9 @@ assert fctname list = forM_ list $ \ (name, assumption) -> do
 	when assumption $ fail (fctname ++ ": assumption about " ++ name ++ " failed")
 
 data TLSCryptState = TLSCryptState
-	{ cstKey        :: ![Word8]
-	, cstIV         :: ![Word8]
-	, cstMacSecret  :: L.ByteString
+	{ cstKey        :: !Bytes
+	, cstIV         :: !Bytes
+	, cstMacSecret  :: !Bytes
 	} deriving (Show)
 
 data TLSMacState = TLSMacState
@@ -65,7 +64,7 @@ data TLSHandshakeState = TLSHandshakeState
 	{ hstClientVersion   :: !(Version)
 	, hstClientRandom    :: !ClientRandom
 	, hstServerRandom    :: !(Maybe ServerRandom)
-	, hstMasterSecret    :: !(Maybe [Word8])
+	, hstMasterSecret    :: !(Maybe Bytes)
 	, hstRSAPublicKey    :: !(Maybe PublicKey)
 	, hstRSAPrivateKey   :: !(Maybe PrivateKey)
 	, hstHandshakeDigest :: Maybe (HashCtx, HashCtx) -- FIXME could be only 1 hash in tls12
@@ -109,7 +108,7 @@ newTLSState rng = TLSState
 modifyTLSState :: (MonadTLSState m) => (TLSState -> TLSState) -> m ()
 modifyTLSState f = getTLSState >>= \st -> putTLSState (f st)
 
-makeDigest :: (MonadTLSState m) => Bool -> Header -> ByteString -> m ByteString
+makeDigest :: (MonadTLSState m) => Bool -> Header -> Bytes -> m Bytes
 makeDigest w hdr content = do
 	st <- getTLSState
 	assert "make digest"
@@ -120,7 +119,7 @@ makeDigest w hdr content = do
 	let ms = fromJust $ if w then stTxMacState st else stRxMacState st
 	let cipher = fromJust $ stCipher st
 
-	let hmac_msg = L.concat [ encodeWord64 $ msSequence ms, encodeHeader hdr, content ]
+	let hmac_msg = B.concat [ encodeWord64 $ msSequence ms, encodeHeader hdr, content ]
 	let digest = (cipherHMAC cipher) (cstMacSecret cst) hmac_msg
 
 	let newms = ms { msSequence = (msSequence ms) + 1 }
@@ -152,7 +151,7 @@ switchRxEncryption = getTLSState >>= putTLSState . (\st -> st { stRxEncrypted = 
 setServerRandom :: MonadTLSState m => ServerRandom -> m ()
 setServerRandom ran = updateHandshake "srand" (\hst -> hst { hstServerRandom = Just ran })
 
-setMasterSecret :: MonadTLSState m => ByteString -> m ()
+setMasterSecret :: MonadTLSState m => Bytes -> m ()
 setMasterSecret premastersecret = do
 	st <- getTLSState
 	hasValidHandshake "master secret"
@@ -161,7 +160,7 @@ setMasterSecret premastersecret = do
 
 	updateHandshake "master secret" (\hst ->
 		let ms = generateMasterSecret premastersecret (hstClientRandom hst) (fromJust $ hstServerRandom hst) in
-		hst { hstMasterSecret = Just $ L.unpack ms } )
+		hst { hstMasterSecret = Just ms } )
 	return ()
 
 setPublicKey :: MonadTLSState m => PublicKey -> m ()
@@ -189,21 +188,21 @@ setKeyBlock = do
 	let ivSize = cipherIVSize cipher
 	let kb = generateKeyBlock (hstClientRandom hst)
 	                          (fromJust $ hstServerRandom hst)
-	                          (L.pack $ fromJust $ hstMasterSecret hst) keyblockSize
-	let (cMACSecret, r1) = L.splitAt (fromIntegral digestSize) kb
-	let (sMACSecret, r2) = L.splitAt (fromIntegral digestSize) r1
-	let (cWriteKey, r3)  = L.splitAt (fromIntegral keySize) r2
-	let (sWriteKey, r4)  = L.splitAt (fromIntegral keySize) r3
-	let (cWriteIV,  r5)  = L.splitAt (fromIntegral ivSize) r4
-	let (sWriteIV,  _)   = L.splitAt (fromIntegral ivSize) r5
+	                          (fromJust $ hstMasterSecret hst) keyblockSize
+	let (cMACSecret, r1) = B.splitAt (fromIntegral digestSize) kb
+	let (sMACSecret, r2) = B.splitAt (fromIntegral digestSize) r1
+	let (cWriteKey, r3)  = B.splitAt (fromIntegral keySize) r2
+	let (sWriteKey, r4)  = B.splitAt (fromIntegral keySize) r3
+	let (cWriteIV,  r5)  = B.splitAt (fromIntegral ivSize) r4
+	let (sWriteIV,  _)   = B.splitAt (fromIntegral ivSize) r5
 
 	let cstClient = TLSCryptState
-		{ cstKey        = L.unpack cWriteKey
-		, cstIV         = L.unpack cWriteIV
+		{ cstKey        = cWriteKey
+		, cstIV         = cWriteIV
 		, cstMacSecret  = cMACSecret }
 	let cstServer = TLSCryptState
-		{ cstKey        = L.unpack sWriteKey
-		, cstIV         = L.unpack sWriteIV
+		{ cstKey        = sWriteKey
+		, cstIV         = sWriteIV
 		, cstMacSecret  = sMACSecret }
 	let msClient = TLSMacState { msSequence = 0 }
 	let msServer = TLSMacState { msSequence = 0 }
@@ -250,22 +249,23 @@ updateHandshake n f = do
 	hasValidHandshake n
 	modifyTLSState (\st -> st { stHandshake = maybe Nothing (Just . f) (stHandshake st) })
 
-updateHandshakeDigest :: MonadTLSState m => ByteString -> m ()
+updateHandshakeDigest :: MonadTLSState m => Bytes -> m ()
 updateHandshakeDigest content = updateHandshake "update digest" (\hs ->
-	let ctxs = case hstHandshakeDigest hs of
+	let (c1, c2) = case hstHandshakeDigest hs of
 		Nothing                -> (initHash HashTypeSHA1, initHash HashTypeMD5)
 		Just (sha1ctx, md5ctx) -> (sha1ctx, md5ctx) in
-	let (nc1, nc2) = foldl (\(c1, c2) s -> (updateHash c1 s, updateHash c2 s)) ctxs $ L.toChunks content in
+	let nc1 = updateHash c1 content in
+	let nc2 = updateHash c2 content in
 	hs { hstHandshakeDigest = Just (nc1, nc2) }
 	)
 
-getHandshakeDigest :: MonadTLSState m => Bool -> m ByteString
+getHandshakeDigest :: MonadTLSState m => Bool -> m Bytes
 getHandshakeDigest client = do
 	st <- getTLSState
 	let hst = fromJust $ stHandshake st
 	let (sha1ctx, md5ctx) = fromJust $ hstHandshakeDigest hst
 	let msecret = fromJust $ hstMasterSecret hst
-	return $ (if client then generateClientFinished else generateServerFinished) (L.pack msecret) md5ctx sha1ctx
+	return $ (if client then generateClientFinished else generateServerFinished) msecret md5ctx sha1ctx
 
 endHandshake :: MonadTLSState m => m ()
 endHandshake = modifyTLSState (\st -> st { stHandshake = Nothing })

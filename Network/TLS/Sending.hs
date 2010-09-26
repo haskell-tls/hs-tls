@@ -15,13 +15,14 @@ module Network.TLS.Sending (
 	) where
 
 import Control.Monad.State
-import Data.Binary.Put (runPut, putWord16be)
+--import Data.Binary.Put (runPut, putWord16be)
 import Data.Maybe
 
-import Data.ByteString.Lazy (ByteString)
+import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString as B
 
+import Network.TLS.Wire
 import Network.TLS.Struct
 import Network.TLS.Packet
 import Network.TLS.State
@@ -36,7 +37,7 @@ makePacketData :: MonadTLSState m => Packet -> m (Header, ByteString)
 makePacketData pkt = do
 	ver <- getTLSState >>= return . stVersion
 	content <- writePacketContent pkt
-	let hdr = Header (packetType pkt) ver (fromIntegral $ L.length content)
+	let hdr = Header (packetType pkt) ver (fromIntegral $ B.length content)
 	return (hdr, content)
 
 {-
@@ -73,7 +74,7 @@ postprocessPacketData dat = return dat
  - marshall packet data
  -}
 encodePacket :: MonadTLSState m => (Header, ByteString) -> m ByteString
-encodePacket (hdr, content) = return $ L.concat [ encodeHeader hdr, content ]
+encodePacket (hdr, content) = return $ B.concat [ encodeHeader hdr, content ]
 
 
 {-
@@ -105,8 +106,8 @@ encryptRSA content = do
 encryptContent :: MonadTLSState m => (Header, ByteString) -> m (Header, ByteString)
 encryptContent (hdr@(Header pt ver _), content) = do
 	digest <- makeDigest True hdr content
-	encrypted_msg <- encryptData $ L.concat [content, digest]
-	let hdrnew = Header pt ver (fromIntegral $ L.length encrypted_msg)
+	encrypted_msg <- encryptData $ B.concat [content, digest]
+	let hdrnew = Header pt ver (fromIntegral $ B.length encrypted_msg)
 	return (hdrnew, encrypted_msg)
 
 takelast :: Int -> [a] -> [a]
@@ -124,27 +125,27 @@ encryptData content = do
 	let cst = fromJust $ stTxCryptState st
 	let padding_size = fromIntegral $ cipherPaddingSize cipher
 
-	let msg_len = L.length content
+	let msg_len = B.length content
 	let padding = if padding_size > 0
 		then
 			let padbyte = padding_size - (msg_len `mod` padding_size) in
 			let padbyte' = if padbyte == 0 then padding_size else padbyte in
-			L.replicate padbyte' (fromIntegral (padbyte' - 1))
+			B.replicate padbyte' (fromIntegral (padbyte' - 1))
 		else
-			L.empty
-	let writekey = B.pack $ cstKey cst
-	let iv = B.pack $ cstIV cst
+			B.empty
+	let writekey = cstKey cst
+	let iv = cstIV cst
 
 	econtent <- case cipherF cipher of
 		CipherNoneF -> fail "none encrypt"
 		CipherBlockF encrypt _ -> do
-			let e = encrypt writekey iv (L.concat [ content, padding ])
-			let newiv = takelast (fromIntegral padding_size) $ L.unpack e
+			let e = encrypt writekey iv (B.concat [ content, padding ])
+			let newiv = B.pack $ takelast (fromIntegral padding_size) $ B.unpack e
 			putTLSState $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
 			return e
 		CipherStreamF initF encryptF _ -> do
 			let (e, newiv) = encryptF (if iv /= B.empty then iv else initF writekey) content
-			putTLSState $ st { stTxCryptState = Just $ cst { cstIV = B.unpack newiv } }
+			putTLSState $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
 			return e
 	return econtent
 
@@ -159,9 +160,9 @@ writePacketContent (Handshake ckx@(ClientKeyXchg _ _)) = do
 	let premastersecret = runPut $ encodeHandshakeContent ckx
 	setMasterSecret premastersecret
 	econtent <- encryptRSA premastersecret
-	let extralength = runPut $ putWord16be $ fromIntegral $ L.length econtent
-	let hdr = runPut $ encodeHandshakeHeader (typeOfHandshake ckx) (fromIntegral (L.length econtent + 2))
-	return $ L.concat [hdr, extralength, econtent]
+	let extralength = runPut $ putWord16 $ fromIntegral $ B.length econtent
+	let hdr = runPut $ encodeHandshakeHeader (typeOfHandshake ckx) (fromIntegral (B.length econtent + 2))
+	return $ B.concat [hdr, extralength, econtent]
 
 writePacketContent pkt@(Handshake (ClientHello ver crand _ _ _ _)) = do
 	cc <- isClientContext

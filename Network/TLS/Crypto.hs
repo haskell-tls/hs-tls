@@ -28,10 +28,12 @@ module Network.TLS.Crypto
 import qualified Data.CryptoHash.SHA1 as SHA1
 import qualified Data.CryptoHash.MD5 as MD5
 import qualified Data.ByteString as B
-import Data.ByteString.Lazy (ByteString)
+import qualified Data.ByteString.Lazy as L
+import Data.ByteString (ByteString)
 import Codec.Crypto.RSA (PublicKey(..), PrivateKey(..))
 import qualified Codec.Crypto.RSA as RSA
 import Control.Spoon
+import Control.Arrow (first)
 import System.Random
 
 data HashCtx =
@@ -49,28 +51,28 @@ data HashType = HashTypeSHA1 | HashTypeMD5
 initMD5 :: MD5.Ctx
 initMD5 = MD5.init
 
-updateMD5 :: MD5.Ctx -> B.ByteString -> MD5.Ctx
+updateMD5 :: MD5.Ctx -> ByteString -> MD5.Ctx
 updateMD5 = MD5.update
 
-finalizeMD5 :: MD5.Ctx -> B.ByteString
+finalizeMD5 :: MD5.Ctx -> ByteString
 finalizeMD5 = MD5.finalize
 
-hashMD5 :: ByteString -> B.ByteString
-hashMD5 = MD5.hashlazy
+hashMD5 :: ByteString -> ByteString
+hashMD5 = MD5.hash
 
 {- SHA1 -}
 
 initSHA1 :: SHA1.Ctx
 initSHA1 = SHA1.init
 
-updateSHA1 :: SHA1.Ctx -> B.ByteString -> SHA1.Ctx
+updateSHA1 :: SHA1.Ctx -> ByteString -> SHA1.Ctx
 updateSHA1 = SHA1.update
 
-finalizeSHA1 :: SHA1.Ctx -> B.ByteString
+finalizeSHA1 :: SHA1.Ctx -> ByteString
 finalizeSHA1 = SHA1.finalize
 
-hashSHA1 :: ByteString -> B.ByteString
-hashSHA1 = SHA1.hashlazy
+hashSHA1 :: ByteString -> ByteString
+hashSHA1 = SHA1.hash
 
 {- generic Hashing -}
 
@@ -94,8 +96,14 @@ finalizeHash (MD5 ctx)  = finalizeMD5 ctx
  need to fix the RSA package to return "Either String X".
 -}
 
-rsaEncrypt :: RandomGen g => g -> PublicKey -> ByteString -> Maybe (ByteString, g)
-rsaEncrypt g pk b = teaspoon (RSA.rsaes_pkcs1_v1_5_encrypt g pk b)
+lazyToStrict = B.concat . L.toChunks
 
-rsaDecrypt :: PrivateKey -> ByteString -> Maybe ByteString
-rsaDecrypt pk b = teaspoon (RSA.rsaes_pkcs1_v1_5_decrypt pk b)
+rsaEncrypt :: RandomGen g => g -> PublicKey -> B.ByteString -> Maybe (B.ByteString, g)
+rsaEncrypt g pk b = maybe Nothing (Just . first lazyToStrict) $ teaspoon (RSA.rsaes_pkcs1_v1_5_encrypt g pk blazy)
+	where
+		blazy = L.fromChunks [ b ]
+
+rsaDecrypt :: PrivateKey -> B.ByteString -> Maybe B.ByteString
+rsaDecrypt pk b = maybe Nothing (Just . lazyToStrict) $ teaspoon (RSA.rsaes_pkcs1_v1_5_decrypt pk blazy)
+	where
+		blazy = L.fromChunks [ b ]

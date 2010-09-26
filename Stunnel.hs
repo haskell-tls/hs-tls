@@ -62,7 +62,7 @@ mainClient host port = do
 	ranByte <- B.head <$> AESRand.randBytes 1
 	_ <- AESRand.randBytes (fromIntegral ranByte)
 	clientRandom <- fromJust . clientRandom . B.unpack <$> AESRand.randBytes 32
-	premasterRandom <- (ClientKeyData . B.unpack) <$> AESRand.randBytes 46
+	premasterRandom <- ClientKeyData <$> AESRand.randBytes 46
 	seqInit <- conv . B.unpack <$> AESRand.randBytes 4
 
 	handle <- connectTo host (PortNumber $ fromIntegral port)
@@ -118,13 +118,13 @@ usage = do
 	putStrLn "usage: stunnel [client|server] <params...>"
 	exitFailure
 
-readCertificate :: FilePath -> IO (L.ByteString, Certificate)
+readCertificate :: FilePath -> IO (B.ByteString, Certificate)
 readCertificate filepath = do
 	content <- B.readFile filepath
 	let certdata = case parsePEMCert content of
 		Left err -> error ("cannot read PEM certificate: " ++ err)
-		Right x  -> L.fromChunks [x]
-	let cert = case decodeCertificate certdata of
+		Right x  -> x
+	let cert = case decodeCertificate $ L.fromChunks [certdata] of
 		Left err -> error ("cannot decode certificate: " ++ err)
 		Right x  -> x
 	return (certdata, cert)

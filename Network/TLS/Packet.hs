@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- |
 -- Module      : Network.TLS.Packet
 -- License     : BSD-style
@@ -48,9 +49,10 @@ import Control.Monad.Error
 import Data.Certificate.X509
 import Network.TLS.Crypto
 import Network.TLS.MAC
-import Data.ByteString.Lazy (ByteString)
-import qualified Data.ByteString.Lazy as L (pack, length, concat, fromChunks)
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString.Lazy as L
 
 {-
  - decode and encode headers
@@ -90,7 +92,7 @@ encodeAlert (al, ad) = runPut (putWord8 (valOfType al) >> putWord8 (valOfType ad
 
 {- decode and encode HANDSHAKE -}
 
-decodeHandshakeHeader :: ByteString -> Either TLSError (HandshakeType, ByteString)
+decodeHandshakeHeader :: ByteString -> Either TLSError (HandshakeType, Bytes)
 decodeHandshakeHeader = runGet $ do
 	tyopt <- getWord8 >>= return . valToType
 	ty <- if isNothing tyopt
@@ -100,7 +102,7 @@ decodeHandshakeHeader = runGet $ do
 	content <- getBytes len
 	empty <- isEmpty
 	unless empty (throwError (Error_Internal_Packet_Remaining 1))
-	return (ty, L.fromChunks [content])
+	return (ty, content)
 
 decodeHandshake :: Version -> HandshakeType -> ByteString -> Either TLSError Handshake
 decodeHandshake ver ty = runGet $ case ty of
@@ -231,9 +233,9 @@ decodeServerKeyXchg ver = do
 encodeHandshake :: Handshake -> ByteString
 encodeHandshake o =
 	let content = runPut $ encodeHandshakeContent o in
-	let len = fromIntegral $ L.length content in
+	let len = fromIntegral $ B.length content in
 	let header = runPut $ encodeHandshakeHeader (typeOfHandshake o) len in
-	L.concat [ header, content ]
+	B.concat [ header, content ]
 
 encodeHandshakeHeader :: HandshakeType -> Int -> Put
 encodeHandshakeHeader ty len = putWord8 (valOfType ty) >> putWord24 len
@@ -255,10 +257,10 @@ encodeHandshakeContent (ServerHello version random session cipherID compressionI
 	                   >> putExtensions exts >> return ()
 
 encodeHandshakeContent (Certificates certs) =
-	putWord24 len >> putLazyByteString certbs
+	putWord24 len >> putBytes certbs
 	where
 		certbs = runPut $ mapM_ putCert certs
-		len    = fromIntegral $ L.length certbs
+		len    = fromIntegral $ B.length certbs
 
 encodeHandshakeContent (ClientKeyXchg version random) = do
 	putVersion version
@@ -276,7 +278,7 @@ encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
 	case sigAlgs of
 		Nothing -> return ()
 		Just l  -> putWords16 $ map (\(x,y) -> (fromIntegral $ valOfType x) * 256 + (fromIntegral $ valOfType y)) l
-	putByteString $ B.pack certAuthorities
+	putBytes $ B.pack certAuthorities
 
 encodeHandshakeContent (CertVerify _) = undefined
 
@@ -296,8 +298,8 @@ putVersion ver = putWord8 major >> putWord8 minor
 	where (major, minor) = numericalVer ver
 
 {- FIXME make sure it return error if not 32 available -}
-getRandom32 :: Get [Word8]
-getRandom32 = B.unpack <$> getBytes 32
+getRandom32 :: Get Bytes
+getRandom32 = getBytes 32
 
 getServerRandom32 :: Get ServerRandom
 getServerRandom32 = ServerRandom <$> getRandom32
@@ -305,8 +307,8 @@ getServerRandom32 = ServerRandom <$> getRandom32
 getClientRandom32 :: Get ClientRandom
 getClientRandom32 = ClientRandom <$> getRandom32
 
-putRandom32 :: [Word8] -> Put
-putRandom32 = mapM_ putWord8
+putRandom32 :: Bytes -> Put
+putRandom32 = putBytes
 
 putClientRandom32 :: ClientRandom -> Put
 putClientRandom32 (ClientRandom r) = putRandom32 r
@@ -315,25 +317,25 @@ putServerRandom32 :: ServerRandom -> Put
 putServerRandom32 (ServerRandom r) = putRandom32 r
 
 getClientKeyData46 :: Get ClientKeyData
-getClientKeyData46 = ClientKeyData . B.unpack <$> getBytes 46
+getClientKeyData46 = ClientKeyData <$> getBytes 46
 
 putClientKeyData46 :: ClientKeyData -> Put
-putClientKeyData46 (ClientKeyData d) = mapM_ putWord8 d
+putClientKeyData46 (ClientKeyData d) = putBytes d
 
 getSession :: Get Session
 getSession = do
 	len8 <- getWord8
 	case fromIntegral len8 of
 		0   -> return $ Session Nothing
-		len -> Session . Just . B.unpack <$> getBytes len
+		len -> Session . Just <$> getBytes len
 
 putSession :: Session -> Put
 putSession (Session session) =
 	case session of
 		Nothing -> putWord8 0
-		Just s  -> putWord8 (fromIntegral $ length s) >> mapM_ putWord8 s
+		Just s  -> putWord8 (fromIntegral $ B.length s) >> putBytes s
 
-getCerts :: Int -> Get [B.ByteString]
+getCerts :: Int -> Get [Bytes]
 getCerts 0   = return []
 getCerts len = do
 	certlen <- getWord24
@@ -342,8 +344,8 @@ getCerts len = do
 	return (cert : certxs)
 
 putCert :: Certificate -> Put
-putCert cert = putWord24 (fromIntegral $ L.length content) >> putLazyByteString content
-	where content = encodeCertificate cert
+putCert cert = putWord24 (fromIntegral $ B.length content) >> putBytes content
+	where content = B.concat $ L.toChunks $ encodeCertificate cert
 
 getExtensions :: Int -> Get [Extension]
 getExtensions 0   = return []
@@ -358,12 +360,12 @@ putExtension :: Extension -> Put
 putExtension (ty, l) = do
 	putWord16 ty
 	putWord16 (fromIntegral $ length l)
-	putByteString (B.pack l)
+	putBytes (B.pack l)
 
 putExtensions :: Maybe [Extension] -> Put
 putExtensions Nothing   = return ()
 putExtensions (Just es) =
-	putWord16 (fromIntegral $ L.length extbs) >> putLazyByteString extbs
+	putWord16 (fromIntegral $ B.length extbs) >> putBytes extbs
 	where
 		extbs = runPut $ mapM_ putExtension es
 
@@ -382,29 +384,26 @@ encodeChangeCipherSpec = runPut (putWord8 1)
 {-
  - generate things for packet content
  -}
-generateMasterSecret :: ByteString -> ClientRandom -> ServerRandom -> ByteString
+generateMasterSecret :: Bytes -> ClientRandom -> ServerRandom -> Bytes
 generateMasterSecret premasterSecret (ClientRandom c) (ServerRandom s) =
 	prf_MD5SHA1 premasterSecret seed 48
 	where
-		label = map (toEnum . fromEnum) "master secret"
-		seed = L.concat $ map L.pack [ label, c, s]
+		seed = B.concat [ BC.pack "master secret", c, s ]
 
-generateKeyBlock :: ClientRandom -> ServerRandom -> ByteString -> Int -> ByteString
+generateKeyBlock :: ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
 generateKeyBlock (ClientRandom c) (ServerRandom s) mastersecret kbsize =
 	prf_MD5SHA1 mastersecret seed kbsize
 	where
-		label = map (toEnum . fromEnum) "key expansion"
-		seed = L.concat $ map L.pack [ label, s, c ]
+		seed = B.concat [ BC.pack "key expansion", s, c ]
 
-generateFinished :: String -> ByteString -> HashCtx -> HashCtx -> ByteString
+generateFinished :: Bytes -> Bytes -> HashCtx -> HashCtx -> Bytes
 generateFinished label mastersecret md5ctx sha1ctx =
 	prf_MD5SHA1 mastersecret seed 12
 	where
-		plabel = B.pack $ map (toEnum . fromEnum) label
-		seed = L.fromChunks [ plabel, finalizeHash md5ctx, finalizeHash sha1ctx ]
+		seed = B.concat [ label, finalizeHash md5ctx, finalizeHash sha1ctx ]
 
-generateClientFinished :: ByteString -> HashCtx -> HashCtx -> ByteString
-generateClientFinished = generateFinished "client finished"
+generateClientFinished :: Bytes -> HashCtx -> HashCtx -> Bytes
+generateClientFinished = generateFinished (BC.pack "client finished")
 
-generateServerFinished :: ByteString -> HashCtx -> HashCtx -> ByteString
-generateServerFinished = generateFinished "server finished"
+generateServerFinished :: Bytes -> HashCtx -> HashCtx -> Bytes
+generateServerFinished = generateFinished (BC.pack "server finished")

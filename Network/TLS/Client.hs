@@ -39,6 +39,7 @@ import Network.TLS.State
 import Network.TLS.Sending
 import Network.TLS.Receiving
 import Network.TLS.SRandom
+import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import System.IO (Handle, hFlush)
 import Data.List (find)
@@ -88,18 +89,18 @@ runTLSClient f params rng = runTLSClientST f (TLSStateClient { scParams = params
 {- | receive a single TLS packet or on error a TLSError -}
 recvPacket :: Handle -> TLSClient IO (Either TLSError Packet)
 recvPacket handle = do
-	hdr <- lift $ L.hGet handle 5 >>= return . decodeHeader
+	hdr <- lift $ B.hGet handle 5 >>= return . decodeHeader
 	case hdr of
 		Left err                          -> return $ Left err
 		Right header@(Header _ _ readlen) -> do
-			content <- lift $ L.hGet handle (fromIntegral readlen)
+			content <- lift $ B.hGet handle (fromIntegral readlen)
 			readPacket header (EncryptedData content)
 
 {- | send a single TLS packet -}
 sendPacket :: Handle -> Packet -> TLSClient IO ()
 sendPacket handle pkt = do
 	dataToSend <- writePacket pkt
-	lift $ L.hPut handle dataToSend
+	lift $ B.hPut handle dataToSend
 
 recvServerHello :: Handle -> TLSClient IO ()
 recvServerHello handle = do
@@ -150,7 +151,7 @@ connectSendClientKeyXchg handle prerand = do
 connectSendFinish :: Handle -> TLSClient IO ()
 connectSendFinish handle = do
 	cf <- getHandshakeDigest True
-	sendPacket handle (Handshake $ Finished $ L.unpack cf)
+	sendPacket handle (Handshake $ Finished $ B.unpack cf)
 
 {- | connect through a handle as a new TLS connection. -}
 connect :: Handle -> ClientRandom -> ClientKeyData -> TLSClient IO ()
@@ -184,16 +185,19 @@ connect handle crand premasterRandom = do
 
 	return ()
 
-{- | sendData sends a bunch of data -}
-sendData :: Handle -> L.ByteString -> TLSClient IO ()
-sendData handle d = do
-	if L.length d > 16384
+sendDataChunk :: Handle -> B.ByteString -> TLSClient IO ()
+sendDataChunk handle d =
+	if B.length d > 16384
 		then do
-			let (sending, remain) = L.splitAt 16384 d
+			let (sending, remain) = B.splitAt 16384 d
 			sendPacket handle $ AppData sending
-			sendData handle remain
+			sendDataChunk handle remain
 		else
 			sendPacket handle $ AppData d
+
+{- | sendData sends a bunch of data -}
+sendData :: Handle -> L.ByteString -> TLSClient IO ()
+sendData handle d = mapM_ (sendDataChunk handle) (L.toChunks d)
 
 {- | recvData get data out of Data packet, and automatically try to renegociate if
  - a Handshake HelloRequest is received -}
@@ -201,7 +205,7 @@ recvData :: Handle -> TLSClient IO L.ByteString
 recvData handle = do
 	pkt <- recvPacket handle
 	case pkt of
-		Right (AppData x) -> return x
+		Right (AppData x) -> return $ L.fromChunks [x]
 		Right (Handshake HelloRequest) -> do
 			-- SECURITY FIXME audit the rng here..
 			st <- getTLSState
@@ -209,7 +213,7 @@ recvData handle = do
 			let (premaster, rng'') = getRandomBytes rng' 46
 			putTLSState $ st { stRandomGen = rng'' }
 			let crand = fromJust $ clientRandom bytes
-			connect handle crand (ClientKeyData premaster)
+			connect handle crand (ClientKeyData $ B.pack premaster)
 			recvData handle
 		Left err          -> error ("error received: " ++ show err)
 		_                 -> error "unexpected item"

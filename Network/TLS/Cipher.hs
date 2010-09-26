@@ -37,11 +37,11 @@ type IV = B.ByteString
 
 data CipherTypeFunctions =
 	  CipherNoneF -- special value for 0
-	| CipherBlockF (Key -> IV -> L.ByteString -> L.ByteString)
-	               (Key -> IV -> L.ByteString -> L.ByteString)
+	| CipherBlockF (Key -> IV -> B.ByteString -> B.ByteString)
+	               (Key -> IV -> B.ByteString -> B.ByteString)
 	| CipherStreamF (Key -> IV)
-	                (IV -> L.ByteString -> (L.ByteString, IV))
-	                (IV -> L.ByteString -> (L.ByteString, IV))
+	                (IV -> B.ByteString -> (B.ByteString, IV))
+	                (IV -> B.ByteString -> (B.ByteString, IV))
 
 data CipherKeyExchangeType =
 	  CipherKeyExchangeRSA
@@ -63,7 +63,7 @@ data Cipher = Cipher
 	, cipherKeyBlockSize :: Word8
 	, cipherPaddingSize  :: Word8
 	, cipherKeyExchange  :: CipherKeyExchangeType
-	, cipherHMAC         :: L.ByteString -> L.ByteString -> L.ByteString
+	, cipherHMAC         :: B.ByteString -> B.ByteString -> B.ByteString
 	, cipherF            :: CipherTypeFunctions
 	, cipherMinVer       :: Maybe Version
 	}
@@ -82,29 +82,32 @@ cipherExchangeNeedMoreData CipherKeyExchangeECDH_ECDSA  = True
 cipherExchangeNeedMoreData CipherKeyExchangeECDH_RSA    = True
 cipherExchangeNeedMoreData CipherKeyExchangeECDHE_ECDSA = True
 
-repack :: Int -> L.ByteString -> [B.ByteString]
+repack :: Int -> B.ByteString -> [B.ByteString]
 repack bs x =
-	if L.length x > fromIntegral bs
+	if B.length x > bs
 		then
-			let (c1, c2) = L.splitAt (fromIntegral bs) x in
-			B.pack (L.unpack c1) : repack 16 c2
+			let (c1, c2) = B.splitAt bs x in
+			B.pack (B.unpack c1) : repack 16 c2
 		else
-			[ B.pack (L.unpack x) ]
+			[ x ]
 
-aes128_cbc_encrypt :: Key -> IV -> L.ByteString -> L.ByteString
-aes128_cbc_encrypt key iv d = AES.crypt AES.CBC key iv AES.Encrypt d16
+lazyToStrict :: L.ByteString -> B.ByteString
+lazyToStrict = B.concat . L.toChunks
+
+aes128_cbc_encrypt :: Key -> IV -> B.ByteString -> B.ByteString
+aes128_cbc_encrypt key iv d = lazyToStrict $ AES.crypt AES.CBC key iv AES.Encrypt d16
 	where d16 = L.fromChunks $ repack 16 d
 
-aes128_cbc_decrypt :: Key -> IV -> L.ByteString -> L.ByteString
-aes128_cbc_decrypt key iv d = AES.crypt AES.CBC key iv AES.Decrypt d16
+aes128_cbc_decrypt :: Key -> IV -> B.ByteString -> B.ByteString
+aes128_cbc_decrypt key iv d = lazyToStrict $ AES.crypt AES.CBC key iv AES.Decrypt d16
 	where d16 = L.fromChunks $ repack 16 d
 
-aes256_cbc_encrypt :: Key -> IV -> L.ByteString -> L.ByteString
-aes256_cbc_encrypt key iv d = AES.crypt AES.CBC key iv AES.Encrypt d16
+aes256_cbc_encrypt :: Key -> IV -> B.ByteString -> B.ByteString
+aes256_cbc_encrypt key iv d = lazyToStrict $ AES.crypt AES.CBC key iv AES.Encrypt d16
 	where d16 = L.fromChunks $ repack 16 d
 
-aes256_cbc_decrypt :: Key -> IV -> L.ByteString -> L.ByteString
-aes256_cbc_decrypt key iv d = AES.crypt AES.CBC key iv AES.Decrypt d16
+aes256_cbc_decrypt :: Key -> IV -> B.ByteString -> B.ByteString
+aes256_cbc_decrypt key iv d = lazyToStrict $ AES.crypt AES.CBC key iv AES.Decrypt d16
 	where d16 = L.fromChunks $ repack 32 d
 
 toIV :: RC4.Ctx -> IV
@@ -119,11 +122,11 @@ toCtx iv =
 initF_rc4 :: Key -> IV
 initF_rc4 key     = toIV $ RC4.initCtx (B.unpack key)
 
-encryptF_rc4 :: IV -> L.ByteString -> (L.ByteString, IV)
-encryptF_rc4 iv d = (\(ctx, e) -> (e, toIV ctx)) $ RC4.encryptlazy (toCtx iv) d
+encryptF_rc4 :: IV -> B.ByteString -> (B.ByteString, IV)
+encryptF_rc4 iv d = (\(ctx, e) -> (e, toIV ctx)) $ RC4.encrypt (toCtx iv) d
 
-decryptF_rc4 :: IV -> L.ByteString -> (L.ByteString, IV)
-decryptF_rc4 iv e = (\(ctx, d) -> (d, toIV ctx)) $ RC4.decryptlazy (toCtx iv) e
+decryptF_rc4 :: IV -> B.ByteString -> (B.ByteString, IV)
+decryptF_rc4 iv e = (\(ctx, d) -> (d, toIV ctx)) $ RC4.decrypt (toCtx iv) e
 
 {-
 TLS 1.0 ciphers definition
@@ -171,7 +174,7 @@ cipher_null_null = Cipher
 	, cipherIVSize       = 0
 	, cipherKeyBlockSize = 0
 	, cipherPaddingSize  = 0
-	, cipherHMAC         = (\_ _ -> L.empty)
+	, cipherHMAC         = (\_ _ -> B.empty)
 	, cipherKeyExchange  = CipherKeyExchangeRSA
 	, cipherF            = CipherNoneF
 	, cipherMinVer       = Nothing

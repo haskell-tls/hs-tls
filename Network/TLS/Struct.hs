@@ -8,7 +8,8 @@
 -- the Struct module contains all definitions and values of the TLS protocol
 --
 module Network.TLS.Struct
-	( Version(..)
+	( Bytes
+	, Version(..)
 	, ConnectionEnd(..)
 	, CipherType(..)
 	, Extension
@@ -41,9 +42,11 @@ module Network.TLS.Struct
 	, typeOfHandshake
 	) where
 
-import Data.ByteString.Lazy (ByteString)
+import Data.ByteString (ByteString, pack)
 import Data.Word
 import Data.Certificate.X509
+
+type Bytes = ByteString
 
 data Version = SSL2 | SSL3 | TLS10 | TLS11 | TLS12 deriving (Show, Eq, Ord)
 
@@ -107,17 +110,17 @@ data Packet =
 
 data Header = Header ProtocolType Version Word16 deriving (Show, Eq)
 
-newtype ServerRandom = ServerRandom [Word8] deriving (Show, Eq)
-newtype ClientRandom = ClientRandom [Word8] deriving (Show, Eq)
-newtype ClientKeyData = ClientKeyData [Word8] deriving (Show, Eq)
-newtype Session = Session (Maybe [Word8]) deriving (Show, Eq)
+newtype ServerRandom = ServerRandom Bytes deriving (Show, Eq)
+newtype ClientRandom = ClientRandom Bytes deriving (Show, Eq)
+newtype ClientKeyData = ClientKeyData Bytes deriving (Show, Eq)
+newtype Session = Session (Maybe Bytes) deriving (Show, Eq)
 type CipherID = Word16
 type CompressionID = Word8
 type FinishedData = [Word8]
 type Extension = (Word16, [Word8])
 
-constrRandom32 :: ([Word8] -> a) -> [Word8] -> Maybe a
-constrRandom32 constr l = if length l == 32 then Just (constr l) else Nothing
+constrRandom32 :: (Bytes -> a) -> [Word8] -> Maybe a
+constrRandom32 constr l = if length l == 32 then Just (constr $ pack l) else Nothing
 
 serverRandom :: [Word8] -> Maybe ServerRandom
 serverRandom l = constrRandom32 ServerRandom l

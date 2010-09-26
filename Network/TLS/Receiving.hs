@@ -19,7 +19,7 @@ import Control.Monad.State
 import Control.Monad.Error
 import Data.Maybe
 
-import Data.ByteString.Lazy (ByteString)
+import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString as B
 
@@ -72,14 +72,14 @@ readPacket hdr@(Header ProtocolType_Handshake ver _) content =
 decryptRSA :: MonadTLSState m => ByteString -> m (Maybe ByteString)
 decryptRSA econtent = do
 	rsapriv <- getTLSState >>= return . fromJust . hstRSAPrivateKey . fromJust . stHandshake
-	return $ rsaDecrypt rsapriv (L.drop 2 econtent)
+	return $ rsaDecrypt rsapriv (B.drop 2 econtent)
 
 setMasterSecretRandom :: ByteString -> TLSRead ()
 setMasterSecretRandom content = do
 	st <- getTLSState
-	let (bytes, g') = getRandomBytes (stRandomGen st) (fromIntegral $ L.length content)
+	let (bytes, g') = getRandomBytes (stRandomGen st) (fromIntegral $ B.length content)
 	putTLSState $ st { stRandomGen = g' }
-	setMasterSecret (L.pack bytes)
+	setMasterSecret (B.pack bytes)
 
 processClientKeyXchg :: Version -> ByteString -> TLSRead ()
 processClientKeyXchg ver content = do
@@ -93,7 +93,7 @@ processClientFinished :: FinishedData -> TLSRead ()
 processClientFinished fdata = do
 	cc <- getTLSState >>= return . stClientContext
 	expected <- getHandshakeDigest (not cc)
-	when (expected /= L.pack fdata) $ do
+	when (expected /= B.pack fdata) $ do
 		-- FIXME don't fail, but report the error so that the code can send a BadMac Alert.
 		fail ("client mac failure: expecting " ++ show expected ++ " received " ++ (show $L.pack fdata))
 	return ()
@@ -110,7 +110,7 @@ processHsPacket ver dcontent = do
 			return econtent
 	hs <- case (ty, decodeHandshake ver ty content) of
 		(_, Right x)                            -> return x
-		(HandshakeType_ClientKeyXchg, Left _)   -> return $ ClientKeyXchg SSL2 (ClientKeyData $ replicate 0xff 46)
+		(HandshakeType_ClientKeyXchg, Left _)   -> return $ ClientKeyXchg SSL2 (ClientKeyData $ B.replicate 46 0xff)
 		(_, Left err)                           -> throwError err
 	clientmode <- isClientContext
 	case hs of
@@ -132,14 +132,14 @@ decryptContentReally hdr e = do
 	st <- getTLSState
 	unencrypted_content <- decryptData e
 	let digestSize = cipherDigestSize $ fromJust $ stCipher st
-	let (unencrypted_msg, digest) = L.splitAt (L.length unencrypted_content - fromIntegral digestSize) unencrypted_content
+	let (unencrypted_msg, digest) = B.splitAt (B.length unencrypted_content - fromIntegral digestSize) unencrypted_content
 	let (Header pt ver _) = hdr
-	let new_hdr = Header pt ver (fromIntegral $ L.length unencrypted_msg)
+	let new_hdr = Header pt ver (fromIntegral $ B.length unencrypted_msg)
 	expected_digest <- makeDigest False new_hdr unencrypted_msg
 
 	if expected_digest == digest
 		then return $ unencrypted_msg
-		else throwError $ Error_Digest (L.unpack expected_digest, L.unpack digest)
+		else throwError $ Error_Digest (B.unpack expected_digest, B.unpack digest)
 
 decryptContent :: Header -> EncryptedData -> TLSRead ByteString
 decryptContent hdr e@(EncryptedData b) = do
@@ -163,26 +163,26 @@ decryptData (EncryptedData econtent) = do
 	let cst = fromJust $ stRxCryptState st
 	let padding_size = fromIntegral $ cipherPaddingSize cipher
 
-	let writekey = B.pack $ cstKey cst
-	let iv = B.pack $ cstIV cst
+	let writekey = cstKey cst
+	let iv = cstIV cst
 
 	contentpadded <- case cipherF cipher of
 		CipherNoneF -> fail "none decrypt"
 		CipherBlockF _ decryptF -> do
 			{- update IV -}
-			let newiv = takelast padding_size $ L.unpack econtent
+			let newiv = B.pack $ takelast padding_size $ B.unpack econtent
 			putTLSState $ st { stRxCryptState = Just $ cst { cstIV = newiv } }
 			return $ decryptF writekey iv econtent
 		CipherStreamF initF _ decryptF -> do
 			let (content, newiv) = decryptF (if iv /= B.empty then iv else initF writekey) econtent
 			{- update Ctx -}
-			putTLSState $ st { stRxCryptState = Just $ cst { cstIV = B.unpack newiv } }
+			putTLSState $ st { stRxCryptState = Just $ cst { cstIV = newiv } }
 			return $ content
 	let content =
 		if cipherPaddingSize cipher > 0
 			then
-				let pb = L.last contentpadded + 1 in
-				fst $ L.splitAt ((L.length contentpadded) - fromIntegral pb) contentpadded
+				let pb = B.last contentpadded + 1 in
+				fst $ B.splitAt ((B.length contentpadded) - fromIntegral pb) contentpadded
 			else contentpadded
 	return content
 
