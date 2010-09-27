@@ -1,5 +1,5 @@
 Name:                tls
-Version:             0.1.2
+Version:             0.1.3
 Description:
    Implementation of the TLS protocol, focusing on purity and more type-checking.
    .
