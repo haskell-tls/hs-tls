@@ -33,6 +33,7 @@ module Network.TLS.State
 	, isClientContext
 	, startHandshakeClient
 	, updateHandshakeDigest
+	, updateHandshakeDigestSplitted
 	, getHandshakeDigest
 	, endHandshake
 	) where
@@ -281,6 +282,11 @@ updateHandshakeDigest content = updateHandshake "update digest" (\hs ->
 	let nc2 = updateHash c2 content in
 	hs { hstHandshakeDigest = Just (nc1, nc2) }
 	)
+
+updateHandshakeDigestSplitted :: MonadTLSState m => HandshakeType -> Bytes -> m ()
+updateHandshakeDigestSplitted ty bytes = updateHandshakeDigest $ B.concat [hdr, bytes]
+	where
+		hdr = runPut $ encodeHandshakeHeader ty (B.length bytes)
 
 getHandshakeDigest :: MonadTLSState m => Bool -> m Bytes
 getHandshakeDigest client = do
