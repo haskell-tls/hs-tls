@@ -69,7 +69,15 @@ processPacket (Header ProtocolType_ChangeCipherSpec _ _) content = do
 	return ChangeCipherSpec
 
 processPacket (Header ProtocolType_Handshake ver _) dcontent = do
-	(ty, econtent) <- returnEither $ decodeHandshakeHeader dcontent
+	handshakes <- returnEither (decodeHandshakes dcontent)
+	hss <- forM handshakes $ \(ty, content) -> do
+		hs <- processHandshake ver ty content
+		when (finishHandshakeTypeMaterial ty) $ updateHandshakeDigestSplitted ty content
+		return hs
+	return $ head hss -- FIXME for compat until we fixes the expectations in server/client
+
+processHandshake :: Version -> HandshakeType -> ByteString -> TLSRead Packet
+processHandshake ver ty econtent = do
 	-- SECURITY FIXME if RSA fail, we need to generate a random master secret and not fail.
 	content <- case ty of
 		HandshakeType_ClientKeyXchg -> do
@@ -93,7 +101,6 @@ processPacket (Header ProtocolType_Handshake ver _) dcontent = do
 			processClientKeyXchg cver content
 		Finished fdata               -> processClientFinished fdata
 		_                            -> return ()
-	when (finishHandshakeTypeMaterial ty) (updateHandshakeDigest dcontent)
 	return $ Handshake hs
 
 decryptRSA :: MonadTLSState m => ByteString -> m (Maybe ByteString)

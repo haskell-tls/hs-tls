@@ -20,7 +20,7 @@ module Network.TLS.Packet
 	, encodeAlert
 
 	-- * marshall functions for handshake messages
-	, decodeHandshakeHeader
+	, decodeHandshakes
 	, decodeHandshake
 	, encodeHandshake
 	, encodeHandshakeHeader
@@ -90,18 +90,25 @@ encodeAlert :: (AlertLevel, AlertDescription) -> ByteString
 encodeAlert (al, ad) = runPut (putWord8 (valOfType al) >> putWord8 (valOfType ad))
 
 {- decode and encode HANDSHAKE -}
-
-decodeHandshakeHeader :: ByteString -> Either TLSError (HandshakeType, Bytes)
-decodeHandshakeHeader = runGet $ do
+decodeHandshakeHeader :: Get (HandshakeType, Bytes)
+decodeHandshakeHeader = do
 	tyopt <- getWord8 >>= return . valToType
 	ty <- if isNothing tyopt
 		then throwError (Error_Unknown_Type "handshake type")
 		else return $ fromJust tyopt
 	len <- getWord24
 	content <- getBytes len
-	empty <- isEmpty
-	unless empty (throwError (Error_Internal_Packet_Remaining 1))
 	return (ty, content)
+
+decodeHandshakes :: ByteString -> Either TLSError [(HandshakeType, Bytes)]
+decodeHandshakes b = runGet getAll b
+	where
+		getAll = do
+			x <- decodeHandshakeHeader
+			empty <- isEmpty
+			if empty
+				then return [x]
+				else getAll >>= \l -> return (x : l)
 
 decodeHandshake :: Version -> HandshakeType -> ByteString -> Either TLSError Handshake
 decodeHandshake ver ty = runGet $ case ty of

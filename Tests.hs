@@ -89,7 +89,7 @@ instance Arbitrary Handshake where
 prop_header_marshalling_id x = (decodeHeader $ encodeHeader x) == Right x
 prop_handshake_marshalling_id x = (decodeHs $ encodeHandshake x) == Right x
 	where
-		decodeHs b = either (Left . id) (\(ty, bdata) -> decodeHandshake TLS10 ty bdata) $ decodeHandshakeHeader b
+		decodeHs b = either (Left . id) (uncurry (decodeHandshake TLS10) . head) $ decodeHandshakes b
 
 {- main -}
 args = Args
