@@ -88,7 +88,7 @@ runTLSServer f params rng = runTLSServerST f (TLSStateServer { scParams = params
 	where state = (newTLSState rng) { stClientContext = False }
 
 {- | receive a single TLS packet or on error a TLSError -}
-recvPacket :: Handle -> TLSServer IO (Either TLSError Packet)
+recvPacket :: Handle -> TLSServer IO (Either TLSError [Packet])
 recvPacket handle = do
 	hdr <- lift $ B.hGet handle 5 >>= return . decodeHeader
 	case hdr of
@@ -126,25 +126,6 @@ handleClientHello (ClientHello ver _ _ ciphers compressionID _) = do
 
 handleClientHello _ = do
 	fail "unexpected handshake type received. expecting client hello"
-
-expectingPacket :: (Either TLSError Packet) -> ProtocolType -> TLSServer IO ()
-expectingPacket pkt expectedType = do
-	apkt <- case pkt of
-		Right x       -> return x
-		Left tlserror -> fail ("expecting packet but got error " ++ show tlserror)
-	when (packetType apkt /= expectedType) $ do
-		fail ("unexpected packet received, expecting " ++ show expectedType)
-	return ()
-
-expectingHandshake :: (Either TLSError Packet) -> HandshakeType -> TLSServer IO ()
-expectingHandshake pkt expectedType = do
-	hs <- case pkt of
-		Right (Handshake hs) -> return hs
-		Right _              -> fail ("unexpected packet received, expecting handshake " ++ show expectedType)
-		Left tlserror        -> fail ("expecting handshake but got error " ++ show tlserror)
-	when (typeOfHandshake hs /= expectedType) $ do
-		fail ("unexpected handshake received, expecting " ++ show expectedType)
-	return ()
 
 handshakeSendServerData :: Handle -> ServerRandom -> TLSServer IO ()
 handshakeSendServerData handle srand = do
@@ -192,9 +173,7 @@ handshake handle srand = do
 	handshakeSendServerData handle srand
 	lift $ hFlush handle
 
-	recvPacket handle >>= \pkt -> expectingHandshake pkt HandshakeType_ClientKeyXchg
-	recvPacket handle >>= \pkt -> expectingPacket pkt ProtocolType_ChangeCipherSpec
-	recvPacket handle >>= \pkt -> expectingHandshake pkt HandshakeType_Finished
+	whileStatus (/= (StatusHandshake HsStatusClientFinished)) (recvPacket handle)
 
 	sendPacket handle ChangeCipherSpec
 	handshakeSendFinish handle
@@ -206,9 +185,9 @@ handshake handle srand = do
 {- | listen on a handle to a new TLS connection. -}
 listen :: Handle -> ServerRandom -> TLSServer IO ()
 listen handle srand = do
-	pkt <- recvPacket handle
-	case pkt of
-		Right (Handshake hs) -> handleClientHello hs
+	pkts <- recvPacket handle
+	case pkts of
+		Right [Handshake hs] -> handleClientHello hs
 		x                    -> fail ("unexpected type received. expecting handshake ++ " ++ show x)
 	handshake handle srand
 
@@ -234,7 +213,7 @@ recvData :: Handle -> TLSServer IO L.ByteString
 recvData handle = do
 	pkt <- recvPacket handle
 	case pkt of
-		Right (Handshake (ClientHello _ _ _ _ _ _)) -> do
+		Right [Handshake (ClientHello _ _ _ _ _ _)] -> do
 			-- SECURITY FIXME audit the rng here..
 			st <- getTLSState
 			let (bytes, rng') = getRandomBytes (stRandomGen st) 32
@@ -242,7 +221,7 @@ recvData handle = do
 			let srand = fromJust $ serverRandom bytes
 			handshake handle srand
 			recvData handle
-		Right (AppData x) -> return $ L.fromChunks [x]
+		Right [AppData x] -> return $ L.fromChunks [x]
 		Left err          -> error ("error received: " ++ show err)
 		_                 -> error "unexpected item"
 

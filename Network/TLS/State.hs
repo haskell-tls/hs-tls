@@ -20,6 +20,7 @@ module Network.TLS.State
 	, assert -- FIXME move somewhere else (Internal.hs ?)
 	, updateStatusHs
 	, updateStatusCC
+	, whileStatus
 	, finishHandshakeTypeMaterial
 	, finishHandshakeMaterial
 	, makeDigest
@@ -190,6 +191,11 @@ hsStatusTransitionTable =
 	, (HandshakeType_Finished, StatusOk,
 		[ StatusHandshake HsStatusServerChangeCipher ])
 	]
+
+whileStatus :: (MonadTLSState m, Monad m) => (TLSStatus -> Bool) -> m a -> m ()
+whileStatus p a = do
+	currentStatus <- getTLSState >>= return . stStatus
+	when (p currentStatus) (a >> whileStatus p a)
 
 updateStatus :: MonadTLSState m => TLSStatus -> m ()
 updateStatus x = modifyTLSState (\st -> st { stStatus = x })

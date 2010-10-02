@@ -87,7 +87,7 @@ runTLSClient f params rng = runTLSClientST f (TLSStateClient { scParams = params
 	where state = (newTLSState rng) { stVersion = cpConnectVersion params, stClientContext = True }
 
 {- | receive a single TLS packet or on error a TLSError -}
-recvPacket :: Handle -> TLSClient IO (Either TLSError Packet)
+recvPacket :: Handle -> TLSClient IO (Either TLSError [Packet])
 recvPacket handle = do
 	hdr <- lift $ B.hGet handle 5 >>= return . decodeHeader
 	case hdr of
@@ -102,33 +102,33 @@ sendPacket handle pkt = do
 	dataToSend <- writePacket pkt
 	lift $ B.hPut handle dataToSend
 
-recvServerHello :: Handle -> TLSClient IO ()
-recvServerHello handle = do
+processServerInfo (Handshake (ServerHello ver _ _ cipher _ _)) = do
 	ciphers <- cpCiphers . scParams <$> get
 	allowedvers <- cpAllowedVersions . scParams <$> get
-	callbacks <- cpCallbacks . scParams <$> get
-	pkt <- recvPacket handle
-	let hs = case pkt of
-		Right (Handshake h) -> h
-		Left err            -> error ("error received: " ++ show err)
-		Right x             -> error ("unexpected packet received, expecting handshake " ++ show x)
-	case hs of
-		ServerHello ver _ _ cipher _ _ -> do
-			case find ((==) ver) allowedvers of
-				Nothing -> error ("received version which is not allowed: " ++ show ver)
-				Just _  -> setVersion ver
+	case find ((==) ver) allowedvers of
+		Nothing -> error ("received version which is not allowed: " ++ show ver)
+		Just _  -> setVersion ver
+	case find ((==) cipher . cipherID) ciphers of
+		Nothing -> error "no cipher in common with the server"
+		Just c  -> setCipher c
 
-			case find ((==) cipher . cipherID) ciphers of
-				Nothing -> error "no cipher in common with the server"
-				Just c  -> setCipher c
-			recvServerHello handle
-		CertRequest _ _ _  -> modify (\sc -> sc { scCertRequested = True }) >> recvServerHello handle
-		Certificates certs -> do
-			valid <- lift $ maybe (return True) (\cb -> cb certs) (cbCertificates callbacks)
-			unless valid $ error "certificates received deemed invalid by user"
-			recvServerHello handle
-		ServerHelloDone    -> return ()
-		_                  -> error "unexpected handshake message received in server hello messages"
+processServerInfo (Handshake (CertRequest _ _ _)) = do
+	modify (\sc -> sc { scCertRequested = True })
+
+processServerInfo (Handshake (Certificates certs)) = do
+	callbacks <- cpCallbacks . scParams <$> get
+	valid <- lift $ maybe (return True) (\cb -> cb certs) (cbCertificates callbacks)
+	unless valid $ error "certificates received deemed invalid by user"
+
+processServerInfo _ = return ()
+
+recvServerInfo :: Handle -> TLSClient IO ()
+recvServerInfo handle = do
+	whileStatus (/= (StatusHandshake HsStatusServerHelloDone)) $ do
+		pkts <- recvPacket handle
+		case pkts of
+			Left err -> error ("error received: " ++ show err)
+			Right l  -> forM_ l processServerInfo
 
 connectSendClientHello :: Handle -> ClientRandom -> TLSClient IO ()
 connectSendClientHello handle crand = do
@@ -157,7 +157,7 @@ connectSendFinish handle = do
 connect :: Handle -> ClientRandom -> ClientKeyData -> TLSClient IO ()
 connect handle crand premasterRandom = do
 	connectSendClientHello handle crand
-	recvServerHello handle
+	recvServerInfo handle
 	connectSendClientCertificate handle
 
 	connectSendClientKeyXchg handle premasterRandom
@@ -172,16 +172,10 @@ connect handle crand premasterRandom = do
 	connectSendFinish handle
 	
 	{- receive changeCipherSpec -}
-	pktCCS <- recvPacket handle
-	case pktCCS of
-		Right ChangeCipherSpec -> return ()
-		x                      -> error ("unexpected reply. expecting change cipher spec  " ++ show x)
+	_ <- recvPacket handle
 
 	{- receive Finished -}
-	pktFin <- recvPacket handle
-	case pktFin of
-		Right (Handshake (Finished _)) -> return ()
-		x                              -> error ("unexpected reply. expecting finished " ++ show x)
+	_ <- recvPacket handle
 
 	return ()
 
@@ -205,8 +199,8 @@ recvData :: Handle -> TLSClient IO L.ByteString
 recvData handle = do
 	pkt <- recvPacket handle
 	case pkt of
-		Right (AppData x) -> return $ L.fromChunks [x]
-		Right (Handshake HelloRequest) -> do
+		Right [AppData x] -> return $ L.fromChunks [x]
+		Right [Handshake HelloRequest] -> do
 			-- SECURITY FIXME audit the rng here..
 			st <- getTLSState
 			let (bytes, rng') = getRandomBytes (stRandomGen st) 32

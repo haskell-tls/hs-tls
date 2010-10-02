@@ -54,7 +54,7 @@ returnEither :: Either TLSError a -> TLSRead a
 returnEither (Left err) = throwError err
 returnEither (Right a)  = return a
 
-readPacket :: MonadTLSState m => Header -> EncryptedData -> m (Either TLSError Packet)
+readPacket :: MonadTLSState m => Header -> EncryptedData -> m (Either TLSError [Packet])
 readPacket hdr content = runTLSRead (checkState hdr >> decryptContent hdr content >>= processPacket hdr)
 
 checkState :: Header -> TLSRead ()
@@ -71,11 +71,11 @@ checkState (Header pt _ _) =
 		allowed ProtocolType_ChangeCipherSpec (StatusHandshake HsStatusClientCertificateVerify) = True
 		allowed _ _ = False
 
-processPacket :: Header -> Bytes -> TLSRead Packet
+processPacket :: Header -> Bytes -> TLSRead [Packet]
 
-processPacket (Header ProtocolType_AppData _ _) content = return $ AppData content
+processPacket (Header ProtocolType_AppData _ _) content = return [AppData content]
 
-processPacket (Header ProtocolType_Alert _ _) content = return . Alert =<< returnEither (decodeAlert content)
+processPacket (Header ProtocolType_Alert _ _) content = return . (:[]) . Alert =<< returnEither (decodeAlert content)
 
 processPacket (Header ProtocolType_ChangeCipherSpec _ _) content = do
 	e <- updateStatusCC False
@@ -84,15 +84,14 @@ processPacket (Header ProtocolType_ChangeCipherSpec _ _) content = do
 	returnEither $ decodeChangeCipherSpec content
 	switchRxEncryption
 	isClientContext >>= \cc -> when (not cc) setKeyBlock
-	return ChangeCipherSpec
+	return [ChangeCipherSpec]
 
 processPacket (Header ProtocolType_Handshake ver _) dcontent = do
 	handshakes <- returnEither (decodeHandshakes dcontent)
-	hss <- forM handshakes $ \(ty, content) -> do
+	forM handshakes $ \(ty, content) -> do
 		hs <- processHandshake ver ty content
 		when (finishHandshakeTypeMaterial ty) $ updateHandshakeDigestSplitted ty content
 		return hs
-	return $ head hss -- FIXME for compat until we fixes the expectations in server/client
 
 processHandshake :: Version -> HandshakeType -> ByteString -> TLSRead Packet
 processHandshake ver ty econtent = do
