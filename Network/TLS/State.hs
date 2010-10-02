@@ -13,6 +13,8 @@ module Network.TLS.State
 	, TLSHandshakeState(..)
 	, TLSCryptState(..)
 	, TLSMacState(..)
+	, TLSStatus(..)
+	, HandshakeStatus(..)
 	, MonadTLSState, getTLSState, putTLSState, modifyTLSState
 	, newTLSState
 	, assert -- FIXME move somewhere else (Internal.hs ?)
@@ -51,6 +53,29 @@ assert :: Monad m => String -> [(String,Bool)] -> m ()
 assert fctname list = forM_ list $ \ (name, assumption) -> do
 	when assumption $ fail (fctname ++ ": assumption about " ++ name ++ " failed")
 
+data HandshakeStatus =
+	  HsStatusClientHello
+	| HsStatusServerHello
+	| HsStatusServerCertificate
+	| HsStatusServerKeyXchg
+	| HsStatusServerCertificateReq
+	| HsStatusServerHelloDone
+	| HsStatusClientCertificate
+	| HsStatusClientKeyXchg
+	| HsStatusClientCertificateVerify
+	| HsStatusClientChangeCipher
+	| HsStatusClientFinished
+	| HsStatusServerChangeCipher
+	| HsStatusServerFinished
+	deriving (Show,Eq)
+
+data TLSStatus =
+	  StatusInit
+	| StatusHandshakeReq
+	| StatusHandshake HandshakeStatus
+	| StatusOk
+	deriving (Show,Eq)
+
 data TLSCryptState = TLSCryptState
 	{ cstKey        :: !Bytes
 	, cstIV         :: !Bytes
@@ -74,6 +99,7 @@ data TLSHandshakeState = TLSHandshakeState
 data TLSState = TLSState
 	{ stClientContext :: Bool
 	, stVersion       :: !Version
+	, stStatus        :: !TLSStatus
 	, stHandshake     :: !(Maybe TLSHandshakeState)
 	, stTxEncrypted   :: Bool
 	, stRxEncrypted   :: Bool
@@ -93,6 +119,7 @@ newTLSState :: SRandomGen -> TLSState
 newTLSState rng = TLSState
 	{ stClientContext = False
 	, stVersion       = TLS10
+	, stStatus        = StatusInit
 	, stHandshake     = Nothing
 	, stTxEncrypted   = False
 	, stRxEncrypted   = False
