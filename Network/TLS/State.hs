@@ -18,6 +18,8 @@ module Network.TLS.State
 	, MonadTLSState, getTLSState, putTLSState, modifyTLSState
 	, newTLSState
 	, assert -- FIXME move somewhere else (Internal.hs ?)
+	, updateStatusHs
+	, updateStatusCC
 	, finishHandshakeTypeMaterial
 	, finishHandshakeMaterial
 	, makeDigest
@@ -39,6 +41,7 @@ module Network.TLS.State
 	) where
 
 import Data.Word
+import Data.List (find)
 import Data.Maybe (fromJust, isNothing)
 import Network.TLS.Util
 import Network.TLS.Struct
@@ -67,7 +70,6 @@ data HandshakeStatus =
 	| HsStatusClientChangeCipher
 	| HsStatusClientFinished
 	| HsStatusServerChangeCipher
-	| HsStatusServerFinished
 	deriving (Show,Eq)
 
 data TLSStatus =
@@ -153,6 +155,68 @@ makeDigest w hdr content = do
 
 	modifyTLSState (\_ -> if w then st { stTxMacState = Just newms } else st { stRxMacState = Just newms })
 	return digest
+
+hsStatusTransitionTable :: [ (HandshakeType, TLSStatus, [ TLSStatus ]) ]
+hsStatusTransitionTable =
+	[ (HandshakeType_HelloRequest, StatusHandshakeReq,
+		[ StatusOk ])
+	, (HandshakeType_ClientHello, StatusHandshake HsStatusClientHello,
+		[ StatusInit, StatusHandshakeReq ])
+	, (HandshakeType_ServerHello, StatusHandshake HsStatusServerHello,
+		[ StatusHandshake HsStatusClientHello ])
+	, (HandshakeType_Certificate, StatusHandshake HsStatusServerCertificate,
+		[ StatusHandshake HsStatusServerHello ])
+	, (HandshakeType_ServerKeyXchg, StatusHandshake HsStatusServerKeyXchg,
+		[ StatusHandshake HsStatusServerHello
+		, StatusHandshake HsStatusServerCertificate ])
+	, (HandshakeType_CertRequest, StatusHandshake HsStatusServerCertificateReq,
+		[ StatusHandshake HsStatusServerHello
+		, StatusHandshake HsStatusServerCertificate
+		, StatusHandshake HsStatusServerKeyXchg ])
+	, (HandshakeType_ServerHelloDone, StatusHandshake HsStatusServerHelloDone,
+		[ StatusHandshake HsStatusServerHello
+		, StatusHandshake HsStatusServerCertificate
+		, StatusHandshake HsStatusServerKeyXchg
+		, StatusHandshake HsStatusServerCertificateReq ])
+	, (HandshakeType_Certificate, StatusHandshake HsStatusClientCertificate,
+		[ StatusHandshake HsStatusServerHelloDone ])
+	, (HandshakeType_ClientKeyXchg, StatusHandshake HsStatusClientKeyXchg,
+		[ StatusHandshake HsStatusServerHelloDone
+		, StatusHandshake HsStatusClientCertificate ])
+	, (HandshakeType_CertVerify, StatusHandshake HsStatusClientCertificateVerify,
+		[ StatusHandshake HsStatusClientKeyXchg ])
+	, (HandshakeType_Finished, StatusHandshake HsStatusClientFinished,
+		[ StatusHandshake HsStatusClientChangeCipher ])
+	, (HandshakeType_Finished, StatusOk,
+		[ StatusHandshake HsStatusServerChangeCipher ])
+	]
+
+updateStatus :: MonadTLSState m => TLSStatus -> m ()
+updateStatus x = modifyTLSState (\st -> st { stStatus = x })
+
+updateStatusHs :: MonadTLSState m => HandshakeType -> m (Maybe TLSError)
+updateStatusHs ty = do
+	status <- return . stStatus =<< getTLSState
+	ns <- return . transition . stStatus =<< getTLSState
+	case ns of
+		Nothing      -> return $ Just $ Error_Packet_unexpected (show status) ("handshake:" ++ show ty)
+		Just (_,x,_) -> updateStatus x >> return Nothing
+	where
+		edgeEq cur (ety, _, aprevs) = ty == ety && (maybe False (const True) $ find (== cur) aprevs)
+		transition currentStatus = find (edgeEq currentStatus) hsStatusTransitionTable
+
+updateStatusCC :: MonadTLSState m => Bool -> m (Maybe TLSError)
+updateStatusCC sending = do
+	status <- return . stStatus =<< getTLSState
+	cc     <- isClientContext
+	let x = case (cc /= sending, status) of
+		(False, StatusHandshake HsStatusClientKeyXchg)           -> Just (StatusHandshake HsStatusClientChangeCipher)
+		(False, StatusHandshake HsStatusClientCertificateVerify) -> Just (StatusHandshake HsStatusClientChangeCipher)
+		(True, StatusHandshake HsStatusClientFinished)           -> Just (StatusHandshake HsStatusServerChangeCipher)
+		_                                                        -> Nothing
+	case x of
+		Just newstatus -> updateStatus newstatus >> return Nothing
+		Nothing        -> return $ Just $ Error_Packet_unexpected (show status) ("Client Context: " ++ show cc)
 
 finishHandshakeTypeMaterial :: HandshakeType -> Bool
 finishHandshakeTypeMaterial HandshakeType_ClientHello     = True

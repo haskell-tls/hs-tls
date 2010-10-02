@@ -76,13 +76,24 @@ postprocessPacketData dat = return dat
 encodePacket :: MonadTLSState m => (Header, ByteString) -> m ByteString
 encodePacket (hdr, content) = return $ B.concat [ encodeHeader hdr, content ]
 
+{-
+ - just update TLS state machine
+ -}
+preProcessPacket :: MonadTLSState m => Packet -> m Packet
+preProcessPacket pkt = do
+	e <- case pkt of
+		Handshake hs     -> updateStatusHs (typeOfHandshake hs)
+		AppData _        -> return Nothing
+		ChangeCipherSpec -> updateStatusCC True
+		Alert _          -> return Nothing
+	return pkt
 
 {-
  - writePacket transform a packet into marshalled data related to current state
  - and updating state on the go
  -}
 writePacket :: MonadTLSState m => Packet -> m ByteString
-writePacket pkt = makePacketData pkt >>= processPacketData >>=
+writePacket pkt = preProcessPacket pkt >>= makePacketData >>= processPacketData >>=
                   encryptPacketData >>= postprocessPacketData >>= encodePacket
 
 {------------------------------------------------------------------------------}

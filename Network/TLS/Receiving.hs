@@ -14,6 +14,7 @@ module Network.TLS.Receiving (
 	readPacket
 	) where
 
+import Control.Applicative ((<$>))
 import Control.Monad.State
 import Control.Monad.Error
 import Data.Maybe
@@ -54,7 +55,21 @@ returnEither (Left err) = throwError err
 returnEither (Right a)  = return a
 
 readPacket :: MonadTLSState m => Header -> EncryptedData -> m (Either TLSError Packet)
-readPacket hdr content = runTLSRead (decryptContent hdr content >>= processPacket hdr)
+readPacket hdr content = runTLSRead (checkState hdr >> decryptContent hdr content >>= processPacket hdr)
+
+checkState :: Header -> TLSRead ()
+checkState (Header pt _ _) =
+		stStatus <$> getTLSState >>= \status -> unless (allowed pt status) $ throwError $ Error_Packet_unexpected (show status) (show pt)
+	where
+		allowed :: ProtocolType -> TLSStatus -> Bool
+		allowed ProtocolType_Alert _                    = True
+		allowed ProtocolType_Handshake _                = True
+		allowed ProtocolType_AppData StatusHandshakeReq = True
+		allowed ProtocolType_AppData StatusOk           = True
+		allowed ProtocolType_ChangeCipherSpec (StatusHandshake HsStatusClientFinished) = True
+		allowed ProtocolType_ChangeCipherSpec (StatusHandshake HsStatusClientKeyXchg) = True
+		allowed ProtocolType_ChangeCipherSpec (StatusHandshake HsStatusClientCertificateVerify) = True
+		allowed _ _ = False
 
 processPacket :: Header -> Bytes -> TLSRead Packet
 
@@ -63,6 +78,9 @@ processPacket (Header ProtocolType_AppData _ _) content = return $ AppData conte
 processPacket (Header ProtocolType_Alert _ _) content = return . Alert =<< returnEither (decodeAlert content)
 
 processPacket (Header ProtocolType_ChangeCipherSpec _ _) content = do
+	e <- updateStatusCC False
+	when (isJust e) $ throwError (fromJust e)
+
 	returnEither $ decodeChangeCipherSpec content
 	switchRxEncryption
 	isClientContext >>= \cc -> when (not cc) setKeyBlock
@@ -79,6 +97,9 @@ processPacket (Header ProtocolType_Handshake ver _) dcontent = do
 processHandshake :: Version -> HandshakeType -> ByteString -> TLSRead Packet
 processHandshake ver ty econtent = do
 	-- SECURITY FIXME if RSA fail, we need to generate a random master secret and not fail.
+	e <- updateStatusHs ty
+	when (isJust e) $ throwError (fromJust e)
+
 	content <- case ty of
 		HandshakeType_ClientKeyXchg -> do
 			copt <- decryptRSA econtent

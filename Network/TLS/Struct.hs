@@ -103,6 +103,7 @@ data TLSError =
 	| Error_Digest ([Word8], [Word8])
 	| Error_Packet String
 	| Error_Packet_Size_Mismatch (Int, Int)
+	| Error_Packet_unexpected String String
 	| Error_Internal_Packet_Remaining Int
 	| Error_Internal_Packet_ByteProcessed Int Int Int
 	| Error_Unknown_Version Word8 Word8
