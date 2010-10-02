@@ -14,7 +14,6 @@ module Network.TLS.Receiving (
 	readPacket
 	) where
 
-import Control.Applicative ((<$>))
 import Control.Monad.State
 import Control.Monad.Error
 import Data.Maybe
@@ -55,21 +54,47 @@ returnEither (Left err) = throwError err
 returnEither (Right a)  = return a
 
 readPacket :: MonadTLSState m => Header -> EncryptedData -> m (Either TLSError Packet)
-readPacket hdr@(Header ProtocolType_AppData _ _) content =
-	runTLSRead (AppData <$> decryptContent hdr content)
+readPacket hdr content = runTLSRead (decryptContent hdr content >>= processPacket hdr)
 
-readPacket hdr@(Header ProtocolType_Alert _ _)   content =
-	runTLSRead (decryptContent hdr content >>= returnEither . decodeAlert >>= return . Alert)
+processPacket :: Header -> Bytes -> TLSRead Packet
 
-readPacket hdr@(Header ProtocolType_ChangeCipherSpec _ _) content = runTLSRead $ do
-	dcontent <- decryptContent hdr content
-	returnEither $ decodeChangeCipherSpec dcontent
+processPacket (Header ProtocolType_AppData _ _) content = return $ AppData content
+
+processPacket (Header ProtocolType_Alert _ _) content = return . Alert =<< returnEither (decodeAlert content)
+
+processPacket (Header ProtocolType_ChangeCipherSpec _ _) content = do
+	returnEither $ decodeChangeCipherSpec content
 	switchRxEncryption
 	isClientContext >>= \cc -> when (not cc) setKeyBlock
 	return ChangeCipherSpec
 
-readPacket hdr@(Header ProtocolType_Handshake ver _) content =
-	runTLSRead (decryptContent hdr content >>= processHsPacket ver)
+processPacket (Header ProtocolType_Handshake ver _) dcontent = do
+	(ty, econtent) <- returnEither $ decodeHandshakeHeader dcontent
+	-- SECURITY FIXME if RSA fail, we need to generate a random master secret and not fail.
+	content <- case ty of
+		HandshakeType_ClientKeyXchg -> do
+			copt <- decryptRSA econtent
+			return $ maybe econtent id copt
+		_                           ->
+			return econtent
+	hs <- case (ty, decodeHandshake ver ty content) of
+		(_, Right x)                            -> return x
+		(HandshakeType_ClientKeyXchg, Left _)   -> return $ ClientKeyXchg SSL2 (ClientKeyData $ B.replicate 46 0xff)
+		(_, Left err)                           -> throwError err
+	clientmode <- isClientContext
+	case hs of
+		ClientHello cver ran _ _ _ _ -> unless clientmode $ do
+			startHandshakeClient cver ran
+		ServerHello sver ran _ _ _ _ -> when clientmode $ do
+			setServerRandom ran
+			setVersion sver
+		Certificates certs           -> when clientmode $ do processCertificates certs
+		ClientKeyXchg cver _         -> unless clientmode $ do
+			processClientKeyXchg cver content
+		Finished fdata               -> processClientFinished fdata
+		_                            -> return ()
+	when (finishHandshakeTypeMaterial ty) (updateHandshakeDigest dcontent)
+	return $ Handshake hs
 
 decryptRSA :: MonadTLSState m => ByteString -> m (Maybe ByteString)
 decryptRSA econtent = do
@@ -99,36 +124,6 @@ processClientFinished fdata = do
 		-- FIXME don't fail, but report the error so that the code can send a BadMac Alert.
 		fail ("client mac failure: expecting " ++ show expected ++ " received " ++ (show $L.pack fdata))
 	return ()
-
-processHsPacket :: Version -> ByteString -> TLSRead Packet
-processHsPacket ver dcontent = do
-	(ty, econtent) <- returnEither $ decodeHandshakeHeader dcontent
-	-- SECURITY FIXME if RSA fail, we need to generate a random master secret and not fail.
-	content <- case ty of
-		HandshakeType_ClientKeyXchg -> do
-			copt <- decryptRSA econtent
-			return $ maybe econtent id copt
-		_                           ->
-			return econtent
-	hs <- case (ty, decodeHandshake ver ty content) of
-		(_, Right x)                            -> return x
-		(HandshakeType_ClientKeyXchg, Left _)   -> return $ ClientKeyXchg SSL2 (ClientKeyData $ B.replicate 46 0xff)
-		(_, Left err)                           -> throwError err
-	clientmode <- isClientContext
-	case hs of
-		ClientHello cver ran _ _ _ _ -> unless clientmode $ do
-			startHandshakeClient cver ran
-		ServerHello sver ran _ _ _ _ -> when clientmode $ do
-			setServerRandom ran
-			setVersion sver
-		Certificates certs           -> when clientmode $ do processCertificates certs
-		ClientKeyXchg cver _         -> unless clientmode $ do
-			processClientKeyXchg cver content
-		Finished fdata               -> processClientFinished fdata
-		_                            -> return ()
-	when (finishHandshakeTypeMaterial ty) (updateHandshakeDigest dcontent)
-	return $ Handshake hs
-
 
 decryptContent :: Header -> EncryptedData -> TLSRead ByteString
 decryptContent hdr e@(EncryptedData b) = do
