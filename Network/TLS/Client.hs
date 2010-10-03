@@ -131,8 +131,9 @@ recvServerInfo handle = do
 			Left err -> error ("error received: " ++ show err)
 			Right l  -> forM_ l processServerInfo
 
-connectSendClientHello :: Handle -> ClientRandom -> TLSClient IO ()
-connectSendClientHello handle crand = do
+connectSendClientHello :: Handle -> TLSClient IO ()
+connectSendClientHello handle  = do
+	crand <- fromJust . clientRandom <$> withTLSRNG (\rng -> getRandomBytes rng 32)
 	ver <- cpConnectVersion . scParams <$> get
 	ciphers <- cpCiphers . scParams <$> get
 	sendPacket handle $ Handshake (ClientHello ver crand (Session Nothing) (map cipherID ciphers) [ 0 ] Nothing)
@@ -144,8 +145,9 @@ connectSendClientCertificate handle = do
 		clientCert <- cpCertificate . scParams <$> get
 		sendPacket handle $ Handshake (Certificates $ maybe [] (:[]) clientCert)
 
-connectSendClientKeyXchg :: Handle -> ClientKeyData -> TLSClient IO ()
-connectSendClientKeyXchg handle prerand = do
+connectSendClientKeyXchg :: Handle -> TLSClient IO ()
+connectSendClientKeyXchg handle = do
+	prerand <- ClientKeyData . B.pack <$> withTLSRNG (\rng -> getRandomBytes rng 46)
 	ver <- cpConnectVersion . scParams <$> get
 	sendPacket handle $ Handshake (ClientKeyXchg ver prerand)
 
@@ -155,13 +157,13 @@ connectSendFinish handle = do
 	sendPacket handle (Handshake $ Finished $ B.unpack cf)
 
 {- | connect through a handle as a new TLS connection. -}
-connect :: Handle -> ClientRandom -> ClientKeyData -> TLSClient IO ()
-connect handle crand premasterRandom = do
-	connectSendClientHello handle crand
+connect :: Handle -> TLSClient IO ()
+connect handle = do
+	connectSendClientHello handle
 	recvServerInfo handle
 	connectSendClientCertificate handle
 
-	connectSendClientKeyXchg handle premasterRandom
+	connectSendClientKeyXchg handle
 
 	{- maybe send certificateVerify -}
 	{- FIXME not implemented yet -}
@@ -201,16 +203,7 @@ recvData handle = do
 	pkt <- recvPacket handle
 	case pkt of
 		Right [AppData x] -> return $ L.fromChunks [x]
-		Right [Handshake HelloRequest] -> do
-			-- SECURITY FIXME audit the rng here..
-			(bytes, premaster) <- withTLSRNG (\rng ->
-				let (r1, rng')  = getRandomBytes rng 32 in
-				let (r2, rng'') = getRandomBytes rng' 46 in
-				((r1, r2), rng'')
-				)
-			let crand = fromJust $ clientRandom bytes
-			connect handle crand (ClientKeyData $ B.pack premaster)
-			recvData handle
+		Right [Handshake HelloRequest] -> connect handle >> recvData handle
 		Left err          -> error ("error received: " ++ show err)
 		_                 -> error "unexpected item"
 

@@ -30,6 +30,7 @@ import Data.Maybe
 import Data.List (intersect, find)
 import Control.Monad.Trans
 import Control.Monad.State
+import Control.Applicative ((<$>))
 import Codec.Crypto.RSA (PrivateKey(..))
 import Data.Certificate.X509
 import qualified Data.Certificate.Key as CertificateKey
@@ -127,8 +128,9 @@ handleClientHello (ClientHello ver _ _ ciphers compressionID _) = do
 handleClientHello _ = do
 	fail "unexpected handshake type received. expecting client hello"
 
-handshakeSendServerData :: Handle -> ServerRandom -> TLSServer IO ()
-handshakeSendServerData handle srand = do
+handshakeSendServerData :: Handle -> TLSServer IO ()
+handshakeSendServerData handle = do
+	srand <- fromJust . serverRandom <$> withTLSRNG (\rng -> getRandomBytes rng 32)
 	sp <- get >>= return . scParams
 	st <- getTLSState
 
@@ -168,9 +170,9 @@ handshakeSendFinish handle = do
 	sendPacket handle (Handshake $ Finished $ B.unpack cf)
 
 {- after receiving a client hello, we need to redo a handshake -}
-handshake :: Handle -> ServerRandom -> TLSServer IO ()
-handshake handle srand = do
-	handshakeSendServerData handle srand
+handshake :: Handle -> TLSServer IO ()
+handshake handle = do
+	handshakeSendServerData handle
 	lift $ hFlush handle
 
 	whileStatus (/= (StatusHandshake HsStatusClientFinished)) (recvPacket handle)
@@ -183,15 +185,13 @@ handshake handle srand = do
 	return ()
 
 {- | listen on a handle to a new TLS connection. -}
-listen :: Handle -> ServerRandom -> TLSServer IO ()
-listen handle srand = do
+listen :: Handle -> TLSServer IO ()
+listen handle = do
 	pkts <- recvPacket handle
 	case pkts of
 		Right [Handshake hs] -> handleClientHello hs
 		x                    -> fail ("unexpected type received. expecting handshake ++ " ++ show x)
-	handshake handle srand
-
-	return ()
+	handshake handle
 
 sendDataChunk :: Handle -> B.ByteString -> TLSServer IO ()
 sendDataChunk handle d =
@@ -213,12 +213,7 @@ recvData :: Handle -> TLSServer IO L.ByteString
 recvData handle = do
 	pkt <- recvPacket handle
 	case pkt of
-		Right [Handshake (ClientHello _ _ _ _ _ _)] -> do
-			-- SECURITY FIXME audit the rng here..
-			bytes <- withTLSRNG (\rng -> getRandomBytes rng 32)
-			let srand = fromJust $ serverRandom bytes
-			handshake handle srand
-			recvData handle
+		Right [Handshake (ClientHello _ _ _ _ _ _)] -> handshake handle >> recvData handle
 		Right [AppData x] -> return $ L.fromChunks [x]
 		Left err          -> error ("error received: " ++ show err)
 		_                 -> error "unexpected item"

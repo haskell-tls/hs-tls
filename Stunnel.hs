@@ -28,9 +28,6 @@ import Network.TLS.MAC
 import qualified Network.TLS.Client as C
 import qualified Network.TLS.Server as S
 
-import System.Random
-import qualified Codec.Crypto.AES.Random as AESRand
-
 ciphers :: [Cipher]
 ciphers =
 	[ cipher_AES128_SHA1
@@ -44,8 +41,8 @@ conv l = (a `shiftL` 24) .|. (b `shiftL` 16) .|. (c `shiftL` 8) .|. d
 	where
 		[a,b,c,d] = map fromIntegral l
 
-tlsclient handle crand prerand = do
-	C.connect handle crand prerand
+tlsclient handle = do
+	C.connect handle
 	C.sendData handle (L.pack $ map (toEnum.fromEnum) "GET / HTTP/1.0\r\n\r\n")
 
 	d <- C.recvData handle
@@ -58,12 +55,7 @@ tlsclient handle crand prerand = do
 
 mainClient :: String -> Int -> IO ()
 mainClient host port = do
-	{- generate some random stuff ready to be used after skipping some byte for no particular reason -}
-	ranByte <- B.head <$> AESRand.randBytes 1
-	_ <- AESRand.randBytes (fromIntegral ranByte)
-	clientRandom <- fromJust . clientRandom . B.unpack <$> AESRand.randBytes 32
-	premasterRandom <- ClientKeyData <$> AESRand.randBytes 46
-	seqInit <- conv . B.unpack <$> AESRand.randBytes 4
+	rng <- makeSRandomGen
 
 	handle <- connectTo host (PortNumber $ fromIntegral port)
 	hSetBuffering handle NoBuffering
@@ -78,20 +70,19 @@ mainClient host port = do
 			{ C.cbCertificates = Nothing
 			}
 		}
-	C.runTLSClient (tlsclient handle clientRandom premasterRandom) clientstate (makeSRandomGen seqInit)
+	C.runTLSClient (tlsclient handle) clientstate rng
 
 	putStrLn "end"
 
-tlsserver handle srand = do
-	S.listen handle srand
+tlsserver handle = do
+	S.listen handle
 	_ <- S.recvData handle
 	S.sendData handle (LC.pack "this is some data")
 	lift $ hFlush handle
 	lift $ putStrLn "end"
 
 clientProcess ((certdata, cert), pk) (handle, src) = do
-	serverRandom <- fromJust . serverRandom . B.unpack <$> AESRand.randBytes 32
-	seqInit <- conv . B.unpack <$> AESRand.randBytes 4
+	rng <- makeSRandomGen
 
 	let serverstate = S.TLSServerParams
 		{ S.spAllowedVersions = [TLS10,TLS11]
@@ -103,7 +94,7 @@ clientProcess ((certdata, cert), pk) (handle, src) = do
 			{ S.cbCertificates = Nothing }
 		}
 
-	S.runTLSServer (tlsserver handle serverRandom) serverstate (makeSRandomGen seqInit)
+	S.runTLSServer (tlsserver handle) serverstate rng
 	putStrLn "end"
 
 mainServerAccept cert port socket = do

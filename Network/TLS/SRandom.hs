@@ -10,11 +10,12 @@ module Network.TLS.SRandom
 import System.Random
 import Control.Arrow (first)
 import Data.Word
+import Codec.Crypto.AES.Random
 
-type SRandomGen = StdGen
+type SRandomGen = AESGen
 
-makeSRandomGen :: Int -> SRandomGen
-makeSRandomGen i = mkStdGen i
+makeSRandomGen :: IO SRandomGen
+makeSRandomGen = newAESGen
 
 getRandomByte :: SRandomGen -> (Word8, SRandomGen)
 getRandomByte rng = first fromIntegral $ next rng
