@@ -36,7 +36,7 @@ Library
                      random,
                      AES, RSA, spoon,
                      cryptocipher,
-                     certificate >= 0.2
+                     certificate >= 0.3
   Exposed-modules:   Network.TLS.Client
                      Network.TLS.Server
                      Network.TLS.Struct

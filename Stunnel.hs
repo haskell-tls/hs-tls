@@ -122,8 +122,8 @@ readCertificate :: FilePath -> IO (B.ByteString, Certificate)
 readCertificate filepath = do
 	content <- B.readFile filepath
 	let certdata = case parsePEMCert content of
-		Left err -> error ("cannot read PEM certificate: " ++ err)
-		Right x  -> x
+		Nothing -> error ("no valid certificate section")
+		Just x  -> x
 	let cert = case decodeCertificate $ L.fromChunks [certdata] of
 		Left err -> error ("cannot decode certificate: " ++ err)
 		Right x  -> x
@@ -132,9 +132,9 @@ readCertificate filepath = do
 readPrivateKey :: FilePath -> IO (L.ByteString, PrivateKey)
 readPrivateKey filepath = do
 	content <- B.readFile filepath
-	let pkdata = case parsePEMKey content of
-		Left err -> error ("cannot read PEM key: " ++ err)
-		Right x  -> L.fromChunks [x]
+	let pkdata = case parsePEMKeyRSA content of
+		Nothing -> error ("no valid RSA key section")
+		Just x  -> L.fromChunks [x]
 	let pk = case decodePrivateKey pkdata of
 		Left err -> error ("cannot decode key: " ++ err)
 		Right x  -> x
