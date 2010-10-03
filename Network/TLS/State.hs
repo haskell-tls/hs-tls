@@ -17,6 +17,7 @@ module Network.TLS.State
 	, HandshakeStatus(..)
 	, MonadTLSState, getTLSState, putTLSState, modifyTLSState
 	, newTLSState
+	, withTLSRNG
 	, assert -- FIXME move somewhere else (Internal.hs ?)
 	, updateStatusHs
 	, updateStatusCC
@@ -137,6 +138,13 @@ newTLSState rng = TLSState
 
 modifyTLSState :: (MonadTLSState m) => (TLSState -> TLSState) -> m ()
 modifyTLSState f = getTLSState >>= \st -> putTLSState (f st)
+
+withTLSRNG :: MonadTLSState m => (SRandomGen -> (a, SRandomGen)) -> m a
+withTLSRNG f = do
+	st <- getTLSState
+	let (a, newrng) = f (stRandomGen st)
+	putTLSState (st { stRandomGen = newrng })
+	return a
 
 makeDigest :: (MonadTLSState m) => Bool -> Header -> Bytes -> m Bytes
 makeDigest w hdr content = do

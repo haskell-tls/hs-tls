@@ -215,9 +215,7 @@ recvData handle = do
 	case pkt of
 		Right [Handshake (ClientHello _ _ _ _ _ _)] -> do
 			-- SECURITY FIXME audit the rng here..
-			st <- getTLSState
-			let (bytes, rng') = getRandomBytes (stRandomGen st) 32
-			putTLSState $ st { stRandomGen = rng' }
+			bytes <- withTLSRNG (\rng -> getRandomBytes rng 32)
 			let srand = fromJust $ serverRandom bytes
 			handshake handle srand
 			recvData handle

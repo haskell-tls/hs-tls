@@ -203,10 +203,11 @@ recvData handle = do
 		Right [AppData x] -> return $ L.fromChunks [x]
 		Right [Handshake HelloRequest] -> do
 			-- SECURITY FIXME audit the rng here..
-			st <- getTLSState
-			let (bytes, rng') = getRandomBytes (stRandomGen st) 32
-			let (premaster, rng'') = getRandomBytes rng' 46
-			putTLSState $ st { stRandomGen = rng'' }
+			(bytes, premaster) <- withTLSRNG (\rng ->
+				let (r1, rng')  = getRandomBytes rng 32 in
+				let (r2, rng'') = getRandomBytes rng' 46 in
+				((r1, r2), rng'')
+				)
 			let crand = fromJust $ clientRandom bytes
 			connect handle crand (ClientKeyData $ B.pack premaster)
 			recvData handle
