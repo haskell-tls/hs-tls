@@ -102,6 +102,7 @@ sendPacket handle pkt = do
 	dataToSend <- writePacket pkt
 	lift $ B.hPut handle dataToSend
 
+processServerInfo :: Packet -> TLSClient IO ()
 processServerInfo (Handshake (ServerHello ver _ _ cipher _ _)) = do
 	ciphers <- cpCiphers . scParams <$> get
 	allowedvers <- cpAllowedVersions . scParams <$> get
