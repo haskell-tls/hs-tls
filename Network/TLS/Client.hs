@@ -71,7 +71,7 @@ newtype TLSClient m a = TLSClient { runTLSC :: StateT TLSStateClient m a }
 
 instance Monad m => MonadTLSState (TLSClient m) where
 	getTLSState   = TLSClient (get >>= return . scTLSState)
-	putTLSState s = TLSClient (get >>= put . (\st -> st { scTLSState = s }))
+	putTLSState s = TLSClient (modify (\st -> id $! st { scTLSState = s }))
 
 instance MonadTrans TLSClient where
 	lift = TLSClient . lift

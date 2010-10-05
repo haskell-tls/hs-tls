@@ -316,10 +316,10 @@ setKeyBlock = do
 		}
 
 setCipher :: MonadTLSState m => Cipher -> m ()
-setCipher cipher = getTLSState >>= putTLSState . (\st -> st { stCipher = Just cipher })
+setCipher cipher = modifyTLSState (\st -> st { stCipher = Just cipher })
 
 setVersion :: MonadTLSState m => Version -> m ()
-setVersion ver = getTLSState >>= putTLSState . (\st -> st { stVersion = ver })
+setVersion ver = modifyTLSState (\st -> st { stVersion = ver })
 
 isClientContext :: MonadTLSState m => m Bool
 isClientContext = getTLSState >>= return . stClientContext
