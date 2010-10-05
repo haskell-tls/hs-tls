@@ -291,7 +291,7 @@ setKeyBlock = do
 	let digestSize = fromIntegral $ cipherDigestSize cipher
 	let keySize = fromIntegral $ cipherKeySize cipher
 	let ivSize = fromIntegral $ cipherIVSize cipher
-	let kb = generateKeyBlock (hstClientRandom hst)
+	let kb = generateKeyBlock (stVersion st) (hstClientRandom hst)
 	                          (fromJust $ hstServerRandom hst)
 	                          (fromJust $ hstMasterSecret hst) keyblockSize
 

@@ -395,10 +395,10 @@ generateMasterSecret_TLS, generateMasterSecret_SSL :: Bytes -> ClientRandom -> S
 generateMasterSecret_TLS premasterSecret (ClientRandom c) (ServerRandom s) =
 	prf_MD5SHA1 premasterSecret seed 48
 	where
-		seed = B.concat [ BC.pack "master secret", c, s ]
+		seed = B.concat [ "master secret", c, s ]
 
 generateMasterSecret_SSL premasterSecret (ClientRandom c) (ServerRandom s) =
-	B.concat $ map (computeMD5 . BC.pack) [ "A", "BB", "CCC" ]
+	B.concat $ map (computeMD5) ["A","BB","CCC"]
 	where
 		computeMD5  label = hashMD5 $ B.concat [ premasterSecret, computeSHA1 label ]
 		computeSHA1 label = hashSHA1 $ B.concat [ label, premasterSecret, c, s ]
@@ -407,11 +407,23 @@ generateMasterSecret :: Version -> Bytes -> ClientRandom -> ServerRandom -> Byte
 generateMasterSecret ver =
 	if ver < TLS10 then generateMasterSecret_SSL else generateMasterSecret_TLS
 
-generateKeyBlock :: ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
-generateKeyBlock (ClientRandom c) (ServerRandom s) mastersecret kbsize =
+generateKeyBlock_TLS :: ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
+generateKeyBlock_TLS (ClientRandom c) (ServerRandom s) mastersecret kbsize =
 	prf_MD5SHA1 mastersecret seed kbsize
 	where
-		seed = B.concat [ BC.pack "key expansion", s, c ]
+		seed = B.concat [ "key expansion", s, c ]
+
+generateKeyBlock_SSL :: ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
+generateKeyBlock_SSL (ClientRandom c) (ServerRandom s) mastersecret kbsize =
+	B.concat $ map computeMD5 $ take ((kbsize `div` 16) + 1) labels
+	where
+		labels            = [ uncurry BC.replicate x | x <- zip [1..] ['A'..'Z'] ]
+		computeMD5  label = hashMD5 $ B.concat [ mastersecret, computeSHA1 label ]
+		computeSHA1 label = hashSHA1 $ B.concat [ label, mastersecret, s, c ]
+
+generateKeyBlock :: Version -> ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
+generateKeyBlock ver =
+	if ver < TLS10 then generateKeyBlock_SSL else generateKeyBlock_TLS
 
 generateFinished_TLS :: Bytes -> Bytes -> HashCtx -> HashCtx -> Bytes
 generateFinished_TLS label mastersecret md5ctx sha1ctx =
@@ -423,16 +435,17 @@ generateFinished_SSL :: Bytes -> Bytes -> HashCtx -> HashCtx -> Bytes
 generateFinished_SSL sender mastersecret md5ctx sha1ctx =
 	B.concat [md5hash, sha1hash]
 	where
-		md5hash = hashMD5 $ B.concat [ mastersecret, pad2, md5left ]
-		sha1hash = hashSHA1 $ B.concat [ mastersecret, pad2, sha1left ]
-		pad2 = B.empty -- FIXME
-		md5left = hashMD5 B.empty
-		sha1left = hashSHA1 B.empty
+		md5hash  = hashMD5 $ B.concat [ mastersecret, pad2, md5left ]
+		sha1hash = hashSHA1 $ B.concat [ mastersecret, B.take 40 pad2, sha1left ]
+		md5left  = finalizeHash $ foldl updateHash md5ctx [ sender, mastersecret, pad1 ]
+		sha1left = finalizeHash $ foldl updateHash sha1ctx [ sender, mastersecret, B.take 40 pad1 ]
+		pad2     = B.replicate 48 0x5c
+		pad1     = B.replicate 48 0x36
 
 generateClientFinished :: Version -> Bytes -> HashCtx -> HashCtx -> Bytes
 generateClientFinished ver =
-	if ver < TLS10 then generateFinished_SSL "CLNT" else generateFinished_TLS (BC.pack "client finished")
+	if ver < TLS10 then generateFinished_SSL "CLNT" else generateFinished_TLS "client finished"
 
 generateServerFinished :: Version -> Bytes -> HashCtx -> HashCtx -> Bytes
 generateServerFinished ver =
-	if ver < TLS10 then generateFinished_SSL "SRVR" else generateFinished_TLS (BC.pack "server finished")
+	if ver < TLS10 then generateFinished_SSL "SRVR" else generateFinished_TLS "server finished"
