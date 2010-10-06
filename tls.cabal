@@ -1,16 +1,19 @@
 Name:                tls
-Version:             0.1.4
+Version:             0.2
 Description:
-   Implementation of the TLS protocol, focusing on purity and more type-checking.
+   native TLS protocol implementation, focusing on purity and more type-checking.
    .
-   Currently implement only partially the TLS1.0 protocol. Not yet properly secure.
+   Currently implement the SSL3.0, TLS1.0 and TLS1.1 protocol.
+   Not yet properly secure and missing some features.
    Do not yet use as replacement to more mature implementation.
+   .
+   only RSA supported as Key exchange for now.
 License:             BSD3
 License-file:        LICENSE
 Copyright:           Vincent Hanquez <vincent@snarc.org>
 Author:              Vincent Hanquez <vincent@snarc.org>
 Maintainer:          Vincent Hanquez <vincent@snarc.org>
-Synopsis:            TLS protocol for Server and Client sides
+Synopsis:            TLS/SSL protocol native implementation (Server and Client)
 Build-Type:          Simple
 Category:            Network
 stability:           experimental
