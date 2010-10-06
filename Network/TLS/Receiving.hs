@@ -125,8 +125,9 @@ processHandshake ver ty econtent = do
 
 decryptRSA :: MonadTLSState m => ByteString -> m (Maybe ByteString)
 decryptRSA econtent = do
+	ver <- return . stVersion =<< getTLSState
 	rsapriv <- getTLSState >>= return . fromJust . hstRSAPrivateKey . fromJust . stHandshake
-	return $ rsaDecrypt rsapriv (B.drop 2 econtent)
+	return $ rsaDecrypt rsapriv (if ver < TLS10 then econtent else B.drop 2 econtent)
 
 setMasterSecretRandom :: ByteString -> TLSRead ()
 setMasterSecretRandom content = do

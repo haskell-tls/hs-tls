@@ -168,11 +168,17 @@ encodePacketContent (AppData x)        = x
 
 writePacketContent :: MonadTLSState m => Packet -> m ByteString
 writePacketContent (Handshake ckx@(ClientKeyXchg _ _)) = do
+	ver <- getTLSState >>= return . stVersion 
 	let premastersecret = runPut $ encodeHandshakeContent ckx
 	setMasterSecret premastersecret
 	econtent <- encryptRSA premastersecret
-	let extralength = runPut $ putWord16 $ fromIntegral $ B.length econtent
-	let hdr = runPut $ encodeHandshakeHeader (typeOfHandshake ckx) (fromIntegral (B.length econtent + 2))
+
+	let extralength =
+		if ver < TLS10
+		then B.empty
+		else runPut $ putWord16 $ fromIntegral $ B.length econtent
+	let hdr = runPut $ encodeHandshakeHeader (typeOfHandshake ckx)
+	                                         (fromIntegral (B.length econtent + B.length extralength))
 	return $ B.concat [hdr, extralength, econtent]
 
 writePacketContent pkt@(Handshake (ClientHello ver crand _ _ _ _)) = do
