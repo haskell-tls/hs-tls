@@ -23,7 +23,11 @@ module Network.TLS.Cipher
 
 import Data.Word
 import Network.TLS.Struct (Version(..))
-import Network.TLS.MAC
+
+import qualified Data.CryptoHash.SHA256 as SHA256
+import qualified Data.CryptoHash.SHA1 as SHA1
+import qualified Data.CryptoHash.MD5 as MD5
+
 import qualified Data.Vector.Unboxed as Vector (fromList, toList)
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString as B
@@ -63,7 +67,7 @@ data Cipher = Cipher
 	, cipherKeyBlockSize :: Word8
 	, cipherPaddingSize  :: Word8
 	, cipherKeyExchange  :: CipherKeyExchangeType
-	, cipherHMAC         :: B.ByteString -> B.ByteString -> B.ByteString
+	, cipherMACHash      :: B.ByteString -> B.ByteString
 	, cipherF            :: CipherTypeFunctions
 	, cipherMinVer       :: Maybe Version
 	}
@@ -174,7 +178,7 @@ cipher_null_null = Cipher
 	, cipherIVSize       = 0
 	, cipherKeyBlockSize = 0
 	, cipherPaddingSize  = 0
-	, cipherHMAC         = (\_ _ -> B.empty)
+	, cipherMACHash      = (const B.empty)
 	, cipherKeyExchange  = CipherKeyExchangeRSA
 	, cipherF            = CipherNoneF
 	, cipherMinVer       = Nothing
@@ -189,7 +193,7 @@ cipher_RC4_128_MD5 = Cipher
 	, cipherIVSize       = 0
 	, cipherKeyBlockSize = 2 * (16 + 16 + 0)
 	, cipherPaddingSize  = 0
-	, cipherHMAC         = hmacMD5
+	, cipherMACHash      = MD5.hash
 	, cipherKeyExchange  = CipherKeyExchangeRSA
 	, cipherF            = CipherStreamF initF_rc4 encryptF_rc4 decryptF_rc4
 	, cipherMinVer       = Nothing
@@ -204,7 +208,7 @@ cipher_RC4_128_SHA1 = Cipher
 	, cipherIVSize       = 0
 	, cipherKeyBlockSize = 2 * (20 + 16 + 0)
 	, cipherPaddingSize  = 0
-	, cipherHMAC         = hmacSHA1
+	, cipherMACHash      = SHA1.hash
 	, cipherKeyExchange  = CipherKeyExchangeRSA
 	, cipherF            = CipherStreamF initF_rc4 encryptF_rc4 decryptF_rc4
 	, cipherMinVer       = Nothing
@@ -219,7 +223,7 @@ cipher_AES128_SHA1 = Cipher
 	, cipherIVSize       = 16
 	, cipherKeyBlockSize = 2 * (20 + 16 + 16)
 	, cipherPaddingSize  = 16
-	, cipherHMAC         = hmacSHA1
+	, cipherMACHash      = SHA1.hash
 	, cipherKeyExchange  = CipherKeyExchangeRSA
 	, cipherF            = CipherBlockF aes128_cbc_encrypt aes128_cbc_decrypt
 	, cipherMinVer       = Just SSL3
@@ -234,7 +238,7 @@ cipher_AES256_SHA1 = Cipher
 	, cipherIVSize       = 16
 	, cipherKeyBlockSize = 2 * (20 + 32 + 16)
 	, cipherPaddingSize  = 16
-	, cipherHMAC         = hmacSHA1
+	, cipherMACHash      = SHA1.hash
 	, cipherKeyExchange  = CipherKeyExchangeRSA
 	, cipherF            = CipherBlockF aes256_cbc_encrypt aes256_cbc_decrypt
 	, cipherMinVer       = Just SSL3
@@ -249,7 +253,7 @@ cipher_AES128_SHA256 = Cipher
 	, cipherIVSize       = 16
 	, cipherKeyBlockSize = 2 * (32 + 16 + 16)
 	, cipherPaddingSize  = 16
-	, cipherHMAC         = hmacSHA256
+	, cipherMACHash      = SHA256.hash
 	, cipherKeyExchange  = CipherKeyExchangeRSA
 	, cipherF            = CipherBlockF aes128_cbc_encrypt aes128_cbc_decrypt
 	, cipherMinVer       = Just TLS12
@@ -264,7 +268,7 @@ cipher_AES256_SHA256 = Cipher
 	, cipherIVSize       = 16
 	, cipherKeyBlockSize = 2 * (32 + 32 + 16)
 	, cipherPaddingSize  = 16
-	, cipherHMAC         = hmacSHA256
+	, cipherMACHash      = SHA256.hash
 	, cipherKeyExchange  = CipherKeyExchangeRSA
 	, cipherF            = CipherBlockF aes256_cbc_encrypt aes256_cbc_decrypt
 	, cipherMinVer       = Just TLS12

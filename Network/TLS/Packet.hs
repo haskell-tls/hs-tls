@@ -14,6 +14,7 @@ module Network.TLS.Packet
 	-- * marshall functions for header messages
 	  decodeHeader
 	, encodeHeader
+	, encodeHeaderNoVer -- use for SSL3
 
 	-- * marshall functions for alert messages
 	, decodeAlert
@@ -72,6 +73,11 @@ encodeHeader (Header pt ver len) =
 	{- FIXME check len <= 2^14 -}
 	runPut (putWord8 (valOfType pt) >> putWord8 major >> putWord8 minor >> putWord16 len)
 	where (major, minor) = numericalVer ver
+
+encodeHeaderNoVer :: Header -> ByteString
+encodeHeaderNoVer (Header pt _ len) =
+	{- FIXME check len <= 2^14 -}
+	runPut (putWord8 (valOfType pt) >> putWord16 len)
 
 {-
  - decode and encode ALERT

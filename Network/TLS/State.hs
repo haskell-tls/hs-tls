@@ -52,6 +52,7 @@ import Network.TLS.Wire
 import Network.TLS.Packet
 import Network.TLS.Crypto
 import Network.TLS.Cipher
+import Network.TLS.MAC
 import qualified Data.ByteString as B
 import Control.Monad
 
@@ -153,12 +154,17 @@ makeDigest w hdr content = do
 		[ ("cipher", isNothing $ stCipher st)
 		, ("crypt state", isNothing $ if w then stTxCryptState st else stRxCryptState st)
 		, ("mac state", isNothing $ if w then stTxMacState st else stRxMacState st) ]
+	let ver = stVersion st
 	let cst = fromJust $ if w then stTxCryptState st else stRxCryptState st
 	let ms = fromJust $ if w then stTxMacState st else stRxMacState st
 	let cipher = fromJust $ stCipher st
+	let machash = cipherMACHash cipher
 
-	let hmac_msg = B.concat [ encodeWord64 $ msSequence ms, encodeHeader hdr, content ]
-	let digest = (cipherHMAC cipher) (cstMacSecret cst) hmac_msg
+	let (macF, msg) =
+		if ver < TLS10
+			then (macSSL machash, B.concat [ encodeWord64 $ msSequence ms, encodeHeaderNoVer hdr, content ])
+			else (hmac machash 64, B.concat [ encodeWord64 $ msSequence ms, encodeHeader hdr, content ])
+	let digest = macF (cstMacSecret cst) msg
 
 	let newms = ms { msSequence = (msSequence ms) + 1 }
 

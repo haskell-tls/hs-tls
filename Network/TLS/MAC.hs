@@ -2,6 +2,8 @@ module Network.TLS.MAC
 	( hmacMD5
 	, hmacSHA1
 	, hmacSHA256
+	, macSSL
+	, hmac
 	, prf_MD5
 	, prf_SHA1
 	, prf_MD5SHA1
@@ -13,6 +15,13 @@ import qualified Data.CryptoHash.SHA256 as SHA256
 import qualified Data.ByteString as B
 import Data.ByteString (ByteString)
 import Data.Bits (xor)
+
+macSSL :: (ByteString -> ByteString) -> ByteString -> ByteString -> ByteString
+macSSL f secret msg = f $! B.concat [ secret, B.replicate padlen 0x5c,
+			f $! B.concat [ secret, B.replicate padlen 0x36, msg ] ]
+	where
+		-- get the type of algorithm out of the digest length by using the hash fct.
+		padlen = if (B.length $ f B.empty) == 16 then 48 else 40
 
 hmac :: (ByteString -> ByteString) -> Int -> ByteString -> ByteString -> ByteString
 hmac f bl secret msg =
