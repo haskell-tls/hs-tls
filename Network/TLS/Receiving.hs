@@ -177,8 +177,11 @@ getCipherData hdr cdata = do
 	paddingValid <- case cipherDataPadding cdata of
 		Nothing  -> return True
 		Just pad -> do
+			ver <- stVersion <$> getTLSState
 			let b = B.length pad - 1
-			return $ maybe True (const False) $ B.find (/= fromIntegral b) pad
+			if ver < TLS10
+				then return True
+				else return $ maybe True (const False) $ B.find (/= fromIntegral b) pad
 
 	unless (and $! [ macValid, paddingValid ]) $ do
 		throwError $ Error_Digest ([], [])
