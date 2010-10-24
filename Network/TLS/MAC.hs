@@ -9,9 +9,9 @@ module Network.TLS.MAC
 	, prf_MD5SHA1
 	) where
 
-import qualified Data.CryptoHash.MD5 as MD5
-import qualified Data.CryptoHash.SHA1 as SHA1
-import qualified Data.CryptoHash.SHA256 as SHA256
+import qualified Crypto.Hash.MD5 as MD5
+import qualified Crypto.Hash.SHA1 as SHA1
+import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.ByteString as B
 import Data.ByteString (ByteString)
 import Data.Bits (xor)

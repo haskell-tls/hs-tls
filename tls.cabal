@@ -32,7 +32,7 @@ Flag executable
 Library
   Build-Depends:     base >= 3 && < 5,
                      mtl,
-                     cryptohash,
+                     cryptohash >= 0.6,
                      binary >= 0.5,
                      bytestring,
                      vector,

@@ -25,8 +25,8 @@ module Network.TLS.Crypto
 	, rsaDecrypt
 	) where
 
-import qualified Data.CryptoHash.SHA1 as SHA1
-import qualified Data.CryptoHash.MD5 as MD5
+import qualified Crypto.Hash.SHA1 as SHA1
+import qualified Crypto.Hash.MD5 as MD5
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Data.ByteString (ByteString)

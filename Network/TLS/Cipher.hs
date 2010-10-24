@@ -24,9 +24,9 @@ module Network.TLS.Cipher
 import Data.Word
 import Network.TLS.Struct (Version(..))
 
-import qualified Data.CryptoHash.SHA256 as SHA256
-import qualified Data.CryptoHash.SHA1 as SHA1
-import qualified Data.CryptoHash.MD5 as MD5
+import qualified Crypto.Hash.SHA256 as SHA256
+import qualified Crypto.Hash.SHA1 as SHA1
+import qualified Crypto.Hash.MD5 as MD5
 
 import qualified Data.Vector.Unboxed as Vector (fromList, toList)
 import qualified Data.ByteString.Lazy as L
