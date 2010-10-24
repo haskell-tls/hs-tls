@@ -78,7 +78,7 @@ instance Monad m => MonadTLSState (TLSServer m) where
 instance MonadTrans TLSServer where
 	lift = TLSServer . lift
 
-instance Monad m => Functor (TLSServer m) where
+instance (Monad m, Functor m) => Functor (TLSServer m) where
 	fmap f = TLSServer . fmap f . runTLSC
 
 runTLSServerST :: TLSServer m a -> TLSStateServer -> m (a, TLSStateServer)

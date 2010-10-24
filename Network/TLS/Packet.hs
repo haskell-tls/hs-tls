@@ -388,8 +388,9 @@ putExtensions (Just es) =
 
 decodeChangeCipherSpec :: ByteString -> Either TLSError ()
 decodeChangeCipherSpec b = do
-	x <- runGet getWord8 b
-	if x == 1 then Right () else Left $ Error_Misc "unknown change cipher spec content"
+	case runGet getWord8 b of
+		Right 1 -> Right ()
+		_       -> Left $ Error_Misc "unknown change cipher spec content"
 
 encodeChangeCipherSpec :: ByteString
 encodeChangeCipherSpec = runPut (putWord8 1)

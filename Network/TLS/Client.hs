@@ -76,7 +76,7 @@ instance Monad m => MonadTLSState (TLSClient m) where
 instance MonadTrans TLSClient where
 	lift = TLSClient . lift
 
-instance Monad m => Functor (TLSClient m) where
+instance (Functor m, Monad m) => Functor (TLSClient m) where
 	fmap f = TLSClient . fmap f . runTLSC
 
 runTLSClientST :: TLSClient m a -> TLSStateClient -> m (a, TLSStateClient)
