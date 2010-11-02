@@ -30,7 +30,7 @@ Flag executable
   Default:           False
 
 Library
-  Build-Depends:     base >= 4 && < 7,
+  Build-Depends:     base >= 3 && < 7,
                      monads-fd,
                      cryptohash >= 0.6,
                      binary >= 0.5,
@@ -69,7 +69,7 @@ executable           Tests
   Main-is:           Tests.hs
   if flag(test)
     Buildable:       True
-    Build-Depends:   base >= 3 && < 5, HUnit, QuickCheck >= 2 && < 2.3, bytestring, random
+    Build-Depends:   base >= 3 && < 7, HUnit, QuickCheck >= 2 && < 2.3, bytestring, random
   else
     Buildable:       False
 
