@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 import Text.Printf
 import Data.Word
 import Test.QuickCheck
@@ -28,11 +29,14 @@ instance Arbitrary ProtocolType where
 		, ProtocolType_Handshake
 		, ProtocolType_AppData ]
 
+#if MIN_VERSION_QuickCheck(2,3,0)
+#else
 instance Arbitrary Word8 where
 	arbitrary = fromIntegral <$> (choose (0,255) :: Gen Int)
 
 instance Arbitrary Word16 where
 	arbitrary = fromIntegral <$> (choose (0,65535) :: Gen Int)
+#endif
 
 instance Arbitrary Header where
 	arbitrary = do
@@ -97,6 +101,9 @@ args = Args
 	, maxSuccess = 500
 	, maxDiscard = 2000
 	, maxSize    = 500
+#if MIN_VERSION_QuickCheck(2,3,0)
+	, chatty     = True
+#endif
 	}
 
 run_test n t = putStr ("  " ++ n ++ " ... ") >> hFlush stdout >> quickCheckWith args t
