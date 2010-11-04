@@ -34,11 +34,13 @@ Library
                      mtl,
                      cryptohash >= 0.6,
                      binary >= 0.5,
+                     cereal,
                      bytestring,
                      vector,
                      random,
                      AES, RSA, spoon,
                      cryptocipher,
+                     crypto-api >= 0.2,
                      certificate >= 0.3
   Exposed-modules:   Network.TLS.Client
                      Network.TLS.Server
