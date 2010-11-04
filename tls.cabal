@@ -31,7 +31,7 @@ Flag executable
 
 Library
   Build-Depends:     base >= 3 && < 7,
-                     monads-fd,
+                     mtl,
                      cryptohash >= 0.6,
                      binary >= 0.5,
                      bytestring,
