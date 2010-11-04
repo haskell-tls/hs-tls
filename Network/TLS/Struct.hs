@@ -43,7 +43,8 @@ module Network.TLS.Struct
 	, typeOfHandshake
 	) where
 
-import Data.ByteString (ByteString, pack)
+import Data.ByteString (ByteString)
+import qualified Data.ByteString as B (length)
 import Data.Word
 import Data.Certificate.X509
 
@@ -128,13 +129,13 @@ type CompressionID = Word8
 type FinishedData = [Word8]
 type Extension = (Word16, [Word8])
 
-constrRandom32 :: (Bytes -> a) -> [Word8] -> Maybe a
-constrRandom32 constr l = if length l == 32 then Just (constr $ pack l) else Nothing
+constrRandom32 :: (Bytes -> a) -> Bytes -> Maybe a
+constrRandom32 constr l = if B.length l == 32 then Just (constr l) else Nothing
 
-serverRandom :: [Word8] -> Maybe ServerRandom
+serverRandom :: Bytes -> Maybe ServerRandom
 serverRandom l = constrRandom32 ServerRandom l
 
-clientRandom :: [Word8] -> Maybe ClientRandom
+clientRandom :: Bytes -> Maybe ClientRandom
 clientRandom l = constrRandom32 ClientRandom l
 
 newtype EncryptedData = EncryptedData ByteString

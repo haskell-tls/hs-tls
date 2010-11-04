@@ -53,9 +53,12 @@ tlsclient handle = do
 
 	return ()
 
+getRandomGen :: IO SRandomGen
+getRandomGen = makeSRandomGen >>= either (fail . show) (return . id)
+
 mainClient :: String -> Int -> IO ()
 mainClient host port = do
-	rng <- makeSRandomGen
+	rng <- getRandomGen
 
 	handle <- connectTo host (PortNumber $ fromIntegral port)
 	hSetBuffering handle NoBuffering
@@ -82,7 +85,7 @@ tlsserver handle = do
 	lift $ putStrLn "end"
 
 clientProcess ((certdata, cert), pk) (handle, src) = do
-	rng <- makeSRandomGen
+	rng <- getRandomGen
 
 	let serverstate = S.TLSServerParams
 		{ S.spAllowedVersions = [TLS10,TLS11]

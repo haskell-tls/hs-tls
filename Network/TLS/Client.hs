@@ -147,7 +147,7 @@ connectSendClientCertificate handle = do
 
 connectSendClientKeyXchg :: Handle -> TLSClient IO ()
 connectSendClientKeyXchg handle = do
-	prerand <- ClientKeyData . B.pack <$> withTLSRNG (\rng -> getRandomBytes rng 46)
+	prerand <- ClientKeyData <$> withTLSRNG (\rng -> getRandomBytes rng 46)
 	ver <- cpConnectVersion . scParams <$> get
 	sendPacket handle $ Handshake (ClientKeyXchg ver prerand)
 

@@ -134,7 +134,7 @@ setMasterSecretRandom content = do
 	st <- getTLSState
 	let (bytes, g') = getRandomBytes (stRandomGen st) (fromIntegral $ B.length content)
 	putTLSState $ st { stRandomGen = g' }
-	setMasterSecret (B.pack bytes)
+	setMasterSecret bytes
 
 processClientKeyXchg :: Version -> ByteString -> TLSRead ()
 processClientKeyXchg ver content = do
