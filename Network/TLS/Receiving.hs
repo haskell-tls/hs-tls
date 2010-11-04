@@ -33,6 +33,8 @@ import Network.TLS.Crypto
 import Network.TLS.SRandom
 import Data.Certificate.X509
 
+import qualified Crypto.Cipher.RSA as RSA
+
 newtype TLSRead a = TLSR { runTLSR :: ErrorT TLSError (State TLSState) a }
 	deriving (Monad, MonadError TLSError)
 
@@ -102,7 +104,7 @@ processHandshake ver ty econtent = do
 	content <- case ty of
 		HandshakeType_ClientKeyXchg -> do
 			copt <- decryptRSA econtent
-			return $ maybe econtent id copt
+			return $ either (const econtent) id copt
 		_                           ->
 			return econtent
 	hs <- case (ty, decodeHandshake ver ty content) of
@@ -123,11 +125,11 @@ processHandshake ver ty econtent = do
 		_                            -> return ()
 	return $ Handshake hs
 
-decryptRSA :: MonadTLSState m => ByteString -> m (Maybe ByteString)
+decryptRSA :: MonadTLSState m => ByteString -> m (Either KxError ByteString)
 decryptRSA econtent = do
 	ver <- return . stVersion =<< getTLSState
 	rsapriv <- getTLSState >>= return . fromJust . hstRSAPrivateKey . fromJust . stHandshake
-	return $ rsaDecrypt rsapriv (if ver < TLS10 then econtent else B.drop 2 econtent)
+	return $ kxDecrypt rsapriv (if ver < TLS10 then econtent else B.drop 2 econtent)
 
 setMasterSecretRandom :: ByteString -> TLSRead ()
 setMasterSecretRandom content = do
@@ -239,6 +241,6 @@ processCertificates :: [Certificate] -> TLSRead ()
 processCertificates certs = do
 	case certPubKey $ head certs of
 		PubKey _ (PubKeyRSA (lm, m, e)) -> do
-			let pk = PublicKey { public_size = fromIntegral lm, public_n = m, public_e = e }
+			let pk = PubRSA (RSA.PublicKey { RSA.public_sz = fromIntegral lm, RSA.public_n = m, RSA.public_e = e })
 			setPublicKey pk
 		_                    -> return ()

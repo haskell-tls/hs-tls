@@ -18,27 +18,41 @@ module Network.TLS.Crypto
 	, updateSHA1
 	, finalizeSHA1
 
-	-- * RSA stuff
+	-- * key exchange generic interface
 	, PublicKey(..)
 	, PrivateKey(..)
-	, rsaEncrypt
-	, rsaDecrypt
+	, kxEncrypt
+	, kxDecrypt
+	, KxError(..)
 	) where
 
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.MD5 as MD5
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as L
 import Data.ByteString (ByteString)
-import Codec.Crypto.RSA (PublicKey(..), PrivateKey(..))
-import qualified Codec.Crypto.RSA as RSA
-import Control.Spoon
-import Control.Arrow (first)
-import System.Random
+import qualified Crypto.Cipher.RSA as RSA
+import Crypto.Random (CryptoRandomGen)
+
+data PublicKey = PubRSA RSA.PublicKey
+
+data PrivateKey = PrivRSA RSA.PrivateKey
+
+instance Show PublicKey where
+	show (_) = "PublicKey(..)"
+
+instance Show PrivateKey where
+	show (_) = "privateKey(..)"
+
+data KxError = RSAError RSA.Error
+	deriving (Show)
 
 data HashCtx =
 	  SHA1 !SHA1.Ctx
 	| MD5 !MD5.Ctx
+
+data KeyXchg =
+	  KxRSA RSA.PublicKey RSA.PrivateKey
+	deriving (Show)
 
 instance Show HashCtx where
 	show (SHA1 _) = "sha1"
@@ -88,23 +102,13 @@ finalizeHash :: HashCtx -> B.ByteString
 finalizeHash (SHA1 ctx) = finalizeSHA1 ctx
 finalizeHash (MD5 ctx)  = finalizeMD5 ctx
 
-{- RSA reexport and maybification -}
+{- key exchange methods encrypt and decrypt for each supported algorithm -}
+generalizeRSAError :: Either RSA.Error a -> Either KxError a
+generalizeRSAError (Left e)  = Left (RSAError e)
+generalizeRSAError (Right x) = Right x
 
-{- on using spoon:
- because we use rsa Encrypt/Decrypt in a pure context, catching the exception
- when the key is not correctly set or the data isn't correct.
- need to fix the RSA package to return "Either String X".
--}
+kxEncrypt :: CryptoRandomGen g => g -> PublicKey -> ByteString -> Either KxError (ByteString, g)
+kxEncrypt g (PubRSA pk) b = generalizeRSAError $ RSA.encrypt g pk b
 
-lazyToStrict :: L.ByteString -> B.ByteString
-lazyToStrict = B.concat . L.toChunks
-
-rsaEncrypt :: RandomGen g => g -> PublicKey -> B.ByteString -> Maybe (B.ByteString, g)
-rsaEncrypt g pk b = maybe Nothing (Just . first lazyToStrict) $ teaspoon (RSA.rsaes_pkcs1_v1_5_encrypt g pk blazy)
-	where
-		blazy = L.fromChunks [ b ]
-
-rsaDecrypt :: PrivateKey -> B.ByteString -> Maybe B.ByteString
-rsaDecrypt pk b = maybe Nothing (Just . lazyToStrict) $ teaspoon (RSA.rsaes_pkcs1_v1_5_decrypt pk blazy)
-	where
-		blazy = L.fromChunks [ b ]
+kxDecrypt :: PrivateKey -> ByteString -> Either KxError ByteString
+kxDecrypt (PrivRSA pk) b  = generalizeRSAError $ RSA.decrypt pk b

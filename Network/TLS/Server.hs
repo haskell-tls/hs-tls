@@ -31,10 +31,10 @@ import Data.List (intersect, find)
 import Control.Monad.Trans
 import Control.Monad.State
 import Control.Applicative ((<$>))
-import Codec.Crypto.RSA (PrivateKey(..))
 import Data.Certificate.X509
 import qualified Data.Certificate.Key as CertificateKey
 import Network.TLS.Cipher
+import Network.TLS.Crypto
 import Network.TLS.Struct
 import Network.TLS.Packet
 import Network.TLS.State
@@ -44,6 +44,7 @@ import Network.TLS.SRandom
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import System.IO (Handle, hFlush)
+import qualified Crypto.Cipher.RSA as RSA
 
 type TLSServerCert = (B.ByteString, Certificate, CertificateKey.PrivateKey)
 
@@ -145,10 +146,15 @@ handshakeSendServerData handle = do
 	-- the necessary bits set.
 	let needkeyxchg = cipherExchangeNeedMoreData $ cipherKeyExchange cipher
 
-	let privkey = PrivateKey
-		{ private_size = fromIntegral $ CertificateKey.privKey_lenmodulus privkeycert
-		, private_n    = CertificateKey.privKey_modulus privkeycert
-		, private_d    = CertificateKey.privKey_private_exponant privkeycert
+	let privkey = PrivRSA $ RSA.PrivateKey
+		{ RSA.private_sz   = fromIntegral $ CertificateKey.privKey_lenmodulus privkeycert
+		, RSA.private_n    = CertificateKey.privKey_modulus privkeycert
+		, RSA.private_d    = CertificateKey.privKey_private_exponant privkeycert
+		, RSA.private_p    = CertificateKey.privKey_p1 privkeycert
+		, RSA.private_q    = CertificateKey.privKey_p2 privkeycert
+		, RSA.private_dP   = CertificateKey.privKey_exp1 privkeycert
+		, RSA.private_dQ   = CertificateKey.privKey_exp2 privkeycert
+		, RSA.private_qinv = CertificateKey.privKey_coef privkeycert
 		}
 	setPrivateKey privkey
 

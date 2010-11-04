@@ -38,9 +38,9 @@ Library
                      bytestring,
                      vector,
                      random,
-                     AES, RSA, spoon,
-                     cryptocipher,
+                     AES,
                      crypto-api >= 0.2,
+                     cryptocipher >= 0.2,
                      certificate >= 0.3
   Exposed-modules:   Network.TLS.Client
                      Network.TLS.Server
@@ -62,7 +62,7 @@ Library
 Executable           stunnel
   Main-is:           Stunnel.hs
   if flag(executable)
-    Build-Depends:   network, haskell98, RSA
+    Build-Depends:   network, haskell98
     Buildable:       True
   else
     Buildable:       False

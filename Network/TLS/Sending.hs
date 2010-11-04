@@ -108,9 +108,9 @@ encryptRSA content = do
 	st <- getTLSState
 	let g = stRandomGen st
 	let rsakey = fromJust $ hstRSAPublicKey $ fromJust $ stHandshake st
-	case rsaEncrypt g rsakey content of
-		Nothing             -> fail "no RSA key selected"
-		Just (econtent, g') -> do
+	case kxEncrypt g rsakey content of
+		Left err             -> fail ("rsa encrypt failed: " ++ show err)
+		Right (econtent, g') -> do
 			putTLSState (st { stRandomGen = g' })
 			return econtent
 
