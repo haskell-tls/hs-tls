@@ -37,7 +37,6 @@ Library
                      cereal,
                      bytestring,
                      vector,
-                     random,
                      AES,
                      crypto-api >= 0.2,
                      cryptocipher >= 0.2,
@@ -71,7 +70,7 @@ executable           Tests
   Main-is:           Tests.hs
   if flag(test)
     Buildable:       True
-    Build-Depends:   base >= 3 && < 7, HUnit, QuickCheck >= 2, bytestring, random
+    Build-Depends:   base >= 3 && < 7, HUnit, QuickCheck >= 2, bytestring
   else
     Buildable:       False
 

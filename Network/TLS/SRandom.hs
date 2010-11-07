@@ -7,14 +7,12 @@ module Network.TLS.SRandom
 	) where
 
 import Data.Word
-import Control.Arrow (first)
 import Crypto.Random
-import System.Random
 import System.Crypto.Random (getEntropy)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Codec.Crypto.AES as AES
-import Data.Bits (xor, shiftL)
+import Data.Bits (xor)
 import Data.Serialize
 
 {-
@@ -40,20 +38,25 @@ get128 = either (\_ -> Word128 0 0) id . runGet (getWord64host >>= \a -> (getWor
 add1 :: Word128 -> Word128
 add1 (Word128 a b) = if b == 0xffffffffffffffff then Word128 (a+1) 0 else Word128 a (b+1)
 
-toBigInt :: Word128 -> Integer
-toBigInt (Word128 a b) = ((fromIntegral a) `shiftL` 64) + fromIntegral b
+makeParams :: ByteString -> (ByteString, ByteString, ByteString)
+makeParams b = (key, cnt, iv)
+	where
+		key          = B.take 32 left2
+		(cnt, left2) = B.splitAt 16 left1
+		(iv, left1)  = B.splitAt 16 b
 
 make :: B.ByteString -> Either GenError SRandomGen
 make b
 	| B.length b < 64 = Left NotEnoughEntropy
 	| otherwise       = Right $ RNG iv (get128 cnt) key
 		where
-			key          = B.take 32 left2
-			(cnt, left2) = B.splitAt 16 left1
-			(iv, left1)  = B.splitAt 16 b
+			(key, cnt, iv) = makeParams b
 
 chunkSize :: Int
 chunkSize = 16
+
+bxor :: ByteString -> ByteString -> ByteString
+bxor a b = B.pack $ B.zipWith xor a b
 
 nextChunk :: SRandomGen -> (ByteString, SRandomGen)
 nextChunk (RNG iv counter key) = (chunk, newrng)
@@ -61,7 +64,6 @@ nextChunk (RNG iv counter key) = (chunk, newrng)
 		newrng = RNG chunk (add1 counter) key
 		chunk  = AES.crypt' AES.CBC key iv AES.Encrypt bytes
 		bytes  = iv `bxor` (put128 counter)
-		bxor a b = B.pack $ B.zipWith xor a b
 
 makeSRandomGen :: IO (Either GenError SRandomGen)
 makeSRandomGen = getEntropy 64 >>= return . make
@@ -82,11 +84,9 @@ instance CryptoRandomGen SRandomGen where
 	newGen           = make
 	genSeedLength    = 64
 	genBytes len rng = Right $ getRandomBytes rng len
-	reseed b rng     = Right rng
-
-instance RandomGen SRandomGen where
-	split _  = error "split not supported on SRandomGen"
-	next rng = (fromIntegral $ toBigInt w, rng')
-		where
-			(w, rng') = first get128 $ nextChunk rng
-
+	reseed b rng@(RNG _ cnt1 _)
+		| B.length b < 64 = Left NotEnoughEntropy
+		| otherwise       = Right $ RNG (r16 `bxor` iv2) (get128 (put128 cnt1 `bxor` cnt2)) key2
+			where
+				(r16, _)          = nextChunk rng
+				(key2, cnt2, iv2) = makeParams b
