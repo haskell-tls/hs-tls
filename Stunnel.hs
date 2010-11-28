@@ -108,7 +108,7 @@ readPrivateKey filepath = do
 	return (pkdata, pk)
 
 data Stunnel =
-	  Client { srcPort :: Int, destinationPort :: Int, destination :: String }
+	  Client { srcPort :: Int, destinationPort :: Int, destination :: String, sourceType :: String, source :: String }
 	| Server { srcPort :: Int, destinationPort :: Int, destination :: String, certificate :: FilePath, key :: FilePath }
 	deriving (Show, Data, Typeable)
 
@@ -116,6 +116,8 @@ clientOpts = Client
 	{ srcPort         = 6060              &= help "port to listen on"  &= typ "PORT"
 	, destinationPort = 6061              &= help "port to connect to" &= typ "PORT"
 	, destination     = "localhost"       &= help "address to connect to" &= typ "ADDRESS"
+	, sourceType      = "tcp"             &= help "type of source (tcp, unix, fd)" &= typ "SOURCETYPE"
+	, source          = ""                &= help "source address influenced by source type" &= typ "ADDRESS"
 	}
 	&= help "connect to a remote destination that use SSL/TLS"
 
@@ -168,5 +170,5 @@ doServer args = do
 main = do
 	args <- cmdArgsRun mode
 	case args of
-		Client _ _ _ -> doClient args
+		Client _ _ _ _ _ -> doClient args
 		Server _ _ _ _ _ -> doServer args
