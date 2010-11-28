@@ -1,6 +1,7 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 import Network
 import System.IO
-import System
+import System.Console.CmdArgs
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
@@ -56,27 +57,6 @@ tlsclient handle = do
 getRandomGen :: IO SRandomGen
 getRandomGen = makeSRandomGen >>= either (fail . show) (return . id)
 
-mainClient :: String -> Int -> IO ()
-mainClient host port = do
-	rng <- getRandomGen
-
-	handle <- connectTo host (PortNumber $ fromIntegral port)
-	hSetBuffering handle NoBuffering
-
-	let clientstate = C.TLSClientParams
-		{ C.cpConnectVersion = TLS10
-		, C.cpAllowedVersions = [ TLS10, TLS11 ]
-		, C.cpSession = Nothing
-		, C.cpCiphers = ciphers
-		, C.cpCertificate = Nothing
-		, C.cpCallbacks = C.TLSClientCallbacks
-			{ C.cbCertificates = Nothing
-			}
-		}
-	C.runTLSClient (tlsclient handle) clientstate rng
-
-	putStrLn "end"
-
 tlsserver handle = do
 	S.listen handle
 	_ <- S.recvData handle
@@ -100,17 +80,10 @@ clientProcess ((certdata, cert), pk) (handle, src) = do
 	S.runTLSServer (tlsserver handle) serverstate rng
 	putStrLn "end"
 
-mainServerAccept cert port socket = do
+mainServerAccept cert socket = do
 	(h, d, _) <- accept socket
 	forkIO $ clientProcess cert (h, d)
-	mainServerAccept cert port socket
-
-mainServer cert port = bracket (listenOn (PortNumber port)) (sClose) (mainServerAccept cert port)
-
-usage :: IO ()
-usage = do
-	putStrLn "usage: stunnel [client|server] <params...>"
-	exitFailure
+	mainServerAccept cert socket
 
 readCertificate :: FilePath -> IO (B.ByteString, Certificate)
 readCertificate filepath = do
@@ -134,22 +107,66 @@ readPrivateKey filepath = do
 		Right x  -> x
 	return (pkdata, pk)
 
+data Stunnel =
+	  Client { srcPort :: Int, destinationPort :: Int, destination :: String }
+	| Server { srcPort :: Int, destinationPort :: Int, destination :: String, certificate :: FilePath, key :: FilePath }
+	deriving (Show, Data, Typeable)
+
+clientOpts = Client
+	{ srcPort         = 6060              &= help "port to listen on"  &= typ "PORT"
+	, destinationPort = 6061              &= help "port to connect to" &= typ "PORT"
+	, destination     = "localhost"       &= help "address to connect to" &= typ "ADDRESS"
+	}
+	&= help "connect to a remote destination that use SSL/TLS"
+
+serverOpts = Server
+	{ srcPort         = 6061              &= help "port to listen on"  &= typ "PORT"
+	, destinationPort = 6060              &= help "port to connect to" &= typ "PORT"
+	, destination     = "localhost"       &= help "address to connect to" &= typ "ADDRESS"
+	, certificate     = "certificate.pem" &= help "X509 public certificate to use" &= typ "FILE"
+	, key             = "certificate.key" &= help "private key linked to the certificate" &= typ "FILE"
+	}
+	&= help "listen for connection that use SSL/TLS and relay it to a different connection"
+
+mode = cmdArgsMode $ modes [clientOpts,serverOpts]
+	&= help "create SSL/TLS tunnel in client or server mode" &= program "stunnel" &= summary "Stunnel v0.1 (Haskell TLS)"
+
+doClient :: Stunnel -> IO ()
+doClient args = do
+	let host = destination args
+	let port = PortNumber $ fromIntegral $ destinationPort args
+
+	rng <- getRandomGen
+
+	handle <- connectTo host port
+	hSetBuffering handle NoBuffering
+
+	let clientstate = C.TLSClientParams
+		{ C.cpConnectVersion = TLS10
+		, C.cpAllowedVersions = [ TLS10, TLS11 ]
+		, C.cpSession = Nothing
+		, C.cpCiphers = ciphers
+		, C.cpCertificate = Nothing
+		, C.cpCallbacks = C.TLSClientCallbacks
+			{ C.cbCertificates = Nothing
+			}
+		}
+	C.runTLSClient (tlsclient handle) clientstate rng
+
+	putStrLn "end"
+
+doServer :: Stunnel -> IO ()
+doServer args = do
+	let port = PortNumber $ fromIntegral $ srcPort args
+	cert <- readCertificate $ certificate args
+	pk   <- readPrivateKey $ key args
+	bracket
+		(listenOn port)
+		sClose
+		(mainServerAccept (cert, snd pk))
+
 main = do
-	args <- getArgs
-	when (length args == 0) usage
-	case (args !! 0) of
-		"server" -> do
-			cert <- readCertificate (args !! 1)
-			pk <- readPrivateKey (args !! 2)
-			mainServer (cert, snd pk) 6061
-		"client" -> do
-			let port =
-				if length args > 1
-					then read $ args !! 1
-					else 6061
-			let dest =
-				if length args > 2
-					then args !! 2
-					else "localhost"
-			mainClient dest port
-		_        -> usage
+	args <- cmdArgsRun mode
+	case args of
+		Client _ _ _ -> doClient args
+		Server _ _ _ _ _ -> doServer args

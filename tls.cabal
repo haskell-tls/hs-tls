@@ -61,7 +61,7 @@ Library
 Executable           stunnel
   Main-is:           Stunnel.hs
   if flag(executable)
-    Build-Depends:   network, haskell98
+    Build-Depends:   network, cmdargs
     Buildable:       True
   else
     Buildable:       False
