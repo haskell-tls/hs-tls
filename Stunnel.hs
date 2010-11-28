@@ -42,7 +42,7 @@ conv l = (a `shiftL` 24) .|. (b `shiftL` 16) .|. (c `shiftL` 8) .|. d
 		[a,b,c,d] = map fromIntegral l
 
 tlsclient handle = do
-	C.connect handle
+	C.initiate handle
 	C.sendData handle (L.pack $ map (toEnum.fromEnum) "GET / HTTP/1.0\r\n\r\n")
 
 	d <- C.recvData handle

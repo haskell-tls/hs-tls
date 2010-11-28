@@ -20,6 +20,7 @@ module Network.TLS.Client
 	, recvPacket
 	, sendPacket
 	-- * API, warning probably subject to change
+	, initiate
 	, connect
 	, sendData
 	, recvData
@@ -156,9 +157,9 @@ connectSendFinish handle = do
 	cf <- getHandshakeDigest True
 	sendPacket handle (Handshake $ Finished $ B.unpack cf)
 
-{- | connect through a handle as a new TLS connection. -}
-connect :: Handle -> TLSClient IO ()
-connect handle = do
+{- | initiate a new TLS connection through a handshake on a handle. -}
+initiate :: Handle -> TLSClient IO ()
+initiate handle = do
 	connectSendClientHello handle
 	recvServerInfo handle
 	connectSendClientCertificate handle
@@ -181,6 +182,10 @@ connect handle = do
 	_ <- recvPacket handle
 
 	return ()
+
+{-# DEPRECATED connect "use initiate" #-}
+connect :: Handle -> TLSClient IO ()
+connect = initiate
 
 sendDataChunk :: Handle -> B.ByteString -> TLSClient IO ()
 sendDataChunk handle d =
