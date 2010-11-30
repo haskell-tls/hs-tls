@@ -65,6 +65,7 @@ Executable           stunnel
     Buildable:       True
   else
     Buildable:       False
+  ghc-options:       -Wall -fno-warn-missing-signatures
 
 executable           Tests
   Main-is:           Tests.hs
