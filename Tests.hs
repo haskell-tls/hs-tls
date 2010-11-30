@@ -4,12 +4,13 @@ import Data.Word
 import Test.QuickCheck
 import Test.QuickCheck.Test
 
+import Tests.Common
+
 import qualified Data.ByteString as B
 import Network.TLS.Struct
 import Network.TLS.Packet
 import Control.Monad
 import Control.Applicative ((<$>))
-import System.IO
 
 liftM6 f m1 m2 m3 m4 m5 m6 = do { x1 <- m1; x2 <- m2; x3 <- m3; x4 <- m4; x5 <- m5; x6 <- m6; return (f x1 x2 x3 x4 x5 x6) }
 
@@ -94,19 +95,6 @@ prop_header_marshalling_id x = (decodeHeader $ encodeHeader x) == Right x
 prop_handshake_marshalling_id x = (decodeHs $ encodeHandshake x) == Right x
 	where
 		decodeHs b = either (Left . id) (uncurry (decodeHandshake TLS10) . head) $ decodeHandshakes b
-
-{- main -}
-args = Args
-	{ replay     = Nothing
-	, maxSuccess = 500
-	, maxDiscard = 2000
-	, maxSize    = 500
-#if MIN_VERSION_QuickCheck(2,3,0)
-	, chatty     = True
-#endif
-	}
-
-run_test n t = putStr ("  " ++ n ++ " ... ") >> hFlush stdout >> quickCheckWith args t
 
 main = do
 	run_test "marshalling header = id" prop_header_marshalling_id
