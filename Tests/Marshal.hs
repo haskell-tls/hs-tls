@@ -15,11 +15,8 @@ import Control.Applicative ((<$>))
 
 liftM6 f m1 m2 m3 m4 m5 m6 = do { x1 <- m1; x2 <- m2; x3 <- m3; x4 <- m4; x5 <- m5; x6 <- m6; return (f x1 x2 x3 x4 x5 x6) }
 
-someWords8 :: Int -> Gen [Word8] 
-someWords8 i = replicateM i (fromIntegral <$> (choose (0,255) :: Gen Int))
-
-someWords16 :: Int -> Gen [Word16] 
-someWords16 i = replicateM i (fromIntegral <$> (choose (0,65535) :: Gen Int))
+genByteString :: Int -> Gen B.ByteString
+genByteString i = B.pack <$> vector i
 
 instance Arbitrary Version where
 	arbitrary = elements [ SSL2, SSL3, TLS10, TLS11, TLS12 ]
@@ -41,33 +38,29 @@ instance Arbitrary Word16 where
 #endif
 
 instance Arbitrary Header where
-	arbitrary = do
-		pt <- arbitrary
-		ver <- arbitrary
-		len <- arbitrary
-		return $ Header pt ver len
+	arbitrary = liftM3 Header arbitrary arbitrary arbitrary
 
 instance Arbitrary ClientRandom where
-	arbitrary = ClientRandom . B.pack <$> someWords8 32
+	arbitrary = liftM ClientRandom (genByteString 32)
 
 instance Arbitrary ServerRandom where
-	arbitrary = ServerRandom . B.pack <$> someWords8 32
+	arbitrary = liftM ServerRandom (genByteString 32)
 
 instance Arbitrary ClientKeyData where
-	arbitrary = ClientKeyData . B.pack <$> someWords8 46
+	arbitrary = liftM ClientKeyData (genByteString 46)
 
 instance Arbitrary Session where
 	arbitrary = do
 		i <- choose (1,2) :: Gen Int
 		case i of
 			1 -> return $ Session Nothing
-			2 -> Session . Just . B.pack <$> someWords8 32
+			2 -> liftM (Session . Just) (genByteString 32)
 
 arbitraryCiphersIDs :: Gen [Word16]
-arbitraryCiphersIDs = choose (0,200) >>= someWords16
+arbitraryCiphersIDs = choose (0,200) >>= vector
 
 arbitraryCompressionIDs :: Gen [Word8]
-arbitraryCompressionIDs = choose (0,200) >>= someWords8
+arbitraryCompressionIDs = choose (0,200) >>= vector
 
 instance Arbitrary CertificateType where
 	arbitrary = elements
@@ -87,7 +80,7 @@ instance Arbitrary Handshake where
 		--, liftM  ServerKeyXchg
 		--, liftM3 CertRequest arbitrary (return Nothing) (return [])
 		--, liftM CertVerify (return [])
-		, liftM Finished (someWords8 12)
+		, liftM Finished (vector 12)
 		]
 
 {- quickcheck property -}
