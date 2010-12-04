@@ -69,15 +69,9 @@ readPrivateKey filepath = do
 		Right x  -> x
 	return (pkdata, pk)
 
-{- test -}
-testClientServerInitiate spCert = monadicIO $ do
-	(cSocket, sSocket) <- run $ socketPair AF_UNIX Stream defaultProtocol
-	cHandle <- run $ socketToHandle cSocket ReadWriteMode
-	sHandle <- run $ socketToHandle sSocket ReadWriteMode
-
-	run $ hSetBuffering cHandle NoBuffering
-	run $ hSetBuffering sHandle NoBuffering
-
+{- | create a client params and server params that is supposed to
+ - result in a valid connection -}
+makeValidParams spCert = do
 	let ciphers =
 		[ cipher_AES128_SHA1
 		, cipher_AES256_SHA1
@@ -104,18 +98,29 @@ testClientServerInitiate spCert = monadicIO $ do
 			{ C.cbCertificates = Nothing
 			}
 		}
-	clientRNG <- run $ getRandomGen
-	serverRNG <- run $ getRandomGen
+	return (clientstate, serverstate)
 
-	startQueue  <- run newChan
-	resultQueue <- run newChan
+{- | setup create all necessary connection point to create a data "pipe"
+ -   ---(startQueue)---> tlsClient ---(socketPair)---> tlsServer ---(resultQueue)--->
+ -}
+setup :: IO (Handle, Handle, SRandomGen, SRandomGen, Chan a, Chan a)
+setup = do
+	(cSocket, sSocket) <- socketPair AF_UNIX Stream defaultProtocol
+	cHandle            <- socketToHandle cSocket ReadWriteMode
+	sHandle            <- socketToHandle sSocket ReadWriteMode
 
-	d <- L.pack <$> pick (someWords8 256)
-	run $ writeChan startQueue d
+	hSetBuffering cHandle NoBuffering
+	hSetBuffering sHandle NoBuffering
 
-	{- create a data "pipe"
-	 -   ---(startQueue)---> tlsClient ---(socketPair)---> tlsServer ---(resultQueue)--->
-	 -}
+	clientRNG   <- getRandomGen
+	serverRNG   <- getRandomGen
+	startQueue  <- newChan
+	resultQueue <- newChan
+
+	return (cHandle, sHandle, clientRNG, serverRNG, startQueue, resultQueue)
+
+testInitiate (clientstate, serverstate) = do
+	(cHandle, sHandle, clientRNG, serverRNG, startQueue, resultQueue) <- run setup
 
 	run $ forkIO $ do
 		S.runTLSServer (tlsServer sHandle resultQueue) serverstate serverRNG
@@ -124,11 +129,16 @@ testClientServerInitiate spCert = monadicIO $ do
 		C.runTLSClient (tlsClient startQueue cHandle) clientstate clientRNG
 		return ()
 
+	{- the test involves writing data on one side of the data "pipe" and
+	 - then checking we receive them on the other side of the data "pipe" -}
+	d <- L.pack <$> pick (someWords8 256)
+	run $ writeChan startQueue d
+
 	dres <- run $ readChan resultQueue
 	assert $ d == dres
 
-	run $ hClose cHandle
-	run $ hClose sHandle
+	-- cleanup
+	run $ (hClose cHandle >> hClose sHandle)
 
 	where
 		tlsServer handle queue = do
@@ -141,10 +151,12 @@ testClientServerInitiate spCert = monadicIO $ do
 			d <- lift $ readChan queue
 			C.sendData handle d
 			return ()
-	
+
 runTests = do
 	{- FIXME generate the certificate and key with arbitrary, for now rely on special files -}
 	(certdata, cert)   <- readCertificate "host.cert"
 	pk                 <- readPrivateKey "host.key"
 
-	run_test "initiate" $ testClientServerInitiate (certdata, cert, snd pk)
+	let spCert = (certdata, cert, snd pk)
+
+	run_test "initiate" (monadicIO $ makeValidParams spCert >>= testInitiate)
