@@ -55,6 +55,9 @@ data TLSServerCallbacks = TLSServerCallbacks
 instance Show TLSServerCallbacks where
 	show _ = "[callbacks]"
 
+instance Show CertificateKey.PrivateKey where
+	show _ = "[privatekey]"
+
 data TLSServerParams = TLSServerParams
 	{ spAllowedVersions :: [Version]           -- ^ allowed versions that we can use
 	, spSessions        :: [[Word8]]           -- ^ placeholder for futur known sessions
@@ -62,7 +65,7 @@ data TLSServerParams = TLSServerParams
 	, spCertificate     :: Maybe TLSServerCert -- ^ the certificate we serve to the client
 	, spWantClientCert  :: Bool                -- ^ configure if we do a cert request to the client
 	, spCallbacks       :: TLSServerCallbacks  -- ^ user callbacks
-	}
+	} deriving (Show)
 
 data TLSStateServer = TLSStateServer
 	{ scParams   :: TLSServerParams -- ^ server params and config for this connection
