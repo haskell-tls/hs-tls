@@ -75,6 +75,9 @@ data Cipher = Cipher
 instance Show Cipher where
 	show c = cipherName c
 
+instance Eq Cipher where
+	(==) c1 c2 = cipherID c1 == cipherID c2
+
 cipherExchangeNeedMoreData :: CipherKeyExchangeType -> Bool
 cipherExchangeNeedMoreData CipherKeyExchangeRSA         = False
 cipherExchangeNeedMoreData CipherKeyExchangeDHE_RSA     = True
