@@ -34,6 +34,14 @@ import Control.Concurrent.Chan
 import Control.Concurrent
 import System.IO
 
+supportedVersions = [SSL3, TLS10, TLS11]
+supportedCiphers =
+	[ cipher_AES128_SHA1
+	, cipher_AES256_SHA1
+	, cipher_RC4_128_MD5
+	, cipher_RC4_128_SHA1
+	]
+
 someWords8 :: Int -> Gen [Word8] 
 someWords8 i = replicateM i (fromIntegral <$> (choose (0,255) :: Gen Int))
 
@@ -69,35 +77,32 @@ readPrivateKey filepath = do
 		Right x  -> x
 	return (pkdata, pk)
 
+arbitraryVersions :: Gen [Version]
+arbitraryVersions = resize (length supportedVersions + 1) $ listOf1 (elements supportedVersions)
+arbitraryCiphers  = resize (length supportedCiphers + 1) $ listOf1 (elements supportedCiphers)
+
 {- | create a client params and server params that is supposed to
  - result in a valid connection -}
 makeValidParams spCert = do
-	let ciphers =
-		[ cipher_AES128_SHA1
-		, cipher_AES256_SHA1
-		, cipher_RC4_128_MD5
-		, cipher_RC4_128_SHA1
-		]
+	-- it should also generate certificates, key exchange parameters
+	-- here instead of taking them from outside.
 
-	let serverstate = S.TLSServerParams
-		{ S.spAllowedVersions = [TLS10,TLS11]
-		, S.spSessions = []
-		, S.spCiphers = ciphers
-		, S.spCertificate = Just spCert
-		, S.spWantClientCert = False
-		, S.spCallbacks = S.TLSServerCallbacks
-			{ S.cbCertificates = Nothing }
-		}
-	let clientstate = C.TLSClientParams
-		{ C.cpConnectVersion = TLS10
-		, C.cpAllowedVersions = [ TLS10, TLS11 ]
-		, C.cpSession = Nothing
-		, C.cpCiphers = ciphers
-		, C.cpCertificate = Nothing
-		, C.cpCallbacks = C.TLSClientCallbacks
-			{ C.cbCertificates = Nothing
-			}
-		}
+	serverstate <- liftM6 S.TLSServerParams
+		arbitraryVersions
+		(return [])            -- session
+		arbitraryCiphers
+		(return $ Just spCert) -- server certificate
+		(return False)         -- check for client certificate
+		(return $ S.TLSServerCallbacks { S.cbCertificates = Nothing })
+
+	clientstate <- liftM6 C.TLSClientParams
+		(elements supportedVersions `suchThat` (\c -> c `elem` S.spAllowedVersions serverstate))
+		(return $ S.spAllowedVersions serverstate)
+		(return Nothing) -- session
+		(oneof [arbitraryCiphers] `suchThat` (\cs -> or [x `elem` S.spCiphers serverstate | x <- cs]))
+		(return Nothing) -- client certificate
+		(return $ C.TLSClientCallbacks { C.cbCertificates = Nothing })
+
 	return (clientstate, serverstate)
 
 {- | setup create all necessary connection point to create a data "pipe"
@@ -119,7 +124,8 @@ setup = do
 
 	return (cHandle, sHandle, clientRNG, serverRNG, startQueue, resultQueue)
 
-testInitiate (clientstate, serverstate) = do
+testInitiate spCert = do
+	(clientstate, serverstate) <- pick (makeValidParams spCert)
 	(cHandle, sHandle, clientRNG, serverRNG, startQueue, resultQueue) <- run setup
 
 	run $ forkIO $ do
@@ -159,4 +165,4 @@ runTests = do
 
 	let spCert = (certdata, cert, snd pk)
 
-	run_test "initiate" (monadicIO $ makeValidParams spCert >>= testInitiate)
+	run_test "initiate" (monadicIO $ testInitiate spCert)
