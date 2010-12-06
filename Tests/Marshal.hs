@@ -5,8 +5,11 @@ import Test.QuickCheck
 import Test.QuickCheck.Test
 
 import Tests.Common
+import Tests.Certificate
 
 import Data.Word
+import Data.Certificate.X509
+
 import qualified Data.ByteString as B
 import Network.TLS.Struct
 import Network.TLS.Packet
@@ -67,11 +70,14 @@ instance Arbitrary CertificateType where
 		, CertificateType_RSA_Ephemeral_dh, CertificateType_DSS_Ephemeral_dh
 		, CertificateType_fortezza_dms ]
 
+-- we hardcode the pubkey for generated X509. at later stage this will be generated as well.
+pubkey = PubKey SignatureALG_rsa (PubKeyRSA (1,2,3))
+
 instance Arbitrary Handshake where
 	arbitrary = oneof
 		[ liftM6 ClientHello arbitrary arbitrary arbitrary arbitraryCiphersIDs arbitraryCompressionIDs (return Nothing)
 		, liftM6 ServerHello arbitrary arbitrary arbitrary arbitrary arbitrary (return Nothing)
-		, return (Certificates [])
+		, liftM Certificates (resize 2 $ listOf $ arbitraryX509 pubkey)
 		, return HelloRequest
 		, return ServerHelloDone
 		, liftM2 ClientKeyXchg arbitrary arbitrary
