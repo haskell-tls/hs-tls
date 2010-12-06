@@ -7,6 +7,7 @@ import Test.QuickCheck.Test
 import Test.QuickCheck.Monadic as QM
 
 import Tests.Common
+import Tests.Certificate
 
 import Text.Printf
 import Data.Word
@@ -86,6 +87,7 @@ arbitraryCiphers  = resize (length supportedCiphers + 1) $ listOf1 (elements sup
 makeValidParams spCert = do
 	-- it should also generate certificates, key exchange parameters
 	-- here instead of taking them from outside.
+	-- cert <- arbitraryX509 (PubKey SignatureALG_rsa (PubKeyRSA (0,0,0)))
 
 	serverstate <- liftM6 S.TLSServerParams
 		arbitraryVersions
