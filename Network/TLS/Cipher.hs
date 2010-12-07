@@ -9,6 +9,8 @@ module Network.TLS.Cipher
 	( CipherTypeFunctions(..)
 	, CipherKeyExchangeType(..)
 	, Cipher(..)
+	, Key
+	, IV
 	, cipherExchangeNeedMoreData
 
 	-- * builtin ciphers for ease of use, might move later to a tls-ciphers library
