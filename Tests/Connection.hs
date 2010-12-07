@@ -35,14 +35,6 @@ import Control.Concurrent.Chan
 import Control.Concurrent
 import System.IO
 
-supportedVersions = [SSL3, TLS10, TLS11]
-supportedCiphers =
-	[ cipher_AES128_SHA1
-	, cipher_AES256_SHA1
-	, cipher_RC4_128_MD5
-	, cipher_RC4_128_SHA1
-	]
-
 someWords8 :: Int -> Gen [Word8] 
 someWords8 i = replicateM i (fromIntegral <$> (choose (0,255) :: Gen Int))
 

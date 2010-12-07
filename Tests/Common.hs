@@ -3,6 +3,19 @@ module Tests.Common where
 
 import System.IO
 import Test.QuickCheck
+import Network.TLS.Struct (Version(..))
+import Network.TLS.Cipher
+
+supportedVersions :: [Version]
+supportedVersions = [SSL3, TLS10, TLS11]
+
+supportedCiphers :: [Cipher]
+supportedCiphers =
+	[ cipher_AES128_SHA1
+	, cipher_AES256_SHA1
+	, cipher_RC4_128_MD5
+	, cipher_RC4_128_SHA1
+	]
 
 {- main -}
 myQuickCheckArgs = Args
