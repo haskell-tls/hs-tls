@@ -84,7 +84,7 @@ clientProcess ((certdata, cert), pk) handle dsthandle _ = do
 	rng <- getRandomGen
 
 	let serverstate = S.TLSServerParams
-		{ S.spAllowedVersions = [TLS10,TLS11]
+		{ S.spAllowedVersions = [SSL3,TLS10,TLS11]
 		, S.spSessions = []
 		, S.spCiphers = ciphers
 		, S.spCertificate = Just (certdata, cert, pk)
