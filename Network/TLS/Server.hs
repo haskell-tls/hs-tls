@@ -32,7 +32,8 @@ import Control.Monad.Trans
 import Control.Monad.State
 import Control.Applicative ((<$>))
 import Data.Certificate.X509
-import qualified Data.Certificate.Key as CertificateKey
+import qualified Data.Certificate.KeyRSA as KeyRSA
+import qualified Data.Certificate.KeyDSA as KeyDSA
 import Network.TLS.Cipher
 import Network.TLS.Crypto
 import Network.TLS.Struct
@@ -46,7 +47,7 @@ import qualified Data.ByteString.Lazy as L
 import System.IO (Handle, hFlush)
 import qualified Crypto.Cipher.RSA as RSA
 
-type TLSServerCert = (B.ByteString, Certificate, CertificateKey.PrivateKey)
+type TLSServerCert = (B.ByteString, Certificate, KeyRSA.Private)
 
 data TLSServerCallbacks = TLSServerCallbacks
 	{ cbCertificates :: Maybe ([Certificate] -> IO Bool) -- ^ optional callback to verify certificates
@@ -55,7 +56,7 @@ data TLSServerCallbacks = TLSServerCallbacks
 instance Show TLSServerCallbacks where
 	show _ = "[callbacks]"
 
-instance Show CertificateKey.PrivateKey where
+instance Show KeyRSA.Private where
 	show _ = "[privatekey]"
 
 data TLSServerParams = TLSServerParams
@@ -150,14 +151,14 @@ handshakeSendServerData handle = do
 	let needkeyxchg = cipherExchangeNeedMoreData $ cipherKeyExchange cipher
 
 	let privkey = PrivRSA $ RSA.PrivateKey
-		{ RSA.private_sz   = fromIntegral $ CertificateKey.privKey_lenmodulus privkeycert
-		, RSA.private_n    = CertificateKey.privKey_modulus privkeycert
-		, RSA.private_d    = CertificateKey.privKey_private_exponant privkeycert
-		, RSA.private_p    = CertificateKey.privKey_p1 privkeycert
-		, RSA.private_q    = CertificateKey.privKey_p2 privkeycert
-		, RSA.private_dP   = CertificateKey.privKey_exp1 privkeycert
-		, RSA.private_dQ   = CertificateKey.privKey_exp2 privkeycert
-		, RSA.private_qinv = CertificateKey.privKey_coef privkeycert
+		{ RSA.private_sz   = fromIntegral $ KeyRSA.lenmodulus privkeycert
+		, RSA.private_n    = KeyRSA.modulus privkeycert
+		, RSA.private_d    = KeyRSA.private_exponant privkeycert
+		, RSA.private_p    = KeyRSA.p1 privkeycert
+		, RSA.private_q    = KeyRSA.p2 privkeycert
+		, RSA.private_dP   = KeyRSA.exp1 privkeycert
+		, RSA.private_dQ   = KeyRSA.exp2 privkeycert
+		, RSA.private_qinv = KeyRSA.coef privkeycert
 		}
 	setPrivateKey privkey
 

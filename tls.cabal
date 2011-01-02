@@ -40,7 +40,7 @@ Library
                      AES,
                      crypto-api >= 0.2,
                      cryptocipher >= 0.2,
-                     certificate >= 0.4 && < 0.5
+                     certificate >= 0.5 && < 0.6
   Exposed-modules:   Network.TLS.Client
                      Network.TLS.Server
                      Network.TLS.Struct
