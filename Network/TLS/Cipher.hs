@@ -15,6 +15,8 @@ module Network.TLS.Cipher
 
 	-- * builtin ciphers for ease of use, might move later to a tls-ciphers library
 	, cipher_null_null
+	, cipher_null_SHA1
+	, cipher_null_MD5
 	, cipher_RC4_128_MD5
 	, cipher_RC4_128_SHA1
 	, cipher_AES128_SHA1
@@ -184,6 +186,36 @@ cipher_null_null = Cipher
 	, cipherKeyBlockSize = 0
 	, cipherPaddingSize  = 0
 	, cipherMACHash      = (const B.empty)
+	, cipherKeyExchange  = CipherKeyExchangeRSA
+	, cipherF            = CipherNoneF
+	, cipherMinVer       = Nothing
+	}
+
+cipher_null_MD5 :: Cipher
+cipher_null_MD5 = Cipher
+	{ cipherID           = 0x1
+	, cipherName         = "RSA-null-MD5"
+	, cipherDigestSize   = 16
+	, cipherKeySize      = 0
+	, cipherIVSize       = 0
+	, cipherKeyBlockSize = 2 * (16 + 0 + 0)
+	, cipherPaddingSize  = 0
+	, cipherMACHash      = MD5.hash
+	, cipherKeyExchange  = CipherKeyExchangeRSA
+	, cipherF            = CipherNoneF
+	, cipherMinVer       = Nothing
+	}
+
+cipher_null_SHA1 :: Cipher
+cipher_null_SHA1 = Cipher
+	{ cipherID           = 0x2
+	, cipherName         = "RSA-null-SHA1"
+	, cipherDigestSize   = 20
+	, cipherKeySize      = 0
+	, cipherIVSize       = 0
+	, cipherKeyBlockSize = 2 * (20 + 0 + 0)
+	, cipherPaddingSize  = 0
+	, cipherMACHash      = SHA1.hash
 	, cipherKeyExchange  = CipherKeyExchangeRSA
 	, cipherF            = CipherNoneF
 	, cipherMinVer       = Nothing
