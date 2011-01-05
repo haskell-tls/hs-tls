@@ -33,6 +33,8 @@ cipher_test cipher = run_test n t
 				key <- B.pack <$> arbitraryKey cipher
 				t   <- B.pack <$> arbitraryText cipher
 				return $ stream ktoi enc dec key t
+			CipherNoneF -> do
+				return True
 		block e d key iv t = (d key iv . e key iv) t == t
 		stream ktoi e d key t = (fst . d iv . fst . e iv) t == t
 			where iv = ktoi key

@@ -144,7 +144,7 @@ encryptData content = do
 	let writekey = cstKey cst
 
 	econtent <- case cipherF cipher of
-		CipherNoneF -> fail "none encrypt"
+		CipherNoneF -> return content
 		CipherBlockF encrypt _ -> do
 			let iv = cstIV cst
 			let e = encrypt writekey iv (B.concat [ content, padding ])

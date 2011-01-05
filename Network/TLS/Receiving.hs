@@ -205,7 +205,17 @@ decryptData (EncryptedData econtent) = do
 	let writekey     = cstKey cst
 
 	case cipherF cipher of
-		CipherNoneF -> fail "none decrypt"
+		CipherNoneF -> do
+			let contentlen = B.length econtent - digestSize
+			case partition3 econtent (contentlen, digestSize, 0) of
+				Nothing                ->
+					throwError $ Error_Misc "partition3 failed"
+				Just (content, mac, _) ->
+					return $ CipherData
+						{ cipherDataContent = content
+						, cipherDataMAC     = Just mac
+						, cipherDataPadding = Nothing
+						}
 		CipherBlockF _ decryptF -> do
 			{- update IV -}
 			let (iv, econtent') =
