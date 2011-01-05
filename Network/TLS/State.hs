@@ -375,7 +375,11 @@ updateHandshakeDigestSplitted ty bytes = updateHandshakeDigest $ B.concat [hdr, 
 getHandshakeDigest :: MonadTLSState m => Bool -> m Bytes
 getHandshakeDigest client = do
 	st <- getTLSState
+	hasValidHandshake "getHandshakeDigest"
 	let hst = fromJust $ stHandshake st
+	assert "make digest"
+		[ ("hst handshake digest", isNothing $ hstHandshakeDigest hst)
+		, ("master secret", isNothing $ hstMasterSecret hst) ]
 	let (sha1ctx, md5ctx) = fromJust $ hstHandshakeDigest hst
 	let msecret = fromJust $ hstMasterSecret hst
 	return $ (if client then generateClientFinished else generateServerFinished) (stVersion st) msecret md5ctx sha1ctx
