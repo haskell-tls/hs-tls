@@ -247,9 +247,10 @@ decryptData (EncryptedData econtent) = do
 				, cipherDataPadding = Nothing
 				}
 
-processCertificates :: [Certificate] -> TLSRead ()
+processCertificates :: [X509] -> TLSRead ()
 processCertificates certs = do
-	case certPubKey $ head certs of
+	let (X509 mainCert _ _ _) = head certs
+	case certPubKey mainCert of
 		PubKey _ (PubKeyRSA (lm, m, e)) -> do
 			let pk = PubRSA (RSA.PublicKey { RSA.public_sz = fromIntegral lm, RSA.public_n = m, RSA.public_e = e })
 			setPublicKey pk

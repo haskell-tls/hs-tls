@@ -356,7 +356,7 @@ getCerts len = do
 	certxs <- getCerts (len - certlen - 3)
 	return (cert : certxs)
 
-putCert :: Certificate -> Put
+putCert :: X509 -> Put
 putCert cert = putWord24 (fromIntegral $ B.length content) >> putBytes content
 	where content = B.concat $ L.toChunks $ encodeCertificate cert
 

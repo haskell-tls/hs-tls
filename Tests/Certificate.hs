@@ -4,6 +4,7 @@ module Tests.Certificate
 
 import Test.QuickCheck
 import qualified Data.Certificate.X509 as X509
+import qualified Data.Certificate.X509Cert as X509Cert
 import Control.Monad
 
 readableChar :: Gen Char
@@ -21,16 +22,15 @@ arbitraryTime = do
 	z      <- arbitrary
 	return (year, month, day, hour, minute, second, z)
 
-arbitraryX509 pubKey@(X509.PubKey alg _) = do
+arbitraryX509Cert pubKey@(X509.PubKey alg _) = do
 	version   <- arbitrary
 	serial    <- arbitrary
 	issuerdn  <- arbitraryDN
 	subjectdn <- arbitraryDN
 	time1     <- arbitraryTime
 	time2     <- arbitraryTime
-	sig       <- resize 40 $ listOf1 arbitrary
 	let sigalg = X509.SignatureALG_md5WithRSAEncryption
-	return $ X509.Certificate
+	return $ X509Cert.Certificate
 		{ X509.certVersion      = version
 		, X509.certSerial       = serial
 		, X509.certSignatureAlg = sigalg
@@ -39,6 +39,10 @@ arbitraryX509 pubKey@(X509.PubKey alg _) = do
 		, X509.certValidity     = (time1, time2)
 		, X509.certPubKey       = pubKey
 		, X509.certExtensions   = Nothing
-		, X509.certSignature    = Just (sigalg, sig)
-		, X509.certOthers       = []
 		}
+
+arbitraryX509 pubKey = do
+	cert <- arbitraryX509Cert pubKey
+	sig  <- resize 40 $ listOf1 arbitrary
+	let sigalg = X509.SignatureALG_md5WithRSAEncryption
+	return (X509.X509 cert Nothing sigalg sig)

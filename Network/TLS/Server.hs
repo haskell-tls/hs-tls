@@ -47,7 +47,7 @@ import qualified Data.ByteString.Lazy as L
 import System.IO (Handle, hFlush)
 import qualified Crypto.Cipher.RSA as RSA
 
-type TLSServerCert = (B.ByteString, Certificate, KeyRSA.Private)
+type TLSServerCert = (B.ByteString, X509, KeyRSA.Private)
 
 data TLSServerCallbacks = TLSServerCallbacks
 	{ cbCertificates :: Maybe ([Certificate] -> IO Bool) -- ^ optional callback to verify certificates

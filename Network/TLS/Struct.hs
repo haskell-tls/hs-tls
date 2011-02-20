@@ -208,7 +208,7 @@ data ServerKeyXchgAlgorithmData =
 data Handshake =
 	  ClientHello !Version !ClientRandom !Session ![CipherID] ![CompressionID] (Maybe [Extension])
 	| ServerHello !Version !ServerRandom !Session !CipherID !CompressionID (Maybe [Extension])
-	| Certificates [Certificate]
+	| Certificates [X509]
 	| HelloRequest
 	| ServerHelloDone
 	| ClientKeyXchg Version ClientKeyData

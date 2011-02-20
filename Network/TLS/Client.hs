@@ -46,7 +46,7 @@ import System.IO (Handle, hFlush)
 import Data.List (find)
 
 data TLSClientCallbacks = TLSClientCallbacks
-	{ cbCertificates :: Maybe ([Certificate] -> IO Bool) -- ^ optional callback to verify certificates
+	{ cbCertificates :: Maybe ([X509] -> IO Bool) -- ^ optional callback to verify certificates
 	}
 
 instance Show TLSClientCallbacks where
@@ -57,7 +57,7 @@ data TLSClientParams = TLSClientParams
 	, cpAllowedVersions :: [Version]          -- ^ allowed versions from the server
 	, cpSession         :: Maybe [Word8]      -- ^ session for this connection
 	, cpCiphers         :: [Cipher]           -- ^ all ciphers for this connection
-	, cpCertificate     :: Maybe Certificate  -- ^ an optional client certificate
+	, cpCertificate     :: Maybe X509         -- ^ an optional client certificate
 	, cpCallbacks       :: TLSClientCallbacks -- ^ user callbacks
 	} deriving (Show)
 

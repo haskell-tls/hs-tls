@@ -51,7 +51,7 @@ instance Arbitrary Word8 where
 getRandomGen :: IO SRandomGen
 getRandomGen = makeSRandomGen >>= either (fail . show) (return . id)
 
-readCertificate :: FilePath -> IO (B.ByteString, Certificate)
+readCertificate :: FilePath -> IO (B.ByteString, X509)
 readCertificate filepath = do
 	content <- B.readFile filepath
 	let certdata = case parsePEMCert content of

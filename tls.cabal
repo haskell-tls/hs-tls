@@ -38,8 +38,8 @@ Library
                      bytestring,
                      vector,
                      crypto-api >= 0.2,
-                     certificate >= 0.5 && < 0.6
                      cryptocipher >= 0.2.5,
+                     certificate >= 0.6 && < 0.7
   Exposed-modules:   Network.TLS.Client
                      Network.TLS.Server
                      Network.TLS.Struct

@@ -95,7 +95,7 @@ clientProcess ((certdata, cert), pk) handle dsthandle _ = do
 
 	S.runTLSServer (tlsserver handle dsthandle) serverstate rng
 
-readCertificate :: FilePath -> IO (B.ByteString, Certificate)
+readCertificate :: FilePath -> IO (B.ByteString, X509)
 readCertificate filepath = do
 	content <- B.readFile filepath
 	let certdata = case parsePEMCert content of
