@@ -37,7 +37,7 @@ Library
                      cereal >= 0.3,
                      bytestring,
                      vector,
-                     crypto-api >= 0.2,
+                     crypto-api >= 0.5,
                      cryptocipher >= 0.2.5,
                      certificate >= 0.6 && < 0.7
   Exposed-modules:   Network.TLS.Client
