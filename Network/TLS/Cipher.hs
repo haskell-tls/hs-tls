@@ -33,10 +33,9 @@ import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.MD5 as MD5
 
 import qualified Data.Vector.Unboxed as Vector (fromList, toList)
-import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString as B
 
-import qualified Codec.Crypto.AES as AES
+import qualified Crypto.Cipher.AES as AES
 import qualified Crypto.Cipher.RC4 as RC4
 
 -- FIXME convert to newtype
@@ -93,33 +92,21 @@ cipherExchangeNeedMoreData CipherKeyExchangeECDH_ECDSA  = True
 cipherExchangeNeedMoreData CipherKeyExchangeECDH_RSA    = True
 cipherExchangeNeedMoreData CipherKeyExchangeECDHE_ECDSA = True
 
-repack :: Int -> B.ByteString -> [B.ByteString]
-repack bs x =
-	if B.length x > bs
-		then
-			let (c1, c2) = B.splitAt bs x in
-			B.pack (B.unpack c1) : repack 16 c2
-		else
-			[ x ]
-
-lazyToStrict :: L.ByteString -> B.ByteString
-lazyToStrict = B.concat . L.toChunks
-
 aes128_cbc_encrypt :: Key -> IV -> B.ByteString -> B.ByteString
-aes128_cbc_encrypt key iv d = lazyToStrict $ AES.crypt AES.CBC key iv AES.Encrypt d16
-	where d16 = L.fromChunks $ repack 16 d
+aes128_cbc_encrypt key iv d = AES.encryptCBC pkey iv d
+	where (Right pkey) = AES.initKey128 key
 
 aes128_cbc_decrypt :: Key -> IV -> B.ByteString -> B.ByteString
-aes128_cbc_decrypt key iv d = lazyToStrict $ AES.crypt AES.CBC key iv AES.Decrypt d16
-	where d16 = L.fromChunks $ repack 16 d
+aes128_cbc_decrypt key iv d = AES.decryptCBC pkey iv d
+	where (Right pkey) = AES.initKey128 key
 
 aes256_cbc_encrypt :: Key -> IV -> B.ByteString -> B.ByteString
-aes256_cbc_encrypt key iv d = lazyToStrict $ AES.crypt AES.CBC key iv AES.Encrypt d16
-	where d16 = L.fromChunks $ repack 16 d
+aes256_cbc_encrypt key iv d = AES.encryptCBC pkey iv d
+	where (Right pkey) = AES.initKey256 key
 
 aes256_cbc_decrypt :: Key -> IV -> B.ByteString -> B.ByteString
-aes256_cbc_decrypt key iv d = lazyToStrict $ AES.crypt AES.CBC key iv AES.Decrypt d16
-	where d16 = L.fromChunks $ repack 32 d
+aes256_cbc_decrypt key iv d = AES.decryptCBC pkey iv d
+	where (Right pkey) = AES.initKey256 key
 
 toIV :: RC4.Ctx -> IV
 toIV (v, x, y) = B.pack (x : y : Vector.toList v)
