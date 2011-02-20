@@ -247,7 +247,7 @@ processCertificates :: [X509] -> TLSRead ()
 processCertificates certs = do
 	let (X509 mainCert _ _ _) = head certs
 	case certPubKey mainCert of
-		PubKey _ (PubKeyRSA (lm, m, e)) -> do
+		PubKeyRSA (lm, m, e) -> do
 			let pk = PubRSA (RSA.PublicKey { RSA.public_sz = fromIntegral lm, RSA.public_n = m, RSA.public_e = e })
 			setPublicKey pk
 		_                    -> return ()

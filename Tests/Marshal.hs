@@ -71,7 +71,7 @@ instance Arbitrary CertificateType where
 		, CertificateType_fortezza_dms ]
 
 -- we hardcode the pubkey for generated X509. at later stage this will be generated as well.
-pubkey = PubKey PubKeyALG_RSA (PubKeyRSA (1,2,3))
+pubkey = PubKeyRSA (1,2,3)
 
 instance Arbitrary Handshake where
 	arbitrary = oneof
