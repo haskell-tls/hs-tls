@@ -39,7 +39,7 @@ Library
                    , vector
                    , crypto-api >= 0.5
                    , cryptocipher >= 0.2.5
-                   , certificate >= 0.6 && < 0.7
+                   , certificate >= 0.7 && < 0.8
   Exposed-modules:   Network.TLS.Client
                      Network.TLS.Server
                      Network.TLS.Struct
