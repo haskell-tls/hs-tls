@@ -22,9 +22,9 @@ arbitraryTime = do
 	z      <- arbitrary
 	return (year, month, day, hour, minute, second, z)
 
-arbitraryX509Cert pubKey@(X509.PubKey alg _) = do
-	version   <- arbitrary
-	serial    <- arbitrary
+arbitraryX509Cert pubKey = do
+	version   <- choose (1,3)
+	serial    <- choose (0,2^24)
 	issuerdn  <- arbitraryDN
 	subjectdn <- arbitraryDN
 	time1     <- arbitraryTime
