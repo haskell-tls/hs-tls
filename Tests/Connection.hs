@@ -33,7 +33,10 @@ import Control.Monad.Trans (lift)
 import Control.Applicative ((<$>))
 import Control.Concurrent.Chan
 import Control.Concurrent
+import Control.Exception (catch, throw, SomeException)
 import System.IO
+
+import Prelude hiding (catch)
 
 someWords8 :: Int -> Gen [Word8] 
 someWords8 i = replicateM i (fromIntegral <$> (choose (0,255) :: Gen Int))
@@ -123,10 +126,12 @@ testInitiate spCert = do
 	(cHandle, sHandle, clientRNG, serverRNG, startQueue, resultQueue) <- run setup
 
 	run $ forkIO $ do
-		S.runTLSServer (tlsServer sHandle resultQueue) serverstate serverRNG
+		catch (S.runTLSServer (tlsServer sHandle resultQueue) serverstate serverRNG)
+		      (\e -> putStrLn ("server exception: " ++ show e) >> throw (e :: SomeException))
 		return ()
 	run $ forkIO $ do
-		C.runTLSClient (tlsClient startQueue cHandle) clientstate clientRNG
+		catch (C.runTLSClient (tlsClient startQueue cHandle) clientstate clientRNG)
+		      (\e -> putStrLn ("client exception: " ++ show e) >> throw (e :: SomeException))
 		return ()
 
 	{- the test involves writing data on one side of the data "pipe" and
