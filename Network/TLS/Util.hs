@@ -28,7 +28,7 @@ partition3 bytes (d1,d2,d3) = if B.length bytes /= s then Nothing else Just (p1,
 		(p3, _)  = B.splitAt d3 r2
 
 partition6 :: Bytes -> (Int,Int,Int,Int,Int,Int) -> Maybe (Bytes, Bytes, Bytes, Bytes, Bytes, Bytes)
-partition6 bytes (d1,d2,d3,d4,d5,d6) = if B.length bytes /= s then Nothing else Just (p1,p2,p3,p4,p5,p6)
+partition6 bytes (d1,d2,d3,d4,d5,d6) = if B.length bytes < s then Nothing else Just (p1,p2,p3,p4,p5,p6)
 	where
 		s        = sum [d1,d2,d3,d4,d5,d6]
 		(p1, r1) = B.splitAt d1 bytes
