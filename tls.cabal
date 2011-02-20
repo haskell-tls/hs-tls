@@ -30,16 +30,16 @@ Flag executable
   Default:           False
 
 Library
-  Build-Depends:     base >= 3 && < 7,
-                     mtl,
-                     cryptohash >= 0.6,
-                     binary >= 0.5,
-                     cereal >= 0.3,
-                     bytestring,
-                     vector,
-                     crypto-api >= 0.5,
-                     cryptocipher >= 0.2.5,
-                     certificate >= 0.6 && < 0.7
+  Build-Depends:     base >= 3 && < 5
+                   , mtl
+                   , cryptohash >= 0.6
+                   , binary >= 0.5
+                   , cereal >= 0.3
+                   , bytestring
+                   , vector
+                   , crypto-api >= 0.5
+                   , cryptocipher >= 0.2.5
+                   , certificate >= 0.6 && < 0.7
   Exposed-modules:   Network.TLS.Client
                      Network.TLS.Server
                      Network.TLS.Struct
@@ -60,7 +60,8 @@ Library
 Executable           stunnel
   Main-is:           Stunnel.hs
   if flag(executable)
-    Build-Depends:   network, cmdargs
+    Build-Depends:   network
+                   , cmdargs
     Buildable:       True
   else
     Buildable:       False
@@ -70,7 +71,10 @@ executable           Tests
   Main-is:           Tests.hs
   if flag(test)
     Buildable:       True
-    Build-Depends:   base >= 3 && < 7, HUnit, QuickCheck >= 2, bytestring
+    Build-Depends:   base >= 3 && < 5
+                   , HUnit
+                   , QuickCheck >= 2
+                   , bytestring
   else
     Buildable:       False
 
