@@ -3,6 +3,7 @@ module Network.TLS.Util
 	, takelast
 	, partition3
 	, partition6
+	, fromJust
 	) where
 
 import Network.TLS.Struct (Bytes)
@@ -36,3 +37,7 @@ partition6 bytes (d1,d2,d3,d4,d5,d6) = if B.length bytes /= s then Nothing else 
 		(p4, r4) = B.splitAt d4 r3
 		(p5, r5) = B.splitAt d5 r4
 		(p6, _)  = B.splitAt d6 r5
+
+fromJust :: String -> Maybe a -> a
+fromJust what Nothing  = error ("fromJust " ++ what ++ ": Nothing") -- yuck
+fromJust _    (Just x) = x

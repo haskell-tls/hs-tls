@@ -14,10 +14,10 @@ module Network.TLS.Receiving (
 	readPacket
 	) where
 
+import Data.Maybe (isJust)
 import Control.Applicative ((<$>))
 import Control.Monad.State
 import Control.Monad.Error
-import Data.Maybe
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as L
@@ -81,7 +81,7 @@ processPacket (Header ProtocolType_Alert _ _) content = return . (:[]) . Alert =
 
 processPacket (Header ProtocolType_ChangeCipherSpec _ _) content = do
 	e <- updateStatusCC False
-	when (isJust e) $ throwError (fromJust e)
+	when (isJust e) $ throwError (fromJust "" e)
 
 	returnEither $ decodeChangeCipherSpec content
 	switchRxEncryption
@@ -99,7 +99,7 @@ processHandshake :: Version -> HandshakeType -> ByteString -> TLSRead Packet
 processHandshake ver ty econtent = do
 	-- SECURITY FIXME if RSA fail, we need to generate a random master secret and not fail.
 	e <- updateStatusHs ty
-	when (isJust e) $ throwError (fromJust e)
+	when (isJust e) $ throwError (fromJust "" e)
 
 	content <- case ty of
 		HandshakeType_ClientKeyXchg -> do
@@ -128,7 +128,7 @@ processHandshake ver ty econtent = do
 decryptRSA :: MonadTLSState m => ByteString -> m (Either KxError ByteString)
 decryptRSA econtent = do
 	ver <- return . stVersion =<< getTLSState
-	rsapriv <- getTLSState >>= return . fromJust . hstRSAPrivateKey . fromJust . stHandshake
+	rsapriv <- getTLSState >>= return . fromJust "rsa private key" . hstRSAPrivateKey . fromJust "handshake" . stHandshake
 	return $ kxDecrypt rsapriv (if ver < TLS10 then econtent else B.drop 2 econtent)
 
 setMasterSecretRandom :: ByteString -> TLSRead ()
@@ -141,7 +141,7 @@ setMasterSecretRandom content = do
 processClientKeyXchg :: Version -> ByteString -> TLSRead ()
 processClientKeyXchg ver content = do
 	{- the TLS protocol expect the initial client version received in the ClientHello, not the negociated version -}
-	expectedVer <- getTLSState >>= return . hstClientVersion . fromJust . stHandshake
+	expectedVer <- getTLSState >>= return . hstClientVersion . fromJust "handshake" . stHandshake
 	if expectedVer /= ver
 		then setMasterSecretRandom content
 		else setMasterSecret content
@@ -194,12 +194,8 @@ decryptData :: EncryptedData -> TLSRead CipherData
 decryptData (EncryptedData econtent) = do
 	st <- getTLSState
 
-	assert "decrypt data"
-		[ ("cipher", isNothing $ stCipher st)
-		, ("crypt state", isNothing $ stRxCryptState st) ]
-
-	let cipher       = fromJust $ stCipher st
-	let cst          = fromJust $ stRxCryptState st
+	let cipher       = fromJust "cipher" $ stCipher st
+	let cst          = fromJust "rx crypt state" $ stRxCryptState st
 	let padding_size = fromIntegral $ cipherPaddingSize cipher
 	let digestSize   = fromIntegral $ cipherDigestSize cipher
 	let writekey     = cstKey cst
@@ -222,13 +218,13 @@ decryptData (EncryptedData econtent) = do
 				if hasExplicitBlockIV $ stVersion st
 					then B.splitAt (fromIntegral $ cipherIVSize cipher) econtent
 					else (cstIV cst, econtent)
-			let newiv = fromJust $ takelast padding_size econtent'
+			let newiv = fromJust "new iv" $ takelast padding_size econtent'
 			putTLSState $ st { stRxCryptState = Just $ cst { cstIV = newiv } }
 
 			let content' = decryptF writekey iv econtent'
 			let paddinglength = fromIntegral (B.last content') + 1
 			let contentlen = B.length content' - paddinglength - digestSize
-			let (content, mac, padding) = fromJust $ partition3 content' (contentlen, digestSize, paddinglength)
+			let (content, mac, padding) = fromJust "p3" $ partition3 content' (contentlen, digestSize, paddinglength)
 			return $ CipherData
 				{ cipherDataContent = content
 				, cipherDataMAC     = Just mac
@@ -239,7 +235,7 @@ decryptData (EncryptedData econtent) = do
 			let (content', newiv) = decryptF (if iv /= B.empty then iv else initF writekey) econtent
 			{- update Ctx -}
 			let contentlen        = B.length content' - digestSize
-			let (content, mac, _) = fromJust $ partition3 content' (contentlen, digestSize, 0)
+			let (content, mac, _) = fromJust "p3" $ partition3 content' (contentlen, digestSize, 0)
 			putTLSState $ st { stRxCryptState = Just $ cst { cstIV = newiv } }
 			return $ CipherData
 				{ cipherDataContent = content

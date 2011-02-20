@@ -15,7 +15,6 @@ module Network.TLS.Sending (
 	) where
 
 import Control.Monad.State
-import Data.Maybe
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
@@ -107,7 +106,7 @@ encryptRSA :: MonadTLSState m => ByteString -> m ByteString
 encryptRSA content = do
 	st <- getTLSState
 	let g = stRandomGen st
-	let rsakey = fromJust $ hstRSAPublicKey $ fromJust $ stHandshake st
+	let rsakey = fromJust "rsa public key" $ hstRSAPublicKey $ fromJust "handshake" $ stHandshake st
 	case kxEncrypt g rsakey content of
 		Left err             -> fail ("rsa encrypt failed: " ++ show err)
 		Right (econtent, g') -> do
@@ -125,12 +124,8 @@ encryptData :: MonadTLSState m => ByteString -> m ByteString
 encryptData content = do
 	st <- getTLSState
 
-	assert "encrypt data"
-		[ ("cipher", isNothing $ stCipher st)
-		, ("crypt state", isNothing $ stTxCryptState st) ]
-
-	let cipher = fromJust $ stCipher st
-	let cst = fromJust $ stTxCryptState st
+	let cipher = fromJust "cipher" $ stCipher st
+	let cst = fromJust "tx crypt state" $ stTxCryptState st
 	let padding_size = fromIntegral $ cipherPaddingSize cipher
 
 	let msg_len = B.length content
@@ -148,7 +143,7 @@ encryptData content = do
 		CipherBlockF encrypt _ -> do
 			let iv = cstIV cst
 			let e = encrypt writekey iv (B.concat [ content, padding ])
-			let newiv = fromJust $ takelast (fromIntegral $ cipherIVSize cipher) e
+			let newiv = fromJust "new iv" $ takelast (fromIntegral $ cipherIVSize cipher) e
 			putTLSState $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
 			return $ if hasExplicitBlockIV $ stVersion st
 				then B.concat [iv,e]

@@ -44,7 +44,7 @@ module Network.TLS.State
 
 import Data.Word
 import Data.List (find)
-import Data.Maybe (fromJust, isNothing)
+import Data.Maybe (isNothing)
 import Network.TLS.Util
 import Network.TLS.Struct
 import Network.TLS.SRandom
@@ -150,14 +150,10 @@ withTLSRNG f = do
 makeDigest :: (MonadTLSState m) => Bool -> Header -> Bytes -> m Bytes
 makeDigest w hdr content = do
 	st <- getTLSState
-	assert "make digest"
-		[ ("cipher", isNothing $ stCipher st)
-		, ("crypt state", isNothing $ if w then stTxCryptState st else stRxCryptState st)
-		, ("mac state", isNothing $ if w then stTxMacState st else stRxMacState st) ]
 	let ver = stVersion st
-	let cst = fromJust $ if w then stTxCryptState st else stRxCryptState st
-	let ms = fromJust $ if w then stTxMacState st else stRxMacState st
-	let cipher = fromJust $ stCipher st
+	let cst = fromJust "crypt state" $ if w then stTxCryptState st else stRxCryptState st
+	let ms = fromJust "mac state" $ if w then stTxMacState st else stRxMacState st
+	let cipher = fromJust "cipher" $ stCipher st
 	let machash = cipherMACHash cipher
 
 	let (macF, msg) =
@@ -266,11 +262,9 @@ setMasterSecret :: MonadTLSState m => Bytes -> m ()
 setMasterSecret premastersecret = do
 	st <- getTLSState
 	hasValidHandshake "master secret"
-	assert "set master secret"
-		[ ("server random", (isNothing $ hstServerRandom $ fromJust $ stHandshake st)) ]
 
 	updateHandshake "master secret" (\hst ->
-		let ms = generateMasterSecret (stVersion st) premastersecret (hstClientRandom hst) (fromJust $ hstServerRandom hst) in
+		let ms = generateMasterSecret (stVersion st) premastersecret (hstClientRandom hst) (fromJust "server random" $ hstServerRandom hst) in
 		hst { hstMasterSecret = Just ms } )
 	return ()
 
@@ -284,25 +278,20 @@ setKeyBlock :: MonadTLSState m => m ()
 setKeyBlock = do
 	st <- getTLSState
 
-	let hst = fromJust $ stHandshake st
-	assert "set key block"
-		[ ("cipher", (isNothing $ stCipher st))
-		, ("server random", (isNothing $ hstServerRandom hst))
-		, ("master secret", (isNothing $ hstMasterSecret hst))
-		]
+	let hst = fromJust "handshake" $ stHandshake st
 
 	let cc = stClientContext st
-	let cipher = fromJust $ stCipher st
+	let cipher = fromJust "cipher" $ stCipher st
 	let keyblockSize = fromIntegral $ cipherKeyBlockSize cipher
-	let digestSize = fromIntegral $ cipherDigestSize cipher
-	let keySize = fromIntegral $ cipherKeySize cipher
-	let ivSize = fromIntegral $ cipherIVSize cipher
+	let digestSize   = fromIntegral $ cipherDigestSize cipher
+	let keySize      = fromIntegral $ cipherKeySize cipher
+	let ivSize       = fromIntegral $ cipherIVSize cipher
 	let kb = generateKeyBlock (stVersion st) (hstClientRandom hst)
-	                          (fromJust $ hstServerRandom hst)
-	                          (fromJust $ hstMasterSecret hst) keyblockSize
+	                          (fromJust "server random" $ hstServerRandom hst)
+	                          (fromJust "master secret" $ hstMasterSecret hst) keyblockSize
 
 	let (cMACSecret, sMACSecret, cWriteKey, sWriteKey, cWriteIV, sWriteIV) =
-		fromJust $ partition6 kb (digestSize, digestSize, keySize, keySize, ivSize, ivSize)
+		fromJust "p6" $ partition6 kb (digestSize, digestSize, keySize, keySize, ivSize, ivSize)
 
 	let cstClient = TLSCryptState
 		{ cstKey        = cWriteKey
@@ -375,13 +364,9 @@ updateHandshakeDigestSplitted ty bytes = updateHandshakeDigest $ B.concat [hdr, 
 getHandshakeDigest :: MonadTLSState m => Bool -> m Bytes
 getHandshakeDigest client = do
 	st <- getTLSState
-	hasValidHandshake "getHandshakeDigest"
-	let hst = fromJust $ stHandshake st
-	assert "make digest"
-		[ ("hst handshake digest", isNothing $ hstHandshakeDigest hst)
-		, ("master secret", isNothing $ hstMasterSecret hst) ]
-	let (sha1ctx, md5ctx) = fromJust $ hstHandshakeDigest hst
-	let msecret = fromJust $ hstMasterSecret hst
+	let hst = fromJust "handshake" $ stHandshake st
+	let (sha1ctx, md5ctx) = fromJust "handshake digest" $ hstHandshakeDigest hst
+	let msecret           = fromJust "master secret" $ hstMasterSecret hst
 	return $ (if client then generateClientFinished else generateServerFinished) (stVersion st) msecret md5ctx sha1ctx
 
 endHandshake :: MonadTLSState m => m ()
