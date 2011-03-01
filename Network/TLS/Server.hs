@@ -53,7 +53,7 @@ handleClientHello _ _ = do
 
 handshakeSendServerData :: MonadIO m => TLSCtx -> m ()
 handshakeSendServerData ctx = do
-	srand <- getStateRNG ctx 32 >>= return . fromJust . serverRandom
+	srand <- getStateRNG ctx 32 >>= return . ServerRandom
 	let sp = getParams ctx
 	--st    <- get >>= return . scTLSState
 
