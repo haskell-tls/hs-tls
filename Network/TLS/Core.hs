@@ -32,13 +32,11 @@ import Network.TLS.SRandom
 import Data.Certificate.X509
 import Data.List (intercalate)
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as L
 
 import Control.Applicative ((<$>))
 import Control.Concurrent.MVar
-import Control.Monad (when, unless)
+--import Control.Monad (when, unless)
 import Control.Monad.State
-import Control.Monad.Trans (MonadIO, liftIO)
 import System.IO (Handle, hSetBuffering, BufferMode(..))
 
 data TLSParams = TLSParams

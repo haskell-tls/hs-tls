@@ -47,16 +47,15 @@ readOne h = do
 		Right True  -> B.hGetNonBlocking h 4096
 		Right False -> return B.empty
 
-tlsclient :: Handle -> Handle -> C.TLSClient IO ()
+tlsclient :: Handle -> TLSCtx -> IO ()
 tlsclient srchandle dsthandle = do
-	lift $ hSetBuffering dsthandle NoBuffering
-	lift $ hSetBuffering srchandle NoBuffering
+	hSetBuffering srchandle NoBuffering
 
 	C.initiate dsthandle
 
 	loopUntil $ do
-		b <- lift $ readOne srchandle
-		lift $ putStrLn ("sending " ++ show b)
+		b <- readOne srchandle
+		putStrLn ("sending " ++ show b)
 		if B.null b
 			then do
 				C.close dsthandle
@@ -231,8 +230,9 @@ doClient pargs = do
 				(StunnelSocket dst)  <- connectAddressDescription dstaddr
 
 				dsth <- socketToHandle dst ReadWriteMode
+				dstctx <- C.client clientstate rng dsth
 				_    <- forkIO $ finally
-					(C.runTLSClient (tlsclient srch dsth) clientstate rng >> return ())
+					(tlsclient srch dstctx)
 					(hClose srch >> hClose dsth)
 				return ()
 		AddrFD _ _ -> error "bad error fd. not implemented"
