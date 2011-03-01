@@ -58,7 +58,7 @@ tlsclient srchandle dsthandle = do
 		putStrLn ("sending " ++ show b)
 		if B.null b
 			then do
-				C.close dsthandle
+				bye dsthandle
 				return True
 			else do
 				C.sendData dsthandle (L.fromChunks [b])

@@ -16,6 +16,7 @@ module Network.TLS.Core
 	, whileStatus
 	, sendPacket
 	, recvPacket
+	, bye
 	, getParams
 	, getHandle
 	) where
@@ -131,3 +132,9 @@ getParams = ctxParams
 
 getHandle :: TLSCtx -> Handle
 getHandle = ctxHandle
+
+{- | close a TLS connection.
+ - note that it doesn't close the handle, but just signal we're going to close
+ - the connection to the other side -}
+bye :: MonadIO m => TLSCtx -> m ()
+bye ctx = sendPacket ctx $ Alert (AlertLevel_Warning, CloseNotify)

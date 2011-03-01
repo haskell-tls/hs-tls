@@ -16,7 +16,6 @@ module Network.TLS.Client
 	, initiate
 	, sendData
 	, recvData
-	, close
 	) where
 
 import Data.Maybe
@@ -145,9 +144,3 @@ recvData handle = do
 		Right [Handshake HelloRequest] -> initiate handle >> recvData handle
 		Left err          -> error ("error received: " ++ show err)
 		_                 -> error "unexpected item"
-
-{- | close a TLS connection.
- - note that it doesn't close the handle, but just signal we're going to close
- - the connection to the other side -}
-close :: MonadIO m => TLSCtx -> m ()
-close ctx = sendPacket ctx $ Alert (AlertLevel_Warning, CloseNotify)

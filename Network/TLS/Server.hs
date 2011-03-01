@@ -16,7 +16,6 @@ module Network.TLS.Server
 	, listen
 	, sendData
 	, recvData
-	, close
 	) where
 
 import Data.Maybe
@@ -144,9 +143,3 @@ recvData ctx = do
 		Right [AppData x] -> return $ L.fromChunks [x]
 		Left err          -> error ("error received: " ++ show err)
 		_                 -> error "unexpected item"
-
-{- | close a TLS connection.
- - note that it doesn't close the handle, but just signal we're going to close
- - the connection to the other side -}
-close :: MonadIO m => TLSCtx -> m ()
-close ctx = sendPacket ctx $ Alert (AlertLevel_Warning, CloseNotify)
