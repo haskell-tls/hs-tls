@@ -253,11 +253,9 @@ finishHandshakeTypeMaterial HandshakeType_Finished        = True
 finishHandshakeMaterial :: Handshake -> Bool
 finishHandshakeMaterial = finishHandshakeTypeMaterial . typeOfHandshake
 
-switchTxEncryption :: MonadState TLSState m => m ()
-switchTxEncryption = get >>= put . (\st -> st { stTxEncrypted = True })
-
-switchRxEncryption :: MonadState TLSState m => m ()
-switchRxEncryption = get >>= put . (\st -> st { stRxEncrypted = True })
+switchTxEncryption, switchRxEncryption :: MonadState TLSState m => m ()
+switchTxEncryption = modify (\st -> st { stTxEncrypted = True })
+switchRxEncryption = modify (\st -> st { stRxEncrypted = True })
 
 setServerRandom :: MonadState TLSState m => ServerRandom -> m ()
 setServerRandom ran = updateHandshake "srand" (\hst -> hst { hstServerRandom = Just ran })
