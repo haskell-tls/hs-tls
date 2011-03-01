@@ -50,7 +50,7 @@ tlsclient :: Handle -> TLSCtx -> IO ()
 tlsclient srchandle dsthandle = do
 	hSetBuffering srchandle NoBuffering
 
-	C.initiate dsthandle
+	handshake dsthandle
 
 	loopUntil $ do
 		b <- readOne srchandle

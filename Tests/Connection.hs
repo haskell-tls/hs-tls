@@ -171,7 +171,7 @@ testInitiate spCert = do
 			writeChan queue d
 			return ()
 		tlsClient queue handle = do
-			C.initiate handle
+			handshake handle
 			d <- readChan queue
 			sendData handle d
 			return ()

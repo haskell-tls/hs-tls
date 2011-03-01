@@ -88,8 +88,8 @@ handshakeSendFinish ctx = do
 	sendPacket ctx (Handshake $ Finished $ B.unpack cf)
 
 {- after receiving a client hello, we need to redo a handshake -}
-handshake :: MonadIO m => TLSCtx -> m ()
-handshake ctx = do
+handshakeServer :: MonadIO m => TLSCtx -> m ()
+handshakeServer ctx = do
 	handshakeSendServerData ctx
 	liftIO $ hFlush $ getHandle ctx
 
@@ -109,7 +109,7 @@ listen ctx = do
 	case pkts of
 		Right [Handshake hs] -> handleClientHello ctx hs
 		x                    -> fail ("unexpected type received. expecting handshake ++ " ++ show x)
-	handshake ctx
+	handshakeServer ctx
 
 {- | recvData get data out of Data packet, and automatically renegociate if
  - a Handshake ClientHello is received -}

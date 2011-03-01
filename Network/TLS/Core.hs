@@ -6,21 +6,26 @@
 -- Portability : unknown
 --
 module Network.TLS.Core
-	( TLSParams(..)
+	(
+	-- ^ Context configuration
+	  TLSParams(..)
 	, defaultParams
+	-- ^ Context object
 	, TLSCtx
-	, newCtx
 	, getParams
 	, getHandle
+	-- hide
 	, usingState
 	, usingState_
 	, getStateRNG
 	, whileStatus
+	-- api
 	, sendPacket
 	, recvPacket
 	, client
 	, server
 	, bye
+	, handshake
 	, sendData
 	) where
 
@@ -34,14 +39,14 @@ import Network.TLS.Sending
 import Network.TLS.Receiving
 import Network.TLS.SRandom
 import Data.Certificate.X509
-import Data.List (intercalate)
+import Data.List (intercalate, find)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 
 import Control.Applicative ((<$>))
 import Control.Concurrent.MVar
 import Control.Monad.State
-import System.IO (Handle, hSetBuffering, BufferMode(..))
+import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush)
 
 data TLSParams = TLSParams
 	{ pConnectVersion    :: Version             -- ^ version to use on client connection.
@@ -150,6 +155,81 @@ getHandle = ctxHandle
 bye :: MonadIO m => TLSCtx -> m ()
 bye ctx = sendPacket ctx $ Alert (AlertLevel_Warning, CloseNotify)
 
+{- | handshake a new TLS connection through a handshake on a handle. -}
+handshakeClient :: MonadIO m => TLSCtx -> m ()
+handshakeClient ctx = do
+	-- Send ClientHello
+	crand <- getStateRNG ctx 32 >>= return . ClientRandom
+	sendPacket ctx $ Handshake $ ClientHello ver crand
+	                                         (Session Nothing)
+	                                         (map cipherID ciphers)
+	                                         (map compressionID compressions)
+	                                         Nothing
+
+	-- Receive Server information until ServerHelloDone
+	whileStatus ctx (/= (StatusHandshake HsStatusServerHelloDone)) $ do
+		pkts <- recvPacket ctx
+		case pkts of
+			Left err -> error ("error received: " ++ show err)
+			Right l  -> mapM_ processServerInfo l
+
+	-- Send Certificate if requested. XXX disabled for now.
+	certRequested <- return False
+	when certRequested (sendPacket ctx $ Handshake (Certificates clientCerts))
+
+	-- Send ClientKeyXchg
+	prerand <- getStateRNG ctx 46 >>= return . ClientKeyData
+	sendPacket ctx $ Handshake (ClientKeyXchg ver prerand)
+
+	{- maybe send certificateVerify -}
+	{- FIXME not implemented yet -}
+
+	sendPacket ctx ChangeCipherSpec
+	liftIO $ hFlush $ getHandle ctx
+
+	-- Send Finished
+	cf <- usingState_ ctx $ getHandshakeDigest True
+	sendPacket ctx (Handshake $ Finished $ B.unpack cf)
+
+	-- receive changeCipherSpec & Finished
+	recvPacket ctx >> recvPacket ctx >> return ()
+
+	where
+		params       = getParams ctx
+		ver          = pConnectVersion params
+		allowedvers  = pAllowedVersions params
+		ciphers      = pCiphers params
+		compressions = pCompressions params
+		clientCerts  = map fst $ pCertificates params
+
+		processServerInfo (Handshake (ServerHello rver _ _ cipher _ _)) = do
+			case find ((==) rver) allowedvers of
+				Nothing -> error ("received version which is not allowed: " ++ show ver)
+				Just _  -> usingState_ ctx $ setVersion ver
+			case find ((==) cipher . cipherID) ciphers of
+				Nothing -> error "no cipher in common with the server"
+				Just c  -> usingState_ ctx $ setCipher c
+
+		processServerInfo (Handshake (CertRequest _ _ _)) = do
+			return ()
+			--modify (\sc -> sc { scCertRequested = True })
+
+		processServerInfo (Handshake (Certificates certs)) = do
+			let cb = onCertificatesRecv $ getParams ctx
+			valid <- liftIO $ cb certs
+			unless valid $ error "certificates received deemed invalid by user"
+
+		processServerInfo _ = return ()
+
+{-| Handshake for a new TLS connection
+ - This is to be called at the beGinning of a connection, and during renegociation -}
+handshake :: MonadIO m => TLSCtx -> m ()
+handshake ctx = do
+	cc <- usingState_ ctx (stClientContext <$> get)
+	if cc
+		then handshakeClient ctx
+		else undefined
+
 {- | sendData sends a bunch of data -}
 sendData :: MonadIO m => TLSCtx -> L.ByteString -> m ()
 sendData ctx dataToSend = mapM_ sendDataChunk (L.toChunks dataToSend)
@@ -161,4 +241,3 @@ sendData ctx dataToSend = mapM_ sendDataChunk (L.toChunks dataToSend)
 				sendDataChunk remain
 			else
 				sendPacket ctx $ AppData d
-
