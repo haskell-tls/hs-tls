@@ -38,7 +38,7 @@ import Network.TLS.State
 import Network.TLS.Sending
 import Network.TLS.Receiving
 import Network.TLS.SRandom
-import Network.TLS.Core
+import Network.TLS.Core (TLSParams(..))
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import System.IO (Handle, hFlush)

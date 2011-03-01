@@ -70,18 +70,17 @@ getRandomGen :: IO SRandomGen
 getRandomGen = makeSRandomGen >>= either (fail . show) (return . id)
 
 tlsserver srchandle dsthandle = do
-	lift $ hSetBuffering dsthandle NoBuffering
-	lift $ hSetBuffering srchandle NoBuffering
+	hSetBuffering dsthandle NoBuffering
 
 	S.listen srchandle
 
 	loopUntil $ do
 		d <- S.recvData srchandle
-		lift $ putStrLn ("received: " ++ show d)
+		putStrLn ("received: " ++ show d)
 		S.sendData srchandle (L.pack $ map (toEnum . fromEnum) "this is some data")
-		lift $ hFlush srchandle
+		hFlush (getHandle srchandle)
 		return False
-	lift $ putStrLn "end"
+	putStrLn "end"
 
 clientProcess certs handle dsthandle _ = do
 	rng <- getRandomGen
@@ -92,8 +91,9 @@ clientProcess certs handle dsthandle _ = do
 		, pCertificates    = certs
 		, pWantClientCert  = False
 		}
-
-	S.runTLSServer (tlsserver handle dsthandle) serverstate rng
+	ctx <- S.server serverstate rng handle
+	tlsserver ctx dsthandle
+	--S.runTLSServer (tlsserver handle dsthandle) serverstate rng
 
 readCertificate :: FilePath -> IO X509
 readCertificate filepath = do

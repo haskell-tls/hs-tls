@@ -121,8 +121,8 @@ makeValidParams serverCerts = do
 {- | setup create all necessary connection point to create a data "pipe"
  -   ---(startQueue)---> tlsClient ---(socketPair)---> tlsServer ---(resultQueue)--->
  -}
-setup :: IO (Handle, Handle, SRandomGen, SRandomGen, Chan a, Chan a)
-setup = do
+setup :: TLSParams -> IO (Handle, TLSCtx, SRandomGen, Chan a, Chan a)
+setup serverState = do
 	(cSocket, sSocket) <- socketPair AF_UNIX Stream defaultProtocol
 	cHandle            <- socketToHandle cSocket ReadWriteMode
 	sHandle            <- socketToHandle sSocket ReadWriteMode
@@ -135,14 +135,16 @@ setup = do
 	startQueue  <- newChan
 	resultQueue <- newChan
 
-	return (cHandle, sHandle, clientRNG, serverRNG, startQueue, resultQueue)
+	sCtx <- S.server serverState serverRNG sHandle
+
+	return (cHandle, sCtx, clientRNG, startQueue, resultQueue)
 
 testInitiate spCert = do
 	(clientstate, serverstate) <- pick (makeValidParams spCert)
-	(cHandle, sHandle, clientRNG, serverRNG, startQueue, resultQueue) <- run setup
+	(cHandle, sCtx, clientRNG, startQueue, resultQueue) <- run (setup serverstate)
 
 	run $ forkIO $ do
-		catch (S.runTLSServer (tlsServer sHandle resultQueue) serverstate serverRNG)
+		catch (tlsServer sCtx resultQueue)
 		      (\e -> putStrLn ("server exception: " ++ show e) >> throw (e :: SomeException))
 		return ()
 	run $ forkIO $ do
@@ -159,13 +161,13 @@ testInitiate spCert = do
 	assert $ d == dres
 
 	-- cleanup
-	run $ (hClose cHandle >> hClose sHandle)
+	run $ (hClose cHandle >> hClose (getHandle sCtx))
 
 	where
 		tlsServer handle queue = do
 			S.listen handle
 			d <- S.recvData handle
-			lift $ writeChan queue d
+			writeChan queue d
 			return ()
 		tlsClient queue handle = do
 			C.initiate handle
