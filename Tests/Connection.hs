@@ -135,8 +135,8 @@ setup (clientState, serverState) = do
 	startQueue  <- newChan
 	resultQueue <- newChan
 
-	cCtx <- C.client clientState clientRNG cHandle
-	sCtx <- S.server serverState serverRNG sHandle
+	cCtx <- client clientState clientRNG cHandle
+	sCtx <- server serverState serverRNG sHandle
 
 	return (cCtx, sCtx, startQueue, resultQueue)
 

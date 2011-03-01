@@ -11,9 +11,7 @@
 --
 
 module Network.TLS.Server
-	( server
-	-- * API, warning probably subject to change
-	, listen
+	( listen
 	, sendData
 	, recvData
 	) where
@@ -27,14 +25,9 @@ import Network.TLS.Core
 import Network.TLS.Cipher
 import Network.TLS.Struct
 import Network.TLS.State
-import Network.TLS.SRandom
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
-import System.IO (Handle, hFlush)
-
-server :: MonadIO m => TLSParams -> SRandomGen -> Handle -> m TLSCtx
-server params rng handle = liftIO $ newCtx handle params state
-	where state = (newTLSState rng) { stClientContext = False }
+import System.IO (hFlush)
 
 handleClientHello :: MonadIO m => TLSCtx -> Handshake -> m ()
 handleClientHello ctx (ClientHello ver _ _ ciphers compressionID _) = do

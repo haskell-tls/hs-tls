@@ -25,16 +25,11 @@ import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Struct
 import Network.TLS.State
-import Network.TLS.SRandom
 import Network.TLS.Core
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
-import System.IO (Handle, hFlush)
+import System.IO (hFlush)
 import Data.List (find)
-
-client :: MonadIO m => TLSParams -> SRandomGen -> Handle -> m TLSCtx
-client params rng handle = liftIO $ newCtx handle params state
-	where state = (newTLSState rng) { stClientContext = True }
 
 processServerInfo :: MonadIO m => TLSCtx -> Packet -> m ()
 processServerInfo ctx (Handshake (ServerHello ver _ _ cipher _ _)) = do

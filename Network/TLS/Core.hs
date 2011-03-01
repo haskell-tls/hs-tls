@@ -16,6 +16,8 @@ module Network.TLS.Core
 	, whileStatus
 	, sendPacket
 	, recvPacket
+	, client
+	, server
 	, bye
 	, getParams
 	, getHandle
@@ -36,7 +38,6 @@ import qualified Data.ByteString as B
 
 import Control.Applicative ((<$>))
 import Control.Concurrent.MVar
---import Control.Monad (when, unless)
 import Control.Monad.State
 import System.IO (Handle, hSetBuffering, BufferMode(..))
 
@@ -126,6 +127,14 @@ sendPacket :: MonadIO m => TLSCtx -> Packet -> m ()
 sendPacket ctx pkt = do
 	dataToSend <- usingState_ ctx $ writePacket pkt
 	liftIO $ B.hPut (ctxHandle ctx) dataToSend
+
+client :: MonadIO m => TLSParams -> SRandomGen -> Handle -> m TLSCtx
+client params rng handle = liftIO $ newCtx handle params state
+	where state = (newTLSState rng) { stClientContext = True }
+
+server :: MonadIO m => TLSParams -> SRandomGen -> Handle -> m TLSCtx
+server params rng handle = liftIO $ newCtx handle params state
+	where state = (newTLSState rng) { stClientContext = False }
 
 getParams :: TLSCtx -> TLSParams
 getParams = ctxParams

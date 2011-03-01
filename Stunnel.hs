@@ -11,7 +11,6 @@ import qualified Data.ByteString.Lazy as L
 import Control.Concurrent (forkIO)
 import Control.Exception (finally, try, throw)
 import Control.Monad (when, forever)
-import Control.Monad.Trans (lift)
 
 import Data.Char (isDigit)
 
@@ -90,7 +89,7 @@ clientProcess certs handle dsthandle _ = do
 		, pCertificates    = certs
 		, pWantClientCert  = False
 		}
-	ctx <- S.server serverstate rng handle
+	ctx <- server serverstate rng handle
 	tlsserver ctx dsthandle
 	--S.runTLSServer (tlsserver handle dsthandle) serverstate rng
 
@@ -230,7 +229,7 @@ doClient pargs = do
 				(StunnelSocket dst)  <- connectAddressDescription dstaddr
 
 				dsth <- socketToHandle dst ReadWriteMode
-				dstctx <- C.client clientstate rng dsth
+				dstctx <- client clientstate rng dsth
 				_    <- forkIO $ finally
 					(tlsclient srch dstctx)
 					(hClose srch >> hClose dsth)
