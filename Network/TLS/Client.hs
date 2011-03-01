@@ -11,8 +11,7 @@
 -- aka. a client socket.
 --
 module Network.TLS.Client
-	( TLSClientParams(..)
-	, TLSClientCallbacks(..)
+	( TLSParams(..)
 	, TLSStateClient
 	, TLSClient (..)
 	, runTLSClient
@@ -34,38 +33,24 @@ import Control.Monad.Trans
 import Control.Monad.State
 import Data.Certificate.X509
 import Network.TLS.Cipher
+import Network.TLS.Compression
 import Network.TLS.Struct
 import Network.TLS.Packet
 import Network.TLS.State
 import Network.TLS.Sending
 import Network.TLS.Receiving
 import Network.TLS.SRandom
+import Network.TLS.Core
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import System.IO (Handle, hFlush)
 import Data.List (find)
 
-data TLSClientCallbacks = TLSClientCallbacks
-	{ cbCertificates :: Maybe ([X509] -> IO Bool) -- ^ optional callback to verify certificates
-	}
-
-instance Show TLSClientCallbacks where
-	show _ = "[callbacks]"
-
-data TLSClientParams = TLSClientParams
-	{ cpConnectVersion  :: Version            -- ^ client version we're sending by default
-	, cpAllowedVersions :: [Version]          -- ^ allowed versions from the server
-	, cpSession         :: Maybe [Word8]      -- ^ session for this connection
-	, cpCiphers         :: [Cipher]           -- ^ all ciphers for this connection
-	, cpCertificate     :: Maybe X509         -- ^ an optional client certificate
-	, cpCallbacks       :: TLSClientCallbacks -- ^ user callbacks
-	} deriving (Show)
-
 data TLSStateClient = TLSStateClient
-	{ scParams   :: TLSClientParams -- ^ client params and config for this connection
-	, scTLSState :: TLSState        -- ^ client TLS State for this connection
-	, scCertRequested :: Bool       -- ^ mark that the server requested a certificate
-	} deriving (Show)
+	{ scParams   :: TLSParams -- ^ client params and config for this connection
+	, scTLSState :: TLSState  -- ^ client TLS State for this connection
+	, scCertRequested :: Bool -- ^ mark that the server requested a certificate
+	}
 
 newtype TLSClient m a = TLSClient { runTLSC :: StateT TLSStateClient m a }
 	deriving (Monad, MonadState TLSStateClient)
@@ -83,9 +68,9 @@ instance (Functor m, Monad m) => Functor (TLSClient m) where
 runTLSClientST :: TLSClient m a -> TLSStateClient -> m (a, TLSStateClient)
 runTLSClientST f s = runStateT (runTLSC f) s
 
-runTLSClient :: TLSClient m a -> TLSClientParams -> SRandomGen -> m (a, TLSStateClient)
+runTLSClient :: TLSClient m a -> TLSParams -> SRandomGen -> m (a, TLSStateClient)
 runTLSClient f params rng = runTLSClientST f (TLSStateClient { scParams = params, scTLSState = state, scCertRequested = False  })
-	where state = (newTLSState rng) { stVersion = cpConnectVersion params, stClientContext = True }
+	where state = (newTLSState rng) { stVersion = pConnectVersion params, stClientContext = True }
 
 {- | receive a single TLS packet or on error a TLSError -}
 recvPacket :: Handle -> TLSClient IO (Either TLSError [Packet])
@@ -105,8 +90,8 @@ sendPacket handle pkt = do
 
 processServerInfo :: Packet -> TLSClient IO ()
 processServerInfo (Handshake (ServerHello ver _ _ cipher _ _)) = do
-	ciphers <- cpCiphers . scParams <$> get
-	allowedvers <- cpAllowedVersions . scParams <$> get
+	ciphers <- pCiphers . scParams <$> get
+	allowedvers <- pAllowedVersions . scParams <$> get
 	case find ((==) ver) allowedvers of
 		Nothing -> error ("received version which is not allowed: " ++ show ver)
 		Just _  -> setVersion ver
@@ -118,8 +103,8 @@ processServerInfo (Handshake (CertRequest _ _ _)) = do
 	modify (\sc -> sc { scCertRequested = True })
 
 processServerInfo (Handshake (Certificates certs)) = do
-	callbacks <- cpCallbacks . scParams <$> get
-	valid <- lift $ maybe (return True) (\cb -> cb certs) (cbCertificates callbacks)
+	cb <- onCertificatesRecv . scParams <$> get
+	valid <- lift $ cb certs
 	unless valid $ error "certificates received deemed invalid by user"
 
 processServerInfo _ = return ()
@@ -135,21 +120,22 @@ recvServerInfo handle = do
 connectSendClientHello :: Handle -> TLSClient IO ()
 connectSendClientHello handle  = do
 	crand <- fromJust . clientRandom <$> withTLSRNG (\rng -> getRandomBytes rng 32)
-	ver <- cpConnectVersion . scParams <$> get
-	ciphers <- cpCiphers . scParams <$> get
-	sendPacket handle $ Handshake (ClientHello ver crand (Session Nothing) (map cipherID ciphers) [ 0 ] Nothing)
+	ver <- pConnectVersion . scParams <$> get
+	ciphers <- pCiphers . scParams <$> get
+	compressions <- pCompressions . scParams <$> get
+	sendPacket handle $ Handshake (ClientHello ver crand (Session Nothing) (map cipherID ciphers) (map compressionID compressions) Nothing)
 
 connectSendClientCertificate :: Handle -> TLSClient IO ()
 connectSendClientCertificate handle = do
 	certRequested <- scCertRequested <$> get
 	when certRequested $ do
-		clientCert <- cpCertificate . scParams <$> get
-		sendPacket handle $ Handshake (Certificates $ maybe [] (:[]) clientCert)
+		clientCerts <- map fst . pCertificates . scParams <$> get
+		sendPacket handle $ Handshake (Certificates clientCerts)
 
 connectSendClientKeyXchg :: Handle -> TLSClient IO ()
 connectSendClientKeyXchg handle = do
 	prerand <- ClientKeyData <$> withTLSRNG (\rng -> getRandomBytes rng 46)
-	ver <- cpConnectVersion . scParams <$> get
+	ver <- pConnectVersion . scParams <$> get
 	sendPacket handle $ Handshake (ClientKeyXchg ver prerand)
 
 connectSendFinish :: Handle -> TLSClient IO ()

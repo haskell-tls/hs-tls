@@ -18,11 +18,14 @@ import Data.Char (isDigit)
 import Data.Certificate.PEM
 import Data.Certificate.X509
 import qualified Data.Certificate.KeyRSA as KeyRSA
+import qualified Crypto.Cipher.RSA as RSA
 
+import Network.TLS.Crypto
 import Network.TLS.Cipher
 import Network.TLS.SRandom
 import Network.TLS.Struct
 
+import Network.TLS.Core
 import qualified Network.TLS.Client as C
 import qualified Network.TLS.Server as S
 
@@ -80,22 +83,19 @@ tlsserver srchandle dsthandle = do
 		return False
 	lift $ putStrLn "end"
 
-clientProcess ((certdata, cert), pk) handle dsthandle _ = do
+clientProcess certs handle dsthandle _ = do
 	rng <- getRandomGen
 
-	let serverstate = S.TLSServerParams
-		{ S.spAllowedVersions = [SSL3,TLS10,TLS11]
-		, S.spSessions = []
-		, S.spCiphers = ciphers
-		, S.spCertificate = Just (certdata, cert, pk)
-		, S.spWantClientCert = False
-		, S.spCallbacks = S.TLSServerCallbacks
-			{ S.cbCertificates = Nothing }
+	let serverstate = defaultParams
+		{ pAllowedVersions = [SSL3,TLS10,TLS11]
+		, pCiphers         = ciphers
+		, pCertificates    = certs
+		, pWantClientCert  = False
 		}
 
 	S.runTLSServer (tlsserver handle dsthandle) serverstate rng
 
-readCertificate :: FilePath -> IO (B.ByteString, X509)
+readCertificate :: FilePath -> IO X509
 readCertificate filepath = do
 	content <- B.readFile filepath
 	let certdata = case parsePEMCert content of
@@ -104,9 +104,9 @@ readCertificate filepath = do
 	let cert = case decodeCertificate $ L.fromChunks [certdata] of
 		Left err -> error ("cannot decode certificate: " ++ err)
 		Right x  -> x
-	return (certdata, cert)
+	return cert
 
-readPrivateKey :: FilePath -> IO (L.ByteString, KeyRSA.Private)
+readPrivateKey :: FilePath -> IO PrivateKey
 readPrivateKey filepath = do
 	content <- B.readFile filepath
 	let pkdata = case parsePEMKeyRSA content of
@@ -114,8 +114,17 @@ readPrivateKey filepath = do
 		Just x  -> L.fromChunks [x]
 	let pk = case KeyRSA.decodePrivate pkdata of
 		Left err -> error ("cannot decode key: " ++ err)
-		Right x  -> x
-	return (pkdata, pk)
+		Right x  -> PrivRSA $ RSA.PrivateKey
+			{ RSA.private_sz   = fromIntegral $ KeyRSA.lenmodulus x
+			, RSA.private_n    = KeyRSA.modulus x
+			, RSA.private_d    = KeyRSA.private_exponant x
+			, RSA.private_p    = KeyRSA.p1 x
+			, RSA.private_q    = KeyRSA.p2 x
+			, RSA.private_dP   = KeyRSA.exp1 x
+			, RSA.private_dQ   = KeyRSA.exp2 x
+			, RSA.private_qinv = KeyRSA.coef x
+			}
+	return pk
 
 data Stunnel =
 	  Client
@@ -204,15 +213,11 @@ doClient pargs = do
 	srcaddr <- getAddressDescription (sourceType pargs) (source pargs)
 	dstaddr <- getAddressDescription (destinationType pargs) (destination pargs)
 
-	let clientstate = C.TLSClientParams
-		{ C.cpConnectVersion = TLS10
-		, C.cpAllowedVersions = [ TLS10, TLS11 ]
-		, C.cpSession = Nothing
-		, C.cpCiphers = ciphers
-		, C.cpCertificate = Nothing
-		, C.cpCallbacks = C.TLSClientCallbacks
-			{ C.cbCertificates = Nothing
-			}
+	let clientstate = defaultParams
+		{ pConnectVersion = TLS10
+		, pAllowedVersions = [ TLS10, TLS11 ]
+		, pCiphers = ciphers
+		, pCertificates = []
 		}
 
 	case srcaddr of
@@ -248,7 +253,7 @@ doServer pargs = do
 				(StunnelSocket dst) <- connectAddressDescription dstaddr
 				dsth <- socketToHandle dst ReadWriteMode
 				_ <- forkIO $ finally
-					(clientProcess (cert, snd pk) srch dsth addr >> return ())
+					(clientProcess [(cert, Just pk)] srch dsth addr >> return ())
 					(hClose srch >> hClose dsth)
 				return ()
 		AddrFD _ _ -> error "bad error fd. not implemented"

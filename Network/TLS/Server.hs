@@ -11,8 +11,7 @@
 --
 
 module Network.TLS.Server
-	( TLSServerParams(..)
-	, TLSServerCallbacks(..)
+	( TLSParams(..)
 	, TLSStateServer
 	, runTLSServer
 	-- * low level packet sending receiving.
@@ -34,6 +33,7 @@ import Control.Applicative ((<$>))
 import Data.Certificate.X509
 import qualified Data.Certificate.KeyRSA as KeyRSA
 import qualified Data.Certificate.KeyDSA as KeyDSA
+import Network.TLS.Core
 import Network.TLS.Cipher
 import Network.TLS.Crypto
 import Network.TLS.Struct
@@ -47,30 +47,9 @@ import qualified Data.ByteString.Lazy as L
 import System.IO (Handle, hFlush)
 import qualified Crypto.Cipher.RSA as RSA
 
-type TLSServerCert = (B.ByteString, X509, KeyRSA.Private)
-
-data TLSServerCallbacks = TLSServerCallbacks
-	{ cbCertificates :: Maybe ([Certificate] -> IO Bool) -- ^ optional callback to verify certificates
-	}
-
-instance Show TLSServerCallbacks where
-	show _ = "[callbacks]"
-
-instance Show KeyRSA.Private where
-	show _ = "[privatekey]"
-
-data TLSServerParams = TLSServerParams
-	{ spAllowedVersions :: [Version]           -- ^ allowed versions that we can use
-	, spSessions        :: [[Word8]]           -- ^ placeholder for futur known sessions
-	, spCiphers         :: [Cipher]            -- ^ all ciphers that the server side support
-	, spCertificate     :: Maybe TLSServerCert -- ^ the certificate we serve to the client
-	, spWantClientCert  :: Bool                -- ^ configure if we do a cert request to the client
-	, spCallbacks       :: TLSServerCallbacks  -- ^ user callbacks
-	} deriving (Show)
-
 data TLSStateServer = TLSStateServer
-	{ scParams   :: TLSServerParams -- ^ server params and config for this connection
-	, scTLSState :: TLSState        -- ^ server TLS State for this connection
+	{ scParams   :: TLSParams -- ^ server params and config for this connection
+	, scTLSState :: TLSState  -- ^ server TLS State for this connection
 	}
 
 newtype TLSServer m a = TLSServer { runTLSC :: StateT TLSStateServer m a }
@@ -89,7 +68,7 @@ instance (Monad m, Functor m) => Functor (TLSServer m) where
 runTLSServerST :: TLSServer m a -> TLSStateServer -> m (a, TLSStateServer)
 runTLSServerST f s = runStateT (runTLSC f) s
 
-runTLSServer :: TLSServer m a -> TLSServerParams -> SRandomGen -> m (a, TLSStateServer)
+runTLSServer :: TLSServer m a -> TLSParams -> SRandomGen -> m (a, TLSStateServer)
 runTLSServer f params rng = runTLSServerST f (TLSStateServer { scParams = params, scTLSState = state })
 	where state = (newTLSState rng) { stClientContext = False }
 
@@ -112,14 +91,14 @@ sendPacket handle pkt = do
 handleClientHello :: Handshake -> TLSServer IO ()
 handleClientHello (ClientHello ver _ _ ciphers compressionID _) = do
 	cfg <- get >>= return . scParams
-	when (not $ elem ver (spAllowedVersions cfg)) $ do
+	when (not $ elem ver (pAllowedVersions cfg)) $ do
 		{- unsupported version -}
 		fail "unsupported version"
 
-	let commonCiphers = intersect ciphers (map cipherID $ spCiphers cfg)
+	let commonCiphers = intersect ciphers (map cipherID $ pCiphers cfg)
 	when (commonCiphers == []) $ do
 		{- unsupported cipher -}
-		fail ("unsupported cipher: " ++ show ciphers ++ " : server : " ++ (show $ map cipherID $ spCiphers cfg))
+		fail ("unsupported cipher: " ++ show ciphers ++ " : server : " ++ (show $ map cipherID $ pCiphers cfg))
 
 	when (not $ elem 0 compressionID) $ do
 		{- unsupported compression -}
@@ -127,7 +106,7 @@ handleClientHello (ClientHello ver _ _ ciphers compressionID _) = do
 
 	modifyTLSState (\st -> st
 		{ stVersion = ver
-		, stCipher = find (\c -> cipherID c == (head commonCiphers)) (spCiphers cfg)
+		, stCipher = find (\c -> cipherID c == (head commonCiphers)) (pCiphers cfg)
 		})
 
 handleClientHello _ = do
@@ -142,14 +121,18 @@ handshakeSendServerData handle = do
 	let cipher = fromJust $ stCipher st
 
 	let srvhello = ServerHello (stVersion st) srand (Session Nothing) (cipherID cipher) 0 Nothing
-	let (_,cert,privkeycert) = fromJust $ spCertificate sp
-	let srvcert = Certificates [ cert ]
+	let srvCerts = Certificates $ map fst $ pCertificates sp
+	case map snd $ pCertificates sp of
+		(Just privkey : _) -> setPrivateKey privkey
+		_                  -> return () -- return a sensible error
+	--let srvcert = Certificates [ cert ]
 
 
 	-- in TLS12, we need to check as well the certificates we are sending if they have in the extension
 	-- the necessary bits set.
 	let needkeyxchg = cipherExchangeNeedMoreData $ cipherKeyExchange cipher
 
+	{-
 	let privkey = PrivRSA $ RSA.PrivateKey
 		{ RSA.private_sz   = fromIntegral $ KeyRSA.lenmodulus privkeycert
 		, RSA.private_n    = KeyRSA.modulus privkeycert
@@ -161,14 +144,15 @@ handshakeSendServerData handle = do
 		, RSA.private_qinv = KeyRSA.coef privkeycert
 		}
 	setPrivateKey privkey
+	-}
 
 	sendPacket handle (Handshake srvhello)
-	sendPacket handle (Handshake srvcert)
+	sendPacket handle (Handshake srvCerts)
 	when needkeyxchg $ do
 		let skg = SKX_RSA Nothing
 		sendPacket handle (Handshake $ ServerKeyXchg skg)
 	-- FIXME we don't do this on a Anonymous server
-	when (spWantClientCert sp) $ do
+	when (pWantClientCert sp) $ do
 		let certTypes = [ CertificateType_RSA_Sign ]
 		let creq = CertRequest certTypes Nothing [0,0,0]
 		sendPacket handle (Handshake creq)

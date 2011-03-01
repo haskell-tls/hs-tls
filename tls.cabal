@@ -46,6 +46,7 @@ Library
                      Network.TLS.Cipher
                      Network.TLS.SRandom
                      Network.TLS.MAC
+                     Network.TLS.Core
   other-modules:     Network.TLS.Cap
                      Network.TLS.Compression
                      Network.TLS.Crypto
