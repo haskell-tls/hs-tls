@@ -132,26 +132,10 @@ handshakeSendServerData handle = do
 	case map snd $ pCertificates sp of
 		(Just privkey : _) -> usingState_ $ setPrivateKey privkey
 		_                  -> return () -- return a sensible error
-	--let srvcert = Certificates [ cert ]
-
 
 	-- in TLS12, we need to check as well the certificates we are sending if they have in the extension
 	-- the necessary bits set.
 	let needkeyxchg = cipherExchangeNeedMoreData $ cipherKeyExchange cipher
-
-	{-
-	let privkey = PrivRSA $ RSA.PrivateKey
-		{ RSA.private_sz   = fromIntegral $ KeyRSA.lenmodulus privkeycert
-		, RSA.private_n    = KeyRSA.modulus privkeycert
-		, RSA.private_d    = KeyRSA.private_exponant privkeycert
-		, RSA.private_p    = KeyRSA.p1 privkeycert
-		, RSA.private_q    = KeyRSA.p2 privkeycert
-		, RSA.private_dP   = KeyRSA.exp1 privkeycert
-		, RSA.private_dQ   = KeyRSA.exp2 privkeycert
-		, RSA.private_qinv = KeyRSA.coef privkeycert
-		}
-	setPrivateKey privkey
-	-}
 
 	sendPacket handle (Handshake srvhello)
 	sendPacket handle (Handshake srvCerts)
