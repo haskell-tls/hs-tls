@@ -7,6 +7,7 @@
 --
 module Network.TLS.Compression
 	( Compression(..)
+	, nullCompression
 	) where
 
 import Data.Word
@@ -16,3 +17,9 @@ data Compression = Compression
 	{ compressionID :: Word8
 	, compressionFct :: (ByteString -> ByteString)
 	}
+
+instance Show Compression where
+	show = show . compressionID
+
+nullCompression :: Compression
+nullCompression = Compression { compressionID = 0, compressionFct = id }
