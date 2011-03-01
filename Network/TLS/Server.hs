@@ -27,7 +27,6 @@ import Control.Applicative ((<$>))
 import Network.TLS.Core
 import Network.TLS.Cipher
 import Network.TLS.Struct
---import Network.TLS.Packet
 import Network.TLS.State
 import Network.TLS.SRandom
 import qualified Data.ByteString as B
