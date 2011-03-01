@@ -1,5 +1,3 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
-
 -- |
 -- Module      : Network.TLS.Client
 -- License     : BSD-style
@@ -14,7 +12,6 @@ module Network.TLS.Client
 	( client
 	-- * API, warning probably subject to change
 	, initiate
-	, sendData
 	, recvData
 	) where
 
@@ -115,19 +112,6 @@ initiate handle = do
 	_ <- recvPacket handle
 
 	return ()
-
-{- | sendData sends a bunch of data -}
-sendData :: MonadIO m => TLSCtx -> L.ByteString -> m ()
-sendData ctx dataToSend = mapM_ sendDataChunk (L.toChunks dataToSend)
-	where sendDataChunk d =
-		if B.length d > 16384
-			then do
-				let (sending, remain) = B.splitAt 16384 d
-				sendPacket ctx $ AppData sending
-				sendDataChunk remain
-			else
-				sendPacket ctx $ AppData d
-
 
 {- | recvData get data out of Data packet, and automatically renegociate if
  - a Handshake ClientHello is received -}

@@ -10,6 +10,8 @@ module Network.TLS.Core
 	, defaultParams
 	, TLSCtx
 	, newCtx
+	, getParams
+	, getHandle
 	, usingState
 	, usingState_
 	, getStateRNG
@@ -19,8 +21,7 @@ module Network.TLS.Core
 	, client
 	, server
 	, bye
-	, getParams
-	, getHandle
+	, sendData
 	) where
 
 import Network.TLS.Struct
@@ -35,6 +36,7 @@ import Network.TLS.SRandom
 import Data.Certificate.X509
 import Data.List (intercalate)
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
 
 import Control.Applicative ((<$>))
 import Control.Concurrent.MVar
@@ -147,3 +149,16 @@ getHandle = ctxHandle
  - the connection to the other side -}
 bye :: MonadIO m => TLSCtx -> m ()
 bye ctx = sendPacket ctx $ Alert (AlertLevel_Warning, CloseNotify)
+
+{- | sendData sends a bunch of data -}
+sendData :: MonadIO m => TLSCtx -> L.ByteString -> m ()
+sendData ctx dataToSend = mapM_ sendDataChunk (L.toChunks dataToSend)
+	where sendDataChunk d =
+		if B.length d > 16384
+			then do
+				let (sending, remain) = B.splitAt 16384 d
+				sendPacket ctx $ AppData sending
+				sendDataChunk remain
+			else
+				sendPacket ctx $ AppData d
+

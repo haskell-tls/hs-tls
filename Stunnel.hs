@@ -60,7 +60,7 @@ tlsclient srchandle dsthandle = do
 				bye dsthandle
 				return True
 			else do
-				C.sendData dsthandle (L.fromChunks [b])
+				sendData dsthandle (L.fromChunks [b])
 				return False
 	return ()
 
@@ -75,7 +75,7 @@ tlsserver srchandle dsthandle = do
 	loopUntil $ do
 		d <- S.recvData srchandle
 		putStrLn ("received: " ++ show d)
-		S.sendData srchandle (L.pack $ map (toEnum . fromEnum) "this is some data")
+		sendData srchandle (L.pack $ map (toEnum . fromEnum) "this is some data")
 		hFlush (getHandle srchandle)
 		return False
 	putStrLn "end"

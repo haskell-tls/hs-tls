@@ -1,4 +1,3 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses #-}
 -- |
 -- Module      : Network.TLS.Server
 -- License     : BSD-style
@@ -12,7 +11,6 @@
 
 module Network.TLS.Server
 	( listen
-	, sendData
 	, recvData
 	) where
 
@@ -112,19 +110,6 @@ listen ctx = do
 		Right [Handshake hs] -> handleClientHello ctx hs
 		x                    -> fail ("unexpected type received. expecting handshake ++ " ++ show x)
 	handshake ctx
-
-{- | sendData sends a bunch of data -}
-sendData :: MonadIO m => TLSCtx -> L.ByteString -> m ()
-sendData ctx dataToSend = mapM_ sendDataChunk (L.toChunks dataToSend)
-	where sendDataChunk d =
-		if B.length d > 16384
-			then do
-				let (sending, remain) = B.splitAt 16384 d
-				sendPacket ctx $ AppData sending
-				sendDataChunk remain
-			else
-				sendPacket ctx $ AppData d
-
 
 {- | recvData get data out of Data packet, and automatically renegociate if
  - a Handshake ClientHello is received -}
