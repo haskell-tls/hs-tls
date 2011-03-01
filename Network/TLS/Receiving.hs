@@ -35,33 +35,16 @@ import Data.Certificate.X509
 
 import qualified Crypto.Cipher.RSA as RSA
 
-newtype TLSRead a = TLSR { runTLSR :: ErrorT TLSError (State TLSState) a }
-	deriving (Monad, MonadError TLSError)
-
-instance Functor TLSRead where
-	fmap f = TLSR . fmap f . runTLSR
-
-instance MonadTLSState TLSRead where
-	putTLSState x = TLSR (lift $ put x)
-	getTLSState   = TLSR (lift get)
-
-runTLSRead :: MonadTLSState m => TLSRead a -> m (Either TLSError a)
-runTLSRead f = do
-	st <- getTLSState
-	let (a, newst) = runState (runErrorT (runTLSR f)) st
-	putTLSState newst
-	return a
-
-returnEither :: Either TLSError a -> TLSRead a
+returnEither :: Either TLSError a -> TLSSt a
 returnEither (Left err) = throwError err
 returnEither (Right a)  = return a
 
-readPacket :: MonadTLSState m => Header -> EncryptedData -> m (Either TLSError [Packet])
-readPacket hdr content = runTLSRead (checkState hdr >> decryptContent hdr content >>= processPacket hdr)
+readPacket :: Header -> EncryptedData -> TLSSt [Packet]
+readPacket hdr content = checkState hdr >> decryptContent hdr content >>= processPacket hdr
 
-checkState :: Header -> TLSRead ()
+checkState :: Header -> TLSSt ()
 checkState (Header pt _ _) =
-		stStatus <$> getTLSState >>= \status -> unless (allowed pt status) $ throwError $ Error_Packet_unexpected (show status) (show pt)
+		stStatus <$> get >>= \status -> unless (allowed pt status) $ throwError $ Error_Packet_unexpected (show status) (show pt)
 	where
 		allowed :: ProtocolType -> TLSStatus -> Bool
 		allowed ProtocolType_Alert _                    = True
@@ -73,7 +56,7 @@ checkState (Header pt _ _) =
 		allowed ProtocolType_ChangeCipherSpec (StatusHandshake HsStatusClientCertificateVerify) = True
 		allowed _ _ = False
 
-processPacket :: Header -> Bytes -> TLSRead [Packet]
+processPacket :: Header -> Bytes -> TLSSt [Packet]
 
 processPacket (Header ProtocolType_AppData _ _) content = return [AppData content]
 
@@ -95,7 +78,7 @@ processPacket (Header ProtocolType_Handshake ver _) dcontent = do
 		when (finishHandshakeTypeMaterial ty) $ updateHandshakeDigestSplitted ty content
 		return hs
 
-processHandshake :: Version -> HandshakeType -> ByteString -> TLSRead Packet
+processHandshake :: Version -> HandshakeType -> ByteString -> TLSSt Packet
 processHandshake ver ty econtent = do
 	-- SECURITY FIXME if RSA fail, we need to generate a random master secret and not fail.
 	e <- updateStatusHs ty
@@ -125,44 +108,44 @@ processHandshake ver ty econtent = do
 		_                            -> return ()
 	return $ Handshake hs
 
-decryptRSA :: MonadTLSState m => ByteString -> m (Either KxError ByteString)
+decryptRSA :: ByteString -> TLSSt (Either KxError ByteString)
 decryptRSA econtent = do
-	ver <- return . stVersion =<< getTLSState
-	rsapriv <- getTLSState >>= return . fromJust "rsa private key" . hstRSAPrivateKey . fromJust "handshake" . stHandshake
+	ver <- return . stVersion =<< get
+	rsapriv <- get >>= return . fromJust "rsa private key" . hstRSAPrivateKey . fromJust "handshake" . stHandshake
 	return $ kxDecrypt rsapriv (if ver < TLS10 then econtent else B.drop 2 econtent)
 
-setMasterSecretRandom :: ByteString -> TLSRead ()
+setMasterSecretRandom :: ByteString -> TLSSt ()
 setMasterSecretRandom content = do
-	st <- getTLSState
+	st <- get
 	let (bytes, g') = getRandomBytes (stRandomGen st) (fromIntegral $ B.length content)
-	putTLSState $ st { stRandomGen = g' }
+	put $ st { stRandomGen = g' }
 	setMasterSecret bytes
 
-processClientKeyXchg :: Version -> ByteString -> TLSRead ()
+processClientKeyXchg :: Version -> ByteString -> TLSSt ()
 processClientKeyXchg ver content = do
 	{- the TLS protocol expect the initial client version received in the ClientHello, not the negociated version -}
-	expectedVer <- getTLSState >>= return . hstClientVersion . fromJust "handshake" . stHandshake
+	expectedVer <- get >>= return . hstClientVersion . fromJust "handshake" . stHandshake
 	if expectedVer /= ver
 		then setMasterSecretRandom content
 		else setMasterSecret content
 
-processClientFinished :: FinishedData -> TLSRead ()
+processClientFinished :: FinishedData -> TLSSt ()
 processClientFinished fdata = do
-	cc <- getTLSState >>= return . stClientContext
+	cc <- get >>= return . stClientContext
 	expected <- getHandshakeDigest (not cc)
 	when (expected /= B.pack fdata) $ do
 		-- FIXME don't fail, but report the error so that the code can send a BadMac Alert.
 		fail ("client mac failure: expecting " ++ show expected ++ " received " ++ (show $L.pack fdata))
 	return ()
 
-decryptContent :: Header -> EncryptedData -> TLSRead ByteString
+decryptContent :: Header -> EncryptedData -> TLSSt ByteString
 decryptContent hdr e@(EncryptedData b) = do
-	st <- getTLSState
+	st <- get
 	if stRxEncrypted st
 		then decryptData e >>= getCipherData hdr
 		else return b
 
-getCipherData :: Header -> CipherData -> TLSRead ByteString
+getCipherData :: Header -> CipherData -> TLSSt ByteString
 getCipherData hdr cdata = do
 	-- check if the MAC is valid.
 	macValid <- case cipherDataMAC cdata of
@@ -179,7 +162,7 @@ getCipherData hdr cdata = do
 	paddingValid <- case cipherDataPadding cdata of
 		Nothing  -> return True
 		Just pad -> do
-			ver <- stVersion <$> getTLSState
+			ver <- stVersion <$> get
 			let b = B.length pad - 1
 			if ver < TLS10
 				then return True
@@ -190,9 +173,9 @@ getCipherData hdr cdata = do
 
 	return $ cipherDataContent cdata
 
-decryptData :: EncryptedData -> TLSRead CipherData
+decryptData :: EncryptedData -> TLSSt CipherData
 decryptData (EncryptedData econtent) = do
-	st <- getTLSState
+	st <- get
 
 	let cipher       = fromJust "cipher" $ stCipher st
 	let cst          = fromJust "rx crypt state" $ stRxCryptState st
@@ -219,7 +202,7 @@ decryptData (EncryptedData econtent) = do
 					then B.splitAt (fromIntegral $ cipherIVSize cipher) econtent
 					else (cstIV cst, econtent)
 			let newiv = fromJust "new iv" $ takelast padding_size econtent'
-			putTLSState $ st { stRxCryptState = Just $ cst { cstIV = newiv } }
+			put $ st { stRxCryptState = Just $ cst { cstIV = newiv } }
 
 			let content' = decryptF writekey iv econtent'
 			let paddinglength = fromIntegral (B.last content') + 1
@@ -236,14 +219,14 @@ decryptData (EncryptedData econtent) = do
 			{- update Ctx -}
 			let contentlen        = B.length content' - digestSize
 			let (content, mac, _) = fromJust "p3" $ partition3 content' (contentlen, digestSize, 0)
-			putTLSState $ st { stRxCryptState = Just $ cst { cstIV = newiv } }
+			put $ st { stRxCryptState = Just $ cst { cstIV = newiv } }
 			return $ CipherData
 				{ cipherDataContent = content
 				, cipherDataMAC     = Just mac
 				, cipherDataPadding = Nothing
 				}
 
-processCertificates :: [X509] -> TLSRead ()
+processCertificates :: [X509] -> TLSSt ()
 processCertificates certs = do
 	let (X509 mainCert _ _ _) = head certs
 	case certPubKey mainCert of

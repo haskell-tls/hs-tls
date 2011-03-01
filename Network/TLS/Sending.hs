@@ -32,9 +32,9 @@ import Network.TLS.Crypto
  - 'makePacketData' create a Header and a content bytestring related to a packet
  - this doesn't change any state
  -}
-makePacketData :: MonadTLSState m => Packet -> m (Header, ByteString)
+makePacketData :: Packet -> TLSSt (Header, ByteString)
 makePacketData pkt = do
-	ver <- getTLSState >>= return . stVersion
+	ver <- get >>= return . stVersion
 	content <- writePacketContent pkt
 	let hdr = Header (packetType pkt) ver (fromIntegral $ B.length content)
 	return (hdr, content)
@@ -42,7 +42,7 @@ makePacketData pkt = do
 {-
  - Handshake data need to update a digest
  -}
-processPacketData :: MonadTLSState m => (Header, ByteString) -> m (Header, ByteString)
+processPacketData :: (Header, ByteString) -> TLSSt (Header, ByteString)
 processPacketData dat@(Header ty _ _, content) = do
 	when (ty == ProtocolType_Handshake) (updateHandshakeDigest content)
 	return dat
@@ -51,9 +51,9 @@ processPacketData dat@(Header ty _ _, content) = do
  - when Tx Encrypted is set, we pass the data through encryptContent, otherwise
  - we just return the packet
  -}
-encryptPacketData :: MonadTLSState m => (Header, ByteString) -> m (Header, ByteString)
+encryptPacketData :: (Header, ByteString) -> TLSSt (Header, ByteString)
 encryptPacketData dat = do
-	st <- getTLSState
+	st <- get
 	if stTxEncrypted st
 		then encryptContent dat
 		else return dat
@@ -63,7 +63,7 @@ encryptPacketData dat = do
  - its own packet would be encrypted with the new context, instead of beeing sent
  - under the current context
  -}
-postprocessPacketData :: MonadTLSState m => (Header, ByteString) -> m (Header, ByteString)
+postprocessPacketData :: (Header, ByteString) -> TLSSt (Header, ByteString)
 postprocessPacketData dat@(Header ProtocolType_ChangeCipherSpec _ _, _) =
 	switchTxEncryption >> isClientContext >>= \cc -> when cc setKeyBlock >> return dat
 
@@ -72,13 +72,13 @@ postprocessPacketData dat = return dat
 {-
  - marshall packet data
  -}
-encodePacket :: MonadTLSState m => (Header, ByteString) -> m ByteString
+encodePacket :: (Header, ByteString) -> TLSSt ByteString
 encodePacket (hdr, content) = return $ B.concat [ encodeHeader hdr, content ]
 
 {-
  - just update TLS state machine
  -}
-preProcessPacket :: MonadTLSState m => Packet -> m Packet
+preProcessPacket :: Packet -> TLSSt Packet
 preProcessPacket pkt = do
 	e <- case pkt of
 		Handshake hs     -> updateStatusHs (typeOfHandshake hs)
@@ -91,7 +91,7 @@ preProcessPacket pkt = do
  - writePacket transform a packet into marshalled data related to current state
  - and updating state on the go
  -}
-writePacket :: MonadTLSState m => Packet -> m ByteString
+writePacket :: Packet -> TLSSt ByteString
 writePacket pkt = preProcessPacket pkt >>= makePacketData >>= processPacketData >>=
                   encryptPacketData >>= postprocessPacketData >>= encodePacket
 
@@ -102,27 +102,27 @@ writePacket pkt = preProcessPacket pkt >>= makePacketData >>= processPacketData 
 {- if the RSA encryption fails we just return an empty bytestring, and let the protocol
  - fail by itself; however it would be probably better to just report it since it's an internal problem.
  -}
-encryptRSA :: MonadTLSState m => ByteString -> m ByteString
+encryptRSA :: ByteString -> TLSSt ByteString
 encryptRSA content = do
-	st <- getTLSState
+	st <- get
 	let g = stRandomGen st
 	let rsakey = fromJust "rsa public key" $ hstRSAPublicKey $ fromJust "handshake" $ stHandshake st
 	case kxEncrypt g rsakey content of
 		Left err             -> fail ("rsa encrypt failed: " ++ show err)
 		Right (econtent, g') -> do
-			putTLSState (st { stRandomGen = g' })
+			put (st { stRandomGen = g' })
 			return econtent
 
-encryptContent :: MonadTLSState m => (Header, ByteString) -> m (Header, ByteString)
+encryptContent :: (Header, ByteString) -> TLSSt (Header, ByteString)
 encryptContent (hdr@(Header pt ver _), content) = do
 	digest <- makeDigest True hdr content
 	encrypted_msg <- encryptData $ B.concat [content, digest]
 	let hdrnew = Header pt ver (fromIntegral $ B.length encrypted_msg)
 	return (hdrnew, encrypted_msg)
 
-encryptData :: MonadTLSState m => ByteString -> m ByteString
+encryptData :: ByteString -> TLSSt ByteString
 encryptData content = do
-	st <- getTLSState
+	st <- get
 
 	let cipher = fromJust "cipher" $ stCipher st
 	let cst = fromJust "tx crypt state" $ stTxCryptState st
@@ -144,14 +144,14 @@ encryptData content = do
 			let iv = cstIV cst
 			let e = encrypt writekey iv (B.concat [ content, padding ])
 			let newiv = fromJust "new iv" $ takelast (fromIntegral $ cipherIVSize cipher) e
-			putTLSState $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
+			put $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
 			return $ if hasExplicitBlockIV $ stVersion st
 				then B.concat [iv,e]
 				else e
 		CipherStreamF initF encryptF _ -> do
 			let iv = cstIV cst
 			let (e, newiv) = encryptF (if iv /= B.empty then iv else initF writekey) content
-			putTLSState $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
+			put $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
 			return e
 	return econtent
 
@@ -161,9 +161,9 @@ encodePacketContent (Alert a)          = encodeAlert a
 encodePacketContent (ChangeCipherSpec) = encodeChangeCipherSpec
 encodePacketContent (AppData x)        = x
 
-writePacketContent :: MonadTLSState m => Packet -> m ByteString
+writePacketContent :: Packet -> TLSSt ByteString
 writePacketContent (Handshake ckx@(ClientKeyXchg _ _)) = do
-	ver <- getTLSState >>= return . stVersion 
+	ver <- get >>= return . stVersion 
 	let premastersecret = runPut $ encodeHandshakeContent ckx
 	setMasterSecret premastersecret
 	econtent <- encryptRSA premastersecret

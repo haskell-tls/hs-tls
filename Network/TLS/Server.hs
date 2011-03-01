@@ -24,18 +24,13 @@ module Network.TLS.Server
 	, close
 	) where
 
-import Data.Word
 import Data.Maybe
 import Data.List (intersect, find)
 import Control.Monad.Trans
 import Control.Monad.State
 import Control.Applicative ((<$>))
-import Data.Certificate.X509
-import qualified Data.Certificate.KeyRSA as KeyRSA
-import qualified Data.Certificate.KeyDSA as KeyDSA
 import Network.TLS.Core
 import Network.TLS.Cipher
-import Network.TLS.Crypto
 import Network.TLS.Struct
 import Network.TLS.Packet
 import Network.TLS.State
@@ -45,7 +40,6 @@ import Network.TLS.SRandom
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import System.IO (Handle, hFlush)
-import qualified Crypto.Cipher.RSA as RSA
 
 data TLSStateServer = TLSStateServer
 	{ scParams   :: TLSParams -- ^ server params and config for this connection
@@ -54,10 +48,6 @@ data TLSStateServer = TLSStateServer
 
 newtype TLSServer m a = TLSServer { runTLSC :: StateT TLSStateServer m a }
 	deriving (Monad, MonadState TLSStateServer)
-
-instance Monad m => MonadTLSState (TLSServer m) where
-	getTLSState   = TLSServer (get >>= return . scTLSState)
-	putTLSState s = TLSServer (get >>= put . (\st -> st { scTLSState = s }))
 
 instance MonadTrans TLSServer where
 	lift = TLSServer . lift
@@ -72,6 +62,23 @@ runTLSServer :: TLSServer m a -> TLSParams -> SRandomGen -> m (a, TLSStateServer
 runTLSServer f params rng = runTLSServerST f (TLSStateServer { scParams = params, scTLSState = state })
 	where state = (newTLSState rng) { stClientContext = False }
 
+usingState :: Monad m => TLSSt a -> TLSServer m (Either TLSError a)
+usingState f =
+	get >>= return . scTLSState >>= execAndStore
+	where
+		execAndStore st = do
+			let (a, newst) = runTLSState f st
+			modify (\stateserver -> stateserver { scTLSState = newst })
+			return a
+
+usingState_ f = do
+	ret <- usingState f
+	case ret of
+		Left err -> error "assertion failed, error in path without an error"
+		Right r  -> return r
+
+getStateRNG n = usingState_ (withTLSRNG (\rng -> getRandomBytes rng n))
+
 {- | receive a single TLS packet or on error a TLSError -}
 recvPacket :: Handle -> TLSServer IO (Either TLSError [Packet])
 recvPacket handle = do
@@ -80,12 +87,12 @@ recvPacket handle = do
 		Left err -> return $ Left err
 		Right header@(Header _ _ readlen) -> do
 			content <- lift $ B.hGet handle (fromIntegral readlen)
-			readPacket header (EncryptedData content)
+			usingState $ readPacket header (EncryptedData content)
 
 {- | send a single TLS packet -}
 sendPacket :: Handle -> Packet -> TLSServer IO ()
 sendPacket handle pkt = do
-	dataToSend <- writePacket pkt
+	dataToSend <- usingState_ $ writePacket pkt
 	lift $ B.hPut handle dataToSend
 
 handleClientHello :: Handshake -> TLSServer IO ()
@@ -104,7 +111,7 @@ handleClientHello (ClientHello ver _ _ ciphers compressionID _) = do
 		{- unsupported compression -}
 		fail "unsupported compression"
 
-	modifyTLSState (\st -> st
+	usingState_ $ modify (\st -> st
 		{ stVersion = ver
 		, stCipher = find (\c -> cipherID c == (head commonCiphers)) (pCiphers cfg)
 		})
@@ -114,16 +121,16 @@ handleClientHello _ = do
 
 handshakeSendServerData :: Handle -> TLSServer IO ()
 handshakeSendServerData handle = do
-	srand <- fromJust . serverRandom <$> withTLSRNG (\rng -> getRandomBytes rng 32)
+	srand <- fromJust . serverRandom <$> getStateRNG 32
 	sp <- get >>= return . scParams
-	st <- getTLSState
+	st <- get >>= return . scTLSState
 
 	let cipher = fromJust $ stCipher st
 
 	let srvhello = ServerHello (stVersion st) srand (Session Nothing) (cipherID cipher) 0 Nothing
 	let srvCerts = Certificates $ map fst $ pCertificates sp
 	case map snd $ pCertificates sp of
-		(Just privkey : _) -> setPrivateKey privkey
+		(Just privkey : _) -> usingState_ $ setPrivateKey privkey
 		_                  -> return () -- return a sensible error
 	--let srvcert = Certificates [ cert ]
 
@@ -160,7 +167,7 @@ handshakeSendServerData handle = do
 
 handshakeSendFinish :: Handle -> TLSServer IO ()
 handshakeSendFinish handle = do
-	cf <- getHandshakeDigest False
+	cf <- usingState_ $ getHandshakeDigest False
 	sendPacket handle (Handshake $ Finished $ B.unpack cf)
 
 {- after receiving a client hello, we need to redo a handshake -}
@@ -177,6 +184,11 @@ handshake handle = do
 	lift $ hFlush handle
 
 	return ()
+	where
+		whileStatus p a = do
+			b <- usingState_ (p . stStatus <$> get)
+			when b (a >> whileStatus p a)
+
 
 {- | listen on a handle to a new TLS connection. -}
 listen :: Handle -> TLSServer IO ()
