@@ -1,5 +1,3 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleContexts #-}
-
 -- |
 -- Module      : Network.TLS.Receiving
 -- License     : BSD-style
