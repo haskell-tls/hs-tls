@@ -74,7 +74,7 @@ tlsserver srchandle dsthandle = do
 		d <- recvData srchandle
 		putStrLn ("received: " ++ show d)
 		sendData srchandle (L.pack $ map (toEnum . fromEnum) "this is some data")
-		hFlush (getHandle srchandle)
+		hFlush (ctxHandle srchandle)
 		return False
 	putStrLn "end"
 

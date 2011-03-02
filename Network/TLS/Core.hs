@@ -7,25 +7,27 @@
 --
 module Network.TLS.Core
 	(
-	-- ^ Context configuration
+	-- * Context configuration
 	  TLSParams(..)
 	, defaultParams
-	-- ^ Context object
+
+	-- * Context object
 	, TLSCtx
-	, getParams
-	, getHandle
-	-- hide
-	, usingState
-	, usingState_
-	, getStateRNG
-	, whileStatus
-	-- api
+	, ctxHandle
+
+	-- * Low level API
 	, sendPacket
 	, recvPacket
+
+	-- * Creating a context
 	, client
 	, server
+
+	-- * initialisation and termination of Context
 	, bye
 	, handshake
+
+	-- * High level API
 	, sendData
 	, recvData
 	) where
@@ -123,6 +125,10 @@ whileStatus ctx p a = do
 	b <- usingState_ ctx (p . stStatus <$> get)
 	when b (a >> whileStatus ctx p a)
 
+{-| receive one enveloppe from the context that contains 1 or
+ - many packets (many only in case of handshake). if will returns a
+ - TLSError if the packet is unexpected or malformed
+ -}
 recvPacket :: MonadIO m => TLSCtx -> m (Either TLSError [Packet])
 recvPacket ctx = do
 	hdr <- (liftIO $ B.hGet (ctxHandle ctx) 5) >>= return . decodeHeader
@@ -132,32 +138,35 @@ recvPacket ctx = do
 			content <- liftIO $ B.hGet (ctxHandle ctx) (fromIntegral readlen)
 			usingState ctx $ readPacket header (EncryptedData content)
 
+{-| Send one packet to the context -}
 sendPacket :: MonadIO m => TLSCtx -> Packet -> m ()
 sendPacket ctx pkt = do
 	dataToSend <- usingState_ ctx $ writePacket pkt
 	liftIO $ B.hPut (ctxHandle ctx) dataToSend
 
+{-| Create a new Client context with a configuration, a RNG, and a Handle.
+ - It reconfigures the handle buffermode to noBuffering -}
 client :: MonadIO m => TLSParams -> SRandomGen -> Handle -> m TLSCtx
 client params rng handle = liftIO $ newCtx handle params state
 	where state = (newTLSState rng) { stClientContext = True }
 
+{-| Create a new Server context with a configuration, a RNG, and a Handle.
+ - It reconfigures the handle buffermode to noBuffering -}
 server :: MonadIO m => TLSParams -> SRandomGen -> Handle -> m TLSCtx
 server params rng handle = liftIO $ newCtx handle params state
 	where state = (newTLSState rng) { stClientContext = False }
 
-getParams :: TLSCtx -> TLSParams
-getParams = ctxParams
-
-getHandle :: TLSCtx -> Handle
-getHandle = ctxHandle
-
-{- | close a TLS connection.
- - note that it doesn't close the handle, but just signal we're going to close
- - the connection to the other side -}
+{- | notify the context that this side wants to close connection.
+ - this is important that it is called before closing the handle, otherwise
+ - the session might not be resumable (for version < TLS1.2).
+ -
+ - this doesn't actually close the handle -}
 bye :: MonadIO m => TLSCtx -> m ()
 bye ctx = sendPacket ctx $ Alert (AlertLevel_Warning, CloseNotify)
 
-{- | handshake a new TLS connection through a handshake on a handle. -}
+{- client part of handshake. send a bunch of handshake of client
+ - values intertwined with response from the server.
+ --}
 handshakeClient :: MonadIO m => TLSCtx -> m ()
 handshakeClient ctx = do
 	-- Send ClientHello
@@ -187,7 +196,7 @@ handshakeClient ctx = do
 	{- FIXME not implemented yet -}
 
 	sendPacket ctx ChangeCipherSpec
-	liftIO $ hFlush $ getHandle ctx
+	liftIO $ hFlush $ ctxHandle ctx
 
 	-- Send Finished
 	cf <- usingState_ ctx $ getHandshakeDigest True
@@ -197,7 +206,7 @@ handshakeClient ctx = do
 	recvPacket ctx >> recvPacket ctx >> return ()
 
 	where
-		params       = getParams ctx
+		params       = ctxParams ctx
 		ver          = pConnectVersion params
 		allowedvers  = pAllowedVersions params
 		ciphers      = pCiphers params
@@ -217,7 +226,7 @@ handshakeClient ctx = do
 			--modify (\sc -> sc { scCertRequested = True })
 
 		processServerInfo (Handshake (Certificates certs)) = do
-			let cb = onCertificatesRecv $ getParams ctx
+			let cb = onCertificatesRecv $ params
 			valid <- liftIO $ cb certs
 			unless valid $ error "certificates received deemed invalid by user"
 
@@ -237,7 +246,7 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 
 	-- send Server Data until ServerHelloDone
 	handshakeSendServerData
-	liftIO $ hFlush $ getHandle ctx
+	liftIO $ hFlush $ ctxHandle ctx
 
 	-- Receive client info until client Finished.
 	whileStatus ctx (/= (StatusHandshake HsStatusClientFinished)) (recvPacket ctx)
@@ -248,10 +257,10 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 	cf <- usingState_ ctx $ getHandshakeDigest False
 	sendPacket ctx (Handshake $ Finished $ B.unpack cf)
 
-	liftIO $ hFlush $ getHandle ctx
+	liftIO $ hFlush $ ctxHandle ctx
 	return ()
 	where
-		params             = getParams ctx
+		params             = ctxParams ctx
 		commonCiphers      = intersect ciphers (map cipherID $ pCiphers params)
 		usedCipher         = fromJust $ find (\c -> cipherID c == head commonCiphers) (pCiphers params)
 		commonCompressions = intersect compressions (map compressionID $ pCompressions params)
@@ -288,8 +297,7 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 			-- Send HelloDone
 			sendPacket ctx (Handshake ServerHelloDone)
 
-handshakeServerWith _ _ = do
-	fail "unexpected handshake type received. expecting client hello"
+handshakeServerWith _ _ = fail "unexpected handshake type received. expecting client hello"
 
 {- after receiving a client hello, we need to redo a handshake -}
 handshakeServer :: MonadIO m => TLSCtx -> m ()
@@ -300,7 +308,8 @@ handshakeServer ctx = do
 		x                    -> fail ("unexpected type received. expecting handshake ++ " ++ show x)
 
 {-| Handshake for a new TLS connection
- - This is to be called at the beGinning of a connection, and during renegociation -}
+ - This is to be called at the beginning of a connection, and during renegociation
+ -}
 handshake :: MonadIO m => TLSCtx -> m ()
 handshake ctx = do
 	cc <- usingState_ ctx (stClientContext <$> get)
@@ -308,7 +317,8 @@ handshake ctx = do
 		then handshakeClient ctx
 		else handshakeServer ctx
 
-{- | sendData sends a bunch of data -}
+{- | sendData sends a bunch of data.
+ - it will automatically chunk data for acceptable packet size -}
 sendData :: MonadIO m => TLSCtx -> L.ByteString -> m ()
 sendData ctx dataToSend = mapM_ sendDataChunk (L.toChunks dataToSend)
 	where sendDataChunk d =

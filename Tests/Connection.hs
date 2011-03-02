@@ -160,7 +160,7 @@ testInitiate spCert = do
 	assert $ d == dres
 
 	-- cleanup
-	run $ (hClose (getHandle cCtx) >> hClose (getHandle sCtx))
+	run $ (hClose (ctxHandle cCtx) >> hClose (ctxHandle sCtx))
 
 	where
 		tlsServer handle queue = do
