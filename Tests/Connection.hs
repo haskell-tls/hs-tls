@@ -21,8 +21,6 @@ import qualified Data.ByteString.Lazy as L
 import Data.Certificate.PEM
 import Data.Certificate.X509
 import qualified Data.Certificate.KeyRSA as KeyRSA
-import qualified Network.TLS.Client as C
-import qualified Network.TLS.Server as S
 import Network.TLS.Crypto
 import Network.TLS.Cipher
 import Network.TLS.Core
@@ -167,7 +165,7 @@ testInitiate spCert = do
 	where
 		tlsServer handle queue = do
 			handshake handle
-			d <- S.recvData handle
+			d <- recvData handle
 			writeChan queue d
 			return ()
 		tlsClient queue handle = do

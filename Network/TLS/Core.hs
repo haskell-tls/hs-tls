@@ -27,6 +27,7 @@ module Network.TLS.Core
 	, bye
 	, handshake
 	, sendData
+	, recvData
 	) where
 
 import Network.TLS.Struct
@@ -318,3 +319,19 @@ sendData ctx dataToSend = mapM_ sendDataChunk (L.toChunks dataToSend)
 				sendDataChunk remain
 			else
 				sendPacket ctx $ AppData d
+
+{- | recvData get data out of Data packet, and automatically renegociate if
+ - a Handshake ClientHello is received -}
+recvData :: MonadIO m => TLSCtx -> m L.ByteString
+recvData ctx = do
+	pkt <- recvPacket ctx
+	case pkt of
+		-- on server context receiving a client hello == renegociation
+		Right [Handshake ch@(ClientHello _ _ _ _ _ _)] ->
+			handshakeServerWith ctx ch >> recvData ctx
+		-- on client context, receiving a hello request == renegociation
+		Right [Handshake HelloRequest] ->
+			handshakeClient ctx >> recvData ctx
+		Right [AppData x] -> return $ L.fromChunks [x]
+		Left err          -> error ("error received: " ++ show err)
+		_                 -> error "unexpected item"

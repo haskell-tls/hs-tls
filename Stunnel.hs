@@ -25,7 +25,6 @@ import Network.TLS.SRandom
 import Network.TLS.Struct
 
 import Network.TLS.Core
-import qualified Network.TLS.Server as S
 
 ciphers :: [Cipher]
 ciphers =
@@ -72,7 +71,7 @@ tlsserver srchandle dsthandle = do
 	handshake srchandle
 
 	loopUntil $ do
-		d <- S.recvData srchandle
+		d <- recvData srchandle
 		putStrLn ("received: " ++ show d)
 		sendData srchandle (L.pack $ map (toEnum . fromEnum) "this is some data")
 		hFlush (getHandle srchandle)
@@ -90,7 +89,6 @@ clientProcess certs handle dsthandle _ = do
 		}
 	ctx <- server serverstate rng handle
 	tlsserver ctx dsthandle
-	--S.runTLSServer (tlsserver handle dsthandle) serverstate rng
 
 readCertificate :: FilePath -> IO X509
 readCertificate filepath = do
