@@ -1,3 +1,4 @@
+{-# OPTIONS_HADDOCK hide #-}
 -- |
 -- Module      : Network.TLS.Struct
 -- License     : BSD-style
@@ -50,6 +51,11 @@ import Data.Certificate.X509
 
 type Bytes = ByteString
 
+-- | Versions known to TLS
+--
+-- SSL2 is just defined, but this version is and will not be supported.
+--
+-- TLS12 is not yet supported
 data Version = SSL2 | SSL3 | TLS10 | TLS11 | TLS12 deriving (Show, Eq, Ord)
 
 data ConnectionEnd = ConnectionServer | ConnectionClient
@@ -98,6 +104,7 @@ data ProtocolType =
 	| ProtocolType_AppData
 	deriving (Eq, Show)
 
+-- | TLSError that might be returned through the TLS stack
 data TLSError =
 	  Error_Misc String
 	| Error_Certificate String

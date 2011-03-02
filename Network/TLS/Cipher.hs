@@ -1,3 +1,4 @@
+{-# OPTIONS_HADDOCK hide #-}
 -- |
 -- Module      : Network.TLS.Cipher
 -- License     : BSD-style
@@ -61,6 +62,7 @@ data CipherKeyExchangeType =
 	| CipherKeyExchangeECDH_RSA
 	| CipherKeyExchangeECDHE_ECDSA
 
+-- | Cipher algorithm
 data Cipher = Cipher
 	{ cipherID           :: Word16
 	, cipherName         :: String

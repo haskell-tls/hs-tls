@@ -40,13 +40,14 @@ Library
                    , crypto-api >= 0.5
                    , cryptocipher >= 0.2.5
                    , certificate >= 0.7 && < 0.8
-  Exposed-modules:   Network.TLS.Struct
+  Exposed-modules:   Network.TLS
                      Network.TLS.Cipher
+                     Network.TLS.Compression
+  other-modules:     Network.TLS.Cap
                      Network.TLS.SRandom
+                     Network.TLS.Struct
                      Network.TLS.MAC
                      Network.TLS.Core
-  other-modules:     Network.TLS.Cap
-                     Network.TLS.Compression
                      Network.TLS.Crypto
                      Network.TLS.Packet
                      Network.TLS.State

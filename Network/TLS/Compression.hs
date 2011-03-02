@@ -1,3 +1,4 @@
+{-# OPTIONS_HADDOCK hide #-}
 -- |
 -- Module      : Network.TLS.Compression
 -- License     : BSD-style
@@ -13,6 +14,7 @@ module Network.TLS.Compression
 import Data.Word
 import Data.ByteString (ByteString)
 
+-- | Compression algorithm
 data Compression = Compression
 	{ compressionID :: Word8
 	, compressionFct :: (ByteString -> ByteString)
@@ -21,5 +23,6 @@ data Compression = Compression
 instance Show Compression where
 	show = show . compressionID
 
+-- | default null compression
 nullCompression :: Compression
 nullCompression = Compression { compressionID = 0, compressionFct = id }

@@ -22,6 +22,7 @@ import Data.Serialize
 
 data Word128 = Word128 !Word64 !Word64
 
+{-| An opaque object containing an AES CPRNG -}
 data SRandomGen = RNG !ByteString !Word128 !AES.Key
 
 instance Show SRandomGen where
@@ -63,6 +64,7 @@ nextChunk (RNG iv counter key) = (chunk, newrng)
 		chunk  = AES.encryptCBC key iv bytes
 		bytes  = iv `bxor` (put128 counter)
 
+{-| initialize from system a new SrandomGen -}
 makeSRandomGen :: IO (Either GenError SRandomGen)
 makeSRandomGen = getEntropy 64 >>= return . make
 

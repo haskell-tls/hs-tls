@@ -19,12 +19,7 @@ import Data.Certificate.X509
 import qualified Data.Certificate.KeyRSA as KeyRSA
 import qualified Crypto.Cipher.RSA as RSA
 
-import Network.TLS.Crypto
-import Network.TLS.Cipher
-import Network.TLS.SRandom
-import Network.TLS.Struct
-
-import Network.TLS.Core
+import Network.TLS
 
 ciphers :: [Cipher]
 ciphers =
