@@ -1,5 +1,5 @@
 Name:                tls
-Version:             0.3.3
+Version:             0.4.0
 Description:
    native TLS protocol implementation, focusing on purity and more type-checking.
    .
