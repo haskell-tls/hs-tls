@@ -166,7 +166,7 @@ testInitiate spCert = do
 
 	where
 		tlsServer handle queue = do
-			S.listen handle
+			handshake handle
 			d <- S.recvData handle
 			writeChan queue d
 			return ()

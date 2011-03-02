@@ -25,7 +25,6 @@ import Network.TLS.SRandom
 import Network.TLS.Struct
 
 import Network.TLS.Core
-import qualified Network.TLS.Client as C
 import qualified Network.TLS.Server as S
 
 ciphers :: [Cipher]
@@ -70,7 +69,7 @@ getRandomGen = makeSRandomGen >>= either (fail . show) (return . id)
 tlsserver srchandle dsthandle = do
 	hSetBuffering dsthandle NoBuffering
 
-	S.listen srchandle
+	handshake srchandle
 
 	loopUntil $ do
 		d <- S.recvData srchandle

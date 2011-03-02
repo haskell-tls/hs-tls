@@ -38,8 +38,9 @@ import Network.TLS.State
 import Network.TLS.Sending
 import Network.TLS.Receiving
 import Network.TLS.SRandom
+import Data.Maybe
 import Data.Certificate.X509
-import Data.List (intercalate, find)
+import Data.List (intersect, intercalate, find)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 
@@ -110,7 +111,7 @@ usingState_ :: MonadIO m => TLSCtx -> TLSSt a -> m a
 usingState_ ctx f = do
 	ret <- usingState ctx f
 	case ret of
-		Left err -> error "assertion failed, error in path without an error"
+		Left err -> error ("assertion failed, wrong use of state_: " ++ show err)
 		Right r  -> return r
 
 getStateRNG :: MonadIO m => TLSCtx -> Int -> m Bytes
@@ -221,6 +222,82 @@ handshakeClient ctx = do
 
 		processServerInfo _ = return ()
 
+handshakeServerWith :: MonadIO m => TLSCtx -> Handshake -> m ()
+handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
+	-- Handle Client hello
+	when (not $ elem ver (pAllowedVersions params)) $ fail "unsupported version"
+	when (commonCiphers == []) $ fail "no common cipher supported"
+	when (commonCompressions == []) $ fail "no common compression supported"
+	usingState_ ctx $ modify (\st -> st
+		{ stVersion = ver
+		, stCipher  = Just usedCipher
+		--, stCompression = Just usedCompression
+		})
+
+	-- send Server Data until ServerHelloDone
+	handshakeSendServerData
+	liftIO $ hFlush $ getHandle ctx
+
+	-- Receive client info until client Finished.
+	whileStatus ctx (/= (StatusHandshake HsStatusClientFinished)) (recvPacket ctx)
+
+	sendPacket ctx ChangeCipherSpec
+
+	-- Send Finish
+	cf <- usingState_ ctx $ getHandshakeDigest False
+	sendPacket ctx (Handshake $ Finished $ B.unpack cf)
+
+	liftIO $ hFlush $ getHandle ctx
+	return ()
+	where
+		params             = getParams ctx
+		commonCiphers      = intersect ciphers (map cipherID $ pCiphers params)
+		usedCipher         = fromJust $ find (\c -> cipherID c == head commonCiphers) (pCiphers params)
+		commonCompressions = intersect compressions (map compressionID $ pCompressions params)
+		usedCompression    = fromJust $ find (\c -> compressionID c == head commonCompressions) (pCompressions params)
+		srvCerts           = map fst $ pCertificates params
+		privKeys           = map snd $ pCertificates params
+		needKeyXchg        = cipherExchangeNeedMoreData $ cipherKeyExchange usedCipher
+
+		handshakeSendServerData = do
+			srand <- getStateRNG ctx 32 >>= return . ServerRandom
+
+			case privKeys of
+				(Just privkey : _) -> usingState_ ctx $ setPrivateKey privkey
+				_                  -> return () -- return a sensible error
+
+			-- in TLS12, we need to check as well the certificates we are sending if they have in the extension
+			-- the necessary bits set.
+
+			-- send ServerHello & Certificate & ServerKeyXchg & CertReq
+			sendPacket ctx $ Handshake $ ServerHello ver srand
+			                                         (Session Nothing)
+			                                         (cipherID usedCipher)
+			                                         (compressionID usedCompression)
+			                                         Nothing
+			sendPacket ctx (Handshake $ Certificates srvCerts)
+			when needKeyXchg $ do
+				let skg = SKX_RSA Nothing
+				sendPacket ctx (Handshake $ ServerKeyXchg skg)
+			-- FIXME we don't do this on a Anonymous server
+			when (pWantClientCert params) $ do
+				let certTypes = [ CertificateType_RSA_Sign ]
+				let creq = CertRequest certTypes Nothing [0,0,0]
+				sendPacket ctx (Handshake creq)
+			-- Send HelloDone
+			sendPacket ctx (Handshake ServerHelloDone)
+
+handshakeServerWith _ _ = do
+	fail "unexpected handshake type received. expecting client hello"
+
+{- after receiving a client hello, we need to redo a handshake -}
+handshakeServer :: MonadIO m => TLSCtx -> m ()
+handshakeServer ctx = do
+	pkts <- recvPacket ctx
+	case pkts of
+		Right [Handshake hs] -> handshakeServerWith ctx hs
+		x                    -> fail ("unexpected type received. expecting handshake ++ " ++ show x)
+
 {-| Handshake for a new TLS connection
  - This is to be called at the beGinning of a connection, and during renegociation -}
 handshake :: MonadIO m => TLSCtx -> m ()
@@ -228,7 +305,7 @@ handshake ctx = do
 	cc <- usingState_ ctx (stClientContext <$> get)
 	if cc
 		then handshakeClient ctx
-		else undefined
+		else handshakeServer ctx
 
 {- | sendData sends a bunch of data -}
 sendData :: MonadIO m => TLSCtx -> L.ByteString -> m ()
