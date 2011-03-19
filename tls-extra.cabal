@@ -1,0 +1,78 @@
+Name:                tls-extra
+Version:             0.1.0
+Description:
+   a set of extra definitions, default values and helpers for tls.
+License:             BSD3
+License-file:        LICENSE
+Copyright:           Vincent Hanquez <vincent@snarc.org>
+Author:              Vincent Hanquez <vincent@snarc.org>
+Maintainer:          Vincent Hanquez <vincent@snarc.org>
+Synopsis:            TLS extra default values and helpers
+Build-Type:          Simple
+Category:            Network
+stability:           experimental
+Cabal-Version:       >=1.6
+Homepage:            http://github.com/vincenthz/hs-tls-extra
+
+Flag test
+  Description:       Build unit test
+  Default:           False
+
+Flag bench
+  Description:       Build benchmarks
+  Default:           False
+
+Flag executable
+  Description:       Build the executable
+  Default:           False
+
+Library
+  Build-Depends:     tls >= 0.5 && < 0.6
+                   , mtl
+                   , cryptohash >= 0.6
+                   , bytestring
+                   , vector
+                   , crypto-api >= 0.5
+                   , cryptocipher >= 0.2.5
+                   , certificate >= 0.7 && < 0.8
+  Exposed-modules:   Network.TLS.Extra
+  other-modules:     Network.TLS.Extra.Certificate
+                     Network.TLS.Extra.Cipher
+                     Network.TLS.Extra.Compression
+                     Network.TLS.Extra.Thread
+  ghc-options:       -Wall
+
+Executable           stunnel
+  Main-is:           Examples/Stunnel.hs
+  if flag(executable)
+    Build-Depends:   network
+                   , cmdargs
+    Buildable:       True
+  else
+    Buildable:       False
+  ghc-options:       -Wall -fno-warn-missing-signatures
+
+Executable           checkciphers
+  Main-is:           Examples/CheckCiphers.hs
+  if flag(executable)
+    Build-Depends:   network
+                   , cmdargs
+    Buildable:       True
+  else
+    Buildable:       False
+  ghc-options:       -Wall -fno-warn-missing-signatures
+
+executable           Tests
+  Main-is:           Tests.hs
+  if flag(test)
+    Buildable:       True
+    Build-Depends:   base >= 3 && < 5
+                   , HUnit
+                   , QuickCheck >= 2
+                   , bytestring
+  else
+    Buildable:       False
+
+source-repository head
+  type: git
+  location: git://github.com/vincenthz/hs-tls-extra
