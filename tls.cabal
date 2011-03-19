@@ -36,7 +36,6 @@ Library
                    , binary >= 0.5
                    , cereal >= 0.3
                    , bytestring
-                   , vector
                    , crypto-api >= 0.5
                    , cryptocipher >= 0.2.5
                    , certificate >= 0.7 && < 0.8
