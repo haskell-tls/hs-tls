@@ -83,8 +83,8 @@ instance Show TLSParams where
 
 -- | A TLS Context is a handle augmented by tls specific state and parameters
 data TLSCtx = TLSCtx
-	{ ctxHandle :: Handle
-	, ctxParams :: TLSParams     -- ^ return the handle associated with this context
+	{ ctxHandle :: Handle        -- ^ return the handle associated with this context
+	, ctxParams :: TLSParams
 	, ctxState  :: MVar TLSState
 	}
 
