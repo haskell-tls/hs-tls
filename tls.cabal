@@ -43,6 +43,7 @@ Library
   Exposed-modules:   Network.TLS
                      Network.TLS.Cipher
                      Network.TLS.Compression
+                     Network.TLS.Internal
   other-modules:     Network.TLS.Cap
                      Network.TLS.SRandom
                      Network.TLS.Struct

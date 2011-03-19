@@ -7,7 +7,26 @@
 --
 module Network.TLS
 	(
-	module Network.TLS.Core
+	-- * Context configuration
+	  TLSParams(..)
+	, defaultParams
+
+	-- * Context object
+	, TLSCtx
+	, ctxHandle
+
+	-- * Creating a context
+	, client
+	, server
+
+	-- * Initialisation and Termination of context
+	, bye
+	, handshake
+
+	-- * High level API
+	, sendData
+	, recvData
+
 	-- * Crypto Key
 	, PrivateKey(..)
 	-- * Crypto RNG

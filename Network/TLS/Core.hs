@@ -16,6 +16,10 @@ module Network.TLS.Core
 	, TLSCtx
 	, ctxHandle
 
+	-- * Internal packet sending and receiving
+	, sendPacket
+	, recvPacket
+
 	-- * Creating a context
 	, client
 	, server
