@@ -40,7 +40,7 @@ Library
                      Network.TLS.Extra.Cipher
                      Network.TLS.Extra.Compression
                      Network.TLS.Extra.Thread
-  ghc-options:       -Wall
+  ghc-options:       -Wall -fno-warn-missing-signatures
 
 Executable           stunnel
   Main-is:           Examples/Stunnel.hs
