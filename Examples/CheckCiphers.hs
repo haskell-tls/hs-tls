@@ -21,6 +21,46 @@ import Text.Printf
 
 import System.Console.CmdArgs
 
+tableCiphers =
+	[ (0x0000, "NULL_WITH_NULL_NULL")
+	, (0x0001, "RSA_WITH_NULL_MD5")
+	, (0x0002, "RSA_WITH_NULL_SHA")
+	, (0x003B, "RSA_WITH_NULL_SHA256")
+	, (0x0004, "RSA_WITH_RC4_128_MD5")
+	, (0x0005, "RSA_WITH_RC4_128_SHA")
+	, (0x000A, "RSA_WITH_3DES_EDE_CBC_SHA")
+	, (0x002F, "RSA_WITH_AES_128_CBC_SHA")
+	, (0x0035, "RSA_WITH_AES_256_CBC_SHA")
+	, (0x003C, "RSA_WITH_AES_128_CBC_SHA256")
+	, (0x003D, "RSA_WITH_AES_256_CBC_SHA256")
+	, (0x000D, "DH_DSS_WITH_3DES_EDE_CBC_SHA")
+	, (0x0010, "DH_RSA_WITH_3DES_EDE_CBC_SHA")
+	, (0x0013, "DHE_DSS_WITH_3DES_EDE_CBC_SHA")
+	, (0x0016, "DHE_RSA_WITH_3DES_EDE_CBC_SHA")
+	, (0x0030, "DH_DSS_WITH_AES_128_CBC_SHA")
+	, (0x0031, "DH_RSA_WITH_AES_128_CBC_SHA")
+	, (0x0032, "DHE_DSS_WITH_AES_128_CBC_SHA")
+	, (0x0033, "DHE_RSA_WITH_AES_128_CBC_SHA")
+	, (0x0036, "DH_DSS_WITH_AES_256_CBC_SHA")
+	, (0x0037, "DH_RSA_WITH_AES_256_CBC_SHA")
+	, (0x0038, "DHE_DSS_WITH_AES_256_CBC_SHA")
+	, (0x0039, "DHE_RSA_WITH_AES_256_CBC_SHA")
+	, (0x003E, "DH_DSS_WITH_AES_128_CBC_SHA256")
+	, (0x003F, "DH_RSA_WITH_AES_128_CBC_SHA256")
+	, (0x0040, "DHE_DSS_WITH_AES_128_CBC_SHA256")
+	, (0x0067, "DHE_RSA_WITH_AES_128_CBC_SHA256")
+	, (0x0068, "DH_DSS_WITH_AES_256_CBC_SHA256")
+	, (0x0069, "DH_RSA_WITH_AES_256_CBC_SHA256")
+	, (0x006A, "DHE_DSS_WITH_AES_256_CBC_SHA256")
+	, (0x006B, "DHE_RSA_WITH_AES_256_CBC_SHA256")
+	, (0x0018, "DH_anon_WITH_RC4_128_MD5")
+	, (0x001B, "DH_anon_WITH_3DES_EDE_CBC_SHA")
+	, (0x0034, "DH_anon_WITH_AES_128_CBC_SHA")
+	, (0x003A, "DH_anon_WITH_AES_256_CBC_SHA")
+	, (0x006C, "DH_anon_WITH_AES_128_CBC_SHA256")
+	, (0x006D, "DH_anon_WITH_AES_256_CBC_SHA256")
+	]
+
 fakeCipher cid = Cipher
 	{ cipherID           = cid
 	, cipherName         = "cipher-" ++ show cid
@@ -120,4 +160,5 @@ main = do
 	a <- cmdArgs progArgs
 	_ <- printf "connecting to %s on port %s ...\n" (destination a) (port a)
 	supported <- connectBetween (destination a) (port a) (speed a) (fromIntegral $ nb a) (fromIntegral $ end a) (fromIntegral $ start a)
-	putStrLn $ show supported
+	forM_ supported $ \i -> do
+		putStrLn $ maybe ("cipher " ++ show i) id $ lookup i tableCiphers
