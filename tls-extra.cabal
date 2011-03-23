@@ -27,7 +27,8 @@ Flag executable
   Default:           False
 
 Library
-  Build-Depends:     tls >= 0.5 && < 0.6
+  Build-Depends:     base > 3 && < 5
+                   , tls >= 0.5 && < 0.6
                    , mtl
                    , cryptohash >= 0.6
                    , bytestring
