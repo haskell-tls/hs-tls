@@ -46,6 +46,10 @@ tlsclient srchandle dsthandle = do
 
 	handshake dsthandle
 
+	forkIO $ forever $ do
+		dat <- recvData dsthandle
+		putStrLn ("received " ++ show dat)
+		L.hPut srchandle dat
 	loopUntil $ do
 		b <- readOne srchandle
 		putStrLn ("sending " ++ show b)
