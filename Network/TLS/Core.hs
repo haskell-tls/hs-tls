@@ -341,6 +341,11 @@ recvData ctx = do
 		-- on client context, receiving a hello request == renegociation
 		Right [Handshake HelloRequest] ->
 			handshakeClient ctx >> recvData ctx
-		Right [AppData x] -> return $ L.fromChunks [x]
+		Right l           -> do
+			let dat = map getAppData l
+			when (length dat < length l) $ error "error mixed type packet"
+			return $ L.fromChunks $ catMaybes dat
 		Left err          -> error ("error received: " ++ show err)
-		_                 -> error "unexpected item"
+	where
+		getAppData (AppData x) = Just x
+		getAppData _           = Nothing
