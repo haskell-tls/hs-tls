@@ -7,7 +7,11 @@
 --
 module Network.TLS.Extra.Cipher
 	(
-	  cipher_null_null
+	  ciphersuite_all
+	, ciphersuite_medium
+	, ciphersuite_strong
+	, ciphersuite_unencrypted
+	, cipher_null_null
 	, cipher_null_SHA1
 	, cipher_null_MD5
 	, cipher_RC4_128_MD5
@@ -64,6 +68,22 @@ encryptF_rc4 iv d = (\(ctx, e) -> (e, toIV ctx)) $ RC4.encrypt (toCtx iv) d
 decryptF_rc4 :: IV -> B.ByteString -> (B.ByteString, IV)
 decryptF_rc4 iv e = (\(ctx, d) -> (d, toIV ctx)) $ RC4.decrypt (toCtx iv) e
 
+
+ciphersuite_all :: [Cipher]
+ciphersuite_all =
+	[ cipher_AES128_SHA256, cipher_AES256_SHA256
+	, cipher_AES128_SHA1,   cipher_AES256_SHA1
+	, cipher_RC4_128_SHA1,  cipher_RC4_128_MD5
+	]
+
+ciphersuite_medium :: [Cipher]
+ciphersuite_medium = [cipher_RC4_128_MD5, cipher_RC4_128_SHA1, cipher_AES128_SHA1, cipher_AES256_SHA1]
+
+ciphersuite_strong :: [Cipher]
+ciphersuite_strong = [cipher_AES256_SHA256, cipher_AES256_SHA1]
+
+ciphersuite_unencrypted :: [Cipher]
+ciphersuite_unencrypted = [cipher_null_MD5, cipher_null_SHA1]
 
 cipher_null_null :: Cipher
 cipher_null_null = Cipher
