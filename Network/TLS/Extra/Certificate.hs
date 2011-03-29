@@ -1,4 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
+-- |
+-- Module      : Network.TLS.Extra.Certificate
+-- License     : BSD-style
+-- Maintainer  : Vincent Hanquez <vincent@snarc.org>
+-- Stability   : experimental
+-- Portability : unknown
+--
 module Network.TLS.Extra.Certificate
 	( certificateVerifyChain
 	, certificateVerify
@@ -16,6 +23,10 @@ import qualified Crypto.Hash.MD5 as MD5
 import qualified Crypto.Cipher.RSA as RSA
 import qualified Crypto.Cipher.DSA as DSA
 
+-- | verify a certificates chain using the system certificates available.
+--
+-- each certificate of the list is verified against the next certificate, until
+-- it can be verified against a system certificate (system certificates are assumed as trusted)
 certificateVerifyChain :: [X509] -> IO Bool
 certificateVerifyChain l
 	| l == []   = return False
@@ -35,6 +46,8 @@ certificateVerifyChain l
 			let y = certIssuerDN cert
 			x == y
 
+-- | verify a certificate against another one.
+-- the first certificate need to be signed by the second one for this function to succeed.
 certificateVerify :: X509 -> X509 -> IO Bool
 certificateVerify ux509@(X509 _ _ sigalg sig) (X509 scert _ _ _) = do
 	let f = verifyF sigalg pk

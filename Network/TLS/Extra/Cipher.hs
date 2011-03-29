@@ -7,10 +7,12 @@
 --
 module Network.TLS.Extra.Cipher
 	(
+	-- * cipher suite
 	  ciphersuite_all
 	, ciphersuite_medium
 	, ciphersuite_strong
 	, ciphersuite_unencrypted
+	-- * individual ciphers
 	, cipher_null_null
 	, cipher_null_SHA1
 	, cipher_null_MD5
@@ -69,6 +71,8 @@ decryptF_rc4 :: IV -> B.ByteString -> (B.ByteString, IV)
 decryptF_rc4 iv e = (\(ctx, d) -> (d, toIV ctx)) $ RC4.decrypt (toCtx iv) e
 
 
+-- | all encrypted ciphers supported ordered from strong to weak.
+-- this choice of ciphersuite should satisfy most normal need
 ciphersuite_all :: [Cipher]
 ciphersuite_all =
 	[ cipher_AES128_SHA256, cipher_AES256_SHA256
@@ -76,15 +80,19 @@ ciphersuite_all =
 	, cipher_RC4_128_SHA1,  cipher_RC4_128_MD5
 	]
 
+-- | list of medium ciphers.
 ciphersuite_medium :: [Cipher]
 ciphersuite_medium = [cipher_RC4_128_MD5, cipher_RC4_128_SHA1, cipher_AES128_SHA1, cipher_AES256_SHA1]
 
+-- | the strongest ciphers supported.
 ciphersuite_strong :: [Cipher]
 ciphersuite_strong = [cipher_AES256_SHA256, cipher_AES256_SHA1]
 
+-- | all unencrypted ciphers, do not use on insecure network.
 ciphersuite_unencrypted :: [Cipher]
 ciphersuite_unencrypted = [cipher_null_MD5, cipher_null_SHA1]
 
+-- | this is not stricly a usable cipher; it's the initial cipher of a TLS connection
 cipher_null_null :: Cipher
 cipher_null_null = Cipher
 	{ cipherID           = 0x0
@@ -100,6 +108,7 @@ cipher_null_null = Cipher
 	, cipherMinVer       = Nothing
 	}
 
+-- | unencrypted cipher using RSA for key exchange and MD5 for digest
 cipher_null_MD5 :: Cipher
 cipher_null_MD5 = Cipher
 	{ cipherID           = 0x1
@@ -115,6 +124,7 @@ cipher_null_MD5 = Cipher
 	, cipherMinVer       = Nothing
 	}
 
+-- | unencrypted cipher using RSA for key exchange and SHA1 for digest
 cipher_null_SHA1 :: Cipher
 cipher_null_SHA1 = Cipher
 	{ cipherID           = 0x2
@@ -130,6 +140,7 @@ cipher_null_SHA1 = Cipher
 	, cipherMinVer       = Nothing
 	}
 
+-- | RC4 cipher, RSA key exchange and MD5 for digest
 cipher_RC4_128_MD5 :: Cipher
 cipher_RC4_128_MD5 = Cipher
 	{ cipherID           = 0x04
@@ -145,6 +156,7 @@ cipher_RC4_128_MD5 = Cipher
 	, cipherMinVer       = Nothing
 	}
 
+-- | RC4 cipher, RSA key exchange and SHA1 for digest
 cipher_RC4_128_SHA1 :: Cipher
 cipher_RC4_128_SHA1 = Cipher
 	{ cipherID           = 0x05
@@ -160,6 +172,7 @@ cipher_RC4_128_SHA1 = Cipher
 	, cipherMinVer       = Nothing
 	}
 
+-- | AES cipher (128 bit key), RSA key exchange and SHA1 for digest
 cipher_AES128_SHA1 :: Cipher
 cipher_AES128_SHA1 = Cipher
 	{ cipherID           = 0x2f
@@ -175,6 +188,7 @@ cipher_AES128_SHA1 = Cipher
 	, cipherMinVer       = Just SSL3
 	}
 
+-- | AES cipher (256 bit key), RSA key exchange and SHA1 for digest
 cipher_AES256_SHA1 :: Cipher
 cipher_AES256_SHA1 = Cipher
 	{ cipherID           = 0x35
@@ -190,6 +204,7 @@ cipher_AES256_SHA1 = Cipher
 	, cipherMinVer       = Just SSL3
 	}
 
+-- | AES cipher (128 bit key), RSA key exchange and SHA256 for digest
 cipher_AES128_SHA256 :: Cipher
 cipher_AES128_SHA256 = Cipher
 	{ cipherID           = 0x3c
@@ -205,6 +220,7 @@ cipher_AES128_SHA256 = Cipher
 	, cipherMinVer       = Just TLS12
 	}
 
+-- | AES cipher (256 bit key), RSA key exchange and SHA256 for digest
 cipher_AES256_SHA256 :: Cipher
 cipher_AES256_SHA256 = Cipher
 	{ cipherID           = 0x3d
