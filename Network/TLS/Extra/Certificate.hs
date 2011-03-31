@@ -8,7 +8,7 @@
 --
 module Network.TLS.Extra.Certificate
 	( certificateVerifyChain
-	, certificateVerify
+	, certificateVerifyAgainst
 	) where
 
 import qualified Data.ByteString as B
@@ -49,9 +49,9 @@ certificateVerifyChain l
 		-- find a matching certificate that we trust (== installed on the system)
 		found <- SysCert.findCertificate (matchsysX509 $ head l)
 		case found of
-			Just sysx509 -> certificateVerify (head l) sysx509
+			Just sysx509 -> certificateVerifyAgainst (head l) sysx509
 			Nothing      -> do
-				validChain <- certificateVerify (head l) (head $ tail l)
+				validChain <- certificateVerifyAgainst (head l) (head $ tail l)
 				if validChain
 					then certificateVerifyChain $ tail l
 					else return False
@@ -64,8 +64,8 @@ certificateVerifyChain l
 
 -- | verify a certificate against another one.
 -- the first certificate need to be signed by the second one for this function to succeed.
-certificateVerify :: X509 -> X509 -> IO Bool
-certificateVerify ux509@(X509 _ _ sigalg sig) (X509 scert _ _ _) = do
+certificateVerifyAgainst :: X509 -> X509 -> IO Bool
+certificateVerifyAgainst ux509@(X509 _ _ sigalg sig) (X509 scert _ _ _) = do
 	let f = verifyF sigalg pk
 	case f udata esig of
 		Right True -> return True
