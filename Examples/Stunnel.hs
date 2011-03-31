@@ -126,7 +126,8 @@ data Stunnel =
 		{ destinationType :: String
 		, destination     :: String
 		, sourceType      :: String
-		, source          :: String }
+		, source          :: String
+		, validCert       :: Bool }
 	| Server
 		{ destinationType :: String
 		, destination     :: String
@@ -141,6 +142,7 @@ clientOpts = Client
 	, destination     = "localhost:6061"  &= help "destination address influenced by destination type" &= typ "ADDRESS"
 	, sourceType      = "tcp"             &= help "type of source (tcp, unix, fd)" &= typ "SOURCETYPE"
 	, source          = "localhost:6060"  &= help "source address influenced by source type" &= typ "ADDRESS"
+	, validCert       = False             &= help "check if the certificate receive is valid" &= typ "Bool"
 	}
 	&= help "connect to a remote destination that use SSL/TLS"
 
@@ -208,11 +210,13 @@ doClient pargs = do
 	srcaddr <- getAddressDescription (sourceType pargs) (source pargs)
 	dstaddr <- getAddressDescription (destinationType pargs) (destination pargs)
 
+	let crecv = if validCert pargs then certificateVerifyChain else (\_ -> return True)
 	let clientstate = defaultParams
 		{ pConnectVersion = TLS10
 		, pAllowedVersions = [ TLS10, TLS11 ]
 		, pCiphers = ciphers
 		, pCertificates = []
+		, onCertificatesRecv = crecv
 		}
 
 	case srcaddr of
@@ -258,5 +262,5 @@ main :: IO ()
 main = do
 	x <- cmdArgsRun mode
 	case x of
-		Client _ _ _ _     -> doClient x
+		Client _ _ _ _ _   -> doClient x
 		Server _ _ _ _ _ _ -> doServer x
