@@ -42,6 +42,16 @@ certificateVerifyChain _ = do
 --
 -- each certificate of the list is verified against the next certificate, until
 -- it can be verified against a system certificate (system certificates are assumed as trusted)
+--
+-- This helper only check that the chain of certificate is valid, which means that each items
+-- received are signed by the next one, or by a system certificate. Some extra checks need to
+-- be done at the user level so that the certificate chain received make sense in the context.
+--
+-- for example for HTTP, the user should typically verify the certificate subject match the URL
+-- of connection.
+--
+-- TODO: verify validity, check revocation list if any, add optional user output to know
+-- the rejection reason.
 certificateVerifyChain :: [X509] -> IO Bool
 certificateVerifyChain l
 	| l == []   = return False
