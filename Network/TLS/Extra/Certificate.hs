@@ -103,5 +103,6 @@ dsaSHA1Verify pk a b = either (Left . show) (Right) $ DSA.verify asig SHA1.hash 
 	where asig = (0,0) {- FIXME : need to work out how to get R/S from the bytestring a -}
 
 rsaVerify h hdesc pk a b = either (Left . show) (Right) $ RSA.verify h hdesc pk a b
+
 mkRSA (lenmodulus, modulus, e) =
 	RSA.PublicKey { RSA.public_sz = lenmodulus, RSA.public_n = modulus, RSA.public_e = e }
