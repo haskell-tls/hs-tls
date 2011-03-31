@@ -42,6 +42,8 @@ Library
                      Network.TLS.Extra.Compression
                      Network.TLS.Extra.Thread
   ghc-options:       -Wall -fno-warn-missing-signatures
+  if os(windows) || os(osx)
+    cpp-options:     -DNOCERTVERIFY
 
 Executable           stunnel
   Main-is:           Examples/Stunnel.hs

@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, CPP #-}
 -- |
 -- Module      : Network.TLS.Extra.Certificate
 -- License     : BSD-style
@@ -23,6 +23,21 @@ import qualified Crypto.Hash.MD5 as MD5
 import qualified Crypto.Cipher.RSA as RSA
 import qualified Crypto.Cipher.DSA as DSA
 
+#if defined(NOCERTVERIFY)
+
+# warning "********certificate verify chain doesn't yet work on your platform *************"
+# warning "********please consider contributing to the certificate to fix this issue *************"
+# warning "********getting trusted system certificate is platform dependant *************"
+
+{- on windows and OSX, the trusted certificates are not yet accessible,
+ - for now, print a big fat warning (better than nothing) and returns true  -}
+certificateVerifyChain :: [X509] -> IO Bool
+certificateVerifyChain _ = do
+	putStrLn "****************** certificate verify chain doesn't yet work on your platform **********************"
+	putStrLn "please consider contributing to the certificate package to fix this issue"
+	return True
+
+#else
 -- | verify a certificates chain using the system certificates available.
 --
 -- each certificate of the list is verified against the next certificate, until
@@ -45,6 +60,7 @@ certificateVerifyChain l
 			let x = certSubjectDN syscert
 			let y = certIssuerDN cert
 			x == y
+#endif
 
 -- | verify a certificate against another one.
 -- the first certificate need to be signed by the second one for this function to succeed.
