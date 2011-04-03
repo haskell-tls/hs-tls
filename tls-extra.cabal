@@ -1,5 +1,5 @@
 Name:                tls-extra
-Version:             0.1.5
+Version:             0.1.6
 Description:
    a set of extra definitions, default values and helpers for tls.
 License:             BSD3
@@ -36,6 +36,7 @@ Library
                    , crypto-api >= 0.5
                    , cryptocipher >= 0.2.5
                    , certificate >= 0.7 && < 0.8
+                   , text >= 0.5 && < 1.0
   Exposed-modules:   Network.TLS.Extra
   other-modules:     Network.TLS.Extra.Certificate
                      Network.TLS.Extra.Cipher

@@ -9,6 +9,7 @@
 module Network.TLS.Extra.Certificate
 	( certificateVerifyChain
 	, certificateVerifyAgainst
+    , certificateVerifyDomain
 	) where
 
 import qualified Data.ByteString as B
@@ -22,6 +23,9 @@ import qualified Crypto.Hash.MD2 as MD2
 import qualified Crypto.Hash.MD5 as MD5
 import qualified Crypto.Cipher.RSA as RSA
 import qualified Crypto.Cipher.DSA as DSA
+
+import Data.Text.Lazy (unpack)
+import Data.Certificate.X509Cert (oidCommonName)
 
 #if defined(NOCERTVERIFY)
 
@@ -116,3 +120,25 @@ rsaVerify h hdesc pk a b = either (Left . show) (Right) $ RSA.verify h hdesc pk 
 
 mkRSA (lenmodulus, modulus, e) =
 	RSA.PublicKey { RSA.public_sz = lenmodulus, RSA.public_n = modulus, RSA.public_e = e }
+
+-- | Verify that the given certificate chain is application to the given domain
+-- name.
+certificateVerifyDomain :: String -> [X509] -> Bool
+certificateVerifyDomain _ [] = False
+certificateVerifyDomain domain (X509 cert _ _ _:_) =
+    case lookup oidCommonName $ certSubjectDN cert of
+        Nothing -> False
+        Just (_, val) -> base domain == base (unpack val)
+  where
+    -- Note: This is an incredibly simplistic algorithm which will almost certainly break.
+    base :: String -> [String]
+    base = taker . reverse . pieces
+    -- If the last piece in the domain name is two letters, then it is an
+    -- country domain and take the last three pieces. Otherwise, take the last
+    -- two.
+    taker :: [String] -> [String]
+    taker x@([_, _]:_) = take 3 x
+    taker x = take 2 x
+    pieces :: String -> [String]
+    pieces [] = []
+    pieces x = let (y, z) = break (== '.') x in y : pieces (drop 1 z)
