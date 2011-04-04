@@ -9,7 +9,7 @@
 module Network.TLS.Extra.Certificate
 	( certificateVerifyChain
 	, certificateVerifyAgainst
-    , certificateVerifyDomain
+	, certificateVerifyDomain
 	) where
 
 import qualified Data.ByteString as B
@@ -121,24 +121,32 @@ rsaVerify h hdesc pk a b = either (Left . show) (Right) $ RSA.verify h hdesc pk 
 mkRSA (lenmodulus, modulus, e) =
 	RSA.PublicKey { RSA.public_sz = lenmodulus, RSA.public_n = modulus, RSA.public_e = e }
 
--- | Verify that the given certificate chain is application to the given domain
--- name.
+-- | Verify that the given certificate chain is application to the given fully qualified host name.
 certificateVerifyDomain :: String -> [X509] -> Bool
-certificateVerifyDomain _ [] = False
-certificateVerifyDomain domain (X509 cert _ _ _:_) =
-    case lookup oidCommonName $ certSubjectDN cert of
-        Nothing -> False
-        Just (_, val) -> base domain == base (unpack val)
-  where
-    -- Note: This is an incredibly simplistic algorithm which will almost certainly break.
-    base :: String -> [String]
-    base = taker . reverse . pieces
-    -- If the last piece in the domain name is two letters, then it is an
-    -- country domain and take the last three pieces. Otherwise, take the last
-    -- two.
-    taker :: [String] -> [String]
-    taker x@([_, _]:_) = take 3 x
-    taker x = take 2 x
-    pieces :: String -> [String]
-    pieces [] = []
-    pieces x = let (y, z) = break (== '.') x in y : pieces (drop 1 z)
+certificateVerifyDomain _      []                  = False
+certificateVerifyDomain fqhn (X509 cert _ _ _:_) =
+	case lookup oidCommonName $ certSubjectDN cert of
+		Nothing       -> False
+		Just (_, val) -> matchDomain (splitDot $ unpack val)
+	where
+		matchDomain l
+			| length (filter (== "") l) > 0 = False
+			| head l == "*"                 = wildcardMatch (reverse $ drop 1 l)
+			| otherwise                     = l == splitDot fqhn
+
+		-- only 1 wildcard is valid, and if multiples are present
+		-- they won't have a wildcard meaning but will be match as normal star
+		-- character to the fqhn and inevitably will fail.
+		wildcardMatch l
+			-- * or *.com is always invalid
+			| length l < 2                         = False
+			-- *.com.<country> is always invalid
+			| length (head l) <= 2 && length (head $ drop 1 l) <= 3 && length l < 3 = False
+			| otherwise                            =
+				l == take (length l) (reverse $ splitDot fqhn)
+
+		splitDot :: String -> [String]
+		splitDot [] = [""]
+		splitDot x  =
+			let (y, z) = break (== '.') x in
+			y : (if z == "" then [] else splitDot $ drop 1 z)
