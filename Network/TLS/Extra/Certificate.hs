@@ -138,9 +138,9 @@ certificateVerifyDomain fqhn (X509 cert _ _ _:_) =
 		-- they won't have a wildcard meaning but will be match as normal star
 		-- character to the fqhn and inevitably will fail.
 		wildcardMatch l
-			-- * or *.com is always invalid
+			-- <star>.com or <star> is always invalid
 			| length l < 2                         = False
-			-- *.com.<country> is always invalid
+			-- <star>.com.<country> is always invalid
 			| length (head l) <= 2 && length (head $ drop 1 l) <= 3 && length l < 3 = False
 			| otherwise                            =
 				l == take (length l) (reverse $ splitDot fqhn)
