@@ -11,7 +11,10 @@ module Network.TLS.Extra
 	  module Network.TLS.Extra.Cipher
 	-- * Certificate helpers
 	, module Network.TLS.Extra.Certificate
+	-- * Connection helpers
+	, module Network.TLS.Extra.Connection
 	) where
 
 import Network.TLS.Extra.Cipher
 import Network.TLS.Extra.Certificate
+import Network.TLS.Extra.Connection

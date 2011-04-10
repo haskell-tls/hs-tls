@@ -41,6 +41,7 @@ Library
   other-modules:     Network.TLS.Extra.Certificate
                      Network.TLS.Extra.Cipher
                      Network.TLS.Extra.Compression
+                     Network.TLS.Extra.Connection
                      Network.TLS.Extra.Thread
   ghc-options:       -Wall -fno-warn-missing-signatures
   if os(windows) || os(osx)
