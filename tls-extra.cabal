@@ -67,6 +67,16 @@ Executable           checkciphers
     Buildable:       False
   ghc-options:       -Wall -fno-warn-missing-signatures
 
+Executable           retrievecertificate
+  Main-is:           Examples/RetrieveCertificate.hs
+  if flag(executable)
+    Build-Depends:   network
+                   , cmdargs
+    Buildable:       True
+  else
+    Buildable:       False
+  ghc-options:       -Wall -fno-warn-missing-signatures
+
 executable           Tests
   Main-is:           Tests.hs
   if flag(test)
