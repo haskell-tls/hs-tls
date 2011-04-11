@@ -92,8 +92,6 @@ prop_header_marshalling_id x = (decodeHeader $ encodeHeader x) == Right x
 prop_handshake_marshalling_id x = (decodeHs $ encodeHandshake x) == Right x
 	where
 		decodeHs b = either (Left . id) (uncurry (decodeHandshake TLS10) . head) $ decodeHandshakes b
---import qualified Tests.Connection as Connection
---import qualified Tests.Ciphers as Ciphers
 
 myQuickCheckArgs = stdArgs
 	{ replay     = Nothing
@@ -110,6 +108,3 @@ liftM6 f m1 m2 m3 m4 m5 m6 = do { x1 <- m1; x2 <- m2; x3 <- m3; x4 <- m4; x5 <- 
 main = do
 	run_test "marshalling header = id" prop_header_marshalling_id
 	run_test "marshalling handshake = id" prop_handshake_marshalling_id
-	--Marshal.runTests
-	--Ciphers.runTests
-	--Connection.runTests
