@@ -108,6 +108,7 @@ data ProtocolType =
 data TLSError =
 	  Error_Misc String
 	| Error_Certificate String
+	| Error_Random String
 	| Error_Digest ([Word8], [Word8])
 	| Error_Packet String
 	| Error_Packet_Size_Mismatch (Int, Int)

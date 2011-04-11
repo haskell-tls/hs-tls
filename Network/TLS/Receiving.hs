@@ -28,7 +28,6 @@ import Network.TLS.Packet
 import Network.TLS.State
 import Network.TLS.Cipher
 import Network.TLS.Crypto
-import Network.TLS.SRandom
 import Data.Certificate.X509
 
 import qualified Crypto.Cipher.RSA as RSA
@@ -114,9 +113,7 @@ decryptRSA econtent = do
 
 setMasterSecretRandom :: ByteString -> TLSSt ()
 setMasterSecretRandom content = do
-	st <- get
-	let (bytes, g') = getRandomBytes (stRandomGen st) (fromIntegral $ B.length content)
-	put $ st { stRandomGen = g' }
+	bytes <- genTLSRandom (fromIntegral $ B.length content)
 	setMasterSecret bytes
 
 processClientKeyXchg :: Version -> ByteString -> TLSSt ()

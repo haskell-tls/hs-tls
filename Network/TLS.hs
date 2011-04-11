@@ -29,8 +29,6 @@ module Network.TLS
 
 	-- * Crypto Key
 	, PrivateKey(..)
-	-- * Crypto RNG
-	, makeSRandomGen, SRandomGen
 	-- * Compressions & Predefined compressions
 	, Compression
 	, nullCompression
@@ -46,5 +44,4 @@ import Network.TLS.Struct (Version(..), TLSError(..))
 import Network.TLS.Crypto (PrivateKey(..))
 import Network.TLS.Cipher (Cipher(..))
 import Network.TLS.Compression (Compression(..), nullCompression)
-import Network.TLS.SRandom (makeSRandomGen, SRandomGen)
 import Network.TLS.Core

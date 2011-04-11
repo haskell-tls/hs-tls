@@ -41,13 +41,13 @@ import Network.TLS.Packet
 import Network.TLS.State
 import Network.TLS.Sending
 import Network.TLS.Receiving
-import Network.TLS.SRandom
 import Data.Maybe
 import Data.Certificate.X509
 import Data.List (intersect, intercalate, find)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 
+import Crypto.Random
 import Control.Applicative ((<$>))
 import Control.Concurrent.MVar
 import Control.Monad.State
@@ -120,7 +120,7 @@ usingState_ ctx f = do
 		Right r  -> return r
 
 getStateRNG :: MonadIO m => TLSCtx -> Int -> m Bytes
-getStateRNG ctx n = usingState_ ctx (withTLSRNG (\rng -> getRandomBytes rng n))
+getStateRNG ctx n = usingState_ ctx (genTLSRandom n)
 
 whileStatus :: MonadIO m => TLSCtx -> (TLSStatus -> Bool) -> m a -> m ()
 whileStatus ctx p a = do
@@ -147,13 +147,13 @@ sendPacket ctx pkt = do
 
 -- | Create a new Client context with a configuration, a RNG, and a Handle.
 -- It reconfigures the handle buffermode to noBuffering
-client :: MonadIO m => TLSParams -> SRandomGen -> Handle -> m TLSCtx
+client :: (MonadIO m, CryptoRandomGen g) => TLSParams -> g -> Handle -> m TLSCtx
 client params rng handle = liftIO $ newCtx handle params state
 	where state = (newTLSState rng) { stClientContext = True }
 
 -- | Create a new Server context with a configuration, a RNG, and a Handle.
 -- It reconfigures the handle buffermode to noBuffering
-server :: MonadIO m => TLSParams -> SRandomGen -> Handle -> m TLSCtx
+server :: (MonadIO m, CryptoRandomGen g) => TLSParams -> g -> Handle -> m TLSCtx
 server params rng handle = liftIO $ newCtx handle params state
 	where state = (newTLSState rng) { stClientContext = False }
 

@@ -1,4 +1,4 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleContexts, MultiParamTypeClasses #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleContexts, MultiParamTypeClasses, ExistentialQuantification, RankNTypes #-}
 -- |
 -- Module      : Network.TLS.State
 -- License     : BSD-style
@@ -19,6 +19,7 @@ module Network.TLS.State
 	, TLSStatus(..)
 	, HandshakeStatus(..)
 	, newTLSState
+	, genTLSRandom
 	, withTLSRNG
 	, assert -- FIXME move somewhere else (Internal.hs ?)
 	, updateStatusHs
@@ -48,7 +49,6 @@ import Data.List (find)
 import Data.Maybe (isNothing)
 import Network.TLS.Util
 import Network.TLS.Struct
-import Network.TLS.SRandom
 import Network.TLS.Wire
 import Network.TLS.Packet
 import Network.TLS.Crypto
@@ -58,6 +58,7 @@ import qualified Data.ByteString as B
 import Control.Monad
 import Control.Monad.State
 import Control.Monad.Error
+import Crypto.Random
 
 assert :: Monad m => String -> [(String,Bool)] -> m ()
 assert fctname list = forM_ list $ \ (name, assumption) -> do
@@ -105,6 +106,11 @@ data TLSHandshakeState = TLSHandshakeState
 	, hstHandshakeDigest :: Maybe (HashCtx, HashCtx) -- FIXME could be only 1 hash in tls12
 	} deriving (Show)
 
+data StateRNG = forall g . CryptoRandomGen g => StateRNG g
+
+instance Show StateRNG where
+	show _ = "rng[..]"
+
 data TLSState = TLSState
 	{ stClientContext :: Bool
 	, stVersion       :: !Version
@@ -117,7 +123,7 @@ data TLSState = TLSState
 	, stTxMacState    :: !(Maybe TLSMacState)
 	, stRxMacState    :: !(Maybe TLSMacState)
 	, stCipher        :: Maybe Cipher
-	, stRandomGen     :: SRandomGen
+	, stRandomGen     :: StateRNG
 	} deriving (Show)
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrorT TLSError (State TLSState) a }
@@ -133,7 +139,7 @@ instance MonadState TLSState TLSSt where
 runTLSState :: TLSSt a -> TLSState -> (Either TLSError a, TLSState)
 runTLSState f st = runState (runErrorT (runTLSSt f)) st
 
-newTLSState :: SRandomGen -> TLSState
+newTLSState :: CryptoRandomGen g => g -> TLSState
 newTLSState rng = TLSState
 	{ stClientContext = False
 	, stVersion       = TLS10
@@ -146,15 +152,20 @@ newTLSState rng = TLSState
 	, stTxMacState    = Nothing
 	, stRxMacState    = Nothing
 	, stCipher        = Nothing
-	, stRandomGen     = rng
+	, stRandomGen     = StateRNG rng
 	}
 
-withTLSRNG :: MonadState TLSState m => (SRandomGen -> (a, SRandomGen)) -> m a
-withTLSRNG f = do
+withTLSRNG :: StateRNG -> (forall g . CryptoRandomGen g => g -> Either e (a,g)) -> Either e (a, StateRNG)
+withTLSRNG (StateRNG rng) f = case f rng of
+	Left err        -> Left err
+	Right (a, rng') -> Right (a, StateRNG rng')
+
+genTLSRandom :: (MonadState TLSState m, MonadError TLSError m) => Int -> m Bytes
+genTLSRandom n = do
 	st <- get
-	let (a, newrng) = f (stRandomGen st)
-	put (st { stRandomGen = newrng })
-	return a
+	case withTLSRNG (stRandomGen st) (genBytes n) of
+		Left err            -> throwError $ Error_Random $ show err
+		Right (bytes, rng') -> put (st { stRandomGen = rng' }) >> return bytes
 
 makeDigest :: MonadState TLSState m => Bool -> Header -> Bytes -> m Bytes
 makeDigest w hdr content = do

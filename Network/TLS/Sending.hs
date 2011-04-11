@@ -103,13 +103,10 @@ writePacket pkt = preProcessPacket pkt >>= makePacketData >>= processPacketData 
 encryptRSA :: ByteString -> TLSSt ByteString
 encryptRSA content = do
 	st <- get
-	let g = stRandomGen st
 	let rsakey = fromJust "rsa public key" $ hstRSAPublicKey $ fromJust "handshake" $ stHandshake st
-	case kxEncrypt g rsakey content of
-		Left err             -> fail ("rsa encrypt failed: " ++ show err)
-		Right (econtent, g') -> do
-			put (st { stRandomGen = g' })
-			return econtent
+	case withTLSRNG (stRandomGen st) (\g -> kxEncrypt g rsakey content) of
+		Left err               -> fail ("rsa encrypt failed: " ++ show err)
+		Right (econtent, rng') -> put (st { stRandomGen = rng' }) >> return econtent
 
 encryptContent :: (Header, ByteString) -> TLSSt (Header, ByteString)
 encryptContent (hdr@(Header pt ver _), content) = do
