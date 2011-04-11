@@ -19,6 +19,7 @@ import Data.Certificate.X509
 import qualified Data.Certificate.KeyRSA as KeyRSA
 import qualified Crypto.Cipher.RSA as RSA
 
+import qualified Crypto.Random.AESCtr as RNG
 import Network.TLS
 import Network.TLS.Extra
 
@@ -62,9 +63,6 @@ tlsclient srchandle dsthandle = do
 				return False
 	return ()
 
-getRandomGen :: IO SRandomGen
-getRandomGen = makeSRandomGen >>= either (fail . show) (return . id)
-
 tlsserver srchandle dsthandle = do
 	hSetBuffering dsthandle NoBuffering
 
@@ -79,7 +77,7 @@ tlsserver srchandle dsthandle = do
 	putStrLn "end"
 
 clientProcess certs handle dsthandle _ = do
-	rng <- getRandomGen
+	rng <- RNG.makeSystem
 
 	let serverstate = defaultParams
 		{ pAllowedVersions = [SSL3,TLS10,TLS11]
@@ -224,7 +222,7 @@ doClient pargs = do
 			(StunnelSocket srcsocket) <- listenAddressDescription srcaddr
 			forever $ do
 				(s, _) <- accept srcsocket
-				rng    <- getRandomGen
+				rng    <- RNG.makeSystem
 				srch   <- socketToHandle s ReadWriteMode
 
 				(StunnelSocket dst)  <- connectAddressDescription dstaddr

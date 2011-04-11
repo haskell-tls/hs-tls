@@ -4,6 +4,8 @@ import Network.TLS.Internal
 import Network.TLS.Cipher
 import Network.TLS
 
+import qualified Crypto.Random.AESCtr as RNG
+
 import qualified Data.ByteString as B
 import Data.Word
 import Data.Char
@@ -89,7 +91,7 @@ openConnection s p ciphers = do
 	connect sock (SockAddrInet pn (head $ hostAddresses he))
 	handle <- socketToHandle sock ReadWriteMode
 
-	(Right rng) <- makeSRandomGen
+	rng <- RNG.makeSystem
 	let params = defaultParams { pCiphers = map fakeCipher ciphers }
 	ctx <- client params rng handle
 	sendPacket ctx $ Handshake $ clienthello ciphers

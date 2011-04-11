@@ -9,6 +9,7 @@ module Network.TLS.Extra.Connection
 	( connectionClient
 	) where
 
+import Crypto.Random
 import Control.Applicative ((<$>))
 import Control.Exception
 import Data.Char
@@ -21,7 +22,7 @@ import Network.TLS
 
 -- | open a TCP client connection to a destination and port description (number or name)
 -- 
-connectionClient :: String -> String -> TLSParams -> SRandomGen -> IO TLSCtx
+connectionClient :: CryptoRandomGen g => String -> String -> TLSParams -> g -> IO TLSCtx
 connectionClient s p params rng = do
 	pn <- if and $ map isDigit $ p
 		then return $ fromIntegral $ (read p :: Int)

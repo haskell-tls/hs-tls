@@ -1,5 +1,5 @@
 Name:                tls-extra
-Version:             0.1.9
+Version:             0.2.0
 Description:
    a set of extra definitions, default values and helpers for tls.
 License:             BSD3
@@ -28,7 +28,7 @@ Flag executable
 
 Library
   Build-Depends:     base > 3 && < 5
-                   , tls >= 0.5 && < 0.6
+                   , tls >= 0.6 && < 0.7
                    , mtl
                    , network >= 2.3
                    , cryptohash >= 0.6
@@ -53,6 +53,7 @@ Executable           stunnel
   if flag(executable)
     Build-Depends:   network
                    , cmdargs
+                   , cprng-aes
     Buildable:       True
   else
     Buildable:       False
@@ -63,6 +64,7 @@ Executable           checkciphers
   if flag(executable)
     Build-Depends:   network
                    , cmdargs
+                   , cprng-aes
     Buildable:       True
   else
     Buildable:       False
@@ -73,6 +75,7 @@ Executable           retrievecertificate
   if flag(executable)
     Build-Depends:   network
                    , cmdargs
+                   , cprng-aes
     Buildable:       True
   else
     Buildable:       False

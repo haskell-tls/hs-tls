@@ -21,8 +21,7 @@ import qualified Data.ByteString.Lazy as L
 import Data.Certificate.PEM
 import Data.Certificate.X509
 import qualified Data.Certificate.KeyRSA as KeyRSA
---import Network.TLS.Crypto
---import Network.TLS.Cipher
+import qualified Crypto.Random.AESCtr as RNG
 import Network.TLS
 import Control.Monad
 import Control.Monad.Trans (lift)
@@ -49,9 +48,6 @@ instance Arbitrary Word8 where
 #endif
 
 {- helpers to prepare the tests -}
-getRandomGen :: IO SRandomGen
-getRandomGen = makeSRandomGen >>= either (fail . show) (return . id)
-
 readCertificate :: FilePath -> IO X509
 readCertificate filepath = do
 	content <- B.readFile filepath
@@ -126,8 +122,8 @@ setup (clientState, serverState) = do
 	hSetBuffering cHandle NoBuffering
 	hSetBuffering sHandle NoBuffering
 
-	clientRNG   <- getRandomGen
-	serverRNG   <- getRandomGen
+	clientRNG   <- RNG.makeSystem
+	serverRNG   <- RNG.makeSystem
 	startQueue  <- newChan
 	resultQueue <- newChan
 

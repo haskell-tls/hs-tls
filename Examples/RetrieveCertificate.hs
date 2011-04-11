@@ -10,13 +10,15 @@ import System.IO
 import Control.Monad
 import Prelude hiding (catch)
 
+import qualified Crypto.Random.AESCtr as RNG
+
 import Text.Printf
 
 import System.Console.CmdArgs
 
 openConnection s p = do
 	ref <- newIORef Nothing
-	(Right rng) <- makeSRandomGen
+	rng <- RNG.makeSystem
 	let params = defaultParams
 		{ pCiphers           = ciphersuite_all
 		, onCertificatesRecv = \l -> do
