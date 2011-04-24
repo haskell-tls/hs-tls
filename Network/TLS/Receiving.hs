@@ -111,18 +111,16 @@ decryptRSA econtent = do
 	rsapriv <- get >>= return . fromJust "rsa private key" . hstRSAPrivateKey . fromJust "handshake" . stHandshake
 	return $ kxDecrypt rsapriv (if ver < TLS10 then econtent else B.drop 2 econtent)
 
-setMasterSecretRandom :: ByteString -> TLSSt ()
-setMasterSecretRandom content = do
-	bytes <- genTLSRandom (fromIntegral $ B.length content)
-	setMasterSecret bytes
-
+-- process the client key exchange message. the protocol expects the initial
+-- client version received in ClientHello, not the negociated version.
+-- in case the version mismatch, generate a random master secret
 processClientKeyXchg :: Version -> ByteString -> TLSSt ()
 processClientKeyXchg ver content = do
-	{- the TLS protocol expect the initial client version received in the ClientHello, not the negociated version -}
-	expectedVer <- get >>= return . hstClientVersion . fromJust "handshake" . stHandshake
-	if expectedVer /= ver
-		then setMasterSecretRandom content
-		else setMasterSecret content
+	expectedVer <- hstClientVersion . fromJust "handshake" . stHandshake <$> get
+	setMasterSecret =<<
+		if expectedVer /= ver
+		then genTLSRandom (fromIntegral $ B.length content)
+		else content
 
 processClientFinished :: FinishedData -> TLSSt ()
 processClientFinished fdata = do
