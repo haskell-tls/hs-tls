@@ -82,15 +82,12 @@ processHandshake ver ty econtent = do
 	when (isJust e) $ throwError (fromJust "" e)
 
 	content <- case ty of
-		HandshakeType_ClientKeyXchg -> do
-			copt <- decryptRSA econtent
-			return $ either (const econtent) id copt
-		_                           ->
-			return econtent
+		HandshakeType_ClientKeyXchg -> either (const econtent) id <$> decryptRSA econtent
+		_                           -> return econtent
 	hs <- case (ty, decodeHandshake ver ty content) of
-		(_, Right x)                            -> return x
-		(HandshakeType_ClientKeyXchg, Left _)   -> return $ ClientKeyXchg SSL2 (ClientKeyData $ B.replicate 46 0xff)
-		(_, Left err)                           -> throwError err
+		(_, Right x)                          -> return x
+		(HandshakeType_ClientKeyXchg, Left _) -> return $ ClientKeyXchg SSL2 (ClientKeyData $ B.replicate 46 0xff)
+		(_, Left err)                         -> throwError err
 	clientmode <- isClientContext
 	case hs of
 		ClientHello cver ran _ _ _ _ -> unless clientmode $ do
@@ -107,8 +104,8 @@ processHandshake ver ty econtent = do
 
 decryptRSA :: ByteString -> TLSSt (Either KxError ByteString)
 decryptRSA econtent = do
-	ver <- return . stVersion =<< get
-	rsapriv <- get >>= return . fromJust "rsa private key" . hstRSAPrivateKey . fromJust "handshake" . stHandshake
+	ver <- stVersion <$> get
+	rsapriv <- fromJust "rsa private key" . hstRSAPrivateKey . fromJust "handshake" . stHandshake <$> get
 	return $ kxDecrypt rsapriv (if ver < TLS10 then econtent else B.drop 2 econtent)
 
 -- process the client key exchange message. the protocol expects the initial
@@ -120,11 +117,11 @@ processClientKeyXchg ver content = do
 	setMasterSecret =<<
 		if expectedVer /= ver
 		then genTLSRandom (fromIntegral $ B.length content)
-		else content
+		else return content
 
 processClientFinished :: FinishedData -> TLSSt ()
 processClientFinished fdata = do
-	cc <- get >>= return . stClientContext
+	cc <- stClientContext <$> get
 	expected <- getHandshakeDigest (not cc)
 	when (expected /= B.pack fdata) $ do
 		-- FIXME don't fail, but report the error so that the code can send a BadMac Alert.
