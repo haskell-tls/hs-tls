@@ -5,7 +5,7 @@
 -- Stability   : experimental
 -- Portability : unknown
 --
--- the Wire module is a specialized Binary package related to the TLS protocol.
+-- the Wire module is a specialized marshalling/unmarshalling package related to the TLS protocol.
 -- all multibytes values are written as big endian.
 --
 module Network.TLS.Wire
