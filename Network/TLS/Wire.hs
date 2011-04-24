@@ -1,5 +1,3 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving,FlexibleInstances #-}
-
 -- |
 -- Module      : Network.TLS.Wire
 -- License     : BSD-style
