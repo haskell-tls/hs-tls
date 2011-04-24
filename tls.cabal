@@ -33,7 +33,6 @@ Library
   Build-Depends:     base >= 3 && < 5
                    , mtl
                    , cryptohash >= 0.6
-                   , binary >= 0.5
                    , cereal >= 0.3
                    , bytestring
                    , crypto-api >= 0.5

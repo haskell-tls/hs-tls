@@ -42,10 +42,9 @@ import Network.TLS.Struct
 import Network.TLS.Cap
 import Network.TLS.Wire
 import Data.Either (partitionEithers)
-import Data.Maybe (fromJust, isNothing)
+import Data.Maybe (fromJust)
 import Control.Applicative ((<$>))
 import Control.Monad
-import Control.Monad.Error
 import Data.Certificate.X509
 import Network.TLS.Crypto
 import Network.TLS.MAC
@@ -54,43 +53,67 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as L
 
+runGetErr :: Get a -> ByteString -> Either TLSError a
+runGetErr f = either (Left . Error_Packet_Parsing) Right . runGet f
+
+{- marshall helpers -}
+getVersion :: Get Version
+getVersion = do
+	major <- getWord8
+	minor <- getWord8
+	case verOfNum (major, minor) of
+		Nothing -> fail ("invalid version : " ++ show major ++ "," ++ show minor)
+		Just v  -> return v
+
+putVersion :: Version -> Put
+putVersion ver = putWord8 major >> putWord8 minor
+	where (major, minor) = numericalVer ver
+
+getHeaderType :: Get ProtocolType
+getHeaderType = do
+	ty <- getWord8
+	case valToType ty of
+		Nothing -> fail ("invalid header type: " ++ show ty)
+		Just t  -> return t
+
+putHeaderType = putWord8 . valOfType
+
+getHandshakeType :: Get HandshakeType
+getHandshakeType = do
+	ty <- getWord8
+	case valToType ty of
+		Nothing -> fail ("invalid handshake type: " ++ show ty)
+		Just t  -> return t
+
 {-
  - decode and encode headers
  -}
 decodeHeader :: ByteString -> Either TLSError Header
-decodeHeader = runGet $ do
-	ty <- getWord8
-	major <- getWord8
-	minor <- getWord8
+decodeHeader = runGetErr $ do
+	ty  <- getHeaderType
+	v   <- getVersion
 	len <- getWord16
-	case (valToType ty, verOfNum (major, minor)) of
-		(Just y, Just v) -> return $ Header y v len
-		(Nothing, _)     -> throwError (Error_Packet "invalid type")
-		(_, Nothing)     -> throwError (Error_Packet "invalid version")
+	return $ Header ty v len
 
 encodeHeader :: Header -> ByteString
-encodeHeader (Header pt ver len) =
+encodeHeader (Header pt ver len) = runPut (putHeaderType pt >> putVersion ver >> putWord16 len)
 	{- FIXME check len <= 2^14 -}
-	runPut (putWord8 (valOfType pt) >> putWord8 major >> putWord8 minor >> putWord16 len)
-	where (major, minor) = numericalVer ver
 
 encodeHeaderNoVer :: Header -> ByteString
-encodeHeaderNoVer (Header pt _ len) =
+encodeHeaderNoVer (Header pt _ len) = runPut (putHeaderType pt >> putWord16 len)
 	{- FIXME check len <= 2^14 -}
-	runPut (putWord8 (valOfType pt) >> putWord16 len)
 
 {-
  - decode and encode ALERT
  -}
-
 decodeAlert :: ByteString -> Either TLSError (AlertLevel, AlertDescription)
-decodeAlert = runGet $ do
+decodeAlert = runGetErr $ do
 	al <- getWord8
 	ad <- getWord8
 	case (valToType al, valToType ad) of
 		(Just a, Just d) -> return (a, d)
-		(Nothing, _)     -> throwError (Error_Packet "missing alert level")
-		(_, Nothing)     -> throwError (Error_Packet "missing alert description")
+		(Nothing, _)     -> fail "cannot decode alert level"
+		(_, Nothing)     -> fail "cannot decode alert description"
 
 encodeAlert :: (AlertLevel, AlertDescription) -> ByteString
 encodeAlert (al, ad) = runPut (putWord8 (valOfType al) >> putWord8 (valOfType ad))
@@ -98,16 +121,13 @@ encodeAlert (al, ad) = runPut (putWord8 (valOfType al) >> putWord8 (valOfType ad
 {- decode and encode HANDSHAKE -}
 decodeHandshakeHeader :: Get (HandshakeType, Bytes)
 decodeHandshakeHeader = do
-	tyopt <- getWord8 >>= return . valToType
-	ty <- if isNothing tyopt
-		then throwError (Error_Unknown_Type "handshake type")
-		else return $ fromJust tyopt
+	ty <- getHandshakeType
 	len <- getWord24
 	content <- getBytes len
 	return (ty, content)
 
 decodeHandshakes :: ByteString -> Either TLSError [(HandshakeType, Bytes)]
-decodeHandshakes b = runGet getAll b
+decodeHandshakes b = runGetErr getAll b
 	where
 		getAll = do
 			x <- decodeHandshakeHeader
@@ -117,7 +137,7 @@ decodeHandshakes b = runGet getAll b
 				else getAll >>= \l -> return (x : l)
 
 decodeHandshake :: Version -> HandshakeType -> ByteString -> Either TLSError Handshake
-decodeHandshake ver ty = runGet $ case ty of
+decodeHandshake ver ty = runGetErr $ case ty of
 	HandshakeType_HelloRequest    -> decodeHelloRequest
 	HandshakeType_ClientHello     -> decodeClientHello
 	HandshakeType_ServerHello     -> decodeServerHello
@@ -167,7 +187,7 @@ decodeCertificates = do
 	certs <- getCerts certslen >>= return . map (decodeCertificate . L.fromChunks . (:[]))
 	let (l, r) = partitionEithers certs
 	if length l > 0
-		then throwError $ Error_Certificate $ show l
+		then fail ("error certificate parsing: " ++ show l)
 		else return $ Certificates r
 
 decodeFinished :: Version -> Get Handshake
@@ -199,7 +219,7 @@ decodeCertRequest ver = do
 			Just <$> getSignatureHashAlgorithm (fromIntegral sighashlen)
 		else return Nothing
 	dNameLen <- getWord16
-	when (ver < TLS12 && dNameLen < 3) $ throwError (Error_Misc "certrequest distinguishname not of the correct size")
+	when (ver < TLS12 && dNameLen < 3) $ fail "certrequest distinguishname not of the correct size"
 	dName <- getBytes $ fromIntegral dNameLen
 	return $ CertRequest certTypes sigHashAlgs (B.unpack dName)
 
@@ -297,19 +317,6 @@ encodeHandshakeContent (CertVerify _) = undefined
 
 encodeHandshakeContent (Finished opaque) = mapM_ putWord8 opaque
 
-{- marshall helpers -}
-getVersion :: Get Version
-getVersion = do
-	major <- getWord8
-	minor <- getWord8
-	case verOfNum (major, minor) of
-		Just v   -> return v
-		Nothing  -> throwError (Error_Unknown_Version major minor)
-
-putVersion :: Version -> Put
-putVersion ver = putWord8 major >> putWord8 minor
-	where (major, minor) = numericalVer ver
-
 {- FIXME make sure it return error if not 32 available -}
 getRandom32 :: Get Bytes
 getRandom32 = getBytes 32
@@ -387,9 +394,9 @@ putExtensions (Just es) =
  -}
 
 decodeChangeCipherSpec :: ByteString -> Either TLSError ()
-decodeChangeCipherSpec = runGet $ do
+decodeChangeCipherSpec = runGetErr $ do
 	x <- getWord8
-	when (x /= 1) (throwError $ Error_Misc "unknown change cipher spec content")
+	when (x /= 1) (fail "unknown change cipher spec content")
 
 encodeChangeCipherSpec :: ByteString
 encodeChangeCipherSpec = runPut (putWord8 1)
