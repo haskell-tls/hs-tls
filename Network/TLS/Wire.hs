@@ -44,10 +44,6 @@ import Data.Word
 import Data.Bits
 import Network.TLS.Struct
 
-instance Error TLSError where
-	noMsg = Error_Misc ""
-	strMsg = Error_Misc
-
 newtype Get a = GE { runGE :: ErrorT TLSError G.Get a }
 	deriving (Monad, MonadError TLSError)
 

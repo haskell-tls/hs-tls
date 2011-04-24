@@ -48,6 +48,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as B (length)
 import Data.Word
 import Data.Certificate.X509
+import Control.Monad.Error (Error(..))
 
 type Bytes = ByteString
 
@@ -118,6 +119,11 @@ data TLSError =
 	| Error_Unknown_Version Word8 Word8
 	| Error_Unknown_Type String
 	deriving (Eq, Show)
+
+instance Error TLSError where
+	noMsg  = Error_Misc ""
+	strMsg = Error_Misc
+
 
 data Packet =
 	  Handshake Handshake
