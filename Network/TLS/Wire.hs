@@ -33,8 +33,6 @@ module Network.TLS.Wire
 
 import Data.Serialize.Get
 import Data.Serialize.Put
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as L
 import Control.Applicative ((<$>))
 import Control.Monad.Error
 import Data.Word
