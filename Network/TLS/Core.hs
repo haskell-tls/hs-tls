@@ -93,9 +93,9 @@ data TLSCtx = TLSCtx
 	}
 
 newCtx :: Handle -> TLSParams -> TLSState -> IO TLSCtx
-newCtx handle params state = do
+newCtx handle params st = do
 	hSetBuffering handle NoBuffering
-	stvar <- newMVar state
+	stvar <- newMVar st
 	return $ TLSCtx
 		{ ctxHandle = handle
 		, ctxParams = params
@@ -148,14 +148,14 @@ sendPacket ctx pkt = do
 -- | Create a new Client context with a configuration, a RNG, and a Handle.
 -- It reconfigures the handle buffermode to noBuffering
 client :: (MonadIO m, CryptoRandomGen g) => TLSParams -> g -> Handle -> m TLSCtx
-client params rng handle = liftIO $ newCtx handle params state
-	where state = (newTLSState rng) { stClientContext = True }
+client params rng handle = liftIO $ newCtx handle params st
+	where st = (newTLSState rng) { stClientContext = True }
 
 -- | Create a new Server context with a configuration, a RNG, and a Handle.
 -- It reconfigures the handle buffermode to noBuffering
 server :: (MonadIO m, CryptoRandomGen g) => TLSParams -> g -> Handle -> m TLSCtx
-server params rng handle = liftIO $ newCtx handle params state
-	where state = (newTLSState rng) { stClientContext = False }
+server params rng handle = liftIO $ newCtx handle params st
+	where st = (newTLSState rng) { stClientContext = False }
 
 -- | notify the context that this side wants to close connection.
 -- this is important that it is called before closing the handle, otherwise
