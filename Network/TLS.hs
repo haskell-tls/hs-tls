@@ -9,7 +9,9 @@ module Network.TLS
 	(
 	-- * Context configuration
 	  TLSParams(..)
+	, TLSLogging(..)
 	, defaultParams
+	, defaultLogging
 
 	-- * Context object
 	, TLSCtx

@@ -10,6 +10,8 @@ module Network.TLS.Core
 	(
 	-- * Context configuration
 	  TLSParams(..)
+	, TLSLogging(..)
+	, defaultLogging
 	, defaultParams
 
 	-- * Context object
@@ -53,6 +55,13 @@ import Control.Concurrent.MVar
 import Control.Monad.State
 import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush)
 
+data TLSLogging = TLSLogging
+	{ loggingPacketSent :: String -> IO ()
+	, loggingPacketRecv :: String -> IO ()
+	, loggingIOSent     :: Bytes -> IO ()
+	, loggingIORecv     :: Header -> Bytes -> IO ()
+	}
+
 data TLSParams = TLSParams
 	{ pConnectVersion    :: Version             -- ^ version to use on client connection.
 	, pAllowedVersions   :: [Version]           -- ^ allowed versions that we can use.
@@ -61,7 +70,16 @@ data TLSParams = TLSParams
 	, pWantClientCert    :: Bool                -- ^ request a certificate from client.
 	                                            -- use by server only.
 	, pCertificates      :: [(X509, Maybe PrivateKey)] -- ^ the cert chain for this context with the associated keys if any.
+	, pLogging           :: TLSLogging          -- ^ callback for logging
 	, onCertificatesRecv :: ([X509] -> IO Bool) -- ^ callback to verify received cert chain.
+	}
+
+defaultLogging :: TLSLogging
+defaultLogging = TLSLogging
+	{ loggingPacketSent = (\_ -> return ())
+	, loggingPacketRecv = (\_ -> return ())
+	, loggingIOSent     = (\_ -> return ())
+	, loggingIORecv     = (\_ _ -> return ())
 	}
 
 defaultParams :: TLSParams
@@ -72,6 +90,7 @@ defaultParams = TLSParams
 	, pCompressions      = [nullCompression]
 	, pWantClientCert    = False
 	, pCertificates      = []
+	, pLogging           = defaultLogging
 	, onCertificatesRecv = (\_ -> return True)
 	}
 
@@ -101,6 +120,9 @@ newCtx handle params st = do
 		, ctxParams = params
 		, ctxState  = stvar
 		}
+
+ctxLogging :: TLSCtx -> TLSLogging
+ctxLogging = pLogging . ctxParams
 
 usingState :: MonadIO m => TLSCtx -> TLSSt a -> m (Either TLSError a)
 usingState ctx f = liftIO (takeMVar mvar) >>= execAndStore
@@ -137,12 +159,19 @@ recvPacket ctx = do
 		Left err                          -> return $ Left err
 		Right header@(Header _ _ readlen) -> do
 			content <- liftIO $ B.hGet (ctxHandle ctx) (fromIntegral readlen)
-			usingState ctx $ readPacket header (EncryptedData content)
+			liftIO $ (loggingIORecv $ ctxLogging ctx) header content
+			pkt <- usingState ctx $ readPacket header (EncryptedData content)
+			case pkt of
+				Right p -> liftIO $ mapM_ ((loggingPacketRecv $ ctxLogging ctx) . show) p
+				_       -> return ()
+			return pkt
 
 -- | Send one packet to the context
 sendPacket :: MonadIO m => TLSCtx -> Packet -> m ()
 sendPacket ctx pkt = do
+	liftIO $ (loggingPacketSent $ ctxLogging ctx) (show pkt)
 	dataToSend <- usingState_ ctx $ writePacket pkt
+	liftIO $ (loggingIOSent $ ctxLogging ctx) dataToSend
 	liftIO $ B.hPut (ctxHandle ctx) dataToSend
 
 -- | Create a new Client context with a configuration, a RNG, and a Handle.
