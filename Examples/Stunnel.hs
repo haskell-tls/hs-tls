@@ -125,6 +125,7 @@ data Stunnel =
 		, destination     :: String
 		, sourceType      :: String
 		, source          :: String
+		, debug           :: Bool
 		, validCert       :: Bool }
 	| Server
 		{ destinationType :: String
@@ -140,6 +141,7 @@ clientOpts = Client
 	, destination     = "localhost:6061"  &= help "destination address influenced by destination type" &= typ "ADDRESS"
 	, sourceType      = "tcp"             &= help "type of source (tcp, unix, fd)" &= typ "SOURCETYPE"
 	, source          = "localhost:6060"  &= help "source address influenced by source type" &= typ "ADDRESS"
+	, debug           = False             &= help "debug the TLS protocol printing debugging to stdout" &= typ "Bool"
 	, validCert       = False             &= help "check if the certificate receive is valid" &= typ "Bool"
 	}
 	&= help "connect to a remote destination that use SSL/TLS"
@@ -208,12 +210,18 @@ doClient pargs = do
 	srcaddr <- getAddressDescription (sourceType pargs) (source pargs)
 	dstaddr <- getAddressDescription (destinationType pargs) (destination pargs)
 
+	let logging = if not $ debug pargs then defaultLogging else defaultLogging
+		{ loggingPacketSent = putStrLn . ("debug: send: " ++)
+		, loggingPacketRecv = putStrLn . ("debug: recv: " ++)
+		}
+
 	let crecv = if validCert pargs then certificateVerifyChain else (\_ -> return True)
 	let clientstate = defaultParams
 		{ pConnectVersion = TLS10
 		, pAllowedVersions = [ TLS10, TLS11 ]
 		, pCiphers = ciphers
 		, pCertificates = []
+		, pLogging = logging
 		, onCertificatesRecv = crecv
 		}
 
@@ -260,5 +268,5 @@ main :: IO ()
 main = do
 	x <- cmdArgsRun mode
 	case x of
-		Client _ _ _ _ _   -> doClient x
+		Client _ _ _ _ _ _ -> doClient x
 		Server _ _ _ _ _ _ -> doServer x
