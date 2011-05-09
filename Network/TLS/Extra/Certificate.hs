@@ -24,7 +24,6 @@ import qualified Crypto.Hash.MD5 as MD5
 import qualified Crypto.Cipher.RSA as RSA
 import qualified Crypto.Cipher.DSA as DSA
 
-import Data.Text.Lazy (unpack)
 import Data.Certificate.X509Cert (oidCommonName)
 
 #if defined(NOCERTVERIFY)
@@ -70,7 +69,7 @@ certificateVerifyChain l
 					then certificateVerifyChain $ tail l
 					else return False
 	where
-		matchsysX509 (X509 cert _ _ _) (X509 syscert _ _ _) = do
+		matchsysX509 (X509 cert _ _ _ _) (X509 syscert _ _ _ _) = do
 			let x = certSubjectDN syscert
 			let y = certIssuerDN cert
 			x == y
@@ -79,7 +78,7 @@ certificateVerifyChain l
 -- | verify a certificate against another one.
 -- the first certificate need to be signed by the second one for this function to succeed.
 certificateVerifyAgainst :: X509 -> X509 -> IO Bool
-certificateVerifyAgainst ux509@(X509 _ _ sigalg sig) (X509 scert _ _ _) = do
+certificateVerifyAgainst ux509@(X509 _ _ _ sigalg sig) (X509 scert _ _ _ _) = do
 	let f = verifyF sigalg pk
 	case f udata esig of
 		Right True -> return True
@@ -113,7 +112,7 @@ verifyF SignatureALG_dsaWithSHA1 (PubKeyDSA (pub,p,q,g)) = dsaSHA1Verify pk
 			
 verifyF _ _ = (\_ _ -> Left "unexpected/wrong signature")
 
-dsaSHA1Verify pk a b = either (Left . show) (Right) $ DSA.verify asig SHA1.hash pk b
+dsaSHA1Verify pk _ b = either (Left . show) (Right) $ DSA.verify asig SHA1.hash pk b
 	where asig = (0,0) {- FIXME : need to work out how to get R/S from the bytestring a -}
 
 rsaVerify h hdesc pk a b = either (Left . show) (Right) $ RSA.verify h hdesc pk a b
@@ -124,10 +123,10 @@ mkRSA (lenmodulus, modulus, e) =
 -- | Verify that the given certificate chain is application to the given fully qualified host name.
 certificateVerifyDomain :: String -> [X509] -> Bool
 certificateVerifyDomain _      []                  = False
-certificateVerifyDomain fqhn (X509 cert _ _ _:_) =
+certificateVerifyDomain fqhn (X509 cert _ _ _ _:_) =
 	case lookup oidCommonName $ certSubjectDN cert of
 		Nothing       -> False
-		Just (_, val) -> matchDomain (splitDot $ unpack val)
+		Just (_, val) -> matchDomain (splitDot val)
 	where
 		matchDomain l
 			| length (filter (== "") l) > 0 = False
