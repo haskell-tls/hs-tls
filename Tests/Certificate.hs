@@ -45,4 +45,4 @@ arbitraryX509 pubKey = do
 	cert <- arbitraryX509Cert pubKey
 	sig  <- resize 40 $ listOf1 arbitrary
 	let sigalg = X509.SignatureALG_md5WithRSAEncryption
-	return (X509.X509 cert Nothing sigalg sig)
+	return (X509.X509 cert Nothing Nothing sigalg sig)

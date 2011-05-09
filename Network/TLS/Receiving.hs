@@ -218,7 +218,7 @@ decryptData (EncryptedData econtent) = do
 
 processCertificates :: [X509] -> TLSSt ()
 processCertificates certs = do
-	let (X509 mainCert _ _ _) = head certs
+	let (X509 mainCert _ _ _ _) = head certs
 	case certPubKey mainCert of
 		PubKeyRSA (lm, m, e) -> do
 			let pk = PubRSA (RSA.PublicKey { RSA.public_sz = fromIntegral lm, RSA.public_n = m, RSA.public_e = e })
