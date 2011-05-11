@@ -73,8 +73,8 @@ data CertificateType =
 	| CertificateType_DSS_Sign         -- TLS10
 	| CertificateType_RSA_Fixed_DH     -- TLS10
 	| CertificateType_DSS_Fixed_DH     -- TLS10
-	| CertificateType_RSA_Ephemeral_dh -- TLS12
-	| CertificateType_DSS_Ephemeral_dh -- TLS12
+	| CertificateType_RSA_Ephemeral_DH -- TLS12
+	| CertificateType_DSS_Ephemeral_DH -- TLS12
 	| CertificateType_fortezza_dms     -- TLS12
 	| CertificateType_Unknown Word8
 	deriving (Show,Eq)
@@ -386,8 +386,8 @@ instance TypeValuable CertificateType where
 	valOfType CertificateType_DSS_Sign         = 2
 	valOfType CertificateType_RSA_Fixed_DH     = 3
 	valOfType CertificateType_DSS_Fixed_DH     = 4
-	valOfType CertificateType_RSA_Ephemeral_dh = 5
-	valOfType CertificateType_DSS_Ephemeral_dh = 6
+	valOfType CertificateType_RSA_Ephemeral_DH = 5
+	valOfType CertificateType_DSS_Ephemeral_DH = 6
 	valOfType CertificateType_fortezza_dms     = 20
 	valOfType (CertificateType_Unknown i)      = i
 
@@ -395,8 +395,8 @@ instance TypeValuable CertificateType where
 	valToType 2  = Just CertificateType_DSS_Sign
 	valToType 3  = Just CertificateType_RSA_Fixed_DH
 	valToType 4  = Just CertificateType_DSS_Fixed_DH
-	valToType 5  = Just CertificateType_RSA_Ephemeral_dh
-	valToType 6  = Just CertificateType_DSS_Ephemeral_dh
+	valToType 5  = Just CertificateType_RSA_Ephemeral_DH
+	valToType 6  = Just CertificateType_DSS_Ephemeral_DH
 	valToType 20 = Just CertificateType_fortezza_dms
 	valToType i  = Just (CertificateType_Unknown i)
 
