@@ -3,7 +3,7 @@
 import Test.QuickCheck
 import Test.QuickCheck.Test
 
-import Tests.Certificate
+--import Tests.Certificate
 
 import Data.Word
 import Data.Certificate.X509
@@ -76,7 +76,7 @@ instance Arbitrary Handshake where
 	arbitrary = oneof
 		[ liftM6 ClientHello arbitrary arbitrary arbitrary arbitraryCiphersIDs arbitraryCompressionIDs (return Nothing)
 		, liftM6 ServerHello arbitrary arbitrary arbitrary arbitrary arbitrary (return Nothing)
-		, liftM Certificates (resize 2 $ listOf $ arbitraryX509 pubkey)
+		--, liftM Certificates (resize 2 $ listOf $ arbitraryX509 pubkey)
 		, return HelloRequest
 		, return ServerHelloDone
 		, liftM2 ClientKeyXchg arbitrary arbitrary
