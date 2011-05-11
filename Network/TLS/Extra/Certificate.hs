@@ -11,6 +11,7 @@ module Network.TLS.Extra.Certificate
 	, certificateVerifyAgainst
 	, certificateVerifyDomain
 	, certificateVerifyValidity
+	, certificateFingerprint
 	) where
 
 import qualified Data.ByteString as B
@@ -159,3 +160,6 @@ certificateVerifyValidity _ []                         = False
 certificateVerifyValidity ctime (X509 cert _ _ _ _ :_) =
 	let ((beforeDay,_,_) , (afterDay,_,_)) = certValidity cert in
 	beforeDay < ctime && ctime <= afterDay
+
+certificateFingerprint :: (L.ByteString -> B.ByteString) -> X509 -> B.ByteString
+certificateFingerprint hash x509 = hash $ getSigningData x509
