@@ -10,6 +10,7 @@ module Network.TLS.Extra.Certificate
 	( certificateVerifyChain
 	, certificateVerifyAgainst
 	, certificateVerifyDomain
+	, certificateVerifyValidity
 	) where
 
 import qualified Data.ByteString as B
@@ -25,6 +26,8 @@ import qualified Crypto.Cipher.RSA as RSA
 import qualified Crypto.Cipher.DSA as DSA
 
 import Data.Certificate.X509Cert (oidCommonName)
+
+import Data.Time.Calendar
 
 #if defined(NOCERTVERIFY)
 
@@ -149,3 +152,10 @@ certificateVerifyDomain fqhn (X509 cert _ _ _ _:_) =
 		splitDot x  =
 			let (y, z) = break (== '.') x in
 			y : (if z == "" then [] else splitDot $ drop 1 z)
+
+-- Maybe should verify whole chain
+certificateVerifyValidity :: Day -> [X509] -> Bool
+certificateVerifyValidity _ []                         = False
+certificateVerifyValidity ctime (X509 cert _ _ _ _ :_) =
+	let ((beforeDay,_,_) , (afterDay,_,_)) = certValidity cert in
+	beforeDay < ctime && ctime <= afterDay
