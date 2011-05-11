@@ -6,6 +6,8 @@ import Test.QuickCheck
 import qualified Data.Certificate.X509 as X509
 import qualified Data.Certificate.X509Cert as X509Cert
 import Control.Monad
+import Data.Time.Calendar
+import Data.Time.Clock (secondsToDiffTime)
 
 readableChar :: Gen Char
 readableChar = elements (['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'])
@@ -16,11 +18,13 @@ arbitraryTime = do
 	year   <- choose (1951, 2050)
 	month  <- choose (1, 12)
 	day    <- choose (1, 30)
+	let days = fromGregorian year month day
 	hour   <- choose (0, 23)
 	minute <- choose (0, 59)
 	second <- choose (0, 59)
+	let seconds = secondsToDiffTime (hour * 3600 + minute * 60 + second)
 	z      <- arbitrary
-	return (year, month, day, hour, minute, second, z)
+	return (days, seconds, z)
 
 arbitraryX509Cert pubKey = do
 	version   <- choose (1,3)
