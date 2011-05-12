@@ -161,14 +161,18 @@ recvPacket ctx = do
 	hdr <- (liftIO $ B.hGet (ctxHandle ctx) 5) >>= return . decodeHeader
 	case hdr of
 		Left err                          -> return $ Left err
-		Right header@(Header _ _ readlen) -> do
-			content <- liftIO $ B.hGet (ctxHandle ctx) (fromIntegral readlen)
-			liftIO $ (loggingIORecv $ ctxLogging ctx) header content
-			pkt <- usingState ctx $ readPacket header (EncryptedData content)
-			case pkt of
-				Right p -> liftIO $ mapM_ ((loggingPacketRecv $ ctxLogging ctx) . show) p
-				_       -> return ()
-			return pkt
+		Right header@(Header _ _ readlen) ->
+			if readlen > (16384 + 2048)
+				then return $ Left $ Error_Protocol ("record exceeding maximum size",True, RecordOverflow)
+				else recvLength header readlen
+	where recvLength header readlen = do
+		content <- liftIO $ B.hGet (ctxHandle ctx) (fromIntegral readlen)
+		liftIO $ (loggingIORecv $ ctxLogging ctx) header content
+		pkt <- usingState ctx $ readPacket header (EncryptedData content)
+		case pkt of
+			Right p -> liftIO $ mapM_ ((loggingPacketRecv $ ctxLogging ctx) . show) p
+			_       -> return ()
+		return pkt
 
 -- | Send one packet to the context
 sendPacket :: MonadIO m => TLSCtx -> Packet -> m ()
