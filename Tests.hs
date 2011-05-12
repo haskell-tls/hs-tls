@@ -66,7 +66,7 @@ instance Arbitrary CertificateType where
 	arbitrary = elements
 		[ CertificateType_RSA_Sign, CertificateType_DSS_Sign
 		, CertificateType_RSA_Fixed_DH, CertificateType_DSS_Fixed_DH
-		, CertificateType_RSA_Ephemeral_dh, CertificateType_DSS_Ephemeral_dh
+		, CertificateType_RSA_Ephemeral_DH, CertificateType_DSS_Ephemeral_DH
 		, CertificateType_fortezza_dms ]
 
 -- we hardcode the pubkey for generated X509. at later stage this will be generated as well.
