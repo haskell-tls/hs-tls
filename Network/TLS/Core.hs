@@ -53,6 +53,7 @@ import Crypto.Random
 import Control.Applicative ((<$>))
 import Control.Concurrent.MVar
 import Control.Monad.State
+import Control.Exception (throwIO, Exception())
 import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush)
 
 data TLSLogging = TLSLogging
@@ -110,6 +111,9 @@ data TLSCtx = TLSCtx
 	, ctxParams :: TLSParams
 	, ctxState  :: MVar TLSState
 	}
+
+throwCore :: (MonadIO m, Exception e) => e -> m a
+throwCore = liftIO . throwIO
 
 newCtx :: Handle -> TLSParams -> TLSState -> IO TLSCtx
 newCtx handle params st = do
