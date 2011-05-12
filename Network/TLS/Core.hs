@@ -256,7 +256,7 @@ handshakeClient ctx = do
 				Nothing -> error ("received version which is not allowed: " ++ show ver)
 				Just _  -> usingState_ ctx $ setVersion ver
 			case find ((==) cipher . cipherID) ciphers of
-				Nothing -> error "no cipher in common with the server"
+				Nothing -> throwCore $ Error_Protocol ("no cipher in common with the server", True, HandshakeFailure)
 				Just c  -> usingState_ ctx $ setCipher c
 
 		processServerInfo (Handshake (CertRequest _ _ _)) = do
