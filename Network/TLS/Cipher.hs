@@ -42,6 +42,7 @@ data CipherKeyExchangeType =
 	| CipherKeyExchange_ECDH_ECDSA
 	| CipherKeyExchange_ECDH_RSA
 	| CipherKeyExchange_ECDHE_ECDSA
+	deriving (Show,Eq)
 
 -- | Cipher algorithm
 data Cipher = Cipher
