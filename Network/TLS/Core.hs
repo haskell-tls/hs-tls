@@ -379,6 +379,11 @@ recvData ctx = do
 		-- on client context, receiving a hello request == renegociation
 		Right [Handshake HelloRequest] ->
 			handshakeClient ctx >> recvData ctx
+		Right [Alert (AlertLevel_Fatal, _)] ->
+			-- close the connection
+			return L.empty
+		Right [Alert (AlertLevel_Warning, CloseNotify)] -> do
+			return L.empty
 		Right l           -> do
 			let dat = map getAppData l
 			when (length dat < length l) $ error "error mixed type packet"
