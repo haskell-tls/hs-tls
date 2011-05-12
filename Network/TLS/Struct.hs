@@ -111,9 +111,9 @@ data ProtocolType =
 -- | TLSError that might be returned through the TLS stack
 data TLSError =
 	  Error_Misc String        -- ^ mainly for instance of Error
+	| Error_Protocol (String, Bool, AlertDescription)
 	| Error_Certificate String
 	| Error_Random String
-	| Error_Digest ([Word8], [Word8])
 	| Error_Packet String
 	| Error_Packet_Size_Mismatch (Int, Int)
 	| Error_Packet_unexpected String String
