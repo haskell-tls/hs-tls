@@ -1,4 +1,5 @@
 {-# OPTIONS_HADDOCK hide #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 -- |
 -- Module      : Network.TLS.Struct
 -- License     : BSD-style
@@ -48,7 +49,9 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as B (length)
 import Data.Word
 import Data.Certificate.X509
+import Data.Typeable
 import Control.Monad.Error (Error(..))
+import Control.Exception (Exception(..))
 
 type Bytes = ByteString
 
@@ -118,12 +121,13 @@ data TLSError =
 	| Error_Internal_Packet_ByteProcessed Int Int Int
 	| Error_Unknown_Version Word8 Word8
 	| Error_Unknown_Type String
-	deriving (Eq, Show)
+	deriving (Eq, Show, Typeable)
 
 instance Error TLSError where
 	noMsg  = Error_Misc ""
 	strMsg = Error_Misc
 
+instance Exception TLSError
 
 data Packet =
 	  Handshake Handshake
