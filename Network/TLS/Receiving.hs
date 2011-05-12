@@ -18,7 +18,6 @@ import Control.Monad.State
 import Control.Monad.Error
 
 import Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString as B
 
 import Network.TLS.Util
