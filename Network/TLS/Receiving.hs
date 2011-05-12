@@ -78,7 +78,7 @@ processHandshake :: Version -> HandshakeType -> ByteString -> TLSSt Packet
 processHandshake ver ty econtent = do
 	-- SECURITY FIXME if RSA fail, we need to generate a random master secret and not fail.
 	e <- updateStatusHs ty
-	when (isJust e) $ throwError (fromJust "" e)
+	maybe (return ()) throwError e
 
 	keyxchg <- getCipherKeyExchangeType
 	let currentparams = CurrentParams
