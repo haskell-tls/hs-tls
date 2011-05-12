@@ -110,7 +110,7 @@ data ProtocolType =
 
 -- | TLSError that might be returned through the TLS stack
 data TLSError =
-	  Error_Misc String
+	  Error_Misc String        -- ^ mainly for instance of Error
 	| Error_Certificate String
 	| Error_Random String
 	| Error_Digest ([Word8], [Word8])
@@ -168,7 +168,7 @@ data AlertDescription =
 	  CloseNotify
 	| UnexpectedMessage
 	| BadRecordMac
-	| DecryptionFailed
+	| DecryptionFailed       -- ^ deprecated alert, should never be sent by compliant implementation
 	| RecordOverflow
 	| DecompressionFailure
 	| HandshakeFailure
