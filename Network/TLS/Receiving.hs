@@ -128,8 +128,7 @@ processClientFinished fdata = do
 	cc <- stClientContext <$> get
 	expected <- getHandshakeDigest (not cc)
 	when (expected /= B.pack fdata) $ do
-		-- FIXME don't fail, but report the error so that the code can send a BadMac Alert.
-		fail ("client mac failure: expecting " ++ show expected ++ " received " ++ (show $L.pack fdata))
+		throwError $ Error_Protocol( "bad record mac", True, BadRecordMac)
 	return ()
 
 decryptContent :: Header -> EncryptedData -> TLSSt ByteString
@@ -163,7 +162,7 @@ getCipherData hdr cdata = do
 				else return $ maybe True (const False) $ B.find (/= fromIntegral b) pad
 
 	unless (and $! [ macValid, paddingValid ]) $ do
-		throwError $ Error_Digest ([], [])
+		throwError $ Error_Protocol ("bad record mac", True, BadRecordMac)
 
 	return $ cipherDataContent cdata
 
