@@ -84,6 +84,7 @@ getHeaderType = do
 		Nothing -> fail ("invalid header type: " ++ show ty)
 		Just t  -> return t
 
+putHeaderType :: ProtocolType -> Put
 putHeaderType = putWord8 . valOfType
 
 getHandshakeType :: Get HandshakeType
