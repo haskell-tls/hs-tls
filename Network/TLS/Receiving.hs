@@ -81,10 +81,15 @@ processHandshake ver ty econtent = do
 	e <- updateStatusHs ty
 	when (isJust e) $ throwError (fromJust "" e)
 
+	keyxchg <- getCipherKeyExchangeType
+	let currentparams = CurrentParams
+		{ cParamsVersion     = ver
+		, cParamsKeyXchgType = maybe CipherKeyExchange_RSA id $ keyxchg
+		}
 	content <- case ty of
 		HandshakeType_ClientKeyXchg -> either (const econtent) id <$> decryptRSA econtent
 		_                           -> return econtent
-	hs <- case (ty, decodeHandshake ver ty content) of
+	hs <- case (ty, decodeHandshake currentparams ty content) of
 		(_, Right x)                          -> return x
 		(HandshakeType_ClientKeyXchg, Left _) -> return $ ClientKeyXchg SSL2 (ClientKeyData $ B.replicate 46 0xff)
 		(_, Left err)                         -> throwError err

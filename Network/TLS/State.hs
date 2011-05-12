@@ -36,6 +36,7 @@ module Network.TLS.State
 	, setServerRandom
 	, switchTxEncryption
 	, switchRxEncryption
+	, getCipherKeyExchangeType
 	, isClientContext
 	, startHandshakeClient
 	, updateHandshakeDigest
@@ -328,6 +329,9 @@ setCipher cipher = modify (\st -> st { stCipher = Just cipher })
 
 setVersion :: MonadState TLSState m => Version -> m ()
 setVersion ver = modify (\st -> st { stVersion = ver })
+
+getCipherKeyExchangeType :: MonadState TLSState m => m (Maybe CipherKeyExchangeType)
+getCipherKeyExchangeType = get >>= return . (maybe Nothing (Just . cipherKeyExchange) . stCipher)
 
 isClientContext :: MonadState TLSState m => m Bool
 isClientContext = get >>= return . stClientContext

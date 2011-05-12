@@ -9,6 +9,7 @@ import Data.Word
 import Data.Certificate.X509
 
 import qualified Data.ByteString as B
+import Network.TLS.Cipher
 import Network.TLS.Struct
 import Network.TLS.Packet
 import Control.Monad
@@ -91,7 +92,8 @@ instance Arbitrary Handshake where
 prop_header_marshalling_id x = (decodeHeader $ encodeHeader x) == Right x
 prop_handshake_marshalling_id x = (decodeHs $ encodeHandshake x) == Right x
 	where
-		decodeHs b = either (Left . id) (uncurry (decodeHandshake TLS10) . head) $ decodeHandshakes b
+		decodeHs b = either (Left . id) (uncurry (decodeHandshake cp) . head) $ decodeHandshakes b
+		cp = CurrentParams { cParamsVersion = TLS10, cParamsKeyXchgType = CipherKeyExchange_RSA }
 
 myQuickCheckArgs = stdArgs
 	{ replay     = Nothing

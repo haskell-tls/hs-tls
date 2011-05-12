@@ -11,8 +11,10 @@
 --
 module Network.TLS.Packet
 	(
+	-- * params for encoding and decoding
+	  CurrentParams(..)
 	-- * marshall functions for header messages
-	  decodeHeader
+	, decodeHeader
 	, encodeHeader
 	, encodeHeaderNoVer -- use for SSL3
 
@@ -48,10 +50,16 @@ import Control.Monad
 import Data.Certificate.X509
 import Network.TLS.Crypto
 import Network.TLS.MAC
+import Network.TLS.Cipher (CipherKeyExchangeType(..))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as L
+
+data CurrentParams = CurrentParams
+	{ cParamsVersion     :: Version               -- ^ current protocol version
+	, cParamsKeyXchgType :: CipherKeyExchangeType -- ^ current key exchange type
+	} deriving (Show,Eq)
 
 runGetErr :: Get a -> ByteString -> Either TLSError a
 runGetErr f = either (Left . Error_Packet_Parsing) Right . runGet f
@@ -136,18 +144,18 @@ decodeHandshakes b = runGetErr getAll b
 				then return [x]
 				else getAll >>= \l -> return (x : l)
 
-decodeHandshake :: Version -> HandshakeType -> ByteString -> Either TLSError Handshake
-decodeHandshake ver ty = runGetErr $ case ty of
+decodeHandshake :: CurrentParams -> HandshakeType -> ByteString -> Either TLSError Handshake
+decodeHandshake cp ty = runGetErr $ case ty of
 	HandshakeType_HelloRequest    -> decodeHelloRequest
 	HandshakeType_ClientHello     -> decodeClientHello
 	HandshakeType_ServerHello     -> decodeServerHello
 	HandshakeType_Certificate     -> decodeCertificates
-	HandshakeType_ServerKeyXchg   -> decodeServerKeyXchg ver
-	HandshakeType_CertRequest     -> decodeCertRequest ver
+	HandshakeType_ServerKeyXchg   -> decodeServerKeyXchg cp
+	HandshakeType_CertRequest     -> decodeCertRequest cp
 	HandshakeType_ServerHelloDone -> decodeServerHelloDone
 	HandshakeType_CertVerify      -> decodeCertVerify
 	HandshakeType_ClientKeyXchg   -> decodeClientKeyXchg
-	HandshakeType_Finished        -> decodeFinished ver
+	HandshakeType_Finished        -> decodeFinished cp
 
 decodeHelloRequest :: Get Handshake
 decodeHelloRequest = return HelloRequest
@@ -190,13 +198,13 @@ decodeCertificates = do
 		then fail ("error certificate parsing: " ++ show l)
 		else return $ Certificates r
 
-decodeFinished :: Version -> Get Handshake
-decodeFinished ver = do
+decodeFinished :: CurrentParams -> Get Handshake
+decodeFinished cp = do
 	-- unfortunately passing the verify_data_size here would be tedious for >=TLS12,
 	-- so just return the remaining string.
-	len <- if ver >= TLS12
+	len <- if cParamsVersion cp >= TLS12
 		then remaining
-		else if ver == SSL3 then return 36
+		else if cParamsVersion cp == SSL3 then return 36
 			else return 12
 	opaque <- getBytes (fromIntegral len)
 	return $ Finished $ B.unpack opaque
@@ -209,17 +217,17 @@ getSignatureHashAlgorithm len = do
 	xs <- getSignatureHashAlgorithm (len - 2)
 	return ((h, s) : xs)
 
-decodeCertRequest :: Version -> Get Handshake
-decodeCertRequest ver = do
+decodeCertRequest :: CurrentParams -> Get Handshake
+decodeCertRequest cp = do
 	certTypes <- map (fromJust . valToType . fromIntegral) <$> getWords8
 
-	sigHashAlgs <- if ver >= TLS12
+	sigHashAlgs <- if cParamsVersion cp >= TLS12
 		then do
 			sighashlen <- getWord16
 			Just <$> getSignatureHashAlgorithm (fromIntegral sighashlen)
 		else return Nothing
 	dNameLen <- getWord16
-	when (ver < TLS12 && dNameLen < 3) $ fail "certrequest distinguishname not of the correct size"
+	when (cParamsVersion cp < TLS12 && dNameLen < 3) $ fail "certrequest distinguishname not of the correct size"
 	dName <- getBytes $ fromIntegral dNameLen
 	return $ CertRequest certTypes sigHashAlgs (B.unpack dName)
 
@@ -251,10 +259,10 @@ decodeServerKeyXchg_RSA = do
 	expo <- getWord16 >>= getBytes . fromIntegral
 	return $ ServerRSAParams { rsa_modulus = numberise modulus, rsa_exponent = numberise expo }
 
-decodeServerKeyXchg :: Version -> Get Handshake
-decodeServerKeyXchg ver = do
+decodeServerKeyXchg :: CurrentParams -> Get Handshake
+decodeServerKeyXchg cp = do
 	-- mostly unimplemented
-	skxAlg <- case ver of
+	skxAlg <- case cParamsVersion cp of
 		TLS12 -> return $ SKX_RSA Nothing
 		TLS10 -> do
 			rsaparams <- decodeServerKeyXchg_RSA
