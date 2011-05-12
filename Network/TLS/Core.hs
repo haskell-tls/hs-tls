@@ -251,6 +251,7 @@ handshakeClient ctx = do
 		clientCerts  = map fst $ pCertificates params
 
 		processServerInfo (Handshake (ServerHello rver _ _ cipher _ _)) = do
+			when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
 			case find ((==) rver) allowedvers of
 				Nothing -> error ("received version which is not allowed: " ++ show ver)
 				Just _  -> usingState_ ctx $ setVersion ver
