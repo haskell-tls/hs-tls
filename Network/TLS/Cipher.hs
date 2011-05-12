@@ -33,15 +33,15 @@ data CipherTypeFunctions =
 	                (IV -> B.ByteString -> (B.ByteString, IV))
 
 data CipherKeyExchangeType =
-	  CipherKeyExchangeRSA
-	| CipherKeyExchangeDHE_RSA
-	| CipherKeyExchangeECDHE_RSA
-	| CipherKeyExchangeDHE_DSS
-	| CipherKeyExchangeDH_DSS
-	| CipherKeyExchangeDH_RSA
-	| CipherKeyExchangeECDH_ECDSA
-	| CipherKeyExchangeECDH_RSA
-	| CipherKeyExchangeECDHE_ECDSA
+	  CipherKeyExchange_RSA
+	| CipherKeyExchange_DHE_RSA
+	| CipherKeyExchange_ECDHE_RSA
+	| CipherKeyExchange_DHE_DSS
+	| CipherKeyExchange_DH_DSS
+	| CipherKeyExchange_DH_RSA
+	| CipherKeyExchange_ECDH_ECDSA
+	| CipherKeyExchange_ECDH_RSA
+	| CipherKeyExchange_ECDHE_ECDSA
 
 -- | Cipher algorithm
 data Cipher = Cipher
@@ -65,12 +65,12 @@ instance Eq Cipher where
 	(==) c1 c2 = cipherID c1 == cipherID c2
 
 cipherExchangeNeedMoreData :: CipherKeyExchangeType -> Bool
-cipherExchangeNeedMoreData CipherKeyExchangeRSA         = False
-cipherExchangeNeedMoreData CipherKeyExchangeDHE_RSA     = True
-cipherExchangeNeedMoreData CipherKeyExchangeECDHE_RSA   = True
-cipherExchangeNeedMoreData CipherKeyExchangeDHE_DSS     = True
-cipherExchangeNeedMoreData CipherKeyExchangeDH_DSS      = False
-cipherExchangeNeedMoreData CipherKeyExchangeDH_RSA      = False
-cipherExchangeNeedMoreData CipherKeyExchangeECDH_ECDSA  = True
-cipherExchangeNeedMoreData CipherKeyExchangeECDH_RSA    = True
-cipherExchangeNeedMoreData CipherKeyExchangeECDHE_ECDSA = True
+cipherExchangeNeedMoreData CipherKeyExchange_RSA         = False
+cipherExchangeNeedMoreData CipherKeyExchange_DHE_RSA     = True
+cipherExchangeNeedMoreData CipherKeyExchange_ECDHE_RSA   = True
+cipherExchangeNeedMoreData CipherKeyExchange_DHE_DSS     = True
+cipherExchangeNeedMoreData CipherKeyExchange_DH_DSS      = False
+cipherExchangeNeedMoreData CipherKeyExchange_DH_RSA      = False
+cipherExchangeNeedMoreData CipherKeyExchange_ECDH_ECDSA  = True
+cipherExchangeNeedMoreData CipherKeyExchange_ECDH_RSA    = True
+cipherExchangeNeedMoreData CipherKeyExchange_ECDHE_ECDSA = True
