@@ -103,7 +103,7 @@ cipher_null_null = Cipher
 	, cipherKeyBlockSize = 0
 	, cipherPaddingSize  = 0
 	, cipherMACHash      = (const B.empty)
-	, cipherKeyExchange  = CipherKeyExchangeRSA
+	, cipherKeyExchange  = CipherKeyExchange_RSA
 	, cipherF            = CipherNoneF
 	, cipherMinVer       = Nothing
 	}
@@ -119,7 +119,7 @@ cipher_null_MD5 = Cipher
 	, cipherKeyBlockSize = 2 * (16 + 0 + 0)
 	, cipherPaddingSize  = 0
 	, cipherMACHash      = MD5.hash
-	, cipherKeyExchange  = CipherKeyExchangeRSA
+	, cipherKeyExchange  = CipherKeyExchange_RSA
 	, cipherF            = CipherNoneF
 	, cipherMinVer       = Nothing
 	}
@@ -135,7 +135,7 @@ cipher_null_SHA1 = Cipher
 	, cipherKeyBlockSize = 2 * (20 + 0 + 0)
 	, cipherPaddingSize  = 0
 	, cipherMACHash      = SHA1.hash
-	, cipherKeyExchange  = CipherKeyExchangeRSA
+	, cipherKeyExchange  = CipherKeyExchange_RSA
 	, cipherF            = CipherNoneF
 	, cipherMinVer       = Nothing
 	}
@@ -151,7 +151,7 @@ cipher_RC4_128_MD5 = Cipher
 	, cipherKeyBlockSize = 2 * (16 + 16 + 0)
 	, cipherPaddingSize  = 0
 	, cipherMACHash      = MD5.hash
-	, cipherKeyExchange  = CipherKeyExchangeRSA
+	, cipherKeyExchange  = CipherKeyExchange_RSA
 	, cipherF            = CipherStreamF initF_rc4 encryptF_rc4 decryptF_rc4
 	, cipherMinVer       = Nothing
 	}
@@ -167,7 +167,7 @@ cipher_RC4_128_SHA1 = Cipher
 	, cipherKeyBlockSize = 2 * (20 + 16 + 0)
 	, cipherPaddingSize  = 0
 	, cipherMACHash      = SHA1.hash
-	, cipherKeyExchange  = CipherKeyExchangeRSA
+	, cipherKeyExchange  = CipherKeyExchange_RSA
 	, cipherF            = CipherStreamF initF_rc4 encryptF_rc4 decryptF_rc4
 	, cipherMinVer       = Nothing
 	}
@@ -183,7 +183,7 @@ cipher_AES128_SHA1 = Cipher
 	, cipherKeyBlockSize = 2 * (20 + 16 + 16)
 	, cipherPaddingSize  = 16
 	, cipherMACHash      = SHA1.hash
-	, cipherKeyExchange  = CipherKeyExchangeRSA
+	, cipherKeyExchange  = CipherKeyExchange_RSA
 	, cipherF            = CipherBlockF aes128_cbc_encrypt aes128_cbc_decrypt
 	, cipherMinVer       = Just SSL3
 	}
@@ -199,7 +199,7 @@ cipher_AES256_SHA1 = Cipher
 	, cipherKeyBlockSize = 2 * (20 + 32 + 16)
 	, cipherPaddingSize  = 16
 	, cipherMACHash      = SHA1.hash
-	, cipherKeyExchange  = CipherKeyExchangeRSA
+	, cipherKeyExchange  = CipherKeyExchange_RSA
 	, cipherF            = CipherBlockF aes256_cbc_encrypt aes256_cbc_decrypt
 	, cipherMinVer       = Just SSL3
 	}
@@ -215,7 +215,7 @@ cipher_AES128_SHA256 = Cipher
 	, cipherKeyBlockSize = 2 * (32 + 16 + 16)
 	, cipherPaddingSize  = 16
 	, cipherMACHash      = SHA256.hash
-	, cipherKeyExchange  = CipherKeyExchangeRSA
+	, cipherKeyExchange  = CipherKeyExchange_RSA
 	, cipherF            = CipherBlockF aes128_cbc_encrypt aes128_cbc_decrypt
 	, cipherMinVer       = Just TLS12
 	}
@@ -231,7 +231,7 @@ cipher_AES256_SHA256 = Cipher
 	, cipherKeyBlockSize = 2 * (32 + 32 + 16)
 	, cipherPaddingSize  = 16
 	, cipherMACHash      = SHA256.hash
-	, cipherKeyExchange  = CipherKeyExchangeRSA
+	, cipherKeyExchange  = CipherKeyExchange_RSA
 	, cipherF            = CipherBlockF aes256_cbc_encrypt aes256_cbc_decrypt
 	, cipherMinVer       = Just TLS12
 	}
