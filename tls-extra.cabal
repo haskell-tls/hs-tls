@@ -28,7 +28,7 @@ Flag executable
 
 Library
   Build-Depends:     base > 3 && < 5
-                   , tls >= 0.6.4 && < 0.7
+                   , tls >= 0.7 && < 0.8
                    , mtl
                    , network >= 2.3
                    , cryptohash >= 0.6
