@@ -10,6 +10,8 @@ module Network.TLS
 	-- * Context configuration
 	  TLSParams(..)
 	, TLSLogging(..)
+	, TLSCertificateUsage(..)
+	, TLSCertificateRejectReason(..)
 	, defaultParams
 	, defaultLogging
 

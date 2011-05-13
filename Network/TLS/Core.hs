@@ -11,6 +11,8 @@ module Network.TLS.Core
 	-- * Context configuration
 	  TLSParams(..)
 	, TLSLogging(..)
+	, TLSCertificateUsage(..)
+	, TLSCertificateRejectReason(..)
 	, defaultLogging
 	, defaultParams
 
@@ -63,6 +65,20 @@ data TLSLogging = TLSLogging
 	, loggingIORecv     :: Header -> Bytes -> IO ()
 	}
 
+-- | Certificate and Chain rejection reason
+data TLSCertificateRejectReason =
+	  CertificateRejectExpired
+	| CertificateRejectRevoked
+	| CertificateRejectUnknownCA
+	| CertificateRejectOther String
+	deriving (Show,Eq)
+
+-- | Certificate Usage callback possible returns values.
+data TLSCertificateUsage =
+	  CertificateUsageAccept                            -- ^ usage of certificate accepted
+	| CertificateUsageReject TLSCertificateRejectReason -- ^ usage of certificate rejected
+	deriving (Show,Eq)
+
 data TLSParams = TLSParams
 	{ pConnectVersion    :: Version             -- ^ version to use on client connection.
 	, pAllowedVersions   :: [Version]           -- ^ allowed versions that we can use.
@@ -72,7 +88,7 @@ data TLSParams = TLSParams
 	                                            -- use by server only.
 	, pCertificates      :: [(X509, Maybe PrivateKey)] -- ^ the cert chain for this context with the associated keys if any.
 	, pLogging           :: TLSLogging          -- ^ callback for logging
-	, onCertificatesRecv :: ([X509] -> IO Bool) -- ^ callback to verify received cert chain.
+	, onCertificatesRecv :: ([X509] -> IO TLSCertificateUsage) -- ^ callback to verify received cert chain.
 	}
 
 defaultLogging :: TLSLogging
@@ -92,7 +108,7 @@ defaultParams = TLSParams
 	, pWantClientCert    = False
 	, pCertificates      = []
 	, pLogging           = defaultLogging
-	, onCertificatesRecv = (\_ -> return True)
+	, onCertificatesRecv = (\_ -> return CertificateUsageAccept)
 	}
 
 instance Show TLSParams where
@@ -265,10 +281,22 @@ handshakeClient ctx = do
 
 		processServerInfo (Handshake (Certificates certs)) = do
 			let cb = onCertificatesRecv $ params
-			valid <- liftIO $ cb certs
-			unless valid $ error "certificates received deemed invalid by user"
+			usage <- liftIO $ cb certs
+			case usage of
+				CertificateUsageAccept        -> return ()
+				CertificateUsageReject reason -> certificateRejected reason
 
 		processServerInfo _ = return ()
+
+		-- on certificate reject, throw an exception with the proper protocol alert error.
+		certificateRejected CertificateRejectRevoked =
+			throwCore $ Error_Protocol ("certificate is revoked", True, CertificateRevoked)
+		certificateRejected CertificateRejectExpired =
+			throwCore $ Error_Protocol ("certificate has expired", True, CertificateExpired)
+		certificateRejected CertificateRejectUnknownCA =
+			throwCore $ Error_Protocol ("certificate has unknown CA", True, UnknownCa)
+		certificateRejected (CertificateRejectOther s) =
+			throwCore $ Error_Protocol ("certificate rejected: " ++ s, True, CertificateUnknown)
 
 handshakeServerWith :: MonadIO m => TLSCtx -> Handshake -> m ()
 handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
