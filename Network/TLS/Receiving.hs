@@ -40,8 +40,10 @@ readPacket hdr content = checkState hdr >> decryptContent hdr content >>= proces
 
 checkState :: Header -> TLSSt ()
 checkState (Header pt _ _) =
-		stStatus <$> get >>= \status -> unless (allowed pt status) $ throwError $ Error_Packet_unexpected (show status) (show pt)
+		stStatus <$> get >>= \status -> unless (allowed pt status) $ throwError (err status)
 	where
+		err st = Error_Protocol ("unexpected message received: status=" ++ show st, True, UnexpectedMessage)
+
 		allowed :: ProtocolType -> TLSStatus -> Bool
 		allowed ProtocolType_Alert _                    = True
 		allowed ProtocolType_Handshake _                = True
