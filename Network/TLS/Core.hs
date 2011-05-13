@@ -55,8 +55,9 @@ import Crypto.Random
 import Control.Applicative ((<$>))
 import Control.Concurrent.MVar
 import Control.Monad.State
-import Control.Exception (throwIO, Exception(), onException)
+import Control.Exception (throwIO, Exception(), onException, fromException, catch)
 import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush)
+import Prelude hiding (catch)
 
 data TLSLogging = TLSLogging
 	{ loggingPacketSent :: String -> IO ()
@@ -167,6 +168,10 @@ whileStatus :: MonadIO m => TLSCtx -> (TLSStatus -> Bool) -> m a -> m ()
 whileStatus ctx p a = do
 	b <- usingState_ ctx (p . stStatus <$> get)
 	when b (a >> whileStatus ctx p a)
+
+errorToAlert :: TLSError -> Packet
+errorToAlert (Error_Protocol (_, _, ad)) = Alert (AlertLevel_Fatal, ad)
+errorToAlert _                           = Alert (AlertLevel_Fatal, InternalError)
 
 -- | receive one enveloppe from the context that contains 1 or
 -- many packets (many only in case of handshake). if will returns a
@@ -378,12 +383,15 @@ handshakeServer ctx = do
 
 -- | Handshake for a new TLS connection
 -- This is to be called at the beginning of a connection, and during renegociation
-handshake :: MonadIO m => TLSCtx -> m ()
+handshake :: MonadIO m => TLSCtx -> m Bool
 handshake ctx = do
 	cc <- usingState_ ctx (stClientContext <$> get)
-	if cc
-		then handshakeClient ctx
-		else handshakeServer ctx
+	liftIO $ handleException $ if cc then handshakeClient ctx else handshakeServer ctx
+	where
+		handleException f = catch (f >> return True) (\e -> handler e >> return False)
+		handler e = case fromException e of
+			Just err -> sendPacket ctx (errorToAlert err)
+			Nothing  -> sendPacket ctx (errorToAlert $ Error_Misc "")
 
 -- | sendData sends a bunch of data.
 -- It will automatically chunk data to acceptable packet size
