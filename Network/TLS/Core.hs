@@ -55,7 +55,7 @@ import Crypto.Random
 import Control.Applicative ((<$>))
 import Control.Concurrent.MVar
 import Control.Monad.State
-import Control.Exception (throwIO, Exception())
+import Control.Exception (throwIO, Exception(), onException)
 import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush)
 
 data TLSLogging = TLSLogging
@@ -145,13 +145,12 @@ ctxLogging :: TLSCtx -> TLSLogging
 ctxLogging = pLogging . ctxParams
 
 usingState :: MonadIO m => TLSCtx -> TLSSt a -> m (Either TLSError a)
-usingState ctx f = liftIO (takeMVar mvar) >>= execAndStore
+usingState ctx f = liftIO (takeMVar mvar) >>= \st -> liftIO $ onException (execAndStore st) (putMVar mvar st)
 	where
 		mvar = ctxState ctx
 		execAndStore st = do
-			-- FIXME add onException with (putMVar mvar st)
 			let (a, newst) = runTLSState f st
-			liftIO (putMVar mvar newst)
+			putMVar mvar newst
 			return a
 
 usingState_ :: MonadIO m => TLSCtx -> TLSSt a -> m a
