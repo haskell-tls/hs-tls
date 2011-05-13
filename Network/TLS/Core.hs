@@ -301,9 +301,13 @@ handshakeClient ctx = do
 handshakeServerWith :: MonadIO m => TLSCtx -> Handshake -> m ()
 handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 	-- Handle Client hello
-	when (not $ elem ver (pAllowedVersions params)) $ fail "unsupported version"
-	when (commonCiphers == []) $ fail "no common cipher supported"
-	when (commonCompressions == []) $ fail "no common compression supported"
+	when (ver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
+	when (not $ elem ver (pAllowedVersions params)) $
+		throwCore $ Error_Protocol ("version " ++ show ver ++ "is not supported", True, ProtocolVersion)
+	when (commonCiphers == []) $
+		throwCore $ Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
+	when (commonCompressions == []) $
+		throwCore $ Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
 	usingState_ ctx $ modify (\st -> st
 		{ stVersion = ver
 		, stCipher  = Just usedCipher
