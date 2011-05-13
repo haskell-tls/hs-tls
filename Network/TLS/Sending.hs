@@ -133,22 +133,25 @@ encryptData content = do
 			B.empty
 	let writekey = cstKey cst
 
-	econtent <- case cipherF cipher of
+	case cipherF cipher of
 		CipherNoneF -> return content
 		CipherBlockF encrypt _ -> do
-			let iv = cstIV cst
+			-- before TLS 1.1, the block cipher IV is made of the residual of the previous block.
+			iv <- if hasExplicitBlockIV $ stVersion st
+				then genTLSRandom (fromIntegral $ cipherIVSize cipher)
+				else return $ cstIV cst
 			let e = encrypt writekey iv (B.concat [ content, padding ])
-			let newiv = fromJust "new iv" $ takelast (fromIntegral $ cipherIVSize cipher) e
-			put $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
-			return $ if hasExplicitBlockIV $ stVersion st
-				then B.concat [iv,e]
-				else e
+			if hasExplicitBlockIV $ stVersion st
+				then return $ B.concat [iv,e]
+				else do
+					let newiv = fromJust "new iv" $ takelast (fromIntegral $ cipherIVSize cipher) e
+					put $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
+					return e
 		CipherStreamF initF encryptF _ -> do
 			let iv = cstIV cst
 			let (e, newiv) = encryptF (if iv /= B.empty then iv else initF writekey) content
 			put $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
 			return e
-	return econtent
 
 encodePacketContent :: Packet -> ByteString
 encodePacketContent (Handshake h)      = encodeHandshake h
