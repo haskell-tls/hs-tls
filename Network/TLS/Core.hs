@@ -269,7 +269,7 @@ handshakeClient ctx = do
 		processServerInfo (Handshake (ServerHello rver _ _ cipher _ _)) = do
 			when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
 			case find ((==) rver) allowedvers of
-				Nothing -> error ("received version which is not allowed: " ++ show ver)
+				Nothing -> throwCore $ Error_Protocol ("version " ++ show ver ++ "is not supported", True, ProtocolVersion)
 				Just _  -> usingState_ ctx $ setVersion ver
 			case find ((==) cipher . cipherID) ciphers of
 				Nothing -> throwCore $ Error_Protocol ("no cipher in common with the server", True, HandshakeFailure)
