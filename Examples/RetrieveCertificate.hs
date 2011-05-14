@@ -23,7 +23,7 @@ openConnection s p = do
 		{ pCiphers           = ciphersuite_all
 		, onCertificatesRecv = \l -> do
 			modifyIORef ref (const $ Just l)
-			return True
+			return CertificateUsageAccept
 		}
 	ctx <- connectionClient s p params rng
 	handshake ctx

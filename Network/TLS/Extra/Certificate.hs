@@ -7,7 +7,8 @@
 -- Portability : unknown
 --
 module Network.TLS.Extra.Certificate
-	( certificateVerifyChain
+	( certificateChecks
+	, certificateVerifyChain
 	, certificateVerifyAgainst
 	, certificateVerifyDomain
 	, certificateVerifyValidity
@@ -27,8 +28,21 @@ import qualified Crypto.Cipher.RSA as RSA
 import qualified Crypto.Cipher.DSA as DSA
 
 import Data.Certificate.X509Cert (oidCommonName)
+import Network.TLS (TLSCertificateUsage(..), TLSCertificateRejectReason(..))
 
 import Data.Time.Calendar
+import Data.List (find)
+
+-- | combine many certificates checking function together.
+-- if one check fail, the whole sequence of checking is cuted short and return the
+-- reject reason.
+certificateChecks :: [ [X509] -> IO TLSCertificateUsage ] -> [X509] -> IO TLSCertificateUsage
+certificateChecks checks x509s = do
+	r <- sequence $ map (\c -> c x509s) checks
+	return $ maybe CertificateUsageAccept id $ find ((/=) CertificateUsageAccept) r
+	--CertificateUsageAccept -> certificateChecks x509s cs
+	--r                      -> return r
+
 
 #if defined(NOCERTVERIFY)
 
@@ -38,7 +52,7 @@ import Data.Time.Calendar
 
 {- on windows and OSX, the trusted certificates are not yet accessible,
  - for now, print a big fat warning (better than nothing) and returns true  -}
-certificateVerifyChain :: [X509] -> IO Bool
+certificateVerifyChain :: [X509] -> IO TLSCertificateUsage
 certificateVerifyChain _ = do
 	putStrLn "****************** certificate verify chain doesn't yet work on your platform **********************"
 	putStrLn "please consider contributing to the certificate package to fix this issue"
@@ -59,19 +73,23 @@ certificateVerifyChain _ = do
 --
 -- TODO: verify validity, check revocation list if any, add optional user output to know
 -- the rejection reason.
-certificateVerifyChain :: [X509] -> IO Bool
+certificateVerifyChain :: [X509] -> IO TLSCertificateUsage
 certificateVerifyChain l
-	| l == []   = return False
+	| l == []   = return $ CertificateUsageReject CertificateRejectUnknownCA
 	| otherwise = do
 		-- find a matching certificate that we trust (== installed on the system)
 		found <- SysCert.findCertificate (matchsysX509 $ head l)
 		case found of
-			Just sysx509 -> certificateVerifyAgainst (head l) sysx509
+			Just sysx509 -> do
+				validChain <- certificateVerifyAgainst (head l) sysx509
+				if validChain
+					then return CertificateUsageAccept
+					else return $ CertificateUsageReject (CertificateRejectOther "chain doesn't match each other")
 			Nothing      -> do
 				validChain <- certificateVerifyAgainst (head l) (head $ tail l)
 				if validChain
 					then certificateVerifyChain $ tail l
-					else return False
+					else return $ CertificateUsageReject (CertificateRejectOther "chain doesn't match each other")
 	where
 		matchsysX509 (X509 cert _ _ _ _) (X509 syscert _ _ _ _) = do
 			let x = certSubjectDN syscert
@@ -125,28 +143,32 @@ mkRSA (lenmodulus, modulus, e) =
 	RSA.PublicKey { RSA.public_sz = lenmodulus, RSA.public_n = modulus, RSA.public_e = e }
 
 -- | Verify that the given certificate chain is application to the given fully qualified host name.
-certificateVerifyDomain :: String -> [X509] -> Bool
-certificateVerifyDomain _      []                  = False
+certificateVerifyDomain :: String -> [X509] -> TLSCertificateUsage
+certificateVerifyDomain _      []                  = CertificateUsageReject (CertificateRejectOther "empty list")
 certificateVerifyDomain fqhn (X509 cert _ _ _ _:_) =
 	case lookup oidCommonName $ certSubjectDN cert of
-		Nothing       -> False
+		Nothing       -> rejectMisc "no commonname OID in certificate cannot match to FQDN"
 		Just (_, val) -> matchDomain (splitDot val)
 	where
 		matchDomain l
-			| length (filter (== "") l) > 0 = False
+			| length (filter (== "") l) > 0 = rejectMisc "commonname OID got empty subdomain"
 			| head l == "*"                 = wildcardMatch (reverse $ drop 1 l)
-			| otherwise                     = l == splitDot fqhn
+			| otherwise                     = if l == splitDot fqhn
+				then CertificateUsageAccept
+				else rejectMisc "FQDN and common name OID do not match"
 
 		-- only 1 wildcard is valid, and if multiples are present
 		-- they won't have a wildcard meaning but will be match as normal star
 		-- character to the fqhn and inevitably will fail.
 		wildcardMatch l
 			-- <star>.com or <star> is always invalid
-			| length l < 2                         = False
+			| length l < 2                         = rejectMisc "commonname OID wildcard match too widely"
 			-- <star>.com.<country> is always invalid
-			| length (head l) <= 2 && length (head $ drop 1 l) <= 3 && length l < 3 = False
+			| length (head l) <= 2 && length (head $ drop 1 l) <= 3 && length l < 3 = rejectMisc "commonname OID wildcard match too widely"
 			| otherwise                            =
-				l == take (length l) (reverse $ splitDot fqhn)
+				if l == take (length l) (reverse $ splitDot fqhn)
+					then CertificateUsageAccept
+					else rejectMisc "FQDN and common name OID do not match"
 
 		splitDot :: String -> [String]
 		splitDot [] = [""]
@@ -154,12 +176,16 @@ certificateVerifyDomain fqhn (X509 cert _ _ _ _:_) =
 			let (y, z) = break (== '.') x in
 			y : (if z == "" then [] else splitDot $ drop 1 z)
 
+		rejectMisc s = CertificateUsageReject (CertificateRejectOther s)
+
 -- Maybe should verify whole chain
-certificateVerifyValidity :: Day -> [X509] -> Bool
-certificateVerifyValidity _ []                         = False
+certificateVerifyValidity :: Day -> [X509] -> TLSCertificateUsage
+certificateVerifyValidity _ []                         = CertificateUsageReject $ CertificateRejectOther "empty list"
 certificateVerifyValidity ctime (X509 cert _ _ _ _ :_) =
 	let ((beforeDay,_,_) , (afterDay,_,_)) = certValidity cert in
-	beforeDay < ctime && ctime <= afterDay
+	if beforeDay < ctime && ctime <= afterDay
+		then CertificateUsageAccept
+		else CertificateUsageReject CertificateRejectExpired
 
 certificateFingerprint :: (L.ByteString -> B.ByteString) -> X509 -> B.ByteString
 certificateFingerprint hash x509 = hash $ getSigningData x509

@@ -215,7 +215,7 @@ doClient pargs = do
 		, loggingPacketRecv = putStrLn . ("debug: recv: " ++)
 		}
 
-	let crecv = if validCert pargs then certificateVerifyChain else (\_ -> return True)
+	let crecv = if validCert pargs then certificateVerifyChain else (\_ -> return CertificateUsageAccept)
 	let clientstate = defaultParams
 		{ pConnectVersion = TLS10
 		, pAllowedVersions = [ TLS10, TLS11 ]
