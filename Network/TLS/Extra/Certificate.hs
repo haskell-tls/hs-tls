@@ -72,27 +72,23 @@ certificateVerifyChain _ = do
 -- TODO: verify validity, check revocation list if any, add optional user output to know
 -- the rejection reason.
 certificateVerifyChain :: [X509] -> IO TLSCertificateUsage
-certificateVerifyChain l
-	| l == []   = return $ CertificateUsageReject CertificateRejectUnknownCA
-	| otherwise = do
-		-- find a matching certificate that we trust (== installed on the system)
-		found <- SysCert.findCertificate (matchsysX509 $ head l)
-		case found of
-			Just sysx509 -> do
-				validChain <- certificateVerifyAgainst (head l) sysx509
+certificateVerifyChain []     = return $ CertificateUsageReject (CertificateRejectOther "empty chain / no certificates")
+certificateVerifyChain (x:xs) = do
+	-- find a matching certificate that we trust (== installed on the system)
+	foundCert <- SysCert.findCertificate (certMatchDN x)
+	case foundCert of
+		Just sysx509 -> do
+			validChain <- certificateVerifyAgainst x sysx509
+			if validChain
+				then return CertificateUsageAccept
+				else return $ CertificateUsageReject (CertificateRejectOther "chain doesn't match each other")
+		Nothing      -> case xs of
+			[] -> return $ CertificateUsageReject CertificateRejectUnknownCA
+			_  -> do
+				validChain <- certificateVerifyAgainst x (head xs)
 				if validChain
-					then return CertificateUsageAccept
+					then certificateVerifyChain xs
 					else return $ CertificateUsageReject (CertificateRejectOther "chain doesn't match each other")
-			Nothing      -> do
-				validChain <- certificateVerifyAgainst (head l) (head $ tail l)
-				if validChain
-					then certificateVerifyChain $ tail l
-					else return $ CertificateUsageReject (CertificateRejectOther "chain doesn't match each other")
-	where
-		matchsysX509 (X509 cert _ _ _ _) (X509 syscert _ _ _ _) = do
-			let x = certSubjectDN syscert
-			let y = certIssuerDN cert
-			x == y
 #endif
 
 -- | verify a certificate against another one.
