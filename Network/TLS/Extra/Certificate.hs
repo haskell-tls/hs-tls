@@ -10,6 +10,7 @@ module Network.TLS.Extra.Certificate
 	( certificateChecks
 	, certificateVerifyChain
 	, certificateVerifyAgainst
+	, certificateSelfSigned
 	, certificateVerifyDomain
 	, certificateVerifyValidity
 	, certificateFingerprint
@@ -106,6 +107,14 @@ certificateVerifyAgainst ux509@(X509 _ _ _ sigalg sig) (X509 scert _ _ _ _) = do
 		udata = B.concat $ L.toChunks $ getSigningData ux509
 		esig  = B.pack sig
 		pk    = certPubKey scert
+
+-- | returns if this certificate is self signed.
+certificateSelfSigned :: X509 -> Bool
+certificateSelfSigned x509 = certMatchDN x509 x509
+
+certMatchDN :: X509 -> X509 -> Bool
+certMatchDN (X509 testedCert _ _ _ _) (X509 issuerCert _ _ _ _) =
+	certSubjectDN issuerCert == certIssuerDN testedCert
 
 verifyF :: SignatureALG -> PubKey -> B.ByteString -> B.ByteString -> Either String Bool
 
