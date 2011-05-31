@@ -40,9 +40,6 @@ certificateChecks :: [ [X509] -> IO TLSCertificateUsage ] -> [X509] -> IO TLSCer
 certificateChecks checks x509s = do
 	r <- sequence $ map (\c -> c x509s) checks
 	return $ maybe CertificateUsageAccept id $ find ((/=) CertificateUsageAccept) r
-	--CertificateUsageAccept -> certificateChecks x509s cs
-	--r                      -> return r
-
 
 #if defined(NOCERTVERIFY)
 
