@@ -175,7 +175,8 @@ certificateVerifyDomain fqhn (X509 cert _ _ _ _:_) =
 
 		rejectMisc s = CertificateUsageReject (CertificateRejectOther s)
 
--- Maybe should verify whole chain
+-- | Verify certificate validity period that need to between the bounds of the certificate.
+-- TODO: maybe should verify whole chain.
 certificateVerifyValidity :: Day -> [X509] -> TLSCertificateUsage
 certificateVerifyValidity _ []                         = CertificateUsageReject $ CertificateRejectOther "empty list"
 certificateVerifyValidity ctime (X509 cert _ _ _ _ :_) =
@@ -184,5 +185,6 @@ certificateVerifyValidity ctime (X509 cert _ _ _ _ :_) =
 		then CertificateUsageAccept
 		else CertificateUsageReject CertificateRejectExpired
 
+-- | hash the certificate signing data using the supplied hash function.
 certificateFingerprint :: (L.ByteString -> B.ByteString) -> X509 -> B.ByteString
 certificateFingerprint hash x509 = hash $ getSigningData x509
