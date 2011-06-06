@@ -129,7 +129,7 @@ processClientFinished :: FinishedData -> TLSSt ()
 processClientFinished fdata = do
 	cc <- stClientContext <$> get
 	expected <- getHandshakeDigest (not cc)
-	when (expected /= B.pack fdata) $ do
+	when (expected /= fdata) $ do
 		throwError $ Error_Protocol( "bad record mac", True, BadRecordMac)
 	return ()
 

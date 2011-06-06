@@ -257,7 +257,7 @@ handshakeClient ctx = do
 
 	-- Send Finished
 	cf <- usingState_ ctx $ getHandshakeDigest True
-	sendPacket ctx (Handshake $ Finished $ B.unpack cf)
+	sendPacket ctx (Handshake $ Finished cf)
 
 	-- receive changeCipherSpec & Finished
 	recvPacket ctx >> recvPacket ctx >> return ()
@@ -329,7 +329,7 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 
 	-- Send Finish
 	cf <- usingState_ ctx $ getHandshakeDigest False
-	sendPacket ctx (Handshake $ Finished $ B.unpack cf)
+	sendPacket ctx (Handshake $ Finished cf)
 
 	liftIO $ hFlush $ ctxHandle ctx
 	return ()

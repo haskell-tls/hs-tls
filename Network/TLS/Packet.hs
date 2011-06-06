@@ -202,7 +202,7 @@ decodeCertificates = do
 decodeFinished :: Get Handshake
 decodeFinished = do
 	opaque <- remaining >>= getBytes
-	return $ Finished $ B.unpack opaque
+	return $ Finished $ opaque
 
 getSignatureHashAlgorithm :: Int -> Get [ (HashAlgorithm, SignatureAlgorithm) ]
 getSignatureHashAlgorithm 0   = return []
@@ -318,7 +318,7 @@ encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
 
 encodeHandshakeContent (CertVerify _) = undefined
 
-encodeHandshakeContent (Finished opaque) = mapM_ putWord8 opaque
+encodeHandshakeContent (Finished opaque) = putBytes opaque
 
 {- FIXME make sure it return error if not 32 available -}
 getRandom32 :: Get Bytes
@@ -377,13 +377,13 @@ getExtensions len = do
 	extdatalen <- getWord16
 	extdata <- getBytes $ fromIntegral extdatalen
 	extxs <- getExtensions (len - fromIntegral extdatalen - 4)
-	return $ (extty, B.unpack extdata) : extxs
+	return $ (extty, extdata) : extxs
 
 putExtension :: Extension -> Put
 putExtension (ty, l) = do
 	putWord16 ty
-	putWord16 (fromIntegral $ length l)
-	putBytes (B.pack l)
+	putWord16 (fromIntegral $ B.length l)
+	putBytes l
 
 putExtensions :: Maybe [Extension] -> Put
 putExtensions Nothing   = return ()

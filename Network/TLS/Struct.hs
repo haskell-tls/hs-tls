@@ -144,8 +144,8 @@ newtype ClientKeyData = ClientKeyData Bytes deriving (Show, Eq)
 newtype Session = Session (Maybe Bytes) deriving (Show, Eq)
 type CipherID = Word16
 type CompressionID = Word8
-type FinishedData = [Word8]
-type Extension = (Word16, [Word8])
+type FinishedData = Bytes
+type Extension = (Word16, Bytes)
 
 constrRandom32 :: (Bytes -> a) -> Bytes -> Maybe a
 constrRandom32 constr l = if B.length l == 32 then Just (constr l) else Nothing
