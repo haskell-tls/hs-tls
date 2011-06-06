@@ -113,18 +113,19 @@ instance Show StateRNG where
 	show _ = "rng[..]"
 
 data TLSState = TLSState
-	{ stClientContext :: Bool
-	, stVersion       :: !Version
-	, stStatus        :: !TLSStatus
-	, stHandshake     :: !(Maybe TLSHandshakeState)
-	, stTxEncrypted   :: Bool
-	, stRxEncrypted   :: Bool
-	, stTxCryptState  :: !(Maybe TLSCryptState)
-	, stRxCryptState  :: !(Maybe TLSCryptState)
-	, stTxMacState    :: !(Maybe TLSMacState)
-	, stRxMacState    :: !(Maybe TLSMacState)
-	, stCipher        :: Maybe Cipher
-	, stRandomGen     :: StateRNG
+	{ stClientContext       :: Bool
+	, stVersion             :: !Version
+	, stStatus              :: !TLSStatus
+	, stHandshake           :: !(Maybe TLSHandshakeState)
+	, stTxEncrypted         :: Bool
+	, stRxEncrypted         :: Bool
+	, stTxCryptState        :: !(Maybe TLSCryptState)
+	, stRxCryptState        :: !(Maybe TLSCryptState)
+	, stTxMacState          :: !(Maybe TLSMacState)
+	, stRxMacState          :: !(Maybe TLSMacState)
+	, stCipher              :: Maybe Cipher
+	, stRandomGen           :: StateRNG
+	, stSecureRenegotiation :: Bool -- RFC 5746
 	} deriving (Show)
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrorT TLSError (State TLSState) a }
@@ -142,18 +143,19 @@ runTLSState f st = runState (runErrorT (runTLSSt f)) st
 
 newTLSState :: CryptoRandomGen g => g -> TLSState
 newTLSState rng = TLSState
-	{ stClientContext = False
-	, stVersion       = TLS10
-	, stStatus        = StatusInit
-	, stHandshake     = Nothing
-	, stTxEncrypted   = False
-	, stRxEncrypted   = False
-	, stTxCryptState  = Nothing
-	, stRxCryptState  = Nothing
-	, stTxMacState    = Nothing
-	, stRxMacState    = Nothing
-	, stCipher        = Nothing
-	, stRandomGen     = StateRNG rng
+	{ stClientContext       = False
+	, stVersion             = TLS10
+	, stStatus              = StatusInit
+	, stHandshake           = Nothing
+	, stTxEncrypted         = False
+	, stRxEncrypted         = False
+	, stTxCryptState        = Nothing
+	, stRxCryptState        = Nothing
+	, stTxMacState          = Nothing
+	, stRxMacState          = Nothing
+	, stCipher              = Nothing
+	, stRandomGen           = StateRNG rng
+	, stSecureRenegotiation = False
 	}
 
 withTLSRNG :: StateRNG -> (forall g . CryptoRandomGen g => g -> Either e (a,g)) -> Either e (a, StateRNG)
