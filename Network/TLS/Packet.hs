@@ -41,7 +41,6 @@ module Network.TLS.Packet
 	) where
 
 import Network.TLS.Struct
-import Network.TLS.Cap
 import Network.TLS.Wire
 import Data.Either (partitionEithers)
 import Data.Maybe (fromJust)
@@ -156,7 +155,7 @@ decodeHandshake cp ty = runGetErr $ case ty of
 	HandshakeType_ServerHelloDone -> decodeServerHelloDone
 	HandshakeType_CertVerify      -> decodeCertVerify
 	HandshakeType_ClientKeyXchg   -> decodeClientKeyXchg
-	HandshakeType_Finished        -> decodeFinished cp
+	HandshakeType_Finished        -> decodeFinished
 
 decodeHelloRequest :: Get Handshake
 decodeHelloRequest = return HelloRequest
@@ -199,15 +198,9 @@ decodeCertificates = do
 		then fail ("error certificate parsing: " ++ show l)
 		else return $ Certificates r
 
-decodeFinished :: CurrentParams -> Get Handshake
-decodeFinished cp = do
-	-- unfortunately passing the verify_data_size here would be tedious for >=TLS12,
-	-- so just return the remaining string.
-	len <- if cParamsVersion cp >= TLS12
-		then remaining
-		else if cParamsVersion cp == SSL3 then return 36
-			else return 12
-	opaque <- getBytes (fromIntegral len)
+decodeFinished :: Get Handshake
+decodeFinished = do
+	opaque <- remaining >>= getBytes
 	return $ Finished $ B.unpack opaque
 
 getSignatureHashAlgorithm :: Int -> Get [ (HashAlgorithm, SignatureAlgorithm) ]
