@@ -130,8 +130,8 @@ encodeAlert (al, ad) = runPut (putWord8 (valOfType al) >> putWord8 (valOfType ad
 {- decode and encode HANDSHAKE -}
 decodeHandshakeHeader :: Get (HandshakeType, Bytes)
 decodeHandshakeHeader = do
-	ty <- getHandshakeType
-	len <- getWord24
+	ty      <- getHandshakeType
+	len     <- getWord24
 	content <- getBytes len
 	return (ty, content)
 
