@@ -42,6 +42,7 @@ module Network.TLS.Packet
 
 import Network.TLS.Struct
 import Network.TLS.Wire
+import Network.TLS.Cap
 import Data.Either (partitionEithers)
 import Data.Maybe (fromJust)
 import Control.Applicative ((<$>))

@@ -15,5 +15,5 @@ import Network.TLS.Struct
 
 hasHelloExtensions, hasExplicitBlockIV :: Version -> Bool
 
-hasHelloExtensions ver = ver >= TLS12
+hasHelloExtensions ver = ver >= SSL3
 hasExplicitBlockIV ver = ver >= TLS11
