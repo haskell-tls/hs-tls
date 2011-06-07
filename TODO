@@ -1,10 +1,7 @@
 protocol:
 
-- finish implementing renegocitiation Client and Server
 - implement Certificate Verify / Certificate Request
 - add Client Certificates
-- add check for non-self signed certificate
-- alert correctly on errors
 - process session as they should
 - put 4 bytes of time in client/server random
 - implement compression
@@ -13,7 +10,6 @@ protocol:
 
 tls v1.2:
 
-- finish implementation of extensions
 - implement finish digest generation with hmac256
 - implement finish digest generation with client/server negociated algorithm
 - proper version dispatch in marshalling packets
