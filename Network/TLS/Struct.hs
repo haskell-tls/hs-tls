@@ -224,8 +224,8 @@ data ServerKeyXchgAlgorithmData =
 	deriving (Show,Eq)
 
 data Handshake =
-	  ClientHello !Version !ClientRandom !Session ![CipherID] ![CompressionID] (Maybe [Extension])
-	| ServerHello !Version !ServerRandom !Session !CipherID !CompressionID (Maybe [Extension])
+	  ClientHello !Version !ClientRandom !Session ![CipherID] ![CompressionID] [Extension]
+	| ServerHello !Version !ServerRandom !Session !CipherID !CompressionID [Extension]
 	| Certificates [X509]
 	| HelloRequest
 	| ServerHelloDone

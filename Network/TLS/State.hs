@@ -35,6 +35,9 @@ module Network.TLS.State
 	, setVersion
 	, setCipher
 	, setServerRandom
+	, setSecureRenegotiation
+	, getSecureRenegotiation
+	, getVerifiedData
 	, switchTxEncryption
 	, switchRxEncryption
 	, getCipherKeyExchangeType
@@ -126,9 +129,9 @@ data TLSState = TLSState
 	, stRxMacState          :: !(Maybe TLSMacState)
 	, stCipher              :: Maybe Cipher
 	, stRandomGen           :: StateRNG
-	, stSecureRenegotiation :: Bool          -- RFC 5746
-	, stClientVerifiedData  :: (Bytes,Bytes) -- RFC 5746
-	, stServerVerifiedData  :: Bytes         -- RFC 5746
+	, stSecureRenegotiation :: Bool  -- RFC 5746
+	, stClientVerifiedData  :: Bytes -- RFC 5746
+	, stServerVerifiedData  :: Bytes -- RFC 5746
 	} deriving (Show)
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrorT TLSError (State TLSState) a }
@@ -159,7 +162,7 @@ newTLSState rng = TLSState
 	, stCipher              = Nothing
 	, stRandomGen           = StateRNG rng
 	, stSecureRenegotiation = False
-	, stClientVerifiedData  = (B.empty, B.empty)
+	, stClientVerifiedData  = B.empty
 	, stServerVerifiedData  = B.empty
 	}
 
@@ -262,7 +265,7 @@ updateVerifiedData sending bs = do
 	cc <- isClientContext
 	if cc /= sending
 		then modify (\st -> st { stServerVerifiedData = bs })
-		else modify (\st -> st { stClientVerifiedData = (bs, fst $ stClientVerifiedData st) })
+		else modify (\st -> st { stClientVerifiedData = bs })
 
 finishHandshakeTypeMaterial :: HandshakeType -> Bool
 finishHandshakeTypeMaterial HandshakeType_ClientHello     = True
@@ -344,8 +347,17 @@ setCipher cipher = modify (\st -> st { stCipher = Just cipher })
 setVersion :: MonadState TLSState m => Version -> m ()
 setVersion ver = modify (\st -> st { stVersion = ver })
 
+setSecureRenegotiation :: MonadState TLSState m => Bool -> m ()
+setSecureRenegotiation b = modify (\st -> st { stSecureRenegotiation = b })
+
+getSecureRenegotiation :: MonadState TLSState m => m Bool
+getSecureRenegotiation = get >>= return . stSecureRenegotiation
+
 getCipherKeyExchangeType :: MonadState TLSState m => m (Maybe CipherKeyExchangeType)
 getCipherKeyExchangeType = get >>= return . (maybe Nothing (Just . cipherKeyExchange) . stCipher)
+
+getVerifiedData :: MonadState TLSState m => Bool -> m Bytes
+getVerifiedData client = get >>= return . (if client then stClientVerifiedData else stServerVerifiedData)
 
 isClientContext :: MonadState TLSState m => m Bool
 isClientContext = get >>= return . stClientContext

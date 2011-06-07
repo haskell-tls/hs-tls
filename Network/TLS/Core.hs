@@ -230,11 +230,12 @@ handshakeClient :: MonadIO m => TLSCtx -> m ()
 handshakeClient ctx = do
 	-- Send ClientHello
 	crand <- getStateRNG ctx 32 >>= return . ClientRandom
+	extensions <- getExtensions
 	sendPacket ctx $ Handshake $ ClientHello ver crand
 	                                         (Session Nothing)
 	                                         (map cipherID ciphers)
 	                                         (map compressionID compressions)
-	                                         Nothing
+	                                         extensions
 
 	-- Receive Server information until ServerHelloDone
 	whileStatus ctx (/= (StatusHandshake HsStatusServerHelloDone)) $ do
@@ -271,6 +272,10 @@ handshakeClient ctx = do
 		ciphers      = pCiphers params
 		compressions = pCompressions params
 		clientCerts  = map fst $ pCertificates params
+		getExtensions =
+			if pUseSecureRenegotiation params
+			then usingState_ ctx (getVerifiedData True) >>= \vd -> return [ (0xff01, vd) ]
+			else return []
 
 		processServerInfo (Handshake (ServerHello rver _ _ cipher _ _)) = do
 			when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
@@ -360,7 +365,7 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 			                                         (Session Nothing)
 			                                         (cipherID usedCipher)
 			                                         (compressionID usedCompression)
-			                                         Nothing
+			                                         []
 			sendPacket ctx (Handshake $ Certificates srvCerts)
 			when needKeyXchg $ do
 				let skg = SKX_RSA Nothing

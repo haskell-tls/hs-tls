@@ -170,8 +170,8 @@ decodeClientHello = do
 	compressions <- getWords8
 	r            <- remaining
 	exts <- if hasHelloExtensions ver && r > 0
-		then fmap fromIntegral getWord16 >>= getExtensions >>= return . Just
-		else return Nothing
+		then fmap fromIntegral getWord16 >>= getExtensions
+		else return []
 	return $ ClientHello ver random session ciphers compressions exts
 
 decodeServerHello :: Get Handshake
@@ -183,8 +183,8 @@ decodeServerHello = do
 	compressionid <- getWord8
 	r             <- remaining
 	exts <- if hasHelloExtensions ver && r > 0
-		then fmap fromIntegral getWord16 >>= getExtensions >>= return . Just
-		else return Nothing
+		then fmap fromIntegral getWord16 >>= getExtensions
+		else return []
 	return $ ServerHello ver random session cipherid compressionid exts
 
 decodeServerHelloDone :: Get Handshake
@@ -385,10 +385,9 @@ putExtension (ty, l) = do
 	putWord16 (fromIntegral $ B.length l)
 	putBytes l
 
-putExtensions :: Maybe [Extension] -> Put
-putExtensions Nothing   = return ()
-putExtensions (Just es) =
-	putWord16 (fromIntegral $ B.length extbs) >> putBytes extbs
+putExtensions :: [Extension] -> Put
+putExtensions [] = return ()
+putExtensions es = putWord16 (fromIntegral $ B.length extbs) >> putBytes extbs
 	where
 		extbs = runPut $ mapM_ putExtension es
 

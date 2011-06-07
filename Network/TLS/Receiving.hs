@@ -97,8 +97,10 @@ processHandshake ver ty econtent = do
 	clientmode <- isClientContext
 	case hs of
 		ClientHello cver ran _ _ _ ex -> unless clientmode $ do
+			mapM_ processClientExtension ex
 			startHandshakeClient cver ran
 		ServerHello sver ran _ _ _ ex -> when clientmode $ do
+			mapM_ processServerExtension ex
 			setServerRandom ran
 			setVersion sver
 		Certificates certs            -> when clientmode $ do processCertificates certs
@@ -107,6 +109,20 @@ processHandshake ver ty econtent = do
 		Finished fdata                -> processClientFinished fdata
 		_                             -> return ()
 	return $ Handshake hs
+	where
+		-- secure renegotiation
+		processClientExtension (0xff01, content) = do
+			v <- getVerifiedData True
+			when (v /= content) $ throwError $ Error_Protocol ("client verified data not matching", True, HandshakeFailure)
+			setSecureRenegotiation True
+		-- unknown extensions
+		processClientExtension _ = return ()
+
+		processServerExtension (0xff01, content) = do
+			-- do something
+			return ()
+
+		processServerExtension _ = return ()
 
 decryptRSA :: ByteString -> TLSSt (Either KxError ByteString)
 decryptRSA econtent = do
