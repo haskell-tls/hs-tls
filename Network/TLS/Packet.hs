@@ -45,6 +45,7 @@ import Network.TLS.Wire
 import Network.TLS.Cap
 import Data.Either (partitionEithers)
 import Data.Maybe (fromJust)
+import Data.Bits ((.|.))
 import Control.Applicative ((<$>))
 import Control.Monad
 import Data.Certificate.X509
@@ -237,33 +238,34 @@ decodeClientKeyXchg = do
 	ran <- getClientKeyData46
 	return $ ClientKeyXchg ver ran
 
--- FIXME need to work out how we marshall an opaque number
---numberise :: ByteString -> Integer
-numberise _ = 0
+os2ip :: ByteString -> Integer
+os2ip = B.foldl' (\a b -> (256 * a) .|. (fromIntegral b)) 0
 
 decodeServerKeyXchg_DH :: Get ServerDHParams
 decodeServerKeyXchg_DH = do
 	p <- getWord16 >>= getBytes . fromIntegral
 	g <- getWord16 >>= getBytes . fromIntegral
 	y <- getWord16 >>= getBytes . fromIntegral
-	return $ ServerDHParams { dh_p = numberise p, dh_g = numberise g, dh_Ys = numberise y }
+	return $ ServerDHParams { dh_p = os2ip p, dh_g = os2ip g, dh_Ys = os2ip y }
 
 decodeServerKeyXchg_RSA :: Get ServerRSAParams
 decodeServerKeyXchg_RSA = do
 	modulus <- getWord16 >>= getBytes . fromIntegral
-	expo <- getWord16 >>= getBytes . fromIntegral
-	return $ ServerRSAParams { rsa_modulus = numberise modulus, rsa_exponent = numberise expo }
+	expo    <- getWord16 >>= getBytes . fromIntegral
+	return $ ServerRSAParams { rsa_modulus = os2ip modulus, rsa_exponent = os2ip expo }
 
 decodeServerKeyXchg :: CurrentParams -> Get Handshake
 decodeServerKeyXchg cp = do
-	-- mostly unimplemented
-	skxAlg <- case cParamsVersion cp of
-		TLS12 -> return $ SKX_RSA Nothing
-		TLS10 -> do
+	skxAlg <- case cParamsKeyXchgType cp of
+		CipherKeyExchange_RSA -> do
 			rsaparams <- decodeServerKeyXchg_RSA
 			return $ SKX_RSA $ Just rsaparams
+		CipherKeyExchange_DH_Anon -> do
+			dhparams <- decodeServerKeyXchg_DH
+			return $ SKX_DH_Anon dhparams
 		_ -> do
-			return $ SKX_RSA Nothing
+			bs <- remaining >>= getBytes
+			return $ SKX_Unknown bs
 	return (ServerKeyXchg skxAlg)
 
 encodeHandshake :: Handshake -> ByteString

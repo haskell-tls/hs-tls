@@ -34,6 +34,7 @@ data CipherTypeFunctions =
 
 data CipherKeyExchangeType =
 	  CipherKeyExchange_RSA
+	| CipherKeyExchange_DH_Anon
 	| CipherKeyExchange_DHE_RSA
 	| CipherKeyExchange_ECDHE_RSA
 	| CipherKeyExchange_DHE_DSS
@@ -67,6 +68,7 @@ instance Eq Cipher where
 
 cipherExchangeNeedMoreData :: CipherKeyExchangeType -> Bool
 cipherExchangeNeedMoreData CipherKeyExchange_RSA         = False
+cipherExchangeNeedMoreData CipherKeyExchange_DH_Anon     = True
 cipherExchangeNeedMoreData CipherKeyExchange_DHE_RSA     = True
 cipherExchangeNeedMoreData CipherKeyExchange_ECDHE_RSA   = True
 cipherExchangeNeedMoreData CipherKeyExchange_DHE_DSS     = True

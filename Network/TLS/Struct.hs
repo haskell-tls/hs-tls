@@ -221,6 +221,7 @@ data ServerKeyXchgAlgorithmData =
 	| SKX_RSA (Maybe ServerRSAParams)
 	| SKX_DH_DSS (Maybe ServerRSAParams)
 	| SKX_DH_RSA (Maybe ServerRSAParams)
+	| SKX_Unknown Bytes
 	deriving (Show,Eq)
 
 data Handshake =
