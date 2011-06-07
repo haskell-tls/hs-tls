@@ -78,8 +78,14 @@ encodePacket (hdr, content) = return $ B.concat [ encodeHeader hdr, content ]
  -}
 preProcessPacket :: Packet -> TLSSt Packet
 preProcessPacket pkt = do
-	e <- case pkt of
-		Handshake hs     -> updateStatusHs (typeOfHandshake hs)
+	-- FIXME don't ignore this error just in case
+	_ <- case pkt of
+		Handshake hs     -> do
+			e <- updateStatusHs (typeOfHandshake hs)
+			case hs of
+				Finished fdata -> updateVerifiedData True fdata
+				_              -> return ()
+			return e
 		AppData _        -> return Nothing
 		ChangeCipherSpec -> updateStatusCC True
 		Alert _          -> return Nothing

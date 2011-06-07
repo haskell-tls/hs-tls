@@ -96,16 +96,16 @@ processHandshake ver ty econtent = do
 		(_, Left err)                         -> throwError err
 	clientmode <- isClientContext
 	case hs of
-		ClientHello cver ran _ _ _ _ -> unless clientmode $ do
+		ClientHello cver ran _ _ _ ex -> unless clientmode $ do
 			startHandshakeClient cver ran
-		ServerHello sver ran _ _ _ _ -> when clientmode $ do
+		ServerHello sver ran _ _ _ ex -> when clientmode $ do
 			setServerRandom ran
 			setVersion sver
-		Certificates certs           -> when clientmode $ do processCertificates certs
-		ClientKeyXchg cver _         -> unless clientmode $ do
+		Certificates certs            -> when clientmode $ do processCertificates certs
+		ClientKeyXchg cver _          -> unless clientmode $ do
 			processClientKeyXchg cver content
-		Finished fdata               -> processClientFinished fdata
-		_                            -> return ()
+		Finished fdata                -> processClientFinished fdata
+		_                             -> return ()
 	return $ Handshake hs
 
 decryptRSA :: ByteString -> TLSSt (Either KxError ByteString)
@@ -131,6 +131,7 @@ processClientFinished fdata = do
 	expected <- getHandshakeDigest (not cc)
 	when (expected /= fdata) $ do
 		throwError $ Error_Protocol( "bad record mac", True, BadRecordMac)
+	updateVerifiedData False fdata
 	return ()
 
 decryptContent :: Header -> EncryptedData -> TLSSt ByteString

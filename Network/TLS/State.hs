@@ -24,6 +24,7 @@ module Network.TLS.State
 	, assert -- FIXME move somewhere else (Internal.hs ?)
 	, updateStatusHs
 	, updateStatusCC
+	, updateVerifiedData
 	, finishHandshakeTypeMaterial
 	, finishHandshakeMaterial
 	, makeDigest
@@ -125,7 +126,9 @@ data TLSState = TLSState
 	, stRxMacState          :: !(Maybe TLSMacState)
 	, stCipher              :: Maybe Cipher
 	, stRandomGen           :: StateRNG
-	, stSecureRenegotiation :: Bool -- RFC 5746
+	, stSecureRenegotiation :: Bool          -- RFC 5746
+	, stClientVerifiedData  :: (Bytes,Bytes) -- RFC 5746
+	, stServerVerifiedData  :: Bytes         -- RFC 5746
 	} deriving (Show)
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrorT TLSError (State TLSState) a }
@@ -156,6 +159,8 @@ newTLSState rng = TLSState
 	, stCipher              = Nothing
 	, stRandomGen           = StateRNG rng
 	, stSecureRenegotiation = False
+	, stClientVerifiedData  = (B.empty, B.empty)
+	, stServerVerifiedData  = B.empty
 	}
 
 withTLSRNG :: StateRNG -> (forall g . CryptoRandomGen g => g -> Either e (a,g)) -> Either e (a, StateRNG)
@@ -251,6 +256,13 @@ updateStatusCC sending = do
 	case x of
 		Just newstatus -> updateStatus newstatus >> return Nothing
 		Nothing        -> return $ Just $ Error_Packet_unexpected (show status) ("Client Context: " ++ show cc)
+
+updateVerifiedData :: MonadState TLSState m => Bool -> Bytes -> m ()
+updateVerifiedData sending bs = do
+	cc <- isClientContext
+	if cc /= sending
+		then modify (\st -> st { stServerVerifiedData = bs })
+		else modify (\st -> st { stClientVerifiedData = (bs, fst $ stClientVerifiedData st) })
 
 finishHandshakeTypeMaterial :: HandshakeType -> Bool
 finishHandshakeTypeMaterial HandshakeType_ClientHello     = True

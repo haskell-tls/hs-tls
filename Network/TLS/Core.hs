@@ -87,6 +87,7 @@ data TLSParams = TLSParams
 	, pCompressions      :: [Compression]       -- ^ all compression supported ordered by priority.
 	, pWantClientCert    :: Bool                -- ^ request a certificate from client.
 	                                            -- use by server only.
+	, pUseSecureRenegotiation :: Bool           -- notify that we want to use secure renegotation
 	, pCertificates      :: [(X509, Maybe PrivateKey)] -- ^ the cert chain for this context with the associated keys if any.
 	, pLogging           :: TLSLogging          -- ^ callback for logging
 	, onCertificatesRecv :: ([X509] -> IO TLSCertificateUsage) -- ^ callback to verify received cert chain.
@@ -102,14 +103,15 @@ defaultLogging = TLSLogging
 
 defaultParams :: TLSParams
 defaultParams = TLSParams
-	{ pConnectVersion    = TLS10
-	, pAllowedVersions   = [TLS10,TLS11]
-	, pCiphers           = []
-	, pCompressions      = [nullCompression]
-	, pWantClientCert    = False
-	, pCertificates      = []
-	, pLogging           = defaultLogging
-	, onCertificatesRecv = (\_ -> return CertificateUsageAccept)
+	{ pConnectVersion         = TLS10
+	, pAllowedVersions        = [TLS10,TLS11]
+	, pCiphers                = []
+	, pCompressions           = [nullCompression]
+	, pWantClientCert         = False
+	, pUseSecureRenegotiation = True
+	, pCertificates           = []
+	, pLogging                = defaultLogging
+	, onCertificatesRecv      = (\_ -> return CertificateUsageAccept)
 	}
 
 instance Show TLSParams where
