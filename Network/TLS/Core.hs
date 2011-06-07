@@ -361,11 +361,20 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 			-- the necessary bits set.
 
 			-- send ServerHello & Certificate & ServerKeyXchg & CertReq
+			secReneg   <- usingState_ ctx getSecureRenegotiation
+			extensions <- if secReneg
+				then do
+					vf <- usingState_ ctx $ do
+						cvf <- getVerifiedData True
+						svf <- getVerifiedData False
+						return $ B.concat [cvf,svf]
+					return [ (0xff01, vf) ]
+				else return []
 			sendPacket ctx $ Handshake $ ServerHello ver srand
 			                                         (Session Nothing)
 			                                         (cipherID usedCipher)
 			                                         (compressionID usedCompression)
-			                                         []
+			                                         extensions
 			sendPacket ctx (Handshake $ Certificates srvCerts)
 			when needKeyXchg $ do
 				let skg = SKX_RSA Nothing

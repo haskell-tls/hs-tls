@@ -100,6 +100,9 @@ processHandshake ver ty econtent = do
 			mapM_ processClientExtension ex
 			startHandshakeClient cver ran
 		ServerHello sver ran _ _ _ ex -> when clientmode $ do
+			-- FIXME notify the user to take action if the extension requested is missing
+			-- secreneg <- getSecureRenegotiation
+			-- when (secreneg && (isNothing $ lookup 0xff01 ex)) $ ...
 			mapM_ processServerExtension ex
 			setServerRandom ran
 			setVersion sver
@@ -119,7 +122,9 @@ processHandshake ver ty econtent = do
 		processClientExtension _ = return ()
 
 		processServerExtension (0xff01, content) = do
-			-- do something
+			cv <- getVerifiedData True
+			sv <- getVerifiedData False
+			when (B.concat [cv,sv] /= content) $ throwError $ Error_Protocol ("server secure renegotiation data not matching", True, HandshakeFailure)
 			return ()
 
 		processServerExtension _ = return ()
