@@ -95,17 +95,20 @@ makeValidParams serverCerts = do
 	serverCiphers <- arbitraryCiphers
 	clientCiphers <- oneof [arbitraryCiphers] `suchThat`
 	                 (\cs -> or [x `elem` serverCiphers | x <- cs])
+	secNeg <- arbitrary
 
 	let serverState = defaultParams
-		{ pAllowedVersions = allowedVersions
-		, pCiphers         = serverCiphers
-		, pCertificates    = serverCerts
+		{ pAllowedVersions        = allowedVersions
+		, pCiphers                = serverCiphers
+		, pCertificates           = serverCerts
+		, pUseSecureRenegotiation = secNeg
 		}
 
 	let clientState = defaultParams
-		{ pConnectVersion  = connectVersion
-		, pAllowedVersions = allowedVersions
-		, pCiphers         = clientCiphers
+		{ pConnectVersion         = connectVersion
+		, pAllowedVersions        = allowedVersions
+		, pCiphers                = clientCiphers
+		, pUseSecureRenegotiation = secNeg
 		}
 
 	return (clientState, serverState)
@@ -146,7 +149,7 @@ testInitiate spCert = do
 		return ()
 
 	{- the test involves writing data on one side of the data "pipe" and
-	 - then checking we receive them on the other side of the data "pipe" -}
+	 - then checking we received them on the other side of the data "pipe" -}
 	d <- L.pack <$> pick (someWords8 256)
 	run $ writeChan startQueue d
 
