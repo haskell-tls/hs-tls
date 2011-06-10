@@ -94,14 +94,12 @@ openConnection s p ciphers = do
 	rng <- RNG.makeSystem
 	let params = defaultParams { pCiphers = map fakeCipher ciphers }
 	ctx <- client params rng handle
-	sendPacket ctx $ Handshake $ clienthello ciphers
+	sendPacket ctx $ Handshake [clienthello ciphers]
 	catch (do
 		rpkt <- recvPacket ctx
 		ccid <- case rpkt of
-			Right (h:_) -> case h of
-				(Handshake (ServerHello _ _ _ i _ _)) -> return i
-				_                                     -> error "didn't received serverhello"
-			_                                           -> error ("packet received: " ++ show rpkt)
+			Right (Handshake ((ServerHello _ _ _ i _ _):_)) -> return i
+			_                                               -> error ("expecting server hello, packet received: " ++ show rpkt)
 		bye ctx
 		hClose handle
 		return $ Just ccid
