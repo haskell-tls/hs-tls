@@ -172,13 +172,13 @@ whileStatus ctx p a = do
 	when b (a >> whileStatus ctx p a)
 
 errorToAlert :: TLSError -> Packet
-errorToAlert (Error_Protocol (_, _, ad)) = Alert (AlertLevel_Fatal, ad)
-errorToAlert _                           = Alert (AlertLevel_Fatal, InternalError)
+errorToAlert (Error_Protocol (_, _, ad)) = Alert [(AlertLevel_Fatal, ad)]
+errorToAlert _                           = Alert [(AlertLevel_Fatal, InternalError)]
 
 -- | receive one enveloppe from the context that contains 1 or
 -- many packets (many only in case of handshake). if will returns a
 -- TLSError if the packet is unexpected or malformed
-recvPacket :: MonadIO m => TLSCtx -> m (Either TLSError [Packet])
+recvPacket :: MonadIO m => TLSCtx -> m (Either TLSError Packet)
 recvPacket ctx = do
 	hdr <- (liftIO $ B.hGet (ctxHandle ctx) 5) >>= return . decodeHeader
 	case hdr of
@@ -192,7 +192,7 @@ recvPacket ctx = do
 		liftIO $ (loggingIORecv $ ctxLogging ctx) header content
 		pkt <- usingState ctx $ readPacket header (EncryptedData content)
 		case pkt of
-			Right p -> liftIO $ mapM_ ((loggingPacketRecv $ ctxLogging ctx) . show) p
+			Right p -> liftIO $ (loggingPacketRecv $ ctxLogging ctx) $ show p
 			_       -> return ()
 		return pkt
 
@@ -222,7 +222,7 @@ server params rng handle = liftIO $ newCtx handle params st
 --
 -- this doesn't actually close the handle
 bye :: MonadIO m => TLSCtx -> m ()
-bye ctx = sendPacket ctx $ Alert (AlertLevel_Warning, CloseNotify)
+bye ctx = sendPacket ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
 
 -- client part of handshake. send a bunch of handshake of client
 -- values intertwined with response from the server.
@@ -231,26 +231,25 @@ handshakeClient ctx = do
 	-- Send ClientHello
 	crand <- getStateRNG ctx 32 >>= return . ClientRandom
 	extensions <- getExtensions
-	sendPacket ctx $ Handshake $ ClientHello ver crand
-	                                         (Session Nothing)
-	                                         (map cipherID ciphers)
-	                                         (map compressionID compressions)
-	                                         extensions
+	sendPacket ctx $ Handshake
+		[ ClientHello ver crand (Session Nothing) (map cipherID ciphers)
+		              (map compressionID compressions) extensions
+		]
 
 	-- Receive Server information until ServerHelloDone
 	whileStatus ctx (/= (StatusHandshake HsStatusServerHelloDone)) $ do
 		pkts <- recvPacket ctx
 		case pkts of
 			Left err -> error ("error received: " ++ show err)
-			Right l  -> mapM_ processServerInfo l
+			Right l  -> processServerInfo l
 
 	-- Send Certificate if requested. XXX disabled for now.
 	certRequested <- return False
-	when certRequested (sendPacket ctx $ Handshake (Certificates clientCerts))
+	when certRequested (sendPacket ctx $ Handshake [Certificates clientCerts])
 
 	-- Send ClientKeyXchg
 	prerand <- getStateRNG ctx 46 >>= return . ClientKeyData
-	sendPacket ctx $ Handshake (ClientKeyXchg ver prerand)
+	sendPacket ctx $ Handshake [ClientKeyXchg ver prerand]
 
 	{- maybe send certificateVerify -}
 	{- FIXME not implemented yet -}
@@ -260,7 +259,7 @@ handshakeClient ctx = do
 
 	-- Send Finished
 	cf <- usingState_ ctx $ getHandshakeDigest True
-	sendPacket ctx (Handshake $ Finished cf)
+	sendPacket ctx (Handshake [Finished cf])
 
 	-- receive changeCipherSpec & Finished
 	recvPacket ctx >> recvPacket ctx >> return ()
@@ -277,7 +276,10 @@ handshakeClient ctx = do
 			then usingState_ ctx (getVerifiedData True) >>= \vd -> return [ (0xff01, vd) ]
 			else return []
 
-		processServerInfo (Handshake (ServerHello rver _ _ cipher _ _)) = do
+		processServerInfo (Handshake hss) = mapM_ processHandshake hss
+		processServerInfo _               = return ()
+
+		processHandshake (ServerHello rver _ _ cipher _ _) = do
 			when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
 			case find ((==) rver) allowedvers of
 				Nothing -> throwCore $ Error_Protocol ("version " ++ show ver ++ "is not supported", True, ProtocolVersion)
@@ -286,18 +288,18 @@ handshakeClient ctx = do
 				Nothing -> throwCore $ Error_Protocol ("no cipher in common with the server", True, HandshakeFailure)
 				Just c  -> usingState_ ctx $ setCipher c
 
-		processServerInfo (Handshake (CertRequest _ _ _)) = do
-			return ()
-			--modify (\sc -> sc { scCertRequested = True })
-
-		processServerInfo (Handshake (Certificates certs)) = do
+		processHandshake (Certificates certs) = do
 			let cb = onCertificatesRecv $ params
 			usage <- liftIO $ cb certs
 			case usage of
 				CertificateUsageAccept        -> return ()
 				CertificateUsageReject reason -> certificateRejected reason
 
-		processServerInfo _ = return ()
+		processHandshake (CertRequest _ _ _) = do
+			return ()
+			--modify (\sc -> sc { scCertRequested = True })
+		processHandshake _ = return ()
+
 
 		-- on certificate reject, throw an exception with the proper protocol alert error.
 		certificateRejected CertificateRejectRevoked =
@@ -336,7 +338,7 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 
 	-- Send Finish
 	cf <- usingState_ ctx $ getHandshakeDigest False
-	sendPacket ctx (Handshake $ Finished cf)
+	sendPacket ctx (Handshake [Finished cf])
 
 	liftIO $ hFlush $ ctxHandle ctx
 	return ()
@@ -370,22 +372,21 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 						return $ B.concat [cvf,svf]
 					return [ (0xff01, vf) ]
 				else return []
-			sendPacket ctx $ Handshake $ ServerHello ver srand
-			                                         (Session Nothing)
-			                                         (cipherID usedCipher)
-			                                         (compressionID usedCompression)
-			                                         extensions
-			sendPacket ctx (Handshake $ Certificates srvCerts)
+			sendPacket ctx $ Handshake
+				[ ServerHello ver srand (Session Nothing) (cipherID usedCipher)
+				                        (compressionID usedCompression) extensions
+				, Certificates srvCerts
+				]
 			when needKeyXchg $ do
 				let skg = SKX_RSA Nothing
-				sendPacket ctx (Handshake $ ServerKeyXchg skg)
+				sendPacket ctx (Handshake [ServerKeyXchg skg])
 			-- FIXME we don't do this on a Anonymous server
 			when (pWantClientCert params) $ do
 				let certTypes = [ CertificateType_RSA_Sign ]
 				let creq = CertRequest certTypes Nothing [0,0,0]
-				sendPacket ctx (Handshake creq)
+				sendPacket ctx (Handshake [creq])
 			-- Send HelloDone
-			sendPacket ctx (Handshake ServerHelloDone)
+			sendPacket ctx (Handshake [ServerHelloDone])
 
 handshakeServerWith _ _ = fail "unexpected handshake type received. expecting client hello"
 
@@ -394,8 +395,8 @@ handshakeServer :: MonadIO m => TLSCtx -> m ()
 handshakeServer ctx = do
 	pkts <- recvPacket ctx
 	case pkts of
-		Right [Handshake hs] -> handshakeServerWith ctx hs
-		x                    -> fail ("unexpected type received. expecting handshake ++ " ++ show x)
+		Right (Handshake [hs]) -> handshakeServerWith ctx hs
+		x                      -> fail ("unexpected type received. expecting handshake ++ " ++ show x)
 
 -- | Handshake for a new TLS connection
 -- This is to be called at the beginning of a connection, and during renegociation
@@ -429,21 +430,16 @@ recvData ctx = do
 	pkt <- recvPacket ctx
 	case pkt of
 		-- on server context receiving a client hello == renegociation
-		Right [Handshake ch@(ClientHello _ _ _ _ _ _)] ->
+		Right (Handshake [ch@(ClientHello _ _ _ _ _ _)]) ->
 			handshakeServerWith ctx ch >> recvData ctx
 		-- on client context, receiving a hello request == renegociation
-		Right [Handshake HelloRequest] ->
+		Right (Handshake [HelloRequest]) ->
 			handshakeClient ctx >> recvData ctx
-		Right [Alert (AlertLevel_Fatal, _)] ->
+		Right (Alert [(AlertLevel_Fatal, _)]) ->
 			-- close the connection
 			return L.empty
-		Right [Alert (AlertLevel_Warning, CloseNotify)] -> do
+		Right (Alert [(AlertLevel_Warning, CloseNotify)]) -> do
 			return L.empty
-		Right l           -> do
-			let dat = map getAppData l
-			when (length dat < length l) $ error "error mixed type packet"
-			return $ L.fromChunks $ catMaybes dat
+		Right (AppData x) -> return $ L.fromChunks [x]
+		Right p           -> error ("error unexpected packet: p" ++ show p)
 		Left err          -> error ("error received: " ++ show err)
-	where
-		getAppData (AppData x) = Just x
-		getAppData _           = Nothing

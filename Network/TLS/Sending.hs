@@ -76,27 +76,23 @@ encodePacket (hdr, content) = return $ B.concat [ encodeHeader hdr, content ]
 {-
  - just update TLS state machine
  -}
-preProcessPacket :: Packet -> TLSSt Packet
-preProcessPacket pkt = do
-	-- FIXME don't ignore this error just in case
-	_ <- case pkt of
-		Handshake hs     -> do
-			e <- updateStatusHs (typeOfHandshake hs)
-			case hs of
-				Finished fdata -> updateVerifiedData True fdata
-				_              -> return ()
-			return e
-		AppData _        -> return Nothing
-		ChangeCipherSpec -> updateStatusCC True
-		Alert _          -> return Nothing
-	return pkt
+preProcessPacket :: Packet -> TLSSt ()
+preProcessPacket (Alert _)          = return ()
+preProcessPacket (AppData _)        = return ()
+preProcessPacket (ChangeCipherSpec) = updateStatusCC True >> return () -- FIXME don't ignore this error just in case
+preProcessPacket (Handshake hss)    = forM_ hss $ \hs -> do
+	-- FIXME don't ignore this error
+	_ <- updateStatusHs (typeOfHandshake hs)
+	case hs of
+		Finished fdata -> updateVerifiedData True fdata
+		_              -> return ()
 
 {-
  - writePacket transform a packet into marshalled data related to current state
  - and updating state on the go
  -}
 writePacket :: Packet -> TLSSt ByteString
-writePacket pkt = preProcessPacket pkt >>= makePacketData >>= processPacketData >>=
+writePacket pkt = preProcessPacket pkt >> makePacketData pkt >>= processPacketData >>=
                   encryptPacketData >>= postprocessPacketData >>= encodePacket
 
 {------------------------------------------------------------------------------}
@@ -159,37 +155,35 @@ encryptData content = do
 			put $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
 			return e
 
-encodePacketContent :: Packet -> ByteString
-encodePacketContent (Handshake h)      = encodeHandshake h
-encodePacketContent (Alert a)          = encodeAlert a
-encodePacketContent (ChangeCipherSpec) = encodeChangeCipherSpec
-encodePacketContent (AppData x)        = x
-
 writePacketContent :: Packet -> TLSSt ByteString
-writePacketContent (Handshake ckx@(ClientKeyXchg _ _)) = do
-	ver <- get >>= return . stVersion 
-	let premastersecret = runPut $ encodeHandshakeContent ckx
-	setMasterSecret premastersecret
-	econtent <- encryptRSA premastersecret
+writePacketContent (Handshake hss) = return . B.concat =<< mapM makeContent hss where
+	makeContent hs@(ClientKeyXchg _ _) = do
+		ver <- get >>= return . stVersion
+		let premastersecret = runPut $ encodeHandshakeContent hs
+		setMasterSecret premastersecret
+		econtent <- encryptRSA premastersecret
 
-	let extralength =
-		if ver < TLS10
-		then B.empty
-		else runPut $ putWord16 $ fromIntegral $ B.length econtent
-	let hdr = runPut $ encodeHandshakeHeader (typeOfHandshake ckx)
-	                                         (fromIntegral (B.length econtent + B.length extralength))
-	return $ B.concat [hdr, extralength, econtent]
+		let extralength =
+			if ver < TLS10
+			then B.empty
+			else runPut $ putWord16 $ fromIntegral $ B.length econtent
+		let hdr = runPut $ encodeHandshakeHeader (typeOfHandshake hs)
+							 (fromIntegral (B.length econtent + B.length extralength))
+		return $ B.concat [hdr, extralength, econtent]
 
-writePacketContent pkt@(Handshake (ClientHello ver crand _ _ _ _)) = do
-	cc <- isClientContext
-	when cc (startHandshakeClient ver crand)
-	return $ encodePacketContent pkt
+	makeContent hs@(ClientHello ver crand _ _ _ _) = do
+		cc <- isClientContext
+		when cc (startHandshakeClient ver crand)
+		return $ encodeHandshakes [hs]
+	makeContent hs@(ServerHello ver srand _ _ _ _) = do
+		cc <- isClientContext
+		unless cc $ do
+			setVersion ver
+			setServerRandom srand
+		return $ encodeHandshakes [hs]
 
-writePacketContent pkt@(Handshake (ServerHello ver srand _ _ _ _)) = do
-	cc <- isClientContext
-	unless cc $ do
-		setVersion ver
-		setServerRandom srand
-	return $ encodePacketContent pkt
+	makeContent hs = return $ encodeHandshakes [hs]
 
-writePacketContent pkt = return $ encodePacketContent pkt
+writePacketContent (Alert a)          = return $ encodeAlerts a
+writePacketContent (ChangeCipherSpec) = return $ encodeChangeCipherSpec
+writePacketContent (AppData x)        = return x

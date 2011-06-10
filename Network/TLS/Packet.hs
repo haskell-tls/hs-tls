@@ -20,12 +20,14 @@ module Network.TLS.Packet
 
 	-- * marshall functions for alert messages
 	, decodeAlert
-	, encodeAlert
+	, decodeAlerts
+	, encodeAlerts
 
 	-- * marshall functions for handshake messages
 	, decodeHandshakes
 	, decodeHandshake
 	, encodeHandshake
+	, encodeHandshakes
 	, encodeHandshakeHeader
 	, encodeHandshakeContent
 
@@ -116,8 +118,8 @@ encodeHeaderNoVer (Header pt _ len) = runPut (putHeaderType pt >> putWord16 len)
 {-
  - decode and encode ALERT
  -}
-decodeAlert :: ByteString -> Either TLSError (AlertLevel, AlertDescription)
-decodeAlert = runGetErr $ do
+decodeAlert :: Get (AlertLevel, AlertDescription)
+decodeAlert = do
 	al <- getWord8
 	ad <- getWord8
 	case (valToType al, valToType ad) of
@@ -125,8 +127,17 @@ decodeAlert = runGetErr $ do
 		(Nothing, _)     -> fail "cannot decode alert level"
 		(_, Nothing)     -> fail "cannot decode alert description"
 
-encodeAlert :: (AlertLevel, AlertDescription) -> ByteString
-encodeAlert (al, ad) = runPut (putWord8 (valOfType al) >> putWord8 (valOfType ad))
+decodeAlerts :: ByteString -> Either TLSError [(AlertLevel, AlertDescription)]
+decodeAlerts = runGetErr $ loop
+	where loop = do
+		r <- remaining
+		if r == 0
+			then return []
+			else liftM2 (:) decodeAlert loop
+
+encodeAlerts :: [(AlertLevel, AlertDescription)] -> ByteString
+encodeAlerts l = runPut $ mapM_ encodeAlert l
+	where encodeAlert (al, ad) = (putWord8 (valOfType al) >> putWord8 (valOfType ad))
 
 {- decode and encode HANDSHAKE -}
 decodeHandshakeHeader :: Get (HandshakeType, Bytes)
@@ -274,6 +285,9 @@ encodeHandshake o =
 	let len = fromIntegral $ B.length content in
 	let header = runPut $ encodeHandshakeHeader (typeOfHandshake o) len in
 	B.concat [ header, content ]
+
+encodeHandshakes :: [Handshake] -> ByteString
+encodeHandshakes hss = B.concat $ map encodeHandshake hss
 
 encodeHandshakeHeader :: HandshakeType -> Int -> Put
 encodeHandshakeHeader ty len = putWord8 (valOfType ty) >> putWord24 len

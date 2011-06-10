@@ -130,8 +130,8 @@ instance Error TLSError where
 instance Exception TLSError
 
 data Packet =
-	  Handshake Handshake
-	| Alert (AlertLevel, AlertDescription)
+	  Handshake [Handshake]
+	| Alert [(AlertLevel, AlertDescription)]
 	| ChangeCipherSpec
 	| AppData ByteString
 	deriving (Show,Eq)

@@ -35,7 +35,7 @@ returnEither :: Either TLSError a -> TLSSt a
 returnEither (Left err) = throwError err
 returnEither (Right a)  = return a
 
-readPacket :: Header -> EncryptedData -> TLSSt [Packet]
+readPacket :: Header -> EncryptedData -> TLSSt Packet
 readPacket hdr content = checkState hdr >> decryptContent hdr content >>= processPacket hdr
 
 checkState :: Header -> TLSSt ()
@@ -54,11 +54,11 @@ checkState (Header pt _ _) =
 		allowed ProtocolType_ChangeCipherSpec (StatusHandshake HsStatusClientCertificateVerify) = True
 		allowed _ _ = False
 
-processPacket :: Header -> Bytes -> TLSSt [Packet]
+processPacket :: Header -> Bytes -> TLSSt Packet
 
-processPacket (Header ProtocolType_AppData _ _) content = return [AppData content]
+processPacket (Header ProtocolType_AppData _ _) content = return $ AppData content
 
-processPacket (Header ProtocolType_Alert _ _) content = return . (:[]) . Alert =<< returnEither (decodeAlert content)
+processPacket (Header ProtocolType_Alert _ _) content = return . Alert =<< returnEither (decodeAlerts content)
 
 processPacket (Header ProtocolType_ChangeCipherSpec _ _) content = do
 	e <- updateStatusCC False
@@ -67,16 +67,17 @@ processPacket (Header ProtocolType_ChangeCipherSpec _ _) content = do
 	returnEither $ decodeChangeCipherSpec content
 	switchRxEncryption
 	isClientContext >>= \cc -> when (not cc) setKeyBlock
-	return [ChangeCipherSpec]
+	return ChangeCipherSpec
 
 processPacket (Header ProtocolType_Handshake ver _) dcontent = do
 	handshakes <- returnEither (decodeHandshakes dcontent)
-	forM handshakes $ \(ty, content) -> do
+	hss <- forM handshakes $ \(ty, content) -> do
 		hs <- processHandshake ver ty content
 		when (finishHandshakeTypeMaterial ty) $ updateHandshakeDigestSplitted ty content
 		return hs
+	return $ Handshake hss
 
-processHandshake :: Version -> HandshakeType -> ByteString -> TLSSt Packet
+processHandshake :: Version -> HandshakeType -> ByteString -> TLSSt Handshake
 processHandshake ver ty econtent = do
 	-- SECURITY FIXME if RSA fail, we need to generate a random master secret and not fail.
 	e <- updateStatusHs ty
@@ -111,7 +112,7 @@ processHandshake ver ty econtent = do
 			processClientKeyXchg cver content
 		Finished fdata                -> processClientFinished fdata
 		_                             -> return ()
-	return $ Handshake hs
+	return hs
 	where
 		-- secure renegotiation
 		processClientExtension (0xff01, content) = do
