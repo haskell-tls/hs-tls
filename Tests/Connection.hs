@@ -161,12 +161,14 @@ testInitiate spCert = do
 
 	where
 		tlsServer handle queue = do
-			handshake handle
+			success <- handshake handle
+			unless success $ fail "handshake failed on server side"
 			d <- recvData handle
 			writeChan queue d
 			return ()
 		tlsClient queue handle = do
-			handshake handle
+			success <- handshake handle
+			unless success $ fail "handshake failed on client side"
 			d <- readChan queue
 			sendData handle d
 			return ()
