@@ -267,11 +267,14 @@ doServer pargs = do
 			forever $ do
 				(s, addr) <- accept srcsocket
 				srch <- socketToHandle s ReadWriteMode
-				(StunnelSocket dst) <- connectAddressDescription dstaddr
-				dsth <- socketToHandle dst ReadWriteMode
+				r <- connectAddressDescription dstaddr
+				dsth <- case r of
+					StunnelFd _ _     -> return stdout
+					StunnelSocket dst -> socketToHandle dst ReadWriteMode
+
 				_ <- forkIO $ finally
 					(clientProcess [(cert, Just pk)] srch dsth (debug pargs) addr >> return ())
-					(hClose srch >> hClose dsth)
+					(hClose srch >> (when (dsth /= stdout) $ hClose dsth))
 				return ()
 		AddrFD _ _ -> error "bad error fd. not implemented"
 
