@@ -160,7 +160,7 @@ usingState_ :: MonadIO m => TLSCtx -> TLSSt a -> m a
 usingState_ ctx f = do
 	ret <- usingState ctx f
 	case ret of
-		Left err -> error ("assertion failed, wrong use of state_: " ++ show err)
+		Left err -> throwCore err
 		Right r  -> return r
 
 getStateRNG :: MonadIO m => TLSCtx -> Int -> m Bytes
@@ -247,7 +247,7 @@ handshakeClient ctx = do
 	whileStatus ctx (/= (StatusHandshake HsStatusServerHelloDone)) $ do
 		pkts <- recvPacket ctx
 		case pkts of
-			Left err -> error ("error received: " ++ show err)
+			Left err -> throwCore err
 			Right l  -> processServerInfo l
 
 	-- Send Certificate if requested. XXX disabled for now.
