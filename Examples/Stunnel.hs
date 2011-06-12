@@ -80,14 +80,19 @@ tlsserver srchandle dsthandle = do
 		return False
 	putStrLn "end"
 
-clientProcess certs handle dsthandle _ = do
+clientProcess certs handle dsthandle dbg _ = do
 	rng <- RNG.makeSystem
+	let logging = if not dbg then defaultLogging else defaultLogging
+		{ loggingPacketSent = putStrLn . ("debug: send: " ++)
+		, loggingPacketRecv = putStrLn . ("debug: recv: " ++)
+		}
 
 	let serverstate = defaultParams
 		{ pAllowedVersions = [SSL3,TLS10,TLS11]
 		, pCiphers         = ciphers
 		, pCertificates    = certs
 		, pWantClientCert  = False
+		, pLogging         = logging
 		}
 	ctx <- server serverstate rng handle
 	tlsserver ctx dsthandle
@@ -136,6 +141,7 @@ data Stunnel =
 		, destination     :: String
 		, sourceType      :: String
 		, source          :: String
+		, debug           :: Bool
 		, certificate     :: FilePath
 		, key             :: FilePath }
 	deriving (Show, Data, Typeable)
@@ -155,6 +161,7 @@ serverOpts = Server
 	, destination     = "localhost:6060"  &= help "destination address influenced by destination type" &= typ "ADDRESS"
 	, sourceType      = "tcp"             &= help "type of source (tcp, unix, fd)" &= typ "SOURCETYPE"
 	, source          = "localhost:6061"  &= help "source address influenced by source type" &= typ "ADDRESS"
+	, debug           = False             &= help "debug the TLS protocol printing debugging to stdout" &= typ "Bool"
 	, certificate     = "certificate.pem" &= help "X509 public certificate to use" &= typ "FILE"
 	, key             = "certificate.key" &= help "private key linked to the certificate" &= typ "FILE"
 	}
@@ -263,7 +270,7 @@ doServer pargs = do
 				(StunnelSocket dst) <- connectAddressDescription dstaddr
 				dsth <- socketToHandle dst ReadWriteMode
 				_ <- forkIO $ finally
-					(clientProcess [(cert, Just pk)] srch dsth addr >> return ())
+					(clientProcess [(cert, Just pk)] srch dsth (debug pargs) addr >> return ())
 					(hClose srch >> hClose dsth)
 				return ()
 		AddrFD _ _ -> error "bad error fd. not implemented"
@@ -273,4 +280,4 @@ main = do
 	x <- cmdArgsRun mode
 	case x of
 		Client _ _ _ _ _ _ -> doClient x
-		Server _ _ _ _ _ _ -> doServer x
+		Server _ _ _ _ _ _ _ -> doServer x
