@@ -175,8 +175,8 @@ errorToAlert :: TLSError -> Packet
 errorToAlert (Error_Protocol (_, _, ad)) = Alert [(AlertLevel_Fatal, ad)]
 errorToAlert _                           = Alert [(AlertLevel_Fatal, InternalError)]
 
--- | receive one enveloppe from the context that contains 1 or
--- many packets (many only in case of handshake). if will returns a
+-- | receive one packet from the context that contains 1 or
+-- many messages (many only in case of handshake). if will returns a
 -- TLSError if the packet is unexpected or malformed
 recvPacket :: MonadIO m => TLSCtx -> m (Either TLSError Packet)
 recvPacket ctx = do
