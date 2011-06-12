@@ -196,6 +196,13 @@ recvPacket ctx = do
 			_       -> return ()
 		return pkt
 
+recvPacketSuccess :: MonadIO m => TLSCtx -> m ()
+recvPacketSuccess ctx = do
+	pkt <- recvPacket ctx
+	case pkt of
+		Left err -> throwCore err
+		Right _  -> return ()
+
 -- | Send one packet to the context
 sendPacket :: MonadIO m => TLSCtx -> Packet -> m ()
 sendPacket ctx pkt = do
@@ -262,7 +269,7 @@ handshakeClient ctx = do
 	sendPacket ctx (Handshake [Finished cf])
 
 	-- receive changeCipherSpec & Finished
-	recvPacket ctx >> recvPacket ctx >> return ()
+	recvPacketSuccess ctx >> recvPacketSuccess ctx >> return ()
 
 	where
 		params       = ctxParams ctx
@@ -332,7 +339,7 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 	liftIO $ hFlush $ ctxHandle ctx
 
 	-- Receive client info until client Finished.
-	whileStatus ctx (/= (StatusHandshake HsStatusClientFinished)) (recvPacket ctx)
+	whileStatus ctx (/= (StatusHandshake HsStatusClientFinished)) (recvPacketSuccess ctx)
 
 	sendPacket ctx ChangeCipherSpec
 
