@@ -180,8 +180,8 @@ errorToAlert _                           = Alert [(AlertLevel_Fatal, InternalErr
 -- TLSError if the packet is unexpected or malformed
 recvPacket :: MonadIO m => TLSCtx -> m (Either TLSError Packet)
 recvPacket ctx = do
-	hdr <- (liftIO $ B.hGet (ctxHandle ctx) 5) >>= return . decodeHeader
-	case hdr of
+	hdrbs <- liftIO $ B.hGet (ctxHandle ctx) 5
+	case decodeHeader hdrbs of
 		Left err                          -> return $ Left err
 		Right header@(Header _ _ readlen) ->
 			if readlen > (16384 + 2048)
