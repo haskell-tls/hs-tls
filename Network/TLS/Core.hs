@@ -238,6 +238,7 @@ handshakeClient ctx = do
 	-- Send ClientHello
 	crand <- getStateRNG ctx 32 >>= return . ClientRandom
 	extensions <- getExtensions
+	usingState_ ctx (startHandshakeClient ver crand)
 	sendPacket ctx $ Handshake
 		[ ClientHello ver crand (Session Nothing) (map cipherID ciphers)
 		              (map compressionID compressions) extensions
@@ -379,6 +380,7 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 						return $ B.concat [cvf,svf]
 					return [ (0xff01, vf) ]
 				else return []
+			usingState_ ctx (setVersion ver >> setServerRandom srand)
 			sendPacket ctx $ Handshake
 				[ ServerHello ver srand (Session Nothing) (cipherID usedCipher)
 				                        (compressionID usedCompression) extensions

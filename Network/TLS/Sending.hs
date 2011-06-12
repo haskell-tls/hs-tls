@@ -170,18 +170,6 @@ writePacketContent (Handshake hss) = return . B.concat =<< mapM makeContent hss 
 		let hdr = runPut $ encodeHandshakeHeader (typeOfHandshake hs)
 							 (fromIntegral (B.length econtent + B.length extralength))
 		return $ B.concat [hdr, extralength, econtent]
-
-	makeContent hs@(ClientHello ver crand _ _ _ _) = do
-		cc <- isClientContext
-		when cc (startHandshakeClient ver crand)
-		return $ encodeHandshakes [hs]
-	makeContent hs@(ServerHello ver srand _ _ _ _) = do
-		cc <- isClientContext
-		unless cc $ do
-			setVersion ver
-			setServerRandom srand
-		return $ encodeHandshakes [hs]
-
 	makeContent hs = return $ encodeHandshakes [hs]
 
 writePacketContent (Alert a)          = return $ encodeAlerts a
