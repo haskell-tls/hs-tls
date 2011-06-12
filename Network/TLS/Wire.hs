@@ -31,13 +31,16 @@ module Network.TLS.Wire
 	, encodeWord64
 	) where
 
-import Data.Serialize.Get
+import Data.Serialize.Get hiding (runGet)
+import qualified Data.Serialize.Get as G
 import Data.Serialize.Put
 import Control.Applicative ((<$>))
 import Control.Monad.Error
 import Data.Word
 import Data.Bits
 import Network.TLS.Struct
+
+runGet lbl f = G.runGet (label lbl f)
 
 getWords8 :: Get [Word8]
 getWords8 = getWord8 >>= \lenb -> replicateM (fromIntegral lenb) getWord8

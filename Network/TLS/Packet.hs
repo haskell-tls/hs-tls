@@ -64,8 +64,8 @@ data CurrentParams = CurrentParams
 	, cParamsKeyXchgType :: CipherKeyExchangeType -- ^ current key exchange type
 	} deriving (Show,Eq)
 
-runGetErr :: Get a -> ByteString -> Either TLSError a
-runGetErr f = either (Left . Error_Packet_Parsing) Right . runGet f
+runGetErr :: String -> Get a -> ByteString -> Either TLSError a
+runGetErr lbl f = either (Left . Error_Packet_Parsing) Right . runGet lbl f
 
 {- marshall helpers -}
 getVersion :: Get Version
@@ -101,7 +101,7 @@ getHandshakeType = do
  - decode and encode headers
  -}
 decodeHeader :: ByteString -> Either TLSError Header
-decodeHeader = runGetErr $ do
+decodeHeader = runGetErr "header" $ do
 	ty  <- getHeaderType
 	v   <- getVersion
 	len <- getWord16
@@ -128,7 +128,7 @@ decodeAlert = do
 		(_, Nothing)     -> fail "cannot decode alert description"
 
 decodeAlerts :: ByteString -> Either TLSError [(AlertLevel, AlertDescription)]
-decodeAlerts = runGetErr $ loop
+decodeAlerts = runGetErr "alerts" $ loop
 	where loop = do
 		r <- remaining
 		if r == 0
@@ -148,17 +148,16 @@ decodeHandshakeHeader = do
 	return (ty, content)
 
 decodeHandshakes :: ByteString -> Either TLSError [(HandshakeType, Bytes)]
-decodeHandshakes b = runGetErr getAll b
-	where
-		getAll = do
-			x <- decodeHandshakeHeader
-			empty <- isEmpty
-			if empty
-				then return [x]
-				else getAll >>= \l -> return (x : l)
+decodeHandshakes b = runGetErr "handshakes" getAll b where
+	getAll = do
+		x <- decodeHandshakeHeader
+		empty <- isEmpty
+		if empty
+			then return [x]
+			else getAll >>= \l -> return (x : l)
 
 decodeHandshake :: CurrentParams -> HandshakeType -> ByteString -> Either TLSError Handshake
-decodeHandshake cp ty = runGetErr $ case ty of
+decodeHandshake cp ty = runGetErr "handshake" $ case ty of
 	HandshakeType_HelloRequest    -> decodeHelloRequest
 	HandshakeType_ClientHello     -> decodeClientHello
 	HandshakeType_ServerHello     -> decodeServerHello
@@ -412,7 +411,7 @@ putExtensions es = putWord16 (fromIntegral $ B.length extbs) >> putBytes extbs
  -}
 
 decodeChangeCipherSpec :: ByteString -> Either TLSError ()
-decodeChangeCipherSpec = runGetErr $ do
+decodeChangeCipherSpec = runGetErr "changecipherspec" $ do
 	x <- getWord8
 	when (x /= 1) (fail "unknown change cipher spec content")
 
