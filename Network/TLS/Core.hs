@@ -255,9 +255,7 @@ handshakeClient ctx = do
 	certRequested <- return False
 	when certRequested (sendPacket ctx $ Handshake [Certificates clientCerts])
 
-	-- Send ClientKeyXchg
-	prerand <- getStateRNG ctx 46 >>= return . ClientKeyData
-	sendPacket ctx $ Handshake [ClientKeyXchg ver prerand]
+	sendClientKeyXchg
 
 	{- maybe send certificateVerify -}
 	{- FIXME not implemented yet -}
@@ -308,6 +306,9 @@ handshakeClient ctx = do
 			--modify (\sc -> sc { scCertRequested = True })
 		processHandshake _ = return ()
 
+		sendClientKeyXchg = do
+			prerand <- getStateRNG ctx 46 >>= return . ClientKeyData
+			sendPacket ctx $ Handshake [ClientKeyXchg ver prerand]
 
 		-- on certificate reject, throw an exception with the proper protocol alert error.
 		certificateRejected CertificateRejectRevoked =
