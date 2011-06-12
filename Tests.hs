@@ -75,8 +75,8 @@ pubkey = PubKeyRSA (1,2,3)
 
 instance Arbitrary Handshake where
 	arbitrary = oneof
-		[ liftM6 ClientHello arbitrary arbitrary arbitrary arbitraryCiphersIDs arbitraryCompressionIDs (return Nothing)
-		, liftM6 ServerHello arbitrary arbitrary arbitrary arbitrary arbitrary (return Nothing)
+		[ liftM6 ClientHello arbitrary arbitrary arbitrary arbitraryCiphersIDs arbitraryCompressionIDs (return [])
+		, liftM6 ServerHello arbitrary arbitrary arbitrary arbitrary arbitrary (return [])
 		--, liftM Certificates (resize 2 $ listOf $ arbitraryX509 pubkey)
 		, return HelloRequest
 		, return ServerHelloDone
@@ -84,7 +84,7 @@ instance Arbitrary Handshake where
 		--, liftM  ServerKeyXchg
 		--, liftM3 CertRequest arbitrary (return Nothing) (return [])
 		--, liftM CertVerify (return [])
-		, liftM Finished (vector 12)
+		, liftM Finished (genByteString 12)
 		]
 
 {- quickcheck property -}
