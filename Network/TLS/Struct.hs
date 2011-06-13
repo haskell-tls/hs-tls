@@ -114,6 +114,7 @@ data TLSError =
 	| Error_Protocol (String, Bool, AlertDescription)
 	| Error_Certificate String
 	| Error_Random String
+	| Error_EOF
 	| Error_Packet String
 	| Error_Packet_Size_Mismatch (Int, Int)
 	| Error_Packet_unexpected String String

@@ -19,6 +19,7 @@ module Network.TLS.Core
 	-- * Context object
 	, TLSCtx
 	, ctxHandle
+	, ctxEOF
 
 	-- * Internal packet sending and receiving
 	, sendPacket
@@ -56,7 +57,9 @@ import Control.Applicative ((<$>))
 import Control.Concurrent.MVar
 import Control.Monad.State
 import Control.Exception (throwIO, Exception(), onException, fromException, catch)
+import Data.IORef
 import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush)
+import System.IO.Error (mkIOError, eofErrorType)
 import Prelude hiding (catch)
 
 data TLSLogging = TLSLogging
@@ -129,7 +132,11 @@ data TLSCtx = TLSCtx
 	{ ctxHandle :: Handle        -- ^ return the handle associated with this context
 	, ctxParams :: TLSParams
 	, ctxState  :: MVar TLSState
+	, ctxEOF_   :: IORef Bool    -- ^ is the handle as EOFed or not.
 	}
+
+ctxEOF :: MonadIO m => TLSCtx -> m Bool
+ctxEOF ctx = liftIO (readIORef $ ctxEOF_ ctx)
 
 throwCore :: (MonadIO m, Exception e) => e -> m a
 throwCore = liftIO . throwIO
@@ -138,10 +145,12 @@ newCtx :: Handle -> TLSParams -> TLSState -> IO TLSCtx
 newCtx handle params st = do
 	hSetBuffering handle NoBuffering
 	stvar <- newMVar st
+	eof   <- newIORef False
 	return $ TLSCtx
 		{ ctxHandle = handle
 		, ctxParams = params
 		, ctxState  = stvar
+		, ctxEOF_   = eof
 		}
 
 ctxLogging :: TLSCtx -> TLSLogging
@@ -175,12 +184,25 @@ errorToAlert :: TLSError -> Packet
 errorToAlert (Error_Protocol (_, _, ad)) = Alert [(AlertLevel_Fatal, ad)]
 errorToAlert _                           = Alert [(AlertLevel_Fatal, InternalError)]
 
+setEOF :: MonadIO m => TLSCtx -> m ()
+setEOF ctx = liftIO $ writeIORef (ctxEOF_ ctx) True
+
+readExact :: MonadIO m => TLSCtx -> Int -> m Bytes
+readExact ctx sz = do
+	hdrbs <- liftIO $ B.hGet (ctxHandle ctx) sz
+	when (B.length hdrbs < sz) $ do
+		setEOF ctx
+		if B.null hdrbs
+			then throwCore Error_EOF
+			else throwCore (Error_Packet ("partial packet: expecting " ++ show sz ++ " bytes, got: " ++ (show $B.length hdrbs)))
+	return hdrbs
+
 -- | receive one packet from the context that contains 1 or
 -- many messages (many only in case of handshake). if will returns a
 -- TLSError if the packet is unexpected or malformed
 recvPacket :: MonadIO m => TLSCtx -> m (Either TLSError Packet)
 recvPacket ctx = do
-	hdrbs <- liftIO $ B.hGet (ctxHandle ctx) 5
+	hdrbs <- readExact ctx 5
 	case decodeHeader hdrbs of
 		Left err                          -> return $ Left err
 		Right header@(Header _ _ readlen) ->
@@ -188,7 +210,7 @@ recvPacket ctx = do
 				then return $ Left $ Error_Protocol ("record exceeding maximum size",True, RecordOverflow)
 				else recvLength header readlen
 	where recvLength header readlen = do
-		content <- liftIO $ B.hGet (ctxHandle ctx) (fromIntegral readlen)
+		content <- readExact ctx (fromIntegral readlen)
 		liftIO $ (loggingIORecv $ ctxLogging ctx) header content
 		pkt <- usingState ctx $ readPacket header (EncryptedData content)
 		case pkt of
@@ -423,9 +445,11 @@ handshake ctx = do
 -- | sendData sends a bunch of data.
 -- It will automatically chunk data to acceptable packet size
 sendData :: MonadIO m => TLSCtx -> L.ByteString -> m ()
-sendData ctx dataToSend = mapM_ sendDataChunk (L.toChunks dataToSend)
-	where sendDataChunk d =
-		if B.length d > 16384
+sendData ctx dataToSend = do
+	eofed <- ctxEOF ctx
+	when eofed $ liftIO $ throwIO $ mkIOError eofErrorType "sendData" (Just (ctxHandle ctx)) Nothing
+	mapM_ sendDataChunk (L.toChunks dataToSend)
+		where sendDataChunk d = if B.length d > 16384
 			then do
 				let (sending, remain) = B.splitAt 16384 d
 				sendPacket ctx $ AppData sending
@@ -437,7 +461,9 @@ sendData ctx dataToSend = mapM_ sendDataChunk (L.toChunks dataToSend)
 -- a Handshake ClientHello is received
 recvData :: MonadIO m => TLSCtx -> m L.ByteString
 recvData ctx = do
-	pkt <- recvPacket ctx
+	eofed <- ctxEOF ctx
+	when eofed $ liftIO $ throwIO $ mkIOError eofErrorType "recvData" (Just (ctxHandle ctx)) Nothing
+	pkt   <- recvPacket ctx
 	case pkt of
 		-- on server context receiving a client hello == renegociation
 		Right (Handshake [ch@(ClientHello _ _ _ _ _ _)]) ->
@@ -445,10 +471,11 @@ recvData ctx = do
 		-- on client context, receiving a hello request == renegociation
 		Right (Handshake [HelloRequest]) ->
 			handshakeClient ctx >> recvData ctx
-		Right (Alert [(AlertLevel_Fatal, _)]) ->
-			-- close the connection
+		Right (Alert [(AlertLevel_Fatal, _)]) -> do
+			setEOF ctx
 			return L.empty
 		Right (Alert [(AlertLevel_Warning, CloseNotify)]) -> do
+			setEOF ctx
 			return L.empty
 		Right (AppData x) -> return $ L.fromChunks [x]
 		Right p           -> error ("error unexpected packet: p" ++ show p)
