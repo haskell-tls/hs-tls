@@ -35,6 +35,10 @@ module Network.TLS.Packet
 	, decodeChangeCipherSpec
 	, encodeChangeCipherSpec
 
+	-- * marshall extensions
+	, decodeExtSecureRenegotiation
+	, encodeExtSecureRenegotiation
+
 	-- * generate things for packet content
 	, generateMasterSecret
 	, generateKeyBlock
@@ -417,6 +421,27 @@ decodeChangeCipherSpec = runGetErr "changecipherspec" $ do
 
 encodeChangeCipherSpec :: ByteString
 encodeChangeCipherSpec = runPut (putWord8 1)
+
+
+{-
+ - decode and encode various extensions
+ -}
+decodeExtSecureRenegotiation :: Bool -> Bytes -> Either TLSError (Bytes, Maybe Bytes)
+decodeExtSecureRenegotiation isServerHello = runGetErr "ext-secure-renegotiation" $ do
+	l <- fromIntegral <$> getWord8
+	if isServerHello
+		then do
+			cvd <- getBytes (l `div` 2) 
+			svd <- getBytes (l `div` 2)
+			return (cvd, Just svd)
+		else getBytes (l `div` 2) >>= \cvd -> return (cvd, Nothing)
+
+encodeExtSecureRenegotiation :: Bytes -> Maybe Bytes -> Bytes
+encodeExtSecureRenegotiation cvd msvd = runPut $ do
+	let svd = maybe B.empty id msvd
+	putWord8 $ fromIntegral (B.length cvd + B.length svd)
+	putBytes cvd
+	putBytes svd
 
 {-
  - generate things for packet content

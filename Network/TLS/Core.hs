@@ -400,7 +400,7 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 					vf <- usingState_ ctx $ do
 						cvf <- getVerifiedData True
 						svf <- getVerifiedData False
-						return $ B.concat [cvf,svf]
+						return $ encodeExtSecureRenegotiation cvf (Just svf)
 					return [ (0xff01, vf) ]
 				else return []
 			usingState_ ctx (setVersion ver >> setServerRandom srand)
