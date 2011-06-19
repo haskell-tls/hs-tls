@@ -54,7 +54,7 @@ certificateVerifyChain :: [X509] -> IO TLSCertificateUsage
 certificateVerifyChain _ = do
 	putStrLn "****************** certificate verify chain doesn't yet work on your platform **********************"
 	putStrLn "please consider contributing to the certificate package to fix this issue"
-	return True
+	return CertificateUsageAccept
 
 #else
 -- | verify a certificates chain using the system certificates available.
