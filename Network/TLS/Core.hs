@@ -301,7 +301,7 @@ handshakeClient ctx = do
 		clientCerts  = map fst $ pCertificates params
 		getExtensions =
 			if pUseSecureRenegotiation params
-			then usingState_ ctx (getVerifiedData True) >>= \vd -> return [ (0xff01, vd) ]
+			then usingState_ ctx (getVerifiedData True) >>= \vd -> return [ (0xff01, encodeExtSecureRenegotiation vd Nothing) ]
 			else return []
 
 		processServerInfo (Handshake hss) = mapM_ processHandshake hss
