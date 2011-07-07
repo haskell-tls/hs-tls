@@ -60,6 +60,7 @@ import Network.TLS.Crypto
 import Network.TLS.Cipher
 import Network.TLS.MAC
 import qualified Data.ByteString as B
+import Control.Applicative ((<$>))
 import Control.Monad
 import Control.Monad.State
 import Control.Monad.Error
@@ -354,7 +355,7 @@ getSecureRenegotiation :: MonadState TLSState m => m Bool
 getSecureRenegotiation = get >>= return . stSecureRenegotiation
 
 getCipherKeyExchangeType :: MonadState TLSState m => m (Maybe CipherKeyExchangeType)
-getCipherKeyExchangeType = get >>= return . (maybe Nothing (Just . cipherKeyExchange) . stCipher)
+getCipherKeyExchangeType = get >>= return . (cipherKeyExchange <$> stCipher)
 
 getVerifiedData :: MonadState TLSState m => Bool -> m Bytes
 getVerifiedData client = get >>= return . (if client then stClientVerifiedData else stServerVerifiedData)
@@ -387,7 +388,7 @@ hasValidHandshake name = get >>= \st -> assert name [ ("valid handshake", isNoth
 updateHandshake :: MonadState TLSState m => String -> (TLSHandshakeState -> TLSHandshakeState) -> m ()
 updateHandshake n f = do
 	hasValidHandshake n
-	modify (\st -> st { stHandshake = maybe Nothing (Just . f) (stHandshake st) })
+	modify (\st -> st { stHandshake = f <$> stHandshake st })
 
 updateHandshakeDigest :: MonadState TLSState m => Bytes -> m ()
 updateHandshakeDigest content = updateHandshake "update digest" (\hs ->
