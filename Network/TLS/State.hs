@@ -355,7 +355,7 @@ getSecureRenegotiation :: MonadState TLSState m => m Bool
 getSecureRenegotiation = get >>= return . stSecureRenegotiation
 
 getCipherKeyExchangeType :: MonadState TLSState m => m (Maybe CipherKeyExchangeType)
-getCipherKeyExchangeType = get >>= return . (cipherKeyExchange <$> stCipher)
+getCipherKeyExchangeType = get >>= return . (maybe Nothing (Just . cipherKeyExchange) . stCipher)
 
 getVerifiedData :: MonadState TLSState m => Bool -> m Bytes
 getVerifiedData client = get >>= return . (if client then stClientVerifiedData else stServerVerifiedData)
