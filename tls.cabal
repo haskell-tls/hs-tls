@@ -1,13 +1,18 @@
 Name:                tls
 Version:             0.7.1
 Description:
-   native TLS protocol implementation, focusing on purity and more type-checking.
+   Native Haskell TLS and SSL protocol implementation for server and client.
    .
-   Currently implement the SSL3.0, TLS1.0 and TLS1.1 protocol.
-   Not yet properly secure and missing some features.
-   Do not yet use as replacement to more mature implementation.
+   This provides a high-level implementation of a sensitive security protocol,
+   eliminating a common set of security issues through the use of the advanced
+   type system, high level constructions and common Haskell features.
    .
-   only RSA supported as Key exchange for now.
+   Currently implement the SSL3.0, TLS1.0 and TLS1.1 protocol,
+   with only RSA supported for Key Exchange.
+   .
+   Only core protocol available here, have a look at the
+   <http://hackage.haskell.org/package/tls-extra/> package for default
+   ciphers, compressions and certificates functions.
 License:             BSD3
 License-file:        LICENSE
 Copyright:           Vincent Hanquez <vincent@snarc.org>
