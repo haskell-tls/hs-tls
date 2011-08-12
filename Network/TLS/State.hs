@@ -21,6 +21,7 @@ module Network.TLS.State
 	, newTLSState
 	, genTLSRandom
 	, withTLSRNG
+	, withCompression
 	, assert -- FIXME move somewhere else (Internal.hs ?)
 	, updateStatusHs
 	, updateStatusCC
@@ -174,6 +175,13 @@ withTLSRNG :: StateRNG -> (forall g . CryptoRandomGen g => g -> Either e (a,g)) 
 withTLSRNG (StateRNG rng) f = case f rng of
 	Left err        -> Left err
 	Right (a, rng') -> Right (a, StateRNG rng')
+
+withCompression :: (Compression -> (Compression, a)) -> TLSSt a
+withCompression f = do
+	compression <- stCompression <$> get
+	let (nc, a) = f compression
+	modify (\st -> st { stCompression = nc })
+	return a
 
 genTLSRandom :: (MonadState TLSState m, MonadError TLSError m) => Int -> m Bytes
 genTLSRandom n = do
