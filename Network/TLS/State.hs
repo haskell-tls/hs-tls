@@ -58,6 +58,7 @@ import Network.TLS.Wire
 import Network.TLS.Packet
 import Network.TLS.Crypto
 import Network.TLS.Cipher
+import Network.TLS.Compression
 import Network.TLS.MAC
 import qualified Data.ByteString as B
 import Control.Applicative ((<$>))
@@ -129,6 +130,7 @@ data TLSState = TLSState
 	, stTxMacState          :: !(Maybe TLSMacState)
 	, stRxMacState          :: !(Maybe TLSMacState)
 	, stCipher              :: Maybe Cipher
+	, stCompression         :: Compression
 	, stRandomGen           :: StateRNG
 	, stSecureRenegotiation :: Bool  -- RFC 5746
 	, stClientVerifiedData  :: Bytes -- RFC 5746
@@ -161,6 +163,7 @@ newTLSState rng = TLSState
 	, stTxMacState          = Nothing
 	, stRxMacState          = Nothing
 	, stCipher              = Nothing
+	, stCompression         = nullCompression
 	, stRandomGen           = StateRNG rng
 	, stSecureRenegotiation = False
 	, stClientVerifiedData  = B.empty

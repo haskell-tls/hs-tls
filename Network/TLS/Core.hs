@@ -350,12 +350,12 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 		throwCore $ Error_Protocol ("version " ++ show ver ++ "is not supported", True, ProtocolVersion)
 	when (commonCiphers == []) $
 		throwCore $ Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
-	when (commonCompressions == []) $
+	when (null commonCompressions) $
 		throwCore $ Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
 	usingState_ ctx $ modify (\st -> st
-		{ stVersion = ver
-		, stCipher  = Just usedCipher
-		--, stCompression = Just usedCompression
+		{ stVersion     = ver
+		, stCipher      = Just usedCipher
+		, stCompression = usedCompression
 		})
 
 	-- send Server Data until ServerHelloDone
@@ -377,8 +377,8 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 		params             = ctxParams ctx
 		commonCiphers      = intersect ciphers (map cipherID $ pCiphers params)
 		usedCipher         = fromJust $ find (\c -> cipherID c == head commonCiphers) (pCiphers params)
-		commonCompressions = intersect compressions (map compressionID $ pCompressions params)
-		usedCompression    = fromJust $ find (\c -> compressionID c == head commonCompressions) (pCompressions params)
+		commonCompressions = compressionIntersectID (pCompressions params) compressions
+		usedCompression    = head commonCompressions
 		srvCerts           = map fst $ pCertificates params
 		privKeys           = map snd $ pCertificates params
 		needKeyXchg        = cipherExchangeNeedMoreData $ cipherKeyExchange usedCipher
