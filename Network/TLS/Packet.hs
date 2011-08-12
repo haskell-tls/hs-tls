@@ -455,11 +455,10 @@ generateMasterSecret :: Version -> Bytes -> ClientRandom -> ServerRandom -> Byte
 generateMasterSecret ver =
 	if ver < TLS10 then generateMasterSecret_SSL else generateMasterSecret_TLS
 
-generateKeyBlock_TLS :: ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
-generateKeyBlock_TLS (ClientRandom c) (ServerRandom s) mastersecret kbsize =
-	prf_MD5SHA1 mastersecret seed kbsize
-	where
-		seed = B.concat [ "key expansion", s, c ]
+generateKeyBlock_TLS :: (Bytes -> Bytes -> Int -> Bytes)
+                     -> ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
+generateKeyBlock_TLS prf (ClientRandom c) (ServerRandom s) mastersecret kbsize =
+	prf mastersecret seed kbsize where seed = B.concat [ "key expansion", s, c ]
 
 generateKeyBlock_SSL :: ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
 generateKeyBlock_SSL (ClientRandom c) (ServerRandom s) mastersecret kbsize =
@@ -470,8 +469,11 @@ generateKeyBlock_SSL (ClientRandom c) (ServerRandom s) mastersecret kbsize =
 		computeSHA1 label = hashSHA1 $ B.concat [ label, mastersecret, s, c ]
 
 generateKeyBlock :: Version -> ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
-generateKeyBlock ver =
-	if ver < TLS10 then generateKeyBlock_SSL else generateKeyBlock_TLS
+generateKeyBlock SSL2  = generateKeyBlock_SSL
+generateKeyBlock SSL3  = generateKeyBlock_SSL
+generateKeyBlock TLS10 = generateKeyBlock_TLS prf_MD5SHA1
+generateKeyBlock TLS11 = generateKeyBlock_TLS prf_MD5SHA1
+generateKeyBlock TLS12 = generateKeyBlock_TLS prf_SHA256
 
 generateFinished_TLS :: Bytes -> Bytes -> HashCtx -> HashCtx -> Bytes
 generateFinished_TLS label mastersecret md5ctx sha1ctx =
@@ -491,9 +493,11 @@ generateFinished_SSL sender mastersecret md5ctx sha1ctx =
 		pad1     = B.replicate 48 0x36
 
 generateClientFinished :: Version -> Bytes -> HashCtx -> HashCtx -> Bytes
-generateClientFinished ver =
-	if ver < TLS10 then generateFinished_SSL "CLNT" else generateFinished_TLS "client finished"
+generateClientFinished ver
+	| ver < TLS10 = generateFinished_SSL "CLNT"
+	| otherwise   = generateFinished_TLS "client finished"
 
 generateServerFinished :: Version -> Bytes -> HashCtx -> HashCtx -> Bytes
-generateServerFinished ver =
-	if ver < TLS10 then generateFinished_SSL "SRVR" else generateFinished_TLS "server finished"
+generateServerFinished ver
+	| ver < TLS10 = generateFinished_SSL "SRVR"
+	| otherwise   = generateFinished_TLS "server finished"

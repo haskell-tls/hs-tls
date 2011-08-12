@@ -6,6 +6,7 @@ module Network.TLS.MAC
 	, hmac
 	, prf_MD5
 	, prf_SHA1
+	, prf_SHA256
 	, prf_MD5SHA1
 	) where
 
@@ -66,3 +67,6 @@ prf_MD5SHA1 secret seed len =
 		slen  = B.length secret
 		s1    = B.take (slen `div` 2 + slen `mod` 2) secret
 		s2    = B.drop (slen `div` 2) secret
+
+prf_SHA256 :: ByteString -> ByteString -> Int -> ByteString
+prf_SHA256 secret seed len = B.concat $ hmacIter hmacSHA256 secret seed seed len
