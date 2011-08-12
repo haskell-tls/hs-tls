@@ -105,11 +105,7 @@ getHandshakeType = do
  - decode and encode headers
  -}
 decodeHeader :: ByteString -> Either TLSError Header
-decodeHeader = runGetErr "header" $ do
-	ty  <- getHeaderType
-	v   <- getVersion
-	len <- getWord16
-	return $ Header ty v len
+decodeHeader = runGetErr "header" $ liftM3 Header getHeaderType getVersion getWord16
 
 encodeHeader :: Header -> ByteString
 encodeHeader (Header pt ver len) = runPut (putHeaderType pt >> putVersion ver >> putWord16 len)
@@ -141,7 +137,7 @@ decodeAlerts = runGetErr "alerts" $ loop
 
 encodeAlerts :: [(AlertLevel, AlertDescription)] -> ByteString
 encodeAlerts l = runPut $ mapM_ encodeAlert l
-	where encodeAlert (al, ad) = (putWord8 (valOfType al) >> putWord8 (valOfType ad))
+	where encodeAlert (al, ad) = putWord8 (valOfType al) >> putWord8 (valOfType ad)
 
 {- decode and encode HANDSHAKE -}
 decodeHandshakeHeader :: Get (HandshakeType, Bytes)
@@ -207,8 +203,7 @@ decodeServerHelloDone = return ServerHelloDone
 
 decodeCertificates :: Get Handshake
 decodeCertificates = do
-	certslen <- getWord24
-	certs <- getCerts certslen >>= return . map (decodeCertificate . L.fromChunks . (:[]))
+	certs <- getWord24 >>= getCerts >>= return . map (decodeCertificate . L.fromChunks . (:[]))
 	let (l, r) = partitionEithers certs
 	if length l > 0
 		then fail ("error certificate parsing: " ++ show l)
@@ -372,10 +367,8 @@ getSession = do
 		len -> Session . Just <$> getBytes len
 
 putSession :: Session -> Put
-putSession (Session session) =
-	case session of
-		Nothing -> putWord8 0
-		Just s  -> putWord8 (fromIntegral $ B.length s) >> putBytes s
+putSession (Session Nothing)  = putWord8 0
+putSession (Session (Just s)) = putWord8 (fromIntegral $ B.length s) >> putBytes s
 
 getCerts :: Int -> Get [Bytes]
 getCerts 0   = return []
