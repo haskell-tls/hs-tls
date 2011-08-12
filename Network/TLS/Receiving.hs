@@ -23,9 +23,11 @@ import qualified Data.ByteString as B
 import Network.TLS.Util
 import Network.TLS.Cap
 import Network.TLS.Struct
+import Network.TLS.Record
 import Network.TLS.Packet
 import Network.TLS.State
 import Network.TLS.Cipher
+import Network.TLS.Compression
 import Network.TLS.Crypto
 import Data.Certificate.X509
 
@@ -35,11 +37,11 @@ returnEither :: Either TLSError a -> TLSSt a
 returnEither (Left err) = throwError err
 returnEither (Right a)  = return a
 
-readPacket :: Header -> EncryptedData -> TLSSt Packet
-readPacket hdr content = checkState hdr >> decryptContent hdr content >>= processPacket hdr
+readPacket :: Record Ciphertext -> TLSSt Packet
+readPacket record = checkState record >> decryptContent record >>= uncompressContent >>= processPacket
 
-checkState :: Header -> TLSSt ()
-checkState (Header pt _ _) =
+checkState :: Record a -> TLSSt ()
+checkState (Record pt _ _) =
 		stStatus <$> get >>= \status -> unless (allowed pt status) $ throwError (err status)
 	where
 		err st = Error_Protocol ("unexpected message received: status=" ++ show st, True, UnexpectedMessage)
@@ -54,23 +56,23 @@ checkState (Header pt _ _) =
 		allowed ProtocolType_ChangeCipherSpec (StatusHandshake HsStatusClientCertificateVerify) = True
 		allowed _ _ = False
 
-processPacket :: Header -> Bytes -> TLSSt Packet
+processPacket :: Record Plaintext -> TLSSt Packet
 
-processPacket (Header ProtocolType_AppData _ _) content = return $ AppData content
+processPacket (Record ProtocolType_AppData _ fragment) = return $ AppData $ fragmentGetBytes fragment
 
-processPacket (Header ProtocolType_Alert _ _) content = return . Alert =<< returnEither (decodeAlerts content)
+processPacket (Record ProtocolType_Alert _ fragment) = return . Alert =<< returnEither (decodeAlerts $ fragmentGetBytes fragment)
 
-processPacket (Header ProtocolType_ChangeCipherSpec _ _) content = do
+processPacket (Record ProtocolType_ChangeCipherSpec _ fragment) = do
 	e <- updateStatusCC False
 	when (isJust e) $ throwError (fromJust "" e)
 
-	returnEither $ decodeChangeCipherSpec content
+	returnEither $ decodeChangeCipherSpec $ fragmentGetBytes fragment
 	switchRxEncryption
 	isClientContext >>= \cc -> when (not cc) setKeyBlock
 	return ChangeCipherSpec
 
-processPacket (Header ProtocolType_Handshake ver _) dcontent = do
-	handshakes <- returnEither (decodeHandshakes dcontent)
+processPacket (Record ProtocolType_Handshake ver fragment) = do
+	handshakes <- returnEither (decodeHandshakes $ fragmentGetBytes fragment)
 	hss <- forM handshakes $ \(ty, content) -> do
 		hs <- processHandshake ver ty content
 		when (finishHandshakeTypeMaterial ty) $ updateHandshakeDigestSplitted ty content
@@ -155,24 +157,28 @@ processClientFinished fdata = do
 	cc <- stClientContext <$> get
 	expected <- getHandshakeDigest (not cc)
 	when (expected /= fdata) $ do
-		throwError $ Error_Protocol( "bad record mac", True, BadRecordMac)
+		throwError $ Error_Protocol("bad record mac", True, BadRecordMac)
 	updateVerifiedData False fdata
 	return ()
 
-decryptContent :: Header -> EncryptedData -> TLSSt ByteString
-decryptContent hdr e@(EncryptedData b) = do
+-- just `decompress' by returning the data for now till we have compression implemented
+uncompressContent :: Record Compressed -> TLSSt (Record Plaintext)
+uncompressContent record = onRecordFragment record $ fragmentUncompress $ \bytes ->
+	withCompression $ compressionInflate bytes
+
+decryptContent :: Record Ciphertext -> TLSSt (Record Compressed)
+decryptContent record = onRecordFragment record $ fragmentUncipher $ \e -> do
 	st <- get
 	if stRxEncrypted st
-		then decryptData e >>= getCipherData hdr
-		else return b
+		then decryptData e >>= getCipherData record
+		else return e
 
-getCipherData :: Header -> CipherData -> TLSSt ByteString
-getCipherData hdr cdata = do
+getCipherData :: Record a -> CipherData -> TLSSt ByteString
+getCipherData (Record pt ver _) cdata = do
 	-- check if the MAC is valid.
 	macValid <- case cipherDataMAC cdata of
 		Nothing     -> return True
 		Just digest -> do
-			let (Header pt ver _) = hdr
 			let new_hdr = Header pt ver (fromIntegral $ B.length $ cipherDataContent cdata)
 			expected_digest <- makeDigest False new_hdr $ cipherDataContent cdata
 			if expected_digest == digest
@@ -183,9 +189,9 @@ getCipherData hdr cdata = do
 	paddingValid <- case cipherDataPadding cdata of
 		Nothing  -> return True
 		Just pad -> do
-			ver <- stVersion <$> get
+			cver <- stVersion <$> get
 			let b = B.length pad - 1
-			if ver < TLS10
+			if cver < TLS10
 				then return True
 				else return $ maybe True (const False) $ B.find (/= fromIntegral b) pad
 
@@ -194,8 +200,8 @@ getCipherData hdr cdata = do
 
 	return $ cipherDataContent cdata
 
-decryptData :: EncryptedData -> TLSSt CipherData
-decryptData (EncryptedData econtent) = do
+decryptData :: Bytes -> TLSSt CipherData
+decryptData econtent = do
 	st <- get
 
 	let cipher       = fromJust "cipher" $ stCipher st

@@ -16,7 +16,6 @@ module Network.TLS.Struct
 	, CipherType(..)
 	, CipherData(..)
 	, Extension
-	, EncryptedData(..)
 	, CertificateType(..)
 	, HashAlgorithm(..)
 	, SignatureAlgorithm(..)
@@ -156,9 +155,6 @@ serverRandom l = constrRandom32 ServerRandom l
 
 clientRandom :: Bytes -> Maybe ClientRandom
 clientRandom l = constrRandom32 ClientRandom l
-
-newtype EncryptedData = EncryptedData ByteString
-	deriving (Show)
 
 data AlertLevel =
 	  AlertLevel_Warning

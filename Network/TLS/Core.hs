@@ -39,6 +39,7 @@ module Network.TLS.Core
 	) where
 
 import Network.TLS.Struct
+import Network.TLS.Record
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Crypto
@@ -212,7 +213,7 @@ recvPacket ctx = do
 	where recvLength header readlen = do
 		content <- readExact ctx (fromIntegral readlen)
 		liftIO $ (loggingIORecv $ ctxLogging ctx) header content
-		pkt <- usingState ctx $ readPacket header (EncryptedData content)
+		pkt <- usingState ctx $ readPacket $ rawToRecord header (fragmentCiphertext content)
 		case pkt of
 			Right p -> liftIO $ (loggingPacketRecv $ ctxLogging ctx) $ show p
 			_       -> return ()

@@ -53,6 +53,7 @@ Library
                      Network.TLS.Core
                      Network.TLS.Crypto
                      Network.TLS.Packet
+                     Network.TLS.Record
                      Network.TLS.State
                      Network.TLS.Sending
                      Network.TLS.Receiving

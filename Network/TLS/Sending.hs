@@ -12,6 +12,7 @@ module Network.TLS.Sending (
 	writePacket
 	) where
 
+import Control.Applicative ((<$>))
 import Control.Monad.State
 
 import Data.ByteString (ByteString)
@@ -21,57 +22,63 @@ import Network.TLS.Util
 import Network.TLS.Cap
 import Network.TLS.Wire
 import Network.TLS.Struct
+import Network.TLS.Record
 import Network.TLS.Packet
 import Network.TLS.State
 import Network.TLS.Cipher
+import Network.TLS.Compression
 import Network.TLS.Crypto
 
 {-
  - 'makePacketData' create a Header and a content bytestring related to a packet
  - this doesn't change any state
  -}
-makePacketData :: Packet -> TLSSt (Header, ByteString)
-makePacketData pkt = do
-	ver <- get >>= return . stVersion
+makeRecord :: Packet -> TLSSt (Record Plaintext)
+makeRecord pkt = do
+	ver <- stVersion <$> get
 	content <- writePacketContent pkt
-	let hdr = Header (packetType pkt) ver (fromIntegral $ B.length content)
-	return (hdr, content)
+	return $ Record (packetType pkt) ver (fragmentPlaintext content)
 
 {-
  - Handshake data need to update a digest
  -}
-processPacketData :: (Header, ByteString) -> TLSSt (Header, ByteString)
-processPacketData dat@(Header ty _ _, content) = do
-	when (ty == ProtocolType_Handshake) (updateHandshakeDigest content)
-	return dat
+processRecord :: Record Plaintext -> TLSSt (Record Plaintext)
+processRecord record@(Record ty _ fragment) = do
+	when (ty == ProtocolType_Handshake) (updateHandshakeDigest $ fragmentGetBytes fragment)
+	return record
+
+compressRecord :: Record Plaintext -> TLSSt (Record Compressed)
+compressRecord record =
+	onRecordFragment record $ fragmentCompress $ \bytes -> do
+		withCompression $ compressionDeflate bytes
 
 {-
  - when Tx Encrypted is set, we pass the data through encryptContent, otherwise
  - we just return the packet
  -}
-encryptPacketData :: (Header, ByteString) -> TLSSt (Header, ByteString)
-encryptPacketData dat = do
+encryptRecord :: Record Compressed -> TLSSt (Record Ciphertext)
+encryptRecord record = onRecordFragment record $ fragmentCipher $ \bytes -> do
 	st <- get
 	if stTxEncrypted st
-		then encryptContent dat
-		else return dat
+		then encryptContent record bytes
+		else return bytes
 
 {-
  - ChangeCipherSpec state change need to be handled after encryption otherwise
  - its own packet would be encrypted with the new context, instead of beeing sent
  - under the current context
  -}
-postprocessPacketData :: (Header, ByteString) -> TLSSt (Header, ByteString)
-postprocessPacketData dat@(Header ProtocolType_ChangeCipherSpec _ _, _) =
-	switchTxEncryption >> isClientContext >>= \cc -> when cc setKeyBlock >> return dat
-
-postprocessPacketData dat = return dat
+postprocessRecord :: Record Ciphertext -> TLSSt (Record Ciphertext)
+postprocessRecord record@(Record ProtocolType_ChangeCipherSpec _ _) =
+	switchTxEncryption >> isClientContext >>= \cc -> when cc setKeyBlock >> return record
+postprocessRecord record = return record
 
 {-
  - marshall packet data
  -}
-encodePacket :: (Header, ByteString) -> TLSSt ByteString
-encodePacket (hdr, content) = return $ B.concat [ encodeHeader hdr, content ]
+encodeRecord :: Record Ciphertext -> TLSSt ByteString
+encodeRecord record = return $ B.concat [ encodeHeader hdr, content ]
+	where (hdr, content) = recordToRaw record
 
 {-
  - just update TLS state machine
@@ -92,8 +99,9 @@ preProcessPacket (Handshake hss)    = forM_ hss $ \hs -> do
  - and updating state on the go
  -}
 writePacket :: Packet -> TLSSt ByteString
-writePacket pkt = preProcessPacket pkt >> makePacketData pkt >>= processPacketData >>=
-                  encryptPacketData >>= postprocessPacketData >>= encodePacket
+writePacket pkt = do
+	preProcessPacket pkt
+	makeRecord pkt >>= processRecord >>= compressRecord >>= encryptRecord >>= postprocessRecord >>= encodeRecord
 
 {------------------------------------------------------------------------------}
 {- SENDING Helpers                                                            -}
@@ -110,12 +118,10 @@ encryptRSA content = do
 		Left err               -> fail ("rsa encrypt failed: " ++ show err)
 		Right (econtent, rng') -> put (st { stRandomGen = rng' }) >> return econtent
 
-encryptContent :: (Header, ByteString) -> TLSSt (Header, ByteString)
-encryptContent (hdr@(Header pt ver _), content) = do
-	digest <- makeDigest True hdr content
-	encrypted_msg <- encryptData $ B.concat [content, digest]
-	let hdrnew = Header pt ver (fromIntegral $ B.length encrypted_msg)
-	return (hdrnew, encrypted_msg)
+encryptContent :: Record Compressed -> ByteString -> TLSSt ByteString
+encryptContent record content = do
+	digest <- makeDigest True (recordToHeader record) content
+	encryptData $ B.concat [content, digest]
 
 encryptData :: ByteString -> TLSSt ByteString
 encryptData content = do
