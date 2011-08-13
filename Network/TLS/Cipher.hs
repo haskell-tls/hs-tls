@@ -49,9 +49,9 @@ data CipherKeyExchangeType =
 
 data Bulk = Bulk
 	{ bulkName           :: String
-	, cipherKeySize      :: Word8
-	, cipherIVSize       :: Word8
-	, cipherKeyBlockSize :: Word8
+	, cipherKeySize      :: Int
+	, cipherIVSize       :: Int
+	, cipherKeyBlockSize :: Int
 	, cipherF            :: CipherTypeFunctions
 	}
 

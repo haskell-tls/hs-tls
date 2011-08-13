@@ -227,7 +227,7 @@ decryptData econtent = do
 			{- update IV -}
 			let (iv, econtent') =
 				if hasExplicitBlockIV $ stVersion st
-					then B.splitAt (fromIntegral $ cipherIVSize bulk) econtent
+					then B.splitAt (cipherIVSize bulk) econtent
 					else (cstIV cst, econtent)
 			let newiv = fromJust "new iv" $ takelast padding_size econtent'
 			put $ st { stRxCryptState = Just $ cst { cstIV = newiv } }

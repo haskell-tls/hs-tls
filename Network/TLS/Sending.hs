@@ -147,13 +147,13 @@ encryptData content = do
 		CipherBlockF encrypt _ -> do
 			-- before TLS 1.1, the block cipher IV is made of the residual of the previous block.
 			iv <- if hasExplicitBlockIV $ stVersion st
-				then genTLSRandom (fromIntegral $ cipherIVSize bulk)
+				then genTLSRandom (cipherIVSize bulk)
 				else return $ cstIV cst
 			let e = encrypt writekey iv (B.concat [ content, padding ])
 			if hasExplicitBlockIV $ stVersion st
 				then return $ B.concat [iv,e]
 				else do
-					let newiv = fromJust "new iv" $ takelast (fromIntegral $ cipherIVSize bulk) e
+					let newiv = fromJust "new iv" $ takelast (cipherIVSize bulk) e
 					put $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
 					return e
 		CipherStreamF initF encryptF _ -> do
