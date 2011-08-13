@@ -48,6 +48,6 @@ module Network.TLS
 
 import Network.TLS.Struct (Version(..), TLSError(..))
 import Network.TLS.Crypto (PrivateKey(..))
-import Network.TLS.Cipher (Cipher(..))
+import Network.TLS.Cipher (Cipher(..), Bulk(..))
 import Network.TLS.Compression (CompressionC(..), Compression(..), nullCompression)
 import Network.TLS.Core

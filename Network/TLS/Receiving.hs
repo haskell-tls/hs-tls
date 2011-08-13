@@ -207,7 +207,7 @@ decryptData econtent = do
 	let cipher     = fromJust "cipher" $ stCipher st
 	let bulk       = cipherBulk cipher
 	let cst        = fromJust "rx crypt state" $ stRxCryptState st
-	let digestSize = fromIntegral $ cipherDigestSize cipher
+	let digestSize = hashSize $ cipherHash cipher
 	let writekey   = cstKey cst
 
 	case bulkF bulk of

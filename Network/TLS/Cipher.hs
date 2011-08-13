@@ -11,6 +11,7 @@ module Network.TLS.Cipher
 	( BulkFunctions(..)
 	, CipherKeyExchangeType(..)
 	, Bulk(..)
+	, Hash(..)
 	, Cipher(..)
 	, cipherKeyBlockSize
 	, Key
@@ -56,19 +57,26 @@ data Bulk = Bulk
 	, bulkF            :: BulkFunctions
 	}
 
+data Hash = Hash
+	{ hashName         :: String
+	, hashSize         :: Int
+	, hashF            :: B.ByteString -> B.ByteString
+	}
+
 -- | Cipher algorithm
 data Cipher = Cipher
 	{ cipherID           :: Word16
 	, cipherName         :: String
-	, cipherDigestSize   :: Int
+	, cipherHash         :: Hash
+	--, cipherDigestSize   :: Int
 	, cipherBulk         :: Bulk
 	, cipherKeyExchange  :: CipherKeyExchangeType
-	, cipherMACHash      :: B.ByteString -> B.ByteString
+	--, cipherMACHash      :: B.ByteString -> B.ByteString
 	, cipherMinVer       :: Maybe Version
 	}
 
 cipherKeyBlockSize :: Cipher -> Int
-cipherKeyBlockSize cipher = 2 * (cipherDigestSize cipher + bulkIVSize bulk + bulkKeySize bulk)
+cipherKeyBlockSize cipher = 2 * (hashSize (cipherHash cipher) + bulkIVSize bulk + bulkKeySize bulk)
 	where bulk = cipherBulk cipher
 
 instance Show Cipher where
