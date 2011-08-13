@@ -128,6 +128,7 @@ encryptData content = do
 	st <- get
 
 	let cipher = fromJust "cipher" $ stCipher st
+	let bulk = cipherBulk cipher
 	let cst = fromJust "tx crypt state" $ stTxCryptState st
 	let padding_size = fromIntegral $ cipherPaddingSize cipher
 
@@ -141,18 +142,18 @@ encryptData content = do
 			B.empty
 	let writekey = cstKey cst
 
-	case cipherF cipher of
+	case cipherF bulk of
 		CipherNoneF -> return content
 		CipherBlockF encrypt _ -> do
 			-- before TLS 1.1, the block cipher IV is made of the residual of the previous block.
 			iv <- if hasExplicitBlockIV $ stVersion st
-				then genTLSRandom (fromIntegral $ cipherIVSize cipher)
+				then genTLSRandom (fromIntegral $ cipherIVSize bulk)
 				else return $ cstIV cst
 			let e = encrypt writekey iv (B.concat [ content, padding ])
 			if hasExplicitBlockIV $ stVersion st
 				then return $ B.concat [iv,e]
 				else do
-					let newiv = fromJust "new iv" $ takelast (fromIntegral $ cipherIVSize cipher) e
+					let newiv = fromJust "new iv" $ takelast (fromIntegral $ cipherIVSize bulk) e
 					put $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
 					return e
 		CipherStreamF initF encryptF _ -> do

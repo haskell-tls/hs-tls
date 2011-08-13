@@ -10,6 +10,7 @@
 module Network.TLS.Cipher
 	( CipherTypeFunctions(..)
 	, CipherKeyExchangeType(..)
+	, Bulk(..)
 	, Cipher(..)
 	, Key
 	, IV
@@ -46,18 +47,23 @@ data CipherKeyExchangeType =
 	| CipherKeyExchange_ECDHE_ECDSA
 	deriving (Show,Eq)
 
+data Bulk = Bulk
+	{ bulkName           :: String
+	, cipherKeySize      :: Word8
+	, cipherIVSize       :: Word8
+	, cipherKeyBlockSize :: Word8
+	, cipherF            :: CipherTypeFunctions
+	}
+
 -- | Cipher algorithm
 data Cipher = Cipher
 	{ cipherID           :: Word16
 	, cipherName         :: String
 	, cipherDigestSize   :: Word8
-	, cipherKeySize      :: Word8
-	, cipherIVSize       :: Word8
-	, cipherKeyBlockSize :: Word8
+	, cipherBulk         :: Bulk
 	, cipherPaddingSize  :: Word8
 	, cipherKeyExchange  :: CipherKeyExchangeType
 	, cipherMACHash      :: B.ByteString -> B.ByteString
-	, cipherF            :: CipherTypeFunctions
 	, cipherMinVer       :: Maybe Version
 	}
 

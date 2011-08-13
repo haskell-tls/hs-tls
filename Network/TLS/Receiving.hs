@@ -205,12 +205,13 @@ decryptData econtent = do
 	st <- get
 
 	let cipher       = fromJust "cipher" $ stCipher st
+	let bulk         = cipherBulk cipher
 	let cst          = fromJust "rx crypt state" $ stRxCryptState st
 	let padding_size = fromIntegral $ cipherPaddingSize cipher
 	let digestSize   = fromIntegral $ cipherDigestSize cipher
 	let writekey     = cstKey cst
 
-	case cipherF cipher of
+	case cipherF bulk of
 		CipherNoneF -> do
 			let contentlen = B.length econtent - digestSize
 			case partition3 econtent (contentlen, digestSize, 0) of
@@ -226,7 +227,7 @@ decryptData econtent = do
 			{- update IV -}
 			let (iv, econtent') =
 				if hasExplicitBlockIV $ stVersion st
-					then B.splitAt (fromIntegral $ cipherIVSize cipher) econtent
+					then B.splitAt (fromIntegral $ cipherIVSize bulk) econtent
 					else (cstIV cst, econtent)
 			let newiv = fromJust "new iv" $ takelast padding_size econtent'
 			put $ st { stRxCryptState = Just $ cst { cstIV = newiv } }

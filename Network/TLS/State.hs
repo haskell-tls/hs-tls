@@ -325,10 +325,11 @@ setKeyBlock = do
 
 	let cc = stClientContext st
 	let cipher = fromJust "cipher" $ stCipher st
-	let keyblockSize = fromIntegral $ cipherKeyBlockSize cipher
+	let bulk = cipherBulk cipher
+	let keyblockSize = fromIntegral $ cipherKeyBlockSize bulk
 	let digestSize   = fromIntegral $ cipherDigestSize cipher
-	let keySize      = fromIntegral $ cipherKeySize cipher
-	let ivSize       = fromIntegral $ cipherIVSize cipher
+	let keySize      = fromIntegral $ cipherKeySize bulk
+	let ivSize       = fromIntegral $ cipherIVSize bulk
 	let kb = generateKeyBlock (stVersion st) (hstClientRandom hst)
 	                          (fromJust "server random" $ hstServerRandom hst)
 	                          (fromJust "master secret" $ hstMasterSecret hst) keyblockSize
