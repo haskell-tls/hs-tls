@@ -124,14 +124,37 @@ bulk_aes256 = Bulk
 	, bulkF            = BulkBlockF aes256_cbc_encrypt aes256_cbc_decrypt
 	}
 
+hash_md5 = Hash
+	{ hashName = "MD5"
+	, hashSize = 16
+	, hashF    = MD5.hash
+	}
+
+hash_sha1 = Hash
+	{ hashName = "SHA1"
+	, hashSize = 20
+	, hashF    = SHA1.hash
+	}
+
+hash_sha256 = Hash
+	{ hashName = "SHA256"
+	, hashSize = 32
+	, hashF    = SHA256.hash
+	}
+
+hash_null = Hash
+	{ hashName = "null"
+	, hashSize = 0
+	, hashF    = const B.empty
+	}
+
 -- | this is not stricly a usable cipher; it's the initial cipher of a TLS connection
 cipher_null_null :: Cipher
 cipher_null_null = Cipher
 	{ cipherID           = 0x0
 	, cipherName         = "null-null"
 	, cipherBulk         = bulk_null
-	, cipherDigestSize   = 0
-	, cipherMACHash      = (const B.empty)
+	, cipherHash         = hash_null
 	, cipherKeyExchange  = CipherKeyExchange_RSA
 	, cipherMinVer       = Nothing
 	}
@@ -141,9 +164,8 @@ cipher_null_MD5 :: Cipher
 cipher_null_MD5 = Cipher
 	{ cipherID           = 0x1
 	, cipherName         = "RSA-null-MD5"
-	, cipherDigestSize   = 16
 	, cipherBulk         = bulk_null
-	, cipherMACHash      = MD5.hash
+	, cipherHash         = hash_md5
 	, cipherKeyExchange  = CipherKeyExchange_RSA
 	, cipherMinVer       = Nothing
 	}
@@ -153,9 +175,8 @@ cipher_null_SHA1 :: Cipher
 cipher_null_SHA1 = Cipher
 	{ cipherID           = 0x2
 	, cipherName         = "RSA-null-SHA1"
-	, cipherDigestSize   = 20
 	, cipherBulk         = bulk_null
-	, cipherMACHash      = SHA1.hash
+	, cipherHash         = hash_sha1
 	, cipherKeyExchange  = CipherKeyExchange_RSA
 	, cipherMinVer       = Nothing
 	}
@@ -165,9 +186,8 @@ cipher_RC4_128_MD5 :: Cipher
 cipher_RC4_128_MD5 = Cipher
 	{ cipherID           = 0x04
 	, cipherName         = "RSA-rc4-128-md5"
-	, cipherDigestSize   = 16
 	, cipherBulk         = bulk_rc4
-	, cipherMACHash      = MD5.hash
+	, cipherHash         = hash_md5
 	, cipherKeyExchange  = CipherKeyExchange_RSA
 	, cipherMinVer       = Nothing
 	}
@@ -177,9 +197,8 @@ cipher_RC4_128_SHA1 :: Cipher
 cipher_RC4_128_SHA1 = Cipher
 	{ cipherID           = 0x05
 	, cipherName         = "RSA-rc4-128-sha1"
-	, cipherDigestSize   = 20
 	, cipherBulk         = bulk_rc4
-	, cipherMACHash      = SHA1.hash
+	, cipherHash         = hash_sha1
 	, cipherKeyExchange  = CipherKeyExchange_RSA
 	, cipherMinVer       = Nothing
 	}
@@ -189,9 +208,8 @@ cipher_AES128_SHA1 :: Cipher
 cipher_AES128_SHA1 = Cipher
 	{ cipherID           = 0x2f
 	, cipherName         = "RSA-aes128-sha1"
-	, cipherDigestSize   = 20
 	, cipherBulk         = bulk_aes128
-	, cipherMACHash      = SHA1.hash
+	, cipherHash         = hash_sha1
 	, cipherKeyExchange  = CipherKeyExchange_RSA
 	, cipherMinVer       = Just SSL3
 	}
@@ -201,9 +219,8 @@ cipher_AES256_SHA1 :: Cipher
 cipher_AES256_SHA1 = Cipher
 	{ cipherID           = 0x35
 	, cipherName         = "RSA-aes256-sha1"
-	, cipherDigestSize   = 20
 	, cipherBulk         = bulk_aes256
-	, cipherMACHash      = SHA1.hash
+	, cipherHash         = hash_sha1
 	, cipherKeyExchange  = CipherKeyExchange_RSA
 	, cipherMinVer       = Just SSL3
 	}
@@ -213,9 +230,8 @@ cipher_AES128_SHA256 :: Cipher
 cipher_AES128_SHA256 = Cipher
 	{ cipherID           = 0x3c
 	, cipherName         = "RSA-aes128-sha256"
-	, cipherDigestSize   = 32
 	, cipherBulk         = bulk_aes128
-	, cipherMACHash      = SHA256.hash
+	, cipherHash         = hash_sha256
 	, cipherKeyExchange  = CipherKeyExchange_RSA
 	, cipherMinVer       = Just TLS12
 	}
@@ -225,9 +241,8 @@ cipher_AES256_SHA256 :: Cipher
 cipher_AES256_SHA256 = Cipher
 	{ cipherID           = 0x3d
 	, cipherName         = "RSA-aes256-sha256"
-	, cipherDigestSize   = 32
 	, cipherBulk         = bulk_aes256
-	, cipherMACHash      = SHA256.hash
+	, cipherHash         = hash_sha256
 	, cipherKeyExchange  = CipherKeyExchange_RSA
 	, cipherMinVer       = Just TLS12
 	}
