@@ -204,12 +204,11 @@ decryptData :: Bytes -> TLSSt CipherData
 decryptData econtent = do
 	st <- get
 
-	let cipher       = fromJust "cipher" $ stCipher st
-	let bulk         = cipherBulk cipher
-	let cst          = fromJust "rx crypt state" $ stRxCryptState st
-	let padding_size = fromIntegral $ cipherPaddingSize cipher
-	let digestSize   = fromIntegral $ cipherDigestSize cipher
-	let writekey     = cstKey cst
+	let cipher     = fromJust "cipher" $ stCipher st
+	let bulk       = cipherBulk cipher
+	let cst        = fromJust "rx crypt state" $ stRxCryptState st
+	let digestSize = fromIntegral $ cipherDigestSize cipher
+	let writekey   = cstKey cst
 
 	case bulkF bulk of
 		BulkNoneF -> do
@@ -229,7 +228,7 @@ decryptData econtent = do
 				if hasExplicitBlockIV $ stVersion st
 					then B.splitAt (bulkIVSize bulk) econtent
 					else (cstIV cst, econtent)
-			let newiv = fromJust "new iv" $ takelast padding_size econtent'
+			let newiv = fromJust "new iv" $ takelast (bulkBlockSize bulk) econtent'
 			put $ st { stRxCryptState = Just $ cst { cstIV = newiv } }
 
 			let content' = decryptF writekey iv econtent'

@@ -12,6 +12,7 @@ module Network.TLS.Cipher
 	, CipherKeyExchangeType(..)
 	, Bulk(..)
 	, Cipher(..)
+	, cipherKeyBlockSize
 	, Key
 	, IV
 	, cipherExchangeNeedMoreData
@@ -51,7 +52,7 @@ data Bulk = Bulk
 	{ bulkName         :: String
 	, bulkKeySize      :: Int
 	, bulkIVSize       :: Int
-	, bulkKeyBlockSize :: Int
+	, bulkBlockSize    :: Int
 	, bulkF            :: BulkFunctions
 	}
 
@@ -59,13 +60,16 @@ data Bulk = Bulk
 data Cipher = Cipher
 	{ cipherID           :: Word16
 	, cipherName         :: String
-	, cipherDigestSize   :: Word8
+	, cipherDigestSize   :: Int
 	, cipherBulk         :: Bulk
-	, cipherPaddingSize  :: Word8
 	, cipherKeyExchange  :: CipherKeyExchangeType
 	, cipherMACHash      :: B.ByteString -> B.ByteString
 	, cipherMinVer       :: Maybe Version
 	}
+
+cipherKeyBlockSize :: Cipher -> Int
+cipherKeyBlockSize cipher = 2 * (cipherDigestSize cipher + bulkIVSize bulk + bulkKeySize bulk)
+	where bulk = cipherBulk cipher
 
 instance Show Cipher where
 	show c = cipherName c

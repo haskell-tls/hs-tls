@@ -130,21 +130,22 @@ encryptData content = do
 	let cipher = fromJust "cipher" $ stCipher st
 	let bulk = cipherBulk cipher
 	let cst = fromJust "tx crypt state" $ stTxCryptState st
-	let padding_size = fromIntegral $ cipherPaddingSize cipher
 
-	let msg_len = B.length content
-	let padding = if padding_size > 0
-		then
-			let padbyte = padding_size - (msg_len `mod` padding_size) in
-			let padbyte' = if padbyte == 0 then padding_size else padbyte in
-			B.replicate padbyte' (fromIntegral (padbyte' - 1))
-		else
-			B.empty
 	let writekey = cstKey cst
 
 	case bulkF bulk of
 		BulkNoneF -> return content
 		BulkBlockF encrypt _ -> do
+			let blockSize = fromIntegral $ bulkBlockSize bulk
+			let msg_len = B.length content
+			let padding = if blockSize > 0
+				then
+					let padbyte = blockSize - (msg_len `mod` blockSize) in
+					let padbyte' = if padbyte == 0 then blockSize else padbyte in
+					B.replicate padbyte' (fromIntegral (padbyte' - 1))
+				else
+					B.empty
+
 			-- before TLS 1.1, the block cipher IV is made of the residual of the previous block.
 			iv <- if hasExplicitBlockIV $ stVersion st
 				then genTLSRandom (bulkIVSize bulk)

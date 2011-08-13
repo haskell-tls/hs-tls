@@ -325,8 +325,9 @@ setKeyBlock = do
 
 	let cc = stClientContext st
 	let cipher = fromJust "cipher" $ stCipher st
+	let keyblockSize = cipherKeyBlockSize cipher
+
 	let bulk = cipherBulk cipher
-	let keyblockSize = bulkKeyBlockSize bulk
 	let digestSize   = fromIntegral $ cipherDigestSize cipher
 	let keySize      = bulkKeySize bulk
 	let ivSize       = bulkIVSize bulk
