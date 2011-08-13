@@ -1,5 +1,5 @@
 Name:                tls-extra
-Version:             0.3.1
+Version:             0.3.999
 Description:
    a set of extra definitions, default values and helpers for tls.
 License:             BSD3
@@ -28,7 +28,7 @@ Flag executable
 
 Library
   Build-Depends:     base > 3 && < 5
-                   , tls >= 0.7 && < 0.8
+                   , tls >= 0.7.999 && < 0.9
                    , mtl
                    , network >= 2.3
                    , cryptohash >= 0.6
