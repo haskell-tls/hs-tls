@@ -94,7 +94,7 @@ data TLSParams = TLSParams
 	, pUseSecureRenegotiation :: Bool           -- notify that we want to use secure renegotation
 	, pCertificates      :: [(X509, Maybe PrivateKey)] -- ^ the cert chain for this context with the associated keys if any.
 	, pLogging           :: TLSLogging          -- ^ callback for logging
-	, onCertificatesRecv :: ([X509] -> IO TLSCertificateUsage) -- ^ callback to verify received cert chain.
+	, onCertificatesRecv :: [X509] -> IO TLSCertificateUsage -- ^ callback to verify received cert chain.
 	}
 
 defaultLogging :: TLSLogging
@@ -133,7 +133,7 @@ data TLSCtx = TLSCtx
 	{ ctxHandle :: Handle        -- ^ return the handle associated with this context
 	, ctxParams :: TLSParams
 	, ctxState  :: MVar TLSState
-	, ctxEOF_   :: IORef Bool    -- ^ is the handle as EOFed or not.
+	, ctxEOF_   :: IORef Bool    -- ^ is the handle has EOFed or not.
 	}
 
 ctxEOF :: MonadIO m => TLSCtx -> m Bool

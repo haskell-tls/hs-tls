@@ -1,4 +1,5 @@
 {-# OPTIONS_HADDOCK hide #-}
+{-# LANGUAGE ExistentialQuantification #-}
 -- |
 -- Module      : Network.TLS.Cipher
 -- License     : BSD-style
