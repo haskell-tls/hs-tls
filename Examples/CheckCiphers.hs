@@ -67,13 +67,15 @@ fakeCipher cid = Cipher
 	{ cipherID           = cid
 	, cipherName         = "cipher-" ++ show cid
 	, cipherDigestSize   = 0
-	, cipherKeySize      = 0
-	, cipherIVSize       = 0
-	, cipherKeyBlockSize = 0
-	, cipherPaddingSize  = 0
+	, cipherBulk         = Bulk
+		{ bulkName         = "fake"
+		, bulkKeySize      = 0
+		, bulkIVSize       = 0
+		, bulkBlockSize    = 0
+		, bulkF            = undefined
+		}
 	, cipherKeyExchange  = CipherKeyExchange_RSA
 	, cipherMACHash      = (\_ -> undefined)
-	, cipherF            = undefined
 	, cipherMinVer       = Nothing
 	}
 

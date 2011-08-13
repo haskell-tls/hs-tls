@@ -11,32 +11,32 @@ import Test.QuickCheck
 import qualified Data.ByteString as B
 import Network.TLS.Cipher
 
-arbitraryKey :: Cipher -> Gen [Word8]
-arbitraryKey cipher = vector (fromIntegral $ cipherKeySize cipher)
+arbitraryKey :: Bulk -> Gen [Word8]
+arbitraryKey bulk = vector (fromIntegral $ bulkKeySize bulk)
 
-arbitraryIV :: Cipher -> Gen [Word8]
-arbitraryIV cipher = vector (fromIntegral $ cipherIVSize cipher)
+arbitraryIV :: Bulk -> Gen [Word8]
+arbitraryIV bulk = vector (fromIntegral $ bulkIVSize bulk)
 
-arbitraryText :: Cipher -> Gen [Word8]
-arbitraryText cipher = vector (fromIntegral $ cipherPaddingSize cipher)
+arbitraryText :: Bulk -> Gen [Word8]
+arbitraryText bulk = vector (fromIntegral $ bulkBlockSize bulk)
 
-cipher_test cipher = run_test n t
+bulk_test bulk = run_test n t
 	where
-		n = ("cipher: " ++ cipherName cipher ++ ": decrypt . encrypt = id")
-		t = case cipherF cipher of
-			CipherBlockF enc dec       -> do
-				key <- B.pack <$> arbitraryKey cipher
-				iv  <- B.pack <$> arbitraryIV cipher
-				t   <- B.pack <$> arbitraryText cipher
+		n = ("bulk: " ++ bulkName bulk ++ ": decrypt . encrypt = id")
+		t = case bulkF bulk of
+			BulkBlockF enc dec       -> do
+				key <- B.pack <$> arbitraryKey bulk
+				iv  <- B.pack <$> arbitraryIV bulk
+				t   <- B.pack <$> arbitraryText bulk
 				return $ block enc dec key iv t
-			CipherStreamF ktoi enc dec -> do
-				key <- B.pack <$> arbitraryKey cipher
-				t   <- B.pack <$> arbitraryText cipher
+			BulkStreamF ktoi enc dec -> do
+				key <- B.pack <$> arbitraryKey bulk
+				t   <- B.pack <$> arbitraryText bulk
 				return $ stream ktoi enc dec key t
-			CipherNoneF -> do
+			BulkNoneF -> do
 				return True
 		block e d key iv t = (d key iv . e key iv) t == t
 		stream ktoi e d key t = (fst . d iv . fst . e iv) t == t
 			where iv = ktoi key
 
-runTests = mapM_ cipher_test supportedCiphers
+runTests = mapM_ (bulk_test . cipherBulk) supportedCiphers
