@@ -142,21 +142,21 @@ encryptData content = do
 			B.empty
 	let writekey = cstKey cst
 
-	case cipherF bulk of
-		CipherNoneF -> return content
-		CipherBlockF encrypt _ -> do
+	case bulkF bulk of
+		BulkNoneF -> return content
+		BulkBlockF encrypt _ -> do
 			-- before TLS 1.1, the block cipher IV is made of the residual of the previous block.
 			iv <- if hasExplicitBlockIV $ stVersion st
-				then genTLSRandom (cipherIVSize bulk)
+				then genTLSRandom (bulkIVSize bulk)
 				else return $ cstIV cst
 			let e = encrypt writekey iv (B.concat [ content, padding ])
 			if hasExplicitBlockIV $ stVersion st
 				then return $ B.concat [iv,e]
 				else do
-					let newiv = fromJust "new iv" $ takelast (cipherIVSize bulk) e
+					let newiv = fromJust "new iv" $ takelast (bulkIVSize bulk) e
 					put $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
 					return e
-		CipherStreamF initF encryptF _ -> do
+		BulkStreamF initF encryptF _ -> do
 			let iv = cstIV cst
 			let (e, newiv) = encryptF (if iv /= B.empty then iv else initF writekey) content
 			put $ st { stTxCryptState = Just $ cst { cstIV = newiv } }

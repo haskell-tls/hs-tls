@@ -8,7 +8,7 @@
 -- Portability : unknown
 --
 module Network.TLS.Cipher
-	( CipherTypeFunctions(..)
+	( BulkFunctions(..)
 	, CipherKeyExchangeType(..)
 	, Bulk(..)
 	, Cipher(..)
@@ -26,13 +26,13 @@ import qualified Data.ByteString as B
 type Key = B.ByteString
 type IV = B.ByteString
 
-data CipherTypeFunctions =
-	  CipherNoneF -- special value for 0
-	| CipherBlockF (Key -> IV -> B.ByteString -> B.ByteString)
-	               (Key -> IV -> B.ByteString -> B.ByteString)
-	| CipherStreamF (Key -> IV)
-	                (IV -> B.ByteString -> (B.ByteString, IV))
-	                (IV -> B.ByteString -> (B.ByteString, IV))
+data BulkFunctions =
+	  BulkNoneF -- special value for 0
+	| BulkBlockF (Key -> IV -> B.ByteString -> B.ByteString)
+	             (Key -> IV -> B.ByteString -> B.ByteString)
+	| BulkStreamF (Key -> IV)
+	              (IV -> B.ByteString -> (B.ByteString, IV))
+	              (IV -> B.ByteString -> (B.ByteString, IV))
 
 data CipherKeyExchangeType =
 	  CipherKeyExchange_RSA
@@ -48,11 +48,11 @@ data CipherKeyExchangeType =
 	deriving (Show,Eq)
 
 data Bulk = Bulk
-	{ bulkName           :: String
-	, cipherKeySize      :: Int
-	, cipherIVSize       :: Int
-	, cipherKeyBlockSize :: Int
-	, cipherF            :: CipherTypeFunctions
+	{ bulkName         :: String
+	, bulkKeySize      :: Int
+	, bulkIVSize       :: Int
+	, bulkKeyBlockSize :: Int
+	, bulkF            :: BulkFunctions
 	}
 
 -- | Cipher algorithm

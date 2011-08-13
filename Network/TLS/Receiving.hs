@@ -211,8 +211,8 @@ decryptData econtent = do
 	let digestSize   = fromIntegral $ cipherDigestSize cipher
 	let writekey     = cstKey cst
 
-	case cipherF bulk of
-		CipherNoneF -> do
+	case bulkF bulk of
+		BulkNoneF -> do
 			let contentlen = B.length econtent - digestSize
 			case partition3 econtent (contentlen, digestSize, 0) of
 				Nothing                ->
@@ -223,11 +223,11 @@ decryptData econtent = do
 						, cipherDataMAC     = Just mac
 						, cipherDataPadding = Nothing
 						}
-		CipherBlockF _ decryptF -> do
+		BulkBlockF _ decryptF -> do
 			{- update IV -}
 			let (iv, econtent') =
 				if hasExplicitBlockIV $ stVersion st
-					then B.splitAt (cipherIVSize bulk) econtent
+					then B.splitAt (bulkIVSize bulk) econtent
 					else (cstIV cst, econtent)
 			let newiv = fromJust "new iv" $ takelast padding_size econtent'
 			put $ st { stRxCryptState = Just $ cst { cstIV = newiv } }
@@ -241,7 +241,7 @@ decryptData econtent = do
 				, cipherDataMAC     = Just mac
 				, cipherDataPadding = Just padding
 				}
-		CipherStreamF initF _ decryptF -> do
+		BulkStreamF initF _ decryptF -> do
 			let iv = cstIV cst
 			let (content', newiv) = decryptF (if iv /= B.empty then iv else initF writekey) econtent
 			{- update Ctx -}
