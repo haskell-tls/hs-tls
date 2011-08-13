@@ -39,6 +39,7 @@ module Network.TLS
 	, nullCompression
 	-- * Ciphers & Predefined ciphers
 	, Cipher(..)
+	, Bulk(..)
 	-- * Versions
 	, Version(..)
 	-- * Errors
