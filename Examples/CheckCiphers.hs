@@ -66,7 +66,6 @@ tableCiphers =
 fakeCipher cid = Cipher
 	{ cipherID           = cid
 	, cipherName         = "cipher-" ++ show cid
-	, cipherDigestSize   = 0
 	, cipherBulk         = Bulk
 		{ bulkName         = "fake"
 		, bulkKeySize      = 0
@@ -75,7 +74,11 @@ fakeCipher cid = Cipher
 		, bulkF            = undefined
 		}
 	, cipherKeyExchange  = CipherKeyExchange_RSA
-	, cipherMACHash      = (\_ -> undefined)
+	, cipherHash         = Hash
+		{ hashName = "fake"
+		, hashSize = 0
+		, hashF    = undefined
+		}
 	, cipherMinVer       = Nothing
 	}
 
