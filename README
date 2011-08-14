@@ -1,7 +1,0 @@
-The hs-tls project aims to reimplement the full TLS protocol (formely known as SSL) in haskell.
-The focus of the projects is to provide a safer implementation than the ones existing,
-through more purity, more type-checking, and more units tests.
-
-While the focus is to make it safer than other implementations, this current
-implementation is *not* to be considered secure, since it doesn't fully
-implement everything necessary (full certificate checking, protocol requirements, etc)
