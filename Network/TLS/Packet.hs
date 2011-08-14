@@ -439,24 +439,29 @@ encodeExtSecureRenegotiation cvd msvd = runPut $ do
 {-
  - generate things for packet content
  -}
-generateMasterSecret_TLS, generateMasterSecret_SSL :: Bytes -> ClientRandom -> ServerRandom -> Bytes
-generateMasterSecret_TLS premasterSecret (ClientRandom c) (ServerRandom s) =
-	prf_MD5SHA1 premasterSecret seed 48
-	where
-		seed = B.concat [ "master secret", c, s ]
+type PRF = Bytes -> Bytes -> Int -> Bytes
 
+generateMasterSecret_SSL :: Bytes -> ClientRandom -> ServerRandom -> Bytes
 generateMasterSecret_SSL premasterSecret (ClientRandom c) (ServerRandom s) =
 	B.concat $ map (computeMD5) ["A","BB","CCC"]
 	where
 		computeMD5  label = hashMD5 $ B.concat [ premasterSecret, computeSHA1 label ]
 		computeSHA1 label = hashSHA1 $ B.concat [ label, premasterSecret, c, s ]
 
-generateMasterSecret :: Version -> Bytes -> ClientRandom -> ServerRandom -> Bytes
-generateMasterSecret ver =
-	if ver < TLS10 then generateMasterSecret_SSL else generateMasterSecret_TLS
+generateMasterSecret_TLS :: PRF -> Bytes -> ClientRandom -> ServerRandom -> Bytes
+generateMasterSecret_TLS prf premasterSecret (ClientRandom c) (ServerRandom s) =
+	prf premasterSecret seed 48
+	where
+		seed = B.concat [ "master secret", c, s ]
 
-generateKeyBlock_TLS :: (Bytes -> Bytes -> Int -> Bytes)
-                     -> ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
+generateMasterSecret :: Version -> Bytes -> ClientRandom -> ServerRandom -> Bytes
+generateMasterSecret SSL2  = generateMasterSecret_SSL
+generateMasterSecret SSL3  = generateMasterSecret_SSL
+generateMasterSecret TLS10 = generateMasterSecret_TLS prf_MD5SHA1
+generateMasterSecret TLS11 = generateMasterSecret_TLS prf_MD5SHA1
+generateMasterSecret TLS12 = generateMasterSecret_TLS prf_SHA256
+
+generateKeyBlock_TLS :: PRF -> ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
 generateKeyBlock_TLS prf (ClientRandom c) (ServerRandom s) mastersecret kbsize =
 	prf mastersecret seed kbsize where seed = B.concat [ "key expansion", s, c ]
 
@@ -475,9 +480,8 @@ generateKeyBlock TLS10 = generateKeyBlock_TLS prf_MD5SHA1
 generateKeyBlock TLS11 = generateKeyBlock_TLS prf_MD5SHA1
 generateKeyBlock TLS12 = generateKeyBlock_TLS prf_SHA256
 
-generateFinished_TLS :: Bytes -> Bytes -> HashCtx -> HashCtx -> Bytes
-generateFinished_TLS label mastersecret md5ctx sha1ctx =
-	prf_MD5SHA1 mastersecret seed 12
+generateFinished_TLS :: PRF -> Bytes -> Bytes -> HashCtx -> HashCtx -> Bytes
+generateFinished_TLS prf label mastersecret md5ctx sha1ctx = prf mastersecret seed 12
 	where
 		seed = B.concat [ label, finalizeHash md5ctx, finalizeHash sha1ctx ]
 
@@ -495,9 +499,11 @@ generateFinished_SSL sender mastersecret md5ctx sha1ctx =
 generateClientFinished :: Version -> Bytes -> HashCtx -> HashCtx -> Bytes
 generateClientFinished ver
 	| ver < TLS10 = generateFinished_SSL "CLNT"
-	| otherwise   = generateFinished_TLS "client finished"
+	| ver < TLS12 = generateFinished_TLS prf_MD5SHA1 "client finished"
+	| otherwise   = generateFinished_TLS prf_SHA256 "client finished"
 
 generateServerFinished :: Version -> Bytes -> HashCtx -> HashCtx -> Bytes
 generateServerFinished ver
 	| ver < TLS10 = generateFinished_SSL "SRVR"
-	| otherwise   = generateFinished_TLS "server finished"
+	| ver < TLS12 = generateFinished_TLS prf_MD5SHA1 "server finished"
+	| otherwise   = generateFinished_TLS prf_SHA256 "server finished"
