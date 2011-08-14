@@ -9,6 +9,7 @@ module Network.TLS.Crypto
 
 	-- * constructor
 	, hashMD5SHA1
+	, hashSHA256
 
 	-- * key exchange generic interface
 	, PublicKey(..)
@@ -18,6 +19,7 @@ module Network.TLS.Crypto
 	, KxError(..)
 	) where
 
+import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.MD5 as MD5
 import qualified Data.ByteString as B
@@ -64,7 +66,14 @@ instance HashCtxC HashMD5SHA1 where
 	hashCUpdateSSL (HashMD5SHA1 sha1ctx md5ctx) (b1,b2) = HashMD5SHA1 (SHA1.update sha1ctx b2) (MD5.update md5ctx b1)
 	hashCFinal  (HashMD5SHA1 sha1ctx md5ctx)   = B.concat [MD5.finalize md5ctx, SHA1.finalize sha1ctx]
 
+data HashSHA256 = HashSHA256 SHA256.Ctx
 
+instance HashCtxC HashSHA256 where
+	hashCName _                    = "SHA256"
+	hashCInit _                    = HashSHA256 SHA256.init
+	hashCUpdate (HashSHA256 ctx) b = HashSHA256 (SHA256.update ctx b)
+	hashCUpdateSSL _ _             = undefined
+	hashCFinal  (HashSHA256 ctx)   = SHA256.finalize ctx
 
 -- functions to use the hidden class.
 hashInit :: HashCtx -> HashCtx
@@ -82,6 +91,7 @@ hashFinal  (HashCtx h)   = hashCFinal h
 -- real hash constructors
 hashMD5SHA1, hashSHA256 :: HashCtx
 hashMD5SHA1 = HashCtx (HashMD5SHA1 SHA1.init MD5.init)
+hashSHA256  = HashCtx (HashSHA256 SHA256.init)
 
 {- key exchange methods encrypt and decrypt for each supported algorithm -}
 generalizeRSAError :: Either RSA.Error a -> Either KxError a
