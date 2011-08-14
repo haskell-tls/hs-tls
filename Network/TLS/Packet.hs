@@ -486,7 +486,7 @@ generateKeyBlock TLS12 = generateKeyBlock_TLS prf_SHA256
 generateFinished_TLS :: PRF -> Bytes -> Bytes -> HashCtx -> HashCtx -> Bytes
 generateFinished_TLS prf label mastersecret md5ctx sha1ctx = prf mastersecret seed 12
 	where
-		seed = B.concat [ label, finalizeHash md5ctx, finalizeHash sha1ctx ]
+		seed = B.concat [ label, hashFinal md5ctx, hashFinal sha1ctx ]
 
 generateFinished_SSL :: Bytes -> Bytes -> HashCtx -> HashCtx -> Bytes
 generateFinished_SSL sender mastersecret md5ctx sha1ctx =
@@ -494,8 +494,8 @@ generateFinished_SSL sender mastersecret md5ctx sha1ctx =
 	where
 		md5hash  = MD5.hash $ B.concat [ mastersecret, pad2, md5left ]
 		sha1hash = SHA1.hash $ B.concat [ mastersecret, B.take 40 pad2, sha1left ]
-		md5left  = finalizeHash $ foldl updateHash md5ctx [ sender, mastersecret, pad1 ]
-		sha1left = finalizeHash $ foldl updateHash sha1ctx [ sender, mastersecret, B.take 40 pad1 ]
+		md5left  = hashFinal $ foldl hashUpdate md5ctx [ sender, mastersecret, pad1 ]
+		sha1left = hashFinal $ foldl hashUpdate sha1ctx [ sender, mastersecret, B.take 40 pad1 ]
 		pad2     = B.replicate 48 0x5c
 		pad1     = B.replicate 48 0x36
 

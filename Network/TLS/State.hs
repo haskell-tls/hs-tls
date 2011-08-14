@@ -406,10 +406,10 @@ updateHandshake n f = do
 updateHandshakeDigest :: MonadState TLSState m => Bytes -> m ()
 updateHandshakeDigest content = updateHandshake "update digest" (\hs ->
 	let (c1, c2) = case hstHandshakeDigest hs of
-		Nothing                -> (initHash HashTypeSHA1, initHash HashTypeMD5)
+		Nothing                -> (hashSHA1, hashMD5)
 		Just (sha1ctx, md5ctx) -> (sha1ctx, md5ctx) in
-	let nc1 = updateHash c1 content in
-	let nc2 = updateHash c2 content in
+	let nc1 = hashUpdate c1 content in
+	let nc2 = hashUpdate c2 content in
 	hs { hstHandshakeDigest = Just (nc1, nc2) }
 	)
 

@@ -1,23 +1,15 @@
 {-# OPTIONS_HADDOCK hide #-}
+{-# LANGUAGE ExistentialQuantification #-}
 module Network.TLS.Crypto
-	( HashType(..)
-	, HashCtx
+	( HashCtx(..)
+	, hashInit
+	, hashUpdate
+	, hashFinal
 
-	-- * incremental interface with algorithm type wrapping for genericity
-	, initHash
-	, updateHash
-	, finalizeHash
-
-	-- * single pass lazy bytestring interface for each algorithm
-	, hashMD5
+	-- * constructor
 	, hashSHA1
-	-- * incremental interface for each algorithm
-	, initMD5
-	, updateMD5
-	, finalizeMD5
-	, initSHA1
-	, updateSHA1
-	, finalizeSHA1
+	, hashMD5
+	, hashMD5SHA1
 
 	-- * key exchange generic interface
 	, PublicKey(..)
@@ -47,61 +39,75 @@ instance Show PrivateKey where
 data KxError = RSAError RSA.Error
 	deriving (Show)
 
-data HashCtx =
-	  SHA1 !SHA1.Ctx
-	| MD5 !MD5.Ctx
-
 data KeyXchg =
 	  KxRSA RSA.PublicKey RSA.PrivateKey
 	deriving (Show)
 
-instance Show HashCtx where
-	show (SHA1 _) = "sha1"
-	show (MD5 _) = "md5"
+class HashCtxC a where
+	hashCName    :: a -> String
+	hashCInit    :: a -> a
+	hashCUpdate  :: a -> B.ByteString -> a
+	hashCFinal   :: a -> B.ByteString
 
-data HashType = HashTypeSHA1 | HashTypeMD5
+data HashCtx = forall h . HashCtxC h => HashCtx h
+
+instance Show HashCtx where
+	show (HashCtx c) = hashCName c
 
 {- MD5 -}
+data HashMD5 = HashMD5 MD5.Ctx
 
-initMD5 :: MD5.Ctx
-initMD5 = MD5.init
-
-updateMD5 :: MD5.Ctx -> ByteString -> MD5.Ctx
-updateMD5 = MD5.update
-
-finalizeMD5 :: MD5.Ctx -> ByteString
-finalizeMD5 = MD5.finalize
-
-hashMD5 :: ByteString -> ByteString
-hashMD5 = MD5.hash
+instance HashCtxC HashMD5 where
+	hashCName _                 = "MD5"
+	hashCInit _                 = HashMD5 MD5.init
+	hashCUpdate (HashMD5 ctx) b = HashMD5 (MD5.update ctx b)
+	hashCFinal  (HashMD5 ctx)   = MD5.finalize ctx
 
 {- SHA1 -}
+data HashSHA1 = HashSHA1 SHA1.Ctx
 
-initSHA1 :: SHA1.Ctx
-initSHA1 = SHA1.init
+instance HashCtxC HashSHA1 where
+	hashCName _                  = "SHA1"
+	hashCInit _                  = HashSHA1 SHA1.init
+	hashCUpdate (HashSHA1 ctx) b = HashSHA1 (SHA1.update ctx b)
+	hashCFinal  (HashSHA1 ctx)   = SHA1.finalize ctx
 
-updateSHA1 :: SHA1.Ctx -> ByteString -> SHA1.Ctx
-updateSHA1 = SHA1.update
+{- MD5 & SHA1 joined -}
+data HashMD5SHA1 = HashMD5SHA1 SHA1.Ctx MD5.Ctx
 
-finalizeSHA1 :: SHA1.Ctx -> ByteString
-finalizeSHA1 = SHA1.finalize
+instance HashCtxC HashMD5SHA1 where
+	hashCName _                  = "MD5-SHA1"
+	hashCInit _                  = HashMD5SHA1 SHA1.init MD5.init
+	hashCUpdate (HashMD5SHA1 sha1ctx md5ctx) b = HashMD5SHA1 (SHA1.update sha1ctx b) (MD5.update md5ctx b)
+	hashCFinal  (HashMD5SHA1 sha1ctx md5ctx)   = B.concat [MD5.finalize md5ctx, SHA1.finalize sha1ctx]
 
-hashSHA1 :: ByteString -> ByteString
-hashSHA1 = SHA1.hash
+{- MD5 & SHA1 joined specially for old SSL3 -}
+{-
+data HashMD5SHA1SSL = HashMD5SHA1SSL SHA1.Ctx MD5.Ctx
 
-{- generic Hashing -}
+instance HashCtxC HashMD5SHA1SSL where
+	hashCName _                  = "MD5-SHA1-SSL"
+	hashCInit _                  = HashMD5SHA1SSL SHA1.init MD5.init
+	hashCUpdate (HashMD5SHA1SSL sha1ctx md5ctx) b = HashMD5SHA1SSL (SHA1.update sha1ctx b) (MD5.update md5ctx b)
+	hashCFinal  (HashMD5SHA1SSL sha1ctx md5ctx)   =
+		B.concat [MD5.finalize md5ctx, SHA1.finalize sha1ctx]
+-}
 
-initHash :: HashType -> HashCtx
-initHash HashTypeSHA1 = SHA1 (initSHA1)
-initHash HashTypeMD5  = MD5 (initMD5)
+-- functions to use the hidden class.
+hashInit :: HashCtx -> HashCtx
+hashInit   (HashCtx h)   = HashCtx $ hashCInit h
 
-updateHash :: HashCtx -> B.ByteString -> HashCtx
-updateHash (SHA1 ctx) = SHA1 . updateSHA1 ctx
-updateHash (MD5 ctx)  = MD5 . updateMD5 ctx
+hashUpdate :: HashCtx -> B.ByteString -> HashCtx
+hashUpdate (HashCtx h) b = HashCtx $ hashCUpdate h b
 
-finalizeHash :: HashCtx -> B.ByteString
-finalizeHash (SHA1 ctx) = finalizeSHA1 ctx
-finalizeHash (MD5 ctx)  = finalizeMD5 ctx
+hashFinal :: HashCtx -> B.ByteString
+hashFinal  (HashCtx h)   = hashCFinal h
+
+-- real hash constructors
+hashSHA1, hashMD5, hashMD5SHA1 :: HashCtx
+hashSHA1    = HashCtx (HashSHA1 SHA1.init)
+hashMD5     = HashCtx (HashMD5 MD5.init)
+hashMD5SHA1 = HashCtx (HashMD5SHA1 SHA1.init MD5.init)
 
 {- key exchange methods encrypt and decrypt for each supported algorithm -}
 generalizeRSAError :: Either RSA.Error a -> Either KxError a
