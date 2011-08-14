@@ -68,10 +68,8 @@ data Cipher = Cipher
 	{ cipherID           :: Word16
 	, cipherName         :: String
 	, cipherHash         :: Hash
-	--, cipherDigestSize   :: Int
 	, cipherBulk         :: Bulk
 	, cipherKeyExchange  :: CipherKeyExchangeType
-	--, cipherMACHash      :: B.ByteString -> B.ByteString
 	, cipherMinVer       :: Maybe Version
 	}
 
