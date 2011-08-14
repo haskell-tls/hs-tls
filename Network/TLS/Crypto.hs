@@ -4,11 +4,10 @@ module Network.TLS.Crypto
 	( HashCtx(..)
 	, hashInit
 	, hashUpdate
+	, hashUpdateSSL
 	, hashFinal
 
 	-- * constructor
-	, hashSHA1
-	, hashMD5
 	, hashMD5SHA1
 
 	-- * key exchange generic interface
@@ -44,33 +43,16 @@ data KeyXchg =
 	deriving (Show)
 
 class HashCtxC a where
-	hashCName    :: a -> String
-	hashCInit    :: a -> a
-	hashCUpdate  :: a -> B.ByteString -> a
-	hashCFinal   :: a -> B.ByteString
+	hashCName      :: a -> String
+	hashCInit      :: a -> a
+	hashCUpdate    :: a -> B.ByteString -> a
+	hashCUpdateSSL :: a -> (B.ByteString,B.ByteString) -> a
+	hashCFinal     :: a -> B.ByteString
 
 data HashCtx = forall h . HashCtxC h => HashCtx h
 
 instance Show HashCtx where
 	show (HashCtx c) = hashCName c
-
-{- MD5 -}
-data HashMD5 = HashMD5 MD5.Ctx
-
-instance HashCtxC HashMD5 where
-	hashCName _                 = "MD5"
-	hashCInit _                 = HashMD5 MD5.init
-	hashCUpdate (HashMD5 ctx) b = HashMD5 (MD5.update ctx b)
-	hashCFinal  (HashMD5 ctx)   = MD5.finalize ctx
-
-{- SHA1 -}
-data HashSHA1 = HashSHA1 SHA1.Ctx
-
-instance HashCtxC HashSHA1 where
-	hashCName _                  = "SHA1"
-	hashCInit _                  = HashSHA1 SHA1.init
-	hashCUpdate (HashSHA1 ctx) b = HashSHA1 (SHA1.update ctx b)
-	hashCFinal  (HashSHA1 ctx)   = SHA1.finalize ctx
 
 {- MD5 & SHA1 joined -}
 data HashMD5SHA1 = HashMD5SHA1 SHA1.Ctx MD5.Ctx
@@ -79,19 +61,10 @@ instance HashCtxC HashMD5SHA1 where
 	hashCName _                  = "MD5-SHA1"
 	hashCInit _                  = HashMD5SHA1 SHA1.init MD5.init
 	hashCUpdate (HashMD5SHA1 sha1ctx md5ctx) b = HashMD5SHA1 (SHA1.update sha1ctx b) (MD5.update md5ctx b)
+	hashCUpdateSSL (HashMD5SHA1 sha1ctx md5ctx) (b1,b2) = HashMD5SHA1 (SHA1.update sha1ctx b2) (MD5.update md5ctx b1)
 	hashCFinal  (HashMD5SHA1 sha1ctx md5ctx)   = B.concat [MD5.finalize md5ctx, SHA1.finalize sha1ctx]
 
-{- MD5 & SHA1 joined specially for old SSL3 -}
-{-
-data HashMD5SHA1SSL = HashMD5SHA1SSL SHA1.Ctx MD5.Ctx
 
-instance HashCtxC HashMD5SHA1SSL where
-	hashCName _                  = "MD5-SHA1-SSL"
-	hashCInit _                  = HashMD5SHA1SSL SHA1.init MD5.init
-	hashCUpdate (HashMD5SHA1SSL sha1ctx md5ctx) b = HashMD5SHA1SSL (SHA1.update sha1ctx b) (MD5.update md5ctx b)
-	hashCFinal  (HashMD5SHA1SSL sha1ctx md5ctx)   =
-		B.concat [MD5.finalize md5ctx, SHA1.finalize sha1ctx]
--}
 
 -- functions to use the hidden class.
 hashInit :: HashCtx -> HashCtx
@@ -100,13 +73,14 @@ hashInit   (HashCtx h)   = HashCtx $ hashCInit h
 hashUpdate :: HashCtx -> B.ByteString -> HashCtx
 hashUpdate (HashCtx h) b = HashCtx $ hashCUpdate h b
 
+hashUpdateSSL :: HashCtx -> (B.ByteString,B.ByteString) -> HashCtx
+hashUpdateSSL (HashCtx h) bs = HashCtx $ hashCUpdateSSL h bs
+
 hashFinal :: HashCtx -> B.ByteString
 hashFinal  (HashCtx h)   = hashCFinal h
 
 -- real hash constructors
-hashSHA1, hashMD5, hashMD5SHA1 :: HashCtx
-hashSHA1    = HashCtx (HashSHA1 SHA1.init)
-hashMD5     = HashCtx (HashMD5 MD5.init)
+hashMD5SHA1, hashSHA256 :: HashCtx
 hashMD5SHA1 = HashCtx (HashMD5SHA1 SHA1.init MD5.init)
 
 {- key exchange methods encrypt and decrypt for each supported algorithm -}

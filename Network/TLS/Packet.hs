@@ -483,29 +483,30 @@ generateKeyBlock TLS10 = generateKeyBlock_TLS prf_MD5SHA1
 generateKeyBlock TLS11 = generateKeyBlock_TLS prf_MD5SHA1
 generateKeyBlock TLS12 = generateKeyBlock_TLS prf_SHA256
 
-generateFinished_TLS :: PRF -> Bytes -> Bytes -> HashCtx -> HashCtx -> Bytes
-generateFinished_TLS prf label mastersecret md5ctx sha1ctx = prf mastersecret seed 12
+generateFinished_TLS :: PRF -> Bytes -> Bytes -> HashCtx -> Bytes
+generateFinished_TLS prf label mastersecret hashctx = prf mastersecret seed 12
 	where
-		seed = B.concat [ label, hashFinal md5ctx, hashFinal sha1ctx ]
+		seed = B.concat [ label, hashFinal hashctx ]
 
-generateFinished_SSL :: Bytes -> Bytes -> HashCtx -> HashCtx -> Bytes
-generateFinished_SSL sender mastersecret md5ctx sha1ctx =
-	B.concat [md5hash, sha1hash]
+generateFinished_SSL :: Bytes -> Bytes -> HashCtx -> Bytes
+generateFinished_SSL sender mastersecret hashctx = B.concat [md5hash, sha1hash]
 	where
 		md5hash  = MD5.hash $ B.concat [ mastersecret, pad2, md5left ]
 		sha1hash = SHA1.hash $ B.concat [ mastersecret, B.take 40 pad2, sha1left ]
-		md5left  = hashFinal $ foldl hashUpdate md5ctx [ sender, mastersecret, pad1 ]
-		sha1left = hashFinal $ foldl hashUpdate sha1ctx [ sender, mastersecret, B.take 40 pad1 ]
+
+		lefthash = hashFinal $ flip hashUpdateSSL (pad1, B.take 40 pad1)
+		                     $ foldl hashUpdate hashctx [sender,mastersecret]
+		(md5left,sha1left) = B.splitAt 16 lefthash
 		pad2     = B.replicate 48 0x5c
 		pad1     = B.replicate 48 0x36
 
-generateClientFinished :: Version -> Bytes -> HashCtx -> HashCtx -> Bytes
+generateClientFinished :: Version -> Bytes -> HashCtx -> Bytes
 generateClientFinished ver
 	| ver < TLS10 = generateFinished_SSL "CLNT"
 	| ver < TLS12 = generateFinished_TLS prf_MD5SHA1 "client finished"
 	| otherwise   = generateFinished_TLS prf_SHA256 "client finished"
 
-generateServerFinished :: Version -> Bytes -> HashCtx -> HashCtx -> Bytes
+generateServerFinished :: Version -> Bytes -> HashCtx -> Bytes
 generateServerFinished ver
 	| ver < TLS10 = generateFinished_SSL "SRVR"
 	| ver < TLS12 = generateFinished_TLS prf_MD5SHA1 "server finished"
