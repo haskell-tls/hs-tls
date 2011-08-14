@@ -63,6 +63,9 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as L
 
+import qualified Crypto.Hash.SHA1 as SHA1
+import qualified Crypto.Hash.MD5 as MD5
+
 data CurrentParams = CurrentParams
 	{ cParamsVersion     :: Version               -- ^ current protocol version
 	, cParamsKeyXchgType :: CipherKeyExchangeType -- ^ current key exchange type
@@ -445,8 +448,8 @@ generateMasterSecret_SSL :: Bytes -> ClientRandom -> ServerRandom -> Bytes
 generateMasterSecret_SSL premasterSecret (ClientRandom c) (ServerRandom s) =
 	B.concat $ map (computeMD5) ["A","BB","CCC"]
 	where
-		computeMD5  label = hashMD5 $ B.concat [ premasterSecret, computeSHA1 label ]
-		computeSHA1 label = hashSHA1 $ B.concat [ label, premasterSecret, c, s ]
+		computeMD5  label = MD5.hash $ B.concat [ premasterSecret, computeSHA1 label ]
+		computeSHA1 label = SHA1.hash $ B.concat [ label, premasterSecret, c, s ]
 
 generateMasterSecret_TLS :: PRF -> Bytes -> ClientRandom -> ServerRandom -> Bytes
 generateMasterSecret_TLS prf premasterSecret (ClientRandom c) (ServerRandom s) =
@@ -470,8 +473,8 @@ generateKeyBlock_SSL (ClientRandom c) (ServerRandom s) mastersecret kbsize =
 	B.concat $ map computeMD5 $ take ((kbsize `div` 16) + 1) labels
 	where
 		labels            = [ uncurry BC.replicate x | x <- zip [1..] ['A'..'Z'] ]
-		computeMD5  label = hashMD5 $ B.concat [ mastersecret, computeSHA1 label ]
-		computeSHA1 label = hashSHA1 $ B.concat [ label, mastersecret, s, c ]
+		computeMD5  label = MD5.hash $ B.concat [ mastersecret, computeSHA1 label ]
+		computeSHA1 label = SHA1.hash $ B.concat [ label, mastersecret, s, c ]
 
 generateKeyBlock :: Version -> ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
 generateKeyBlock SSL2  = generateKeyBlock_SSL
@@ -489,8 +492,8 @@ generateFinished_SSL :: Bytes -> Bytes -> HashCtx -> HashCtx -> Bytes
 generateFinished_SSL sender mastersecret md5ctx sha1ctx =
 	B.concat [md5hash, sha1hash]
 	where
-		md5hash  = hashMD5 $ B.concat [ mastersecret, pad2, md5left ]
-		sha1hash = hashSHA1 $ B.concat [ mastersecret, B.take 40 pad2, sha1left ]
+		md5hash  = MD5.hash $ B.concat [ mastersecret, pad2, md5left ]
+		sha1hash = SHA1.hash $ B.concat [ mastersecret, B.take 40 pad2, sha1left ]
 		md5left  = finalizeHash $ foldl updateHash md5ctx [ sender, mastersecret, pad1 ]
 		sha1left = finalizeHash $ foldl updateHash sha1ctx [ sender, mastersecret, B.take 40 pad1 ]
 		pad2     = B.replicate 48 0x5c
