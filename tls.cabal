@@ -7,7 +7,7 @@ Description:
    eliminating a common set of security issues through the use of the advanced
    type system, high level constructions and common Haskell features.
    .
-   Currently implement the SSL3.0, TLS1.0 and TLS1.1 protocol,
+   Currently implement the SSL3.0, TLS1.0, TLS1.1 and TLS1.2 protocol,
    with only RSA supported for Key Exchange.
    .
    Only core protocol available here, have a look at the

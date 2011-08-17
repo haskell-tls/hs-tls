@@ -17,8 +17,8 @@ Features
 --------
 
 * tiny code base (more than 20 times smaller than openSSL, and 10 times smaller than gnuTLS)
-* permissive license: BSD3
-* supported versions: SSL3, TLS1.0, TLS1.1.
+* permissive license: BSD3.
+* supported versions: SSL3, TLS1.0, TLS1.1, TLS1.2.
 * key exchange supported: only RSA.
 * bulk algorithm supported: any stream or block ciphers.
 * supported extensions: secure renegociation

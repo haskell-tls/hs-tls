@@ -6,14 +6,7 @@ protocol:
 - put 4 bytes of time in client/server random
 - proper separation for key exchange algorithm (hardcoded to RSA at the moment in differents place)
 - implements different key exchange algorithm
-
-tls v1.2:
-
-- implement finish digest generation with hmac256
-- implement finish digest generation with client/server negociated algorithm
-- proper version dispatch in marshalling packets
-- properly separate different version of the protocol
-- implement AEAD
+- implement AEAD bulk algorithm (TLS1.2)
 
 code cleanup:
 
