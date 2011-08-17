@@ -88,7 +88,7 @@ clientProcess certs handle dsthandle dbg _ = do
 		}
 
 	let serverstate = defaultParams
-		{ pAllowedVersions = [SSL3,TLS10,TLS11]
+		{ pAllowedVersions = [SSL3,TLS10,TLS11,TLS12]
 		, pCiphers         = ciphers
 		, pCertificates    = certs
 		, pWantClientCert  = False
@@ -229,7 +229,7 @@ doClient pargs = do
 	let crecv = if validCert pargs then certificateVerifyChain else (\_ -> return CertificateUsageAccept)
 	let clientstate = defaultParams
 		{ pConnectVersion = TLS10
-		, pAllowedVersions = [ TLS10, TLS11 ]
+		, pAllowedVersions = [TLS10,TLS11,TLS12]
 		, pCiphers = ciphers
 		, pCertificates = []
 		, pLogging = logging
