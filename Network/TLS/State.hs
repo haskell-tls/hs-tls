@@ -111,7 +111,7 @@ data TLSHandshakeState = TLSHandshakeState
 	, hstMasterSecret    :: !(Maybe Bytes)
 	, hstRSAPublicKey    :: !(Maybe PublicKey)
 	, hstRSAPrivateKey   :: !(Maybe PrivateKey)
-	, hstHandshakeDigest :: Maybe HashCtx
+	, hstHandshakeDigest :: !HashCtx
 	} deriving (Show)
 
 data StateRNG = forall g . CryptoRandomGen g => StateRNG g
@@ -377,23 +377,24 @@ isClientContext :: MonadState TLSState m => m Bool
 isClientContext = get >>= return . stClientContext
 
 -- create a new empty handshake state
-newEmptyHandshake :: Version -> ClientRandom -> TLSHandshakeState
-newEmptyHandshake ver crand = TLSHandshakeState
+newEmptyHandshake :: Version -> ClientRandom -> HashCtx -> TLSHandshakeState
+newEmptyHandshake ver crand digestInit = TLSHandshakeState
 	{ hstClientVersion   = ver
 	, hstClientRandom    = crand
 	, hstServerRandom    = Nothing
 	, hstMasterSecret    = Nothing
 	, hstRSAPublicKey    = Nothing
 	, hstRSAPrivateKey   = Nothing
-	, hstHandshakeDigest = Nothing
+	, hstHandshakeDigest = digestInit
 	}
 
 startHandshakeClient :: MonadState TLSState m => Version -> ClientRandom -> m ()
 startHandshakeClient ver crand = do
 	-- FIXME check if handshake is already not null
+	let initCtx = if ver < TLS12 then hashMD5SHA1 else hashSHA256
 	chs <- get >>= return . stHandshake
 	when (isNothing chs) $
-		modify (\st -> st { stHandshake = Just $ newEmptyHandshake ver crand })
+		modify (\st -> st { stHandshake = Just $ newEmptyHandshake ver crand initCtx })
 
 hasValidHandshake :: MonadState TLSState m => String -> m ()
 hasValidHandshake name = get >>= \st -> assert name [ ("valid handshake", isNothing $ stHandshake st) ]
@@ -404,13 +405,8 @@ updateHandshake n f = do
 	modify (\st -> st { stHandshake = f <$> stHandshake st })
 
 updateHandshakeDigest :: MonadState TLSState m => Bytes -> m ()
-updateHandshakeDigest content = get >>= return . stVersion >>= initAndUpdate
-	where
-		initAndUpdate ver = updateHandshake "update digest" $ \hs ->
-			let initCtx = if ver < TLS12 then hashMD5SHA1 else hashSHA256 in
-			let ctx = maybe initCtx id $ hstHandshakeDigest hs in
-			let nctx = hashUpdate ctx content in
-			hs { hstHandshakeDigest = Just nctx }
+updateHandshakeDigest content = updateHandshake "update digest" $ \hs ->
+	hs { hstHandshakeDigest = hashUpdate (hstHandshakeDigest hs) content }
 
 updateHandshakeDigestSplitted :: MonadState TLSState m => HandshakeType -> Bytes -> m ()
 updateHandshakeDigestSplitted ty bytes = updateHandshakeDigest $ B.concat [hdr, bytes]
@@ -421,7 +417,7 @@ getHandshakeDigest :: MonadState TLSState m => Bool -> m Bytes
 getHandshakeDigest client = do
 	st <- get
 	let hst = fromJust "handshake" $ stHandshake st
-	let hashctx = fromJust "handshake digest" $ hstHandshakeDigest hst
+	let hashctx = hstHandshakeDigest hst
 	let msecret = fromJust "master secret" $ hstMasterSecret hst
 	return $ (if client then generateClientFinished else generateServerFinished) (stVersion st) msecret hashctx
 
