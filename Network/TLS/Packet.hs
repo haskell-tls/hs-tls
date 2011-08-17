@@ -217,13 +217,15 @@ decodeFinished = do
 	opaque <- remaining >>= getBytes
 	return $ Finished $ opaque
 
-getSignatureHashAlgorithm :: Int -> Get [ (HashAlgorithm, SignatureAlgorithm) ]
-getSignatureHashAlgorithm 0   = return []
-getSignatureHashAlgorithm len = do
+getSignatureHashAlgorithm :: Get (HashAlgorithm, SignatureAlgorithm)
+getSignatureHashAlgorithm = do
 	h <- fromJust . valToType <$> getWord8
 	s <- fromJust . valToType <$> getWord8
-	xs <- getSignatureHashAlgorithm (len - 2)
-	return ((h, s) : xs)
+	return (h,s)
+
+getSignatureHashAlgorithms :: Int -> Get [ (HashAlgorithm, SignatureAlgorithm) ]
+getSignatureHashAlgorithms 0   = return []
+getSignatureHashAlgorithms len = liftM2 (:) getSignatureHashAlgorithm (getSignatureHashAlgorithms (len-2))
 
 decodeCertRequest :: CurrentParams -> Get Handshake
 decodeCertRequest cp = do
@@ -232,7 +234,7 @@ decodeCertRequest cp = do
 	sigHashAlgs <- if cParamsVersion cp >= TLS12
 		then do
 			sighashlen <- getWord16
-			Just <$> getSignatureHashAlgorithm (fromIntegral sighashlen)
+			Just <$> getSignatureHashAlgorithms (fromIntegral sighashlen)
 		else return Nothing
 	dNameLen <- getWord16
 	when (cParamsVersion cp < TLS12 && dNameLen < 3) $ fail "certrequest distinguishname not of the correct size"
