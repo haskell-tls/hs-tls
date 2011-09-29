@@ -40,6 +40,7 @@ import Data.Word
 import Data.Bits
 import Network.TLS.Struct
 
+runGet :: String -> Get a -> Bytes -> Either String a
 runGet lbl f = G.runGet (label lbl f)
 
 getWords8 :: Get [Word8]

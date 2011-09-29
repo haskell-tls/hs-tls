@@ -17,7 +17,7 @@ module Network.TLS
 
 	-- * Context object
 	, TLSCtx
-	, ctxHandle
+	, ctxConnection
 
 	-- * Creating a context
 	, client
