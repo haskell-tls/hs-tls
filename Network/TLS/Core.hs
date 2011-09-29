@@ -27,7 +27,9 @@ module Network.TLS.Core
 
 	-- * Creating a context
 	, client
+	, clientWith
 	, server
+	, serverWith
 
 	-- * Initialisation and Termination of context
 	, bye
@@ -154,20 +156,24 @@ ctxEOF ctx = liftIO (readIORef $ ctxEOF_ ctx)
 throwCore :: (MonadIO m, Exception e) => e -> m a
 throwCore = liftIO . throwIO
 
-newCtx :: Handle -> TLSParams -> TLSState -> IO (TLSCtx Handle)
-newCtx handle params st = do
-	hSetBuffering handle NoBuffering
+newCtxWith :: c -> IO () -> (Bytes -> IO ()) -> (Int -> IO Bytes) -> TLSParams -> TLSState -> IO (TLSCtx c)
+newCtxWith c flushF sendF recvF params st = do
 	stvar <- newMVar st
 	eof   <- newIORef False
 	return $ TLSCtx
-		{ ctxConnection = handle
+		{ ctxConnection = c
 		, ctxParams     = params
 		, ctxState      = stvar
 		, ctxEOF_       = eof
-		, ctxConnectionFlush = hFlush handle
-		, ctxConnectionSend  = B.hPut handle
-		, ctxConnectionRecv  = B.hGet handle
+		, ctxConnectionFlush = flushF
+		, ctxConnectionSend  = sendF
+		, ctxConnectionRecv  = recvF
 		}
+
+newCtx :: Handle -> TLSParams -> TLSState -> IO (TLSCtx Handle)
+newCtx handle params st = do
+	hSetBuffering handle NoBuffering
+	newCtxWith handle (hFlush handle) (B.hPut handle) (B.hGet handle) params st
 
 ctxLogging :: TLSCtx a -> TLSLogging
 ctxLogging = pLogging . ctxParams
@@ -249,11 +255,23 @@ sendPacket ctx pkt = do
 	liftIO $ (loggingIOSent $ ctxLogging ctx) dataToSend
 	liftIO $ connectionSend ctx dataToSend
 
+-- | Create a new Client context with a configuration, a RNG, a generic connection and the connection operation.
+clientWith :: (MonadIO m, CryptoRandomGen g) => TLSParams -> g -> c -> IO () -> (Bytes -> IO ()) -> (Int -> IO Bytes) -> m (TLSCtx c)
+clientWith params rng connection flushF sendF recvF =
+	liftIO $ newCtxWith connection flushF sendF recvF params st
+	where st = (newTLSState rng) { stClientContext = True }
+
 -- | Create a new Client context with a configuration, a RNG, and a Handle.
 -- It reconfigures the handle buffermode to noBuffering
 client :: (MonadIO m, CryptoRandomGen g) => TLSParams -> g -> Handle -> m (TLSCtx Handle)
 client params rng handle = liftIO $ newCtx handle params st
 	where st = (newTLSState rng) { stClientContext = True }
+
+-- | Create a new Server context with a configuration, a RNG, a generic connection and the connection operation.
+serverWith :: (MonadIO m, CryptoRandomGen g) => TLSParams -> g -> c -> IO () -> (Bytes -> IO ()) -> (Int -> IO Bytes) -> m (TLSCtx c)
+serverWith params rng connection flushF sendF recvF =
+	liftIO $ newCtxWith connection flushF sendF recvF params st
+	where st = (newTLSState rng) { stClientContext = False }
 
 -- | Create a new Server context with a configuration, a RNG, and a Handle.
 -- It reconfigures the handle buffermode to noBuffering
