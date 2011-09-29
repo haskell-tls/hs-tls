@@ -134,19 +134,19 @@ data TLSCtx a = TLSCtx
 	, ctxParams          :: TLSParams
 	, ctxState           :: MVar TLSState
 	, ctxEOF_            :: IORef Bool    -- ^ is the handle has EOFed or not.
-	, ctxConnectionFlush :: a -> IO ()
-	, ctxConnectionSend  :: a -> Bytes -> IO ()
-	, ctxConnectionRecv  :: a -> Int -> IO Bytes
+	, ctxConnectionFlush :: IO ()
+	, ctxConnectionSend  :: Bytes -> IO ()
+	, ctxConnectionRecv  :: Int -> IO Bytes
 	}
 
 connectionFlush :: TLSCtx c -> IO ()
-connectionFlush c = (ctxConnectionFlush c) (ctxConnection c)
+connectionFlush c = (ctxConnectionFlush c)
 
 connectionSend :: TLSCtx c -> Bytes -> IO ()
-connectionSend c b = (ctxConnectionSend c) (ctxConnection c) b
+connectionSend c b = (ctxConnectionSend c) b
 
 connectionRecv :: TLSCtx c -> Int -> IO Bytes
-connectionRecv c sz = (ctxConnectionRecv c) (ctxConnection c) sz
+connectionRecv c sz = (ctxConnectionRecv c) sz
 
 ctxEOF :: MonadIO m => TLSCtx a -> m Bool
 ctxEOF ctx = liftIO (readIORef $ ctxEOF_ ctx)
@@ -164,9 +164,9 @@ newCtx handle params st = do
 		, ctxParams     = params
 		, ctxState      = stvar
 		, ctxEOF_       = eof
-		, ctxConnectionFlush = hFlush
-		, ctxConnectionSend  = B.hPut
-		, ctxConnectionRecv  = B.hGet
+		, ctxConnectionFlush = hFlush handle
+		, ctxConnectionSend  = B.hPut handle
+		, ctxConnectionRecv  = B.hGet handle
 		}
 
 ctxLogging :: TLSCtx a -> TLSLogging
