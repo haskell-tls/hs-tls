@@ -41,7 +41,7 @@ readOne h = do
 		Right True  -> B.hGetNonBlocking h 4096
 		Right False -> return B.empty
 
-tlsclient :: Handle -> TLSCtx -> IO ()
+tlsclient :: Handle -> TLSCtx Handle -> IO ()
 tlsclient srchandle dsthandle = do
 	hSetBuffering srchandle NoBuffering
 
@@ -76,7 +76,7 @@ tlsserver srchandle dsthandle = do
 		d <- recvData srchandle
 		putStrLn ("received: " ++ show d)
 		sendData srchandle (L.pack $ map (toEnum . fromEnum) "this is some data")
-		hFlush (ctxHandle srchandle)
+		hFlush (ctxConnection srchandle)
 		return False
 	putStrLn "end"
 

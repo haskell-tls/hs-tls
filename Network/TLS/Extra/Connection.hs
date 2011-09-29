@@ -22,7 +22,7 @@ import Network.TLS
 
 -- | open a TCP client connection to a destination and port description (number or name)
 -- 
-connectionClient :: CryptoRandomGen g => String -> String -> TLSParams -> g -> IO TLSCtx
+connectionClient :: CryptoRandomGen g => String -> String -> TLSParams -> g -> IO (TLSCtx Handle)
 connectionClient s p params rng = do
 	pn <- if and $ map isDigit $ p
 		then return $ fromIntegral $ (read p :: Int)

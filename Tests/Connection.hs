@@ -116,7 +116,7 @@ makeValidParams serverCerts = do
 {- | setup create all necessary connection point to create a data "pipe"
  -   ---(startQueue)---> tlsClient ---(socketPair)---> tlsServer ---(resultQueue)--->
  -}
-setup :: (TLSParams, TLSParams) -> IO (TLSCtx, TLSCtx, Chan a, Chan a)
+setup :: (TLSParams, TLSParams) -> IO (TLSCtx Handle, TLSCtx Handle, Chan a, Chan a)
 setup (clientState, serverState) = do
 	(cSocket, sSocket) <- socketPair AF_UNIX Stream defaultProtocol
 	cHandle            <- socketToHandle cSocket ReadWriteMode
@@ -157,7 +157,7 @@ testInitiate spCert = do
 	assert $ d == dres
 
 	-- cleanup
-	run $ (hClose (ctxHandle cCtx) >> hClose (ctxHandle sCtx))
+	run $ (hClose (ctxConnection cCtx) >> hClose (ctxConnection sCtx))
 
 	where
 		tlsServer handle queue = do
