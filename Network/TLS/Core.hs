@@ -108,7 +108,7 @@ defaultLogging = TLSLogging
 defaultParams :: TLSParams
 defaultParams = TLSParams
 	{ pConnectVersion         = TLS10
-	, pAllowedVersions        = [TLS10,TLS11]
+	, pAllowedVersions        = [TLS10,TLS11,TLS12]
 	, pCiphers                = []
 	, pCompressions           = [nullCompression]
 	, pWantClientCert         = False
