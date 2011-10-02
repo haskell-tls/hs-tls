@@ -4,8 +4,12 @@ module Network.TLS.Util
 	, partition3
 	, partition6
 	, fromJust
+	, and'
+	, (&&!)
+	, bytesEq
 	) where
 
+import Data.List (foldl')
 import Network.TLS.Struct (Bytes)
 import qualified Data.ByteString as B
 
@@ -41,3 +45,20 @@ partition6 bytes (d1,d2,d3,d4,d5,d6) = if B.length bytes < s then Nothing else J
 fromJust :: String -> Maybe a -> a
 fromJust what Nothing  = error ("fromJust " ++ what ++ ": Nothing") -- yuck
 fromJust _    (Just x) = x
+
+-- | This is a strict version of and
+and' :: [Bool] -> Bool
+and' l = foldl' (&&!) True l
+
+-- | This is a strict version of &&.
+(&&!) :: Bool -> Bool -> Bool
+True  &&! True  = True
+True  &&! False = False
+False &&! True  = False
+False &&! False = False
+
+-- | verify that 2 bytestrings are equals.
+-- it's a non lazy version, that will compare every bytes.
+-- arguments need to be of same length
+bytesEq :: Bytes -> Bytes -> Bool
+bytesEq b1 = and' . B.zipWith (==) b1
