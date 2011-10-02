@@ -181,9 +181,7 @@ getCipherData (Record pt ver _) cdata = do
 		Just digest -> do
 			let new_hdr = Header pt ver (fromIntegral $ B.length $ cipherDataContent cdata)
 			expected_digest <- makeDigest False new_hdr $ cipherDataContent cdata
-			if expected_digest == digest
-				then return True
-				else return False
+			return (expected_digest `bytesEq` digest)
 
 	-- check if the padding is filled with the correct pattern if it exists
 	paddingValid <- case cipherDataPadding cdata of
@@ -191,11 +189,9 @@ getCipherData (Record pt ver _) cdata = do
 		Just pad -> do
 			cver <- stVersion <$> get
 			let b = B.length pad - 1
-			if cver < TLS10
-				then return True
-				else return $ maybe True (const False) $ B.find (/= fromIntegral b) pad
+			return (if cver < TLS10 then True else B.replicate (B.length pad) (fromIntegral b) `bytesEq` pad)
 
-	unless (and $! [ macValid, paddingValid ]) $ do
+	unless (macValid &&! paddingValid) $ do
 		throwError $ Error_Protocol ("bad record mac", True, BadRecordMac)
 
 	return $ cipherDataContent cdata
