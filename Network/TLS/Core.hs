@@ -512,5 +512,5 @@ recvData ctx = do
 			setEOF ctx
 			return L.empty
 		Right (AppData x) -> return $ L.fromChunks [x]
-		Right p           -> error ("error unexpected packet: p" ++ show p)
+		Right p           -> error ("error unexpected packet: " ++ show p)
 		Left err          -> error ("error received: " ++ show err)
