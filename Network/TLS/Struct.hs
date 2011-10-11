@@ -47,7 +47,7 @@ module Network.TLS.Struct
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B (length)
 import Data.Word
-import Data.Certificate.X509
+import Data.Certificate.X509 (X509)
 import Data.Typeable
 import Control.Monad.Error (Error(..))
 import Control.Exception (Exception(..))
