@@ -28,7 +28,7 @@ import qualified Crypto.Hash.MD5 as MD5
 import qualified Crypto.Cipher.RSA as RSA
 import qualified Crypto.Cipher.DSA as DSA
 
-import Data.Certificate.X509Cert (oidCommonName)
+import Data.Certificate.X509.Cert (oidCommonName)
 import Network.TLS (TLSCertificateUsage(..), TLSCertificateRejectReason(..))
 
 import Data.Time.Calendar
@@ -121,18 +121,17 @@ verifyF :: SignatureALG -> PubKey -> B.ByteString -> B.ByteString -> Either Stri
 --   md2WithRSAEncryption OBJECT IDENTIFIER ::= { pkcs-1 2 }
 --   md4WithRSAEncryption OBJECT IDENTIFIER ::= { pkcs-1 3 }
 --   md5WithRSAEncryption OBJECT IDENTIFIER ::= { pkcs-1 4 }
-verifyF SignatureALG_md2WithRSAEncryption (PubKeyRSA rsak) = rsaVerify MD2.hash asn1 (mkRSA rsak)
+verifyF (SignatureALG HashMD2 PubKeyALG_RSA) (PubKeyRSA rsak) = rsaVerify MD2.hash asn1 (mkRSA rsak)
 	where asn1 = "\x30\x20\x30\x0c\x06\x08\x2a\x86\x48\x86\xf7\x0d\x02\x05\x05\x00\x02\x10"
 
-verifyF SignatureALG_md5WithRSAEncryption (PubKeyRSA rsak) = rsaVerify MD5.hash asn1 (mkRSA rsak)
+verifyF (SignatureALG HashMD5 PubKeyALG_RSA) (PubKeyRSA rsak) = rsaVerify MD5.hash asn1 (mkRSA rsak)
 	where asn1 = "\x30\x20\x30\x0c\x06\x08\x2a\x86\x48\x86\xf7\x0d\x02\x05\x05\x00\x04\x10"
 
-verifyF SignatureALG_sha1WithRSAEncryption (PubKeyRSA rsak) = rsaVerify SHA1.hash asn1 (mkRSA rsak)
+verifyF (SignatureALG HashSHA1 PubKeyALG_RSA) (PubKeyRSA rsak) = rsaVerify SHA1.hash asn1 (mkRSA rsak)
 	where asn1 = "\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x14"
 
-verifyF SignatureALG_dsaWithSHA1 (PubKeyDSA (pub,p,q,g)) = dsaSHA1Verify pk
-	where
-		pk        = DSA.PublicKey { DSA.public_params = (p,g,q), DSA.public_y = pub }
+verifyF (SignatureALG HashSHA1 PubKeyALG_DSA) (PubKeyDSA (pub,p,q,g)) = dsaSHA1Verify pk
+	where pk = DSA.PublicKey { DSA.public_params = (p,g,q), DSA.public_y = pub }
 			
 verifyF _ _ = (\_ _ -> Left "unexpected/wrong signature")
 

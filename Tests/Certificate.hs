@@ -4,7 +4,7 @@ module Tests.Certificate
 
 import Test.QuickCheck
 import qualified Data.Certificate.X509 as X509
-import qualified Data.Certificate.X509Cert as X509Cert
+import qualified Data.Certificate.X509.Cert as X509Cert
 import Control.Monad
 import Data.Time.Calendar
 import Data.Time.Clock (secondsToDiffTime)
@@ -33,7 +33,7 @@ arbitraryX509Cert pubKey = do
 	subjectdn <- arbitraryDN
 	time1     <- arbitraryTime
 	time2     <- arbitraryTime
-	let sigalg = X509.SignatureALG_md5WithRSAEncryption
+	let sigalg = X509.SignatureALG X509.HashMD5 X509.PubKeyALG_RSA
 	return $ X509Cert.Certificate
 		{ X509.certVersion      = version
 		, X509.certSerial       = serial
@@ -48,5 +48,5 @@ arbitraryX509Cert pubKey = do
 arbitraryX509 pubKey = do
 	cert <- arbitraryX509Cert pubKey
 	sig  <- resize 40 $ listOf1 arbitrary
-	let sigalg = X509.SignatureALG_md5WithRSAEncryption
+	let sigalg = X509.SignatureALG X509.HashMD5 X509.PubKeyALG_RSA
 	return (X509.X509 cert Nothing Nothing sigalg sig)
