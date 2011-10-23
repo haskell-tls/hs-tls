@@ -15,7 +15,7 @@ import Network.TLS.Cipher
 import Network.TLS.Struct
 import Network.TLS.Packet
 import Control.Monad
-import Control.Applicative ((<$>))
+import Control.Applicative
 import System.IO
 
 genByteString :: Int -> Gen B.ByteString
@@ -41,16 +41,16 @@ instance Arbitrary Word16 where
 #endif
 
 instance Arbitrary Header where
-	arbitrary = liftM3 Header arbitrary arbitrary arbitrary
+	arbitrary = Header <$> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary ClientRandom where
-	arbitrary = liftM ClientRandom (genByteString 32)
+	arbitrary = ClientRandom <$> (genByteString 32)
 
 instance Arbitrary ServerRandom where
-	arbitrary = liftM ServerRandom (genByteString 32)
+	arbitrary = ServerRandom <$> (genByteString 32)
 
 instance Arbitrary ClientKeyData where
-	arbitrary = liftM ClientKeyData (genByteString 46)
+	arbitrary = ClientKeyData <$> (genByteString 46)
 
 instance Arbitrary Session where
 	arbitrary = do
@@ -72,21 +72,30 @@ instance Arbitrary CertificateType where
 		, CertificateType_RSA_Ephemeral_DH, CertificateType_DSS_Ephemeral_DH
 		, CertificateType_fortezza_dms ]
 
--- we hardcode the pubkey for generated X509. at later stage this will be generated as well.
-pubkey = PubKeyRSA (1,2,3)
-
 instance Arbitrary Handshake where
 	arbitrary = oneof
-		[ liftM6 ClientHello arbitrary arbitrary arbitrary arbitraryCiphersIDs arbitraryCompressionIDs (return [])
-		, liftM6 ServerHello arbitrary arbitrary arbitrary arbitrary arbitrary (return [])
+		[ ClientHello
+			<$> arbitrary
+			<*> arbitrary
+			<*> arbitrary
+			<*> arbitraryCiphersIDs
+			<*> arbitraryCompressionIDs
+			<*> (return [])
+		, ServerHello
+			<$> arbitrary
+			<*> arbitrary
+			<*> arbitrary
+			<*> arbitrary
+			<*> arbitrary
+			<*> (return [])
 		--, liftM Certificates (resize 2 $ listOf $ arbitraryX509 pubkey)
-		, return HelloRequest
-		, return ServerHelloDone
-		, liftM2 ClientKeyXchg arbitrary arbitrary
+		, pure HelloRequest
+		, pure ServerHelloDone
+		, ClientKeyXchg <$> arbitrary <*> arbitrary
 		--, liftM  ServerKeyXchg
 		--, liftM3 CertRequest arbitrary (return Nothing) (return [])
 		--, liftM CertVerify (return [])
-		, liftM Finished (genByteString 12)
+		, Finished <$> (genByteString 12)
 		]
 
 {- quickcheck property -}
@@ -96,9 +105,6 @@ prop_handshake_marshalling_id x = (decodeHs $ encodeHandshake x) == Right x
 	where
 		decodeHs b = either (Left . id) (uncurry (decodeHandshake cp) . head) $ decodeHandshakes b
 		cp = CurrentParams { cParamsVersion = TLS10, cParamsKeyXchgType = CipherKeyExchange_RSA }
-
-
-liftM6 f m1 m2 m3 m4 m5 m6 = do { x1 <- m1; x2 <- m2; x3 <- m3; x4 <- m4; x5 <- m5; x6 <- m6; return (f x1 x2 x3 x4 x5 x6) }
 
 tests = testGroup "Marshalling"
 	[ testProperty "Header" prop_header_marshalling_id
