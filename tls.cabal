@@ -66,11 +66,13 @@ executable           Tests
   if flag(test)
     Buildable:       True
     Build-Depends:   base >= 3 && < 5
-                   , HUnit
                    , QuickCheck >= 2
+                   , test-framework
+                   , test-framework-quickcheck2
                    , bytestring
   else
     Buildable:       False
+  ghc-options:       -Wall -fhpc
 
 source-repository head
   type: git

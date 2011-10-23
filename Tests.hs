@@ -2,6 +2,8 @@
 
 import Test.QuickCheck
 import Test.QuickCheck.Test
+import Test.Framework (defaultMain, testGroup)
+import Test.Framework.Providers.QuickCheck2 (testProperty)
 
 --import Tests.Certificate
 
@@ -107,6 +109,9 @@ run_test n t =
 
 liftM6 f m1 m2 m3 m4 m5 m6 = do { x1 <- m1; x2 <- m2; x3 <- m3; x4 <- m4; x5 <- m5; x6 <- m6; return (f x1 x2 x3 x4 x5 x6) }
 
-main = do
-	run_test "marshalling header = id" prop_header_marshalling_id
-	run_test "marshalling handshake = id" prop_handshake_marshalling_id
+tests = testGroup "Marshalling"
+	[ testProperty "Header" prop_header_marshalling_id
+	, testProperty "Handshake" prop_handshake_marshalling_id
+	]
+
+main = defaultMain [ tests ]
