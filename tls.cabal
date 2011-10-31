@@ -41,8 +41,8 @@ Library
                    , cereal >= 0.3
                    , bytestring
                    , crypto-api >= 0.5
-                   , cryptocipher >= 0.2.5
-                   , certificate >= 0.9.4 && < 1.0
+                   , cryptocipher >= 0.3.0
+                   , certificate >= 1.0.0 && < 1.1.0
   Exposed-modules:   Network.TLS
                      Network.TLS.Cipher
                      Network.TLS.Compression

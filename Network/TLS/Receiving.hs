@@ -31,8 +31,6 @@ import Network.TLS.Compression
 import Network.TLS.Crypto
 import Data.Certificate.X509
 
-import qualified Crypto.Cipher.RSA as RSA
-
 returnEither :: Either TLSError a -> TLSSt a
 returnEither (Left err) = throwError err
 returnEither (Right a)  = return a
@@ -253,7 +251,5 @@ processCertificates :: [X509] -> TLSSt ()
 processCertificates certs = do
 	let (X509 mainCert _ _ _ _) = head certs
 	case certPubKey mainCert of
-		PubKeyRSA (lm, m, e) -> do
-			let pk = PubRSA (RSA.PublicKey { RSA.public_sz = fromIntegral lm, RSA.public_n = m, RSA.public_e = e })
-			setPublicKey pk
-		_                    -> return ()
+		PubKeyRSA pubkey -> setPublicKey (PubRSA pubkey)
+		_                -> return ()
