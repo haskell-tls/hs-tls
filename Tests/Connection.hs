@@ -65,19 +65,9 @@ readPrivateKey filepath = do
 	let pkdata = case parsePEMKeyRSA content of
 		Nothing -> error ("no valid RSA key section")
 		Just x  -> L.fromChunks [x]
-	let pk = case KeyRSA.decodePrivate pkdata of
+	case KeyRSA.decodePrivate pkdata of
 		Left err -> error ("cannot decode key: " ++ err)
-		Right x  -> PrivRSA $ RSA.PrivateKey
-			{ RSA.private_sz   = fromIntegral $ KeyRSA.lenmodulus x
-			, RSA.private_n    = KeyRSA.modulus x
-			, RSA.private_d    = KeyRSA.private_exponant x
-			, RSA.private_p    = KeyRSA.p1 x
-			, RSA.private_q    = KeyRSA.p2 x
-			, RSA.private_dP   = KeyRSA.exp1 x
-			, RSA.private_dQ   = KeyRSA.exp2 x
-			, RSA.private_qinv = KeyRSA.coef x
-			}
-	return pk
+		Right x  -> return $ PrivRSA $ snd x
 
 arbitraryVersions :: Gen [Version]
 arbitraryVersions = resize (length supportedVersions + 1) $ listOf1 (elements supportedVersions)

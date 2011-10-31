@@ -17,7 +17,6 @@ import Data.Char (isDigit)
 import Data.Certificate.PEM
 import Data.Certificate.X509
 import qualified Data.Certificate.KeyRSA as KeyRSA
-import qualified Crypto.Cipher.RSA as RSA
 
 import qualified Crypto.Random.AESCtr as RNG
 import Network.TLS
@@ -114,19 +113,9 @@ readPrivateKey filepath = do
 	let pkdata = case parsePEMKeyRSA content of
 		Nothing -> error ("no valid RSA key section")
 		Just x  -> L.fromChunks [x]
-	let pk = case KeyRSA.decodePrivate pkdata of
-		Left err -> error ("cannot decode key: " ++ err)
-		Right x  -> PrivRSA $ RSA.PrivateKey
-			{ RSA.private_sz   = fromIntegral $ KeyRSA.lenmodulus x
-			, RSA.private_n    = KeyRSA.modulus x
-			, RSA.private_d    = KeyRSA.private_exponant x
-			, RSA.private_p    = KeyRSA.p1 x
-			, RSA.private_q    = KeyRSA.p2 x
-			, RSA.private_dP   = KeyRSA.exp1 x
-			, RSA.private_dQ   = KeyRSA.exp2 x
-			, RSA.private_qinv = KeyRSA.coef x
-			}
-	return pk
+	case KeyRSA.decodePrivate pkdata of
+		Left err     -> error ("cannot decode key: " ++ err)
+		Right (_,pk) -> return $ PrivRSA pk
 
 data Stunnel =
 	  Client
