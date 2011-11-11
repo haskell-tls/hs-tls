@@ -70,6 +70,9 @@ executable           Tests
                    , test-framework
                    , test-framework-quickcheck2
                    , bytestring
+                   , time
+                   , cprng-aes
+                   , cryptocipher >= 0.3.0
   else
     Buildable:       False
   ghc-options:       -Wall -fhpc

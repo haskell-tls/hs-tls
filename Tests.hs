@@ -2,10 +2,10 @@
 
 import Test.QuickCheck
 import Test.QuickCheck.Test
-import Test.Framework (defaultMain, testGroup)
+import Test.Framework (defaultMain, testGroup, buildTest)
 import Test.Framework.Providers.QuickCheck2 (testProperty)
 
---import Tests.Certificate
+import Tests.Certificate
 
 import Data.Word
 import Data.Certificate.X509
@@ -88,7 +88,7 @@ instance Arbitrary Handshake where
 			<*> arbitrary
 			<*> arbitrary
 			<*> (return [])
-		--, liftM Certificates (resize 2 $ listOf $ arbitraryX509 pubkey)
+		, liftM Certificates (resize 2 $ listOf $ arbitraryX509)
 		, pure HelloRequest
 		, pure ServerHelloDone
 		, ClientKeyXchg <$> arbitrary <*> arbitrary
@@ -106,9 +106,11 @@ prop_handshake_marshalling_id x = (decodeHs $ encodeHandshake x) == Right x
 		decodeHs b = either (Left . id) (uncurry (decodeHandshake cp) . head) $ decodeHandshakes b
 		cp = CurrentParams { cParamsVersion = TLS10, cParamsKeyXchgType = CipherKeyExchange_RSA }
 
-tests = testGroup "Marshalling"
+tests_marshalling = testGroup "Marshalling"
 	[ testProperty "Header" prop_header_marshalling_id
 	, testProperty "Handshake" prop_handshake_marshalling_id
 	]
 
-main = defaultMain [ tests ]
+main = defaultMain
+	[ tests_marshalling
+	]
