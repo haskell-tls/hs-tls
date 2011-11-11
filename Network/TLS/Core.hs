@@ -11,6 +11,7 @@ module Network.TLS.Core
 	-- * Context configuration
 	  TLSParams(..)
 	, TLSLogging(..)
+	, Measurement(..)
 	, TLSCertificateUsage(..)
 	, TLSCertificateRejectReason(..)
 	, defaultLogging
@@ -49,6 +50,7 @@ import Network.TLS.Packet
 import Network.TLS.State
 import Network.TLS.Sending
 import Network.TLS.Receiving
+import Network.TLS.Measurement
 import Data.Maybe
 import Data.Certificate.X509
 import Data.List (intersect, intercalate, find)
@@ -135,20 +137,24 @@ data TLSCtx a = TLSCtx
 	{ ctxConnection      :: a             -- ^ return the connection object associated with this context
 	, ctxParams          :: TLSParams
 	, ctxState           :: MVar TLSState
+	, ctxMeasurement     :: IORef Measurement
 	, ctxEOF_            :: IORef Bool    -- ^ is the handle has EOFed or not.
 	, ctxConnectionFlush :: IO ()
 	, ctxConnectionSend  :: Bytes -> IO ()
 	, ctxConnectionRecv  :: Int -> IO Bytes
 	}
 
+updateMeasure :: MonadIO m => TLSCtx a -> (Measurement -> Measurement) -> m ()
+updateMeasure ctx f = liftIO $ modifyIORef (ctxMeasurement ctx) f
+
 connectionFlush :: TLSCtx c -> IO ()
-connectionFlush c = (ctxConnectionFlush c)
+connectionFlush c = ctxConnectionFlush c
 
 connectionSend :: TLSCtx c -> Bytes -> IO ()
-connectionSend c b = (ctxConnectionSend c) b
+connectionSend c b = updateMeasure c (addBytesSent $ B.length b) >> (ctxConnectionSend c) b
 
 connectionRecv :: TLSCtx c -> Int -> IO Bytes
-connectionRecv c sz = (ctxConnectionRecv c) sz
+connectionRecv c sz = updateMeasure c (addBytesReceived sz) >> (ctxConnectionRecv c) sz
 
 ctxEOF :: MonadIO m => TLSCtx a -> m Bool
 ctxEOF ctx = liftIO (readIORef $ ctxEOF_ ctx)
@@ -160,11 +166,13 @@ newCtxWith :: c -> IO () -> (Bytes -> IO ()) -> (Int -> IO Bytes) -> TLSParams -
 newCtxWith c flushF sendF recvF params st = do
 	stvar <- newMVar st
 	eof   <- newIORef False
+	stats <- newIORef newMeasurement
 	return $ TLSCtx
-		{ ctxConnection = c
-		, ctxParams     = params
-		, ctxState      = stvar
-		, ctxEOF_       = eof
+		{ ctxConnection  = c
+		, ctxParams      = params
+		, ctxState       = stvar
+		, ctxMeasurement = stats
+		, ctxEOF_        = eof
 		, ctxConnectionFlush = flushF
 		, ctxConnectionSend  = sendF
 		, ctxConnectionRecv  = recvF
@@ -291,6 +299,8 @@ bye ctx = sendPacket ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
 -- values intertwined with response from the server.
 handshakeClient :: MonadIO m => TLSCtx c -> m ()
 handshakeClient ctx = do
+	updateMeasure ctx incrementNbHandshakes
+
 	-- Send ClientHello
 	crand <- getStateRNG ctx 32 >>= return . ClientRandom
 	extensions <- getExtensions
@@ -325,6 +335,8 @@ handshakeClient ctx = do
 
 	-- receive changeCipherSpec & Finished
 	recvPacketSuccess ctx >> recvPacketSuccess ctx >> return ()
+
+	updateMeasure ctx resetBytesCounters
 
 	where
 		params       = ctxParams ctx
@@ -378,6 +390,8 @@ handshakeClient ctx = do
 
 handshakeServerWith :: MonadIO m => TLSCtx c -> Handshake -> m ()
 handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
+	updateMeasure ctx incrementNbHandshakes
+
 	-- Handle Client hello
 	when (ver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
 	when (not $ elem ver (pAllowedVersions params)) $
@@ -406,6 +420,8 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 	sendPacket ctx (Handshake [Finished cf])
 
 	liftIO $ connectionFlush ctx
+
+	updateMeasure ctx resetBytesCounters
 	return ()
 	where
 		params             = ctxParams ctx
@@ -456,7 +472,7 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 
 handshakeServerWith _ _ = fail "unexpected handshake type received. expecting client hello"
 
--- after receiving a client hello, we need to redo a handshake -}
+-- after receiving a client hello, we need to redo a handshake
 handshakeServer :: MonadIO m => TLSCtx c -> m ()
 handshakeServer ctx = do
 	pkts <- recvPacket ctx
