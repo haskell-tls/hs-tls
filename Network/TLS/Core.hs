@@ -98,6 +98,7 @@ data TLSParams = TLSParams
 	, pUseSecureRenegotiation :: Bool           -- notify that we want to use secure renegotation
 	, pCertificates      :: [(X509, Maybe PrivateKey)] -- ^ the cert chain for this context with the associated keys if any.
 	, pLogging           :: TLSLogging          -- ^ callback for logging
+	, onHandshake        :: Measurement -> IO Bool -- ^ callback on a beggining of handshake
 	, onCertificatesRecv :: [X509] -> IO TLSCertificateUsage -- ^ callback to verify received cert chain.
 	}
 
@@ -119,6 +120,7 @@ defaultParams = TLSParams
 	, pUseSecureRenegotiation = True
 	, pCertificates           = []
 	, pLogging                = defaultLogging
+	, onHandshake             = (\_ -> return True)
 	, onCertificatesRecv      = (\_ -> return CertificateUsageAccept)
 	}
 
@@ -144,8 +146,11 @@ data TLSCtx a = TLSCtx
 	, ctxConnectionRecv  :: Int -> IO Bytes
 	}
 
-updateMeasure :: MonadIO m => TLSCtx a -> (Measurement -> Measurement) -> m ()
+updateMeasure :: MonadIO m => TLSCtx c -> (Measurement -> Measurement) -> m ()
 updateMeasure ctx f = liftIO $ modifyIORef (ctxMeasurement ctx) f
+
+withMeasure :: MonadIO m => TLSCtx c -> (Measurement -> IO a) -> m a
+withMeasure ctx f = liftIO (readIORef (ctxMeasurement ctx) >>= f)
 
 connectionFlush :: TLSCtx c -> IO ()
 connectionFlush c = ctxConnectionFlush c
@@ -390,6 +395,9 @@ handshakeClient ctx = do
 
 handshakeServerWith :: MonadIO m => TLSCtx c -> Handshake -> m ()
 handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
+	-- check if policy allow this new handshake to happens
+	handshakeAuthorized <- withMeasure ctx (onHandshake $ ctxParams ctx)
+	unless handshakeAuthorized (throwCore $ Error_HandshakePolicy "server: handshake denied")
 	updateMeasure ctx incrementNbHandshakes
 
 	-- Handle Client hello

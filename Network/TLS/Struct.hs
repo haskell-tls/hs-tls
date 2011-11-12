@@ -112,6 +112,7 @@ data TLSError =
 	  Error_Misc String        -- ^ mainly for instance of Error
 	| Error_Protocol (String, Bool, AlertDescription)
 	| Error_Certificate String
+	| Error_HandshakePolicy String -- ^ handshake policy failed.
 	| Error_Random String
 	| Error_EOF
 	| Error_Packet String
