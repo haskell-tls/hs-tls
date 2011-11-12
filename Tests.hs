@@ -2,7 +2,7 @@
 
 import Test.QuickCheck
 import Test.QuickCheck.Test
-import Test.Framework (defaultMain, testGroup, buildTest)
+import Test.Framework (defaultMain, testGroup)
 import Test.Framework.Providers.QuickCheck2 (testProperty)
 
 import Tests.Certificate
