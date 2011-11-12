@@ -392,20 +392,28 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 		, stCompression = usedCompression
 		})
 
+	let useSession = Nothing
+
 	-- send Server Data until ServerHelloDone
-	handshakeSendServerData
-	liftIO $ connectionFlush ctx
+	case useSession of
+		Nothing -> do
+			handshakeSendServerData
+			liftIO $ connectionFlush ctx
 
-	-- Receive client info until client Finished.
-	whileStatus ctx (/= (StatusHandshake HsStatusClientFinished)) (recvPacketSuccess ctx)
+			-- Receive client info until client Finished.
+			whileStatus ctx (/= (StatusHandshake HsStatusClientFinished)) (recvPacketSuccess ctx)
 
-	sendPacket ctx ChangeCipherSpec
-
-	-- Send Finish
-	cf <- usingState_ ctx $ getHandshakeDigest False
-	sendPacket ctx (Handshake [Finished cf])
-
-	liftIO $ connectionFlush ctx
+			sendPacket ctx ChangeCipherSpec
+			sendFinish
+			liftIO $ connectionFlush ctx
+		Just session -> do
+			serverhello <- makeServerHello session
+			sendPacket ctx $ Handshake [serverhello]
+			sendPacket ctx ChangeCipherSpec
+			sendFinish
+			liftIO $ connectionFlush ctx
+			-- receive changeCipherSpec & Finished
+			recvPacket ctx >> recvPacketSuccess ctx
 	return ()
 	where
 		params             = ctxParams ctx
@@ -417,9 +425,12 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 		privKeys           = map snd $ pCertificates params
 		needKeyXchg        = cipherExchangeNeedMoreData $ cipherKeyExchange usedCipher
 
-		handshakeSendServerData = do
-			srand <- getStateRNG ctx 32 >>= return . ServerRandom
+		sendFinish = do
+			cf <- usingState_ ctx $ getHandshakeDigest False
+			sendPacket ctx (Handshake [Finished cf])
 
+		makeServerHello session = do
+			srand <- getStateRNG ctx 32 >>= return . ServerRandom
 			case privKeys of
 				(Just privkey : _) -> usingState_ ctx $ setPrivateKey privkey
 				_                  -> return () -- return a sensible error
@@ -438,11 +449,12 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 					return [ (0xff01, vf) ]
 				else return []
 			usingState_ ctx (setVersion ver >> setServerRandom srand)
-			sendPacket ctx $ Handshake
-				[ ServerHello ver srand (Session Nothing) (cipherID usedCipher)
-				                        (compressionID usedCompression) extensions
-				, Certificates srvCerts
-				]
+			return $ ServerHello ver srand (Session session) (cipherID usedCipher)
+			                               (compressionID usedCompression) extensions
+
+		handshakeSendServerData = do
+			serverhello <- makeServerHello Nothing
+			sendPacket ctx $ Handshake [ serverhello, Certificates srvCerts ]
 			when needKeyXchg $ do
 				let skg = SKX_RSA Nothing
 				sendPacket ctx (Handshake [ServerKeyXchg skg])
