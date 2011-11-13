@@ -308,31 +308,33 @@ handshakeClient ctx = do
 		              (map compressionID compressions) extensions
 		]
 
-	-- Receive Server information until ServerHelloDone
-	whileStatus ctx (/= (StatusHandshake HsStatusServerHelloDone)) $ do
-		pkts <- recvPacket ctx
-		case pkts of
-			Left err -> throwCore err
-			Right l  -> processServerInfo l
+	recvServerHello
 
-	-- Send Certificate if requested. XXX disabled for now.
-	certRequested <- return False
-	when certRequested (sendPacket ctx $ Handshake [Certificates clientCerts])
+	let useSession = Nothing
+	case useSession of
+		Nothing -> do
+			-- Receive Server information until ServerHelloDone
+			whileStatus ctx (/= (StatusHandshake HsStatusServerHelloDone)) $ do
+				hss <- recvPacketHandshake ctx
+				mapM_ processHandshake hss
 
-	sendClientKeyXchg
+			-- Send Certificate if requested. XXX disabled for now.
+			certRequested <- return False
+			when certRequested (sendPacket ctx $ Handshake [Certificates clientCerts])
 
-	{- maybe send certificateVerify -}
-	{- FIXME not implemented yet -}
+			sendClientKeyXchg
 
-	sendPacket ctx ChangeCipherSpec
-	liftIO $ connectionFlush ctx
+			{- maybe send certificateVerify -}
+			{- FIXME not implemented yet -}
+			sendChangeCipherAndFinish
 
-	-- Send Finished
-	cf <- usingState_ ctx $ getHandshakeDigest True
-	sendPacket ctx (Handshake [Finished cf])
+			-- receive changeCipherSpec & Finished
+			recvPacketSuccess ctx >> recvPacketSuccess ctx >> return ()
 
-	-- receive changeCipherSpec & Finished
-	recvPacketSuccess ctx >> recvPacketSuccess ctx >> return ()
+		Just session -> do
+			-- receive changeCipherSpec & Finished
+			recvPacketSuccess ctx
+			sendChangeCipherAndFinish
 
 	where
 		params       = ctxParams ctx
@@ -346,10 +348,22 @@ handshakeClient ctx = do
 			then usingState_ ctx (getVerifiedData True) >>= \vd -> return [ (0xff01, encodeExtSecureRenegotiation vd Nothing) ]
 			else return []
 
-		processServerInfo (Handshake hss) = mapM_ processHandshake hss
-		processServerInfo _               = return ()
+		sendChangeCipherAndFinish = do
+			sendPacket ctx ChangeCipherSpec
+			liftIO $ connectionFlush ctx
+			cf <- usingState_ ctx $ getHandshakeDigest True
+			sendPacket ctx (Handshake [Finished cf])
+			liftIO $ connectionFlush ctx
 
-		processHandshake (ServerHello rver _ _ cipher _ _) = do
+		recvServerHello = do
+			hss <- recvPacketHandshake ctx
+			case hss of
+				(sh:l) -> do
+					processServerHello sh
+					mapM_ processHandshake l
+				_      -> fail "cannot receive empty handshake"
+
+		processServerHello (ServerHello rver _ _ cipher _ _) = do
 			when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
 			case find ((==) rver) allowedvers of
 				Nothing -> throwCore $ Error_Protocol ("version " ++ show ver ++ "is not supported", True, ProtocolVersion)
@@ -357,6 +371,7 @@ handshakeClient ctx = do
 			case find ((==) cipher . cipherID) ciphers of
 				Nothing -> throwCore $ Error_Protocol ("no cipher in common with the server", True, HandshakeFailure)
 				Just c  -> usingState_ ctx $ setCipher c
+		processServerHello _ = error "expecting server hello"
 
 		processHandshake (Certificates certs) = do
 			let cb = onCertificatesRecv $ params
