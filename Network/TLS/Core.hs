@@ -438,7 +438,6 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 			-- in TLS12, we need to check as well the certificates we are sending if they have in the extension
 			-- the necessary bits set.
 
-			-- send ServerHello & Certificate & ServerKeyXchg & CertReq
 			secReneg   <- usingState_ ctx getSecureRenegotiation
 			extensions <- if secReneg
 				then do
@@ -454,6 +453,7 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 
 		handshakeSendServerData = do
 			serverhello <- makeServerHello Nothing
+			-- send ServerHello & Certificate & ServerKeyXchg & CertReq
 			sendPacket ctx $ Handshake [ serverhello, Certificates srvCerts ]
 			when needKeyXchg $ do
 				let skg = SKX_RSA Nothing
