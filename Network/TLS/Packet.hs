@@ -269,18 +269,20 @@ decodeServerKeyXchg_RSA = do
 	return $ ServerRSAParams { rsa_modulus = os2ip modulus, rsa_exponent = os2ip expo }
 
 decodeServerKeyXchg :: CurrentParams -> Get Handshake
-decodeServerKeyXchg cp = do
-	skxAlg <- case cParamsKeyXchgType cp of
-		CipherKeyExchange_RSA -> do
-			rsaparams <- decodeServerKeyXchg_RSA
-			return $ SKX_RSA $ Just rsaparams
-		CipherKeyExchange_DH_Anon -> do
-			dhparams <- decodeServerKeyXchg_DH
-			return $ SKX_DH_Anon dhparams
-		_ -> do
-			bs <- remaining >>= getBytes
-			return $ SKX_Unknown bs
-	return (ServerKeyXchg skxAlg)
+decodeServerKeyXchg cp = ServerKeyXchg <$> case cParamsKeyXchgType cp of
+	CipherKeyExchange_RSA     -> SKX_RSA . Just <$> decodeServerKeyXchg_RSA
+	CipherKeyExchange_DH_Anon -> SKX_DH_Anon <$> decodeServerKeyXchg_DH
+	CipherKeyExchange_DHE_RSA -> do
+		dhparams <- decodeServerKeyXchg_DH
+		signature <- getWord16 >>= getBytes . fromIntegral
+		return $ SKX_DHE_RSA dhparams (B.unpack signature)
+	CipherKeyExchange_DHE_DSS -> do
+		dhparams  <- decodeServerKeyXchg_DH
+		signature <- getWord16 >>= getBytes . fromIntegral
+		return $ SKX_DHE_DSS dhparams (B.unpack signature)
+	_ -> do
+		bs <- remaining >>= getBytes
+		return $ SKX_Unknown bs
 
 encodeHandshake :: Handshake -> ByteString
 encodeHandshake o =
