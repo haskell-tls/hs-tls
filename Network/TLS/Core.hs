@@ -240,6 +240,14 @@ recvPacket ctx = do
 			_       -> return ()
 		return pkt
 
+recvPacketHandshake :: MonadIO m => TLSCtx c -> m [Handshake]
+recvPacketHandshake ctx = do
+	pkts <- recvPacket ctx
+	case pkts of
+		Right (Handshake l) -> return l
+		Right x             -> fail ("unexpected type received. expecting handshake and got: " ++ show x)
+		Left err            -> throwCore err
+
 recvPacketSuccess :: MonadIO m => TLSCtx c -> m ()
 recvPacketSuccess ctx = do
 	pkt <- recvPacket ctx
@@ -471,10 +479,10 @@ handshakeServerWith _ _ = fail "unexpected handshake type received. expecting cl
 -- after receiving a client hello, we need to redo a handshake -}
 handshakeServer :: MonadIO m => TLSCtx c -> m ()
 handshakeServer ctx = do
-	pkts <- recvPacket ctx
-	case pkts of
-		Right (Handshake [hs]) -> handshakeServerWith ctx hs
-		x                      -> fail ("unexpected type received. expecting handshake ++ " ++ show x)
+	hss <- recvPacketHandshake ctx
+	case hss of
+		[ch] -> handshakeServerWith ctx ch
+		_    -> fail ("unexpected handshake received, excepting client hello and received " ++ show hss)
 
 -- | Handshake for a new TLS connection
 -- This is to be called at the beginning of a connection, and during renegociation
