@@ -50,11 +50,11 @@ arbitraryX509Cert pubKey = do
 		}
 
 arbitraryX509WithPublicKey pubKey = do
-	cert <- arbitraryX509Cert pubKey
+	cert <- arbitraryX509Cert (X509.PubKeyRSA pubKey)
 	sig  <- resize 40 $ listOf1 arbitrary
 	let sigalg = X509.SignatureALG X509.HashMD5 X509.PubKeyALG_RSA
 	return (X509.X509 cert Nothing Nothing sigalg sig)
 
 arbitraryX509 = do
-	pubKey <- fst `fmap` arbitraryRSAPair
-	arbitraryX509WithPublicKey (X509.PubKeyRSA pubKey)
+	let pubKey = fst $ getGlobalRSAPair
+	arbitraryX509WithPublicKey pubKey
