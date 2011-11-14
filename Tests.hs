@@ -1,22 +1,30 @@
 {-# LANGUAGE CPP #-}
 
 import Test.QuickCheck
+import Test.QuickCheck.Monadic
 import Test.QuickCheck.Test
 import Test.Framework (defaultMain, testGroup)
 import Test.Framework.Providers.QuickCheck2 (testProperty)
 
 import Tests.Certificate
+import Tests.PipeChan
+import Tests.Connection
 
 import Data.Word
 import Data.Certificate.X509
 
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
+import Network.TLS.Core
 import Network.TLS.Cipher
 import Network.TLS.Struct
 import Network.TLS.Packet
-import Control.Monad
 import Control.Applicative
-import System.IO
+import Control.Concurrent
+import Control.Exception (throw, catch, SomeException)
+import Control.Monad
+
+import Prelude hiding (catch)
 
 genByteString :: Int -> Gen B.ByteString
 genByteString i = B.pack <$> vector i
@@ -106,11 +114,83 @@ prop_handshake_marshalling_id x = (decodeHs $ encodeHandshake x) == Right x
 		decodeHs b = either (Left . id) (uncurry (decodeHandshake cp) . head) $ decodeHandshakes b
 		cp = CurrentParams { cParamsVersion = TLS10, cParamsKeyXchgType = CipherKeyExchange_RSA }
 
+prop_pipe_work = do
+	pipe <- run newPipe
+	run (runPipe pipe)
+
+	let bSize = 16
+	n <- pick (choose (1, 32))
+
+	let d1 = B.replicate (bSize * n) 40
+	let d2 = B.replicate (bSize * n) 45
+
+	d1' <- run (writePipeA pipe d1 >> readPipeB pipe (B.length d1))
+	d1 `assertEq` d1'
+
+	d2' <- run (writePipeB pipe d2 >> readPipeA pipe (B.length d2))
+	d2 `assertEq` d2'
+
+	return ()
+
+
+prop_handshake_initiate = do
+	-- initial setup
+	pipe <- run newPipe
+	run (runPipe pipe)
+	startQueue  <- run newChan
+	resultQueue <- run newChan
+
+	params       <- pick arbitraryPairParams
+	(cCtx, sCtx) <- run $ newPairContext pipe params
+
+	run $ forkIO $ do
+		catch (tlsServer sCtx resultQueue)
+		      (\e -> putStrLn ("server exception: " ++ show e) >> throw (e :: SomeException))
+		return ()
+	run $ forkIO $ do
+		catch (tlsClient startQueue cCtx)
+		      (\e -> putStrLn ("client exception: " ++ show e) >> throw (e :: SomeException))
+		return ()
+
+	{- the test involves writing data on one side of the data "pipe" and
+	 - then checking we received them on the other side of the data "pipe" -}
+	d <- L.pack <$> pick (someWords8 256)
+	run $ writeChan startQueue d
+
+	dres <- run $ readChan resultQueue
+	d `assertEq` dres
+
+	return ()
+	where
+		someWords8 :: Int -> Gen [Word8]
+		someWords8 i = replicateM i (fromIntegral <$> (choose (0,255) :: Gen Int))
+
+		tlsServer handle queue = do
+			success <- handshake handle
+			unless success $ fail "handshake failed on server side"
+			d <- recvData handle
+			writeChan queue d
+			return ()
+		tlsClient queue handle = do
+			success <- handshake handle
+			unless success $ fail "handshake failed on client side"
+			d <- readChan queue
+			sendData handle d
+			return ()
+
+assertEq expected got = unless (expected == got) $ error ("got " ++ show got ++ " but was expecting " ++ show expected)
+
 tests_marshalling = testGroup "Marshalling"
 	[ testProperty "Header" prop_header_marshalling_id
 	, testProperty "Handshake" prop_handshake_marshalling_id
 	]
 
+tests_handshake = testGroup "Handshakes"
+	[ testProperty "setup" (monadicIO prop_pipe_work)
+	, testProperty "initiate" (monadicIO prop_handshake_initiate)
+	]
+
 main = defaultMain
 	[ tests_marshalling
+	, tests_handshake
 	]
