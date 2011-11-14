@@ -176,6 +176,7 @@ prop_handshake_initiate = do
 			unless success $ fail "handshake failed on client side"
 			d <- readChan queue
 			sendData ctx d
+			bye ctx
 			return ()
 
 assertEq expected got = unless (expected == got) $ error ("got " ++ show got ++ " but was expecting " ++ show expected)
