@@ -165,17 +165,17 @@ prop_handshake_initiate = do
 		someWords8 :: Int -> Gen [Word8]
 		someWords8 i = replicateM i (fromIntegral <$> (choose (0,255) :: Gen Int))
 
-		tlsServer handle queue = do
-			success <- handshake handle
+		tlsServer ctx queue = do
+			success <- handshake ctx
 			unless success $ fail "handshake failed on server side"
-			d <- recvData handle
+			d <- recvData ctx
 			writeChan queue d
 			return ()
-		tlsClient queue handle = do
-			success <- handshake handle
+		tlsClient queue ctx = do
+			success <- handshake ctx
 			unless success $ fail "handshake failed on client side"
 			d <- readChan queue
-			sendData handle d
+			sendData ctx d
 			return ()
 
 assertEq expected got = unless (expected == got) $ error ("got " ++ show got ++ " but was expecting " ++ show expected)
