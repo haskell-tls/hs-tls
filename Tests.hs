@@ -143,14 +143,8 @@ prop_handshake_initiate = do
 	params       <- pick arbitraryPairParams
 	(cCtx, sCtx) <- run $ newPairContext pipe params
 
-	run $ forkIO $ do
-		catch (tlsServer sCtx resultQueue)
-		      (\e -> putStrLn ("server exception: " ++ show e) >> throw (e :: SomeException))
-		return ()
-	run $ forkIO $ do
-		catch (tlsClient startQueue cCtx)
-		      (\e -> putStrLn ("client exception: " ++ show e) >> throw (e :: SomeException))
-		return ()
+	run $ forkIO $ catch (tlsServer sCtx resultQueue) (printAndRaise "server")
+	run $ forkIO $ catch (tlsClient startQueue cCtx) (printAndRaise "client")
 
 	{- the test involves writing data on one side of the data "pipe" and
 	 - then checking we received them on the other side of the data "pipe" -}
@@ -162,6 +156,9 @@ prop_handshake_initiate = do
 
 	return ()
 	where
+		printAndRaise :: String -> SomeException -> IO ()
+		printAndRaise s e = putStrLn (s ++ " exception: " ++ show e) >> throw e
+
 		someWords8 :: Int -> Gen [Word8]
 		someWords8 i = replicateM i (fromIntegral <$> (choose (0,255) :: Gen Int))
 
