@@ -26,7 +26,7 @@ openConnection s p = do
 			return CertificateUsageAccept
 		}
 	ctx <- connectionClient s p params rng
-	handshake ctx
+	_   <- handshake ctx
 	bye ctx
 	r <- readIORef ref
 	case r of
