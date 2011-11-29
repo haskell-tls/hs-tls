@@ -16,15 +16,11 @@ module Network.TLS.State
 	, TLSHandshakeState(..)
 	, TLSCryptState(..)
 	, TLSMacState(..)
-	, TLSStatus(..)
-	, HandshakeStatus(..)
 	, newTLSState
 	, genTLSRandom
 	, withTLSRNG
 	, withCompression
 	, assert -- FIXME move somewhere else (Internal.hs ?)
-	, updateStatusHs
-	, updateStatusCC
 	, updateVerifiedData
 	, finishHandshakeTypeMaterial
 	, finishHandshakeMaterial
@@ -51,7 +47,6 @@ module Network.TLS.State
 	) where
 
 import Data.Word
-import Data.List (find)
 import Data.Maybe (isNothing)
 import Network.TLS.Util
 import Network.TLS.Struct
@@ -71,28 +66,6 @@ import Crypto.Random
 assert :: Monad m => String -> [(String,Bool)] -> m ()
 assert fctname list = forM_ list $ \ (name, assumption) -> do
 	when assumption $ fail (fctname ++ ": assumption about " ++ name ++ " failed")
-
-data HandshakeStatus =
-	  HsStatusClientHello
-	| HsStatusServerHello
-	| HsStatusServerCertificate
-	| HsStatusServerKeyXchg
-	| HsStatusServerCertificateReq
-	| HsStatusServerHelloDone
-	| HsStatusClientCertificate
-	| HsStatusClientKeyXchg
-	| HsStatusClientCertificateVerify
-	| HsStatusClientChangeCipher
-	| HsStatusClientFinished
-	| HsStatusServerChangeCipher
-	deriving (Show,Eq)
-
-data TLSStatus =
-	  StatusInit
-	| StatusHandshakeReq
-	| StatusHandshake HandshakeStatus
-	| StatusOk
-	deriving (Show,Eq)
 
 data TLSCryptState = TLSCryptState
 	{ cstKey        :: !Bytes
@@ -122,7 +95,6 @@ instance Show StateRNG where
 data TLSState = TLSState
 	{ stClientContext       :: Bool
 	, stVersion             :: !Version
-	, stStatus              :: !TLSStatus
 	, stHandshake           :: !(Maybe TLSHandshakeState)
 	, stTxEncrypted         :: Bool
 	, stRxEncrypted         :: Bool
@@ -155,7 +127,6 @@ newTLSState :: CryptoRandomGen g => g -> TLSState
 newTLSState rng = TLSState
 	{ stClientContext       = False
 	, stVersion             = TLS10
-	, stStatus              = StatusInit
 	, stHandshake           = Nothing
 	, stTxEncrypted         = False
 	, stRxEncrypted         = False
@@ -209,68 +180,6 @@ makeDigest w hdr content = do
 
 	modify (\_ -> if w then st { stTxMacState = Just newms } else st { stRxMacState = Just newms })
 	return digest
-
-hsStatusTransitionTable :: [ (HandshakeType, TLSStatus, [ TLSStatus ]) ]
-hsStatusTransitionTable =
-	[ (HandshakeType_HelloRequest, StatusHandshakeReq,
-		[ StatusOk ])
-	, (HandshakeType_ClientHello, StatusHandshake HsStatusClientHello,
-		[ StatusInit, StatusHandshakeReq ])
-	, (HandshakeType_ServerHello, StatusHandshake HsStatusServerHello,
-		[ StatusHandshake HsStatusClientHello ])
-	, (HandshakeType_Certificate, StatusHandshake HsStatusServerCertificate,
-		[ StatusHandshake HsStatusServerHello ])
-	, (HandshakeType_ServerKeyXchg, StatusHandshake HsStatusServerKeyXchg,
-		[ StatusHandshake HsStatusServerHello
-		, StatusHandshake HsStatusServerCertificate ])
-	, (HandshakeType_CertRequest, StatusHandshake HsStatusServerCertificateReq,
-		[ StatusHandshake HsStatusServerHello
-		, StatusHandshake HsStatusServerCertificate
-		, StatusHandshake HsStatusServerKeyXchg ])
-	, (HandshakeType_ServerHelloDone, StatusHandshake HsStatusServerHelloDone,
-		[ StatusHandshake HsStatusServerHello
-		, StatusHandshake HsStatusServerCertificate
-		, StatusHandshake HsStatusServerKeyXchg
-		, StatusHandshake HsStatusServerCertificateReq ])
-	, (HandshakeType_Certificate, StatusHandshake HsStatusClientCertificate,
-		[ StatusHandshake HsStatusServerHelloDone ])
-	, (HandshakeType_ClientKeyXchg, StatusHandshake HsStatusClientKeyXchg,
-		[ StatusHandshake HsStatusServerHelloDone
-		, StatusHandshake HsStatusClientCertificate ])
-	, (HandshakeType_CertVerify, StatusHandshake HsStatusClientCertificateVerify,
-		[ StatusHandshake HsStatusClientKeyXchg ])
-	, (HandshakeType_Finished, StatusHandshake HsStatusClientFinished,
-		[ StatusHandshake HsStatusClientChangeCipher ])
-	, (HandshakeType_Finished, StatusOk,
-		[ StatusHandshake HsStatusServerChangeCipher ])
-	]
-
-updateStatus :: MonadState TLSState m => TLSStatus -> m ()
-updateStatus x = modify (\st -> st { stStatus = x })
-
-updateStatusHs :: MonadState TLSState m => HandshakeType -> m (Maybe TLSError)
-updateStatusHs ty = do
-	status <- return . stStatus =<< get
-	ns <- return . transition . stStatus =<< get
-	case ns of
-		Nothing      -> return $ Just $ Error_Packet_unexpected (show status) ("handshake:" ++ show ty)
-		Just (_,x,_) -> updateStatus x >> return Nothing
-	where
-		edgeEq cur (ety, _, aprevs) = ty == ety && (maybe False (const True) $ find (== cur) aprevs)
-		transition currentStatus = find (edgeEq currentStatus) hsStatusTransitionTable
-
-updateStatusCC :: MonadState TLSState m => Bool -> m (Maybe TLSError)
-updateStatusCC sending = do
-	status <- return . stStatus =<< get
-	cc     <- isClientContext
-	let x = case (cc /= sending, status) of
-		(False, StatusHandshake HsStatusClientKeyXchg)           -> Just (StatusHandshake HsStatusClientChangeCipher)
-		(False, StatusHandshake HsStatusClientCertificateVerify) -> Just (StatusHandshake HsStatusClientChangeCipher)
-		(True, StatusHandshake HsStatusClientFinished)           -> Just (StatusHandshake HsStatusServerChangeCipher)
-		_                                                        -> Nothing
-	case x of
-		Just newstatus -> updateStatus newstatus >> return Nothing
-		Nothing        -> return $ Just $ Error_Packet_unexpected (show status) ("Client Context: " ++ show cc)
 
 updateVerifiedData :: MonadState TLSState m => Bool -> Bytes -> m ()
 updateVerifiedData sending bs = do

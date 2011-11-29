@@ -86,10 +86,8 @@ encodeRecord record = return $ B.concat [ encodeHeader hdr, content ]
 preProcessPacket :: Packet -> TLSSt ()
 preProcessPacket (Alert _)          = return ()
 preProcessPacket (AppData _)        = return ()
-preProcessPacket (ChangeCipherSpec) = updateStatusCC True >> return () -- FIXME don't ignore this error just in case
+preProcessPacket (ChangeCipherSpec) = return ()
 preProcessPacket (Handshake hss)    = forM_ hss $ \hs -> do
-	-- FIXME don't ignore this error
-	_ <- updateStatusHs (typeOfHandshake hs)
 	case hs of
 		Finished fdata -> updateVerifiedData True fdata
 		_              -> return ()

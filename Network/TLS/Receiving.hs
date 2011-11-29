@@ -12,7 +12,6 @@ module Network.TLS.Receiving (
 	readPacket
 	) where
 
-import Data.Maybe (isJust)
 import Control.Applicative ((<$>))
 import Control.Monad.State
 import Control.Monad.Error
@@ -36,23 +35,7 @@ returnEither (Left err) = throwError err
 returnEither (Right a)  = return a
 
 readPacket :: Record Ciphertext -> TLSSt Packet
-readPacket record = checkState record >> decryptContent record >>= uncompressContent >>= processPacket
-
-checkState :: Record a -> TLSSt ()
-checkState (Record pt _ _) =
-		stStatus <$> get >>= \status -> unless (allowed pt status) $ throwError (err status)
-	where
-		err st = Error_Protocol ("unexpected message received: status=" ++ show st, True, UnexpectedMessage)
-
-		allowed :: ProtocolType -> TLSStatus -> Bool
-		allowed ProtocolType_Alert _                    = True
-		allowed ProtocolType_Handshake _                = True
-		allowed ProtocolType_AppData StatusHandshakeReq = True
-		allowed ProtocolType_AppData StatusOk           = True
-		allowed ProtocolType_ChangeCipherSpec (StatusHandshake HsStatusClientFinished) = True
-		allowed ProtocolType_ChangeCipherSpec (StatusHandshake HsStatusClientKeyXchg) = True
-		allowed ProtocolType_ChangeCipherSpec (StatusHandshake HsStatusClientCertificateVerify) = True
-		allowed _ _ = False
+readPacket record = decryptContent record >>= uncompressContent >>= processPacket
 
 processPacket :: Record Plaintext -> TLSSt Packet
 
@@ -61,9 +44,6 @@ processPacket (Record ProtocolType_AppData _ fragment) = return $ AppData $ frag
 processPacket (Record ProtocolType_Alert _ fragment) = return . Alert =<< returnEither (decodeAlerts $ fragmentGetBytes fragment)
 
 processPacket (Record ProtocolType_ChangeCipherSpec _ fragment) = do
-	e <- updateStatusCC False
-	when (isJust e) $ throwError (fromJust "" e)
-
 	returnEither $ decodeChangeCipherSpec $ fragmentGetBytes fragment
 	switchRxEncryption
 	isClientContext >>= \cc -> when (not cc) setKeyBlock
@@ -80,9 +60,6 @@ processPacket (Record ProtocolType_Handshake ver fragment) = do
 processHandshake :: Version -> HandshakeType -> ByteString -> TLSSt Handshake
 processHandshake ver ty econtent = do
 	-- SECURITY FIXME if RSA fail, we need to generate a random master secret and not fail.
-	e <- updateStatusHs ty
-	maybe (return ()) throwError e
-
 	keyxchg <- getCipherKeyExchangeType
 	let currentparams = CurrentParams
 		{ cParamsVersion     = ver
