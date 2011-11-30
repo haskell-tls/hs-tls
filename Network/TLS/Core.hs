@@ -214,26 +214,30 @@ readExact ctx sz = do
 			else throwCore (Error_Packet ("partial packet: expecting " ++ show sz ++ " bytes, got: " ++ (show $B.length hdrbs)))
 	return hdrbs
 
+recvRecord :: MonadIO m => TLSCtx c -> m (Either TLSError (Record Plaintext))
+recvRecord ctx = readExact ctx 5 >>= either (return . Left) recvLength . decodeHeader
+	where recvLength header@(Header _ _ readlen)
+		| readlen > 16384 + 2048 = return $ Left $ Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
+		| otherwise              = do
+			content <- readExact ctx (fromIntegral readlen)
+			liftIO $ (loggingIORecv $ ctxLogging ctx) header content
+			usingState ctx $ disengageRecord $ rawToRecord header (fragmentCiphertext content)
+
+
 -- | receive one packet from the context that contains 1 or
 -- many messages (many only in case of handshake). if will returns a
 -- TLSError if the packet is unexpected or malformed
 recvPacket :: MonadIO m => TLSCtx c -> m (Either TLSError Packet)
 recvPacket ctx = do
-	hdrbs <- readExact ctx 5
-	case decodeHeader hdrbs of
-		Left err                          -> return $ Left err
-		Right header@(Header _ _ readlen) ->
-			if readlen > (16384 + 2048)
-				then return $ Left $ Error_Protocol ("record exceeding maximum size",True, RecordOverflow)
-				else recvLength header readlen
-	where recvLength header readlen = do
-		content <- readExact ctx (fromIntegral readlen)
-		liftIO $ (loggingIORecv $ ctxLogging ctx) header content
-		pkt <- usingState ctx $ readPacket $ rawToRecord header (fragmentCiphertext content)
-		case pkt of
-			Right p -> liftIO $ (loggingPacketRecv $ ctxLogging ctx) $ show p
-			_       -> return ()
-		return pkt
+	erecord <- recvRecord ctx
+	case erecord of
+		Left err     -> return $ Left err
+		Right record -> do
+			pkt <- usingState ctx $ processPacket record
+			case pkt of
+				Right p -> liftIO $ (loggingPacketRecv $ ctxLogging ctx) $ show p
+				_       -> return ()
+			return pkt
 
 recvPacketHandshake :: MonadIO m => TLSCtx c -> m [Handshake]
 recvPacketHandshake ctx = do

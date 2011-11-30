@@ -9,7 +9,7 @@
 -- to the TLS state
 --
 module Network.TLS.Receiving (
-	readPacket
+	processPacket, readPacket
 	) where
 
 import Control.Applicative ((<$>))
