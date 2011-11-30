@@ -54,6 +54,9 @@ Library
                      Network.TLS.Crypto
                      Network.TLS.Packet
                      Network.TLS.Record
+                     Network.TLS.Record.Types
+                     Network.TLS.Record.Engage
+                     Network.TLS.Record.Disengage
                      Network.TLS.State
                      Network.TLS.Sending
                      Network.TLS.Receiving
