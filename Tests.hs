@@ -2,7 +2,6 @@
 
 import Test.QuickCheck
 import Test.QuickCheck.Monadic
-import Test.QuickCheck.Test
 import Test.Framework (defaultMain, testGroup)
 import Test.Framework.Providers.QuickCheck2 (testProperty)
 
@@ -11,7 +10,6 @@ import Tests.PipeChan
 import Tests.Connection
 
 import Data.Word
-import Data.Certificate.X509
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
@@ -61,8 +59,8 @@ instance Arbitrary Session where
 	arbitrary = do
 		i <- choose (1,2) :: Gen Int
 		case i of
-			1 -> return $ Session Nothing
 			2 -> liftM (Session . Just) (genByteString 32)
+			_ -> return $ Session Nothing
 
 arbitraryCiphersIDs :: Gen [Word16]
 arbitraryCiphersIDs = choose (0,200) >>= vector
@@ -105,15 +103,19 @@ instance Arbitrary Handshake where
 
 {- quickcheck property -}
 
+prop_header_marshalling_id :: Header -> Bool
 prop_header_marshalling_id x = (decodeHeader $ encodeHeader x) == Right x
+
+prop_handshake_marshalling_id :: Handshake -> Bool
 prop_handshake_marshalling_id x = (decodeHs $ encodeHandshake x) == Right x
 	where
 		decodeHs b = either (Left . id) (uncurry (decodeHandshake cp) . head) $ decodeHandshakes b
 		cp = CurrentParams { cParamsVersion = TLS10, cParamsKeyXchgType = CipherKeyExchange_RSA }
 
+prop_pipe_work :: PropertyM IO ()
 prop_pipe_work = do
 	pipe <- run newPipe
-	run (runPipe pipe)
+	_ <- run (runPipe pipe)
 
 	let bSize = 16
 	n <- pick (choose (1, 32))
@@ -129,19 +131,19 @@ prop_pipe_work = do
 
 	return ()
 
-
+prop_handshake_initiate :: PropertyM IO ()
 prop_handshake_initiate = do
 	-- initial setup
 	pipe <- run newPipe
-	run (runPipe pipe)
+	_ <- run (runPipe pipe)
 	startQueue  <- run newChan
 	resultQueue <- run newChan
 
 	params       <- pick arbitraryPairParams
 	(cCtx, sCtx) <- run $ newPairContext pipe params
 
-	run $ forkIO $ catch (tlsServer sCtx resultQueue) (printAndRaise "server")
-	run $ forkIO $ catch (tlsClient startQueue cCtx) (printAndRaise "client")
+	_ <- run $ forkIO $ catch (tlsServer sCtx resultQueue) (printAndRaise "server")
+	_ <- run $ forkIO $ catch (tlsClient startQueue cCtx) (printAndRaise "client")
 
 	{- the test involves writing data on one side of the data "pipe" and
 	 - then checking we received them on the other side of the data "pipe" -}
@@ -160,21 +162,23 @@ prop_handshake_initiate = do
 		someWords8 i = replicateM i (fromIntegral <$> (choose (0,255) :: Gen Int))
 
 		tlsServer ctx queue = do
-			success <- handshake ctx
-			unless success $ fail "handshake failed on server side"
+			hSuccess <- handshake ctx
+			unless hSuccess $ fail "handshake failed on server side"
 			d <- recvData ctx
 			writeChan queue d
 			return ()
 		tlsClient queue ctx = do
-			success <- handshake ctx
-			unless success $ fail "handshake failed on client side"
+			hSuccess <- handshake ctx
+			unless hSuccess $ fail "handshake failed on client side"
 			d <- readChan queue
 			sendData ctx d
 			bye ctx
 			return ()
 
+assertEq :: (Show a, Monad m, Eq a) => a -> a -> m ()
 assertEq expected got = unless (expected == got) $ error ("got " ++ show got ++ " but was expecting " ++ show expected)
 
+main :: IO ()
 main = defaultMain
 	[ tests_marshalling
 	, tests_handshake
