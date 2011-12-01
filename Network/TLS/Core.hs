@@ -522,7 +522,7 @@ handshake ctx = do
 		handleException f = catch (f >> return True) (\e -> handler e >> return False)
 		handler e = case fromException e of
 			Just err -> sendPacket ctx (errorToAlert err)
-			Nothing  -> sendPacket ctx (errorToAlert $ Error_Misc "")
+			Nothing  -> sendPacket ctx (errorToAlert $ Error_Misc $ show e)
 
 -- | sendData sends a bunch of data.
 -- It will automatically chunk data to acceptable packet size
