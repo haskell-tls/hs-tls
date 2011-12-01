@@ -386,7 +386,8 @@ handshakeClient ctx = do
 		processCertificate p = processServerKeyExchange p
 
 		processServerKeyExchange :: MonadIO m => Handshake -> m (RecvState m)
-		processServerKeyExchange p = processCertificateRequest p
+		processServerKeyExchange (ServerKeyXchg _) = return $ RecvStateHandshake processCertificateRequest
+		processServerKeyExchange p                 = processCertificateRequest p
 
 		processCertificateRequest (CertRequest _ _ _) = do
 			--modify (\sc -> sc { scCertRequested = True })
