@@ -45,28 +45,20 @@ processPacket (Record ProtocolType_ChangeCipherSpec _ fragment) = do
 	return ChangeCipherSpec
 
 processPacket (Record ProtocolType_Handshake ver fragment) = do
-	handshakes <- returnEither (decodeHandshakes $ fragmentGetBytes fragment)
-	hss <- forM handshakes $ \(ty, content) -> do
-		hs <- processHandshake ver ty content
-		when (finishHandshakeTypeMaterial ty) $ updateHandshakeDigestSplitted ty content
-		return hs
-	return $ Handshake hss
-
-processHandshake :: Version -> HandshakeType -> ByteString -> TLSSt Handshake
-processHandshake ver ty econtent = do
-	-- SECURITY FIXME if RSA fail, we need to generate a random master secret and not fail.
 	keyxchg <- getCipherKeyExchangeType
 	let currentparams = CurrentParams
 		{ cParamsVersion     = ver
 		, cParamsKeyXchgType = maybe CipherKeyExchange_RSA id $ keyxchg
 		}
-	content <- case ty of
-		HandshakeType_ClientKeyXchg -> either (const econtent) id <$> decryptRSA econtent
-		_                           -> return econtent
-	hs <- case (ty, decodeHandshake currentparams ty content) of
-		(_, Right x)                          -> return x
-		(HandshakeType_ClientKeyXchg, Left _) -> return $ ClientKeyXchg SSL2 (ClientKeyData $ B.replicate 46 0xff)
-		(_, Left err)                         -> throwError err
+	handshakes <- returnEither (decodeHandshakes $ fragmentGetBytes fragment)
+	hss <- forM handshakes $ \(ty, content) -> do
+		case decodeHandshake currentparams ty content of
+			Left err -> throwError err
+			Right hs -> return hs
+	return $ Handshake hss
+
+processHandshake :: Handshake -> TLSSt ()
+processHandshake hs = do
 	clientmode <- isClientContext
 	case hs of
 		ClientHello cver ran _ _ _ ex -> unless clientmode $ do
@@ -84,7 +76,7 @@ processHandshake ver ty econtent = do
 			processClientKeyXchg content
 		Finished fdata                -> processClientFinished fdata
 		_                             -> return ()
-	return hs
+	when (finishHandshakeTypeMaterial $ typeOfHandshake hs) (updateHandshakeDigest $ encodeHandshake hs)
 	where
 		-- secure renegotiation
 		processClientExtension (0xff01, content) = do

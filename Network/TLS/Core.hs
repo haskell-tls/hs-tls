@@ -259,7 +259,10 @@ runRecvState ctx iniState          = recvPacketHandshake ctx >>= loop iniState >
 	where
 		loop :: MonadIO m => RecvState m -> [Handshake] -> m (RecvState m)
 		loop recvState []                  = return recvState
-		loop (RecvStateHandshake f) (x:xs) = f x >>= \nstate -> loop nstate xs
+		loop (RecvStateHandshake f) (x:xs) = do
+			nstate <- f x
+			usingState_ ctx $ processHandshake x
+			loop nstate xs
 		loop _                         _   = unexpected "spurious handshake" Nothing
 
 sendChangeCipherAndFinish :: MonadIO m => TLSCtx c -> Bool -> m ()
@@ -417,7 +420,8 @@ handshakeClient ctx = do
 			throwCore $ Error_Protocol ("certificate rejected: " ++ s, True, CertificateUnknown)
 
 handshakeServerWith :: MonadIO m => TLSCtx c -> Handshake -> m ()
-handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
+handshakeServerWith ctx clientHello@(ClientHello ver _ _ ciphers compressions _) = do
+	usingState_ ctx $ processHandshake clientHello
 	-- Handle Client hello
 	when (ver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
 	when (not $ elem ver (pAllowedVersions params)) $
