@@ -29,9 +29,6 @@ returnEither :: Either TLSError a -> TLSSt a
 returnEither (Left err) = throwError err
 returnEither (Right a)  = return a
 
-readPacket :: Record Ciphertext -> TLSSt Packet
-readPacket record = disengageRecord record >>= processPacket
-
 processPacket :: Record Plaintext -> TLSSt Packet
 
 processPacket (Record ProtocolType_AppData _ fragment) = return $ AppData $ fragmentGetBytes fragment
