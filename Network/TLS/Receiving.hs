@@ -8,16 +8,13 @@
 -- the Receiving module contains calls related to unmarshalling packets according
 -- to the TLS state
 --
-module Network.TLS.Receiving (
-	processPacket, readPacket
-	) where
+module Network.TLS.Receiving (processHandshake, processPacket) where
 
 import Control.Applicative ((<$>))
 import Control.Monad.State
 import Control.Monad.Error
 
 import Data.ByteString (ByteString)
-import qualified Data.ByteString as B
 
 import Network.TLS.Util
 import Network.TLS.Struct
@@ -83,8 +80,8 @@ processHandshake ver ty econtent = do
 			setServerRandom ran
 			setVersion sver
 		Certificates certs            -> when clientmode $ do processCertificates certs
-		ClientKeyXchg cver _          -> unless clientmode $ do
-			processClientKeyXchg cver content
+		ClientKeyXchg content         -> unless clientmode $ do
+			processClientKeyXchg content
 		Finished fdata                -> processClientFinished fdata
 		_                             -> return ()
 	return hs
@@ -110,20 +107,24 @@ processHandshake ver ty econtent = do
 
 decryptRSA :: ByteString -> TLSSt (Either KxError ByteString)
 decryptRSA econtent = do
-	ver <- stVersion <$> get
 	rsapriv <- fromJust "rsa private key" . hstRSAPrivateKey . fromJust "handshake" . stHandshake <$> get
-	return $ kxDecrypt rsapriv (if ver < TLS10 then econtent else B.drop 2 econtent)
+	return $ kxDecrypt rsapriv econtent
 
 -- process the client key exchange message. the protocol expects the initial
 -- client version received in ClientHello, not the negociated version.
 -- in case the version mismatch, generate a random master secret
-processClientKeyXchg :: Version -> ByteString -> TLSSt ()
-processClientKeyXchg ver content = do
+processClientKeyXchg :: ByteString -> TLSSt ()
+processClientKeyXchg encryptedPremaster = do
 	expectedVer <- hstClientVersion . fromJust "handshake" . stHandshake <$> get
-	setMasterSecret =<<
-		if expectedVer /= ver
-		then genTLSRandom (fromIntegral $ B.length content)
-		else return content
+	random      <- genTLSRandom 48
+	ePremaster  <- decryptRSA encryptedPremaster
+	case ePremaster of
+		Left _          -> setMasterSecret random
+		Right premaster -> case decodePreMasterSecret premaster of
+			Left _                       -> setMasterSecret random
+			Right (ver, _)
+				| ver /= expectedVer -> setMasterSecret random
+				| otherwise          -> setMasterSecret premaster
 
 processClientFinished :: FinishedData -> TLSSt ()
 processClientFinished fdata = do

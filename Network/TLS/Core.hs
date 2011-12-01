@@ -398,8 +398,13 @@ handshakeClient ctx = do
 		processServerHelloDone p = unexpected (show p) (Just "server hello data")
 
 		sendClientKeyXchg = do
-			prerand <- getStateRNG ctx 46 >>= return . ClientKeyData
-			sendPacket ctx $ Handshake [ClientKeyXchg ver prerand]
+			encryptedPreMaster <- usingState_ ctx $ do
+				xver       <- stVersion <$> get
+				prerand    <- genTLSRandom 46
+				let premaster = encodePreMasterSecret xver prerand
+				setMasterSecret premaster
+				encryptRSA premaster
+			sendPacket ctx $ Handshake [ClientKeyXchg encryptedPreMaster]
 
 		-- on certificate reject, throw an exception with the proper protocol alert error.
 		certificateRejected CertificateRejectRevoked =
@@ -452,8 +457,8 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 		processClientCertificate (Certificates _) = return $ RecvStateHandshake processClientKeyExchange
 		processClientCertificate p = processClientKeyExchange p
 
-		processClientKeyExchange (ClientKeyXchg _ _) = return $ RecvStateNext processCertificateVerify
-		processClientKeyExchange p = unexpected (show p) (Just "client key exchange")
+		processClientKeyExchange (ClientKeyXchg _) = return $ RecvStateNext processCertificateVerify
+		processClientKeyExchange p                 = unexpected (show p) (Just "client key exchange")
 
 		processCertificateVerify (Handshake [CertVerify _]) = return $ RecvStateNext expectChangeCipher
 		processCertificateVerify p = expectChangeCipher p

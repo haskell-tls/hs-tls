@@ -57,9 +57,6 @@ instance Arbitrary ClientRandom where
 instance Arbitrary ServerRandom where
 	arbitrary = ServerRandom <$> (genByteString 32)
 
-instance Arbitrary ClientKeyData where
-	arbitrary = ClientKeyData <$> (genByteString 46)
-
 instance Arbitrary Session where
 	arbitrary = do
 		i <- choose (1,2) :: Gen Int
@@ -99,7 +96,7 @@ instance Arbitrary Handshake where
 		, liftM Certificates (resize 2 $ listOf $ arbitraryX509)
 		, pure HelloRequest
 		, pure ServerHelloDone
-		, ClientKeyXchg <$> arbitrary <*> arbitrary
+		, ClientKeyXchg <$> genByteString 48
 		--, liftM  ServerKeyXchg
 		--, liftM3 CertRequest arbitrary (return Nothing) (return [])
 		--, liftM CertVerify (return [])

@@ -8,9 +8,7 @@
 -- the Sending module contains calls related to marshalling packets according
 -- to the TLS state 
 --
-module Network.TLS.Sending (
-	writePacket
-	) where
+module Network.TLS.Sending (writePacket, encryptRSA) where
 
 import Control.Applicative ((<$>))
 import Control.Monad.State
@@ -19,7 +17,6 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
 import Network.TLS.Util
-import Network.TLS.Wire
 import Network.TLS.Struct
 import Network.TLS.Record
 import Network.TLS.Packet
@@ -98,22 +95,7 @@ encryptRSA content = do
 		Right (econtent, rng') -> put (st { stRandomGen = rng' }) >> return econtent
 
 writePacketContent :: Packet -> TLSSt ByteString
-writePacketContent (Handshake hss) = return . B.concat =<< mapM makeContent hss where
-	makeContent hs@(ClientKeyXchg _ _) = do
-		ver <- get >>= return . stVersion
-		let premastersecret = runPut $ encodeHandshakeContent hs
-		setMasterSecret premastersecret
-		econtent <- encryptRSA premastersecret
-
-		let extralength =
-			if ver < TLS10
-			then B.empty
-			else runPut $ putWord16 $ fromIntegral $ B.length econtent
-		let hdr = runPut $ encodeHandshakeHeader (typeOfHandshake hs)
-							 (fromIntegral (B.length econtent + B.length extralength))
-		return $ B.concat [hdr, extralength, econtent]
-	makeContent hs = return $ encodeHandshakes [hs]
-
+writePacketContent (Handshake hss)    = return $ encodeHandshakes hss
 writePacketContent (Alert a)          = return $ encodeAlerts a
 writePacketContent (ChangeCipherSpec) = return $ encodeChangeCipherSpec
 writePacketContent (AppData x)        = return x

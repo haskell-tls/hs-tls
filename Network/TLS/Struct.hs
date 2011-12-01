@@ -28,7 +28,6 @@ module Network.TLS.Struct
 	, Header(..)
 	, ServerRandom(..)
 	, ClientRandom(..)
-	, ClientKeyData(..)
 	, serverRandom
 	, clientRandom
 	, FinishedData
@@ -140,7 +139,6 @@ data Header = Header ProtocolType Version Word16 deriving (Show,Eq)
 
 newtype ServerRandom = ServerRandom Bytes deriving (Show, Eq)
 newtype ClientRandom = ClientRandom Bytes deriving (Show, Eq)
-newtype ClientKeyData = ClientKeyData Bytes deriving (Show, Eq)
 newtype Session = Session (Maybe Bytes) deriving (Show, Eq)
 type CipherID = Word16
 type CompressionID = Word8
@@ -227,7 +225,7 @@ data Handshake =
 	| Certificates [X509]
 	| HelloRequest
 	| ServerHelloDone
-	| ClientKeyXchg Version ClientKeyData
+	| ClientKeyXchg Bytes
 	| ServerKeyXchg ServerKeyXchgAlgorithmData
 	| CertRequest [CertificateType] (Maybe [ (HashAlgorithm, SignatureAlgorithm) ]) [Word8]
 	| CertVerify [Word8]
@@ -246,7 +244,7 @@ typeOfHandshake (ServerHello _ _ _ _ _ _) = HandshakeType_ServerHello
 typeOfHandshake (Certificates _)          = HandshakeType_Certificate
 typeOfHandshake (HelloRequest)            = HandshakeType_HelloRequest
 typeOfHandshake (ServerHelloDone)         = HandshakeType_ServerHelloDone
-typeOfHandshake (ClientKeyXchg _ _)       = HandshakeType_ClientKeyXchg
+typeOfHandshake (ClientKeyXchg _)         = HandshakeType_ClientKeyXchg
 typeOfHandshake (ServerKeyXchg _)         = HandshakeType_ServerKeyXchg
 typeOfHandshake (CertRequest _ _ _)       = HandshakeType_CertRequest
 typeOfHandshake (CertVerify _)            = HandshakeType_CertVerify
