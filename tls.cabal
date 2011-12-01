@@ -1,5 +1,5 @@
 Name:                tls
-Version:             0.8.2
+Version:             0.8.3
 Description:
    Native Haskell TLS and SSL protocol implementation for server and client.
    .
@@ -49,11 +49,15 @@ Library
                      Network.TLS.Internal
   other-modules:     Network.TLS.Cap
                      Network.TLS.Struct
-                     Network.TLS.MAC
                      Network.TLS.Core
                      Network.TLS.Crypto
+                     Network.TLS.MAC
+                     Network.TLS.Measurement
                      Network.TLS.Packet
                      Network.TLS.Record
+                     Network.TLS.Record.Types
+                     Network.TLS.Record.Engage
+                     Network.TLS.Record.Disengage
                      Network.TLS.State
                      Network.TLS.Sending
                      Network.TLS.Receiving

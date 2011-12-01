@@ -35,6 +35,9 @@ module Network.TLS.Packet
 	, decodeChangeCipherSpec
 	, encodeChangeCipherSpec
 
+	, decodePreMasterSecret
+	, encodePreMasterSecret
+
 	-- * marshall extensions
 	, decodeExtSecureRenegotiation
 	, encodeExtSecureRenegotiation
@@ -247,10 +250,7 @@ decodeCertVerify =
 	return $ CertVerify []
 
 decodeClientKeyXchg :: Get Handshake
-decodeClientKeyXchg = do
-	ver <- getVersion
-	ran <- getClientKeyData46
-	return $ ClientKeyXchg ver ran
+decodeClientKeyXchg = ClientKeyXchg <$> (remaining >>= getBytes)
 
 os2ip :: ByteString -> Integer
 os2ip = B.foldl' (\a b -> (256 * a) .|. (fromIntegral b)) 0
@@ -269,18 +269,20 @@ decodeServerKeyXchg_RSA = do
 	return $ ServerRSAParams { rsa_modulus = os2ip modulus, rsa_exponent = os2ip expo }
 
 decodeServerKeyXchg :: CurrentParams -> Get Handshake
-decodeServerKeyXchg cp = do
-	skxAlg <- case cParamsKeyXchgType cp of
-		CipherKeyExchange_RSA -> do
-			rsaparams <- decodeServerKeyXchg_RSA
-			return $ SKX_RSA $ Just rsaparams
-		CipherKeyExchange_DH_Anon -> do
-			dhparams <- decodeServerKeyXchg_DH
-			return $ SKX_DH_Anon dhparams
-		_ -> do
-			bs <- remaining >>= getBytes
-			return $ SKX_Unknown bs
-	return (ServerKeyXchg skxAlg)
+decodeServerKeyXchg cp = ServerKeyXchg <$> case cParamsKeyXchgType cp of
+	CipherKeyExchange_RSA     -> SKX_RSA . Just <$> decodeServerKeyXchg_RSA
+	CipherKeyExchange_DH_Anon -> SKX_DH_Anon <$> decodeServerKeyXchg_DH
+	CipherKeyExchange_DHE_RSA -> do
+		dhparams <- decodeServerKeyXchg_DH
+		signature <- getWord16 >>= getBytes . fromIntegral
+		return $ SKX_DHE_RSA dhparams (B.unpack signature)
+	CipherKeyExchange_DHE_DSS -> do
+		dhparams  <- decodeServerKeyXchg_DH
+		signature <- getWord16 >>= getBytes . fromIntegral
+		return $ SKX_DHE_DSS dhparams (B.unpack signature)
+	_ -> do
+		bs <- remaining >>= getBytes
+		return $ SKX_Unknown bs
 
 encodeHandshake :: Handshake -> ByteString
 encodeHandshake o =
@@ -317,9 +319,8 @@ encodeHandshakeContent (Certificates certs) =
 		certbs = runPut $ mapM_ putCert certs
 		len    = fromIntegral $ B.length certbs
 
-encodeHandshakeContent (ClientKeyXchg version random) = do
-	putVersion version
-	putClientKeyData46 random
+encodeHandshakeContent (ClientKeyXchg content) = do
+	putBytes content
 
 encodeHandshakeContent (ServerKeyXchg _) = do
 	-- FIXME
@@ -357,12 +358,6 @@ putClientRandom32 (ClientRandom r) = putRandom32 r
 
 putServerRandom32 :: ServerRandom -> Put
 putServerRandom32 (ServerRandom r) = putRandom32 r
-
-getClientKeyData46 :: Get ClientKeyData
-getClientKeyData46 = ClientKeyData <$> getBytes 46
-
-putClientKeyData46 :: ClientKeyData -> Put
-putClientKeyData46 (ClientKeyData d) = putBytes d
 
 getSession :: Get Session
 getSession = do
@@ -440,6 +435,14 @@ encodeExtSecureRenegotiation cvd msvd = runPut $ do
 	putWord8 $ fromIntegral (B.length cvd + B.length svd)
 	putBytes cvd
 	putBytes svd
+
+-- rsa pre master secret
+decodePreMasterSecret :: Bytes -> Either TLSError (Version, Bytes)
+decodePreMasterSecret = runGetErr "pre-master-secret" $ do
+	liftM2 (,) getVersion (getBytes 46)
+
+encodePreMasterSecret :: Version -> Bytes -> Bytes
+encodePreMasterSecret version bytes = runPut (putVersion version >> putBytes bytes)
 
 {-
  - generate things for packet content
