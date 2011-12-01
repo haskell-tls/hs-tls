@@ -49,9 +49,10 @@ Library
                      Network.TLS.Internal
   other-modules:     Network.TLS.Cap
                      Network.TLS.Struct
-                     Network.TLS.MAC
                      Network.TLS.Core
                      Network.TLS.Crypto
+                     Network.TLS.MAC
+                     Network.TLS.Measurement
                      Network.TLS.Packet
                      Network.TLS.Record
                      Network.TLS.State
