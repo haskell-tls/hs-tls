@@ -210,11 +210,6 @@ usingState_ ctx f = do
 getStateRNG :: MonadIO m => TLSCtx c -> Int -> m Bytes
 getStateRNG ctx n = usingState_ ctx (genTLSRandom n)
 
-whileStatus :: MonadIO m => TLSCtx c -> (TLSStatus -> Bool) -> m a -> m ()
-whileStatus ctx p a = do
-	b <- usingState_ ctx (p . stStatus <$> get)
-	when b (a >> whileStatus ctx p a)
-
 errorToAlert :: TLSError -> Packet
 errorToAlert (Error_Protocol (_, _, ad)) = Alert [(AlertLevel_Fatal, ad)]
 errorToAlert _                           = Alert [(AlertLevel_Fatal, InternalError)]
@@ -232,33 +227,67 @@ readExact ctx sz = do
 			else throwCore (Error_Packet ("partial packet: expecting " ++ show sz ++ " bytes, got: " ++ (show $B.length hdrbs)))
 	return hdrbs
 
+recvRecord :: MonadIO m => TLSCtx c -> m (Either TLSError (Record Plaintext))
+recvRecord ctx = readExact ctx 5 >>= either (return . Left) recvLength . decodeHeader
+	where recvLength header@(Header _ _ readlen)
+		| readlen > 16384 + 2048 = return $ Left $ Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
+		| otherwise              = do
+			content <- readExact ctx (fromIntegral readlen)
+			liftIO $ (loggingIORecv $ ctxLogging ctx) header content
+			usingState ctx $ disengageRecord $ rawToRecord header (fragmentCiphertext content)
+
+
 -- | receive one packet from the context that contains 1 or
 -- many messages (many only in case of handshake). if will returns a
 -- TLSError if the packet is unexpected or malformed
 recvPacket :: MonadIO m => TLSCtx c -> m (Either TLSError Packet)
 recvPacket ctx = do
-	hdrbs <- readExact ctx 5
-	case decodeHeader hdrbs of
-		Left err                          -> return $ Left err
-		Right header@(Header _ _ readlen) ->
-			if readlen > (16384 + 2048)
-				then return $ Left $ Error_Protocol ("record exceeding maximum size",True, RecordOverflow)
-				else recvLength header readlen
-	where recvLength header readlen = do
-		content <- readExact ctx (fromIntegral readlen)
-		liftIO $ (loggingIORecv $ ctxLogging ctx) header content
-		pkt <- usingState ctx $ readPacket $ rawToRecord header (fragmentCiphertext content)
-		case pkt of
-			Right p -> liftIO $ (loggingPacketRecv $ ctxLogging ctx) $ show p
-			_       -> return ()
-		return pkt
+	erecord <- recvRecord ctx
+	case erecord of
+		Left err     -> return $ Left err
+		Right record -> do
+			pkt <- usingState ctx $ processPacket record
+			case pkt of
+				Right p -> liftIO $ (loggingPacketRecv $ ctxLogging ctx) $ show p
+				_       -> return ()
+			return pkt
 
-recvPacketSuccess :: MonadIO m => TLSCtx c -> m ()
-recvPacketSuccess ctx = do
-	pkt <- recvPacket ctx
-	case pkt of
-		Left err -> throwCore err
-		Right _  -> return ()
+recvPacketHandshake :: MonadIO m => TLSCtx c -> m [Handshake]
+recvPacketHandshake ctx = do
+	pkts <- recvPacket ctx
+	case pkts of
+		Right (Handshake l) -> return l
+		Right x             -> fail ("unexpected type received. expecting handshake and got: " ++ show x)
+		Left err            -> throwCore err
+
+data RecvState m =
+	  RecvStateNext (Packet -> m (RecvState m))
+	| RecvStateHandshake (Handshake -> m (RecvState m))
+	| RecvStateDone
+
+runRecvState :: MonadIO m => TLSCtx a -> RecvState m -> m ()
+runRecvState _   (RecvStateDone)   = return ()
+runRecvState ctx (RecvStateNext f) = recvPacket ctx >>= either throwCore f >>= runRecvState ctx
+runRecvState ctx iniState          = recvPacketHandshake ctx >>= loop iniState >>= runRecvState ctx
+	where
+		loop :: MonadIO m => RecvState m -> [Handshake] -> m (RecvState m)
+		loop recvState []                  = return recvState
+		loop (RecvStateHandshake f) (x:xs) = do
+			nstate <- f x
+			usingState_ ctx $ processHandshake x
+			loop nstate xs
+		loop _                         _   = unexpected "spurious handshake" Nothing
+
+sendChangeCipherAndFinish :: MonadIO m => TLSCtx c -> Bool -> m ()
+sendChangeCipherAndFinish ctx isClient = do
+	sendPacket ctx ChangeCipherSpec
+	liftIO $ connectionFlush ctx
+	cf <- usingState_ ctx $ getHandshakeDigest isClient
+	sendPacket ctx (Handshake [Finished cf])
+	liftIO $ connectionFlush ctx
+
+unexpected :: MonadIO m => String -> Maybe [Char] -> m a
+unexpected msg expected = throwCore $ Error_Packet_unexpected msg (maybe "" (" expected: " ++) expected)
 
 -- | Send one packet to the context
 sendPacket :: MonadIO m => TLSCtx c -> Packet -> m ()
@@ -305,42 +334,11 @@ bye ctx = sendPacket ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
 handshakeClient :: MonadIO m => TLSCtx c -> m ()
 handshakeClient ctx = do
 	updateMeasure ctx incrementNbHandshakes
-
-	-- Send ClientHello
-	crand <- getStateRNG ctx 32 >>= return . ClientRandom
-	extensions <- getExtensions
-	usingState_ ctx (startHandshakeClient ver crand)
-	sendPacket ctx $ Handshake
-		[ ClientHello ver crand (Session Nothing) (map cipherID ciphers)
-		              (map compressionID compressions) extensions
-		]
-
-	-- Receive Server information until ServerHelloDone
-	whileStatus ctx (/= (StatusHandshake HsStatusServerHelloDone)) $ do
-		pkts <- recvPacket ctx
-		case pkts of
-			Left err -> throwCore err
-			Right l  -> processServerInfo l
-
-	-- Send Certificate if requested. XXX disabled for now.
-	certRequested <- return False
-	when certRequested (sendPacket ctx $ Handshake [Certificates clientCerts])
-
-	sendClientKeyXchg
-
-	{- maybe send certificateVerify -}
-	{- FIXME not implemented yet -}
-
-	sendPacket ctx ChangeCipherSpec
-	liftIO $ connectionFlush ctx
-
-	-- Send Finished
-	cf <- usingState_ ctx $ getHandshakeDigest True
-	sendPacket ctx (Handshake [Finished cf])
-
-	-- receive changeCipherSpec & Finished
-	recvPacketSuccess ctx >> recvPacketSuccess ctx >> return ()
-
+	sendClientHello
+	recvServerHello
+	sendCertificate >> sendClientKeyXchg >> sendCertificateVerify
+	sendChangeCipherAndFinish ctx True
+	recvChangeCipherAndFinish
 	updateMeasure ctx resetBytesCounters
 
 	where
@@ -355,10 +353,36 @@ handshakeClient ctx = do
 			then usingState_ ctx (getVerifiedData True) >>= \vd -> return [ (0xff01, encodeExtSecureRenegotiation vd Nothing) ]
 			else return []
 
-		processServerInfo (Handshake hss) = mapM_ processHandshake hss
-		processServerInfo _               = return ()
+		sendClientHello = do
+			crand <- getStateRNG ctx 32 >>= return . ClientRandom
+			extensions <- getExtensions
+			usingState_ ctx (startHandshakeClient ver crand)
+			sendPacket ctx $ Handshake
+				[ ClientHello ver crand (Session Nothing) (map cipherID ciphers)
+					      (map compressionID compressions) extensions
+				]
 
-		processHandshake (ServerHello rver _ _ cipher _ _) = do
+		recvChangeCipherAndFinish = runRecvState ctx (RecvStateNext expectChangeCipher)
+			where
+				expectChangeCipher ChangeCipherSpec = return $ RecvStateHandshake expectFinish
+				expectChangeCipher p                = unexpected (show p) (Just "change cipher")
+				expectFinish (Finished _) = return RecvStateDone
+				expectFinish p            = unexpected (show p) (Just "Handshake Finished")
+
+		sendCertificate = do
+			-- Send Certificate if requested. XXX disabled for now.
+			certRequested <- return False
+			when certRequested (sendPacket ctx $ Handshake [Certificates clientCerts])
+
+		sendCertificateVerify =
+			{- maybe send certificateVerify -}
+			{- FIXME not implemented yet -}
+			return ()
+
+		recvServerHello = runRecvState ctx (RecvStateHandshake processServerHello)
+
+		processServerHello :: MonadIO m => Handshake -> m (RecvState m)
+		processServerHello (ServerHello rver _ _ cipher _ _) = do
 			when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
 			case find ((==) rver) allowedvers of
 				Nothing -> throwCore $ Error_Protocol ("version " ++ show ver ++ "is not supported", True, ProtocolVersion)
@@ -366,22 +390,39 @@ handshakeClient ctx = do
 			case find ((==) cipher . cipherID) ciphers of
 				Nothing -> throwCore $ Error_Protocol ("no cipher in common with the server", True, HandshakeFailure)
 				Just c  -> usingState_ ctx $ setCipher c
+			return $ RecvStateHandshake processCertificate
+		processServerHello p = unexpected (show p) (Just "server hello")
 
-		processHandshake (Certificates certs) = do
+		processCertificate :: MonadIO m => Handshake -> m (RecvState m)
+		processCertificate (Certificates certs) = do
 			let cb = onCertificatesRecv $ params
 			usage <- liftIO $ cb certs
 			case usage of
 				CertificateUsageAccept        -> return ()
 				CertificateUsageReject reason -> certificateRejected reason
+			return $ RecvStateHandshake processServerKeyExchange
+		processCertificate p = processServerKeyExchange p
 
-		processHandshake (CertRequest _ _ _) = do
-			return ()
+		processServerKeyExchange :: MonadIO m => Handshake -> m (RecvState m)
+		processServerKeyExchange (ServerKeyXchg _) = return $ RecvStateHandshake processCertificateRequest
+		processServerKeyExchange p                 = processCertificateRequest p
+
+		processCertificateRequest (CertRequest _ _ _) = do
 			--modify (\sc -> sc { scCertRequested = True })
-		processHandshake _ = return ()
+			return $ RecvStateHandshake processServerHelloDone
+		processCertificateRequest p = processServerHelloDone p
+
+		processServerHelloDone ServerHelloDone = return RecvStateDone
+		processServerHelloDone p = unexpected (show p) (Just "server hello data")
 
 		sendClientKeyXchg = do
-			prerand <- getStateRNG ctx 46 >>= return . ClientKeyData
-			sendPacket ctx $ Handshake [ClientKeyXchg ver prerand]
+			encryptedPreMaster <- usingState_ ctx $ do
+				xver       <- stVersion <$> get
+				prerand    <- genTLSRandom 46
+				let premaster = encodePreMasterSecret xver prerand
+				setMasterSecret premaster
+				encryptRSA premaster
+			sendPacket ctx $ Handshake [ClientKeyXchg encryptedPreMaster]
 
 		-- on certificate reject, throw an exception with the proper protocol alert error.
 		certificateRejected CertificateRejectRevoked =
@@ -394,13 +435,14 @@ handshakeClient ctx = do
 			throwCore $ Error_Protocol ("certificate rejected: " ++ s, True, CertificateUnknown)
 
 handshakeServerWith :: MonadIO m => TLSCtx c -> Handshake -> m ()
-handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
+handshakeServerWith ctx clientHello@(ClientHello ver _ _ ciphers compressions _) = do
 	-- check if policy allow this new handshake to happens
 	handshakeAuthorized <- withMeasure ctx (onHandshake $ ctxParams ctx)
 	unless handshakeAuthorized (throwCore $ Error_HandshakePolicy "server: handshake denied")
 	updateMeasure ctx incrementNbHandshakes
 
 	-- Handle Client hello
+	usingState_ ctx $ processHandshake clientHello
 	when (ver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
 	when (not $ elem ver (pAllowedVersions params)) $
 		throwCore $ Error_Protocol ("version " ++ show ver ++ "is not supported", True, ProtocolVersion)
@@ -419,15 +461,8 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 	liftIO $ connectionFlush ctx
 
 	-- Receive client info until client Finished.
-	whileStatus ctx (/= (StatusHandshake HsStatusClientFinished)) (recvPacketSuccess ctx)
-
-	sendPacket ctx ChangeCipherSpec
-
-	-- Send Finish
-	cf <- usingState_ ctx $ getHandshakeDigest False
-	sendPacket ctx (Handshake [Finished cf])
-
-	liftIO $ connectionFlush ctx
+	recvClientData
+	sendChangeCipherAndFinish ctx False
 
 	updateMeasure ctx resetBytesCounters
 	return ()
@@ -440,6 +475,25 @@ handshakeServerWith ctx (ClientHello ver _ _ ciphers compressions _) = do
 		srvCerts           = map fst $ pCertificates params
 		privKeys           = map snd $ pCertificates params
 		needKeyXchg        = cipherExchangeNeedMoreData $ cipherKeyExchange usedCipher
+
+		---
+		recvClientData = runRecvState ctx (RecvStateHandshake $ processClientCertificate)
+
+		processClientCertificate (Certificates _) = return $ RecvStateHandshake processClientKeyExchange
+		processClientCertificate p = processClientKeyExchange p
+
+		processClientKeyExchange (ClientKeyXchg _) = return $ RecvStateNext processCertificateVerify
+		processClientKeyExchange p                 = unexpected (show p) (Just "client key exchange")
+
+		processCertificateVerify (Handshake [CertVerify _]) = return $ RecvStateNext expectChangeCipher
+		processCertificateVerify p = expectChangeCipher p
+
+		expectChangeCipher ChangeCipherSpec = return $ RecvStateHandshake expectFinish
+		expectChangeCipher p                = unexpected (show p) (Just "change cipher")
+
+		expectFinish (Finished _) = return RecvStateDone
+		expectFinish p            = unexpected (show p) (Just "Handshake Finished")
+		---
 
 		handshakeSendServerData = do
 			srand <- getStateRNG ctx 32 >>= return . ServerRandom
@@ -498,7 +552,7 @@ handshake ctx = do
 		handleException f = catch (f >> return True) (\e -> handler e >> return False)
 		handler e = case fromException e of
 			Just err -> sendPacket ctx (errorToAlert err)
-			Nothing  -> sendPacket ctx (errorToAlert $ Error_Misc "")
+			Nothing  -> sendPacket ctx (errorToAlert $ Error_Misc $ show e)
 
 -- | sendData sends a bunch of data.
 -- It will automatically chunk data to acceptable packet size
