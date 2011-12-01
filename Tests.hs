@@ -175,17 +175,19 @@ prop_handshake_initiate = do
 
 assertEq expected got = unless (expected == got) $ error ("got " ++ show got ++ " but was expecting " ++ show expected)
 
-tests_marshalling = testGroup "Marshalling"
-	[ testProperty "Header" prop_header_marshalling_id
-	, testProperty "Handshake" prop_handshake_marshalling_id
-	]
-
-tests_handshake = testGroup "Handshakes"
-	[ testProperty "setup" (monadicIO prop_pipe_work)
-	, testProperty "initiate" (monadicIO prop_handshake_initiate)
-	]
-
 main = defaultMain
 	[ tests_marshalling
 	, tests_handshake
 	]
+	where
+		-- lowlevel tests to check the packet marshalling.
+		tests_marshalling = testGroup "Marshalling"
+			[ testProperty "Header" prop_header_marshalling_id
+			, testProperty "Handshake" prop_handshake_marshalling_id
+			]
+
+		-- high level tests between a client and server with fake ciphers.
+		tests_handshake = testGroup "Handshakes"
+			[ testProperty "setup" (monadicIO prop_pipe_work)
+			, testProperty "initiate" (monadicIO prop_handshake_initiate)
+			]
