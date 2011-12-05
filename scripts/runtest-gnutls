@@ -1,0 +1,20 @@
+#!/bin/sh
+STUNNEL=./dist/build/stunnel/stunnel
+
+if [ ! -x ${STUNNEL} ]; then
+	echo "hs-tls stunnel is not present, build with executable flag set."
+	exit 1
+fi
+
+PORT=$(($$ % 10000 + 10000))
+
+echo "running stunnel"
+${STUNNEL} server -c server.crt -k server.key --source=localhost:${PORT} --destinationtype=fd --destination=2 > stunnel-gnutls-log 2>&1 &
+stunnelpid=$(pidof stunnel)
+STUNNELPID=$!
+sleep 1
+
+echo "starting gnutls cli debug"
+gnutls-cli-debug localhost -p ${PORT}
+
+kill ${STUNNELPID}
