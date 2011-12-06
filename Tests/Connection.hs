@@ -16,6 +16,8 @@ import Control.Concurrent
 import qualified Crypto.Random.AESCtr as RNG
 import qualified Data.ByteString as B
 
+debug = False
+
 idCipher :: Cipher
 idCipher = Cipher
 	{ cipherID   = 0xff12
@@ -56,15 +58,22 @@ arbitraryPairParams = do
 		, pCiphers                = serverCiphers
 		, pCertificates           = [(servCert, Just $ PrivRSA privKey)]
 		, pUseSecureRenegotiation = secNeg
+		, pLogging                = logging "server: "
 		}
 	let clientState = defaultParams
 		{ pConnectVersion         = connectVersion
 		, pAllowedVersions        = allowedVersions
 		, pCiphers                = clientCiphers
 		, pUseSecureRenegotiation = secNeg
+		, pLogging                = logging "client: "
 		}
 	return (clientState, serverState)
 	where
+		logging pre = if debug
+			then defaultLogging
+				{ loggingPacketSent = putStrLn . (pre ++)
+				, loggingPacketRecv = putStrLn . (pre ++) }
+			else defaultLogging
 		arbitraryVersions :: Gen [Version]
 		arbitraryVersions = resize (length supportedVersions + 1) $ listOf1 (elements supportedVersions)
 		arbitraryCiphers  = resize (length supportedCiphers + 1) $ listOf1 (elements supportedCiphers)

@@ -8,25 +8,11 @@
 --
 module Network.TLS.Core
 	(
-	-- * Context configuration
-	  TLSParams(..)
-	, TLSLogging(..)
-	, Measurement(..)
-	, TLSCertificateUsage(..)
-	, TLSCertificateRejectReason(..)
-	, defaultLogging
-	, defaultParams
-
-	-- * Context object
-	, TLSCtx
-	, ctxConnection
-	, ctxEOF
-
 	-- * Internal packet sending and receiving
-	, sendPacket
+	  sendPacket
 	, recvPacket
 
-	-- * Creating a context
+	-- * Creating a client or server context
 	, client
 	, clientWith
 	, server
@@ -41,181 +27,33 @@ module Network.TLS.Core
 	, recvData
 	) where
 
+import Network.TLS.Context
 import Network.TLS.Struct
 import Network.TLS.Record
 import Network.TLS.Cipher
 import Network.TLS.Compression
-import Network.TLS.Crypto
 import Network.TLS.Packet
 import Network.TLS.State
 import Network.TLS.Sending
 import Network.TLS.Receiving
 import Network.TLS.Measurement
+import Network.TLS.Wire (encodeWord16)
 import Data.Maybe
-import Data.Certificate.X509
-import Data.List (intersect, intercalate, find)
+import Data.List (intersect, find)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 
 import Crypto.Random
 import Control.Applicative ((<$>))
-import Control.Concurrent.MVar
 import Control.Monad.State
-import Control.Exception (throwIO, Exception(), onException, fromException, catch)
-import Data.IORef
-import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush)
+import Control.Exception (throwIO, Exception(), fromException, catch)
+import System.IO (Handle)
 import System.IO.Error (mkIOError, eofErrorType)
 import Prelude hiding (catch)
-
-data TLSLogging = TLSLogging
-	{ loggingPacketSent :: String -> IO ()
-	, loggingPacketRecv :: String -> IO ()
-	, loggingIOSent     :: Bytes -> IO ()
-	, loggingIORecv     :: Header -> Bytes -> IO ()
-	}
-
--- | Certificate and Chain rejection reason
-data TLSCertificateRejectReason =
-	  CertificateRejectExpired
-	| CertificateRejectRevoked
-	| CertificateRejectUnknownCA
-	| CertificateRejectOther String
-	deriving (Show,Eq)
-
--- | Certificate Usage callback possible returns values.
-data TLSCertificateUsage =
-	  CertificateUsageAccept                            -- ^ usage of certificate accepted
-	| CertificateUsageReject TLSCertificateRejectReason -- ^ usage of certificate rejected
-	deriving (Show,Eq)
-
-data TLSParams = TLSParams
-	{ pConnectVersion    :: Version             -- ^ version to use on client connection.
-	, pAllowedVersions   :: [Version]           -- ^ allowed versions that we can use.
-	, pCiphers           :: [Cipher]            -- ^ all ciphers supported ordered by priority.
-	, pCompressions      :: [Compression]       -- ^ all compression supported ordered by priority.
-	, pWantClientCert    :: Bool                -- ^ request a certificate from client.
-	                                            -- use by server only.
-	, pUseSecureRenegotiation :: Bool           -- notify that we want to use secure renegotation
-	, pCertificates      :: [(X509, Maybe PrivateKey)] -- ^ the cert chain for this context with the associated keys if any.
-	, pLogging           :: TLSLogging          -- ^ callback for logging
-	, onHandshake        :: Measurement -> IO Bool -- ^ callback on a beggining of handshake
-	, onCertificatesRecv :: [X509] -> IO TLSCertificateUsage -- ^ callback to verify received cert chain.
-	}
-
-defaultLogging :: TLSLogging
-defaultLogging = TLSLogging
-	{ loggingPacketSent = (\_ -> return ())
-	, loggingPacketRecv = (\_ -> return ())
-	, loggingIOSent     = (\_ -> return ())
-	, loggingIORecv     = (\_ _ -> return ())
-	}
-
-defaultParams :: TLSParams
-defaultParams = TLSParams
-	{ pConnectVersion         = TLS10
-	, pAllowedVersions        = [TLS10,TLS11,TLS12]
-	, pCiphers                = []
-	, pCompressions           = [nullCompression]
-	, pWantClientCert         = False
-	, pUseSecureRenegotiation = True
-	, pCertificates           = []
-	, pLogging                = defaultLogging
-	, onHandshake             = (\_ -> return True)
-	, onCertificatesRecv      = (\_ -> return CertificateUsageAccept)
-	}
-
-instance Show TLSParams where
-	show p = "TLSParams { " ++ (intercalate "," $ map (\(k,v) -> k ++ "=" ++ v)
-		[ ("connectVersion", show $ pConnectVersion p)
-		, ("allowedVersions", show $ pAllowedVersions p)
-		, ("ciphers", show $ pCiphers p)
-		, ("compressions", show $ pCompressions p)
-		, ("want-client-cert", show $ pWantClientCert p)
-		, ("certificates", show $ length $ pCertificates p)
-		]) ++ " }"
-
--- | A TLS Context is a handle augmented by tls specific state and parameters
-data TLSCtx a = TLSCtx
-	{ ctxConnection      :: a             -- ^ return the connection object associated with this context
-	, ctxParams          :: TLSParams
-	, ctxState           :: MVar TLSState
-	, ctxMeasurement     :: IORef Measurement
-	, ctxEOF_            :: IORef Bool    -- ^ is the handle has EOFed or not.
-	, ctxConnectionFlush :: IO ()
-	, ctxConnectionSend  :: Bytes -> IO ()
-	, ctxConnectionRecv  :: Int -> IO Bytes
-	}
-
-updateMeasure :: MonadIO m => TLSCtx c -> (Measurement -> Measurement) -> m ()
-updateMeasure ctx f = liftIO $ modifyIORef (ctxMeasurement ctx) f
-
-withMeasure :: MonadIO m => TLSCtx c -> (Measurement -> IO a) -> m a
-withMeasure ctx f = liftIO (readIORef (ctxMeasurement ctx) >>= f)
-
-connectionFlush :: TLSCtx c -> IO ()
-connectionFlush c = ctxConnectionFlush c
-
-connectionSend :: TLSCtx c -> Bytes -> IO ()
-connectionSend c b = updateMeasure c (addBytesSent $ B.length b) >> (ctxConnectionSend c) b
-
-connectionRecv :: TLSCtx c -> Int -> IO Bytes
-connectionRecv c sz = updateMeasure c (addBytesReceived sz) >> (ctxConnectionRecv c) sz
-
-ctxEOF :: MonadIO m => TLSCtx a -> m Bool
-ctxEOF ctx = liftIO (readIORef $ ctxEOF_ ctx)
-
-throwCore :: (MonadIO m, Exception e) => e -> m a
-throwCore = liftIO . throwIO
-
-newCtxWith :: c -> IO () -> (Bytes -> IO ()) -> (Int -> IO Bytes) -> TLSParams -> TLSState -> IO (TLSCtx c)
-newCtxWith c flushF sendF recvF params st = do
-	stvar <- newMVar st
-	eof   <- newIORef False
-	stats <- newIORef newMeasurement
-	return $ TLSCtx
-		{ ctxConnection  = c
-		, ctxParams      = params
-		, ctxState       = stvar
-		, ctxMeasurement = stats
-		, ctxEOF_        = eof
-		, ctxConnectionFlush = flushF
-		, ctxConnectionSend  = sendF
-		, ctxConnectionRecv  = recvF
-		}
-
-newCtx :: Handle -> TLSParams -> TLSState -> IO (TLSCtx Handle)
-newCtx handle params st = do
-	hSetBuffering handle NoBuffering
-	newCtxWith handle (hFlush handle) (B.hPut handle) (B.hGet handle) params st
-
-ctxLogging :: TLSCtx a -> TLSLogging
-ctxLogging = pLogging . ctxParams
-
-usingState :: MonadIO m => TLSCtx c -> TLSSt a -> m (Either TLSError a)
-usingState ctx f = liftIO (takeMVar mvar) >>= \st -> liftIO $ onException (execAndStore st) (putMVar mvar st)
-	where
-		mvar = ctxState ctx
-		execAndStore st = do
-			let (a, newst) = runTLSState f st
-			putMVar mvar newst
-			return a
-
-usingState_ :: MonadIO m => TLSCtx c -> TLSSt a -> m a
-usingState_ ctx f = do
-	ret <- usingState ctx f
-	case ret of
-		Left err -> throwCore err
-		Right r  -> return r
-
-getStateRNG :: MonadIO m => TLSCtx c -> Int -> m Bytes
-getStateRNG ctx n = usingState_ ctx (genTLSRandom n)
 
 errorToAlert :: TLSError -> Packet
 errorToAlert (Error_Protocol (_, _, ad)) = Alert [(AlertLevel_Fatal, ad)]
 errorToAlert _                           = Alert [(AlertLevel_Fatal, InternalError)]
-
-setEOF :: MonadIO m => TLSCtx c -> m ()
-setEOF ctx = liftIO $ writeIORef (ctxEOF_ ctx) True
 
 readExact :: MonadIO m => TLSCtx c -> Int -> m Bytes
 readExact ctx sz = do
@@ -434,7 +272,14 @@ handshakeClient ctx = do
 				prerand    <- genTLSRandom 46
 				let premaster = encodePreMasterSecret xver prerand
 				setMasterSecret premaster
-				encryptRSA premaster
+
+				-- SSL3 implementation generally forget this length field since it's redundant,
+				-- however TLS10 make it clear that the length field need to be present.
+				e <- encryptRSA premaster
+				let extra = if xver < TLS10
+					then B.empty
+					else encodeWord16 $ fromIntegral $ B.length e
+				return $ extra `B.append` e
 			sendPacket ctx $ Handshake [ClientKeyXchg encryptedPreMaster]
 
 		-- on certificate reject, throw an exception with the proper protocol alert error.

@@ -15,6 +15,7 @@ import Control.Monad.State
 import Control.Monad.Error
 
 import Data.ByteString (ByteString)
+import qualified Data.ByteString as B
 
 import Network.TLS.Util
 import Network.TLS.Struct
@@ -96,8 +97,9 @@ processHandshake hs = do
 
 decryptRSA :: ByteString -> TLSSt (Either KxError ByteString)
 decryptRSA econtent = do
+	ver <- stVersion <$> get
 	rsapriv <- fromJust "rsa private key" . hstRSAPrivateKey . fromJust "handshake" . stHandshake <$> get
-	return $ kxDecrypt rsapriv econtent
+	return $ kxDecrypt rsapriv (if ver < TLS10 then econtent else B.drop 2 econtent)
 
 -- process the client key exchange message. the protocol expects the initial
 -- client version received in ClientHello, not the negociated version.
