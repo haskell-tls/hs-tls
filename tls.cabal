@@ -50,6 +50,7 @@ Library
   other-modules:     Network.TLS.Cap
                      Network.TLS.Struct
                      Network.TLS.Core
+                     Network.TLS.Context
                      Network.TLS.Crypto
                      Network.TLS.MAC
                      Network.TLS.Measurement
