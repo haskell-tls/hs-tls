@@ -51,6 +51,7 @@ import Network.TLS.State
 import Network.TLS.Sending
 import Network.TLS.Receiving
 import Network.TLS.Measurement
+import Network.TLS.Wire (encodeWord16)
 import Data.Maybe
 import Data.Certificate.X509
 import Data.List (intersect, intercalate, find)
@@ -421,7 +422,14 @@ handshakeClient ctx = do
 				prerand    <- genTLSRandom 46
 				let premaster = encodePreMasterSecret xver prerand
 				setMasterSecret premaster
-				encryptRSA premaster
+
+				-- SSL3 implementation generally forget this length field since it's redundant,
+				-- however TLS10 make it clear that the length field need to be present.
+				e <- encryptRSA premaster
+				let extra = if xver < TLS10
+					then B.empty
+					else encodeWord16 $ fromIntegral $ B.length e
+				return $ extra `B.append` e
 			sendPacket ctx $ Handshake [ClientKeyXchg encryptedPreMaster]
 
 		-- on certificate reject, throw an exception with the proper protocol alert error.

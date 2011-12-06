@@ -28,6 +28,7 @@ module Network.TLS.Wire
 	, putWords16
 	, putWord24
 	, putBytes
+	, encodeWord16
 	, encodeWord64
 	) where
 
@@ -84,6 +85,9 @@ putWord24 i = do
 
 putBytes :: Bytes -> Put
 putBytes = putByteString
+
+encodeWord16 :: Word16 -> Bytes
+encodeWord16 = runPut . putWord16
 
 encodeWord64 :: Word64 -> Bytes
 encodeWord64 = runPut . putWord64be
