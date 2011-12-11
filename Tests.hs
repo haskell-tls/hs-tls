@@ -68,6 +68,9 @@ arbitraryCiphersIDs = choose (0,200) >>= vector
 arbitraryCompressionIDs :: Gen [Word8]
 arbitraryCompressionIDs = choose (0,200) >>= vector
 
+someWords8 :: Int -> Gen [Word8]
+someWords8 i = replicateM i (fromIntegral <$> (choose (0,255) :: Gen Int))
+
 instance Arbitrary CertificateType where
 	arbitrary = elements
 		[ CertificateType_RSA_Sign, CertificateType_DSS_Sign
@@ -131,19 +134,27 @@ prop_pipe_work = do
 
 	return ()
 
+establish_data_pipe params tlsServer tlsClient = do
+	-- initial setup
+	pipe        <- newPipe
+	_           <- (runPipe pipe)
+	startQueue  <- newChan
+	resultQueue <- newChan
+
+	(cCtx, sCtx) <- newPairContext pipe params
+
+	_ <- forkIO $ catch (tlsServer sCtx resultQueue) (printAndRaise "server")
+	_ <- forkIO $ catch (tlsClient startQueue cCtx) (printAndRaise "client")
+
+	return (startQueue, resultQueue)
+	where
+		printAndRaise :: String -> SomeException -> IO ()
+		printAndRaise s e = putStrLn (s ++ " exception: " ++ show e) >> throw e
+
 prop_handshake_initiate :: PropertyM IO ()
 prop_handshake_initiate = do
-	-- initial setup
-	pipe <- run newPipe
-	_ <- run (runPipe pipe)
-	startQueue  <- run newChan
-	resultQueue <- run newChan
-
 	params       <- pick arbitraryPairParams
-	(cCtx, sCtx) <- run $ newPairContext pipe params
-
-	_ <- run $ forkIO $ catch (tlsServer sCtx resultQueue) (printAndRaise "server")
-	_ <- run $ forkIO $ catch (tlsClient startQueue cCtx) (printAndRaise "client")
+	(startQueue, resultQueue) <- run (establish_data_pipe params tlsServer tlsClient)
 
 	{- the test involves writing data on one side of the data "pipe" and
 	 - then checking we received them on the other side of the data "pipe" -}
@@ -155,12 +166,6 @@ prop_handshake_initiate = do
 
 	return ()
 	where
-		printAndRaise :: String -> SomeException -> IO ()
-		printAndRaise s e = putStrLn (s ++ " exception: " ++ show e) >> throw e
-
-		someWords8 :: Int -> Gen [Word8]
-		someWords8 i = replicateM i (fromIntegral <$> (choose (0,255) :: Gen Int))
-
 		tlsServer ctx queue = do
 			hSuccess <- handshake ctx
 			unless hSuccess $ fail "handshake failed on server side"
@@ -170,6 +175,37 @@ prop_handshake_initiate = do
 		tlsClient queue ctx = do
 			hSuccess <- handshake ctx
 			unless hSuccess $ fail "handshake failed on client side"
+			d <- readChan queue
+			sendData ctx d
+			bye ctx
+			return ()
+
+prop_handshake_renegociation :: PropertyM IO ()
+prop_handshake_renegociation = do
+	params       <- pick arbitraryPairParams
+	(startQueue, resultQueue) <- run (establish_data_pipe params tlsServer tlsClient)
+
+	{- the test involves writing data on one side of the data "pipe" and
+	 - then checking we received them on the other side of the data "pipe" -}
+	d <- L.pack <$> pick (someWords8 256)
+	run $ writeChan startQueue d
+
+	dres <- run $ readChan resultQueue
+	d `assertEq` dres
+
+	return ()
+	where
+		tlsServer ctx queue = do
+			hSuccess <- handshake ctx
+			unless hSuccess $ fail "handshake failed on server side"
+			d <- recvData ctx
+			writeChan queue d
+			return ()
+		tlsClient queue ctx = do
+			hSuccess <- handshake ctx
+			unless hSuccess $ fail "handshake failed on client side"
+			hSuccess2 <- handshake ctx
+			unless hSuccess $ fail "renegociation handshake failed"
 			d <- readChan queue
 			sendData ctx d
 			bye ctx
@@ -194,4 +230,5 @@ main = defaultMain
 		tests_handshake = testGroup "Handshakes"
 			[ testProperty "setup" (monadicIO prop_pipe_work)
 			, testProperty "initiate" (monadicIO prop_handshake_initiate)
+			, testProperty "renegociation" (monadicIO prop_handshake_renegociation)
 			]
