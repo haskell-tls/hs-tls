@@ -56,8 +56,6 @@ type Bytes = ByteString
 -- | Versions known to TLS
 --
 -- SSL2 is just defined, but this version is and will not be supported.
---
--- TLS12 is not yet supported
 data Version = SSL2 | SSL3 | TLS10 | TLS11 | TLS12 deriving (Show, Eq, Ord)
 
 data ConnectionEnd = ConnectionServer | ConnectionClient
