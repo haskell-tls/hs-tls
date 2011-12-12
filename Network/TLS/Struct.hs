@@ -31,6 +31,7 @@ module Network.TLS.Struct
 	, serverRandom
 	, clientRandom
 	, FinishedData
+	, SessionID
 	, Session(..)
 	, AlertLevel(..)
 	, AlertDescription(..)
@@ -138,7 +139,8 @@ data Header = Header ProtocolType Version Word16 deriving (Show,Eq)
 
 newtype ServerRandom = ServerRandom Bytes deriving (Show, Eq)
 newtype ClientRandom = ClientRandom Bytes deriving (Show, Eq)
-newtype Session = Session (Maybe Bytes) deriving (Show, Eq)
+type SessionID = Bytes
+newtype Session = Session (Maybe SessionID) deriving (Show, Eq)
 type CipherID = Word16
 type CompressionID = Word8
 type FinishedData = Bytes
