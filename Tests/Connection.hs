@@ -18,8 +18,8 @@ import qualified Data.ByteString as B
 
 debug = False
 
-idCipher :: Cipher
-idCipher = Cipher
+blockCipher :: Cipher
+blockCipher = Cipher
 	{ cipherID   = 0xff12
 	, cipherName = "rsa-id-const"
 	, cipherBulk = Bulk
@@ -38,8 +38,30 @@ idCipher = Cipher
 	, cipherMinVer      = Nothing
 	}
 
+streamCipher = blockCipher
+	{ cipherID   = 0xff13
+	, cipherBulk = Bulk
+		{ bulkName      = "stream"
+		, bulkKeySize   = 16
+		, bulkIVSize    = 0
+		, bulkBlockSize = 0
+		, bulkF         = BulkStreamF (\k -> k) (\i m -> (m,i)) (\i m -> (m,i))
+		}
+	}
+
+nullCipher = blockCipher
+	{ cipherID   = 0xff14
+	, cipherBulk = Bulk
+		{ bulkName      = "null"
+		, bulkKeySize   = 0
+		, bulkIVSize    = 0
+		, bulkBlockSize = 0
+		, bulkF         = BulkNoneF
+		}
+	}
+
 supportedCiphers :: [Cipher]
-supportedCiphers = [idCipher]
+supportedCiphers = [blockCipher,streamCipher,nullCipher]
 
 supportedVersions :: [Version]
 supportedVersions = [SSL3,TLS10,TLS11,TLS12]
