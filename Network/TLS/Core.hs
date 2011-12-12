@@ -175,6 +175,13 @@ server params rng handle = liftIO $ newCtx handle params st
 bye :: MonadIO m => TLSCtx c -> m ()
 bye ctx = sendPacket ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
 
+-- | when a new handshake is done, wrap up, clean up.
+handshakeTerminate :: MonadIO m => TLSCtx c -> m ()
+handshakeTerminate ctx = do
+	usingState_ ctx endHandshake
+	updateMeasure ctx resetBytesCounters
+	return ()
+
 -- client part of handshake. send a bunch of handshake of client
 -- values intertwined with response from the server.
 handshakeClient :: MonadIO m => TLSCtx c -> m ()
@@ -188,8 +195,7 @@ handshakeClient ctx = do
 			sendCertificate >> sendClientKeyXchg >> sendCertificateVerify
 			sendChangeCipherAndFinish ctx True
 			recvChangeCipherAndFinish ctx
-	updateMeasure ctx resetBytesCounters
-
+	handshakeTerminate ctx
 	where
 		params       = ctxParams ctx
 		ver          = pConnectVersion params
@@ -328,8 +334,7 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ _ ciphers compressions _)
 			sendPacket ctx $ Handshake [serverhello]
 			sendChangeCipherAndFinish ctx False
 			recvChangeCipherAndFinish ctx
-	updateMeasure ctx resetBytesCounters
-	return ()
+	handshakeTerminate ctx
 	where
 		params             = ctxParams ctx
 		commonCiphers      = intersect ciphers (map cipherID $ pCiphers params)
