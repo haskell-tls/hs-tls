@@ -33,6 +33,7 @@ module Network.TLS.Struct
 	, FinishedData
 	, SessionID
 	, Session(..)
+	, SessionData(..)
 	, AlertLevel(..)
 	, AlertDescription(..)
 	, HandshakeType(..)
@@ -141,6 +142,13 @@ newtype ServerRandom = ServerRandom Bytes deriving (Show, Eq)
 newtype ClientRandom = ClientRandom Bytes deriving (Show, Eq)
 type SessionID = Bytes
 newtype Session = Session (Maybe SessionID) deriving (Show, Eq)
+
+data SessionData = SessionData
+	{ sessionVersion :: Version
+	, sessionCipher  :: CipherID
+	, sessionSecret  :: Bytes
+	}
+
 type CipherID = Word16
 type CompressionID = Word8
 type FinishedData = Bytes

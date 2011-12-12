@@ -10,6 +10,7 @@ module Network.TLS.Context
 	-- * Context configuration
 	  TLSParams(..)
 	, TLSLogging(..)
+	, SessionData(..)
 	, Measurement(..)
 	, TLSCertificateUsage(..)
 	, TLSCertificateRejectReason(..)
