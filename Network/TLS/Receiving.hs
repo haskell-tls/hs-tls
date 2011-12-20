@@ -39,7 +39,6 @@ processPacket (Record ProtocolType_Alert _ fragment) = return . Alert =<< return
 processPacket (Record ProtocolType_ChangeCipherSpec _ fragment) = do
 	returnEither $ decodeChangeCipherSpec $ fragmentGetBytes fragment
 	switchRxEncryption
-	isClientContext >>= \cc -> when (not cc) setKeyBlock
 	return ChangeCipherSpec
 
 processPacket (Record ProtocolType_Handshake ver fragment) = do

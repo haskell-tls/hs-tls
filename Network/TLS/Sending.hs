@@ -48,7 +48,7 @@ processRecord record@(Record ty _ fragment) = do
  -}
 postprocessRecord :: Record Ciphertext -> TLSSt (Record Ciphertext)
 postprocessRecord record@(Record ProtocolType_ChangeCipherSpec _ _) =
-	switchTxEncryption >> isClientContext >>= \cc -> when cc setKeyBlock >> return record
+	switchTxEncryption >> return record
 postprocessRecord record = return record
 
 {-

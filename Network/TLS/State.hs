@@ -223,6 +223,7 @@ setMasterSecret masterSecret = do
 	hasValidHandshake "master secret"
 
 	updateHandshake "master secret" (\hst -> hst { hstMasterSecret = Just masterSecret } )
+	setKeyBlock
 	return ()
 
 setMasterSecretFromPre :: MonadState TLSState m => Bytes -> m ()
