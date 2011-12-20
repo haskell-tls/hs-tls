@@ -82,6 +82,17 @@ Executable           retrievecertificate
     Buildable:       False
   ghc-options:       -Wall -fno-warn-missing-signatures
 
+Executable           simpleclient
+  Main-is:           Examples/SimpleClient.hs
+  if flag(executable)
+    Build-Depends:   network
+                   , cmdargs
+                   , cprng-aes >= 0.2.3
+    Buildable:       True
+  else
+    Buildable:       False
+  ghc-options:       -Wall -fno-warn-missing-signatures
+
 executable           Tests
   Main-is:           Tests.hs
   if flag(test)
