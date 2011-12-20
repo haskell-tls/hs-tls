@@ -78,6 +78,12 @@ processHandshake hs = do
 		-- unknown extensions
 		processClientExtension _ = return ()
 
+decryptRSA :: ByteString -> TLSSt (Either KxError ByteString)
+decryptRSA econtent = do
+	ver <- stVersion <$> get
+	rsapriv <- fromJust "rsa private key" . hstRSAPrivateKey . fromJust "handshake" . stHandshake <$> get
+	return $ kxDecrypt rsapriv (if ver < TLS10 then econtent else B.drop 2 econtent)
+
 processServerHello :: Handshake -> TLSSt ()
 processServerHello (ServerHello sver ran _ _ _ ex) = do
 	-- FIXME notify the user to take action if the extension requested is missing
@@ -96,12 +102,6 @@ processServerHello (ServerHello sver ran _ _ _ ex) = do
 
 		processServerExtension _ = return ()
 processServerHello _ = error "processServerHello called on wrong type"
-
-decryptRSA :: ByteString -> TLSSt (Either KxError ByteString)
-decryptRSA econtent = do
-	ver <- stVersion <$> get
-	rsapriv <- fromJust "rsa private key" . hstRSAPrivateKey . fromJust "handshake" . stHandshake <$> get
-	return $ kxDecrypt rsapriv (if ver < TLS10 then econtent else B.drop 2 econtent)
 
 -- process the client key exchange message. the protocol expects the initial
 -- client version received in ClientHello, not the negociated version.
