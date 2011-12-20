@@ -202,7 +202,8 @@ handshakeClient ctx = do
 	updateMeasure ctx incrementNbHandshakes
 	sendClientHello
 	recvServerHello
-	if False {- usingSession ctx -}
+	sessionResuming <- usingState_ ctx isSessionResuming
+	if sessionResuming
 		then sendChangeCipherAndFinish ctx True
 		else do
 			sendCertificate >> sendClientKeyXchg >> sendCertificateVerify
@@ -223,10 +224,11 @@ handshakeClient ctx = do
 
 		sendClientHello = do
 			crand <- getStateRNG ctx 32 >>= return . ClientRandom
+			let clientSession = Session . maybe Nothing (Just . fst) $ sessionResumeWith params
 			extensions <- getExtensions
 			usingState_ ctx (startHandshakeClient ver crand)
 			sendPacket ctx $ Handshake
-				[ ClientHello ver crand (Session Nothing) (map cipherID ciphers)
+				[ ClientHello ver crand clientSession (map cipherID ciphers)
 					      (map compressionID compressions) extensions
 				]
 
