@@ -9,6 +9,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 
 import Control.Concurrent (forkIO)
+import Control.Concurrent.MVar
 import Control.Exception (finally, try, throw)
 import Control.Monad (when, forever, unless)
 
@@ -79,7 +80,7 @@ tlsserver srchandle dsthandle = do
 		return False
 	putStrLn "end"
 
-clientProcess certs handle dsthandle dbg _ = do
+clientProcess certs handle dsthandle dbg sessionStorage _ = do
 	rng <- RNG.makeSystem
 	let logging = if not dbg then defaultLogging else defaultLogging
 		{ loggingPacketSent = putStrLn . ("debug: send: " ++)
@@ -93,7 +94,14 @@ clientProcess certs handle dsthandle dbg _ = do
 		, pWantClientCert  = False
 		, pLogging         = logging
 		}
-	ctx <- server serverstate rng handle
+	let serverState' = case sessionStorage of
+		Nothing      -> serverstate
+		Just storage -> serverstate
+			{ onSessionResumption  = \s -> withMVar storage (return . lookup s)
+			, onSessionEstablished = \s d -> modifyMVar_ storage (\l -> return $ (s,d) : l)
+			}
+
+	ctx <- server serverState' rng handle
 	tlsserver ctx dsthandle
 
 readCertificate :: FilePath -> IO X509
@@ -131,6 +139,7 @@ data Stunnel =
 		, sourceType      :: String
 		, source          :: String
 		, debug           :: Bool
+		, disableSession  :: Bool
 		, certificate     :: FilePath
 		, key             :: FilePath }
 	deriving (Show, Data, Typeable)
@@ -150,6 +159,7 @@ serverOpts = Server
 	, destination     = "localhost:6060"  &= help "destination address influenced by destination type" &= typ "ADDRESS"
 	, sourceType      = "tcp"             &= help "type of source (tcp, unix, fd)" &= typ "SOURCETYPE"
 	, source          = "localhost:6061"  &= help "source address influenced by source type" &= typ "ADDRESS"
+	, disableSession  = False             &= help "disable support for session" &= typ "Bool"
 	, debug           = False             &= help "debug the TLS protocol printing debugging to stdout" &= typ "Bool"
 	, certificate     = "certificate.pem" &= help "X509 public certificate to use" &= typ "FILE"
 	, key             = "certificate.key" &= help "private key linked to the certificate" &= typ "FILE"
@@ -250,6 +260,8 @@ doServer pargs = do
 	srcaddr <- getAddressDescription (sourceType pargs) (source pargs)
 	dstaddr <- getAddressDescription (destinationType pargs) (destination pargs)
 
+	sessionStorage <- if disableSession pargs then return Nothing else (Just `fmap` newMVar [])
+
 	case srcaddr of
 		AddrSocket _ _ -> do
 			(StunnelSocket srcsocket) <- listenAddressDescription srcaddr
@@ -262,7 +274,7 @@ doServer pargs = do
 					StunnelSocket dst -> socketToHandle dst ReadWriteMode
 
 				_ <- forkIO $ finally
-					(clientProcess [(cert, Just pk)] srch dsth (debug pargs) addr >> return ())
+					(clientProcess [(cert, Just pk)] srch dsth (debug pargs) sessionStorage addr >> return ())
 					(hClose srch >> (when (dsth /= stdout) $ hClose dsth))
 				return ()
 		AddrFD _ _ -> error "bad error fd. not implemented"
@@ -272,4 +284,4 @@ main = do
 	x <- cmdArgsRun mode
 	case x of
 		Client _ _ _ _ _ _ -> doClient x
-		Server _ _ _ _ _ _ _ -> doServer x
+		Server _ _ _ _ _ _ _ _ -> doServer x
