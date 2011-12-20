@@ -135,6 +135,11 @@ recvChangeCipherAndFinish ctx = runRecvState ctx (RecvStateNext expectChangeCiph
 unexpected :: MonadIO m => String -> Maybe [Char] -> m a
 unexpected msg expected = throwCore $ Error_Packet_unexpected msg (maybe "" (" expected: " ++) expected)
 
+newSession :: MonadIO m => TLSCtx c -> m Session
+newSession ctx
+	| pUseSession $ ctxParams ctx = getStateRNG ctx 32 >>= return . Session . Just
+	| otherwise                   = return $ Session Nothing
+
 -- | Send one packet to the context
 sendPacket :: MonadIO m => TLSCtx c -> Packet -> m ()
 sendPacket ctx pkt = do
