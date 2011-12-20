@@ -320,7 +320,7 @@ handshakeClient ctx = do
 			throwCore $ Error_Protocol ("certificate rejected: " ++ s, True, CertificateUnknown)
 
 handshakeServerWith :: MonadIO m => TLSCtx c -> Handshake -> m ()
-handshakeServerWith ctx clientHello@(ClientHello ver _ _ ciphers compressions _) = do
+handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers compressions _) = do
 	-- check if policy allow this new handshake to happens
 	handshakeAuthorized <- withMeasure ctx (onHandshake $ ctxParams ctx)
 	unless handshakeAuthorized (throwCore $ Error_HandshakePolicy "server: handshake denied")
@@ -341,8 +341,10 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ _ ciphers compressions _)
 		, stCompression = usedCompression
 		})
 
-	let useSession = Nothing
-	case useSession of
+	resumeSessionData <- case clientSession of
+		(Session (Just clientSessionId)) -> liftIO $ onSessionResumption params $ clientSessionId
+		(Session Nothing)                -> return Nothing
+	case resumeSessionData of
 		Nothing -> do
 			handshakeSendServerData
 			liftIO $ connectionFlush ctx
@@ -350,9 +352,11 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ _ ciphers compressions _)
 			-- Receive client info until client Finished.
 			recvClientData
 			sendChangeCipherAndFinish ctx False
-		Just session -> do
-			serverhello <- makeServerHello session
+		Just sessionData -> do
+			usingState_ ctx (setSession clientSession True)
+			serverhello <- makeServerHello clientSession
 			sendPacket ctx $ Handshake [serverhello]
+			usingState_ ctx $ setMasterSecret $ sessionSecret sessionData
 			sendChangeCipherAndFinish ctx False
 			recvChangeCipherAndFinish ctx
 	handshakeTerminate ctx
@@ -403,11 +407,13 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ _ ciphers compressions _)
 					return [ (0xff01, vf) ]
 				else return []
 			usingState_ ctx (setVersion ver >> setServerRandom srand)
-			return $ ServerHello ver srand (Session session) (cipherID usedCipher)
+			return $ ServerHello ver srand session (cipherID usedCipher)
 			                               (compressionID usedCompression) extensions
 
 		handshakeSendServerData = do
-			serverhello <- makeServerHello Nothing
+			serverSession <- newSession ctx
+			usingState_ ctx (setSession serverSession False)
+			serverhello   <- makeServerHello serverSession
 			-- send ServerHello & Certificate & ServerKeyXchg & CertReq
 			sendPacket ctx $ Handshake [ serverhello, Certificates srvCerts ]
 			when needKeyXchg $ do
