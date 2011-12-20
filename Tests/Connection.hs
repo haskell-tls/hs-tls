@@ -1,6 +1,8 @@
 module Tests.Connection
 	( newPairContext
 	, arbitraryPairParams
+	, setPairParamsSessionSaving
+	, setPairParamsSessionResuming
 	) where
 
 import Test.QuickCheck
@@ -99,6 +101,17 @@ arbitraryPairParams = do
 		arbitraryVersions :: Gen [Version]
 		arbitraryVersions = resize (length supportedVersions + 1) $ listOf1 (elements supportedVersions)
 		arbitraryCiphers  = resize (length supportedCiphers + 1) $ listOf1 (elements supportedCiphers)
+
+setPairParamsSessionSaving f (clientState, serverState) = (nc,ns)
+	where
+		nc = clientState { onSessionEstablished = f }
+		ns = serverState { onSessionEstablished = f }
+
+setPairParamsSessionResuming sessionStuff (clientState, serverState) = (nc,ns)
+	where
+		nc = clientState { sessionResumeWith   = Just sessionStuff }
+		ns = serverState { onSessionResumption = \s ->
+			return $ if s == fst sessionStuff then Just (snd sessionStuff) else Nothing }
 
 newPairContext pipe (cParams, sParams) = do
 	let noFlush = return ()
