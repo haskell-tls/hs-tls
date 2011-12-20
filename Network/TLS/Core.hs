@@ -175,9 +175,17 @@ server params rng handle = liftIO $ newCtx handle params st
 bye :: MonadIO m => TLSCtx c -> m ()
 bye ctx = sendPacket ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
 
--- | when a new handshake is done, wrap up, clean up.
+-- | when a new handshake is done, wrap up & clean up.
 handshakeTerminate :: MonadIO m => TLSCtx c -> m ()
 handshakeTerminate ctx = do
+	session <- usingState_ ctx getSession
+	-- only callback the session established if we have a session
+	case session of
+		Session (Just sessionId) -> do
+			sessionData <- usingState_ ctx getSessionData
+			liftIO $ (onSessionEstablished $ ctxParams ctx) sessionId (fromJust sessionData)
+		_ -> return ()
+	-- forget all handshake data now and reset bytes counters.
 	usingState_ ctx endHandshake
 	updateMeasure ctx resetBytesCounters
 	return ()
