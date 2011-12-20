@@ -259,10 +259,16 @@ handshakeClient ctx = do
 				Nothing -> throwCore $ Error_Protocol ("no cipher in common with the server", True, HandshakeFailure)
 				Just c  -> usingState_ ctx $ setCipher c
 
-			let useSession = Nothing
-			case useSession of
-				Nothing      -> return $ RecvStateHandshake processCertificate
-				Just session -> return $ RecvStateNext expectChangeCipher
+			let resumingSession = case sessionResumeWith params of
+				Just (sessionId, sessionData) -> if serverSession == Session (Just sessionId) then Just sessionData else Nothing
+				Nothing                       -> Nothing
+			usingState_ ctx $ setSession serverSession (isJust resumingSession)
+			usingState_ ctx $ processServerHello sh
+			case resumingSession of
+				Nothing          -> return $ RecvStateHandshake processCertificate
+				Just sessionData -> do
+					usingState_ ctx (setMasterSecret $ sessionSecret sessionData)
+					return $ RecvStateNext expectChangeCipher
 		onServerHello p = unexpected (show p) (Just "server hello")
 
 		processCertificate :: MonadIO m => Handshake -> m (RecvState m)

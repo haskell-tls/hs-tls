@@ -8,7 +8,7 @@
 -- the Receiving module contains calls related to unmarshalling packets according
 -- to the TLS state
 --
-module Network.TLS.Receiving (processHandshake, processPacket) where
+module Network.TLS.Receiving (processHandshake, processPacket, processServerHello) where
 
 import Control.Applicative ((<$>))
 import Control.Monad.State
@@ -61,13 +61,6 @@ processHandshake hs = do
 		ClientHello cver ran _ _ _ ex -> unless clientmode $ do
 			mapM_ processClientExtension ex
 			startHandshakeClient cver ran
-		ServerHello sver ran _ _ _ ex -> when clientmode $ do
-			-- FIXME notify the user to take action if the extension requested is missing
-			-- secreneg <- getSecureRenegotiation
-			-- when (secreneg && (isNothing $ lookup 0xff01 ex)) $ ...
-			mapM_ processServerExtension ex
-			setServerRandom ran
-			setVersion sver
 		Certificates certs            -> when clientmode $ do processCertificates certs
 		ClientKeyXchg content         -> unless clientmode $ do
 			processClientKeyXchg content
@@ -85,6 +78,15 @@ processHandshake hs = do
 		-- unknown extensions
 		processClientExtension _ = return ()
 
+processServerHello :: Handshake -> TLSSt ()
+processServerHello (ServerHello sver ran _ _ _ ex) = do
+	-- FIXME notify the user to take action if the extension requested is missing
+	-- secreneg <- getSecureRenegotiation
+	-- when (secreneg && (isNothing $ lookup 0xff01 ex)) $ ...
+	mapM_ processServerExtension ex
+	setServerRandom ran
+	setVersion sver
+	where
 		processServerExtension (0xff01, content) = do
 			cv <- getVerifiedData True
 			sv <- getVerifiedData False
@@ -93,6 +95,7 @@ processHandshake hs = do
 			return ()
 
 		processServerExtension _ = return ()
+processServerHello _ = error "processServerHello called on wrong type"
 
 decryptRSA :: ByteString -> TLSSt (Either KxError ByteString)
 decryptRSA econtent = do
