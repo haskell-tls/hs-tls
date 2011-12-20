@@ -277,7 +277,7 @@ handshakeClient ctx = do
 				xver       <- stVersion <$> get
 				prerand    <- genTLSRandom 46
 				let premaster = encodePreMasterSecret xver prerand
-				setMasterSecret premaster
+				setMasterSecretFromPre premaster
 
 				-- SSL3 implementation generally forget this length field since it's redundant,
 				-- however TLS10 make it clear that the length field need to be present.

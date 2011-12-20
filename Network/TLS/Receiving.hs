@@ -110,12 +110,12 @@ processClientKeyXchg encryptedPremaster = do
 	random      <- genTLSRandom 48
 	ePremaster  <- decryptRSA encryptedPremaster
 	case ePremaster of
-		Left _          -> setMasterSecret random
+		Left _          -> setMasterSecretFromPre random
 		Right premaster -> case decodePreMasterSecret premaster of
-			Left _                       -> setMasterSecret random
+			Left _                       -> setMasterSecretFromPre random
 			Right (ver, _)
-				| ver /= expectedVer -> setMasterSecret random
-				| otherwise          -> setMasterSecret premaster
+				| ver /= expectedVer -> setMasterSecretFromPre random
+				| otherwise          -> setMasterSecretFromPre premaster
 
 processClientFinished :: FinishedData -> TLSSt ()
 processClientFinished fdata = do

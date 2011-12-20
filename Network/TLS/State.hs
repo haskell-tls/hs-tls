@@ -26,6 +26,7 @@ module Network.TLS.State
 	, finishHandshakeMaterial
 	, makeDigest
 	, setMasterSecret
+	, setMasterSecretFromPre
 	, setPublicKey
 	, setPrivateKey
 	, setKeyBlock
@@ -210,14 +211,24 @@ setServerRandom :: MonadState TLSState m => ServerRandom -> m ()
 setServerRandom ran = updateHandshake "srand" (\hst -> hst { hstServerRandom = Just ran })
 
 setMasterSecret :: MonadState TLSState m => Bytes -> m ()
-setMasterSecret premastersecret = do
-	st <- get
+setMasterSecret masterSecret = do
 	hasValidHandshake "master secret"
 
-	updateHandshake "master secret" (\hst ->
-		let ms = generateMasterSecret (stVersion st) premastersecret (hstClientRandom hst) (fromJust "server random" $ hstServerRandom hst) in
-		hst { hstMasterSecret = Just ms } )
+	updateHandshake "master secret" (\hst -> hst { hstMasterSecret = Just masterSecret } )
 	return ()
+
+setMasterSecretFromPre :: MonadState TLSState m => Bytes -> m ()
+setMasterSecretFromPre premasterSecret = do
+	hasValidHandshake "generate master secret"
+	st <- get
+	setMasterSecret $ genSecret st
+	where
+		genSecret st =
+			let hst = fromJust "handshake" $ stHandshake st in
+			generateMasterSecret (stVersion st)
+					     premasterSecret
+					     (hstClientRandom hst)
+					     (fromJust "server random" $ hstServerRandom hst)
 
 setPublicKey :: MonadState TLSState m => PublicKey -> m ()
 setPublicKey pk = updateHandshake "publickey" (\hst -> hst { hstRSAPublicKey = Just pk })
