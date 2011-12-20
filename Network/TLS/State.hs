@@ -36,6 +36,10 @@ module Network.TLS.State
 	, setSecureRenegotiation
 	, getSecureRenegotiation
 	, getVerifiedData
+	, setSession
+	, getSession
+	, getSessionData
+	, isSessionResuming
 	, switchTxEncryption
 	, switchRxEncryption
 	, getCipherKeyExchangeType
@@ -96,6 +100,8 @@ data TLSState = TLSState
 	{ stClientContext       :: Bool
 	, stVersion             :: !Version
 	, stHandshake           :: !(Maybe TLSHandshakeState)
+	, stSession             :: Session
+	, stSessionResuming     :: Bool
 	, stTxEncrypted         :: Bool
 	, stRxEncrypted         :: Bool
 	, stTxCryptState        :: !(Maybe TLSCryptState)
@@ -128,6 +134,8 @@ newTLSState rng = TLSState
 	{ stClientContext       = False
 	, stVersion             = TLS10
 	, stHandshake           = Nothing
+	, stSession             = Session Nothing
+	, stSessionResuming     = False
 	, stTxEncrypted         = False
 	, stRxEncrypted         = False
 	, stTxCryptState        = Nothing
@@ -235,6 +243,26 @@ setPublicKey pk = updateHandshake "publickey" (\hst -> hst { hstRSAPublicKey = J
 
 setPrivateKey :: MonadState TLSState m => PrivateKey -> m ()
 setPrivateKey pk = updateHandshake "privatekey" (\hst -> hst { hstRSAPrivateKey = Just pk })
+
+getSessionData :: MonadState TLSState m => m (Maybe SessionData)
+getSessionData = do
+	st <- get
+	return (stHandshake st >>= hstMasterSecret >>= wrapSessionData st)
+	where wrapSessionData st masterSecret = do
+		return $ SessionData
+			{ sessionVersion = stVersion st
+			, sessionCipher  = cipherID $ fromJust "cipher" $ stCipher st
+			, sessionSecret  = masterSecret
+			}
+
+setSession :: MonadState TLSState m => Session -> Bool -> m ()
+setSession session resuming = modify (\st -> st { stSession = session, stSessionResuming = resuming })
+
+getSession :: MonadState TLSState m => m Session
+getSession = gets stSession
+
+isSessionResuming :: MonadState TLSState m => m Bool
+isSessionResuming = gets stSessionResuming
 
 setKeyBlock :: MonadState TLSState m => m ()
 setKeyBlock = do
