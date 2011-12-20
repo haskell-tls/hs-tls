@@ -240,10 +240,10 @@ handshakeClient ctx = do
 			{- FIXME not implemented yet -}
 			return ()
 
-		recvServerHello = runRecvState ctx (RecvStateHandshake processServerHello)
+		recvServerHello = runRecvState ctx (RecvStateHandshake onServerHello)
 
-		processServerHello :: MonadIO m => Handshake -> m (RecvState m)
-		processServerHello (ServerHello rver _ _ cipher _ _) = do
+		onServerHello :: MonadIO m => Handshake -> m (RecvState m)
+		onServerHello sh@(ServerHello rver _ serverSession cipher _ _) = do
 			when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
 			case find ((==) rver) allowedvers of
 				Nothing -> throwCore $ Error_Protocol ("version " ++ show ver ++ "is not supported", True, ProtocolVersion)
@@ -256,7 +256,7 @@ handshakeClient ctx = do
 			case useSession of
 				Nothing      -> return $ RecvStateHandshake processCertificate
 				Just session -> return $ RecvStateNext expectChangeCipher
-		processServerHello p = unexpected (show p) (Just "server hello")
+		onServerHello p = unexpected (show p) (Just "server hello")
 
 		processCertificate :: MonadIO m => Handshake -> m (RecvState m)
 		processCertificate (Certificates certs) = do
