@@ -95,8 +95,8 @@ arbitraryPairParams = do
 	where
 		logging pre = if debug
 			then defaultLogging
-				{ loggingPacketSent = putStrLn . (pre ++)
-				, loggingPacketRecv = putStrLn . (pre ++) }
+				{ loggingPacketSent = putStrLn . ((pre ++ ">> ") ++)
+				, loggingPacketRecv = putStrLn . ((pre ++ "<< ") ++) }
 			else defaultLogging
 		arbitraryVersions :: Gen [Version]
 		arbitraryVersions = resize (length supportedVersions + 1) $ listOf1 (elements supportedVersions)
