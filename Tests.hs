@@ -9,6 +9,7 @@ import Tests.Certificate
 import Tests.PipeChan
 import Tests.Connection
 
+import Data.Maybe
 import Data.Word
 
 import qualified Data.ByteString as B
@@ -21,6 +22,8 @@ import Control.Applicative
 import Control.Concurrent
 import Control.Exception (throw, catch, SomeException)
 import Control.Monad
+
+import Data.IORef
 
 import Prelude hiding (catch)
 
@@ -205,7 +208,54 @@ prop_handshake_renegociation = do
 			hSuccess <- handshake ctx
 			unless hSuccess $ fail "handshake failed on client side"
 			hSuccess2 <- handshake ctx
-			unless hSuccess $ fail "renegociation handshake failed"
+			unless hSuccess2 $ fail "renegociation handshake failed"
+			d <- readChan queue
+			sendData ctx d
+			bye ctx
+			return ()
+
+prop_handshake_session_resumption :: PropertyM IO ()
+prop_handshake_session_resumption = do
+	sessionRef <- run $ newIORef Nothing
+
+	plainParams <- pick arbitraryPairParams
+	let params = setPairParamsSessionSaving (\sid d -> writeIORef sessionRef $ Just (sid,d)) plainParams
+
+	-- establish a session.
+	(s1, r1) <- run (establish_data_pipe params tlsServer tlsClient)
+
+	d <- L.pack <$> pick (someWords8 256)
+	run $ writeChan s1 d
+	dres <- run $ readChan r1
+	d `assertEq` dres
+
+	-- and resume
+	sessionParams <- run $ readIORef sessionRef
+	assert (isJust sessionParams)
+	let params2 = setPairParamsSessionResuming (fromJust sessionParams) plainParams
+
+	-- resume
+	(startQueue, resultQueue) <- run (establish_data_pipe params2 tlsServer tlsClient)
+
+	{- the test involves writing data on one side of the data "pipe" and
+	 - then checking we received them on the other side of the data "pipe" -}
+	d <- L.pack <$> pick (someWords8 256)
+	run $ writeChan startQueue d
+
+	dres <- run $ readChan resultQueue
+	d `assertEq` dres
+
+	return ()
+	where
+		tlsServer ctx queue = do
+			hSuccess <- handshake ctx
+			unless hSuccess $ fail "resumption failed on server side"
+			d <- recvData ctx
+			writeChan queue d
+			return ()
+		tlsClient queue ctx = do
+			hSuccess <- handshake ctx
+			unless hSuccess $ fail "resumption failed on client side"
 			d <- readChan queue
 			sendData ctx d
 			bye ctx
@@ -231,4 +281,5 @@ main = defaultMain
 			[ testProperty "setup" (monadicIO prop_pipe_work)
 			, testProperty "initiate" (monadicIO prop_handshake_initiate)
 			, testProperty "renegociation" (monadicIO prop_handshake_renegociation)
+			, testProperty "resumption" (monadicIO prop_handshake_session_resumption)
 			]
