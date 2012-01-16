@@ -46,7 +46,7 @@ import qualified Data.ByteString.Lazy as L
 import Crypto.Random
 import Control.Applicative ((<$>))
 import Control.Monad.State
-import Control.Exception (throwIO, Exception(), fromException, catch)
+import Control.Exception (throwIO, Exception(), fromException, catch, SomeException)
 import System.IO (Handle)
 import System.IO.Error (mkIOError, eofErrorType)
 import Prelude hiding (catch)
@@ -273,12 +273,14 @@ handshakeClient ctx = do
 
 		processCertificate :: MonadIO m => Handshake -> m (RecvState m)
 		processCertificate (Certificates certs) = do
-			let cb = onCertificatesRecv $ params
-			usage <- liftIO $ cb certs
+			usage <- liftIO $ catch (onCertificatesRecv params $ certs) rejectOnException
 			case usage of
 				CertificateUsageAccept        -> return ()
 				CertificateUsageReject reason -> certificateRejected reason
 			return $ RecvStateHandshake processServerKeyExchange
+			where
+				rejectOnException :: SomeException -> IO TLSCertificateUsage
+				rejectOnException e = return $ CertificateUsageReject $ CertificateRejectOther $ show e
 		processCertificate p = processServerKeyExchange p
 
 		processServerKeyExchange :: MonadIO m => Handshake -> m (RecvState m)
