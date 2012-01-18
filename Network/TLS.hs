@@ -44,6 +44,8 @@ module Network.TLS
 	, Version(..)
 	-- * Errors
 	, TLSError(..)
+	-- * Exceptions
+	, HandshakeFailed(..)
 	) where
 
 import Network.TLS.Struct (Version(..), TLSError(..))
