@@ -1,4 +1,5 @@
 {-# OPTIONS_HADDOCK hide #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 -- |
 -- Module      : Network.TLS.Core
 -- License     : BSD-style
@@ -21,6 +22,7 @@ module Network.TLS.Core
 	-- * Initialisation and Termination of context
 	, bye
 	, handshake
+	, HandshakeFailed
 
 	-- * High level API
 	, sendData
@@ -39,6 +41,7 @@ import Network.TLS.Receiving
 import Network.TLS.Measurement
 import Network.TLS.Wire (encodeWord16)
 import Data.Maybe
+import Data.Data
 import Data.List (intersect, find)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
@@ -51,9 +54,17 @@ import System.IO (Handle)
 import System.IO.Error (mkIOError, eofErrorType)
 import Prelude hiding (catch)
 
+data HandshakeFailed = HandshakeFailed TLSError
+	deriving (Show,Eq,Typeable)
+
+instance Exception HandshakeFailed
+
 errorToAlert :: TLSError -> Packet
 errorToAlert (Error_Protocol (_, _, ad)) = Alert [(AlertLevel_Fatal, ad)]
 errorToAlert _                           = Alert [(AlertLevel_Fatal, InternalError)]
+
+handshakeFailed :: TLSError -> IO ()
+handshakeFailed err = throwIO $ HandshakeFailed err
 
 readExact :: MonadIO m => TLSCtx c -> Int -> m Bytes
 readExact ctx sz = do
@@ -441,15 +452,15 @@ handshakeServer ctx = do
 
 -- | Handshake for a new TLS connection
 -- This is to be called at the beginning of a connection, and during renegociation
-handshake :: MonadIO m => TLSCtx c -> m Bool
+handshake :: MonadIO m => TLSCtx c -> m ()
 handshake ctx = do
 	cc <- usingState_ ctx (stClientContext <$> get)
 	liftIO $ handleException $ if cc then handshakeClient ctx else handshakeServer ctx
 	where
-		handleException f = catch (f >> return True) (\e -> handler e >> return False)
-		handler e = case fromException e of
-			Just err -> sendPacket ctx (errorToAlert err)
-			Nothing  -> sendPacket ctx (errorToAlert $ Error_Misc $ show e)
+		handleException f = catch f $ \exception -> do
+			let tlserror = maybe (Error_Misc $ show exception) id $ fromException exception
+			sendPacket ctx (errorToAlert tlserror)
+			handshakeFailed tlserror
 
 -- | sendData sends a bunch of data.
 -- It will automatically chunk data to acceptable packet size

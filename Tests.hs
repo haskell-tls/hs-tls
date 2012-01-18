@@ -170,14 +170,12 @@ prop_handshake_initiate = do
 	return ()
 	where
 		tlsServer ctx queue = do
-			hSuccess <- handshake ctx
-			unless hSuccess $ fail "handshake failed on server side"
+			handshake ctx
 			d <- recvData ctx
 			writeChan queue d
 			return ()
 		tlsClient queue ctx = do
-			hSuccess <- handshake ctx
-			unless hSuccess $ fail "handshake failed on client side"
+			handshake ctx
 			d <- readChan queue
 			sendData ctx d
 			bye ctx
@@ -199,16 +197,13 @@ prop_handshake_renegociation = do
 	return ()
 	where
 		tlsServer ctx queue = do
-			hSuccess <- handshake ctx
-			unless hSuccess $ fail "handshake failed on server side"
+			handshake ctx
 			d <- recvData ctx
 			writeChan queue d
 			return ()
 		tlsClient queue ctx = do
-			hSuccess <- handshake ctx
-			unless hSuccess $ fail "handshake failed on client side"
-			hSuccess2 <- handshake ctx
-			unless hSuccess2 $ fail "renegociation handshake failed"
+			handshake ctx
+			handshake ctx
 			d <- readChan queue
 			sendData ctx d
 			bye ctx
@@ -239,23 +234,21 @@ prop_handshake_session_resumption = do
 
 	{- the test involves writing data on one side of the data "pipe" and
 	 - then checking we received them on the other side of the data "pipe" -}
-	d <- L.pack <$> pick (someWords8 256)
-	run $ writeChan startQueue d
+	d2 <- L.pack <$> pick (someWords8 256)
+	run $ writeChan startQueue d2
 
-	dres <- run $ readChan resultQueue
-	d `assertEq` dres
+	dres2 <- run $ readChan resultQueue
+	d2 `assertEq` dres2
 
 	return ()
 	where
 		tlsServer ctx queue = do
-			hSuccess <- handshake ctx
-			unless hSuccess $ fail "resumption failed on server side"
+			handshake ctx
 			d <- recvData ctx
 			writeChan queue d
 			return ()
 		tlsClient queue ctx = do
-			hSuccess <- handshake ctx
-			unless hSuccess $ fail "resumption failed on client side"
+			handshake ctx
 			d <- readChan queue
 			sendData ctx d
 			bye ctx
