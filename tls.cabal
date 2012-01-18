@@ -80,7 +80,7 @@ executable           Tests
                    , cryptocipher >= 0.3.0
   else
     Buildable:       False
-  ghc-options:       -Wall -fhpc
+  ghc-options:       -Wall -fno-warn-orphans -fno-warn-missing-signatures -fhpc
 
 source-repository head
   type: git
