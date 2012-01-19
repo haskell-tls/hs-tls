@@ -22,7 +22,7 @@ module Network.TLS.Core
 	-- * Initialisation and Termination of context
 	, bye
 	, handshake
-	, HandshakeFailed
+	, HandshakeFailed(..)
 
 	-- * High level API
 	, sendData
