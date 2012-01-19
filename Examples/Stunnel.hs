@@ -1,8 +1,9 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 import Network.BSD
 import Network.Socket
 import System.IO
-import System.IO.Error hiding (try)
+import System.IO.Error hiding (try, catch)
 import System.Console.CmdArgs
 
 import qualified Data.ByteString as B
@@ -10,7 +11,7 @@ import qualified Data.ByteString.Lazy as L
 
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar
-import Control.Exception (finally, try, throw)
+import Control.Exception (finally, try, throw, catch, SomeException)
 import Control.Monad (when, forever)
 
 import Data.Char (isDigit)
@@ -22,6 +23,8 @@ import qualified Data.Certificate.KeyRSA as KeyRSA
 import qualified Crypto.Random.AESCtr as RNG
 import Network.TLS
 import Network.TLS.Extra
+
+import Prelude hiding (catch)
 
 ciphers :: [Cipher]
 ciphers =
@@ -196,7 +199,7 @@ getAddressDescription _ _  = error "unrecognized source type (expecting tcp/unix
 connectAddressDescription (AddrSocket family sockaddr) = do
 	sock <- socket family Stream defaultProtocol
 	catch (connect sock sockaddr)
-	      (\_ -> sClose sock >> error ("cannot open socket " ++ show sockaddr))
+	      (\(e :: SomeException) -> sClose sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
 	return $ StunnelSocket sock
 
 connectAddressDescription (AddrFD h1 h2) = do
@@ -205,7 +208,7 @@ connectAddressDescription (AddrFD h1 h2) = do
 listenAddressDescription (AddrSocket family sockaddr) = do
 	sock <- socket family Stream defaultProtocol
 	catch (bindSocket sock sockaddr >> listen sock 10 >> setSocketOption sock ReuseAddr 1)
-	      (\_ -> sClose sock >> error ("cannot open socket " ++ show sockaddr))
+	      (\(e :: SomeException) -> sClose sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
 	return $ StunnelSocket sock
 
 listenAddressDescription (AddrFD _ _) = do
