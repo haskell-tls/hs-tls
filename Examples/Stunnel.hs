@@ -11,7 +11,7 @@ import qualified Data.ByteString.Lazy as L
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar
 import Control.Exception (finally, try, throw)
-import Control.Monad (when, forever, unless)
+import Control.Monad (when, forever)
 
 import Data.Char (isDigit)
 
@@ -45,9 +45,7 @@ tlsclient :: Handle -> TLSCtx Handle -> IO ()
 tlsclient srchandle dsthandle = do
 	hSetBuffering srchandle NoBuffering
 
-	success <- handshake dsthandle
-	unless success $ do
-		error "client: handshake failed"
+	handshake dsthandle
 
 	_ <- forkIO $ forever $ do
 		dat <- recvData dsthandle
@@ -68,9 +66,7 @@ tlsclient srchandle dsthandle = do
 tlsserver srchandle dsthandle = do
 	hSetBuffering dsthandle NoBuffering
 
-	success <- handshake srchandle
-	unless success $ do
-		error "server: handshake failed"
+	handshake srchandle
 
 	loopUntil $ do
 		d <- recvData srchandle
