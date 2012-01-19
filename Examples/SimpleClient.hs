@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 import Network.BSD
 import Network.Socket
 import Network.TLS
@@ -6,10 +7,13 @@ import Network.TLS.Extra
 import System.IO
 import qualified Crypto.Random.AESCtr as RNG
 import qualified Data.ByteString.Lazy.Char8 as LC
+import Control.Exception
+import System.Environment
+import Prelude hiding (catch)
 
 import Data.IORef
 
-validateCert = False
+validateCert = True
 debug = False
 
 ciphers :: [Cipher]
@@ -26,7 +30,7 @@ runTLS params hostname portNumber f = do
 	sock <- socket AF_INET Stream defaultProtocol
 	let sockaddr = SockAddrInet portNumber (head $ hostAddresses he)
 	catch (connect sock sockaddr)
-	      (\_ -> error ("cannot open socket " ++ show sockaddr) >> sClose sock)
+	      (\(e :: SomeException) -> sClose sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
 	dsth <- socketToHandle sock ReadWriteMode
 	ctx <- client params rng dsth
 	f ctx
@@ -52,15 +56,17 @@ getDefaultParams sStorage session = defaultParams
 
 main = do
 	sStorage <- newIORef undefined
-	let hostname = "localhost"
-	let port = 2001
-	runTLS (getDefaultParams sStorage Nothing) hostname port $ \ctx -> do
+	args     <- getArgs
+	let hostname = args !! 0
+	let port = read (args !! 1) :: Int
+	runTLS (getDefaultParams sStorage Nothing) hostname (fromIntegral port) $ \ctx -> do
 		handshake ctx
 		sendData ctx $ LC.pack "GET / HTTP/1.0\r\n\r\n"
 		d <- recvData ctx
 		bye ctx
 		LC.putStrLn d
 		return ()
+{-
 	session <- readIORef sStorage
 	runTLS (getDefaultParams sStorage $ Just session) hostname port $ \ctx -> do
 		handshake ctx
@@ -69,3 +75,4 @@ main = do
 		bye ctx
 		LC.putStrLn d
 		return ()
+-}
