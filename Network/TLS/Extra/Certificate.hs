@@ -50,13 +50,33 @@ certificateChecks checks x509s = do
 
 {- on windows and OSX, the trusted certificates are not yet accessible,
  - for now, print a big fat warning (better than nothing) and returns true  -}
-certificateVerifyChain :: [X509] -> IO TLSCertificateUsage
-certificateVerifyChain _ = do
+certificateVerifyChain_ :: [X509] -> IO TLSCertificateUsage
+certificateVerifyChain_ _ = do
 	putStrLn "****************** certificate verify chain doesn't yet work on your platform **********************"
 	putStrLn "please consider contributing to the certificate package to fix this issue"
 	return CertificateUsageAccept
 
 #else
+certificateVerifyChain_ :: [X509] -> IO TLSCertificateUsage
+certificateVerifyChain_ []     = return $ CertificateUsageReject (CertificateRejectOther "empty chain / no certificates")
+certificateVerifyChain_ (x:xs) = do
+	-- find a matching certificate that we trust (== installed on the system)
+	foundCert <- SysCert.findCertificate (certMatchDN x)
+	case foundCert of
+		Just sysx509 -> do
+			validChain <- certificateVerifyAgainst x sysx509
+			if validChain
+				then return CertificateUsageAccept
+				else return $ CertificateUsageReject (CertificateRejectOther "chain doesn't match each other")
+		Nothing      -> case xs of
+			[] -> return $ CertificateUsageReject CertificateRejectUnknownCA
+			_  -> do
+				validChain <- certificateVerifyAgainst x (head xs)
+				if validChain
+					then certificateVerifyChain_ xs
+					else return $ CertificateUsageReject (CertificateRejectOther "chain doesn't match each other")
+#endif
+
 -- | verify a certificates chain using the system certificates available.
 --
 -- each certificate of the list is verified against the next certificate, until
@@ -72,24 +92,13 @@ certificateVerifyChain _ = do
 -- TODO: verify validity, check revocation list if any, add optional user output to know
 -- the rejection reason.
 certificateVerifyChain :: [X509] -> IO TLSCertificateUsage
-certificateVerifyChain []     = return $ CertificateUsageReject (CertificateRejectOther "empty chain / no certificates")
-certificateVerifyChain (x:xs) = do
-	-- find a matching certificate that we trust (== installed on the system)
-	foundCert <- SysCert.findCertificate (certMatchDN x)
-	case foundCert of
-		Just sysx509 -> do
-			validChain <- certificateVerifyAgainst x sysx509
-			if validChain
-				then return CertificateUsageAccept
-				else return $ CertificateUsageReject (CertificateRejectOther "chain doesn't match each other")
-		Nothing      -> case xs of
-			[] -> return $ CertificateUsageReject CertificateRejectUnknownCA
-			_  -> do
-				validChain <- certificateVerifyAgainst x (head xs)
-				if validChain
-					then certificateVerifyChain xs
-					else return $ CertificateUsageReject (CertificateRejectOther "chain doesn't match each other")
-#endif
+certificateVerifyChain = certificateVerifyChain_ . reorderList
+	where
+		reorderList []     = []
+		reorderList (x:xs) =
+			case find (certMatchDN x) xs of
+				Nothing    -> x : reorderList xs
+				Just found -> x : found : reorderList (filter (/= found) xs)
 
 -- | verify a certificate against another one.
 -- the first certificate need to be signed by the second one for this function to succeed.
