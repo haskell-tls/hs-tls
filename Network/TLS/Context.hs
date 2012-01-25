@@ -142,7 +142,7 @@ data TLSCtx a = TLSCtx
 	, ctxParams          :: TLSParams
 	, ctxState           :: MVar TLSState
 	, ctxMeasurement     :: IORef Measurement
-	, ctxEOF_            :: IORef Bool    -- ^ is the handle has EOFed or not.
+	, ctxEOF_            :: IORef Bool    -- ^ has the handle EOFed or not.
 	, ctxConnectionFlush :: IO ()
 	, ctxConnectionSend  :: Bytes -> IO ()
 	, ctxConnectionRecv  :: Int -> IO Bytes
