@@ -23,6 +23,7 @@ module Network.TLS.Core
 	, bye
 	, handshake
 	, HandshakeFailed(..)
+	, ConnectionNotEstablished(..)
 
 	-- * High level API
 	, sendData
@@ -57,7 +58,11 @@ import Prelude hiding (catch)
 data HandshakeFailed = HandshakeFailed TLSError
 	deriving (Show,Eq,Typeable)
 
+data ConnectionNotEstablished = ConnectionNotEstablished
+	deriving (Show,Eq,Typeable)
+
 instance Exception HandshakeFailed
+instance Exception ConnectionNotEstablished
 
 errorToAlert :: TLSError -> Packet
 errorToAlert (Error_Protocol (_, _, ad)) = Alert [(AlertLevel_Fatal, ad)]
@@ -65,6 +70,13 @@ errorToAlert _                           = Alert [(AlertLevel_Fatal, InternalErr
 
 handshakeFailed :: TLSError -> IO ()
 handshakeFailed err = throwIO $ HandshakeFailed err
+
+checkValid :: MonadIO m => TLSCtx c -> m ()
+checkValid ctx = do
+	established <- ctxEstablished ctx
+	unless established $ liftIO $ throwIO ConnectionNotEstablished
+	eofed <- ctxEOF ctx
+	when eofed $ liftIO $ throwIO $ mkIOError eofErrorType "data" Nothing Nothing
 
 readExact :: MonadIO m => TLSCtx c -> Int -> m Bytes
 readExact ctx sz = do
@@ -204,6 +216,8 @@ handshakeTerminate ctx = do
 	-- forget all handshake data now and reset bytes counters.
 	usingState_ ctx endHandshake
 	updateMeasure ctx resetBytesCounters
+	-- mark the secure connection up and running.
+	setEstablished ctx True
 	return ()
 
 -- client part of handshake. send a bunch of handshake of client
@@ -459,6 +473,7 @@ handshake ctx = do
 	where
 		handleException f = catch f $ \exception -> do
 			let tlserror = maybe (Error_Misc $ show exception) id $ fromException exception
+			setEstablished ctx False
 			sendPacket ctx (errorToAlert tlserror)
 			handshakeFailed tlserror
 
@@ -466,8 +481,7 @@ handshake ctx = do
 -- It will automatically chunk data to acceptable packet size
 sendData :: MonadIO m => TLSCtx c -> L.ByteString -> m ()
 sendData ctx dataToSend = do
-	eofed <- ctxEOF ctx
-	when eofed $ liftIO $ throwIO $ mkIOError eofErrorType "sendData" Nothing Nothing
+	checkValid ctx
 	mapM_ sendDataChunk (L.toChunks dataToSend)
 		where sendDataChunk d = if B.length d > 16384
 			then do
@@ -481,9 +495,8 @@ sendData ctx dataToSend = do
 -- a Handshake ClientHello is received
 recvData :: MonadIO m => TLSCtx c -> m L.ByteString
 recvData ctx = do
-	eofed <- ctxEOF ctx
-	when eofed $ liftIO $ throwIO $ mkIOError eofErrorType "recvData" Nothing Nothing
-	pkt   <- recvPacket ctx
+	checkValid ctx
+	pkt <- recvPacket ctx
 	case pkt of
 		-- on server context receiving a client hello == renegociation
 		Right (Handshake [ch@(ClientHello _ _ _ _ _ _)]) ->

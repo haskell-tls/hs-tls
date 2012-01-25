@@ -22,8 +22,10 @@ module Network.TLS.Context
 	, ctxParams
 	, ctxConnection
 	, ctxEOF
+	, ctxEstablished
 	, ctxLogging
 	, setEOF
+	, setEstablished
 	, connectionFlush
 	, connectionSend
 	, connectionRecv
@@ -143,6 +145,7 @@ data TLSCtx a = TLSCtx
 	, ctxState           :: MVar TLSState
 	, ctxMeasurement     :: IORef Measurement
 	, ctxEOF_            :: IORef Bool    -- ^ has the handle EOFed or not.
+	, ctxEstablished_    :: IORef Bool    -- ^ has the handshake been done and been successful.
 	, ctxConnectionFlush :: IO ()
 	, ctxConnectionSend  :: Bytes -> IO ()
 	, ctxConnectionRecv  :: Int -> IO Bytes
@@ -169,6 +172,12 @@ ctxEOF ctx = liftIO (readIORef $ ctxEOF_ ctx)
 setEOF :: MonadIO m => TLSCtx c -> m ()
 setEOF ctx = liftIO $ writeIORef (ctxEOF_ ctx) True
 
+ctxEstablished :: MonadIO m => TLSCtx a -> m Bool
+ctxEstablished ctx = liftIO $ readIORef $ ctxEstablished_ ctx
+
+setEstablished :: MonadIO m => TLSCtx c -> Bool -> m ()
+setEstablished ctx v = liftIO $ writeIORef (ctxEstablished_ ctx) v
+
 ctxLogging :: TLSCtx a -> TLSLogging
 ctxLogging = pLogging . ctxParams
 
@@ -176,6 +185,7 @@ newCtxWith :: c -> IO () -> (Bytes -> IO ()) -> (Int -> IO Bytes) -> TLSParams -
 newCtxWith c flushF sendF recvF params st = do
 	stvar <- newMVar st
 	eof   <- newIORef False
+	established <- newIORef False
 	stats <- newIORef newMeasurement
 	return $ TLSCtx
 		{ ctxConnection  = c
@@ -183,6 +193,7 @@ newCtxWith c flushF sendF recvF params st = do
 		, ctxState       = stvar
 		, ctxMeasurement = stats
 		, ctxEOF_        = eof
+		, ctxEstablished_    = established
 		, ctxConnectionFlush = flushF
 		, ctxConnectionSend  = sendF
 		, ctxConnectionRecv  = recvF
