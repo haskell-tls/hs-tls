@@ -62,7 +62,7 @@ main = do
 	runTLS (getDefaultParams sStorage Nothing) hostname (fromIntegral port) $ \ctx -> do
 		handshake ctx
 		sendData ctx $ LC.pack "GET / HTTP/1.0\r\n\r\n"
-		d <- recvData ctx
+		d <- recvData' ctx
 		bye ctx
 		LC.putStrLn d
 		return ()

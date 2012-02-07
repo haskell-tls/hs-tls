@@ -152,7 +152,7 @@ testInitiate spCert = do
 	where
 		tlsServer handle queue = do
 			handshake handle
-			d <- recvData handle
+			d <- recvData' handle
 			writeChan queue d
 			return ()
 		tlsClient queue handle = do
