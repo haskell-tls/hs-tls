@@ -36,7 +36,7 @@ Library
                    , vector
                    , crypto-api >= 0.5
                    , cryptocipher >= 0.3.0
-                   , certificate >= 1.0.0 && < 1.1.0
+                   , certificate >= 1.1.0 && < 1.2.0
                    , text >= 0.5 && < 1.0
                    , time
   Exposed-modules:   Network.TLS.Extra
