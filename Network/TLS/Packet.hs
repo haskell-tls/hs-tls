@@ -57,7 +57,7 @@ import Data.Maybe (fromJust)
 import Data.Bits ((.|.))
 import Control.Applicative ((<$>))
 import Control.Monad
-import Data.Certificate.X509
+import Data.Certificate.X509 (decodeCertificate, encodeCertificate, X509)
 import Network.TLS.Crypto
 import Network.TLS.MAC
 import Network.TLS.Cipher (CipherKeyExchangeType(..))
