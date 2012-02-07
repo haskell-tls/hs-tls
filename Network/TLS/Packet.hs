@@ -149,8 +149,7 @@ encodeAlerts l = runPut $ mapM_ encodeAlert l
 decodeHandshakeHeader :: Get (HandshakeType, Bytes)
 decodeHandshakeHeader = do
 	ty      <- getHandshakeType
-	len     <- getWord24
-	content <- getBytes len
+	content <- getOpaque24
 	return (ty, content)
 
 decodeHandshakes :: ByteString -> Either TLSError [(HandshakeType, Bytes)]
@@ -216,9 +215,7 @@ decodeCertificates = do
 		else return $ Certificates r
 
 decodeFinished :: Get Handshake
-decodeFinished = do
-	opaque <- remaining >>= getBytes
-	return $ Finished $ opaque
+decodeFinished = Finished <$> (remaining >>= getBytes)
 
 getSignatureHashAlgorithm :: Get (HashAlgorithm, SignatureAlgorithm)
 getSignatureHashAlgorithm = do
@@ -257,15 +254,15 @@ os2ip = B.foldl' (\a b -> (256 * a) .|. (fromIntegral b)) 0
 
 decodeServerKeyXchg_DH :: Get ServerDHParams
 decodeServerKeyXchg_DH = do
-	p <- getWord16 >>= getBytes . fromIntegral
-	g <- getWord16 >>= getBytes . fromIntegral
-	y <- getWord16 >>= getBytes . fromIntegral
+	p <- getOpaque16
+	g <- getOpaque16
+	y <- getOpaque16
 	return $ ServerDHParams { dh_p = os2ip p, dh_g = os2ip g, dh_Ys = os2ip y }
 
 decodeServerKeyXchg_RSA :: Get ServerRSAParams
 decodeServerKeyXchg_RSA = do
-	modulus <- getWord16 >>= getBytes . fromIntegral
-	expo    <- getWord16 >>= getBytes . fromIntegral
+	modulus <- getOpaque16
+	expo    <- getOpaque16
 	return $ ServerRSAParams { rsa_modulus = os2ip modulus, rsa_exponent = os2ip expo }
 
 decodeServerKeyXchg :: CurrentParams -> Get Handshake
@@ -274,11 +271,11 @@ decodeServerKeyXchg cp = ServerKeyXchg <$> case cParamsKeyXchgType cp of
 	CipherKeyExchange_DH_Anon -> SKX_DH_Anon <$> decodeServerKeyXchg_DH
 	CipherKeyExchange_DHE_RSA -> do
 		dhparams <- decodeServerKeyXchg_DH
-		signature <- getWord16 >>= getBytes . fromIntegral
+		signature <- getOpaque16
 		return $ SKX_DHE_RSA dhparams (B.unpack signature)
 	CipherKeyExchange_DHE_DSS -> do
 		dhparams  <- decodeServerKeyXchg_DH
-		signature <- getWord16 >>= getBytes . fromIntegral
+		signature <- getOpaque16
 		return $ SKX_DHE_DSS dhparams (B.unpack signature)
 	_ -> do
 		bs <- remaining >>= getBytes
@@ -313,11 +310,7 @@ encodeHandshakeContent (ServerHello version random session cipherID compressionI
 	                   >> putWord16 cipherID >> putWord8 compressionID
 	                   >> putExtensions exts >> return ()
 
-encodeHandshakeContent (Certificates certs) =
-	putWord24 len >> putBytes certbs
-	where
-		certbs = runPut $ mapM_ putCert certs
-		len    = fromIntegral $ B.length certbs
+encodeHandshakeContent (Certificates certs) = putOpaque24 (runPut $ mapM_ putCert certs)
 
 encodeHandshakeContent (ClientKeyXchg content) = do
 	putBytes content
@@ -368,7 +361,7 @@ getSession = do
 
 putSession :: Session -> Put
 putSession (Session Nothing)  = putWord8 0
-putSession (Session (Just s)) = putWord8 (fromIntegral $ B.length s) >> putBytes s
+putSession (Session (Just s)) = putOpaque8 s
 
 getCerts :: Int -> Get [Bytes]
 getCerts 0   = return []
@@ -379,8 +372,7 @@ getCerts len = do
 	return (cert : certxs)
 
 putCert :: X509 -> Put
-putCert cert = putWord24 (fromIntegral $ B.length content) >> putBytes content
-	where content = B.concat $ L.toChunks $ encodeCertificate cert
+putCert cert = putOpaque24 (B.concat $ L.toChunks $ encodeCertificate cert)
 
 getExtensions :: Int -> Get [Extension]
 getExtensions 0   = return []
@@ -392,16 +384,11 @@ getExtensions len = do
 	return $ (extty, extdata) : extxs
 
 putExtension :: Extension -> Put
-putExtension (ty, l) = do
-	putWord16 ty
-	putWord16 (fromIntegral $ B.length l)
-	putBytes l
+putExtension (ty, l) = putWord16 ty >> putOpaque16 l
 
 putExtensions :: [Extension] -> Put
 putExtensions [] = return ()
-putExtensions es = putWord16 (fromIntegral $ B.length extbs) >> putBytes extbs
-	where
-		extbs = runPut $ mapM_ putExtension es
+putExtensions es = putOpaque16 (runPut $ mapM_ putExtension es)
 
 {-
  - decode and encode ALERT
@@ -432,9 +419,7 @@ decodeExtSecureRenegotiation isServerHello = runGetErr "ext-secure-renegotiation
 encodeExtSecureRenegotiation :: Bytes -> Maybe Bytes -> Bytes
 encodeExtSecureRenegotiation cvd msvd = runPut $ do
 	let svd = maybe B.empty id msvd
-	putWord8 $ fromIntegral (B.length cvd + B.length svd)
-	putBytes cvd
-	putBytes svd
+	putOpaque8 (cvd `B.append` svd)
 
 -- rsa pre master secret
 decodePreMasterSecret :: Bytes -> Either TLSError (Version, Bytes)

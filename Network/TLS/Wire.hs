@@ -18,6 +18,9 @@ module Network.TLS.Wire
 	, getWords16
 	, getWord24
 	, getBytes
+	, getOpaque8
+	, getOpaque16
+	, getOpaque24
 	, processBytes
 	, isEmpty
 	, Put
@@ -28,6 +31,9 @@ module Network.TLS.Wire
 	, putWords16
 	, putWord24
 	, putBytes
+	, putOpaque8
+	, putOpaque16
+	, putOpaque24
 	, encodeWord16
 	, encodeWord64
 	) where
@@ -37,6 +43,7 @@ import qualified Data.Serialize.Get as G
 import Data.Serialize.Put
 import Control.Applicative ((<$>))
 import Control.Monad.Error
+import qualified Data.ByteString as B
 import Data.Word
 import Data.Bits
 import Network.TLS.Struct
@@ -59,6 +66,15 @@ getWord24 = do
 	b <- fromIntegral <$> getWord8
 	c <- fromIntegral <$> getWord8
 	return $ (a `shiftL` 16) .|. (b `shiftL` 8) .|. c
+
+getOpaque8 :: Get Bytes
+getOpaque8 = getWord8 >>= getBytes . fromIntegral
+
+getOpaque16 :: Get Bytes
+getOpaque16 = getWord16 >>= getBytes . fromIntegral
+
+getOpaque24 :: Get Bytes
+getOpaque24 = getWord24 >>= getBytes
 
 processBytes :: Int -> Get a -> Get a
 processBytes i f = isolate i f
@@ -85,6 +101,15 @@ putWord24 i = do
 
 putBytes :: Bytes -> Put
 putBytes = putByteString
+
+putOpaque8 :: Bytes -> Put
+putOpaque8 b = putWord8 (fromIntegral $ B.length b) >> putBytes b
+
+putOpaque16 :: Bytes -> Put
+putOpaque16 b = putWord16 (fromIntegral $ B.length b) >> putBytes b
+
+putOpaque24 :: Bytes -> Put
+putOpaque24 b = putWord24 (B.length b) >> putBytes b
 
 encodeWord16 :: Word16 -> Bytes
 encodeWord16 = runPut . putWord16
