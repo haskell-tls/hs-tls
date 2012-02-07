@@ -172,14 +172,25 @@ sendPacket ctx pkt = do
 	liftIO $ connectionSend ctx dataToSend
 
 -- | Create a new Client context with a configuration, a RNG, a generic connection and the connection operation.
-clientWith :: (MonadIO m, CryptoRandomGen g) => TLSParams -> g -> c -> IO () -> (Bytes -> IO ()) -> (Int -> IO Bytes) -> m (TLSCtx c)
+clientWith :: (MonadIO m, CryptoRandomGen g)
+           => TLSParams         -- ^ Parameters to use for this context
+           -> g                 -- ^ Random number generator associated
+           -> c                 -- ^ An abstract connection type
+           -> IO ()             -- ^ A method for the connection buffer to be flushed
+           -> (Bytes -> IO ())  -- ^ A method for sending bytes through the connection
+           -> (Int -> IO Bytes) -- ^ A method for receiving bytes through the connection
+           -> m (TLSCtx c)
 clientWith params rng connection flushF sendF recvF =
 	liftIO $ newCtxWith connection flushF sendF recvF params st
 	where st = (newTLSState rng) { stClientContext = True }
 
 -- | Create a new Client context with a configuration, a RNG, and a Handle.
 -- It reconfigures the handle buffermode to noBuffering
-client :: (MonadIO m, CryptoRandomGen g) => TLSParams -> g -> Handle -> m (TLSCtx Handle)
+client :: (MonadIO m, CryptoRandomGen g)
+       => TLSParams -- ^ parameters to use for this context
+       -> g         -- ^ random number generator associated with the context
+       -> Handle    -- ^ handle to use
+       -> m (TLSCtx Handle)
 client params rng handle = liftIO $ newCtx handle params st
 	where st = (newTLSState rng) { stClientContext = True }
 
