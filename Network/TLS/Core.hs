@@ -28,6 +28,7 @@ module Network.TLS.Core
 	-- * High level API
 	, sendData
 	, recvData
+	, recvData'
 	) where
 
 import Network.TLS.Context
@@ -501,7 +502,7 @@ sendData ctx dataToSend = checkValid ctx >> mapM_ sendDataChunk (L.toChunks data
 
 -- | recvData get data out of Data packet, and automatically renegociate if
 -- a Handshake ClientHello is received
-recvData :: MonadIO m => TLSCtx c -> m L.ByteString
+recvData :: MonadIO m => TLSCtx c -> m Bytes
 recvData ctx = do
 	checkValid ctx
 	pkt <- recvPacket ctx
@@ -514,10 +515,13 @@ recvData ctx = do
 			handshakeClient ctx >> recvData ctx
 		Right (Alert [(AlertLevel_Fatal, _)]) -> do
 			setEOF ctx
-			return L.empty
+			return B.empty
 		Right (Alert [(AlertLevel_Warning, CloseNotify)]) -> do
 			setEOF ctx
-			return L.empty
-		Right (AppData x) -> return $ L.fromChunks [x]
+			return B.empty
+		Right (AppData x) -> return x
 		Right p           -> error ("error unexpected packet: " ++ show p)
 		Left err          -> error ("error received: " ++ show err)
+
+recvData' :: MonadIO m => TLSCtx c -> m L.ByteString
+recvData' ctx = recvData ctx >>= return . L.fromChunks . (:[])
