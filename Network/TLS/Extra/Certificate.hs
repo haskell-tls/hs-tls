@@ -152,10 +152,16 @@ rsaVerify h hdesc pk a b = either (Left . show) (Right) $ RSA.verify h hdesc pk 
 certificateVerifyDomain :: String -> [X509] -> TLSCertificateUsage
 certificateVerifyDomain _      []                  = CertificateUsageReject (CertificateRejectOther "empty list")
 certificateVerifyDomain fqhn (X509 cert _ _ _ _:_) =
-	case lookup oidCommonName $ certSubjectDN cert of
-		Nothing       -> rejectMisc "no commonname OID in certificate cannot match to FQDN"
-		Just (_, val) -> matchDomain (splitDot val)
+	let names = maybe [] ((:[]) . snd) (lookup oidCommonName $ certSubjectDN cert)
+	         ++ maybe [] (maybe [] toAltName . extensionGet) (certExtensions cert) in
+	orUsage $ map (matchDomain . splitDot) names
 	where
+		orUsage [] = rejectMisc "FQDN do not match this certificate"
+		orUsage (x:xs)
+			| x == CertificateUsageAccept = CertificateUsageAccept
+			| otherwise                   = orUsage xs
+
+		toAltName (ExtSubjectAltName l) = l
 		matchDomain l
 			| length (filter (== "") l) > 0 = rejectMisc "commonname OID got empty subdomain"
 			| head l == "*"                 = wildcardMatch (reverse $ drop 1 l)
