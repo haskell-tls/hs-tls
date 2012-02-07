@@ -75,8 +75,9 @@ data TLSParams = TLSParams
 	, pCompressions      :: [Compression]       -- ^ all compression supported ordered by priority.
 	, pWantClientCert    :: Bool                -- ^ request a certificate from client.
 	                                            -- use by server only.
-	, pUseSecureRenegotiation :: Bool           -- notify that we want to use secure renegotation
-	, pUseSession             :: Bool           -- generate new session if specified
+	, pUseSecureRenegotiation :: Bool           -- ^ notify that we want to use secure renegotation
+	, pUseNextProtocolNegociation :: Bool       -- ^ use draft Next Protocol Negociation extension.
+	, pUseSession             :: Bool           -- ^ generate new session if specified
 	, pCertificates      :: [(X509, Maybe PrivateKey)] -- ^ the cert chain for this context with the associated keys if any.
 	, pLogging           :: TLSLogging          -- ^ callback for logging
 	, onHandshake        :: Measurement -> IO Bool -- ^ callback on a beggining of handshake

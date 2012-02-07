@@ -114,6 +114,7 @@ data TLSState = TLSState
 	, stSecureRenegotiation :: Bool  -- RFC 5746
 	, stClientVerifiedData  :: Bytes -- RFC 5746
 	, stServerVerifiedData  :: Bytes -- RFC 5746
+	, stExtensionNPN        :: Bool  -- NPN draft extension
 	} deriving (Show)
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrorT TLSError (State TLSState) a }
@@ -148,6 +149,7 @@ newTLSState rng = TLSState
 	, stSecureRenegotiation = False
 	, stClientVerifiedData  = B.empty
 	, stServerVerifiedData  = B.empty
+	, stExtensionNPN        = False
 	}
 
 withTLSRNG :: StateRNG -> (forall g . CryptoRandomGen g => g -> Either e (a,g)) -> Either e (a, StateRNG)
@@ -207,6 +209,7 @@ finishHandshakeTypeMaterial HandshakeType_ServerKeyXchg   = True
 finishHandshakeTypeMaterial HandshakeType_CertRequest     = True
 finishHandshakeTypeMaterial HandshakeType_CertVerify      = False
 finishHandshakeTypeMaterial HandshakeType_Finished        = True
+finishHandshakeTypeMaterial HandshakeType_NPN             = True
 
 finishHandshakeMaterial :: Handshake -> Bool
 finishHandshakeMaterial = finishHandshakeTypeMaterial . typeOfHandshake

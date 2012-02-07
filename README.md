@@ -21,5 +21,5 @@ Features
 * supported versions: SSL3, TLS1.0, TLS1.1, TLS1.2.
 * key exchange supported: only RSA.
 * bulk algorithm supported: any stream or block ciphers.
-* supported extensions: secure renegociation
+* supported extensions: secure renegociation, next protocol renegociation (draft 2)
 

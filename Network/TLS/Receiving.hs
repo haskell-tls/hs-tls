@@ -46,6 +46,7 @@ processPacket (Record ProtocolType_Handshake ver fragment) = do
 	let currentparams = CurrentParams
 		{ cParamsVersion     = ver
 		, cParamsKeyXchgType = maybe CipherKeyExchange_RSA id $ keyxchg
+		, cParamsSupportNPN  = False
 		}
 	handshakes <- returnEither (decodeHandshakes $ fragmentGetBytes fragment)
 	hss <- forM handshakes $ \(ty, content) -> do
