@@ -171,7 +171,7 @@ prop_handshake_initiate = do
 	where
 		tlsServer ctx queue = do
 			handshake ctx
-			d <- recvData ctx
+			d <- recvData' ctx
 			writeChan queue d
 			return ()
 		tlsClient queue ctx = do
@@ -198,7 +198,7 @@ prop_handshake_renegociation = do
 	where
 		tlsServer ctx queue = do
 			handshake ctx
-			d <- recvData ctx
+			d <- recvData' ctx
 			writeChan queue d
 			return ()
 		tlsClient queue ctx = do
@@ -244,7 +244,7 @@ prop_handshake_session_resumption = do
 	where
 		tlsServer ctx queue = do
 			handshake ctx
-			d <- recvData ctx
+			d <- recvData' ctx
 			writeChan queue d
 			return ()
 		tlsClient queue ctx = do
