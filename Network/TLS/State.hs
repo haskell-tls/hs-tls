@@ -35,6 +35,10 @@ module Network.TLS.State
 	, setServerRandom
 	, setSecureRenegotiation
 	, getSecureRenegotiation
+        , setClientRequestedNPN
+        , getClientRequestedNPN
+        , setSelectedProtocol
+        , getSelectedProtocol
 	, getVerifiedData
 	, setSession
 	, getSession
@@ -115,6 +119,8 @@ data TLSState = TLSState
 	, stClientVerifiedData  :: Bytes -- RFC 5746
 	, stServerVerifiedData  :: Bytes -- RFC 5746
 	, stExtensionNPN        :: Bool  -- NPN draft extension
+        , stClientRequestedNPN  :: Bool
+        , stSelectedProtocol    :: Maybe Bytes
 	} deriving (Show)
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrorT TLSError (State TLSState) a }
@@ -150,6 +156,8 @@ newTLSState rng = TLSState
 	, stClientVerifiedData  = B.empty
 	, stServerVerifiedData  = B.empty
 	, stExtensionNPN        = False
+        , stClientRequestedNPN  = False
+        , stSelectedProtocol    = Nothing
 	}
 
 withTLSRNG :: StateRNG -> (forall g . CryptoRandomGen g => g -> Either e (a,g)) -> Either e (a, StateRNG)
@@ -317,6 +325,18 @@ setSecureRenegotiation b = modify (\st -> st { stSecureRenegotiation = b })
 
 getSecureRenegotiation :: MonadState TLSState m => m Bool
 getSecureRenegotiation = get >>= return . stSecureRenegotiation
+
+setClientRequestedNPN :: MonadState TLSState m => Bool -> m ()
+setClientRequestedNPN b = modify (\st -> st { stClientRequestedNPN = b })
+
+getClientRequestedNPN :: MonadState TLSState m => m Bool
+getClientRequestedNPN = get >>= return . stClientRequestedNPN
+
+setSelectedProtocol :: MonadState TLSState m => Bytes -> m ()
+setSelectedProtocol s = modify (\st -> st { stSelectedProtocol = Just s })
+
+getSelectedProtocol :: MonadState TLSState m => m (Maybe Bytes)
+getSelectedProtocol = get >>= return . stSelectedProtocol
 
 getCipherKeyExchangeType :: MonadState TLSState m => m (Maybe CipherKeyExchangeType)
 getCipherKeyExchangeType = get >>= return . (maybe Nothing (Just . cipherKeyExchange) . stCipher)

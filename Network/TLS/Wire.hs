@@ -36,6 +36,7 @@ module Network.TLS.Wire
 	, putOpaque24
 	, encodeWord16
 	, encodeWord64
+        , encodeNPNAlternatives
 	) where
 
 import Data.Serialize.Get hiding (runGet)
@@ -116,3 +117,6 @@ encodeWord16 = runPut . putWord16
 
 encodeWord64 :: Word64 -> Bytes
 encodeWord64 = runPut . putWord64be
+
+encodeNPNAlternatives :: [Bytes] -> Bytes
+encodeNPNAlternatives = runPut . mapM_ putOpaque8

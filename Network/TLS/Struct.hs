@@ -260,7 +260,7 @@ typeOfHandshake (ServerKeyXchg {})           = HandshakeType_ServerKeyXchg
 typeOfHandshake (CertRequest {})             = HandshakeType_CertRequest
 typeOfHandshake (CertVerify {})              = HandshakeType_CertVerify
 typeOfHandshake (Finished {})                = HandshakeType_Finished
-typeOfHandshake (NextProtocolNegociation {}) = HandshakeType_Finished
+typeOfHandshake (NextProtocolNegociation {}) = HandshakeType_NPN
 
 numericalVer :: Version -> (Word8, Word8)
 numericalVer SSL2  = (2, 0)
@@ -334,6 +334,7 @@ instance TypeValuable HandshakeType where
 	valToType 15 = Just HandshakeType_CertVerify
 	valToType 16 = Just HandshakeType_ClientKeyXchg
 	valToType 20 = Just HandshakeType_Finished
+	valToType 67 = Just HandshakeType_NPN
 	valToType _  = Nothing
 
 instance TypeValuable AlertLevel where

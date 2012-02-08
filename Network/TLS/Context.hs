@@ -76,10 +76,10 @@ data TLSParams = TLSParams
 	, pWantClientCert    :: Bool                -- ^ request a certificate from client.
 	                                            -- use by server only.
 	, pUseSecureRenegotiation :: Bool           -- ^ notify that we want to use secure renegotation
-	, pUseNextProtocolNegociation :: Bool       -- ^ use draft Next Protocol Negociation extension.
 	, pUseSession             :: Bool           -- ^ generate new session if specified
 	, pCertificates      :: [(X509, Maybe PrivateKey)] -- ^ the cert chain for this context with the associated keys if any.
 	, pLogging           :: TLSLogging          -- ^ callback for logging
+        , pNextProtocols     :: Maybe [Bytes]       -- ^ suggested next protocols accoring to the next protocol negotiation extension.
 	, onHandshake        :: Measurement -> IO Bool -- ^ callback on a beggining of handshake
 	, onCertificatesRecv :: [X509] -> IO TLSCertificateUsage -- ^ callback to verify received cert chain.
 	, onSessionResumption :: SessionID -> IO (Maybe SessionData) -- ^ callback to maybe resume session on server.
@@ -107,6 +107,7 @@ defaultParams = TLSParams
 	, pUseSession             = True
 	, pCertificates           = []
 	, pLogging                = defaultLogging
+        , pNextProtocols          = Nothing
 	, onHandshake             = (\_ -> return True)
 	, onCertificatesRecv      = (\_ -> return CertificateUsageAccept)
 	, onSessionResumption     = (\_ -> return Nothing)

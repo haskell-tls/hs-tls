@@ -1,5 +1,5 @@
 {-# OPTIONS_HADDOCK hide #-}
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
 -- |
 -- Module      : Network.TLS.Core
 -- License     : BSD-style
@@ -41,11 +41,12 @@ import Network.TLS.State
 import Network.TLS.Sending
 import Network.TLS.Receiving
 import Network.TLS.Measurement
-import Network.TLS.Wire (encodeWord16)
+import Network.TLS.Wire (encodeWord16, encodeNPNAlternatives)
 import Data.Maybe
 import Data.Data
 import Data.List (intersect, find)
 import qualified Data.ByteString as B
+import Data.ByteString.Char8 ()
 import qualified Data.ByteString.Lazy as L
 
 import Crypto.Random
@@ -410,7 +411,12 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
 		needKeyXchg        = cipherExchangeNeedMoreData $ cipherKeyExchange usedCipher
 
 		---
-		recvClientData = runRecvState ctx (RecvStateHandshake $ processClientCertificate)
+		recvClientData = do
+                  runRecvState ctx (RecvStateHandshake $ processClientCertificate)
+                  expectNP <- usingState_ ctx $ getClientRequestedNPN
+                  if expectNP
+                    then runRecvState ctx $ RecvStateHandshake expectNPNAndFinish
+                    else runRecvState ctx (RecvStateHandshake expectFinish)
 
 		processClientCertificate (Certificates _) = return $ RecvStateHandshake processClientKeyExchange
 		processClientCertificate p = processClientKeyExchange p
@@ -421,11 +427,11 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
 		processCertificateVerify (Handshake [CertVerify _]) = return $ RecvStateNext expectChangeCipher
 		processCertificateVerify p = expectChangeCipher p
 
-		expectChangeCipher ChangeCipherSpec = return $ RecvStateHandshake expectFinish
+		expectChangeCipher ChangeCipherSpec = return $ RecvStateDone
 		expectChangeCipher p                = unexpected (show p) (Just "change cipher")
 
-		expectNPN (NextProtocolNegociation _) = return $ RecvStateHandshake expectFinish
-		expectNPN p                           = unexpected (show p) (Just "Handshake NextProtocolNegociation")
+                expectNPNAndFinish (NextProtocolNegociation _) = return $ RecvStateHandshake expectFinish
+                expectNPNAndFinish p                           = unexpected (show p) (Just "Handshake NextProtocolNegociation")
 
 		expectFinish (Finished _) = return RecvStateDone
 		expectFinish p            = unexpected (show p) (Just "Handshake Finished")
@@ -440,7 +446,7 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
 			-- in TLS12, we need to check as well the certificates we are sending if they have in the extension
 			-- the necessary bits set.
 			secReneg   <- usingState_ ctx getSecureRenegotiation
-			extensions <- if secReneg
+			secRengExt <- if secReneg
 				then do
 					vf <- usingState_ ctx $ do
 						cvf <- getVerifiedData True
@@ -448,6 +454,11 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
 						return $ encodeExtSecureRenegotiation cvf (Just svf)
 					return [ (0xff01, vf) ]
 				else return []
+                        nextPneg <- usingState_ ctx $ getClientRequestedNPN
+                        npnExt <- case (pNextProtocols params, nextPneg) of
+                                    (Just protos, True) -> return [ (13172, encodeNPNAlternatives protos) ]
+                                    _ -> return []
+                        let extensions = secRengExt ++ npnExt
 			usingState_ ctx (setVersion ver >> setServerRandom srand)
 			return $ ServerHello ver srand session (cipherID usedCipher)
 			                               (compressionID usedCompression) extensions
