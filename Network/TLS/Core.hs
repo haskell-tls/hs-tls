@@ -502,7 +502,7 @@ sendData ctx dataToSend = checkValid ctx >> mapM_ sendDataChunk (L.toChunks data
 
 -- | recvData get data out of Data packet, and automatically renegociate if
 -- a Handshake ClientHello is received
-recvData :: MonadIO m => TLSCtx c -> m Bytes
+recvData :: MonadIO m => TLSCtx c -> m B.ByteString
 recvData ctx = do
 	checkValid ctx
 	pkt <- recvPacket ctx
