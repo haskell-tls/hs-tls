@@ -178,8 +178,8 @@ clientWith :: (MonadIO m, CryptoRandomGen g)
            -> g                 -- ^ Random number generator associated
            -> c                 -- ^ An abstract connection type
            -> IO ()             -- ^ A method for the connection buffer to be flushed
-           -> (Bytes -> IO ())  -- ^ A method for sending bytes through the connection
-           -> (Int -> IO Bytes) -- ^ A method for receiving bytes through the connection
+           -> (B.ByteString -> IO ())  -- ^ A method for sending bytes through the connection
+           -> (Int -> IO B.ByteString) -- ^ A method for receiving bytes through the connection
            -> m (TLSCtx c)
 clientWith params rng connection flushF sendF recvF =
 	liftIO $ newCtxWith connection flushF sendF recvF params st
@@ -196,7 +196,7 @@ client params rng handle = liftIO $ newCtx handle params st
 	where st = (newTLSState rng) { stClientContext = True }
 
 -- | Create a new Server context with a configuration, a RNG, a generic connection and the connection operation.
-serverWith :: (MonadIO m, CryptoRandomGen g) => TLSParams -> g -> c -> IO () -> (Bytes -> IO ()) -> (Int -> IO Bytes) -> m (TLSCtx c)
+serverWith :: (MonadIO m, CryptoRandomGen g) => TLSParams -> g -> c -> IO () -> (B.ByteString -> IO ()) -> (Int -> IO B.ByteString) -> m (TLSCtx c)
 serverWith params rng connection flushF sendF recvF =
 	liftIO $ newCtxWith connection flushF sendF recvF params st
 	where st = (newTLSState rng) { stClientContext = False }

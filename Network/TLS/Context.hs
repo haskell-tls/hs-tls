@@ -64,8 +64,8 @@ import Prelude hiding (catch)
 data TLSLogging = TLSLogging
 	{ loggingPacketSent :: String -> IO ()
 	, loggingPacketRecv :: String -> IO ()
-	, loggingIOSent     :: Bytes -> IO ()
-	, loggingIORecv     :: Header -> Bytes -> IO ()
+	, loggingIOSent     :: B.ByteString -> IO ()
+	, loggingIORecv     :: Header -> B.ByteString -> IO ()
 	}
 
 data TLSParams = TLSParams
