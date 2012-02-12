@@ -27,6 +27,9 @@ module Network.TLS
 	, bye
 	, handshake
 
+        -- * Next Protocol Negotiation
+        , getNegotiatedProtocol
+
 	-- * High level API
 	, sendData
 	, recvData

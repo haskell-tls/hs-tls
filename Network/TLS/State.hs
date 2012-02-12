@@ -35,10 +35,10 @@ module Network.TLS.State
 	, setServerRandom
 	, setSecureRenegotiation
 	, getSecureRenegotiation
-        , setClientRequestedNPN
-        , getClientRequestedNPN
-        , setSelectedProtocol
-        , getSelectedProtocol
+        , setExtensionNPN
+        , getExtensionNPN
+        , setNegotiatedProtocol
+        , getNegotiatedProtocol
 	, getVerifiedData
 	, setSession
 	, getSession
@@ -119,8 +119,7 @@ data TLSState = TLSState
 	, stClientVerifiedData  :: Bytes -- RFC 5746
 	, stServerVerifiedData  :: Bytes -- RFC 5746
 	, stExtensionNPN        :: Bool  -- NPN draft extension
-        , stClientRequestedNPN  :: Bool
-        , stSelectedProtocol    :: Maybe Bytes
+        , stNegotiatedProtocol  :: Maybe B.ByteString -- NPN protocol
 	} deriving (Show)
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrorT TLSError (State TLSState) a }
@@ -156,8 +155,7 @@ newTLSState rng = TLSState
 	, stClientVerifiedData  = B.empty
 	, stServerVerifiedData  = B.empty
 	, stExtensionNPN        = False
-        , stClientRequestedNPN  = False
-        , stSelectedProtocol    = Nothing
+        , stNegotiatedProtocol  = Nothing
 	}
 
 withTLSRNG :: StateRNG -> (forall g . CryptoRandomGen g => g -> Either e (a,g)) -> Either e (a, StateRNG)
@@ -326,17 +324,17 @@ setSecureRenegotiation b = modify (\st -> st { stSecureRenegotiation = b })
 getSecureRenegotiation :: MonadState TLSState m => m Bool
 getSecureRenegotiation = get >>= return . stSecureRenegotiation
 
-setClientRequestedNPN :: MonadState TLSState m => Bool -> m ()
-setClientRequestedNPN b = modify (\st -> st { stClientRequestedNPN = b })
+setExtensionNPN :: MonadState TLSState m => Bool -> m ()
+setExtensionNPN b = modify (\st -> st { stExtensionNPN = b })
 
-getClientRequestedNPN :: MonadState TLSState m => m Bool
-getClientRequestedNPN = get >>= return . stClientRequestedNPN
+getExtensionNPN :: MonadState TLSState m => m Bool
+getExtensionNPN = get >>= return . stExtensionNPN
 
-setSelectedProtocol :: MonadState TLSState m => Bytes -> m ()
-setSelectedProtocol s = modify (\st -> st { stSelectedProtocol = Just s })
+setNegotiatedProtocol :: MonadState TLSState m => B.ByteString -> m ()
+setNegotiatedProtocol s = modify (\st -> st { stNegotiatedProtocol = Just s })
 
-getSelectedProtocol :: MonadState TLSState m => m (Maybe Bytes)
-getSelectedProtocol = get >>= return . stSelectedProtocol
+getNegotiatedProtocol :: MonadState TLSState m => m (Maybe B.ByteString)
+getNegotiatedProtocol = get >>= return . stNegotiatedProtocol
 
 getCipherKeyExchangeType :: MonadState TLSState m => m (Maybe CipherKeyExchangeType)
 getCipherKeyExchangeType = get >>= return . (maybe Nothing (Just . cipherKeyExchange) . stCipher)

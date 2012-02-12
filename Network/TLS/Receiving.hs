@@ -43,11 +43,11 @@ processPacket (Record ProtocolType_ChangeCipherSpec _ fragment) = do
 
 processPacket (Record ProtocolType_Handshake ver fragment) = do
 	keyxchg <- getCipherKeyExchangeType
-        npn <- getClientRequestedNPN
+        npn <- getExtensionNPN
 	let currentparams = CurrentParams
 		{ cParamsVersion     = ver
 		, cParamsKeyXchgType = maybe CipherKeyExchange_RSA id $ keyxchg
-		, cParamsSupportNPN  = npn -- TODO: not accururate, server might not have offered any protocols
+		, cParamsSupportNPN  = npn
 		}
 	handshakes <- returnEither (decodeHandshakes $ fragmentGetBytes fragment)
 	hss <- forM handshakes $ \(ty, content) -> do
@@ -68,7 +68,7 @@ processHandshake hs = do
 			processClientKeyXchg content
                 NextProtocolNegociation selected_protocol ->
                         unless clientmode $ do
-                        setSelectedProtocol selected_protocol
+                        setNegotiatedProtocol selected_protocol
 		Finished fdata                -> processClientFinished fdata
 		_                             -> return ()
 	when (finishHandshakeTypeMaterial $ typeOfHandshake hs) (updateHandshakeDigest $ encodeHandshake hs)
@@ -80,8 +80,6 @@ processHandshake hs = do
 			when (bs /= content) $ throwError $
 				Error_Protocol ("client verified data not matching: " ++ show v ++ ":" ++ show content, True, HandshakeFailure)
 			setSecureRenegotiation True
-                -- next protocol negotiation
-                processClientExtension (13172, _) = setClientRequestedNPN True
 		-- unknown extensions
 		processClientExtension _ = return ()
 

@@ -79,12 +79,12 @@ data TLSParams = TLSParams
 	, pUseSession             :: Bool           -- ^ generate new session if specified
 	, pCertificates      :: [(X509, Maybe PrivateKey)] -- ^ the cert chain for this context with the associated keys if any.
 	, pLogging           :: TLSLogging          -- ^ callback for logging
-        , pNextProtocols     :: Maybe [Bytes]       -- ^ suggested next protocols accoring to the next protocol negotiation extension.
 	, onHandshake        :: Measurement -> IO Bool -- ^ callback on a beggining of handshake
 	, onCertificatesRecv :: [X509] -> IO TLSCertificateUsage -- ^ callback to verify received cert chain.
 	, onSessionResumption :: SessionID -> IO (Maybe SessionData) -- ^ callback to maybe resume session on server.
 	, onSessionEstablished :: SessionID -> SessionData -> IO ()  -- ^ callback when session have been established
 	, onSessionInvalidated :: SessionID -> IO ()                 -- ^ callback when session is invalidated by error
+        , onSuggestNextProtocols :: IO (Maybe [B.ByteString])       -- ^ suggested next protocols accoring to the next protocol negotiation extension.
 	, sessionResumeWith   :: Maybe (SessionID, SessionData) -- ^ try to establish a connection using this session.
 	}
 
@@ -107,12 +107,12 @@ defaultParams = TLSParams
 	, pUseSession             = True
 	, pCertificates           = []
 	, pLogging                = defaultLogging
-        , pNextProtocols          = Nothing
 	, onHandshake             = (\_ -> return True)
 	, onCertificatesRecv      = (\_ -> return CertificateUsageAccept)
 	, onSessionResumption     = (\_ -> return Nothing)
 	, onSessionEstablished    = (\_ _ -> return ())
 	, onSessionInvalidated    = (\_ -> return ())
+        , onSuggestNextProtocols  = return Nothing
 	, sessionResumeWith       = Nothing
 	}
 

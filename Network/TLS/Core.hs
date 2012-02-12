@@ -19,6 +19,9 @@ module Network.TLS.Core
 	, server
 	, serverWith
 
+        -- * Next Protocol Negotiation
+        , Network.TLS.Core.getNegotiatedProtocol
+
 	-- * Initialisation and Termination of context
 	, bye
 	, handshake
@@ -37,7 +40,7 @@ import Network.TLS.Record
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Packet
-import Network.TLS.State
+import Network.TLS.State as S
 import Network.TLS.Sending
 import Network.TLS.Receiving
 import Network.TLS.Measurement
@@ -216,6 +219,11 @@ server params rng handle = liftIO $ newCtx handle params st
 bye :: MonadIO m => TLSCtx c -> m ()
 bye ctx = sendPacket ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
 
+-- | If the Next Protocol Negotiation extension has been used, this will
+-- return get the protocol agreed upon.
+getNegotiatedProtocol :: MonadIO m => TLSCtx c -> m (Maybe B.ByteString)
+getNegotiatedProtocol ctx = usingState_ ctx S.getNegotiatedProtocol
+
 -- | when a new handshake is done, wrap up & clean up.
 handshakeTerminate :: MonadIO m => TLSCtx c -> m ()
 handshakeTerminate ctx = do
@@ -360,7 +368,7 @@ handshakeClient ctx = do
 			throwCore $ Error_Protocol ("certificate rejected: " ++ s, True, CertificateUnknown)
 
 handshakeServerWith :: MonadIO m => TLSCtx c -> Handshake -> m ()
-handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers compressions _) = do
+handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers compressions exts) = do
 	-- check if policy allow this new handshake to happens
 	handshakeAuthorized <- withMeasure ctx (onHandshake $ ctxParams ctx)
 	unless handshakeAuthorized (throwCore $ Error_HandshakePolicy "server: handshake denied")
@@ -409,11 +417,12 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
 		srvCerts           = map fst $ pCertificates params
 		privKeys           = map snd $ pCertificates params
 		needKeyXchg        = cipherExchangeNeedMoreData $ cipherKeyExchange usedCipher
+                clientRequestedNPN = isJust $ lookup 13172 exts
 
 		---
 		recvClientData = do
                   runRecvState ctx (RecvStateHandshake $ processClientCertificate)
-                  expectNP <- usingState_ ctx $ getClientRequestedNPN
+                  expectNP <- usingState_ ctx $ getExtensionNPN
                   if expectNP
                     then runRecvState ctx $ RecvStateHandshake expectNPNAndFinish
                     else runRecvState ctx (RecvStateHandshake expectFinish)
@@ -454,10 +463,14 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
 						return $ encodeExtSecureRenegotiation cvf (Just svf)
 					return [ (0xff01, vf) ]
 				else return []
-                        nextPneg <- usingState_ ctx $ getClientRequestedNPN
-                        npnExt <- case (pNextProtocols params, nextPneg) of
-                                    (Just protos, True) -> return [ (13172, encodeNPNAlternatives protos) ]
-                                    _ -> return []
+                        nextProtocols <-
+                          if clientRequestedNPN
+                            then liftIO $ onSuggestNextProtocols params
+                            else return Nothing
+                        npnExt <- case nextProtocols of
+                                    Just protos -> do usingState_ ctx $ setExtensionNPN True
+                                                      return [ (13172, encodeNPNAlternatives protos) ]
+                                    Nothing -> return []
                         let extensions = secRengExt ++ npnExt
 			usingState_ ctx (setVersion ver >> setServerRandom srand)
 			return $ ServerHello ver srand session (cipherID usedCipher)
