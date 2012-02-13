@@ -437,8 +437,8 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
                                                                                          else expectFinish
 		expectChangeCipher p                = unexpected (show p) (Just "change cipher")
 
-                expectNPN (NextProtocolNegociation _) = return $ RecvStateHandshake expectFinish
-                expectNPN p                           = unexpected (show p) (Just "Handshake NextProtocolNegociation")
+                expectNPN (NextProtocolNegotiation _) = return $ RecvStateHandshake expectFinish
+                expectNPN p                           = unexpected (show p) (Just "Handshake NextProtocolNegotiation")
 
 		expectFinish (Finished _) = return RecvStateDone
 		expectFinish p            = unexpected (show p) (Just "Handshake Finished")

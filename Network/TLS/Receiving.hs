@@ -66,7 +66,7 @@ processHandshake hs = do
 		Certificates certs            -> when clientmode $ do processCertificates certs
 		ClientKeyXchg content         -> unless clientmode $ do
 			processClientKeyXchg content
-                NextProtocolNegociation selected_protocol ->
+                NextProtocolNegotiation selected_protocol ->
                         unless clientmode $ do
                         setNegotiatedProtocol selected_protocol
 		Finished fdata                -> processClientFinished fdata
