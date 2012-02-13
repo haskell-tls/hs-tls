@@ -72,7 +72,7 @@ import qualified Crypto.Hash.MD5 as MD5
 data CurrentParams = CurrentParams
 	{ cParamsVersion     :: Version               -- ^ current protocol version
 	, cParamsKeyXchgType :: CipherKeyExchangeType -- ^ current key exchange type
-	, cParamsSupportNPN  :: Bool                  -- ^ support Next Protocol Negociation extension
+	, cParamsSupportNPN  :: Bool                  -- ^ support Next Protocol Negotiation extension
 	} deriving (Show,Eq)
 
 runGetErr :: String -> Get a -> ByteString -> Either TLSError a
@@ -176,7 +176,7 @@ decodeHandshake cp ty = runGetErr "handshake" $ case ty of
 	HandshakeType_Finished        -> decodeFinished
 	HandshakeType_NPN             -> do
 		unless (cParamsSupportNPN cp) $ fail "unsupported handshake type"
-		decodeNextProtocolNegociation
+		decodeNextProtocolNegotiation
 
 decodeHelloRequest :: Get Handshake
 decodeHelloRequest = return HelloRequest
@@ -221,11 +221,11 @@ decodeCertificates = do
 decodeFinished :: Get Handshake
 decodeFinished = Finished <$> (remaining >>= getBytes)
 
-decodeNextProtocolNegociation :: Get Handshake
-decodeNextProtocolNegociation = do
+decodeNextProtocolNegotiation :: Get Handshake
+decodeNextProtocolNegotiation = do
 	opaque <- getOpaque8
 	_      <- getOpaque8
-	return $ NextProtocolNegociation opaque
+	return $ NextProtocolNegotiation opaque
 
 getSignatureHashAlgorithm :: Get (HashAlgorithm, SignatureAlgorithm)
 getSignatureHashAlgorithm = do
@@ -343,7 +343,7 @@ encodeHandshakeContent (CertVerify _) = undefined
 
 encodeHandshakeContent (Finished opaque) = putBytes opaque
 
-encodeHandshakeContent (NextProtocolNegociation protocol) = do
+encodeHandshakeContent (NextProtocolNegotiation protocol) = do
 	putOpaque8 protocol
 	putOpaque8 $ B.replicate paddingLen 0
 	where paddingLen = 32 - ((B.length protocol + 2) `mod` 32)
