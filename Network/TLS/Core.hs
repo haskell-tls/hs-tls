@@ -420,12 +420,7 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
                 clientRequestedNPN = isJust $ lookup 13172 exts
 
 		---
-		recvClientData = do
-                  runRecvState ctx (RecvStateHandshake $ processClientCertificate)
-                  expectNP <- usingState_ ctx $ getExtensionNPN
-                  if expectNP
-                    then runRecvState ctx $ RecvStateHandshake expectNPNAndFinish
-                    else runRecvState ctx (RecvStateHandshake expectFinish)
+		recvClientData = runRecvState ctx (RecvStateHandshake processClientCertificate)
 
 		processClientCertificate (Certificates _) = return $ RecvStateHandshake processClientKeyExchange
 		processClientCertificate p = processClientKeyExchange p
@@ -436,11 +431,14 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
 		processCertificateVerify (Handshake [CertVerify _]) = return $ RecvStateNext expectChangeCipher
 		processCertificateVerify p = expectChangeCipher p
 
-		expectChangeCipher ChangeCipherSpec = return $ RecvStateDone
+		expectChangeCipher ChangeCipherSpec = do npn <- usingState_ ctx getExtensionNPN
+                                                         return $ RecvStateHandshake $ if npn
+                                                                                         then expectNPN
+                                                                                         else expectFinish
 		expectChangeCipher p                = unexpected (show p) (Just "change cipher")
 
-                expectNPNAndFinish (NextProtocolNegociation _) = return $ RecvStateHandshake expectFinish
-                expectNPNAndFinish p                           = unexpected (show p) (Just "Handshake NextProtocolNegociation")
+                expectNPN (NextProtocolNegociation _) = return $ RecvStateHandshake expectFinish
+                expectNPN p                           = unexpected (show p) (Just "Handshake NextProtocolNegociation")
 
 		expectFinish (Finished _) = return RecvStateDone
 		expectFinish p            = unexpected (show p) (Just "Handshake Finished")
