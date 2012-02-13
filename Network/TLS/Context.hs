@@ -76,7 +76,6 @@ data TLSParams = TLSParams
 	, pWantClientCert    :: Bool                -- ^ request a certificate from client.
 	                                            -- use by server only.
 	, pUseSecureRenegotiation :: Bool           -- ^ notify that we want to use secure renegotation
-	, pUseNextProtocolNegociation :: Bool       -- ^ use draft Next Protocol Negociation extension.
 	, pUseSession             :: Bool           -- ^ generate new session if specified
 	, pCertificates      :: [(X509, Maybe PrivateKey)] -- ^ the cert chain for this context with the associated keys if any.
 	, pLogging           :: TLSLogging          -- ^ callback for logging
@@ -85,6 +84,7 @@ data TLSParams = TLSParams
 	, onSessionResumption :: SessionID -> IO (Maybe SessionData) -- ^ callback to maybe resume session on server.
 	, onSessionEstablished :: SessionID -> SessionData -> IO ()  -- ^ callback when session have been established
 	, onSessionInvalidated :: SessionID -> IO ()                 -- ^ callback when session is invalidated by error
+        , onSuggestNextProtocols :: IO (Maybe [B.ByteString])       -- ^ suggested next protocols accoring to the next protocol negotiation extension.
 	, sessionResumeWith   :: Maybe (SessionID, SessionData) -- ^ try to establish a connection using this session.
 	}
 
@@ -112,6 +112,7 @@ defaultParams = TLSParams
 	, onSessionResumption     = (\_ -> return Nothing)
 	, onSessionEstablished    = (\_ _ -> return ())
 	, onSessionInvalidated    = (\_ -> return ())
+        , onSuggestNextProtocols  = return Nothing
 	, sessionResumeWith       = Nothing
 	}
 
