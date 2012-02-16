@@ -44,7 +44,7 @@ import Network.TLS.State as S
 import Network.TLS.Sending
 import Network.TLS.Receiving
 import Network.TLS.Measurement
-import Network.TLS.Wire (encodeWord16, encodeNPNAlternatives)
+import Network.TLS.Wire (encodeWord16, encodeNPNAlternatives, decodeNPNAlternatives)
 import Data.Maybe
 import Data.Data
 import Data.List (intersect, find)
@@ -147,6 +147,17 @@ runRecvState ctx iniState          = recvPacketHandshake ctx >>= loop iniState >
 sendChangeCipherAndFinish :: MonadIO m => TLSCtx c -> Bool -> m ()
 sendChangeCipherAndFinish ctx isClient = do
 	sendPacket ctx ChangeCipherSpec
+        when isClient $ do
+          suggest <- usingState_ ctx $ getServerNextProtocolSuggest
+          case (onNPNServerSuggest (ctxParams ctx), suggest) of
+            -- client offered, server picked up. send NPN handshake.
+            (Just io, Just protos) -> do proto <- liftIO $ io protos
+                                         sendPacket ctx (Handshake [NextProtocolNegotiation proto])
+                                         usingState_ ctx $ setNegotiatedProtocol proto
+            -- client offered, server didn't pick up. do nothing.
+            (Just _, Nothing) -> return ()
+            -- client didn't offer. do nothing.
+            (Nothing, _) -> return ()
 	liftIO $ connectionFlush ctx
 	cf <- usingState_ ctx $ getHandshakeDigest isClient
 	sendPacket ctx (Handshake [Finished cf])
@@ -263,11 +274,14 @@ handshakeClient ctx = do
 		ciphers      = pCiphers params
 		compressions = pCompressions params
 		clientCerts  = map fst $ pCertificates params
-		getExtensions =
+                getExtensions = sequence [secureReneg, npnExtention] >>= return . catMaybes
+		secureReneg  =
 			if pUseSecureRenegotiation params
-			then usingState_ ctx (getVerifiedData True) >>= \vd -> return [ (0xff01, encodeExtSecureRenegotiation vd Nothing) ]
-			else return []
-
+			then usingState_ ctx (getVerifiedData True) >>= \vd -> return $ Just (0xff01, encodeExtSecureRenegotiation vd Nothing)
+			else return Nothing
+                npnExtention = if isJust $ onNPNServerSuggest params
+                                 then return $ Just (13172, "")
+                                 else return Nothing
 		sendClientHello = do
 			crand <- getStateRNG ctx 32 >>= return . ClientRandom
 			let clientSession = Session . maybe Nothing (Just . fst) $ sessionResumeWith params
@@ -296,7 +310,7 @@ handshakeClient ctx = do
 		recvServerHello = runRecvState ctx (RecvStateHandshake onServerHello)
 
 		onServerHello :: MonadIO m => Handshake -> m (RecvState m)
-		onServerHello sh@(ServerHello rver _ serverSession cipher _ _) = do
+		onServerHello sh@(ServerHello rver _ serverSession cipher _ exts) = do
 			when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
 			case find ((==) rver) allowedvers of
 				Nothing -> throwCore $ Error_Protocol ("version " ++ show ver ++ "is not supported", True, ProtocolVersion)
@@ -310,6 +324,12 @@ handshakeClient ctx = do
 				Nothing                       -> Nothing
 			usingState_ ctx $ setSession serverSession (isJust resumingSession)
 			usingState_ ctx $ processServerHello sh
+                        case fmap decodeNPNAlternatives (lookup 13172 exts) of
+                          Just (Right protos) -> usingState_ ctx $ do
+                                                   setExtensionNPN True
+                                                   setServerNextProtocolSuggest protos
+                          Just (Left err) -> throwCore (Error_Protocol ("could not decode NPN handshake: " ++ err, True, DecodeError))
+                          Nothing -> return ()
 			case resumingSession of
 				Nothing          -> return $ RecvStateHandshake processCertificate
 				Just sessionData -> do
@@ -466,7 +486,8 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
                             then liftIO $ onSuggestNextProtocols params
                             else return Nothing
                         npnExt <- case nextProtocols of
-                                    Just protos -> do usingState_ ctx $ setExtensionNPN True
+                                    Just protos -> do usingState_ ctx $ do setExtensionNPN True
+                                                                           setServerNextProtocolSuggest protos
                                                       return [ (13172, encodeNPNAlternatives protos) ]
                                     Nothing -> return []
                         let extensions = secRengExt ++ npnExt

@@ -39,6 +39,8 @@ module Network.TLS.State
         , getExtensionNPN
         , setNegotiatedProtocol
         , getNegotiatedProtocol
+        , setServerNextProtocolSuggest
+        , getServerNextProtocolSuggest
 	, getVerifiedData
 	, setSession
 	, getSession
@@ -120,6 +122,7 @@ data TLSState = TLSState
 	, stServerVerifiedData  :: Bytes -- RFC 5746
 	, stExtensionNPN        :: Bool  -- NPN draft extension
         , stNegotiatedProtocol  :: Maybe B.ByteString -- NPN protocol
+        , stServerNextProtocolSuggest :: Maybe [B.ByteString]
 	} deriving (Show)
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrorT TLSError (State TLSState) a }
@@ -156,6 +159,7 @@ newTLSState rng = TLSState
 	, stServerVerifiedData  = B.empty
 	, stExtensionNPN        = False
         , stNegotiatedProtocol  = Nothing
+        , stServerNextProtocolSuggest = Nothing
 	}
 
 withTLSRNG :: StateRNG -> (forall g . CryptoRandomGen g => g -> Either e (a,g)) -> Either e (a, StateRNG)
@@ -335,6 +339,12 @@ setNegotiatedProtocol s = modify (\st -> st { stNegotiatedProtocol = Just s })
 
 getNegotiatedProtocol :: MonadState TLSState m => m (Maybe B.ByteString)
 getNegotiatedProtocol = get >>= return . stNegotiatedProtocol
+
+setServerNextProtocolSuggest :: MonadState TLSState m => [B.ByteString] -> m ()
+setServerNextProtocolSuggest ps = modify (\st -> st { stServerNextProtocolSuggest = Just ps})
+
+getServerNextProtocolSuggest :: MonadState TLSState m => m (Maybe [B.ByteString])
+getServerNextProtocolSuggest = get >>= return . stServerNextProtocolSuggest
 
 getCipherKeyExchangeType :: MonadState TLSState m => m (Maybe CipherKeyExchangeType)
 getCipherKeyExchangeType = get >>= return . (maybe Nothing (Just . cipherKeyExchange) . stCipher)

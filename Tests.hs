@@ -13,7 +13,9 @@ import Data.Maybe
 import Data.Word
 
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
+import Network.TLS
 import Network.TLS.Core
 import Network.TLS.Cipher
 import Network.TLS.Struct
@@ -181,6 +183,40 @@ prop_handshake_initiate = do
 			bye ctx
 			return ()
 
+prop_handshake_npn_initiate :: PropertyM IO ()
+prop_handshake_npn_initiate = do
+	(clientParam,serverParam) <- pick arbitraryPairParams
+        let clientParam' = clientParam { onNPNServerSuggest = Just $ \protos -> return (head protos) }
+            serverParam' = serverParam { onSuggestNextProtocols = return $ Just [C8.pack "spdy/2", C8.pack "http/1.1"] }
+            params' = (clientParam',serverParam')
+	(startQueue, resultQueue) <- run (establish_data_pipe params' tlsServer tlsClient)
+
+	{- the test involves writing data on one side of the data "pipe" and
+	 - then checking we received them on the other side of the data "pipe" -}
+	d <- L.pack <$> pick (someWords8 256)
+	run $ writeChan startQueue d
+
+	dres <- run $ readChan resultQueue
+	d `assertEq` dres
+
+	return ()
+	where
+		tlsServer ctx queue = do
+			handshake ctx
+                        proto <- getNegotiatedProtocol ctx
+                        Just (C8.pack "spdy/2") `assertEq` proto
+			d <- recvData' ctx
+			writeChan queue d
+			return ()
+		tlsClient queue ctx = do
+			handshake ctx
+                        proto <- getNegotiatedProtocol ctx
+                        Just (C8.pack "spdy/2") `assertEq` proto
+			d <- readChan queue
+			sendData ctx d
+			bye ctx
+			return ()
+
 prop_handshake_renegociation :: PropertyM IO ()
 prop_handshake_renegociation = do
 	params       <- pick arbitraryPairParams
@@ -273,6 +309,7 @@ main = defaultMain
 		tests_handshake = testGroup "Handshakes"
 			[ testProperty "setup" (monadicIO prop_pipe_work)
 			, testProperty "initiate" (monadicIO prop_handshake_initiate)
+			, testProperty "initiate with npn" (monadicIO prop_handshake_npn_initiate)
 			, testProperty "renegociation" (monadicIO prop_handshake_renegociation)
 			, testProperty "resumption" (monadicIO prop_handshake_session_resumption)
 			]

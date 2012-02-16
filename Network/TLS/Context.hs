@@ -85,6 +85,7 @@ data TLSParams = TLSParams
 	, onSessionEstablished :: SessionID -> SessionData -> IO ()  -- ^ callback when session have been established
 	, onSessionInvalidated :: SessionID -> IO ()                 -- ^ callback when session is invalidated by error
         , onSuggestNextProtocols :: IO (Maybe [B.ByteString])       -- ^ suggested next protocols accoring to the next protocol negotiation extension.
+        , onNPNServerSuggest :: Maybe ([B.ByteString] -> IO B.ByteString)
 	, sessionResumeWith   :: Maybe (SessionID, SessionData) -- ^ try to establish a connection using this session.
 	}
 
@@ -113,6 +114,7 @@ defaultParams = TLSParams
 	, onSessionEstablished    = (\_ _ -> return ())
 	, onSessionInvalidated    = (\_ -> return ())
         , onSuggestNextProtocols  = return Nothing
+        , onNPNServerSuggest      = Nothing
 	, sessionResumeWith       = Nothing
 	}
 
