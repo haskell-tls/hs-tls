@@ -34,6 +34,12 @@ import Network.TLS (TLSCertificateUsage(..), TLSCertificateRejectReason(..))
 import Data.Time.Calendar
 import Data.List (find)
 
+#if defined(NOCERTVERIFY)
+
+import System.IO (hPutStrLn, stderr)
+
+#endif
+
 -- | combine many certificates checking function together.
 -- if one check fail, the whole sequence of checking is cuted short and return the
 -- reject reason.
@@ -52,8 +58,8 @@ certificateChecks checks x509s = do
  - for now, print a big fat warning (better than nothing) and returns true  -}
 certificateVerifyChain_ :: [X509] -> IO TLSCertificateUsage
 certificateVerifyChain_ _ = do
-	putStrLn "****************** certificate verify chain doesn't yet work on your platform **********************"
-	putStrLn "please consider contributing to the certificate package to fix this issue"
+	hPutStrLn stderr "****************** certificate verify chain doesn't yet work on your platform **********************"
+	hPutStrLn stderr "please consider contributing to the certificate package to fix this issue"
 	return CertificateUsageAccept
 
 #else
