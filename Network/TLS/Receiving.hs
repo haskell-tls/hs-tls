@@ -104,7 +104,7 @@ processServerHello (ServerHello sver ran _ _ _ ex) = do
 processServerHello _ = error "processServerHello called on wrong type"
 
 -- process the client key exchange message. the protocol expects the initial
--- client version received in ClientHello, not the negociated version.
+-- client version received in ClientHello, not the negotiated version.
 -- in case the version mismatch, generate a random master secret
 processClientKeyXchg :: ByteString -> TLSSt ()
 processClientKeyXchg encryptedPremaster = do
