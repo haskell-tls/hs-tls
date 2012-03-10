@@ -186,7 +186,7 @@ clientWith params rng connection flushF sendF recvF =
 	where st = (newTLSState rng) { stClientContext = True }
 
 -- | Create a new Client context with a configuration, a RNG, and a Handle.
--- It reconfigures the handle buffermode to noBuffering
+-- It reconfigures the handle's 'System.IO.BufferMode' to @NoBuffering@.
 client :: (MonadIO m, CryptoRandomGen g)
        => TLSParams -- ^ parameters to use for this context
        -> g         -- ^ random number generator associated with the context
@@ -202,7 +202,7 @@ serverWith params rng connection flushF sendF recvF =
 	where st = (newTLSState rng) { stClientContext = False }
 
 -- | Create a new Server context with a configuration, a RNG, and a Handle.
--- It reconfigures the handle buffermode to noBuffering
+-- It reconfigures the handle's 'System.IO.BufferMode' to @NoBuffering@.
 server :: (MonadIO m, CryptoRandomGen g) => TLSParams -> g -> Handle -> m (TLSCtx Handle)
 server params rng handle = liftIO $ newCtx handle params st
 	where st = (newTLSState rng) { stClientContext = False }
