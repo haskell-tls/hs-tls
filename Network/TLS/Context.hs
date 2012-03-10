@@ -56,7 +56,7 @@ import qualified Data.ByteString as B
 
 import Control.Concurrent.MVar
 import Control.Monad.State
-import Control.Exception (throwIO, Exception(), onException)
+import Control.Exception (throwIO, Exception())
 import Data.IORef
 import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush)
 import Prelude hiding (catch)
@@ -211,13 +211,10 @@ throwCore = liftIO . throwIO
 
 
 usingState :: MonadIO m => TLSCtx c -> TLSSt a -> m (Either TLSError a)
-usingState ctx f = liftIO (takeMVar mvar) >>= \st -> liftIO $ onException (execAndStore st) (putMVar mvar st)
-	where
-		mvar = ctxState ctx
-		execAndStore st = do
-			let (a, newst) = runTLSState f st
-			putMVar mvar newst
-			return a
+usingState ctx f =
+	liftIO $ modifyMVar (ctxState ctx) $ \st ->
+		let (a, newst) = runTLSState f st
+		 in newst `seq` return (newst, a)
 
 usingState_ :: MonadIO m => TLSCtx c -> TLSSt a -> m a
 usingState_ ctx f = do
