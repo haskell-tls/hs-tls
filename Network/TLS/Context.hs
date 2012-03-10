@@ -152,7 +152,9 @@ data TLSCtx a = TLSCtx
 	}
 
 updateMeasure :: MonadIO m => TLSCtx c -> (Measurement -> Measurement) -> m ()
-updateMeasure ctx f = liftIO $ modifyIORef (ctxMeasurement ctx) f
+updateMeasure ctx f = liftIO $ do
+    x <- readIORef (ctxMeasurement ctx)
+    writeIORef (ctxMeasurement ctx) $! f x
 
 withMeasure :: MonadIO m => TLSCtx c -> (Measurement -> IO a) -> m a
 withMeasure ctx f = liftIO (readIORef (ctxMeasurement ctx) >>= f)
