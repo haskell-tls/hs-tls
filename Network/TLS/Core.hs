@@ -186,7 +186,7 @@ clientWith params rng connection flushF sendF recvF =
 	where st = (newTLSState rng) { stClientContext = True }
 
 -- | Create a new Client context with a configuration, a RNG, and a Handle.
--- It reconfigures the handle buffermode to noBuffering
+-- It reconfigures the handle's 'System.IO.BufferMode' to @NoBuffering@.
 client :: (MonadIO m, CryptoRandomGen g)
        => TLSParams -- ^ parameters to use for this context
        -> g         -- ^ random number generator associated with the context
@@ -202,7 +202,7 @@ serverWith params rng connection flushF sendF recvF =
 	where st = (newTLSState rng) { stClientContext = False }
 
 -- | Create a new Server context with a configuration, a RNG, and a Handle.
--- It reconfigures the handle buffermode to noBuffering
+-- It reconfigures the handle's 'System.IO.BufferMode' to @NoBuffering@.
 server :: (MonadIO m, CryptoRandomGen g) => TLSParams -> g -> Handle -> m (TLSCtx Handle)
 server params rng handle = liftIO $ newCtx handle params st
 	where st = (newTLSState rng) { stClientContext = False }
@@ -477,7 +477,7 @@ handshakeServer ctx = do
 		_    -> fail ("unexpected handshake received, excepting client hello and received " ++ show hss)
 
 -- | Handshake for a new TLS connection
--- This is to be called at the beginning of a connection, and during renegociation
+-- This is to be called at the beginning of a connection, and during renegotiation
 handshake :: MonadIO m => TLSCtx c -> m ()
 handshake ctx = do
 	cc <- usingState_ ctx (stClientContext <$> get)
@@ -500,17 +500,17 @@ sendData ctx dataToSend = checkValid ctx >> mapM_ sendDataChunk (L.toChunks data
 			sendDataChunk remain
 		| otherwise = sendPacket ctx $ AppData d
 
--- | recvData get data out of Data packet, and automatically renegociate if
+-- | recvData get data out of Data packet, and automatically renegotiate if
 -- a Handshake ClientHello is received
 recvData :: MonadIO m => TLSCtx c -> m B.ByteString
 recvData ctx = do
 	checkValid ctx
 	pkt <- recvPacket ctx
 	case pkt of
-		-- on server context receiving a client hello == renegociation
+		-- on server context receiving a client hello == renegotiation
 		Right (Handshake [ch@(ClientHello _ _ _ _ _ _)]) ->
 			handshakeServerWith ctx ch >> recvData ctx
-		-- on client context, receiving a hello request == renegociation
+		-- on client context, receiving a hello request == renegotiation
 		Right (Handshake [HelloRequest]) ->
 			handshakeClient ctx >> recvData ctx
 		Right (Alert [(AlertLevel_Fatal, _)]) -> do
