@@ -282,5 +282,5 @@ main :: IO ()
 main = do
 	x <- cmdArgsRun mode
 	case x of
-		Client _ _ _ _ _ _ -> doClient x
-		Server _ _ _ _ _ _ _ _ -> doServer x
+		Client {} -> doClient x
+		Server {} -> doServer x
