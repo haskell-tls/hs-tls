@@ -11,9 +11,6 @@ import Data.Time.Clock (secondsToDiffTime)
 
 import Tests.PubKey
 
-readableChar :: Gen Char
-readableChar = elements (['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'])
-
 arbitraryDN = return []
 
 arbitraryTime = do
@@ -28,9 +25,11 @@ arbitraryTime = do
 	       , secondsToDiffTime (hour * 3600 + minute * 60 + second)
 	       , z)
 
+maxSerial = 16777216
+
 arbitraryX509Cert pubKey = do
 	version   <- choose (1,3)
-	serial    <- choose (0,2^24)
+	serial    <- choose (0,maxSerial)
 	issuerdn  <- arbitraryDN
 	subjectdn <- arbitraryDN
 	time1     <- arbitraryTime
