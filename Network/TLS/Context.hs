@@ -18,6 +18,7 @@ module Network.TLS.Context
 	, defaultParams
 
 	-- * Context object and accessor
+	, TLSBackend(..)
 	, TLSCtx
 	, ctxParams
 	, ctxConnection
@@ -52,6 +53,7 @@ import Network.TLS.Measurement
 import Data.Maybe
 import Data.Certificate.X509
 import Data.List (intercalate)
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
 import Control.Concurrent.MVar
@@ -138,91 +140,92 @@ data TLSCertificateUsage =
 	| CertificateUsageReject TLSCertificateRejectReason -- ^ usage of certificate rejected
 	deriving (Show,Eq)
 
--- | A TLS Context is a handle augmented by tls specific state and parameters
-data TLSCtx a = TLSCtx
-	{ ctxConnection      :: a             -- ^ return the connection object associated with this context
+-- |
+data TLSBackend = TLSBackend
+	{ backendFlush :: IO ()                -- ^ Flush the connection sending buffer, if any.
+	, backendSend  :: ByteString -> IO ()  -- ^ Send a bytestring through the connection.
+	, backendRecv  :: Int -> IO ByteString -- ^ Receive specified number of bytes from the connection.
+	}
+
+-- | A TLS Context keep tls specific state, parameters and backend information.
+data TLSCtx = TLSCtx
+	{ ctxConnection      :: TLSBackend   -- ^ return the backend object associated with this context
 	, ctxParams          :: TLSParams
 	, ctxState           :: MVar TLSState
 	, ctxMeasurement     :: IORef Measurement
 	, ctxEOF_            :: IORef Bool    -- ^ has the handle EOFed or not.
 	, ctxEstablished_    :: IORef Bool    -- ^ has the handshake been done and been successful.
-	, ctxConnectionFlush :: IO ()
-	, ctxConnectionSend  :: Bytes -> IO ()
-	, ctxConnectionRecv  :: Int -> IO Bytes
 	}
 
-updateMeasure :: MonadIO m => TLSCtx c -> (Measurement -> Measurement) -> m ()
+updateMeasure :: MonadIO m => TLSCtx -> (Measurement -> Measurement) -> m ()
 updateMeasure ctx f = liftIO $ do
     x <- readIORef (ctxMeasurement ctx)
     writeIORef (ctxMeasurement ctx) $! f x
 
-withMeasure :: MonadIO m => TLSCtx c -> (Measurement -> IO a) -> m a
+withMeasure :: MonadIO m => TLSCtx -> (Measurement -> IO a) -> m a
 withMeasure ctx f = liftIO (readIORef (ctxMeasurement ctx) >>= f)
 
-connectionFlush :: TLSCtx c -> IO ()
-connectionFlush c = ctxConnectionFlush c
+connectionFlush :: TLSCtx -> IO ()
+connectionFlush = backendFlush . ctxConnection
 
-connectionSend :: TLSCtx c -> Bytes -> IO ()
-connectionSend c b = updateMeasure c (addBytesSent $ B.length b) >> (ctxConnectionSend c) b
+connectionSend :: TLSCtx -> Bytes -> IO ()
+connectionSend c b = updateMeasure c (addBytesSent $ B.length b) >> (backendSend $ ctxConnection c) b
 
-connectionRecv :: TLSCtx c -> Int -> IO Bytes
-connectionRecv c sz = updateMeasure c (addBytesReceived sz) >> (ctxConnectionRecv c) sz
+connectionRecv :: TLSCtx -> Int -> IO Bytes
+connectionRecv c sz = updateMeasure c (addBytesReceived sz) >> (backendRecv $ ctxConnection c) sz
 
-ctxEOF :: MonadIO m => TLSCtx a -> m Bool
+ctxEOF :: MonadIO m => TLSCtx -> m Bool
 ctxEOF ctx = liftIO (readIORef $ ctxEOF_ ctx)
 
-setEOF :: MonadIO m => TLSCtx c -> m ()
+setEOF :: MonadIO m => TLSCtx -> m ()
 setEOF ctx = liftIO $ writeIORef (ctxEOF_ ctx) True
 
-ctxEstablished :: MonadIO m => TLSCtx a -> m Bool
+ctxEstablished :: MonadIO m => TLSCtx -> m Bool
 ctxEstablished ctx = liftIO $ readIORef $ ctxEstablished_ ctx
 
-setEstablished :: MonadIO m => TLSCtx c -> Bool -> m ()
+setEstablished :: MonadIO m => TLSCtx -> Bool -> m ()
 setEstablished ctx v = liftIO $ writeIORef (ctxEstablished_ ctx) v
 
-ctxLogging :: TLSCtx a -> TLSLogging
+ctxLogging :: TLSCtx -> TLSLogging
 ctxLogging = pLogging . ctxParams
 
-newCtxWith :: c -> IO () -> (Bytes -> IO ()) -> (Int -> IO Bytes) -> TLSParams -> TLSState -> IO (TLSCtx c)
-newCtxWith c flushF sendF recvF params st = do
+newCtxWith :: TLSBackend -> TLSParams -> TLSState -> IO TLSCtx
+newCtxWith backend params st = do
 	stvar <- newMVar st
 	eof   <- newIORef False
 	established <- newIORef False
 	stats <- newIORef newMeasurement
 	return $ TLSCtx
-		{ ctxConnection  = c
-		, ctxParams      = params
-		, ctxState       = stvar
-		, ctxMeasurement = stats
-		, ctxEOF_        = eof
-		, ctxEstablished_    = established
-		, ctxConnectionFlush = flushF
-		, ctxConnectionSend  = sendF
-		, ctxConnectionRecv  = recvF
+		{ ctxConnection   = backend
+		, ctxParams       = params
+		, ctxState        = stvar
+		, ctxMeasurement  = stats
+		, ctxEOF_         = eof
+		, ctxEstablished_ = established
 		}
 
-newCtx :: Handle -> TLSParams -> TLSState -> IO (TLSCtx Handle)
-newCtx handle params st = do
-	hSetBuffering handle NoBuffering
-	newCtxWith handle (hFlush handle) (B.hPut handle) (B.hGet handle) params st
+newCtx :: Handle -> TLSParams -> TLSState -> IO TLSCtx
+newCtx handle params st =
+	hSetBuffering handle NoBuffering >> newCtxWith backend params st
+	where backend = TLSBackend (hFlush handle) (B.hPut handle) (B.hGet handle)
 
 throwCore :: (MonadIO m, Exception e) => e -> m a
 throwCore = liftIO . throwIO
 
 
-usingState :: MonadIO m => TLSCtx c -> TLSSt a -> m (Either TLSError a)
+usingState :: MonadIO m => TLSCtx -> TLSSt a -> m (Either TLSError a)
 usingState ctx f =
 	liftIO $ modifyMVar (ctxState ctx) $ \st ->
 		let (a, newst) = runTLSState f st
 		 in newst `seq` return (newst, a)
 
-usingState_ :: MonadIO m => TLSCtx c -> TLSSt a -> m a
+usingState_ :: MonadIO m => TLSCtx -> TLSSt a -> m a
 usingState_ ctx f = do
 	ret <- usingState ctx f
 	case ret of
 		Left err -> throwCore err
 		Right r  -> return r
 
-getStateRNG :: MonadIO m => TLSCtx c -> Int -> m Bytes
+getStateRNG :: MonadIO m => TLSCtx -> Int -> m Bytes
 getStateRNG ctx n = usingState_ ctx (genTLSRandom n)
 

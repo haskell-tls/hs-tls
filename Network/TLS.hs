@@ -15,6 +15,9 @@ module Network.TLS
 	, defaultParams
 	, defaultLogging
 
+	-- * Backend abstraction
+	, TLSBackend(..)
+
 	-- * Context object
 	, TLSCtx
 	, ctxConnection
