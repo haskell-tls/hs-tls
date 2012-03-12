@@ -6,10 +6,8 @@ module Tests.Certificate
 import Test.QuickCheck
 import qualified Data.Certificate.X509 as X509
 import qualified Data.Certificate.X509.Cert as Cert
-import Control.Monad
 import Data.Time.Calendar (fromGregorian)
 import Data.Time.Clock (secondsToDiffTime)
-import qualified Data.ByteString as B
 
 import Tests.PubKey
 
