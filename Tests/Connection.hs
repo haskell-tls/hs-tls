@@ -12,8 +12,6 @@ import Tests.PipeChan
 import Network.TLS
 import Network.TLS.Core
 import Network.TLS.Cipher
-import Network.TLS.Crypto
-import Control.Concurrent
 
 import qualified Crypto.Random.AESCtr as RNG
 import qualified Data.ByteString as B
@@ -29,7 +27,7 @@ blockCipher = Cipher
 		, bulkKeySize   = 16
 		, bulkIVSize    = 16
 		, bulkBlockSize = 16
-		, bulkF         = BulkBlockF (\k iv m -> m) (\k iv m -> m)
+		, bulkF         = BulkBlockF (\_ _ m -> m) (\_ _ m -> m)
 		}
 	, cipherHash = Hash
 		{ hashName = "const-hash"
