@@ -508,7 +508,7 @@ recvData ctx = do
 	pkt <- recvPacket ctx
 	case pkt of
 		-- on server context receiving a client hello == renegotiation
-		Right (Handshake [ch@(ClientHello _ _ _ _ _ _)]) ->
+		Right (Handshake [ch@(ClientHello {})]) ->
 			handshakeServerWith ctx ch >> recvData ctx
 		-- on client context, receiving a hello request == renegotiation
 		Right (Handshake [HelloRequest]) ->
