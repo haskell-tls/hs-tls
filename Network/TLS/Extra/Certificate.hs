@@ -33,14 +33,20 @@ import Network.TLS (TLSCertificateUsage(..), TLSCertificateRejectReason(..))
 
 import Data.Time.Calendar
 import Data.List (find)
+import Data.Maybe (fromMaybe)
 
--- | combine many certificates checking function together.
--- if one check fail, the whole sequence of checking is cuted short and return the
--- reject reason.
+#if defined(NOCERTVERIFY)
+
+import System.IO (hPutStrLn, stderr)
+
+#endif
+
+-- | Returns 'CertificateUsageAccept' if all the checks pass, or the first 
+--   failure.
 certificateChecks :: [ [X509] -> IO TLSCertificateUsage ] -> [X509] -> IO TLSCertificateUsage
 certificateChecks checks x509s = do
-	r <- sequence $ map (\c -> c x509s) checks
-	return $ maybe CertificateUsageAccept id $ find ((/=) CertificateUsageAccept) r
+	r <- mapM (\c -> c x509s) checks
+	return $ fromMaybe CertificateUsageAccept $ find (CertificateUsageAccept /=) r
 
 #if defined(NOCERTVERIFY)
 
@@ -52,8 +58,8 @@ certificateChecks checks x509s = do
  - for now, print a big fat warning (better than nothing) and returns true  -}
 certificateVerifyChain_ :: [X509] -> IO TLSCertificateUsage
 certificateVerifyChain_ _ = do
-	putStrLn "****************** certificate verify chain doesn't yet work on your platform **********************"
-	putStrLn "please consider contributing to the certificate package to fix this issue"
+	hPutStrLn stderr "****************** certificate verify chain doesn't yet work on your platform **********************"
+	hPutStrLn stderr "please consider contributing to the certificate package to fix this issue"
 	return CertificateUsageAccept
 
 #else
@@ -113,7 +119,7 @@ certificateVerifyAgainst ux509@(X509 _ _ _ sigalg sig) (X509 scert _ _ _ _) = do
 		esig  = B.pack sig
 		pk    = certPubKey scert
 
--- | returns if this certificate is self signed.
+-- | Is this certificate self signed?
 certificateSelfSigned :: X509 -> Bool
 certificateSelfSigned x509 = certMatchDN x509 x509
 
