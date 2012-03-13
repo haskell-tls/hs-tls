@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, DeriveDataTypeable #-}
+{-# LANGUAGE ScopedTypeVariables, DeriveDataTypeable, ViewPatterns #-}
 
 import Network.TLS
 import Network.TLS.Extra
@@ -6,6 +6,7 @@ import Network.TLS.Extra
 import Data.Char
 import Data.IORef
 import Data.Time.Clock
+import Data.Certificate.X509
 
 import System.IO
 import Control.Monad
@@ -47,7 +48,7 @@ progArgs = PArgs
 	{ destination = "localhost" &= help "destination address to connect to" &= typ "address"
 	, port        = "443"       &= help "destination port to connect to" &= typ "port"
 	, chain       = False       &= help "also output the chain of certificate used"
-	, output      = "pem"       &= help "define the format of output (PEM by default)" &= typ "format"
+	, output      = "simple"    &= help "define the format of output (full, pem, default: simple)" &= typ "format"
 	, verify      = False       &= help "verify the chain received with the trusted system certificates"
 	, verifyFQDN  = ""          &= help "verify the chain against a specific fully qualified domain name (e.g. web.example.com)" &= explicit &= name "verify-domain-name"
 	} &= summary "RetrieveCertificate remotely for SSL/TLS protocol"
@@ -55,8 +56,13 @@ progArgs = PArgs
 		[ "Retrieve the remote certificate and optionally its chain from a remote destination"
 		]
 
-showCert _ cert =
-	putStrLn $ show cert
+showCert "full" cert = putStrLn $ show cert
+
+showCert _ (x509Cert -> cert)  = do
+	putStrLn ("serial:   " ++ (show $ certSerial cert))
+	putStrLn ("issuer:   " ++ (show $ certIssuerDN cert))
+	putStrLn ("subject:  " ++ (show $ certSubjectDN cert))
+	putStrLn ("validity: " ++ (show $ fst $ certValidity cert) ++ " to " ++ (show $ snd $ certValidity cert))
 
 main = do
 	a <- cmdArgs progArgs
