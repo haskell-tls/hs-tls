@@ -176,7 +176,7 @@ sendPacket ctx pkt = do
 clientWith :: (MonadIO m, CryptoRandomGen g)
            => TLSParams         -- ^ Parameters to use for this context
            -> g                 -- ^ Random number generator associated
-           -> TLSBackend        -- ^ Backend abstraction with specific methods to interact with the connection type.
+           -> Backend           -- ^ Backend abstraction with specific methods to interact with the connection type.
            -> m TLSCtx
 clientWith params rng backend =
 	liftIO $ newCtxWith backend params st
@@ -193,7 +193,7 @@ client params rng handle = liftIO $ newCtx handle params st
 	where st = (newTLSState rng) { stClientContext = True }
 
 -- | Create a new Server context with a configuration, a RNG, a generic connection and the connection operation.
-serverWith :: (MonadIO m, CryptoRandomGen g) => TLSParams -> g -> TLSBackend -> m TLSCtx
+serverWith :: (MonadIO m, CryptoRandomGen g) => TLSParams -> g -> Backend -> m TLSCtx
 serverWith params rng backend =
 	liftIO $ newCtxWith backend params st
 	where st = (newTLSState rng) { stClientContext = False }

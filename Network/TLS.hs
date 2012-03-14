@@ -8,23 +8,30 @@
 module Network.TLS
 	(
 	-- * Context configuration
-	  TLSParams(..)
-	, TLSLogging(..)
-	, TLSCertificateUsage(..)
-	, TLSCertificateRejectReason(..)
+	  Params(..)
+	, Logging(..)
+	, CertificateUsage(..)
+	, CertificateRejectReason(..)
 	, defaultParams
 	, defaultLogging
 
 	-- * Backend abstraction
-	, TLSBackend(..)
+	, Backend(..)
 
 	-- * Context object
-	, TLSCtx
+	, Context
 	, ctxConnection
 
 	-- * Creating a context
 	, client
 	, server
+
+	-- * deprecated type aliases
+	, TLSParams
+	, TLSLogging
+	, TLSCertificateUsage
+	, TLSCertificateRejectReason
+	, TLSCtx
 
 	-- * Initialisation and Termination of context
 	, bye

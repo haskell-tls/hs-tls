@@ -117,8 +117,8 @@ newPairContext pipe (cParams, sParams) = do
 	cRNG <- RNG.makeSystem
 	sRNG <- RNG.makeSystem
 
-	let cBackend = TLSBackend noFlush (writePipeA pipe) (readPipeA pipe)
-	let sBackend = TLSBackend noFlush (writePipeB pipe) (readPipeB pipe)
+	let cBackend = Backend noFlush (writePipeA pipe) (readPipeA pipe)
+	let sBackend = Backend noFlush (writePipeB pipe) (readPipeB pipe)
 	cCtx' <- clientWith cParams cRNG cBackend
 	sCtx' <- serverWith sParams sRNG sBackend
 
