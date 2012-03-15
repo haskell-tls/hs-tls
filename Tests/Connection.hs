@@ -75,14 +75,14 @@ arbitraryPairParams = do
 	clientCiphers     <- oneof [arbitraryCiphers] `suchThat` (\cs -> or [x `elem` serverCiphers | x <- cs])
 	secNeg            <- arbitrary
 
-	let serverState = defaultParams
+	let serverState = defaultParamsServer
 		{ pAllowedVersions        = allowedVersions
 		, pCiphers                = serverCiphers
 		, pCertificates           = [(servCert, Just $ PrivRSA privKey)]
 		, pUseSecureRenegotiation = secNeg
 		, pLogging                = logging "server: "
 		}
-	let clientState = defaultParams
+	let clientState = defaultParamsClient
 		{ pConnectVersion         = connectVersion
 		, pAllowedVersions        = allowedVersions
 		, pCiphers                = clientCiphers

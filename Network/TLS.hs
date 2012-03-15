@@ -12,7 +12,8 @@ module Network.TLS
 	, Logging(..)
 	, CertificateUsage(..)
 	, CertificateRejectReason(..)
-	, defaultParams
+	, defaultParamsClient
+	, defaultParamsServer
 	, defaultLogging
 
 	-- * Backend abstraction
@@ -32,6 +33,9 @@ module Network.TLS
 	, TLSCertificateUsage
 	, TLSCertificateRejectReason
 	, TLSCtx
+
+	-- * deprecated values
+	, defaultParams
 
 	-- * Initialisation and Termination of context
 	, bye

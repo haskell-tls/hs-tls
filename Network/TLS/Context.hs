@@ -15,7 +15,8 @@ module Network.TLS.Context
 	, CertificateUsage(..)
 	, CertificateRejectReason(..)
 	, defaultLogging
-	, defaultParams
+	, defaultParamsClient
+	, defaultParamsServer
 
 	-- * Context object and accessor
 	, Backend(..)
@@ -39,6 +40,9 @@ module Network.TLS.Context
 	, TLSCertificateUsage
 	, TLSCertificateRejectReason
 	, TLSCtx
+
+	-- * deprecated values
+	, defaultParams
 
 	-- * New contexts
 	, contextNew
@@ -77,6 +81,11 @@ data Logging = Logging
 	, loggingIORecv     :: Header -> B.ByteString -> IO ()
 	}
 
+data ClientParams = ClientParams
+data ServerParams = ServerParams
+
+data RoleParams = Client ClientParams | Server ServerParams
+
 data Params = Params
 	{ pConnectVersion    :: Version             -- ^ version to use on client connection.
 	, pAllowedVersions   :: [Version]           -- ^ allowed versions that we can use.
@@ -94,6 +103,7 @@ data Params = Params
 	, onSessionEstablished :: SessionID -> SessionData -> IO ()  -- ^ callback when session have been established
 	, onSessionInvalidated :: SessionID -> IO ()                 -- ^ callback when session is invalidated by error
 	, sessionResumeWith   :: Maybe (SessionID, SessionData) -- ^ try to establish a connection using this session.
+	, roleParams          :: RoleParams
 	}
 
 defaultLogging :: Logging
@@ -104,8 +114,8 @@ defaultLogging = Logging
 	, loggingIORecv     = (\_ _ -> return ())
 	}
 
-defaultParams :: Params
-defaultParams = Params
+defaultParamsClient :: Params
+defaultParamsClient = Params
 	{ pConnectVersion         = TLS10
 	, pAllowedVersions        = [TLS10,TLS11,TLS12]
 	, pCiphers                = []
@@ -121,7 +131,18 @@ defaultParams = Params
 	, onSessionEstablished    = (\_ _ -> return ())
 	, onSessionInvalidated    = (\_ -> return ())
 	, sessionResumeWith       = Nothing
+	, roleParams              = Client $ ClientParams
 	}
+
+defaultParamsServer :: Params
+defaultParamsServer = defaultParamsClient
+	{ roleParams = Server $ ServerParams
+	}
+
+defaultParams :: Params
+defaultParams = defaultParamsClient
+{-# DEPRECATED defaultParams "use defaultParamsClient" #-}
+
 
 instance Show Params where
 	show p = "Params { " ++ (intercalate "," $ map (\(k,v) -> k ++ "=" ++ v)
