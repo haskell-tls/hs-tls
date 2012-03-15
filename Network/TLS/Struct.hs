@@ -205,6 +205,7 @@ data HandshakeType =
 	| HandshakeType_CertVerify
 	| HandshakeType_ClientKeyXchg
 	| HandshakeType_Finished
+	| HandshakeType_NPN -- Next Protocol Negotiation extension
 	deriving (Show,Eq)
 
 data ServerDHParams = ServerDHParams
@@ -239,6 +240,7 @@ data Handshake =
 	| CertRequest [CertificateType] (Maybe [ (HashAlgorithm, SignatureAlgorithm) ]) [Word8]
 	| CertVerify [Word8]
 	| Finished FinishedData
+	| NextProtocolNegotiation Bytes -- NPN extension
 	deriving (Show,Eq)
 
 packetType :: Packet -> ProtocolType
@@ -248,16 +250,17 @@ packetType ChangeCipherSpec = ProtocolType_ChangeCipherSpec
 packetType (AppData _)      = ProtocolType_AppData
 
 typeOfHandshake :: Handshake -> HandshakeType
-typeOfHandshake (ClientHello _ _ _ _ _ _) = HandshakeType_ClientHello
-typeOfHandshake (ServerHello _ _ _ _ _ _) = HandshakeType_ServerHello
-typeOfHandshake (Certificates _)          = HandshakeType_Certificate
-typeOfHandshake (HelloRequest)            = HandshakeType_HelloRequest
-typeOfHandshake (ServerHelloDone)         = HandshakeType_ServerHelloDone
-typeOfHandshake (ClientKeyXchg _)         = HandshakeType_ClientKeyXchg
-typeOfHandshake (ServerKeyXchg _)         = HandshakeType_ServerKeyXchg
-typeOfHandshake (CertRequest _ _ _)       = HandshakeType_CertRequest
-typeOfHandshake (CertVerify _)            = HandshakeType_CertVerify
-typeOfHandshake (Finished _)              = HandshakeType_Finished
+typeOfHandshake (ClientHello {})             = HandshakeType_ClientHello
+typeOfHandshake (ServerHello {})             = HandshakeType_ServerHello
+typeOfHandshake (Certificates {})            = HandshakeType_Certificate
+typeOfHandshake HelloRequest                 = HandshakeType_HelloRequest
+typeOfHandshake (ServerHelloDone)            = HandshakeType_ServerHelloDone
+typeOfHandshake (ClientKeyXchg {})           = HandshakeType_ClientKeyXchg
+typeOfHandshake (ServerKeyXchg {})           = HandshakeType_ServerKeyXchg
+typeOfHandshake (CertRequest {})             = HandshakeType_CertRequest
+typeOfHandshake (CertVerify {})              = HandshakeType_CertVerify
+typeOfHandshake (Finished {})                = HandshakeType_Finished
+typeOfHandshake (NextProtocolNegotiation {}) = HandshakeType_NPN
 
 numericalVer :: Version -> (Word8, Word8)
 numericalVer SSL2  = (2, 0)
@@ -319,6 +322,7 @@ instance TypeValuable HandshakeType where
 	valOfType HandshakeType_CertVerify      = 15
 	valOfType HandshakeType_ClientKeyXchg   = 16
 	valOfType HandshakeType_Finished        = 20
+	valOfType HandshakeType_NPN             = 67
 
 	valToType 0  = Just HandshakeType_HelloRequest
 	valToType 1  = Just HandshakeType_ClientHello
@@ -330,6 +334,7 @@ instance TypeValuable HandshakeType where
 	valToType 15 = Just HandshakeType_CertVerify
 	valToType 16 = Just HandshakeType_ClientKeyXchg
 	valToType 20 = Just HandshakeType_Finished
+	valToType 67 = Just HandshakeType_NPN
 	valToType _  = Nothing
 
 instance TypeValuable AlertLevel where

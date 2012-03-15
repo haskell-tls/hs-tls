@@ -35,6 +35,12 @@ module Network.TLS.State
 	, setServerRandom
 	, setSecureRenegotiation
 	, getSecureRenegotiation
+        , setExtensionNPN
+        , getExtensionNPN
+        , setNegotiatedProtocol
+        , getNegotiatedProtocol
+        , setServerNextProtocolSuggest
+        , getServerNextProtocolSuggest
 	, getVerifiedData
 	, setSession
 	, getSession
@@ -114,6 +120,9 @@ data TLSState = TLSState
 	, stSecureRenegotiation :: Bool  -- RFC 5746
 	, stClientVerifiedData  :: Bytes -- RFC 5746
 	, stServerVerifiedData  :: Bytes -- RFC 5746
+	, stExtensionNPN        :: Bool  -- NPN draft extension
+        , stNegotiatedProtocol  :: Maybe B.ByteString -- NPN protocol
+        , stServerNextProtocolSuggest :: Maybe [B.ByteString]
 	} deriving (Show)
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrorT TLSError (State TLSState) a }
@@ -148,6 +157,9 @@ newTLSState rng = TLSState
 	, stSecureRenegotiation = False
 	, stClientVerifiedData  = B.empty
 	, stServerVerifiedData  = B.empty
+	, stExtensionNPN        = False
+        , stNegotiatedProtocol  = Nothing
+        , stServerNextProtocolSuggest = Nothing
 	}
 
 withTLSRNG :: StateRNG -> (forall g . CryptoRandomGen g => g -> Either e (a,g)) -> Either e (a, StateRNG)
@@ -207,6 +219,7 @@ finishHandshakeTypeMaterial HandshakeType_ServerKeyXchg   = True
 finishHandshakeTypeMaterial HandshakeType_CertRequest     = True
 finishHandshakeTypeMaterial HandshakeType_CertVerify      = False
 finishHandshakeTypeMaterial HandshakeType_Finished        = True
+finishHandshakeTypeMaterial HandshakeType_NPN             = True
 
 finishHandshakeMaterial :: Handshake -> Bool
 finishHandshakeMaterial = finishHandshakeTypeMaterial . typeOfHandshake
@@ -314,6 +327,24 @@ setSecureRenegotiation b = modify (\st -> st { stSecureRenegotiation = b })
 
 getSecureRenegotiation :: MonadState TLSState m => m Bool
 getSecureRenegotiation = get >>= return . stSecureRenegotiation
+
+setExtensionNPN :: MonadState TLSState m => Bool -> m ()
+setExtensionNPN b = modify (\st -> st { stExtensionNPN = b })
+
+getExtensionNPN :: MonadState TLSState m => m Bool
+getExtensionNPN = get >>= return . stExtensionNPN
+
+setNegotiatedProtocol :: MonadState TLSState m => B.ByteString -> m ()
+setNegotiatedProtocol s = modify (\st -> st { stNegotiatedProtocol = Just s })
+
+getNegotiatedProtocol :: MonadState TLSState m => m (Maybe B.ByteString)
+getNegotiatedProtocol = get >>= return . stNegotiatedProtocol
+
+setServerNextProtocolSuggest :: MonadState TLSState m => [B.ByteString] -> m ()
+setServerNextProtocolSuggest ps = modify (\st -> st { stServerNextProtocolSuggest = Just ps})
+
+getServerNextProtocolSuggest :: MonadState TLSState m => m (Maybe [B.ByteString])
+getServerNextProtocolSuggest = get >>= return . stServerNextProtocolSuggest
 
 getCipherKeyExchangeType :: MonadState TLSState m => m (Maybe CipherKeyExchangeType)
 getCipherKeyExchangeType = get >>= return . (maybe Nothing (Just . cipherKeyExchange) . stCipher)

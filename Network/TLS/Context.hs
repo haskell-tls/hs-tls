@@ -95,8 +95,8 @@ data Params = Params
 	, pCompressions      :: [Compression]       -- ^ all compression supported ordered by priority.
 	, pWantClientCert    :: Bool                -- ^ request a certificate from client.
 	                                            -- use by server only.
-	, pUseSecureRenegotiation :: Bool           -- notify that we want to use secure renegotation
-	, pUseSession             :: Bool           -- generate new session if specified
+	, pUseSecureRenegotiation :: Bool           -- ^ notify that we want to use secure renegotation
+	, pUseSession             :: Bool           -- ^ generate new session if specified
 	, pCertificates      :: [(X509, Maybe PrivateKey)] -- ^ the cert chain for this context with the associated keys if any.
 	, pLogging           :: Logging             -- ^ callback for logging
 	, onHandshake        :: Measurement -> IO Bool -- ^ callback on a beggining of handshake
@@ -104,6 +104,8 @@ data Params = Params
 	, onSessionResumption :: SessionID -> IO (Maybe SessionData) -- ^ callback to maybe resume session on server.
 	, onSessionEstablished :: SessionID -> SessionData -> IO ()  -- ^ callback when session have been established
 	, onSessionInvalidated :: SessionID -> IO ()                 -- ^ callback when session is invalidated by error
+        , onSuggestNextProtocols :: IO (Maybe [B.ByteString])       -- ^ suggested next protocols accoring to the next protocol negotiation extension.
+        , onNPNServerSuggest :: Maybe ([B.ByteString] -> IO B.ByteString)
 	, sessionResumeWith   :: Maybe (SessionID, SessionData) -- ^ try to establish a connection using this session.
 	, roleParams          :: RoleParams
 	}
@@ -132,6 +134,8 @@ defaultParamsClient = Params
 	, onSessionResumption     = (\_ -> return Nothing)
 	, onSessionEstablished    = (\_ _ -> return ())
 	, onSessionInvalidated    = (\_ -> return ())
+        , onSuggestNextProtocols  = return Nothing
+        , onNPNServerSuggest      = Nothing
 	, sessionResumeWith       = Nothing
 	, roleParams              = Client $ ClientParams
 	}

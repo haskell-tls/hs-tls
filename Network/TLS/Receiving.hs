@@ -43,9 +43,11 @@ processPacket (Record ProtocolType_ChangeCipherSpec _ fragment) = do
 
 processPacket (Record ProtocolType_Handshake ver fragment) = do
 	keyxchg <- getCipherKeyExchangeType
+        npn <- getExtensionNPN
 	let currentparams = CurrentParams
 		{ cParamsVersion     = ver
 		, cParamsKeyXchgType = maybe CipherKeyExchange_RSA id $ keyxchg
+		, cParamsSupportNPN  = npn
 		}
 	handshakes <- returnEither (decodeHandshakes $ fragmentGetBytes fragment)
 	hss <- forM handshakes $ \(ty, content) -> do
@@ -64,6 +66,9 @@ processHandshake hs = do
 		Certificates certs            -> when clientmode $ do processCertificates certs
 		ClientKeyXchg content         -> unless clientmode $ do
 			processClientKeyXchg content
+                NextProtocolNegotiation selected_protocol ->
+                        unless clientmode $ do
+                        setNegotiatedProtocol selected_protocol
 		Finished fdata                -> processClientFinished fdata
 		_                             -> return ()
 	when (finishHandshakeTypeMaterial $ typeOfHandshake hs) (updateHandshakeDigest $ encodeHandshake hs)
