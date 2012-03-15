@@ -72,14 +72,14 @@ errorToAlert _                           = Alert [(AlertLevel_Fatal, InternalErr
 handshakeFailed :: TLSError -> IO ()
 handshakeFailed err = throwIO $ HandshakeFailed err
 
-checkValid :: MonadIO m => TLSCtx -> m ()
+checkValid :: MonadIO m => Context -> m ()
 checkValid ctx = do
 	established <- ctxEstablished ctx
 	unless established $ liftIO $ throwIO ConnectionNotEstablished
 	eofed <- ctxEOF ctx
 	when eofed $ liftIO $ throwIO $ mkIOError eofErrorType "data" Nothing Nothing
 
-readExact :: MonadIO m => TLSCtx -> Int -> m Bytes
+readExact :: MonadIO m => Context -> Int -> m Bytes
 readExact ctx sz = do
 	hdrbs <- liftIO $ connectionRecv ctx sz
 	when (B.length hdrbs < sz) $ do
@@ -89,7 +89,7 @@ readExact ctx sz = do
 			else throwCore (Error_Packet ("partial packet: expecting " ++ show sz ++ " bytes, got: " ++ (show $B.length hdrbs)))
 	return hdrbs
 
-recvRecord :: MonadIO m => TLSCtx -> m (Either TLSError (Record Plaintext))
+recvRecord :: MonadIO m => Context -> m (Either TLSError (Record Plaintext))
 recvRecord ctx = readExact ctx 5 >>= either (return . Left) recvLength . decodeHeader
 	where recvLength header@(Header _ _ readlen)
 		| readlen > 16384 + 2048 = return $ Left $ Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
@@ -102,7 +102,7 @@ recvRecord ctx = readExact ctx 5 >>= either (return . Left) recvLength . decodeH
 -- | receive one packet from the context that contains 1 or
 -- many messages (many only in case of handshake). if will returns a
 -- TLSError if the packet is unexpected or malformed
-recvPacket :: MonadIO m => TLSCtx -> m (Either TLSError Packet)
+recvPacket :: MonadIO m => Context -> m (Either TLSError Packet)
 recvPacket ctx = do
 	erecord <- recvRecord ctx
 	case erecord of
@@ -114,7 +114,7 @@ recvPacket ctx = do
 				_       -> return ()
 			return pkt
 
-recvPacketHandshake :: MonadIO m => TLSCtx -> m [Handshake]
+recvPacketHandshake :: MonadIO m => Context -> m [Handshake]
 recvPacketHandshake ctx = do
 	pkts <- recvPacket ctx
 	case pkts of
@@ -127,7 +127,7 @@ data RecvState m =
 	| RecvStateHandshake (Handshake -> m (RecvState m))
 	| RecvStateDone
 
-runRecvState :: MonadIO m => TLSCtx -> RecvState m -> m ()
+runRecvState :: MonadIO m => Context -> RecvState m -> m ()
 runRecvState _   (RecvStateDone)   = return ()
 runRecvState ctx (RecvStateNext f) = recvPacket ctx >>= either throwCore f >>= runRecvState ctx
 runRecvState ctx iniState          = recvPacketHandshake ctx >>= loop iniState >>= runRecvState ctx
@@ -140,7 +140,7 @@ runRecvState ctx iniState          = recvPacketHandshake ctx >>= loop iniState >
 			loop nstate xs
 		loop _                         _   = unexpected "spurious handshake" Nothing
 
-sendChangeCipherAndFinish :: MonadIO m => TLSCtx -> Bool -> m ()
+sendChangeCipherAndFinish :: MonadIO m => Context -> Bool -> m ()
 sendChangeCipherAndFinish ctx isClient = do
 	sendPacket ctx ChangeCipherSpec
 	liftIO $ connectionFlush ctx
@@ -148,7 +148,7 @@ sendChangeCipherAndFinish ctx isClient = do
 	sendPacket ctx (Handshake [Finished cf])
 	liftIO $ connectionFlush ctx
 
-recvChangeCipherAndFinish :: MonadIO m => TLSCtx -> m ()
+recvChangeCipherAndFinish :: MonadIO m => Context -> m ()
 recvChangeCipherAndFinish ctx = runRecvState ctx (RecvStateNext expectChangeCipher)
 	where
 		expectChangeCipher ChangeCipherSpec = return $ RecvStateHandshake expectFinish
@@ -159,13 +159,13 @@ recvChangeCipherAndFinish ctx = runRecvState ctx (RecvStateNext expectChangeCiph
 unexpected :: MonadIO m => String -> Maybe [Char] -> m a
 unexpected msg expected = throwCore $ Error_Packet_unexpected msg (maybe "" (" expected: " ++) expected)
 
-newSession :: MonadIO m => TLSCtx -> m Session
+newSession :: MonadIO m => Context -> m Session
 newSession ctx
 	| pUseSession $ ctxParams ctx = getStateRNG ctx 32 >>= return . Session . Just
 	| otherwise                   = return $ Session Nothing
 
 -- | Send one packet to the context
-sendPacket :: MonadIO m => TLSCtx -> Packet -> m ()
+sendPacket :: MonadIO m => Context -> Packet -> m ()
 sendPacket ctx pkt = do
 	liftIO $ (loggingPacketSent $ ctxLogging ctx) (show pkt)
 	dataToSend <- usingState_ ctx $ writePacket pkt
@@ -174,10 +174,10 @@ sendPacket ctx pkt = do
 
 -- | Create a new Client context with a configuration, a RNG, a generic connection and the connection operation.
 clientWith :: (MonadIO m, CryptoRandomGen g)
-           => TLSParams         -- ^ Parameters to use for this context
-           -> g                 -- ^ Random number generator associated
-           -> Backend           -- ^ Backend abstraction with specific methods to interact with the connection type.
-           -> m TLSCtx
+           => Params         -- ^ Parameters to use for this context
+           -> g              -- ^ Random number generator associated
+           -> Backend        -- ^ Backend abstraction with specific methods to interact with the connection type.
+           -> m Context
 clientWith params rng backend =
 	liftIO $ newCtxWith backend params st
 	where st = (newTLSState rng) { stClientContext = True }
@@ -185,22 +185,22 @@ clientWith params rng backend =
 -- | Create a new Client context with a configuration, a RNG, and a Handle.
 -- It reconfigures the handle's 'System.IO.BufferMode' to @NoBuffering@.
 client :: (MonadIO m, CryptoRandomGen g)
-       => TLSParams -- ^ parameters to use for this context
-       -> g         -- ^ random number generator associated with the context
-       -> Handle    -- ^ handle to use
-       -> m TLSCtx
+       => Params -- ^ parameters to use for this context
+       -> g      -- ^ random number generator associated with the context
+       -> Handle -- ^ handle to use
+       -> m Context
 client params rng handle = liftIO $ newCtx handle params st
 	where st = (newTLSState rng) { stClientContext = True }
 
 -- | Create a new Server context with a configuration, a RNG, a generic connection and the connection operation.
-serverWith :: (MonadIO m, CryptoRandomGen g) => TLSParams -> g -> Backend -> m TLSCtx
+serverWith :: (MonadIO m, CryptoRandomGen g) => Params -> g -> Backend -> m Context
 serverWith params rng backend =
 	liftIO $ newCtxWith backend params st
 	where st = (newTLSState rng) { stClientContext = False }
 
 -- | Create a new Server context with a configuration, a RNG, and a Handle.
 -- It reconfigures the handle's 'System.IO.BufferMode' to @NoBuffering@.
-server :: (MonadIO m, CryptoRandomGen g) => TLSParams -> g -> Handle -> m TLSCtx
+server :: (MonadIO m, CryptoRandomGen g) => Params -> g -> Handle -> m Context
 server params rng handle = liftIO $ newCtx handle params st
 	where st = (newTLSState rng) { stClientContext = False }
 
@@ -209,11 +209,11 @@ server params rng handle = liftIO $ newCtx handle params st
 -- the session might not be resumable (for version < TLS1.2).
 --
 -- this doesn't actually close the handle
-bye :: MonadIO m => TLSCtx -> m ()
+bye :: MonadIO m => Context -> m ()
 bye ctx = sendPacket ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
 
 -- | when a new handshake is done, wrap up & clean up.
-handshakeTerminate :: MonadIO m => TLSCtx -> m ()
+handshakeTerminate :: MonadIO m => Context -> m ()
 handshakeTerminate ctx = do
 	session <- usingState_ ctx getSession
 	-- only callback the session established if we have a session
@@ -231,7 +231,7 @@ handshakeTerminate ctx = do
 
 -- client part of handshake. send a bunch of handshake of client
 -- values intertwined with response from the server.
-handshakeClient :: MonadIO m => TLSCtx -> m ()
+handshakeClient :: MonadIO m => Context -> m ()
 handshakeClient ctx = do
 	updateMeasure ctx incrementNbHandshakes
 	sendClientHello
@@ -355,7 +355,7 @@ handshakeClient ctx = do
 		certificateRejected (CertificateRejectOther s) =
 			throwCore $ Error_Protocol ("certificate rejected: " ++ s, True, CertificateUnknown)
 
-handshakeServerWith :: MonadIO m => TLSCtx -> Handshake -> m ()
+handshakeServerWith :: MonadIO m => Context -> Handshake -> m ()
 handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers compressions _) = do
 	-- check if policy allow this new handshake to happens
 	handshakeAuthorized <- withMeasure ctx (onHandshake $ ctxParams ctx)
@@ -466,7 +466,7 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
 handshakeServerWith _ _ = fail "unexpected handshake type received. expecting client hello"
 
 -- after receiving a client hello, we need to redo a handshake
-handshakeServer :: MonadIO m => TLSCtx -> m ()
+handshakeServer :: MonadIO m => Context -> m ()
 handshakeServer ctx = do
 	hss <- recvPacketHandshake ctx
 	case hss of
@@ -475,7 +475,7 @@ handshakeServer ctx = do
 
 -- | Handshake for a new TLS connection
 -- This is to be called at the beginning of a connection, and during renegotiation
-handshake :: MonadIO m => TLSCtx -> m ()
+handshake :: MonadIO m => Context -> m ()
 handshake ctx = do
 	cc <- usingState_ ctx (stClientContext <$> get)
 	liftIO $ handleException $ if cc then handshakeClient ctx else handshakeServer ctx
@@ -488,7 +488,7 @@ handshake ctx = do
 
 -- | sendData sends a bunch of data.
 -- It will automatically chunk data to acceptable packet size
-sendData :: MonadIO m => TLSCtx -> L.ByteString -> m ()
+sendData :: MonadIO m => Context -> L.ByteString -> m ()
 sendData ctx dataToSend = checkValid ctx >> mapM_ sendDataChunk (L.toChunks dataToSend)
 	where sendDataChunk d
 		| B.length d > 16384 = do
@@ -499,7 +499,7 @@ sendData ctx dataToSend = checkValid ctx >> mapM_ sendDataChunk (L.toChunks data
 
 -- | recvData get data out of Data packet, and automatically renegotiate if
 -- a Handshake ClientHello is received
-recvData :: MonadIO m => TLSCtx -> m B.ByteString
+recvData :: MonadIO m => Context -> m B.ByteString
 recvData ctx = do
 	checkValid ctx
 	pkt <- recvPacket ctx
@@ -520,5 +520,5 @@ recvData ctx = do
 		Right p           -> error ("error unexpected packet: " ++ show p)
 		Left err          -> error ("error received: " ++ show err)
 
-recvData' :: MonadIO m => TLSCtx -> m L.ByteString
+recvData' :: MonadIO m => Context -> m L.ByteString
 recvData' ctx = recvData ctx >>= return . L.fromChunks . (:[])
