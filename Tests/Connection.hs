@@ -10,7 +10,6 @@ import Tests.Certificate
 import Tests.PubKey
 import Tests.PipeChan
 import Network.TLS
-import Network.TLS.Core
 import Network.TLS.Cipher
 
 import qualified Crypto.Random.AESCtr as RNG
@@ -119,7 +118,7 @@ newPairContext pipe (cParams, sParams) = do
 
 	let cBackend = Backend noFlush (writePipeA pipe) (readPipeA pipe)
 	let sBackend = Backend noFlush (writePipeB pipe) (readPipeB pipe)
-	cCtx' <- clientWith cParams cRNG cBackend
-	sCtx' <- serverWith sParams sRNG sBackend
+	cCtx' <- contextNew cBackend cParams cRNG
+	sCtx' <- contextNew sBackend sParams sRNG
 
 	return (cCtx', sCtx')

@@ -67,6 +67,8 @@ import Data.List (intercalate)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
+import Crypto.Random
+
 import Control.Concurrent.MVar
 import Control.Monad.State
 import Control.Exception (throwIO, Exception())
@@ -224,8 +226,19 @@ setEstablished ctx v = liftIO $ writeIORef (ctxEstablished_ ctx) v
 ctxLogging :: Context -> Logging
 ctxLogging = pLogging . ctxParams
 
-contextNew :: Backend -> Params -> TLSState -> IO Context
-contextNew backend params st = do
+-- | create a new context using the backend and parameters specified.
+contextNew :: (MonadIO m, CryptoRandomGen rng)
+           => Backend   -- ^ Backend abstraction with specific method to interacat with the connection type.
+           -> Params    -- ^ Parameters of the context.
+           -> rng       -- ^ Random number generator associated with this context.
+           -> m Context
+contextNew backend params rng = liftIO $ do
+
+	let clientContext = case roleParams params of
+	                         Client {} -> True
+	                         Server {} -> False
+	let st = (newTLSState rng) { stClientContext = clientContext }
+
 	stvar <- newMVar st
 	eof   <- newIORef False
 	established <- newIORef False
@@ -239,9 +252,14 @@ contextNew backend params st = do
 		, ctxEstablished_ = established
 		}
 
-contextNewOnHandle :: Handle -> Params -> TLSState -> IO Context
+-- | create a new context on an handle.
+contextNewOnHandle :: (MonadIO m, CryptoRandomGen rng)
+                   => Handle -- ^ Handle of the connection.
+                   -> Params -- ^ Parameters of the context.
+                   -> rng    -- ^ Random number generator associated with this context.
+                   -> m Context
 contextNewOnHandle handle params st =
-	hSetBuffering handle NoBuffering >> contextNew backend params st
+	liftIO (hSetBuffering handle NoBuffering) >> contextNew backend params st
 	where backend = Backend (hFlush handle) (B.hPut handle) (B.hGet handle)
 
 throwCore :: (MonadIO m, Exception e) => e -> m a

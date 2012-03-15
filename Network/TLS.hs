@@ -24,8 +24,8 @@ module Network.TLS
 	, ctxConnection
 
 	-- * Creating a context
-	, client
-	, server
+	, contextNew
+	, contextNewOnHandle
 
 	-- * deprecated type aliases
 	, TLSParams

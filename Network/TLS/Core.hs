@@ -13,12 +13,6 @@ module Network.TLS.Core
 	  sendPacket
 	, recvPacket
 
-	-- * Creating a client or server context
-	, client
-	, clientWith
-	, server
-	, serverWith
-
 	-- * Initialisation and Termination of context
 	, bye
 	, handshake
@@ -48,11 +42,9 @@ import Data.List (intersect, find)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 
-import Crypto.Random
 import Control.Applicative ((<$>))
 import Control.Monad.State
 import Control.Exception (throwIO, Exception(), fromException, catch, SomeException)
-import System.IO (Handle)
 import System.IO.Error (mkIOError, eofErrorType)
 import Prelude hiding (catch)
 
@@ -171,38 +163,6 @@ sendPacket ctx pkt = do
 	dataToSend <- usingState_ ctx $ writePacket pkt
 	liftIO $ (loggingIOSent $ ctxLogging ctx) dataToSend
 	liftIO $ connectionSend ctx dataToSend
-
--- | Create a new Client context with a configuration, a RNG, a generic connection and the connection operation.
-clientWith :: (MonadIO m, CryptoRandomGen g)
-           => Params         -- ^ Parameters to use for this context
-           -> g              -- ^ Random number generator associated
-           -> Backend        -- ^ Backend abstraction with specific methods to interact with the connection type.
-           -> m Context
-clientWith params rng backend =
-	liftIO $ contextNew backend params st
-	where st = (newTLSState rng) { stClientContext = True }
-
--- | Create a new Client context with a configuration, a RNG, and a Handle.
--- It reconfigures the handle's 'System.IO.BufferMode' to @NoBuffering@.
-client :: (MonadIO m, CryptoRandomGen g)
-       => Params -- ^ parameters to use for this context
-       -> g      -- ^ random number generator associated with the context
-       -> Handle -- ^ handle to use
-       -> m Context
-client params rng handle = liftIO $ contextNewOnHandle handle params st
-	where st = (newTLSState rng) { stClientContext = True }
-
--- | Create a new Server context with a configuration, a RNG, a generic connection and the connection operation.
-serverWith :: (MonadIO m, CryptoRandomGen g) => Params -> g -> Backend -> m Context
-serverWith params rng backend =
-	liftIO $ contextNew backend params st
-	where st = (newTLSState rng) { stClientContext = False }
-
--- | Create a new Server context with a configuration, a RNG, and a Handle.
--- It reconfigures the handle's 'System.IO.BufferMode' to @NoBuffering@.
-server :: (MonadIO m, CryptoRandomGen g) => Params -> g -> Handle -> m Context
-server params rng handle = liftIO $ contextNewOnHandle handle params st
-	where st = (newTLSState rng) { stClientContext = False }
 
 -- | notify the context that this side wants to close connection.
 -- this is important that it is called before closing the handle, otherwise
