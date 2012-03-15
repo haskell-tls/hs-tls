@@ -179,7 +179,7 @@ clientWith :: (MonadIO m, CryptoRandomGen g)
            -> Backend        -- ^ Backend abstraction with specific methods to interact with the connection type.
            -> m Context
 clientWith params rng backend =
-	liftIO $ newCtxWith backend params st
+	liftIO $ contextNew backend params st
 	where st = (newTLSState rng) { stClientContext = True }
 
 -- | Create a new Client context with a configuration, a RNG, and a Handle.
@@ -189,19 +189,19 @@ client :: (MonadIO m, CryptoRandomGen g)
        -> g      -- ^ random number generator associated with the context
        -> Handle -- ^ handle to use
        -> m Context
-client params rng handle = liftIO $ newCtx handle params st
+client params rng handle = liftIO $ contextNewOnHandle handle params st
 	where st = (newTLSState rng) { stClientContext = True }
 
 -- | Create a new Server context with a configuration, a RNG, a generic connection and the connection operation.
 serverWith :: (MonadIO m, CryptoRandomGen g) => Params -> g -> Backend -> m Context
 serverWith params rng backend =
-	liftIO $ newCtxWith backend params st
+	liftIO $ contextNew backend params st
 	where st = (newTLSState rng) { stClientContext = False }
 
 -- | Create a new Server context with a configuration, a RNG, and a Handle.
 -- It reconfigures the handle's 'System.IO.BufferMode' to @NoBuffering@.
 server :: (MonadIO m, CryptoRandomGen g) => Params -> g -> Handle -> m Context
-server params rng handle = liftIO $ newCtx handle params st
+server params rng handle = liftIO $ contextNewOnHandle handle params st
 	where st = (newTLSState rng) { stClientContext = False }
 
 -- | notify the context that this side wants to close connection.

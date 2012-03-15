@@ -41,8 +41,8 @@ module Network.TLS.Context
 	, TLSCtx
 
 	-- * New contexts
-	, newCtxWith
-	, newCtx
+	, contextNew
+	, contextNewOnHandle
 
 	-- * Using context states
 	, throwCore
@@ -203,8 +203,8 @@ setEstablished ctx v = liftIO $ writeIORef (ctxEstablished_ ctx) v
 ctxLogging :: Context -> Logging
 ctxLogging = pLogging . ctxParams
 
-newCtxWith :: Backend -> Params -> TLSState -> IO Context
-newCtxWith backend params st = do
+contextNew :: Backend -> Params -> TLSState -> IO Context
+contextNew backend params st = do
 	stvar <- newMVar st
 	eof   <- newIORef False
 	established <- newIORef False
@@ -218,9 +218,9 @@ newCtxWith backend params st = do
 		, ctxEstablished_ = established
 		}
 
-newCtx :: Handle -> Params -> TLSState -> IO Context
-newCtx handle params st =
-	hSetBuffering handle NoBuffering >> newCtxWith backend params st
+contextNewOnHandle :: Handle -> Params -> TLSState -> IO Context
+contextNewOnHandle handle params st =
+	hSetBuffering handle NoBuffering >> contextNew backend params st
 	where backend = Backend (hFlush handle) (B.hPut handle) (B.hGet handle)
 
 throwCore :: (MonadIO m, Exception e) => e -> m a
