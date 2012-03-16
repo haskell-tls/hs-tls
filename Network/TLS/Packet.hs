@@ -41,6 +41,8 @@ module Network.TLS.Packet
 	-- * marshall extensions
 	, decodeExtSecureRenegotiation
 	, encodeExtSecureRenegotiation
+	, decodeExtNextProtocolNegotiation
+	, encodeExtNextProtocolNegotiation
 
 	-- * generate things for packet content
 	, generateMasterSecret
@@ -435,6 +437,16 @@ encodeExtSecureRenegotiation :: Bytes -> Maybe Bytes -> Bytes
 encodeExtSecureRenegotiation cvd msvd = runPut $ do
 	let svd = maybe B.empty id msvd
 	putOpaque8 (cvd `B.append` svd)
+
+decodeExtNextProtocolNegotiation :: Bytes -> Either TLSError [Bytes]
+decodeExtNextProtocolNegotiation = runGetErr "ext-next-protocol-negotiation" p
+    where p = do avail <- remaining
+                 case avail of
+                     0 -> return []
+                     _ -> do liftM2 (:) getOpaque8 p
+
+encodeExtNextProtocolNegotiation :: [Bytes] -> Bytes
+encodeExtNextProtocolNegotiation = runPut . mapM_ putOpaque8
 
 -- rsa pre master secret
 decodePreMasterSecret :: Bytes -> Either TLSError (Version, Bytes)

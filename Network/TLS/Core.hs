@@ -39,7 +39,7 @@ import Network.TLS.State hiding (getNegotiatedProtocol)
 import Network.TLS.Sending
 import Network.TLS.Receiving
 import Network.TLS.Measurement
-import Network.TLS.Wire (encodeWord16, encodeNPNAlternatives, decodeNPNAlternatives)
+import Network.TLS.Wire (encodeWord16)
 import Data.Maybe
 import Data.Data
 import Data.List (intersect, find)
@@ -282,11 +282,11 @@ handshakeClient ctx = do
 				Nothing                       -> Nothing
 			usingState_ ctx $ setSession serverSession (isJust resumingSession)
 			usingState_ ctx $ processServerHello sh
-                        case fmap decodeNPNAlternatives (lookup 13172 exts) of
+                        case decodeExtNextProtocolNegotiation `fmap` (lookup 13172 exts) of
                           Just (Right protos) -> usingState_ ctx $ do
                                                    setExtensionNPN True
                                                    setServerNextProtocolSuggest protos
-                          Just (Left err) -> throwCore (Error_Protocol ("could not decode NPN handshake: " ++ err, True, DecodeError))
+                          Just (Left err) -> throwCore (Error_Protocol ("could not decode NPN handshake: " ++ show err, True, DecodeError))
                           Nothing -> return ()
 			case resumingSession of
 				Nothing          -> return $ RecvStateHandshake processCertificate
@@ -446,7 +446,7 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
                         npnExt <- case nextProtocols of
                                     Just protos -> do usingState_ ctx $ do setExtensionNPN True
                                                                            setServerNextProtocolSuggest protos
-                                                      return [ (13172, encodeNPNAlternatives protos) ]
+                                                      return [ (13172, encodeExtNextProtocolNegotiation protos) ]
                                     Nothing -> return []
                         let extensions = secRengExt ++ npnExt
 			usingState_ ctx (setVersion ver >> setServerRandom srand)
