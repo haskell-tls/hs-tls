@@ -10,40 +10,40 @@
 -- the Struct module contains all definitions and values of the TLS protocol
 --
 module Network.TLS.Struct
-	( Bytes
-	, Version(..)
-	, ConnectionEnd(..)
-	, CipherType(..)
-	, CipherData(..)
-	, Extension
-	, CertificateType(..)
-	, HashAlgorithm(..)
-	, SignatureAlgorithm(..)
-	, ProtocolType(..)
-	, TLSError(..)
-	, ServerDHParams(..)
-	, ServerRSAParams(..)
-	, ServerKeyXchgAlgorithmData(..)
-	, Packet(..)
-	, Header(..)
-	, ServerRandom(..)
-	, ClientRandom(..)
-	, serverRandom
-	, clientRandom
-	, FinishedData
-	, SessionID
-	, Session(..)
-	, SessionData(..)
-	, AlertLevel(..)
-	, AlertDescription(..)
-	, HandshakeType(..)
-	, Handshake(..)
-	, numericalVer
-	, verOfNum
-	, TypeValuable, valOfType, valToType
-	, packetType
-	, typeOfHandshake
-	) where
+        ( Bytes
+        , Version(..)
+        , ConnectionEnd(..)
+        , CipherType(..)
+        , CipherData(..)
+        , Extension
+        , CertificateType(..)
+        , HashAlgorithm(..)
+        , SignatureAlgorithm(..)
+        , ProtocolType(..)
+        , TLSError(..)
+        , ServerDHParams(..)
+        , ServerRSAParams(..)
+        , ServerKeyXchgAlgorithmData(..)
+        , Packet(..)
+        , Header(..)
+        , ServerRandom(..)
+        , ClientRandom(..)
+        , serverRandom
+        , clientRandom
+        , FinishedData
+        , SessionID
+        , Session(..)
+        , SessionData(..)
+        , AlertLevel(..)
+        , AlertDescription(..)
+        , HandshakeType(..)
+        , Handshake(..)
+        , numericalVer
+        , verOfNum
+        , TypeValuable, valOfType, valToType
+        , packetType
+        , typeOfHandshake
+        ) where
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B (length)
@@ -64,77 +64,77 @@ data ConnectionEnd = ConnectionServer | ConnectionClient
 data CipherType = CipherStream | CipherBlock | CipherAEAD
 
 data CipherData = CipherData
-	{ cipherDataContent :: Bytes
-	, cipherDataMAC     :: Maybe Bytes
-	, cipherDataPadding :: Maybe Bytes
-	} deriving (Show,Eq)
+        { cipherDataContent :: Bytes
+        , cipherDataMAC     :: Maybe Bytes
+        , cipherDataPadding :: Maybe Bytes
+        } deriving (Show,Eq)
 
 data CertificateType =
-	  CertificateType_RSA_Sign         -- TLS10
-	| CertificateType_DSS_Sign         -- TLS10
-	| CertificateType_RSA_Fixed_DH     -- TLS10
-	| CertificateType_DSS_Fixed_DH     -- TLS10
-	| CertificateType_RSA_Ephemeral_DH -- TLS12
-	| CertificateType_DSS_Ephemeral_DH -- TLS12
-	| CertificateType_fortezza_dms     -- TLS12
-	| CertificateType_Unknown Word8
-	deriving (Show,Eq)
+          CertificateType_RSA_Sign         -- TLS10
+        | CertificateType_DSS_Sign         -- TLS10
+        | CertificateType_RSA_Fixed_DH     -- TLS10
+        | CertificateType_DSS_Fixed_DH     -- TLS10
+        | CertificateType_RSA_Ephemeral_DH -- TLS12
+        | CertificateType_DSS_Ephemeral_DH -- TLS12
+        | CertificateType_fortezza_dms     -- TLS12
+        | CertificateType_Unknown Word8
+        deriving (Show,Eq)
 
 data HashAlgorithm =
-	  HashNone
-	| HashMD5
-	| HashSHA1
-	| HashSHA224
-	| HashSHA256
-	| HashSHA384
-	| HashSHA512
-	| HashOther Word8
-	deriving (Show,Eq)
+          HashNone
+        | HashMD5
+        | HashSHA1
+        | HashSHA224
+        | HashSHA256
+        | HashSHA384
+        | HashSHA512
+        | HashOther Word8
+        deriving (Show,Eq)
 
 data SignatureAlgorithm =
-	  SignatureAnonymous
-	| SignatureRSA
-	| SignatureDSS
-	| SignatureECDSA
-	| SignatureOther Word8
-	deriving (Show,Eq)
+          SignatureAnonymous
+        | SignatureRSA
+        | SignatureDSS
+        | SignatureECDSA
+        | SignatureOther Word8
+        deriving (Show,Eq)
 
 data ProtocolType =
-	  ProtocolType_ChangeCipherSpec
-	| ProtocolType_Alert
-	| ProtocolType_Handshake
-	| ProtocolType_AppData
-	deriving (Eq, Show)
+          ProtocolType_ChangeCipherSpec
+        | ProtocolType_Alert
+        | ProtocolType_Handshake
+        | ProtocolType_AppData
+        deriving (Eq, Show)
 
 -- | TLSError that might be returned through the TLS stack
 data TLSError =
-	  Error_Misc String        -- ^ mainly for instance of Error
-	| Error_Protocol (String, Bool, AlertDescription)
-	| Error_Certificate String
-	| Error_HandshakePolicy String -- ^ handshake policy failed.
-	| Error_Random String
-	| Error_EOF
-	| Error_Packet String
-	| Error_Packet_Size_Mismatch (Int, Int)
-	| Error_Packet_unexpected String String
-	| Error_Packet_Parsing String
-	| Error_Internal_Packet_ByteProcessed Int Int Int
-	| Error_Unknown_Version Word8 Word8
-	| Error_Unknown_Type String
-	deriving (Eq, Show, Typeable)
+          Error_Misc String        -- ^ mainly for instance of Error
+        | Error_Protocol (String, Bool, AlertDescription)
+        | Error_Certificate String
+        | Error_HandshakePolicy String -- ^ handshake policy failed.
+        | Error_Random String
+        | Error_EOF
+        | Error_Packet String
+        | Error_Packet_Size_Mismatch (Int, Int)
+        | Error_Packet_unexpected String String
+        | Error_Packet_Parsing String
+        | Error_Internal_Packet_ByteProcessed Int Int Int
+        | Error_Unknown_Version Word8 Word8
+        | Error_Unknown_Type String
+        deriving (Eq, Show, Typeable)
 
 instance Error TLSError where
-	noMsg  = Error_Misc ""
-	strMsg = Error_Misc
+        noMsg  = Error_Misc ""
+        strMsg = Error_Misc
 
 instance Exception TLSError
 
 data Packet =
-	  Handshake [Handshake]
-	| Alert [(AlertLevel, AlertDescription)]
-	| ChangeCipherSpec
-	| AppData ByteString
-	deriving (Show,Eq)
+          Handshake [Handshake]
+        | Alert [(AlertLevel, AlertDescription)]
+        | ChangeCipherSpec
+        | AppData ByteString
+        deriving (Show,Eq)
 
 data Header = Header ProtocolType Version Word16 deriving (Show,Eq)
 
@@ -144,10 +144,10 @@ type SessionID = Bytes
 newtype Session = Session (Maybe SessionID) deriving (Show, Eq)
 
 data SessionData = SessionData
-	{ sessionVersion :: Version
-	, sessionCipher  :: CipherID
-	, sessionSecret  :: Bytes
-	}
+        { sessionVersion :: Version
+        , sessionCipher  :: CipherID
+        , sessionSecret  :: Bytes
+        }
 
 type CipherID = Word16
 type CompressionID = Word8
@@ -164,84 +164,84 @@ clientRandom :: Bytes -> Maybe ClientRandom
 clientRandom l = constrRandom32 ClientRandom l
 
 data AlertLevel =
-	  AlertLevel_Warning
-	| AlertLevel_Fatal
-	deriving (Show,Eq)
+          AlertLevel_Warning
+        | AlertLevel_Fatal
+        deriving (Show,Eq)
 
 data AlertDescription =
-	  CloseNotify
-	| UnexpectedMessage
-	| BadRecordMac
-	| DecryptionFailed       -- ^ deprecated alert, should never be sent by compliant implementation
-	| RecordOverflow
-	| DecompressionFailure
-	| HandshakeFailure
-	| BadCertificate
-	| UnsupportedCertificate
-	| CertificateRevoked
-	| CertificateExpired
-	| CertificateUnknown
-	| IllegalParameter
-	| UnknownCa
-	| AccessDenied
-	| DecodeError
-	| DecryptError
-	| ExportRestriction
-	| ProtocolVersion
-	| InsufficientSecurity
-	| InternalError
-	| UserCanceled
-	| NoRenegotiation
-	deriving (Show,Eq)
+          CloseNotify
+        | UnexpectedMessage
+        | BadRecordMac
+        | DecryptionFailed       -- ^ deprecated alert, should never be sent by compliant implementation
+        | RecordOverflow
+        | DecompressionFailure
+        | HandshakeFailure
+        | BadCertificate
+        | UnsupportedCertificate
+        | CertificateRevoked
+        | CertificateExpired
+        | CertificateUnknown
+        | IllegalParameter
+        | UnknownCa
+        | AccessDenied
+        | DecodeError
+        | DecryptError
+        | ExportRestriction
+        | ProtocolVersion
+        | InsufficientSecurity
+        | InternalError
+        | UserCanceled
+        | NoRenegotiation
+        deriving (Show,Eq)
 
 data HandshakeType =
-	  HandshakeType_HelloRequest
-	| HandshakeType_ClientHello
-	| HandshakeType_ServerHello
-	| HandshakeType_Certificate
-	| HandshakeType_ServerKeyXchg
-	| HandshakeType_CertRequest
-	| HandshakeType_ServerHelloDone
-	| HandshakeType_CertVerify
-	| HandshakeType_ClientKeyXchg
-	| HandshakeType_Finished
-	| HandshakeType_NPN -- Next Protocol Negotiation extension
-	deriving (Show,Eq)
+          HandshakeType_HelloRequest
+        | HandshakeType_ClientHello
+        | HandshakeType_ServerHello
+        | HandshakeType_Certificate
+        | HandshakeType_ServerKeyXchg
+        | HandshakeType_CertRequest
+        | HandshakeType_ServerHelloDone
+        | HandshakeType_CertVerify
+        | HandshakeType_ClientKeyXchg
+        | HandshakeType_Finished
+        | HandshakeType_NPN -- Next Protocol Negotiation extension
+        deriving (Show,Eq)
 
 data ServerDHParams = ServerDHParams
-	{ dh_p  :: Integer -- ^ prime modulus
-	, dh_g  :: Integer -- ^ generator
-	, dh_Ys :: Integer -- ^ public value (g^X mod p)
-	} deriving (Show,Eq)
+        { dh_p  :: Integer -- ^ prime modulus
+        , dh_g  :: Integer -- ^ generator
+        , dh_Ys :: Integer -- ^ public value (g^X mod p)
+        } deriving (Show,Eq)
 
 data ServerRSAParams = ServerRSAParams
-	{ rsa_modulus  :: Integer
-	, rsa_exponent :: Integer
-	} deriving (Show,Eq)
+        { rsa_modulus  :: Integer
+        , rsa_exponent :: Integer
+        } deriving (Show,Eq)
 
 data ServerKeyXchgAlgorithmData =
-	  SKX_DH_Anon ServerDHParams
-	| SKX_DHE_DSS ServerDHParams [Word8]
-	| SKX_DHE_RSA ServerDHParams [Word8]
-	| SKX_RSA (Maybe ServerRSAParams)
-	| SKX_DH_DSS (Maybe ServerRSAParams)
-	| SKX_DH_RSA (Maybe ServerRSAParams)
-	| SKX_Unknown Bytes
-	deriving (Show,Eq)
+          SKX_DH_Anon ServerDHParams
+        | SKX_DHE_DSS ServerDHParams [Word8]
+        | SKX_DHE_RSA ServerDHParams [Word8]
+        | SKX_RSA (Maybe ServerRSAParams)
+        | SKX_DH_DSS (Maybe ServerRSAParams)
+        | SKX_DH_RSA (Maybe ServerRSAParams)
+        | SKX_Unknown Bytes
+        deriving (Show,Eq)
 
 data Handshake =
-	  ClientHello !Version !ClientRandom !Session ![CipherID] ![CompressionID] [Extension]
-	| ServerHello !Version !ServerRandom !Session !CipherID !CompressionID [Extension]
-	| Certificates [X509]
-	| HelloRequest
-	| ServerHelloDone
-	| ClientKeyXchg Bytes
-	| ServerKeyXchg ServerKeyXchgAlgorithmData
-	| CertRequest [CertificateType] (Maybe [ (HashAlgorithm, SignatureAlgorithm) ]) [Word8]
-	| CertVerify [Word8]
-	| Finished FinishedData
-	| NextProtocolNegotiation Bytes -- NPN extension
-	deriving (Show,Eq)
+          ClientHello !Version !ClientRandom !Session ![CipherID] ![CompressionID] [Extension]
+        | ServerHello !Version !ServerRandom !Session !CipherID !CompressionID [Extension]
+        | Certificates [X509]
+        | HelloRequest
+        | ServerHelloDone
+        | ClientKeyXchg Bytes
+        | ServerKeyXchg ServerKeyXchgAlgorithmData
+        | CertRequest [CertificateType] (Maybe [ (HashAlgorithm, SignatureAlgorithm) ]) [Word8]
+        | CertVerify [Word8]
+        | Finished FinishedData
+        | NextProtocolNegotiation Bytes -- NPN extension
+        deriving (Show,Eq)
 
 packetType :: Packet -> ProtocolType
 packetType (Handshake _)    = ProtocolType_Handshake
@@ -278,170 +278,170 @@ verOfNum (3, 3) = Just TLS12
 verOfNum _      = Nothing
 
 class TypeValuable a where
-	valOfType :: a -> Word8
-	valToType :: Word8 -> Maybe a
+        valOfType :: a -> Word8
+        valToType :: Word8 -> Maybe a
 
 instance TypeValuable ConnectionEnd where
-	valOfType ConnectionServer = 0
-	valOfType ConnectionClient = 1
+        valOfType ConnectionServer = 0
+        valOfType ConnectionClient = 1
 
-	valToType 0 = Just ConnectionServer
-	valToType 1 = Just ConnectionClient
-	valToType _ = Nothing
+        valToType 0 = Just ConnectionServer
+        valToType 1 = Just ConnectionClient
+        valToType _ = Nothing
 
 instance TypeValuable CipherType where
-	valOfType CipherStream = 0
-	valOfType CipherBlock  = 1
-	valOfType CipherAEAD   = 2
+        valOfType CipherStream = 0
+        valOfType CipherBlock  = 1
+        valOfType CipherAEAD   = 2
 
-	valToType 0 = Just CipherStream
-	valToType 1 = Just CipherBlock
-	valToType 2 = Just CipherAEAD
-	valToType _ = Nothing
+        valToType 0 = Just CipherStream
+        valToType 1 = Just CipherBlock
+        valToType 2 = Just CipherAEAD
+        valToType _ = Nothing
 
 instance TypeValuable ProtocolType where
-	valOfType ProtocolType_ChangeCipherSpec = 20
-	valOfType ProtocolType_Alert            = 21
-	valOfType ProtocolType_Handshake        = 22
-	valOfType ProtocolType_AppData          = 23
+        valOfType ProtocolType_ChangeCipherSpec = 20
+        valOfType ProtocolType_Alert            = 21
+        valOfType ProtocolType_Handshake        = 22
+        valOfType ProtocolType_AppData          = 23
 
-	valToType 20 = Just ProtocolType_ChangeCipherSpec
-	valToType 21 = Just ProtocolType_Alert
-	valToType 22 = Just ProtocolType_Handshake
-	valToType 23 = Just ProtocolType_AppData
-	valToType _  = Nothing
+        valToType 20 = Just ProtocolType_ChangeCipherSpec
+        valToType 21 = Just ProtocolType_Alert
+        valToType 22 = Just ProtocolType_Handshake
+        valToType 23 = Just ProtocolType_AppData
+        valToType _  = Nothing
 
 instance TypeValuable HandshakeType where
-	valOfType HandshakeType_HelloRequest    = 0
-	valOfType HandshakeType_ClientHello     = 1
-	valOfType HandshakeType_ServerHello     = 2
-	valOfType HandshakeType_Certificate     = 11
-	valOfType HandshakeType_ServerKeyXchg   = 12
-	valOfType HandshakeType_CertRequest     = 13
-	valOfType HandshakeType_ServerHelloDone = 14
-	valOfType HandshakeType_CertVerify      = 15
-	valOfType HandshakeType_ClientKeyXchg   = 16
-	valOfType HandshakeType_Finished        = 20
-	valOfType HandshakeType_NPN             = 67
+        valOfType HandshakeType_HelloRequest    = 0
+        valOfType HandshakeType_ClientHello     = 1
+        valOfType HandshakeType_ServerHello     = 2
+        valOfType HandshakeType_Certificate     = 11
+        valOfType HandshakeType_ServerKeyXchg   = 12
+        valOfType HandshakeType_CertRequest     = 13
+        valOfType HandshakeType_ServerHelloDone = 14
+        valOfType HandshakeType_CertVerify      = 15
+        valOfType HandshakeType_ClientKeyXchg   = 16
+        valOfType HandshakeType_Finished        = 20
+        valOfType HandshakeType_NPN             = 67
 
-	valToType 0  = Just HandshakeType_HelloRequest
-	valToType 1  = Just HandshakeType_ClientHello
-	valToType 2  = Just HandshakeType_ServerHello
-	valToType 11 = Just HandshakeType_Certificate
-	valToType 12 = Just HandshakeType_ServerKeyXchg
-	valToType 13 = Just HandshakeType_CertRequest
-	valToType 14 = Just HandshakeType_ServerHelloDone
-	valToType 15 = Just HandshakeType_CertVerify
-	valToType 16 = Just HandshakeType_ClientKeyXchg
-	valToType 20 = Just HandshakeType_Finished
-	valToType 67 = Just HandshakeType_NPN
-	valToType _  = Nothing
+        valToType 0  = Just HandshakeType_HelloRequest
+        valToType 1  = Just HandshakeType_ClientHello
+        valToType 2  = Just HandshakeType_ServerHello
+        valToType 11 = Just HandshakeType_Certificate
+        valToType 12 = Just HandshakeType_ServerKeyXchg
+        valToType 13 = Just HandshakeType_CertRequest
+        valToType 14 = Just HandshakeType_ServerHelloDone
+        valToType 15 = Just HandshakeType_CertVerify
+        valToType 16 = Just HandshakeType_ClientKeyXchg
+        valToType 20 = Just HandshakeType_Finished
+        valToType 67 = Just HandshakeType_NPN
+        valToType _  = Nothing
 
 instance TypeValuable AlertLevel where
-	valOfType AlertLevel_Warning = 1
-	valOfType AlertLevel_Fatal   = 2
+        valOfType AlertLevel_Warning = 1
+        valOfType AlertLevel_Fatal   = 2
 
-	valToType 1 = Just AlertLevel_Warning
-	valToType 2 = Just AlertLevel_Fatal
-	valToType _ = Nothing
+        valToType 1 = Just AlertLevel_Warning
+        valToType 2 = Just AlertLevel_Fatal
+        valToType _ = Nothing
 
 instance TypeValuable AlertDescription where
-	valOfType CloseNotify            = 0
-	valOfType UnexpectedMessage      = 10
-	valOfType BadRecordMac           = 20
-	valOfType DecryptionFailed       = 21
-	valOfType RecordOverflow         = 22
-	valOfType DecompressionFailure   = 30
-	valOfType HandshakeFailure       = 40
-	valOfType BadCertificate         = 42
-	valOfType UnsupportedCertificate = 43
-	valOfType CertificateRevoked     = 44
-	valOfType CertificateExpired     = 45
-	valOfType CertificateUnknown     = 46
-	valOfType IllegalParameter       = 47
-	valOfType UnknownCa              = 48
-	valOfType AccessDenied           = 49
-	valOfType DecodeError            = 50
-	valOfType DecryptError           = 51
-	valOfType ExportRestriction      = 60
-	valOfType ProtocolVersion        = 70
-	valOfType InsufficientSecurity   = 71
-	valOfType InternalError          = 80
-	valOfType UserCanceled           = 90
-	valOfType NoRenegotiation        = 100
+        valOfType CloseNotify            = 0
+        valOfType UnexpectedMessage      = 10
+        valOfType BadRecordMac           = 20
+        valOfType DecryptionFailed       = 21
+        valOfType RecordOverflow         = 22
+        valOfType DecompressionFailure   = 30
+        valOfType HandshakeFailure       = 40
+        valOfType BadCertificate         = 42
+        valOfType UnsupportedCertificate = 43
+        valOfType CertificateRevoked     = 44
+        valOfType CertificateExpired     = 45
+        valOfType CertificateUnknown     = 46
+        valOfType IllegalParameter       = 47
+        valOfType UnknownCa              = 48
+        valOfType AccessDenied           = 49
+        valOfType DecodeError            = 50
+        valOfType DecryptError           = 51
+        valOfType ExportRestriction      = 60
+        valOfType ProtocolVersion        = 70
+        valOfType InsufficientSecurity   = 71
+        valOfType InternalError          = 80
+        valOfType UserCanceled           = 90
+        valOfType NoRenegotiation        = 100
 
-	valToType 0   = Just CloseNotify
-	valToType 10  = Just UnexpectedMessage
-	valToType 20  = Just BadRecordMac
-	valToType 21  = Just DecryptionFailed
-	valToType 22  = Just RecordOverflow
-	valToType 30  = Just DecompressionFailure
-	valToType 40  = Just HandshakeFailure
-	valToType 42  = Just BadCertificate
-	valToType 43  = Just UnsupportedCertificate
-	valToType 44  = Just CertificateRevoked
-	valToType 45  = Just CertificateExpired
-	valToType 46  = Just CertificateUnknown
-	valToType 47  = Just IllegalParameter
-	valToType 48  = Just UnknownCa
-	valToType 49  = Just AccessDenied
-	valToType 50  = Just DecodeError
-	valToType 51  = Just DecryptError
-	valToType 60  = Just ExportRestriction
-	valToType 70  = Just ProtocolVersion
-	valToType 71  = Just InsufficientSecurity
-	valToType 80  = Just InternalError
-	valToType 90  = Just UserCanceled
-	valToType 100 = Just NoRenegotiation
-	valToType _   = Nothing
+        valToType 0   = Just CloseNotify
+        valToType 10  = Just UnexpectedMessage
+        valToType 20  = Just BadRecordMac
+        valToType 21  = Just DecryptionFailed
+        valToType 22  = Just RecordOverflow
+        valToType 30  = Just DecompressionFailure
+        valToType 40  = Just HandshakeFailure
+        valToType 42  = Just BadCertificate
+        valToType 43  = Just UnsupportedCertificate
+        valToType 44  = Just CertificateRevoked
+        valToType 45  = Just CertificateExpired
+        valToType 46  = Just CertificateUnknown
+        valToType 47  = Just IllegalParameter
+        valToType 48  = Just UnknownCa
+        valToType 49  = Just AccessDenied
+        valToType 50  = Just DecodeError
+        valToType 51  = Just DecryptError
+        valToType 60  = Just ExportRestriction
+        valToType 70  = Just ProtocolVersion
+        valToType 71  = Just InsufficientSecurity
+        valToType 80  = Just InternalError
+        valToType 90  = Just UserCanceled
+        valToType 100 = Just NoRenegotiation
+        valToType _   = Nothing
 
 instance TypeValuable CertificateType where
-	valOfType CertificateType_RSA_Sign         = 1
-	valOfType CertificateType_DSS_Sign         = 2
-	valOfType CertificateType_RSA_Fixed_DH     = 3
-	valOfType CertificateType_DSS_Fixed_DH     = 4
-	valOfType CertificateType_RSA_Ephemeral_DH = 5
-	valOfType CertificateType_DSS_Ephemeral_DH = 6
-	valOfType CertificateType_fortezza_dms     = 20
-	valOfType (CertificateType_Unknown i)      = i
+        valOfType CertificateType_RSA_Sign         = 1
+        valOfType CertificateType_DSS_Sign         = 2
+        valOfType CertificateType_RSA_Fixed_DH     = 3
+        valOfType CertificateType_DSS_Fixed_DH     = 4
+        valOfType CertificateType_RSA_Ephemeral_DH = 5
+        valOfType CertificateType_DSS_Ephemeral_DH = 6
+        valOfType CertificateType_fortezza_dms     = 20
+        valOfType (CertificateType_Unknown i)      = i
 
-	valToType 1  = Just CertificateType_RSA_Sign
-	valToType 2  = Just CertificateType_DSS_Sign
-	valToType 3  = Just CertificateType_RSA_Fixed_DH
-	valToType 4  = Just CertificateType_DSS_Fixed_DH
-	valToType 5  = Just CertificateType_RSA_Ephemeral_DH
-	valToType 6  = Just CertificateType_DSS_Ephemeral_DH
-	valToType 20 = Just CertificateType_fortezza_dms
-	valToType i  = Just (CertificateType_Unknown i)
+        valToType 1  = Just CertificateType_RSA_Sign
+        valToType 2  = Just CertificateType_DSS_Sign
+        valToType 3  = Just CertificateType_RSA_Fixed_DH
+        valToType 4  = Just CertificateType_DSS_Fixed_DH
+        valToType 5  = Just CertificateType_RSA_Ephemeral_DH
+        valToType 6  = Just CertificateType_DSS_Ephemeral_DH
+        valToType 20 = Just CertificateType_fortezza_dms
+        valToType i  = Just (CertificateType_Unknown i)
 
 instance TypeValuable HashAlgorithm where
-	valOfType HashNone      = 0
-	valOfType HashMD5       = 1
-	valOfType HashSHA1      = 2
-	valOfType HashSHA224    = 3
-	valOfType HashSHA256    = 4
-	valOfType HashSHA384    = 5
-	valOfType HashSHA512    = 6
-	valOfType (HashOther i) = i
+        valOfType HashNone      = 0
+        valOfType HashMD5       = 1
+        valOfType HashSHA1      = 2
+        valOfType HashSHA224    = 3
+        valOfType HashSHA256    = 4
+        valOfType HashSHA384    = 5
+        valOfType HashSHA512    = 6
+        valOfType (HashOther i) = i
 
-	valToType 0 = Just HashNone
-	valToType 1 = Just HashMD5
-	valToType 2 = Just HashSHA1
-	valToType 3 = Just HashSHA224
-	valToType 4 = Just HashSHA256
-	valToType 5 = Just HashSHA384
-	valToType 6 = Just HashSHA512
-	valToType i = Just (HashOther i)
+        valToType 0 = Just HashNone
+        valToType 1 = Just HashMD5
+        valToType 2 = Just HashSHA1
+        valToType 3 = Just HashSHA224
+        valToType 4 = Just HashSHA256
+        valToType 5 = Just HashSHA384
+        valToType 6 = Just HashSHA512
+        valToType i = Just (HashOther i)
 
 instance TypeValuable SignatureAlgorithm where
-	valOfType SignatureAnonymous = 0
-	valOfType SignatureRSA       = 1
-	valOfType SignatureDSS       = 2
-	valOfType SignatureECDSA     = 3
-	valOfType (SignatureOther i) = i
+        valOfType SignatureAnonymous = 0
+        valOfType SignatureRSA       = 1
+        valOfType SignatureDSS       = 2
+        valOfType SignatureECDSA     = 3
+        valOfType (SignatureOther i) = i
 
-	valToType 0 = Just SignatureAnonymous
-	valToType 1 = Just SignatureRSA
-	valToType 2 = Just SignatureDSS
-	valToType 3 = Just SignatureECDSA
-	valToType i = Just (SignatureOther i)
+        valToType 0 = Just SignatureAnonymous
+        valToType 1 = Just SignatureRSA
+        valToType 2 = Just SignatureDSS
+        valToType 3 = Just SignatureECDSA
+        valToType i = Just (SignatureOther i)

@@ -29,17 +29,17 @@ import Network.TLS.Crypto
  -}
 makeRecord :: Packet -> TLSSt (Record Plaintext)
 makeRecord pkt = do
-	ver <- stVersion <$> get
-	content <- writePacketContent pkt
-	return $ Record (packetType pkt) ver (fragmentPlaintext content)
+        ver <- stVersion <$> get
+        content <- writePacketContent pkt
+        return $ Record (packetType pkt) ver (fragmentPlaintext content)
 
 {-
  - Handshake data need to update a digest
  -}
 processRecord :: Record Plaintext -> TLSSt (Record Plaintext)
 processRecord record@(Record ty _ fragment) = do
-	when (ty == ProtocolType_Handshake) (updateHandshakeDigest $ fragmentGetBytes fragment)
-	return record
+        when (ty == ProtocolType_Handshake) (updateHandshakeDigest $ fragmentGetBytes fragment)
+        return record
 
 {-
  - ChangeCipherSpec state change need to be handled after encryption otherwise
@@ -48,7 +48,7 @@ processRecord record@(Record ty _ fragment) = do
  -}
 postprocessRecord :: Record Ciphertext -> TLSSt (Record Ciphertext)
 postprocessRecord record@(Record ProtocolType_ChangeCipherSpec _ _) =
-	switchTxEncryption >> return record
+        switchTxEncryption >> return record
 postprocessRecord record = return record
 
 {-
@@ -56,7 +56,7 @@ postprocessRecord record = return record
  -}
 encodeRecord :: Record Ciphertext -> TLSSt ByteString
 encodeRecord record = return $ B.concat [ encodeHeader hdr, content ]
-	where (hdr, content) = recordToRaw record
+        where (hdr, content) = recordToRaw record
 
 {-
  - just update TLS state machine
@@ -66,9 +66,9 @@ preProcessPacket (Alert _)          = return ()
 preProcessPacket (AppData _)        = return ()
 preProcessPacket (ChangeCipherSpec) = return ()
 preProcessPacket (Handshake hss)    = forM_ hss $ \hs -> do
-	case hs of
-		Finished fdata -> updateVerifiedData True fdata
-		_              -> return ()
+        case hs of
+                Finished fdata -> updateVerifiedData True fdata
+                _              -> return ()
 
 {-
  - writePacket transform a packet into marshalled data related to current state
@@ -76,8 +76,8 @@ preProcessPacket (Handshake hss)    = forM_ hss $ \hs -> do
  -}
 writePacket :: Packet -> TLSSt ByteString
 writePacket pkt = do
-	preProcessPacket pkt
-	makeRecord pkt >>= processRecord >>= engageRecord >>= postprocessRecord >>= encodeRecord
+        preProcessPacket pkt
+        makeRecord pkt >>= processRecord >>= engageRecord >>= postprocessRecord >>= encodeRecord
 
 {------------------------------------------------------------------------------}
 {- SENDING Helpers                                                            -}
@@ -88,11 +88,11 @@ writePacket pkt = do
  -}
 encryptRSA :: ByteString -> TLSSt ByteString
 encryptRSA content = do
-	st <- get
-	let rsakey = fromJust "rsa public key" $ hstRSAPublicKey $ fromJust "handshake" $ stHandshake st
-	case withTLSRNG (stRandomGen st) (\g -> kxEncrypt g rsakey content) of
-		Left err               -> fail ("rsa encrypt failed: " ++ show err)
-		Right (econtent, rng') -> put (st { stRandomGen = rng' }) >> return econtent
+        st <- get
+        let rsakey = fromJust "rsa public key" $ hstRSAPublicKey $ fromJust "handshake" $ stHandshake st
+        case withTLSRNG (stRandomGen st) (\g -> kxEncrypt g rsakey content) of
+                Left err               -> fail ("rsa encrypt failed: " ++ show err)
+                Right (econtent, rng') -> put (st { stRandomGen = rng' }) >> return econtent
 
 writePacketContent :: Packet -> TLSSt ByteString
 writePacketContent (Handshake hss)    = return $ encodeHandshakes hss

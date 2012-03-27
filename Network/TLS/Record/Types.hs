@@ -13,30 +13,30 @@
 -- higher-level clients.
 --
 module Network.TLS.Record.Types
-	( Header(..)
-	, ProtocolType(..)
-	, packetType
-	-- * TLS Records
-	, Record(..)
-	-- * TLS Record fragment and constructors
-	, Fragment
-	, fragmentPlaintext
-	, fragmentCiphertext
-	, fragmentGetBytes
-	, Plaintext
-	, Compressed
-	, Ciphertext
-	-- * manipulate record
-	, onRecordFragment
-	, fragmentCompress
-	, fragmentCipher
-	, fragmentUncipher
-	, fragmentUncompress
-	-- * serialize record
-	, rawToRecord
-	, recordToRaw
-	, recordToHeader
-	) where
+        ( Header(..)
+        , ProtocolType(..)
+        , packetType
+        -- * TLS Records
+        , Record(..)
+        -- * TLS Record fragment and constructors
+        , Fragment
+        , fragmentPlaintext
+        , fragmentCiphertext
+        , fragmentGetBytes
+        , Plaintext
+        , Compressed
+        , Ciphertext
+        -- * manipulate record
+        , onRecordFragment
+        , fragmentCompress
+        , fragmentCipher
+        , fragmentUncipher
+        , fragmentUncompress
+        -- * serialize record
+        , rawToRecord
+        , recordToRaw
+        , recordToHeader
+        ) where
 
 import Network.TLS.Struct
 import Network.TLS.State

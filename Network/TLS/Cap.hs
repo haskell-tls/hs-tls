@@ -7,9 +7,9 @@
 --
 
 module Network.TLS.Cap
-	( hasHelloExtensions
-	, hasExplicitBlockIV
-	) where
+        ( hasHelloExtensions
+        , hasExplicitBlockIV
+        ) where
 
 import Network.TLS.Struct
 

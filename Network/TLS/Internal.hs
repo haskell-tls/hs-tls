@@ -7,13 +7,13 @@
 -- Portability : unknown
 --
 module Network.TLS.Internal
-	( module Network.TLS.Struct
-	, module Network.TLS.Packet
-	, module Network.TLS.Receiving
-	, module Network.TLS.Sending
-	, sendPacket
-	, recvPacket
-	) where
+        ( module Network.TLS.Struct
+        , module Network.TLS.Packet
+        , module Network.TLS.Receiving
+        , module Network.TLS.Sending
+        , sendPacket
+        , recvPacket
+        ) where
 
 import Network.TLS.Struct
 import Network.TLS.Packet
