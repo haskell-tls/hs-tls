@@ -29,6 +29,7 @@ module Network.TLS.Context
         , setEOF
         , setEstablished
         , connectionFlush
+        , connectionClose
         , connectionSend
         , connectionRecv
         , updateMeasure
@@ -73,7 +74,7 @@ import Control.Concurrent.MVar
 import Control.Monad.State
 import Control.Exception (throwIO, Exception())
 import Data.IORef
-import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush)
+import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush, hClose)
 import Prelude hiding (catch)
 
 data Logging = Logging
@@ -177,6 +178,7 @@ data CertificateUsage =
 -- |
 data Backend = Backend
         { backendFlush :: IO ()                -- ^ Flush the connection sending buffer, if any.
+        , backendClose :: IO ()                -- ^ Close the connection.
         , backendSend  :: ByteString -> IO ()  -- ^ Send a bytestring through the connection.
         , backendRecv  :: Int -> IO ByteString -- ^ Receive specified number of bytes from the connection.
         }
@@ -208,6 +210,9 @@ withMeasure ctx f = liftIO (readIORef (ctxMeasurement ctx) >>= f)
 
 connectionFlush :: Context -> IO ()
 connectionFlush = backendFlush . ctxConnection
+
+connectionClose :: Context -> IO ()
+connectionClose = backendClose . ctxConnection
 
 connectionSend :: Context -> Bytes -> IO ()
 connectionSend c b = updateMeasure c (addBytesSent $ B.length b) >> (backendSend $ ctxConnection c) b
@@ -264,7 +269,7 @@ contextNewOnHandle :: (MonadIO m, CryptoRandomGen rng)
                    -> m Context
 contextNewOnHandle handle params st =
         liftIO (hSetBuffering handle NoBuffering) >> contextNew backend params st
-        where backend = Backend (hFlush handle) (B.hPut handle) (B.hGet handle)
+        where backend = Backend (hFlush handle) (hClose handle) (B.hPut handle) (B.hGet handle)
 
 throwCore :: (MonadIO m, Exception e) => e -> m a
 throwCore = liftIO . throwIO

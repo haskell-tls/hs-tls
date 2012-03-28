@@ -112,12 +112,13 @@ setPairParamsSessionResuming sessionStuff (clientState, serverState) = (nc,ns)
 
 newPairContext pipe (cParams, sParams) = do
         let noFlush = return ()
+        let noClose = return ()
 
         cRNG <- RNG.makeSystem
         sRNG <- RNG.makeSystem
 
-        let cBackend = Backend noFlush (writePipeA pipe) (readPipeA pipe)
-        let sBackend = Backend noFlush (writePipeB pipe) (readPipeB pipe)
+        let cBackend = Backend noFlush noClose (writePipeA pipe) (readPipeA pipe)
+        let sBackend = Backend noFlush noClose (writePipeB pipe) (readPipeB pipe)
         cCtx' <- contextNew cBackend cParams cRNG
         sCtx' <- contextNew sBackend sParams sRNG
 
