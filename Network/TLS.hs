@@ -6,66 +6,66 @@
 -- Portability : unknown
 --
 module Network.TLS
-	(
-	-- * Context configuration
-	  Params(..)
-	, Logging(..)
-	, CertificateUsage(..)
-	, CertificateRejectReason(..)
-	, defaultParamsClient
-	, defaultParamsServer
-	, defaultLogging
+    (
+    -- * Context configuration
+      Params(..)
+    , Logging(..)
+    , CertificateUsage(..)
+    , CertificateRejectReason(..)
+    , defaultParamsClient
+    , defaultParamsServer
+    , defaultLogging
 
-	-- * Backend abstraction
-	, Backend(..)
+    -- * Backend abstraction
+    , Backend(..)
 
-	-- * Context object
-	, Context
-	, ctxConnection
+    -- * Context object
+    , Context
+    , ctxConnection
 
-	-- * Creating a context
-	, contextNew
-	, contextNewOnHandle
+    -- * Creating a context
+    , contextNew
+    , contextNewOnHandle
 
-	-- * deprecated type aliases
-	, TLSParams
-	, TLSLogging
-	, TLSCertificateUsage
-	, TLSCertificateRejectReason
-	, TLSCtx
+    -- * deprecated type aliases
+    , TLSParams
+    , TLSLogging
+    , TLSCertificateUsage
+    , TLSCertificateRejectReason
+    , TLSCtx
 
-	-- * deprecated values
-	, defaultParams
+    -- * deprecated values
+    , defaultParams
 
-	-- * Initialisation and Termination of context
-	, bye
-	, handshake
+    -- * Initialisation and Termination of context
+    , bye
+    , handshake
 
-	-- * Next Protocol Negotiation
-	, getNegotiatedProtocol
+    -- * Next Protocol Negotiation
+    , getNegotiatedProtocol
 
-	-- * High level API
-	, sendData
-	, recvData
-	, recvData'
+    -- * High level API
+    , sendData
+    , recvData
+    , recvData'
 
-	-- * Crypto Key
-	, PrivateKey(..)
-	-- * Compressions & Predefined compressions
-	, CompressionC(..)
-	, Compression(..)
-	, nullCompression
-	-- * Ciphers & Predefined ciphers
-	, Cipher(..)
-	, Bulk(..)
-	-- * Versions
-	, Version(..)
-	-- * Errors
-	, TLSError(..)
-	-- * Exceptions
-	, HandshakeFailed(..)
-	, ConnectionNotEstablished(..)
-	) where
+    -- * Crypto Key
+    , PrivateKey(..)
+    -- * Compressions & Predefined compressions
+    , CompressionC(..)
+    , Compression(..)
+    , nullCompression
+    -- * Ciphers & Predefined ciphers
+    , Cipher(..)
+    , Bulk(..)
+    -- * Versions
+    , Version(..)
+    -- * Errors
+    , TLSError(..)
+    -- * Exceptions
+    , HandshakeFailed(..)
+    , ConnectionNotEstablished(..)
+    ) where
 
 import Network.TLS.Struct (Version(..), TLSError(..))
 import Network.TLS.Crypto (PrivateKey(..))
