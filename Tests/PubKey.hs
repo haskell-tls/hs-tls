@@ -1,8 +1,8 @@
 module Tests.PubKey
-	( arbitraryRSAPair
-	, globalRSAPair
-	, getGlobalRSAPair
-	) where
+        ( arbitraryRSAPair
+        , globalRSAPair
+        , getGlobalRSAPair
+        ) where
 
 import Test.QuickCheck
 
@@ -16,12 +16,12 @@ import System.IO.Unsafe
 
 arbitraryRSAPair :: Gen (RSA.PublicKey, RSA.PrivateKey)
 arbitraryRSAPair = do
-	rng <- (either (error . show) id . RNG.make . B.pack) `fmap` vector 64
-	arbitraryRSAPairWithRNG rng
+        rng <- (either (error . show) id . RNG.make . B.pack) `fmap` vector 64
+        arbitraryRSAPairWithRNG rng
 
 arbitraryRSAPairWithRNG rng = case RSA.generate rng 128 65537 of
-	Left _             -> error "couldn't generate RSA"
-	Right (keypair, _) -> return keypair
+        Left _             -> error "couldn't generate RSA"
+        Right (keypair, _) -> return keypair
 
 {-# NOINLINE globalRSAPair #-}
 globalRSAPair :: MVar (RSA.PublicKey, RSA.PrivateKey)
