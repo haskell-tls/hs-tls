@@ -28,10 +28,10 @@ module Network.TLS.Context
         , ctxLogging
         , setEOF
         , setEstablished
-        , connectionFlush
-        , connectionClose
-        , connectionSend
-        , connectionRecv
+        , contextFlush
+        , contextClose
+        , contextSend
+        , contextRecv
         , updateMeasure
         , withMeasure
 
@@ -208,17 +208,17 @@ updateMeasure ctx f = liftIO $ do
 withMeasure :: MonadIO m => Context -> (Measurement -> IO a) -> m a
 withMeasure ctx f = liftIO (readIORef (ctxMeasurement ctx) >>= f)
 
-connectionFlush :: Context -> IO ()
-connectionFlush = backendFlush . ctxConnection
+contextFlush :: Context -> IO ()
+contextFlush = backendFlush . ctxConnection
 
-connectionClose :: Context -> IO ()
-connectionClose = backendClose . ctxConnection
+contextClose :: Context -> IO ()
+contextClose = backendClose . ctxConnection
 
-connectionSend :: Context -> Bytes -> IO ()
-connectionSend c b = updateMeasure c (addBytesSent $ B.length b) >> (backendSend $ ctxConnection c) b
+contextSend :: Context -> Bytes -> IO ()
+contextSend c b = updateMeasure c (addBytesSent $ B.length b) >> (backendSend $ ctxConnection c) b
 
-connectionRecv :: Context -> Int -> IO Bytes
-connectionRecv c sz = updateMeasure c (addBytesReceived sz) >> (backendRecv $ ctxConnection c) sz
+contextRecv :: Context -> Int -> IO Bytes
+contextRecv c sz = updateMeasure c (addBytesReceived sz) >> (backendRecv $ ctxConnection c) sz
 
 ctxEOF :: MonadIO m => Context -> m Bool
 ctxEOF ctx = liftIO (readIORef $ ctxEOF_ ctx)

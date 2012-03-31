@@ -26,6 +26,8 @@ module Network.TLS
     -- * Creating a context
     , contextNew
     , contextNewOnHandle
+    , contextFlush
+    , contextClose
 
     -- * deprecated type aliases
     , TLSParams

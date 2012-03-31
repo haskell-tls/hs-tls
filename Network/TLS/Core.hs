@@ -78,7 +78,7 @@ checkValid ctx = do
 
 readExact :: MonadIO m => Context -> Int -> m Bytes
 readExact ctx sz = do
-        hdrbs <- liftIO $ connectionRecv ctx sz
+        hdrbs <- liftIO $ contextRecv ctx sz
         when (B.length hdrbs < sz) $ do
                 setEOF ctx
                 if B.null hdrbs
@@ -151,10 +151,10 @@ sendChangeCipherAndFinish ctx isClient = do
             (Just _, Nothing) -> return ()
             -- client didn't offer. do nothing.
             (Nothing, _) -> return ()
-        liftIO $ connectionFlush ctx
+        liftIO $ contextFlush ctx
         cf <- usingState_ ctx $ getHandshakeDigest isClient
         sendPacket ctx (Handshake [Finished cf])
-        liftIO $ connectionFlush ctx
+        liftIO $ contextFlush ctx
 
 recvChangeCipherAndFinish :: MonadIO m => Context -> m ()
 recvChangeCipherAndFinish ctx = runRecvState ctx (RecvStateNext expectChangeCipher)
@@ -178,7 +178,7 @@ sendPacket ctx pkt = do
         liftIO $ (loggingPacketSent $ ctxLogging ctx) (show pkt)
         dataToSend <- usingState_ ctx $ writePacket pkt
         liftIO $ (loggingIOSent $ ctxLogging ctx) dataToSend
-        liftIO $ connectionSend ctx dataToSend
+        liftIO $ contextSend ctx dataToSend
 
 -- | notify the context that this side wants to close connection.
 -- this is important that it is called before closing the handle, otherwise
@@ -373,7 +373,7 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
         case resumeSessionData of
                 Nothing -> do
                         handshakeSendServerData
-                        liftIO $ connectionFlush ctx
+                        liftIO $ contextFlush ctx
 
                         -- Receive client info until client Finished.
                         recvClientData
