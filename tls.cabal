@@ -1,5 +1,5 @@
 Name:                tls
-Version:             0.9.1
+Version:             0.9.2
 Description:
    Native Haskell TLS and SSL protocol implementation for server and client.
    .
@@ -42,7 +42,7 @@ Library
                    , bytestring
                    , crypto-api >= 0.5
                    , cryptocipher >= 0.3.0
-                   , certificate >= 1.1.0 && < 1.2.0
+                   , certificate >= 1.1.1 && < 1.2.0
   Exposed-modules:   Network.TLS
                      Network.TLS.Cipher
                      Network.TLS.Compression
