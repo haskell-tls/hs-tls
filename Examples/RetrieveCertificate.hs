@@ -7,6 +7,7 @@ import Data.Char
 import Data.IORef
 import Data.Time.Clock
 import Data.Certificate.X509
+import System.Certificate.X509
 
 import System.IO
 import Control.Monad
@@ -21,7 +22,7 @@ import System.Console.CmdArgs
 openConnection s p = do
 	ref <- newIORef Nothing
 	rng <- RNG.makeSystem
-	let params = defaultParams
+	let params = defaultParamsClient
 		{ pCiphers           = ciphersuite_all
 		, onCertificatesRecv = \l -> do
 			modifyIORef ref (const $ Just l)

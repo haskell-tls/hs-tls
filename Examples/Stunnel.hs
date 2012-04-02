@@ -44,7 +44,7 @@ readOne h = do
 		Right True  -> B.hGetNonBlocking h 4096
 		Right False -> return B.empty
 
-tlsclient :: Handle -> TLSCtx Handle -> IO ()
+tlsclient :: Handle -> Context -> IO ()
 tlsclient srchandle dsthandle = do
 	hSetBuffering srchandle NoBuffering
 
@@ -75,7 +75,7 @@ tlsserver srchandle dsthandle = do
 		d <- recvData srchandle
 		putStrLn ("received: " ++ show d)
 		sendData srchandle (L.pack $ map (toEnum . fromEnum) "this is some data")
-		hFlush (ctxConnection srchandle)
+		contextFlush srchandle
 		return False
 	putStrLn "end"
 
@@ -86,7 +86,7 @@ clientProcess certs handle dsthandle dbg sessionStorage _ = do
 		, loggingPacketRecv = putStrLn . ("debug: recv: " ++)
 		}
 
-	let serverstate = defaultParams
+	let serverstate = defaultParamsServer
 		{ pAllowedVersions = [SSL3,TLS10,TLS11,TLS12]
 		, pCiphers         = ciphers
 		, pCertificates    = certs
@@ -100,7 +100,7 @@ clientProcess certs handle dsthandle dbg sessionStorage _ = do
 			, onSessionEstablished = \s d -> modifyMVar_ storage (\l -> return $ (s,d) : l)
 			}
 
-	ctx <- server serverState' rng handle
+	ctx <- contextNewOnHandle handle serverState' rng
 	tlsserver ctx dsthandle
 
 readCertificate :: FilePath -> IO X509
@@ -225,7 +225,7 @@ doClient pargs = do
 		}
 
 	let crecv = if validCert pargs then certificateVerifyChain else (\_ -> return CertificateUsageAccept)
-	let clientstate = defaultParams
+	let clientstate = defaultParamsClient
 		{ pConnectVersion = TLS10
 		, pAllowedVersions = [TLS10,TLS11,TLS12]
 		, pCiphers = ciphers
@@ -245,7 +245,7 @@ doClient pargs = do
 				(StunnelSocket dst)  <- connectAddressDescription dstaddr
 
 				dsth <- socketToHandle dst ReadWriteMode
-				dstctx <- client clientstate rng dsth
+				dstctx <- contextNewOnHandle dsth clientstate rng
 				_    <- forkIO $ finally
 					(tlsclient srch dstctx)
 					(hClose srch >> hClose dsth)

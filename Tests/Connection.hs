@@ -87,14 +87,14 @@ makeValidParams serverCerts = do
 	                 (\cs -> or [x `elem` serverCiphers | x <- cs])
 	secNeg <- arbitrary
 
-	let serverState = defaultParams
+	let serverState = defaultParamsServer
 		{ pAllowedVersions        = allowedVersions
 		, pCiphers                = serverCiphers
 		, pCertificates           = serverCerts
 		, pUseSecureRenegotiation = secNeg
 		}
 
-	let clientState = defaultParams
+	let clientState = defaultParamsClient
 		{ pConnectVersion         = connectVersion
 		, pAllowedVersions        = allowedVersions
 		, pCiphers                = clientCiphers
@@ -106,7 +106,7 @@ makeValidParams serverCerts = do
 {- | setup create all necessary connection point to create a data "pipe"
  -   ---(startQueue)---> tlsClient ---(socketPair)---> tlsServer ---(resultQueue)--->
  -}
-setup :: (TLSParams, TLSParams) -> IO (TLSCtx Handle, TLSCtx Handle, Chan a, Chan a)
+setup :: (TLSParams, TLSParams) -> IO (Context, Context, Chan a, Chan a)
 setup (clientState, serverState) = do
 	(cSocket, sSocket) <- socketPair AF_UNIX Stream defaultProtocol
 	cHandle            <- socketToHandle cSocket ReadWriteMode
@@ -120,8 +120,8 @@ setup (clientState, serverState) = do
 	startQueue  <- newChan
 	resultQueue <- newChan
 
-	cCtx <- client clientState clientRNG cHandle
-	sCtx <- server serverState serverRNG sHandle
+	cCtx <- contextNewOnHandle cHandle clientState clientRNG
+	sCtx <- contextNewOnHandle sHandle serverState serverRNG
 
 	return (cCtx, sCtx, startQueue, resultQueue)
 
@@ -147,7 +147,7 @@ testInitiate spCert = do
 	assert $ d == dres
 
 	-- cleanup
-	run $ (hClose (ctxConnection cCtx) >> hClose (ctxConnection sCtx))
+	run (contextClose cCtx >> contextClose sCtx)
 
 	where
 		tlsServer handle queue = do

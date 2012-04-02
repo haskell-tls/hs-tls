@@ -22,14 +22,14 @@ import Network.TLS
 
 -- | open a TCP client connection to a destination and port description (number or name)
 -- 
-connectionClient :: CryptoRandomGen g => String -> String -> TLSParams -> g -> IO (TLSCtx Handle)
+connectionClient :: CryptoRandomGen g => String -> String -> TLSParams -> g -> IO Context
 connectionClient s p params rng = do
 	pn <- if and $ map isDigit $ p
 		then return $ fromIntegral $ (read p :: Int)
 		else servicePort <$> getServiceByName p "tcp"
-        he <- getHostByName s
+	he <- getHostByName s
 
-	h  <- bracketOnError (socket AF_INET Stream defaultProtocol) sClose $ \sock -> do
+	h <- bracketOnError (socket AF_INET Stream defaultProtocol) sClose $ \sock -> do
 		connect sock (SockAddrInet pn (head $ hostAddresses he))
 		socketToHandle sock ReadWriteMode
-	client params rng h
+	contextNewOnHandle h params rng

@@ -29,7 +29,7 @@ import qualified Crypto.Cipher.RSA as RSA
 import qualified Crypto.Cipher.DSA as DSA
 
 import Data.Certificate.X509.Cert (oidCommonName)
-import Network.TLS (TLSCertificateUsage(..), TLSCertificateRejectReason(..))
+import Network.TLS (CertificateUsage(..), CertificateRejectReason(..))
 
 import Data.Time.Calendar
 import Data.List (find)
@@ -43,7 +43,7 @@ import System.IO (hPutStrLn, stderr)
 
 -- | Returns 'CertificateUsageAccept' if all the checks pass, or the first 
 --   failure.
-certificateChecks :: [ [X509] -> IO TLSCertificateUsage ] -> [X509] -> IO TLSCertificateUsage
+certificateChecks :: [ [X509] -> IO CertificateUsage ] -> [X509] -> IO CertificateUsage
 certificateChecks checks x509s = do
 	r <- mapM (\c -> c x509s) checks
 	return $ fromMaybe CertificateUsageAccept $ find (CertificateUsageAccept /=) r
@@ -56,14 +56,14 @@ certificateChecks checks x509s = do
 
 {- on windows and OSX, the trusted certificates are not yet accessible,
  - for now, print a big fat warning (better than nothing) and returns true  -}
-certificateVerifyChain_ :: [X509] -> IO TLSCertificateUsage
+certificateVerifyChain_ :: [X509] -> IO CertificateUsage
 certificateVerifyChain_ _ = do
 	hPutStrLn stderr "****************** certificate verify chain doesn't yet work on your platform **********************"
 	hPutStrLn stderr "please consider contributing to the certificate package to fix this issue"
 	return CertificateUsageAccept
 
 #else
-certificateVerifyChain_ :: [X509] -> IO TLSCertificateUsage
+certificateVerifyChain_ :: [X509] -> IO CertificateUsage
 certificateVerifyChain_ []     = return $ CertificateUsageReject (CertificateRejectOther "empty chain / no certificates")
 certificateVerifyChain_ (x:xs) = do
 	-- find a matching certificate that we trust (== installed on the system)
@@ -97,7 +97,7 @@ certificateVerifyChain_ (x:xs) = do
 --
 -- TODO: verify validity, check revocation list if any, add optional user output to know
 -- the rejection reason.
-certificateVerifyChain :: [X509] -> IO TLSCertificateUsage
+certificateVerifyChain :: [X509] -> IO CertificateUsage
 certificateVerifyChain = certificateVerifyChain_ . reorderList
 	where
 		reorderList []     = []
@@ -155,7 +155,7 @@ dsaSHA1Verify pk _ b = either (Left . show) (Right) $ DSA.verify asig SHA1.hash 
 rsaVerify h hdesc pk a b = either (Left . show) (Right) $ RSA.verify h hdesc pk a b
 
 -- | Verify that the given certificate chain is application to the given fully qualified host name.
-certificateVerifyDomain :: String -> [X509] -> TLSCertificateUsage
+certificateVerifyDomain :: String -> [X509] -> CertificateUsage
 certificateVerifyDomain _      []                  = CertificateUsageReject (CertificateRejectOther "empty list")
 certificateVerifyDomain fqhn (X509 cert _ _ _ _:_) =
 	let names = maybe [] ((:[]) . snd) (lookup oidCommonName $ certSubjectDN cert)
@@ -198,7 +198,7 @@ certificateVerifyDomain fqhn (X509 cert _ _ _ _:_) =
 
 -- | Verify certificate validity period that need to between the bounds of the certificate.
 -- TODO: maybe should verify whole chain.
-certificateVerifyValidity :: Day -> [X509] -> TLSCertificateUsage
+certificateVerifyValidity :: Day -> [X509] -> CertificateUsage
 certificateVerifyValidity _ []                         = CertificateUsageReject $ CertificateRejectOther "empty list"
 certificateVerifyValidity ctime (X509 cert _ _ _ _ :_) =
 	let ((beforeDay,_,_) , (afterDay,_,_)) = certValidity cert in

@@ -32,11 +32,11 @@ runTLS params hostname portNumber f = do
 	catch (connect sock sockaddr)
 	      (\(e :: SomeException) -> sClose sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
 	dsth <- socketToHandle sock ReadWriteMode
-	ctx <- client params rng dsth
+	ctx <- contextNewOnHandle dsth params rng
 	f ctx
 	hClose dsth
 
-getDefaultParams sStorage session = defaultParams
+getDefaultParams sStorage session = defaultParamsClient
 	{ pConnectVersion    = TLS10
 	, pAllowedVersions   = [TLS10,TLS11,TLS12]
 	, pCiphers           = ciphers
