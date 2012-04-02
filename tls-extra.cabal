@@ -36,7 +36,7 @@ Library
                    , vector
                    , crypto-api >= 0.5
                    , cryptocipher >= 0.3.0
-                   , certificate >= 1.1.0 && < 1.2.0
+                   , certificate >= 1.1.1 && < 1.2.0
                    , text >= 0.5 && < 1.0
                    , time
   Exposed-modules:   Network.TLS.Extra
@@ -46,7 +46,7 @@ Library
                      Network.TLS.Extra.Connection
                      Network.TLS.Extra.Thread
   ghc-options:       -Wall -fno-warn-missing-signatures
-  if os(windows) || os(osx)
+  if os(windows)
     cpp-options:     -DNOCERTVERIFY
 
 Executable           stunnel
@@ -101,6 +101,7 @@ executable           Tests
                    , HUnit
                    , QuickCheck >= 2
                    , bytestring
+                   , cprng-aes >= 0.2.3
   else
     Buildable:       False
 
