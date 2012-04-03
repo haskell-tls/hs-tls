@@ -1,0 +1,76 @@
+Name:                tls-debug
+Version:             0.1.0
+Description:
+   A set of program to test and debug various aspect of the TLS package.
+   .
+License:             BSD3
+License-file:        LICENSE
+Copyright:           Vincent Hanquez <vincent@snarc.org>
+Author:              Vincent Hanquez <vincent@snarc.org>
+Maintainer:          Vincent Hanquez <vincent@snarc.org>
+Synopsis:            Set of programs for TLS testing and debugging
+Build-Type:          Simple
+Category:            Network
+stability:           experimental
+Cabal-Version:       >=1.6
+Homepage:            http://github.com/vincenthz/hs-tls-debug
+
+Executable           tls-stunnel
+  Main-is:           Stunnel.hs
+  Hs-Source-Dirs:    src
+  Build-Depends:     base >= 4 && < 5
+                   , network
+                   , bytestring
+                   , cmdargs
+                   , certificate >= 1.0
+                   , cprng-aes >= 0.2.3
+                   , tls >= 0.9.0 && < 1.0
+                   , tls-extra >= 0.4.3 && < 0.5.0
+  Buildable:         True
+  ghc-options:       -Wall -fno-warn-missing-signatures
+
+Executable           tls-checkciphers
+  Main-is:           CheckCiphers.hs
+  Hs-Source-Dirs:    src
+  Build-Depends:     base >= 4 && < 5
+                   , network
+                   , bytestring
+                   , cprng-aes
+                   , certificate >= 1.0
+                   , tls >= 0.9.0 && < 1.0
+                   , tls-extra >= 0.4.3 && < 0.5.0
+  Buildable:         True
+  ghc-options:       -Wall -fno-warn-missing-signatures
+
+Executable           tls-retrievecertificate
+  Main-is:           RetrieveCertificate.hs
+  Hs-Source-Dirs:    src
+  Build-Depends:     base >= 4 && < 5
+                   , network
+                   , bytestring
+                   , cmdargs
+                   , time
+                   , cprng-aes >= 0.2.3
+                   , certificate >= 1.0
+                   , tls >= 0.9.0 && < 1.0
+                   , tls-extra >= 0.4.3 && < 0.5.0
+  Buildable:         True
+  ghc-options:       -Wall -fno-warn-missing-signatures
+
+Executable           tls-simpleclient
+  Main-is:           SimpleClient.hs
+  Hs-Source-Dirs:    src
+  Build-Depends:     base >= 4 && < 5
+                   , network
+                   , bytestring
+                   , cmdargs
+                   , cprng-aes >= 0.2.3
+                   , certificate >= 1.0
+                   , tls >= 0.9.0 && < 1.0
+                   , tls-extra >= 0.4.3 && < 0.5.0
+  Buildable:         True
+  ghc-options:       -Wall -fno-warn-missing-signatures
+
+source-repository head
+  type: git
+  location: git://github.com/vincenthz/hs-tls-debug
