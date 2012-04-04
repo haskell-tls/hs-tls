@@ -35,12 +35,12 @@ module Network.TLS.State
 	, setServerRandom
 	, setSecureRenegotiation
 	, getSecureRenegotiation
-        , setExtensionNPN
-        , getExtensionNPN
-        , setNegotiatedProtocol
-        , getNegotiatedProtocol
-        , setServerNextProtocolSuggest
-        , getServerNextProtocolSuggest
+	, setExtensionNPN
+	, getExtensionNPN
+	, setNegotiatedProtocol
+	, getNegotiatedProtocol
+	, setServerNextProtocolSuggest
+	, getServerNextProtocolSuggest
 	, getVerifiedData
 	, setSession
 	, getSession
@@ -121,8 +121,8 @@ data TLSState = TLSState
 	, stClientVerifiedData  :: Bytes -- RFC 5746
 	, stServerVerifiedData  :: Bytes -- RFC 5746
 	, stExtensionNPN        :: Bool  -- NPN draft extension
-        , stNegotiatedProtocol  :: Maybe B.ByteString -- NPN protocol
-        , stServerNextProtocolSuggest :: Maybe [B.ByteString]
+	, stNegotiatedProtocol  :: Maybe B.ByteString -- NPN protocol
+	, stServerNextProtocolSuggest :: Maybe [B.ByteString]
 	} deriving (Show)
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrorT TLSError (State TLSState) a }
@@ -158,8 +158,8 @@ newTLSState rng = TLSState
 	, stClientVerifiedData  = B.empty
 	, stServerVerifiedData  = B.empty
 	, stExtensionNPN        = False
-        , stNegotiatedProtocol  = Nothing
-        , stServerNextProtocolSuggest = Nothing
+	, stNegotiatedProtocol  = Nothing
+	, stServerNextProtocolSuggest = Nothing
 	}
 
 withTLSRNG :: StateRNG -> (forall g . CryptoRandomGen g => g -> Either e (a,g)) -> Either e (a, StateRNG)
@@ -397,3 +397,5 @@ getHandshakeDigest client = do
 
 endHandshake :: MonadState TLSState m => m ()
 endHandshake = modify (\st -> st { stHandshake = Nothing })
+
+-- vim: tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab

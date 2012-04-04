@@ -27,8 +27,8 @@ module Network.TLS
 	, bye
 	, handshake
 
-        -- * Next Protocol Negotiation
-        , getNegotiatedProtocol
+	-- * Next Protocol Negotiation
+	, getNegotiatedProtocol
 
 	-- * High level API
 	, sendData
@@ -59,3 +59,5 @@ import Network.TLS.Cipher (Cipher(..), Bulk(..))
 import Network.TLS.Compression (CompressionC(..), Compression(..), nullCompression)
 import Network.TLS.Context
 import Network.TLS.Core
+
+-- vim: tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab

@@ -43,7 +43,7 @@ processPacket (Record ProtocolType_ChangeCipherSpec _ fragment) = do
 
 processPacket (Record ProtocolType_Handshake ver fragment) = do
 	keyxchg <- getCipherKeyExchangeType
-        npn <- getExtensionNPN
+	npn <- getExtensionNPN
 	let currentparams = CurrentParams
 		{ cParamsVersion     = ver
 		, cParamsKeyXchgType = maybe CipherKeyExchange_RSA id $ keyxchg
@@ -66,9 +66,9 @@ processHandshake hs = do
 		Certificates certs            -> when clientmode $ do processCertificates certs
 		ClientKeyXchg content         -> unless clientmode $ do
 			processClientKeyXchg content
-                NextProtocolNegotiation selected_protocol ->
-                        unless clientmode $ do
-                        setNegotiatedProtocol selected_protocol
+		NextProtocolNegotiation selected_protocol ->
+			unless clientmode $ do
+			setNegotiatedProtocol selected_protocol
 		Finished fdata                -> processClientFinished fdata
 		_                             -> return ()
 	when (finishHandshakeTypeMaterial $ typeOfHandshake hs) (updateHandshakeDigest $ encodeHandshake hs)
@@ -139,3 +139,5 @@ processCertificates certs = do
 	case certPubKey mainCert of
 		PubKeyRSA pubkey -> setPublicKey (PubRSA pubkey)
 		_                -> return ()
+
+-- vim: tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab
