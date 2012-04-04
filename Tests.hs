@@ -186,9 +186,9 @@ prop_handshake_initiate = do
 prop_handshake_npn_initiate :: PropertyM IO ()
 prop_handshake_npn_initiate = do
 	(clientParam,serverParam) <- pick arbitraryPairParams
-        let clientParam' = clientParam { onNPNServerSuggest = Just $ \protos -> return (head protos) }
-            serverParam' = serverParam { onSuggestNextProtocols = return $ Just [C8.pack "spdy/2", C8.pack "http/1.1"] }
-            params' = (clientParam',serverParam')
+	let clientParam' = clientParam { onNPNServerSuggest = Just $ \protos -> return (head protos) }
+	let serverParam' = serverParam { onSuggestNextProtocols = return $ Just [C8.pack "spdy/2", C8.pack "http/1.1"] }
+	let params' = (clientParam',serverParam')
 	(startQueue, resultQueue) <- run (establish_data_pipe params' tlsServer tlsClient)
 
 	{- the test involves writing data on one side of the data "pipe" and
@@ -203,15 +203,15 @@ prop_handshake_npn_initiate = do
 	where
 		tlsServer ctx queue = do
 			handshake ctx
-                        proto <- getNegotiatedProtocol ctx
-                        Just (C8.pack "spdy/2") `assertEq` proto
+			protocol <- getNegotiatedProtocol ctx
+			Just (C8.pack "spdy/2") `assertEq` protocol
 			d <- recvData' ctx
 			writeChan queue d
 			return ()
 		tlsClient queue ctx = do
 			handshake ctx
-                        proto <- getNegotiatedProtocol ctx
-                        Just (C8.pack "spdy/2") `assertEq` proto
+			protocol <- getNegotiatedProtocol ctx
+			Just (C8.pack "spdy/2") `assertEq` protocol
 			d <- readChan queue
 			sendData ctx d
 			bye ctx
@@ -313,3 +313,5 @@ main = defaultMain
 			, testProperty "renegociation" (monadicIO prop_handshake_renegociation)
 			, testProperty "resumption" (monadicIO prop_handshake_session_resumption)
 			]
+
+-- vim: tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab

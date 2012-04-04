@@ -84,8 +84,8 @@ data TLSParams = TLSParams
 	, onSessionResumption :: SessionID -> IO (Maybe SessionData) -- ^ callback to maybe resume session on server.
 	, onSessionEstablished :: SessionID -> SessionData -> IO ()  -- ^ callback when session have been established
 	, onSessionInvalidated :: SessionID -> IO ()                 -- ^ callback when session is invalidated by error
-        , onSuggestNextProtocols :: IO (Maybe [B.ByteString])       -- ^ suggested next protocols accoring to the next protocol negotiation extension.
-        , onNPNServerSuggest :: Maybe ([B.ByteString] -> IO B.ByteString)
+	, onSuggestNextProtocols :: IO (Maybe [B.ByteString])       -- ^ suggested next protocols accoring to the next protocol negotiation extension.
+	, onNPNServerSuggest :: Maybe ([B.ByteString] -> IO B.ByteString) -- ^ client's callback when the server suggests to use the NPN extension.
 	, sessionResumeWith   :: Maybe (SessionID, SessionData) -- ^ try to establish a connection using this session.
 	}
 
@@ -113,8 +113,8 @@ defaultParams = TLSParams
 	, onSessionResumption     = (\_ -> return Nothing)
 	, onSessionEstablished    = (\_ _ -> return ())
 	, onSessionInvalidated    = (\_ -> return ())
-        , onSuggestNextProtocols  = return Nothing
-        , onNPNServerSuggest      = Nothing
+	, onSuggestNextProtocols  = return Nothing
+	, onNPNServerSuggest      = Nothing
 	, sessionResumeWith       = Nothing
 	}
 
@@ -211,7 +211,6 @@ newCtx handle params st = do
 throwCore :: (MonadIO m, Exception e) => e -> m a
 throwCore = liftIO . throwIO
 
-
 usingState :: MonadIO m => TLSCtx c -> TLSSt a -> m (Either TLSError a)
 usingState ctx f = liftIO (takeMVar mvar) >>= \st -> liftIO $ onException (execAndStore st) (putMVar mvar st)
 	where
@@ -231,3 +230,4 @@ usingState_ ctx f = do
 getStateRNG :: MonadIO m => TLSCtx c -> Int -> m Bytes
 getStateRNG ctx n = usingState_ ctx (genTLSRandom n)
 
+-- vim: tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab

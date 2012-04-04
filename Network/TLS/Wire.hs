@@ -36,8 +36,8 @@ module Network.TLS.Wire
 	, putOpaque24
 	, encodeWord16
 	, encodeWord64
-        , encodeNPNAlternatives
-        , decodeNPNAlternatives
+	, encodeNPNAlternatives
+	, decodeNPNAlternatives
 	) where
 
 import Data.Serialize.Get hiding (runGet)
@@ -124,9 +124,11 @@ encodeNPNAlternatives = runPut . mapM_ putOpaque8
 
 decodeNPNAlternatives :: Bytes -> Either String [Bytes]
 decodeNPNAlternatives = runGet "" p
- where
- p = do
-   avail <- remaining
-   case avail of
-     0 -> return []
-     _ -> do liftM2 (:) getOpaque8 p
+	where
+	p = do
+		avail <- remaining
+		case avail of
+			0 -> return []
+			_ -> do liftM2 (:) getOpaque8 p
+
+-- vim: tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab
