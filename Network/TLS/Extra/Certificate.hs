@@ -16,6 +16,7 @@ module Network.TLS.Extra.Certificate
 	, certificateFingerprint
 	) where
 
+import Control.Applicative ((<$>))
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Data.Certificate.X509
@@ -44,9 +45,8 @@ import System.IO (hPutStrLn, stderr)
 -- | Returns 'CertificateUsageAccept' if all the checks pass, or the first 
 --   failure.
 certificateChecks :: [ [X509] -> IO TLSCertificateUsage ] -> [X509] -> IO TLSCertificateUsage
-certificateChecks checks x509s = do
-	r <- mapM (\c -> c x509s) checks
-	return $ fromMaybe CertificateUsageAccept $ find (CertificateUsageAccept /=) r
+certificateChecks checks x509s =
+    fromMaybe CertificateUsageAccept . find (CertificateUsageAccept /=) <$> mapM ($ x509s) checks
 
 #if defined(NOCERTVERIFY)
 
