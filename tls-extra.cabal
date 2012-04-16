@@ -36,7 +36,7 @@ Library
                    , vector
                    , crypto-api >= 0.5
                    , cryptocipher >= 0.3.0
-                   , certificate >= 1.1.1 && < 1.2.0
+                   , certificate >= 1.2.0 && < 1.3.0
                    , text >= 0.5 && < 1.0
                    , time
   Exposed-modules:   Network.TLS.Extra
@@ -55,6 +55,7 @@ Executable           stunnel
     Build-Depends:   network
                    , cmdargs
                    , cprng-aes >= 0.2.3
+                   , pem >= 0.1.0
     Buildable:       True
   else
     Buildable:       False
