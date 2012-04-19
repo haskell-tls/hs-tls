@@ -16,10 +16,6 @@ import Control.Monad (when, forever)
 
 import Data.Char (isDigit)
 
-import Data.Certificate.PEM
-import Data.Certificate.X509
-import qualified Data.Certificate.KeyRSA as KeyRSA
-
 import qualified Crypto.Random.AESCtr as RNG
 import Network.TLS
 import Network.TLS.Extra
@@ -102,27 +98,6 @@ clientProcess certs handle dsthandle dbg sessionStorage _ = do
 
 	ctx <- server serverState' rng handle
 	tlsserver ctx dsthandle
-
-readCertificate :: FilePath -> IO X509
-readCertificate filepath = do
-	content <- B.readFile filepath
-	let certdata = case parsePEMCert content of
-		Nothing -> error ("no valid certificate section")
-		Just x  -> x
-	let cert = case decodeCertificate $ L.fromChunks [certdata] of
-		Left err -> error ("cannot decode certificate: " ++ err)
-		Right x  -> x
-	return cert
-
-readPrivateKey :: FilePath -> IO PrivateKey
-readPrivateKey filepath = do
-	content <- B.readFile filepath
-	let pkdata = case parsePEMKeyRSA content of
-		Nothing -> error ("no valid RSA key section")
-		Just x  -> L.fromChunks [x]
-	case KeyRSA.decodePrivate pkdata of
-		Left err     -> error ("cannot decode key: " ++ err)
-		Right (_,pk) -> return $ PrivRSA pk
 
 data Stunnel =
 	  Client
@@ -254,8 +229,8 @@ doClient pargs = do
 
 doServer :: Stunnel -> IO ()
 doServer pargs = do
-	cert    <- readCertificate $ certificate pargs
-	pk      <- readPrivateKey $ key pargs
+	cert    <- fileReadCertificate $ certificate pargs
+	pk      <- fileReadPrivateKey $ key pargs
 	srcaddr <- getAddressDescription (sourceType pargs) (source pargs)
 	dstaddr <- getAddressDescription (destinationType pargs) (destination pargs)
 
