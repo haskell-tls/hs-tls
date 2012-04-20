@@ -1,4 +1,4 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleContexts, MultiParamTypeClasses, ExistentialQuantification, RankNTypes #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleContexts, MultiParamTypeClasses, ExistentialQuantification, RankNTypes, CPP #-}
 -- |
 -- Module      : Network.TLS.State
 -- License     : BSD-style
@@ -125,6 +125,9 @@ instance Functor TLSSt where
 instance MonadState TLSState TLSSt where
 	put x = TLSSt (lift $ put x)
 	get   = TLSSt (lift get)
+#if MIN_VERSION_mtl(2,1,0)
+	state f = TLSSt (lift $ state f)
+#endif
 
 runTLSState :: TLSSt a -> TLSState -> (Either TLSError a, TLSState)
 runTLSState f st = runState (runErrorT (runTLSSt f)) st
