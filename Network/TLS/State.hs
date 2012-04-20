@@ -134,6 +134,7 @@ instance Functor TLSSt where
 instance MonadState TLSState TLSSt where
         put x = TLSSt (lift $ put x)
         get   = TLSSt (lift get)
+        state f = TLSSt (lift $ state f)
 
 runTLSState :: TLSSt a -> TLSState -> (Either TLSError a, TLSState)
 runTLSState f st = runState (runErrorT (runTLSSt f)) st
