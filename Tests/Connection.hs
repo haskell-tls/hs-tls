@@ -18,7 +18,8 @@ import Test.QuickCheck.Monadic as QM
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 
-import Data.Certificate.PEM
+import Data.Either
+import Data.PEM
 import Data.Certificate.X509
 import qualified Data.Certificate.KeyRSA as KeyRSA
 import qualified Crypto.Random.AESCtr as RNG
@@ -50,24 +51,24 @@ instance Arbitrary Word8 where
 {- helpers to prepare the tests -}
 readCertificate :: FilePath -> IO X509
 readCertificate filepath = do
-	content <- B.readFile filepath
-	let certdata = case parsePEMCert content of
-		Nothing -> error ("no valid certificate section")
-		Just x  -> x
-	let cert = case decodeCertificate $ L.fromChunks [certdata] of
-		Left err -> error ("cannot decode certificate: " ++ err)
-		Right x  -> x
-	return cert
+    certs <- rights . parseCerts . pemParseBS <$> B.readFile filepath
+    case certs of
+        []    -> error "no valid certificate found"
+        (x:_) -> return x
+    where parseCerts (Right pems) = map (decodeCertificate . L.fromChunks . (:[]) . pemContent)
+                                  $ filter (flip elem ["CERTIFICATE", "TRUSTED CERTIFICATE"] . pemName) pems
+          parseCerts (Left err) = error "cannot parse PEM file"
 
 readPrivateKey :: FilePath -> IO PrivateKey
 readPrivateKey filepath = do
-	content <- B.readFile filepath
-	let pkdata = case parsePEMKeyRSA content of
-		Nothing -> error ("no valid RSA key section")
-		Just x  -> L.fromChunks [x]
-	case KeyRSA.decodePrivate pkdata of
-		Left err -> error ("cannot decode key: " ++ err)
-		Right x  -> return $ PrivRSA $ snd x
+    pk <- rights . parseKey . pemParseBS <$> B.readFile filepath
+    case pk of
+        []    -> error "no valid RSA key found"
+        (x:_) -> return x
+
+    where parseKey (Right pems) = map (fmap (PrivRSA . snd) . KeyRSA.decodePrivate . L.fromChunks . (:[]) . pemContent)
+                                $ filter ((== "RSA PRIVATE KEY") . pemName) pems
+          parseKey (Left err) = error "Cannot parse PEM file"
 
 arbitraryVersions :: Gen [Version]
 arbitraryVersions = resize (length supportedVersions + 1) $ listOf1 (elements supportedVersions)

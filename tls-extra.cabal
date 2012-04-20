@@ -18,14 +18,6 @@ Flag test
   Description:       Build unit test
   Default:           False
 
-Flag bench
-  Description:       Build benchmarks
-  Default:           False
-
-Flag executable
-  Description:       Build the executable
-  Default:           False
-
 Library
   Build-Depends:     base > 3 && < 5
                    , tls >= 1.0.0 && < 1.1.0
@@ -35,8 +27,9 @@ Library
                    , bytestring
                    , vector
                    , crypto-api >= 0.5
-                   , cryptocipher >= 0.3.0
-                   , certificate >= 1.1.0 && < 1.2.0
+                   , cryptocipher >= 0.3.0 && < 0.4.0
+                   , certificate >= 1.2.0 && < 1.3.0
+                   , pem >= 0.1.0 && < 0.2.0
                    , text >= 0.5 && < 1.0
                    , time
   Exposed-modules:   Network.TLS.Extra
@@ -45,53 +38,10 @@ Library
                      Network.TLS.Extra.Compression
                      Network.TLS.Extra.Connection
                      Network.TLS.Extra.Thread
+                     Network.TLS.Extra.File
   ghc-options:       -Wall -fno-warn-missing-signatures
-  if os(windows) || os(osx)
+  if os(windows)
     cpp-options:     -DNOCERTVERIFY
-
-Executable           stunnel
-  Main-is:           Examples/Stunnel.hs
-  if flag(executable)
-    Build-Depends:   network
-                   , cmdargs
-                   , cprng-aes >= 0.2.3
-    Buildable:       True
-  else
-    Buildable:       False
-  ghc-options:       -Wall -fno-warn-missing-signatures
-
-Executable           checkciphers
-  Main-is:           Examples/CheckCiphers.hs
-  if flag(executable)
-    Build-Depends:   network
-                   , cmdargs
-                   , cprng-aes
-    Buildable:       True
-  else
-    Buildable:       False
-  ghc-options:       -Wall -fno-warn-missing-signatures
-
-Executable           retrievecertificate
-  Main-is:           Examples/RetrieveCertificate.hs
-  if flag(executable)
-    Build-Depends:   network
-                   , cmdargs
-                   , cprng-aes >= 0.2.3
-    Buildable:       True
-  else
-    Buildable:       False
-  ghc-options:       -Wall -fno-warn-missing-signatures
-
-Executable           simpleclient
-  Main-is:           Examples/SimpleClient.hs
-  if flag(executable)
-    Build-Depends:   network
-                   , cmdargs
-                   , cprng-aes >= 0.2.3
-    Buildable:       True
-  else
-    Buildable:       False
-  ghc-options:       -Wall -fno-warn-missing-signatures
 
 executable           Tests
   Main-is:           Tests.hs
@@ -101,6 +51,7 @@ executable           Tests
                    , HUnit
                    , QuickCheck >= 2
                    , bytestring
+                   , cprng-aes >= 0.2.3
   else
     Buildable:       False
 
