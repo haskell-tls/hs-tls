@@ -1,5 +1,5 @@
 Name:                tls
-Version:             0.9.4
+Version:             0.9.5
 Description:
    Native Haskell TLS and SSL protocol implementation for server and client.
    .
