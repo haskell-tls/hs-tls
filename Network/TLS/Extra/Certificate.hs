@@ -44,7 +44,7 @@ import System.IO (hPutStrLn, stderr)
 
 -- | Returns 'CertificateUsageAccept' if all the checks pass, or the first 
 --   failure.
-certificateChecks :: [ [X509] -> IO TLSCertificateUsage ] -> [X509] -> IO TLSCertificateUsage
+certificateChecks :: [ [X509] -> IO CertificateUsage ] -> [X509] -> IO CertificateUsage
 certificateChecks checks x509s =
     fromMaybe CertificateUsageAccept . find (CertificateUsageAccept /=) <$> mapM ($ x509s) checks
 
