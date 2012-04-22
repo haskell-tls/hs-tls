@@ -25,6 +25,7 @@ stability:           experimental
 Cabal-Version:       >=1.6
 Homepage:            http://github.com/vincenthz/hs-tls
 data-files:          README.md, TODO
+extra-source-files:  Tests/*.hs
 
 Flag test
   Description:       Build unit test
