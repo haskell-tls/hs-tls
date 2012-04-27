@@ -30,10 +30,10 @@ module Network.TLS.Core
 
 import Network.TLS.Context
 import Network.TLS.Struct
-import Network.TLS.Record
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Packet
+import Network.TLS.IO
 import qualified Network.TLS.State as S
 import Network.TLS.State hiding (getNegotiatedProtocol)
 import Network.TLS.Sending
@@ -50,17 +50,12 @@ import qualified Data.ByteString.Lazy as L
 import Control.Applicative ((<$>))
 import Control.Monad.State
 import Control.Exception (throwIO, Exception(), fromException, catch, SomeException)
-import System.IO.Error (mkIOError, eofErrorType)
 import Prelude hiding (catch)
 
 data HandshakeFailed = HandshakeFailed TLSError
         deriving (Show,Eq,Typeable)
 
-data ConnectionNotEstablished = ConnectionNotEstablished
-        deriving (Show,Eq,Typeable)
-
 instance Exception HandshakeFailed
-instance Exception ConnectionNotEstablished
 
 errorToAlert :: TLSError -> Packet
 errorToAlert (Error_Protocol (_, _, ad)) = Alert [(AlertLevel_Fatal, ad)]
@@ -68,48 +63,6 @@ errorToAlert _                           = Alert [(AlertLevel_Fatal, InternalErr
 
 handshakeFailed :: TLSError -> IO ()
 handshakeFailed err = throwIO $ HandshakeFailed err
-
-checkValid :: MonadIO m => Context -> m ()
-checkValid ctx = do
-        established <- ctxEstablished ctx
-        unless established $ liftIO $ throwIO ConnectionNotEstablished
-        eofed <- ctxEOF ctx
-        when eofed $ liftIO $ throwIO $ mkIOError eofErrorType "data" Nothing Nothing
-
-readExact :: MonadIO m => Context -> Int -> m Bytes
-readExact ctx sz = do
-        hdrbs <- liftIO $ contextRecv ctx sz
-        when (B.length hdrbs < sz) $ do
-                setEOF ctx
-                if B.null hdrbs
-                        then throwCore Error_EOF
-                        else throwCore (Error_Packet ("partial packet: expecting " ++ show sz ++ " bytes, got: " ++ (show $B.length hdrbs)))
-        return hdrbs
-
-recvRecord :: MonadIO m => Context -> m (Either TLSError (Record Plaintext))
-recvRecord ctx = readExact ctx 5 >>= either (return . Left) recvLength . decodeHeader
-        where recvLength header@(Header _ _ readlen)
-                | readlen > 16384 + 2048 = return $ Left $ Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
-                | otherwise              = do
-                        content <- readExact ctx (fromIntegral readlen)
-                        liftIO $ (loggingIORecv $ ctxLogging ctx) header content
-                        usingState ctx $ disengageRecord $ rawToRecord header (fragmentCiphertext content)
-
-
--- | receive one packet from the context that contains 1 or
--- many messages (many only in case of handshake). if will returns a
--- TLSError if the packet is unexpected or malformed
-recvPacket :: MonadIO m => Context -> m (Either TLSError Packet)
-recvPacket ctx = do
-        erecord <- recvRecord ctx
-        case erecord of
-                Left err     -> return $ Left err
-                Right record -> do
-                        pkt <- usingState ctx $ processPacket record
-                        case pkt of
-                                Right p -> liftIO $ (loggingPacketRecv $ ctxLogging ctx) $ show p
-                                _       -> return ()
-                        return pkt
 
 recvPacketHandshake :: MonadIO m => Context -> m [Handshake]
 recvPacketHandshake ctx = do
@@ -171,15 +124,6 @@ newSession :: MonadIO m => Context -> m Session
 newSession ctx
         | pUseSession $ ctxParams ctx = getStateRNG ctx 32 >>= return . Session . Just
         | otherwise                   = return $ Session Nothing
-
--- | Send one packet to the context
-sendPacket :: MonadIO m => Context -> Packet -> m ()
-sendPacket ctx pkt = do
-        liftIO $ (loggingPacketSent $ ctxLogging ctx) (show pkt)
-        dataToSend <- usingState_ ctx $ writePacket pkt
-        liftIO $ (loggingIOSent $ ctxLogging ctx) dataToSend
-        liftIO $ contextSend ctx dataToSend
-
 -- | notify the context that this side wants to close connection.
 -- this is important that it is called before closing the handle, otherwise
 -- the session might not be resumable (for version < TLS1.2).
