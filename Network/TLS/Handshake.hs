@@ -1,4 +1,11 @@
 {-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
+-- |
+-- Module      : Network.TLS.Handshake
+-- License     : BSD-style
+-- Maintainer  : Vincent Hanquez <vincent@snarc.org>
+-- Stability   : experimental
+-- Portability : unknown
+--
 module Network.TLS.Handshake
     ( handshake
     , handshakeServerWith
