@@ -59,6 +59,8 @@ False &&! False = False
 
 -- | verify that 2 bytestrings are equals.
 -- it's a non lazy version, that will compare every bytes.
--- arguments need to be of same length
+-- arguments with different length will bail out early
 bytesEq :: Bytes -> Bytes -> Bool
-bytesEq b1 = and' . B.zipWith (==) b1
+bytesEq b1 b2
+    | B.length b1 /= B.length b2 = False
+    | otherwise                  = and' $ B.zipWith (==) b1 b2
