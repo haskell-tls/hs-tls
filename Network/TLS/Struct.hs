@@ -15,7 +15,7 @@ module Network.TLS.Struct
         , ConnectionEnd(..)
         , CipherType(..)
         , CipherData(..)
-        , Extension
+        , ExtensionRaw
         , CertificateType(..)
         , HashAlgorithm(..)
         , SignatureAlgorithm(..)
@@ -152,7 +152,7 @@ data SessionData = SessionData
 type CipherID = Word16
 type CompressionID = Word8
 type FinishedData = Bytes
-type Extension = (Word16, Bytes)
+type ExtensionRaw = (Word16, Bytes)
 
 constrRandom32 :: (Bytes -> a) -> Bytes -> Maybe a
 constrRandom32 constr l = if B.length l == 32 then Just (constr l) else Nothing
@@ -230,8 +230,8 @@ data ServerKeyXchgAlgorithmData =
         deriving (Show,Eq)
 
 data Handshake =
-          ClientHello !Version !ClientRandom !Session ![CipherID] ![CompressionID] [Extension]
-        | ServerHello !Version !ServerRandom !Session !CipherID !CompressionID [Extension]
+          ClientHello !Version !ClientRandom !Session ![CipherID] ![CompressionID] [ExtensionRaw]
+        | ServerHello !Version !ServerRandom !Session !CipherID !CompressionID [ExtensionRaw]
         | Certificates [X509]
         | HelloRequest
         | ServerHelloDone

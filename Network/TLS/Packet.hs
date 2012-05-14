@@ -391,7 +391,7 @@ getCerts len = do
 putCert :: X509 -> Put
 putCert cert = putOpaque24 (B.concat $ L.toChunks $ encodeCertificate cert)
 
-getExtensions :: Int -> Get [Extension]
+getExtensions :: Int -> Get [ExtensionRaw]
 getExtensions 0   = return []
 getExtensions len = do
         extty <- getWord16
@@ -400,10 +400,10 @@ getExtensions len = do
         extxs <- getExtensions (len - fromIntegral extdatalen - 4)
         return $ (extty, extdata) : extxs
 
-putExtension :: Extension -> Put
+putExtension :: ExtensionRaw -> Put
 putExtension (ty, l) = putWord16 ty >> putOpaque16 l
 
-putExtensions :: [Extension] -> Put
+putExtensions :: [ExtensionRaw] -> Put
 putExtensions [] = return ()
 putExtensions es = putOpaque16 (runPut $ mapM_ putExtension es)
 
