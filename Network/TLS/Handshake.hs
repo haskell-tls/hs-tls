@@ -35,6 +35,8 @@ import Control.Monad.State
 import Control.Exception (throwIO, Exception(), fromException, catch, SomeException)
 import Prelude hiding (catch)
 
+npnId = 0x3374
+
 data HandshakeFailed = HandshakeFailed TLSError
         deriving (Show,Eq,Typeable)
 
@@ -154,7 +156,7 @@ handshakeClient ctx = do
                         then usingState_ ctx (getVerifiedData True) >>= \vd -> return $ Just (0xff01, encodeExtSecureRenegotiation vd Nothing)
                         else return Nothing
                 npnExtention = if isJust $ onNPNServerSuggest params
-                                 then return $ Just (13172, "")
+                                 then return $ Just (npnId, "")
                                  else return Nothing
                 sendClientHello = do
                         crand <- getStateRNG ctx 32 >>= return . ClientRandom
@@ -198,7 +200,7 @@ handshakeClient ctx = do
                                 Nothing                       -> Nothing
                         usingState_ ctx $ setSession serverSession (isJust resumingSession)
                         usingState_ ctx $ processServerHello sh
-                        case decodeExtNextProtocolNegotiation `fmap` (lookup 13172 exts) of
+                        case decodeExtNextProtocolNegotiation `fmap` (lookup npnId exts) of
                           Just (Right protos) -> usingState_ ctx $ do
                                                    setExtensionNPN True
                                                    setServerNextProtocolSuggest protos
@@ -311,7 +313,7 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
                 srvCerts           = map fst $ pCertificates params
                 privKeys           = map snd $ pCertificates params
                 needKeyXchg        = cipherExchangeNeedMoreData $ cipherKeyExchange usedCipher
-                clientRequestedNPN = isJust $ lookup 13172 exts
+                clientRequestedNPN = isJust $ lookup npnId exts
 
                 ---
                 recvClientData = runRecvState ctx (RecvStateHandshake processClientCertificate)
@@ -362,7 +364,7 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
                         npnExt <- case nextProtocols of
                                     Just protos -> do usingState_ ctx $ do setExtensionNPN True
                                                                            setServerNextProtocolSuggest protos
-                                                      return [ (13172, encodeExtNextProtocolNegotiation protos) ]
+                                                      return [ (npnId, encodeExtNextProtocolNegotiation protos) ]
                                     Nothing -> return []
                         let extensions = secRengExt ++ npnExt
                         usingState_ ctx (setVersion ver >> setServerRandom srand)
