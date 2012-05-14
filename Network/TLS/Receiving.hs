@@ -77,8 +77,7 @@ processHandshake hs = do
                 processClientExtension (0xff01, content) = do
                         v <- getVerifiedData True
                         let bs = encodeExtSecureRenegotiation v Nothing
-                        when (bs /= content) $ throwError $
-                                Error_Protocol ("client verified data not matching: " ++ show v ++ ":" ++ show content, True, HandshakeFailure)
+                        unless (bs `bytesEq` content) $ throwError $ Error_Protocol ("client verified data not matching: " ++ show v ++ ":" ++ show content, True, HandshakeFailure)
                         setSecureRenegotiation True
                 -- unknown extensions
                 processClientExtension _ = return ()
@@ -102,7 +101,7 @@ processServerHello (ServerHello sver ran _ _ _ ex) = do
                         cv <- getVerifiedData True
                         sv <- getVerifiedData False
                         let bs = encodeExtSecureRenegotiation cv (Just sv)
-                        when (bs /= content) $ throwError $ Error_Protocol ("server secure renegotiation data not matching", True, HandshakeFailure)
+                        unless (bs `bytesEq` content) $ throwError $ Error_Protocol ("server secure renegotiation data not matching", True, HandshakeFailure)
                         return ()
 
                 processServerExtension _ = return ()
