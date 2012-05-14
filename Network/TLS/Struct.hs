@@ -240,7 +240,7 @@ data Handshake =
         | CertRequest [CertificateType] (Maybe [ (HashAlgorithm, SignatureAlgorithm) ]) [Word8]
         | CertVerify [Word8]
         | Finished FinishedData
-        | NextProtocolNegotiation Bytes -- NPN extension
+        | HsNextProtocolNegotiation Bytes -- NPN extension
         deriving (Show,Eq)
 
 packetType :: Packet -> ProtocolType
@@ -260,7 +260,7 @@ typeOfHandshake (ServerKeyXchg {})           = HandshakeType_ServerKeyXchg
 typeOfHandshake (CertRequest {})             = HandshakeType_CertRequest
 typeOfHandshake (CertVerify {})              = HandshakeType_CertVerify
 typeOfHandshake (Finished {})                = HandshakeType_Finished
-typeOfHandshake (NextProtocolNegotiation {}) = HandshakeType_NPN
+typeOfHandshake (HsNextProtocolNegotiation {}) = HandshakeType_NPN
 
 numericalVer :: Version -> (Word8, Word8)
 numericalVer SSL2  = (2, 0)

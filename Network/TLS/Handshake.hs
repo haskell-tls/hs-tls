@@ -83,7 +83,7 @@ sendChangeCipherAndFinish ctx isClient = do
           case (onNPNServerSuggest (ctxParams ctx), suggest) of
             -- client offered, server picked up. send NPN handshake.
             (Just io, Just protos) -> do proto <- liftIO $ io protos
-                                         sendPacket ctx (Handshake [NextProtocolNegotiation proto])
+                                         sendPacket ctx (Handshake [HsNextProtocolNegotiation proto])
                                          usingState_ ctx $ setNegotiatedProtocol proto
             -- client offered, server didn't pick up. do nothing.
             (Just _, Nothing) -> return ()
@@ -333,8 +333,8 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
                                                                                          else expectFinish
                 expectChangeCipher p                = unexpected (show p) (Just "change cipher")
 
-                expectNPN (NextProtocolNegotiation _) = return $ RecvStateHandshake expectFinish
-                expectNPN p                           = unexpected (show p) (Just "Handshake NextProtocolNegotiation")
+                expectNPN (HsNextProtocolNegotiation _) = return $ RecvStateHandshake expectFinish
+                expectNPN p                             = unexpected (show p) (Just "Handshake NextProtocolNegotiation")
 
                 expectFinish (Finished _) = return RecvStateDone
                 expectFinish p            = unexpected (show p) (Just "Handshake Finished")

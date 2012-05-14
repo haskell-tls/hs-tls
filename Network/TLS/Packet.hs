@@ -227,7 +227,7 @@ decodeNextProtocolNegotiation :: Get Handshake
 decodeNextProtocolNegotiation = do
         opaque <- getOpaque8
         _      <- getOpaque8
-        return $ NextProtocolNegotiation opaque
+        return $ HsNextProtocolNegotiation opaque
 
 getSignatureHashAlgorithm :: Get (HashAlgorithm, SignatureAlgorithm)
 getSignatureHashAlgorithm = do
@@ -345,7 +345,7 @@ encodeHandshakeContent (CertVerify _) = undefined
 
 encodeHandshakeContent (Finished opaque) = putBytes opaque
 
-encodeHandshakeContent (NextProtocolNegotiation protocol) = do
+encodeHandshakeContent (HsNextProtocolNegotiation protocol) = do
         putOpaque8 protocol
         putOpaque8 $ B.replicate paddingLen 0
         where paddingLen = 32 - ((B.length protocol + 2) `mod` 32)
