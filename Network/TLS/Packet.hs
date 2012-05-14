@@ -77,9 +77,6 @@ data CurrentParams = CurrentParams
         , cParamsSupportNPN  :: Bool                  -- ^ support Next Protocol Negotiation extension
         } deriving (Show,Eq)
 
-runGetErr :: String -> Get a -> ByteString -> Either TLSError a
-runGetErr lbl f = either (Left . Error_Packet_Parsing) Right . runGet lbl f
-
 {- marshall helpers -}
 getVersion :: Get Version
 getVersion = do

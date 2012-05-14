@@ -11,6 +11,8 @@
 module Network.TLS.Wire
         ( Get
         , runGet
+        , runGetErr
+        , runGetMaybe
         , remaining
         , getWord8
         , getWords8
@@ -50,6 +52,12 @@ import Network.TLS.Struct
 
 runGet :: String -> Get a -> Bytes -> Either String a
 runGet lbl f = G.runGet (label lbl f)
+
+runGetErr :: String -> Get a -> Bytes -> Either TLSError a
+runGetErr lbl f = either (Left . Error_Packet_Parsing) Right . runGet lbl f
+
+runGetMaybe :: Get a -> Bytes -> Maybe a
+runGetMaybe f = either (const Nothing) Just . runGet "" f
 
 getWords8 :: Get [Word8]
 getWords8 = getWord8 >>= \lenb -> replicateM (fromIntegral lenb) getWord8
