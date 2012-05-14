@@ -24,6 +24,7 @@ import Network.TLS.Packet
 import Network.TLS.State
 import Network.TLS.Cipher
 import Network.TLS.Crypto
+import Network.TLS.Extension
 import Data.Certificate.X509
 
 returnEither :: Either TLSError a -> TLSSt a
@@ -76,8 +77,9 @@ processHandshake hs = do
                 -- secure renegotiation
                 processClientExtension (0xff01, content) = do
                         v <- getVerifiedData True
-                        let bs = encodeExtSecureRenegotiation v Nothing
+                        let bs = extensionEncode (SecureRenegotiation v Nothing)
                         unless (bs `bytesEq` content) $ throwError $ Error_Protocol ("client verified data not matching: " ++ show v ++ ":" ++ show content, True, HandshakeFailure)
+
                         setSecureRenegotiation True
                 -- unknown extensions
                 processClientExtension _ = return ()
@@ -100,7 +102,7 @@ processServerHello (ServerHello sver ran _ _ _ ex) = do
                 processServerExtension (0xff01, content) = do
                         cv <- getVerifiedData True
                         sv <- getVerifiedData False
-                        let bs = encodeExtSecureRenegotiation cv (Just sv)
+                        let bs = extensionEncode (SecureRenegotiation cv $ Just sv)
                         unless (bs `bytesEq` content) $ throwError $ Error_Protocol ("server secure renegotiation data not matching", True, HandshakeFailure)
                         return ()
 

@@ -53,6 +53,7 @@ Library
                      Network.TLS.Core
                      Network.TLS.Context
                      Network.TLS.Crypto
+                     Network.TLS.Extension
                      Network.TLS.IO
                      Network.TLS.MAC
                      Network.TLS.Measurement

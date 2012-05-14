@@ -18,6 +18,7 @@ import Network.TLS.Struct
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Packet
+import Network.TLS.Extension
 import Network.TLS.IO
 import Network.TLS.State hiding (getNegotiatedProtocol)
 import Network.TLS.Sending
@@ -150,13 +151,17 @@ handshakeClient ctx = do
                 ciphers      = pCiphers params
                 compressions = pCompressions params
                 clientCerts  = map fst $ pCertificates params
-                getExtensions = sequence [secureReneg, npnExtention] >>= return . catMaybes
+                getExtensions = sequence [secureReneg,npnExtention] >>= return . catMaybes
+
+                toExtensionRaw :: Extension e => e -> ExtensionRaw
+                toExtensionRaw ext = (extensionID ext, extensionEncode ext)
+
                 secureReneg  =
                         if pUseSecureRenegotiation params
-                        then usingState_ ctx (getVerifiedData True) >>= \vd -> return $ Just (0xff01, encodeExtSecureRenegotiation vd Nothing)
+                        then usingState_ ctx (getVerifiedData True) >>= \vd -> return $ Just $ toExtensionRaw $ SecureRenegotiation vd Nothing
                         else return Nothing
                 npnExtention = if isJust $ onNPNServerSuggest params
-                                 then return $ Just (npnId, "")
+                                 then return $ Just $ toExtensionRaw $ NextProtocolNegotiation []
                                  else return Nothing
                 sendClientHello = do
                         crand <- getStateRNG ctx 32 >>= return . ClientRandom
@@ -200,12 +205,13 @@ handshakeClient ctx = do
                                 Nothing                       -> Nothing
                         usingState_ ctx $ setSession serverSession (isJust resumingSession)
                         usingState_ ctx $ processServerHello sh
-                        case decodeExtNextProtocolNegotiation `fmap` (lookup npnId exts) of
-                          Just (Right protos) -> usingState_ ctx $ do
-                                                   setExtensionNPN True
-                                                   setServerNextProtocolSuggest protos
-                          Just (Left err) -> throwCore (Error_Protocol ("could not decode NPN handshake: " ++ show err, True, DecodeError))
-                          Nothing -> return ()
+
+                        case extensionDecode False `fmap` (lookup npnId exts) of
+                                Just (Just (NextProtocolNegotiation protos)) -> usingState_ ctx $ do
+                                        setExtensionNPN True
+                                        setServerNextProtocolSuggest protos
+                                _ -> return ()
+
                         case resumingSession of
                                 Nothing          -> return $ RecvStateHandshake processCertificate
                                 Just sessionData -> do
@@ -354,7 +360,7 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
                                         vf <- usingState_ ctx $ do
                                                 cvf <- getVerifiedData True
                                                 svf <- getVerifiedData False
-                                                return $ encodeExtSecureRenegotiation cvf (Just svf)
+                                                return $ extensionEncode (SecureRenegotiation cvf $ Just svf)
                                         return [ (0xff01, vf) ]
                                 else return []
                         nextProtocols <-
@@ -364,7 +370,7 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
                         npnExt <- case nextProtocols of
                                     Just protos -> do usingState_ ctx $ do setExtensionNPN True
                                                                            setServerNextProtocolSuggest protos
-                                                      return [ (npnId, encodeExtNextProtocolNegotiation protos) ]
+                                                      return [ (npnId, extensionEncode $ NextProtocolNegotiation protos) ]
                                     Nothing -> return []
                         let extensions = secRengExt ++ npnExt
                         usingState_ ctx (setVersion ver >> setServerRandom srand)
