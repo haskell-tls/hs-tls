@@ -22,6 +22,8 @@ module Network.TLS
 	-- * Creating a context
 	, client
 	, server
+	, clientWith
+	, serverWith
 
 	-- * Initialisation and Termination of context
 	, bye
