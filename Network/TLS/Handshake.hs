@@ -36,8 +36,6 @@ import Control.Monad.State
 import Control.Exception (throwIO, Exception(), fromException, catch, SomeException)
 import Prelude hiding (catch)
 
-npnId = 0x3374
-
 data HandshakeFailed = HandshakeFailed TLSError
         deriving (Show,Eq,Typeable)
 
@@ -206,7 +204,7 @@ handshakeClient ctx = do
                         usingState_ ctx $ setSession serverSession (isJust resumingSession)
                         usingState_ ctx $ processServerHello sh
 
-                        case extensionDecode False `fmap` (lookup npnId exts) of
+                        case extensionDecode False `fmap` (lookup extensionID_NextProtocolNegotiation exts) of
                                 Just (Just (NextProtocolNegotiation protos)) -> usingState_ ctx $ do
                                         setExtensionNPN True
                                         setServerNextProtocolSuggest protos
@@ -319,7 +317,7 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
                 srvCerts           = map fst $ pCertificates params
                 privKeys           = map snd $ pCertificates params
                 needKeyXchg        = cipherExchangeNeedMoreData $ cipherKeyExchange usedCipher
-                clientRequestedNPN = isJust $ lookup npnId exts
+                clientRequestedNPN = isJust $ lookup extensionID_NextProtocolNegotiation exts
 
                 ---
                 recvClientData = runRecvState ctx (RecvStateHandshake processClientCertificate)
@@ -370,7 +368,8 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
                         npnExt <- case nextProtocols of
                                     Just protos -> do usingState_ ctx $ do setExtensionNPN True
                                                                            setServerNextProtocolSuggest protos
-                                                      return [ (npnId, extensionEncode $ NextProtocolNegotiation protos) ]
+                                                      return [ ( extensionID_NextProtocolNegotiation
+                                                               , extensionEncode $ NextProtocolNegotiation protos) ]
                                     Nothing -> return []
                         let extensions = secRengExt ++ npnExt
                         usingState_ ctx (setVersion ver >> setServerRandom srand)
