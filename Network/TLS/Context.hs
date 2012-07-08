@@ -10,6 +10,7 @@ module Network.TLS.Context
         -- * Context configuration
           Params(..)
         , Logging(..)
+        , SessionID
         , SessionData(..)
         , Measurement(..)
         , CertificateUsage(..)

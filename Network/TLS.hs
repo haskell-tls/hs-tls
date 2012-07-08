@@ -12,6 +12,8 @@ module Network.TLS
     , Logging(..)
     , CertificateUsage(..)
     , CertificateRejectReason(..)
+    , SessionID
+    , SessionData(..)
     , defaultParamsClient
     , defaultParamsServer
     , defaultLogging
