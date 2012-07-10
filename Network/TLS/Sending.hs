@@ -8,7 +8,7 @@
 -- the Sending module contains calls related to marshalling packets according
 -- to the TLS state 
 --
-module Network.TLS.Sending (writePacket, encryptRSA) where
+module Network.TLS.Sending (writePacket, encryptRSA, signRSA) where
 
 import Control.Applicative ((<$>))
 import Control.Monad.State
@@ -93,6 +93,14 @@ encryptRSA content = do
         case withTLSRNG (stRandomGen st) (\g -> kxEncrypt g rsakey content) of
                 Left err               -> fail ("rsa encrypt failed: " ++ show err)
                 Right (econtent, rng') -> put (st { stRandomGen = rng' }) >> return econtent
+
+signRSA :: ByteString -> TLSSt ByteString
+signRSA content = do
+        st <- get
+        let rsakey = fromJust "rsa private key" $ hstRSAPrivateKey $ fromJust "handshake" $ stHandshake st
+        case kxSign rsakey content of
+                Left err       -> fail ("rsa sign failed: " ++ show err)
+                Right econtent -> return econtent
 
 writePacketContent :: Packet -> TLSSt ByteString
 writePacketContent (Handshake hss)    = return $ encodeHandshakes hss

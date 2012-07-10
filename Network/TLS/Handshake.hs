@@ -31,6 +31,8 @@ import Data.List (intersect, find)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 
+import Data.Certificate.X509(X509, certIssuerDN, x509Cert)
+
 import Control.Applicative ((<$>))
 import Control.Monad.State
 import Control.Exception (throwIO, Exception(), fromException, catch, SomeException)
@@ -149,6 +151,7 @@ handshakeClient ctx = do
                 ciphers      = pCiphers params
                 compressions = pCompressions params
                 clientCerts  = map fst $ pCertificates params
+                clientKeys   = map snd $ pCertificates params
                 getExtensions = sequence [secureReneg,npnExtention] >>= return . catMaybes
 
                 toExtensionRaw :: Extension e => e -> ExtensionRaw
@@ -178,13 +181,38 @@ handshakeClient ctx = do
 
                 sendCertificate = do
                         -- Send Certificate if requested. XXX disabled for now.
-                        certRequested <- return False
-                        when certRequested (sendPacket ctx $ Handshake [Certificates clientCerts])
+                        certRequested <- usingState ctx (gets stClientCertRequest)
+                        case certRequested of
+                          Left err ->
+                            throwCore err
+                          Right Nothing ->
+                            return ()
+                          Right (Just req) -> do
+                            -- FIXME: What shall we do when the callback throws an exception?
+                            certChain <- liftIO $ onCertificateRequest params req
+                            sendPacket ctx $ Handshake [Certificates certChain]
 
-                sendCertificateVerify =
-                        {- maybe send certificateVerify -}
-                        {- FIXME not implemented yet -}
-                        return ()
+                sendCertificateVerify = do
+                        -- Send CertificateVerify if requested. XXX disabled for now.
+                        certRequested <- usingState ctx (gets stClientCertRequest)
+                        case certRequested of
+                          Left err ->
+                            throwCore err
+                          Right Nothing ->
+                            return ()
+                          Right (Just (certTypes, sigAlgs, dNames)) -> do
+                            usingState_ ctx $ setPrivateKey (fromJust $ head clientKeys)
+                            liftIO $ putStrLn $ "dnames-raw: " ++ show dNames
+                            {- maybe send certificateVerify -}
+                            {- FIXME not implemented yet -}
+                            dig <- usingState_ ctx $ getCertVerifyDigest True
+                            liftIO $ putStrLn $ "digest: " ++ show dig
+                            liftIO $ putStrLn $ "digest length: " ++ show (B.length dig)
+                            Right sigDig <- usingState ctx $ signRSA dig
+                            liftIO $ putStrLn $ "signed digest: " ++ show sigDig
+                            liftIO $ putStrLn $ "signed digest length: " ++ show (B.length sigDig)
+                            sendPacket ctx $ Handshake [CertVerify sigDig]
+                            return ()
 
                 recvServerHello = runRecvState ctx (RecvStateHandshake onServerHello)
 
@@ -233,8 +261,12 @@ handshakeClient ctx = do
                 processServerKeyExchange (ServerKeyXchg _) = return $ RecvStateHandshake processCertificateRequest
                 processServerKeyExchange p                 = processCertificateRequest p
 
-                processCertificateRequest (CertRequest _ _ _) = do
-                        --modify (\sc -> sc { scCertRequested = True })
+                processCertificateRequest :: MonadIO m => Handshake -> m (RecvState m)
+                processCertificateRequest (CertRequest cTypes sigAlgs dNames) = do
+                        usingState_ ctx
+                          (modify (\sc -> sc {
+                                      stClientCertRequest = Just (cTypes, sigAlgs, dNames)
+                                      }))
                         return $ RecvStateHandshake processServerHelloDone
                 processCertificateRequest p = processServerHelloDone p
 
@@ -388,10 +420,13 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
                         -- FIXME we don't do this on a Anonymous server
                         when (pWantClientCert params) $ do
                                 let certTypes = [ CertificateType_RSA_Sign ]
-                                let creq = CertRequest certTypes Nothing [0,0,0]
+                                let creq = CertRequest certTypes Nothing (map extractCAname $ pCACertificates params)
                                 sendPacket ctx (Handshake [creq])
                         -- Send HelloDone
                         sendPacket ctx (Handshake [ServerHelloDone])
+                        
+                extractCAname :: X509 -> DistinguishedName
+                extractCAname cert = DistinguishedName $ certIssuerDN (x509Cert cert)
 
 handshakeServerWith _ _ = fail "unexpected handshake type received. expecting client hello"
 

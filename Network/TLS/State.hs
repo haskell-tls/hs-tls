@@ -53,6 +53,7 @@ module Network.TLS.State
         , startHandshakeClient
         , updateHandshakeDigest
         , getHandshakeDigest
+        , getCertVerifyDigest
         , endHandshake
         ) where
 
@@ -123,6 +124,9 @@ data TLSState = TLSState
         , stExtensionNPN        :: Bool  -- NPN draft extension
         , stNegotiatedProtocol  :: Maybe B.ByteString -- NPN protocol
         , stServerNextProtocolSuggest :: Maybe [B.ByteString]
+        , stClientCertRequest  :: Maybe ([CertificateType],
+                                         Maybe [(HashAlgorithm, SignatureAlgorithm)],
+                                         [DistinguishedName])
         } deriving (Show)
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrorT TLSError (State TLSState) a }
@@ -163,6 +167,7 @@ newTLSState rng = TLSState
         , stExtensionNPN        = False
         , stNegotiatedProtocol  = Nothing
         , stServerNextProtocolSuggest = Nothing
+        , stClientCertRequest   = Nothing
         }
 
 withTLSRNG :: StateRNG -> (forall g . CryptoRandomGen g => g -> Either e (a,g)) -> Either e (a, StateRNG)
@@ -397,6 +402,13 @@ getHandshakeDigest client = do
         let hashctx = hstHandshakeDigest hst
         let msecret = fromJust "master secret" $ hstMasterSecret hst
         return $ (if client then generateClientFinished else generateServerFinished) (stVersion st) msecret hashctx
+
+getCertVerifyDigest :: MonadState TLSState m => Bool -> m Bytes
+getCertVerifyDigest client = do
+        st <- get
+        let hst = fromJust "handshake" $ stHandshake st
+        let hashctx = hstHandshakeDigest hst
+        return (hashFinal hashctx)
 
 endHandshake :: MonadState TLSState m => m ()
 endHandshake = modify (\st -> st { stHandshake = Nothing })

@@ -16,6 +16,8 @@ module Network.TLS.Crypto
         , PrivateKey(..)
         , kxEncrypt
         , kxDecrypt
+        , kxSign
+        , kxVerify
         , KxError(..)
         ) where
 
@@ -103,3 +105,15 @@ kxEncrypt g (PubRSA pk) b = generalizeRSAError $ RSA.encrypt g pk b
 
 kxDecrypt :: PrivateKey -> ByteString -> Either KxError ByteString
 kxDecrypt (PrivRSA pk) b  = generalizeRSAError $ RSA.decrypt pk b
+
+kxVerify :: PublicKey -> ByteString -> ByteString -> Either KxError Bool
+kxVerify (PubRSA pk) b sign = 
+  let hashF = SHA1.hash
+      hashASN1 = B.empty
+  in generalizeRSAError $ RSA.verify hashF hashASN1 pk b sign
+
+kxSign :: PrivateKey -> ByteString -> Either KxError ByteString
+kxSign (PrivRSA pk) b  = 
+  let hashF = SHA1.hash
+      hashASN1 = B.empty
+  in generalizeRSAError $ RSA.sign hashF hashASN1 pk b

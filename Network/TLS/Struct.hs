@@ -43,12 +43,15 @@ module Network.TLS.Struct
         , TypeValuable, valOfType, valToType
         , packetType
         , typeOfHandshake
+        , OID
+        , DistinguishedName(..)
         ) where
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B (length)
 import Data.Word
 import Data.Certificate.X509 (X509)
+import Data.Certificate.X509.Cert (ASN1String)
 import Data.Typeable
 import Control.Monad.Error (Error(..))
 import Control.Exception (Exception(..))
@@ -229,6 +232,11 @@ data ServerKeyXchgAlgorithmData =
         | SKX_Unknown Bytes
         deriving (Show,Eq)
 
+type OID = [Integer]
+
+data DistinguishedName = DistinguishedName [(OID, ASN1String)]
+  deriving (Eq, Show)
+
 data Handshake =
           ClientHello !Version !ClientRandom !Session ![CipherID] ![CompressionID] [ExtensionRaw]
         | ServerHello !Version !ServerRandom !Session !CipherID !CompressionID [ExtensionRaw]
@@ -237,8 +245,8 @@ data Handshake =
         | ServerHelloDone
         | ClientKeyXchg Bytes
         | ServerKeyXchg ServerKeyXchgAlgorithmData
-        | CertRequest [CertificateType] (Maybe [ (HashAlgorithm, SignatureAlgorithm) ]) [Word8]
-        | CertVerify [Word8]
+        | CertRequest [CertificateType] (Maybe [ (HashAlgorithm, SignatureAlgorithm) ]) [DistinguishedName]
+        | CertVerify ByteString
         | Finished FinishedData
         | HsNextProtocolNegotiation Bytes -- NPN extension
         deriving (Show,Eq)

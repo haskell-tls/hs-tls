@@ -99,9 +99,13 @@ data Params = Params
         , pUseSecureRenegotiation :: Bool           -- ^ notify that we want to use secure renegotation
         , pUseSession             :: Bool           -- ^ generate new session if specified
         , pCertificates      :: [(X509, Maybe PrivateKey)] -- ^ the cert chain for this context with the associated keys if any.
+        , pCACertificates    :: [(X509)]                   -- ^ list of CA certificate for which to expect client certificates.
         , pLogging           :: Logging             -- ^ callback for logging
         , onHandshake        :: Measurement -> IO Bool -- ^ callback on a beggining of handshake
         , onCertificatesRecv :: [X509] -> IO CertificateUsage -- ^ callback to verify received cert chain.
+        , onCertificateRequest :: ([CertificateType],
+                                  Maybe [(HashAlgorithm, SignatureAlgorithm)],
+                                  [DistinguishedName]) -> IO [X509] -- ^ callback to get client certificate chain.
         , onSessionResumption :: SessionID -> IO (Maybe SessionData) -- ^ callback to maybe resume session on server.
         , onSessionEstablished :: SessionID -> SessionData -> IO ()  -- ^ callback when session have been established
         , onSessionInvalidated :: SessionID -> IO ()                 -- ^ callback when session is invalidated by error
@@ -129,9 +133,11 @@ defaultParamsClient = Params
         , pUseSecureRenegotiation = True
         , pUseSession             = True
         , pCertificates           = []
+        , pCACertificates         = []
         , pLogging                = defaultLogging
         , onHandshake             = (\_ -> return True)
         , onCertificatesRecv      = (\_ -> return CertificateUsageAccept)
+        , onCertificateRequest    = (\_ -> return [])
         , onSessionResumption     = (\_ -> return Nothing)
         , onSessionEstablished    = (\_ _ -> return ())
         , onSessionInvalidated    = (\_ -> return ())

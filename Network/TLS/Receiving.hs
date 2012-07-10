@@ -64,7 +64,10 @@ processHandshake hs = do
                 ClientHello cver ran _ _ _ ex -> unless clientmode $ do
                         mapM_ processClientExtension ex
                         startHandshakeClient cver ran
-                Certificates certs            -> when clientmode $ do processCertificates certs
+                Certificates certs            ->  
+                        if clientmode 
+                        then processCertificates certs
+                        else processCertificates certs -- FIXME: Only when client cert requested?
                 ClientKeyXchg content         -> unless clientmode $ do
                         processClientKeyXchg content
                 HsNextProtocolNegotiation selected_protocol ->
@@ -89,6 +92,12 @@ decryptRSA econtent = do
         ver <- stVersion <$> get
         rsapriv <- fromJust "rsa private key" . hstRSAPrivateKey . fromJust "handshake" . stHandshake <$> get
         return $ kxDecrypt rsapriv (if ver < TLS10 then econtent else B.drop 2 econtent)
+
+verifyRSA :: ByteString -> ByteString -> TLSSt (Either KxError Bool)
+verifyRSA econtent sign = do
+        ver <- stVersion <$> get
+        rsapriv <- fromJust "rsa public key" . hstRSAPublicKey . fromJust "handshake" . stHandshake <$> get
+        return $ kxVerify rsapriv (if ver < TLS10 then econtent else B.drop 2 econtent) sign -- FIXME: is drop 2 correct?
 
 processServerHello :: Handshake -> TLSSt ()
 processServerHello (ServerHello sver ran _ _ _ ex) = do
