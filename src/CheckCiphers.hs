@@ -97,8 +97,8 @@ openConnection s p ciphers = do
 	handle <- socketToHandle sock ReadWriteMode
 
 	rng <- RNG.makeSystem
-	let params = defaultParams { pCiphers = map fakeCipher ciphers }
-	ctx <- client params rng handle
+	let params = defaultParamsClient { pCiphers = map fakeCipher ciphers }
+	ctx <- contextNewOnHandle handle params rng
 	sendPacket ctx $ Handshake [clienthello ciphers]
 	catch (do
 		rpkt <- recvPacket ctx

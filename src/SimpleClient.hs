@@ -32,7 +32,7 @@ runTLS params hostname portNumber f = do
 	catch (connect sock sockaddr)
 	      (\(e :: SomeException) -> sClose sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
 	dsth <- socketToHandle sock ReadWriteMode
-	ctx <- client params rng dsth
+	ctx <- contextNewOnHandle dsth params rng
 	f ctx
 	hClose dsth
 

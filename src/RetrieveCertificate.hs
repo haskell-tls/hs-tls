@@ -21,7 +21,7 @@ import System.Console.CmdArgs
 openConnection s p = do
 	ref <- newIORef Nothing
 	rng <- RNG.makeSystem
-	let params = defaultParams
+	let params = defaultParamsClient
 		{ pCiphers           = ciphersuite_all
 		, onCertificatesRecv = \l -> do
 			modifyIORef ref (const $ Just l)

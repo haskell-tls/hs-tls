@@ -24,8 +24,8 @@ Executable           tls-stunnel
                    , cmdargs
                    , certificate >= 1.0
                    , cprng-aes >= 0.2.3
-                   , tls >= 0.9.4 && < 1.0
-                   , tls-extra >= 0.4.6 && < 0.5.0
+                   , tls >= 1.0 && < 1.1
+                   , tls-extra >= 0.5 && < 0.6
   Buildable:         True
   ghc-options:       -Wall -fno-warn-missing-signatures
 
@@ -37,8 +37,8 @@ Executable           tls-checkciphers
                    , bytestring
                    , cprng-aes
                    , certificate >= 1.0
-                   , tls >= 0.9.4 && < 1.0
-                   , tls-extra >= 0.4.6 && < 0.5.0
+                   , tls >= 1.0 && < 1.1
+                   , tls-extra >= 0.5 && < 0.6
   Buildable:         True
   ghc-options:       -Wall -fno-warn-missing-signatures
 
@@ -52,8 +52,8 @@ Executable           tls-retrievecertificate
                    , time
                    , cprng-aes >= 0.2.3
                    , certificate >= 1.0
-                   , tls >= 0.9.4 && < 1.0
-                   , tls-extra >= 0.4.6 && < 0.5.0
+                   , tls >= 1.0 && < 1.1
+                   , tls-extra >= 0.5 && < 0.6
   Buildable:         True
   ghc-options:       -Wall -fno-warn-missing-signatures
 
@@ -66,8 +66,8 @@ Executable           tls-simpleclient
                    , cmdargs
                    , cprng-aes >= 0.2.3
                    , certificate >= 1.0
-                   , tls >= 0.9.4 && < 1.0
-                   , tls-extra >= 0.4.6 && < 0.5.0
+                   , tls >= 1.0 && < 1.1
+                   , tls-extra >= 0.5 && < 0.6
   Buildable:         True
   ghc-options:       -Wall -fno-warn-missing-signatures
 
