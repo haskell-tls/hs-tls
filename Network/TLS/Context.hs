@@ -9,6 +9,11 @@ module Network.TLS.Context
         (
         -- * Context configuration
           Params(..)
+        , RoleParams(..)
+        , ClientParams(..)
+        , ServerParams(..)
+        , updateClientParams
+        , updateServerParams
         , Logging(..)
         , SessionID
         , SessionData(..)
@@ -146,6 +151,17 @@ defaultParamsServer :: Params
 defaultParamsServer = defaultParamsClient
         { roleParams = Server $ ServerParams
         }
+
+updateRoleParams :: (ClientParams -> ClientParams) -> (ServerParams -> ServerParams) -> Params -> Params
+updateRoleParams fc fs params = case roleParams params of
+                                     Client c -> params { roleParams = Client (fc c) }
+                                     Server s -> params { roleParams = Server (fs s) }
+
+updateClientParams :: (ClientParams -> ClientParams) -> Params -> Params
+updateClientParams f = updateRoleParams f id
+
+updateServerParams :: (ServerParams -> ServerParams) -> Params -> Params
+updateServerParams f = updateRoleParams id f
 
 defaultParams :: Params
 defaultParams = defaultParamsClient

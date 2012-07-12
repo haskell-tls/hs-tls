@@ -9,6 +9,11 @@ module Network.TLS
     (
     -- * Context configuration
       Params(..)
+    , RoleParams(..)
+    , ClientParams(..)
+    , ServerParams(..)
+    , updateClientParams
+    , updateServerParams
     , Logging(..)
     , CertificateUsage(..)
     , CertificateRejectReason(..)
