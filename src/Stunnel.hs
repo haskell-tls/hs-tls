@@ -74,6 +74,13 @@ tlsserver srchandle dsthandle = do
 		return False
 	putStrLn "end"
 
+data MemSessionManager = MemSessionManager (MVar [(SessionID, SessionData)])
+
+instance SessionManager MemSessionManager where
+    sessionEstablish (MemSessionManager mvar) sid sdata = modifyMVar_ mvar (\l -> return $ (sid,sdata) : l)
+    sessionResume (MemSessionManager mvar) sid          = withMVar mvar (return . lookup sid)
+    sessionInvalidate (MemSessionManager mvar) _        = return ()
+
 clientProcess certs handle dsthandle dbg sessionStorage _ = do
 	rng <- RNG.makeSystem
 	let logging = if not dbg then defaultLogging else defaultLogging
@@ -81,32 +88,25 @@ clientProcess certs handle dsthandle dbg sessionStorage _ = do
 		, loggingPacketRecv = putStrLn . ("debug: recv: " ++)
 		}
 
-	let serverstate = defaultParamsServer
+	let serverstate = maybe id (setSessionManager . MemSessionManager) sessionStorage $ defaultParamsServer
 		{ pAllowedVersions = [SSL3,TLS10,TLS11,TLS12]
 		, pCiphers         = ciphers
 		, pCertificates    = certs
-		, pWantClientCert  = False
 		, pLogging         = logging
 		}
-	let serverState' = case sessionStorage of
-		Nothing      -> serverstate
-		Just storage -> serverstate
-			{ onSessionResumption  = \s -> withMVar storage (return . lookup s)
-			, onSessionEstablished = \s d -> modifyMVar_ storage (\l -> return $ (s,d) : l)
-			}
 
-	ctx <- contextNewOnHandle handle serverState' rng
+	ctx <- contextNewOnHandle handle serverstate rng
 	tlsserver ctx dsthandle
 
 data Stunnel =
-	  Client
+	  ClientConfig
 		{ destinationType :: String
 		, destination     :: String
 		, sourceType      :: String
 		, source          :: String
 		, debug           :: Bool
 		, validCert       :: Bool }
-	| Server
+	| ServerConfig
 		{ destinationType :: String
 		, destination     :: String
 		, sourceType      :: String
@@ -117,7 +117,7 @@ data Stunnel =
 		, key             :: FilePath }
 	deriving (Show, Data, Typeable)
 
-clientOpts = Client
+clientOpts = ClientConfig
 	{ destinationType = "tcp"             &= help "type of source (tcp, unix, fd)" &= typ "DESTTYPE"
 	, destination     = "localhost:6061"  &= help "destination address influenced by destination type" &= typ "ADDRESS"
 	, sourceType      = "tcp"             &= help "type of source (tcp, unix, fd)" &= typ "SOURCETYPE"
@@ -126,8 +126,9 @@ clientOpts = Client
 	, validCert       = False             &= help "check if the certificate receive is valid" &= typ "Bool"
 	}
 	&= help "connect to a remote destination that use SSL/TLS"
+	&= name "client"
 
-serverOpts = Server
+serverOpts = ServerConfig
 	{ destinationType = "tcp"             &= help "type of source (tcp, unix, fd)" &= typ "DESTTYPE"
 	, destination     = "localhost:6060"  &= help "destination address influenced by destination type" &= typ "ADDRESS"
 	, sourceType      = "tcp"             &= help "type of source (tcp, unix, fd)" &= typ "SOURCETYPE"
@@ -138,6 +139,7 @@ serverOpts = Server
 	, key             = "certificate.key" &= help "private key linked to the certificate" &= typ "FILE"
 	}
 	&= help "listen for connection that use SSL/TLS and relay it to a different connection"
+	&= name "server"
 
 mode = cmdArgsMode $ modes [clientOpts,serverOpts]
 	&= help "create SSL/TLS tunnel in client or server mode" &= program "stunnel" &= summary "Stunnel v0.1 (Haskell TLS)"
@@ -256,5 +258,5 @@ main :: IO ()
 main = do
 	x <- cmdArgsRun mode
 	case x of
-		Client {} -> doClient x
-		Server {} -> doServer x
+		ClientConfig {} -> doClient x
+		ServerConfig {} -> doServer x

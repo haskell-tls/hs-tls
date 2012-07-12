@@ -36,17 +36,23 @@ runTLS params hostname portNumber f = do
 	f ctx
 	hClose dsth
 
-getDefaultParams sStorage session = defaultParams
+data SessionRef = SessionRef (IORef (SessionID, SessionData))
+
+instance SessionManager SessionRef where
+    sessionEstablish (SessionRef ref) sid sdata = writeIORef ref (sid,sdata)
+    sessionResume (SessionRef ref) sid = readIORef ref >>= \(s,d) -> if s == sid then return (Just d) else return Nothing
+    sessionInvalidate _ _ = return ()
+
+getDefaultParams sStorage session = updateClientParams setCParams $ setSessionManager (SessionRef sStorage) $ defaultParams
 	{ pConnectVersion    = TLS10
 	, pAllowedVersions   = [TLS10,TLS11,TLS12]
 	, pCiphers           = ciphers
 	, pCertificates      = []
 	, pLogging           = logging
 	, onCertificatesRecv = crecv
-	, onSessionEstablished = \s d -> writeIORef sStorage (s,d)
-	, sessionResumeWith  = session
 	}
 	where
+		setCParams cparams = cparams { clientWantSessionResume = session }
 		logging = if not debug then defaultLogging else defaultLogging
 			{ loggingPacketSent = putStrLn . ("debug: >> " ++)
 			, loggingPacketRecv = putStrLn . ("debug: << " ++)
