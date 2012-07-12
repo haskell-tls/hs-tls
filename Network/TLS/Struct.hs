@@ -55,13 +55,10 @@ import Data.Certificate.X509.Cert (ASN1String)
 import Data.Typeable
 import Control.Monad.Error (Error(..))
 import Control.Exception (Exception(..))
+import Network.TLS.Types
 
 type Bytes = ByteString
 
--- | Versions known to TLS
---
--- SSL2 is just defined, but this version is and will not be supported.
-data Version = SSL2 | SSL3 | TLS10 | TLS11 | TLS12 deriving (Show, Eq, Ord)
 
 data ConnectionEnd = ConnectionServer | ConnectionClient
 data CipherType = CipherStream | CipherBlock | CipherAEAD
@@ -143,17 +140,8 @@ data Header = Header ProtocolType Version Word16 deriving (Show,Eq)
 
 newtype ServerRandom = ServerRandom Bytes deriving (Show, Eq)
 newtype ClientRandom = ClientRandom Bytes deriving (Show, Eq)
-type SessionID = Bytes
 newtype Session = Session (Maybe SessionID) deriving (Show, Eq)
 
-data SessionData = SessionData
-        { sessionVersion :: Version
-        , sessionCipher  :: CipherID
-        , sessionSecret  :: Bytes
-        }
-
-type CipherID = Word16
-type CompressionID = Word8
 type FinishedData = Bytes
 type ExtensionRaw = (Word16, Bytes)
 

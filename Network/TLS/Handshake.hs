@@ -14,6 +14,7 @@ module Network.TLS.Handshake
     ) where
 
 import Network.TLS.Context
+import Network.TLS.Session
 import Network.TLS.Struct
 import Network.TLS.Cipher
 import Network.TLS.Compression
@@ -120,7 +121,7 @@ handshakeTerminate ctx = do
         case session of
                 Session (Just sessionId) -> do
                         sessionData <- usingState_ ctx getSessionData
-                        liftIO $ (onSessionEstablished $ ctxParams ctx) sessionId (fromJust sessionData)
+                        withSessionManager (ctxParams ctx) (\s -> liftIO $ sessionEstablish s sessionId (fromJust sessionData))
                 _ -> return ()
         -- forget all handshake data now and reset bytes counters.
         usingState_ ctx endHandshake
@@ -131,8 +132,8 @@ handshakeTerminate ctx = do
 
 -- client part of handshake. send a bunch of handshake of client
 -- values intertwined with response from the server.
-handshakeClient :: MonadIO m => Context -> m ()
-handshakeClient ctx = do
+handshakeClient :: MonadIO m => ClientParams -> Context -> m ()
+handshakeClient cparams ctx = do
         updateMeasure ctx incrementNbHandshakes
         sendClientHello
         recvServerHello
@@ -164,7 +165,7 @@ handshakeClient ctx = do
                                  else return Nothing
                 sendClientHello = do
                         crand <- getStateRNG ctx 32 >>= return . ClientRandom
-                        let clientSession = Session . maybe Nothing (Just . fst) $ sessionResumeWith params
+                        let clientSession = Session . maybe Nothing (Just . fst) $ clientWantSessionResume cparams
                         extensions <- getExtensions
                         usingState_ ctx (startHandshakeClient ver crand)
                         sendPacket ctx $ Handshake
@@ -255,7 +256,7 @@ handshakeClient ctx = do
                                 Nothing -> throwCore $ Error_Protocol ("no cipher in common with the server", True, HandshakeFailure)
                                 Just c  -> usingState_ ctx $ setCipher c
 
-                        let resumingSession = case sessionResumeWith params of
+                        let resumingSession = case clientWantSessionResume cparams of
                                 Just (sessionId, sessionData) -> if serverSession == Session (Just sessionId) then Just sessionData else Nothing
                                 Nothing                       -> Nothing
                         usingState_ ctx $ setSession serverSession (isJust resumingSession)
@@ -330,8 +331,8 @@ certificateRejected (CertificateRejectOther s) =
 rejectOnException :: SomeException -> IO TLSCertificateUsage
 rejectOnException e = return $ CertificateUsageReject $ CertificateRejectOther $ show e
 
-handshakeServerWith :: MonadIO m => Context -> Handshake -> m ()
-handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers compressions exts) = do
+handshakeServerWith :: MonadIO m => ServerParams -> Context -> Handshake -> m ()
+handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession ciphers compressions exts) = do
         -- check if policy allow this new handshake to happens
         handshakeAuthorized <- withMeasure ctx (onHandshake $ ctxParams ctx)
         unless handshakeAuthorized (throwCore $ Error_HandshakePolicy "server: handshake denied")
@@ -353,7 +354,7 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
                 })
 
         resumeSessionData <- case clientSession of
-                (Session (Just clientSessionId)) -> liftIO $ onSessionResumption params $ clientSessionId
+                (Session (Just clientSessionId)) -> withSessionManager params (\s -> liftIO $ sessionResume s clientSessionId)
                 (Session Nothing)                -> return Nothing
         case resumeSessionData of
                 Nothing -> do
@@ -491,22 +492,24 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
                 extractCAname :: X509 -> DistinguishedName
                 extractCAname cert = DistinguishedName $ certIssuerDN (x509Cert cert)
 
-handshakeServerWith _ _ = fail "unexpected handshake type received. expecting client hello"
+handshakeServerWith _ _ _ = fail "unexpected handshake type received. expecting client hello"
 
 -- after receiving a client hello, we need to redo a handshake
-handshakeServer :: MonadIO m => Context -> m ()
-handshakeServer ctx = do
+handshakeServer :: MonadIO m => ServerParams -> Context -> m ()
+handshakeServer sparams ctx = do
         hss <- recvPacketHandshake ctx
         case hss of
-                [ch] -> handshakeServerWith ctx ch
+                [ch] -> handshakeServerWith sparams ctx ch
                 _    -> fail ("unexpected handshake received, excepting client hello and received " ++ show hss)
 
 -- | Handshake for a new TLS connection
 -- This is to be called at the beginning of a connection, and during renegotiation
 handshake :: MonadIO m => Context -> m ()
 handshake ctx = do
-        cc <- usingState_ ctx (stClientContext <$> get)
-        liftIO $ handleException $ if cc then handshakeClient ctx else handshakeServer ctx
+        let handshakeF = case roleParams $ ctxParams ctx of
+                            Server sparams -> handshakeServer sparams
+                            Client cparams -> handshakeClient cparams
+        liftIO $ handleException $ handshakeF ctx
         where
                 handleException f = catch f $ \exception -> do
                         let tlserror = maybe (Error_Misc $ show exception) id $ fromException exception

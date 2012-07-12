@@ -5,13 +5,22 @@
 -- Stability   : experimental
 -- Portability : unknown
 --
+{-# LANGUAGE ExistentialQuantification, Rank2Types #-}
+-- only needed because of some GHC bug relative to insufficient polymorphic field
+{-# LANGUAGE RecordWildCards #-}
 module Network.TLS.Context
         (
         -- * Context configuration
           Params(..)
         , ClientCertParamsClient(..)
         , ClientCertParamsServer(..)
+        , RoleParams(..)
+        , ClientParams(..)
+        , ServerParams(..)
+        , updateClientParams
+        , updateServerParams
         , Logging(..)
+        , SessionID
         , SessionData(..)
         , Measurement(..)
         , CertificateUsage(..)
@@ -19,6 +28,8 @@ module Network.TLS.Context
         , defaultLogging
         , defaultParamsClient
         , defaultParamsServer
+        , withSessionManager
+        , setSessionManager
 
         -- * Context object and accessor
         , Backend(..)
@@ -59,6 +70,7 @@ module Network.TLS.Context
         ) where
 
 import Network.TLS.Struct
+import Network.TLS.Session
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Crypto
@@ -105,11 +117,16 @@ instance Show ClientCertParamsServer where
   show ccp = "ClientCertParamsServer{ccpCACertificates=" ++ show (ccpCACertificates ccp) ++ "}"
     
 data ClientParams = ClientParams
+        { clientWantSessionResume :: Maybe (SessionID, SessionData) -- ^ try to establish a connection using this session.
+        }
+
 data ServerParams = ServerParams
+        { serverWantClientCert    :: Bool  -- ^ request a certificate from client.
+        }
 
 data RoleParams = Client ClientParams | Server ServerParams
 
-data Params = Params
+data Params = forall s . SessionManager s => Params
         { pConnectVersion    :: Version             -- ^ version to use on client connection.
         , pAllowedVersions   :: [Version]           -- ^ allowed versions that we can use.
         , pCiphers           :: [Cipher]            -- ^ all ciphers supported ordered by priority.
@@ -122,14 +139,18 @@ data Params = Params
         , pLogging           :: Logging             -- ^ callback for logging
         , onHandshake        :: Measurement -> IO Bool -- ^ callback on a beggining of handshake
         , onCertificatesRecv :: [X509] -> IO CertificateUsage -- ^ callback to verify received cert chain.
-        , onSessionResumption :: SessionID -> IO (Maybe SessionData) -- ^ callback to maybe resume session on server.
-        , onSessionEstablished :: SessionID -> SessionData -> IO ()  -- ^ callback when session have been established
-        , onSessionInvalidated :: SessionID -> IO ()                 -- ^ callback when session is invalidated by error
+        , pSessionManager    :: s
         , onSuggestNextProtocols :: IO (Maybe [B.ByteString])       -- ^ suggested next protocols accoring to the next protocol negotiation extension.
         , onNPNServerSuggest :: Maybe ([B.ByteString] -> IO B.ByteString)
-        , sessionResumeWith   :: Maybe (SessionID, SessionData) -- ^ try to establish a connection using this session.
         , roleParams          :: RoleParams
         }
+
+-- | Set a new session manager in a parameters structure.
+setSessionManager :: SessionManager s => s -> Params -> Params
+setSessionManager manager (Params {..}) = Params { pSessionManager = manager, .. }
+
+withSessionManager :: Params -> (forall s . SessionManager s => s -> a) -> a
+withSessionManager (Params { pSessionManager = man }) f = f man
 
 defaultLogging :: Logging
 defaultLogging = Logging
@@ -153,19 +174,31 @@ defaultParamsClient = Params
         , pLogging                = defaultLogging
         , onHandshake             = (\_ -> return True)
         , onCertificatesRecv      = (\_ -> return CertificateUsageAccept)
-        , onSessionResumption     = (\_ -> return Nothing)
-        , onSessionEstablished    = (\_ _ -> return ())
-        , onSessionInvalidated    = (\_ -> return ())
+        , pSessionManager         = NoSessionManager
         , onSuggestNextProtocols  = return Nothing
         , onNPNServerSuggest      = Nothing
-        , sessionResumeWith       = Nothing
         , roleParams              = Client $ ClientParams
+                                        { clientWantSessionResume = Nothing
+                                        }
         }
 
 defaultParamsServer :: Params
 defaultParamsServer = defaultParamsClient
         { roleParams = Server $ ServerParams
+                        { serverWantClientCert         = False
+                        }
         }
+
+updateRoleParams :: (ClientParams -> ClientParams) -> (ServerParams -> ServerParams) -> Params -> Params
+updateRoleParams fc fs params = case roleParams params of
+                                     Client c -> params { roleParams = Client (fc c) }
+                                     Server s -> params { roleParams = Server (fs s) }
+
+updateClientParams :: (ClientParams -> ClientParams) -> Params -> Params
+updateClientParams f = updateRoleParams f id
+
+updateServerParams :: (ServerParams -> ServerParams) -> Params -> Params
+updateServerParams f = updateRoleParams id f
 
 defaultParams :: Params
 defaultParams = defaultParamsClient
@@ -197,7 +230,7 @@ data CertificateUsage =
         | CertificateUsageReject CertificateRejectReason -- ^ usage of certificate rejected
         deriving (Show,Eq)
 
--- |
+-- | Connection IO backend
 data Backend = Backend
         { backendFlush :: IO ()                -- ^ Flush the connection sending buffer, if any.
         , backendClose :: IO ()                -- ^ Close the connection.

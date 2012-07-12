@@ -1,7 +1,7 @@
 module Tests.Connection
         ( newPairContext
         , arbitraryPairParams
-        , setPairParamsSessionSaving
+        , setPairParamsSessionManager
         , setPairParamsSessionResuming
         ) where
 
@@ -99,16 +99,15 @@ arbitraryPairParams = do
                 arbitraryVersions = resize (length supportedVersions + 1) $ listOf1 (elements supportedVersions)
                 arbitraryCiphers  = resize (length supportedCiphers + 1) $ listOf1 (elements supportedCiphers)
 
-setPairParamsSessionSaving f (clientState, serverState) = (nc,ns)
+setPairParamsSessionManager :: SessionManager s => s -> (Params, Params) -> (Params, Params)
+setPairParamsSessionManager manager (clientState, serverState) = (nc,ns)
         where
-                nc = clientState { onSessionEstablished = f }
-                ns = serverState { onSessionEstablished = f }
+                nc = setSessionManager manager clientState
+                ns = setSessionManager manager serverState
 
-setPairParamsSessionResuming sessionStuff (clientState, serverState) = (nc,ns)
+setPairParamsSessionResuming sessionStuff (clientState, serverState) = (nc,serverState)
         where
-                nc = clientState { sessionResumeWith   = Just sessionStuff }
-                ns = serverState { onSessionResumption = \s ->
-                        return $ if s == fst sessionStuff then Just (snd sessionStuff) else Nothing }
+                nc = updateClientParams (\cparams -> cparams { clientWantSessionResume = Just sessionStuff }) clientState
 
 newPairContext pipe (cParams, sParams) = do
         let noFlush = return ()
