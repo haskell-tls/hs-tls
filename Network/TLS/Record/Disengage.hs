@@ -58,7 +58,11 @@ getCipherData (Record pt ver _) cdata = do
                         return (if cver < TLS10 then True else B.replicate (B.length pad) (fromIntegral b) `bytesEq` pad)
 
         unless (macValid &&! paddingValid) $ do
-                throwError $ Error_Protocol ("bad record mac", True, BadRecordMac)
+                throwError $ Error_Protocol (("bad record mac: " ++
+                                             (if not macValid then "!macValid" else "") ++
+                                             " " ++
+                                             (if not paddingValid then "!paddingValid" else "")
+                                                ), True, BadRecordMac)
 
         return $ cipherDataContent cdata
 

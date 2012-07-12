@@ -32,6 +32,8 @@ import Data.List (intersect, find)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 
+import Data.Certificate.X509(X509, certIssuerDN, x509Cert)
+
 import Control.Applicative ((<$>))
 import Control.Monad.State
 import Control.Exception (throwIO, Exception(), fromException, catch, SomeException)
@@ -149,7 +151,6 @@ handshakeClient cparams ctx = do
                 allowedvers  = pAllowedVersions params
                 ciphers      = pCiphers params
                 compressions = pCompressions params
-                clientCerts  = map fst $ pCertificates params
                 getExtensions = sequence [secureReneg,npnExtention] >>= return . catMaybes
 
                 toExtensionRaw :: Extension e => e -> ExtensionRaw
@@ -177,15 +178,71 @@ handshakeClient cparams ctx = do
                 expectFinish (Finished _) = return RecvStateDone
                 expectFinish p            = unexpected (show p) (Just "Handshake Finished")
 
+                -- When the server requests a client certificate, we
+                -- fetch a certificate chain from the callback in the
+                -- client parameters.
+                --
                 sendCertificate = do
-                        -- Send Certificate if requested. XXX disabled for now.
-                        certRequested <- return False
-                        when certRequested (sendPacket ctx $ Handshake [Certificates clientCerts])
+                        certRequested <- usingState_ ctx getClientCertRequest
+                        case certRequested of
+                          Nothing ->
+                            return ()
+                            
+                          Just req ->
+                            
+                            case pClientCertParamsClient $ ctxParams ctx of
+                              Nothing ->
+                                -- FIXME: I interpret section 7.4.2 of
+                                -- RFC 2246 that a client may send an
+                                -- empty list if it does not have a
+                                -- matching certificate.
+                                --
+                                -- When the user has not configured
+                                -- client certificates, we do exactly
+                                -- that.
+                                sendPacket ctx $ Handshake [Certificates []]
+                                
+                              Just ccp -> do
+                                -- FIXME: What shall we do when the
+                                -- callback throws an exception?
+                                certChain <- liftIO $ onCertificateRequest ccp req `catch`
+                                  throwMiscErrorOnException "certificate request callback failed"
+                                
+                                case certChain of
+                                  (_, Just pk) : _ ->
+                                    usingState_ ctx $ setClientPrivateKey pk
+                                  _ ->
+                                    return ()
+                                    
+                                usingState_ ctx $ setClientCertSent (not $ null certChain)
+                                sendPacket ctx $ Handshake [Certificates $ map fst certChain]
 
-                sendCertificateVerify =
-                        {- maybe send certificateVerify -}
-                        {- FIXME not implemented yet -}
-                        return ()
+                -- In order to send a proper certificate verify message,
+                -- we have to do the following:
+                --
+                -- 1. Determine which signing algorithm(s) the server supports
+                --    (we currently only support RSA).
+                -- 2. Get the current handshake hash from the handshake state.
+                -- 3. Sign the handshake hash
+                -- 4. Send it to the server.
+                --
+                sendCertificateVerify = do
+                        -- Determine cert. request parameters.
+                        certRequested <- usingState_ ctx getClientCertRequest
+                        case certRequested of
+                          Nothing ->
+                            return ()
+
+                          Just _ -> do
+                            withClientCertClient ctx $ \ _ -> do
+                                -- Fetch the current handshake hash.
+                                dig <- usingState_ ctx $ getCertVerifyDigest
+                                
+                                -- Sign the hash.
+                                sigDig <- usingState_ ctx $ signRSA dig
+
+                                -- Send the digest
+                                sendPacket ctx $ Handshake [CertVerify sigDig]
 
                 recvServerHello = runRecvState ctx (RecvStateHandshake onServerHello)
 
@@ -225,17 +282,19 @@ handshakeClient cparams ctx = do
                                 CertificateUsageAccept        -> return ()
                                 CertificateUsageReject reason -> certificateRejected reason
                         return $ RecvStateHandshake processServerKeyExchange
-                        where
-                                rejectOnException :: SomeException -> IO TLSCertificateUsage
-                                rejectOnException e = return $ CertificateUsageReject $ CertificateRejectOther $ show e
+
                 processCertificate p = processServerKeyExchange p
 
                 processServerKeyExchange :: MonadIO m => Handshake -> m (RecvState m)
                 processServerKeyExchange (ServerKeyXchg _) = return $ RecvStateHandshake processCertificateRequest
                 processServerKeyExchange p                 = processCertificateRequest p
 
-                processCertificateRequest (CertRequest _ _ _) = do
-                        --modify (\sc -> sc { scCertRequested = True })
+                processCertificateRequest :: MonadIO m => Handshake -> m (RecvState m)
+                processCertificateRequest (CertRequest cTypes sigAlgs dNames) = do
+                        usingState_ ctx $ setClientCertRequest (cTypes, sigAlgs, dNames)
+                          -- (modify (\sc -> sc {
+                          --             stClientCertRequest = Just (cTypes, sigAlgs, dNames)
+                          --             }))
                         return $ RecvStateHandshake processServerHelloDone
                 processCertificateRequest p = processServerHelloDone p
 
@@ -258,15 +317,19 @@ handshakeClient cparams ctx = do
                                 return $ extra `B.append` e
                         sendPacket ctx $ Handshake [ClientKeyXchg encryptedPreMaster]
 
-                -- on certificate reject, throw an exception with the proper protocol alert error.
-                certificateRejected CertificateRejectRevoked =
-                        throwCore $ Error_Protocol ("certificate is revoked", True, CertificateRevoked)
-                certificateRejected CertificateRejectExpired =
-                        throwCore $ Error_Protocol ("certificate has expired", True, CertificateExpired)
-                certificateRejected CertificateRejectUnknownCA =
-                        throwCore $ Error_Protocol ("certificate has unknown CA", True, UnknownCa)
-                certificateRejected (CertificateRejectOther s) =
-                        throwCore $ Error_Protocol ("certificate rejected: " ++ s, True, CertificateUnknown)
+-- on certificate reject, throw an exception with the proper protocol alert error.
+certificateRejected :: MonadIO m => CertificateRejectReason -> m a
+certificateRejected CertificateRejectRevoked =
+  throwCore $ Error_Protocol ("certificate is revoked", True, CertificateRevoked)
+certificateRejected CertificateRejectExpired =
+  throwCore $ Error_Protocol ("certificate has expired", True, CertificateExpired)
+certificateRejected CertificateRejectUnknownCA =
+  throwCore $ Error_Protocol ("certificate has unknown CA", True, UnknownCa)
+certificateRejected (CertificateRejectOther s) =
+  throwCore $ Error_Protocol ("certificate rejected: " ++ s, True, CertificateUnknown)
+
+rejectOnException :: SomeException -> IO TLSCertificateUsage
+rejectOnException e = return $ CertificateUsageReject $ CertificateRejectOther $ show e
 
 handshakeServerWith :: MonadIO m => ServerParams -> Context -> Handshake -> m ()
 handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession ciphers compressions exts) = do
@@ -323,13 +386,41 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                 ---
                 recvClientData = runRecvState ctx (RecvStateHandshake processClientCertificate)
 
-                processClientCertificate (Certificates _) = return $ RecvStateHandshake processClientKeyExchange
+                processClientCertificate (Certificates certs) =
+                  withClientCertServer ctx $ \ ccp -> do
+                    usage <- liftIO $ catch (onClientCertificate ccp certs) rejectOnException
+                    case usage of
+                      CertificateUsageAccept        -> return ()
+                      CertificateUsageReject reason -> certificateRejected reason
+                    return $ RecvStateHandshake processClientKeyExchange
+
+                    
                 processClientCertificate p = processClientKeyExchange p
 
                 processClientKeyExchange (ClientKeyXchg _) = return $ RecvStateNext processCertificateVerify
                 processClientKeyExchange p                 = unexpected (show p) (Just "client key exchange")
 
-                processCertificateVerify (Handshake [CertVerify _]) = return $ RecvStateNext expectChangeCipher
+                processCertificateVerify (Handshake [CertVerify bs]) =
+                  withClientCertServer ctx $ \ ccp -> do
+                    dig <- usingState_ ctx $ getCertVerifyDigest
+                            
+                    verif <- usingState_ ctx $ verifyRSA dig bs
+                  
+                    case verif of
+                      Right True ->
+                        return ()
+                      
+                      _ -> do
+                        let arg = case verif of Left err -> Just err; _ -> Nothing
+                        res <- liftIO $ onUnverifiedClientCert ccp arg
+                        when (not res) $ do
+                          case verif of
+                            Left err -> 
+                              throwCore $ Error_Protocol (show err, True, DecryptError)
+                            _ ->
+                              throwCore $ Error_Protocol ("verification failed", True, BadCertificate)
+                    return $ RecvStateNext expectChangeCipher
+
                 processCertificateVerify p = expectChangeCipher p
 
                 expectChangeCipher ChangeCipherSpec = do npn <- usingState_ ctx getExtensionNPN
@@ -387,12 +478,19 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                                 let skg = SKX_RSA Nothing
                                 sendPacket ctx (Handshake [ServerKeyXchg skg])
                         -- FIXME we don't do this on a Anonymous server
-                        when (serverWantClientCert sparams) $ do
-                                let certTypes = [ CertificateType_RSA_Sign ]
-                                let creq = CertRequest certTypes Nothing [0,0,0]
-                                sendPacket ctx (Handshake [creq])
+                        case pClientCertParamsServer $ ctxParams ctx of
+                          Nothing ->
+                            return ()
+                            
+                          Just ccp -> do
+                            let certTypes = [ CertificateType_RSA_Sign ]
+                            let creq = CertRequest certTypes Nothing (map extractCAname $ ccpCACertificates ccp)
+                            sendPacket ctx (Handshake [creq])
                         -- Send HelloDone
                         sendPacket ctx (Handshake [ServerHelloDone])
+                        
+                extractCAname :: X509 -> DistinguishedName
+                extractCAname cert = DistinguishedName $ certIssuerDN (x509Cert cert)
 
 handshakeServerWith _ _ _ = fail "unexpected handshake type received. expecting client hello"
 
@@ -419,3 +517,25 @@ handshake ctx = do
                         sendPacket ctx (errorToAlert tlserror)
                         handshakeFailed tlserror
 
+
+withClientCertServer :: MonadIO m => Context -> (ClientCertParamsServer -> m a) -> m a
+withClientCertServer ctx f =
+  case pClientCertParamsServer $ ctxParams ctx of
+    Nothing ->
+      throwCore $ Error_Misc "client certificates not configured"
+      
+    Just cpp ->
+      f cpp
+
+withClientCertClient :: MonadIO m => Context -> (ClientCertParamsClient -> m a) -> m a
+withClientCertClient ctx f =
+  case pClientCertParamsClient $ ctxParams ctx of
+    Nothing ->
+      throwCore $ Error_Misc "client certificates not configured"
+      
+    Just cpp ->
+      f cpp
+
+throwMiscErrorOnException :: MonadIO m => String -> SomeException -> m a
+throwMiscErrorOnException msg e =
+  throwCore $ Error_Misc $ msg ++ ": " ++ show e

@@ -51,9 +51,11 @@ import Network.TLS.Cap
 import Data.Either (partitionEithers)
 import Data.Maybe (fromJust)
 import Data.Bits ((.|.))
+import Data.Word(Word16)
 import Control.Applicative ((<$>))
 import Control.Monad
 import Data.Certificate.X509 (decodeCertificate, encodeCertificate, X509)
+import Data.Certificate.X509.Cert (ASN1StringType(..), ASN1String)
 import Network.TLS.Crypto
 import Network.TLS.MAC
 import Network.TLS.Cipher (CipherKeyExchangeType(..))
@@ -64,6 +66,26 @@ import qualified Data.ByteString.Lazy as L
 
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.MD5 as MD5
+
+import Data.ASN1.DER
+
+asn1String :: ASN1 -> ASN1String
+asn1String (PrintableString x) = (Printable, x)
+asn1String (UTF8String x)      = (UTF8, x)
+asn1String (UniversalString x) = (Univ, x)
+asn1String (BMPString x)       = (BMP, x)
+asn1String (IA5String x)       = (IA5, x)
+asn1String (T61String x)       = (IA5, x)
+asn1String x                   = error ("not a print string " ++ show x)
+
+encodeAsn1String :: ASN1String -> ASN1
+encodeAsn1String (Printable, x) = PrintableString x
+encodeAsn1String (UTF8, x)      = UTF8String x
+encodeAsn1String (Univ, x)      = UniversalString x
+encodeAsn1String (BMP, x)       = BMPString x
+encodeAsn1String (IA5, x)       = IA5String x
+encodeAsn1String (T61, x)       = T61String x
+
 
 data CurrentParams = CurrentParams
         { cParamsVersion     :: Version               -- ^ current protocol version
@@ -241,13 +263,53 @@ decodeCertRequest cp = do
                 else return Nothing
         dNameLen <- getWord16
         when (cParamsVersion cp < TLS12 && dNameLen < 3) $ fail "certrequest distinguishname not of the correct size"
-        dName <- getBytes $ fromIntegral dNameLen
-        return $ CertRequest certTypes sigHashAlgs (B.unpack dName)
-
+        dNames <- decodeDNames dNameLen
+        return $ CertRequest certTypes sigHashAlgs dNames
+  where
+    -- Parse a list of distinguished names, which must be exactly
+    -- 'len' bytes long.
+    decodeDNames :: Word16 -> Get [DistinguishedName]
+    decodeDNames len | len == 0 = return []
+    decodeDNames len = do
+      thisLen <- getWord16
+      dName <- getBytes $ fromIntegral thisLen
+      l <- decodeDNames (len - (2 + thisLen))
+      dn <- decodeDName dName
+      return $ dn : l
+      
+    -- Decode the given bytes into a distinguished name.
+    decodeDName :: Bytes -> Get DistinguishedName
+    decodeDName d =
+      case decodeASN1Stream (L.fromChunks [d]) of
+        Left err -> fail $ "certrequest: " ++ show err
+        Right stream -> parseDName stream
+        
+    -- Parse a distinguished name from a list of ASN1 values.
+    parseDName :: [ASN1] -> Get DistinguishedName
+    parseDName (Start Sequence : r) = DistinguishedName `fmap` parseDName' r
+    parseDName _ = fail "certrequest: invalid sequence start"
+    
+    -- Parse a list of OID\/ASN1String values from the given list of
+    -- ASN1 values.
+    parseDName' :: [ASN1] -> Get [(OID, ASN1String)]
+    parseDName' [End Sequence] = return []
+    parseDName' (Start Set :
+                 Start Sequence :
+                 OID oid :
+                 str :
+                 End Sequence :
+                 End Set :
+                 r) = do
+      s <- parseDName' r  
+      return $ (oid, asn1String str) : s
+    parseDName' _ = fail "certrequest: cannot decode distingished name part"
+      
 decodeCertVerify :: Get Handshake
-decodeCertVerify =
+decodeCertVerify = do
+        c <- getWord16
+        bs <- getBytes $ fromIntegral c
         {- FIXME -}
-        return $ CertVerify []
+        return $ CertVerify bs
 
 decodeClientKeyXchg :: Get Handshake
 decodeClientKeyXchg = ClientKeyXchg <$> (remaining >>= getBytes)
@@ -330,9 +392,34 @@ encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
         case sigAlgs of
                 Nothing -> return ()
                 Just l  -> putWords16 $ map (\(x,y) -> (fromIntegral $ valOfType x) * 256 + (fromIntegral $ valOfType y)) l
-        putBytes $ B.pack certAuthorities
+        encodeCertAuthorities certAuthorities
+  where
+    -- Convert a distinguished name to its DER encoding.
+    encodeCA (DistinguishedName dn) = 
+      let str = Start Sequence :
+                concatMap (\ (a, b) ->
+                            Start Set : 
+                            Start Sequence : 
+                            OID a :
+                            encodeAsn1String b : 
+                            End Sequence :
+                            [End Set]) 
+                          dn ++
+                [End Sequence]
+      in case encodeASN1Stream  str of
+        Left err -> error $ show err
+        Right b -> B.concat $ L.toChunks b
+        
+    -- Encode a list of distinguished names.
+    encodeCertAuthorities certAuths = do
+      let enc = map encodeCA certAuths
+          totLength = sum $ map (((+) 2) . B.length) enc
+      putWord16 (fromIntegral totLength)
+      mapM_ (\ b -> putWord16 (fromIntegral (B.length b)) >> putBytes b) enc
 
-encodeHandshakeContent (CertVerify _) = undefined
+encodeHandshakeContent (CertVerify c) = do
+  putWord16 (fromIntegral $ B.length c)
+  putBytes c
 
 encodeHandshakeContent (Finished opaque) = putBytes opaque
 

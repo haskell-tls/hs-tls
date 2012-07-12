@@ -8,7 +8,8 @@
 -- the Receiving module contains calls related to unmarshalling packets according
 -- to the TLS state
 --
-module Network.TLS.Receiving (processHandshake, processPacket, processServerHello) where
+module Network.TLS.Receiving (processHandshake, processPacket, processServerHello
+                             , verifyRSA) where
 
 import Control.Applicative ((<$>))
 import Control.Monad.State
@@ -64,7 +65,8 @@ processHandshake hs = do
                 ClientHello cver ran _ _ _ ex -> unless clientmode $ do
                         mapM_ processClientExtension ex
                         startHandshakeClient cver ran
-                Certificates certs            -> when clientmode $ do processCertificates certs
+                Certificates certs            ->  
+                        processCertificates clientmode certs
                 ClientKeyXchg content         -> unless clientmode $ do
                         processClientKeyXchg content
                 HsNextProtocolNegotiation selected_protocol ->
@@ -89,6 +91,11 @@ decryptRSA econtent = do
         ver <- stVersion <$> get
         rsapriv <- fromJust "rsa private key" . hstRSAPrivateKey . fromJust "handshake" . stHandshake <$> get
         return $ kxDecrypt rsapriv (if ver < TLS10 then econtent else B.drop 2 econtent)
+
+verifyRSA :: ByteString -> ByteString -> TLSSt (Either KxError Bool)
+verifyRSA econtent sign = do
+        rsapriv <- fromJust "rsa client public key" . hstRSAClientPublicKey . fromJust "handshake" . stHandshake <$> get
+        return $ kxVerify rsapriv econtent sign
 
 processServerHello :: Handshake -> TLSSt ()
 processServerHello (ServerHello sver ran _ _ _ ex) = do
@@ -130,13 +137,14 @@ processClientFinished fdata = do
         cc <- stClientContext <$> get
         expected <- getHandshakeDigest (not cc)
         when (expected /= fdata) $ do
-                throwError $ Error_Protocol("bad record mac", True, BadRecordMac)
+                throwError $ Error_Protocol("bad record mac: client finished", True, BadRecordMac)
         updateVerifiedData False fdata
         return ()
 
-processCertificates :: [X509] -> TLSSt ()
-processCertificates certs = do
+processCertificates :: Bool -> [X509] -> TLSSt ()
+processCertificates clientMode certs = do
         let (X509 mainCert _ _ _ _) = head certs
         case certPubKey mainCert of
-                PubKeyRSA pubkey -> setPublicKey (PubRSA pubkey)
+                PubKeyRSA pubkey -> 
+                  (if clientMode then setPublicKey else setClientPublicKey) (PubRSA pubkey)
                 _                -> return ()
