@@ -38,7 +38,7 @@ makeRecord pkt = do
  -}
 processRecord :: Record Plaintext -> TLSSt (Record Plaintext)
 processRecord record@(Record ty _ fragment) = do
-        when (ty == ProtocolType_Handshake) (updateHandshakeDigest $ fragmentGetBytes fragment)
+--        when (ty == ProtocolType_Handshake) (updateHandshakeDigest $ fragmentGetBytes fragment)
         return record
 
 {-
@@ -69,6 +69,7 @@ preProcessPacket (Handshake hss)    = forM_ hss $ \hs -> do
         case hs of
                 Finished fdata -> updateVerifiedData True fdata
                 _              -> return ()
+        when (finishHandshakeTypeMaterial $ typeOfHandshake hs) (updateHandshakeDigest $ encodeHandshake hs)
 
 {-
  - writePacket transform a packet into marshalled data related to current state
@@ -97,7 +98,7 @@ encryptRSA content = do
 signRSA :: ByteString -> TLSSt ByteString
 signRSA content = do
         st <- get
-        let rsakey = fromJust "rsa private key" $ hstRSAPrivateKey $ fromJust "handshake" $ stHandshake st
+        let rsakey = fromJust "rsa client private key" $ hstRSAClientPrivateKey $ fromJust "handshake" $ stHandshake st
         case kxSign rsakey content of
                 Left err       -> fail ("rsa sign failed: " ++ show err)
                 Right econtent -> return econtent
