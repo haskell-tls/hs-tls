@@ -97,7 +97,12 @@ data Logging = Logging
         }
 
 data ClientParams = ClientParams
+        { clientWantSessionResume :: Maybe (SessionID, SessionData) -- ^ try to establish a connection using this session.
+        }
+
 data ServerParams = ServerParams
+        { serverWantClientCert    :: Bool  -- ^ request a certificate from client.
+        }
 
 data RoleParams = Client ClientParams | Server ServerParams
 
@@ -106,8 +111,6 @@ data Params = forall s . SessionManager s => Params
         , pAllowedVersions   :: [Version]           -- ^ allowed versions that we can use.
         , pCiphers           :: [Cipher]            -- ^ all ciphers supported ordered by priority.
         , pCompressions      :: [Compression]       -- ^ all compression supported ordered by priority.
-        , pWantClientCert    :: Bool                -- ^ request a certificate from client.
-                                                    -- use by server only.
         , pUseSecureRenegotiation :: Bool           -- ^ notify that we want to use secure renegotation
         , pUseSession             :: Bool           -- ^ generate new session if specified
         , pCertificates      :: [(X509, Maybe PrivateKey)] -- ^ the cert chain for this context with the associated keys if any.
@@ -117,7 +120,6 @@ data Params = forall s . SessionManager s => Params
         , pSessionManager    :: s
         , onSuggestNextProtocols :: IO (Maybe [B.ByteString])       -- ^ suggested next protocols accoring to the next protocol negotiation extension.
         , onNPNServerSuggest :: Maybe ([B.ByteString] -> IO B.ByteString)
-        , sessionResumeWith   :: Maybe (SessionID, SessionData) -- ^ try to establish a connection using this session.
         , roleParams          :: RoleParams
         }
 
@@ -142,7 +144,6 @@ defaultParamsClient = Params
         , pAllowedVersions        = [TLS10,TLS11,TLS12]
         , pCiphers                = []
         , pCompressions           = [nullCompression]
-        , pWantClientCert         = False
         , pUseSecureRenegotiation = True
         , pUseSession             = True
         , pCertificates           = []
@@ -152,13 +153,16 @@ defaultParamsClient = Params
         , pSessionManager         = NoSessionManager
         , onSuggestNextProtocols  = return Nothing
         , onNPNServerSuggest      = Nothing
-        , sessionResumeWith       = Nothing
         , roleParams              = Client $ ClientParams
+                                        { clientWantSessionResume = Nothing
+                                        }
         }
 
 defaultParamsServer :: Params
 defaultParamsServer = defaultParamsClient
         { roleParams = Server $ ServerParams
+                        { serverWantClientCert         = False
+                        }
         }
 
 updateRoleParams :: (ClientParams -> ClientParams) -> (ServerParams -> ServerParams) -> Params -> Params
@@ -183,7 +187,6 @@ instance Show Params where
                 , ("allowedVersions", show $ pAllowedVersions p)
                 , ("ciphers", show $ pCiphers p)
                 , ("compressions", show $ pCompressions p)
-                , ("want-client-cert", show $ pWantClientCert p)
                 , ("certificates", show $ length $ pCertificates p)
                 ]) ++ " }"
 

@@ -274,7 +274,7 @@ prop_handshake_session_resumption = do
         -- and resume
         sessionParams <- run $ readIORef sessionRef
         assert (isJust sessionParams)
-        let params2 = setPairParamsSessionResuming (fromJust sessionParams) plainParams
+        let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 
         -- resume
         (startQueue, resultQueue) <- run (establish_data_pipe params2 tlsServer tlsClient)

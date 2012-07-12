@@ -105,11 +105,9 @@ setPairParamsSessionManager manager (clientState, serverState) = (nc,ns)
                 nc = setSessionManager manager clientState
                 ns = setSessionManager manager serverState
 
-setPairParamsSessionResuming sessionStuff (clientState, serverState) = (nc,ns)
+setPairParamsSessionResuming sessionStuff (clientState, serverState) = (nc,serverState)
         where
-                nc = clientState { sessionResumeWith   = Just sessionStuff }
-                ns = serverState { onSessionResumption = \s ->
-                        return $ if s == fst sessionStuff then Just (snd sessionStuff) else Nothing }
+                nc = updateClientParams (\cparams -> cparams { clientWantSessionResume = Just sessionStuff }) clientState
 
 newPairContext pipe (cParams, sParams) = do
         let noFlush = return ()
