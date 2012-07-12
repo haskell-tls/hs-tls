@@ -204,7 +204,7 @@ data CertificateUsage =
         | CertificateUsageReject CertificateRejectReason -- ^ usage of certificate rejected
         deriving (Show,Eq)
 
--- |
+-- | Connection IO backend
 data Backend = Backend
         { backendFlush :: IO ()                -- ^ Flush the connection sending buffer, if any.
         , backendClose :: IO ()                -- ^ Close the connection.
