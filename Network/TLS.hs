@@ -17,12 +17,13 @@ module Network.TLS
     , Logging(..)
     , CertificateUsage(..)
     , CertificateRejectReason(..)
-    , SessionID
-    , SessionData(..)
     , defaultParamsClient
     , defaultParamsServer
     , defaultLogging
 
+    -- * Session
+    , SessionID
+    , SessionData(..)
     -- * Backend abstraction
     , Backend(..)
 

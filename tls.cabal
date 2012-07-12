@@ -67,6 +67,7 @@ Library
                      Network.TLS.Sending
                      Network.TLS.Receiving
                      Network.TLS.Util
+                     Network.TLS.Types
                      Network.TLS.Wire
   ghc-options:       -Wall
 
