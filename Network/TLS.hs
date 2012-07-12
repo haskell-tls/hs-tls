@@ -24,6 +24,10 @@ module Network.TLS
     -- * Session
     , SessionID
     , SessionData(..)
+    , SessionManager(..)
+    , NoSessionManager(..)
+    , setSessionManager
+
     -- * Backend abstraction
     , Backend(..)
 
@@ -83,3 +87,4 @@ import Network.TLS.Cipher (Cipher(..), Bulk(..))
 import Network.TLS.Compression (CompressionC(..), Compression(..), nullCompression)
 import Network.TLS.Context
 import Network.TLS.Core
+import Network.TLS.Session

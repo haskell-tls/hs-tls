@@ -118,7 +118,7 @@ handshakeTerminate ctx = do
         case session of
                 Session (Just sessionId) -> do
                         sessionData <- usingState_ ctx getSessionData
-                        liftIO $ (onSessionEstablished $ ctxParams ctx) sessionId (fromJust sessionData)
+                        withSessionManager (ctxParams ctx) (\s -> liftIO $ sessionEstablish s sessionId (fromJust sessionData))
                 _ -> return ()
         -- forget all handshake data now and reset bytes counters.
         usingState_ ctx endHandshake
@@ -290,7 +290,7 @@ handshakeServerWith ctx clientHello@(ClientHello ver _ clientSession ciphers com
                 })
 
         resumeSessionData <- case clientSession of
-                (Session (Just clientSessionId)) -> liftIO $ onSessionResumption params $ clientSessionId
+                (Session (Just clientSessionId)) -> withSessionManager params (\s -> liftIO $ sessionResume s clientSessionId)
                 (Session Nothing)                -> return Nothing
         case resumeSessionData of
                 Nothing -> do
