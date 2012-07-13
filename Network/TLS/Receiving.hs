@@ -8,7 +8,8 @@
 -- the Receiving module contains calls related to unmarshalling packets according
 -- to the TLS state
 --
-module Network.TLS.Receiving (processHandshake, processPacket, processServerHello) where
+module Network.TLS.Receiving (processHandshake, processPacket, processServerHello
+                             , verifyRSA) where
 
 import Control.Applicative ((<$>))
 import Control.Monad.State
@@ -89,6 +90,11 @@ decryptRSA econtent = do
         ver <- stVersion <$> get
         rsapriv <- fromJust "rsa private key" . hstRSAPrivateKey . fromJust "handshake" . stHandshake <$> get
         return $ kxDecrypt rsapriv (if ver < TLS10 then econtent else B.drop 2 econtent)
+
+verifyRSA :: ByteString -> ByteString -> TLSSt (Either KxError Bool)
+verifyRSA econtent sign = do
+        rsapriv <- fromJust "rsa client public key" . hstRSAClientPublicKey . fromJust "handshake" . stHandshake <$> get
+        return $ kxVerify rsapriv econtent sign
 
 processServerHello :: Handshake -> TLSSt ()
 processServerHello (ServerHello sver ran _ _ _ ex) = do

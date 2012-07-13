@@ -29,6 +29,8 @@ module Network.TLS.State
         , setMasterSecretFromPre
         , setPublicKey
         , setPrivateKey
+        , setClientPublicKey
+        , setClientPrivateKey
         , setKeyBlock
         , setVersion
         , setCipher
@@ -94,6 +96,8 @@ data TLSHandshakeState = TLSHandshakeState
         , hstMasterSecret    :: !(Maybe Bytes)
         , hstRSAPublicKey    :: !(Maybe PublicKey)
         , hstRSAPrivateKey   :: !(Maybe PrivateKey)
+        , hstRSAClientPublicKey    :: !(Maybe PublicKey)
+        , hstRSAClientPrivateKey   :: !(Maybe PrivateKey)
         , hstHandshakeDigest :: !HashCtx
         } deriving (Show)
 
@@ -261,6 +265,12 @@ setPublicKey pk = updateHandshake "publickey" (\hst -> hst { hstRSAPublicKey = J
 setPrivateKey :: MonadState TLSState m => PrivateKey -> m ()
 setPrivateKey pk = updateHandshake "privatekey" (\hst -> hst { hstRSAPrivateKey = Just pk })
 
+setClientPublicKey :: MonadState TLSState m => PublicKey -> m ()
+setClientPublicKey pk = updateHandshake "client publickey" (\hst -> hst { hstRSAClientPublicKey = Just pk })
+
+setClientPrivateKey :: MonadState TLSState m => PrivateKey -> m ()
+setClientPrivateKey pk = updateHandshake "client privatekey" (\hst -> hst { hstRSAClientPrivateKey = Just pk })
+
 getSessionData :: MonadState TLSState m => m (Maybe SessionData)
 getSessionData = do
         st <- get
@@ -367,6 +377,8 @@ newEmptyHandshake ver crand digestInit = TLSHandshakeState
         , hstMasterSecret    = Nothing
         , hstRSAPublicKey    = Nothing
         , hstRSAPrivateKey   = Nothing
+        , hstRSAClientPublicKey    = Nothing
+        , hstRSAClientPrivateKey   = Nothing
         , hstHandshakeDigest = digestInit
         }
 
