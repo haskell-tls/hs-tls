@@ -59,6 +59,7 @@ module Network.TLS.State
         , startHandshakeClient
         , updateHandshakeDigest
         , getHandshakeDigest
+        , getCertVerifyDigest
         , endHandshake
         ) where
 
@@ -437,6 +438,13 @@ getHandshakeDigest client = do
         let hashctx = hstHandshakeDigest hst
         let msecret = fromJust "master secret" $ hstMasterSecret hst
         return $ (if client then generateClientFinished else generateServerFinished) (stVersion st) msecret hashctx
+
+getCertVerifyDigest :: MonadState TLSState m => m Bytes
+getCertVerifyDigest = do
+        st <- get
+        let hst = fromJust "handshake" $ stHandshake st
+        let hashctx = hstHandshakeDigest hst
+        return (hashFinal hashctx)
 
 endHandshake :: MonadState TLSState m => m ()
 endHandshake = modify (\st -> st { stHandshake = Nothing })
