@@ -65,7 +65,7 @@ processHandshake hs = do
                 ClientHello cver ran _ _ _ ex -> unless clientmode $ do
                         mapM_ processClientExtension ex
                         startHandshakeClient cver ran
-                Certificates certs            -> when clientmode $ do processCertificates certs
+                Certificates certs            -> processCertificates clientmode certs
                 ClientKeyXchg content         -> unless clientmode $ do
                         processClientKeyXchg content
                 HsNextProtocolNegotiation selected_protocol ->
@@ -140,9 +140,11 @@ processClientFinished fdata = do
         updateVerifiedData False fdata
         return ()
 
-processCertificates :: [X509] -> TLSSt ()
-processCertificates certs = do
+processCertificates :: Bool -> [X509] -> TLSSt ()
+processCertificates clientmode certs = do
         let (X509 mainCert _ _ _ _) = head certs
         case certPubKey mainCert of
-                PubKeyRSA pubkey -> setPublicKey (PubRSA pubkey)
+                PubKeyRSA pubkey -> (if clientmode
+                                     then setPublicKey
+                                     else setClientPublicKey) (PubRSA pubkey)
                 _                -> return ()
