@@ -142,8 +142,13 @@ processClientFinished fdata = do
 
 processCertificates :: Bool -> [X509] -> TLSSt ()
 processCertificates clientmode certs = do
-        let (X509 mainCert _ _ _ _) = head certs
-        case certPubKey mainCert of
+        if null certs 
+         then when (clientmode) $
+                 throwError $ Error_Protocol ("server certificate missing", True,
+                                              HandshakeFailure)
+         else do
+          let (X509 mainCert _ _ _ _) = head certs
+          case certPubKey mainCert of
                 PubKeyRSA pubkey -> (if clientmode
                                      then setPublicKey
                                      else setClientPublicKey) (PubRSA pubkey)
