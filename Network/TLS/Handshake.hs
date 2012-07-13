@@ -419,3 +419,25 @@ handshake ctx = do
                         sendPacket ctx (errorToAlert tlserror)
                         handshakeFailed tlserror
 
+
+withClientCertServer :: MonadIO m => Context -> (ClientCertParamsServer -> m a) -> m a
+withClientCertServer ctx f =
+  case pClientCertParamsServer $ ctxParams ctx of
+    Nothing ->
+      throwCore $ Error_Misc "client certificates not configured"
+      
+    Just cpp ->
+      f cpp
+
+withClientCertClient :: MonadIO m => Context -> (ClientCertParamsClient -> m a) -> m a
+withClientCertClient ctx f =
+  case pClientCertParamsClient $ ctxParams ctx of
+    Nothing ->
+      throwCore $ Error_Misc "client certificates not configured"
+      
+    Just cpp ->
+      f cpp
+
+throwMiscErrorOnException :: MonadIO m => String -> SomeException -> m a
+throwMiscErrorOnException msg e =
+  throwCore $ Error_Misc $ msg ++ ": " ++ show e
