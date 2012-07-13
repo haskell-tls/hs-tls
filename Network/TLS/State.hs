@@ -31,6 +31,10 @@ module Network.TLS.State
         , setPrivateKey
         , setClientPublicKey
         , setClientPrivateKey
+        , setClientCertSent
+        , getClientCertSent
+        , setClientCertRequest
+        , getClientCertRequest
         , setKeyBlock
         , setVersion
         , setCipher
@@ -89,6 +93,10 @@ data TLSMacState = TLSMacState
         { msSequence :: Word64
         } deriving (Show)
 
+type ClientCertRequestData = ([CertificateType],
+                              Maybe [(HashAlgorithm, SignatureAlgorithm)],
+                              [DistinguishedName])
+  
 data TLSHandshakeState = TLSHandshakeState
         { hstClientVersion   :: !(Version)
         , hstClientRandom    :: !ClientRandom
@@ -99,6 +107,8 @@ data TLSHandshakeState = TLSHandshakeState
         , hstRSAClientPublicKey    :: !(Maybe PublicKey)
         , hstRSAClientPrivateKey   :: !(Maybe PrivateKey)
         , hstHandshakeDigest :: !HashCtx
+        , hstClientCertRequest   :: Maybe ClientCertRequestData -- ^ Set to Just-value when certificate request was received
+        , hstClientCertSent      :: Bool -- ^ Set to true when a client certificate chain was sent
         } deriving (Show)
 
 data StateRNG = forall g . CryptoRandomGen g => StateRNG g
@@ -271,6 +281,22 @@ setClientPublicKey pk = updateHandshake "client publickey" (\hst -> hst { hstRSA
 setClientPrivateKey :: MonadState TLSState m => PrivateKey -> m ()
 setClientPrivateKey pk = updateHandshake "client privatekey" (\hst -> hst { hstRSAClientPrivateKey = Just pk })
 
+setClientCertSent :: MonadState TLSState m => Bool -> m ()
+setClientCertSent b = updateHandshake "client cert sent" (\hst -> hst { hstClientCertSent = b })
+
+getClientCertSent :: MonadState TLSState m => m (Maybe Bool)
+getClientCertSent = do
+        st <- get
+        return (stHandshake st >>= Just . hstClientCertSent)
+
+setClientCertRequest :: MonadState TLSState m => ClientCertRequestData -> m ()
+setClientCertRequest d = updateHandshake "client cert data" (\hst -> hst { hstClientCertRequest = Just d })
+
+getClientCertRequest :: MonadState TLSState m => m (Maybe ClientCertRequestData)
+getClientCertRequest = do
+        st <- get
+        return (stHandshake st >>= hstClientCertRequest)
+
 getSessionData :: MonadState TLSState m => m (Maybe SessionData)
 getSessionData = do
         st <- get
@@ -380,6 +406,8 @@ newEmptyHandshake ver crand digestInit = TLSHandshakeState
         , hstRSAClientPublicKey    = Nothing
         , hstRSAClientPrivateKey   = Nothing
         , hstHandshakeDigest = digestInit
+        , hstClientCertRequest = Nothing
+        , hstClientCertSent  = False
         }
 
 startHandshakeClient :: MonadState TLSState m => Version -> ClientRandom -> m ()
