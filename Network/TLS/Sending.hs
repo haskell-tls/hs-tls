@@ -38,7 +38,6 @@ makeRecord pkt = do
  -}
 processRecord :: Record Plaintext -> TLSSt (Record Plaintext)
 processRecord record@(Record ty _ fragment) = do
-        when (ty == ProtocolType_Handshake) (updateHandshakeDigest $ fragmentGetBytes fragment)
         return record
 
 {-
@@ -69,6 +68,7 @@ preProcessPacket (Handshake hss)    = forM_ hss $ \hs -> do
         case hs of
                 Finished fdata -> updateVerifiedData True fdata
                 _              -> return ()
+        when (finishHandshakeTypeMaterial $ typeOfHandshake hs) (updateHandshakeDigest $ encodeHandshake hs)
 
 {-
  - writePacket transform a packet into marshalled data related to current state
