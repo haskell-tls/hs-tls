@@ -389,7 +389,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                         -- FIXME we don't do this on a Anonymous server
                         when (serverWantClientCert sparams) $ do
                                 let certTypes = [ CertificateType_RSA_Sign ]
-                                let creq = CertRequest certTypes Nothing [0,0,0]
+                                let creq = CertRequest certTypes Nothing [] -- FIXME: get client cert names.
                                 sendPacket ctx (Handshake [creq])
                         -- Send HelloDone
                         sendPacket ctx (Handshake [ServerHelloDone])

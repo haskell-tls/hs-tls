@@ -51,9 +51,10 @@ import Network.TLS.Cap
 import Data.Either (partitionEithers)
 import Data.Maybe (fromJust)
 import Data.Bits ((.|.))
+import Data.Word(Word16)
 import Control.Applicative ((<$>))
 import Control.Monad
-import Data.Certificate.X509 (decodeCertificate, encodeCertificate, X509)
+import Data.Certificate.X509 (decodeCertificate, encodeCertificate, X509, encodeDN, decodeDN)
 import Network.TLS.Crypto
 import Network.TLS.MAC
 import Network.TLS.Cipher (CipherKeyExchangeType(..))
@@ -241,13 +242,33 @@ decodeCertRequest cp = do
                 else return Nothing
         dNameLen <- getWord16
         when (cParamsVersion cp < TLS12 && dNameLen < 3) $ fail "certrequest distinguishname not of the correct size"
-        dName <- getBytes $ fromIntegral dNameLen
-        return $ CertRequest certTypes sigHashAlgs (B.unpack dName)
+        dNames <- decodeDNames dNameLen
+        return $ CertRequest certTypes sigHashAlgs dNames
+  where
+    -- Parse a list of distinguished names, which must be exactly
+    -- 'len' bytes long.
+    decodeDNames :: Word16 -> Get [DistinguishedName]
+    decodeDNames len | len == 0 = return []
+    decodeDNames len = do
+      thisLen <- getWord16
+      dName <- getBytes $ fromIntegral thisLen
+      l <- decodeDNames (len - (2 + thisLen))
+      dn <- decodeDName dName
+      return $ dn : l
+
+    -- Decode the given bytes into a distinguished name.
+    decodeDName :: Bytes -> Get DistinguishedName
+    decodeDName d =
+      case decodeDN (L.fromChunks [d]) of
+        Left err -> fail $ "certrequest: " ++ show err
+        Right s -> return $ DistinguishedName s
+
 
 decodeCertVerify :: Get Handshake
-decodeCertVerify =
-        {- FIXME -}
-        return $ CertVerify []
+decodeCertVerify = do
+        c <- getWord16
+        bs <- getBytes $ fromIntegral c
+        return $ CertVerify bs
 
 decodeClientKeyXchg :: Get Handshake
 decodeClientKeyXchg = ClientKeyXchg <$> (remaining >>= getBytes)
@@ -330,9 +351,25 @@ encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
         case sigAlgs of
                 Nothing -> return ()
                 Just l  -> putWords16 $ map (\(x,y) -> (fromIntegral $ valOfType x) * 256 + (fromIntegral $ valOfType y)) l
-        putBytes $ B.pack certAuthorities
+        encodeCertAuthorities certAuthorities
+  where
+    -- Convert a distinguished name to its DER encoding.
+    encodeCA (DistinguishedName dn) =
+      case encodeDN dn of
+        Left err -> fail $ "cannot encode distinguished name: " ++ err
+        Right s -> return $ B.concat $ L.toChunks s
 
-encodeHandshakeContent (CertVerify _) = undefined
+    -- Encode a list of distinguished names.
+    encodeCertAuthorities certAuths = do
+      enc <- mapM encodeCA certAuths
+      let totLength = sum $ map (((+) 2) . B.length) enc
+      putWord16 (fromIntegral totLength)
+      mapM_ (\ b -> putWord16 (fromIntegral (B.length b)) >> putBytes b) enc
+
+encodeHandshakeContent (CertVerify c) = do
+        putWord16 (fromIntegral $ B.length c)
+        putBytes c
+
 
 encodeHandshakeContent (Finished opaque) = putBytes opaque
 
