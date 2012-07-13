@@ -225,9 +225,7 @@ handshakeClient cparams ctx = do
                                 CertificateUsageAccept        -> return ()
                                 CertificateUsageReject reason -> certificateRejected reason
                         return $ RecvStateHandshake processServerKeyExchange
-                        where
-                                rejectOnException :: SomeException -> IO TLSCertificateUsage
-                                rejectOnException e = return $ CertificateUsageReject $ CertificateRejectOther $ show e
+                
                 processCertificate p = processServerKeyExchange p
 
                 processServerKeyExchange :: MonadIO m => Handshake -> m (RecvState m)
@@ -258,15 +256,19 @@ handshakeClient cparams ctx = do
                                 return $ extra `B.append` e
                         sendPacket ctx $ Handshake [ClientKeyXchg encryptedPreMaster]
 
-                -- on certificate reject, throw an exception with the proper protocol alert error.
-                certificateRejected CertificateRejectRevoked =
-                        throwCore $ Error_Protocol ("certificate is revoked", True, CertificateRevoked)
-                certificateRejected CertificateRejectExpired =
-                        throwCore $ Error_Protocol ("certificate has expired", True, CertificateExpired)
-                certificateRejected CertificateRejectUnknownCA =
-                        throwCore $ Error_Protocol ("certificate has unknown CA", True, UnknownCa)
-                certificateRejected (CertificateRejectOther s) =
-                        throwCore $ Error_Protocol ("certificate rejected: " ++ s, True, CertificateUnknown)
+-- on certificate reject, throw an exception with the proper protocol alert error.
+certificateRejected :: MonadIO m => CertificateRejectReason -> m a
+certificateRejected CertificateRejectRevoked =
+  throwCore $ Error_Protocol ("certificate is revoked", True, CertificateRevoked)
+certificateRejected CertificateRejectExpired =
+  throwCore $ Error_Protocol ("certificate has expired", True, CertificateExpired)
+certificateRejected CertificateRejectUnknownCA =
+  throwCore $ Error_Protocol ("certificate has unknown CA", True, UnknownCa)
+certificateRejected (CertificateRejectOther s) =
+  throwCore $ Error_Protocol ("certificate rejected: " ++ s, True, CertificateUnknown)
+
+rejectOnException :: SomeException -> IO TLSCertificateUsage
+rejectOnException e = return $ CertificateUsageReject $ CertificateRejectOther $ show e
 
 handshakeServerWith :: MonadIO m => ServerParams -> Context -> Handshake -> m ()
 handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession ciphers compressions exts) = do
