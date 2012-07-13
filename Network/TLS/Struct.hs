@@ -21,6 +21,7 @@ module Network.TLS.Struct
         , SignatureAlgorithm(..)
         , ProtocolType(..)
         , TLSError(..)
+        , DistinguishedName(..)
         , ServerDHParams(..)
         , ServerRSAParams(..)
         , ServerKeyXchgAlgorithmData(..)
@@ -49,6 +50,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as B (length)
 import Data.Word
 import Data.Certificate.X509 (X509)
+import Data.Certificate.X509.Cert (ASN1String, OID)
 import Data.Typeable
 import Control.Monad.Error (Error(..))
 import Control.Exception (Exception(..))
@@ -216,6 +218,9 @@ data ServerKeyXchgAlgorithmData =
         | SKX_DH_RSA (Maybe ServerRSAParams)
         | SKX_Unknown Bytes
         deriving (Show,Eq)
+
+data DistinguishedName = DistinguishedName [(OID, ASN1String)]
+  deriving (Eq, Show)
 
 data Handshake =
           ClientHello !Version !ClientRandom !Session ![CipherID] ![CompressionID] [ExtensionRaw]
