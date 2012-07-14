@@ -32,7 +32,7 @@ import Data.List (intersect, find)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 
-import Data.Certificate.X509(X509, certIssuerDN, x509Cert)
+import Data.Certificate.X509(X509, certSubjectDN, x509Cert)
 
 import Control.Applicative ((<$>))
 import Control.Monad.State
@@ -554,7 +554,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                         sendPacket ctx (Handshake [ServerHelloDone])
 
                 extractCAname :: X509 -> DistinguishedName
-                extractCAname cert = DistinguishedName $ certIssuerDN (x509Cert cert)
+                extractCAname cert = DistinguishedName $ certSubjectDN (x509Cert cert)
 
 handshakeServerWith _ _ _ = fail "unexpected handshake type received. expecting client hello"
 
