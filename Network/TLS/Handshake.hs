@@ -180,16 +180,19 @@ handshakeClient cparams ctx = do
 
                 -- When the server requests a client certificate, we
                 -- fetch a certificate chain from the callback in the
-                -- client parameters.
+                -- client parameters and send it to the server.
+                -- Additionally, we store the private key associated
+                -- with the first certificate in the chain for later
+                -- use.
                 --
                 sendCertificate = do
                         certRequested <- usingState_ ctx getClientCertRequest
                         case certRequested of
                           Nothing ->
                             return ()
-                            
+
                           Just req ->
-                            
+
                             case pClientCertParamsClient $ ctxParams ctx of
                               Nothing ->
                                 -- FIXME: I interpret section 7.4.2 of
@@ -200,20 +203,39 @@ handshakeClient cparams ctx = do
                                 -- When the user has not configured
                                 -- client certificates, we do exactly
                                 -- that.
+                                --
                                 sendPacket ctx $ Handshake [Certificates []]
-                                
+
                               Just ccp -> do
                                 -- FIXME: What shall we do when the
                                 -- callback throws an exception?
+                                --
                                 certChain <- liftIO $ onCertificateRequest ccp req `catch`
                                   throwMiscErrorOnException "certificate request callback failed"
-                                
+
+                                -- FIXME: Currently, when the first
+                                -- client certificate has no
+                                -- associated private key (or when the
+                                -- application offered no
+                                -- certificates), we simply do not
+                                -- install the key for later use.
+                                -- This will lead to an error later
+                                -- on, but it would propbably better
+                                -- to fail explicitly.
+                                --
                                 case certChain of
                                   (_, Just pk) : _ ->
                                     usingState_ ctx $ setClientPrivateKey pk
                                   _ ->
                                     return ()
-                                    
+
+                                -- FIXME: Check that we can sign with
+                                -- the provided certificate.
+
+                                -- FIXME: Check that the certificate
+                                -- matches the types requeted by the
+                                -- server.
+
                                 usingState_ ctx $ setClientCertSent (not $ null certChain)
                                 sendPacket ctx $ Handshake [Certificates $ map fst certChain]
 
@@ -227,7 +249,10 @@ handshakeClient cparams ctx = do
                 -- 4. Send it to the server.
                 --
                 sendCertificateVerify = do
-                        -- Determine cert. request parameters.
+                        -- Determine certificate request parameters.
+                        -- When no certicicate was requested, do
+                        -- nothing.
+                        --
                         certRequested <- usingState_ ctx getClientCertRequest
                         case certRequested of
                           Nothing ->
@@ -237,8 +262,15 @@ handshakeClient cparams ctx = do
                             withClientCertClient ctx $ \ _ -> do
                                 -- Fetch the current handshake hash.
                                 dig <- usingState_ ctx $ getCertVerifyDigest
-                                
+
+                                -- FIXME: Need to chek whether the
+                                -- server supports RSA signing.
+
                                 -- Sign the hash.
+                                --
+                                -- FIXME: Dows not work yet. RSA
+                                -- signing is not used correctly yet.
+                                --
                                 sigDig <- usingState_ ctx $ signRSA dig
 
                                 -- Send the digest
@@ -282,7 +314,7 @@ handshakeClient cparams ctx = do
                                 CertificateUsageAccept        -> return ()
                                 CertificateUsageReject reason -> certificateRejected reason
                         return $ RecvStateHandshake processServerKeyExchange
-                
+
                 processCertificate p = processServerKeyExchange p
 
                 processServerKeyExchange :: MonadIO m => Handshake -> m (RecvState m)
@@ -291,6 +323,10 @@ handshakeClient cparams ctx = do
 
                 processCertificateRequest :: MonadIO m => Handshake -> m (RecvState m)
                 processCertificateRequest (CertRequest cTypes sigAlgs dNames) = do
+                        -- When the server requests a client
+                        -- certificate, we simply store the
+                        -- information for later.
+                        --
                         usingState_ ctx $ setClientCertRequest (cTypes, sigAlgs, dNames)
                         return $ RecvStateHandshake processServerHelloDone
                 processCertificateRequest p = processServerHelloDone p
@@ -383,36 +419,61 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                 ---
                 recvClientData = runRecvState ctx (RecvStateHandshake processClientCertificate)
 
+                -- When the client sends a certificate, check whether
+                -- it is acceptable for the application.
+                --
                 processClientCertificate (Certificates certs) =
+                  -- Note that the following call will throw an
+                  -- exception when we did not request a certificate.
+                  --
                   withClientCertServer ctx $ \ ccp -> do
+                    -- Call application callback to see whether the
+                    -- certificate chain is acceptable.
+                    --
                     usage <- liftIO $ catch (onClientCertificate ccp certs) rejectOnException
                     case usage of
                       CertificateUsageAccept        -> return ()
                       CertificateUsageReject reason -> certificateRejected reason
+
+
+                    -- FIXME: We should check whether the certificate
+                    -- matches our request and that we support
+                    -- verifying with that certificate.
+
                     return $ RecvStateHandshake processClientKeyExchange
 
-                    
+
                 processClientCertificate p = processClientKeyExchange p
 
                 processClientKeyExchange (ClientKeyXchg _) = return $ RecvStateNext processCertificateVerify
                 processClientKeyExchange p                 = unexpected (show p) (Just "client key exchange")
 
+                -- Check whether the client correctly signed the handshake.
+                -- If not, ask the application on how to proceed.
+                --
                 processCertificateVerify (Handshake [CertVerify bs]) =
                   withClientCertServer ctx $ \ ccp -> do
                     dig <- usingState_ ctx $ getCertVerifyDigest
-                            
+
+                    -- Verify the signature.
                     verif <- usingState_ ctx $ verifyRSA dig bs
-                  
+
                     case verif of
                       Right True ->
                         return ()
-                      
+
                       _ -> do
+                        -- Either verification failed because of an
+                        -- invalid format (with an error message), or
+                        -- the signature is wrong.  In either case,
+                        -- ask the application -- if it wants to
+                        -- proceed, we will do that.
+                        --
                         let arg = case verif of Left err -> Just err; _ -> Nothing
                         res <- liftIO $ onUnverifiedClientCert ccp arg
                         when (not res) $ do
                           case verif of
-                            Left err -> 
+                            Left err ->
                               throwCore $ Error_Protocol (show err, True, DecryptError)
                             _ ->
                               throwCore $ Error_Protocol ("verification failed", True, BadCertificate)
@@ -474,11 +535,17 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                         when needKeyXchg $ do
                                 let skg = SKX_RSA Nothing
                                 sendPacket ctx (Handshake [ServerKeyXchg skg])
+
                         -- FIXME we don't do this on a Anonymous server
+
+                        -- When configured, send a certificate request
+                        -- with the DNs of all confgure CA
+                        -- certificates.
+                        --
                         case pClientCertParamsServer $ ctxParams ctx of
                           Nothing ->
                             return ()
-                            
+
                           Just ccp -> do
                             let certTypes = [ CertificateType_RSA_Sign ]
                             let creq = CertRequest certTypes Nothing (map extractCAname $ ccpCACertificates ccp)
@@ -488,7 +555,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
 
                 extractCAname :: X509 -> DistinguishedName
                 extractCAname cert = DistinguishedName $ certIssuerDN (x509Cert cert)
- 
+
 handshakeServerWith _ _ _ = fail "unexpected handshake type received. expecting client hello"
 
 -- after receiving a client hello, we need to redo a handshake
@@ -520,7 +587,7 @@ withClientCertServer ctx f =
   case pClientCertParamsServer $ ctxParams ctx of
     Nothing ->
       throwCore $ Error_Misc "client certificates not configured"
-      
+
     Just cpp ->
       f cpp
 
@@ -529,7 +596,7 @@ withClientCertClient ctx f =
   case pClientCertParamsClient $ ctxParams ctx of
     Nothing ->
       throwCore $ Error_Misc "client certificates not configured"
-      
+
     Just cpp ->
       f cpp
 

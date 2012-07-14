@@ -94,6 +94,7 @@ encryptRSA content = do
                 Left err               -> fail ("rsa encrypt failed: " ++ show err)
                 Right (econtent, rng') -> put (st { stRandomGen = rng' }) >> return econtent
 
+-- FIXME: Add support for different hash functions for TLS1.2
 signRSA :: ByteString -> TLSSt ByteString
 signRSA content = do
         st <- get
