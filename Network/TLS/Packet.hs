@@ -251,6 +251,7 @@ decodeCertRequest cp = do
     decodeDNames len | len == 0 = return []
     decodeDNames len = do
       thisLen <- getWord16
+      when (thisLen == 0) $ fail "certrequest: invalid DN length"
       dName <- getBytes $ fromIntegral thisLen
       l <- decodeDNames (len - (2 + thisLen))
       dn <- decodeDName dName
@@ -266,8 +267,7 @@ decodeCertRequest cp = do
 
 decodeCertVerify :: Get Handshake
 decodeCertVerify = do
-        c <- getWord16
-        bs <- getBytes $ fromIntegral c
+        bs <- getOpaque16
         return $ CertVerify bs
 
 decodeClientKeyXchg :: Get Handshake
