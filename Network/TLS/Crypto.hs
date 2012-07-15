@@ -111,7 +111,7 @@ kxDecrypt (PrivRSA pk) b  = generalizeRSAError $ RSA.decrypt pk b
 --
 kxVerify :: PublicKey -> ByteString -> ByteString -> Either KxError Bool
 kxVerify (PubRSA pk) msg sign =
-  let hashF = SHA1.hash
+  let hashF = id
       hashASN1 = B.empty        -- for TLS MD5-SHA1 signatures, no
                                 -- algorithm identifier is defined.
   in generalizeRSAError $ RSA.verify hashF hashASN1 pk msg sign
@@ -120,7 +120,7 @@ kxVerify (PubRSA pk) msg sign =
 --
 kxSign :: PrivateKey -> ByteString -> Either KxError ByteString
 kxSign (PrivRSA pk) msg  =
-  let hashF = SHA1.hash
+  let hashF = id
       hashASN1 = B.empty        -- for TLS MD5-SHA1 signatures, no
                                 -- algorithm identifier is defined.
   in generalizeRSAError $ RSA.sign hashF hashASN1 pk msg
