@@ -193,8 +193,9 @@ handshakeClient cparams ctx = do
 
                           Just req ->
 
-                            case pClientCertParamsClient $ ctxParams ctx of
-                              Nothing ->
+                            case roleParams $ ctxParams ctx of
+                              Server{} ->
+                                throwCore $ Error_Misc "not allowed in server context"
                                 -- FIXME: I interpret section 7.4.2 of
                                 -- RFC 2246 that a client may send an
                                 -- empty list if it does not have a
@@ -204,13 +205,13 @@ handshakeClient cparams ctx = do
                                 -- client certificates, we do exactly
                                 -- that.
                                 --
-                                sendPacket ctx $ Handshake [Certificates []]
+                                -- sendPacket ctx $ Handshake [Certificates []]
 
-                              Just ccp -> do
+                              Client cp -> do
                                 -- FIXME: What shall we do when the
                                 -- callback throws an exception?
                                 --
-                                certChain <- liftIO $ onCertificateRequest ccp req `catch`
+                                certChain <- liftIO $ onCertificateRequest cp req `catch`
                                   throwMiscErrorOnException "certificate request callback failed"
 
                                 -- FIXME: Currently, when the first
@@ -249,6 +250,8 @@ handshakeClient cparams ctx = do
                 -- 4. Send it to the server.
                 --
                 sendCertificateVerify = do
+                  certSent <- usingState_ ctx $ getClientCertSent
+                  when (isJust certSent && fromJust certSent) $ do
                         -- Determine certificate request parameters.
                         -- When no certicicate was requested, do
                         -- nothing.
@@ -435,6 +438,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                       CertificateUsageAccept        -> return ()
                       CertificateUsageReject reason -> certificateRejected reason
 
+                    usingState_ ctx $ setClientCertChain certs
 
                     -- FIXME: We should check whether the certificate
                     -- matches our request and that we support
@@ -459,7 +463,9 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                     verif <- usingState_ ctx $ verifyRSA dig bs
 
                     case verif of
-                      Right True ->
+                      Right True -> do
+                        Just certs <- usingState_ ctx $ getClientCertChain
+                        usingState_ ctx $ setClientCertificateChain certs
                         return ()
 
                       _ -> do
@@ -471,12 +477,16 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                         --
                         let arg = case verif of Left err -> Just err; _ -> Nothing
                         res <- liftIO $ onUnverifiedClientCert ccp arg
-                        when (not res) $ do
-                          case verif of
-                            Left err ->
-                              throwCore $ Error_Protocol (show err, True, DecryptError)
-                            _ ->
-                              throwCore $ Error_Protocol ("verification failed", True, BadCertificate)
+                        if res
+                          then do
+                                Just certs <- usingState_ ctx $ getClientCertChain
+                                usingState_ ctx $ setClientCertificateChain certs
+                          else do
+                            case verif of
+                              Left err ->
+                                throwCore $ Error_Protocol (show err, True, DecryptError)
+                              _ ->
+                                throwCore $ Error_Protocol ("verification failed", True, BadCertificate)
                     return $ RecvStateNext expectChangeCipher
 
                 processCertificateVerify p = expectChangeCipher p
@@ -542,13 +552,13 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                         -- with the DNs of all confgure CA
                         -- certificates.
                         --
-                        case pClientCertParamsServer $ ctxParams ctx of
-                          Nothing ->
-                            return ()
+                        case roleParams $ ctxParams ctx of
+                          Client{} ->
+                            throwCore $ Error_Misc "not allowed in client context"
 
-                          Just ccp -> do
+                          Server sp -> do
                             let certTypes = [ CertificateType_RSA_Sign ]
-                            let creq = CertRequest certTypes Nothing (map extractCAname $ ccpCACertificates ccp)
+                            let creq = CertRequest certTypes Nothing (map extractCAname $ serverCACertificates sp)
                             sendPacket ctx (Handshake [creq])
                         -- Send HelloDone
                         sendPacket ctx (Handshake [ServerHelloDone])
@@ -582,23 +592,23 @@ handshake ctx = do
                         handshakeFailed tlserror
 
 
-withClientCertServer :: MonadIO m => Context -> (ClientCertParamsServer -> m a) -> m a
+withClientCertServer :: MonadIO m => Context -> (ServerParams -> m a) -> m a
 withClientCertServer ctx f =
-  case pClientCertParamsServer $ ctxParams ctx of
-    Nothing ->
-      throwCore $ Error_Misc "client certificates not configured"
+  case roleParams $ ctxParams ctx of
+    Client{} ->
+      throwCore $ Error_Misc "not allowed in client context"
 
-    Just cpp ->
-      f cpp
+    Server sp ->
+      f sp
 
-withClientCertClient :: MonadIO m => Context -> (ClientCertParamsClient -> m a) -> m a
+withClientCertClient :: MonadIO m => Context -> (ClientParams -> m a) -> m a
 withClientCertClient ctx f =
-  case pClientCertParamsClient $ ctxParams ctx of
-    Nothing ->
-      throwCore $ Error_Misc "client certificates not configured"
+  case roleParams $ ctxParams ctx of
+    Server{} ->
+      throwCore $ Error_Misc "not allowed in server context"
 
-    Just cpp ->
-      f cpp
+    Client cp ->
+      f cp
 
 throwMiscErrorOnException :: MonadIO m => String -> SomeException -> m a
 throwMiscErrorOnException msg e =

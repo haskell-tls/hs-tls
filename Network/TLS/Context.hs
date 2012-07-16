@@ -12,8 +12,6 @@ module Network.TLS.Context
         (
         -- * Context configuration
           Params(..)
-        , ClientCertParamsClient(..)
-        , ClientCertParamsServer(..)
         , RoleParams(..)
         , ClientParams(..)
         , ServerParams(..)
@@ -98,30 +96,18 @@ data Logging = Logging
         , loggingIORecv     :: Header -> B.ByteString -> IO ()
         }
 
-data ClientCertParamsClient = ClientCertParamsClient
-    { onCertificateRequest :: ([CertificateType],
-                                  Maybe [(HashAlgorithm, SignatureAlgorithm)],
-                                  [DistinguishedName]) -> IO [(X509, Maybe PrivateKey)]
-    }
-    
-instance Show ClientCertParamsClient where
-  show _ = "ClientCertParamsClient{}"
-    
-data ClientCertParamsServer = ClientCertParamsServer
-    { ccpCACertificates :: [X509] 
-    , onClientCertificate :: [X509] -> IO CertificateUsage
-    , onUnverifiedClientCert :: Maybe KxError -> IO Bool
-    }
-
-instance Show ClientCertParamsServer where
-  show ccp = "ClientCertParamsServer{ccpCACertificates=" ++ show (ccpCACertificates ccp) ++ "}"
-    
 data ClientParams = ClientParams
         { clientWantSessionResume :: Maybe (SessionID, SessionData) -- ^ try to establish a connection using this session.
+        , onCertificateRequest :: ([CertificateType],
+                                   Maybe [(HashAlgorithm, SignatureAlgorithm)],
+                                   [DistinguishedName]) -> IO [(X509, Maybe PrivateKey)]
         }
 
 data ServerParams = ServerParams
         { serverWantClientCert    :: Bool  -- ^ request a certificate from client.
+        , serverCACertificates :: [X509]
+        , onClientCertificate :: [X509] -> IO CertificateUsage
+        , onUnverifiedClientCert :: Maybe KxError -> IO Bool
         }
 
 data RoleParams = Client ClientParams | Server ServerParams
@@ -134,8 +120,6 @@ data Params = forall s . SessionManager s => Params
         , pUseSecureRenegotiation :: Bool           -- ^ notify that we want to use secure renegotation
         , pUseSession             :: Bool           -- ^ generate new session if specified
         , pCertificates      :: [(X509, Maybe PrivateKey)] -- ^ the cert chain for this context with the associated keys if any.
-        , pClientCertParamsClient :: Maybe ClientCertParamsClient
-        , pClientCertParamsServer :: Maybe ClientCertParamsServer
         , pLogging           :: Logging             -- ^ callback for logging
         , onHandshake        :: Measurement -> IO Bool -- ^ callback on a beggining of handshake
         , onCertificatesRecv :: [X509] -> IO CertificateUsage -- ^ callback to verify received cert chain.
@@ -169,8 +153,6 @@ defaultParamsClient = Params
         , pUseSecureRenegotiation = True
         , pUseSession             = True
         , pCertificates           = []
-        , pClientCertParamsClient = Nothing
-        , pClientCertParamsServer = Nothing
         , pLogging                = defaultLogging
         , onHandshake             = (\_ -> return True)
         , onCertificatesRecv      = (\_ -> return CertificateUsageAccept)
@@ -179,14 +161,19 @@ defaultParamsClient = Params
         , onNPNServerSuggest      = Nothing
         , roleParams              = Client $ ClientParams
                                         { clientWantSessionResume = Nothing
+                                        , onCertificateRequest = \ _ -> return []
                                         }
         }
 
 defaultParamsServer :: Params
 defaultParamsServer = defaultParamsClient
         { roleParams = Server $ ServerParams
-                        { serverWantClientCert         = False
-                        }
+                        { serverWantClientCert = False
+                        , serverCACertificates = []
+                        , onClientCertificate = \ _ ->
+                            return $ CertificateUsageReject $ CertificateRejectOther "no client certificates expected"
+                        , onUnverifiedClientCert = \ _ -> return False
+        }
         }
 
 updateRoleParams :: (ClientParams -> ClientParams) -> (ServerParams -> ServerParams) -> Params -> Params
@@ -211,8 +198,6 @@ instance Show Params where
                 , ("allowedVersions", show $ pAllowedVersions p)
                 , ("ciphers", show $ pCiphers p)
                 , ("compressions", show $ pCompressions p)
-                , ("client-cert-client", show $ pClientCertParamsClient p)
-                , ("client-cert-server", show $ pClientCertParamsServer p)
                 , ("certificates", show $ length $ pCertificates p)
                 ]) ++ " }"
 

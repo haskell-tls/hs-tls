@@ -33,6 +33,8 @@ module Network.TLS.State
         , setClientPrivateKey
         , setClientCertSent
         , getClientCertSent
+        , setClientCertChain
+        , getClientCertChain
         , setClientCertRequest
         , getClientCertRequest
         , setKeyBlock
@@ -47,6 +49,8 @@ module Network.TLS.State
         , getNegotiatedProtocol
         , setServerNextProtocolSuggest
         , getServerNextProtocolSuggest
+        , getClientCertificateChain
+        , setClientCertificateChain
         , getVerifiedData
         , setSession
         , getSession
@@ -79,6 +83,7 @@ import Control.Monad
 import Control.Monad.State
 import Control.Monad.Error
 import Crypto.Random
+import Data.Certificate.X509
 
 assert :: Monad m => String -> [(String,Bool)] -> m ()
 assert fctname list = forM_ list $ \ (name, assumption) -> do
@@ -108,8 +113,9 @@ data TLSHandshakeState = TLSHandshakeState
         , hstRSAClientPublicKey    :: !(Maybe PublicKey)
         , hstRSAClientPrivateKey   :: !(Maybe PrivateKey)
         , hstHandshakeDigest :: !HashCtx
-        , hstClientCertRequest   :: Maybe ClientCertRequestData -- ^ Set to Just-value when certificate request was received
-        , hstClientCertSent      :: Bool -- ^ Set to true when a client certificate chain was sent
+        , hstClientCertRequest   :: !(Maybe ClientCertRequestData) -- ^ Set to Just-value when certificate request was received
+        , hstClientCertSent      :: !Bool -- ^ Set to true when a client certificate chain was sent
+        , hstClientCertChain :: !(Maybe [X509])
         } deriving (Show)
 
 data StateRNG = forall g . CryptoRandomGen g => StateRNG g
@@ -138,6 +144,7 @@ data TLSState = TLSState
         , stExtensionNPN        :: Bool  -- NPN draft extension
         , stNegotiatedProtocol  :: Maybe B.ByteString -- NPN protocol
         , stServerNextProtocolSuggest :: Maybe [B.ByteString]
+        , stClientCertificateChain :: Maybe [X509]
         } deriving (Show)
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrorT TLSError (State TLSState) a }
@@ -178,6 +185,7 @@ newTLSState rng = TLSState
         , stExtensionNPN        = False
         , stNegotiatedProtocol  = Nothing
         , stServerNextProtocolSuggest = Nothing
+        , stClientCertificateChain = Nothing
         }
 
 withTLSRNG :: StateRNG -> (forall g . CryptoRandomGen g => g -> Either e (a,g)) -> Either e (a, StateRNG)
@@ -290,6 +298,14 @@ getClientCertSent = do
         st <- get
         return (stHandshake st >>= Just . hstClientCertSent)
 
+setClientCertChain :: MonadState TLSState m => [X509] -> m ()
+setClientCertChain b = updateHandshake "client certificate chain" (\hst -> hst { hstClientCertChain = Just b })
+
+getClientCertChain :: MonadState TLSState m => m (Maybe [X509])
+getClientCertChain = do
+        st <- get
+        return (stHandshake st >>= hstClientCertChain)
+
 setClientCertRequest :: MonadState TLSState m => ClientCertRequestData -> m ()
 setClientCertRequest d = updateHandshake "client cert data" (\hst -> hst { hstClientCertRequest = Just d })
 
@@ -386,6 +402,12 @@ setServerNextProtocolSuggest ps = modify (\st -> st { stServerNextProtocolSugges
 getServerNextProtocolSuggest :: MonadState TLSState m => m (Maybe [B.ByteString])
 getServerNextProtocolSuggest = get >>= return . stServerNextProtocolSuggest
 
+setClientCertificateChain :: MonadState TLSState m => [X509] -> m ()
+setClientCertificateChain s = modify (\st -> st { stClientCertificateChain = Just s })
+
+getClientCertificateChain :: MonadState TLSState m => m (Maybe [X509])
+getClientCertificateChain = get >>= return . stClientCertificateChain
+
 getCipherKeyExchangeType :: MonadState TLSState m => m (Maybe CipherKeyExchangeType)
 getCipherKeyExchangeType = get >>= return . (maybe Nothing (Just . cipherKeyExchange) . stCipher)
 
@@ -409,6 +431,7 @@ newEmptyHandshake ver crand digestInit = TLSHandshakeState
         , hstHandshakeDigest = digestInit
         , hstClientCertRequest = Nothing
         , hstClientCertSent  = False
+        , hstClientCertChain = Nothing
         }
 
 startHandshakeClient :: MonadState TLSState m => Version -> ClientRandom -> m ()
