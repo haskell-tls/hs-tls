@@ -250,8 +250,12 @@ handshakeClient cparams ctx = do
                 -- 4. Send it to the server.
                 --
                 sendCertificateVerify = do
+                  -- Only send a certificate verify message when we
+                  -- have sent a non-empty list of certificates.
+                  --
                   certSent <- usingState_ ctx $ getClientCertSent
                   when (isJust certSent && fromJust certSent) $ do
+
                         -- Determine certificate request parameters.
                         -- When no certicicate was requested, do
                         -- nothing.
@@ -438,6 +442,8 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                       CertificateUsageAccept        -> return ()
                       CertificateUsageReject reason -> certificateRejected reason
 
+                    -- Remember cert chain for later use.
+                    --
                     usingState_ ctx $ setClientCertChain certs
 
                     -- FIXME: We should check whether the certificate
@@ -464,6 +470,9 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
 
                     case verif of
                       Right True -> do
+                        -- When verification succeeds, commit the
+                        -- client certificate chain to the context.
+                        --
                         Just certs <- usingState_ ctx $ getClientCertChain
                         usingState_ ctx $ setClientCertificateChain certs
                         return ()
@@ -479,6 +488,11 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                         res <- liftIO $ onUnverifiedClientCert ccp arg
                         if res
                           then do
+                                -- When verification fails, but the
+                                -- application callbacks accepts, we
+                                -- also commit the client certificate
+                                -- chain to the context.
+                                --
                                 Just certs <- usingState_ ctx $ getClientCertChain
                                 usingState_ ctx $ setClientCertificateChain certs
                           else do
