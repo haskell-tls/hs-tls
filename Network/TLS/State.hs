@@ -24,6 +24,8 @@ module Network.TLS.State
         , updateVerifiedData
         , finishHandshakeTypeMaterial
         , finishHandshakeMaterial
+        , certVerifyHandshakeTypeMaterial
+        , certVerifyHandshakeMaterial
         , makeDigest
         , setMasterSecret
         , setMasterSecretFromPre
@@ -31,6 +33,7 @@ module Network.TLS.State
         , setPrivateKey
         , setClientPublicKey
         , setClientPrivateKey
+        , getHandshakeMessages
         , setClientCertSent
         , getClientCertSent
         , setClientCertChain
@@ -63,6 +66,7 @@ module Network.TLS.State
         , startHandshakeClient
         , updateHandshakeDigest
         , getHandshakeDigest
+        , updateCertVerifyDigest
         , getCertVerifyDigest
         , endHandshake
         ) where
@@ -113,6 +117,8 @@ data TLSHandshakeState = TLSHandshakeState
         , hstRSAClientPublicKey    :: !(Maybe PublicKey)
         , hstRSAClientPrivateKey   :: !(Maybe PrivateKey)
         , hstHandshakeDigest :: !HashCtx
+        , hstCertVerifyDigest :: !HashCtx
+        , hstHandshakeMessages :: [Bytes]
         , hstClientCertRequest   :: !(Maybe ClientCertRequestData) -- ^ Set to Just-value when certificate request was received
         , hstClientCertSent      :: !Bool -- ^ Set to true when a client certificate chain was sent
         , hstClientCertChain :: !(Maybe [X509])
@@ -250,6 +256,22 @@ finishHandshakeTypeMaterial HandshakeType_NPN             = True
 finishHandshakeMaterial :: Handshake -> Bool
 finishHandshakeMaterial = finishHandshakeTypeMaterial . typeOfHandshake
 
+certVerifyHandshakeTypeMaterial :: HandshakeType -> Bool
+certVerifyHandshakeTypeMaterial HandshakeType_ClientHello     = True
+certVerifyHandshakeTypeMaterial HandshakeType_ServerHello     = True
+certVerifyHandshakeTypeMaterial HandshakeType_Certificate     = True
+certVerifyHandshakeTypeMaterial HandshakeType_HelloRequest    = False
+certVerifyHandshakeTypeMaterial HandshakeType_ServerHelloDone = True
+certVerifyHandshakeTypeMaterial HandshakeType_ClientKeyXchg   = True
+certVerifyHandshakeTypeMaterial HandshakeType_ServerKeyXchg   = True
+certVerifyHandshakeTypeMaterial HandshakeType_CertRequest     = True
+certVerifyHandshakeTypeMaterial HandshakeType_CertVerify      = False
+certVerifyHandshakeTypeMaterial HandshakeType_Finished        = False
+certVerifyHandshakeTypeMaterial HandshakeType_NPN             = False
+
+certVerifyHandshakeMaterial :: Handshake -> Bool
+certVerifyHandshakeMaterial = certVerifyHandshakeTypeMaterial . typeOfHandshake
+
 switchTxEncryption, switchRxEncryption :: MonadState TLSState m => m ()
 switchTxEncryption = modify (\st -> st { stTxEncrypted = True })
 switchRxEncryption = modify (\st -> st { stRxEncrypted = True })
@@ -289,6 +311,14 @@ setClientPublicKey pk = updateHandshake "client publickey" (\hst -> hst { hstRSA
 
 setClientPrivateKey :: MonadState TLSState m => PrivateKey -> m ()
 setClientPrivateKey pk = updateHandshake "client privatekey" (\hst -> hst { hstRSAClientPrivateKey = Just pk })
+
+getHandshakeMessages :: MonadState TLSState m => m [Bytes]
+getHandshakeMessages = do
+        st <- get
+        case stHandshake st of
+          Nothing -> return []
+          Just hst -> return $ hstHandshakeMessages hst
+
 
 setClientCertSent :: MonadState TLSState m => Bool -> m ()
 setClientCertSent b = updateHandshake "client cert sent" (\hst -> hst { hstClientCertSent = b })
@@ -418,8 +448,8 @@ isClientContext :: MonadState TLSState m => m Bool
 isClientContext = get >>= return . stClientContext
 
 -- create a new empty handshake state
-newEmptyHandshake :: Version -> ClientRandom -> HashCtx -> TLSHandshakeState
-newEmptyHandshake ver crand digestInit = TLSHandshakeState
+newEmptyHandshake :: Version -> ClientRandom -> HashCtx -> HashCtx -> TLSHandshakeState
+newEmptyHandshake ver crand digestInit certVerifyInit = TLSHandshakeState
         { hstClientVersion   = ver
         , hstClientRandom    = crand
         , hstServerRandom    = Nothing
@@ -429,6 +459,8 @@ newEmptyHandshake ver crand digestInit = TLSHandshakeState
         , hstRSAClientPublicKey    = Nothing
         , hstRSAClientPrivateKey   = Nothing
         , hstHandshakeDigest = digestInit
+        , hstCertVerifyDigest = certVerifyInit
+        , hstHandshakeMessages = []
         , hstClientCertRequest = Nothing
         , hstClientCertSent  = False
         , hstClientCertChain = Nothing
@@ -438,9 +470,11 @@ startHandshakeClient :: MonadState TLSState m => Version -> ClientRandom -> m ()
 startHandshakeClient ver crand = do
         -- FIXME check if handshake is already not null
         let initCtx = if ver < TLS12 then hashMD5SHA1 else hashSHA256
+            initCertVerify = if ver < TLS12 then hashMD5SHA1 else hashSHA256
+                                                                  -- FIXME: may be other hash as determined by certificate request.
         chs <- get >>= return . stHandshake
         when (isNothing chs) $
-                modify (\st -> st { stHandshake = Just $ newEmptyHandshake ver crand initCtx })
+                modify (\st -> st { stHandshake = Just $ newEmptyHandshake ver crand initCtx initCertVerify })
 
 hasValidHandshake :: MonadState TLSState m => String -> m ()
 hasValidHandshake name = get >>= \st -> assert name [ ("valid handshake", isNothing $ stHandshake st) ]
@@ -452,7 +486,8 @@ updateHandshake n f = do
 
 updateHandshakeDigest :: MonadState TLSState m => Bytes -> m ()
 updateHandshakeDigest content = updateHandshake "update digest" $ \hs ->
-        hs { hstHandshakeDigest = hashUpdate (hstHandshakeDigest hs) content }
+        hs { hstHandshakeDigest = hashUpdate (hstHandshakeDigest hs) content
+           , hstHandshakeMessages = content : hstHandshakeMessages hs }
 
 getHandshakeDigest :: MonadState TLSState m => Bool -> m Bytes
 getHandshakeDigest client = do
@@ -462,11 +497,15 @@ getHandshakeDigest client = do
         let msecret = fromJust "master secret" $ hstMasterSecret hst
         return $ (if client then generateClientFinished else generateServerFinished) (stVersion st) msecret hashctx
 
+updateCertVerifyDigest :: MonadState TLSState m => Bytes -> m ()
+updateCertVerifyDigest content = updateHandshake "update certverify digest" $ \hs ->
+        hs { hstCertVerifyDigest = hashUpdate (hstCertVerifyDigest hs) content }
+
 getCertVerifyDigest :: MonadState TLSState m => m Bytes
 getCertVerifyDigest = do
         st <- get
         let hst = fromJust "handshake" $ stHandshake st
-        let hashctx = hstHandshakeDigest hst
+        let hashctx = hstCertVerifyDigest hst
         return (hashFinal hashctx)
 
 endHandshake :: MonadState TLSState m => m ()

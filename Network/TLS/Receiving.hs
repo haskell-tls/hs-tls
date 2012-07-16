@@ -74,6 +74,7 @@ processHandshake hs = do
                 Finished fdata                -> processClientFinished fdata
                 _                             -> return ()
         when (finishHandshakeTypeMaterial $ typeOfHandshake hs) (updateHandshakeDigest $ encodeHandshake hs)
+        when (certVerifyHandshakeTypeMaterial $ typeOfHandshake hs) (updateCertVerifyDigest $ encodeHandshake hs)
         where
                 -- secure renegotiation
                 processClientExtension (0xff01, content) = do
