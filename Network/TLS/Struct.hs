@@ -144,6 +144,8 @@ newtype Session = Session (Maybe SessionID) deriving (Show, Eq)
 type FinishedData = Bytes
 type ExtensionRaw = (Word16, Bytes)
 
+type CertVerifyData = Bytes
+
 constrRandom32 :: (Bytes -> a) -> Bytes -> Maybe a
 constrRandom32 constr l = if B.length l == 32 then Just (constr l) else Nothing
 
@@ -231,7 +233,7 @@ data Handshake =
         | ClientKeyXchg Bytes
         | ServerKeyXchg ServerKeyXchgAlgorithmData
         | CertRequest [CertificateType] (Maybe [ (HashAlgorithm, SignatureAlgorithm) ]) [DistinguishedName]
-        | CertVerify ByteString
+        | CertVerify CertVerifyData
         | Finished FinishedData
         | HsNextProtocolNegotiation Bytes -- NPN extension
         deriving (Show,Eq)

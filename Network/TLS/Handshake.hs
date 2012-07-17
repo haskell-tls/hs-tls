@@ -13,6 +13,7 @@ module Network.TLS.Handshake
     , HandshakeFailed(..)
     ) where
 
+import Text.Printf
 import Network.TLS.Context
 import Network.TLS.Session
 import Network.TLS.Struct
@@ -28,7 +29,7 @@ import Network.TLS.Measurement
 import Network.TLS.Wire (encodeWord16)
 import Data.Maybe
 import Data.Data
-import Data.List (intersect, find)
+import Data.List (intersect, find, intercalate)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 
@@ -92,6 +93,11 @@ sendChangeCipherAndFinish ctx isClient = do
             -- client didn't offer. do nothing.
             (Nothing, _) -> return ()
         liftIO $ contextFlush ctx
+        
+        msgs <- usingState_ ctx $ getHandshakeMessages
+        liftIO $ putStrLn $ formatHandshakeMessages msgs
+
+        
         cf <- usingState_ ctx $ getHandshakeDigest isClient
         sendPacket ctx (Handshake [Finished cf])
         liftIO $ contextFlush ctx
@@ -627,3 +633,15 @@ withClientCertClient ctx f =
 throwMiscErrorOnException :: MonadIO m => String -> SomeException -> m a
 throwMiscErrorOnException msg e =
   throwCore $ Error_Misc $ msg ++ ": " ++ show e
+
+formatHandshakeMessages :: [Bytes] -> String
+formatHandshakeMessages bss =
+  "=====\n" ++ intercalate "\n" (map form bss) ++ "\n====="
+ where
+   form :: Bytes -> String
+   form bs = frm bs 0
+   frm bs' ofs =
+     let (a, b) = B.splitAt 16 bs'
+     in if B.null a
+        then []
+        else printf "%04x: " ofs ++ concatMap (printf "%02x") (B.unpack a) ++ "\n"  ++ frm b (ofs + B.length a)

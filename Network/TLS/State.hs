@@ -33,7 +33,6 @@ module Network.TLS.State
         , setPrivateKey
         , setClientPublicKey
         , setClientPrivateKey
-        , getHandshakeMessages
         , setClientCertSent
         , getClientCertSent
         , setClientCertChain
@@ -64,10 +63,12 @@ module Network.TLS.State
         , getCipherKeyExchangeType
         , isClientContext
         , startHandshakeClient
+        , addHandshakeMessage
         , updateHandshakeDigest
         , getHandshakeDigest
         , updateCertVerifyDigest
         , getCertVerifyDigest
+        , getHandshakeMessages
         , endHandshake
         ) where
 
@@ -249,7 +250,7 @@ finishHandshakeTypeMaterial HandshakeType_ServerHelloDone = True
 finishHandshakeTypeMaterial HandshakeType_ClientKeyXchg   = True
 finishHandshakeTypeMaterial HandshakeType_ServerKeyXchg   = True
 finishHandshakeTypeMaterial HandshakeType_CertRequest     = True
-finishHandshakeTypeMaterial HandshakeType_CertVerify      = False
+finishHandshakeTypeMaterial HandshakeType_CertVerify      = True
 finishHandshakeTypeMaterial HandshakeType_Finished        = True
 finishHandshakeTypeMaterial HandshakeType_NPN             = True
 
@@ -311,14 +312,6 @@ setClientPublicKey pk = updateHandshake "client publickey" (\hst -> hst { hstRSA
 
 setClientPrivateKey :: MonadState TLSState m => PrivateKey -> m ()
 setClientPrivateKey pk = updateHandshake "client privatekey" (\hst -> hst { hstRSAClientPrivateKey = Just pk })
-
-getHandshakeMessages :: MonadState TLSState m => m [Bytes]
-getHandshakeMessages = do
-        st <- get
-        case stHandshake st of
-          Nothing -> return []
-          Just hst -> return $ hstHandshakeMessages hst
-
 
 setClientCertSent :: MonadState TLSState m => Bool -> m ()
 setClientCertSent b = updateHandshake "client cert sent" (\hst -> hst { hstClientCertSent = b })
@@ -484,10 +477,19 @@ updateHandshake n f = do
         hasValidHandshake n
         modify (\st -> st { stHandshake = f <$> stHandshake st })
 
+addHandshakeMessage :: MonadState TLSState m => Bytes -> m ()
+addHandshakeMessage content = updateHandshake "add handshake message" $ \hs ->
+        hs { hstHandshakeMessages = hstHandshakeMessages hs ++ [content]}
+
+getHandshakeMessages :: MonadState TLSState m => m [Bytes]
+getHandshakeMessages = do
+        st <- get
+        let hst = fromJust "handshake" $ stHandshake st
+        return $ hstHandshakeMessages hst
+
 updateHandshakeDigest :: MonadState TLSState m => Bytes -> m ()
 updateHandshakeDigest content = updateHandshake "update digest" $ \hs ->
-        hs { hstHandshakeDigest = hashUpdate (hstHandshakeDigest hs) content
-           , hstHandshakeMessages = content : hstHandshakeMessages hs }
+        hs { hstHandshakeDigest = hashUpdate (hstHandshakeDigest hs) content }
 
 getHandshakeDigest :: MonadState TLSState m => Bool -> m Bytes
 getHandshakeDigest client = do
