@@ -81,6 +81,7 @@ runRecvState ctx iniState          = recvPacketHandshake ctx >>= loop iniState >
 sendChangeCipherAndFinish :: MonadIO m => Context -> Bool -> m ()
 sendChangeCipherAndFinish ctx isClient = do
         sendPacket ctx ChangeCipherSpec
+
         when isClient $ do
           suggest <- usingState_ ctx $ getServerNextProtocolSuggest
           case (onNPNServerSuggest (ctxParams ctx), suggest) of
@@ -94,9 +95,6 @@ sendChangeCipherAndFinish ctx isClient = do
             (Nothing, _) -> return ()
         liftIO $ contextFlush ctx
 
-        -- msgs <- usingState_ ctx $ getHandshakeMessages
-        -- liftIO $ putStrLn $ formatHandshakeMessages msgs
-
         cf <- usingState_ ctx $ getHandshakeDigest isClient
         sendPacket ctx (Handshake [Finished cf])
         liftIO $ contextFlush ctx
@@ -104,11 +102,7 @@ sendChangeCipherAndFinish ctx isClient = do
 recvChangeCipherAndFinish :: MonadIO m => Context -> m ()
 recvChangeCipherAndFinish ctx = runRecvState ctx (RecvStateNext expectChangeCipher)
         where
-                expectChangeCipher ChangeCipherSpec = do
-                  msgs <- usingState_ ctx $ getHandshakeMessages
-                  liftIO $ putStrLn $ formatHandshakeMessages msgs
-
-                  return $ RecvStateHandshake expectFinish
+                expectChangeCipher ChangeCipherSpec = return $ RecvStateHandshake expectFinish
                 expectChangeCipher p                = unexpected (show p) (Just "change cipher")
                 expectFinish (Finished _) = return RecvStateDone
                 expectFinish p            = unexpected (show p) (Just "Handshake Finished")
@@ -470,7 +464,8 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                 -- Check whether the client correctly signed the handshake.
                 -- If not, ask the application on how to proceed.
                 --
-                processCertificateVerify (Handshake [CertVerify bs]) =
+                processCertificateVerify (Handshake [hs@(CertVerify bs)]) = do
+                  usingState_ ctx $ processHandshake hs
                   withClientCertServer ctx $ \ ccp -> do
                     dig <- usingState_ ctx $ getCertVerifyDigest
 
