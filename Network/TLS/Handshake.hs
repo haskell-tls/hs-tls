@@ -93,11 +93,10 @@ sendChangeCipherAndFinish ctx isClient = do
             -- client didn't offer. do nothing.
             (Nothing, _) -> return ()
         liftIO $ contextFlush ctx
-        
-        msgs <- usingState_ ctx $ getHandshakeMessages
-        liftIO $ putStrLn $ formatHandshakeMessages msgs
 
-        
+        -- msgs <- usingState_ ctx $ getHandshakeMessages
+        -- liftIO $ putStrLn $ formatHandshakeMessages msgs
+
         cf <- usingState_ ctx $ getHandshakeDigest isClient
         sendPacket ctx (Handshake [Finished cf])
         liftIO $ contextFlush ctx
@@ -105,7 +104,11 @@ sendChangeCipherAndFinish ctx isClient = do
 recvChangeCipherAndFinish :: MonadIO m => Context -> m ()
 recvChangeCipherAndFinish ctx = runRecvState ctx (RecvStateNext expectChangeCipher)
         where
-                expectChangeCipher ChangeCipherSpec = return $ RecvStateHandshake expectFinish
+                expectChangeCipher ChangeCipherSpec = do
+                  msgs <- usingState_ ctx $ getHandshakeMessages
+                  liftIO $ putStrLn $ formatHandshakeMessages msgs
+
+                  return $ RecvStateHandshake expectFinish
                 expectChangeCipher p                = unexpected (show p) (Just "change cipher")
                 expectFinish (Finished _) = return RecvStateDone
                 expectFinish p            = unexpected (show p) (Just "Handshake Finished")
