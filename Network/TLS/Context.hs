@@ -98,6 +98,26 @@ data Logging = Logging
 
 data ClientParams = ClientParams
         { clientWantSessionResume :: Maybe (SessionID, SessionData) -- ^ try to establish a connection using this session.
+
+          -- | This action is called when the server sends a
+          -- certificate request.  The parameter is the information
+          -- from the request.  The action should select a certificate
+          -- chain of one of the given certificate types where the
+          -- last certificate in the chain should be signed by one of
+          -- the given distinguished names.  Each certificate should
+          -- be signed by the following one, except for the last.  At
+          -- least the first of the certificates in the chain must
+          -- have a corresponding private key, because that is used
+          -- for signing the certificate verify message.
+          --
+          -- Note that is is the responsibility of this action to
+          -- select a certificate matching one of the requested
+          -- certificate types.  Returning a non-matching one will
+          -- lead to handshake failure later.
+          --
+          -- Returning a certificate chain not matching the
+          -- distinguished names may lead to problems or not,
+          -- depending whether the server accepts it.
         , onCertificateRequest :: ([CertificateType],
                                    Maybe [(HashAlgorithm, SignatureAlgorithm)],
                                    [DistinguishedName]) -> IO [(X509, Maybe PrivateKey)]
@@ -105,8 +125,21 @@ data ClientParams = ClientParams
 
 data ServerParams = ServerParams
         { serverWantClientCert    :: Bool  -- ^ request a certificate from client.
+
+          -- | This is a list of certificates from which the
+          -- disinguished names are sent in certificate request
+          -- messages.  For TLS1.0, it should not be empty.
         , serverCACertificates :: [X509]
+
+          -- | This action is called when a client certificate chain
+          -- is received from the client.  When it returns a
+          -- CertificateUsageReject value, the handshake is aborted.
         , onClientCertificate :: [X509] -> IO CertificateUsage
+
+          -- | This action is called when the client certificate
+          -- cannot be verified.  A 'Nothing' argument indicates a
+          -- wrong signature, a 'Just e' message signals a crypto
+          -- error.
         , onUnverifiedClientCert :: Maybe KxError -> IO Bool
         }
 
@@ -330,4 +363,3 @@ usingState_ ctx f = do
 
 getStateRNG :: MonadIO m => Context -> Int -> m Bytes
 getStateRNG ctx n = usingState_ ctx (genTLSRandom n)
-
