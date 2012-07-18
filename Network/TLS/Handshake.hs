@@ -33,7 +33,7 @@ import Data.List (intersect, find, intercalate)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 
-import Data.Certificate.X509(X509, certSubjectDN, x509Cert)
+import Data.Certificate.X509(X509, certSubjectDN, x509Cert, certPubKey, PubKey(PubKeyRSA))
 
 import Control.Applicative ((<$>))
 import Control.Monad.State
@@ -195,34 +195,20 @@ handshakeClient cparams ctx = do
                       return ()
 
                     Just req -> do
-                      -- FIXME: What shall we do when the
-                      -- callback throws an exception?
-                      --
                       certChain <- liftIO $ onCertificateRequest cparams req `catch`
                                    throwMiscErrorOnException "certificate request callback failed"
 
-                      -- FIXME: Currently, when the first
-                      -- client certificate has no
-                      -- associated private key (or when the
-                      -- application offered no
-                      -- certificates), we simply do not
-                      -- install the key for later use.
-                      -- This will lead to an error later
-                      -- on, but it would propbably better
-                      -- to fail explicitly.
-                      --
                       case certChain of
-                        (_, Just pk) : _ ->
+                        (_, Nothing) : _ ->
+                              throwCore $ Error_Misc "no private key available"
+                        (cert, Just pk) : _ -> do
+                          case certPubKey $ x509Cert cert of
+                            PubKeyRSA _ -> return ()
+                            _ ->
+                              throwCore $ Error_Protocol ("no supported certificate type", True, HandshakeFailure)
                           usingState_ ctx $ setClientPrivateKey pk
                         _ ->
                           return ()
-
-                      -- FIXME: Check that we can sign with
-                      -- the provided certificate.
-
-                      -- FIXME: Check that the certificate
-                      -- matches the types requeted by the
-                      -- server.
 
                       usingState_ ctx $ setClientCertSent (not $ null certChain)
                       sendPacket ctx $ Handshake [Certificates $ map fst certChain]
@@ -246,15 +232,22 @@ handshakeClient cparams ctx = do
                       -- Fetch the current handshake hash.
                       dig <- usingState_ ctx $ getCertVerifyDigest
 
-                      -- FIXME: Need to chek whether the
+                      when (ver >= TLS12) $ do
+                        Just (_, Just hashSigs, _) <- usingState_ ctx $ getClientCertRequest
+
+                        let suppHashSigs = pHashSignatures $ ctxParams ctx
+                        let hashSigs' = filter (\ a -> a `elem` hashSigs) suppHashSigs
+                        liftIO $ putStrLn $ " supported hash sig algorithms: " ++ show hashSigs'
+
+                        when (null hashSigs') $ do
+                          throwCore $ Error_Protocol ("no hash/signature algorithms in common with the server", True, HandshakeFailure)
+
+                      -- FIXME: Need to check whether the
                       -- server supports RSA signing.
 
                       -- Sign the hash.
                       --
-                      -- FIXME: Dows not work yet. RSA
-                      -- signing is not used correctly yet.
-                      --
-                      sigDig <- usingState_ ctx $ signRSA dig
+                      sigDig <- usingState_ ctx $ signRSA Nothing dig
 
                       -- Send the digest
                       sendPacket ctx $ Handshake [CertVerify sigDig]
@@ -448,7 +441,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                   dig <- usingState_ ctx $ getCertVerifyDigest
 
                   -- Verify the signature.
-                  verif <- usingState_ ctx $ verifyRSA dig bs
+                  verif <- usingState_ ctx $ verifyRSA Nothing dig bs
 
                   case verif of
                     Right True -> do
@@ -558,7 +551,10 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                         --
                         when (serverWantClientCert sparams) $ do
                           let certTypes = [ CertificateType_RSA_Sign ]
-                              creq = CertRequest certTypes Nothing
+                              hashSigs = if ver < TLS12 
+                                         then Nothing
+                                         else Just (pHashSignatures $ ctxParams ctx)
+                              creq = CertRequest certTypes hashSigs
                                        (map extractCAname $ serverCACertificates sparams)
                           usingState_ ctx $ setCertReqSent True
                           sendPacket ctx (Handshake [creq])

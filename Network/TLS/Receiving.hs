@@ -94,10 +94,10 @@ decryptRSA econtent = do
         return $ kxDecrypt rsapriv (if ver < TLS10 then econtent else B.drop 2 econtent)
 
 -- FIXME: Add support for different hash functions for TLS1.2
-verifyRSA :: ByteString -> ByteString -> TLSSt (Either KxError Bool)
-verifyRSA econtent sign = do
+verifyRSA :: Maybe (ByteString -> ByteString, ByteString) -> ByteString -> ByteString -> TLSSt (Either KxError Bool)
+verifyRSA hsh econtent sign = do
         rsapriv <- fromJust "rsa client public key" . hstRSAClientPublicKey . fromJust "handshake" . stHandshake <$> get
-        return $ kxVerify rsapriv econtent sign
+        return $ kxVerify rsapriv hsh econtent sign
 
 processServerHello :: Handshake -> TLSSt ()
 processServerHello (ServerHello sver ran _ _ _ ex) = do

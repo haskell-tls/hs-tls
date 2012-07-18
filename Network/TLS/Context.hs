@@ -68,6 +68,7 @@ module Network.TLS.Context
         ) where
 
 import Network.TLS.Struct
+import qualified Network.TLS.Struct as Struct
 import Network.TLS.Session
 import Network.TLS.Cipher
 import Network.TLS.Compression
@@ -150,6 +151,7 @@ data Params = forall s . SessionManager s => Params
         , pAllowedVersions   :: [Version]           -- ^ allowed versions that we can use.
         , pCiphers           :: [Cipher]            -- ^ all ciphers supported ordered by priority.
         , pCompressions      :: [Compression]       -- ^ all compression supported ordered by priority.
+        , pHashSignatures    :: [(HashAlgorithm, SignatureAlgorithm)] -- ^ All supported hash/signature algorithms for client certificate verification, ordered by decreasing priority.
         , pUseSecureRenegotiation :: Bool           -- ^ notify that we want to use secure renegotation
         , pUseSession             :: Bool           -- ^ generate new session if specified
         , pCertificates      :: [(X509, Maybe PrivateKey)] -- ^ the cert chain for this context with the associated keys if any.
@@ -183,6 +185,11 @@ defaultParamsClient = Params
         , pAllowedVersions        = [TLS10,TLS11,TLS12]
         , pCiphers                = []
         , pCompressions           = [nullCompression]
+        , pHashSignatures         = [ (Struct.HashSHA512, SignatureRSA)
+                                    , (Struct.HashSHA384, SignatureRSA)
+                                    , (Struct.HashSHA256, SignatureRSA)
+                                    , (Struct.HashSHA224, SignatureRSA)
+                                    ]
         , pUseSecureRenegotiation = True
         , pUseSession             = True
         , pCertificates           = []

@@ -97,11 +97,11 @@ encryptRSA content = do
                 Right (econtent, rng') -> put (st { stRandomGen = rng' }) >> return econtent
 
 -- FIXME: Add support for different hash functions for TLS1.2
-signRSA :: ByteString -> TLSSt ByteString
-signRSA content = do
+signRSA :: Maybe (ByteString -> ByteString, ByteString) -> ByteString -> TLSSt ByteString
+signRSA hsh content = do
         st <- get
         let rsakey = fromJust "rsa client private key" $ hstRSAClientPrivateKey $ fromJust "handshake" $ stHandshake st
-        case kxSign rsakey content of
+        case kxSign rsakey hsh content of
                 Left err       -> fail ("rsa sign failed: " ++ show err)
                 Right econtent -> return econtent
 
