@@ -35,6 +35,8 @@ module Network.TLS.State
         , setClientPrivateKey
         , setClientCertSent
         , getClientCertSent
+        , setCertReqSent
+        , getCertReqSent
         , setClientCertChain
         , getClientCertChain
         , setClientCertRequest
@@ -120,8 +122,9 @@ data TLSHandshakeState = TLSHandshakeState
         , hstHandshakeDigest :: !HashCtx
         , hstCertVerifyDigest :: !HashCtx
         , hstHandshakeMessages :: [Bytes]
-        , hstClientCertRequest   :: !(Maybe ClientCertRequestData) -- ^ Set to Just-value when certificate request was received
-        , hstClientCertSent      :: !Bool -- ^ Set to true when a client certificate chain was sent
+        , hstClientCertRequest :: !(Maybe ClientCertRequestData) -- ^ Set to Just-value when certificate request was received
+        , hstClientCertSent  :: !Bool -- ^ Set to true when a client certificate chain was sent
+        , hstCertReqSent     :: !Bool -- ^ Set to true when a certificate request was sent
         , hstClientCertChain :: !(Maybe [X509])
         } deriving (Show)
 
@@ -313,6 +316,14 @@ setClientPublicKey pk = updateHandshake "client publickey" (\hst -> hst { hstRSA
 setClientPrivateKey :: MonadState TLSState m => PrivateKey -> m ()
 setClientPrivateKey pk = updateHandshake "client privatekey" (\hst -> hst { hstRSAClientPrivateKey = Just pk })
 
+setCertReqSent :: MonadState TLSState m => Bool -> m ()
+setCertReqSent b = updateHandshake "client cert req sent" (\hst -> hst { hstCertReqSent = b })
+
+getCertReqSent :: MonadState TLSState m => m (Maybe Bool)
+getCertReqSent = do
+        st <- get
+        return (stHandshake st >>= Just . hstCertReqSent)
+
 setClientCertSent :: MonadState TLSState m => Bool -> m ()
 setClientCertSent b = updateHandshake "client cert sent" (\hst -> hst { hstClientCertSent = b })
 
@@ -456,6 +467,7 @@ newEmptyHandshake ver crand digestInit certVerifyInit = TLSHandshakeState
         , hstHandshakeMessages = []
         , hstClientCertRequest = Nothing
         , hstClientCertSent  = False
+        , hstCertReqSent     = False
         , hstClientCertChain = Nothing
         }
 
