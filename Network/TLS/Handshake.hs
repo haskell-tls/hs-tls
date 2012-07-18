@@ -598,12 +598,20 @@ throwMiscErrorOnException :: MonadIO m => String -> SomeException -> m a
 throwMiscErrorOnException msg e =
   throwCore $ Error_Misc $ msg ++ ": " ++ show e
 
+
+-- Debugging helpers.
+
+dumpMsgs :: MonadIO m => Context -> m ()
+dumpMsgs ctx = do
+        msgs <- usingState_ ctx $ getHandshakeMessages
+        liftIO $ putStrLn $ formatHandshakeMessages msgs
+
 formatHandshakeMessages :: [Bytes] -> String
 formatHandshakeMessages bss =
   "=====\n" ++ intercalate "\n" (map form bss) ++ "\n====="
  where
    form :: Bytes -> String
-   form bs = frm bs 0
+   form bs = printf "bytes: %d\n" (B.length bs) ++ frm bs 0
    frm bs' ofs =
      let (a, b) = B.splitAt 16 bs'
      in if B.null a

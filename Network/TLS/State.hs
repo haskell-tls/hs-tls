@@ -141,10 +141,14 @@ data TLSState = TLSState
         , stSessionResuming     :: Bool
         , stTxEncrypted         :: Bool
         , stRxEncrypted         :: Bool
-        , stTxCryptState        :: !(Maybe TLSCryptState)
-        , stRxCryptState        :: !(Maybe TLSCryptState)
-        , stTxMacState          :: !(Maybe TLSMacState)
-        , stRxMacState          :: !(Maybe TLSMacState)
+        , stActiveTxCryptState        :: !(Maybe TLSCryptState)
+        , stActiveRxCryptState        :: !(Maybe TLSCryptState)
+        , stPendingTxCryptState        :: !(Maybe TLSCryptState)
+        , stPendingRxCryptState        :: !(Maybe TLSCryptState)
+        , stActiveTxMacState          :: !(Maybe TLSMacState)
+        , stActiveRxMacState          :: !(Maybe TLSMacState)
+        , stPendingTxMacState          :: !(Maybe TLSMacState)
+        , stPendingRxMacState          :: !(Maybe TLSMacState)
         , stCipher              :: Maybe Cipher
         , stCompression         :: Compression
         , stRandomGen           :: StateRNG
@@ -182,10 +186,14 @@ newTLSState rng = TLSState
         , stSessionResuming     = False
         , stTxEncrypted         = False
         , stRxEncrypted         = False
-        , stTxCryptState        = Nothing
-        , stRxCryptState        = Nothing
-        , stTxMacState          = Nothing
-        , stRxMacState          = Nothing
+        , stActiveTxCryptState        = Nothing
+        , stActiveRxCryptState        = Nothing
+        , stPendingTxCryptState        = Nothing
+        , stPendingRxCryptState        = Nothing
+        , stActiveTxMacState          = Nothing
+        , stActiveRxMacState          = Nothing
+        , stPendingTxMacState          = Nothing
+        , stPendingRxMacState          = Nothing
         , stCipher              = Nothing
         , stCompression         = nullCompression
         , stRandomGen           = StateRNG rng
@@ -221,8 +229,8 @@ makeDigest :: MonadState TLSState m => Bool -> Header -> Bytes -> m Bytes
 makeDigest w hdr content = do
         st <- get
         let ver = stVersion st
-        let cst = fromJust "crypt state" $ if w then stTxCryptState st else stRxCryptState st
-        let ms = fromJust "mac state" $ if w then stTxMacState st else stRxMacState st
+        let cst = fromJust "crypt state" $ if w then stActiveTxCryptState st else stActiveRxCryptState st
+        let ms = fromJust "mac state" $ if w then stActiveTxMacState st else stActiveRxMacState st
         let cipher = fromJust "cipher" $ stCipher st
         let hashf = hashF $ cipherHash cipher
 
@@ -234,7 +242,7 @@ makeDigest w hdr content = do
 
         let newms = ms { msSequence = (msSequence ms) + 1 }
 
-        modify (\_ -> if w then st { stTxMacState = Just newms } else st { stRxMacState = Just newms })
+        modify (\_ -> if w then st { stActiveTxMacState = Just newms } else st { stActiveRxMacState = Just newms })
         return digest
 
 updateVerifiedData :: MonadState TLSState m => Bool -> Bytes -> m ()
@@ -277,8 +285,12 @@ certVerifyHandshakeMaterial :: Handshake -> Bool
 certVerifyHandshakeMaterial = certVerifyHandshakeTypeMaterial . typeOfHandshake
 
 switchTxEncryption, switchRxEncryption :: MonadState TLSState m => m ()
-switchTxEncryption = modify (\st -> st { stTxEncrypted = True })
-switchRxEncryption = modify (\st -> st { stRxEncrypted = True })
+switchTxEncryption = modify (\st -> st { stTxEncrypted = True,
+                                         stActiveTxMacState = stPendingTxMacState st,
+                                         stActiveTxCryptState = stPendingTxCryptState st })
+switchRxEncryption = modify (\st -> st { stRxEncrypted = True,
+                                         stActiveRxMacState = stPendingRxMacState st,
+                                         stActiveRxCryptState = stPendingRxCryptState st })
 
 setServerRandom :: MonadState TLSState m => ServerRandom -> m ()
 setServerRandom ran = updateHandshake "srand" (\hst -> hst { hstServerRandom = Just ran })
@@ -400,10 +412,10 @@ setKeyBlock = do
         let msClient = TLSMacState { msSequence = 0 }
         let msServer = TLSMacState { msSequence = 0 }
         put $ st
-                { stTxCryptState = Just $ if cc then cstClient else cstServer
-                , stRxCryptState = Just $ if cc then cstServer else cstClient
-                , stTxMacState   = Just $ if cc then msClient else msServer
-                , stRxMacState   = Just $ if cc then msServer else msClient
+                { stPendingTxCryptState = Just $ if cc then cstClient else cstServer
+                , stPendingRxCryptState = Just $ if cc then cstServer else cstClient
+                , stPendingTxMacState   = Just $ if cc then msClient else msServer
+                , stPendingRxMacState   = Just $ if cc then msServer else msClient
                 }
 
 setCipher :: MonadState TLSState m => Cipher -> m ()
