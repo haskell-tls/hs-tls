@@ -233,7 +233,7 @@ data Handshake =
         | ClientKeyXchg Bytes
         | ServerKeyXchg ServerKeyXchgAlgorithmData
         | CertRequest [CertificateType] (Maybe [ (HashAlgorithm, SignatureAlgorithm) ]) [DistinguishedName]
-        | CertVerify CertVerifyData
+        | CertVerify (Maybe (HashAlgorithm, SignatureAlgorithm)) CertVerifyData
         | Finished FinishedData
         | HsNextProtocolNegotiation Bytes -- NPN extension
         deriving (Show,Eq)

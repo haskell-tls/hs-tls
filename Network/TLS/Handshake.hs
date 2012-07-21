@@ -35,6 +35,11 @@ import Data.ByteString.Char8 ()
 
 import Data.Certificate.X509(X509, certSubjectDN, x509Cert, certPubKey, PubKey(PubKeyRSA))
 
+import qualified Crypto.Hash.SHA224 as SHA224
+import qualified Crypto.Hash.SHA256 as SHA256
+import qualified Crypto.Hash.SHA384 as SHA384
+import qualified Crypto.Hash.SHA512 as SHA512
+
 import Control.Applicative ((<$>))
 import Control.Monad.State
 import Control.Exception (throwIO, Exception(), fromException, catch, SomeException)
@@ -229,28 +234,42 @@ handshakeClient cparams ctx = do
                   certSent <- usingState_ ctx $ getClientCertSent
                   case certSent of
                     Just True -> do
-                      -- Fetch the current handshake hash.
-                      dig <- usingState_ ctx $ getCertVerifyDigest
+                      Just (_, mbHashSigs, _) <- usingState_ ctx $ getClientCertRequest
+                      (mbHashSig, sigDig) <- if isJust mbHashSigs
+                        then do
+                          let Just hashSigs = mbHashSigs
+                          let suppHashSigs = pHashSignatures $ ctxParams ctx
+                          let hashSigs' = filter (\ a -> a `elem` hashSigs) suppHashSigs
+                          liftIO $ putStrLn $ " supported hash sig algorithms: " ++ show hashSigs'
 
-                      when (ver >= TLS12) $ do
-                        Just (_, Just hashSigs, _) <- usingState_ ctx $ getClientCertRequest
+                          when (null hashSigs') $ do
+                            throwCore $ Error_Protocol ("no hash/signature algorithms in common with the server", True, HandshakeFailure)
 
-                        let suppHashSigs = pHashSignatures $ ctxParams ctx
-                        let hashSigs' = filter (\ a -> a `elem` hashSigs) suppHashSigs
-                        liftIO $ putStrLn $ " supported hash sig algorithms: " ++ show hashSigs'
+                          let hashSig = head hashSigs'
+                          hsh <- getHashAndASN1 hashSig
 
-                        when (null hashSigs') $ do
-                          throwCore $ Error_Protocol ("no hash/signature algorithms in common with the server", True, HandshakeFailure)
+                          -- Fetch all handshake messages up to now.
+                          msgs <- usingState_ ctx $ B.concat <$> getHandshakeMessages
 
-                      -- FIXME: Need to check whether the
-                      -- server supports RSA signing.
+                          -- Sign them.
+                          sigDig <- usingState_ ctx $ signRSA (Just hsh) msgs
 
-                      -- Sign the hash.
-                      --
-                      sigDig <- usingState_ ctx $ signRSA Nothing dig
+                          return (Just hashSig, sigDig)
+                        else do
+
+                          -- FIXME: Need to check whether the
+                          -- server supports RSA signing.
+
+                          -- Fetch the current handshake hash.
+                          dig <- usingState_ ctx $ getCertVerifyDigest
+
+                          -- Sign the hash.
+                          --
+                          sigDig <- usingState_ ctx $ signRSA Nothing dig
+                          return (Nothing, sigDig)
 
                       -- Send the digest
-                      sendPacket ctx $ Handshake [CertVerify sigDig]
+                      sendPacket ctx $ Handshake [CertVerify mbHashSig sigDig]
 
                     _ -> return ()
 
@@ -327,6 +346,21 @@ handshakeClient cparams ctx = do
                                         else encodeWord16 $ fromIntegral $ B.length e
                                 return $ extra `B.append` e
                         sendPacket ctx $ Handshake [ClientKeyXchg encryptedPreMaster]
+
+getHashAndASN1 :: MonadIO m => (HashAlgorithm, SignatureAlgorithm) -> m (B.ByteString -> B.ByteString, B.ByteString)
+getHashAndASN1 hashSig = do
+  case hashSig of
+    (HashSHA224, SignatureRSA) ->
+      return (SHA224.hash, "\x30\x2d\x30\x0d\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x04\x05\x00\x04\x1c")
+    (HashSHA256, SignatureRSA) ->
+      return (SHA256.hash, "\x30\x31\x30\x0d\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x01\x05\x00\x04\x20")
+    (HashSHA384, SignatureRSA) ->
+      return (SHA384.hash, "\x30\x41\x30\x0d\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x02\x05\x00\x04\x30")
+    (HashSHA512, SignatureRSA) ->
+      return (SHA512.hash, "\x30\x51\x30\x0d\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x03\x05\x00\x04\x40")
+    _ ->
+      throwCore $ Error_Misc "unsupported hash/sig algorithm"
+
 
 -- on certificate reject, throw an exception with the proper protocol alert error.
 certificateRejected :: MonadIO m => CertificateRejectReason -> m a
@@ -429,8 +463,15 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                 -- Check whether the client correctly signed the handshake.
                 -- If not, ask the application on how to proceed.
                 --
-                processCertificateVerify (Handshake [hs@(CertVerify bs)]) = do
+                processCertificateVerify (Handshake [hs@(CertVerify mbHashSig bs)]) = do
                   usingState_ ctx $ processHandshake hs
+
+                  case mbHashSig of
+                    Just hashSig -> do
+                      when (ver < TLS12) $ throwCore $ Error_Protocol ("unexpected hash/sig identifier", True, IllegalParameter)
+                      when (not $ hashSig `elem` pHashSignatures (ctxParams ctx)) $ throwCore $ Error_Protocol ("unsupported hash/sig algorithm", True, IllegalParameter)
+                    Nothing ->
+                      when (ver >= TLS12) $ throwCore $ Error_Protocol ("missing hash/sig identifier", True, IllegalParameter)
 
                   chain <- usingState_ ctx $ getClientCertChain
                   case chain of
@@ -438,10 +479,28 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                     _ -> throwCore $ Error_Protocol ("change cipher message expected",
                                                      True, UnexpectedMessage)
 
-                  dig <- usingState_ ctx $ getCertVerifyDigest
+                  (sigDig, hsh) <- if ver >= TLS12
+                        then do
+                          let Just sentHashSig = mbHashSig
+
+                          hsh <- getHashAndASN1 sentHashSig
+
+                          -- Fetch all handshake messages up to now.
+                          msgs <- usingState_ ctx $ B.concat <$> getHandshakeMessages
+
+                          return (msgs, Just hsh)
+                        else do
+
+                          -- FIXME: Need to check whether the
+                          -- server supports RSA signing.
+
+                          -- Fetch the current handshake hash.
+                          dig <- usingState_ ctx $ getCertVerifyDigest
+
+                          return (dig, Nothing)
 
                   -- Verify the signature.
-                  verif <- usingState_ ctx $ verifyRSA Nothing dig bs
+                  verif <- usingState_ ctx $ verifyRSA hsh sigDig bs
 
                   case verif of
                     Right True -> do
@@ -551,7 +610,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                         --
                         when (serverWantClientCert sparams) $ do
                           let certTypes = [ CertificateType_RSA_Sign ]
-                              hashSigs = if ver < TLS12 
+                              hashSigs = if ver < TLS12
                                          then Nothing
                                          else Just (pHashSignatures $ ctxParams ctx)
                               creq = CertRequest certTypes hashSigs

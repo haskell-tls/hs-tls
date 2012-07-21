@@ -165,7 +165,7 @@ decodeHandshake cp ty = runGetErr "handshake" $ case ty of
         HandshakeType_ServerKeyXchg   -> decodeServerKeyXchg cp
         HandshakeType_CertRequest     -> decodeCertRequest cp
         HandshakeType_ServerHelloDone -> decodeServerHelloDone
-        HandshakeType_CertVerify      -> decodeCertVerify
+        HandshakeType_CertVerify      -> decodeCertVerify cp
         HandshakeType_ClientKeyXchg   -> decodeClientKeyXchg
         HandshakeType_Finished        -> decodeFinished
         HandshakeType_NPN             -> do
@@ -265,10 +265,13 @@ decodeCertRequest cp = do
         Right s -> return $ DistinguishedName s
 
 
-decodeCertVerify :: Get Handshake
-decodeCertVerify = do
+decodeCertVerify :: CurrentParams -> Get Handshake
+decodeCertVerify cp = do
+        mbHashSig <- if cParamsVersion cp >= TLS12
+                     then Just <$> getSignatureHashAlgorithm
+                     else return Nothing
         bs <- getOpaque16
-        return $ CertVerify bs
+        return $ CertVerify mbHashSig bs
 
 decodeClientKeyXchg :: Get Handshake
 decodeClientKeyXchg = ClientKeyXchg <$> (remaining >>= getBytes)
@@ -366,7 +369,12 @@ encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
       putWord16 (fromIntegral totLength)
       mapM_ (\ b -> putWord16 (fromIntegral (B.length b)) >> putBytes b) enc
 
-encodeHandshakeContent (CertVerify c) = do
+encodeHandshakeContent (CertVerify mbHashSig c) = do
+        -- TLS 1.2 prepends the hash and signature algorithms to the
+        -- signature.
+        case mbHashSig of
+          Nothing -> return ()
+          Just (h, s) -> putWord16 $ (fromIntegral $ valOfType h) * 256 + (fromIntegral $ valOfType s)
         putWord16 (fromIntegral $ B.length c)
         putBytes c
 
