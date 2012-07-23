@@ -14,6 +14,8 @@ module Network.TLS
 	, TLSCertificateRejectReason(..)
 	, defaultParams
 	, defaultLogging
+	, SessionID
+	, SessionData(..)
 
 	-- * Context object
 	, TLSCtx
@@ -52,7 +54,7 @@ module Network.TLS
 	, ConnectionNotEstablished(..)
 	) where
 
-import Network.TLS.Struct (Version(..), TLSError(..))
+import Network.TLS.Struct (Version(..), TLSError(..), SessionID)
 import Network.TLS.Crypto (PrivateKey(..))
 import Network.TLS.Cipher (Cipher(..), Bulk(..))
 import Network.TLS.Compression (CompressionC(..), Compression(..), nullCompression)
