@@ -39,6 +39,7 @@ module Network.TLS.State
 	, setSession
 	, getSession
 	, getSessionData
+	, needEmptyPacket
 	, isSessionResuming
 	, switchTxEncryption
 	, switchRxEncryption
@@ -267,6 +268,11 @@ getSession = gets stSession
 
 isSessionResuming :: MonadState TLSState m => m Bool
 isSessionResuming = gets stSessionResuming
+
+needEmptyPacket :: MonadState TLSState m => m Bool
+needEmptyPacket = gets f
+    where f st = (stVersion st <= TLS10)
+              && (maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stCipher st))
 
 setKeyBlock :: MonadState TLSState m => m ()
 setKeyBlock = do

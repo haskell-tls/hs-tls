@@ -167,10 +167,19 @@ newSession ctx
 -- | Send one packet to the context
 sendPacket :: MonadIO m => TLSCtx c -> Packet -> m ()
 sendPacket ctx pkt = do
+	-- in ver <= TLS1.0, block ciphers using CBC are using CBC residue as IV, which can be guessed
+	-- by an attacker. Hence, an empty packet is sent before a normal data packet, to
+	-- prevent guessability.
+	withEmptyPacket <- usingState_ ctx needEmptyPacket
+	when (isNonNullAppData pkt && withEmptyPacket) $ sendPacket ctx $ AppData B.empty
+
 	liftIO $ (loggingPacketSent $ ctxLogging ctx) (show pkt)
 	dataToSend <- usingState_ ctx $ writePacket pkt
 	liftIO $ (loggingIOSent $ ctxLogging ctx) dataToSend
 	liftIO $ connectionSend ctx dataToSend
+	where
+                isNonNullAppData (AppData b) = B.null b
+                isNonNullAppData _           = False
 
 -- | Create a new Client context with a configuration, a RNG, a generic connection and the connection operation.
 clientWith :: (MonadIO m, CryptoRandomGen g)
