@@ -280,7 +280,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
         when (ver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
         when (not $ elem ver (pAllowedVersions params)) $
                 throwCore $ Error_Protocol ("version " ++ show ver ++ "is not supported", True, ProtocolVersion)
-        when (commonCiphers == []) $
+        when (commonCipherIDs == []) $
                 throwCore $ Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
         when (null commonCompressions) $
                 throwCore $ Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
@@ -311,8 +311,9 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
         handshakeTerminate ctx
         where
                 params             = ctxParams ctx
-                commonCiphers      = intersect ciphers (map cipherID $ pCiphers params)
-                usedCipher         = fromJust $ find (\c -> cipherID c == head commonCiphers) (pCiphers params)
+                commonCipherIDs    = intersect ciphers (map cipherID $ pCiphers params)
+                commonCiphers      = filter (flip elem commonCipherIDs . cipherID) (pCiphers params)
+                usedCipher         = (onCipherChoosing sparams) ver commonCiphers
                 commonCompressions = compressionIntersectID (pCompressions params) compressions
                 usedCompression    = head commonCompressions
                 srvCerts           = map fst $ pCertificates params

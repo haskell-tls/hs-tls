@@ -102,6 +102,7 @@ data ClientParams = ClientParams
 
 data ServerParams = ServerParams
         { serverWantClientCert    :: Bool  -- ^ request a certificate from client.
+        , onCipherChoosing        :: Version -> [Cipher] -> Cipher -- ^ callback on server to modify the cipher chosen.
         }
 
 data RoleParams = Client ClientParams | Server ServerParams
@@ -161,7 +162,8 @@ defaultParamsClient = Params
 defaultParamsServer :: Params
 defaultParamsServer = defaultParamsClient
         { roleParams = Server $ ServerParams
-                        { serverWantClientCert         = False
+                        { serverWantClientCert  = False
+                        , onCipherChoosing      = \_ -> head
                         }
         }
 
