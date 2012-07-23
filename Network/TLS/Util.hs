@@ -24,9 +24,12 @@ takelast i b
         | otherwise       = Nothing
 
 partition3 :: Bytes -> (Int,Int,Int) -> Maybe (Bytes, Bytes, Bytes)
-partition3 bytes (d1,d2,d3) = if B.length bytes /= s then Nothing else Just (p1,p2,p3)
+partition3 bytes (d1,d2,d3)
+    | any (< 0) l             = Nothing
+    | sum l /= B.length bytes = Nothing
+    | otherwise               = Just (p1,p2,p3)
         where
-                s        = sum [d1,d2,d3]
+                l        = [d1,d2,d3]
                 (p1, r1) = B.splitAt d1 bytes
                 (p2, r2) = B.splitAt d2 r1
                 (p3, _)  = B.splitAt d3 r2
