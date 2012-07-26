@@ -142,6 +142,8 @@ data ServerParams = ServerParams
           -- wrong signature, a 'Just e' message signals a crypto
           -- error.
         , onUnverifiedClientCert :: Maybe KxError -> IO Bool
+
+        , onCipherChoosing        :: Version -> [Cipher] -> Cipher -- ^ callback on server to modify the cipher chosen.
         }
 
 data RoleParams = Client ClientParams | Server ServerParams
@@ -213,7 +215,8 @@ defaultParamsServer = defaultParamsClient
                         , onClientCertificate = \ _ ->
                             return $ CertificateUsageReject $ CertificateRejectOther "no client certificates expected"
                         , onUnverifiedClientCert = \ _ -> return False
-        }
+                        , onCipherChoosing      = \_ -> head
+                        }
         }
 
 updateRoleParams :: (ClientParams -> ClientParams) -> (ServerParams -> ServerParams) -> Params -> Params

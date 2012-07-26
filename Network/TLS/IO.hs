@@ -14,6 +14,7 @@ module Network.TLS.IO
     ) where
 
 import Network.TLS.Context
+import Network.TLS.State (needEmptyPacket)
 import Network.TLS.Struct
 import Network.TLS.Record
 import Network.TLS.Packet
@@ -76,8 +77,15 @@ recvPacket ctx = do
 -- | Send one packet to the context
 sendPacket :: MonadIO m => Context -> Packet -> m ()
 sendPacket ctx pkt = do
+        -- in ver <= TLS1.0, block ciphers using CBC are using CBC residue as IV, which can be guessed
+        -- by an attacker. Hence, an empty packet is sent before a normal data packet, to
+        -- prevent guessability.
+        withEmptyPacket <- usingState_ ctx needEmptyPacket
+        when (isNonNullAppData pkt && withEmptyPacket) $ sendPacket ctx $ AppData B.empty
+
         liftIO $ (loggingPacketSent $ ctxLogging ctx) (show pkt)
         dataToSend <- usingState_ ctx $ writePacket pkt
         liftIO $ (loggingIOSent $ ctxLogging ctx) dataToSend
         liftIO $ contextSend ctx dataToSend
-
+    where isNonNullAppData (AppData b) = B.null b
+          isNonNullAppData _           = False

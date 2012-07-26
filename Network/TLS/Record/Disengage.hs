@@ -75,28 +75,24 @@ decryptData econtent = do
         case bulkF bulk of
                 BulkNoneF -> do
                         let contentlen = B.length econtent - digestSize
-                        case partition3 econtent (contentlen, digestSize, 0) of
-                                Nothing                ->
-                                        throwError $ Error_Misc "partition3 failed"
-                                Just (content, mac, _) ->
-                                        return $ CipherData
-                                                { cipherDataContent = content
-                                                , cipherDataMAC     = Just mac
-                                                , cipherDataPadding = Nothing
-                                                }
+                        (content, mac) <- get2 econtent (contentlen, digestSize)
+                        return $ CipherData
+                                    { cipherDataContent = content
+                                    , cipherDataMAC     = Just mac
+                                    , cipherDataPadding = Nothing
+                                    }
                 BulkBlockF _ decryptF -> do
                         {- update IV -}
-                        let (iv, econtent') =
-                                if hasExplicitBlockIV $ stVersion st
-                                        then B.splitAt (bulkIVSize bulk) econtent
-                                        else (cstIV cst, econtent)
+                        (iv, econtent') <- if hasExplicitBlockIV $ stVersion st
+                                                then get2 econtent (bulkIVSize bulk, B.length econtent - bulkIVSize bulk)
+                                                else return (cstIV cst, econtent)
                         let newiv = fromJust "new iv" $ takelast (bulkBlockSize bulk) econtent'
                         put $ st { stActiveRxCryptState = Just $ cst { cstIV = newiv } }
 
                         let content' = decryptF writekey iv econtent'
                         let paddinglength = fromIntegral (B.last content') + 1
                         let contentlen = B.length content' - paddinglength - digestSize
-                        let (content, mac, padding) = fromJust "p3" $ partition3 content' (contentlen, digestSize, paddinglength)
+                        (content, mac, padding) <- get3 content' (contentlen, digestSize, paddinglength)
                         return $ CipherData
                                 { cipherDataContent = content
                                 , cipherDataMAC     = Just mac
@@ -107,11 +103,12 @@ decryptData econtent = do
                         let (content', newiv) = decryptF (if iv /= B.empty then iv else initF writekey) econtent
                         {- update Ctx -}
                         let contentlen        = B.length content' - digestSize
-                        let (content, mac, _) = fromJust "p3" $ partition3 content' (contentlen, digestSize, 0)
+                        (content, mac) <- get2 content' (contentlen, digestSize)
                         put $ st { stActiveRxCryptState = Just $ cst { cstIV = newiv } }
                         return $ CipherData
                                 { cipherDataContent = content
                                 , cipherDataMAC     = Just mac
                                 , cipherDataPadding = Nothing
                                 }
-
+    where get3 s ls = maybe (throwError $ Error_Packet "record bad format") return $ partition3 s ls
+          get2 s (d1,d2) = get3 s (d1,d2,0) >>= \(r1,r2,_) -> return (r1,r2)
