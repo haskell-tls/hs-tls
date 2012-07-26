@@ -68,8 +68,6 @@ module Network.TLS.State
         , addHandshakeMessage
         , updateHandshakeDigest
         , getHandshakeDigest
-        , updateCertVerifyDigest
-        , getCertVerifyDigest
         , getHandshakeMessages
         , endHandshake
         ) where
@@ -120,7 +118,6 @@ data TLSHandshakeState = TLSHandshakeState
         , hstRSAClientPublicKey    :: !(Maybe PublicKey)
         , hstRSAClientPrivateKey   :: !(Maybe PrivateKey)
         , hstHandshakeDigest :: !HashCtx
-        , hstCertVerifyDigest :: !HashCtx
         , hstHandshakeMessages :: [Bytes]
         , hstClientCertRequest :: !(Maybe ClientCertRequestData) -- ^ Set to Just-value when certificate request was received
         , hstClientCertSent  :: !Bool -- ^ Set to true when a client certificate chain was sent
@@ -464,8 +461,8 @@ isClientContext :: MonadState TLSState m => m Bool
 isClientContext = get >>= return . stClientContext
 
 -- create a new empty handshake state
-newEmptyHandshake :: Version -> ClientRandom -> HashCtx -> HashCtx -> TLSHandshakeState
-newEmptyHandshake ver crand digestInit certVerifyInit = TLSHandshakeState
+newEmptyHandshake :: Version -> ClientRandom -> HashCtx -> TLSHandshakeState
+newEmptyHandshake ver crand digestInit = TLSHandshakeState
         { hstClientVersion   = ver
         , hstClientRandom    = crand
         , hstServerRandom    = Nothing
@@ -475,7 +472,6 @@ newEmptyHandshake ver crand digestInit certVerifyInit = TLSHandshakeState
         , hstRSAClientPublicKey    = Nothing
         , hstRSAClientPrivateKey   = Nothing
         , hstHandshakeDigest = digestInit
-        , hstCertVerifyDigest = certVerifyInit
         , hstHandshakeMessages = []
         , hstClientCertRequest = Nothing
         , hstClientCertSent  = False
@@ -487,11 +483,9 @@ startHandshakeClient :: MonadState TLSState m => Version -> ClientRandom -> m ()
 startHandshakeClient ver crand = do
         -- FIXME check if handshake is already not null
         let initCtx = if ver < TLS12 then hashMD5SHA1 else hashSHA256
-            initCertVerify = if ver < TLS12 then hashMD5SHA1 else hashSHA256
-                                                                  -- FIXME: may be other hash as determined by certificate request.
         chs <- get >>= return . stHandshake
         when (isNothing chs) $
-                modify (\st -> st { stHandshake = Just $ newEmptyHandshake ver crand initCtx initCertVerify })
+                modify (\st -> st { stHandshake = Just $ newEmptyHandshake ver crand initCtx })
 
 hasValidHandshake :: MonadState TLSState m => String -> m ()
 hasValidHandshake name = get >>= \st -> assert name [ ("valid handshake", isNothing $ stHandshake st) ]
@@ -522,17 +516,6 @@ getHandshakeDigest client = do
         let hashctx = hstHandshakeDigest hst
         let msecret = fromJust "master secret" $ hstMasterSecret hst
         return $ (if client then generateClientFinished else generateServerFinished) (stVersion st) msecret hashctx
-
-updateCertVerifyDigest :: MonadState TLSState m => Bytes -> m ()
-updateCertVerifyDigest content = updateHandshake "update certverify digest" $ \hs ->
-        hs { hstCertVerifyDigest = hashUpdate (hstCertVerifyDigest hs) content }
-
-getCertVerifyDigest :: MonadState TLSState m => m Bytes
-getCertVerifyDigest = do
-        st <- get
-        let hst = fromJust "handshake" $ stHandshake st
-        let hashctx = hstCertVerifyDigest hst
-        return (hashFinal hashctx)
 
 endHandshake :: MonadState TLSState m => m ()
 endHandshake = modify (\st -> st { stHandshake = Nothing })

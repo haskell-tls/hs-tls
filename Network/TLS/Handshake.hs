@@ -14,6 +14,7 @@ module Network.TLS.Handshake
     ) where
 
 import Text.Printf
+import Network.TLS.Crypto
 import Network.TLS.Context
 import Network.TLS.Session
 import Network.TLS.Struct
@@ -257,15 +258,18 @@ handshakeClient cparams ctx = do
                           return (Just hashSig, sigDig)
                         else do
 
+                          let hashf bs = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs) 
+                              hsh = (hashf, "")
+
                           -- FIXME: Need to check whether the
                           -- server supports RSA signing.
 
-                          -- Fetch the current handshake hash.
-                          dig <- usingState_ ctx $ getCertVerifyDigest
+                          -- Fetch all handshake messages up to now.
+                          msgs <- usingState_ ctx $ B.concat <$> getHandshakeMessages
 
                           -- Sign the hash.
                           --
-                          sigDig <- usingState_ ctx $ signRSA Nothing dig
+                          sigDig <- usingState_ ctx $ signRSA (Just hsh) msgs
                           return (Nothing, sigDig)
 
                       -- Send the digest
@@ -466,12 +470,14 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                 processCertificateVerify (Handshake [hs@(CertVerify mbHashSig bs)]) = do
                   usingState_ ctx $ processHandshake hs
 
+                  usedVersion <- usingState_ ctx $ stVersion <$> get
+
                   case mbHashSig of
                     Just hashSig -> do
-                      when (ver < TLS12) $ throwCore $ Error_Protocol ("unexpected hash/sig identifier", True, IllegalParameter)
+                      when (usedVersion < TLS12) $ throwCore $ Error_Protocol ("unexpected hash/sig identifier", True, IllegalParameter)
                       when (not $ hashSig `elem` pHashSignatures (ctxParams ctx)) $ throwCore $ Error_Protocol ("unsupported hash/sig algorithm", True, IllegalParameter)
                     Nothing ->
-                      when (ver >= TLS12) $ throwCore $ Error_Protocol ("missing hash/sig identifier", True, IllegalParameter)
+                      when (usedVersion >= TLS12) $ throwCore $ Error_Protocol ("missing hash/sig identifier", True, IllegalParameter)
 
                   chain <- usingState_ ctx $ getClientCertChain
                   case chain of
@@ -479,7 +485,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                     _ -> throwCore $ Error_Protocol ("change cipher message expected",
                                                      True, UnexpectedMessage)
 
-                  (sigDig, hsh) <- if ver >= TLS12
+                  (sigDig, hsh) <- if usedVersion >= TLS12
                         then do
                           let Just sentHashSig = mbHashSig
 
@@ -491,13 +497,19 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                           return (msgs, Just hsh)
                         else do
 
+                          let hashf bs' = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs') 
+                              hsh = (hashf, "")
+
                           -- FIXME: Need to check whether the
                           -- server supports RSA signing.
 
-                          -- Fetch the current handshake hash.
-                          dig <- usingState_ ctx $ getCertVerifyDigest
+                          -- Fetch all handshake messages up to now.
+                          msgs <- usingState_ ctx $ B.concat <$> getHandshakeMessages
 
-                          return (dig, Nothing)
+                          -- FIXME: Need to check whether the
+                          -- server supports RSA signing.
+
+                          return (msgs, Just hsh)
 
                   -- Verify the signature.
                   verif <- usingState_ ctx $ verifyRSA hsh sigDig bs
@@ -609,8 +621,9 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                         -- certificates.
                         --
                         when (serverWantClientCert sparams) $ do
+                          usedVersion <- usingState_ ctx $ stVersion <$> get
                           let certTypes = [ CertificateType_RSA_Sign ]
-                              hashSigs = if ver < TLS12
+                              hashSigs = if usedVersion < TLS12
                                          then Nothing
                                          else Just (pHashSignatures $ ctxParams ctx)
                               creq = CertRequest certTypes hashSigs

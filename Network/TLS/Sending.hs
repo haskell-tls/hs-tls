@@ -68,9 +68,8 @@ preProcessPacket (Handshake hss)    = forM_ hss $ \hs -> do
         case hs of
                 Finished fdata -> updateVerifiedData True fdata
                 _              -> return ()
-        when (typeOfHandshake hs /= HandshakeType_HelloRequest) $ addHandshakeMessage $ encodeHandshake hs
+        when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage $ encodeHandshake hs
         when (finishHandshakeTypeMaterial $ typeOfHandshake hs) (updateHandshakeDigest $ encodeHandshake hs)
-        when (certVerifyHandshakeTypeMaterial $ typeOfHandshake hs) (updateCertVerifyDigest $ encodeHandshake hs)
 
 {-
  - writePacket transform a packet into marshalled data related to current state
