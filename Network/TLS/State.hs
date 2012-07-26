@@ -497,13 +497,13 @@ updateHandshake n f = do
 
 addHandshakeMessage :: MonadState TLSState m => Bytes -> m ()
 addHandshakeMessage content = updateHandshake "add handshake message" $ \hs ->
-        hs { hstHandshakeMessages = hstHandshakeMessages hs ++ [content]}
+        hs { hstHandshakeMessages = content : hstHandshakeMessages hs}
 
 getHandshakeMessages :: MonadState TLSState m => m [Bytes]
 getHandshakeMessages = do
         st <- get
         let hst = fromJust "handshake" $ stHandshake st
-        return $ hstHandshakeMessages hst
+        return $ reverse $ hstHandshakeMessages hst
 
 updateHandshakeDigest :: MonadState TLSState m => Bytes -> m ()
 updateHandshakeDigest content = updateHandshake "update digest" $ \hs ->
