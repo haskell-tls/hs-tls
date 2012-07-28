@@ -243,7 +243,8 @@ decodeCertRequest cp = do
                         Just <$> getSignatureHashAlgorithms (fromIntegral sighashlen)
                 else return Nothing
         dNameLen <- getWord16
-        when (cParamsVersion cp < TLS12 && dNameLen < 3) $ fail "certrequest distinguishname not of the correct size"
+        -- FIXME: Decide whether to remove this check completely or to make it an option.
+--        when (cParamsVersion cp < TLS12 && dNameLen < 3) $ fail "certrequest distinguishname not of the correct size"
         dNames <- decodeDNames dNameLen
         return $ CertRequest certTypes sigHashAlgs dNames
   where
@@ -273,7 +274,7 @@ decodeCertVerify cp = do
                      then Just <$> getSignatureHashAlgorithm
                      else return Nothing
         bs <- getOpaque16
-        return $ CertVerify mbHashSig bs
+        return $ CertVerify mbHashSig (CertVerifyData bs)
 
 decodeClientKeyXchg :: Get Handshake
 decodeClientKeyXchg = ClientKeyXchg <$> (remaining >>= getBytes)
@@ -371,7 +372,7 @@ encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
       putWord16 (fromIntegral totLength)
       mapM_ (\ b -> putWord16 (fromIntegral (B.length b)) >> putBytes b) enc
 
-encodeHandshakeContent (CertVerify mbHashSig c) = do
+encodeHandshakeContent (CertVerify mbHashSig (CertVerifyData c)) = do
         -- TLS 1.2 prepends the hash and signature algorithms to the
         -- signature.
         case mbHashSig of

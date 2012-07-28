@@ -248,7 +248,7 @@ handshakeClient cparams ctx = do
 
                           sigDig <- usingState_ ctx $ signRSA hsh digest
 
-                          sendPacket ctx $ Handshake [CertVerify Nothing sigDig]
+                          sendPacket ctx $ Handshake [CertVerify Nothing (CertVerifyData sigDig)]
 
                         x | x == TLS10 || x == TLS11 -> do
                           let hashf bs = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs)
@@ -256,7 +256,7 @@ handshakeClient cparams ctx = do
 
                           sigDig <- usingState_ ctx $ signRSA hsh msgs
 
-                          sendPacket ctx $ Handshake [CertVerify Nothing sigDig]
+                          sendPacket ctx $ Handshake [CertVerify Nothing (CertVerifyData sigDig)]
 
                         _ -> do
                           Just (_, Just hashSigs, _) <- usingState_ ctx $ getClientCertRequest
@@ -272,7 +272,7 @@ handshakeClient cparams ctx = do
 
                           sigDig <- usingState_ ctx $ signRSA hsh msgs
 
-                          sendPacket ctx $ Handshake [CertVerify (Just hashSig) sigDig]
+                          sendPacket ctx $ Handshake [CertVerify (Just hashSig) (CertVerifyData sigDig)]
 
                     _ -> return ()
 
@@ -467,7 +467,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                 -- Check whether the client correctly signed the handshake.
                 -- If not, ask the application on how to proceed.
                 --
-                processCertificateVerify (Handshake [hs@(CertVerify mbHashSig bs)]) = do
+                processCertificateVerify (Handshake [hs@(CertVerify mbHashSig (CertVerifyData bs))]) = do
                   usingState_ ctx $ processHandshake hs
 
                   chain <- usingState_ ctx $ getClientCertChain

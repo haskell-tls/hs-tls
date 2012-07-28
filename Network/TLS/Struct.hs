@@ -35,6 +35,7 @@ module Network.TLS.Struct
         , SessionID
         , Session(..)
         , SessionData(..)
+        , CertVerifyData(..)
         , AlertLevel(..)
         , AlertDescription(..)
         , HandshakeType(..)
@@ -144,7 +145,8 @@ newtype Session = Session (Maybe SessionID) deriving (Show, Eq)
 type FinishedData = Bytes
 type ExtensionRaw = (Word16, Bytes)
 
-type CertVerifyData = Bytes
+newtype CertVerifyData = CertVerifyData Bytes
+  deriving (Show, Eq)
 
 constrRandom32 :: (Bytes -> a) -> Bytes -> Maybe a
 constrRandom32 constr l = if B.length l == 32 then Just (constr l) else Nothing
