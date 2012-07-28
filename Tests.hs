@@ -66,6 +66,10 @@ instance Arbitrary Session where
                         2 -> liftM (Session . Just) (genByteString 32)
                         _ -> return $ Session Nothing
 
+instance Arbitrary CertVerifyData where
+        arbitrary = do
+                liftM CertVerifyData (genByteString 128)
+
 arbitraryCiphersIDs :: Gen [Word16]
 arbitraryCiphersIDs = choose (0,200) >>= vector
 
@@ -103,8 +107,8 @@ instance Arbitrary Handshake where
                 , pure ServerHelloDone
                 , ClientKeyXchg <$> genByteString 48
                 --, liftM  ServerKeyXchg
-                --, liftM3 CertRequest arbitrary (return Nothing) (return [])
-                --, liftM CertVerify (return [])
+                , liftM3 CertRequest arbitrary (return Nothing) (return [])
+                , liftM2 CertVerify (return Nothing) arbitrary
                 , Finished <$> (genByteString 12)
                 ]
 
