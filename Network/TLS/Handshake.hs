@@ -229,18 +229,39 @@ handshakeClient cparams ctx = do
                 -- 4. Send it to the server.
                 --
                 sendCertificateVerify = do
+                  usedVersion <- usingState_ ctx $ stVersion <$> get
+
                   -- Only send a certificate verify message when we
                   -- have sent a non-empty list of certificates.
                   --
                   certSent <- usingState_ ctx $ getClientCertSent
                   case certSent of
                     Just True -> do
-                      Just (_, mbHashSigs, _) <- usingState_ ctx $ getClientCertRequest
-                      (mbHashSig, hsh) <- if isJust mbHashSigs
-                        then do
-                          let Just hashSigs = mbHashSigs
+                      -- Fetch all handshake messages up to now.
+                      msgs <- usingState_ ctx $ B.concat <$> getHandshakeMessages
+
+                      case usedVersion of
+                        SSL3 -> do
+                          Just masterSecret <- usingState_ ctx $ getMasterSecret
+                          let digest = generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit hashMD5SHA1) msgs)
+                              hsh = (id, "")
+
+                          sigDig <- usingState_ ctx $ signRSA hsh digest
+
+                          sendPacket ctx $ Handshake [CertVerify Nothing sigDig]
+
+                        x | x == TLS10 || x == TLS11 -> do
+                          let hashf bs = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs)
+                              hsh = (hashf, "")
+
+                          sigDig <- usingState_ ctx $ signRSA hsh msgs
+
+                          sendPacket ctx $ Handshake [CertVerify Nothing sigDig]
+
+                        _ -> do
+                          Just (_, Just hashSigs, _) <- usingState_ ctx $ getClientCertRequest
                           let suppHashSigs = pHashSignatures $ ctxParams ctx
-                          let hashSigs' = filter (\ a -> a `elem` hashSigs) suppHashSigs
+                              hashSigs' = filter (\ a -> a `elem` hashSigs) suppHashSigs
                           liftIO $ putStrLn $ " supported hash sig algorithms: " ++ show hashSigs'
 
                           when (null hashSigs') $ do
@@ -249,26 +270,9 @@ handshakeClient cparams ctx = do
                           let hashSig = head hashSigs'
                           hsh <- getHashAndASN1 hashSig
 
-                          return (Just hashSig, hsh)
-                        else do
+                          sigDig <- usingState_ ctx $ signRSA hsh msgs
 
-                          let hashf bs = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs) 
-                              hsh = (hashf, "")
-
-                          return (Nothing, hsh)
-
-                      -- FIXME: Need to check whether the
-                      -- server supports RSA signing.
-
-                      -- Fetch all handshake messages up to now.
-                      msgs <- usingState_ ctx $ B.concat <$> getHandshakeMessages
-
-                      -- Sign the hash.
-                      --
-                      sigDig <- usingState_ ctx $ signRSA hsh msgs
-
-                      -- Send the digest
-                      sendPacket ctx $ Handshake [CertVerify mbHashSig sigDig]
+                          sendPacket ctx $ Handshake [CertVerify (Just hashSig) sigDig]
 
                     _ -> return ()
 
@@ -466,43 +470,43 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                 processCertificateVerify (Handshake [hs@(CertVerify mbHashSig bs)]) = do
                   usingState_ ctx $ processHandshake hs
 
-                  usedVersion <- usingState_ ctx $ stVersion <$> get
-
-                  case mbHashSig of
-                    Just hashSig -> do
-                      when (usedVersion < TLS12) $ throwCore $ Error_Protocol ("unexpected hash/sig identifier", True, IllegalParameter)
-                      when (not $ hashSig `elem` pHashSignatures (ctxParams ctx)) $ throwCore $ Error_Protocol ("unsupported hash/sig algorithm", True, IllegalParameter)
-                    Nothing ->
-                      when (usedVersion >= TLS12) $ throwCore $ Error_Protocol ("missing hash/sig identifier", True, IllegalParameter)
-
                   chain <- usingState_ ctx $ getClientCertChain
                   case chain of
                     Just (_:_) -> return ()
                     _ -> throwCore $ Error_Protocol ("change cipher message expected",
                                                      True, UnexpectedMessage)
 
-                  hsh <- if usedVersion >= TLS12
-                        then do
-                          let Just sentHashSig = mbHashSig
-
-                          hsh <- getHashAndASN1 sentHashSig
-
-                          return hsh
-                        else do
-
-                          let hashf bs' = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs') 
-                              hsh = (hashf, "")
-
-                          -- FIXME: Need to check whether the
-                          -- server supports RSA signing.
-
-                          return hsh
-
                   -- Fetch all handshake messages up to now.
                   msgs <- usingState_ ctx $ B.concat <$> getHandshakeMessages
 
-                  -- Verify the signature.
-                  verif <- usingState_ ctx $ verifyRSA hsh msgs bs
+                  usedVersion <- usingState_ ctx $ stVersion <$> get
+
+                  verif <- case usedVersion of
+                    SSL3 -> do
+                      Just masterSecret <- usingState_ ctx $ getMasterSecret
+                      let digest = generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit hashMD5SHA1) msgs)
+                          hsh = (id, "")
+
+                      -- Verify the signature.
+                      verif <- usingState_ ctx $ verifyRSA hsh digest bs
+                      return verif
+
+                    x | x == TLS10 || x == TLS11 -> do
+                      let hashf bs' = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs')
+                          hsh = (hashf, "")
+
+                      -- Verify the signature.
+                      verif <- usingState_ ctx $ verifyRSA hsh msgs bs
+                      return verif
+
+                    _ -> do
+                      let Just sentHashSig = mbHashSig
+
+                      hsh <- getHashAndASN1 sentHashSig
+
+                      -- Verify the signature.
+                      verif <- usingState_ ctx $ verifyRSA hsh msgs bs
+                      return verif
 
                   case verif of
                     Right True -> do

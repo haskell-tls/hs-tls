@@ -43,6 +43,8 @@ module Network.TLS.Packet
         , generateKeyBlock
         , generateClientFinished
         , generateServerFinished
+
+        , generateCertificateVerify_SSL
         ) where
 
 import Network.TLS.Struct
@@ -535,3 +537,6 @@ generateServerFinished ver
         | ver < TLS10 = generateFinished_SSL "SRVR"
         | ver < TLS12 = generateFinished_TLS prf_MD5SHA1 "server finished"
         | otherwise   = generateFinished_TLS prf_SHA256 "server finished"
+
+generateCertificateVerify_SSL :: Bytes -> HashCtx -> Bytes
+generateCertificateVerify_SSL = generateFinished_SSL ""

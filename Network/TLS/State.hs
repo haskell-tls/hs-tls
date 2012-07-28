@@ -29,6 +29,7 @@ module Network.TLS.State
         , makeDigest
         , setMasterSecret
         , setMasterSecretFromPre
+        , getMasterSecret
         , setPublicKey
         , setPrivateKey
         , setClientPublicKey
@@ -313,6 +314,11 @@ setMasterSecretFromPre premasterSecret = do
                                              premasterSecret
                                              (hstClientRandom hst)
                                              (fromJust "server random" $ hstServerRandom hst)
+
+getMasterSecret :: MonadState TLSState m => m (Maybe Bytes)
+getMasterSecret = do
+        st <- get
+        return (stHandshake st >>= hstMasterSecret)
 
 setPublicKey :: MonadState TLSState m => PublicKey -> m ()
 setPublicKey pk = updateHandshake "publickey" (\hst -> hst { hstRSAPublicKey = Just pk })
