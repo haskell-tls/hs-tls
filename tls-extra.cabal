@@ -18,6 +18,10 @@ Flag test
   Description:       Build unit test
   Default:           False
 
+Flag fastaes
+  Description:       Use fast
+  Default:           True
+
 Library
   Build-Depends:     base > 3 && < 5
                    , tls >= 1.0.0 && < 1.1.0
@@ -42,6 +46,9 @@ Library
   ghc-options:       -Wall -fno-warn-missing-signatures
   if os(windows)
     cpp-options:     -DNOCERTVERIFY
+  if os(linux) && flag(fastaes) && (arch(i386) || arch(x86_64))
+    cpp-options:     -DCIPHER_AES
+    Build-Depends:   cipher-aes >= 0.1 && < 0.2
 
 executable           Tests
   Main-is:           Tests.hs
@@ -54,6 +61,11 @@ executable           Tests
                    , cprng-aes >= 0.2.3
   else
     Buildable:       False
+  if os(windows)
+    cpp-options:     -DNOCERTVERIFY
+  if os(linux) && flag(fastaes)
+    cpp-options:     -DCIPHER_AES
+    Build-Depends:   cipher-aes >= 0.1 && < 0.2
 
 source-repository head
   type: git
