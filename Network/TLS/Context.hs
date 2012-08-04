@@ -160,12 +160,11 @@ defaultParamsClient = Params
         }
 
 defaultParamsServer :: Params
-defaultParamsServer = defaultParamsClient
-        { roleParams = Server $ ServerParams
+defaultParamsServer = defaultParamsClient { roleParams = Server serverRole }
+    where role = ServerParams
                         { serverWantClientCert  = False
                         , onCipherChoosing      = \_ -> head
                         }
-        }
 
 updateRoleParams :: (ClientParams -> ClientParams) -> (ServerParams -> ServerParams) -> Params -> Params
 updateRoleParams fc fs params = case roleParams params of
