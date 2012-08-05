@@ -208,7 +208,7 @@ defaultParamsClient = Params
         }
 
 defaultParamsServer :: Params
-defaultParamsServer = defaultParamsClient { roleParams = Server serverRole }
+defaultParamsServer = defaultParamsClient { roleParams = Server role }
     where role = ServerParams
                    { serverWantClientCert   = False
                    , onCipherChoosing       = \_ -> head

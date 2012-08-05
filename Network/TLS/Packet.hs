@@ -56,7 +56,7 @@ import Data.Bits ((.|.))
 import Data.Word(Word16)
 import Control.Applicative ((<$>))
 import Control.Monad
-import Data.Certificate.X509 (decodeCertificate, encodeCertificate, X509, encodeDN, decodeDNnoSort)
+import Data.Certificate.X509 (decodeCertificate, encodeCertificate, X509, encodeDN, decodeDN)
 import Network.TLS.Crypto
 import Network.TLS.MAC
 import Network.TLS.Cipher (CipherKeyExchangeType(..))
@@ -263,7 +263,7 @@ decodeCertRequest cp = do
     -- Decode the given bytes into a distinguished name.
     decodeDName :: Bytes -> Get DistinguishedName
     decodeDName d =
-      case decodeDNnoSort (L.fromChunks [d]) of
+      case decodeDN (L.fromChunks [d]) of
         Left err -> fail $ "certrequest: " ++ show err
         Right s -> return $ DistinguishedName s
 
