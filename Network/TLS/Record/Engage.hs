@@ -53,7 +53,7 @@ encryptData content = do
 
         let cipher = fromJust "cipher" $ stCipher st
         let bulk = cipherBulk cipher
-        let cst = fromJust "tx crypt state" $ stTxCryptState st
+        let cst = fromJust "tx crypt state" $ stActiveTxCryptState st
 
         let writekey = cstKey cst
 
@@ -79,11 +79,11 @@ encryptData content = do
                                 then return $ B.concat [iv,e]
                                 else do
                                         let newiv = fromJust "new iv" $ takelast (bulkIVSize bulk) e
-                                        put $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
+                                        put $ st { stActiveTxCryptState = Just $ cst { cstIV = newiv } }
                                         return e
                 BulkStreamF initF encryptF _ -> do
                         let iv = cstIV cst
                         let (e, newiv) = encryptF (if iv /= B.empty then iv else initF writekey) content
-                        put $ st { stTxCryptState = Just $ cst { cstIV = newiv } }
+                        put $ st { stActiveTxCryptState = Just $ cst { cstIV = newiv } }
                         return e
 

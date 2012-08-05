@@ -68,6 +68,7 @@ module Network.TLS.Context
         ) where
 
 import Network.TLS.Struct
+import qualified Network.TLS.Struct as Struct
 import Network.TLS.Session
 import Network.TLS.Cipher
 import Network.TLS.Compression
@@ -98,10 +99,50 @@ data Logging = Logging
 
 data ClientParams = ClientParams
         { clientWantSessionResume :: Maybe (SessionID, SessionData) -- ^ try to establish a connection using this session.
+
+          -- | This action is called when the server sends a
+          -- certificate request.  The parameter is the information
+          -- from the request.  The action should select a certificate
+          -- chain of one of the given certificate types where the
+          -- last certificate in the chain should be signed by one of
+          -- the given distinguished names.  Each certificate should
+          -- be signed by the following one, except for the last.  At
+          -- least the first of the certificates in the chain must
+          -- have a corresponding private key, because that is used
+          -- for signing the certificate verify message.
+          --
+          -- Note that is is the responsibility of this action to
+          -- select a certificate matching one of the requested
+          -- certificate types.  Returning a non-matching one will
+          -- lead to handshake failure later.
+          --
+          -- Returning a certificate chain not matching the
+          -- distinguished names may lead to problems or not,
+          -- depending whether the server accepts it.
+        , onCertificateRequest :: ([CertificateType],
+                                   Maybe [(HashAlgorithm, SignatureAlgorithm)],
+                                   [DistinguishedName]) -> IO [(X509, Maybe PrivateKey)]
         }
 
 data ServerParams = ServerParams
         { serverWantClientCert    :: Bool  -- ^ request a certificate from client.
+
+          -- | This is a list of certificates from which the
+          -- disinguished names are sent in certificate request
+          -- messages.  For TLS1.0, it should not be empty.
+        , serverCACertificates :: [X509]
+
+          -- | This action is called when a client certificate chain
+          -- is received from the client.  When it returns a
+          -- CertificateUsageReject value, the handshake is aborted.
+        , onClientCertificate :: [X509] -> IO CertificateUsage
+
+          -- | This action is called when the client certificate
+          -- cannot be verified.  A 'Nothing' argument indicates a
+          -- wrong signature, a 'Just e' message signals a crypto
+          -- error.
+        , onUnverifiedClientCert :: Maybe KxError -> IO Bool
+
         , onCipherChoosing        :: Version -> [Cipher] -> Cipher -- ^ callback on server to modify the cipher chosen.
         }
 
@@ -112,6 +153,7 @@ data Params = forall s . SessionManager s => Params
         , pAllowedVersions   :: [Version]           -- ^ allowed versions that we can use.
         , pCiphers           :: [Cipher]            -- ^ all ciphers supported ordered by priority.
         , pCompressions      :: [Compression]       -- ^ all compression supported ordered by priority.
+        , pHashSignatures    :: [(HashAlgorithm, SignatureAlgorithm)] -- ^ All supported hash/signature algorithms for client certificate verification, ordered by decreasing priority.
         , pUseSecureRenegotiation :: Bool           -- ^ notify that we want to use secure renegotation
         , pUseSession             :: Bool           -- ^ generate new session if specified
         , pCertificates      :: [(X509, Maybe PrivateKey)] -- ^ the cert chain for this context with the associated keys if any.
@@ -145,6 +187,11 @@ defaultParamsClient = Params
         , pAllowedVersions        = [TLS10,TLS11,TLS12]
         , pCiphers                = []
         , pCompressions           = [nullCompression]
+        , pHashSignatures         = [ (Struct.HashSHA512, SignatureRSA)
+                                    , (Struct.HashSHA384, SignatureRSA)
+                                    , (Struct.HashSHA256, SignatureRSA)
+                                    , (Struct.HashSHA224, SignatureRSA)
+                                    ]
         , pUseSecureRenegotiation = True
         , pUseSession             = True
         , pCertificates           = []
@@ -156,15 +203,19 @@ defaultParamsClient = Params
         , onNPNServerSuggest      = Nothing
         , roleParams              = Client $ ClientParams
                                         { clientWantSessionResume = Nothing
+                                        , onCertificateRequest = \ _ -> return []
                                         }
         }
 
 defaultParamsServer :: Params
 defaultParamsServer = defaultParamsClient { roleParams = Server serverRole }
     where role = ServerParams
-                        { serverWantClientCert  = False
-                        , onCipherChoosing      = \_ -> head
-                        }
+                   { serverWantClientCert   = False
+                   , onCipherChoosing       = \_ -> head
+                   , serverCACertificates   = []
+                   , onClientCertificate    = \ _ -> return $ CertificateUsageReject $ CertificateRejectOther "no client certificates expected"
+                   , onUnverifiedClientCert = \ _ -> return False
+                   }
 
 updateRoleParams :: (ClientParams -> ClientParams) -> (ServerParams -> ServerParams) -> Params -> Params
 updateRoleParams fc fs params = case roleParams params of
@@ -320,4 +371,3 @@ usingState_ ctx f = do
 
 getStateRNG :: MonadIO m => Context -> Int -> m Bytes
 getStateRNG ctx n = usingState_ ctx (genTLSRandom n)
-

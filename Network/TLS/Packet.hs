@@ -43,6 +43,8 @@ module Network.TLS.Packet
         , generateKeyBlock
         , generateClientFinished
         , generateServerFinished
+
+        , generateCertificateVerify_SSL
         ) where
 
 import Network.TLS.Struct
@@ -51,9 +53,10 @@ import Network.TLS.Cap
 import Data.Either (partitionEithers)
 import Data.Maybe (fromJust)
 import Data.Bits ((.|.))
+import Data.Word(Word16)
 import Control.Applicative ((<$>))
 import Control.Monad
-import Data.Certificate.X509 (decodeCertificate, encodeCertificate, X509)
+import Data.Certificate.X509 (decodeCertificate, encodeCertificate, X509, encodeDN, decodeDNnoSort)
 import Network.TLS.Crypto
 import Network.TLS.MAC
 import Network.TLS.Cipher (CipherKeyExchangeType(..))
@@ -164,7 +167,7 @@ decodeHandshake cp ty = runGetErr "handshake" $ case ty of
         HandshakeType_ServerKeyXchg   -> decodeServerKeyXchg cp
         HandshakeType_CertRequest     -> decodeCertRequest cp
         HandshakeType_ServerHelloDone -> decodeServerHelloDone
-        HandshakeType_CertVerify      -> decodeCertVerify
+        HandshakeType_CertVerify      -> decodeCertVerify cp
         HandshakeType_ClientKeyXchg   -> decodeClientKeyXchg
         HandshakeType_Finished        -> decodeFinished
         HandshakeType_NPN             -> do
@@ -240,14 +243,38 @@ decodeCertRequest cp = do
                         Just <$> getSignatureHashAlgorithms (fromIntegral sighashlen)
                 else return Nothing
         dNameLen <- getWord16
-        when (cParamsVersion cp < TLS12 && dNameLen < 3) $ fail "certrequest distinguishname not of the correct size"
-        dName <- getBytes $ fromIntegral dNameLen
-        return $ CertRequest certTypes sigHashAlgs (B.unpack dName)
+        -- FIXME: Decide whether to remove this check completely or to make it an option.
+--        when (cParamsVersion cp < TLS12 && dNameLen < 3) $ fail "certrequest distinguishname not of the correct size"
+        dNames <- decodeDNames dNameLen
+        return $ CertRequest certTypes sigHashAlgs dNames
+  where
+    -- Parse a list of distinguished names, which must be exactly
+    -- 'len' bytes long.
+    decodeDNames :: Word16 -> Get [DistinguishedName]
+    decodeDNames len | len == 0 = return []
+    decodeDNames len = do
+      thisLen <- getWord16
+      when (thisLen == 0) $ fail "certrequest: invalid DN length"
+      dName <- getBytes $ fromIntegral thisLen
+      l <- decodeDNames (len - (2 + thisLen))
+      dn <- decodeDName dName
+      return $ dn : l
 
-decodeCertVerify :: Get Handshake
-decodeCertVerify =
-        {- FIXME -}
-        return $ CertVerify []
+    -- Decode the given bytes into a distinguished name.
+    decodeDName :: Bytes -> Get DistinguishedName
+    decodeDName d =
+      case decodeDNnoSort (L.fromChunks [d]) of
+        Left err -> fail $ "certrequest: " ++ show err
+        Right s -> return $ DistinguishedName s
+
+
+decodeCertVerify :: CurrentParams -> Get Handshake
+decodeCertVerify cp = do
+        mbHashSig <- if cParamsVersion cp >= TLS12
+                     then Just <$> getSignatureHashAlgorithm
+                     else return Nothing
+        bs <- getOpaque16
+        return $ CertVerify mbHashSig (CertVerifyData bs)
 
 decodeClientKeyXchg :: Get Handshake
 decodeClientKeyXchg = ClientKeyXchg <$> (remaining >>= getBytes)
@@ -330,9 +357,30 @@ encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
         case sigAlgs of
                 Nothing -> return ()
                 Just l  -> putWords16 $ map (\(x,y) -> (fromIntegral $ valOfType x) * 256 + (fromIntegral $ valOfType y)) l
-        putBytes $ B.pack certAuthorities
+        encodeCertAuthorities certAuthorities
+  where
+    -- Convert a distinguished name to its DER encoding.
+    encodeCA (DistinguishedName dn) =
+      case encodeDN dn of
+        Left err -> fail $ "cannot encode distinguished name: " ++ err
+        Right s -> return $ B.concat $ L.toChunks s
 
-encodeHandshakeContent (CertVerify _) = undefined
+    -- Encode a list of distinguished names.
+    encodeCertAuthorities certAuths = do
+      enc <- mapM encodeCA certAuths
+      let totLength = sum $ map (((+) 2) . B.length) enc
+      putWord16 (fromIntegral totLength)
+      mapM_ (\ b -> putWord16 (fromIntegral (B.length b)) >> putBytes b) enc
+
+encodeHandshakeContent (CertVerify mbHashSig (CertVerifyData c)) = do
+        -- TLS 1.2 prepends the hash and signature algorithms to the
+        -- signature.
+        case mbHashSig of
+          Nothing -> return ()
+          Just (h, s) -> putWord16 $ (fromIntegral $ valOfType h) * 256 + (fromIntegral $ valOfType s)
+        putWord16 (fromIntegral $ B.length c)
+        putBytes c
+
 
 encodeHandshakeContent (Finished opaque) = putBytes opaque
 
@@ -490,3 +538,6 @@ generateServerFinished ver
         | ver < TLS10 = generateFinished_SSL "SRVR"
         | ver < TLS12 = generateFinished_TLS prf_MD5SHA1 "server finished"
         | otherwise   = generateFinished_TLS prf_SHA256 "server finished"
+
+generateCertificateVerify_SSL :: Bytes -> HashCtx -> Bytes
+generateCertificateVerify_SSL = generateFinished_SSL ""

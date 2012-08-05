@@ -8,7 +8,8 @@
 -- the Receiving module contains calls related to unmarshalling packets according
 -- to the TLS state
 --
-module Network.TLS.Receiving (processHandshake, processPacket, processServerHello) where
+module Network.TLS.Receiving (processHandshake, processPacket, processServerHello
+                             , verifyRSA) where
 
 import Control.Applicative ((<$>))
 import Control.Monad.State
@@ -64,7 +65,7 @@ processHandshake hs = do
                 ClientHello cver ran _ _ _ ex -> unless clientmode $ do
                         mapM_ processClientExtension ex
                         startHandshakeClient cver ran
-                Certificates certs            -> when clientmode $ do processCertificates certs
+                Certificates certs            -> processCertificates clientmode certs
                 ClientKeyXchg content         -> unless clientmode $ do
                         processClientKeyXchg content
                 HsNextProtocolNegotiation selected_protocol ->
@@ -72,6 +73,7 @@ processHandshake hs = do
                         setNegotiatedProtocol selected_protocol
                 Finished fdata                -> processClientFinished fdata
                 _                             -> return ()
+        when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage $ encodeHandshake hs
         when (finishHandshakeTypeMaterial $ typeOfHandshake hs) (updateHandshakeDigest $ encodeHandshake hs)
         where
                 -- secure renegotiation
@@ -89,6 +91,11 @@ decryptRSA econtent = do
         ver <- stVersion <$> get
         rsapriv <- fromJust "rsa private key" . hstRSAPrivateKey . fromJust "handshake" . stHandshake <$> get
         return $ kxDecrypt rsapriv (if ver < TLS10 then econtent else B.drop 2 econtent)
+
+verifyRSA :: (ByteString -> ByteString, ByteString) -> ByteString -> ByteString -> TLSSt (Either KxError Bool)
+verifyRSA hsh econtent sign = do
+        rsapriv <- fromJust "rsa client public key" . hstRSAClientPublicKey . fromJust "handshake" . stHandshake <$> get
+        return $ kxVerify rsapriv hsh econtent sign
 
 processServerHello :: Handshake -> TLSSt ()
 processServerHello (ServerHello sver ran _ _ _ ex) = do
@@ -134,9 +141,16 @@ processClientFinished fdata = do
         updateVerifiedData False fdata
         return ()
 
-processCertificates :: [X509] -> TLSSt ()
-processCertificates certs = do
-        let (X509 mainCert _ _ _ _) = head certs
-        case certPubKey mainCert of
-                PubKeyRSA pubkey -> setPublicKey (PubRSA pubkey)
+processCertificates :: Bool -> [X509] -> TLSSt ()
+processCertificates clientmode certs = do
+        if null certs 
+         then when (clientmode) $
+                 throwError $ Error_Protocol ("server certificate missing", True,
+                                              HandshakeFailure)
+         else do
+          let (X509 mainCert _ _ _ _) = head certs
+          case certPubKey mainCert of
+                PubKeyRSA pubkey -> (if clientmode
+                                     then setPublicKey
+                                     else setClientPublicKey) (PubRSA pubkey)
                 _                -> return ()

@@ -68,7 +68,7 @@ decryptData econtent = do
 
         let cipher     = fromJust "cipher" $ stCipher st
         let bulk       = cipherBulk cipher
-        let cst        = fromJust "rx crypt state" $ stRxCryptState st
+        let cst        = fromJust "rx crypt state" $ stActiveRxCryptState st
         let digestSize = hashSize $ cipherHash cipher
         let writekey   = cstKey cst
 
@@ -87,7 +87,7 @@ decryptData econtent = do
                                                 then get2 econtent (bulkIVSize bulk, B.length econtent - bulkIVSize bulk)
                                                 else return (cstIV cst, econtent)
                         let newiv = fromJust "new iv" $ takelast (bulkBlockSize bulk) econtent'
-                        put $ st { stRxCryptState = Just $ cst { cstIV = newiv } }
+                        put $ st { stActiveRxCryptState = Just $ cst { cstIV = newiv } }
 
                         let content' = decryptF writekey iv econtent'
                         let paddinglength = fromIntegral (B.last content') + 1
@@ -104,7 +104,7 @@ decryptData econtent = do
                         {- update Ctx -}
                         let contentlen        = B.length content' - digestSize
                         (content, mac) <- get2 content' (contentlen, digestSize)
-                        put $ st { stRxCryptState = Just $ cst { cstIV = newiv } }
+                        put $ st { stActiveRxCryptState = Just $ cst { cstIV = newiv } }
                         return $ CipherData
                                 { cipherDataContent = content
                                 , cipherDataMAC     = Just mac

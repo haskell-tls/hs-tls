@@ -21,6 +21,7 @@ module Network.TLS.Struct
         , SignatureAlgorithm(..)
         , ProtocolType(..)
         , TLSError(..)
+        , DistinguishedName(..)
         , ServerDHParams(..)
         , ServerRSAParams(..)
         , ServerKeyXchgAlgorithmData(..)
@@ -34,6 +35,7 @@ module Network.TLS.Struct
         , SessionID
         , Session(..)
         , SessionData(..)
+        , CertVerifyData(..)
         , AlertLevel(..)
         , AlertDescription(..)
         , HandshakeType(..)
@@ -49,6 +51,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as B (length)
 import Data.Word
 import Data.Certificate.X509 (X509)
+import Data.Certificate.X509.Cert (ASN1String, OID)
 import Data.Typeable
 import Control.Monad.Error (Error(..))
 import Control.Exception (Exception(..))
@@ -142,6 +145,9 @@ newtype Session = Session (Maybe SessionID) deriving (Show, Eq)
 type FinishedData = Bytes
 type ExtensionRaw = (Word16, Bytes)
 
+newtype CertVerifyData = CertVerifyData Bytes
+  deriving (Show, Eq)
+
 constrRandom32 :: (Bytes -> a) -> Bytes -> Maybe a
 constrRandom32 constr l = if B.length l == 32 then Just (constr l) else Nothing
 
@@ -217,6 +223,9 @@ data ServerKeyXchgAlgorithmData =
         | SKX_Unknown Bytes
         deriving (Show,Eq)
 
+data DistinguishedName = DistinguishedName [(OID, ASN1String)]
+  deriving (Eq, Show)
+
 data Handshake =
           ClientHello !Version !ClientRandom !Session ![CipherID] ![CompressionID] [ExtensionRaw]
         | ServerHello !Version !ServerRandom !Session !CipherID !CompressionID [ExtensionRaw]
@@ -225,8 +234,8 @@ data Handshake =
         | ServerHelloDone
         | ClientKeyXchg Bytes
         | ServerKeyXchg ServerKeyXchgAlgorithmData
-        | CertRequest [CertificateType] (Maybe [ (HashAlgorithm, SignatureAlgorithm) ]) [Word8]
-        | CertVerify [Word8]
+        | CertRequest [CertificateType] (Maybe [ (HashAlgorithm, SignatureAlgorithm) ]) [DistinguishedName]
+        | CertVerify (Maybe (HashAlgorithm, SignatureAlgorithm)) CertVerifyData
         | Finished FinishedData
         | HsNextProtocolNegotiation Bytes -- NPN extension
         deriving (Show,Eq)

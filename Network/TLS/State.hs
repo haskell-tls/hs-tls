@@ -24,11 +24,24 @@ module Network.TLS.State
         , updateVerifiedData
         , finishHandshakeTypeMaterial
         , finishHandshakeMaterial
+        , certVerifyHandshakeTypeMaterial
+        , certVerifyHandshakeMaterial
         , makeDigest
         , setMasterSecret
         , setMasterSecretFromPre
+        , getMasterSecret
         , setPublicKey
         , setPrivateKey
+        , setClientPublicKey
+        , setClientPrivateKey
+        , setClientCertSent
+        , getClientCertSent
+        , setCertReqSent
+        , getCertReqSent
+        , setClientCertChain
+        , getClientCertChain
+        , setClientCertRequest
+        , getClientCertRequest
         , setKeyBlock
         , setVersion
         , setCipher
@@ -41,6 +54,8 @@ module Network.TLS.State
         , getNegotiatedProtocol
         , setServerNextProtocolSuggest
         , getServerNextProtocolSuggest
+        , getClientCertificateChain
+        , setClientCertificateChain
         , getVerifiedData
         , setSession
         , getSession
@@ -52,8 +67,10 @@ module Network.TLS.State
         , getCipherKeyExchangeType
         , isClientContext
         , startHandshakeClient
+        , addHandshakeMessage
         , updateHandshakeDigest
         , getHandshakeDigest
+        , getHandshakeMessages
         , endHandshake
         ) where
 
@@ -73,6 +90,7 @@ import Control.Monad
 import Control.Monad.State
 import Control.Monad.Error
 import Crypto.Random
+import Data.Certificate.X509
 
 assert :: Monad m => String -> [(String,Bool)] -> m ()
 assert fctname list = forM_ list $ \ (name, assumption) -> do
@@ -88,6 +106,10 @@ data TLSMacState = TLSMacState
         { msSequence :: Word64
         } deriving (Show)
 
+type ClientCertRequestData = ([CertificateType],
+                              Maybe [(HashAlgorithm, SignatureAlgorithm)],
+                              [DistinguishedName])
+  
 data TLSHandshakeState = TLSHandshakeState
         { hstClientVersion   :: !(Version)
         , hstClientRandom    :: !ClientRandom
@@ -95,7 +117,14 @@ data TLSHandshakeState = TLSHandshakeState
         , hstMasterSecret    :: !(Maybe Bytes)
         , hstRSAPublicKey    :: !(Maybe PublicKey)
         , hstRSAPrivateKey   :: !(Maybe PrivateKey)
+        , hstRSAClientPublicKey    :: !(Maybe PublicKey)
+        , hstRSAClientPrivateKey   :: !(Maybe PrivateKey)
         , hstHandshakeDigest :: !HashCtx
+        , hstHandshakeMessages :: [Bytes]
+        , hstClientCertRequest :: !(Maybe ClientCertRequestData) -- ^ Set to Just-value when certificate request was received
+        , hstClientCertSent  :: !Bool -- ^ Set to true when a client certificate chain was sent
+        , hstCertReqSent     :: !Bool -- ^ Set to true when a certificate request was sent
+        , hstClientCertChain :: !(Maybe [X509])
         } deriving (Show)
 
 data StateRNG = forall g . CryptoRandomGen g => StateRNG g
@@ -111,10 +140,14 @@ data TLSState = TLSState
         , stSessionResuming     :: Bool
         , stTxEncrypted         :: Bool
         , stRxEncrypted         :: Bool
-        , stTxCryptState        :: !(Maybe TLSCryptState)
-        , stRxCryptState        :: !(Maybe TLSCryptState)
-        , stTxMacState          :: !(Maybe TLSMacState)
-        , stRxMacState          :: !(Maybe TLSMacState)
+        , stActiveTxCryptState        :: !(Maybe TLSCryptState)
+        , stActiveRxCryptState        :: !(Maybe TLSCryptState)
+        , stPendingTxCryptState        :: !(Maybe TLSCryptState)
+        , stPendingRxCryptState        :: !(Maybe TLSCryptState)
+        , stActiveTxMacState          :: !(Maybe TLSMacState)
+        , stActiveRxMacState          :: !(Maybe TLSMacState)
+        , stPendingTxMacState          :: !(Maybe TLSMacState)
+        , stPendingRxMacState          :: !(Maybe TLSMacState)
         , stCipher              :: Maybe Cipher
         , stCompression         :: Compression
         , stRandomGen           :: StateRNG
@@ -124,6 +157,7 @@ data TLSState = TLSState
         , stExtensionNPN        :: Bool  -- NPN draft extension
         , stNegotiatedProtocol  :: Maybe B.ByteString -- NPN protocol
         , stServerNextProtocolSuggest :: Maybe [B.ByteString]
+        , stClientCertificateChain :: Maybe [X509]
         } deriving (Show)
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrorT TLSError (State TLSState) a }
@@ -151,10 +185,14 @@ newTLSState rng = TLSState
         , stSessionResuming     = False
         , stTxEncrypted         = False
         , stRxEncrypted         = False
-        , stTxCryptState        = Nothing
-        , stRxCryptState        = Nothing
-        , stTxMacState          = Nothing
-        , stRxMacState          = Nothing
+        , stActiveTxCryptState        = Nothing
+        , stActiveRxCryptState        = Nothing
+        , stPendingTxCryptState        = Nothing
+        , stPendingRxCryptState        = Nothing
+        , stActiveTxMacState          = Nothing
+        , stActiveRxMacState          = Nothing
+        , stPendingTxMacState          = Nothing
+        , stPendingRxMacState          = Nothing
         , stCipher              = Nothing
         , stCompression         = nullCompression
         , stRandomGen           = StateRNG rng
@@ -164,6 +202,7 @@ newTLSState rng = TLSState
         , stExtensionNPN        = False
         , stNegotiatedProtocol  = Nothing
         , stServerNextProtocolSuggest = Nothing
+        , stClientCertificateChain = Nothing
         }
 
 withTLSRNG :: StateRNG -> (forall g . CryptoRandomGen g => g -> Either e (a,g)) -> Either e (a, StateRNG)
@@ -189,8 +228,8 @@ makeDigest :: MonadState TLSState m => Bool -> Header -> Bytes -> m Bytes
 makeDigest w hdr content = do
         st <- get
         let ver = stVersion st
-        let cst = fromJust "crypt state" $ if w then stTxCryptState st else stRxCryptState st
-        let ms = fromJust "mac state" $ if w then stTxMacState st else stRxMacState st
+        let cst = fromJust "crypt state" $ if w then stActiveTxCryptState st else stActiveRxCryptState st
+        let ms = fromJust "mac state" $ if w then stActiveTxMacState st else stActiveRxMacState st
         let cipher = fromJust "cipher" $ stCipher st
         let hashf = hashF $ cipherHash cipher
 
@@ -202,7 +241,7 @@ makeDigest w hdr content = do
 
         let newms = ms { msSequence = (msSequence ms) + 1 }
 
-        modify (\_ -> if w then st { stTxMacState = Just newms } else st { stRxMacState = Just newms })
+        modify (\_ -> if w then st { stActiveTxMacState = Just newms } else st { stActiveRxMacState = Just newms })
         return digest
 
 updateVerifiedData :: MonadState TLSState m => Bool -> Bytes -> m ()
@@ -221,16 +260,36 @@ finishHandshakeTypeMaterial HandshakeType_ServerHelloDone = True
 finishHandshakeTypeMaterial HandshakeType_ClientKeyXchg   = True
 finishHandshakeTypeMaterial HandshakeType_ServerKeyXchg   = True
 finishHandshakeTypeMaterial HandshakeType_CertRequest     = True
-finishHandshakeTypeMaterial HandshakeType_CertVerify      = False
+finishHandshakeTypeMaterial HandshakeType_CertVerify      = True
 finishHandshakeTypeMaterial HandshakeType_Finished        = True
 finishHandshakeTypeMaterial HandshakeType_NPN             = True
 
 finishHandshakeMaterial :: Handshake -> Bool
 finishHandshakeMaterial = finishHandshakeTypeMaterial . typeOfHandshake
 
+certVerifyHandshakeTypeMaterial :: HandshakeType -> Bool
+certVerifyHandshakeTypeMaterial HandshakeType_ClientHello     = True
+certVerifyHandshakeTypeMaterial HandshakeType_ServerHello     = True
+certVerifyHandshakeTypeMaterial HandshakeType_Certificate     = True
+certVerifyHandshakeTypeMaterial HandshakeType_HelloRequest    = False
+certVerifyHandshakeTypeMaterial HandshakeType_ServerHelloDone = True
+certVerifyHandshakeTypeMaterial HandshakeType_ClientKeyXchg   = True
+certVerifyHandshakeTypeMaterial HandshakeType_ServerKeyXchg   = True
+certVerifyHandshakeTypeMaterial HandshakeType_CertRequest     = True
+certVerifyHandshakeTypeMaterial HandshakeType_CertVerify      = False
+certVerifyHandshakeTypeMaterial HandshakeType_Finished        = False
+certVerifyHandshakeTypeMaterial HandshakeType_NPN             = False
+
+certVerifyHandshakeMaterial :: Handshake -> Bool
+certVerifyHandshakeMaterial = certVerifyHandshakeTypeMaterial . typeOfHandshake
+
 switchTxEncryption, switchRxEncryption :: MonadState TLSState m => m ()
-switchTxEncryption = modify (\st -> st { stTxEncrypted = True })
-switchRxEncryption = modify (\st -> st { stRxEncrypted = True })
+switchTxEncryption = modify (\st -> st { stTxEncrypted = True,
+                                         stActiveTxMacState = stPendingTxMacState st,
+                                         stActiveTxCryptState = stPendingTxCryptState st })
+switchRxEncryption = modify (\st -> st { stRxEncrypted = True,
+                                         stActiveRxMacState = stPendingRxMacState st,
+                                         stActiveRxCryptState = stPendingRxCryptState st })
 
 setServerRandom :: MonadState TLSState m => ServerRandom -> m ()
 setServerRandom ran = updateHandshake "srand" (\hst -> hst { hstServerRandom = Just ran })
@@ -256,11 +315,54 @@ setMasterSecretFromPre premasterSecret = do
                                              (hstClientRandom hst)
                                              (fromJust "server random" $ hstServerRandom hst)
 
+getMasterSecret :: MonadState TLSState m => m (Maybe Bytes)
+getMasterSecret = do
+        st <- get
+        return (stHandshake st >>= hstMasterSecret)
+
 setPublicKey :: MonadState TLSState m => PublicKey -> m ()
 setPublicKey pk = updateHandshake "publickey" (\hst -> hst { hstRSAPublicKey = Just pk })
 
 setPrivateKey :: MonadState TLSState m => PrivateKey -> m ()
 setPrivateKey pk = updateHandshake "privatekey" (\hst -> hst { hstRSAPrivateKey = Just pk })
+
+setClientPublicKey :: MonadState TLSState m => PublicKey -> m ()
+setClientPublicKey pk = updateHandshake "client publickey" (\hst -> hst { hstRSAClientPublicKey = Just pk })
+
+setClientPrivateKey :: MonadState TLSState m => PrivateKey -> m ()
+setClientPrivateKey pk = updateHandshake "client privatekey" (\hst -> hst { hstRSAClientPrivateKey = Just pk })
+
+setCertReqSent :: MonadState TLSState m => Bool -> m ()
+setCertReqSent b = updateHandshake "client cert req sent" (\hst -> hst { hstCertReqSent = b })
+
+getCertReqSent :: MonadState TLSState m => m (Maybe Bool)
+getCertReqSent = do
+        st <- get
+        return (stHandshake st >>= Just . hstCertReqSent)
+
+setClientCertSent :: MonadState TLSState m => Bool -> m ()
+setClientCertSent b = updateHandshake "client cert sent" (\hst -> hst { hstClientCertSent = b })
+
+getClientCertSent :: MonadState TLSState m => m (Maybe Bool)
+getClientCertSent = do
+        st <- get
+        return (stHandshake st >>= Just . hstClientCertSent)
+
+setClientCertChain :: MonadState TLSState m => [X509] -> m ()
+setClientCertChain b = updateHandshake "client certificate chain" (\hst -> hst { hstClientCertChain = Just b })
+
+getClientCertChain :: MonadState TLSState m => m (Maybe [X509])
+getClientCertChain = do
+        st <- get
+        return (stHandshake st >>= hstClientCertChain)
+
+setClientCertRequest :: MonadState TLSState m => ClientCertRequestData -> m ()
+setClientCertRequest d = updateHandshake "client cert data" (\hst -> hst { hstClientCertRequest = Just d })
+
+getClientCertRequest :: MonadState TLSState m => m (Maybe ClientCertRequestData)
+getClientCertRequest = do
+        st <- get
+        return (stHandshake st >>= hstClientCertRequest)
 
 getSessionData :: MonadState TLSState m => m (Maybe SessionData)
 getSessionData = do
@@ -319,10 +421,10 @@ setKeyBlock = do
         let msClient = TLSMacState { msSequence = 0 }
         let msServer = TLSMacState { msSequence = 0 }
         put $ st
-                { stTxCryptState = Just $ if cc then cstClient else cstServer
-                , stRxCryptState = Just $ if cc then cstServer else cstClient
-                , stTxMacState   = Just $ if cc then msClient else msServer
-                , stRxMacState   = Just $ if cc then msServer else msClient
+                { stPendingTxCryptState = Just $ if cc then cstClient else cstServer
+                , stPendingRxCryptState = Just $ if cc then cstServer else cstClient
+                , stPendingTxMacState   = Just $ if cc then msClient else msServer
+                , stPendingRxMacState   = Just $ if cc then msServer else msClient
                 }
 
 setCipher :: MonadState TLSState m => Cipher -> m ()
@@ -355,6 +457,12 @@ setServerNextProtocolSuggest ps = modify (\st -> st { stServerNextProtocolSugges
 getServerNextProtocolSuggest :: MonadState TLSState m => m (Maybe [B.ByteString])
 getServerNextProtocolSuggest = get >>= return . stServerNextProtocolSuggest
 
+setClientCertificateChain :: MonadState TLSState m => [X509] -> m ()
+setClientCertificateChain s = modify (\st -> st { stClientCertificateChain = Just s })
+
+getClientCertificateChain :: MonadState TLSState m => m (Maybe [X509])
+getClientCertificateChain = get >>= return . stClientCertificateChain
+
 getCipherKeyExchangeType :: MonadState TLSState m => m (Maybe CipherKeyExchangeType)
 getCipherKeyExchangeType = get >>= return . (maybe Nothing (Just . cipherKeyExchange) . stCipher)
 
@@ -373,7 +481,14 @@ newEmptyHandshake ver crand digestInit = TLSHandshakeState
         , hstMasterSecret    = Nothing
         , hstRSAPublicKey    = Nothing
         , hstRSAPrivateKey   = Nothing
+        , hstRSAClientPublicKey    = Nothing
+        , hstRSAClientPrivateKey   = Nothing
         , hstHandshakeDigest = digestInit
+        , hstHandshakeMessages = []
+        , hstClientCertRequest = Nothing
+        , hstClientCertSent  = False
+        , hstCertReqSent     = False
+        , hstClientCertChain = Nothing
         }
 
 startHandshakeClient :: MonadState TLSState m => Version -> ClientRandom -> m ()
@@ -391,6 +506,16 @@ updateHandshake :: MonadState TLSState m => String -> (TLSHandshakeState -> TLSH
 updateHandshake n f = do
         hasValidHandshake n
         modify (\st -> st { stHandshake = f <$> stHandshake st })
+
+addHandshakeMessage :: MonadState TLSState m => Bytes -> m ()
+addHandshakeMessage content = updateHandshake "add handshake message" $ \hs ->
+        hs { hstHandshakeMessages = content : hstHandshakeMessages hs}
+
+getHandshakeMessages :: MonadState TLSState m => m [Bytes]
+getHandshakeMessages = do
+        st <- get
+        let hst = fromJust "handshake" $ stHandshake st
+        return $ reverse $ hstHandshakeMessages hst
 
 updateHandshakeDigest :: MonadState TLSState m => Bytes -> m ()
 updateHandshakeDigest content = updateHandshake "update digest" $ \hs ->

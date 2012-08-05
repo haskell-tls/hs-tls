@@ -8,7 +8,7 @@
 -- the Sending module contains calls related to marshalling packets according
 -- to the TLS state 
 --
-module Network.TLS.Sending (writePacket, encryptRSA) where
+module Network.TLS.Sending (writePacket, encryptRSA, signRSA) where
 
 import Control.Applicative ((<$>))
 import Control.Monad.State
@@ -38,7 +38,6 @@ makeRecord pkt = do
  -}
 processRecord :: Record Plaintext -> TLSSt (Record Plaintext)
 processRecord record@(Record ty _ fragment) = do
-        when (ty == ProtocolType_Handshake) (updateHandshakeDigest $ fragmentGetBytes fragment)
         return record
 
 {-
@@ -69,6 +68,8 @@ preProcessPacket (Handshake hss)    = forM_ hss $ \hs -> do
         case hs of
                 Finished fdata -> updateVerifiedData True fdata
                 _              -> return ()
+        when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage $ encodeHandshake hs
+        when (finishHandshakeTypeMaterial $ typeOfHandshake hs) (updateHandshakeDigest $ encodeHandshake hs)
 
 {-
  - writePacket transform a packet into marshalled data related to current state
@@ -93,6 +94,14 @@ encryptRSA content = do
         case withTLSRNG (stRandomGen st) (\g -> kxEncrypt g rsakey content) of
                 Left err               -> fail ("rsa encrypt failed: " ++ show err)
                 Right (econtent, rng') -> put (st { stRandomGen = rng' }) >> return econtent
+
+signRSA :: (ByteString -> ByteString, ByteString) -> ByteString -> TLSSt ByteString
+signRSA hsh content = do
+        st <- get
+        let rsakey = fromJust "rsa client private key" $ hstRSAClientPrivateKey $ fromJust "handshake" $ stHandshake st
+        case kxSign rsakey hsh content of
+                Left err       -> fail ("rsa sign failed: " ++ show err)
+                Right econtent -> return econtent
 
 writePacketContent :: Packet -> TLSSt ByteString
 writePacketContent (Handshake hss)    = return $ encodeHandshakes hss
