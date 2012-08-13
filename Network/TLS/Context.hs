@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- |
 -- Module      : Network.TLS.Context
 -- License     : BSD-style
@@ -49,7 +50,6 @@ import Network.TLS.Compression
 import Network.TLS.Crypto
 import Network.TLS.State
 import Network.TLS.Measurement
-import Data.Maybe
 import Data.Certificate.X509
 import Data.List (intercalate)
 import qualified Data.ByteString as B
@@ -59,7 +59,10 @@ import Control.Monad.State
 import Control.Exception (throwIO, Exception())
 import Data.IORef
 import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush)
+
+#if !MIN_VERSION_base(4,6,0)
 import Prelude hiding (catch)
+#endif
 
 data TLSLogging = TLSLogging
 	{ loggingPacketSent :: String -> IO ()
