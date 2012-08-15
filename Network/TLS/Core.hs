@@ -1,4 +1,5 @@
 {-# OPTIONS_HADDOCK hide #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 -- |
 -- Module      : Network.TLS.Core
@@ -54,7 +55,9 @@ import Control.Monad.State
 import Control.Exception (throwIO, Exception(), fromException, catch, SomeException)
 import System.IO (Handle)
 import System.IO.Error (mkIOError, eofErrorType)
+#if !MIN_VERSION_base(4,6,0)
 import Prelude hiding (catch)
+#endif
 
 data HandshakeFailed = HandshakeFailed TLSError
 	deriving (Show,Eq,Typeable)
