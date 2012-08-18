@@ -46,6 +46,7 @@ import Control.Exception (Exception(), fromException, catch, SomeException)
 import Prelude hiding (catch)
 
 import Network.TLS.Handshake.Common
+import Network.TLS.Handshake.Certificate
 
 -- client part of handshake. send a bunch of handshake of client
 -- values intertwined with response from the server.
@@ -272,20 +273,6 @@ getHashAndASN1 hashSig = do
     _ ->
       throwCore $ Error_Misc "unsupported hash/sig algorithm"
 
-
--- on certificate reject, throw an exception with the proper protocol alert error.
-certificateRejected :: MonadIO m => CertificateRejectReason -> m a
-certificateRejected CertificateRejectRevoked =
-  throwCore $ Error_Protocol ("certificate is revoked", True, CertificateRevoked)
-certificateRejected CertificateRejectExpired =
-  throwCore $ Error_Protocol ("certificate has expired", True, CertificateExpired)
-certificateRejected CertificateRejectUnknownCA =
-  throwCore $ Error_Protocol ("certificate has unknown CA", True, UnknownCa)
-certificateRejected (CertificateRejectOther s) =
-  throwCore $ Error_Protocol ("certificate rejected: " ++ s, True, CertificateUnknown)
-
-rejectOnException :: SomeException -> IO TLSCertificateUsage
-rejectOnException e = return $ CertificateUsageReject $ CertificateRejectOther $ show e
 
 handshakeServerWith :: MonadIO m => ServerParams -> Context -> Handshake -> m ()
 handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession ciphers compressions exts) = do
