@@ -58,6 +58,7 @@ Library
                      Network.TLS.Handshake.Common
                      Network.TLS.Handshake.Certificate
                      Network.TLS.Handshake.Client
+                     Network.TLS.Handshake.Server
                      Network.TLS.Handshake.Signature
                      Network.TLS.IO
                      Network.TLS.MAC

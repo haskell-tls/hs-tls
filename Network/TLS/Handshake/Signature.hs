@@ -8,9 +8,7 @@ import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Crypto.Hash.SHA384 as SHA384
 import qualified Crypto.Hash.SHA512 as SHA512
 
-import Network.TLS.Crypto
 import Network.TLS.Context
-import Network.TLS.Session
 import Network.TLS.Struct
 
 import Control.Monad.State
