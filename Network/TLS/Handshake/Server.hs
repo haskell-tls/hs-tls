@@ -38,6 +38,44 @@ import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Certificate
 
+-- Put the server context in handshake mode.
+--
+-- Expect to receive as first packet a client hello handshake message
+--
+-- This is just a helper to pop the next message from the recv layer,
+-- and call handshakeServerWith.
+handshakeServer :: MonadIO m => ServerParams -> Context -> m ()
+handshakeServer sparams ctx = do
+        hss <- recvPacketHandshake ctx
+        case hss of
+                [ch] -> handshakeServerWith sparams ctx ch
+                _    -> fail ("unexpected handshake received, excepting client hello and received " ++ show hss)
+
+-- | Put the server context in handshake mode.
+--
+-- Expect a client hello message as parameter.
+-- This is useful when the client hello has been already poped from the recv layer to inspect the packet.
+--
+-- When the function returns, a new handshake has been succesfully negociated.
+-- On any error, a HandshakeFailed exception is raised.
+--
+-- handshake protocol (<- receiving, -> sending, [] optional):
+--    (no session)           (session resumption)
+--      <- client hello       <- client hello
+--      -> server hello       -> server hello
+--      -> [certificate]
+--      -> [server key xchg]
+--      -> [cert request]
+--      -> hello done
+--      <- [certificate]
+--      <- client key xchg
+--      <- [cert verify]
+--      <- change cipher      -> change cipher
+--      <- [NPN]
+--      <- finish             -> finish
+--      -> change cipher      <- change cipher
+--      -> finish             <- finish
+--
 handshakeServerWith :: MonadIO m => ServerParams -> Context -> Handshake -> m ()
 handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession ciphers compressions exts) = do
         -- check if policy allow this new handshake to happens
@@ -291,12 +329,4 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                 extractCAname cert = DistinguishedName $ certSubjectDN (x509Cert cert)
 
 handshakeServerWith _ _ _ = fail "unexpected handshake type received. expecting client hello"
-
--- after receiving a client hello, we need to redo a handshake
-handshakeServer :: MonadIO m => ServerParams -> Context -> m ()
-handshakeServer sparams ctx = do
-        hss <- recvPacketHandshake ctx
-        case hss of
-                [ch] -> handshakeServerWith sparams ctx ch
-                _    -> fail ("unexpected handshake received, excepting client hello and received " ++ show hss)
 
