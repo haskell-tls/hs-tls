@@ -243,80 +243,76 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                 -- If not, ask the application on how to proceed.
                 --
                 processCertificateVerify (Handshake [hs@(CertVerify mbHashSig (CertVerifyData bs))]) = do
-                  usingState_ ctx $ processHandshake hs
+                    usingState_ ctx $ processHandshake hs
+                    chain <- usingState_ ctx $ getClientCertChain
+                    case chain of
+                        Just (_:_) -> return ()
+                        _          -> throwCore $ Error_Protocol ("change cipher message expected", True, UnexpectedMessage)
 
-                  chain <- usingState_ ctx $ getClientCertChain
-                  case chain of
-                    Just (_:_) -> return ()
-                    _ -> throwCore $ Error_Protocol ("change cipher message expected",
-                                                     True, UnexpectedMessage)
+                    -- Fetch all handshake messages up to now.
+                    msgs <- usingState_ ctx $ B.concat <$> getHandshakeMessages
 
-                  -- Fetch all handshake messages up to now.
-                  msgs <- usingState_ ctx $ B.concat <$> getHandshakeMessages
+                    usedVersion <- usingState_ ctx $ stVersion <$> get
 
-                  usedVersion <- usingState_ ctx $ stVersion <$> get
+                    verif <- case usedVersion of
+                        SSL3 -> do
+                            Just masterSecret <- usingState_ ctx $ getMasterSecret
+                            let digest = generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit hashMD5SHA1) msgs)
+                                hsh = (id, "")
+                            -- Verify the signature.
+                            verif <- usingState_ ctx $ verifyRSA hsh digest bs
+                            return verif
 
-                  verif <- case usedVersion of
-                    SSL3 -> do
-                      Just masterSecret <- usingState_ ctx $ getMasterSecret
-                      let digest = generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit hashMD5SHA1) msgs)
-                          hsh = (id, "")
+                        x | x == TLS10 || x == TLS11 -> do
+                            let hashf bs' = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs')
+                                hsh = (hashf, "")
 
-                      -- Verify the signature.
-                      verif <- usingState_ ctx $ verifyRSA hsh digest bs
-                      return verif
+                            -- Verify the signature.
+                            verif <- usingState_ ctx $ verifyRSA hsh msgs bs
+                            return verif
 
-                    x | x == TLS10 || x == TLS11 -> do
-                      let hashf bs' = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs')
-                          hsh = (hashf, "")
+                        _ -> do
+                            let Just sentHashSig = mbHashSig
+                            hsh <- getHashAndASN1 sentHashSig
 
-                      -- Verify the signature.
-                      verif <- usingState_ ctx $ verifyRSA hsh msgs bs
-                      return verif
+                            -- Verify the signature.
+                            verif <- usingState_ ctx $ verifyRSA hsh msgs bs
+                            return verif
 
-                    _ -> do
-                      let Just sentHashSig = mbHashSig
+                    case verif of
+                        Right True -> do
+                            -- When verification succeeds, commit the
+                            -- client certificate chain to the context.
+                            --
+                            Just certs <- usingState_ ctx $ getClientCertChain
+                            usingState_ ctx $ setClientCertificateChain certs
+                            return ()
 
-                      hsh <- getHashAndASN1 sentHashSig
-
-                      -- Verify the signature.
-                      verif <- usingState_ ctx $ verifyRSA hsh msgs bs
-                      return verif
-
-                  case verif of
-                    Right True -> do
-                      -- When verification succeeds, commit the
-                      -- client certificate chain to the context.
-                      --
-                      Just certs <- usingState_ ctx $ getClientCertChain
-                      usingState_ ctx $ setClientCertificateChain certs
-                      return ()
-
-                    _ -> do
-                      -- Either verification failed because of an
-                      -- invalid format (with an error message), or
-                      -- the signature is wrong.  In either case,
-                      -- ask the application -- if it wants to
-                      -- proceed, we will do that.
-                      --
-                      let arg = case verif of Left err -> Just err; _ -> Nothing
-                      res <- liftIO $ onUnverifiedClientCert sparams arg
-                      if res
-                        then do
-                              -- When verification fails, but the
-                              -- application callbacks accepts, we
-                              -- also commit the client certificate
-                              -- chain to the context.
-                              --
-                              Just certs <- usingState_ ctx $ getClientCertChain
-                              usingState_ ctx $ setClientCertificateChain certs
-                        else do
-                          case verif of
-                            Left err ->
-                              throwCore $ Error_Protocol (show err, True, DecryptError)
-                            _ ->
-                              throwCore $ Error_Protocol ("verification failed", True, BadCertificate)
-                  return $ RecvStateNext expectChangeCipher
+                        _ -> do
+                            -- Either verification failed because of an
+                            -- invalid format (with an error message), or
+                            -- the signature is wrong.  In either case,
+                            -- ask the application -- if it wants to
+                            -- proceed, we will do that.
+                            --
+                            let arg = case verif of
+                                    Left err -> Just err
+                                    _        -> Nothing
+                            res <- liftIO $ onUnverifiedClientCert sparams arg
+                            if res
+                                then do
+                                    -- When verification fails, but the
+                                    -- application callbacks accepts, we
+                                    -- also commit the client certificate
+                                    -- chain to the context.
+                                    --
+                                    Just certs <- usingState_ ctx $ getClientCertChain
+                                    usingState_ ctx $ setClientCertificateChain certs
+                                else do
+                                    case verif of
+                                        Left err -> throwCore $ Error_Protocol (show err, True, DecryptError)
+                                        _        -> throwCore $ Error_Protocol ("verification failed", True, BadCertificate)
+                    return $ RecvStateNext expectChangeCipher
 
                 processCertificateVerify p = do
                     chain <- usingState_ ctx $ getClientCertChain
