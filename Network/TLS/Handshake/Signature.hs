@@ -1,4 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
+-- |
+-- Module      : Network.TLS.Handshake.Signature
+-- License     : BSD-style
+-- Maintainer  : Vincent Hanquez <vincent@snarc.org>
+-- Stability   : experimental
+-- Portability : unknown
+--
 module Network.TLS.Handshake.Signature
     ( getHashAndASN1
     ) where
