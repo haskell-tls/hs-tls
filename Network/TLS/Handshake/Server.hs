@@ -105,9 +105,8 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                 Nothing -> do
                         handshakeSendServerData
                         liftIO $ contextFlush ctx
-
                         -- Receive client info until client Finished.
-                        recvClientData
+                        recvClientData sparams ctx
                         sendChangeCipherAndFinish ctx False
                 Just sessionData -> do
                         usingState_ ctx (setSession clientSession True)
@@ -130,11 +129,91 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                 clientRequestedNPN = isJust $ lookup extensionID_NextProtocolNegotiation exts
 
                 ---
-                recvClientData = runRecvState ctx (RecvStateHandshake processClientCertificate)
 
                 -- When the client sends a certificate, check whether
                 -- it is acceptable for the application.
                 --
+                ---
+
+                makeServerHello session = do
+                        srand <- getStateRNG ctx 32 >>= return . ServerRandom
+                        case privKeys of
+                                (Just privkey : _) -> usingState_ ctx $ setPrivateKey privkey
+                                _                  -> return () -- return a sensible error
+
+                        -- in TLS12, we need to check as well the certificates we are sending if they have in the extension
+                        -- the necessary bits set.
+                        secReneg   <- usingState_ ctx getSecureRenegotiation
+                        secRengExt <- if secReneg
+                                then do
+                                        vf <- usingState_ ctx $ do
+                                                cvf <- getVerifiedData True
+                                                svf <- getVerifiedData False
+                                                return $ extensionEncode (SecureRenegotiation cvf $ Just svf)
+                                        return [ (0xff01, vf) ]
+                                else return []
+                        nextProtocols <-
+                          if clientRequestedNPN
+                            then liftIO $ onSuggestNextProtocols params
+                            else return Nothing
+                        npnExt <- case nextProtocols of
+                                    Just protos -> do usingState_ ctx $ do setExtensionNPN True
+                                                                           setServerNextProtocolSuggest protos
+                                                      return [ ( extensionID_NextProtocolNegotiation
+                                                               , extensionEncode $ NextProtocolNegotiation protos) ]
+                                    Nothing -> return []
+                        let extensions = secRengExt ++ npnExt
+                        usingState_ ctx (setVersion ver >> setServerRandom srand)
+                        return $ ServerHello ver srand session (cipherID usedCipher)
+                                                       (compressionID usedCompression) extensions
+
+                handshakeSendServerData = do
+                        serverSession <- newSession ctx
+                        usingState_ ctx (setSession serverSession False)
+                        serverhello   <- makeServerHello serverSession
+                        -- send ServerHello & Certificate & ServerKeyXchg & CertReq
+                        sendPacket ctx $ Handshake [ serverhello, Certificates srvCerts ]
+                        when needKeyXchg $ do
+                                let skg = SKX_RSA Nothing
+                                sendPacket ctx (Handshake [ServerKeyXchg skg])
+
+                        -- FIXME we don't do this on a Anonymous server
+
+                        -- When configured, send a certificate request
+                        -- with the DNs of all confgure CA
+                        -- certificates.
+                        --
+                        when (serverWantClientCert sparams) $ do
+                          usedVersion <- usingState_ ctx $ stVersion <$> get
+                          let certTypes = [ CertificateType_RSA_Sign ]
+                              hashSigs = if usedVersion < TLS12
+                                         then Nothing
+                                         else Just (pHashSignatures $ ctxParams ctx)
+                              creq = CertRequest certTypes hashSigs
+                                       (map extractCAname $ serverCACertificates sparams)
+                          usingState_ ctx $ setCertReqSent True
+                          sendPacket ctx (Handshake [creq])
+
+                        -- Send HelloDone
+                        sendPacket ctx (Handshake [ServerHelloDone])
+
+                extractCAname :: X509 -> DistinguishedName
+                extractCAname cert = DistinguishedName $ certSubjectDN (x509Cert cert)
+
+handshakeServerWith _ _ _ = fail "unexpected handshake type received. expecting client hello"
+
+-- | receive Client data in handshake until the Finished handshake.
+--
+--      <- [certificate]
+--      <- client key xchg
+--      <- [cert verify]
+--      <- change cipher
+--      <- [NPN]
+--      <- finish
+--
+recvClientData :: MonadIO m => ServerParams -> Context -> m ()
+recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientCertificate)
+    where
                 processClientCertificate (Certificates certs) = do
 
                   -- Call application callback to see whether the
@@ -154,7 +233,6 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                   -- verifying with that certificate.
 
                   return $ RecvStateHandshake processClientKeyExchange
-
 
                 processClientCertificate p = processClientKeyExchange p
 
@@ -241,19 +319,15 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                   return $ RecvStateNext expectChangeCipher
 
                 processCertificateVerify p = do
-                  chain <- usingState_ ctx $ getClientCertChain
-                  case chain of
-                    Just (_:_) ->
-                      throwCore $ Error_Protocol ("cert verify message missing",
-                                                  True, UnexpectedMessage)
-                    _ -> return ()
+                    chain <- usingState_ ctx $ getClientCertChain
+                    case chain of
+                        Just (_:_) -> throwCore $ Error_Protocol ("cert verify message missing", True, UnexpectedMessage)
+                        _          -> return ()
+                    expectChangeCipher p
 
-                  expectChangeCipher p
-
-                expectChangeCipher ChangeCipherSpec = do npn <- usingState_ ctx getExtensionNPN
-                                                         return $ RecvStateHandshake $ if npn
-                                                                                         then expectNPN
-                                                                                         else expectFinish
+                expectChangeCipher ChangeCipherSpec = do
+                    npn <- usingState_ ctx getExtensionNPN
+                    return $ RecvStateHandshake $ if npn then expectNPN else expectFinish
                 expectChangeCipher p                = unexpected (show p) (Just "change cipher")
 
                 expectNPN (HsNextProtocolNegotiation _) = return $ RecvStateHandshake expectFinish
@@ -261,72 +335,3 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
 
                 expectFinish (Finished _) = return RecvStateDone
                 expectFinish p            = unexpected (show p) (Just "Handshake Finished")
-                ---
-
-                makeServerHello session = do
-                        srand <- getStateRNG ctx 32 >>= return . ServerRandom
-                        case privKeys of
-                                (Just privkey : _) -> usingState_ ctx $ setPrivateKey privkey
-                                _                  -> return () -- return a sensible error
-
-                        -- in TLS12, we need to check as well the certificates we are sending if they have in the extension
-                        -- the necessary bits set.
-                        secReneg   <- usingState_ ctx getSecureRenegotiation
-                        secRengExt <- if secReneg
-                                then do
-                                        vf <- usingState_ ctx $ do
-                                                cvf <- getVerifiedData True
-                                                svf <- getVerifiedData False
-                                                return $ extensionEncode (SecureRenegotiation cvf $ Just svf)
-                                        return [ (0xff01, vf) ]
-                                else return []
-                        nextProtocols <-
-                          if clientRequestedNPN
-                            then liftIO $ onSuggestNextProtocols params
-                            else return Nothing
-                        npnExt <- case nextProtocols of
-                                    Just protos -> do usingState_ ctx $ do setExtensionNPN True
-                                                                           setServerNextProtocolSuggest protos
-                                                      return [ ( extensionID_NextProtocolNegotiation
-                                                               , extensionEncode $ NextProtocolNegotiation protos) ]
-                                    Nothing -> return []
-                        let extensions = secRengExt ++ npnExt
-                        usingState_ ctx (setVersion ver >> setServerRandom srand)
-                        return $ ServerHello ver srand session (cipherID usedCipher)
-                                                       (compressionID usedCompression) extensions
-
-                handshakeSendServerData = do
-                        serverSession <- newSession ctx
-                        usingState_ ctx (setSession serverSession False)
-                        serverhello   <- makeServerHello serverSession
-                        -- send ServerHello & Certificate & ServerKeyXchg & CertReq
-                        sendPacket ctx $ Handshake [ serverhello, Certificates srvCerts ]
-                        when needKeyXchg $ do
-                                let skg = SKX_RSA Nothing
-                                sendPacket ctx (Handshake [ServerKeyXchg skg])
-
-                        -- FIXME we don't do this on a Anonymous server
-
-                        -- When configured, send a certificate request
-                        -- with the DNs of all confgure CA
-                        -- certificates.
-                        --
-                        when (serverWantClientCert sparams) $ do
-                          usedVersion <- usingState_ ctx $ stVersion <$> get
-                          let certTypes = [ CertificateType_RSA_Sign ]
-                              hashSigs = if usedVersion < TLS12
-                                         then Nothing
-                                         else Just (pHashSignatures $ ctxParams ctx)
-                              creq = CertRequest certTypes hashSigs
-                                       (map extractCAname $ serverCACertificates sparams)
-                          usingState_ ctx $ setCertReqSent True
-                          sendPacket ctx (Handshake [creq])
-
-                        -- Send HelloDone
-                        sendPacket ctx (Handshake [ServerHelloDone])
-
-                extractCAname :: X509 -> DistinguishedName
-                extractCAname cert = DistinguishedName $ certSubjectDN (x509Cert cert)
-
-handshakeServerWith _ _ _ = fail "unexpected handshake type received. expecting client hello"
-
