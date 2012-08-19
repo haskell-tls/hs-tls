@@ -32,8 +32,8 @@ import Data.Certificate.X509(X509, x509Cert, certPubKey, PubKey(PubKeyRSA))
 
 import Control.Applicative ((<$>))
 import Control.Monad.State
-import Control.Exception (catch, SomeException)
-import Prelude hiding (catch)
+import Control.Exception (SomeException)
+import qualified Control.Exception as E
 
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Certificate
@@ -50,7 +50,7 @@ handshakeClient cparams ctx = do
         if sessionResuming
                 then sendChangeCipherAndFinish ctx True
                 else do
-                        sendCertificate >> sendClientKeyXchg >> sendCertificateVerify
+                        sendClientData cparams ctx
                         sendChangeCipherAndFinish ctx True
                         recvChangeCipherAndFinish ctx
         handshakeTerminate ctx
@@ -87,95 +87,6 @@ handshakeClient cparams ctx = do
                 expectFinish (Finished _) = return RecvStateDone
                 expectFinish p            = unexpected (show p) (Just "Handshake Finished")
 
-                -- When the server requests a client certificate, we
-                -- fetch a certificate chain from the callback in the
-                -- client parameters and send it to the server.
-                -- Additionally, we store the private key associated
-                -- with the first certificate in the chain for later
-                -- use.
-                --
-                sendCertificate = do
-                  certRequested <- usingState_ ctx getClientCertRequest
-                  case certRequested of
-                    Nothing ->
-                      return ()
-
-                    Just req -> do
-                      certChain <- liftIO $ onCertificateRequest cparams req `catch`
-                                   throwMiscErrorOnException "certificate request callback failed"
-
-                      case certChain of
-                        (_, Nothing) : _ ->
-                              throwCore $ Error_Misc "no private key available"
-                        (cert, Just pk) : _ -> do
-                          case certPubKey $ x509Cert cert of
-                            PubKeyRSA _ -> return ()
-                            _ ->
-                              throwCore $ Error_Protocol ("no supported certificate type", True, HandshakeFailure)
-                          usingState_ ctx $ setClientPrivateKey pk
-                        _ ->
-                          return ()
-
-                      usingState_ ctx $ setClientCertSent (not $ null certChain)
-                      sendPacket ctx $ Handshake [Certificates $ map fst certChain]
-
-                -- In order to send a proper certificate verify message,
-                -- we have to do the following:
-                --
-                -- 1. Determine which signing algorithm(s) the server supports
-                --    (we currently only support RSA).
-                -- 2. Get the current handshake hash from the handshake state.
-                -- 3. Sign the handshake hash
-                -- 4. Send it to the server.
-                --
-                sendCertificateVerify = do
-                  usedVersion <- usingState_ ctx $ stVersion <$> get
-
-                  -- Only send a certificate verify message when we
-                  -- have sent a non-empty list of certificates.
-                  --
-                  certSent <- usingState_ ctx $ getClientCertSent
-                  case certSent of
-                    Just True -> do
-                      -- Fetch all handshake messages up to now.
-                      msgs <- usingState_ ctx $ B.concat <$> getHandshakeMessages
-
-                      case usedVersion of
-                        SSL3 -> do
-                          Just masterSecret <- usingState_ ctx $ getMasterSecret
-                          let digest = generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit hashMD5SHA1) msgs)
-                              hsh = (id, "")
-
-                          sigDig <- usingState_ ctx $ signRSA hsh digest
-
-                          sendPacket ctx $ Handshake [CertVerify Nothing (CertVerifyData sigDig)]
-
-                        x | x == TLS10 || x == TLS11 -> do
-                          let hashf bs = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs)
-                              hsh = (hashf, "")
-
-                          sigDig <- usingState_ ctx $ signRSA hsh msgs
-
-                          sendPacket ctx $ Handshake [CertVerify Nothing (CertVerifyData sigDig)]
-
-                        _ -> do
-                          Just (_, Just hashSigs, _) <- usingState_ ctx $ getClientCertRequest
-                          let suppHashSigs = pHashSignatures $ ctxParams ctx
-                              hashSigs' = filter (\ a -> a `elem` hashSigs) suppHashSigs
-                          liftIO $ putStrLn $ " supported hash sig algorithms: " ++ show hashSigs'
-
-                          when (null hashSigs') $ do
-                            throwCore $ Error_Protocol ("no hash/signature algorithms in common with the server", True, HandshakeFailure)
-
-                          let hashSig = head hashSigs'
-                          hsh <- getHashAndASN1 hashSig
-
-                          sigDig <- usingState_ ctx $ signRSA hsh msgs
-
-                          sendPacket ctx $ Handshake [CertVerify (Just hashSig) (CertVerifyData sigDig)]
-
-                    _ -> return ()
-
                 recvServerHello = runRecvState ctx (RecvStateHandshake onServerHello)
 
                 onServerHello :: MonadIO m => Handshake -> m (RecvState m)
@@ -209,7 +120,7 @@ handshakeClient cparams ctx = do
 
                 processCertificate :: MonadIO m => Handshake -> m (RecvState m)
                 processCertificate (Certificates certs) = do
-                        usage <- liftIO $ catch (onCertificatesRecv params $ certs) rejectOnException
+                        usage <- liftIO $ E.catch (onCertificatesRecv params $ certs) rejectOnException
                         case usage of
                                 CertificateUsageAccept        -> return ()
                                 CertificateUsageReject reason -> certificateRejected reason
@@ -234,21 +145,118 @@ handshakeClient cparams ctx = do
                 processServerHelloDone ServerHelloDone = return RecvStateDone
                 processServerHelloDone p = unexpected (show p) (Just "server hello data")
 
-                sendClientKeyXchg = do
-                        encryptedPreMaster <- usingState_ ctx $ do
-                                xver       <- stVersion <$> get
-                                prerand    <- genTLSRandom 46
-                                let premaster = encodePreMasterSecret xver prerand
-                                setMasterSecretFromPre premaster
+-- | send client Data after receiving all server data (hello/certificates/key).
+--
+--       -> [certificate]
+--       -> client key exchange
+--       -> [cert verify]
+sendClientData :: MonadIO m => ClientParams -> Context -> m ()
+sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertificateVerify
+    where
+            -- When the server requests a client certificate, we
+            -- fetch a certificate chain from the callback in the
+            -- client parameters and send it to the server.
+            -- Additionally, we store the private key associated
+            -- with the first certificate in the chain for later
+            -- use.
+            --
+            sendCertificate = do
+                certRequested <- usingState_ ctx getClientCertRequest
+                case certRequested of
+                    Nothing ->
+                        return ()
 
-                                -- SSL3 implementation generally forget this length field since it's redundant,
-                                -- however TLS10 make it clear that the length field need to be present.
-                                e <- encryptRSA premaster
-                                let extra = if xver < TLS10
-                                        then B.empty
-                                        else encodeWord16 $ fromIntegral $ B.length e
-                                return $ extra `B.append` e
-                        sendPacket ctx $ Handshake [ClientKeyXchg encryptedPreMaster]
+                    Just req -> do
+                        certChain <- liftIO $ onCertificateRequest cparams req `E.catch`
+                                     throwMiscErrorOnException "certificate request callback failed"
+
+                        case certChain of
+                            (_, Nothing) : _ ->
+                                  throwCore $ Error_Misc "no private key available"
+                            (cert, Just pk) : _ -> do
+                                case certPubKey $ x509Cert cert of
+                                    PubKeyRSA _ -> return ()
+                                    _           ->
+                                        throwCore $ Error_Protocol ("no supported certificate type", True, HandshakeFailure)
+                                usingState_ ctx $ setClientPrivateKey pk
+                            _ ->
+                                return ()
+
+                        usingState_ ctx $ setClientCertSent (not $ null certChain)
+                        sendPacket ctx $ Handshake [Certificates $ map fst certChain]
+
+
+            sendClientKeyXchg = do
+                    encryptedPreMaster <- usingState_ ctx $ do
+                            xver       <- stVersion <$> get
+                            prerand    <- genTLSRandom 46
+                            let premaster = encodePreMasterSecret xver prerand
+                            setMasterSecretFromPre premaster
+
+                            -- SSL3 implementation generally forget this length field since it's redundant,
+                            -- however TLS10 make it clear that the length field need to be present.
+                            e <- encryptRSA premaster
+                            let extra = if xver < TLS10
+                                    then B.empty
+                                    else encodeWord16 $ fromIntegral $ B.length e
+                            return $ extra `B.append` e
+                    sendPacket ctx $ Handshake [ClientKeyXchg encryptedPreMaster]
+
+            -- In order to send a proper certificate verify message,
+            -- we have to do the following:
+            --
+            -- 1. Determine which signing algorithm(s) the server supports
+            --    (we currently only support RSA).
+            -- 2. Get the current handshake hash from the handshake state.
+            -- 3. Sign the handshake hash
+            -- 4. Send it to the server.
+            --
+            sendCertificateVerify = do
+                usedVersion <- usingState_ ctx $ stVersion <$> get
+
+                -- Only send a certificate verify message when we
+                -- have sent a non-empty list of certificates.
+                --
+                certSent <- usingState_ ctx $ getClientCertSent
+                case certSent of
+                    Just True -> do
+                        -- Fetch all handshake messages up to now.
+                        msgs <- usingState_ ctx $ B.concat <$> getHandshakeMessages
+
+                        case usedVersion of
+                            SSL3 -> do
+                                Just masterSecret <- usingState_ ctx $ getMasterSecret
+                                let digest = generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit hashMD5SHA1) msgs)
+                                    hsh = (id, "")
+
+                                sigDig <- usingState_ ctx $ signRSA hsh digest
+                                sendPacket ctx $ Handshake [CertVerify Nothing (CertVerifyData sigDig)]
+
+                            x | x == TLS10 || x == TLS11 -> do
+                                let hashf bs = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs)
+                                    hsh = (hashf, "")
+
+                                sigDig <- usingState_ ctx $ signRSA hsh msgs
+                                sendPacket ctx $ Handshake [CertVerify Nothing (CertVerifyData sigDig)]
+
+                            _ -> do
+                                Just (_, Just hashSigs, _) <- usingState_ ctx $ getClientCertRequest
+                                let suppHashSigs = pHashSignatures $ ctxParams ctx
+                                    hashSigs' = filter (\ a -> a `elem` hashSigs) suppHashSigs
+                                liftIO $ putStrLn $ " supported hash sig algorithms: " ++ show hashSigs'
+
+                                when (null hashSigs') $ do
+                                    throwCore $ Error_Protocol ("no hash/signature algorithms in common with the server", True, HandshakeFailure)
+
+                                let hashSig = head hashSigs'
+                                hsh <- getHashAndASN1 hashSig
+
+                                sigDig <- usingState_ ctx $ signRSA hsh msgs
+
+                                sendPacket ctx $ Handshake [CertVerify (Just hashSig) (CertVerifyData sigDig)]
+
+                    _ -> return ()
+
 
 
 throwMiscErrorOnException :: MonadIO m => String -> SomeException -> m a
