@@ -254,30 +254,24 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
 
                     usedVersion <- usingState_ ctx $ stVersion <$> get
 
-                    verif <- case usedVersion of
+                    (signature, hsh) <- case usedVersion of
                         SSL3 -> do
                             Just masterSecret <- usingState_ ctx $ getMasterSecret
                             let digest = generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit hashMD5SHA1) msgs)
                                 hsh = (id, "")
-                            -- Verify the signature.
-                            verif <- usingState_ ctx $ verifyRSA hsh digest bs
-                            return verif
+                            return (digest, hsh)
 
                         x | x == TLS10 || x == TLS11 -> do
                             let hashf bs' = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs')
                                 hsh = (hashf, "")
-
-                            -- Verify the signature.
-                            verif <- usingState_ ctx $ verifyRSA hsh msgs bs
-                            return verif
-
+                            return (msgs,hsh)
                         _ -> do
                             let Just sentHashSig = mbHashSig
                             hsh <- getHashAndASN1 sentHashSig
+                            return (msgs,hsh)
 
-                            -- Verify the signature.
-                            verif <- usingState_ ctx $ verifyRSA hsh msgs bs
-                            return verif
+                    -- Verify the signature.
+                    verif <- usingState_ ctx $ verifyRSA hsh signature bs
 
                     case verif of
                         Right True -> do
@@ -292,9 +286,8 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                             -- Either verification failed because of an
                             -- invalid format (with an error message), or
                             -- the signature is wrong.  In either case,
-                            -- ask the application -- if it wants to
+                            -- ask the application if it wants to
                             -- proceed, we will do that.
-                            --
                             let arg = case verif of
                                     Left err -> Just err
                                     _        -> Nothing
@@ -305,7 +298,6 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                                     -- application callbacks accepts, we
                                     -- also commit the client certificate
                                     -- chain to the context.
-                                    --
                                     Just certs <- usingState_ ctx $ getClientCertChain
                                     usingState_ ctx $ setClientCertificateChain certs
                                 else do
