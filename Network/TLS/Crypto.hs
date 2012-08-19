@@ -110,15 +110,11 @@ kxDecrypt (PrivRSA pk) b  = generalizeRSAError $ RSA.decrypt pk b
 -- public key.
 --
 kxVerify :: PublicKey -> (ByteString -> ByteString, ByteString) -> ByteString -> ByteString -> Either KxError Bool
-kxVerify (PubRSA pk) hsh msg sign =
-  let hashF = fst hsh
-      hashASN1 = snd hsh
-  in generalizeRSAError $ RSA.verify hashF hashASN1 pk msg sign
+kxVerify (PubRSA pk) (hashF, hashASN1) msg sign =
+    generalizeRSAError $ RSA.verify hashF hashASN1 pk msg sign
 
 -- Sign the given message using the private key.
 --
 kxSign :: PrivateKey -> (ByteString -> ByteString, ByteString) -> ByteString -> Either KxError ByteString
-kxSign (PrivRSA pk) hsh msg  =
-  let hashF = fst hsh
-      hashASN1 = snd hsh
-  in generalizeRSAError $ RSA.sign hashF hashASN1 pk msg
+kxSign (PrivRSA pk) (hashF, hashASN1) msg  =
+    generalizeRSAError $ RSA.sign hashF hashASN1 pk msg
