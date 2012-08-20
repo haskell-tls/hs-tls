@@ -56,7 +56,6 @@ handshakeClient cparams ctx = do
         handshakeTerminate ctx
         where
                 params       = ctxParams ctx
-                ver          = pConnectVersion params
                 allowedvers  = pAllowedVersions params
                 ciphers      = pCiphers params
                 compressions = pCompressions params
@@ -76,9 +75,9 @@ handshakeClient cparams ctx = do
                         crand <- getStateRNG ctx 32 >>= return . ClientRandom
                         let clientSession = Session . maybe Nothing (Just . fst) $ clientWantSessionResume cparams
                         extensions <- getExtensions
-                        usingState_ ctx (startHandshakeClient ver crand)
+                        usingState_ ctx (startHandshakeClient (pConnectVersion params) crand)
                         sendPacket ctx $ Handshake
-                                [ ClientHello ver crand clientSession (map cipherID ciphers)
+                                [ ClientHello (pConnectVersion params) crand clientSession (map cipherID ciphers)
                                               (map compressionID compressions) extensions
                                 ]
 
