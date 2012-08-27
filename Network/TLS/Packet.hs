@@ -156,7 +156,7 @@ decodeHandshakes b = runGetErr "handshakes" getAll b where
                 empty <- isEmpty
                 if empty
                         then return [x]
-                        else getAll >>= \l -> return (x : l)
+                        else liftM ((:) x) getAll
 
 decodeHandshake :: CurrentParams -> HandshakeType -> ByteString -> Either TLSError Handshake
 decodeHandshake cp ty = runGetErr "handshake" $ case ty of
