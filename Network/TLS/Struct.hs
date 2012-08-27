@@ -192,6 +192,10 @@ data AlertDescription =
         | UserCanceled
         | NoRenegotiation
         | UnsupportedExtension
+        | CertificateUnobtainable
+        | UnrecognizedName
+        | BadCertificateStatusResponse
+        | BadCertificateHashValue
         deriving (Show,Eq)
 
 data HandshakeType =
@@ -373,6 +377,10 @@ instance TypeValuable AlertDescription where
         valOfType UserCanceled           = 90
         valOfType NoRenegotiation        = 100
         valOfType UnsupportedExtension   = 110
+        valOfType CertificateUnobtainable = 111
+        valOfType UnrecognizedName        = 112
+        valOfType BadCertificateStatusResponse = 113
+        valOfType BadCertificateHashValue = 114
 
         valToType 0   = Just CloseNotify
         valToType 10  = Just UnexpectedMessage
@@ -398,6 +406,10 @@ instance TypeValuable AlertDescription where
         valToType 90  = Just UserCanceled
         valToType 100 = Just NoRenegotiation
         valToType 110 = Just UnsupportedExtension
+        valToType 111 = Just CertificateUnobtainable
+        valToType 112 = Just UnrecognizedName
+        valToType 113 = Just BadCertificateStatusResponse
+        valToType 114 = Just BadCertificateHashValue
         valToType _   = Nothing
 
 instance TypeValuable CertificateType where
