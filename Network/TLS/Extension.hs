@@ -45,6 +45,23 @@ class Extension a where
     extensionDecode :: Bool -> ByteString -> Maybe a
     extensionEncode :: a -> ByteString
 
+
+-- | Server Name including the name type and the associated name.
+-- the associated name decoding is dependant of its name type.
+-- name type = 0 : hostname
+data ServerName = ServerName [(Word8,ByteString)]
+    deriving (Show,Eq)
+
+instance Extension ServerName where
+    extensionID _ = 0x0
+    extensionEncode (ServerName l) = runPut $ mapM_ encodeName l
+        where encodeName (nt,opaque) = putWord8 nt >> putOpaque16 opaque
+    extensionDecode _ = runGetMaybe (remaining >>= \len -> getList len getServerName >>= return . ServerName)
+        where getServerName = do
+                  ty    <- getWord8
+                  sname <- getOpaque16
+                  return (1+2+B.length sname, (ty, sname))
+
 -- | Secure Renegotiation
 data SecureRenegotiation = SecureRenegotiation ByteString (Maybe ByteString)
     deriving (Show,Eq)
