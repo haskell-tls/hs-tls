@@ -15,6 +15,7 @@ module Network.TLS.Struct
         , ConnectionEnd(..)
         , CipherType(..)
         , CipherData(..)
+        , ExtensionID
         , ExtensionRaw
         , CertificateType(..)
         , HashAlgorithm(..)
@@ -146,7 +147,8 @@ newtype ClientRandom = ClientRandom Bytes deriving (Show, Eq)
 newtype Session = Session (Maybe SessionID) deriving (Show, Eq)
 
 type FinishedData = Bytes
-type ExtensionRaw = (Word16, Bytes)
+type ExtensionID  = Word16
+type ExtensionRaw = (ExtensionID, Bytes)
 
 newtype CertVerifyData = CertVerifyData Bytes
   deriving (Show, Eq)

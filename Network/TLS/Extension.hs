@@ -26,9 +26,8 @@ import Data.Maybe (fromMaybe)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
+import Network.TLS.Struct (ExtensionID)
 import Network.TLS.Wire
-
-type ExtensionID = Word16
 
 extensionID_SecureRenegotiation, extensionID_NextProtocolNegotiation :: ExtensionID
 extensionID_SecureRenegotiation = 0xff01
