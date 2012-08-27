@@ -244,7 +244,7 @@ decodeCertRequest cp = do
                 else return Nothing
         dNameLen <- getWord16
         -- FIXME: Decide whether to remove this check completely or to make it an option.
---        when (cParamsVersion cp < TLS12 && dNameLen < 3) $ fail "certrequest distinguishname not of the correct size"
+        -- when (cParamsVersion cp < TLS12 && dNameLen < 3) $ fail "certrequest distinguishname not of the correct size"
         dNames <- decodeDNames dNameLen
         return $ CertRequest certTypes sigHashAlgs dNames
   where
