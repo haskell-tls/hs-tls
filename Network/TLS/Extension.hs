@@ -45,6 +45,7 @@ class Extension a where
     extensionDecode :: Bool -> ByteString -> Maybe a
     extensionEncode :: a -> ByteString
 
+-- | Secure Renegotiation
 data SecureRenegotiation = SecureRenegotiation ByteString (Maybe ByteString)
     deriving (Show,Eq)
 
@@ -60,6 +61,7 @@ instance Extension SecureRenegotiation where
                            in return $ SecureRenegotiation cvd (Just svd)
                      else return $ SecureRenegotiation opaque Nothing
 
+-- | Next Protocol Negotiation
 data NextProtocolNegotiation = NextProtocolNegotiation [ByteString]
     deriving (Show,Eq)
 
