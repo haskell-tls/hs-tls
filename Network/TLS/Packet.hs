@@ -220,7 +220,7 @@ decodeFinished = Finished <$> (remaining >>= getBytes)
 decodeNextProtocolNegotiation :: Get Handshake
 decodeNextProtocolNegotiation = do
         opaque <- getOpaque8
-        _      <- getOpaque8
+        _      <- getOpaque8 -- ignore padding
         return $ HsNextProtocolNegotiation opaque
 
 getSignatureHashAlgorithm :: Get (HashAlgorithm, SignatureAlgorithm)
