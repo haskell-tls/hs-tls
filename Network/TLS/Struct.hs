@@ -19,6 +19,7 @@ module Network.TLS.Struct
         , CertificateType(..)
         , HashAlgorithm(..)
         , SignatureAlgorithm(..)
+        , HashAndSignatureAlgorithm
         , ProtocolType(..)
         , TLSError(..)
         , DistinguishedName(..)
@@ -98,6 +99,8 @@ data SignatureAlgorithm =
         | SignatureECDSA
         | SignatureOther Word8
         deriving (Show,Eq)
+
+type HashAndSignatureAlgorithm = (HashAlgorithm, SignatureAlgorithm)
 
 data ProtocolType =
           ProtocolType_ChangeCipherSpec

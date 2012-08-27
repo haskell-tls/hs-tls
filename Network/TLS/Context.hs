@@ -153,7 +153,7 @@ data Params = forall s . SessionManager s => Params
         , pAllowedVersions   :: [Version]           -- ^ allowed versions that we can use.
         , pCiphers           :: [Cipher]            -- ^ all ciphers supported ordered by priority.
         , pCompressions      :: [Compression]       -- ^ all compression supported ordered by priority.
-        , pHashSignatures    :: [(HashAlgorithm, SignatureAlgorithm)] -- ^ All supported hash/signature algorithms for client certificate verification, ordered by decreasing priority.
+        , pHashSignatures    :: [HashAndSignatureAlgorithm] -- ^ All supported hash/signature algorithms pair for client certificate verification, ordered by decreasing priority.
         , pUseSecureRenegotiation :: Bool           -- ^ notify that we want to use secure renegotation
         , pUseSession             :: Bool           -- ^ generate new session if specified
         , pCertificates      :: [(X509, Maybe PrivateKey)] -- ^ the cert chain for this context with the associated keys if any.
