@@ -191,6 +191,7 @@ data AlertDescription =
         | InternalError
         | UserCanceled
         | NoRenegotiation
+        | UnsupportedExtension
         deriving (Show,Eq)
 
 data HandshakeType =
@@ -371,6 +372,7 @@ instance TypeValuable AlertDescription where
         valOfType InternalError          = 80
         valOfType UserCanceled           = 90
         valOfType NoRenegotiation        = 100
+        valOfType UnsupportedExtension   = 110
 
         valToType 0   = Just CloseNotify
         valToType 10  = Just UnexpectedMessage
@@ -395,6 +397,7 @@ instance TypeValuable AlertDescription where
         valToType 80  = Just InternalError
         valToType 90  = Just UserCanceled
         valToType 100 = Just NoRenegotiation
+        valToType 110 = Just UnsupportedExtension
         valToType _   = Nothing
 
 instance TypeValuable CertificateType where
