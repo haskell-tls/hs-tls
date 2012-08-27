@@ -41,7 +41,7 @@ supportedExtensions = [ extensionID_SecureRenegotiation
 
 -- | Extension class to transform bytes to and from a high level Extension type.
 class Extension a where
-    extensionID     :: a -> Word16
+    extensionID     :: a -> ExtensionID
     extensionDecode :: Bool -> ByteString -> Maybe a
     extensionEncode :: a -> ByteString
 
