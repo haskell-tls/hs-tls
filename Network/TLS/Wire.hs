@@ -23,6 +23,7 @@ module Network.TLS.Wire
         , getOpaque8
         , getOpaque16
         , getOpaque24
+        , getList
         , processBytes
         , isEmpty
         , Put
@@ -83,6 +84,13 @@ getOpaque16 = getWord16 >>= getBytes . fromIntegral
 
 getOpaque24 :: Get Bytes
 getOpaque24 = getWord24 >>= getBytes
+
+getList :: Int -> (Get (Int, a)) -> Get [a]
+getList totalLen getElement = isolate totalLen (getElements totalLen)
+    where getElements len
+            | len < 0     = error "list consumed too much data. should never happen with isolate."
+            | len == 0    = return []
+            | otherwise   = getElement >>= \(elementLen, a) -> liftM ((:) a) (getElements (len - elementLen))
 
 processBytes :: Int -> Get a -> Get a
 processBytes i f = isolate i f
