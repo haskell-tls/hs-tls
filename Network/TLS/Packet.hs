@@ -251,7 +251,7 @@ decodeCertRequest cp = do
 
         decodeDName d = case decodeDN (L.fromChunks [d]) of
                             Left err -> fail ("certrequest: " ++ show err)
-                            Right s  -> return $ DistinguishedName s
+                            Right s  -> return s
 
 decodeCertVerify :: CurrentParams -> Get Handshake
 decodeCertVerify cp = do
@@ -345,10 +345,7 @@ encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
         encodeCertAuthorities certAuthorities
   where
     -- Convert a distinguished name to its DER encoding.
-    encodeCA (DistinguishedName dn) =
-      case encodeDN dn of
-        Left err -> fail $ "cannot encode distinguished name: " ++ err
-        Right s -> return $ B.concat $ L.toChunks s
+    encodeCA dn = return $ B.concat $ L.toChunks $ encodeDN dn
 
     -- Encode a list of distinguished names.
     encodeCertAuthorities certAuths = do

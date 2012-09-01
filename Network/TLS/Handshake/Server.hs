@@ -198,7 +198,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                         sendPacket ctx (Handshake [ServerHelloDone])
 
                 extractCAname :: X509 -> DistinguishedName
-                extractCAname cert = DistinguishedName $ certSubjectDN (x509Cert cert)
+                extractCAname cert = certSubjectDN (x509Cert cert)
 
 handshakeServerWith _ _ _ = fail "unexpected handshake type received. expecting client hello"
 
