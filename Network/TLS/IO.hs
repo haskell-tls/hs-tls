@@ -87,5 +87,5 @@ sendPacket ctx pkt = do
         dataToSend <- usingState_ ctx $ writePacket pkt
         liftIO $ (loggingIOSent $ ctxLogging ctx) dataToSend
         liftIO $ contextSend ctx dataToSend
-    where isNonNullAppData (AppData b) = B.null b
+    where isNonNullAppData (AppData b) = not $ B.null b
           isNonNullAppData _           = False
