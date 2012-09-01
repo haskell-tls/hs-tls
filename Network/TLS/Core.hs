@@ -181,7 +181,7 @@ sendPacket ctx pkt = do
 	liftIO $ (loggingIOSent $ ctxLogging ctx) dataToSend
 	liftIO $ connectionSend ctx dataToSend
 	where
-                isNonNullAppData (AppData b) = B.null b
+                isNonNullAppData (AppData b) = not $ B.null b
                 isNonNullAppData _           = False
 
 -- | Create a new Client context with a configuration, a RNG, a generic connection and the connection operation.

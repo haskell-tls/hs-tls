@@ -154,6 +154,8 @@ establish_data_pipe params tlsServer tlsClient = do
 		printAndRaise :: String -> SomeException -> IO ()
 		printAndRaise s e = putStrLn (s ++ " exception: " ++ show e) >> throw e
 
+recvDataNonNull ctx = recvData' ctx >>= \l -> if L.null l then recvDataNonNull ctx else return l
+
 prop_handshake_initiate :: PropertyM IO ()
 prop_handshake_initiate = do
 	params       <- pick arbitraryPairParams
@@ -171,7 +173,7 @@ prop_handshake_initiate = do
 	where
 		tlsServer ctx queue = do
 			handshake ctx
-			d <- recvData' ctx
+			d <- recvDataNonNull ctx
 			writeChan queue d
 			return ()
 		tlsClient queue ctx = do
@@ -198,7 +200,7 @@ prop_handshake_renegociation = do
 	where
 		tlsServer ctx queue = do
 			handshake ctx
-			d <- recvData' ctx
+			d <- recvDataNonNull ctx
 			writeChan queue d
 			return ()
 		tlsClient queue ctx = do
@@ -244,7 +246,7 @@ prop_handshake_session_resumption = do
 	where
 		tlsServer ctx queue = do
 			handshake ctx
-			d <- recvData' ctx
+			d <- recvDataNonNull ctx
 			writeChan queue d
 			return ()
 		tlsClient queue ctx = do
