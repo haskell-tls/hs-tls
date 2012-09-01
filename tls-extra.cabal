@@ -19,7 +19,7 @@ Flag test
   Default:           False
 
 Flag fastaes
-  Description:       Use fast
+  Description:       Use fast AES if available
   Default:           True
 
 Library
