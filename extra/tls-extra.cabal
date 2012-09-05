@@ -12,7 +12,7 @@ Build-Type:          Simple
 Category:            Network
 stability:           experimental
 Cabal-Version:       >=1.6
-Homepage:            http://github.com/vincenthz/hs-tls-extra
+Homepage:            http://github.com/vincenthz/hs-tls
 
 Flag test
   Description:       Build unit test
@@ -69,4 +69,4 @@ executable           Tests
 
 source-repository head
   type: git
-  location: git://github.com/vincenthz/hs-tls-extra
+  location: git://github.com/vincenthz/hs-tls

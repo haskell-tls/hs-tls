@@ -13,7 +13,7 @@ Build-Type:          Simple
 Category:            Network
 stability:           experimental
 Cabal-Version:       >=1.6
-Homepage:            http://github.com/vincenthz/hs-tls-debug
+Homepage:            http://github.com/vincenthz/hs-tls
 
 Executable           tls-stunnel
   Main-is:           Stunnel.hs
@@ -73,4 +73,4 @@ Executable           tls-simpleclient
 
 source-repository head
   type: git
-  location: git://github.com/vincenthz/hs-tls-debug
+  location: git://github.com/vincenthz/hs-tls
