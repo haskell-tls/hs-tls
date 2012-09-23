@@ -16,8 +16,8 @@ import System.IO
 import Control.Monad
 import Control.Applicative ((<$>))
 import Control.Concurrent
-import Control.Exception (catch, SomeException(..))
-import Prelude hiding (catch)
+import Control.Exception (SomeException(..))
+import qualified Control.Exception as E
 
 import Text.Printf
 
@@ -91,7 +91,7 @@ openConnection s p ciphers = do
 			else do
 				service <- getServiceByName p "tcp"
 				return $ servicePort service
-        he     <- getHostByName s
+	he     <- getHostByName s
 	sock   <- socket AF_INET Stream defaultProtocol
 	connect sock (SockAddrInet pn (head $ hostAddresses he))
 	handle <- socketToHandle sock ReadWriteMode
@@ -100,7 +100,7 @@ openConnection s p ciphers = do
 	let params = defaultParamsClient { pCiphers = map fakeCipher ciphers }
 	ctx <- contextNewOnHandle handle params rng
 	sendPacket ctx $ Handshake [clienthello ciphers]
-	catch (do
+	E.catch (do
 		rpkt <- recvPacket ctx
 		ccid <- case rpkt of
 			Right (Handshake ((ServerHello _ _ _ i _ _):_)) -> return i

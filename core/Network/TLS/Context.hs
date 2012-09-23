@@ -88,7 +88,6 @@ import Control.Monad.State
 import Control.Exception (throwIO, Exception())
 import Data.IORef
 import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush, hClose)
-import Prelude hiding (catch)
 
 data Logging = Logging
         { loggingPacketSent :: String -> IO ()

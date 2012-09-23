@@ -23,7 +23,6 @@ supportedCiphers =
 myQuickCheckArgs = stdArgs
 	{ replay     = Nothing
 	, maxSuccess = 500
-	, maxDiscard = 2000
 	, maxSize    = 500
 	}
 

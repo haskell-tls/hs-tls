@@ -21,12 +21,11 @@ import Network.TLS.Struct
 import Network.TLS.Packet
 import Control.Applicative
 import Control.Concurrent
-import Control.Exception (throw, catch, SomeException)
+import Control.Exception (throw, SomeException)
+import qualified Control.Exception as E
 import Control.Monad
 
 import Data.IORef
-
-import Prelude hiding (catch)
 
 genByteString :: Int -> Gen B.ByteString
 genByteString i = B.pack <$> vector i
@@ -151,8 +150,8 @@ establish_data_pipe params tlsServer tlsClient = do
 
         (cCtx, sCtx) <- newPairContext pipe params
 
-        _ <- forkIO $ catch (tlsServer sCtx resultQueue) (printAndRaise "server")
-        _ <- forkIO $ catch (tlsClient startQueue cCtx) (printAndRaise "client")
+        _ <- forkIO $ E.catch (tlsServer sCtx resultQueue) (printAndRaise "server")
+        _ <- forkIO $ E.catch (tlsClient startQueue cCtx) (printAndRaise "client")
 
         return (startQueue, resultQueue)
         where

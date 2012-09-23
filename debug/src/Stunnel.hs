@@ -3,7 +3,7 @@
 import Network.BSD
 import Network.Socket
 import System.IO
-import System.IO.Error hiding (try, catch)
+import System.IO.Error (isEOFError)
 import System.Console.CmdArgs
 
 import qualified Data.ByteString as B
@@ -11,7 +11,8 @@ import qualified Data.ByteString.Lazy as L
 
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar
-import Control.Exception (finally, try, throw, catch, SomeException)
+import Control.Exception (finally, throw, SomeException)
+import qualified Control.Exception as E
 import Control.Monad (when, forever)
 
 import Data.Char (isDigit)
@@ -19,8 +20,6 @@ import Data.Char (isDigit)
 import qualified Crypto.Random.AESCtr as RNG
 import Network.TLS
 import Network.TLS.Extra
-
-import Prelude hiding (catch)
 
 ciphers :: [Cipher]
 ciphers =
@@ -34,7 +33,7 @@ loopUntil :: Monad m => m Bool -> m ()
 loopUntil f = f >>= \v -> if v then return () else loopUntil f
 
 readOne h = do
-	r <- try $ hWaitForInput h (-1)
+	r <- E.try $ hWaitForInput h (-1)
 	case r of
 		Left err    -> if isEOFError err then return B.empty else throw err
 		Right True  -> B.hGetNonBlocking h 4096
@@ -174,7 +173,7 @@ getAddressDescription _ _  = error "unrecognized source type (expecting tcp/unix
 
 connectAddressDescription (AddrSocket family sockaddr) = do
 	sock <- socket family Stream defaultProtocol
-	catch (connect sock sockaddr)
+	E.catch (connect sock sockaddr)
 	      (\(e :: SomeException) -> sClose sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
 	return $ StunnelSocket sock
 
@@ -183,7 +182,7 @@ connectAddressDescription (AddrFD h1 h2) = do
 
 listenAddressDescription (AddrSocket family sockaddr) = do
 	sock <- socket family Stream defaultProtocol
-	catch (bindSocket sock sockaddr >> listen sock 10 >> setSocketOption sock ReuseAddr 1)
+	E.catch (bindSocket sock sockaddr >> listen sock 10 >> setSocketOption sock ReuseAddr 1)
 	      (\(e :: SomeException) -> sClose sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
 	return $ StunnelSocket sock
 

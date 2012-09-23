@@ -39,7 +39,6 @@ import Data.ByteString.Char8 ()
 import qualified Data.ByteString.Lazy as L
 
 import Control.Monad.State
-import Prelude hiding (catch)
 
 -- | notify the context that this side wants to close connection.
 -- this is important that it is called before closing the handle, otherwise

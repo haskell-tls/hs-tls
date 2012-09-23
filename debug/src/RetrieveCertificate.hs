@@ -10,7 +10,6 @@ import Data.Certificate.X509
 
 import System.IO
 import Control.Monad
-import Prelude hiding (catch)
 
 import qualified Crypto.Random.AESCtr as RNG
 

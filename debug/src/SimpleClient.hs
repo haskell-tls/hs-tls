@@ -8,8 +8,8 @@ import System.IO
 import qualified Crypto.Random.AESCtr as RNG
 import qualified Data.ByteString.Lazy.Char8 as LC
 import Control.Exception
+import qualified Control.Exception as E
 import System.Environment
-import Prelude hiding (catch)
 
 import Data.IORef
 
@@ -29,7 +29,7 @@ runTLS params hostname portNumber f = do
 	he   <- getHostByName hostname
 	sock <- socket AF_INET Stream defaultProtocol
 	let sockaddr = SockAddrInet portNumber (head $ hostAddresses he)
-	catch (connect sock sockaddr)
+	E.catch (connect sock sockaddr)
 	      (\(e :: SomeException) -> sClose sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
 	dsth <- socketToHandle sock ReadWriteMode
 	ctx <- contextNewOnHandle dsth params rng

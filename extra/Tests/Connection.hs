@@ -29,15 +29,14 @@ import Control.Monad.Trans (lift)
 import Control.Applicative ((<$>))
 import Control.Concurrent.Chan
 import Control.Concurrent
-import Control.Exception (catch, throw, SomeException)
+import Control.Exception (throw, SomeException)
+import qualified Control.Exception as E
 import System.IO
 
 import Network.Socket
 
 import qualified Data.Certificate.KeyRSA as KeyRSA
 import qualified Crypto.Cipher.RSA as RSA
-
-import Prelude hiding (catch)
 
 someWords8 :: Int -> Gen [Word8] 
 someWords8 i = replicateM i (fromIntegral <$> (choose (0,255) :: Gen Int))
@@ -131,11 +130,11 @@ testInitiate spCert = do
 	(cCtx, sCtx, startQueue, resultQueue) <- run (setup states)
 
 	run $ forkIO $ do
-		catch (tlsServer sCtx resultQueue)
+		E.catch (tlsServer sCtx resultQueue)
 		      (\e -> putStrLn ("server exception: " ++ show e) >> throw (e :: SomeException))
 		return ()
 	run $ forkIO $ do
-		catch (tlsClient startQueue cCtx)
+		E.catch (tlsClient startQueue cCtx)
 		      (\e -> putStrLn ("client exception: " ++ show e) >> throw (e :: SomeException))
 		return ()
 
