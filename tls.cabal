@@ -65,6 +65,8 @@ Library
                      Network.TLS.Util
                      Network.TLS.Wire
   ghc-options:       -Wall
+  if impl(ghc == 7.6.1)
+    ghc-options:     -O0
 
 executable           Tests
   Main-is:           Tests.hs
