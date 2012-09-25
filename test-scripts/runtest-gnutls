@@ -15,6 +15,6 @@ STUNNELPID=$!
 sleep 1
 
 echo "starting gnutls cli debug"
-gnutls-cli-debug localhost -p ${PORT}
+gnutls-cli-debug localhost -p ${PORT} -VV
 
 kill ${STUNNELPID}
