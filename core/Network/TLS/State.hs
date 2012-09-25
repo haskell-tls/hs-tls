@@ -140,14 +140,14 @@ data TLSState = TLSState
         , stSessionResuming     :: Bool
         , stTxEncrypted         :: Bool
         , stRxEncrypted         :: Bool
-        , stActiveTxCryptState        :: !(Maybe TLSCryptState)
-        , stActiveRxCryptState        :: !(Maybe TLSCryptState)
-        , stPendingTxCryptState        :: !(Maybe TLSCryptState)
-        , stPendingRxCryptState        :: !(Maybe TLSCryptState)
-        , stActiveTxMacState          :: !(Maybe TLSMacState)
-        , stActiveRxMacState          :: !(Maybe TLSMacState)
-        , stPendingTxMacState          :: !(Maybe TLSMacState)
-        , stPendingRxMacState          :: !(Maybe TLSMacState)
+        , stActiveTxCryptState  :: !(Maybe TLSCryptState)
+        , stActiveRxCryptState  :: !(Maybe TLSCryptState)
+        , stPendingTxCryptState :: !(Maybe TLSCryptState)
+        , stPendingRxCryptState :: !(Maybe TLSCryptState)
+        , stActiveTxMacState    :: !(Maybe TLSMacState)
+        , stActiveRxMacState    :: !(Maybe TLSMacState)
+        , stPendingTxMacState   :: !(Maybe TLSMacState)
+        , stPendingRxMacState   :: !(Maybe TLSMacState)
         , stCipher              :: Maybe Cipher
         , stCompression         :: Compression
         , stRandomGen           :: StateRNG
@@ -185,14 +185,14 @@ newTLSState rng = TLSState
         , stSessionResuming     = False
         , stTxEncrypted         = False
         , stRxEncrypted         = False
-        , stActiveTxCryptState        = Nothing
-        , stActiveRxCryptState        = Nothing
-        , stPendingTxCryptState        = Nothing
-        , stPendingRxCryptState        = Nothing
-        , stActiveTxMacState          = Nothing
-        , stActiveRxMacState          = Nothing
-        , stPendingTxMacState          = Nothing
-        , stPendingRxMacState          = Nothing
+        , stActiveTxCryptState  = Nothing
+        , stActiveRxCryptState  = Nothing
+        , stPendingTxCryptState = Nothing
+        , stPendingRxCryptState = Nothing
+        , stActiveTxMacState    = Nothing
+        , stActiveRxMacState    = Nothing
+        , stPendingTxMacState   = Nothing
+        , stPendingRxMacState   = Nothing
         , stCipher              = Nothing
         , stCompression         = nullCompression
         , stRandomGen           = StateRNG rng
