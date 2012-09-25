@@ -1,5 +1,5 @@
 #!/bin/sh
-STUNNEL=./dist/build/stunnel/stunnel
+STUNNEL=./debug/dist/build/tls-stunnel/tls-stunnel
 
 if [ ! -x ${STUNNEL} ]; then
 	echo "hs-tls stunnel is not present, build with executable flag set."
