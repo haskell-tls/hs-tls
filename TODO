@@ -1,8 +1,5 @@
 protocol:
 
-- implement Certificate Verify / Certificate Request
-- add Client Certificates
-- process session as they should
 - put 4 bytes of time in client/server random
 - proper separation for key exchange algorithm (hardcoded to RSA at the moment in differents place)
 - implements different key exchange algorithm
@@ -20,7 +17,6 @@ security audit:
 
 misc:
 
-- investigate an iteratee/enumerator interface
 - portability
 - implement more ciphers
 - check & optimize memory footprint
