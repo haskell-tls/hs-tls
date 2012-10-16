@@ -5,6 +5,7 @@ import Network.Socket
 import System.IO
 import System.IO.Error (isEOFError)
 import System.Console.CmdArgs
+import System.Certificate.X509
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
@@ -199,7 +200,8 @@ doClient pargs = do
 		, loggingPacketRecv = putStrLn . ("debug: recv: " ++)
 		}
 
-	let crecv = if validCert pargs then certificateVerifyChain else (\_ -> return CertificateUsageAccept)
+	store <- getSystemCertificateStore
+	let crecv = if validCert pargs then certificateVerifyChain store else (\_ -> return CertificateUsageAccept)
 	let clientstate = defaultParamsClient
 		{ pConnectVersion = TLS10
 		, pAllowedVersions = [TLS10,TLS11,TLS12]

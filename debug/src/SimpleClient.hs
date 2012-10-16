@@ -10,6 +10,7 @@ import qualified Data.ByteString.Lazy.Char8 as LC
 import Control.Exception
 import qualified Control.Exception as E
 import System.Environment
+import System.Certificate.X509
 
 import Data.IORef
 
@@ -43,7 +44,7 @@ instance SessionManager SessionRef where
     sessionResume (SessionRef ref) sid = readIORef ref >>= \(s,d) -> if s == sid then return (Just d) else return Nothing
     sessionInvalidate _ _ = return ()
 
-getDefaultParams sStorage session = updateClientParams setCParams $ setSessionManager (SessionRef sStorage) $ defaultParams
+getDefaultParams store sStorage session = updateClientParams setCParams $ setSessionManager (SessionRef sStorage) $ defaultParamsClient
 	{ pConnectVersion    = TLS10
 	, pAllowedVersions   = [TLS10,TLS11,TLS12]
 	, pCiphers           = ciphers
@@ -57,7 +58,7 @@ getDefaultParams sStorage session = updateClientParams setCParams $ setSessionMa
 			{ loggingPacketSent = putStrLn . ("debug: >> " ++)
 			, loggingPacketRecv = putStrLn . ("debug: << " ++)
 			}
-		crecv = if validateCert then certificateVerifyChain else (\_ -> return CertificateUsageAccept)
+		crecv = if validateCert then certificateVerifyChain store else (\_ -> return CertificateUsageAccept)
 
 
 main = do
@@ -65,7 +66,8 @@ main = do
 	args     <- getArgs
 	let hostname = args !! 0
 	let port = read (args !! 1) :: Int
-	runTLS (getDefaultParams sStorage Nothing) hostname (fromIntegral port) $ \ctx -> do
+	store <- getSystemCertificateStore
+	runTLS (getDefaultParams store sStorage Nothing) hostname (fromIntegral port) $ \ctx -> do
 		handshake ctx
 		sendData ctx $ LC.pack "GET / HTTP/1.0\r\n\r\n"
 		d <- recvData' ctx

@@ -3,12 +3,11 @@
 import Network.TLS
 import Network.TLS.Extra
 
-import Data.Char
 import Data.IORef
 import Data.Time.Clock
 import Data.Certificate.X509
+import System.Certificate.X509
 
-import System.IO
 import Control.Monad
 
 import qualified Crypto.Random.AESCtr as RNG
@@ -77,9 +76,10 @@ main = do
 			showCert (output a) $ head certs
 
 	when (verify a) $ do
+		store <- getSystemCertificateStore
 		putStrLn "### certificate chain trust"
 		ctime <- utctDay `fmap` getCurrentTime
-		certificateVerifyChain certs >>= showUsage "chain validity"
+		certificateVerifyChain store certs >>= showUsage "chain validity"
 		showUsage "time validity" (certificateVerifyValidity ctime certs)
 		when (verifyFQDN a /= "") $
 			showUsage "fqdn match" (certificateVerifyDomain (verifyFQDN a) certs)

@@ -12,7 +12,7 @@ import Data.Time.Clock (secondsToDiffTime)
 readableChar :: Gen Char
 readableChar = elements (['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'])
 
-arbitraryDN = return []
+arbitraryDN = return $ X509Cert.DistinguishedName []
 
 arbitraryTime = do
 	year   <- choose (1951, 2050)

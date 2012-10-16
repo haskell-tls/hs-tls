@@ -20,7 +20,6 @@ import Control.Applicative ((<$>))
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Data.Certificate.X509
-import System.Certificate.X509 as SysCert
 
 -- for signing/verifying certificate
 import qualified Crypto.Hash.SHA1 as SHA1
@@ -29,6 +28,7 @@ import qualified Crypto.Hash.MD5 as MD5
 import qualified Crypto.Cipher.RSA as RSA
 import qualified Crypto.Cipher.DSA as DSA
 
+import Data.CertificateStore
 import Data.Certificate.X509.Cert (oidCommonName)
 import Network.TLS (CertificateUsage(..), CertificateRejectReason(..))
 
@@ -36,39 +36,17 @@ import Data.Time.Calendar
 import Data.List (find)
 import Data.Maybe (fromMaybe)
 
-#if defined(NOCERTVERIFY)
-
-import System.IO (hPutStrLn, stderr)
-
-#endif
-
 -- | Returns 'CertificateUsageAccept' if all the checks pass, or the first 
 --   failure.
 certificateChecks :: [ [X509] -> IO CertificateUsage ] -> [X509] -> IO CertificateUsage
 certificateChecks checks x509s =
     fromMaybe CertificateUsageAccept . find (CertificateUsageAccept /=) <$> mapM ($ x509s) checks
 
-#if defined(NOCERTVERIFY)
-
-# warning "********certificate verify chain doesn't yet work on your platform *************"
-# warning "********please consider contributing to the certificate to fix this issue *************"
-# warning "********getting trusted system certificate is platform dependant *************"
-
-{- on windows and OSX, the trusted certificates are not yet accessible,
- - for now, print a big fat warning (better than nothing) and returns true  -}
-certificateVerifyChain_ :: [X509] -> IO CertificateUsage
-certificateVerifyChain_ _ = do
-	hPutStrLn stderr "****************** certificate verify chain doesn't yet work on your platform **********************"
-	hPutStrLn stderr "please consider contributing to the certificate package to fix this issue"
-	return CertificateUsageAccept
-
-#else
-certificateVerifyChain_ :: [X509] -> IO CertificateUsage
-certificateVerifyChain_ []     = return $ CertificateUsageReject (CertificateRejectOther "empty chain / no certificates")
-certificateVerifyChain_ (x:xs) = do
+certificateVerifyChain_ :: CertificateStore -> [X509] -> IO CertificateUsage
+certificateVerifyChain_ _     []     = return $ CertificateUsageReject (CertificateRejectOther "empty chain / no certificates")
+certificateVerifyChain_ store (x:xs) = do
 	-- find a matching certificate that we trust (== installed on the system)
-	foundCert <- SysCert.findCertificate (certMatchDN x)
-	case foundCert of
+	case findCertificate (certIssuerDN $ x509Cert x) store of
 		Just sysx509 -> do
 			validChain <- certificateVerifyAgainst x sysx509
 			if validChain
@@ -79,9 +57,8 @@ certificateVerifyChain_ (x:xs) = do
 			_  -> do
 				validChain <- certificateVerifyAgainst x (head xs)
 				if validChain
-					then certificateVerifyChain_ xs
+					then certificateVerifyChain_ store xs
 					else return $ CertificateUsageReject (CertificateRejectOther "chain doesn't match each other")
-#endif
 
 -- | verify a certificates chain using the system certificates available.
 --
@@ -97,8 +74,8 @@ certificateVerifyChain_ (x:xs) = do
 --
 -- TODO: verify validity, check revocation list if any, add optional user output to know
 -- the rejection reason.
-certificateVerifyChain :: [X509] -> IO CertificateUsage
-certificateVerifyChain = certificateVerifyChain_ . reorderList
+certificateVerifyChain :: CertificateStore -> [X509] -> IO CertificateUsage
+certificateVerifyChain store = certificateVerifyChain_ store . reorderList
 	where
 		reorderList []     = []
 		reorderList (x:xs) =
@@ -158,7 +135,7 @@ rsaVerify h hdesc pk a b = either (Left . show) (Right) $ RSA.verify h hdesc pk 
 certificateVerifyDomain :: String -> [X509] -> CertificateUsage
 certificateVerifyDomain _      []                  = CertificateUsageReject (CertificateRejectOther "empty list")
 certificateVerifyDomain fqhn (X509 cert _ _ _ _:_) =
-	let names = maybe [] ((:[]) . snd) (lookup oidCommonName $ certSubjectDN cert)
+	let names = maybe [] ((:[]) . snd) (lookup oidCommonName $ getDistinguishedElements $ certSubjectDN cert)
 	         ++ maybe [] (maybe [] toAltName . extensionGet) (certExtensions cert) in
 	orUsage $ map (matchDomain . splitDot) names
 	where
