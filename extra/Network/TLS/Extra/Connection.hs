@@ -20,8 +20,19 @@ import Network.BSD
 import Network.Socket
 import Network.TLS
 
--- | open a TCP client connection to a destination and port description (number or name)
+-- | @connectionClient host port param rng@ opens a TCP client connection
+-- to a destination host and port description (number or name). For
+-- example:
 -- 
+-- @
+-- import Network.TLS.Extra
+-- import Crypto.Random
+-- ...
+--   conn <- (newGenIO::IO SystemRandom) >>= connectionClient 192.168.2.2 7777 defaultParams g
+-- @
+--
+-- will make a new RNG (using system entropy) and connect to IP 192.168.2.2
+-- on port 7777.
 connectionClient :: CryptoRandomGen g => String -> String -> TLSParams -> g -> IO Context
 connectionClient s p params rng = do
 	pn <- if and $ map isDigit $ p
