@@ -11,7 +11,7 @@ import Data.Time.Clock (secondsToDiffTime)
 
 import Tests.PubKey
 
-arbitraryDN = return []
+arbitraryDN = return $ Cert.DistinguishedName []
 
 arbitraryTime = do
         year   <- choose (1951, 2050)
