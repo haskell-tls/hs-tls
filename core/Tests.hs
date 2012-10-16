@@ -158,7 +158,7 @@ establish_data_pipe params tlsServer tlsClient = do
                 printAndRaise :: String -> SomeException -> IO ()
                 printAndRaise s e = putStrLn (s ++ " exception: " ++ show e) >> throw e
 
-recvDataNonNull ctx = recvData' ctx >>= \l -> if L.null l then recvDataNonNull ctx else return l
+recvDataNonNull ctx = recvData ctx >>= \l -> if B.null l then recvDataNonNull ctx else return l
 
 prop_handshake_initiate :: PropertyM IO ()
 prop_handshake_initiate = do
@@ -167,7 +167,7 @@ prop_handshake_initiate = do
 
         {- the test involves writing data on one side of the data "pipe" and
          - then checking we received them on the other side of the data "pipe" -}
-        d <- L.pack <$> pick (someWords8 256)
+        d <- B.pack <$> pick (someWords8 256)
         run $ writeChan startQueue d
 
         dres <- run $ readChan resultQueue
@@ -183,7 +183,7 @@ prop_handshake_initiate = do
                 tlsClient queue ctx = do
                         handshake ctx
                         d <- readChan queue
-                        sendData ctx d
+                        sendData ctx (L.fromChunks [d])
                         bye ctx
                         return ()
 
@@ -197,7 +197,7 @@ prop_handshake_npn_initiate = do
 
         {- the test involves writing data on one side of the data "pipe" and
          - then checking we received them on the other side of the data "pipe" -}
-        d <- L.pack <$> pick (someWords8 256)
+        d <- B.pack <$> pick (someWords8 256)
         run $ writeChan startQueue d
 
         dres <- run $ readChan resultQueue
@@ -217,7 +217,7 @@ prop_handshake_npn_initiate = do
                         proto <- getNegotiatedProtocol ctx
                         Just (C8.pack "spdy/2") `assertEq` proto
                         d <- readChan queue
-                        sendData ctx d
+                        sendData ctx (L.fromChunks [d])
                         bye ctx
                         return ()
 
@@ -228,7 +228,7 @@ prop_handshake_renegociation = do
 
         {- the test involves writing data on one side of the data "pipe" and
          - then checking we received them on the other side of the data "pipe" -}
-        d <- L.pack <$> pick (someWords8 256)
+        d <- B.pack <$> pick (someWords8 256)
         run $ writeChan startQueue d
 
         dres <- run $ readChan resultQueue
@@ -245,7 +245,7 @@ prop_handshake_renegociation = do
                         handshake ctx
                         handshake ctx
                         d <- readChan queue
-                        sendData ctx d
+                        sendData ctx (L.fromChunks [d])
                         bye ctx
                         return ()
 
@@ -271,7 +271,7 @@ prop_handshake_session_resumption = do
         -- establish a session.
         (s1, r1) <- run (establish_data_pipe params tlsServer tlsClient)
 
-        d <- L.pack <$> pick (someWords8 256)
+        d <- B.pack <$> pick (someWords8 256)
         run $ writeChan s1 d
         dres <- run $ readChan r1
         d `assertEq` dres
@@ -286,7 +286,7 @@ prop_handshake_session_resumption = do
 
         {- the test involves writing data on one side of the data "pipe" and
          - then checking we received them on the other side of the data "pipe" -}
-        d2 <- L.pack <$> pick (someWords8 256)
+        d2 <- B.pack <$> pick (someWords8 256)
         run $ writeChan startQueue d2
 
         dres2 <- run $ readChan resultQueue
@@ -302,7 +302,7 @@ prop_handshake_session_resumption = do
                 tlsClient queue ctx = do
                         handshake ctx
                         d <- readChan queue
-                        sendData ctx d
+                        sendData ctx (L.fromChunks [d])
                         bye ctx
                         return ()
 
