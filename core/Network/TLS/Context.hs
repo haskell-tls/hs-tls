@@ -75,7 +75,6 @@ import Network.TLS.Compression
 import Network.TLS.Crypto
 import Network.TLS.State
 import Network.TLS.Measurement
-import Data.Maybe
 import Data.Certificate.X509
 import Data.List (intercalate)
 import Data.ByteString (ByteString)

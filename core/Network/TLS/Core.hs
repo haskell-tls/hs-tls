@@ -33,7 +33,6 @@ import Network.TLS.Struct
 import Network.TLS.IO
 import Network.TLS.Handshake
 import qualified Network.TLS.State as S
-import Data.Maybe
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 import qualified Data.ByteString.Lazy as L

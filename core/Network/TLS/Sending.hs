@@ -34,13 +34,6 @@ makeRecord pkt = do
         return $ Record (packetType pkt) ver (fragmentPlaintext content)
 
 {-
- - Handshake data need to update a digest
- -}
-processRecord :: Record Plaintext -> TLSSt (Record Plaintext)
-processRecord record@(Record ty _ fragment) = do
-        return record
-
-{-
  - ChangeCipherSpec state change need to be handled after encryption otherwise
  - its own packet would be encrypted with the new context, instead of beeing sent
  - under the current context
@@ -78,7 +71,7 @@ preProcessPacket (Handshake hss)    = forM_ hss $ \hs -> do
 writePacket :: Packet -> TLSSt ByteString
 writePacket pkt = do
         preProcessPacket pkt
-        makeRecord pkt >>= processRecord >>= engageRecord >>= postprocessRecord >>= encodeRecord
+        makeRecord pkt >>= engageRecord >>= postprocessRecord >>= encodeRecord
 
 {------------------------------------------------------------------------------}
 {- SENDING Helpers                                                            -}
