@@ -36,15 +36,34 @@ import Data.Time.Calendar
 import Data.List (find)
 import Data.Maybe (fromMaybe)
 
+#if defined(NOCERTVERIFY)
+import System.IO (hPutStrLn, stderr)
+#endif
+
 -- | Returns 'CertificateUsageAccept' if all the checks pass, or the first 
 --   failure.
 certificateChecks :: [ [X509] -> IO CertificateUsage ] -> [X509] -> IO CertificateUsage
 certificateChecks checks x509s =
     fromMaybe CertificateUsageAccept . find (CertificateUsageAccept /=) <$> mapM ($ x509s) checks
 
+#if defined(NOCERTVERIFY)
+
+# warning "********certificate verify chain doesn't yet work on your platform *************"
+# warning "********please consider contributing to the certificate to fix this issue *************"
+# warning "********getting trusted system certificate is platform dependant *************"
+
+{- on windows, the trusted certificates are not yet accessible,
+ - for now, print a big fat warning (better than nothing) and returns true  -}
+certificateVerifyChain_ :: CertificateStore -> [X509] -> IO CertificateUsage
+certificateVerifyChain_ _ _ = do
+    hPutStrLn stderr "****************** certificate verify chain doesn't yet work on your platform **********************"
+    hPutStrLn stderr "please consider contributing to the certificate package to fix this issue"
+    return CertificateUsageAccept
+
+#else
 certificateVerifyChain_ :: CertificateStore -> [X509] -> IO CertificateUsage
 certificateVerifyChain_ _     []     = return $ CertificateUsageReject (CertificateRejectOther "empty chain / no certificates")
-certificateVerifyChain_ store (x:xs) = do
+certificateVerifyChain_ store (x:xs) =
 	-- find a matching certificate that we trust (== installed on the system)
 	case findCertificate (certIssuerDN $ x509Cert x) store of
 		Just sysx509 -> do
@@ -59,6 +78,7 @@ certificateVerifyChain_ store (x:xs) = do
 				if validChain
 					then certificateVerifyChain_ store xs
 					else return $ CertificateUsageReject (CertificateRejectOther "chain doesn't match each other")
+#endif
 
 -- | verify a certificates chain using the system certificates available.
 --

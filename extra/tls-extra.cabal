@@ -44,6 +44,8 @@ Library
                      Network.TLS.Extra.Thread
                      Network.TLS.Extra.File
   ghc-options:       -Wall -fno-warn-missing-signatures
+  if os(windows)
+    cpp-options:     -DNOCERTVERIFY
   if os(linux) && flag(fastaes) && (arch(i386) || arch(x86_64))
     cpp-options:     -DCIPHER_AES
     Build-Depends:   cipher-aes >= 0.1 && < 0.2
@@ -59,6 +61,8 @@ executable           Tests
                    , cprng-aes >= 0.2.3
   else
     Buildable:       False
+  if os(windows)
+    cpp-options:     -DNOCERTVERIFY
   if os(linux) && flag(fastaes)
     cpp-options:     -DCIPHER_AES
     Build-Depends:   cipher-aes >= 0.1 && < 0.2
