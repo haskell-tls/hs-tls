@@ -15,6 +15,7 @@ module Network.TLS.Extension
     , extensionID_SecureRenegotiation
     , extensionID_NextProtocolNegotiation
     -- all implemented extensions
+    , ServerName(..)
     , SecureRenegotiation(..)
     , NextProtocolNegotiation(..)
     ) where
