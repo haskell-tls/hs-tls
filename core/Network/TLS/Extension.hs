@@ -11,6 +11,7 @@ module Network.TLS.Extension
     ( Extension(..)
     , supportedExtensions
     -- all extensions ID supported
+    , extensionID_ServerName
     , extensionID_SecureRenegotiation
     , extensionID_NextProtocolNegotiation
     -- all implemented extensions
@@ -30,12 +31,14 @@ import Network.TLS.Struct (ExtensionID)
 import Network.TLS.Wire
 
 extensionID_SecureRenegotiation, extensionID_NextProtocolNegotiation :: ExtensionID
-extensionID_SecureRenegotiation = 0xff01
+extensionID_ServerName              = 0x0
+extensionID_SecureRenegotiation     = 0xff01
 extensionID_NextProtocolNegotiation = 0x3374
 
 -- | all supported extensions by the implementation
 supportedExtensions :: [ExtensionID]
-supportedExtensions = [ extensionID_SecureRenegotiation
+supportedExtensions = [ extensionID_ServerName
+                      , extensionID_SecureRenegotiation
                       , extensionID_NextProtocolNegotiation
                       ]
 
@@ -53,7 +56,7 @@ data ServerName = ServerName [(Word8,ByteString)]
     deriving (Show,Eq)
 
 instance Extension ServerName where
-    extensionID _ = 0x0
+    extensionID _ = extensionID_ServerName
     extensionEncode (ServerName l) = runPut $ mapM_ encodeName l
         where encodeName (nt,opaque) = putWord8 nt >> putOpaque16 opaque
     extensionDecode _ = runGetMaybe (remaining >>= \len -> getList len getServerName >>= return . ServerName)
