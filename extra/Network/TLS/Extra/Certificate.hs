@@ -37,7 +37,8 @@ import Data.List (find)
 import Data.Maybe (fromMaybe)
 
 #if defined(NOCERTVERIFY)
-import System.IO (hPutStrLn, stderr)
+import System.IO (hPutStrLn, stderr, hIsTerminalDevice)
+import Control.Monad (when)
 #endif
 
 -- | Returns 'CertificateUsageAccept' if all the checks pass, or the first 
@@ -56,8 +57,11 @@ certificateChecks checks x509s =
  - for now, print a big fat warning (better than nothing) and returns true  -}
 certificateVerifyChain_ :: CertificateStore -> [X509] -> IO CertificateUsage
 certificateVerifyChain_ _ _ = do
-    hPutStrLn stderr "****************** certificate verify chain doesn't yet work on your platform **********************"
-    hPutStrLn stderr "please consider contributing to the certificate package to fix this issue"
+    wvisible <- hIsTerminalDevice stderr
+    when wvisible $ do
+        hPutStrLn stderr "tls-extra:Network.TLS.Extra.Certificate"
+        hPutStrLn stderr "****************** certificate verify chain doesn't yet work on your platform **********************"
+        hPutStrLn stderr "please consider contributing to the certificate package to fix this issue"
     return CertificateUsageAccept
 
 #else
