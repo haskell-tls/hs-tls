@@ -80,7 +80,7 @@ data MaxFragmentEnum = MaxFragment512 | MaxFragment1024 | MaxFragment2048 | MaxF
 
 instance Extension MaxFragmentLength where
     extensionID _ = extensionID_MaxFragmentLength
-    extensionEncode (MaxFragmentLength e) = putWord8 $ marshallSize e
+    extensionEncode (MaxFragmentLength e) = B.singleton $ marshallSize e
         where marshallSize MaxFragment512  = 1
               marshallSize MaxFragment1024 = 2
               marshallSize MaxFragment2048 = 3
