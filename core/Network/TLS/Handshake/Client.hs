@@ -43,18 +43,17 @@ import Network.TLS.Handshake.Signature
 -- values intertwined with response from the server.
 handshakeClient :: MonadIO m => ClientParams -> Context -> m ()
 handshakeClient cparams ctx = do
-        updateMeasure ctx incrementNbHandshakes
-        sentExtensions <- sendClientHello
-        recvServerHello sentExtensions
-        sessionResuming <- usingState_ ctx isSessionResuming
-        if sessionResuming
-                then sendChangeCipherAndFinish ctx True
-                else do
-                        sendClientData cparams ctx
-                        sendChangeCipherAndFinish ctx True
-                        recvChangeCipherAndFinish ctx
-        handshakeTerminate ctx
-        where
+    updateMeasure ctx incrementNbHandshakes
+    sentExtensions <- sendClientHello
+    recvServerHello sentExtensions
+    sessionResuming <- usingState_ ctx isSessionResuming
+    if sessionResuming
+        then sendChangeCipherAndFinish ctx True
+        else do sendClientData cparams ctx
+                sendChangeCipherAndFinish ctx True
+                recvChangeCipherAndFinish ctx
+    handshakeTerminate ctx
+    where
                 params       = ctxParams ctx
                 allowedvers  = pAllowedVersions params
                 ciphers      = pCiphers params
