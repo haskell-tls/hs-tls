@@ -16,6 +16,7 @@ module Network.TLS.Extension
     , extensionID_SecureRenegotiation
     , extensionID_NextProtocolNegotiation
     -- all implemented extensions
+    , ServerNameType(..)
     , ServerName(..)
     , MaxFragmentLength(..)
     , MaxFragmentEnum(..)
@@ -30,9 +31,11 @@ import Data.Word
 import Data.Maybe (fromMaybe)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as BC
 
 import Network.TLS.Struct (ExtensionID)
 import Network.TLS.Wire
+import Network.BSD (HostName)
 
 extensionID_ServerName, extensionID_MaxFragmentLength
                       , extensionID_SecureRenegotiation
@@ -59,18 +62,25 @@ class Extension a where
 -- | Server Name extension including the name type and the associated name.
 -- the associated name decoding is dependant of its name type.
 -- name type = 0 : hostname
-data ServerName = ServerName [(Word8,ByteString)]
+data ServerName = ServerName [ServerNameType]
     deriving (Show,Eq)
+
+data ServerNameType = ServerNameHostName HostName
+                    | ServerNameOther    (Word8, ByteString)
+                    deriving (Show,Eq)
 
 instance Extension ServerName where
     extensionID _ = extensionID_ServerName
-    extensionEncode (ServerName l) = runPut $ mapM_ encodeName l
-        where encodeName (nt,opaque) = putWord8 nt >> putOpaque16 opaque
+    extensionEncode (ServerName l) = runPut $ mapM_ encodeNameType l
+        where encodeNameType (ServerNameHostName hn)       = putWord8 0  >> putOpaque16 (BC.pack hn) -- FIXME: should be puny code conversion
+              encodeNameType (ServerNameOther (nt,opaque)) = putWord8 nt >> putOpaque16 opaque
     extensionDecode _ = runGetMaybe (remaining >>= \len -> getList len getServerName >>= return . ServerName)
         where getServerName = do
                   ty    <- getWord8
                   sname <- getOpaque16
-                  return (1+2+B.length sname, (ty, sname))
+                  return (1+2+B.length sname, case ty of
+                      0 -> ServerNameHostName $ BC.unpack sname -- FIXME: should be puny code conversion
+                      _ -> ServerNameOther (ty, sname))
 
 -- | Max fragment extension with length from 512 bytes to 4096 bytes
 data MaxFragmentLength = MaxFragmentLength MaxFragmentEnum
