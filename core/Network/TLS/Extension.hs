@@ -73,7 +73,7 @@ instance Extension ServerName where
                   return (1+2+B.length sname, (ty, sname))
 
 -- | Max fragment extension with length from 512 bytes to 4096 bytes
-data MaxFragmentLength = MaxFragmentLength MaxFragentEnum
+data MaxFragmentLength = MaxFragmentLength MaxFragmentEnum
     deriving (Show,Eq)
 data MaxFragmentEnum = MaxFragment512 | MaxFragment1024 | MaxFragment2048 | MaxFragment4096
     deriving (Show,Eq)
