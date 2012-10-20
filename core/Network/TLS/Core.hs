@@ -74,11 +74,11 @@ recvData ctx = do
                 Right (Handshake [ch@(ClientHello {})]) ->
                         case roleParams $ ctxParams ctx of
                             Server sparams -> handshakeServerWith sparams ctx ch >> recvData ctx
-                            Client {}      -> error ("assert, unexpected client hello in client context");
+                            Client {}      -> error "assert, unexpected client hello in client context"
                 -- on client context, receiving a hello request == renegotiation
                 Right (Handshake [HelloRequest]) ->
                         case roleParams $ ctxParams ctx of
-                            Server {}      -> error ("assert, unexpected hello request in server context");
+                            Server {}      -> error "assert, unexpected hello request in server context"
                             Client cparams -> handshakeClient cparams ctx >> recvData ctx
                 Right (Alert [(AlertLevel_Fatal, _)]) -> do
                         setEOF ctx
