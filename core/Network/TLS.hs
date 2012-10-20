@@ -65,17 +65,22 @@ module Network.TLS
 
     -- * Crypto Key
     , PrivateKey(..)
+
     -- * Compressions & Predefined compressions
     , CompressionC(..)
     , Compression(..)
     , nullCompression
+
     -- * Ciphers & Predefined ciphers
     , Cipher(..)
     , Bulk(..)
+
     -- * Versions
     , Version(..)
+
     -- * Errors
     , TLSError(..)
+
     -- * Exceptions
     , HandshakeFailed(..)
     , ConnectionNotEstablished(..)
