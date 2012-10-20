@@ -90,7 +90,7 @@ instance Extension MaxFragmentLength where
               unmarshallSize 2 = MaxFragment1024
               unmarshallSize 3 = MaxFragment2048
               unmarshallSize 4 = MaxFragment4096
-              unmarshallSize _ = error ("unknown max fragment size " ++ show n)
+              unmarshallSize n = error ("unknown max fragment size " ++ show n)
 
 -- | Secure Renegotiation
 data SecureRenegotiation = SecureRenegotiation ByteString (Maybe ByteString)
