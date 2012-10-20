@@ -85,7 +85,7 @@ instance Extension MaxFragmentLength where
               marshallSize MaxFragment1024 = 2
               marshallSize MaxFragment2048 = 3
               marshallSize MaxFragment4096 = 4
-    extensionDecode _ = runGetMaybe (unmarshallSize <$> getWord8)
+    extensionDecode _ = runGetMaybe (MaxFragmentLength . unmarshallSize <$> getWord8)
         where unmarshallSize 1 = MaxFragment512
               unmarshallSize 2 = MaxFragment1024
               unmarshallSize 3 = MaxFragment2048
