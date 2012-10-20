@@ -20,6 +20,7 @@ module Network.TLS.Context
         , Logging(..)
         , SessionID
         , SessionData(..)
+        , MaxFragmentEnum(..)
         , Measurement(..)
         , CertificateUsage(..)
         , CertificateRejectReason(..)
@@ -67,6 +68,8 @@ module Network.TLS.Context
         , getStateRNG
         ) where
 
+import Network.BSD (HostName)
+import Network.TLS.Extension
 import Network.TLS.Struct
 import qualified Network.TLS.Struct as Struct
 import Network.TLS.Session
@@ -96,7 +99,9 @@ data Logging = Logging
         }
 
 data ClientParams = ClientParams
-        { clientWantSessionResume :: Maybe (SessionID, SessionData) -- ^ try to establish a connection using this session.
+        { clientUseMaxFragmentLength :: Maybe MaxFragmentEnum
+        , clientUseServerName        :: Maybe HostName
+        , clientWantSessionResume    :: Maybe (SessionID, SessionData) -- ^ try to establish a connection using this session.
 
           -- | This action is called when the server sends a
           -- certificate request.  The parameter is the information
@@ -200,8 +205,10 @@ defaultParamsClient = Params
         , onSuggestNextProtocols  = return Nothing
         , onNPNServerSuggest      = Nothing
         , roleParams              = Client $ ClientParams
-                                        { clientWantSessionResume = Nothing
-                                        , onCertificateRequest = \ _ -> return []
+                                        { clientWantSessionResume    = Nothing
+                                        , clientUseMaxFragmentLength = Nothing
+                                        , clientUseServerName        = Nothing
+                                        , onCertificateRequest       = \ _ -> return []
                                         }
         }
 
