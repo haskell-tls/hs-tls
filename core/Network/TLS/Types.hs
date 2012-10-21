@@ -31,5 +31,8 @@ data SessionData = SessionData
         , sessionSecret  :: ByteString
         }
 
+-- | Cipher identification
 type CipherID = Word16
+
+-- | Compression identification
 type CompressionID = Word8

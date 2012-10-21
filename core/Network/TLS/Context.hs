@@ -123,7 +123,7 @@ data ClientParams = ClientParams
           -- distinguished names may lead to problems or not,
           -- depending whether the server accepts it.
         , onCertificateRequest :: ([CertificateType],
-                                   Maybe [(HashAlgorithm, SignatureAlgorithm)],
+                                   Maybe [HashAndSignatureAlgorithm],
                                    [DistinguishedName]) -> IO [(X509, Maybe PrivateKey)]
         }
 

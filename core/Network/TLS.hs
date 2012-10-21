@@ -15,11 +15,21 @@ module Network.TLS
     , updateClientParams
     , updateServerParams
     , Logging(..)
+    , Measurement(..)
     , CertificateUsage(..)
     , CertificateRejectReason(..)
     , defaultParamsClient
     , defaultParamsServer
     , defaultLogging
+    , MaxFragmentEnum(..)
+    , HashAndSignatureAlgorithm
+    , HashAlgorithm(..)
+    , SignatureAlgorithm(..)
+    , CertificateType(..)
+
+    -- * raw types
+    , ProtocolType(..)
+    , Header(..)
 
     -- * Session
     , SessionID
@@ -67,28 +77,38 @@ module Network.TLS
     , PrivateKey(..)
 
     -- * Compressions & Predefined compressions
+    , CompressionID
     , CompressionC(..)
     , Compression(..)
     , nullCompression
 
     -- * Ciphers & Predefined ciphers
+    , CipherID
     , Cipher(..)
+    , Hash(..)
     , Bulk(..)
+    , BulkFunctions(..)
+    , CipherKeyExchangeType(..)
+    , Key
+    , IV
 
     -- * Versions
     , Version(..)
 
     -- * Errors
     , TLSError(..)
+    , KxError(..)
+    , AlertDescription(..)
 
     -- * Exceptions
     , HandshakeFailed(..)
     , ConnectionNotEstablished(..)
     ) where
 
-import Network.TLS.Struct (Version(..), TLSError(..))
-import Network.TLS.Crypto (PrivateKey(..))
-import Network.TLS.Cipher (Cipher(..), Bulk(..))
+import Network.TLS.Types (CompressionID, CipherID)
+import Network.TLS.Struct (Version(..), TLSError(..), HashAndSignatureAlgorithm, HashAlgorithm(..), SignatureAlgorithm(..), Header(..), ProtocolType(..), CertificateType(..), AlertDescription(..))
+import Network.TLS.Crypto (PrivateKey(..), KxError(..))
+import Network.TLS.Cipher (Cipher(..), Bulk(..), BulkFunctions(..), Hash(..), CipherKeyExchangeType(..), Key, IV)
 import Network.TLS.Compression (CompressionC(..), Compression(..), nullCompression)
 import Network.TLS.Context
 import Network.TLS.Core

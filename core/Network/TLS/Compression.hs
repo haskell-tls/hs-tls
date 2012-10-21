@@ -57,6 +57,7 @@ instance Show Compression where
 compressionIntersectID :: [Compression] -> [Word8] -> [Compression]
 compressionIntersectID l ids = filter (\c -> elem (compressionID c) ids) l
 
+-- | This is the default compression which is a NOOP.
 data NullCompression = NullCompression
 
 instance CompressionC NullCompression where
