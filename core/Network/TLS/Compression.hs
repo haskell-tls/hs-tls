@@ -10,7 +10,9 @@
 module Network.TLS.Compression
         ( CompressionC(..)
         , Compression(..)
+        , CompressionID
         , nullCompression
+        , NullCompression
 
         -- * member redefined for the class abstraction
         , compressionID
@@ -22,12 +24,13 @@ module Network.TLS.Compression
         ) where
 
 import Data.Word
+import Network.TLS.Types (CompressionID)
 import Data.ByteString (ByteString)
 import Control.Arrow (first)
 
 -- | supported compression algorithms need to be part of this class
 class CompressionC a where
-        compressionCID      :: a -> Word8
+        compressionCID      :: a -> CompressionID
         compressionCDeflate :: a -> ByteString -> (a, ByteString)
         compressionCInflate :: a -> ByteString -> (a, ByteString)
 
@@ -35,7 +38,7 @@ class CompressionC a where
 data Compression = forall a . CompressionC a => Compression a
 
 -- | return the associated ID for this algorithm
-compressionID :: Compression -> Word8
+compressionID :: Compression -> CompressionID
 compressionID (Compression c) = compressionCID c
 
 -- | deflate (compress) a bytestring using a compression context and return the result

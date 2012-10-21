@@ -77,20 +77,10 @@ module Network.TLS
     , PrivateKey(..)
 
     -- * Compressions & Predefined compressions
-    , CompressionID
-    , CompressionC(..)
-    , Compression(..)
-    , nullCompression
+    , module Network.TLS.Compression
 
     -- * Ciphers & Predefined ciphers
-    , CipherID
-    , Cipher(..)
-    , Hash(..)
-    , Bulk(..)
-    , BulkFunctions(..)
-    , CipherKeyExchangeType(..)
-    , Key
-    , IV
+    , module Network.TLS.Cipher
 
     -- * Versions
     , Version(..)
@@ -105,10 +95,9 @@ module Network.TLS
     , ConnectionNotEstablished(..)
     ) where
 
-import Network.TLS.Types (CompressionID, CipherID)
 import Network.TLS.Struct (Version(..), TLSError(..), HashAndSignatureAlgorithm, HashAlgorithm(..), SignatureAlgorithm(..), Header(..), ProtocolType(..), CertificateType(..), AlertDescription(..))
 import Network.TLS.Crypto (PrivateKey(..), KxError(..))
-import Network.TLS.Cipher (Cipher(..), Bulk(..), BulkFunctions(..), Hash(..), CipherKeyExchangeType(..), Key, IV)
+import Network.TLS.Cipher
 import Network.TLS.Compression (CompressionC(..), Compression(..), nullCompression)
 import Network.TLS.Context
 import Network.TLS.Core

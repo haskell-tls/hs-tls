@@ -16,7 +16,6 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
 import Network.TLS
-import Network.TLS.Cipher
 import Network.TLS.Struct
 import Network.TLS.Packet
 import Control.Applicative

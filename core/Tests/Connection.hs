@@ -10,7 +10,6 @@ import Tests.Certificate
 import Tests.PubKey
 import Tests.PipeChan
 import Network.TLS
-import Network.TLS.Cipher
 
 import qualified Crypto.Random.AESCtr as RNG
 import qualified Data.ByteString as B

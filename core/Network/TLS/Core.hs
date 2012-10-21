@@ -90,5 +90,7 @@ recvData ctx = do
                 Right p           -> error ("error unexpected packet: " ++ show p)
                 Left err          -> error ("error received: " ++ show err)
 
+{-# DEPRECATED recvData' "use recvData that returns strict bytestring" #-}
+-- | same as recvData but returns a lazy bytestring.
 recvData' :: MonadIO m => Context -> m L.ByteString
 recvData' ctx = recvData ctx >>= return . L.fromChunks . (:[])

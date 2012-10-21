@@ -13,13 +13,14 @@ module Network.TLS.Cipher
         , Bulk(..)
         , Hash(..)
         , Cipher(..)
+        , CipherID
         , cipherKeyBlockSize
         , Key
         , IV
         , cipherExchangeNeedMoreData
         ) where
 
-import Data.Word
+import Network.TLS.Types (CipherID)
 import Network.TLS.Struct (Version(..))
 
 import qualified Data.ByteString as B
@@ -65,7 +66,7 @@ data Hash = Hash
 
 -- | Cipher algorithm
 data Cipher = Cipher
-        { cipherID           :: Word16
+        { cipherID           :: CipherID
         , cipherName         :: String
         , cipherHash         :: Hash
         , cipherBulk         :: Bulk
