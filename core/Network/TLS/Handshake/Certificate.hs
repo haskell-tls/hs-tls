@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 -- |
 -- Module      : Network.TLS.Handshake.Certificate
 -- License     : BSD-style
@@ -13,8 +14,7 @@ module Network.TLS.Handshake.Certificate
 import Network.TLS.Context
 import Network.TLS.Struct
 import Control.Monad.State
-import Control.Exception (SomeException)
-
+import Control.Exception (SomeException, AsyncException, Handler(..), throwIO)
 -- on certificate reject, throw an exception with the proper protocol alert error.
 certificateRejected :: MonadIO m => CertificateRejectReason -> m a
 certificateRejected CertificateRejectRevoked =
@@ -26,5 +26,7 @@ certificateRejected CertificateRejectUnknownCA =
 certificateRejected (CertificateRejectOther s) =
     throwCore $ Error_Protocol ("certificate rejected: " ++ s, True, CertificateUnknown)
 
-rejectOnException :: SomeException -> IO TLSCertificateUsage
-rejectOnException e = return $ CertificateUsageReject $ CertificateRejectOther $ show e
+rejectOnException :: [Handler TLSCertificateUsage]
+rejectOnException =
+    [Handler $ \(e::AsyncException) -> throwIO e
+    ,Handler $ \(e::SomeException) -> return $ CertificateUsageReject $ CertificateRejectOther $ show e]

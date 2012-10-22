@@ -219,7 +219,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                   -- Call application callback to see whether the
                   -- certificate chain is acceptable.
                   --
-                  usage <- liftIO $ E.catch (onClientCertificate sparams certs) rejectOnException
+                  usage <- liftIO $ E.catches (onClientCertificate sparams certs) rejectOnException
                   case usage of
                     CertificateUsageAccept        -> return ()
                     CertificateUsageReject reason -> certificateRejected reason
