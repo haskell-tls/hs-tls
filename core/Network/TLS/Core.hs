@@ -86,9 +86,10 @@ recvData ctx = do
                 Right (Alert [(AlertLevel_Warning, CloseNotify)]) -> do
                         setEOF ctx
                         return B.empty
-                Right (AppData x) -> return x
-                Right p           -> error ("error unexpected packet: " ++ show p)
-                Left err          -> error ("error received: " ++ show err)
+                Right (AppData "") -> recvData ctx
+                Right (AppData x)  -> return x
+                Right p            -> error ("error unexpected packet: " ++ show p)
+                Left err           -> error ("error received: " ++ show err)
 
 {-# DEPRECATED recvData' "use recvData that returns strict bytestring" #-}
 -- | same as recvData but returns a lazy bytestring.
