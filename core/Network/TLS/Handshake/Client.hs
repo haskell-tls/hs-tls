@@ -77,7 +77,7 @@ handshakeClient cparams ctx = do
                         usingState_ ctx (startHandshakeClient (pConnectVersion params) crand)
                         sendPacket ctx $ Handshake
                                 [ ClientHello (pConnectVersion params) crand clientSession (map cipherID ciphers)
-                                              (map compressionID compressions) extensions
+                                              (map compressionID compressions) extensions Nothing
                                 ]
                         return $ map fst extensions
 

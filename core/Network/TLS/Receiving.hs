@@ -58,11 +58,16 @@ processPacket (Record ProtocolType_Handshake ver fragment) = do
                         Right hs -> return hs
         return $ Handshake hss
 
+processPacket (Record ProtocolType_DeprecatedHandshake _ fragment) =
+        case decodeDeprecatedHandshake $ fragmentGetBytes fragment of
+                Left err -> throwError err
+                Right hs -> return $ Handshake [hs]
+
 processHandshake :: Handshake -> TLSSt ()
 processHandshake hs = do
         clientmode <- isClientContext
         case hs of
-                ClientHello cver ran _ _ _ ex -> unless clientmode $ do
+                ClientHello cver ran _ _ _ ex _ -> unless clientmode $ do
                         mapM_ processClientExtension ex
                         startHandshakeClient cver ran
                 Certificates certs            -> processCertificates clientmode certs
@@ -143,7 +148,7 @@ processClientFinished fdata = do
 
 processCertificates :: Bool -> [X509] -> TLSSt ()
 processCertificates clientmode certs = do
-        if null certs 
+        if null certs
          then when (clientmode) $
                  throwError $ Error_Protocol ("server certificate missing", True,
                                               HandshakeFailure)
