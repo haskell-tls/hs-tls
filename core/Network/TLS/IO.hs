@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE CPP #-}
 -- |
 -- Module      : Network.TLS.IO
 -- License     : BSD-style
@@ -52,10 +53,14 @@ readExact ctx sz = do
 
 recvRecord :: MonadIO m => Context -> m (Either TLSError (Record Plaintext))
 recvRecord ctx = do
+#ifdef SSLV2_COMPATIBLE
         header <- readExact ctx 2
         if B.head header < 0x80
                 then readExact ctx 3 >>= either (return . Left) recvLength . decodeHeader . B.append header
                 else either (return . Left) recvDeprecatedLength $ decodeDeprecatedHeaderLength header
+#else
+        readExact ctx 5 >>= either (return . Left) recvLength . decodeHeader
+#endif
         where recvLength header@(Header _ _ readlen)
                 | readlen > 16384 + 2048 = return $ Left maximumSizeExceeded
                 | otherwise              = readExact ctx (fromIntegral readlen) >>= makeRecord ctx header
