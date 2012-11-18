@@ -4,12 +4,16 @@ import Network.BSD
 import Network.Socket
 import Network.TLS
 import Network.TLS.Extra
+import System.Console.GetOpt
 import System.IO
 import qualified Crypto.Random.AESCtr as RNG
 import qualified Data.ByteString.Lazy.Char8 as LC
+import qualified Data.ByteString.Char8 as BC
 import Control.Exception
 import qualified Control.Exception as E
+import Control.Monad
 import System.Environment
+import System.Exit
 import System.Certificate.X509
 
 import Data.IORef
@@ -34,7 +38,7 @@ runTLS params hostname portNumber f = do
 	      (\(e :: SomeException) -> sClose sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
 	dsth <- socketToHandle sock ReadWriteMode
 	ctx <- contextNewOnHandle dsth params rng
-	f ctx
+	() <- f ctx
 	hClose dsth
 
 data SessionRef = SessionRef (IORef (SessionID, SessionData))
@@ -60,27 +64,50 @@ getDefaultParams store sStorage session = updateClientParams setCParams $ setSes
 			}
 		crecv = if validateCert then certificateVerifyChain store else (\_ -> return CertificateUsageAccept)
 
+data Flag = Verbose | Session | Http11 | Uri String
+          deriving (Show,Eq)
+
+options :: [OptDescr Flag]
+options =
+    [ Option ['v']  ["verbose"] (NoArg Verbose) "verbose output on stdout"
+    , Option ['s']  ["session"] (NoArg Session) "try to resume a session"
+    , Option []     ["http1.1"] (NoArg Http11) "use http1.1 instead of http1.0"
+    , Option []     ["uri"]     (ReqArg Uri "URI") "optional URI requested by default /"
+    ]
+
+runOn (sStorage, certStore) flags port hostname = do
+    doTLS Nothing
+    when (Session `elem` flags) $ do
+        session <- readIORef sStorage
+        doTLS (Just session)
+    where doTLS sess = do
+            let query = LC.pack (
+                        "GET "
+                        ++ findURI flags
+                        ++ (if Http11 `elem` flags then (" HTTP1.1\r\nHost: " ++ hostname) else " HTTP1.0")
+                        ++ "\r\n\r\n")
+            when (Verbose `elem` flags) (putStrLn "sending query:" >> LC.putStrLn query >> putStrLn "")
+            runTLS (getDefaultParams certStore sStorage sess) hostname (fromIntegral port) $ \ctx -> do
+                handshake ctx
+                sendData ctx $ query
+                d <- recvData ctx
+                bye ctx
+                BC.putStrLn d
+                return ()
+          findURI []        = "/"
+          findURI (Uri u:_) = u
+          findURI (_:xs)    = findURI xs
 
 main = do
-	sStorage <- newIORef undefined
-	args     <- getArgs
-	let hostname = args !! 0
-	let port = read (args !! 1) :: Int
-	store <- getSystemCertificateStore
-	runTLS (getDefaultParams store sStorage Nothing) hostname (fromIntegral port) $ \ctx -> do
-		handshake ctx
-		sendData ctx $ LC.pack "GET / HTTP/1.0\r\n\r\n"
-		d <- recvData' ctx
-		bye ctx
-		LC.putStrLn d
-		return ()
-{-
-	session <- readIORef sStorage
-	runTLS (getDefaultParams sStorage $ Just session) hostname port $ \ctx -> do
-		handshake ctx
-		sendData ctx $ LC.pack "GET / HTTP/1.0\r\n\r\n"
-		d <- recvData ctx
-		bye ctx
-		LC.putStrLn d
-		return ()
--}
+    args <- getArgs
+    let (opts,other,errs) = getOpt Permute options args
+    when (not $ null errs) $ do
+        putStrLn $ show errs
+        exitFailure
+
+    certStore <- getSystemCertificateStore
+    sStorage <- newIORef undefined
+    case other of
+        [hostname]      -> runOn (sStorage, certStore) opts 443 hostname
+        [hostname,port] -> runOn (sStorage, certStore) opts (read port) hostname
+        _               -> putStrLn "usage: simpleclient [opts] <hostname> [port]" >> exitFailure
