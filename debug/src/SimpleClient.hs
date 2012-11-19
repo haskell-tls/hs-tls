@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 import Network.BSD
-import Network.Socket
+import Network.Socket (socket, socketToHandle, Family(..), SocketType(..), sClose, SockAddr(..), connect)
 import Network.TLS
 import Network.TLS.Extra
 import System.Console.GetOpt
@@ -19,7 +19,6 @@ import System.Certificate.X509
 import Data.IORef
 
 validateCert = True
-debug = False
 
 ciphers :: [Cipher]
 ciphers =
@@ -48,30 +47,46 @@ instance SessionManager SessionRef where
     sessionResume (SessionRef ref) sid = readIORef ref >>= \(s,d) -> if s == sid then return (Just d) else return Nothing
     sessionInvalidate _ _ = return ()
 
-getDefaultParams store sStorage session = updateClientParams setCParams $ setSessionManager (SessionRef sStorage) $ defaultParamsClient
-	{ pConnectVersion    = TLS10
-	, pAllowedVersions   = [TLS10,TLS11,TLS12]
-	, pCiphers           = ciphers
-	, pCertificates      = []
-	, pLogging           = logging
-	, onCertificatesRecv = crecv
-	}
-	where
-		setCParams cparams = cparams { clientWantSessionResume = session }
-		logging = if not debug then defaultLogging else defaultLogging
-			{ loggingPacketSent = putStrLn . ("debug: >> " ++)
-			, loggingPacketRecv = putStrLn . ("debug: << " ++)
-			}
-		crecv = if validateCert then certificateVerifyChain store else (\_ -> return CertificateUsageAccept)
+getDefaultParams flags store sStorage session =
+    updateClientParams setCParams $ setSessionManager (SessionRef sStorage) $ defaultParamsClient
+        { pConnectVersion    = tlsConnectVer
+        , pAllowedVersions   = [TLS10,TLS11,TLS12]
+        , pCiphers           = ciphers
+        , pCertificates      = []
+        , pLogging           = logging
+        , onCertificatesRecv = crecv
+        }
+    where
+            setCParams cparams = cparams { clientWantSessionResume = session }
+            logging = if not debug then defaultLogging else defaultLogging
+                { loggingPacketSent = putStrLn . ("debug: >> " ++)
+                , loggingPacketRecv = putStrLn . ("debug: << " ++)
+                }
+            crecv = if validateCert then certificateVerifyChain store else (\_ -> return CertificateUsageAccept)
 
-data Flag = Verbose | Session | Http11 | Uri String
+            tlsConnectVer
+                | Tls12 `elem` flags = TLS12
+                | Tls11 `elem` flags = TLS11
+                | Ssl3  `elem` flags = SSL3
+                | otherwise          = TLS10
+            debug = Debug `elem` flags
+            validateCert = not (NoValidateCert `elem` flags)
+
+data Flag = Verbose | Debug | NoValidateCert | Session | Http11
+          | Ssl3 | Tls11 | Tls12
+          | Uri String
           deriving (Show,Eq)
 
 options :: [OptDescr Flag]
 options =
     [ Option ['v']  ["verbose"] (NoArg Verbose) "verbose output on stdout"
+    , Option ['d']  ["debug"]   (NoArg Debug) "TLS debug output on stdout"
     , Option ['s']  ["session"] (NoArg Session) "try to resume a session"
+    , Option []     ["no-validation"] (NoArg NoValidateCert) "disable certificate validation"
     , Option []     ["http1.1"] (NoArg Http11) "use http1.1 instead of http1.0"
+    , Option []     ["ssl3"]    (NoArg Ssl3) "use SSL 3.0 as default"
+    , Option []     ["tls11"]   (NoArg Tls11) "use TLS 1.1 as default"
+    , Option []     ["tls12"]   (NoArg Tls12) "use TLS 1.2 as default"
     , Option []     ["uri"]     (ReqArg Uri "URI") "optional URI requested by default /"
     ]
 
@@ -87,7 +102,7 @@ runOn (sStorage, certStore) flags port hostname = do
                         ++ (if Http11 `elem` flags then (" HTTP1.1\r\nHost: " ++ hostname) else " HTTP1.0")
                         ++ "\r\n\r\n")
             when (Verbose `elem` flags) (putStrLn "sending query:" >> LC.putStrLn query >> putStrLn "")
-            runTLS (getDefaultParams certStore sStorage sess) hostname (fromIntegral port) $ \ctx -> do
+            runTLS (getDefaultParams flags certStore sStorage sess) hostname (fromIntegral port) $ \ctx -> do
                 handshake ctx
                 sendData ctx $ query
                 d <- recvData ctx
