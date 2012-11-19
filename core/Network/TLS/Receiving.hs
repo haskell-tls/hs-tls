@@ -45,7 +45,7 @@ processPacket (Record ProtocolType_ChangeCipherSpec _ fragment) = do
 
 processPacket (Record ProtocolType_Handshake ver fragment) = do
         keyxchg <- getCipherKeyExchangeType
-        npn <- getExtensionNPN
+        npn     <- getExtensionNPN
         let currentparams = CurrentParams
                 { cParamsVersion     = ver
                 , cParamsKeyXchgType = maybe CipherKeyExchange_RSA id $ keyxchg

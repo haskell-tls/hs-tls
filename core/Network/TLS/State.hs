@@ -148,7 +148,9 @@ data TLSState = TLSState
         , stActiveRxMacState    :: !(Maybe TLSMacState)
         , stPendingTxMacState   :: !(Maybe TLSMacState)
         , stPendingRxMacState   :: !(Maybe TLSMacState)
-        , stCipher              :: Maybe Cipher
+        , stActiveTxCipher      :: Maybe Cipher
+        , stActiveRxCipher      :: Maybe Cipher
+        , stPendingCipher       :: Maybe Cipher
         , stCompression         :: Compression
         , stRandomGen           :: StateRNG
         , stSecureRenegotiation :: Bool  -- RFC 5746
@@ -193,7 +195,9 @@ newTLSState rng = TLSState
         , stActiveRxMacState    = Nothing
         , stPendingTxMacState   = Nothing
         , stPendingRxMacState   = Nothing
-        , stCipher              = Nothing
+        , stActiveTxCipher      = Nothing
+        , stActiveRxCipher      = Nothing
+        , stPendingCipher       = Nothing
         , stCompression         = nullCompression
         , stRandomGen           = StateRNG rng
         , stSecureRenegotiation = False
@@ -230,7 +234,7 @@ makeDigest w hdr content = do
         let ver = stVersion st
         let cst = fromJust "crypt state" $ if w then stActiveTxCryptState st else stActiveRxCryptState st
         let ms = fromJust "mac state" $ if w then stActiveTxMacState st else stActiveRxMacState st
-        let cipher = fromJust "cipher" $ stCipher st
+        let cipher = fromJust "cipher" $ if w then stActiveTxCipher st else stActiveRxCipher st
         let hashf = hashF $ cipherHash cipher
 
         let (macF, msg) =
@@ -284,12 +288,14 @@ certVerifyHandshakeMaterial :: Handshake -> Bool
 certVerifyHandshakeMaterial = certVerifyHandshakeTypeMaterial . typeOfHandshake
 
 switchTxEncryption, switchRxEncryption :: MonadState TLSState m => m ()
-switchTxEncryption = modify (\st -> st { stTxEncrypted = True,
-                                         stActiveTxMacState = stPendingTxMacState st,
-                                         stActiveTxCryptState = stPendingTxCryptState st })
-switchRxEncryption = modify (\st -> st { stRxEncrypted = True,
-                                         stActiveRxMacState = stPendingRxMacState st,
-                                         stActiveRxCryptState = stPendingRxCryptState st })
+switchTxEncryption = modify (\st -> st { stTxEncrypted = True
+                                       , stActiveTxMacState = stPendingTxMacState st
+                                       , stActiveTxCryptState = stPendingTxCryptState st
+                                       , stActiveTxCipher = stPendingCipher st })
+switchRxEncryption = modify (\st -> st { stRxEncrypted = True
+                                       , stActiveRxMacState = stPendingRxMacState st
+                                       , stActiveRxCryptState = stPendingRxCryptState st
+                                       , stActiveRxCipher = stPendingCipher st })
 
 setServerRandom :: MonadState TLSState m => ServerRandom -> m ()
 setServerRandom ran = updateHandshake "srand" (\hst -> hst { hstServerRandom = Just ran })
@@ -359,7 +365,7 @@ getSessionData = get >>= \st -> return (stHandshake st >>= hstMasterSecret >>= w
         where wrapSessionData st masterSecret = do
                 return $ SessionData
                         { sessionVersion = stVersion st
-                        , sessionCipher  = cipherID $ fromJust "cipher" $ stCipher st
+                        , sessionCipher  = cipherID $ fromJust "cipher" $ stActiveTxCipher st
                         , sessionSecret  = masterSecret
                         }
 
@@ -375,7 +381,7 @@ isSessionResuming = gets stSessionResuming
 needEmptyPacket :: MonadState TLSState m => m Bool
 needEmptyPacket = gets f
     where f st = (stVersion st <= TLS10)
-              && (maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stCipher st))
+              && (maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stActiveTxCipher st))
 
 setKeyBlock :: MonadState TLSState m => m ()
 setKeyBlock = modify setPendingState where
@@ -386,7 +392,7 @@ setKeyBlock = modify setPendingState where
                             }
         where hst          = fromJust "handshake" $ stHandshake st
               cc           = stClientContext st
-              cipher       = fromJust "cipher" $ stCipher st
+              cipher       = fromJust "cipher" $ stPendingCipher st
               keyblockSize = cipherKeyBlockSize cipher
 
               bulk         = cipherBulk cipher
@@ -410,7 +416,7 @@ setKeyBlock = modify setPendingState where
               msServer = TLSMacState { msSequence = 0 }
 
 setCipher :: MonadState TLSState m => Cipher -> m ()
-setCipher cipher = modify (\st -> st { stCipher = Just cipher })
+setCipher cipher = modify (\st -> st { stPendingCipher = Just cipher })
 
 setVersion :: MonadState TLSState m => Version -> m ()
 setVersion ver = modify (\st -> st { stVersion = ver })
@@ -446,7 +452,7 @@ getClientCertificateChain :: MonadState TLSState m => m (Maybe [X509])
 getClientCertificateChain = gets stClientCertificateChain
 
 getCipherKeyExchangeType :: MonadState TLSState m => m (Maybe CipherKeyExchangeType)
-getCipherKeyExchangeType = gets (\st -> cipherKeyExchange <$> stCipher st)
+getCipherKeyExchangeType = gets (\st -> cipherKeyExchange <$> stPendingCipher st)
 
 getVerifiedData :: MonadState TLSState m => Bool -> m Bytes
 getVerifiedData client = gets (if client then stClientVerifiedData else stServerVerifiedData)

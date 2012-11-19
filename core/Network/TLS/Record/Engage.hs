@@ -51,7 +51,7 @@ encryptData :: ByteString -> TLSSt ByteString
 encryptData content = do
         st <- get
 
-        let cipher = fromJust "cipher" $ stCipher st
+        let cipher = fromJust "cipher" $ stActiveTxCipher st
         let bulk = cipherBulk cipher
         let cst = fromJust "tx crypt state" $ stActiveTxCryptState st
 

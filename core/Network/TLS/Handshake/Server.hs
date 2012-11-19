@@ -93,9 +93,9 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
         when (null commonCompressions) $
                 throwCore $ Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
         usingState_ ctx $ modify (\st -> st
-                { stVersion     = ver
-                , stCipher      = Just usedCipher
-                , stCompression = usedCompression
+                { stVersion       = ver
+                , stPendingCipher = Just usedCipher
+                , stCompression   = usedCompression
                 })
 
         resumeSessionData <- case clientSession of

@@ -66,7 +66,7 @@ decryptData :: Bytes -> TLSSt CipherData
 decryptData econtent = do
         st <- get
 
-        let cipher     = fromJust "cipher" $ stCipher st
+        let cipher     = fromJust "cipher" $ stActiveRxCipher st
         let bulk       = cipherBulk cipher
         let cst        = fromJust "rx crypt state" $ stActiveRxCryptState st
         let digestSize = hashSize $ cipherHash cipher
