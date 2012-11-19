@@ -18,8 +18,6 @@ import System.Certificate.X509
 
 import Data.IORef
 
-validateCert = True
-
 ciphers :: [Cipher]
 ciphers =
 	[ cipher_AES128_SHA1
