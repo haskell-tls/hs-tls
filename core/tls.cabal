@@ -34,6 +34,9 @@ Flag executable
   Description:       Build the executable
   Default:           False
 
+Flag compat
+  Description:       Accept SSLv2 compatible handshake
+
 Library
   Build-Depends:     base >= 3 && < 5
                    , mtl
@@ -78,6 +81,8 @@ Library
   ghc-options:       -Wall
   if impl(ghc == 7.6.1)
     ghc-options:     -O0
+  if flag(compat)
+    cpp-options:     -DSSLV2_COMPATIBLE
 
 executable           Tests
   Main-is:           Tests.hs

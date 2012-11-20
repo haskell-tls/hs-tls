@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE CPP #-}
 -- |
 -- Module      : Network.TLS.IO
 -- License     : BSD-style
@@ -51,13 +52,30 @@ readExact ctx sz = do
         return hdrbs
 
 recvRecord :: MonadIO m => Context -> m (Either TLSError (Record Plaintext))
-recvRecord ctx = readExact ctx 5 >>= either (return . Left) recvLength . decodeHeader
+recvRecord ctx = do
+#ifdef SSLV2_COMPATIBLE
+        header <- readExact ctx 2
+        if B.head header < 0x80
+                then readExact ctx 3 >>= either (return . Left) recvLength . decodeHeader . B.append header
+                else either (return . Left) recvDeprecatedLength $ decodeDeprecatedHeaderLength header
+#else
+        readExact ctx 5 >>= either (return . Left) recvLength . decodeHeader
+#endif
         where recvLength header@(Header _ _ readlen)
-                | readlen > 16384 + 2048 = return $ Left $ Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
+                | readlen > 16384 + 2048 = return $ Left maximumSizeExceeded
+                | otherwise              = readExact ctx (fromIntegral readlen) >>= makeRecord ctx header
+              recvDeprecatedLength readlen
+                | readlen > 1024 * 4     = return $ Left maximumSizeExceeded
                 | otherwise              = do
                         content <- readExact ctx (fromIntegral readlen)
+                        case decodeDeprecatedHeader readlen content of
+                                Left err     -> return $ Left err
+                                Right header -> makeRecord ctx header content
+              maximumSizeExceeded = Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
+              makeRecord ctx header content = do
                         liftIO $ (loggingIORecv $ ctxLogging ctx) header content
                         usingState ctx $ disengageRecord $ rawToRecord header (fragmentCiphertext content)
+
 
 -- | receive one packet from the context that contains 1 or
 -- many messages (many only in case of handshake). if will returns a
