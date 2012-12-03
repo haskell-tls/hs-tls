@@ -51,16 +51,16 @@ readExact ctx sz = do
                         else throwCore (Error_Packet ("partial packet: expecting " ++ show sz ++ " bytes, got: " ++ (show $B.length hdrbs)))
         return hdrbs
 
-recvRecord :: MonadIO m => Context -> m (Either TLSError (Record Plaintext))
-recvRecord ctx = do
-#ifdef SSLV2_COMPATIBLE
+recvRecord :: MonadIO m => Bool    -- ^ flag to enable SSLv2 compat ClientHello reception
+                        -> Context -- ^ TLS context
+                        -> m (Either TLSError (Record Plaintext))
+recvRecord compatSSLv2 ctx
+    | compatSSLv2 = do
         header <- readExact ctx 2
         if B.head header < 0x80
-                then readExact ctx 3 >>= either (return . Left) recvLength . decodeHeader . B.append header
-                else either (return . Left) recvDeprecatedLength $ decodeDeprecatedHeaderLength header
-#else
-        readExact ctx 5 >>= either (return . Left) recvLength . decodeHeader
-#endif
+            then readExact ctx 3 >>= either (return . Left) recvLength . decodeHeader . B.append header
+            else either (return . Left) recvDeprecatedLength $ decodeDeprecatedHeaderLength header
+    | otherwise = readExact ctx 5 >>= either (return . Left) recvLength . decodeHeader
         where recvLength header@(Header _ _ readlen)
                 | readlen > 16384 + 2048 = return $ Left maximumSizeExceeded
                 | otherwise              = readExact ctx (fromIntegral readlen) >>= makeRecord header
@@ -84,7 +84,7 @@ recvRecord ctx = do
 -- TLSError if the packet is unexpected or malformed
 recvPacket :: MonadIO m => Context -> m (Either TLSError Packet)
 recvPacket ctx = do
-        erecord <- recvRecord ctx
+        erecord <- recvRecord True ctx
         case erecord of
                 Left err     -> return $ Left err
                 Right record -> do
