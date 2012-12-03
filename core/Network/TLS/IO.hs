@@ -63,16 +63,18 @@ recvRecord ctx = do
 #endif
         where recvLength header@(Header _ _ readlen)
                 | readlen > 16384 + 2048 = return $ Left maximumSizeExceeded
-                | otherwise              = readExact ctx (fromIntegral readlen) >>= makeRecord ctx header
+                | otherwise              = readExact ctx (fromIntegral readlen) >>= makeRecord header
+#ifdef SSLV2_COMPATIBLE
               recvDeprecatedLength readlen
                 | readlen > 1024 * 4     = return $ Left maximumSizeExceeded
                 | otherwise              = do
                         content <- readExact ctx (fromIntegral readlen)
                         case decodeDeprecatedHeader readlen content of
                                 Left err     -> return $ Left err
-                                Right header -> makeRecord ctx header content
+                                Right header -> makeRecord header content
+#endif
               maximumSizeExceeded = Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
-              makeRecord ctx header content = do
+              makeRecord header content = do
                         liftIO $ (loggingIORecv $ ctxLogging ctx) header content
                         usingState ctx $ disengageRecord $ rawToRecord header (fragmentCiphertext content)
 

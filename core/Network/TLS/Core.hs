@@ -71,7 +71,7 @@ recvData ctx = do
         pkt <- recvPacket ctx
         case pkt of
                 -- on server context receiving a client hello == renegotiation
-                Right (Handshake [ch@(ClientHello _ _ _ _ _ _ (Just _))]) ->
+                Right (Handshake [(ClientHello _ _ _ _ _ _ (Just _))]) ->
                         -- reject renegotiation with SSLv2 header
                         case roleParams $ ctxParams ctx of
                             Server sparams -> error "assert, deprecated hello request in server context"
