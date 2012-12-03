@@ -74,8 +74,8 @@ recvData ctx = do
                 Right (Handshake [(ClientHello _ _ _ _ _ _ (Just _))]) ->
                         -- reject renegotiation with SSLv2 header
                         case roleParams $ ctxParams ctx of
-                            Server sparams -> error "assert, deprecated hello request in server context"
-                            Client {}      -> error "assert, unexpected client hello in client context"
+                            Server _  -> error "assert, deprecated hello request in server context"
+                            Client {} -> error "assert, unexpected client hello in client context"
                 Right (Handshake [ch@(ClientHello {})]) ->
                         case roleParams $ ctxParams ctx of
                             Server sparams -> handshakeServerWith sparams ctx ch >> recvData ctx
