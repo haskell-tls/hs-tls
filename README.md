@@ -22,11 +22,12 @@ Features
 * supported extensions: secure renegociation, next protocol negotiation (draft 2), server name indication.
 
 Common Issues
--------------
+=============
 
 The tools mentioned below are all available from the tls-debug package.
 
-* Certificate issues
+Certificate issues
+------------------
 
 It's useful to run the following command, which will connect to the destination and
 retrieve the certificate chained used.
@@ -41,3 +42,12 @@ It creates a chain where issuer of certificate is the subject of the next certif
 A "CA is unknown" error indicates that your system doesn't have a certificate in
 the trusted store belonging to any of the node of the chain.
 
+TLS issues
+----------
+
+When having unknown issues with TLS, if your protocol is HTTP based it's useful to use tls-simpleclient from the
+tls-debug package.
+
+    tls-simpleclient -d -v <www.myserver.com> <port>
+
+This provides useful information for debugging issues related to TLS.
