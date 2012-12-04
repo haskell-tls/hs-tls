@@ -16,7 +16,7 @@ import System.IO.Unsafe
 
 arbitraryRSAPair :: Gen (RSA.PublicKey, RSA.PrivateKey)
 arbitraryRSAPair = do
-        rng <- (either (error . show) id . RNG.make . B.pack) `fmap` vector 64
+        rng <- (maybe (error "making rng") id . RNG.make . B.pack) `fmap` vector 64
         arbitraryRSAPairWithRNG rng
 
 arbitraryRSAPairWithRNG rng = case RSA.generate rng 128 65537 of
