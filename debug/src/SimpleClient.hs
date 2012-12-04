@@ -99,7 +99,7 @@ runOn (sStorage, certStore) flags port hostname = do
             let query = LC.pack (
                         "GET "
                         ++ findURI flags
-                        ++ (if Http11 `elem` flags then (" HTTP1.1\r\nHost: " ++ hostname) else " HTTP1.0")
+                        ++ (if Http11 `elem` flags then (" HTTP/1.1\r\nHost: " ++ hostname) else " HTTP/1.0")
                         ++ "\r\n\r\n")
             when (Verbose `elem` flags) (putStrLn "sending query:" >> LC.putStrLn query >> putStrLn "")
             runTLS (getDefaultParams flags certStore sStorage sess) hostname (fromIntegral port) $ \ctx -> do
