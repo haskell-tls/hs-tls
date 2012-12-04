@@ -108,6 +108,7 @@ data ProtocolType =
         | ProtocolType_Alert
         | ProtocolType_Handshake
         | ProtocolType_AppData
+        | ProtocolType_DeprecatedHandshake
         deriving (Eq, Show)
 
 -- | TLSError that might be returned through the TLS stack
@@ -233,8 +234,10 @@ data ServerKeyXchgAlgorithmData =
         | SKX_Unknown Bytes
         deriving (Show,Eq)
 
+type DeprecatedRecord = ByteString
+
 data Handshake =
-          ClientHello !Version !ClientRandom !Session ![CipherID] ![CompressionID] [ExtensionRaw]
+          ClientHello !Version !ClientRandom !Session ![CipherID] ![CompressionID] [ExtensionRaw] (Maybe DeprecatedRecord)
         | ServerHello !Version !ServerRandom !Session !CipherID !CompressionID [ExtensionRaw]
         | Certificates [X509]
         | HelloRequest
@@ -304,10 +307,11 @@ instance TypeValuable CipherType where
         valToType _ = Nothing
 
 instance TypeValuable ProtocolType where
-        valOfType ProtocolType_ChangeCipherSpec = 20
-        valOfType ProtocolType_Alert            = 21
-        valOfType ProtocolType_Handshake        = 22
-        valOfType ProtocolType_AppData          = 23
+        valOfType ProtocolType_ChangeCipherSpec    = 20
+        valOfType ProtocolType_Alert               = 21
+        valOfType ProtocolType_Handshake           = 22
+        valOfType ProtocolType_AppData             = 23
+        valOfType ProtocolType_DeprecatedHandshake = 128 -- unused
 
         valToType 20 = Just ProtocolType_ChangeCipherSpec
         valToType 21 = Just ProtocolType_Alert

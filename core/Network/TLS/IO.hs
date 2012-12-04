@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE CPP #-}
 -- |
 -- Module      : Network.TLS.IO
 -- License     : BSD-style
@@ -50,21 +51,43 @@ readExact ctx sz = do
                         else throwCore (Error_Packet ("partial packet: expecting " ++ show sz ++ " bytes, got: " ++ (show $B.length hdrbs)))
         return hdrbs
 
-recvRecord :: MonadIO m => Context -> m (Either TLSError (Record Plaintext))
-recvRecord ctx = readExact ctx 5 >>= either (return . Left) recvLength . decodeHeader
+recvRecord :: MonadIO m => Bool    -- ^ flag to enable SSLv2 compat ClientHello reception
+                        -> Context -- ^ TLS context
+                        -> m (Either TLSError (Record Plaintext))
+recvRecord compatSSLv2 ctx
+#ifdef SSLV2_COMPATIBLE
+    | compatSSLv2 = do
+        header <- readExact ctx 2
+        if B.head header < 0x80
+            then readExact ctx 3 >>= either (return . Left) recvLength . decodeHeader . B.append header
+            else either (return . Left) recvDeprecatedLength $ decodeDeprecatedHeaderLength header
+#endif
+    | otherwise = readExact ctx 5 >>= either (return . Left) recvLength . decodeHeader
         where recvLength header@(Header _ _ readlen)
-                | readlen > 16384 + 2048 = return $ Left $ Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
+                | readlen > 16384 + 2048 = return $ Left maximumSizeExceeded
+                | otherwise              = readExact ctx (fromIntegral readlen) >>= makeRecord header
+#ifdef SSLV2_COMPATIBLE
+              recvDeprecatedLength readlen
+                | readlen > 1024 * 4     = return $ Left maximumSizeExceeded
                 | otherwise              = do
                         content <- readExact ctx (fromIntegral readlen)
+                        case decodeDeprecatedHeader readlen content of
+                                Left err     -> return $ Left err
+                                Right header -> makeRecord header content
+#endif
+              maximumSizeExceeded = Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
+              makeRecord header content = do
                         liftIO $ (loggingIORecv $ ctxLogging ctx) header content
                         usingState ctx $ disengageRecord $ rawToRecord header (fragmentCiphertext content)
+
 
 -- | receive one packet from the context that contains 1 or
 -- many messages (many only in case of handshake). if will returns a
 -- TLSError if the packet is unexpected or malformed
 recvPacket :: MonadIO m => Context -> m (Either TLSError Packet)
 recvPacket ctx = do
-        erecord <- recvRecord ctx
+        compatSSLv2 <- ctxHasSSLv2ClientHello ctx
+        erecord     <- recvRecord compatSSLv2 ctx
         case erecord of
                 Left err     -> return $ Left err
                 Right record -> do
@@ -72,6 +95,7 @@ recvPacket ctx = do
                         case pkt of
                                 Right p -> liftIO $ (loggingPacketRecv $ ctxLogging ctx) $ show p
                                 _       -> return ()
+                        ctxDisableSSLv2ClientHello ctx
                         return pkt
 
 -- | Send one packet to the context

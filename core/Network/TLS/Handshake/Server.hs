@@ -77,7 +77,7 @@ handshakeServer sparams ctx = do
 --      -> finish             <- finish
 --
 handshakeServerWith :: MonadIO m => ServerParams -> Context -> Handshake -> m ()
-handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession ciphers compressions exts) = do
+handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession ciphers compressions exts _) = do
         -- check if policy allow this new handshake to happens
         handshakeAuthorized <- withMeasure ctx (onHandshake $ ctxParams ctx)
         unless handshakeAuthorized (throwCore $ Error_HandshakePolicy "server: handshake denied")
