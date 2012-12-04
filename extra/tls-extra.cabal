@@ -58,7 +58,7 @@ executable           Tests
                    , HUnit
                    , QuickCheck >= 2
                    , bytestring
-                   , cprng-aes >= 0.2.3
+                   , cprng-aes >= 0.3.0
   else
     Buildable:       False
   if os(windows)

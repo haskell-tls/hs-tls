@@ -23,7 +23,7 @@ Executable           tls-stunnel
                    , bytestring
                    , cmdargs
                    , certificate >= 1.0
-                   , cprng-aes >= 0.2.3
+                   , cprng-aes >= 0.3.0
                    , tls >= 1.0 && < 1.1
                    , tls-extra >= 0.5 && < 0.6
   Buildable:         True
@@ -50,7 +50,7 @@ Executable           tls-retrievecertificate
                    , bytestring
                    , cmdargs
                    , time
-                   , cprng-aes >= 0.2.3
+                   , cprng-aes >= 0.3.0
                    , certificate >= 1.0
                    , tls >= 1.0 && < 1.1
                    , tls-extra >= 0.5 && < 0.6
@@ -64,7 +64,7 @@ Executable           tls-simpleclient
                    , network
                    , bytestring
                    , cmdargs
-                   , cprng-aes >= 0.2.3
+                   , cprng-aes >= 0.3.0
                    , certificate >= 1.0
                    , tls >= 1.0 && < 1.1
                    , tls-extra >= 0.5 && < 0.6
