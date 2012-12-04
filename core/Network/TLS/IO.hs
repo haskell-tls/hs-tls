@@ -55,11 +55,13 @@ recvRecord :: MonadIO m => Bool    -- ^ flag to enable SSLv2 compat ClientHello 
                         -> Context -- ^ TLS context
                         -> m (Either TLSError (Record Plaintext))
 recvRecord compatSSLv2 ctx
+#ifdef SSLV2_COMPATIBLE
     | compatSSLv2 = do
         header <- readExact ctx 2
         if B.head header < 0x80
             then readExact ctx 3 >>= either (return . Left) recvLength . decodeHeader . B.append header
             else either (return . Left) recvDeprecatedLength $ decodeDeprecatedHeaderLength header
+#endif
     | otherwise = readExact ctx 5 >>= either (return . Left) recvLength . decodeHeader
         where recvLength header@(Header _ _ readlen)
                 | readlen > 16384 + 2048 = return $ Left maximumSizeExceeded
@@ -84,7 +86,8 @@ recvRecord compatSSLv2 ctx
 -- TLSError if the packet is unexpected or malformed
 recvPacket :: MonadIO m => Context -> m (Either TLSError Packet)
 recvPacket ctx = do
-        erecord <- recvRecord True ctx
+        compatSSLv2 <- ctxHasSSLv2ClientHello ctx
+        erecord     <- recvRecord compatSSLv2 ctx
         case erecord of
                 Left err     -> return $ Left err
                 Right record -> do
@@ -92,6 +95,7 @@ recvPacket ctx = do
                         case pkt of
                                 Right p -> liftIO $ (loggingPacketRecv $ ctxLogging ctx) $ show p
                                 _       -> return ()
+                        ctxDisableSSLv2ClientHello ctx
                         return pkt
 
 -- | Send one packet to the context
