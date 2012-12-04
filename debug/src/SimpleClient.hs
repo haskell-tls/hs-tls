@@ -73,6 +73,7 @@ getDefaultParams flags store sStorage session =
 data Flag = Verbose | Debug | NoValidateCert | Session | Http11
           | Ssl3 | Tls11 | Tls12
           | Uri String
+          | Help
           deriving (Show,Eq)
 
 options :: [OptDescr Flag]
@@ -86,6 +87,7 @@ options =
     , Option []     ["tls11"]   (NoArg Tls11) "use TLS 1.1 as default"
     , Option []     ["tls12"]   (NoArg Tls12) "use TLS 1.2 as default"
     , Option []     ["uri"]     (ReqArg Uri "URI") "optional URI requested by default /"
+    , Option ['h']  ["help"]    (NoArg Help) "request help"
     ]
 
 runOn (sStorage, certStore) flags port hostname = do
@@ -111,6 +113,9 @@ runOn (sStorage, certStore) flags port hostname = do
           findURI (Uri u:_) = u
           findURI (_:xs)    = findURI xs
 
+printUsage =
+    putStrLn $ usageInfo "usage: simpleclient [opts] <hostname> [port]\n\n\t(port default to: 443)\noptions:\n" options
+
 main = do
     args <- getArgs
     let (opts,other,errs) = getOpt Permute options args
@@ -118,9 +123,13 @@ main = do
         putStrLn $ show errs
         exitFailure
 
+    when (Help `elem` opts) $ do
+        printUsage
+        exitSuccess
+
     certStore <- getSystemCertificateStore
     sStorage <- newIORef undefined
     case other of
         [hostname]      -> runOn (sStorage, certStore) opts 443 hostname
         [hostname,port] -> runOn (sStorage, certStore) opts (read port) hostname
-        _               -> putStrLn "usage: simpleclient [opts] <hostname> [port]" >> exitFailure
+        _               -> printUsage >> exitFailure
