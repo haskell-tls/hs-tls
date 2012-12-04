@@ -82,7 +82,7 @@ fakeCipher cid = Cipher
 	, cipherMinVer       = Nothing
 	}
 
-clienthello ciphers = ClientHello TLS10 (ClientRandom $ B.pack [0..31]) (Session Nothing) ciphers [0] []
+clienthello ciphers = ClientHello TLS10 (ClientRandom $ B.pack [0..31]) (Session Nothing) ciphers [0] [] Nothing
 
 openConnection :: String -> String -> [Word16] -> IO (Maybe Word16)
 openConnection s p ciphers = do
