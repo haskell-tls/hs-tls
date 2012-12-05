@@ -93,9 +93,13 @@ processHandshake hs = do
 
 decryptRSA :: ByteString -> TLSSt (Either KxError ByteString)
 decryptRSA econtent = do
+        st  <- get
         ver <- stVersion <$> get
         rsapriv <- fromJust "rsa private key" . hstRSAPrivateKey . fromJust "handshake" . stHandshake <$> get
-        return $ kxDecrypt rsapriv (if ver < TLS10 then econtent else B.drop 2 econtent)
+        let cipher = if ver < TLS10 then econtent else B.drop 2 econtent
+        let (mmsg,rng') = withTLSRNG (stRandomGen st) (\g -> kxDecrypt g rsapriv cipher)
+        put (st { stRandomGen = rng' })
+        return mmsg
 
 verifyRSA :: (ByteString -> ByteString, ByteString) -> ByteString -> ByteString -> TLSSt (Either KxError Bool)
 verifyRSA hsh econtent sign = do

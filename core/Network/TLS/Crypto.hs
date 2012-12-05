@@ -106,8 +106,8 @@ kxEncrypt g (PubRSA pk) b = case RSA.encrypt g pk b of
                                 Left e        -> (Left $ RSAError e, g)
                                 Right (v, g') -> (Right v, g')
 
-kxDecrypt :: PrivateKey -> ByteString -> Either KxError ByteString
-kxDecrypt (PrivRSA pk) b  = generalizeRSAError $ RSA.decrypt pk b
+kxDecrypt :: CPRG g => g -> PrivateKey -> ByteString -> (Either KxError ByteString, g)
+kxDecrypt g (PrivRSA pk) b = (generalizeRSAError $ RSA.decrypt pk b, g)
 
 -- Verify that the signature matches the given message, using the
 -- public key.
