@@ -101,13 +101,17 @@ generalizeRSAError :: Either RSA.Error a -> Either KxError a
 generalizeRSAError (Left e)  = Left (RSAError e)
 generalizeRSAError (Right x) = Right x
 
+generalizeRSAWithRNG :: CPRG g => (Either RSA.Error a, g) -> (Either KxError a, g)
+generalizeRSAWithRNG (Left e, g) = (Left (RSAError e), g)
+generalizeRSAWithRNG (Right x, g) = (Right x, g)
+
 kxEncrypt :: CPRG g => g -> PublicKey -> ByteString -> (Either KxError ByteString, g)
 kxEncrypt g (PubRSA pk) b = case RSA.encrypt g pk b of
                                 Left e        -> (Left $ RSAError e, g)
                                 Right (v, g') -> (Right v, g')
 
 kxDecrypt :: CPRG g => g -> PrivateKey -> ByteString -> (Either KxError ByteString, g)
-kxDecrypt g (PrivRSA pk) b = (generalizeRSAError $ RSA.decrypt pk b, g)
+kxDecrypt g (PrivRSA pk) b = generalizeRSAWithRNG $ RSA.decryptSafer g pk b
 
 -- Verify that the signature matches the given message, using the
 -- public key.
@@ -120,4 +124,4 @@ kxVerify (PubRSA pk) (hashF, hashASN1) msg sign =
 --
 kxSign :: CPRG g => g -> PrivateKey -> (ByteString -> ByteString, ByteString) -> ByteString -> (Either KxError ByteString, g)
 kxSign g (PrivRSA pk) (hashF, hashASN1) msg  =
-    (generalizeRSAError $ RSA.sign hashF hashASN1 pk msg, g)
+    generalizeRSAWithRNG $ RSA.signSafer g hashF hashASN1 pk msg
