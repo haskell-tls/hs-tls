@@ -1,4 +1,4 @@
-module Tests.Connection
+module Connection
         ( newPairContext
         , arbitraryPairParams
         , setPairParamsSessionManager
@@ -6,9 +6,9 @@ module Tests.Connection
         ) where
 
 import Test.QuickCheck
-import Tests.Certificate
-import Tests.PubKey
-import Tests.PipeChan
+import Certificate
+import PubKey
+import PipeChan
 import Network.TLS
 
 import qualified Crypto.Random.AESCtr as RNG

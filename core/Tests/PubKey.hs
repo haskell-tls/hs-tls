@@ -1,4 +1,4 @@
-module Tests.PubKey
+module PubKey
         ( arbitraryRSAPair
         , globalRSAPair
         , getGlobalRSAPair

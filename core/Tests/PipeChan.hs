@@ -1,5 +1,5 @@
 -- create a similar concept than a unix pipe.
-module Tests.PipeChan
+module PipeChan
         ( PipeChan(..)
         , newPipe
         , runPipe

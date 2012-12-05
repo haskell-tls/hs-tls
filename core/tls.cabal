@@ -26,14 +26,6 @@ Cabal-Version:       >=1.8
 Homepage:            http://github.com/vincenthz/hs-tls
 extra-source-files:  Tests/*.hs
 
-Flag test
-  Description:       Build unit test
-  Default:           False
-
-Flag executable
-  Description:       Build the executable
-  Default:           False
-
 Flag compat
   Description:       Accept SSLv2 compatible handshake
   Default:           True
@@ -86,30 +78,24 @@ Library
   if flag(compat)
     cpp-options:     -DSSLV2_COMPATIBLE
 
-executable           Tests
+Test-Suite test-tls
+  type:              exitcode-stdio-1.0
+  hs-source-dirs:    Tests
   Main-is:           Tests.hs
-  if flag(test)
-    Buildable:       True
-    Build-Depends:   base >= 3 && < 5
+  Build-Depends:     base >= 3 && < 5
                    , mtl
                    , cereal >= 0.3
                    , QuickCheck >= 2
                    , test-framework
                    , test-framework-quickcheck2
-                   , bytestring
-                   , time
-                   , cryptocipher >= 0.3.0 && < 0.4.0
+                   , cprng-aes
                    , crypto-pubkey
-                   , network
-                   , cprng-aes >= 0.3.0
-                   , cryptohash >= 0.6
-                   , certificate >= 1.3.0 && < 1.4.0
+                   , bytestring
+                   , certificate
+                   , tls
+                   , time
                    , crypto-random-api
-  else
-    Buildable:       False
   ghc-options:       -Wall -fno-warn-orphans -fno-warn-missing-signatures -fhpc
-  if flag(compat)
-    cpp-options:     -DSSLV2_COMPATIBLE
 
 source-repository head
   type: git

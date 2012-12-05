@@ -1,4 +1,4 @@
-module Tests.Certificate
+module Certificate
         ( arbitraryX509
         , arbitraryX509WithPublicKey
         ) where
@@ -9,7 +9,7 @@ import qualified Data.Certificate.X509.Cert as Cert
 import Data.Time.Calendar (fromGregorian)
 import Data.Time.Clock (secondsToDiffTime)
 
-import Tests.PubKey
+import PubKey
 
 arbitraryDN = return $ Cert.DistinguishedName []
 

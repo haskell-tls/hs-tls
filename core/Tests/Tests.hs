@@ -5,9 +5,9 @@ import Test.QuickCheck.Monadic
 import Test.Framework (defaultMain, testGroup)
 import Test.Framework.Providers.QuickCheck2 (testProperty)
 
-import Tests.Certificate
-import Tests.PipeChan
-import Tests.Connection
+import Certificate
+import PipeChan
+import Connection
 
 import Data.Maybe
 import Data.Word
@@ -16,8 +16,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
 import Network.TLS
-import Network.TLS.Struct
-import Network.TLS.Packet
+import Network.TLS.Internal
 import Control.Applicative
 import Control.Concurrent
 import Control.Exception (throw, SomeException)
