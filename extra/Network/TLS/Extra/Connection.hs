@@ -9,7 +9,7 @@ module Network.TLS.Extra.Connection
 	( connectionClient
 	) where
 
-import Crypto.Random
+import Crypto.Random.Types
 import Control.Applicative ((<$>))
 import Control.Exception
 import Data.Char
@@ -33,7 +33,7 @@ import Network.TLS
 --
 -- will make a new RNG (using system entropy) and connect to IP 192.168.2.2
 -- on port 7777.
-connectionClient :: CryptoRandomGen g => String -> String -> TLSParams -> g -> IO Context
+connectionClient :: CPRG g => String -> String -> TLSParams -> g -> IO Context
 connectionClient s p params rng = do
 	pn <- if and $ map isDigit $ p
 		then return $ fromIntegral $ (read p :: Int)

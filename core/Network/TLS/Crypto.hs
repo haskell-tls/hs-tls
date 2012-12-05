@@ -26,8 +26,9 @@ import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.MD5 as MD5
 import qualified Data.ByteString as B
 import Data.ByteString (ByteString)
-import qualified Crypto.Cipher.RSA as RSA
-import Crypto.Random (CryptoRandomGen)
+import qualified Crypto.PubKey.RSA as RSA
+import qualified Crypto.PubKey.RSA.PKCS15 as RSA
+import Crypto.Random.API
 
 data PublicKey = PubRSA RSA.PublicKey
 
@@ -100,8 +101,10 @@ generalizeRSAError :: Either RSA.Error a -> Either KxError a
 generalizeRSAError (Left e)  = Left (RSAError e)
 generalizeRSAError (Right x) = Right x
 
-kxEncrypt :: CryptoRandomGen g => g -> PublicKey -> ByteString -> Either KxError (ByteString, g)
-kxEncrypt g (PubRSA pk) b = generalizeRSAError $ RSA.encrypt g pk b
+kxEncrypt :: CPRG g => g -> PublicKey -> ByteString -> (Either KxError ByteString, g)
+kxEncrypt g (PubRSA pk) b = case RSA.encrypt g pk b of
+                                Left e        -> (Left $ RSAError e, g)
+                                Right (v, g') -> (Right v, g')
 
 kxDecrypt :: PrivateKey -> ByteString -> Either KxError ByteString
 kxDecrypt (PrivRSA pk) b  = generalizeRSAError $ RSA.decrypt pk b

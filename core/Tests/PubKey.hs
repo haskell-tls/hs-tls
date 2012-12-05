@@ -7,7 +7,7 @@ module Tests.PubKey
 import Test.QuickCheck
 
 import qualified Crypto.Random.AESCtr as RNG
-import qualified Crypto.Cipher.RSA as RSA
+import qualified Crypto.PubKey.RSA as RSA
 
 import qualified Data.ByteString as B
 
@@ -19,9 +19,7 @@ arbitraryRSAPair = do
         rng <- (maybe (error "making rng") id . RNG.make . B.pack) `fmap` vector 64
         arbitraryRSAPairWithRNG rng
 
-arbitraryRSAPairWithRNG rng = case RSA.generate rng 128 65537 of
-        Left _             -> error "couldn't generate RSA"
-        Right (keypair, _) -> return keypair
+arbitraryRSAPairWithRNG rng = return $ fst $ RSA.generate rng 128 0x10001
 
 {-# NOINLINE globalRSAPair #-}
 globalRSAPair :: MVar (RSA.PublicKey, RSA.PrivateKey)

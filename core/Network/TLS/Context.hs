@@ -85,7 +85,7 @@ import Data.List (intercalate)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
-import Crypto.Random
+import Crypto.Random.API
 
 import Control.Concurrent.MVar
 import Control.Monad.State
@@ -333,7 +333,7 @@ ctxLogging :: Context -> Logging
 ctxLogging = pLogging . ctxParams
 
 -- | create a new context using the backend and parameters specified.
-contextNew :: (MonadIO m, CryptoRandomGen rng)
+contextNew :: (MonadIO m, CPRG rng)
            => Backend   -- ^ Backend abstraction with specific method to interacat with the connection type.
            -> Params    -- ^ Parameters of the context.
            -> rng       -- ^ Random number generator associated with this context.
@@ -362,7 +362,7 @@ contextNew backend params rng = liftIO $ do
                 }
 
 -- | create a new context on an handle.
-contextNewOnHandle :: (MonadIO m, CryptoRandomGen rng)
+contextNewOnHandle :: (MonadIO m, CPRG rng)
                    => Handle -- ^ Handle of the connection.
                    -> Params -- ^ Parameters of the context.
                    -> rng    -- ^ Random number generator associated with this context.

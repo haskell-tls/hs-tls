@@ -84,9 +84,11 @@ encryptRSA :: ByteString -> TLSSt ByteString
 encryptRSA content = do
         st <- get
         let rsakey = fromJust "rsa public key" $ hstRSAPublicKey $ fromJust "handshake" $ stHandshake st
-        case withTLSRNG (stRandomGen st) (\g -> kxEncrypt g rsakey content) of
-                Left err               -> fail ("rsa encrypt failed: " ++ show err)
-                Right (econtent, rng') -> put (st { stRandomGen = rng' }) >> return econtent
+            (v,rng') = withTLSRNG (stRandomGen st) (\g -> kxEncrypt g rsakey content)
+         in do put (st { stRandomGen = rng' })
+               case v of
+                    Left err       -> fail ("rsa encrypt failed: " ++ show err)
+                    Right econtent -> return econtent
 
 signRSA :: (ByteString -> ByteString, ByteString) -> ByteString -> TLSSt ByteString
 signRSA hsh content = do

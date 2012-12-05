@@ -89,7 +89,7 @@ import Control.Applicative ((<$>))
 import Control.Monad
 import Control.Monad.State
 import Control.Monad.Error
-import Crypto.Random
+import Crypto.Random.API
 import Data.Certificate.X509
 
 assert :: Monad m => String -> [(String,Bool)] -> m ()
@@ -127,7 +127,7 @@ data TLSHandshakeState = TLSHandshakeState
         , hstClientCertChain :: !(Maybe [X509])
         } deriving (Show)
 
-data StateRNG = forall g . CryptoRandomGen g => StateRNG g
+data StateRNG = forall g . CPRG g => StateRNG g
 
 instance Show StateRNG where
         show _ = "rng[..]"
@@ -178,7 +178,7 @@ instance MonadState TLSState TLSSt where
 runTLSState :: TLSSt a -> TLSState -> (Either TLSError a, TLSState)
 runTLSState f st = runState (runErrorT (runTLSSt f)) st
 
-newTLSState :: CryptoRandomGen g => g -> TLSState
+newTLSState :: CPRG g => g -> TLSState
 newTLSState rng = TLSState
         { stClientContext       = False
         , stVersion             = TLS10
@@ -209,10 +209,9 @@ newTLSState rng = TLSState
         , stClientCertificateChain = Nothing
         }
 
-withTLSRNG :: StateRNG -> (forall g . CryptoRandomGen g => g -> Either e (a,g)) -> Either e (a, StateRNG)
-withTLSRNG (StateRNG rng) f = case f rng of
-        Left err        -> Left err
-        Right (a, rng') -> Right (a, StateRNG rng')
+withTLSRNG :: StateRNG -> (forall g . CPRG g => g -> (a,g)) -> (a, StateRNG)
+withTLSRNG (StateRNG rng) f = let (a, rng') = f rng
+                               in (a, StateRNG rng')
 
 withCompression :: (Compression -> (Compression, a)) -> TLSSt a
 withCompression f = do
@@ -224,9 +223,8 @@ withCompression f = do
 genTLSRandom :: (MonadState TLSState m, MonadError TLSError m) => Int -> m Bytes
 genTLSRandom n = do
         st <- get
-        case withTLSRNG (stRandomGen st) (genBytes n) of
-                Left err            -> throwError $ Error_Random $ show err
-                Right (bytes, rng') -> put (st { stRandomGen = rng' }) >> return bytes
+        case withTLSRNG (stRandomGen st) (\g -> genRandomBytes g n) of
+                (bytes, rng') -> put (st { stRandomGen = rng' }) >> return bytes
 
 makeDigest :: MonadState TLSState m => Bool -> Header -> Bytes -> m Bytes
 makeDigest w hdr content = do
