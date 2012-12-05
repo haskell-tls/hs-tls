@@ -94,7 +94,9 @@ signRSA :: (ByteString -> ByteString, ByteString) -> ByteString -> TLSSt ByteStr
 signRSA hsh content = do
         st <- get
         let rsakey = fromJust "rsa client private key" $ hstRSAClientPrivateKey $ fromJust "handshake" $ stHandshake st
-        case kxSign rsakey hsh content of
+        let (r, rng') = withTLSRNG (stRandomGen st) (\g -> kxSign g rsakey hsh content)
+        put (st { stRandomGen = rng' })
+        case r of
                 Left err       -> fail ("rsa sign failed: " ++ show err)
                 Right econtent -> return econtent
 

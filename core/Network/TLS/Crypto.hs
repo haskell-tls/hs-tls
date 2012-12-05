@@ -118,6 +118,6 @@ kxVerify (PubRSA pk) (hashF, hashASN1) msg sign =
 
 -- Sign the given message using the private key.
 --
-kxSign :: PrivateKey -> (ByteString -> ByteString, ByteString) -> ByteString -> Either KxError ByteString
-kxSign (PrivRSA pk) (hashF, hashASN1) msg  =
-    generalizeRSAError $ RSA.sign hashF hashASN1 pk msg
+kxSign :: CPRG g => g -> PrivateKey -> (ByteString -> ByteString, ByteString) -> ByteString -> (Either KxError ByteString, g)
+kxSign g (PrivRSA pk) (hashF, hashASN1) msg  =
+    (generalizeRSAError $ RSA.sign hashF hashASN1 pk msg, g)
