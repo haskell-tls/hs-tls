@@ -31,7 +31,7 @@ import qualified Data.ByteString as B
 
 import Network.TLS (Version(..))
 import Network.TLS.Cipher
-import qualified Crypto.Cipher.RC4 as RC4
+import qualified "cipher-rc4" Crypto.Cipher.RC4 as RC4
 
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Crypto.Hash.SHA1 as SHA1
@@ -74,22 +74,19 @@ aes256_cbc_decrypt key iv d = AES.decryptCBC pkey iv d
 #endif
 
 toIV :: RC4.Ctx -> IV
-toIV (v, x, y) = B.pack (x : y : Vector.toList v)
+toIV (RC4.Ctx ctx) = ctx
 
 toCtx :: IV -> RC4.Ctx
-toCtx iv =
-	case B.unpack iv of
-		x:y:l -> (Vector.fromList l, x, y)
-		_     -> (Vector.fromList [], 0, 0)
+toCtx iv = RC4.Ctx iv
 
 initF_rc4 :: Key -> IV
-initF_rc4 key     = toIV $ RC4.initCtx (B.unpack key)
+initF_rc4 key     = toIV $ RC4.initCtx key
 
 encryptF_rc4 :: IV -> B.ByteString -> (B.ByteString, IV)
-encryptF_rc4 iv d = (\(ctx, e) -> (e, toIV ctx)) $ RC4.encrypt (toCtx iv) d
+encryptF_rc4 iv d = (\(ctx, e) -> (e, toIV ctx)) $ RC4.combine (toCtx iv) d
 
 decryptF_rc4 :: IV -> B.ByteString -> (B.ByteString, IV)
-decryptF_rc4 iv e = (\(ctx, d) -> (d, toIV ctx)) $ RC4.decrypt (toCtx iv) e
+decryptF_rc4 iv e = (\(ctx, d) -> (d, toIV ctx)) $ RC4.combine (toCtx iv) e
 
 
 -- | all encrypted ciphers supported ordered from strong to weak.
