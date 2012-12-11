@@ -9,7 +9,7 @@ module Network.TLS.Extra.Connection
 	( connectionClient
 	) where
 
-import Crypto.Random.Types
+import Crypto.Random.API
 import Control.Applicative ((<$>))
 import Control.Exception
 import Data.Char
