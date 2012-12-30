@@ -146,7 +146,7 @@ data ServerParams = ServerParams
           -- cannot be verified.  A 'Nothing' argument indicates a
           -- wrong signature, a 'Just e' message signals a crypto
           -- error.
-        , onUnverifiedClientCert :: Maybe KxError -> IO Bool
+        , onUnverifiedClientCert :: IO Bool
 
         , onCipherChoosing        :: Version -> [Cipher] -> Cipher -- ^ callback on server to modify the cipher chosen.
         }
@@ -221,7 +221,7 @@ defaultParamsServer = defaultParamsClient { roleParams = Server role }
                    , onCipherChoosing       = \_ -> head
                    , serverCACertificates   = []
                    , onClientCertificate    = \ _ -> return $ CertificateUsageReject $ CertificateRejectOther "no client certificates expected"
-                   , onUnverifiedClientCert = \ _ -> return False
+                   , onUnverifiedClientCert = return False
                    }
 
 updateRoleParams :: (ClientParams -> ClientParams) -> (ServerParams -> ServerParams) -> Params -> Params

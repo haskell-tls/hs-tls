@@ -90,7 +90,7 @@ encryptRSA content = do
                     Left err       -> fail ("rsa encrypt failed: " ++ show err)
                     Right econtent -> return econtent
 
-signRSA :: (ByteString -> ByteString, ByteString) -> ByteString -> TLSSt ByteString
+signRSA :: HashDescr -> ByteString -> TLSSt ByteString
 signRSA hsh content = do
         st <- get
         let rsakey = fromJust "rsa client private key" $ hstRSAClientPrivateKey $ fromJust "handshake" $ stHandshake st

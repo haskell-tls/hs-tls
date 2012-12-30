@@ -101,7 +101,7 @@ decryptRSA econtent = do
         put (st { stRandomGen = rng' })
         return mmsg
 
-verifyRSA :: (ByteString -> ByteString, ByteString) -> ByteString -> ByteString -> TLSSt (Either KxError Bool)
+verifyRSA :: HashDescr -> ByteString -> ByteString -> TLSSt Bool
 verifyRSA hsh econtent sign = do
         rsapriv <- fromJust "rsa client public key" . hstRSAClientPublicKey . fromJust "handshake" . stHandshake <$> get
         return $ kxVerify rsapriv hsh econtent sign

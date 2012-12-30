@@ -231,14 +231,14 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                             SSL3 -> do
                                 Just masterSecret <- usingState_ ctx $ getMasterSecret
                                 let digest = generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit hashMD5SHA1) msgs)
-                                    hsh = (id, "")
+                                    hsh = HashDescr id id
 
                                 sigDig <- usingState_ ctx $ signRSA hsh digest
                                 sendPacket ctx $ Handshake [CertVerify Nothing (CertVerifyData sigDig)]
 
                             x | x == TLS10 || x == TLS11 -> do
                                 let hashf bs = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs)
-                                    hsh = (hashf, "")
+                                    hsh = HashDescr hashf id
 
                                 sigDig <- usingState_ ctx $ signRSA hsh msgs
                                 sendPacket ctx $ Handshake [CertVerify Nothing (CertVerifyData sigDig)]

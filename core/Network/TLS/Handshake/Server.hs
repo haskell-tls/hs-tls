@@ -258,12 +258,12 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                         SSL3 -> do
                             Just masterSecret <- usingState_ ctx $ getMasterSecret
                             let digest = generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit hashMD5SHA1) msgs)
-                                hsh = (id, "")
+                                hsh = HashDescr id id
                             return (digest, hsh)
 
                         x | x == TLS10 || x == TLS11 -> do
                             let hashf bs' = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs')
-                                hsh = (hashf, "")
+                                hsh = HashDescr hashf id
                             return (msgs,hsh)
                         _ -> do
                             let Just sentHashSig = mbHashSig
@@ -274,7 +274,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                     verif <- usingState_ ctx $ verifyRSA hsh signature bs
 
                     case verif of
-                        Right True -> do
+                        True -> do
                             -- When verification succeeds, commit the
                             -- client certificate chain to the context.
                             --
@@ -282,16 +282,13 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                             usingState_ ctx $ setClientCertificateChain certs
                             return ()
 
-                        _ -> do
+                        False -> do
                             -- Either verification failed because of an
                             -- invalid format (with an error message), or
                             -- the signature is wrong.  In either case,
                             -- ask the application if it wants to
                             -- proceed, we will do that.
-                            let arg = case verif of
-                                    Left err -> Just err
-                                    _        -> Nothing
-                            res <- liftIO $ onUnverifiedClientCert sparams arg
+                            res <- liftIO $ onUnverifiedClientCert sparams
                             if res
                                 then do
                                     -- When verification fails, but the
@@ -300,10 +297,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                                     -- chain to the context.
                                     Just certs <- usingState_ ctx $ getClientCertChain
                                     usingState_ ctx $ setClientCertificateChain certs
-                                else do
-                                    case verif of
-                                        Left err -> throwCore $ Error_Protocol (show err, True, DecryptError)
-                                        _        -> throwCore $ Error_Protocol ("verification failed", True, BadCertificate)
+                                else throwCore $ Error_Protocol ("verification failed", True, BadCertificate)
                     return $ RecvStateNext expectChangeCipher
 
                 processCertificateVerify p = do
