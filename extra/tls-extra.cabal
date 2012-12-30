@@ -47,7 +47,7 @@ Library
   ghc-options:       -Wall -fno-warn-missing-signatures
   if os(windows)
     cpp-options:     -DNOCERTVERIFY
-  if os(linux) && flag(fastaes) && (arch(i386) || arch(x86_64))
+  if flag(fastaes) && (arch(i386) || arch(x86_64))
     cpp-options:     -DCIPHER_AES
     Build-Depends:   cipher-aes >= 0.1 && < 0.2
 
@@ -64,7 +64,7 @@ executable           Tests
     Buildable:       False
   if os(windows)
     cpp-options:     -DNOCERTVERIFY
-  if os(linux) && flag(fastaes)
+  if flag(fastaes)
     cpp-options:     -DCIPHER_AES
     Build-Depends:   cipher-aes >= 0.1 && < 0.2
 
