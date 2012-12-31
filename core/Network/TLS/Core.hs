@@ -96,7 +96,7 @@ recvData ctx = checkValid ctx >> recvPacket ctx >>= either onError process
                                   terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
                 Client cparams -> handshakeClient cparams ctx >> recvData ctx
 
-          process (Alert [(AlertLevel_Warning, CloseNotify)]) = setEOF ctx >> return B.empty
+          process (Alert [(AlertLevel_Warning, CloseNotify)]) = tryBye >> setEOF ctx >> return B.empty
           process (Alert [(AlertLevel_Fatal, desc)]) = do
             setEOF ctx
             liftIO $ E.throwIO (Terminated True ("received fatal error: " ++ show desc) (Error_Protocol ("remote side fatal error", True, desc)))
@@ -117,6 +117,9 @@ recvData ctx = checkValid ctx >> recvPacket ctx >>= either onError process
             setEOF ctx
             liftIO $ E.throwIO (Terminated False reason err)
 
+          -- the other side could have close the connection already, so wrap
+          -- this in a try and ignore all exceptions
+          tryBye = liftIO $ E.catch (bye ctx) (\(_ :: E.SomeException) -> return ())
 
 {-# DEPRECATED recvData' "use recvData that returns strict bytestring" #-}
 -- | same as recvData but returns a lazy bytestring.
