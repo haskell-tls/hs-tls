@@ -67,34 +67,34 @@ sendData ctx dataToSend = checkValid ctx >> mapM_ sendDataChunk (L.toChunks data
 -- a Handshake ClientHello is received
 recvData :: MonadIO m => Context -> m B.ByteString
 recvData ctx = do
-        checkValid ctx
-        pkt <- recvPacket ctx
-        case pkt of
-                -- on server context receiving a client hello == renegotiation
-                Right (Handshake [(ClientHello _ _ _ _ _ _ (Just _))]) ->
-                        -- reject renegotiation with SSLv2 header
-                        case roleParams $ ctxParams ctx of
-                            Server _  -> error "assert, deprecated hello request in server context"
-                            Client {} -> error "assert, unexpected client hello in client context"
-                Right (Handshake [ch@(ClientHello {})]) ->
-                        case roleParams $ ctxParams ctx of
-                            Server sparams -> handshakeServerWith sparams ctx ch >> recvData ctx
-                            Client {}      -> error "assert, unexpected client hello in client context"
-                -- on client context, receiving a hello request == renegotiation
-                Right (Handshake [HelloRequest]) ->
-                        case roleParams $ ctxParams ctx of
-                            Server {}      -> error "assert, unexpected hello request in server context"
-                            Client cparams -> handshakeClient cparams ctx >> recvData ctx
-                Right (Alert [(AlertLevel_Fatal, _)]) -> do
-                        setEOF ctx
-                        return B.empty
-                Right (Alert [(AlertLevel_Warning, CloseNotify)]) -> do
-                        setEOF ctx
-                        return B.empty
-                Right (AppData "") -> recvData ctx
-                Right (AppData x)  -> return x
-                Right p            -> error ("error unexpected packet: " ++ show p)
-                Left err           -> error ("error received: " ++ show err)
+    checkValid ctx
+    pkt <- recvPacket ctx
+    case pkt of
+        -- on server context receiving a client hello == renegotiation
+        Right (Handshake [(ClientHello _ _ _ _ _ _ (Just _))]) ->
+            -- reject renegotiation with SSLv2 header
+            case roleParams $ ctxParams ctx of
+                Server _  -> error "assert, deprecated hello request in server context"
+                Client {} -> error "assert, unexpected client hello in client context"
+        Right (Handshake [ch@(ClientHello {})]) ->
+            case roleParams $ ctxParams ctx of
+                Server sparams -> handshakeServerWith sparams ctx ch >> recvData ctx
+                Client {}      -> error "assert, unexpected client hello in client context"
+        -- on client context, receiving a hello request == renegotiation
+        Right (Handshake [HelloRequest]) ->
+            case roleParams $ ctxParams ctx of
+                Server {}      -> error "assert, unexpected hello request in server context"
+                Client cparams -> handshakeClient cparams ctx >> recvData ctx
+        Right (Alert [(AlertLevel_Fatal, _)]) -> do
+            setEOF ctx
+            return B.empty
+        Right (Alert [(AlertLevel_Warning, CloseNotify)]) -> do
+            setEOF ctx
+            return B.empty
+        Right (AppData "") -> recvData ctx
+        Right (AppData x)  -> return x
+        Right p            -> error ("error unexpected packet: " ++ show p)
+        Left err           -> error ("error received: " ++ show err)
 
 {-# DEPRECATED recvData' "use recvData that returns strict bytestring" #-}
 -- | same as recvData but returns a lazy bytestring.
