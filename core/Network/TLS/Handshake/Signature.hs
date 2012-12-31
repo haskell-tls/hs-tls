@@ -16,11 +16,10 @@ import Network.TLS.Struct
 
 import Control.Monad.State
 
-import qualified Data.ByteString as B
-
 getHashAndASN1 :: MonadIO m => (HashAlgorithm, SignatureAlgorithm) -> m HashDescr
 getHashAndASN1 hashSig = do
   case hashSig of
+    (HashSHA1,   SignatureRSA) -> return hashDescrSHA1
     (HashSHA224, SignatureRSA) -> return hashDescrSHA224
     (HashSHA256, SignatureRSA) -> return hashDescrSHA256
     (HashSHA384, SignatureRSA) -> return hashDescrSHA384
