@@ -91,6 +91,7 @@ module Network.TLS
     , AlertDescription(..)
 
     -- * Exceptions
+    , Terminated(..)
     , HandshakeFailed(..)
     , ConnectionNotEstablished(..)
     ) where
