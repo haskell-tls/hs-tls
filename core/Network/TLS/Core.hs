@@ -31,7 +31,9 @@ module Network.TLS.Core
 
 import Network.TLS.Context
 import Network.TLS.Struct
+import Network.TLS.State (getSession)
 import Network.TLS.IO
+import Network.TLS.Session
 import Network.TLS.Handshake
 import Data.Typeable
 import qualified Network.TLS.State as S
@@ -75,27 +77,46 @@ sendData ctx dataToSend = checkValid ctx >> mapM_ sendDataChunk (L.toChunks data
 -- | recvData get data out of Data packet, and automatically renegotiate if
 -- a Handshake ClientHello is received
 recvData :: MonadIO m => Context -> m B.ByteString
-recvData ctx = checkValid ctx >> recvPacket ctx >>= either packetError process
-    where packetError err = error ("error received: " ++ show err)
+recvData ctx = checkValid ctx >> recvPacket ctx >>= either onError process
+    where onError err@(Error_Protocol (reason,fatal,desc)) =
+            terminate err (if fatal then AlertLevel_Fatal else AlertLevel_Warning) desc reason
+          onError err =
+            terminate err AlertLevel_Fatal InternalError (show err)
 
           process (Handshake [ch@(ClientHello {})]) =
             -- on server context receiving a client hello == renegotiation
             case roleParams $ ctxParams ctx of
                 Server sparams -> handshakeServerWith sparams ctx ch >> recvData ctx
-                Client {}      -> error "assert, unexpected client hello in client context"
+                Client {}      -> let reason = "unexpected client hello in client context" in
+                                  terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
           process (Handshake [HelloRequest]) =
             -- on client context, receiving a hello request == renegotiation
             case roleParams $ ctxParams ctx of
-                Server {}      -> error "assert, unexpected hello request in server context"
+                Server {}      -> let reason = "unexpected hello request in server context" in
+                                  terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
                 Client cparams -> handshakeClient cparams ctx >> recvData ctx
 
           process (Alert [(AlertLevel_Warning, CloseNotify)]) = setEOF ctx >> return B.empty
-          process (Alert [(AlertLevel_Fatal, _)]) = setEOF ctx >> return B.empty
+          process (Alert [(AlertLevel_Fatal, desc)]) = do
+            setEOF ctx
+            liftIO $ E.throwIO (Terminated True ("received fatal error: " ++ show desc) (Error_Protocol ("remote side fatal error", True, desc)))
 
           -- when receiving empty appdata, we just retry to get some data.
           process (AppData "") = recvData ctx
           process (AppData x)  = return x
-          process p            = error ("error unexpected packet: " ++ show p)
+          process p            = let reason = "unexpected message " ++ show p in
+                                 terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+
+          terminate :: MonadIO m => TLSError -> AlertLevel -> AlertDescription -> String -> m a
+          terminate err level desc reason = do
+            session <- usingState_ ctx getSession
+            case session of
+                Session Nothing    -> return ()
+                Session (Just sid) -> withSessionManager (ctxParams ctx) (\s -> liftIO $ sessionInvalidate s sid)
+            liftIO $ E.catch (sendPacket ctx $ Alert [(level, desc)]) (\(_ :: E.SomeException) -> return ())
+            setEOF ctx
+            liftIO $ E.throwIO (Terminated False reason err)
+
 
 {-# DEPRECATED recvData' "use recvData that returns strict bytestring" #-}
 -- | same as recvData but returns a lazy bytestring.
