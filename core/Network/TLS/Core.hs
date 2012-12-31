@@ -66,35 +66,27 @@ sendData ctx dataToSend = checkValid ctx >> mapM_ sendDataChunk (L.toChunks data
 -- | recvData get data out of Data packet, and automatically renegotiate if
 -- a Handshake ClientHello is received
 recvData :: MonadIO m => Context -> m B.ByteString
-recvData ctx = do
-    checkValid ctx
-    pkt <- recvPacket ctx
-    case pkt of
-        -- on server context receiving a client hello == renegotiation
-        Right (Handshake [(ClientHello _ _ _ _ _ _ (Just _))]) ->
-            -- reject renegotiation with SSLv2 header
-            case roleParams $ ctxParams ctx of
-                Server _  -> error "assert, deprecated hello request in server context"
-                Client {} -> error "assert, unexpected client hello in client context"
-        Right (Handshake [ch@(ClientHello {})]) ->
+recvData ctx = checkValid ctx >> recvPacket ctx >>= either packetError process
+    where packetError err = error ("error received: " ++ show err)
+
+          process (Handshake [ch@(ClientHello {})]) =
+            -- on server context receiving a client hello == renegotiation
             case roleParams $ ctxParams ctx of
                 Server sparams -> handshakeServerWith sparams ctx ch >> recvData ctx
                 Client {}      -> error "assert, unexpected client hello in client context"
-        -- on client context, receiving a hello request == renegotiation
-        Right (Handshake [HelloRequest]) ->
+          process (Handshake [HelloRequest]) =
+            -- on client context, receiving a hello request == renegotiation
             case roleParams $ ctxParams ctx of
                 Server {}      -> error "assert, unexpected hello request in server context"
                 Client cparams -> handshakeClient cparams ctx >> recvData ctx
-        Right (Alert [(AlertLevel_Fatal, _)]) -> do
-            setEOF ctx
-            return B.empty
-        Right (Alert [(AlertLevel_Warning, CloseNotify)]) -> do
-            setEOF ctx
-            return B.empty
-        Right (AppData "") -> recvData ctx
-        Right (AppData x)  -> return x
-        Right p            -> error ("error unexpected packet: " ++ show p)
-        Left err           -> error ("error received: " ++ show err)
+
+          process (Alert [(AlertLevel_Warning, CloseNotify)]) = setEOF ctx >> return B.empty
+          process (Alert [(AlertLevel_Fatal, _)]) = setEOF ctx >> return B.empty
+
+          -- when receiving empty appdata, we just retry to get some data.
+          process (AppData "") = recvData ctx
+          process (AppData x)  = return x
+          process p            = error ("error unexpected packet: " ++ show p)
 
 {-# DEPRECATED recvData' "use recvData that returns strict bytestring" #-}
 -- | same as recvData but returns a lazy bytestring.
