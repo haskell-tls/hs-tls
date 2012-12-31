@@ -379,6 +379,7 @@ isSessionResuming = gets stSessionResuming
 needEmptyPacket :: MonadState TLSState m => m Bool
 needEmptyPacket = gets f
     where f st = (stVersion st <= TLS10)
+              && stClientContext st
               && (maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stActiveTxCipher st))
 
 setKeyBlock :: MonadState TLSState m => m ()
