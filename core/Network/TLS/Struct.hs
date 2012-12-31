@@ -117,15 +117,10 @@ data TLSError =
         | Error_Protocol (String, Bool, AlertDescription)
         | Error_Certificate String
         | Error_HandshakePolicy String -- ^ handshake policy failed.
-        | Error_Random String
         | Error_EOF
         | Error_Packet String
-        | Error_Packet_Size_Mismatch (Int, Int)
         | Error_Packet_unexpected String String
         | Error_Packet_Parsing String
-        | Error_Internal_Packet_ByteProcessed Int Int Int
-        | Error_Unknown_Version Word8 Word8
-        | Error_Unknown_Type String
         deriving (Eq, Show, Typeable)
 
 instance Error TLSError where
