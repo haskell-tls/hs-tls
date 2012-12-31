@@ -334,7 +334,7 @@ ctxLogging = pLogging . ctxParams
 
 -- | create a new context using the backend and parameters specified.
 contextNew :: (MonadIO m, CPRG rng)
-           => Backend   -- ^ Backend abstraction with specific method to interacat with the connection type.
+           => Backend   -- ^ Backend abstraction with specific method to interact with the connection type.
            -> Params    -- ^ Parameters of the context.
            -> rng       -- ^ Random number generator associated with this context.
            -> m Context
