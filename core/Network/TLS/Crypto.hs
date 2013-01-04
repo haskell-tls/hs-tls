@@ -45,10 +45,6 @@ instance Show PrivateKey where
 data KxError = RSAError RSA.Error
         deriving (Show)
 
-data KeyXchg =
-          KxRSA RSA.PublicKey RSA.PrivateKey
-        deriving (Show)
-
 class HashCtxC a where
         hashCName      :: a -> String
         hashCInit      :: a -> a
