@@ -30,8 +30,8 @@ Library
                    , cryptohash >= 0.6
                    , bytestring
                    , vector
-                   , cryptocipher >= 0.3.0 && < 0.4.0
                    , cipher-rc4
+                   , cipher-aes >= 0.1 && < 0.2
                    , certificate >= 1.3.0 && < 1.4.0
                    , crypto-random-api
                    , pem >= 0.1.0 && < 0.2.0
@@ -47,9 +47,6 @@ Library
   ghc-options:       -Wall -fno-warn-missing-signatures
   if os(windows)
     cpp-options:     -DNOCERTVERIFY
-  if flag(fastaes) && (arch(i386) || arch(x86_64))
-    cpp-options:     -DCIPHER_AES
-    Build-Depends:   cipher-aes >= 0.1 && < 0.2
 
 executable           Tests
   Main-is:           Tests.hs

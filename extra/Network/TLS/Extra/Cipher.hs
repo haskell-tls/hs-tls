@@ -37,9 +37,7 @@ import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.MD5 as MD5
 
-#ifdef CIPHER_AES
 import qualified "cipher-aes" Crypto.Cipher.AES as AES
-
 
 aes_cbc_encrypt :: Key -> IV -> B.ByteString -> B.ByteString
 aes_cbc_encrypt key iv d = AES.encryptCBC (AES.initKey key) (AES.IV iv) d
@@ -51,27 +49,6 @@ aes128_cbc_encrypt = aes_cbc_encrypt
 aes128_cbc_decrypt = aes_cbc_decrypt
 aes256_cbc_encrypt = aes_cbc_encrypt
 aes256_cbc_decrypt = aes_cbc_decrypt
-
-#else
-import qualified "cryptocipher" Crypto.Cipher.AES as AES
-
-aes128_cbc_encrypt :: Key -> IV -> B.ByteString -> B.ByteString
-aes128_cbc_encrypt key iv d = AES.encryptCBC pkey iv d
-	where (Right pkey) = AES.initKey128 key
-
-aes128_cbc_decrypt :: Key -> IV -> B.ByteString -> B.ByteString
-aes128_cbc_decrypt key iv d = AES.decryptCBC pkey iv d
-	where (Right pkey) = AES.initKey128 key
-
-aes256_cbc_encrypt :: Key -> IV -> B.ByteString -> B.ByteString
-aes256_cbc_encrypt key iv d = AES.encryptCBC pkey iv d
-	where (Right pkey) = AES.initKey256 key
-
-aes256_cbc_decrypt :: Key -> IV -> B.ByteString -> B.ByteString
-aes256_cbc_decrypt key iv d = AES.decryptCBC pkey iv d
-	where (Right pkey) = AES.initKey256 key
-
-#endif
 
 toIV :: RC4.Ctx -> IV
 toIV (RC4.Ctx ctx) = ctx
