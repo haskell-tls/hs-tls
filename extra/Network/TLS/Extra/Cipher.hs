@@ -26,7 +26,6 @@ module Network.TLS.Extra.Cipher
 	, cipher_AES256_SHA256
 	) where
 
-import qualified Data.Vector.Unboxed as Vector (fromList, toList)
 import qualified Data.ByteString as B
 
 import Network.TLS (Version(..))

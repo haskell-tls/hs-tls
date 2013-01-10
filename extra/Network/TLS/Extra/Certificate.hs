@@ -23,10 +23,9 @@ import Data.Certificate.X509
 
 -- for signing/verifying certificate
 import qualified Crypto.Hash.SHA1 as SHA1
-import qualified Crypto.Hash.MD2 as MD2
-import qualified Crypto.Hash.MD5 as MD5
-import qualified Crypto.Cipher.RSA as RSA
-import qualified Crypto.Cipher.DSA as DSA
+import qualified Crypto.PubKey.HashDescr as HD
+import qualified Crypto.PubKey.RSA.PKCS15 as RSA
+import qualified Crypto.PubKey.DSA as DSA
 
 import Data.CertificateStore
 import Data.Certificate.X509.Cert (oidCommonName)
@@ -110,15 +109,12 @@ certificateVerifyChain store = certificateVerifyChain_ store . reorderList
 -- | verify a certificate against another one.
 -- the first certificate need to be signed by the second one for this function to succeed.
 certificateVerifyAgainst :: X509 -> X509 -> IO Bool
-certificateVerifyAgainst ux509@(X509 _ _ _ sigalg sig) (X509 scert _ _ _ _) = do
-	let f = verifyF sigalg pk
-	case f udata esig of
-		Right True -> return True
-		_          -> return False
-	where
-		udata = B.concat $ L.toChunks $ getSigningData ux509
-		esig  = B.pack sig
-		pk    = certPubKey scert
+certificateVerifyAgainst ux509@(X509 _ _ _ sigalg sig) (X509 scert _ _ _ _) =
+    return $ (verifyF sigalg pk) udata esig
+    where
+        udata = B.concat $ L.toChunks $ getSigningData ux509
+        esig  = B.pack sig
+        pk    = certPubKey scert
 
 -- | Is this certificate self signed?
 certificateSelfSigned :: X509 -> Bool
@@ -128,7 +124,7 @@ certMatchDN :: X509 -> X509 -> Bool
 certMatchDN (X509 testedCert _ _ _ _) (X509 issuerCert _ _ _ _) =
 	certSubjectDN issuerCert == certIssuerDN testedCert
 
-verifyF :: SignatureALG -> PubKey -> B.ByteString -> B.ByteString -> Either String Bool
+verifyF :: SignatureALG -> PubKey -> B.ByteString -> B.ByteString -> Bool
 
 -- md[245]WithRSAEncryption:
 --
@@ -137,23 +133,15 @@ verifyF :: SignatureALG -> PubKey -> B.ByteString -> B.ByteString -> Either Stri
 --   md2WithRSAEncryption OBJECT IDENTIFIER ::= { pkcs-1 2 }
 --   md4WithRSAEncryption OBJECT IDENTIFIER ::= { pkcs-1 3 }
 --   md5WithRSAEncryption OBJECT IDENTIFIER ::= { pkcs-1 4 }
-verifyF (SignatureALG HashMD2 PubKeyALG_RSA) (PubKeyRSA rsak) = rsaVerify MD2.hash asn1 rsak
-	where asn1 = "\x30\x20\x30\x0c\x06\x08\x2a\x86\x48\x86\xf7\x0d\x02\x05\x05\x00\x02\x10"
-
-verifyF (SignatureALG HashMD5 PubKeyALG_RSA) (PubKeyRSA rsak) = rsaVerify MD5.hash asn1 rsak
-	where asn1 = "\x30\x20\x30\x0c\x06\x08\x2a\x86\x48\x86\xf7\x0d\x02\x05\x05\x00\x04\x10"
-
-verifyF (SignatureALG HashSHA1 PubKeyALG_RSA) (PubKeyRSA rsak) = rsaVerify SHA1.hash asn1 rsak
-	where asn1 = "\x30\x21\x30\x09\x06\x05\x2b\x0e\x03\x02\x1a\x05\x00\x04\x14"
-
+verifyF (SignatureALG HashMD2 PubKeyALG_RSA) (PubKeyRSA rsak) = RSA.verify HD.hashDescrMD2 rsak
+verifyF (SignatureALG HashMD5 PubKeyALG_RSA) (PubKeyRSA rsak) = RSA.verify HD.hashDescrMD5 rsak
+verifyF (SignatureALG HashSHA1 PubKeyALG_RSA) (PubKeyRSA rsak) = RSA.verify HD.hashDescrSHA1 rsak
 verifyF (SignatureALG HashSHA1 PubKeyALG_DSA) (PubKeyDSA dsak) = dsaSHA1Verify dsak
 			
-verifyF _ _ = (\_ _ -> Left "unexpected/wrong signature")
+verifyF _ _ = \_ _ -> False
 
-dsaSHA1Verify pk _ b = either (Left . show) (Right) $ DSA.verify asig SHA1.hash pk b
+dsaSHA1Verify pk _ b = DSA.verify SHA1.hash pk asig b
 	where asig = (0,0) {- FIXME : need to work out how to get R/S from the bytestring a -}
-
-rsaVerify h hdesc pk a b = either (Left . show) (Right) $ RSA.verify h hdesc pk a b
 
 -- | Verify that the given certificate chain is application to the given fully qualified host name.
 certificateVerifyDomain :: String -> [X509] -> CertificateUsage

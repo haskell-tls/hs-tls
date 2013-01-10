@@ -35,9 +35,6 @@ import System.IO
 
 import Network.Socket
 
-import qualified Data.Certificate.KeyRSA as KeyRSA
-import qualified Crypto.Cipher.RSA as RSA
-
 someWords8 :: Int -> Gen [Word8] 
 someWords8 i = replicateM i (fromIntegral <$> (choose (0,255) :: Gen Int))
 
