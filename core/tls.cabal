@@ -94,7 +94,7 @@ Test-Suite test-tls
                    , tls
                    , time
                    , crypto-random-api
-  ghc-options:       -Wall -fno-warn-orphans -fno-warn-missing-signatures -fhpc
+  ghc-options:       -Wall -fno-warn-orphans -fno-warn-missing-signatures
 
 source-repository head
   type: git
