@@ -26,12 +26,12 @@ import Network.TLS
 -- 
 -- @
 -- import Network.TLS.Extra
--- import Crypto.Random
+-- import Crypto.Random.AESCtr
 -- ...
---   conn <- (newGenIO::IO SystemRandom) >>= connectionClient 192.168.2.2 7777 defaultParams g
+--   conn <- makeSystem >>= connectionClient 192.168.2.2 7777 defaultParams
 -- @
 --
--- will make a new RNG (using system entropy) and connect to IP 192.168.2.2
+-- will make a new RNG (using cprng-aes) and connect to IP 192.168.2.2
 -- on port 7777.
 connectionClient :: CPRG g => String -> String -> TLSParams -> g -> IO Context
 connectionClient s p params rng = do
