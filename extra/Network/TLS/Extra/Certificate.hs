@@ -7,14 +7,14 @@
 -- Portability : unknown
 --
 module Network.TLS.Extra.Certificate
-	( certificateChecks
-	, certificateVerifyChain
-	, certificateVerifyAgainst
-	, certificateSelfSigned
-	, certificateVerifyDomain
-	, certificateVerifyValidity
-	, certificateFingerprint
-	) where
+    ( certificateChecks
+    , certificateVerifyChain
+    , certificateVerifyAgainst
+    , certificateSelfSigned
+    , certificateVerifyDomain
+    , certificateVerifyValidity
+    , certificateFingerprint
+    ) where
 
 import Control.Applicative ((<$>))
 import qualified Data.ByteString as B
@@ -40,7 +40,7 @@ import System.IO (hPutStrLn, stderr, hIsTerminalDevice)
 import Control.Monad (when)
 #endif
 
--- | Returns 'CertificateUsageAccept' if all the checks pass, or the first 
+-- | Returns 'CertificateUsageAccept' if all the checks pass, or the first
 --   failure.
 certificateChecks :: [ [X509] -> IO CertificateUsage ] -> [X509] -> IO CertificateUsage
 certificateChecks checks x509s =
@@ -67,20 +67,20 @@ certificateVerifyChain_ _ _ = do
 certificateVerifyChain_ :: CertificateStore -> [X509] -> IO CertificateUsage
 certificateVerifyChain_ _     []     = return $ CertificateUsageReject (CertificateRejectOther "empty chain / no certificates")
 certificateVerifyChain_ store (x:xs) =
-	-- find a matching certificate that we trust (== installed on the system)
-	case findCertificate (certIssuerDN $ x509Cert x) store of
-		Just sysx509 -> do
-			validChain <- certificateVerifyAgainst x sysx509
-			if validChain
-				then return CertificateUsageAccept
-				else return $ CertificateUsageReject (CertificateRejectOther "chain doesn't match each other")
-		Nothing      -> case xs of
-			[] -> return $ CertificateUsageReject CertificateRejectUnknownCA
-			_  -> do
-				validChain <- certificateVerifyAgainst x (head xs)
-				if validChain
-					then certificateVerifyChain_ store xs
-					else return $ CertificateUsageReject (CertificateRejectOther "chain doesn't match each other")
+    -- find a matching certificate that we trust (== installed on the system)
+    case findCertificate (certIssuerDN $ x509Cert x) store of
+        Just sysx509 -> do
+            validChain <- certificateVerifyAgainst x sysx509
+            if validChain
+                then return CertificateUsageAccept
+                else return $ CertificateUsageReject (CertificateRejectOther "chain doesn't match each other")
+        Nothing      -> case xs of
+            [] -> return $ CertificateUsageReject CertificateRejectUnknownCA
+            _  -> do
+                validChain <- certificateVerifyAgainst x (head xs)
+                if validChain
+                    then certificateVerifyChain_ store xs
+                    else return $ CertificateUsageReject (CertificateRejectOther "chain doesn't match each other")
 #endif
 
 -- | verify a certificates chain using the system certificates available.
@@ -99,12 +99,12 @@ certificateVerifyChain_ store (x:xs) =
 -- the rejection reason.
 certificateVerifyChain :: CertificateStore -> [X509] -> IO CertificateUsage
 certificateVerifyChain store = certificateVerifyChain_ store . reorderList
-	where
-		reorderList []     = []
-		reorderList (x:xs) =
-			case find (certMatchDN x) xs of
-				Nothing    -> x : reorderList xs
-				Just found -> x : found : reorderList (filter (/= found) xs)
+    where
+        reorderList []     = []
+        reorderList (x:xs) =
+            case find (certMatchDN x) xs of
+                Nothing    -> x : reorderList xs
+                Just found -> x : found : reorderList (filter (/= found) xs)
 
 -- | verify a certificate against another one.
 -- the first certificate need to be signed by the second one for this function to succeed.
@@ -122,7 +122,7 @@ certificateSelfSigned x509 = certMatchDN x509 x509
 
 certMatchDN :: X509 -> X509 -> Bool
 certMatchDN (X509 testedCert _ _ _ _) (X509 issuerCert _ _ _ _) =
-	certSubjectDN issuerCert == certIssuerDN testedCert
+    certSubjectDN issuerCert == certIssuerDN testedCert
 
 verifyF :: SignatureALG -> PubKey -> B.ByteString -> B.ByteString -> Bool
 
@@ -137,63 +137,63 @@ verifyF (SignatureALG HashMD2 PubKeyALG_RSA) (PubKeyRSA rsak) = RSA.verify HD.ha
 verifyF (SignatureALG HashMD5 PubKeyALG_RSA) (PubKeyRSA rsak) = RSA.verify HD.hashDescrMD5 rsak
 verifyF (SignatureALG HashSHA1 PubKeyALG_RSA) (PubKeyRSA rsak) = RSA.verify HD.hashDescrSHA1 rsak
 verifyF (SignatureALG HashSHA1 PubKeyALG_DSA) (PubKeyDSA dsak) = dsaSHA1Verify dsak
-			
+
 verifyF _ _ = \_ _ -> False
 
 dsaSHA1Verify pk _ b = DSA.verify SHA1.hash pk asig b
-	where asig = (0,0) {- FIXME : need to work out how to get R/S from the bytestring a -}
+    where asig = (0,0) {- FIXME : need to work out how to get R/S from the bytestring a -}
 
 -- | Verify that the given certificate chain is application to the given fully qualified host name.
 certificateVerifyDomain :: String -> [X509] -> CertificateUsage
 certificateVerifyDomain _      []                  = CertificateUsageReject (CertificateRejectOther "empty list")
 certificateVerifyDomain fqhn (X509 cert _ _ _ _:_) =
-	let names = maybe [] ((:[]) . snd) (lookup oidCommonName $ getDistinguishedElements $ certSubjectDN cert)
-	         ++ maybe [] (maybe [] toAltName . extensionGet) (certExtensions cert) in
-	orUsage $ map (matchDomain . splitDot) names
-	where
-		orUsage [] = rejectMisc "FQDN do not match this certificate"
-		orUsage (x:xs)
-			| x == CertificateUsageAccept = CertificateUsageAccept
-			| otherwise                   = orUsage xs
+    let names = maybe [] ((:[]) . snd) (lookup oidCommonName $ getDistinguishedElements $ certSubjectDN cert)
+             ++ maybe [] (maybe [] toAltName . extensionGet) (certExtensions cert) in
+    orUsage $ map (matchDomain . splitDot) names
+    where
+        orUsage [] = rejectMisc "FQDN do not match this certificate"
+        orUsage (x:xs)
+            | x == CertificateUsageAccept = CertificateUsageAccept
+            | otherwise                   = orUsage xs
 
-		toAltName (ExtSubjectAltName l) = l
-		matchDomain l
-			| length (filter (== "") l) > 0 = rejectMisc "commonname OID got empty subdomain"
-			| head l == "*"                 = wildcardMatch (reverse $ drop 1 l)
-			| otherwise                     = if l == splitDot fqhn
-				then CertificateUsageAccept
-				else rejectMisc "FQDN and common name OID do not match"
+        toAltName (ExtSubjectAltName l) = l
+        matchDomain l
+            | length (filter (== "") l) > 0 = rejectMisc "commonname OID got empty subdomain"
+            | head l == "*"                 = wildcardMatch (reverse $ drop 1 l)
+            | otherwise                     = if l == splitDot fqhn
+                then CertificateUsageAccept
+                else rejectMisc "FQDN and common name OID do not match"
 
-		-- only 1 wildcard is valid, and if multiples are present
-		-- they won't have a wildcard meaning but will be match as normal star
-		-- character to the fqhn and inevitably will fail.
-		wildcardMatch l
-			-- <star>.com or <star> is always invalid
-			| length l < 2                         = rejectMisc "commonname OID wildcard match too widely"
-			-- <star>.com.<country> is always invalid
-			| length (head l) <= 2 && length (head $ drop 1 l) <= 3 && length l < 3 = rejectMisc "commonname OID wildcard match too widely"
-			| otherwise                            =
-				if l == take (length l) (reverse $ splitDot fqhn)
-					then CertificateUsageAccept
-					else rejectMisc "FQDN and common name OID do not match"
+        -- only 1 wildcard is valid, and if multiples are present
+        -- they won't have a wildcard meaning but will be match as normal star
+        -- character to the fqhn and inevitably will fail.
+        wildcardMatch l
+            -- <star>.com or <star> is always invalid
+            | length l < 2                         = rejectMisc "commonname OID wildcard match too widely"
+            -- <star>.com.<country> is always invalid
+            | length (head l) <= 2 && length (head $ drop 1 l) <= 3 && length l < 3 = rejectMisc "commonname OID wildcard match too widely"
+            | otherwise                            =
+                if l == take (length l) (reverse $ splitDot fqhn)
+                    then CertificateUsageAccept
+                    else rejectMisc "FQDN and common name OID do not match"
 
-		splitDot :: String -> [String]
-		splitDot [] = [""]
-		splitDot x  =
-			let (y, z) = break (== '.') x in
-			y : (if z == "" then [] else splitDot $ drop 1 z)
+        splitDot :: String -> [String]
+        splitDot [] = [""]
+        splitDot x  =
+            let (y, z) = break (== '.') x in
+            y : (if z == "" then [] else splitDot $ drop 1 z)
 
-		rejectMisc s = CertificateUsageReject (CertificateRejectOther s)
+        rejectMisc s = CertificateUsageReject (CertificateRejectOther s)
 
 -- | Verify certificate validity period that need to between the bounds of the certificate.
 -- TODO: maybe should verify whole chain.
 certificateVerifyValidity :: Day -> [X509] -> CertificateUsage
 certificateVerifyValidity _ []                         = CertificateUsageReject $ CertificateRejectOther "empty list"
 certificateVerifyValidity ctime (X509 cert _ _ _ _ :_) =
-	let ((beforeDay,_,_) , (afterDay,_,_)) = certValidity cert in
-	if beforeDay < ctime && ctime <= afterDay
-		then CertificateUsageAccept
-		else CertificateUsageReject CertificateRejectExpired
+    let ((beforeDay,_,_) , (afterDay,_,_)) = certValidity cert in
+    if beforeDay < ctime && ctime <= afterDay
+        then CertificateUsageAccept
+        else CertificateUsageReject CertificateRejectExpired
 
 -- | hash the certificate signing data using the supplied hash function.
 certificateFingerprint :: (L.ByteString -> B.ByteString) -> X509 -> B.ByteString

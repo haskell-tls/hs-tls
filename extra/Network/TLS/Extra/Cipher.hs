@@ -8,23 +8,23 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE PackageImports #-}
 module Network.TLS.Extra.Cipher
-	(
-	-- * cipher suite
-	  ciphersuite_all
-	, ciphersuite_medium
-	, ciphersuite_strong
-	, ciphersuite_unencrypted
-	-- * individual ciphers
-	, cipher_null_null
-	, cipher_null_SHA1
-	, cipher_null_MD5
-	, cipher_RC4_128_MD5
-	, cipher_RC4_128_SHA1
-	, cipher_AES128_SHA1
-	, cipher_AES256_SHA1
-	, cipher_AES128_SHA256
-	, cipher_AES256_SHA256
-	) where
+    (
+    -- * cipher suite
+      ciphersuite_all
+    , ciphersuite_medium
+    , ciphersuite_strong
+    , ciphersuite_unencrypted
+    -- * individual ciphers
+    , cipher_null_null
+    , cipher_null_SHA1
+    , cipher_null_MD5
+    , cipher_RC4_128_MD5
+    , cipher_RC4_128_SHA1
+    , cipher_AES128_SHA1
+    , cipher_AES256_SHA1
+    , cipher_AES128_SHA256
+    , cipher_AES256_SHA256
+    ) where
 
 import qualified Data.ByteString as B
 
@@ -69,10 +69,10 @@ decryptF_rc4 iv e = (\(ctx, d) -> (d, toIV ctx)) $ RC4.combine (toCtx iv) e
 -- this choice of ciphersuite should satisfy most normal need
 ciphersuite_all :: [Cipher]
 ciphersuite_all =
-	[ cipher_AES128_SHA256, cipher_AES256_SHA256
-	, cipher_AES128_SHA1,   cipher_AES256_SHA1
-	, cipher_RC4_128_SHA1,  cipher_RC4_128_MD5
-	]
+    [ cipher_AES128_SHA256, cipher_AES256_SHA256
+    , cipher_AES128_SHA1,   cipher_AES256_SHA1
+    , cipher_RC4_128_SHA1,  cipher_RC4_128_MD5
+    ]
 
 -- | list of medium ciphers.
 ciphersuite_medium :: [Cipher]
@@ -87,159 +87,159 @@ ciphersuite_unencrypted :: [Cipher]
 ciphersuite_unencrypted = [cipher_null_MD5, cipher_null_SHA1]
 
 bulk_null = Bulk
-	{ bulkName         = "null"
-	, bulkKeySize      = 0
-	, bulkIVSize       = 0
-	, bulkBlockSize    = 0
-	, bulkF            = BulkNoneF
-	}
+    { bulkName         = "null"
+    , bulkKeySize      = 0
+    , bulkIVSize       = 0
+    , bulkBlockSize    = 0
+    , bulkF            = BulkNoneF
+    }
 
 bulk_rc4 = Bulk
-	{ bulkName         = "RC4-128"
-	, bulkKeySize      = 16
-	, bulkIVSize       = 0
-	, bulkBlockSize    = 0
-	, bulkF            = BulkStreamF initF_rc4 encryptF_rc4 decryptF_rc4
-	}
+    { bulkName         = "RC4-128"
+    , bulkKeySize      = 16
+    , bulkIVSize       = 0
+    , bulkBlockSize    = 0
+    , bulkF            = BulkStreamF initF_rc4 encryptF_rc4 decryptF_rc4
+    }
 
 bulk_aes128 = Bulk
-	{ bulkName         = "AES128"
-	, bulkKeySize      = 16
-	, bulkIVSize       = 16
-	, bulkBlockSize    = 16
-	, bulkF            = BulkBlockF aes128_cbc_encrypt aes128_cbc_decrypt
-	}
+    { bulkName         = "AES128"
+    , bulkKeySize      = 16
+    , bulkIVSize       = 16
+    , bulkBlockSize    = 16
+    , bulkF            = BulkBlockF aes128_cbc_encrypt aes128_cbc_decrypt
+    }
 
 bulk_aes256 = Bulk
-	{ bulkName         = "AES256"
-	, bulkKeySize      = 32
-	, bulkIVSize       = 16
-	, bulkBlockSize    = 16
-	, bulkF            = BulkBlockF aes256_cbc_encrypt aes256_cbc_decrypt
-	}
+    { bulkName         = "AES256"
+    , bulkKeySize      = 32
+    , bulkIVSize       = 16
+    , bulkBlockSize    = 16
+    , bulkF            = BulkBlockF aes256_cbc_encrypt aes256_cbc_decrypt
+    }
 
 hash_md5 = Hash
-	{ hashName = "MD5"
-	, hashSize = 16
-	, hashF    = MD5.hash
-	}
+    { hashName = "MD5"
+    , hashSize = 16
+    , hashF    = MD5.hash
+    }
 
 hash_sha1 = Hash
-	{ hashName = "SHA1"
-	, hashSize = 20
-	, hashF    = SHA1.hash
-	}
+    { hashName = "SHA1"
+    , hashSize = 20
+    , hashF    = SHA1.hash
+    }
 
 hash_sha256 = Hash
-	{ hashName = "SHA256"
-	, hashSize = 32
-	, hashF    = SHA256.hash
-	}
+    { hashName = "SHA256"
+    , hashSize = 32
+    , hashF    = SHA256.hash
+    }
 
 hash_null = Hash
-	{ hashName = "null"
-	, hashSize = 0
-	, hashF    = const B.empty
-	}
+    { hashName = "null"
+    , hashSize = 0
+    , hashF    = const B.empty
+    }
 
 -- | this is not stricly a usable cipher; it's the initial cipher of a TLS connection
 cipher_null_null :: Cipher
 cipher_null_null = Cipher
-	{ cipherID           = 0x0
-	, cipherName         = "null-null"
-	, cipherBulk         = bulk_null
-	, cipherHash         = hash_null
-	, cipherKeyExchange  = CipherKeyExchange_RSA
-	, cipherMinVer       = Nothing
-	}
+    { cipherID           = 0x0
+    , cipherName         = "null-null"
+    , cipherBulk         = bulk_null
+    , cipherHash         = hash_null
+    , cipherKeyExchange  = CipherKeyExchange_RSA
+    , cipherMinVer       = Nothing
+    }
 
 -- | unencrypted cipher using RSA for key exchange and MD5 for digest
 cipher_null_MD5 :: Cipher
 cipher_null_MD5 = Cipher
-	{ cipherID           = 0x1
-	, cipherName         = "RSA-null-MD5"
-	, cipherBulk         = bulk_null
-	, cipherHash         = hash_md5
-	, cipherKeyExchange  = CipherKeyExchange_RSA
-	, cipherMinVer       = Nothing
-	}
+    { cipherID           = 0x1
+    , cipherName         = "RSA-null-MD5"
+    , cipherBulk         = bulk_null
+    , cipherHash         = hash_md5
+    , cipherKeyExchange  = CipherKeyExchange_RSA
+    , cipherMinVer       = Nothing
+    }
 
 -- | unencrypted cipher using RSA for key exchange and SHA1 for digest
 cipher_null_SHA1 :: Cipher
 cipher_null_SHA1 = Cipher
-	{ cipherID           = 0x2
-	, cipherName         = "RSA-null-SHA1"
-	, cipherBulk         = bulk_null
-	, cipherHash         = hash_sha1
-	, cipherKeyExchange  = CipherKeyExchange_RSA
-	, cipherMinVer       = Nothing
-	}
+    { cipherID           = 0x2
+    , cipherName         = "RSA-null-SHA1"
+    , cipherBulk         = bulk_null
+    , cipherHash         = hash_sha1
+    , cipherKeyExchange  = CipherKeyExchange_RSA
+    , cipherMinVer       = Nothing
+    }
 
 -- | RC4 cipher, RSA key exchange and MD5 for digest
 cipher_RC4_128_MD5 :: Cipher
 cipher_RC4_128_MD5 = Cipher
-	{ cipherID           = 0x04
-	, cipherName         = "RSA-rc4-128-md5"
-	, cipherBulk         = bulk_rc4
-	, cipherHash         = hash_md5
-	, cipherKeyExchange  = CipherKeyExchange_RSA
-	, cipherMinVer       = Nothing
-	}
+    { cipherID           = 0x04
+    , cipherName         = "RSA-rc4-128-md5"
+    , cipherBulk         = bulk_rc4
+    , cipherHash         = hash_md5
+    , cipherKeyExchange  = CipherKeyExchange_RSA
+    , cipherMinVer       = Nothing
+    }
 
 -- | RC4 cipher, RSA key exchange and SHA1 for digest
 cipher_RC4_128_SHA1 :: Cipher
 cipher_RC4_128_SHA1 = Cipher
-	{ cipherID           = 0x05
-	, cipherName         = "RSA-rc4-128-sha1"
-	, cipherBulk         = bulk_rc4
-	, cipherHash         = hash_sha1
-	, cipherKeyExchange  = CipherKeyExchange_RSA
-	, cipherMinVer       = Nothing
-	}
+    { cipherID           = 0x05
+    , cipherName         = "RSA-rc4-128-sha1"
+    , cipherBulk         = bulk_rc4
+    , cipherHash         = hash_sha1
+    , cipherKeyExchange  = CipherKeyExchange_RSA
+    , cipherMinVer       = Nothing
+    }
 
 -- | AES cipher (128 bit key), RSA key exchange and SHA1 for digest
 cipher_AES128_SHA1 :: Cipher
 cipher_AES128_SHA1 = Cipher
-	{ cipherID           = 0x2f
-	, cipherName         = "RSA-aes128-sha1"
-	, cipherBulk         = bulk_aes128
-	, cipherHash         = hash_sha1
-	, cipherKeyExchange  = CipherKeyExchange_RSA
-	, cipherMinVer       = Just SSL3
-	}
+    { cipherID           = 0x2f
+    , cipherName         = "RSA-aes128-sha1"
+    , cipherBulk         = bulk_aes128
+    , cipherHash         = hash_sha1
+    , cipherKeyExchange  = CipherKeyExchange_RSA
+    , cipherMinVer       = Just SSL3
+    }
 
 -- | AES cipher (256 bit key), RSA key exchange and SHA1 for digest
 cipher_AES256_SHA1 :: Cipher
 cipher_AES256_SHA1 = Cipher
-	{ cipherID           = 0x35
-	, cipherName         = "RSA-aes256-sha1"
-	, cipherBulk         = bulk_aes256
-	, cipherHash         = hash_sha1
-	, cipherKeyExchange  = CipherKeyExchange_RSA
-	, cipherMinVer       = Just SSL3
-	}
+    { cipherID           = 0x35
+    , cipherName         = "RSA-aes256-sha1"
+    , cipherBulk         = bulk_aes256
+    , cipherHash         = hash_sha1
+    , cipherKeyExchange  = CipherKeyExchange_RSA
+    , cipherMinVer       = Just SSL3
+    }
 
 -- | AES cipher (128 bit key), RSA key exchange and SHA256 for digest
 cipher_AES128_SHA256 :: Cipher
 cipher_AES128_SHA256 = Cipher
-	{ cipherID           = 0x3c
-	, cipherName         = "RSA-aes128-sha256"
-	, cipherBulk         = bulk_aes128
-	, cipherHash         = hash_sha256
-	, cipherKeyExchange  = CipherKeyExchange_RSA
-	, cipherMinVer       = Just TLS12
-	}
+    { cipherID           = 0x3c
+    , cipherName         = "RSA-aes128-sha256"
+    , cipherBulk         = bulk_aes128
+    , cipherHash         = hash_sha256
+    , cipherKeyExchange  = CipherKeyExchange_RSA
+    , cipherMinVer       = Just TLS12
+    }
 
 -- | AES cipher (256 bit key), RSA key exchange and SHA256 for digest
 cipher_AES256_SHA256 :: Cipher
 cipher_AES256_SHA256 = Cipher
-	{ cipherID           = 0x3d
-	, cipherName         = "RSA-aes256-sha256"
-	, cipherBulk         = bulk_aes256
-	, cipherHash         = hash_sha256
-	, cipherKeyExchange  = CipherKeyExchange_RSA
-	, cipherMinVer       = Just TLS12
-	}
+    { cipherID           = 0x3d
+    , cipherName         = "RSA-aes256-sha256"
+    , cipherBulk         = bulk_aes256
+    , cipherHash         = hash_sha256
+    , cipherKeyExchange  = CipherKeyExchange_RSA
+    , cipherMinVer       = Just TLS12
+    }
 
 {-
 TLS 1.0 ciphers definition

@@ -6,7 +6,7 @@
 -- Portability : unknown
 --
 module Network.TLS.Extra.Compression
-	(
-	) where
+    (
+    ) where
 
 import Network.TLS.Compression
