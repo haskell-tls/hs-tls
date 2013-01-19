@@ -28,7 +28,7 @@ import qualified Crypto.PubKey.RSA.PKCS15 as RSA
 import qualified Crypto.PubKey.DSA as DSA
 
 import Data.CertificateStore
-import Data.Certificate.X509.Cert (oidCommonName)
+import Data.Certificate.X509.Cert (oidCommonName, extensionGet, certExtensions)
 import Network.TLS (CertificateUsage(..), CertificateRejectReason(..))
 
 import Data.Time.Calendar
@@ -74,13 +74,14 @@ certificateVerifyChain_ store (x:xs) =
             if validChain
                 then return CertificateUsageAccept
                 else return $ CertificateUsageReject (CertificateRejectOther "chain doesn't match each other")
-        Nothing      -> case xs of
-            [] -> return $ CertificateUsageReject CertificateRejectUnknownCA
-            _  -> do
-                validChain <- certificateVerifyAgainst x (head xs)
-                if validChain
-                    then certificateVerifyChain_ store xs
-                    else return $ CertificateUsageReject (CertificateRejectOther "chain doesn't match each other")
+        Nothing      ->
+            case xs of
+                [] -> return $ CertificateUsageReject CertificateRejectUnknownCA
+                _  -> do
+                    validChain <- certificateVerifyAgainst x (head xs)
+                    if validChain
+                        then certificateVerifyChain_ store xs
+                        else return $ CertificateUsageReject (CertificateRejectOther "chain doesn't match each other")
 #endif
 
 -- | verify a certificates chain using the system certificates available.
