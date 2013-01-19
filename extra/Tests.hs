@@ -1,5 +1,3 @@
-{-# LANGUAGE CPP #-}
-
 import qualified Tests.Connection as Connection
 import qualified Tests.Ciphers as Ciphers
 
