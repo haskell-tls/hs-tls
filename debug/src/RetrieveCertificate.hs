@@ -13,6 +13,7 @@ import Control.Monad
 import qualified Crypto.Random.AESCtr as RNG
 
 import Text.Printf
+import Text.Groom
 
 import System.Console.CmdArgs
 
@@ -54,7 +55,7 @@ progArgs = PArgs
 		[ "Retrieve the remote certificate and optionally its chain from a remote destination"
 		]
 
-showCert "full" cert = putStrLn $ show cert
+showCert "full" cert = putStrLn $ groom cert
 
 showCert _ (x509Cert -> cert)  = do
 	putStrLn ("serial:   " ++ (show $ certSerial cert))

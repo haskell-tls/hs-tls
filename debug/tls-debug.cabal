@@ -49,6 +49,7 @@ Executable           tls-retrievecertificate
                    , network
                    , bytestring
                    , cmdargs
+                   , groom
                    , time
                    , cprng-aes >= 0.3.0
                    , certificate >= 1.0
