@@ -18,10 +18,6 @@ Flag test
   Description:       Build unit test
   Default:           False
 
-Flag fastaes
-  Description:       Use fast AES if available
-  Default:           True
-
 Library
   Build-Depends:     base > 3 && < 5
                    , tls >= 1.1.0 && < 1.2.0
@@ -57,13 +53,11 @@ executable           Tests
                    , QuickCheck >= 2
                    , bytestring
                    , cprng-aes >= 0.3.0
+                   , cipher-aes >= 0.1 && < 0.2
   else
     Buildable:       False
   if os(windows)
     cpp-options:     -DNOCERTVERIFY
-  if flag(fastaes)
-    cpp-options:     -DCIPHER_AES
-    Build-Depends:   cipher-aes >= 0.1 && < 0.2
 
 source-repository head
   type: git
