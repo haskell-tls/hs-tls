@@ -66,38 +66,37 @@ certificateVerifyChain_ _ _ = do
 #else
 certificateVerifyChain_ :: CertificateStore -> [X509] -> IO CertificateUsage
 certificateVerifyChain_ _     []     = return $ CertificateUsageReject (CertificateRejectOther "empty chain / no certificates")
-certificateVerifyChain_ store (x:xs) =
-    -- find a matching certificate that we trust (== installed on the system)
-    case findCertificate (certIssuerDN $ x509Cert x) store of
-        Just sysx509 -> do
-            validChain <- certificateVerifyAgainst x sysx509
-            if validChain
-                then return CertificateUsageAccept
-                else return certificateChainDoesntMatch
-        Nothing      ->
-            case xs of
-                []     -> return $ CertificateUsageReject CertificateRejectUnknownCA
-                cert:_ -> do
-                    let exts = certExtensions (x509Cert cert)
-                    case checkCA exts of
-                        Just r  -> return r
-                        Nothing -> do
-                            validChain <- certificateVerifyAgainst x cert
-                            if validChain
-                                then certificateVerifyChain_ store xs
-                                else return certificateChainDoesntMatch
-    where checkCA Nothing   = return $ certificateNotAllowedToSign
-          checkCA (Just es) = do
+certificateVerifyChain_ store (x:xs) = loop 0 x xs >>= return . maybe CertificateUsageAccept CertificateUsageReject
+    where checkTrusted _ cert notFound =
+              case findCertificate (certIssuerDN $ x509Cert cert) store of
+                  Just tCer -> verifyAgainstTrusted tCer cert
+                  Nothing   -> notFound
+
+          loop :: Int -> X509 -> [X509] -> IO (Maybe CertificateRejectReason)
+          loop depth cert []     = checkTrusted depth cert (return $ Just (CertificateRejectUnknownCA))
+          loop depth cert (n:ns) = checkTrusted depth cert $ do
+               case checkCA $ certExtensions $ x509Cert n of
+                   Just r                                    -> return (Just r)
+                   Nothing | certificateVerifyAgainst cert n -> loop (depth+1) n ns
+                           | otherwise                       -> return certificateChainDoesntMatch
+
+          verifyAgainstTrusted trustedCer cert
+              | validChain = return Nothing
+              | otherwise  = return certificateChainDoesntMatch
+              where validChain = certificateVerifyAgainst cert trustedCer
+
+          checkCA Nothing   = certificateNotAllowedToSign
+          checkCA (Just es) =
               let kuCanCertSign = case extensionGet es of
                                       Just (ExtKeyUsage l) -> elem KeyUsage_keyCertSign l
                                       Nothing              -> False
-              case extensionGet es of
-                  Just (ExtBasicConstraints True _)
-                                         | kuCanCertSign -> Nothing
-                                         | otherwise     -> Just certificateNotAllowedToSign
-                  _                                      -> Just certificateNotAllowedToSign
-          certificateNotAllowedToSign = CertificateUsageReject $ CertificateRejectOther "certificate is not allowed to sign another certificate"
-          certificateChainDoesntMatch = CertificateUsageReject $ CertificateRejectOther "chain doesn't match each other"
+               in case extensionGet es of
+                    Just (ExtBasicConstraints True _)
+                                           | kuCanCertSign -> Nothing
+                                           | otherwise     -> certificateNotAllowedToSign
+                    _                                      -> certificateNotAllowedToSign
+          certificateNotAllowedToSign = Just $ CertificateRejectOther "certificate is not allowed to sign another certificate"
+          certificateChainDoesntMatch = Just $ CertificateRejectOther "chain doesn't match"
 #endif
 
 -- | verify a certificates chain using the system certificates available.
@@ -125,10 +124,10 @@ certificateVerifyChain store = certificateVerifyChain_ store . reorderList
 
 -- | verify a certificate against another one.
 -- the first certificate need to be signed by the second one for this function to succeed.
-certificateVerifyAgainst :: X509 -> X509 -> IO Bool
-certificateVerifyAgainst ux509@(X509 _ _ _ sigalg sig) (X509 scert _ _ _ _) =
-    return $ (verifyF sigalg pk) udata esig
+certificateVerifyAgainst :: X509 -> X509 -> Bool
+certificateVerifyAgainst ux509@(X509 _ _ _ sigalg sig) (X509 scert _ _ _ _) = verified
     where
+        verified = (verifyF sigalg pk) udata esig
         udata = B.concat $ L.toChunks $ getSigningData ux509
         esig  = B.pack sig
         pk    = certPubKey scert
