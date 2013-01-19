@@ -43,7 +43,6 @@ Library
                      Network.TLS.Extra.Cipher
                      Network.TLS.Extra.Compression
                      Network.TLS.Extra.Connection
-                     Network.TLS.Extra.Thread
                      Network.TLS.Extra.File
   ghc-options:       -Wall -fno-warn-missing-signatures
   if os(windows)
