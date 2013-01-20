@@ -102,7 +102,7 @@ runOn (sStorage, certStore) flags port hostname = do
                         ++ (if Http11 `elem` flags then (" HTTP/1.1\r\nHost: " ++ hostname) else " HTTP/1.0")
                         ++ "\r\n\r\n")
             when (Verbose `elem` flags) (putStrLn "sending query:" >> LC.putStrLn query >> putStrLn "")
-            runTLS (getDefaultParams flags certStore sStorage sess) hostname (fromIntegral port) $ \ctx -> do
+            runTLS (getDefaultParams flags certStore sStorage sess) hostname port $ \ctx -> do
                 handshake ctx
                 sendData ctx $ query
                 d <- recvData ctx
@@ -131,5 +131,5 @@ main = do
     sStorage <- newIORef undefined
     case other of
         [hostname]      -> runOn (sStorage, certStore) opts 443 hostname
-        [hostname,port] -> runOn (sStorage, certStore) opts (read port) hostname
+        [hostname,port] -> runOn (sStorage, certStore) opts (fromInteger $ read port) hostname
         _               -> printUsage >> exitFailure
