@@ -45,7 +45,7 @@ instance SessionManager SessionRef where
     sessionResume (SessionRef ref) sid = readIORef ref >>= \(s,d) -> if s == sid then return (Just d) else return Nothing
     sessionInvalidate _ _ = return ()
 
-getDefaultParams flags store sStorage session =
+getDefaultParams flags host store sStorage session =
     updateClientParams setCParams $ setSessionManager (SessionRef sStorage) $ defaultParamsClient
         { pConnectVersion    = tlsConnectVer
         , pAllowedVersions   = [TLS10,TLS11,TLS12]
@@ -55,12 +55,17 @@ getDefaultParams flags store sStorage session =
         , onCertificatesRecv = crecv
         }
     where
-            setCParams cparams = cparams { clientWantSessionResume = session }
+            setCParams cparams = cparams
+                { clientWantSessionResume = session
+                , clientUseServerName = if NoSNI `elem` flags then Nothing else Just host
+                }
             logging = if not debug then defaultLogging else defaultLogging
                 { loggingPacketSent = putStrLn . ("debug: >> " ++)
                 , loggingPacketRecv = putStrLn . ("debug: << " ++)
                 }
-            crecv = if validateCert then certificateVerifyChain store else (\_ -> return CertificateUsageAccept)
+            crecv = if validateCert
+                        then certificateChecks [certificateVerifyChain store,return . certificateVerifyDomain host]
+                        else (\_ -> return CertificateUsageAccept)
 
             tlsConnectVer
                 | Tls12 `elem` flags = TLS12
@@ -72,6 +77,7 @@ getDefaultParams flags store sStorage session =
 
 data Flag = Verbose | Debug | NoValidateCert | Session | Http11
           | Ssl3 | Tls11 | Tls12
+          | NoSNI
           | Uri String
           | Help
           deriving (Show,Eq)
@@ -84,6 +90,7 @@ options =
     , Option []     ["no-validation"] (NoArg NoValidateCert) "disable certificate validation"
     , Option []     ["http1.1"] (NoArg Http11) "use http1.1 instead of http1.0"
     , Option []     ["ssl3"]    (NoArg Ssl3) "use SSL 3.0 as default"
+    , Option []     ["no-sni"]  (NoArg NoSNI) "don't use server name indication"
     , Option []     ["tls11"]   (NoArg Tls11) "use TLS 1.1 as default"
     , Option []     ["tls12"]   (NoArg Tls12) "use TLS 1.2 as default"
     , Option []     ["uri"]     (ReqArg Uri "URI") "optional URI requested by default /"
@@ -102,7 +109,7 @@ runOn (sStorage, certStore) flags port hostname = do
                         ++ (if Http11 `elem` flags then (" HTTP/1.1\r\nHost: " ++ hostname) else " HTTP/1.0")
                         ++ "\r\n\r\n")
             when (Verbose `elem` flags) (putStrLn "sending query:" >> LC.putStrLn query >> putStrLn "")
-            runTLS (getDefaultParams flags certStore sStorage sess) hostname port $ \ctx -> do
+            runTLS (getDefaultParams flags hostname certStore sStorage sess) hostname port $ \ctx -> do
                 handshake ctx
                 sendData ctx $ query
                 d <- recvData ctx
