@@ -20,23 +20,23 @@ import Data.IORef
 
 ciphers :: [Cipher]
 ciphers =
-	[ cipher_AES128_SHA1
-	, cipher_AES256_SHA1
-	, cipher_RC4_128_MD5
-	, cipher_RC4_128_SHA1
-	]
+    [ cipher_AES128_SHA1
+    , cipher_AES256_SHA1
+    , cipher_RC4_128_MD5
+    , cipher_RC4_128_SHA1
+    ]
 
 runTLS params hostname portNumber f = do
-	rng  <- RNG.makeSystem
-	he   <- getHostByName hostname
-	sock <- socket AF_INET Stream defaultProtocol
-	let sockaddr = SockAddrInet portNumber (head $ hostAddresses he)
-	E.catch (connect sock sockaddr)
-	      (\(e :: SomeException) -> sClose sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
-	dsth <- socketToHandle sock ReadWriteMode
-	ctx <- contextNewOnHandle dsth params rng
-	() <- f ctx
-	hClose dsth
+    rng  <- RNG.makeSystem
+    he   <- getHostByName hostname
+    sock <- socket AF_INET Stream defaultProtocol
+    let sockaddr = SockAddrInet portNumber (head $ hostAddresses he)
+    E.catch (connect sock sockaddr)
+          (\(e :: SomeException) -> sClose sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
+    dsth <- socketToHandle sock ReadWriteMode
+    ctx <- contextNewOnHandle dsth params rng
+    () <- f ctx
+    hClose dsth
 
 data SessionRef = SessionRef (IORef (SessionID, SessionData))
 
