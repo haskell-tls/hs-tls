@@ -58,7 +58,7 @@ handshakeClient cparams ctx = do
                 allowedvers  = pAllowedVersions params
                 ciphers      = pCiphers params
                 compressions = pCompressions params
-                getExtensions = sequence [secureReneg,npnExtention] >>= return . catMaybes
+                getExtensions = sequence [sniExtension,secureReneg,npnExtention] >>= return . catMaybes
 
                 toExtensionRaw :: Extension e => e -> ExtensionRaw
                 toExtensionRaw ext = (extensionID ext, extensionEncode ext)
@@ -70,6 +70,7 @@ handshakeClient cparams ctx = do
                 npnExtention = if isJust $ onNPNServerSuggest params
                                  then return $ Just $ toExtensionRaw $ NextProtocolNegotiation []
                                  else return Nothing
+                sniExtension = return ((\h -> toExtensionRaw $ ServerName [(ServerNameHostName h)]) <$> clientUseServerName cparams)
                 sendClientHello = do
                         crand <- getStateRNG ctx 32 >>= return . ClientRandom
                         let clientSession = Session . maybe Nothing (Just . fst) $ clientWantSessionResume cparams
