@@ -71,10 +71,10 @@ data ServerNameType = ServerNameHostName HostName
 
 instance Extension ServerName where
     extensionID _ = extensionID_ServerName
-    extensionEncode (ServerName l) = runPut $ mapM_ encodeNameType l
+    extensionEncode (ServerName l) = runPut $ putOpaque16 (runPut $ mapM_ encodeNameType l)
         where encodeNameType (ServerNameHostName hn)       = putWord8 0  >> putOpaque16 (BC.pack hn) -- FIXME: should be puny code conversion
-              encodeNameType (ServerNameOther (nt,opaque)) = putWord8 nt >> putOpaque16 opaque
-    extensionDecode _ = runGetMaybe (remaining >>= \len -> getList len getServerName >>= return . ServerName)
+              encodeNameType (ServerNameOther (nt,opaque)) = putWord8 nt >> putBytes opaque
+    extensionDecode _ = runGetMaybe (getWord16 >>= \len -> getList (fromIntegral len) getServerName >>= return . ServerName)
         where getServerName = do
                   ty    <- getWord8
                   sname <- getOpaque16
