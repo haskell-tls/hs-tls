@@ -153,6 +153,7 @@ verifyF (SignatureALG HashMD2 PubKeyALG_RSA) (PubKeyRSA rsak) = RSA.verify HD.ha
 verifyF (SignatureALG HashMD5 PubKeyALG_RSA) (PubKeyRSA rsak) = RSA.verify HD.hashDescrMD5 rsak
 verifyF (SignatureALG HashSHA1 PubKeyALG_RSA) (PubKeyRSA rsak) = RSA.verify HD.hashDescrSHA1 rsak
 verifyF (SignatureALG HashSHA1 PubKeyALG_DSA) (PubKeyDSA dsak) = dsaSHA1Verify dsak
+verifyF (SignatureALG HashSHA256 PubKeyALG_RSA) (PubKeyRSA rsak) = RSA.verify HD.hashDescrSHA256 rsak
 
 verifyF _ _ = \_ _ -> False
 
