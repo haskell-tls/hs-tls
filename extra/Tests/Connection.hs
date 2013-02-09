@@ -24,6 +24,7 @@ import Data.Certificate.X509
 import qualified Data.Certificate.KeyRSA as KeyRSA
 import qualified Crypto.Random.AESCtr as RNG
 import Network.TLS
+import Network.TLS.Extra.File
 import Control.Monad
 import Control.Monad.Trans (lift)
 import Control.Applicative ((<$>))
@@ -43,28 +44,6 @@ someWords8 i = replicateM i (fromIntegral <$> (choose (0,255) :: Gen Int))
 instance Arbitrary Word8 where
 	arbitrary = fromIntegral <$> (choose (0,255) :: Gen Int)
 #endif
-
-{- helpers to prepare the tests -}
-readCertificate :: FilePath -> IO X509
-readCertificate filepath = do
-    certs <- rights . parseCerts . pemParseBS <$> B.readFile filepath
-    case certs of
-        []    -> error "no valid certificate found"
-        (x:_) -> return x
-    where parseCerts (Right pems) = map (decodeCertificate . L.fromChunks . (:[]) . pemContent)
-                                  $ filter (flip elem ["CERTIFICATE", "TRUSTED CERTIFICATE"] . pemName) pems
-          parseCerts (Left err) = error "cannot parse PEM file"
-
-readPrivateKey :: FilePath -> IO PrivateKey
-readPrivateKey filepath = do
-    pk <- rights . parseKey . pemParseBS <$> B.readFile filepath
-    case pk of
-        []    -> error "no valid RSA key found"
-        (x:_) -> return x
-
-    where parseKey (Right pems) = map (fmap (PrivRSA . snd) . KeyRSA.decodePrivate . L.fromChunks . (:[]) . pemContent)
-                                $ filter ((== "RSA PRIVATE KEY") . pemName) pems
-          parseKey (Left err) = error "Cannot parse PEM file"
 
 arbitraryVersions :: Gen [Version]
 arbitraryVersions = resize (length supportedVersions + 1) $ listOf1 (elements supportedVersions)
