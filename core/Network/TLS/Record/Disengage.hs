@@ -67,23 +67,30 @@ decryptData record econtent st = decryptOf (bulkF bulk)
     where cipher     = fromJust "cipher" $ stActiveRxCipher st
           bulk       = cipherBulk cipher
           cst        = fromJust "rx crypt state" $ stActiveRxCryptState st
-          digestSize = hashSize $ cipherHash cipher
+          macSize    = hashSize $ cipherHash cipher
           writekey   = cstKey cst
+          blockSize  = bulkBlockSize bulk
+          econtentLen = B.length econtent
 
+          explicitIV = hasExplicitBlockIV $ stVersion st
+
+          sanityCheckError = throwError (Error_Packet "encrypted content too small for encryption parameters")
 
           decryptOf :: BulkFunctions -> TLSSt Bytes
           decryptOf (BulkBlockF _ decryptF) = do
+            let minContent = (if explicitIV then bulkIVSize bulk else 0) + max (macSize + 1) blockSize
+            when ((econtentLen `mod` blockSize) /= 0 || econtentLen < minContent) $ sanityCheckError
             {- update IV -}
-            (iv, econtent') <- if hasExplicitBlockIV $ stVersion st
-                                  then get2 econtent (bulkIVSize bulk, B.length econtent - bulkIVSize bulk)
+            (iv, econtent') <- if explicitIV
+                                  then get2 econtent (bulkIVSize bulk, econtentLen - bulkIVSize bulk)
                                   else return (cstIV cst, econtent)
             let newiv = fromJust "new iv" $ takelast (bulkBlockSize bulk) econtent'
             put $ st { stActiveRxCryptState = Just $ cst { cstIV = newiv } }
 
             let content' = decryptF writekey iv econtent'
             let paddinglength = fromIntegral (B.last content') + 1
-            let contentlen = B.length content' - paddinglength - digestSize
-            (content, mac, padding) <- get3 content' (contentlen, digestSize, paddinglength)
+            let contentlen = B.length content' - paddinglength - macSize
+            (content, mac, padding) <- get3 content' (contentlen, macSize, paddinglength)
             getCipherData record $ CipherData
                     { cipherDataContent = content
                     , cipherDataMAC     = Just mac
@@ -91,11 +98,12 @@ decryptData record econtent st = decryptOf (bulkF bulk)
                     }
 
           decryptOf (BulkStreamF initF _ decryptF) = do
+            when (econtentLen < macSize) $ sanityCheckError
             let iv = cstIV cst
             let (content', newiv) = decryptF (if iv /= B.empty then iv else initF writekey) econtent
             {- update Ctx -}
-            let contentlen        = B.length content' - digestSize
-            (content, mac) <- get2 content' (contentlen, digestSize)
+            let contentlen        = B.length content' - macSize
+            (content, mac) <- get2 content' (contentlen, macSize)
             put $ st { stActiveRxCryptState = Just $ cst { cstIV = newiv } }
             getCipherData record $ CipherData
                     { cipherDataContent = content
