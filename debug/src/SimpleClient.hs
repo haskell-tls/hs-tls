@@ -6,6 +6,7 @@ import Network.TLS
 import Network.TLS.Extra
 import System.Console.GetOpt
 import System.IO
+import System.Timeout
 import qualified Crypto.Random.AESCtr as RNG
 import qualified Data.ByteString.Lazy.Char8 as LC
 import qualified Data.ByteString.Char8 as BC
@@ -112,10 +113,16 @@ runOn (sStorage, certStore) flags port hostname = do
             runTLS (getDefaultParams flags hostname certStore sStorage sess) hostname port $ \ctx -> do
                 handshake ctx
                 sendData ctx $ query
-                d <- recvData ctx
+                loopRecv ctx
                 bye ctx
-                BC.putStrLn d
                 return ()
+          loopRecv ctx = do
+            d <- timeout 2000000 (recvData ctx) -- 2s per recv
+            case d of
+                Nothing            -> when (Debug `elem` flags) (hPutStrLn stderr "timeout") >> return ()
+                Just b | BC.null b -> return ()
+                       | otherwise -> BC.putStrLn b >> loopRecv ctx
+
           findURI []        = "/"
           findURI (Uri u:_) = u
           findURI (_:xs)    = findURI xs
