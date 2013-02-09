@@ -9,4 +9,4 @@ module Network.TLS.Extra.Compression
     (
     ) where
 
-import Network.TLS.Compression
+--import Network.TLS.Compression
