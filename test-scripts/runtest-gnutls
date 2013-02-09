@@ -8,6 +8,16 @@ fi
 
 PORT=$(($$ % 10000 + 10000))
 
+if [ ! -f server.crt ]; then
+	echo "generate some certificate \"server.crt\""
+	exit 2
+fi
+
+if [ ! -f server.key ]; then
+	echo "generate some private key \"server.key\""
+	exit 2
+fi
+
 echo "running stunnel"
 ${STUNNEL} server -c server.crt -k server.key --source=localhost:${PORT} --destinationtype=fd --destination=2 > stunnel-gnutls-log 2>&1 &
 stunnelpid=$(pidof stunnel)
