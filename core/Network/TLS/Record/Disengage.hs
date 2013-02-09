@@ -36,7 +36,7 @@ decryptRecord :: Record Ciphertext -> TLSSt (Record Compressed)
 decryptRecord record = onRecordFragment record $ fragmentUncipher $ \e -> do
         st <- get
         if stRxEncrypted st
-                then decryptData e >>= getCipherData record
+                then get >>= decryptData record e
                 else return e
 
 getCipherData :: Record a -> CipherData -> TLSSt ByteString
@@ -62,53 +62,54 @@ getCipherData (Record pt ver _) cdata = do
 
         return $ cipherDataContent cdata
 
-decryptData :: Bytes -> TLSSt CipherData
-decryptData econtent = do
-        st <- get
+decryptData :: Record Ciphertext -> Bytes -> TLSState -> TLSSt Bytes
+decryptData record econtent st = decryptOf (bulkF bulk)
+    where cipher     = fromJust "cipher" $ stActiveRxCipher st
+          bulk       = cipherBulk cipher
+          cst        = fromJust "rx crypt state" $ stActiveRxCryptState st
+          digestSize = hashSize $ cipherHash cipher
+          writekey   = cstKey cst
 
-        let cipher     = fromJust "cipher" $ stActiveRxCipher st
-        let bulk       = cipherBulk cipher
-        let cst        = fromJust "rx crypt state" $ stActiveRxCryptState st
-        let digestSize = hashSize $ cipherHash cipher
-        let writekey   = cstKey cst
+          decryptOf :: BulkFunctions -> TLSSt Bytes
+          decryptOf BulkNoneF = do
+            let contentlen = B.length econtent - digestSize
+            (content, mac) <- get2 econtent (contentlen, digestSize)
+            getCipherData record $ CipherData
+                 { cipherDataContent = content
+                 , cipherDataMAC     = Just mac
+                 , cipherDataPadding = Nothing
+                 }
 
-        case bulkF bulk of
-                BulkNoneF -> do
-                        let contentlen = B.length econtent - digestSize
-                        (content, mac) <- get2 econtent (contentlen, digestSize)
-                        return $ CipherData
-                                    { cipherDataContent = content
-                                    , cipherDataMAC     = Just mac
-                                    , cipherDataPadding = Nothing
-                                    }
-                BulkBlockF _ decryptF -> do
-                        {- update IV -}
-                        (iv, econtent') <- if hasExplicitBlockIV $ stVersion st
-                                                then get2 econtent (bulkIVSize bulk, B.length econtent - bulkIVSize bulk)
-                                                else return (cstIV cst, econtent)
-                        let newiv = fromJust "new iv" $ takelast (bulkBlockSize bulk) econtent'
-                        put $ st { stActiveRxCryptState = Just $ cst { cstIV = newiv } }
+          decryptOf (BulkBlockF _ decryptF) = do
+            {- update IV -}
+            (iv, econtent') <- if hasExplicitBlockIV $ stVersion st
+                                  then get2 econtent (bulkIVSize bulk, B.length econtent - bulkIVSize bulk)
+                                  else return (cstIV cst, econtent)
+            let newiv = fromJust "new iv" $ takelast (bulkBlockSize bulk) econtent'
+            put $ st { stActiveRxCryptState = Just $ cst { cstIV = newiv } }
 
-                        let content' = decryptF writekey iv econtent'
-                        let paddinglength = fromIntegral (B.last content') + 1
-                        let contentlen = B.length content' - paddinglength - digestSize
-                        (content, mac, padding) <- get3 content' (contentlen, digestSize, paddinglength)
-                        return $ CipherData
-                                { cipherDataContent = content
-                                , cipherDataMAC     = Just mac
-                                , cipherDataPadding = Just padding
-                                }
-                BulkStreamF initF _ decryptF -> do
-                        let iv = cstIV cst
-                        let (content', newiv) = decryptF (if iv /= B.empty then iv else initF writekey) econtent
-                        {- update Ctx -}
-                        let contentlen        = B.length content' - digestSize
-                        (content, mac) <- get2 content' (contentlen, digestSize)
-                        put $ st { stActiveRxCryptState = Just $ cst { cstIV = newiv } }
-                        return $ CipherData
-                                { cipherDataContent = content
-                                , cipherDataMAC     = Just mac
-                                , cipherDataPadding = Nothing
-                                }
-    where get3 s ls = maybe (throwError $ Error_Packet "record bad format") return $ partition3 s ls
+            let content' = decryptF writekey iv econtent'
+            let paddinglength = fromIntegral (B.last content') + 1
+            let contentlen = B.length content' - paddinglength - digestSize
+            (content, mac, padding) <- get3 content' (contentlen, digestSize, paddinglength)
+            getCipherData record $ CipherData
+                    { cipherDataContent = content
+                    , cipherDataMAC     = Just mac
+                    , cipherDataPadding = Just padding
+                    }
+
+          decryptOf (BulkStreamF initF _ decryptF) = do
+            let iv = cstIV cst
+            let (content', newiv) = decryptF (if iv /= B.empty then iv else initF writekey) econtent
+            {- update Ctx -}
+            let contentlen        = B.length content' - digestSize
+            (content, mac) <- get2 content' (contentlen, digestSize)
+            put $ st { stActiveRxCryptState = Just $ cst { cstIV = newiv } }
+            getCipherData record $ CipherData
+                    { cipherDataContent = content
+                    , cipherDataMAC     = Just mac
+                    , cipherDataPadding = Nothing
+                    }
+
+          get3 s ls = maybe (throwError $ Error_Packet "record bad format") return $ partition3 s ls
           get2 s (d1,d2) = get3 s (d1,d2,0) >>= \(r1,r2,_) -> return (r1,r2)
