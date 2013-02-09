@@ -139,7 +139,7 @@ testInitiate spCert = do
 
 runTests = do
 	{- FIXME generate the certificate and key with arbitrary, for now rely on special files -}
-	cert <- readCertificate "host.cert"
-	pk   <- readPrivateKey "host.key"
+	cert <- fileReadCertificate "server.crt"
+	pk   <- fileReadPrivateKey "server.key"
 
 	run_test "initiate" (monadicIO $ testInitiate [(cert, Just pk)])
