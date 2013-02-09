@@ -47,19 +47,8 @@ streamCipher = blockCipher
                 }
         }
 
-nullCipher = blockCipher
-        { cipherID   = 0xff14
-        , cipherBulk = Bulk
-                { bulkName      = "null"
-                , bulkKeySize   = 0
-                , bulkIVSize    = 0
-                , bulkBlockSize = 0
-                , bulkF         = BulkNoneF
-                }
-        }
-
 supportedCiphers :: [Cipher]
-supportedCiphers = [blockCipher,streamCipher,nullCipher]
+supportedCiphers = [blockCipher,streamCipher]
 
 supportedVersions :: [Version]
 supportedVersions = [SSL3,TLS10,TLS11,TLS12]

@@ -33,8 +33,6 @@ bulk_test bulk = run_test n t
 				key <- B.pack <$> arbitraryKey bulk
 				t   <- B.pack <$> arbitraryText bulk
 				return $ stream ktoi enc dec key t
-			BulkNoneF -> do
-				return True
 		block e d key iv t = (d key iv . e key iv) t == t
 		stream ktoi e d key t = (fst . d iv . fst . e iv) t == t
 			where iv = ktoi key

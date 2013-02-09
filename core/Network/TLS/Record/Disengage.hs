@@ -70,16 +70,8 @@ decryptData record econtent st = decryptOf (bulkF bulk)
           digestSize = hashSize $ cipherHash cipher
           writekey   = cstKey cst
 
-          decryptOf :: BulkFunctions -> TLSSt Bytes
-          decryptOf BulkNoneF = do
-            let contentlen = B.length econtent - digestSize
-            (content, mac) <- get2 econtent (contentlen, digestSize)
-            getCipherData record $ CipherData
-                 { cipherDataContent = content
-                 , cipherDataMAC     = Just mac
-                 , cipherDataPadding = Nothing
-                 }
 
+          decryptOf :: BulkFunctions -> TLSSt Bytes
           decryptOf (BulkBlockF _ decryptF) = do
             {- update IV -}
             (iv, econtent') <- if hasExplicitBlockIV $ stVersion st

@@ -15,7 +15,6 @@ module Network.TLS.Extra.Cipher
     , ciphersuite_strong
     , ciphersuite_unencrypted
     -- * individual ciphers
-    , cipher_null_null
     , cipher_null_SHA1
     , cipher_null_MD5
     , cipher_RC4_128_MD5
@@ -91,8 +90,9 @@ bulk_null = Bulk
     , bulkKeySize      = 0
     , bulkIVSize       = 0
     , bulkBlockSize    = 0
-    , bulkF            = BulkNoneF
+    , bulkF            = BulkStreamF (const B.empty) streamId streamId
     }
+    where streamId = \iv b -> (b,iv)
 
 bulk_rc4 = Bulk
     { bulkName         = "RC4-128"
@@ -134,23 +134,6 @@ hash_sha256 = Hash
     { hashName = "SHA256"
     , hashSize = 32
     , hashF    = SHA256.hash
-    }
-
-hash_null = Hash
-    { hashName = "null"
-    , hashSize = 0
-    , hashF    = const B.empty
-    }
-
--- | this is not stricly a usable cipher; it's the initial cipher of a TLS connection
-cipher_null_null :: Cipher
-cipher_null_null = Cipher
-    { cipherID           = 0x0
-    , cipherName         = "null-null"
-    , cipherBulk         = bulk_null
-    , cipherHash         = hash_null
-    , cipherKeyExchange  = CipherKeyExchange_RSA
-    , cipherMinVer       = Nothing
     }
 
 -- | unencrypted cipher using RSA for key exchange and MD5 for digest

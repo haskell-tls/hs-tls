@@ -30,8 +30,7 @@ type Key = B.ByteString
 type IV = B.ByteString
 
 data BulkFunctions =
-          BulkNoneF -- special value for 0
-        | BulkBlockF (Key -> IV -> B.ByteString -> B.ByteString)
+          BulkBlockF (Key -> IV -> B.ByteString -> B.ByteString)
                      (Key -> IV -> B.ByteString -> B.ByteString)
         | BulkStreamF (Key -> IV)
                       (IV -> B.ByteString -> (B.ByteString, IV))

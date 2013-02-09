@@ -58,7 +58,6 @@ encryptData content = do
         let writekey = cstKey cst
 
         case bulkF bulk of
-                BulkNoneF -> return content
                 BulkBlockF encrypt _ -> do
                         let blockSize = fromIntegral $ bulkBlockSize bulk
                         let msg_len = B.length content
