@@ -116,25 +116,29 @@ testInitiate spCert = do
 
 	{- the test involves writing data on one side of the data "pipe" and
 	 - then checking we received them on the other side of the data "pipe" -}
-	d <- L.pack <$> pick (someWords8 256)
+	d <- B.pack <$> pick (someWords8 256)
 	run $ writeChan startQueue d
 
 	dres <- run $ readChan resultQueue
-	assert $ d == dres
+	assertEq d dres
 
 	-- cleanup
 	run (contextClose cCtx >> contextClose sCtx)
 
 	where
+		assertEq exp got
+			| exp == got = return ()
+			| otherwise  = error ("expected: " ++ show exp ++ "\n    got: " ++ show got)
+
 		tlsServer handle queue = do
 			handshake handle
-			d <- recvData' handle
+			d <- recvData handle
 			writeChan queue d
 			return ()
 		tlsClient queue handle = do
 			handshake handle
 			d <- readChan queue
-			sendData handle d
+			sendData handle (L.fromChunks [d])
 			return ()
 
 runTests = do
