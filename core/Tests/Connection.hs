@@ -87,7 +87,7 @@ arbitraryPairParams = do
                 arbitraryVersions = resize (length supportedVersions + 1) $ listOf1 (elements supportedVersions)
                 arbitraryCiphers  = resize (length supportedCiphers + 1) $ listOf1 (elements supportedCiphers)
 
-setPairParamsSessionManager :: SessionManager s => s -> (Params, Params) -> (Params, Params)
+setPairParamsSessionManager :: SessionManager -> (Params, Params) -> (Params, Params)
 setPairParamsSessionManager manager (clientState, serverState) = (nc,ns)
         where
                 nc = setSessionManager manager clientState

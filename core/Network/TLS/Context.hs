@@ -5,7 +5,6 @@
 -- Stability   : experimental
 -- Portability : unknown
 --
-{-# LANGUAGE ExistentialQuantification, Rank2Types #-}
 -- only needed because of some GHC bug relative to insufficient polymorphic field
 {-# LANGUAGE RecordWildCards #-}
 module Network.TLS.Context
@@ -153,7 +152,7 @@ data ServerParams = ServerParams
 
 data RoleParams = Client ClientParams | Server ServerParams
 
-data Params = forall s . SessionManager s => Params
+data Params = Params
         { pConnectVersion    :: Version             -- ^ version to use on client connection.
         , pAllowedVersions   :: [Version]           -- ^ allowed versions that we can use.
         , pCiphers           :: [Cipher]            -- ^ all ciphers supported ordered by priority.
@@ -165,17 +164,17 @@ data Params = forall s . SessionManager s => Params
         , pLogging           :: Logging             -- ^ callback for logging
         , onHandshake        :: Measurement -> IO Bool -- ^ callback on a beggining of handshake
         , onCertificatesRecv :: [X509] -> IO CertificateUsage -- ^ callback to verify received cert chain.
-        , pSessionManager    :: s
+        , pSessionManager    :: SessionManager
         , onSuggestNextProtocols :: IO (Maybe [B.ByteString])       -- ^ suggested next protocols accoring to the next protocol negotiation extension.
         , onNPNServerSuggest :: Maybe ([B.ByteString] -> IO B.ByteString)
         , roleParams          :: RoleParams
         }
 
 -- | Set a new session manager in a parameters structure.
-setSessionManager :: SessionManager s => s -> Params -> Params
+setSessionManager :: SessionManager -> Params -> Params
 setSessionManager manager (Params {..}) = Params { pSessionManager = manager, .. }
 
-withSessionManager :: Params -> (forall s . SessionManager s => s -> a) -> a
+withSessionManager :: Params -> (SessionManager -> a) -> a
 withSessionManager (Params { pSessionManager = man }) f = f man
 
 defaultLogging :: Logging
@@ -203,7 +202,7 @@ defaultParamsClient = Params
         , pLogging                = defaultLogging
         , onHandshake             = (\_ -> return True)
         , onCertificatesRecv      = (\_ -> return CertificateUsageAccept)
-        , pSessionManager         = NoSessionManager
+        , pSessionManager         = nullSessionManager
         , onSuggestNextProtocols  = return Nothing
         , onNPNServerSuggest      = Nothing
         , roleParams              = Client $ ClientParams
