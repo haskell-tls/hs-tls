@@ -24,6 +24,7 @@ import qualified Control.Exception as E
 import Control.Monad
 
 import Data.IORef
+import Data.X509
 
 genByteString :: Int -> Gen B.ByteString
 genByteString i = B.pack <$> vector i
@@ -100,7 +101,7 @@ instance Arbitrary Handshake where
                         <*> arbitrary
                         <*> arbitrary
                         <*> (return [])
-                , liftM Certificates (resize 2 $ listOf $ arbitraryX509)
+                , liftM Certificates (CertificateChain <$> (resize 2 $ listOf $ arbitraryX509))
                 , pure HelloRequest
                 , pure ServerHelloDone
                 , ClientKeyXchg <$> genByteString 48

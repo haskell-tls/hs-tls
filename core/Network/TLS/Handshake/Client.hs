@@ -28,7 +28,7 @@ import Data.List (find)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 
-import Data.Certificate.X509(X509, x509Cert, certPubKey, PubKey(PubKeyRSA))
+import Data.X509 (Certificate(..), CertificateChain(..), getCertificate, PubKey(..)) --(X509, x509Cert, certPubKey, PubKey(PubKeyRSA))
 
 import Control.Applicative ((<$>))
 import Control.Monad.State
@@ -125,7 +125,7 @@ handshakeClient cparams ctx = do
 
                 processCertificate :: MonadIO m => Handshake -> m (RecvState m)
                 processCertificate (Certificates certs) = do
-                        usage <- liftIO $ E.catch (onCertificatesRecv params $ certs) rejectOnException
+                        usage <- liftIO $ E.catch (onCertificatesRecv params certs) rejectOnException
                         case usage of
                                 CertificateUsageAccept        -> return ()
                                 CertificateUsageReject reason -> certificateRejected reason
@@ -175,21 +175,17 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                         certChain <- liftIO $ onCertificateRequest cparams req `E.catch`
                                      throwMiscErrorOnException "certificate request callback failed"
 
+                        usingState_ ctx $ setClientCertSent False
                         case certChain of
-                            (_, Nothing) : _ ->
-                                  throwCore $ Error_Misc "no private key available"
-                            (cert, Just pk) : _ -> do
-                                case certPubKey $ x509Cert cert of
+                            Nothing                       -> sendPacket ctx $ Handshake [Certificates (CertificateChain [])]
+                            Just (CertificateChain [], _) -> sendPacket ctx $ Handshake [Certificates (CertificateChain [])]
+                            Just (cc@(CertificateChain (c:_)), pk) -> do
+                                case certPubKey $ getCertificate c of
                                     PubKeyRSA _ -> return ()
-                                    _           ->
-                                        throwCore $ Error_Protocol ("no supported certificate type", True, HandshakeFailure)
+                                    _           -> throwCore $ Error_Protocol ("no supported certificate type", True, HandshakeFailure)
                                 usingState_ ctx $ setClientPrivateKey pk
-                            _ ->
-                                return ()
-
-                        usingState_ ctx $ setClientCertSent (not $ null certChain)
-                        sendPacket ctx $ Handshake [Certificates $ map fst certChain]
-
+                                usingState_ ctx $ setClientCertSent True
+                                sendPacket ctx $ Handshake [Certificates cc]
 
             sendClientKeyXchg = do
                     encryptedPreMaster <- usingState_ ctx $ do

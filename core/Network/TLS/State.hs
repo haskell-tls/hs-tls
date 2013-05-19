@@ -90,7 +90,7 @@ import Control.Monad
 import Control.Monad.State
 import Control.Monad.Error
 import Crypto.Random.API
-import Data.Certificate.X509
+import Data.X509 (CertificateChain)
 
 assert :: Monad m => String -> [(String,Bool)] -> m ()
 assert fctname list = forM_ list $ \ (name, assumption) -> do
@@ -124,7 +124,7 @@ data TLSHandshakeState = TLSHandshakeState
         , hstClientCertRequest :: !(Maybe ClientCertRequestData) -- ^ Set to Just-value when certificate request was received
         , hstClientCertSent  :: !Bool -- ^ Set to true when a client certificate chain was sent
         , hstCertReqSent     :: !Bool -- ^ Set to true when a certificate request was sent
-        , hstClientCertChain :: !(Maybe [X509])
+        , hstClientCertChain :: !(Maybe CertificateChain)
         } deriving (Show)
 
 data StateRNG = forall g . CPRG g => StateRNG g
@@ -159,7 +159,7 @@ data TLSState = TLSState
         , stExtensionNPN        :: Bool  -- NPN draft extension
         , stNegotiatedProtocol  :: Maybe B.ByteString -- NPN protocol
         , stServerNextProtocolSuggest :: Maybe [B.ByteString]
-        , stClientCertificateChain :: Maybe [X509]
+        , stClientCertificateChain :: Maybe CertificateChain
         } deriving (Show)
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrorT TLSError (State TLSState) a }
@@ -346,10 +346,10 @@ setClientCertSent b = updateHandshake "client cert sent" (\hst -> hst { hstClien
 getClientCertSent :: MonadState TLSState m => m (Maybe Bool)
 getClientCertSent = gets (stHandshake >=> Just . hstClientCertSent)
 
-setClientCertChain :: MonadState TLSState m => [X509] -> m ()
+setClientCertChain :: MonadState TLSState m => CertificateChain -> m ()
 setClientCertChain b = updateHandshake "client certificate chain" (\hst -> hst { hstClientCertChain = Just b })
 
-getClientCertChain :: MonadState TLSState m => m (Maybe [X509])
+getClientCertChain :: MonadState TLSState m => m (Maybe CertificateChain)
 getClientCertChain = gets (stHandshake >=> hstClientCertChain)
 
 setClientCertRequest :: MonadState TLSState m => ClientCertRequestData -> m ()
@@ -444,10 +444,10 @@ setServerNextProtocolSuggest ps = modify (\st -> st { stServerNextProtocolSugges
 getServerNextProtocolSuggest :: MonadState TLSState m => m (Maybe [B.ByteString])
 getServerNextProtocolSuggest = get >>= return . stServerNextProtocolSuggest
 
-setClientCertificateChain :: MonadState TLSState m => [X509] -> m ()
+setClientCertificateChain :: MonadState TLSState m => CertificateChain -> m ()
 setClientCertificateChain s = modify (\st -> st { stClientCertificateChain = Just s })
 
-getClientCertificateChain :: MonadState TLSState m => m (Maybe [X509])
+getClientCertificateChain :: MonadState TLSState m => m (Maybe CertificateChain)
 getClientCertificateChain = gets stClientCertificateChain
 
 getCipherKeyExchangeType :: MonadState TLSState m => m (Maybe CipherKeyExchangeType)

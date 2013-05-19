@@ -53,20 +53,21 @@ module Network.TLS.Packet
 import Network.TLS.Struct
 import Network.TLS.Wire
 import Network.TLS.Cap
-import Data.Either (partitionEithers)
 import Data.Maybe (fromJust)
 import Data.Word
 import Data.Bits ((.|.))
 import Control.Applicative ((<$>))
 import Control.Monad
-import Data.Certificate.X509 (decodeCertificate, encodeCertificate, X509, encodeDN, decodeDN)
+import Data.ASN1.Types (fromASN1, toASN1)
+import Data.ASN1.Encoding (decodeASN1', encodeASN1')
+import Data.ASN1.BinaryEncoding (DER(..))
+import Data.X509 (CertificateChainRaw(..), encodeCertificateChain, decodeCertificateChain)
 import Network.TLS.Crypto
 import Network.TLS.MAC
 import Network.TLS.Cipher (CipherKeyExchangeType(..))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
-import qualified Data.ByteString.Lazy as L
 
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.MD5 as MD5
@@ -243,11 +244,10 @@ decodeServerHelloDone = return ServerHelloDone
 
 decodeCertificates :: Get Handshake
 decodeCertificates = do
-    certsRaw <- getWord24 >>= \len -> getList (fromIntegral len) getCertRaw
-    let (badCerts, certs) = partitionEithers $ map (decodeCertificate . L.fromChunks . (:[])) certsRaw
-    if not $ null badCerts
-        then fail ("error certificate parsing: " ++ show badCerts)
-        else return $ Certificates certs
+    certsRaw <- CertificateChainRaw <$> (getWord24 >>= \len -> getList (fromIntegral len) getCertRaw)
+    case decodeCertificateChain certsRaw of
+        Left (i, s) -> fail ("error certificate parsing " ++ show i ++ ":" ++ s)
+        Right cc    -> return $ Certificates cc
     where getCertRaw = getOpaque24 >>= \cert -> return (3 + B.length cert, cert)
 
 decodeFinished :: Get Handshake
@@ -282,12 +282,12 @@ decodeCertRequest cp = do
         getDName = do
             dName <- getOpaque16
             when (B.length dName == 0) $ fail "certrequest: invalid DN length"
-            dn <- decodeDName dName
+            dn <- case decodeASN1' DER dName of
+                    Left e      -> fail ("cert request decoding DistinguishedName ASN1 failed: " ++ show e)
+                    Right asn1s -> case fromASN1 asn1s of
+                                        Left e      -> fail ("cert request parsing DistinguishedName ASN1 failed: " ++ show e)
+                                        Right (d,_) -> return d
             return (2 + B.length dName, dn)
-
-        decodeDName d = case decodeDN (L.fromChunks [d]) of
-                            Left err -> fail ("certrequest: " ++ show err)
-                            Right s  -> return s
 
 decodeCertVerify :: CurrentParams -> Get Handshake
 decodeCertVerify cp = do
@@ -365,7 +365,8 @@ encodeHandshakeContent (ServerHello version random session cipherID compressionI
                            >> putWord16 cipherID >> putWord8 compressionID
                            >> putExtensions exts >> return ()
 
-encodeHandshakeContent (Certificates certs) = putOpaque24 (runPut $ mapM_ putCert certs)
+encodeHandshakeContent (Certificates cc) = putOpaque24 (runPut $ mapM_ putOpaque24 certs)
+  where (CertificateChainRaw certs) = encodeCertificateChain cc
 
 encodeHandshakeContent (ClientKeyXchg content) = do
         putBytes content
@@ -385,7 +386,7 @@ encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
         encodeCertAuthorities certAuthorities
   where
     -- Convert a distinguished name to its DER encoding.
-    encodeCA dn = return $ B.concat $ L.toChunks $ encodeDN dn
+    encodeCA dn = return $ encodeASN1' DER (toASN1 dn []) --B.concat $ L.toChunks $ encodeDN dn
 
     -- Encode a list of distinguished names.
     encodeCertAuthorities certAuths = do
@@ -440,9 +441,6 @@ getSession = do
 putSession :: Session -> Put
 putSession (Session Nothing)  = putWord8 0
 putSession (Session (Just s)) = putOpaque8 s
-
-putCert :: X509 -> Put
-putCert cert = putOpaque24 (B.concat $ L.toChunks $ encodeCertificate cert)
 
 getExtensions :: Int -> Get [ExtensionRaw]
 getExtensions 0   = return []

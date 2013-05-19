@@ -10,6 +10,7 @@ import Certificate
 import PubKey
 import PipeChan
 import Network.TLS
+import Data.X509
 
 import qualified Crypto.Random.AESCtr as RNG
 import qualified Data.ByteString as B
@@ -65,7 +66,7 @@ arbitraryPairParams = do
         let serverState = defaultParamsServer
                 { pAllowedVersions        = allowedVersions
                 , pCiphers                = serverCiphers
-                , pCertificates           = [(servCert, Just $ PrivRSA privKey)]
+                , pCertificates           = Just (CertificateChain [servCert], Just $ PrivRSA privKey)
                 , pUseSecureRenegotiation = secNeg
                 , pLogging                = logging "server: "
                 }

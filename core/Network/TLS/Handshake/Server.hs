@@ -28,7 +28,7 @@ import Data.List (intersect)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 
-import Data.Certificate.X509(X509, certSubjectDN, x509Cert)
+--import Data.X509
 
 import Control.Applicative ((<$>))
 import Control.Monad.State
@@ -37,6 +37,7 @@ import qualified Control.Exception as E
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Certificate
+import Network.TLS.X509
 
 -- Put the server context in handshake mode.
 --
@@ -123,8 +124,8 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                 usedCipher         = (onCipherChoosing sparams) ver commonCiphers
                 commonCompressions = compressionIntersectID (pCompressions params) compressions
                 usedCompression    = head commonCompressions
-                srvCerts           = map fst $ pCertificates params
-                privKeys           = map snd $ pCertificates params
+                srvCerts           = fmap fst $ pCertificates params
+                privKey            = join $ fmap snd $ pCertificates params
                 needKeyXchg        = cipherExchangeNeedMoreData $ cipherKeyExchange usedCipher
                 clientRequestedNPN = isJust $ lookup extensionID_NextProtocolNegotiation exts
 
@@ -137,9 +138,9 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
 
                 makeServerHello session = do
                         srand <- getStateRNG ctx 32 >>= return . ServerRandom
-                        case privKeys of
-                                (Just privkey : _) -> usingState_ ctx $ setPrivateKey privkey
-                                _                  -> return () -- return a sensible error
+                        case privKey of
+                                Just privkey -> usingState_ ctx $ setPrivateKey privkey
+                                _            -> return () -- return a sensible error
 
                         -- in TLS12, we need to check as well the certificates we are sending if they have in the extension
                         -- the necessary bits set.
@@ -172,7 +173,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                         usingState_ ctx (setSession serverSession False)
                         serverhello   <- makeServerHello serverSession
                         -- send ServerHello & Certificate & ServerKeyXchg & CertReq
-                        sendPacket ctx $ Handshake [ serverhello, Certificates srvCerts ]
+                        sendPacket ctx $ Handshake [ serverhello, Certificates (maybe (CertificateChain []) id srvCerts) ]
                         when needKeyXchg $ do
                                 let skg = SKX_RSA Nothing
                                 sendPacket ctx (Handshake [ServerKeyXchg skg])
@@ -197,8 +198,8 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                         -- Send HelloDone
                         sendPacket ctx (Handshake [ServerHelloDone])
 
-                extractCAname :: X509 -> DistinguishedName
-                extractCAname cert = certSubjectDN (x509Cert cert)
+                extractCAname :: SignedCertificate -> DistinguishedName
+                extractCAname cert = certSubjectDN $ getCertificate cert
 
 handshakeServerWith _ _ _ = fail "unexpected handshake type received. expecting client hello"
 
@@ -244,10 +245,8 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                 --
                 processCertificateVerify (Handshake [hs@(CertVerify mbHashSig (CertVerifyData bs))]) = do
                     usingState_ ctx $ processHandshake hs
-                    chain <- usingState_ ctx $ getClientCertChain
-                    case chain of
-                        Just (_:_) -> return ()
-                        _          -> throwCore $ Error_Protocol ("change cipher message expected", True, UnexpectedMessage)
+
+                    checkValidClientCertChain "change cipher message expected"
 
                     -- Fetch all handshake messages up to now.
                     msgs <- usingState_ ctx $ B.concat <$> getHandshakeMessages
@@ -303,8 +302,9 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                 processCertificateVerify p = do
                     chain <- usingState_ ctx $ getClientCertChain
                     case chain of
-                        Just (_:_) -> throwCore $ Error_Protocol ("cert verify message missing", True, UnexpectedMessage)
-                        _          -> return ()
+                        Just cc | isNullCertificateChain cc -> return ()
+                                | otherwise                 -> throwCore $ Error_Protocol ("cert verify message missing", True, UnexpectedMessage)
+                        Nothing -> return ()
                     expectChangeCipher p
 
                 expectChangeCipher ChangeCipherSpec = do
@@ -317,3 +317,12 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
 
                 expectFinish (Finished _) = return RecvStateDone
                 expectFinish p            = unexpected (show p) (Just "Handshake Finished")
+
+                checkValidClientCertChain msg = do
+                    chain <- usingState_ ctx $ getClientCertChain
+                    let throwerror = Error_Protocol (msg , True, UnexpectedMessage)
+                    case chain of
+                        Nothing -> throwCore throwerror
+                        Just cc | isNullCertificateChain cc -> throwCore throwerror
+                                | otherwise                 -> return ()
+

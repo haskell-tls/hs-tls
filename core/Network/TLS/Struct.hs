@@ -52,8 +52,7 @@ module Network.TLS.Struct
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B (length)
 import Data.Word
-import Data.Certificate.X509 (X509)
-import Data.Certificate.X509.Cert (DistinguishedName)
+import Data.X509 (CertificateChain, DistinguishedName)
 import Data.Typeable
 import Control.Monad.Error (Error(..))
 import Control.Exception (Exception(..))
@@ -234,7 +233,7 @@ type DeprecatedRecord = ByteString
 data Handshake =
           ClientHello !Version !ClientRandom !Session ![CipherID] ![CompressionID] [ExtensionRaw] (Maybe DeprecatedRecord)
         | ServerHello !Version !ServerRandom !Session !CipherID !CompressionID [ExtensionRaw]
-        | Certificates [X509]
+        | Certificates CertificateChain
         | HelloRequest
         | ServerHelloDone
         | ClientKeyXchg Bytes

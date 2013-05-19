@@ -80,7 +80,7 @@ import Network.TLS.Compression
 import Network.TLS.Crypto
 import Network.TLS.State
 import Network.TLS.Measurement
-import Data.Certificate.X509
+import Data.X509
 import Data.List (intercalate)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
@@ -126,7 +126,7 @@ data ClientParams = ClientParams
           -- depending whether the server accepts it.
         , onCertificateRequest :: ([CertificateType],
                                    Maybe [HashAndSignatureAlgorithm],
-                                   [DistinguishedName]) -> IO [(X509, Maybe PrivateKey)]
+                                   [DistinguishedName]) -> IO (Maybe (CertificateChain, PrivateKey))
         }
 
 data ServerParams = ServerParams
@@ -135,12 +135,12 @@ data ServerParams = ServerParams
           -- | This is a list of certificates from which the
           -- disinguished names are sent in certificate request
           -- messages.  For TLS1.0, it should not be empty.
-        , serverCACertificates :: [X509]
+        , serverCACertificates :: [SignedCertificate]
 
           -- | This action is called when a client certificate chain
           -- is received from the client.  When it returns a
           -- CertificateUsageReject value, the handshake is aborted.
-        , onClientCertificate :: [X509] -> IO CertificateUsage
+        , onClientCertificate :: CertificateChain -> IO CertificateUsage
 
           -- | This action is called when the client certificate
           -- cannot be verified.  A 'Nothing' argument indicates a
@@ -161,10 +161,10 @@ data Params = forall s . SessionManager s => Params
         , pHashSignatures    :: [HashAndSignatureAlgorithm] -- ^ All supported hash/signature algorithms pair for client certificate verification, ordered by decreasing priority.
         , pUseSecureRenegotiation :: Bool           -- ^ notify that we want to use secure renegotation
         , pUseSession             :: Bool           -- ^ generate new session if specified
-        , pCertificates      :: [(X509, Maybe PrivateKey)] -- ^ the cert chain for this context with the associated keys if any.
+        , pCertificates      :: Maybe (CertificateChain, Maybe PrivateKey) -- ^ the cert chain for this context with the associated keys if any.
         , pLogging           :: Logging             -- ^ callback for logging
         , onHandshake        :: Measurement -> IO Bool -- ^ callback on a beggining of handshake
-        , onCertificatesRecv :: [X509] -> IO CertificateUsage -- ^ callback to verify received cert chain.
+        , onCertificatesRecv :: CertificateChain -> IO CertificateUsage -- ^ callback to verify received cert chain.
         , pSessionManager    :: s
         , onSuggestNextProtocols :: IO (Maybe [B.ByteString])       -- ^ suggested next protocols accoring to the next protocol negotiation extension.
         , onNPNServerSuggest :: Maybe ([B.ByteString] -> IO B.ByteString)
@@ -199,7 +199,7 @@ defaultParamsClient = Params
                                     ]
         , pUseSecureRenegotiation = True
         , pUseSession             = True
-        , pCertificates           = []
+        , pCertificates           = Nothing
         , pLogging                = defaultLogging
         , onHandshake             = (\_ -> return True)
         , onCertificatesRecv      = (\_ -> return CertificateUsageAccept)
@@ -210,7 +210,7 @@ defaultParamsClient = Params
                                         { clientWantSessionResume    = Nothing
                                         , clientUseMaxFragmentLength = Nothing
                                         , clientUseServerName        = Nothing
-                                        , onCertificateRequest       = \ _ -> return []
+                                        , onCertificateRequest       = \ _ -> return Nothing
                                         }
         }
 
@@ -246,7 +246,7 @@ instance Show Params where
                 , ("allowedVersions", show $ pAllowedVersions p)
                 , ("ciphers", show $ pCiphers p)
                 , ("compressions", show $ pCompressions p)
-                , ("certificates", show $ length $ pCertificates p)
+                , ("certificates", show $ pCertificates p)
                 ]) ++ " }"
 
 -- | Certificate and Chain rejection reason

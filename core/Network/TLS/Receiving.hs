@@ -26,7 +26,7 @@ import Network.TLS.State
 import Network.TLS.Cipher
 import Network.TLS.Crypto
 import Network.TLS.Extension
-import Data.Certificate.X509
+import Data.X509
 
 returnEither :: Either TLSError a -> TLSSt a
 returnEither (Left err) = throwError err
@@ -150,16 +150,14 @@ processClientFinished fdata = do
         updateVerifiedData False fdata
         return ()
 
-processCertificates :: Bool -> [X509] -> TLSSt ()
-processCertificates clientmode certs = do
-        if null certs
-         then when (clientmode) $
-                 throwError $ Error_Protocol ("server certificate missing", True,
-                                              HandshakeFailure)
-         else do
-          let (X509 mainCert _ _ _ _) = head certs
-          case certPubKey mainCert of
+processCertificates :: Bool -> CertificateChain -> TLSSt ()
+processCertificates False (CertificateChain []) = return ()
+processCertificates True (CertificateChain [])  =
+    throwError $ Error_Protocol ("server certificate missing", True, HandshakeFailure)
+processCertificates clientmode (CertificateChain (c:_)) = do
+          --let (X509 mainCert _ _ _ _) = head certs
+          case certPubKey $ getCertificate c of
                 PubKeyRSA pubkey -> (if clientmode
                                      then setPublicKey
                                      else setClientPublicKey) (PubRSA pubkey)
-                _                -> return ()
+                _ -> return ()
