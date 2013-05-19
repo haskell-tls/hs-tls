@@ -51,6 +51,7 @@ Executable           tls-retrievecertificate
                    , cmdargs
                    , groom
                    , time
+                   , pem
                    , cprng-aes >= 0.3.0
                    , certificate >= 1.0
                    , tls >= 1.1 && < 1.2

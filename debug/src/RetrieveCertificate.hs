@@ -12,10 +12,15 @@ import Control.Monad
 
 import qualified Crypto.Random.AESCtr as RNG
 
+import Data.PEM
+
 import Text.Printf
 import Text.Groom
 
 import System.Console.CmdArgs
+
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy as L
 
 openConnection s p = do
     ref <- newIORef Nothing
@@ -53,6 +58,11 @@ progArgs = PArgs
         [ "Retrieve the remote certificate and optionally its chain from a remote destination"
         ]
 
+showCert "pem" cert = B.putStrLn $ pemWriteBS pem
+    where pem = PEM { pemName = "CERTIFICATE"
+                    , pemHeader = []
+                    , pemContent = B.concat $ L.toChunks $ encodeCertificate cert
+                    }
 showCert "full" cert = putStrLn $ groom cert
 
 showCert _ (x509Cert -> cert)  = do
