@@ -51,13 +51,6 @@ module Network.TLS
     , contextFlush
     , contextClose
 
-    -- * deprecated type aliases
-    , TLSParams
-    , TLSLogging
-    , TLSCertificateUsage
-    , TLSCertificateRejectReason
-    , TLSCtx
-
     -- * deprecated values
     , defaultParams
 
