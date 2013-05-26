@@ -33,7 +33,7 @@ import Network.TLS
 --
 -- will make a new RNG (using cprng-aes) and connect to IP 192.168.2.2
 -- on port 7777.
-connectionClient :: CPRG g => String -> String -> TLSParams -> g -> IO Context
+connectionClient :: CPRG g => String -> String -> Params -> g -> IO Context
 connectionClient s p params rng = do
     pn <- if and $ map isDigit $ p
               then return $ fromIntegral $ (read p :: Int)
