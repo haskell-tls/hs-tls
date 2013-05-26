@@ -17,9 +17,8 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Data.Either
 import Data.PEM (PEM(..), pemParseBS)
-import Data.Certificate.X509
-import qualified Data.Certificate.KeyRSA as KeyRSA
-import Network.TLS
+import Data.X509.File
+import Data.X509
 
 -- | read one X509 certificate from a file.
 --
@@ -29,29 +28,20 @@ import Network.TLS
 -- If no valid PEM encoded certificate is found in the file
 -- this function will raise an error.
 fileReadCertificate :: FilePath -> IO SignedCertificate
-fileReadCertificate filepath = do
-    certs <- rights . parseCerts . pemParseBS <$> B.readFile filepath
-    case certs of
-        []    -> error "no valid certificate found"
-        (x:_) -> return x
-    where parseCerts (Right pems) = map (decodeCertificate . L.fromChunks . (:[]) . pemContent)
+fileReadCertificate filepath = headError <$> readSignedObject filepath
+  where headError []    = error ("read certificate: not found in " ++ show filepath)
+        headError (x:_) = x
+{-
                                   $ filter (flip elem ["CERTIFICATE", "TRUSTED CERTIFICATE"] . pemName) pems
-          parseCerts (Left err) = error ("cannot parse PEM file " ++ show err)
+-}
 
 -- | read one private key from a file.
 --
--- the private key must be in the usual PEM format and at the moment only
--- RSA PRIVATE KEY are supported.
+-- the private key must be in the usual PEM format
 --
 -- If no valid PEM encoded private key is found in the file
 -- this function will raise an error.
-fileReadPrivateKey :: FilePath -> IO PrivateKey
-fileReadPrivateKey filepath = do
-    pk <- rights . parseKey . pemParseBS <$> B.readFile filepath
-    case pk of
-        []    -> error "no valid RSA key found"
-        (x:_) -> return x
-
-    where parseKey (Right pems) = map (fmap (PrivRSA . snd) . KeyRSA.decodePrivate . L.fromChunks . (:[]) . pemContent)
-                                $ filter ((== "RSA PRIVATE KEY") . pemName) pems
-          parseKey (Left err) = error ("Cannot parse PEM file " ++ show err)
+fileReadPrivateKey :: FilePath -> IO PrivKey
+fileReadPrivateKey filepath = headError <$> readKeyFile filepath
+  where headError []    = error ("read private key: no key found in " ++ show filepath)
+        headError (x:_) = x
