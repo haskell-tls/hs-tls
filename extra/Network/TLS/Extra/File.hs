@@ -28,7 +28,7 @@ import Network.TLS
 --
 -- If no valid PEM encoded certificate is found in the file
 -- this function will raise an error.
-fileReadCertificate :: FilePath -> IO X509
+fileReadCertificate :: FilePath -> IO SignedCertificate
 fileReadCertificate filepath = do
     certs <- rights . parseCerts . pemParseBS <$> B.readFile filepath
     case certs of
