@@ -80,7 +80,7 @@ import Network.TLS.Compression
 import Network.TLS.Crypto
 import Network.TLS.State
 import Network.TLS.Measurement
-import Data.X509
+import Network.TLS.X509
 import Data.List (intercalate)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
@@ -249,19 +249,6 @@ instance Show Params where
                 , ("certificates", show $ pCertificates p)
                 ]) ++ " }"
 
--- | Certificate and Chain rejection reason
-data CertificateRejectReason =
-          CertificateRejectExpired
-        | CertificateRejectRevoked
-        | CertificateRejectUnknownCA
-        | CertificateRejectOther String
-        deriving (Show,Eq)
-
--- | Certificate Usage callback possible returns values.
-data CertificateUsage =
-          CertificateUsageAccept                         -- ^ usage of certificate accepted
-        | CertificateUsageReject CertificateRejectReason -- ^ usage of certificate rejected
-        deriving (Show,Eq)
 
 -- | Connection IO backend
 data Backend = Backend

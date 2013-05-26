@@ -13,9 +13,26 @@ module Network.TLS.X509
     , SignedCertificate
     , getCertificate
     , isNullCertificateChain
+    , CertificateRejectReason(..)
+    , CertificateUsage(..)
     ) where
 
 import Data.X509
 
 isNullCertificateChain :: CertificateChain -> Bool
 isNullCertificateChain (CertificateChain l) = null l
+
+-- | Certificate and Chain rejection reason
+data CertificateRejectReason =
+          CertificateRejectExpired
+        | CertificateRejectRevoked
+        | CertificateRejectUnknownCA
+        | CertificateRejectOther String
+        deriving (Show,Eq)
+
+-- | Certificate Usage callback possible returns values.
+data CertificateUsage =
+          CertificateUsageAccept                         -- ^ usage of certificate accepted
+        | CertificateUsageReject CertificateRejectReason -- ^ usage of certificate rejected
+        deriving (Show,Eq)
+
