@@ -9,21 +9,17 @@
 -- to be handled by the TLS stack
 module Network.TLS.Extra.File 
     ( fileReadCertificate
+    , fileReadCertificateChain
     , fileReadPrivateKey
     ) where
 
 import Control.Applicative ((<$>))
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as L
-import Data.Either
-import Data.PEM (PEM(..), pemParseBS)
 import Data.X509.File
 import Data.X509
 
 -- | read one X509 certificate from a file.
 --
--- the certificate must be in the usual PEM format with the
--- TRUSTED CERTIFICATE or CERTIFICATE pem name.
+-- the certificate must be in the usual PEM format
 --
 -- If no valid PEM encoded certificate is found in the file
 -- this function will raise an error.
@@ -31,9 +27,16 @@ fileReadCertificate :: FilePath -> IO SignedCertificate
 fileReadCertificate filepath = headError <$> readSignedObject filepath
   where headError []    = error ("read certificate: not found in " ++ show filepath)
         headError (x:_) = x
-{-
-                                  $ filter (flip elem ["CERTIFICATE", "TRUSTED CERTIFICATE"] . pemName) pems
--}
+
+-- | read a CertificateChain from a file.
+--
+-- No checks are performed on the chain itself for validity or consistency.
+--
+-- the expected format is the list of PEM encoded signed certificate,
+-- with the first one being the subject of the chain.
+--
+fileReadCertificateChain :: FilePath -> IO CertificateChain
+fileReadCertificateChain filepath = CertificateChain <$> readSignedObject filepath
 
 -- | read one private key from a file.
 --
