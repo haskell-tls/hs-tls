@@ -4,9 +4,9 @@ import Network.TLS
 import Network.TLS.Extra
 
 import Data.IORef
-import Data.Time.Clock
-import Data.Certificate.X509
-import System.Certificate.X509
+import Data.X509
+import Data.X509.Validation
+import System.X509
 
 import Control.Monad
 
@@ -20,7 +20,6 @@ import Text.Groom
 import System.Console.CmdArgs
 
 import qualified Data.ByteString.Char8 as B
-import qualified Data.ByteString.Lazy as L
 
 openConnection s p = do
     ref <- newIORef Nothing
@@ -40,7 +39,7 @@ openConnection s p = do
 data PArgs = PArgs
     { destination :: String
     , port        :: String
-    , chain       :: Bool
+    , printChain  :: Bool
     , output      :: String
     , verify      :: Bool
     , verifyFQDN  :: String
@@ -49,7 +48,7 @@ data PArgs = PArgs
 progArgs = PArgs
     { destination = "localhost" &= help "destination address to connect to" &= typ "address"
     , port        = "443"       &= help "destination port to connect to" &= typ "port"
-    , chain       = False       &= help "also output the chain of certificate used"
+    , printChain  = False       &= help "also output the chain of certificate used" &= name "chain"
     , output      = "simple"    &= help "define the format of output (full, pem, default: simple)" &= typ "format"
     , verify      = False       &= help "verify the chain received with the trusted system certificates"
     , verifyFQDN  = ""          &= help "verify the chain against a specific fully qualified domain name (e.g. web.example.com)" &= explicit &= name "verify-domain-name"
@@ -61,22 +60,24 @@ progArgs = PArgs
 showCert "pem" cert = B.putStrLn $ pemWriteBS pem
     where pem = PEM { pemName = "CERTIFICATE"
                     , pemHeader = []
-                    , pemContent = B.concat $ L.toChunks $ encodeCertificate cert
+                    , pemContent = encodeSignedObject cert
                     }
 showCert "full" cert = putStrLn $ groom cert
 
-showCert _ (x509Cert -> cert)  = do
+showCert _ (signedCert)  = do
     putStrLn ("serial:   " ++ (show $ certSerial cert))
     putStrLn ("issuer:   " ++ (show $ certIssuerDN cert))
     putStrLn ("subject:  " ++ (show $ certSubjectDN cert))
     putStrLn ("validity: " ++ (show $ fst $ certValidity cert) ++ " to " ++ (show $ snd $ certValidity cert))
+  where cert = getCertificate signedCert
 
 main = do
     a <- cmdArgs progArgs
     _ <- printf "connecting to %s on port %s ...\n" (destination a) (port a)
 
-    certs <- openConnection (destination a) (port a)
-    case (chain a) of
+    chain <- openConnection (destination a) (port a)
+    let (CertificateChain certs) = chain
+    case (printChain a) of
         True ->
             forM_ (zip [0..] certs) $ \(n, cert) -> do
                 putStrLn ("###### Certificate " ++ show (n + 1 :: Int) ++ " ######")
@@ -87,12 +88,18 @@ main = do
     when (verify a) $ do
         store <- getSystemCertificateStore
         putStrLn "### certificate chain trust"
+        let checks = (defaultChecks Nothing) { checkExhaustive = True }
+        reasons <- validate checks store chain
+        when (not $ null reasons) $ do putStrLn "fail validation:"
+                                       putStrLn $ show reasons
+        {-
         ctime <- utctDay `fmap` getCurrentTime
-        certificateVerifyChain store certs >>= showUsage "chain validity"
-        showUsage "time validity" (certificateVerifyValidity ctime certs)
+        --certificateVerifyChain store certs >>= showUsage "chain validity"
+        --showUsage "time validity" (certificateVerifyValidity ctime certs)
         when (verifyFQDN a /= "") $
             showUsage "fqdn match" (certificateVerifyDomain (verifyFQDN a) certs)
     where
         showUsage :: String -> TLSCertificateUsage -> IO ()
         showUsage s CertificateUsageAccept     = printf "%s : accepted\n" s
         showUsage s (CertificateUsageReject r) = printf "%s : rejected: %s\n" s (show r)
+-}

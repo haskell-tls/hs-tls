@@ -5,7 +5,7 @@ import Network.Socket
 import System.IO
 import System.IO.Error (isEOFError)
 import System.Console.CmdArgs
-import System.Certificate.X509
+import System.X509
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
@@ -40,7 +40,7 @@ readOne h = do
         Right True  -> B.hGetNonBlocking h 4096
         Right False -> return B.empty
 
-tlsclient :: Handle -> TLSCtx -> IO ()
+tlsclient :: Handle -> Context -> IO ()
 tlsclient srchandle dsthandle = do
     hSetBuffering srchandle NoBuffering
 
@@ -202,11 +202,14 @@ doClient pargs = do
                             }
 
     store <- getSystemCertificateStore
-    let crecv = if validCert pargs then certificateVerifyChain store else (\_ -> return CertificateUsageAccept)
+    let checks = defaultChecks (Just $ destination pargs)
+    let crecv = if validCert pargs
+                then certificateChecks checks store
+                else certificateNoChecks
     let clientstate = defaultParamsClient { pConnectVersion = TLS10
                                           , pAllowedVersions = [TLS10,TLS11,TLS12]
                                           , pCiphers = ciphers
-                                          , pCertificates = []
+                                          , pCertificates = Nothing
                                           , pLogging = logging
                                           , onCertificatesRecv = crecv
                                           }
@@ -231,7 +234,7 @@ doClient pargs = do
 
 doServer :: Stunnel -> IO ()
 doServer pargs = do
-    cert    <- fileReadCertificate $ certificate pargs
+    cert    <- fileReadCertificateChain $ certificate pargs
     pk      <- fileReadPrivateKey $ key pargs
     srcaddr <- getAddressDescription (sourceType pargs) (source pargs)
     dstaddr <- getAddressDescription (destinationType pargs) (destination pargs)
@@ -250,7 +253,7 @@ doServer pargs = do
                     StunnelSocket dst -> socketToHandle dst ReadWriteMode
 
                 _ <- forkIO $ finally
-                    (clientProcess [(cert, Just pk)] srch dsth (debug pargs) sessionStorage addr >> return ())
+                    (clientProcess (Just (cert, Just pk)) srch dsth (debug pargs) sessionStorage addr >> return ())
                     (hClose srch >> (when (dsth /= stdout) $ hClose dsth))
                 return ()
         AddrFD _ _ -> error "bad error fd. not implemented"

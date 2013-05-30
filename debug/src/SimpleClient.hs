@@ -15,7 +15,7 @@ import qualified Control.Exception as E
 import Control.Monad
 import System.Environment
 import System.Exit
-import System.Certificate.X509
+import System.X509
 
 import Data.IORef
 
@@ -51,7 +51,7 @@ getDefaultParams flags host store sStorage session =
         { pConnectVersion    = tlsConnectVer
         , pAllowedVersions   = [TLS10,TLS11,TLS12]
         , pCiphers           = ciphers
-        , pCertificates      = []
+        , pCertificates      = Nothing
         , pLogging           = logging
         , onCertificatesRecv = crecv
         }
@@ -64,9 +64,10 @@ getDefaultParams flags host store sStorage session =
                 { loggingPacketSent = putStrLn . ("debug: >> " ++)
                 , loggingPacketRecv = putStrLn . ("debug: << " ++)
                 }
+            checks = defaultChecks (Just host)
             crecv = if validateCert
-                        then certificateChecks [certificateVerifyChain store,return . certificateVerifyDomain host]
-                        else (\_ -> return CertificateUsageAccept)
+                        then certificateChecks checks store
+                        else certificateNoChecks
 
             tlsConnectVer
                 | Tls12 `elem` flags = TLS12
