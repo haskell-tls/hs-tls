@@ -126,7 +126,7 @@ data ClientParams = ClientParams
           -- depending whether the server accepts it.
         , onCertificateRequest :: ([CertificateType],
                                    Maybe [HashAndSignatureAlgorithm],
-                                   [DistinguishedName]) -> IO (Maybe (CertificateChain, PrivateKey))
+                                   [DistinguishedName]) -> IO (Maybe (CertificateChain, PrivKey))
         }
 
 data ServerParams = ServerParams
@@ -161,7 +161,7 @@ data Params = forall s . SessionManager s => Params
         , pHashSignatures    :: [HashAndSignatureAlgorithm] -- ^ All supported hash/signature algorithms pair for client certificate verification, ordered by decreasing priority.
         , pUseSecureRenegotiation :: Bool           -- ^ notify that we want to use secure renegotation
         , pUseSession             :: Bool           -- ^ generate new session if specified
-        , pCertificates      :: Maybe (CertificateChain, Maybe PrivateKey) -- ^ the cert chain for this context with the associated keys if any.
+        , pCertificates      :: Maybe (CertificateChain, Maybe PrivKey) -- ^ the cert chain for this context with the associated keys if any.
         , pLogging           :: Logging             -- ^ callback for logging
         , onHandshake        :: Measurement -> IO Bool -- ^ callback on a beggining of handshake
         , onCertificatesRecv :: CertificateChain -> IO CertificateUsage -- ^ callback to verify received cert chain.

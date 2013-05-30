@@ -23,12 +23,11 @@ import Network.TLS.Sending
 import Network.TLS.Receiving
 import Network.TLS.Measurement
 import Network.TLS.Wire (encodeWord16)
+import Network.TLS.X509
 import Data.Maybe
 import Data.List (find)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
-
-import Data.X509 (Certificate(..), CertificateChain(..), getCertificate, PubKey(..)) --(X509, x509Cert, certPubKey, PubKey(PubKeyRSA))
 
 import Control.Applicative ((<$>))
 import Control.Monad.State

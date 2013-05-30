@@ -12,8 +12,10 @@ module Network.TLS.Crypto
         , hashSHA256
 
         -- * key exchange generic interface
-        , PublicKey(..)
-        , PrivateKey(..)
+        , PubKey(..)
+        , PrivKey(..)
+        , PublicKey
+        , PrivateKey
         , HashDescr(..)
         , kxEncrypt
         , kxDecrypt
@@ -31,19 +33,17 @@ import Crypto.PubKey.HashDescr
 import qualified Crypto.PubKey.RSA as RSA
 import qualified Crypto.PubKey.RSA.PKCS15 as RSA
 import Crypto.Random.API
+import Data.X509 (PrivKey(..), PubKey(..))
 
-data PublicKey = PubRSA RSA.PublicKey
+{-# DEPRECATED PublicKey "use PubKey" #-}
+type PublicKey = PubKey
+{-# DEPRECATED PrivateKey "use PrivKey" #-}
+type PrivateKey = PrivKey
 
-data PrivateKey = PrivRSA RSA.PrivateKey
-
-instance Show PublicKey where
-        show (_) = "PublicKey(..)"
-
-instance Show PrivateKey where
-        show (_) = "privateKey(..)"
-
-data KxError = RSAError RSA.Error
-        deriving (Show)
+data KxError =
+      RSAError RSA.Error
+    | KxUnsupported
+    deriving (Show)
 
 class HashCtxC a where
         hashCName      :: a -> String
@@ -101,20 +101,24 @@ generalizeRSAWithRNG (Left e, g) = (Left (RSAError e), g)
 generalizeRSAWithRNG (Right x, g) = (Right x, g)
 
 kxEncrypt :: CPRG g => g -> PublicKey -> ByteString -> (Either KxError ByteString, g)
-kxEncrypt g (PubRSA pk) b = generalizeRSAWithRNG $ RSA.encrypt g pk b
+kxEncrypt g (PubKeyRSA pk) b = generalizeRSAWithRNG $ RSA.encrypt g pk b
+kxEncrypt g _              _ = (Left KxUnsupported, g)
 
 kxDecrypt :: CPRG g => g -> PrivateKey -> ByteString -> (Either KxError ByteString, g)
-kxDecrypt g (PrivRSA pk) b = generalizeRSAWithRNG $ RSA.decryptSafer g pk b
+kxDecrypt g (PrivKeyRSA pk) b = generalizeRSAWithRNG $ RSA.decryptSafer g pk b
+kxDecrypt g _               _ = (Left KxUnsupported, g)
 
 -- Verify that the signature matches the given message, using the
 -- public key.
 --
 kxVerify :: PublicKey -> HashDescr -> ByteString -> ByteString -> Bool
-kxVerify (PubRSA pk) hashDescr msg sign =
-    RSA.verify hashDescr pk msg sign
+kxVerify (PubKeyRSA pk) hashDescr msg sign = RSA.verify hashDescr pk msg sign
+kxVerify _              _         _   _    = False
 
 -- Sign the given message using the private key.
 --
 kxSign :: CPRG g => g -> PrivateKey -> HashDescr -> ByteString -> (Either KxError ByteString, g)
-kxSign g (PrivRSA pk) hashDescr msg  =
+kxSign g (PrivKeyRSA pk) hashDescr msg  =
     generalizeRSAWithRNG $ RSA.signSafer g hashDescr pk msg
+kxSign g _               _         _    =
+    (Left KxUnsupported, g)

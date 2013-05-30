@@ -154,10 +154,7 @@ processCertificates :: Bool -> CertificateChain -> TLSSt ()
 processCertificates False (CertificateChain []) = return ()
 processCertificates True (CertificateChain [])  =
     throwError $ Error_Protocol ("server certificate missing", True, HandshakeFailure)
-processCertificates clientmode (CertificateChain (c:_)) = do
-          --let (X509 mainCert _ _ _ _) = head certs
-          case certPubKey $ getCertificate c of
-                PubKeyRSA pubkey -> (if clientmode
-                                     then setPublicKey
-                                     else setClientPublicKey) (PubRSA pubkey)
-                _ -> return ()
+processCertificates clientmode (CertificateChain (c:_))
+    | clientmode = setPublicKey pubkey
+    | otherwise  = setClientPublicKey pubkey
+  where pubkey = certPubKey $ getCertificate c

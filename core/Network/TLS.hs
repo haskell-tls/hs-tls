@@ -67,7 +67,8 @@ module Network.TLS
     , recvData'
 
     -- * Crypto Key
-    , PrivateKey(..)
+    , PubKey(..)
+    , PrivKey(..)
 
     -- * Compressions & Predefined compressions
     , module Network.TLS.Compression
@@ -90,9 +91,10 @@ module Network.TLS
     ) where
 
 import Network.TLS.Struct (Version(..), TLSError(..), HashAndSignatureAlgorithm, HashAlgorithm(..), SignatureAlgorithm(..), Header(..), ProtocolType(..), CertificateType(..), AlertDescription(..))
-import Network.TLS.Crypto (PrivateKey(..), KxError(..))
+import Network.TLS.Crypto (KxError(..))
 import Network.TLS.Cipher
 import Network.TLS.Compression (CompressionC(..), Compression(..), nullCompression)
 import Network.TLS.Context
 import Network.TLS.Core
 import Network.TLS.Session
+import Data.X509 (PubKey(..), PrivKey(..))
