@@ -5,26 +5,26 @@
 -- Stability   : experimental
 -- Portability : unknown
 --
-{-# LANGUAGE ExistentialQuantification #-}
 module Network.TLS.Session
     ( SessionManager(..)
-    , NoSessionManager(..)
+    , noSessionManager
     ) where
 
 import Network.TLS.Types
 
 -- | A session manager
-class SessionManager a where
-    -- | used on server side to decide whether to resume a client session
-    sessionResume     :: a -> SessionID -> IO (Maybe SessionData)
-    -- | used when a session is established.
-    sessionEstablish  :: a -> SessionID -> SessionData -> IO ()
-    -- | used when a session is invalidated
-    sessionInvalidate :: a -> SessionID -> IO ()
+data SessionManager = SessionManager
+    { -- | used on server side to decide whether to resume a client session.
+      sessionResume     :: SessionID -> IO (Maybe SessionData)
+      -- | used when a session is established.
+    , sessionEstablish  :: SessionID -> SessionData -> IO ()
+      -- | used when a session is invalidated.
+    , sessionInvalidate :: SessionID -> IO ()
+    }
 
-data NoSessionManager = NoSessionManager
-
-instance SessionManager NoSessionManager where
-    sessionResume     _ _   = return Nothing
-    sessionEstablish  _ _ _ = return ()
-    sessionInvalidate _ _   = return ()
+noSessionManager :: SessionManager
+noSessionManager = SessionManager
+    { sessionResume     = \_   -> return Nothing
+    , sessionEstablish  = \_ _ -> return ()
+    , sessionInvalidate = \_   -> return ()
+    }
