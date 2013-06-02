@@ -66,7 +66,7 @@ arbitraryPairParams = do
         let serverState = defaultParamsServer
                 { pAllowedVersions        = allowedVersions
                 , pCiphers                = serverCiphers
-                , pCertificates           = Just (CertificateChain [servCert], Just $ PrivRSA privKey)
+                , pCertificates           = Just (CertificateChain [servCert], Just $ PrivKeyRSA privKey)
                 , pUseSecureRenegotiation = secNeg
                 , pLogging                = logging "server: "
                 }
