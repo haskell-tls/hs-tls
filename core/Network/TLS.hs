@@ -35,7 +35,7 @@ module Network.TLS
     , SessionID
     , SessionData(..)
     , SessionManager(..)
-    , nullSessionManager
+    , noSessionManager
     , setSessionManager
 
     -- * Backend abstraction

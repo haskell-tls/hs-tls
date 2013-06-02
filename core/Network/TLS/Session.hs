@@ -7,7 +7,7 @@
 --
 module Network.TLS.Session
     ( SessionManager(..)
-    , nullSessionManager
+    , noSessionManager
     ) where
 
 import Network.TLS.Types
@@ -22,8 +22,8 @@ data SessionManager = SessionManager
     , sessionInvalidate :: SessionID -> IO ()
     }
 
-nullSessionManager :: SessionManager
-nullSessionManager = SessionManager
+noSessionManager :: SessionManager
+noSessionManager = SessionManager
     { sessionResume     = \_   -> return Nothing
     , sessionEstablish  = \_ _ -> return ()
     , sessionInvalidate = \_   -> return ()
