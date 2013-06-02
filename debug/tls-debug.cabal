@@ -48,7 +48,6 @@ Executable           tls-retrievecertificate
   Build-Depends:     base >= 4 && < 5
                    , network
                    , bytestring
-                   , cmdargs
                    , groom
                    , time
                    , pem
@@ -67,7 +66,6 @@ Executable           tls-simpleclient
   Build-Depends:     base >= 4 && < 5
                    , network
                    , bytestring
-                   , cmdargs
                    , cprng-aes >= 0.3.0
                    , x509-system >= 1.0
                    , tls >= 1.2 && < 1.3
