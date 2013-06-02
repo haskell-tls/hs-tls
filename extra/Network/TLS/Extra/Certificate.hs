@@ -89,7 +89,7 @@ certificateVerifyChain_ store (x:xs) = loop 0 x xs >>= return . maybe Certificat
           checkCA (Just es) =
               let kuCanCertSign = case extensionGet es of
                                       Just (ExtKeyUsage l) -> elem KeyUsage_keyCertSign l
-                                      Nothing              -> False
+                                      Nothing              -> True
                in case extensionGet es of
                     Just (ExtBasicConstraints True _)
                                            | kuCanCertSign -> Nothing
