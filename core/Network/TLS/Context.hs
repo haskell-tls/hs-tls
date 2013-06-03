@@ -147,7 +147,15 @@ data ServerParams = ServerParams
           -- error.
         , onUnverifiedClientCert :: IO Bool
 
-        , onCipherChoosing        :: Version -> [Cipher] -> Cipher -- ^ callback on server to modify the cipher chosen.
+          -- | Allow the server to choose the cipher relative to the
+          -- the client version and the client list of ciphers.
+          --
+          -- This could be useful with old clients and as a workaround
+          -- to the BEAST (where RC4 is sometimes prefered with TLS < 1.1)
+          --
+          -- The client cipher list cannot be empty.
+        , onCipherChoosing        :: Version -> [Cipher] -> Cipher
+
         }
 
 data RoleParams = Client ClientParams | Server ServerParams
