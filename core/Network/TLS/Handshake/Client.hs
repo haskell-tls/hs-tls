@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
+{-# LANGUAGE DeriveDataTypeable, OverloadedStrings, ScopedTypeVariables #-}
 -- |
 -- Module      : Network.TLS.Handshake.Client
 -- License     : BSD-style
@@ -32,7 +32,7 @@ import Data.Certificate.X509(X509, x509Cert, certPubKey, PubKey(PubKeyRSA))
 
 import Control.Applicative ((<$>))
 import Control.Monad.State
-import Control.Exception (SomeException)
+import Control.Exception (SomeException, AsyncException, Handler(..))
 import qualified Control.Exception as E
 
 import Network.TLS.Handshake.Common
@@ -125,7 +125,7 @@ handshakeClient cparams ctx = do
 
                 processCertificate :: MonadIO m => Handshake -> m (RecvState m)
                 processCertificate (Certificates certs) = do
-                        usage <- liftIO $ E.catch (onCertificatesRecv params $ certs) rejectOnException
+                        usage <- liftIO $ E.catches (onCertificatesRecv params $ certs) rejectOnException
                         case usage of
                                 CertificateUsageAccept        -> return ()
                                 CertificateUsageReject reason -> certificateRejected reason
@@ -172,7 +172,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                         return ()
 
                     Just req -> do
-                        certChain <- liftIO $ onCertificateRequest cparams req `E.catch`
+                        certChain <- liftIO $ onCertificateRequest cparams req `E.catches`
                                      throwMiscErrorOnException "certificate request callback failed"
 
                         case certChain of
@@ -264,6 +264,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
 
 
 
-throwMiscErrorOnException :: MonadIO m => String -> SomeException -> m a
-throwMiscErrorOnException msg e =
-  throwCore $ Error_Misc $ msg ++ ": " ++ show e
+throwMiscErrorOnException :: String -> [Handler a]
+throwMiscErrorOnException msg =
+  [Handler $ \(e::AsyncException) -> throwCore e
+  ,Handler $ \(e::SomeException) -> throwCore $ Error_Misc $ msg ++ ": " ++ show e]
