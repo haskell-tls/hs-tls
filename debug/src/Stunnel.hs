@@ -76,12 +76,13 @@ tlsserver srchandle dsthandle = do
         return False
     putStrLn "end"
 
-data MemSessionManager = MemSessionManager (MVar [(SessionID, SessionData)])
+newtype MemSessionManager = MemSessionManager (MVar [(SessionID, SessionData)])
 
-instance SessionManager MemSessionManager where
-    sessionEstablish (MemSessionManager mvar) sid sdata = modifyMVar_ mvar (\l -> return $ (sid,sdata) : l)
-    sessionResume (MemSessionManager mvar) sid          = withMVar mvar (return . lookup sid)
-    sessionInvalidate (MemSessionManager mvar) _        = return ()
+memSessionManager (MemSessionManager mvar) = SessionManager
+    { sessionEstablish  = \sid sdata -> modifyMVar_ mvar (\l -> return $ (sid,sdata) : l)
+    , sessionResume     = \sid       -> withMVar mvar (return . lookup sid)
+    , sessionInvalidate = \_         -> return ()
+    }
 
 clientProcess certs handle dsthandle dbg sessionStorage _ = do
     rng <- RNG.makeSystem
@@ -91,11 +92,12 @@ clientProcess certs handle dsthandle dbg sessionStorage _ = do
                                 , loggingPacketRecv = putStrLn . ("debug: recv: " ++)
                                 }
 
-    let serverstate = maybe id (setSessionManager . MemSessionManager) sessionStorage $ defaultParamsServer
+    let serverstate = defaultParamsServer --maybe id (setSessionManager . MemSessionManager) sessionStorage $ defaultParamsServer
                         { pAllowedVersions = [SSL3,TLS10,TLS11,TLS12]
                         , pCiphers         = ciphers
                         , pCertificates    = certs
                         , pLogging         = logging
+                        , pSessionManager  = maybe noSessionManager (memSessionManager . MemSessionManager) sessionStorage
                         }
 
     ctx <- contextNewOnHandle handle serverstate rng

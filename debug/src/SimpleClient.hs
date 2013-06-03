@@ -39,20 +39,20 @@ runTLS params hostname portNumber f = do
     () <- f ctx
     hClose dsth
 
-data SessionRef = SessionRef (IORef (SessionID, SessionData))
-
-instance SessionManager SessionRef where
-    sessionEstablish (SessionRef ref) sid sdata = writeIORef ref (sid,sdata)
-    sessionResume (SessionRef ref) sid = readIORef ref >>= \(s,d) -> if s == sid then return (Just d) else return Nothing
-    sessionInvalidate _ _ = return ()
+sessionRef ref = SessionManager
+    { sessionEstablish  = \sid sdata -> writeIORef ref (sid,sdata)
+    , sessionResume     = \sid       -> readIORef ref >>= \(s,d) -> if s == sid then return (Just d) else return Nothing
+    , sessionInvalidate = \_         -> return ()
+    }
 
 getDefaultParams flags host store sStorage session =
-    updateClientParams setCParams $ setSessionManager (SessionRef sStorage) $ defaultParamsClient
+    updateClientParams setCParams $ defaultParamsClient
         { pConnectVersion    = tlsConnectVer
         , pAllowedVersions   = [TLS10,TLS11,TLS12]
         , pCiphers           = ciphers
         , pCertificates      = Nothing
         , pLogging           = logging
+        , pSessionManager    = sessionRef sStorage
         , onCertificatesRecv = crecv
         }
     where
