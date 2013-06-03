@@ -21,8 +21,6 @@ import qualified Control.Exception as E
 
 import Text.Printf
 
-import System.Console.CmdArgs
-
 tableCiphers =
     [ (0x0000, "NULL_WITH_NULL_NULL")
     , (0x0001, "RSA_WITH_NULL_MD5")
@@ -138,6 +136,7 @@ connectBetween d p v chunkSize ep sp = concat <$> loop sp where
                 then [a..ep]
                 else [a..sp+chunkSize]
 
+{-
 data PArgs = PArgs
     { destination :: String
     , port        :: String
@@ -160,10 +159,13 @@ progArgs = PArgs
         , "Beware: this program make multiple connections to the destination"
         , "which might be taken by the remote side as aggressive behavior"
         ]
+-}
 
 main = do
-    a <- cmdArgs progArgs
+    putStrLn "broken"
+{-
     _ <- printf "connecting to %s on port %s ...\n" (destination a) (port a)
     supported <- connectBetween (destination a) (port a) (speed a) (fromIntegral $ nb a) (fromIntegral $ end a) (fromIntegral $ start a)
     forM_ supported $ \i -> do
         putStrLn $ maybe ("cipher " ++ show i) id $ lookup i tableCiphers
+-}
