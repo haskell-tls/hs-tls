@@ -66,7 +66,7 @@ handshakeClient cparams ctx = do
                         if pUseSecureRenegotiation params
                         then usingState_ ctx (getVerifiedData True) >>= \vd -> return $ Just $ toExtensionRaw $ SecureRenegotiation vd Nothing
                         else return Nothing
-                npnExtention = if isJust $ onNPNServerSuggest params
+                npnExtention = if isJust $ onNPNServerSuggest cparams
                                  then return $ Just $ toExtensionRaw $ NextProtocolNegotiation []
                                  else return Nothing
                 sniExtension = return ((\h -> toExtensionRaw $ ServerName [(ServerNameHostName h)]) <$> clientUseServerName cparams)

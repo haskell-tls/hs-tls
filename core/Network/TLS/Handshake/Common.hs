@@ -71,8 +71,9 @@ sendChangeCipherAndFinish ctx isClient = do
         sendPacket ctx ChangeCipherSpec
 
         when isClient $ do
+          let cparams = getClientParams $ ctxParams ctx
           suggest <- usingState_ ctx $ getServerNextProtocolSuggest
-          case (onNPNServerSuggest (ctxParams ctx), suggest) of
+          case (onNPNServerSuggest cparams, suggest) of
             -- client offered, server picked up. send NPN handshake.
             (Just io, Just protos) -> do proto <- liftIO $ io protos
                                          sendPacket ctx (Handshake [HsNextProtocolNegotiation proto])

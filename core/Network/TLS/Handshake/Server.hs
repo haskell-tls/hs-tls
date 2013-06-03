@@ -155,7 +155,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                                 else return []
                         nextProtocols <-
                           if clientRequestedNPN
-                            then liftIO $ onSuggestNextProtocols params
+                            then liftIO $ onSuggestNextProtocols sparams
                             else return Nothing
                         npnExt <- case nextProtocols of
                                     Just protos -> do usingState_ ctx $ do setExtensionNPN True

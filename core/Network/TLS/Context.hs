@@ -28,6 +28,8 @@ module Network.TLS.Context
         , defaultParamsServer
         , withSessionManager
         , setSessionManager
+        , getClientParams
+        , getServerParams
 
         -- * Context object and accessor
         , Backend(..)
@@ -126,6 +128,7 @@ data ClientParams = ClientParams
         , onCertificateRequest :: ([CertificateType],
                                    Maybe [HashAndSignatureAlgorithm],
                                    [DistinguishedName]) -> IO (Maybe (CertificateChain, PrivKey))
+        , onNPNServerSuggest :: Maybe ([B.ByteString] -> IO B.ByteString)
         }
 
 data ServerParams = ServerParams
@@ -156,6 +159,8 @@ data ServerParams = ServerParams
           -- The client cipher list cannot be empty.
         , onCipherChoosing        :: Version -> [Cipher] -> Cipher
 
+          -- | suggested next protocols accoring to the next protocol negotiation extension.
+        , onSuggestNextProtocols :: IO (Maybe [B.ByteString])
         }
 
 data RoleParams = Client ClientParams | Server ServerParams
@@ -173,9 +178,7 @@ data Params = Params
         , onHandshake        :: Measurement -> IO Bool -- ^ callback on a beggining of handshake
         , onCertificatesRecv :: CertificateChain -> IO CertificateUsage -- ^ callback to verify received cert chain.
         , pSessionManager    :: SessionManager
-        , onSuggestNextProtocols :: IO (Maybe [B.ByteString])       -- ^ suggested next protocols accoring to the next protocol negotiation extension.
-        , onNPNServerSuggest :: Maybe ([B.ByteString] -> IO B.ByteString)
-        , roleParams          :: RoleParams
+        , roleParams         :: RoleParams
         }
 
 -- | Set a new session manager in a parameters structure.
@@ -192,6 +195,18 @@ defaultLogging = Logging
         , loggingIOSent     = (\_ -> return ())
         , loggingIORecv     = (\_ _ -> return ())
         }
+
+getClientParams :: Params -> ClientParams
+getClientParams params =
+    case roleParams params of
+        Client clientParams -> clientParams
+        _                   -> error "server params in client context"
+
+getServerParams :: Params -> ServerParams
+getServerParams params =
+    case roleParams params of
+        Server serverParams -> serverParams
+        _                   -> error "client params in server context"
 
 defaultParamsClient :: Params
 defaultParamsClient = Params
@@ -211,13 +226,12 @@ defaultParamsClient = Params
         , onHandshake             = (\_ -> return True)
         , onCertificatesRecv      = (\_ -> return CertificateUsageAccept)
         , pSessionManager         = noSessionManager
-        , onSuggestNextProtocols  = return Nothing
-        , onNPNServerSuggest      = Nothing
         , roleParams              = Client $ ClientParams
                                         { clientWantSessionResume    = Nothing
                                         , clientUseMaxFragmentLength = Nothing
                                         , clientUseServerName        = Nothing
                                         , onCertificateRequest       = \ _ -> return Nothing
+                                        , onNPNServerSuggest         = Nothing
                                         }
         }
 
@@ -229,6 +243,7 @@ defaultParamsServer = defaultParamsClient { roleParams = Server role }
                    , serverCACertificates   = []
                    , onClientCertificate    = \ _ -> return $ CertificateUsageReject $ CertificateRejectOther "no client certificates expected"
                    , onUnverifiedClientCert = return False
+                   , onSuggestNextProtocols  = return Nothing
                    }
 
 updateRoleParams :: (ClientParams -> ClientParams) -> (ServerParams -> ServerParams) -> Params -> Params
