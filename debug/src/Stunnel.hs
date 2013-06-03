@@ -1,10 +1,12 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 import Network.BSD
-import Network.Socket
+import Network.Socket hiding (Debug)
 import System.IO
 import System.IO.Error (isEOFError)
-import System.Console.CmdArgs
+import System.Console.GetOpt
+import System.Environment (getArgs)
+import System.Exit
 import System.X509
 
 import qualified Data.ByteString as B
@@ -99,52 +101,6 @@ clientProcess certs handle dsthandle dbg sessionStorage _ = do
     ctx <- contextNewOnHandle handle serverstate rng
     tlsserver ctx dsthandle
 
-data Stunnel =
-      ClientConfig
-        { destinationType :: String
-        , destination     :: String
-        , sourceType      :: String
-        , source          :: String
-        , debug           :: Bool
-        , validCert       :: Bool }
-    | ServerConfig
-        { destinationType :: String
-        , destination     :: String
-        , sourceType      :: String
-        , source          :: String
-        , debug           :: Bool
-        , disableSession  :: Bool
-        , certificate     :: FilePath
-        , key             :: FilePath }
-    deriving (Show, Data, Typeable)
-
-clientOpts = ClientConfig
-    { destinationType = "tcp"             &= help "type of source (tcp, unix, fd)" &= typ "DESTTYPE"
-    , destination     = "localhost:6061"  &= help "destination address influenced by destination type" &= typ "ADDRESS"
-    , sourceType      = "tcp"             &= help "type of source (tcp, unix, fd)" &= typ "SOURCETYPE"
-    , source          = "localhost:6060"  &= help "source address influenced by source type" &= typ "ADDRESS"
-    , debug           = False             &= help "debug the TLS protocol printing debugging to stdout" &= typ "Bool"
-    , validCert       = False             &= help "check if the certificate receive is valid" &= typ "Bool"
-    }
-    &= help "connect to a remote destination that use SSL/TLS"
-    &= name "client"
-
-serverOpts = ServerConfig
-    { destinationType = "tcp"             &= help "type of source (tcp, unix, fd)" &= typ "DESTTYPE"
-    , destination     = "localhost:6060"  &= help "destination address influenced by destination type" &= typ "ADDRESS"
-    , sourceType      = "tcp"             &= help "type of source (tcp, unix, fd)" &= typ "SOURCETYPE"
-    , source          = "localhost:6061"  &= help "source address influenced by source type" &= typ "ADDRESS"
-    , disableSession  = False             &= help "disable support for session" &= typ "Bool"
-    , debug           = False             &= help "debug the TLS protocol printing debugging to stdout" &= typ "Bool"
-    , certificate     = "certificate.pem" &= help "X509 public certificate to use" &= typ "FILE"
-    , key             = "certificate.key" &= help "private key linked to the certificate" &= typ "FILE"
-    }
-    &= help "listen for connection that use SSL/TLS and relay it to a different connection"
-    &= name "server"
-
-mode = cmdArgsMode $ modes [clientOpts,serverOpts]
-    &= help "create SSL/TLS tunnel in client or server mode" &= program "stunnel" &= summary "Stunnel v0.1 (Haskell TLS)"
-
 data StunnelAddr   =
       AddrSocket Family SockAddr
     | AddrFD Handle Handle
@@ -153,8 +109,8 @@ data StunnelHandle =
       StunnelSocket Socket
     | StunnelFd     Handle Handle
 
-getAddressDescription :: String -> String -> IO StunnelAddr
-getAddressDescription "tcp"  desc = do
+getAddressDescription :: Address -> IO StunnelAddr
+getAddressDescription (Address "tcp" desc) = do
     let (s, p) = break ((==) ':') desc
     when (p == "") (error "missing port: expecting [source]:port")
     pn <- if and $ map isDigit $ drop 1 p
@@ -165,13 +121,13 @@ getAddressDescription "tcp"  desc = do
     he <- getHostByName s
     return $ AddrSocket AF_INET (SockAddrInet pn (head $ hostAddresses he))
 
-getAddressDescription "unix" desc = do
+getAddressDescription (Address "unix" desc) = do
     return $ AddrSocket AF_UNIX (SockAddrUnix desc)
 
-getAddressDescription "fd" _  =
+getAddressDescription (Address "fd" _) =
     return $ AddrFD stdin stdout
 
-getAddressDescription _ _  = error "unrecognized source type (expecting tcp/unix/fd)"
+getAddressDescription _  = error "unrecognized source type (expecting tcp/unix/fd)"
 
 connectAddressDescription (AddrSocket family sockaddr) = do
     sock <- socket family Stream defaultProtocol
@@ -191,19 +147,19 @@ listenAddressDescription (AddrSocket family sockaddr) = do
 listenAddressDescription (AddrFD _ _) = do
     error "cannot listen on fd"
 
-doClient :: Stunnel -> IO ()
-doClient pargs = do
-    srcaddr <- getAddressDescription (sourceType pargs) (source pargs)
-    dstaddr <- getAddressDescription (destinationType pargs) (destination pargs)
+doClient :: Address -> Address -> [Flag] -> IO ()
+doClient source destination@(Address a _) flags = do
+    srcaddr <- getAddressDescription source
+    dstaddr <- getAddressDescription destination
 
-    let logging = if not $ debug pargs then defaultLogging else defaultLogging
+    let logging = if not (Debug `elem` flags) then defaultLogging else defaultLogging
                             { loggingPacketSent = putStrLn . ("debug: send: " ++)
                             , loggingPacketRecv = putStrLn . ("debug: recv: " ++)
                             }
 
     store <- getSystemCertificateStore
-    let checks = defaultChecks (Just $ destination pargs)
-    let crecv = if validCert pargs
+    let checks = defaultChecks (Just a)
+    let crecv = if not (NoCertValidation `elem` flags)
                 then certificateChecks checks store
                 else certificateNoChecks
     let clientstate = defaultParamsClient { pConnectVersion = TLS10
@@ -232,14 +188,14 @@ doClient pargs = do
                 return ()
         AddrFD _ _ -> error "bad error fd. not implemented"
 
-doServer :: Stunnel -> IO ()
-doServer pargs = do
-    cert    <- fileReadCertificateChain $ certificate pargs
-    pk      <- fileReadPrivateKey $ key pargs
-    srcaddr <- getAddressDescription (sourceType pargs) (source pargs)
-    dstaddr <- getAddressDescription (destinationType pargs) (destination pargs)
+doServer :: Address -> Address -> [Flag] -> IO ()
+doServer source destination flags = do
+    cert    <- fileReadCertificateChain $ getCertificate flags
+    pk      <- fileReadPrivateKey $ getKey flags
+    srcaddr <- getAddressDescription source
+    dstaddr <- getAddressDescription destination
 
-    sessionStorage <- if disableSession pargs then return Nothing else (Just `fmap` newMVar [])
+    sessionStorage <- if NoSession `elem` flags then return Nothing else (Just `fmap` newMVar [])
 
     case srcaddr of
         AddrSocket _ _ -> do
@@ -253,14 +209,82 @@ doServer pargs = do
                     StunnelSocket dst -> socketToHandle dst ReadWriteMode
 
                 _ <- forkIO $ finally
-                    (clientProcess (Just (cert, Just pk)) srch dsth (debug pargs) sessionStorage addr >> return ())
+                    (clientProcess (Just (cert, Just pk)) srch dsth (Debug `elem` flags) sessionStorage addr >> return ())
                     (hClose srch >> (when (dsth /= stdout) $ hClose dsth))
                 return ()
         AddrFD _ _ -> error "bad error fd. not implemented"
 
+printUsage =
+    putStrLn $ usageInfo "usage: tls-stunnel <mode> [opts]\n\n\tmode:\n\tclient\n\tserver\n\nclient options:\n" options
+
+data Flag =
+      Source String
+    | Destination String
+    | SourceType String
+    | DestinationType String
+    | Debug
+    | Help
+    | Certificate String
+    | Key String
+    | NoSession
+    | NoCertValidation
+    deriving (Show,Eq)
+
+options :: [OptDescr Flag]
+options =
+    [ Option ['s']  ["source"]  (ReqArg Source "source") "source address influenced by source type"
+    , Option ['d']  ["destination"] (ReqArg Destination "destination") "destination address influenced by destination type"
+    , Option []     ["source-type"] (ReqArg SourceType "source-type") "type of source (tcp, unix, fd)"
+    , Option []     ["destination-type"] (ReqArg SourceType "source-type") "type of source (tcp, unix, fd)"
+    , Option []     ["debug"]   (NoArg Debug) "debug the TLS protocol printing debugging to stdout"
+    , Option ['h']  ["help"]    (NoArg Help) "request help"
+    , Option []     ["certificate"] (ReqArg Certificate "certificate") "certificate file"
+    , Option []     ["key"] (ReqArg Key "key") "certificate file"
+    , Option []     ["no-session"] (NoArg NoSession) "disable support for session"
+    , Option []     ["no-cert-validation"] (NoArg NoCertValidation) "disable certificate validation"
+    ]
+
+data Address = Address String String
+    deriving (Show,Eq)
+
+defaultSource      = Address "localhost:6060" "tcp"
+defaultDestination = Address "localhost:6061" "tcp"
+
+getSource opts = foldl accf defaultSource opts
+  where accf (Address _ t) (Source s)     = Address s t
+        accf (Address s _) (SourceType t) = Address s t
+        accf acc           _              = acc
+
+getDestination opts = foldl accf defaultDestination opts
+  where accf (Address _ t) (Destination s)     = Address s t
+        accf (Address s _) (DestinationType t) = Address s t
+        accf acc           _                   = acc
+
+getCertificate opts = foldl accf "certificate.pem" opts
+  where accf _   (Certificate cert) = cert
+        accf acc _                  = acc
+
+getKey opts = foldl accf "certificate.key" opts
+  where accf _   (Key key) = key
+        accf acc _         = acc
+
 main :: IO ()
 main = do
-    x <- cmdArgsRun mode
-    case x of
-        ClientConfig {} -> doClient x
-        ServerConfig {} -> doServer x
+    args <- getArgs
+    let (opts,other,errs) = getOpt Permute options args
+    when (not $ null errs) $ do
+        putStrLn $ show errs
+        exitFailure
+
+    when (Help `elem` opts) $ do
+        printUsage
+        exitSuccess
+
+    let source      = getSource opts
+        destination = getDestination opts
+
+    case other of
+        []         -> printUsage
+        "client":_ -> doClient source destination opts
+        "server":_ -> doServer source destination opts
+        mode:_     -> error ("unknown mode " ++ show mode)
