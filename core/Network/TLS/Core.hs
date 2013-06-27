@@ -78,37 +78,37 @@ sendData ctx dataToSend = checkValid ctx >> mapM_ sendDataChunk (L.toChunks data
 -- a Handshake ClientHello is received
 recvData :: MonadIO m => Context -> m B.ByteString
 recvData ctx = checkValid ctx >> recvPacket ctx >>= either onError process
-    where onError err@(Error_Protocol (reason,fatal,desc)) =
+  where onError err@(Error_Protocol (reason,fatal,desc)) =
             terminate err (if fatal then AlertLevel_Fatal else AlertLevel_Warning) desc reason
-          onError err =
+        onError err =
             terminate err AlertLevel_Fatal InternalError (show err)
 
-          process (Handshake [ch@(ClientHello {})]) =
+        process (Handshake [ch@(ClientHello {})]) =
             -- on server context receiving a client hello == renegotiation
             case roleParams $ ctxParams ctx of
                 Server sparams -> handshakeServerWith sparams ctx ch >> recvData ctx
                 Client {}      -> let reason = "unexpected client hello in client context" in
                                   terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-          process (Handshake [HelloRequest]) =
+        process (Handshake [HelloRequest]) =
             -- on client context, receiving a hello request == renegotiation
             case roleParams $ ctxParams ctx of
                 Server {}      -> let reason = "unexpected hello request in server context" in
                                   terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
                 Client cparams -> handshakeClient cparams ctx >> recvData ctx
 
-          process (Alert [(AlertLevel_Warning, CloseNotify)]) = tryBye >> setEOF ctx >> return B.empty
-          process (Alert [(AlertLevel_Fatal, desc)]) = do
+        process (Alert [(AlertLevel_Warning, CloseNotify)]) = tryBye >> setEOF ctx >> return B.empty
+        process (Alert [(AlertLevel_Fatal, desc)]) = do
             setEOF ctx
             liftIO $ E.throwIO (Terminated True ("received fatal error: " ++ show desc) (Error_Protocol ("remote side fatal error", True, desc)))
 
-          -- when receiving empty appdata, we just retry to get some data.
-          process (AppData "") = recvData ctx
-          process (AppData x)  = return x
-          process p            = let reason = "unexpected message " ++ show p in
-                                 terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+        -- when receiving empty appdata, we just retry to get some data.
+        process (AppData "") = recvData ctx
+        process (AppData x)  = return x
+        process p            = let reason = "unexpected message " ++ show p in
+                               terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
 
-          terminate :: MonadIO m => TLSError -> AlertLevel -> AlertDescription -> String -> m a
-          terminate err level desc reason = do
+        terminate :: MonadIO m => TLSError -> AlertLevel -> AlertDescription -> String -> m a
+        terminate err level desc reason = do
             session <- usingState_ ctx getSession
             case session of
                 Session Nothing    -> return ()
@@ -117,9 +117,9 @@ recvData ctx = checkValid ctx >> recvPacket ctx >>= either onError process
             setEOF ctx
             liftIO $ E.throwIO (Terminated False reason err)
 
-          -- the other side could have close the connection already, so wrap
-          -- this in a try and ignore all exceptions
-          tryBye = liftIO $ E.catch (bye ctx) (\(_ :: E.SomeException) -> return ())
+        -- the other side could have close the connection already, so wrap
+        -- this in a try and ignore all exceptions
+        tryBye = liftIO $ E.catch (bye ctx) (\(_ :: E.SomeException) -> return ())
 
 {-# DEPRECATED recvData' "use recvData that returns strict bytestring" #-}
 -- | same as recvData but returns a lazy bytestring.
