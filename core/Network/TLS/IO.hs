@@ -30,26 +30,26 @@ import Control.Exception (throwIO, Exception())
 import System.IO.Error (mkIOError, eofErrorType)
 
 data ConnectionNotEstablished = ConnectionNotEstablished
-        deriving (Show,Eq,Typeable)
+    deriving (Show,Eq,Typeable)
 
 instance Exception ConnectionNotEstablished
 
 checkValid :: MonadIO m => Context -> m ()
 checkValid ctx = do
-        established <- ctxEstablished ctx
-        unless established $ liftIO $ throwIO ConnectionNotEstablished
-        eofed <- ctxEOF ctx
-        when eofed $ liftIO $ throwIO $ mkIOError eofErrorType "data" Nothing Nothing
+    established <- ctxEstablished ctx
+    unless established $ liftIO $ throwIO ConnectionNotEstablished
+    eofed <- ctxEOF ctx
+    when eofed $ liftIO $ throwIO $ mkIOError eofErrorType "data" Nothing Nothing
 
 readExact :: MonadIO m => Context -> Int -> m Bytes
 readExact ctx sz = do
-        hdrbs <- liftIO $ contextRecv ctx sz
-        when (B.length hdrbs < sz) $ do
-                setEOF ctx
-                if B.null hdrbs
-                        then throwCore Error_EOF
-                        else throwCore (Error_Packet ("partial packet: expecting " ++ show sz ++ " bytes, got: " ++ (show $B.length hdrbs)))
-        return hdrbs
+    hdrbs <- liftIO $ contextRecv ctx sz
+    when (B.length hdrbs < sz) $ do
+        setEOF ctx
+        if B.null hdrbs
+            then throwCore Error_EOF
+            else throwCore (Error_Packet ("partial packet: expecting " ++ show sz ++ " bytes, got: " ++ (show $B.length hdrbs)))
+    return hdrbs
 
 recvRecord :: MonadIO m => Bool    -- ^ flag to enable SSLv2 compat ClientHello reception
                         -> Context -- ^ TLS context
@@ -86,30 +86,30 @@ recvRecord compatSSLv2 ctx
 -- TLSError if the packet is unexpected or malformed
 recvPacket :: MonadIO m => Context -> m (Either TLSError Packet)
 recvPacket ctx = do
-        compatSSLv2 <- ctxHasSSLv2ClientHello ctx
-        erecord     <- recvRecord compatSSLv2 ctx
-        case erecord of
-                Left err     -> return $ Left err
-                Right record -> do
-                        pkt <- usingState ctx $ processPacket record
-                        case pkt of
-                                Right p -> liftIO $ (loggingPacketRecv $ ctxLogging ctx) $ show p
-                                _       -> return ()
-                        ctxDisableSSLv2ClientHello ctx
-                        return pkt
+    compatSSLv2 <- ctxHasSSLv2ClientHello ctx
+    erecord     <- recvRecord compatSSLv2 ctx
+    case erecord of
+        Left err     -> return $ Left err
+        Right record -> do
+            pkt <- usingState ctx $ processPacket record
+            case pkt of
+                Right p -> liftIO $ (loggingPacketRecv $ ctxLogging ctx) $ show p
+                _       -> return ()
+            ctxDisableSSLv2ClientHello ctx
+            return pkt
 
 -- | Send one packet to the context
 sendPacket :: MonadIO m => Context -> Packet -> m ()
 sendPacket ctx pkt = do
-        -- in ver <= TLS1.0, block ciphers using CBC are using CBC residue as IV, which can be guessed
-        -- by an attacker. Hence, an empty packet is sent before a normal data packet, to
-        -- prevent guessability.
-        withEmptyPacket <- usingState_ ctx needEmptyPacket
-        when (isNonNullAppData pkt && withEmptyPacket) $ sendPacket ctx $ AppData B.empty
+    -- in ver <= TLS1.0, block ciphers using CBC are using CBC residue as IV, which can be guessed
+    -- by an attacker. Hence, an empty packet is sent before a normal data packet, to
+    -- prevent guessability.
+    withEmptyPacket <- usingState_ ctx needEmptyPacket
+    when (isNonNullAppData pkt && withEmptyPacket) $ sendPacket ctx $ AppData B.empty
 
-        liftIO $ (loggingPacketSent $ ctxLogging ctx) (show pkt)
-        dataToSend <- usingState_ ctx $ writePacket pkt
-        liftIO $ (loggingIOSent $ ctxLogging ctx) dataToSend
-        liftIO $ contextSend ctx dataToSend
-    where isNonNullAppData (AppData b) = not $ B.null b
-          isNonNullAppData _           = False
+    liftIO $ (loggingPacketSent $ ctxLogging ctx) (show pkt)
+    dataToSend <- usingState_ ctx $ writePacket pkt
+    liftIO $ (loggingIOSent $ ctxLogging ctx) dataToSend
+    liftIO $ contextSend ctx dataToSend
+  where isNonNullAppData (AppData b) = not $ B.null b
+        isNonNullAppData _           = False
