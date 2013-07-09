@@ -34,6 +34,7 @@ module Network.TLS.Context
         -- * Context object and accessor
         , Backend(..)
         , Context
+        , Hooks(..)
         , ctxParams
         , ctxConnection
         , ctxEOF
@@ -41,6 +42,7 @@ module Network.TLS.Context
         , ctxDisableSSLv2ClientHello
         , ctxEstablished
         , ctxLogging
+        , ctxWithHooks
         , setEOF
         , setEstablished
         , contextFlush
@@ -63,6 +65,9 @@ module Network.TLS.Context
         -- * New contexts
         , contextNew
         , contextNewOnHandle
+
+        -- * Context hooks
+        , contextHookSetHandshakeRecv
 
         -- * Using context states
         , throwCore
@@ -280,6 +285,16 @@ data Backend = Backend
         , backendRecv  :: Int -> IO ByteString -- ^ Receive specified number of bytes from the connection.
         }
 
+-- | A collection of hooks actions.
+data Hooks = Hooks
+    { hookRecvHandshake :: Handshake -> IO Handshake
+    }
+
+defaultHooks :: Hooks
+defaultHooks = Hooks
+    { hookRecvHandshake = \hs -> return hs
+    }
+
 -- | A TLS Context keep tls specific state, parameters and backend information.
 data Context = Context
         { ctxConnection       :: Backend   -- ^ return the backend object associated with this context
@@ -291,6 +306,7 @@ data Context = Context
         , ctxSSLv2ClientHello :: IORef Bool    -- ^ enable the reception of compatibility SSLv2 client hello.
                                                -- the flag will be set to false regardless of its initial value
                                                -- after the first packet received.
+        , ctxHooks            :: IORef Hooks   -- ^ hooks for this context
         }
 
 -- deprecated types, setup as aliases for compatibility.
@@ -335,6 +351,9 @@ setEOF ctx = liftIO $ writeIORef (ctxEOF_ ctx) True
 ctxEstablished :: MonadIO m => Context -> m Bool
 ctxEstablished ctx = liftIO $ readIORef $ ctxEstablished_ ctx
 
+ctxWithHooks :: MonadIO m => Context -> (Hooks -> m a) -> m a
+ctxWithHooks ctx f = liftIO (readIORef $ ctxHooks ctx) >>= f
+
 setEstablished :: MonadIO m => Context -> Bool -> m ()
 setEstablished ctx v = liftIO $ writeIORef (ctxEstablished_ ctx) v
 
@@ -360,6 +379,7 @@ contextNew backend params rng = liftIO $ do
         -- we enable the reception of SSLv2 ClientHello message only in the
         -- server context, where we might be dealing with an old/compat client.
         sslv2Compat <- newIORef (not clientContext)
+        hooks <- newIORef defaultHooks
         return $ Context
                 { ctxConnection   = backend
                 , ctxParams       = params
@@ -368,6 +388,7 @@ contextNew backend params rng = liftIO $ do
                 , ctxEOF_         = eof
                 , ctxEstablished_ = established
                 , ctxSSLv2ClientHello = sslv2Compat
+                , ctxHooks            = hooks
                 }
 
 -- | create a new context on an handle.
@@ -379,6 +400,10 @@ contextNewOnHandle :: (MonadIO m, CPRG rng)
 contextNewOnHandle handle params st =
         liftIO (hSetBuffering handle NoBuffering) >> contextNew backend params st
         where backend = Backend (hFlush handle) (hClose handle) (B.hPut handle) (B.hGet handle)
+
+contextHookSetHandshakeRecv :: MonadIO m => Context -> (Handshake -> IO Handshake) -> m ()
+contextHookSetHandshakeRecv context f =
+    liftIO $ modifyIORef (ctxHooks context) (\hooks -> hooks { hookRecvHandshake = f })
 
 throwCore :: (MonadIO m, Exception e) => e -> m a
 throwCore = liftIO . throwIO

@@ -91,7 +91,12 @@ recvPacket ctx = do
     case erecord of
         Left err     -> return $ Left err
         Right record -> do
-            pkt <- usingState ctx $ processPacket record
+            pktRecv <- usingState ctx $ processPacket record
+            pkt <- case pktRecv of
+                    Right (Handshake hss) ->
+                        ctxWithHooks ctx $ \hooks ->
+                            liftIO (mapM (hookRecvHandshake hooks) hss) >>= return . Right . Handshake
+                    _                     -> return pktRecv
             case pkt of
                 Right p -> liftIO $ (loggingPacketRecv $ ctxLogging ctx) $ show p
                 _       -> return ()
