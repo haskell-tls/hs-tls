@@ -8,8 +8,12 @@
 -- the Receiving module contains calls related to unmarshalling packets according
 -- to the TLS state
 --
-module Network.TLS.Receiving (processHandshake, processPacket, processServerHello
-                             , verifyRSA) where
+module Network.TLS.Receiving
+    ( processHandshake
+    , processPacket
+    , processServerHello
+    , verifyRSA
+    ) where
 
 import Control.Applicative ((<$>))
 import Control.Monad.State
