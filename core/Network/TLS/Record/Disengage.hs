@@ -30,54 +30,54 @@ disengageRecord = decryptRecord >=> uncompressRecord
 
 uncompressRecord :: Record Compressed -> TLSSt (Record Plaintext)
 uncompressRecord record = onRecordFragment record $ fragmentUncompress $ \bytes ->
-        withCompression $ compressionInflate bytes
+    withCompression $ compressionInflate bytes
 
 decryptRecord :: Record Ciphertext -> TLSSt (Record Compressed)
 decryptRecord record = onRecordFragment record $ fragmentUncipher $ \e -> do
-        st <- get
-        if stRxEncrypted st
-                then get >>= decryptData record e
-                else return e
+    st <- get
+    if stRxEncrypted st
+        then get >>= decryptData record e
+        else return e
 
 getCipherData :: Record a -> CipherData -> TLSSt ByteString
 getCipherData (Record pt ver _) cdata = do
-        -- check if the MAC is valid.
-        macValid <- case cipherDataMAC cdata of
-                Nothing     -> return True
-                Just digest -> do
-                        let new_hdr = Header pt ver (fromIntegral $ B.length $ cipherDataContent cdata)
-                        expected_digest <- makeDigest False new_hdr $ cipherDataContent cdata
-                        return (expected_digest `bytesEq` digest)
+    -- check if the MAC is valid.
+    macValid <- case cipherDataMAC cdata of
+        Nothing     -> return True
+        Just digest -> do
+            let new_hdr = Header pt ver (fromIntegral $ B.length $ cipherDataContent cdata)
+            expected_digest <- makeDigest False new_hdr $ cipherDataContent cdata
+            return (expected_digest `bytesEq` digest)
 
-        -- check if the padding is filled with the correct pattern if it exists
-        paddingValid <- case cipherDataPadding cdata of
-                Nothing  -> return True
-                Just pad -> do
-                        cver <- gets stVersion
-                        let b = B.length pad - 1
-                        return (if cver < TLS10 then True else B.replicate (B.length pad) (fromIntegral b) `bytesEq` pad)
+    -- check if the padding is filled with the correct pattern if it exists
+    paddingValid <- case cipherDataPadding cdata of
+        Nothing  -> return True
+        Just pad -> do
+            cver <- gets stVersion
+            let b = B.length pad - 1
+            return (if cver < TLS10 then True else B.replicate (B.length pad) (fromIntegral b) `bytesEq` pad)
 
-        unless (macValid &&! paddingValid) $ do
-                throwError $ Error_Protocol ("bad record mac", True, BadRecordMac)
+    unless (macValid &&! paddingValid) $ do
+        throwError $ Error_Protocol ("bad record mac", True, BadRecordMac)
 
-        return $ cipherDataContent cdata
+    return $ cipherDataContent cdata
 
 decryptData :: Record Ciphertext -> Bytes -> TLSState -> TLSSt Bytes
 decryptData record econtent st = decryptOf (bulkF bulk)
-    where cipher     = fromJust "cipher" $ stActiveRxCipher st
-          bulk       = cipherBulk cipher
-          cst        = fromJust "rx crypt state" $ stActiveRxCryptState st
-          macSize    = hashSize $ cipherHash cipher
-          writekey   = cstKey cst
-          blockSize  = bulkBlockSize bulk
-          econtentLen = B.length econtent
+  where cipher     = fromJust "cipher" $ stActiveRxCipher st
+        bulk       = cipherBulk cipher
+        cst        = fromJust "rx crypt state" $ stActiveRxCryptState st
+        macSize    = hashSize $ cipherHash cipher
+        writekey   = cstKey cst
+        blockSize  = bulkBlockSize bulk
+        econtentLen = B.length econtent
 
-          explicitIV = hasExplicitBlockIV $ stVersion st
+        explicitIV = hasExplicitBlockIV $ stVersion st
 
-          sanityCheckError = throwError (Error_Packet "encrypted content too small for encryption parameters")
+        sanityCheckError = throwError (Error_Packet "encrypted content too small for encryption parameters")
 
-          decryptOf :: BulkFunctions -> TLSSt Bytes
-          decryptOf (BulkBlockF _ decryptF) = do
+        decryptOf :: BulkFunctions -> TLSSt Bytes
+        decryptOf (BulkBlockF _ decryptF) = do
             let minContent = (if explicitIV then bulkIVSize bulk else 0) + max (macSize + 1) blockSize
             when ((econtentLen `mod` blockSize) /= 0 || econtentLen < minContent) $ sanityCheckError
             {- update IV -}
@@ -97,7 +97,7 @@ decryptData record econtent st = decryptOf (bulkF bulk)
                     , cipherDataPadding = Just padding
                     }
 
-          decryptOf (BulkStreamF initF _ decryptF) = do
+        decryptOf (BulkStreamF initF _ decryptF) = do
             when (econtentLen < macSize) $ sanityCheckError
             let iv = cstIV cst
             let (content', newiv) = decryptF (if iv /= B.empty then iv else initF writekey) econtent
@@ -111,5 +111,5 @@ decryptData record econtent st = decryptOf (bulkF bulk)
                     , cipherDataPadding = Nothing
                     }
 
-          get3 s ls = maybe (throwError $ Error_Packet "record bad format") return $ partition3 s ls
-          get2 s (d1,d2) = get3 s (d1,d2,0) >>= \(r1,r2,_) -> return (r1,r2)
+        get3 s ls = maybe (throwError $ Error_Packet "record bad format") return $ partition3 s ls
+        get2 s (d1,d2) = get3 s (d1,d2,0) >>= \(r1,r2,_) -> return (r1,r2)

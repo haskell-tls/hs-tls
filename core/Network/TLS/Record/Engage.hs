@@ -28,8 +28,8 @@ engageRecord = compressRecord >=> encryptRecord
 
 compressRecord :: Record Plaintext -> TLSSt (Record Compressed)
 compressRecord record =
-        onRecordFragment record $ fragmentCompress $ \bytes -> do
-                withCompression $ compressionDeflate bytes
+    onRecordFragment record $ fragmentCompress $ \bytes -> do
+        withCompression $ compressionDeflate bytes
 
 {-
  - when Tx Encrypted is set, we pass the data through encryptContent, otherwise
@@ -37,52 +37,51 @@ compressRecord record =
  -}
 encryptRecord :: Record Compressed -> TLSSt (Record Ciphertext)
 encryptRecord record = onRecordFragment record $ fragmentCipher $ \bytes -> do
-        st <- get
-        if stTxEncrypted st
-                then encryptContent record bytes
-                else return bytes
+    st <- get
+    if stTxEncrypted st
+        then encryptContent record bytes
+        else return bytes
 
 encryptContent :: Record Compressed -> ByteString -> TLSSt ByteString
 encryptContent record content = do
-        digest <- makeDigest True (recordToHeader record) content
-        encryptData $ B.concat [content, digest]
+    digest <- makeDigest True (recordToHeader record) content
+    encryptData $ B.concat [content, digest]
 
 encryptData :: ByteString -> TLSSt ByteString
 encryptData content = do
-        st <- get
+    st <- get
 
-        let cipher = fromJust "cipher" $ stActiveTxCipher st
-        let bulk = cipherBulk cipher
-        let cst = fromJust "tx crypt state" $ stActiveTxCryptState st
+    let cipher = fromJust "cipher" $ stActiveTxCipher st
+    let bulk = cipherBulk cipher
+    let cst = fromJust "tx crypt state" $ stActiveTxCryptState st
 
-        let writekey = cstKey cst
+    let writekey = cstKey cst
 
-        case bulkF bulk of
-                BulkBlockF encrypt _ -> do
-                        let blockSize = fromIntegral $ bulkBlockSize bulk
-                        let msg_len = B.length content
-                        let padding = if blockSize > 0
-                                then
-                                        let padbyte = blockSize - (msg_len `mod` blockSize) in
-                                        let padbyte' = if padbyte == 0 then blockSize else padbyte in
-                                        B.replicate padbyte' (fromIntegral (padbyte' - 1))
-                                else
-                                        B.empty
+    case bulkF bulk of
+        BulkBlockF encrypt _ -> do
+            let blockSize = fromIntegral $ bulkBlockSize bulk
+            let msg_len = B.length content
+            let padding = if blockSize > 0
+                    then
+                            let padbyte = blockSize - (msg_len `mod` blockSize) in
+                            let padbyte' = if padbyte == 0 then blockSize else padbyte in
+                            B.replicate padbyte' (fromIntegral (padbyte' - 1))
+                    else
+                            B.empty
 
-                        -- before TLS 1.1, the block cipher IV is made of the residual of the previous block.
-                        iv <- if hasExplicitBlockIV $ stVersion st
-                                then genTLSRandom (bulkIVSize bulk)
-                                else return $ cstIV cst
-                        let e = encrypt writekey iv (B.concat [ content, padding ])
-                        if hasExplicitBlockIV $ stVersion st
-                                then return $ B.concat [iv,e]
-                                else do
-                                        let newiv = fromJust "new iv" $ takelast (bulkIVSize bulk) e
-                                        put $ st { stActiveTxCryptState = Just $ cst { cstIV = newiv } }
-                                        return e
-                BulkStreamF initF encryptF _ -> do
-                        let iv = cstIV cst
-                        let (e, newiv) = encryptF (if iv /= B.empty then iv else initF writekey) content
-                        put $ st { stActiveTxCryptState = Just $ cst { cstIV = newiv } }
-                        return e
-
+            -- before TLS 1.1, the block cipher IV is made of the residual of the previous block.
+            iv <- if hasExplicitBlockIV $ stVersion st
+                    then genTLSRandom (bulkIVSize bulk)
+                    else return $ cstIV cst
+            let e = encrypt writekey iv (B.concat [ content, padding ])
+            if hasExplicitBlockIV $ stVersion st
+                    then return $ B.concat [iv,e]
+                    else do
+                            let newiv = fromJust "new iv" $ takelast (bulkIVSize bulk) e
+                            put $ st { stActiveTxCryptState = Just $ cst { cstIV = newiv } }
+                            return e
+        BulkStreamF initF encryptF _ -> do
+            let iv = cstIV cst
+            let (e, newiv) = encryptF (if iv /= B.empty then iv else initF writekey) content
+            put $ st { stActiveTxCryptState = Just $ cst { cstIV = newiv } }
+            return e

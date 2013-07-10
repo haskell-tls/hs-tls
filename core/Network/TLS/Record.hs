@@ -12,20 +12,20 @@
 -- higher-level clients.
 --
 module Network.TLS.Record
-        ( Record(..)
-        , Fragment
-        , fragmentGetBytes
-        , fragmentPlaintext
-        , fragmentCiphertext
-        , recordToRaw
-        , rawToRecord
-        , recordToHeader
-        , Plaintext
-        , Compressed
-        , Ciphertext
-        , engageRecord
-        , disengageRecord
-        ) where
+    ( Record(..)
+    , Fragment
+    , fragmentGetBytes
+    , fragmentPlaintext
+    , fragmentCiphertext
+    , recordToRaw
+    , rawToRecord
+    , recordToHeader
+    , Plaintext
+    , Compressed
+    , Ciphertext
+    , engageRecord
+    , disengageRecord
+    ) where
 
 import Network.TLS.Record.Types
 import Network.TLS.Record.Engage
