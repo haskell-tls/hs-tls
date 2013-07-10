@@ -8,26 +8,26 @@
 -- Portability : unknown
 --
 module Network.TLS.Core
-        (
-        -- * Internal packet sending and receiving
-          sendPacket
-        , recvPacket
+    (
+    -- * Internal packet sending and receiving
+      sendPacket
+    , recvPacket
 
-        -- * Initialisation and Termination of context
-        , bye
-        , handshake
-        , HandshakeFailed(..)
-        , ConnectionNotEstablished(..)
+    -- * Initialisation and Termination of context
+    , bye
+    , handshake
+    , HandshakeFailed(..)
+    , ConnectionNotEstablished(..)
 
-        -- * Next Protocol Negotiation
-        , getNegotiatedProtocol
+    -- * Next Protocol Negotiation
+    , getNegotiatedProtocol
 
-        -- * High level API
-        , Terminated(..)
-        , sendData
-        , recvData
-        , recvData'
-        ) where
+    -- * High level API
+    , Terminated(..)
+    , sendData
+    , recvData
+    , recvData'
+    ) where
 
 import Network.TLS.Context
 import Network.TLS.Struct
@@ -67,12 +67,12 @@ getNegotiatedProtocol ctx = usingState_ ctx S.getNegotiatedProtocol
 -- It will automatically chunk data to acceptable packet size
 sendData :: MonadIO m => Context -> L.ByteString -> m ()
 sendData ctx dataToSend = checkValid ctx >> mapM_ sendDataChunk (L.toChunks dataToSend)
-        where sendDataChunk d
-                | B.length d > 16384 = do
-                        let (sending, remain) = B.splitAt 16384 d
-                        sendPacket ctx $ AppData sending
-                        sendDataChunk remain
-                | otherwise = sendPacket ctx $ AppData d
+  where sendDataChunk d
+            | B.length d > 16384 = do
+                let (sending, remain) = B.splitAt 16384 d
+                sendPacket ctx $ AppData sending
+                sendDataChunk remain
+            | otherwise = sendPacket ctx $ AppData d
 
 -- | recvData get data out of Data packet, and automatically renegotiate if
 -- a Handshake ClientHello is received
