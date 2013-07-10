@@ -50,6 +50,7 @@ module Network.TLS
     , contextNewOnHandle
     , contextFlush
     , contextClose
+    , contextHookSetHandshakeRecv
 
     -- * deprecated values
     , defaultParams
