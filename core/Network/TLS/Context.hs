@@ -435,10 +435,7 @@ usingState_ ctx f = do
         Right r  -> return r
 
 getStateRNG :: MonadIO m => Context -> Int -> m Bytes
-<<<<<<< Updated upstream
 getStateRNG ctx n = usingState_ ctx $ runRecordStateSt (genTLSRandom n)
-=======
-getStateRNG ctx n = usingState_ ctx (genTLSRandom n)
 
 withReadLock :: MonadIO m => Context -> IO a -> m a
 withReadLock ctx f = liftIO $ withMVar (ctxLockRead ctx) (const f)
@@ -448,4 +445,3 @@ withWriteLock ctx f = liftIO $ withMVar (ctxLockWrite ctx) (const f)
 
 withStateLock :: MonadIO m => Context -> IO a -> m a
 withStateLock ctx f = liftIO $ withMVar (ctxLockState ctx) (const f)
->>>>>>> Stashed changes
