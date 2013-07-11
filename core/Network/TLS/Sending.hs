@@ -27,7 +27,7 @@ import Network.TLS.Crypto
  - 'makePacketData' create a Header and a content bytestring related to a packet
  - this doesn't change any state
  -}
-makeRecord :: Packet -> TLSSt (Record Plaintext)
+makeRecord :: Packet -> RecordM (Record Plaintext)
 makeRecord pkt = do
         ver <- stVersion <$> get
         content <- writePacketContent pkt
@@ -38,7 +38,7 @@ makeRecord pkt = do
  - its own packet would be encrypted with the new context, instead of beeing sent
  - under the current context
  -}
-postprocessRecord :: Record Ciphertext -> TLSSt (Record Ciphertext)
+postprocessRecord :: Record Ciphertext -> RecordM (Record Ciphertext)
 postprocessRecord record@(Record ProtocolType_ChangeCipherSpec _ _) =
         switchTxEncryption >> return record
 postprocessRecord record = return record
@@ -46,7 +46,7 @@ postprocessRecord record = return record
 {-
  - marshall packet data
  -}
-encodeRecord :: Record Ciphertext -> TLSSt ByteString
+encodeRecord :: Record Ciphertext -> RecordM ByteString
 encodeRecord record = return $ B.concat [ encodeHeader hdr, content ]
         where (hdr, content) = recordToRaw record
 
@@ -71,7 +71,7 @@ preProcessPacket (Handshake hss)    = forM_ hss $ \hs -> do
 writePacket :: Packet -> TLSSt ByteString
 writePacket pkt = do
         preProcessPacket pkt
-        makeRecord pkt >>= engageRecord >>= postprocessRecord >>= encodeRecord
+        runRecordStateSt (makeRecord pkt >>= engageRecord >>= postprocessRecord >>= encodeRecord)
 
 {------------------------------------------------------------------------------}
 {- SENDING Helpers                                                            -}
@@ -82,25 +82,27 @@ writePacket pkt = do
  -}
 encryptRSA :: ByteString -> TLSSt ByteString
 encryptRSA content = do
+    rsakey <- fromJust "rsa public key" . hstRSAPublicKey . fromJust "handshake" . stHandshake <$> get
+    runRecordStateSt $ do
         st <- get
-        let rsakey = fromJust "rsa public key" $ hstRSAPublicKey $ fromJust "handshake" $ stHandshake st
-            (v,rng') = withTLSRNG (stRandomGen st) (\g -> kxEncrypt g rsakey content)
-         in do put (st { stRandomGen = rng' })
-               case v of
-                    Left err       -> fail ("rsa encrypt failed: " ++ show err)
-                    Right econtent -> return econtent
+        let (v,rng') = withTLSRNG (stRandomGen st) (\g -> kxEncrypt g rsakey content)
+        put (st { stRandomGen = rng' })
+        case v of
+            Left err       -> fail ("rsa encrypt failed: " ++ show err)
+            Right econtent -> return econtent
 
 signRSA :: HashDescr -> ByteString -> TLSSt ByteString
 signRSA hsh content = do
+    rsakey <- fromJust "rsa client private key" . hstRSAClientPrivateKey . fromJust "handshake" . stHandshake <$> get
+    runRecordStateSt $ do
         st <- get
-        let rsakey = fromJust "rsa client private key" $ hstRSAClientPrivateKey $ fromJust "handshake" $ stHandshake st
         let (r, rng') = withTLSRNG (stRandomGen st) (\g -> kxSign g rsakey hsh content)
         put (st { stRandomGen = rng' })
         case r of
-                Left err       -> fail ("rsa sign failed: " ++ show err)
-                Right econtent -> return econtent
+            Left err       -> fail ("rsa sign failed: " ++ show err)
+            Right econtent -> return econtent
 
-writePacketContent :: Packet -> TLSSt ByteString
+writePacketContent :: Monad m => Packet -> m ByteString
 writePacketContent (Handshake hss)    = return $ encodeHandshakes hss
 writePacketContent (Alert a)          = return $ encodeAlerts a
 writePacketContent (ChangeCipherSpec) = return $ encodeChangeCipherSpec

@@ -93,7 +93,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
             throwCore $ Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
     when (null commonCompressions) $
             throwCore $ Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
-    usingState_ ctx $ modify (\st -> st
+    usingState_ ctx $ runRecordStateSt $ modify (\st -> st
             { stVersion       = ver
             , stPendingCipher = Just usedCipher
             , stCompression   = usedCompression
@@ -185,7 +185,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
             -- certificates.
             --
             when (serverWantClientCert sparams) $ do
-                usedVersion <- usingState_ ctx $ stVersion <$> get
+                usedVersion <- usingState_ ctx $ getRecordState stVersion
                 let certTypes = [ CertificateType_RSA_Sign ]
                     hashSigs = if usedVersion < TLS12
                                    then Nothing
@@ -249,7 +249,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             -- Fetch all handshake messages up to now.
             msgs <- usingState_ ctx $ B.concat <$> getHandshakeMessages
 
-            usedVersion <- usingState_ ctx $ stVersion <$> get
+            usedVersion <- usingState_ ctx $ getRecordState stVersion
 
             (signature, hsh) <- case usedVersion of
                 SSL3 -> do

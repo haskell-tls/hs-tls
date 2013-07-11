@@ -370,7 +370,7 @@ contextNew backend params rng = liftIO $ do
     let clientContext = case roleParams params of
                              Client {} -> True
                              Server {} -> False
-    let st = (newTLSState rng) { stClientContext = clientContext }
+    let st = newTLSState rng clientContext
 
     stvar <- newMVar st
     eof   <- newIORef False
@@ -422,4 +422,4 @@ usingState_ ctx f = do
         Right r  -> return r
 
 getStateRNG :: MonadIO m => Context -> Int -> m Bytes
-getStateRNG ctx n = usingState_ ctx (genTLSRandom n)
+getStateRNG ctx n = usingState_ ctx $ runRecordStateSt (genTLSRandom n)

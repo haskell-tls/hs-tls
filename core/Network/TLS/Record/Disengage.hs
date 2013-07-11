@@ -25,21 +25,21 @@ import Network.TLS.Util
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
-disengageRecord :: Record Ciphertext -> TLSSt (Record Plaintext)
+disengageRecord :: Record Ciphertext -> RecordM (Record Plaintext)
 disengageRecord = decryptRecord >=> uncompressRecord
 
-uncompressRecord :: Record Compressed -> TLSSt (Record Plaintext)
+uncompressRecord :: Record Compressed -> RecordM (Record Plaintext)
 uncompressRecord record = onRecordFragment record $ fragmentUncompress $ \bytes ->
     withCompression $ compressionInflate bytes
 
-decryptRecord :: Record Ciphertext -> TLSSt (Record Compressed)
+decryptRecord :: Record Ciphertext -> RecordM (Record Compressed)
 decryptRecord record = onRecordFragment record $ fragmentUncipher $ \e -> do
     st <- get
     if stRxEncrypted st
         then get >>= decryptData record e
         else return e
 
-getCipherData :: Record a -> CipherData -> TLSSt ByteString
+getCipherData :: Record a -> CipherData -> RecordM ByteString
 getCipherData (Record pt ver _) cdata = do
     -- check if the MAC is valid.
     macValid <- case cipherDataMAC cdata of
@@ -62,7 +62,7 @@ getCipherData (Record pt ver _) cdata = do
 
     return $ cipherDataContent cdata
 
-decryptData :: Record Ciphertext -> Bytes -> TLSState -> TLSSt Bytes
+decryptData :: Record Ciphertext -> Bytes -> RecordState -> RecordM Bytes
 decryptData record econtent st = decryptOf (bulkF bulk)
   where cipher     = fromJust "cipher" $ stActiveRxCipher st
         bulk       = cipherBulk cipher
@@ -76,7 +76,7 @@ decryptData record econtent st = decryptOf (bulkF bulk)
 
         sanityCheckError = throwError (Error_Packet "encrypted content too small for encryption parameters")
 
-        decryptOf :: BulkFunctions -> TLSSt Bytes
+        decryptOf :: BulkFunctions -> RecordM Bytes
         decryptOf (BulkBlockF _ decryptF) = do
             let minContent = (if explicitIV then bulkIVSize bulk else 0) + max (macSize + 1) blockSize
             when ((econtentLen `mod` blockSize) /= 0 || econtentLen < minContent) $ sanityCheckError

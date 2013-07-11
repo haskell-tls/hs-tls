@@ -44,11 +44,11 @@ processPacket (Record ProtocolType_Alert _ fragment) = return . Alert =<< return
 
 processPacket (Record ProtocolType_ChangeCipherSpec _ fragment) = do
     returnEither $ decodeChangeCipherSpec $ fragmentGetBytes fragment
-    switchRxEncryption
+    runRecordStateSt switchRxEncryption
     return ChangeCipherSpec
 
 processPacket (Record ProtocolType_Handshake ver fragment) = do
-    keyxchg <- getCipherKeyExchangeType
+    keyxchg <- runRecordStateSt getCipherKeyExchangeType
     npn     <- getExtensionNPN
     let currentparams = CurrentParams
                         { cParamsVersion     = ver
@@ -95,13 +95,15 @@ processHandshake hs = do
 
 decryptRSA :: ByteString -> TLSSt (Either KxError ByteString)
 decryptRSA econtent = do
-    st  <- get
-    ver <- stVersion <$> get
+    -- st  <- get
+    ver <- getRecordState stVersion
     rsapriv <- fromJust "rsa private key" . hstRSAPrivateKey . fromJust "handshake" . stHandshake <$> get
     let cipher = if ver < TLS10 then econtent else B.drop 2 econtent
-    let (mmsg,rng') = withTLSRNG (stRandomGen st) (\g -> kxDecrypt g rsapriv cipher)
-    put (st { stRandomGen = rng' })
-    return mmsg
+    runRecordStateSt $ do
+        st <- get
+        let (mmsg,rng') = withTLSRNG (stRandomGen st) (\g -> kxDecrypt g rsapriv cipher)
+        put (st { stRandomGen = rng' })
+        return mmsg
 
 verifyRSA :: HashDescr -> ByteString -> ByteString -> TLSSt Bool
 verifyRSA hsh econtent sign = do
@@ -132,7 +134,7 @@ processServerHello _ = error "processServerHello called on wrong type"
 processClientKeyXchg :: ByteString -> TLSSt ()
 processClientKeyXchg encryptedPremaster = do
     expectedVer <- hstClientVersion . fromJust "handshake" . stHandshake <$> get
-    random      <- genTLSRandom 48
+    random      <- runRecordStateSt (genTLSRandom 48)
     ePremaster  <- decryptRSA encryptedPremaster
     case ePremaster of
         Left _          -> setMasterSecretFromPre random
@@ -144,7 +146,7 @@ processClientKeyXchg encryptedPremaster = do
 
 processClientFinished :: FinishedData -> TLSSt ()
 processClientFinished fdata = do
-    cc <- stClientContext <$> get
+    cc       <- isClientContext
     expected <- getHandshakeDigest (not cc)
     when (expected /= fdata) $ do
         throwError $ Error_Protocol("bad record mac", True, BadRecordMac)

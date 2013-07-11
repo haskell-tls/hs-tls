@@ -23,10 +23,10 @@ import Network.TLS.Util
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
-engageRecord :: Record Plaintext -> TLSSt (Record Ciphertext)
+engageRecord :: Record Plaintext -> RecordM (Record Ciphertext)
 engageRecord = compressRecord >=> encryptRecord
 
-compressRecord :: Record Plaintext -> TLSSt (Record Compressed)
+compressRecord :: Record Plaintext -> RecordM (Record Compressed)
 compressRecord record =
     onRecordFragment record $ fragmentCompress $ \bytes -> do
         withCompression $ compressionDeflate bytes
@@ -35,19 +35,19 @@ compressRecord record =
  - when Tx Encrypted is set, we pass the data through encryptContent, otherwise
  - we just return the packet
  -}
-encryptRecord :: Record Compressed -> TLSSt (Record Ciphertext)
+encryptRecord :: Record Compressed -> RecordM (Record Ciphertext)
 encryptRecord record = onRecordFragment record $ fragmentCipher $ \bytes -> do
     st <- get
     if stTxEncrypted st
         then encryptContent record bytes
         else return bytes
 
-encryptContent :: Record Compressed -> ByteString -> TLSSt ByteString
+encryptContent :: Record Compressed -> ByteString -> RecordM ByteString
 encryptContent record content = do
     digest <- makeDigest True (recordToHeader record) content
     encryptData $ B.concat [content, digest]
 
-encryptData :: ByteString -> TLSSt ByteString
+encryptData :: ByteString -> RecordM ByteString
 encryptData content = do
     st <- get
 

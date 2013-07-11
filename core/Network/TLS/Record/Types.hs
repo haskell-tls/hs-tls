@@ -61,26 +61,26 @@ fragmentCiphertext bytes = Fragment bytes
 fragmentGetBytes :: Fragment a -> Bytes
 fragmentGetBytes (Fragment bytes) = bytes
 
-onRecordFragment :: Record a -> (Fragment a -> TLSSt (Fragment b)) -> TLSSt (Record b)
+onRecordFragment :: Record a -> (Fragment a -> RecordM (Fragment b)) -> RecordM (Record b)
 onRecordFragment (Record pt ver frag) f = Record pt ver <$> f frag
 
-fragmentMap :: (Bytes -> TLSSt Bytes) -> Fragment a -> TLSSt (Fragment b)
+fragmentMap :: (Bytes -> RecordM Bytes) -> Fragment a -> RecordM (Fragment b)
 fragmentMap f (Fragment b) = Fragment <$> f b
 
 -- | turn a plaintext record into a compressed record using the compression function supplied
-fragmentCompress :: (Bytes -> TLSSt Bytes) -> Fragment Plaintext -> TLSSt (Fragment Compressed)
+fragmentCompress :: (Bytes -> RecordM Bytes) -> Fragment Plaintext -> RecordM (Fragment Compressed)
 fragmentCompress f = fragmentMap f
 
 -- | turn a compressed record into a ciphertext record using the cipher function supplied
-fragmentCipher :: (Bytes -> TLSSt Bytes) -> Fragment Compressed -> TLSSt (Fragment Ciphertext)
+fragmentCipher :: (Bytes -> RecordM Bytes) -> Fragment Compressed -> RecordM (Fragment Ciphertext)
 fragmentCipher f = fragmentMap f
 
 -- | turn a ciphertext fragment into a compressed fragment using the cipher function supplied
-fragmentUncipher :: (Bytes -> TLSSt Bytes) -> Fragment Ciphertext -> TLSSt (Fragment Compressed)
+fragmentUncipher :: (Bytes -> RecordM Bytes) -> Fragment Ciphertext -> RecordM (Fragment Compressed)
 fragmentUncipher f = fragmentMap f
 
 -- | turn a compressed fragment into a plaintext fragment using the decompression function supplied
-fragmentUncompress :: (Bytes -> TLSSt Bytes) -> Fragment Compressed -> TLSSt (Fragment Plaintext)
+fragmentUncompress :: (Bytes -> RecordM Bytes) -> Fragment Compressed -> RecordM (Fragment Plaintext)
 fragmentUncompress f = fragmentMap f
 
 -- | turn a record into an header and bytes

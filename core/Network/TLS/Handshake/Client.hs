@@ -95,7 +95,7 @@ handshakeClient cparams ctx = do
                 Just _  -> usingState_ ctx $ setVersion rver
             case find ((==) cipher . cipherID) ciphers of
                 Nothing -> throwCore $ Error_Protocol ("no cipher in common with the server", True, HandshakeFailure)
-                Just c  -> usingState_ ctx $ setCipher c
+                Just c  -> usingState_ ctx $ runRecordStateSt $ setCipher c
 
             -- intersect sent extensions in client and the received extensions from server.
             -- if server returns extensions that we didn't request, fail.
@@ -188,8 +188,8 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
 
         sendClientKeyXchg = do
             encryptedPreMaster <- usingState_ ctx $ do
-                xver       <- stVersion <$> get
-                prerand    <- genTLSRandom 46
+                xver       <- getRecordState stVersion
+                prerand    <- runRecordStateSt $ genTLSRandom 46
                 let premaster = encodePreMasterSecret xver prerand
                 setMasterSecretFromPre premaster
 
@@ -212,7 +212,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
         -- 4. Send it to the server.
         --
         sendCertificateVerify = do
-            usedVersion <- usingState_ ctx $ stVersion <$> get
+            usedVersion <- usingState_ ctx $ stVersion . stRecordState <$> get
 
             -- Only send a certificate verify message when we
             -- have sent a non-empty list of certificates.
