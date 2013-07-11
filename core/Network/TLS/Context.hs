@@ -51,6 +51,9 @@ module Network.TLS.Context
     , contextRecv
     , updateMeasure
     , withMeasure
+    , withReadLock
+    , withWriteLock
+    , withStateLock
 
     -- * deprecated types
     , TLSParams
@@ -307,6 +310,10 @@ data Context = Context
                                            -- the flag will be set to false regardless of its initial value
                                            -- after the first packet received.
     , ctxHooks            :: IORef Hooks   -- ^ hooks for this context
+    , ctxLockWrite        :: MVar ()       -- ^ lock to use for writing data (including updating the state)
+    , ctxLockRead         :: MVar ()       -- ^ lock to use for reading data (including updating the state)
+    , ctxLockState        :: MVar ()       -- ^ lock used during read/write when receiving and sending packet.
+                                           -- it is usually nested in a write or read lock.
     }
 
 -- deprecated types, setup as aliases for compatibility.
@@ -380,6 +387,9 @@ contextNew backend params rng = liftIO $ do
     -- server context, where we might be dealing with an old/compat client.
     sslv2Compat <- newIORef (not clientContext)
     hooks <- newIORef defaultHooks
+    lockWrite <- newMVar ()
+    lockRead  <- newMVar ()
+    lockState <- newMVar ()
     return $ Context
             { ctxConnection   = backend
             , ctxParams       = params
@@ -389,6 +399,9 @@ contextNew backend params rng = liftIO $ do
             , ctxEstablished_ = established
             , ctxSSLv2ClientHello = sslv2Compat
             , ctxHooks            = hooks
+            , ctxLockWrite        = lockWrite
+            , ctxLockRead         = lockRead
+            , ctxLockState        = lockState
             }
 
 -- | create a new context on an handle.
@@ -422,4 +435,17 @@ usingState_ ctx f = do
         Right r  -> return r
 
 getStateRNG :: MonadIO m => Context -> Int -> m Bytes
+<<<<<<< Updated upstream
 getStateRNG ctx n = usingState_ ctx $ runRecordStateSt (genTLSRandom n)
+=======
+getStateRNG ctx n = usingState_ ctx (genTLSRandom n)
+
+withReadLock :: MonadIO m => Context -> IO a -> m a
+withReadLock ctx f = liftIO $ withMVar (ctxLockRead ctx) (const f)
+
+withWriteLock :: MonadIO m => Context -> IO a -> m a
+withWriteLock ctx f = liftIO $ withMVar (ctxLockWrite ctx) (const f)
+
+withStateLock :: MonadIO m => Context -> IO a -> m a
+withStateLock ctx f = liftIO $ withMVar (ctxLockState ctx) (const f)
+>>>>>>> Stashed changes
