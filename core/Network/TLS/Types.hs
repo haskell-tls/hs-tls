@@ -26,10 +26,10 @@ type SessionID = ByteString
 
 -- | Session data to resume
 data SessionData = SessionData
-        { sessionVersion :: Version
-        , sessionCipher  :: CipherID
-        , sessionSecret  :: ByteString
-        }
+    { sessionVersion :: Version
+    , sessionCipher  :: CipherID
+    , sessionSecret  :: ByteString
+    }
 
 -- | Cipher identification
 type CipherID = Word16

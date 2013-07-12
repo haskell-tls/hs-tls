@@ -10,45 +10,45 @@
 -- with only explicit parameters, no TLS state is involved here.
 --
 module Network.TLS.Packet
-        (
-        -- * params for encoding and decoding
-          CurrentParams(..)
-        -- * marshall functions for header messages
-        , decodeHeader
-        , decodeDeprecatedHeaderLength
-        , decodeDeprecatedHeader
-        , encodeHeader
-        , encodeHeaderNoVer -- use for SSL3
+    (
+    -- * params for encoding and decoding
+      CurrentParams(..)
+    -- * marshall functions for header messages
+    , decodeHeader
+    , decodeDeprecatedHeaderLength
+    , decodeDeprecatedHeader
+    , encodeHeader
+    , encodeHeaderNoVer -- use for SSL3
 
-        -- * marshall functions for alert messages
-        , decodeAlert
-        , decodeAlerts
-        , encodeAlerts
+    -- * marshall functions for alert messages
+    , decodeAlert
+    , decodeAlerts
+    , encodeAlerts
 
-        -- * marshall functions for handshake messages
-        , decodeHandshakes
-        , decodeHandshake
-        , decodeDeprecatedHandshake
-        , encodeHandshake
-        , encodeHandshakes
-        , encodeHandshakeHeader
-        , encodeHandshakeContent
+    -- * marshall functions for handshake messages
+    , decodeHandshakes
+    , decodeHandshake
+    , decodeDeprecatedHandshake
+    , encodeHandshake
+    , encodeHandshakes
+    , encodeHandshakeHeader
+    , encodeHandshakeContent
 
-        -- * marshall functions for change cipher spec message
-        , decodeChangeCipherSpec
-        , encodeChangeCipherSpec
+    -- * marshall functions for change cipher spec message
+    , decodeChangeCipherSpec
+    , encodeChangeCipherSpec
 
-        , decodePreMasterSecret
-        , encodePreMasterSecret
+    , decodePreMasterSecret
+    , encodePreMasterSecret
 
-        -- * generate things for packet content
-        , generateMasterSecret
-        , generateKeyBlock
-        , generateClientFinished
-        , generateServerFinished
+    -- * generate things for packet content
+    , generateMasterSecret
+    , generateKeyBlock
+    , generateClientFinished
+    , generateServerFinished
 
-        , generateCertificateVerify_SSL
-        ) where
+    , generateCertificateVerify_SSL
+    ) where
 
 import Network.TLS.Struct
 import Network.TLS.Wire
@@ -84,8 +84,8 @@ getVersion = do
     major <- getWord8
     minor <- getWord8
     case verOfNum (major, minor) of
-            Nothing -> fail ("invalid version : " ++ show major ++ "," ++ show minor)
-            Just v  -> return v
+        Nothing -> fail ("invalid version : " ++ show major ++ "," ++ show minor)
+        Just v  -> return v
 
 putVersion :: Version -> Put
 putVersion ver = putWord8 major >> putWord8 minor

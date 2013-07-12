@@ -8,17 +8,17 @@
 -- Portability : unknown
 --
 module Network.TLS.Cipher
-        ( BulkFunctions(..)
-        , CipherKeyExchangeType(..)
-        , Bulk(..)
-        , Hash(..)
-        , Cipher(..)
-        , CipherID
-        , cipherKeyBlockSize
-        , Key
-        , IV
-        , cipherExchangeNeedMoreData
-        ) where
+    ( BulkFunctions(..)
+    , CipherKeyExchangeType(..)
+    , Bulk(..)
+    , Hash(..)
+    , Cipher(..)
+    , CipherID
+    , cipherKeyBlockSize
+    , Key
+    , IV
+    , cipherExchangeNeedMoreData
+    ) where
 
 import Network.TLS.Types (CipherID)
 import Network.TLS.Struct (Version(..))
@@ -30,58 +30,58 @@ type Key = B.ByteString
 type IV = B.ByteString
 
 data BulkFunctions =
-          BulkBlockF (Key -> IV -> B.ByteString -> B.ByteString)
-                     (Key -> IV -> B.ByteString -> B.ByteString)
-        | BulkStreamF (Key -> IV)
-                      (IV -> B.ByteString -> (B.ByteString, IV))
-                      (IV -> B.ByteString -> (B.ByteString, IV))
+      BulkBlockF (Key -> IV -> B.ByteString -> B.ByteString)
+                 (Key -> IV -> B.ByteString -> B.ByteString)
+    | BulkStreamF (Key -> IV)
+                  (IV -> B.ByteString -> (B.ByteString, IV))
+                  (IV -> B.ByteString -> (B.ByteString, IV))
 
 data CipherKeyExchangeType =
-          CipherKeyExchange_RSA
-        | CipherKeyExchange_DH_Anon
-        | CipherKeyExchange_DHE_RSA
-        | CipherKeyExchange_ECDHE_RSA
-        | CipherKeyExchange_DHE_DSS
-        | CipherKeyExchange_DH_DSS
-        | CipherKeyExchange_DH_RSA
-        | CipherKeyExchange_ECDH_ECDSA
-        | CipherKeyExchange_ECDH_RSA
-        | CipherKeyExchange_ECDHE_ECDSA
-        deriving (Show,Eq)
+      CipherKeyExchange_RSA
+    | CipherKeyExchange_DH_Anon
+    | CipherKeyExchange_DHE_RSA
+    | CipherKeyExchange_ECDHE_RSA
+    | CipherKeyExchange_DHE_DSS
+    | CipherKeyExchange_DH_DSS
+    | CipherKeyExchange_DH_RSA
+    | CipherKeyExchange_ECDH_ECDSA
+    | CipherKeyExchange_ECDH_RSA
+    | CipherKeyExchange_ECDHE_ECDSA
+    deriving (Show,Eq)
 
 data Bulk = Bulk
-        { bulkName         :: String
-        , bulkKeySize      :: Int
-        , bulkIVSize       :: Int
-        , bulkBlockSize    :: Int
-        , bulkF            :: BulkFunctions
-        }
+    { bulkName         :: String
+    , bulkKeySize      :: Int
+    , bulkIVSize       :: Int
+    , bulkBlockSize    :: Int
+    , bulkF            :: BulkFunctions
+    }
 
 data Hash = Hash
-        { hashName         :: String
-        , hashSize         :: Int
-        , hashF            :: B.ByteString -> B.ByteString
-        }
+    { hashName         :: String
+    , hashSize         :: Int
+    , hashF            :: B.ByteString -> B.ByteString
+    }
 
 -- | Cipher algorithm
 data Cipher = Cipher
-        { cipherID           :: CipherID
-        , cipherName         :: String
-        , cipherHash         :: Hash
-        , cipherBulk         :: Bulk
-        , cipherKeyExchange  :: CipherKeyExchangeType
-        , cipherMinVer       :: Maybe Version
-        }
+    { cipherID           :: CipherID
+    , cipherName         :: String
+    , cipherHash         :: Hash
+    , cipherBulk         :: Bulk
+    , cipherKeyExchange  :: CipherKeyExchangeType
+    , cipherMinVer       :: Maybe Version
+    }
 
 cipherKeyBlockSize :: Cipher -> Int
 cipherKeyBlockSize cipher = 2 * (hashSize (cipherHash cipher) + bulkIVSize bulk + bulkKeySize bulk)
-        where bulk = cipherBulk cipher
+  where bulk = cipherBulk cipher
 
 instance Show Cipher where
-        show c = cipherName c
+    show c = cipherName c
 
 instance Eq Cipher where
-        (==) c1 c2 = cipherID c1 == cipherID c2
+    (==) c1 c2 = cipherID c1 == cipherID c2
 
 cipherExchangeNeedMoreData :: CipherKeyExchangeType -> Bool
 cipherExchangeNeedMoreData CipherKeyExchange_RSA         = False

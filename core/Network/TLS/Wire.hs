@@ -9,37 +9,37 @@
 -- all multibytes values are written as big endian.
 --
 module Network.TLS.Wire
-        ( Get
-        , runGet
-        , runGetErr
-        , runGetMaybe
-        , remaining
-        , getWord8
-        , getWords8
-        , getWord16
-        , getWords16
-        , getWord24
-        , getBytes
-        , getOpaque8
-        , getOpaque16
-        , getOpaque24
-        , getList
-        , processBytes
-        , isEmpty
-        , Put
-        , runPut
-        , putWord8
-        , putWords8
-        , putWord16
-        , putWords16
-        , putWord24
-        , putBytes
-        , putOpaque8
-        , putOpaque16
-        , putOpaque24
-        , encodeWord16
-        , encodeWord64
-        ) where
+    ( Get
+    , runGet
+    , runGetErr
+    , runGetMaybe
+    , remaining
+    , getWord8
+    , getWords8
+    , getWord16
+    , getWords16
+    , getWord24
+    , getBytes
+    , getOpaque8
+    , getOpaque16
+    , getOpaque24
+    , getList
+    , processBytes
+    , isEmpty
+    , Put
+    , runPut
+    , putWord8
+    , putWords8
+    , putWord16
+    , putWords16
+    , putWord24
+    , putBytes
+    , putOpaque8
+    , putOpaque16
+    , putOpaque24
+    , encodeWord16
+    , encodeWord64
+    ) where
 
 import Data.Serialize.Get hiding (runGet)
 import qualified Data.Serialize.Get as G
@@ -71,10 +71,10 @@ getWords16 = getWord16 >>= \lenb -> replicateM (fromIntegral lenb `div` 2) getWo
 
 getWord24 :: Get Int
 getWord24 = do
-        a <- fromIntegral <$> getWord8
-        b <- fromIntegral <$> getWord8
-        c <- fromIntegral <$> getWord8
-        return $ (a `shiftL` 16) .|. (b `shiftL` 8) .|. c
+    a <- fromIntegral <$> getWord8
+    b <- fromIntegral <$> getWord8
+    c <- fromIntegral <$> getWord8
+    return $ (a `shiftL` 16) .|. (b `shiftL` 8) .|. c
 
 getOpaque8 :: Get Bytes
 getOpaque8 = getWord8 >>= getBytes . fromIntegral
@@ -87,7 +87,7 @@ getOpaque24 = getWord24 >>= getBytes
 
 getList :: Int -> (Get (Int, a)) -> Get [a]
 getList totalLen getElement = isolate totalLen (getElements totalLen)
-    where getElements len
+  where getElements len
             | len < 0     = error "list consumed too much data. should never happen with isolate."
             | len == 0    = return []
             | otherwise   = getElement >>= \(elementLen, a) -> liftM ((:) a) (getElements (len - elementLen))
@@ -97,23 +97,23 @@ processBytes i f = isolate i f
 
 putWords8 :: [Word8] -> Put
 putWords8 l = do
-        putWord8 $ fromIntegral (length l)
-        mapM_ putWord8 l
+    putWord8 $ fromIntegral (length l)
+    mapM_ putWord8 l
 
 putWord16 :: Word16 -> Put
 putWord16 = putWord16be
 
 putWords16 :: [Word16] -> Put
 putWords16 l = do
-        putWord16 $ 2 * (fromIntegral $ length l)
-        mapM_ putWord16 l
+    putWord16 $ 2 * (fromIntegral $ length l)
+    mapM_ putWord16 l
 
 putWord24 :: Int -> Put
 putWord24 i = do
-        let a = fromIntegral ((i `shiftR` 16) .&. 0xff)
-        let b = fromIntegral ((i `shiftR` 8) .&. 0xff)
-        let c = fromIntegral (i .&. 0xff)
-        mapM_ putWord8 [a,b,c]
+    let a = fromIntegral ((i `shiftR` 16) .&. 0xff)
+    let b = fromIntegral ((i `shiftR` 8) .&. 0xff)
+    let c = fromIntegral (i .&. 0xff)
+    mapM_ putWord8 [a,b,c]
 
 putBytes :: Bytes -> Put
 putBytes = putByteString

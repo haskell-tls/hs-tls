@@ -8,20 +8,20 @@
 -- Portability : unknown
 --
 module Network.TLS.Compression
-        ( CompressionC(..)
-        , Compression(..)
-        , CompressionID
-        , nullCompression
-        , NullCompression
+    ( CompressionC(..)
+    , Compression(..)
+    , CompressionID
+    , nullCompression
+    , NullCompression
 
-        -- * member redefined for the class abstraction
-        , compressionID
-        , compressionDeflate
-        , compressionInflate
+    -- * member redefined for the class abstraction
+    , compressionID
+    , compressionDeflate
+    , compressionInflate
 
-        -- * helper
-        , compressionIntersectID
-        ) where
+    -- * helper
+    , compressionIntersectID
+    ) where
 
 import Data.Word
 import Network.TLS.Types (CompressionID)
@@ -30,9 +30,9 @@ import Control.Arrow (first)
 
 -- | supported compression algorithms need to be part of this class
 class CompressionC a where
-        compressionCID      :: a -> CompressionID
-        compressionCDeflate :: a -> ByteString -> (a, ByteString)
-        compressionCInflate :: a -> ByteString -> (a, ByteString)
+    compressionCID      :: a -> CompressionID
+    compressionCDeflate :: a -> ByteString -> (a, ByteString)
+    compressionCInflate :: a -> ByteString -> (a, ByteString)
 
 -- | every compression need to be wrapped in this, to fit in structure
 data Compression = forall a . CompressionC a => Compression a
@@ -52,7 +52,7 @@ compressionInflate :: ByteString -> Compression -> (Compression, ByteString)
 compressionInflate bytes (Compression c) = first Compression $ compressionCInflate c bytes
 
 instance Show Compression where
-        show = show . compressionID
+    show = show . compressionID
 
 -- | intersect a list of ids commonly given by the other side with a list of compression
 -- the function keeps the list of compression in order, to be able to find quickly the prefered
@@ -64,9 +64,9 @@ compressionIntersectID l ids = filter (\c -> elem (compressionID c) ids) l
 data NullCompression = NullCompression
 
 instance CompressionC NullCompression where
-        compressionCID _         = 0
-        compressionCDeflate s b = (s, b)
-        compressionCInflate s b = (s, b)
+    compressionCID _        = 0
+    compressionCDeflate s b = (s, b)
+    compressionCInflate s b = (s, b)
 
 -- | default null compression
 nullCompression :: Compression

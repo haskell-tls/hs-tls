@@ -29,9 +29,9 @@ import Network.TLS.Crypto
  -}
 makeRecord :: Packet -> RecordM (Record Plaintext)
 makeRecord pkt = do
-        ver <- stVersion <$> get
-        content <- writePacketContent pkt
-        return $ Record (packetType pkt) ver (fragmentPlaintext content)
+    ver <- stVersion <$> get
+    content <- writePacketContent pkt
+    return $ Record (packetType pkt) ver (fragmentPlaintext content)
 
 {-
  - ChangeCipherSpec state change need to be handled after encryption otherwise
@@ -40,7 +40,7 @@ makeRecord pkt = do
  -}
 postprocessRecord :: Record Ciphertext -> RecordM (Record Ciphertext)
 postprocessRecord record@(Record ProtocolType_ChangeCipherSpec _ _) =
-        switchTxEncryption >> return record
+    switchTxEncryption >> return record
 postprocessRecord record = return record
 
 {-
@@ -48,7 +48,7 @@ postprocessRecord record = return record
  -}
 encodeRecord :: Record Ciphertext -> RecordM ByteString
 encodeRecord record = return $ B.concat [ encodeHeader hdr, content ]
-        where (hdr, content) = recordToRaw record
+  where (hdr, content) = recordToRaw record
 
 {-
  - just update TLS state machine
@@ -58,11 +58,11 @@ preProcessPacket (Alert _)          = return ()
 preProcessPacket (AppData _)        = return ()
 preProcessPacket (ChangeCipherSpec) = return ()
 preProcessPacket (Handshake hss)    = forM_ hss $ \hs -> do
-        case hs of
-                Finished fdata -> updateVerifiedData True fdata
-                _              -> return ()
-        when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage $ encodeHandshake hs
-        when (finishHandshakeTypeMaterial $ typeOfHandshake hs) (updateHandshakeDigest $ encodeHandshake hs)
+    case hs of
+        Finished fdata -> updateVerifiedData True fdata
+        _              -> return ()
+    when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage $ encodeHandshake hs
+    when (finishHandshakeTypeMaterial $ typeOfHandshake hs) (updateHandshakeDigest $ encodeHandshake hs)
 
 {-
  - writePacket transform a packet into marshalled data related to current state
