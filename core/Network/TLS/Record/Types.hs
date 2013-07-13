@@ -39,7 +39,7 @@ module Network.TLS.Record.Types
     ) where
 
 import Network.TLS.Struct
-import Network.TLS.State
+import Network.TLS.Record.State
 import qualified Data.ByteString as B
 import Control.Applicative ((<$>))
 

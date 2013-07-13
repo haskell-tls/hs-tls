@@ -133,7 +133,7 @@ processServerHello _ = error "processServerHello called on wrong type"
 processClientKeyXchg :: ByteString -> TLSSt ()
 processClientKeyXchg encryptedPremaster = do
     expectedVer <- hstClientVersion . fromJust "handshake" . stHandshake <$> get
-    random      <- runRecordStateSt (genTLSRandom 48)
+    random      <- genRandom 48
     ePremaster  <- decryptRSA encryptedPremaster
     case ePremaster of
         Left _          -> setMasterSecretFromPre random

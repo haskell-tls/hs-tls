@@ -13,24 +13,19 @@ module Network.TLS.State
     ( TLSState(..)
     , TLSSt
     , RecordState(..)
-    , RecordM
     , getRecordState
     , runTLSState
     , runRecordStateSt
     , TLSHandshakeState(..)
-    , TLSCryptState(..)
-    , TLSMacState(..)
     , newTLSState
-    , genTLSRandom
     , withTLSRNG
-    , withCompression
+    , genRandom
     , assert -- FIXME move somewhere else (Internal.hs ?)
     , updateVerifiedData
     , finishHandshakeTypeMaterial
     , finishHandshakeMaterial
     , certVerifyHandshakeTypeMaterial
     , certVerifyHandshakeMaterial
-    , makeDigest
     , setMasterSecret
     , setMasterSecretFromPre
     , getMasterSecret
@@ -48,6 +43,7 @@ module Network.TLS.State
     , getClientCertRequest
     , setKeyBlock
     , setVersion
+    , getVersion
     , setCipher
     , setServerRandom
     , setSecureRenegotiation
@@ -78,16 +74,14 @@ module Network.TLS.State
     , endHandshake
     ) where
 
-import Data.Word
 import Data.Maybe (isNothing)
 import Network.TLS.Util
 import Network.TLS.Struct
-import Network.TLS.Wire
 import Network.TLS.Packet
 import Network.TLS.Crypto
 import Network.TLS.Cipher
-import Network.TLS.Compression
-import Network.TLS.MAC
+import Network.TLS.Record.State
+import Network.TLS.RNG
 import qualified Data.ByteString as B
 import Control.Applicative ((<$>))
 import Control.Monad
@@ -99,16 +93,6 @@ import Data.X509 (CertificateChain)
 assert :: Monad m => String -> [(String,Bool)] -> m ()
 assert fctname list = forM_ list $ \ (name, assumption) -> do
     when assumption $ fail (fctname ++ ": assumption about " ++ name ++ " failed")
-
-data TLSCryptState = TLSCryptState
-    { cstKey        :: !Bytes
-    , cstIV         :: !Bytes
-    , cstMacSecret  :: !Bytes
-    } deriving (Show)
-
-data TLSMacState = TLSMacState
-    { msSequence :: Word64
-    } deriving (Show)
 
 type ClientCertRequestData = ([CertificateType],
                               Maybe [(HashAlgorithm, SignatureAlgorithm)],
@@ -130,44 +114,6 @@ data TLSHandshakeState = TLSHandshakeState
     , hstCertReqSent     :: !Bool -- ^ Set to true when a certificate request was sent
     , hstClientCertChain :: !(Maybe CertificateChain)
     } deriving (Show)
-
-data StateRNG = forall g . CPRG g => StateRNG g
-
-instance Show StateRNG where
-    show _ = "rng[..]"
-
-data RecordState = RecordState
-    { stClientContext       :: Bool
-    , stVersion             :: !Version
-    , stTxEncrypted         :: Bool
-    , stRxEncrypted         :: Bool
-    , stActiveTxCryptState  :: !(Maybe TLSCryptState)
-    , stActiveRxCryptState  :: !(Maybe TLSCryptState)
-    , stPendingTxCryptState :: !(Maybe TLSCryptState)
-    , stPendingRxCryptState :: !(Maybe TLSCryptState)
-    , stActiveTxMacState    :: !(Maybe TLSMacState)
-    , stActiveRxMacState    :: !(Maybe TLSMacState)
-    , stPendingTxMacState   :: !(Maybe TLSMacState)
-    , stPendingRxMacState   :: !(Maybe TLSMacState)
-    , stActiveTxCipher      :: Maybe Cipher
-    , stActiveRxCipher      :: Maybe Cipher
-    , stPendingCipher       :: Maybe Cipher
-    , stCompression         :: Compression
-    , stRandomGen           :: StateRNG
-    } deriving (Show)
-
-newtype RecordM a = RecordM { runRecordM :: ErrorT TLSError (State RecordState) a }
-    deriving (Monad, MonadError TLSError)
-
-instance Functor RecordM where
-    fmap f = RecordM . fmap f . runRecordM
-
-instance MonadState RecordState RecordM where
-    put x = RecordM (lift $ put x)
-    get   = RecordM (lift get)
-#if MIN_VERSION_mtl(2,1,0)
-    state f = RecordM (lift $ state f)
-#endif
 
 data TLSState = TLSState
     { stHandshake           :: !(Maybe TLSHandshakeState)
@@ -230,64 +176,6 @@ newTLSState rng clientContext = TLSState
     , stServerNextProtocolSuggest = Nothing
     , stClientCertificateChain = Nothing
     }
-
-newRecordState :: CPRG g => g -> Bool -> RecordState
-newRecordState rng clientContext = RecordState
-    { stClientContext       = clientContext
-    , stVersion             = TLS10
-    , stTxEncrypted         = False
-    , stRxEncrypted         = False
-    , stActiveTxCryptState  = Nothing
-    , stActiveRxCryptState  = Nothing
-    , stPendingTxCryptState = Nothing
-    , stPendingRxCryptState = Nothing
-    , stActiveTxMacState    = Nothing
-    , stActiveRxMacState    = Nothing
-    , stPendingTxMacState   = Nothing
-    , stPendingRxMacState   = Nothing
-    , stActiveTxCipher      = Nothing
-    , stActiveRxCipher      = Nothing
-    , stPendingCipher       = Nothing
-    , stCompression         = nullCompression
-    , stRandomGen           = StateRNG rng
-    }
-
-withTLSRNG :: StateRNG -> (forall g . CPRG g => g -> (a,g)) -> (a, StateRNG)
-withTLSRNG (StateRNG rng) f = let (a, rng') = f rng
-                               in (a, StateRNG rng')
-
-withCompression :: (Compression -> (Compression, a)) -> RecordM a
-withCompression f = do
-    st <- get
-    let (nc, a) = f (stCompression st)
-    put $ st { stCompression = nc }
-    return a
-
-genTLSRandom :: (MonadState RecordState m, MonadError TLSError m) => Int -> m Bytes
-genTLSRandom n = do
-    st <- get
-    case withTLSRNG (stRandomGen st) (genRandomBytes n) of
-            (bytes, rng') -> put (st { stRandomGen = rng' }) >> return bytes
-
-makeDigest :: MonadState RecordState m => Bool -> Header -> Bytes -> m Bytes
-makeDigest w hdr content = do
-    st <- get
-    let ver = stVersion st
-    let cst = fromJust "crypt state" $ if w then stActiveTxCryptState st else stActiveRxCryptState st
-    let ms = fromJust "mac state" $ if w then stActiveTxMacState st else stActiveRxMacState st
-    let cipher = fromJust "cipher" $ if w then stActiveTxCipher st else stActiveRxCipher st
-    let hashf = hashF $ cipherHash cipher
-
-    let (macF, msg) =
-            if ver < TLS10
-                then (macSSL hashf, B.concat [ encodeWord64 $ msSequence ms, encodeHeaderNoVer hdr, content ])
-                else (hmac hashf 64, B.concat [ encodeWord64 $ msSequence ms, encodeHeader hdr, content ])
-    let digest = macF (cstMacSecret cst) msg
-
-    let newms = ms { msSequence = (msSequence ms) + 1 }
-
-    modify (\_ -> if w then st { stActiveTxMacState = Just newms } else st { stActiveRxMacState = Just newms })
-    return digest
 
 updateVerifiedData :: MonadState TLSState m => Bool -> Bytes -> m ()
 updateVerifiedData sending bs = do
@@ -466,6 +354,9 @@ setCipher cipher = modify (\st -> st { stPendingCipher = Just cipher })
 setVersion :: MonadState TLSState m => Version -> m ()
 setVersion ver = modify (\st -> st { stRecordState = (stRecordState st) { stVersion = ver } })
 
+getVersion :: MonadState TLSState m => m Version
+getVersion = gets (stVersion . stRecordState)
+
 setSecureRenegotiation :: MonadState TLSState m => Bool -> m ()
 setSecureRenegotiation b = modify (\st -> st { stSecureRenegotiation = b })
 
@@ -564,3 +455,6 @@ getHandshakeDigest client = do
 
 endHandshake :: MonadState TLSState m => m ()
 endHandshake = modify (\st -> st { stHandshake = Nothing })
+
+genRandom :: Int -> TLSSt Bytes
+genRandom n = runRecordStateSt (genTLSRandom n)

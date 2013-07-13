@@ -435,7 +435,7 @@ usingState_ ctx f = do
         Right r  -> return r
 
 getStateRNG :: MonadIO m => Context -> Int -> m Bytes
-getStateRNG ctx n = usingState_ ctx $ runRecordStateSt (genTLSRandom n)
+getStateRNG ctx n = usingState_ ctx $ genRandom n
 
 withReadLock :: MonadIO m => Context -> IO a -> m a
 withReadLock ctx f = liftIO $ withMVar (ctxLockRead ctx) (const f)

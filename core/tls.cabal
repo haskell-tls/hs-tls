@@ -66,6 +66,8 @@ Library
                      Network.TLS.Record.Types
                      Network.TLS.Record.Engage
                      Network.TLS.Record.Disengage
+                     Network.TLS.Record.State
+                     Network.TLS.RNG
                      Network.TLS.State
                      Network.TLS.Session
                      Network.TLS.Sending

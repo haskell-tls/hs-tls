@@ -188,8 +188,8 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
 
         sendClientKeyXchg = do
             encryptedPreMaster <- usingState_ ctx $ do
-                xver       <- getRecordState stVersion
-                prerand    <- runRecordStateSt $ genTLSRandom 46
+                xver       <- getVersion
+                prerand    <- genRandom 46
                 let premaster = encodePreMasterSecret xver prerand
                 setMasterSecretFromPre premaster
 

@@ -15,7 +15,7 @@ module Network.TLS.Record.Engage
 import Control.Monad.State
 
 import Network.TLS.Cap
-import Network.TLS.State
+import Network.TLS.Record.State
 import Network.TLS.Record.Types
 import Network.TLS.Cipher
 import Network.TLS.Compression
