@@ -20,7 +20,6 @@ import Network.TLS.Util
 import Network.TLS.Struct
 import Network.TLS.Record
 import Network.TLS.Packet
-import Network.TLS.Record.State
 import Network.TLS.State
 import Network.TLS.Crypto
 

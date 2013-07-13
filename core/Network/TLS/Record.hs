@@ -13,6 +13,7 @@
 --
 module Network.TLS.Record
     ( Record(..)
+    -- * Fragment manipulation types
     , Fragment
     , fragmentGetBytes
     , fragmentPlaintext
@@ -23,10 +24,16 @@ module Network.TLS.Record
     , Plaintext
     , Compressed
     , Ciphertext
+    -- * Engage and disengage from the record layer
     , engageRecord
     , disengageRecord
+    -- * State tracking
+    , RecordState(..)
+    , RecordM
+    , newRecordState
     ) where
 
 import Network.TLS.Record.Types
 import Network.TLS.Record.Engage
 import Network.TLS.Record.Disengage
+import Network.TLS.Record.State

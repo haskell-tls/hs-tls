@@ -1,6 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE CPP #-}
 -- |
 -- Module      : Network.TLS.Record.State
@@ -107,13 +106,13 @@ withCompression f = do
     put $ st { stCompression = nc }
     return a
 
-genTLSRandom :: (MonadState RecordState m, MonadError TLSError m) => Int -> m Bytes
+genTLSRandom :: Int -> RecordM Bytes
 genTLSRandom n = do
     st <- get
     case withTLSRNG (stRandomGen st) (genRandomBytes n) of
             (bytes, rng') -> put (st { stRandomGen = rng' }) >> return bytes
 
-makeDigest :: MonadState RecordState m => Bool -> Header -> Bytes -> m Bytes
+makeDigest :: Bool -> Header -> Bytes -> RecordM Bytes
 makeDigest w hdr content = do
     st <- get
     let ver = stVersion st
