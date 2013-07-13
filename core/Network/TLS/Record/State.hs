@@ -41,7 +41,7 @@ data TLSCryptState = TLSCryptState
     , cstMacSecret  :: !Bytes
     } deriving (Show)
 
-data TLSMacState = TLSMacState
+newtype TLSMacState = TLSMacState
     { msSequence :: Word64
     } deriving (Show)
 
