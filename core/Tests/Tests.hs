@@ -160,94 +160,72 @@ establish_data_pipe params tlsServer tlsClient = do
 
 recvDataNonNull ctx = recvData ctx >>= \l -> if B.null l then recvDataNonNull ctx else return l
 
+runTLSPipe params tlsServer tlsClient = do
+    (startQueue, resultQueue) <- run (establish_data_pipe params tlsServer tlsClient)
+    -- send some data
+    d <- B.pack <$> pick (someWords8 256)
+    run $ writeChan startQueue d
+    -- receive it
+    dres <- run $ readChan resultQueue
+    -- check if it equal
+    d `assertEq` dres
+    return ()
+
 prop_handshake_initiate :: PropertyM IO ()
 prop_handshake_initiate = do
-        params       <- pick arbitraryPairParams
-        (startQueue, resultQueue) <- run (establish_data_pipe params tlsServer tlsClient)
-
-        {- the test involves writing data on one side of the data "pipe" and
-         - then checking we received them on the other side of the data "pipe" -}
-        d <- B.pack <$> pick (someWords8 256)
-        run $ writeChan startQueue d
-
-        dres <- run $ readChan resultQueue
-        d `assertEq` dres
-
-        return ()
-        where
-                tlsServer ctx queue = do
-                        handshake ctx
-                        d <- recvDataNonNull ctx
-                        writeChan queue d
-                        return ()
-                tlsClient queue ctx = do
-                        handshake ctx
-                        d <- readChan queue
-                        sendData ctx (L.fromChunks [d])
-                        bye ctx
-                        return ()
+    params  <- pick arbitraryPairParams
+    runTLSPipe params tlsServer tlsClient
+  where tlsServer ctx queue = do
+            handshake ctx
+            d <- recvDataNonNull ctx
+            writeChan queue d
+            return ()
+        tlsClient queue ctx = do
+            handshake ctx
+            d <- readChan queue
+            sendData ctx (L.fromChunks [d])
+            bye ctx
+            return ()
 
 prop_handshake_npn_initiate :: PropertyM IO ()
 prop_handshake_npn_initiate = do
-        (clientParam,serverParam) <- pick arbitraryPairParams
-        let clientParam' = updateClientParams (\cp -> cp { onNPNServerSuggest = Just $ \protos -> return (head protos) }) clientParam
-            serverParam' = updateServerParams (\sp -> sp { onSuggestNextProtocols = return $ Just [C8.pack "spdy/2", C8.pack "http/1.1"] }) serverParam
-            params' = (clientParam',serverParam')
-        (startQueue, resultQueue) <- run (establish_data_pipe params' tlsServer tlsClient)
-
-        {- the test involves writing data on one side of the data "pipe" and
-         - then checking we received them on the other side of the data "pipe" -}
-        d <- B.pack <$> pick (someWords8 256)
-        run $ writeChan startQueue d
-
-        dres <- run $ readChan resultQueue
-        d `assertEq` dres
-
-        return ()
-        where
-                tlsServer ctx queue = do
-                        handshake ctx
-                        proto <- getNegotiatedProtocol ctx
-                        Just (C8.pack "spdy/2") `assertEq` proto
-                        d <- recvDataNonNull ctx
-                        writeChan queue d
-                        return ()
-                tlsClient queue ctx = do
-                        handshake ctx
-                        proto <- getNegotiatedProtocol ctx
-                        Just (C8.pack "spdy/2") `assertEq` proto
-                        d <- readChan queue
-                        sendData ctx (L.fromChunks [d])
-                        bye ctx
-                        return ()
+    (clientParam,serverParam) <- pick arbitraryPairParams
+    let clientParam' = updateClientParams (\cp -> cp { onNPNServerSuggest = Just $ \protos -> return (head protos) }) clientParam
+        serverParam' = updateServerParams (\sp -> sp { onSuggestNextProtocols = return $ Just [C8.pack "spdy/2", C8.pack "http/1.1"] }) serverParam
+        params' = (clientParam',serverParam')
+    runTLSPipe params' tlsServer tlsClient
+  where tlsServer ctx queue = do
+            handshake ctx
+            proto <- getNegotiatedProtocol ctx
+            Just (C8.pack "spdy/2") `assertEq` proto
+            d <- recvDataNonNull ctx
+            writeChan queue d
+            return ()
+        tlsClient queue ctx = do
+            handshake ctx
+            proto <- getNegotiatedProtocol ctx
+            Just (C8.pack "spdy/2") `assertEq` proto
+            d <- readChan queue
+            sendData ctx (L.fromChunks [d])
+            bye ctx
+            return ()
 
 prop_handshake_renegociation :: PropertyM IO ()
 prop_handshake_renegociation = do
-        params       <- pick arbitraryPairParams
-        (startQueue, resultQueue) <- run (establish_data_pipe params tlsServer tlsClient)
-
-        {- the test involves writing data on one side of the data "pipe" and
-         - then checking we received them on the other side of the data "pipe" -}
-        d <- B.pack <$> pick (someWords8 256)
-        run $ writeChan startQueue d
-
-        dres <- run $ readChan resultQueue
-        d `assertEq` dres
-
-        return ()
-        where
-                tlsServer ctx queue = do
-                        handshake ctx
-                        d <- recvDataNonNull ctx
-                        writeChan queue d
-                        return ()
-                tlsClient queue ctx = do
-                        handshake ctx
-                        handshake ctx
-                        d <- readChan queue
-                        sendData ctx (L.fromChunks [d])
-                        bye ctx
-                        return ()
+    params <- pick arbitraryPairParams
+    runTLSPipe params tlsServer tlsClient
+  where tlsServer ctx queue = do
+            handshake ctx
+            d <- recvDataNonNull ctx
+            writeChan queue d
+            return ()
+        tlsClient queue ctx = do
+            handshake ctx
+            handshake ctx
+            d <- readChan queue
+            sendData ctx (L.fromChunks [d])
+            bye ctx
+            return ()
 
 -- | simple session manager to store one session id and session data for a single thread.
 -- a Real concurrent session manager would use an MVar and have multiples items.
@@ -264,49 +242,31 @@ oneSessionManager ref = SessionManager
 
 prop_handshake_session_resumption :: PropertyM IO ()
 prop_handshake_session_resumption = do
-        sessionRef <- run $ newIORef Nothing
-        let sessionManager = oneSessionManager sessionRef
+    sessionRef <- run $ newIORef Nothing
+    let sessionManager = oneSessionManager sessionRef
 
-        plainParams <- pick arbitraryPairParams
-        let params = setPairParamsSessionManager sessionManager plainParams
+    plainParams <- pick arbitraryPairParams
+    let params = setPairParamsSessionManager sessionManager plainParams
 
-        -- establish a session.
-        (s1, r1) <- run (establish_data_pipe params tlsServer tlsClient)
+    runTLSPipe params tlsServer tlsClient
 
-        d <- B.pack <$> pick (someWords8 256)
-        run $ writeChan s1 d
-        dres <- run $ readChan r1
-        d `assertEq` dres
+    -- and resume
+    sessionParams <- run $ readIORef sessionRef
+    assert (isJust sessionParams)
+    let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 
-        -- and resume
-        sessionParams <- run $ readIORef sessionRef
-        assert (isJust sessionParams)
-        let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
-
-        -- resume
-        (startQueue, resultQueue) <- run (establish_data_pipe params2 tlsServer tlsClient)
-
-        {- the test involves writing data on one side of the data "pipe" and
-         - then checking we received them on the other side of the data "pipe" -}
-        d2 <- B.pack <$> pick (someWords8 256)
-        run $ writeChan startQueue d2
-
-        dres2 <- run $ readChan resultQueue
-        d2 `assertEq` dres2
-
-        return ()
-        where
-                tlsServer ctx queue = do
-                        handshake ctx
-                        d <- recvDataNonNull ctx
-                        writeChan queue d
-                        return ()
-                tlsClient queue ctx = do
-                        handshake ctx
-                        d <- readChan queue
-                        sendData ctx (L.fromChunks [d])
-                        bye ctx
-                        return ()
+    runTLSPipe params2 tlsServer tlsClient
+  where tlsServer ctx queue = do
+            handshake ctx
+            d <- recvDataNonNull ctx
+            writeChan queue d
+            return ()
+        tlsClient queue ctx = do
+            handshake ctx
+            d <- readChan queue
+            sendData ctx (L.fromChunks [d])
+            bye ctx
+            return ()
 
 assertEq :: (Show a, Monad m, Eq a) => a -> a -> m ()
 assertEq expected got = unless (expected == got) $ error ("got " ++ show got ++ " but was expecting " ++ show expected)
