@@ -318,14 +318,14 @@ setKeyBlock = modify setPendingState
               (cMACSecret, sMACSecret, cWriteKey, sWriteKey, cWriteIV, sWriteIV) =
                         fromJust "p6" $ partition6 kb (digestSize, digestSize, keySize, keySize, ivSize, ivSize)
 
-              cstClient = TLSCryptState { cstKey        = cWriteKey
-                                        , cstIV         = cWriteIV
-                                        , cstMacSecret  = cMACSecret }
-              cstServer = TLSCryptState { cstKey        = sWriteKey
-                                        , cstIV         = sWriteIV
-                                        , cstMacSecret  = sMACSecret }
-              msClient = TLSMacState { msSequence = 0 }
-              msServer = TLSMacState { msSequence = 0 }
+              cstClient = CryptState { cstKey        = cWriteKey
+                                     , cstIV         = cWriteIV
+                                     , cstMacSecret  = cMACSecret }
+              cstServer = CryptState { cstKey        = sWriteKey
+                                     , cstIV         = sWriteIV
+                                     , cstMacSecret  = sMACSecret }
+              msClient = MacState { msSequence = 0 }
+              msServer = MacState { msSequence = 0 }
 
               newRst = rst { stPendingTxCryptState = Just $ if cc then cstClient else cstServer
                            , stPendingRxCryptState = Just $ if cc then cstServer else cstClient

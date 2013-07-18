@@ -9,8 +9,8 @@
 -- Portability : unknown
 --
 module Network.TLS.Record.State
-    ( TLSCryptState(..)
-    , TLSMacState(..)
+    ( CryptState(..)
+    , MacState(..)
     , RecordState(..)
     , newRecordState
     , RecordM(..)
@@ -36,16 +36,18 @@ import Network.TLS.Util
 
 import qualified Data.ByteString as B
 
-data TLSCryptState = TLSCryptState
+data CryptState = CryptState
     { cstKey        :: !Bytes
     , cstIV         :: !Bytes
     , cstMacSecret  :: !Bytes
     } deriving (Show)
 
-newtype TLSMacState = TLSMacState
+newtype MacState = MacState
     { msSequence :: Word64
     } deriving (Show)
 
+type TLSCryptState = CryptState
+type TLSMacState = MacState
 data RecordState = RecordState
     { stClientContext       :: Bool
     , stVersion             :: !Version
