@@ -27,20 +27,20 @@ import Control.Monad.Error
 import Data.X509 (CertificateChain)
 
 data HandshakeState = HandshakeState
-    { hstClientVersion   :: !(Version)
-    , hstClientRandom    :: !ClientRandom
-    , hstServerRandom    :: !(Maybe ServerRandom)
-    , hstMasterSecret    :: !(Maybe Bytes)
-    , hstRSAPublicKey    :: !(Maybe PubKey)
-    , hstRSAPrivateKey   :: !(Maybe PrivKey)
-    , hstRSAClientPublicKey    :: !(Maybe PubKey)
-    , hstRSAClientPrivateKey   :: !(Maybe PrivKey)
-    , hstHandshakeDigest :: !HashCtx
-    , hstHandshakeMessages :: [Bytes]
-    , hstClientCertRequest :: !(Maybe ClientCertRequestData) -- ^ Set to Just-value when certificate request was received
-    , hstClientCertSent  :: !Bool -- ^ Set to true when a client certificate chain was sent
-    , hstCertReqSent     :: !Bool -- ^ Set to true when a certificate request was sent
-    , hstClientCertChain :: !(Maybe CertificateChain)
+    { hstClientVersion       :: !(Version)
+    , hstClientRandom        :: !ClientRandom
+    , hstServerRandom        :: !(Maybe ServerRandom)
+    , hstMasterSecret        :: !(Maybe Bytes)
+    , hstRSAPublicKey        :: !(Maybe PubKey)
+    , hstRSAPrivateKey       :: !(Maybe PrivKey)
+    , hstRSAClientPublicKey  :: !(Maybe PubKey)
+    , hstRSAClientPrivateKey :: !(Maybe PrivKey)
+    , hstHandshakeDigest     :: !HashCtx
+    , hstHandshakeMessages   :: [Bytes]
+    , hstClientCertRequest   :: !(Maybe ClientCertRequestData) -- ^ Set to Just-value when certificate request was received
+    , hstClientCertSent      :: !Bool -- ^ Set to true when a client certificate chain was sent
+    , hstCertReqSent         :: !Bool -- ^ Set to true when a certificate request was sent
+    , hstClientCertChain     :: !(Maybe CertificateChain)
     } deriving (Show)
 
 type ClientCertRequestData = ([CertificateType],
@@ -61,18 +61,18 @@ instance MonadState HandshakeState HandshakeM where
 -- create a new empty handshake state
 newEmptyHandshake :: Version -> ClientRandom -> HashCtx -> HandshakeState
 newEmptyHandshake ver crand digestInit = HandshakeState
-    { hstClientVersion   = ver
-    , hstClientRandom    = crand
-    , hstServerRandom    = Nothing
-    , hstMasterSecret    = Nothing
-    , hstRSAPublicKey    = Nothing
-    , hstRSAPrivateKey   = Nothing
-    , hstRSAClientPublicKey    = Nothing
-    , hstRSAClientPrivateKey   = Nothing
-    , hstHandshakeDigest = digestInit
-    , hstHandshakeMessages = []
-    , hstClientCertRequest = Nothing
-    , hstClientCertSent  = False
-    , hstCertReqSent     = False
-    , hstClientCertChain = Nothing
+    { hstClientVersion       = ver
+    , hstClientRandom        = crand
+    , hstServerRandom        = Nothing
+    , hstMasterSecret        = Nothing
+    , hstRSAPublicKey        = Nothing
+    , hstRSAPrivateKey       = Nothing
+    , hstRSAClientPublicKey  = Nothing
+    , hstRSAClientPrivateKey = Nothing
+    , hstHandshakeDigest     = digestInit
+    , hstHandshakeMessages   = []
+    , hstClientCertRequest   = Nothing
+    , hstClientCertSent      = False
+    , hstCertReqSent         = False
+    , hstClientCertChain     = Nothing
     }
