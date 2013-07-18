@@ -30,7 +30,7 @@ disengageRecord = decryptRecord >=> uncompressRecord
 
 uncompressRecord :: Record Compressed -> RecordM (Record Plaintext)
 uncompressRecord record = onRecordFragment record $ fragmentUncompress $ \bytes ->
-    withCompression $ compressionInflate bytes
+    withRxCompression $ compressionInflate bytes
 
 decryptRecord :: Record Ciphertext -> RecordM (Record Compressed)
 decryptRecord record = onRecordFragment record $ fragmentUncipher $ \e -> do

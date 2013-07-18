@@ -29,7 +29,7 @@ engageRecord = compressRecord >=> encryptRecord
 compressRecord :: Record Plaintext -> RecordM (Record Compressed)
 compressRecord record =
     onRecordFragment record $ fragmentCompress $ \bytes -> do
-        withCompression $ compressionDeflate bytes
+        withTxCompression $ compressionDeflate bytes
 
 {-
  - when Tx Encrypted is set, we pass the data through encryptContent, otherwise

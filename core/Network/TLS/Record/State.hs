@@ -14,7 +14,8 @@ module Network.TLS.Record.State
     , RecordState(..)
     , newRecordState
     , RecordM(..)
-    , withCompression
+    , withTxCompression
+    , withRxCompression
     , genTLSRandom
     , makeDigest
     ) where
@@ -61,7 +62,9 @@ data RecordState = RecordState
     , stActiveTxCipher      :: Maybe Cipher
     , stActiveRxCipher      :: Maybe Cipher
     , stPendingCipher       :: Maybe Cipher
-    , stCompression         :: Compression
+    , stTxCompression       :: Compression
+    , stRxCompression       :: Compression
+    , stPendingCompression  :: Compression
     , stRandomGen           :: StateRNG
     } deriving (Show)
 
@@ -95,15 +98,24 @@ newRecordState rng clientContext = RecordState
     , stActiveTxCipher      = Nothing
     , stActiveRxCipher      = Nothing
     , stPendingCipher       = Nothing
-    , stCompression         = nullCompression
+    , stTxCompression       = nullCompression
+    , stRxCompression       = nullCompression
+    , stPendingCompression  = nullCompression
     , stRandomGen           = StateRNG rng
     }
 
-withCompression :: (Compression -> (Compression, a)) -> RecordM a
-withCompression f = do
+withTxCompression :: (Compression -> (Compression, a)) -> RecordM a
+withTxCompression f = do
     st <- get
-    let (nc, a) = f (stCompression st)
-    put $ st { stCompression = nc }
+    let (nc, a) = f (stTxCompression st)
+    put $ st { stTxCompression = nc }
+    return a
+
+withRxCompression :: (Compression -> (Compression, a)) -> RecordM a
+withRxCompression f = do
+    st <- get
+    let (nc, a) = f (stRxCompression st)
+    put $ st { stRxCompression = nc }
     return a
 
 genTLSRandom :: Int -> RecordM Bytes

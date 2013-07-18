@@ -217,14 +217,16 @@ certVerifyHandshakeMaterial :: Handshake -> Bool
 certVerifyHandshakeMaterial = certVerifyHandshakeTypeMaterial . typeOfHandshake
 
 switchTxEncryption, switchRxEncryption :: MonadState RecordState m => m ()
-switchTxEncryption = modify (\st -> st { stTxEncrypted = True
-                                       , stActiveTxMacState = stPendingTxMacState st
+switchTxEncryption = modify (\st -> st { stTxEncrypted        = True
+                                       , stActiveTxMacState   = stPendingTxMacState st
                                        , stActiveTxCryptState = stPendingTxCryptState st
-                                       , stActiveTxCipher = stPendingCipher st })
-switchRxEncryption = modify (\st -> st { stRxEncrypted = True
-                                       , stActiveRxMacState = stPendingRxMacState st
+                                       , stActiveTxCipher     = stPendingCipher st
+                                       , stTxCompression      = stPendingCompression st })
+switchRxEncryption = modify (\st -> st { stRxEncrypted        = True
+                                       , stActiveRxMacState   = stPendingRxMacState st
                                        , stActiveRxCryptState = stPendingRxCryptState st
-                                       , stActiveRxCipher = stPendingCipher st })
+                                       , stActiveRxCipher     = stPendingCipher st
+                                       , stRxCompression      = stPendingCompression st })
 
 setServerRandom :: MonadState TLSState m => ServerRandom -> m ()
 setServerRandom ran = updateHandshake "srand" (\hst -> hst { hstServerRandom = Just ran })
