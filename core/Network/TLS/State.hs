@@ -16,7 +16,8 @@ module Network.TLS.State
     , getRecordState
     , runTLSState
     , runRecordStateSt
-    , TLSHandshakeState(..)
+    , HandshakeState(..)
+    , TLSHandshakeState
     , newTLSState
     , withTLSRNG
     , genRandom
@@ -81,6 +82,7 @@ import Network.TLS.Packet
 import Network.TLS.Crypto
 import Network.TLS.Cipher
 import Network.TLS.Record.State
+import Network.TLS.Handshake.State
 import Network.TLS.RNG
 import qualified Data.ByteString as B
 import Control.Applicative ((<$>))
@@ -94,26 +96,7 @@ assert :: Monad m => String -> [(String,Bool)] -> m ()
 assert fctname list = forM_ list $ \ (name, assumption) -> do
     when assumption $ fail (fctname ++ ": assumption about " ++ name ++ " failed")
 
-type ClientCertRequestData = ([CertificateType],
-                              Maybe [(HashAlgorithm, SignatureAlgorithm)],
-                              [DistinguishedName])
-  
-data TLSHandshakeState = TLSHandshakeState
-    { hstClientVersion   :: !(Version)
-    , hstClientRandom    :: !ClientRandom
-    , hstServerRandom    :: !(Maybe ServerRandom)
-    , hstMasterSecret    :: !(Maybe Bytes)
-    , hstRSAPublicKey    :: !(Maybe PubKey)
-    , hstRSAPrivateKey   :: !(Maybe PrivKey)
-    , hstRSAClientPublicKey    :: !(Maybe PubKey)
-    , hstRSAClientPrivateKey   :: !(Maybe PrivKey)
-    , hstHandshakeDigest :: !HashCtx
-    , hstHandshakeMessages :: [Bytes]
-    , hstClientCertRequest :: !(Maybe ClientCertRequestData) -- ^ Set to Just-value when certificate request was received
-    , hstClientCertSent  :: !Bool -- ^ Set to true when a client certificate chain was sent
-    , hstCertReqSent     :: !Bool -- ^ Set to true when a certificate request was sent
-    , hstClientCertChain :: !(Maybe CertificateChain)
-    } deriving (Show)
+type TLSHandshakeState = HandshakeState
 
 data TLSState = TLSState
     { stHandshake           :: !(Maybe TLSHandshakeState)
@@ -398,24 +381,6 @@ getVerifiedData client = gets (if client then stClientVerifiedData else stServer
 isClientContext :: MonadState TLSState m => m Bool
 isClientContext = getRecordState stClientContext
 
--- create a new empty handshake state
-newEmptyHandshake :: Version -> ClientRandom -> HashCtx -> TLSHandshakeState
-newEmptyHandshake ver crand digestInit = TLSHandshakeState
-    { hstClientVersion   = ver
-    , hstClientRandom    = crand
-    , hstServerRandom    = Nothing
-    , hstMasterSecret    = Nothing
-    , hstRSAPublicKey    = Nothing
-    , hstRSAPrivateKey   = Nothing
-    , hstRSAClientPublicKey    = Nothing
-    , hstRSAClientPrivateKey   = Nothing
-    , hstHandshakeDigest = digestInit
-    , hstHandshakeMessages = []
-    , hstClientCertRequest = Nothing
-    , hstClientCertSent  = False
-    , hstCertReqSent     = False
-    , hstClientCertChain = Nothing
-    }
 
 startHandshakeClient :: MonadState TLSState m => Version -> ClientRandom -> m ()
 startHandshakeClient ver crand = do
