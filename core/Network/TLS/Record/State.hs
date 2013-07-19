@@ -88,6 +88,7 @@ instance MonadState RecordState RecordM where
     state f = RecordM (lift $ state f)
 #endif
 
+newTransmissionState :: TransmissionState
 newTransmissionState = TransmissionState
     { stCipher      = Nothing
     , stCompression = nullCompression
@@ -95,6 +96,7 @@ newTransmissionState = TransmissionState
     , stMacState    = MacState 0
     }
 
+incrTransmissionState :: TransmissionState -> TransmissionState
 incrTransmissionState ts = ts { stMacState = MacState (ms + 1) }
   where (MacState ms) = stMacState ts
 
@@ -129,6 +131,7 @@ modifyRxState f =
 modifyRxState_ :: (TransmissionState -> TransmissionState) -> RecordM ()
 modifyRxState_ f = modifyRxState (\t -> (f t, ()))
 
+modifyCompression :: TransmissionState -> (Compression -> (Compression, a)) -> (TransmissionState, a)
 modifyCompression tst f = case f (stCompression tst) of
                             (nc, a) -> (tst { stCompression = nc }, a)
 
