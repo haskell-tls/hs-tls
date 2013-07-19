@@ -182,7 +182,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                             case certPubKey $ getCertificate c of
                                 PubKeyRSA _ -> return ()
                                 _           -> throwCore $ Error_Protocol ("no supported certificate type", True, HandshakeFailure)
-                            usingState_ ctx $ setClientPrivateKey pk
+                            usingHState ctx $ setClientPrivateKey pk
                             usingState_ ctx $ setClientCertSent True
                             sendPacket ctx $ Handshake [Certificates cc]
 

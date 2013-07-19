@@ -241,18 +241,6 @@ setMasterSecretFromPre premasterSecret = do
 getMasterSecret :: MonadState TLSState m => m (Maybe Bytes)
 getMasterSecret = gets (stHandshake >=> hstMasterSecret)
 
-setPublicKey :: MonadState TLSState m => PubKey -> m ()
-setPublicKey pk = updateHandshake "publickey" (\hst -> hst { hstRSAPublicKey = Just pk })
-
-setPrivateKey :: MonadState TLSState m => PrivKey -> m ()
-setPrivateKey pk = updateHandshake "privatekey" (\hst -> hst { hstRSAPrivateKey = Just pk })
-
-setClientPublicKey :: MonadState TLSState m => PubKey -> m ()
-setClientPublicKey pk = updateHandshake "client publickey" (\hst -> hst { hstRSAClientPublicKey = Just pk })
-
-setClientPrivateKey :: MonadState TLSState m => PrivKey -> m ()
-setClientPrivateKey pk = updateHandshake "client privatekey" (\hst -> hst { hstRSAClientPrivateKey = Just pk })
-
 setCertReqSent :: MonadState TLSState m => Bool -> m ()
 setCertReqSent b = updateHandshake "client cert req sent" (\hst -> hst { hstCertReqSent = b })
 

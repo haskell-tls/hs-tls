@@ -14,6 +14,11 @@ module Network.TLS.Handshake.State
     , HandshakeM
     , newEmptyHandshake
     , runHandshake
+    -- * accessors
+    , setPublicKey
+    , setPrivateKey
+    , setClientPublicKey
+    , setClientPrivateKey
     ) where
 
 import Network.TLS.Util
@@ -80,3 +85,15 @@ newEmptyHandshake ver crand digestInit = HandshakeState
 
 runHandshake :: HandshakeState -> HandshakeM a -> (a, HandshakeState)
 runHandshake hst f = runState (runHandshakeM f) hst
+
+setPublicKey :: PubKey -> HandshakeM ()
+setPublicKey pk = modify (\hst -> hst { hstRSAPublicKey = Just pk })
+
+setPrivateKey :: PrivKey -> HandshakeM ()
+setPrivateKey pk = modify (\hst -> hst { hstRSAPrivateKey = Just pk })
+
+setClientPublicKey :: PubKey -> HandshakeM ()
+setClientPublicKey pk = modify (\hst -> hst { hstRSAClientPublicKey = Just pk })
+
+setClientPrivateKey :: PrivKey -> HandshakeM ()
+setClientPrivateKey pk = modify (\hst -> hst { hstRSAClientPrivateKey = Just pk })

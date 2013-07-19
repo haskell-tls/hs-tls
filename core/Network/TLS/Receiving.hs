@@ -157,6 +157,6 @@ processCertificates False (CertificateChain []) = return ()
 processCertificates True (CertificateChain [])  =
     throwError $ Error_Protocol ("server certificate missing", True, HandshakeFailure)
 processCertificates clientmode (CertificateChain (c:_))
-    | clientmode = setPublicKey pubkey
-    | otherwise  = setClientPublicKey pubkey
+    | clientmode = withHandshakeM $ setPublicKey pubkey
+    | otherwise  = withHandshakeM $ setClientPublicKey pubkey
   where pubkey = certPubKey $ getCertificate c

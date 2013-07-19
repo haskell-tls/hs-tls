@@ -139,7 +139,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
         makeServerHello session = do
             srand <- getStateRNG ctx 32 >>= return . ServerRandom
             case privKey of
-                Just privkey -> usingState_ ctx $ setPrivateKey privkey
+                Just privkey -> usingHState ctx $ setPrivateKey privkey
                 _            -> return () -- return a sensible error
 
             -- in TLS12, we need to check as well the certificates we are sending if they have in the extension
