@@ -199,17 +199,23 @@ certVerifyHandshakeTypeMaterial HandshakeType_NPN             = False
 certVerifyHandshakeMaterial :: Handshake -> Bool
 certVerifyHandshakeMaterial = certVerifyHandshakeTypeMaterial . typeOfHandshake
 
-switchTxEncryption, switchRxEncryption :: MonadState RecordState m => m ()
-switchTxEncryption = modify (\st -> st { stTxEncrypted        = True
-                                       , stActiveTxMacState   = stPendingTxMacState st
-                                       , stActiveTxCryptState = stPendingTxCryptState st
-                                       , stActiveTxCipher     = stPendingCipher st
-                                       , stTxCompression      = stPendingCompression st })
-switchRxEncryption = modify (\st -> st { stRxEncrypted        = True
-                                       , stActiveRxMacState   = stPendingRxMacState st
-                                       , stActiveRxCryptState = stPendingRxCryptState st
-                                       , stActiveRxCipher     = stPendingCipher st
-                                       , stRxCompression      = stPendingCompression st })
+switchTxEncryption, switchRxEncryption :: RecordM ()
+switchTxEncryption = modify (\st -> st
+    { stTxState = TransmissionState
+        { stCipher      = stPendingCipher st
+        , stCompression = stPendingCompression st
+        , stCryptState  = fromJust "crypt-state" $ stPendingTxCryptState st
+        , stMacState    = fromJust "mac-state"   $ stPendingTxMacState st
+        }
+    })
+switchRxEncryption = modify (\st -> st
+    { stRxState = TransmissionState
+        { stCipher      = stPendingCipher st
+        , stCompression = stPendingCompression st
+        , stCryptState  = fromJust "crypt-state" $ stPendingRxCryptState st
+        , stMacState    = fromJust "mac-state"   $ stPendingRxMacState st
+        }
+    })
 
 setServerRandom :: MonadState TLSState m => ServerRandom -> m ()
 setServerRandom ran = updateHandshake "srand" (\hst -> hst { hstServerRandom = Just ran })
@@ -278,7 +284,7 @@ getSessionData = get >>= \st -> return (stHandshake st >>= hstMasterSecret >>= w
   where wrapSessionData st masterSecret = do
             return $ SessionData
                     { sessionVersion = stVersion $ stRecordState st
-                    , sessionCipher  = cipherID $ fromJust "cipher" $ stActiveTxCipher $ stRecordState st
+                    , sessionCipher  = cipherID $ fromJust "cipher" $ stCipher $ stTxState $ stRecordState st
                     , sessionSecret  = masterSecret
                     }
 
@@ -295,7 +301,7 @@ needEmptyPacket :: MonadState RecordState m => m Bool
 needEmptyPacket = gets f
   where f st = (stVersion st <= TLS10)
             && stClientContext st
-            && (maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stActiveTxCipher st))
+            && (maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stCipher $ stTxState st))
 
 setKeyBlock :: MonadState TLSState m => m ()
 setKeyBlock = modify setPendingState

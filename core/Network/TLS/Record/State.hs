@@ -11,11 +11,16 @@
 module Network.TLS.Record.State
     ( CryptState(..)
     , MacState(..)
+    , TransmissionState(..)
     , RecordState(..)
     , newRecordState
     , RecordM(..)
     , withTxCompression
     , withRxCompression
+    , modifyTxState
+    , modifyRxState
+    , modifyTxState_
+    , modifyRxState_
     , genTLSRandom
     , makeDigest
     ) where
@@ -46,22 +51,21 @@ newtype MacState = MacState
     { msSequence :: Word64
     } deriving (Show)
 
+data TransmissionState = TransmissionState
+    { stCipher      :: Maybe Cipher
+    , stCompression :: Compression
+    , stCryptState  :: !CryptState
+    , stMacState    :: !MacState
+    } deriving (Show)
+
 type TLSCryptState = CryptState
 type TLSMacState = MacState
 
 data RecordState = RecordState
     { stClientContext       :: Bool
     , stVersion             :: !Version
-    , stTxEncrypted         :: Bool
-    , stRxEncrypted         :: Bool
-    , stActiveTxCryptState  :: !(Maybe TLSCryptState)
-    , stActiveRxCryptState  :: !(Maybe TLSCryptState)
-    , stActiveTxMacState    :: !(Maybe TLSMacState)
-    , stActiveRxMacState    :: !(Maybe TLSMacState)
-    , stActiveTxCipher      :: Maybe Cipher
-    , stActiveRxCipher      :: Maybe Cipher
-    , stTxCompression       :: Compression
-    , stRxCompression       :: Compression
+    , stTxState             :: TransmissionState
+    , stRxState             :: TransmissionState
     , stPendingTxCryptState :: !(Maybe TLSCryptState)
     , stPendingRxCryptState :: !(Maybe TLSCryptState)
     , stPendingTxMacState   :: !(Maybe TLSMacState)
@@ -84,20 +88,22 @@ instance MonadState RecordState RecordM where
     state f = RecordM (lift $ state f)
 #endif
 
+newTransmissionState = TransmissionState
+    { stCipher      = Nothing
+    , stCompression = nullCompression
+    , stCryptState  = CryptState B.empty B.empty B.empty
+    , stMacState    = MacState 0
+    }
+
+incrTransmissionState ts = ts { stMacState = MacState (ms + 1) }
+  where (MacState ms) = stMacState ts
+
 newRecordState :: CPRG g => g -> Bool -> RecordState
 newRecordState rng clientContext = RecordState
     { stClientContext       = clientContext
     , stVersion             = TLS10
-    , stTxEncrypted         = False
-    , stRxEncrypted         = False
-    , stActiveTxCryptState  = Nothing
-    , stActiveRxCryptState  = Nothing
-    , stActiveTxMacState    = Nothing
-    , stActiveRxMacState    = Nothing
-    , stActiveTxCipher      = Nothing
-    , stActiveRxCipher      = Nothing
-    , stTxCompression       = nullCompression
-    , stRxCompression       = nullCompression
+    , stTxState             = newTransmissionState
+    , stRxState             = newTransmissionState
     , stPendingTxCryptState = Nothing
     , stPendingRxCryptState = Nothing
     , stPendingTxMacState   = Nothing
@@ -107,19 +113,30 @@ newRecordState rng clientContext = RecordState
     , stRandomGen           = StateRNG rng
     }
 
+modifyTxState :: (TransmissionState -> (TransmissionState, a)) -> RecordM a
+modifyTxState f =
+    get >>= \st -> case f $ stTxState st of
+                    (nst, a) -> put (st { stTxState = nst }) >> return a
+
+modifyTxState_ :: (TransmissionState -> TransmissionState) -> RecordM ()
+modifyTxState_ f = modifyTxState (\t -> (f t, ()))
+
+modifyRxState :: (TransmissionState -> (TransmissionState, a)) -> RecordM a
+modifyRxState f =
+    get >>= \st -> case f $ stRxState st of
+                    (nst, a) -> put (st { stRxState = nst }) >> return a
+
+modifyRxState_ :: (TransmissionState -> TransmissionState) -> RecordM ()
+modifyRxState_ f = modifyRxState (\t -> (f t, ()))
+
+modifyCompression tst f = case f (stCompression tst) of
+                            (nc, a) -> (tst { stCompression = nc }, a)
+
 withTxCompression :: (Compression -> (Compression, a)) -> RecordM a
-withTxCompression f = do
-    st <- get
-    let (nc, a) = f (stTxCompression st)
-    put $ st { stTxCompression = nc }
-    return a
+withTxCompression f = modifyTxState $ \tst -> modifyCompression tst f
 
 withRxCompression :: (Compression -> (Compression, a)) -> RecordM a
-withRxCompression f = do
-    st <- get
-    let (nc, a) = f (stRxCompression st)
-    put $ st { stRxCompression = nc }
-    return a
+withRxCompression f = modifyRxState $ \tst -> modifyCompression tst f
 
 genTLSRandom :: Int -> RecordM Bytes
 genTLSRandom n = do
@@ -130,19 +147,18 @@ genTLSRandom n = do
 makeDigest :: Bool -> Header -> Bytes -> RecordM Bytes
 makeDigest w hdr content = do
     st <- get
-    let ver = stVersion st
-    let cst = fromJust "crypt state" $ if w then stActiveTxCryptState st else stActiveRxCryptState st
-    let ms = fromJust "mac state" $ if w then stActiveTxMacState st else stActiveRxMacState st
-    let cipher = fromJust "cipher" $ if w then stActiveTxCipher st else stActiveRxCipher st
-    let hashf = hashF $ cipherHash cipher
-
-    let (macF, msg) =
-            if ver < TLS10
-                then (macSSL hashf, B.concat [ encodeWord64 $ msSequence ms, encodeHeaderNoVer hdr, content ])
-                else (hmac hashf 64, B.concat [ encodeWord64 $ msSequence ms, encodeHeader hdr, content ])
-    let digest = macF (cstMacSecret cst) msg
-
-    let newms = ms { msSequence = (msSequence ms) + 1 }
-
-    put (if w then st { stActiveTxMacState = Just newms } else st { stActiveRxMacState = Just newms })
+    let tstate = if w then stTxState st else stRxState st
+        digest = make (stVersion st) tstate
+    put $ if w
+            then st { stTxState = incrTransmissionState tstate }
+            else st { stRxState = incrTransmissionState tstate }
     return digest
+  where make ver tstate = macF (cstMacSecret cst) msg
+          where
+                (macF, msg)
+                    | ver < TLS10 = (macSSL hashf, B.concat [ encodeWord64 $ msSequence ms, encodeHeaderNoVer hdr, content ])
+                    | otherwise   = (hmac hashf 64, B.concat [ encodeWord64 $ msSequence ms, encodeHeader hdr, content ])
+                ms     = stMacState tstate
+                cst    = stCryptState tstate
+                cipher = fromJust "cipher" $ stCipher tstate
+                hashf  = hashF $ cipherHash cipher

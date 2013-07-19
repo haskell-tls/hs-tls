@@ -35,9 +35,9 @@ uncompressRecord record = onRecordFragment record $ fragmentUncompress $ \bytes 
 decryptRecord :: Record Ciphertext -> RecordM (Record Compressed)
 decryptRecord record = onRecordFragment record $ fragmentUncipher $ \e -> do
     st <- get
-    if stRxEncrypted st
-        then get >>= decryptData record e
-        else return e
+    case stCipher $ stRxState st of
+        Nothing -> return e
+        _       -> decryptData record e st
 
 getCipherData :: Record a -> CipherData -> RecordM ByteString
 getCipherData (Record pt ver _) cdata = do
@@ -64,9 +64,10 @@ getCipherData (Record pt ver _) cdata = do
 
 decryptData :: Record Ciphertext -> Bytes -> RecordState -> RecordM Bytes
 decryptData record econtent st = decryptOf (bulkF bulk)
-  where cipher     = fromJust "cipher" $ stActiveRxCipher st
+  where tst        = stRxState st
+        cipher     = fromJust "cipher" $ stCipher tst
         bulk       = cipherBulk cipher
-        cst        = fromJust "rx crypt state" $ stActiveRxCryptState st
+        cst        = stCryptState tst
         macSize    = hashSize $ cipherHash cipher
         writekey   = cstKey cst
         blockSize  = bulkBlockSize bulk
@@ -85,7 +86,7 @@ decryptData record econtent st = decryptOf (bulkF bulk)
                                   then get2 econtent (bulkIVSize bulk, econtentLen - bulkIVSize bulk)
                                   else return (cstIV cst, econtent)
             let newiv = fromJust "new iv" $ takelast (bulkBlockSize bulk) econtent'
-            put $ st { stActiveRxCryptState = Just $ cst { cstIV = newiv } }
+            modifyRxState_ $ \txs -> txs { stCryptState = cst { cstIV = newiv } }
 
             let content' = decryptF writekey iv econtent'
             let paddinglength = fromIntegral (B.last content') + 1
@@ -104,7 +105,7 @@ decryptData record econtent st = decryptOf (bulkF bulk)
             {- update Ctx -}
             let contentlen        = B.length content' - macSize
             (content, mac) <- get2 content' (contentlen, macSize)
-            put $ st { stActiveRxCryptState = Just $ cst { cstIV = newiv } }
+            modifyRxState_ $ \txs -> txs { stCryptState = cst { cstIV = newiv } }
             getCipherData record $ CipherData
                     { cipherDataContent = content
                     , cipherDataMAC     = Just mac
