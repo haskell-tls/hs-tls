@@ -17,7 +17,6 @@ module Network.TLS.State
     , runTLSState
     , runRecordStateSt
     , HandshakeState(..)
-    , TLSHandshakeState
     , newTLSState
     , withTLSRNG
     , genRandom
@@ -96,10 +95,8 @@ assert :: Monad m => String -> [(String,Bool)] -> m ()
 assert fctname list = forM_ list $ \ (name, assumption) -> do
     when assumption $ fail (fctname ++ ": assumption about " ++ name ++ " failed")
 
-type TLSHandshakeState = HandshakeState
-
 data TLSState = TLSState
-    { stHandshake           :: !(Maybe TLSHandshakeState)
+    { stHandshake           :: !(Maybe HandshakeState)
     , stSession             :: Session
     , stSessionResuming     :: Bool
     , stRecordState         :: RecordState
@@ -399,7 +396,7 @@ startHandshakeClient ver crand = do
 hasValidHandshake :: MonadState TLSState m => String -> m ()
 hasValidHandshake name = get >>= \st -> assert name [ ("valid handshake", isNothing $ stHandshake st) ]
 
-updateHandshake :: MonadState TLSState m => String -> (TLSHandshakeState -> TLSHandshakeState) -> m ()
+updateHandshake :: MonadState TLSState m => String -> (HandshakeState -> HandshakeState) -> m ()
 updateHandshake n f = do
     hasValidHandshake n
     modify (\st -> st { stHandshake = f <$> stHandshake st })
