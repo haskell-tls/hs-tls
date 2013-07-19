@@ -76,6 +76,7 @@ module Network.TLS.Context
     , throwCore
     , usingState
     , usingState_
+    , usingHState
     , getStateRNG
     ) where
 
@@ -88,6 +89,7 @@ import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Crypto
 import Network.TLS.State
+import Network.TLS.Handshake.State
 import Network.TLS.Measurement
 import Network.TLS.X509
 import Data.List (intercalate)
@@ -433,6 +435,9 @@ usingState_ ctx f = do
     case ret of
         Left err -> throwCore err
         Right r  -> return r
+
+usingHState :: MonadIO m => Context -> HandshakeM a -> m a
+usingHState ctx f = usingState_ ctx $ withHandshakeM f
 
 getStateRNG :: MonadIO m => Context -> Int -> m Bytes
 getStateRNG ctx n = usingState_ ctx $ genRandom n

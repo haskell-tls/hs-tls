@@ -17,6 +17,7 @@ module Network.TLS.State
     , runTLSState
     , runRecordStateSt
     , HandshakeState(..)
+    , withHandshakeM
     , newTLSState
     , withTLSRNG
     , genRandom
@@ -400,6 +401,14 @@ updateHandshake :: MonadState TLSState m => String -> (HandshakeState -> Handsha
 updateHandshake n f = do
     hasValidHandshake n
     modify (\st -> st { stHandshake = f <$> stHandshake st })
+
+withHandshakeM :: MonadState TLSState m => HandshakeM a -> m a
+withHandshakeM f =
+    get >>= \st -> case stHandshake st of
+                    Nothing  -> fail "handshake missing"
+                    Just hst -> do let (a, nhst) = runHandshake hst f
+                                   put (st { stHandshake = Just nhst })
+                                   return a
 
 addHandshakeMessage :: MonadState TLSState m => Bytes -> m ()
 addHandshakeMessage content = updateHandshake "add handshake message" $ \hs ->

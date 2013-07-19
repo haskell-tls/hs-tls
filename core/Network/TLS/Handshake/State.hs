@@ -13,6 +13,7 @@ module Network.TLS.Handshake.State
     , ClientCertRequestData
     , HandshakeM
     , newEmptyHandshake
+    , runHandshake
     ) where
 
 import Network.TLS.Util
@@ -76,3 +77,6 @@ newEmptyHandshake ver crand digestInit = HandshakeState
     , hstCertReqSent         = False
     , hstClientCertChain     = Nothing
     }
+
+runHandshake :: HandshakeState -> HandshakeM a -> (a, HandshakeState)
+runHandshake hst f = runState (runHandshakeM f) hst
