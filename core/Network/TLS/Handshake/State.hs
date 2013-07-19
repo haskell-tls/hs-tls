@@ -48,14 +48,14 @@ type ClientCertRequestData = ([CertificateType],
                               [DistinguishedName])
   
 
-newtype HandshakeM a = HandshakeM { runHandshakeM :: ErrorT TLSError (State HandshakeState) a }
-    deriving (Functor, Monad, MonadError TLSError)
+newtype HandshakeM a = HandshakeM { runHandshakeM :: State HandshakeState a }
+    deriving (Functor, Monad)
 
 instance MonadState HandshakeState HandshakeM where
-    put x = HandshakeM (lift $ put x)
-    get   = HandshakeM (lift get)
+    put x = HandshakeM (put x)
+    get   = HandshakeM (get)
 #if MIN_VERSION_mtl(2,1,0)
-    state f = HandshakeM (lift $ state f)
+    state f = HandshakeM (state f)
 #endif
 
 -- create a new empty handshake state
