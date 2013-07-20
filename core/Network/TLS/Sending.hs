@@ -35,16 +35,6 @@ makeRecord pkt = do
     return $ Record (packetType pkt) ver (fragmentPlaintext content)
 
 {-
- - ChangeCipherSpec state change need to be handled after encryption otherwise
- - its own packet would be encrypted with the new context, instead of beeing sent
- - under the current context
- -}
-postprocessRecord :: Record Ciphertext -> RecordM (Record Ciphertext)
-postprocessRecord record@(Record ProtocolType_ChangeCipherSpec _ _) =
-    switchTxEncryption >> return record
-postprocessRecord record = return record
-
-{-
  - marshall packet data
  -}
 encodeRecord :: Record Ciphertext -> RecordM ByteString
@@ -64,9 +54,11 @@ writePacket pkt@(Handshake hss) = do
         let encoded = encodeHandshake hs
         when (certVerifyHandshakeMaterial hs) $ withHandshakeM $ addHandshakeMessage encoded
         when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ withHandshakeM $ updateHandshakeDigest encoded
-    runRecordStateSt (makeRecord pkt >>= engageRecord >>= postprocessRecord >>= encodeRecord)
-writePacket pkt =
-    runRecordStateSt (makeRecord pkt >>= engageRecord >>= postprocessRecord >>= encodeRecord)
+    runRecordStateSt (makeRecord pkt >>= engageRecord >>= encodeRecord)
+writePacket pkt = do
+    d <- runRecordStateSt (makeRecord pkt >>= engageRecord >>= encodeRecord)
+    when (pkt == ChangeCipherSpec) $ runRecordStateSt switchTxEncryption
+    return d
 
 {------------------------------------------------------------------------------}
 {- SENDING Helpers                                                            -}
