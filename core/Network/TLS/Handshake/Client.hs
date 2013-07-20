@@ -222,7 +222,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
             case certSent of
                 True -> do
                     -- Fetch all handshake messages up to now.
-                    msgs <- usingState_ ctx $ B.concat <$> getHandshakeMessages
+                    msgs <- usingHState ctx $ B.concat <$> getHandshakeMessages
 
                     case usedVersion of
                         SSL3 -> do

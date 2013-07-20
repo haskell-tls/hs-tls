@@ -58,18 +58,13 @@ data TransmissionState = TransmissionState
     , stMacState    :: !MacState
     } deriving (Show)
 
-type TLSCryptState = CryptState
-type TLSMacState = MacState
-
 data RecordState = RecordState
     { stClientContext       :: Bool
     , stVersion             :: !Version
     , stTxState             :: TransmissionState
     , stRxState             :: TransmissionState
-    , stPendingTxCryptState :: !(Maybe TLSCryptState)
-    , stPendingRxCryptState :: !(Maybe TLSCryptState)
-    , stPendingTxMacState   :: !(Maybe TLSMacState)
-    , stPendingRxMacState   :: !(Maybe TLSMacState)
+    , stPendingTxState      :: Maybe TransmissionState
+    , stPendingRxState      :: Maybe TransmissionState
     , stPendingCipher       :: Maybe Cipher
     , stPendingCompression  :: Compression
     , stRandomGen           :: StateRNG
@@ -106,10 +101,14 @@ newRecordState rng clientContext = RecordState
     , stVersion             = TLS10
     , stTxState             = newTransmissionState
     , stRxState             = newTransmissionState
+    , stPendingTxState      = Nothing
+    , stPendingRxState      = Nothing
+{-
     , stPendingTxCryptState = Nothing
     , stPendingRxCryptState = Nothing
     , stPendingTxMacState   = Nothing
     , stPendingRxMacState   = Nothing
+-}
     , stPendingCipher       = Nothing
     , stPendingCompression  = nullCompression
     , stRandomGen           = StateRNG rng

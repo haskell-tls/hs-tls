@@ -28,6 +28,10 @@ module Network.TLS.Handshake.State
     , getClientCertChain
     , setClientCertRequest
     , getClientCertRequest
+    -- * digest accessors
+    , addHandshakeMessage
+    , updateHandshakeDigest
+    , getHandshakeMessages
     ) where
 
 import Network.TLS.Util
@@ -130,3 +134,11 @@ setClientCertRequest d = modify (\hst -> hst { hstClientCertRequest = Just d })
 getClientCertRequest :: HandshakeM (Maybe ClientCertRequestData)
 getClientCertRequest = gets hstClientCertRequest
 
+addHandshakeMessage :: Bytes -> HandshakeM ()
+addHandshakeMessage content = modify $ \hs -> hs { hstHandshakeMessages = content : hstHandshakeMessages hs}
+
+getHandshakeMessages :: HandshakeM [Bytes]
+getHandshakeMessages = gets (reverse . hstHandshakeMessages)
+
+updateHandshakeDigest :: Bytes -> HandshakeM ()
+updateHandshakeDigest content = modify $ \hs -> hs { hstHandshakeDigest = hashUpdate (hstHandshakeDigest hs) content }

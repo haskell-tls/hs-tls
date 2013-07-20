@@ -56,10 +56,7 @@ module Network.TLS.State
     , getCipherKeyExchangeType
     , isClientContext
     , startHandshakeClient
-    , addHandshakeMessage
-    , updateHandshakeDigest
     , getHandshakeDigest
-    , getHandshakeMessages
     , endHandshake
     ) where
 
@@ -186,22 +183,8 @@ certVerifyHandshakeMaterial :: Handshake -> Bool
 certVerifyHandshakeMaterial = certVerifyHandshakeTypeMaterial . typeOfHandshake
 
 switchTxEncryption, switchRxEncryption :: RecordM ()
-switchTxEncryption = modify (\st -> st
-    { stTxState = TransmissionState
-        { stCipher      = stPendingCipher st
-        , stCompression = stPendingCompression st
-        , stCryptState  = fromJust "crypt-state" $ stPendingTxCryptState st
-        , stMacState    = fromJust "mac-state"   $ stPendingTxMacState st
-        }
-    })
-switchRxEncryption = modify (\st -> st
-    { stRxState = TransmissionState
-        { stCipher      = stPendingCipher st
-        , stCompression = stPendingCompression st
-        , stCryptState  = fromJust "crypt-state" $ stPendingRxCryptState st
-        , stMacState    = fromJust "mac-state"   $ stPendingRxMacState st
-        }
-    })
+switchTxEncryption = modify (\st -> st { stTxState = fromJust "pending-tx" $ stPendingTxState st })
+switchRxEncryption = modify (\st -> st { stRxState = fromJust "pending-rx" $ stPendingRxState st })
 
 setServerRandom :: MonadState TLSState m => ServerRandom -> m ()
 setServerRandom ran = updateHandshake "srand" (\hst -> hst { hstServerRandom = Just ran })
@@ -283,11 +266,20 @@ setKeyBlock = modify setPendingState
               msClient = MacState { msSequence = 0 }
               msServer = MacState { msSequence = 0 }
 
-              newRst = rst { stPendingTxCryptState = Just $ if cc then cstClient else cstServer
-                           , stPendingRxCryptState = Just $ if cc then cstServer else cstClient
-                           , stPendingTxMacState   = Just $ if cc then msClient else msServer
-                           , stPendingRxMacState   = Just $ if cc then msServer else msClient
-                           }
+              pendingTx = TransmissionState
+                        { stCryptState = if cc then cstClient else cstServer
+                        , stMacState   = if cc then msClient else msServer
+                        , stCipher     = Just cipher
+                        , stCompression = stPendingCompression rst
+                        }
+              pendingRx = TransmissionState
+                        { stCryptState  = if cc then cstServer else cstClient
+                        , stMacState    = if cc then msServer else msClient
+                        , stCipher      = Just cipher
+                        , stCompression = stPendingCompression rst
+                        }
+    
+              newRst = rst { stPendingTxState = Just pendingTx, stPendingRxState = Just pendingRx }
 
 setCipher :: MonadState RecordState m => Cipher -> m ()
 setCipher cipher = modify (\st -> st { stPendingCipher = Just cipher })
@@ -361,20 +353,6 @@ withHandshakeM f =
                     Just hst -> do let (a, nhst) = runHandshake hst f
                                    put (st { stHandshake = Just nhst })
                                    return a
-
-addHandshakeMessage :: MonadState TLSState m => Bytes -> m ()
-addHandshakeMessage content = updateHandshake "add handshake message" $ \hs ->
-    hs { hstHandshakeMessages = content : hstHandshakeMessages hs}
-
-getHandshakeMessages :: MonadState TLSState m => m [Bytes]
-getHandshakeMessages = do
-    st <- get
-    let hst = fromJust "handshake" $ stHandshake st
-    return $ reverse $ hstHandshakeMessages hst
-
-updateHandshakeDigest :: MonadState TLSState m => Bytes -> m ()
-updateHandshakeDigest content = updateHandshake "update digest" $ \hs ->
-    hs { hstHandshakeDigest = hashUpdate (hstHandshakeDigest hs) content }
 
 getHandshakeDigest :: MonadState TLSState m => Bool -> m Bytes
 getHandshakeDigest client = do

@@ -82,8 +82,9 @@ processHandshake hs = do
             unless clientmode $ setNegotiatedProtocol selected_protocol
         Finished fdata                -> processClientFinished fdata
         _                             -> return ()
-    when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage $ encodeHandshake hs
-    when (finishHandshakeTypeMaterial $ typeOfHandshake hs) (updateHandshakeDigest $ encodeHandshake hs)
+    let encoded = encodeHandshake hs
+    when (certVerifyHandshakeMaterial hs) $ withHandshakeM $ addHandshakeMessage encoded
+    when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ withHandshakeM $ updateHandshakeDigest encoded
   where -- secure renegotiation
         processClientExtension (0xff01, content) = do
             v <- getVerifiedData True

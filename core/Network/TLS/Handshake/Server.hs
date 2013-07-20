@@ -248,7 +248,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             checkValidClientCertChain "change cipher message expected"
 
             -- Fetch all handshake messages up to now.
-            msgs <- usingState_ ctx $ B.concat <$> getHandshakeMessages
+            msgs <- usingHState ctx $ B.concat <$> getHandshakeMessages
 
             usedVersion <- usingState_ ctx $ getRecordState stVersion
 

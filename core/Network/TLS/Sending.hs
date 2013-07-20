@@ -21,6 +21,7 @@ import Network.TLS.Struct
 import Network.TLS.Record
 import Network.TLS.Packet
 import Network.TLS.State
+import Network.TLS.Handshake.State
 import Network.TLS.Crypto
 
 {-
@@ -61,8 +62,9 @@ preProcessPacket (Handshake hss)    = forM_ hss $ \hs -> do
     case hs of
         Finished fdata -> updateVerifiedData True fdata
         _              -> return ()
-    when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage $ encodeHandshake hs
-    when (finishHandshakeTypeMaterial $ typeOfHandshake hs) (updateHandshakeDigest $ encodeHandshake hs)
+    let encoded = encodeHandshake hs
+    when (certVerifyHandshakeMaterial hs) $ withHandshakeM $ addHandshakeMessage encoded
+    when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ withHandshakeM $ updateHandshakeDigest encoded
 
 {-
  - writePacket transform a packet into marshalled data related to current state
