@@ -27,6 +27,7 @@ import Network.TLS.Struct
 import Network.TLS.Record
 import Network.TLS.Packet
 import Network.TLS.State
+import Network.TLS.Handshake.State
 import Network.TLS.Cipher
 import Network.TLS.Crypto
 import Network.TLS.Extension

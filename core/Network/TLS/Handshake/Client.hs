@@ -37,6 +37,7 @@ import qualified Control.Exception as E
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Certificate
 import Network.TLS.Handshake.Signature
+import Network.TLS.Handshake.State
 
 -- client part of handshake. send a bunch of handshake of client
 -- values intertwined with response from the server.
@@ -142,7 +143,7 @@ handshakeClient cparams ctx = do
             -- certificate, we simply store the
             -- information for later.
             --
-            usingState_ ctx $ setClientCertRequest (cTypes, sigAlgs, dNames)
+            usingHState ctx $ setClientCertRequest (cTypes, sigAlgs, dNames)
             return $ RecvStateHandshake processServerHelloDone
         processCertificateRequest p = processServerHelloDone p
 
@@ -165,7 +166,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
         -- use.
         --
         sendCertificate = do
-            certRequested <- usingState_ ctx getClientCertRequest
+            certRequested <- usingHState ctx getClientCertRequest
             case certRequested of
                 Nothing ->
                     return ()
@@ -174,7 +175,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     certChain <- liftIO $ onCertificateRequest cparams req `E.catch`
                                  throwMiscErrorOnException "certificate request callback failed"
 
-                    usingState_ ctx $ setClientCertSent False
+                    usingHState ctx $ setClientCertSent False
                     case certChain of
                         Nothing                       -> sendPacket ctx $ Handshake [Certificates (CertificateChain [])]
                         Just (CertificateChain [], _) -> sendPacket ctx $ Handshake [Certificates (CertificateChain [])]
@@ -183,7 +184,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                                 PubKeyRSA _ -> return ()
                                 _           -> throwCore $ Error_Protocol ("no supported certificate type", True, HandshakeFailure)
                             usingHState ctx $ setClientPrivateKey pk
-                            usingState_ ctx $ setClientCertSent True
+                            usingHState ctx $ setClientCertSent True
                             sendPacket ctx $ Handshake [Certificates cc]
 
         sendClientKeyXchg = do
@@ -217,9 +218,9 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
             -- Only send a certificate verify message when we
             -- have sent a non-empty list of certificates.
             --
-            certSent <- usingState_ ctx $ getClientCertSent
+            certSent <- usingHState ctx $ getClientCertSent
             case certSent of
-                Just True -> do
+                True -> do
                     -- Fetch all handshake messages up to now.
                     msgs <- usingState_ ctx $ B.concat <$> getHandshakeMessages
 
@@ -240,7 +241,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                             sendPacket ctx $ Handshake [CertVerify Nothing (CertVerifyData sigDig)]
 
                         _ -> do
-                            Just (_, Just hashSigs, _) <- usingState_ ctx $ getClientCertRequest
+                            Just (_, Just hashSigs, _) <- usingHState ctx $ getClientCertRequest
                             let suppHashSigs = pHashSignatures $ ctxParams ctx
                                 hashSigs' = filter (\ a -> a `elem` hashSigs) suppHashSigs
                             liftIO $ putStrLn $ " supported hash sig algorithms: " ++ show hashSigs'

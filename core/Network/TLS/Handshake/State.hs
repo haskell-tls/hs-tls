@@ -14,11 +14,20 @@ module Network.TLS.Handshake.State
     , HandshakeM
     , newEmptyHandshake
     , runHandshake
-    -- * accessors
+    -- * key accessors
     , setPublicKey
     , setPrivateKey
     , setClientPublicKey
     , setClientPrivateKey
+    -- * cert accessors
+    , setClientCertSent
+    , getClientCertSent
+    , setCertReqSent
+    , getCertReqSent
+    , setClientCertChain
+    , getClientCertChain
+    , setClientCertRequest
+    , getClientCertRequest
     ) where
 
 import Network.TLS.Util
@@ -29,7 +38,6 @@ import qualified Data.ByteString as B
 import Control.Applicative ((<$>))
 import Control.Monad
 import Control.Monad.State
-import Control.Monad.Error
 import Data.X509 (CertificateChain)
 
 data HandshakeState = HandshakeState
@@ -97,3 +105,28 @@ setClientPublicKey pk = modify (\hst -> hst { hstRSAClientPublicKey = Just pk })
 
 setClientPrivateKey :: PrivKey -> HandshakeM ()
 setClientPrivateKey pk = modify (\hst -> hst { hstRSAClientPrivateKey = Just pk })
+
+setCertReqSent :: Bool -> HandshakeM ()
+setCertReqSent b = modify (\hst -> hst { hstCertReqSent = b })
+
+getCertReqSent :: HandshakeM Bool
+getCertReqSent = gets hstCertReqSent
+
+setClientCertSent :: Bool -> HandshakeM ()
+setClientCertSent b = modify (\hst -> hst { hstClientCertSent = b })
+
+getClientCertSent :: HandshakeM Bool
+getClientCertSent = gets hstClientCertSent
+
+setClientCertChain :: CertificateChain -> HandshakeM ()
+setClientCertChain b = modify (\hst -> hst { hstClientCertChain = Just b })
+
+getClientCertChain :: HandshakeM (Maybe CertificateChain)
+getClientCertChain = gets hstClientCertChain
+
+setClientCertRequest :: ClientCertRequestData -> HandshakeM ()
+setClientCertRequest d = modify (\hst -> hst { hstClientCertRequest = Just d })
+
+getClientCertRequest :: HandshakeM (Maybe ClientCertRequestData)
+getClientCertRequest = gets hstClientCertRequest
+

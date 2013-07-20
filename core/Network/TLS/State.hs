@@ -30,18 +30,6 @@ module Network.TLS.State
     , setMasterSecret
     , setMasterSecretFromPre
     , getMasterSecret
-    , setPublicKey
-    , setPrivateKey
-    , setClientPublicKey
-    , setClientPrivateKey
-    , setClientCertSent
-    , getClientCertSent
-    , setCertReqSent
-    , getCertReqSent
-    , setClientCertChain
-    , getClientCertChain
-    , setClientCertRequest
-    , getClientCertRequest
     , setKeyBlock
     , setVersion
     , getVersion
@@ -240,30 +228,6 @@ setMasterSecretFromPre premasterSecret = do
 
 getMasterSecret :: MonadState TLSState m => m (Maybe Bytes)
 getMasterSecret = gets (stHandshake >=> hstMasterSecret)
-
-setCertReqSent :: MonadState TLSState m => Bool -> m ()
-setCertReqSent b = updateHandshake "client cert req sent" (\hst -> hst { hstCertReqSent = b })
-
-getCertReqSent :: MonadState TLSState m => m (Maybe Bool)
-getCertReqSent = gets (stHandshake >=> Just . hstCertReqSent)
-
-setClientCertSent :: MonadState TLSState m => Bool -> m ()
-setClientCertSent b = updateHandshake "client cert sent" (\hst -> hst { hstClientCertSent = b })
-
-getClientCertSent :: MonadState TLSState m => m (Maybe Bool)
-getClientCertSent = gets (stHandshake >=> Just . hstClientCertSent)
-
-setClientCertChain :: MonadState TLSState m => CertificateChain -> m ()
-setClientCertChain b = updateHandshake "client certificate chain" (\hst -> hst { hstClientCertChain = Just b })
-
-getClientCertChain :: MonadState TLSState m => m (Maybe CertificateChain)
-getClientCertChain = gets (stHandshake >=> hstClientCertChain)
-
-setClientCertRequest :: MonadState TLSState m => ClientCertRequestData -> m ()
-setClientCertRequest d = updateHandshake "client cert data" (\hst -> hst { hstClientCertRequest = Just d })
-
-getClientCertRequest :: MonadState TLSState m => m (Maybe ClientCertRequestData)
-getClientCertRequest = gets (stHandshake >=> hstClientCertRequest)
 
 getSessionData :: MonadState TLSState m => m (Maybe SessionData)
 getSessionData = get >>= \st -> return (stHandshake st >>= hstMasterSecret >>= wrapSessionData st)

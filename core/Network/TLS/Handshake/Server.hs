@@ -21,6 +21,7 @@ import Network.TLS.Packet
 import Network.TLS.Extension
 import Network.TLS.IO
 import Network.TLS.State hiding (getNegotiatedProtocol)
+import Network.TLS.Handshake.State
 import Network.TLS.Receiving
 import Network.TLS.Measurement
 import Data.Maybe
@@ -192,7 +193,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                                    else Just (pHashSignatures $ ctxParams ctx)
                     creq = CertRequest certTypes hashSigs
                                (map extractCAname $ serverCACertificates sparams)
-                usingState_ ctx $ setCertReqSent True
+                usingHState ctx $ setCertReqSent True
                 sendPacket ctx (Handshake [creq])
 
             -- Send HelloDone
@@ -225,7 +226,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
 
             -- Remember cert chain for later use.
             --
-            usingState_ ctx $ setClientCertChain certs
+            usingHState ctx $ setClientCertChain certs
 
             -- FIXME: We should check whether the certificate
             -- matches our request and that we support
@@ -275,7 +276,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                     -- When verification succeeds, commit the
                     -- client certificate chain to the context.
                     --
-                    Just certs <- usingState_ ctx $ getClientCertChain
+                    Just certs <- usingHState ctx $ getClientCertChain
                     usingState_ ctx $ setClientCertificateChain certs
                     return ()
 
@@ -292,13 +293,13 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                             -- application callbacks accepts, we
                             -- also commit the client certificate
                             -- chain to the context.
-                            Just certs <- usingState_ ctx $ getClientCertChain
+                            Just certs <- usingHState ctx $ getClientCertChain
                             usingState_ ctx $ setClientCertificateChain certs
                         else throwCore $ Error_Protocol ("verification failed", True, BadCertificate)
             return $ RecvStateNext expectChangeCipher
 
         processCertificateVerify p = do
-            chain <- usingState_ ctx $ getClientCertChain
+            chain <- usingHState ctx $ getClientCertChain
             case chain of
                 Just cc | isNullCertificateChain cc -> return ()
                         | otherwise                 -> throwCore $ Error_Protocol ("cert verify message missing", True, UnexpectedMessage)
@@ -317,7 +318,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
         expectFinish p            = unexpected (show p) (Just "Handshake Finished")
 
         checkValidClientCertChain msg = do
-            chain <- usingState_ ctx $ getClientCertChain
+            chain <- usingHState ctx $ getClientCertChain
             let throwerror = Error_Protocol (msg , True, UnexpectedMessage)
             case chain of
                 Nothing -> throwCore throwerror
