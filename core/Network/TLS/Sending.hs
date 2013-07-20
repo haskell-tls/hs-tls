@@ -52,28 +52,21 @@ encodeRecord record = return $ B.concat [ encodeHeader hdr, content ]
   where (hdr, content) = recordToRaw record
 
 {-
- - just update TLS state machine
- -}
-preProcessPacket :: Packet -> TLSSt ()
-preProcessPacket (Alert _)          = return ()
-preProcessPacket (AppData _)        = return ()
-preProcessPacket (ChangeCipherSpec) = return ()
-preProcessPacket (Handshake hss)    = forM_ hss $ \hs -> do
-    case hs of
-        Finished fdata -> updateVerifiedData True fdata
-        _              -> return ()
-    let encoded = encodeHandshake hs
-    when (certVerifyHandshakeMaterial hs) $ withHandshakeM $ addHandshakeMessage encoded
-    when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ withHandshakeM $ updateHandshakeDigest encoded
-
-{-
  - writePacket transform a packet into marshalled data related to current state
  - and updating state on the go
  -}
 writePacket :: Packet -> TLSSt ByteString
-writePacket pkt = do
-        preProcessPacket pkt
-        runRecordStateSt (makeRecord pkt >>= engageRecord >>= postprocessRecord >>= encodeRecord)
+writePacket pkt@(Handshake hss) = do
+    forM_ hss $ \hs -> do
+        case hs of
+            Finished fdata -> updateVerifiedData True fdata
+            _              -> return ()
+        let encoded = encodeHandshake hs
+        when (certVerifyHandshakeMaterial hs) $ withHandshakeM $ addHandshakeMessage encoded
+        when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ withHandshakeM $ updateHandshakeDigest encoded
+    runRecordStateSt (makeRecord pkt >>= engageRecord >>= postprocessRecord >>= encodeRecord)
+writePacket pkt =
+    runRecordStateSt (makeRecord pkt >>= engageRecord >>= postprocessRecord >>= encodeRecord)
 
 {------------------------------------------------------------------------------}
 {- SENDING Helpers                                                            -}
