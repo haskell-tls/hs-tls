@@ -103,12 +103,6 @@ newRecordState rng clientContext = RecordState
     , stRxState             = newTransmissionState
     , stPendingTxState      = Nothing
     , stPendingRxState      = Nothing
-{-
-    , stPendingTxCryptState = Nothing
-    , stPendingRxCryptState = Nothing
-    , stPendingTxMacState   = Nothing
-    , stPendingRxMacState   = Nothing
--}
     , stPendingCipher       = Nothing
     , stPendingCompression  = nullCompression
     , stRandomGen           = StateRNG rng
