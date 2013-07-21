@@ -47,5 +47,11 @@ bench1 params !d name = runTLSPipe params tlsServer tlsClient d name
             return ()
 
 main = defaultMain
-    [ bench1 (getParams TLS10 blockCipher) (B.replicate 256 0) "TLS10-256 bytes"
+    [ bgroup "connection"
+        -- not sure the number actually make sense for anything. improve ..
+        [ bench1 (getParams SSL3 blockCipher) (B.replicate 256 0) "SSL3-256 bytes"
+        , bench1 (getParams TLS10 blockCipher) (B.replicate 256 0) "TLS10-256 bytes"
+        , bench1 (getParams TLS11 blockCipher) (B.replicate 256 0) "TLS11-256 bytes"
+        , bench1 (getParams TLS12 blockCipher) (B.replicate 256 0) "TLS12-256 bytes"
+        ]
     ]
