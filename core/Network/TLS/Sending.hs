@@ -17,6 +17,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
 import Network.TLS.Util
+import Network.TLS.Types (Role(..))
 import Network.TLS.Struct
 import Network.TLS.Record
 import Network.TLS.Packet
@@ -46,7 +47,7 @@ writePacket :: Packet -> TLSSt ByteString
 writePacket pkt@(Handshake hss) = do
     forM_ hss $ \hs -> do
         case hs of
-            Finished fdata -> updateVerifiedData True fdata
+            Finished fdata -> updateVerifiedData ClientRole fdata
             _              -> return ()
         let encoded = encodeHandshake hs
         when (certVerifyHandshakeMaterial hs) $ withHandshakeM $ addHandshakeMessage encoded

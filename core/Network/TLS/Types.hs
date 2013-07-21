@@ -11,6 +11,7 @@ module Network.TLS.Types
     , SessionData(..)
     , CipherID
     , CompressionID
+    , Role(..)
     ) where
 
 import Data.ByteString (ByteString)
@@ -36,3 +37,7 @@ type CipherID = Word16
 
 -- | Compression identification
 type CompressionID = Word8
+
+-- | Role
+data Role = ClientRole | ServerRole
+    deriving (Show,Eq)

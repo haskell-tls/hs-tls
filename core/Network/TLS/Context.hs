@@ -92,6 +92,7 @@ import Network.TLS.State
 import Network.TLS.Handshake.State
 import Network.TLS.Measurement
 import Network.TLS.X509
+import Network.TLS.Types (Role(..))
 import Data.List (intercalate)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
@@ -376,10 +377,10 @@ contextNew :: (MonadIO m, CPRG rng)
            -> rng       -- ^ Random number generator associated with this context.
            -> m Context
 contextNew backend params rng = liftIO $ do
-    let clientContext = case roleParams params of
-                             Client {} -> True
-                             Server {} -> False
-    let st = newTLSState rng clientContext
+    let role = case roleParams params of
+                    Client {} -> ClientRole
+                    Server {} -> ServerRole
+    let st = newTLSState rng role
 
     stvar <- newMVar st
     eof   <- newIORef False
@@ -387,7 +388,7 @@ contextNew backend params rng = liftIO $ do
     stats <- newIORef newMeasurement
     -- we enable the reception of SSLv2 ClientHello message only in the
     -- server context, where we might be dealing with an old/compat client.
-    sslv2Compat <- newIORef (not clientContext)
+    sslv2Compat <- newIORef (role == ServerRole)
     hooks <- newIORef defaultHooks
     lockWrite <- newMVar ()
     lockRead  <- newMVar ()

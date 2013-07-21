@@ -22,6 +22,7 @@ import Control.Monad.Error
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
+import Network.TLS.Types (Role(..))
 import Network.TLS.Util
 import Network.TLS.Struct
 import Network.TLS.Record
@@ -70,16 +71,16 @@ processPacket (Record ProtocolType_DeprecatedHandshake _ fragment) =
 
 processHandshake :: Handshake -> TLSSt ()
 processHandshake hs = do
-    clientmode <- isClientContext
+    role <- isClientContext
     case hs of
-        ClientHello cver ran _ _ _ ex _ -> unless clientmode $ do
+        ClientHello cver ran _ _ _ ex _ -> when (role == ServerRole) $ do
             mapM_ processClientExtension ex
             startHandshakeClient cver ran
-        Certificates certs            -> processCertificates clientmode certs
-        ClientKeyXchg content         -> unless clientmode $ do
+        Certificates certs            -> processCertificates role certs
+        ClientKeyXchg content         -> when (role == ServerRole) $ do
             processClientKeyXchg content
         HsNextProtocolNegotiation selected_protocol ->
-            unless clientmode $ setNegotiatedProtocol selected_protocol
+            when (role == ServerRole) $ setNegotiatedProtocol selected_protocol
         Finished fdata                -> processClientFinished fdata
         _                             -> return ()
     let encoded = encodeHandshake hs
@@ -148,17 +149,17 @@ processClientKeyXchg encryptedPremaster = do
 processClientFinished :: FinishedData -> TLSSt ()
 processClientFinished fdata = do
     cc       <- isClientContext
-    expected <- getHandshakeDigest (not cc)
+    expected <- getHandshakeDigest (cc == ServerRole)
     when (expected /= fdata) $ do
         throwError $ Error_Protocol("bad record mac", True, BadRecordMac)
-    updateVerifiedData False fdata
+    updateVerifiedData ServerRole fdata
     return ()
 
-processCertificates :: Bool -> CertificateChain -> TLSSt ()
-processCertificates False (CertificateChain []) = return ()
-processCertificates True (CertificateChain [])  =
+processCertificates :: Role -> CertificateChain -> TLSSt ()
+processCertificates ServerRole (CertificateChain []) = return ()
+processCertificates ClientRole (CertificateChain []) =
     throwError $ Error_Protocol ("server certificate missing", True, HandshakeFailure)
-processCertificates clientmode (CertificateChain (c:_))
-    | clientmode = withHandshakeM $ setPublicKey pubkey
-    | otherwise  = withHandshakeM $ setClientPublicKey pubkey
+processCertificates role (CertificateChain (c:_))
+    | role == ClientRole = withHandshakeM $ setPublicKey pubkey
+    | otherwise          = withHandshakeM $ setClientPublicKey pubkey
   where pubkey = certPubKey $ getCertificate c

@@ -69,6 +69,7 @@ import Network.TLS.Cipher
 import Network.TLS.Record.State
 import Network.TLS.Handshake.State
 import Network.TLS.RNG
+import Network.TLS.Types (Role(..))
 import qualified Data.ByteString as B
 import Control.Applicative ((<$>))
 import Control.Monad
@@ -128,7 +129,7 @@ runRecordStateSt f = do
         (Left e, _)      -> throwError e
         (Right a, newSt) -> put newSt >> return a
 
-newTLSState :: CPRG g => g -> Bool -> TLSState
+newTLSState :: CPRG g => g -> Role -> TLSState
 newTLSState rng clientContext = TLSState
     { stHandshake           = Nothing
     , stSession             = Session Nothing
@@ -143,7 +144,7 @@ newTLSState rng clientContext = TLSState
     , stClientCertificateChain = Nothing
     }
 
-updateVerifiedData :: MonadState TLSState m => Bool -> Bytes -> m ()
+updateVerifiedData :: MonadState TLSState m => Role -> Bytes -> m ()
 updateVerifiedData sending bs = do
     cc <- isClientContext
     if cc /= sending
@@ -233,7 +234,7 @@ isSessionResuming = gets stSessionResuming
 needEmptyPacket :: MonadState RecordState m => m Bool
 needEmptyPacket = gets f
   where f st = (stVersion st <= TLS10)
-            && stClientContext st
+            && stClientContext st == ClientRole
             && (maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stCipher $ stTxState st))
 
 setKeyBlock :: MonadState TLSState m => m ()
@@ -267,14 +268,14 @@ setKeyBlock = modify setPendingState
               msServer = MacState { msSequence = 0 }
 
               pendingTx = TransmissionState
-                        { stCryptState = if cc then cstClient else cstServer
-                        , stMacState   = if cc then msClient else msServer
+                        { stCryptState = if cc == ClientRole then cstClient else cstServer
+                        , stMacState   = if cc == ClientRole then msClient else msServer
                         , stCipher     = Just cipher
                         , stCompression = stPendingCompression rst
                         }
               pendingRx = TransmissionState
-                        { stCryptState  = if cc then cstServer else cstClient
-                        , stMacState    = if cc then msServer else msClient
+                        { stCryptState  = if cc == ClientRole then cstServer else cstClient
+                        , stMacState    = if cc == ClientRole then msServer else msClient
                         , stCipher      = Just cipher
                         , stCompression = stPendingCompression rst
                         }
@@ -326,9 +327,8 @@ getCipherKeyExchangeType = gets (\st -> cipherKeyExchange <$> stPendingCipher st
 getVerifiedData :: MonadState TLSState m => Bool -> m Bytes
 getVerifiedData client = gets (if client then stClientVerifiedData else stServerVerifiedData)
 
-isClientContext :: MonadState TLSState m => m Bool
+isClientContext :: MonadState TLSState m => m Role
 isClientContext = getRecordState stClientContext
-
 
 startHandshakeClient :: MonadState TLSState m => Version -> ClientRandom -> m ()
 startHandshakeClient ver crand = do

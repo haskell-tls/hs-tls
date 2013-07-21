@@ -38,6 +38,7 @@ import Network.TLS.Wire
 import Network.TLS.Packet
 import Network.TLS.MAC
 import Network.TLS.Util
+import Network.TLS.Types (Role(..))
 
 import qualified Data.ByteString as B
 
@@ -59,7 +60,7 @@ data TransmissionState = TransmissionState
     } deriving (Show)
 
 data RecordState = RecordState
-    { stClientContext       :: Bool
+    { stClientContext       :: Role
     , stVersion             :: !Version
     , stTxState             :: TransmissionState
     , stRxState             :: TransmissionState
@@ -95,7 +96,7 @@ incrTransmissionState :: TransmissionState -> TransmissionState
 incrTransmissionState ts = ts { stMacState = MacState (ms + 1) }
   where (MacState ms) = stMacState ts
 
-newRecordState :: CPRG g => g -> Bool -> RecordState
+newRecordState :: CPRG g => g -> Role -> RecordState
 newRecordState rng clientContext = RecordState
     { stClientContext       = clientContext
     , stVersion             = TLS10
