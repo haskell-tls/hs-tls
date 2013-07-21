@@ -1,13 +1,13 @@
 -- create a similar concept than a unix pipe.
 module PipeChan
-        ( PipeChan(..)
-        , newPipe
-        , runPipe
-        , readPipeA
-        , readPipeB
-        , writePipeA
-        , writePipeB
-        ) where
+    ( PipeChan(..)
+    , newPipe
+    , runPipe
+    , readPipeA
+    , readPipeB
+    , writePipeA
+    , writePipeB
+    ) where
 
 import Control.Applicative
 import Control.Concurrent.Chan
@@ -42,15 +42,15 @@ writePipeB (PipeChan _ _ _ s)   = writeChan $ getReadUniPipe s
 
 -- helper to read buffered data.
 readBuffered buf chan sz = do
-        left <- readIORef buf
-        if B.length left >= sz
-                then do
-                        let (ret, nleft) = B.splitAt sz left
-                        writeIORef buf nleft
-                        return ret
-                else do
-                        let newSize = (sz - B.length left)
-                        newData <- readChan chan
-                        writeIORef buf newData
-                        remain <- readBuffered buf chan newSize
-                        return (left `B.append` remain)
+    left <- readIORef buf
+    if B.length left >= sz
+        then do
+            let (ret, nleft) = B.splitAt sz left
+            writeIORef buf nleft
+            return ret
+        else do
+            let newSize = (sz - B.length left)
+            newData <- readChan chan
+            writeIORef buf newData
+            remain <- readBuffered buf chan newSize
+            return (left `B.append` remain)

@@ -1,7 +1,7 @@
 module Certificate
-        ( arbitraryX509
-        , arbitraryX509WithPublicKey
-        ) where
+    ( arbitraryX509
+    , arbitraryX509WithPublicKey
+    ) where
 
 import Test.QuickCheck
 import Data.X509
@@ -14,14 +14,14 @@ import PubKey
 arbitraryDN = return $ DistinguishedName []
 
 arbitraryTime = do
-        year   <- choose (1951, 2050)
-        month  <- choose (1, 12)
-        day    <- choose (1, 30)
-        hour   <- choose (0, 23)
-        minute <- choose (0, 59)
-        second <- choose (0, 59)
-        --z      <- arbitrary
-        return $ UTCTime (fromGregorian year month day) (secondsToDiffTime (hour * 3600 + minute * 60 + second))
+    year   <- choose (1951, 2050)
+    month  <- choose (1, 12)
+    day    <- choose (1, 30)
+    hour   <- choose (0, 23)
+    minute <- choose (0, 59)
+    second <- choose (0, 59)
+    --z      <- arbitrary
+    return $ UTCTime (fromGregorian year month day) (secondsToDiffTime (hour * 3600 + minute * 60 + second))
 
 maxSerial = 16777216
 
@@ -66,12 +66,12 @@ arbitraryX509Cert pubKey = do
 -}
 
 arbitraryX509WithPublicKey pubKey = do
-        cert <- arbitraryCertificate (PubKeyRSA pubKey)
-        sig  <- resize 40 $ listOf1 arbitrary
-        let sigalg = SignatureALG HashMD5 PubKeyALG_RSA
-        let (signedExact, ()) = objectToSignedExact (\_ -> (B.pack sig,sigalg,())) cert
-        return signedExact
+    cert <- arbitraryCertificate (PubKeyRSA pubKey)
+    sig  <- resize 40 $ listOf1 arbitrary
+    let sigalg = SignatureALG HashMD5 PubKeyALG_RSA
+    let (signedExact, ()) = objectToSignedExact (\_ -> (B.pack sig,sigalg,())) cert
+    return signedExact
 
 arbitraryX509 = do
-        let pubKey = fst $ getGlobalRSAPair
-        arbitraryX509WithPublicKey pubKey
+    let pubKey = fst $ getGlobalRSAPair
+    arbitraryX509WithPublicKey pubKey
