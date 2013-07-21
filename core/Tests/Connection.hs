@@ -4,6 +4,8 @@ module Connection
     , setPairParamsSessionManager
     , setPairParamsSessionResuming
     , establishDataPipe
+    , blockCipher
+    , streamCipher
     ) where
 
 import Test.QuickCheck

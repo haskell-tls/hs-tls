@@ -1,6 +1,8 @@
 module Certificate
     ( arbitraryX509
     , arbitraryX509WithPublicKey
+    , simpleCertificate
+    , simpleX509
     ) where
 
 import Test.QuickCheck
@@ -43,6 +45,28 @@ arbitraryCertificate pubKey = do
             , certPubKey       = pubKey
             , certExtensions   = Extensions Nothing
             }
+
+simpleCertificate pubKey =
+    Certificate
+        { certVersion = 3
+        , certSerial = 0
+        , certSignatureAlg = SignatureALG HashSHA1 PubKeyALG_RSA
+        , certIssuerDN     = simpleDN
+        , certSubjectDN    = simpleDN
+        , certValidity     = (time1, time2)
+        , certPubKey       = pubKey
+        , certExtensions   = Extensions Nothing
+        }
+  where time1 = UTCTime (fromGregorian 1999 1 1) 0
+        time2 = UTCTime (fromGregorian 2901 1 1) 0
+        simpleDN = DistinguishedName []
+
+simpleX509 pubKey = do
+    let cert = simpleCertificate pubKey
+        sig  = replicate 40 1
+        sigalg = SignatureALG HashMD5 PubKeyALG_RSA
+        (signedExact, ()) = objectToSignedExact (\_ -> (B.pack sig,sigalg,())) cert
+     in signedExact
 
 {-
 arbitraryX509Cert pubKey = do
