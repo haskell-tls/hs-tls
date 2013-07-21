@@ -24,27 +24,24 @@ import Network.TLS.State
 import Network.TLS.Handshake.State
 import Network.TLS.Crypto
 
-{-
- - 'makePacketData' create a Header and a content bytestring related to a packet
- - this doesn't change any state
- -}
+-- | 'makePacketData' create a Header and a content bytestring related to a packet
+-- this doesn't change any state
 makeRecord :: Packet -> RecordM (Record Plaintext)
 makeRecord pkt = do
     ver <- stVersion <$> get
-    content <- writePacketContent pkt
-    return $ Record (packetType pkt) ver (fragmentPlaintext content)
+    return $ Record (packetType pkt) ver (fragmentPlaintext $ writePacketContent pkt)
+  where writePacketContent (Handshake hss)    = encodeHandshakes hss
+        writePacketContent (Alert a)          = encodeAlerts a
+        writePacketContent (ChangeCipherSpec) = encodeChangeCipherSpec
+        writePacketContent (AppData x)        = x
 
-{-
- - marshall packet data
- -}
+-- | marshall packet data
 encodeRecord :: Record Ciphertext -> RecordM ByteString
 encodeRecord record = return $ B.concat [ encodeHeader hdr, content ]
   where (hdr, content) = recordToRaw record
 
-{-
- - writePacket transform a packet into marshalled data related to current state
- - and updating state on the go
- -}
+-- | writePacket transform a packet into marshalled data related to current state
+-- and updating state on the go
 writePacket :: Packet -> TLSSt ByteString
 writePacket pkt@(Handshake hss) = do
     forM_ hss $ \hs -> do
@@ -88,9 +85,3 @@ signRSA hsh content = do
         case r of
             Left err       -> fail ("rsa sign failed: " ++ show err)
             Right econtent -> return econtent
-
-writePacketContent :: Monad m => Packet -> m ByteString
-writePacketContent (Handshake hss)    = return $ encodeHandshakes hss
-writePacketContent (Alert a)          = return $ encodeAlerts a
-writePacketContent (ChangeCipherSpec) = return $ encodeChangeCipherSpec
-writePacketContent (AppData x)        = return x
