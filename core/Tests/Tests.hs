@@ -17,8 +17,6 @@ import qualified Data.ByteString.Lazy as L
 import Network.TLS
 import Control.Applicative
 import Control.Concurrent
-import Control.Exception (throw, SomeException)
-import qualified Control.Exception as E
 import Control.Monad
 
 import Data.IORef
@@ -42,27 +40,10 @@ prop_pipe_work = do
 
     return ()
 
-establish_data_pipe params tlsServer tlsClient = do
-    -- initial setup
-    pipe        <- newPipe
-    _           <- (runPipe pipe)
-    startQueue  <- newChan
-    resultQueue <- newChan
-
-    (cCtx, sCtx) <- newPairContext pipe params
-
-    _ <- forkIO $ E.catch (tlsServer sCtx resultQueue) (printAndRaise "server")
-    _ <- forkIO $ E.catch (tlsClient startQueue cCtx) (printAndRaise "client")
-
-    return (startQueue, resultQueue)
-  where
-        printAndRaise :: String -> SomeException -> IO ()
-        printAndRaise s e = putStrLn (s ++ " exception: " ++ show e) >> throw e
-
 recvDataNonNull ctx = recvData ctx >>= \l -> if B.null l then recvDataNonNull ctx else return l
 
 runTLSPipe params tlsServer tlsClient = do
-    (startQueue, resultQueue) <- run (establish_data_pipe params tlsServer tlsClient)
+    (startQueue, resultQueue) <- run (establishDataPipe params tlsServer tlsClient)
     -- send some data
     d <- B.pack <$> pick (someWords8 256)
     run $ writeChan startQueue d

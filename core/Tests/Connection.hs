@@ -3,6 +3,7 @@ module Connection
     , arbitraryPairParams
     , setPairParamsSessionManager
     , setPairParamsSessionResuming
+    , establishDataPipe
     ) where
 
 import Test.QuickCheck
@@ -11,6 +12,9 @@ import PubKey
 import PipeChan
 import Network.TLS
 import Data.X509
+import Control.Concurrent.Chan
+import Control.Concurrent
+import qualified Control.Exception as E
 
 import qualified Crypto.Random.AESCtr as RNG
 import qualified Data.ByteString as B
@@ -109,3 +113,20 @@ newPairContext pipe (cParams, sParams) = do
     sCtx' <- contextNew sBackend sParams sRNG
 
     return (cCtx', sCtx')
+
+establishDataPipe params tlsServer tlsClient = do
+    -- initial setup
+    pipe        <- newPipe
+    _           <- (runPipe pipe)
+    startQueue  <- newChan
+    resultQueue <- newChan
+
+    (cCtx, sCtx) <- newPairContext pipe params
+
+    _ <- forkIO $ E.catch (tlsServer sCtx resultQueue) (printAndRaise "server")
+    _ <- forkIO $ E.catch (tlsClient startQueue cCtx) (printAndRaise "client")
+
+    return (startQueue, resultQueue)
+  where
+        printAndRaise :: String -> E.SomeException -> IO ()
+        printAndRaise s e = putStrLn (s ++ " exception: " ++ show e) >> E.throw e
