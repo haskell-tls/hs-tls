@@ -104,4 +104,4 @@ prop_header_marshalling_id x = (decodeHeader $ encodeHeader x) == Right x
 prop_handshake_marshalling_id :: Handshake -> Bool
 prop_handshake_marshalling_id x = (decodeHs $ encodeHandshake x) == Right x
   where decodeHs b = either (Left . id) (uncurry (decodeHandshake cp) . head) $ decodeHandshakes b
-        cp = CurrentParams { cParamsVersion = TLS10, cParamsKeyXchgType = CipherKeyExchange_RSA, cParamsSupportNPN = True }
+        cp = CurrentParams { cParamsVersion = TLS10, cParamsKeyXchgType = Just CipherKeyExchange_RSA, cParamsSupportNPN = True }

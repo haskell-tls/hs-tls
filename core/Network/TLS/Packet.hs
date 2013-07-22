@@ -73,9 +73,9 @@ import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.MD5 as MD5
 
 data CurrentParams = CurrentParams
-    { cParamsVersion     :: Version               -- ^ current protocol version
-    , cParamsKeyXchgType :: CipherKeyExchangeType -- ^ current key exchange type
-    , cParamsSupportNPN  :: Bool                  -- ^ support Next Protocol Negotiation extension
+    { cParamsVersion     :: Version                     -- ^ current protocol version
+    , cParamsKeyXchgType :: Maybe CipherKeyExchangeType -- ^ current key exchange type
+    , cParamsSupportNPN  :: Bool                        -- ^ support Next Protocol Negotiation extension
     } deriving (Show,Eq)
 
 {- marshall helpers -}
@@ -316,20 +316,24 @@ decodeServerKeyXchg_RSA = do
     return $ ServerRSAParams { rsa_modulus = os2ip modulus, rsa_exponent = os2ip expo }
 
 decodeServerKeyXchg :: CurrentParams -> Get Handshake
-decodeServerKeyXchg cp = ServerKeyXchg <$> case cParamsKeyXchgType cp of
-    CipherKeyExchange_RSA     -> SKX_RSA . Just <$> decodeServerKeyXchg_RSA
-    CipherKeyExchange_DH_Anon -> SKX_DH_Anon <$> decodeServerKeyXchg_DH
-    CipherKeyExchange_DHE_RSA -> do
-        dhparams <- decodeServerKeyXchg_DH
-        signature <- getOpaque16
-        return $ SKX_DHE_RSA dhparams (B.unpack signature)
-    CipherKeyExchange_DHE_DSS -> do
-        dhparams  <- decodeServerKeyXchg_DH
-        signature <- getOpaque16
-        return $ SKX_DHE_DSS dhparams (B.unpack signature)
-    _ -> do
-        bs <- remaining >>= getBytes
-        return $ SKX_Unknown bs
+decodeServerKeyXchg cp =
+    case cParamsKeyXchgType cp of
+        Just cke -> ServerKeyXchg <$> toCKE cke
+        Nothing  -> error "no server key exchange"
+  where toCKE cke = case cke of
+            CipherKeyExchange_RSA     -> SKX_RSA . Just <$> decodeServerKeyXchg_RSA
+            CipherKeyExchange_DH_Anon -> SKX_DH_Anon <$> decodeServerKeyXchg_DH
+            CipherKeyExchange_DHE_RSA -> do
+                dhparams <- decodeServerKeyXchg_DH
+                signature <- getOpaque16
+                return $ SKX_DHE_RSA dhparams (B.unpack signature)
+            CipherKeyExchange_DHE_DSS -> do
+                dhparams  <- decodeServerKeyXchg_DH
+                signature <- getOpaque16
+                return $ SKX_DHE_DSS dhparams (B.unpack signature)
+            _ -> do
+                bs <- remaining >>= getBytes
+                return $ SKX_Unknown bs
 
 encodeHandshake :: Handshake -> ByteString
 encodeHandshake o =

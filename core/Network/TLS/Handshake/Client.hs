@@ -97,7 +97,7 @@ handshakeClient cparams ctx = do
                 Just _  -> usingState_ ctx $ setVersion rver
             case find ((==) cipher . cipherID) ciphers of
                 Nothing -> throwCore $ Error_Protocol ("no cipher in common with the server", True, HandshakeFailure)
-                Just c  -> usingState_ ctx $ runRecordStateSt $ setCipher c
+                Just c  -> usingHState ctx $ setCipher c
 
             -- intersect sent extensions in client and the received extensions from server.
             -- if server returns extensions that we didn't request, fail.
@@ -120,7 +120,7 @@ handshakeClient cparams ctx = do
             case resumingSession of
                 Nothing          -> return $ RecvStateHandshake processCertificate
                 Just sessionData -> do
-                    usingState_ ctx (setMasterSecret rver ClientRole $ sessionSecret sessionData)
+                    usingHState ctx (setMasterSecret rver ClientRole $ sessionSecret sessionData)
                     return $ RecvStateNext expectChangeCipher
         onServerHello _ p = unexpected (show p) (Just "server hello")
 
@@ -193,7 +193,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                 xver       <- getVersion
                 prerand    <- genRandom 46
                 let premaster = encodePreMasterSecret xver prerand
-                setMasterSecretFromPre xver ClientRole premaster
+                withHandshakeM $ setMasterSecretFromPre xver ClientRole premaster
 
                 -- SSL3 implementation generally forget this length field since it's redundant,
                 -- however TLS10 make it clear that the length field need to be present.
@@ -245,7 +245,6 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                             Just (_, Just hashSigs, _) <- usingHState ctx $ getClientCertRequest
                             let suppHashSigs = pHashSignatures $ ctxParams ctx
                                 hashSigs' = filter (\ a -> a `elem` hashSigs) suppHashSigs
-                            liftIO $ putStrLn $ " supported hash sig algorithms: " ++ show hashSigs'
 
                             when (null hashSigs') $ do
                                 throwCore $ Error_Protocol ("no hash/signature algorithms in common with the server", True, HandshakeFailure)

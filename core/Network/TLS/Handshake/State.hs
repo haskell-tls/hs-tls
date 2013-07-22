@@ -36,8 +36,11 @@ module Network.TLS.Handshake.State
 
 import Network.TLS.Util
 import Network.TLS.Struct
+import Network.TLS.Record.State
 import Network.TLS.Packet
 import Network.TLS.Crypto
+import Network.TLS.Cipher
+import Network.TLS.Compression
 import qualified Data.ByteString as B
 import Control.Applicative ((<$>))
 import Control.Monad
@@ -59,6 +62,10 @@ data HandshakeState = HandshakeState
     , hstClientCertSent      :: !Bool -- ^ Set to true when a client certificate chain was sent
     , hstCertReqSent         :: !Bool -- ^ Set to true when a certificate request was sent
     , hstClientCertChain     :: !(Maybe CertificateChain)
+    , hstPendingTxState      :: Maybe TransmissionState
+    , hstPendingRxState      :: Maybe TransmissionState
+    , hstPendingCipher       :: Maybe Cipher
+    , hstPendingCompression  :: Compression
     } deriving (Show)
 
 type ClientCertRequestData = ([CertificateType],
@@ -93,6 +100,10 @@ newEmptyHandshake ver crand digestInit = HandshakeState
     , hstClientCertSent      = False
     , hstCertReqSent         = False
     , hstClientCertChain     = Nothing
+    , hstPendingTxState      = Nothing
+    , hstPendingRxState      = Nothing
+    , hstPendingCipher       = Nothing
+    , hstPendingCompression  = nullCompression
     }
 
 runHandshake :: HandshakeState -> HandshakeM a -> (a, HandshakeState)

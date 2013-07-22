@@ -46,15 +46,17 @@ processPacket (Record ProtocolType_Alert _ fragment) = return . Alert =<< return
 
 processPacket (Record ProtocolType_ChangeCipherSpec _ fragment) = do
     returnEither $ decodeChangeCipherSpec $ fragmentGetBytes fragment
-    runRecordStateSt switchRxEncryption
+    switchRxEncryption
     return ChangeCipherSpec
 
 processPacket (Record ProtocolType_Handshake ver fragment) = do
-    keyxchg <- runRecordStateSt getCipherKeyExchangeType
+    keyxchg <- gets (\st -> case stHandshake st of
+                                Nothing  -> Nothing
+                                Just hst -> cipherKeyExchange <$> hstPendingCipher hst)
     npn     <- getExtensionNPN
     let currentparams = CurrentParams
                         { cParamsVersion     = ver
-                        , cParamsKeyXchgType = maybe CipherKeyExchange_RSA id $ keyxchg
+                        , cParamsKeyXchgType = keyxchg
                         , cParamsSupportNPN  = npn
                         }
     handshakes <- returnEither (decodeHandshakes $ fragmentGetBytes fragment)
@@ -135,18 +137,19 @@ processServerHello _ = error "processServerHello called on wrong type"
 -- in case the version mismatch, generate a random master secret
 processClientKeyXchg :: ByteString -> TLSSt ()
 processClientKeyXchg encryptedPremaster = do
-    ver         <- getVersion
+    rver        <- getVersion
     role        <- isClientContext
-    expectedVer <- hstClientVersion . fromJust "handshake" . stHandshake <$> get
     random      <- genRandom 48
     ePremaster  <- decryptRSA encryptedPremaster
-    case ePremaster of
-        Left _          -> setMasterSecretFromPre ver role random
-        Right premaster -> case decodePreMasterSecret premaster of
-            Left _                   -> setMasterSecretFromPre ver role random
-            Right (ver, _)
-                | ver /= expectedVer -> setMasterSecretFromPre ver role random
-                | otherwise          -> setMasterSecretFromPre ver role premaster
+    withHandshakeM $ do
+        expectedVer <- gets hstClientVersion
+        case ePremaster of
+            Left _          -> setMasterSecretFromPre rver role random
+            Right premaster -> case decodePreMasterSecret premaster of
+                Left _                   -> setMasterSecretFromPre rver role random
+                Right (ver, _)
+                    | ver /= expectedVer -> setMasterSecretFromPre rver role random
+                    | otherwise          -> setMasterSecretFromPre rver role premaster
 
 processClientFinished :: FinishedData -> TLSSt ()
 processClientFinished fdata = do

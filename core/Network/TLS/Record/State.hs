@@ -64,10 +64,6 @@ data RecordState = RecordState
     , stVersion             :: !Version
     , stTxState             :: TransmissionState
     , stRxState             :: TransmissionState
-    , stPendingTxState      :: Maybe TransmissionState
-    , stPendingRxState      :: Maybe TransmissionState
-    , stPendingCipher       :: Maybe Cipher
-    , stPendingCompression  :: Compression
     , stRandomGen           :: StateRNG
     } deriving (Show)
 
@@ -102,10 +98,6 @@ newRecordState rng clientContext = RecordState
     , stVersion             = TLS10
     , stTxState             = newTransmissionState
     , stRxState             = newTransmissionState
-    , stPendingTxState      = Nothing
-    , stPendingRxState      = Nothing
-    , stPendingCipher       = Nothing
-    , stPendingCompression  = nullCompression
     , stRandomGen           = StateRNG rng
     }
 

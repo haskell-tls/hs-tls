@@ -183,29 +183,28 @@ certVerifyHandshakeTypeMaterial HandshakeType_NPN             = False
 certVerifyHandshakeMaterial :: Handshake -> Bool
 certVerifyHandshakeMaterial = certVerifyHandshakeTypeMaterial . typeOfHandshake
 
-switchTxEncryption, switchRxEncryption :: RecordM ()
-switchTxEncryption = modify (\st -> st { stTxState = fromJust "pending-tx" $ stPendingTxState st })
-switchRxEncryption = modify (\st -> st { stRxState = fromJust "pending-rx" $ stPendingRxState st })
+switchTxEncryption, switchRxEncryption :: TLSSt ()
+switchTxEncryption =
+        withHandshakeM (gets hstPendingTxState)
+    >>= \newTxState -> runRecordStateSt (modify $ \st -> st { stTxState = fromJust "pending-tx" newTxState })
+switchRxEncryption =
+        withHandshakeM (gets hstPendingRxState)
+    >>= \newRxState -> runRecordStateSt (modify $ \st -> st { stRxState = fromJust "pending-rx" newRxState })
 
 setServerRandom :: MonadState TLSState m => ServerRandom -> m ()
 setServerRandom ran = updateHandshake "srand" (\hst -> hst { hstServerRandom = Just ran })
 
-setMasterSecret :: MonadState TLSState m => Version -> Role -> Bytes -> m ()
+setMasterSecret :: Version -> Role -> Bytes -> HandshakeM ()
 setMasterSecret ver role masterSecret = do
-    hasValidHandshake "master secret"
-
-    updateHandshake "master secret" (\hst -> hst { hstMasterSecret = Just masterSecret } )
+    modify (\hst -> hst { hstMasterSecret = Just masterSecret } )
     setKeyBlock ver role
     return ()
 
-setMasterSecretFromPre :: MonadState TLSState m => Version -> Role -> Bytes -> m ()
+setMasterSecretFromPre :: Version -> Role -> Bytes -> HandshakeM ()
 setMasterSecretFromPre ver role premasterSecret = do
-    hasValidHandshake "generate master secret"
-    st <- get
-    setMasterSecret ver role $ genSecret st
-  where genSecret st =
-            let hst = fromJust "handshake" $ stHandshake st in
-            generateMasterSecret (stVersion $ stRecordState st)
+    secret <- genSecret <$> get
+    setMasterSecret ver role secret
+  where genSecret hst = generateMasterSecret ver
                                  premasterSecret
                                  (hstClientRandom hst)
                                  (fromJust "server random" $ hstServerRandom hst)
@@ -237,13 +236,11 @@ needEmptyPacket = gets f
             && stClientContext st == ClientRole
             && (maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stCipher $ stTxState st))
 
-setKeyBlock :: MonadState TLSState m => Version -> Role -> m ()
+setKeyBlock :: Version -> Role -> HandshakeM ()
 setKeyBlock ver cc = modify setPendingState
   where
-    setPendingState st = st { stRecordState = newRst }
-        where hst          = fromJust "handshake" $ stHandshake st
-              rst          = stRecordState st
-              cipher       = fromJust "cipher" $ stPendingCipher rst
+    setPendingState hst = hst { hstPendingTxState = Just pendingTx, hstPendingRxState = Just pendingRx }
+        where cipher       = fromJust "cipher" $ hstPendingCipher hst
               keyblockSize = cipherKeyBlockSize cipher
 
               bulk         = cipherBulk cipher
@@ -267,22 +264,20 @@ setKeyBlock ver cc = modify setPendingState
               msServer = MacState { msSequence = 0 }
 
               pendingTx = TransmissionState
-                        { stCryptState = if cc == ClientRole then cstClient else cstServer
-                        , stMacState   = if cc == ClientRole then msClient else msServer
-                        , stCipher     = Just cipher
-                        , stCompression = stPendingCompression rst
+                        { stCryptState  = if cc == ClientRole then cstClient else cstServer
+                        , stMacState    = if cc == ClientRole then msClient else msServer
+                        , stCipher      = Just cipher
+                        , stCompression = hstPendingCompression hst
                         }
               pendingRx = TransmissionState
                         { stCryptState  = if cc == ClientRole then cstServer else cstClient
                         , stMacState    = if cc == ClientRole then msServer else msClient
                         , stCipher      = Just cipher
-                        , stCompression = stPendingCompression rst
+                        , stCompression = hstPendingCompression hst
                         }
-    
-              newRst = rst { stPendingTxState = Just pendingTx, stPendingRxState = Just pendingRx }
 
-setCipher :: MonadState RecordState m => Cipher -> m ()
-setCipher cipher = modify (\st -> st { stPendingCipher = Just cipher })
+setCipher :: Cipher -> HandshakeM ()
+setCipher cipher = modify (\st -> st { hstPendingCipher = Just cipher })
 
 setVersion :: MonadState TLSState m => Version -> m ()
 setVersion ver = modify (\st -> st { stRecordState = (stRecordState st) { stVersion = ver } })
@@ -320,8 +315,8 @@ setClientCertificateChain s = modify (\st -> st { stClientCertificateChain = Jus
 getClientCertificateChain :: MonadState TLSState m => m (Maybe CertificateChain)
 getClientCertificateChain = gets stClientCertificateChain
 
-getCipherKeyExchangeType :: MonadState RecordState m => m (Maybe CipherKeyExchangeType)
-getCipherKeyExchangeType = gets (\st -> cipherKeyExchange <$> stPendingCipher st)
+getCipherKeyExchangeType :: HandshakeM (Maybe CipherKeyExchangeType)
+getCipherKeyExchangeType = gets (\st -> cipherKeyExchange <$> hstPendingCipher st)
 
 getVerifiedData :: MonadState TLSState m => Bool -> m Bytes
 getVerifiedData client = gets (if client then stClientVerifiedData else stServerVerifiedData)

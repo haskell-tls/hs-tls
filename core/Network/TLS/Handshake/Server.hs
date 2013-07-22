@@ -95,11 +95,10 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
             throwCore $ Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
     when (null commonCompressions) $
             throwCore $ Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
-    usingState_ ctx $ runRecordStateSt $ modify (\st -> st
-            { stVersion            = ver
-            , stPendingCipher      = Just usedCipher
-            , stPendingCompression = usedCompression
-            })
+    usingState_ ctx $ setVersion ver
+    usingHState ctx $ do
+        setCipher usedCipher
+        modify (\hst -> hst { hstPendingCompression = usedCompression })
 
     resumeSessionData <- case clientSession of
             (Session (Just clientSessionId)) -> withSessionManager params (\s -> liftIO $ sessionResume s clientSessionId)
@@ -115,7 +114,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
             usingState_ ctx (setSession clientSession True)
             serverhello <- makeServerHello clientSession
             sendPacket ctx $ Handshake [serverhello]
-            usingState_ ctx $ setMasterSecret ver ServerRole $ sessionSecret sessionData
+            usingHState ctx $ setMasterSecret ver ServerRole $ sessionSecret sessionData
             sendChangeCipherAndFinish ctx False
             recvChangeCipherAndFinish ctx
     handshakeTerminate ctx

@@ -55,7 +55,7 @@ writePacket pkt@(Handshake hss) = do
     runRecordStateSt (makeRecord pkt >>= engageRecord >>= encodeRecord)
 writePacket pkt = do
     d <- runRecordStateSt (makeRecord pkt >>= engageRecord >>= encodeRecord)
-    when (pkt == ChangeCipherSpec) $ runRecordStateSt switchTxEncryption
+    when (pkt == ChangeCipherSpec) $ switchTxEncryption
     return d
 
 {------------------------------------------------------------------------------}
