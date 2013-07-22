@@ -4,7 +4,6 @@ module Marshalling where
 import Control.Monad
 import Control.Applicative
 import Test.QuickCheck
-import Test.QuickCheck.Monadic
 import Network.TLS.Internal
 import Network.TLS
 
