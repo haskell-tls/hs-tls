@@ -135,16 +135,18 @@ processServerHello _ = error "processServerHello called on wrong type"
 -- in case the version mismatch, generate a random master secret
 processClientKeyXchg :: ByteString -> TLSSt ()
 processClientKeyXchg encryptedPremaster = do
+    ver         <- getVersion
+    role        <- isClientContext
     expectedVer <- hstClientVersion . fromJust "handshake" . stHandshake <$> get
     random      <- genRandom 48
     ePremaster  <- decryptRSA encryptedPremaster
     case ePremaster of
-        Left _          -> setMasterSecretFromPre random
+        Left _          -> setMasterSecretFromPre ver role random
         Right premaster -> case decodePreMasterSecret premaster of
-            Left _                   -> setMasterSecretFromPre random
+            Left _                   -> setMasterSecretFromPre ver role random
             Right (ver, _)
-                | ver /= expectedVer -> setMasterSecretFromPre random
-                | otherwise          -> setMasterSecretFromPre premaster
+                | ver /= expectedVer -> setMasterSecretFromPre ver role random
+                | otherwise          -> setMasterSecretFromPre ver role premaster
 
 processClientFinished :: FinishedData -> TLSSt ()
 processClientFinished fdata = do

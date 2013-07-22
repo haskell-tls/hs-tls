@@ -23,6 +23,7 @@ import Network.TLS.Sending
 import Network.TLS.Receiving
 import Network.TLS.Measurement
 import Network.TLS.Wire (encodeWord16)
+import Network.TLS.Types
 import Network.TLS.X509
 import Data.Maybe
 import Data.List (find)
@@ -119,7 +120,7 @@ handshakeClient cparams ctx = do
             case resumingSession of
                 Nothing          -> return $ RecvStateHandshake processCertificate
                 Just sessionData -> do
-                    usingState_ ctx (setMasterSecret $ sessionSecret sessionData)
+                    usingState_ ctx (setMasterSecret rver ClientRole $ sessionSecret sessionData)
                     return $ RecvStateNext expectChangeCipher
         onServerHello _ p = unexpected (show p) (Just "server hello")
 
@@ -192,7 +193,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                 xver       <- getVersion
                 prerand    <- genRandom 46
                 let premaster = encodePreMasterSecret xver prerand
-                setMasterSecretFromPre premaster
+                setMasterSecretFromPre xver ClientRole premaster
 
                 -- SSL3 implementation generally forget this length field since it's redundant,
                 -- however TLS10 make it clear that the length field need to be present.

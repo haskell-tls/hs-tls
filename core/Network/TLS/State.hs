@@ -190,19 +190,19 @@ switchRxEncryption = modify (\st -> st { stRxState = fromJust "pending-rx" $ stP
 setServerRandom :: MonadState TLSState m => ServerRandom -> m ()
 setServerRandom ran = updateHandshake "srand" (\hst -> hst { hstServerRandom = Just ran })
 
-setMasterSecret :: MonadState TLSState m => Bytes -> m ()
-setMasterSecret masterSecret = do
+setMasterSecret :: MonadState TLSState m => Version -> Role -> Bytes -> m ()
+setMasterSecret ver role masterSecret = do
     hasValidHandshake "master secret"
 
     updateHandshake "master secret" (\hst -> hst { hstMasterSecret = Just masterSecret } )
-    setKeyBlock
+    setKeyBlock ver role
     return ()
 
-setMasterSecretFromPre :: MonadState TLSState m => Bytes -> m ()
-setMasterSecretFromPre premasterSecret = do
+setMasterSecretFromPre :: MonadState TLSState m => Version -> Role -> Bytes -> m ()
+setMasterSecretFromPre ver role premasterSecret = do
     hasValidHandshake "generate master secret"
     st <- get
-    setMasterSecret $ genSecret st
+    setMasterSecret ver role $ genSecret st
   where genSecret st =
             let hst = fromJust "handshake" $ stHandshake st in
             generateMasterSecret (stVersion $ stRecordState st)
@@ -237,13 +237,12 @@ needEmptyPacket = gets f
             && stClientContext st == ClientRole
             && (maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stCipher $ stTxState st))
 
-setKeyBlock :: MonadState TLSState m => m ()
-setKeyBlock = modify setPendingState
+setKeyBlock :: MonadState TLSState m => Version -> Role -> m ()
+setKeyBlock ver cc = modify setPendingState
   where
     setPendingState st = st { stRecordState = newRst }
         where hst          = fromJust "handshake" $ stHandshake st
               rst          = stRecordState st
-              cc           = stClientContext rst
               cipher       = fromJust "cipher" $ stPendingCipher rst
               keyblockSize = cipherKeyBlockSize cipher
 
@@ -251,7 +250,7 @@ setKeyBlock = modify setPendingState
               digestSize   = hashSize $ cipherHash cipher
               keySize      = bulkKeySize bulk
               ivSize       = bulkIVSize bulk
-              kb           = generateKeyBlock (stVersion rst) (hstClientRandom hst)
+              kb           = generateKeyBlock ver (hstClientRandom hst)
                                               (fromJust "server random" $ hstServerRandom hst)
                                               (fromJust "master secret" $ hstMasterSecret hst) keyblockSize
 

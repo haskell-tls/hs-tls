@@ -20,6 +20,7 @@ import Network.TLS.Compression
 import Network.TLS.Packet
 import Network.TLS.Extension
 import Network.TLS.IO
+import Network.TLS.Types
 import Network.TLS.State hiding (getNegotiatedProtocol)
 import Network.TLS.Handshake.State
 import Network.TLS.Receiving
@@ -114,7 +115,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
             usingState_ ctx (setSession clientSession True)
             serverhello <- makeServerHello clientSession
             sendPacket ctx $ Handshake [serverhello]
-            usingState_ ctx $ setMasterSecret $ sessionSecret sessionData
+            usingState_ ctx $ setMasterSecret ver ServerRole $ sessionSecret sessionData
             sendChangeCipherAndFinish ctx False
             recvChangeCipherAndFinish ctx
     handshakeTerminate ctx
