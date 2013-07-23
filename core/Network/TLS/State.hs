@@ -56,7 +56,6 @@ module Network.TLS.State
 import Data.Maybe (isNothing)
 import Network.TLS.Util
 import Network.TLS.Struct
-import Network.TLS.Packet
 import Network.TLS.Crypto
 import Network.TLS.Cipher
 import Network.TLS.Record.State
@@ -264,14 +263,6 @@ withHandshakeM f =
                     Just hst -> do let (a, nhst) = runHandshake hst f
                                    put (st { stHandshake = Just nhst })
                                    return a
-
-getHandshakeDigest :: MonadState TLSState m => Role -> m Bytes
-getHandshakeDigest role = do
-    st <- get
-    let hst = fromJust "handshake" $ stHandshake st
-    let hashctx = hstHandshakeDigest hst
-    let msecret = fromJust "master secret" $ hstMasterSecret hst
-    return $ (if role == ClientRole then generateClientFinished else generateServerFinished) (stVersion $ stRecordState st) msecret hashctx
 
 endHandshake :: MonadState TLSState m => m ()
 endHandshake = modify (\st -> st { stHandshake = Nothing })

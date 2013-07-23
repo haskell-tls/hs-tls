@@ -154,7 +154,8 @@ processClientKeyXchg encryptedPremaster = do
 processClientFinished :: FinishedData -> TLSSt ()
 processClientFinished fdata = do
     cc       <- isClientContext
-    expected <- getHandshakeDigest $ invertRole cc
+    ver      <- getVersion
+    expected <- withHandshakeM $ getHandshakeDigest ver $ invertRole cc
     when (expected /= fdata) $ do
         throwError $ Error_Protocol("bad record mac", True, BadRecordMac)
     updateVerifiedData ServerRole fdata

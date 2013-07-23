@@ -85,7 +85,7 @@ sendChangeCipherAndFinish ctx role = do
             (Nothing, _) -> return ()
     liftIO $ contextFlush ctx
 
-    cf <- usingState_ ctx $ getHandshakeDigest role
+    cf <- usingState_ ctx getVersion >>= \ver -> usingHState ctx $ getHandshakeDigest ver role
     sendPacket ctx (Handshake [Finished cf])
     liftIO $ contextFlush ctx
 

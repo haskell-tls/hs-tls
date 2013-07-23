@@ -32,6 +32,7 @@ module Network.TLS.Handshake.State
     , addHandshakeMessage
     , updateHandshakeDigest
     , getHandshakeMessages
+    , getHandshakeDigest
     -- * master secret
     , setMasterSecret
     , setMasterSecretFromPre
@@ -158,6 +159,14 @@ getHandshakeMessages = gets (reverse . hstHandshakeMessages)
 
 updateHandshakeDigest :: Bytes -> HandshakeM ()
 updateHandshakeDigest content = modify $ \hs -> hs { hstHandshakeDigest = hashUpdate (hstHandshakeDigest hs) content }
+
+getHandshakeDigest :: Version -> Role -> HandshakeM Bytes
+getHandshakeDigest ver role = gets gen
+  where gen hst = let hashctx = hstHandshakeDigest hst
+                      msecret = fromJust "master secret" $ hstMasterSecret hst
+                   in generateFinish ver msecret hashctx
+        generateFinish | role == ClientRole = generateClientFinished
+                       | otherwise          = generateServerFinished
 
 setMasterSecretFromPre :: Version -> Role -> Bytes -> HandshakeM ()
 setMasterSecretFromPre ver role premasterSecret = do
