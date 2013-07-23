@@ -19,7 +19,7 @@ if [ ! -f server.key ]; then
 fi
 
 echo "running stunnel"
-${STUNNEL} server -c server.crt -k server.key --source=localhost:${PORT} --destinationtype=fd --destination=2 > stunnel-gnutls-log 2>&1 &
+${STUNNEL} server --certificate server.crt --key server.key --source=localhost:${PORT} --destination-type=fd --destination=2 > stunnel-gnutls-log 2>&1 &
 stunnelpid=$(pidof stunnel)
 STUNNELPID=$!
 sleep 1
