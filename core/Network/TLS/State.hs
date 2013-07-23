@@ -27,7 +27,6 @@ module Network.TLS.State
     , finishHandshakeMaterial
     , certVerifyHandshakeTypeMaterial
     , certVerifyHandshakeMaterial
-    , getMasterSecret
     , setVersion
     , getVersion
     , setCipher
@@ -190,9 +189,6 @@ switchRxEncryption =
 
 setServerRandom :: MonadState TLSState m => ServerRandom -> m ()
 setServerRandom ran = updateHandshake "srand" (\hst -> hst { hstServerRandom = Just ran })
-
-getMasterSecret :: MonadState TLSState m => m (Maybe Bytes)
-getMasterSecret = gets (stHandshake >=> hstMasterSecret)
 
 getSessionData :: MonadState TLSState m => m (Maybe SessionData)
 getSessionData = get >>= \st -> return (stHandshake st >>= hstMasterSecret >>= wrapSessionData st)

@@ -254,7 +254,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
 
             (signature, hsh) <- case usedVersion of
                 SSL3 -> do
-                    Just masterSecret <- usingState_ ctx $ getMasterSecret
+                    Just masterSecret <- usingHState ctx $ gets hstMasterSecret
                     let digest = generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit hashMD5SHA1) msgs)
                         hsh = HashDescr id id
                     return (digest, hsh)
