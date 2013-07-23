@@ -114,7 +114,7 @@ data StunnelHandle =
 getAddressDescription :: Address -> IO StunnelAddr
 getAddressDescription (Address "tcp" desc) = do
     let (s, p) = break ((==) ':') desc
-    when (p == "") (error "missing port: expecting [source]:port")
+    when (p == "") (error $ "missing port: expecting [source]:port got " ++ show desc)
     pn <- if and $ map isDigit $ drop 1 p
         then return $ fromIntegral $ (read (drop 1 p) :: Int)
         else do
@@ -129,7 +129,7 @@ getAddressDescription (Address "unix" desc) = do
 getAddressDescription (Address "fd" _) =
     return $ AddrFD stdin stdout
 
-getAddressDescription _  = error "unrecognized source type (expecting tcp/unix/fd)"
+getAddressDescription a = error ("unrecognized source type (expecting tcp/unix/fd, got " ++ show a ++ ")")
 
 connectAddressDescription (AddrSocket family sockaddr) = do
     sock <- socket family Stream defaultProtocol
@@ -237,7 +237,7 @@ options =
     [ Option ['s']  ["source"]  (ReqArg Source "source") "source address influenced by source type"
     , Option ['d']  ["destination"] (ReqArg Destination "destination") "destination address influenced by destination type"
     , Option []     ["source-type"] (ReqArg SourceType "source-type") "type of source (tcp, unix, fd)"
-    , Option []     ["destination-type"] (ReqArg SourceType "source-type") "type of source (tcp, unix, fd)"
+    , Option []     ["destination-type"] (ReqArg DestinationType "source-type") "type of source (tcp, unix, fd)"
     , Option []     ["debug"]   (NoArg Debug) "debug the TLS protocol printing debugging to stdout"
     , Option ['h']  ["help"]    (NoArg Help) "request help"
     , Option []     ["certificate"] (ReqArg Certificate "certificate") "certificate file"
@@ -249,17 +249,17 @@ options =
 data Address = Address String String
     deriving (Show,Eq)
 
-defaultSource      = Address "localhost:6060" "tcp"
-defaultDestination = Address "localhost:6061" "tcp"
+defaultSource      = Address "tcp" "localhost:6060"
+defaultDestination = Address "tcp" "localhost:6061"
 
 getSource opts = foldl accf defaultSource opts
-  where accf (Address _ t) (Source s)     = Address s t
-        accf (Address s _) (SourceType t) = Address s t
+  where accf (Address t _) (Source s)     = Address t s
+        accf (Address _ s) (SourceType t) = Address t s
         accf acc           _              = acc
 
 getDestination opts = foldl accf defaultDestination opts
-  where accf (Address _ t) (Destination s)     = Address s t
-        accf (Address s _) (DestinationType t) = Address s t
+  where accf (Address t _) (Destination s)     = Address t s
+        accf (Address _ s) (DestinationType t) = Address t s
         accf acc           _                   = acc
 
 getCertificate opts = foldl accf "certificate.pem" opts
