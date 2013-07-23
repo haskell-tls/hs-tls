@@ -12,6 +12,7 @@ module Network.TLS.Types
     , CipherID
     , CompressionID
     , Role(..)
+    , invertRole
     ) where
 
 import Data.ByteString (ByteString)
@@ -41,3 +42,7 @@ type CompressionID = Word8
 -- | Role
 data Role = ClientRole | ServerRole
     deriving (Show,Eq)
+
+invertRole :: Role -> Role
+invertRole ClientRole = ServerRole
+invertRole ServerRole = ClientRole

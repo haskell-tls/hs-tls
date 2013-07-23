@@ -107,13 +107,13 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
             liftIO $ contextFlush ctx
             -- Receive client info until client Finished.
             recvClientData sparams ctx
-            sendChangeCipherAndFinish ctx False
+            sendChangeCipherAndFinish ctx ServerRole
         Just sessionData -> do
             usingState_ ctx (setSession clientSession True)
             serverhello <- makeServerHello clientSession
             sendPacket ctx $ Handshake [serverhello]
             usingHState ctx $ setMasterSecret ver ServerRole $ sessionSecret sessionData
-            sendChangeCipherAndFinish ctx False
+            sendChangeCipherAndFinish ctx ServerRole
             recvChangeCipherAndFinish ctx
     handshakeTerminate ctx
   where

@@ -265,13 +265,13 @@ withHandshakeM f =
                                    put (st { stHandshake = Just nhst })
                                    return a
 
-getHandshakeDigest :: MonadState TLSState m => Bool -> m Bytes
-getHandshakeDigest roleClient = do
+getHandshakeDigest :: MonadState TLSState m => Role -> m Bytes
+getHandshakeDigest role = do
     st <- get
     let hst = fromJust "handshake" $ stHandshake st
     let hashctx = hstHandshakeDigest hst
     let msecret = fromJust "master secret" $ hstMasterSecret hst
-    return $ (if roleClient then generateClientFinished else generateServerFinished) (stVersion $ stRecordState st) msecret hashctx
+    return $ (if role == ClientRole then generateClientFinished else generateServerFinished) (stVersion $ stRecordState st) msecret hashctx
 
 endHandshake :: MonadState TLSState m => m ()
 endHandshake = modify (\st -> st { stHandshake = Nothing })

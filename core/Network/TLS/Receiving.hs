@@ -22,7 +22,7 @@ import Control.Monad.Error
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
-import Network.TLS.Types (Role(..))
+import Network.TLS.Types (Role(..), invertRole)
 import Network.TLS.Util
 import Network.TLS.Struct
 import Network.TLS.Record
@@ -154,7 +154,7 @@ processClientKeyXchg encryptedPremaster = do
 processClientFinished :: FinishedData -> TLSSt ()
 processClientFinished fdata = do
     cc       <- isClientContext
-    expected <- getHandshakeDigest (cc == ServerRole)
+    expected <- getHandshakeDigest $ invertRole cc
     when (expected /= fdata) $ do
         throwError $ Error_Protocol("bad record mac", True, BadRecordMac)
     updateVerifiedData ServerRole fdata

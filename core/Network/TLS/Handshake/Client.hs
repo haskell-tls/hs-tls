@@ -49,9 +49,9 @@ handshakeClient cparams ctx = do
     recvServerHello sentExtensions
     sessionResuming <- usingState_ ctx isSessionResuming
     if sessionResuming
-        then sendChangeCipherAndFinish ctx True
+        then sendChangeCipherAndFinish ctx ClientRole
         else do sendClientData cparams ctx
-                sendChangeCipherAndFinish ctx True
+                sendChangeCipherAndFinish ctx ClientRole
                 recvChangeCipherAndFinish ctx
     handshakeTerminate ctx
   where params       = ctxParams ctx

@@ -22,6 +22,7 @@ import Network.TLS.IO
 import Network.TLS.State hiding (getNegotiatedProtocol)
 import Network.TLS.Receiving
 import Network.TLS.Measurement
+import Network.TLS.Types
 import Data.Maybe
 import Data.Data
 import Data.ByteString.Char8 ()
@@ -66,11 +67,11 @@ handshakeTerminate ctx = do
     setEstablished ctx True
     return ()
 
-sendChangeCipherAndFinish :: MonadIO m => Context -> Bool -> m ()
-sendChangeCipherAndFinish ctx isClient = do
+sendChangeCipherAndFinish :: MonadIO m => Context -> Role -> m ()
+sendChangeCipherAndFinish ctx role = do
     sendPacket ctx ChangeCipherSpec
 
-    when isClient $ do
+    when (role == ClientRole) $ do
         let cparams = getClientParams $ ctxParams ctx
         suggest <- usingState_ ctx $ getServerNextProtocolSuggest
         case (onNPNServerSuggest cparams, suggest) of
@@ -84,7 +85,7 @@ sendChangeCipherAndFinish ctx isClient = do
             (Nothing, _) -> return ()
     liftIO $ contextFlush ctx
 
-    cf <- usingState_ ctx $ getHandshakeDigest isClient
+    cf <- usingState_ ctx $ getHandshakeDigest role
     sendPacket ctx (Handshake [Finished cf])
     liftIO $ contextFlush ctx
 
