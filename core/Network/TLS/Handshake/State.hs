@@ -32,6 +32,9 @@ module Network.TLS.Handshake.State
     , addHandshakeMessage
     , updateHandshakeDigest
     , getHandshakeMessages
+    -- * master secret
+    , setMasterSecret
+    , setMasterSecretFromPre
     ) where
 
 import Network.TLS.Util
@@ -41,9 +44,8 @@ import Network.TLS.Packet
 import Network.TLS.Crypto
 import Network.TLS.Cipher
 import Network.TLS.Compression
-import qualified Data.ByteString as B
+import Network.TLS.Types
 import Control.Applicative ((<$>))
-import Control.Monad
 import Control.Monad.State
 import Data.X509 (CertificateChain)
 
@@ -153,3 +155,59 @@ getHandshakeMessages = gets (reverse . hstHandshakeMessages)
 
 updateHandshakeDigest :: Bytes -> HandshakeM ()
 updateHandshakeDigest content = modify $ \hs -> hs { hstHandshakeDigest = hashUpdate (hstHandshakeDigest hs) content }
+
+setMasterSecretFromPre :: Version -> Role -> Bytes -> HandshakeM ()
+setMasterSecretFromPre ver role premasterSecret = do
+    secret <- genSecret <$> get
+    setMasterSecret ver role secret
+  where genSecret hst = generateMasterSecret ver
+                                 premasterSecret
+                                 (hstClientRandom hst)
+                                 (fromJust "server random" $ hstServerRandom hst)
+
+-- | Set master secret and as a side effect generate the key block
+-- with all the right parameters, and setup the pending tx/rx state.
+setMasterSecret :: Version -> Role -> Bytes -> HandshakeM ()
+setMasterSecret ver role masterSecret = modify $ \hst ->
+    let (pendingTx, pendingRx) = computeKeyBlock hst masterSecret ver role
+     in hst { hstMasterSecret   = Just masterSecret
+            , hstPendingTxState = Just pendingTx
+            , hstPendingRxState = Just pendingRx }
+
+computeKeyBlock :: HandshakeState -> Bytes -> Version -> Role -> (TransmissionState, TransmissionState)
+computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
+  where cipher       = fromJust "cipher" $ hstPendingCipher hst
+        keyblockSize = cipherKeyBlockSize cipher
+
+        bulk         = cipherBulk cipher
+        digestSize   = hashSize $ cipherHash cipher
+        keySize      = bulkKeySize bulk
+        ivSize       = bulkIVSize bulk
+        kb           = generateKeyBlock ver (hstClientRandom hst)
+                                        (fromJust "server random" $ hstServerRandom hst)
+                                        masterSecret keyblockSize
+
+        (cMACSecret, sMACSecret, cWriteKey, sWriteKey, cWriteIV, sWriteIV) =
+                    fromJust "p6" $ partition6 kb (digestSize, digestSize, keySize, keySize, ivSize, ivSize)
+
+        cstClient = CryptState { cstKey        = cWriteKey
+                               , cstIV         = cWriteIV
+                               , cstMacSecret  = cMACSecret }
+        cstServer = CryptState { cstKey        = sWriteKey
+                               , cstIV         = sWriteIV
+                               , cstMacSecret  = sMACSecret }
+        msClient = MacState { msSequence = 0 }
+        msServer = MacState { msSequence = 0 }
+
+        pendingTx = TransmissionState
+                  { stCryptState  = if cc == ClientRole then cstClient else cstServer
+                  , stMacState    = if cc == ClientRole then msClient else msServer
+                  , stCipher      = Just cipher
+                  , stCompression = hstPendingCompression hst
+                  }
+        pendingRx = TransmissionState
+                  { stCryptState  = if cc == ClientRole then cstServer else cstClient
+                  , stMacState    = if cc == ClientRole then msServer else msClient
+                  , stCipher      = Just cipher
+                  , stCompression = hstPendingCompression hst
+                  }
