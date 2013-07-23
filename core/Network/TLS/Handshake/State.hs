@@ -35,6 +35,9 @@ module Network.TLS.Handshake.State
     -- * master secret
     , setMasterSecret
     , setMasterSecretFromPre
+    -- * misc accessor
+    , setPendingAlgs
+    , setServerRandom
     ) where
 
 import Network.TLS.Util
@@ -211,3 +214,10 @@ computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
                   , stCipher      = Just cipher
                   , stCompression = hstPendingCompression hst
                   }
+
+setPendingAlgs :: Cipher -> Compression -> HandshakeM ()
+setPendingAlgs cipher compression =
+    modify $ \hst -> hst { hstPendingCipher = Just cipher, hstPendingCompression = compression }
+
+setServerRandom :: ServerRandom -> HandshakeM ()
+setServerRandom ran = modify $ \hst -> hst { hstServerRandom = Just ran }

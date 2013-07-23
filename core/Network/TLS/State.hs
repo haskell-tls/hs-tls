@@ -29,8 +29,6 @@ module Network.TLS.State
     , certVerifyHandshakeMaterial
     , setVersion
     , getVersion
-    , setCipher
-    , setServerRandom
     , setSecureRenegotiation
     , getSecureRenegotiation
     , setExtensionNPN
@@ -49,7 +47,6 @@ module Network.TLS.State
     , needEmptyPacket
     , switchTxEncryption
     , switchRxEncryption
-    , getCipherKeyExchangeType
     , isClientContext
     , startHandshakeClient
     , getHandshakeDigest
@@ -67,7 +64,6 @@ import Network.TLS.Handshake.State
 import Network.TLS.RNG
 import Network.TLS.Types (Role(..))
 import qualified Data.ByteString as B
-import Control.Applicative ((<$>))
 import Control.Monad
 import Control.Monad.State
 import Control.Monad.Error
@@ -187,9 +183,6 @@ switchRxEncryption =
         withHandshakeM (gets hstPendingRxState)
     >>= \newRxState -> runRecordStateSt (modify $ \st -> st { stRxState = fromJust "pending-rx" newRxState })
 
-setServerRandom :: MonadState TLSState m => ServerRandom -> m ()
-setServerRandom ran = updateHandshake "srand" (\hst -> hst { hstServerRandom = Just ran })
-
 getSessionData :: MonadState TLSState m => m (Maybe SessionData)
 getSessionData = get >>= \st -> return (stHandshake st >>= hstMasterSecret >>= wrapSessionData st)
   where wrapSessionData st masterSecret = do
@@ -213,9 +206,6 @@ needEmptyPacket = gets f
   where f st = (stVersion st <= TLS10)
             && stClientContext st == ClientRole
             && (maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stCipher $ stTxState st))
-
-setCipher :: Cipher -> HandshakeM ()
-setCipher cipher = modify (\st -> st { hstPendingCipher = Just cipher })
 
 setVersion :: MonadState TLSState m => Version -> m ()
 setVersion ver = modify (\st -> st { stRecordState = (stRecordState st) { stVersion = ver } })
@@ -253,9 +243,6 @@ setClientCertificateChain s = modify (\st -> st { stClientCertificateChain = Jus
 getClientCertificateChain :: MonadState TLSState m => m (Maybe CertificateChain)
 getClientCertificateChain = gets stClientCertificateChain
 
-getCipherKeyExchangeType :: HandshakeM (Maybe CipherKeyExchangeType)
-getCipherKeyExchangeType = gets (\st -> cipherKeyExchange <$> hstPendingCipher st)
-
 getVerifiedData :: MonadState TLSState m => Bool -> m Bytes
 getVerifiedData client = gets (if client then stClientVerifiedData else stServerVerifiedData)
 
@@ -270,14 +257,6 @@ startHandshakeClient ver crand = do
     when (isNothing chs) $
         modify (\st -> st { stHandshake = Just $ newEmptyHandshake ver crand initCtx })
 
-hasValidHandshake :: MonadState TLSState m => String -> m ()
-hasValidHandshake name = get >>= \st -> assert name [ ("valid handshake", isNothing $ stHandshake st) ]
-
-updateHandshake :: MonadState TLSState m => String -> (HandshakeState -> HandshakeState) -> m ()
-updateHandshake n f = do
-    hasValidHandshake n
-    modify (\st -> st { stHandshake = f <$> stHandshake st })
-
 withHandshakeM :: MonadState TLSState m => HandshakeM a -> m a
 withHandshakeM f =
     get >>= \st -> case stHandshake st of
@@ -287,12 +266,12 @@ withHandshakeM f =
                                    return a
 
 getHandshakeDigest :: MonadState TLSState m => Bool -> m Bytes
-getHandshakeDigest client = do
+getHandshakeDigest roleClient = do
     st <- get
     let hst = fromJust "handshake" $ stHandshake st
     let hashctx = hstHandshakeDigest hst
     let msecret = fromJust "master secret" $ hstMasterSecret hst
-    return $ (if client then generateClientFinished else generateServerFinished) (stVersion $ stRecordState st) msecret hashctx
+    return $ (if roleClient then generateClientFinished else generateServerFinished) (stVersion $ stRecordState st) msecret hashctx
 
 endHandshake :: MonadState TLSState m => m ()
 endHandshake = modify (\st -> st { stHandshake = Nothing })

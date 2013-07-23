@@ -90,14 +90,17 @@ handshakeClient cparams ctx = do
         recvServerHello sentExts = runRecvState ctx (RecvStateHandshake $ onServerHello sentExts)
 
         onServerHello :: MonadIO m => [ExtensionID] -> Handshake -> m (RecvState m)
-        onServerHello sentExts sh@(ServerHello rver _ serverSession cipher _ exts) = do
+        onServerHello sentExts sh@(ServerHello rver _ serverSession cipher compression exts) = do
             when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
             case find ((==) rver) allowedvers of
                 Nothing -> throwCore $ Error_Protocol ("version " ++ show rver ++ "is not supported", True, ProtocolVersion)
                 Just _  -> usingState_ ctx $ setVersion rver
-            case find ((==) cipher . cipherID) ciphers of
-                Nothing -> throwCore $ Error_Protocol ("no cipher in common with the server", True, HandshakeFailure)
-                Just c  -> usingHState ctx $ setCipher c
+            -- find the compression and cipher methods that the server want to use.
+            case (find ((==) cipher . cipherID) ciphers, find ((==) compression . compressionID) compressions) of
+                (Nothing,_) -> throwCore $ Error_Protocol ("no cipher in common with the server", True, HandshakeFailure)
+                (_,Nothing) -> throwCore $ Error_Protocol ("no compression in common with the server", True, HandshakeFailure)
+                (Just cipherAlg, Just compressAlg) ->
+                    usingHState ctx $ setPendingAlgs cipherAlg compressAlg
 
             -- intersect sent extensions in client and the received extensions from server.
             -- if server returns extensions that we didn't request, fail.

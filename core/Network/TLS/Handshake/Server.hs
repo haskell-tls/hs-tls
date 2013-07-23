@@ -96,9 +96,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
     when (null commonCompressions) $
             throwCore $ Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
     usingState_ ctx $ setVersion ver
-    usingHState ctx $ do
-        setCipher usedCipher
-        modify (\hst -> hst { hstPendingCompression = usedCompression })
+    usingHState ctx $ setPendingAlgs usedCipher usedCompression
 
     resumeSessionData <- case clientSession of
             (Session (Just clientSessionId)) -> withSessionManager params (\s -> liftIO $ sessionResume s clientSessionId)
@@ -165,7 +163,8 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                                                    , extensionEncode $ NextProtocolNegotiation protos) ]
                         Nothing -> return []
             let extensions = secRengExt ++ npnExt
-            usingState_ ctx (setVersion ver >> setServerRandom srand)
+            usingState_ ctx (setVersion ver)
+            usingHState ctx $ setServerRandom srand
             return $ ServerHello ver srand session (cipherID usedCipher)
                                            (compressionID usedCompression) extensions
 

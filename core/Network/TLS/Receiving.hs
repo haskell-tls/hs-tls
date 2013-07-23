@@ -120,7 +120,7 @@ processServerHello (ServerHello sver ran _ _ _ ex) = do
     -- secreneg <- getSecureRenegotiation
     -- when (secreneg && (isNothing $ lookup 0xff01 ex)) $ ...
     mapM_ processServerExtension ex
-    setServerRandom ran
+    withHandshakeM $ setServerRandom ran
     setVersion sver
   where processServerExtension (0xff01, content) = do
             cv <- getVerifiedData True
