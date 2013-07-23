@@ -81,6 +81,7 @@ data Flag = Verbose | Debug | NoValidateCert | Session | Http11
           | Ssl3 | Tls11 | Tls12
           | NoSNI
           | Uri String
+          | UserAgent String
           | Help
           deriving (Show,Eq)
 
@@ -93,6 +94,7 @@ options =
     , Option []     ["http1.1"] (NoArg Http11) "use http1.1 instead of http1.0"
     , Option []     ["ssl3"]    (NoArg Ssl3) "use SSL 3.0 as default"
     , Option []     ["no-sni"]  (NoArg NoSNI) "don't use server name indication"
+    , Option []     ["user-agent"] (ReqArg UserAgent "user-agent") "use a user agent"
     , Option []     ["tls11"]   (NoArg Tls11) "use TLS 1.1 as default"
     , Option []     ["tls12"]   (NoArg Tls12) "use TLS 1.2 as default"
     , Option []     ["uri"]     (ReqArg Uri "URI") "optional URI requested by default /"
@@ -109,6 +111,7 @@ runOn (sStorage, certStore) flags port hostname = do
                         "GET "
                         ++ findURI flags
                         ++ (if Http11 `elem` flags then (" HTTP/1.1\r\nHost: " ++ hostname) else " HTTP/1.0")
+                        ++ userAgent
                         ++ "\r\n\r\n")
             when (Verbose `elem` flags) (putStrLn "sending query:" >> LC.putStrLn query >> putStrLn "")
             runTLS (getDefaultParams flags hostname certStore sStorage sess) hostname port $ \ctx -> do
@@ -127,6 +130,11 @@ runOn (sStorage, certStore) flags port hostname = do
           findURI []        = "/"
           findURI (Uri u:_) = u
           findURI (_:xs)    = findURI xs
+
+          userAgent = maybe "" (\s -> "\r\nUser-Agent: " ++ s) mUserAgent
+          mUserAgent = foldl f Nothing flags
+            where f _   (UserAgent ua) = Just ua
+                  f acc _              = acc
 
 printUsage =
     putStrLn $ usageInfo "usage: simpleclient [opts] <hostname> [port]\n\n\t(port default to: 443)\noptions:\n" options
