@@ -21,17 +21,14 @@ module Network.TLS.Record.State
     , modifyRxState
     , modifyTxState_
     , modifyRxState_
-    , genTLSRandom
     , computeDigest
     , makeDigest
     ) where
 
 import Data.Word
-import Crypto.Random.API
 import Control.Monad.State
 import Control.Monad.Error
 import Network.TLS.Compression
-import Network.TLS.RNG
 import Network.TLS.Cipher
 import Network.TLS.Struct
 import Network.TLS.Wire
@@ -65,7 +62,6 @@ data RecordState = RecordState
     , stVersion             :: !Version
     , stTxState             :: TransmissionState
     , stRxState             :: TransmissionState
-    , stRandomGen           :: StateRNG
     } deriving (Show)
 
 newtype RecordM a = RecordM { runRecordM :: ErrorT TLSError (State RecordState) a }
@@ -93,13 +89,12 @@ incrTransmissionState :: TransmissionState -> TransmissionState
 incrTransmissionState ts = ts { stMacState = MacState (ms + 1) }
   where (MacState ms) = stMacState ts
 
-newRecordState :: CPRG g => g -> Role -> RecordState
-newRecordState rng clientContext = RecordState
+newRecordState :: Role -> RecordState
+newRecordState clientContext = RecordState
     { stClientContext       = clientContext
     , stVersion             = TLS10
     , stTxState             = newTransmissionState
     , stRxState             = newTransmissionState
-    , stRandomGen           = StateRNG rng
     }
 
 modifyTxState :: (TransmissionState -> (TransmissionState, a)) -> RecordM a
@@ -127,12 +122,6 @@ withTxCompression f = modifyTxState $ \tst -> modifyCompression tst f
 
 withRxCompression :: (Compression -> (Compression, a)) -> RecordM a
 withRxCompression f = modifyRxState $ \tst -> modifyCompression tst f
-
-genTLSRandom :: Int -> RecordM Bytes
-genTLSRandom n = do
-    st <- get
-    case withTLSRNG (stRandomGen st) (genRandomBytes n) of
-            (bytes, rng') -> put (st { stRandomGen = rng' }) >> return bytes
 
 computeDigest :: Version -> TransmissionState -> Header -> Bytes -> (Bytes, TransmissionState)
 computeDigest ver tstate hdr content = (digest, incrTransmissionState tstate)

@@ -85,6 +85,7 @@ data TLSState = TLSState
     , stNegotiatedProtocol  :: Maybe B.ByteString -- NPN protocol
     , stServerNextProtocolSuggest :: Maybe [B.ByteString]
     , stClientCertificateChain :: Maybe CertificateChain
+    , stRandomGen                 :: StateRNG
     } deriving (Show)
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrorT TLSError (State TLSState) a }
@@ -125,7 +126,7 @@ newTLSState rng clientContext = TLSState
     { stHandshake           = Nothing
     , stSession             = Session Nothing
     , stSessionResuming     = False
-    , stRecordState         = newRecordState rng clientContext
+    , stRecordState         = newRecordState clientContext
     , stSecureRenegotiation = False
     , stClientVerifiedData  = B.empty
     , stServerVerifiedData  = B.empty
@@ -133,6 +134,7 @@ newTLSState rng clientContext = TLSState
     , stNegotiatedProtocol  = Nothing
     , stServerNextProtocolSuggest = Nothing
     , stClientCertificateChain = Nothing
+    , stRandomGen           = StateRNG rng
     }
 
 updateVerifiedData :: MonadState TLSState m => Role -> Bytes -> m ()
@@ -268,4 +270,7 @@ endHandshake :: MonadState TLSState m => m ()
 endHandshake = modify (\st -> st { stHandshake = Nothing })
 
 genRandom :: Int -> TLSSt Bytes
-genRandom n = runRecordStateSt (genTLSRandom n)
+genRandom n = do
+    st <- get
+    case withTLSRNG (stRandomGen st) (genRandomBytes n) of
+            (bytes, rng') -> put (st { stRandomGen = rng' }) >> return bytes

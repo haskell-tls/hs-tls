@@ -102,11 +102,10 @@ decryptRSA econtent = do
     ver <- getRecordState stVersion
     rsapriv <- fromJust "rsa private key" . hstRSAPrivateKey . fromJust "handshake" . stHandshake <$> get
     let cipher = if ver < TLS10 then econtent else B.drop 2 econtent
-    runRecordStateSt $ do
-        st <- get
-        let (mmsg,rng') = withTLSRNG (stRandomGen st) (\g -> kxDecrypt g rsapriv cipher)
-        put (st { stRandomGen = rng' })
-        return mmsg
+    st <- get
+    let (mmsg,rng') = withTLSRNG (stRandomGen st) (\g -> kxDecrypt g rsapriv cipher)
+    put (st { stRandomGen = rng' })
+    return mmsg
 
 verifyRSA :: HashDescr -> ByteString -> ByteString -> TLSSt Bool
 verifyRSA hsh econtent sign = do
