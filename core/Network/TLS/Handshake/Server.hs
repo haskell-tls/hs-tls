@@ -30,8 +30,6 @@ import Data.List (intersect)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 
---import Data.X509
-
 import Control.Applicative ((<$>))
 import Control.Monad.State
 import qualified Control.Exception as E
