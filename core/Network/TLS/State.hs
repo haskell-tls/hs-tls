@@ -242,8 +242,8 @@ setClientCertificateChain s = modify (\st -> st { stClientCertificateChain = Jus
 getClientCertificateChain :: MonadState TLSState m => m (Maybe CertificateChain)
 getClientCertificateChain = gets stClientCertificateChain
 
-getVerifiedData :: MonadState TLSState m => Bool -> m Bytes
-getVerifiedData client = gets (if client then stClientVerifiedData else stServerVerifiedData)
+getVerifiedData :: MonadState TLSState m => Role -> m Bytes
+getVerifiedData client = gets (if client == ClientRole then stClientVerifiedData else stServerVerifiedData)
 
 isClientContext :: MonadState TLSState m => m Role
 isClientContext = getRecordState stClientContext

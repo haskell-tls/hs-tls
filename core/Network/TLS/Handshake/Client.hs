@@ -20,9 +20,9 @@ import Network.TLS.Extension
 import Network.TLS.IO
 import Network.TLS.State hiding (getNegotiatedProtocol)
 import Network.TLS.Sending
-import Network.TLS.Receiving
 import Network.TLS.Measurement
 import Network.TLS.Wire (encodeWord16)
+import Network.TLS.Util (bytesEq)
 import Network.TLS.Types
 import Network.TLS.X509
 import Data.Maybe
@@ -32,6 +32,7 @@ import Data.ByteString.Char8 ()
 
 import Control.Applicative ((<$>))
 import Control.Monad.State
+import Control.Monad.Error
 import Control.Exception (SomeException)
 import qualified Control.Exception as E
 
@@ -65,7 +66,7 @@ handshakeClient cparams ctx = do
 
         secureReneg  =
                 if pUseSecureRenegotiation params
-                then usingState_ ctx (getVerifiedData True) >>= \vd -> return $ Just $ toExtensionRaw $ SecureRenegotiation vd Nothing
+                then usingState_ ctx (getVerifiedData ClientRole) >>= \vd -> return $ Just $ toExtensionRaw $ SecureRenegotiation vd Nothing
                 else return Nothing
         npnExtention = if isJust $ onNPNServerSuggest cparams
                          then return $ Just $ toExtensionRaw $ NextProtocolNegotiation []
@@ -261,6 +262,23 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
 
                 _ -> return ()
 
+processServerHello :: Handshake -> TLSSt ()
+processServerHello (ServerHello sver ran _ _ _ ex) = do
+    -- FIXME notify the user to take action if the extension requested is missing
+    -- secreneg <- getSecureRenegotiation
+    -- when (secreneg && (isNothing $ lookup 0xff01 ex)) $ ...
+    mapM_ processServerExtension ex
+    withHandshakeM $ setServerRandom ran
+    setVersion sver
+  where processServerExtension (0xff01, content) = do
+            cv <- getVerifiedData ClientRole
+            sv <- getVerifiedData ServerRole
+            let bs = extensionEncode (SecureRenegotiation cv $ Just sv)
+            unless (bs `bytesEq` content) $ throwError $ Error_Protocol ("server secure renegotiation data not matching", True, HandshakeFailure)
+            return ()
+
+        processServerExtension _ = return ()
+processServerHello _ = error "processServerHello called on wrong type"
 
 throwMiscErrorOnException :: MonadIO m => String -> SomeException -> m a
 throwMiscErrorOnException msg e =

@@ -147,8 +147,8 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
             secRengExt <- if secReneg
                     then do
                             vf <- usingState_ ctx $ do
-                                    cvf <- getVerifiedData True
-                                    svf <- getVerifiedData False
+                                    cvf <- getVerifiedData ClientRole
+                                    svf <- getVerifiedData ServerRole
                                     return $ extensionEncode (SecureRenegotiation cvf $ Just svf)
                             return [ (0xff01, vf) ]
                     else return []

@@ -11,7 +11,6 @@
 module Network.TLS.Receiving
     ( processHandshake
     , processPacket
-    , processServerHello
     , verifyRSA
     ) where
 
@@ -90,7 +89,7 @@ processHandshake hs = do
     when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ withHandshakeM $ updateHandshakeDigest encoded
   where -- secure renegotiation
         processClientExtension (0xff01, content) = do
-            v <- getVerifiedData True
+            v <- getVerifiedData ClientRole
             let bs = extensionEncode (SecureRenegotiation v Nothing)
             unless (bs `bytesEq` content) $ throwError $ Error_Protocol ("client verified data not matching: " ++ show v ++ ":" ++ show content, True, HandshakeFailure)
 
@@ -113,24 +112,6 @@ verifyRSA :: HashDescr -> ByteString -> ByteString -> TLSSt Bool
 verifyRSA hsh econtent sign = do
     rsapriv <- fromJust "rsa client public key" . hstRSAClientPublicKey . fromJust "handshake" . stHandshake <$> get
     return $ kxVerify rsapriv hsh econtent sign
-
-processServerHello :: Handshake -> TLSSt ()
-processServerHello (ServerHello sver ran _ _ _ ex) = do
-    -- FIXME notify the user to take action if the extension requested is missing
-    -- secreneg <- getSecureRenegotiation
-    -- when (secreneg && (isNothing $ lookup 0xff01 ex)) $ ...
-    mapM_ processServerExtension ex
-    withHandshakeM $ setServerRandom ran
-    setVersion sver
-  where processServerExtension (0xff01, content) = do
-            cv <- getVerifiedData True
-            sv <- getVerifiedData False
-            let bs = extensionEncode (SecureRenegotiation cv $ Just sv)
-            unless (bs `bytesEq` content) $ throwError $ Error_Protocol ("server secure renegotiation data not matching", True, HandshakeFailure)
-            return ()
-
-        processServerExtension _ = return ()
-processServerHello _ = error "processServerHello called on wrong type"
 
 -- process the client key exchange message. the protocol expects the initial
 -- client version received in ClientHello, not the negotiated version.

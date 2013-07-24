@@ -82,6 +82,7 @@ data Flag = Verbose | Debug | NoValidateCert | Session | Http11
           | NoSNI
           | Uri String
           | UserAgent String
+          | Output String
           | Help
           deriving (Show,Eq)
 
@@ -90,6 +91,7 @@ options =
     [ Option ['v']  ["verbose"] (NoArg Verbose) "verbose output on stdout"
     , Option ['d']  ["debug"]   (NoArg Debug) "TLS debug output on stdout"
     , Option ['s']  ["session"] (NoArg Session) "try to resume a session"
+    , Option ['O']  ["output"]  (ReqArg Output "stdout") "output "
     , Option []     ["no-validation"] (NoArg NoValidateCert) "disable certificate validation"
     , Option []     ["http1.1"] (NoArg Http11) "use http1.1 instead of http1.0"
     , Option []     ["ssl3"]    (NoArg Ssl3) "use SSL 3.0 as default"
@@ -106,7 +108,7 @@ runOn (sStorage, certStore) flags port hostname = do
     when (Session `elem` flags) $ do
         session <- readIORef sStorage
         doTLS (Just session)
-    where doTLS sess = do
+  where doTLS sess = do
             let query = LC.pack (
                         "GET "
                         ++ findURI flags
@@ -114,27 +116,31 @@ runOn (sStorage, certStore) flags port hostname = do
                         ++ userAgent
                         ++ "\r\n\r\n")
             when (Verbose `elem` flags) (putStrLn "sending query:" >> LC.putStrLn query >> putStrLn "")
+            out <- maybe (return stdout) (flip openFile WriteMode) getOutput
             runTLS (getDefaultParams flags hostname certStore sStorage sess) hostname port $ \ctx -> do
                 handshake ctx
                 sendData ctx $ query
-                loopRecv ctx
+                loopRecv out ctx
                 bye ctx
                 return ()
-          loopRecv ctx = do
+        loopRecv out ctx = do
             d <- timeout 2000000 (recvData ctx) -- 2s per recv
             case d of
                 Nothing            -> when (Debug `elem` flags) (hPutStrLn stderr "timeout") >> return ()
                 Just b | BC.null b -> return ()
-                       | otherwise -> BC.putStrLn b >> loopRecv ctx
+                       | otherwise -> BC.hPutStrLn out b >> loopRecv out ctx
 
-          findURI []        = "/"
-          findURI (Uri u:_) = u
-          findURI (_:xs)    = findURI xs
+        findURI []        = "/"
+        findURI (Uri u:_) = u
+        findURI (_:xs)    = findURI xs
 
-          userAgent = maybe "" (\s -> "\r\nUser-Agent: " ++ s) mUserAgent
-          mUserAgent = foldl f Nothing flags
-            where f _   (UserAgent ua) = Just ua
-                  f acc _              = acc
+        userAgent = maybe "" (\s -> "\r\nUser-Agent: " ++ s) mUserAgent
+        mUserAgent = foldl f Nothing flags
+          where f _   (UserAgent ua) = Just ua
+                f acc _              = acc
+        getOutput = foldl f Nothing flags
+          where f _   (Output o) = Just o
+                f acc _          = acc
 
 printUsage =
     putStrLn $ usageInfo "usage: simpleclient [opts] <hostname> [port]\n\n\t(port default to: 443)\noptions:\n" options

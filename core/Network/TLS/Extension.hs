@@ -110,13 +110,12 @@ instance Extension SecureRenegotiation where
     extensionID _ = extensionID_SecureRenegotiation
     extensionEncode (SecureRenegotiation cvd svd) =
         runPut $ putOpaque8 (cvd `B.append` fromMaybe B.empty svd)
-    extensionDecode isServerHello = runGetMaybe getSecureReneg
-        where getSecureReneg = do
-                  opaque <- getOpaque8
-                  if isServerHello
-                     then let (cvd, svd) = B.splitAt (B.length opaque `div` 2) opaque
-                           in return $ SecureRenegotiation cvd (Just svd)
-                     else return $ SecureRenegotiation opaque Nothing
+    extensionDecode isServerHello = runGetMaybe $ do
+        opaque <- getOpaque8
+        if isServerHello
+           then let (cvd, svd) = B.splitAt (B.length opaque `div` 2) opaque
+                 in return $ SecureRenegotiation cvd (Just svd)
+           else return $ SecureRenegotiation opaque Nothing
 
 -- | Next Protocol Negotiation
 data NextProtocolNegotiation = NextProtocolNegotiation [ByteString]
