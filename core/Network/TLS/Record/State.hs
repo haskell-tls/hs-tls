@@ -22,6 +22,7 @@ module Network.TLS.Record.State
     , modifyTxState_
     , modifyRxState_
     , genTLSRandom
+    , computeDigest
     , makeDigest
     ) where
 
@@ -133,21 +134,24 @@ genTLSRandom n = do
     case withTLSRNG (stRandomGen st) (genRandomBytes n) of
             (bytes, rng') -> put (st { stRandomGen = rng' }) >> return bytes
 
+computeDigest :: Version -> TransmissionState -> Header -> Bytes -> (Bytes, TransmissionState)
+computeDigest ver tstate hdr content = (digest, incrTransmissionState tstate)
+  where digest = macF (cstMacSecret cst) msg
+        cst    = stCryptState tstate
+        cipher = fromJust "cipher" $ stCipher tstate
+        hashf  = hashF $ cipherHash cipher
+        encodedSeq = encodeWord64 $ msSequence $ stMacState tstate
+
+        (macF, msg)
+            | ver < TLS10 = (macSSL hashf, B.concat [ encodedSeq, encodeHeaderNoVer hdr, content ])
+            | otherwise   = (hmac hashf 64, B.concat [ encodedSeq, encodeHeader hdr, content ])
+
 makeDigest :: Bool -> Header -> Bytes -> RecordM Bytes
 makeDigest w hdr content = do
     st <- get
-    let tstate = if w then stTxState st else stRxState st
-        digest = make (stVersion st) tstate
+    let (digest, nstate) = computeDigest (stVersion st)
+                                         (if w then stTxState st else stRxState st) hdr content
     put $ if w
-            then st { stTxState = incrTransmissionState tstate }
-            else st { stRxState = incrTransmissionState tstate }
+            then st { stTxState = nstate }
+            else st { stRxState = nstate }
     return digest
-  where make ver tstate = macF (cstMacSecret cst) msg
-          where
-                (macF, msg)
-                    | ver < TLS10 = (macSSL hashf, B.concat [ encodeWord64 $ msSequence ms, encodeHeaderNoVer hdr, content ])
-                    | otherwise   = (hmac hashf 64, B.concat [ encodeWord64 $ msSequence ms, encodeHeader hdr, content ])
-                ms     = stMacState tstate
-                cst    = stCryptState tstate
-                cipher = fromJust "cipher" $ stCipher tstate
-                hashf  = hashF $ cipherHash cipher

@@ -100,8 +100,7 @@ decryptData record econtent st = decryptOf (bulkF bulk)
 
         decryptOf (BulkStreamF initF _ decryptF) = do
             when (econtentLen < macSize) $ sanityCheckError
-            let iv = cstIV cst
-            let (content', newiv) = decryptF (if iv /= B.empty then iv else initF writekey) econtent
+            let (content', newiv) = decryptF (if cstIV cst /= B.empty then cstIV cst else initF writekey) econtent
             {- update Ctx -}
             let contentlen        = B.length content' - macSize
             (content, mac) <- get2 content' (contentlen, macSize)
