@@ -18,12 +18,15 @@ import qualified Data.ByteString as B
 
 import Network.TLS.Util
 import Network.TLS.Types (Role(..))
+import Network.TLS.Cap
 import Network.TLS.Struct
 import Network.TLS.Record
 import Network.TLS.Packet
 import Network.TLS.State
 import Network.TLS.Handshake.State
+import Network.TLS.Record.State
 import Network.TLS.Crypto
+import Network.TLS.Cipher
 
 -- | 'makePacketData' create a Header and a content bytestring related to a packet
 -- this doesn't change any state
@@ -52,11 +55,29 @@ writePacket pkt@(Handshake hss) = do
         let encoded = encodeHandshake hs
         when (certVerifyHandshakeMaterial hs) $ withHandshakeM $ addHandshakeMessage encoded
         when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ withHandshakeM $ updateHandshakeDigest encoded
-    runRecordStateSt (makeRecord pkt >>= engageRecord >>= encodeRecord)
+    prepareRecord (makeRecord pkt >>= engageRecord >>= encodeRecord)
 writePacket pkt = do
-    d <- runRecordStateSt (makeRecord pkt >>= engageRecord >>= encodeRecord)
+    d <- prepareRecord (makeRecord pkt >>= engageRecord >>= encodeRecord)
     when (pkt == ChangeCipherSpec) $ switchTxEncryption
     return d
+
+-- before TLS 1.1, the block cipher IV is made of the residual of the previous block,
+-- so we use cstIV as is, however in other case we generate an explicit IV
+prepareRecord :: RecordM a -> TLSSt a
+prepareRecord f = do
+    st  <- get
+    ver <- getVersion
+    let sz = case stCipher $ stTxState $ stRecordState st of
+                  Nothing     -> 0
+                  Just cipher -> bulkIVSize $ cipherBulk cipher
+    if hasExplicitBlockIV ver && sz > 0
+        then do newIV <- genRandom sz
+                runRecordStateSt $ modify $ \rts ->
+                    let ts = stTxState rts
+                        nts  = ts { stCryptState = (stCryptState ts) { cstIV = newIV } }
+                     in rts { stTxState = nts }
+                runRecordStateSt f
+        else runRecordStateSt f
 
 {------------------------------------------------------------------------------}
 {- SENDING Helpers                                                            -}

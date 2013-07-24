@@ -70,13 +70,9 @@ encryptData content = do
                     else
                             B.empty
 
-            -- before TLS 1.1, the block cipher IV is made of the residual of the previous block.
-            iv <- if hasExplicitBlockIV $ stVersion st
-                    then genTLSRandom (bulkIVSize bulk)
-                    else return $ cstIV cst
-            let e = encrypt writekey iv (B.concat [ content, padding ])
+            let e = encrypt writekey (cstIV cst) (B.concat [ content, padding ])
             if hasExplicitBlockIV $ stVersion st
-                    then return $ B.concat [iv,e]
+                    then return $ B.concat [cstIV cst,e]
                     else do
                             let newiv = fromJust "new iv" $ takelast (bulkIVSize bulk) e
                             modifyTxState_ $ \txs -> txs { stCryptState = cst { cstIV = newiv } }
