@@ -12,15 +12,11 @@ module Network.TLS.Record.State
     ( CryptState(..)
     , MacState(..)
     , TransmissionState(..)
-    , RecordState(..)
-    , newRecordState
-    , RecordM(..)
-    , withTxCompression
-    , withRxCompression
-    , modifyTxState
-    , modifyRxState
-    , modifyTxState_
-    , modifyRxState_
+    , newTransmissionState
+    , RecordM
+    , runRecordM
+    , getRecordVersion
+    , withCompression
     , computeDigest
     , makeDigest
     ) where
@@ -36,7 +32,7 @@ import Network.TLS.Wire
 import Network.TLS.Packet
 import Network.TLS.MAC
 import Network.TLS.Util
-import Network.TLS.Types (Role(..))
+import Network.TLS.Types (Direction(..))
 
 import qualified Data.ByteString as B
 
@@ -57,25 +53,39 @@ data TransmissionState = TransmissionState
     , stMacState    :: !MacState
     } deriving (Show)
 
-data RecordState = RecordState
-    { stClientContext       :: Role
-    , stVersion             :: !Version
-    , stTxState             :: TransmissionState
-    , stRxState             :: TransmissionState
-    } deriving (Show)
+newtype RecordM a = RecordM { runRecordM :: Version
+                                         -> TransmissionState
+                                         -> Either TLSError (a, TransmissionState) }
 
-newtype RecordM a = RecordM { runRecordM :: ErrorT TLSError (State RecordState) a }
-    deriving (Monad, MonadError TLSError)
+instance Monad RecordM where
+    return a  = RecordM $ \_ st  -> Right (a, st)
+    m1 >>= m2 = RecordM $ \ver st -> do
+                    case runRecordM m1 ver st of
+                        Left err       -> Left err
+                        Right (a, st2) -> runRecordM (m2 a) ver st2
 
 instance Functor RecordM where
-    fmap f = RecordM . fmap f . runRecordM
+    fmap f m = RecordM $ \ver st ->
+                case runRecordM m ver st of
+                    Left err       -> Left err
+                    Right (a, st2) -> Right (f a, st2)
 
-instance MonadState RecordState RecordM where
-    put x = RecordM (lift $ put x)
-    get   = RecordM (lift get)
+getRecordVersion :: RecordM Version
+getRecordVersion = RecordM $ \ver st -> Right (ver, st)
+
+instance MonadState TransmissionState RecordM where
+    put x = RecordM $ \_  _  -> Right ((), x)
+    get   = RecordM $ \_  st -> Right (st, st)
 #if MIN_VERSION_mtl(2,1,0)
-    state f = RecordM (lift $ state f)
+    state f = RecordM $ \_ st -> Right (f st)
 #endif
+
+instance MonadError TLSError RecordM where
+    throwError e   = RecordM $ \_ _ -> Left e
+    catchError m f = RecordM $ \ver st ->
+                        case runRecordM m ver st of
+                            Left err -> runRecordM (f err) ver st
+                            r        -> r
 
 newTransmissionState :: TransmissionState
 newTransmissionState = TransmissionState
@@ -89,39 +99,12 @@ incrTransmissionState :: TransmissionState -> TransmissionState
 incrTransmissionState ts = ts { stMacState = MacState (ms + 1) }
   where (MacState ms) = stMacState ts
 
-newRecordState :: Role -> RecordState
-newRecordState clientContext = RecordState
-    { stClientContext       = clientContext
-    , stVersion             = TLS10
-    , stTxState             = newTransmissionState
-    , stRxState             = newTransmissionState
-    }
-
-modifyTxState :: (TransmissionState -> (TransmissionState, a)) -> RecordM a
-modifyTxState f =
-    get >>= \st -> case f $ stTxState st of
-                    (nst, a) -> put (st { stTxState = nst }) >> return a
-
-modifyTxState_ :: (TransmissionState -> TransmissionState) -> RecordM ()
-modifyTxState_ f = modifyTxState (\t -> (f t, ()))
-
-modifyRxState :: (TransmissionState -> (TransmissionState, a)) -> RecordM a
-modifyRxState f =
-    get >>= \st -> case f $ stRxState st of
-                    (nst, a) -> put (st { stRxState = nst }) >> return a
-
-modifyRxState_ :: (TransmissionState -> TransmissionState) -> RecordM ()
-modifyRxState_ f = modifyRxState (\t -> (f t, ()))
-
-modifyCompression :: TransmissionState -> (Compression -> (Compression, a)) -> (TransmissionState, a)
-modifyCompression tst f = case f (stCompression tst) of
-                            (nc, a) -> (tst { stCompression = nc }, a)
-
-withTxCompression :: (Compression -> (Compression, a)) -> RecordM a
-withTxCompression f = modifyTxState $ \tst -> modifyCompression tst f
-
-withRxCompression :: (Compression -> (Compression, a)) -> RecordM a
-withRxCompression f = modifyRxState $ \tst -> modifyCompression tst f
+withCompression :: (Compression -> (Compression, a)) -> RecordM a
+withCompression f = do
+    st <- get
+    let (nc, a) = f $ stCompression st
+    put $ st { stCompression = nc }
+    return a
 
 computeDigest :: Version -> TransmissionState -> Header -> Bytes -> (Bytes, TransmissionState)
 computeDigest ver tstate hdr content = (digest, incrTransmissionState tstate)
@@ -135,12 +118,10 @@ computeDigest ver tstate hdr content = (digest, incrTransmissionState tstate)
             | ver < TLS10 = (macSSL hashf, B.concat [ encodedSeq, encodeHeaderNoVer hdr, content ])
             | otherwise   = (hmac hashf 64, B.concat [ encodedSeq, encodeHeader hdr, content ])
 
-makeDigest :: Bool -> Header -> Bytes -> RecordM Bytes
-makeDigest w hdr content = do
+makeDigest :: Header -> Bytes -> RecordM Bytes
+makeDigest hdr content = do
+    ver <- getRecordVersion
     st <- get
-    let (digest, nstate) = computeDigest (stVersion st)
-                                         (if w then stTxState st else stRxState st) hdr content
-    put $ if w
-            then st { stTxState = nstate }
-            else st { stRxState = nstate }
+    let (digest, nstate) = computeDigest ver st hdr content
+    put nstate
     return digest

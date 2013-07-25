@@ -183,7 +183,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
             -- certificates.
             --
             when (serverWantClientCert sparams) $ do
-                usedVersion <- usingState_ ctx $ getRecordState stVersion
+                usedVersion <- usingState_ ctx getVersion
                 let certTypes = [ CertificateType_RSA_Sign ]
                     hashSigs = if usedVersion < TLS12
                                    then Nothing
@@ -247,7 +247,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             -- Fetch all handshake messages up to now.
             msgs <- usingHState ctx $ B.concat <$> getHandshakeMessages
 
-            usedVersion <- usingState_ ctx $ getRecordState stVersion
+            usedVersion <- usingState_ ctx getVersion
 
             (signature, hsh) <- case usedVersion of
                 SSL3 -> do

@@ -30,14 +30,14 @@ disengageRecord = decryptRecord >=> uncompressRecord
 
 uncompressRecord :: Record Compressed -> RecordM (Record Plaintext)
 uncompressRecord record = onRecordFragment record $ fragmentUncompress $ \bytes ->
-    withRxCompression $ compressionInflate bytes
+    withCompression $ compressionInflate bytes
 
 decryptRecord :: Record Ciphertext -> RecordM (Record Compressed)
 decryptRecord record = onRecordFragment record $ fragmentUncipher $ \e -> do
     st <- get
-    case stCipher $ stRxState st of
+    case stCipher st of
         Nothing -> return e
-        _       -> decryptData record e st
+        _       -> getRecordVersion >>= \ver -> decryptData ver record e st
 
 getCipherData :: Record a -> CipherData -> RecordM ByteString
 getCipherData (Record pt ver _) cdata = do
@@ -46,14 +46,14 @@ getCipherData (Record pt ver _) cdata = do
         Nothing     -> return True
         Just digest -> do
             let new_hdr = Header pt ver (fromIntegral $ B.length $ cipherDataContent cdata)
-            expected_digest <- makeDigest False new_hdr $ cipherDataContent cdata
+            expected_digest <- makeDigest new_hdr $ cipherDataContent cdata
             return (expected_digest `bytesEq` digest)
 
     -- check if the padding is filled with the correct pattern if it exists
     paddingValid <- case cipherDataPadding cdata of
         Nothing  -> return True
         Just pad -> do
-            cver <- gets stVersion
+            cver <- getRecordVersion
             let b = B.length pad - 1
             return (if cver < TLS10 then True else B.replicate (B.length pad) (fromIntegral b) `bytesEq` pad)
 
@@ -62,10 +62,9 @@ getCipherData (Record pt ver _) cdata = do
 
     return $ cipherDataContent cdata
 
-decryptData :: Record Ciphertext -> Bytes -> RecordState -> RecordM Bytes
-decryptData record econtent st = decryptOf (bulkF bulk)
-  where tst        = stRxState st
-        cipher     = fromJust "cipher" $ stCipher tst
+decryptData :: Version -> Record Ciphertext -> Bytes -> TransmissionState -> RecordM Bytes
+decryptData ver record econtent tst = decryptOf (bulkF bulk)
+  where cipher     = fromJust "cipher" $ stCipher tst
         bulk       = cipherBulk cipher
         cst        = stCryptState tst
         macSize    = hashSize $ cipherHash cipher
@@ -73,7 +72,7 @@ decryptData record econtent st = decryptOf (bulkF bulk)
         blockSize  = bulkBlockSize bulk
         econtentLen = B.length econtent
 
-        explicitIV = hasExplicitBlockIV $ stVersion st
+        explicitIV = hasExplicitBlockIV ver
 
         sanityCheckError = throwError (Error_Packet "encrypted content too small for encryption parameters")
 
@@ -86,7 +85,7 @@ decryptData record econtent st = decryptOf (bulkF bulk)
                                   then get2 econtent (bulkIVSize bulk, econtentLen - bulkIVSize bulk)
                                   else return (cstIV cst, econtent)
             let newiv = fromJust "new iv" $ takelast (bulkBlockSize bulk) econtent'
-            modifyRxState_ $ \txs -> txs { stCryptState = cst { cstIV = newiv } }
+            modify $ \txs -> txs { stCryptState = cst { cstIV = newiv } }
 
             let content' = decryptF writekey iv econtent'
             let paddinglength = fromIntegral (B.last content') + 1
@@ -104,7 +103,7 @@ decryptData record econtent st = decryptOf (bulkF bulk)
             {- update Ctx -}
             let contentlen        = B.length content' - macSize
             (content, mac) <- get2 content' (contentlen, macSize)
-            modifyRxState_ $ \txs -> txs { stCryptState = cst { cstIV = newiv } }
+            modify $ \txs -> txs { stCryptState = cst { cstIV = newiv } }
             getCipherData record $ CipherData
                     { cipherDataContent = content
                     , cipherDataMAC     = Just mac

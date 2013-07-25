@@ -29,7 +29,7 @@ engageRecord = compressRecord >=> encryptRecord
 compressRecord :: Record Plaintext -> RecordM (Record Compressed)
 compressRecord record =
     onRecordFragment record $ fragmentCompress $ \bytes -> do
-        withTxCompression $ compressionDeflate bytes
+        withCompression $ compressionDeflate bytes
 
 {-
  - when Tx Encrypted is set, we pass the data through encryptContent, otherwise
@@ -38,20 +38,20 @@ compressRecord record =
 encryptRecord :: Record Compressed -> RecordM (Record Ciphertext)
 encryptRecord record = onRecordFragment record $ fragmentCipher $ \bytes -> do
     st <- get
-    case stCipher $ stTxState st of
+    case stCipher st of
         Nothing -> return bytes
         _       -> encryptContent record bytes
 
 encryptContent :: Record Compressed -> ByteString -> RecordM ByteString
 encryptContent record content = do
-    digest <- makeDigest True (recordToHeader record) content
+    digest <- makeDigest (recordToHeader record) content
     encryptData $ B.concat [content, digest]
 
 encryptData :: ByteString -> RecordM ByteString
 encryptData content = do
-    st <- get
+    tstate <- get
+    ver    <- getRecordVersion
 
-    let tstate = stTxState st
     let cipher = fromJust "cipher" $ stCipher tstate
     let bulk = cipherBulk cipher
     let cst = stCryptState tstate
@@ -71,14 +71,14 @@ encryptData content = do
                             B.empty
 
             let e = encrypt writekey (cstIV cst) (B.concat [ content, padding ])
-            if hasExplicitBlockIV $ stVersion st
+            if hasExplicitBlockIV ver
                     then return $ B.concat [cstIV cst,e]
                     else do
                             let newiv = fromJust "new iv" $ takelast (bulkIVSize bulk) e
-                            modifyTxState_ $ \txs -> txs { stCryptState = cst { cstIV = newiv } }
+                            put $ tstate { stCryptState = cst { cstIV = newiv } }
                             return e
         BulkStreamF initF encryptF _ -> do
             let iv = cstIV cst
             let (e, newiv) = encryptF (if iv /= B.empty then iv else initF writekey) content
-            modifyTxState_ $ \txs -> txs { stCryptState = cst { cstIV = newiv } }
+            put $ tstate { stCryptState = cst { cstIV = newiv } }
             return e

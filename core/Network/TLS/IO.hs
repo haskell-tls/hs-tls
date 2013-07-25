@@ -15,7 +15,7 @@ module Network.TLS.IO
     ) where
 
 import Network.TLS.Context
-import Network.TLS.State (needEmptyPacket, runRecordStateSt)
+import Network.TLS.State (needEmptyPacket, runRxState)
 import Network.TLS.Struct
 import Network.TLS.Record
 import Network.TLS.Packet
@@ -78,7 +78,7 @@ recvRecord compatSSLv2 ctx
               maximumSizeExceeded = Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
               makeRecord header content = do
                         liftIO $ (loggingIORecv $ ctxLogging ctx) header content
-                        usingState ctx $ runRecordStateSt $ disengageRecord $ rawToRecord header (fragmentCiphertext content)
+                        usingState ctx $ runRxState $ disengageRecord $ rawToRecord header (fragmentCiphertext content)
 
 
 -- | receive one packet from the context that contains 1 or
@@ -109,7 +109,7 @@ sendPacket ctx pkt = do
     -- in ver <= TLS1.0, block ciphers using CBC are using CBC residue as IV, which can be guessed
     -- by an attacker. Hence, an empty packet is sent before a normal data packet, to
     -- prevent guessability.
-    withEmptyPacket <- usingState_ ctx (runRecordStateSt needEmptyPacket)
+    withEmptyPacket <- usingState_ ctx needEmptyPacket
     when (isNonNullAppData pkt && withEmptyPacket) $ sendPacket ctx $ AppData B.empty
 
     liftIO $ (loggingPacketSent $ ctxLogging ctx) (show pkt)

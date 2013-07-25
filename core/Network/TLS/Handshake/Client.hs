@@ -218,7 +218,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
         -- 4. Send it to the server.
         --
         sendCertificateVerify = do
-            usedVersion <- usingState_ ctx $ stVersion . stRecordState <$> get
+            usedVersion <- usingState_ ctx getVersion
 
             -- Only send a certificate verify message when we
             -- have sent a non-empty list of certificates.

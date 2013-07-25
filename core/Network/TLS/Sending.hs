@@ -32,7 +32,7 @@ import Network.TLS.Cipher
 -- this doesn't change any state
 makeRecord :: Packet -> RecordM (Record Plaintext)
 makeRecord pkt = do
-    ver <- stVersion <$> get
+    ver <- getRecordVersion
     return $ Record (packetType pkt) ver (fragmentPlaintext $ writePacketContent pkt)
   where writePacketContent (Handshake hss)    = encodeHandshakes hss
         writePacketContent (Alert a)          = encodeAlerts a
@@ -67,17 +67,14 @@ prepareRecord :: RecordM a -> TLSSt a
 prepareRecord f = do
     st  <- get
     ver <- getVersion
-    let sz = case stCipher $ stTxState $ stRecordState st of
+    let sz = case stCipher $ stTxState st of
                   Nothing     -> 0
                   Just cipher -> bulkIVSize $ cipherBulk cipher
     if hasExplicitBlockIV ver && sz > 0
         then do newIV <- genRandom sz
-                runRecordStateSt $ modify $ \rts ->
-                    let ts = stTxState rts
-                        nts  = ts { stCryptState = (stCryptState ts) { cstIV = newIV } }
-                     in rts { stTxState = nts }
-                runRecordStateSt f
-        else runRecordStateSt f
+                runTxState (modify $ \ts -> ts { stCryptState = (stCryptState ts) { cstIV = newIV } })
+                runTxState f
+        else runTxState f
 
 {------------------------------------------------------------------------------}
 {- SENDING Helpers                                                            -}

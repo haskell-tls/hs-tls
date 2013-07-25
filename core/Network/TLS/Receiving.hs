@@ -99,7 +99,7 @@ processHandshake hs = do
 
 decryptRSA :: ByteString -> TLSSt (Either KxError ByteString)
 decryptRSA econtent = do
-    ver <- getRecordState stVersion
+    ver <- getVersion
     rsapriv <- fromJust "rsa private key" . hstRSAPrivateKey . fromJust "handshake" . stHandshake <$> get
     let cipher = if ver < TLS10 then econtent else B.drop 2 econtent
     st <- get
