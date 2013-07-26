@@ -1,0 +1,25 @@
+#!/bin/sh
+
+PORT=20004
+
+if [ ! -d test-dir ]; then
+	mkdir test-dir
+fi
+
+if [ ! -f test-dir/small ]; then
+	dd if=/dev/zero of=test-dir/small bs=1024 count=1024
+fi
+if [ ! -f test-dir/big ]; then
+	dd if=/dev/zero of=test-dir/big bs=1024 count=104448
+fi
+cp server.key server.crt test-dir
+
+(cd test-dir; openssl s_server -WWW -accept $PORT -key server.key -cert server.crt &)
+
+echo "=========================== WGET ======================="
+time wget -q --no-check-certificate -O /dev/null https://localhost:$PORT/small
+time wget -q --no-check-certificate -O /dev/null https://localhost:$PORT/big
+
+echo "=========================== TLS ======================="
+time ./debug/dist/build/tls-simpleclient/tls-simpleclient -O /dev/null localhost $PORT --uri /small  --no-validation
+time ./debug/dist/build/tls-simpleclient/tls-simpleclient -O /dev/null localhost $PORT --uri /big  --no-validation
