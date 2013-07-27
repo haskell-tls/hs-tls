@@ -29,6 +29,11 @@ module Network.TLS.Record
     , disengageRecord
     -- * State tracking
     , RecordM
+    , runRecordM
+    , RecordState(..)
+    , newRecordState
+    , getRecordVersion
+    , setRecordIV
     ) where
 
 import Network.TLS.Record.Types

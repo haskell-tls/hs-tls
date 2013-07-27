@@ -62,7 +62,7 @@ getCipherData (Record pt ver _) cdata = do
 
     return $ cipherDataContent cdata
 
-decryptData :: Version -> Record Ciphertext -> Bytes -> TransmissionState -> RecordM Bytes
+decryptData :: Version -> Record Ciphertext -> Bytes -> RecordState -> RecordM Bytes
 decryptData ver record econtent tst = decryptOf (bulkF bulk)
   where cipher     = fromJust "cipher" $ stCipher tst
         bulk       = cipherBulk cipher

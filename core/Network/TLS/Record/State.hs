@@ -11,11 +11,12 @@
 module Network.TLS.Record.State
     ( CryptState(..)
     , MacState(..)
-    , TransmissionState(..)
-    , newTransmissionState
+    , RecordState(..)
+    , newRecordState
     , RecordM
     , runRecordM
     , getRecordVersion
+    , setRecordIV
     , withCompression
     , computeDigest
     , makeDigest
@@ -32,7 +33,6 @@ import Network.TLS.Wire
 import Network.TLS.Packet
 import Network.TLS.MAC
 import Network.TLS.Util
-import Network.TLS.Types (Direction(..))
 
 import qualified Data.ByteString as B
 
@@ -46,7 +46,7 @@ newtype MacState = MacState
     { msSequence :: Word64
     } deriving (Show)
 
-data TransmissionState = TransmissionState
+data RecordState = RecordState
     { stCipher      :: Maybe Cipher
     , stCompression :: Compression
     , stCryptState  :: !CryptState
@@ -54,8 +54,8 @@ data TransmissionState = TransmissionState
     } deriving (Show)
 
 newtype RecordM a = RecordM { runRecordM :: Version
-                                         -> TransmissionState
-                                         -> Either TLSError (a, TransmissionState) }
+                                         -> RecordState
+                                         -> Either TLSError (a, RecordState) }
 
 instance Monad RecordM where
     return a  = RecordM $ \_ st  -> Right (a, st)
@@ -73,7 +73,7 @@ instance Functor RecordM where
 getRecordVersion :: RecordM Version
 getRecordVersion = RecordM $ \ver st -> Right (ver, st)
 
-instance MonadState TransmissionState RecordM where
+instance MonadState RecordState RecordM where
     put x = RecordM $ \_  _  -> Right ((), x)
     get   = RecordM $ \_  st -> Right (st, st)
 #if MIN_VERSION_mtl(2,1,0)
@@ -87,17 +87,20 @@ instance MonadError TLSError RecordM where
                             Left err -> runRecordM (f err) ver st
                             r        -> r
 
-newTransmissionState :: TransmissionState
-newTransmissionState = TransmissionState
+newRecordState :: RecordState
+newRecordState = RecordState
     { stCipher      = Nothing
     , stCompression = nullCompression
     , stCryptState  = CryptState B.empty B.empty B.empty
     , stMacState    = MacState 0
     }
 
-incrTransmissionState :: TransmissionState -> TransmissionState
-incrTransmissionState ts = ts { stMacState = MacState (ms + 1) }
+incrRecordState :: RecordState -> RecordState
+incrRecordState ts = ts { stMacState = MacState (ms + 1) }
   where (MacState ms) = stMacState ts
+
+setRecordIV :: Bytes -> RecordState -> RecordState
+setRecordIV iv st = st { stCryptState = (stCryptState st) { cstIV = iv } }
 
 withCompression :: (Compression -> (Compression, a)) -> RecordM a
 withCompression f = do
@@ -106,8 +109,8 @@ withCompression f = do
     put $ st { stCompression = nc }
     return a
 
-computeDigest :: Version -> TransmissionState -> Header -> Bytes -> (Bytes, TransmissionState)
-computeDigest ver tstate hdr content = (digest, incrTransmissionState tstate)
+computeDigest :: Version -> RecordState -> Header -> Bytes -> (Bytes, RecordState)
+computeDigest ver tstate hdr content = (digest, incrRecordState tstate)
   where digest = macF (cstMacSecret cst) msg
         cst    = stCryptState tstate
         cipher = fromJust "cipher" $ stCipher tstate

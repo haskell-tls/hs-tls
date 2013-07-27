@@ -24,7 +24,6 @@ import Network.TLS.Record
 import Network.TLS.Packet
 import Network.TLS.State
 import Network.TLS.Handshake.State
-import Network.TLS.Record.State
 import Network.TLS.Crypto
 import Network.TLS.Cipher
 
@@ -72,7 +71,7 @@ prepareRecord f = do
                   Just cipher -> bulkIVSize $ cipherBulk cipher
     if hasExplicitBlockIV ver && sz > 0
         then do newIV <- genRandom sz
-                runTxState (modify $ \ts -> ts { stCryptState = (stCryptState ts) { cstIV = newIV } })
+                runTxState (modify $ setRecordIV newIV)
                 runTxState f
         else runTxState f
 

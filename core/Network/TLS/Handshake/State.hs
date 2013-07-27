@@ -68,8 +68,8 @@ data HandshakeState = HandshakeState
     , hstClientCertSent      :: !Bool -- ^ Set to true when a client certificate chain was sent
     , hstCertReqSent         :: !Bool -- ^ Set to true when a certificate request was sent
     , hstClientCertChain     :: !(Maybe CertificateChain)
-    , hstPendingTxState      :: Maybe TransmissionState
-    , hstPendingRxState      :: Maybe TransmissionState
+    , hstPendingTxState      :: Maybe RecordState
+    , hstPendingRxState      :: Maybe RecordState
     , hstPendingCipher       :: Maybe Cipher
     , hstPendingCompression  :: Compression
     } deriving (Show)
@@ -186,7 +186,7 @@ setMasterSecret ver role masterSecret = modify $ \hst ->
             , hstPendingTxState = Just pendingTx
             , hstPendingRxState = Just pendingRx }
 
-computeKeyBlock :: HandshakeState -> Bytes -> Version -> Role -> (TransmissionState, TransmissionState)
+computeKeyBlock :: HandshakeState -> Bytes -> Version -> Role -> (RecordState, RecordState)
 computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
   where cipher       = fromJust "cipher" $ hstPendingCipher hst
         keyblockSize = cipherKeyBlockSize cipher
@@ -211,13 +211,13 @@ computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
         msClient = MacState { msSequence = 0 }
         msServer = MacState { msSequence = 0 }
 
-        pendingTx = TransmissionState
+        pendingTx = RecordState
                   { stCryptState  = if cc == ClientRole then cstClient else cstServer
                   , stMacState    = if cc == ClientRole then msClient else msServer
                   , stCipher      = Just cipher
                   , stCompression = hstPendingCompression hst
                   }
-        pendingRx = TransmissionState
+        pendingRx = RecordState
                   { stCryptState  = if cc == ClientRole then cstServer else cstClient
                   , stMacState    = if cc == ClientRole then msServer else msClient
                   , stCipher      = Just cipher

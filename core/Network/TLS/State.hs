@@ -76,8 +76,8 @@ data TLSState = TLSState
     { stHandshake           :: !(Maybe HandshakeState)
     , stSession             :: Session
     , stSessionResuming     :: Bool
-    , stTxState             :: TransmissionState
-    , stRxState             :: TransmissionState
+    , stTxState             :: RecordState
+    , stRxState             :: RecordState
     , stSecureRenegotiation :: Bool  -- RFC 5746
     , stClientVerifiedData  :: Bytes -- RFC 5746
     , stServerVerifiedData  :: Bytes -- RFC 5746
@@ -125,8 +125,8 @@ newTLSState rng clientContext = TLSState
     { stHandshake           = Nothing
     , stSession             = Session Nothing
     , stSessionResuming     = False
-    , stTxState             = newTransmissionState
-    , stRxState             = newTransmissionState
+    , stTxState             = newRecordState
+    , stRxState             = newRecordState
     , stSecureRenegotiation = False
     , stClientVerifiedData  = B.empty
     , stServerVerifiedData  = B.empty
