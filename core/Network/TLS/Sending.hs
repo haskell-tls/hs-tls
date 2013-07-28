@@ -85,9 +85,7 @@ prepareRecord f = do
 encryptRSA :: ByteString -> TLSSt ByteString
 encryptRSA content = do
     rsakey <- fromJust "rsa public key" . hstRSAPublicKey . fromJust "handshake" . stHandshake <$> get
-    st <- get
-    let (v,rng') = withTLSRNG (stRandomGen st) (\g -> kxEncrypt g rsakey content)
-    put (st { stRandomGen = rng' })
+    v      <- withRNG (\g -> kxEncrypt g rsakey content)
     case v of
         Left err       -> fail ("rsa encrypt failed: " ++ show err)
         Right econtent -> return econtent
@@ -95,9 +93,7 @@ encryptRSA content = do
 signRSA :: HashDescr -> ByteString -> TLSSt ByteString
 signRSA hsh content = do
     rsakey <- fromJust "rsa client private key" . hstRSAClientPrivateKey . fromJust "handshake" . stHandshake <$> get
-    st <- get
-    let (r, rng') = withTLSRNG (stRandomGen st) (\g -> kxSign g rsakey hsh content)
-    put (st { stRandomGen = rng' })
+    r      <- withRNG (\g -> kxSign g rsakey hsh content)
     case r of
         Left err       -> fail ("rsa sign failed: " ++ show err)
         Right econtent -> return econtent

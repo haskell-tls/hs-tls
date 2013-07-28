@@ -19,7 +19,6 @@ module Network.TLS.State
     , withTLSRNG
     , runTxState
     , runRxState
-    , genRandom
     , assert -- FIXME move somewhere else (Internal.hs ?)
     , updateVerifiedData
     , finishHandshakeTypeMaterial
@@ -50,6 +49,9 @@ module Network.TLS.State
     , startHandshakeClient
     , getHandshakeDigest
     , endHandshake
+    -- * random
+    , genRandom
+    , withRNG
     ) where
 
 import Data.Maybe (isNothing)
@@ -276,3 +278,10 @@ genRandom n = do
     st <- get
     case withTLSRNG (stRandomGen st) (genRandomBytes n) of
             (bytes, rng') -> put (st { stRandomGen = rng' }) >> return bytes
+
+withRNG :: (forall g . CPRG g => g -> (a, g)) -> TLSSt a
+withRNG f = do
+    st <- get
+    let (a,rng') = withTLSRNG (stRandomGen st) f
+    put (st { stRandomGen = rng' })
+    return a
