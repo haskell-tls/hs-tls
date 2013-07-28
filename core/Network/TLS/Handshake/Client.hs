@@ -90,6 +90,15 @@ handshakeClient cparams ctx = do
 
         recvServerHello sentExts = runRecvState ctx (RecvStateHandshake $ onServerHello sentExts)
 
+        -- | onServerHello process the ServerHello message on the client.
+        --
+        -- 1) check the version chosen by the server is one allowed by parameters.
+        -- 2) check that our compression and cipher algorithms are part of the list we sent
+        -- 3) check extensions received are part of the one we sent
+        -- 4) process the session parameter to see if the server want to start a new session or can resume
+        -- 5) process NPN extension
+        -- 6) if no resume switch to processCertificate SM or in resume switch to expectChangeCipher
+        --
         onServerHello :: MonadIO m => [ExtensionID] -> Handshake -> m (RecvState m)
         onServerHello sentExts sh@(ServerHello rver _ serverSession cipher compression exts) = do
             when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
