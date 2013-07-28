@@ -100,7 +100,7 @@ handshakeClient cparams ctx = do
         -- 6) if no resume switch to processCertificate SM or in resume switch to expectChangeCipher
         --
         onServerHello :: MonadIO m => [ExtensionID] -> Handshake -> m (RecvState m)
-        onServerHello sentExts sh@(ServerHello rver _ serverSession cipher compression exts) = do
+        onServerHello sentExts (ServerHello rver serverRan serverSession cipher compression exts) = do
             when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
             case find ((==) rver) allowedvers of
                 Nothing -> throwCore $ Error_Protocol ("version " ++ show rver ++ "is not supported", True, ProtocolVersion)
@@ -121,8 +121,11 @@ handshakeClient cparams ctx = do
                     case clientWantSessionResume cparams of
                         Just (sessionId, sessionData) -> if serverSession == Session (Just sessionId) then Just sessionData else Nothing
                         Nothing                       -> Nothing
-            usingState_ ctx $ setSession serverSession (isJust resumingSession)
-            usingState_ ctx $ processServerHello sh
+            usingState_ ctx $ do
+                setSession serverSession (isJust resumingSession)
+                mapM_ processServerExtension exts
+                withHandshakeM $ setServerRandom serverRan
+                setVersion rver
 
             case extensionDecode False `fmap` (lookup extensionID_NextProtocolNegotiation exts) of
                 Just (Just (NextProtocolNegotiation protos)) -> usingState_ ctx $ do
@@ -271,23 +274,14 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
 
                 _ -> return ()
 
-processServerHello :: Handshake -> TLSSt ()
-processServerHello (ServerHello sver ran _ _ _ ex) = do
-    -- FIXME notify the user to take action if the extension requested is missing
-    -- secreneg <- getSecureRenegotiation
-    -- when (secreneg && (isNothing $ lookup 0xff01 ex)) $ ...
-    mapM_ processServerExtension ex
-    withHandshakeM $ setServerRandom ran
-    setVersion sver
-  where processServerExtension (0xff01, content) = do
-            cv <- getVerifiedData ClientRole
-            sv <- getVerifiedData ServerRole
-            let bs = extensionEncode (SecureRenegotiation cv $ Just sv)
-            unless (bs `bytesEq` content) $ throwError $ Error_Protocol ("server secure renegotiation data not matching", True, HandshakeFailure)
-            return ()
-
-        processServerExtension _ = return ()
-processServerHello _ = error "processServerHello called on wrong type"
+processServerExtension :: (ExtensionID, Bytes) -> TLSSt ()
+processServerExtension (0xff01, content) = do
+    cv <- getVerifiedData ClientRole
+    sv <- getVerifiedData ServerRole
+    let bs = extensionEncode (SecureRenegotiation cv $ Just sv)
+    unless (bs `bytesEq` content) $ throwError $ Error_Protocol ("server secure renegotiation data not matching", True, HandshakeFailure)
+    return ()
+processServerExtension _ = return ()
 
 throwMiscErrorOnException :: MonadIO m => String -> SomeException -> m a
 throwMiscErrorOnException msg e =
