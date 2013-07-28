@@ -103,7 +103,7 @@ recvPacket ctx = do
             case pkt of
                 Right p -> liftIO $ (loggingPacketRecv $ ctxLogging ctx) $ show p
                 _       -> return ()
-            ctxDisableSSLv2ClientHello ctx
+            when compatSSLv2 $ ctxDisableSSLv2ClientHello ctx
             return pkt
 
 -- | Send one packet to the context
