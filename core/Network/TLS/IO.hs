@@ -51,6 +51,9 @@ readExact ctx sz = do
             else throwCore (Error_Packet ("partial packet: expecting " ++ show sz ++ " bytes, got: " ++ (show $B.length hdrbs)))
     return hdrbs
 
+-- | recvRecord receive a full TLS record (header + data), from the other side.
+--
+-- The record is disengaged from the record layer
 recvRecord :: MonadIO m => Bool    -- ^ flag to enable SSLv2 compat ClientHello reception
                         -> Context -- ^ TLS context
                         -> m (Either TLSError (Record Plaintext))
@@ -70,15 +73,15 @@ recvRecord compatSSLv2 ctx
               recvDeprecatedLength readlen
                 | readlen > 1024 * 4     = return $ Left maximumSizeExceeded
                 | otherwise              = do
-                        content <- readExact ctx (fromIntegral readlen)
-                        case decodeDeprecatedHeader readlen content of
-                                Left err     -> return $ Left err
-                                Right header -> makeRecord header content
+                    content <- readExact ctx (fromIntegral readlen)
+                    case decodeDeprecatedHeader readlen content of
+                        Left err     -> return $ Left err
+                        Right header -> makeRecord header content
 #endif
               maximumSizeExceeded = Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
               makeRecord header content = do
-                        liftIO $ (loggingIORecv $ ctxLogging ctx) header content
-                        usingState ctx $ runRxState $ disengageRecord $ rawToRecord header (fragmentCiphertext content)
+                    liftIO $ (loggingIORecv $ ctxLogging ctx) header content
+                    usingState ctx $ runRxState $ disengageRecord $ rawToRecord header (fragmentCiphertext content)
 
 
 -- | receive one packet from the context that contains 1 or
