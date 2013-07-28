@@ -5,8 +5,7 @@
 -- Stability   : experimental
 -- Portability : unknown
 --
--- the Receiving module contains calls related to unmarshalling packets according
--- to the TLS state
+-- process handshake message received
 --
 module Network.TLS.Handshake.Process
     ( processHandshake
