@@ -21,6 +21,7 @@ import Network.TLS.Struct
 import Network.TLS.IO
 import Network.TLS.State hiding (getNegotiatedProtocol)
 import Network.TLS.Receiving
+import Network.TLS.Handshake.Process
 import Network.TLS.Measurement
 import Network.TLS.Types
 import Data.Maybe

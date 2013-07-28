@@ -8,15 +8,13 @@
 -- the Sending module contains calls related to marshalling packets according
 -- to the TLS state 
 --
-module Network.TLS.Sending (writePacket, encryptRSA, signRSA) where
+module Network.TLS.Sending (writePacket) where
 
-import Control.Applicative ((<$>))
 import Control.Monad.State
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
-import Network.TLS.Util
 import Network.TLS.Types (Role(..))
 import Network.TLS.Cap
 import Network.TLS.Struct
@@ -24,7 +22,6 @@ import Network.TLS.Record
 import Network.TLS.Packet
 import Network.TLS.State
 import Network.TLS.Handshake.State
-import Network.TLS.Crypto
 import Network.TLS.Cipher
 
 -- | 'makePacketData' create a Header and a content bytestring related to a packet
@@ -74,26 +71,3 @@ prepareRecord f = do
                 runTxState (modify $ setRecordIV newIV)
                 runTxState f
         else runTxState f
-
-{------------------------------------------------------------------------------}
-{- SENDING Helpers                                                            -}
-{------------------------------------------------------------------------------}
-
-{- if the RSA encryption fails we just return an empty bytestring, and let the protocol
- - fail by itself; however it would be probably better to just report it since it's an internal problem.
- -}
-encryptRSA :: ByteString -> TLSSt ByteString
-encryptRSA content = do
-    rsakey <- fromJust "rsa public key" . hstRSAPublicKey . fromJust "handshake" . stHandshake <$> get
-    v      <- withRNG (\g -> kxEncrypt g rsakey content)
-    case v of
-        Left err       -> fail ("rsa encrypt failed: " ++ show err)
-        Right econtent -> return econtent
-
-signRSA :: HashDescr -> ByteString -> TLSSt ByteString
-signRSA hsh content = do
-    rsakey <- fromJust "rsa client private key" . hstRSAClientPrivateKey . fromJust "handshake" . stHandshake <$> get
-    r      <- withRNG (\g -> kxSign g rsakey hsh content)
-    case r of
-        Left err       -> fail ("rsa sign failed: " ++ show err)
-        Right econtent -> return econtent

@@ -23,7 +23,8 @@ import Network.TLS.IO
 import Network.TLS.Types
 import Network.TLS.State hiding (getNegotiatedProtocol)
 import Network.TLS.Handshake.State
-import Network.TLS.Receiving
+import Network.TLS.Handshake.Key
+import Network.TLS.Handshake.Process
 import Network.TLS.Measurement
 import Data.Maybe
 import Data.List (intersect)

@@ -19,7 +19,6 @@ import Network.TLS.Packet
 import Network.TLS.Extension
 import Network.TLS.IO
 import Network.TLS.State hiding (getNegotiatedProtocol)
-import Network.TLS.Sending
 import Network.TLS.Measurement
 import Network.TLS.Wire (encodeWord16)
 import Network.TLS.Util (bytesEq)
@@ -39,6 +38,7 @@ import qualified Control.Exception as E
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Certificate
 import Network.TLS.Handshake.Signature
+import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.State
 
 -- client part of handshake. send a bunch of handshake of client
