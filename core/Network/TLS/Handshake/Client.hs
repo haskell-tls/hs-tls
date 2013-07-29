@@ -56,7 +56,6 @@ handshakeClient cparams ctx = do
                 recvChangeCipherAndFinish ctx
     handshakeTerminate ctx
   where params       = ctxParams ctx
-        allowedvers  = pAllowedVersions params
         ciphers      = pCiphers params
         compressions = pCompressions params
         getExtensions = sequence [sniExtension,secureReneg,npnExtention] >>= return . catMaybes
@@ -83,89 +82,7 @@ handshakeClient cparams ctx = do
                 ]
             return $ map fst extensions
 
-        expectChangeCipher ChangeCipherSpec = return $ RecvStateHandshake expectFinish
-        expectChangeCipher p                = unexpected (show p) (Just "change cipher")
-        expectFinish (Finished _) = return RecvStateDone
-        expectFinish p            = unexpected (show p) (Just "Handshake Finished")
-
-        recvServerHello sentExts = runRecvState ctx (RecvStateHandshake $ onServerHello sentExts)
-
-        -- | onServerHello process the ServerHello message on the client.
-        --
-        -- 1) check the version chosen by the server is one allowed by parameters.
-        -- 2) check that our compression and cipher algorithms are part of the list we sent
-        -- 3) check extensions received are part of the one we sent
-        -- 4) process the session parameter to see if the server want to start a new session or can resume
-        -- 5) process NPN extension
-        -- 6) if no resume switch to processCertificate SM or in resume switch to expectChangeCipher
-        --
-        onServerHello :: MonadIO m => [ExtensionID] -> Handshake -> m (RecvState m)
-        onServerHello sentExts (ServerHello rver serverRan serverSession cipher compression exts) = do
-            when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
-            case find ((==) rver) allowedvers of
-                Nothing -> throwCore $ Error_Protocol ("version " ++ show rver ++ "is not supported", True, ProtocolVersion)
-                Just _  -> usingState_ ctx $ setVersion rver
-            -- find the compression and cipher methods that the server want to use.
-            case (find ((==) cipher . cipherID) ciphers, find ((==) compression . compressionID) compressions) of
-                (Nothing,_) -> throwCore $ Error_Protocol ("no cipher in common with the server", True, HandshakeFailure)
-                (_,Nothing) -> throwCore $ Error_Protocol ("no compression in common with the server", True, HandshakeFailure)
-                (Just cipherAlg, Just compressAlg) ->
-                    usingHState ctx $ setPendingAlgs cipherAlg compressAlg
-
-            -- intersect sent extensions in client and the received extensions from server.
-            -- if server returns extensions that we didn't request, fail.
-            when (not $ null $ filter (not . flip elem sentExts . fst) exts) $
-                throwCore $ Error_Protocol ("spurious extensions received", True, UnsupportedExtension)
-
-            let resumingSession =
-                    case clientWantSessionResume cparams of
-                        Just (sessionId, sessionData) -> if serverSession == Session (Just sessionId) then Just sessionData else Nothing
-                        Nothing                       -> Nothing
-            usingState_ ctx $ do
-                setSession serverSession (isJust resumingSession)
-                mapM_ processServerExtension exts
-                withHandshakeM $ setServerRandom serverRan
-                setVersion rver
-
-            case extensionDecode False `fmap` (lookup extensionID_NextProtocolNegotiation exts) of
-                Just (Just (NextProtocolNegotiation protos)) -> usingState_ ctx $ do
-                    setExtensionNPN True
-                    setServerNextProtocolSuggest protos
-                _ -> return ()
-
-            case resumingSession of
-                Nothing          -> return $ RecvStateHandshake processCertificate
-                Just sessionData -> do
-                    usingHState ctx (setMasterSecret rver ClientRole $ sessionSecret sessionData)
-                    return $ RecvStateNext expectChangeCipher
-        onServerHello _ p = unexpected (show p) (Just "server hello")
-
-        processCertificate :: MonadIO m => Handshake -> m (RecvState m)
-        processCertificate (Certificates certs) = do
-            usage <- liftIO $ E.catch (onCertificatesRecv params certs) rejectOnException
-            case usage of
-                CertificateUsageAccept        -> return ()
-                CertificateUsageReject reason -> certificateRejected reason
-            return $ RecvStateHandshake processServerKeyExchange
-
-        processCertificate p = processServerKeyExchange p
-
-        processServerKeyExchange :: MonadIO m => Handshake -> m (RecvState m)
-        processServerKeyExchange (ServerKeyXchg _) = return $ RecvStateHandshake processCertificateRequest
-        processServerKeyExchange p                 = processCertificateRequest p
-
-        processCertificateRequest :: MonadIO m => Handshake -> m (RecvState m)
-        processCertificateRequest (CertRequest cTypes sigAlgs dNames) = do
-            -- When the server requests a client
-            -- certificate, we simply store the
-            -- information for later.
-            --
-            usingHState ctx $ setClientCertRequest (cTypes, sigAlgs, dNames)
-            return $ RecvStateHandshake processServerHelloDone
-        processCertificateRequest p = processServerHelloDone p
-
-        processServerHelloDone ServerHelloDone = return RecvStateDone
-        processServerHelloDone p = unexpected (show p) (Just "server hello data")
+        recvServerHello sentExts = runRecvState ctx (RecvStateHandshake $ onServerHello ctx cparams sentExts)
 
 -- | send client Data after receiving all server data (hello/certificates/key).
 --
@@ -286,3 +203,93 @@ processServerExtension _ = return ()
 throwMiscErrorOnException :: MonadIO m => String -> SomeException -> m a
 throwMiscErrorOnException msg e =
     throwCore $ Error_Misc $ msg ++ ": " ++ show e
+
+-- | onServerHello process the ServerHello message on the client.
+--
+-- 1) check the version chosen by the server is one allowed by parameters.
+-- 2) check that our compression and cipher algorithms are part of the list we sent
+-- 3) check extensions received are part of the one we sent
+-- 4) process the session parameter to see if the server want to start a new session or can resume
+-- 5) process NPN extension
+-- 6) if no resume switch to processCertificate SM or in resume switch to expectChangeCipher
+--
+onServerHello :: MonadIO m => Context -> ClientParams -> [ExtensionID] -> Handshake -> m (RecvState m)
+onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cipher compression exts) = do
+    when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
+    case find ((==) rver) allowedvers of
+        Nothing -> throwCore $ Error_Protocol ("version " ++ show rver ++ "is not supported", True, ProtocolVersion)
+        Just _  -> usingState_ ctx $ setVersion rver
+    -- find the compression and cipher methods that the server want to use.
+    case (find ((==) cipher . cipherID) ciphers, find ((==) compression . compressionID) compressions) of
+        (Nothing,_) -> throwCore $ Error_Protocol ("no cipher in common with the server", True, HandshakeFailure)
+        (_,Nothing) -> throwCore $ Error_Protocol ("no compression in common with the server", True, HandshakeFailure)
+        (Just cipherAlg, Just compressAlg) ->
+            usingHState ctx $ setPendingAlgs cipherAlg compressAlg
+
+    -- intersect sent extensions in client and the received extensions from server.
+    -- if server returns extensions that we didn't request, fail.
+    when (not $ null $ filter (not . flip elem sentExts . fst) exts) $
+        throwCore $ Error_Protocol ("spurious extensions received", True, UnsupportedExtension)
+
+    let resumingSession =
+            case clientWantSessionResume cparams of
+                Just (sessionId, sessionData) -> if serverSession == Session (Just sessionId) then Just sessionData else Nothing
+                Nothing                       -> Nothing
+    usingState_ ctx $ do
+        setSession serverSession (isJust resumingSession)
+        mapM_ processServerExtension exts
+        withHandshakeM $ setServerRandom serverRan
+        setVersion rver
+
+    case extensionDecode False `fmap` (lookup extensionID_NextProtocolNegotiation exts) of
+        Just (Just (NextProtocolNegotiation protos)) -> usingState_ ctx $ do
+            setExtensionNPN True
+            setServerNextProtocolSuggest protos
+        _ -> return ()
+
+    case resumingSession of
+        Nothing          -> return $ RecvStateHandshake (processCertificate ctx)
+        Just sessionData -> do
+            usingHState ctx (setMasterSecret rver ClientRole $ sessionSecret sessionData)
+            return $ RecvStateNext expectChangeCipher
+  where params       = ctxParams ctx
+        allowedvers  = pAllowedVersions params
+        ciphers      = pCiphers params
+        compressions = pCompressions params
+onServerHello _ _ _ p = unexpected (show p) (Just "server hello")
+
+processCertificate :: MonadIO m => Context -> Handshake -> m (RecvState m)
+processCertificate ctx (Certificates certs) = do
+    usage <- liftIO $ E.catch (onCertificatesRecv params certs) rejectOnException
+    case usage of
+        CertificateUsageAccept        -> return ()
+        CertificateUsageReject reason -> certificateRejected reason
+    return $ RecvStateHandshake (processServerKeyExchange ctx)
+  where params       = ctxParams ctx
+processCertificate ctx p = processServerKeyExchange ctx p
+
+expectChangeCipher :: MonadIO m => Packet -> m (RecvState m)
+expectChangeCipher ChangeCipherSpec = return $ RecvStateHandshake expectFinish
+expectChangeCipher p                = unexpected (show p) (Just "change cipher")
+
+expectFinish :: MonadIO m => Handshake -> m (RecvState m)
+expectFinish (Finished _) = return RecvStateDone
+expectFinish p            = unexpected (show p) (Just "Handshake Finished")
+
+processServerKeyExchange :: MonadIO m => Context -> Handshake -> m (RecvState m)
+processServerKeyExchange ctx (ServerKeyXchg _) = return $ RecvStateHandshake (processCertificateRequest ctx)
+processServerKeyExchange ctx p                 = processCertificateRequest ctx p
+
+processCertificateRequest :: MonadIO m => Context -> Handshake -> m (RecvState m)
+processCertificateRequest ctx (CertRequest cTypes sigAlgs dNames) = do
+    -- When the server requests a client
+    -- certificate, we simply store the
+    -- information for later.
+    --
+    usingHState ctx $ setClientCertRequest (cTypes, sigAlgs, dNames)
+    return $ RecvStateHandshake (processServerHelloDone ctx)
+processCertificateRequest ctx p = processServerHelloDone ctx p
+
+processServerHelloDone :: MonadIO m => Context -> Handshake -> m (RecvState m)
+processServerHelloDone _ ServerHelloDone = return RecvStateDone
+processServerHelloDone _ p = unexpected (show p) (Just "server hello data")
