@@ -43,6 +43,7 @@ module Network.TLS.Context
     , ctxEstablished
     , ctxLogging
     , ctxWithHooks
+    , ctxRxState
     , setEOF
     , setEstablished
     , contextFlush
@@ -76,6 +77,7 @@ module Network.TLS.Context
     , throwCore
     , usingState
     , usingState_
+    , runRxState
     , usingHState
     , getStateRNG
     ) where
@@ -90,6 +92,7 @@ import Network.TLS.Compression
 import Network.TLS.Crypto
 import Network.TLS.State
 import Network.TLS.Handshake.State
+import Network.TLS.Record.State
 import Network.TLS.Measurement
 import Network.TLS.X509
 import Network.TLS.Types (Role(..))
@@ -312,6 +315,7 @@ data Context = Context
     , ctxSSLv2ClientHello :: IORef Bool    -- ^ enable the reception of compatibility SSLv2 client hello.
                                            -- the flag will be set to false regardless of its initial value
                                            -- after the first packet received.
+    , ctxRxState          :: MVar RecordState -- ^ current rx state
     , ctxHooks            :: IORef Hooks   -- ^ hooks for this context
     , ctxLockWrite        :: MVar ()       -- ^ lock to use for writing data (including updating the state)
     , ctxLockRead         :: MVar ()       -- ^ lock to use for reading data (including updating the state)
@@ -390,6 +394,7 @@ contextNew backend params rng = liftIO $ do
     -- server context, where we might be dealing with an old/compat client.
     sslv2Compat <- newIORef (role == ServerRole)
     hooks <- newIORef defaultHooks
+    rx    <- newMVar newRecordState
     lockWrite <- newMVar ()
     lockRead  <- newMVar ()
     lockState <- newMVar ()
@@ -397,6 +402,7 @@ contextNew backend params rng = liftIO $ do
             { ctxConnection   = backend
             , ctxParams       = params
             , ctxState        = stvar
+            , ctxRxState      = rx
             , ctxMeasurement  = stats
             , ctxEOF_         = eof
             , ctxEstablished_ = established
@@ -439,6 +445,14 @@ usingState_ ctx f = do
 
 usingHState :: MonadIO m => Context -> HandshakeM a -> m a
 usingHState ctx f = usingState_ ctx $ withHandshakeM f
+
+runRxState :: MonadIO m => Context -> RecordM a -> m (Either TLSError a)
+runRxState ctx f = do
+    ver <- usingState_ ctx getVersion
+    liftIO $ modifyMVar (ctxRxState ctx) $ \st ->
+        case runRecordM f ver st of
+            Left err         -> return (st, Left err)
+            Right (a, newSt) -> return (newSt, Right a)
 
 getStateRNG :: MonadIO m => Context -> Int -> m Bytes
 getStateRNG ctx n = usingState_ ctx $ genRandom n

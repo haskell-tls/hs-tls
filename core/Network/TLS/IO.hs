@@ -15,7 +15,7 @@ module Network.TLS.IO
     ) where
 
 import Network.TLS.Context
-import Network.TLS.State (needEmptyPacket, runRxState)
+import Network.TLS.State (needEmptyPacket)
 import Network.TLS.Struct
 import Network.TLS.Record
 import Network.TLS.Packet
@@ -68,7 +68,7 @@ recvRecord compatSSLv2 ctx
     | otherwise = readExact ctx 5 >>= either (return . Left) recvLength . decodeHeader
         where recvLength header@(Header _ _ readlen)
                 | readlen > 16384 + 2048 = return $ Left maximumSizeExceeded
-                | otherwise              = readExact ctx (fromIntegral readlen) >>= makeRecord header
+                | otherwise              = readExact ctx (fromIntegral readlen) >>= getRecord header
 #ifdef SSLV2_COMPATIBLE
               recvDeprecatedLength readlen
                 | readlen > 1024 * 4     = return $ Left maximumSizeExceeded
@@ -76,12 +76,13 @@ recvRecord compatSSLv2 ctx
                     content <- readExact ctx (fromIntegral readlen)
                     case decodeDeprecatedHeader readlen content of
                         Left err     -> return $ Left err
-                        Right header -> makeRecord header content
+                        Right header -> getRecord header content
 #endif
               maximumSizeExceeded = Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
-              makeRecord header content = do
+              getRecord :: MonadIO m => Header -> Bytes -> m (Either TLSError (Record Plaintext))
+              getRecord header content = do
                     liftIO $ (loggingIORecv $ ctxLogging ctx) header content
-                    usingState ctx $ runRxState $ disengageRecord $ rawToRecord header (fragmentCiphertext content)
+                    runRxState ctx $ disengageRecord $ rawToRecord header (fragmentCiphertext content)
 
 
 -- | receive one packet from the context that contains 1 or
@@ -94,7 +95,7 @@ recvPacket ctx = do
     case erecord of
         Left err     -> return $ Left err
         Right record -> do
-            pktRecv <- usingState ctx $ processPacket record
+            pktRecv <- processPacket ctx record
             pkt <- case pktRecv of
                     Right (Handshake hss) ->
                         ctxWithHooks ctx $ \hooks ->

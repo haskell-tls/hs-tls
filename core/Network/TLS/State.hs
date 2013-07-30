@@ -18,7 +18,6 @@ module Network.TLS.State
     , newTLSState
     , withTLSRNG
     , runTxState
-    , runRxState
     , assert -- FIXME move somewhere else (Internal.hs ?)
     , updateVerifiedData
     , finishHandshakeTypeMaterial
@@ -44,7 +43,6 @@ module Network.TLS.State
     , isSessionResuming
     , needEmptyPacket
     , switchTxEncryption
-    , switchRxEncryption
     , isClientContext
     , startHandshakeClient
     , getHandshakeDigest
@@ -79,7 +77,6 @@ data TLSState = TLSState
     , stSession             :: Session
     , stSessionResuming     :: Bool
     , stTxState             :: RecordState
-    , stRxState             :: RecordState
     , stSecureRenegotiation :: Bool  -- RFC 5746
     , stClientVerifiedData  :: Bytes -- RFC 5746
     , stServerVerifiedData  :: Bytes -- RFC 5746
@@ -115,20 +112,12 @@ runTxState f = do
         Left err         -> throwError err
         Right (a, newSt) -> put (st { stTxState = newSt }) >> return a
 
-runRxState :: RecordM a -> TLSSt a
-runRxState f = do
-    st <- get
-    case runRecordM f (stVersion st) (stRxState st) of
-        Left err         -> throwError err
-        Right (a, newSt) -> put (st { stRxState = newSt }) >> return a
-
 newTLSState :: CPRG g => g -> Role -> TLSState
 newTLSState rng clientContext = TLSState
     { stHandshake           = Nothing
     , stSession             = Session Nothing
     , stSessionResuming     = False
     , stTxState             = newRecordState
-    , stRxState             = newRecordState
     , stSecureRenegotiation = False
     , stClientVerifiedData  = B.empty
     , stServerVerifiedData  = B.empty
@@ -180,13 +169,10 @@ certVerifyHandshakeTypeMaterial HandshakeType_NPN             = False
 certVerifyHandshakeMaterial :: Handshake -> Bool
 certVerifyHandshakeMaterial = certVerifyHandshakeTypeMaterial . typeOfHandshake
 
-switchTxEncryption, switchRxEncryption :: TLSSt ()
+switchTxEncryption :: TLSSt ()
 switchTxEncryption =
         withHandshakeM (gets hstPendingTxState)
     >>= \newTxState -> modify $ \st -> st { stTxState = fromJust "pending-tx" newTxState }
-switchRxEncryption =
-        withHandshakeM (gets hstPendingRxState)
-    >>= \newRxState -> modify $ \st -> st { stRxState = fromJust "pending-rx" newRxState }
 
 getSessionData :: MonadState TLSState m => m (Maybe SessionData)
 getSessionData = get >>= \st -> return (stHandshake st >>= hstMasterSecret >>= wrapSessionData st)

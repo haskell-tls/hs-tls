@@ -15,29 +15,33 @@ module Network.TLS.Receiving
 import Control.Applicative ((<$>))
 import Control.Monad.State
 import Control.Monad.Error
+import Control.Concurrent.MVar
 
+import Network.TLS.Context
 import Network.TLS.Struct
 import Network.TLS.Record
 import Network.TLS.Packet
 import Network.TLS.State
 import Network.TLS.Cipher
+import Network.TLS.Util
 
 returnEither :: Either TLSError a -> TLSSt a
 returnEither (Left err) = throwError err
 returnEither (Right a)  = return a
 
-processPacket :: Record Plaintext -> TLSSt Packet
+processPacket :: MonadIO m => Context -> Record Plaintext -> m (Either TLSError Packet)
 
-processPacket (Record ProtocolType_AppData _ fragment) = return $ AppData $ fragmentGetBytes fragment
+processPacket _ (Record ProtocolType_AppData _ fragment) = return $ Right $ AppData $ fragmentGetBytes fragment
 
-processPacket (Record ProtocolType_Alert _ fragment) = return . Alert =<< returnEither (decodeAlerts $ fragmentGetBytes fragment)
+processPacket _ (Record ProtocolType_Alert _ fragment) = return (Alert `fmapEither` (decodeAlerts $ fragmentGetBytes fragment))
 
-processPacket (Record ProtocolType_ChangeCipherSpec _ fragment) = do
-    returnEither $ decodeChangeCipherSpec $ fragmentGetBytes fragment
-    switchRxEncryption
-    return ChangeCipherSpec
+processPacket ctx (Record ProtocolType_ChangeCipherSpec _ fragment) =
+    case decodeChangeCipherSpec $ fragmentGetBytes fragment of
+        Left err -> return $ Left err
+        Right _  -> do switchRxEncryption ctx
+                       return $ Right ChangeCipherSpec
 
-processPacket (Record ProtocolType_Handshake ver fragment) = do
+processPacket ctx (Record ProtocolType_Handshake ver fragment) = usingState ctx $ do
     keyxchg <- gets (\st -> case stHandshake st of
                                 Nothing  -> Nothing
                                 Just hst -> cipherKeyExchange <$> hstPendingCipher hst)
@@ -54,7 +58,12 @@ processPacket (Record ProtocolType_Handshake ver fragment) = do
                 Right hs -> return hs
     return $ Handshake hss
 
-processPacket (Record ProtocolType_DeprecatedHandshake _ fragment) =
+processPacket _ (Record ProtocolType_DeprecatedHandshake _ fragment) =
     case decodeDeprecatedHandshake $ fragmentGetBytes fragment of
-        Left err -> throwError err
-        Right hs -> return $ Handshake [hs]
+        Left err -> return $ Left err
+        Right hs -> return $ Right $ Handshake [hs]
+
+switchRxEncryption :: MonadIO m => Context -> m ()
+switchRxEncryption ctx =
+    usingHState ctx (gets hstPendingRxState) >>= \rx ->
+    liftIO $ modifyMVar_ (ctxRxState ctx) (\_ -> return $ fromJust "rx-state" rx)
