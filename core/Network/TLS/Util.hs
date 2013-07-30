@@ -7,6 +7,7 @@ module Network.TLS.Util
         , and'
         , (&&!)
         , bytesEq
+        , fmapEither
         ) where
 
 import Data.List (foldl')
@@ -65,3 +66,8 @@ bytesEq :: Bytes -> Bytes -> Bool
 bytesEq b1 b2
     | B.length b1 /= B.length b2 = False
     | otherwise                  = and' $ B.zipWith (==) b1 b2
+
+fmapEither :: (a -> b) -> Either l a -> Either l b
+fmapEither f e = case e of
+    Left l  -> Left l
+    Right r -> Right (f r)
