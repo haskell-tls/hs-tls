@@ -86,7 +86,8 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
     updateMeasure ctx incrementNbHandshakes
 
     -- Handle Client hello
-    usingState_ ctx $ processHandshake clientHello
+    processHandshake ctx clientHello
+
     when (ver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
     when (not $ elem ver (pAllowedVersions params)) $
             throwCore $ Error_Protocol ("version " ++ show ver ++ "is not supported", True, ProtocolVersion)
@@ -241,7 +242,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
         -- If not, ask the application on how to proceed.
         --
         processCertificateVerify (Handshake [hs@(CertVerify mbHashSig (CertVerifyData bs))]) = do
-            usingState_ ctx $ processHandshake hs
+            processHandshake ctx hs
 
             checkValidClientCertChain "change cipher message expected"
 

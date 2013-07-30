@@ -119,7 +119,7 @@ runRecvState ctx iniState          = recvPacketHandshake ctx >>= loop iniState >
         loop recvState []                  = return recvState
         loop (RecvStateHandshake f) (x:xs) = do
             nstate <- f x
-            usingState_ ctx $ processHandshake x
+            processHandshake ctx x
             loop nstate xs
         loop _                         _   = unexpected "spurious handshake" Nothing
 

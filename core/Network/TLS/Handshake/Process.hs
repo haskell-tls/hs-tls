@@ -13,8 +13,7 @@ module Network.TLS.Handshake.Process
 
 import Data.ByteString (ByteString)
 
-import Control.Monad (when, unless)
-import Control.Monad.Error (throwError)
+import Control.Monad.Error
 import Control.Monad.State (gets)
 
 import Network.TLS.Types (Role(..), invertRole)
@@ -22,28 +21,29 @@ import Network.TLS.Util
 import Network.TLS.Packet
 import Network.TLS.Struct
 import Network.TLS.State
+import Network.TLS.Context
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Key
 import Network.TLS.Extension
 import Data.X509
 
-processHandshake :: Handshake -> TLSSt ()
-processHandshake hs = do
-    role <- isClientContext
+processHandshake :: MonadIO m => Context -> Handshake -> m ()
+processHandshake ctx hs = do
+    role <- usingState_ ctx isClientContext
     case hs of
         ClientHello cver ran _ _ _ ex _ -> when (role == ServerRole) $ do
-            mapM_ processClientExtension ex
-            startHandshakeClient cver ran
-        Certificates certs            -> processCertificates role certs
+            mapM_ (usingState_ ctx . processClientExtension) ex
+            usingState_ ctx $ startHandshakeClient cver ran
+        Certificates certs            -> usingState_ ctx $ processCertificates role certs
         ClientKeyXchg content         -> when (role == ServerRole) $ do
-            processClientKeyXchg content
+            usingState_ ctx $ processClientKeyXchg content
         HsNextProtocolNegotiation selected_protocol ->
-            when (role == ServerRole) $ setNegotiatedProtocol selected_protocol
-        Finished fdata                -> processClientFinished fdata
+            when (role == ServerRole) $ usingState_ ctx $ setNegotiatedProtocol selected_protocol
+        Finished fdata                -> usingState_ ctx $ processClientFinished fdata
         _                             -> return ()
     let encoded = encodeHandshake hs
-    when (certVerifyHandshakeMaterial hs) $ withHandshakeM $ addHandshakeMessage encoded
-    when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ withHandshakeM $ updateHandshakeDigest encoded
+    when (certVerifyHandshakeMaterial hs) $ usingHState ctx $ addHandshakeMessage encoded
+    when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ usingHState ctx $ updateHandshakeDigest encoded
   where -- secure renegotiation
         processClientExtension (0xff01, content) = do
             v <- getVerifiedData ClientRole
@@ -53,6 +53,15 @@ processHandshake hs = do
             setSecureRenegotiation True
         -- unknown extensions
         processClientExtension _ = return ()
+
+        processCertificates :: Role -> CertificateChain -> TLSSt ()
+        processCertificates ServerRole (CertificateChain []) = return ()
+        processCertificates ClientRole (CertificateChain []) =
+            throwError $ Error_Protocol ("server certificate missing", True, HandshakeFailure)
+        processCertificates role (CertificateChain (c:_))
+            | role == ClientRole = withHandshakeM $ setPublicKey pubkey
+            | otherwise          = withHandshakeM $ setClientPublicKey pubkey
+          where pubkey = certPubKey $ getCertificate c
 
 -- process the client key exchange message. the protocol expects the initial
 -- client version received in ClientHello, not the negotiated version.
@@ -83,11 +92,3 @@ processClientFinished fdata = do
     updateVerifiedData ServerRole fdata
     return ()
 
-processCertificates :: Role -> CertificateChain -> TLSSt ()
-processCertificates ServerRole (CertificateChain []) = return ()
-processCertificates ClientRole (CertificateChain []) =
-    throwError $ Error_Protocol ("server certificate missing", True, HandshakeFailure)
-processCertificates role (CertificateChain (c:_))
-    | role == ClientRole = withHandshakeM $ setPublicKey pubkey
-    | otherwise          = withHandshakeM $ setClientPublicKey pubkey
-  where pubkey = certPubKey $ getCertificate c
