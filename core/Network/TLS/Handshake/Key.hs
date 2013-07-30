@@ -21,12 +21,8 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
 import Network.TLS.Util
-import Network.TLS.Record
-import Network.TLS.Packet
 import Network.TLS.State
-import Network.TLS.Handshake.State
 import Network.TLS.Crypto
-import Network.TLS.Cipher
 import Network.TLS.Types
 
 {- if the RSA encryption fails we just return an empty bytestring, and let the protocol
