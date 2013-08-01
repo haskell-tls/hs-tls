@@ -29,7 +29,7 @@ import Data.List (find)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 
-import Control.Applicative ((<$>))
+import Control.Applicative ((<$>), (<*>))
 import Control.Monad.State
 import Control.Monad.Error
 import Control.Exception (SomeException)
@@ -122,12 +122,10 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                             sendPacket ctx $ Handshake [Certificates cc]
 
         sendClientKeyXchg = do
+            (xver, prerand) <- usingState_ ctx $ (,) <$> getVersion <*> genRandom 46
+            let premaster = encodePreMasterSecret xver prerand
+            usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
             encryptedPreMaster <- usingState_ ctx $ do
-                xver       <- getVersion
-                prerand    <- genRandom 46
-                let premaster = encodePreMasterSecret xver prerand
-                withHandshakeM $ setMasterSecretFromPre xver ClientRole premaster
-
                 -- SSL3 implementation generally forget this length field since it's redundant,
                 -- however TLS10 make it clear that the length field need to be present.
                 e <- encryptRSA premaster
@@ -238,8 +236,8 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
     usingState_ ctx $ do
         setSession serverSession (isJust resumingSession)
         mapM_ processServerExtension exts
-        withHandshakeM $ setServerRandom serverRan
         setVersion rver
+    usingHState ctx $ setServerRandom serverRan
 
     case extensionDecode False `fmap` (lookup extensionID_NextProtocolNegotiation exts) of
         Just (Just (NextProtocolNegotiation protos)) -> usingState_ ctx $ do

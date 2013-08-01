@@ -1,4 +1,8 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleContexts, MultiParamTypeClasses, ExistentialQuantification, RankNTypes, CPP #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE FlexibleContexts #-}
 -- |
 -- Module      : Network.TLS.State
 -- License     : BSD-style
@@ -48,6 +52,7 @@ module Network.TLS.State
     , withRNG
     ) where
 
+import Control.Applicative
 import Data.Maybe (isNothing)
 import Network.TLS.Struct
 import Network.TLS.Crypto
@@ -78,10 +83,7 @@ data TLSState = TLSState
     } deriving (Show)
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrorT TLSError (State TLSState) a }
-    deriving (Monad, MonadError TLSError)
-
-instance Functor TLSSt where
-    fmap f = TLSSt . fmap f . runTLSSt
+    deriving (Monad, MonadError TLSError, Functor, Applicative)
 
 instance MonadState TLSState TLSSt where
     put x = TLSSt (lift $ put x)

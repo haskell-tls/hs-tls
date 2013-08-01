@@ -49,13 +49,14 @@ encodeRecord record = return $ B.concat [ encodeHeader hdr, content ]
 -- and updating state on the go
 writePacket :: Context -> Packet -> IO (Either TLSError ByteString)
 writePacket ctx pkt@(Handshake hss) = do
-    usingState_ ctx $ forM_ hss $ \hs -> do
+    forM_ hss $ \hs -> do
         case hs of
-            Finished fdata -> updateVerifiedData ClientRole fdata
+            Finished fdata -> usingState_ ctx $ updateVerifiedData ClientRole fdata
             _              -> return ()
         let encoded = encodeHandshake hs
-        when (certVerifyHandshakeMaterial hs) $ withHandshakeM $ addHandshakeMessage encoded
-        when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ withHandshakeM $ updateHandshakeDigest encoded
+        usingHState ctx $ do
+            when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage encoded
+            when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ updateHandshakeDigest encoded
     prepareRecord ctx (makeRecord pkt >>= engageRecord >>= encodeRecord)
 writePacket ctx pkt = do
     d <- prepareRecord ctx (makeRecord pkt >>= engageRecord >>= encodeRecord)

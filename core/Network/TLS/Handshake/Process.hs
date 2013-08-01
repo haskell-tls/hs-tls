@@ -13,6 +13,7 @@ module Network.TLS.Handshake.Process
 
 import Data.ByteString (ByteString)
 
+import Control.Applicative
 import Control.Monad.Error
 import Control.Monad.State (gets)
 
@@ -34,12 +35,12 @@ processHandshake ctx hs = do
         ClientHello cver ran _ _ _ ex _ -> when (role == ServerRole) $ do
             mapM_ (usingState_ ctx . processClientExtension) ex
             usingState_ ctx $ startHandshakeClient cver ran
-        Certificates certs            -> usingState_ ctx $ processCertificates role certs
+        Certificates certs            -> processCertificates role certs
         ClientKeyXchg content         -> when (role == ServerRole) $ do
-            usingState_ ctx $ processClientKeyXchg content
+            processClientKeyXchg ctx content
         HsNextProtocolNegotiation selected_protocol ->
             when (role == ServerRole) $ usingState_ ctx $ setNegotiatedProtocol selected_protocol
-        Finished fdata                -> usingState_ ctx $ processClientFinished fdata
+        Finished fdata                -> processClientFinished ctx fdata
         _                             -> return ()
     let encoded = encodeHandshake hs
     when (certVerifyHandshakeMaterial hs) $ usingHState ctx $ addHandshakeMessage encoded
@@ -54,25 +55,23 @@ processHandshake ctx hs = do
         -- unknown extensions
         processClientExtension _ = return ()
 
-        processCertificates :: Role -> CertificateChain -> TLSSt ()
+        processCertificates :: MonadIO m => Role -> CertificateChain -> m ()
         processCertificates ServerRole (CertificateChain []) = return ()
         processCertificates ClientRole (CertificateChain []) =
-            throwError $ Error_Protocol ("server certificate missing", True, HandshakeFailure)
+            throwCore $ Error_Protocol ("server certificate missing", True, HandshakeFailure)
         processCertificates role (CertificateChain (c:_))
-            | role == ClientRole = withHandshakeM $ setPublicKey pubkey
-            | otherwise          = withHandshakeM $ setClientPublicKey pubkey
+            | role == ClientRole = usingHState ctx $ setPublicKey pubkey
+            | otherwise          = usingHState ctx $ setClientPublicKey pubkey
           where pubkey = certPubKey $ getCertificate c
 
 -- process the client key exchange message. the protocol expects the initial
 -- client version received in ClientHello, not the negotiated version.
 -- in case the version mismatch, generate a random master secret
-processClientKeyXchg :: ByteString -> TLSSt ()
-processClientKeyXchg encryptedPremaster = do
-    rver        <- getVersion
-    role        <- isClientContext
-    random      <- genRandom 48
-    ePremaster  <- decryptRSA encryptedPremaster
-    withHandshakeM $ do
+processClientKeyXchg :: MonadIO m => Context -> ByteString -> m ()
+processClientKeyXchg ctx encryptedPremaster = do
+    (rver, role, random, ePremaster) <- usingState_ ctx $ do
+        (,,,) <$> getVersion <*> isClientContext <*> genRandom 48 <*> decryptRSA encryptedPremaster
+    usingHState ctx $ do
         expectedVer <- gets hstClientVersion
         case ePremaster of
             Left _          -> setMasterSecretFromPre rver role random
@@ -82,13 +81,12 @@ processClientKeyXchg encryptedPremaster = do
                     | ver /= expectedVer -> setMasterSecretFromPre rver role random
                     | otherwise          -> setMasterSecretFromPre rver role premaster
 
-processClientFinished :: FinishedData -> TLSSt ()
-processClientFinished fdata = do
-    cc       <- isClientContext
-    ver      <- getVersion
-    expected <- withHandshakeM $ getHandshakeDigest ver $ invertRole cc
+processClientFinished :: MonadIO m => Context -> FinishedData -> m ()
+processClientFinished ctx fdata = do
+    (cc,ver) <- usingState_ ctx $ (,) <$> isClientContext <*> getVersion
+    expected <- usingHState ctx $ getHandshakeDigest ver $ invertRole cc
     when (expected /= fdata) $ do
-        throwError $ Error_Protocol("bad record mac", True, BadRecordMac)
-    updateVerifiedData ServerRole fdata
+        throwCore $ Error_Protocol("bad record mac", True, BadRecordMac)
+    usingState_ ctx $ updateVerifiedData ServerRole fdata
     return ()
 
