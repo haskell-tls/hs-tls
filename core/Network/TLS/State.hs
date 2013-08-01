@@ -17,7 +17,6 @@ module Network.TLS.State
     , withHandshakeM
     , newTLSState
     , withTLSRNG
-    , assert -- FIXME move somewhere else (Internal.hs ?)
     , updateVerifiedData
     , finishHandshakeTypeMaterial
     , finishHandshakeMaterial
@@ -50,11 +49,8 @@ module Network.TLS.State
     ) where
 
 import Data.Maybe (isNothing)
-import Network.TLS.Util
 import Network.TLS.Struct
 import Network.TLS.Crypto
-import Network.TLS.Cipher
-import Network.TLS.Record.State
 import Network.TLS.Handshake.State
 import Network.TLS.RNG
 import Network.TLS.Types (Role(..))
@@ -64,10 +60,6 @@ import Control.Monad.State
 import Control.Monad.Error
 import Crypto.Random.API
 import Data.X509 (CertificateChain)
-
-assert :: Monad m => String -> [(String,Bool)] -> m ()
-assert fctname list = forM_ list $ \ (name, assumption) -> do
-    when assumption $ fail (fctname ++ ": assumption about " ++ name ++ " failed")
 
 data TLSState = TLSState
     { stHandshake           :: !(Maybe HandshakeState)
