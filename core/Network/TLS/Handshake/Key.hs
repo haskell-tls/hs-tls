@@ -14,7 +14,6 @@ module Network.TLS.Handshake.Key
     , verifyRSA
     ) where
 
-import Control.Applicative ((<$>))
 import Control.Monad.State
 
 import Data.ByteString (ByteString)
@@ -30,30 +29,35 @@ import Network.TLS.Context
  - fail by itself; however it would be probably better to just report it since it's an internal problem.
  -}
 encryptRSA :: MonadIO m => Context -> ByteString -> m ByteString
-encryptRSA ctx content = usingState_ ctx $ do
-    rsakey <- fromJust "rsa public key" . hstRSAPublicKey . fromJust "handshake" . stHandshake <$> get
-    v      <- withRNG (\g -> kxEncrypt g rsakey content)
-    case v of
-        Left err       -> fail ("rsa encrypt failed: " ++ show err)
-        Right econtent -> return econtent
+encryptRSA ctx content = do
+    rsakey <- return . fromJust "rsa public key" =<< handshakeGet ctx hstRSAPublicKey
+    usingState_ ctx $ do
+        v      <- withRNG (\g -> kxEncrypt g rsakey content)
+        case v of
+            Left err       -> fail ("rsa encrypt failed: " ++ show err)
+            Right econtent -> return econtent
 
 signRSA :: MonadIO m => Context -> HashDescr -> ByteString -> m ByteString
-signRSA ctx hsh content = usingState_ ctx $ do
-    rsakey <- fromJust "rsa client private key" . hstRSAClientPrivateKey . fromJust "handshake" . stHandshake <$> get
-    r      <- withRNG (\g -> kxSign g rsakey hsh content)
-    case r of
-        Left err       -> fail ("rsa sign failed: " ++ show err)
-        Right econtent -> return econtent
+signRSA ctx hsh content = do
+    rsakey <- return . fromJust "rsa client private key" =<< handshakeGet ctx hstRSAClientPrivateKey
+    usingState_ ctx $ do
+        r      <- withRNG (\g -> kxSign g rsakey hsh content)
+        case r of
+            Left err       -> fail ("rsa sign failed: " ++ show err)
+            Right econtent -> return econtent
 
 decryptRSA :: MonadIO m => Context -> ByteString -> m (Either KxError ByteString)
-decryptRSA ctx econtent = usingState_ ctx $ do
-    ver     <- getVersion
-    rsapriv <- fromJust "rsa private key" . hstRSAPrivateKey . fromJust "handshake" . stHandshake <$> get
-    let cipher = if ver < TLS10 then econtent else B.drop 2 econtent
-    withRNG (\g -> kxDecrypt g rsapriv cipher)
+decryptRSA ctx econtent = do
+    rsapriv <- return . fromJust "rsa private key" =<< handshakeGet ctx hstRSAPrivateKey
+    usingState_ ctx $ do
+        ver     <- getVersion
+        let cipher = if ver < TLS10 then econtent else B.drop 2 econtent
+        withRNG (\g -> kxDecrypt g rsapriv cipher)
 
 verifyRSA :: MonadIO m => Context -> HashDescr -> ByteString -> ByteString -> m Bool
-verifyRSA ctx hsh econtent sign = usingState_ ctx $ do
-    rsapriv <- fromJust "rsa client public key" . hstRSAClientPublicKey . fromJust "handshake" . stHandshake <$> get
+verifyRSA ctx hsh econtent sign = do
+    rsapriv <- return . fromJust "rsa client public key" =<< handshakeGet ctx hstRSAClientPublicKey
     return $ kxVerify rsapriv hsh econtent sign
 
+handshakeGet :: MonadIO m => Context -> (HandshakeState -> a) -> m a
+handshakeGet ctx f = usingHState ctx (gets f)
