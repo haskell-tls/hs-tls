@@ -44,7 +44,6 @@ module Network.TLS.State
     , getSessionData
     , isSessionResuming
     , isClientContext
-    , startHandshakeClient
     , getHandshakeDigest
     , endHandshake
     -- * random
@@ -53,14 +52,11 @@ module Network.TLS.State
     ) where
 
 import Control.Applicative
-import Data.Maybe (isNothing)
 import Network.TLS.Struct
-import Network.TLS.Crypto
-import Network.TLS.Handshake.State
 import Network.TLS.RNG
+import Network.TLS.Handshake.State
 import Network.TLS.Types (Role(..))
 import qualified Data.ByteString as B
-import Control.Monad
 import Control.Monad.State
 import Control.Monad.Error
 import Crypto.Random.API
@@ -210,14 +206,6 @@ getVerifiedData client = gets (if client == ClientRole then stClientVerifiedData
 
 isClientContext :: MonadState TLSState m => m Role
 isClientContext = gets stClientContext
-
-startHandshakeClient :: MonadState TLSState m => Version -> ClientRandom -> m ()
-startHandshakeClient ver crand = do
-    -- FIXME check if handshake is already not null
-    let initCtx = if ver < TLS12 then hashMD5SHA1 else hashSHA256
-    chs <- get >>= return . stHandshake
-    when (isNothing chs) $
-        modify (\st -> st { stHandshake = Just $ newEmptyHandshake ver crand initCtx })
 
 withHandshakeM :: MonadState TLSState m => HandshakeM a -> m a
 withHandshakeM f =

@@ -121,4 +121,3 @@ runRecvState ctx iniState          = recvPacketHandshake ctx >>= loop iniState >
             processHandshake ctx x
             loop nstate xs
         loop _                         _   = unexpected "spurious handshake" Nothing
-

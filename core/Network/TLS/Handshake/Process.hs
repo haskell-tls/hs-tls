@@ -9,13 +9,15 @@
 --
 module Network.TLS.Handshake.Process
     ( processHandshake
+    , startHandshake
     ) where
 
 import Data.ByteString (ByteString)
+import Data.Maybe (isNothing)
 
 import Control.Applicative
 import Control.Monad.Error
-import Control.Monad.State (gets)
+import Control.Monad.State (gets, modify)
 
 import Network.TLS.Types (Role(..), invertRole)
 import Network.TLS.Util
@@ -23,6 +25,7 @@ import Network.TLS.Packet
 import Network.TLS.Struct
 import Network.TLS.State
 import Network.TLS.Context
+import Network.TLS.Crypto
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Key
 import Network.TLS.Extension
@@ -34,7 +37,7 @@ processHandshake ctx hs = do
     case hs of
         ClientHello cver ran _ _ _ ex _ -> when (role == ServerRole) $ do
             mapM_ (usingState_ ctx . processClientExtension) ex
-            usingState_ ctx $ startHandshakeClient cver ran
+            startHandshake ctx cver ran
         Certificates certs            -> processCertificates role certs
         ClientKeyXchg content         -> when (role == ServerRole) $ do
             processClientKeyXchg ctx content
@@ -90,3 +93,11 @@ processClientFinished ctx fdata = do
     usingState_ ctx $ updateVerifiedData ServerRole fdata
     return ()
 
+startHandshake :: MonadIO m => Context -> Version -> ClientRandom -> m ()
+startHandshake ctx ver crand = do
+    -- FIXME check if handshake is already not null
+    let initCtx = if ver < TLS12 then hashMD5SHA1 else hashSHA256
+    usingState_ ctx $ do
+        chs <- gets stHandshake
+        when (isNothing chs) $
+            modify (\st -> st { stHandshake = Just $ newEmptyHandshake ver crand initCtx })

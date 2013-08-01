@@ -36,6 +36,7 @@ import Control.Exception (SomeException)
 import qualified Control.Exception as E
 
 import Network.TLS.Handshake.Common
+import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Certificate
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.Key
@@ -75,7 +76,7 @@ handshakeClient cparams ctx = do
             crand <- getStateRNG ctx 32 >>= return . ClientRandom
             let clientSession = Session . maybe Nothing (Just . fst) $ clientWantSessionResume cparams
             extensions <- getExtensions
-            usingState_ ctx (startHandshakeClient (pConnectVersion params) crand)
+            startHandshake ctx (pConnectVersion params) crand
             sendPacket ctx $ Handshake
                 [ ClientHello (pConnectVersion params) crand clientSession (map cipherID ciphers)
                               (map compressionID compressions) extensions Nothing
