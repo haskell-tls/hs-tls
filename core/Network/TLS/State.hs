@@ -2,7 +2,6 @@
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE FlexibleContexts #-}
 -- |
 -- Module      : Network.TLS.State
 -- License     : BSD-style
@@ -100,7 +99,7 @@ newTLSState rng clientContext = TLSState
     , stClientContext       = clientContext
     }
 
-updateVerifiedData :: MonadState TLSState m => Role -> Bytes -> m ()
+updateVerifiedData :: Role -> Bytes -> TLSSt ()
 updateVerifiedData sending bs = do
     cc <- isClientContext
     if cc /= sending
@@ -139,55 +138,55 @@ certVerifyHandshakeTypeMaterial HandshakeType_NPN             = False
 certVerifyHandshakeMaterial :: Handshake -> Bool
 certVerifyHandshakeMaterial = certVerifyHandshakeTypeMaterial . typeOfHandshake
 
-setSession :: MonadState TLSState m => Session -> Bool -> m ()
+setSession :: Session -> Bool -> TLSSt ()
 setSession session resuming = modify (\st -> st { stSession = session, stSessionResuming = resuming })
 
-getSession :: MonadState TLSState m => m Session
+getSession :: TLSSt Session
 getSession = gets stSession
 
-isSessionResuming :: MonadState TLSState m => m Bool
+isSessionResuming :: TLSSt Bool
 isSessionResuming = gets stSessionResuming
 
-setVersion :: MonadState TLSState m => Version -> m ()
+setVersion :: Version -> TLSSt ()
 setVersion ver = modify (\st -> st { stVersion = ver })
 
-getVersion :: MonadState TLSState m => m Version
+getVersion :: TLSSt Version
 getVersion = gets stVersion
 
-setSecureRenegotiation :: MonadState TLSState m => Bool -> m ()
+setSecureRenegotiation :: Bool -> TLSSt ()
 setSecureRenegotiation b = modify (\st -> st { stSecureRenegotiation = b })
 
-getSecureRenegotiation :: MonadState TLSState m => m Bool
+getSecureRenegotiation :: TLSSt Bool
 getSecureRenegotiation = gets stSecureRenegotiation
 
-setExtensionNPN :: MonadState TLSState m => Bool -> m ()
+setExtensionNPN :: Bool -> TLSSt ()
 setExtensionNPN b = modify (\st -> st { stExtensionNPN = b })
 
-getExtensionNPN :: MonadState TLSState m => m Bool
+getExtensionNPN :: TLSSt Bool
 getExtensionNPN = gets stExtensionNPN
 
-setNegotiatedProtocol :: MonadState TLSState m => B.ByteString -> m ()
+setNegotiatedProtocol :: B.ByteString -> TLSSt ()
 setNegotiatedProtocol s = modify (\st -> st { stNegotiatedProtocol = Just s })
 
-getNegotiatedProtocol :: MonadState TLSState m => m (Maybe B.ByteString)
+getNegotiatedProtocol :: TLSSt (Maybe B.ByteString)
 getNegotiatedProtocol = gets stNegotiatedProtocol
 
-setServerNextProtocolSuggest :: MonadState TLSState m => [B.ByteString] -> m ()
+setServerNextProtocolSuggest :: [B.ByteString] -> TLSSt ()
 setServerNextProtocolSuggest ps = modify (\st -> st { stServerNextProtocolSuggest = Just ps})
 
-getServerNextProtocolSuggest :: MonadState TLSState m => m (Maybe [B.ByteString])
-getServerNextProtocolSuggest = get >>= return . stServerNextProtocolSuggest
+getServerNextProtocolSuggest :: TLSSt (Maybe [B.ByteString])
+getServerNextProtocolSuggest = gets stServerNextProtocolSuggest
 
-setClientCertificateChain :: MonadState TLSState m => CertificateChain -> m ()
+setClientCertificateChain :: CertificateChain -> TLSSt ()
 setClientCertificateChain s = modify (\st -> st { stClientCertificateChain = Just s })
 
-getClientCertificateChain :: MonadState TLSState m => m (Maybe CertificateChain)
+getClientCertificateChain :: TLSSt (Maybe CertificateChain)
 getClientCertificateChain = gets stClientCertificateChain
 
-getVerifiedData :: MonadState TLSState m => Role -> m Bytes
+getVerifiedData :: Role -> TLSSt Bytes
 getVerifiedData client = gets (if client == ClientRole then stClientVerifiedData else stServerVerifiedData)
 
-isClientContext :: MonadState TLSState m => m Role
+isClientContext :: TLSSt Role
 isClientContext = gets stClientContext
 
 genRandom :: Int -> TLSSt Bytes
