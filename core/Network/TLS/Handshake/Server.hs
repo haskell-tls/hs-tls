@@ -268,7 +268,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                     return (msgs,hsh)
 
             -- Verify the signature.
-            verif <- usingState_ ctx $ verifyRSA hsh signature bs
+            verif <- verifyRSA ctx hsh signature bs
 
             case verif of
                 True -> do

@@ -126,10 +126,10 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
             (xver, prerand) <- usingState_ ctx $ (,) <$> getVersion <*> genRandom 46
             let premaster = encodePreMasterSecret xver prerand
             usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
-            encryptedPreMaster <- usingState_ ctx $ do
+            encryptedPreMaster <- do
                 -- SSL3 implementation generally forget this length field since it's redundant,
                 -- however TLS10 make it clear that the length field need to be present.
-                e <- encryptRSA premaster
+                e <- encryptRSA ctx premaster
                 let extra = if xver < TLS10
                                 then B.empty
                                 else encodeWord16 $ fromIntegral $ B.length e
@@ -163,14 +163,14 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                             let digest = generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit hashMD5SHA1) msgs)
                                 hsh = HashDescr id id
 
-                            sigDig <- usingState_ ctx $ signRSA hsh digest
+                            sigDig <- signRSA ctx hsh digest
                             sendPacket ctx $ Handshake [CertVerify Nothing (CertVerifyData sigDig)]
 
                         x | x == TLS10 || x == TLS11 -> do
                             let hashf bs = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs)
                                 hsh = HashDescr hashf id
 
-                            sigDig <- usingState_ ctx $ signRSA hsh msgs
+                            sigDig <- signRSA ctx hsh msgs
                             sendPacket ctx $ Handshake [CertVerify Nothing (CertVerifyData sigDig)]
 
                         _ -> do
@@ -184,7 +184,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                             let hashSig = head hashSigs'
                             hsh <- getHashAndASN1 hashSig
 
-                            sigDig <- usingState_ ctx $ signRSA hsh msgs
+                            sigDig <- signRSA ctx hsh msgs
 
                             sendPacket ctx $ Handshake [CertVerify (Just hashSig) (CertVerifyData sigDig)]
 

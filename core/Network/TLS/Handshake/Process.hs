@@ -72,8 +72,9 @@ processHandshake ctx hs = do
 -- in case the version mismatch, generate a random master secret
 processClientKeyXchg :: MonadIO m => Context -> ByteString -> m ()
 processClientKeyXchg ctx encryptedPremaster = do
-    (rver, role, random, ePremaster) <- usingState_ ctx $ do
-        (,,,) <$> getVersion <*> isClientContext <*> genRandom 48 <*> decryptRSA encryptedPremaster
+    (rver, role, random) <- usingState_ ctx $ do
+        (,,) <$> getVersion <*> isClientContext <*> genRandom 48
+    ePremaster <- decryptRSA ctx encryptedPremaster
     usingHState ctx $ do
         expectedVer <- gets hstClientVersion
         case ePremaster of
