@@ -15,7 +15,6 @@ module Network.TLS.IO
     ) where
 
 import Network.TLS.Context
-import Network.TLS.State (needEmptyPacket)
 import Network.TLS.Struct
 import Network.TLS.Record
 import Network.TLS.Packet
@@ -25,6 +24,7 @@ import Data.Data
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 
+import Data.IORef
 import Control.Monad.State
 import Control.Exception (throwIO, Exception())
 import System.IO.Error (mkIOError, eofErrorType)
@@ -113,12 +113,15 @@ sendPacket ctx pkt = do
     -- in ver <= TLS1.0, block ciphers using CBC are using CBC residue as IV, which can be guessed
     -- by an attacker. Hence, an empty packet is sent before a normal data packet, to
     -- prevent guessability.
-    withEmptyPacket <- usingState_ ctx needEmptyPacket
+    withEmptyPacket <- liftIO $ readIORef $ ctxNeedEmptyPacket ctx
     when (isNonNullAppData pkt && withEmptyPacket) $ sendPacket ctx $ AppData B.empty
 
     liftIO $ (loggingPacketSent $ ctxLogging ctx) (show pkt)
-    dataToSend <- usingState_ ctx $ writePacket pkt
-    liftIO $ (loggingIOSent $ ctxLogging ctx) dataToSend
-    liftIO $ contextSend ctx dataToSend
+    edataToSend <- liftIO (writePacket ctx pkt)
+    case edataToSend of
+        Left err         -> throwCore err
+        Right dataToSend -> do
+            liftIO $ (loggingIOSent $ ctxLogging ctx) dataToSend
+            liftIO $ contextSend ctx dataToSend
   where isNonNullAppData (AppData b) = not $ B.null b
         isNonNullAppData _           = False

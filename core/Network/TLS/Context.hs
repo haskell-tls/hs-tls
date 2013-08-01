@@ -44,6 +44,8 @@ module Network.TLS.Context
     , ctxLogging
     , ctxWithHooks
     , ctxRxState
+    , ctxTxState
+    , ctxNeedEmptyPacket
     , setEOF
     , setEstablished
     , contextFlush
@@ -77,6 +79,7 @@ module Network.TLS.Context
     , throwCore
     , usingState
     , usingState_
+    , runTxState
     , runRxState
     , usingHState
     , getStateRNG
@@ -312,9 +315,11 @@ data Context = Context
     , ctxMeasurement      :: IORef Measurement
     , ctxEOF_             :: IORef Bool    -- ^ has the handle EOFed or not.
     , ctxEstablished_     :: IORef Bool    -- ^ has the handshake been done and been successful.
+    , ctxNeedEmptyPacket  :: IORef Bool    -- ^ empty packet workaround for CBC guessability.
     , ctxSSLv2ClientHello :: IORef Bool    -- ^ enable the reception of compatibility SSLv2 client hello.
                                            -- the flag will be set to false regardless of its initial value
                                            -- after the first packet received.
+    , ctxTxState          :: MVar RecordState -- ^ current tx state
     , ctxRxState          :: MVar RecordState -- ^ current rx state
     , ctxHooks            :: IORef Hooks   -- ^ hooks for this context
     , ctxLockWrite        :: MVar ()       -- ^ lock to use for writing data (including updating the state)
@@ -393,7 +398,9 @@ contextNew backend params rng = liftIO $ do
     -- we enable the reception of SSLv2 ClientHello message only in the
     -- server context, where we might be dealing with an old/compat client.
     sslv2Compat <- newIORef (role == ServerRole)
+    needEmptyPacket <- newIORef False
     hooks <- newIORef defaultHooks
+    tx    <- newMVar newRecordState
     rx    <- newMVar newRecordState
     lockWrite <- newMVar ()
     lockRead  <- newMVar ()
@@ -402,11 +409,13 @@ contextNew backend params rng = liftIO $ do
             { ctxConnection   = backend
             , ctxParams       = params
             , ctxState        = stvar
+            , ctxTxState      = tx
             , ctxRxState      = rx
             , ctxMeasurement  = stats
             , ctxEOF_         = eof
             , ctxEstablished_ = established
             , ctxSSLv2ClientHello = sslv2Compat
+            , ctxNeedEmptyPacket  = needEmptyPacket
             , ctxHooks            = hooks
             , ctxLockWrite        = lockWrite
             , ctxLockRead         = lockRead
@@ -445,6 +454,14 @@ usingState_ ctx f = do
 
 usingHState :: MonadIO m => Context -> HandshakeM a -> m a
 usingHState ctx f = usingState_ ctx $ withHandshakeM f
+
+runTxState :: MonadIO m => Context -> RecordM a -> m (Either TLSError a)
+runTxState ctx f = do
+    ver <- usingState_ ctx getVersion
+    liftIO $ modifyMVar (ctxTxState ctx) $ \st ->
+        case runRecordM f ver st of
+            Left err         -> return (st, Left err)
+            Right (a, newSt) -> return (newSt, Right a)
 
 runRxState :: MonadIO m => Context -> RecordM a -> m (Either TLSError a)
 runRxState ctx f = do

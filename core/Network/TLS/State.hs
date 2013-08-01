@@ -17,7 +17,6 @@ module Network.TLS.State
     , withHandshakeM
     , newTLSState
     , withTLSRNG
-    , runTxState
     , assert -- FIXME move somewhere else (Internal.hs ?)
     , updateVerifiedData
     , finishHandshakeTypeMaterial
@@ -41,8 +40,6 @@ module Network.TLS.State
     , getSession
     , getSessionData
     , isSessionResuming
-    , needEmptyPacket
-    , switchTxEncryption
     , isClientContext
     , startHandshakeClient
     , getHandshakeDigest
@@ -76,7 +73,6 @@ data TLSState = TLSState
     { stHandshake           :: !(Maybe HandshakeState)
     , stSession             :: Session
     , stSessionResuming     :: Bool
-    , stTxState             :: RecordState
     , stSecureRenegotiation :: Bool  -- RFC 5746
     , stClientVerifiedData  :: Bytes -- RFC 5746
     , stServerVerifiedData  :: Bytes -- RFC 5746
@@ -105,19 +101,11 @@ instance MonadState TLSState TLSSt where
 runTLSState :: TLSSt a -> TLSState -> (Either TLSError a, TLSState)
 runTLSState f st = runState (runErrorT (runTLSSt f)) st
 
-runTxState :: RecordM a -> TLSSt a
-runTxState f = do
-    st <- get
-    case runRecordM f (stVersion st) (stTxState st) of
-        Left err         -> throwError err
-        Right (a, newSt) -> put (st { stTxState = newSt }) >> return a
-
 newTLSState :: CPRG g => g -> Role -> TLSState
 newTLSState rng clientContext = TLSState
     { stHandshake           = Nothing
     , stSession             = Session Nothing
     , stSessionResuming     = False
-    , stTxState             = newRecordState
     , stSecureRenegotiation = False
     , stClientVerifiedData  = B.empty
     , stServerVerifiedData  = B.empty
@@ -169,17 +157,12 @@ certVerifyHandshakeTypeMaterial HandshakeType_NPN             = False
 certVerifyHandshakeMaterial :: Handshake -> Bool
 certVerifyHandshakeMaterial = certVerifyHandshakeTypeMaterial . typeOfHandshake
 
-switchTxEncryption :: TLSSt ()
-switchTxEncryption =
-        withHandshakeM (gets hstPendingTxState)
-    >>= \newTxState -> modify $ \st -> st { stTxState = fromJust "pending-tx" newTxState }
-
 getSessionData :: MonadState TLSState m => m (Maybe SessionData)
 getSessionData = get >>= \st -> return (stHandshake st >>= hstMasterSecret >>= wrapSessionData st)
   where wrapSessionData st masterSecret = do
             return $ SessionData
                     { sessionVersion = stVersion st
-                    , sessionCipher  = cipherID $ fromJust "cipher" $ stCipher $ stTxState $ st
+                    , sessionCipher  = undefined -- cipherID $ fromJust "cipher" $ stCipher $ stTxState $ st
                     , sessionSecret  = masterSecret
                     }
 
@@ -191,12 +174,6 @@ getSession = gets stSession
 
 isSessionResuming :: MonadState TLSState m => m Bool
 isSessionResuming = gets stSessionResuming
-
-needEmptyPacket :: MonadState TLSState m => m Bool
-needEmptyPacket = gets f
-  where f st = (stVersion st <= TLS10)
-            && stClientContext st == ClientRole
-            && (maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stCipher $ stTxState st))
 
 setVersion :: MonadState TLSState m => Version -> m ()
 setVersion ver = modify (\st -> st { stVersion = ver })
