@@ -44,7 +44,7 @@ import Network.TLS.Handshake.State
 
 -- client part of handshake. send a bunch of handshake of client
 -- values intertwined with response from the server.
-handshakeClient :: MonadIO m => ClientParams -> Context -> m ()
+handshakeClient :: ClientParams -> Context -> IO ()
 handshakeClient cparams ctx = do
     updateMeasure ctx incrementNbHandshakes
     sentExtensions <- sendClientHello
@@ -90,7 +90,7 @@ handshakeClient cparams ctx = do
 --       -> [certificate]
 --       -> client key exchange
 --       -> [cert verify]
-sendClientData :: MonadIO m => ClientParams -> Context -> m ()
+sendClientData :: ClientParams -> Context -> IO ()
 sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertificateVerify
   where
         -- When the server requests a client certificate, we
@@ -199,7 +199,7 @@ processServerExtension (0xff01, content) = do
     return ()
 processServerExtension _ = return ()
 
-throwMiscErrorOnException :: MonadIO m => String -> SomeException -> m a
+throwMiscErrorOnException :: String -> SomeException -> IO a
 throwMiscErrorOnException msg e =
     throwCore $ Error_Misc $ msg ++ ": " ++ show e
 
@@ -212,7 +212,7 @@ throwMiscErrorOnException msg e =
 -- 5) process NPN extension
 -- 6) if no resume switch to processCertificate SM or in resume switch to expectChangeCipher
 --
-onServerHello :: MonadIO m => Context -> ClientParams -> [ExtensionID] -> Handshake -> m (RecvState m)
+onServerHello :: Context -> ClientParams -> [ExtensionID] -> Handshake -> IO (RecvState IO)
 onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cipher compression exts) = do
     when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
     case find ((==) rver) allowedvers of
@@ -257,7 +257,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
         compressions = pCompressions params
 onServerHello _ _ _ p = unexpected (show p) (Just "server hello")
 
-processCertificate :: MonadIO m => Context -> Handshake -> m (RecvState m)
+processCertificate :: Context -> Handshake -> IO (RecvState IO)
 processCertificate ctx (Certificates certs) = do
     usage <- liftIO $ E.catch (onCertificatesRecv params certs) rejectOnException
     case usage of
@@ -267,19 +267,19 @@ processCertificate ctx (Certificates certs) = do
   where params       = ctxParams ctx
 processCertificate ctx p = processServerKeyExchange ctx p
 
-expectChangeCipher :: MonadIO m => Packet -> m (RecvState m)
+expectChangeCipher :: Packet -> IO (RecvState IO)
 expectChangeCipher ChangeCipherSpec = return $ RecvStateHandshake expectFinish
 expectChangeCipher p                = unexpected (show p) (Just "change cipher")
 
-expectFinish :: MonadIO m => Handshake -> m (RecvState m)
+expectFinish :: Handshake -> IO (RecvState IO)
 expectFinish (Finished _) = return RecvStateDone
 expectFinish p            = unexpected (show p) (Just "Handshake Finished")
 
-processServerKeyExchange :: MonadIO m => Context -> Handshake -> m (RecvState m)
+processServerKeyExchange :: Context -> Handshake -> IO (RecvState IO)
 processServerKeyExchange ctx (ServerKeyXchg _) = return $ RecvStateHandshake (processCertificateRequest ctx)
 processServerKeyExchange ctx p                 = processCertificateRequest ctx p
 
-processCertificateRequest :: MonadIO m => Context -> Handshake -> m (RecvState m)
+processCertificateRequest :: Context -> Handshake -> IO (RecvState IO)
 processCertificateRequest ctx (CertRequest cTypes sigAlgs dNames) = do
     -- When the server requests a client
     -- certificate, we simply store the
@@ -289,6 +289,6 @@ processCertificateRequest ctx (CertRequest cTypes sigAlgs dNames) = do
     return $ RecvStateHandshake (processServerHelloDone ctx)
 processCertificateRequest ctx p = processServerHelloDone ctx p
 
-processServerHelloDone :: MonadIO m => Context -> Handshake -> m (RecvState m)
+processServerHelloDone :: Context -> Handshake -> IO (RecvState m)
 processServerHelloDone _ ServerHelloDone = return RecvStateDone
 processServerHelloDone _ p = unexpected (show p) (Just "server hello data")

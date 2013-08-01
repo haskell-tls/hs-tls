@@ -34,14 +34,14 @@ data ConnectionNotEstablished = ConnectionNotEstablished
 
 instance Exception ConnectionNotEstablished
 
-checkValid :: MonadIO m => Context -> m ()
+checkValid :: Context -> IO ()
 checkValid ctx = do
     established <- ctxEstablished ctx
     unless established $ liftIO $ throwIO ConnectionNotEstablished
     eofed <- ctxEOF ctx
     when eofed $ liftIO $ throwIO $ mkIOError eofErrorType "data" Nothing Nothing
 
-readExact :: MonadIO m => Context -> Int -> m Bytes
+readExact :: Context -> Int -> IO Bytes
 readExact ctx sz = do
     hdrbs <- liftIO $ contextRecv ctx sz
     when (B.length hdrbs < sz) $ do
@@ -54,9 +54,9 @@ readExact ctx sz = do
 -- | recvRecord receive a full TLS record (header + data), from the other side.
 --
 -- The record is disengaged from the record layer
-recvRecord :: MonadIO m => Bool    -- ^ flag to enable SSLv2 compat ClientHello reception
-                        -> Context -- ^ TLS context
-                        -> m (Either TLSError (Record Plaintext))
+recvRecord :: Bool    -- ^ flag to enable SSLv2 compat ClientHello reception
+           -> Context -- ^ TLS context
+           -> IO (Either TLSError (Record Plaintext))
 recvRecord compatSSLv2 ctx
 #ifdef SSLV2_COMPATIBLE
     | compatSSLv2 = do
@@ -79,7 +79,7 @@ recvRecord compatSSLv2 ctx
                         Right header -> getRecord header content
 #endif
               maximumSizeExceeded = Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
-              getRecord :: MonadIO m => Header -> Bytes -> m (Either TLSError (Record Plaintext))
+              getRecord :: Header -> Bytes -> IO (Either TLSError (Record Plaintext))
               getRecord header content = do
                     liftIO $ (loggingIORecv $ ctxLogging ctx) header content
                     runRxState ctx $ disengageRecord $ rawToRecord header (fragmentCiphertext content)
@@ -89,7 +89,7 @@ recvRecord compatSSLv2 ctx
 -- many messages (many only in case of handshake). if will returns a
 -- TLSError if the packet is unexpected or malformed
 recvPacket :: MonadIO m => Context -> m (Either TLSError Packet)
-recvPacket ctx = do
+recvPacket ctx = liftIO $ do
     compatSSLv2 <- ctxHasSSLv2ClientHello ctx
     erecord     <- recvRecord compatSSLv2 ctx
     case erecord of
@@ -99,10 +99,10 @@ recvPacket ctx = do
             pkt <- case pktRecv of
                     Right (Handshake hss) ->
                         ctxWithHooks ctx $ \hooks ->
-                            liftIO (mapM (hookRecvHandshake hooks) hss) >>= return . Right . Handshake
+                            (mapM (hookRecvHandshake hooks) hss) >>= return . Right . Handshake
                     _                     -> return pktRecv
             case pkt of
-                Right p -> liftIO $ (loggingPacketRecv $ ctxLogging ctx) $ show p
+                Right p -> (loggingPacketRecv $ ctxLogging ctx) $ show p
                 _       -> return ()
             when compatSSLv2 $ ctxDisableSSLv2ClientHello ctx
             return pkt

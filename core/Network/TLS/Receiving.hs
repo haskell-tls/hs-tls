@@ -12,7 +12,6 @@ module Network.TLS.Receiving
     ( processPacket
     ) where
 
-import Control.Applicative ((<$>))
 import Control.Monad.State
 import Control.Monad.Error
 import Control.Concurrent.MVar
@@ -30,7 +29,7 @@ returnEither :: Either TLSError a -> TLSSt a
 returnEither (Left err) = throwError err
 returnEither (Right a)  = return a
 
-processPacket :: MonadIO m => Context -> Record Plaintext -> m (Either TLSError Packet)
+processPacket :: Context -> Record Plaintext -> IO (Either TLSError Packet)
 
 processPacket _ (Record ProtocolType_AppData _ fragment) = return $ Right $ AppData $ fragmentGetBytes fragment
 
@@ -43,7 +42,6 @@ processPacket ctx (Record ProtocolType_ChangeCipherSpec _ fragment) =
                        return $ Right ChangeCipherSpec
 
 processPacket ctx (Record ProtocolType_Handshake ver fragment) = do
-    --keyxchg <- (hstPendingCipher >=> return . cipherKeyExchange) <$> getHState ctx >>=
     keyxchg <- getHState ctx >>= \hs -> return $ (hs >>= hstPendingCipher >>= Just . cipherKeyExchange)
     usingState ctx $ do
         npn     <- getExtensionNPN
@@ -64,7 +62,7 @@ processPacket _ (Record ProtocolType_DeprecatedHandshake _ fragment) =
         Left err -> return $ Left err
         Right hs -> return $ Right $ Handshake [hs]
 
-switchRxEncryption :: MonadIO m => Context -> m ()
+switchRxEncryption :: Context -> IO ()
 switchRxEncryption ctx =
     usingHState ctx (gets hstPendingRxState) >>= \rx ->
     liftIO $ modifyMVar_ (ctxRxState ctx) (\_ -> return $ fromJust "rx-state" rx)

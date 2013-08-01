@@ -32,7 +32,7 @@ import Network.TLS.Handshake.Key
 import Network.TLS.Extension
 import Data.X509
 
-processHandshake :: MonadIO m => Context -> Handshake -> m ()
+processHandshake :: Context -> Handshake -> IO ()
 processHandshake ctx hs = do
     role <- usingState_ ctx isClientContext
     case hs of
@@ -59,7 +59,7 @@ processHandshake ctx hs = do
         -- unknown extensions
         processClientExtension _ = return ()
 
-        processCertificates :: MonadIO m => Role -> CertificateChain -> m ()
+        processCertificates :: Role -> CertificateChain -> IO ()
         processCertificates ServerRole (CertificateChain []) = return ()
         processCertificates ClientRole (CertificateChain []) =
             throwCore $ Error_Protocol ("server certificate missing", True, HandshakeFailure)
@@ -71,7 +71,7 @@ processHandshake ctx hs = do
 -- process the client key exchange message. the protocol expects the initial
 -- client version received in ClientHello, not the negotiated version.
 -- in case the version mismatch, generate a random master secret
-processClientKeyXchg :: MonadIO m => Context -> ByteString -> m ()
+processClientKeyXchg :: Context -> ByteString -> IO ()
 processClientKeyXchg ctx encryptedPremaster = do
     (rver, role, random) <- usingState_ ctx $ do
         (,,) <$> getVersion <*> isClientContext <*> genRandom 48
@@ -86,7 +86,7 @@ processClientKeyXchg ctx encryptedPremaster = do
                     | ver /= expectedVer -> setMasterSecretFromPre rver role random
                     | otherwise          -> setMasterSecretFromPre rver role premaster
 
-processClientFinished :: MonadIO m => Context -> FinishedData -> m ()
+processClientFinished :: Context -> FinishedData -> IO ()
 processClientFinished ctx fdata = do
     (cc,ver) <- usingState_ ctx $ (,) <$> isClientContext <*> getVersion
     expected <- usingHState ctx $ getHandshakeDigest ver $ invertRole cc
@@ -95,7 +95,7 @@ processClientFinished ctx fdata = do
     usingState_ ctx $ updateVerifiedData ServerRole fdata
     return ()
 
-startHandshake :: MonadIO m => Context -> Version -> ClientRandom -> m ()
+startHandshake :: Context -> Version -> ClientRandom -> IO ()
 startHandshake ctx ver crand = do
     -- FIXME check if handshake is already not null
     let initCtx = if ver < TLS12 then hashMD5SHA1 else hashSHA256

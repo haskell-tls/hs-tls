@@ -77,7 +77,7 @@ prepareRecord ctx f = do
                 runTxState ctx (modify (setRecordIV newIV) >> f)
         else runTxState ctx f
 
-switchTxEncryption :: MonadIO m => Context -> m ()
+switchTxEncryption :: Context -> IO ()
 switchTxEncryption ctx = do
     tx  <- usingHState ctx (fromJust "tx-state" <$> gets hstPendingTxState)
     (ver, cc) <- usingState_ ctx $ do v <- getVersion
@@ -87,4 +87,3 @@ switchTxEncryption ctx = do
     -- set empty packet counter measure if condition are met
     when (ver <= TLS10 && cc == ClientRole && isCBC tx) $ liftIO $ writeIORef (ctxNeedEmptyPacket ctx) True
   where isCBC tx = maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stCipher tx)
-

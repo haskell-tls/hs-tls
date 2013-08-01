@@ -61,12 +61,12 @@ bye ctx = sendPacket ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
 -- | If the Next Protocol Negotiation extension has been used, this will
 -- return get the protocol agreed upon.
 getNegotiatedProtocol :: MonadIO m => Context -> m (Maybe B.ByteString)
-getNegotiatedProtocol ctx = usingState_ ctx S.getNegotiatedProtocol
+getNegotiatedProtocol ctx = liftIO $ usingState_ ctx S.getNegotiatedProtocol
 
 -- | sendData sends a bunch of data.
 -- It will automatically chunk data to acceptable packet size
 sendData :: MonadIO m => Context -> L.ByteString -> m ()
-sendData ctx dataToSend = checkValid ctx >> mapM_ sendDataChunk (L.toChunks dataToSend)
+sendData ctx dataToSend = liftIO (checkValid ctx) >> mapM_ sendDataChunk (L.toChunks dataToSend)
   where sendDataChunk d
             | B.length d > 16384 = do
                 let (sending, remain) = B.splitAt 16384 d
@@ -77,7 +77,7 @@ sendData ctx dataToSend = checkValid ctx >> mapM_ sendDataChunk (L.toChunks data
 -- | recvData get data out of Data packet, and automatically renegotiate if
 -- a Handshake ClientHello is received
 recvData :: MonadIO m => Context -> m B.ByteString
-recvData ctx = checkValid ctx >> recvPacket ctx >>= either onError process
+recvData ctx = liftIO (checkValid ctx) >> recvPacket ctx >>= liftIO . either onError process
   where onError err@(Error_Protocol (reason,fatal,desc)) =
             terminate err (if fatal then AlertLevel_Fatal else AlertLevel_Warning) desc reason
         onError err =
@@ -107,19 +107,19 @@ recvData ctx = checkValid ctx >> recvPacket ctx >>= either onError process
         process p            = let reason = "unexpected message " ++ show p in
                                terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
 
-        terminate :: MonadIO m => TLSError -> AlertLevel -> AlertDescription -> String -> m a
+        terminate :: TLSError -> AlertLevel -> AlertDescription -> String -> IO a
         terminate err level desc reason = do
             session <- usingState_ ctx getSession
             case session of
                 Session Nothing    -> return ()
-                Session (Just sid) -> withSessionManager (ctxParams ctx) (\s -> liftIO $ sessionInvalidate s sid)
-            liftIO $ E.catch (sendPacket ctx $ Alert [(level, desc)]) (\(_ :: E.SomeException) -> return ())
+                Session (Just sid) -> withSessionManager (ctxParams ctx) (\s -> sessionInvalidate s sid)
+            E.catch (sendPacket ctx $ Alert [(level, desc)]) (\(_ :: E.SomeException) -> return ())
             setEOF ctx
-            liftIO $ E.throwIO (Terminated False reason err)
+            E.throwIO (Terminated False reason err)
 
         -- the other side could have close the connection already, so wrap
         -- this in a try and ignore all exceptions
-        tryBye = liftIO $ E.catch (bye ctx) (\(_ :: E.SomeException) -> return ())
+        tryBye = E.catch (bye ctx) (\(_ :: E.SomeException) -> return ())
 
 {-# DEPRECATED recvData' "use recvData that returns strict bytestring" #-}
 -- | same as recvData but returns a lazy bytestring.

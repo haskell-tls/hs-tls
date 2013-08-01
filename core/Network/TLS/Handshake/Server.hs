@@ -47,7 +47,7 @@ import Network.TLS.X509
 -- This is just a helper to pop the next message from the recv layer,
 -- and call handshakeServerWith.
 handshakeServer :: MonadIO m => ServerParams -> Context -> m ()
-handshakeServer sparams ctx = do
+handshakeServer sparams ctx = liftIO $ do
     hss <- recvPacketHandshake ctx
     case hss of
         [ch] -> handshakeServerWith sparams ctx ch
@@ -78,7 +78,7 @@ handshakeServer sparams ctx = do
 --      -> change cipher      <- change cipher
 --      -> finish             <- finish
 --
-handshakeServerWith :: MonadIO m => ServerParams -> Context -> Handshake -> m ()
+handshakeServerWith :: ServerParams -> Context -> Handshake -> IO ()
 handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession ciphers compressions exts _) = do
     -- check if policy allow this new handshake to happens
     handshakeAuthorized <- withMeasure ctx (onHandshake $ ctxParams ctx)
@@ -212,7 +212,7 @@ handshakeServerWith _ _ _ = fail "unexpected handshake type received. expecting 
 --      <- [NPN]
 --      <- finish
 --
-recvClientData :: MonadIO m => ServerParams -> Context -> m ()
+recvClientData :: ServerParams -> Context -> IO ()
 recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientCertificate)
   where processClientCertificate (Certificates certs) = do
             -- Call application callback to see whether the

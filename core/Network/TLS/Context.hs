@@ -339,13 +339,13 @@ type TLSLogging = Logging
 type TLSCertificateUsage = CertificateUsage
 type TLSCertificateRejectReason = CertificateRejectReason
 
-updateMeasure :: MonadIO m => Context -> (Measurement -> Measurement) -> m ()
-updateMeasure ctx f = liftIO $ do
+updateMeasure :: Context -> (Measurement -> Measurement) -> IO ()
+updateMeasure ctx f = do
     x <- readIORef (ctxMeasurement ctx)
     writeIORef (ctxMeasurement ctx) $! f x
 
-withMeasure :: MonadIO m => Context -> (Measurement -> IO a) -> m a
-withMeasure ctx f = liftIO (readIORef (ctxMeasurement ctx) >>= f)
+withMeasure :: Context -> (Measurement -> IO a) -> IO a
+withMeasure ctx f = readIORef (ctxMeasurement ctx) >>= f
 
 contextFlush :: Context -> IO ()
 contextFlush = backendFlush . ctxConnection
@@ -359,26 +359,26 @@ contextSend c b = updateMeasure c (addBytesSent $ B.length b) >> (backendSend $ 
 contextRecv :: Context -> Int -> IO Bytes
 contextRecv c sz = updateMeasure c (addBytesReceived sz) >> (backendRecv $ ctxConnection c) sz
 
-ctxEOF :: MonadIO m => Context -> m Bool
-ctxEOF ctx = liftIO (readIORef $ ctxEOF_ ctx)
+ctxEOF :: Context -> IO Bool
+ctxEOF ctx = readIORef $ ctxEOF_ ctx
 
-ctxHasSSLv2ClientHello :: MonadIO m => Context -> m Bool
-ctxHasSSLv2ClientHello ctx = liftIO (readIORef $ ctxSSLv2ClientHello ctx)
+ctxHasSSLv2ClientHello :: Context -> IO Bool
+ctxHasSSLv2ClientHello ctx = readIORef $ ctxSSLv2ClientHello ctx
 
-ctxDisableSSLv2ClientHello :: MonadIO m => Context -> m ()
-ctxDisableSSLv2ClientHello ctx = liftIO (writeIORef (ctxSSLv2ClientHello ctx) False)
+ctxDisableSSLv2ClientHello :: Context -> IO ()
+ctxDisableSSLv2ClientHello ctx = writeIORef (ctxSSLv2ClientHello ctx) False
 
-setEOF :: MonadIO m => Context -> m ()
-setEOF ctx = liftIO $ writeIORef (ctxEOF_ ctx) True
+setEOF :: Context -> IO ()
+setEOF ctx = writeIORef (ctxEOF_ ctx) True
 
-ctxEstablished :: MonadIO m => Context -> m Bool
-ctxEstablished ctx = liftIO $ readIORef $ ctxEstablished_ ctx
+ctxEstablished :: Context -> IO Bool
+ctxEstablished ctx = readIORef $ ctxEstablished_ ctx
 
-ctxWithHooks :: MonadIO m => Context -> (Hooks -> m a) -> m a
-ctxWithHooks ctx f = liftIO (readIORef $ ctxHooks ctx) >>= f
+ctxWithHooks :: Context -> (Hooks -> IO a) -> IO a
+ctxWithHooks ctx f = readIORef (ctxHooks ctx) >>= f
 
-setEstablished :: MonadIO m => Context -> Bool -> m ()
-setEstablished ctx v = liftIO $ writeIORef (ctxEstablished_ ctx) v
+setEstablished :: Context -> Bool -> IO ()
+setEstablished ctx v = writeIORef (ctxEstablished_ ctx) v
 
 ctxLogging :: Context -> Logging
 ctxLogging = pLogging . ctxParams
@@ -438,59 +438,59 @@ contextNewOnHandle handle params st =
     liftIO (hSetBuffering handle NoBuffering) >> contextNew backend params st
   where backend = Backend (hFlush handle) (hClose handle) (B.hPut handle) (B.hGet handle)
 
-contextHookSetHandshakeRecv :: MonadIO m => Context -> (Handshake -> IO Handshake) -> m ()
+contextHookSetHandshakeRecv :: Context -> (Handshake -> IO Handshake) -> IO ()
 contextHookSetHandshakeRecv context f =
     liftIO $ modifyIORef (ctxHooks context) (\hooks -> hooks { hookRecvHandshake = f })
 
 throwCore :: (MonadIO m, Exception e) => e -> m a
 throwCore = liftIO . throwIO
 
-usingState :: MonadIO m => Context -> TLSSt a -> m (Either TLSError a)
+usingState :: Context -> TLSSt a -> IO (Either TLSError a)
 usingState ctx f =
-    liftIO $ modifyMVar (ctxState ctx) $ \st ->
+    modifyMVar (ctxState ctx) $ \st ->
             let (a, newst) = runTLSState f st
              in newst `seq` return (newst, a)
 
-usingState_ :: MonadIO m => Context -> TLSSt a -> m a
+usingState_ :: Context -> TLSSt a -> IO a
 usingState_ ctx f = do
     ret <- usingState ctx f
     case ret of
         Left err -> throwCore err
         Right r  -> return r
 
-usingHState :: MonadIO m => Context -> HandshakeM a -> m a
+usingHState :: Context -> HandshakeM a -> IO a
 usingHState ctx f = liftIO $ modifyMVar (ctxHandshake ctx) $ \mst ->
     case mst of
         Nothing -> throwCore $ Error_Misc "missing handshake"
         Just st -> return $ swap (Just `fmap` runHandshake st f)
 
-getHState :: MonadIO m => Context -> m (Maybe HandshakeState)
+getHState :: Context -> IO (Maybe HandshakeState)
 getHState ctx = liftIO $ readMVar (ctxHandshake ctx)
 
-runTxState :: MonadIO m => Context -> RecordM a -> m (Either TLSError a)
+runTxState :: Context -> RecordM a -> IO (Either TLSError a)
 runTxState ctx f = do
     ver <- usingState_ ctx getVersion
-    liftIO $ modifyMVar (ctxTxState ctx) $ \st ->
+    modifyMVar (ctxTxState ctx) $ \st ->
         case runRecordM f ver st of
             Left err         -> return (st, Left err)
             Right (a, newSt) -> return (newSt, Right a)
 
-runRxState :: MonadIO m => Context -> RecordM a -> m (Either TLSError a)
+runRxState :: Context -> RecordM a -> IO (Either TLSError a)
 runRxState ctx f = do
     ver <- usingState_ ctx getVersion
-    liftIO $ modifyMVar (ctxRxState ctx) $ \st ->
+    modifyMVar (ctxRxState ctx) $ \st ->
         case runRecordM f ver st of
             Left err         -> return (st, Left err)
             Right (a, newSt) -> return (newSt, Right a)
 
-getStateRNG :: MonadIO m => Context -> Int -> m Bytes
+getStateRNG :: Context -> Int -> IO Bytes
 getStateRNG ctx n = usingState_ ctx $ genRandom n
 
-withReadLock :: MonadIO m => Context -> IO a -> m a
-withReadLock ctx f = liftIO $ withMVar (ctxLockRead ctx) (const f)
+withReadLock :: Context -> IO a -> IO a
+withReadLock ctx f = withMVar (ctxLockRead ctx) (const f)
 
-withWriteLock :: MonadIO m => Context -> IO a -> m a
-withWriteLock ctx f = liftIO $ withMVar (ctxLockWrite ctx) (const f)
+withWriteLock :: Context -> IO a -> IO a
+withWriteLock ctx f = withMVar (ctxLockWrite ctx) (const f)
 
-withStateLock :: MonadIO m => Context -> IO a -> m a
-withStateLock ctx f = liftIO $ withMVar (ctxLockState ctx) (const f)
+withStateLock :: Context -> IO a -> IO a
+withStateLock ctx f = withMVar (ctxLockState ctx) (const f)

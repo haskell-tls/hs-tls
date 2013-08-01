@@ -47,16 +47,16 @@ errorToAlert :: TLSError -> Packet
 errorToAlert (Error_Protocol (_, _, ad)) = Alert [(AlertLevel_Fatal, ad)]
 errorToAlert _                           = Alert [(AlertLevel_Fatal, InternalError)]
 
-unexpected :: MonadIO m => String -> Maybe [Char] -> m a
+unexpected :: String -> Maybe [Char] -> IO a
 unexpected msg expected = throwCore $ Error_Packet_unexpected msg (maybe "" (" expected: " ++) expected)
 
-newSession :: MonadIO m => Context -> m Session
+newSession :: Context -> IO Session
 newSession ctx
     | pUseSession $ ctxParams ctx = getStateRNG ctx 32 >>= return . Session . Just
     | otherwise                   = return $ Session Nothing
 
 -- | when a new handshake is done, wrap up & clean up.
-handshakeTerminate :: MonadIO m => Context -> m ()
+handshakeTerminate :: Context -> IO ()
 handshakeTerminate ctx = do
     session <- usingState_ ctx getSession
     -- only callback the session established if we have a session
@@ -72,7 +72,7 @@ handshakeTerminate ctx = do
     setEstablished ctx True
     return ()
 
-sendChangeCipherAndFinish :: MonadIO m => Context -> Role -> m ()
+sendChangeCipherAndFinish :: Context -> Role -> IO ()
 sendChangeCipherAndFinish ctx role = do
     sendPacket ctx ChangeCipherSpec
 
@@ -94,7 +94,7 @@ sendChangeCipherAndFinish ctx role = do
     sendPacket ctx (Handshake [Finished cf])
     liftIO $ contextFlush ctx
 
-recvChangeCipherAndFinish :: MonadIO m => Context -> m ()
+recvChangeCipherAndFinish :: Context -> IO ()
 recvChangeCipherAndFinish ctx = runRecvState ctx (RecvStateNext expectChangeCipher)
   where expectChangeCipher ChangeCipherSpec = return $ RecvStateHandshake expectFinish
         expectChangeCipher p                = unexpected (show p) (Just "change cipher")
@@ -106,7 +106,7 @@ data RecvState m =
     | RecvStateHandshake (Handshake -> m (RecvState m))
     | RecvStateDone
 
-recvPacketHandshake :: MonadIO m => Context -> m [Handshake]
+recvPacketHandshake :: Context -> IO [Handshake]
 recvPacketHandshake ctx = do
     pkts <- recvPacket ctx
     case pkts of
@@ -114,12 +114,12 @@ recvPacketHandshake ctx = do
         Right x             -> fail ("unexpected type received. expecting handshake and got: " ++ show x)
         Left err            -> throwCore err
 
-runRecvState :: MonadIO m => Context -> RecvState m -> m ()
+runRecvState :: Context -> RecvState IO -> IO ()
 runRecvState _   (RecvStateDone)   = return ()
 runRecvState ctx (RecvStateNext f) = recvPacket ctx >>= either throwCore f >>= runRecvState ctx
 runRecvState ctx iniState          = recvPacketHandshake ctx >>= loop iniState >>= runRecvState ctx
   where
-        loop :: MonadIO m => RecvState m -> [Handshake] -> m (RecvState m)
+        loop :: RecvState IO -> [Handshake] -> IO (RecvState IO)
         loop recvState []                  = return recvState
         loop (RecvStateHandshake f) (x:xs) = do
             nstate <- f x
@@ -127,7 +127,7 @@ runRecvState ctx iniState          = recvPacketHandshake ctx >>= loop iniState >
             loop nstate xs
         loop _                         _   = unexpected "spurious handshake" Nothing
 
-getSessionData :: MonadIO m => Context -> m (Maybe SessionData)
+getSessionData :: Context -> IO (Maybe SessionData)
 getSessionData ctx = do
     ver <- usingState_ ctx getVersion
     mms <- usingHState ctx (gets hstMasterSecret)
