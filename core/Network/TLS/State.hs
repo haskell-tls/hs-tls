@@ -41,7 +41,6 @@ module Network.TLS.State
     , getVerifiedData
     , setSession
     , getSession
-    , getSessionData
     , isSessionResuming
     , isClientContext
     , getHandshakeDigest
@@ -146,15 +145,6 @@ certVerifyHandshakeTypeMaterial HandshakeType_NPN             = False
 
 certVerifyHandshakeMaterial :: Handshake -> Bool
 certVerifyHandshakeMaterial = certVerifyHandshakeTypeMaterial . typeOfHandshake
-
-getSessionData :: MonadState TLSState m => m (Maybe SessionData)
-getSessionData = get >>= \st -> return (stHandshake st >>= hstMasterSecret >>= wrapSessionData st)
-  where wrapSessionData st masterSecret = do
-            return $ SessionData
-                    { sessionVersion = stVersion st
-                    , sessionCipher  = undefined -- cipherID $ fromJust "cipher" $ stCipher $ stTxState $ st
-                    , sessionSecret  = masterSecret
-                    }
 
 setSession :: MonadState TLSState m => Session -> Bool -> m ()
 setSession session resuming = modify (\st -> st { stSession = session, stSessionResuming = resuming })

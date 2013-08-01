@@ -15,15 +15,19 @@ module Network.TLS.Handshake.Common
     , recvPacketHandshake
     ) where
 
+import Control.Concurrent.MVar
+
 import Network.TLS.Context
 import Network.TLS.Session
 import Network.TLS.Struct
 import Network.TLS.IO
 import Network.TLS.State hiding (getNegotiatedProtocol)
 import Network.TLS.Handshake.Process
+import Network.TLS.Record.State
 import Network.TLS.Measurement
 import Network.TLS.Types
-import Data.Maybe
+import Network.TLS.Cipher
+import Network.TLS.Util
 import Data.Data
 import Data.ByteString.Char8 ()
 
@@ -57,8 +61,8 @@ handshakeTerminate ctx = do
     -- only callback the session established if we have a session
     case session of
         Session (Just sessionId) -> do
-            sessionData <- usingState_ ctx getSessionData
-            withSessionManager (ctxParams ctx) (\s -> liftIO $ sessionEstablish s sessionId (fromJust sessionData))
+            sessionData <- getSessionData ctx
+            withSessionManager (ctxParams ctx) (\s -> liftIO $ sessionEstablish s sessionId (fromJust "session-data" sessionData))
         _ -> return ()
     -- forget all handshake data now and reset bytes counters.
     usingState_ ctx endHandshake
@@ -121,3 +125,16 @@ runRecvState ctx iniState          = recvPacketHandshake ctx >>= loop iniState >
             processHandshake ctx x
             loop nstate xs
         loop _                         _   = unexpected "spurious handshake" Nothing
+
+getSessionData :: MonadIO m => Context -> m (Maybe SessionData)
+getSessionData ctx = do
+    ver <- usingState_ ctx getVersion
+    mms <- usingHState ctx (gets hstMasterSecret)
+    tx  <- liftIO $ readMVar (ctxTxState ctx)
+    case mms of
+        Nothing -> return Nothing
+        Just ms -> return $ Just $ SessionData
+                        { sessionVersion = ver
+                        , sessionCipher  = cipherID $ fromJust "cipher" $ stCipher tx
+                        , sessionSecret  = ms
+                        }
