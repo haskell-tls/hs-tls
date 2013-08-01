@@ -17,8 +17,6 @@ module Network.TLS.State
     ( TLSState(..)
     , TLSSt
     , runTLSState
-    , HandshakeState(..)
-    , withHandshakeM
     , newTLSState
     , withTLSRNG
     , updateVerifiedData
@@ -43,8 +41,6 @@ module Network.TLS.State
     , getSession
     , isSessionResuming
     , isClientContext
-    , getHandshakeDigest
-    , endHandshake
     -- * random
     , genRandom
     , withRNG
@@ -53,7 +49,6 @@ module Network.TLS.State
 import Control.Applicative
 import Network.TLS.Struct
 import Network.TLS.RNG
-import Network.TLS.Handshake.State
 import Network.TLS.Types (Role(..))
 import qualified Data.ByteString as B
 import Control.Monad.State
@@ -62,8 +57,7 @@ import Crypto.Random.API
 import Data.X509 (CertificateChain)
 
 data TLSState = TLSState
-    { stHandshake           :: !(Maybe HandshakeState)
-    , stSession             :: Session
+    { stSession             :: Session
     , stSessionResuming     :: Bool
     , stSecureRenegotiation :: Bool  -- RFC 5746
     , stClientVerifiedData  :: Bytes -- RFC 5746
@@ -92,8 +86,7 @@ runTLSState f st = runState (runErrorT (runTLSSt f)) st
 
 newTLSState :: CPRG g => g -> Role -> TLSState
 newTLSState rng clientContext = TLSState
-    { stHandshake           = Nothing
-    , stSession             = Session Nothing
+    { stSession             = Session Nothing
     , stSessionResuming     = False
     , stSecureRenegotiation = False
     , stClientVerifiedData  = B.empty
@@ -196,17 +189,6 @@ getVerifiedData client = gets (if client == ClientRole then stClientVerifiedData
 
 isClientContext :: MonadState TLSState m => m Role
 isClientContext = gets stClientContext
-
-withHandshakeM :: MonadState TLSState m => HandshakeM a -> m a
-withHandshakeM f =
-    get >>= \st -> case stHandshake st of
-                    Nothing  -> fail "handshake missing"
-                    Just hst -> do let (a, nhst) = runHandshake hst f
-                                   put (st { stHandshake = Just nhst })
-                                   return a
-
-endHandshake :: MonadState TLSState m => m ()
-endHandshake = modify (\st -> st { stHandshake = Nothing })
 
 genRandom :: Int -> TLSSt Bytes
 genRandom n = do

@@ -22,6 +22,7 @@ import Network.TLS.Struct
 import Network.TLS.Record
 import Network.TLS.Packet
 import Network.TLS.State
+import Network.TLS.Handshake.State
 import Network.TLS.Cipher
 import Network.TLS.Util
 
@@ -41,22 +42,22 @@ processPacket ctx (Record ProtocolType_ChangeCipherSpec _ fragment) =
         Right _  -> do switchRxEncryption ctx
                        return $ Right ChangeCipherSpec
 
-processPacket ctx (Record ProtocolType_Handshake ver fragment) = usingState ctx $ do
-    keyxchg <- gets (\st -> case stHandshake st of
-                                Nothing  -> Nothing
-                                Just hst -> cipherKeyExchange <$> hstPendingCipher hst)
-    npn     <- getExtensionNPN
-    let currentparams = CurrentParams
-                        { cParamsVersion     = ver
-                        , cParamsKeyXchgType = keyxchg
-                        , cParamsSupportNPN  = npn
-                        }
-    handshakes <- returnEither (decodeHandshakes $ fragmentGetBytes fragment)
-    hss <- forM handshakes $ \(ty, content) -> do
-        case decodeHandshake currentparams ty content of
-                Left err -> throwError err
-                Right hs -> return hs
-    return $ Handshake hss
+processPacket ctx (Record ProtocolType_Handshake ver fragment) = do
+    --keyxchg <- (hstPendingCipher >=> return . cipherKeyExchange) <$> getHState ctx >>=
+    keyxchg <- getHState ctx >>= \hs -> return $ (hs >>= hstPendingCipher >>= Just . cipherKeyExchange)
+    usingState ctx $ do
+        npn     <- getExtensionNPN
+        let currentparams = CurrentParams
+                            { cParamsVersion     = ver
+                            , cParamsKeyXchgType = keyxchg
+                            , cParamsSupportNPN  = npn
+                            }
+        handshakes <- returnEither (decodeHandshakes $ fragmentGetBytes fragment)
+        hss <- forM handshakes $ \(ty, content) -> do
+            case decodeHandshake currentparams ty content of
+                    Left err -> throwError err
+                    Right hs -> return hs
+        return $ Handshake hss
 
 processPacket _ (Record ProtocolType_DeprecatedHandshake _ fragment) =
     case decodeDeprecatedHandshake $ fragmentGetBytes fragment of

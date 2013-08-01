@@ -23,6 +23,7 @@ import Network.TLS.Struct
 import Network.TLS.IO
 import Network.TLS.State hiding (getNegotiatedProtocol)
 import Network.TLS.Handshake.Process
+import Network.TLS.Handshake.State
 import Network.TLS.Record.State
 import Network.TLS.Measurement
 import Network.TLS.Types
@@ -65,7 +66,7 @@ handshakeTerminate ctx = do
             withSessionManager (ctxParams ctx) (\s -> liftIO $ sessionEstablish s sessionId (fromJust "session-data" sessionData))
         _ -> return ()
     -- forget all handshake data now and reset bytes counters.
-    usingState_ ctx endHandshake
+    liftIO $ modifyMVar_ (ctxHandshake ctx) (return . const Nothing)
     updateMeasure ctx resetBytesCounters
     -- mark the secure connection up and running.
     setEstablished ctx True

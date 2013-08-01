@@ -45,6 +45,7 @@ module Network.TLS.Context
     , ctxWithHooks
     , ctxRxState
     , ctxTxState
+    , ctxHandshake
     , ctxNeedEmptyPacket
     , setEOF
     , setEstablished
@@ -82,6 +83,7 @@ module Network.TLS.Context
     , runTxState
     , runRxState
     , usingHState
+    , getHState
     , getStateRNG
     ) where
 
@@ -109,6 +111,7 @@ import Control.Concurrent.MVar
 import Control.Monad.State
 import Control.Exception (throwIO, Exception())
 import Data.IORef
+import Data.Tuple
 import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush, hClose)
 
 data Logging = Logging
@@ -321,6 +324,7 @@ data Context = Context
                                            -- after the first packet received.
     , ctxTxState          :: MVar RecordState -- ^ current tx state
     , ctxRxState          :: MVar RecordState -- ^ current rx state
+    , ctxHandshake        :: MVar (Maybe HandshakeState) -- ^ optional handshake state
     , ctxHooks            :: IORef Hooks   -- ^ hooks for this context
     , ctxLockWrite        :: MVar ()       -- ^ lock to use for writing data (including updating the state)
     , ctxLockRead         :: MVar ()       -- ^ lock to use for reading data (including updating the state)
@@ -402,6 +406,7 @@ contextNew backend params rng = liftIO $ do
     hooks <- newIORef defaultHooks
     tx    <- newMVar newRecordState
     rx    <- newMVar newRecordState
+    hs    <- newMVar Nothing
     lockWrite <- newMVar ()
     lockRead  <- newMVar ()
     lockState <- newMVar ()
@@ -411,6 +416,7 @@ contextNew backend params rng = liftIO $ do
             , ctxState        = stvar
             , ctxTxState      = tx
             , ctxRxState      = rx
+            , ctxHandshake    = hs
             , ctxMeasurement  = stats
             , ctxEOF_         = eof
             , ctxEstablished_ = established
@@ -453,7 +459,13 @@ usingState_ ctx f = do
         Right r  -> return r
 
 usingHState :: MonadIO m => Context -> HandshakeM a -> m a
-usingHState ctx f = usingState_ ctx $ withHandshakeM f
+usingHState ctx f = liftIO $ modifyMVar (ctxHandshake ctx) $ \mst ->
+    case mst of
+        Nothing -> throwCore $ Error_Misc "missing handshake"
+        Just st -> return $ swap (Just `fmap` runHandshake st f)
+
+getHState :: MonadIO m => Context -> m (Maybe HandshakeState)
+getHState ctx = liftIO $ readMVar (ctxHandshake ctx)
 
 runTxState :: MonadIO m => Context -> RecordM a -> m (Either TLSError a)
 runTxState ctx f = do

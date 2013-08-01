@@ -20,7 +20,8 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
 import Network.TLS.Util
-import Network.TLS.State
+import Network.TLS.Handshake.State
+import Network.TLS.State (withRNG, getVersion)
 import Network.TLS.Crypto
 import Network.TLS.Types
 import Network.TLS.Context

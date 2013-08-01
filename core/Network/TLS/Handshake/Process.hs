@@ -10,14 +10,15 @@
 module Network.TLS.Handshake.Process
     ( processHandshake
     , startHandshake
+    , getHandshakeDigest
     ) where
 
 import Data.ByteString (ByteString)
-import Data.Maybe (isNothing)
 
 import Control.Applicative
+import Control.Concurrent.MVar
 import Control.Monad.Error
-import Control.Monad.State (gets, modify)
+import Control.Monad.State (gets)
 
 import Network.TLS.Types (Role(..), invertRole)
 import Network.TLS.Util
@@ -98,7 +99,7 @@ startHandshake :: MonadIO m => Context -> Version -> ClientRandom -> m ()
 startHandshake ctx ver crand = do
     -- FIXME check if handshake is already not null
     let initCtx = if ver < TLS12 then hashMD5SHA1 else hashSHA256
-    usingState_ ctx $ do
-        chs <- gets stHandshake
-        when (isNothing chs) $
-            modify (\st -> st { stHandshake = Just $ newEmptyHandshake ver crand initCtx })
+    liftIO $ modifyMVar_ (ctxHandshake ctx) $ \hs ->
+        case hs of
+            Nothing -> return $ Just $ newEmptyHandshake ver crand initCtx
+            Just _  -> return hs
