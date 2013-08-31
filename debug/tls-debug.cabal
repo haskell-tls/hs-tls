@@ -1,5 +1,5 @@
 Name:                tls-debug
-Version:             0.2.4
+Version:             0.2.5
 Description:
    A set of program to test and debug various aspect of the TLS package.
    .
