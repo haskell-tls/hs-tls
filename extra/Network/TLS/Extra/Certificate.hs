@@ -157,7 +157,7 @@ verifyF (SignatureALG HashSHA256 PubKeyALG_RSA) (PubKeyRSA rsak) = RSA.verify HD
 
 verifyF _ _ = \_ _ -> False
 
-dsaSHA1Verify pk _ b = False -- DSA.verify SHA1.hash pk asig b
+dsaSHA1Verify pk _ b = False
     --where asig = DSA.Signature 0 0 {- FIXME : need to work out how to get R/S from the bytestring a -}
 
 -- | Verify that the given certificate chain is application to the given fully qualified host name.

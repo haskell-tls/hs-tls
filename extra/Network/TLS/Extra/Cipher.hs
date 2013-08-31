@@ -38,10 +38,10 @@ import qualified Crypto.Hash.MD5 as MD5
 import qualified "cipher-aes" Crypto.Cipher.AES as AES
 
 aes_cbc_encrypt :: Key -> IV -> B.ByteString -> B.ByteString
-aes_cbc_encrypt key iv d = AES.encryptCBC (AES.initKey key) (AES.IV iv) d
+aes_cbc_encrypt key iv d = AES.encryptCBC (AES.initAES key) iv d
 
 aes_cbc_decrypt :: Key -> IV -> B.ByteString -> B.ByteString
-aes_cbc_decrypt key iv d = AES.decryptCBC (AES.initKey key) (AES.IV iv) d
+aes_cbc_decrypt key iv d = AES.decryptCBC (AES.initAES key) iv d
 
 aes128_cbc_encrypt = aes_cbc_encrypt
 aes128_cbc_decrypt = aes_cbc_decrypt

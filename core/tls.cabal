@@ -1,5 +1,5 @@
 Name:                tls
-Version:             1.1.2
+Version:             1.1.3
 Description:
    Native Haskell TLS and SSL protocol implementation for server and client.
    .
@@ -37,8 +37,8 @@ Library
                    , cereal >= 0.3
                    , bytestring
                    , network
-                   , crypto-random-api >= 0.2 && < 0.3
-                   , crypto-pubkey
+                   , crypto-random >= 0.0 && < 0.1
+                   , crypto-pubkey >= 0.2
                    , certificate >= 1.3.0 && < 1.4.0
   Exposed-modules:   Network.TLS
                      Network.TLS.Cipher
@@ -87,13 +87,13 @@ Test-Suite test-tls
                    , QuickCheck >= 2
                    , test-framework
                    , test-framework-quickcheck2
-                   , cprng-aes
+                   , cprng-aes >= 0.5
                    , crypto-pubkey
                    , bytestring
                    , certificate
                    , tls
                    , time
-                   , crypto-random-api
+                   , crypto-random >= 0.0.2 && < 0.1
   ghc-options:       -Wall -fno-warn-orphans -fno-warn-missing-signatures
 
 source-repository head
