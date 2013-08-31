@@ -223,7 +223,7 @@ withCompression f = do
 genTLSRandom :: (MonadState TLSState m, MonadError TLSError m) => Int -> m Bytes
 genTLSRandom n = do
         st <- get
-        case withTLSRNG (stRandomGen st) (genRandomBytes n) of
+        case withTLSRNG (stRandomGen st) (cprgGenerate n) of
                 (bytes, rng') -> put (st { stRandomGen = rng' }) >> return bytes
 
 makeDigest :: MonadState TLSState m => Bool -> Header -> Bytes -> m Bytes
