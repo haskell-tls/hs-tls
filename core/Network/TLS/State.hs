@@ -52,7 +52,7 @@ import Network.TLS.Types (Role(..))
 import qualified Data.ByteString as B
 import Control.Monad.State
 import Control.Monad.Error
-import Crypto.Random.API
+import Crypto.Random
 import Data.X509 (CertificateChain)
 
 data TLSState = TLSState
@@ -192,7 +192,7 @@ isClientContext = gets stClientContext
 genRandom :: Int -> TLSSt Bytes
 genRandom n = do
     st <- get
-    case withTLSRNG (stRandomGen st) (genRandomBytes n) of
+    case withTLSRNG (stRandomGen st) (cprgGenerate n) of
             (bytes, rng') -> put (st { stRandomGen = rng' }) >> return bytes
 
 withRNG :: (forall g . CPRG g => g -> (a, g)) -> TLSSt a

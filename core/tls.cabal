@@ -37,8 +37,8 @@ Library
                    , cereal >= 0.3
                    , bytestring
                    , network
-                   , crypto-random-api >= 0.2 && < 0.3
-                   , crypto-pubkey
+                   , crypto-random >= 0.0 && < 0.1
+                   , crypto-pubkey >= 0.2
                    , asn1-types >= 0.2.0
                    , asn1-encoding
                    , x509 >= 1.4.3 && < 1.5.0
@@ -95,13 +95,13 @@ Test-Suite test-tls
                    , QuickCheck >= 2
                    , test-framework
                    , test-framework-quickcheck2
-                   , cprng-aes
-                   , crypto-pubkey
+                   , cprng-aes >= 0.5
+                   , crypto-pubkey >= 0.2
                    , bytestring
                    , x509
                    , tls
                    , time
-                   , crypto-random-api
+                   , crypto-random
   ghc-options:       -Wall -fno-warn-orphans -fno-warn-missing-signatures
 
 Benchmark bench-tls
@@ -111,12 +111,12 @@ Benchmark bench-tls
   Build-depends:     base >= 4 && < 5
                    , tls
                    , x509
-                   , crypto-random-api
+                   , crypto-random
                    , criterion
                    , cprng-aes
                    , mtl
                    , bytestring
-                   , crypto-pubkey
+                   , crypto-pubkey >= 0.2
                    , time
                    , QuickCheck >= 2
 
