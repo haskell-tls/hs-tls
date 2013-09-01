@@ -27,14 +27,13 @@ Library
                    , bytestring
                    , vector
                    , cipher-rc4
-                   , cipher-aes >= 0.1 && < 0.2
+                   , cipher-aes >= 0.2 && < 0.3
                    , x509 >= 1.4.3 && < 1.5.0
                    , x509-store >= 1.4.0 && < 1.5.0
                    , x509-validation >= 1.4.2 && < 1.5.0
-                   , crypto-pubkey >= 0.1.4
-                   , crypto-random-api
+                   , crypto-pubkey >= 0.2.0
+                   , crypto-random
                    , pem >= 0.1.0 && < 0.2.0
-                   , text >= 0.5 && < 1.0
                    , time
   Exposed-modules:   Network.TLS.Extra
   other-modules:     Network.TLS.Extra.Certificate
@@ -54,8 +53,8 @@ executable           Tests
                    , HUnit
                    , QuickCheck >= 2
                    , bytestring
-                   , cprng-aes >= 0.3.0
-                   , cipher-aes >= 0.1 && < 0.2
+                   , cprng-aes >= 0.5.0
+                   , cipher-aes >= 0.2 && < 0.3
   else
     Buildable:       False
   if os(windows)
