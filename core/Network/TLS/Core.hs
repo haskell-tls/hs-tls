@@ -77,7 +77,10 @@ sendData ctx dataToSend = liftIO (checkValid ctx) >> mapM_ sendDataChunk (L.toCh
 -- | recvData get data out of Data packet, and automatically renegotiate if
 -- a Handshake ClientHello is received
 recvData :: MonadIO m => Context -> m B.ByteString
-recvData ctx = liftIO (checkValid ctx) >> recvPacket ctx >>= liftIO . either onError process
+recvData ctx = liftIO $ do
+    checkValid ctx
+    pkt <- withReadLock ctx $ recvPacket ctx
+    either onError process pkt
   where onError err@(Error_Protocol (reason,fatal,desc)) =
             terminate err (if fatal then AlertLevel_Fatal else AlertLevel_Warning) desc reason
         onError err =
@@ -86,7 +89,7 @@ recvData ctx = liftIO (checkValid ctx) >> recvPacket ctx >>= liftIO . either onE
         process (Handshake [ch@(ClientHello {})]) =
             -- on server context receiving a client hello == renegotiation
             case roleParams $ ctxParams ctx of
-                Server sparams -> handshakeServerWith sparams ctx ch >> recvData ctx
+                Server sparams -> withRWLock ctx (handshakeServerWith sparams ctx ch) >> recvData ctx
                 Client {}      -> let reason = "unexpected client hello in client context" in
                                   terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
         process (Handshake [HelloRequest]) =
@@ -94,12 +97,12 @@ recvData ctx = liftIO (checkValid ctx) >> recvPacket ctx >>= liftIO . either onE
             case roleParams $ ctxParams ctx of
                 Server {}      -> let reason = "unexpected hello request in server context" in
                                   terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-                Client cparams -> handshakeClient cparams ctx >> recvData ctx
+                Client cparams -> withRWLock ctx (handshakeClient cparams ctx) >> recvData ctx
 
         process (Alert [(AlertLevel_Warning, CloseNotify)]) = tryBye >> setEOF ctx >> return B.empty
         process (Alert [(AlertLevel_Fatal, desc)]) = do
             setEOF ctx
-            liftIO $ E.throwIO (Terminated True ("received fatal error: " ++ show desc) (Error_Protocol ("remote side fatal error", True, desc)))
+            E.throwIO (Terminated True ("received fatal error: " ++ show desc) (Error_Protocol ("remote side fatal error", True, desc)))
 
         -- when receiving empty appdata, we just retry to get some data.
         process (AppData "") = recvData ctx

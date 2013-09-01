@@ -32,7 +32,7 @@ handshake ctx = do
     let handshakeF = case roleParams $ ctxParams ctx of
                         Server sparams -> handshakeServer sparams
                         Client cparams -> handshakeClient cparams
-    liftIO $ handleException $ handshakeF ctx
+    liftIO $ handleException $ withRWLock ctx (handshakeF ctx)
   where handleException f = E.catch f $ \exception -> do
             let tlserror = maybe (Error_Misc $ show exception) id $ fromException exception
             setEstablished ctx False

@@ -58,6 +58,7 @@ module Network.TLS.Context
     , withReadLock
     , withWriteLock
     , withStateLock
+    , withRWLock
 
     -- * deprecated types
     , TLSParams
@@ -491,6 +492,9 @@ withReadLock ctx f = withMVar (ctxLockRead ctx) (const f)
 
 withWriteLock :: Context -> IO a -> IO a
 withWriteLock ctx f = withMVar (ctxLockWrite ctx) (const f)
+
+withRWLock :: Context -> IO a -> IO a
+withRWLock ctx f = withReadLock ctx $ withWriteLock ctx f
 
 withStateLock :: Context -> IO a -> IO a
 withStateLock ctx f = withMVar (ctxLockState ctx) (const f)
