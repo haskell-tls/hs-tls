@@ -1,5 +1,5 @@
 Name:                tls
-Version:             1.1.4
+Version:             1.1.5
 Description:
    Native Haskell TLS and SSL protocol implementation for server and client.
    .
@@ -37,7 +37,7 @@ Library
                    , cereal >= 0.3
                    , bytestring
                    , network
-                   , crypto-random >= 0.0 && < 0.1
+                   , crypto-random >= 0.0.7 && < 0.1
                    , crypto-pubkey >= 0.2
                    , certificate >= 1.3.0 && < 1.4.0
   Exposed-modules:   Network.TLS
