@@ -79,7 +79,7 @@ Library
                      Network.TLS.Types
                      Network.TLS.Wire
                      Network.TLS.X509
-  ghc-options:       -Wall
+  ghc-options:       -Wall -fwarn-tabs
   if impl(ghc == 7.6.1)
     ghc-options:     -O0
   if flag(compat)
@@ -102,7 +102,7 @@ Test-Suite test-tls
                    , tls
                    , time
                    , crypto-random
-  ghc-options:       -Wall -fno-warn-orphans -fno-warn-missing-signatures
+  ghc-options:       -Wall -fno-warn-orphans -fno-warn-missing-signatures -fwarn-tabs
 
 Benchmark bench-tls
   hs-source-dirs:    Benchmarks Tests
