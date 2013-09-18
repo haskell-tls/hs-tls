@@ -6,6 +6,7 @@ module PubKey
 
 import Test.QuickCheck
 
+import Crypto.Random (createTestEntropyPool)
 import qualified Crypto.Random.AESCtr as RNG
 import qualified Crypto.PubKey.RSA as RSA
 
@@ -16,7 +17,7 @@ import System.IO.Unsafe
 
 arbitraryRSAPair :: Gen (RSA.PublicKey, RSA.PrivateKey)
 arbitraryRSAPair = do
-    rng <- (maybe (error "making rng") id . RNG.make . B.pack) `fmap` vector 64
+    rng <- (RNG.make . createTestEntropyPool . B.pack) `fmap` vector 64
     arbitraryRSAPairWithRNG rng
 
 arbitraryRSAPairWithRNG rng = return $ fst $ RSA.generate rng 128 0x10001
