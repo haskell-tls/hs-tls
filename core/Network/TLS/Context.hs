@@ -73,6 +73,7 @@ module Network.TLS.Context
     -- * New contexts
     , contextNew
     , contextNewOnHandle
+    , contextNewOnSocket
 
     -- * Context hooks
     , contextHookSetHandshakeRecv
@@ -89,6 +90,9 @@ module Network.TLS.Context
     ) where
 
 import Network.BSD (HostName)
+import Network.Socket (Socket, sClose)
+import qualified Network.Socket.ByteString as Socket
+
 import Network.TLS.Extension
 import Network.TLS.Struct
 import qualified Network.TLS.Struct as Struct
@@ -438,6 +442,20 @@ contextNewOnHandle :: (MonadIO m, CPRG rng)
 contextNewOnHandle handle params st =
     liftIO (hSetBuffering handle NoBuffering) >> contextNew backend params st
   where backend = Backend (hFlush handle) (hClose handle) (B.hPut handle) (B.hGet handle)
+
+-- | create a new context on a socket.
+contextNewOnSocket :: (MonadIO m, CPRG rng)
+                   => Socket -- ^ Socket of the connection.
+                   -> Params -- ^ Parameters of the context.
+                   -> rng    -- ^ Random number generator associated with this context.
+                   -> m Context
+contextNewOnSocket sock params st = contextNew backend params st
+  where backend   = Backend (return ()) (sClose sock) (Socket.sendAll sock) recvAll
+        recvAll n = B.concat `fmap` loop n
+          where loop 0    = return []
+                loop left = do
+                    r <- Socket.recv sock left
+                    liftM (r:) (loop (left - B.length r))
 
 contextHookSetHandshakeRecv :: Context -> (Handshake -> IO Handshake) -> IO ()
 contextHookSetHandshakeRecv context f =

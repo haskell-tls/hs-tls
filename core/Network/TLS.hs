@@ -48,6 +48,7 @@ module Network.TLS
     -- * Creating a context
     , contextNew
     , contextNewOnHandle
+    , contextNewOnSocket
     , contextFlush
     , contextClose
     , contextHookSetHandshakeRecv
