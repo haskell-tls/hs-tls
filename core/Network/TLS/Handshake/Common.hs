@@ -1,7 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
 module Network.TLS.Handshake.Common
-    ( HandshakeFailed(..)
-    , handshakeFailed
+    ( handshakeFailed
     , errorToAlert
     , unexpected
     , newSession
@@ -29,16 +28,10 @@ import Network.TLS.Measurement
 import Network.TLS.Types
 import Network.TLS.Cipher
 import Network.TLS.Util
-import Data.Data
 import Data.ByteString.Char8 ()
 
 import Control.Monad.State
-import Control.Exception (throwIO, Exception())
-
-data HandshakeFailed = HandshakeFailed TLSError
-    deriving (Show,Eq,Typeable)
-
-instance Exception HandshakeFailed
+import Control.Exception (throwIO)
 
 handshakeFailed :: TLSError -> IO ()
 handshakeFailed err = throwIO $ HandshakeFailed err

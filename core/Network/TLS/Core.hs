@@ -1,5 +1,5 @@
 {-# OPTIONS_HADDOCK hide #-}
-{-# LANGUAGE DeriveDataTypeable, OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 -- |
 -- Module      : Network.TLS.Core
 -- License     : BSD-style
@@ -16,14 +16,11 @@ module Network.TLS.Core
     -- * Initialisation and Termination of context
     , bye
     , handshake
-    , HandshakeFailed(..)
-    , ConnectionNotEstablished(..)
 
     -- * Next Protocol Negotiation
     , getNegotiatedProtocol
 
     -- * High level API
-    , Terminated(..)
     , sendData
     , recvData
     , recvData'
@@ -36,7 +33,6 @@ import Network.TLS.IO
 import Network.TLS.Session
 import Network.TLS.Handshake
 import Network.TLS.Util (catchException)
-import Data.Typeable
 import qualified Network.TLS.State as S
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
@@ -45,11 +41,6 @@ import qualified Control.Exception as E
 
 import Control.Monad.State
 
--- | Early termination exception with the reason and the TLS error associated
-data Terminated = Terminated Bool String TLSError
-                deriving (Eq,Show,Typeable)
-
-instance E.Exception Terminated
 
 -- | notify the context that this side wants to close connection.
 -- this is important that it is called before closing the handle, otherwise

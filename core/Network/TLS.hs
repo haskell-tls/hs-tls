@@ -87,12 +87,13 @@ module Network.TLS
     , AlertDescription(..)
 
     -- * Exceptions
-    , Terminated(..)
-    , HandshakeFailed(..)
-    , ConnectionNotEstablished(..)
+    , TLSException(..)
     ) where
 
-import Network.TLS.Struct (Version(..), TLSError(..), HashAndSignatureAlgorithm, HashAlgorithm(..), SignatureAlgorithm(..), Header(..), ProtocolType(..), CertificateType(..), AlertDescription(..))
+import Network.TLS.Struct ( Version(..), TLSError(..), TLSException(..)
+                          , HashAndSignatureAlgorithm, HashAlgorithm(..), SignatureAlgorithm(..)
+                          , Header(..), ProtocolType(..), CertificateType(..)
+                          , AlertDescription(..))
 import Network.TLS.Crypto (KxError(..))
 import Network.TLS.Cipher
 import Network.TLS.Compression (CompressionC(..), Compression(..), nullCompression)

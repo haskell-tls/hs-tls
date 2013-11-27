@@ -9,7 +9,6 @@ module Network.TLS.Handshake
     ( handshake
     , handshakeServerWith
     , handshakeClient
-    , HandshakeFailed(..)
     ) where
 
 import Network.TLS.Context

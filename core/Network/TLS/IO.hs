@@ -9,7 +9,6 @@
 --
 module Network.TLS.IO
     ( checkValid
-    , ConnectionNotEstablished(..)
     , sendPacket
     , recvPacket
     ) where
@@ -20,19 +19,13 @@ import Network.TLS.Record
 import Network.TLS.Packet
 import Network.TLS.Sending
 import Network.TLS.Receiving
-import Data.Data
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 
 import Data.IORef
 import Control.Monad.State
-import Control.Exception (throwIO, Exception())
+import Control.Exception (throwIO)
 import System.IO.Error (mkIOError, eofErrorType)
-
-data ConnectionNotEstablished = ConnectionNotEstablished
-    deriving (Show,Eq,Typeable)
-
-instance Exception ConnectionNotEstablished
 
 checkValid :: Context -> IO ()
 checkValid ctx = do
