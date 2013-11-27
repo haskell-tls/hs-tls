@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
 -- |
 -- Module      : Network.TLS.Handshake
 -- License     : BSD-style
@@ -16,6 +15,7 @@ module Network.TLS.Handshake
 import Network.TLS.Context
 import Network.TLS.Struct
 import Network.TLS.IO
+import Network.TLS.Util (catchException)
 
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Client
@@ -23,7 +23,6 @@ import Network.TLS.Handshake.Server
 
 import Control.Monad.State
 import Control.Exception (fromException)
-import qualified Control.Exception as E
 
 -- | Handshake for a new TLS connection
 -- This is to be called at the beginning of a connection, and during renegotiation
@@ -33,7 +32,7 @@ handshake ctx = do
                         Server sparams -> handshakeServer sparams
                         Client cparams -> handshakeClient cparams
     liftIO $ handleException $ withRWLock ctx (handshakeF ctx)
-  where handleException f = E.catch f $ \exception -> do
+  where handleException f = catchException f $ \exception -> do
             let tlserror = maybe (Error_Misc $ show exception) id $ fromException exception
             setEstablished ctx False
             sendPacket ctx (errorToAlert tlserror)

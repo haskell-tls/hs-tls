@@ -19,6 +19,7 @@ import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Packet
 import Network.TLS.Extension
+import Network.TLS.Util (catchException)
 import Network.TLS.IO
 import Network.TLS.Types
 import Network.TLS.State hiding (getNegotiatedProtocol)
@@ -33,7 +34,6 @@ import Data.ByteString.Char8 ()
 
 import Control.Applicative ((<$>))
 import Control.Monad.State
-import qualified Control.Exception as E
 
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.Common
@@ -129,7 +129,6 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
         clientRequestedNPN = isJust $ lookup extensionID_NextProtocolNegotiation exts
 
         ---
-
         -- When the client sends a certificate, check whether
         -- it is acceptable for the application.
         --
@@ -218,7 +217,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             -- Call application callback to see whether the
             -- certificate chain is acceptable.
             --
-            usage <- liftIO $ E.catch (onClientCertificate sparams certs) rejectOnException
+            usage <- liftIO $ catchException (onClientCertificate sparams certs) rejectOnException
             case usage of
                 CertificateUsageAccept        -> return ()
                 CertificateUsageReject reason -> certificateRejected reason

@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module Network.TLS.Util
         ( sub
         , takelast
@@ -8,11 +9,15 @@ module Network.TLS.Util
         , (&&!)
         , bytesEq
         , fmapEither
+        , catchException
         ) where
 
 import Data.List (foldl')
 import Network.TLS.Struct (Bytes)
 import qualified Data.ByteString as B
+
+import Control.Exception (fromException)
+import qualified Control.Exception as E
 
 sub :: Bytes -> Int -> Int -> Maybe Bytes
 sub b offset len
@@ -71,3 +76,10 @@ fmapEither :: (a -> b) -> Either l a -> Either l b
 fmapEither f e = case e of
     Left l  -> Left l
     Right r -> Right (f r)
+
+catchException :: IO a -> (E.SomeException -> IO a) -> IO a
+catchException f handler = E.catchJust filterExn f handler
+  where filterExn :: E.SomeException -> Maybe E.SomeException
+        filterExn e = case fromException e of
+                            Just (_ :: E.AsyncException) -> Nothing
+                            Nothing                      -> Just e

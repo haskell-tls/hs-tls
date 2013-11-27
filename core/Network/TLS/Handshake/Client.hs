@@ -21,7 +21,7 @@ import Network.TLS.IO
 import Network.TLS.State hiding (getNegotiatedProtocol)
 import Network.TLS.Measurement
 import Network.TLS.Wire (encodeWord16)
-import Network.TLS.Util (bytesEq)
+import Network.TLS.Util (bytesEq, catchException)
 import Network.TLS.Types
 import Network.TLS.X509
 import Data.Maybe
@@ -33,7 +33,6 @@ import Control.Applicative ((<$>), (<*>))
 import Control.Monad.State
 import Control.Monad.Error
 import Control.Exception (SomeException)
-import qualified Control.Exception as E
 
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Process
@@ -107,7 +106,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     return ()
 
                 Just req -> do
-                    certChain <- liftIO $ onCertificateRequest cparams req `E.catch`
+                    certChain <- liftIO $ onCertificateRequest cparams req `catchException`
                                  throwMiscErrorOnException "certificate request callback failed"
 
                     usingHState ctx $ setClientCertSent False
@@ -259,7 +258,7 @@ onServerHello _ _ _ p = unexpected (show p) (Just "server hello")
 
 processCertificate :: Context -> Handshake -> IO (RecvState IO)
 processCertificate ctx (Certificates certs) = do
-    usage <- liftIO $ E.catch (onCertificatesRecv params certs) rejectOnException
+    usage <- liftIO $ catchException (onCertificatesRecv params certs) rejectOnException
     case usage of
         CertificateUsageAccept        -> return ()
         CertificateUsageReject reason -> certificateRejected reason

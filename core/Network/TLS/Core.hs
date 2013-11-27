@@ -35,6 +35,7 @@ import Network.TLS.State (getSession)
 import Network.TLS.IO
 import Network.TLS.Session
 import Network.TLS.Handshake
+import Network.TLS.Util (catchException)
 import Data.Typeable
 import qualified Network.TLS.State as S
 import qualified Data.ByteString as B
@@ -116,13 +117,13 @@ recvData ctx = liftIO $ do
             case session of
                 Session Nothing    -> return ()
                 Session (Just sid) -> withSessionManager (ctxParams ctx) (\s -> sessionInvalidate s sid)
-            E.catch (sendPacket ctx $ Alert [(level, desc)]) (\(_ :: E.SomeException) -> return ())
+            catchException (sendPacket ctx $ Alert [(level, desc)]) (\_ -> return ())
             setEOF ctx
             E.throwIO (Terminated False reason err)
 
         -- the other side could have close the connection already, so wrap
         -- this in a try and ignore all exceptions
-        tryBye = E.catch (bye ctx) (\(_ :: E.SomeException) -> return ())
+        tryBye = catchException (bye ctx) (\_ -> return ())
 
 {-# DEPRECATED recvData' "use recvData that returns strict bytestring" #-}
 -- | same as recvData but returns a lazy bytestring.
