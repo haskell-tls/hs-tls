@@ -73,7 +73,7 @@ instance HashCtxC HashSHA256 where
     hashCName _                    = "SHA256"
     hashCInit _                    = HashSHA256 SHA256.init
     hashCUpdate (HashSHA256 ctx) b = HashSHA256 (SHA256.update ctx b)
-    hashCUpdateSSL _ _             = undefined
+    hashCUpdateSSL _ _             = error "CUpdateSSL with HashSHA256"
     hashCFinal  (HashSHA256 ctx)   = SHA256.finalize ctx
 
 -- functions to use the hidden class.
