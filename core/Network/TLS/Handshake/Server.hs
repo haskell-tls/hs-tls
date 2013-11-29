@@ -28,7 +28,7 @@ import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Process
 import Network.TLS.Measurement
 import Data.Maybe
-import Data.List (intersect)
+import Data.List (intersect, sortBy)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 
@@ -323,3 +323,8 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                 Just cc | isNullCertificateChain cc -> throwCore throwerror
                         | otherwise                 -> return ()
 
+findHighestVersionFrom :: Version -> [Version] -> Maybe Version
+findHighestVersionFrom clientVersion allowedVersions =
+    case filter (clientVersion >=) $ reverse $ sortBy compare allowedVersions of
+        []  -> Nothing
+        v:_ -> Just v
