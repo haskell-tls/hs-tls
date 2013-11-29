@@ -14,9 +14,10 @@ module Network.TLS.Cipher
     , Hash(..)
     , Cipher(..)
     , CipherID
-    , cipherKeyBlockSize
     , Key
     , IV
+    , cipherKeyBlockSize
+    , cipherAllowedForVersion
     , cipherExchangeNeedMoreData
     ) where
 
@@ -76,6 +77,14 @@ data Cipher = Cipher
 cipherKeyBlockSize :: Cipher -> Int
 cipherKeyBlockSize cipher = 2 * (hashSize (cipherHash cipher) + bulkIVSize bulk + bulkKeySize bulk)
   where bulk = cipherBulk cipher
+
+-- | Check if a specific 'Cipher' is allowed to be used
+-- with the version specified
+cipherAllowedForVersion :: Version -> Cipher -> Bool
+cipherAllowedForVersion ver cipher =
+    case cipherMinVer cipher of
+        Nothing   -> True
+        Just cVer -> cVer <= ver
 
 instance Show Cipher where
     show c = cipherName c
