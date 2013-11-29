@@ -168,7 +168,11 @@ getHandshakeDigest ver role = gets gen
         generateFinish | role == ClientRole = generateClientFinished
                        | otherwise          = generateServerFinished
 
-setMasterSecretFromPre :: Version -> Role -> Bytes -> HandshakeM ()
+-- | Generate the master secret from the pre master secret.
+setMasterSecretFromPre :: Version -- ^ chosen transmission version
+                       -> Role    -- ^ the role (Client or Server) of the generating side
+                       -> Bytes   -- ^ the pre master secret
+                       -> HandshakeM ()
 setMasterSecretFromPre ver role premasterSecret = do
     secret <- genSecret <$> get
     setMasterSecret ver role secret
