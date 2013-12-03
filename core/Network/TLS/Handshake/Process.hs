@@ -26,7 +26,6 @@ import Network.TLS.Packet
 import Network.TLS.Struct
 import Network.TLS.State
 import Network.TLS.Context
-import Network.TLS.Crypto
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Key
 import Network.TLS.Extension
@@ -98,8 +97,7 @@ processClientFinished ctx fdata = do
 startHandshake :: Context -> Version -> ClientRandom -> IO ()
 startHandshake ctx ver crand = do
     -- FIXME check if handshake is already not null
-    let initCtx = if ver < TLS12 then hashMD5SHA1 else hashSHA256
     liftIO $ modifyMVar_ (ctxHandshake ctx) $ \hs ->
         case hs of
-            Nothing -> return $ Just $ newEmptyHandshake ver crand initCtx
+            Nothing -> return $ Just $ newEmptyHandshake ver crand
             Just _  -> return hs

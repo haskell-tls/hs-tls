@@ -24,6 +24,7 @@ module Network.TLS.State
     , certVerifyHandshakeTypeMaterial
     , certVerifyHandshakeMaterial
     , setVersion
+    , setVersionIfUnset
     , getVersion
     , setSecureRenegotiation
     , getSecureRenegotiation
@@ -65,8 +66,8 @@ data TLSState = TLSState
     , stNegotiatedProtocol  :: Maybe B.ByteString -- NPN protocol
     , stServerNextProtocolSuggest :: Maybe [B.ByteString]
     , stClientCertificateChain :: Maybe CertificateChain
-    , stRandomGen                 :: StateRNG
-    , stVersion             :: Version
+    , stRandomGen           :: StateRNG
+    , stVersion             :: Maybe Version
     , stClientContext       :: Role
     } deriving (Show)
 
@@ -95,7 +96,7 @@ newTLSState rng clientContext = TLSState
     , stServerNextProtocolSuggest = Nothing
     , stClientCertificateChain = Nothing
     , stRandomGen           = StateRNG rng
-    , stVersion             = TLS10
+    , stVersion             = Nothing
     , stClientContext       = clientContext
     }
 
@@ -148,10 +149,16 @@ isSessionResuming :: TLSSt Bool
 isSessionResuming = gets stSessionResuming
 
 setVersion :: Version -> TLSSt ()
-setVersion ver = modify (\st -> st { stVersion = ver })
+setVersion ver = modify (\st -> st { stVersion = Just ver })
+
+setVersionIfUnset :: Version -> TLSSt ()
+setVersionIfUnset ver = modify maybeSet
+  where maybeSet st = case stVersion st of
+                           Nothing -> st { stVersion = Just ver }
+                           Just _  -> st
 
 getVersion :: TLSSt Version
-getVersion = gets stVersion
+getVersion = maybe (error "internal error: version hasn't been set yet") id <$> gets stVersion
 
 setSecureRenegotiation :: Bool -> TLSSt ()
 setSecureRenegotiation b = modify (\st -> st { stSecureRenegotiation = b })

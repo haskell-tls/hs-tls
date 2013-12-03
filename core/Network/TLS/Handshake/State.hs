@@ -37,8 +37,7 @@ module Network.TLS.Handshake.State
     , setMasterSecret
     , setMasterSecretFromPre
     -- * misc accessor
-    , setPendingAlgs
-    , setServerRandom
+    , setServerHelloParameters
     ) where
 
 import Network.TLS.Util
@@ -62,7 +61,7 @@ data HandshakeState = HandshakeState
     , hstRSAPrivateKey       :: !(Maybe PrivKey)
     , hstRSAClientPublicKey  :: !(Maybe PubKey)
     , hstRSAClientPrivateKey :: !(Maybe PrivKey)
-    , hstHandshakeDigest     :: !HashCtx
+    , hstHandshakeDigest     :: !(Either [Bytes] HashCtx)
     , hstHandshakeMessages   :: [Bytes]
     , hstClientCertRequest   :: !(Maybe ClientCertRequestData) -- ^ Set to Just-value when certificate request was received
     , hstClientCertSent      :: !Bool -- ^ Set to true when a client certificate chain was sent
@@ -77,7 +76,6 @@ data HandshakeState = HandshakeState
 type ClientCertRequestData = ([CertificateType],
                               Maybe [(HashAlgorithm, SignatureAlgorithm)],
                               [DistinguishedName])
-  
 
 newtype HandshakeM a = HandshakeM { runHandshakeM :: State HandshakeState a }
     deriving (Functor, Monad)
@@ -90,8 +88,8 @@ instance MonadState HandshakeState HandshakeM where
 #endif
 
 -- create a new empty handshake state
-newEmptyHandshake :: Version -> ClientRandom -> HashCtx -> HandshakeState
-newEmptyHandshake ver crand digestInit = HandshakeState
+newEmptyHandshake :: Version -> ClientRandom -> HandshakeState
+newEmptyHandshake ver crand = HandshakeState
     { hstClientVersion       = ver
     , hstClientRandom        = crand
     , hstServerRandom        = Nothing
@@ -100,7 +98,7 @@ newEmptyHandshake ver crand digestInit = HandshakeState
     , hstRSAPrivateKey       = Nothing
     , hstRSAClientPublicKey  = Nothing
     , hstRSAClientPrivateKey = Nothing
-    , hstHandshakeDigest     = digestInit
+    , hstHandshakeDigest     = Left []
     , hstHandshakeMessages   = []
     , hstClientCertRequest   = Nothing
     , hstClientCertSent      = False
@@ -158,13 +156,19 @@ getHandshakeMessages :: HandshakeM [Bytes]
 getHandshakeMessages = gets (reverse . hstHandshakeMessages)
 
 updateHandshakeDigest :: Bytes -> HandshakeM ()
-updateHandshakeDigest content = modify $ \hs -> hs { hstHandshakeDigest = hashUpdate (hstHandshakeDigest hs) content }
+updateHandshakeDigest content = modify $ \hs -> hs
+    { hstHandshakeDigest = case hstHandshakeDigest hs of
+                                Left bytes    -> Left (content:bytes)
+                                Right hashCtx -> Right $ hashUpdate hashCtx content }
 
 getHandshakeDigest :: Version -> Role -> HandshakeM Bytes
 getHandshakeDigest ver role = gets gen
-  where gen hst = let hashctx = hstHandshakeDigest hst
-                      msecret = fromJust "master secret" $ hstMasterSecret hst
-                   in generateFinish ver msecret hashctx
+  where gen hst = case hstHandshakeDigest hst of
+                      Right hashCtx ->
+                         let msecret = fromJust "master secret" $ hstMasterSecret hst
+                          in generateFinish ver msecret hashCtx
+                      Left _        ->
+                         error "un-initialized handshake digest"
         generateFinish | role == ClientRole = generateClientFinished
                        | otherwise          = generateServerFinished
 
@@ -228,9 +232,18 @@ computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
                   , stCompression = hstPendingCompression hst
                   }
 
-setPendingAlgs :: Cipher -> Compression -> HandshakeM ()
-setPendingAlgs cipher compression =
-    modify $ \hst -> hst { hstPendingCipher = Just cipher, hstPendingCompression = compression }
-
-setServerRandom :: ServerRandom -> HandshakeM ()
-setServerRandom ran = modify $ \hst -> hst { hstServerRandom = Just ran }
+setServerHelloParameters :: Version      -- ^ chosen version
+                         -> ServerRandom
+                         -> Cipher
+                         -> Compression
+                         -> HandshakeM ()
+setServerHelloParameters ver sran cipher compression = do
+    modify $ \hst -> hst
+                { hstServerRandom       = Just sran
+                , hstPendingCipher      = Just cipher
+                , hstPendingCompression = compression
+                , hstHandshakeDigest    = updateDigest $ hstHandshakeDigest hst
+                }
+  where initCtx = if ver < TLS12 then hashMD5SHA1 else hashSHA256
+        updateDigest (Left bytes) = Right $ foldl hashUpdate initCtx $ reverse bytes
+        updateDigest (Right _)    = error "cannot initialize digest with another digest"

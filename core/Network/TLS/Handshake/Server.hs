@@ -79,7 +79,7 @@ handshakeServer sparams ctx = liftIO $ do
 --      -> finish             <- finish
 --
 handshakeServerWith :: ServerParams -> Context -> Handshake -> IO ()
-handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession ciphers compressions exts _) = do
+handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientSession ciphers compressions exts _) = do
     -- check if policy allow this new handshake to happens
     handshakeAuthorized <- withMeasure ctx (onHandshake $ ctxParams ctx)
     unless handshakeAuthorized (throwCore $ Error_HandshakePolicy "server: handshake denied")
@@ -88,19 +88,37 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
     -- Handle Client hello
     processHandshake ctx clientHello
 
-    when (ver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
-    when (not $ elem ver (pAllowedVersions params)) $
-            throwCore $ Error_Protocol ("version " ++ show ver ++ "is not supported", True, ProtocolVersion)
-    when (commonCipherIDs == []) $
-            throwCore $ Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
-    when (null commonCompressions) $
-            throwCore $ Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
-    usingState_ ctx $ setVersion ver
-    usingHState ctx $ setPendingAlgs usedCipher usedCompression
+    when (clientVersion == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
+    chosenVersion <- case findHighestVersionFrom clientVersion (pAllowedVersions params) of
+                        Nothing -> throwCore $ Error_Protocol ("client version " ++ show clientVersion ++ " is not supported", True, ProtocolVersion)
+                        Just v  -> return v
 
+    let usedCipher = (onCipherChoosing sparams) chosenVersion
+                   $ filter (cipherAllowedForVersion chosenVersion) commonCiphers
+
+    when (commonCipherIDs == []) $ throwCore $
+        Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
+    when (null commonCompressions) $ throwCore $
+        Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
     resumeSessionData <- case clientSession of
             (Session (Just clientSessionId)) -> withSessionManager params (\s -> liftIO $ sessionResume s clientSessionId)
             (Session Nothing)                -> return Nothing
+    doHandshake sparams ctx chosenVersion usedCipher usedCompression clientSession resumeSessionData exts
+
+  where
+        params             = ctxParams ctx
+        commonCipherIDs    = intersect ciphers (map cipherID $ pCiphers params)
+        commonCiphers      = filter (flip elem commonCipherIDs . cipherID) (pCiphers params)
+        commonCompressions = compressionIntersectID (pCompressions params) compressions
+        usedCompression    = head commonCompressions
+
+
+handshakeServerWith _ _ _ = fail "unexpected handshake type received. expecting client hello"
+
+doHandshake :: ServerParams -> Context -> Version -> Cipher
+            -> Compression -> Session -> Maybe SessionData
+            -> [(ExtensionID, a)] -> IO ()
+doHandshake sparams ctx chosenVersion usedCipher usedCompression clientSession resumeSessionData exts = do
     case resumeSessionData of
         Nothing -> do
             handshakeSendServerData
@@ -112,17 +130,12 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
             usingState_ ctx (setSession clientSession True)
             serverhello <- makeServerHello clientSession
             sendPacket ctx $ Handshake [serverhello]
-            usingHState ctx $ setMasterSecret ver ServerRole $ sessionSecret sessionData
+            usingHState ctx $ setMasterSecret chosenVersion ServerRole $ sessionSecret sessionData
             sendChangeCipherAndFinish ctx ServerRole
             recvChangeCipherAndFinish ctx
     handshakeTerminate ctx
   where
         params             = ctxParams ctx
-        commonCipherIDs    = intersect ciphers (map cipherID $ pCiphers params)
-        commonCiphers      = filter (flip elem commonCipherIDs . cipherID) (pCiphers params)
-        usedCipher         = (onCipherChoosing sparams) ver commonCiphers
-        commonCompressions = compressionIntersectID (pCompressions params) compressions
-        usedCompression    = head commonCompressions
         srvCerts           = fmap fst $ pCertificates params
         privKey            = join $ fmap snd $ pCertificates params
         needKeyXchg        = cipherExchangeNeedMoreData $ cipherKeyExchange usedCipher
@@ -133,7 +146,6 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
         -- it is acceptable for the application.
         --
         ---
-
         makeServerHello session = do
             srand <- getStateRNG ctx 32 >>= return . ServerRandom
             case privKey of
@@ -162,10 +174,10 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
                                                    , extensionEncode $ NextProtocolNegotiation protos) ]
                         Nothing -> return []
             let extensions = secRengExt ++ npnExt
-            usingState_ ctx (setVersion ver)
-            usingHState ctx $ setServerRandom srand
-            return $ ServerHello ver srand session (cipherID usedCipher)
-                                           (compressionID usedCompression) extensions
+            usingState_ ctx (setVersion chosenVersion)
+            usingHState ctx $ setServerHelloParameters chosenVersion srand usedCipher usedCompression
+            return $ ServerHello chosenVersion srand session (cipherID usedCipher)
+                                               (compressionID usedCompression) extensions
 
         handshakeSendServerData = do
             serverSession <- newSession ctx
@@ -199,8 +211,6 @@ handshakeServerWith sparams ctx clientHello@(ClientHello ver _ clientSession cip
 
         extractCAname :: SignedCertificate -> DistinguishedName
         extractCAname cert = certSubjectDN $ getCertificate cert
-
-handshakeServerWith _ _ _ = fail "unexpected handshake type received. expecting client hello"
 
 -- | receive Client data in handshake until the Finished handshake.
 --

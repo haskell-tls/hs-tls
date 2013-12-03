@@ -76,6 +76,7 @@ handshakeClient cparams ctx = do
             let clientSession = Session . maybe Nothing (Just . fst) $ clientWantSessionResume cparams
             extensions <- getExtensions
             startHandshake ctx (pConnectVersion params) crand
+            usingState_ ctx $ setVersionIfUnset (pConnectVersion params)
             sendPacket ctx $ Handshake
                 [ ClientHello (pConnectVersion params) crand clientSession (map cipherID ciphers)
                               (map compressionID compressions) extensions Nothing
@@ -122,8 +123,9 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                             sendPacket ctx $ Handshake [Certificates cc]
 
         sendClientKeyXchg = do
+            clientVersion <- usingHState ctx $ gets hstClientVersion
             (xver, prerand) <- usingState_ ctx $ (,) <$> getVersion <*> genRandom 46
-            let premaster = encodePreMasterSecret xver prerand
+            let premaster = encodePreMasterSecret clientVersion prerand
             usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
             encryptedPreMaster <- do
                 -- SSL3 implementation generally forget this length field since it's redundant,
@@ -216,13 +218,14 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
     when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
     case find ((==) rver) allowedvers of
         Nothing -> throwCore $ Error_Protocol ("server version " ++ show rver ++ " is not supported", True, ProtocolVersion)
-        Just _  -> usingState_ ctx $ setVersion rver
+        Just _  -> return ()
     -- find the compression and cipher methods that the server want to use.
-    case (find ((==) cipher . cipherID) ciphers, find ((==) compression . compressionID) compressions) of
-        (Nothing,_) -> throwCore $ Error_Protocol ("no cipher in common with the server", True, HandshakeFailure)
-        (_,Nothing) -> throwCore $ Error_Protocol ("no compression in common with the server", True, HandshakeFailure)
-        (Just cipherAlg, Just compressAlg) ->
-            usingHState ctx $ setPendingAlgs cipherAlg compressAlg
+    cipherAlg <- case find ((==) cipher . cipherID) ciphers of
+                     Nothing  -> throwCore $ Error_Protocol ("server choose unknown cipher", True, HandshakeFailure)
+                     Just alg -> return alg
+    compressAlg <- case find ((==) compression . compressionID) compressions of
+                       Nothing  -> throwCore $ Error_Protocol ("server choose unknown compression", True, HandshakeFailure)
+                       Just alg -> return alg
 
     -- intersect sent extensions in client and the received extensions from server.
     -- if server returns extensions that we didn't request, fail.
@@ -237,7 +240,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
         setSession serverSession (isJust resumingSession)
         mapM_ processServerExtension exts
         setVersion rver
-    usingHState ctx $ setServerRandom serverRan
+    usingHState ctx $ setServerHelloParameters rver serverRan cipherAlg compressAlg
 
     case extensionDecode False `fmap` (lookup extensionID_NextProtocolNegotiation exts) of
         Just (Just (NextProtocolNegotiation protos)) -> usingState_ ctx $ do
