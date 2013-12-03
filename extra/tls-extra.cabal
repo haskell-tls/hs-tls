@@ -33,7 +33,7 @@ Library
                    , x509-validation >= 1.4.2 && < 1.5.0
                    , crypto-pubkey >= 0.2.0
                    , crypto-random
-                   , pem >= 0.1.0 && < 0.2.0
+                   , pem >= 0.1.0 && < 0.3.0
                    , time
   Exposed-modules:   Network.TLS.Extra
   other-modules:     Network.TLS.Extra.Certificate
