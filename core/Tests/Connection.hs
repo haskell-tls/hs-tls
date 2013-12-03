@@ -62,15 +62,16 @@ supportedVersions = [SSL3,TLS10,TLS11,TLS12]
 
 arbitraryPairParams = do
     let (pubKey, privKey) = getGlobalRSAPair
-    servCert          <- arbitraryX509WithPublicKey pubKey
-    allowedVersions   <- arbitraryVersions
-    connectVersion    <- elements supportedVersions `suchThat` (\c -> c `elem` allowedVersions)
-    serverCiphers     <- arbitraryCiphers
-    clientCiphers     <- oneof [arbitraryCiphers] `suchThat` (\cs -> or [x `elem` serverCiphers | x <- cs])
-    secNeg            <- arbitrary
+    servCert           <- arbitraryX509WithPublicKey pubKey
+    connectVersion     <- elements supportedVersions
+    let allowedVersions = [ v | v <- supportedVersions, v <= connectVersion ]
+    serAllowedVersions <- (:[]) `fmap` elements allowedVersions
+    serverCiphers      <- arbitraryCiphers
+    clientCiphers      <- oneof [arbitraryCiphers] `suchThat` (\cs -> or [x `elem` serverCiphers | x <- cs])
+    secNeg             <- arbitrary
 
     let serverState = defaultParamsServer
-            { pAllowedVersions        = allowedVersions
+            { pAllowedVersions        = serAllowedVersions
             , pCiphers                = serverCiphers
             , pCertificates           = Just (CertificateChain [servCert], Just $ PrivKeyRSA privKey)
             , pUseSecureRenegotiation = secNeg
@@ -90,8 +91,6 @@ arbitraryPairParams = do
                 then defaultLogging { loggingPacketSent = putStrLn . ((pre ++ ">> ") ++)
                                     , loggingPacketRecv = putStrLn . ((pre ++ "<< ") ++) }
                 else defaultLogging
-        arbitraryVersions :: Gen [Version]
-        arbitraryVersions = resize (length supportedVersions + 1) $ listOf1 (elements supportedVersions)
         arbitraryCiphers  = resize (length supportedCiphers + 1) $ listOf1 (elements supportedCiphers)
 
 setPairParamsSessionManager :: SessionManager -> (Params, Params) -> (Params, Params)
