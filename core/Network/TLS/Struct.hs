@@ -232,8 +232,8 @@ data ServerRSAParams = ServerRSAParams
 
 data ServerKeyXchgAlgorithmData =
       SKX_DH_Anon ServerDHParams
-    | SKX_DHE_DSS ServerDHParams [Word8]
-    | SKX_DHE_RSA ServerDHParams [Word8]
+    | SKX_DHE_DSS ServerDHParams Bytes
+    | SKX_DHE_RSA ServerDHParams Bytes
     | SKX_RSA (Maybe ServerRSAParams)
     | SKX_DH_DSS (Maybe ServerRSAParams)
     | SKX_DH_RSA (Maybe ServerRSAParams)

@@ -326,11 +326,11 @@ decodeServerKeyXchg cp =
             CipherKeyExchange_DHE_RSA -> do
                 dhparams <- decodeServerKeyXchg_DH
                 signature <- getOpaque16
-                return $ SKX_DHE_RSA dhparams (B.unpack signature)
+                return $ SKX_DHE_RSA dhparams signature
             CipherKeyExchange_DHE_DSS -> do
                 dhparams  <- decodeServerKeyXchg_DH
                 signature <- getOpaque16
-                return $ SKX_DHE_DSS dhparams (B.unpack signature)
+                return $ SKX_DHE_DSS dhparams signature
             _ -> do
                 bs <- remaining >>= getBytes
                 return $ SKX_Unknown bs
