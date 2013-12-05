@@ -76,6 +76,7 @@ Library
                      Network.TLS.Sending
                      Network.TLS.Receiving
                      Network.TLS.Util
+                     Network.TLS.Util.ASN1
                      Network.TLS.Types
                      Network.TLS.Wire
                      Network.TLS.X509
