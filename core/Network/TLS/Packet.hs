@@ -258,12 +258,6 @@ decodeNextProtocolNegotiation = do
     _      <- getOpaque8 -- ignore padding
     return $ HsNextProtocolNegotiation opaque
 
-getSignatureHashAlgorithm :: Get HashAndSignatureAlgorithm
-getSignatureHashAlgorithm = do
-    h <- fromJust . valToType <$> getWord8
-    s <- fromJust . valToType <$> getWord8
-    return (h,s)
-
 decodeCertRequest :: CurrentParams -> Get Handshake
 decodeCertRequest cp = do
     certTypes <- map (fromJust . valToType . fromIntegral) <$> getWords8
@@ -452,6 +446,11 @@ putExtensions :: [ExtensionRaw] -> Put
 putExtensions [] = return ()
 putExtensions es = putOpaque16 (runPut $ mapM_ putExtension es)
 
+getSignatureHashAlgorithm :: Get HashAndSignatureAlgorithm
+getSignatureHashAlgorithm = do
+    h <- fromJust . valToType <$> getWord8
+    s <- fromJust . valToType <$> getWord8
+    return (h,s)
 {-
  - decode and encode ALERT
  -}
