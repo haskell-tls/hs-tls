@@ -288,9 +288,7 @@ decodeClientKeyXchg :: Get Handshake
 decodeClientKeyXchg = ClientKeyXchg <$> (remaining >>= getBytes)
 
 decodeServerKeyXchg_DH :: Get ServerDHParams
-decodeServerKeyXchg_DH = ServerDHParams <$> getInteger16 -- p
-                                        <*> getInteger16 -- g
-                                        <*> getInteger16 -- Ys
+decodeServerKeyXchg_DH = getServerDHParams
 
 decodeServerKeyXchg_RSA :: Get ServerRSAParams
 decodeServerKeyXchg_RSA = ServerRSAParams <$> getInteger16 -- modulus
@@ -305,11 +303,11 @@ decodeServerKeyXchg cp =
             CipherKeyExchange_RSA     -> SKX_RSA . Just <$> decodeServerKeyXchg_RSA
             CipherKeyExchange_DH_Anon -> SKX_DH_Anon <$> decodeServerKeyXchg_DH
             CipherKeyExchange_DHE_RSA -> do
-                dhparams <- decodeServerKeyXchg_DH
+                dhparams <- getServerDHParams
                 signature <- getDigitallySigned (cParamsVersion cp)
                 return $ SKX_DHE_RSA dhparams signature
             CipherKeyExchange_DHE_DSS -> do
-                dhparams  <- decodeServerKeyXchg_DH
+                dhparams  <- getServerDHParams
                 signature <- getDigitallySigned (cParamsVersion cp)
                 return $ SKX_DHE_DSS dhparams signature
             _ -> do
@@ -358,12 +356,10 @@ encodeHandshakeContent (ClientKeyXchg content) = do
 encodeHandshakeContent (ServerKeyXchg skg) =
     case skg of
         SKX_RSA _              -> undefined
-        SKX_DH_Anon params     -> putDHParams params
-        SKX_DHE_RSA params sig -> putDHParams params >> putDigitallySigned sig
-        SKX_DHE_DSS params sig -> putDHParams params >> putDigitallySigned sig
+        SKX_DH_Anon params     -> putServerDHParams params
+        SKX_DHE_RSA params sig -> putServerDHParams params >> putDigitallySigned sig
+        SKX_DHE_DSS params sig -> putServerDHParams params >> putDigitallySigned sig
         _                      -> error "cannot handle"
-  where putDHParams (ServerDHParams p g y) =
-            putInteger16 p >> putInteger16 g >> putInteger16 y
 
 encodeHandshakeContent (HelloRequest) = return ()
 encodeHandshakeContent (ServerHelloDone) = return ()
@@ -448,6 +444,15 @@ getSignatureHashAlgorithm = do
 putSignatureHashAlgorithm :: HashAndSignatureAlgorithm -> Put
 putSignatureHashAlgorithm (h,s) =
     putWord8 (valOfType h) >> putWord8 (valOfType s)
+
+getServerDHParams :: Get ServerDHParams
+getServerDHParams = ServerDHParams <$> getInteger16 -- p
+                                   <*> getInteger16 -- g
+                                   <*> getInteger16 -- Ys
+
+putServerDHParams :: ServerDHParams -> Put
+putServerDHParams (ServerDHParams p g y) =
+    mapM_ putInteger16 [p,g,y]
 
 getDigitallySigned :: Version -> Get DigitallySigned
 getDigitallySigned ver
