@@ -256,7 +256,7 @@ data Handshake =
     | ServerHelloDone
     | ClientKeyXchg Bytes
     | ServerKeyXchg ServerKeyXchgAlgorithmData
-    | CertRequest [CertificateType] (Maybe [ HashAndSignatureAlgorithm ]) [DistinguishedName]
+    | CertRequest [CertificateType] (Maybe [HashAndSignatureAlgorithm]) [DistinguishedName]
     | CertVerify (Maybe HashAndSignatureAlgorithm) CertVerifyData
     | Finished FinishedData
     | HsNextProtocolNegotiation Bytes -- NPN extension
