@@ -8,11 +8,15 @@
 --
 module Network.TLS.Handshake.Signature
     ( getHashAndASN1
+    , prepareCertificateVerifySignatureData
     ) where
 
 import Crypto.PubKey.HashDescr
+import Network.TLS.Crypto
 import Network.TLS.Context
 import Network.TLS.Struct
+import Network.TLS.Packet (generateCertificateVerify_SSL)
+import Network.TLS.Handshake.State
 
 import Control.Monad.State
 
@@ -24,3 +28,23 @@ getHashAndASN1 hashSig = case hashSig of
     (HashSHA384, SignatureRSA) -> return hashDescrSHA384
     (HashSHA512, SignatureRSA) -> return hashDescrSHA512
     _                          -> throwCore $ Error_Misc "unsupported hash/sig algorithm"
+
+prepareCertificateVerifySignatureData :: Context
+                                      -> Version
+                                      -> Maybe (HashAlgorithm, SignatureAlgorithm)
+                                      -> Bytes
+                                      -> IO (HashDescr, Bytes)
+prepareCertificateVerifySignatureData ctx usedVersion malg msgs
+    | usedVersion == SSL3 = do
+        Just masterSecret <- usingHState ctx $ gets hstMasterSecret
+        let digest = generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit hashMD5SHA1) msgs)
+            hsh = HashDescr id id
+        return (hsh, digest)
+    | usedVersion == TLS10 || usedVersion == TLS11 = do
+        let hashf bs = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs)
+            hsh = HashDescr hashf id
+        return (hsh, msgs)
+    | otherwise = do
+        let Just hashSig = malg
+        hsh <- getHashAndASN1 hashSig
+        return (hsh, msgs)

@@ -11,13 +11,11 @@ module Network.TLS.Handshake.Server
     , handshakeServerWith
     ) where
 
-import Network.TLS.Crypto
 import Network.TLS.Context
 import Network.TLS.Session
 import Network.TLS.Struct
 import Network.TLS.Cipher
 import Network.TLS.Compression
-import Network.TLS.Packet
 import Network.TLS.Extension
 import Network.TLS.Util (catchException)
 import Network.TLS.IO
@@ -255,29 +253,13 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
 
             checkValidClientCertChain "change cipher message expected"
 
+            usedVersion <- usingState_ ctx getVersion
             -- Fetch all handshake messages up to now.
             msgs <- usingHState ctx $ B.concat <$> getHandshakeMessages
-
-            usedVersion <- usingState_ ctx getVersion
-
-            (signature, hsh) <- case usedVersion of
-                SSL3 -> do
-                    Just masterSecret <- usingHState ctx $ gets hstMasterSecret
-                    let digest = generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit hashMD5SHA1) msgs)
-                        hsh = HashDescr id id
-                    return (digest, hsh)
-
-                x | x == TLS10 || x == TLS11 -> do
-                    let hashf bs' = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs')
-                        hsh = HashDescr hashf id
-                    return (msgs,hsh)
-                _ -> do
-                    let Just sentHashSig = mbHashSig
-                    hsh <- getHashAndASN1 sentHashSig
-                    return (msgs,hsh)
+            (hashMethod, toSign) <- prepareCertificateVerifySignatureData ctx usedVersion mbHashSig msgs
 
             -- Verify the signature.
-            verif <- verifyRSA ctx hsh signature bs
+            verif <- verifyRSA ctx hashMethod toSign bs
 
             case verif of
                 True -> do

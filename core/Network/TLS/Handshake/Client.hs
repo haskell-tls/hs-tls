@@ -155,32 +155,21 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
             certSent <- usingHState ctx $ getClientCertSent
             case certSent of
                 True -> do
-                    -- Fetch all handshake messages up to now.
-                    msgs <- usingHState ctx $ B.concat <$> getHandshakeMessages
 
-                    (malg, hashMethod, toSign) <- case usedVersion of
-                        SSL3 -> do
-                            Just masterSecret <- usingHState ctx $ gets hstMasterSecret
-                            let digest = generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit hashMD5SHA1) msgs)
-                                hsh = HashDescr id id
-                            return (Nothing, hsh, digest)
-
-                        x | x == TLS10 || x == TLS11 -> do
-                            let hashf bs = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs)
-                                hsh = HashDescr hashf id
-                            return (Nothing, hsh, msgs)
-
-                        _ -> do
+                    malg <- case usedVersion of
+                        TLS12 -> do
                             Just (_, Just hashSigs, _) <- usingHState ctx $ getClientCertRequest
                             let suppHashSigs = pHashSignatures $ ctxParams ctx
                                 hashSigs' = filter (\ a -> a `elem` hashSigs) suppHashSigs
 
-                            when (null hashSigs') $ do
+                            when (null hashSigs') $
                                 throwCore $ Error_Protocol ("no hash/signature algorithms in common with the server", True, HandshakeFailure)
+                            return $ Just $ head hashSigs'
+                        _     -> return Nothing
 
-                            let hashSig = head hashSigs'
-                            hsh <- getHashAndASN1 hashSig
-                            return (Just hashSig, hsh, msgs)
+                    -- Fetch all handshake messages up to now.
+                    msgs <- usingHState ctx $ B.concat <$> getHandshakeMessages
+                    (hashMethod, toSign) <- prepareCertificateVerifySignatureData ctx usedVersion malg msgs
 
                     sigDig <- signRSA ctx hashMethod toSign
                     sendPacket ctx $ Handshake [CertVerify malg (CertVerifyData sigDig)]
