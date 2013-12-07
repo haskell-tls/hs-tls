@@ -43,6 +43,14 @@ blockCipher = Cipher
     , cipherMinVer      = Nothing
     }
 
+blockCipherDHE_RSA :: Cipher
+blockCipherDHE_RSA = blockCipher
+    { cipherID   = 0xff14
+    , cipherName = "dhe-rsa-id-const"
+    , cipherKeyExchange = CipherKeyExchange_DHE_RSA
+    }
+
+streamCipher :: Cipher
 streamCipher = blockCipher
     { cipherID   = 0xff13
     , cipherBulk = Bulk
