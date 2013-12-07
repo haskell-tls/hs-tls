@@ -9,6 +9,7 @@ module Network.TLS.Crypto
 
     -- * constructor
     , hashMD5SHA1
+    , hashSHA1
     , hashSHA256
 
     -- * key exchange generic interface
@@ -67,7 +68,16 @@ instance HashCtxC HashMD5SHA1 where
     hashCUpdateSSL (HashMD5SHA1 sha1ctx md5ctx) (b1,b2) = HashMD5SHA1 (SHA1.update sha1ctx b2) (MD5.update md5ctx b1)
     hashCFinal  (HashMD5SHA1 sha1ctx md5ctx)   = B.concat [MD5.finalize md5ctx, SHA1.finalize sha1ctx]
 
-data HashSHA256 = HashSHA256 SHA256.Ctx
+newtype HashSHA1 = HashSHA1 SHA1.Ctx
+
+instance HashCtxC HashSHA1 where
+    hashCName _                  = "SHA1"
+    hashCInit _                  = HashSHA1 SHA1.init
+    hashCUpdate (HashSHA1 ctx) b = HashSHA1 (SHA1.update ctx b)
+    hashCUpdateSSL (HashSHA1 ctx) (_,b2) = HashSHA1 (SHA1.update ctx b2)
+    hashCFinal  (HashSHA1 ctx)   = SHA1.finalize ctx
+
+newtype HashSHA256 = HashSHA256 SHA256.Ctx
 
 instance HashCtxC HashSHA256 where
     hashCName _                    = "SHA256"
@@ -92,8 +102,9 @@ hashFinal :: HashCtx -> B.ByteString
 hashFinal  (HashCtx h)   = hashCFinal h
 
 -- real hash constructors
-hashMD5SHA1, hashSHA256 :: HashCtx
+hashMD5SHA1, hashSHA1, hashSHA256 :: HashCtx
 hashMD5SHA1 = HashCtx (HashMD5SHA1 SHA1.init MD5.init)
+hashSHA1    = HashCtx (HashSHA1 SHA1.init)
 hashSHA256  = HashCtx (HashSHA256 SHA256.init)
 
 {- key exchange methods encrypt and decrypt for each supported algorithm -}
