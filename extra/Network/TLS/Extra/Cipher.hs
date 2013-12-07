@@ -14,6 +14,7 @@ module Network.TLS.Extra.Cipher
     , ciphersuite_medium
     , ciphersuite_strong
     , ciphersuite_unencrypted
+    , ciphersuite_dhe_rsa
     -- * individual ciphers
     , cipher_null_SHA1
     , cipher_null_MD5
@@ -23,6 +24,8 @@ module Network.TLS.Extra.Cipher
     , cipher_AES256_SHA1
     , cipher_AES128_SHA256
     , cipher_AES256_SHA256
+    , cipher_DHE_RSA_AES128_SHA1
+    , cipher_DHE_RSA_AES256_SHA1
     ) where
 
 import qualified Data.ByteString as B
@@ -80,6 +83,10 @@ ciphersuite_medium = [cipher_RC4_128_MD5, cipher_RC4_128_SHA1, cipher_AES128_SHA
 -- | the strongest ciphers supported.
 ciphersuite_strong :: [Cipher]
 ciphersuite_strong = [cipher_AES256_SHA256, cipher_AES256_SHA1]
+
+-- | DHE-RSA cipher suite
+ciphersuite_dhe_rsa :: [Cipher]
+ciphersuite_dhe_rsa = [cipher_DHE_RSA_AES256_SHA1, cipher_DHE_RSA_AES128_SHA1]
 
 -- | all unencrypted ciphers, do not use on insecure network.
 ciphersuite_unencrypted :: [Cipher]
@@ -222,6 +229,25 @@ cipher_AES256_SHA256 = Cipher
     , cipherHash         = hash_sha256
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just TLS12
+    }
+
+-- | AES cipher (128 bit key), DHE key exchanged signed by RSA and SHA1 for digest
+cipher_DHE_RSA_AES128_SHA1 :: Cipher
+cipher_DHE_RSA_AES128_SHA1 = Cipher
+    { cipherID           = 0x33
+    , cipherName         = "DHE-RSA-AES128-SHA1"
+    , cipherBulk         = bulk_aes128
+    , cipherHash         = hash_sha1
+    , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
+    , cipherMinVer       = Nothing
+    }
+
+-- | AES cipher (256 bit key), DHE key exchanged signed by RSA and SHA1 for digest
+cipher_DHE_RSA_AES256_SHA1 :: Cipher
+cipher_DHE_RSA_AES256_SHA1 = cipher_DHE_RSA_AES128_SHA1
+    { cipherID           = 0x39
+    , cipherName         = "DHE-RSA-AES256-SHA1"
+    , cipherBulk         = bulk_aes256
     }
 
 {-
