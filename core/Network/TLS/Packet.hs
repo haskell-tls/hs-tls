@@ -451,6 +451,10 @@ getSignatureHashAlgorithm = do
     h <- fromJust . valToType <$> getWord8
     s <- fromJust . valToType <$> getWord8
     return (h,s)
+
+putSignatureHashAlgorithm :: HashAndSignatureAlgorithm -> Put
+putSignatureHashAlgorithm (h,s) =
+    putWord8 (valOfType h) >> putWord8 (valOfType s)
 {-
  - decode and encode ALERT
  -}
