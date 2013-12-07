@@ -158,21 +158,17 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     -- Fetch all handshake messages up to now.
                     msgs <- usingHState ctx $ B.concat <$> getHandshakeMessages
 
-                    case usedVersion of
+                    (malg, hashMethod, toSign) <- case usedVersion of
                         SSL3 -> do
                             Just masterSecret <- usingHState ctx $ gets hstMasterSecret
                             let digest = generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit hashMD5SHA1) msgs)
                                 hsh = HashDescr id id
-
-                            sigDig <- signRSA ctx hsh digest
-                            sendPacket ctx $ Handshake [CertVerify Nothing (CertVerifyData sigDig)]
+                            return (Nothing, hsh, digest)
 
                         x | x == TLS10 || x == TLS11 -> do
                             let hashf bs = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs)
                                 hsh = HashDescr hashf id
-
-                            sigDig <- signRSA ctx hsh msgs
-                            sendPacket ctx $ Handshake [CertVerify Nothing (CertVerifyData sigDig)]
+                            return (Nothing, hsh, msgs)
 
                         _ -> do
                             Just (_, Just hashSigs, _) <- usingHState ctx $ getClientCertRequest
@@ -184,10 +180,10 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
 
                             let hashSig = head hashSigs'
                             hsh <- getHashAndASN1 hashSig
+                            return (Just hashSig, hsh, msgs)
 
-                            sigDig <- signRSA ctx hsh msgs
-
-                            sendPacket ctx $ Handshake [CertVerify (Just hashSig) (CertVerifyData sigDig)]
+                    sigDig <- signRSA ctx hashMethod toSign
+                    sendPacket ctx $ Handshake [CertVerify malg (CertVerifyData sigDig)]
 
                 _ -> return ()
 
