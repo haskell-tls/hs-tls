@@ -311,11 +311,11 @@ decodeServerKeyXchg cp =
             CipherKeyExchange_DH_Anon -> SKX_DH_Anon <$> decodeServerKeyXchg_DH
             CipherKeyExchange_DHE_RSA -> do
                 dhparams <- decodeServerKeyXchg_DH
-                signature <- getOpaque16
+                signature <- getDigitallySigned (cParamsVersion cp)
                 return $ SKX_DHE_RSA dhparams signature
             CipherKeyExchange_DHE_DSS -> do
                 dhparams  <- decodeServerKeyXchg_DH
-                signature <- getOpaque16
+                signature <- getDigitallySigned (cParamsVersion cp)
                 return $ SKX_DHE_DSS dhparams signature
             _ -> do
                 bs <- remaining >>= getBytes
