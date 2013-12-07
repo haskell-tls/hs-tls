@@ -9,6 +9,8 @@
 module Network.TLS.Handshake.Signature
     ( getHashAndASN1
     , prepareCertificateVerifySignatureData
+    , signatureCreate
+    , signatureVerify
     ) where
 
 import Crypto.PubKey.HashDescr
@@ -17,6 +19,7 @@ import Network.TLS.Context
 import Network.TLS.Struct
 import Network.TLS.Packet (generateCertificateVerify_SSL)
 import Network.TLS.Handshake.State
+import Network.TLS.Handshake.Key
 
 import Control.Monad.State
 
@@ -31,7 +34,7 @@ getHashAndASN1 hashSig = case hashSig of
 
 prepareCertificateVerifySignatureData :: Context
                                       -> Version
-                                      -> Maybe (HashAlgorithm, SignatureAlgorithm)
+                                      -> Maybe HashAndSignatureAlgorithm
                                       -> Bytes
                                       -> IO (HashDescr, Bytes)
 prepareCertificateVerifySignatureData ctx usedVersion malg msgs
@@ -48,3 +51,11 @@ prepareCertificateVerifySignatureData ctx usedVersion malg msgs
         let Just hashSig = malg
         hsh <- getHashAndASN1 hashSig
         return (hsh, msgs)
+
+signatureCreate :: Context -> Maybe HashAndSignatureAlgorithm -> HashDescr -> Bytes -> IO Bytes
+signatureCreate ctx _ hashMethod toSign =
+    signRSA ctx hashMethod toSign
+
+signatureVerify :: Context -> Maybe HashAndSignatureAlgorithm -> HashDescr -> Bytes -> Bytes -> IO Bool
+signatureVerify ctx _ hashMethod toVerify bs =
+    verifyRSA ctx hashMethod toVerify bs

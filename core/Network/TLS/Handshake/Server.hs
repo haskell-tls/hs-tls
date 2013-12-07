@@ -22,7 +22,6 @@ import Network.TLS.IO
 import Network.TLS.Types
 import Network.TLS.State hiding (getNegotiatedProtocol)
 import Network.TLS.Handshake.State
-import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Process
 import Network.TLS.Measurement
 import Data.Maybe
@@ -256,10 +255,10 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             usedVersion <- usingState_ ctx getVersion
             -- Fetch all handshake messages up to now.
             msgs <- usingHState ctx $ B.concat <$> getHandshakeMessages
-            (hashMethod, toSign) <- prepareCertificateVerifySignatureData ctx usedVersion mbHashSig msgs
+            (hashMethod, toVerify) <- prepareCertificateVerifySignatureData ctx usedVersion mbHashSig msgs
 
             -- Verify the signature.
-            verif <- verifyRSA ctx hashMethod toSign bs
+            verif <- signatureVerify ctx mbHashSig hashMethod toVerify bs
 
             case verif of
                 True -> do

@@ -155,7 +155,6 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
             certSent <- usingHState ctx $ getClientCertSent
             case certSent of
                 True -> do
-
                     malg <- case usedVersion of
                         TLS12 -> do
                             Just (_, Just hashSigs, _) <- usingHState ctx $ getClientCertRequest
@@ -171,7 +170,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     msgs <- usingHState ctx $ B.concat <$> getHandshakeMessages
                     (hashMethod, toSign) <- prepareCertificateVerifySignatureData ctx usedVersion malg msgs
 
-                    sigDig <- signRSA ctx hashMethod toSign
+                    sigDig <- signatureCreate ctx malg hashMethod toSign
                     sendPacket ctx $ Handshake [CertVerify malg (CertVerifyData sigDig)]
 
                 _ -> return ()
