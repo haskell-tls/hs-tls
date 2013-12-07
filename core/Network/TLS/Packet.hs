@@ -455,6 +455,17 @@ getSignatureHashAlgorithm = do
 putSignatureHashAlgorithm :: HashAndSignatureAlgorithm -> Put
 putSignatureHashAlgorithm (h,s) =
     putWord8 (valOfType h) >> putWord8 (valOfType s)
+
+getDigitallySigned :: Version -> Get DigitallySigned
+getDigitallySigned ver
+    | ver >= TLS12 = DigitallySigned <$> (Just <$> getSignatureHashAlgorithm)
+                                     <*> getOpaque16
+    | otherwise    = DigitallySigned Nothing <$> getOpaque16
+
+putDigitallySigned :: DigitallySigned -> Put
+putDigitallySigned (DigitallySigned mhash sig) =
+    maybe (return ()) putSignatureHashAlgorithm mhash >> putOpaque16 sig
+
 {-
  - decode and encode ALERT
  -}

@@ -21,6 +21,7 @@ module Network.TLS.Struct
     , HashAlgorithm(..)
     , SignatureAlgorithm(..)
     , HashAndSignatureAlgorithm
+    , DigitallySigned(..)
     , ProtocolType(..)
     , TLSError(..)
     , TLSException(..)
@@ -101,6 +102,11 @@ data SignatureAlgorithm =
     deriving (Show,Eq)
 
 type HashAndSignatureAlgorithm = (HashAlgorithm, SignatureAlgorithm)
+
+type Signature = Bytes
+
+data DigitallySigned = DigitallySigned (Maybe HashAndSignatureAlgorithm) Signature
+    deriving (Show,Eq)
 
 data ProtocolType =
       ProtocolType_ChangeCipherSpec
