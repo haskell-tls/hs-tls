@@ -83,7 +83,9 @@ hashInit   (HashCtx h)   = HashCtx $ hashCInit h
 hashUpdate :: HashCtx -> B.ByteString -> HashCtx
 hashUpdate (HashCtx h) b = HashCtx $ hashCUpdate h b
 
-hashUpdateSSL :: HashCtx -> (B.ByteString,B.ByteString) -> HashCtx
+hashUpdateSSL :: HashCtx
+              -> (B.ByteString,B.ByteString) -- ^ (for the md5 context, for the sha1 context)
+              -> HashCtx
 hashUpdateSSL (HashCtx h) bs = HashCtx $ hashCUpdateSSL h bs
 
 hashFinal :: HashCtx -> B.ByteString
