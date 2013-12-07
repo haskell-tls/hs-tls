@@ -48,6 +48,7 @@ module Network.TLS.Packet
     , generateServerFinished
 
     , generateCertificateVerify_SSL
+    , generateSignedDHParams
     ) where
 
 import Network.TLS.Struct
@@ -554,3 +555,7 @@ generateServerFinished ver
 
 generateCertificateVerify_SSL :: Bytes -> HashCtx -> Bytes
 generateCertificateVerify_SSL = generateFinished_SSL ""
+
+generateSignedDHParams :: ClientRandom -> ServerRandom -> ServerDHParams -> Bytes
+generateSignedDHParams cran sran dhparams = runPut $
+    putClientRandom32 cran >> putServerRandom32 sran >> putServerDHParams dhparams
