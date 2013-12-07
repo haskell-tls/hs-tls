@@ -282,12 +282,7 @@ decodeCertRequest cp = do
             return (2 + B.length dName, dn)
 
 decodeCertVerify :: CurrentParams -> Get Handshake
-decodeCertVerify cp = do
-    mbHashSig <- if cParamsVersion cp >= TLS12
-                 then Just <$> getSignatureHashAlgorithm
-                 else return Nothing
-    bs <- getOpaque16
-    return $ CertVerify mbHashSig (CertVerifyData bs)
+decodeCertVerify cp = CertVerify <$> getDigitallySigned (cParamsVersion cp)
 
 decodeClientKeyXchg :: Get Handshake
 decodeClientKeyXchg = ClientKeyXchg <$> (remaining >>= getBytes)
@@ -360,9 +355,15 @@ encodeHandshakeContent (Certificates cc) = putOpaque24 (runPut $ mapM_ putOpaque
 encodeHandshakeContent (ClientKeyXchg content) = do
     putBytes content
 
-encodeHandshakeContent (ServerKeyXchg _) = do
-    -- FIXME
-    return ()
+encodeHandshakeContent (ServerKeyXchg skg) =
+    case skg of
+        SKX_RSA _              -> undefined
+        SKX_DH_Anon params     -> putDHParams params
+        SKX_DHE_RSA params sig -> putDHParams params >> putDigitallySigned sig
+        SKX_DHE_DSS params sig -> putDHParams params >> putDigitallySigned sig
+        _                      -> error "cannot handle"
+  where putDHParams (ServerDHParams p g y) =
+            putInteger16 p >> putInteger16 g >> putInteger16 y
 
 encodeHandshakeContent (HelloRequest) = return ()
 encodeHandshakeContent (ServerHelloDone) = return ()
@@ -383,15 +384,7 @@ encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
             putWord16 (fromIntegral totLength)
             mapM_ (\ b -> putWord16 (fromIntegral (B.length b)) >> putBytes b) enc
 
-encodeHandshakeContent (CertVerify mbHashSig (CertVerifyData c)) = do
-    -- TLS 1.2 prepends the hash and signature algorithms to the
-    -- signature.
-    case mbHashSig of
-        Nothing -> return ()
-        Just (h, s) -> putWord16 $ (fromIntegral $ valOfType h) * 256 + (fromIntegral $ valOfType s)
-    putWord16 (fromIntegral $ B.length c)
-    putBytes c
-
+encodeHandshakeContent (CertVerify digitallySigned) = putDigitallySigned digitallySigned
 
 encodeHandshakeContent (Finished opaque) = putBytes opaque
 

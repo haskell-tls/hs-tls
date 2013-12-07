@@ -247,7 +247,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
         -- Check whether the client correctly signed the handshake.
         -- If not, ask the application on how to proceed.
         --
-        processCertificateVerify (Handshake [hs@(CertVerify mbHashSig (CertVerifyData bs))]) = do
+        processCertificateVerify (Handshake [hs@(CertVerify dsig@(DigitallySigned mbHashSig _))]) = do
             processHandshake ctx hs
 
             checkValidClientCertChain "change cipher message expected"
@@ -258,7 +258,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             (hashMethod, toVerify) <- prepareCertificateVerifySignatureData ctx usedVersion mbHashSig msgs
 
             -- Verify the signature.
-            verif <- signatureVerify ctx mbHashSig hashMethod toVerify bs
+            verif <- signatureVerify ctx hashMethod toVerify dsig
 
             case verif of
                 True -> do

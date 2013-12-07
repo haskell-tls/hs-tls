@@ -39,7 +39,6 @@ module Network.TLS.Struct
     , SessionID
     , Session(..)
     , SessionData(..)
-    , CertVerifyData(..)
     , AlertLevel(..)
     , AlertDescription(..)
     , HandshakeType(..)
@@ -163,9 +162,6 @@ type FinishedData = Bytes
 type ExtensionID  = Word16
 type ExtensionRaw = (ExtensionID, Bytes)
 
-newtype CertVerifyData = CertVerifyData Bytes
-    deriving (Show, Eq)
-
 constrRandom32 :: (Bytes -> a) -> Bytes -> Maybe a
 constrRandom32 constr l = if B.length l == 32 then Just (constr l) else Nothing
 
@@ -257,7 +253,7 @@ data Handshake =
     | ClientKeyXchg Bytes
     | ServerKeyXchg ServerKeyXchgAlgorithmData
     | CertRequest [CertificateType] (Maybe [HashAndSignatureAlgorithm]) [DistinguishedName]
-    | CertVerify (Maybe HashAndSignatureAlgorithm) CertVerifyData
+    | CertVerify DigitallySigned
     | Finished FinishedData
     | HsNextProtocolNegotiation Bytes -- NPN extension
     deriving (Show,Eq)

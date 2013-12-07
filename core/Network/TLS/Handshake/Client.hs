@@ -171,7 +171,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     (hashMethod, toSign) <- prepareCertificateVerifySignatureData ctx usedVersion malg msgs
 
                     sigDig <- signatureCreate ctx malg hashMethod toSign
-                    sendPacket ctx $ Handshake [CertVerify malg (CertVerifyData sigDig)]
+                    sendPacket ctx $ Handshake [CertVerify sigDig]
 
                 _ -> return ()
 

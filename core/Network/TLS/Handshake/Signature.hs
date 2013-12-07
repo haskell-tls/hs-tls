@@ -21,6 +21,7 @@ import Network.TLS.Packet (generateCertificateVerify_SSL)
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Key
 
+import Control.Applicative
 import Control.Monad.State
 
 getHashAndASN1 :: MonadIO m => (HashAlgorithm, SignatureAlgorithm) -> m HashDescr
@@ -52,10 +53,10 @@ prepareCertificateVerifySignatureData ctx usedVersion malg msgs
         hsh <- getHashAndASN1 hashSig
         return (hsh, msgs)
 
-signatureCreate :: Context -> Maybe HashAndSignatureAlgorithm -> HashDescr -> Bytes -> IO Bytes
-signatureCreate ctx _ hashMethod toSign =
-    signRSA ctx hashMethod toSign
+signatureCreate :: Context -> Maybe HashAndSignatureAlgorithm -> HashDescr -> Bytes -> IO DigitallySigned
+signatureCreate ctx malg hashMethod toSign =
+    DigitallySigned malg <$> signRSA ctx hashMethod toSign
 
-signatureVerify :: Context -> Maybe HashAndSignatureAlgorithm -> HashDescr -> Bytes -> Bytes -> IO Bool
-signatureVerify ctx _ hashMethod toVerify bs =
+signatureVerify :: Context -> HashDescr -> Bytes -> DigitallySigned -> IO Bool
+signatureVerify ctx hashMethod toVerify (DigitallySigned _ bs) =
     verifyRSA ctx hashMethod toVerify bs
