@@ -23,6 +23,7 @@ module Network.TLS.Wire
     , getOpaque8
     , getOpaque16
     , getOpaque24
+    , getInteger16
     , getList
     , processBytes
     , isEmpty
@@ -37,6 +38,7 @@ module Network.TLS.Wire
     , putOpaque8
     , putOpaque16
     , putOpaque24
+    , putInteger16
     , encodeWord16
     , encodeWord64
     ) where
@@ -50,6 +52,7 @@ import qualified Data.ByteString as B
 import Data.Word
 import Data.Bits
 import Network.TLS.Struct
+import Network.TLS.Util.Serialization
 
 runGet :: String -> Get a -> Bytes -> Either String a
 runGet lbl f = G.runGet (label lbl f)
@@ -84,6 +87,9 @@ getOpaque16 = getWord16 >>= getBytes . fromIntegral
 
 getOpaque24 :: Get Bytes
 getOpaque24 = getWord24 >>= getBytes
+
+getInteger16 :: Get Integer
+getInteger16 = os2ip <$> getOpaque16
 
 getList :: Int -> (Get (Int, a)) -> Get [a]
 getList totalLen getElement = isolate totalLen (getElements totalLen)
@@ -126,6 +132,9 @@ putOpaque16 b = putWord16 (fromIntegral $ B.length b) >> putBytes b
 
 putOpaque24 :: Bytes -> Put
 putOpaque24 b = putWord24 (B.length b) >> putBytes b
+
+putInteger16 :: Integer -> Put
+putInteger16 = putOpaque16 . i2osp
 
 encodeWord16 :: Word16 -> Bytes
 encodeWord16 = runPut . putWord16
