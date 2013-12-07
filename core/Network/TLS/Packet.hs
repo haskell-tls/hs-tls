@@ -55,7 +55,7 @@ import Network.TLS.Wire
 import Network.TLS.Cap
 import Data.Maybe (fromJust)
 import Data.Word
-import Control.Applicative ((<$>))
+import Control.Applicative ((<$>), (<*>))
 import Control.Monad
 import Data.ASN1.Types (fromASN1, toASN1)
 import Data.ASN1.Encoding (decodeASN1', encodeASN1')
@@ -299,17 +299,13 @@ decodeClientKeyXchg :: Get Handshake
 decodeClientKeyXchg = ClientKeyXchg <$> (remaining >>= getBytes)
 
 decodeServerKeyXchg_DH :: Get ServerDHParams
-decodeServerKeyXchg_DH = do
-    p <- getOpaque16
-    g <- getOpaque16
-    y <- getOpaque16
-    return $ ServerDHParams { dh_p = os2ip p, dh_g = os2ip g, dh_Ys = os2ip y }
+decodeServerKeyXchg_DH = ServerDHParams <$> getInteger16 -- p
+                                        <*> getInteger16 -- g
+                                        <*> getInteger16 -- Ys
 
 decodeServerKeyXchg_RSA :: Get ServerRSAParams
-decodeServerKeyXchg_RSA = do
-    modulus <- getOpaque16
-    expo    <- getOpaque16
-    return $ ServerRSAParams { rsa_modulus = os2ip modulus, rsa_exponent = os2ip expo }
+decodeServerKeyXchg_RSA = ServerRSAParams <$> getInteger16 -- modulus
+                                          <*> getInteger16 -- exponent
 
 decodeServerKeyXchg :: CurrentParams -> Get Handshake
 decodeServerKeyXchg cp =
