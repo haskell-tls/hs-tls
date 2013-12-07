@@ -38,6 +38,7 @@ Library
                    , bytestring
                    , network
                    , crypto-random >= 0.0 && < 0.1
+                   , crypto-numbers
                    , crypto-pubkey >= 0.2
                    , asn1-types >= 0.2.0
                    , asn1-encoding
@@ -77,6 +78,7 @@ Library
                      Network.TLS.Receiving
                      Network.TLS.Util
                      Network.TLS.Util.ASN1
+                     Network.TLS.Util.Serialization
                      Network.TLS.Types
                      Network.TLS.Wire
                      Network.TLS.X509

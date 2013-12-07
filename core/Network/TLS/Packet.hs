@@ -55,7 +55,6 @@ import Network.TLS.Wire
 import Network.TLS.Cap
 import Data.Maybe (fromJust)
 import Data.Word
-import Data.Bits ((.|.))
 import Control.Applicative ((<$>))
 import Control.Monad
 import Data.ASN1.Types (fromASN1, toASN1)
@@ -298,9 +297,6 @@ decodeCertVerify cp = do
 
 decodeClientKeyXchg :: Get Handshake
 decodeClientKeyXchg = ClientKeyXchg <$> (remaining >>= getBytes)
-
-os2ip :: ByteString -> Integer
-os2ip = B.foldl' (\a b -> (256 * a) .|. (fromIntegral b)) 0
 
 decodeServerKeyXchg_DH :: Get ServerDHParams
 decodeServerKeyXchg_DH = do
