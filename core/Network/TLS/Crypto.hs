@@ -13,6 +13,7 @@ module Network.TLS.Crypto
     , hashMD5SHA1
     , hashSHA1
     , hashSHA256
+    , hashSHA512
 
     -- * key exchange generic interface
     , PubKey(..)
@@ -27,6 +28,7 @@ module Network.TLS.Crypto
     , KxError(..)
     ) where
 
+import qualified Crypto.Hash.SHA512 as SHA512
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.MD5 as MD5
@@ -89,6 +91,15 @@ instance HashCtxC HashSHA256 where
     hashCUpdateSSL _ _             = error "CUpdateSSL with HashSHA256"
     hashCFinal  (HashSHA256 ctx)   = SHA256.finalize ctx
 
+newtype HashSHA512 = HashSHA512 SHA512.Ctx
+
+instance HashCtxC HashSHA512 where
+    hashCName _                    = "SHA512"
+    hashCInit _                    = HashSHA512 SHA512.init
+    hashCUpdate (HashSHA512 ctx) b = HashSHA512 (SHA512.update ctx b)
+    hashCUpdateSSL _ _             = error "CUpdateSSL with HashSHA512"
+    hashCFinal  (HashSHA512 ctx)   = SHA512.finalize ctx
+
 -- functions to use the hidden class.
 hashInit :: HashCtx -> HashCtx
 hashInit   (HashCtx h)   = HashCtx $ hashCInit h
@@ -105,10 +116,11 @@ hashFinal :: HashCtx -> B.ByteString
 hashFinal  (HashCtx h)   = hashCFinal h
 
 -- real hash constructors
-hashMD5SHA1, hashSHA1, hashSHA256 :: HashCtx
+hashMD5SHA1, hashSHA1, hashSHA256, hashSHA512 :: HashCtx
 hashMD5SHA1 = HashCtx (HashMD5SHA1 SHA1.init MD5.init)
 hashSHA1    = HashCtx (HashSHA1 SHA1.init)
 hashSHA256  = HashCtx (HashSHA256 SHA256.init)
+hashSHA512  = HashCtx (HashSHA512 SHA512.init)
 
 {- key exchange methods encrypt and decrypt for each supported algorithm -}
 
