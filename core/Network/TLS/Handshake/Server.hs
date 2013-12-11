@@ -23,6 +23,7 @@ import Network.TLS.Types
 import Network.TLS.State hiding (getNegotiatedProtocol)
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Process
+import Network.TLS.Handshake.Key
 import Network.TLS.Measurement
 import Data.Maybe (isJust)
 import Data.List (intersect, sortBy)
@@ -184,6 +185,9 @@ doHandshake sparams ctx chosenVersion usedCipher usedCompression clientSession r
 
             -- send server key exchange if needed
             skx <- case cipherKeyExchange usedCipher of
+                        CipherKeyExchange_DH_Anon -> Just <$> generateSKX_DH_Anon
+                        CipherKeyExchange_DHE_RSA -> Just <$> generateSKX_DHE SignatureRSA
+                        CipherKeyExchange_DHE_DSS -> Just <$> generateSKX_DHE SignatureDSS
                         _                         -> return Nothing
             maybe (return ()) (sendPacket ctx . Handshake . (:[]) . ServerKeyXchg) skx
 
@@ -209,6 +213,36 @@ doHandshake sparams ctx chosenVersion usedCipher usedCompression clientSession r
 
         extractCAname :: SignedCertificate -> DistinguishedName
         extractCAname cert = certSubjectDN $ getCertificate cert
+
+        setup_DHE = do
+            let dhparams = fromJust "server DHE Params" $ serverDHEParams sparams
+            (priv, pub) <- generateDHE ctx dhparams
+
+            let serverParams = ServerDHParams dhparams pub
+
+            usingHState ctx $ setServerDHParams serverParams
+            usingHState ctx $ modify $ \hst -> hst { hstDHPrivate = Just priv }
+            return (serverParams)
+
+        generateSKX_DHE sigAlg = do
+            serverParams  <- setup_DHE
+            signatureData <- generateSignedDHParams ctx serverParams
+
+            usedVersion <- usingState_ ctx getVersion
+            let mhash = case usedVersion of
+                            TLS12 -> case filter ((==) sigAlg . snd) $ pHashSignatures $ ctxParams ctx of
+                                          []  -> error ("no hash signature for " ++ show sigAlg)
+                                          x:_ -> Just (fst x)
+                            _     -> Nothing
+            let hashDescr = signatureHashData sigAlg mhash
+            signed <- signatureCreate ctx (fmap (\h -> (h, sigAlg)) mhash) hashDescr signatureData
+
+            case sigAlg of
+                SignatureRSA -> return $ SKX_DHE_RSA serverParams signed
+                SignatureDSS -> return $ SKX_DHE_DSS serverParams signed
+                _            -> error ("generate skx_dhe unsupported signature type: " ++ show sigAlg)
+
+        generateSKX_DH_Anon = SKX_DH_Anon <$> setup_DHE
 
 -- | receive Client data in handshake until the Finished handshake.
 --

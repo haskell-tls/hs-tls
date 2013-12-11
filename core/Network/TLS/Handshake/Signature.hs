@@ -13,13 +13,15 @@ module Network.TLS.Handshake.Signature
     , signatureCreate
     , signatureVerify
     , signatureVerifyWithHashDescr
+    , generateSignedDHParams
     ) where
 
 import Crypto.PubKey.HashDescr
 import Network.TLS.Crypto
 import Network.TLS.Context
 import Network.TLS.Struct
-import Network.TLS.Packet (generateCertificateVerify_SSL)
+import Network.TLS.Packet (generateCertificateVerify_SSL, encodeSignedDHParams)
+import Network.TLS.State
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Key
 import Network.TLS.Util
@@ -98,3 +100,9 @@ signatureVerifyWithHashDescr ctx sigAlgExpected hashDescr toVerify (DigitallySig
     case sigAlgExpected of
         SignatureRSA -> verifyRSA ctx cc hashDescr toVerify bs
         _            -> error "not implemented yet"
+
+generateSignedDHParams :: Context -> ServerDHParams -> IO Bytes
+generateSignedDHParams ctx serverParams = do
+    (cran, sran) <- usingHState ctx $ do
+                        (,) <$> gets hstClientRandom <*> (fromJust "server random" <$> gets hstServerRandom)
+    return $ encodeSignedDHParams cran sran serverParams

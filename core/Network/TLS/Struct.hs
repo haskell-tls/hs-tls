@@ -243,6 +243,7 @@ data ServerKeyXchgAlgorithmData =
 
 data ClientKeyXchgAlgorithmData =
       CKX_RSA Bytes
+    | CKX_DH DHPublic
     deriving (Show,Eq)
 
 type DeprecatedRecord = ByteString

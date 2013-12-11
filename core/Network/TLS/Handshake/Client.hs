@@ -140,6 +140,15 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                                         else encodeWord16 $ fromIntegral $ B.length e
                         return $ extra `B.append` e
                     return $ CKX_RSA encryptedPreMaster
+                CipherKeyExchange_DHE_RSA -> do
+                    xver <- usingState_ ctx getVersion
+                    (ServerDHParams dhparams serverDHPub) <- fromJust <$> usingHState ctx (gets hstServerDHParams)
+                    (clientDHPriv, clientDHPub) <- generateDHE ctx dhparams
+
+                    let premaster = dhGetShared dhparams clientDHPriv serverDHPub
+                    usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
+
+                    return $ CKX_DH clientDHPub
                 _ -> throwCore $ Error_Protocol ("client key exchange unsupported type", True, HandshakeFailure)
             sendPacket ctx $ Handshake [ClientKeyXchg ckx]
 
@@ -271,6 +280,13 @@ processServerKeyExchange :: Context -> Handshake -> IO (RecvState IO)
 processServerKeyExchange ctx (ServerKeyXchg skx) = do
     cipher <- usingHState ctx getPendingCipher
     case (cipherKeyExchange cipher, skx) of
+        (CipherKeyExchange_DHE_RSA, SKX_DHE_RSA dhparams signature) -> do
+            -- TODO verify DHParams
+            expectedData <- generateSignedDHParams ctx dhparams
+            verified <- signatureVerify ctx SignatureRSA expectedData signature
+            when (not verified) $ throwCore $ Error_Protocol ("bad RSA signature for dhparams", True, HandshakeFailure)
+
+            usingHState ctx $ setServerDHParams dhparams
         (c,_)           -> throwCore $ Error_Protocol ("unknown server key exchange received, expecting: " ++ show c, True, HandshakeFailure)
     return $ RecvStateHandshake (processCertificateRequest ctx)
 processServerKeyExchange ctx p = processCertificateRequest ctx p

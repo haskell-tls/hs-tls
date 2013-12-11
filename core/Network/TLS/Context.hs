@@ -179,6 +179,8 @@ data ServerParams = ServerParams
       -- The client cipher list cannot be empty.
     , onCipherChoosing        :: Version -> [Cipher] -> Cipher
 
+      -- | Server Optional Diffie Hellman parameters
+    , serverDHEParams         :: Maybe DHParams
       -- | suggested next protocols accoring to the next protocol negotiation extension.
     , onSuggestNextProtocols :: IO (Maybe [B.ByteString])
     }
@@ -254,6 +256,7 @@ defaultParamsServer = defaultParamsClient { roleParams = Server role }
                    { serverWantClientCert   = False
                    , onCipherChoosing       = \_ -> head
                    , serverCACertificates   = []
+                   , serverDHEParams        = Nothing
                    , onClientCertificate    = \ _ -> return $ CertificateUsageReject $ CertificateRejectOther "no client certificates expected"
                    , onUnverifiedClientCert = return False
                    , onSuggestNextProtocols  = return Nothing

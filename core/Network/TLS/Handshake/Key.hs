@@ -12,6 +12,7 @@ module Network.TLS.Handshake.Key
     , signRSA
     , decryptRSA
     , verifyRSA
+    , generateDHE
     ) where
 
 import Control.Monad.State
@@ -64,3 +65,6 @@ verifyRSA ctx role hsh econtent sign = do
 
 handshakeGet :: Context -> (HandshakeState -> a) -> IO a
 handshakeGet ctx f = usingHState ctx (gets f)
+
+generateDHE :: Context -> DHParams -> IO (DHPrivate, DHPublic)
+generateDHE ctx dhp = usingState_ ctx $ withRNG $ \rng -> dhGenerateKeyPair rng dhp

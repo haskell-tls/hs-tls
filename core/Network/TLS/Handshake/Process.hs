@@ -24,6 +24,7 @@ import Network.TLS.Packet
 import Network.TLS.Struct
 import Network.TLS.State
 import Network.TLS.Context
+import Network.TLS.Crypto
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Key
 import Network.TLS.Extension
@@ -82,6 +83,14 @@ processClientKeyXchg ctx (CKX_RSA encryptedPremaster) = do
                 Right (ver, _)
                     | ver /= expectedVer -> setMasterSecretFromPre rver role random
                     | otherwise          -> setMasterSecretFromPre rver role premaster
+processClientKeyXchg ctx (CKX_DH clientDHValue) = do
+    rver <- usingState_ ctx getVersion
+    role <- usingState_ ctx isClientContext
+
+    (ServerDHParams dhparams _) <- fromJust "server dh params" <$> usingHState ctx (gets hstServerDHParams)
+    dhpriv                      <- fromJust "dh private" <$> usingHState ctx (gets hstDHPrivate)
+    let premaster = dhGetShared dhparams dhpriv clientDHValue
+    usingHState ctx $ setMasterSecretFromPre rver role premaster
 
 processClientFinished :: Context -> FinishedData -> IO ()
 processClientFinished ctx fdata = do

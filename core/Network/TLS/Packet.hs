@@ -40,6 +40,7 @@ module Network.TLS.Packet
 
     , decodePreMasterSecret
     , encodePreMasterSecret
+    , encodeSignedDHParams
 
     -- * generate things for packet content
     , generateMasterSecret
@@ -48,7 +49,6 @@ module Network.TLS.Packet
     , generateServerFinished
 
     , generateCertificateVerify_SSL
-    , generateSignedDHParams
     ) where
 
 import Network.TLS.Struct
@@ -291,7 +291,11 @@ decodeClientKeyXchg cp = -- case  ClientKeyXchg <$> (remaining >>= getBytes)
         Nothing  -> error "no client key exchange type"
         Just cke -> ClientKeyXchg <$> parseCKE cke
   where parseCKE CipherKeyExchange_RSA     = CKX_RSA <$> (remaining >>= getBytes)
+        parseCKE CipherKeyExchange_DHE_RSA = parseClientDHPublic
+        parseCKE CipherKeyExchange_DHE_DSS = parseClientDHPublic
+        parseCKE CipherKeyExchange_DH_Anon = parseClientDHPublic
         parseCKE _                         = error "unsupported client key exchange type"
+        parseClientDHPublic = CKX_DH . dhPublic <$> getInteger16
 
 decodeServerKeyXchg_DH :: Get ServerDHParams
 decodeServerKeyXchg_DH = getServerDHParams
@@ -359,6 +363,7 @@ encodeHandshakeContent (Certificates cc) = putOpaque24 (runPut $ mapM_ putOpaque
 encodeHandshakeContent (ClientKeyXchg ckx) = do
     case ckx of
         CKX_RSA encryptedPreMaster -> putBytes encryptedPreMaster
+        CKX_DH clientDHPublic      -> putInteger16 $ dhUnwrapPublic clientDHPublic
 
 encodeHandshakeContent (ServerKeyXchg skg) =
     case skg of
@@ -563,6 +568,6 @@ generateServerFinished ver
 generateCertificateVerify_SSL :: Bytes -> HashCtx -> Bytes
 generateCertificateVerify_SSL = generateFinished_SSL ""
 
-generateSignedDHParams :: ClientRandom -> ServerRandom -> ServerDHParams -> Bytes
-generateSignedDHParams cran sran dhparams = runPut $
+encodeSignedDHParams :: ClientRandom -> ServerRandom -> ServerDHParams -> Bytes
+encodeSignedDHParams cran sran dhparams = runPut $
     putClientRandom32 cran >> putServerRandom32 sran >> putServerDHParams dhparams

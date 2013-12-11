@@ -19,6 +19,7 @@ module Network.TLS.Handshake.State
     , setPrivateKey
     , setClientPublicKey
     , setClientPrivateKey
+    , setServerDHParams
     -- * cert accessors
     , setClientCertSent
     , getClientCertSent
@@ -37,6 +38,7 @@ module Network.TLS.Handshake.State
     , setMasterSecret
     , setMasterSecretFromPre
     -- * misc accessor
+    , getPendingCipher
     , setServerHelloParameters
     ) where
 
@@ -61,6 +63,8 @@ data HandshakeState = HandshakeState
     , hstRSAPrivateKey       :: !(Maybe PrivKey)
     , hstRSAClientPublicKey  :: !(Maybe PubKey)
     , hstRSAClientPrivateKey :: !(Maybe PrivKey)
+    , hstServerDHParams      :: !(Maybe ServerDHParams)
+    , hstDHPrivate           :: !(Maybe DHPrivate)
     , hstHandshakeDigest     :: !(Either [Bytes] HashCtx)
     , hstHandshakeMessages   :: [Bytes]
     , hstClientCertRequest   :: !(Maybe ClientCertRequestData) -- ^ Set to Just-value when certificate request was received
@@ -98,6 +102,8 @@ newEmptyHandshake ver crand = HandshakeState
     , hstRSAPrivateKey       = Nothing
     , hstRSAClientPublicKey  = Nothing
     , hstRSAClientPrivateKey = Nothing
+    , hstServerDHParams      = Nothing
+    , hstDHPrivate           = Nothing
     , hstHandshakeDigest     = Left []
     , hstHandshakeMessages   = []
     , hstClientCertRequest   = Nothing
@@ -118,6 +124,9 @@ setPublicKey pk = modify (\hst -> hst { hstRSAPublicKey = Just pk })
 
 setPrivateKey :: PrivKey -> HandshakeM ()
 setPrivateKey pk = modify (\hst -> hst { hstRSAPrivateKey = Just pk })
+
+setServerDHParams :: ServerDHParams -> HandshakeM ()
+setServerDHParams shp = modify (\hst -> hst { hstServerDHParams = Just shp })
 
 setClientPublicKey :: PubKey -> HandshakeM ()
 setClientPublicKey pk = modify (\hst -> hst { hstRSAClientPublicKey = Just pk })
@@ -148,6 +157,9 @@ setClientCertRequest d = modify (\hst -> hst { hstClientCertRequest = Just d })
 
 getClientCertRequest :: HandshakeM (Maybe ClientCertRequestData)
 getClientCertRequest = gets hstClientCertRequest
+
+getPendingCipher :: HandshakeM Cipher
+getPendingCipher = fromJust "pending cipher" <$> gets hstPendingCipher
 
 addHandshakeMessage :: Bytes -> HandshakeM ()
 addHandshakeMessage content = modify $ \hs -> hs { hstHandshakeMessages = content : hstHandshakeMessages hs}
