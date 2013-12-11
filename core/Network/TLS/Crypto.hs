@@ -33,7 +33,7 @@ import Data.ByteString (ByteString)
 import Crypto.PubKey.HashDescr
 import qualified Crypto.PubKey.RSA as RSA
 import qualified Crypto.PubKey.RSA.PKCS15 as RSA
-import Crypto.Random.API
+import Crypto.Random
 import Data.X509 (PrivKey(..), PubKey(..))
 
 {-# DEPRECATED PublicKey "use PubKey" #-}

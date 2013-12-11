@@ -111,7 +111,7 @@ import Data.List (intercalate)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
-import Crypto.Random.API
+import Crypto.Random
 
 import Control.Concurrent.MVar
 import Control.Monad.State

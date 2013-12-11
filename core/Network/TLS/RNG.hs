@@ -4,7 +4,7 @@ module Network.TLS.RNG
     , withTLSRNG
     ) where
 
-import Crypto.Random.API
+import Crypto.Random
 
 data StateRNG = forall g . CPRG g => StateRNG g
 
