@@ -5,7 +5,8 @@
 -- Stability   : experimental
 -- Portability : unknown
 --
--- only needed because of some GHC bug relative to insufficient polymorphic field
+-- extension RecordWildCards only needed because of some GHC bug
+-- relative to insufficient polymorphic field
 {-# LANGUAGE RecordWildCards #-}
 module Network.TLS.Context
     (
