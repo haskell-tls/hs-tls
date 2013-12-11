@@ -103,6 +103,7 @@ import Network.TLS.Compression
 import Network.TLS.Crypto
 import Network.TLS.State
 import Network.TLS.Handshake.State
+import Network.TLS.Hooks
 import Network.TLS.Record.State
 import Network.TLS.Measurement
 import Network.TLS.X509
@@ -119,13 +120,6 @@ import Control.Exception (throwIO, Exception())
 import Data.IORef
 import Data.Tuple
 import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush, hClose)
-
-data Logging = Logging
-    { loggingPacketSent :: String -> IO ()
-    , loggingPacketRecv :: String -> IO ()
-    , loggingIOSent     :: B.ByteString -> IO ()
-    , loggingIORecv     :: Header -> B.ByteString -> IO ()
-    }
 
 data ClientParams = ClientParams
     { clientUseMaxFragmentLength :: Maybe MaxFragmentEnum
@@ -215,13 +209,6 @@ withSessionManager :: Params -> (SessionManager -> a) -> a
 withSessionManager (Params { pSessionManager = man }) f = f man
 
 defaultLogging :: Logging
-defaultLogging = Logging
-    { loggingPacketSent = (\_ -> return ())
-    , loggingPacketRecv = (\_ -> return ())
-    , loggingIOSent     = (\_ -> return ())
-    , loggingIORecv     = (\_ _ -> return ())
-    }
-
 getClientParams :: Params -> ClientParams
 getClientParams params =
     case roleParams params of
@@ -306,15 +293,6 @@ data Backend = Backend
     , backendRecv  :: Int -> IO ByteString -- ^ Receive specified number of bytes from the connection.
     }
 
--- | A collection of hooks actions.
-data Hooks = Hooks
-    { hookRecvHandshake :: Handshake -> IO Handshake
-    }
-
-defaultHooks :: Hooks
-defaultHooks = Hooks
-    { hookRecvHandshake = \hs -> return hs
-    }
 
 -- | A TLS Context keep tls specific state, parameters and backend information.
 data Context = Context

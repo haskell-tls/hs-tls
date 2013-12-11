@@ -64,6 +64,7 @@ Library
                      Network.TLS.Handshake.Process
                      Network.TLS.Handshake.Signature
                      Network.TLS.Handshake.State
+                     Network.TLS.Hooks
                      Network.TLS.IO
                      Network.TLS.MAC
                      Network.TLS.Measurement
