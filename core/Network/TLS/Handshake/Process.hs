@@ -13,8 +13,6 @@ module Network.TLS.Handshake.Process
     , getHandshakeDigest
     ) where
 
-import Data.ByteString (ByteString)
-
 import Control.Applicative
 import Control.Concurrent.MVar
 import Control.Monad.Error

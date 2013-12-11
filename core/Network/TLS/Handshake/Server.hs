@@ -17,19 +17,19 @@ import Network.TLS.Struct
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Extension
-import Network.TLS.Util (catchException)
+import Network.TLS.Util (catchException, fromJust)
 import Network.TLS.IO
 import Network.TLS.Types
 import Network.TLS.State hiding (getNegotiatedProtocol)
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Process
 import Network.TLS.Measurement
-import Data.Maybe
+import Data.Maybe (isJust)
 import Data.List (intersect, sortBy)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 
-import Control.Applicative ((<$>))
+import Control.Applicative ((<$>), (<*>))
 import Control.Monad.State
 
 import Network.TLS.Handshake.Signature
@@ -135,7 +135,6 @@ doHandshake sparams ctx chosenVersion usedCipher usedCompression clientSession r
         params             = ctxParams ctx
         srvCerts           = fmap fst $ pCertificates params
         privKey            = join $ fmap snd $ pCertificates params
-        needKeyXchg        = cipherExchangeNeedMoreData $ cipherKeyExchange usedCipher
         clientRequestedNPN = isJust $ lookup extensionID_NextProtocolNegotiation exts
 
         ---
