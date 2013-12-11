@@ -39,6 +39,7 @@ Library
                    , network
                    , crypto-random >= 0.0 && < 0.1
                    , crypto-numbers
+                   , crypto-pubkey-types >= 0.4
                    , crypto-pubkey >= 0.2
                    , asn1-types >= 0.2.0
                    , asn1-encoding
@@ -52,6 +53,7 @@ Library
                      Network.TLS.Core
                      Network.TLS.Context
                      Network.TLS.Crypto
+                     Network.TLS.Crypto.DH
                      Network.TLS.Extension
                      Network.TLS.Handshake
                      Network.TLS.Handshake.Common

@@ -7,6 +7,8 @@ module Network.TLS.Crypto
     , hashUpdateSSL
     , hashFinal
 
+    , module Network.TLS.Crypto.DH
+
     -- * constructor
     , hashMD5SHA1
     , hashSHA1
