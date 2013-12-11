@@ -59,6 +59,7 @@ import Data.Typeable
 import Control.Monad.Error (Error(..))
 import Control.Exception (Exception(..))
 import Network.TLS.Types
+import Network.TLS.Crypto.DH
 
 type Bytes = ByteString
 
@@ -222,11 +223,8 @@ data HandshakeType =
     | HandshakeType_NPN -- Next Protocol Negotiation extension
     deriving (Show,Eq)
 
-data ServerDHParams = ServerDHParams
-    { dh_p  :: Integer -- ^ prime modulus
-    , dh_g  :: Integer -- ^ generator
-    , dh_Ys :: Integer -- ^ public value (g^X mod p)
-    } deriving (Show,Eq)
+data ServerDHParams = ServerDHParams DHParams {- (p,g) -} DHPublic {- y -}
+    deriving (Show,Eq)
 
 data ServerRSAParams = ServerRSAParams
     { rsa_modulus  :: Integer
