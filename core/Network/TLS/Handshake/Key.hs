@@ -38,14 +38,15 @@ encryptRSA ctx content = do
             Left err       -> fail ("rsa encrypt failed: " ++ show err)
             Right econtent -> return econtent
 
-signRSA :: Context -> HashDescr -> ByteString -> IO ByteString
-signRSA ctx hsh content = do
-    rsakey <- return . fromJust "rsa client private key" =<< handshakeGet ctx hstRSAClientPrivateKey
+signRSA :: Context -> Role -> HashDescr -> ByteString -> IO ByteString
+signRSA ctx role hsh content = do
+    rsakey <- return . fromJust "rsa client private key" =<< access
     usingState_ ctx $ do
         r      <- withRNG (\g -> kxSign g rsakey hsh content)
         case r of
             Left err       -> fail ("rsa sign failed: " ++ show err)
             Right econtent -> return econtent
+  where access = handshakeGet ctx $ (if role == ClientRole then hstRSAClientPrivateKey else hstRSAPrivateKey)
 
 decryptRSA :: Context -> ByteString -> IO (Either KxError ByteString)
 decryptRSA ctx econtent = do
@@ -55,10 +56,11 @@ decryptRSA ctx econtent = do
         let cipher = if ver < TLS10 then econtent else B.drop 2 econtent
         withRNG (\g -> kxDecrypt g rsapriv cipher)
 
-verifyRSA :: Context -> HashDescr -> ByteString -> ByteString -> IO Bool
-verifyRSA ctx hsh econtent sign = do
-    rsapriv <- return . fromJust "rsa client public key" =<< handshakeGet ctx hstRSAClientPublicKey
+verifyRSA :: Context -> Role -> HashDescr -> ByteString -> ByteString -> IO Bool
+verifyRSA ctx role hsh econtent sign = do
+    rsapriv <- return . fromJust "rsa client public key" =<< access
     return $ kxVerify rsapriv hsh econtent sign
+  where access = handshakeGet ctx $ (if role == ClientRole then hstRSAPublicKey else hstRSAClientPublicKey)
 
 handshakeGet :: Context -> (HandshakeState -> a) -> IO a
 handshakeGet ctx f = usingHState ctx (gets f)

@@ -260,7 +260,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             (hashMethod, toVerify) <- prepareCertificateVerifySignatureData ctx usedVersion mbHashSig msgs
 
             -- Verify the signature.
-            verif <- signatureVerify ctx hashMethod toVerify dsig
+            verif <- signatureVerifyWithHashDescr ctx SignatureRSA hashMethod toVerify dsig
 
             case verif of
                 True -> do
