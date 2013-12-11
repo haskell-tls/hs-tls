@@ -108,6 +108,7 @@ Test-Suite test-tls
                    , tls
                    , time
                    , crypto-random
+                   , crypto-pubkey
   ghc-options:       -Wall -fno-warn-orphans -fno-warn-missing-signatures -fwarn-tabs
 
 Benchmark bench-tls

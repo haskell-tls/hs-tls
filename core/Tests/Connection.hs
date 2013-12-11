@@ -63,7 +63,7 @@ streamCipher = blockCipher
     }
 
 supportedCiphers :: [Cipher]
-supportedCiphers = [blockCipher,streamCipher]
+supportedCiphers = [blockCipher,blockCipherDHE_RSA,streamCipher]
 
 supportedVersions :: [Version]
 supportedVersions = [SSL3,TLS10,TLS11,TLS12]
@@ -78,12 +78,14 @@ arbitraryPairParams = do
     clientCiphers      <- oneof [arbitraryCiphers] `suchThat` (\cs -> or [x `elem` serverCiphers | x <- cs])
     secNeg             <- arbitrary
 
+    let cred = (CertificateChain [servCert], Just $ PrivKeyRSA privKey)
     let serverState = defaultParamsServer
             { pAllowedVersions        = serAllowedVersions
             , pCiphers                = serverCiphers
-            , pCertificates           = Just (CertificateChain [servCert], Just $ PrivKeyRSA privKey)
+            , pCertificates           = Just cred
             , pUseSecureRenegotiation = secNeg
             , pLogging                = logging "server: "
+            , roleParams              = roleParams $ updateServerParams (\sp -> sp { serverDHEParams = Just dhParams }) defaultParamsServer
             }
     let clientState = defaultParamsClient
             { pConnectVersion         = connectVersion

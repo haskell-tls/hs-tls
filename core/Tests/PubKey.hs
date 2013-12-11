@@ -2,10 +2,12 @@ module PubKey
     ( arbitraryRSAPair
     , globalRSAPair
     , getGlobalRSAPair
+    , dhParams
     ) where
 
 import Test.QuickCheck
 
+import qualified Crypto.PubKey.DH as DH
 import Crypto.Random (createTestEntropyPool)
 import qualified Crypto.Random.AESCtr as RNG
 import qualified Crypto.PubKey.RSA as RSA
@@ -29,3 +31,9 @@ globalRSAPair = unsafePerformIO (RNG.makeSystem >>= arbitraryRSAPairWithRNG >>= 
 {-# NOINLINE getGlobalRSAPair #-}
 getGlobalRSAPair :: (RSA.PublicKey, RSA.PrivateKey)
 getGlobalRSAPair = unsafePerformIO (readMVar globalRSAPair)
+
+dhParams :: DH.Params
+dhParams = DH.Params
+    { DH.params_p = 0x00ccaa3884b50789ebea8d39bef8bbc66e20f2a78f537a76f26b4edde5de8b0ff15a8193abf0873cbdc701323a2bf6e860affa6e043fe8300d47e95baf9f6354cb
+    , DH.params_g = 0x2
+    }
