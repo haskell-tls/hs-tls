@@ -48,7 +48,7 @@ import Network.TLS.Crypto
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Types
-import Control.Applicative ((<$>))
+import Control.Applicative (Applicative, (<$>))
 import Control.Monad.State
 import Data.X509 (CertificateChain)
 
@@ -78,7 +78,7 @@ type ClientCertRequestData = ([CertificateType],
                               [DistinguishedName])
 
 newtype HandshakeM a = HandshakeM { runHandshakeM :: State HandshakeState a }
-    deriving (Functor, Monad)
+    deriving (Functor, Applicative, Monad)
 
 instance MonadState HandshakeState HandshakeM where
     put x = HandshakeM (put x)
