@@ -182,9 +182,11 @@ doHandshake sparams ctx chosenVersion usedCipher usedCompression clientSession r
             serverhello   <- makeServerHello serverSession
             -- send ServerHello & Certificate & ServerKeyXchg & CertReq
             sendPacket ctx $ Handshake [ serverhello, Certificates (maybe (CertificateChain []) id srvCerts) ]
-            when needKeyXchg $ do
-                    let skg = SKX_RSA Nothing
-                    sendPacket ctx (Handshake [ServerKeyXchg skg])
+
+            -- send server key exchange if needed
+            skx <- case cipherKeyExchange usedCipher of
+                        _                         -> return Nothing
+            maybe (return ()) (sendPacket ctx . Handshake . (:[]) . ServerKeyXchg) skx
 
             -- FIXME we don't do this on a Anonymous server
 

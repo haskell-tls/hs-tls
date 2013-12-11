@@ -182,7 +182,7 @@ decodeHandshake cp ty = runGetErr "handshake" $ case ty of
     HandshakeType_CertRequest     -> decodeCertRequest cp
     HandshakeType_ServerHelloDone -> decodeServerHelloDone
     HandshakeType_CertVerify      -> decodeCertVerify cp
-    HandshakeType_ClientKeyXchg   -> decodeClientKeyXchg
+    HandshakeType_ClientKeyXchg   -> decodeClientKeyXchg cp
     HandshakeType_Finished        -> decodeFinished
     HandshakeType_NPN             -> do
         unless (cParamsSupportNPN cp) $ fail "unsupported handshake type"
@@ -285,8 +285,13 @@ decodeCertRequest cp = do
 decodeCertVerify :: CurrentParams -> Get Handshake
 decodeCertVerify cp = CertVerify <$> getDigitallySigned (cParamsVersion cp)
 
-decodeClientKeyXchg :: Get Handshake
-decodeClientKeyXchg = ClientKeyXchg <$> (remaining >>= getBytes)
+decodeClientKeyXchg :: CurrentParams -> Get Handshake
+decodeClientKeyXchg cp = -- case  ClientKeyXchg <$> (remaining >>= getBytes)
+    case cParamsKeyXchgType cp of
+        Nothing  -> error "no client key exchange type"
+        Just cke -> ClientKeyXchg <$> parseCKE cke
+  where parseCKE CipherKeyExchange_RSA     = CKX_RSA <$> (remaining >>= getBytes)
+        parseCKE _                         = error "unsupported client key exchange type"
 
 decodeServerKeyXchg_DH :: Get ServerDHParams
 decodeServerKeyXchg_DH = getServerDHParams
@@ -299,7 +304,7 @@ decodeServerKeyXchg :: CurrentParams -> Get Handshake
 decodeServerKeyXchg cp =
     case cParamsKeyXchgType cp of
         Just cke -> ServerKeyXchg <$> toCKE cke
-        Nothing  -> error "no server key exchange"
+        Nothing  -> error "no server key exchange type"
   where toCKE cke = case cke of
             CipherKeyExchange_RSA     -> SKX_RSA . Just <$> decodeServerKeyXchg_RSA
             CipherKeyExchange_DH_Anon -> SKX_DH_Anon <$> decodeServerKeyXchg_DH
@@ -351,8 +356,9 @@ encodeHandshakeContent (ServerHello version random session cipherID compressionI
 encodeHandshakeContent (Certificates cc) = putOpaque24 (runPut $ mapM_ putOpaque24 certs)
   where (CertificateChainRaw certs) = encodeCertificateChain cc
 
-encodeHandshakeContent (ClientKeyXchg content) = do
-    putBytes content
+encodeHandshakeContent (ClientKeyXchg ckx) = do
+    case ckx of
+        CKX_RSA encryptedPreMaster -> putBytes encryptedPreMaster
 
 encodeHandshakeContent (ServerKeyXchg skg) =
     case skg of

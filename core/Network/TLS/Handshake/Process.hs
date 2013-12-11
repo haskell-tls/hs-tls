@@ -70,8 +70,8 @@ processHandshake ctx hs = do
 -- process the client key exchange message. the protocol expects the initial
 -- client version received in ClientHello, not the negotiated version.
 -- in case the version mismatch, generate a random master secret
-processClientKeyXchg :: Context -> ByteString -> IO ()
-processClientKeyXchg ctx encryptedPremaster = do
+processClientKeyXchg :: Context -> ClientKeyXchgAlgorithmData -> IO ()
+processClientKeyXchg ctx (CKX_RSA encryptedPremaster) = do
     (rver, role, random) <- usingState_ ctx $ do
         (,,) <$> getVersion <*> isClientContext <*> genRandom 48
     ePremaster <- decryptRSA ctx encryptedPremaster

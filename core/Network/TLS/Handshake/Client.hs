@@ -123,19 +123,25 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                             sendPacket ctx $ Handshake [Certificates cc]
 
         sendClientKeyXchg = do
-            clientVersion <- usingHState ctx $ gets hstClientVersion
-            (xver, prerand) <- usingState_ ctx $ (,) <$> getVersion <*> genRandom 46
-            let premaster = encodePreMasterSecret clientVersion prerand
-            usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
-            encryptedPreMaster <- do
-                -- SSL3 implementation generally forget this length field since it's redundant,
-                -- however TLS10 make it clear that the length field need to be present.
-                e <- encryptRSA ctx premaster
-                let extra = if xver < TLS10
-                                then B.empty
-                                else encodeWord16 $ fromIntegral $ B.length e
-                return $ extra `B.append` e
-            sendPacket ctx $ Handshake [ClientKeyXchg encryptedPreMaster]
+            cipher <- usingHState ctx getPendingCipher
+            ckx <- case cipherKeyExchange cipher of
+                CipherKeyExchange_RSA -> do
+                    clientVersion <- usingHState ctx $ gets hstClientVersion
+                    (xver, prerand) <- usingState_ ctx $ (,) <$> getVersion <*> genRandom 46
+
+                    let premaster = encodePreMasterSecret clientVersion prerand
+                    usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
+                    encryptedPreMaster <- do
+                        -- SSL3 implementation generally forget this length field since it's redundant,
+                        -- however TLS10 make it clear that the length field need to be present.
+                        e <- encryptRSA ctx premaster
+                        let extra = if xver < TLS10
+                                        then B.empty
+                                        else encodeWord16 $ fromIntegral $ B.length e
+                        return $ extra `B.append` e
+                    return $ CKX_RSA encryptedPreMaster
+                _ -> throwCore $ Error_Protocol ("client key exchange unsupported type", True, HandshakeFailure)
+            sendPacket ctx $ Handshake [ClientKeyXchg ckx]
 
         -- In order to send a proper certificate verify message,
         -- we have to do the following:
@@ -262,8 +268,12 @@ expectFinish (Finished _) = return RecvStateDone
 expectFinish p            = unexpected (show p) (Just "Handshake Finished")
 
 processServerKeyExchange :: Context -> Handshake -> IO (RecvState IO)
-processServerKeyExchange ctx (ServerKeyXchg _) = return $ RecvStateHandshake (processCertificateRequest ctx)
-processServerKeyExchange ctx p                 = processCertificateRequest ctx p
+processServerKeyExchange ctx (ServerKeyXchg skx) = do
+    cipher <- usingHState ctx getPendingCipher
+    case (cipherKeyExchange cipher, skx) of
+        (c,_)           -> throwCore $ Error_Protocol ("unknown server key exchange received, expecting: " ++ show c, True, HandshakeFailure)
+    return $ RecvStateHandshake (processCertificateRequest ctx)
+processServerKeyExchange ctx p = processCertificateRequest ctx p
 
 processCertificateRequest :: Context -> Handshake -> IO (RecvState IO)
 processCertificateRequest ctx (CertRequest cTypes sigAlgs dNames) = do

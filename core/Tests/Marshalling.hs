@@ -89,7 +89,7 @@ instance Arbitrary Handshake where
             , liftM Certificates (CertificateChain <$> (resize 2 $ listOf $ arbitraryX509))
             , pure HelloRequest
             , pure ServerHelloDone
-            , ClientKeyXchg <$> genByteString 48
+            , ClientKeyXchg . CKX_RSA <$> genByteString 48
             --, liftM  ServerKeyXchg
             , liftM3 CertRequest arbitrary (return Nothing) (return [])
             , CertVerify <$> arbitrary

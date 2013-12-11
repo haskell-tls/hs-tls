@@ -29,6 +29,7 @@ module Network.TLS.Struct
     , ServerDHParams(..)
     , ServerRSAParams(..)
     , ServerKeyXchgAlgorithmData(..)
+    , ClientKeyXchgAlgorithmData(..)
     , Packet(..)
     , Header(..)
     , ServerRandom(..)
@@ -242,6 +243,10 @@ data ServerKeyXchgAlgorithmData =
     | SKX_Unknown Bytes
     deriving (Show,Eq)
 
+data ClientKeyXchgAlgorithmData =
+      CKX_RSA Bytes
+    deriving (Show,Eq)
+
 type DeprecatedRecord = ByteString
 
 data Handshake =
@@ -250,7 +255,7 @@ data Handshake =
     | Certificates CertificateChain
     | HelloRequest
     | ServerHelloDone
-    | ClientKeyXchg Bytes
+    | ClientKeyXchg ClientKeyXchgAlgorithmData
     | ServerKeyXchg ServerKeyXchgAlgorithmData
     | CertRequest [CertificateType] (Maybe [HashAndSignatureAlgorithm]) [DistinguishedName]
     | CertVerify DigitallySigned
