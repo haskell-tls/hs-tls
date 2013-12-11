@@ -37,6 +37,7 @@ import qualified Crypto.PubKey.RSA as RSA
 import qualified Crypto.PubKey.RSA.PKCS15 as RSA
 import Crypto.Random
 import Data.X509 (PrivKey(..), PubKey(..))
+import Network.TLS.Crypto.DH
 
 {-# DEPRECATED PublicKey "use PubKey" #-}
 type PublicKey = PubKey
