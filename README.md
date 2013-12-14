@@ -17,7 +17,7 @@ Features
 * client certificates.
 * permissive license: BSD3.
 * supported versions: SSL3, TLS1.0, TLS1.1, TLS1.2.
-* key exchange supported: only RSA.
+* key exchange supported: RSA, DHE-RSA.
 * bulk algorithm supported: any stream or block ciphers.
 * supported extensions: secure renegociation, next protocol negotiation (draft 2), server name indication.
 
