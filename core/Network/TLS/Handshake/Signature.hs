@@ -99,6 +99,7 @@ signatureVerifyWithHashDescr ctx sigAlgExpected hashDescr toVerify (DigitallySig
     cc <- usingState_ ctx $ isClientContext
     case sigAlgExpected of
         SignatureRSA -> verifyRSA ctx cc hashDescr toVerify bs
+        SignatureDSS -> verifyRSA ctx cc hashDescr toVerify bs
         _            -> error "not implemented yet"
 
 generateSignedDHParams :: Context -> ServerDHParams -> IO Bytes
