@@ -13,6 +13,7 @@ module Network.TLS.X509
     , SignedCertificate
     , getCertificate
     , isNullCertificateChain
+    , getCertificateChainLeaf
     , CertificateRejectReason(..)
     , CertificateUsage(..)
     ) where
@@ -21,6 +22,10 @@ import Data.X509
 
 isNullCertificateChain :: CertificateChain -> Bool
 isNullCertificateChain (CertificateChain l) = null l
+
+getCertificateChainLeaf :: CertificateChain -> SignedExact Certificate
+getCertificateChainLeaf (CertificateChain [])    = error "empty certificate chain"
+getCertificateChainLeaf (CertificateChain (x:_)) = x
 
 -- | Certificate and Chain rejection reason
 data CertificateRejectReason =
