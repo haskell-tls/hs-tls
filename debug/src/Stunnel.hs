@@ -24,7 +24,7 @@ import qualified Crypto.Random.AESCtr as RNG
 import Network.TLS
 import Network.TLS.Extra
 
-import qualified Crypto.PubKey.DH as DH
+import qualified Crypto.PubKey.DH as DH ()
 
 ciphers :: [Cipher]
 ciphers =
@@ -91,7 +91,7 @@ memSessionManager (MemSessionManager mvar) = SessionManager
     , sessionInvalidate = \_         -> return ()
     }
 
-clientProcess creds handle dsthandle dbg sessionStorage _ = do
+clientProcess dhParamsFile creds handle dsthandle dbg sessionStorage _ = do
     rng <- RNG.makeSystem
     let logging = if not dbg
             then defaultLogging
@@ -99,12 +99,17 @@ clientProcess creds handle dsthandle dbg sessionStorage _ = do
                                 , loggingPacketRecv = putStrLn . ("debug: recv: " ++)
                                 }
 
+    dhParams <- case dhParamsFile of
+            Nothing   -> return Nothing
+            Just file -> (Just . read) `fmap` readFile file
+
     let serverstate = defaultParamsServer --maybe id (setSessionManager . MemSessionManager) sessionStorage $ defaultParamsServer
                         { pAllowedVersions = [SSL3,TLS10,TLS11,TLS12]
                         , pCiphers         = ciphers
                         , pCredentials     = creds
                         , pLogging         = logging
                         , pSessionManager  = maybe noSessionManager (memSessionManager . MemSessionManager) sessionStorage
+                        , roleParams       = roleParams $ updateServerParams (\sp -> sp { serverDHEParams = dhParams }) defaultParamsServer
                         }
 
     ctx <- contextNewOnHandle handle serverstate rng
@@ -210,6 +215,7 @@ doServer source destination flags = do
     creds <- (either (error . show) Credentials . sequence) `fmap` mapM loadCred (zip (getCertificate flags) (getKey flags))
     srcaddr <- getAddressDescription source
     dstaddr <- getAddressDescription destination
+    let dhParamsFile = getDHParams flags
 
     sessionStorage <- if NoSession `elem` flags then return Nothing else (Just `fmap` newMVar [])
 
@@ -225,7 +231,7 @@ doServer source destination flags = do
                     StunnelSocket dst -> socketToHandle dst ReadWriteMode
 
                 _ <- forkIO $ finally
-                    (clientProcess creds srch dsth (Debug `elem` flags) sessionStorage addr >> return ())
+                    (clientProcess dhParamsFile creds srch dsth (Debug `elem` flags) sessionStorage addr >> return ())
                     (hClose srch >> (when (dsth /= stdout) $ hClose dsth))
                 return ()
         AddrFD _ _ -> error "bad error fd. not implemented"
@@ -242,6 +248,7 @@ data Flag =
     | Help
     | Certificate String
     | Key String
+    | DHParams String
     | NoSession
     | NoCertValidation
     deriving (Show,Eq)
@@ -256,6 +263,7 @@ options =
     , Option ['h']  ["help"]    (NoArg Help) "request help"
     , Option []     ["certificate"] (ReqArg Certificate "certificate") "certificate file"
     , Option []     ["key"] (ReqArg Key "key") "certificate file"
+    , Option []     ["dhparams"] (ReqArg DHParams "dhparams") "DH parameter file"
     , Option []     ["no-session"] (NoArg NoSession) "disable support for session"
     , Option []     ["no-cert-validation"] (NoArg NoCertValidation) "disable certificate validation"
     ]
@@ -287,6 +295,10 @@ getCertificate opts = reverse $ onNull ["certificate.pem"] $ foldl accf [] opts
 getKey opts = reverse $ onNull ["certificate.key"] $ foldl accf [] opts
   where accf acc (Key key) = key : acc
         accf acc _         = acc
+
+getDHParams opts = foldl accf Nothing opts
+  where accf _   (DHParams file) = Just file
+        accf acc _               = acc
 
 main :: IO ()
 main = do
