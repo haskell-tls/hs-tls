@@ -27,6 +27,8 @@ module Network.TLS.Extra.Cipher
     , cipher_AES256_SHA256
     , cipher_DHE_RSA_AES128_SHA1
     , cipher_DHE_RSA_AES256_SHA1
+    , cipher_DHE_RSA_AES128_SHA256
+    , cipher_DHE_RSA_AES256_SHA256
     , cipher_DHE_DSS_AES128_SHA1
     , cipher_DHE_DSS_AES256_SHA1
     , cipher_DHE_DSS_RC4_SHA1
@@ -75,7 +77,8 @@ decryptF_rc4 iv e = (\(ctx, d) -> (d, toIV ctx)) $ RC4.combine (toCtx iv) e
 -- this choice of ciphersuite should satisfy most normal need
 ciphersuite_all :: [Cipher]
 ciphersuite_all =
-    [ cipher_DHE_RSA_AES256_SHA1, cipher_DHE_RSA_AES128_SHA1
+    [ cipher_DHE_RSA_AES256_SHA256, cipher_DHE_RSA_AES128_SHA256
+    , cipher_DHE_RSA_AES256_SHA1, cipher_DHE_RSA_AES128_SHA1
     , cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1
     , cipher_AES128_SHA256, cipher_AES256_SHA256
     , cipher_AES128_SHA1,   cipher_AES256_SHA1
@@ -88,11 +91,12 @@ ciphersuite_medium = [cipher_RC4_128_MD5, cipher_RC4_128_SHA1, cipher_AES128_SHA
 
 -- | the strongest ciphers supported.
 ciphersuite_strong :: [Cipher]
-ciphersuite_strong = [cipher_AES256_SHA256, cipher_AES256_SHA1]
+ciphersuite_strong = [cipher_DHE_RSA_AES256_SHA256, cipher_AES256_SHA256, cipher_AES256_SHA1]
 
 -- | DHE-RSA cipher suite
 ciphersuite_dhe_rsa :: [Cipher]
-ciphersuite_dhe_rsa = [cipher_DHE_RSA_AES256_SHA1, cipher_DHE_RSA_AES128_SHA1]
+ciphersuite_dhe_rsa = [cipher_DHE_RSA_AES256_SHA256, cipher_DHE_RSA_AES128_SHA256
+                      , cipher_DHE_RSA_AES256_SHA1, cipher_DHE_RSA_AES128_SHA1]
 
 ciphersuite_dhe_dss :: [Cipher]
 ciphersuite_dhe_dss = [cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1, cipher_DHE_DSS_RC4_SHA1]
@@ -284,6 +288,22 @@ cipher_DHE_DSS_RC4_SHA1 = cipher_DHE_DSS_AES128_SHA1
     , cipherName         = "DHE-DSA-RC4-SHA1"
     , cipherBulk         = bulk_rc4
     }
+
+cipher_DHE_RSA_AES128_SHA256 :: Cipher
+cipher_DHE_RSA_AES128_SHA256 = cipher_DHE_RSA_AES128_SHA1
+    { cipherID           = 0x67
+    , cipherName         = "DHE-RSA-AES128-SHA256"
+    , cipherHash         = hash_sha256
+    , cipherMinVer       = Just TLS12
+    }
+
+cipher_DHE_RSA_AES256_SHA256 :: Cipher
+cipher_DHE_RSA_AES256_SHA256 = cipher_DHE_RSA_AES128_SHA256
+    { cipherID           = 0x6b
+    , cipherName         = "DHE-RSA-AES256-SHA256"
+    , cipherBulk         = bulk_aes256
+    }
+
 
 {-
 TLS 1.0 ciphers definition
