@@ -28,7 +28,7 @@ import Network.TLS.Crypto
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Key
 import Network.TLS.Extension
-import Data.X509
+import Data.X509 (CertificateChain(..), Certificate(..), getCertificate)
 
 processHandshake :: Context -> Handshake -> IO ()
 processHandshake ctx hs = do
