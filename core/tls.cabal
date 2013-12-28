@@ -44,6 +44,7 @@ Library
                    , asn1-types >= 0.2.0
                    , asn1-encoding
                    , x509 >= 1.4.3 && < 1.5.0
+                   , x509-store
   Exposed-modules:   Network.TLS
                      Network.TLS.Cipher
                      Network.TLS.Compression
@@ -52,6 +53,7 @@ Library
                      Network.TLS.Struct
                      Network.TLS.Core
                      Network.TLS.Context
+                     Network.TLS.Credentials
                      Network.TLS.Crypto
                      Network.TLS.Crypto.DH
                      Network.TLS.Extension

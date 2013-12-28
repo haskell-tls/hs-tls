@@ -53,6 +53,11 @@ module Network.TLS
     , contextClose
     , contextHookSetHandshakeRecv
 
+    -- * Credentials
+    , Credentials(..)
+    , Credential
+    , credentialLoadX509
+
     -- * deprecated values
     , defaultParams
 
@@ -96,6 +101,7 @@ import Network.TLS.Struct ( Version(..), TLSError(..), TLSException(..)
                           , AlertDescription(..))
 import Network.TLS.Crypto (KxError(..))
 import Network.TLS.Cipher
+import Network.TLS.Credentials
 import Network.TLS.Compression (CompressionC(..), Compression(..), nullCompression)
 import Network.TLS.Context
 import Network.TLS.Core
