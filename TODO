@@ -1,8 +1,6 @@
 protocol:
 
 - put 4 bytes of time in client/server random
-- proper separation for key exchange algorithm (hardcoded to RSA at the moment in differents place)
-- implements different key exchange algorithm
 - implement AEAD bulk algorithm (TLS1.2)
 
 code cleanup:
