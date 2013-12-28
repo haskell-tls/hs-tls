@@ -15,12 +15,9 @@ module Network.TLS.Handshake.Key
     , generateDHE
     ) where
 
-import Control.Monad.State
-
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
-import Network.TLS.Util
 import Network.TLS.Handshake.State
 import Network.TLS.State (withRNG, getVersion)
 import Network.TLS.Crypto
@@ -32,39 +29,34 @@ import Network.TLS.Context
  -}
 encryptRSA :: Context -> ByteString -> IO ByteString
 encryptRSA ctx content = do
-    rsakey <- return . fromJust "rsa public key" =<< handshakeGet ctx hstRSAPublicKey
+    publicKey <- usingHState ctx getRemotePublicKey
     usingState_ ctx $ do
-        v      <- withRNG (\g -> kxEncrypt g rsakey content)
+        v      <- withRNG (\g -> kxEncrypt g publicKey content)
         case v of
             Left err       -> fail ("rsa encrypt failed: " ++ show err)
             Right econtent -> return econtent
 
 signRSA :: Context -> Role -> HashDescr -> ByteString -> IO ByteString
-signRSA ctx role hsh content = do
-    rsakey <- return . fromJust "rsa client private key" =<< access
+signRSA ctx _ hsh content = do
+    privateKey <- usingHState ctx getLocalPrivateKey
     usingState_ ctx $ do
-        r      <- withRNG (\g -> kxSign g rsakey hsh content)
+        r      <- withRNG (\g -> kxSign g privateKey hsh content)
         case r of
             Left err       -> fail ("rsa sign failed: " ++ show err)
             Right econtent -> return econtent
-  where access = handshakeGet ctx $ (if role == ClientRole then hstRSAClientPrivateKey else hstRSAPrivateKey)
 
 decryptRSA :: Context -> ByteString -> IO (Either KxError ByteString)
 decryptRSA ctx econtent = do
-    rsapriv <- return . fromJust "rsa private key" =<< handshakeGet ctx hstRSAPrivateKey
+    privateKey <- usingHState ctx getLocalPrivateKey
     usingState_ ctx $ do
         ver     <- getVersion
         let cipher = if ver < TLS10 then econtent else B.drop 2 econtent
-        withRNG (\g -> kxDecrypt g rsapriv cipher)
+        withRNG (\g -> kxDecrypt g privateKey cipher)
 
 verifyRSA :: Context -> Role -> HashDescr -> ByteString -> ByteString -> IO Bool
-verifyRSA ctx role hsh econtent sign = do
-    rsapriv <- return . fromJust "rsa client public key" =<< access
-    return $ kxVerify rsapriv hsh econtent sign
-  where access = handshakeGet ctx $ (if role == ClientRole then hstRSAPublicKey else hstRSAClientPublicKey)
-
-handshakeGet :: Context -> (HandshakeState -> a) -> IO a
-handshakeGet ctx f = usingHState ctx (gets f)
+verifyRSA ctx _ hsh econtent sign = do
+    publicKey <- usingHState ctx getRemotePublicKey
+    return $ kxVerify publicKey hsh econtent sign
 
 generateDHE :: Context -> DHParams -> IO (DHPrivate, DHPublic)
 generateDHE ctx dhp = usingState_ ctx $ withRNG $ \rng -> dhGenerateKeyPair rng dhp

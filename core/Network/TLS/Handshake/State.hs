@@ -17,8 +17,8 @@ module Network.TLS.Handshake.State
     -- * key accessors
     , setPublicKey
     , setPrivateKey
-    , setClientPublicKey
-    , setClientPrivateKey
+    , getLocalPrivateKey
+    , getRemotePublicKey
     , setServerDHParams
     -- * cert accessors
     , setClientCertSent
@@ -54,15 +54,17 @@ import Control.Applicative (Applicative, (<$>))
 import Control.Monad.State
 import Data.X509 (CertificateChain)
 
+data HandshakeKeyState = HandshakeKeyState
+    { hksRemotePublicKey :: !(Maybe PubKey)
+    , hksLocalPrivateKey :: !(Maybe PrivKey)
+    } deriving (Show)
+
 data HandshakeState = HandshakeState
     { hstClientVersion       :: !(Version)
     , hstClientRandom        :: !ClientRandom
     , hstServerRandom        :: !(Maybe ServerRandom)
     , hstMasterSecret        :: !(Maybe Bytes)
-    , hstRSAPublicKey        :: !(Maybe PubKey)
-    , hstRSAPrivateKey       :: !(Maybe PrivKey)
-    , hstRSAClientPublicKey  :: !(Maybe PubKey)
-    , hstRSAClientPrivateKey :: !(Maybe PrivKey)
+    , hstKeyState            :: !HandshakeKeyState
     , hstServerDHParams      :: !(Maybe ServerDHParams)
     , hstDHPrivate           :: !(Maybe DHPrivate)
     , hstHandshakeDigest     :: !(Either [Bytes] HashCtx)
@@ -98,10 +100,7 @@ newEmptyHandshake ver crand = HandshakeState
     , hstClientRandom        = crand
     , hstServerRandom        = Nothing
     , hstMasterSecret        = Nothing
-    , hstRSAPublicKey        = Nothing
-    , hstRSAPrivateKey       = Nothing
-    , hstRSAClientPublicKey  = Nothing
-    , hstRSAClientPrivateKey = Nothing
+    , hstKeyState            = HandshakeKeyState Nothing Nothing
     , hstServerDHParams      = Nothing
     , hstDHPrivate           = Nothing
     , hstHandshakeDigest     = Left []
@@ -120,19 +119,21 @@ runHandshake :: HandshakeState -> HandshakeM a -> (a, HandshakeState)
 runHandshake hst f = runState (runHandshakeM f) hst
 
 setPublicKey :: PubKey -> HandshakeM ()
-setPublicKey pk = modify (\hst -> hst { hstRSAPublicKey = Just pk })
+setPublicKey pk = modify (\hst -> hst { hstKeyState = setPK (hstKeyState hst) })
+  where setPK hks = hks { hksRemotePublicKey = Just pk }
 
 setPrivateKey :: PrivKey -> HandshakeM ()
-setPrivateKey pk = modify (\hst -> hst { hstRSAPrivateKey = Just pk })
+setPrivateKey pk = modify (\hst -> hst { hstKeyState = setPK (hstKeyState hst) })
+  where setPK hks = hks { hksLocalPrivateKey = Just pk }
+
+getRemotePublicKey :: HandshakeM PubKey
+getRemotePublicKey = fromJust "remote public key" <$> gets (hksRemotePublicKey . hstKeyState)
+
+getLocalPrivateKey :: HandshakeM PrivKey
+getLocalPrivateKey = fromJust "local private key" <$> gets (hksLocalPrivateKey . hstKeyState)
 
 setServerDHParams :: ServerDHParams -> HandshakeM ()
 setServerDHParams shp = modify (\hst -> hst { hstServerDHParams = Just shp })
-
-setClientPublicKey :: PubKey -> HandshakeM ()
-setClientPublicKey pk = modify (\hst -> hst { hstRSAClientPublicKey = Just pk })
-
-setClientPrivateKey :: PrivKey -> HandshakeM ()
-setClientPrivateKey pk = modify (\hst -> hst { hstRSAClientPrivateKey = Just pk })
 
 setCertReqSent :: Bool -> HandshakeM ()
 setCertReqSent b = modify (\hst -> hst { hstCertReqSent = b })

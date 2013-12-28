@@ -61,9 +61,8 @@ processHandshake ctx hs = do
         processCertificates ServerRole (CertificateChain []) = return ()
         processCertificates ClientRole (CertificateChain []) =
             throwCore $ Error_Protocol ("server certificate missing", True, HandshakeFailure)
-        processCertificates role (CertificateChain (c:_))
-            | role == ClientRole = usingHState ctx $ setPublicKey pubkey
-            | otherwise          = usingHState ctx $ setClientPublicKey pubkey
+        processCertificates _ (CertificateChain (c:_)) =
+            usingHState ctx $ setPublicKey pubkey
           where pubkey = certPubKey $ getCertificate c
 
 -- process the client key exchange message. the protocol expects the initial
