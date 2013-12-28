@@ -43,6 +43,7 @@ module Network.TLS.Context
     , ctxHasSSLv2ClientHello
     , ctxDisableSSLv2ClientHello
     , ctxEstablished
+    , ctxCiphers
     , ctxLogging
     , ctxWithHooks
     , ctxRxState
@@ -112,6 +113,7 @@ import Network.TLS.X509
 import Network.TLS.Types (Role(..))
 import Data.Monoid
 import Data.List (intercalate)
+import Data.Maybe (isJust)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
@@ -313,6 +315,7 @@ data Backend = Backend
 data Context = Context
     { ctxConnection       :: Backend   -- ^ return the backend object associated with this context
     , ctxParams           :: Params
+    , ctxCiphers          :: [Cipher]  -- ^ prepared list of allowed ciphers according to parameters
     , ctxState            :: MVar TLSState
     , ctxMeasurement      :: IORef Measurement
     , ctxEOF_             :: IORef Bool    -- ^ has the handle EOFed or not.
@@ -406,12 +409,21 @@ contextNew backend params rng = liftIO $ do
     tx    <- newMVar newRecordState
     rx    <- newMVar newRecordState
     hs    <- newMVar Nothing
+    -- on the server we filter our allowed ciphers here according
+    -- to the credentials and DHE parameters loaded
+    let ciphers = case roleParams params of
+                    Client {}      -> pCiphers params
+                    Server sParams -> filterServer sParams $ pCiphers params
     lockWrite <- newMVar ()
     lockRead  <- newMVar ()
     lockState <- newMVar ()
+
+    when (null ciphers) $ error "no ciphers"
+
     return $ Context
             { ctxConnection   = backend
             , ctxParams       = params
+            , ctxCiphers      = ciphers
             , ctxState        = stvar
             , ctxTxState      = tx
             , ctxRxState      = rx
@@ -426,6 +438,28 @@ contextNew backend params rng = liftIO $ do
             , ctxLockRead         = lockRead
             , ctxLockState        = lockState
             }
+  where filterServer sParams ciphers = filter authorizedCKE ciphers
+          where authorizedCKE cipher =
+                    case cipherKeyExchange cipher of
+                        CipherKeyExchange_RSA         -> canEncryptRSA
+                        CipherKeyExchange_DH_Anon     -> canDHE
+                        CipherKeyExchange_DHE_RSA     -> canSignRSA && canDHE
+                        CipherKeyExchange_DHE_DSS     -> canSignDSS && canDHE
+                        -- unimplemented: non ephemeral DH
+                        CipherKeyExchange_DH_DSS      -> False
+                        CipherKeyExchange_DH_RSA      -> False
+                        -- unimplemented: EC
+                        CipherKeyExchange_ECDHE_RSA   -> False
+                        CipherKeyExchange_ECDH_ECDSA  -> False
+                        CipherKeyExchange_ECDH_RSA    -> False
+                        CipherKeyExchange_ECDHE_ECDSA -> False
+
+                canDHE        = isJust $ serverDHEParams sParams
+                canSignDSS    = SignatureDSS `elem` signingAlgs
+                canSignRSA    = SignatureRSA `elem` signingAlgs
+                canEncryptRSA = isJust $ credentialsFindForDecrypting creds
+                signingAlgs   = credentialsListSigningAlgorithms creds
+                creds         = credentialsGet params
 
 -- | create a new context on an handle.
 contextNewOnHandle :: (MonadIO m, CPRG rng)

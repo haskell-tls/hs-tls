@@ -115,8 +115,8 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
 
   where
         params             = ctxParams ctx
-        commonCipherIDs    = intersect ciphers (map cipherID $ pCiphers params)
-        commonCiphers      = filter (flip elem commonCipherIDs . cipherID) (pCiphers params)
+        commonCipherIDs    = intersect ciphers (map cipherID $ ctxCiphers ctx)
+        commonCiphers      = filter (flip elem commonCipherIDs . cipherID) (ctxCiphers ctx)
         commonCompressions = compressionIntersectID (pCompressions params) compressions
         usedCompression    = head commonCompressions
 
