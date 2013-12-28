@@ -15,6 +15,7 @@ module Network.TLS.Extra.Cipher
     , ciphersuite_strong
     , ciphersuite_unencrypted
     , ciphersuite_dhe_rsa
+    , ciphersuite_dhe_dss
     -- * individual ciphers
     , cipher_null_SHA1
     , cipher_null_MD5
@@ -26,6 +27,9 @@ module Network.TLS.Extra.Cipher
     , cipher_AES256_SHA256
     , cipher_DHE_RSA_AES128_SHA1
     , cipher_DHE_RSA_AES256_SHA1
+    , cipher_DHE_DSS_AES128_SHA1
+    , cipher_DHE_DSS_AES256_SHA1
+    , cipher_DHE_DSS_RC4_SHA1
     ) where
 
 import qualified Data.ByteString as B
@@ -71,9 +75,11 @@ decryptF_rc4 iv e = (\(ctx, d) -> (d, toIV ctx)) $ RC4.combine (toCtx iv) e
 -- this choice of ciphersuite should satisfy most normal need
 ciphersuite_all :: [Cipher]
 ciphersuite_all =
-    [ cipher_AES128_SHA256, cipher_AES256_SHA256
+    [ cipher_DHE_RSA_AES256_SHA1, cipher_DHE_RSA_AES128_SHA1
+    , cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1
+    , cipher_AES128_SHA256, cipher_AES256_SHA256
     , cipher_AES128_SHA1,   cipher_AES256_SHA1
-    , cipher_RC4_128_SHA1,  cipher_RC4_128_MD5
+    , cipher_DHE_DSS_RC4_SHA1, cipher_RC4_128_SHA1,  cipher_RC4_128_MD5
     ]
 
 -- | list of medium ciphers.
@@ -87,6 +93,9 @@ ciphersuite_strong = [cipher_AES256_SHA256, cipher_AES256_SHA1]
 -- | DHE-RSA cipher suite
 ciphersuite_dhe_rsa :: [Cipher]
 ciphersuite_dhe_rsa = [cipher_DHE_RSA_AES256_SHA1, cipher_DHE_RSA_AES128_SHA1]
+
+ciphersuite_dhe_dss :: [Cipher]
+ciphersuite_dhe_dss = [cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1, cipher_DHE_DSS_RC4_SHA1]
 
 -- | all unencrypted ciphers, do not use on insecure network.
 ciphersuite_unencrypted :: [Cipher]
@@ -250,6 +259,32 @@ cipher_DHE_RSA_AES256_SHA1 = cipher_DHE_RSA_AES128_SHA1
     , cipherBulk         = bulk_aes256
     }
 
+-- | AES cipher (128 bit key), DHE key exchanged signed by DSA and SHA1 for digest
+cipher_DHE_DSS_AES128_SHA1 :: Cipher
+cipher_DHE_DSS_AES128_SHA1 = Cipher
+    { cipherID           = 0x32
+    , cipherName         = "DHE-DSA-AES128-SHA1"
+    , cipherBulk         = bulk_aes128
+    , cipherHash         = hash_sha1
+    , cipherKeyExchange  = CipherKeyExchange_DHE_DSS
+    , cipherMinVer       = Nothing
+    }
+
+-- | AES cipher (256 bit key), DHE key exchanged signed by DSA and SHA1 for digest
+cipher_DHE_DSS_AES256_SHA1 :: Cipher
+cipher_DHE_DSS_AES256_SHA1 = cipher_DHE_DSS_AES128_SHA1
+    { cipherID           = 0x38
+    , cipherName         = "DHE-DSA-AES256-SHA1"
+    , cipherBulk         = bulk_aes256
+    }
+
+cipher_DHE_DSS_RC4_SHA1 :: Cipher
+cipher_DHE_DSS_RC4_SHA1 = cipher_DHE_DSS_AES128_SHA1
+    { cipherID           = 0x66
+    , cipherName         = "DHE-DSA-RC4-SHA1"
+    , cipherBulk         = bulk_rc4
+    }
+
 {-
 TLS 1.0 ciphers definition
 
@@ -326,5 +361,8 @@ TLS-PSK-WITH-CAMELLIA-256-GCM-SHA384      {0xC0,0x8F}
 TLS-PSK-WITH-NULL-SHA     {0x00,0x2C}
 TLS-PSK-WITH-NULL-SHA256      {0x00,0xB4}
 TLS-PSK-WITH-NULL-SHA384      {0x00,0xB5}
+
+best ciphers suite description:
+    <http://www.thesprawl.org/research/tls-and-ssl-cipher-suites/>
 
 -}
