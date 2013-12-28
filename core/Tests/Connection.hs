@@ -14,6 +14,7 @@ import PubKey
 import PipeChan
 import Network.TLS
 import Data.X509
+import Control.Applicative
 import Control.Concurrent.Chan
 import Control.Concurrent
 import qualified Control.Exception as E
@@ -50,6 +51,13 @@ blockCipherDHE_RSA = blockCipher
     , cipherKeyExchange = CipherKeyExchange_DHE_RSA
     }
 
+blockCipherDHE_DSS :: Cipher
+blockCipherDHE_DSS = blockCipher
+    { cipherID   = 0xff15
+    , cipherName = "dhe-dss-id-const"
+    , cipherKeyExchange = CipherKeyExchange_DHE_DSS
+    }
+
 streamCipher :: Cipher
 streamCipher = blockCipher
     { cipherID   = 0xff13
@@ -63,14 +71,18 @@ streamCipher = blockCipher
     }
 
 supportedCiphers :: [Cipher]
-supportedCiphers = [blockCipher,blockCipherDHE_RSA,streamCipher]
+supportedCiphers = [blockCipher,blockCipherDHE_RSA,blockCipherDHE_DSS,streamCipher]
 
 supportedVersions :: [Version]
 supportedVersions = [SSL3,TLS10,TLS11,TLS12]
 
 arbitraryPairParams = do
-    let (pubKey, privKey) = getGlobalRSAPair
-    servCert           <- arbitraryX509WithPublicKey pubKey
+    (dsaPub, dsaPriv) <- (\(p,r) -> (PubKeyDSA p, PrivKeyDSA r)) <$> arbitraryDSAPair
+    let (pubKey, privKey) = (\(p, r) -> (PubKeyRSA p, PrivKeyRSA r)) $ getGlobalRSAPair
+    creds              <- mapM (\(pub, priv) -> do
+                                    cert <- arbitraryX509WithKey (pub, priv)
+                                    return (CertificateChain [cert], priv)
+                               ) [ (pubKey, privKey), (dsaPub, dsaPriv) ]
     connectVersion     <- elements supportedVersions
     let allowedVersions = [ v | v <- supportedVersions, v <= connectVersion ]
     serAllowedVersions <- (:[]) `fmap` elements allowedVersions
@@ -78,11 +90,11 @@ arbitraryPairParams = do
     clientCiphers      <- oneof [arbitraryCiphers] `suchThat` (\cs -> or [x `elem` serverCiphers | x <- cs])
     secNeg             <- arbitrary
 
-    let cred = (CertificateChain [servCert], Just $ PrivKeyRSA privKey)
+    --let cred = (CertificateChain [servCert], PrivKeyRSA privKey)
     let serverState = defaultParamsServer
             { pAllowedVersions        = serAllowedVersions
             , pCiphers                = serverCiphers
-            , pCertificates           = Just cred
+            , pCredentials            = Credentials creds
             , pUseSecureRenegotiation = secNeg
             , pLogging                = logging "server: "
             , roleParams              = roleParams $ updateServerParams (\sp -> sp { serverDHEParams = Just dhParams }) defaultParamsServer

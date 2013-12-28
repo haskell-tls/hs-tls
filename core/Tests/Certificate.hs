@@ -1,6 +1,7 @@
+{-# LANGUAGE BangPatterns #-}
 module Certificate
     ( arbitraryX509
-    , arbitraryX509WithPublicKey
+    , arbitraryX509WithKey
     , simpleCertificate
     , simpleX509
     ) where
@@ -12,6 +13,8 @@ import Data.Time.Clock (secondsToDiffTime, UTCTime(..))
 import qualified Data.ByteString as B
 
 import PubKey
+
+testExtensionEncode critical ext = ExtensionRaw (extOID ext) critical (extEncode ext)
 
 arbitraryDN = return $ DistinguishedName []
 
@@ -28,34 +31,37 @@ arbitraryTime = do
 maxSerial = 16777216
 
 arbitraryCertificate pubKey = do
-    version   <- choose (1,3)
     serial    <- choose (0,maxSerial)
     issuerdn  <- arbitraryDN
     subjectdn <- arbitraryDN
     time1     <- arbitraryTime
     time2     <- arbitraryTime
-    let sigalg = SignatureALG HashMD5 PubKeyALG_RSA
+    let sigalg = SignatureALG HashSHA1 (pubkeyToAlg pubKey)
     return $ Certificate
-            { certVersion      = version
+            { certVersion      = 3
             , certSerial       = serial
             , certSignatureAlg = sigalg
             , certIssuerDN     = issuerdn
             , certSubjectDN    = subjectdn
             , certValidity     = (time1, time2)
             , certPubKey       = pubKey
-            , certExtensions   = Extensions Nothing
+            , certExtensions   = Extensions $ Just
+                [ testExtensionEncode True $ ExtKeyUsage [KeyUsage_digitalSignature,KeyUsage_keyEncipherment,KeyUsage_keyCertSign]
+                ]
             }
 
 simpleCertificate pubKey =
     Certificate
         { certVersion = 3
         , certSerial = 0
-        , certSignatureAlg = SignatureALG HashSHA1 PubKeyALG_RSA
+        , certSignatureAlg = SignatureALG HashSHA1 (pubkeyToAlg pubKey)
         , certIssuerDN     = simpleDN
         , certSubjectDN    = simpleDN
         , certValidity     = (time1, time2)
         , certPubKey       = pubKey
-        , certExtensions   = Extensions Nothing
+        , certExtensions   = Extensions $ Just
+                [ testExtensionEncode True $ ExtKeyUsage [KeyUsage_digitalSignature,KeyUsage_keyEncipherment]
+                ]
         }
   where time1 = UTCTime (fromGregorian 1999 1 1) 0
         time2 = UTCTime (fromGregorian 2901 1 1) 0
@@ -64,38 +70,17 @@ simpleCertificate pubKey =
 simpleX509 pubKey = do
     let cert = simpleCertificate pubKey
         sig  = replicate 40 1
-        sigalg = SignatureALG HashMD5 PubKeyALG_RSA
+        sigalg = SignatureALG HashSHA1 (pubkeyToAlg pubKey)
         (signedExact, ()) = objectToSignedExact (\_ -> (B.pack sig,sigalg,())) cert
      in signedExact
 
-{-
-arbitraryX509Cert pubKey = do
-        version   <- choose (1,3)
-        serial    <- choose (0,maxSerial)
-        issuerdn  <- arbitraryDN
-        subjectdn <- arbitraryDN
-        time1     <- arbitraryTime
-        time2     <- arbitraryTime
-        let sigalg = X509.SignatureALG X509.HashMD5 X509.PubKeyALG_RSA
-        return $ Cert.Certificate
-                { X509.certVersion      = version
-                , X509.certSerial       = serial
-                , X509.certSignatureAlg = sigalg
-                , X509.certIssuerDN     = issuerdn
-                , X509.certSubjectDN    = subjectdn
-                , X509.certValidity     = (time1, time2)
-                , X509.certPubKey       = pubKey
-                , X509.certExtensions   = Nothing
-                }
--}
-
-arbitraryX509WithPublicKey pubKey = do
-    cert <- arbitraryCertificate (PubKeyRSA pubKey)
+arbitraryX509WithKey (pubKey, _) = do
+    cert <- arbitraryCertificate pubKey
     sig  <- resize 40 $ listOf1 arbitrary
-    let sigalg = SignatureALG HashMD5 PubKeyALG_RSA
-    let (signedExact, ()) = objectToSignedExact (\_ -> (B.pack sig,sigalg,())) cert
+    let sigalg = SignatureALG HashSHA1 (pubkeyToAlg pubKey)
+    let (signedExact, ()) = objectToSignedExact (\(!(_)) -> (B.pack sig,sigalg,())) cert
     return signedExact
 
 arbitraryX509 = do
-    let pubKey = fst $ getGlobalRSAPair
-    arbitraryX509WithPublicKey pubKey
+    let (pubKey, privKey) = getGlobalRSAPair
+    arbitraryX509WithKey (PubKeyRSA pubKey, PrivKeyRSA privKey)
