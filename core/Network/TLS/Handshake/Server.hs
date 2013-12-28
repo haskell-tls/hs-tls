@@ -16,6 +16,7 @@ import Network.TLS.Session
 import Network.TLS.Struct
 import Network.TLS.Cipher
 import Network.TLS.Compression
+import Network.TLS.Credentials
 import Network.TLS.Extension
 import Network.TLS.Util (catchException, fromJust)
 import Network.TLS.IO
@@ -30,7 +31,7 @@ import Data.List (intersect, sortBy)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 
-import Control.Applicative ((<$>), (<*>))
+import Control.Applicative ((<$>))
 import Control.Monad.State
 
 import Network.TLS.Handshake.Signature
@@ -91,17 +92,26 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
                         Nothing -> throwCore $ Error_Protocol ("client version " ++ show clientVersion ++ " is not supported", True, ProtocolVersion)
                         Just v  -> return v
 
-    let usedCipher = (onCipherChoosing sparams) chosenVersion
-                   $ filter (cipherAllowedForVersion chosenVersion) commonCiphers
-
     when (commonCipherIDs == []) $ throwCore $
         Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
     when (null commonCompressions) $ throwCore $
         Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
+
+    let ciphersFilteredVersion = filter (cipherAllowedForVersion chosenVersion) commonCiphers
+        usedCipher = (onCipherChoosing sparams) chosenVersion ciphersFilteredVersion
+        creds = credentialsGet params
+    cred <- case cipherKeyExchange usedCipher of
+                CipherKeyExchange_RSA     -> return $ credentialsFindForDecrypting creds
+                CipherKeyExchange_DH_Anon -> return $ Nothing
+                CipherKeyExchange_DHE_RSA -> return $ credentialsFindForSigning SignatureRSA creds
+                CipherKeyExchange_DHE_DSS -> return $ credentialsFindForSigning SignatureDSS creds
+                _                         -> throwCore $ Error_Protocol ("key exchange algorithm not implemented", True, HandshakeFailure)
+
     resumeSessionData <- case clientSession of
             (Session (Just clientSessionId)) -> withSessionManager params (\s -> liftIO $ sessionResume s clientSessionId)
             (Session Nothing)                -> return Nothing
-    doHandshake sparams ctx chosenVersion usedCipher usedCompression clientSession resumeSessionData exts
+
+    doHandshake sparams cred ctx chosenVersion usedCipher usedCompression clientSession resumeSessionData exts
 
   where
         params             = ctxParams ctx
@@ -113,10 +123,10 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
 
 handshakeServerWith _ _ _ = fail "unexpected handshake type received. expecting client hello"
 
-doHandshake :: ServerParams -> Context -> Version -> Cipher
+doHandshake :: ServerParams -> Maybe Credential -> Context -> Version -> Cipher
             -> Compression -> Session -> Maybe SessionData
             -> [(ExtensionID, a)] -> IO ()
-doHandshake sparams ctx chosenVersion usedCipher usedCompression clientSession resumeSessionData exts = do
+doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSession resumeSessionData exts = do
     case resumeSessionData of
         Nothing -> do
             handshakeSendServerData
@@ -133,9 +143,6 @@ doHandshake sparams ctx chosenVersion usedCipher usedCompression clientSession r
             recvChangeCipherAndFinish ctx
     handshakeTerminate ctx
   where
-        params             = ctxParams ctx
-        srvCerts           = fmap fst $ pCertificates params
-        privKey            = join $ fmap snd $ pCertificates params
         clientRequestedNPN = isJust $ lookup extensionID_NextProtocolNegotiation exts
 
         ---
@@ -145,9 +152,9 @@ doHandshake sparams ctx chosenVersion usedCipher usedCompression clientSession r
         ---
         makeServerHello session = do
             srand <- getStateRNG ctx 32 >>= return . ServerRandom
-            case privKey of
-                Just privkey -> usingHState ctx $ setPrivateKey privkey
-                _            -> return () -- return a sensible error
+            case mcred of
+                Just (_, privkey) -> usingHState ctx $ setPrivateKey privkey
+                _                 -> return () -- return a sensible error
 
             -- in TLS12, we need to check as well the certificates we are sending if they have in the extension
             -- the necessary bits set.
@@ -181,7 +188,10 @@ doHandshake sparams ctx chosenVersion usedCipher usedCompression clientSession r
             usingState_ ctx (setSession serverSession False)
             serverhello   <- makeServerHello serverSession
             -- send ServerHello & Certificate & ServerKeyXchg & CertReq
-            sendPacket ctx $ Handshake [ serverhello, Certificates (maybe (CertificateChain []) id srvCerts) ]
+            let certMsg = case mcred of
+                            Just (srvCerts, _) -> Certificates srvCerts
+                            _                  -> Certificates $ CertificateChain []
+            sendPacket ctx $ Handshake [ serverhello, certMsg ]
 
             -- send server key exchange if needed
             skx <- case cipherKeyExchange usedCipher of

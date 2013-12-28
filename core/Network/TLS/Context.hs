@@ -31,6 +31,7 @@ module Network.TLS.Context
     , setSessionManager
     , getClientParams
     , getServerParams
+    , credentialsGet
 
     -- * Context object and accessor
     , Backend(..)
@@ -101,6 +102,7 @@ import Network.TLS.Session
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Crypto
+import Network.TLS.Credentials
 import Network.TLS.State
 import Network.TLS.Handshake.State
 import Network.TLS.Hooks
@@ -108,6 +110,7 @@ import Network.TLS.Record.State
 import Network.TLS.Measurement
 import Network.TLS.X509
 import Network.TLS.Types (Role(..))
+import Data.Monoid
 import Data.List (intercalate)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
@@ -196,12 +199,20 @@ data Params = Params
     , pUseSecureRenegotiation :: Bool           -- ^ notify that we want to use secure renegotation
     , pUseSession             :: Bool           -- ^ generate new session if specified
     , pCertificates      :: Maybe (CertificateChain, Maybe PrivKey) -- ^ the cert chain for this context with the associated keys if any.
+    , pCredentials       :: Credentials         -- ^ credentials
     , pLogging           :: Logging             -- ^ callback for logging
     , onHandshake        :: Measurement -> IO Bool -- ^ callback on a beggining of handshake
     , onCertificatesRecv :: CertificateChain -> IO CertificateUsage -- ^ callback to verify received cert chain.
     , pSessionManager    :: SessionManager
     , roleParams         :: RoleParams
     }
+{-# DEPRECATED pCertificates "use pCredentials instead of pCertificates. removed in tls-1.3" #-}
+
+credentialsGet :: Params -> Credentials
+credentialsGet params = pCredentials params `mappend`
+    case pCertificates params of
+        Just (cchain, Just priv) -> Credentials [(cchain, priv)]
+        _                        -> Credentials []
 
 -- | Set a new session manager in a parameters structure.
 setSessionManager :: SessionManager -> Params -> Params
@@ -210,7 +221,6 @@ setSessionManager manager (Params {..}) = Params { pSessionManager = manager, ..
 withSessionManager :: Params -> (SessionManager -> a) -> a
 withSessionManager (Params { pSessionManager = man }) f = f man
 
-defaultLogging :: Logging
 getClientParams :: Params -> ClientParams
 getClientParams params =
     case roleParams params of
@@ -238,6 +248,7 @@ defaultParamsClient = Params
     , pUseSecureRenegotiation = True
     , pUseSession             = True
     , pCertificates           = Nothing
+    , pCredentials            = mempty
     , pLogging                = defaultLogging
     , onHandshake             = (\_ -> return True)
     , onCertificatesRecv      = (\_ -> return CertificateUsageAccept)

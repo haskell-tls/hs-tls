@@ -19,7 +19,7 @@ getParams connectVer cipher = (cParams, sParams)
             { pAllowedVersions = [connectVer]
             , pConnectVersion  = connectVer
             , pCiphers         = [cipher]
-            , pCertificates    = Just (CertificateChain [simpleX509 $ PubKeyRSA pubKey], Just $ PrivKeyRSA privKey)
+            , pCredentials     = Credentials [ (CertificateChain [simpleX509 $ PubKeyRSA pubKey], PrivKeyRSA privKey) ]
             }
         cParams = defaultParamsClient
             { pAllowedVersions = [connectVer]
