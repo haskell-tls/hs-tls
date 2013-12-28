@@ -21,7 +21,9 @@ import Data.IORef
 
 ciphers :: [Cipher]
 ciphers =
-    [ cipher_AES128_SHA1
+    [ cipher_DHE_RSA_AES128_SHA1
+    , cipher_DHE_RSA_AES256_SHA1
+    , cipher_AES128_SHA1
     , cipher_AES256_SHA1
     , cipher_RC4_128_MD5
     , cipher_RC4_128_SHA1
@@ -50,7 +52,6 @@ getDefaultParams flags host store sStorage session =
         { pConnectVersion    = tlsConnectVer
         , pAllowedVersions   = [TLS10,TLS11,TLS12]
         , pCiphers           = ciphers
-        , pCertificates      = Nothing
         , pLogging           = logging
         , pSessionManager    = sessionRef sStorage
         , onCertificatesRecv = crecv

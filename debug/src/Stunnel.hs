@@ -24,9 +24,16 @@ import qualified Crypto.Random.AESCtr as RNG
 import Network.TLS
 import Network.TLS.Extra
 
+import qualified Crypto.PubKey.DH as DH
+
 ciphers :: [Cipher]
 ciphers =
-    [ cipher_AES128_SHA1
+    [ cipher_DHE_RSA_AES128_SHA1
+    , cipher_DHE_RSA_AES256_SHA1
+    , cipher_DHE_DSS_AES128_SHA1
+    , cipher_DHE_DSS_AES256_SHA1
+    , cipher_DHE_DSS_RC4_SHA1
+    , cipher_AES128_SHA1
     , cipher_AES256_SHA1
     , cipher_RC4_128_MD5
     , cipher_RC4_128_SHA1
@@ -84,7 +91,7 @@ memSessionManager (MemSessionManager mvar) = SessionManager
     , sessionInvalidate = \_         -> return ()
     }
 
-clientProcess certs handle dsthandle dbg sessionStorage _ = do
+clientProcess creds handle dsthandle dbg sessionStorage _ = do
     rng <- RNG.makeSystem
     let logging = if not dbg
             then defaultLogging
@@ -95,7 +102,7 @@ clientProcess certs handle dsthandle dbg sessionStorage _ = do
     let serverstate = defaultParamsServer --maybe id (setSessionManager . MemSessionManager) sessionStorage $ defaultParamsServer
                         { pAllowedVersions = [SSL3,TLS10,TLS11,TLS12]
                         , pCiphers         = ciphers
-                        , pCertificates    = certs
+                        , pCredentials     = creds
                         , pLogging         = logging
                         , pSessionManager  = maybe noSessionManager (memSessionManager . MemSessionManager) sessionStorage
                         }
@@ -167,7 +174,6 @@ doClient source destination@(Address a _) flags = do
     let clientstate = defaultParamsClient { pConnectVersion = TLS10
                                           , pAllowedVersions = [TLS10,TLS11,TLS12]
                                           , pCiphers = ciphers
-                                          , pCertificates = Nothing
                                           , pLogging = logging
                                           , onCertificatesRecv = crecv
                                           }
@@ -190,10 +196,18 @@ doClient source destination@(Address a _) flags = do
                 return ()
         AddrFD _ _ -> error "bad error fd. not implemented"
 
+loadCred (cert, priv) = do
+    putStrLn ("loading credential " ++ show cert ++ " : key=" ++ show priv)
+    res <- credentialLoadX509 cert priv
+    case res of
+        Left _  -> putStrLn "ERR"
+        Right _ -> putStrLn "OK"
+    return res
+
+
 doServer :: Address -> Address -> [Flag] -> IO ()
 doServer source destination flags = do
-    cert    <- fileReadCertificateChain $ getCertificate flags
-    pk      <- fileReadPrivateKey $ getKey flags
+    creds <- (either (error . show) Credentials . sequence) `fmap` mapM loadCred (zip (getCertificate flags) (getKey flags))
     srcaddr <- getAddressDescription source
     dstaddr <- getAddressDescription destination
 
@@ -211,7 +225,7 @@ doServer source destination flags = do
                     StunnelSocket dst -> socketToHandle dst ReadWriteMode
 
                 _ <- forkIO $ finally
-                    (clientProcess (Just (cert, Just pk)) srch dsth (Debug `elem` flags) sessionStorage addr >> return ())
+                    (clientProcess creds srch dsth (Debug `elem` flags) sessionStorage addr >> return ())
                     (hClose srch >> (when (dsth /= stdout) $ hClose dsth))
                 return ()
         AddrFD _ _ -> error "bad error fd. not implemented"
@@ -262,12 +276,16 @@ getDestination opts = foldl accf defaultDestination opts
         accf (Address _ s) (DestinationType t) = Address t s
         accf acc           _                   = acc
 
-getCertificate opts = foldl accf "certificate.pem" opts
-  where accf _   (Certificate cert) = cert
+onNull def l | null l    = def
+             | otherwise = l
+
+getCertificate :: [Flag] -> [String]
+getCertificate opts = reverse $ onNull ["certificate.pem"] $ foldl accf [] opts
+  where accf acc (Certificate cert) = cert:acc
         accf acc _                  = acc
 
-getKey opts = foldl accf "certificate.key" opts
-  where accf _   (Key key) = key
+getKey opts = reverse $ onNull ["certificate.key"] $ foldl accf [] opts
+  where accf acc (Key key) = key : acc
         accf acc _         = acc
 
 main :: IO ()
