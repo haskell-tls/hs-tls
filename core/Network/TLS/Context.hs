@@ -233,6 +233,7 @@ defaultParamsClient = Params
                                 , (Struct.HashSHA384, SignatureRSA)
                                 , (Struct.HashSHA256, SignatureRSA)
                                 , (Struct.HashSHA224, SignatureRSA)
+                                , (Struct.HashSHA1,   SignatureDSS)
                                 ]
     , pUseSecureRenegotiation = True
     , pUseSession             = True

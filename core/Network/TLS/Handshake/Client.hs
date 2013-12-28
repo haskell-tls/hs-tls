@@ -140,7 +140,11 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                                         else encodeWord16 $ fromIntegral $ B.length e
                         return $ extra `B.append` e
                     return $ CKX_RSA encryptedPreMaster
-                CipherKeyExchange_DHE_RSA -> do
+                CipherKeyExchange_DHE_RSA -> getCKX_DHE
+                CipherKeyExchange_DHE_DSS -> getCKX_DHE
+                _ -> throwCore $ Error_Protocol ("client key exchange unsupported type", True, HandshakeFailure)
+            sendPacket ctx $ Handshake [ClientKeyXchg ckx]
+          where getCKX_DHE = do
                     xver <- usingState_ ctx getVersion
                     (ServerDHParams dhparams serverDHPub) <- fromJust <$> usingHState ctx (gets hstServerDHParams)
                     (clientDHPriv, clientDHPub) <- generateDHE ctx dhparams
@@ -149,8 +153,6 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
 
                     return $ CKX_DH clientDHPub
-                _ -> throwCore $ Error_Protocol ("client key exchange unsupported type", True, HandshakeFailure)
-            sendPacket ctx $ Handshake [ClientKeyXchg ckx]
 
         -- In order to send a proper certificate verify message,
         -- we have to do the following:
@@ -281,14 +283,18 @@ processServerKeyExchange ctx (ServerKeyXchg skx) = do
     cipher <- usingHState ctx getPendingCipher
     case (cipherKeyExchange cipher, skx) of
         (CipherKeyExchange_DHE_RSA, SKX_DHE_RSA dhparams signature) -> do
-            -- TODO verify DHParams
-            expectedData <- generateSignedDHParams ctx dhparams
-            verified <- signatureVerify ctx SignatureRSA expectedData signature
-            when (not verified) $ throwCore $ Error_Protocol ("bad RSA signature for dhparams", True, HandshakeFailure)
-
-            usingHState ctx $ setServerDHParams dhparams
+            doDHESignature dhparams signature SignatureRSA
+        (CipherKeyExchange_DHE_DSS, SKX_DHE_DSS dhparams signature) -> do
+            doDHESignature dhparams signature SignatureDSS
         (c,_)           -> throwCore $ Error_Protocol ("unknown server key exchange received, expecting: " ++ show c, True, HandshakeFailure)
     return $ RecvStateHandshake (processCertificateRequest ctx)
+  where doDHESignature dhparams signature signatureType = do
+            -- TODO verify DHParams
+            expectedData <- generateSignedDHParams ctx dhparams
+            verified <- signatureVerify ctx signatureType expectedData signature
+            when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " for dhparams", True, HandshakeFailure)
+            usingHState ctx $ setServerDHParams dhparams
+
 processServerKeyExchange ctx p = processCertificateRequest ctx p
 
 processCertificateRequest :: Context -> Handshake -> IO (RecvState IO)
