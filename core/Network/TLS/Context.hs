@@ -186,6 +186,7 @@ data ServerParams = ServerParams
 
       -- | Server Optional Diffie Hellman parameters
     , serverDHEParams         :: Maybe DHParams
+
       -- | suggested next protocols accoring to the next protocol negotiation extension.
     , onSuggestNextProtocols :: IO (Maybe [B.ByteString])
     }
