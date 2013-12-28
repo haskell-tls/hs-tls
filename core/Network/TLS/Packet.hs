@@ -367,7 +367,7 @@ encodeHandshakeContent (ClientKeyXchg ckx) = do
 
 encodeHandshakeContent (ServerKeyXchg skg) =
     case skg of
-        SKX_RSA _              -> undefined
+        SKX_RSA _              -> error "encodeHandshakeContent SKX_RSA not implemented"
         SKX_DH_Anon params     -> putServerDHParams params
         SKX_DHE_RSA params sig -> putServerDHParams params >> putDigitallySigned sig
         SKX_DHE_DSS params sig -> putServerDHParams params >> putDigitallySigned sig
