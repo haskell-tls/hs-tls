@@ -1,6 +1,85 @@
-#!/bin/sh
+#!/bin/sh -e
 
-openssl genrsa -out server.key 1024 
-openssl rsa -in server.key -out server.pem
-openssl req -new -subj '/CN=www.mytest.com/O=MyTest/C=US'  -key server.key -out server.csr
-openssl x509 -req -days 1000 -in server.csr -signkey server.key -out server.crt
+
+#make req
+
+cat > server.rsa.req << EOF
+[ req ]
+default_bits        = 2048
+default_keyfile     = server.rsa.key
+distinguished_name  = req_distinguished_name
+req_extensions      = v3_req
+x509_extensions     = v3_ca
+
+[req_distinguished_name]
+C_default = US
+C_min = 2
+C_max = 2
+
+O =
+O_default = MyTest
+
+O.0U =
+0.OU_default = default
+1.OU_default = PKI
+2.OU_default = ABCD
+commonName_default = www.mytest.com
+commonName_max = 64
+emailAddress_default = test@test.com
+
+[ v3_req ]
+basicConstraints = CA:FALSE
+keyUsage = digitalSignature, nonRepudiation, keyEncipherment
+
+[ v3_ca ]
+subjectKeyIdentifier   = hash
+authorityKeyIdentifier = keyid:always,issuer:always
+subjectAltName         = email:test@test.com
+issuerAltName          = issuer:copy
+EOF
+
+cat > server.dsa.req << EOF
+[ req ]
+keyfile     = server.dsa.key
+distinguished_name  = req_distinguished_name
+req_extensions      = v3_req
+x509_extensions     = v3_ca
+
+[req_distinguished_name]
+C_default = US
+C_min = 2
+C_max = 2
+
+O =
+O_default = MyTest
+
+O.0U =
+0.OU_default = default
+1.OU_default = PKI
+2.OU_default = ABCD
+commonName_default = www.mytest.com
+commonName_max = 64
+emailAddress_default = test@test.com
+
+[ v3_req ]
+basicConstraints = CA:FALSE
+keyUsage = digitalSignature, nonRepudiation, keyEncipherment
+
+[ v3_ca ]
+subjectKeyIdentifier   = hash
+authorityKeyIdentifier = keyid:always,issuer:always
+subjectAltName         = email:test@test.com
+issuerAltName          = issuer:copy
+EOF
+
+openssl genrsa -out server.rsa.key 1024
+#openssl rsa -in server.rsa.key -out server.pem
+
+openssl req -config server.rsa.req -key server.rsa.key -new -nodes -out server.rsa.crt -extensions v3_req -x509
+#openssl x509 -req -days 1000 -in server.rsa.req -signkey server.rsa.key -out server.rsa.crt
+
+openssl dsaparam -out server.dsa.params 1024
+openssl gendsa server.dsa.params -out server.dsa.key
+
+openssl req -config server.dsa.req -key server.dsa.key -new -nodes -out server.dsa.crt -extensions v3_req -x509
+#openssl x509 -req -days 1000 -in server.dsa.req -signkey server.dsa.key -out server.dsa.crt

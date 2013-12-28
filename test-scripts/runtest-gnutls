@@ -8,23 +8,23 @@ fi
 
 PORT=$(($$ % 10000 + 10000))
 
-if [ ! -f server.crt ]; then
-	echo "generate some certificate \"server.crt\""
+if [ ! -f server.rsa.crt ]; then
+	echo "generate some certificate \"server.rsa.crt\""
 	exit 2
 fi
 
-if [ ! -f server.key ]; then
-	echo "generate some private key \"server.key\""
+if [ ! -f server.rsa.key ]; then
+	echo "generate some private key \"server.rsa.key\""
 	exit 2
 fi
 
 echo "running stunnel"
-${STUNNEL} server --certificate server.crt --key server.key --source=localhost:${PORT} --destination-type=fd --destination=2 > stunnel-gnutls-log 2>&1 &
+${STUNNEL} server --certificate server.rsa.crt --key server.rsa.key --certificate server.dsa.crt --key server.dsa.key --source=localhost:${PORT} --destination-type=fd --debug --destination=2 > stunnel-gnutls-log 2>&1 &
 stunnelpid=$(pidof stunnel)
 STUNNELPID=$!
 sleep 1
 
 echo "starting gnutls cli debug"
-gnutls-cli-debug localhost -p ${PORT} -VV
+gnutls-cli-debug localhost -p ${PORT} -V -V
 
 kill ${STUNNELPID}
