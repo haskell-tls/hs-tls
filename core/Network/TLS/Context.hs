@@ -470,7 +470,7 @@ getHState ctx = liftIO $ readMVar (ctxHandshake ctx)
 
 runTxState :: Context -> RecordM a -> IO (Either TLSError a)
 runTxState ctx f = do
-    ver <- usingState_ ctx getVersion
+    ver <- usingState_ ctx (getVersionWithDefault $ pConnectVersion $ ctxParams ctx)
     modifyMVar (ctxTxState ctx) $ \st ->
         case runRecordM f ver st of
             Left err         -> return (st, Left err)
