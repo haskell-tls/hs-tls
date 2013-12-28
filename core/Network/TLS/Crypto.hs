@@ -35,11 +35,16 @@ import qualified Crypto.Hash.MD5 as MD5
 import qualified Data.ByteString as B
 import Data.ByteString (ByteString)
 import Crypto.PubKey.HashDescr
+import qualified Crypto.PubKey.DSA as DSA
 import qualified Crypto.PubKey.RSA as RSA
 import qualified Crypto.PubKey.RSA.PKCS15 as RSA
 import Crypto.Random
 import Data.X509 (PrivKey(..), PubKey(..))
 import Network.TLS.Crypto.DH
+
+import Data.ASN1.Types
+import Data.ASN1.Encoding
+import Data.ASN1.BinaryEncoding (DER(..), BER(..))
 
 {-# DEPRECATED PublicKey "use PubKey" #-}
 type PublicKey = PubKey
@@ -141,12 +146,22 @@ kxDecrypt g _               _ = (Left KxUnsupported, g)
 --
 kxVerify :: PublicKey -> HashDescr -> ByteString -> ByteString -> Bool
 kxVerify (PubKeyRSA pk) hashDescr msg sign = RSA.verify hashDescr pk msg sign
+kxVerify (PubKeyDSA pk) hashDescr msg signBS =
+    case signature of
+        Right (sig, []) -> DSA.verify (hashFunction hashDescr) pk sig msg
+        _               -> False
+  where signature = case decodeASN1' BER signBS of
+                        Left err    -> Left (show err)
+                        Right asn1s -> fromASN1 asn1s
 kxVerify _              _         _   _    = False
 
 -- Sign the given message using the private key.
 --
 kxSign :: CPRG g => g -> PrivateKey -> HashDescr -> ByteString -> (Either KxError ByteString, g)
-kxSign g (PrivKeyRSA pk) hashDescr msg  =
+kxSign g (PrivKeyRSA pk) hashDescr msg =
     generalizeRSAWithRNG $ RSA.signSafer g hashDescr pk msg
-kxSign g _               _         _    =
-    (Left KxUnsupported, g)
+kxSign g (PrivKeyDSA pk) hashDescr msg =
+    let (sign, g') = DSA.sign g pk (hashFunction hashDescr) msg
+     in (Right $ encodeASN1' DER $ toASN1 sign [], g')
+--kxSign g _               _         _   =
+--    (Left KxUnsupported, g)
