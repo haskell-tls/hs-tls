@@ -28,8 +28,10 @@ import qualified Crypto.PubKey.DH as DH ()
 
 ciphers :: [Cipher]
 ciphers =
-    [ cipher_DHE_RSA_AES128_SHA1
+    [ cipher_DHE_RSA_AES256_SHA256
+    , cipher_DHE_RSA_AES128_SHA256
     , cipher_DHE_RSA_AES256_SHA1
+    , cipher_DHE_RSA_AES128_SHA1
     , cipher_DHE_DSS_AES128_SHA1
     , cipher_DHE_DSS_AES256_SHA1
     , cipher_DHE_DSS_RC4_SHA1
