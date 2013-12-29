@@ -21,8 +21,12 @@ import Data.IORef
 
 ciphers :: [Cipher]
 ciphers =
-    [ cipher_DHE_RSA_AES128_SHA1
+    [ cipher_DHE_RSA_AES256_SHA256
+    , cipher_DHE_RSA_AES128_SHA256
     , cipher_DHE_RSA_AES256_SHA1
+    , cipher_DHE_RSA_AES128_SHA1
+    , cipher_DHE_DSS_AES256_SHA1
+    , cipher_DHE_DSS_AES128_SHA1
     , cipher_AES128_SHA1
     , cipher_AES256_SHA1
     , cipher_RC4_128_MD5
