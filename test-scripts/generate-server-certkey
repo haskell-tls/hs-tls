@@ -83,3 +83,7 @@ openssl gendsa server.dsa.params -out server.dsa.key
 
 openssl req -config server.dsa.req -key server.dsa.key -new -nodes -out server.dsa.crt -extensions v3_req -x509
 #openssl x509 -req -days 1000 -in server.dsa.req -signkey server.dsa.key -out server.dsa.crt
+
+cat > dhparams << EOF
+Params {params_p = 10719171887047462424462377894372628069923269478878247097091798192644237231396492564025928794300391495193820465477    538346762614835402050938824463012084274379, params_g = 2}
+EOF

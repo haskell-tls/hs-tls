@@ -19,7 +19,7 @@ if [ ! -f server.rsa.key ]; then
 fi
 
 echo "running stunnel"
-${STUNNEL} server --certificate server.rsa.crt --key server.rsa.key --certificate server.dsa.crt --key server.dsa.key --source=localhost:${PORT} --destination-type=fd --debug --destination=2 > stunnel-gnutls-log 2>&1 &
+${STUNNEL} server --dhparams dhparams --certificate server.rsa.crt --key server.rsa.key --certificate server.dsa.crt --key server.dsa.key --source=localhost:${PORT} --destination-type=fd --debug --destination=2 > stunnel-gnutls-log 2>&1 &
 stunnelpid=$(pidof stunnel)
 STUNNELPID=$!
 sleep 1
