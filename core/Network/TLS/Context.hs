@@ -419,7 +419,7 @@ contextNew backend params rng = liftIO $ do
     lockRead  <- newMVar ()
     lockState <- newMVar ()
 
-    when (null ciphers) $ error "no ciphers"
+    when (null ciphers) $ error "no ciphers available with those parameters"
 
     return $ Context
             { ctxConnection   = backend
