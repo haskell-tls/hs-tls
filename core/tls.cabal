@@ -71,6 +71,7 @@ Library
                      Network.TLS.MAC
                      Network.TLS.Measurement
                      Network.TLS.Packet
+                     Network.TLS.Parameters
                      Network.TLS.Record
                      Network.TLS.Record.Types
                      Network.TLS.Record.Engage

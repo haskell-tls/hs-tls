@@ -58,9 +58,6 @@ module Network.TLS
     , Credential
     , credentialLoadX509
 
-    -- * deprecated values
-    , defaultParams
-
     -- * Initialisation and Termination of context
     , bye
     , handshake
