@@ -31,7 +31,6 @@ module Network.TLS.Context
     , credentialsGet
 
     -- * Context object and accessor
-    , Backend(..)
     , Context
     , Hooks(..)
     , ctxParams
@@ -113,14 +112,6 @@ import Data.IORef
 import Data.Tuple
 import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush, hClose)
 
--- | Connection IO backend
-data Backend = Backend
-    { backendFlush :: IO ()                -- ^ Flush the connection sending buffer, if any.
-    , backendClose :: IO ()                -- ^ Close the connection.
-    , backendSend  :: ByteString -> IO ()  -- ^ Send a bytestring through the connection.
-    , backendRecv  :: Int -> IO ByteString -- ^ Receive specified number of bytes from the connection.
-    }
-
 
 -- | A TLS Context keep tls specific state, parameters and backend information.
 data Context = Context
@@ -197,8 +188,8 @@ ctxLogging :: Context -> Logging
 ctxLogging = pLogging . ctxParams
 
 -- | create a new context using the backend and parameters specified.
-contextNew :: (MonadIO m, CPRG rng)
-           => Backend   -- ^ Backend abstraction with specific method to interact with the connection type.
+contextNew :: (MonadIO m, CPRG rng, HasBackend backend)
+           => backend   -- ^ Backend abstraction with specific method to interact with the connection type.
            -> Params    -- ^ Parameters of the context.
            -> rng       -- ^ Random number generator associated with this context.
            -> m Context
@@ -232,7 +223,7 @@ contextNew backend params rng = liftIO $ do
     when (null ciphers) $ error "no ciphers available with those parameters"
 
     return $ Context
-            { ctxConnection   = backend
+            { ctxConnection   = getBackend backend
             , ctxParams       = params
             , ctxCiphers      = ciphers
             , ctxState        = stvar

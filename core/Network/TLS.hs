@@ -92,6 +92,7 @@ module Network.TLS
     , TLSException(..)
     ) where
 
+import Network.TLS.Backend (Backend(..))
 import Network.TLS.Struct ( Version(..), TLSError(..), TLSException(..)
                           , HashAndSignatureAlgorithm, HashAlgorithm(..), SignatureAlgorithm(..)
                           , Header(..), ProtocolType(..), CertificateType(..)

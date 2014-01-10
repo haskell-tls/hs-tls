@@ -54,6 +54,7 @@ Library
                      Network.TLS.Core
                      Network.TLS.Context
                      Network.TLS.Credentials
+                     Network.TLS.Backend
                      Network.TLS.Crypto
                      Network.TLS.Crypto.DH
                      Network.TLS.Extension
