@@ -88,6 +88,7 @@ module Network.TLS.Context
 import Network.Socket (Socket, sClose)
 import qualified Network.Socket.ByteString as Socket
 
+import Network.TLS.Backend
 import Network.TLS.Extension
 import Network.TLS.Struct
 import Network.TLS.Cipher
@@ -100,7 +101,6 @@ import Network.TLS.Parameters
 import Network.TLS.Measurement
 import Network.TLS.Types (Role(..))
 import Data.Maybe (isJust)
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
 import Crypto.Random
