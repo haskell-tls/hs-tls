@@ -67,7 +67,7 @@ writePacket ctx pkt = do
 -- so we use cstIV as is, however in other case we generate an explicit IV
 prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
 prepareRecord ctx f = do
-    ver     <- usingState_ ctx (getVersionWithDefault $ pConnectVersion $ ctxParams ctx)
+    ver     <- usingState_ ctx (getVersionWithDefault $ maximum $ pAllowedVersions $ ctxParams ctx)
     txState <- readMVar $ ctxTxState ctx
     let sz = case stCipher $ txState of
                   Nothing     -> 0

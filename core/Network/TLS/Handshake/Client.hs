@@ -74,11 +74,12 @@ handshakeClient cparams ctx = do
         sendClientHello = do
             crand <- getStateRNG ctx 32 >>= return . ClientRandom
             let clientSession = Session . maybe Nothing (Just . fst) $ clientWantSessionResume cparams
+                highestVer = maximum $ pAllowedVersions params
             extensions <- getExtensions
-            startHandshake ctx (pConnectVersion params) crand
-            usingState_ ctx $ setVersionIfUnset (pConnectVersion params)
+            startHandshake ctx highestVer crand
+            usingState_ ctx $ setVersionIfUnset highestVer
             sendPacket ctx $ Handshake
-                [ ClientHello (pConnectVersion params) crand clientSession (map cipherID ciphers)
+                [ ClientHello highestVer crand clientSession (map cipherID ciphers)
                               (map compressionID compressions) extensions Nothing
                 ]
             return $ map fst extensions

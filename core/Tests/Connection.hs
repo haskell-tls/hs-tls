@@ -100,8 +100,7 @@ arbitraryPairParams = do
             , roleParams              = roleParams $ updateServerParams (\sp -> sp { serverDHEParams = Just dhParams }) defaultParamsServer
             }
     let clientState = defaultParamsClient
-            { pConnectVersion         = connectVersion
-            , pAllowedVersions        = allowedVersions
+            { pAllowedVersions        = allowedVersions
             , pCiphers                = clientCiphers
             , pUseSecureRenegotiation = secNeg
             , pLogging                = logging "client: "

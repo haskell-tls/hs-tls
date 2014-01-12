@@ -17,13 +17,11 @@ recvDataNonNull ctx = recvData ctx >>= \l -> if B.null l then recvDataNonNull ct
 getParams connectVer cipher = (cParams, sParams)
   where sParams = defaultParamsServer
             { pAllowedVersions = [connectVer]
-            , pConnectVersion  = connectVer
             , pCiphers         = [cipher]
             , pCredentials     = Credentials [ (CertificateChain [simpleX509 $ PubKeyRSA pubKey], PrivKeyRSA privKey) ]
             }
         cParams = defaultParamsClient
             { pAllowedVersions = [connectVer]
-            , pConnectVersion  = connectVer
             , pCiphers         = [cipher]
             }
         (pubKey, privKey) = getGlobalRSAPair

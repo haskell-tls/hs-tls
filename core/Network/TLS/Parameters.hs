@@ -119,8 +119,8 @@ data ServerParams = ServerParams
 data RoleParams = Client ClientParams | Server ServerParams
 
 data Params = Params
-    { pConnectVersion    :: Version             -- ^ version to use on client connection.
-    , pAllowedVersions   :: [Version]           -- ^ allowed versions that we can use.
+    { pAllowedVersions   :: [Version]           -- ^ allowed versions that we can use.
+                                                -- the default version used for connection is the highest version in the list
     , pCiphers           :: [Cipher]            -- ^ all ciphers supported ordered by priority.
     , pCompressions      :: [Compression]       -- ^ all compression supported ordered by priority.
     , pHashSignatures    :: [HashAndSignatureAlgorithm] -- ^ All supported hash/signature algorithms pair for client certificate verification, ordered by decreasing priority.
@@ -163,8 +163,7 @@ getServerParams params =
 
 defaultParamsClient :: Params
 defaultParamsClient = Params
-    { pConnectVersion         = TLS10
-    , pAllowedVersions        = [TLS10,TLS11,TLS12]
+    { pAllowedVersions        = [TLS10,TLS11,TLS12]
     , pCiphers                = []
     , pCompressions           = [nullCompression]
     , pHashSignatures         = [ (Struct.HashSHA512, SignatureRSA)
@@ -215,8 +214,7 @@ updateServerParams f = updateRoleParams id f
 
 instance Show Params where
     show p = "Params { " ++ (intercalate "," $ map (\(k,v) -> k ++ "=" ++ v)
-            [ ("connectVersion", show $ pConnectVersion p)
-            , ("allowedVersions", show $ pAllowedVersions p)
+            [ ("allowedVersions", show $ pAllowedVersions p)
             , ("ciphers", show $ pCiphers p)
             , ("compressions", show $ pCompressions p)
             , ("certificates", show $ pCertificates p)
