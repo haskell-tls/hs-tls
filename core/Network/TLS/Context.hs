@@ -294,6 +294,13 @@ contextHookSetHandshakeRecv context f =
 throwCore :: (MonadIO m, Exception e) => e -> m a
 throwCore = liftIO . throwIO
 
+failOnEitherError :: MonadIO m => m (Either TLSError a) -> m a
+failOnEitherError f = do
+    ret <- f
+    case ret of
+        Left err -> throwCore err
+        Right r  -> return r
+
 usingState :: Context -> TLSSt a -> IO (Either TLSError a)
 usingState ctx f =
     modifyMVar (ctxState ctx) $ \st ->
@@ -301,11 +308,7 @@ usingState ctx f =
              in newst `seq` return (newst, a)
 
 usingState_ :: Context -> TLSSt a -> IO a
-usingState_ ctx f = do
-    ret <- usingState ctx f
-    case ret of
-        Left err -> throwCore err
-        Right r  -> return r
+usingState_ ctx f = failOnEitherError $ usingState ctx f
 
 usingHState :: Context -> HandshakeM a -> IO a
 usingHState ctx f = liftIO $ modifyMVar (ctxHandshake ctx) $ \mst ->
