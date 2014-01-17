@@ -68,6 +68,7 @@ module Network.TLS.Context
 
     -- * New contexts
     , contextNew
+    -- * Deprecated new contexts methods
     , contextNewOnHandle
     , contextNewOnSocket
 
@@ -84,9 +85,6 @@ module Network.TLS.Context
     , getHState
     , getStateRNG
     ) where
-
-import Network.Socket (Socket, sClose)
-import qualified Network.Socket.ByteString as Socket
 
 import Network.TLS.Backend
 import Network.TLS.Extension
@@ -110,8 +108,10 @@ import Control.Monad.State
 import Control.Exception (throwIO, Exception())
 import Data.IORef
 import Data.Tuple
-import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush, hClose)
 
+-- deprecated imports
+import Network.Socket (Socket)
+import System.IO (Handle)
 
 -- | A TLS Context keep tls specific state, parameters and backend information.
 data Context = Context
@@ -194,6 +194,7 @@ contextNew :: (MonadIO m, CPRG rng, HasBackend backend)
            -> rng       -- ^ Random number generator associated with this context.
            -> m Context
 contextNew backend params rng = liftIO $ do
+    initializeBackend backend
     let role = case roleParams params of
                     Client {} -> ClientRole
                     Server {} -> ServerRole
@@ -269,9 +270,8 @@ contextNewOnHandle :: (MonadIO m, CPRG rng)
                    -> Params -- ^ Parameters of the context.
                    -> rng    -- ^ Random number generator associated with this context.
                    -> m Context
-contextNewOnHandle handle params st =
-    liftIO (hSetBuffering handle NoBuffering) >> contextNew backend params st
-  where backend = Backend (hFlush handle) (hClose handle) (B.hPut handle) (B.hGet handle)
+contextNewOnHandle handle params st = contextNew handle params st
+{-# DEPRECATED contextNewOnHandle "use contextNew" #-}
 
 -- | create a new context on a socket.
 contextNewOnSocket :: (MonadIO m, CPRG rng)
@@ -279,13 +279,8 @@ contextNewOnSocket :: (MonadIO m, CPRG rng)
                    -> Params -- ^ Parameters of the context.
                    -> rng    -- ^ Random number generator associated with this context.
                    -> m Context
-contextNewOnSocket sock params st = contextNew backend params st
-  where backend   = Backend (return ()) (sClose sock) (Socket.sendAll sock) recvAll
-        recvAll n = B.concat `fmap` loop n
-          where loop 0    = return []
-                loop left = do
-                    r <- Socket.recv sock left
-                    liftM (r:) (loop (left - B.length r))
+contextNewOnSocket sock params st = contextNew sock params st
+{-# DEPRECATED contextNewOnSocket "use contextNew" #-}
 
 contextHookSetHandshakeRecv :: Context -> (Handshake -> IO Handshake) -> IO ()
 contextHookSetHandshakeRecv context f =

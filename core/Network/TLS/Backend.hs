@@ -25,7 +25,7 @@ import Network.Socket (Socket, sClose)
 import qualified Network.Socket.ByteString as Socket
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
-import System.IO
+import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush, hClose)
 
 -- | Connection IO backend
 data Backend = Backend
@@ -36,12 +36,15 @@ data Backend = Backend
     }
 
 class HasBackend a where
+    initializeBackend :: a -> IO ()
     getBackend :: a -> Backend
 
 instance HasBackend Backend where
+    initializeBackend _ = return ()
     getBackend = id
 
 instance HasBackend Socket where
+    initializeBackend _ = return ()
     getBackend sock = Backend (return ()) (sClose sock) (Socket.sendAll sock) recvAll
       where recvAll n = B.concat `fmap` loop n
               where loop 0    = return []
@@ -50,4 +53,5 @@ instance HasBackend Socket where
                         liftM (r:) (loop (left - B.length r))
 
 instance HasBackend Handle where
+    initializeBackend handle = hSetBuffering handle NoBuffering
     getBackend handle = Backend (hFlush handle) (hClose handle) (B.hPut handle) (B.hGet handle)
