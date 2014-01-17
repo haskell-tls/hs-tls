@@ -53,6 +53,10 @@ module Network.TLS
     , contextClose
     , contextHookSetHandshakeRecv
 
+    -- * Information gathering
+    , Information(..)
+    , contextGetInformation
+
     -- * Credentials
     , Credentials(..)
     , Credential
