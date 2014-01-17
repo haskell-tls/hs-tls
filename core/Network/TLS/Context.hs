@@ -59,6 +59,10 @@ module Network.TLS.Context
     , withStateLock
     , withRWLock
 
+    -- * information
+    , Information(..)
+    , contextGetInformation
+
     -- * deprecated types
     , TLSParams
     , TLSLogging
@@ -89,7 +93,8 @@ module Network.TLS.Context
 import Network.TLS.Backend
 import Network.TLS.Extension
 import Network.TLS.Struct
-import Network.TLS.Cipher
+import Network.TLS.Cipher (Cipher(..), CipherKeyExchangeType(..))
+import Network.TLS.Compression (Compression)
 import Network.TLS.Credentials
 import Network.TLS.State
 import Network.TLS.Handshake.State
@@ -113,6 +118,12 @@ import Data.Tuple
 import Network.Socket (Socket)
 import System.IO (Handle)
 
+-- | Information related to a running context, e.g. current cipher
+data Information = Information
+    { infoVersion     :: Version
+    , infoCipher      :: Cipher
+    , infoCompression :: Compression
+    } deriving (Show,Eq)
 -- | A TLS Context keep tls specific state, parameters and backend information.
 data Context = Context
     { ctxConnection       :: Backend   -- ^ return the backend object associated with this context
@@ -156,6 +167,15 @@ contextFlush = backendFlush . ctxConnection
 
 contextClose :: Context -> IO ()
 contextClose = backendClose . ctxConnection
+
+-- | Information about the current context
+contextGetInformation :: Context -> IO (Maybe Information)
+contextGetInformation ctx = do
+    ver    <- usingState_ ctx $ gets stVersion
+    (cipher,comp) <- failOnEitherError $ runRxState ctx $ gets $ \st -> (stCipher st, stCompression st)
+    case (ver, cipher) of
+        (Just v, Just c) -> return $ Just $ Information v c comp
+        _                -> return Nothing
 
 contextSend :: Context -> Bytes -> IO ()
 contextSend c b = updateMeasure c (addBytesSent $ B.length b) >> (backendSend $ ctxConnection c) b
