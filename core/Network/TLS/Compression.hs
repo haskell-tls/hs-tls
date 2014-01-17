@@ -53,6 +53,8 @@ compressionInflate bytes (Compression c) = first Compression $ compressionCInfla
 
 instance Show Compression where
     show = show . compressionID
+instance Eq Compression where
+    (==) c1 c2 = compressionID c1 == compressionID c2
 
 -- | intersect a list of ids commonly given by the other side with a list of compression
 -- the function keeps the list of compression in order, to be able to find quickly the prefered
