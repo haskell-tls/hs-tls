@@ -8,6 +8,8 @@ import Criterion.Main
 import Control.Concurrent.Chan
 import Network.TLS
 import Data.X509
+import Data.X509.Validation
+import Data.Default.Class
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
@@ -15,15 +17,22 @@ import qualified Data.ByteString.Lazy as L
 recvDataNonNull ctx = recvData ctx >>= \l -> if B.null l then recvDataNonNull ctx else return l
 
 getParams connectVer cipher = (cParams, sParams)
-  where sParams = defaultParamsServer
-            { pAllowedVersions = [connectVer]
-            , pCiphers         = [cipher]
-            , pCredentials     = Credentials [ (CertificateChain [simpleX509 $ PubKeyRSA pubKey], PrivKeyRSA privKey) ]
+  where sParams = def { serverSupported = supported
+                      , serverShared = def {
+                          sharedCredentials = Credentials [ (CertificateChain [simpleX509 $ PubKeyRSA pubKey], PrivKeyRSA privKey) ]
+                          }
+                      }
+        cParams = (defaultParamsClient "" B.empty)
+            { clientSupported = supported
+            , clientShared = def { sharedValidationCache = ValidationCache
+                                        { cacheAdd = \_ _ _ -> return ()
+                                        , cacheQuery = \_ _ _ -> return ValidationCachePass
+                                        }
+                                 }
             }
-        cParams = defaultParamsClient
-            { pAllowedVersions = [connectVer]
-            , pCiphers         = [cipher]
-            }
+        supported = def { supportedCiphers = [cipher]
+                        , supportedVersions = [connectVer]
+                        }
         (pubKey, privKey) = getGlobalRSAPair
 
 runTLSPipe params tlsServer tlsClient d name = bench name $ do

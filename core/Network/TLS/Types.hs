@@ -32,7 +32,7 @@ data SessionData = SessionData
     { sessionVersion :: Version
     , sessionCipher  :: CipherID
     , sessionSecret  :: ByteString
-    }
+    } deriving (Show,Eq)
 
 -- | Cipher identification
 type CipherID = Word16

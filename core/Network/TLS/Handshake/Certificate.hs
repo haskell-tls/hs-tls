@@ -10,8 +10,9 @@ module Network.TLS.Handshake.Certificate
     , rejectOnException
     ) where
 
-import Network.TLS.Context
+import Network.TLS.Context.Internal
 import Network.TLS.Struct
+import Network.TLS.X509
 import Control.Monad.State
 import Control.Exception (SomeException)
 
@@ -26,5 +27,5 @@ certificateRejected CertificateRejectUnknownCA =
 certificateRejected (CertificateRejectOther s) =
     throwCore $ Error_Protocol ("certificate rejected: " ++ s, True, CertificateUnknown)
 
-rejectOnException :: SomeException -> IO TLSCertificateUsage
+rejectOnException :: SomeException -> IO CertificateUsage
 rejectOnException e = return $ CertificateUsageReject $ CertificateRejectOther $ show e

@@ -13,10 +13,11 @@ module Network.TLS.IO
     , recvPacket
     ) where
 
-import Network.TLS.Context
+import Network.TLS.Context.Internal
 import Network.TLS.Struct
 import Network.TLS.Record
 import Network.TLS.Packet
+import Network.TLS.Hooks
 import Network.TLS.Sending
 import Network.TLS.Receiving
 import qualified Data.ByteString as B

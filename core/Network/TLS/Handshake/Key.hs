@@ -22,7 +22,7 @@ import Network.TLS.Handshake.State
 import Network.TLS.State (withRNG, getVersion)
 import Network.TLS.Crypto
 import Network.TLS.Types
-import Network.TLS.Context
+import Network.TLS.Context.Internal
 
 {- if the RSA encryption fails we just return an empty bytestring, and let the protocol
  - fail by itself; however it would be probably better to just report it since it's an internal problem.

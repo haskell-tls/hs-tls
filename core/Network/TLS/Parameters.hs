@@ -5,33 +5,23 @@
 -- Stability   : experimental
 -- Portability : unknown
 --
--- extension RecordWildCards only needed because of some GHC bug
--- relative to insufficient polymorphic field
-{-# LANGUAGE RecordWildCards #-}
 module Network.TLS.Parameters
     (
-    -- * Parameters
-      Params(..)
-    , RoleParams(..)
-    , ClientParams(..)
+      ClientParams(..)
     , ServerParams(..)
-    , updateClientParams
-    , updateServerParams
-    , Logging(..)
-    , SessionID
-    , SessionData(..)
+    , CommonParams
+    , ClientHooks(..)
+    , ServerHooks(..)
+    , CommonHooks(..)
+    , Supported(..)
+    , Shared(..)
+    -- * special default
+    , defaultParamsClient
+    -- * Parameters
     , MaxFragmentEnum(..)
-    , Measurement(..)
+    , Logging(..)
     , CertificateUsage(..)
     , CertificateRejectReason(..)
-    , defaultLogging
-    , defaultParamsClient
-    , defaultParamsServer
-    , withSessionManager
-    , setSessionManager
-    , getClientParams
-    , getServerParams
-    , credentialsGet
     ) where
 
 import Network.BSD (HostName)
@@ -48,15 +38,137 @@ import Network.TLS.Hooks
 import Network.TLS.Measurement
 import Network.TLS.X509
 import Data.Monoid
-import Data.List (intercalate)
+import Data.Default.Class
 import qualified Data.ByteString as B
 
-data ClientParams = ClientParams
-    { clientUseMaxFragmentLength :: Maybe MaxFragmentEnum
-    , clientUseServerName        :: Maybe HostName
-    , clientWantSessionResume    :: Maybe (SessionID, SessionData) -- ^ try to establish a connection using this session.
+type CommonParams = (Supported, Shared, CommonHooks)
 
-      -- | This action is called when the server sends a
+data ClientParams = ClientParams
+    { clientUseMaxFragmentLength    :: Maybe MaxFragmentEnum
+      -- | Define the name of the server, along with an extra service identification blob.
+      -- this is important that the hostname part is properly filled for security reason,
+      -- as it allow to properly associate the remote side with the given certificate
+      -- during a handshake.
+      --
+      -- The extra blob is useful to differentiate services running on the same host, but that
+      -- might have different certificates given. It's only used as part of the X509 validation
+      -- infrastructure.
+    , clientServerIdentification      :: (HostName, Bytes)
+      -- | Allow the use of the Server Name Indication TLS extension during handshake, which allow
+      -- the client to specify which host name, it's trying to access. This is useful to distinguish
+      -- CNAME aliasing (e.g. web virtual host).
+    , clientUseServerNameIndication   :: Bool
+      -- | try to establish a connection using this session.
+    , clientWantSessionResume         :: Maybe (SessionID, SessionData)
+    , clientShared                    :: Shared
+    , clientHooks                     :: ClientHooks
+    , clientCommonHooks               :: CommonHooks
+    , clientSupported                 :: Supported
+    } deriving (Show)
+
+defaultParamsClient :: HostName -> Bytes -> ClientParams
+defaultParamsClient serverName serverId = ClientParams
+    { clientWantSessionResume    = Nothing
+    , clientUseMaxFragmentLength = Nothing
+    , clientServerIdentification = (serverName, serverId)
+    , clientUseServerNameIndication = True
+    , clientShared               = def
+    , clientHooks                = def
+    , clientCommonHooks          = def
+    , clientSupported            = def
+    }
+
+data ServerParams = ServerParams
+    { -- | request a certificate from client.
+      serverWantClientCert    :: Bool
+
+      -- | This is a list of certificates from which the
+      -- disinguished names are sent in certificate request
+      -- messages.  For TLS1.0, it should not be empty.
+    , serverCACertificates :: [SignedCertificate]
+
+      -- | Server Optional Diffie Hellman parameters. If this value is not
+      -- properly set, no Diffie Hellman key exchange will take place.
+    , serverDHEParams         :: Maybe DHParams
+
+    , serverShared            :: Shared
+    , serverHooks             :: ServerHooks
+    , serverCommonHooks       :: CommonHooks
+    , serverSupported         :: Supported
+    } deriving (Show)
+
+defaultParamsServer :: ServerParams
+defaultParamsServer = ServerParams
+    { serverWantClientCert   = False
+    , serverCACertificates   = []
+    , serverDHEParams        = Nothing
+    , serverHooks            = def
+    , serverShared           = def
+    , serverCommonHooks      = def
+    , serverSupported        = def
+    }
+
+instance Default ServerParams where
+    def = defaultParamsServer
+
+-- | List all the supported algorithms, versions, ciphers, etc supported.
+data Supported = Supported
+    {
+      -- | Supported Versions by this context
+      -- On the client side, the highest version will be used to establish the connection.
+      -- On the server side, the highest version that is less or equal than the client version will be chosed.
+      supportedVersions       :: [Version]
+      -- | Supported cipher methods
+    , supportedCiphers        :: [Cipher]
+      -- | supported compressions methods
+    , supportedCompressions   :: [Compression]
+      -- | All supported hash/signature algorithms pair for client
+      -- certificate verification, ordered by decreasing priority.
+    , supportedHashSignatures :: [HashAndSignatureAlgorithm]
+      -- | Set if we support secure renegotiation.
+    , supportedSecureRenegotiation :: Bool
+      -- | Set if we support session.
+    , supportedSession             :: Bool
+    } deriving (Show,Eq)
+
+defaultSupported :: Supported
+defaultSupported = Supported
+    { supportedVersions       = [TLS10,TLS11,TLS12]
+    , supportedCiphers        = []
+    , supportedCompressions   = [nullCompression]
+    , supportedHashSignatures = [ (Struct.HashSHA512, SignatureRSA)
+                                , (Struct.HashSHA384, SignatureRSA)
+                                , (Struct.HashSHA256, SignatureRSA)
+                                , (Struct.HashSHA224, SignatureRSA)
+                                , (Struct.HashSHA1,   SignatureDSS)
+                                ]
+    , supportedSecureRenegotiation = True
+    , supportedSession             = True
+    }
+
+instance Default Supported where
+    def = defaultSupported
+
+data Shared = Shared
+    { sharedCredentials     :: Credentials
+    , sharedSessionManager  :: SessionManager
+    , sharedCAStore         :: CertificateStore
+    , sharedValidationCache :: ValidationCache
+    }
+
+instance Show Shared where
+    show _ = "Shared"
+instance Default Shared where
+    def = Shared
+            { sharedCAStore         = mempty
+            , sharedCredentials     = mempty
+            , sharedSessionManager  = noSessionManager
+            , sharedValidationCache = def
+            }
+
+-- | A set of callbacks run by the clients for various corners of TLS establishment
+data ClientHooks = ClientHooks
+    { -- | This action is called when the server sends a
       -- certificate request.  The parameter is the information
       -- from the request.  The action should select a certificate
       -- chain of one of the given certificate types where the
@@ -75,24 +187,32 @@ data ClientParams = ClientParams
       -- Returning a certificate chain not matching the
       -- distinguished names may lead to problems or not,
       -- depending whether the server accepts it.
-    , onCertificateRequest :: ([CertificateType],
+      onCertificateRequest :: ([CertificateType],
                                Maybe [HashAndSignatureAlgorithm],
                                [DistinguishedName]) -> IO (Maybe (CertificateChain, PrivKey))
     , onNPNServerSuggest   :: Maybe ([B.ByteString] -> IO B.ByteString)
+    , onServerCertificate  :: CertificateStore -> ValidationCache -> ServiceID -> CertificateChain -> IO [FailedReason]
     }
 
-data ServerParams = ServerParams
-    { serverWantClientCert    :: Bool  -- ^ request a certificate from client.
+defaultClientHooks :: ClientHooks
+defaultClientHooks = ClientHooks
+    { onCertificateRequest = \ _ -> return Nothing
+    , onNPNServerSuggest   = Nothing
+    , onServerCertificate  = validateDefault
+    }
 
-      -- | This is a list of certificates from which the
-      -- disinguished names are sent in certificate request
-      -- messages.  For TLS1.0, it should not be empty.
-    , serverCACertificates :: [SignedCertificate]
+instance Show ClientHooks where
+    show _ = "ClientHooks"
+instance Default ClientHooks where
+    def = defaultClientHooks
 
+-- | A set of callbacks run by the server for various corners of the TLS establishment
+data ServerHooks = ServerHooks
+    {
       -- | This action is called when a client certificate chain
       -- is received from the client.  When it returns a
       -- CertificateUsageReject value, the handshake is aborted.
-    , onClientCertificate :: CertificateChain -> IO CertificateUsage
+      onClientCertificate :: CertificateChain -> IO CertificateUsage
 
       -- | This action is called when the client certificate
       -- cannot be verified.  A 'Nothing' argument indicates a
@@ -109,113 +229,35 @@ data ServerParams = ServerParams
       -- The client cipher list cannot be empty.
     , onCipherChoosing        :: Version -> [Cipher] -> Cipher
 
-      -- | Server Optional Diffie Hellman parameters
-    , serverDHEParams         :: Maybe DHParams
-
       -- | suggested next protocols accoring to the next protocol negotiation extension.
-    , onSuggestNextProtocols :: IO (Maybe [B.ByteString])
+    , onSuggestNextProtocols  :: IO (Maybe [B.ByteString])
     }
 
-data RoleParams = Client ClientParams | Server ServerParams
+defaultServerHooks :: ServerHooks
+defaultServerHooks = ServerHooks
+    { onCipherChoosing       = \_ -> head
+    , onClientCertificate    = \_ -> return $ CertificateUsageReject $ CertificateRejectOther "no client certificates expected"
+    , onUnverifiedClientCert = return False
+    , onSuggestNextProtocols  = return Nothing
+    }
 
-data Params = Params
-    { pAllowedVersions   :: [Version]           -- ^ allowed versions that we can use.
-                                                -- the default version used for connection is the highest version in the list
-    , pCiphers           :: [Cipher]            -- ^ all ciphers supported ordered by priority.
-    , pCompressions      :: [Compression]       -- ^ all compression supported ordered by priority.
-    , pHashSignatures    :: [HashAndSignatureAlgorithm] -- ^ All supported hash/signature algorithms pair for client certificate verification, ordered by decreasing priority.
-    , pUseSecureRenegotiation :: Bool           -- ^ notify that we want to use secure renegotation
-    , pUseSession             :: Bool           -- ^ generate new session if specified
-    , pCertificates      :: Maybe (CertificateChain, Maybe PrivKey) -- ^ the cert chain for this context with the associated keys if any.
-    , pCredentials       :: Credentials         -- ^ credentials
-    , pLogging           :: Logging             -- ^ callback for logging
+instance Show ServerHooks where
+    show _ = "ClientHooks"
+instance Default ServerHooks where
+    def = defaultServerHooks
+
+data CommonHooks = CommonHooks
+    { onCertificatesRecv :: CertificateChain -> IO CertificateUsage -- ^ callback to verify received cert chain.
     , onHandshake        :: Measurement -> IO Bool -- ^ callback on a beggining of handshake
-    , onCertificatesRecv :: CertificateChain -> IO CertificateUsage -- ^ callback to verify received cert chain.
-    , pSessionManager    :: SessionManager
-    , roleParams         :: RoleParams
-    }
-{-# DEPRECATED pCertificates "use pCredentials instead of pCertificates. removed in tls-1.3" #-}
-
-credentialsGet :: Params -> Credentials
-credentialsGet params = pCredentials params `mappend`
-    case pCertificates params of
-        Just (cchain, Just priv) -> Credentials [(cchain, priv)]
-        _                        -> Credentials []
-
--- | Set a new session manager in a parameters structure.
-setSessionManager :: SessionManager -> Params -> Params
-setSessionManager manager (Params {..}) = Params { pSessionManager = manager, .. }
-
-withSessionManager :: Params -> (SessionManager -> a) -> a
-withSessionManager (Params { pSessionManager = man }) f = f man
-
-getClientParams :: Params -> ClientParams
-getClientParams params =
-    case roleParams params of
-        Client clientParams -> clientParams
-        _                   -> error "server params in client context"
-
-getServerParams :: Params -> ServerParams
-getServerParams params =
-    case roleParams params of
-        Server serverParams -> serverParams
-        _                   -> error "client params in server context"
-
-defaultParamsClient :: Params
-defaultParamsClient = Params
-    { pAllowedVersions        = [TLS10,TLS11,TLS12]
-    , pCiphers                = []
-    , pCompressions           = [nullCompression]
-    , pHashSignatures         = [ (Struct.HashSHA512, SignatureRSA)
-                                , (Struct.HashSHA384, SignatureRSA)
-                                , (Struct.HashSHA256, SignatureRSA)
-                                , (Struct.HashSHA224, SignatureRSA)
-                                , (Struct.HashSHA1,   SignatureDSS)
-                                ]
-    , pUseSecureRenegotiation = True
-    , pUseSession             = True
-    , pCertificates           = Nothing
-    , pCredentials            = mempty
-    , pLogging                = defaultLogging
-    , onHandshake             = (\_ -> return True)
-    , onCertificatesRecv      = (\_ -> return CertificateUsageAccept)
-    , pSessionManager         = noSessionManager
-    , roleParams              = Client $ ClientParams
-                                    { clientWantSessionResume    = Nothing
-                                    , clientUseMaxFragmentLength = Nothing
-                                    , clientUseServerName        = Nothing
-                                    , onCertificateRequest       = \ _ -> return Nothing
-                                    , onNPNServerSuggest         = Nothing
-                                    }
+    , logging            :: Logging                -- ^ callback for logging
     }
 
-defaultParamsServer :: Params
-defaultParamsServer = defaultParamsClient { roleParams = Server role }
-  where role = ServerParams
-                   { serverWantClientCert   = False
-                   , onCipherChoosing       = \_ -> head
-                   , serverCACertificates   = []
-                   , serverDHEParams        = Nothing
-                   , onClientCertificate    = \ _ -> return $ CertificateUsageReject $ CertificateRejectOther "no client certificates expected"
-                   , onUnverifiedClientCert = return False
-                   , onSuggestNextProtocols  = return Nothing
-                   }
+instance Show CommonHooks where
+    show _ = "CommonHooks"
 
-updateRoleParams :: (ClientParams -> ClientParams) -> (ServerParams -> ServerParams) -> Params -> Params
-updateRoleParams fc fs params = case roleParams params of
-                                     Client c -> params { roleParams = Client (fc c) }
-                                     Server s -> params { roleParams = Server (fs s) }
-
-updateClientParams :: (ClientParams -> ClientParams) -> Params -> Params
-updateClientParams f = updateRoleParams f id
-
-updateServerParams :: (ServerParams -> ServerParams) -> Params -> Params
-updateServerParams f = updateRoleParams id f
-
-instance Show Params where
-    show p = "Params { " ++ (intercalate "," $ map (\(k,v) -> k ++ "=" ++ v)
-            [ ("allowedVersions", show $ pAllowedVersions p)
-            , ("ciphers", show $ pCiphers p)
-            , ("compressions", show $ pCompressions p)
-            , ("certificates", show $ pCertificates p)
-            ]) ++ " }"
+instance Default CommonHooks where
+    def = CommonHooks
+        { onCertificatesRecv = \_ -> return CertificateUsageAccept
+        , logging            = def
+        , onHandshake        = \_ -> return True
+        }

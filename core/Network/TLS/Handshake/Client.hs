@@ -8,10 +8,12 @@
 --
 module Network.TLS.Handshake.Client
     ( handshakeClient
+    , handshakeClientWith
     ) where
 
 import Network.TLS.Crypto
-import Network.TLS.Context
+import Network.TLS.Context.Internal
+import Network.TLS.Parameters
 import Network.TLS.Struct
 import Network.TLS.Cipher
 import Network.TLS.Compression
@@ -41,6 +43,10 @@ import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.State
 
+handshakeClientWith :: ClientParams -> Context -> Handshake -> IO ()
+handshakeClientWith cparams ctx HelloRequest = handshakeClient cparams ctx
+handshakeClientWith _       _   _            = throwCore $ Error_Protocol ("unexpected handshake message received in handshakeClientWith", True, HandshakeFailure)
+
 -- client part of handshake. send a bunch of handshake of client
 -- values intertwined with response from the server.
 handshakeClient :: ClientParams -> Context -> IO ()
@@ -50,31 +56,32 @@ handshakeClient cparams ctx = do
     recvServerHello sentExtensions
     sessionResuming <- usingState_ ctx isSessionResuming
     if sessionResuming
-        then sendChangeCipherAndFinish ctx ClientRole
+        then sendChangeCipherAndFinish sendMaybeNPN ctx ClientRole
         else do sendClientData cparams ctx
-                sendChangeCipherAndFinish ctx ClientRole
+                sendChangeCipherAndFinish sendMaybeNPN ctx ClientRole
                 recvChangeCipherAndFinish ctx
     handshakeTerminate ctx
-  where params       = ctxParams ctx
-        ciphers      = pCiphers params
-        compressions = pCompressions params
+  where ciphers      = ctxCiphers ctx
+        compressions = supportedCompressions $ ctxSupported ctx
         getExtensions = sequence [sniExtension,secureReneg,npnExtention] >>= return . catMaybes
 
         toExtensionRaw :: Extension e => e -> ExtensionRaw
         toExtensionRaw ext = (extensionID ext, extensionEncode ext)
 
         secureReneg  =
-                if pUseSecureRenegotiation params
+                if supportedSecureRenegotiation $ ctxSupported ctx
                 then usingState_ ctx (getVerifiedData ClientRole) >>= \vd -> return $ Just $ toExtensionRaw $ SecureRenegotiation vd Nothing
                 else return Nothing
-        npnExtention = if isJust $ onNPNServerSuggest cparams
+        npnExtention = if isJust $ onNPNServerSuggest $ clientHooks cparams
                          then return $ Just $ toExtensionRaw $ NextProtocolNegotiation []
                          else return Nothing
-        sniExtension = return ((\h -> toExtensionRaw $ ServerName [(ServerNameHostName h)]) <$> clientUseServerName cparams)
+        sniExtension = if clientUseServerNameIndication cparams
+                         then return $ Just $ toExtensionRaw $ ServerName [ServerNameHostName $ fst $ clientServerIdentification cparams]
+                         else return Nothing
         sendClientHello = do
             crand <- getStateRNG ctx 32 >>= return . ClientRandom
             let clientSession = Session . maybe Nothing (Just . fst) $ clientWantSessionResume cparams
-                highestVer = maximum $ pAllowedVersions params
+                highestVer = maximum $ supportedVersions $ ctxSupported ctx
             extensions <- getExtensions
             startHandshake ctx highestVer crand
             usingState_ ctx $ setVersionIfUnset highestVer
@@ -83,6 +90,18 @@ handshakeClient cparams ctx = do
                               (map compressionID compressions) extensions Nothing
                 ]
             return $ map fst extensions
+
+        sendMaybeNPN = do
+            suggest <- usingState_ ctx $ getServerNextProtocolSuggest
+            case (onNPNServerSuggest $ clientHooks cparams, suggest) of
+                -- client offered, server picked up. send NPN handshake.
+                (Just io, Just protos) -> do proto <- liftIO $ io protos
+                                             sendPacket ctx (Handshake [HsNextProtocolNegotiation proto])
+                                             usingState_ ctx $ setNegotiatedProtocol proto
+                -- client offered, server didn't pick up. do nothing.
+                (Just _, Nothing) -> return ()
+                -- client didn't offer. do nothing.
+                (Nothing, _) -> return ()
 
         recvServerHello sentExts = runRecvState ctx (RecvStateHandshake $ onServerHello ctx cparams sentExts)
 
@@ -108,7 +127,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     return ()
 
                 Just req -> do
-                    certChain <- liftIO $ onCertificateRequest cparams req `catchException`
+                    certChain <- liftIO $ (onCertificateRequest $ clientHooks cparams) req `catchException`
                                  throwMiscErrorOnException "certificate request callback failed"
 
                     usingHState ctx $ setClientCertSent False
@@ -176,7 +195,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     malg <- case usedVersion of
                         TLS12 -> do
                             Just (_, Just hashSigs, _) <- usingHState ctx $ getClientCertRequest
-                            let suppHashSigs = pHashSignatures $ ctxParams ctx
+                            let suppHashSigs = supportedHashSignatures $ ctxSupported ctx
                                 hashSigs' = filter (\ a -> a `elem` hashSigs) suppHashSigs
 
                             when (null hashSigs') $
@@ -218,14 +237,14 @@ throwMiscErrorOnException msg e =
 onServerHello :: Context -> ClientParams -> [ExtensionID] -> Handshake -> IO (RecvState IO)
 onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cipher compression exts) = do
     when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
-    case find ((==) rver) allowedvers of
+    case find ((==) rver) (supportedVersions $ ctxSupported ctx) of
         Nothing -> throwCore $ Error_Protocol ("server version " ++ show rver ++ " is not supported", True, ProtocolVersion)
         Just _  -> return ()
     -- find the compression and cipher methods that the server want to use.
-    cipherAlg <- case find ((==) cipher . cipherID) ciphers of
+    cipherAlg <- case find ((==) cipher . cipherID) (ctxCiphers ctx) of
                      Nothing  -> throwCore $ Error_Protocol ("server choose unknown cipher", True, HandshakeFailure)
                      Just alg -> return alg
-    compressAlg <- case find ((==) compression . compressionID) compressions of
+    compressAlg <- case find ((==) compression . compressionID) (supportedCompressions $ ctxSupported ctx) of
                        Nothing  -> throwCore $ Error_Protocol ("server choose unknown compression", True, HandshakeFailure)
                        Just alg -> return alg
 
@@ -251,25 +270,25 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
         _ -> return ()
 
     case resumingSession of
-        Nothing          -> return $ RecvStateHandshake (processCertificate ctx)
+        Nothing          -> return $ RecvStateHandshake (processCertificate cparams ctx)
         Just sessionData -> do
             usingHState ctx (setMasterSecret rver ClientRole $ sessionSecret sessionData)
             return $ RecvStateNext expectChangeCipher
-  where params       = ctxParams ctx
-        allowedvers  = pAllowedVersions params
-        ciphers      = pCiphers params
-        compressions = pCompressions params
 onServerHello _ _ _ p = unexpected (show p) (Just "server hello")
 
-processCertificate :: Context -> Handshake -> IO (RecvState IO)
-processCertificate ctx (Certificates certs) = do
-    usage <- liftIO $ catchException (onCertificatesRecv params certs) rejectOnException
+processCertificate :: ClientParams -> Context -> Handshake -> IO (RecvState IO)
+processCertificate cparams ctx (Certificates certs) = do
+    usage <- catchException (wrapCertificateChecks <$> checkCert) rejectOnException
     case usage of
         CertificateUsageAccept        -> return ()
         CertificateUsageReject reason -> certificateRejected reason
     return $ RecvStateHandshake (processServerKeyExchange ctx)
-  where params       = ctxParams ctx
-processCertificate ctx p = processServerKeyExchange ctx p
+  where shared = clientShared cparams
+        checkCert = (onServerCertificate $ clientHooks cparams) (sharedCAStore shared)
+                                                                (sharedValidationCache shared)
+                                                                (clientServerIdentification cparams)
+                                                                certs
+processCertificate _ ctx p = processServerKeyExchange ctx p
 
 expectChangeCipher :: Packet -> IO (RecvState IO)
 expectChangeCipher ChangeCipherSpec = return $ RecvStateHandshake expectFinish

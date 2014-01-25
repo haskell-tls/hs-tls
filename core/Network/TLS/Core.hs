@@ -29,6 +29,7 @@ module Network.TLS.Core
 import Network.TLS.Context
 import Network.TLS.Struct
 import Network.TLS.State (getSession)
+import Network.TLS.Parameters
 import Network.TLS.IO
 import Network.TLS.Session
 import Network.TLS.Handshake
@@ -79,17 +80,22 @@ recvData ctx = liftIO $ do
             terminate err AlertLevel_Fatal InternalError (show err)
 
         process (Handshake [ch@(ClientHello {})]) =
-            -- on server context receiving a client hello == renegotiation
+            withRWLock ctx ((ctxDoHandshakeWith ctx) ctx ch) >> recvData ctx
+            {-
             case roleParams $ ctxParams ctx of
                 Server sparams -> withRWLock ctx (handshakeServerWith sparams ctx ch) >> recvData ctx
                 Client {}      -> let reason = "unexpected client hello in client context" in
                                   terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-        process (Handshake [HelloRequest]) =
+                                  -}
+        process (Handshake [hr@HelloRequest]) =
+            withRWLock ctx ((ctxDoHandshakeWith ctx) ctx hr) >> recvData ctx
+            {-
             -- on client context, receiving a hello request == renegotiation
             case roleParams $ ctxParams ctx of
                 Server {}      -> let reason = "unexpected hello request in server context" in
                                   terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
                 Client cparams -> withRWLock ctx (handshakeClient cparams ctx) >> recvData ctx
+                -}
 
         process (Alert [(AlertLevel_Warning, CloseNotify)]) = tryBye >> setEOF ctx >> return B.empty
         process (Alert [(AlertLevel_Fatal, desc)]) = do
@@ -107,7 +113,7 @@ recvData ctx = liftIO $ do
             session <- usingState_ ctx getSession
             case session of
                 Session Nothing    -> return ()
-                Session (Just sid) -> withSessionManager (ctxParams ctx) (\s -> sessionInvalidate s sid)
+                Session (Just sid) -> sessionInvalidate (sharedSessionManager $ ctxShared ctx) sid
             catchException (sendPacket ctx $ Alert [(level, desc)]) (\_ -> return ())
             setEOF ctx
             E.throwIO (Terminated False reason err)

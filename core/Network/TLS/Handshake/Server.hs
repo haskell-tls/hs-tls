@@ -11,7 +11,8 @@ module Network.TLS.Handshake.Server
     , handshakeServerWith
     ) where
 
-import Network.TLS.Context
+import Network.TLS.Parameters
+import Network.TLS.Context.Internal
 import Network.TLS.Session
 import Network.TLS.Struct
 import Network.TLS.Cipher
@@ -80,7 +81,7 @@ handshakeServer sparams ctx = liftIO $ do
 handshakeServerWith :: ServerParams -> Context -> Handshake -> IO ()
 handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientSession ciphers compressions exts _) = do
     -- check if policy allow this new handshake to happens
-    handshakeAuthorized <- withMeasure ctx (onHandshake $ ctxParams ctx)
+    handshakeAuthorized <- withMeasure ctx (onHandshake $ ctxCommonHooks ctx)
     unless handshakeAuthorized (throwCore $ Error_HandshakePolicy "server: handshake denied")
     updateMeasure ctx incrementNbHandshakes
 
@@ -88,7 +89,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     processHandshake ctx clientHello
 
     when (clientVersion == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
-    chosenVersion <- case findHighestVersionFrom clientVersion (pAllowedVersions params) of
+    chosenVersion <- case findHighestVersionFrom clientVersion (supportedVersions $ ctxSupported ctx) of
                         Nothing -> throwCore $ Error_Protocol ("client version " ++ show clientVersion ++ " is not supported", True, ProtocolVersion)
                         Just v  -> return v
 
@@ -98,8 +99,8 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
         Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
 
     let ciphersFilteredVersion = filter (cipherAllowedForVersion chosenVersion) commonCiphers
-        usedCipher = (onCipherChoosing sparams) chosenVersion ciphersFilteredVersion
-        creds = credentialsGet params
+        usedCipher = (onCipherChoosing $ serverHooks sparams) chosenVersion ciphersFilteredVersion
+        creds = sharedCredentials $ ctxShared ctx
     cred <- case cipherKeyExchange usedCipher of
                 CipherKeyExchange_RSA     -> return $ credentialsFindForDecrypting creds
                 CipherKeyExchange_DH_Anon -> return $ Nothing
@@ -108,20 +109,19 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
                 _                         -> throwCore $ Error_Protocol ("key exchange algorithm not implemented", True, HandshakeFailure)
 
     resumeSessionData <- case clientSession of
-            (Session (Just clientSessionId)) -> withSessionManager params (\s -> liftIO $ sessionResume s clientSessionId)
+            (Session (Just clientSessionId)) -> liftIO $ sessionResume (sharedSessionManager $ ctxShared ctx) clientSessionId
             (Session Nothing)                -> return Nothing
 
     doHandshake sparams cred ctx chosenVersion usedCipher usedCompression clientSession resumeSessionData exts
 
   where
-        params             = ctxParams ctx
         commonCipherIDs    = intersect ciphers (map cipherID $ ctxCiphers ctx)
         commonCiphers      = filter (flip elem commonCipherIDs . cipherID) (ctxCiphers ctx)
-        commonCompressions = compressionIntersectID (pCompressions params) compressions
+        commonCompressions = compressionIntersectID (supportedCompressions $ ctxSupported ctx) compressions
         usedCompression    = head commonCompressions
 
 
-handshakeServerWith _ _ _ = fail "unexpected handshake type received. expecting client hello"
+handshakeServerWith _ _ _ = throwCore $ Error_Protocol ("unexpected handshake message received in handshakeServerWith", True, HandshakeFailure)
 
 doHandshake :: ServerParams -> Maybe Credential -> Context -> Version -> Cipher
             -> Compression -> Session -> Maybe SessionData
@@ -133,13 +133,13 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             liftIO $ contextFlush ctx
             -- Receive client info until client Finished.
             recvClientData sparams ctx
-            sendChangeCipherAndFinish ctx ServerRole
+            sendChangeCipherAndFinish (return ()) ctx ServerRole
         Just sessionData -> do
             usingState_ ctx (setSession clientSession True)
             serverhello <- makeServerHello clientSession
             sendPacket ctx $ Handshake [serverhello]
             usingHState ctx $ setMasterSecret chosenVersion ServerRole $ sessionSecret sessionData
-            sendChangeCipherAndFinish ctx ServerRole
+            sendChangeCipherAndFinish (return ()) ctx ServerRole
             recvChangeCipherAndFinish ctx
     handshakeTerminate ctx
   where
@@ -169,7 +169,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                     else return []
             nextProtocols <-
                 if clientRequestedNPN
-                    then liftIO $ onSuggestNextProtocols sparams
+                    then liftIO $ onSuggestNextProtocols $ serverHooks sparams
                     else return Nothing
             npnExt <- case nextProtocols of
                         Just protos -> do usingState_ ctx $ do setExtensionNPN True
@@ -212,7 +212,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                 let certTypes = [ CertificateType_RSA_Sign ]
                     hashSigs = if usedVersion < TLS12
                                    then Nothing
-                                   else Just (pHashSignatures $ ctxParams ctx)
+                                   else Just (supportedHashSignatures $ ctxSupported ctx)
                     creq = CertRequest certTypes hashSigs
                                (map extractCAname $ serverCACertificates sparams)
                 usingHState ctx $ setCertReqSent True
@@ -240,7 +240,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
 
             usedVersion <- usingState_ ctx getVersion
             let mhash = case usedVersion of
-                            TLS12 -> case filter ((==) sigAlg . snd) $ pHashSignatures $ ctxParams ctx of
+                            TLS12 -> case filter ((==) sigAlg . snd) $ supportedHashSignatures $ ctxSupported ctx of
                                           []  -> error ("no hash signature for " ++ show sigAlg)
                                           x:_ -> Just (fst x)
                             _     -> Nothing
@@ -269,7 +269,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             -- Call application callback to see whether the
             -- certificate chain is acceptable.
             --
-            usage <- liftIO $ catchException (onClientCertificate sparams certs) rejectOnException
+            usage <- liftIO $ catchException (onClientCertificate (serverHooks sparams) certs) rejectOnException
             case usage of
                 CertificateUsageAccept        -> return ()
                 CertificateUsageReject reason -> certificateRejected reason
@@ -320,7 +320,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                     -- the signature is wrong.  In either case,
                     -- ask the application if it wants to
                     -- proceed, we will do that.
-                    res <- liftIO $ onUnverifiedClientCert sparams
+                    res <- liftIO $ onUnverifiedClientCert (serverHooks sparams)
                     if res
                         then do
                             -- When verification fails, but the

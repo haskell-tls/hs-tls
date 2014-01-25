@@ -14,6 +14,8 @@ import PubKey
 import PipeChan
 import Network.TLS
 import Data.X509
+import Data.X509.Validation
+import Data.Default.Class
 import Control.Applicative
 import Control.Concurrent.Chan
 import Control.Concurrent
@@ -70,11 +72,11 @@ streamCipher = blockCipher
         }
     }
 
-supportedCiphers :: [Cipher]
-supportedCiphers = [blockCipher,blockCipherDHE_RSA,blockCipherDHE_DSS,streamCipher]
+knownCiphers :: [Cipher]
+knownCiphers = [blockCipher,blockCipherDHE_RSA,blockCipherDHE_DSS,streamCipher]
 
-supportedVersions :: [Version]
-supportedVersions = [SSL3,TLS10,TLS11,TLS12]
+knownVersions :: [Version]
+knownVersions = [SSL3,TLS10,TLS11,TLS12]
 
 arbitraryPairParams = do
     (dsaPub, dsaPriv) <- (\(p,r) -> (PubKeyDSA p, PrivKeyDSA r)) <$> arbitraryDSAPair
@@ -83,44 +85,54 @@ arbitraryPairParams = do
                                     cert <- arbitraryX509WithKey (pub, priv)
                                     return (CertificateChain [cert], priv)
                                ) [ (pubKey, privKey), (dsaPub, dsaPriv) ]
-    connectVersion     <- elements supportedVersions
-    let allowedVersions = [ v | v <- supportedVersions, v <= connectVersion ]
+    connectVersion     <- elements knownVersions
+    let allowedVersions = [ v | v <- knownVersions, v <= connectVersion ]
     serAllowedVersions <- (:[]) `fmap` elements allowedVersions
     serverCiphers      <- arbitraryCiphers
     clientCiphers      <- oneof [arbitraryCiphers] `suchThat` (\cs -> or [x `elem` serverCiphers | x <- cs])
     secNeg             <- arbitrary
 
-    --let cred = (CertificateChain [servCert], PrivKeyRSA privKey)
-    let serverState = defaultParamsServer
-            { pAllowedVersions        = serAllowedVersions
-            , pCiphers                = serverCiphers
-            , pCredentials            = Credentials creds
-            , pUseSecureRenegotiation = secNeg
-            , pLogging                = logging "server: "
-            , roleParams              = roleParams $ updateServerParams (\sp -> sp { serverDHEParams = Just dhParams }) defaultParamsServer
+
+-- , pLogging                = logging "server: "
+-- , pLogging                = logging "client: "
+
+    let serverState = def
+            { serverSupported = def { supportedCiphers  = serverCiphers
+                                    , supportedVersions = serAllowedVersions
+                                    , supportedSecureRenegotiation = secNeg
+                                    }
+            , serverDHEParams = Just dhParams
+            , serverShared = def { sharedCredentials = Credentials creds }
             }
-    let clientState = defaultParamsClient
-            { pAllowedVersions        = allowedVersions
-            , pCiphers                = clientCiphers
-            , pUseSecureRenegotiation = secNeg
-            , pLogging                = logging "client: "
+    let clientState = (defaultParamsClient "" B.empty)
+            { clientSupported = def { supportedCiphers  = clientCiphers
+                                    , supportedVersions = allowedVersions
+                                    , supportedSecureRenegotiation = secNeg
+                                    }
+            , clientShared = def { sharedValidationCache = ValidationCache
+                                        { cacheAdd = \_ _ _ -> return ()
+                                        , cacheQuery = \_ _ _ -> return ValidationCachePass
+                                        }
+                                }
             }
     return (clientState, serverState)
   where
         logging pre =
             if debug
-                then defaultLogging { loggingPacketSent = putStrLn . ((pre ++ ">> ") ++)
+                then def { loggingPacketSent = putStrLn . ((pre ++ ">> ") ++)
                                     , loggingPacketRecv = putStrLn . ((pre ++ "<< ") ++) }
-                else defaultLogging
-        arbitraryCiphers  = resize (length supportedCiphers + 1) $ listOf1 (elements supportedCiphers)
+                else def
+        arbitraryCiphers  = resize (length knownCiphers + 1) $ listOf1 (elements knownCiphers)
 
-setPairParamsSessionManager :: SessionManager -> (Params, Params) -> (Params, Params)
+setPairParamsSessionManager :: SessionManager -> (ClientParams, ServerParams) -> (ClientParams, ServerParams)
 setPairParamsSessionManager manager (clientState, serverState) = (nc,ns)
-  where nc = setSessionManager manager clientState
-        ns = setSessionManager manager serverState
+  where nc = clientState { clientShared = updateSessionManager $ clientShared clientState }
+        ns = serverState { serverShared = updateSessionManager $ serverShared serverState }
+        updateSessionManager shared = shared { sharedSessionManager = manager }
 
-setPairParamsSessionResuming sessionStuff (clientState, serverState) = (nc,serverState)
-  where nc = updateClientParams (\cparams -> cparams { clientWantSessionResume = Just sessionStuff }) clientState
+setPairParamsSessionResuming sessionStuff (clientState, serverState) =
+    ( clientState { clientWantSessionResume = Just sessionStuff }
+    , serverState)
 
 newPairContext pipe (cParams, sParams) = do
     let noFlush = return ()

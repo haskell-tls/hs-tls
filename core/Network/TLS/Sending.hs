@@ -23,7 +23,8 @@ import Network.TLS.Cap
 import Network.TLS.Struct
 import Network.TLS.Record
 import Network.TLS.Packet
-import Network.TLS.Context
+import Network.TLS.Context.Internal
+import Network.TLS.Parameters
 import Network.TLS.State
 import Network.TLS.Handshake.State
 import Network.TLS.Cipher
@@ -67,7 +68,7 @@ writePacket ctx pkt = do
 -- so we use cstIV as is, however in other case we generate an explicit IV
 prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
 prepareRecord ctx f = do
-    ver     <- usingState_ ctx (getVersionWithDefault $ maximum $ pAllowedVersions $ ctxParams ctx)
+    ver     <- usingState_ ctx (getVersionWithDefault $ maximum $ supportedVersions $ ctxSupported ctx)
     txState <- readMVar $ ctxTxState ctx
     let sz = case stCipher $ txState of
                   Nothing     -> 0

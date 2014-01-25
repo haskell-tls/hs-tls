@@ -23,7 +23,7 @@ import Network.TLS.Util
 import Network.TLS.Packet
 import Network.TLS.Struct
 import Network.TLS.State
-import Network.TLS.Context
+import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Key

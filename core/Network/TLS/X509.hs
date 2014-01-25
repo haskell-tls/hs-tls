@@ -16,9 +16,18 @@ module Network.TLS.X509
     , getCertificateChainLeaf
     , CertificateRejectReason(..)
     , CertificateUsage(..)
+    , CertificateStore
+    , ValidationCache
+    , exceptionValidationCache
+    , validateDefault
+    , FailedReason
+    , ServiceID
+    , wrapCertificateChecks
     ) where
 
 import Data.X509
+import Data.X509.Validation
+import Data.X509.CertificateStore
 
 isNullCertificateChain :: CertificateChain -> Bool
 isNullCertificateChain (CertificateChain l) = null l
@@ -41,3 +50,10 @@ data CertificateUsage =
         | CertificateUsageReject CertificateRejectReason -- ^ usage of certificate rejected
         deriving (Show,Eq)
 
+wrapCertificateChecks :: [FailedReason] -> CertificateUsage
+wrapCertificateChecks [] = CertificateUsageAccept
+wrapCertificateChecks l
+    | Expired `elem` l   = CertificateUsageReject $ CertificateRejectExpired
+    | InFuture `elem` l  = CertificateUsageReject $ CertificateRejectExpired
+    | UnknownCA `elem` l = CertificateUsageReject $ CertificateRejectUnknownCA
+    | otherwise          = CertificateUsageReject $ CertificateRejectOther (show l)

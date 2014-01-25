@@ -72,8 +72,12 @@ prop_handshake_initiate = do
 prop_handshake_npn_initiate :: PropertyM IO ()
 prop_handshake_npn_initiate = do
     (clientParam,serverParam) <- pick arbitraryPairParams
-    let clientParam' = updateClientParams (\cp -> cp { onNPNServerSuggest = Just $ \protos -> return (head protos) }) clientParam
-        serverParam' = updateServerParams (\sp -> sp { onSuggestNextProtocols = return $ Just [C8.pack "spdy/2", C8.pack "http/1.1"] }) serverParam
+    let clientParam' = clientParam { clientHooks = (clientHooks clientParam)
+                                       { onNPNServerSuggest = Just $ \protos -> return (head protos) }
+                                    }
+        serverParam' = serverParam { serverHooks = (serverHooks serverParam)
+                                        { onSuggestNextProtocols = return $ Just [C8.pack "spdy/2", C8.pack "http/1.1"] }
+                                   }
         params' = (clientParam',serverParam')
     runTLSPipe params' tlsServer tlsClient
   where tlsServer ctx queue = do

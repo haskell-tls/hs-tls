@@ -18,7 +18,7 @@ module Network.TLS.Handshake.Signature
 
 import Crypto.PubKey.HashDescr
 import Network.TLS.Crypto
-import Network.TLS.Context
+import Network.TLS.Context.Internal
 import Network.TLS.Struct
 import Network.TLS.Packet (generateCertificateVerify_SSL, encodeSignedDHParams)
 import Network.TLS.State

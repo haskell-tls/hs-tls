@@ -7,13 +7,13 @@
 --
 module Network.TLS.Hooks
     ( Logging(..)
-    , defaultLogging
     , Hooks(..)
     , defaultHooks
     ) where
 
 import qualified Data.ByteString as B
 import Network.TLS.Struct (Header, Handshake(..))
+import Data.Default.Class
 
 -- | Hooks for logging 
 data Logging = Logging
@@ -31,6 +31,9 @@ defaultLogging = Logging
     , loggingIORecv     = (\_ _ -> return ())
     }
 
+instance Default Logging where
+    def = defaultLogging
+
 -- | A collection of hooks actions.
 data Hooks = Hooks
     { hookRecvHandshake :: Handshake -> IO Handshake
@@ -41,3 +44,5 @@ defaultHooks = Hooks
     { hookRecvHandshake = \hs -> return hs
     }
 
+instance Default Hooks where
+    def = defaultHooks

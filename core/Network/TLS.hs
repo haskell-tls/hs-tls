@@ -8,19 +8,17 @@
 module Network.TLS
     (
     -- * Context configuration
-      Params(..)
-    , RoleParams(..)
-    , ClientParams(..)
+      ClientParams(..)
     , ServerParams(..)
-    , updateClientParams
-    , updateServerParams
+    , ClientHooks(..)
+    , ServerHooks(..)
+    , Supported(..)
+    , Shared(..)
     , Logging(..)
     , Measurement(..)
     , CertificateUsage(..)
     , CertificateRejectReason(..)
     , defaultParamsClient
-    , defaultParamsServer
-    , defaultLogging
     , MaxFragmentEnum(..)
     , HashAndSignatureAlgorithm
     , HashAlgorithm(..)
@@ -36,7 +34,6 @@ module Network.TLS
     , SessionData(..)
     , SessionManager(..)
     , noSessionManager
-    , setSessionManager
 
     -- * Backend abstraction
     , Backend(..)
@@ -94,18 +91,27 @@ module Network.TLS
 
     -- * Exceptions
     , TLSException(..)
+
+    -- * Validation Cache
+    , ValidationCache
+    , exceptionValidationCache
     ) where
 
 import Network.TLS.Backend (Backend(..))
-import Network.TLS.Struct ( Version(..), TLSError(..), TLSException(..)
+import Network.TLS.Struct ( TLSError(..), TLSException(..)
                           , HashAndSignatureAlgorithm, HashAlgorithm(..), SignatureAlgorithm(..)
                           , Header(..), ProtocolType(..), CertificateType(..)
                           , AlertDescription(..))
 import Network.TLS.Crypto (KxError(..))
 import Network.TLS.Cipher
+import Network.TLS.Hooks
+import Network.TLS.Measurement
 import Network.TLS.Credentials
 import Network.TLS.Compression (CompressionC(..), Compression(..), nullCompression)
 import Network.TLS.Context
+import Network.TLS.Parameters
 import Network.TLS.Core
 import Network.TLS.Session
+import Network.TLS.X509
+import Network.TLS.Types
 import Data.X509 (PubKey(..), PrivKey(..))

@@ -16,7 +16,8 @@ module Network.TLS.Handshake.Common
 
 import Control.Concurrent.MVar
 
-import Network.TLS.Context
+import Network.TLS.Parameters
+import Network.TLS.Context.Internal
 import Network.TLS.Session
 import Network.TLS.Struct
 import Network.TLS.IO
@@ -45,8 +46,8 @@ unexpected msg expected = throwCore $ Error_Packet_unexpected msg (maybe "" (" e
 
 newSession :: Context -> IO Session
 newSession ctx
-    | pUseSession $ ctxParams ctx = getStateRNG ctx 32 >>= return . Session . Just
-    | otherwise                   = return $ Session Nothing
+    | supportedSession $ ctxSupported ctx = getStateRNG ctx 32 >>= return . Session . Just
+    | otherwise                           = return $ Session Nothing
 
 -- | when a new handshake is done, wrap up & clean up.
 handshakeTerminate :: Context -> IO ()
@@ -56,7 +57,7 @@ handshakeTerminate ctx = do
     case session of
         Session (Just sessionId) -> do
             sessionData <- getSessionData ctx
-            withSessionManager (ctxParams ctx) (\s -> liftIO $ sessionEstablish s sessionId (fromJust "session-data" sessionData))
+            liftIO $ sessionEstablish (sharedSessionManager $ ctxShared ctx) sessionId (fromJust "session-data" sessionData)
         _ -> return ()
     -- forget all handshake data now and reset bytes counters.
     liftIO $ modifyMVar_ (ctxHandshake ctx) (return . const Nothing)
@@ -65,24 +66,14 @@ handshakeTerminate ctx = do
     setEstablished ctx True
     return ()
 
-sendChangeCipherAndFinish :: Context -> Role -> IO ()
-sendChangeCipherAndFinish ctx role = do
+sendChangeCipherAndFinish :: IO ()   -- ^ message possibly sent between ChangeCipherSpec and Finished.
+                          -> Context
+                          -> Role
+                          -> IO ()
+sendChangeCipherAndFinish betweenCall ctx role = do
     sendPacket ctx ChangeCipherSpec
-
-    when (role == ClientRole) $ do
-        let cparams = getClientParams $ ctxParams ctx
-        suggest <- usingState_ ctx $ getServerNextProtocolSuggest
-        case (onNPNServerSuggest cparams, suggest) of
-            -- client offered, server picked up. send NPN handshake.
-            (Just io, Just protos) -> do proto <- liftIO $ io protos
-                                         sendPacket ctx (Handshake [HsNextProtocolNegotiation proto])
-                                         usingState_ ctx $ setNegotiatedProtocol proto
-            -- client offered, server didn't pick up. do nothing.
-            (Just _, Nothing) -> return ()
-            -- client didn't offer. do nothing.
-            (Nothing, _) -> return ()
+    betweenCall
     liftIO $ contextFlush ctx
-
     cf <- usingState_ ctx getVersion >>= \ver -> usingHState ctx $ getHandshakeDigest ver role
     sendPacket ctx (Handshake [Finished cf])
     liftIO $ contextFlush ctx
