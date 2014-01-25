@@ -9,12 +9,9 @@ module Network.TLS.Extra
 	(
 	-- * Cipher related definition
 	  module Network.TLS.Extra.Cipher
-	-- * Connection helpers
-	, module Network.TLS.Extra.Connection
 	-- * File helpers
 	, module Network.TLS.Extra.File
 	) where
 
 import Network.TLS.Extra.Cipher
-import Network.TLS.Extra.Connection
 import Network.TLS.Extra.File

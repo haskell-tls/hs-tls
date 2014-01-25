@@ -25,7 +25,8 @@ Library
                    , network >= 2.3
                    , cryptohash >= 0.6
                    , bytestring
-                   , vector
+                   , x509
+                   , x509-store
                    , cipher-rc4
                    , cipher-aes >= 0.2 && < 0.3
                    , crypto-pubkey >= 0.2.0
@@ -35,7 +36,6 @@ Library
   Exposed-modules:   Network.TLS.Extra
   other-modules:     Network.TLS.Extra.Cipher
                      Network.TLS.Extra.Compression
-                     Network.TLS.Extra.Connection
                      Network.TLS.Extra.File
   ghc-options:       -Wall -fno-warn-missing-signatures
   if os(windows)
