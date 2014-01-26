@@ -3,3 +3,7 @@ dist
 *.hi
 *.tix
 *.mix
+*.pem
+*.csr
+*.crt
+*.key
