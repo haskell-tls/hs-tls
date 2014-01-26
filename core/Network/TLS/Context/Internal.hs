@@ -23,7 +23,7 @@ module Network.TLS.Context.Internal
     , ctxHasSSLv2ClientHello
     , ctxDisableSSLv2ClientHello
     , ctxEstablished
-    , ctxLogging
+    , withLog
     , ctxWithHooks
     , modifyHooks
     , setEOF
@@ -161,8 +161,8 @@ modifyHooks ctx f = modifyIORef (ctxHooks ctx) f
 setEstablished :: Context -> Bool -> IO ()
 setEstablished ctx v = writeIORef (ctxEstablished_ ctx) v
 
-ctxLogging :: Context -> Logging
-ctxLogging = logging . ctxCommonHooks
+withLog :: Context -> (Logging -> IO ()) -> IO ()
+withLog ctx f = ctxWithHooks ctx (f . hookLogging)
 
 throwCore :: (MonadIO m, Exception e) => e -> m a
 throwCore = liftIO . throwIO

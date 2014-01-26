@@ -14,6 +14,7 @@ module Network.TLS
     , ServerHooks(..)
     , Supported(..)
     , Shared(..)
+    , Hooks(..)
     , Logging(..)
     , Measurement(..)
     , CertificateUsage(..)

@@ -17,7 +17,7 @@ module Network.TLS.Context
     , ctxHasSSLv2ClientHello
     , ctxDisableSSLv2ClientHello
     , ctxEstablished
-    , ctxLogging
+    , withLog
     , ctxWithHooks
     , modifyHooks
     , setEOF
@@ -46,6 +46,7 @@ module Network.TLS.Context
     -- * Context hooks
     , contextHookSetHandshakeRecv
     , contextHookSetCertificateRecv
+    , contextHookSetLogging
 
     -- * Using context states
     , throwCore
@@ -208,8 +209,12 @@ contextNewOnSocket sock params st = contextNew sock params st
 
 contextHookSetHandshakeRecv :: Context -> (Handshake -> IO Handshake) -> IO ()
 contextHookSetHandshakeRecv context f =
-    liftIO $ modifyIORef (ctxHooks context) (\hooks -> hooks { hookRecvHandshake = f })
+    modifyHooks context (\hooks -> hooks { hookRecvHandshake = f })
 
 contextHookSetCertificateRecv :: Context -> (CertificateChain -> IO ()) -> IO ()
 contextHookSetCertificateRecv context f =
-    liftIO $ modifyIORef (ctxHooks context) (\hooks -> hooks { hookRecvCertificates = f })
+    modifyHooks context (\hooks -> hooks { hookRecvCertificates = f })
+
+contextHookSetLogging :: Context -> Logging -> IO ()
+contextHookSetLogging context loggingCallbacks =
+    modifyHooks context (\hooks -> hooks { hookLogging = loggingCallbacks })

@@ -19,7 +19,6 @@ module Network.TLS.Parameters
     , defaultParamsClient
     -- * Parameters
     , MaxFragmentEnum(..)
-    , Logging(..)
     , CertificateUsage(..)
     , CertificateRejectReason(..)
     ) where
@@ -248,7 +247,6 @@ instance Default ServerHooks where
 
 data CommonHooks = CommonHooks
     { onHandshake        :: Measurement -> IO Bool -- ^ callback on a beggining of handshake
-    , logging            :: Logging                -- ^ callback for logging
     }
 
 instance Show CommonHooks where
@@ -256,6 +254,5 @@ instance Show CommonHooks where
 
 instance Default CommonHooks where
     def = CommonHooks
-        { logging            = def
-        , onHandshake        = \_ -> return True
+        { onHandshake        = \_ -> return True
         }

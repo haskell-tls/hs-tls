@@ -16,7 +16,9 @@ import Network.TLS.Struct (Header, Handshake(..))
 import Network.TLS.X509 (CertificateChain)
 import Data.Default.Class
 
--- | Hooks for logging 
+-- | Hooks for logging
+--
+-- This is called when sending and receiving packets and IO
 data Logging = Logging
     { loggingPacketSent :: String -> IO ()
     , loggingPacketRecv :: String -> IO ()
@@ -42,12 +44,15 @@ data Hooks = Hooks
       hookRecvHandshake    :: Handshake -> IO Handshake
       -- | called at each certificate chain message received
     , hookRecvCertificates :: CertificateChain -> IO ()
+      -- | hooks on IO and packets, receiving and sending.
+    , hookLogging          :: Logging
     }
 
 defaultHooks :: Hooks
 defaultHooks = Hooks
-    { hookRecvHandshake = \hs -> return hs
+    { hookRecvHandshake    = \hs -> return hs
     , hookRecvCertificates = return . const ()
+    , hookLogging          = def
     }
 
 instance Default Hooks where

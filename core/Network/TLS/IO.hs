@@ -75,7 +75,7 @@ recvRecord compatSSLv2 ctx
               maximumSizeExceeded = Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
               getRecord :: Header -> Bytes -> IO (Either TLSError (Record Plaintext))
               getRecord header content = do
-                    liftIO $ (loggingIORecv $ ctxLogging ctx) header content
+                    liftIO $ withLog ctx $ \logging -> loggingIORecv logging header content
                     runRxState ctx $ disengageRecord $ rawToRecord header (fragmentCiphertext content)
 
 
@@ -96,7 +96,7 @@ recvPacket ctx = liftIO $ do
                             (mapM (hookRecvHandshake hooks) hss) >>= return . Right . Handshake
                     _                     -> return pktRecv
             case pkt of
-                Right p -> (loggingPacketRecv $ ctxLogging ctx) $ show p
+                Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p
                 _       -> return ()
             when compatSSLv2 $ ctxDisableSSLv2ClientHello ctx
             return pkt
@@ -110,12 +110,13 @@ sendPacket ctx pkt = do
     withEmptyPacket <- liftIO $ readIORef $ ctxNeedEmptyPacket ctx
     when (isNonNullAppData pkt && withEmptyPacket) $ sendPacket ctx $ AppData B.empty
 
-    liftIO $ (loggingPacketSent $ ctxLogging ctx) (show pkt)
-    edataToSend <- liftIO (writePacket ctx pkt)
+    edataToSend <- liftIO $ do
+                        withLog ctx $ \logging -> loggingPacketSent logging (show pkt)
+                        writePacket ctx pkt
     case edataToSend of
         Left err         -> throwCore err
-        Right dataToSend -> do
-            liftIO $ (loggingIOSent $ ctxLogging ctx) dataToSend
-            liftIO $ contextSend ctx dataToSend
+        Right dataToSend -> liftIO $ do
+            withLog ctx $ \logging -> loggingIOSent logging dataToSend
+            contextSend ctx dataToSend
   where isNonNullAppData (AppData b) = not $ B.null b
         isNonNullAppData _           = False
