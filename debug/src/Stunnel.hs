@@ -19,6 +19,7 @@ import qualified Control.Exception as E
 import Control.Monad (when, forever)
 
 import Data.Char (isDigit)
+import Data.Default.Class
 
 import qualified Crypto.Random.AESCtr as RNG
 import Network.TLS
@@ -96,25 +97,25 @@ memSessionManager (MemSessionManager mvar) = SessionManager
 clientProcess dhParamsFile creds handle dsthandle dbg sessionStorage _ = do
     rng <- RNG.makeSystem
     let logging = if not dbg
-            then defaultLogging
-            else defaultLogging { loggingPacketSent = putStrLn . ("debug: send: " ++)
-                                , loggingPacketRecv = putStrLn . ("debug: recv: " ++)
-                                }
+            then def
+            else def { loggingPacketSent = putStrLn . ("debug: send: " ++)
+                     , loggingPacketRecv = putStrLn . ("debug: recv: " ++)
+                     }
 
     dhParams <- case dhParamsFile of
             Nothing   -> return Nothing
             Just file -> (Just . read) `fmap` readFile file
 
-    let serverstate = defaultParamsServer --maybe id (setSessionManager . MemSessionManager) sessionStorage $ defaultParamsServer
-                        { pAllowedVersions = [SSL3,TLS10,TLS11,TLS12]
-                        , pCiphers         = ciphers
-                        , pCredentials     = creds
-                        , pLogging         = logging
-                        , pSessionManager  = maybe noSessionManager (memSessionManager . MemSessionManager) sessionStorage
-                        , roleParams       = roleParams $ updateServerParams (\sp -> sp { serverDHEParams = dhParams }) defaultParamsServer
-                        }
+    let serverstate = def
+            { serverSupported = def { supportedCiphers = ciphers }
+            , serverShared    = def { sharedCredentials = creds
+                                    , sharedSessionManager = maybe noSessionManager (memSessionManager . MemSessionManager) sessionStorage
+                                    }
+            , serverDHEParams = dhParams
+            }
 
-    ctx <- contextNewOnHandle handle serverstate rng
+    ctx <- contextNew handle serverstate rng
+    contextHookSetLogging ctx logging
     tlsserver ctx dsthandle
 
 data StunnelAddr   =
@@ -168,22 +169,24 @@ doClient source destination@(Address a _) flags = do
     srcaddr <- getAddressDescription source
     dstaddr <- getAddressDescription destination
 
-    let logging = if not (Debug `elem` flags) then defaultLogging else defaultLogging
-                            { loggingPacketSent = putStrLn . ("debug: send: " ++)
-                            , loggingPacketRecv = putStrLn . ("debug: recv: " ++)
-                            }
+    let logging =
+            if not (Debug `elem` flags)
+                then def
+                else def { loggingPacketSent = putStrLn . ("debug: send: " ++)
+                         , loggingPacketRecv = putStrLn . ("debug: recv: " ++)
+                         }
 
     store <- getSystemCertificateStore
+    {-
     let checks = defaultChecks (Just a)
     let crecv = if not (NoCertValidation `elem` flags)
                 then certificateChecks checks store
                 else certificateNoChecks
-    let clientstate = defaultParamsClient { pConnectVersion = TLS10
-                                          , pAllowedVersions = [TLS10,TLS11,TLS12]
-                                          , pCiphers = ciphers
-                                          , pLogging = logging
-                                          , onCertificatesRecv = crecv
-                                          }
+    -}
+    let clientstate = (defaultParamsClient "" B.empty)
+                        { clientSupported = def { supportedCiphers = ciphers }
+                        , clientShared    = def { sharedCAStore = store }
+                        }
 
     case srcaddr of
         AddrSocket _ _ -> do
@@ -196,7 +199,7 @@ doClient source destination@(Address a _) flags = do
                 (StunnelSocket dst)  <- connectAddressDescription dstaddr
 
                 dsth <- socketToHandle dst ReadWriteMode
-                dstctx <- contextNewOnHandle dsth clientstate rng
+                dstctx <- contextNew dsth clientstate rng
                 _    <- forkIO $ finally
                     (tlsclient srch dstctx)
                     (hClose srch >> hClose dsth)
@@ -286,8 +289,8 @@ getDestination opts = foldl accf defaultDestination opts
         accf (Address _ s) (DestinationType t) = Address t s
         accf acc           _                   = acc
 
-onNull def l | null l    = def
-             | otherwise = l
+onNull defVal l | null l    = defVal
+                | otherwise = l
 
 getCertificate :: [Flag] -> [String]
 getCertificate opts = reverse $ onNull ["certificate.pem"] $ foldl accf [] opts

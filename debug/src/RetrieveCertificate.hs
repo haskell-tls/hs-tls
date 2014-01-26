@@ -3,15 +3,22 @@
 import Network.TLS
 import Network.TLS.Extra
 
+import Network.BSD
+import Network.Socket
+
+import Data.Default.Class
 import Data.IORef
 import Data.X509
 import Data.X509.Validation
 import System.X509
 
+import Control.Applicative
 import Control.Monad
+import Control.Exception
 
 import qualified Crypto.Random.AESCtr as RNG
 
+import Data.Char (isDigit)
 import Data.PEM
 
 import Text.Printf
@@ -26,11 +33,22 @@ import qualified Data.ByteString.Char8 as B
 openConnection s p = do
     ref <- newIORef Nothing
     rng <- RNG.makeSystem
-    let params = defaultParamsClient { pCiphers           = ciphersuite_all
-                                     , onCertificatesRecv = \l -> do modifyIORef ref (const $ Just l)
-                                                                     return CertificateUsageAccept
-                                     }
-    ctx <- connectionClient s p params rng
+    let params = (defaultParamsClient s (B.pack p))
+                    { clientSupported = def { supportedCiphers = ciphersuite_all } }
+
+    --ctx <- connectionClient s p params rng
+    pn <- if and $ map isDigit $ p
+            then return $ fromIntegral $ (read p :: Int)
+            else servicePort <$> getServiceByName p "tcp"
+    he <- getHostByName s
+
+    sock <- bracketOnError (socket AF_INET Stream defaultProtocol) sClose $ \sock -> do
+            connect sock (SockAddrInet pn (head $ hostAddresses he))
+            return sock
+    ctx <- contextNew sock params rng
+
+    contextHookSetCertificateRecv ctx $ \l -> modifyIORef ref (const $ Just l)
+
     _   <- handshake ctx
     bye ctx
     r <- readIORef ref
@@ -104,6 +122,7 @@ main = do
                 False ->
                     showCert format $ head certs
 
+{-
             when (Verify `elem` opts) $ do
                 store <- getSystemCertificateStore
                 putStrLn "### certificate chain trust"
@@ -111,3 +130,4 @@ main = do
                 reasons <- validate checks store chain
                 when (not $ null reasons) $ do putStrLn "fail validation:"
                                                putStrLn $ show reasons
+                                               -}

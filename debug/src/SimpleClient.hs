@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 import Network.BSD
-import Network.Socket (socket, socketToHandle, Family(..), SocketType(..), sClose, SockAddr(..), connect)
+import Network.Socket (socket, Family(..), SocketType(..), sClose, SockAddr(..), connect)
 import Network.TLS
 import Network.TLS.Extra
 import System.Console.GetOpt
@@ -17,6 +17,7 @@ import System.Environment
 import System.Exit
 import System.X509
 
+import Data.Default.Class
 import Data.IORef
 
 ciphers :: [Cipher]
@@ -40,10 +41,10 @@ runTLS params hostname portNumber f = do
     let sockaddr = SockAddrInet portNumber (head $ hostAddresses he)
     E.catch (connect sock sockaddr)
           (\(e :: SomeException) -> sClose sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
-    dsth <- socketToHandle sock ReadWriteMode
-    ctx <- contextNewOnHandle dsth params rng
+    --dsth <- socketToHandle sock ReadWriteMode
+    ctx <- contextNew sock params rng
     () <- f ctx
-    hClose dsth
+    sClose sock
 
 sessionRef ref = SessionManager
     { sessionEstablish  = \sid sdata -> writeIORef ref (sid,sdata)
@@ -52,38 +53,38 @@ sessionRef ref = SessionManager
     }
 
 getDefaultParams flags host store sStorage session =
-    updateClientParams setCParams $ defaultParamsClient
-        { pConnectVersion    = tlsConnectVer
-        , pAllowedVersions   = [TLS10,TLS11,TLS12]
-        , pCiphers           = ciphers
-        , pLogging           = logging
-        , pSessionManager    = sessionRef sStorage
-        , onCertificatesRecv = crecv
+    (defaultParamsClient host BC.empty)
+        { clientSupported = def { supportedVersions = [tlsConnectVer], supportedCiphers = ciphers }
+        , clientWantSessionResume = session
+        , clientUseServerNameIndication = not (NoSNI `elem` flags)
+        , clientShared = def { sharedSessionManager = sessionRef sStorage
+                             , sharedCAStore        = store
+                             }
         }
+        --, pLogging           = logging
+        --, onCertificatesRecv = crecv
+        --}
     where
-            setCParams cparams = cparams
-                { clientWantSessionResume = session
-                , clientUseServerName = if NoSNI `elem` flags then Nothing else Just host
-                }
-            logging = if not debug then defaultLogging else defaultLogging
+            logging = if not debug then def else def
                 { loggingPacketSent = putStrLn . ("debug: >> " ++)
                 , loggingPacketRecv = putStrLn . ("debug: << " ++)
                 }
-            checks = defaultChecks (Just host)
-            crecv = if validateCert
-                        then certificateChecks checks store
-                        else certificateNoChecks
+            --checks = defaultChecks (Just host)
+            --crecv = if validateCert
+            --            then certificateChecks checks store
+            --            else certificateNoChecks
 
             tlsConnectVer
                 | Tls12 `elem` flags = TLS12
                 | Tls11 `elem` flags = TLS11
                 | Ssl3  `elem` flags = SSL3
-                | otherwise          = TLS10
+                | Tls10 `elem` flags = TLS10
+                | otherwise          = TLS12
             debug = Debug `elem` flags
             validateCert = not (NoValidateCert `elem` flags)
 
 data Flag = Verbose | Debug | NoValidateCert | Session | Http11
-          | Ssl3 | Tls11 | Tls12
+          | Ssl3 | Tls10 | Tls11 | Tls12
           | NoSNI
           | Uri String
           | UserAgent String
@@ -99,11 +100,12 @@ options =
     , Option ['O']  ["output"]  (ReqArg Output "stdout") "output "
     , Option []     ["no-validation"] (NoArg NoValidateCert) "disable certificate validation"
     , Option []     ["http1.1"] (NoArg Http11) "use http1.1 instead of http1.0"
-    , Option []     ["ssl3"]    (NoArg Ssl3) "use SSL 3.0 as default"
+    , Option []     ["ssl3"]    (NoArg Ssl3) "use SSL 3.0"
     , Option []     ["no-sni"]  (NoArg NoSNI) "don't use server name indication"
     , Option []     ["user-agent"] (ReqArg UserAgent "user-agent") "use a user agent"
-    , Option []     ["tls11"]   (NoArg Tls11) "use TLS 1.1 as default"
-    , Option []     ["tls12"]   (NoArg Tls12) "use TLS 1.2 as default"
+    , Option []     ["tls10"]   (NoArg Tls11) "use TLS 1.0"
+    , Option []     ["tls11"]   (NoArg Tls11) "use TLS 1.1"
+    , Option []     ["tls12"]   (NoArg Tls12) "use TLS 1.2 (default)"
     , Option []     ["uri"]     (ReqArg Uri "URI") "optional URI requested by default /"
     , Option ['h']  ["help"]    (NoArg Help) "request help"
     ]
