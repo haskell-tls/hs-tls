@@ -8,7 +8,7 @@ import Network.Socket
 
 import Data.Default.Class
 import Data.IORef
-import Data.X509
+import Data.X509 as X509
 import Data.X509.Validation
 import System.X509
 
@@ -34,7 +34,9 @@ openConnection s p = do
     ref <- newIORef Nothing
     rng <- RNG.makeSystem
     let params = (defaultParamsClient s (B.pack p))
-                    { clientSupported = def { supportedCiphers = ciphersuite_all } }
+                    { clientSupported = def { supportedCiphers = ciphersuite_all }
+                    , clientShared    = def { sharedValidationCache = noValidate }
+                    }
 
     --ctx <- connectionClient s p params rng
     pn <- if and $ map isDigit $ p
@@ -55,10 +57,13 @@ openConnection s p = do
     case r of
         Nothing    -> error "cannot retrieve any certificate"
         Just certs -> return certs
+  where noValidate = ValidationCache (\_ _ _ -> return ValidationCachePass)
+                                     (\_ _ _ -> return ())
 
 data Flag = PrintChain
           | Format String
           | Verify
+          | GetFingerprint
           | VerifyFQDN String
           | Help
           deriving (Show,Eq)
@@ -68,6 +73,7 @@ options =
     [ Option []     ["chain"]   (NoArg PrintChain) "output the chain of certificate used"
     , Option []     ["format"]  (ReqArg Format "format") "define the output format (full, pem, default: simple)"
     , Option []     ["verify"]  (NoArg Verify) "verify the chain received with the trusted system certificate"
+    , Option []     ["fingerprint"] (NoArg GetFingerprint) "show fingerprint (SHA1)"
     , Option []     ["verify-domain-name"]  (ReqArg VerifyFQDN "fqdn") "verify the chain against a specific FQDN"
     , Option ['h']  ["help"]    (NoArg Help) "request help"
     ]
@@ -122,6 +128,13 @@ main = do
                 False ->
                     showCert format $ head certs
 
+            let fingerprints = foldl (doFingerprint (head certs)) [] opts
+            unless (null fingerprints) $ putStrLn ("Fingerprints:")
+            mapM_ (\(alg,fprint) -> putStrLn ("  " ++ alg ++ " = " ++ show fprint)) fingerprints
+
+        doFingerprint cert acc GetFingerprint =
+            ("SHA1", getFingerprint cert X509.HashSHA1) : acc
+        doFingerprint _ acc _ = acc
 {-
             when (Verify `elem` opts) $ do
                 store <- getSystemCertificateStore
