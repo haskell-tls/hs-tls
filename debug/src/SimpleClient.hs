@@ -19,6 +19,7 @@ import System.X509
 
 import Data.Default.Class
 import Data.IORef
+import Data.X509.Validation
 
 ciphers :: [Cipher]
 ciphers =
@@ -34,7 +35,7 @@ ciphers =
     , cipher_RC4_128_SHA1
     ]
 
-runTLS params hostname portNumber f = do
+runTLS debug params hostname portNumber f = do
     rng  <- RNG.makeSystem
     he   <- getHostByName hostname
     sock <- socket AF_INET Stream defaultProtocol
@@ -43,8 +44,13 @@ runTLS params hostname portNumber f = do
           (\(e :: SomeException) -> sClose sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
     --dsth <- socketToHandle sock ReadWriteMode
     ctx <- contextNew sock params rng
+    contextHookSetLogging ctx logging
     () <- f ctx
     sClose sock
+  where logging = if not debug then def else def
+                { loggingPacketSent = putStrLn . ("debug: >> " ++)
+                , loggingPacketRecv = putStrLn . ("debug: << " ++)
+                }
 
 sessionRef ref = SessionManager
     { sessionEstablish  = \sid sdata -> writeIORef ref (sid,sdata)
@@ -57,18 +63,18 @@ getDefaultParams flags host store sStorage session =
         { clientSupported = def { supportedVersions = [tlsConnectVer], supportedCiphers = ciphers }
         , clientWantSessionResume = session
         , clientUseServerNameIndication = not (NoSNI `elem` flags)
-        , clientShared = def { sharedSessionManager = sessionRef sStorage
-                             , sharedCAStore        = store
+        , clientShared = def { sharedSessionManager  = sessionRef sStorage
+                             , sharedCAStore         = store
+                             , sharedValidationCache = validateCache
                              }
         }
-        --, pLogging           = logging
         --, onCertificatesRecv = crecv
         --}
     where
-            logging = if not debug then def else def
-                { loggingPacketSent = putStrLn . ("debug: >> " ++)
-                , loggingPacketRecv = putStrLn . ("debug: << " ++)
-                }
+            validateCache
+                | validateCert = def
+                | otherwise    = ValidationCache (\_ _ _ -> return ValidationCachePass)
+                                                 (\_ _ _ -> return ())
             --checks = defaultChecks (Just host)
             --crecv = if validateCert
             --            then certificateChecks checks store
@@ -80,7 +86,6 @@ getDefaultParams flags host store sStorage session =
                 | Ssl3  `elem` flags = SSL3
                 | Tls10 `elem` flags = TLS10
                 | otherwise          = TLS12
-            debug = Debug `elem` flags
             validateCert = not (NoValidateCert `elem` flags)
 
 data Flag = Verbose | Debug | NoValidateCert | Session | Http11
@@ -124,7 +129,7 @@ runOn (sStorage, certStore) flags port hostname = do
                         ++ "\r\n\r\n")
             when (Verbose `elem` flags) (putStrLn "sending query:" >> LC.putStrLn query >> putStrLn "")
             out <- maybe (return stdout) (flip openFile WriteMode) getOutput
-            runTLS (getDefaultParams flags hostname certStore sStorage sess) hostname port $ \ctx -> do
+            runTLS (Debug `elem` flags) (getDefaultParams flags hostname certStore sStorage sess) hostname port $ \ctx -> do
                 handshake ctx
                 sendData ctx $ query
                 loopRecv out ctx
