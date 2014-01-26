@@ -19,7 +19,7 @@ module Network.TLS.Context
     , ctxEstablished
     , withLog
     , ctxWithHooks
-    , modifyHooks
+    , contextModifyHooks
     , setEOF
     , setEstablished
     , contextFlush
@@ -94,7 +94,6 @@ class TLSParams a where
 instance TLSParams ClientParams where
     getTLSCommonParams cparams = ( clientSupported cparams
                                  , clientShared cparams
-                                 , clientCommonHooks cparams
                                  )
     getTLSRole _ = ClientRole
     getCiphers cparams = supportedCiphers $ clientSupported cparams
@@ -104,7 +103,6 @@ instance TLSParams ClientParams where
 instance TLSParams ServerParams where
     getTLSCommonParams sparams = ( serverSupported sparams
                                  , serverShared sparams
-                                 , serverCommonHooks sparams
                                  )
     getTLSRole _ = ServerRole
     -- on the server we filter our allowed ciphers here according
@@ -145,7 +143,7 @@ contextNew backend params rng = liftIO $ do
 
     let role = getTLSRole params
         st   = newTLSState rng role
-        (supported, shared, commonHooks) = getTLSCommonParams params
+        (supported, shared) = getTLSCommonParams params
         ciphers = getCiphers params
 
     when (null ciphers) $ error "no ciphers available with those parameters"
@@ -170,7 +168,6 @@ contextNew backend params rng = liftIO $ do
             { ctxConnection   = getBackend backend
             , ctxShared       = shared
             , ctxSupported    = supported
-            , ctxCommonHooks  = commonHooks
             , ctxCiphers      = ciphers
             , ctxState        = stvar
             , ctxTxState      = tx
@@ -209,12 +206,12 @@ contextNewOnSocket sock params st = contextNew sock params st
 
 contextHookSetHandshakeRecv :: Context -> (Handshake -> IO Handshake) -> IO ()
 contextHookSetHandshakeRecv context f =
-    modifyHooks context (\hooks -> hooks { hookRecvHandshake = f })
+    contextModifyHooks context (\hooks -> hooks { hookRecvHandshake = f })
 
 contextHookSetCertificateRecv :: Context -> (CertificateChain -> IO ()) -> IO ()
 contextHookSetCertificateRecv context f =
-    modifyHooks context (\hooks -> hooks { hookRecvCertificates = f })
+    contextModifyHooks context (\hooks -> hooks { hookRecvCertificates = f })
 
 contextHookSetLogging :: Context -> Logging -> IO ()
 contextHookSetLogging context loggingCallbacks =
-    modifyHooks context (\hooks -> hooks { hookLogging = loggingCallbacks })
+    contextModifyHooks context (\hooks -> hooks { hookLogging = loggingCallbacks })

@@ -25,7 +25,7 @@ module Network.TLS.Context.Internal
     , ctxEstablished
     , withLog
     , ctxWithHooks
-    , modifyHooks
+    , contextModifyHooks
     , setEOF
     , setEstablished
     , contextFlush
@@ -86,7 +86,6 @@ data Context = Context
     { ctxConnection       :: Backend   -- ^ return the backend object associated with this context
     , ctxSupported        :: Supported
     , ctxShared           :: Shared
-    , ctxCommonHooks      :: CommonHooks
     , ctxCiphers          :: [Cipher]  -- ^ prepared list of allowed ciphers according to parameters
     , ctxState            :: MVar TLSState
     , ctxMeasurement      :: IORef Measurement
@@ -155,8 +154,8 @@ ctxEstablished ctx = readIORef $ ctxEstablished_ ctx
 ctxWithHooks :: Context -> (Hooks -> IO a) -> IO a
 ctxWithHooks ctx f = readIORef (ctxHooks ctx) >>= f
 
-modifyHooks :: Context -> (Hooks -> Hooks) -> IO ()
-modifyHooks ctx f = modifyIORef (ctxHooks ctx) f
+contextModifyHooks :: Context -> (Hooks -> Hooks) -> IO ()
+contextModifyHooks ctx f = modifyIORef (ctxHooks ctx) f
 
 setEstablished :: Context -> Bool -> IO ()
 setEstablished ctx v = writeIORef (ctxEstablished_ ctx) v

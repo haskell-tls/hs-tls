@@ -81,7 +81,7 @@ handshakeServer sparams ctx = liftIO $ do
 handshakeServerWith :: ServerParams -> Context -> Handshake -> IO ()
 handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientSession ciphers compressions exts _) = do
     -- check if policy allow this new handshake to happens
-    handshakeAuthorized <- withMeasure ctx (onHandshake $ ctxCommonHooks ctx)
+    handshakeAuthorized <- withMeasure ctx (onNewHandshake $ serverHooks sparams)
     unless handshakeAuthorized (throwCore $ Error_HandshakePolicy "server: handshake denied")
     updateMeasure ctx incrementNbHandshakes
 

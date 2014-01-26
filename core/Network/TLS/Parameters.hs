@@ -12,7 +12,6 @@ module Network.TLS.Parameters
     , CommonParams
     , ClientHooks(..)
     , ServerHooks(..)
-    , CommonHooks(..)
     , Supported(..)
     , Shared(..)
     -- * special default
@@ -30,17 +29,16 @@ import Network.TLS.Struct
 import qualified Network.TLS.Struct as Struct
 import Network.TLS.Session
 import Network.TLS.Cipher
+import Network.TLS.Measurement
 import Network.TLS.Compression
 import Network.TLS.Crypto
 import Network.TLS.Credentials
-import Network.TLS.Hooks
-import Network.TLS.Measurement
 import Network.TLS.X509
 import Data.Monoid
 import Data.Default.Class
 import qualified Data.ByteString as B
 
-type CommonParams = (Supported, Shared, CommonHooks)
+type CommonParams = (Supported, Shared)
 
 data ClientParams = ClientParams
     { clientUseMaxFragmentLength    :: Maybe MaxFragmentEnum
@@ -61,7 +59,6 @@ data ClientParams = ClientParams
     , clientWantSessionResume         :: Maybe (SessionID, SessionData)
     , clientShared                    :: Shared
     , clientHooks                     :: ClientHooks
-    , clientCommonHooks               :: CommonHooks
     , clientSupported                 :: Supported
     } deriving (Show)
 
@@ -73,7 +70,6 @@ defaultParamsClient serverName serverId = ClientParams
     , clientUseServerNameIndication = True
     , clientShared               = def
     , clientHooks                = def
-    , clientCommonHooks          = def
     , clientSupported            = def
     }
 
@@ -92,7 +88,6 @@ data ServerParams = ServerParams
 
     , serverShared            :: Shared
     , serverHooks             :: ServerHooks
-    , serverCommonHooks       :: CommonHooks
     , serverSupported         :: Supported
     } deriving (Show)
 
@@ -103,7 +98,6 @@ defaultParamsServer = ServerParams
     , serverDHEParams        = Nothing
     , serverHooks            = def
     , serverShared           = def
-    , serverCommonHooks      = def
     , serverSupported        = def
     }
 
@@ -230,6 +224,8 @@ data ServerHooks = ServerHooks
 
       -- | suggested next protocols accoring to the next protocol negotiation extension.
     , onSuggestNextProtocols  :: IO (Maybe [B.ByteString])
+      -- | at each new handshake, we call this hook to see if we allow handshake to happens.
+    , onNewHandshake          :: Measurement -> IO Bool
     }
 
 defaultServerHooks :: ServerHooks
@@ -238,21 +234,10 @@ defaultServerHooks = ServerHooks
     , onClientCertificate    = \_ -> return $ CertificateUsageReject $ CertificateRejectOther "no client certificates expected"
     , onUnverifiedClientCert = return False
     , onSuggestNextProtocols  = return Nothing
+    , onNewHandshake          = \_ -> return True
     }
 
 instance Show ServerHooks where
     show _ = "ClientHooks"
 instance Default ServerHooks where
     def = defaultServerHooks
-
-data CommonHooks = CommonHooks
-    { onHandshake        :: Measurement -> IO Bool -- ^ callback on a beggining of handshake
-    }
-
-instance Show CommonHooks where
-    show _ = "CommonHooks"
-
-instance Default CommonHooks where
-    def = CommonHooks
-        { onHandshake        = \_ -> return True
-        }
