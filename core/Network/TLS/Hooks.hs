@@ -37,7 +37,10 @@ instance Default Logging where
 
 -- | A collection of hooks actions.
 data Hooks = Hooks
-    { hookRecvHandshake    :: Handshake -> IO Handshake
+    {
+      -- | called at each handshake message received
+      hookRecvHandshake    :: Handshake -> IO Handshake
+      -- | called at each certificate chain message received
     , hookRecvCertificates :: CertificateChain -> IO ()
     }
 
