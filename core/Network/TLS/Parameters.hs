@@ -247,8 +247,7 @@ instance Default ServerHooks where
     def = defaultServerHooks
 
 data CommonHooks = CommonHooks
-    { onCertificatesRecv :: CertificateChain -> IO CertificateUsage -- ^ callback to verify received cert chain.
-    , onHandshake        :: Measurement -> IO Bool -- ^ callback on a beggining of handshake
+    { onHandshake        :: Measurement -> IO Bool -- ^ callback on a beggining of handshake
     , logging            :: Logging                -- ^ callback for logging
     }
 
@@ -257,7 +256,6 @@ instance Show CommonHooks where
 
 instance Default CommonHooks where
     def = CommonHooks
-        { onCertificatesRecv = \_ -> return CertificateUsageAccept
-        , logging            = def
+        { logging            = def
         , onHandshake        = \_ -> return True
         }

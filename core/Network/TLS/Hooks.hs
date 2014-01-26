@@ -13,6 +13,7 @@ module Network.TLS.Hooks
 
 import qualified Data.ByteString as B
 import Network.TLS.Struct (Header, Handshake(..))
+import Network.TLS.X509 (CertificateChain)
 import Data.Default.Class
 
 -- | Hooks for logging 
@@ -36,12 +37,14 @@ instance Default Logging where
 
 -- | A collection of hooks actions.
 data Hooks = Hooks
-    { hookRecvHandshake :: Handshake -> IO Handshake
+    { hookRecvHandshake    :: Handshake -> IO Handshake
+    , hookRecvCertificates :: CertificateChain -> IO ()
     }
 
 defaultHooks :: Hooks
 defaultHooks = Hooks
     { hookRecvHandshake = \hs -> return hs
+    , hookRecvCertificates = return . const ()
     }
 
 instance Default Hooks where

@@ -45,6 +45,7 @@ module Network.TLS.Context
 
     -- * Context hooks
     , contextHookSetHandshakeRecv
+    , contextHookSetCertificateRecv
 
     -- * Using context states
     , throwCore
@@ -69,6 +70,7 @@ import Network.TLS.Parameters
 import Network.TLS.Measurement
 import Network.TLS.Types (Role(..))
 import Network.TLS.Handshake (handshakeClient, handshakeClientWith, handshakeServer, handshakeServerWith)
+import Network.TLS.X509
 import Data.Maybe (isJust)
 
 import Crypto.Random
@@ -207,3 +209,7 @@ contextNewOnSocket sock params st = contextNew sock params st
 contextHookSetHandshakeRecv :: Context -> (Handshake -> IO Handshake) -> IO ()
 contextHookSetHandshakeRecv context f =
     liftIO $ modifyIORef (ctxHooks context) (\hooks -> hooks { hookRecvHandshake = f })
+
+contextHookSetCertificateRecv :: Context -> (CertificateChain -> IO ()) -> IO ()
+contextHookSetCertificateRecv context f =
+    liftIO $ modifyIORef (ctxHooks context) (\hooks -> hooks { hookRecvCertificates = f })

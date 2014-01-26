@@ -266,6 +266,8 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
 recvClientData :: ServerParams -> Context -> IO ()
 recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientCertificate)
   where processClientCertificate (Certificates certs) = do
+            -- run certificate recv hook
+            ctxWithHooks ctx (\hooks -> hookRecvCertificates hooks $ certs)
             -- Call application callback to see whether the
             -- certificate chain is acceptable.
             --
