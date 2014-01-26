@@ -93,9 +93,6 @@ arbitraryPairParams = do
     secNeg             <- arbitrary
 
 
--- , pLogging                = logging "server: "
--- , pLogging                = logging "client: "
-
     let serverState = def
             { serverSupported = def { supportedCiphers  = serverCiphers
                                     , supportedVersions = serAllowedVersions
@@ -117,11 +114,6 @@ arbitraryPairParams = do
             }
     return (clientState, serverState)
   where
-        logging pre =
-            if debug
-                then def { loggingPacketSent = putStrLn . ((pre ++ ">> ") ++)
-                                    , loggingPacketRecv = putStrLn . ((pre ++ "<< ") ++) }
-                else def
         arbitraryCiphers  = resize (length knownCiphers + 1) $ listOf1 (elements knownCiphers)
 
 setPairParamsSessionManager :: SessionManager -> (ClientParams, ServerParams) -> (ClientParams, ServerParams)
@@ -146,7 +138,16 @@ newPairContext pipe (cParams, sParams) = do
     cCtx' <- contextNew cBackend cParams cRNG
     sCtx' <- contextNew sBackend sParams sRNG
 
+    contextHookSetLogging cCtx' (logging "client: ")
+    contextHookSetLogging sCtx' (logging "server: ")
+
     return (cCtx', sCtx')
+  where
+        logging pre =
+            if debug
+                then def { loggingPacketSent = putStrLn . ((pre ++ ">> ") ++)
+                                    , loggingPacketRecv = putStrLn . ((pre ++ "<< ") ++) }
+                else def
 
 establishDataPipe params tlsServer tlsClient = do
     -- initial setup
