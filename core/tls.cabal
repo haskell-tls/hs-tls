@@ -33,15 +33,19 @@ Flag compat
 Library
   Build-Depends:     base >= 3 && < 5
                    , mtl
-                   , cryptohash >= 0.6
                    , cereal >= 0.3
                    , bytestring
                    , network
                    , data-default-class
+                   -- crypto related
+                   , cryptohash >= 0.6
                    , crypto-random >= 0.0 && < 0.1
                    , crypto-numbers
                    , crypto-pubkey-types >= 0.4
                    , crypto-pubkey >= 0.2.4
+                   , cipher-rc4
+                   , cipher-aes >= 0.2 && < 0.3
+                   -- certificate related
                    , asn1-types >= 0.2.0
                    , asn1-encoding
                    , x509 >= 1.4.3 && < 1.5.0
@@ -51,6 +55,7 @@ Library
                      Network.TLS.Cipher
                      Network.TLS.Compression
                      Network.TLS.Internal
+                     Network.TLS.Extra.Cipher
   other-modules:     Network.TLS.Cap
                      Network.TLS.Struct
                      Network.TLS.Core
