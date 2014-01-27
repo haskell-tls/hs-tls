@@ -58,11 +58,25 @@ data Bulk = Bulk
     , bulkF            :: BulkFunctions
     }
 
+instance Show Bulk where
+    show bulk = bulkName bulk
+instance Eq Bulk where
+    b1 == b2 = and [ bulkName b1 == bulkName b2
+                   , bulkKeySize b1 == bulkKeySize b2
+                   , bulkIVSize b1 == bulkIVSize b2
+                   , bulkBlockSize b1 == bulkBlockSize b2
+                   ]
+
 data Hash = Hash
     { hashName         :: String
     , hashSize         :: Int
     , hashF            :: B.ByteString -> B.ByteString
     }
+
+instance Show Hash where
+    show hash = hashName hash
+instance Eq Hash where
+    h1 == h2 = hashName h1 == hashName h2 && hashSize h1 == hashSize h2
 
 -- | Cipher algorithm
 data Cipher = Cipher
