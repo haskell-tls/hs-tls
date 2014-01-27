@@ -233,8 +233,8 @@ defaultServerHooks = ServerHooks
     { onCipherChoosing       = \_ -> head
     , onClientCertificate    = \_ -> return $ CertificateUsageReject $ CertificateRejectOther "no client certificates expected"
     , onUnverifiedClientCert = return False
-    , onSuggestNextProtocols  = return Nothing
-    , onNewHandshake          = \_ -> return True
+    , onSuggestNextProtocols = return Nothing
+    , onNewHandshake         = \_ -> return True
     }
 
 instance Show ServerHooks where
