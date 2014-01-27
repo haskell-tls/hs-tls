@@ -14,7 +14,6 @@ import PubKey
 import PipeChan
 import Network.TLS
 import Data.X509
-import Data.X509.Validation
 import Data.Default.Class
 import Control.Applicative
 import Control.Concurrent.Chan

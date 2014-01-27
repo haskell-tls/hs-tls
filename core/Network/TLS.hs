@@ -96,8 +96,13 @@ module Network.TLS
     -- * Exceptions
     , TLSException(..)
 
-    -- * Validation Cache
-    , ValidationCache
+    -- * X509 Validation
+    , ValidationChecks(..)
+    , ValidationHooks(..)
+
+    -- * X509 Validation Cache
+    , ValidationCache(..)
+    , ValidationCacheResult(..)
     , exceptionValidationCache
     ) where
 
@@ -119,3 +124,4 @@ import Network.TLS.Session
 import Network.TLS.X509
 import Network.TLS.Types
 import Data.X509 (PubKey(..), PrivKey(..))
+import Data.X509.Validation
