@@ -8,6 +8,7 @@ import Test.Framework.Providers.QuickCheck2 (testProperty)
 import PipeChan
 import Connection
 import Marshalling
+import Ciphers
 
 import Data.Maybe
 
@@ -160,6 +161,7 @@ assertEq expected got = unless (expected == got) $ error ("got " ++ show got ++ 
 main :: IO ()
 main = defaultMain
     [ tests_marshalling
+    , tests_ciphers
     , tests_handshake
     ]
   where -- lowlevel tests to check the packet marshalling.
@@ -167,6 +169,8 @@ main = defaultMain
             [ testProperty "Header" prop_header_marshalling_id
             , testProperty "Handshake" prop_handshake_marshalling_id
             ]
+        tests_ciphers = testGroup "Ciphers"
+            [ testProperty "Bulk" propertyBulkFunctional ]
 
         -- high level tests between a client and server with fake ciphers.
         tests_handshake = testGroup "Handshakes"
