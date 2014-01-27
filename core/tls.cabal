@@ -55,6 +55,7 @@ Library
                      Network.TLS.Cipher
                      Network.TLS.Compression
                      Network.TLS.Internal
+                     Network.TLS.Extra
                      Network.TLS.Extra.Cipher
   other-modules:     Network.TLS.Cap
                      Network.TLS.Struct
