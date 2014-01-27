@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables, DeriveDataTypeable, ViewPatterns #-}
 
 import Network.TLS
-import Network.TLS.Extra
+import Network.TLS.Extra.Cipher
 
 import Network.BSD
 import Network.Socket
@@ -10,7 +10,6 @@ import Data.Default.Class
 import Data.IORef
 import Data.X509 as X509
 import Data.X509.Validation
-import System.X509
 
 import Control.Applicative
 import Control.Monad

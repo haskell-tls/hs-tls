@@ -8,6 +8,7 @@ import System.Console.GetOpt
 import System.Environment (getArgs)
 import System.Exit
 import System.X509
+import Data.X509.Validation
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
@@ -23,7 +24,7 @@ import Data.Default.Class
 
 import qualified Crypto.Random.AESCtr as RNG
 import Network.TLS
-import Network.TLS.Extra
+import Network.TLS.Extra.Cipher
 
 import qualified Crypto.PubKey.DH as DH ()
 
@@ -177,15 +178,14 @@ doClient source destination@(Address a _) flags = do
                          }
 
     store <- getSystemCertificateStore
-    {-
-    let checks = defaultChecks (Just a)
-    let crecv = if not (NoCertValidation `elem` flags)
-                then certificateChecks checks store
-                else certificateNoChecks
-    -}
-    let clientstate = (defaultParamsClient "" B.empty)
+    let validateCache
+           | NoCertValidation `elem` flags =
+                ValidationCache (\_ _ _ -> return ValidationCachePass)
+                                (\_ _ _ -> return ())
+           | otherwise = def
+    let clientstate = (defaultParamsClient a B.empty)
                         { clientSupported = def { supportedCiphers = ciphers }
-                        , clientShared    = def { sharedCAStore = store }
+                        , clientShared    = def { sharedCAStore = store, sharedValidationCache = validateCache }
                         }
 
     case srcaddr of
@@ -200,6 +200,7 @@ doClient source destination@(Address a _) flags = do
 
                 dsth <- socketToHandle dst ReadWriteMode
                 dstctx <- contextNew dsth clientstate rng
+                contextHookSetLogging dstctx logging
                 _    <- forkIO $ finally
                     (tlsclient srch dstctx)
                     (hClose srch >> hClose dsth)

@@ -3,7 +3,7 @@
 import Network.BSD
 import Network.Socket (socket, Family(..), SocketType(..), sClose, SockAddr(..), connect)
 import Network.TLS
-import Network.TLS.Extra
+import Network.TLS.Extra.Cipher
 import System.Console.GetOpt
 import System.IO
 import System.Timeout
@@ -42,7 +42,6 @@ runTLS debug params hostname portNumber f = do
     let sockaddr = SockAddrInet portNumber (head $ hostAddresses he)
     E.catch (connect sock sockaddr)
           (\(e :: SomeException) -> sClose sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
-    --dsth <- socketToHandle sock ReadWriteMode
     ctx <- contextNew sock params rng
     contextHookSetLogging ctx logging
     () <- f ctx
@@ -68,17 +67,11 @@ getDefaultParams flags host store sStorage session =
                              , sharedValidationCache = validateCache
                              }
         }
-        --, onCertificatesRecv = crecv
-        --}
     where
             validateCache
                 | validateCert = def
                 | otherwise    = ValidationCache (\_ _ _ -> return ValidationCachePass)
                                                  (\_ _ _ -> return ())
-            --checks = defaultChecks (Just host)
-            --crecv = if validateCert
-            --            then certificateChecks checks store
-            --            else certificateNoChecks
 
             tlsConnectVer
                 | Tls12 `elem` flags = TLS12
