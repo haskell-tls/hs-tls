@@ -31,7 +31,8 @@ instance Monoid Credentials where
     mappend (Credentials l1) (Credentials l2) = Credentials (l1 ++ l2)
 
 -- | try to create a new credential object from a public certificate
--- and the associated private key.
+-- and the associated private key that are stored on the filesystem
+-- in PEM format.
 credentialLoadX509 :: FilePath -- ^ public certificate (X.509 format)
                    -> FilePath -- ^ private key associated
                    -> IO (Either String Credential)
