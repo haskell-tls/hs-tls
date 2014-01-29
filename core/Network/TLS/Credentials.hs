@@ -9,6 +9,7 @@ module Network.TLS.Credentials
     ( Credential
     , Credentials(..)
     , credentialLoadX509
+    , credentialLoadX509FromMemory
     , credentialsFindForSigning
     , credentialsFindForDecrypting
     , credentialsListSigningAlgorithms
@@ -20,6 +21,7 @@ import Data.List (find)
 import Network.TLS.Struct
 import Network.TLS.X509
 import Data.X509.File
+import Data.X509.Memory
 import Data.X509
 
 type Credential = (CertificateChain, PrivKey)
@@ -42,6 +44,19 @@ credentialLoadX509 certFile privateFile = do
     case keys of
         []    -> return $ Left "no keys found"
         (k:_) -> return $ Right (CertificateChain x509, k)
+
+-- | similar to 'credentialLoadX509' but take the certificate
+-- and private key from memory instead of from the filesystem.
+credentialLoadX509FromMemory :: Bytes
+                  -> Bytes
+                  -> Either String Credential
+credentialLoadX509FromMemory certData privateData = do
+    let x509 = readSignedObjectFromMemory certData
+        keys = readKeyFileFromMemory privateData
+     in case keys of
+            []    -> Left "no keys found"
+            (k:_) -> Right (CertificateChain x509, k)
+  where
 
 credentialsListSigningAlgorithms :: Credentials -> [SignatureAlgorithm]
 credentialsListSigningAlgorithms (Credentials l) = catMaybes $ map credentialCanSign l
