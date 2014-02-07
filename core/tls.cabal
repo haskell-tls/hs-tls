@@ -8,11 +8,11 @@ Description:
    type system, high level constructions and common Haskell features.
    .
    Currently implement the SSL3.0, TLS1.0, TLS1.1 and TLS1.2 protocol,
-   with only RSA supported for Key Exchange.
+   and support RSA and Ephemeral Diffie Hellman key exchanges,
+   and many extensions.
    .
-   Only core protocol available here, have a look at the
-   <http://hackage.haskell.org/package/tls-extra/> package for default
-   ciphers, compressions and certificates functions.
+   Some debug tools linked with tls, are available through the
+   <http://hackage.haskell.org/package/tls-debug/>.
 License:             BSD3
 License-file:        LICENSE
 Copyright:           Vincent Hanquez <vincent@snarc.org>
