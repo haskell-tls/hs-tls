@@ -5,11 +5,11 @@
 -- Stability   : experimental
 -- Portability : unknown
 --
--- Backend represent a unified way to do IO on differents
--- types without burdening our calling API with multiples
--- way to initialize a new context.
+-- A Backend represents a unified way to do IO on different
+-- types without burdening our calling API with multiple
+-- ways to initialize a new context.
 --
--- Typically any backend much implement:
+-- Typically, a backend provides:
 -- * a way to read data
 -- * a way to write data
 -- * a way to close the stream
