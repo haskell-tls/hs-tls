@@ -15,7 +15,6 @@ module Network.TLS.Record
     ( Record(..)
     -- * Fragment manipulation types
     , Fragment
-    , fragmentGetBytes
     , fragmentPlaintext
     , fragmentCiphertext
     , recordToRaw

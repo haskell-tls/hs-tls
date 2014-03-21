@@ -35,6 +35,7 @@ Library
                    , mtl
                    , cereal >= 0.3
                    , bytestring
+                   , byteable
                    , network
                    , data-default-class
                    -- crypto related

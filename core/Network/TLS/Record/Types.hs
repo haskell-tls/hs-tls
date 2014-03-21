@@ -22,7 +22,6 @@ module Network.TLS.Record.Types
     , Fragment
     , fragmentPlaintext
     , fragmentCiphertext
-    , fragmentGetBytes
     , Plaintext
     , Compressed
     , Ciphertext
@@ -41,6 +40,7 @@ module Network.TLS.Record.Types
 import Network.TLS.Struct
 import Network.TLS.Record.State
 import qualified Data.ByteString as B
+import Data.Byteable
 import Control.Applicative ((<$>))
 
 -- | Represent a TLS record.
@@ -58,8 +58,8 @@ fragmentPlaintext bytes = Fragment bytes
 fragmentCiphertext :: Bytes -> Fragment Ciphertext
 fragmentCiphertext bytes = Fragment bytes
 
-fragmentGetBytes :: Fragment a -> Bytes
-fragmentGetBytes (Fragment bytes) = bytes
+instance Byteable (Fragment a) where
+    toBytes (Fragment b) = b
 
 onRecordFragment :: Record a -> (Fragment a -> RecordM (Fragment b)) -> RecordM (Record b)
 onRecordFragment (Record pt ver frag) f = Record pt ver <$> f frag

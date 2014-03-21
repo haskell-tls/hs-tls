@@ -25,18 +25,20 @@ import Network.TLS.Handshake.State
 import Network.TLS.Cipher
 import Network.TLS.Util
 
+import Data.Byteable
+
 returnEither :: Either TLSError a -> TLSSt a
 returnEither (Left err) = throwError err
 returnEither (Right a)  = return a
 
 processPacket :: Context -> Record Plaintext -> IO (Either TLSError Packet)
 
-processPacket _ (Record ProtocolType_AppData _ fragment) = return $ Right $ AppData $ fragmentGetBytes fragment
+processPacket _ (Record ProtocolType_AppData _ fragment) = return $ Right $ AppData $ toBytes fragment
 
-processPacket _ (Record ProtocolType_Alert _ fragment) = return (Alert `fmapEither` (decodeAlerts $ fragmentGetBytes fragment))
+processPacket _ (Record ProtocolType_Alert _ fragment) = return (Alert `fmapEither` (decodeAlerts $ toBytes fragment))
 
 processPacket ctx (Record ProtocolType_ChangeCipherSpec _ fragment) =
-    case decodeChangeCipherSpec $ fragmentGetBytes fragment of
+    case decodeChangeCipherSpec $ toBytes fragment of
         Left err -> return $ Left err
         Right _  -> do switchRxEncryption ctx
                        return $ Right ChangeCipherSpec
@@ -50,7 +52,7 @@ processPacket ctx (Record ProtocolType_Handshake ver fragment) = do
                             , cParamsKeyXchgType = keyxchg
                             , cParamsSupportNPN  = npn
                             }
-        handshakes <- returnEither (decodeHandshakes $ fragmentGetBytes fragment)
+        handshakes <- returnEither (decodeHandshakes $ toBytes fragment)
         hss <- forM handshakes $ \(ty, content) -> do
             case decodeHandshake currentparams ty content of
                     Left err -> throwError err
@@ -58,7 +60,7 @@ processPacket ctx (Record ProtocolType_Handshake ver fragment) = do
         return $ Handshake hss
 
 processPacket _ (Record ProtocolType_DeprecatedHandshake _ fragment) =
-    case decodeDeprecatedHandshake $ fragmentGetBytes fragment of
+    case decodeDeprecatedHandshake $ toBytes fragment of
         Left err -> return $ Left err
         Right hs -> return $ Right $ Handshake [hs]
 
