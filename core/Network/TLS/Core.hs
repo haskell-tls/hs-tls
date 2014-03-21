@@ -81,21 +81,8 @@ recvData ctx = liftIO $ do
 
         process (Handshake [ch@(ClientHello {})]) =
             withRWLock ctx ((ctxDoHandshakeWith ctx) ctx ch) >> recvData ctx
-            {-
-            case roleParams $ ctxParams ctx of
-                Server sparams -> withRWLock ctx (handshakeServerWith sparams ctx ch) >> recvData ctx
-                Client {}      -> let reason = "unexpected client hello in client context" in
-                                  terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-                                  -}
         process (Handshake [hr@HelloRequest]) =
             withRWLock ctx ((ctxDoHandshakeWith ctx) ctx hr) >> recvData ctx
-            {-
-            -- on client context, receiving a hello request == renegotiation
-            case roleParams $ ctxParams ctx of
-                Server {}      -> let reason = "unexpected hello request in server context" in
-                                  terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-                Client cparams -> withRWLock ctx (handshakeClient cparams ctx) >> recvData ctx
-                -}
 
         process (Alert [(AlertLevel_Warning, CloseNotify)]) = tryBye >> setEOF ctx >> return B.empty
         process (Alert [(AlertLevel_Fatal, desc)]) = do
