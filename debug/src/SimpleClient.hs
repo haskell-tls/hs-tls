@@ -106,7 +106,7 @@ options =
     , Option []     ["ssl3"]    (NoArg Ssl3) "use SSL 3.0"
     , Option []     ["no-sni"]  (NoArg NoSNI) "don't use server name indication"
     , Option []     ["user-agent"] (ReqArg UserAgent "user-agent") "use a user agent"
-    , Option []     ["tls10"]   (NoArg Tls11) "use TLS 1.0"
+    , Option []     ["tls10"]   (NoArg Tls10) "use TLS 1.0"
     , Option []     ["tls11"]   (NoArg Tls11) "use TLS 1.1"
     , Option []     ["tls12"]   (NoArg Tls12) "use TLS 1.2 (default)"
     , Option ['x']  ["no-version-downgrade"] (NoArg NoVersionDowngrade) "do not allow version downgrade"
