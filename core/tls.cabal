@@ -25,6 +25,7 @@ stability:           experimental
 Cabal-Version:       >=1.8
 Homepage:            http://github.com/vincenthz/hs-tls
 extra-source-files:  Tests/*.hs
+                     CHANGELOG.md
 
 Flag compat
   Description:       Accept SSLv2 compatible handshake
