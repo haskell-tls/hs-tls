@@ -35,7 +35,7 @@ ciphers =
     , cipher_RC4_128_SHA1
     ]
 
-runTLS debug params hostname portNumber f = do
+runTLS debug ioDebug params hostname portNumber f = do
     rng  <- RNG.makeSystem
     he   <- getHostByName hostname
     sock <- socket AF_INET Stream defaultProtocol
@@ -43,13 +43,20 @@ runTLS debug params hostname portNumber f = do
     E.catch (connect sock sockaddr)
           (\(e :: SomeException) -> sClose sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
     ctx <- contextNew sock params rng
-    contextHookSetLogging ctx logging
+    contextHookSetLogging ctx getLogging
     () <- f ctx
     sClose sock
-  where logging = if not debug then def else def
-                { loggingPacketSent = putStrLn . ("debug: >> " ++)
-                , loggingPacketRecv = putStrLn . ("debug: << " ++)
-                }
+  where getLogging = ioLogging $ packetLogging $ def
+        packetLogging logging
+            | debug = logging { loggingPacketSent = putStrLn . ("debug: >> " ++)
+                              , loggingPacketRecv = putStrLn . ("debug: << " ++)
+                              }
+            | otherwise = logging
+        ioLogging logging
+            | ioDebug = logging { loggingIOSent = putStrLn . ("io: >> " ++) . show
+                                , loggingIORecv = \hdr -> putStrLn . (("io: << " ++ show hdr ++ " ") ++) . show
+                                }
+            | otherwise = logging
 
 sessionRef ref = SessionManager
     { sessionEstablish  = \sid sdata -> writeIORef ref (sid,sdata)
@@ -85,7 +92,7 @@ getDefaultParams flags host store sStorage session =
             allVers = [SSL3, TLS10, TLS11, TLS12]
             validateCert = not (NoValidateCert `elem` flags)
 
-data Flag = Verbose | Debug | NoValidateCert | Session | Http11
+data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | Ssl3 | Tls10 | Tls11 | Tls12
           | NoSNI
           | Uri String
@@ -99,6 +106,7 @@ options :: [OptDescr Flag]
 options =
     [ Option ['v']  ["verbose"] (NoArg Verbose) "verbose output on stdout"
     , Option ['d']  ["debug"]   (NoArg Debug) "TLS debug output on stdout"
+    , Option []     ["io-debug"] (NoArg IODebug) "TLS IO debug output on stdout"
     , Option ['s']  ["session"] (NoArg Session) "try to resume a session"
     , Option ['O']  ["output"]  (ReqArg Output "stdout") "output "
     , Option []     ["no-validation"] (NoArg NoValidateCert) "disable certificate validation"
@@ -128,7 +136,9 @@ runOn (sStorage, certStore) flags port hostname = do
                         ++ "\r\n\r\n")
             when (Verbose `elem` flags) (putStrLn "sending query:" >> LC.putStrLn query >> putStrLn "")
             out <- maybe (return stdout) (flip openFile WriteMode) getOutput
-            runTLS (Debug `elem` flags) (getDefaultParams flags hostname certStore sStorage sess) hostname port $ \ctx -> do
+            runTLS (Debug `elem` flags)
+                   (IODebug `elem` flags)
+                   (getDefaultParams flags hostname certStore sStorage sess) hostname port $ \ctx -> do
                 handshake ctx
                 sendData ctx $ query
                 loopRecv out ctx
