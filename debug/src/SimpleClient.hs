@@ -59,7 +59,7 @@ sessionRef ref = SessionManager
 
 getDefaultParams flags host store sStorage session =
     (defaultParamsClient host BC.empty)
-        { clientSupported = def { supportedVersions = [tlsConnectVer], supportedCiphers = ciphers }
+        { clientSupported = def { supportedVersions = supportedVers, supportedCiphers = ciphers }
         , clientWantSessionResume = session
         , clientUseServerNameIndication = not (NoSNI `elem` flags)
         , clientShared = def { sharedSessionManager  = sessionRef sStorage
@@ -79,12 +79,17 @@ getDefaultParams flags host store sStorage session =
                 | Ssl3  `elem` flags = SSL3
                 | Tls10 `elem` flags = TLS10
                 | otherwise          = TLS12
+            supportedVers
+                | NoVersionDowngrade `elem` flags = [tlsConnectVer]
+                | otherwise = filter (< tlsConnectVer) allVers
+            allVers = [SSL3, TLS10, TLS11, TLS12]
             validateCert = not (NoValidateCert `elem` flags)
 
 data Flag = Verbose | Debug | NoValidateCert | Session | Http11
           | Ssl3 | Tls10 | Tls11 | Tls12
           | NoSNI
           | Uri String
+          | NoVersionDowngrade
           | UserAgent String
           | Output String
           | Help
@@ -104,6 +109,7 @@ options =
     , Option []     ["tls10"]   (NoArg Tls11) "use TLS 1.0"
     , Option []     ["tls11"]   (NoArg Tls11) "use TLS 1.1"
     , Option []     ["tls12"]   (NoArg Tls12) "use TLS 1.2 (default)"
+    , Option ['x']  ["no-version-downgrade"] (NoArg NoVersionDowngrade) "do not allow version downgrade"
     , Option []     ["uri"]     (ReqArg Uri "URI") "optional URI requested by default /"
     , Option ['h']  ["help"]    (NoArg Help) "request help"
     ]
