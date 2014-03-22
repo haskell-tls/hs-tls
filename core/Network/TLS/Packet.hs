@@ -26,7 +26,7 @@ module Network.TLS.Packet
     , encodeAlerts
 
     -- * marshall functions for handshake messages
-    , decodeHandshakes
+    , decodeHandshakeRecord
     , decodeHandshake
     , decodeDeprecatedHandshake
     , encodeHandshake
@@ -157,20 +157,11 @@ encodeAlerts l = runPut $ mapM_ encodeAlert l
   where encodeAlert (al, ad) = putWord8 (valOfType al) >> putWord8 (valOfType ad)
 
 {- decode and encode HANDSHAKE -}
-decodeHandshakeHeader :: Get (HandshakeType, Bytes)
-decodeHandshakeHeader = do
+decodeHandshakeRecord :: ByteString -> GetResult (HandshakeType, Bytes)
+decodeHandshakeRecord = runGet "handshake-record" $ do
     ty      <- getHandshakeType
     content <- getOpaque24
     return (ty, content)
-
-decodeHandshakes :: ByteString -> Either TLSError [(HandshakeType, Bytes)]
-decodeHandshakes b = runGetErr "handshakes" getAll b
-  where getAll = do
-            x <- decodeHandshakeHeader
-            empty <- isEmpty
-            if empty
-                then return [x]
-                else liftM ((:) x) getAll
 
 decodeHandshake :: CurrentParams -> HandshakeType -> ByteString -> Either TLSError Handshake
 decodeHandshake cp ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of

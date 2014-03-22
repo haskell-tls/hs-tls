@@ -51,6 +51,7 @@ import Control.Applicative
 import Network.TLS.Struct
 import Network.TLS.RNG
 import Network.TLS.Types (Role(..))
+import Network.TLS.Wire (GetContinuation)
 import qualified Data.ByteString as B
 import Control.Monad.State
 import Control.Monad.Error
@@ -64,13 +65,14 @@ data TLSState = TLSState
     , stClientVerifiedData  :: Bytes -- RFC 5746
     , stServerVerifiedData  :: Bytes -- RFC 5746
     , stExtensionNPN        :: Bool  -- NPN draft extension
+    , stHandshakeRecordCont :: Maybe (GetContinuation (HandshakeType, Bytes))
     , stNegotiatedProtocol  :: Maybe B.ByteString -- NPN protocol
     , stServerNextProtocolSuggest :: Maybe [B.ByteString]
     , stClientCertificateChain :: Maybe CertificateChain
     , stRandomGen           :: StateRNG
     , stVersion             :: Maybe Version
     , stClientContext       :: Role
-    } deriving (Show)
+    }
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrorT TLSError (State TLSState) a }
     deriving (Monad, MonadError TLSError, Functor, Applicative)
@@ -93,6 +95,7 @@ newTLSState rng clientContext = TLSState
     , stClientVerifiedData  = B.empty
     , stServerVerifiedData  = B.empty
     , stExtensionNPN        = False
+    , stHandshakeRecordCont = Nothing
     , stNegotiatedProtocol  = Nothing
     , stServerNextProtocolSuggest = Nothing
     , stClientCertificateChain = Nothing

@@ -20,16 +20,13 @@ import Network.TLS.Context.Internal
 import Network.TLS.Struct
 import Network.TLS.Record
 import Network.TLS.Packet
+import Network.TLS.Wire
 import Network.TLS.State
 import Network.TLS.Handshake.State
 import Network.TLS.Cipher
 import Network.TLS.Util
 
 import Data.Byteable
-
-returnEither :: Either TLSError a -> TLSSt a
-returnEither (Left err) = throwError err
-returnEither (Right a)  = return a
 
 processPacket :: Context -> Record Plaintext -> IO (Either TLSError Packet)
 
@@ -47,17 +44,26 @@ processPacket ctx (Record ProtocolType_Handshake ver fragment) = do
     keyxchg <- getHState ctx >>= \hs -> return $ (hs >>= hstPendingCipher >>= Just . cipherKeyExchange)
     usingState ctx $ do
         npn     <- getExtensionNPN
-        let currentparams = CurrentParams
+        let currentParams = CurrentParams
                             { cParamsVersion     = ver
                             , cParamsKeyXchgType = keyxchg
                             , cParamsSupportNPN  = npn
                             }
-        handshakes <- returnEither (decodeHandshakes $ toBytes fragment)
-        hss <- forM handshakes $ \(ty, content) -> do
-            case decodeHandshake currentparams ty content of
-                    Left err -> throwError err
-                    Right hs -> return hs
+        -- get back the optional continuation, and parse as many handshake record as possible.
+        mCont <- gets stHandshakeRecordCont
+        modify (\st -> st { stHandshakeRecordCont = Nothing })
+        hss   <- parseMany currentParams mCont (toBytes fragment)
         return $ Handshake hss
+  where parseMany currentParams mCont bs =
+            case maybe decodeHandshakeRecord id mCont $ bs of
+                GotError err                -> throwError err
+                GotPartial cont             -> modify (\st -> st { stHandshakeRecordCont = Just cont }) >> return []
+                GotSuccess (ty,content)     ->
+                    either throwError (return . (:[])) $ decodeHandshake currentParams ty content
+                GotSuccessRemaining (ty,content) left ->
+                    case decodeHandshake currentParams ty content of
+                        Left err -> throwError err
+                        Right hh -> (hh:) `fmap` parseMany currentParams Nothing left
 
 processPacket _ (Record ProtocolType_DeprecatedHandshake _ fragment) =
     case decodeDeprecatedHandshake $ toBytes fragment of

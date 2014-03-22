@@ -103,5 +103,9 @@ prop_header_marshalling_id x = (decodeHeader $ encodeHeader x) == Right x
 
 prop_handshake_marshalling_id :: Handshake -> Bool
 prop_handshake_marshalling_id x = (decodeHs $ encodeHandshake x) == Right x
-  where decodeHs b = either (Left . id) (uncurry (decodeHandshake cp) . head) $ decodeHandshakes b
+  where decodeHs b = case decodeHandshakeRecord b of
+                        GotPartial _ -> error "got partial"
+                        GotError e   -> error ("got error: " ++ show e)
+                        GotSuccessRemaining _ _ -> error "got remaining byte left"
+                        GotSuccess (ty, content) -> decodeHandshake cp ty content
         cp = CurrentParams { cParamsVersion = TLS10, cParamsKeyXchgType = Just CipherKeyExchange_RSA, cParamsSupportNPN = True }

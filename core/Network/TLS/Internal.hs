@@ -11,6 +11,7 @@ module Network.TLS.Internal
     , module Network.TLS.Packet
     , module Network.TLS.Receiving
     , module Network.TLS.Sending
+    , module Network.TLS.Wire
     , sendPacket
     , recvPacket
     ) where
@@ -19,4 +20,5 @@ import Network.TLS.Struct
 import Network.TLS.Packet
 import Network.TLS.Receiving
 import Network.TLS.Sending
+import Network.TLS.Wire
 import Network.TLS.Core (sendPacket, recvPacket)
