@@ -173,7 +173,7 @@ decodeHandshakes b = runGetErr "handshakes" getAll b
                 else liftM ((:) x) getAll
 
 decodeHandshake :: CurrentParams -> HandshakeType -> ByteString -> Either TLSError Handshake
-decodeHandshake cp ty = runGetErr "handshake" $ case ty of
+decodeHandshake cp ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
     HandshakeType_HelloRequest    -> decodeHelloRequest
     HandshakeType_ClientHello     -> decodeClientHello
     HandshakeType_ServerHello     -> decodeServerHello
