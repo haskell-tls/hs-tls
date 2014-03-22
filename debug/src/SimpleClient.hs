@@ -81,7 +81,7 @@ getDefaultParams flags host store sStorage session =
                 | otherwise          = TLS12
             supportedVers
                 | NoVersionDowngrade `elem` flags = [tlsConnectVer]
-                | otherwise = filter (< tlsConnectVer) allVers
+                | otherwise = filter (<= tlsConnectVer) allVers
             allVers = [SSL3, TLS10, TLS11, TLS12]
             validateCert = not (NoValidateCert `elem` flags)
 
