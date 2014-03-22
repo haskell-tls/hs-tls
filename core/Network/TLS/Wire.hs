@@ -10,9 +10,12 @@
 --
 module Network.TLS.Wire
     ( Get
+    , GetResult(..)
+    , GetContinuation
     , runGet
     , runGetErr
     , runGetMaybe
+    , tryGet
     , remaining
     , getWord8
     , getWords8
@@ -54,14 +57,33 @@ import Data.Bits
 import Network.TLS.Struct
 import Network.TLS.Util.Serialization
 
-runGet :: String -> Get a -> Bytes -> Either String a
-runGet lbl f = G.runGet (label lbl f)
+type GetContinuation a = Bytes -> GetResult a
+data GetResult a =
+      GotError TLSError
+    | GotPartial (GetContinuation a)
+    | GotSuccess a
+    | GotSuccessRemaining a Bytes
+
+runGet :: String -> Get a -> Bytes -> GetResult a
+runGet lbl f = toGetResult <$> G.runGetPartial (label lbl f)
+  where toGetResult (G.Fail err _)    = GotError (Error_Packet_Parsing err)
+        toGetResult (G.Partial cont)  = GotPartial (toGetResult <$> cont)
+        toGetResult (G.Done r bsLeft)
+            | B.null bsLeft = GotSuccess r
+            | otherwise     = GotSuccessRemaining r bsLeft
 
 runGetErr :: String -> Get a -> Bytes -> Either TLSError a
-runGetErr lbl f = either (Left . Error_Packet_Parsing) Right . runGet lbl f
+runGetErr lbl getter b = toSimple $ runGet lbl getter b
+  where toSimple (GotError err) = Left err
+        toSimple (GotPartial _) = Left (Error_Packet_Parsing (lbl ++ ": parsing error: partial packet"))
+        toSimple (GotSuccessRemaining _ _) = Left (Error_Packet_Parsing (lbl ++ ": parsing error: remaining bytes"))
+        toSimple (GotSuccess r) = Right r
 
 runGetMaybe :: Get a -> Bytes -> Maybe a
-runGetMaybe f = either (const Nothing) Just . runGet "" f
+runGetMaybe f = either (const Nothing) Just . G.runGet f
+
+tryGet :: Get a -> Bytes -> Maybe a
+tryGet f = either (const Nothing) Just . G.runGet f
 
 getWords8 :: Get [Word8]
 getWords8 = getWord8 >>= \lenb -> replicateM (fromIntegral lenb) getWord8
