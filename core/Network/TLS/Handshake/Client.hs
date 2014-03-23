@@ -103,7 +103,19 @@ handshakeClient cparams ctx = do
                 -- client didn't offer. do nothing.
                 (Nothing, _) -> return ()
 
-        recvServerHello sentExts = runRecvState ctx (RecvStateHandshake $ onServerHello ctx cparams sentExts)
+        recvServerHello sentExts = runRecvState ctx recvState
+          where recvState = RecvStateNext $ \p ->
+                    case p of
+                        Handshake hs -> onRecvStateHandshake ctx (RecvStateHandshake $ onServerHello ctx cparams sentExts) hs
+                        Alert a      ->
+                            case a of
+                                [(AlertLevel_Warning, UnrecognizedName)] ->
+                                    if clientUseServerNameIndication cparams
+                                        then return recvState
+                                        else throwAlert a
+                                _ -> throwAlert a
+                        _ -> fail ("unexepected type received. expecting handshake and got: " ++ show p)
+                throwAlert a = usingState_ ctx $ throwError $ Error_Protocol ("expecting server hello, got alert : " ++ show a, True, HandshakeFailure)
 
 -- | send client Data after receiving all server data (hello/certificates/key).
 --

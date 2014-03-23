@@ -12,6 +12,7 @@ module Network.TLS.Handshake.Common
     , RecvState(..)
     , runRecvState
     , recvPacketHandshake
+    , onRecvStateHandshake
     ) where
 
 import Control.Concurrent.MVar
@@ -98,18 +99,19 @@ recvPacketHandshake ctx = do
         Right x             -> fail ("unexpected type received. expecting handshake and got: " ++ show x)
         Left err            -> throwCore err
 
+-- | process a list of handshakes message in the recv state machine.
+onRecvStateHandshake :: Context -> RecvState IO -> [Handshake] -> IO (RecvState IO)
+onRecvStateHandshake _   recvState [] = return recvState
+onRecvStateHandshake ctx (RecvStateHandshake f) (x:xs) = do
+    nstate <- f x
+    processHandshake ctx x
+    onRecvStateHandshake ctx nstate xs
+onRecvStateHandshake _ _ _   = unexpected "spurious handshake" Nothing
+
 runRecvState :: Context -> RecvState IO -> IO ()
 runRecvState _   (RecvStateDone)   = return ()
 runRecvState ctx (RecvStateNext f) = recvPacket ctx >>= either throwCore f >>= runRecvState ctx
-runRecvState ctx iniState          = recvPacketHandshake ctx >>= loop iniState >>= runRecvState ctx
-  where
-        loop :: RecvState IO -> [Handshake] -> IO (RecvState IO)
-        loop recvState []                  = return recvState
-        loop (RecvStateHandshake f) (x:xs) = do
-            nstate <- f x
-            processHandshake ctx x
-            loop nstate xs
-        loop _                         _   = unexpected "spurious handshake" Nothing
+runRecvState ctx iniState          = recvPacketHandshake ctx >>= onRecvStateHandshake ctx iniState >>= runRecvState ctx
 
 getSessionData :: Context -> IO (Maybe SessionData)
 getSessionData ctx = do

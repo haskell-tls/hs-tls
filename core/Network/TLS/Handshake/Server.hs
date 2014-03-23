@@ -288,6 +288,8 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
 
         processClientCertificate p = processClientKeyExchange p
 
+        -- cannot use RecvStateHandshake, as the next message could be a ChangeCipher,
+        -- so we must process any packet, and in case of handshake call processHandshake manually.
         processClientKeyExchange (ClientKeyXchg _) = return $ RecvStateNext processCertificateVerify
         processClientKeyExchange p                 = unexpected (show p) (Just "client key exchange")
 
