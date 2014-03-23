@@ -1,3 +1,12 @@
+## Version 1.2.5 (23 Mar 2014)
+
+- Fixed Server key exchange data being parsed without the correct
+  context, leading to not knowing how to parse the structure.
+  The bug happens on efficient server that happens to send the ServerKeyXchg
+  message together with the ServerHello in the same handshake packet.
+  This trigger parsing of all the messages without having set the pending cipher.
+  Delay parsing, when this happen, until we know what to do with it.
+
 ## Version 1.2.4 (23 Mar 2014)
 
 - Fixed unrecognized name non-fatal alert after client hello.
