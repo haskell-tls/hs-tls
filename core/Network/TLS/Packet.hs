@@ -42,6 +42,8 @@ module Network.TLS.Packet
     , encodePreMasterSecret
     , encodeSignedDHParams
 
+    , decodeReallyServerKeyXchgAlgorithmData
+
     -- * generate things for packet content
     , generateMasterSecret
     , generateKeyBlock
@@ -295,25 +297,30 @@ decodeServerKeyXchg_RSA :: Get ServerRSAParams
 decodeServerKeyXchg_RSA = ServerRSAParams <$> getInteger16 -- modulus
                                           <*> getInteger16 -- exponent
 
-decodeServerKeyXchg :: CurrentParams -> Get Handshake
-decodeServerKeyXchg cp =
-    case cParamsKeyXchgType cp of
-        Just cke -> ServerKeyXchg <$> toCKE cke
-        Nothing  -> error "no server key exchange type"
-  where toCKE cke = case cke of
+decodeServerKeyXchgAlgorithmData :: Version
+                                 -> CipherKeyExchangeType
+                                 -> Get ServerKeyXchgAlgorithmData
+decodeServerKeyXchgAlgorithmData ver cke = toCKE
+  where toCKE = case cke of
             CipherKeyExchange_RSA     -> SKX_RSA . Just <$> decodeServerKeyXchg_RSA
             CipherKeyExchange_DH_Anon -> SKX_DH_Anon <$> decodeServerKeyXchg_DH
             CipherKeyExchange_DHE_RSA -> do
-                dhparams <- getServerDHParams
-                signature <- getDigitallySigned (cParamsVersion cp)
+                dhparams  <- getServerDHParams
+                signature <- getDigitallySigned ver
                 return $ SKX_DHE_RSA dhparams signature
             CipherKeyExchange_DHE_DSS -> do
                 dhparams  <- getServerDHParams
-                signature <- getDigitallySigned (cParamsVersion cp)
+                signature <- getDigitallySigned ver
                 return $ SKX_DHE_DSS dhparams signature
             _ -> do
                 bs <- remaining >>= getBytes
                 return $ SKX_Unknown bs
+
+decodeServerKeyXchg :: CurrentParams -> Get Handshake
+decodeServerKeyXchg cp =
+    case cParamsKeyXchgType cp of
+        Just cke -> ServerKeyXchg <$> decodeServerKeyXchgAlgorithmData (cParamsVersion cp) cke
+        Nothing  -> ServerKeyXchg . SKX_Unparsed <$> (remaining >>= getBytes)
 
 encodeHandshake :: Handshake -> ByteString
 encodeHandshake o =
@@ -362,7 +369,8 @@ encodeHandshakeContent (ServerKeyXchg skg) =
         SKX_DH_Anon params     -> putServerDHParams params
         SKX_DHE_RSA params sig -> putServerDHParams params >> putDigitallySigned sig
         SKX_DHE_DSS params sig -> putServerDHParams params >> putDigitallySigned sig
-        _                      -> error "cannot handle"
+        SKX_Unparsed bytes     -> putBytes bytes
+        _                      -> error ("encodeHandshakeContent: cannot handle: " ++ show skg)
 
 encodeHandshakeContent (HelloRequest) = return ()
 encodeHandshakeContent (ServerHelloDone) = return ()
@@ -487,6 +495,18 @@ decodePreMasterSecret = runGetErr "pre-master-secret" $ do
 
 encodePreMasterSecret :: Version -> Bytes -> Bytes
 encodePreMasterSecret version bytes = runPut (putVersion version >> putBytes bytes)
+
+-- | in certain cases, we haven't manage to decode ServerKeyExchange properly,
+-- because the decoding was too eager and the cipher wasn't been set yet.
+-- we keep the Server Key Exchange in it unparsed format, and this function is
+-- able to really decode the server key xchange if it's unparsed.
+decodeReallyServerKeyXchgAlgorithmData :: Version
+                                       -> CipherKeyExchangeType
+                                       -> Bytes
+                                       -> Either TLSError ServerKeyXchgAlgorithmData
+decodeReallyServerKeyXchgAlgorithmData ver cke =
+    runGetErr "server-key-xchg-algorithm-data" (decodeServerKeyXchgAlgorithmData ver cke)
+
 
 {-
  - generate things for packet content

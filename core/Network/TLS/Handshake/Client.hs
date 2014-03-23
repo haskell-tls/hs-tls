@@ -314,16 +314,24 @@ expectFinish (Finished _) = return RecvStateDone
 expectFinish p            = unexpected (show p) (Just "Handshake Finished")
 
 processServerKeyExchange :: Context -> Handshake -> IO (RecvState IO)
-processServerKeyExchange ctx (ServerKeyXchg skx) = do
+processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
     cipher <- usingHState ctx getPendingCipher
-    case (cipherKeyExchange cipher, skx) of
-        (CipherKeyExchange_DHE_RSA, SKX_DHE_RSA dhparams signature) -> do
-            doDHESignature dhparams signature SignatureRSA
-        (CipherKeyExchange_DHE_DSS, SKX_DHE_DSS dhparams signature) -> do
-            doDHESignature dhparams signature SignatureDSS
-        (c,_)           -> throwCore $ Error_Protocol ("unknown server key exchange received, expecting: " ++ show c, True, HandshakeFailure)
+    processWithCipher cipher origSkx
     return $ RecvStateHandshake (processCertificateRequest ctx)
-  where doDHESignature dhparams signature signatureType = do
+  where processWithCipher cipher skx =
+            case (cipherKeyExchange cipher, skx) of
+                (CipherKeyExchange_DHE_RSA, SKX_DHE_RSA dhparams signature) -> do
+                    doDHESignature dhparams signature SignatureRSA
+                (CipherKeyExchange_DHE_DSS, SKX_DHE_DSS dhparams signature) -> do
+                    doDHESignature dhparams signature SignatureDSS
+                (cke, SKX_Unparsed bytes) -> do
+                    ver <- usingState_ ctx getVersion
+                    case decodeReallyServerKeyXchgAlgorithmData ver cke bytes of
+                        Left _        -> throwCore $ Error_Protocol ("unknown server key exchange received, expecting: " ++ show cke, True, HandshakeFailure)
+                        Right realSkx -> processWithCipher cipher realSkx
+                    -- we need to resolve the result. and recall processWithCipher ..
+                (c,_)           -> throwCore $ Error_Protocol ("unknown server key exchange received, expecting: " ++ show c, True, HandshakeFailure)
+        doDHESignature dhparams signature signatureType = do
             -- TODO verify DHParams
             expectedData <- generateSignedDHParams ctx dhparams
             verified <- signatureVerify ctx signatureType expectedData signature

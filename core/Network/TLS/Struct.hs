@@ -238,6 +238,7 @@ data ServerKeyXchgAlgorithmData =
     | SKX_RSA (Maybe ServerRSAParams)
     | SKX_DH_DSS (Maybe ServerRSAParams)
     | SKX_DH_RSA (Maybe ServerRSAParams)
+    | SKX_Unparsed Bytes -- if we parse the server key xchg before knowing the actual cipher, we end up with this structure.
     | SKX_Unknown Bytes
     deriving (Show,Eq)
 
