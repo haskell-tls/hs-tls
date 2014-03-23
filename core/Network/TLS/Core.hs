@@ -72,9 +72,14 @@ sendData ctx dataToSend = liftIO (checkValid ctx) >> mapM_ sendDataChunk (L.toCh
 recvData :: MonadIO m => Context -> m B.ByteString
 recvData ctx = liftIO $ do
     checkValid ctx
-    pkt <- withReadLock ctx $ recvPacket ctx
-    either onError process pkt
-  where onError err@(Error_Protocol (reason,fatal,desc)) =
+    E.catchJust (\Error_EOF -> Just ())
+                doRecv
+                (\() -> return B.empty)
+  where doRecv = do
+            pkt <- withReadLock ctx $ recvPacket ctx
+            either onError process pkt
+
+        onError err@(Error_Protocol (reason,fatal,desc)) =
             terminate err (if fatal then AlertLevel_Fatal else AlertLevel_Warning) desc reason
         onError err =
             terminate err AlertLevel_Fatal InternalError (show err)
