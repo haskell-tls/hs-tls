@@ -50,7 +50,9 @@ instance HasBackend Socket where
               where loop 0    = return []
                     loop left = do
                         r <- Socket.recv sock left
-                        liftM (r:) (loop (left - B.length r))
+                        if B.null r
+                            then return []
+                            else liftM (r:) (loop (left - B.length r))
 
 instance HasBackend Handle where
     initializeBackend handle = hSetBuffering handle NoBuffering
