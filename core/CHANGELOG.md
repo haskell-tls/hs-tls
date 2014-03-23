@@ -1,3 +1,9 @@
+## Version 1.2.6 (23 Mar 2014)
+
+- Fixed socket backend endless loop when the server does not close connection
+  properly at the TLS level with the close notify alert.
+- Catch Error_EOF in recvData and return empty data.
+
 ## Version 1.2.5 (23 Mar 2014)
 
 - Fixed Server key exchange data being parsed without the correct
