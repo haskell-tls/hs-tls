@@ -1,7 +1,7 @@
 haskell TLS
 ===========
 
-This library provide native Haskell TLS and SSL protocol implementation for server and client.
+This library provides native Haskell TLS and SSL protocol implementation for server and client.
 
 Description
 -----------
@@ -13,13 +13,13 @@ type system, high level constructions and common Haskell features.
 Features
 --------
 
-* tiny code base (more than 20 times smaller than openSSL, and 10 times smaller than gnuTLS)
-* client certificates.
-* permissive license: BSD3.
-* supported versions: SSL3, TLS1.0, TLS1.1, TLS1.2.
-* key exchange supported: RSA, DHE-RSA, DHE-DSS.
-* bulk algorithm supported: any stream or block ciphers.
-* supported extensions: secure renegociation, next protocol negotiation (draft 2), server name indication.
+* tiny codebase (more than 20 times smaller than OpenSSL, and 10 times smaller than gnuTLS)
+* client certificates
+* permissive license: BSD3
+* supported versions: SSL3, TLS1.0, TLS1.1, TLS1.2
+* key exchange supported: RSA, DHE-RSA, DHE-DSS
+* bulk algorithm supported: any stream or block ciphers
+* supported extensions: secure renegociation, next protocol negotiation (draft 2), server name indication
 
 Common Issues
 =============
@@ -34,7 +34,7 @@ retrieve the certificate chained used.
 
     tls-retrievecertificate -d <destination> -p <port> -v -c
 
-As an output it will print every certificates in the chain and will gives the issuer and subjects of each.
+As an output it will print every certificate in the chain and will give the issuer and subjects of each.
 It creates a chain where issuer of certificate is the subject of the next certificate part of the chain:
 
     (subject #1, issuer #2) -> (subject #2, issuer #3) -> (subject #3, issuer #3)
