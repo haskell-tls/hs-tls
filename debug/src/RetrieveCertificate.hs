@@ -10,6 +10,7 @@ import Data.Default.Class
 import Data.IORef
 import Data.X509 as X509
 import Data.X509.Validation
+import System.X509
 
 import Control.Applicative
 import Control.Monad
@@ -113,12 +114,17 @@ main = do
         outputFormat (Format s:_ ) = s
         outputFormat (_       :xs) = outputFormat xs
 
+        getFQDN []                  = Nothing
+        getFQDN (VerifyFQDN fqdn:_) = Just fqdn
+        getFQDN (_:xs)              = getFQDN xs
+
         doMain destination port opts = do
             _ <- printf "connecting to %s on port %s ...\n" destination port
 
             chain <- openConnection destination port
             let (CertificateChain certs) = chain
                 format = outputFormat opts
+                fqdn   = getFQDN opts
             case PrintChain `elem` opts of
                 True ->
                     forM_ (zip [0..] certs) $ \(n, cert) -> do
@@ -129,17 +135,21 @@ main = do
 
             let fingerprints = foldl (doFingerprint (head certs)) [] opts
             unless (null fingerprints) $ putStrLn ("Fingerprints:")
-            mapM_ (\(alg,fprint) -> putStrLn ("  " ++ alg ++ " = " ++ show fprint)) fingerprints
+            mapM_ (\(alg,fprint) -> putStrLn ("  " ++ alg ++ " = " ++ show fprint)) $ concat fingerprints
 
-        doFingerprint cert acc GetFingerprint =
-            ("SHA1", getFingerprint cert X509.HashSHA1) : acc
-        doFingerprint _ acc _ = acc
-{-
             when (Verify `elem` opts) $ do
                 store <- getSystemCertificateStore
                 putStrLn "### certificate chain trust"
-                let checks = (defaultChecks Nothing) { checkExhaustive = True }
-                reasons <- validate checks store chain
+                let checks = defaultChecks { checkExhaustive = True
+                                           , checkFQHN = maybe False (const True) fqdn }
+                    servId = (maybe "" id fqdn, B.empty)
+                reasons <- validate X509.HashSHA256 def checks store def servId chain
                 when (not $ null reasons) $ do putStrLn "fail validation:"
                                                putStrLn $ show reasons
-                                               -}
+
+        doFingerprint cert acc GetFingerprint =
+            [ ("SHA1", getFingerprint cert X509.HashSHA1)
+            , ("SHA256", getFingerprint cert X509.HashSHA256)
+            , ("SHA512", getFingerprint cert X509.HashSHA512)
+            ] : acc
+        doFingerprint _ acc _ = acc
