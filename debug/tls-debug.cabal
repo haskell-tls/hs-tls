@@ -50,7 +50,6 @@ Executable           tls-retrievecertificate
   Build-Depends:     base >= 4 && < 5
                    , network
                    , bytestring
-                   , groom
                    , time
                    , pem
                    , cprng-aes >= 0.5.0

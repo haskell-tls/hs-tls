@@ -22,7 +22,6 @@ import Data.Char (isDigit)
 import Data.PEM
 
 import Text.Printf
-import Text.Groom
 
 import System.Console.GetOpt
 import System.Environment
@@ -83,7 +82,7 @@ showCert "pem" cert = B.putStrLn $ pemWriteBS pem
                     , pemHeader = []
                     , pemContent = encodeSignedObject cert
                     }
-showCert "full" cert = putStrLn $ groom cert
+showCert "full" cert = putStrLn $ show cert
 
 showCert _ (signedCert)  = do
     putStrLn ("serial:   " ++ (show $ certSerial cert))
