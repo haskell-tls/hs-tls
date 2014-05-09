@@ -23,6 +23,7 @@ module Network.TLS.Record.State
     ) where
 
 import Data.Word
+import Control.Applicative
 import Control.Monad.State
 import Control.Monad.Error
 import Network.TLS.Compression
@@ -56,6 +57,10 @@ data RecordState = RecordState
 newtype RecordM a = RecordM { runRecordM :: Version
                                          -> RecordState
                                          -> Either TLSError (a, RecordState) }
+
+instance Applicative RecordM where
+    pure = return
+    (<*>) = ap
 
 instance Monad RecordM where
     return a  = RecordM $ \_ st  -> Right (a, st)
