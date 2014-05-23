@@ -99,6 +99,7 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | NoVersionDowngrade
           | UserAgent String
           | Output String
+          | Timeout String
           | Help
           deriving (Show,Eq)
 
@@ -109,6 +110,7 @@ options =
     , Option []     ["io-debug"] (NoArg IODebug) "TLS IO debug output on stdout"
     , Option ['s']  ["session"] (NoArg Session) "try to resume a session"
     , Option ['O']  ["output"]  (ReqArg Output "stdout") "output "
+    , Option ['t']  ["timeout"] (ReqArg Timeout "timeout") "timeout in milliseconds (2s by default)"
     , Option []     ["no-validation"] (NoArg NoValidateCert) "disable certificate validation"
     , Option []     ["http1.1"] (NoArg Http11) "use http1.1 instead of http1.0"
     , Option []     ["ssl3"]    (NoArg Ssl3) "use SSL 3.0"
@@ -145,7 +147,7 @@ runOn (sStorage, certStore) flags port hostname = do
                 bye ctx
                 return ()
         loopRecv out ctx = do
-            d <- timeout 2000000 (recvData ctx) -- 2s per recv
+            d <- timeout (timeoutMs * 1000) (recvData ctx) -- 2s per recv
             case d of
                 Nothing            -> when (Debug `elem` flags) (hPutStrLn stderr "timeout") >> return ()
                 Just b | BC.null b -> return ()
@@ -162,6 +164,9 @@ runOn (sStorage, certStore) flags port hostname = do
         getOutput = foldl f Nothing flags
           where f _   (Output o) = Just o
                 f acc _          = acc
+        timeoutMs = foldl f 2000 flags
+          where f _   (Timeout t) = read t
+                f acc _           = acc
 
 printUsage =
     putStrLn $ usageInfo "usage: simpleclient [opts] <hostname> [port]\n\n\t(port default to: 443)\noptions:\n" options
