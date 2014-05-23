@@ -25,6 +25,7 @@ module Network.TLS.Extra.Cipher
     , cipher_AES256_SHA1
     , cipher_AES128_SHA256
     , cipher_AES256_SHA256
+    , cipher_RSA_3DES_EDE_CBC_SHA1
     , cipher_DHE_RSA_AES128_SHA1
     , cipher_DHE_RSA_AES256_SHA1
     , cipher_DHE_RSA_AES128_SHA256
@@ -45,6 +46,9 @@ import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.MD5 as MD5
 
 import qualified "cipher-aes" Crypto.Cipher.AES as AES
+import Crypto.Cipher.TripleDES
+import Crypto.Cipher.Types (makeKey, makeIV, cipherInit, cbcEncrypt, cbcDecrypt)
+import qualified Crypto.Cipher.Types as T
 
 aes_cbc_encrypt :: Key -> IV -> B.ByteString -> B.ByteString
 aes_cbc_encrypt key iv d = AES.encryptCBC (AES.initAES key) iv d
@@ -60,6 +64,20 @@ aes128_cbc_encrypt = aes_cbc_encrypt
 aes128_cbc_decrypt = aes_cbc_decrypt
 aes256_cbc_encrypt = aes_cbc_encrypt
 aes256_cbc_decrypt = aes_cbc_decrypt
+
+tripledes_ede_cbc_encrypt :: Key -> IV -> B.ByteString -> B.ByteString
+tripledes_ede_cbc_encrypt key iv bs =
+    cbcEncrypt (cipherInit $ tripledes_key key) (tripledes_iv iv) bs
+
+tripledes_ede_cbc_decrypt :: Key -> IV -> B.ByteString -> B.ByteString
+tripledes_ede_cbc_decrypt key iv bs =
+    cbcDecrypt (cipherInit $ tripledes_key key) (tripledes_iv iv) bs
+
+tripledes_key :: Key -> T.Key DES_EDE3
+tripledes_key key = either (\ke -> error ("tripledes cipher key internal error: " ++ show ke)) id $ makeKey key
+
+tripledes_iv :: IV -> T.IV DES_EDE3
+tripledes_iv iv = maybe (error "tripledes cipher iv internal error") id $ makeIV iv
 
 toIV :: RC4.Ctx -> IV
 toIV (RC4.Ctx ctx) = ctx
@@ -87,6 +105,7 @@ ciphersuite_all =
     , cipher_AES128_SHA256, cipher_AES256_SHA256
     , cipher_AES128_SHA1,   cipher_AES256_SHA1
     , cipher_DHE_DSS_RC4_SHA1, cipher_RC4_128_SHA1,  cipher_RC4_128_MD5
+    , cipher_RSA_3DES_EDE_CBC_SHA1
     ]
 
 -- | list of medium ciphers.
@@ -109,7 +128,7 @@ ciphersuite_dhe_dss = [cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1, c
 ciphersuite_unencrypted :: [Cipher]
 ciphersuite_unencrypted = [cipher_null_MD5, cipher_null_SHA1]
 
-bulk_null, bulk_rc4, bulk_aes128, bulk_aes256 :: Bulk
+bulk_null, bulk_rc4, bulk_aes128, bulk_aes256, bulk_tripledes_ede :: Bulk
 bulk_null = Bulk
     { bulkName         = "null"
     , bulkKeySize      = 0
@@ -141,6 +160,14 @@ bulk_aes256 = Bulk
     , bulkIVSize       = 16
     , bulkBlockSize    = 16
     , bulkF            = BulkBlockF aes256_cbc_encrypt aes256_cbc_decrypt
+    }
+
+bulk_tripledes_ede = Bulk
+    { bulkName      = "3DES-EDE-CBC"
+    , bulkKeySize   = 24
+    , bulkIVSize    = 8
+    , bulkBlockSize = 8
+    , bulkF         = BulkBlockF tripledes_ede_cbc_encrypt tripledes_ede_cbc_decrypt
     }
 
 hash_md5, hash_sha1, hash_sha256 :: Hash
@@ -308,6 +335,17 @@ cipher_DHE_RSA_AES256_SHA256 = cipher_DHE_RSA_AES128_SHA256
     { cipherID           = 0x6b
     , cipherName         = "DHE-RSA-AES256-SHA256"
     , cipherBulk         = bulk_aes256
+    }
+
+-- | 3DES cipher (168 bit key), RSA key exchange and SHA1 for digest
+cipher_RSA_3DES_EDE_CBC_SHA1 :: Cipher
+cipher_RSA_3DES_EDE_CBC_SHA1 = Cipher
+    { cipherID           = 0x0a
+    , cipherName         = "RSA-3DES-EDE-CBC-SHA1"
+    , cipherBulk         = bulk_tripledes_ede
+    , cipherHash         = hash_sha1
+    , cipherKeyExchange  = CipherKeyExchange_RSA
+    , cipherMinVer       = Nothing
     }
 
 
