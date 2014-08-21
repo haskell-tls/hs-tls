@@ -8,6 +8,8 @@
 -- Disengage a record from the Record layer.
 -- The record is decrypted, checked for integrity and then decompressed.
 --
+{-# LANGUAGE FlexibleContexts #-}
+
 module Network.TLS.Record.Disengage
         ( disengageRecord
         ) where
