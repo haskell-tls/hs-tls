@@ -42,6 +42,8 @@ module Network.TLS
     -- * Context object
     , Context
     , ctxConnection
+    , TLSParams
+    , HasBackend
 
     -- * Creating a context
     , contextNew
@@ -107,7 +109,7 @@ module Network.TLS
     , exceptionValidationCache
     ) where
 
-import Network.TLS.Backend (Backend(..))
+import Network.TLS.Backend (Backend(..), HasBackend)
 import Network.TLS.Struct ( TLSError(..), TLSException(..)
                           , HashAndSignatureAlgorithm, HashAlgorithm(..), SignatureAlgorithm(..)
                           , Header(..), ProtocolType(..), CertificateType(..)
