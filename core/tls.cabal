@@ -43,9 +43,11 @@ Library
                    , cryptohash >= 0.6
                    , crypto-random >= 0.0 && < 0.1
                    , crypto-numbers
-                   , crypto-pubkey-types >= 0.4
+                   , crypto-cipher-types >= 0.0.8
                    , crypto-pubkey >= 0.2.4
+                   , crypto-pubkey-types >= 0.4
                    , cipher-rc4
+                   , cipher-des
                    , cipher-aes >= 0.2 && < 0.3
                    -- certificate related
                    , asn1-types >= 0.2.0
