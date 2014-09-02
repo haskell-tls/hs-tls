@@ -8,6 +8,8 @@
 -- the Receiving module contains calls related to unmarshalling packets according
 -- to the TLS state
 --
+{-# LANGUAGE FlexibleContexts #-}
+
 module Network.TLS.Receiving
     ( processPacket
     ) where
