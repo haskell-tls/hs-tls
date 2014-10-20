@@ -34,6 +34,7 @@ Flag compat
 Library
   Build-Depends:     base >= 3 && < 5
                    , mtl
+                   , transformers
                    , cereal >= 0.4
                    , bytestring
                    , byteable
@@ -70,6 +71,7 @@ Library
                      Network.TLS.Backend
                      Network.TLS.Crypto
                      Network.TLS.Crypto.DH
+                     Network.TLS.ErrT
                      Network.TLS.Extension
                      Network.TLS.Handshake
                      Network.TLS.Handshake.Common

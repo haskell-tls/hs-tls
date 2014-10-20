@@ -54,7 +54,7 @@ import Network.TLS.Types (Role(..))
 import Network.TLS.Wire (GetContinuation)
 import qualified Data.ByteString as B
 import Control.Monad.State
-import Control.Monad.Error
+import Network.TLS.ErrT
 import Crypto.Random
 import Data.X509 (CertificateChain)
 
@@ -74,7 +74,7 @@ data TLSState = TLSState
     , stClientContext       :: Role
     }
 
-newtype TLSSt a = TLSSt { runTLSSt :: ErrorT TLSError (State TLSState) a }
+newtype TLSSt a = TLSSt { runTLSSt :: ErrT TLSError (State TLSState) a }
     deriving (Monad, MonadError TLSError, Functor, Applicative)
 
 instance MonadState TLSState TLSSt where
@@ -85,7 +85,7 @@ instance MonadState TLSState TLSSt where
 #endif
 
 runTLSState :: TLSSt a -> TLSState -> (Either TLSError a, TLSState)
-runTLSState f st = runState (runErrorT (runTLSSt f)) st
+runTLSState f st = runState (runErrT (runTLSSt f)) st
 
 newTLSState :: CPRG g => g -> Role -> TLSState
 newTLSState rng clientContext = TLSState

@@ -50,7 +50,7 @@ import Data.Serialize.Get hiding (runGet)
 import qualified Data.Serialize.Get as G
 import Data.Serialize.Put
 import Control.Applicative ((<$>))
-import Control.Monad.Error
+import Control.Monad
 import qualified Data.ByteString as B
 import Data.Word
 import Data.Bits

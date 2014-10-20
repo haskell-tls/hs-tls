@@ -15,9 +15,9 @@ module Network.TLS.Record.Disengage
         ) where
 
 import Control.Monad.State
-import Control.Monad.Error
 
 import Network.TLS.Struct
+import Network.TLS.ErrT
 import Network.TLS.Cap
 import Network.TLS.Record.State
 import Network.TLS.Record.Types

@@ -18,6 +18,7 @@ import Network.TLS.Struct
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Packet
+import Network.TLS.ErrT
 import Network.TLS.Extension
 import Network.TLS.IO
 import Network.TLS.State hiding (getNegotiatedProtocol)
@@ -33,7 +34,6 @@ import Data.ByteString.Char8 ()
 
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad.State
-import Control.Monad.Error
 import Control.Exception (SomeException)
 
 import Network.TLS.Handshake.Common

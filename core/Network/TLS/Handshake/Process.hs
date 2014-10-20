@@ -15,12 +15,14 @@ module Network.TLS.Handshake.Process
 
 import Control.Applicative
 import Control.Concurrent.MVar
-import Control.Monad.Error
 import Control.Monad.State (gets)
+import Control.Monad
+import Control.Monad.IO.Class (liftIO)
 
 import Network.TLS.Types (Role(..), invertRole)
 import Network.TLS.Util
 import Network.TLS.Packet
+import Network.TLS.ErrT
 import Network.TLS.Struct
 import Network.TLS.State
 import Network.TLS.Context.Internal

@@ -25,9 +25,9 @@ module Network.TLS.Record.State
 import Data.Word
 import Control.Applicative
 import Control.Monad.State
-import Control.Monad.Error
 import Network.TLS.Compression
 import Network.TLS.Cipher
+import Network.TLS.ErrT
 import Network.TLS.Struct
 import Network.TLS.Wire
 

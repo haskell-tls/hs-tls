@@ -15,11 +15,11 @@ module Network.TLS.Receiving
     ) where
 
 import Control.Monad.State
-import Control.Monad.Error
 import Control.Concurrent.MVar
 
 import Network.TLS.Context.Internal
 import Network.TLS.Struct
+import Network.TLS.ErrT
 import Network.TLS.Record
 import Network.TLS.Packet
 import Network.TLS.Wire
