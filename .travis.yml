@@ -20,7 +20,6 @@ install:
  - cabal-1.18 install --only-dependencies --enable-tests;
 
 script:
- - cd core
  - cabal-1.18 configure --enable-tests -v2
  - cabal-1.18 build
  - cabal-1.18 test
