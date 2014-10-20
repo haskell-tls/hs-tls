@@ -60,6 +60,10 @@ import Data.Typeable
 import Control.Exception (Exception(..))
 import Network.TLS.Types
 import Network.TLS.Crypto.DH
+#if MIN_VERSION_mtl(2,2,1)
+#else
+import Control.Monad.Error
+#endif
 
 type Bytes = ByteString
 
