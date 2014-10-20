@@ -1,9 +1,8 @@
 {-# LANGUAGE CPP #-}
 
-import Test.QuickCheck
+import Test.Tasty
+import Test.Tasty.QuickCheck
 import Test.QuickCheck.Monadic
-import Test.Framework (defaultMain, testGroup)
-import Test.Framework.Providers.QuickCheck2 (testProperty)
 
 import PipeChan
 import Connection
@@ -159,7 +158,7 @@ assertEq :: (Show a, Monad m, Eq a) => a -> a -> m ()
 assertEq expected got = unless (expected == got) $ error ("got " ++ show got ++ " but was expecting " ++ show expected)
 
 main :: IO ()
-main = defaultMain
+main = defaultMain $ testGroup "tls"
     [ tests_marshalling
     , tests_ciphers
     , tests_handshake

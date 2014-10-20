@@ -8,7 +8,7 @@ module PubKey
     , rsaParams
     ) where
 
-import Test.QuickCheck
+import Test.Tasty.QuickCheck
 
 import qualified Crypto.PubKey.DH as DH
 import Crypto.Random (createTestEntropyPool)

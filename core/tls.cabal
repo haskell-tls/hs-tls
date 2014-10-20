@@ -116,9 +116,9 @@ Test-Suite test-tls
                    , mtl
                    , cereal >= 0.3
                    , data-default-class
-                   , QuickCheck >= 2
-                   , test-framework
-                   , test-framework-quickcheck2
+                   , tasty
+                   , tasty-quickcheck
+                   , QuickCheck
                    , cprng-aes >= 0.5
                    , crypto-pubkey >= 0.2
                    , bytestring

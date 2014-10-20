@@ -4,7 +4,7 @@ module Ciphers
 
 import Control.Applicative ((<$>), (<*>))
 
-import Test.QuickCheck
+import Test.Tasty.QuickCheck
 
 import qualified Data.ByteString as B
 import Network.TLS.Cipher

@@ -3,7 +3,7 @@ module Marshalling where
 
 import Control.Monad
 import Control.Applicative
-import Test.QuickCheck
+import Test.Tasty.QuickCheck
 import Network.TLS.Internal
 import Network.TLS
 
@@ -24,15 +24,6 @@ instance Arbitrary ProtocolType where
             , ProtocolType_Alert
             , ProtocolType_Handshake
             , ProtocolType_AppData ]
-
-#if MIN_VERSION_QuickCheck(2,3,0)
-#else
-instance Arbitrary Word8 where
-    arbitrary = fromIntegral <$> (choose (0,255) :: Gen Int)
-
-instance Arbitrary Word16 where
-    arbitrary = fromIntegral <$> (choose (0,65535) :: Gen Int)
-#endif
 
 instance Arbitrary Header where
     arbitrary = Header <$> arbitrary <*> arbitrary <*> arbitrary

@@ -7,7 +7,7 @@ module Certificate
     ) where
 
 import Control.Applicative
-import Test.QuickCheck
+import Test.Tasty.QuickCheck
 import Data.X509
 import Data.Hourglass
 import qualified Data.ByteString as B

@@ -8,7 +8,7 @@ module Connection
     , streamCipher
     ) where
 
-import Test.QuickCheck
+import Test.Tasty.QuickCheck
 import Certificate
 import PubKey
 import PipeChan
