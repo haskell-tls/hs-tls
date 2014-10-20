@@ -125,7 +125,7 @@ Test-Suite test-tls
                    , x509
                    , x509-validation
                    , tls
-                   , time
+                   , hourglass
                    , crypto-random
                    , crypto-pubkey
   ghc-options:       -Wall -fno-warn-orphans -fno-warn-missing-signatures -fwarn-tabs
@@ -145,7 +145,7 @@ Benchmark bench-tls
                    , mtl
                    , bytestring
                    , crypto-pubkey >= 0.2
-                   , time
+                   , hourglass
                    , QuickCheck >= 2
 
 source-repository head

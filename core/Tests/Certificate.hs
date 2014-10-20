@@ -6,10 +6,10 @@ module Certificate
     , simpleX509
     ) where
 
+import Control.Applicative
 import Test.QuickCheck
 import Data.X509
-import Data.Time.Calendar (fromGregorian)
-import Data.Time.Clock (secondsToDiffTime, UTCTime(..))
+import Data.Hourglass
 import qualified Data.ByteString as B
 
 import PubKey
@@ -18,15 +18,26 @@ testExtensionEncode critical ext = ExtensionRaw (extOID ext) critical (extEncode
 
 arbitraryDN = return $ DistinguishedName []
 
-arbitraryTime = do
-    year   <- choose (1951, 2050)
-    month  <- choose (1, 12)
-    day    <- choose (1, 30)
-    hour   <- choose (0, 23)
-    minute <- choose (0, 59)
-    second <- choose (0, 59)
-    --z      <- arbitrary
-    return $ UTCTime (fromGregorian year month day) (secondsToDiffTime (hour * 3600 + minute * 60 + second))
+instance Arbitrary Date where
+    arbitrary = do
+        y <- choose (1951, 2050)
+        m <- elements [ January .. December]
+        d <- choose (1, 30)
+        return $ normalizeDate $ Date y m d
+
+normalizeDate :: Date -> Date
+normalizeDate d = timeConvert (timeConvert d :: Elapsed)
+
+instance Arbitrary TimeOfDay where
+    arbitrary = do
+        h    <- choose (0, 23)
+        mi   <- choose (0, 59)
+        se   <- choose (0, 59)
+        nsec <- return 0
+        return $ TimeOfDay (Hours h) (Minutes mi) (Seconds se) nsec
+
+instance Arbitrary DateTime where
+    arbitrary = DateTime <$> arbitrary <*> arbitrary
 
 maxSerial = 16777216
 
@@ -34,8 +45,7 @@ arbitraryCertificate pubKey = do
     serial    <- choose (0,maxSerial)
     issuerdn  <- arbitraryDN
     subjectdn <- arbitraryDN
-    time1     <- arbitraryTime
-    time2     <- arbitraryTime
+    validity  <- (,) <$> arbitrary <*> arbitrary
     let sigalg = SignatureALG HashSHA1 (pubkeyToAlg pubKey)
     return $ Certificate
             { certVersion      = 3
@@ -43,7 +53,7 @@ arbitraryCertificate pubKey = do
             , certSignatureAlg = sigalg
             , certIssuerDN     = issuerdn
             , certSubjectDN    = subjectdn
-            , certValidity     = (time1, time2)
+            , certValidity     = validity
             , certPubKey       = pubKey
             , certExtensions   = Extensions $ Just
                 [ testExtensionEncode True $ ExtKeyUsage [KeyUsage_digitalSignature,KeyUsage_keyEncipherment,KeyUsage_keyCertSign]
@@ -63,8 +73,8 @@ simpleCertificate pubKey =
                 [ testExtensionEncode True $ ExtKeyUsage [KeyUsage_digitalSignature,KeyUsage_keyEncipherment]
                 ]
         }
-  where time1 = UTCTime (fromGregorian 1999 1 1) 0
-        time2 = UTCTime (fromGregorian 2901 1 1) 0
+  where time1 = DateTime (Date 1999 January 1) (TimeOfDay 0 0 0 0)
+        time2 = DateTime (Date 2049 January 1) (TimeOfDay 0 0 0 0)
         simpleDN = DistinguishedName []
 
 simpleX509 pubKey = do
