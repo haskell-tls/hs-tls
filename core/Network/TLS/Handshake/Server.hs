@@ -112,6 +112,10 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
             (Session (Just clientSessionId)) -> liftIO $ sessionResume (sharedSessionManager $ ctxShared ctx) clientSessionId
             (Session Nothing)                -> return Nothing
 
+    case extensionDecode False `fmap` (lookup extensionID_ApplicationLayerProtocolNegotiation exts) of
+        Just (Just (ApplicationLayerProtocolNegotiation protos)) -> usingState_ ctx $ setClientALPNSuggest protos
+        _ -> return ()
+
     doHandshake sparams cred ctx chosenVersion usedCipher usedCompression clientSession resumeSessionData exts
 
   where
@@ -144,6 +148,38 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
     handshakeTerminate ctx
   where
         clientRequestedNPN = isJust $ lookup extensionID_NextProtocolNegotiation exts
+        clientALPNSuggest = isJust $ lookup extensionID_ApplicationLayerProtocolNegotiation exts
+
+        applicationProtocol = do
+            protos <- alpn
+            if null protos then npn else return protos
+
+        alpn | clientALPNSuggest = do
+            suggest <- usingState_ ctx $ getClientALPNSuggest
+            case (onALPNClientSuggest $ serverHooks sparams, suggest) of
+                (Just io, Just protos) -> do
+                    proto <- liftIO $ io protos
+                    usingState_ ctx $ do
+                        setExtensionALPN True
+                        setNegotiatedProtocol proto
+                    return $ [ ( extensionID_ApplicationLayerProtocolNegotiation
+                                                                                                               , extensionEncode $ ApplicationLayerProtocolNegotiation [proto]) ]
+                (_, _)                  -> return []
+             | otherwise = return []
+        npn = do
+            nextProtocols <-
+                if clientRequestedNPN
+                    then liftIO $ onSuggestNextProtocols $ serverHooks sparams
+                    else return Nothing
+            case nextProtocols of
+                Just protos -> do
+                    usingState_ ctx $ do
+                        setExtensionNPN True
+                        setServerNextProtocolSuggest protos
+                    return [ ( extensionID_NextProtocolNegotiation
+                             , extensionEncode $ NextProtocolNegotiation protos) ]
+                Nothing -> return []
+
 
         ---
         -- When the client sends a certificate, check whether
@@ -167,17 +203,8 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                                     return $ extensionEncode (SecureRenegotiation cvf $ Just svf)
                             return [ (0xff01, vf) ]
                     else return []
-            nextProtocols <-
-                if clientRequestedNPN
-                    then liftIO $ onSuggestNextProtocols $ serverHooks sparams
-                    else return Nothing
-            npnExt <- case nextProtocols of
-                        Just protos -> do usingState_ ctx $ do setExtensionNPN True
-                                                               setServerNextProtocolSuggest protos
-                                          return [ ( extensionID_NextProtocolNegotiation
-                                                   , extensionEncode $ NextProtocolNegotiation protos) ]
-                        Nothing -> return []
-            let extensions = secRengExt ++ npnExt
+            protoExt <- applicationProtocol
+            let extensions = secRengExt ++ protoExt
             usingState_ ctx (setVersion chosenVersion)
             usingHState ctx $ setServerHelloParameters chosenVersion srand usedCipher usedCompression
             return $ ServerHello chosenVersion srand session (cipherID usedCipher)

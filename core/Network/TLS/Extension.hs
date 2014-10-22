@@ -15,6 +15,7 @@ module Network.TLS.Extension
     , extensionID_MaxFragmentLength
     , extensionID_SecureRenegotiation
     , extensionID_NextProtocolNegotiation
+    , extensionID_ApplicationLayerProtocolNegotiation
     -- all implemented extensions
     , ServerNameType(..)
     , ServerName(..)
@@ -22,9 +23,10 @@ module Network.TLS.Extension
     , MaxFragmentEnum(..)
     , SecureRenegotiation(..)
     , NextProtocolNegotiation(..)
+    , ApplicationLayerProtocolNegotiation(..)
     ) where
 
-import Control.Applicative ((<$>))
+import Control.Applicative ((<$>),(<*>))
 import Control.Monad
 
 import Data.Word
@@ -38,17 +40,20 @@ import Network.TLS.Wire
 import Network.BSD (HostName)
 
 extensionID_ServerName, extensionID_MaxFragmentLength
+                      , extensionID_ApplicationLayerProtocolNegotiation
                       , extensionID_SecureRenegotiation
                       , extensionID_NextProtocolNegotiation :: ExtensionID
-extensionID_ServerName              = 0x0
-extensionID_MaxFragmentLength       = 0x1
-extensionID_SecureRenegotiation     = 0xff01
-extensionID_NextProtocolNegotiation = 0x3374
+extensionID_ServerName                          = 0x0
+extensionID_MaxFragmentLength                   = 0x1
+extensionID_ApplicationLayerProtocolNegotiation = 0x10
+extensionID_SecureRenegotiation                 = 0xff01
+extensionID_NextProtocolNegotiation             = 0x3374
 
 -- | all supported extensions by the implementation
 supportedExtensions :: [ExtensionID]
 supportedExtensions = [ extensionID_ServerName
                       , extensionID_MaxFragmentLength
+                      , extensionID_ApplicationLayerProtocolNegotiation
                       , extensionID_SecureRenegotiation
                       , extensionID_NextProtocolNegotiation
                       ]
@@ -131,3 +136,21 @@ instance Extension NextProtocolNegotiation where
                  case avail of
                      0 -> return []
                      _ -> do liftM2 (:) getOpaque8 getNPN
+
+-- | Application Layer Protocol Negotiation (ALPN)
+data ApplicationLayerProtocolNegotiation = ApplicationLayerProtocolNegotiation [ByteString]
+    deriving (Show,Eq)
+
+instance Extension ApplicationLayerProtocolNegotiation where
+    extensionID _ = extensionID_ApplicationLayerProtocolNegotiation
+    extensionEncode (ApplicationLayerProtocolNegotiation bytes) =
+        runPut $ putOpaque16 $ runPut $ mapM_ putOpaque8 bytes
+    extensionDecode _ = runGetMaybe (ApplicationLayerProtocolNegotiation <$> getALPN)
+        where getALPN = do
+                 _ <- getWord16
+                 getALPN'
+              getALPN' = do
+                 avail <- remaining
+                 case avail of
+                     0 -> return []
+                     _ -> (:) <$> getOpaque8 <*> getALPN'

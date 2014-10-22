@@ -63,7 +63,7 @@ handshakeClient cparams ctx = do
     handshakeTerminate ctx
   where ciphers      = ctxCiphers ctx
         compressions = supportedCompressions $ ctxSupported ctx
-        getExtensions = sequence [sniExtension,secureReneg,npnExtention] >>= return . catMaybes
+        getExtensions = sequence [sniExtension,secureReneg,npnExtention,alpnExtension] >>= return . catMaybes
 
         toExtensionRaw :: Extension e => e -> ExtensionRaw
         toExtensionRaw ext = (extensionID ext, extensionEncode ext)
@@ -75,6 +75,13 @@ handshakeClient cparams ctx = do
         npnExtention = if isJust $ onNPNServerSuggest $ clientHooks cparams
                          then return $ Just $ toExtensionRaw $ NextProtocolNegotiation []
                          else return Nothing
+        alpnExtension = do
+            mprotos <- onSuggestALPN $ clientHooks cparams
+            case mprotos of
+                Nothing -> return Nothing
+                Just protos -> do
+                    usingState_ ctx $ setClientALPNSuggest protos
+                    return $ Just $ toExtensionRaw $ ApplicationLayerProtocolNegotiation protos
         sniExtension = if clientUseServerNameIndication cparams
                          then return $ Just $ toExtensionRaw $ ServerName [ServerNameHostName $ fst $ clientServerIdentification cparams]
                          else return Nothing
@@ -275,10 +282,22 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
         setVersion rver
     usingHState ctx $ setServerHelloParameters rver serverRan cipherAlg compressAlg
 
+    case extensionDecode False `fmap` (lookup extensionID_ApplicationLayerProtocolNegotiation exts) of
+        Just (Just (ApplicationLayerProtocolNegotiation [proto])) -> usingState_ ctx $ do
+            mprotos <- getClientALPNSuggest
+            case mprotos of
+                Just protos -> when (elem proto protos) $ do
+                    setExtensionALPN True
+                    setNegotiatedProtocol proto
+                _ -> return ()
+        _ -> return ()
+
     case extensionDecode False `fmap` (lookup extensionID_NextProtocolNegotiation exts) of
         Just (Just (NextProtocolNegotiation protos)) -> usingState_ ctx $ do
-            setExtensionNPN True
-            setServerNextProtocolSuggest protos
+            alpnDone <- getExtensionALPN
+            unless alpnDone $ do
+                setExtensionNPN True
+                setServerNextProtocolSuggest protos
         _ -> return ()
 
     case resumingSession of

@@ -31,10 +31,14 @@ module Network.TLS.State
     , getSecureRenegotiation
     , setExtensionNPN
     , getExtensionNPN
+    , setExtensionALPN
+    , getExtensionALPN
     , setNegotiatedProtocol
     , getNegotiatedProtocol
     , setServerNextProtocolSuggest
     , getServerNextProtocolSuggest
+    , setClientALPNSuggest
+    , getClientALPNSuggest
     , getClientCertificateChain
     , setClientCertificateChain
     , getVerifiedData
@@ -65,9 +69,11 @@ data TLSState = TLSState
     , stClientVerifiedData  :: Bytes -- RFC 5746
     , stServerVerifiedData  :: Bytes -- RFC 5746
     , stExtensionNPN        :: Bool  -- NPN draft extension
+    , stExtensionALPN       :: Bool  -- RFC 7301
     , stHandshakeRecordCont :: Maybe (GetContinuation (HandshakeType, Bytes))
-    , stNegotiatedProtocol  :: Maybe B.ByteString -- NPN protocol
+    , stNegotiatedProtocol  :: Maybe B.ByteString -- NPN and ALPN protocol
     , stServerNextProtocolSuggest :: Maybe [B.ByteString]
+    , stClientALPNSuggest   :: Maybe [B.ByteString]
     , stClientCertificateChain :: Maybe CertificateChain
     , stRandomGen           :: StateRNG
     , stVersion             :: Maybe Version
@@ -95,9 +101,11 @@ newTLSState rng clientContext = TLSState
     , stClientVerifiedData  = B.empty
     , stServerVerifiedData  = B.empty
     , stExtensionNPN        = False
+    , stExtensionALPN       = False
     , stHandshakeRecordCont = Nothing
     , stNegotiatedProtocol  = Nothing
     , stServerNextProtocolSuggest = Nothing
+    , stClientALPNSuggest   = Nothing
     , stClientCertificateChain = Nothing
     , stRandomGen           = StateRNG rng
     , stVersion             = Nothing
@@ -179,6 +187,12 @@ setExtensionNPN b = modify (\st -> st { stExtensionNPN = b })
 getExtensionNPN :: TLSSt Bool
 getExtensionNPN = gets stExtensionNPN
 
+setExtensionALPN :: Bool -> TLSSt ()
+setExtensionALPN b = modify (\st -> st { stExtensionALPN = b })
+
+getExtensionALPN :: TLSSt Bool
+getExtensionALPN = gets stExtensionALPN
+
 setNegotiatedProtocol :: B.ByteString -> TLSSt ()
 setNegotiatedProtocol s = modify (\st -> st { stNegotiatedProtocol = Just s })
 
@@ -190,6 +204,12 @@ setServerNextProtocolSuggest ps = modify (\st -> st { stServerNextProtocolSugges
 
 getServerNextProtocolSuggest :: TLSSt (Maybe [B.ByteString])
 getServerNextProtocolSuggest = gets stServerNextProtocolSuggest
+
+setClientALPNSuggest :: [B.ByteString] -> TLSSt ()
+setClientALPNSuggest ps = modify (\st -> st { stClientALPNSuggest = Just ps})
+
+getClientALPNSuggest :: TLSSt (Maybe [B.ByteString])
+getClientALPNSuggest = gets stClientALPNSuggest
 
 setClientCertificateChain :: CertificateChain -> TLSSt ()
 setClientCertificateChain s = modify (\st -> st { stClientCertificateChain = Just s })

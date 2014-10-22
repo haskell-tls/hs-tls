@@ -185,6 +185,7 @@ data ClientHooks = ClientHooks
                                [DistinguishedName]) -> IO (Maybe (CertificateChain, PrivKey))
     , onNPNServerSuggest   :: Maybe ([B.ByteString] -> IO B.ByteString)
     , onServerCertificate  :: CertificateStore -> ValidationCache -> ServiceID -> CertificateChain -> IO [FailedReason]
+    , onSuggestALPN :: IO (Maybe [B.ByteString])
     }
 
 defaultClientHooks :: ClientHooks
@@ -192,6 +193,7 @@ defaultClientHooks = ClientHooks
     { onCertificateRequest = \ _ -> return Nothing
     , onNPNServerSuggest   = Nothing
     , onServerCertificate  = validateDefault
+    , onSuggestALPN        = return Nothing
     }
 
 instance Show ClientHooks where
@@ -226,6 +228,7 @@ data ServerHooks = ServerHooks
     , onSuggestNextProtocols  :: IO (Maybe [B.ByteString])
       -- | at each new handshake, we call this hook to see if we allow handshake to happens.
     , onNewHandshake          :: Measurement -> IO Bool
+    , onALPNClientSuggest     :: Maybe ([B.ByteString] -> IO B.ByteString)
     }
 
 defaultServerHooks :: ServerHooks
@@ -235,6 +238,7 @@ defaultServerHooks = ServerHooks
     , onUnverifiedClientCert = return False
     , onSuggestNextProtocols = return Nothing
     , onNewHandshake         = \_ -> return True
+    , onALPNClientSuggest    = Nothing
     }
 
 instance Show ServerHooks where
