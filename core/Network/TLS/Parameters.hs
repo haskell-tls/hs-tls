@@ -126,7 +126,7 @@ data Supported = Supported
 
 defaultSupported :: Supported
 defaultSupported = Supported
-    { supportedVersions       = [TLS12,TLS11,TLS10,SSL3]
+    { supportedVersions       = [TLS12,TLS11,TLS10]
     , supportedCiphers        = []
     , supportedCompressions   = [nullCompression]
     , supportedHashSignatures = [ (Struct.HashSHA512, SignatureRSA)
