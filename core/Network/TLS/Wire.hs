@@ -43,6 +43,7 @@ module Network.TLS.Wire
     , putOpaque24
     , putInteger16
     , encodeWord16
+    , encodeWord32
     , encodeWord64
     ) where
 
@@ -131,6 +132,9 @@ putWords8 l = do
 putWord16 :: Word16 -> Put
 putWord16 = putWord16be
 
+putWord32 :: Word32 -> Put
+putWord32 = putWord32be
+
 putWords16 :: [Word16] -> Put
 putWords16 l = do
     putWord16 $ 2 * (fromIntegral $ length l)
@@ -160,6 +164,9 @@ putInteger16 = putOpaque16 . i2osp
 
 encodeWord16 :: Word16 -> Bytes
 encodeWord16 = runPut . putWord16
+
+encodeWord32 :: Word32 -> Bytes
+encodeWord32 = runPut . putWord32
 
 encodeWord64 :: Word64 -> Bytes
 encodeWord64 = runPut . putWord64be

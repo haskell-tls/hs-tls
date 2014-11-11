@@ -13,6 +13,7 @@ module Network.TLS.Record.State
     , MacState(..)
     , RecordState(..)
     , newRecordState
+    , incrRecordState
     , RecordM
     , runRecordM
     , getRecordVersion
