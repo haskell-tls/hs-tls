@@ -85,6 +85,8 @@ handshakeClient cparams ctx = do
         sniExtension = if clientUseServerNameIndication cparams
                          then return $ Just $ toExtensionRaw $ ServerName [ServerNameHostName $ fst $ clientServerIdentification cparams]
                          else return Nothing
+        signatureAlgExtension = return $ Just $ toExtensionRaw $ SignatureAlgorithms $ supportedHashSignatures $ clientSupported cparams
+
         sendClientHello = do
             crand <- getStateRNG ctx 32 >>= return . ClientRandom
             let clientSession = Session . maybe Nothing (Just . fst) $ clientWantSessionResume cparams
