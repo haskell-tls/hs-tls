@@ -36,6 +36,8 @@ ciphers =
     , cipher_RSA_3DES_EDE_CBC_SHA1
     ]
 
+bogusCipher cid = cipher_AES128_SHA1 { cipherID = cid }
+
 runTLS debug ioDebug params hostname portNumber f = do
     rng  <- RNG.makeSystem
     he   <- getHostByName hostname
@@ -67,7 +69,7 @@ sessionRef ref = SessionManager
 
 getDefaultParams flags host store sStorage session =
     (defaultParamsClient host BC.empty)
-        { clientSupported = def { supportedVersions = supportedVers, supportedCiphers = ciphers }
+        { clientSupported = def { supportedVersions = supportedVers, supportedCiphers = myCiphers }
         , clientWantSessionResume = session
         , clientUseServerNameIndication = not (NoSNI `elem` flags)
         , clientShared = def { sharedSessionManager  = sessionRef sStorage
@@ -80,6 +82,13 @@ getDefaultParams flags host store sStorage session =
                 | validateCert = def
                 | otherwise    = ValidationCache (\_ _ _ -> return ValidationCachePass)
                                                  (\_ _ _ -> return ())
+
+            myCiphers = foldl accBogusCipher ciphers flags
+              where accBogusCipher acc (BogusCipher c) =
+                        case reads c of
+                            [(v, "")] -> acc ++ [bogusCipher v]
+                            _         -> acc
+                    accBogusCipher acc _ = acc
 
             tlsConnectVer
                 | Tls12 `elem` flags = TLS12
@@ -101,6 +110,7 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | UserAgent String
           | Output String
           | Timeout String
+          | BogusCipher String
           | Help
           deriving (Show,Eq)
 
@@ -120,6 +130,7 @@ options =
     , Option []     ["tls10"]   (NoArg Tls10) "use TLS 1.0"
     , Option []     ["tls11"]   (NoArg Tls11) "use TLS 1.1"
     , Option []     ["tls12"]   (NoArg Tls12) "use TLS 1.2 (default)"
+    , Option []     ["bogocipher"] (ReqArg BogusCipher "cipher-id") "add a bogus cipher id for testing"
     , Option ['x']  ["no-version-downgrade"] (NoArg NoVersionDowngrade) "do not allow version downgrade"
     , Option []     ["uri"]     (ReqArg Uri "URI") "optional URI requested by default /"
     , Option ['h']  ["help"]    (NoArg Help) "request help"
