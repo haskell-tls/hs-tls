@@ -10,6 +10,7 @@
 module Network.TLS.Extension
     ( Extension(..)
     , supportedExtensions
+    , definedExtensions
     -- all extensions ID supported
     , extensionID_ServerName
     , extensionID_MaxFragmentLength
@@ -39,15 +40,93 @@ import Network.TLS.Struct (ExtensionID)
 import Network.TLS.Wire
 import Network.BSD (HostName)
 
-extensionID_ServerName, extensionID_MaxFragmentLength
-                      , extensionID_ApplicationLayerProtocolNegotiation
-                      , extensionID_SecureRenegotiation
-                      , extensionID_NextProtocolNegotiation :: ExtensionID
-extensionID_ServerName                          = 0x0
-extensionID_MaxFragmentLength                   = 0x1
-extensionID_ApplicationLayerProtocolNegotiation = 0x10
-extensionID_SecureRenegotiation                 = 0xff01
-extensionID_NextProtocolNegotiation             = 0x3374
+
+-- central list defined in <http://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.txt>
+extensionID_ServerName
+  , extensionID_MaxFragmentLength
+  , extensionID_ClientCertificateUrl
+  , extensionID_TrustedCAKeys
+  , extensionID_TruncatedHMAC
+  , extensionID_StatusRequest
+  , extensionID_UserMapping
+  , extensionID_ClientAuthz
+  , extensionID_ServerAuthz
+  , extensionID_CertType
+  , extensionID_EllipticCurves
+  , extensionID_EcPointFormats
+  , extensionID_SRP
+  , extensionID_SignatureAlgorithms
+  , extensionID_SRTP
+  , extensionID_Heartbeat
+  , extensionID_ApplicationLayerProtocolNegotiation
+  , extensionID_StatusRequestv2
+  , extensionID_SignedCertificateTimestamp
+  , extensionID_ClientCertificateType
+  , extensionID_ServerCertificateType
+  , extensionID_Padding
+  , extensionID_EncryptThenMAC
+  , extensionID_ExtendedMasterSecret
+  , extensionID_SessionTicket
+  , extensionID_NextProtocolNegotiation
+  , extensionID_SecureRenegotiation :: ExtensionID
+extensionID_ServerName                          = 0x0 -- RFC6066
+extensionID_MaxFragmentLength                   = 0x1 -- RFC6066
+extensionID_ClientCertificateUrl                = 0x2 -- RFC6066
+extensionID_TrustedCAKeys                       = 0x3 -- RFC6066
+extensionID_TruncatedHMAC                       = 0x4 -- RFC6066
+extensionID_StatusRequest                       = 0x5 -- RFC6066
+extensionID_UserMapping                         = 0x6 -- RFC4681
+extensionID_ClientAuthz                         = 0x7 -- RFC5878
+extensionID_ServerAuthz                         = 0x8 -- RFC5878
+extensionID_CertType                            = 0x9 -- RFC6091
+extensionID_EllipticCurves                      = 0xa -- RFC4492
+extensionID_EcPointFormats                      = 0xb -- RFC4492
+extensionID_SRP                                 = 0xc -- RFC5054
+extensionID_SignatureAlgorithms                 = 0xd -- RFC5246
+extensionID_SRTP                                = 0xe -- RFC5764
+extensionID_Heartbeat                           = 0xf -- RFC6520
+extensionID_ApplicationLayerProtocolNegotiation = 0x10 -- RFC7301
+extensionID_StatusRequestv2                     = 0x11 -- RFC6961
+extensionID_SignedCertificateTimestamp          = 0x12 -- RFC6962
+extensionID_ClientCertificateType               = 0x13 -- RFC7250
+extensionID_ServerCertificateType               = 0x14 -- RFC7250
+extensionID_Padding                             = 0x15 -- draft-agl-tls-padding. expires 2015-03-12
+extensionID_EncryptThenMAC                      = 0x16 -- RFC7366
+extensionID_ExtendedMasterSecret                = 0x17 -- draft-ietf-tls-session-hash. expires 2015-09-26
+extensionID_SessionTicket                       = 0x23 -- RFC4507
+extensionID_NextProtocolNegotiation             = 0x3374 -- obsolete
+extensionID_SecureRenegotiation                 = 0xff01 -- RFC5746
+
+definedExtensions :: [ExtensionID]
+definedExtensions =
+    [ extensionID_ServerName
+    , extensionID_MaxFragmentLength
+    , extensionID_ClientCertificateUrl
+    , extensionID_TrustedCAKeys
+    , extensionID_TruncatedHMAC
+    , extensionID_StatusRequest
+    , extensionID_UserMapping
+    , extensionID_ClientAuthz
+    , extensionID_ServerAuthz
+    , extensionID_CertType
+    , extensionID_EllipticCurves
+    , extensionID_EcPointFormats
+    , extensionID_SRP
+    , extensionID_SignatureAlgorithms
+    , extensionID_SRTP
+    , extensionID_Heartbeat
+    , extensionID_ApplicationLayerProtocolNegotiation
+    , extensionID_StatusRequestv2
+    , extensionID_SignedCertificateTimestamp
+    , extensionID_ClientCertificateType
+    , extensionID_ServerCertificateType
+    , extensionID_Padding
+    , extensionID_EncryptThenMAC
+    , extensionID_ExtendedMasterSecret
+    , extensionID_SessionTicket
+    , extensionID_NextProtocolNegotiation
+    , extensionID_SecureRenegotiation
+    ]
 
 -- | all supported extensions by the implementation
 supportedExtensions :: [ExtensionID]
