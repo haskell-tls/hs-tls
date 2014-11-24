@@ -51,6 +51,10 @@ module Network.TLS.Packet
     , generateServerFinished
 
     , generateCertificateVerify_SSL
+
+    -- * for extensions parsing
+    , getSignatureHashAlgorithm
+    , putSignatureHashAlgorithm
     ) where
 
 import Network.TLS.Struct
