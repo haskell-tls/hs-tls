@@ -17,6 +17,7 @@ module Network.TLS.Extension
     , extensionID_SecureRenegotiation
     , extensionID_NextProtocolNegotiation
     , extensionID_ApplicationLayerProtocolNegotiation
+    , extensionID_SignatureAlgorithms
     -- all implemented extensions
     , ServerNameType(..)
     , ServerName(..)
@@ -25,6 +26,7 @@ module Network.TLS.Extension
     , SecureRenegotiation(..)
     , NextProtocolNegotiation(..)
     , ApplicationLayerProtocolNegotiation(..)
+    , SignatureAlgorithms(..)
     ) where
 
 import Control.Applicative ((<$>),(<*>))
@@ -36,8 +38,9 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 
-import Network.TLS.Struct (ExtensionID)
+import Network.TLS.Struct (ExtensionID, EnumSafe8(..), EnumSafe16(..), HashAndSignatureAlgorithm)
 import Network.TLS.Wire
+import Network.TLS.Packet (putSignatureHashAlgorithm, getSignatureHashAlgorithm)
 import Network.BSD (HostName)
 
 
@@ -135,6 +138,7 @@ supportedExtensions = [ extensionID_ServerName
                       , extensionID_ApplicationLayerProtocolNegotiation
                       , extensionID_SecureRenegotiation
                       , extensionID_NextProtocolNegotiation
+                      , extensionID_SignatureAlgorithms
                       ]
 
 -- | Extension class to transform bytes to and from a high level Extension type.
@@ -233,3 +237,15 @@ instance Extension ApplicationLayerProtocolNegotiation where
                  case avail of
                      0 -> return []
                      _ -> (:) <$> getOpaque8 <*> getALPN'
+
+data SignatureAlgorithms = SignatureAlgorithms [HashAndSignatureAlgorithm]
+    deriving (Show,Eq)
+
+instance Extension SignatureAlgorithms where
+    extensionID _ = extensionID_SignatureAlgorithms
+    extensionEncode (SignatureAlgorithms algs) =
+        runPut $ putWord16 (fromIntegral (length algs * 2)) >> mapM_ putSignatureHashAlgorithm algs
+    extensionDecode _ =
+        runGetMaybe $ do
+            len <- getWord16
+            SignatureAlgorithms <$> getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
