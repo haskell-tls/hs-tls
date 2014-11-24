@@ -48,6 +48,8 @@ module Network.TLS.Struct
     , numericalVer
     , verOfNum
     , TypeValuable, valOfType, valToType
+    , EnumSafe8(..)
+    , EnumSafe16(..)
     , packetType
     , typeOfHandshake
     ) where
@@ -307,6 +309,15 @@ verOfNum _      = Nothing
 class TypeValuable a where
     valOfType :: a -> Word8
     valToType :: Word8 -> Maybe a
+
+-- a better name for TypeValuable
+class EnumSafe8 a where
+    fromEnumSafe8 :: a -> Word8
+    toEnumSafe8   :: Word8 -> Maybe a
+
+class EnumSafe16 a where
+    fromEnumSafe16 :: a -> Word16
+    toEnumSafe16   :: Word16 -> Maybe a
 
 instance TypeValuable ConnectionEnd where
     valOfType ConnectionServer = 0
