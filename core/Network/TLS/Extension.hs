@@ -33,6 +33,7 @@ module Network.TLS.Extension
     , NamedCurve(..)
     , EcPointFormatsSupported(..)
     , EcPointFormat(..)
+    , SessionTicket(..)
     , HeartBeat(..)
     , HeartBeatMode(..)
     , SignatureAlgorithms(..)
@@ -348,6 +349,14 @@ instance Extension EcPointFormatsSupported where
     extensionID _ = extensionID_EcPointFormats
     extensionEncode (EcPointFormatsSupported formats) = runPut $ putWords8 $ map fromEnumSafe8 formats
     extensionDecode _ = runGetMaybe (EcPointFormatsSupported . catMaybes . map toEnumSafe8 <$> getWords8)
+
+data SessionTicket = SessionTicket
+    deriving (Show,Eq)
+
+instance Extension SessionTicket where
+    extensionID _ = extensionID_SessionTicket
+    extensionEncode (SessionTicket {}) = runPut $ return ()
+    extensionDecode _ = runGetMaybe (return SessionTicket)
 
 data HeartBeat = HeartBeat HeartBeatMode
     deriving (Show,Eq)
