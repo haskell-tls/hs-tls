@@ -63,7 +63,12 @@ handshakeClient cparams ctx = do
     handshakeTerminate ctx
   where ciphers      = ctxCiphers ctx
         compressions = supportedCompressions $ ctxSupported ctx
-        getExtensions = sequence [sniExtension,secureReneg,npnExtention,alpnExtension] >>= return . catMaybes
+        getExtensions = sequence [sniExtension
+                                 ,secureReneg
+                                 ,npnExtention
+                                 ,alpnExtension
+                                 ,signatureAlgExtension
+                                 ]
 
         toExtensionRaw :: Extension e => e -> ExtensionRaw
         toExtensionRaw ext = (extensionID ext, extensionEncode ext)
@@ -91,7 +96,7 @@ handshakeClient cparams ctx = do
             crand <- getStateRNG ctx 32 >>= return . ClientRandom
             let clientSession = Session . maybe Nothing (Just . fst) $ clientWantSessionResume cparams
                 highestVer = maximum $ supportedVersions $ ctxSupported ctx
-            extensions <- getExtensions
+            extensions <- catMaybes <$> getExtensions
             startHandshake ctx highestVer crand
             usingState_ ctx $ setVersionIfUnset highestVer
             sendPacket ctx $ Handshake
