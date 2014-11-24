@@ -67,6 +67,12 @@ handshakeClient cparams ctx = do
                                  ,secureReneg
                                  ,npnExtention
                                  ,alpnExtension
+                                 {-
+                                 ,curveExtension,
+                                 ,ecPointExtension
+                                 ,sessionTicketExtension
+                                 ,heartbeatExtension
+                                 -}
                                  ,signatureAlgExtension
                                  ]
 
@@ -90,6 +96,16 @@ handshakeClient cparams ctx = do
         sniExtension = if clientUseServerNameIndication cparams
                          then return $ Just $ toExtensionRaw $ ServerName [ServerNameHostName $ fst $ clientServerIdentification cparams]
                          else return Nothing
+
+        {-
+        curveExtension = return $ Just $ toExtensionRaw $ EllipticCurvesSupported [NamedCurve_secp256k1,NamedCurve_secp256r1]
+        ecPointExtension = return $ Just $ toExtensionRaw $ EcPointFormatsSupported [EcPointFormat_Uncompressed,EcPointFormat_AnsiX962_compressed_prime,EcPointFormat_AnsiX962_compressed_char2]
+
+        sessionTicketExtension = return $ Just $ toExtensionRaw $ SessionTicket
+
+        heartbeatExtension = return $ Just $ toExtensionRaw $ HeartBeat $ HeartBeat_PeerAllowedToSend
+        -}
+
         signatureAlgExtension = return $ Just $ toExtensionRaw $ SignatureAlgorithms $ supportedHashSignatures $ clientSupported cparams
 
         sendClientHello = do
