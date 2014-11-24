@@ -17,6 +17,8 @@ module Network.TLS.Extension
     , extensionID_SecureRenegotiation
     , extensionID_NextProtocolNegotiation
     , extensionID_ApplicationLayerProtocolNegotiation
+    , extensionID_EllipticCurves
+    , extensionID_EcPointFormats
     , extensionID_Heartbeat
     , extensionID_SignatureAlgorithms
     -- all implemented extensions
@@ -27,6 +29,10 @@ module Network.TLS.Extension
     , SecureRenegotiation(..)
     , NextProtocolNegotiation(..)
     , ApplicationLayerProtocolNegotiation(..)
+    , EllipticCurvesSupported(..)
+    , NamedCurve(..)
+    , EcPointFormatsSupported(..)
+    , EcPointFormat(..)
     , HeartBeat(..)
     , HeartBeatMode(..)
     , SignatureAlgorithms(..)
@@ -36,7 +42,8 @@ import Control.Applicative ((<$>),(<*>))
 import Control.Monad
 
 import Data.Word
-import Data.Maybe (fromMaybe)
+import Data.List (find)
+import Data.Maybe (fromMaybe, catMaybes)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
@@ -141,6 +148,8 @@ supportedExtensions = [ extensionID_ServerName
                       , extensionID_ApplicationLayerProtocolNegotiation
                       , extensionID_SecureRenegotiation
                       , extensionID_NextProtocolNegotiation
+                      , extensionID_EllipticCurves
+                      , extensionID_EcPointFormats
                       , extensionID_SignatureAlgorithms
                       ]
 
@@ -240,6 +249,105 @@ instance Extension ApplicationLayerProtocolNegotiation where
                  case avail of
                      0 -> return []
                      _ -> (:) <$> getOpaque8 <*> getALPN'
+
+data EllipticCurvesSupported = EllipticCurvesSupported [NamedCurve]
+    deriving (Show,Eq)
+
+data NamedCurve =
+      NamedCurve_sect163k1
+    | NamedCurve_sect163r1
+    | NamedCurve_sect163r2
+    | NamedCurve_sect193r1
+    | NamedCurve_sect193r2
+    | NamedCurve_sect233k1
+    | NamedCurve_sect233r1
+    | NamedCurve_sect239k1
+    | NamedCurve_sect283k1
+    | NamedCurve_sect283r1
+    | NamedCurve_sect409k1
+    | NamedCurve_sect409r1
+    | NamedCurve_sect571k1
+    | NamedCurve_sect571r1
+    | NamedCurve_secp160k1
+    | NamedCurve_secp160r1
+    | NamedCurve_secp160r2
+    | NamedCurve_secp192k1
+    | NamedCurve_secp192r1
+    | NamedCurve_secp224k1
+    | NamedCurve_secp224r1
+    | NamedCurve_secp256k1
+    | NamedCurve_secp256r1
+    | NamedCurve_secp384r1
+    | NamedCurve_secp521r1
+    | NamedCurve_arbitrary_explicit_prime_curves
+    | NamedCurve_arbitrary_explicit_char2_curves
+    deriving (Show,Eq)
+
+namedCurveValues :: [(NamedCurve, Word16)]
+namedCurveValues =
+    [ (NamedCurve_sect163k1, 1)
+    , (NamedCurve_sect163r1, 2)
+    , (NamedCurve_sect163r2, 3)
+    , (NamedCurve_sect193r1, 4)
+    , (NamedCurve_sect193r2, 5)
+    , (NamedCurve_sect233k1, 6)
+    , (NamedCurve_sect233r1, 7)
+    , (NamedCurve_sect239k1, 8)
+    , (NamedCurve_sect283k1, 9)
+    , (NamedCurve_sect283r1, 10)
+    , (NamedCurve_sect409k1, 11)
+    , (NamedCurve_sect409r1, 12)
+    , (NamedCurve_sect571k1, 13)
+    , (NamedCurve_sect571r1, 14)
+    , (NamedCurve_secp160k1, 15)
+    , (NamedCurve_secp160r1, 16)
+    , (NamedCurve_secp160r2, 17)
+    , (NamedCurve_secp192k1, 18)
+    , (NamedCurve_secp192r1, 19)
+    , (NamedCurve_secp224k1, 20)
+    , (NamedCurve_secp224r1, 21)
+    , (NamedCurve_secp256k1, 22)
+    , (NamedCurve_secp256r1, 23)
+    , (NamedCurve_secp384r1, 24)
+    , (NamedCurve_secp521r1, 25)
+    , (NamedCurve_arbitrary_explicit_prime_curves, 0xFF01)
+    , (NamedCurve_arbitrary_explicit_char2_curves, 0xFF02)
+    ]
+
+instance EnumSafe16 NamedCurve where
+    fromEnumSafe16 nc = maybe (error "named curve: internal error") id $ lookup nc namedCurveValues
+    toEnumSafe16 n    = fmap fst $ find ((== n) . snd) namedCurveValues
+
+-- on decode, filter all unknown curves
+instance Extension EllipticCurvesSupported where
+    extensionID _ = extensionID_EllipticCurves
+    extensionEncode (EllipticCurvesSupported curves) = runPut $ putWords16 $ map fromEnumSafe16 curves
+    extensionDecode _ = runGetMaybe (EllipticCurvesSupported . catMaybes . map toEnumSafe16 <$> getWords16)
+
+data EcPointFormatsSupported = EcPointFormatsSupported [EcPointFormat]
+    deriving (Show,Eq)
+
+data EcPointFormat =
+      EcPointFormat_Uncompressed
+    | EcPointFormat_AnsiX962_compressed_prime
+    | EcPointFormat_AnsiX962_compressed_char2
+    deriving (Show,Eq)
+
+instance EnumSafe8 EcPointFormat where
+    fromEnumSafe8 EcPointFormat_Uncompressed = 0
+    fromEnumSafe8 EcPointFormat_AnsiX962_compressed_prime = 1
+    fromEnumSafe8 EcPointFormat_AnsiX962_compressed_char2 = 2
+
+    toEnumSafe8 0 = Just EcPointFormat_Uncompressed
+    toEnumSafe8 1 = Just EcPointFormat_AnsiX962_compressed_prime
+    toEnumSafe8 2 = Just EcPointFormat_AnsiX962_compressed_char2
+    toEnumSafe8 _ = Nothing
+
+-- on decode, filter all unknown formats
+instance Extension EcPointFormatsSupported where
+    extensionID _ = extensionID_EcPointFormats
+    extensionEncode (EcPointFormatsSupported formats) = runPut $ putWords8 $ map fromEnumSafe8 formats
+    extensionDecode _ = runGetMaybe (EcPointFormatsSupported . catMaybes . map toEnumSafe8 <$> getWords8)
 
 data HeartBeat = HeartBeat HeartBeatMode
     deriving (Show,Eq)
