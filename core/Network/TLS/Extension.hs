@@ -17,6 +17,7 @@ module Network.TLS.Extension
     , extensionID_SecureRenegotiation
     , extensionID_NextProtocolNegotiation
     , extensionID_ApplicationLayerProtocolNegotiation
+    , extensionID_Heartbeat
     , extensionID_SignatureAlgorithms
     -- all implemented extensions
     , ServerNameType(..)
@@ -26,6 +27,8 @@ module Network.TLS.Extension
     , SecureRenegotiation(..)
     , NextProtocolNegotiation(..)
     , ApplicationLayerProtocolNegotiation(..)
+    , HeartBeat(..)
+    , HeartBeatMode(..)
     , SignatureAlgorithms(..)
     ) where
 
@@ -237,6 +240,30 @@ instance Extension ApplicationLayerProtocolNegotiation where
                  case avail of
                      0 -> return []
                      _ -> (:) <$> getOpaque8 <*> getALPN'
+
+data HeartBeat = HeartBeat HeartBeatMode
+    deriving (Show,Eq)
+
+data HeartBeatMode =
+      HeartBeat_PeerAllowedToSend
+    | HeartBeat_PeerNotAllowedToSend
+    deriving (Show,Eq)
+
+instance EnumSafe8 HeartBeatMode where
+    fromEnumSafe8 HeartBeat_PeerAllowedToSend    = 1
+    fromEnumSafe8 HeartBeat_PeerNotAllowedToSend = 2
+
+    toEnumSafe8 1 = Just HeartBeat_PeerAllowedToSend
+    toEnumSafe8 2 = Just HeartBeat_PeerNotAllowedToSend
+    toEnumSafe8 _ = Nothing
+
+instance Extension HeartBeat where
+    extensionID _ = extensionID_Heartbeat
+    extensionEncode (HeartBeat mode) = runPut $ putWord8 $ fromEnumSafe8 mode
+    extensionDecode _ bs =
+        case runGetMaybe (toEnumSafe8 <$> getWord8) bs of
+            Just (Just mode) -> Just $ HeartBeat mode
+            _                -> Nothing
 
 data SignatureAlgorithms = SignatureAlgorithms [HashAndSignatureAlgorithm]
     deriving (Show,Eq)
