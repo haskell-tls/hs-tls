@@ -20,6 +20,7 @@ module Network.TLS.Handshake.State
     , getLocalPrivateKey
     , getRemotePublicKey
     , setServerDHParams
+    , setServerECDHParams
     -- * cert accessors
     , setClientCertSent
     , getClientCertSent
@@ -67,6 +68,8 @@ data HandshakeState = HandshakeState
     , hstKeyState            :: !HandshakeKeyState
     , hstServerDHParams      :: !(Maybe ServerDHParams)
     , hstDHPrivate           :: !(Maybe DHPrivate)
+    , hstServerECDHParams    :: !(Maybe ServerECDHParams)
+    , hstECDHPrivate         :: !(Maybe ECDHPrivate)
     , hstHandshakeDigest     :: !(Either [Bytes] HashCtx)
     , hstHandshakeMessages   :: [Bytes]
     , hstClientCertRequest   :: !(Maybe ClientCertRequestData) -- ^ Set to Just-value when certificate request was received
@@ -103,6 +106,8 @@ newEmptyHandshake ver crand = HandshakeState
     , hstKeyState            = HandshakeKeyState Nothing Nothing
     , hstServerDHParams      = Nothing
     , hstDHPrivate           = Nothing
+    , hstServerECDHParams    = Nothing
+    , hstECDHPrivate         = Nothing
     , hstHandshakeDigest     = Left []
     , hstHandshakeMessages   = []
     , hstClientCertRequest   = Nothing
@@ -134,6 +139,9 @@ getLocalPrivateKey = fromJust "local private key" <$> gets (hksLocalPrivateKey .
 
 setServerDHParams :: ServerDHParams -> HandshakeM ()
 setServerDHParams shp = modify (\hst -> hst { hstServerDHParams = Just shp })
+
+setServerECDHParams :: ServerECDHParams -> HandshakeM ()
+setServerECDHParams shp = modify (\hst -> hst { hstServerECDHParams = Just shp })
 
 setCertReqSent :: Bool -> HandshakeM ()
 setCertReqSent b = modify (\hst -> hst { hstCertReqSent = b })
