@@ -28,6 +28,7 @@ module Network.TLS.Struct
     , TLSException(..)
     , DistinguishedName
     , ServerDHParams(..)
+    , ServerECDHParams(..)
     , ServerRSAParams(..)
     , ServerKeyXchgAlgorithmData(..)
     , ClientKeyXchgAlgorithmData(..)
@@ -62,6 +63,7 @@ import Data.Typeable
 import Control.Exception (Exception(..))
 import Network.TLS.Types
 import Network.TLS.Crypto.DH
+import Network.TLS.Crypto.ECDH
 #if MIN_VERSION_mtl(2,2,1)
 #else
 import Control.Monad.Error
@@ -235,6 +237,9 @@ data HandshakeType =
 data ServerDHParams = ServerDHParams DHParams {- (p,g) -} DHPublic {- y -}
     deriving (Show,Eq)
 
+data ServerECDHParams = ServerECDHParams ECDHParams ECDHPublic
+    deriving (Show,Eq)
+
 data ServerRSAParams = ServerRSAParams
     { rsa_modulus  :: Integer
     , rsa_exponent :: Integer
@@ -244,6 +249,7 @@ data ServerKeyXchgAlgorithmData =
       SKX_DH_Anon ServerDHParams
     | SKX_DHE_DSS ServerDHParams DigitallySigned
     | SKX_DHE_RSA ServerDHParams DigitallySigned
+    | SKX_ECDHE_RSA ServerECDHParams DigitallySigned
     | SKX_RSA (Maybe ServerRSAParams)
     | SKX_DH_DSS (Maybe ServerRSAParams)
     | SKX_DH_RSA (Maybe ServerRSAParams)
@@ -254,6 +260,7 @@ data ServerKeyXchgAlgorithmData =
 data ClientKeyXchgAlgorithmData =
       CKX_RSA Bytes
     | CKX_DH DHPublic
+    | CKX_ECDH ECDHPublic
     deriving (Show,Eq)
 
 type DeprecatedRecord = ByteString
