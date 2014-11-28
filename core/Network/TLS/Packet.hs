@@ -41,6 +41,7 @@ module Network.TLS.Packet
     , decodePreMasterSecret
     , encodePreMasterSecret
     , encodeSignedDHParams
+    , encodeSignedECDHParams
 
     , decodeReallyServerKeyXchgAlgorithmData
 
@@ -71,6 +72,7 @@ import Data.X509 (CertificateChainRaw(..), encodeCertificateChain, decodeCertifi
 import Network.TLS.Crypto
 import Network.TLS.MAC
 import Network.TLS.Cipher (CipherKeyExchangeType(..))
+import Network.TLS.Util.Serialization (os2ip,i2ospOf_)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
@@ -291,11 +293,24 @@ decodeClientKeyXchg cp = -- case  ClientKeyXchg <$> (remaining >>= getBytes)
         parseCKE CipherKeyExchange_DHE_RSA = parseClientDHPublic
         parseCKE CipherKeyExchange_DHE_DSS = parseClientDHPublic
         parseCKE CipherKeyExchange_DH_Anon = parseClientDHPublic
+        parseCKE CipherKeyExchange_ECDHE_RSA = parseClientECDHPublic
         parseCKE _                         = error "unsupported client key exchange type"
         parseClientDHPublic = CKX_DH . dhPublic <$> getInteger16
+        parseClientECDHPublic = do
+            len <- getWord8
+            _ <- getWord8 -- Magic number 4
+            let siz = fromIntegral len `div` 2
+            xb <- getBytes siz
+            yb <- getBytes siz
+            let x = os2ip xb
+                y = os2ip yb
+            return $ CKX_ECDH $ ecdhPublic x y siz
 
 decodeServerKeyXchg_DH :: Get ServerDHParams
 decodeServerKeyXchg_DH = getServerDHParams
+
+-- We don't support ECDH_Anon at this moment
+-- decodeServerKeyXchg_ECDH :: Get ServerECDHParams
 
 decodeServerKeyXchg_RSA :: Get ServerRSAParams
 decodeServerKeyXchg_RSA = ServerRSAParams <$> getInteger16 -- modulus
@@ -316,6 +331,10 @@ decodeServerKeyXchgAlgorithmData ver cke = toCKE
                 dhparams  <- getServerDHParams
                 signature <- getDigitallySigned ver
                 return $ SKX_DHE_DSS dhparams signature
+            CipherKeyExchange_ECDHE_RSA -> do
+                dhparams  <- getServerECDHParams
+                signature <- getDigitallySigned ver
+                return $ SKX_ECDHE_RSA dhparams signature
             _ -> do
                 bs <- remaining >>= getBytes
                 return $ SKX_Unknown bs
@@ -366,6 +385,11 @@ encodeHandshakeContent (ClientKeyXchg ckx) = do
     case ckx of
         CKX_RSA encryptedPreMaster -> putBytes encryptedPreMaster
         CKX_DH clientDHPublic      -> putInteger16 $ dhUnwrapPublic clientDHPublic
+        CKX_ECDH clientECDHPublic  -> do
+            let (x,y,siz) = ecdhUnwrapPublic clientECDHPublic
+            let xb = i2ospOf_ siz x
+                yb = i2ospOf_ siz y
+            putOpaque8 $ B.concat [B.singleton 4,xb,yb]
 
 encodeHandshakeContent (ServerKeyXchg skg) =
     case skg of
@@ -373,6 +397,7 @@ encodeHandshakeContent (ServerKeyXchg skg) =
         SKX_DH_Anon params     -> putServerDHParams params
         SKX_DHE_RSA params sig -> putServerDHParams params >> putDigitallySigned sig
         SKX_DHE_DSS params sig -> putServerDHParams params >> putDigitallySigned sig
+        SKX_ECDHE_RSA params sig -> putServerECDHParams params >> putDigitallySigned sig
         SKX_Unparsed bytes     -> putBytes bytes
         _                      -> error ("encodeHandshakeContent: cannot handle: " ++ show skg)
 
@@ -469,6 +494,27 @@ getServerDHParams = ServerDHParams <$> getDHParams <*> getDHPublic
 putServerDHParams :: ServerDHParams -> Put
 putServerDHParams (ServerDHParams dhparams dhpub) =
     mapM_ putInteger16 $ dhUnwrap dhparams dhpub
+
+getServerECDHParams :: Get ServerECDHParams
+getServerECDHParams = do
+    _ <- getWord8 -- ECParameters ECCurveType: curve name type, should be 3
+    w16 <- getWord16   -- ECParameters NamedCurve
+    mxy <- getOpaque16 -- ECPoint
+    let xy = B.drop 1 mxy
+        siz = B.length xy `div` 2
+        (xb,yb) = B.splitAt siz xy
+        x = os2ip xb
+        y = os2ip yb
+    return $ ServerECDHParams (ecdhParams w16) (ecdhPublic x y siz)
+
+putServerECDHParams :: ServerECDHParams -> Put
+putServerECDHParams (ServerECDHParams ecdhparams ecdhpub) = do
+    let (w16,x,y,siz) = ecdhUnwrap ecdhparams ecdhpub
+    putWord8 3    -- ECParameters ECCurveType: curve name type
+    putWord16 w16 -- ECParameters NamedCurve
+    let xb = i2ospOf_ siz x
+        yb = i2ospOf_ siz y
+    putOpaque8 $ B.concat [B.singleton 4,xb,yb] -- ECPoint
 
 getDigitallySigned :: Version -> Get DigitallySigned
 getDigitallySigned ver
@@ -586,3 +632,10 @@ generateCertificateVerify_SSL = generateFinished_SSL ""
 encodeSignedDHParams :: ClientRandom -> ServerRandom -> ServerDHParams -> Bytes
 encodeSignedDHParams cran sran dhparams = runPut $
     putClientRandom32 cran >> putServerRandom32 sran >> putServerDHParams dhparams
+
+-- Combination of RFC 5246 and 4492 is ambiguous.
+-- Let's assume ecdhe_rsa and ecdhe_dss are identical to
+-- dhe_rsa and dhe_dss.
+encodeSignedECDHParams :: ClientRandom -> ServerRandom -> ServerECDHParams -> Bytes
+encodeSignedECDHParams cran sran dhparams = runPut $
+    putClientRandom32 cran >> putServerRandom32 sran >> putServerECDHParams dhparams

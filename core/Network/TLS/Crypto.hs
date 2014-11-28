@@ -8,6 +8,7 @@ module Network.TLS.Crypto
     , hashFinal
 
     , module Network.TLS.Crypto.DH
+    , module Network.TLS.Crypto.ECDH
 
     -- * constructor
     , hashMD5SHA1
@@ -41,6 +42,7 @@ import qualified Crypto.PubKey.RSA.PKCS15 as RSA
 import Crypto.Random
 import Data.X509 (PrivKey(..), PubKey(..))
 import Network.TLS.Crypto.DH
+import Network.TLS.Crypto.ECDH
 
 import Data.ASN1.Types
 import Data.ASN1.Encoding
