@@ -19,20 +19,25 @@ arbitraryIV bulk = B.pack `fmap` vector (fromIntegral $ bulkIVSize bulk)
 arbitraryText :: Bulk -> Gen B.ByteString
 arbitraryText bulk = B.pack `fmap` vector (fromIntegral $ bulkBlockSize bulk)
 
-data BulkTest = BulkTest Bulk B.ByteString B.ByteString B.ByteString
+data BulkTest = BulkTest Bulk B.ByteString B.ByteString B.ByteString B.ByteString
     deriving (Show,Eq)
 
 instance Arbitrary BulkTest where
     arbitrary = do
         bulk <- cipherBulk `fmap` elements ciphersuite_all
-        BulkTest bulk <$> arbitraryKey bulk <*> arbitraryIV bulk <*> arbitraryText bulk
+        BulkTest bulk <$> arbitraryKey bulk <*> arbitraryIV bulk <*> arbitraryText bulk <*> arbitraryText bulk
 
 propertyBulkFunctional :: BulkTest -> Bool
-propertyBulkFunctional (BulkTest bulk key iv t) =
+propertyBulkFunctional (BulkTest bulk key iv t additional) =
     case bulkF bulk of
         BulkBlockF enc dec       -> block enc dec
         BulkStreamF ktoi enc dec -> stream ktoi enc dec
+        BulkAeadF enc dec        -> aead enc dec
   where
         block e d = (d key iv . e key iv) t == t
         stream ktoi e d = (fst . d siv . fst . e siv) t == t
             where siv = ktoi key
+        aead e d =
+            let (encrypted, at)  = e key iv t additional
+                (decrypted, at2) = d key iv encrypted additional
+             in decrypted == t && at == at2
