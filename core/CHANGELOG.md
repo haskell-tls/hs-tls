@@ -1,3 +1,55 @@
+## Version HEAD
+
+- adding ALPN extension
+- adding support for AEAD, and particularly AES128-GCM
+- Adding support for ECDH
+- Do not support SSL3 by default for security reason.
+- add EnumSafe8 and 16 for specific sized Enum instance that are safer
+- export signatureAndHash parser/encoder
+- add a "known" list of extensions
+- add SignatureAlgorithms extension
+- add Heartbeat extension
+- add support for EC curves and point format extensions
+- add preliminary SessionTicket extension
+- Debug: Add the ability to choose arbitrary cipher in the client hello.
+
+## Version 1.2.13
+
+- Fix compilation with old mtl version
+
+## Version 1.2.12
+
+- Propagate asynchronous exception
+
+## Version 1.2.11
+
+- use hourglass instead of time
+- use tasty instead of test-framework
+- add travis file
+- remove old de-optimisation flag as the bytestring bug is old now and it conflict with cabal check
+
+## Version 1.2.10
+
+- Update x509 dependencies
+
+## Version 1.2.9
+
+- Export TLSParams and HasBackend type names
+- Added FlexibleContexts flag required by ghc-7.9
+- debug: add support for specifying the timeout length in milliseconds.
+- debug: add support for 3DES in simple client
+
+## Version 1.2.8
+
+- add support for 3DES-EDE-CBC-SHA1 (cipher 0xa)
+
+## Version 1.2.7
+
+- repair retrieve certificate validation, and improve fingerprints
+- remove groom from dependency
+- make RecordM an instance of Applicative
+- Fixes the Error_EOF partial pattern match error in exception handling
+
 ## Version 1.2.6 (23 Mar 2014)
 
 - Fixed socket backend endless loop when the server does not close connection
