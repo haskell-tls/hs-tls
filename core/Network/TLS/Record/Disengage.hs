@@ -16,6 +16,7 @@ module Network.TLS.Record.Disengage
 
 import Control.Monad.State
 
+import Crypto.Cipher.Types (AuthTag(..))
 import Network.TLS.Struct
 import Network.TLS.ErrT
 import Network.TLS.Cap
@@ -24,6 +25,8 @@ import Network.TLS.Record.Types
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Util
+import Network.TLS.Wire
+import Network.TLS.Packet
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
@@ -111,6 +114,22 @@ decryptData ver record econtent tst = decryptOf (bulkF bulk)
                     , cipherDataMAC     = Just mac
                     , cipherDataPadding = Nothing
                     }
+
+        decryptOf (BulkAeadF _ decryptF) = do
+            let authtaglen = 16 -- FIXME: fixed_iv_length + record_iv_length
+                nonceexplen = 8 -- FIXME: record_iv_length
+                econtentlen = B.length econtent - authtaglen - nonceexplen
+            (enonce, econtent', authTag) <- get3 econtent (nonceexplen, econtentlen, authtaglen)
+            let encodedSeq = encodeWord64 $ msSequence $ stMacState tst
+                Header typ v _ = recordToHeader record
+                hdr = Header typ v $ fromIntegral econtentlen
+                ad = B.concat [ encodedSeq, encodeHeader hdr ]
+                nonce = cstIV (stCryptState tst) `B.append` enonce
+                (content, AuthTag authTag2) = decryptF writekey nonce econtent' ad
+            when (authTag /= authTag2) $
+              throwError $ Error_Protocol ("bad record mac", True, BadRecordMac)
+            modify incrRecordState
+            return content
 
         get3 s ls = maybe (throwError $ Error_Packet "record bad format") return $ partition3 s ls
         get2 s (d1,d2) = get3 s (d1,d2,0) >>= \(r1,r2,_) -> return (r1,r2)

@@ -16,11 +16,16 @@ module Network.TLS.Cipher
     , CipherID
     , Key
     , IV
+    , Nonce
+    , AdditionalData
     , cipherKeyBlockSize
     , cipherAllowedForVersion
     , cipherExchangeNeedMoreData
+    , hasMAC
+    , hasRecordIV
     ) where
 
+import Crypto.Cipher.Types (AuthTag)
 import Network.TLS.Types (CipherID)
 import Network.TLS.Struct (Version(..))
 
@@ -29,6 +34,8 @@ import qualified Data.ByteString as B
 -- FIXME convert to newtype
 type Key = B.ByteString
 type IV = B.ByteString
+type Nonce = B.ByteString
+type AdditionalData = B.ByteString
 
 data BulkFunctions =
       BulkBlockF (Key -> IV -> B.ByteString -> B.ByteString)
@@ -36,6 +43,16 @@ data BulkFunctions =
     | BulkStreamF (Key -> IV)
                   (IV -> B.ByteString -> (B.ByteString, IV))
                   (IV -> B.ByteString -> (B.ByteString, IV))
+    | BulkAeadF (Key -> Nonce -> B.ByteString -> AdditionalData -> (B.ByteString, AuthTag))
+                (Key -> Nonce -> B.ByteString -> AdditionalData -> (B.ByteString, AuthTag))
+
+hasMAC,hasRecordIV :: BulkFunctions -> Bool
+
+hasMAC (BulkBlockF _ _)    = True
+hasMAC (BulkStreamF _ _ _) = True
+hasMAC (BulkAeadF _ _    ) = False
+
+hasRecordIV = hasMAC
 
 data CipherKeyExchangeType =
       CipherKeyExchange_RSA

@@ -33,6 +33,8 @@ module Network.TLS.Extra.Cipher
     , cipher_DHE_DSS_AES128_SHA1
     , cipher_DHE_DSS_AES256_SHA1
     , cipher_DHE_DSS_RC4_SHA1
+    , cipher_DHE_RSA_AES128GCM_SHA256
+    , cipher_ECDHE_RSA_AES128GCM_SHA256
     ) where
 
 import qualified Data.ByteString as B
@@ -64,6 +66,10 @@ aes128_cbc_encrypt = aes_cbc_encrypt
 aes128_cbc_decrypt = aes_cbc_decrypt
 aes256_cbc_encrypt = aes_cbc_encrypt
 aes256_cbc_decrypt = aes_cbc_decrypt
+
+aes128_gcm_encrypt, aes128_gcm_decrypt :: Key -> Nonce -> B.ByteString -> AdditionalData -> (B.ByteString, T.AuthTag)
+aes128_gcm_encrypt key nonce d ad = AES.encryptGCM (AES.initAES key) nonce ad d
+aes128_gcm_decrypt key nonce d ad = AES.decryptGCM (AES.initAES key) nonce ad d
 
 tripledes_ede_cbc_encrypt :: Key -> IV -> B.ByteString -> B.ByteString
 tripledes_ede_cbc_encrypt key iv bs =
@@ -106,6 +112,7 @@ ciphersuite_all =
     , cipher_AES128_SHA1,   cipher_AES256_SHA1
     , cipher_DHE_DSS_RC4_SHA1, cipher_RC4_128_SHA1,  cipher_RC4_128_MD5
     , cipher_RSA_3DES_EDE_CBC_SHA1
+    , cipher_DHE_RSA_AES128GCM_SHA256
     ]
 
 -- | list of medium ciphers.
@@ -119,7 +126,8 @@ ciphersuite_strong = [cipher_DHE_RSA_AES256_SHA256, cipher_AES256_SHA256, cipher
 -- | DHE-RSA cipher suite
 ciphersuite_dhe_rsa :: [Cipher]
 ciphersuite_dhe_rsa = [cipher_DHE_RSA_AES256_SHA256, cipher_DHE_RSA_AES128_SHA256
-                      , cipher_DHE_RSA_AES256_SHA1, cipher_DHE_RSA_AES128_SHA1]
+                      , cipher_DHE_RSA_AES256_SHA1, cipher_DHE_RSA_AES128_SHA1
+                      , cipher_DHE_RSA_AES128GCM_SHA256]
 
 ciphersuite_dhe_dss :: [Cipher]
 ciphersuite_dhe_dss = [cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1, cipher_DHE_DSS_RC4_SHA1]
@@ -128,7 +136,7 @@ ciphersuite_dhe_dss = [cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1, c
 ciphersuite_unencrypted :: [Cipher]
 ciphersuite_unencrypted = [cipher_null_MD5, cipher_null_SHA1]
 
-bulk_null, bulk_rc4, bulk_aes128, bulk_aes256, bulk_tripledes_ede :: Bulk
+bulk_null, bulk_rc4, bulk_aes128, bulk_aes256, bulk_tripledes_ede, bulk_aes128gcm :: Bulk
 bulk_null = Bulk
     { bulkName         = "null"
     , bulkKeySize      = 0
@@ -152,6 +160,14 @@ bulk_aes128 = Bulk
     , bulkIVSize       = 16
     , bulkBlockSize    = 16
     , bulkF            = BulkBlockF aes128_cbc_encrypt aes128_cbc_decrypt
+    }
+
+bulk_aes128gcm = Bulk
+    { bulkName         = "AES128GCM"
+    , bulkKeySize      = 16 -- RFC 5116 Sec 5.1: K_LEN
+    , bulkIVSize       = 4  -- RFC 5288 GCMNonce.salt, fixed_iv_length
+    , bulkBlockSize    = 0  -- dummy, not used
+    , bulkF            = BulkAeadF aes128_gcm_encrypt aes128_gcm_decrypt
     }
 
 bulk_aes256 = Bulk
@@ -348,6 +364,25 @@ cipher_RSA_3DES_EDE_CBC_SHA1 = Cipher
     , cipherMinVer       = Nothing
     }
 
+cipher_DHE_RSA_AES128GCM_SHA256 :: Cipher
+cipher_DHE_RSA_AES128GCM_SHA256 = Cipher
+    { cipherID           = 0x9e
+    , cipherName         = "DHE-RSA-AES128GCM-SHA256"
+    , cipherBulk         = bulk_aes128gcm
+    , cipherHash         = hash_sha256
+    , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
+    , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
+    }
+
+cipher_ECDHE_RSA_AES128GCM_SHA256 :: Cipher
+cipher_ECDHE_RSA_AES128GCM_SHA256 = Cipher
+    { cipherID           = 0xc02f
+    , cipherName         = "ECDHE-RSA-AES128GCM-SHA256"
+    , cipherBulk         = bulk_aes128gcm
+    , cipherHash         = hash_sha256
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
+    , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
+    }
 
 {-
 TLS 1.0 ciphers definition

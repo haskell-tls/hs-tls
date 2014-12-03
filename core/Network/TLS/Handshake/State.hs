@@ -213,7 +213,8 @@ computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
         keyblockSize = cipherKeyBlockSize cipher
 
         bulk         = cipherBulk cipher
-        digestSize   = hashSize $ cipherHash cipher
+        digestSize   = if hasMAC (bulkF bulk) then hashSize (cipherHash cipher)
+                                              else 0
         keySize      = bulkKeySize bulk
         ivSize       = bulkIVSize bulk
         kb           = generateKeyBlock ver (hstClientRandom hst)

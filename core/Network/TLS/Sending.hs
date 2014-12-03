@@ -72,7 +72,9 @@ prepareRecord ctx f = do
     txState <- readMVar $ ctxTxState ctx
     let sz = case stCipher $ txState of
                   Nothing     -> 0
-                  Just cipher -> bulkIVSize $ cipherBulk cipher
+                  Just cipher -> if hasRecordIV $ bulkF $ cipherBulk cipher
+                                    then bulkIVSize $ cipherBulk cipher
+                                    else 0 -- to not generate IV
     if hasExplicitBlockIV ver && sz > 0
         then do newIV <- getStateRNG ctx sz
                 runTxState ctx (modify (setRecordIV newIV) >> f)
