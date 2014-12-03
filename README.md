@@ -23,7 +23,7 @@ Features
 * supported versions: SSL3, TLS1.0, TLS1.1, TLS1.2
 * key exchange supported: RSA, DHE-RSA, DHE-DSS
 * bulk algorithm supported: any stream or block ciphers
-* supported extensions: secure renegociation, next protocol negotiation (draft 2), server name indication
+* supported extensions: secure renegotiation, next protocol negotiation (draft 2), server name indication
 
 Common Issues
 =============
