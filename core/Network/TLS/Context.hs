@@ -114,11 +114,11 @@ instance TLSParams ServerParams where
                         CipherKeyExchange_DH_Anon     -> canDHE
                         CipherKeyExchange_DHE_RSA     -> canSignRSA && canDHE
                         CipherKeyExchange_DHE_DSS     -> canSignDSS && canDHE
+                        CipherKeyExchange_ECDHE_RSA   -> canSignRSA
                         -- unimplemented: non ephemeral DH
                         CipherKeyExchange_DH_DSS      -> False
                         CipherKeyExchange_DH_RSA      -> False
                         -- unimplemented: EC
-                        CipherKeyExchange_ECDHE_RSA   -> False
                         CipherKeyExchange_ECDH_ECDSA  -> False
                         CipherKeyExchange_ECDH_RSA    -> False
                         CipherKeyExchange_ECDHE_ECDSA -> False

@@ -204,6 +204,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     return $ CKX_RSA encryptedPreMaster
                 CipherKeyExchange_DHE_RSA -> getCKX_DHE
                 CipherKeyExchange_DHE_DSS -> getCKX_DHE
+                CipherKeyExchange_ECDHE_RSA -> getCKX_ECDHE
                 _ -> throwCore $ Error_Protocol ("client key exchange unsupported type", True, HandshakeFailure)
             sendPacket ctx $ Handshake [ClientKeyXchg ckx]
           where getCKX_DHE = do
@@ -215,6 +216,16 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
 
                     return $ CKX_DH clientDHPub
+
+                getCKX_ECDHE = do
+                    xver <- usingState_ ctx getVersion
+                    (ServerECDHParams ecdhparams serverECDHPub) <- fromJust <$> usingHState ctx (gets hstServerECDHParams)
+                    (clientECDHPriv, clientECDHPub) <- generateECDHE ctx ecdhparams
+
+                    let premaster = ecdhGetShared ecdhparams clientECDHPriv serverECDHPub
+                    usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
+
+                    return $ CKX_ECDH clientECDHPub
 
         -- In order to send a proper certificate verify message,
         -- we have to do the following:
@@ -366,6 +377,8 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
                     doDHESignature dhparams signature SignatureRSA
                 (CipherKeyExchange_DHE_DSS, SKX_DHE_DSS dhparams signature) -> do
                     doDHESignature dhparams signature SignatureDSS
+                (CipherKeyExchange_ECDHE_RSA, SKX_ECDHE_RSA ecdhparams signature) -> do
+                    doECDHESignature ecdhparams signature SignatureRSA
                 (cke, SKX_Unparsed bytes) -> do
                     ver <- usingState_ ctx getVersion
                     case decodeReallyServerKeyXchgAlgorithmData ver cke bytes of
@@ -379,6 +392,13 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
             verified <- signatureVerify ctx signatureType expectedData signature
             when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " for dhparams", True, HandshakeFailure)
             usingHState ctx $ setServerDHParams dhparams
+
+        doECDHESignature ecdhparams signature signatureType = do
+            -- TODO verify DHParams
+            expectedData <- generateSignedECDHParams ctx ecdhparams
+            verified <- signatureVerify ctx signatureType expectedData signature
+            when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " for dhparams", True, HandshakeFailure)
+            usingHState ctx $ setServerECDHParams ecdhparams
 
 processServerKeyExchange ctx p = processCertificateRequest ctx p
 

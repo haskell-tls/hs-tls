@@ -31,24 +31,26 @@ module Network.TLS.Extension
     , ApplicationLayerProtocolNegotiation(..)
     , EllipticCurvesSupported(..)
     , NamedCurve(..)
+    , CurveName(..)
     , EcPointFormatsSupported(..)
     , EcPointFormat(..)
     , SessionTicket(..)
     , HeartBeat(..)
     , HeartBeatMode(..)
     , SignatureAlgorithms(..)
+    , availableEllipticCurves
     ) where
 
 import Control.Applicative ((<$>),(<*>))
 import Control.Monad
 
 import Data.Word
-import Data.List (find)
 import Data.Maybe (fromMaybe, catMaybes)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 
+import Network.TLS.Extension.EC
 import Network.TLS.Struct (ExtensionID, EnumSafe8(..), EnumSafe16(..), HashAndSignatureAlgorithm)
 import Network.TLS.Wire
 import Network.TLS.Packet (putSignatureHashAlgorithm, getSignatureHashAlgorithm)
@@ -255,69 +257,23 @@ data EllipticCurvesSupported = EllipticCurvesSupported [NamedCurve]
     deriving (Show,Eq)
 
 data NamedCurve =
-      NamedCurve_sect163k1
-    | NamedCurve_sect163r1
-    | NamedCurve_sect163r2
-    | NamedCurve_sect193r1
-    | NamedCurve_sect193r2
-    | NamedCurve_sect233k1
-    | NamedCurve_sect233r1
-    | NamedCurve_sect239k1
-    | NamedCurve_sect283k1
-    | NamedCurve_sect283r1
-    | NamedCurve_sect409k1
-    | NamedCurve_sect409r1
-    | NamedCurve_sect571k1
-    | NamedCurve_sect571r1
-    | NamedCurve_secp160k1
-    | NamedCurve_secp160r1
-    | NamedCurve_secp160r2
-    | NamedCurve_secp192k1
-    | NamedCurve_secp192r1
-    | NamedCurve_secp224k1
-    | NamedCurve_secp224r1
-    | NamedCurve_secp256k1
-    | NamedCurve_secp256r1
-    | NamedCurve_secp384r1
-    | NamedCurve_secp521r1
+      SEC CurveName
     | NamedCurve_arbitrary_explicit_prime_curves
     | NamedCurve_arbitrary_explicit_char2_curves
     deriving (Show,Eq)
 
-namedCurveValues :: [(NamedCurve, Word16)]
-namedCurveValues =
-    [ (NamedCurve_sect163k1, 1)
-    , (NamedCurve_sect163r1, 2)
-    , (NamedCurve_sect163r2, 3)
-    , (NamedCurve_sect193r1, 4)
-    , (NamedCurve_sect193r2, 5)
-    , (NamedCurve_sect233k1, 6)
-    , (NamedCurve_sect233r1, 7)
-    , (NamedCurve_sect239k1, 8)
-    , (NamedCurve_sect283k1, 9)
-    , (NamedCurve_sect283r1, 10)
-    , (NamedCurve_sect409k1, 11)
-    , (NamedCurve_sect409r1, 12)
-    , (NamedCurve_sect571k1, 13)
-    , (NamedCurve_sect571r1, 14)
-    , (NamedCurve_secp160k1, 15)
-    , (NamedCurve_secp160r1, 16)
-    , (NamedCurve_secp160r2, 17)
-    , (NamedCurve_secp192k1, 18)
-    , (NamedCurve_secp192r1, 19)
-    , (NamedCurve_secp224k1, 20)
-    , (NamedCurve_secp224r1, 21)
-    , (NamedCurve_secp256k1, 22)
-    , (NamedCurve_secp256r1, 23)
-    , (NamedCurve_secp384r1, 24)
-    , (NamedCurve_secp521r1, 25)
-    , (NamedCurve_arbitrary_explicit_prime_curves, 0xFF01)
-    , (NamedCurve_arbitrary_explicit_char2_curves, 0xFF02)
-    ]
+-- FIXME: currently maximum crypto strength of our supported
+--        cipher suite is 128 bits. Not support 384 and 512.
+availableEllipticCurves :: [NamedCurve]
+availableEllipticCurves = [SEC SEC_p160r1, SEC SEC_p224r1, SEC SEC_p256r1]
 
 instance EnumSafe16 NamedCurve where
-    fromEnumSafe16 nc = maybe (error "named curve: internal error") id $ lookup nc namedCurveValues
-    toEnumSafe16 n    = fmap fst $ find ((== n) . snd) namedCurveValues
+    fromEnumSafe16 NamedCurve_arbitrary_explicit_prime_curves = 0xFF01
+    fromEnumSafe16 NamedCurve_arbitrary_explicit_char2_curves = 0xFF02
+    fromEnumSafe16 (SEC nc) = maybe (error "named curve: internal error") id $ fromCurveName nc
+    toEnumSafe16 0xFF01 = Just NamedCurve_arbitrary_explicit_prime_curves
+    toEnumSafe16 0xFF02 = Just NamedCurve_arbitrary_explicit_char2_curves
+    toEnumSafe16 n      = SEC <$> toCurveName n
 
 -- on decode, filter all unknown curves
 instance Extension EllipticCurvesSupported where

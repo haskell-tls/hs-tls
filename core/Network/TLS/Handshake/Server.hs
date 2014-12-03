@@ -18,6 +18,7 @@ import Network.TLS.Struct
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Credentials
+import Network.TLS.Crypto.ECDH
 import Network.TLS.Extension
 import Network.TLS.Util (catchException, fromJust)
 import Network.TLS.IO
@@ -106,6 +107,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
                 CipherKeyExchange_DH_Anon -> return $ Nothing
                 CipherKeyExchange_DHE_RSA -> return $ credentialsFindForSigning SignatureRSA creds
                 CipherKeyExchange_DHE_DSS -> return $ credentialsFindForSigning SignatureDSS creds
+                CipherKeyExchange_ECDHE_RSA -> return $ credentialsFindForSigning SignatureRSA creds
                 _                         -> throwCore $ Error_Protocol ("key exchange algorithm not implemented", True, HandshakeFailure)
 
     resumeSessionData <- case clientSession of
@@ -114,6 +116,16 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
 
     case extensionDecode False `fmap` (lookup extensionID_ApplicationLayerProtocolNegotiation exts) of
         Just (Just (ApplicationLayerProtocolNegotiation protos)) -> usingState_ ctx $ setClientALPNSuggest protos
+        _ -> return ()
+
+    case extensionDecode False `fmap` (lookup extensionID_EllipticCurves exts) of
+        Just (Just (EllipticCurvesSupported es)) -> usingState_ ctx $ setClientEllipticCurveSuggest es
+        _ -> return ()
+
+    -- Currently, we don't send back EcPointFormats. In this case,
+    -- the client chooses EcPointFormat_Uncompressed.
+    case extensionDecode False `fmap` (lookup extensionID_EcPointFormats exts) of
+        Just (Just (EcPointFormatsSupported fs)) -> usingState_ ctx $ setClientEcPointFormatSuggest fs
         _ -> return ()
 
     doHandshake sparams cred ctx chosenVersion usedCipher usedCompression clientSession resumeSessionData exts
@@ -225,6 +237,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                         CipherKeyExchange_DH_Anon -> Just <$> generateSKX_DH_Anon
                         CipherKeyExchange_DHE_RSA -> Just <$> generateSKX_DHE SignatureRSA
                         CipherKeyExchange_DHE_DSS -> Just <$> generateSKX_DHE SignatureDSS
+                        CipherKeyExchange_ECDHE_RSA -> Just <$> generateSKX_ECDHE SignatureRSA
                         _                         -> return Nothing
             maybe (return ()) (sendPacket ctx . Handshake . (:[]) . ServerKeyXchg) skx
 
@@ -280,6 +293,39 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                 _            -> error ("generate skx_dhe unsupported signature type: " ++ show sigAlg)
 
         generateSKX_DH_Anon = SKX_DH_Anon <$> setup_DHE
+
+        setup_ECDHE curvename = do
+            let ecdhparams = ecdhParams curvename
+            (priv, pub) <- generateECDHE ctx ecdhparams
+
+            let serverParams = ServerECDHParams ecdhparams pub
+
+            usingHState ctx $ setServerECDHParams serverParams
+            usingHState ctx $ modify $ \hst -> hst { hstECDHPrivate = Just priv }
+            return (serverParams)
+
+        generateSKX_ECDHE sigAlg = do
+            ncs <- usingState_ ctx $ getClientEllipticCurveSuggest
+            let common = availableEllipticCurves `intersect` fromJust "ClientEllipticCurveSuggest" ncs
+                -- FIXME: Currently maximum strength is chosen.
+                --        There may be a better way to choose EC.
+                nc = if null common then error "No common EllipticCurves"
+                                    else maximum $ map fromEnumSafe16 common
+            serverParams  <- setup_ECDHE nc
+            signatureData <- generateSignedECDHParams ctx serverParams
+
+            usedVersion <- usingState_ ctx getVersion
+            let mhash = case usedVersion of
+                            TLS12 -> case filter ((==) sigAlg . snd) $ supportedHashSignatures $ ctxSupported ctx of
+                                          []  -> error ("no hash signature for " ++ show sigAlg)
+                                          x:_ -> Just (fst x)
+                            _     -> Nothing
+            let hashDescr = signatureHashData sigAlg mhash
+            signed <- signatureCreate ctx (fmap (\h -> (h, sigAlg)) mhash) hashDescr signatureData
+
+            case sigAlg of
+                SignatureRSA -> return $ SKX_ECDHE_RSA serverParams signed
+                _            -> error ("generate skx_dhe unsupported signature type: " ++ show sigAlg)
 
 -- | receive Client data in handshake until the Finished handshake.
 --

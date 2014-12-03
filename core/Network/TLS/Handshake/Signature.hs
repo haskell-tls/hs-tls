@@ -14,13 +14,14 @@ module Network.TLS.Handshake.Signature
     , signatureVerify
     , signatureVerifyWithHashDescr
     , generateSignedDHParams
+    , generateSignedECDHParams
     ) where
 
 import Crypto.PubKey.HashDescr
 import Network.TLS.Crypto
 import Network.TLS.Context.Internal
 import Network.TLS.Struct
-import Network.TLS.Packet (generateCertificateVerify_SSL, encodeSignedDHParams)
+import Network.TLS.Packet (generateCertificateVerify_SSL, encodeSignedDHParams, encodeSignedECDHParams)
 import Network.TLS.State
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Key
@@ -107,3 +108,9 @@ generateSignedDHParams ctx serverParams = do
     (cran, sran) <- usingHState ctx $ do
                         (,) <$> gets hstClientRandom <*> (fromJust "server random" <$> gets hstServerRandom)
     return $ encodeSignedDHParams cran sran serverParams
+
+generateSignedECDHParams :: Context -> ServerECDHParams -> IO Bytes
+generateSignedECDHParams ctx serverParams = do
+    (cran, sran) <- usingHState ctx $ do
+                        (,) <$> gets hstClientRandom <*> (fromJust "server random" <$> gets hstServerRandom)
+    return $ encodeSignedECDHParams cran sran serverParams

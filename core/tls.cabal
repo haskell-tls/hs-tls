@@ -72,8 +72,10 @@ Library
                      Network.TLS.Backend
                      Network.TLS.Crypto
                      Network.TLS.Crypto.DH
+                     Network.TLS.Crypto.ECDH
                      Network.TLS.ErrT
                      Network.TLS.Extension
+                     Network.TLS.Extension.EC
                      Network.TLS.Handshake
                      Network.TLS.Handshake.Common
                      Network.TLS.Handshake.Certificate
