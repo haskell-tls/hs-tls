@@ -48,7 +48,9 @@ import Data.Word
 import Data.Maybe (fromMaybe, catMaybes)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8 as BC
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import qualified Text.IDNA as IDNA
 
 import Network.TLS.Extension.EC
 import Network.TLS.Struct (ExtensionID, EnumSafe8(..), EnumSafe16(..), HashAndSignatureAlgorithm)
@@ -175,15 +177,19 @@ data ServerNameType = ServerNameHostName HostName
 instance Extension ServerName where
     extensionID _ = extensionID_ServerName
     extensionEncode (ServerName l) = runPut $ putOpaque16 (runPut $ mapM_ encodeNameType l)
-        where encodeNameType (ServerNameHostName hn)       = putWord8 0  >> putOpaque16 (BC.pack hn) -- FIXME: should be puny code conversion
+        where encodeNameType (ServerNameHostName hn)       = putWord8 0  >> putOpaque16 (idnaEncode hn)
               encodeNameType (ServerNameOther (nt,opaque)) = putWord8 nt >> putBytes opaque
+              idnaEncode s = case TE.encodeUtf8 <$> IDNA.toASCII True True (T.pack s) of
+                               Nothing -> error "IDNA encoding HostName failed"
+                               Just bs -> bs
     extensionDecode _ = runGetMaybe (getWord16 >>= \len -> getList (fromIntegral len) getServerName >>= return . ServerName)
         where getServerName = do
                   ty    <- getWord8
                   sname <- getOpaque16
                   return (1+2+B.length sname, case ty of
-                      0 -> ServerNameHostName $ BC.unpack sname -- FIXME: should be puny code conversion
+                      0 -> ServerNameHostName (idnaDecode sname)
                       _ -> ServerNameOther (ty, sname))
+              idnaDecode bs = T.unpack $ IDNA.toUnicode True True (TE.decodeUtf8 bs)
 
 -- | Max fragment extension with length from 512 bytes to 4096 bytes
 data MaxFragmentLength = MaxFragmentLength MaxFragmentEnum
