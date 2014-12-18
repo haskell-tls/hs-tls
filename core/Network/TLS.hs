@@ -65,6 +65,8 @@ module Network.TLS
     , Credential
     , credentialLoadX509
     , credentialLoadX509FromMemory
+    , credentialLoadX509Chain
+    , credentialLoadX509ChainFromMemory
 
     -- * Initialisation and Termination of context
     , bye
