@@ -61,6 +61,7 @@ Library
                      Network.TLS.Cipher
                      Network.TLS.Compression
                      Network.TLS.Internal
+                     Network.TLS.Extension
                      Network.TLS.Extra
                      Network.TLS.Extra.Cipher
   other-modules:     Network.TLS.Cap
@@ -73,7 +74,6 @@ Library
                      Network.TLS.Crypto
                      Network.TLS.Crypto.DH
                      Network.TLS.ErrT
-                     Network.TLS.Extension
                      Network.TLS.Handshake
                      Network.TLS.Handshake.Common
                      Network.TLS.Handshake.Certificate

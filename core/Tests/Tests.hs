@@ -167,6 +167,7 @@ main = defaultMain $ testGroup "tls"
         tests_marshalling = testGroup "Marshalling"
             [ testProperty "Header" prop_header_marshalling_id
             , testProperty "Handshake" prop_handshake_marshalling_id
+            , testProperty "ServerName" prop_disallow_empty_hostname
             ]
         tests_ciphers = testGroup "Ciphers"
             [ testProperty "Bulk" propertyBulkFunctional ]
