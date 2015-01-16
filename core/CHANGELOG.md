@@ -1,4 +1,8 @@
-## Version HEAD
+## Version 1.2.15
+
+- support chain certificate in credentials
+
+## Version 1.2.14
 
 - adding ALPN extension
 - adding support for AEAD, and particularly AES128-GCM
