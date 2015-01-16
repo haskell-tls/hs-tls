@@ -10,6 +10,8 @@ module Network.TLS.Credentials
     , Credentials(..)
     , credentialLoadX509
     , credentialLoadX509FromMemory
+    , credentialLoadX509Chain
+    , credentialLoadX509ChainFromMemory
     , credentialsFindForSigning
     , credentialsFindForDecrypting
     , credentialsListSigningAlgorithms
@@ -38,25 +40,44 @@ instance Monoid Credentials where
 credentialLoadX509 :: FilePath -- ^ public certificate (X.509 format)
                    -> FilePath -- ^ private key associated
                    -> IO (Either String Credential)
-credentialLoadX509 certFile privateFile = do
-    x509 <- readSignedObject certFile
-    keys <- readKeyFile privateFile
-    case keys of
-        []    -> return $ Left "no keys found"
-        (k:_) -> return $ Right (CertificateChain x509, k)
+credentialLoadX509 certFile = credentialLoadX509Chain certFile []
 
 -- | similar to 'credentialLoadX509' but take the certificate
 -- and private key from memory instead of from the filesystem.
 credentialLoadX509FromMemory :: Bytes
                   -> Bytes
                   -> Either String Credential
-credentialLoadX509FromMemory certData privateData = do
-    let x509 = readSignedObjectFromMemory certData
-        keys = readKeyFileFromMemory privateData
+credentialLoadX509FromMemory certData =
+  credentialLoadX509ChainFromMemory certData []
+
+-- | similar to 'credentialLoadX509' but also allow specifying chain
+-- certificates.
+credentialLoadX509Chain ::
+                      FilePath   -- ^ public certificate (X.509 format)
+                   -> [FilePath] -- ^ chain certificates (X.509 format)
+                   -> FilePath   -- ^ private key associated
+                   -> IO (Either String Credential)
+credentialLoadX509Chain certFile chainFiles privateFile = do
+    x509 <- readSignedObject certFile
+    chains <- mapM readSignedObject chainFiles
+    keys <- readKeyFile privateFile
+    case keys of
+        []    -> return $ Left "no keys found"
+        (k:_) -> return $ Right (CertificateChain . concat $ x509 : chains, k)
+
+-- | similar to 'credentialLoadX509FromMemory' but also allow
+-- specifying chain certificates.
+credentialLoadX509ChainFromMemory :: Bytes
+                  -> [Bytes]
+                  -> Bytes
+                  -> Either String Credential
+credentialLoadX509ChainFromMemory certData chainData privateData = do
+    let x509   = readSignedObjectFromMemory certData
+        chains = map readSignedObjectFromMemory chainData
+        keys   = readKeyFileFromMemory privateData
      in case keys of
             []    -> Left "no keys found"
-            (k:_) -> Right (CertificateChain x509, k)
-  where
+            (k:_) -> Right (CertificateChain . concat $ x509 : chains, k)
 
 credentialsListSigningAlgorithms :: Credentials -> [SignatureAlgorithm]
 credentialsListSigningAlgorithms (Credentials l) = catMaybes $ map credentialCanSign l
