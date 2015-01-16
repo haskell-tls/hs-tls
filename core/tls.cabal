@@ -8,7 +8,7 @@ Description:
    type system, high level constructions and common Haskell features.
    .
    Currently implement the SSL3.0, TLS1.0, TLS1.1 and TLS1.2 protocol,
-   and support RSA and Ephemeral Diffie Hellman key exchanges,
+   and support RSA and Ephemeral (Elliptic curve and regular) Diffie Hellman key exchanges,
    and many extensions.
    .
    Some debug tools linked with tls, are available through the
