@@ -2,7 +2,7 @@ module Network.TLS.Crypto.ECDH
     (
     -- * ECDH types
       ECDHParams(..)
-    , ECDHPublic(..)
+    , ECDHPublic
     , ECDHPrivate(..)
 
     -- * ECDH methods
@@ -19,6 +19,7 @@ import Network.TLS.Util.Serialization (i2osp, lengthBytes)
 import Network.TLS.Extension.EC
 import qualified Crypto.PubKey.ECC.DH as ECDH
 import qualified Crypto.Types.PubKey.ECC as ECDH
+import qualified Crypto.PubKey.ECC.Prim as ECC (isPointValid)
 import Crypto.Random (CPRG)
 import Data.ByteString (ByteString)
 import Data.Word (Word16)
@@ -49,10 +50,13 @@ ecdhGenerateKeyPair rng (ECDHParams curve _) =
         pub        = ECDHPublic point siz
      in ((ECDHPrivate priv, pub), g')
 
-ecdhGetShared :: ECDHParams -> ECDHPrivate -> ECDHPublic -> ECDHKey
-ecdhGetShared (ECDHParams curve _)  (ECDHPrivate priv) (ECDHPublic point _) =
-    let ECDH.SharedKey sk = ECDH.getShared curve priv point
-     in i2osp sk
+ecdhGetShared :: ECDHParams -> ECDHPrivate -> ECDHPublic -> Maybe ECDHKey
+ecdhGetShared (ECDHParams curve _)  (ECDHPrivate priv) (ECDHPublic point _)
+    | ECC.isPointValid curve point =
+        let ECDH.SharedKey sk = ECDH.getShared curve priv point
+         in Just $ i2osp sk
+    | otherwise =
+        Nothing
 
 -- for server key exchange
 ecdhUnwrap :: ECDHParams -> ECDHPublic -> (Word16,Integer,Integer,Int)
