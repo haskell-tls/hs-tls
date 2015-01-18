@@ -126,8 +126,10 @@ decryptData ver record econtent tst = decryptOf (bulkF bulk)
                 ad = B.concat [ encodedSeq, encodeHeader hdr ]
                 nonce = cstIV (stCryptState tst) `B.append` enonce
                 (content, authTag2) = decryptF writekey nonce econtent' ad
+
             when (AuthTag authTag /= authTag2) $
-              throwError $ Error_Protocol ("bad record mac", True, BadRecordMac)
+                throwError $ Error_Protocol ("bad record mac", True, BadRecordMac)
+
             modify incrRecordState
             return content
 
