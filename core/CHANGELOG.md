@@ -1,3 +1,8 @@
+## Version 1.2.16
+
+- Fix an issue with stream cipher not correctly calculating the internal state,
+  resulting systematically in bad record mac failure during handshake
+
 ## Version 1.2.15
 
 - support chain certificate in credentials
