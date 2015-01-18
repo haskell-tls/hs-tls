@@ -21,6 +21,8 @@ module Network.TLS.Record.State
     , withCompression
     , computeDigest
     , makeDigest
+    , getBulk
+    , getMacSequence
     ) where
 
 import Data.Word
@@ -134,3 +136,9 @@ makeDigest hdr content = do
     let (digest, nstate) = computeDigest ver st hdr content
     put nstate
     return digest
+
+getBulk :: RecordM Bulk
+getBulk = cipherBulk . fromJust "cipher" . stCipher <$> get
+
+getMacSequence :: RecordM Word64
+getMacSequence = msSequence . stMacState <$> get
