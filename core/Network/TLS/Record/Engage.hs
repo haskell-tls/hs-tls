@@ -12,6 +12,7 @@ module Network.TLS.Record.Engage
         ( engageRecord
         ) where
 
+import Control.Applicative
 import Control.Monad.State
 import Crypto.Cipher.Types (AuthTag(..))
 
@@ -47,69 +48,69 @@ encryptRecord record = onRecordFragment record $ fragmentCipher $ \bytes -> do
 
 encryptContent :: Record Compressed -> ByteString -> RecordM ByteString
 encryptContent record content = do
-    tstate <- get
-
-    let cipher = fromJust "cipher" $ stCipher tstate
-    let bulk = cipherBulk cipher
-    let cst = stCryptState tstate
-
-    let writekey = cstKey cst
-
+    bulk <- getBulk
     case bulkF bulk of
         BulkBlockF encryptF _ -> do
             digest <- makeDigest (recordToHeader record) content
             let content' =  B.concat [content, digest]
-            encryptBlock encryptF writekey content' cst tstate bulk
+            encryptBlock encryptF content' bulk
         BulkStreamF initF encryptF _ -> do
             digest <- makeDigest (recordToHeader record) content
             let content' =  B.concat [content, digest]
-            encryptStream encryptF writekey content' cst tstate initF
+            encryptStream encryptF content' initF
         BulkAeadF encryptF _ ->
-            encryptAead encryptF writekey content cst tstate record
+            encryptAead encryptF content record
 
 encryptBlock :: (Key -> IV -> ByteString -> ByteString)
-             -> Key -> ByteString -> CryptState -> RecordState -> Bulk
+             -> ByteString -> Bulk
              -> RecordM ByteString
-encryptBlock encryptF writekey content cst tstate bulk = do
+encryptBlock encryptF content bulk = do
+    cst <- getCryptState
     ver <- getRecordVersion
     let blockSize = fromIntegral $ bulkBlockSize bulk
     let msg_len = B.length content
     let padding = if blockSize > 0
                   then
                       let padbyte = blockSize - (msg_len `mod` blockSize) in
-                      let padbyte' = if padbyte == 0 then blockSize else padbyte in                   B.replicate padbyte' (fromIntegral (padbyte' - 1))
+                      let padbyte' = if padbyte == 0 then blockSize else padbyte in B.replicate padbyte' (fromIntegral (padbyte' - 1))
                   else
                       B.empty
 
-    let iv = cstIV cst
-        e = encryptF writekey iv $ B.concat [ content, padding ]
+    let e = encryptF (cstKey cst) (cstIV cst) $ B.concat [ content, padding ]
+
     if hasExplicitBlockIV ver
-        then return $ B.concat [iv,e]
+        then return $ B.concat [cstIV cst,e]
         else do
             let newiv = fromJust "new iv" $ takelast (bulkIVSize bulk) e
-            put $ tstate { stCryptState = cst { cstIV = newiv } }
+            modify $ \tstate -> tstate { stCryptState = cst { cstIV = newiv } }
             return e
 
 encryptStream :: (IV -> ByteString -> (ByteString, IV))
-              -> Key -> ByteString -> CryptState -> RecordState -> (Key -> IV)
+              -> ByteString -> (Key -> IV)
               -> RecordM ByteString
-encryptStream encryptF writekey content cst tstate initF = do
+encryptStream encryptF content initF = do
+    cst <- getCryptState
     let iv = cstIV cst
-    let (e, newiv) = encryptF (if iv /= B.empty then iv else initF writekey) content
-    put $ tstate { stCryptState = cst { cstIV = newiv } }
+        (e, newiv) = encryptF (if iv /= B.empty then iv else initF (cstKey cst)) content
+    modify $ \tstate -> tstate { stCryptState = cst { cstIV = newiv } }
     return e
 
 encryptAead :: (Key -> Nonce -> ByteString -> AdditionalData -> (ByteString, AuthTag))
-            -> Key -> ByteString -> CryptState -> RecordState -> Record Compressed
+            -> ByteString -> Record Compressed
             -> RecordM ByteString
-encryptAead encryptF writekey content cst tstate record = do
-    let encodedSeq = encodeWord64 $ msSequence $ stMacState tstate
-        hdr = recordToHeader record
+encryptAead encryptF content record = do
+    cst        <- getCryptState
+    encodedSeq <- encodeWord64 <$> getMacSequence
+
+    let hdr = recordToHeader record
         ad = B.concat [ encodedSeq, encodeHeader hdr ]
     let salt = cstIV cst
         processorNum = encodeWord32 1 -- FIXME
         counter = B.drop 4 encodedSeq -- FIXME: probably OK
         nonce = B.concat [salt, processorNum, counter]
-    let (e, AuthTag authtag) = encryptF writekey nonce content ad
+    let (e, AuthTag authtag) = encryptF (cstKey cst) nonce content ad
     modify incrRecordState
     return $ B.concat [processorNum, counter, e, authtag]
+
+getCryptState :: RecordM CryptState
+getCryptState = stCryptState <$> get
