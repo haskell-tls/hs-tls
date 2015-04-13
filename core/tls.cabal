@@ -40,6 +40,8 @@ Library
                    , byteable
                    , network
                    , data-default-class
+                   , idna
+                   , text
                    -- crypto related
                    , cryptohash >= 0.6
                    , crypto-random >= 0.0 && < 0.1

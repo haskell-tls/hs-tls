@@ -15,6 +15,7 @@ before_install:
  - export PATH=/opt/ghc/$GHCVER/bin:$PATH
 
 install:
+ - sudo apt-get install libicu-dev
  - cd core
  - cabal-1.18 update
  - cabal-1.18 install --only-dependencies --enable-tests;
