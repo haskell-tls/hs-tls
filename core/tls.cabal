@@ -41,15 +41,8 @@ Library
                    , network
                    , data-default-class
                    -- crypto related
-                   , cryptohash >= 0.6
-                   , crypto-random >= 0.0 && < 0.1
-                   , crypto-numbers
-                   , crypto-cipher-types >= 0.0.8
-                   , crypto-pubkey >= 0.2.8
-                   , crypto-pubkey-types >= 0.4
-                   , cipher-rc4
-                   , cipher-des
-                   , cipher-aes >= 0.2 && < 0.3
+                   , memory
+                   , cryptonite
                    -- certificate related
                    , asn1-types >= 0.2.0
                    , asn1-encoding
@@ -122,8 +115,7 @@ Test-Suite test-tls
                    , tasty
                    , tasty-quickcheck
                    , QuickCheck
-                   , cprng-aes >= 0.5
-                   , crypto-pubkey >= 0.2
+                   , cryptonite
                    , bytestring
                    , x509
                    , x509-validation
@@ -142,12 +134,10 @@ Benchmark bench-tls
                    , x509
                    , x509-validation
                    , data-default-class
-                   , crypto-random
+                   , cryptonite
                    , criterion
-                   , cprng-aes
                    , mtl
                    , bytestring
-                   , crypto-pubkey >= 0.2
                    , hourglass
                    , QuickCheck >= 2
 

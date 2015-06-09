@@ -36,10 +36,13 @@ import qualified Data.ByteString as B
 import qualified Data.Byteable as B
 import Data.ByteString (ByteString)
 import Crypto.PubKey.HashDescr
+import Crypto.Random
 import qualified Crypto.PubKey.DSA as DSA
 import qualified Crypto.PubKey.RSA as RSA
 import qualified Crypto.PubKey.RSA.PKCS15 as RSA
-import Crypto.Random
+
+import qualified Data.ByteString as B
+import Data.ByteString (ByteString)
 import Data.X509 (PrivKey(..), PubKey(..))
 import Network.TLS.Crypto.DH
 import Network.TLS.Crypto.ECDH
@@ -129,17 +132,17 @@ hashBlockSize SHA1_MD5 = 64
 
 {- key exchange methods encrypt and decrypt for each supported algorithm -}
 
-generalizeRSAWithRNG :: CPRG g => (Either RSA.Error a, g) -> (Either KxError a, g)
-generalizeRSAWithRNG (Left e, g) = (Left (RSAError e), g)
-generalizeRSAWithRNG (Right x, g) = (Right x, g)
+generalizeRSAWithRNG :: Either RSA.Error a -> Either KxError a
+generalizeRSAWithRNG (Left e)  = Left (RSAError e)
+generalizeRSAWithRNG (Right x) = Right x
 
-kxEncrypt :: CPRG g => g -> PublicKey -> ByteString -> (Either KxError ByteString, g)
-kxEncrypt g (PubKeyRSA pk) b = generalizeRSAWithRNG $ RSA.encrypt g pk b
-kxEncrypt g _              _ = (Left KxUnsupported, g)
+kxEncrypt :: MonadRandom r => PublicKey -> ByteString -> r (Either KxError ByteString)
+kxEncrypt (PubKeyRSA pk) b = generalizeRSAWithRNG `fmap` RSA.encrypt pk b
+kxEncrypt _              _ = return (Left KxUnsupported)
 
-kxDecrypt :: CPRG g => g -> PrivateKey -> ByteString -> (Either KxError ByteString, g)
-kxDecrypt g (PrivKeyRSA pk) b = generalizeRSAWithRNG $ RSA.decryptSafer g pk b
-kxDecrypt g _               _ = (Left KxUnsupported, g)
+kxDecrypt :: MonadRandom r => PrivateKey -> ByteString -> r (Either KxError ByteString)
+kxDecrypt (PrivKeyRSA pk) b = generalizeRSAWithRNG `fmap` RSA.decryptSafer pk b
+kxDecrypt _               _ = return (Left KxUnsupported)
 
 -- Verify that the signature matches the given message, using the
 -- public key.
@@ -157,11 +160,15 @@ kxVerify _              _         _   _    = False
 
 -- Sign the given message using the private key.
 --
-kxSign :: CPRG g => g -> PrivateKey -> HashDescr -> ByteString -> (Either KxError ByteString, g)
-kxSign g (PrivKeyRSA pk) hashDescr msg =
+kxSign :: MonadRandom r
+       => PrivateKey
+       -> HashDescr
+       -> ByteString
+       -> r (Either KxError ByteString)
+kxSign (PrivKeyRSA pk) hashDescr msg =
     generalizeRSAWithRNG $ RSA.signSafer g hashDescr pk msg
-kxSign g (PrivKeyDSA pk) hashDescr msg =
-    let (sign, g') = DSA.sign g pk (hashFunction hashDescr) msg
-     in (Right $ encodeASN1' DER $ toASN1 sign [], g')
+kxSign (PrivKeyDSA pk) hashDescr msg =
+    sign <- DSA.sign pk (hashFunction hashDescr) msg
+    return (Right $ encodeASN1' DER $ toASN1 sign [])
 --kxSign g _               _         _   =
 --    (Left KxUnsupported, g)
