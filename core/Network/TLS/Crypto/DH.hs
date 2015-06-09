@@ -17,8 +17,7 @@ module Network.TLS.Crypto.DH
 
 import Network.TLS.Util.Serialization (i2osp)
 import qualified Crypto.PubKey.DH as DH
-import qualified Crypto.Types.PubKey.DH as DH
-import Crypto.Random (CPRG)
+import Network.TLS.RNG
 import Data.ByteString (ByteString)
 
 type DHPublic   = DH.PublicNumber
@@ -35,11 +34,11 @@ dhPrivate = DH.PrivateNumber
 dhParams :: Integer -> Integer -> DHParams
 dhParams = DH.Params
 
-dhGenerateKeyPair :: CPRG g => g -> DHParams -> ((DHPrivate, DHPublic), g)
-dhGenerateKeyPair rng params =
-    let (priv, g') = DH.generatePrivate rng params
-        pub        = DH.generatePublic params priv
-     in ((priv, pub), g')
+dhGenerateKeyPair :: MonadRandom r => DHParams -> r (DHPrivate, DHPublic)
+dhGenerateKeyPair params = do
+    priv <- DH.generatePrivate params
+    let pub        = DH.generatePublic params priv
+    return (priv, pub)
 
 dhGetShared :: DHParams -> DHPrivate -> DHPublic -> DHKey
 dhGetShared params priv pub =

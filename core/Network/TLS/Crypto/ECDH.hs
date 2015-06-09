@@ -18,17 +18,20 @@ module Network.TLS.Crypto.ECDH
 import Network.TLS.Util.Serialization (i2osp, lengthBytes)
 import Network.TLS.Extension.EC
 import qualified Crypto.PubKey.ECC.DH as ECDH
-import qualified Crypto.Types.PubKey.ECC as ECDH
+import qualified Crypto.PubKey.ECC.Types as ECDH
 import qualified Crypto.PubKey.ECC.Prim as ECC (isPointValid)
-import Crypto.Random (CPRG)
+import Network.TLS.RNG
 import Data.ByteString (ByteString)
 import Data.Word (Word16)
 
-data ECDHPublic     = ECDHPublic ECDH.PublicPoint Int {- byte size -}
-                      deriving (Show,Eq)
+data ECDHPublic = ECDHPublic ECDH.PublicPoint Int {- byte size -}
+    deriving (Show,Eq)
+
 newtype ECDHPrivate = ECDHPrivate ECDH.PrivateNumber deriving (Show,Eq)
-data ECDHParams     = ECDHParams ECDH.Curve ECDH.CurveName deriving (Show,Eq)
-type ECDHKey        = ByteString
+
+data ECDHParams = ECDHParams ECDH.Curve ECDH.CurveName deriving (Show,Eq)
+
+type ECDHKey = ByteString
 
 ecdhPublic :: Integer -> Integer -> Int -> ECDHPublic
 ecdhPublic x y siz = ECDHPublic (ECDH.Point x y) siz
@@ -42,13 +45,13 @@ ecdhParams w16 = ECDHParams curve name
     Just name = toCurveName w16 -- FIXME
     curve = ECDH.getCurveByName name
 
-ecdhGenerateKeyPair :: CPRG g => g -> ECDHParams -> ((ECDHPrivate, ECDHPublic), g)
-ecdhGenerateKeyPair rng (ECDHParams curve _) =
-    let (priv, g') = ECDH.generatePrivate rng curve
-        siz        = pointSize curve
+ecdhGenerateKeyPair :: MonadRandom r => ECDHParams -> r (ECDHPrivate, ECDHPublic)
+ecdhGenerateKeyPair (ECDHParams curve _) = do
+    priv <- ECDH.generatePrivate curve
+    let siz        = pointSize curve
         point      = ECDH.calculatePublic curve priv
         pub        = ECDHPublic point siz
-     in ((ECDHPrivate priv, pub), g')
+    return (ECDHPrivate priv, pub)
 
 ecdhGetShared :: ECDHParams -> ECDHPrivate -> ECDHPublic -> Maybe ECDHKey
 ecdhGetShared (ECDHParams curve _)  (ECDHPrivate priv) (ECDHPublic point _)

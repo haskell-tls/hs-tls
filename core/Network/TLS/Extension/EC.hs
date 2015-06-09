@@ -4,7 +4,7 @@ module Network.TLS.Extension.EC (
   , fromCurveName
   ) where
 
-import Crypto.Types.PubKey.ECC (CurveName(..))
+import Crypto.PubKey.ECC.Types (CurveName(..))
 import Data.Word (Word16)
 
 toCurveName :: Word16 -> Maybe CurveName

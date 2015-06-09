@@ -41,9 +41,10 @@ import qualified Data.ByteString as B
 
 import Network.TLS (Version(..))
 import Network.TLS.Cipher
-import qualified "cipher-rc4" Crypto.Cipher.RC4 as RC4
+import Network.TLS.Crypto
+import qualified Crypto.Cipher.RC4 as RC4
 
-import qualified "cipher-aes" Crypto.Cipher.AES as AES
+import Crypto.Cipher.AES
 import Crypto.Cipher.TripleDES
 import Crypto.Cipher.Types (makeKey, makeIV, cipherInit, cbcEncrypt, cbcDecrypt)
 import qualified Crypto.Cipher.Types as T
