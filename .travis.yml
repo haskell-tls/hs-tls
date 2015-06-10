@@ -1,27 +1,77 @@
+sudo: false
+
 env:
- - GHCVER=7.4.2
- - GHCVER=7.6.3
- - GHCVER=7.8.2
- - GHCVER=head
+ - CABALVER=1.16 GHCVER=7.0.4
+ - CABALVER=1.16 GHCVER=7.4.2
+ - CABALVER=1.18 GHCVER=7.6.3
+ - CABALVER=1.18 GHCVER=7.8.4
+ - CABALVER=1.22 GHCVER=7.10.1
+ - CABALVER=head GHCVER=head
 
 matrix:
   allow_failures:
-   - env: GHCVER=head
+   - env: CABALVER=head GHCVER=head
+
+addons:
+    apt:
+        sources:
+         - hvr-ghc
+        packages:
+         - cabal-install-1.16
+         - cabal-install-1.18
+         - cabal-install-1.20
+         - cabal-install-1.22
+         - cabal-install-head
+         - ghc-7.0.4
+         - ghc-7.4.2
+         - ghc-7.6.3
+         - ghc-7.8.4
+         - ghc-7.10.1
+         - ghc-head
 
 before_install:
- - sudo add-apt-repository -y ppa:hvr/ghc
- - sudo apt-get update
- - sudo apt-get install cabal-install-1.18 ghc-$GHCVER
- - export PATH=/opt/ghc/$GHCVER/bin:$PATH
+ - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$PATH
 
 install:
+ - cabal --version
+ - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
+ - travis_retry cabal update
  - cd core
- - cabal-1.18 update
- - cabal-1.18 install --only-dependencies --enable-tests;
+ - if [ "${GHCVER}" = "7.0.4" ]; then cabal install --only-dependencies; else cabal install --only-dependencies --enable-tests; fi
+ - cd ../debug
+ - if [ "${GHCVER}" = "7.0.4" ]; then cabal install --only-dependencies; else cabal install --only-dependencies --enable-tests; fi
 
 script:
- - cabal-1.18 configure --enable-tests -v2
- - cabal-1.18 build
- - cabal-1.18 test
- - cabal-1.18 check
- - cabal-1.18 sdist
+ - cd ../core
+ - if [ "${GHCVER}" != "7.0.4" ]; then
+      cabal configure --enable-tests -v2;
+   else
+      cabal configure -v2;
+   fi
+ - cabal build
+ - if [ "${GHCVER}" != "7.0.4" ]; then
+       cabal test;
+   fi;
+ - cabal check
+ - cabal sdist
+ - export SRC_TGZ=$(cabal info . | awk '{print $2 ".tar.gz";exit}') ;
+   cd dist/;
+   if [ -f "$SRC_TGZ" ]; then
+      cabal install --force-reinstalls "$SRC_TGZ";
+   else
+      echo "expected '$SRC_TGZ' not found";
+      exit 1;
+   fi
+ - cd ../../debug
+ - cabal configure -v2
+ - cabal build
+ - cabal check
+ - cabal sdist
+ - export SRC_TGZ=$(cabal info . | awk '{print $2 ".tar.gz";exit}') ;
+   cd dist/;
+   if [ -f "$SRC_TGZ" ]; then
+      cabal install --force-reinstalls "$SRC_TGZ";
+   else
+      echo "expected '$SRC_TGZ' not found";
+      exit 1;
+   fi
