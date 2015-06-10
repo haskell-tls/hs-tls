@@ -75,3 +75,6 @@ script:
       echo "expected '$SRC_TGZ' not found";
       exit 1;
    fi
+ - cd ../../
+ - ghc --threaded --make test-scripts/TestClient
+ - ./test-scripts/TestClient
