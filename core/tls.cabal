@@ -121,8 +121,6 @@ Test-Suite test-tls
                    , x509-validation
                    , tls
                    , hourglass
-                   , crypto-random
-                   , crypto-pubkey
   ghc-options:       -Wall -fno-warn-orphans -fno-warn-missing-signatures -fwarn-tabs
 
 Benchmark bench-tls
