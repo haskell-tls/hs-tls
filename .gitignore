@@ -9,3 +9,4 @@ cabal.sandbox.config
 *.csr
 *.crt
 *.key
+test-scripts/TestClient
