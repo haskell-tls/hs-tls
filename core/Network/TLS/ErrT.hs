@@ -22,6 +22,7 @@ runErrT = runExceptT
 type ErrT = ExceptT
 #else
 import Control.Monad.Error
+runErrT :: ErrorT e m a -> m (Either e a)
 runErrT = runErrorT
 type ErrT = ErrorT
 #endif
