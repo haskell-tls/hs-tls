@@ -1,3 +1,7 @@
+## Version 1.2.17
+
+- Fix an issue of type of key / hash that prevented connection with SChannel.
+
 ## Version 1.2.16
 
 - Fix an issue with stream cipher not correctly calculating the internal state,
