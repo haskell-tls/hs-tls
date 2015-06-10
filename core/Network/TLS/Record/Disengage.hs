@@ -23,6 +23,7 @@ import Network.TLS.Cap
 import Network.TLS.Record.State
 import Network.TLS.Record.Types
 import Network.TLS.Cipher
+import Network.TLS.Crypto
 import Network.TLS.Compression
 import Network.TLS.Util
 import Network.TLS.Wire
@@ -72,7 +73,7 @@ decryptData ver record econtent tst = decryptOf (bulkF bulk)
   where cipher     = fromJust "cipher" $ stCipher tst
         bulk       = cipherBulk cipher
         cst        = stCryptState tst
-        macSize    = hashSize $ cipherHash cipher
+        macSize    = hashDigestSize $ cipherHash cipher
         writekey   = cstKey cst
         blockSize  = bulkBlockSize bulk
         econtentLen = B.length econtent

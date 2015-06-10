@@ -43,10 +43,6 @@ import Network.TLS (Version(..))
 import Network.TLS.Cipher
 import qualified "cipher-rc4" Crypto.Cipher.RC4 as RC4
 
-import qualified Crypto.Hash.SHA256 as SHA256
-import qualified Crypto.Hash.SHA1 as SHA1
-import qualified Crypto.Hash.MD5 as MD5
-
 import qualified "cipher-aes" Crypto.Cipher.AES as AES
 import Crypto.Cipher.TripleDES
 import Crypto.Cipher.Types (makeKey, makeIV, cipherInit, cbcEncrypt, cbcDecrypt)
@@ -186,32 +182,13 @@ bulk_tripledes_ede = Bulk
     , bulkF         = BulkBlockF tripledes_ede_cbc_encrypt tripledes_ede_cbc_decrypt
     }
 
-hash_md5, hash_sha1, hash_sha256 :: Hash
-hash_md5 = Hash
-    { hashName = "MD5"
-    , hashSize = 16
-    , hashF    = MD5.hash
-    }
-
-hash_sha1 = Hash
-    { hashName = "SHA1"
-    , hashSize = 20
-    , hashF    = SHA1.hash
-    }
-
-hash_sha256 = Hash
-    { hashName = "SHA256"
-    , hashSize = 32
-    , hashF    = SHA256.hash
-    }
-
 -- | unencrypted cipher using RSA for key exchange and MD5 for digest
 cipher_null_MD5 :: Cipher
 cipher_null_MD5 = Cipher
     { cipherID           = 0x1
     , cipherName         = "RSA-null-MD5"
     , cipherBulk         = bulk_null
-    , cipherHash         = hash_md5
+    , cipherHash         = MD5
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Nothing
     }
@@ -222,7 +199,7 @@ cipher_null_SHA1 = Cipher
     { cipherID           = 0x2
     , cipherName         = "RSA-null-SHA1"
     , cipherBulk         = bulk_null
-    , cipherHash         = hash_sha1
+    , cipherHash         = SHA1
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Nothing
     }
@@ -233,7 +210,7 @@ cipher_RC4_128_MD5 = Cipher
     { cipherID           = 0x04
     , cipherName         = "RSA-rc4-128-md5"
     , cipherBulk         = bulk_rc4
-    , cipherHash         = hash_md5
+    , cipherHash         = MD5
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Nothing
     }
@@ -244,7 +221,7 @@ cipher_RC4_128_SHA1 = Cipher
     { cipherID           = 0x05
     , cipherName         = "RSA-rc4-128-sha1"
     , cipherBulk         = bulk_rc4
-    , cipherHash         = hash_sha1
+    , cipherHash         = SHA1
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Nothing
     }
@@ -255,7 +232,7 @@ cipher_AES128_SHA1 = Cipher
     { cipherID           = 0x2f
     , cipherName         = "RSA-aes128-sha1"
     , cipherBulk         = bulk_aes128
-    , cipherHash         = hash_sha1
+    , cipherHash         = SHA1
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just SSL3
     }
@@ -266,7 +243,7 @@ cipher_AES256_SHA1 = Cipher
     { cipherID           = 0x35
     , cipherName         = "RSA-aes256-sha1"
     , cipherBulk         = bulk_aes256
-    , cipherHash         = hash_sha1
+    , cipherHash         = SHA1
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just SSL3
     }
@@ -277,7 +254,7 @@ cipher_AES128_SHA256 = Cipher
     { cipherID           = 0x3c
     , cipherName         = "RSA-aes128-sha256"
     , cipherBulk         = bulk_aes128
-    , cipherHash         = hash_sha256
+    , cipherHash         = SHA256
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just TLS12
     }
@@ -288,7 +265,7 @@ cipher_AES256_SHA256 = Cipher
     { cipherID           = 0x3d
     , cipherName         = "RSA-aes256-sha256"
     , cipherBulk         = bulk_aes256
-    , cipherHash         = hash_sha256
+    , cipherHash         = SHA256
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just TLS12
     }
@@ -299,7 +276,7 @@ cipher_DHE_RSA_AES128_SHA1 = Cipher
     { cipherID           = 0x33
     , cipherName         = "DHE-RSA-AES128-SHA1"
     , cipherBulk         = bulk_aes128
-    , cipherHash         = hash_sha1
+    , cipherHash         = SHA1
     , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
     , cipherMinVer       = Nothing
     }
@@ -318,7 +295,7 @@ cipher_DHE_DSS_AES128_SHA1 = Cipher
     { cipherID           = 0x32
     , cipherName         = "DHE-DSA-AES128-SHA1"
     , cipherBulk         = bulk_aes128
-    , cipherHash         = hash_sha1
+    , cipherHash         = SHA1
     , cipherKeyExchange  = CipherKeyExchange_DHE_DSS
     , cipherMinVer       = Nothing
     }
@@ -342,7 +319,7 @@ cipher_DHE_RSA_AES128_SHA256 :: Cipher
 cipher_DHE_RSA_AES128_SHA256 = cipher_DHE_RSA_AES128_SHA1
     { cipherID           = 0x67
     , cipherName         = "DHE-RSA-AES128-SHA256"
-    , cipherHash         = hash_sha256
+    , cipherHash         = SHA256
     , cipherMinVer       = Just TLS12
     }
 
@@ -359,7 +336,7 @@ cipher_RSA_3DES_EDE_CBC_SHA1 = Cipher
     { cipherID           = 0x0a
     , cipherName         = "RSA-3DES-EDE-CBC-SHA1"
     , cipherBulk         = bulk_tripledes_ede
-    , cipherHash         = hash_sha1
+    , cipherHash         = SHA1
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Nothing
     }
@@ -369,7 +346,7 @@ cipher_DHE_RSA_AES128GCM_SHA256 = Cipher
     { cipherID           = 0x9e
     , cipherName         = "DHE-RSA-AES128GCM-SHA256"
     , cipherBulk         = bulk_aes128gcm
-    , cipherHash         = hash_sha256
+    , cipherHash         = SHA256
     , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
     , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
     }
@@ -379,7 +356,7 @@ cipher_ECDHE_RSA_AES128GCM_SHA256 = Cipher
     { cipherID           = 0xc02f
     , cipherName         = "ECDHE-RSA-AES128GCM-SHA256"
     , cipherBulk         = bulk_aes128gcm
-    , cipherHash         = hash_sha256
+    , cipherHash         = SHA256
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
     , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
     }

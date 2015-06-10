@@ -47,11 +47,11 @@ prepareCertificateVerifySignatureData :: Context
 prepareCertificateVerifySignatureData ctx usedVersion malg msgs
     | usedVersion == SSL3 = do
         Just masterSecret <- usingHState ctx $ gets hstMasterSecret
-        let digest = generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit hashMD5SHA1) msgs)
+        let digest = generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit SHA1_MD5) msgs)
             hsh = HashDescr id id
         return (hsh, digest)
     | usedVersion == TLS10 || usedVersion == TLS11 = do
-        let hashf bs = hashFinal (hashUpdate (hashInit hashMD5SHA1) bs)
+        let hashf bs = hashFinal (hashUpdate (hashInit SHA1_MD5) bs)
             hsh = HashDescr hashf id
         return (hsh, msgs)
     | otherwise = do
@@ -65,7 +65,7 @@ signatureHashData SignatureRSA mhash =
         Just HashSHA512 -> hashDescrSHA512
         Just HashSHA256 -> hashDescrSHA256
         Just HashSHA1   -> hashDescrSHA1
-        Nothing         -> HashDescr (hashFinal . hashUpdate (hashInit hashMD5SHA1)) id
+        Nothing         -> HashDescr (hashFinal . hashUpdate (hashInit SHA1_MD5)) id
         _               -> error ("unimplemented signature hash type")
 signatureHashData SignatureDSS mhash =
     case mhash of

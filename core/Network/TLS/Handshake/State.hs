@@ -221,7 +221,7 @@ computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
         keyblockSize = cipherKeyBlockSize cipher
 
         bulk         = cipherBulk cipher
-        digestSize   = if hasMAC (bulkF bulk) then hashSize (cipherHash cipher)
+        digestSize   = if hasMAC (bulkF bulk) then hashDigestSize (cipherHash cipher)
                                               else 0
         keySize      = bulkKeySize bulk
         ivSize       = bulkIVSize bulk
@@ -266,6 +266,6 @@ setServerHelloParameters ver sran cipher compression = do
                 , hstPendingCompression = compression
                 , hstHandshakeDigest    = updateDigest $ hstHandshakeDigest hst
                 }
-  where initCtx = if ver < TLS12 then hashMD5SHA1 else hashSHA256
-        updateDigest (Left bytes) = Right $ foldl hashUpdate initCtx $ reverse bytes
+  where hashAlg = if ver < TLS12 then SHA1_MD5 else SHA256
+        updateDigest (Left bytes) = Right $ foldl hashUpdate (hashInit hashAlg) $ reverse bytes
         updateDigest (Right _)    = error "cannot initialize digest with another digest"

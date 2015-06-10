@@ -77,9 +77,6 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 
-import qualified Crypto.Hash.SHA1 as SHA1
-import qualified Crypto.Hash.MD5 as MD5
-
 data CurrentParams = CurrentParams
     { cParamsVersion     :: Version                     -- ^ current protocol version
     , cParamsKeyXchgType :: Maybe CipherKeyExchangeType -- ^ current key exchange type
@@ -566,8 +563,8 @@ type PRF = Bytes -> Bytes -> Int -> Bytes
 generateMasterSecret_SSL :: Bytes -> ClientRandom -> ServerRandom -> Bytes
 generateMasterSecret_SSL premasterSecret (ClientRandom c) (ServerRandom s) =
     B.concat $ map (computeMD5) ["A","BB","CCC"]
-  where computeMD5  label = MD5.hash $ B.concat [ premasterSecret, computeSHA1 label ]
-        computeSHA1 label = SHA1.hash $ B.concat [ label, premasterSecret, c, s ]
+  where computeMD5  label = hash MD5 $ B.concat [ premasterSecret, computeSHA1 label ]
+        computeSHA1 label = hash SHA1 $ B.concat [ label, premasterSecret, c, s ]
 
 generateMasterSecret_TLS :: PRF -> Bytes -> ClientRandom -> ServerRandom -> Bytes
 generateMasterSecret_TLS prf premasterSecret (ClientRandom c) (ServerRandom s) =
@@ -589,8 +586,8 @@ generateKeyBlock_SSL :: ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
 generateKeyBlock_SSL (ClientRandom c) (ServerRandom s) mastersecret kbsize =
     B.concat $ map computeMD5 $ take ((kbsize `div` 16) + 1) labels
   where labels            = [ uncurry BC.replicate x | x <- zip [1..] ['A'..'Z'] ]
-        computeMD5  label = MD5.hash $ B.concat [ mastersecret, computeSHA1 label ]
-        computeSHA1 label = SHA1.hash $ B.concat [ label, mastersecret, s, c ]
+        computeMD5  label = hash MD5 $ B.concat [ mastersecret, computeSHA1 label ]
+        computeSHA1 label = hash SHA1 $ B.concat [ label, mastersecret, s, c ]
 
 generateKeyBlock :: Version -> ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
 generateKeyBlock SSL2  = generateKeyBlock_SSL
@@ -605,8 +602,8 @@ generateFinished_TLS prf label mastersecret hashctx = prf mastersecret seed 12
 
 generateFinished_SSL :: Bytes -> Bytes -> HashCtx -> Bytes
 generateFinished_SSL sender mastersecret hashctx = B.concat [md5hash, sha1hash]
-  where md5hash  = MD5.hash $ B.concat [ mastersecret, pad2, md5left ]
-        sha1hash = SHA1.hash $ B.concat [ mastersecret, B.take 40 pad2, sha1left ]
+  where md5hash  = hash MD5 $ B.concat [ mastersecret, pad2, md5left ]
+        sha1hash = hash SHA1 $ B.concat [ mastersecret, B.take 40 pad2, sha1left ]
 
         lefthash = hashFinal $ flip hashUpdateSSL (pad1, B.take 40 pad1)
                              $ foldl hashUpdate hashctx [sender,mastersecret]

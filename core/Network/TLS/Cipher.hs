@@ -28,6 +28,7 @@ module Network.TLS.Cipher
 import Crypto.Cipher.Types (AuthTag)
 import Network.TLS.Types (CipherID)
 import Network.TLS.Struct (Version(..))
+import Network.TLS.Crypto (Hash(..), hashDigestSize)
 
 import qualified Data.ByteString as B
 
@@ -84,17 +85,6 @@ instance Eq Bulk where
                    , bulkBlockSize b1 == bulkBlockSize b2
                    ]
 
-data Hash = Hash
-    { hashName         :: String
-    , hashSize         :: Int
-    , hashF            :: B.ByteString -> B.ByteString
-    }
-
-instance Show Hash where
-    show hash = hashName hash
-instance Eq Hash where
-    h1 == h2 = hashName h1 == hashName h2 && hashSize h1 == hashSize h2
-
 -- | Cipher algorithm
 data Cipher = Cipher
     { cipherID           :: CipherID
@@ -106,7 +96,7 @@ data Cipher = Cipher
     }
 
 cipherKeyBlockSize :: Cipher -> Int
-cipherKeyBlockSize cipher = 2 * (hashSize (cipherHash cipher) + bulkIVSize bulk + bulkKeySize bulk)
+cipherKeyBlockSize cipher = 2 * (hashDigestSize (cipherHash cipher) + bulkIVSize bulk + bulkKeySize bulk)
   where bulk = cipherBulk cipher
 
 -- | Check if a specific 'Cipher' is allowed to be used

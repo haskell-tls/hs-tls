@@ -1,7 +1,8 @@
 {-# OPTIONS_HADDOCK hide #-}
 {-# LANGUAGE ExistentialQuantification #-}
 module Network.TLS.Crypto
-    ( HashCtx(..)
+    ( HashContext
+    , HashCtx
     , hashInit
     , hashUpdate
     , hashUpdateSSL
@@ -10,11 +11,12 @@ module Network.TLS.Crypto
     , module Network.TLS.Crypto.DH
     , module Network.TLS.Crypto.ECDH
 
-    -- * constructor
-    , hashMD5SHA1
-    , hashSHA1
-    , hashSHA256
-    , hashSHA512
+    -- * Hash
+    , hash
+    , Hash(..)
+    , hashName
+    , hashDigestSize
+    , hashBlockSize
 
     -- * key exchange generic interface
     , PubKey(..)
@@ -29,11 +31,9 @@ module Network.TLS.Crypto
     , KxError(..)
     ) where
 
-import qualified Crypto.Hash.SHA512 as SHA512
-import qualified Crypto.Hash.SHA256 as SHA256
-import qualified Crypto.Hash.SHA1 as SHA1
-import qualified Crypto.Hash.MD5 as MD5
+import qualified Crypto.Hash as H
 import qualified Data.ByteString as B
+import qualified Data.Byteable as B
 import Data.ByteString (ByteString)
 import Crypto.PubKey.HashDescr
 import qualified Crypto.PubKey.DSA as DSA
@@ -58,76 +58,74 @@ data KxError =
     | KxUnsupported
     deriving (Show)
 
-class HashCtxC a where
-    hashCName      :: a -> String
-    hashCInit      :: a -> a
-    hashCUpdate    :: a -> B.ByteString -> a
-    hashCUpdateSSL :: a -> (B.ByteString,B.ByteString) -> a
-    hashCFinal     :: a -> B.ByteString
-
-data HashCtx = forall h . HashCtxC h => HashCtx h
-
-instance Show HashCtx where
-    show (HashCtx c) = hashCName c
-
-{- MD5 & SHA1 joined -}
-data HashMD5SHA1 = HashMD5SHA1 SHA1.Ctx MD5.Ctx
-
-instance HashCtxC HashMD5SHA1 where
-    hashCName _                  = "MD5-SHA1"
-    hashCInit _                  = HashMD5SHA1 SHA1.init MD5.init
-    hashCUpdate (HashMD5SHA1 sha1ctx md5ctx) b = HashMD5SHA1 (SHA1.update sha1ctx b) (MD5.update md5ctx b)
-    hashCUpdateSSL (HashMD5SHA1 sha1ctx md5ctx) (b1,b2) = HashMD5SHA1 (SHA1.update sha1ctx b2) (MD5.update md5ctx b1)
-    hashCFinal  (HashMD5SHA1 sha1ctx md5ctx)   = B.concat [MD5.finalize md5ctx, SHA1.finalize sha1ctx]
-
-newtype HashSHA1 = HashSHA1 SHA1.Ctx
-
-instance HashCtxC HashSHA1 where
-    hashCName _                  = "SHA1"
-    hashCInit _                  = HashSHA1 SHA1.init
-    hashCUpdate (HashSHA1 ctx) b = HashSHA1 (SHA1.update ctx b)
-    hashCUpdateSSL (HashSHA1 ctx) (_,b2) = HashSHA1 (SHA1.update ctx b2)
-    hashCFinal  (HashSHA1 ctx)   = SHA1.finalize ctx
-
-newtype HashSHA256 = HashSHA256 SHA256.Ctx
-
-instance HashCtxC HashSHA256 where
-    hashCName _                    = "SHA256"
-    hashCInit _                    = HashSHA256 SHA256.init
-    hashCUpdate (HashSHA256 ctx) b = HashSHA256 (SHA256.update ctx b)
-    hashCUpdateSSL _ _             = error "CUpdateSSL with HashSHA256"
-    hashCFinal  (HashSHA256 ctx)   = SHA256.finalize ctx
-
-newtype HashSHA512 = HashSHA512 SHA512.Ctx
-
-instance HashCtxC HashSHA512 where
-    hashCName _                    = "SHA512"
-    hashCInit _                    = HashSHA512 SHA512.init
-    hashCUpdate (HashSHA512 ctx) b = HashSHA512 (SHA512.update ctx b)
-    hashCUpdateSSL _ _             = error "CUpdateSSL with HashSHA512"
-    hashCFinal  (HashSHA512 ctx)   = SHA512.finalize ctx
-
 -- functions to use the hidden class.
-hashInit :: HashCtx -> HashCtx
-hashInit   (HashCtx h)   = HashCtx $ hashCInit h
+hashInit :: Hash -> HashContext
+hashInit MD5      = HashContext $ ContextSimple (H.hashInit :: H.Context H.MD5)
+hashInit SHA1     = HashContext $ ContextSimple (H.hashInit :: H.Context H.SHA1)
+hashInit SHA256   = HashContext $ ContextSimple (H.hashInit :: H.Context H.SHA256)
+hashInit SHA512   = HashContext $ ContextSimple (H.hashInit :: H.Context H.SHA512)
+hashInit SHA1_MD5 = HashContextSSL H.hashInit H.hashInit
 
-hashUpdate :: HashCtx -> B.ByteString -> HashCtx
-hashUpdate (HashCtx h) b = HashCtx $ hashCUpdate h b
+hashUpdate :: HashContext -> B.ByteString -> HashCtx
+hashUpdate (HashContext (ContextSimple h)) b = HashContext $ ContextSimple (H.hashUpdate h b)
+hashUpdate (HashContextSSL sha1Ctx md5Ctx) b =
+    HashContextSSL (H.hashUpdate sha1Ctx b) (H.hashUpdate md5Ctx b)
 
 hashUpdateSSL :: HashCtx
               -> (B.ByteString,B.ByteString) -- ^ (for the md5 context, for the sha1 context)
               -> HashCtx
-hashUpdateSSL (HashCtx h) bs = HashCtx $ hashCUpdateSSL h bs
+hashUpdateSSL (HashContext _) _ = error "internal error: update SSL without a SSL Context"
+hashUpdateSSL (HashContextSSL sha1Ctx md5Ctx) (b1,b2) =
+    HashContextSSL (H.hashUpdate sha1Ctx b1) (H.hashUpdate md5Ctx b2)
 
 hashFinal :: HashCtx -> B.ByteString
-hashFinal  (HashCtx h)   = hashCFinal h
+hashFinal (HashContext (ContextSimple h)) = B.toBytes $ H.hashFinalize h
+hashFinal (HashContextSSL sha1Ctx md5Ctx) =
+    B.concat [B.toBytes (H.hashFinalize sha1Ctx), B.toBytes (H.hashFinalize md5Ctx)]
 
--- real hash constructors
-hashMD5SHA1, hashSHA1, hashSHA256, hashSHA512 :: HashCtx
-hashMD5SHA1 = HashCtx (HashMD5SHA1 SHA1.init MD5.init)
-hashSHA1    = HashCtx (HashSHA1 SHA1.init)
-hashSHA256  = HashCtx (HashSHA256 SHA256.init)
-hashSHA512  = HashCtx (HashSHA512 SHA512.init)
+data Hash = MD5 | SHA1 | SHA256 | SHA512 | SHA1_MD5
+    deriving (Show,Eq)
+
+data HashContext =
+      HashContext ContextSimple
+    | HashContextSSL (H.Context H.SHA1) (H.Context H.MD5)
+
+instance Show HashContext where
+    show _ = "hash-context"
+
+data ContextSimple = forall alg . H.HashAlgorithm alg => ContextSimple (H.Context alg)
+
+type HashCtx = HashContext
+
+hash :: Hash -> B.ByteString -> B.ByteString
+hash MD5 b      = B.toBytes . (H.hash :: B.ByteString -> H.Digest H.MD5) $ b
+hash SHA1 b     = B.toBytes . (H.hash :: B.ByteString -> H.Digest H.SHA1) $ b
+hash SHA256 b   = B.toBytes . (H.hash :: B.ByteString -> H.Digest H.SHA256) $ b
+hash SHA512 b   = B.toBytes . (H.hash :: B.ByteString -> H.Digest H.SHA512) $ b
+hash SHA1_MD5 b =
+    B.concat [B.toBytes (md5Hash b), B.toBytes (sha1Hash b)]
+  where
+    sha1Hash :: B.ByteString -> H.Digest H.SHA1
+    sha1Hash = H.hash
+    md5Hash :: B.ByteString -> H.Digest H.MD5
+    md5Hash = H.hash
+
+hashName :: Hash -> String
+hashName = show
+
+hashDigestSize :: Hash -> Int
+hashDigestSize MD5    = 16
+hashDigestSize SHA1   = 20
+hashDigestSize SHA256 = 32
+hashDigestSize SHA512 = 64
+hashDigestSize SHA1_MD5 = 36
+
+hashBlockSize :: Hash -> Int
+hashBlockSize MD5    = 64
+hashBlockSize SHA1   = 64
+hashBlockSize SHA256 = 64
+hashBlockSize SHA512 = 128
+hashBlockSize SHA1_MD5 = 64
 
 {- key exchange methods encrypt and decrypt for each supported algorithm -}
 

@@ -36,11 +36,7 @@ blockCipher = Cipher
         , bulkBlockSize = 16
         , bulkF         = BulkBlockF (\_ _ m -> m) (\_ _ m -> m)
         }
-    , cipherHash = Hash
-        { hashName = "const-hash"
-        , hashSize = 16
-        , hashF    = (\_ -> B.replicate 16 1)
-        }
+    , cipherHash = MD5
     , cipherKeyExchange = CipherKeyExchange_RSA
     , cipherMinVer      = Nothing
     }
