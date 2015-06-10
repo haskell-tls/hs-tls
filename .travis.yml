@@ -76,5 +76,5 @@ script:
       exit 1;
    fi
  - cd ../../
- - ghc --threaded --make test-scripts/TestClient
+ - ghc -threaded --make test-scripts/TestClient
  - ./test-scripts/TestClient
