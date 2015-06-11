@@ -387,15 +387,13 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
                 (c,_)           -> throwCore $ Error_Protocol ("unknown server key exchange received, expecting: " ++ show c, True, HandshakeFailure)
         doDHESignature dhparams signature signatureType = do
             -- TODO verify DHParams
-            expectedData <- generateSignedDHParams ctx dhparams
-            verified <- signatureVerify ctx signatureType expectedData signature
+            verified <- digitallySignDHParamsVerify ctx dhparams signatureType signature
             when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " for dhparams", True, HandshakeFailure)
             usingHState ctx $ setServerDHParams dhparams
 
         doECDHESignature ecdhparams signature signatureType = do
             -- TODO verify DHParams
-            expectedData <- generateSignedECDHParams ctx ecdhparams
-            verified <- signatureVerify ctx signatureType expectedData signature
+            verified <- digitallySignECDHParamsVerify ctx ecdhparams signatureType signature
             when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " for dhparams", True, HandshakeFailure)
             usingHState ctx $ setServerECDHParams ecdhparams
 

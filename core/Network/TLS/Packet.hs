@@ -626,13 +626,13 @@ generateServerFinished ver
 generateCertificateVerify_SSL :: Bytes -> HashCtx -> Bytes
 generateCertificateVerify_SSL = generateFinished_SSL ""
 
-encodeSignedDHParams :: ClientRandom -> ServerRandom -> ServerDHParams -> Bytes
-encodeSignedDHParams cran sran dhparams = runPut $
+encodeSignedDHParams :: ServerDHParams -> ClientRandom -> ServerRandom -> Bytes
+encodeSignedDHParams dhparams cran sran = runPut $
     putClientRandom32 cran >> putServerRandom32 sran >> putServerDHParams dhparams
 
 -- Combination of RFC 5246 and 4492 is ambiguous.
 -- Let's assume ecdhe_rsa and ecdhe_dss are identical to
 -- dhe_rsa and dhe_dss.
-encodeSignedECDHParams :: ClientRandom -> ServerRandom -> ServerECDHParams -> Bytes
-encodeSignedECDHParams cran sran dhparams = runPut $
+encodeSignedECDHParams :: ServerECDHParams -> ClientRandom -> ServerRandom -> Bytes
+encodeSignedECDHParams dhparams cran sran = runPut $
     putClientRandom32 cran >> putServerRandom32 sran >> putServerECDHParams dhparams

@@ -10,11 +10,10 @@ module Network.TLS.Handshake.Signature
     (
       certificateVerifyCreate
     , certificateVerifyCheck
-    , signatureHashData
-    , signatureCreate
-    , signatureVerify
-    , generateSignedDHParams
-    , generateSignedECDHParams
+    , digitallySignDHParams
+    , digitallySignECDHParams
+    , digitallySignDHParamsVerify
+    , digitallySignECDHParamsVerify
     ) where
 
 import Crypto.PubKey.HashDescr
@@ -22,6 +21,7 @@ import Network.TLS.Crypto
 import Network.TLS.Context.Internal
 import Network.TLS.Struct
 import Network.TLS.Packet (generateCertificateVerify_SSL, encodeSignedDHParams, encodeSignedECDHParams)
+import Network.TLS.Parameters (supportedHashSignatures)
 import Network.TLS.State
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Key
@@ -122,14 +122,53 @@ signatureVerifyWithHashDescr ctx sigAlgExpected hashDescr toVerify (DigitallySig
         SignatureDSS -> verifyRSA ctx cc hashDescr toVerify bs
         _            -> error "not implemented yet"
 
-generateSignedDHParams :: Context -> ServerDHParams -> IO Bytes
-generateSignedDHParams ctx serverParams = do
-    (cran, sran) <- usingHState ctx $ do
-                        (,) <$> gets hstClientRandom <*> (fromJust "server random" <$> gets hstServerRandom)
-    return $ encodeSignedDHParams cran sran serverParams
+digitallySignParams :: Context -> Bytes -> SignatureAlgorithm -> IO DigitallySigned
+digitallySignParams ctx signatureData sigAlg = do
+    usedVersion <- usingState_ ctx getVersion
+    let mhash = case usedVersion of
+                    TLS12 -> case filter ((==) sigAlg . snd) $ supportedHashSignatures $ ctxSupported ctx of
+                                []  -> error ("no hash signature for " ++ show sigAlg)
+                                x:_ -> Just (fst x)
+                    _     -> Nothing
+    let hashDescr = signatureHashData sigAlg mhash
+    signatureCreate ctx (fmap (\h -> (h, sigAlg)) mhash) hashDescr signatureData
 
-generateSignedECDHParams :: Context -> ServerECDHParams -> IO Bytes
-generateSignedECDHParams ctx serverParams = do
-    (cran, sran) <- usingHState ctx $ do
-                        (,) <$> gets hstClientRandom <*> (fromJust "server random" <$> gets hstServerRandom)
-    return $ encodeSignedECDHParams cran sran serverParams
+digitallySignDHParams :: Context
+                      -> ServerDHParams
+                      -> SignatureAlgorithm
+                      -> IO DigitallySigned
+digitallySignDHParams ctx serverParams sigAlg = do
+    dhParamsData <- withClientAndServerRandom ctx $ encodeSignedDHParams serverParams
+    digitallySignParams ctx dhParamsData sigAlg
+
+digitallySignECDHParams :: Context
+                        -> ServerECDHParams
+                        -> SignatureAlgorithm
+                        -> IO DigitallySigned
+digitallySignECDHParams ctx serverParams sigAlg = do
+    ecdhParamsData <- withClientAndServerRandom ctx $ encodeSignedECDHParams serverParams
+    digitallySignParams ctx ecdhParamsData sigAlg
+
+digitallySignDHParamsVerify :: Context
+                            -> ServerDHParams
+                            -> SignatureAlgorithm
+                            -> DigitallySigned
+                            -> IO Bool
+digitallySignDHParamsVerify ctx dhparams sigAlg signature = do
+    expectedData <- withClientAndServerRandom ctx $ encodeSignedDHParams dhparams
+    signatureVerify ctx sigAlg expectedData signature
+
+digitallySignECDHParamsVerify :: Context
+                              -> ServerECDHParams
+                              -> SignatureAlgorithm
+                              -> DigitallySigned
+                              -> IO Bool
+digitallySignECDHParamsVerify ctx dhparams sigAlg signature = do
+    expectedData <- withClientAndServerRandom ctx $ encodeSignedECDHParams dhparams
+    signatureVerify ctx sigAlg expectedData signature
+
+withClientAndServerRandom :: Context -> (ClientRandom -> ServerRandom -> b) -> IO b
+withClientAndServerRandom ctx f = do
+    (cran, sran) <- usingHState ctx $ (,) <$> gets hstClientRandom
+                                          <*> (fromJust "withClientAndServer : server random" <$> gets hstServerRandom)
+    return $ f cran sran

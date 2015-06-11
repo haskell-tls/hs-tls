@@ -276,17 +276,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
 
         generateSKX_DHE sigAlg = do
             serverParams  <- setup_DHE
-            signatureData <- generateSignedDHParams ctx serverParams
-
-            usedVersion <- usingState_ ctx getVersion
-            let mhash = case usedVersion of
-                            TLS12 -> case filter ((==) sigAlg . snd) $ supportedHashSignatures $ ctxSupported ctx of
-                                          []  -> error ("no hash signature for " ++ show sigAlg)
-                                          x:_ -> Just (fst x)
-                            _     -> Nothing
-            let hashDescr = signatureHashData sigAlg mhash
-            signed <- signatureCreate ctx (fmap (\h -> (h, sigAlg)) mhash) hashDescr signatureData
-
+            signed <- digitallySignDHParams ctx serverParams sigAlg
             case sigAlg of
                 SignatureRSA -> return $ SKX_DHE_RSA serverParams signed
                 SignatureDSS -> return $ SKX_DHE_DSS serverParams signed
@@ -311,21 +301,13 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                 --        There may be a better way to choose EC.
                 nc = if null common then error "No common EllipticCurves"
                                     else maximum $ map fromEnumSafe16 common
-            serverParams  <- setup_ECDHE nc
-            signatureData <- generateSignedECDHParams ctx serverParams
-
-            usedVersion <- usingState_ ctx getVersion
-            let mhash = case usedVersion of
-                            TLS12 -> case filter ((==) sigAlg . snd) $ supportedHashSignatures $ ctxSupported ctx of
-                                          []  -> error ("no hash signature for " ++ show sigAlg)
-                                          x:_ -> Just (fst x)
-                            _     -> Nothing
-            let hashDescr = signatureHashData sigAlg mhash
-            signed <- signatureCreate ctx (fmap (\h -> (h, sigAlg)) mhash) hashDescr signatureData
-
+            serverParams <- setup_ECDHE nc
+            signed       <- digitallySignECDHParams ctx serverParams sigAlg
             case sigAlg of
                 SignatureRSA -> return $ SKX_ECDHE_RSA serverParams signed
                 _            -> error ("generate skx_dhe unsupported signature type: " ++ show sigAlg)
+
+        -- create a DigitallySigned objects for DHParams or ECDHParams.
 
 -- | receive Client data in handshake until the Finished handshake.
 --
