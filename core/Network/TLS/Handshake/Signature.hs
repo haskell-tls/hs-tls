@@ -7,12 +7,12 @@
 -- Portability : unknown
 --
 module Network.TLS.Handshake.Signature
-    ( getHashAndASN1
-    , prepareCertificateVerifySignatureData
+    (
+      certificateVerifyCreate
+    , certificateVerifyCheck
     , signatureHashData
     , signatureCreate
     , signatureVerify
-    , signatureVerifyWithHashDescr
     , generateSignedDHParams
     , generateSignedECDHParams
     ) where
@@ -29,6 +29,25 @@ import Network.TLS.Util
 
 import Control.Applicative
 import Control.Monad.State
+
+certificateVerifyCheck :: Context
+                       -> Version
+                       -> Maybe HashAndSignatureAlgorithm
+                       -> Bytes
+                       -> DigitallySigned
+                       -> IO Bool
+certificateVerifyCheck ctx usedVersion malg msgs dsig = do
+    (hashMethod, toVerify) <- prepareCertificateVerifySignatureData ctx usedVersion malg msgs
+    signatureVerifyWithHashDescr ctx SignatureRSA hashMethod toVerify dsig
+
+certificateVerifyCreate :: Context
+                        -> Version
+                        -> Maybe HashAndSignatureAlgorithm
+                        -> Bytes
+                        -> IO DigitallySigned
+certificateVerifyCreate ctx usedVersion malg msgs = do
+    (hashMethod, toSign) <- prepareCertificateVerifySignatureData ctx usedVersion malg msgs
+    signatureCreate ctx malg hashMethod toSign
 
 getHashAndASN1 :: MonadIO m => (HashAlgorithm, SignatureAlgorithm) -> m HashDescr
 getHashAndASN1 hashSig = case hashSig of

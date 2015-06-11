@@ -376,11 +376,8 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
 
             usedVersion <- usingState_ ctx getVersion
             -- Fetch all handshake messages up to now.
-            msgs <- usingHState ctx $ B.concat <$> getHandshakeMessages
-            (hashMethod, toVerify) <- prepareCertificateVerifySignatureData ctx usedVersion mbHashSig msgs
-
-            -- Verify the signature.
-            verif <- signatureVerifyWithHashDescr ctx SignatureRSA hashMethod toVerify dsig
+            msgs  <- usingHState ctx $ B.concat <$> getHandshakeMessages
+            verif <- certificateVerifyCheck ctx usedVersion mbHashSig msgs dsig
 
             case verif of
                 True -> do

@@ -258,10 +258,8 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                         _     -> return Nothing
 
                     -- Fetch all handshake messages up to now.
-                    msgs <- usingHState ctx $ B.concat <$> getHandshakeMessages
-                    (hashMethod, toSign) <- prepareCertificateVerifySignatureData ctx usedVersion malg msgs
-
-                    sigDig <- signatureCreate ctx malg hashMethod toSign
+                    msgs   <- usingHState ctx $ B.concat <$> getHandshakeMessages
+                    sigDig <- certificateVerifyCreate ctx usedVersion malg msgs
                     sendPacket ctx $ Handshake [CertVerify sigDig]
 
                 _ -> return ()
