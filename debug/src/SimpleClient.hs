@@ -19,6 +19,7 @@ import System.X509
 
 import Data.Default.Class
 import Data.IORef
+import Data.Monoid
 import Data.X509.Validation
 
 ciphers :: [Cipher]
@@ -67,7 +68,7 @@ sessionRef ref = SessionManager
     , sessionInvalidate = \_         -> return ()
     }
 
-getDefaultParams flags host store sStorage session =
+getDefaultParams flags host store sStorage certCredsRequest session =
     (defaultParamsClient host BC.empty)
         { clientSupported = def { supportedVersions = supportedVers, supportedCiphers = myCiphers }
         , clientWantSessionResume = session
@@ -75,7 +76,9 @@ getDefaultParams flags host store sStorage session =
         , clientShared = def { sharedSessionManager  = sessionRef sStorage
                              , sharedCAStore         = store
                              , sharedValidationCache = validateCache
+                             , sharedCredentials     = maybe mempty fst certCredsRequest
                              }
+        , clientHooks = def { onCertificateRequest = maybe (onCertificateRequest def) snd certCredsRequest }
         }
     where
             validateCache
@@ -111,6 +114,7 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | Output String
           | Timeout String
           | BogusCipher String
+          | ClientCert String
           | Help
           deriving (Show,Eq)
 
@@ -123,6 +127,7 @@ options =
     , Option ['O']  ["output"]  (ReqArg Output "stdout") "output "
     , Option ['t']  ["timeout"] (ReqArg Timeout "timeout") "timeout in milliseconds (2s by default)"
     , Option []     ["no-validation"] (NoArg NoValidateCert) "disable certificate validation"
+    , Option []     ["client-cert"] (ReqArg ClientCert "cert-file:key-file") "add a client certificate to use with the server"
     , Option []     ["http1.1"] (NoArg Http11) "use http1.1 instead of http1.0"
     , Option []     ["ssl3"]    (NoArg Ssl3) "use SSL 3.0"
     , Option []     ["no-sni"]  (NoArg NoSNI) "don't use server name indication"
@@ -137,11 +142,13 @@ options =
     ]
 
 runOn (sStorage, certStore) flags port hostname = do
-    doTLS Nothing
+    certCredRequest <- getCredRequest
+    doTLS certCredRequest Nothing
     when (Session `elem` flags) $ do
         session <- readIORef sStorage
-        doTLS (Just session)
-  where doTLS sess = do
+        doTLS certCredRequest (Just session)
+  where
+        doTLS certCredRequest sess = do
             let query = LC.pack (
                         "GET "
                         ++ findURI flags
@@ -152,7 +159,7 @@ runOn (sStorage, certStore) flags port hostname = do
             out <- maybe (return stdout) (flip openFile WriteMode) getOutput
             runTLS (Debug `elem` flags)
                    (IODebug `elem` flags)
-                   (getDefaultParams flags hostname certStore sStorage sess) hostname port $ \ctx -> do
+                   (getDefaultParams flags hostname certStore sStorage certCredRequest sess) hostname port $ \ctx -> do
                 handshake ctx
                 sendData ctx $ query
                 loopRecv out ctx
@@ -164,6 +171,21 @@ runOn (sStorage, certStore) flags port hostname = do
                 Nothing            -> when (Debug `elem` flags) (hPutStrLn stderr "timeout") >> return ()
                 Just b | BC.null b -> return ()
                        | otherwise -> BC.hPutStrLn out b >> loopRecv out ctx
+
+        getCredRequest =
+            case clientCert of
+                Nothing -> return Nothing
+                Just s  -> do
+                    case break (== ':') s of
+                        (_   ,"")      -> error "wrong format for client-cert, expecting 'cert-file:key-file'"
+                        (cert,':':key) -> do
+                            ecred <- credentialLoadX509 cert key
+                            case ecred of
+                                Left err   -> error ("cannot load client certificate: " ++ err)
+                                Right cred -> do
+                                    let certRequest _ = return $ Just cred
+                                    return $ Just (Credentials [cred], certRequest)
+                        (_   ,_)      -> error "wrong format for client-cert, expecting 'cert-file:key-file'"
 
         findURI []        = "/"
         findURI (Uri u:_) = u
@@ -179,6 +201,9 @@ runOn (sStorage, certStore) flags port hostname = do
         timeoutMs = foldl f 2000 flags
           where f _   (Timeout t) = read t
                 f acc _           = acc
+        clientCert = foldl f Nothing flags
+          where f _   (ClientCert c) = Just c
+                f acc _              = acc
 
 printUsage =
     putStrLn $ usageInfo "usage: simpleclient [opts] <hostname> [port]\n\n\t(port default to: 443)\noptions:\n" options
