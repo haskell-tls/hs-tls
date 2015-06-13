@@ -1,6 +1,7 @@
 module Main (main) where
 
 import System.Process
+import System.Posix.Process (getProcessID)
 import System.Exit
 import Text.Printf
 import Control.Concurrent.Async
@@ -96,7 +97,10 @@ pad n s
 
 printIndented txt = mapM_ (putStrLn . ((++) "  ")) $ lines txt
 
-run l = do
+logFile pid = "TestClient." ++ show pid ++ ".log"
+
+run pid l = do
+    putStrLn $ ("log file : " ++ lfile)
     term <- newMVar ()
     let withTerm f = withMVar term $ \() -> f
     mapConcurrently (runGroup withTerm) l
@@ -114,10 +118,13 @@ run l = do
                     mapM_ (\n -> putStr "  " >> putRow n "SUCCESS") success
                     mapM_ (\n -> putStr "  " >> putRow n "SKIPPED") skipped
                     mapM_ showErr errs
+      where
 
-    showErr (FailStatus name ec out err) = do
-        putStrLn ("  name=" ++ name ++ " exitcode=" ++ show ec)
-        printIndented out
+        showErr (FailStatus name ec out err) = do
+            putStr "  " >> putRow (name ++ " exitcode=" ++ show ec) "FAILED"
+            appendFile lfile ("### " ++ url ++ "  name=" ++ name ++ "\n" ++ out)
+
+    lfile = logFile pid
 
     toStats :: [Result] -> ([String], [String], [FailStatus])
     toStats = foldl accumulate ([], [], [])
@@ -129,8 +136,9 @@ run l = do
 t2 :: b -> [a] -> [(a, b)]
 t2 b = map (\x -> (x, b))
 
-main =
-    run $
+main = do
+    pid <- getProcessID
+    run pid $
         -- Everything supported
         t2 Everything
             [ "www.google.com"
