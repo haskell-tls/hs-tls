@@ -1,5 +1,5 @@
 all:
-	echo "reinstall | tests"
+	@echo "reinstall | tests | build-openssl-server | build-openssl-server-mac-102"
 
 .PHONY: reinstall
 reinstall:
@@ -12,3 +12,15 @@ tests: test-scripts/TestClient
 .PHONY: test-scripts/TestClient
 test-scripts/TestClient:
 	ghc -threaded --make test-scripts/TestClient
+
+.PHONY: build-openssl-server
+build-openssl-server:
+	gcc -Wall -o test-scripts/openssl-server -lcrypto -Wno-deprecated-declarations -lssl test-scripts/openssl-server.c
+
+# for building on osx with the latest openssl version in brew
+.PHONY: build-openssl-server-mac-102
+build-openssl-server-mac-102:
+	gcc -Wall -o test-scripts/openssl-server \
+			-L/usr/local/Cellar/openssl/1.0.2a-1/lib \
+			-I/usr/local/Cellar/openssl/1.0.2a-1/include \
+			-lcrypto -lssl test-scripts/openssl-server.c
