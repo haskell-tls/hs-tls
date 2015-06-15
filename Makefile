@@ -15,7 +15,7 @@ test-scripts/TestClient:
 
 .PHONY: build-openssl-server
 build-openssl-server:
-	gcc -Wall -o test-scripts/openssl-server -lcrypto -Wno-deprecated-declarations -lssl test-scripts/openssl-server.c
+	gcc -Wall -o test-scripts/openssl-server -Wno-deprecated-declarations test-scripts/openssl-server.c -lcrypto -lssl
 
 # for building on osx with the latest openssl version in brew
 .PHONY: build-openssl-server-mac-102
