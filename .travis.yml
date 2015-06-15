@@ -79,4 +79,6 @@ script:
  - cd ../../
  - make build-openssl-server
  - ghc -threaded --make test-scripts/TestClient
- - ./test-scripts/TestClient
+ - touch debug.log
+ - ./test-scripts/TestClient debug.log
+ - cat debug.log
