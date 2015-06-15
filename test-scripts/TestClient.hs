@@ -1,8 +1,10 @@
 module Main (main) where
 
 import System.Process
+import System.Environment
 import System.Posix.Process (getProcessID)
 import System.Exit
+import System.Timeout
 import Text.Printf
 import Control.Applicative
 import Control.Monad
@@ -21,6 +23,9 @@ data Option = Everything
 
 data CertValidation = NoCertValidation | CertValidation
     deriving (Eq)
+
+-- 10 seconds
+timeoutSeconds = 10 * 1000000
 
 userAgent = "--user-agent=haskell tls 1.2"
 {-
@@ -83,18 +88,20 @@ data FailStatus = FailStatus
     , failErr      :: String
     } deriving (Show,Eq)
 
-data Result = Success String | Skipped String | Failure FailStatus
+data Result = Success String String | Skipped String | Failure FailStatus | Timeout String
     deriving (Show,Eq)
 
-showResultStatus (Success _) = "SUCCESS"
+showResultStatus (Success _ _) = "SUCCESS"
 showResultStatus (Skipped _) = "SKIPPED"
 showResultStatus (Failure _) = "FAILURE"
+showResultStatus (Timeout _) = "TIMEOUT"
 
 wrapResult name f = do
-    (ec,out,err) <- f
-    case ec of
-        ExitSuccess   -> return $ Success name
-        ExitFailure r -> return $ Failure $ FailStatus name r out err
+    r <- timeout timeoutSeconds f
+    case r of
+        Just (ExitSuccess, out, err)   -> return $ Success name (out ++ err)
+        Just (ExitFailure r, out, err) -> return $ Failure $ FailStatus name r out err
+        Nothing                        -> return $ Timeout name
 
 test :: String -> Option -> [IO Result]
 test url opt = do
@@ -125,10 +132,7 @@ pad n s
 
 printIndented txt = mapM_ (putStrLn . ((++) "  ")) $ lines txt
 
-logFile pid = "TestClient." ++ show pid ++ ".log"
-
-runAgainstServices pid l = do
-    putStrLn $ ("log file : " ++ lfile)
+runAgainstServices logFile pid l = do
     term <- newMVar ()
     let withTerm f = withMVar term $ \() -> f
     mapConcurrently (runGroup withTerm) l
@@ -150,21 +154,19 @@ runAgainstServices pid l = do
 
         showErr (FailStatus name ec out err) = do
             putStr "  " >> putRow (name ++ " exitcode=" ++ show ec) "FAILED"
-            appendFile lfile ("### " ++ url ++ "  name=" ++ name ++ "\n" ++ out)
-
-    lfile = logFile pid
+            appendFile logFile ("### " ++ url ++ "  name=" ++ name ++ "\n" ++ out)
 
     toStats :: [Result] -> ([String], [String], [FailStatus])
     toStats = foldl accumulate ([], [], [])
-      where accumulate (success, skipped, errs) (Success n) = (n : success, skipped, errs)
-            accumulate (success, skipped, errs) (Skipped n) = (success, n : skipped, errs)
-            accumulate (success, skipped, errs) (Failure r) = (success, skipped, r:errs)
+      where accumulate (success, skipped, errs) (Success n _) = (n : success, skipped, errs)
+            accumulate (success, skipped, errs) (Skipped n)   = (success, n : skipped, errs)
+            accumulate (success, skipped, errs) (Failure r)   = (success, skipped, r:errs)
 
 -- no better name ..
 t2 :: b -> [a] -> [(a, b)]
 t2 b = map (\x -> (x, b))
 
-runLocal pid = do
+runLocal logFile pid = do
     putStrLn "running local test against OpenSSL"
     let combi = [ (ver, cert) | ver <- [SSL3, TLS10, TLS11, TLS12], cert <- [Nothing, Just ("test-cert/client.crt", "test-cert/client.key") ] ]
     haveFailed <- filter (== False) <$> mapM runOne combi
@@ -174,23 +176,34 @@ runLocal pid = do
     pidToPort pid = 14000 + (fromIntegral pid `mod` 2901)
 
     runOne (ver,ccert) = do
-        putStrLn ("version=" ++ show ver ++ " client-certificate: " ++ maybe "NO" (const "YES") ccert)
+        let hdr = "version=" ++ show ver ++ " client-certificate: " ++ maybe "NO" (const "YES") ccert
+        putStrLn hdr
+        opensslResult <- newEmptyMVar
         _ <- forkIO $ do
-            r <- wrapResult "openssl" (opensslServer (pidToPort pid) "test-certs/server.rsa.crt" "test-certs/server.rsa.key" ver False)
+            r <- wrapResult "openssl" (opensslServer (pidToPort pid) "test-certs/server.rsa.crt" "test-certs/server.rsa.key" ver (maybe False (const True) ccert))
+            putMVar opensslResult r
             case r of
-                Success _ -> return ()
-                _         -> putStrLn ("openssl finished: " ++ showResultStatus r)
+                Success _ _ -> return ()
+                _           -> putStrLn ("openssl finished: " ++ showResultStatus r)
         -- FIXME : racy. replace by a check that the port is bound
-        threadDelay 800000
-        r <- wrapResult "simpleclient" (simpleClient (pidToPort pid) "localhost" Nothing ver NoCertValidation Nothing)
+        threadDelay 1000000
+        r  <- wrapResult "simpleclient" (simpleClient (pidToPort pid) "localhost" Nothing ver NoCertValidation ccert)
+        r2 <- readMVar opensslResult
         case r of
-            Success _ -> putRow "" "SUCCESS" >> return True
-            _         -> putStrLn (show r) >> return False
+            Success _ _ -> putRow "" "SUCCESS" >> return True
+            _           -> putRow "" "FAILED" >> appendFile logFile (hdr ++ "\n\n" ++ show r ++ "\n\n" ++ show r2 ++ "\n\n\n") >> return False
 
 main = do
+    args <- getArgs
     pid <- getProcessID
-    runLocal pid
-    runAgainstServices pid $
+    let logFile = case args of
+                    []    -> "TestClient." ++ show (fromIntegral pid) ++ ".log"
+                    (x:_) -> x
+
+    putStrLn $ ("log file : " ++ logFile)
+
+    runLocal logFile pid
+    runAgainstServices logFile pid $
         -- Everything supported
         t2 Everything
             [ "www.google.com"
