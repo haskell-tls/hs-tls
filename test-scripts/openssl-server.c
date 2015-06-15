@@ -155,6 +155,7 @@ int main(int argc, char *argv[])
 	char *file_key;
 	int want_client_cert = 0;
 	int keep_running = 0;
+	int i;
 
 	if (argc < 4) {
 		printf("Usage: %s <portnum> <cert.pem> <key.pem> [opts]\n", argv[0]);
@@ -165,7 +166,7 @@ int main(int argc, char *argv[])
 	file_cert = argv[2];
 	file_key = argv[3];
 
-	for (int i = 4; i < argc; i++) {
+	for (i = 4; i < argc; i++) {
 		if (strcmp("tls-1.2", argv[i]) == 0) {
 			method = TLSv1_2_server_method();
 		} else if (strcmp("tls-1.1", argv[i]) == 0) {
@@ -203,4 +204,5 @@ int main(int argc, char *argv[])
 
 	close(server_fd);
 	SSL_CTX_free(ctx);
+	return 0;
 }
