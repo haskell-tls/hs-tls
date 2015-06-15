@@ -168,7 +168,10 @@ t2 b = map (\x -> (x, b))
 
 runLocal logFile pid = do
     putStrLn "running local test against OpenSSL"
-    let combi = [ (ver, cert) | ver <- [SSL3, TLS10, TLS11, TLS12], cert <- [Nothing, Just ("test-cert/client.crt", "test-cert/client.key") ] ]
+    let combi = [ (ver, cert)
+                | ver  <- [SSL3, TLS10, TLS11, TLS12]
+                , cert <- [Nothing] -- [Nothing, Just ("test-cert/client.crt", "test-cert/client.key") ]
+                ]
     haveFailed <- filter (== False) <$> mapM runOne combi
     when (not $ null haveFailed) $ exitFailure
   where
@@ -180,7 +183,8 @@ runLocal logFile pid = do
         putStrLn hdr
         opensslResult <- newEmptyMVar
         _ <- forkIO $ do
-            r <- wrapResult "openssl" (opensslServer (pidToPort pid) "test-certs/server.rsa.crt" "test-certs/server.rsa.key" ver (maybe False (const True) ccert))
+            let useClientCert = maybe False (const True) ccert
+            r <- wrapResult "openssl" (opensslServer (pidToPort pid) "test-certs/server.rsa.crt" "test-certs/server.rsa.key" ver useClientCert)
             putMVar opensslResult r
             case r of
                 Success _ _ -> return ()
