@@ -190,7 +190,7 @@ runLocal logFile pid = do
                 Success _ _ -> return ()
                 _           -> putStrLn ("openssl finished: " ++ showResultStatus r)
         -- FIXME : racy. replace by a check that the port is bound
-        threadDelay 1000000
+        threadDelay 800000
         r  <- wrapResult "simpleclient" (simpleClient (pidToPort pid) "localhost" Nothing ver NoCertValidation ccert)
         r2 <- readMVar opensslResult
         case r of

@@ -132,12 +132,20 @@ static void process(SSL* ssl)
 	}
 
 	show_certificates(ssl);
-	bytes = SSL_read(ssl, buf, sizeof(buf));
-	if (bytes > 0) {
-		printf("received from client: \"%s\"\n", buf);
-		SSL_write(ssl, buf, bytes);
-	} else
-		ERR_print_errors_fp(stderr);
+	while (1) {
+		bytes = SSL_read(ssl, buf, sizeof(buf));
+		if (bytes > 0) {
+			printf("received from client: \"%s\"\n", buf);
+			SSL_write(ssl, buf, bytes);
+		} else {
+			ERR_print_errors_fp(stderr);
+			break;
+		}
+		if (SSL_get_shutdown(ssl) == SSL_RECEIVED_SHUTDOWN) {
+			SSL_shutdown(ssl);
+			break;
+		}
+	}
 
 out:
 	sd = SSL_get_fd(ssl);
@@ -173,6 +181,8 @@ int main(int argc, char *argv[])
 			method = TLSv1_1_server_method();
 		} else if (strcmp("tls-1.0", argv[i]) == 0) {
 			method = TLSv1_server_method();
+		} else if (strcmp("ssl-3.0", argv[i]) == 0) {
+			method = SSLv3_server_method();
 		} else if (strcmp("client-cert", argv[i]) == 0) {
 			want_client_cert = 1;
 		} else if (strcmp("keep-running", argv[i]) == 0) {
