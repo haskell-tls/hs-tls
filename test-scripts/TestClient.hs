@@ -4,8 +4,11 @@ import System.Process
 import System.Posix.Process (getProcessID)
 import System.Exit
 import Text.Printf
+import Control.Applicative
+import Control.Monad
 import Control.Concurrent.Async
 import Control.Concurrent.MVar
+import Control.Concurrent
 
 data Version = SSL3 | TLS10 | TLS11 | TLS12
     deriving (Show,Eq,Ord)
@@ -16,13 +19,16 @@ data Option = Everything
             | RangeBound Version Version
     deriving (Show,Eq)
 
-userAgent = "--user-agent="
+data CertValidation = NoCertValidation | CertValidation
+    deriving (Eq)
+
+userAgent = "--user-agent=haskell tls 1.2"
 {-
   -v          --verbose                verbose output on stdout
   -d          --debug                  TLS debug output on stdout
               --io-debug               TLS IO debug output on stdout
   -s          --session                try to resume a session
-  -O stdout   --output=stdout          output 
+  -O stdout   --output=stdout          output
   -t timeout  --timeout=timeout        timeout in milliseconds (2s by default)
               --no-validation          disable certificate validation
               --http1.1                use http1.1 instead of http1.0
@@ -37,17 +43,38 @@ userAgent = "--user-agent="
               --uri=URI                optional URI requested by default /
   -h          --help                   request help
 -}
-simpleClient :: Int -> String -> Maybe String -> Version -> IO (ExitCode, String, String)
-simpleClient clientPort clientHost uri ver =
+simpleClient :: Int
+             -> String
+             -> Maybe String
+             -> Version
+             -> CertValidation
+             -> Maybe (FilePath, FilePath)
+             -> IO (ExitCode, String, String)
+simpleClient clientPort clientHost uri ver certVal clientCert =
     readProcessWithExitCode "./debug/dist/build/tls-simpleclient/tls-simpleclient"
-        ["-v", "--debug", "-O", "/dev/null", clientHost, show clientPort, "--uri", maybe "/" id uri, verString, "--user-agent=" ]
-        ""
+        (["-v", "--debug", "-O", "/dev/null", clientHost, show clientPort, "--uri", maybe "/" id uri, verString, userAgent]
+         ++ if certVal == CertValidation then [] else ["--no-validation"]
+         ++ maybe [] (\(f,v) -> ["--client-cert=" ++ f ++ ":" ++ v ]) clientCert
+        ) ""
   where verString =
             case ver of
                 SSL3  -> "--ssl3"
                 TLS10 -> "--tls10"
                 TLS11 -> "--tls11"
                 TLS12 -> "--tls12"
+
+opensslServer :: Int -> String -> String -> Version -> Bool -> IO (ExitCode, String, String)
+opensslServer port cert key ver useClientCert =
+    readProcessWithExitCode "./test-scripts/openssl-server"
+        ([show port, cert, key, verString ]
+         ++ if useClientCert then ["client-cert"] else []
+        ) ""
+  where verString =
+            case ver of
+                SSL3  -> "ssl-3.0"
+                TLS10 -> "tls-1.0"
+                TLS11 -> "tls-1.1"
+                TLS12 -> "tls-1.2"
 
 data FailStatus = FailStatus
     { failName     :: String
@@ -58,6 +85,16 @@ data FailStatus = FailStatus
 
 data Result = Success String | Skipped String | Failure FailStatus
     deriving (Show,Eq)
+
+showResultStatus (Success _) = "SUCCESS"
+showResultStatus (Skipped _) = "SKIPPED"
+showResultStatus (Failure _) = "FAILURE"
+
+wrapResult name f = do
+    (ec,out,err) <- f
+    case ec of
+        ExitSuccess   -> return $ Success name
+        ExitFailure r -> return $ Failure $ FailStatus name r out err
 
 test :: String -> Option -> [IO Result]
 test url opt = do
@@ -76,17 +113,8 @@ test url opt = do
             RangeBound minB maxB
                 | ver < minB || ver > maxB -> False
                 | otherwise                -> True
-    
-    reallyRunOne ver = do
-        (ec,out,err) <- simpleClient 443 url Nothing ver
-        case ec of
-            ExitSuccess   -> return $ Success (show ver)
---                putRow url "SUCCESS"
---                mapM_ (putStrLn . ((++) "  ")) $ lines out
---                mapM_ (putStrLn . ((++) "  ")) $ lines err
-            ExitFailure r -> return $ Failure $ FailStatus (show ver) r out err
-                --putRow url "FAILED"
-                --mapM_ (putStrLn . ((++) "  ")) $ lines out
+    reallyRunOne ver = wrapResult (show ver) (simpleClient 443 url Nothing ver CertValidation Nothing)
+
 
 putRow n s =
     putStrLn (pad 64 n ++ " " ++ s)
@@ -99,7 +127,7 @@ printIndented txt = mapM_ (putStrLn . ((++) "  ")) $ lines txt
 
 logFile pid = "TestClient." ++ show pid ++ ".log"
 
-run pid l = do
+runAgainstServices pid l = do
     putStrLn $ ("log file : " ++ lfile)
     term <- newMVar ()
     let withTerm f = withMVar term $ \() -> f
@@ -131,14 +159,38 @@ run pid l = do
       where accumulate (success, skipped, errs) (Success n) = (n : success, skipped, errs)
             accumulate (success, skipped, errs) (Skipped n) = (success, n : skipped, errs)
             accumulate (success, skipped, errs) (Failure r) = (success, skipped, r:errs)
- 
+
 -- no better name ..
 t2 :: b -> [a] -> [(a, b)]
 t2 b = map (\x -> (x, b))
 
+runLocal pid = do
+    putStrLn "running local test against OpenSSL"
+    let combi = [ (ver, cert) | ver <- [SSL3, TLS10, TLS11, TLS12], cert <- [Nothing, Just ("test-cert/client.crt", "test-cert/client.key") ] ]
+    haveFailed <- filter (== False) <$> mapM runOne combi
+    when (not $ null haveFailed) $ exitFailure
+  where
+    -- running between port 14000 and 16901
+    pidToPort pid = 14000 + (fromIntegral pid `mod` 2901)
+
+    runOne (ver,ccert) = do
+        putStrLn ("version=" ++ show ver ++ " client-certificate: " ++ maybe "NO" (const "YES") ccert)
+        _ <- forkIO $ do
+            r <- wrapResult "openssl" (opensslServer (pidToPort pid) "test-certs/server.rsa.crt" "test-certs/server.rsa.key" ver False)
+            case r of
+                Success _ -> return ()
+                _         -> putStrLn ("openssl finished: " ++ showResultStatus r)
+        -- FIXME : racy. replace by a check that the port is bound
+        threadDelay 800000
+        r <- wrapResult "simpleclient" (simpleClient (pidToPort pid) "localhost" Nothing ver NoCertValidation Nothing)
+        case r of
+            Success _ -> putRow "" "SUCCESS" >> return True
+            _         -> putStrLn (show r) >> return False
+
 main = do
     pid <- getProcessID
-    run pid $
+    runLocal pid
+    runAgainstServices pid $
         -- Everything supported
         t2 Everything
             [ "www.google.com"
