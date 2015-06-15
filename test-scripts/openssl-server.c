@@ -17,6 +17,7 @@
 #define OPENSSL_RECENT
 #define const_SSL_METHOD const SSL_METHOD
 #else
+#warning "building with old version of openSSL"
 #define OPENSSL_OLD
 #define TLSv1_2_server_method() SSLv3_server_method()
 #define TLSv1_1_server_method() SSLv3_server_method()
