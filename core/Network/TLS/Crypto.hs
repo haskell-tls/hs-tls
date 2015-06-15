@@ -76,7 +76,7 @@ hashUpdateSSL :: HashCtx
               -> HashCtx
 hashUpdateSSL (HashContext _) _ = error "internal error: update SSL without a SSL Context"
 hashUpdateSSL (HashContextSSL sha1Ctx md5Ctx) (b1,b2) =
-    HashContextSSL (H.hashUpdate sha1Ctx b1) (H.hashUpdate md5Ctx b2)
+    HashContextSSL (H.hashUpdate sha1Ctx b2) (H.hashUpdate md5Ctx b1)
 
 hashFinal :: HashCtx -> B.ByteString
 hashFinal (HashContext (ContextSimple h)) = B.toBytes $ H.hashFinalize h
