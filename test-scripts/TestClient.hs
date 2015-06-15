@@ -11,6 +11,13 @@ import Control.Monad
 import Control.Concurrent.Async
 import Control.Concurrent.MVar
 import Control.Concurrent
+import Control.Exception
+
+import Data.ByteString (ByteString)
+import qualified Data.ByteString as B
+import System.IO
+
+import qualified Data.ByteString.UTF8 as UTF8
 
 data Version = SSL3 | TLS10 | TLS11 | TLS12
     deriving (Show,Eq,Ord)
@@ -26,6 +33,49 @@ data CertValidation = NoCertValidation | CertValidation
 
 -- 10 seconds
 timeoutSeconds = 10 * 1000000
+
+forkWait :: IO a -> IO (IO a)
+forkWait a = do
+  res <- newEmptyMVar
+  _ <- mask $ \restore -> forkIO $ try (restore a) >>= putMVar res
+  return (takeMVar res >>= either (\ex -> throwIO (ex :: SomeException)) return)
+
+-- | Like 'System.Process.readProcessWithExitCode', but using 'ByteString'
+readProcessWithExitCodeBinary
+    :: FilePath                 -- ^ command to run
+    -> [String]                 -- ^ any arguments
+    -> ByteString               -- ^ standard input
+    -> IO (ExitCode, ByteString, ByteString) -- ^ exitcode, stdout, stderr
+readProcessWithExitCodeBinary cmd args input = mask $ \restore -> do
+    (Just inh, Just outh, Just errh, pid) <-
+        createProcess (proc cmd args){ std_in  = CreatePipe,
+                                       std_out = CreatePipe,
+                                       std_err = CreatePipe }
+    flip onException
+      (do hClose inh; hClose outh; hClose errh;
+          terminateProcess pid; waitForProcess pid) $ restore $ do
+
+      -- fork off a thread to start consuming stdout
+      waitOut <- forkWait $ B.hGetContents outh
+
+      -- fork off a thread to start consuming stderr
+      waitErr <- forkWait $ B.hGetContents errh
+
+      -- now write and flush any input
+      unless (B.null input) $ do B.hPutStr inh input; hFlush inh
+      hClose inh -- done with stdin
+
+      -- wait on the output
+      out <- waitOut
+      err <- waitErr
+
+      hClose outh
+      hClose errh
+
+      -- wait on the process
+      ex <- waitForProcess pid
+
+      return (ex, out, err)
 
 userAgent = "--user-agent=haskell tls 1.2"
 {-
@@ -54,13 +104,13 @@ simpleClient :: Int
              -> Version
              -> CertValidation
              -> Maybe (FilePath, FilePath)
-             -> IO (ExitCode, String, String)
+             -> IO (ExitCode, ByteString, ByteString)
 simpleClient clientPort clientHost uri ver certVal clientCert =
-    readProcessWithExitCode "./debug/dist/build/tls-simpleclient/tls-simpleclient"
+    readProcessWithExitCodeBinary "./debug/dist/build/tls-simpleclient/tls-simpleclient"
         (["-v", "--debug", "-O", "/dev/null", clientHost, show clientPort, "--uri", maybe "/" id uri, verString, userAgent]
          ++ if certVal == CertValidation then [] else ["--no-validation"]
          ++ maybe [] (\(f,v) -> ["--client-cert=" ++ f ++ ":" ++ v ]) clientCert
-        ) ""
+        ) B.empty
   where verString =
             case ver of
                 SSL3  -> "--ssl3"
@@ -68,12 +118,12 @@ simpleClient clientPort clientHost uri ver certVal clientCert =
                 TLS11 -> "--tls11"
                 TLS12 -> "--tls12"
 
-opensslServer :: Int -> String -> String -> Version -> Bool -> IO (ExitCode, String, String)
+opensslServer :: Int -> String -> String -> Version -> Bool -> IO (ExitCode, ByteString, ByteString)
 opensslServer port cert key ver useClientCert =
-    readProcessWithExitCode "./test-scripts/openssl-server"
+    readProcessWithExitCodeBinary "./test-scripts/openssl-server"
         ([show port, cert, key, verString ]
          ++ if useClientCert then ["client-cert"] else []
-        ) ""
+        ) B.empty
   where verString =
             case ver of
                 SSL3  -> "ssl-3.0"
@@ -99,8 +149,8 @@ showResultStatus (Timeout _) = "TIMEOUT"
 wrapResult name f = do
     r <- timeout timeoutSeconds f
     case r of
-        Just (ExitSuccess, out, err)   -> return $ Success name (out ++ err)
-        Just (ExitFailure r, out, err) -> return $ Failure $ FailStatus name r out err
+        Just (ExitSuccess, out, err)   -> return $ Success name (UTF8.toString (out `B.append` err))
+        Just (ExitFailure r, out, err) -> return $ Failure $ FailStatus name r (UTF8.toString out) (UTF8.toString err)
         Nothing                        -> return $ Timeout name
 
 test :: String -> Option -> [IO Result]
@@ -170,7 +220,7 @@ runLocal logFile pid = do
     putStrLn "running local test against OpenSSL"
     let combi = [ (ver, cert)
                 | ver  <- [SSL3, TLS10, TLS11, TLS12]
-                , cert <- [Nothing] -- [Nothing, Just ("test-cert/client.crt", "test-cert/client.key") ]
+                , cert <- [Nothing, Just ("test-certs/client.crt", "test-certs/client.key") ]
                 ]
     haveFailed <- filter (== False) <$> mapM runOne combi
     when (not $ null haveFailed) $ exitFailure
