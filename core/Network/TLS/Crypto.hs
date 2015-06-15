@@ -81,7 +81,7 @@ hashUpdateSSL (HashContextSSL sha1Ctx md5Ctx) (b1,b2) =
 hashFinal :: HashCtx -> B.ByteString
 hashFinal (HashContext (ContextSimple h)) = B.toBytes $ H.hashFinalize h
 hashFinal (HashContextSSL sha1Ctx md5Ctx) =
-    B.concat [B.toBytes (H.hashFinalize sha1Ctx), B.toBytes (H.hashFinalize md5Ctx)]
+    B.concat [B.toBytes (H.hashFinalize md5Ctx), B.toBytes (H.hashFinalize sha1Ctx)]
 
 data Hash = MD5 | SHA1 | SHA256 | SHA512 | SHA1_MD5
     deriving (Show,Eq)
