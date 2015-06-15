@@ -76,5 +76,6 @@ script:
       exit 1;
    fi
  - cd ../../
+ - make build-openssl-server
  - ghc -threaded --make test-scripts/TestClient
  - ./test-scripts/TestClient
