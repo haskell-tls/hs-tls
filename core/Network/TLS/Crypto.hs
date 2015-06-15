@@ -132,16 +132,16 @@ hashBlockSize SHA1_MD5 = 64
 
 {- key exchange methods encrypt and decrypt for each supported algorithm -}
 
-generalizeRSAWithRNG :: Either RSA.Error a -> Either KxError a
-generalizeRSAWithRNG (Left e)  = Left (RSAError e)
-generalizeRSAWithRNG (Right x) = Right x
+generalizeRSAError :: Either RSA.Error a -> Either KxError a
+generalizeRSAError (Left e)  = Left (RSAError e)
+generalizeRSAError (Right x) = Right x
 
 kxEncrypt :: MonadRandom r => PublicKey -> ByteString -> r (Either KxError ByteString)
-kxEncrypt (PubKeyRSA pk) b = generalizeRSAWithRNG `fmap` RSA.encrypt pk b
+kxEncrypt (PubKeyRSA pk) b = generalizeRSAError `fmap` RSA.encrypt pk b
 kxEncrypt _              _ = return (Left KxUnsupported)
 
 kxDecrypt :: MonadRandom r => PrivateKey -> ByteString -> r (Either KxError ByteString)
-kxDecrypt (PrivKeyRSA pk) b = generalizeRSAWithRNG `fmap` RSA.decryptSafer pk b
+kxDecrypt (PrivKeyRSA pk) b = generalizeRSAError `fmap` RSA.decryptSafer pk b
 kxDecrypt _               _ = return (Left KxUnsupported)
 
 -- Verify that the signature matches the given message, using the
@@ -166,8 +166,8 @@ kxSign :: MonadRandom r
        -> ByteString
        -> r (Either KxError ByteString)
 kxSign (PrivKeyRSA pk) hashDescr msg =
-    generalizeRSAWithRNG $ RSA.signSafer g hashDescr pk msg
-kxSign (PrivKeyDSA pk) hashDescr msg =
+    generalizeRSAError `fmap` RSA.signSafer hashDescr pk msg
+kxSign (PrivKeyDSA pk) hashDescr msg = do
     sign <- DSA.sign pk (hashFunction hashDescr) msg
     return (Right $ encodeASN1' DER $ toASN1 sign [])
 --kxSign g _               _         _   =
