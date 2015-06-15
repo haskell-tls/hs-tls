@@ -37,7 +37,7 @@ install:
  - cabal --version
  - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
  - travis_retry cabal update
- - cabal install bytestring-utf8
+ - cabal install utf8-string
  - cd core
  - if [ "${GHCVER}" = "7.0.4" ]; then cabal install --only-dependencies; else cabal install --only-dependencies --enable-tests; fi
  - cd ../debug
