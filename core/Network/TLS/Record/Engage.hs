@@ -26,6 +26,7 @@ import Network.TLS.Wire
 import Network.TLS.Packet
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+import qualified Data.ByteArray as B (convert)
 
 engageRecord :: Record Plaintext -> RecordM (Record Ciphertext)
 engageRecord = compressRecord >=> encryptRecord
@@ -107,7 +108,7 @@ encryptAead encryptF content record = do
         nonce = B.concat [salt, processorNum, counter]
     let (e, AuthTag authtag) = encryptF nonce content ad
     modify incrRecordState
-    return $ B.concat [processorNum, counter, e, authtag]
+    return $ B.concat [processorNum, counter, e, B.convert authtag]
 
 getCryptState :: RecordM CryptState
 getCryptState = stCryptState <$> get

@@ -30,6 +30,7 @@ import Network.TLS.Wire
 import Network.TLS.Packet
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+import qualified Data.ByteArray as B (convert)
 
 disengageRecord :: Record Ciphertext -> RecordM (Record Plaintext)
 disengageRecord = decryptRecord >=> uncompressRecord
@@ -126,7 +127,7 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
                 nonce = cstIV (stCryptState tst) `B.append` enonce
                 (content, authTag2) = decryptF nonce econtent' ad
 
-            when (AuthTag authTag /= authTag2) $
+            when (AuthTag (B.convert authTag) /= authTag2) $
                 throwError $ Error_Protocol ("bad record mac", True, BadRecordMac)
 
             modify incrRecordState
