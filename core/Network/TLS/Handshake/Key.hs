@@ -37,7 +37,7 @@ encryptRSA ctx content = do
             Left err       -> fail ("rsa encrypt failed: " ++ show err)
             Right econtent -> return econtent
 
-signRSA :: Context -> Role -> HashDescr -> ByteString -> IO ByteString
+signRSA :: Context -> Role -> Hash -> ByteString -> IO ByteString
 signRSA ctx _ hsh content = do
     privateKey <- usingHState ctx getLocalPrivateKey
     usingState_ ctx $ do
@@ -54,7 +54,7 @@ decryptRSA ctx econtent = do
         let cipher = if ver < TLS10 then econtent else B.drop 2 econtent
         withRNG $ kxDecrypt privateKey cipher
 
-verifyRSA :: Context -> Role -> HashDescr -> ByteString -> ByteString -> IO Bool
+verifyRSA :: Context -> Role -> Hash -> ByteString -> ByteString -> IO Bool
 verifyRSA ctx _ hsh econtent sign = do
     publicKey <- usingHState ctx getRemotePublicKey
     return $ kxVerify publicKey hsh econtent sign
