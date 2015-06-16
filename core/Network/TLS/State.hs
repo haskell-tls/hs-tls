@@ -100,7 +100,7 @@ instance MonadState TLSState TLSSt where
 runTLSState :: TLSSt a -> TLSState -> (Either TLSError a, TLSState)
 runTLSState f st = runState (runErrT (runTLSSt f)) st
 
-newTLSState :: CPRG g => g -> Role -> TLSState
+newTLSState :: StateRNG -> Role -> TLSState
 newTLSState rng clientContext = TLSState
     { stSession             = Session Nothing
     , stSessionResuming     = False
@@ -116,7 +116,7 @@ newTLSState rng clientContext = TLSState
     , stClientEllipticCurveSuggest = Nothing
     , stClientEcPointFormatSuggest = Nothing
     , stClientCertificateChain = Nothing
-    , stRandomGen           = StateRNG rng
+    , stRandomGen           = rng
     , stVersion             = Nothing
     , stClientContext       = clientContext
     }
@@ -246,11 +246,9 @@ isClientContext = gets stClientContext
 
 genRandom :: Int -> TLSSt Bytes
 genRandom n = do
-    st <- get
-    case withTLSRNG (stRandomGen st) (cprgGenerate n) of
-            (bytes, rng') -> put (st { stRandomGen = rng' }) >> return bytes
+    withRNG (getRandomBytes n)
 
-withRNG :: (forall g . CPRG g => g -> (a, g)) -> TLSSt a
+withRNG :: MonadPseudoRandom StateRNG a -> TLSSt a
 withRNG f = do
     st <- get
     let (a,rng') = withTLSRNG (stRandomGen st) f
