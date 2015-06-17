@@ -3,7 +3,7 @@ all:
 
 .PHONY: reinstall
 reinstall:
-	(cd core; cabal install --force-reinstalls --enable-tests; cd ../debug; cabal configure; cabal build; cabal install --force-reinstalls)
+	(cd core && cabal install --force-reinstalls --enable-tests && cd ../debug && cabal configure && cabal build && cabal install --force-reinstalls)
 
 .PHONY: tests
 tests: test-scripts/TestClient
