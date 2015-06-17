@@ -220,7 +220,7 @@ main = do
         exitSuccess
 
     certStore <- getSystemCertificateStore
-    sStorage <- newIORef undefined
+    sStorage <- newIORef (error "storage ioref undefined")
     case other of
         [hostname]      -> runOn (sStorage, certStore) opts 443 hostname
         [hostname,port] -> runOn (sStorage, certStore) opts (fromInteger $ read port) hostname
