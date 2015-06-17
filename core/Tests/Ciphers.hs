@@ -29,15 +29,20 @@ instance Arbitrary BulkTest where
 
 propertyBulkFunctional :: BulkTest -> Bool
 propertyBulkFunctional (BulkTest bulk key iv t additional) =
-    case bulkF bulk of
-        BulkBlockF enc dec       -> block enc dec
-        BulkStreamF ktoi enc dec -> stream ktoi enc dec
-        BulkAeadF enc dec        -> aead enc dec
+    let enc = bulkInit bulk BulkEncrypt key
+        dec = bulkInit bulk BulkDecrypt key
+     in case (enc, dec) of
+        (BulkStateBlock encF, BulkStateBlock decF)   -> block encF decF
+        (BulkStateAEAD encF, BulkStateAEAD decF)     -> aead encF decF
+        (BulkStateStream (BulkStream encF), BulkStateStream (BulkStream decF)) -> stream encF decF
+        _                                            -> True
   where
-        block e d = (d key iv . e key iv) t == t
-        stream ktoi e d = (fst . d siv . fst . e siv) t == t
-            where siv = ktoi key
+        block e d =
+            let (etxt, e_iv) = e iv t
+                (dtxt, d_iv) = d iv etxt
+             in dtxt == t && d_iv == e_iv
+        stream e d = (fst . d . fst . e) t == t
         aead e d =
-            let (encrypted, at)  = e key iv t additional
-                (decrypted, at2) = d key iv encrypted additional
+            let (encrypted, at)  = e iv t additional
+                (decrypted, at2) = d iv encrypted additional
              in decrypted == t && at == at2

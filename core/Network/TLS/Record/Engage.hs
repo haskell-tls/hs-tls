@@ -8,6 +8,7 @@
 -- Engage a record into the Record layer.
 -- The record is compressed, added some integrity field, then encrypted.
 --
+{-# LANGUAGE BangPatterns #-}
 module Network.TLS.Record.Engage
         ( engageRecord
         ) where
@@ -21,7 +22,6 @@ import Network.TLS.Record.State
 import Network.TLS.Record.Types
 import Network.TLS.Cipher
 import Network.TLS.Compression
-import Network.TLS.Util
 import Network.TLS.Wire
 import Network.TLS.Packet
 import Data.ByteString (ByteString)
@@ -48,22 +48,23 @@ encryptRecord record = onRecordFragment record $ fragmentCipher $ \bytes -> do
 
 encryptContent :: Record Compressed -> ByteString -> RecordM ByteString
 encryptContent record content = do
+    cst  <- getCryptState
     bulk <- getBulk
-    case bulkF bulk of
-        BulkBlockF encryptF _ -> do
+    case cstKey cst of
+        BulkStateBlock encryptF -> do
             digest <- makeDigest (recordToHeader record) content
             let content' =  B.concat [content, digest]
             encryptBlock encryptF content' bulk
-        BulkStreamF initF encryptF _ -> do
+        BulkStateStream encryptF -> do
             digest <- makeDigest (recordToHeader record) content
             let content' =  B.concat [content, digest]
-            encryptStream encryptF content' initF
-        BulkAeadF encryptF _ ->
+            encryptStream encryptF content'
+        BulkStateAEAD encryptF ->
             encryptAead encryptF content record
+        BulkStateUninitialized ->
+            return content
 
-encryptBlock :: (Key -> IV -> ByteString -> ByteString)
-             -> ByteString -> Bulk
-             -> RecordM ByteString
+encryptBlock :: BulkBlock -> ByteString -> Bulk -> RecordM ByteString
 encryptBlock encryptF content bulk = do
     cst <- getCryptState
     ver <- getRecordVersion
@@ -76,26 +77,22 @@ encryptBlock encryptF content bulk = do
                   else
                       B.empty
 
-    let e = encryptF (cstKey cst) (cstIV cst) $ B.concat [ content, padding ]
+    let (e, iv') = encryptF (cstIV cst) $ B.concat [ content, padding ]
 
     if hasExplicitBlockIV ver
         then return $ B.concat [cstIV cst,e]
         else do
-            let newiv = fromJust "new iv" $ takelast (bulkIVSize bulk) e
-            modify $ \tstate -> tstate { stCryptState = cst { cstIV = newiv } }
+            modify $ \tstate -> tstate { stCryptState = cst { cstIV = iv' } }
             return e
 
-encryptStream :: (IV -> ByteString -> (ByteString, IV))
-              -> ByteString -> (Key -> IV)
-              -> RecordM ByteString
-encryptStream encryptF content initF = do
+encryptStream :: BulkStream -> ByteString -> RecordM ByteString
+encryptStream (BulkStream encryptF) content = do
     cst <- getCryptState
-    let iv = cstIV cst
-        (e, newiv) = encryptF (if iv /= B.empty then iv else initF (cstKey cst)) content
-    modify $ \tstate -> tstate { stCryptState = cst { cstIV = newiv } }
+    let (!e, !newBulkStream) = encryptF content
+    modify $ \tstate -> tstate { stCryptState = cst { cstKey = BulkStateStream newBulkStream } }
     return e
 
-encryptAead :: (Key -> Nonce -> ByteString -> AdditionalData -> (ByteString, AuthTag))
+encryptAead :: BulkAEAD
             -> ByteString -> Record Compressed
             -> RecordM ByteString
 encryptAead encryptF content record = do
@@ -108,7 +105,7 @@ encryptAead encryptF content record = do
         processorNum = encodeWord32 1 -- FIXME
         counter = B.drop 4 encodedSeq -- FIXME: probably OK
         nonce = B.concat [salt, processorNum, counter]
-    let (e, AuthTag authtag) = encryptF (cstKey cst) nonce content ad
+    let (e, AuthTag authtag) = encryptF nonce content ad
     modify incrRecordState
     return $ B.concat [processorNum, counter, e, authtag]
 

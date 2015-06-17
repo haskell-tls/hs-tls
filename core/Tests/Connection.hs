@@ -34,7 +34,7 @@ blockCipher = Cipher
         , bulkKeySize   = 16
         , bulkIVSize    = 16
         , bulkBlockSize = 16
-        , bulkF         = BulkBlockF (\_ _ m -> m) (\_ _ m -> m)
+        , bulkF         = BulkBlockF $ \_ _ _ -> (\m -> (m, B.empty))
         }
     , cipherHash = MD5
     , cipherKeyExchange = CipherKeyExchange_RSA
@@ -63,9 +63,11 @@ streamCipher = blockCipher
         , bulkKeySize   = 16
         , bulkIVSize    = 0
         , bulkBlockSize = 0
-        , bulkF         = BulkStreamF (\k -> k) (\i m -> (m,i)) (\i m -> (m,i))
+        , bulkF         = BulkStreamF passThrough
         }
     }
+  where
+    passThrough _ _ = BulkStream go where go inp = (inp, BulkStream go)
 
 knownCiphers :: [Cipher]
 knownCiphers = [blockCipher,blockCipherDHE_RSA,blockCipherDHE_DSS,streamCipher]

@@ -41,7 +41,7 @@ import Network.TLS.Util
 import qualified Data.ByteString as B
 
 data CryptState = CryptState
-    { cstKey        :: !Bytes
+    { cstKey        :: !BulkState
     , cstIV         :: !Bytes
     , cstMacSecret  :: !Bytes
     } deriving (Show)
@@ -99,7 +99,7 @@ newRecordState :: RecordState
 newRecordState = RecordState
     { stCipher      = Nothing
     , stCompression = nullCompression
-    , stCryptState  = CryptState B.empty B.empty B.empty
+    , stCryptState  = CryptState BulkStateUninitialized B.empty B.empty
     , stMacState    = MacState 0
     }
 

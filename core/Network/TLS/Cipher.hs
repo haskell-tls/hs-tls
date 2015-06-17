@@ -8,17 +8,23 @@
 -- Portability : unknown
 --
 module Network.TLS.Cipher
-    ( BulkFunctions(..)
-    , CipherKeyExchangeType(..)
+    ( CipherKeyExchangeType(..)
     , Bulk(..)
+    , BulkFunctions(..)
+    , BulkDirection(..)
+    , BulkState(..)
+    , BulkStream(..)
+    , BulkBlock
+    , BulkAEAD
+    , bulkInit
     , Hash(..)
     , Cipher(..)
     , CipherID
-    , Key
-    , IV
-    , Nonce
-    , AdditionalData
     , cipherKeyBlockSize
+    , BulkKey
+    , BulkIV
+    , BulkNonce
+    , BulkAdditionalData
     , cipherAllowedForVersion
     , cipherExchangeNeedMoreData
     , hasMAC
@@ -33,25 +39,49 @@ import Network.TLS.Crypto (Hash(..), hashDigestSize)
 import qualified Data.ByteString as B
 
 -- FIXME convert to newtype
-type Key = B.ByteString
-type IV = B.ByteString
-type Nonce = B.ByteString
-type AdditionalData = B.ByteString
+type BulkKey = B.ByteString
+type BulkIV = B.ByteString
+type BulkNonce = B.ByteString
+type BulkAdditionalData = B.ByteString
+
+data BulkState =
+      BulkStateStream BulkStream
+    | BulkStateBlock  BulkBlock
+    | BulkStateAEAD   BulkAEAD
+    | BulkStateUninitialized
+
+instance Show BulkState where
+    show (BulkStateStream _)      = "BulkStateStream"
+    show (BulkStateBlock _)       = "BulkStateBlock"
+    show (BulkStateAEAD _)        = "BulkStateAEAD"
+    show (BulkStateUninitialized) = "BulkStateUninitialized"
+
+newtype BulkStream = BulkStream (B.ByteString -> (B.ByteString, BulkStream))
+
+type BulkBlock = BulkIV -> B.ByteString -> (B.ByteString, BulkIV)
+
+type BulkAEAD = BulkNonce -> B.ByteString -> BulkAdditionalData -> (B.ByteString, AuthTag)
+
+data BulkDirection = BulkEncrypt | BulkDecrypt
+    deriving (Show,Eq)
+
+bulkInit :: Bulk -> BulkDirection -> BulkKey -> BulkState
+bulkInit bulk direction key =
+    case bulkF bulk of
+        BulkBlockF  ini -> BulkStateBlock  (ini direction key)
+        BulkStreamF ini -> BulkStateStream (ini direction key)
+        BulkAeadF   ini -> BulkStateAEAD   (ini direction key)
 
 data BulkFunctions =
-      BulkBlockF (Key -> IV -> B.ByteString -> B.ByteString)
-                 (Key -> IV -> B.ByteString -> B.ByteString)
-    | BulkStreamF (Key -> IV)
-                  (IV -> B.ByteString -> (B.ByteString, IV))
-                  (IV -> B.ByteString -> (B.ByteString, IV))
-    | BulkAeadF (Key -> Nonce -> B.ByteString -> AdditionalData -> (B.ByteString, AuthTag))
-                (Key -> Nonce -> B.ByteString -> AdditionalData -> (B.ByteString, AuthTag))
+      BulkBlockF  (BulkDirection -> BulkKey -> BulkBlock)
+    | BulkStreamF (BulkDirection -> BulkKey -> BulkStream)
+    | BulkAeadF   (BulkDirection -> BulkKey -> BulkAEAD)
 
 hasMAC,hasRecordIV :: BulkFunctions -> Bool
 
-hasMAC (BulkBlockF _ _)    = True
-hasMAC (BulkStreamF _ _ _) = True
-hasMAC (BulkAeadF _ _    ) = False
+hasMAC (BulkBlockF _ ) = True
+hasMAC (BulkStreamF _) = True
+hasMAC (BulkAeadF _  ) = False
 
 hasRecordIV = hasMAC
 

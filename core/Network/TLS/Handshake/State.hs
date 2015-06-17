@@ -232,10 +232,10 @@ computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
         (cMACSecret, sMACSecret, cWriteKey, sWriteKey, cWriteIV, sWriteIV) =
                     fromJust "p6" $ partition6 kb (digestSize, digestSize, keySize, keySize, ivSize, ivSize)
 
-        cstClient = CryptState { cstKey        = cWriteKey
+        cstClient = CryptState { cstKey        = bulkInit bulk (BulkEncrypt `orOnServer` BulkDecrypt) cWriteKey
                                , cstIV         = cWriteIV
                                , cstMacSecret  = cMACSecret }
-        cstServer = CryptState { cstKey        = sWriteKey
+        cstServer = CryptState { cstKey        = bulkInit bulk (BulkDecrypt `orOnServer` BulkEncrypt) sWriteKey
                                , cstIV         = sWriteIV
                                , cstMacSecret  = sMACSecret }
         msClient = MacState { msSequence = 0 }
@@ -253,6 +253,9 @@ computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
                   , stCipher      = Just cipher
                   , stCompression = hstPendingCompression hst
                   }
+
+        orOnServer f g = if cc == ClientRole then f else g
+
 
 setServerHelloParameters :: Version      -- ^ chosen version
                          -> ServerRandom

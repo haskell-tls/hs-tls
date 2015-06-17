@@ -69,12 +69,11 @@ getCipherData (Record pt ver _) cdata = do
     return $ cipherDataContent cdata
 
 decryptData :: Version -> Record Ciphertext -> Bytes -> RecordState -> RecordM Bytes
-decryptData ver record econtent tst = decryptOf (bulkF bulk)
+decryptData ver record econtent tst = decryptOf (cstKey cst)
   where cipher     = fromJust "cipher" $ stCipher tst
         bulk       = cipherBulk cipher
         cst        = stCryptState tst
         macSize    = hashDigestSize $ cipherHash cipher
-        writekey   = cstKey cst
         blockSize  = bulkBlockSize bulk
         econtentLen = B.length econtent
 
@@ -82,18 +81,17 @@ decryptData ver record econtent tst = decryptOf (bulkF bulk)
 
         sanityCheckError = throwError (Error_Packet "encrypted content too small for encryption parameters")
 
-        decryptOf :: BulkFunctions -> RecordM Bytes
-        decryptOf (BulkBlockF _ decryptF) = do
+        decryptOf :: BulkState -> RecordM Bytes
+        decryptOf (BulkStateBlock decryptF) = do
             let minContent = (if explicitIV then bulkIVSize bulk else 0) + max (macSize + 1) blockSize
             when ((econtentLen `mod` blockSize) /= 0 || econtentLen < minContent) $ sanityCheckError
             {- update IV -}
             (iv, econtent') <- if explicitIV
                                   then get2 econtent (bulkIVSize bulk, econtentLen - bulkIVSize bulk)
                                   else return (cstIV cst, econtent)
-            let newiv = fromJust "new iv" $ takelast (bulkBlockSize bulk) econtent'
-            modify $ \txs -> txs { stCryptState = cst { cstIV = newiv } }
+            let (content', iv') = decryptF iv econtent'
+            modify $ \txs -> txs { stCryptState = cst { cstIV = iv' } }
 
-            let content' = decryptF writekey iv econtent'
             let paddinglength = fromIntegral (B.last content') + 1
             let contentlen = B.length content' - paddinglength - macSize
             (content, mac, padding) <- get3 content' (contentlen, macSize, paddinglength)
@@ -103,20 +101,20 @@ decryptData ver record econtent tst = decryptOf (bulkF bulk)
                     , cipherDataPadding = Just padding
                     }
 
-        decryptOf (BulkStreamF initF _ decryptF) = do
+        decryptOf (BulkStateStream (BulkStream decryptF)) = do
             when (econtentLen < macSize) $ sanityCheckError
-            let (content', newiv) = decryptF (if cstIV cst /= B.empty then cstIV cst else initF writekey) econtent
+            let (content', bulkStream') = decryptF econtent
             {- update Ctx -}
             let contentlen        = B.length content' - macSize
             (content, mac) <- get2 content' (contentlen, macSize)
-            modify $ \txs -> txs { stCryptState = cst { cstIV = newiv } }
+            modify $ \txs -> txs { stCryptState = cst { cstKey = BulkStateStream bulkStream' } }
             getCipherData record $ CipherData
                     { cipherDataContent = content
                     , cipherDataMAC     = Just mac
                     , cipherDataPadding = Nothing
                     }
 
-        decryptOf (BulkAeadF _ decryptF) = do
+        decryptOf (BulkStateAEAD decryptF) = do
             let authtaglen = 16 -- FIXME: fixed_iv_length + record_iv_length
                 nonceexplen = 8 -- FIXME: record_iv_length
                 econtentlen = B.length econtent - authtaglen - nonceexplen
@@ -126,13 +124,16 @@ decryptData ver record econtent tst = decryptOf (bulkF bulk)
                 hdr = Header typ v $ fromIntegral econtentlen
                 ad = B.concat [ encodedSeq, encodeHeader hdr ]
                 nonce = cstIV (stCryptState tst) `B.append` enonce
-                (content, authTag2) = decryptF writekey nonce econtent' ad
+                (content, authTag2) = decryptF nonce econtent' ad
 
             when (AuthTag authTag /= authTag2) $
                 throwError $ Error_Protocol ("bad record mac", True, BadRecordMac)
 
             modify incrRecordState
             return content
+
+        decryptOf BulkStateUninitialized =
+            throwError $ Error_Protocol ("decrypt state uninitialized", True, InternalError)
 
         get3 s ls = maybe (throwError $ Error_Packet "record bad format") return $ partition3 s ls
         get2 s (d1,d2) = get3 s (d1,d2,0) >>= \(r1,r2,_) -> return (r1,r2)

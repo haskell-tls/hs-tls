@@ -48,53 +48,54 @@ import Crypto.Cipher.TripleDES
 import Crypto.Cipher.Types (makeKey, makeIV, cipherInit, cbcEncrypt, cbcDecrypt)
 import qualified Crypto.Cipher.Types as T
 
-aes_cbc_encrypt :: Key -> IV -> B.ByteString -> B.ByteString
-aes_cbc_encrypt key iv d = AES.encryptCBC (AES.initAES key) iv d
 
-aes_cbc_decrypt :: Key -> IV -> B.ByteString -> B.ByteString
-aes_cbc_decrypt key iv d = AES.decryptCBC (AES.initAES key) iv d
+takelast :: Int -> B.ByteString -> B.ByteString
+takelast i b = B.drop (B.length b - i) b
 
-aes128_cbc_encrypt
-  , aes128_cbc_decrypt
-  , aes256_cbc_encrypt
-  , aes256_cbc_decrypt :: Key -> IV -> B.ByteString -> B.ByteString
-aes128_cbc_encrypt = aes_cbc_encrypt
-aes128_cbc_decrypt = aes_cbc_decrypt
-aes256_cbc_encrypt = aes_cbc_encrypt
-aes256_cbc_decrypt = aes_cbc_decrypt
+aes128cbc :: BulkDirection -> BulkKey -> BulkBlock
+aes128cbc BulkEncrypt key =
+    let ctx = AES.initAES key
+     in (\iv input -> let output = AES.encryptCBC ctx iv input in (output, takelast 16 output))
+aes128cbc BulkDecrypt key =
+    let ctx = AES.initAES key
+     in (\iv input -> let output = AES.decryptCBC ctx iv input in (output, takelast 16 input))
 
-aes128_gcm_encrypt, aes128_gcm_decrypt :: Key -> Nonce -> B.ByteString -> AdditionalData -> (B.ByteString, T.AuthTag)
-aes128_gcm_encrypt key nonce d ad = AES.encryptGCM (AES.initAES key) nonce ad d
-aes128_gcm_decrypt key nonce d ad = AES.decryptGCM (AES.initAES key) nonce ad d
+aes256cbc :: BulkDirection -> BulkKey -> BulkBlock
+aes256cbc BulkEncrypt key =
+    let ctx = AES.initAES key
+     in (\iv input -> let output = AES.encryptCBC ctx iv input in (output, takelast 16 output))
+aes256cbc BulkDecrypt key =
+    let ctx = AES.initAES key
+     in (\iv input -> let output = AES.decryptCBC ctx iv input in (output, takelast 16 input))
 
-tripledes_ede_cbc_encrypt :: Key -> IV -> B.ByteString -> B.ByteString
-tripledes_ede_cbc_encrypt key iv bs =
-    cbcEncrypt (cipherInit $ tripledes_key key) (tripledes_iv iv) bs
+aes128gcm :: BulkDirection -> BulkKey -> BulkAEAD
+aes128gcm BulkEncrypt key =
+    let ctx = AES.initAES key
+     in (\nonce d ad -> AES.encryptGCM ctx nonce ad d)
+aes128gcm BulkDecrypt key =
+    let ctx = AES.initAES key
+     in (\nonce d ad -> AES.decryptGCM ctx nonce ad d)
 
-tripledes_ede_cbc_decrypt :: Key -> IV -> B.ByteString -> B.ByteString
-tripledes_ede_cbc_decrypt key iv bs =
-    cbcDecrypt (cipherInit $ tripledes_key key) (tripledes_iv iv) bs
+tripledes_ede :: BulkDirection -> BulkKey -> BulkBlock
+tripledes_ede BulkEncrypt key =
+    let ctx = cipherInit (tripledes_key key)
+     in (\iv input -> let output = cbcEncrypt ctx (tripledes_iv iv) input in (output, takelast 16 output))
+tripledes_ede BulkDecrypt key =
+    let ctx = cipherInit (tripledes_key key)
+     in (\iv input -> let output = cbcDecrypt ctx (tripledes_iv iv) input in (output, takelast 16 input))
 
-tripledes_key :: Key -> T.Key DES_EDE3
+tripledes_key :: BulkKey -> T.Key DES_EDE3
 tripledes_key key = either (\ke -> error ("tripledes cipher key internal error: " ++ show ke)) id $ makeKey key
 
-tripledes_iv :: IV -> T.IV DES_EDE3
+tripledes_iv :: BulkIV -> T.IV DES_EDE3
 tripledes_iv iv = maybe (error "tripledes cipher iv internal error") id $ makeIV iv
 
-toIV :: RC4.Ctx -> IV
-toIV (RC4.Ctx ctx) = ctx
-
-toCtx :: IV -> RC4.Ctx
-toCtx iv = RC4.Ctx iv
-
-initF_rc4 :: Key -> IV
-initF_rc4 key     = toIV $ RC4.initCtx key
-
-encryptF_rc4 :: IV -> B.ByteString -> (B.ByteString, IV)
-encryptF_rc4 iv d = (\(ctx, e) -> (e, toIV ctx)) $ RC4.combine (toCtx iv) d
-
-decryptF_rc4 :: IV -> B.ByteString -> (B.ByteString, IV)
-decryptF_rc4 iv e = (\(ctx, d) -> (d, toIV ctx)) $ RC4.combine (toCtx iv) e
+rc4 :: BulkDirection -> BulkKey -> BulkStream
+rc4 _ bulkKey = BulkStream (combineRC4 $ RC4.initCtx bulkKey)
+  where
+    combineRC4 ctx input =
+        let (ctx', output) = RC4.combine ctx input
+         in (output, BulkStream (combineRC4 ctx'))
 
 
 -- | all encrypted ciphers supported ordered from strong to weak.
@@ -138,16 +139,17 @@ bulk_null = Bulk
     , bulkKeySize      = 0
     , bulkIVSize       = 0
     , bulkBlockSize    = 0
-    , bulkF            = BulkStreamF (const B.empty) streamId streamId
+    , bulkF            = BulkStreamF passThrough
     }
-    where streamId = \iv b -> (b,iv)
+  where
+    passThrough _ _ = BulkStream go where go inp = (inp, BulkStream go)
 
 bulk_rc4 = Bulk
     { bulkName         = "RC4-128"
     , bulkKeySize      = 16
     , bulkIVSize       = 0
     , bulkBlockSize    = 0
-    , bulkF            = BulkStreamF initF_rc4 encryptF_rc4 decryptF_rc4
+    , bulkF            = BulkStreamF rc4
     }
 
 bulk_aes128 = Bulk
@@ -155,7 +157,7 @@ bulk_aes128 = Bulk
     , bulkKeySize      = 16
     , bulkIVSize       = 16
     , bulkBlockSize    = 16
-    , bulkF            = BulkBlockF aes128_cbc_encrypt aes128_cbc_decrypt
+    , bulkF            = BulkBlockF aes128cbc
     }
 
 bulk_aes128gcm = Bulk
@@ -163,7 +165,7 @@ bulk_aes128gcm = Bulk
     , bulkKeySize      = 16 -- RFC 5116 Sec 5.1: K_LEN
     , bulkIVSize       = 4  -- RFC 5288 GCMNonce.salt, fixed_iv_length
     , bulkBlockSize    = 0  -- dummy, not used
-    , bulkF            = BulkAeadF aes128_gcm_encrypt aes128_gcm_decrypt
+    , bulkF            = BulkAeadF aes128gcm
     }
 
 bulk_aes256 = Bulk
@@ -171,7 +173,7 @@ bulk_aes256 = Bulk
     , bulkKeySize      = 32
     , bulkIVSize       = 16
     , bulkBlockSize    = 16
-    , bulkF            = BulkBlockF aes256_cbc_encrypt aes256_cbc_decrypt
+    , bulkF            = BulkBlockF aes256cbc
     }
 
 bulk_tripledes_ede = Bulk
@@ -179,7 +181,7 @@ bulk_tripledes_ede = Bulk
     , bulkKeySize   = 24
     , bulkIVSize    = 8
     , bulkBlockSize = 8
-    , bulkF         = BulkBlockF tripledes_ede_cbc_encrypt tripledes_ede_cbc_decrypt
+    , bulkF         = BulkBlockF tripledes_ede
     }
 
 -- | unencrypted cipher using RSA for key exchange and MD5 for digest
