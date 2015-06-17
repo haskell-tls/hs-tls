@@ -20,7 +20,7 @@ import Control.Concurrent.Chan
 import Control.Concurrent
 import qualified Control.Exception as E
 
-import qualified Crypto.Random.AESCtr as RNG
+import Crypto.Random
 import qualified Data.ByteString as B
 
 debug = False
@@ -127,13 +127,10 @@ newPairContext pipe (cParams, sParams) = do
     let noFlush = return ()
     let noClose = return ()
 
-    cRNG <- RNG.makeSystem
-    sRNG <- RNG.makeSystem
-
     let cBackend = Backend noFlush noClose (writePipeA pipe) (readPipeA pipe)
     let sBackend = Backend noFlush noClose (writePipeB pipe) (readPipeB pipe)
-    cCtx' <- contextNew cBackend cParams cRNG
-    sCtx' <- contextNew sBackend sParams sRNG
+    cCtx' <- contextNew cBackend cParams
+    sCtx' <- contextNew sBackend sParams
 
     contextHookSetLogging cCtx' (logging "client: ")
     contextHookSetLogging sCtx' (logging "server: ")
