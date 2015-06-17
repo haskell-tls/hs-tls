@@ -141,6 +141,13 @@ data FailStatus = FailStatus
 data Result = Success String String | Skipped String | Failure FailStatus | Timeout String
     deriving (Show,Eq)
 
+prettyResult (Success name out) =
+    "SUCCESS " ++ name ++ "\n" ++ out
+prettyResult (Skipped name) = "SKIPPED " ++ name ++ "\n"
+prettyResult (Timeout name) = "TIMEOUT " ++ name ++ "\n"
+prettyResult (Failure (FailStatus name ec out err)) =
+    "FAILURE " ++ name ++ " exitcode=" ++ show ec ++ "\n" ++ out ++ "\n" ++ err
+
 showResultStatus (Success _ _) = "SUCCESS"
 showResultStatus (Skipped _) = "SKIPPED"
 showResultStatus (Failure _) = "FAILURE"
@@ -245,7 +252,7 @@ runLocal logFile pid = do
         r2 <- readMVar opensslResult
         case r of
             Success _ _ -> putRow "" "SUCCESS" >> return True
-            _           -> putRow "" "FAILED" >> appendFile logFile (hdr ++ "\n\n" ++ show r ++ "\n\n" ++ show r2 ++ "\n\n\n") >> return False
+            _           -> putRow "" "FAILED" >> appendFile logFile (hdr ++ "\n\n" ++ prettyResult r ++ "\n\n" ++ prettyResult r2 ++ "\n\n\n") >> return False
 
 main = do
     args <- getArgs
