@@ -72,9 +72,8 @@ import Network.TLS.Measurement
 import Network.TLS.Types (Role(..))
 import Network.TLS.Handshake (handshakeClient, handshakeClientWith, handshakeServer, handshakeServerWith)
 import Network.TLS.X509
+import Network.TLS.RNG
 import Data.Maybe (isJust)
-
-import Crypto.Random
 
 import Control.Concurrent.MVar
 import Control.Monad.State
@@ -133,13 +132,14 @@ instance TLSParams ServerParams where
     doHandshakeWith = handshakeServerWith
 
 -- | create a new context using the backend and parameters specified.
-contextNew :: (MonadIO m, CPRG rng, HasBackend backend, TLSParams params)
+contextNew :: (MonadIO m, HasBackend backend, TLSParams params)
            => backend   -- ^ Backend abstraction with specific method to interact with the connection type.
            -> params    -- ^ Parameters of the context.
-           -> rng       -- ^ Random number generator associated with this context.
            -> m Context
-contextNew backend params rng = liftIO $ do
+contextNew backend params = liftIO $ do
     initializeBackend backend
+
+    rng <- newStateRNG
 
     let role = getTLSRole params
         st   = newTLSState rng role
@@ -187,21 +187,19 @@ contextNew backend params rng = liftIO $ do
             }
 
 -- | create a new context on an handle.
-contextNewOnHandle :: (MonadIO m, CPRG rng, TLSParams params)
+contextNewOnHandle :: (MonadIO m, TLSParams params)
                    => Handle -- ^ Handle of the connection.
                    -> params -- ^ Parameters of the context.
-                   -> rng    -- ^ Random number generator associated with this context.
                    -> m Context
-contextNewOnHandle handle params st = contextNew handle params st
+contextNewOnHandle handle params = contextNew handle params
 {-# DEPRECATED contextNewOnHandle "use contextNew" #-}
 
 -- | create a new context on a socket.
-contextNewOnSocket :: (MonadIO m, CPRG rng, TLSParams params)
+contextNewOnSocket :: (MonadIO m, TLSParams params)
                    => Socket -- ^ Socket of the connection.
                    -> params -- ^ Parameters of the context.
-                   -> rng    -- ^ Random number generator associated with this context.
                    -> m Context
-contextNewOnSocket sock params st = contextNew sock params st
+contextNewOnSocket sock params = contextNew sock params
 {-# DEPRECATED contextNewOnSocket "use contextNew" #-}
 
 contextHookSetHandshakeRecv :: Context -> (Handshake -> IO Handshake) -> IO ()

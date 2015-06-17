@@ -11,26 +11,27 @@ module PubKey
 import Test.Tasty.QuickCheck
 
 import qualified Crypto.PubKey.DH as DH
-import Crypto.Random (createTestEntropyPool)
-import qualified Crypto.Random.AESCtr as RNG
+import Crypto.Random
 import qualified Crypto.PubKey.RSA as RSA
 import qualified Crypto.PubKey.DSA as DSA
-
-import qualified Data.ByteString as B
 
 import Control.Concurrent.MVar
 import System.IO.Unsafe
 
 arbitraryRSAPair :: Gen (RSA.PublicKey, RSA.PrivateKey)
-arbitraryRSAPair = do
-    rng <- (RNG.make . createTestEntropyPool . B.pack) `fmap` vector 1024
-    arbitraryRSAPairWithRNG rng
+arbitraryRSAPair = (rngToRSA . drgNewTest) `fmap` arbitrary
+  where
+    rngToRSA :: ChaChaDRG -> (RSA.PublicKey, RSA.PrivateKey)
+    rngToRSA rng = fst $ withDRG rng arbitraryRSAPairWithRNG
 
-arbitraryRSAPairWithRNG rng = return $ fst $ RSA.generate rng 128 0x10001
+arbitraryRSAPairWithRNG :: MonadRandom m => m (RSA.PublicKey, RSA.PrivateKey)
+arbitraryRSAPairWithRNG = RSA.generate 256 0x10001
 
 {-# NOINLINE globalRSAPair #-}
 globalRSAPair :: MVar (RSA.PublicKey, RSA.PrivateKey)
-globalRSAPair = unsafePerformIO (RNG.makeSystem >>= arbitraryRSAPairWithRNG >>= newMVar)
+globalRSAPair = unsafePerformIO $ do
+    drg <- drgNew
+    newMVar (fst $ withDRG drg arbitraryRSAPairWithRNG)
 
 {-# NOINLINE getGlobalRSAPair #-}
 getGlobalRSAPair :: (RSA.PublicKey, RSA.PrivateKey)

@@ -16,7 +16,6 @@ module Network.TLS.Handshake.Signature
     , digitallySignECDHParamsVerify
     ) where
 
-import Crypto.PubKey.HashDescr
 import Network.TLS.Crypto
 import Network.TLS.Context.Internal
 import Network.TLS.Struct
@@ -36,70 +35,69 @@ certificateVerifyCheck :: Context
                        -> Bytes
                        -> DigitallySigned
                        -> IO Bool
-certificateVerifyCheck ctx usedVersion malg msgs dsig = do
-    (hashMethod, toVerify) <- prepareCertificateVerifySignatureData ctx usedVersion malg msgs
-    signatureVerifyWithHashDescr ctx SignatureRSA hashMethod toVerify dsig
+certificateVerifyCheck ctx usedVersion malg msgs dsig =
+    prepareCertificateVerifySignatureData ctx usedVersion malg msgs >>=
+    signatureVerifyWithHashDescr ctx SignatureRSA dsig
 
 certificateVerifyCreate :: Context
                         -> Version
                         -> Maybe HashAndSignatureAlgorithm
                         -> Bytes
                         -> IO DigitallySigned
-certificateVerifyCreate ctx usedVersion malg msgs = do
-    (hashMethod, toSign) <- prepareCertificateVerifySignatureData ctx usedVersion malg msgs
-    signatureCreate ctx malg hashMethod toSign
+certificateVerifyCreate ctx usedVersion malg msgs =
+    prepareCertificateVerifySignatureData ctx usedVersion malg msgs >>=
+    signatureCreate ctx malg
 
-getHashAndASN1 :: MonadIO m => (HashAlgorithm, SignatureAlgorithm) -> m HashDescr
+getHashAndASN1 :: MonadIO m => (HashAlgorithm, SignatureAlgorithm) -> m Hash
 getHashAndASN1 hashSig = case hashSig of
-    (HashSHA1,   SignatureRSA) -> return hashDescrSHA1
-    (HashSHA224, SignatureRSA) -> return hashDescrSHA224
-    (HashSHA256, SignatureRSA) -> return hashDescrSHA256
-    (HashSHA384, SignatureRSA) -> return hashDescrSHA384
-    (HashSHA512, SignatureRSA) -> return hashDescrSHA512
+    (HashSHA1,   SignatureRSA) -> return SHA1
+    (HashSHA224, SignatureRSA) -> return SHA224
+    (HashSHA256, SignatureRSA) -> return SHA256
+    (HashSHA384, SignatureRSA) -> return SHA384
+    (HashSHA512, SignatureRSA) -> return SHA512
     _                          -> throwCore $ Error_Misc "unsupported hash/sig algorithm"
+
+type CertVerifyData = (Hash, Bytes)
 
 prepareCertificateVerifySignatureData :: Context
                                       -> Version
                                       -> Maybe HashAndSignatureAlgorithm
                                       -> Bytes
-                                      -> IO (HashDescr, Bytes)
+                                      -> IO CertVerifyData
 prepareCertificateVerifySignatureData ctx usedVersion malg msgs
     | usedVersion == SSL3 = do
         Just masterSecret <- usingHState ctx $ gets hstMasterSecret
-        let digest = generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit SHA1_MD5) msgs)
-            hsh = HashDescr id id
-        return (hsh, digest)
+        return (SHA1_MD5, generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit SHA1_MD5) msgs))
     | usedVersion == TLS10 || usedVersion == TLS11 = do
-        let hashf bs = hashFinal (hashUpdate (hashInit SHA1_MD5) bs)
-            hsh = HashDescr hashf id
-        return (hsh, msgs)
+        return (SHA1_MD5, hashFinal $ hashUpdate (hashInit SHA1_MD5) msgs)
     | otherwise = do
         let Just hashSig = malg
         hsh <- getHashAndASN1 hashSig
         return (hsh, msgs)
 
-signatureHashData :: SignatureAlgorithm -> Maybe HashAlgorithm -> HashDescr
+signatureHashData :: SignatureAlgorithm -> Maybe HashAlgorithm -> Hash
 signatureHashData SignatureRSA mhash =
     case mhash of
-        Just HashSHA512 -> hashDescrSHA512
-        Just HashSHA256 -> hashDescrSHA256
-        Just HashSHA1   -> hashDescrSHA1
-        Nothing         -> HashDescr (hashFinal . hashUpdate (hashInit SHA1_MD5)) id
+        Just HashSHA512 -> SHA512
+        Just HashSHA256 -> SHA256
+        Just HashSHA1   -> SHA1
+        Nothing         -> SHA1_MD5
         _               -> error ("unimplemented signature hash type")
 signatureHashData SignatureDSS mhash =
     case mhash of
-        Nothing       -> hashDescrSHA1
-        Just HashSHA1 -> hashDescrSHA1
+        Nothing       -> SHA1
+        Just HashSHA1 -> SHA1
         Just _        -> error "invalid DSA hash choice, only SHA1 allowed"
 signatureHashData sig _ = error ("unimplemented signature type: " ++ show sig)
 
-signatureCreate :: Context -> Maybe HashAndSignatureAlgorithm -> HashDescr -> Bytes -> IO DigitallySigned
-signatureCreate ctx malg hashMethod toSign = do
+--signatureCreate :: Context -> Maybe HashAndSignatureAlgorithm -> HashDescr -> Bytes -> IO DigitallySigned
+signatureCreate :: Context -> Maybe HashAndSignatureAlgorithm -> CertVerifyData -> IO DigitallySigned
+signatureCreate ctx malg (hashAlg, toSign) = do
     cc <- usingState_ ctx $ isClientContext
-    DigitallySigned malg <$> signRSA ctx cc hashMethod toSign
+    DigitallySigned malg <$> signRSA ctx cc hashAlg toSign
 
-signatureVerify :: Context -> SignatureAlgorithm -> Bytes -> DigitallySigned -> IO Bool
-signatureVerify ctx sigAlgExpected toVerify digSig@(DigitallySigned hashSigAlg _) = do
+signatureVerify :: Context -> DigitallySigned -> SignatureAlgorithm -> Bytes -> IO Bool
+signatureVerify ctx digSig@(DigitallySigned hashSigAlg _) sigAlgExpected toVerify = do
     usedVersion <- usingState_ ctx getVersion
     let hashDescr = case (usedVersion, hashSigAlg) of
             (TLS12, Nothing)    -> error "expecting hash and signature algorithm in a TLS12 digitally signed structure"
@@ -107,15 +105,14 @@ signatureVerify ctx sigAlgExpected toVerify digSig@(DigitallySigned hashSigAlg _
                                 | otherwise           -> error "expecting different signature algorithm"
             (_,     Nothing)    -> signatureHashData sigAlgExpected Nothing
             (_,     Just _)     -> error "not expecting hash and signature algorithm in a < TLS12 digitially signed structure"
-    signatureVerifyWithHashDescr ctx sigAlgExpected hashDescr toVerify digSig
+    signatureVerifyWithHashDescr ctx sigAlgExpected digSig (hashDescr, toVerify)
 
 signatureVerifyWithHashDescr :: Context
                              -> SignatureAlgorithm
-                             -> HashDescr
-                             -> Bytes
                              -> DigitallySigned
+                             -> CertVerifyData
                              -> IO Bool
-signatureVerifyWithHashDescr ctx sigAlgExpected hashDescr toVerify (DigitallySigned _ bs) = do
+signatureVerifyWithHashDescr ctx sigAlgExpected (DigitallySigned _ bs) (hashDescr, toVerify) = do
     cc <- usingState_ ctx $ isClientContext
     case sigAlgExpected of
         SignatureRSA -> verifyRSA ctx cc hashDescr toVerify bs
@@ -131,7 +128,7 @@ digitallySignParams ctx signatureData sigAlg = do
                                 x:_ -> Just (fst x)
                     _     -> Nothing
     let hashDescr = signatureHashData sigAlg mhash
-    signatureCreate ctx (fmap (\h -> (h, sigAlg)) mhash) hashDescr signatureData
+    signatureCreate ctx (fmap (\h -> (h, sigAlg)) mhash) (hashDescr, signatureData)
 
 digitallySignDHParams :: Context
                       -> ServerDHParams
@@ -156,7 +153,7 @@ digitallySignDHParamsVerify :: Context
                             -> IO Bool
 digitallySignDHParamsVerify ctx dhparams sigAlg signature = do
     expectedData <- withClientAndServerRandom ctx $ encodeSignedDHParams dhparams
-    signatureVerify ctx sigAlg expectedData signature
+    signatureVerify ctx signature sigAlg expectedData
 
 digitallySignECDHParamsVerify :: Context
                               -> ServerECDHParams
@@ -165,7 +162,7 @@ digitallySignECDHParamsVerify :: Context
                               -> IO Bool
 digitallySignECDHParamsVerify ctx dhparams sigAlg signature = do
     expectedData <- withClientAndServerRandom ctx $ encodeSignedECDHParams dhparams
-    signatureVerify ctx sigAlg expectedData signature
+    signatureVerify ctx signature sigAlg expectedData
 
 withClientAndServerRandom :: Context -> (ClientRandom -> ServerRandom -> b) -> IO b
 withClientAndServerRandom ctx f = do
