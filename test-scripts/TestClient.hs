@@ -5,6 +5,8 @@ import System.Environment
 import System.Posix.Process (getProcessID)
 import System.Exit
 import System.Timeout
+import System.Directory
+import System.Random
 import Text.Printf
 import Control.Applicative
 import Control.Monad
@@ -32,7 +34,7 @@ data CertValidation = NoCertValidation | CertValidation
     deriving (Eq)
 
 -- 10 seconds
-timeoutSeconds = 10 * 1000000
+timeoutSeconds = 15 * 1000000
 
 forkWait :: IO a -> IO (IO a)
 forkWait a = do
@@ -77,6 +79,15 @@ readProcessWithExitCodeBinary cmd args input = mask $ \restore -> do
 
       return (ex, out, err)
 
+removeSafe f = doesFileExist f >>= flip when (removeFile f)
+
+untilFileExist iter readyFile
+    | iter == 15000 = return ()
+    | otherwise     = do
+        threadDelay 1000
+        b <- doesFileExist readyFile
+        if b then return () else untilFileExist (iter+1) readyFile
+
 userAgent = "--user-agent=haskell tls 1.2"
 {-
   -v          --verbose                verbose output on stdout
@@ -118,11 +129,13 @@ simpleClient clientPort clientHost uri ver certVal clientCert =
                 TLS11 -> "--tls11"
                 TLS12 -> "--tls12"
 
-opensslServer :: Int -> String -> String -> Version -> Bool -> IO (ExitCode, ByteString, ByteString)
-opensslServer port cert key ver useClientCert =
+opensslServer :: String -> Int -> String -> String -> Version -> Bool -> Bool -> IO (ExitCode, ByteString, ByteString)
+opensslServer readyFile port cert key ver useClientCert useDhe =
     readProcessWithExitCodeBinary "./test-scripts/openssl-server"
         ([show port, cert, key, verString ]
-         ++ if useClientCert then ["client-cert"] else []
+         ++ (if useClientCert then ["client-cert"] else [])
+         ++ (if useDhe then ["dhe"] else [])
+         ++ ["ready-file",readyFile]
         ) B.empty
   where verString =
             case ver of
@@ -211,7 +224,7 @@ runAgainstServices logFile pid l = do
 
         showErr (FailStatus name ec out err) = do
             putStr "  " >> putRow (name ++ " exitcode=" ++ show ec) "FAILED"
-            appendFile logFile ("### " ++ url ++ "  name=" ++ name ++ "\n" ++ out)
+            appendFile logFile ("### " ++ url ++ "  name=" ++ name ++ "\n" ++ out ++ "\n" ++ err)
 
     toStats :: [Result] -> ([String], [String], [FailStatus])
     toStats = foldl accumulate ([], [], [])
@@ -223,11 +236,20 @@ runAgainstServices logFile pid l = do
 t2 :: b -> [a] -> [(a, b)]
 t2 b = map (\x -> (x, b))
 
+data Cred = Cred
+    { credGetType :: String
+    , credGetCert :: String
+    , credGetKey  :: String
+    }
+
 runLocal logFile pid = do
     putStrLn "running local test against OpenSSL"
-    let combi = [ (ver, cert)
+    let combi = [ (ver, cert, dhe, serverCert)
                 | ver  <- [SSL3, TLS10, TLS11, TLS12]
                 , cert <- [Nothing, Just ("test-certs/client.crt", "test-certs/client.key") ]
+                , dhe  <- [False,True]
+                , serverCert <- [Cred "RSA" "test-certs/server.rsa.crt" "test-certs/server.rsa.key"
+                                ,Cred "DSA" "test-certs/server.dsa.crt" "test-certs/server.dsa.key"]
                 ]
     haveFailed <- filter (== False) <$> mapM runOne combi
     when (not $ null haveFailed) $ exitFailure
@@ -235,24 +257,34 @@ runLocal logFile pid = do
     -- running between port 14000 and 16901
     pidToPort pid = 14000 + (fromIntegral pid `mod` 2901)
 
-    runOne (ver,ccert) = do
-        let hdr = "version=" ++ show ver ++ " client-certificate: " ++ maybe "NO" (const "YES") ccert
-        putStrLn hdr
+    runOne (ver,ccert,useDhe,serverCert)
+      | not useDhe && credGetType serverCert == "DSA" = do
+        putRow hdr "SKIPPED" >> return True
+      | otherwise = do
+        --putStrLn hdr
         opensslResult <- newEmptyMVar
+        r <- randomIO
+        let readyFile = "openssl-server-" ++ show pid ++ "-" ++ show (r :: Int) ++ ".ready"
+        removeSafe readyFile
+
         _ <- forkIO $ do
             let useClientCert = maybe False (const True) ccert
-            r <- wrapResult "openssl" (opensslServer (pidToPort pid) "test-certs/server.rsa.crt" "test-certs/server.rsa.key" ver useClientCert)
+            r <- wrapResult "openssl" (opensslServer readyFile (pidToPort pid) (credGetCert serverCert) (credGetKey serverCert) ver useClientCert useDhe)
             putMVar opensslResult r
             case r of
                 Success _ _ -> return ()
                 _           -> putStrLn ("openssl finished: " ++ showResultStatus r)
-        -- FIXME : racy. replace by a check that the port is bound
-        threadDelay 800000
+        untilFileExist 0 readyFile
+
         r  <- wrapResult "simpleclient" (simpleClient (pidToPort pid) "localhost" Nothing ver NoCertValidation ccert)
         r2 <- readMVar opensslResult
+
+        removeSafe readyFile
         case r of
-            Success _ _ -> putRow "" "SUCCESS" >> return True
-            _           -> putRow "" "FAILED" >> appendFile logFile (hdr ++ "\n\n" ++ prettyResult r ++ "\n\n" ++ prettyResult r2 ++ "\n\n\n") >> return False
+            Success _ _ -> putRow hdr "SUCCESS" >> return True
+            _           -> putRow hdr "FAILED" >> appendFile logFile (hdr ++ "\n\n" ++ prettyResult r ++ "\n\n" ++ prettyResult r2 ++ "\n\n\n") >> return False
+      where
+        hdr = "version=" ++ show ver ++ " client-cert=" ++ maybe "NO" (const "YES") ccert ++ " DHE=" ++ show useDhe ++ " server-cert=" ++ credGetType serverCert
 
 main = do
     args <- getArgs

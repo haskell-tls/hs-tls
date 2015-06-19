@@ -63,7 +63,7 @@ static int verify_callback(int preverify_ok, X509_STORE_CTX *x509)
 	return 1; /* 1 for success, 0 for fail */
 }
 
-static SSL_CTX* server_init(const_SSL_METHOD *method, int want_client_cert)
+static SSL_CTX* server_init(const_SSL_METHOD *method, int want_client_cert, int want_dhe)
 {
 	SSL_CTX *ctx;
 
@@ -78,8 +78,27 @@ static SSL_CTX* server_init(const_SSL_METHOD *method, int want_client_cert)
 	}
 
 	if (want_client_cert) {
-		SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, verify_callback); 
+		SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, verify_callback);
 	}
+
+	if (want_dhe) {
+		DH *dh;
+
+		dh = DH_new();
+		if (!dh) { printf("cannot DH new\n"); failure(); }
+
+		if (DH_generate_parameters_ex(dh, 1024, DH_GENERATOR_2, NULL) != 1) {
+			printf("cannot generate DH\n");
+			failure();
+		}
+
+		if (SSL_CTX_set_tmp_dh(ctx, dh) != 1) {
+			printf("cannot set tmp DH\n");
+			failure();
+		}
+		SSL_CTX_set_options(ctx, SSL_OP_SINGLE_DH_USE);
+	}
+
 	return ctx;
 }
 
@@ -162,7 +181,10 @@ int main(int argc, char *argv[])
 	char *file_cert;
 	char *file_key;
 	int want_client_cert = 0;
+	int want_dhe = 0;
 	int keep_running = 0;
+	int use_ready_file = 0;
+	char *ready_file;
 	int i;
 
 	if (argc < 4) {
@@ -187,16 +209,34 @@ int main(int argc, char *argv[])
 			want_client_cert = 1;
 		} else if (strcmp("keep-running", argv[i]) == 0) {
 			keep_running = 1;
+		} else if (strcmp("dhe", argv[i]) == 0) {
+			want_dhe = 1;
+		} else if (strcmp("ready-file", argv[i]) == 0) {
+			use_ready_file = 1;
+			ready_file = argv[++i];
 		} else {
 			printf("warning: unknown option: \"%s\"\n", argv[i]);
 		}
 	}
 
-	ctx = server_init(method, want_client_cert);
+	if (use_ready_file)
+		printf("readyfile: %s\n", ready_file);
+
+	ctx = server_init(method, want_client_cert, want_dhe);
 
 	load_server_certificates(ctx, file_cert, file_key);
 
 	server_fd = listen_socket(atoi(portnum));
+
+	if (use_ready_file) {
+		FILE *f;
+
+		f = fopen(ready_file, "w+");
+		if (f != NULL) {
+			fwrite("ready\n", 6, 1, f);
+			fclose(f);
+		}
+	}
 
 	do {
 		struct sockaddr_in addr;
