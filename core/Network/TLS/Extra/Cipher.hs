@@ -41,7 +41,6 @@ import qualified Data.ByteString as B
 
 import Network.TLS (Version(..))
 import Network.TLS.Cipher
-import Network.TLS.Crypto
 import Data.Tuple (swap)
 
 import Crypto.Cipher.AES
@@ -98,7 +97,7 @@ tripledes_ede BulkEncrypt key =
     let ctx = noFail $ cipherInit key
      in (\iv input -> let output = cbcEncrypt ctx (tripledes_iv iv) input in (output, takelast 16 output))
 tripledes_ede BulkDecrypt key =
-    let ctx = noFail $ cipherInit key)
+    let ctx = noFail $ cipherInit key
      in (\iv input -> let output = cbcDecrypt ctx (tripledes_iv iv) input in (output, takelast 16 input))
 
 tripledes_iv :: BulkIV -> IV DES_EDE3

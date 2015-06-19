@@ -20,7 +20,6 @@ import Control.Concurrent.Chan
 import Control.Concurrent
 import qualified Control.Exception as E
 
-import Crypto.Random
 import qualified Data.ByteString as B
 
 debug = False
