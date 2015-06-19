@@ -22,7 +22,7 @@ import Control.Monad (when, forever)
 import Data.Char (isDigit)
 import Data.Default.Class
 
-import qualified Crypto.Random.AESCtr as RNG
+import Crypto.Random
 import Network.TLS
 import Network.TLS.Extra.Cipher
 
@@ -96,7 +96,6 @@ memSessionManager (MemSessionManager mvar) = SessionManager
     }
 
 clientProcess dhParamsFile creds handle dsthandle dbg sessionStorage _ = do
-    rng <- RNG.makeSystem
     let logging = if not dbg
             then def
             else def { loggingPacketSent = putStrLn . ("debug: send: " ++)
@@ -115,7 +114,7 @@ clientProcess dhParamsFile creds handle dsthandle dbg sessionStorage _ = do
             , serverDHEParams = dhParams
             }
 
-    ctx <- contextNew handle serverstate rng
+    ctx <- contextNew handle serverstate
     contextHookSetLogging ctx logging
     tlsserver ctx dsthandle
 
@@ -193,13 +192,12 @@ doClient source destination@(Address a _) flags = do
             (StunnelSocket srcsocket) <- listenAddressDescription srcaddr
             forever $ do
                 (s, _) <- accept srcsocket
-                rng    <- RNG.makeSystem
                 srch   <- socketToHandle s ReadWriteMode
 
                 (StunnelSocket dst)  <- connectAddressDescription dstaddr
 
                 dsth <- socketToHandle dst ReadWriteMode
-                dstctx <- contextNew dsth clientstate rng
+                dstctx <- contextNew dsth clientstate
                 contextHookSetLogging dstctx logging
                 _    <- forkIO $ finally
                     (tlsclient srch dstctx)
