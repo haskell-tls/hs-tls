@@ -1,3 +1,9 @@
+## Version 1.2.18
+
+- add more tests (network, local)
+- cleanup cipher / bulk code, certificate verify / creation, and digitall signed handling
+- fix handling of DHE ciphers with MS SSL stack that serialize leading zero.
+
 ## Version 1.2.17
 
 - Fix an issue of type of key / hash that prevented connection with SChannel.
