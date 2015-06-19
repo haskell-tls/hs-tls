@@ -97,14 +97,19 @@ signatureCreate ctx malg (hashAlg, toSign) = do
     DigitallySigned malg <$> signRSA ctx cc hashAlg toSign
 
 signatureVerify :: Context -> DigitallySigned -> SignatureAlgorithm -> Bytes -> IO Bool
-signatureVerify ctx digSig@(DigitallySigned hashSigAlg _) sigAlgExpected toVerify = do
+signatureVerify ctx digSig@(DigitallySigned hashSigAlg _) sigAlgExpected toVerifyData = do
     usedVersion <- usingState_ ctx getVersion
-    let hashDescr = case (usedVersion, hashSigAlg) of
-            (TLS12, Nothing)    -> error "expecting hash and signature algorithm in a TLS12 digitally signed structure"
-            (TLS12, Just (h,s)) | s == sigAlgExpected -> signatureHashData sigAlgExpected (Just h)
-                                | otherwise           -> error "expecting different signature algorithm"
-            (_,     Nothing)    -> signatureHashData sigAlgExpected Nothing
-            (_,     Just _)     -> error "not expecting hash and signature algorithm in a < TLS12 digitially signed structure"
+    -- in the case of TLS < 1.2, RSA signing, then the data need to be hashed first, as
+    -- the SHA_MD5 algorithm expect an already digested data
+    let (hashDescr, toVerify) =
+            case (usedVersion, hashSigAlg) of
+                (TLS12, Nothing)    -> error "expecting hash and signature algorithm in a TLS12 digitally signed structure"
+                (TLS12, Just (h,s)) | s == sigAlgExpected -> (signatureHashData sigAlgExpected (Just h), toVerifyData)
+                                    | otherwise           -> error "expecting different signature algorithm"
+                (_,     Nothing)    -> case signatureHashData sigAlgExpected Nothing of
+                                            SHA1_MD5 -> (SHA1_MD5, hashFinal $ hashUpdate (hashInit SHA1_MD5) toVerifyData)
+                                            alg      -> (alg, toVerifyData)
+                (_,     Just _)     -> error "not expecting hash and signature algorithm in a < TLS12 digitially signed structure"
     signatureVerifyWithHashDescr ctx sigAlgExpected digSig (hashDescr, toVerify)
 
 signatureVerifyWithHashDescr :: Context
