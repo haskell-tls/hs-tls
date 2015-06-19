@@ -1,3 +1,7 @@
+## Version 1.3.0
+
+- modernize the crypto stack by using cryptonite.
+
 ## Version 1.2.18
 
 - add more tests (network, local)
