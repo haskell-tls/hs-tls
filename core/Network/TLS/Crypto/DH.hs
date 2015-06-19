@@ -9,6 +9,8 @@ module Network.TLS.Crypto.DH
     , dhPublic
     , dhPrivate
     , dhParams
+    , dhParamsGetP
+    , dhParamsGetG
     , dhGenerateKeyPair
     , dhGetShared
     , dhUnwrap
@@ -48,6 +50,12 @@ dhGetShared params priv pub =
 
 dhUnwrap :: DHParams -> DHPublic -> [Integer]
 dhUnwrap (DH.Params p g) (DH.PublicNumber y) = [p,g,y]
+
+dhParamsGetP :: DHParams -> Integer
+dhParamsGetP (DH.Params p _) = p
+
+dhParamsGetG :: DHParams -> Integer
+dhParamsGetG (DH.Params _ g) = g
 
 dhUnwrapPublic :: DHPublic -> Integer
 dhUnwrapPublic (DH.PublicNumber y) = y

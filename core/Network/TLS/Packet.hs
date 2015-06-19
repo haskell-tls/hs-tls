@@ -483,14 +483,10 @@ putSignatureHashAlgorithm (h,s) =
     putWord8 (valOfType h) >> putWord8 (valOfType s)
 
 getServerDHParams :: Get ServerDHParams
-getServerDHParams = ServerDHParams <$> getDHParams <*> getDHPublic
-  where getDHParams = dhParams <$> getInteger16 -- p
-                               <*> getInteger16 -- g
-        getDHPublic = dhPublic <$> getInteger16 -- y(server)
+getServerDHParams = ServerDHParams <$> getBigNum16 <*> getBigNum16 <*> getBigNum16
 
 putServerDHParams :: ServerDHParams -> Put
-putServerDHParams (ServerDHParams dhparams dhpub) =
-    mapM_ putInteger16 $ dhUnwrap dhparams dhpub
+putServerDHParams (ServerDHParams p g y) = mapM_ putBigNum16 [p,g,y]
 
 getServerECDHParams :: Get ServerECDHParams
 getServerECDHParams = do

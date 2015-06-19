@@ -35,6 +35,7 @@ ciphers =
     , cipher_RC4_128_MD5
     , cipher_RC4_128_SHA1
     , cipher_RSA_3DES_EDE_CBC_SHA1
+    , cipher_DHE_RSA_AES128GCM_SHA256
     ]
 
 bogusCipher cid = cipher_AES128_SHA1 { cipherID = cid }

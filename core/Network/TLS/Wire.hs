@@ -27,6 +27,7 @@ module Network.TLS.Wire
     , getOpaque16
     , getOpaque24
     , getInteger16
+    , getBigNum16
     , getList
     , processBytes
     , isEmpty
@@ -42,6 +43,7 @@ module Network.TLS.Wire
     , putOpaque16
     , putOpaque24
     , putInteger16
+    , putBigNum16
     , encodeWord16
     , encodeWord32
     , encodeWord64
@@ -114,6 +116,9 @@ getOpaque24 = getWord24 >>= getBytes
 getInteger16 :: Get Integer
 getInteger16 = os2ip <$> getOpaque16
 
+getBigNum16 :: Get BigNum
+getBigNum16 = BigNum <$> getOpaque16
+
 getList :: Int -> (Get (Int, a)) -> Get [a]
 getList totalLen getElement = isolate totalLen (getElements totalLen)
   where getElements len
@@ -161,6 +166,9 @@ putOpaque24 b = putWord24 (B.length b) >> putBytes b
 
 putInteger16 :: Integer -> Put
 putInteger16 = putOpaque16 . i2osp
+
+putBigNum16 :: BigNum -> Put
+putBigNum16 (BigNum b) = putOpaque16 b
 
 encodeWord16 :: Word16 -> Bytes
 encodeWord16 = runPut . putWord16

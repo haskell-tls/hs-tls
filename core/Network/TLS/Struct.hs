@@ -27,7 +27,13 @@ module Network.TLS.Struct
     , TLSError(..)
     , TLSException(..)
     , DistinguishedName
+    , BigNum(..)
+    , bigNumToInteger
+    , bigNumFromInteger
     , ServerDHParams(..)
+    , serverDHParamsToParams
+    , serverDHParamsToPublic
+    , serverDHParamsFrom
     , ServerECDHParams(..)
     , ServerRSAParams(..)
     , ServerKeyXchgAlgorithmData(..)
@@ -64,6 +70,7 @@ import Control.Exception (Exception(..))
 import Network.TLS.Types
 import Network.TLS.Crypto.DH
 import Network.TLS.Crypto.ECDH
+import Network.TLS.Util.Serialization
 #if MIN_VERSION_mtl(2,2,1)
 #else
 import Control.Monad.Error
@@ -234,8 +241,35 @@ data HandshakeType =
     | HandshakeType_NPN -- Next Protocol Negotiation extension
     deriving (Show,Eq)
 
-data ServerDHParams = ServerDHParams DHParams {- (p,g) -} DHPublic {- y -}
+newtype BigNum = BigNum Bytes
     deriving (Show,Eq)
+
+bigNumToInteger :: BigNum -> Integer
+bigNumToInteger (BigNum b) = os2ip b
+
+bigNumFromInteger :: Integer -> BigNum
+bigNumFromInteger i = BigNum $ i2osp i
+
+data ServerDHParams = ServerDHParams
+    { serverDHParams_p :: BigNum
+    , serverDHParams_g :: BigNum
+    , serverDHParams_y :: BigNum
+    } deriving (Show,Eq)
+
+serverDHParamsFrom :: DHParams -> DHPublic -> ServerDHParams
+serverDHParamsFrom params dhPub =
+    ServerDHParams (bigNumFromInteger $ dhParamsGetP params)
+                   (bigNumFromInteger $ dhParamsGetG params)
+                   (bigNumFromInteger $ dhUnwrapPublic dhPub)
+
+serverDHParamsToParams :: ServerDHParams -> DHParams
+serverDHParamsToParams serverParams =
+    dhParams (bigNumToInteger $ serverDHParams_p serverParams)
+             (bigNumToInteger $ serverDHParams_g serverParams)
+
+serverDHParamsToPublic :: ServerDHParams -> DHPublic
+serverDHParamsToPublic serverParams =
+    dhPublic (bigNumToInteger $ serverDHParams_y serverParams)
 
 data ServerECDHParams = ServerECDHParams ECDHParams ECDHPublic
     deriving (Show,Eq)

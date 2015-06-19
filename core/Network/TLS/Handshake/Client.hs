@@ -209,10 +209,12 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
             sendPacket ctx $ Handshake [ClientKeyXchg ckx]
           where getCKX_DHE = do
                     xver <- usingState_ ctx getVersion
-                    (ServerDHParams dhparams serverDHPub) <- fromJust <$> usingHState ctx (gets hstServerDHParams)
-                    (clientDHPriv, clientDHPub) <- generateDHE ctx dhparams
+                    serverParams <- fromJust <$> usingHState ctx (gets hstServerDHParams)
+                    (clientDHPriv, clientDHPub) <- generateDHE ctx (serverDHParamsToParams serverParams)
 
-                    let premaster = dhGetShared dhparams clientDHPriv serverDHPub
+                    let premaster = dhGetShared (serverDHParamsToParams serverParams)
+                                                clientDHPriv
+                                                (serverDHParamsToPublic serverParams)
                     usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
 
                     return $ CKX_DH clientDHPub
@@ -388,7 +390,7 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
         doDHESignature dhparams signature signatureType = do
             -- TODO verify DHParams
             verified <- digitallySignDHParamsVerify ctx dhparams signatureType signature
-            when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " for dhparams", True, HandshakeFailure)
+            when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " for dhparams " ++ show dhparams, True, HandshakeFailure)
             usingHState ctx $ setServerDHParams dhparams
 
         doECDHESignature ecdhparams signature signatureType = do

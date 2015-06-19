@@ -268,7 +268,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             let dhparams = fromJust "server DHE Params" $ serverDHEParams sparams
             (priv, pub) <- generateDHE ctx dhparams
 
-            let serverParams = ServerDHParams dhparams pub
+            let serverParams = serverDHParamsFrom dhparams pub
 
             usingHState ctx $ setServerDHParams serverParams
             usingHState ctx $ modify $ \hst -> hst { hstDHPrivate = Just priv }
