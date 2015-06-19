@@ -46,9 +46,9 @@ Library
                    -- certificate related
                    , asn1-types >= 0.2.0
                    , asn1-encoding
-                   , x509 >= 1.5.999 && < 1.7.0
-                   , x509-store >= 1.5.999
-                   , x509-validation >= 1.5.999 && < 1.7.0
+                   , x509 >= 1.6 && < 1.7.0
+                   , x509-store >= 1.6
+                   , x509-validation >= 1.6 && < 1.7.0
                    , async
   Exposed-modules:   Network.TLS
                      Network.TLS.Cipher
