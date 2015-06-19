@@ -7,7 +7,6 @@ import Network.TLS.Extra.Cipher
 import System.Console.GetOpt
 import System.IO
 import System.Timeout
-import qualified Crypto.Random.AESCtr as RNG
 import qualified Data.ByteString.Lazy.Char8 as LC
 import qualified Data.ByteString.Char8 as BC
 import Control.Exception
@@ -40,13 +39,12 @@ ciphers =
 bogusCipher cid = cipher_AES128_SHA1 { cipherID = cid }
 
 runTLS debug ioDebug params hostname portNumber f = do
-    rng  <- RNG.makeSystem
     he   <- getHostByName hostname
     sock <- socket AF_INET Stream defaultProtocol
     let sockaddr = SockAddrInet portNumber (head $ hostAddresses he)
     E.catch (connect sock sockaddr)
           (\(e :: SomeException) -> sClose sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
-    ctx <- contextNew sock params rng
+    ctx <- contextNew sock params
     contextHookSetLogging ctx getLogging
     () <- f ctx
     sClose sock

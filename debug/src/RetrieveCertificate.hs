@@ -16,8 +16,6 @@ import Control.Applicative
 import Control.Monad
 import Control.Exception
 
-import qualified Crypto.Random.AESCtr as RNG
-
 import Data.Char (isDigit)
 import Data.PEM
 
@@ -31,7 +29,6 @@ import qualified Data.ByteString.Char8 as B
 
 openConnection s p = do
     ref <- newIORef Nothing
-    rng <- RNG.makeSystem
     let params = (defaultParamsClient s (B.pack p))
                     { clientSupported = def { supportedCiphers = ciphersuite_all }
                     , clientShared    = def { sharedValidationCache = noValidate }
@@ -46,7 +43,7 @@ openConnection s p = do
     sock <- bracketOnError (socket AF_INET Stream defaultProtocol) sClose $ \sock -> do
             connect sock (SockAddrInet pn (head $ hostAddresses he))
             return sock
-    ctx <- contextNew sock params rng
+    ctx <- contextNew sock params
 
     contextHookSetCertificateRecv ctx $ \l -> modifyIORef ref (const $ Just l)
 
