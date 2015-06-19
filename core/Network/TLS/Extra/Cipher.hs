@@ -42,57 +42,70 @@ import qualified Data.ByteString as B
 import Network.TLS (Version(..))
 import Network.TLS.Cipher
 import Network.TLS.Crypto
-import qualified Crypto.Cipher.RC4 as RC4
+import Data.Tuple (swap)
 
 import Crypto.Cipher.AES
+import qualified Crypto.Cipher.RC4 as RC4
 import Crypto.Cipher.TripleDES
-import Crypto.Cipher.Types (makeKey, makeIV, cipherInit, cbcEncrypt, cbcDecrypt)
-import qualified Crypto.Cipher.Types as T
-
+import Crypto.Cipher.Types hiding (Cipher, cipherName)
+import Crypto.Error
 
 takelast :: Int -> B.ByteString -> B.ByteString
 takelast i b = B.drop (B.length b - i) b
 
 aes128cbc :: BulkDirection -> BulkKey -> BulkBlock
 aes128cbc BulkEncrypt key =
-    let ctx = AES.initAES key
-     in (\iv input -> let output = AES.encryptCBC ctx iv input in (output, takelast 16 output))
+    let ctx = noFail (cipherInit key) :: AES128
+     in (\iv input -> let output = cbcEncrypt ctx (makeIV_ iv) input in (output, takelast 16 output))
 aes128cbc BulkDecrypt key =
-    let ctx = AES.initAES key
-     in (\iv input -> let output = AES.decryptCBC ctx iv input in (output, takelast 16 input))
+    let ctx = noFail (cipherInit key) :: AES128
+     in (\iv input -> let output = cbcDecrypt ctx (makeIV_ iv) input in (output, takelast 16 input))
 
 aes256cbc :: BulkDirection -> BulkKey -> BulkBlock
 aes256cbc BulkEncrypt key =
-    let ctx = AES.initAES key
-     in (\iv input -> let output = AES.encryptCBC ctx iv input in (output, takelast 16 output))
+    let ctx = noFail (cipherInit key) :: AES256
+     in (\iv input -> let output = cbcEncrypt ctx (makeIV_ iv) input in (output, takelast 16 output))
 aes256cbc BulkDecrypt key =
-    let ctx = AES.initAES key
-     in (\iv input -> let output = AES.decryptCBC ctx iv input in (output, takelast 16 input))
+    let ctx = noFail (cipherInit key) :: AES256
+     in (\iv input -> let output = cbcDecrypt ctx (makeIV_ iv) input in (output, takelast 16 input))
 
 aes128gcm :: BulkDirection -> BulkKey -> BulkAEAD
 aes128gcm BulkEncrypt key =
-    let ctx = AES.initAES key
-     in (\nonce d ad -> AES.encryptGCM ctx nonce ad d)
+    let ctx = noFail (cipherInit key) :: AES128
+     in (\nonce d ad ->
+            let aeadIni = noFail (aeadInit AEAD_GCM ctx nonce)
+             in swap $ aeadSimpleEncrypt aeadIni ad d 16)
 aes128gcm BulkDecrypt key =
-    let ctx = AES.initAES key
-     in (\nonce d ad -> AES.decryptGCM ctx nonce ad d)
+    let ctx = noFail (cipherInit key) :: AES128
+     in (\nonce d ad ->
+            let aeadIni = noFail (aeadInit AEAD_GCM ctx nonce)
+             in simpleDecrypt aeadIni ad d)
+  where
+    simpleDecrypt aeadIni header input = (output, tag)
+      where
+            aead                = aeadAppendHeader aeadIni header
+            (output, aeadFinal) = aeadDecrypt aead input
+            tag                 = aeadFinalize aeadFinal 16
+
+noFail :: CryptoFailable a -> a
+noFail = throwCryptoError
+
+makeIV_ :: BlockCipher a => B.ByteString -> IV a
+makeIV_ = maybe (error "makeIV_") id . makeIV
 
 tripledes_ede :: BulkDirection -> BulkKey -> BulkBlock
 tripledes_ede BulkEncrypt key =
-    let ctx = cipherInit (tripledes_key key)
+    let ctx = noFail $ cipherInit key
      in (\iv input -> let output = cbcEncrypt ctx (tripledes_iv iv) input in (output, takelast 16 output))
 tripledes_ede BulkDecrypt key =
-    let ctx = cipherInit (tripledes_key key)
+    let ctx = noFail $ cipherInit key)
      in (\iv input -> let output = cbcDecrypt ctx (tripledes_iv iv) input in (output, takelast 16 input))
 
-tripledes_key :: BulkKey -> T.Key DES_EDE3
-tripledes_key key = either (\ke -> error ("tripledes cipher key internal error: " ++ show ke)) id $ makeKey key
-
-tripledes_iv :: BulkIV -> T.IV DES_EDE3
+tripledes_iv :: BulkIV -> IV DES_EDE3
 tripledes_iv iv = maybe (error "tripledes cipher iv internal error") id $ makeIV iv
 
 rc4 :: BulkDirection -> BulkKey -> BulkStream
-rc4 _ bulkKey = BulkStream (combineRC4 $ RC4.initCtx bulkKey)
+rc4 _ bulkKey = BulkStream (combineRC4 $ RC4.initialize bulkKey)
   where
     combineRC4 ctx input =
         let (ctx', output) = RC4.combine ctx input
