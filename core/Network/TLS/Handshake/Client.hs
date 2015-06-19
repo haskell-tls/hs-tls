@@ -394,7 +394,7 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
         doECDHESignature ecdhparams signature signatureType = do
             -- TODO verify DHParams
             verified <- digitallySignECDHParamsVerify ctx ecdhparams signatureType signature
-            when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " for dhparams", True, HandshakeFailure)
+            when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " for ecdhparams", True, HandshakeFailure)
             usingHState ctx $ setServerECDHParams ecdhparams
 
 processServerKeyExchange ctx p = processCertificateRequest ctx p
