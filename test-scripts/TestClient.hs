@@ -289,13 +289,15 @@ runLocal logFile pid = do
 main = do
     args <- getArgs
     pid <- getProcessID
-    let logFile = case args of
-                    []    -> "TestClient." ++ show (fromIntegral pid) ++ ".log"
-                    (x:_) -> x
+    let (logFile, doLocal) = case args of
+                    []    -> ("TestClient." ++ show (fromIntegral pid) ++ ".log", False)
+                    ["with-local"] -> ("TestClient." ++ show (fromIntegral pid) ++ ".log", True)
+                    ("with-local":x:_) -> (x, True)
+                    (x:_) -> (x, False)
 
     putStrLn $ ("log file : " ++ logFile)
 
-    runLocal logFile pid
+    when doLocal $ runLocal logFile pid
     runAgainstServices logFile pid $
         -- Everything supported
         t2 Everything

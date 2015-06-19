@@ -7,6 +7,10 @@ reinstall:
 
 .PHONY: tests
 tests: test-scripts/TestClient
+	./test-scripts/TestClient with-local
+
+.PHONY: travis-tests
+travis-tests: test-scripts/TestClient
 	./test-scripts/TestClient
 
 .PHONY: test-scripts/TestClient
