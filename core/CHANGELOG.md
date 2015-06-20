@@ -1,3 +1,7 @@
+## Version 1.3.1
+
+- Repair DHE RSA handling on the cipher by creating signature properly
+
 ## Version 1.3.0
 
 - modernize the crypto stack by using cryptonite.
