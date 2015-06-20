@@ -94,7 +94,11 @@ signatureHashData sig _ = error ("unimplemented signature type: " ++ show sig)
 signatureCreate :: Context -> Maybe HashAndSignatureAlgorithm -> CertVerifyData -> IO DigitallySigned
 signatureCreate ctx malg (hashAlg, toSign) = do
     cc <- usingState_ ctx $ isClientContext
-    DigitallySigned malg <$> signRSA ctx cc hashAlg toSign
+    let signData =
+            case (malg, hashAlg) of
+                (Nothing, SHA1_MD5) -> hashFinal $ hashUpdate (hashInit SHA1_MD5) toSign
+                _                   -> toSign
+    DigitallySigned malg <$> signRSA ctx cc hashAlg signData
 
 signatureVerify :: Context -> DigitallySigned -> SignatureAlgorithm -> Bytes -> IO Bool
 signatureVerify ctx digSig@(DigitallySigned hashSigAlg _) sigAlgExpected toVerifyData = do

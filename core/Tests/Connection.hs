@@ -69,7 +69,7 @@ streamCipher = blockCipher
     passThrough _ _ = BulkStream go where go inp = (inp, BulkStream go)
 
 knownCiphers :: [Cipher]
-knownCiphers = [blockCipher{-,blockCipherDHE_RSA-},blockCipherDHE_DSS,streamCipher]
+knownCiphers = [blockCipher,blockCipherDHE_RSA,blockCipherDHE_DSS,streamCipher]
 
 knownVersions :: [Version]
 knownVersions = [SSL3,TLS10,TLS11,TLS12]
