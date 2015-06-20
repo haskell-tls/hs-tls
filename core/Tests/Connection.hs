@@ -35,7 +35,7 @@ blockCipher = Cipher
         , bulkBlockSize = 16
         , bulkF         = BulkBlockF $ \_ _ _ -> (\m -> (m, B.empty))
         }
-    , cipherHash = MD5
+    , cipherHash        = MD5
     , cipherKeyExchange = CipherKeyExchange_RSA
     , cipherMinVer      = Nothing
     }
@@ -69,7 +69,7 @@ streamCipher = blockCipher
     passThrough _ _ = BulkStream go where go inp = (inp, BulkStream go)
 
 knownCiphers :: [Cipher]
-knownCiphers = [blockCipher,blockCipherDHE_RSA,blockCipherDHE_DSS,streamCipher]
+knownCiphers = [blockCipher{-,blockCipherDHE_RSA-},blockCipherDHE_DSS,streamCipher]
 
 knownVersions :: [Version]
 knownVersions = [SSL3,TLS10,TLS11,TLS12]

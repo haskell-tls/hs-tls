@@ -21,6 +21,8 @@ import Control.Monad
 
 import Data.IORef
 
+import System.Timeout
+
 prop_pipe_work :: PropertyM IO ()
 prop_pipe_work = do
     pipe <- run newPipe
@@ -48,9 +50,9 @@ runTLSPipe params tlsServer tlsClient = do
     d <- B.pack <$> pick (someWords8 256)
     run $ writeChan startQueue d
     -- receive it
-    dres <- run $ readChan resultQueue
+    dres <- run $ timeout 10000000 $ readChan resultQueue
     -- check if it equal
-    d `assertEq` dres
+    Just d `assertEq` dres
     return ()
 
 prop_handshake_initiate :: PropertyM IO ()
