@@ -28,16 +28,14 @@ import Network.TLS.Handshake.State
 import Network.TLS.Cipher
 import Network.TLS.Util
 
-import Data.Byteable
-
 processPacket :: Context -> Record Plaintext -> IO (Either TLSError Packet)
 
-processPacket _ (Record ProtocolType_AppData _ fragment) = return $ Right $ AppData $ toBytes fragment
+processPacket _ (Record ProtocolType_AppData _ fragment) = return $ Right $ AppData $ fragmentGetBytes fragment
 
-processPacket _ (Record ProtocolType_Alert _ fragment) = return (Alert `fmapEither` (decodeAlerts $ toBytes fragment))
+processPacket _ (Record ProtocolType_Alert _ fragment) = return (Alert `fmapEither` (decodeAlerts $ fragmentGetBytes fragment))
 
 processPacket ctx (Record ProtocolType_ChangeCipherSpec _ fragment) =
-    case decodeChangeCipherSpec $ toBytes fragment of
+    case decodeChangeCipherSpec $ fragmentGetBytes fragment of
         Left err -> return $ Left err
         Right _  -> do switchRxEncryption ctx
                        return $ Right ChangeCipherSpec
@@ -54,7 +52,7 @@ processPacket ctx (Record ProtocolType_Handshake ver fragment) = do
         -- get back the optional continuation, and parse as many handshake record as possible.
         mCont <- gets stHandshakeRecordCont
         modify (\st -> st { stHandshakeRecordCont = Nothing })
-        hss   <- parseMany currentParams mCont (toBytes fragment)
+        hss   <- parseMany currentParams mCont (fragmentGetBytes fragment)
         return $ Handshake hss
   where parseMany currentParams mCont bs =
             case maybe decodeHandshakeRecord id mCont $ bs of
@@ -68,7 +66,7 @@ processPacket ctx (Record ProtocolType_Handshake ver fragment) = do
                         Right hh -> (hh:) `fmap` parseMany currentParams Nothing left
 
 processPacket _ (Record ProtocolType_DeprecatedHandshake _ fragment) =
-    case decodeDeprecatedHandshake $ toBytes fragment of
+    case decodeDeprecatedHandshake $ fragmentGetBytes fragment of
         Left err -> return $ Left err
         Right hs -> return $ Right $ Handshake [hs]
 

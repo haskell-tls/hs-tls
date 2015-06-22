@@ -37,7 +37,6 @@ Library
                    , transformers
                    , cereal >= 0.4
                    , bytestring
-                   , byteable
                    , network
                    , data-default-class
                    -- crypto related
