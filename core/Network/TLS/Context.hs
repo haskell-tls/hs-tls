@@ -1,3 +1,4 @@
+{-# Language GeneralizedNewtypeDeriving #-}
 -- |
 -- Module      : Network.TLS.Context
 -- License     : BSD-style
@@ -77,6 +78,8 @@ import Data.Maybe (isJust)
 
 import Control.Concurrent.MVar
 import Control.Monad.State
+import Control.Monad.Reader
+import Crypto.Random.EntropyPool
 import Data.IORef
 
 -- deprecated imports
@@ -131,6 +134,14 @@ instance TLSParams ServerParams where
     doHandshake = handshakeServer
     doHandshakeWith = handshakeServerWith
 
+newtype RndPool a = RndPool { runPool :: ReaderT EntropyPool IO a }
+    deriving (Functor, Applicative, Monad)
+
+instance MonadRandom RndPool where
+    getRandomBytes n = RndPool $ do
+        pool <- ask
+        liftIO $ getEntropyFrom pool n
+
 -- | create a new context using the backend and parameters specified.
 contextNew :: (MonadIO m, HasBackend backend, TLSParams params)
            => backend   -- ^ Backend abstraction with specific method to interact with the connection type.
@@ -139,11 +150,13 @@ contextNew :: (MonadIO m, HasBackend backend, TLSParams params)
 contextNew backend params = liftIO $ do
     initializeBackend backend
 
-    rng <- newStateRNG
+    let (supported, shared) = getTLSCommonParams params
+    rng <- case sharedEntropyPool shared of
+            Nothing -> newStateRNG
+            Just pool -> runReaderT (runPool newStateRNG) pool
 
     let role = getTLSRole params
         st   = newTLSState rng role
-        (supported, shared) = getTLSCommonParams params
         ciphers = getCiphers params
 
     when (null ciphers) $ error "no ciphers available with those parameters"
