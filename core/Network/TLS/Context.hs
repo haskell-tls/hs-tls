@@ -76,6 +76,8 @@ import Network.TLS.X509
 import Network.TLS.RNG
 import Data.Maybe (isJust)
 
+import Control.Applicative
+import Control.Concurrent.MVar
 import Control.Concurrent.MVar
 import Control.Monad.State
 import Control.Monad.Reader
