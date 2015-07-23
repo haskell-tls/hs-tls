@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <arpa/inet.h>
 #include <resolv.h>
 #include <openssl/ssl.h>
@@ -140,6 +141,115 @@ static void show_certificates(SSL* ssl)
 	X509_free(cert);
 }
 
+int SSL_write_all(SSL *ssl, char *buf, int sz)
+{
+	int written = 0;
+	int n;
+
+	while (written < sz) {
+		n = SSL_write(ssl, buf + written, sz - written);
+		if (n > 0)
+			written += n;
+		else if (n < 0)
+			return -1;
+	}
+	return 0;
+}
+
+#define BENCH_CHUNK 4096
+
+typedef struct
+{
+	struct timeval v;
+} record_time_t;
+
+void record_time(record_time_t *t)
+{
+	int rv = gettimeofday(&t->v, NULL);
+	if (rv) {
+		perror("gettimeofday");
+		exit(1);
+	}
+}
+
+void print_time(char *label, uint64_t nb_bytes, record_time_t *t1, record_time_t *t2)
+{
+	int sec = t2->v.tv_sec - t1->v.tv_sec;
+	int usec = t2->v.tv_usec - t1->v.tv_usec;
+	uint64_t f;
+	int unit_index = 0;
+	double val;
+	char *units[] = {
+		" b",
+		"kb",
+		"mb",
+		"gb",
+	};
+
+	if (usec < 0) {
+		usec += 1000000;
+		sec--;
+	}
+
+	f = sec * 1000000 + usec;
+
+	val = nb_bytes * 1000000 / f;
+
+	while (unit_index < 3 && val > 1080) {
+		val /= 1024;
+		unit_index++;
+	}
+
+	printf("%s: %lld bytes in %lld us => %.3f %s/s\n", label, nb_bytes, f, val, units[unit_index]);
+}
+
+static void benchmark(SSL *ssl, uint64_t send_bytes, uint64_t recv_bytes)
+{
+	uint64_t bytes = 0;
+	char buf[BENCH_CHUNK];
+	record_time_t t1, t2;
+	int sd;
+
+	memset(buf, 'a', BENCH_CHUNK);
+
+	if (SSL_accept(ssl) == SSL_FAIL) {
+		ERR_print_errors_fp(stderr);
+		goto out;
+	}
+
+	record_time(&t1);
+
+	if (send_bytes) {
+		while (bytes < send_bytes) {
+			int to_send = (send_bytes - bytes > BENCH_CHUNK) ? BENCH_CHUNK : send_bytes - bytes;
+			if (SSL_write_all(ssl, buf, to_send))
+				break;
+			bytes += to_send;
+		}
+	} else {
+		while (bytes < recv_bytes) {
+			int to_recv = (recv_bytes - bytes > BENCH_CHUNK) ? BENCH_CHUNK : recv_bytes - bytes;
+			int recved;
+			recved = SSL_read(ssl, buf, sizeof(to_recv));
+			if (recved > 0)
+				bytes += recved;
+			else
+				break;
+		}
+	}
+
+	record_time(&t2);
+	print_time((send_bytes > 0) ? "sending" : "receiving",
+	           (send_bytes > 0) ? send_bytes : recv_bytes,
+	           &t1, &t2);
+
+	SSL_shutdown(ssl);
+out:
+	sd = SSL_get_fd(ssl);
+	SSL_free(ssl);
+	close(sd);
+}
+
 static void process(SSL* ssl)
 {
 	char buf[1024];
@@ -184,6 +294,8 @@ int main(int argc, char *argv[])
 	int want_dhe = 0;
 	int keep_running = 0;
 	int use_ready_file = 0;
+	int bench_send = 0;
+	int bench_recv = 0;
 	char *ready_file;
 	int i;
 
@@ -214,6 +326,10 @@ int main(int argc, char *argv[])
 		} else if (strcmp("ready-file", argv[i]) == 0) {
 			use_ready_file = 1;
 			ready_file = argv[++i];
+		} else if (strcmp("bench-send", argv[i]) == 0) {
+			bench_send = atoi(argv[++i]);
+		} else if (strcmp("bench-recv", argv[i]) == 0) {
+			bench_recv = atoi(argv[++i]);
 		} else {
 			printf("warning: unknown option: \"%s\"\n", argv[i]);
 		}
@@ -249,7 +365,10 @@ int main(int argc, char *argv[])
 
 		ssl = SSL_new(ctx);
 		SSL_set_fd(ssl, client);
-		process(ssl);
+		if (bench_send > 0 || bench_recv > 0)
+			benchmark(ssl, bench_send, bench_recv);
+		else
+			process(ssl);
 	} while (keep_running);
 
 	close(server_fd);

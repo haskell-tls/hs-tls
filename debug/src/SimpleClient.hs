@@ -9,6 +9,7 @@ import System.IO
 import System.Timeout
 import qualified Data.ByteString.Lazy.Char8 as LC
 import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString as B
 import Control.Exception
 import qualified Control.Exception as E
 import Control.Monad
@@ -20,6 +21,8 @@ import Data.Default.Class
 import Data.IORef
 import Data.Monoid
 import Data.X509.Validation
+
+import Text.Read
 
 ciphers :: [Cipher]
 ciphers =
@@ -36,6 +39,9 @@ ciphers =
     , cipher_RSA_3DES_EDE_CBC_SHA1
     , cipher_DHE_RSA_AES128GCM_SHA256
     ]
+
+defaultBenchAmount = 1024 * 1024
+defaultTimeout = 2000
 
 bogusCipher cid = cipher_AES128_SHA1 { cipherID = cid }
 
@@ -114,6 +120,9 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | Timeout String
           | BogusCipher String
           | ClientCert String
+          | BenchSend
+          | BenchRecv
+          | BenchData String
           | Help
           deriving (Show,Eq)
 
@@ -138,15 +147,45 @@ options =
     , Option ['x']  ["no-version-downgrade"] (NoArg NoVersionDowngrade) "do not allow version downgrade"
     , Option []     ["uri"]     (ReqArg Uri "URI") "optional URI requested by default /"
     , Option ['h']  ["help"]    (NoArg Help) "request help"
+    , Option []     ["bench-send"]   (NoArg BenchSend) "benchmark send path. only with compatible server"
+    , Option []     ["bench-recv"]   (NoArg BenchRecv) "benchmark recv path. only with compatible server"
+    , Option []     ["bench-data"] (ReqArg BenchData "amount") "amount of data to benchmark with"
     ]
 
-runOn (sStorage, certStore) flags port hostname = do
-    certCredRequest <- getCredRequest
-    doTLS certCredRequest Nothing
-    when (Session `elem` flags) $ do
-        session <- readIORef sStorage
-        doTLS certCredRequest (Just session)
+noSession = Nothing
+
+runOn (sStorage, certStore) flags port hostname
+    | BenchSend `elem` flags = runBench True
+    | BenchRecv `elem` flags = runBench False
+    | otherwise              = do
+        certCredRequest <- getCredRequest
+        doTLS certCredRequest noSession
+        when (Session `elem` flags) $ do
+            session <- readIORef sStorage
+            doTLS certCredRequest (Just session)
   where
+        runBench isSend =
+            runTLS False False
+                   (getDefaultParams flags hostname certStore sStorage Nothing noSession) hostname port $ \ctx -> do
+                handshake ctx
+                if isSend
+                    then loopSendData getBenchAmount ctx
+                    else loopRecvData getBenchAmount ctx
+                bye ctx
+          where
+            dataSend = BC.replicate 4096 'a'
+            loopSendData bytes ctx
+                | bytes <= 0 = return ()
+                | otherwise  = do
+                    sendData ctx $ LC.fromChunks [(if bytes > B.length dataSend then dataSend else BC.take bytes dataSend)]
+                    loopSendData (bytes - B.length dataSend) ctx
+
+            loopRecvData bytes ctx
+                | bytes <= 0 = return ()
+                | otherwise  = do
+                    d <- recvData ctx
+                    loopRecvData (bytes - B.length d) ctx
+
         doTLS certCredRequest sess = do
             let query = LC.pack (
                         "GET "
@@ -197,11 +236,16 @@ runOn (sStorage, certStore) flags port hostname = do
         getOutput = foldl f Nothing flags
           where f _   (Output o) = Just o
                 f acc _          = acc
-        timeoutMs = foldl f 2000 flags
+        timeoutMs = foldl f defaultTimeout flags
           where f _   (Timeout t) = read t
                 f acc _           = acc
         clientCert = foldl f Nothing flags
           where f _   (ClientCert c) = Just c
+                f acc _              = acc
+        getBenchAmount = foldl f defaultBenchAmount flags
+          where f acc (BenchData am) = case readMaybe am of
+                                            Nothing -> acc
+                                            Just i  -> i
                 f acc _              = acc
 
 printUsage =
