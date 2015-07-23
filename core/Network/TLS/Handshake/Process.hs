@@ -36,8 +36,10 @@ processHandshake :: Context -> Handshake -> IO ()
 processHandshake ctx hs = do
     role <- usingState_ ctx isClientContext
     case hs of
-        ClientHello cver ran _ _ _ ex _ -> when (role == ServerRole) $ do
+        ClientHello cver ran _ cids _ ex _ -> when (role == ServerRole) $ do
             mapM_ (usingState_ ctx . processClientExtension) ex
+            usingState_ ctx $ do
+                when (0xff `elem` cids) $ setSecureRenegotiation True
             startHandshake ctx cver ran
         Certificates certs            -> processCertificates role certs
         ClientKeyXchg content         -> when (role == ServerRole) $ do
