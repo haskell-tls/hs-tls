@@ -1,5 +1,12 @@
 all:
-	@echo "reinstall | tests | build-openssl-server | build-openssl-server-mac-102"
+	@echo "use: make <target>"
+	@echo ""
+	@echo "where target is one of:"
+	@echo ""
+	@echo "  reinstall"
+	@echo "  tests"
+	@echo "  build-openssl-server | build-openssl-server-mac-102"
+	@echo "  build-openssl-client | build-openssl-client-mac-102"
 
 .PHONY: reinstall
 reinstall:
@@ -28,3 +35,15 @@ build-openssl-server-mac-102:
 			-L/usr/local/Cellar/openssl/1.0.2a-1/lib \
 			-I/usr/local/Cellar/openssl/1.0.2a-1/include \
 			-lcrypto -lssl test-scripts/openssl-server.c
+
+.PHONY: build-openssl-client
+build-openssl-client:
+	gcc -Wall -o test-scripts/openssl-client -Wno-deprecated-declarations test-scripts/openssl-client.c -lcrypto -lssl
+
+# for building on osx with the latest openssl version in brew
+.PHONY: build-openssl-client-mac-102
+build-openssl-client-mac-102:
+	gcc -Wall -o test-scripts/openssl-client \
+			-L/usr/local/Cellar/openssl/1.0.2a-1/lib \
+			-I/usr/local/Cellar/openssl/1.0.2a-1/include \
+			-lcrypto -lssl test-scripts/openssl-client.c
