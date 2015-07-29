@@ -23,6 +23,7 @@ import Data.Monoid
 import Data.X509.Validation
 
 import Text.Read
+import Numeric (showHex)
 
 ciphers :: [Cipher]
 ciphers =
@@ -123,6 +124,7 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | BenchSend
           | BenchRecv
           | BenchData String
+          | ListCiphers
           | Help
           deriving (Show,Eq)
 
@@ -150,6 +152,7 @@ options =
     , Option []     ["bench-send"]   (NoArg BenchSend) "benchmark send path. only with compatible server"
     , Option []     ["bench-recv"]   (NoArg BenchRecv) "benchmark recv path. only with compatible server"
     , Option []     ["bench-data"] (ReqArg BenchData "amount") "amount of data to benchmark with"
+    , Option []     ["list-ciphers"] (NoArg ListCiphers) "list all ciphers supported and exit"
     ]
 
 noSession = Nothing
@@ -251,6 +254,16 @@ runOn (sStorage, certStore) flags port hostname
 printUsage =
     putStrLn $ usageInfo "usage: simpleclient [opts] <hostname> [port]\n\n\t(port default to: 443)\noptions:\n" options
 
+printCiphers = do
+    putStrLn "Supported ciphers"
+    putStrLn "====================================="
+    forM_ ciphers $ \c -> do
+        putStrLn (pad 50 (cipherName c) ++ " = " ++ pad 5 (show $ cipherID c) ++ "  0x" ++ showHex (cipherID c) "")
+  where
+    pad n s
+        | length s < n = s ++ replicate (n - length s) ' '
+        | otherwise    = s
+
 main = do
     args <- getArgs
     let (opts,other,errs) = getOpt Permute options args
@@ -260,6 +273,10 @@ main = do
 
     when (Help `elem` opts) $ do
         printUsage
+        exitSuccess
+
+    when (ListCiphers `elem` opts) $ do
+        printCiphers
         exitSuccess
 
     certStore <- getSystemCertificateStore
