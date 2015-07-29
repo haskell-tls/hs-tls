@@ -92,12 +92,23 @@ getDefaultParams flags host store sStorage certCredsRequest session =
                 | otherwise    = ValidationCache (\_ _ _ -> return ValidationCachePass)
                                                  (\_ _ _ -> return ())
 
-            myCiphers = foldl accBogusCipher ciphers flags
+            myCiphers = foldl accBogusCipher (filter withUseCipher ciphers) flags
               where accBogusCipher acc (BogusCipher c) =
                         case reads c of
                             [(v, "")] -> acc ++ [bogusCipher v]
                             _         -> acc
                     accBogusCipher acc _ = acc
+
+            getUsedCiphers = foldl f [] flags
+              where f acc (UseCipher am) = case readMaybe am of
+                                                Nothing -> acc
+                                                Just i  -> i : acc
+                    f acc _ = acc
+
+            withUseCipher c =
+                case getUsedCiphers of
+                    [] -> True
+                    l  -> cipherID c `elem` l
 
             tlsConnectVer
                 | Tls12 `elem` flags = TLS12
@@ -124,6 +135,7 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | BenchSend
           | BenchRecv
           | BenchData String
+          | UseCipher String
           | ListCiphers
           | Help
           deriving (Show,Eq)
@@ -152,6 +164,7 @@ options =
     , Option []     ["bench-send"]   (NoArg BenchSend) "benchmark send path. only with compatible server"
     , Option []     ["bench-recv"]   (NoArg BenchRecv) "benchmark recv path. only with compatible server"
     , Option []     ["bench-data"] (ReqArg BenchData "amount") "amount of data to benchmark with"
+    , Option []     ["use-cipher"] (ReqArg UseCipher "cipher-id") "use a specific cipher" 
     , Option []     ["list-ciphers"] (NoArg ListCiphers) "list all ciphers supported and exit"
     ]
 
