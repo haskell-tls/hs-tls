@@ -23,7 +23,6 @@ import Data.Monoid
 import Data.Char (isDigit)
 import Data.X509.Validation
 
-import Text.Read
 import Numeric (showHex)
 
 ciphers :: [Cipher]
@@ -101,7 +100,7 @@ getDefaultParams flags host store sStorage certCredsRequest session =
                     accBogusCipher acc _ = acc
 
             getUsedCiphers = foldl f [] flags
-              where f acc (UseCipher am) = case readMaybe am of
+              where f acc (UseCipher am) = case readNumber am of
                                                 Nothing -> acc
                                                 Just i  -> i : acc
                     f acc _ = acc
@@ -265,10 +264,10 @@ runOn (sStorage, certStore) flags port hostname
                                             Just i  -> i
                 f acc _              = acc
 
-        readNumber :: (Num a, Read a) => String -> Maybe a
-        readNumber s
-            | all isDigit s = Just $ read s
-            | otherwise     = Nothing
+readNumber :: (Num a, Read a) => String -> Maybe a
+readNumber s
+    | all isDigit s = Just $ read s
+    | otherwise     = Nothing
 
 printUsage =
     putStrLn $ usageInfo "usage: simpleclient [opts] <hostname> [port]\n\n\t(port default to: 443)\noptions:\n" options
