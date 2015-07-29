@@ -35,6 +35,8 @@ module Network.TLS.Extra.Cipher
     , cipher_DHE_DSS_RC4_SHA1
     , cipher_DHE_RSA_AES128GCM_SHA256
     , cipher_ECDHE_RSA_AES128GCM_SHA256
+    , cipher_ECDHE_RSA_AES128CBC_SHA256
+    , cipher_ECDHE_RSA_AES128CBC_SHA
     ) where
 
 import qualified Data.ByteString as B
@@ -371,6 +373,26 @@ cipher_ECDHE_RSA_AES128GCM_SHA256 = Cipher
     { cipherID           = 0xc02f
     , cipherName         = "ECDHE-RSA-AES128GCM-SHA256"
     , cipherBulk         = bulk_aes128gcm
+    , cipherHash         = SHA256
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
+    , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
+    }
+
+cipher_ECDHE_RSA_AES128CBC_SHA :: Cipher
+cipher_ECDHE_RSA_AES128CBC_SHA = Cipher
+    { cipherID           = 0xc013
+    , cipherName         = "ECDHE-RSA-AES128CBC-SHA"
+    , cipherBulk         = bulk_aes128
+    , cipherHash         = SHA1
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
+    }
+
+--TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256 
+cipher_ECDHE_RSA_AES128CBC_SHA256 :: Cipher
+cipher_ECDHE_RSA_AES128CBC_SHA256 = Cipher
+    { cipherID           = 0xc027
+    , cipherName         = "ECDHE-RSA-AES128CBC-SHA"
+    , cipherBulk         = bulk_aes128
     , cipherHash         = SHA256
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
     , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
