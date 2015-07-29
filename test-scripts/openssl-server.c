@@ -217,6 +217,8 @@ static void benchmark(SSL *ssl, uint64_t send_bytes, uint64_t recv_bytes)
 		goto out;
 	}
 
+	printf("cipher: %s\n", SSL_CIPHER_get_name(SSL_get_current_cipher(ssl)));
+
 	record_time(&t1);
 
 	if (send_bytes) {
