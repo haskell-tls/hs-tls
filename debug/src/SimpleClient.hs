@@ -20,6 +20,7 @@ import System.X509
 import Data.Default.Class
 import Data.IORef
 import Data.Monoid
+import Data.Char (isDigit)
 import Data.X509.Validation
 
 import Text.Read
@@ -259,10 +260,15 @@ runOn (sStorage, certStore) flags port hostname
           where f _   (ClientCert c) = Just c
                 f acc _              = acc
         getBenchAmount = foldl f defaultBenchAmount flags
-          where f acc (BenchData am) = case readMaybe am of
+          where f acc (BenchData am) = case readNumber am of
                                             Nothing -> acc
                                             Just i  -> i
                 f acc _              = acc
+
+        readNumber :: (Num a, Read a) => String -> Maybe a
+        readNumber s
+            | all isDigit s = Just $ read s
+            | otherwise     = Nothing
 
 printUsage =
     putStrLn $ usageInfo "usage: simpleclient [opts] <hostname> [port]\n\n\t(port default to: 443)\noptions:\n" options
