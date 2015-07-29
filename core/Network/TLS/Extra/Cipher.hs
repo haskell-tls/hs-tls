@@ -385,6 +385,7 @@ cipher_ECDHE_RSA_AES128CBC_SHA = Cipher
     , cipherBulk         = bulk_aes128
     , cipherHash         = SHA1
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
+    , cipherMinVer       = Just TLS10
     }
 
 --TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256 
