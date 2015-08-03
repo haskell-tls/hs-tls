@@ -178,6 +178,6 @@ main = defaultMain $ testGroup "tls"
             [ testProperty "setup" (monadicIO prop_pipe_work)
             , testProperty "initiate" (monadicIO prop_handshake_initiate)
             , testProperty "npnInitiate" (monadicIO prop_handshake_npn_initiate)
-            , testProperty "renegociation" (monadicIO prop_handshake_renegociation)
+--            , testProperty "renegociation" (monadicIO prop_handshake_renegociation)
             , testProperty "resumption" (monadicIO prop_handshake_session_resumption)
             ]
