@@ -40,8 +40,8 @@ processHandshake ctx hs = do
             mapM_ (usingState_ ctx . processClientExtension) ex
             -- RFC 5746: secure renegotiation
             -- TLS_EMPTY_RENEGOTIATION_INFO_SCSV: {0x00, 0xFF}
-            usingState_ ctx $ do
-                when (0xff `elem` cids) $ setSecureRenegotiation True
+            when (0xff `elem` cids) $
+                usingState_ ctx $ setSecureRenegotiation True
             startHandshake ctx cver ran
         Certificates certs            -> processCertificates role certs
         ClientKeyXchg content         -> when (role == ServerRole) $ do
