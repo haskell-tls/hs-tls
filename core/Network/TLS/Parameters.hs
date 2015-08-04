@@ -130,6 +130,10 @@ data Supported = Supported
     , supportedClientInitiatedRenegotiation :: Bool
       -- | Set if we support session.
     , supportedSession             :: Bool
+      -- | Support for fallback SCSV defined in RFC7507.
+      --   If 'True', servers reject handshakes which suggest
+      --   a lower protocol than the highest protocol supported.
+    , supportedFallbackScsv        :: Bool
     } deriving (Show,Eq)
 
 defaultSupported :: Supported
@@ -147,6 +151,7 @@ defaultSupported = Supported
     , supportedSecureRenegotiation = True
     , supportedClientInitiatedRenegotiation = False
     , supportedSession             = True
+    , supportedFallbackScsv        = True
     }
 
 instance Default Supported where
