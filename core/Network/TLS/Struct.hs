@@ -218,6 +218,7 @@ data AlertDescription =
     | ProtocolVersion
     | InsufficientSecurity
     | InternalError
+    | InappropriateFallback -- RFC7507
     | UserCanceled
     | NoRenegotiation
     | UnsupportedExtension
@@ -447,6 +448,7 @@ instance TypeValuable AlertDescription where
     valOfType ProtocolVersion        = 70
     valOfType InsufficientSecurity   = 71
     valOfType InternalError          = 80
+    valOfType InappropriateFallback  = 86
     valOfType UserCanceled           = 90
     valOfType NoRenegotiation        = 100
     valOfType UnsupportedExtension   = 110
@@ -476,6 +478,7 @@ instance TypeValuable AlertDescription where
     valToType 70  = Just ProtocolVersion
     valToType 71  = Just InsufficientSecurity
     valToType 80  = Just InternalError
+    valToType 86  = Just InappropriateFallback
     valToType 90  = Just UserCanceled
     valToType 100 = Just NoRenegotiation
     valToType 110 = Just UnsupportedExtension
