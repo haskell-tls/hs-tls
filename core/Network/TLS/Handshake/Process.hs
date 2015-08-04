@@ -38,6 +38,8 @@ processHandshake ctx hs = do
     case hs of
         ClientHello cver ran _ cids _ ex _ -> when (role == ServerRole) $ do
             mapM_ (usingState_ ctx . processClientExtension) ex
+            -- RFC 5746: secure renegotiation
+            -- TLS_EMPTY_RENEGOTIATION_INFO_SCSV: {0x00, 0xFF}
             usingState_ ctx $ do
                 when (0xff `elem` cids) $ setSecureRenegotiation True
             startHandshake ctx cver ran
@@ -51,7 +53,8 @@ processHandshake ctx hs = do
     let encoded = encodeHandshake hs
     when (certVerifyHandshakeMaterial hs) $ usingHState ctx $ addHandshakeMessage encoded
     when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ usingHState ctx $ updateHandshakeDigest encoded
-  where -- secure renegotiation
+  where -- RFC5746: secure renegotiation
+        -- the renegotiation_info extension: 0xff01
         processClientExtension (0xff01, content) = do
             v <- getVerifiedData ClientRole
             let bs = extensionEncode (SecureRenegotiation v Nothing)
