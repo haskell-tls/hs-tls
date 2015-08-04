@@ -81,6 +81,12 @@ handshakeServer sparams ctx = liftIO $ do
 --
 handshakeServerWith :: ServerParams -> Context -> Handshake -> IO ()
 handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientSession ciphers compressions exts _) = do
+    -- rejecting client initiated renegotiation to prevent DOS.
+    unless (supportedClientInitiatedRenegotiation (ctxSupported ctx)) $ do
+        established <- ctxEstablished ctx
+        eof <- ctxEOF ctx
+        when (established && not eof) $
+            throwCore $ Error_Protocol ("renegotiation is not allowed", False, NoRenegotiation)
     -- check if policy allow this new handshake to happens
     handshakeAuthorized <- withMeasure ctx (onNewHandshake $ serverHooks sparams)
     unless handshakeAuthorized (throwCore $ Error_HandshakePolicy "server: handshake denied")

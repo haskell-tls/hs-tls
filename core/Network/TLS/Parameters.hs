@@ -123,6 +123,11 @@ data Supported = Supported
       --   If 'True', servers handle the extension or the renegotiation SCSV
       --   then send the renegotiation_info extension.
     , supportedSecureRenegotiation :: Bool
+      -- | If 'True', renegotiation is allowed from the client side.
+      --   This is vulnerable to DOS attacks.
+      --   If 'False', renegotiation is allowed only from the server side
+      --   via HelloRequest.
+    , supportedClientInitiatedRenegotiation :: Bool
       -- | Set if we support session.
     , supportedSession             :: Bool
     } deriving (Show,Eq)
@@ -140,6 +145,7 @@ defaultSupported = Supported
                                 , (Struct.HashSHA1,   SignatureDSS)
                                 ]
     , supportedSecureRenegotiation = True
+    , supportedClientInitiatedRenegotiation = False
     , supportedSession             = True
     }
 
