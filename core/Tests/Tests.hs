@@ -100,8 +100,13 @@ prop_handshake_npn_initiate = do
 
 prop_handshake_renegociation :: PropertyM IO ()
 prop_handshake_renegociation = do
-    params <- pick arbitraryPairParams
-    runTLSPipe params tlsServer tlsClient
+    (cparams, sparams) <- pick arbitraryPairParams
+    let sparams' = sparams {
+            serverSupported = (serverSupported sparams) {
+                 supportedClientInitiatedRenegotiation = True
+               }
+          }
+    runTLSPipe (cparams, sparams') tlsServer tlsClient
   where tlsServer ctx queue = do
             handshake ctx
             d <- recvDataNonNull ctx
