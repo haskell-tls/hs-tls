@@ -231,6 +231,7 @@ runAgainstServices logFile pid l = do
       where accumulate (success, skipped, errs) (Success n _) = (n : success, skipped, errs)
             accumulate (success, skipped, errs) (Skipped n)   = (success, n : skipped, errs)
             accumulate (success, skipped, errs) (Failure r)   = (success, skipped, r:errs)
+            accumulate (success, skipped, errs) (Timeout _)   = (success, skipped, errs)
 
 -- no better name ..
 t2 :: b -> [a] -> [(a, b)]
