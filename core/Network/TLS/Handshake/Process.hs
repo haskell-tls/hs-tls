@@ -30,6 +30,7 @@ import Network.TLS.Crypto
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Key
 import Network.TLS.Extension
+import Network.TLS.Parameters
 import Data.X509 (CertificateChain(..), Certificate(..), getCertificate)
 
 processHandshake :: Context -> Handshake -> IO ()
@@ -38,8 +39,10 @@ processHandshake ctx hs = do
     case hs of
         ClientHello cver ran _ cids _ ex _ -> when (role == ServerRole) $ do
             mapM_ (usingState_ ctx . processClientExtension) ex
-            usingState_ ctx $ do
-                when (0xff `elem` cids) $ setSecureRenegotiation True
+            -- RFC 5746: secure renegotiation
+            -- TLS_EMPTY_RENEGOTIATION_INFO_SCSV: {0x00, 0xFF}
+            when (secureRenegotiation && (0xff `elem` cids)) $
+                usingState_ ctx $ setSecureRenegotiation True
             startHandshake ctx cver ran
         Certificates certs            -> processCertificates role certs
         ClientKeyXchg content         -> when (role == ServerRole) $ do
@@ -51,8 +54,10 @@ processHandshake ctx hs = do
     let encoded = encodeHandshake hs
     when (certVerifyHandshakeMaterial hs) $ usingHState ctx $ addHandshakeMessage encoded
     when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ usingHState ctx $ updateHandshakeDigest encoded
-  where -- secure renegotiation
-        processClientExtension (0xff01, content) = do
+  where secureRenegotiation = supportedSecureRenegotiation $ ctxSupported ctx
+        -- RFC5746: secure renegotiation
+        -- the renegotiation_info extension: 0xff01
+        processClientExtension (0xff01, content) | secureRenegotiation = do
             v <- getVerifiedData ClientRole
             let bs = extensionEncode (SecureRenegotiation v Nothing)
             unless (bs `bytesEq` content) $ throwError $ Error_Protocol ("client verified data not matching: " ++ show v ++ ":" ++ show content, True, HandshakeFailure)

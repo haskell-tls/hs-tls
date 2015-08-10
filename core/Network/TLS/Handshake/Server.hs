@@ -81,6 +81,12 @@ handshakeServer sparams ctx = liftIO $ do
 --
 handshakeServerWith :: ServerParams -> Context -> Handshake -> IO ()
 handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientSession ciphers compressions exts _) = do
+    -- rejecting client initiated renegotiation to prevent DOS.
+    unless (supportedClientInitiatedRenegotiation (ctxSupported ctx)) $ do
+        established <- ctxEstablished ctx
+        eof <- ctxEOF ctx
+        when (established && not eof) $
+            throwCore $ Error_Protocol ("renegotiation is not allowed", False, NoRenegotiation)
     -- check if policy allow this new handshake to happens
     handshakeAuthorized <- withMeasure ctx (onNewHandshake $ serverHooks sparams)
     unless handshakeAuthorized (throwCore $ Error_HandshakePolicy "server: handshake denied")
@@ -90,6 +96,12 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     processHandshake ctx clientHello
 
     when (clientVersion == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
+    -- Fallback SCSV: RFC7507
+    -- TLS_FALLBACK_SCSV: {0x56, 0x00}
+    when (supportedFallbackScsv (ctxSupported ctx) &&
+          (0x5600 `elem` ciphers) &&
+          clientVersion /= maxBound) $
+        throwCore $ Error_Protocol ("fallback is not allowed", True, InappropriateFallback)
     chosenVersion <- case findHighestVersionFrom clientVersion (supportedVersions $ ctxSupported ctx) of
                         Nothing -> throwCore $ Error_Protocol ("client version " ++ show clientVersion ++ " is not supported", True, ProtocolVersion)
                         Just v  -> return v

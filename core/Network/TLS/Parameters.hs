@@ -118,10 +118,22 @@ data Supported = Supported
       -- | All supported hash/signature algorithms pair for client
       -- certificate verification, ordered by decreasing priority.
     , supportedHashSignatures :: [HashAndSignatureAlgorithm]
-      -- | Set if we support secure renegotiation.
+      -- | Secure renegotiation defined in RFC5746.
+      --   If 'True', clients send the renegotiation_info extension.
+      --   If 'True', servers handle the extension or the renegotiation SCSV
+      --   then send the renegotiation_info extension.
     , supportedSecureRenegotiation :: Bool
+      -- | If 'True', renegotiation is allowed from the client side.
+      --   This is vulnerable to DOS attacks.
+      --   If 'False', renegotiation is allowed only from the server side
+      --   via HelloRequest.
+    , supportedClientInitiatedRenegotiation :: Bool
       -- | Set if we support session.
     , supportedSession             :: Bool
+      -- | Support for fallback SCSV defined in RFC7507.
+      --   If 'True', servers reject handshakes which suggest
+      --   a lower protocol than the highest protocol supported.
+    , supportedFallbackScsv        :: Bool
     } deriving (Show,Eq)
 
 defaultSupported :: Supported
@@ -137,7 +149,9 @@ defaultSupported = Supported
                                 , (Struct.HashSHA1,   SignatureDSS)
                                 ]
     , supportedSecureRenegotiation = True
+    , supportedClientInitiatedRenegotiation = False
     , supportedSession             = True
+    , supportedFallbackScsv        = True
     }
 
 instance Default Supported where
