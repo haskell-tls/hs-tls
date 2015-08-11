@@ -36,10 +36,9 @@ compressRecord record =
     onRecordFragment record $ fragmentCompress $ \bytes -> do
         withCompression $ compressionDeflate bytes
 
-{-
- - when Tx Encrypted is set, we pass the data through encryptContent, otherwise
- - we just return the packet
- -}
+-- when Tx Encrypted is set, we pass the data through encryptContent, otherwise
+-- we just return the compress payload directly as the ciphered one
+--
 encryptRecord :: Record Compressed -> RecordM (Record Ciphertext)
 encryptRecord record = onRecordFragment record $ fragmentCipher $ \bytes -> do
     st <- get
