@@ -99,15 +99,12 @@ encryptAead encryptF content record = do
     cst        <- getCryptState
     encodedSeq <- encodeWord64 <$> getMacSequence
 
-    let hdr = recordToHeader record
-        ad = B.concat [ encodedSeq, encodeHeader hdr ]
-    let salt = cstIV cst
-        processorNum = encodeWord32 1 -- FIXME
-        counter = B.drop 4 encodedSeq -- FIXME: probably OK
-        nonce = B.concat [salt, processorNum, counter]
-    let (e, AuthTag authtag) = encryptF nonce content ad
+    let hdr   = recordToHeader record
+        ad    = B.concat [encodedSeq, encodeHeader hdr]
+        nonce = B.concat [cstIV cst, encodedSeq]
+        (e, AuthTag authtag) = encryptF nonce content ad
     modify incrRecordState
-    return $ B.concat [processorNum, counter, e, B.convert authtag]
+    return $ B.concat [encodedSeq, e, B.convert authtag]
 
 getCryptState :: RecordM CryptState
 getCryptState = stCryptState <$> get
