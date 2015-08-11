@@ -85,7 +85,10 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
         decryptOf :: BulkState -> RecordM Bytes
         decryptOf (BulkStateBlock decryptF) = do
             let minContent = (if explicitIV then bulkIVSize bulk else 0) + max (macSize + 1) blockSize
+
+            -- check if we have enough bytes to cover the minimum for this cipher
             when ((econtentLen `mod` blockSize) /= 0 || econtentLen < minContent) $ sanityCheckError
+
             {- update IV -}
             (iv, econtent') <- if explicitIV
                                   then get2 econtent (bulkIVSize bulk, econtentLen - bulkIVSize bulk)
@@ -103,7 +106,9 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
                     }
 
         decryptOf (BulkStateStream (BulkStream decryptF)) = do
+            -- check if we have enough bytes to cover the minimum for this cipher
             when (econtentLen < macSize) $ sanityCheckError
+
             let (content', bulkStream') = decryptF econtent
             {- update Ctx -}
             let contentlen        = B.length content' - macSize
@@ -119,6 +124,9 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
             let authTagLen  = bulkAuthTagLen bulk
                 nonceExpLen = bulkExplicitIV bulk
                 cipherLen   = econtentLen - authTagLen - nonceExpLen
+
+            -- check if we have enough bytes to cover the minimum for this cipher
+            when (econtentLen < (authTagLen + nonceExpLen)) $ sanityCheckError
 
             (enonce, econtent', authTag) <- get3 econtent (nonceExpLen, cipherLen, authTagLen)
             let encodedSeq = encodeWord64 $ msSequence $ stMacState tst
