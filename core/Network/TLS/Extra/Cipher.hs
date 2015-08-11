@@ -153,6 +153,8 @@ bulk_null = Bulk
     { bulkName         = "null"
     , bulkKeySize      = 0
     , bulkIVSize       = 0
+    , bulkExplicitIV   = 0
+    , bulkAuthTagLen   = 0
     , bulkBlockSize    = 0
     , bulkF            = BulkStreamF passThrough
     }
@@ -163,6 +165,8 @@ bulk_rc4 = Bulk
     { bulkName         = "RC4-128"
     , bulkKeySize      = 16
     , bulkIVSize       = 0
+    , bulkExplicitIV   = 0
+    , bulkAuthTagLen   = 0
     , bulkBlockSize    = 0
     , bulkF            = BulkStreamF rc4
     }
@@ -171,6 +175,8 @@ bulk_aes128 = Bulk
     { bulkName         = "AES128"
     , bulkKeySize      = 16
     , bulkIVSize       = 16
+    , bulkExplicitIV   = 0
+    , bulkAuthTagLen   = 0
     , bulkBlockSize    = 16
     , bulkF            = BulkBlockF aes128cbc
     }
@@ -179,6 +185,8 @@ bulk_aes128gcm = Bulk
     { bulkName         = "AES128GCM"
     , bulkKeySize      = 16 -- RFC 5116 Sec 5.1: K_LEN
     , bulkIVSize       = 4  -- RFC 5288 GCMNonce.salt, fixed_iv_length
+    , bulkExplicitIV   = 8
+    , bulkAuthTagLen   = 16
     , bulkBlockSize    = 0  -- dummy, not used
     , bulkF            = BulkAeadF aes128gcm
     }
@@ -187,6 +195,8 @@ bulk_aes256 = Bulk
     { bulkName         = "AES256"
     , bulkKeySize      = 32
     , bulkIVSize       = 16
+    , bulkExplicitIV   = 0
+    , bulkAuthTagLen   = 0
     , bulkBlockSize    = 16
     , bulkF            = BulkBlockF aes256cbc
     }
@@ -195,6 +205,8 @@ bulk_tripledes_ede = Bulk
     { bulkName      = "3DES-EDE-CBC"
     , bulkKeySize   = 24
     , bulkIVSize    = 8
+    , bulkExplicitIV = 0
+    , bulkAuthTagLen = 0
     , bulkBlockSize = 8
     , bulkF         = BulkBlockF tripledes_ede
     }

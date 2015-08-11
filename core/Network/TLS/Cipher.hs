@@ -102,6 +102,8 @@ data Bulk = Bulk
     { bulkName         :: String
     , bulkKeySize      :: Int
     , bulkIVSize       :: Int
+    , bulkExplicitIV   :: Int -- Explicit size for IV for AEAD Cipher, 0 otherwise
+    , bulkAuthTagLen   :: Int -- Authentication tag length in bytes for AEAD Cipher, 0 otherwise
     , bulkBlockSize    :: Int
     , bulkF            :: BulkFunctions
     }
