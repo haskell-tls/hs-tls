@@ -116,13 +116,14 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
                     }
 
         decryptOf (BulkStateAEAD decryptF) = do
-            let authtaglen = 16 -- FIXME: fixed_iv_length + record_iv_length
-                nonceexplen = 8 -- FIXME: record_iv_length
-                econtentlen = B.length econtent - authtaglen - nonceexplen
-            (enonce, econtent', authTag) <- get3 econtent (nonceexplen, econtentlen, authtaglen)
+            let authTagLen  = bulkAuthTagLen bulk
+                nonceExpLen = bulkExplicitIV bulk
+                cipherLen   = econtentLen - authTagLen - nonceExpLen
+
+            (enonce, econtent', authTag) <- get3 econtent (nonceExpLen, cipherLen, authTagLen)
             let encodedSeq = encodeWord64 $ msSequence $ stMacState tst
                 Header typ v _ = recordToHeader record
-                hdr = Header typ v $ fromIntegral econtentlen
+                hdr = Header typ v $ fromIntegral cipherLen
                 ad = B.concat [ encodedSeq, encodeHeader hdr ]
                 nonce = cstIV (stCryptState tst) `B.append` enonce
                 (content, authTag2) = decryptF nonce econtent' ad
