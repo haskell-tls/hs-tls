@@ -58,6 +58,8 @@ module Network.TLS
 
     -- * Information gathering
     , Information(..)
+    , unClientRandom
+    , unServerRandom
     , contextGetInformation
 
     -- * Credentials
@@ -115,7 +117,8 @@ import Network.TLS.Backend (Backend(..), HasBackend)
 import Network.TLS.Struct ( TLSError(..), TLSException(..)
                           , HashAndSignatureAlgorithm, HashAlgorithm(..), SignatureAlgorithm(..)
                           , Header(..), ProtocolType(..), CertificateType(..)
-                          , AlertDescription(..))
+                          , AlertDescription(..)
+                          , ClientRandom(..), ServerRandom(..))
 import Network.TLS.Crypto (KxError(..))
 import Network.TLS.Cipher
 import Network.TLS.Hooks

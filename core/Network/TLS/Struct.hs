@@ -174,8 +174,8 @@ data Packet =
 
 data Header = Header ProtocolType Version Word16 deriving (Show,Eq)
 
-newtype ServerRandom = ServerRandom Bytes deriving (Show, Eq)
-newtype ClientRandom = ClientRandom Bytes deriving (Show, Eq)
+newtype ServerRandom = ServerRandom { unServerRandom :: Bytes } deriving (Show, Eq)
+newtype ClientRandom = ClientRandom { unClientRandom :: Bytes } deriving (Show, Eq)
 newtype Session = Session (Maybe SessionID) deriving (Show, Eq)
 
 type FinishedData = Bytes
