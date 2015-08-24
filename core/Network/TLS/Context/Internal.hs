@@ -76,9 +76,12 @@ import Data.Tuple
 
 -- | Information related to a running context, e.g. current cipher
 data Information = Information
-    { infoVersion     :: Version
-    , infoCipher      :: Cipher
-    , infoCompression :: Compression
+    { infoVersion      :: Version
+    , infoCipher       :: Cipher
+    , infoCompression  :: Compression
+    , infoMasterSecret :: Maybe Bytes
+    , infoClientRandom :: Maybe ClientRandom
+    , infoServerRandom :: Maybe ServerRandom
     } deriving (Show,Eq)
 
 -- | A TLS Context keep tls specific state, parameters and backend information.
@@ -125,9 +128,15 @@ contextClose = backendClose . ctxConnection
 contextGetInformation :: Context -> IO (Maybe Information)
 contextGetInformation ctx = do
     ver    <- usingState_ ctx $ gets stVersion
+    hstate <- getHState ctx
+    let (ms, cr, sr) = case hstate of
+                           Just st -> (hstMasterSecret st,
+                                       Just (hstClientRandom st),
+                                       hstServerRandom st)
+                           Nothing -> (Nothing, Nothing, Nothing)
     (cipher,comp) <- failOnEitherError $ runRxState ctx $ gets $ \st -> (stCipher st, stCompression st)
     case (ver, cipher) of
-        (Just v, Just c) -> return $ Just $ Information v c comp
+        (Just v, Just c) -> return $ Just $ Information v c comp ms cr sr
         _                -> return Nothing
 
 contextSend :: Context -> Bytes -> IO ()

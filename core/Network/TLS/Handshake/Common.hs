@@ -60,8 +60,15 @@ handshakeTerminate ctx = do
             sessionData <- getSessionData ctx
             liftIO $ sessionEstablish (sharedSessionManager $ ctxShared ctx) sessionId (fromJust "session-data" sessionData)
         _ -> return ()
-    -- forget all handshake data now and reset bytes counters.
-    liftIO $ modifyMVar_ (ctxHandshake ctx) (return . const Nothing)
+    -- forget most handshake data and reset bytes counters.
+    liftIO $ modifyMVar_ (ctxHandshake ctx) $ \ mhshake ->
+        case mhshake of
+            Nothing -> return Nothing
+            Just hshake ->
+                return $ Just (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
+                    { hstServerRandom = hstServerRandom hshake
+                    , hstMasterSecret = hstMasterSecret hshake
+                    }
     updateMeasure ctx resetBytesCounters
     -- mark the secure connection up and running.
     setEstablished ctx True
