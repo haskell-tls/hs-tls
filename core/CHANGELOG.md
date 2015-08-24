@@ -1,3 +1,12 @@
+## Version 1.3.2
+
+- Add cipher suites for forward secrecy on more clients (Aaron Friel)
+- Maintain more handshake information to be queried by protocol (Adam Wick)
+- handle SCSV on client and server side (Kazu Yamamoto)
+- Cleanup renegotiation logic (Kazu Yamamoto)
+- Various testing improvements with the openssl test parts
+- Cleanup AEAD handling for future support of other ciphers
+
 ## Version 1.3.1
 
 - Repair DHE RSA handling on the cipher by creating signature properly
