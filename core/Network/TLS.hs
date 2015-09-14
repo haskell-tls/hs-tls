@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- |
 -- Module      : Network.TLS
 -- License     : BSD-style
@@ -48,7 +49,9 @@ module Network.TLS
     -- * Creating a context
     , contextNew
     , contextNewOnHandle
+#ifdef INCLUDE_NETWORK
     , contextNewOnSocket
+#endif
     , contextFlush
     , contextClose
     , contextHookSetHandshakeRecv
