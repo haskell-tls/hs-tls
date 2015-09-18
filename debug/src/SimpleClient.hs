@@ -25,6 +25,8 @@ import Data.X509.Validation
 
 import Numeric (showHex)
 
+import HexDump
+
 ciphers :: [Cipher]
 ciphers =
     [ cipher_DHE_RSA_AES256_SHA256
@@ -63,8 +65,10 @@ runTLS debug ioDebug params hostname portNumber f = do
                               }
             | otherwise = logging
         ioLogging logging
-            | ioDebug = logging { loggingIOSent = putStrLn . ("io: >> " ++) . show
-                                , loggingIORecv = \hdr -> putStrLn . (("io: << " ++ show hdr ++ " ") ++) . show
+            | ioDebug = logging { loggingIOSent = mapM_ putStrLn . hexdump ">>"
+                                , loggingIORecv = \hdr body -> do
+                                    putStrLn ("<< " ++ show hdr)
+                                    mapM_ putStrLn $ hexdump "<<" body
                                 }
             | otherwise = logging
 
