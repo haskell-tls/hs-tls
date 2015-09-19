@@ -34,6 +34,7 @@ import Network.TLS.Compression
 import Network.TLS.Crypto
 import Network.TLS.Credentials
 import Network.TLS.X509
+import Crypto.Random.EntropyPool
 import Data.Monoid
 import Data.Default.Class
 import qualified Data.ByteString as B
@@ -162,6 +163,7 @@ data Shared = Shared
     , sharedSessionManager  :: SessionManager
     , sharedCAStore         :: CertificateStore
     , sharedValidationCache :: ValidationCache
+    , sharedEntropyPool     :: Maybe EntropyPool
     }
 
 instance Show Shared where
@@ -172,6 +174,7 @@ instance Default Shared where
             , sharedCredentials     = mempty
             , sharedSessionManager  = noSessionManager
             , sharedValidationCache = def
+            , sharedEntropyPool     = Nothing
             }
 
 -- | A set of callbacks run by the clients for various corners of TLS establishment
