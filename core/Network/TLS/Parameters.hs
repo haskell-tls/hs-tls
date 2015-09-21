@@ -22,8 +22,6 @@ module Network.TLS.Parameters
     , CertificateRejectReason(..)
     ) where
 
-import Network.BSD (HostName)
-
 import Network.TLS.Extension
 import Network.TLS.Struct
 import qualified Network.TLS.Struct as Struct
@@ -37,6 +35,8 @@ import Network.TLS.X509
 import Data.Monoid
 import Data.Default.Class
 import qualified Data.ByteString as B
+
+type HostName = String
 
 type CommonParams = (Supported, Shared)
 

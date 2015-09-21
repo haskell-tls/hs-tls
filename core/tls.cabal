@@ -31,13 +31,20 @@ Flag compat
   Description:       Accept SSLv2 compatible handshake
   Default:           True
 
+Flag network
+  Description:       Use the base network library
+  Default:           True
+
+Flag hans
+  Description:       Use the Haskell Network Stack (HaNS)
+  Default:           False
+
 Library
   Build-Depends:     base >= 3 && < 5
                    , mtl
                    , transformers
                    , cereal >= 0.4
                    , bytestring
-                   , network
                    , data-default-class
                    -- crypto related
                    , memory
@@ -49,6 +56,12 @@ Library
                    , x509-store >= 1.6
                    , x509-validation >= 1.6 && < 1.7.0
                    , async
+  if flag(network)
+    Build-Depends:   network
+    cpp-options:     -DINCLUDE_NETWORK
+  if flag(hans)
+    Build-Depends:   hans
+    cpp-options:     -DINCLUDE_HANS
   Exposed-modules:   Network.TLS
                      Network.TLS.Cipher
                      Network.TLS.Compression

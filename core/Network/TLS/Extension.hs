@@ -54,8 +54,8 @@ import Network.TLS.Extension.EC
 import Network.TLS.Struct (ExtensionID, EnumSafe8(..), EnumSafe16(..), HashAndSignatureAlgorithm)
 import Network.TLS.Wire
 import Network.TLS.Packet (putSignatureHashAlgorithm, getSignatureHashAlgorithm)
-import Network.BSD (HostName)
 
+type HostName = String
 
 -- central list defined in <http://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.txt>
 extensionID_ServerName
