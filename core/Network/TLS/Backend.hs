@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- |
 -- Module      : Network.TLS.Backend
 -- License     : BSD-style
@@ -20,12 +21,20 @@ module Network.TLS.Backend
     , Backend(..)
     ) where
 
-import Control.Monad
-import Network.Socket (Socket, sClose)
-import qualified Network.Socket.ByteString as Socket
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush, hClose)
+
+#ifdef INCLUDE_NETWORK
+import Control.Monad
+import qualified Network.Socket as Network (Socket, sClose)
+import qualified Network.Socket.ByteString as Network
+#endif
+
+#ifdef INCLUDE_HANS
+import qualified Data.ByteString.Lazy as L
+import qualified Hans.NetworkStack as Hans
+#endif
 
 -- | Connection IO backend
 data Backend = Backend
@@ -43,16 +52,36 @@ instance HasBackend Backend where
     initializeBackend _ = return ()
     getBackend = id
 
-instance HasBackend Socket where
+#ifdef INCLUDE_NETWORK
+instance HasBackend Network.Socket where
     initializeBackend _ = return ()
-    getBackend sock = Backend (return ()) (sClose sock) (Socket.sendAll sock) recvAll
+    getBackend sock = Backend (return ()) (Network.sClose sock) (Network.sendAll sock) recvAll
       where recvAll n = B.concat `fmap` loop n
               where loop 0    = return []
                     loop left = do
-                        r <- Socket.recv sock left
+                        r <- Network.recv sock left
                         if B.null r
                             then return []
                             else liftM (r:) (loop (left - B.length r))
+#endif
+
+#ifdef INCLUDE_HANS
+instance HasBackend Hans.Socket where
+    initializeBackend _ = return ()
+    getBackend sock = Backend (return ()) (Hans.close sock) sendAll recvAll
+      where sendAll x = do
+              amt <- fromIntegral `fmap` Hans.sendBytes sock (L.fromStrict x)
+              if (amt == 0) || (amt == B.length x)
+                 then return ()
+                 else sendAll (B.drop amt x)
+            recvAll n = loop (fromIntegral n) L.empty
+            loop    0 acc = return (L.toStrict acc)
+            loop left acc = do
+                r <- Hans.recvBytes sock left
+                if L.null r
+                   then loop 0 acc
+                   else loop (left - L.length r) (acc `L.append` r)
+#endif
 
 instance HasBackend Handle where
     initializeBackend handle = hSetBuffering handle NoBuffering
