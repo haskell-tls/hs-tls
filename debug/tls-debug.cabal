@@ -14,6 +14,7 @@ Category:            Network
 stability:           experimental
 Cabal-Version:       >=1.6
 Homepage:            http://github.com/vincenthz/hs-tls
+extra-source-files:  src/HexDump.hs
 
 Executable           tls-stunnel
   Main-is:           Stunnel.hs
