@@ -493,15 +493,29 @@ putServerDHParams (ServerDHParams p g y) = mapM_ putBigNum16 [p,g,y]
 
 getServerECDHParams :: Get ServerECDHParams
 getServerECDHParams = do
-    _ <- getWord8 -- ECParameters ECCurveType: curve name type, should be 3
-    w16 <- getWord16   -- ECParameters NamedCurve
-    mxy <- getOpaque16 -- ECPoint
-    let xy = B.drop 1 mxy
-        siz = B.length xy `div` 2
-        (xb,yb) = B.splitAt siz xy
-        x = os2ip xb
-        y = os2ip yb
-    return $ ServerECDHParams (ecdhParams w16) (ecdhPublic x y siz)
+    curveType <- getWord8
+    case curveType of
+        1 -> do -- explicit prime
+            _prime    <- getOpaque8
+            _a        <- getOpaque8
+            _b        <- getOpaque8
+            _base     <- getOpaque8
+            _order    <- getOpaque8
+            _cofactor <- getOpaque8
+            error "cannot handle explicit prime ECDH Params"
+        2 -> -- explicit_char2
+            error "cannot handle explicit char2 ECDH Params"
+        3 -> do -- ECParameters ECCurveType: curve name type
+            w16 <- getWord16   -- ECParameters NamedCurve
+            mxy <- getOpaque8 -- ECPoint
+            let xy = B.drop 1 mxy
+                siz = B.length xy `div` 2
+                (xb,yb) = B.splitAt siz xy
+                x = os2ip xb
+                y = os2ip yb
+            return $ ServerECDHParams (ecdhParams w16) (ecdhPublic x y siz)
+        _ ->
+            error "unknown type for ECDH Params"
 
 putServerECDHParams :: ServerECDHParams -> Put
 putServerECDHParams (ServerECDHParams ecdhparams ecdhpub) = do
