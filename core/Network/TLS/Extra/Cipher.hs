@@ -37,6 +37,7 @@ module Network.TLS.Extra.Cipher
     , cipher_ECDHE_RSA_AES128GCM_SHA256
     , cipher_ECDHE_RSA_AES128CBC_SHA256
     , cipher_ECDHE_RSA_AES128CBC_SHA
+    , cipher_ECDHE_ECDSA_AES128GCM_SHA256
     ) where
 
 import qualified Data.ByteString as B
@@ -117,7 +118,9 @@ rc4 _ bulkKey = BulkStream (combineRC4 $ RC4.initialize bulkKey)
 -- this choice of ciphersuite should satisfy most normal need
 ciphersuite_all :: [Cipher]
 ciphersuite_all =
-    [ cipher_DHE_RSA_AES256_SHA256, cipher_DHE_RSA_AES128_SHA256
+    [ cipher_ECDHE_RSA_AES128GCM_SHA256
+    , cipher_ECDHE_ECDSA_AES128GCM_SHA256
+    , cipher_DHE_RSA_AES256_SHA256, cipher_DHE_RSA_AES128_SHA256
     , cipher_DHE_RSA_AES256_SHA1, cipher_DHE_RSA_AES128_SHA1
     , cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1
     , cipher_AES128_SHA256, cipher_AES256_SHA256
@@ -133,7 +136,7 @@ ciphersuite_medium = [cipher_RC4_128_MD5, cipher_RC4_128_SHA1, cipher_AES128_SHA
 
 -- | the strongest ciphers supported.
 ciphersuite_strong :: [Cipher]
-ciphersuite_strong = [cipher_DHE_RSA_AES256_SHA256, cipher_AES256_SHA256, cipher_AES256_SHA1]
+ciphersuite_strong = [cipher_ECDHE_RSA_AES128GCM_SHA256, cipher_ECDHE_ECDSA_AES128GCM_SHA256, cipher_DHE_RSA_AES256_SHA256, cipher_AES256_SHA256, cipher_AES256_SHA1]
 
 -- | DHE-RSA cipher suite
 ciphersuite_dhe_rsa :: [Cipher]
@@ -411,6 +414,15 @@ cipher_ECDHE_RSA_AES128CBC_SHA256 = Cipher
     , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
     }
 
+cipher_ECDHE_ECDSA_AES128GCM_SHA256 :: Cipher
+cipher_ECDHE_ECDSA_AES128GCM_SHA256 = Cipher
+    { cipherID           = 0xc02b
+    , cipherName         = "ECDHE-ECDSA-AES128GCM-SHA256"
+    , cipherBulk         = bulk_aes128gcm
+    , cipherHash         = SHA256
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
+    , cipherMinVer       = Just TLS12 -- RFC 5289
+    }
 {-
 TLS 1.0 ciphers definition
 

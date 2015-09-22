@@ -67,13 +67,11 @@ handshakeClient cparams ctx = do
                                  ,secureReneg
                                  ,npnExtention
                                  ,alpnExtension
-                                 {-
-                                 ,curveExtension,
+                                 ,curveExtension
                                  ,ecPointExtension
-                                 ,sessionTicketExtension
-                                 ,heartbeatExtension
-                                 -}
+                                 --,sessionTicketExtension
                                  ,signatureAlgExtension
+                                 -- ,heartbeatExtension
                                  ]
 
         toExtensionRaw :: Extension e => e -> ExtensionRaw
@@ -97,14 +95,11 @@ handshakeClient cparams ctx = do
                          then return $ Just $ toExtensionRaw $ ServerName [ServerNameHostName $ fst $ clientServerIdentification cparams]
                          else return Nothing
 
-        {-
-        curveExtension = return $ Just $ toExtensionRaw $ EllipticCurvesSupported [NamedCurve_secp256k1,NamedCurve_secp256r1]
-        ecPointExtension = return $ Just $ toExtensionRaw $ EcPointFormatsSupported [EcPointFormat_Uncompressed,EcPointFormat_AnsiX962_compressed_prime,EcPointFormat_AnsiX962_compressed_char2]
-
-        sessionTicketExtension = return $ Just $ toExtensionRaw $ SessionTicket
-
-        heartbeatExtension = return $ Just $ toExtensionRaw $ HeartBeat $ HeartBeat_PeerAllowedToSend
-        -}
+        curveExtension = return $ Just $ toExtensionRaw $ EllipticCurvesSupported availableEllipticCurves
+        ecPointExtension = return $ Just $ toExtensionRaw $ EcPointFormatsSupported [EcPointFormat_Uncompressed]
+                                --[EcPointFormat_Uncompressed,EcPointFormat_AnsiX962_compressed_prime,EcPointFormat_AnsiX962_compressed_char2]
+        --heartbeatExtension = return $ Just $ toExtensionRaw $ HeartBeat $ HeartBeat_PeerAllowedToSend
+        --sessionTicketExtension = return $ Just $ toExtensionRaw $ SessionTicket
 
         signatureAlgExtension = return $ Just $ toExtensionRaw $ SignatureAlgorithms $ supportedHashSignatures $ clientSupported cparams
 
