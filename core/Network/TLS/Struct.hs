@@ -285,6 +285,7 @@ data ServerKeyXchgAlgorithmData =
     | SKX_DHE_DSS ServerDHParams DigitallySigned
     | SKX_DHE_RSA ServerDHParams DigitallySigned
     | SKX_ECDHE_RSA ServerECDHParams DigitallySigned
+    | SKX_ECDHE_ECDSA ServerECDHParams DigitallySigned
     | SKX_RSA (Maybe ServerRSAParams)
     | SKX_DH_DSS (Maybe ServerRSAParams)
     | SKX_DH_RSA (Maybe ServerRSAParams)

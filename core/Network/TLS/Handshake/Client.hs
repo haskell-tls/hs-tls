@@ -205,6 +205,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                 CipherKeyExchange_DHE_RSA -> getCKX_DHE
                 CipherKeyExchange_DHE_DSS -> getCKX_DHE
                 CipherKeyExchange_ECDHE_RSA -> getCKX_ECDHE
+                CipherKeyExchange_ECDHE_ECDSA -> getCKX_ECDHE
                 _ -> throwCore $ Error_Protocol ("client key exchange unsupported type", True, HandshakeFailure)
             sendPacket ctx $ Handshake [ClientKeyXchg ckx]
           where getCKX_DHE = do
@@ -380,6 +381,8 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
                     doDHESignature dhparams signature SignatureDSS
                 (CipherKeyExchange_ECDHE_RSA, SKX_ECDHE_RSA ecdhparams signature) -> do
                     doECDHESignature ecdhparams signature SignatureRSA
+                (CipherKeyExchange_ECDHE_ECDSA, SKX_ECDHE_ECDSA ecdhparams signature) -> do
+                    doECDHESignature ecdhparams signature SignatureECDSA
                 (cke, SKX_Unparsed bytes) -> do
                     ver <- usingState_ ctx getVersion
                     case decodeReallyServerKeyXchgAlgorithmData ver cke bytes of

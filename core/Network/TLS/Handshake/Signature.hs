@@ -82,12 +82,20 @@ signatureHashData SignatureRSA mhash =
         Just HashSHA256 -> SHA256
         Just HashSHA1   -> SHA1
         Nothing         -> SHA1_MD5
-        _               -> error ("unimplemented signature hash type")
+        Just hash       -> error ("unimplemented RSA signature hash type: " ++ show hash)
 signatureHashData SignatureDSS mhash =
     case mhash of
         Nothing       -> SHA1
         Just HashSHA1 -> SHA1
         Just _        -> error "invalid DSA hash choice, only SHA1 allowed"
+signatureHashData SignatureECDSA mhash =
+    case mhash of
+        Just HashSHA512 -> SHA512
+        Just HashSHA384 -> SHA384
+        Just HashSHA256 -> SHA256
+        Just HashSHA1   -> SHA1
+        Nothing         -> SHA1_MD5
+        Just hash       -> error ("unimplemented ECDSA signature hash type: " ++ show hash)
 signatureHashData sig _ = error ("unimplemented signature type: " ++ show sig)
 
 --signatureCreate :: Context -> Maybe HashAndSignatureAlgorithm -> HashDescr -> Bytes -> IO DigitallySigned
@@ -124,9 +132,10 @@ signatureVerifyWithHashDescr :: Context
 signatureVerifyWithHashDescr ctx sigAlgExpected (DigitallySigned _ bs) (hashDescr, toVerify) = do
     cc <- usingState_ ctx $ isClientContext
     case sigAlgExpected of
-        SignatureRSA -> verifyRSA ctx cc hashDescr toVerify bs
-        SignatureDSS -> verifyRSA ctx cc hashDescr toVerify bs
-        _            -> error "not implemented yet"
+        SignatureRSA   -> verifyRSA ctx cc hashDescr toVerify bs
+        SignatureDSS   -> verifyRSA ctx cc hashDescr toVerify bs
+        SignatureECDSA -> verifyRSA ctx cc hashDescr toVerify bs
+        _              -> error "signature verification not implemented yet"
 
 digitallySignParams :: Context -> Bytes -> SignatureAlgorithm -> IO DigitallySigned
 digitallySignParams ctx signatureData sigAlg = do

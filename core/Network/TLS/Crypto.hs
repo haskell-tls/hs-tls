@@ -36,16 +36,22 @@ import qualified Data.ByteArray as B (convert)
 import Data.ByteString (ByteString)
 import Crypto.Random
 import qualified Crypto.PubKey.DSA as DSA
+import qualified Crypto.PubKey.ECC.ECDSA as ECDSA
+import qualified Crypto.PubKey.ECC.Prim as ECC
+import qualified Crypto.PubKey.ECC.Types as ECC
 import qualified Crypto.PubKey.RSA as RSA
 import qualified Crypto.PubKey.RSA.PKCS15 as RSA
+import Crypto.Number.Serialize (os2ip)
+import Crypto.Number.Basic (numBits)
 
-import Data.X509 (PrivKey(..), PubKey(..))
+import Data.X509 (PrivKey(..), PubKey(..), PubKeyEC(..), SerializedPoint(..))
 import Network.TLS.Crypto.DH
 import Network.TLS.Crypto.ECDH
 
 import Data.ASN1.Types
 import Data.ASN1.Encoding
 import Data.ASN1.BinaryEncoding (DER(..), BER(..))
+import Data.List (find)
 
 {-# DEPRECATED PublicKey "use PubKey" #-}
 type PublicKey = PubKey
@@ -168,6 +174,59 @@ kxVerify (PubKeyDSA pk) _ msg signBS =
                             Just $ DSA.Signature { DSA.sign_r = r, DSA.sign_s = s }
                         _ ->
                             Nothing
+kxVerify (PubKeyEC key) alg msg sigBS = maybe False id $ do
+    -- get the curve name and the public key data
+    (curveName, pubBS) <- case key of
+            PubKeyEC_Named curveName' pub -> Just (curveName',pub)
+            PubKeyEC_Prime {}            ->
+                case find matchPrimeCurve $ enumFrom $ toEnum 0 of
+                    Nothing        -> Nothing
+                    Just curveName' -> Just (curveName', pubkeyEC_pub key)
+    -- decode the signature
+    signature <- case decodeASN1' BER sigBS of
+        Left _ -> Nothing
+        Right [Start Sequence,IntVal r,IntVal s,End Sequence] -> Just $ ECDSA.Signature r s
+        Right _ -> Nothing
+
+    -- decode the public key related to the curve
+    pubkey <- unserializePoint (ECC.getCurveByName curveName) pubBS
+
+    verifyF <- case alg of
+                    MD5    -> Just (ECDSA.verify H.MD5)
+                    SHA1   -> Just (ECDSA.verify H.SHA1)
+                    SHA224 -> Just (ECDSA.verify H.SHA224)
+                    SHA256 -> Just (ECDSA.verify H.SHA256)
+                    SHA384 -> Just (ECDSA.verify H.SHA384)
+                    SHA512 -> Just (ECDSA.verify H.SHA512)
+                    _      -> Nothing
+    return $ verifyF pubkey signature msg
+  where
+        matchPrimeCurve c =
+            case ECC.getCurveByName c of
+                ECC.CurveFP (ECC.CurvePrime p cc) ->
+                    ECC.ecc_a cc == pubkeyEC_a key     &&
+                    ECC.ecc_b cc == pubkeyEC_b key     &&
+                    ECC.ecc_n cc == pubkeyEC_order key &&
+                    p            == pubkeyEC_prime key
+                _                                 -> False
+
+        unserializePoint curve (SerializedPoint bs) =
+            case B.uncons bs of
+                Nothing                -> Nothing
+                Just (ptFormat, input) ->
+                    case ptFormat of
+                        4 -> if B.length bs == 2 * bytes
+                                then Nothing
+                                else
+                                    let (x, y) = B.splitAt bytes input
+                                        p      = ECC.Point (os2ip x) (os2ip y)
+                                     in if ECC.isPointValid curve p
+                                            then Just $ ECDSA.PublicKey curve p
+                                            else Nothing
+                        -- 2 and 3 for compressed format.
+                        _ -> Nothing
+          where bits  = numBits . ECC.ecc_n . ECC.common_curve $ curve
+                bytes = (bits + 7) `div` 8
 kxVerify _              _         _   _    = False
 
 -- Sign the given message using the private key.
@@ -183,8 +242,8 @@ kxSign (PrivKeyDSA pk) _ msg = do
     sign <- DSA.sign pk H.SHA1 msg
     return (Right $ encodeASN1' DER $ dsaSequence sign)
   where dsaSequence sign = [Start Sequence,IntVal (DSA.sign_r sign),IntVal (DSA.sign_s sign),End Sequence]
---kxSign g _               _         _   =
---    (Left KxUnsupported, g)
+--kxSign _ _ _ =
+--    return (Left KxUnsupported)
 
 rsaSignHash :: MonadRandom m => Hash -> RSA.PrivateKey -> ByteString -> m (Either RSA.Error ByteString)
 rsaSignHash SHA1_MD5 pk msg = RSA.signSafer noHash pk msg

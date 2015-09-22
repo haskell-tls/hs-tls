@@ -291,6 +291,7 @@ decodeClientKeyXchg cp = -- case  ClientKeyXchg <$> (remaining >>= getBytes)
         parseCKE CipherKeyExchange_DHE_DSS = parseClientDHPublic
         parseCKE CipherKeyExchange_DH_Anon = parseClientDHPublic
         parseCKE CipherKeyExchange_ECDHE_RSA = parseClientECDHPublic
+        parseCKE CipherKeyExchange_ECDHE_ECDSA = parseClientECDHPublic
         parseCKE _                         = error "unsupported client key exchange type"
         parseClientDHPublic = CKX_DH . dhPublic <$> getInteger16
         parseClientECDHPublic = do
@@ -335,6 +336,10 @@ decodeServerKeyXchgAlgorithmData ver cke = toCKE
                 dhparams  <- getServerECDHParams
                 signature <- getDigitallySigned ver
                 return $ SKX_ECDHE_RSA dhparams signature
+            CipherKeyExchange_ECDHE_ECDSA -> do
+                dhparams  <- getServerECDHParams
+                signature <- getDigitallySigned ver
+                return $ SKX_ECDHE_ECDSA dhparams signature
             _ -> do
                 bs <- remaining >>= getBytes
                 return $ SKX_Unknown bs
@@ -398,6 +403,7 @@ encodeHandshakeContent (ServerKeyXchg skg) =
         SKX_DHE_RSA params sig -> putServerDHParams params >> putDigitallySigned sig
         SKX_DHE_DSS params sig -> putServerDHParams params >> putDigitallySigned sig
         SKX_ECDHE_RSA params sig -> putServerECDHParams params >> putDigitallySigned sig
+        SKX_ECDHE_ECDSA params sig -> putServerECDHParams params >> putDigitallySigned sig
         SKX_Unparsed bytes     -> putBytes bytes
         _                      -> error ("encodeHandshakeContent: cannot handle: " ++ show skg)
 
