@@ -294,14 +294,17 @@ decodeClientKeyXchg cp = -- case  ClientKeyXchg <$> (remaining >>= getBytes)
         parseCKE _                         = error "unsupported client key exchange type"
         parseClientDHPublic = CKX_DH . dhPublic <$> getInteger16
         parseClientECDHPublic = do
-            len <- getWord8
-            _ <- getWord8 -- Magic number 4
-            let siz = fromIntegral len `div` 2
-            xb <- getBytes siz
-            yb <- getBytes siz
-            let x = os2ip xb
-                y = os2ip yb
-            return $ CKX_ECDH $ ecdhPublic x y siz
+            len      <- getWord8
+            formatTy <- getWord8
+            case formatTy of
+                4 -> do -- uncompressed
+                    let siz = fromIntegral len `div` 2
+                    xb <- getBytes siz
+                    yb <- getBytes siz
+                    let x = os2ip xb
+                        y = os2ip yb
+                    return $ CKX_ECDH $ ecdhPublic x y siz
+                _ -> error ("unsupported EC format type: " ++ show formatTy)
 
 decodeServerKeyXchg_DH :: Get ServerDHParams
 decodeServerKeyXchg_DH = getServerDHParams
