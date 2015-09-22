@@ -1,3 +1,10 @@
+## Version 1.3.3
+
+- Add support for Hans (Haskell Network Stack) (Adam Wick)
+- Add support for ECDSA signature
+- Add support for ECDSA-ECDHE Cipher
+- Improve parsing of ECC related structure
+
 ## Version 1.3.2
 
 - Add cipher suites for forward secrecy on more clients (Aaron Friel)
