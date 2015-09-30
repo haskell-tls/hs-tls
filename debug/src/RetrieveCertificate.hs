@@ -104,6 +104,7 @@ main = do
 
     case other of
         [destination,port] -> doMain destination port opts
+        [destination]      -> doMain destination "443" opts
         _                  -> printUsage >> exitFailure
 
   where outputFormat [] = "simple"
