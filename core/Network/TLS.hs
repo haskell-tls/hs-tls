@@ -80,6 +80,9 @@ module Network.TLS
     -- * Next Protocol Negotiation
     , getNegotiatedProtocol
 
+    -- * Server Name Indication
+    , getClientSNI
+
     -- * High level API
     , sendData
     , recvData

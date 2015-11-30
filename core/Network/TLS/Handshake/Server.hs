@@ -133,6 +133,8 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
             (Session (Just clientSessionId)) -> liftIO $ sessionResume (sharedSessionManager $ ctxShared ctx) clientSessionId
             (Session Nothing)                -> return Nothing
 
+    maybe (return ()) (usingState_ ctx . setClientSNI) serverName
+
     case extensionDecode False `fmap` (lookup extensionID_ApplicationLayerProtocolNegotiation exts) of
         Just (Just (ApplicationLayerProtocolNegotiation protos)) -> usingState_ ctx $ setClientALPNSuggest protos
         _ -> return ()
