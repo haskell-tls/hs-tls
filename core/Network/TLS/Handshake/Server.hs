@@ -28,6 +28,7 @@ import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Key
 import Network.TLS.Measurement
+import Data.Monoid
 import Data.Maybe (isJust, listToMaybe, mapMaybe)
 import Data.List (intersect, sortBy)
 import qualified Data.ByteString as B
