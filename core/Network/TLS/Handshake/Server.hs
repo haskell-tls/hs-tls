@@ -28,7 +28,7 @@ import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Key
 import Network.TLS.Measurement
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, listToMaybe, mapMaybe)
 import Data.List (intersect, sortBy)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
@@ -111,9 +111,16 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     when (null commonCompressions) $ throwCore $
         Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
 
+    let serverName = case extensionDecode False `fmap` (lookup extensionID_ServerName exts) of
+            Just (Just (ServerName ns)) -> listToMaybe (mapMaybe toHostName ns)
+                where toHostName (ServerNameHostName hostName) = Just hostName
+                      toHostName (ServerNameOther _)           = Nothing
+            _                           -> Nothing
+
     let ciphersFilteredVersion = filter (cipherAllowedForVersion chosenVersion) commonCiphers
         usedCipher = (onCipherChoosing $ serverHooks sparams) chosenVersion ciphersFilteredVersion
-        creds = sharedCredentials $ ctxShared ctx
+    extraCreds <- (onServerNameIndication $ serverHooks sparams) serverName
+    let creds = extraCreds `mappend` (sharedCredentials $ ctxShared ctx)
     cred <- case cipherKeyExchange usedCipher of
                 CipherKeyExchange_RSA     -> return $ credentialsFindForDecrypting creds
                 CipherKeyExchange_DH_Anon -> return $ Nothing
