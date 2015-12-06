@@ -20,6 +20,9 @@ module Network.TLS.Core
     -- * Next Protocol Negotiation
     , getNegotiatedProtocol
 
+    -- * Server Name Indication
+    , getClientSNI
+
     -- * High level API
     , sendData
     , recvData
@@ -55,6 +58,13 @@ bye ctx = sendPacket ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
 -- return get the protocol agreed upon.
 getNegotiatedProtocol :: MonadIO m => Context -> m (Maybe B.ByteString)
 getNegotiatedProtocol ctx = liftIO $ usingState_ ctx S.getNegotiatedProtocol
+
+type HostName = String
+
+-- | If the Server Name Indication extension has been used, return the
+-- hostname specified by the client.
+getClientSNI :: MonadIO m => Context -> m (Maybe HostName)
+getClientSNI ctx = liftIO $ usingState_ ctx S.getClientSNI
 
 -- | sendData sends a bunch of data.
 -- It will automatically chunk data to acceptable packet size

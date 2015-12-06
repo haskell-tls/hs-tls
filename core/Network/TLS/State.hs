@@ -45,6 +45,8 @@ module Network.TLS.State
     , getClientEcPointFormatSuggest
     , getClientCertificateChain
     , setClientCertificateChain
+    , setClientSNI
+    , getClientSNI
     , getVerifiedData
     , setSession
     , getSession
@@ -67,6 +69,8 @@ import Network.TLS.ErrT
 import Crypto.Random
 import Data.X509 (CertificateChain)
 
+type HostName = String
+
 data TLSState = TLSState
     { stSession             :: Session
     , stSessionResuming     :: Bool
@@ -82,6 +86,7 @@ data TLSState = TLSState
     , stClientEllipticCurveSuggest :: Maybe [NamedCurve]
     , stClientEcPointFormatSuggest :: Maybe [EcPointFormat]
     , stClientCertificateChain :: Maybe CertificateChain
+    , stClientSNI           :: Maybe HostName
     , stRandomGen           :: StateRNG
     , stVersion             :: Maybe Version
     , stClientContext       :: Role
@@ -116,6 +121,7 @@ newTLSState rng clientContext = TLSState
     , stClientEllipticCurveSuggest = Nothing
     , stClientEcPointFormatSuggest = Nothing
     , stClientCertificateChain = Nothing
+    , stClientSNI           = Nothing
     , stRandomGen           = rng
     , stVersion             = Nothing
     , stClientContext       = clientContext
@@ -237,6 +243,12 @@ setClientCertificateChain s = modify (\st -> st { stClientCertificateChain = Jus
 
 getClientCertificateChain :: TLSSt (Maybe CertificateChain)
 getClientCertificateChain = gets stClientCertificateChain
+
+setClientSNI :: HostName -> TLSSt ()
+setClientSNI hn = modify (\st -> st { stClientSNI = Just hn })
+
+getClientSNI :: TLSSt (Maybe HostName)
+getClientSNI = gets stClientSNI
 
 getVerifiedData :: Role -> TLSSt Bytes
 getVerifiedData client = gets (if client == ClientRole then stClientVerifiedData else stServerVerifiedData)

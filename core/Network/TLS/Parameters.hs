@@ -239,6 +239,15 @@ data ServerHooks = ServerHooks
       -- The client cipher list cannot be empty.
     , onCipherChoosing        :: Version -> [Cipher] -> Cipher
 
+      -- | Allow the server to indicate additional credentials
+      -- to be used depending on the host name indicated by the
+      -- client.
+      --
+      -- This is most useful for transparent proxies where
+      -- credentials must be generated on the fly according to
+      -- the host the client is trying to connect to.
+    , onServerNameIndication  :: Maybe HostName -> IO Credentials
+
       -- | suggested next protocols accoring to the next protocol negotiation extension.
     , onSuggestNextProtocols  :: IO (Maybe [B.ByteString])
       -- | at each new handshake, we call this hook to see if we allow handshake to happens.
@@ -251,6 +260,7 @@ defaultServerHooks = ServerHooks
     { onCipherChoosing       = \_ -> head
     , onClientCertificate    = \_ -> return $ CertificateUsageReject $ CertificateRejectOther "no client certificates expected"
     , onUnverifiedClientCert = return False
+    , onServerNameIndication = \_ -> return mempty
     , onSuggestNextProtocols = return Nothing
     , onNewHandshake         = \_ -> return True
     , onALPNClientSuggest    = Nothing
