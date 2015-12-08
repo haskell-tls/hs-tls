@@ -150,6 +150,7 @@ Benchmark bench-tls
                    , bytestring
                    , hourglass
                    , QuickCheck >= 2
+                   , tasty-quickcheck
 
 source-repository head
   type: git
