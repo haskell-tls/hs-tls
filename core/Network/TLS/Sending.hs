@@ -6,7 +6,7 @@
 -- Portability : unknown
 --
 -- the Sending module contains calls related to marshalling packets according
--- to the TLS state 
+-- to the TLS state
 --
 module Network.TLS.Sending (writePacket) where
 
@@ -88,5 +88,5 @@ switchTxEncryption ctx = do
                                       return (v, c)
     liftIO $ modifyMVar_ (ctxTxState ctx) (\_ -> return tx)
     -- set empty packet counter measure if condition are met
-    when (ver <= TLS10 && cc == ClientRole && isCBC tx) $ liftIO $ writeIORef (ctxNeedEmptyPacket ctx) True
+    when (ver <= TLS10 && cc == ClientRole && isCBC tx && supportedEmptyPacket (ctxSupported ctx)) $ liftIO $ writeIORef (ctxNeedEmptyPacket ctx) True
   where isCBC tx = maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stCipher tx)

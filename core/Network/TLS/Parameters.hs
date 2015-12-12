@@ -134,6 +134,13 @@ data Supported = Supported
       --   If 'True', servers reject handshakes which suggest
       --   a lower protocol than the highest protocol supported.
     , supportedFallbackScsv        :: Bool
+      -- | In ver <= TLS1.0, block ciphers using CBC are using CBC residue as IV, which can be guessed
+      -- by an attacker. Hence, an empty packet is normally sent before a normal data packet, to
+      -- prevent guessability. Some Microsoft TLS-based protocol implementations, however,
+      -- consider these empty packets as a protocol violation and disconnect. If this parameter is
+      -- 'False', empty packets will never be added, which is less secure, but might help in rare
+      -- cases.
+    , supportedEmptyPacket         :: Bool
     } deriving (Show,Eq)
 
 defaultSupported :: Supported
@@ -152,6 +159,7 @@ defaultSupported = Supported
     , supportedClientInitiatedRenegotiation = False
     , supportedSession             = True
     , supportedFallbackScsv        = True
+    , supportedEmptyPacket         = True
     }
 
 instance Default Supported where
