@@ -20,7 +20,7 @@ arbitraryDN = return $ DistinguishedName []
 
 instance Arbitrary Date where
     arbitrary = do
-        y <- choose (1951, 2050)
+        y <- choose (1971, 2035)
         m <- elements [ January .. December]
         d <- choose (1, 30)
         return $ normalizeDate $ Date y m d
