@@ -145,11 +145,12 @@ Benchmark bench-tls
                    , x509-validation
                    , data-default-class
                    , cryptonite
-                   , criterion
+                   , criterion >= 1.0
                    , mtl
                    , bytestring
                    , hourglass
                    , QuickCheck >= 2
+                   , tasty-quickcheck
 
 source-repository head
   type: git

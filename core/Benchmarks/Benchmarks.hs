@@ -35,7 +35,7 @@ getParams connectVer cipher = (cParams, sParams)
                         }
         (pubKey, privKey) = getGlobalRSAPair
 
-runTLSPipe params tlsServer tlsClient d name = bench name $ do
+runTLSPipe params tlsServer tlsClient d name = bench name . nfIO $ do
     (startQueue, resultQueue) <- establishDataPipe params tlsServer tlsClient
     writeChan startQueue d
     readChan resultQueue
