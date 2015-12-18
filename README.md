@@ -46,6 +46,14 @@ It creates a chain where issuer of certificate is the subject of the next certif
 A "CA is unknown" error indicates that your system doesn't have a certificate in
 the trusted store belonging to any of the node of the chain.
 
+You can list the certificates available on your system, as detected by tls running the following command (from the `x509-util` package):
+
+    x509-util system
+
+If this command return 0 certificates, it's likely that you don't have any certificates installed,
+or that your system is storing certificates in an un-expected place. All TLS operations will result
+in "CA is unknown" errors.
+
 TLS issues
 ----------
 
