@@ -36,7 +36,7 @@ Certificate issues
 It's useful to run the following command, which will connect to the destination and
 retrieve the certificate chained used.
 
-    tls-retrievecertificate -d <destination> -p <port> -v -c
+    tls-retrievecertificate <destination> <port> --chain --verify
 
 As an output it will print every certificate in the chain and will give the issuer and subjects of each.
 It creates a chain where issuer of certificate is the subject of the next certificate part of the chain:
