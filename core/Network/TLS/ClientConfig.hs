@@ -13,6 +13,7 @@ module Network.TLS.ClientConfig (
   defaultParamsClient,
   setCiphers,
   setCA,
+  setServerValidator,
   -- * Ciphers
   Cipher,
   module Network.TLS.Extra.Cipher,
@@ -26,7 +27,7 @@ module Network.TLS.ClientConfig (
   ServerValidator
 ) where
 
-import Network.TLS.Parameters (ClientParams(..), defaultParamsClient, Shared(..), Supported(..))
+import Network.TLS.Parameters (ClientParams(..), defaultParamsClient, Shared(..), Supported(..), ClientHooks(..))
 import Network.TLS.Cipher (Cipher(..))
 import Network.TLS.Extra.Cipher
 import Data.X509 (SignedCertificate, CertificateChain)
@@ -48,6 +49,13 @@ setCiphers ciphers cp = cp { clientSupported = (clientSupported cp) { supportedC
 -- Because 'CertificateStore' is a "Monoid", you can 'mappend' them.
 setCA :: CertificateStore -> ClientParams -> ClientParams
 setCA certs cp = cp { clientShared = (clientShared cp) { sharedCAStore = certs } }
+
+-- | Set the validator of the TLS server.
+-- 
+-- Usually you don't need to call this function, because
+-- 'defaultParamsClient' set a validator appropriate for normal uses.
+setServerValidator :: ServerValidator -> ClientParams -> ClientParams
+setServerValidator validator cp = cp { clientHooks = (clientHooks cp) { onServerCertificate = validator } }
 
 -- | Read a list of certificate files to create a 'CertificateStore'.
 readCertificateStore :: [FilePath] -> IO CertificateStore
