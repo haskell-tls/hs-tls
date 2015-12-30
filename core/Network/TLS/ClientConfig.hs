@@ -23,7 +23,7 @@ module Network.TLS.ClientConfig (
   readSignedObject
 ) where
 
-import Network.TLS.Parameters (ClientParams(..), defaultParamsClient)
+import Network.TLS.Parameters (ClientParams(..), defaultParamsClient, Shared(..), Supported(..))
 import Network.TLS.Cipher (Cipher(..))
 import Network.TLS.Extra.Cipher
 import Data.X509.CertificateStore (CertificateStore, makeCertificateStore, listCertificates)
@@ -33,7 +33,7 @@ import Data.X509 (SignedCertificate)
 -- | Set ciphers that the client supports. Normally, you can just set
 -- 'ciphersuite_all', which is exported by this module.
 setCiphers :: ClientParams -> [Cipher] -> ClientParams
-setCiphers = undefined
+setCiphers cp ciphers = cp { clientSupported = (clientSupported cp) { supportedCiphers = ciphers } }
 
 -- | Set CA (Certification Authority) the client trusts.
 -- 
@@ -43,4 +43,4 @@ setCiphers = undefined
 -- To load CA certificates from files, use 'readSignedObject' and
 -- 'makeCertificateStore', which are exported by this module.
 setCA :: ClientParams -> CertificateStore -> ClientParams
-setCA = undefined
+setCA cp certs = cp { clientShared = (clientShared cp) { sharedCAStore = certs } }
