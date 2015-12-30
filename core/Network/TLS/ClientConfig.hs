@@ -36,8 +36,8 @@ import Data.X509.Validation (ValidationCache, ServiceID, FailedReason)
 
 -- | Set ciphers that the client supports. Normally, you can just set
 -- 'ciphersuite_all', which is exported by this module.
-setCiphers :: ClientParams -> [Cipher] -> ClientParams
-setCiphers cp ciphers = cp { clientSupported = (clientSupported cp) { supportedCiphers = ciphers } }
+setCiphers :: [Cipher] -> ClientParams -> ClientParams
+setCiphers ciphers cp = cp { clientSupported = (clientSupported cp) { supportedCiphers = ciphers } }
 
 -- | Set CA (Certification Authority) the client trusts.
 -- 
@@ -46,8 +46,8 @@ setCiphers cp ciphers = cp { clientSupported = (clientSupported cp) { supportedC
 -- from files, use 'readCertificateStore'.
 --
 -- Because 'CertificateStore' is a "Monoid", you can 'mappend' them.
-setCA :: ClientParams -> CertificateStore -> ClientParams
-setCA cp certs = cp { clientShared = (clientShared cp) { sharedCAStore = certs } }
+setCA :: CertificateStore -> ClientParams -> ClientParams
+setCA certs cp = cp { clientShared = (clientShared cp) { sharedCAStore = certs } }
 
 -- | Read a list of certificate files to create a 'CertificateStore'.
 readCertificateStore :: [FilePath] -> IO CertificateStore
