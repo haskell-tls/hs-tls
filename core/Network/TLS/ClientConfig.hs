@@ -13,10 +13,10 @@ module Network.TLS.ClientConfig (
   defaultParamsClient,
   setCiphers,
   setCA,
-  -- * Re-exports (Cipher)
-  Cipher(..),
+  -- * Ciphers
+  Cipher,
   module Network.TLS.Extra.Cipher,
-  -- * Re-exports (Certificates)
+  -- * Certificates
   CertificateStore,
   makeCertificateStore, listCertificates,
   SignedCertificate,
