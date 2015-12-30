@@ -39,9 +39,10 @@ setCiphers cp ciphers = cp { clientSupported = (clientSupported cp) { supportedC
 -- | Set CA (Certification Authority) the client trusts.
 -- 
 -- To load the system-wide CA, use
--- 'System.X509.getSystemCertificateStore'.
+-- 'System.X509.getSystemCertificateStore'.  To load CA certificates
+-- from files, use 'readCertificateStore'.
 --
--- To load CA certificates from files, use 'readCertificateStore'
+-- Because 'CertificateStore' is a "Monoid", you can 'mappend' them.
 setCA :: ClientParams -> CertificateStore -> ClientParams
 setCA cp certs = cp { clientShared = (clientShared cp) { sharedCAStore = certs } }
 
