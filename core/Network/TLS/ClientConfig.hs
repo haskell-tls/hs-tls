@@ -18,6 +18,7 @@ module Network.TLS.ClientConfig (
   module Network.TLS.Extra.Cipher,
   -- * Certificates
   CertificateStore,
+  readCertificateStore,
   makeCertificateStore, listCertificates,
   SignedCertificate,
   readSignedObject
@@ -40,7 +41,10 @@ setCiphers cp ciphers = cp { clientSupported = (clientSupported cp) { supportedC
 -- To load the system-wide CA, use
 -- 'System.X509.getSystemCertificateStore'.
 --
--- To load CA certificates from files, use 'readSignedObject' and
--- 'makeCertificateStore', which are exported by this module.
+-- To load CA certificates from files, use 'readCertificateStore'
 setCA :: ClientParams -> CertificateStore -> ClientParams
 setCA cp certs = cp { clientShared = (clientShared cp) { sharedCAStore = certs } }
+
+-- | Read a list of certificate files to create a 'CertificateStore'.
+readCertificateStore :: [FilePath] -> IO CertificateStore
+readCertificateStore files = fmap (makeCertificateStore . concat) $ mapM readSignedObject files
