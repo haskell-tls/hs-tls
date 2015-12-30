@@ -24,16 +24,23 @@ module Network.TLS.ClientConfig (
   SignedCertificate,
   readSignedObject,
   -- * Server validator
-  ServerValidator
+  ServerValidator,
+  makeValidator,
+  ValidationChecks(..),
+  ValidationHooks(..),
+  -- * Default value
+  Default(def)
 ) where
 
 import Network.TLS.Parameters (ClientParams(..), defaultParamsClient, Shared(..), Supported(..), ClientHooks(..))
 import Network.TLS.Cipher (Cipher(..))
 import Network.TLS.Extra.Cipher
-import Data.X509 (SignedCertificate, CertificateChain)
+import Data.X509 (SignedCertificate, CertificateChain, HashALG(HashSHA256))
 import Data.X509.CertificateStore (CertificateStore, makeCertificateStore, listCertificates)
 import Data.X509.File (readSignedObject)
-import Data.X509.Validation (ValidationCache, ServiceID, FailedReason)
+import Data.X509.Validation (ValidationCache, ServiceID, FailedReason, validate,
+                             ValidationChecks(..), ValidationHooks(..))
+import Data.Default.Class (Default(def))
 
 -- | Set ciphers that the client supports. Normally, you can just set
 -- 'ciphersuite_all', which is exported by this module.
@@ -63,3 +70,9 @@ readCertificateStore files = fmap (makeCertificateStore . concat) $ mapM readSig
 
 -- | An action to validate the TLS server.
 type ServerValidator = CertificateStore -> ValidationCache -> ServiceID -> CertificateChain -> IO [FailedReason]
+
+-- | Make a 'ServerValidator'. You can use 'def' to get
+-- 'ValidationChecks' and 'ValidationChecks' appropriate for normal
+-- uses.
+makeValidator :: ValidationHooks -> ValidationChecks -> ServerValidator
+makeValidator = validate HashSHA256
