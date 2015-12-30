@@ -92,7 +92,10 @@ data ClientParams = ClientParams
     , clientDebug                     :: DebugParams
     } deriving (Show)
 
-defaultParamsClient :: HostName -> Bytes -> ClientParams
+-- | Create a 'ClientParams' with default values.
+defaultParamsClient :: HostName -- ^ server name in 'clientServerIdentification'.
+                    -> Bytes -- ^ service identification in 'clientServerIdentification'.
+                    -> ClientParams
 defaultParamsClient serverName serverId = ClientParams
     { clientWantSessionResume    = Nothing
     , clientUseMaxFragmentLength = Nothing
