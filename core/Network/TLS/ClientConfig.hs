@@ -21,15 +21,18 @@ module Network.TLS.ClientConfig (
   readCertificateStore,
   makeCertificateStore, listCertificates,
   SignedCertificate,
-  readSignedObject
+  readSignedObject,
+  -- * Server validator
+  ServerValidator
 ) where
 
 import Network.TLS.Parameters (ClientParams(..), defaultParamsClient, Shared(..), Supported(..))
 import Network.TLS.Cipher (Cipher(..))
 import Network.TLS.Extra.Cipher
+import Data.X509 (SignedCertificate, CertificateChain)
 import Data.X509.CertificateStore (CertificateStore, makeCertificateStore, listCertificates)
 import Data.X509.File (readSignedObject)
-import Data.X509 (SignedCertificate)
+import Data.X509.Validation (ValidationCache, ServiceID, FailedReason)
 
 -- | Set ciphers that the client supports. Normally, you can just set
 -- 'ciphersuite_all', which is exported by this module.
@@ -49,3 +52,6 @@ setCA cp certs = cp { clientShared = (clientShared cp) { sharedCAStore = certs }
 -- | Read a list of certificate files to create a 'CertificateStore'.
 readCertificateStore :: [FilePath] -> IO CertificateStore
 readCertificateStore files = fmap (makeCertificateStore . concat) $ mapM readSignedObject files
+
+-- | An action to validate the TLS server.
+type ServerValidator = CertificateStore -> ValidationCache -> ServiceID -> CertificateChain -> IO [FailedReason]
