@@ -13,22 +13,34 @@ module Network.TLS.ClientConfig (
   defaultParamsClient,
   setCiphers,
   setCA,
-  -- * Re-exports
+  -- * Re-exports (Cipher)
   Cipher(..),
   module Network.TLS.Extra.Cipher,
-  CertificateStore
+  -- * Re-exports (Certificates)
+  CertificateStore,
+  makeCertificateStore, listCertificates,
+  SignedCertificate,
+  readSignedObject
 ) where
 
 import Network.TLS.Parameters (ClientParams(..), defaultParamsClient)
 import Network.TLS.Cipher (Cipher(..))
 import Network.TLS.Extra.Cipher
-import Data.X509.CertificateStore (CertificateStore)
+import Data.X509.CertificateStore (CertificateStore, makeCertificateStore, listCertificates)
+import Data.X509.File (readSignedObject)
+import Data.X509 (SignedCertificate)
 
--- | Set ciphers that the client supports.
+-- | Set ciphers that the client supports. Normally, you can just set
+-- 'ciphersuite_all', which is exported by this module.
 setCiphers :: ClientParams -> [Cipher] -> ClientParams
 setCiphers = undefined
 
--- | Set CA (Certification Authority) the client trusts. To load the
--- system-wide CA, use 'getSystemCertificateStore' from "System.X509".
+-- | Set CA (Certification Authority) the client trusts.
+-- 
+-- To load the system-wide CA, use
+-- 'System.X509.getSystemCertificateStore'.
+--
+-- To load CA certificates from files, use 'readSignedObject' and
+-- 'makeCertificateStore', which are exported by this module.
 setCA :: ClientParams -> CertificateStore -> ClientParams
 setCA = undefined
