@@ -192,5 +192,6 @@ main = defaultMain $ testGroup "tls"
         -- tests for ClientConfig module
         tests_clientconfig = testGroup "ClientConfig"
             [ testProperty "setCiphers" ClientConfig.prop_setCiphers
+            , testProperty "setCA" ClientConfig.prop_setCA
             ]
 

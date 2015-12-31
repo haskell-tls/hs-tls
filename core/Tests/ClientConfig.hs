@@ -1,5 +1,6 @@
 module ClientConfig (
-  prop_setCiphers
+  prop_setCiphers,
+  prop_setCA
 ) where
 
 import Control.Applicative ((<$>), (<*>))
@@ -7,7 +8,8 @@ import qualified Data.ByteString.Char8 as BC
 import Network.TLS.ClientConfig (
   Cipher, ciphersuite_all, ClientParams(..), Default(def),
   defaultParamsClient,
-  setCiphers)
+  setCiphers, setCA,
+  makeCertificateStore, listCertificates)
 import qualified Network.TLS as TLS
 import Test.QuickCheck (Arbitrary(arbitrary), elements)
 
@@ -21,4 +23,7 @@ instance Arbitrary ClientParams where
   arbitrary = defaultParamsClient <$> arbitrary <*> arbitrary
 
 prop_setCiphers :: [Cipher] -> ClientParams -> Bool
-prop_setCiphers ciphers cp = (TLS.supportedCiphers $ clientSupported $ setCiphers ciphers cp) == ciphers
+prop_setCiphers ciphers cp = ciphers == (TLS.supportedCiphers $ clientSupported $ setCiphers ciphers cp)
+
+prop_setCA :: ClientParams -> Bool
+prop_setCA cp = [] == (listCertificates $ TLS.sharedCAStore $ clientShared $ setCA (makeCertificateStore []) cp)
