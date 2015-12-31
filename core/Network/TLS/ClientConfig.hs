@@ -72,7 +72,7 @@ readCertificateStore files = fmap (makeCertificateStore . concat) $ mapM readSig
 type ServerValidator = CertificateStore -> ValidationCache -> ServiceID -> CertificateChain -> IO [FailedReason]
 
 -- | Make a 'ServerValidator'. You can use 'def' to get
--- 'ValidationChecks' and 'ValidationChecks' appropriate for normal
+-- 'ValidationHooks' and 'ValidationChecks' appropriate for normal
 -- uses.
 makeValidator :: ValidationHooks -> ValidationChecks -> ServerValidator
 makeValidator = validate HashSHA256
