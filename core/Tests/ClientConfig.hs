@@ -3,6 +3,7 @@ module ClientConfig (
 ) where
 
 import Control.Applicative ((<$>), (<*>))
+import qualified Data.ByteString.Char8 as BC
 import Network.TLS.ClientConfig (
   Cipher, ciphersuite_all, ClientParams(..), Default(def),
   defaultParamsClient,
@@ -12,6 +13,9 @@ import Test.QuickCheck (Arbitrary(arbitrary), elements)
 
 instance Arbitrary Cipher where
   arbitrary = elements ciphersuite_all
+
+instance Arbitrary BC.ByteString where
+  arbitrary = BC.pack <$> arbitrary
 
 instance Arbitrary ClientParams where
   arbitrary = defaultParamsClient <$> arbitrary <*> arbitrary
