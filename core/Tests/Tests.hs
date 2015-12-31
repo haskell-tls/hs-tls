@@ -193,5 +193,6 @@ main = defaultMain $ testGroup "tls"
         tests_clientconfig = testGroup "ClientConfig"
             [ testProperty "setCiphers" ClientConfig.prop_setCiphers
             , testProperty "setCA" ClientConfig.prop_setCA
+            , testProperty "setServerValidator" (monadicIO ClientConfig.prop_setServerValidator)
             ]
 
