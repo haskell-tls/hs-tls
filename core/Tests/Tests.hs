@@ -8,6 +8,7 @@ import PipeChan
 import Connection
 import Marshalling
 import Ciphers
+import qualified ClientConfig
 
 import Data.Maybe
 
@@ -169,6 +170,7 @@ main = defaultMain $ testGroup "tls"
     [ tests_marshalling
     , tests_ciphers
     , tests_handshake
+    , tests_clientconfig
     ]
   where -- lowlevel tests to check the packet marshalling.
         tests_marshalling = testGroup "Marshalling"
@@ -186,3 +188,9 @@ main = defaultMain $ testGroup "tls"
             , testProperty "renegociation" (monadicIO prop_handshake_renegociation)
             , testProperty "resumption" (monadicIO prop_handshake_session_resumption)
             ]
+
+        -- tests for ClientConfig module
+        tests_clientconfig = testGroup "ClientConfig"
+            [ testProperty "setCiphers" prop_setCiphers
+            ]
+
