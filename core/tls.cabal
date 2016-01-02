@@ -41,7 +41,7 @@ Flag hans
 
 Library
   Build-Depends:     base >= 3 && < 5
-                   , mtl
+                   , mtl >= 2
                    , transformers
                    , cereal >= 0.4
                    , bytestring
