@@ -1,16 +1,17 @@
 sudo: false
 
 env:
- - CABALVER=1.16 GHCVER=7.0.4
+ - CABALVER=1.16 GHCVER=7.0.4 RUNTEST=0
  - CABALVER=1.16 GHCVER=7.4.2
  - CABALVER=1.18 GHCVER=7.6.3
  - CABALVER=1.18 GHCVER=7.8.4
- - CABALVER=1.22 GHCVER=7.10.2
- - CABALVER=head GHCVER=head
+ - CABALVER=1.22 GHCVER=7.10.3
+ - CABALVER=1.24 GHCVER=8.0.1 RUNTEST=0
+ - CABALVER=head GHCVER=head RUNTEST=0
 
 matrix:
   allow_failures:
-   - env: CABALVER=head GHCVER=head
+   - env: CABALVER=head GHCVER=head RUNTEST=0
 
 addons:
     apt:
@@ -21,12 +22,14 @@ addons:
          - cabal-install-1.18
          - cabal-install-1.20
          - cabal-install-1.22
+         - cabal-install-1.24
          - cabal-install-head
          - ghc-7.0.4
          - ghc-7.4.2
          - ghc-7.6.3
          - ghc-7.8.4
-         - ghc-7.10.2
+         - ghc-7.10.3
+         - ghc-8.0.1
          - ghc-head
          - libssl-dev
 
@@ -39,21 +42,15 @@ install:
  - travis_retry cabal update
  - cabal install utf8-string
  - cd core
- - if [ "${GHCVER}" = "7.0.4" ]; then cabal install --only-dependencies; else cabal install --only-dependencies --enable-tests; fi
+ - if [ "${RUNTEST}" != "0" ]; then cabal install --only-dependencies --enable-tests; else cabal install --only-dependencies; fi
  - cd ../debug
- - if [ "${GHCVER}" = "7.0.4" ]; then cabal install --only-dependencies; else cabal install --only-dependencies --enable-tests; fi
+ - if [ "${RUNTEST}" != "0" ]; then cabal install --only-dependencies --enable-tests; else cabal install --only-dependencies; fi
 
 script:
  - cd ../core
- - if [ "${GHCVER}" != "7.0.4" ]; then
-      cabal configure --enable-tests -v2;
-   else
-      cabal configure -v2;
-   fi
+ - if [ "${RUNTEST}" != "0" ]; then cabal configure --enable-tests -v2; else cabal configure -v2; fi
  - cabal build
- - if [ "${GHCVER}" != "7.0.4" ]; then
-       cabal test;
-   fi;
+ - if [ "${RUNTEST}" != "0" ]; then cabal test; fi;
  - cabal check
  - cabal sdist
  - export SRC_TGZ=$(cabal info . | awk '{print $2 ".tar.gz";exit}') ;
