@@ -98,10 +98,10 @@ makeIV_ = maybe (error "makeIV_") id . makeIV
 tripledes_ede :: BulkDirection -> BulkKey -> BulkBlock
 tripledes_ede BulkEncrypt key =
     let ctx = noFail $ cipherInit key
-     in (\iv input -> let output = cbcEncrypt ctx (tripledes_iv iv) input in (output, takelast 16 output))
+     in (\iv input -> let output = cbcEncrypt ctx (tripledes_iv iv) input in (output, takelast 8 output))
 tripledes_ede BulkDecrypt key =
     let ctx = noFail $ cipherInit key
-     in (\iv input -> let output = cbcDecrypt ctx (tripledes_iv iv) input in (output, takelast 16 input))
+     in (\iv input -> let output = cbcDecrypt ctx (tripledes_iv iv) input in (output, takelast 8 input))
 
 tripledes_iv :: BulkIV -> IV DES_EDE3
 tripledes_iv iv = maybe (error "tripledes cipher iv internal error") id $ makeIV iv
