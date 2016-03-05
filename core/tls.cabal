@@ -28,7 +28,7 @@ extra-source-files:  Tests/*.hs
                      CHANGELOG.md
 
 Flag compat
-  Description:       Accept SSLv2 compatible handshake
+  Description:       Accept SSLv2 client hello for beginning SSLv3 / TLS handshake
   Default:           True
 
 Flag network
