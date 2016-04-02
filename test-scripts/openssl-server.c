@@ -64,7 +64,7 @@ static int verify_callback(int preverify_ok, X509_STORE_CTX *x509)
 	return 1; /* 1 for success, 0 for fail */
 }
 
-static SSL_CTX* server_init(const_SSL_METHOD *method, int want_client_cert, int want_dhe)
+static SSL_CTX* server_init(const_SSL_METHOD *method, int want_client_cert, int want_dhe, int want_ecdhe)
 {
 	SSL_CTX *ctx;
 
@@ -98,6 +98,9 @@ static SSL_CTX* server_init(const_SSL_METHOD *method, int want_client_cert, int 
 			failure();
 		}
 		SSL_CTX_set_options(ctx, SSL_OP_SINGLE_DH_USE);
+	}
+	if (want_ecdhe) {
+		SSL_CTX_set_ecdh_auto(ctx, 1);
 	}
 
 	return ctx;
@@ -296,6 +299,7 @@ int main(int argc, char *argv[])
 	char *file_key;
 	int want_client_cert = 0;
 	int want_dhe = 0;
+	int want_ecdhe = 0;
 	int keep_running = 0;
 	int use_ready_file = 0;
 	int bench_send = 0;
@@ -327,6 +331,8 @@ int main(int argc, char *argv[])
 			keep_running = 1;
 		} else if (strcmp("dhe", argv[i]) == 0) {
 			want_dhe = 1;
+		} else if (strcmp("ecdhe", argv[i]) == 0) {
+			want_ecdhe = 1;
 		} else if (strcmp("ready-file", argv[i]) == 0) {
 			use_ready_file = 1;
 			ready_file = argv[++i];
@@ -342,7 +348,7 @@ int main(int argc, char *argv[])
 	if (use_ready_file)
 		printf("readyfile: %s\n", ready_file);
 
-	ctx = server_init(method, want_client_cert, want_dhe);
+	ctx = server_init(method, want_client_cert, want_dhe, want_ecdhe);
 
 	load_server_certificates(ctx, file_cert, file_key);
 
