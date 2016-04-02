@@ -262,6 +262,8 @@ static void process(SSL* ssl)
 		goto out;
 	}
 
+	printf("cipher: %s\n", SSL_CIPHER_get_name(SSL_get_current_cipher(ssl)));
+
 	show_certificates(ssl);
 	while (1) {
 		bytes = SSL_read(ssl, buf, sizeof(buf));
