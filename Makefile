@@ -32,8 +32,8 @@ build-openssl-server:
 .PHONY: build-openssl-server-mac-102
 build-openssl-server-mac-102:
 	gcc -Wall -o test-scripts/openssl-server \
-			-L/usr/local/Cellar/openssl/1.0.2a-1/lib \
-			-I/usr/local/Cellar/openssl/1.0.2a-1/include \
+			-L/usr/local/Cellar/openssl/1.0.2g/lib \
+			-I/usr/local/Cellar/openssl/1.0.2g/include \
 			-lcrypto -lssl test-scripts/openssl-server.c
 
 .PHONY: build-openssl-client
