@@ -11,6 +11,7 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/opensslv.h>
+#include <openssl/engine.h>
 
 #define SSL_FAIL    -1
 
@@ -25,6 +26,23 @@
 #define TLSv1_server_method() SSLv3_server_method()
 #define const_SSL_METHOD SSL_METHOD
 #endif
+
+static uint8_t deterministic_val = 1;
+static void deterministic_seed (const void *buf, int num) { return; }
+static int deterministic_bytes (unsigned char *buf, int num) { int i; for (i = 0; i < num; i++) *buf++ = deterministic_val++; return num; }
+static void deterministic_cleanup (void) { return; }
+static void deterministic_add (const void *buf, int num, double entropy) { return; }
+static int deterministic_pseudorand (unsigned char *buf, int num) { return deterministic_bytes(buf, num); }
+static int deterministic_status (void) { return 1; }
+
+const struct rand_meth_st deterministic_rand = {
+	.seed = deterministic_seed,
+	.bytes = deterministic_bytes,
+	.cleanup = deterministic_cleanup,
+	.add = deterministic_add,
+	.pseudorand = deterministic_pseudorand,
+	.status = deterministic_status,
+};
 
 void failure() { exit(0xf); }
 
@@ -304,6 +322,7 @@ int main(int argc, char *argv[])
 	int use_ready_file = 0;
 	int bench_send = 0;
 	int bench_recv = 0;
+	int deterministic = 0;
 	char *ready_file;
 	int i;
 
@@ -340,6 +359,8 @@ int main(int argc, char *argv[])
 			bench_send = atoi(argv[++i]);
 		} else if (strcmp("bench-recv", argv[i]) == 0) {
 			bench_recv = atoi(argv[++i]);
+		} else if (strcmp("deterministic", argv[i]) == 0) {
+			deterministic = 1;
 		} else {
 			printf("warning: unknown option: \"%s\"\n", argv[i]);
 		}
@@ -347,6 +368,15 @@ int main(int argc, char *argv[])
 
 	if (use_ready_file)
 		printf("readyfile: %s\n", ready_file);
+
+	if (deterministic) {
+		ENGINE *engine;
+
+		engine = ENGINE_new();
+		ENGINE_set_RAND(engine, &deterministic_rand);
+
+		RAND_set_rand_engine(engine);
+	}
 
 	ctx = server_init(method, want_client_cert, want_dhe, want_ecdhe);
 
@@ -372,6 +402,8 @@ int main(int argc, char *argv[])
 		printf("[status] accepting connection\n");
 		int client = accept(server_fd, (struct sockaddr *) &addr, &len);
 		printf("[log] got connection from %s:%d\n", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
+
+		deterministic_val = 1;
 
 		ssl = SSL_new(ctx);
 		SSL_set_fd(ssl, client);
