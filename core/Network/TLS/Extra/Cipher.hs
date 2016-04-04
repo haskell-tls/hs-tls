@@ -262,7 +262,7 @@ cipher_RC4_128_SHA1 = Cipher
 cipher_AES128_SHA1 :: Cipher
 cipher_AES128_SHA1 = Cipher
     { cipherID           = 0x2f
-    , cipherName         = "RSA-aes128-sha1"
+    , cipherName         = "RSA-AES128-SHA1"
     , cipherBulk         = bulk_aes128
     , cipherHash         = SHA1
     , cipherKeyExchange  = CipherKeyExchange_RSA
@@ -273,7 +273,7 @@ cipher_AES128_SHA1 = Cipher
 cipher_AES256_SHA1 :: Cipher
 cipher_AES256_SHA1 = Cipher
     { cipherID           = 0x35
-    , cipherName         = "RSA-aes256-sha1"
+    , cipherName         = "RSA-AES256-SHA1"
     , cipherBulk         = bulk_aes256
     , cipherHash         = SHA1
     , cipherKeyExchange  = CipherKeyExchange_RSA
@@ -284,7 +284,7 @@ cipher_AES256_SHA1 = Cipher
 cipher_AES128_SHA256 :: Cipher
 cipher_AES128_SHA256 = Cipher
     { cipherID           = 0x3c
-    , cipherName         = "RSA-aes128-sha256"
+    , cipherName         = "RSA-AES128-SHA256"
     , cipherBulk         = bulk_aes128
     , cipherHash         = SHA256
     , cipherKeyExchange  = CipherKeyExchange_RSA
@@ -295,7 +295,7 @@ cipher_AES128_SHA256 = Cipher
 cipher_AES256_SHA256 :: Cipher
 cipher_AES256_SHA256 = Cipher
     { cipherID           = 0x3d
-    , cipherName         = "RSA-aes256-sha256"
+    , cipherName         = "RSA-AES256-SHA256"
     , cipherBulk         = bulk_aes256
     , cipherHash         = SHA256
     , cipherKeyExchange  = CipherKeyExchange_RSA
