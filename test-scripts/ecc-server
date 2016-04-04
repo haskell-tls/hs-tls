@@ -1,0 +1,3 @@
+#!/bin/sh
+
+./test-scripts/openssl-server 10000 test-certs/server.rsa.crt test-certs/server.rsa.key ecdhe tls-1.2 keep-running deterministic

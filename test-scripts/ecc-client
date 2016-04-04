@@ -1,0 +1,7 @@
+#!/bin/sh
+for i in `seq 1 10000`;
+do
+    ./debug/dist/build/tls-simpleclient/tls-simpleclient --tls12 localhost 10000 --bench-data=10 --bench-send --no-validation --use-cipher 49199 --verbose --debug > ecclog.$i
+    if [ $? -ne 0 ]; then break; else rm ecclog.$i;
+    fi
+done
