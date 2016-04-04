@@ -187,7 +187,8 @@ runOn (sStorage, certStore) flags port hostname
             doTLS certCredRequest (Just session)
   where
         runBench isSend =
-            runTLS False False
+            runTLS (Debug `elem` flags)
+                   (IODebug `elem` flags)
                    (getDefaultParams flags hostname certStore sStorage Nothing noSession) hostname port $ \ctx -> do
                 handshake ctx
                 if isSend
