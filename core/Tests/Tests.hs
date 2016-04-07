@@ -8,6 +8,7 @@ import PipeChan
 import Connection
 import Marshalling
 import Ciphers
+import Imports ()
 
 import Data.Maybe
 

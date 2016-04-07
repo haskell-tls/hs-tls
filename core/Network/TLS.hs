@@ -10,12 +10,16 @@ module Network.TLS
     (
     -- * Context configuration
       ClientParams(..)
+    , HostName
+    , Bytes
     , ServerParams(..)
+    , DHParams
     , ClientHooks(..)
     , ServerHooks(..)
     , Supported(..)
     , Shared(..)
     , Hooks(..)
+    , Handshake
     , Logging(..)
     , Measurement(..)
     , CertificateUsage(..)
@@ -61,6 +65,9 @@ module Network.TLS
 
     -- * Information gathering
     , Information(..)
+    , ClientRandom
+    , ServerRandom
+
     , unClientRandom
     , unServerRandom
     , contextGetInformation
@@ -124,8 +131,10 @@ import Network.TLS.Struct ( TLSError(..), TLSException(..)
                           , HashAndSignatureAlgorithm, HashAlgorithm(..), SignatureAlgorithm(..)
                           , Header(..), ProtocolType(..), CertificateType(..)
                           , AlertDescription(..)
-                          , ClientRandom(..), ServerRandom(..))
-import Network.TLS.Crypto (KxError(..))
+                          , ClientRandom(..), ServerRandom(..)
+                          , Bytes
+                          , Handshake)
+import Network.TLS.Crypto (KxError(..), DHParams)
 import Network.TLS.Cipher
 import Network.TLS.Hooks
 import Network.TLS.Measurement
