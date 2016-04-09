@@ -15,7 +15,7 @@ module Network.TLS.Crypto.ECDH
     , ecdhUnwrapPublic
     ) where
 
-import Network.TLS.Util.Serialization (i2osp, lengthBytes)
+import Network.TLS.Util.Serialization (i2ospOf_, lengthBytes)
 import Network.TLS.Extension.EC
 import qualified Crypto.PubKey.ECC.DH as ECDH
 import qualified Crypto.PubKey.ECC.Types as ECDH
@@ -54,10 +54,10 @@ ecdhGenerateKeyPair (ECDHParams curve _) = do
     return (ECDHPrivate priv, pub)
 
 ecdhGetShared :: ECDHParams -> ECDHPrivate -> ECDHPublic -> Maybe ECDHKey
-ecdhGetShared (ECDHParams curve _)  (ECDHPrivate priv) (ECDHPublic point _)
+ecdhGetShared (ECDHParams curve _)  (ECDHPrivate priv) (ECDHPublic point siz)
     | ECC.isPointValid curve point =
         let ECDH.SharedKey sk = ECDH.getShared curve priv point
-         in Just $ i2osp sk
+         in Just $ i2ospOf_ siz sk
     | otherwise =
         Nothing
 
