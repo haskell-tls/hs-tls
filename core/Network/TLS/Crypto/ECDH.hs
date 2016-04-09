@@ -15,13 +15,12 @@ module Network.TLS.Crypto.ECDH
     , ecdhUnwrapPublic
     ) where
 
-import Network.TLS.Util.Serialization (i2ospOf_, lengthBytes)
+import Network.TLS.Util.Serialization (lengthBytes)
 import Network.TLS.Extension.EC
 import qualified Crypto.PubKey.ECC.DH as ECDH
 import qualified Crypto.PubKey.ECC.Types as ECDH
 import qualified Crypto.PubKey.ECC.Prim as ECC (isPointValid)
 import Network.TLS.RNG
-import Data.ByteString (ByteString)
 import Data.Word (Word16)
 
 data ECDHPublic = ECDHPublic ECDH.PublicPoint Int {- byte size -}
@@ -31,7 +30,7 @@ newtype ECDHPrivate = ECDHPrivate ECDH.PrivateNumber deriving (Show,Eq)
 
 data ECDHParams = ECDHParams ECDH.Curve ECDH.CurveName deriving (Show,Eq)
 
-type ECDHKey = ByteString
+type ECDHKey = ECDH.SharedKey
 
 ecdhPublic :: Integer -> Integer -> Int -> ECDHPublic
 ecdhPublic x y siz = ECDHPublic (ECDH.Point x y) siz
@@ -54,12 +53,9 @@ ecdhGenerateKeyPair (ECDHParams curve _) = do
     return (ECDHPrivate priv, pub)
 
 ecdhGetShared :: ECDHParams -> ECDHPrivate -> ECDHPublic -> Maybe ECDHKey
-ecdhGetShared (ECDHParams curve _)  (ECDHPrivate priv) (ECDHPublic point siz)
-    | ECC.isPointValid curve point =
-        let ECDH.SharedKey sk = ECDH.getShared curve priv point
-         in Just $ i2ospOf_ siz sk
-    | otherwise =
-        Nothing
+ecdhGetShared (ECDHParams curve _)  (ECDHPrivate priv) (ECDHPublic point _)
+    | ECC.isPointValid curve point = Just $ ECDH.getShared curve priv point
+    | otherwise                    = Nothing
 
 -- for server key exchange
 ecdhUnwrap :: ECDHParams -> ECDHPublic -> (Word16,Integer,Integer,Int)

@@ -54,6 +54,7 @@ import Network.TLS.Types
 import Control.Applicative (Applicative, (<$>))
 import Control.Monad.State
 import Data.X509 (CertificateChain)
+import Data.ByteArray (ByteArrayAccess)
 
 data HandshakeKeyState = HandshakeKeyState
     { hksRemotePublicKey :: !(Maybe PubKey)
@@ -194,9 +195,10 @@ getHandshakeDigest ver role = gets gen
                        | otherwise          = generateServerFinished
 
 -- | Generate the master secret from the pre master secret.
-setMasterSecretFromPre :: Version -- ^ chosen transmission version
-                       -> Role    -- ^ the role (Client or Server) of the generating side
-                       -> Bytes   -- ^ the pre master secret
+setMasterSecretFromPre :: ByteArrayAccess preMaster
+                       => Version   -- ^ chosen transmission version
+                       -> Role      -- ^ the role (Client or Server) of the generating side
+                       -> preMaster -- ^ the pre master secret
                        -> HandshakeM ()
 setMasterSecretFromPre ver role premasterSecret = do
     secret <- genSecret <$> get

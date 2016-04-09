@@ -76,6 +76,8 @@ import Network.TLS.Util.Serialization (os2ip,i2ospOf_)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
+import           Data.ByteArray (ByteArrayAccess)
+import qualified Data.ByteArray as B (convert)
 
 data CurrentParams = CurrentParams
     { cParamsVersion     :: Version                     -- ^ current protocol version
@@ -579,18 +581,18 @@ decodeReallyServerKeyXchgAlgorithmData ver cke =
  -}
 type PRF = Bytes -> Bytes -> Int -> Bytes
 
-generateMasterSecret_SSL :: Bytes -> ClientRandom -> ServerRandom -> Bytes
+generateMasterSecret_SSL :: ByteArrayAccess preMaster => preMaster -> ClientRandom -> ServerRandom -> Bytes
 generateMasterSecret_SSL premasterSecret (ClientRandom c) (ServerRandom s) =
     B.concat $ map (computeMD5) ["A","BB","CCC"]
-  where computeMD5  label = hash MD5 $ B.concat [ premasterSecret, computeSHA1 label ]
-        computeSHA1 label = hash SHA1 $ B.concat [ label, premasterSecret, c, s ]
+  where computeMD5  label = hash MD5 $ B.concat [ B.convert premasterSecret, computeSHA1 label ]
+        computeSHA1 label = hash SHA1 $ B.concat [ label, B.convert premasterSecret, c, s ]
 
-generateMasterSecret_TLS :: PRF -> Bytes -> ClientRandom -> ServerRandom -> Bytes
+generateMasterSecret_TLS :: ByteArrayAccess preMaster => PRF -> preMaster -> ClientRandom -> ServerRandom -> Bytes
 generateMasterSecret_TLS prf premasterSecret (ClientRandom c) (ServerRandom s) =
-    prf premasterSecret seed 48
+    prf (B.convert premasterSecret) seed 48
   where seed = B.concat [ "master secret", c, s ]
 
-generateMasterSecret :: Version -> Bytes -> ClientRandom -> ServerRandom -> Bytes
+generateMasterSecret :: ByteArrayAccess preMaster => Version -> preMaster -> ClientRandom -> ServerRandom -> Bytes
 generateMasterSecret SSL2  = generateMasterSecret_SSL
 generateMasterSecret SSL3  = generateMasterSecret_SSL
 generateMasterSecret TLS10 = generateMasterSecret_TLS prf_MD5SHA1

@@ -17,15 +17,14 @@ module Network.TLS.Crypto.DH
     , dhUnwrapPublic
     ) where
 
-import Network.TLS.Util.Serialization (i2osp)
 import qualified Crypto.PubKey.DH as DH
-import Network.TLS.RNG
-import Data.ByteString (ByteString)
+import           Crypto.Number.Basic (numBits)
+import           Network.TLS.RNG
 
 type DHPublic   = DH.PublicNumber
 type DHPrivate  = DH.PrivateNumber
 type DHParams   = DH.Params
-type DHKey      = ByteString
+type DHKey      = DH.SharedKey
 
 dhPublic :: Integer -> DHPublic
 dhPublic = DH.PublicNumber
@@ -34,7 +33,7 @@ dhPrivate :: Integer -> DHPrivate
 dhPrivate = DH.PrivateNumber
 
 dhParams :: Integer -> Integer -> DHParams
-dhParams = DH.Params
+dhParams p g = DH.Params p g (numBits p)
 
 dhGenerateKeyPair :: MonadRandom r => DHParams -> r (DHPrivate, DHPublic)
 dhGenerateKeyPair params = do
@@ -43,18 +42,16 @@ dhGenerateKeyPair params = do
     return (priv, pub)
 
 dhGetShared :: DHParams -> DHPrivate -> DHPublic -> DHKey
-dhGetShared params priv pub =
-    let (DH.SharedKey sk) = DH.getShared params priv pub
-     in i2osp sk
+dhGetShared params priv pub = DH.getShared params priv pub
 
 dhUnwrap :: DHParams -> DHPublic -> [Integer]
-dhUnwrap (DH.Params p g) (DH.PublicNumber y) = [p,g,y]
+dhUnwrap (DH.Params p g _) (DH.PublicNumber y) = [p,g,y]
 
 dhParamsGetP :: DHParams -> Integer
-dhParamsGetP (DH.Params p _) = p
+dhParamsGetP (DH.Params p _ _) = p
 
 dhParamsGetG :: DHParams -> Integer
-dhParamsGetG (DH.Params _ g) = g
+dhParamsGetG (DH.Params _ g _) = g
 
 dhUnwrapPublic :: DHPublic -> Integer
 dhUnwrapPublic (DH.PublicNumber y) = y
