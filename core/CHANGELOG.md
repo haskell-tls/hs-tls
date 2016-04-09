@@ -1,3 +1,17 @@
+## Version 1.3.5
+
+- Fix a bug with ECDHE based cipher where serialization
+- Debugging: Add a way to print random seed and a way to side-load a seed for replayability
+- Improve tests
+
+## Version 1.3.4
+
+- Fix tests on 32 bits `time_t` machines (time not within bound)
+- VirtualHost: Add a way to load credentials related to the hostname used by the client (Julian Beaumont)
+- VirtualHost: Expose an API to query which hostname the client has contacted (Julian Beaumont)
+- Add a way to disable empty packet that are use for security when
+  using old versions + old CBC based cipher (Anton Dessiatov)
+
 ## Version 1.3.3
 
 - Add support for Hans (Haskell Network Stack) (Adam Wick)
