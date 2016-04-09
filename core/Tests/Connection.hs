@@ -32,6 +32,8 @@ blockCipher = Cipher
         { bulkName      = "id"
         , bulkKeySize   = 16
         , bulkIVSize    = 16
+        , bulkExplicitIV= 0
+        , bulkAuthTagLen= 0
         , bulkBlockSize = 16
         , bulkF         = BulkBlockF $ \_ _ _ -> (\m -> (m, B.empty))
         }
@@ -61,6 +63,8 @@ streamCipher = blockCipher
         { bulkName      = "stream"
         , bulkKeySize   = 16
         , bulkIVSize    = 0
+        , bulkExplicitIV= 0
+        , bulkAuthTagLen= 0
         , bulkBlockSize = 0
         , bulkF         = BulkStreamF passThrough
         }
