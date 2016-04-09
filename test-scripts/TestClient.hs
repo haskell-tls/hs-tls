@@ -303,7 +303,6 @@ main = do
         -- Everything supported
         t2 Everything
             [ "www.google.com"
-            , "www.udacity.com"
             , "www.coursera.org"
             ] ++
         -- SSL3 not supported
@@ -313,4 +312,5 @@ main = do
             , "www.github.com"
             , "mail.office365.com"
             , "login.live.com"
+            , "www.udacity.com"
             ]
