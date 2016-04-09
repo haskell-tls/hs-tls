@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+import Crypto.Random
 import Network.BSD
 import Network.Socket (socket, Family(..), SocketType(..), sClose, SockAddr(..), bind, listen, accept)
 import Network.TLS
@@ -98,6 +99,11 @@ getDefaultParams flags host store sStorage cred session =
                              }
         , serverHooks = def
         , serverSupported = def { supportedVersions = supportedVers, supportedCiphers = myCiphers }
+        , serverDebug = def { debugSeed      = foldl getDebugSeed Nothing flags
+                            , debugPrintSeed = if DebugPrintSeed `elem` flags
+                                                    then (\seed -> putStrLn ("seed: " ++ show (seedToInteger seed)))
+                                                    else (\_ -> return ())
+                            }
         }
     where
             validateCache
@@ -122,6 +128,10 @@ getDefaultParams flags host store sStorage cred session =
                 case getUsedCiphers of
                     [] -> True
                     l  -> cipherID c `elem` l
+
+            getDebugSeed :: Maybe Seed -> Flag -> Maybe Seed
+            getDebugSeed _   (DebugSeed seed) = seedFromInteger <$> readNumber seed
+            getDebugSeed acc _                = acc
 
             tlsConnectVer
                 | Tls12 `elem` flags = TLS12
@@ -149,6 +159,8 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | ListCiphers
           | Certificate String
           | Key String
+          | DebugSeed String
+          | DebugPrintSeed
           | Help
           deriving (Show,Eq)
 
@@ -176,6 +188,8 @@ options =
     , Option []     ["use-cipher"] (ReqArg UseCipher "cipher-id") "use a specific cipher" 
     , Option []     ["list-ciphers"] (NoArg ListCiphers) "list all ciphers supported and exit"
     , Option []     ["certificate"] (ReqArg Certificate "certificate") "certificate file"
+    , Option []     ["debug-seed"] (ReqArg DebugSeed "debug-seed") "debug: set a specific seed for randomness"
+    , Option []     ["debug-print-seed"] (NoArg DebugPrintSeed) "debug: set a specific seed for randomness"
     , Option []     ["key"] (ReqArg Key "key") "certificate file"
     ]
 

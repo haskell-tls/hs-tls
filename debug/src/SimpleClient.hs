@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+import Crypto.Random
 import Network.BSD
 import Network.Socket (socket, Family(..), SocketType(..), sClose, SockAddr(..), connect)
 import Network.TLS
@@ -91,13 +92,17 @@ getDefaultParams flags host store sStorage certCredsRequest session =
                              , sharedCredentials     = maybe mempty fst certCredsRequest
                              }
         , clientHooks = def { onCertificateRequest = maybe (onCertificateRequest def) snd certCredsRequest }
+        , clientDebug = def { debugSeed      = foldl getDebugSeed Nothing flags
+                            , debugPrintSeed = if DebugPrintSeed `elem` flags
+                                                    then (\seed -> putStrLn ("seed: " ++ show (seedToInteger seed)))
+                                                    else (\_ -> return ())
+                            }
         }
     where
             validateCache
                 | validateCert = def
                 | otherwise    = ValidationCache (\_ _ _ -> return ValidationCachePass)
                                                  (\_ _ _ -> return ())
-
             myCiphers = foldl accBogusCipher (filter withUseCipher ciphers) flags
               where accBogusCipher acc (BogusCipher c) =
                         case reads c of
@@ -115,6 +120,10 @@ getDefaultParams flags host store sStorage certCredsRequest session =
                 case getUsedCiphers of
                     [] -> True
                     l  -> cipherID c `elem` l
+
+            getDebugSeed :: Maybe Seed -> Flag -> Maybe Seed
+            getDebugSeed _   (DebugSeed seed) = seedFromInteger <$> readNumber seed
+            getDebugSeed acc _                = acc
 
             tlsConnectVer
                 | Tls12 `elem` flags = TLS12
@@ -143,6 +152,8 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | BenchData String
           | UseCipher String
           | ListCiphers
+          | DebugSeed String
+          | DebugPrintSeed
           | Help
           deriving (Show,Eq)
 
@@ -172,6 +183,8 @@ options =
     , Option []     ["bench-data"] (ReqArg BenchData "amount") "amount of data to benchmark with"
     , Option []     ["use-cipher"] (ReqArg UseCipher "cipher-id") "use a specific cipher" 
     , Option []     ["list-ciphers"] (NoArg ListCiphers) "list all ciphers supported and exit"
+    , Option []     ["debug-seed"] (ReqArg DebugSeed "debug-seed") "debug: set a specific seed for randomness"
+    , Option []     ["debug-print-seed"] (NoArg DebugPrintSeed) "debug: set a specific seed for randomness"
     ]
 
 noSession = Nothing

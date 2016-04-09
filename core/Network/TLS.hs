@@ -11,6 +11,7 @@ module Network.TLS
     -- * Context configuration
       ClientParams(..)
     , ServerParams(..)
+    , DebugParams(..)
     , ClientHooks(..)
     , ServerHooks(..)
     , Supported(..)

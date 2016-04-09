@@ -98,6 +98,7 @@ class TLSParams a where
 instance TLSParams ClientParams where
     getTLSCommonParams cparams = ( clientSupported cparams
                                  , clientShared cparams
+                                 , clientDebug cparams
                                  )
     getTLSRole _ = ClientRole
     getCiphers cparams = supportedCiphers $ clientSupported cparams
@@ -107,6 +108,7 @@ instance TLSParams ClientParams where
 instance TLSParams ServerParams where
     getTLSCommonParams sparams = ( serverSupported sparams
                                  , serverShared sparams
+                                 , serverDebug sparams
                                  )
     getTLSRole _ = ServerRole
     -- on the server we filter our allowed ciphers here according
@@ -144,11 +146,17 @@ contextNew :: (MonadIO m, HasBackend backend, TLSParams params)
 contextNew backend params = liftIO $ do
     initializeBackend backend
 
-    rng <- newStateRNG
+    let (supported, shared, debug) = getTLSCommonParams params
+
+    seed <- case debugSeed debug of
+                Nothing     -> do seed <- seedNew
+                                  debugPrintSeed debug $ seed
+                                  return seed
+                Just determ -> return determ
+    let rng = newStateRNG seed
 
     let role = getTLSRole params
         st   = newTLSState rng role
-        (supported, shared) = getTLSCommonParams params
         ciphers = getCiphers params
 
     when (null ciphers) $ error "no ciphers available with those parameters"

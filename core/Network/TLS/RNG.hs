@@ -1,12 +1,17 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Network.TLS.RNG
     ( StateRNG(..)
+    , Seed
+    , seedNew
+    , seedToInteger
+    , seedFromInteger
     , withTLSRNG
     , newStateRNG
     , MonadRandom
     , getRandomBytes
     ) where
 
+import Crypto.Random.Types
 import Crypto.Random
 
 newtype StateRNG = StateRNG ChaChaDRG
@@ -20,5 +25,5 @@ withTLSRNG :: StateRNG
            -> (a, StateRNG)
 withTLSRNG rng f = withDRG rng f
 
-newStateRNG :: MonadRandom randomly => randomly StateRNG
-newStateRNG = StateRNG `fmap` drgNew
+newStateRNG :: Seed -> StateRNG
+newStateRNG seed = StateRNG $ drgNewSeed seed

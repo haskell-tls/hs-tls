@@ -10,6 +10,7 @@ module Network.TLS.Parameters
       ClientParams(..)
     , ServerParams(..)
     , CommonParams
+    , DebugParams(..)
     , ClientHooks(..)
     , ServerHooks(..)
     , Supported(..)
@@ -32,13 +33,37 @@ import Network.TLS.Compression
 import Network.TLS.Crypto
 import Network.TLS.Credentials
 import Network.TLS.X509
+import Network.TLS.RNG (Seed)
 import Data.Monoid
 import Data.Default.Class
 import qualified Data.ByteString as B
 
 type HostName = String
 
-type CommonParams = (Supported, Shared)
+type CommonParams = (Supported, Shared, DebugParams)
+
+-- | All settings should not be used in production
+data DebugParams = DebugParams
+    {
+      -- | Disable the true randomness in favor of deterministic seed that will produce
+      -- a deterministic random from. This is useful for tests and debugging purpose.
+      -- Do not use in production
+      debugSeed :: Maybe Seed
+      -- | Add a way to print the seed that was randomly generated. re-using the same seed
+      -- will reproduce the same randomness with 'debugSeed'
+    , debugPrintSeed :: Seed -> IO ()
+    }
+
+defaultDebugParams :: DebugParams
+defaultDebugParams = DebugParams
+    { debugSeed = Nothing
+    , debugPrintSeed = const (return ())
+    }
+
+instance Show DebugParams where
+    show _ = "DebugParams"
+instance Default DebugParams where
+    def = defaultDebugParams
 
 data ClientParams = ClientParams
     { clientUseMaxFragmentLength    :: Maybe MaxFragmentEnum
@@ -60,6 +85,7 @@ data ClientParams = ClientParams
     , clientShared                    :: Shared
     , clientHooks                     :: ClientHooks
     , clientSupported                 :: Supported
+    , clientDebug                     :: DebugParams
     } deriving (Show)
 
 defaultParamsClient :: HostName -> Bytes -> ClientParams
@@ -71,6 +97,7 @@ defaultParamsClient serverName serverId = ClientParams
     , clientShared               = def
     , clientHooks                = def
     , clientSupported            = def
+    , clientDebug                = defaultDebugParams
     }
 
 data ServerParams = ServerParams
@@ -89,6 +116,7 @@ data ServerParams = ServerParams
     , serverShared            :: Shared
     , serverHooks             :: ServerHooks
     , serverSupported         :: Supported
+    , serverDebug             :: DebugParams
     } deriving (Show)
 
 defaultParamsServer :: ServerParams
@@ -99,6 +127,7 @@ defaultParamsServer = ServerParams
     , serverHooks            = def
     , serverShared           = def
     , serverSupported        = def
+    , serverDebug            = defaultDebugParams
     }
 
 instance Default ServerParams where
@@ -275,6 +304,6 @@ defaultServerHooks = ServerHooks
     }
 
 instance Show ServerHooks where
-    show _ = "ClientHooks"
+    show _ = "ServerHooks"
 instance Default ServerHooks where
     def = defaultServerHooks
