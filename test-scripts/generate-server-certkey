@@ -72,13 +72,13 @@ subjectAltName         = email:test@test.com
 issuerAltName          = issuer:copy
 EOF
 
-openssl genrsa -out server.rsa.key 1024
+openssl genrsa -out server.rsa.key 2048
 #openssl rsa -in server.rsa.key -out server.pem
 
 openssl req -config server.rsa.req -key server.rsa.key -new -nodes -out server.rsa.crt -extensions v3_req -x509
 #openssl x509 -req -days 1000 -in server.rsa.req -signkey server.rsa.key -out server.rsa.crt
 
-openssl dsaparam -out server.dsa.params 1024
+openssl dsaparam -out server.dsa.params 2048
 openssl gendsa server.dsa.params -out server.dsa.key
 
 openssl req -config server.dsa.req -key server.dsa.key -new -nodes -out server.dsa.crt -extensions v3_req -x509
