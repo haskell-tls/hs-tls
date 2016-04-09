@@ -327,7 +327,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             signed       <- digitallySignECDHParams ctx serverParams sigAlg
             case sigAlg of
                 SignatureRSA -> return $ SKX_ECDHE_RSA serverParams signed
-                _            -> error ("generate skx_dhe unsupported signature type: " ++ show sigAlg)
+                _            -> error ("generate skx_ecdhe unsupported signature type: " ++ show sigAlg)
 
         -- create a DigitallySigned objects for DHParams or ECDHParams.
 
