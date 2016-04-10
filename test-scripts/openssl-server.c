@@ -15,8 +15,9 @@
 
 #define SSL_FAIL    -1
 
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
-#define OPENSSL_NO_MORE_ECDH_AUTO
+/* ECDH_auto only available in 1.0.2, not before 1.0.1 and not after 1.1 */
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L || OPENSSL_VERSION_NUMBER < 0x10002000L
+#define OPENSSL_NO_ECDH_AUTO
 #endif
 
 #if OPENSSL_VERSION_NUMBER >= 0x10000000L
@@ -122,7 +123,7 @@ static SSL_CTX* server_init(const_SSL_METHOD *method, int want_client_cert, int 
 		SSL_CTX_set_options(ctx, SSL_OP_SINGLE_DH_USE);
 	}
 	if (want_ecdhe) {
-#ifndef OPENSSL_NO_MORE_ECDH_AUTO
+#ifndef OPENSSL_NO_ECDH_AUTO
 		SSL_CTX_set_ecdh_auto(ctx, 1);
 #endif
 	}
