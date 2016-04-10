@@ -130,7 +130,7 @@ getDefaultParams flags host store sStorage cred session =
                     l  -> cipherID c `elem` l
 
             getDebugSeed :: Maybe Seed -> Flag -> Maybe Seed
-            getDebugSeed _   (DebugSeed seed) = seedFromInteger <$> readNumber seed
+            getDebugSeed _   (DebugSeed seed) = seedFromInteger `fmap` readNumber seed
             getDebugSeed acc _                = acc
 
             tlsConnectVer
