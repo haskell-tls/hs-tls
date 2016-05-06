@@ -29,6 +29,7 @@ import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush, hClose)
 import Control.Monad
 import qualified Network.Socket as Network (Socket, sClose)
 import qualified Network.Socket.ByteString as Network
+import qualified Data.Streaming.Network as Network (safeRecv)
 #endif
 
 #ifdef INCLUDE_HANS
@@ -59,7 +60,7 @@ instance HasBackend Network.Socket where
       where recvAll n = B.concat `fmap` loop n
               where loop 0    = return []
                     loop left = do
-                        r <- Network.recv sock left
+                        r <- Network.safeRecv sock left
                         if B.null r
                             then return []
                             else liftM (r:) (loop (left - B.length r))
