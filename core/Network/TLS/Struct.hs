@@ -71,12 +71,11 @@ import Network.TLS.Types
 import Network.TLS.Crypto.DH
 import Network.TLS.Crypto.ECDH
 import Network.TLS.Util.Serialization
+import Network.TLS.Imports
 #if MIN_VERSION_mtl(2,2,1)
 #else
 import Control.Monad.Error
 #endif
-
-type Bytes = ByteString
 
 data ConnectionEnd = ConnectionServer | ConnectionClient
 data CipherType = CipherStream | CipherBlock | CipherAEAD

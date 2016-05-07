@@ -12,6 +12,7 @@ module Network.TLS.Handshake.Server
     ) where
 
 import Network.TLS.Parameters
+import Network.TLS.Imports
 import Network.TLS.Context.Internal
 import Network.TLS.Session
 import Network.TLS.Struct
@@ -28,13 +29,11 @@ import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Key
 import Network.TLS.Measurement
-import Data.Monoid
 import Data.Maybe (isJust, listToMaybe, mapMaybe)
 import Data.List (intersect, sortBy)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 
-import Control.Applicative ((<$>))
 import Control.Monad.State
 
 import Network.TLS.Handshake.Signature

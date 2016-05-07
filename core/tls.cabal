@@ -92,6 +92,7 @@ Library
                      Network.TLS.Handshake.State
                      Network.TLS.Hooks
                      Network.TLS.IO
+                     Network.TLS.Imports
                      Network.TLS.MAC
                      Network.TLS.Measurement
                      Network.TLS.Packet

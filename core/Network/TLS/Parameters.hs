@@ -34,7 +34,6 @@ import Network.TLS.Crypto
 import Network.TLS.Credentials
 import Network.TLS.X509
 import Network.TLS.RNG (Seed)
-import Data.Monoid
 import Data.Default.Class
 import qualified Data.ByteString as B
 

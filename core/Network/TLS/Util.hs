@@ -13,7 +13,7 @@ module Network.TLS.Util
         ) where
 
 import Data.List (foldl')
-import Network.TLS.Struct (Bytes)
+import Network.TLS.Imports (Bytes)
 import qualified Data.ByteString as B
 
 import Control.Exception (SomeException)

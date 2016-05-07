@@ -21,6 +21,7 @@ import Network.TLS.Packet
 import Network.TLS.ErrT
 import Network.TLS.Extension
 import Network.TLS.IO
+import Network.TLS.Imports
 import Network.TLS.State hiding (getNegotiatedProtocol)
 import Network.TLS.Measurement
 import Network.TLS.Wire (encodeWord16)
@@ -32,7 +33,6 @@ import Data.List (find)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 
-import Control.Applicative ((<$>), (<*>))
 import Control.Monad.State
 import Control.Exception (SomeException)
 

@@ -58,12 +58,12 @@ module Network.TLS.Packet
     , putSignatureHashAlgorithm
     ) where
 
+import Network.TLS.Imports
 import Network.TLS.Struct
 import Network.TLS.Wire
 import Network.TLS.Cap
 import Data.Maybe (fromJust)
 import Data.Word
-import Control.Applicative ((<$>), (<*>))
 import Control.Monad
 import Data.ASN1.Types (fromASN1, toASN1)
 import Data.ASN1.Encoding (decodeASN1', encodeASN1')
