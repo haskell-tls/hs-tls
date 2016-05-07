@@ -258,8 +258,15 @@ data EllipticCurvesSupported = EllipticCurvesSupported [NamedCurve]
 
 data NamedCurve =
       SEC CurveName
+    | BrainPool BrainPoolCurve
     | NamedCurve_arbitrary_explicit_prime_curves
     | NamedCurve_arbitrary_explicit_char2_curves
+    deriving (Show,Eq)
+
+data BrainPoolCurve =
+      BrainPoolP512R1 -- 28
+    | BrainPoolP384R1 -- 27
+    | BrainPoolP256R1 -- 26
     deriving (Show,Eq)
 
 -- FIXME: currently maximum crypto strength of our supported
@@ -271,8 +278,14 @@ instance EnumSafe16 NamedCurve where
     fromEnumSafe16 NamedCurve_arbitrary_explicit_prime_curves = 0xFF01
     fromEnumSafe16 NamedCurve_arbitrary_explicit_char2_curves = 0xFF02
     fromEnumSafe16 (SEC nc) = maybe (error "named curve: internal error") id $ fromCurveName nc
+    fromEnumSafe16 (BrainPool BrainPoolP512R1) = 28
+    fromEnumSafe16 (BrainPool BrainPoolP384R1) = 27
+    fromEnumSafe16 (BrainPool BrainPoolP256R1) = 26
     toEnumSafe16 0xFF01 = Just NamedCurve_arbitrary_explicit_prime_curves
     toEnumSafe16 0xFF02 = Just NamedCurve_arbitrary_explicit_char2_curves
+    toEnumSafe16 26     = Just (BrainPool BrainPoolP256R1)
+    toEnumSafe16 27     = Just (BrainPool BrainPoolP384R1)
+    toEnumSafe16 28     = Just (BrainPool BrainPoolP512R1)
     toEnumSafe16 n      = SEC <$> toCurveName n
 
 -- on decode, filter all unknown curves
