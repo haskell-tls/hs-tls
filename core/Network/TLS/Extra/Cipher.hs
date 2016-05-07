@@ -35,8 +35,11 @@ module Network.TLS.Extra.Cipher
     , cipher_DHE_DSS_RC4_SHA1
     , cipher_DHE_RSA_AES128GCM_SHA256
     , cipher_ECDHE_RSA_AES128GCM_SHA256
+    , cipher_ECDHE_RSA_AES256GCM_SHA384
     , cipher_ECDHE_RSA_AES128CBC_SHA256
     , cipher_ECDHE_RSA_AES128CBC_SHA
+    , cipher_ECDHE_RSA_AES256CBC_SHA
+    , cipher_ECDHE_RSA_AES256CBC_SHA384
     , cipher_ECDHE_ECDSA_AES128GCM_SHA256
     ) where
 
@@ -89,6 +92,24 @@ aes128gcm BulkDecrypt key =
             (output, aeadFinal) = aeadDecrypt aead input
             tag                 = aeadFinalize aeadFinal 16
 
+aes256gcm :: BulkDirection -> BulkKey -> BulkAEAD
+aes256gcm BulkEncrypt key =
+    let ctx = noFail (cipherInit key) :: AES256
+     in (\nonce d ad ->
+            let aeadIni = noFail (aeadInit AEAD_GCM ctx nonce)
+             in swap $ aeadSimpleEncrypt aeadIni ad d 16)
+aes256gcm BulkDecrypt key =
+    let ctx = noFail (cipherInit key) :: AES256
+     in (\nonce d ad ->
+            let aeadIni = noFail (aeadInit AEAD_GCM ctx nonce)
+             in simpleDecrypt aeadIni ad d)
+  where
+    simpleDecrypt aeadIni header input = (output, tag)
+      where
+            aead                = aeadAppendHeader aeadIni header
+            (output, aeadFinal) = aeadDecrypt aead input
+            tag                 = aeadFinalize aeadFinal 16
+
 noFail :: CryptoFailable a -> a
 noFail = throwCryptoError
 
@@ -118,7 +139,10 @@ rc4 _ bulkKey = BulkStream (combineRC4 $ RC4.initialize bulkKey)
 -- this choice of ciphersuite should satisfy most normal need
 ciphersuite_all :: [Cipher]
 ciphersuite_all =
-    [ cipher_ECDHE_RSA_AES128GCM_SHA256
+    [ cipher_ECDHE_RSA_AES256GCM_SHA384
+    , cipher_ECDHE_RSA_AES128GCM_SHA256
+    , cipher_ECDHE_RSA_AES256CBC_SHA384
+    , cipher_ECDHE_RSA_AES256CBC_SHA
     , cipher_ECDHE_ECDSA_AES128GCM_SHA256
     , cipher_DHE_RSA_AES256_SHA256, cipher_DHE_RSA_AES128_SHA256
     , cipher_DHE_RSA_AES256_SHA1, cipher_DHE_RSA_AES128_SHA1
@@ -136,7 +160,16 @@ ciphersuite_medium = [cipher_RC4_128_MD5, cipher_RC4_128_SHA1, cipher_AES128_SHA
 
 -- | the strongest ciphers supported.
 ciphersuite_strong :: [Cipher]
-ciphersuite_strong = [cipher_ECDHE_RSA_AES128GCM_SHA256, cipher_ECDHE_ECDSA_AES128GCM_SHA256, cipher_DHE_RSA_AES256_SHA256, cipher_AES256_SHA256, cipher_AES256_SHA1]
+ciphersuite_strong =
+    [ cipher_ECDHE_RSA_AES256GCM_SHA384
+    , cipher_ECDHE_RSA_AES128GCM_SHA256
+    , cipher_ECDHE_RSA_AES256CBC_SHA384
+    , cipher_ECDHE_RSA_AES256CBC_SHA
+    , cipher_ECDHE_ECDSA_AES128GCM_SHA256
+    , cipher_DHE_RSA_AES256_SHA256
+    , cipher_AES256_SHA256
+    , cipher_AES256_SHA1
+    ]
 
 -- | DHE-RSA cipher suite
 ciphersuite_dhe_rsa :: [Cipher]
@@ -151,7 +184,7 @@ ciphersuite_dhe_dss = [cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1, c
 ciphersuite_unencrypted :: [Cipher]
 ciphersuite_unencrypted = [cipher_null_MD5, cipher_null_SHA1]
 
-bulk_null, bulk_rc4, bulk_aes128, bulk_aes256, bulk_tripledes_ede, bulk_aes128gcm :: Bulk
+bulk_null, bulk_rc4, bulk_aes128, bulk_aes256, bulk_tripledes_ede, bulk_aes128gcm, bulk_aes256gcm :: Bulk
 bulk_null = Bulk
     { bulkName         = "null"
     , bulkKeySize      = 0
@@ -192,6 +225,16 @@ bulk_aes128gcm = Bulk
     , bulkAuthTagLen   = 16
     , bulkBlockSize    = 0  -- dummy, not used
     , bulkF            = BulkAeadF aes128gcm
+    }
+
+bulk_aes256gcm = Bulk
+    { bulkName         = "AES256GCM"
+    , bulkKeySize      = 32 -- RFC 5116 Sec 5.1: K_LEN
+    , bulkIVSize       = 4  -- RFC 5288 GCMNonce.salt, fixed_iv_length
+    , bulkExplicitIV   = 8
+    , bulkAuthTagLen   = 16
+    , bulkBlockSize    = 0  -- dummy, not used
+    , bulkF            = BulkAeadF aes256gcm
     }
 
 bulk_aes256 = Bulk
@@ -269,6 +312,28 @@ cipher_AES128_SHA1 = Cipher
     , cipherMinVer       = Just SSL3
     }
 
+-- | AES cipher (128 bit key), DHE key exchanged signed by DSA and SHA1 for digest
+cipher_DHE_DSS_AES128_SHA1 :: Cipher
+cipher_DHE_DSS_AES128_SHA1 = Cipher
+    { cipherID           = 0x32
+    , cipherName         = "DHE-DSA-AES128-SHA1"
+    , cipherBulk         = bulk_aes128
+    , cipherHash         = SHA1
+    , cipherKeyExchange  = CipherKeyExchange_DHE_DSS
+    , cipherMinVer       = Nothing
+    }
+
+-- | AES cipher (128 bit key), DHE key exchanged signed by RSA and SHA1 for digest
+cipher_DHE_RSA_AES128_SHA1 :: Cipher
+cipher_DHE_RSA_AES128_SHA1 = Cipher
+    { cipherID           = 0x33
+    , cipherName         = "DHE-RSA-AES128-SHA1"
+    , cipherBulk         = bulk_aes128
+    , cipherHash         = SHA1
+    , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
+    , cipherMinVer       = Nothing
+    }
+
 -- | AES cipher (256 bit key), RSA key exchange and SHA1 for digest
 cipher_AES256_SHA1 :: Cipher
 cipher_AES256_SHA1 = Cipher
@@ -278,6 +343,22 @@ cipher_AES256_SHA1 = Cipher
     , cipherHash         = SHA1
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just SSL3
+    }
+
+-- | AES cipher (256 bit key), DHE key exchanged signed by DSA and SHA1 for digest
+cipher_DHE_DSS_AES256_SHA1 :: Cipher
+cipher_DHE_DSS_AES256_SHA1 = cipher_DHE_DSS_AES128_SHA1
+    { cipherID           = 0x38
+    , cipherName         = "DHE-DSA-AES256-SHA1"
+    , cipherBulk         = bulk_aes256
+    }
+
+-- | AES cipher (256 bit key), DHE key exchanged signed by RSA and SHA1 for digest
+cipher_DHE_RSA_AES256_SHA1 :: Cipher
+cipher_DHE_RSA_AES256_SHA1 = cipher_DHE_RSA_AES128_SHA1
+    { cipherID           = 0x39
+    , cipherName         = "DHE-RSA-AES256-SHA1"
+    , cipherBulk         = bulk_aes256
     }
 
 -- | AES cipher (128 bit key), RSA key exchange and SHA256 for digest
@@ -302,43 +383,6 @@ cipher_AES256_SHA256 = Cipher
     , cipherMinVer       = Just TLS12
     }
 
--- | AES cipher (128 bit key), DHE key exchanged signed by RSA and SHA1 for digest
-cipher_DHE_RSA_AES128_SHA1 :: Cipher
-cipher_DHE_RSA_AES128_SHA1 = Cipher
-    { cipherID           = 0x33
-    , cipherName         = "DHE-RSA-AES128-SHA1"
-    , cipherBulk         = bulk_aes128
-    , cipherHash         = SHA1
-    , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
-    , cipherMinVer       = Nothing
-    }
-
--- | AES cipher (256 bit key), DHE key exchanged signed by RSA and SHA1 for digest
-cipher_DHE_RSA_AES256_SHA1 :: Cipher
-cipher_DHE_RSA_AES256_SHA1 = cipher_DHE_RSA_AES128_SHA1
-    { cipherID           = 0x39
-    , cipherName         = "DHE-RSA-AES256-SHA1"
-    , cipherBulk         = bulk_aes256
-    }
-
--- | AES cipher (128 bit key), DHE key exchanged signed by DSA and SHA1 for digest
-cipher_DHE_DSS_AES128_SHA1 :: Cipher
-cipher_DHE_DSS_AES128_SHA1 = Cipher
-    { cipherID           = 0x32
-    , cipherName         = "DHE-DSA-AES128-SHA1"
-    , cipherBulk         = bulk_aes128
-    , cipherHash         = SHA1
-    , cipherKeyExchange  = CipherKeyExchange_DHE_DSS
-    , cipherMinVer       = Nothing
-    }
-
--- | AES cipher (256 bit key), DHE key exchanged signed by DSA and SHA1 for digest
-cipher_DHE_DSS_AES256_SHA1 :: Cipher
-cipher_DHE_DSS_AES256_SHA1 = cipher_DHE_DSS_AES128_SHA1
-    { cipherID           = 0x38
-    , cipherName         = "DHE-DSA-AES256-SHA1"
-    , cipherBulk         = bulk_aes256
-    }
 
 cipher_DHE_DSS_RC4_SHA1 :: Cipher
 cipher_DHE_DSS_RC4_SHA1 = cipher_DHE_DSS_AES128_SHA1
@@ -383,16 +427,6 @@ cipher_DHE_RSA_AES128GCM_SHA256 = Cipher
     , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
     }
 
-cipher_ECDHE_RSA_AES128GCM_SHA256 :: Cipher
-cipher_ECDHE_RSA_AES128GCM_SHA256 = Cipher
-    { cipherID           = 0xc02f
-    , cipherName         = "ECDHE-RSA-AES128GCM-SHA256"
-    , cipherBulk         = bulk_aes128gcm
-    , cipherHash         = SHA256
-    , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
-    , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
-    }
-
 cipher_ECDHE_RSA_AES128CBC_SHA :: Cipher
 cipher_ECDHE_RSA_AES128CBC_SHA = Cipher
     { cipherID           = 0xc013
@@ -403,13 +437,32 @@ cipher_ECDHE_RSA_AES128CBC_SHA = Cipher
     , cipherMinVer       = Just TLS10
     }
 
---TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256 
+cipher_ECDHE_RSA_AES256CBC_SHA :: Cipher
+cipher_ECDHE_RSA_AES256CBC_SHA = Cipher
+    { cipherID           = 0xc014
+    , cipherName         = "ECDHE-RSA-AES256CBC-SHA"
+    , cipherBulk         = bulk_aes256
+    , cipherHash         = SHA1
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
+    , cipherMinVer       = Just TLS10
+    }
+
 cipher_ECDHE_RSA_AES128CBC_SHA256 :: Cipher
 cipher_ECDHE_RSA_AES128CBC_SHA256 = Cipher
     { cipherID           = 0xc027
-    , cipherName         = "ECDHE-RSA-AES128CBC-SHA"
+    , cipherName         = "ECDHE-RSA-AES128CBC-SHA256"
     , cipherBulk         = bulk_aes128
     , cipherHash         = SHA256
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
+    , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
+    }
+
+cipher_ECDHE_RSA_AES256CBC_SHA384 :: Cipher
+cipher_ECDHE_RSA_AES256CBC_SHA384 = Cipher
+    { cipherID           = 0xc027
+    , cipherName         = "ECDHE-RSA-AES256CBC-SHA384"
+    , cipherBulk         = bulk_aes256
+    , cipherHash         = SHA384
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
     , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
     }
@@ -423,6 +476,27 @@ cipher_ECDHE_ECDSA_AES128GCM_SHA256 = Cipher
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
     , cipherMinVer       = Just TLS12 -- RFC 5289
     }
+
+cipher_ECDHE_RSA_AES128GCM_SHA256 :: Cipher
+cipher_ECDHE_RSA_AES128GCM_SHA256 = Cipher
+    { cipherID           = 0xc02f
+    , cipherName         = "ECDHE-RSA-AES128GCM-SHA256"
+    , cipherBulk         = bulk_aes128gcm
+    , cipherHash         = SHA256
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
+    , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
+    }
+
+cipher_ECDHE_RSA_AES256GCM_SHA384 :: Cipher
+cipher_ECDHE_RSA_AES256GCM_SHA384 = Cipher
+    { cipherID           = 0xc030
+    , cipherName         = "ECDHE-RSA-AES256GCM-SHA256"
+    , cipherBulk         = bulk_aes256gcm
+    , cipherHash         = SHA384
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
+    , cipherMinVer       = Just TLS12 -- RFC 5289
+    }
+
 {-
 TLS 1.0 ciphers definition
 
