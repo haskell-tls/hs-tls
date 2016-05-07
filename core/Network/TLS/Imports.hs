@@ -10,6 +10,7 @@ module Network.TLS.Imports
     (
     -- generic exports
       Control.Applicative.Applicative(..)
+    , (Control.Applicative.<$>)
     , Data.Monoid.Monoid(..)
     -- project definition
     , Bytes
