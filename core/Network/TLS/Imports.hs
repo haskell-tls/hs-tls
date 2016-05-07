@@ -5,22 +5,25 @@
 -- Stability   : experimental
 -- Portability : unknown
 --
+{-# LANGUAGE NoImplicitPrelude #-}
 module Network.TLS.Imports
     (
     -- generic exports
-      module E
+      Control.Applicative.Applicative(..)
+    , Data.Monoid.Monoid(..)
     -- project definition
     , Bytes
     , showBytesHex
     ) where
 
-import qualified Control.Applicative as E
-import qualified Data.Monoid as E
+import qualified Control.Applicative
+import qualified Data.Monoid
 
 import qualified Data.ByteString as B
 import           Data.ByteArray.Encoding as B
+import qualified Prelude
 
 type Bytes = B.ByteString
 
-showBytesHex :: Bytes -> String
-showBytesHex bs = show (B.convertToBase B.Base16 bs :: Bytes)
+showBytesHex :: Bytes -> Prelude.String
+showBytesHex bs = Prelude.show (B.convertToBase B.Base16 bs :: Bytes)

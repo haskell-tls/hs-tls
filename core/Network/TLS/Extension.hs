@@ -41,7 +41,6 @@ module Network.TLS.Extension
     , availableEllipticCurves
     ) where
 
-import Control.Applicative ((<$>),(<*>))
 import Control.Monad
 
 import Data.Word
@@ -53,6 +52,7 @@ import qualified Data.ByteString.Char8 as BC
 import Network.TLS.Extension.EC
 import Network.TLS.Struct (ExtensionID, EnumSafe8(..), EnumSafe16(..), HashAndSignatureAlgorithm)
 import Network.TLS.Wire
+import Network.TLS.Imports
 import Network.TLS.Packet (putSignatureHashAlgorithm, getSignatureHashAlgorithm)
 
 type HostName = String
