@@ -42,6 +42,8 @@ ciphers =
     , cipher_RC4_128_SHA1
     , cipher_RSA_3DES_EDE_CBC_SHA1
     , cipher_DHE_RSA_AES128GCM_SHA256
+    , cipher_ECDHE_RSA_AES256GCM_SHA384
+    , cipher_ECDHE_RSA_AES256CBC_SHA
     , cipher_ECDHE_RSA_AES128GCM_SHA256
     , cipher_ECDHE_ECDSA_AES128GCM_SHA256
     ]
