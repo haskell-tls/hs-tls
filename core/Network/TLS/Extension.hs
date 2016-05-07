@@ -269,10 +269,8 @@ data BrainPoolCurve =
     | BrainPoolP256R1 -- 26
     deriving (Show,Eq)
 
--- FIXME: currently maximum crypto strength of our supported
---        cipher suite is 128 bits. Not support 384 and 512.
 availableEllipticCurves :: [NamedCurve]
-availableEllipticCurves = [SEC SEC_p160r1, SEC SEC_p224r1, SEC SEC_p256r1]
+availableEllipticCurves = [SEC SEC_p256r1, SEC SEC_p521r1]
 
 instance EnumSafe16 NamedCurve where
     fromEnumSafe16 NamedCurve_arbitrary_explicit_prime_curves = 0xFF01
