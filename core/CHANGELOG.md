@@ -1,3 +1,8 @@
+## Version 1.3.6
+
+- Add new ciphers
+- Improve some debugging and outputs
+
 ## Version 1.3.5
 
 - Fix a bug with ECDHE based cipher where serialization
