@@ -2,7 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 import Crypto.Random
 import Network.BSD
-import Network.Socket (socket, Family(..), SocketType(..), sClose, SockAddr(..), bind, listen, accept)
+import Network.Socket (socket, Family(..), SocketType(..), sClose, SockAddr(..), bind, listen, accept, iNADDR_ANY)
 import Network.TLS
 import Network.TLS.Extra.Cipher
 import System.Console.GetOpt
@@ -50,10 +50,9 @@ defaultTimeout = 2000
 
 bogusCipher cid = cipher_AES128_SHA1 { cipherID = cid }
 
-runTLS debug ioDebug params hostname portNumber f = do
-    he   <- getHostByName hostname
+runTLS debug ioDebug params portNumber f = do
     sock <- socket AF_INET Stream defaultProtocol
-    let sockaddr = SockAddrInet portNumber (head $ hostAddresses he)
+    let sockaddr = SockAddrInet portNumber iNADDR_ANY
 
     bind sock sockaddr
     listen sock 1
@@ -86,8 +85,8 @@ sessionRef ref = SessionManager
     , sessionInvalidate = \_         -> return ()
     }
 
-getDefaultParams :: [Flag] -> String -> CertificateStore -> IORef (SessionID, SessionData) -> Credential -> Maybe (SessionID, SessionData) -> ServerParams
-getDefaultParams flags host store sStorage cred session =
+getDefaultParams :: [Flag] -> CertificateStore -> IORef (SessionID, SessionData) -> Credential -> Maybe (SessionID, SessionData) -> ServerParams
+getDefaultParams flags store sStorage cred session =
     ServerParams
         { serverWantClientCert = False
         , serverCACertificates = []
@@ -205,7 +204,7 @@ loadCred Nothing _ =
 loadCred _       Nothing =
     error "missing credential certificate"
 
-runOn (sStorage, certStore) flags port hostname
+runOn (sStorage, certStore) flags port
     | BenchSend `elem` flags = runBench True
     | BenchRecv `elem` flags = runBench False
     | otherwise              = do
@@ -218,7 +217,7 @@ runOn (sStorage, certStore) flags port hostname
         runBench isSend = do
             cred <- loadCred getKey getCertificate
             runTLS False False
-                   (getDefaultParams flags hostname certStore sStorage cred noSession) hostname port $ \ctx -> do
+                   (getDefaultParams flags certStore sStorage cred noSession) port $ \ctx -> do
                 handshake ctx
                 if isSend
                     then loopSendData getBenchAmount ctx
@@ -245,7 +244,7 @@ runOn (sStorage, certStore) flags port hostname
 
             runTLS (Debug `elem` flags)
                    (IODebug `elem` flags)
-                   (getDefaultParams flags hostname certStore sStorage cred sess) hostname port $ \ctx -> do
+                   (getDefaultParams flags certStore sStorage cred sess) port $ \ctx -> do
                 handshake ctx
                 loopRecv out ctx
                 --sendData ctx $ query
@@ -299,7 +298,7 @@ readNumber s
     | otherwise     = Nothing
 
 printUsage =
-    putStrLn $ usageInfo "usage: simpleclient [opts] <hostname> [port]\n\n\t(port default to: 443)\noptions:\n" options
+    putStrLn $ usageInfo "usage: simpleserver [opts] [port]\n\n\t(port default to: 443)\noptions:\n" options
 
 printCiphers = do
     putStrLn "Supported ciphers"
@@ -329,6 +328,6 @@ main = do
     certStore <- getSystemCertificateStore
     sStorage  <- newIORef (error "storage ioref undefined")
     case other of
-        [hostname]      -> runOn (sStorage, certStore) opts 443 hostname
-        [hostname,port] -> runOn (sStorage, certStore) opts (fromInteger $ read port) hostname
-        _               -> printUsage >> exitFailure
+        []     -> runOn (sStorage, certStore) opts 443
+        [port] -> runOn (sStorage, certStore) opts (fromInteger $ read port)
+        _      -> printUsage >> exitFailure
