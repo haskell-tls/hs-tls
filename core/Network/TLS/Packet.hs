@@ -474,10 +474,10 @@ getExtensions len = do
     extdatalen <- getWord16
     extdata <- getBytes $ fromIntegral extdatalen
     extxs <- getExtensions (len - fromIntegral extdatalen - 4)
-    return $ (extty, extdata) : extxs
+    return $ ExtensionRaw extty extdata : extxs
 
 putExtension :: ExtensionRaw -> Put
-putExtension (ty, l) = putWord16 ty >> putOpaque16 l
+putExtension (ExtensionRaw ty l) = putWord16 ty >> putOpaque16 l
 
 putExtensions :: [ExtensionRaw] -> Put
 putExtensions [] = return ()

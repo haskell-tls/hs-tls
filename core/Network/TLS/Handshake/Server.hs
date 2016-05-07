@@ -111,7 +111,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     when (null commonCompressions) $ throwCore $
         Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
 
-    let serverName = case extensionDecode False `fmap` (lookup extensionID_ServerName exts) of
+    let serverName = case extensionDecode False `fmap` (extensionLookup extensionID_ServerName exts) of
             Just (Just (ServerName ns)) -> listToMaybe (mapMaybe toHostName ns)
                 where toHostName (ServerNameHostName hostName) = Just hostName
                       toHostName (ServerNameOther _)           = Nothing
@@ -135,17 +135,17 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
 
     maybe (return ()) (usingState_ ctx . setClientSNI) serverName
 
-    case extensionDecode False `fmap` (lookup extensionID_ApplicationLayerProtocolNegotiation exts) of
+    case extensionDecode False `fmap` (extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts) of
         Just (Just (ApplicationLayerProtocolNegotiation protos)) -> usingState_ ctx $ setClientALPNSuggest protos
         _ -> return ()
 
-    case extensionDecode False `fmap` (lookup extensionID_EllipticCurves exts) of
+    case extensionDecode False `fmap` (extensionLookup extensionID_EllipticCurves exts) of
         Just (Just (EllipticCurvesSupported es)) -> usingState_ ctx $ setClientEllipticCurveSuggest es
         _ -> return ()
 
     -- Currently, we don't send back EcPointFormats. In this case,
     -- the client chooses EcPointFormat_Uncompressed.
-    case extensionDecode False `fmap` (lookup extensionID_EcPointFormats exts) of
+    case extensionDecode False `fmap` (extensionLookup extensionID_EcPointFormats exts) of
         Just (Just (EcPointFormatsSupported fs)) -> usingState_ ctx $ setClientEcPointFormatSuggest fs
         _ -> return ()
 
@@ -162,7 +162,7 @@ handshakeServerWith _ _ _ = throwCore $ Error_Protocol ("unexpected handshake me
 
 doHandshake :: ServerParams -> Maybe Credential -> Context -> Version -> Cipher
             -> Compression -> Session -> Maybe SessionData
-            -> [(ExtensionID, a)] -> IO ()
+            -> [ExtensionRaw] -> IO ()
 doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSession resumeSessionData exts = do
     case resumeSessionData of
         Nothing -> do
@@ -180,8 +180,8 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             recvChangeCipherAndFinish ctx
     handshakeTerminate ctx
   where
-        clientRequestedNPN = isJust $ lookup extensionID_NextProtocolNegotiation exts
-        clientALPNSuggest = isJust $ lookup extensionID_ApplicationLayerProtocolNegotiation exts
+        clientRequestedNPN = isJust $ extensionLookup extensionID_NextProtocolNegotiation exts
+        clientALPNSuggest = isJust $ extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts
 
         applicationProtocol = do
             protos <- alpn
@@ -195,8 +195,8 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                     usingState_ ctx $ do
                         setExtensionALPN True
                         setNegotiatedProtocol proto
-                    return $ [ ( extensionID_ApplicationLayerProtocolNegotiation
-                                                                                                               , extensionEncode $ ApplicationLayerProtocolNegotiation [proto]) ]
+                    return $ [ ExtensionRaw extensionID_ApplicationLayerProtocolNegotiation
+                                            (extensionEncode $ ApplicationLayerProtocolNegotiation [proto]) ]
                 (_, _)                  -> return []
              | otherwise = return []
         npn = do
@@ -209,8 +209,8 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                     usingState_ ctx $ do
                         setExtensionNPN True
                         setServerNextProtocolSuggest protos
-                    return [ ( extensionID_NextProtocolNegotiation
-                             , extensionEncode $ NextProtocolNegotiation protos) ]
+                    return [ ExtensionRaw extensionID_NextProtocolNegotiation
+                             (extensionEncode $ NextProtocolNegotiation protos) ]
                 Nothing -> return []
 
 
@@ -234,7 +234,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                                     cvf <- getVerifiedData ClientRole
                                     svf <- getVerifiedData ServerRole
                                     return $ extensionEncode (SecureRenegotiation cvf $ Just svf)
-                            return [ (0xff01, vf) ]
+                            return [ ExtensionRaw 0xff01 vf ]
                     else return []
             protoExt <- applicationProtocol
             let extensions = secRengExt ++ protoExt

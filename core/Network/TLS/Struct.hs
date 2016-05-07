@@ -17,7 +17,7 @@ module Network.TLS.Struct
     , CipherType(..)
     , CipherData(..)
     , ExtensionID
-    , ExtensionRaw
+    , ExtensionRaw(..)
     , CertificateType(..)
     , HashAlgorithm(..)
     , SignatureAlgorithm(..)
@@ -179,7 +179,12 @@ newtype Session = Session (Maybe SessionID) deriving (Show, Eq)
 
 type FinishedData = Bytes
 type ExtensionID  = Word16
-type ExtensionRaw = (ExtensionID, Bytes)
+
+data ExtensionRaw = ExtensionRaw ExtensionID Bytes
+    deriving (Eq)
+
+instance Show ExtensionRaw where
+    show (ExtensionRaw eid bs) = "ExtensionRaw " ++ show eid ++ " " ++ showBytesHex bs ++ ""
 
 constrRandom32 :: (Bytes -> a) -> Bytes -> Maybe a
 constrRandom32 constr l = if B.length l == 32 then Just (constr l) else Nothing

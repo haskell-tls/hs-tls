@@ -13,6 +13,7 @@ module Network.TLS.Handshake.Common
     , runRecvState
     , recvPacketHandshake
     , onRecvStateHandshake
+    , extensionLookup
     ) where
 
 import Control.Concurrent.MVar
@@ -30,6 +31,7 @@ import Network.TLS.Measurement
 import Network.TLS.Types
 import Network.TLS.Cipher
 import Network.TLS.Util
+import Data.List (find)
 import Data.ByteString.Char8 ()
 
 import Control.Monad.State
@@ -132,3 +134,6 @@ getSessionData ctx = do
                         , sessionCipher  = cipherID $ fromJust "cipher" $ stCipher tx
                         , sessionSecret  = ms
                         }
+
+extensionLookup toFind = fmap (\(ExtensionRaw _ content) -> content)
+                       . find (\(ExtensionRaw eid content) -> eid == toFind)

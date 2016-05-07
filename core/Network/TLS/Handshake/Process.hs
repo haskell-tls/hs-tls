@@ -57,7 +57,7 @@ processHandshake ctx hs = do
   where secureRenegotiation = supportedSecureRenegotiation $ ctxSupported ctx
         -- RFC5746: secure renegotiation
         -- the renegotiation_info extension: 0xff01
-        processClientExtension (0xff01, content) | secureRenegotiation = do
+        processClientExtension (ExtensionRaw 0xff01 content) | secureRenegotiation = do
             v <- getVerifiedData ClientRole
             let bs = extensionEncode (SecureRenegotiation v Nothing)
             unless (bs `bytesEq` content) $ throwError $ Error_Protocol ("client verified data not matching: " ++ show v ++ ":" ++ show content, True, HandshakeFailure)

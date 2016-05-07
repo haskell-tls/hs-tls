@@ -75,7 +75,7 @@ handshakeClient cparams ctx = do
                                  ]
 
         toExtensionRaw :: Extension e => e -> ExtensionRaw
-        toExtensionRaw ext = (extensionID ext, extensionEncode ext)
+        toExtensionRaw ext = ExtensionRaw (extensionID ext) (extensionEncode ext)
 
         secureReneg  =
                 if supportedSecureRenegotiation $ ctxSupported ctx
@@ -114,7 +114,7 @@ handshakeClient cparams ctx = do
                 [ ClientHello highestVer crand clientSession (map cipherID ciphers)
                               (map compressionID compressions) extensions Nothing
                 ]
-            return $ map fst extensions
+            return $ map (\(ExtensionRaw i _) -> i) extensions
 
         sendMaybeNPN = do
             suggest <- usingState_ ctx $ getServerNextProtocolSuggest
@@ -262,8 +262,8 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
 
                 _ -> return ()
 
-processServerExtension :: (ExtensionID, Bytes) -> TLSSt ()
-processServerExtension (0xff01, content) = do
+processServerExtension :: ExtensionRaw -> TLSSt ()
+processServerExtension (ExtensionRaw 0xff01 content) = do
     cv <- getVerifiedData ClientRole
     sv <- getVerifiedData ServerRole
     let bs = extensionEncode (SecureRenegotiation cv $ Just sv)
@@ -300,7 +300,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
 
     -- intersect sent extensions in client and the received extensions from server.
     -- if server returns extensions that we didn't request, fail.
-    when (not $ null $ filter (not . flip elem sentExts . fst) exts) $
+    when (not $ null $ filter (not . flip elem sentExts . (\(ExtensionRaw i _) -> i)) exts) $
         throwCore $ Error_Protocol ("spurious extensions received", True, UnsupportedExtension)
 
     let resumingSession =
@@ -313,7 +313,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
         setVersion rver
     usingHState ctx $ setServerHelloParameters rver serverRan cipherAlg compressAlg
 
-    case extensionDecode False `fmap` (lookup extensionID_ApplicationLayerProtocolNegotiation exts) of
+    case extensionDecode False `fmap` (extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts) of
         Just (Just (ApplicationLayerProtocolNegotiation [proto])) -> usingState_ ctx $ do
             mprotos <- getClientALPNSuggest
             case mprotos of
@@ -323,7 +323,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
                 _ -> return ()
         _ -> return ()
 
-    case extensionDecode False `fmap` (lookup extensionID_NextProtocolNegotiation exts) of
+    case extensionDecode False `fmap` (extensionLookup extensionID_NextProtocolNegotiation exts) of
         Just (Just (NextProtocolNegotiation protos)) -> usingState_ ctx $ do
             alpnDone <- getExtensionALPN
             unless alpnDone $ do
