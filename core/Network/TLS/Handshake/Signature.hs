@@ -79,6 +79,7 @@ signatureHashData :: SignatureAlgorithm -> Maybe HashAlgorithm -> Hash
 signatureHashData SignatureRSA mhash =
     case mhash of
         Just HashSHA512 -> SHA512
+        Just HashSHA384 -> SHA384
         Just HashSHA256 -> SHA256
         Just HashSHA1   -> SHA1
         Nothing         -> SHA1_MD5
