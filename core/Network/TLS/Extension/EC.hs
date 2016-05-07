@@ -33,6 +33,9 @@ toCurveName 22 = Just SEC_p256k1
 toCurveName 23 = Just SEC_p256r1
 toCurveName 24 = Just SEC_p384r1
 toCurveName 25 = Just SEC_p521r1
+--toCurveName 26 = Just  Brainpool_P256r1
+--toCurveName 27 = Just Brainpool_P384r1
+--toCurveName 28 = Just Brainpool_P512r1
 toCurveName _  = Nothing
 
 fromCurveName :: CurveName -> Maybe Word16
