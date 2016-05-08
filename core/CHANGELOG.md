@@ -1,3 +1,7 @@
+## Version 1.3.7
+
+- Disable SHA384 based cipher, as they don't work properly yet.
+
 ## Version 1.3.6
 
 - Add new ciphers

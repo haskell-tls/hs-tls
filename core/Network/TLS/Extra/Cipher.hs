@@ -139,9 +139,7 @@ rc4 _ bulkKey = BulkStream (combineRC4 $ RC4.initialize bulkKey)
 -- this choice of ciphersuite should satisfy most normal need
 ciphersuite_all :: [Cipher]
 ciphersuite_all =
-    [ cipher_ECDHE_RSA_AES256GCM_SHA384
-    , cipher_ECDHE_RSA_AES128GCM_SHA256
-    , cipher_ECDHE_RSA_AES256CBC_SHA384
+    [ cipher_ECDHE_RSA_AES128GCM_SHA256
     , cipher_ECDHE_RSA_AES256CBC_SHA
     , cipher_ECDHE_ECDSA_AES128GCM_SHA256
     , cipher_DHE_RSA_AES256_SHA256, cipher_DHE_RSA_AES128_SHA256
@@ -161,9 +159,7 @@ ciphersuite_medium = [cipher_RC4_128_MD5, cipher_RC4_128_SHA1, cipher_AES128_SHA
 -- | the strongest ciphers supported.
 ciphersuite_strong :: [Cipher]
 ciphersuite_strong =
-    [ cipher_ECDHE_RSA_AES256GCM_SHA384
-    , cipher_ECDHE_RSA_AES128GCM_SHA256
-    , cipher_ECDHE_RSA_AES256CBC_SHA384
+    [ cipher_ECDHE_RSA_AES128GCM_SHA256
     , cipher_ECDHE_RSA_AES256CBC_SHA
     , cipher_ECDHE_ECDSA_AES128GCM_SHA256
     , cipher_DHE_RSA_AES256_SHA256
