@@ -1,3 +1,5 @@
+ {-# LANGUAGE CPP #-}
+
 -- |
 -- Module      : Network.TLS.Parameters
 -- License     : BSD-style
