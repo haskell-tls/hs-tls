@@ -132,7 +132,6 @@ Test-Suite test-tls
                    , bytestring
                    , x509
                    , x509-validation
-                   , tls
                    , hourglass
   ghc-options:       -Wall -fno-warn-orphans -fno-warn-missing-signatures -fwarn-tabs
 
