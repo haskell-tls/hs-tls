@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
+{-# LANGUAGE DeriveDataTypeable, OverloadedStrings, CPP #-}
 -- |
 -- Module      : Network.TLS.Handshake.Client
 -- License     : BSD-style
@@ -21,7 +21,6 @@ import Network.TLS.Packet
 import Network.TLS.ErrT
 import Network.TLS.Extension
 import Network.TLS.IO
-import Network.TLS.Imports
 import Network.TLS.State hiding (getNegotiatedProtocol)
 import Network.TLS.Measurement
 import Network.TLS.Wire (encodeWord16)
@@ -32,7 +31,9 @@ import Data.Maybe
 import Data.List (find)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
-
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative ((<$>), (<*>))
+#endif
 import Control.Monad.State
 import Control.Exception (SomeException)
 

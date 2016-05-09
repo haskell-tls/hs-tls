@@ -22,7 +22,6 @@ import Control.Monad (when, forever)
 import Data.Char (isDigit)
 import Data.Default.Class
 
-import Crypto.Random
 import Network.TLS
 import Network.TLS.Extra.Cipher
 

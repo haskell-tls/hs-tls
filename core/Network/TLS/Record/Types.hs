@@ -1,4 +1,5 @@
 {-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE CPP #-}
 -- |
 -- Module      : Network.TLS.Record.Types
 -- License     : BSD-style
@@ -41,7 +42,9 @@ module Network.TLS.Record.Types
 import Network.TLS.Struct
 import Network.TLS.Record.State
 import qualified Data.ByteString as B
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative ((<$>))
+#endif
 
 -- | Represent a TLS record.
 data Record a = Record !ProtocolType !Version !(Fragment a) deriving (Show,Eq)

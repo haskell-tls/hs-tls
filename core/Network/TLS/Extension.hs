@@ -7,6 +7,7 @@
 --
 -- basic extensions are defined in RFC 6066
 --
+{-# LANGUAGE CPP #-}
 module Network.TLS.Extension
     ( Extension(..)
     , supportedExtensions
@@ -42,7 +43,9 @@ module Network.TLS.Extension
     ) where
 
 import Control.Monad
-
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative ((<$>), (<*>))
+#endif
 import Data.Word
 import Data.Maybe (fromMaybe, catMaybes)
 import Data.ByteString (ByteString)
@@ -52,7 +55,6 @@ import qualified Data.ByteString.Char8 as BC
 import Network.TLS.Extension.EC
 import Network.TLS.Struct (ExtensionID, EnumSafe8(..), EnumSafe16(..), HashAndSignatureAlgorithm)
 import Network.TLS.Wire
-import Network.TLS.Imports
 import Network.TLS.Packet (putSignatureHashAlgorithm, getSignatureHashAlgorithm)
 
 type HostName = String

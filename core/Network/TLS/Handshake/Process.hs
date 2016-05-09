@@ -7,12 +7,16 @@
 --
 -- process handshake message received
 --
+{-# LANGUAGE CPP #-}
 module Network.TLS.Handshake.Process
     ( processHandshake
     , startHandshake
     , getHandshakeDigest
     ) where
 
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative
+#endif
 import Control.Concurrent.MVar
 import Control.Monad.State (gets)
 import Control.Monad
@@ -26,7 +30,6 @@ import Network.TLS.Struct
 import Network.TLS.State
 import Network.TLS.Context.Internal
 import Network.TLS.Crypto
-import Network.TLS.Imports
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Key
 import Network.TLS.Extension

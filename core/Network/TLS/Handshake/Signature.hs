@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
 -- |
 -- Module      : Network.TLS.Handshake.Signature
 -- License     : BSD-style
@@ -19,14 +20,15 @@ module Network.TLS.Handshake.Signature
 import Network.TLS.Crypto
 import Network.TLS.Context.Internal
 import Network.TLS.Struct
-import Network.TLS.Imports
 import Network.TLS.Packet (generateCertificateVerify_SSL, encodeSignedDHParams, encodeSignedECDHParams)
 import Network.TLS.Parameters (supportedHashSignatures)
 import Network.TLS.State
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Key
 import Network.TLS.Util
-
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative
+#endif
 import Control.Monad.State
 
 certificateVerifyCheck :: Context
@@ -83,7 +85,7 @@ signatureHashData SignatureRSA mhash =
         Just HashSHA256 -> SHA256
         Just HashSHA1   -> SHA1
         Nothing         -> SHA1_MD5
-        Just hash       -> error ("unimplemented RSA signature hash type: " ++ show hash)
+        Just hash'       -> error ("unimplemented RSA signature hash type: " ++ show hash')
 signatureHashData SignatureDSS mhash =
     case mhash of
         Nothing       -> SHA1
@@ -96,7 +98,7 @@ signatureHashData SignatureECDSA mhash =
         Just HashSHA256 -> SHA256
         Just HashSHA1   -> SHA1
         Nothing         -> SHA1_MD5
-        Just hash       -> error ("unimplemented ECDSA signature hash type: " ++ show hash)
+        Just hash'       -> error ("unimplemented ECDSA signature hash type: " ++ show hash')
 signatureHashData sig _ = error ("unimplemented signature type: " ++ show sig)
 
 --signatureCreate :: Context -> Maybe HashAndSignatureAlgorithm -> HashDescr -> Bytes -> IO DigitallySigned

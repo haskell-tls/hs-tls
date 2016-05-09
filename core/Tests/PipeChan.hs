@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- create a similar concept than a unix pipe.
 module PipeChan
     ( PipeChan(..)
@@ -9,7 +10,10 @@ module PipeChan
     , writePipeB
     ) where
 
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
+#endif
+
 import Control.Concurrent.Chan
 import Control.Concurrent
 import Control.Monad (forever)

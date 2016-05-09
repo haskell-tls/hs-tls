@@ -9,11 +9,14 @@
 -- The record is compressed, added some integrity field, then encrypted.
 --
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 module Network.TLS.Record.Engage
         ( engageRecord
         ) where
 
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
+#endif
 import Control.Monad.State
 import Crypto.Cipher.Types (AuthTag(..))
 

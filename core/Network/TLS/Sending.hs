@@ -8,9 +8,12 @@
 -- the Sending module contains calls related to marshalling packets according
 -- to the TLS state
 --
+{-# LANGUAGE CPP #-}
 module Network.TLS.Sending (writePacket) where
 
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
+#endif
 import Control.Monad.State
 import Control.Concurrent.MVar
 import Data.IORef

@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 module Certificate
     ( arbitraryX509
     , arbitraryX509WithKey
@@ -6,7 +7,9 @@ module Certificate
     , simpleX509
     ) where
 
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
+#endif
 import Test.Tasty.QuickCheck
 import Data.X509
 import Data.Hourglass

@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
+{-# LANGUAGE DeriveDataTypeable, OverloadedStrings, CPP #-}
 -- |
 -- Module      : Network.TLS.Handshake.Server
 -- License     : BSD-style
@@ -12,7 +12,6 @@ module Network.TLS.Handshake.Server
     ) where
 
 import Network.TLS.Parameters
-import Network.TLS.Imports
 import Network.TLS.Context.Internal
 import Network.TLS.Session
 import Network.TLS.Struct
@@ -33,7 +32,10 @@ import Data.Maybe (isJust, listToMaybe, mapMaybe)
 import Data.List (intersect, sortBy)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
-
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative ((<$>))
+import Data.Monoid (mappend)
+#endif
 import Control.Monad.State
 
 import Network.TLS.Handshake.Signature

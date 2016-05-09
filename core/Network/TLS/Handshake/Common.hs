@@ -135,5 +135,6 @@ getSessionData ctx = do
                         , sessionSecret  = ms
                         }
 
+extensionLookup :: ExtensionID -> [ExtensionRaw] -> Maybe Bytes
 extensionLookup toFind = fmap (\(ExtensionRaw _ content) -> content)
-                       . find (\(ExtensionRaw eid content) -> eid == toFind)
+                       . find (\(ExtensionRaw eid _) -> eid == toFind)

@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE CPP #-}
 import Crypto.Random
 import Network.BSD
 import Network.Socket (socket, Family(..), SocketType(..), sClose, SockAddr(..), connect)
@@ -20,9 +21,10 @@ import System.X509
 
 import Data.Default.Class
 import Data.IORef
+#if __GLASGOW_HASKELL__ < 710
 import Data.Monoid
+#endif
 import Data.Char (isDigit)
-import Data.X509.Validation
 
 import Numeric (showHex)
 
@@ -183,7 +185,7 @@ options =
     , Option []     ["bench-send"]   (NoArg BenchSend) "benchmark send path. only with compatible server"
     , Option []     ["bench-recv"]   (NoArg BenchRecv) "benchmark recv path. only with compatible server"
     , Option []     ["bench-data"] (ReqArg BenchData "amount") "amount of data to benchmark with"
-    , Option []     ["use-cipher"] (ReqArg UseCipher "cipher-id") "use a specific cipher" 
+    , Option []     ["use-cipher"] (ReqArg UseCipher "cipher-id") "use a specific cipher"
     , Option []     ["list-ciphers"] (NoArg ListCiphers) "list all ciphers supported and exit"
     , Option []     ["debug-seed"] (ReqArg DebugSeed "debug-seed") "debug: set a specific seed for randomness"
     , Option []     ["debug-print-seed"] (NoArg DebugPrintSeed) "debug: set a specific seed for randomness"
