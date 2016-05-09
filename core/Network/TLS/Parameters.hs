@@ -37,6 +37,8 @@ import Network.TLS.RNG (Seed)
 import Data.Default.Class
 import qualified Data.ByteString as B
 
+import Data.Monoid (mempty)
+
 type HostName = String
 
 type CommonParams = (Supported, Shared, DebugParams)
