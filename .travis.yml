@@ -29,7 +29,12 @@ install:
  - travis_retry cabal update
  - cabal install utf8-string
  - cd core
- - if [ "${RUNTEST}" != "0" ]; then cabal install --only-dependencies --enable-tests; else cabal install --only-dependencies; fi
+ - | if [ "${RUNTEST}" != "0" ]; then
+       cabal install --only-dependencies --enable-tests
+     else
+       cabal install --only-dependencies
+     fi
+     cabal install
  - cd ../debug
  - if [ "${RUNTEST}" != "0" ]; then cabal install --only-dependencies --enable-tests; else cabal install --only-dependencies; fi
 
