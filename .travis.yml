@@ -72,3 +72,8 @@ script:
  - make build-openssl-server
  - ghc -threaded --make test-scripts/TestClient && echo "BUILDING TEST OK" || echo "BUILDING TEST FAILED"
  - if [ -x test-scripts/TestClient ]; then touch debug.log; ./test-scripts/TestClient debug.log; cat debug.log; fi
+
+cache:
+  directories:
+  - $HOME/.cabal
+
