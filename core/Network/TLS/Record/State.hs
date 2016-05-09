@@ -26,7 +26,9 @@ module Network.TLS.Record.State
     ) where
 
 import Data.Word
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
+#endif
 import Control.Monad.State
 import Network.TLS.Compression
 import Network.TLS.Cipher

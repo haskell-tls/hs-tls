@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, DeriveDataTypeable, ViewPatterns #-}
+{-# LANGUAGE ScopedTypeVariables, DeriveDataTypeable, ViewPatterns, CPP #-}
 
 import Network.TLS
 import Network.TLS.Extra.Cipher
@@ -12,7 +12,9 @@ import Data.X509 as X509
 import Data.X509.Validation
 import System.X509
 
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
+#endif
 import Control.Monad
 import Control.Exception
 

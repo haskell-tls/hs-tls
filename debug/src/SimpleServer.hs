@@ -11,8 +11,6 @@ import System.Timeout
 import qualified Data.ByteString.Lazy.Char8 as LC
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString as B
-import Control.Exception
-import qualified Control.Exception as E
 import Control.Monad
 import System.Environment
 import System.Exit
@@ -21,9 +19,7 @@ import Data.X509.CertificateStore
 
 import Data.Default.Class
 import Data.IORef
-import Data.Monoid
 import Data.Char (isDigit)
-import Data.X509.Validation
 
 import Numeric (showHex)
 
@@ -86,7 +82,7 @@ sessionRef ref = SessionManager
     }
 
 getDefaultParams :: [Flag] -> CertificateStore -> IORef (SessionID, SessionData) -> Credential -> Maybe (SessionID, SessionData) -> ServerParams
-getDefaultParams flags store sStorage cred session =
+getDefaultParams flags store sStorage cred _session =
     ServerParams
         { serverWantClientCert = False
         , serverCACertificates = []
@@ -184,7 +180,7 @@ options =
     , Option []     ["bench-send"]   (NoArg BenchSend) "benchmark send path. only with compatible server"
     , Option []     ["bench-recv"]   (NoArg BenchRecv) "benchmark recv path. only with compatible server"
     , Option []     ["bench-data"] (ReqArg BenchData "amount") "amount of data to benchmark with"
-    , Option []     ["use-cipher"] (ReqArg UseCipher "cipher-id") "use a specific cipher" 
+    , Option []     ["use-cipher"] (ReqArg UseCipher "cipher-id") "use a specific cipher"
     , Option []     ["list-ciphers"] (NoArg ListCiphers) "list all ciphers supported and exit"
     , Option []     ["certificate"] (ReqArg Certificate "certificate") "certificate file"
     , Option []     ["debug-seed"] (ReqArg DebugSeed "debug-seed") "debug: set a specific seed for randomness"

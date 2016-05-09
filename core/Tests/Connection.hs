@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Connection
     ( newPairContext
     , arbitraryPairParams
@@ -15,7 +16,9 @@ import PipeChan
 import Network.TLS
 import Data.X509
 import Data.Default.Class
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
+#endif
 import Control.Concurrent.Chan
 import Control.Concurrent
 import qualified Control.Exception as E

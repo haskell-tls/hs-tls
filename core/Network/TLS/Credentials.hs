@@ -5,6 +5,7 @@
 -- Stability   : experimental
 -- Portability : unknown
 --
+{-# LANGUAGE CPP #-}
 module Network.TLS.Credentials
     ( Credential
     , Credentials(..)
@@ -17,7 +18,9 @@ module Network.TLS.Credentials
     , credentialsListSigningAlgorithms
     ) where
 
+#if __GLASGOW_HASKELL__ < 710
 import Data.Monoid
+#endif
 import Data.Maybe (catMaybes)
 import Data.List (find)
 import Network.TLS.Struct

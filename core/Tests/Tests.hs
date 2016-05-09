@@ -15,7 +15,9 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
 import Network.TLS
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
+#endif
 import Control.Concurrent
 import Control.Monad
 

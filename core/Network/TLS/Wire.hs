@@ -8,6 +8,7 @@
 -- the Wire module is a specialized marshalling/unmarshalling package related to the TLS protocol.
 -- all multibytes values are written as big endian.
 --
+{-# LANGUAGE CPP #-}
 module Network.TLS.Wire
     ( Get
     , GetResult(..)
@@ -52,7 +53,9 @@ module Network.TLS.Wire
 import Data.Serialize.Get hiding (runGet)
 import qualified Data.Serialize.Get as G
 import Data.Serialize.Put
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative ((<$>))
+#endif
 import Control.Monad
 import qualified Data.ByteString as B
 import Data.Word

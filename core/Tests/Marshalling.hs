@@ -2,7 +2,9 @@
 module Marshalling where
 
 import Control.Monad
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative
+#endif
 import Test.Tasty.QuickCheck
 import Network.TLS.Internal
 import Network.TLS

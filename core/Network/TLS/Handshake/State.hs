@@ -51,7 +51,9 @@ import Network.TLS.Crypto
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Types
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative (Applicative, (<$>))
+#endif
 import Control.Monad.State
 import Data.X509 (CertificateChain)
 import Data.ByteArray (ByteArrayAccess)
