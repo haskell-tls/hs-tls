@@ -127,6 +127,7 @@ Test-Suite test-tls
                    , data-default-class
                    , tasty
                    , tasty-quickcheck
+                   , tls
                    , QuickCheck
                    , cryptonite
                    , bytestring
@@ -151,6 +152,7 @@ Benchmark bench-tls
                    , hourglass
                    , QuickCheck >= 2
                    , tasty-quickcheck
+                   , tls
 
 source-repository head
   type: git
