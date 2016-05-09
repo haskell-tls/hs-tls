@@ -1,22 +1,22 @@
 sudo: false
 
-env:
- - CABALVER=1.16 GHCVER=7.0.4 RUNTEST=0
-   addons: {apt: {packages: [cabal-install-1.16,ghc-7.0.4,libssl-dev], sources: [hvr-ghc]}}
- - CABALVER=1.16 GHCVER=7.4.2
-   addons: {apt: {packages: [cabal-install-1.16,ghc-7.4.2,libssl-dev], sources: [hvr-ghc]}}
- - CABALVER=1.18 GHCVER=7.6.3
-   addons: {apt: {packages: [cabal-install-1.18,ghc-7.6.3,libssl-dev], sources: [hvr-ghc]}}
- - CABALVER=1.18 GHCVER=7.8.4
-   addons: {apt: {packages: [cabal-install-1.18,ghc-7.8.4,libssl-dev], sources: [hvr-ghc]}}
- - CABALVER=1.22 GHCVER=7.10.3
-   addons: {apt: {packages: [cabal-install-1.22,ghc-7.10.3,libssl-dev], sources: [hvr-ghc]}}
- - CABALVER=1.24 GHCVER=8.0.1 RUNTEST=0
-   addons: {apt: {packages: [cabal-install-1.24,ghc-8.0.1,libssl-dev], sources: [hvr-ghc]}}
- - CABALVER=head GHCVER=head RUNTEST=0
-   addons: {apt: {packages: [cabal-install-head,ghc-head,libssl-dev], sources: [hvr-ghc]}}
-
 matrix:
+  include:
+    - env: CABALVER=1.16 GHCVER=7.0.4 RUNTEST=0
+      addons: {apt: {packages: [cabal-install-1.16,ghc-7.0.4,libssl-dev], sources: [hvr-ghc]}}
+    - env: CABALVER=1.16 GHCVER=7.4.2
+      addons: {apt: {packages: [cabal-install-1.16,ghc-7.4.2,libssl-dev], sources: [hvr-ghc]}}
+    - env: CABALVER=1.18 GHCVER=7.6.3
+      addons: {apt: {packages: [cabal-install-1.18,ghc-7.6.3,libssl-dev], sources: [hvr-ghc]}}
+    - env: CABALVER=1.18 GHCVER=7.8.4
+      addons: {apt: {packages: [cabal-install-1.18,ghc-7.8.4,libssl-dev], sources: [hvr-ghc]}}
+    - env: CABALVER=1.22 GHCVER=7.10.3
+      addons: {apt: {packages: [cabal-install-1.22,ghc-7.10.3,libssl-dev], sources: [hvr-ghc]}}
+    - env: CABALVER=1.24 GHCVER=8.0.1 RUNTEST=0
+      addons: {apt: {packages: [cabal-install-1.24,ghc-8.0.1,libssl-dev], sources: [hvr-ghc]}}
+    - env: CABALVER=head GHCVER=head RUNTEST=0
+      addons: {apt: {packages: [cabal-install-head,ghc-head,libssl-dev], sources: [hvr-ghc]}}
+
   allow_failures:
    - env: CABALVER=head GHCVER=head RUNTEST=0
 
