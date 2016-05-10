@@ -22,7 +22,6 @@ import Data.Default.Class
 import Data.IORef
 import Data.Monoid
 import Data.Char (isDigit)
-import Data.X509.Validation
 
 import Numeric (showHex)
 
