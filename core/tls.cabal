@@ -23,7 +23,6 @@ Build-Type:          Simple
 Category:            Network
 stability:           experimental
 Cabal-Version:       >=1.8
--- Tested-With:         GHC == 7.0.4, GHC == 7.4.2, GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.3, GHC == 8.0.1
 Homepage:            http://github.com/vincenthz/hs-tls
 extra-source-files:  Tests/*.hs
                      CHANGELOG.md
@@ -157,5 +156,5 @@ Benchmark bench-tls
 
 source-repository head
   type: git
-  location: git://github.com/vincenthz/hs-tls
+  location: https://github.com/vincenthz/hs-tls
   subdir: core
