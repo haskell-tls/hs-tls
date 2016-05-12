@@ -83,7 +83,7 @@ signatureHashData SignatureRSA mhash =
         Just HashSHA256 -> SHA256
         Just HashSHA1   -> SHA1
         Nothing         -> SHA1_MD5
-        Just hash       -> error ("unimplemented RSA signature hash type: " ++ show hash)
+        Just hsh        -> error ("unimplemented RSA signature hash type: " ++ show hsh)
 signatureHashData SignatureDSS mhash =
     case mhash of
         Nothing       -> SHA1
@@ -96,7 +96,7 @@ signatureHashData SignatureECDSA mhash =
         Just HashSHA256 -> SHA256
         Just HashSHA1   -> SHA1
         Nothing         -> SHA1_MD5
-        Just hash       -> error ("unimplemented ECDSA signature hash type: " ++ show hash)
+        Just hsh        -> error ("unimplemented ECDSA signature hash type: " ++ show hsh)
 signatureHashData sig _ = error ("unimplemented signature type: " ++ show sig)
 
 --signatureCreate :: Context -> Maybe HashAndSignatureAlgorithm -> HashDescr -> Bytes -> IO DigitallySigned

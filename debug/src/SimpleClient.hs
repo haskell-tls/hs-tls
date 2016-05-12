@@ -22,7 +22,6 @@ import Data.Default.Class
 import Data.IORef
 import Data.Monoid
 import Data.Char (isDigit)
-import Data.X509.Validation
 
 import Numeric (showHex)
 
@@ -183,7 +182,7 @@ options =
     , Option []     ["bench-send"]   (NoArg BenchSend) "benchmark send path. only with compatible server"
     , Option []     ["bench-recv"]   (NoArg BenchRecv) "benchmark recv path. only with compatible server"
     , Option []     ["bench-data"] (ReqArg BenchData "amount") "amount of data to benchmark with"
-    , Option []     ["use-cipher"] (ReqArg UseCipher "cipher-id") "use a specific cipher" 
+    , Option []     ["use-cipher"] (ReqArg UseCipher "cipher-id") "use a specific cipher"
     , Option []     ["list-ciphers"] (NoArg ListCiphers) "list all ciphers supported and exit"
     , Option []     ["debug-seed"] (ReqArg DebugSeed "debug-seed") "debug: set a specific seed for randomness"
     , Option []     ["debug-print-seed"] (NoArg DebugPrintSeed) "debug: set a specific seed for randomness"
@@ -286,7 +285,7 @@ runOn (sStorage, certStore) flags port hostname
                                             Just i  -> i
                 f acc _              = acc
 
-readNumber :: (Num a, Read a) => String -> Maybe a
+readNumber :: Read a => String -> Maybe a
 readNumber s
     | all isDigit s = Just $ read s
     | otherwise     = Nothing

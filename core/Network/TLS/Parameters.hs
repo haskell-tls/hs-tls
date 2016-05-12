@@ -1,3 +1,5 @@
+ {-# LANGUAGE CPP #-}
+
 -- |
 -- Module      : Network.TLS.Parameters
 -- License     : BSD-style
@@ -36,6 +38,9 @@ import Network.TLS.X509
 import Network.TLS.RNG (Seed)
 import Data.Default.Class
 import qualified Data.ByteString as B
+#if __GLASGOW_HASKELL__ < 710
+import Data.Monoid (mempty)
+#endif
 
 type HostName = String
 
