@@ -11,3 +11,4 @@ cabal.sandbox.config
 *.key
 test-scripts/TestClient
 test-scripts/openssl-server
+test-scripts/openssl-client
