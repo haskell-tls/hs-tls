@@ -114,7 +114,7 @@ Library
                      Network.TLS.Types
                      Network.TLS.Wire
                      Network.TLS.X509
-  ghc-options:       -Wall -fwarn-tabs
+  ghc-options:       -Wall -fwarn-tabs -fno-warn-unused-imports
   if flag(compat)
     cpp-options:     -DSSLV2_COMPATIBLE
 
