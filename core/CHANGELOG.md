@@ -1,3 +1,7 @@
+## Version 1.3.8
+
+- Fix older GHC builds
+
 ## Version 1.3.7
 
 - Disable SHA384 based cipher, as they don't work properly yet.
