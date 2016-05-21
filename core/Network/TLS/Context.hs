@@ -161,8 +161,8 @@ contextNew backend params = liftIO $ do
         st   = newTLSState rng role
         ciphers = getCiphers params
 
---  we still might get ciphers from SNI calback
--- maybe if just could only bail on protocols which require the main cert??
+--  we still might get some ciphers from SNI callback
+--  If we could bail only on protocols which require the main cert??
 --    when (null (ciphers mempty)) $ error "no ciphers available with those parameters"
 
     stvar <- newMVar st
