@@ -81,6 +81,7 @@ import Data.Maybe (isJust)
 import Control.Concurrent.MVar
 import Control.Monad.State
 import Data.IORef
+import Data.Monoid ((<>))
 
 -- deprecated imports
 #ifdef INCLUDE_NETWORK
@@ -91,7 +92,7 @@ import System.IO (Handle)
 class TLSParams a where
     getTLSCommonParams :: a -> CommonParams
     getTLSRole         :: a -> Role
-    getCiphers         :: a -> [Cipher]
+    getCiphers         :: a -> Credentials -> [Cipher]
     doHandshake        :: a -> Context -> IO ()
     doHandshakeWith    :: a -> Context -> Handshake -> IO ()
 
@@ -101,7 +102,7 @@ instance TLSParams ClientParams where
                                  , clientDebug cparams
                                  )
     getTLSRole _ = ClientRole
-    getCiphers cparams = supportedCiphers $ clientSupported cparams
+    getCiphers cparams _ = supportedCiphers $ clientSupported cparams
     doHandshake = handshakeClient
     doHandshakeWith = handshakeClientWith
 
@@ -113,7 +114,7 @@ instance TLSParams ServerParams where
     getTLSRole _ = ServerRole
     -- on the server we filter our allowed ciphers here according
     -- to the credentials and DHE parameters loaded
-    getCiphers sparams = filter authorizedCKE (supportedCiphers $ serverSupported sparams)
+    getCiphers sparams extraCreds = filter authorizedCKE (supportedCiphers $ serverSupported sparams)
           where authorizedCKE cipher =
                     case cipherKeyExchange cipher of
                         CipherKeyExchange_RSA         -> canEncryptRSA
@@ -134,7 +135,8 @@ instance TLSParams ServerParams where
                 canSignRSA    = SignatureRSA `elem` signingAlgs
                 canEncryptRSA = isJust $ credentialsFindForDecrypting creds
                 signingAlgs   = credentialsListSigningAlgorithms creds
-                creds         = sharedCredentials $ serverShared sparams
+                serverCreds   = sharedCredentials $ serverShared sparams
+                creds         = extraCreds <> serverCreds
     doHandshake = handshakeServer
     doHandshakeWith = handshakeServerWith
 
@@ -159,7 +161,9 @@ contextNew backend params = liftIO $ do
         st   = newTLSState rng role
         ciphers = getCiphers params
 
-    when (null ciphers) $ error "no ciphers available with those parameters"
+--  we still might get ciphers from SNI calback
+-- maybe if just could only bail on protocols which require the main cert??
+--    when (null (ciphers mempty)) $ error "no ciphers available with those parameters"
 
     stvar <- newMVar st
     eof   <- newIORef False

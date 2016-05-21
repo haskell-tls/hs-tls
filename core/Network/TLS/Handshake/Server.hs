@@ -106,8 +106,6 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
                         Nothing -> throwCore $ Error_Protocol ("client version " ++ show clientVersion ++ " is not supported", True, ProtocolVersion)
                         Just v  -> return v
 
-    when (commonCipherIDs == []) $ throwCore $
-        Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
     when (null commonCompressions) $ throwCore $
         Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
 
@@ -117,10 +115,15 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
                       toHostName (ServerNameOther _)           = Nothing
             _                           -> Nothing
 
-    let ciphersFilteredVersion = filter (cipherAllowedForVersion chosenVersion) commonCiphers
-        usedCipher = (onCipherChoosing $ serverHooks sparams) chosenVersion ciphersFilteredVersion
     extraCreds <- (onServerNameIndication $ serverHooks sparams) serverName
-    let creds = extraCreds `mappend` (sharedCredentials $ ctxShared ctx)
+
+    let ciphersFilteredVersion = filter (cipherAllowedForVersion chosenVersion) (commonCiphers extraCreds)
+        usedCipher = (onCipherChoosing $ serverHooks sparams) chosenVersion ciphersFilteredVersion
+        creds = extraCreds `mappend` (sharedCredentials $ ctxShared ctx)
+
+    when (commonCipherIDs extraCreds == []) $ throwCore $
+        Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
+
     cred <- case cipherKeyExchange usedCipher of
                 CipherKeyExchange_RSA     -> return $ credentialsFindForDecrypting creds
                 CipherKeyExchange_DH_Anon -> return $ Nothing
@@ -152,10 +155,10 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     doHandshake sparams cred ctx chosenVersion usedCipher usedCompression clientSession resumeSessionData exts
 
   where
-        commonCipherIDs    = intersect ciphers (map cipherID $ ctxCiphers ctx)
-        commonCiphers      = filter (flip elem commonCipherIDs . cipherID) (ctxCiphers ctx)
-        commonCompressions = compressionIntersectID (supportedCompressions $ ctxSupported ctx) compressions
-        usedCompression    = head commonCompressions
+        commonCipherIDs extra = intersect ciphers (map cipherID $ (ctxCiphers ctx extra))
+        commonCiphers   extra = filter (flip elem (commonCipherIDs extra) . cipherID) (ctxCiphers ctx extra)
+        commonCompressions    = compressionIntersectID (supportedCompressions $ ctxSupported ctx) compressions
+        usedCompression       = head commonCompressions
 
 
 handshakeServerWith _ _ _ = throwCore $ Error_Protocol ("unexpected handshake message received in handshakeServerWith", True, HandshakeFailure)

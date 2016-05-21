@@ -111,7 +111,7 @@ handshakeClient cparams ctx = do
             startHandshake ctx highestVer crand
             usingState_ ctx $ setVersionIfUnset highestVer
             sendPacket ctx $ Handshake
-                [ ClientHello highestVer crand clientSession (map cipherID ciphers)
+                [ ClientHello highestVer crand clientSession (map cipherID (ciphers mempty))
                               (map compressionID compressions) extensions Nothing
                 ]
             return $ map (\(ExtensionRaw i _) -> i) extensions
@@ -291,7 +291,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
         Nothing -> throwCore $ Error_Protocol ("server version " ++ show rver ++ " is not supported", True, ProtocolVersion)
         Just _  -> return ()
     -- find the compression and cipher methods that the server want to use.
-    cipherAlg <- case find ((==) cipher . cipherID) (ctxCiphers ctx) of
+    cipherAlg <- case find ((==) cipher . cipherID) (ctxCiphers ctx mempty) of
                      Nothing  -> throwCore $ Error_Protocol ("server choose unknown cipher", True, HandshakeFailure)
                      Just alg -> return alg
     compressAlg <- case find ((==) compression . compressionID) (supportedCompressions $ ctxSupported ctx) of
