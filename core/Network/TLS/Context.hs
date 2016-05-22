@@ -81,7 +81,7 @@ import Data.Maybe (isJust)
 import Control.Concurrent.MVar
 import Control.Monad.State
 import Data.IORef
-import Data.Monoid ((<>))
+import Data.Monoid (mappend)
 
 -- deprecated imports
 #ifdef INCLUDE_NETWORK
@@ -136,7 +136,7 @@ instance TLSParams ServerParams where
                 canEncryptRSA = isJust $ credentialsFindForDecrypting creds
                 signingAlgs   = credentialsListSigningAlgorithms creds
                 serverCreds   = sharedCredentials $ serverShared sparams
-                creds         = extraCreds <> serverCreds
+                creds         = extraCreds `mappend` serverCreds
     doHandshake = handshakeServer
     doHandshakeWith = handshakeServerWith
 
