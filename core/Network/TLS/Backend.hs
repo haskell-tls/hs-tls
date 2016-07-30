@@ -52,6 +52,23 @@ instance HasBackend Backend where
     initializeBackend _ = return ()
     getBackend = id
 
+#if defined(__GLASGOW_HASKELL__) && WINDOWS
+-- Socket recv and accept calls on Windows platform cannot be interrupted when compiled with -threaded.
+-- See https://ghc.haskell.org/trac/ghc/ticket/5797 for details.
+-- The following enables simple workaround
+#define SOCKET_ACCEPT_RECV_WORKAROUND
+#endif
+
+safeRecv :: Network.Socket -> Int -> IO ByteString
+#ifndef SOCKET_ACCEPT_RECV_WORKAROUND
+safeRecv = Network.recv
+#else
+safeRecv s buf = do
+    var <- newEmptyMVar
+    forkIO $ Network.recv s buf `E.catch` (\(_::IOException) -> return S8.empty) >>= putMVar var
+    takeMVar var
+#endif
+
 #ifdef INCLUDE_NETWORK
 instance HasBackend Network.Socket where
     initializeBackend _ = return ()
@@ -59,7 +76,7 @@ instance HasBackend Network.Socket where
       where recvAll n = B.concat `fmap` loop n
               where loop 0    = return []
                     loop left = do
-                        r <- Network.recv sock left
+                        r <- safeRecv sock left
                         if B.null r
                             then return []
                             else liftM (r:) (loop (left - B.length r))
