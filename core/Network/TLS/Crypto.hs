@@ -215,7 +215,7 @@ kxVerify (PubKeyEC key) alg msg sigBS = maybe False id $ do
                 Nothing                -> Nothing
                 Just (ptFormat, input) ->
                     case ptFormat of
-                        4 -> if B.length bs == 2 * bytes
+                        4 -> if B.length input /= 2 * bytes
                                 then Nothing
                                 else
                                     let (x, y) = B.splitAt bytes input
