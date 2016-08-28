@@ -42,7 +42,6 @@ import qualified Crypto.PubKey.ECC.Types as ECC
 import qualified Crypto.PubKey.RSA as RSA
 import qualified Crypto.PubKey.RSA.PKCS15 as RSA
 import Crypto.Number.Serialize (os2ip)
-import Crypto.Number.Basic (numBits)
 
 import Data.X509 (PrivKey(..), PubKey(..), PubKeyEC(..), SerializedPoint(..))
 import Network.TLS.Crypto.DH
@@ -225,7 +224,7 @@ kxVerify (PubKeyEC key) alg msg sigBS = maybe False id $ do
                                             else Nothing
                         -- 2 and 3 for compressed format.
                         _ -> Nothing
-          where bits  = numBits . ECC.ecc_n . ECC.common_curve $ curve
+          where bits  = ECC.curveSizeBits curve
                 bytes = (bits + 7) `div` 8
 kxVerify _              _         _   _    = False
 
