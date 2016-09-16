@@ -302,12 +302,12 @@ main = do
     runAgainstServices logFile pid $
         -- Everything supported
         t2 Everything
-            [ "www.google.com"
-            , "www.coursera.org"
+            [ "www.coursera.org"
             ] ++
         -- SSL3 not supported
         t2 (LowerBound TLS10)
             [ "developer.apple.com"
+            , "www.google.com"
             , "www.facebook.com"
             , "www.github.com"
             , "mail.office365.com"
