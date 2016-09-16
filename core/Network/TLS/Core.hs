@@ -54,7 +54,7 @@ import Control.Monad.State
 bye :: MonadIO m => Context -> m ()
 bye ctx = sendPacket ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
 
--- | If the Next Protocol Negotiation extension has been used, this will
+-- | If the Next Protocol Negotiation or ALPN extensions have been used, this will
 -- return get the protocol agreed upon.
 getNegotiatedProtocol :: MonadIO m => Context -> m (Maybe B.ByteString)
 getNegotiatedProtocol ctx = liftIO $ usingState_ ctx S.getNegotiatedProtocol
