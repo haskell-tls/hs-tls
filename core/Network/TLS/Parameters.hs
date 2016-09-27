@@ -94,6 +94,11 @@ data ClientParams = ClientParams
     } deriving (Show)
 
 -- | Create a 'ClientParams' with default values.
+--
+-- Note that this default 'ClientParams' is __practically useless__
+-- because it has no CA certificates or supported ciphers. At least
+-- you have to set 'sharedCAStore' in 'clientShared' and
+-- 'supportedCiphers' in 'clientSupported'.
 defaultParamsClient :: HostName -- ^ server name in 'clientServerIdentification'.
                     -> Bytes -- ^ service identification in 'clientServerIdentification'.
                     -> ClientParams

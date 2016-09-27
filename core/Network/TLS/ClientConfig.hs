@@ -42,12 +42,14 @@ import Data.X509.Validation (ValidationCache, ServiceID, FailedReason, validate,
                              ValidationChecks(..), ValidationHooks(..))
 import Data.Default.Class (Default(def))
 
--- | Set ciphers that the client supports. Normally, you can just set
--- 'ciphersuite_all', which is exported by this module.
+-- | Set ciphers that the client supports. This sets 'supportedCiphers' in 'clientSupported' in 'ClientParams'.
+--
+-- Normally, you can just set 'ciphersuite_all', which is exported by
+-- this module.
 setCiphers :: [Cipher] -> ClientParams -> ClientParams
 setCiphers ciphers cp = cp { clientSupported = (clientSupported cp) { supportedCiphers = ciphers } }
 
--- | Set CA (Certification Authority) the client trusts.
+-- | Set CA (Certification Authority) the client trusts. This sets 'sharedCAStore' in 'clientShared' in 'ClientParams'.
 -- 
 -- To load the system-wide CA, use
 -- 'System.X509.getSystemCertificateStore'.  To load CA certificates
