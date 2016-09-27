@@ -77,4 +77,4 @@ type ServerValidator = CertificateStore -> ValidationCache -> ServiceID -> Certi
 -- 'ValidationHooks' and 'ValidationChecks' appropriate for normal
 -- uses.
 makeValidator :: ValidationHooks -> ValidationChecks -> ServerValidator
-makeValidator = validate HashSHA256
+makeValidator = validate HashSHA256  -- See 'Data.X509.Validation.validateDefault'
