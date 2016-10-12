@@ -62,5 +62,5 @@ verifyRSA ctx _ hsh econtent sign = do
 generateDHE :: Context -> DHParams -> IO (DHPrivate, DHPublic)
 generateDHE ctx dhp = usingState_ ctx $ withRNG $ dhGenerateKeyPair dhp
 
-generateECDHE :: Context -> ECDHParams -> IO (ECDHPrivate, ECDHPublic)
+generateECDHE :: Context -> ECDHParams -> IO CurveKeyPair
 generateECDHE ctx dhp = usingState_ ctx $ withRNG $ ecdhGenerateKeyPair dhp

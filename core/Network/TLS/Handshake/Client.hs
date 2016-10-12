@@ -218,9 +218,10 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                 getCKX_ECDHE = do
                     xver <- usingState_ ctx getVersion
                     (ServerECDHParams ecdhparams serverECDHPub) <- fromJust <$> usingHState ctx (gets hstServerECDHParams)
-                    (clientECDHPriv, clientECDHPub) <- generateECDHE ctx ecdhparams
+                    keypair <- generateECDHE ctx ecdhparams
+                    let clientECDHPub = fromECDHKeyPair keypair
 
-                    case ecdhGetShared ecdhparams clientECDHPriv serverECDHPub of
+                    case ecdhGetShared ecdhparams keypair serverECDHPub of
                         Nothing        -> throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
                         Just premaster -> do
                             usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster

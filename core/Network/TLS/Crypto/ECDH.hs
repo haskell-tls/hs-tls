@@ -1,13 +1,15 @@
+{-# LANGUAGE BangPatterns #-}
+
 module Network.TLS.Crypto.ECDH
     (
     -- * ECDH types
       ECDHParams(..)
     , ECDHPublic
-    , ECDHPrivate(..)
-
+    , ECDHKeyPair
+    , ECDH.CurveKeyPair(..)
     -- * ECDH methods
     , ecdhPublic
-    , ecdhPrivate
+    , fromECDHKeyPair
     , ecdhParams
     , ecdhGenerateKeyPair
     , ecdhGetShared
@@ -18,59 +20,47 @@ module Network.TLS.Crypto.ECDH
 import Network.TLS.Util.Serialization (lengthBytes)
 import Network.TLS.Extension.EC
 import qualified Crypto.PubKey.ECC.DH as ECDH
-import qualified Crypto.PubKey.ECC.Types as ECDH
-import qualified Crypto.PubKey.ECC.Prim as ECC (isPointValid)
 import Network.TLS.RNG
 import Data.Word (Word16)
 
-data ECDHPublic = ECDHPublic ECDH.PublicPoint Int {- byte size -}
-    deriving (Show,Eq)
+data ECDHPublic = ECDHPublic (Integer,Integer) !Int -- byte size
+     deriving (Show,Eq)
 
-newtype ECDHPrivate = ECDHPrivate ECDH.PrivateNumber deriving (Show,Eq)
+type ECDHKeyPair = ECDH.CurveKeyPair
 
-data ECDHParams = ECDHParams ECDH.Curve ECDH.CurveName deriving (Show,Eq)
+data ECDHParams = ECDHParams ECDH.Curve !Word16 deriving (Show,Eq)
 
-type ECDHKey = ECDH.SharedKey
+type ECDHKey = ECDH.SharedSecret
 
 ecdhPublic :: Integer -> Integer -> Int -> ECDHPublic
-ecdhPublic x y siz = ECDHPublic (ECDH.Point x y) siz
+ecdhPublic x y siz = ECDHPublic (x,y) siz
 
-ecdhPrivate :: Integer -> ECDHPrivate
-ecdhPrivate = ECDHPrivate
+fromECDHKeyPair :: ECDHKeyPair -> ECDHPublic
+fromECDHKeyPair (ECDH.CurveKeyPair kp) = ECDHPublic xy siz
+  where
+    p = ECDH.keypairPublic kp
+    xy = ECDH.curvePointToIntegers p
+    siz = ECDH.curveBytes (ECDH.curveOfPoint p)
 
 ecdhParams :: Word16 -> ECDHParams
-ecdhParams w16 = ECDHParams curve name
+ecdhParams 23 = ECDHParams (ECDH.Curve ECDH.Curve_P256R1) 23
+ecdhParams 25 = ECDHParams (ECDH.Curve ECDH.Curve_P521R1) 25
+ecdhParams _  = ECDHParams undefined undefined -- fixme
+
+ecdhGenerateKeyPair :: MonadRandom r => ECDHParams -> r ECDH.CurveKeyPair
+ecdhGenerateKeyPair (ECDHParams curve _) = ECDH.generateKeyPair curve
+
+ecdhGetShared :: ECDHParams -> ECDH.CurveKeyPair -> ECDHPublic -> Maybe ECDHKey
+ecdhGetShared (ECDHParams (ECDH.Curve c) _) kp (ECDHPublic xy@(x,y) _)
+  | ECDH.curveIsPointValid p = Just $ ECDH.getShared xy kp
+  | otherwise                = Nothing
   where
-    Just name = toCurveName w16 -- FIXME
-    curve = ECDH.getCurveByName name
-
-ecdhGenerateKeyPair :: MonadRandom r => ECDHParams -> r (ECDHPrivate, ECDHPublic)
-ecdhGenerateKeyPair (ECDHParams curve _) = do
-    priv <- ECDH.generatePrivate curve
-    let siz        = pointSize curve
-        point      = ECDH.calculatePublic curve priv
-        pub        = ECDHPublic point siz
-    return (ECDHPrivate priv, pub)
-
-ecdhGetShared :: ECDHParams -> ECDHPrivate -> ECDHPublic -> Maybe ECDHKey
-ecdhGetShared (ECDHParams curve _)  (ECDHPrivate priv) (ECDHPublic point _)
-    | ECC.isPointValid curve point = Just $ ECDH.getShared curve priv point
-    | otherwise                    = Nothing
+    p = ECDH.curveIntegersToPoint c x y
 
 -- for server key exchange
 ecdhUnwrap :: ECDHParams -> ECDHPublic -> (Word16,Integer,Integer,Int)
-ecdhUnwrap (ECDHParams _ name) point = (w16,x,y,siz)
-  where
-    w16 = case fromCurveName name of
-        Just w  -> w
-        Nothing -> error "ecdhUnwrap"
-    (x,y,siz) = ecdhUnwrapPublic point
+ecdhUnwrap (ECDHParams _ w16) (ECDHPublic (x,y) siz) = (w16,x,y,siz)
 
 -- for client key exchange
 ecdhUnwrapPublic :: ECDHPublic -> (Integer,Integer,Int)
-ecdhUnwrapPublic (ECDHPublic (ECDH.Point x y) siz) = (x,y,siz)
-ecdhUnwrapPublic _                                 = error "ecdhUnwrapPublic"
-
-pointSize :: ECDH.Curve -> Int
-pointSize (ECDH.CurveFP curve) = lengthBytes $ ECDH.ecc_p curve
-pointSize _ = error "pointSize" -- FIXME
+ecdhUnwrapPublic (ECDHPublic (x,y) siz) = (x,y,siz)

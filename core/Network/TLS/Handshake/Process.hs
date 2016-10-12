@@ -105,8 +105,8 @@ processClientKeyXchg ctx (CKX_ECDH clientECDHValue) = do
     role <- usingState_ ctx isClientContext
 
     (ServerECDHParams ecdhparams _) <- fromJust "server ecdh params" <$> usingHState ctx (gets hstServerECDHParams)
-    ecdhpriv                      <- fromJust "ecdh private" <$> usingHState ctx (gets hstECDHPrivate)
-    case ecdhGetShared ecdhparams ecdhpriv clientECDHValue of
+    keypair                      <- fromJust "ecdh private" <$> usingHState ctx (gets hstECDHKeyPair)
+    case ecdhGetShared ecdhparams keypair clientECDHValue of
         Nothing        -> throwCore $ Error_Protocol("invalid client public key", True, HandshakeFailure)
         Just premaster ->
             usingHState ctx $ setMasterSecretFromPre rver role premaster

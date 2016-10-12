@@ -310,12 +310,13 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
 
         setup_ECDHE curvename = do
             let ecdhparams = ecdhParams curvename
-            (priv, pub) <- generateECDHE ctx ecdhparams
+            keypair <- generateECDHE ctx ecdhparams
 
-            let serverParams = ServerECDHParams ecdhparams pub
+            let pub = fromECDHKeyPair keypair
+                serverParams = ServerECDHParams ecdhparams pub
 
             usingHState ctx $ setServerECDHParams serverParams
-            usingHState ctx $ modify $ \hst -> hst { hstECDHPrivate = Just priv }
+            usingHState ctx $ modify $ \hst -> hst { hstECDHKeyPair = Just keypair}
             return (serverParams)
 
         generateSKX_ECDHE sigAlg = do

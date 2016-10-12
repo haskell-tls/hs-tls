@@ -70,7 +70,7 @@ data HandshakeState = HandshakeState
     , hstServerDHParams      :: !(Maybe ServerDHParams)
     , hstDHPrivate           :: !(Maybe DHPrivate)
     , hstServerECDHParams    :: !(Maybe ServerECDHParams)
-    , hstECDHPrivate         :: !(Maybe ECDHPrivate)
+    , hstECDHKeyPair         :: !(Maybe ECDHKeyPair)
     , hstHandshakeDigest     :: !(Either [Bytes] HashCtx)
     , hstHandshakeMessages   :: [Bytes]
     , hstClientCertRequest   :: !(Maybe ClientCertRequestData) -- ^ Set to Just-value when certificate request was received
@@ -108,7 +108,7 @@ newEmptyHandshake ver crand = HandshakeState
     , hstServerDHParams      = Nothing
     , hstDHPrivate           = Nothing
     , hstServerECDHParams    = Nothing
-    , hstECDHPrivate         = Nothing
+    , hstECDHKeyPair         = Nothing
     , hstHandshakeDigest     = Left []
     , hstHandshakeMessages   = []
     , hstClientCertRequest   = Nothing
