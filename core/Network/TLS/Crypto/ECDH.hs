@@ -44,8 +44,9 @@ fromECDHKeyPair (ECDH.CurveKeyPair kp) = ECDHPublic xy siz
 
 ecdhParams :: Word16 -> ECDHParams
 ecdhParams 23 = ECDHParams (ECDH.Curve ECDH.Curve_P256R1) 23
+ecdhParams 24 = ECDHParams (ECDH.Curve ECDH.Curve_P384R1) 24
 ecdhParams 25 = ECDHParams (ECDH.Curve ECDH.Curve_P521R1) 25
-ecdhParams _  = ECDHParams undefined undefined -- fixme
+ecdhParams _  = error "ecdhParams" -- see availableEllipticCurves
 
 ecdhGenerateKeyPair :: MonadRandom r => ECDHParams -> r ECDH.CurveKeyPair
 ecdhGenerateKeyPair (ECDHParams curve _) = ECDH.generateKeyPair curve

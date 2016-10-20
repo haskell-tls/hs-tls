@@ -270,7 +270,7 @@ data BrainPoolCurve =
     deriving (Show,Eq)
 
 availableEllipticCurves :: [NamedCurve]
-availableEllipticCurves = [SEC SEC_p256r1, SEC SEC_p521r1]
+availableEllipticCurves = [SEC SEC_p256r1, SEC SEC_p384r1, SEC SEC_p521r1]
 
 instance EnumSafe16 NamedCurve where
     fromEnumSafe16 NamedCurve_arbitrary_explicit_prime_curves = 0xFF01
