@@ -321,11 +321,10 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
 
         generateSKX_ECDHE sigAlg = do
             ncs <- usingState_ ctx $ getClientEllipticCurveSuggest
-            let common = availableEllipticCurves `intersect` fromJust "ClientEllipticCurveSuggest" ncs
-                -- FIXME: Currently maximum strength is chosen.
-                --        There may be a better way to choose EC.
-                nc = if null common then error "No common EllipticCurves"
-                                    else maximum $ map fromEnumSafe16 common
+            let common = (supportedCurves $ ctxSupported ctx) `intersect` availableEllipticCurves `intersect` fromJust "ClientEllipticCurveSuggest" ncs
+                nc = case common of
+                    []  -> error "No common EllipticCurves"
+                    x:_ -> fromEnumSafe16 x
             serverParams <- setup_ECDHE nc
             signed       <- digitallySignECDHParams ctx serverParams sigAlg
             case sigAlg of

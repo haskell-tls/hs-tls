@@ -125,6 +125,10 @@ module Network.TLS
     , ValidationCache(..)
     , ValidationCacheResult(..)
     , exceptionValidationCache
+
+    -- * Elliptic curves
+    , NamedCurve(..)
+    , CurveName(..)
     ) where
 
 import Network.TLS.Backend (Backend(..), HasBackend(..))
@@ -147,5 +151,6 @@ import Network.TLS.Core
 import Network.TLS.Session
 import Network.TLS.X509
 import Network.TLS.Types
+import Network.TLS.Extension
 import Data.X509 (PubKey(..), PrivKey(..))
 import Data.X509.Validation

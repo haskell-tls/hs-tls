@@ -174,6 +174,8 @@ data Supported = Supported
       -- 'False', empty packets will never be added, which is less secure, but might help in rare
       -- cases.
     , supportedEmptyPacket         :: Bool
+      -- | A list of supported elliptic curves in the preferred order.
+    , supportedCurves              :: [NamedCurve]
     } deriving (Show,Eq)
 
 defaultSupported :: Supported
@@ -193,6 +195,7 @@ defaultSupported = Supported
     , supportedSession             = True
     , supportedFallbackScsv        = True
     , supportedEmptyPacket         = True
+    , supportedCurves              = [SEC SEC_p521r1, SEC SEC_p384r1, SEC SEC_p256r1]
     }
 
 instance Default Supported where
