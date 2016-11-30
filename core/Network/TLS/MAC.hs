@@ -11,10 +11,12 @@ module Network.TLS.MAC
     , prf_MD5
     , prf_SHA1
     , prf_SHA256
+    , prf_TLS
     , prf_MD5SHA1
     ) where
 
 import Network.TLS.Crypto
+import Network.TLS.Types
 import qualified Data.ByteString as B
 import Data.ByteString (ByteString)
 import Data.Bits (xor)
@@ -71,3 +73,9 @@ prf_MD5SHA1 secret seed len =
 
 prf_SHA256 :: ByteString -> ByteString -> Int -> ByteString
 prf_SHA256 secret seed len = B.concat $ hmacIter (hmac SHA256) secret seed seed len
+
+-- | For now we ignore the version, but perhaps some day the PRF will depend
+-- not only on the cipher PRF algorithm, but also on the protocol version.
+prf_TLS :: Version -> Hash -> ByteString -> ByteString -> Int -> ByteString
+prf_TLS _ halg secret seed len =
+    B.concat $ hmacIter (hmac halg) secret seed seed len
