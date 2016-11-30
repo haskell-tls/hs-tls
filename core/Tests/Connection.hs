@@ -57,6 +57,23 @@ blockCipherDHE_DSS = blockCipher
     , cipherKeyExchange = CipherKeyExchange_DHE_DSS
     }
 
+blockCipherECDHE_RSA :: Cipher
+blockCipherECDHE_RSA = blockCipher
+    { cipherID   = 0xff16
+    , cipherName = "ecdhe-rsa-id-const"
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
+    }
+
+blockCipherECDHE_RSA_SHA384 :: Cipher
+blockCipherECDHE_RSA_SHA384 = blockCipher
+    { cipherID   = 0xff17
+    , cipherName = "ecdhe-rsa-id-const-sha384"
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
+    , cipherHash        = SHA384
+    , cipherPRFHash     = Just SHA384
+    , cipherMinVer      = Just TLS12
+    }
+
 streamCipher :: Cipher
 streamCipher = blockCipher
     { cipherID   = 0xff13
@@ -74,7 +91,13 @@ streamCipher = blockCipher
     passThrough _ _ = BulkStream go where go inp = (inp, BulkStream go)
 
 knownCiphers :: [Cipher]
-knownCiphers = [blockCipher,blockCipherDHE_RSA,blockCipherDHE_DSS,streamCipher]
+knownCiphers = [ blockCipher
+               , blockCipherDHE_RSA
+               , blockCipherDHE_DSS
+               , blockCipherECDHE_RSA
+               , blockCipherECDHE_RSA_SHA384
+               , streamCipher
+               ]
 
 knownVersions :: [Version]
 knownVersions = [SSL3,TLS10,TLS11,TLS12]
@@ -87,10 +110,16 @@ arbitraryPairParams = do
                                     return (CertificateChain [cert], priv)
                                ) [ (pubKey, privKey), (dsaPub, dsaPriv) ]
     connectVersion     <- elements knownVersions
-    let allowedVersions = [ v | v <- knownVersions, v <= connectVersion ]
+    serverCiphers      <- arbitraryCiphers `suchThat`
+                                (\cs -> or [maybe True (<= connectVersion) (cipherMinVer x) | x <- cs])
+    clientCiphers      <- oneof [arbitraryCiphers] `suchThat`
+                                (\cs -> or [x `elem` serverCiphers &&
+                                            maybe True (<= connectVersion) (cipherMinVer x) | x <- cs])
+    -- The shared ciphers may set a floor on the compatible protocol versions
+    let allowedVersions = [ v | v <- knownVersions,
+                                or [ x `elem` serverCiphers &&
+                                     maybe True (<= v) (cipherMinVer x) | x <- clientCiphers ]]
     serAllowedVersions <- (:[]) `fmap` elements allowedVersions
-    serverCiphers      <- arbitraryCiphers
-    clientCiphers      <- oneof [arbitraryCiphers] `suchThat` (\cs -> or [x `elem` serverCiphers | x <- cs])
     secNeg             <- arbitrary
 
 
@@ -156,10 +185,15 @@ establishDataPipe params tlsServer tlsClient = do
 
     (cCtx, sCtx) <- newPairContext pipe params
 
-    _ <- forkIO $ E.catch (tlsServer sCtx resultQueue) (printAndRaise "server")
-    _ <- forkIO $ E.catch (tlsClient startQueue cCtx) (printAndRaise "client")
+    _ <- forkIO $ E.catch (tlsServer sCtx resultQueue)
+                          (printAndRaise "server" (serverSupported $ snd params))
+    _ <- forkIO $ E.catch (tlsClient startQueue cCtx)
+                          (printAndRaise "client" (clientSupported $ fst params))
 
     return (startQueue, resultQueue)
   where
-        printAndRaise :: String -> E.SomeException -> IO ()
-        printAndRaise s e = putStrLn (s ++ " exception: " ++ show e) >> E.throw e
+        printAndRaise :: String -> Supported -> E.SomeException -> IO ()
+        printAndRaise s supported e = do
+            putStrLn $ s ++ " exception: " ++ show e ++
+                           ", supported: " ++ show supported
+            E.throw e
