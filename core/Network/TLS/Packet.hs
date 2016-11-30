@@ -71,7 +71,7 @@ import Data.ASN1.BinaryEncoding (DER(..))
 import Data.X509 (CertificateChainRaw(..), encodeCertificateChain, decodeCertificateChain)
 import Network.TLS.Crypto
 import Network.TLS.MAC
-import Network.TLS.Cipher (CipherKeyExchangeType(..))
+import Network.TLS.Cipher (CipherKeyExchangeType(..), Cipher(..))
 import Network.TLS.Util.Serialization (os2ip,i2ospOf_)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
@@ -380,9 +380,9 @@ encodeHandshakeContent (ClientHello version random session cipherIDs compression
     putExtensions exts
     return ()
 
-encodeHandshakeContent (ServerHello version random session cipherID compressionID exts) =
+encodeHandshakeContent (ServerHello version random session cipherid compressionID exts) =
     putVersion version >> putServerRandom32 random >> putSession session
-                       >> putWord16 cipherID >> putWord8 compressionID
+                       >> putWord16 cipherid >> putWord8 compressionID
                        >> putExtensions exts >> return ()
 
 encodeHandshakeContent (Certificates cc) = putOpaque24 (runPut $ mapM_ putOpaque24 certs)
@@ -581,6 +581,14 @@ decodeReallyServerKeyXchgAlgorithmData ver cke =
  -}
 type PRF = Bytes -> Bytes -> Int -> Bytes
 
+-- | The TLS12 PRF is cipher specific, and some TLS12 algorithms use SHA384
+-- instead of the default SHA256.
+getPRF :: Version -> Cipher -> PRF
+getPRF ver ciph
+    | ver < TLS12 = prf_MD5SHA1
+    | maybe True (< TLS12) (cipherMinVer ciph) = prf_SHA256
+    | otherwise = prf_TLS ver $ maybe SHA256 id $ cipherPRFHash ciph
+
 generateMasterSecret_SSL :: ByteArrayAccess preMaster => preMaster -> ClientRandom -> ServerRandom -> Bytes
 generateMasterSecret_SSL premasterSecret (ClientRandom c) (ServerRandom s) =
     B.concat $ map (computeMD5) ["A","BB","CCC"]
@@ -592,12 +600,16 @@ generateMasterSecret_TLS prf premasterSecret (ClientRandom c) (ServerRandom s) =
     prf (B.convert premasterSecret) seed 48
   where seed = B.concat [ "master secret", c, s ]
 
-generateMasterSecret :: ByteArrayAccess preMaster => Version -> preMaster -> ClientRandom -> ServerRandom -> Bytes
-generateMasterSecret SSL2  = generateMasterSecret_SSL
-generateMasterSecret SSL3  = generateMasterSecret_SSL
-generateMasterSecret TLS10 = generateMasterSecret_TLS prf_MD5SHA1
-generateMasterSecret TLS11 = generateMasterSecret_TLS prf_MD5SHA1
-generateMasterSecret TLS12 = generateMasterSecret_TLS prf_SHA256
+generateMasterSecret :: ByteArrayAccess preMaster
+                     => Version
+                     -> Cipher
+                     -> preMaster
+                     -> ClientRandom
+                     -> ServerRandom
+                     -> Bytes
+generateMasterSecret SSL2 _ = generateMasterSecret_SSL
+generateMasterSecret SSL3 _ = generateMasterSecret_SSL
+generateMasterSecret v    c = generateMasterSecret_TLS $ getPRF v c
 
 generateKeyBlock_TLS :: PRF -> ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
 generateKeyBlock_TLS prf (ClientRandom c) (ServerRandom s) mastersecret kbsize =
@@ -610,12 +622,16 @@ generateKeyBlock_SSL (ClientRandom c) (ServerRandom s) mastersecret kbsize =
         computeMD5  label = hash MD5 $ B.concat [ mastersecret, computeSHA1 label ]
         computeSHA1 label = hash SHA1 $ B.concat [ label, mastersecret, s, c ]
 
-generateKeyBlock :: Version -> ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
-generateKeyBlock SSL2  = generateKeyBlock_SSL
-generateKeyBlock SSL3  = generateKeyBlock_SSL
-generateKeyBlock TLS10 = generateKeyBlock_TLS prf_MD5SHA1
-generateKeyBlock TLS11 = generateKeyBlock_TLS prf_MD5SHA1
-generateKeyBlock TLS12 = generateKeyBlock_TLS prf_SHA256
+generateKeyBlock :: Version
+                 -> Cipher
+                 -> ClientRandom
+                 -> ServerRandom
+                 -> Bytes
+                 -> Int
+                 -> Bytes
+generateKeyBlock SSL2 _ = generateKeyBlock_SSL
+generateKeyBlock SSL3 _ = generateKeyBlock_SSL
+generateKeyBlock v    c = generateKeyBlock_TLS $ getPRF v c
 
 generateFinished_TLS :: PRF -> Bytes -> Bytes -> HashCtx -> Bytes
 generateFinished_TLS prf label mastersecret hashctx = prf mastersecret seed 12
@@ -632,17 +648,23 @@ generateFinished_SSL sender mastersecret hashctx = B.concat [md5hash, sha1hash]
         pad2     = B.replicate 48 0x5c
         pad1     = B.replicate 48 0x36
 
-generateClientFinished :: Version -> Bytes -> HashCtx -> Bytes
-generateClientFinished ver
+generateClientFinished :: Version
+                       -> Cipher
+                       -> Bytes
+                       -> HashCtx
+                       -> Bytes
+generateClientFinished ver ciph
     | ver < TLS10 = generateFinished_SSL "CLNT"
-    | ver < TLS12 = generateFinished_TLS prf_MD5SHA1 "client finished"
-    | otherwise   = generateFinished_TLS prf_SHA256 "client finished"
+    | otherwise   = generateFinished_TLS (getPRF ver ciph) "client finished"
 
-generateServerFinished :: Version -> Bytes -> HashCtx -> Bytes
-generateServerFinished ver
+generateServerFinished :: Version
+                       -> Cipher
+                       -> Bytes
+                       -> HashCtx
+                       -> Bytes
+generateServerFinished ver ciph
     | ver < TLS10 = generateFinished_SSL "SRVR"
-    | ver < TLS12 = generateFinished_TLS prf_MD5SHA1 "server finished"
-    | otherwise   = generateFinished_TLS prf_SHA256 "server finished"
+    | otherwise   = generateFinished_TLS (getPRF ver ciph) "server finished"
 
 generateCertificateVerify_SSL :: Bytes -> HashCtx -> Bytes
 generateCertificateVerify_SSL = generateFinished_SSL ""
