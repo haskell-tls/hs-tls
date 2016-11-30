@@ -9,9 +9,9 @@
 --
 module Network.TLS.Handshake.Key
     ( encryptRSA
-    , signRSA
+    , signPrivate
     , decryptRSA
-    , verifyRSA
+    , verifyPublic
     , generateDHE
     , generateECDHE
     ) where
@@ -37,8 +37,8 @@ encryptRSA ctx content = do
             Left err       -> fail ("rsa encrypt failed: " ++ show err)
             Right econtent -> return econtent
 
-signRSA :: Context -> Role -> Hash -> ByteString -> IO ByteString
-signRSA ctx _ hsh content = do
+signPrivate :: Context -> Role -> Hash -> ByteString -> IO ByteString
+signPrivate ctx _ hsh content = do
     privateKey <- usingHState ctx getLocalPrivateKey
     usingState_ ctx $ do
         r <- withRNG $ kxSign privateKey hsh content
@@ -54,8 +54,8 @@ decryptRSA ctx econtent = do
         let cipher = if ver < TLS10 then econtent else B.drop 2 econtent
         withRNG $ kxDecrypt privateKey cipher
 
-verifyRSA :: Context -> Role -> Hash -> ByteString -> ByteString -> IO Bool
-verifyRSA ctx _ hsh econtent sign = do
+verifyPublic :: Context -> Role -> Hash -> ByteString -> ByteString -> IO Bool
+verifyPublic ctx _ hsh econtent sign = do
     publicKey <- usingHState ctx getRemotePublicKey
     return $ kxVerify publicKey hsh econtent sign
 
