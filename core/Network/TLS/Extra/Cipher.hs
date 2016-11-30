@@ -10,7 +10,8 @@
 module Network.TLS.Extra.Cipher
     (
     -- * cipher suite
-      ciphersuite_all
+      ciphersuite_default
+    , ciphersuite_all
     , ciphersuite_medium
     , ciphersuite_strong
     , ciphersuite_unencrypted
@@ -143,44 +144,82 @@ rc4 _ bulkKey = BulkStream (combineRC4 $ RC4.initialize bulkKey)
         let (ctx', output) = RC4.combine ctx input
          in (output, BulkStream (combineRC4 ctx'))
 
+-- | All AES ciphers supported ordered from strong to weak.  This choice
+-- of ciphersuites should satisfy most normal needs.  For otherwise strong
+-- ciphers we make little distinction between AES128 and AES256, and list
+-- each but the weakest of the AES128 ciphers ahead of the corresponding AES256
+-- ciphers.
+ciphersuite_default :: [Cipher]
+ciphersuite_default =
+    [        -- First the PFS + GCM + SHA2 ciphers
+      cipher_ECDHE_ECDSA_AES128GCM_SHA256, cipher_ECDHE_ECDSA_AES256GCM_SHA384
+    , cipher_ECDHE_RSA_AES128GCM_SHA256, cipher_ECDHE_RSA_AES256GCM_SHA384
+    , cipher_DHE_RSA_AES128GCM_SHA256, cipher_DHE_RSA_AES256GCM_SHA384
+             -- Next the PFS + CBC + SHA2 ciphers
+    , cipher_ECDHE_ECDSA_AES128CBC_SHA256, cipher_ECDHE_ECDSA_AES256CBC_SHA384
+    , cipher_ECDHE_RSA_AES128CBC_SHA256, cipher_ECDHE_RSA_AES256CBC_SHA384
+    , cipher_DHE_RSA_AES128_SHA256, cipher_DHE_RSA_AES256_SHA256
+             -- Next the PFS + CBC + SHA1 ciphers
+    , cipher_ECDHE_ECDSA_AES128CBC_SHA, cipher_ECDHE_ECDSA_AES256CBC_SHA
+    , cipher_ECDHE_RSA_AES128CBC_SHA, cipher_ECDHE_RSA_AES256CBC_SHA
+    , cipher_DHE_RSA_AES128_SHA1, cipher_DHE_RSA_AES256_SHA1
+             -- Next the non-PFS + GCM + SHA2 ciphers
+    , cipher_AES128GCM_SHA256, cipher_AES256GCM_SHA384
+             -- Next the non-PFS + CBC + SHA2 ciphers
+    , cipher_AES256_SHA256, cipher_AES128_SHA256
+             -- Next the non-PFS + CBC + SHA1 ciphers
+    , cipher_AES256_SHA1, cipher_AES128_SHA1
+             -- Nobody uses or should use DSS, RC4,  3DES or MD5
+    -- , cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1
+    -- , cipher_DHE_DSS_RC4_SHA1, cipher_RC4_128_SHA1, cipher_RC4_128_MD5
+    -- , cipher_RSA_3DES_EDE_CBC_SHA1
+    ]
 
--- | all encrypted ciphers supported ordered from strong to weak.
--- this choice of ciphersuite should satisfy most normal need
+-- | The default ciphersuites + some not recommended last resort ciphers.
 ciphersuite_all :: [Cipher]
-ciphersuite_all =
-    [ cipher_ECDHE_RSA_AES128GCM_SHA256
-    , cipher_ECDHE_RSA_AES256CBC_SHA
-    , cipher_ECDHE_ECDSA_AES128GCM_SHA256
-    , cipher_DHE_RSA_AES256_SHA256, cipher_DHE_RSA_AES128_SHA256
-    , cipher_DHE_RSA_AES256_SHA1, cipher_DHE_RSA_AES128_SHA1
-    , cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1
-    , cipher_AES128_SHA256, cipher_AES256_SHA256
-    , cipher_AES128_SHA1,   cipher_AES256_SHA1
-    , cipher_DHE_DSS_RC4_SHA1, cipher_RC4_128_SHA1,  cipher_RC4_128_MD5
+ciphersuite_all = ciphersuite_default ++
+    [ cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1
     , cipher_RSA_3DES_EDE_CBC_SHA1
-    , cipher_DHE_RSA_AES128GCM_SHA256
+    , cipher_RC4_128_SHA1
     ]
 
 -- | list of medium ciphers.
 ciphersuite_medium :: [Cipher]
-ciphersuite_medium = [cipher_RC4_128_MD5, cipher_RC4_128_SHA1, cipher_AES128_SHA1, cipher_AES256_SHA1]
+ciphersuite_medium = [ cipher_RC4_128_SHA1
+                     , cipher_AES128_SHA1
+                     ]
 
--- | the strongest ciphers supported.
+-- | The strongest ciphers supported ciphers supported.  For ciphers with PFS,
+-- AEAD and SHA2, we list each AES128 variant right after the corresponding
+-- AES256 variant.  For weaker constructs, we use just the AES256 form.
 ciphersuite_strong :: [Cipher]
 ciphersuite_strong =
-    [ cipher_ECDHE_RSA_AES128GCM_SHA256
-    , cipher_ECDHE_RSA_AES256CBC_SHA
-    , cipher_ECDHE_ECDSA_AES128GCM_SHA256
+    [        -- If we have PFS + AEAD + SHA2, then allow AES128, else just 256
+      cipher_ECDHE_ECDSA_AES256GCM_SHA384, cipher_ECDHE_ECDSA_AES128GCM_SHA256
+    , cipher_ECDHE_RSA_AES256GCM_SHA384, cipher_ECDHE_RSA_AES128GCM_SHA256
+    , cipher_DHE_RSA_AES256GCM_SHA384, cipher_DHE_RSA_AES128GCM_SHA256
+             -- No AEAD
+    , cipher_ECDHE_ECDSA_AES256CBC_SHA384
+    , cipher_ECDHE_RSA_AES256CBC_SHA384
     , cipher_DHE_RSA_AES256_SHA256
+             -- No SHA2
+    , cipher_ECDHE_ECDSA_AES256CBC_SHA
+    , cipher_ECDHE_RSA_AES256CBC_SHA
+    , cipher_DHE_RSA_AES256_SHA1
+             -- No PFS
+    , cipher_AES256GCM_SHA384
+             -- Neither PFS nor AEAD, just SHA2
     , cipher_AES256_SHA256
+             -- Last resort no PFS, AEAD or SHA2
     , cipher_AES256_SHA1
     ]
 
 -- | DHE-RSA cipher suite
 ciphersuite_dhe_rsa :: [Cipher]
-ciphersuite_dhe_rsa = [cipher_DHE_RSA_AES256_SHA256, cipher_DHE_RSA_AES128_SHA256
+ciphersuite_dhe_rsa = [ cipher_DHE_RSA_AES256GCM_SHA384, cipher_DHE_RSA_AES128GCM_SHA256
+                      , cipher_DHE_RSA_AES256_SHA256, cipher_DHE_RSA_AES128_SHA256
                       , cipher_DHE_RSA_AES256_SHA1, cipher_DHE_RSA_AES128_SHA1
-                      , cipher_DHE_RSA_AES128GCM_SHA256]
+                      ]
 
 ciphersuite_dhe_dss :: [Cipher]
 ciphersuite_dhe_dss = [cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1, cipher_DHE_DSS_RC4_SHA1]
