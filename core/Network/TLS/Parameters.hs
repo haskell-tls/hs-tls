@@ -186,9 +186,11 @@ defaultSupported = Supported
     , supportedCiphers        = []
     , supportedCompressions   = [nullCompression]
     , supportedHashSignatures = [ (Struct.HashSHA512, SignatureRSA)
+                                , (Struct.HashSHA512, SignatureECDSA)
                                 , (Struct.HashSHA384, SignatureRSA)
+                                , (Struct.HashSHA384, SignatureECDSA)
                                 , (Struct.HashSHA256, SignatureRSA)
-                                , (Struct.HashSHA224, SignatureRSA)
+                                , (Struct.HashSHA256, SignatureECDSA)
                                 , (Struct.HashSHA1,   SignatureRSA)
                                 , (Struct.HashSHA1,   SignatureDSS)
                                 ]
