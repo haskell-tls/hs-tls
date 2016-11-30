@@ -260,6 +260,7 @@ cipher_null_MD5 = Cipher
     , cipherName         = "RSA-null-MD5"
     , cipherBulk         = bulk_null
     , cipherHash         = MD5
+    , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Nothing
     }
@@ -271,6 +272,7 @@ cipher_null_SHA1 = Cipher
     , cipherName         = "RSA-null-SHA1"
     , cipherBulk         = bulk_null
     , cipherHash         = SHA1
+    , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Nothing
     }
@@ -282,6 +284,7 @@ cipher_RC4_128_MD5 = Cipher
     , cipherName         = "RSA-rc4-128-md5"
     , cipherBulk         = bulk_rc4
     , cipherHash         = MD5
+    , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Nothing
     }
@@ -293,6 +296,7 @@ cipher_RC4_128_SHA1 = Cipher
     , cipherName         = "RSA-rc4-128-sha1"
     , cipherBulk         = bulk_rc4
     , cipherHash         = SHA1
+    , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Nothing
     }
@@ -304,6 +308,7 @@ cipher_AES128_SHA1 = Cipher
     , cipherName         = "RSA-AES128-SHA1"
     , cipherBulk         = bulk_aes128
     , cipherHash         = SHA1
+    , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just SSL3
     }
@@ -315,6 +320,7 @@ cipher_DHE_DSS_AES128_SHA1 = Cipher
     , cipherName         = "DHE-DSA-AES128-SHA1"
     , cipherBulk         = bulk_aes128
     , cipherHash         = SHA1
+    , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_DHE_DSS
     , cipherMinVer       = Nothing
     }
@@ -326,6 +332,7 @@ cipher_DHE_RSA_AES128_SHA1 = Cipher
     , cipherName         = "DHE-RSA-AES128-SHA1"
     , cipherBulk         = bulk_aes128
     , cipherHash         = SHA1
+    , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
     , cipherMinVer       = Nothing
     }
@@ -337,6 +344,7 @@ cipher_AES256_SHA1 = Cipher
     , cipherName         = "RSA-AES256-SHA1"
     , cipherBulk         = bulk_aes256
     , cipherHash         = SHA1
+    , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just SSL3
     }
@@ -364,6 +372,7 @@ cipher_AES128_SHA256 = Cipher
     , cipherName         = "RSA-AES128-SHA256"
     , cipherBulk         = bulk_aes128
     , cipherHash         = SHA256
+    , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just TLS12
     }
@@ -375,6 +384,7 @@ cipher_AES256_SHA256 = Cipher
     , cipherName         = "RSA-AES256-SHA256"
     , cipherBulk         = bulk_aes256
     , cipherHash         = SHA256
+    , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just TLS12
     }
@@ -392,6 +402,7 @@ cipher_DHE_RSA_AES128_SHA256 = cipher_DHE_RSA_AES128_SHA1
     { cipherID           = 0x67
     , cipherName         = "DHE-RSA-AES128-SHA256"
     , cipherHash         = SHA256
+    , cipherPRFHash      = Just SHA256
     , cipherMinVer       = Just TLS12
     }
 
@@ -409,6 +420,7 @@ cipher_RSA_3DES_EDE_CBC_SHA1 = Cipher
     , cipherName         = "RSA-3DES-EDE-CBC-SHA1"
     , cipherBulk         = bulk_tripledes_ede
     , cipherHash         = SHA1
+    , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Nothing
     }
@@ -419,6 +431,7 @@ cipher_DHE_RSA_AES128GCM_SHA256 = Cipher
     , cipherName         = "DHE-RSA-AES128GCM-SHA256"
     , cipherBulk         = bulk_aes128gcm
     , cipherHash         = SHA256
+    , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
     , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
     }
@@ -429,6 +442,7 @@ cipher_ECDHE_RSA_AES128CBC_SHA = Cipher
     , cipherName         = "ECDHE-RSA-AES128CBC-SHA"
     , cipherBulk         = bulk_aes128
     , cipherHash         = SHA1
+    , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
     , cipherMinVer       = Just TLS10
     }
@@ -439,6 +453,7 @@ cipher_ECDHE_RSA_AES256CBC_SHA = Cipher
     , cipherName         = "ECDHE-RSA-AES256CBC-SHA"
     , cipherBulk         = bulk_aes256
     , cipherHash         = SHA1
+    , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
     , cipherMinVer       = Just TLS10
     }
@@ -449,16 +464,18 @@ cipher_ECDHE_RSA_AES128CBC_SHA256 = Cipher
     , cipherName         = "ECDHE-RSA-AES128CBC-SHA256"
     , cipherBulk         = bulk_aes128
     , cipherHash         = SHA256
+    , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
     , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
     }
 
 cipher_ECDHE_RSA_AES256CBC_SHA384 :: Cipher
 cipher_ECDHE_RSA_AES256CBC_SHA384 = Cipher
-    { cipherID           = 0xc027
+    { cipherID           = 0xc028
     , cipherName         = "ECDHE-RSA-AES256CBC-SHA384"
     , cipherBulk         = bulk_aes256
     , cipherHash         = SHA384
+    , cipherPRFHash      = Just SHA384
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
     , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
     }
@@ -469,6 +486,7 @@ cipher_ECDHE_ECDSA_AES128GCM_SHA256 = Cipher
     , cipherName         = "ECDHE-ECDSA-AES128GCM-SHA256"
     , cipherBulk         = bulk_aes128gcm
     , cipherHash         = SHA256
+    , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
     , cipherMinVer       = Just TLS12 -- RFC 5289
     }
@@ -479,6 +497,7 @@ cipher_ECDHE_RSA_AES128GCM_SHA256 = Cipher
     , cipherName         = "ECDHE-RSA-AES128GCM-SHA256"
     , cipherBulk         = bulk_aes128gcm
     , cipherHash         = SHA256
+    , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
     , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
     }
@@ -486,9 +505,10 @@ cipher_ECDHE_RSA_AES128GCM_SHA256 = Cipher
 cipher_ECDHE_RSA_AES256GCM_SHA384 :: Cipher
 cipher_ECDHE_RSA_AES256GCM_SHA384 = Cipher
     { cipherID           = 0xc030
-    , cipherName         = "ECDHE-RSA-AES256GCM-SHA256"
+    , cipherName         = "ECDHE-RSA-AES256GCM-SHA384"
     , cipherBulk         = bulk_aes256gcm
     , cipherHash         = SHA384
+    , cipherPRFHash      = Just SHA384
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
     , cipherMinVer       = Just TLS12 -- RFC 5289
     }

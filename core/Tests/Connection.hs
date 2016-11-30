@@ -38,6 +38,7 @@ blockCipher = Cipher
         , bulkF         = BulkBlockF $ \_ _ _ -> (\m -> (m, B.empty))
         }
     , cipherHash        = MD5
+    , cipherPRFHash     = Nothing
     , cipherKeyExchange = CipherKeyExchange_RSA
     , cipherMinVer      = Nothing
     }
