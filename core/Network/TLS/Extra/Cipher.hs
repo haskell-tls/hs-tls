@@ -18,29 +18,38 @@ module Network.TLS.Extra.Cipher
     , ciphersuite_dhe_dss
     -- * individual ciphers
     , cipher_null_SHA1
-    , cipher_null_MD5
-    , cipher_RC4_128_MD5
-    , cipher_RC4_128_SHA1
     , cipher_AES128_SHA1
     , cipher_AES256_SHA1
     , cipher_AES128_SHA256
     , cipher_AES256_SHA256
-    , cipher_RSA_3DES_EDE_CBC_SHA1
+    , cipher_AES128GCM_SHA256
+    , cipher_AES256GCM_SHA384
     , cipher_DHE_RSA_AES128_SHA1
     , cipher_DHE_RSA_AES256_SHA1
     , cipher_DHE_RSA_AES128_SHA256
     , cipher_DHE_RSA_AES256_SHA256
     , cipher_DHE_DSS_AES128_SHA1
     , cipher_DHE_DSS_AES256_SHA1
-    , cipher_DHE_DSS_RC4_SHA1
     , cipher_DHE_RSA_AES128GCM_SHA256
+    , cipher_DHE_RSA_AES256GCM_SHA384
     , cipher_ECDHE_RSA_AES128GCM_SHA256
     , cipher_ECDHE_RSA_AES256GCM_SHA384
     , cipher_ECDHE_RSA_AES128CBC_SHA256
     , cipher_ECDHE_RSA_AES128CBC_SHA
     , cipher_ECDHE_RSA_AES256CBC_SHA
     , cipher_ECDHE_RSA_AES256CBC_SHA384
+    , cipher_ECDHE_ECDSA_AES128CBC_SHA
+    , cipher_ECDHE_ECDSA_AES256CBC_SHA
+    , cipher_ECDHE_ECDSA_AES128CBC_SHA256
+    , cipher_ECDHE_ECDSA_AES256CBC_SHA384
     , cipher_ECDHE_ECDSA_AES128GCM_SHA256
+    , cipher_ECDHE_ECDSA_AES256GCM_SHA384
+    -- * obsolete and non-standard ciphers
+    , cipher_RSA_3DES_EDE_CBC_SHA1
+    , cipher_RC4_128_MD5
+    , cipher_RC4_128_SHA1
+    , cipher_null_MD5
+    , cipher_DHE_DSS_RC4_SHA1
     ) where
 
 import qualified Data.ByteString as B
@@ -389,6 +398,31 @@ cipher_AES256_SHA256 = Cipher
     , cipherMinVer       = Just TLS12
     }
 
+-- | AESGCM cipher (128 bit key), RSA key exchange.
+-- The SHA256 digest is used as a PRF, not as a MAC.
+cipher_AES128GCM_SHA256 :: Cipher
+cipher_AES128GCM_SHA256 = Cipher
+    { cipherID           = 0x9c
+    , cipherName         = "RSA-AES128GCM-SHA256"
+    , cipherBulk         = bulk_aes128gcm
+    , cipherHash         = SHA256
+    , cipherPRFHash      = Just SHA256
+    , cipherKeyExchange  = CipherKeyExchange_RSA
+    , cipherMinVer       = Just TLS12
+    }
+
+-- | AESGCM cipher (256 bit key), RSA key exchange.
+-- The SHA384 digest is used as a PRF, not as a MAC.
+cipher_AES256GCM_SHA384 :: Cipher
+cipher_AES256GCM_SHA384 = Cipher
+    { cipherID           = 0x9d
+    , cipherName         = "RSA-AES256GCM-SHA384"
+    , cipherBulk         = bulk_aes256gcm
+    , cipherHash         = SHA384
+    , cipherPRFHash      = Just SHA384
+    , cipherKeyExchange  = CipherKeyExchange_RSA
+    , cipherMinVer       = Just TLS12
+    }
 
 cipher_DHE_DSS_RC4_SHA1 :: Cipher
 cipher_DHE_DSS_RC4_SHA1 = cipher_DHE_DSS_AES128_SHA1
@@ -436,6 +470,39 @@ cipher_DHE_RSA_AES128GCM_SHA256 = Cipher
     , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
     }
 
+cipher_DHE_RSA_AES256GCM_SHA384 :: Cipher
+cipher_DHE_RSA_AES256GCM_SHA384 = Cipher
+    { cipherID           = 0x9f
+    , cipherName         = "DHE-RSA-AES256GCM-SHA384"
+    , cipherBulk         = bulk_aes256gcm
+    , cipherHash         = SHA384
+    , cipherPRFHash      = Just SHA384
+    , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
+    , cipherMinVer       = Just TLS12
+    }
+
+cipher_ECDHE_ECDSA_AES128CBC_SHA :: Cipher
+cipher_ECDHE_ECDSA_AES128CBC_SHA = Cipher
+    { cipherID           = 0xc009
+    , cipherName         = "ECDHE-ECDSA-AES128CBC-SHA"
+    , cipherBulk         = bulk_aes128
+    , cipherHash         = SHA1
+    , cipherPRFHash      = Nothing
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
+    , cipherMinVer       = Just TLS10
+    }
+
+cipher_ECDHE_ECDSA_AES256CBC_SHA :: Cipher
+cipher_ECDHE_ECDSA_AES256CBC_SHA = Cipher
+    { cipherID           = 0xc00A
+    , cipherName         = "ECDHE-ECDSA-AES256CBC-SHA"
+    , cipherBulk         = bulk_aes256
+    , cipherHash         = SHA1
+    , cipherPRFHash      = Nothing
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
+    , cipherMinVer       = Just TLS10
+    }
+
 cipher_ECDHE_RSA_AES128CBC_SHA :: Cipher
 cipher_ECDHE_RSA_AES128CBC_SHA = Cipher
     { cipherID           = 0xc013
@@ -480,6 +547,28 @@ cipher_ECDHE_RSA_AES256CBC_SHA384 = Cipher
     , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
     }
 
+cipher_ECDHE_ECDSA_AES128CBC_SHA256 :: Cipher
+cipher_ECDHE_ECDSA_AES128CBC_SHA256 = Cipher
+    { cipherID           = 0xc023
+    , cipherName         = "ECDHE-ECDSA-AES128CBC-SHA256"
+    , cipherBulk         = bulk_aes128
+    , cipherHash         = SHA256
+    , cipherPRFHash      = Just SHA256
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
+    , cipherMinVer       = Just TLS12 -- RFC 5289
+    }
+
+cipher_ECDHE_ECDSA_AES256CBC_SHA384 :: Cipher
+cipher_ECDHE_ECDSA_AES256CBC_SHA384 = Cipher
+    { cipherID           = 0xc024
+    , cipherName         = "ECDHE-ECDSA-AES256CBC-SHA384"
+    , cipherBulk         = bulk_aes256
+    , cipherHash         = SHA384
+    , cipherPRFHash      = Just SHA384
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
+    , cipherMinVer       = Just TLS12 -- RFC 5289
+    }
+
 cipher_ECDHE_ECDSA_AES128GCM_SHA256 :: Cipher
 cipher_ECDHE_ECDSA_AES128GCM_SHA256 = Cipher
     { cipherID           = 0xc02b
@@ -487,6 +576,17 @@ cipher_ECDHE_ECDSA_AES128GCM_SHA256 = Cipher
     , cipherBulk         = bulk_aes128gcm
     , cipherHash         = SHA256
     , cipherPRFHash      = Just SHA256
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
+    , cipherMinVer       = Just TLS12 -- RFC 5289
+    }
+
+cipher_ECDHE_ECDSA_AES256GCM_SHA384 :: Cipher
+cipher_ECDHE_ECDSA_AES256GCM_SHA384 = Cipher
+    { cipherID           = 0xc02c
+    , cipherName         = "ECDHE-ECDSA-AES256GCM-SHA384"
+    , cipherBulk         = bulk_aes256gcm
+    , cipherHash         = SHA384
+    , cipherPRFHash      = Just SHA384
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
     , cipherMinVer       = Just TLS12 -- RFC 5289
     }
@@ -545,6 +645,9 @@ CipherSuite TLS_DH_anon_EXPORT_WITH_DES40_CBC_SHA = { 0x00,0x19 };
 CipherSuite TLS_DH_anon_WITH_DES_CBC_SHA          = { 0x00,0x1A };
 CipherSuite TLS_DH_anon_WITH_3DES_EDE_CBC_SHA     = { 0x00,0x1B };
 
+TLS-RSA-WITH-AES-128-GCM-SHA256    {0x00,0x9C}
+TLS-RSA-WITH-AES-256-GCM-SHA384    {0x00,0x9D}
+
 TLS-DHE-RSA-WITH-AES-128-CBC-SHA     {0x00,0x33}
 TLS-DHE-RSA-WITH-AES-256-CBC-SHA     {0x00,0x39}
 TLS-DHE-RSA-WITH-AES-128-CBC-SHA256   {0x00,0x67}
@@ -573,6 +676,13 @@ TLS-ECDHE-RSA-WITH-CAMELLIA-256-GCM-SHA384    {0xC0,0x8B}
 TLS-ECDHE-RSA-WITH-3DES-EDE-CBC-SHA  {0xC0,0x12}
 TLS-ECDHE-RSA-WITH-RC4-128-SHA    {0xC0,0x11}
 TLS-ECDHE-RSA-WITH-NULL-SHA  {0xC0,0x10}
+
+TLS-ECDHE-ECDSA-WITH-AES-128-CBC-SHA    {0xC0,0x09}
+TLS-ECDHE-ECDSA-WITH-AES-256-CBC-SHA    {0xC0,0x0A}
+TLS-ECDHE-ECDSA-WITH-AES-128-CBC-SHA256 {0xC0,0x23}
+TLS-ECDHE-ECDSA-WITH-AES-256-CBC-SHA384 {0xC0,0x24}
+TLS-ECDHE-ECDSA-WITH-AES-128-GCM-SHA256 {0xC0,0x2B}
+TLS-ECDHE-ECDSA-WITH-AES-256-GCM-SHA384 {0xC0,0x2C}
 
 TLS-PSK-WITH-RC4-128-SHA    {0x00,0x8A}
 TLS-PSK-WITH-3DES-EDE-CBC-SHA      {0x00,0x8B}
