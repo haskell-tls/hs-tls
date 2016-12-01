@@ -117,12 +117,15 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
 
     extraCreds <- (onServerNameIndication $ serverHooks sparams) serverName
 
+    -- The shared cipherlist can become empty after filtering for compatible
+    -- creds, check now before calling onCipherChoosing, which does not handle
+    -- empty lists.
     let ciphersFilteredVersion = filter (cipherAllowedForVersion chosenVersion) (commonCiphers extraCreds)
-        usedCipher = (onCipherChoosing $ serverHooks sparams) chosenVersion ciphersFilteredVersion
-        creds = extraCreds `mappend` (sharedCredentials $ ctxShared ctx)
-
-    when (commonCipherIDs extraCreds == []) $ throwCore $
+    when (null ciphersFilteredVersion) $ throwCore $
         Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
+
+    let usedCipher = (onCipherChoosing $ serverHooks sparams) chosenVersion ciphersFilteredVersion
+        creds = extraCreds `mappend` (sharedCredentials $ ctxShared ctx)
 
     cred <- case cipherKeyExchange usedCipher of
                 CipherKeyExchange_RSA     -> return $ credentialsFindForDecrypting creds
