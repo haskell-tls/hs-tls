@@ -15,7 +15,6 @@ module Network.TLS.Crypto.ECDH
     , ecdhUnwrapPublic
     ) where
 
-import Network.TLS.Util.Serialization (lengthBytes)
 import Network.TLS.Extension.EC
 import qualified Crypto.PubKey.ECC.DH as ECDH
 import qualified Crypto.PubKey.ECC.Types as ECDH
@@ -72,5 +71,6 @@ ecdhUnwrapPublic (ECDHPublic (ECDH.Point x y) siz) = (x,y,siz)
 ecdhUnwrapPublic _                                 = error "ecdhUnwrapPublic"
 
 pointSize :: ECDH.Curve -> Int
-pointSize (ECDH.CurveFP curve) = lengthBytes $ ECDH.ecc_p curve
-pointSize _ = error "pointSize" -- FIXME
+pointSize = toBytes . ECDH.curveSizeBits
+  where
+    toBytes bits = (bits + 7) `div` 8
