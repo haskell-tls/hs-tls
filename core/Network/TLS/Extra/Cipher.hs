@@ -189,9 +189,9 @@ ciphersuite_medium = [ cipher_RC4_128_SHA1
                      , cipher_AES128_SHA1
                      ]
 
--- | The strongest ciphers supported ciphers supported.  For ciphers with PFS,
--- AEAD and SHA2, we list each AES128 variant right after the corresponding
--- AES256 variant.  For weaker constructs, we use just the AES256 form.
+-- | The strongest ciphers supported.  For ciphers with PFS, AEAD and SHA2, we
+-- list each AES128 variant right after the corresponding AES256 variant.  For
+-- weaker constructs, we use just the AES256 form.
 ciphersuite_strong :: [Cipher]
 ciphersuite_strong =
     [        -- If we have PFS + AEAD + SHA2, then allow AES128, else just 256
