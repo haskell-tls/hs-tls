@@ -62,6 +62,7 @@ Executable           tls-retrievecertificate
 
 Executable           tls-simpleclient
   Main-is:           SimpleClient.hs
+  Other-modules:     HexDump
   Hs-Source-Dirs:    src
   Build-Depends:     base >= 4 && < 5
                    , network
@@ -75,6 +76,7 @@ Executable           tls-simpleclient
 
 Executable           tls-simpleserver
   Main-is:           SimpleServer.hs
+  Other-modules:     HexDump
   Hs-Source-Dirs:    src
   Build-Depends:     base >= 4 && < 5
                    , network
