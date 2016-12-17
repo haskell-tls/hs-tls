@@ -2,12 +2,6 @@ sudo: false
 
 matrix:
   include:
-    - env: CABALVER=1.16 GHCVER=7.0.4 RUNTEST=0
-      addons: {apt: {packages: [cabal-install-1.16,ghc-7.0.4,libssl-dev], sources: [hvr-ghc]}}
-    - env: CABALVER=1.16 GHCVER=7.4.2
-      addons: {apt: {packages: [cabal-install-1.16,ghc-7.4.2,libssl-dev], sources: [hvr-ghc]}}
-    - env: CABALVER=1.18 GHCVER=7.6.3
-      addons: {apt: {packages: [cabal-install-1.18,ghc-7.6.3,libssl-dev], sources: [hvr-ghc]}}
     - env: CABALVER=1.18 GHCVER=7.8.4
       addons: {apt: {packages: [cabal-install-1.18,ghc-7.8.4,libssl-dev], sources: [hvr-ghc]}}
     - env: CABALVER=1.22 GHCVER=7.10.3
