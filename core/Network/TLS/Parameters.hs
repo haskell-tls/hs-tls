@@ -88,6 +88,8 @@ data ClientParams = ClientParams
     , clientWantSessionResume         :: Maybe (SessionID, SessionData)
     , clientShared                    :: Shared
     , clientHooks                     :: ClientHooks
+      -- | In this element, you'll  need to override the default empty value of
+      -- of 'supportedCiphers' with a suitable cipherlist.
     , clientSupported                 :: Supported
     , clientDebug                     :: DebugParams
     } deriving (Show)
@@ -144,7 +146,9 @@ data Supported = Supported
       -- On the client side, the highest version will be used to establish the connection.
       -- On the server side, the highest version that is less or equal than the client version will be chosed.
       supportedVersions       :: [Version]
-      -- | Supported cipher methods
+      -- | Supported cipher methods.  The default is empty, specify a suitable
+      -- cipher list.  'Network.TLS.Extra.Cipher.ciphersuite_default' is often
+      -- a good choice.
     , supportedCiphers        :: [Cipher]
       -- | supported compressions methods
     , supportedCompressions   :: [Compression]
@@ -182,9 +186,11 @@ defaultSupported = Supported
     , supportedCiphers        = []
     , supportedCompressions   = [nullCompression]
     , supportedHashSignatures = [ (Struct.HashSHA512, SignatureRSA)
+                                , (Struct.HashSHA512, SignatureECDSA)
                                 , (Struct.HashSHA384, SignatureRSA)
+                                , (Struct.HashSHA384, SignatureECDSA)
                                 , (Struct.HashSHA256, SignatureRSA)
-                                , (Struct.HashSHA224, SignatureRSA)
+                                , (Struct.HashSHA256, SignatureECDSA)
                                 , (Struct.HashSHA1,   SignatureRSA)
                                 , (Struct.HashSHA1,   SignatureDSS)
                                 ]

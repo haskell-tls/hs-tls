@@ -188,7 +188,8 @@ getHandshakeDigest ver role = gets gen
   where gen hst = case hstHandshakeDigest hst of
                       Right hashCtx ->
                          let msecret = fromJust "master secret" $ hstMasterSecret hst
-                          in generateFinish ver msecret hashCtx
+                             cipher  = fromJust "cipher" $ hstPendingCipher hst
+                          in generateFinish ver cipher msecret hashCtx
                       Left _        ->
                          error "un-initialized handshake digest"
         generateFinish | role == ClientRole = generateClientFinished
@@ -203,7 +204,8 @@ setMasterSecretFromPre :: ByteArrayAccess preMaster
 setMasterSecretFromPre ver role premasterSecret = do
     secret <- genSecret <$> get
     setMasterSecret ver role secret
-  where genSecret hst = generateMasterSecret ver
+  where genSecret hst =
+            generateMasterSecret ver (fromJust "cipher" $ hstPendingCipher hst)
                                  premasterSecret
                                  (hstClientRandom hst)
                                  (fromJust "server random" $ hstServerRandom hst)
@@ -227,7 +229,7 @@ computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
                                               else 0
         keySize      = bulkKeySize bulk
         ivSize       = bulkIVSize bulk
-        kb           = generateKeyBlock ver (hstClientRandom hst)
+        kb           = generateKeyBlock ver cipher (hstClientRandom hst)
                                         (fromJust "server random" $ hstServerRandom hst)
                                         masterSecret keyblockSize
 
@@ -271,6 +273,14 @@ setServerHelloParameters ver sran cipher compression = do
                 , hstPendingCompression = compression
                 , hstHandshakeDigest    = updateDigest $ hstHandshakeDigest hst
                 }
-  where hashAlg = if ver < TLS12 then SHA1_MD5 else SHA256
+  where hashAlg = getHash ver cipher
         updateDigest (Left bytes) = Right $ foldl hashUpdate (hashInit hashAlg) $ reverse bytes
         updateDigest (Right _)    = error "cannot initialize digest with another digest"
+
+-- The TLS12 Hash is cipher specific, and some TLS12 algorithms use SHA384
+-- instead of the default SHA256.
+getHash :: Version -> Cipher -> Hash
+getHash ver ciph
+    | ver < TLS12                              = SHA1_MD5
+    | maybe True (< TLS12) (cipherMinVer ciph) = SHA256
+    | otherwise                                = cipherHash ciph

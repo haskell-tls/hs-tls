@@ -107,7 +107,7 @@ signatureCreate ctx malg (hashAlg, toSign) = do
             case (malg, hashAlg) of
                 (Nothing, SHA1_MD5) -> hashFinal $ hashUpdate (hashInit SHA1_MD5) toSign
                 _                   -> toSign
-    DigitallySigned malg <$> signRSA ctx cc hashAlg signData
+    DigitallySigned malg <$> signPrivate ctx cc hashAlg signData
 
 signatureVerify :: Context -> DigitallySigned -> SignatureAlgorithm -> Bytes -> IO Bool
 signatureVerify ctx digSig@(DigitallySigned hashSigAlg _) sigAlgExpected toVerifyData = do
@@ -133,9 +133,9 @@ signatureVerifyWithHashDescr :: Context
 signatureVerifyWithHashDescr ctx sigAlgExpected (DigitallySigned _ bs) (hashDescr, toVerify) = do
     cc <- usingState_ ctx $ isClientContext
     case sigAlgExpected of
-        SignatureRSA   -> verifyRSA ctx cc hashDescr toVerify bs
-        SignatureDSS   -> verifyRSA ctx cc hashDescr toVerify bs
-        SignatureECDSA -> verifyRSA ctx cc hashDescr toVerify bs
+        SignatureRSA   -> verifyPublic ctx cc hashDescr toVerify bs
+        SignatureDSS   -> verifyPublic ctx cc hashDescr toVerify bs
+        SignatureECDSA -> verifyPublic ctx cc hashDescr toVerify bs
         _              -> error "signature verification not implemented yet"
 
 digitallySignParams :: Context -> Bytes -> SignatureAlgorithm -> IO DigitallySigned

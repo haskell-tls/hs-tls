@@ -125,6 +125,7 @@ data Cipher = Cipher
     , cipherBulk         :: Bulk
     , cipherKeyExchange  :: CipherKeyExchangeType
     , cipherMinVer       :: Maybe Version
+    , cipherPRFHash      :: Maybe Hash
     }
 
 cipherKeyBlockSize :: Cipher -> Int

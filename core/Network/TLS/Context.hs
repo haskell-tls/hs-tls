@@ -122,13 +122,16 @@ instance TLSParams ServerParams where
                         CipherKeyExchange_DHE_RSA     -> canSignRSA && canDHE
                         CipherKeyExchange_DHE_DSS     -> canSignDSS && canDHE
                         CipherKeyExchange_ECDHE_RSA   -> canSignRSA
-                        -- unimplemented: non ephemeral DH
+                        -- unimplemented: EC
+                        CipherKeyExchange_ECDHE_ECDSA -> False
+                        -- unimplemented: non ephemeral DH & ECDH.
+                        -- Note, these *should not* be implemented, and have
+                        -- (for example) been removed in OpenSSL 1.1.0
+                        --
                         CipherKeyExchange_DH_DSS      -> False
                         CipherKeyExchange_DH_RSA      -> False
-                        -- unimplemented: EC
                         CipherKeyExchange_ECDH_ECDSA  -> False
                         CipherKeyExchange_ECDH_RSA    -> False
-                        CipherKeyExchange_ECDHE_ECDSA -> False
 
                 canDHE        = isJust $ serverDHEParams sparams
                 canSignDSS    = SignatureDSS `elem` signingAlgs
