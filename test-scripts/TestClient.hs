@@ -301,16 +301,17 @@ main = do
     when doLocal $ runLocal logFile pid
     runAgainstServices logFile pid $
         -- Everything supported
-        t2 Everything
-            [ "www.coursera.org"
-            ] ++
+        --t2 Everything [] ++
         -- SSL3 not supported
         t2 (LowerBound TLS10)
-            [ "developer.apple.com"
-            , "www.google.com"
+            [ "www.google.com"
             , "www.facebook.com"
             , "www.github.com"
             , "mail.office365.com"
             , "login.live.com"
             , "www.udacity.com"
+            , "www.coursera.org"
+            ] ++
+        t2 (LowerBound TLS12)
+            [ "developer.apple.com"
             ]
