@@ -231,7 +231,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
         --
         ---
         makeServerHello session = do
-            srand <- getStateRNG ctx 32 >>= return . ServerRandom
+            srand <- ServerRandom <$> getStateRNG ctx 32
             case mcred of
                 Just (_, privkey) -> usingHState ctx $ setPrivateKey privkey
                 _                 -> return () -- return a sensible error
