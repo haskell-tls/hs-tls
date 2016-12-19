@@ -27,7 +27,7 @@ import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush, hClose)
 
 #ifdef INCLUDE_NETWORK
 import Control.Monad
-import qualified Network.Socket as Network (Socket, sClose)
+import qualified Network.Socket as Network (Socket, close)
 import qualified Network.Socket.ByteString as Network
 #endif
 
@@ -72,7 +72,7 @@ safeRecv s buf = do
 #ifdef INCLUDE_NETWORK
 instance HasBackend Network.Socket where
     initializeBackend _ = return ()
-    getBackend sock = Backend (return ()) (Network.sClose sock) (Network.sendAll sock) recvAll
+    getBackend sock = Backend (return ()) (Network.close sock) (Network.sendAll sock) recvAll
       where recvAll n = B.concat `fmap` loop n
               where loop 0    = return []
                     loop left = do
