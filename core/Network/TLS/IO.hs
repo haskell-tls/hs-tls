@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE CPP #-}
 -- |
 -- Module      : Network.TLS.IO

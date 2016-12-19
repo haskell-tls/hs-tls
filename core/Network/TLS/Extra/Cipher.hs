@@ -6,7 +6,6 @@
 -- Portability : unknown
 --
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE PackageImports #-}
 module Network.TLS.Extra.Cipher
     (
     -- * cipher suite

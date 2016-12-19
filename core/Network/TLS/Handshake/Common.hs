@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Network.TLS.Handshake.Common
     ( handshakeFailed
     , errorToAlert

@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
 -- |
 -- Module      : Network.TLS.Handshake.Server
 -- License     : BSD-style
