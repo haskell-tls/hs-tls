@@ -205,7 +205,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
             sendPacket ctx $ Handshake [ClientKeyXchg ckx]
           where getCKX_DHE = do
                     xver <- usingState_ ctx getVersion
-                    serverParams <- fromJust <$> usingHState ctx (gets hstServerDHParams)
+                    serverParams <- usingHState ctx getServerDHParams
                     (clientDHPriv, clientDHPub) <- generateDHE ctx (serverDHParamsToParams serverParams)
 
                     let premaster = dhGetShared (serverDHParamsToParams serverParams)
@@ -217,7 +217,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
 
                 getCKX_ECDHE = do
                     xver <- usingState_ ctx getVersion
-                    (ServerECDHParams ecdhparams serverECDHPub) <- fromJust <$> usingHState ctx (gets hstServerECDHParams)
+                    (ServerECDHParams ecdhparams serverECDHPub) <- usingHState ctx getServerECDHParams
                     (clientECDHPriv, clientECDHPub) <- generateECDHE ctx ecdhparams
 
                     case ecdhGetShared ecdhparams clientECDHPriv serverECDHPub of

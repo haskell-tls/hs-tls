@@ -20,7 +20,13 @@ module Network.TLS.Handshake.State
     , getLocalPrivateKey
     , getRemotePublicKey
     , setServerDHParams
+    , getServerDHParams
     , setServerECDHParams
+    , getServerECDHParams
+    , setDHPrivate
+    , getDHPrivate
+    , setECDHPrivate
+    , getECDHPrivate
     -- * cert accessors
     , setClientCertSent
     , getClientCertSent
@@ -138,11 +144,29 @@ getRemotePublicKey = fromJust "remote public key" <$> gets (hksRemotePublicKey .
 getLocalPrivateKey :: HandshakeM PrivKey
 getLocalPrivateKey = fromJust "local private key" <$> gets (hksLocalPrivateKey . hstKeyState)
 
+getServerDHParams :: HandshakeM ServerDHParams
+getServerDHParams = fromJust "server DH params" <$> gets hstServerDHParams
+
+getServerECDHParams :: HandshakeM ServerECDHParams
+getServerECDHParams = fromJust "server ECDH params" <$> gets hstServerECDHParams
+
 setServerDHParams :: ServerDHParams -> HandshakeM ()
 setServerDHParams shp = modify (\hst -> hst { hstServerDHParams = Just shp })
 
 setServerECDHParams :: ServerECDHParams -> HandshakeM ()
 setServerECDHParams shp = modify (\hst -> hst { hstServerECDHParams = Just shp })
+
+getDHPrivate :: HandshakeM DHPrivate
+getDHPrivate = fromJust "server DH private" <$> gets hstDHPrivate
+
+getECDHPrivate :: HandshakeM ECDHPrivate
+getECDHPrivate = fromJust "server ECDH private" <$> gets hstECDHPrivate
+
+setDHPrivate :: DHPrivate -> HandshakeM ()
+setDHPrivate shp = modify (\hst -> hst { hstDHPrivate = Just shp })
+
+setECDHPrivate :: ECDHPrivate -> HandshakeM ()
+setECDHPrivate shp = modify (\hst -> hst { hstECDHPrivate = Just shp })
 
 setCertReqSent :: Bool -> HandshakeM ()
 setCertReqSent b = modify (\hst -> hst { hstCertReqSent = b })
