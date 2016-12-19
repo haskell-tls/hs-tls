@@ -96,7 +96,11 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     -- Handle Client hello
     processHandshake ctx clientHello
 
-    when (clientVersion == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
+    -- rejecting SSL2. RFC 6176
+    when (clientVersion == SSL2) $ throwCore $ Error_Protocol ("SSL 2.0 is not supported", True, ProtocolVersion)
+    -- rejecting SSL3. RFC 7568
+    -- when (clientVersion == SSL3) $ throwCore $ Error_Protocol ("SSL 3.0 is not supported", True, ProtocolVersion)
+
     -- Fallback SCSV: RFC7507
     -- TLS_FALLBACK_SCSV: {0x56, 0x00}
     when (supportedFallbackScsv (ctxSupported ctx) &&
