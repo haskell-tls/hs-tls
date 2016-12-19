@@ -22,8 +22,8 @@ module Network.TLS.Extra.Cipher
     , cipher_AES256_SHA1
     , cipher_AES128_SHA256
     , cipher_AES256_SHA256
-    , cipher_AES128GCM_SHA256
-    , cipher_AES256GCM_SHA384
+    , cipher_RSA_AES128GCM_SHA256
+    , cipher_RSA_AES256GCM_SHA384
     , cipher_DHE_RSA_AES128_SHA1
     , cipher_DHE_RSA_AES256_SHA1
     , cipher_DHE_RSA_AES128_SHA256
@@ -44,6 +44,11 @@ module Network.TLS.Extra.Cipher
     , cipher_ECDHE_ECDSA_AES256CBC_SHA384
     , cipher_ECDHE_ECDSA_AES128GCM_SHA256
     , cipher_ECDHE_ECDSA_AES256GCM_SHA384
+{-
+    -- * TLS 1.3
+    , cipher_AES128GCM_SHA256
+    , cipher_AES256GCM_SHA384
+-}
     -- * obsolete and non-standard ciphers
     , cipher_RSA_3DES_EDE_CBC_SHA1
     , cipher_RC4_128_MD5
@@ -163,7 +168,7 @@ ciphersuite_default =
     , cipher_ECDHE_RSA_AES128CBC_SHA, cipher_ECDHE_RSA_AES256CBC_SHA
     , cipher_DHE_RSA_AES128_SHA1, cipher_DHE_RSA_AES256_SHA1
              -- Next the non-PFS + GCM + SHA2 ciphers
-    , cipher_AES128GCM_SHA256, cipher_AES256GCM_SHA384
+    , cipher_RSA_AES128GCM_SHA256, cipher_RSA_AES256GCM_SHA384
              -- Next the non-PFS + CBC + SHA2 ciphers
     , cipher_AES256_SHA256, cipher_AES128_SHA256
              -- Next the non-PFS + CBC + SHA1 ciphers
@@ -172,6 +177,10 @@ ciphersuite_default =
     -- , cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1
     -- , cipher_DHE_DSS_RC4_SHA1, cipher_RC4_128_SHA1, cipher_RC4_128_MD5
     -- , cipher_RSA_3DES_EDE_CBC_SHA1
+{- TLS 1.3
+    , cipher_AES128GCM_SHA256
+    , cipher_AES256GCM_SHA384
+-}
     ]
 
 -- | The default ciphersuites + some not recommended last resort ciphers.
@@ -206,11 +215,15 @@ ciphersuite_strong =
     , cipher_ECDHE_RSA_AES256CBC_SHA
     , cipher_DHE_RSA_AES256_SHA1
              -- No PFS
-    , cipher_AES256GCM_SHA384
+    , cipher_RSA_AES256GCM_SHA384
              -- Neither PFS nor AEAD, just SHA2
     , cipher_AES256_SHA256
              -- Last resort no PFS, AEAD or SHA2
     , cipher_AES256_SHA1
+{- TLS 1.3
+    , cipher_AES128GCM_SHA256
+    , cipher_AES256GCM_SHA384
+-}
     ]
 
 -- | DHE-RSA cipher suite
@@ -438,8 +451,8 @@ cipher_AES256_SHA256 = Cipher
 
 -- | AESGCM cipher (128 bit key), RSA key exchange.
 -- The SHA256 digest is used as a PRF, not as a MAC.
-cipher_AES128GCM_SHA256 :: Cipher
-cipher_AES128GCM_SHA256 = Cipher
+cipher_RSA_AES128GCM_SHA256 :: Cipher
+cipher_RSA_AES128GCM_SHA256 = Cipher
     { cipherID           = 0x9c
     , cipherName         = "RSA-AES128GCM-SHA256"
     , cipherBulk         = bulk_aes128gcm
@@ -451,8 +464,8 @@ cipher_AES128GCM_SHA256 = Cipher
 
 -- | AESGCM cipher (256 bit key), RSA key exchange.
 -- The SHA384 digest is used as a PRF, not as a MAC.
-cipher_AES256GCM_SHA384 :: Cipher
-cipher_AES256GCM_SHA384 = Cipher
+cipher_RSA_AES256GCM_SHA384 :: Cipher
+cipher_RSA_AES256GCM_SHA384 = Cipher
     { cipherID           = 0x9d
     , cipherName         = "RSA-AES256GCM-SHA384"
     , cipherBulk         = bulk_aes256gcm
@@ -650,6 +663,30 @@ cipher_ECDHE_RSA_AES256GCM_SHA384 = Cipher
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
     , cipherMinVer       = Just TLS12 -- RFC 5289
     }
+
+{-
+cipher_AES128GCM_SHA256 :: Cipher
+cipher_AES128GCM_SHA256 = Cipher
+    { cipherID           = 0x1301
+    , cipherName         = "AES128GCM-SHA256"
+    , cipherBulk         = bulk_aes128gcm
+    , cipherHash         = SHA256
+    , cipherPRFHash      = Nothing
+    , cipherKeyExchange  = CipherKeyExchange_TLS13
+    , cipherMinVer       = Just TLS13ID16
+    }
+
+cipher_AES256GCM_SHA384 :: Cipher
+cipher_AES256GCM_SHA384 = Cipher
+    { cipherID           = 0x1302
+    , cipherName         = "AES256GCM-SH384"
+    , cipherBulk         = bulk_aes256gcm
+    , cipherHash         = SHA384
+    , cipherPRFHash      = Nothing
+    , cipherKeyExchange  = CipherKeyExchange_TLS13
+    , cipherMinVer       = Just TLS13ID16
+    }
+-}
 
 {-
 TLS 1.0 ciphers definition
