@@ -116,11 +116,11 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
         Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
 
     -- SNI (Server Name Indication)
-    let serverName = case extensionDecode False `fmap` (extensionLookup extensionID_ServerName exts) of
-            Just (Just (ServerName ns)) -> listToMaybe (mapMaybe toHostName ns)
+    let serverName = case extensionLookup extensionID_ServerName exts >>= extensionDecode False of
+            Just (ServerName ns) -> listToMaybe (mapMaybe toHostName ns)
                 where toHostName (ServerNameHostName hostName) = Just hostName
                       toHostName (ServerNameOther _)           = Nothing
-            _                           -> Nothing
+            _                    -> Nothing
 
     extraCreds <- (onServerNameIndication $ serverHooks sparams) serverName
 
@@ -148,18 +148,18 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
 
     maybe (return ()) (usingState_ ctx . setClientSNI) serverName
 
-    case extensionDecode False `fmap` (extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts) of
-        Just (Just (ApplicationLayerProtocolNegotiation protos)) -> usingState_ ctx $ setClientALPNSuggest protos
+    case extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts >>= extensionDecode False of
+        Just (ApplicationLayerProtocolNegotiation protos) -> usingState_ ctx $ setClientALPNSuggest protos
         _ -> return ()
 
-    case extensionDecode False `fmap` (extensionLookup extensionID_EllipticCurves exts) of
-        Just (Just (EllipticCurvesSupported es)) -> usingState_ ctx $ setClientEllipticCurveSuggest es
+    case extensionLookup extensionID_EllipticCurves exts >>= extensionDecode False of
+        Just (EllipticCurvesSupported es) -> usingState_ ctx $ setClientEllipticCurveSuggest es
         _ -> return ()
 
     -- Currently, we don't send back EcPointFormats. In this case,
     -- the client chooses EcPointFormat_Uncompressed.
-    case extensionDecode False `fmap` (extensionLookup extensionID_EcPointFormats exts) of
-        Just (Just (EcPointFormatsSupported fs)) -> usingState_ ctx $ setClientEcPointFormatSuggest fs
+    case extensionLookup extensionID_EcPointFormats exts >>= extensionDecode False of
+        Just (EcPointFormatsSupported fs) -> usingState_ ctx $ setClientEcPointFormatSuggest fs
         _ -> return ()
 
     doHandshake sparams cred ctx chosenVersion usedCipher usedCompression clientSession resumeSessionData exts
