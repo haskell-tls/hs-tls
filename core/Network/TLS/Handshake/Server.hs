@@ -125,7 +125,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
         Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
 
     let usedCipher = (onCipherChoosing $ serverHooks sparams) chosenVersion ciphersFilteredVersion
-        creds = extraCreds `mappend` (sharedCredentials $ ctxShared ctx)
+        creds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
 
     cred <- case cipherKeyExchange usedCipher of
                 CipherKeyExchange_RSA     -> return $ credentialsFindForDecrypting creds
