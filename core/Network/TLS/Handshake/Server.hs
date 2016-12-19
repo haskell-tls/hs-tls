@@ -111,9 +111,11 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
                         Nothing -> throwCore $ Error_Protocol ("client version " ++ show clientVersion ++ " is not supported", True, ProtocolVersion)
                         Just v  -> return v
 
+    -- If compression is null, commonCompressions should be [0].
     when (null commonCompressions) $ throwCore $
         Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
 
+    -- SNI (Server Name Indication)
     let serverName = case extensionDecode False `fmap` (extensionLookup extensionID_ServerName exts) of
             Just (Just (ServerName ns)) -> listToMaybe (mapMaybe toHostName ns)
                 where toHostName (ServerNameHostName hostName) = Just hostName
