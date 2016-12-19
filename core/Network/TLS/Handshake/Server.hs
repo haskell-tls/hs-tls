@@ -30,9 +30,10 @@ import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Key
 import Network.TLS.Measurement
 import Data.Maybe (isJust, listToMaybe, mapMaybe)
-import Data.List (intersect, sortBy)
+import Data.List (intersect, sortOn)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
+import Data.Ord (Down(..))
 
 import Control.Monad.State
 
@@ -444,6 +445,6 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
 
 findHighestVersionFrom :: Version -> [Version] -> Maybe Version
 findHighestVersionFrom clientVersion allowedVersions =
-    case filter (clientVersion >=) $ reverse $ sortBy compare allowedVersions of
+    case filter (clientVersion >=) $ sortOn Down allowedVersions of
         []  -> Nothing
         v:_ -> Just v
