@@ -22,6 +22,7 @@ module Network.TLS.Wire
     , getWord16
     , getWords16
     , getWord24
+    , getWord32
     , getBytes
     , getOpaque8
     , getOpaque16
@@ -38,6 +39,7 @@ module Network.TLS.Wire
     , putWord16
     , putWords16
     , putWord24
+    , putWord32
     , putBytes
     , putOpaque8
     , putOpaque16
@@ -103,6 +105,9 @@ getWord24 = do
     b <- fromIntegral <$> getWord8
     c <- fromIntegral <$> getWord8
     return $ (a `shiftL` 16) .|. (b `shiftL` 8) .|. c
+
+getWord32 :: Get Word32
+getWord32 = getWord32be
 
 getOpaque8 :: Get Bytes
 getOpaque8 = getWord8 >>= getBytes . fromIntegral
