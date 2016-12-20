@@ -15,3 +15,8 @@ MAINTAINERS
 * PRs: make sure they pass compilations and runtime tests before merging
 * Let someone else merge your own PR, or give other maintainers a chance to review
 * separate meaningful code from syntax changes
+
+SUPPORT
+-------
+
+Need to support all the GHC versions listed in the .travis file.
