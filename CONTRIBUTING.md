@@ -6,8 +6,7 @@ Contributions guideline:
 
 * Keep the code simple
 * Don't add extra dependency: dependencies have costs that is better to avoid. 
-* compatibility:
-  keep the code compatible with previous versions of GHC, 
+* compatibility: keep the code compatible with previous versions of GHC, and base.
 
 MAINTAINERS
 -----------
