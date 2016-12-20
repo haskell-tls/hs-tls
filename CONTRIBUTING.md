@@ -7,6 +7,10 @@ Contributions guideline:
 * Keep the code simple
 * Don't add extra dependency: dependencies have costs that is better to avoid. 
 * compatibility: keep the code compatible with previous versions of GHC, and base.
+* Don't drop older SSL / TLS features (even if insecure) without proper discussion.
+* Limit the change of API if necessary. it's usually better to create new API than
+  change current one.
+* Notable exception to previous rule: security fix have priority to other considerations.
 
 MAINTAINERS
 -----------
@@ -19,4 +23,5 @@ MAINTAINERS
 SUPPORT
 -------
 
-Need to support all the GHC versions listed in the .travis file.
+* Need to support all the GHC versions listed in the .travis file.
+* Operating systems: Windows, OSX and unix (Linux, BSD)
