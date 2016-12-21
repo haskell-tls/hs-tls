@@ -13,6 +13,7 @@ import Certificate
 import PubKey
 import PipeChan
 import Network.TLS
+import Network.TLS.Extra.FFDHE
 import Data.X509
 import Data.Default.Class
 import Control.Applicative
@@ -121,14 +122,14 @@ arbitraryPairParams = do
                                      maybe True (<= v) (cipherMinVer x) | x <- clientCiphers ]]
     serAllowedVersions <- (:[]) `fmap` elements allowedVersions
     secNeg             <- arbitrary
-
+    dhparams           <- elements [dhParams,ffdhe2048,ffdhe3072,ffdhe4096,ffdhe6144,ffdhe8192]
 
     let serverState = def
             { serverSupported = def { supportedCiphers  = serverCiphers
                                     , supportedVersions = serAllowedVersions
                                     , supportedSecureRenegotiation = secNeg
                                     }
-            , serverDHEParams = Just dhParams
+            , serverDHEParams = Just dhparams
             , serverShared = def { sharedCredentials = Credentials creds }
             }
     let clientState = (defaultParamsClient "" B.empty)
