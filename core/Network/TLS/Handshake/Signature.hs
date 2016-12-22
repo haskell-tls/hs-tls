@@ -138,32 +138,28 @@ signatureVerifyWithHashDescr ctx sigAlgExpected (DigitallySigned _ bs) (hashDesc
         SignatureECDSA -> verifyPublic ctx cc hashDescr toVerify bs
         _              -> error "signature verification not implemented yet"
 
-digitallySignParams :: Context -> Bytes -> SignatureAlgorithm -> IO DigitallySigned
-digitallySignParams ctx signatureData sigAlg = do
-    usedVersion <- usingState_ ctx getVersion
-    let mhash = case usedVersion of
-                    TLS12 -> case filter ((==) sigAlg . snd) $ supportedHashSignatures $ ctxSupported ctx of
-                                []  -> error ("no hash signature for " ++ show sigAlg)
-                                x:_ -> Just (fst x)
-                    _     -> Nothing
+digitallySignParams :: Context -> Bytes -> SignatureAlgorithm -> Maybe HashAlgorithm -> IO DigitallySigned
+digitallySignParams ctx signatureData sigAlg mhash = do
     let hashDescr = signatureHashData sigAlg mhash
     signatureCreate ctx (fmap (\h -> (h, sigAlg)) mhash) (hashDescr, signatureData)
 
 digitallySignDHParams :: Context
                       -> ServerDHParams
                       -> SignatureAlgorithm
+                      -> Maybe HashAlgorithm
                       -> IO DigitallySigned
-digitallySignDHParams ctx serverParams sigAlg = do
+digitallySignDHParams ctx serverParams sigAlg mhash = do
     dhParamsData <- withClientAndServerRandom ctx $ encodeSignedDHParams serverParams
-    digitallySignParams ctx dhParamsData sigAlg
+    digitallySignParams ctx dhParamsData sigAlg mhash
 
 digitallySignECDHParams :: Context
                         -> ServerECDHParams
                         -> SignatureAlgorithm
+                        -> Maybe HashAlgorithm
                         -> IO DigitallySigned
-digitallySignECDHParams ctx serverParams sigAlg = do
+digitallySignECDHParams ctx serverParams sigAlg mhash = do
     ecdhParamsData <- withClientAndServerRandom ctx $ encodeSignedECDHParams serverParams
-    digitallySignParams ctx ecdhParamsData sigAlg
+    digitallySignParams ctx ecdhParamsData sigAlg mhash
 
 digitallySignDHParamsVerify :: Context
                             -> ServerDHParams
