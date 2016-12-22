@@ -153,7 +153,8 @@ data Supported = Supported
       -- | supported compressions methods
     , supportedCompressions   :: [Compression]
       -- | All supported hash/signature algorithms pair for client
-      -- certificate verification, ordered by decreasing priority.
+      -- certificate verification and server signature in (EC)DHE,
+      -- ordered by decreasing priority.
     , supportedHashSignatures :: [HashAndSignatureAlgorithm]
       -- | Secure renegotiation defined in RFC5746.
       --   If 'True', clients send the renegotiation_info extension.
