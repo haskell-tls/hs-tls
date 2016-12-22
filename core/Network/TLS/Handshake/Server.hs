@@ -315,11 +315,19 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             usingHState ctx $ setDHPrivate priv
             return serverParams
 
+        -- Choosing a hash algorithm to sign (EC)DHE parameters
+        -- in ServerKeyExchange. Hash algorithm is not suggested by
+        -- the chosen cipher suite. So, it should be selected based on
+        -- the "signature_algorithms" extension in a client hello.
+        -- If RSA is also used for key exchange, this function is
+        -- not called.
         decideHash sigAlg = do
             usedVersion <- usingState_ ctx getVersion
             case usedVersion of
               TLS12 -> do
                   let sHashSigs = supportedHashSignatures $ ctxSupported ctx
+                      -- The values in the "signature_algorithms" extension
+                      -- are in descending order of preference.
                       cHashSigs = case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode False of
                           Just (SignatureAlgorithms hss) -> hss
                           Nothing                        -> []
