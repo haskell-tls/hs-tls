@@ -257,7 +257,16 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                             return [ ExtensionRaw extensionID_SecureRenegotiation vf ]
                     else return []
             protoExt <- applicationProtocol
-            let extensions = secRengExt ++ protoExt
+            sniExt   <- do
+                msni <- usingState_ ctx getClientSNI
+                case msni of
+                  -- RFC6066: In this event, the server SHALL include
+                  -- an extension of type "server_name" in the
+                  -- (extended) server hello. The "extension_data"
+                  -- field of this extension SHALL be empty.
+                  Just _  -> return [ ExtensionRaw extensionID_ServerName ""]
+                  Nothing -> return []
+            let extensions = secRengExt ++ protoExt ++ sniExt
             usingState_ ctx (setVersion chosenVersion)
             usingHState ctx $ setServerHelloParameters chosenVersion srand usedCipher usedCompression
             return $ ServerHello chosenVersion srand session (cipherID usedCipher)
