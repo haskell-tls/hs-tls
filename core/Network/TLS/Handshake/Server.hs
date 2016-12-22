@@ -254,7 +254,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                                     cvf <- getVerifiedData ClientRole
                                     svf <- getVerifiedData ServerRole
                                     return $ extensionEncode (SecureRenegotiation cvf $ Just svf)
-                            return [ ExtensionRaw 0xff01 vf ]
+                            return [ ExtensionRaw extensionID_SecureRenegotiation vf ]
                     else return []
             protoExt <- applicationProtocol
             let extensions = secRengExt ++ protoExt
