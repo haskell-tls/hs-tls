@@ -84,12 +84,16 @@ sessionRef ref = SessionManager
     , sessionInvalidate = \_         -> return ()
     }
 
-getDefaultParams :: [Flag] -> CertificateStore -> IORef (SessionID, SessionData) -> Credential -> Maybe (SessionID, SessionData) -> ServerParams
-getDefaultParams flags store sStorage cred session =
-    ServerParams
+getDefaultParams :: [Flag] -> CertificateStore -> IORef (SessionID, SessionData) -> Credential -> Maybe (SessionID, SessionData) -> IO ServerParams
+getDefaultParams flags store sStorage cred session = do
+    dhParams <- case getDHParams flags of
+        Nothing   -> return Nothing
+        Just file -> (Just . read) `fmap` readFile file
+
+    return ServerParams
         { serverWantClientCert = False
         , serverCACertificates = []
-        , serverDHEParams = Nothing
+        , serverDHEParams = dhParams
         , serverShared = def { sharedSessionManager  = sessionRef sStorage
                              , sharedCAStore         = store
                              , sharedValidationCache = validateCache
@@ -127,6 +131,10 @@ getDefaultParams flags store sStorage cred session =
                     [] -> True
                     l  -> cipherID c `elem` l
 
+            getDHParams opts = foldl accf Nothing opts
+              where accf _   (DHParams file) = Just file
+                    accf acc _               = acc
+
             getDebugSeed :: Maybe Seed -> Flag -> Maybe Seed
             getDebugSeed _   (DebugSeed seed) = seedFromInteger `fmap` readNumber seed
             getDebugSeed acc _                = acc
@@ -157,6 +165,7 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | ListCiphers
           | Certificate String
           | Key String
+          | DHParams String
           | DebugSeed String
           | DebugPrintSeed
           | Help
@@ -189,6 +198,7 @@ options =
     , Option []     ["debug-seed"] (ReqArg DebugSeed "debug-seed") "debug: set a specific seed for randomness"
     , Option []     ["debug-print-seed"] (NoArg DebugPrintSeed) "debug: set a specific seed for randomness"
     , Option []     ["key"] (ReqArg Key "key") "certificate file"
+    , Option []     ["dhparams"] (ReqArg DHParams "dhparams") "DH parameter file"
     ]
 
 noSession = Nothing
@@ -215,8 +225,8 @@ runOn (sStorage, certStore) flags port
   where
         runBench isSend = do
             cred <- loadCred getKey getCertificate
-            runTLS False False
-                   (getDefaultParams flags certStore sStorage cred noSession) port $ \ctx -> do
+            params <- getDefaultParams flags certStore sStorage cred noSession
+            runTLS False False params port $ \ctx -> do
                 handshake ctx
                 if isSend
                     then loopSendData getBenchAmount ctx
@@ -240,10 +250,11 @@ runOn (sStorage, certStore) flags port
             out <- maybe (return stdout) (flip openFile AppendMode) getOutput
 
             cred <- loadCred getKey getCertificate
+            params <- getDefaultParams flags certStore sStorage cred sess
 
             runTLS (Debug `elem` flags)
                    (IODebug `elem` flags)
-                   (getDefaultParams flags certStore sStorage cred sess) port $ \ctx -> do
+                   params port $ \ctx -> do
                 handshake ctx
                 loopRecv out ctx
                 --sendData ctx $ query
