@@ -22,6 +22,7 @@ import Data.Default.Class
 import Data.IORef
 import Data.Monoid
 import Data.Char (isDigit)
+import Data.Maybe (isJust)
 
 import Numeric (showHex)
 
@@ -239,6 +240,7 @@ runOn (sStorage, certStore) flags port hostname
                 sendData ctx $ query
                 loopRecv out ctx
                 bye ctx
+                when (isJust getOutput) $ hClose out
                 return ()
         loopRecv out ctx = do
             d <- timeout (timeoutMs * 1000) (recvData ctx) -- 2s per recv
