@@ -232,7 +232,7 @@ runOn (sStorage, certStore) flags port hostname
                         ++ userAgent
                         ++ "\r\n\r\n")
             when (Verbose `elem` flags) (putStrLn "sending query:" >> LC.putStrLn query >> putStrLn "")
-            out <- maybe (return stdout) (flip openFile WriteMode) getOutput
+            out <- maybe (return stdout) (flip openFile AppendMode) getOutput
             runTLS (Debug `elem` flags)
                    (IODebug `elem` flags)
                    (getDefaultParams flags hostname certStore sStorage certCredRequest sess) hostname port $ \ctx -> do
@@ -240,8 +240,8 @@ runOn (sStorage, certStore) flags port hostname
                 sendData ctx $ query
                 loopRecv out ctx
                 bye ctx
-                when (isJust getOutput) $ hClose out
                 return ()
+            when (isJust getOutput) $ hClose out
         loopRecv out ctx = do
             d <- timeout (timeoutMs * 1000) (recvData ctx) -- 2s per recv
             case d of
