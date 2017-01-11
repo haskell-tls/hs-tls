@@ -122,7 +122,7 @@ arbitraryPairParams = do
                                      maybe True (<= v) (cipherMinVer x) | x <- clientCiphers ]]
     serAllowedVersions <- (:[]) `fmap` elements allowedVersions
     secNeg             <- arbitrary
-    dhparams           <- elements [dhParams,ffdhe2048,ffdhe3072,ffdhe4096,ffdhe6144,ffdhe8192]
+    dhparams           <- elements [dhParams,ffdhe2048,ffdhe3072]
 
     let serverState = def
             { serverSupported = def { supportedCiphers  = serverCiphers
