@@ -54,7 +54,7 @@ module Network.TLS.Extra.Cipher
 
 import qualified Data.ByteString as B
 
-import Network.TLS (Version(..))
+import Network.TLS.Types (Version(..))
 import Network.TLS.Cipher
 import Data.Tuple (swap)
 
