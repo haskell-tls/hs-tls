@@ -22,6 +22,7 @@ import Data.Default.Class
 import Data.IORef
 import Data.Monoid
 import Data.Char (isDigit)
+import Data.Maybe (isJust)
 
 import Numeric (showHex)
 
@@ -236,7 +237,7 @@ runOn (sStorage, certStore) flags port
                     loopRecvData (bytes - B.length d) ctx
 
         doTLS sess = do
-            out <- maybe (return stdout) (flip openFile WriteMode) getOutput
+            out <- maybe (return stdout) (flip openFile AppendMode) getOutput
 
             cred <- loadCred getKey getCertificate
 
@@ -248,6 +249,7 @@ runOn (sStorage, certStore) flags port
                 --sendData ctx $ query
                 bye ctx
                 return ()
+            when (isJust getOutput) $ hClose out
         loopRecv out ctx = do
             d <- timeout (timeoutMs * 1000) (recvData ctx) -- 2s per recv
             case d of
