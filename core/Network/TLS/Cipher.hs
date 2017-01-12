@@ -32,8 +32,7 @@ module Network.TLS.Cipher
     ) where
 
 import Crypto.Cipher.Types (AuthTag)
-import Network.TLS.Types (CipherID)
-import Network.TLS.Struct (Version(..))
+import Network.TLS.Types (CipherID, Version(..))
 import Network.TLS.Crypto (Hash(..), hashDigestSize)
 
 import qualified Data.ByteString as B
