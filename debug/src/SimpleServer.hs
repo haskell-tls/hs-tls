@@ -28,22 +28,6 @@ import Numeric (showHex)
 
 import HexDump
 
-ciphers :: [Cipher]
-ciphers =
-    [ cipher_DHE_RSA_AES256_SHA256
-    , cipher_DHE_RSA_AES128_SHA256
-    , cipher_DHE_RSA_AES256_SHA1
-    , cipher_DHE_RSA_AES128_SHA1
-    , cipher_DHE_DSS_AES256_SHA1
-    , cipher_DHE_DSS_AES128_SHA1
-    , cipher_AES128_SHA1
-    , cipher_AES256_SHA1
-    , cipher_RC4_128_MD5
-    , cipher_RC4_128_SHA1
-    , cipher_RSA_3DES_EDE_CBC_SHA1
-    , cipher_DHE_RSA_AES128GCM_SHA256
-    ]
-
 defaultBenchAmount = 1024 * 1024
 defaultTimeout = 2000
 
@@ -109,7 +93,7 @@ getDefaultParams flags store sStorage cred session =
                 | otherwise    = ValidationCache (\_ _ _ -> return ValidationCachePass)
                                                  (\_ _ _ -> return ())
 
-            myCiphers = foldl accBogusCipher (filter withUseCipher ciphers) flags
+            myCiphers = foldl accBogusCipher (filter withUseCipher ciphersuite_default) flags
               where accBogusCipher acc (BogusCipher c) =
                         case reads c of
                             [(v, "")] -> acc ++ [bogusCipher v]
@@ -303,7 +287,7 @@ printUsage =
 printCiphers = do
     putStrLn "Supported ciphers"
     putStrLn "====================================="
-    forM_ ciphers $ \c -> do
+    forM_ ciphersuite_default $ \c -> do
         putStrLn (pad 50 (cipherName c) ++ " = " ++ pad 5 (show $ cipherID c) ++ "  0x" ++ showHex (cipherID c) "")
   where
     pad n s

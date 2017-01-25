@@ -27,21 +27,6 @@ import Network.TLS.Extra.Cipher
 
 import qualified Crypto.PubKey.DH as DH ()
 
-ciphers :: [Cipher]
-ciphers =
-    [ cipher_DHE_RSA_AES256_SHA256
-    , cipher_DHE_RSA_AES128_SHA256
-    , cipher_DHE_RSA_AES256_SHA1
-    , cipher_DHE_RSA_AES128_SHA1
-    , cipher_DHE_DSS_AES128_SHA1
-    , cipher_DHE_DSS_AES256_SHA1
-    , cipher_DHE_DSS_RC4_SHA1
-    , cipher_AES128_SHA1
-    , cipher_AES256_SHA1
-    , cipher_RC4_128_MD5
-    , cipher_RC4_128_SHA1
-    ]
-
 loopUntil :: Monad m => m Bool -> m ()
 loopUntil f = f >>= \v -> if v then return () else loopUntil f
 
@@ -106,7 +91,7 @@ clientProcess dhParamsFile creds handle dsthandle dbg sessionStorage _ = do
             Just file -> (Just . read) `fmap` readFile file
 
     let serverstate = def
-            { serverSupported = def { supportedCiphers = ciphers }
+            { serverSupported = def { supportedCiphers = ciphersuite_default }
             , serverShared    = def { sharedCredentials = creds
                                     , sharedSessionManager = maybe noSessionManager (memSessionManager . MemSessionManager) sessionStorage
                                     }
@@ -182,7 +167,7 @@ doClient source destination@(Address a _) flags = do
                                 (\_ _ _ -> return ())
            | otherwise = def
     let clientstate = (defaultParamsClient a B.empty)
-                        { clientSupported = def { supportedCiphers = ciphers }
+                        { clientSupported = def { supportedCiphers = ciphersuite_all }
                         , clientShared    = def { sharedCAStore = store, sharedValidationCache = validateCache }
                         }
 
