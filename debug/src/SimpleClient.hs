@@ -2,7 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 import Crypto.Random
 import Network.BSD
-import Network.Socket (socket, Family(..), SocketType(..), sClose, SockAddr(..), connect)
+import Network.Socket (socket, Family(..), SocketType(..), close, SockAddr(..), connect)
 import Network.TLS
 import Network.TLS.Extra.Cipher
 import System.Console.GetOpt
@@ -38,11 +38,11 @@ runTLS debug ioDebug params hostname portNumber f = do
     sock <- socket AF_INET Stream defaultProtocol
     let sockaddr = SockAddrInet portNumber (head $ hostAddresses he)
     E.catch (connect sock sockaddr)
-          (\(e :: SomeException) -> sClose sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
+          (\(e :: SomeException) -> close sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
     ctx <- contextNew sock params
     contextHookSetLogging ctx getLogging
     () <- f ctx
-    sClose sock
+    close sock
   where getLogging = ioLogging $ packetLogging $ def
         packetLogging logging
             | debug = logging { loggingPacketSent = putStrLn . ("debug: >> " ++)

@@ -133,7 +133,7 @@ getAddressDescription a = error ("unrecognized source type (expecting tcp/unix/f
 connectAddressDescription (AddrSocket family sockaddr) = do
     sock <- socket family Stream defaultProtocol
     E.catch (connect sock sockaddr)
-          (\(e :: SomeException) -> sClose sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
+          (\(e :: SomeException) -> close sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
     return $ StunnelSocket sock
 
 connectAddressDescription (AddrFD h1 h2) = do
@@ -141,8 +141,8 @@ connectAddressDescription (AddrFD h1 h2) = do
 
 listenAddressDescription (AddrSocket family sockaddr) = do
     sock <- socket family Stream defaultProtocol
-    E.catch (bindSocket sock sockaddr >> listen sock 10 >> setSocketOption sock ReuseAddr 1)
-          (\(e :: SomeException) -> sClose sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
+    E.catch (bind sock sockaddr >> listen sock 10 >> setSocketOption sock ReuseAddr 1)
+          (\(e :: SomeException) -> close sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
     return $ StunnelSocket sock
 
 listenAddressDescription (AddrFD _ _) = do

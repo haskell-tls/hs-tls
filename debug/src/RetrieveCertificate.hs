@@ -40,7 +40,7 @@ openConnection s p = do
             else servicePort <$> getServiceByName p "tcp"
     he <- getHostByName s
 
-    sock <- bracketOnError (socket AF_INET Stream defaultProtocol) sClose $ \sock -> do
+    sock <- bracketOnError (socket AF_INET Stream defaultProtocol) close $ \sock -> do
             connect sock (SockAddrInet pn (head $ hostAddresses he))
             return sock
     ctx <- contextNew sock params
