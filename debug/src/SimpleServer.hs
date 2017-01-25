@@ -2,7 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 import Crypto.Random
 import Network.BSD
-import Network.Socket (socket, Family(..), SocketType(..), sClose, SockAddr(..), bind, listen, accept, iNADDR_ANY)
+import Network.Socket (socket, Family(..), SocketType(..), close, SockAddr(..), bind, listen, accept, iNADDR_ANY)
 import Network.TLS
 import Network.TLS.Extra.Cipher
 import System.Console.GetOpt
@@ -11,7 +11,6 @@ import System.Timeout
 import qualified Data.ByteString.Lazy.Char8 as LC
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString as B
-import qualified Control.Exception as E
 import Control.Monad
 import System.Environment
 import System.Exit
@@ -46,8 +45,8 @@ runTLS debug ioDebug params portNumber f = do
     ctx <- contextNew cSock params
     contextHookSetLogging ctx getLogging
     () <- f ctx
-    sClose cSock
-    sClose sock
+    close cSock
+    close sock
   where getLogging = ioLogging $ packetLogging $ def
         packetLogging logging
             | debug = logging { loggingPacketSent = putStrLn . ("debug: >> " ++)
@@ -69,7 +68,7 @@ sessionRef ref = SessionManager
     }
 
 getDefaultParams :: [Flag] -> CertificateStore -> IORef (SessionID, SessionData) -> Credential -> Maybe (SessionID, SessionData) -> IO ServerParams
-getDefaultParams flags store sStorage cred session = do
+getDefaultParams flags store sStorage cred _session = do
     dhParams <- case getDHParams flags of
         Nothing   -> return Nothing
         Just file -> (Just . read) `fmap` readFile file
