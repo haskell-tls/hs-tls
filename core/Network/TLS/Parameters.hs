@@ -246,6 +246,10 @@ data ClientHooks = ClientHooks
                                Maybe [HashAndSignatureAlgorithm],
                                [DistinguishedName]) -> IO (Maybe (CertificateChain, PrivKey))
     , onNPNServerSuggest   :: Maybe ([B.ByteString] -> IO B.ByteString)
+      -- | Used by the client to validate the server certificate.  The default
+      -- implementation calls 'validateDefault' which validates according to the
+      -- default hooks and checks provided by "Data.X509.Validation".  This can
+      -- be replaced with a custom validation function using different settings.
     , onServerCertificate  :: CertificateStore -> ValidationCache -> ServiceID -> CertificateChain -> IO [FailedReason]
     , onSuggestALPN :: IO (Maybe [B.ByteString])
     }
