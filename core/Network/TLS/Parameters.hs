@@ -272,9 +272,8 @@ data ServerHooks = ServerHooks
       onClientCertificate :: CertificateChain -> IO CertificateUsage
 
       -- | This action is called when the client certificate
-      -- cannot be verified.  A 'Nothing' argument indicates a
-      -- wrong signature, a 'Just e' message signals a crypto
-      -- error.
+      -- cannot be verified. Return 'True' to accept the certificate
+      -- anyway, or 'False' to fail verification.
     , onUnverifiedClientCert :: IO Bool
 
       -- | Allow the server to choose the cipher relative to the
