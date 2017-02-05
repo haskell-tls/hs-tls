@@ -95,7 +95,7 @@ signatureHashData SignatureECDSA mhash =
         Just HashSHA384 -> SHA384
         Just HashSHA256 -> SHA256
         Just HashSHA1   -> SHA1
-        Nothing         -> SHA1_MD5
+        Nothing         -> SHA1
         Just hsh        -> error ("unimplemented ECDSA signature hash type: " ++ show hsh)
 signatureHashData sig _ = error ("unimplemented signature type: " ++ show sig)
 

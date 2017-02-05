@@ -526,7 +526,7 @@ cipher_ECDHE_ECDSA_AES128CBC_SHA = Cipher
     , cipherBulk         = bulk_aes128
     , cipherHash         = SHA1
     , cipherPRFHash      = Nothing
-    , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
     , cipherMinVer       = Just TLS10
     }
 
@@ -537,7 +537,7 @@ cipher_ECDHE_ECDSA_AES256CBC_SHA = Cipher
     , cipherBulk         = bulk_aes256
     , cipherHash         = SHA1
     , cipherPRFHash      = Nothing
-    , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
     , cipherMinVer       = Just TLS10
     }
 
