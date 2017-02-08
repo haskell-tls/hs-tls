@@ -55,7 +55,7 @@ Library
                    , x509 >= 1.6.5 && < 1.7.0
                    , x509-store >= 1.6
                    , x509-validation >= 1.6.5 && < 1.7.0
-                   , async
+                   , async >= 2.0
   if flag(network)
     Build-Depends:   network
     cpp-options:     -DINCLUDE_NETWORK

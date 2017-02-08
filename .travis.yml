@@ -29,6 +29,7 @@ install:
       cabal install --only-dependencies --enable-tests
     else
       cabal install --only-dependencies
+      cabal install random
     fi
     cabal install
  - cd ../debug
