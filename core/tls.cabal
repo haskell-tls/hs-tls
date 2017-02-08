@@ -57,7 +57,7 @@ Library
                    , x509-validation >= 1.6.5 && < 1.7.0
                    , async >= 2.0
   if flag(network)
-    Build-Depends:   network
+    Build-Depends:   network >= 2.4.0.0
     cpp-options:     -DINCLUDE_NETWORK
   if flag(hans)
     Build-Depends:   hans
