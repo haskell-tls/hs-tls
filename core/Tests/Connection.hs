@@ -1,6 +1,7 @@
 module Connection
     ( newPairContext
     , arbitraryPairParams
+    , arbitraryClientCredential
     , setPairParamsSessionManager
     , setPairParamsSessionResuming
     , establishDataPipe
@@ -146,6 +147,11 @@ arbitraryPairParams = do
     return (clientState, serverState)
   where
         arbitraryCiphers  = resize (length knownCiphers + 1) $ listOf1 (elements knownCiphers)
+
+arbitraryClientCredential = do
+    let (pubKey, privKey) = getGlobalRSAPair
+    cert <- arbitraryX509WithKey (PubKeyRSA pubKey, PrivKeyRSA privKey)
+    return (CertificateChain [cert], PrivKeyRSA privKey)
 
 setPairParamsSessionManager :: SessionManager -> (ClientParams, ServerParams) -> (ClientParams, ServerParams)
 setPairParamsSessionManager manager (clientState, serverState) = (nc,ns)
