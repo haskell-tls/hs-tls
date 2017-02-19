@@ -46,7 +46,7 @@ certificateVerifyCreate :: Context
                         -> IO DigitallySigned
 certificateVerifyCreate ctx usedVersion malg msgs =
     prepareCertificateVerifySignatureData ctx usedVersion malg msgs >>=
-    signatureCreate ctx malg
+    signatureCreateWithHashDescr ctx malg
 
 getHashAndASN1 :: MonadIO m => (HashAlgorithm, SignatureAlgorithm) -> m Hash
 getHashAndASN1 hashSig = case hashSig of
@@ -101,13 +101,22 @@ signatureHashData sig _ = error ("unimplemented signature type: " ++ show sig)
 
 --signatureCreate :: Context -> Maybe HashAndSignatureAlgorithm -> HashDescr -> Bytes -> IO DigitallySigned
 signatureCreate :: Context -> Maybe HashAndSignatureAlgorithm -> CertVerifyData -> IO DigitallySigned
-signatureCreate ctx malg (hashAlg, toSign) = do
-    cc <- usingState_ ctx $ isClientContext
+signatureCreate ctx malg (hashAlg, toSign) =
+    -- in the case of TLS < 1.2, RSA signing, then the data need to be hashed first, as
+    -- the SHA_MD5 algorithm expect an already digested data
     let signData =
             case (malg, hashAlg) of
                 (Nothing, SHA1_MD5) -> hashFinal $ hashUpdate (hashInit SHA1_MD5) toSign
                 _                   -> toSign
-    DigitallySigned malg <$> signPrivate ctx cc hashAlg signData
+    in signatureCreateWithHashDescr ctx malg (hashAlg, signData)
+
+signatureCreateWithHashDescr :: Context
+                             -> Maybe HashAndSignatureAlgorithm
+                             -> CertVerifyData
+                             -> IO DigitallySigned
+signatureCreateWithHashDescr ctx malg (hashDescr, toSign) = do
+    cc <- usingState_ ctx $ isClientContext
+    DigitallySigned malg <$> signPrivate ctx cc hashDescr toSign
 
 signatureVerify :: Context -> DigitallySigned -> SignatureAlgorithm -> Bytes -> IO Bool
 signatureVerify ctx digSig@(DigitallySigned hashSigAlg _) sigAlgExpected toVerifyData = do
