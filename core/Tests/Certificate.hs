@@ -9,6 +9,8 @@ module Certificate
     , arbitraryKeyUsage
     , simpleCertificate
     , simpleX509
+    , toPubKeyEC
+    , toPrivKeyEC
     ) where
 
 import Control.Applicative
@@ -16,6 +18,9 @@ import Test.Tasty.QuickCheck
 import Data.ASN1.OID
 import Data.X509
 import Data.Hourglass
+import Crypto.Number.Serialize (i2ospOf_)
+import qualified Crypto.PubKey.ECC.ECDSA as ECDSA
+import qualified Crypto.PubKey.ECC.Types as ECC
 import qualified Data.ByteString as B
 
 import PubKey
@@ -125,3 +130,17 @@ getSignatureALG (PubKeyEC       _) = SignatureALG HashSHA256    PubKeyALG_EC
 getSignatureALG (PubKeyEd25519  _) = SignatureALG_IntrinsicHash PubKeyALG_Ed25519
 getSignatureALG (PubKeyEd448    _) = SignatureALG_IntrinsicHash PubKeyALG_Ed448
 getSignatureALG pubKey             = error $ "getSignatureALG: unsupported public key: " ++ show pubKey
+
+toPubKeyEC :: ECC.CurveName -> ECDSA.PublicKey -> PubKey
+toPubKeyEC curveName key =
+    let ECC.Point x y = ECDSA.public_q key
+        pub   = SerializedPoint bs
+        bs    = B.cons 4 (i2ospOf_ bytes x `B.append` i2ospOf_ bytes y)
+        bits  = ECC.curveSizeBits (ECC.getCurveByName curveName)
+        bytes = (bits + 7) `div` 8
+     in PubKeyEC (PubKeyEC_Named curveName pub)
+
+toPrivKeyEC :: ECC.CurveName -> ECDSA.PrivateKey -> PrivKey
+toPrivKeyEC curveName key =
+    let priv = ECDSA.private_d key
+     in PrivKeyEC (PrivKeyEC_Named curveName priv)

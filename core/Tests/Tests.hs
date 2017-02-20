@@ -489,10 +489,16 @@ prop_handshake_hashsignatures = do
         serverParam' = serverParam { serverSupported = (serverSupported serverParam)
                                        { supportedHashSignatures = serverHashSigs }
                                    }
-        shouldFail = null (clientHashSigs `intersect` serverHashSigs)
+        commonHashSigs = clientHashSigs `intersect` serverHashSigs
+        shouldFail
+            | tls13     = all incompatibleWithDefaultCurve commonHashSigs
+            | otherwise = null commonHashSigs
     if shouldFail
         then runTLSInitFailure (clientParam',serverParam')
         else runTLSPipeSimple  (clientParam',serverParam')
+  where
+    incompatibleWithDefaultCurve (h, SignatureECDSA) = h /= HashSHA256
+    incompatibleWithDefaultCurve _                   = False
 
 -- Tests ability to use or ignore client "signature_algorithms" extension when
 -- choosing a server certificate.  Here peers allow DHE_RSA_AES128_SHA1 but
