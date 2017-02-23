@@ -20,7 +20,7 @@ import Network.TLS.Struct
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Credentials
-import Network.TLS.Crypto.ECDH
+import Network.TLS.Crypto
 import Network.TLS.Extension
 import Network.TLS.Util (catchException, fromJust)
 import Network.TLS.IO
@@ -434,7 +434,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
         -- Check whether the client correctly signed the handshake.
         -- If not, ask the application on how to proceed.
         --
-        processCertificateVerify (Handshake [hs@(CertVerify dsig@(DigitallySigned mbHashSig _))]) = do
+        processCertificateVerify (Handshake [hs@(CertVerify dsig)]) = do
             processHandshake ctx hs
 
             checkValidClientCertChain "change cipher message expected"
@@ -442,7 +442,12 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             usedVersion <- usingState_ ctx getVersion
             -- Fetch all handshake messages up to now.
             msgs  <- usingHState ctx $ B.concat <$> getHandshakeMessages
-            verif <- certificateVerifyCheck ctx usedVersion mbHashSig msgs dsig
+
+            sigAlgExpected <- getRemoteSignatureAlg
+
+            -- FIXME should check certificate is allowed for signing
+
+            verif <- certificateVerifyCheck ctx usedVersion sigAlgExpected msgs dsig
 
             case verif of
                 True -> do
@@ -478,6 +483,14 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                         | otherwise                 -> throwCore $ Error_Protocol ("cert verify message missing", True, UnexpectedMessage)
                 Nothing -> return ()
             expectChangeCipher p
+
+        getRemoteSignatureAlg = do
+            pk <- usingHState ctx getRemotePublicKey
+            case pk of
+                PubKeyRSA _   -> return SignatureRSA
+                PubKeyDSA _   -> return SignatureDSS
+                PubKeyEC  _   -> return SignatureECDSA
+                _             -> throwCore $ Error_Protocol ("unsupported remote public key type", True, HandshakeFailure)
 
         expectChangeCipher ChangeCipherSpec = do
             npn <- usingState_ ctx getExtensionNPN

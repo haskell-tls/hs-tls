@@ -104,13 +104,19 @@ knownCiphers = [ blockCipher
 knownVersions :: [Version]
 knownVersions = [SSL3,TLS10,TLS11,TLS12]
 
+arbitraryCredentialsOfEachType = do
+    let (pubKey, privKey) = getGlobalRSAPair
+    (dsaPub, dsaPriv) <- arbitraryDSAPair
+    mapM (\(pub, priv) -> do
+              cert <- arbitraryX509WithKey (pub, priv)
+              return (CertificateChain [cert], priv)
+         ) [ (PubKeyRSA pubKey, PrivKeyRSA privKey)
+           , (PubKeyDSA dsaPub, PrivKeyDSA dsaPriv)
+           ]
+
+arbitraryPairParams :: Gen (ClientParams, ServerParams)
 arbitraryPairParams = do
-    (dsaPub, dsaPriv) <- (\(p,r) -> (PubKeyDSA p, PrivKeyDSA r)) <$> arbitraryDSAPair
-    let (pubKey, privKey) = (\(p, r) -> (PubKeyRSA p, PrivKeyRSA r)) $ getGlobalRSAPair
-    creds              <- mapM (\(pub, priv) -> do
-                                    cert <- arbitraryX509WithKey (pub, priv)
-                                    return (CertificateChain [cert], priv)
-                               ) [ (pubKey, privKey), (dsaPub, dsaPriv) ]
+    creds              <- arbitraryCredentialsOfEachType
     connectVersion     <- elements knownVersions
     serverCiphers      <- arbitraryCiphers `suchThat`
                                 (\cs -> or [maybe True (<= connectVersion) (cipherMinVer x) | x <- cs])
@@ -148,10 +154,8 @@ arbitraryPairParams = do
   where
         arbitraryCiphers  = resize (length knownCiphers + 1) $ listOf1 (elements knownCiphers)
 
-arbitraryClientCredential = do
-    let (pubKey, privKey) = getGlobalRSAPair
-    cert <- arbitraryX509WithKey (PubKeyRSA pubKey, PrivKeyRSA privKey)
-    return (CertificateChain [cert], PrivKeyRSA privKey)
+arbitraryClientCredential :: Gen Credential
+arbitraryClientCredential = arbitraryCredentialsOfEachType >>= elements
 
 setPairParamsSessionManager :: SessionManager -> (ClientParams, ServerParams) -> (ClientParams, ServerParams)
 setPairParamsSessionManager manager (clientState, serverState) = (nc,ns)
