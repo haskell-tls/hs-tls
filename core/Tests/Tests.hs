@@ -71,6 +71,34 @@ prop_handshake_initiate = do
             bye ctx
             return ()
 
+prop_handshake_client_auth_initiate :: PropertyM IO ()
+prop_handshake_client_auth_initiate = do
+    (clientParam,serverParam) <- pick arbitraryPairParams
+    cred <- pick arbitraryClientCredential
+    let clientParam' = clientParam { clientHooks = (clientHooks clientParam)
+                                       { onCertificateRequest = \_ -> return $ Just cred }
+                                   }
+        serverParam' = serverParam { serverWantClientCert = True
+                                   , serverHooks = (serverHooks serverParam)
+                                        { onClientCertificate = validateChain cred }
+                                   }
+        params' = (clientParam',serverParam')
+    runTLSPipe params' tlsServer tlsClient
+  where tlsServer ctx queue = do
+            handshake ctx
+            d <- recvDataNonNull ctx
+            writeChan queue d
+            return ()
+        tlsClient queue ctx = do
+            handshake ctx
+            d <- readChan queue
+            sendData ctx (L.fromChunks [d])
+            bye ctx
+            return ()
+        validateChain cred chain
+            | chain == fst cred = return CertificateUsageAccept
+            | otherwise         = return (CertificateUsageReject CertificateRejectUnknownCA)
+
 prop_handshake_npn_initiate :: PropertyM IO ()
 prop_handshake_npn_initiate = do
     (clientParam,serverParam) <- pick arbitraryPairParams
@@ -182,6 +210,7 @@ main = defaultMain $ testGroup "tls"
         tests_handshake = testGroup "Handshakes"
             [ testProperty "setup" (monadicIO prop_pipe_work)
             , testProperty "initiate" (monadicIO prop_handshake_initiate)
+            , testProperty "clientAuthInitiate" (monadicIO prop_handshake_client_auth_initiate)
             , testProperty "npnInitiate" (monadicIO prop_handshake_npn_initiate)
             , testProperty "renegociation" (monadicIO prop_handshake_renegociation)
             , testProperty "resumption" (monadicIO prop_handshake_session_resumption)
