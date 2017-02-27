@@ -344,7 +344,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                       cHashSigs = case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode False of
                           Just (SignatureAlgorithms hss) -> hss
                           Nothing                        -> []
-                      hashSigs = cHashSigs `intersect` sHashSigs
+                      hashSigs = sHashSigs `intersect` cHashSigs
                   case filter ((==) sigAlg . snd) hashSigs of
                       []  -> error ("no hash signature for " ++ show sigAlg)
                       x:_ -> return $ Just (fst x)
