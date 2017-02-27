@@ -324,13 +324,15 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
         decideHash sigAlg = do
             usedVersion <- usingState_ ctx getVersion
             case usedVersion of
-              TLS12 -> do
+              TLS12 -> case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode False of
+                -- According to Section 7.4.1.4.1 of RFC 5246,
+                -- SHA1 is assumed if the "signature_algorithms" extension
+                -- does not exist.
+                Nothing -> return $ Just HashSHA1
+                Just (SignatureAlgorithms cHashSigs) -> do
                   let sHashSigs = supportedHashSignatures $ ctxSupported ctx
                       -- The values in the "signature_algorithms" extension
                       -- are in descending order of preference.
-                      cHashSigs = case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode False of
-                          Just (SignatureAlgorithms hss) -> hss
-                          Nothing                        -> []
                       hashSigs = sHashSigs `intersect` cHashSigs
                   case filter ((==) sigAlg . snd) hashSigs of
                       []  -> error ("no hash signature for " ++ show sigAlg)
