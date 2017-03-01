@@ -328,9 +328,35 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             usingHState ctx $ setDHPrivate priv
             return serverParams
 
+        -- Choosing a hash algorithm to sign (EC)DHE parameters
+        -- in ServerKeyExchange. Hash algorithm is not suggested by
+        -- the chosen cipher suite. So, it should be selected based on
+        -- the "signature_algorithms" extension in a client hello.
+        -- If RSA is also used for key exchange, this function is
+        -- not called.
+        decideHash sigAlg = do
+            usedVersion <- usingState_ ctx getVersion
+            case usedVersion of
+              TLS12 -> do
+                  let cHashSigs = case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode False of
+                          -- See Section 7.4.1.4.1 of RFC 5246.
+                          Nothing -> [(HashSHA1, SignatureECDSA)
+                                     ,(HashSHA1, SignatureRSA)
+                                     ,(HashSHA1, SignatureDSS)]
+                          Just (SignatureAlgorithms sas) -> sas
+                      sHashSigs = supportedHashSignatures $ ctxSupported ctx
+                      -- The values in the "signature_algorithms" extension
+                      -- are in descending order of preference.
+                      hashSigs = sHashSigs `intersect` cHashSigs
+                  case filter ((==) sigAlg . snd) hashSigs of
+                      []  -> error ("no hash signature for " ++ show sigAlg)
+                      x:_ -> return $ Just (fst x)
+              _     -> return Nothing
+
         generateSKX_DHE sigAlg = do
             serverParams  <- setup_DHE
-            signed <- digitallySignDHParams ctx serverParams sigAlg
+            mhash <- decideHash sigAlg
+            signed <- digitallySignDHParams ctx serverParams sigAlg mhash
             case sigAlg of
                 SignatureRSA -> return $ SKX_DHE_RSA serverParams signed
                 SignatureDSS -> return $ SKX_DHE_DSS serverParams signed
@@ -356,7 +382,8 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                 nc = if null common then error "No common EllipticCurves"
                                     else maximum $ map fromEnumSafe16 common
             serverParams <- setup_ECDHE nc
-            signed       <- digitallySignECDHParams ctx serverParams sigAlg
+            mhash <- decideHash sigAlg
+            signed <- digitallySignECDHParams ctx serverParams sigAlg mhash
             case sigAlg of
                 SignatureRSA -> return $ SKX_ECDHE_RSA serverParams signed
                 _            -> error ("generate skx_ecdhe unsupported signature type: " ++ show sigAlg)
