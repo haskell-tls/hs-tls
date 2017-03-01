@@ -83,7 +83,9 @@ getDefaultParams flags store sStorage cred _session = do
                              , sharedCredentials     = Credentials [cred]
                              }
         , serverHooks = def
-        , serverSupported = def { supportedVersions = supportedVers, supportedCiphers = myCiphers }
+        , serverSupported = def { supportedVersions = supportedVers
+                                , supportedCiphers = myCiphers
+                                , supportedClientInitiatedRenegotiation = allowRenegotiation }
         , serverDebug = def { debugSeed      = foldl getDebugSeed Nothing flags
                             , debugPrintSeed = if DebugPrintSeed `elem` flags
                                                     then (\seed -> putStrLn ("seed: " ++ show (seedToInteger seed)))
@@ -133,11 +135,13 @@ getDefaultParams flags store sStorage cred _session = do
                 | otherwise = filter (<= tlsConnectVer) allVers
             allVers = [SSL3, TLS10, TLS11, TLS12]
             validateCert = not (NoValidateCert `elem` flags)
+            allowRenegotiation = AllowRenegotiation `elem` flags
 
 data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | Ssl3 | Tls10 | Tls11 | Tls12
           | NoSNI
           | NoVersionDowngrade
+          | AllowRenegotiation
           | Output String
           | Timeout String
           | BogusCipher String
@@ -171,6 +175,7 @@ options =
     , Option []     ["tls12"]   (NoArg Tls12) "use TLS 1.2 (default)"
     , Option []     ["bogocipher"] (ReqArg BogusCipher "cipher-id") "add a bogus cipher id for testing"
     , Option ['x']  ["no-version-downgrade"] (NoArg NoVersionDowngrade) "do not allow version downgrade"
+    , Option []     ["allow-renegotiation"] (NoArg AllowRenegotiation) "allow client-initiated renegotiation"
     , Option ['h']  ["help"]    (NoArg Help) "request help"
     , Option []     ["bench-send"]   (NoArg BenchSend) "benchmark send path. only with compatible server"
     , Option []     ["bench-recv"]   (NoArg BenchRecv) "benchmark recv path. only with compatible server"

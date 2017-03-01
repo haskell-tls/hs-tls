@@ -120,10 +120,8 @@ processClientFinished ctx fdata = do
     usingState_ ctx $ updateVerifiedData ServerRole fdata
     return ()
 
+-- initialize a new Handshake context (initial handshake or renegotiations)
 startHandshake :: Context -> Version -> ClientRandom -> IO ()
-startHandshake ctx ver crand = do
-    -- FIXME check if handshake is already not null
-    liftIO $ modifyMVar_ (ctxHandshake ctx) $ \hs ->
-        case hs of
-            Nothing -> return $ Just $ newEmptyHandshake ver crand
-            Just _  -> return hs
+startHandshake ctx ver crand =
+    let hs = Just $ newEmptyHandshake ver crand
+    in liftIO $ void $ swapMVar (ctxHandshake ctx) hs
