@@ -131,10 +131,51 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
 
     extraCreds <- (onServerNameIndication $ serverHooks sparams) serverName
 
+    -- When selecting a cipher we must ensure that it is allowed for the
+    -- TLS version but also that all its key-exchange requirements
+    -- will be met.
+
+    -- Some ciphers require a signature and a hash.  With TLS 1.2 the hash
+    -- algorithm is selected from a combination of server configuration and
+    -- the client "supported_signatures" extension.  So we cannot pick
+    -- such a cipher if no hash is available for it.  It's best to skip this
+    -- cipher and pick another one (with another key exchange).
+
+    -- FIXME ciphers should also be checked for other requirements
+    -- (i.e. elliptic curves and D-H groups)
+    let cipherAllowed cipher = case chosenVersion of
+           TLS12 -> let -- Build a list of all signature algorithms with at least
+                        -- one hash algorithm common between client and server.
+                        -- May contain duplicates, as it is only used for `elem`.
+                        sigAlgExt = extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode False
+                        cHashSigs =
+                            case sigAlgExt of
+                                -- See Section 7.4.1.4.1 of RFC 5246.
+                                Nothing -> [(HashSHA1, SignatureECDSA)
+                                           ,(HashSHA1, SignatureRSA)
+                                           ,(HashSHA1, SignatureDSS)]
+                                Just (SignatureAlgorithms sas) -> sas
+                        sHashSigs = supportedHashSignatures (ctxSupported ctx)
+                        possibleSigAlgs = map snd (sHashSigs `intersect` cHashSigs)
+
+                        -- Check that a candidate cipher with a signature requiring
+                        -- a hash will have at least one hash available.  This avoids
+                        -- a failure later in 'decideHash'.
+                        hasSigningRequirements =
+                            case cipherKeyExchange cipher of
+                                CipherKeyExchange_DHE_RSA      -> SignatureRSA   `elem` possibleSigAlgs
+                                CipherKeyExchange_DHE_DSS      -> SignatureDSS   `elem` possibleSigAlgs
+                                CipherKeyExchange_ECDHE_RSA    -> SignatureRSA   `elem` possibleSigAlgs
+                                CipherKeyExchange_ECDHE_ECDSA  -> SignatureECDSA `elem` possibleSigAlgs
+                                _                              -> True -- signature not used
+
+                     in cipherAllowedForVersion chosenVersion cipher && hasSigningRequirements
+           _     -> cipherAllowedForVersion chosenVersion cipher
+
     -- The shared cipherlist can become empty after filtering for compatible
     -- creds, check now before calling onCipherChoosing, which does not handle
     -- empty lists.
-    let ciphersFilteredVersion = filter (cipherAllowedForVersion chosenVersion) (commonCiphers extraCreds)
+    let ciphersFilteredVersion = filter cipherAllowed (commonCiphers extraCreds)
     when (null ciphersFilteredVersion) $ throwCore $
         Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
 
