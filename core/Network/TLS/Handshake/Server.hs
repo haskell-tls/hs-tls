@@ -347,6 +347,8 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                       sHashSigs = supportedHashSignatures $ ctxSupported ctx
                       -- The values in the "signature_algorithms" extension
                       -- are in descending order of preference.
+                      -- However here the algorithms are selected according
+                      -- to server preference in 'supportedHashSignatures'.
                       hashSigs = sHashSigs `intersect` cHashSigs
                   case filter ((==) sigAlg . snd) hashSigs of
                       []  -> error ("no hash signature for " ++ show sigAlg)

@@ -247,6 +247,10 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     malg <- case usedVersion of
                         TLS12 -> do
                             Just (_, Just hashSigs, _) <- usingHState ctx $ getClientCertRequest
+                            -- The values in the "signature_algorithms" extension
+                            -- are in descending order of preference.
+                            -- However here the algorithms are selected according
+                            -- to client preference in 'supportedHashSignatures'.
                             let suppHashSigs = supportedHashSignatures $ ctxSupported ctx
                                 hashSigs' = filter (\ a -> a `elem` hashSigs) suppHashSigs
 

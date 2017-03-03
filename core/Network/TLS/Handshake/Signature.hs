@@ -21,7 +21,6 @@ import Network.TLS.Context.Internal
 import Network.TLS.Struct
 import Network.TLS.Imports
 import Network.TLS.Packet (generateCertificateVerify_SSL, encodeSignedDHParams, encodeSignedECDHParams)
-import Network.TLS.Parameters (supportedHashSignatures)
 import Network.TLS.State
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Key
@@ -155,7 +154,7 @@ digitallySignParams ctx signatureData sigAlg mhash = do
 digitallySignDHParams :: Context
                       -> ServerDHParams
                       -> SignatureAlgorithm
-                      -> Maybe HashAlgorithm
+                      -> Maybe HashAlgorithm -- TLS12 only
                       -> IO DigitallySigned
 digitallySignDHParams ctx serverParams sigAlg mhash = do
     dhParamsData <- withClientAndServerRandom ctx $ encodeSignedDHParams serverParams
@@ -164,7 +163,7 @@ digitallySignDHParams ctx serverParams sigAlg mhash = do
 digitallySignECDHParams :: Context
                         -> ServerECDHParams
                         -> SignatureAlgorithm
-                        -> Maybe HashAlgorithm
+                        -> Maybe HashAlgorithm -- TLS12 only
                         -> IO DigitallySigned
 digitallySignECDHParams ctx serverParams sigAlg mhash = do
     ecdhParamsData <- withClientAndServerRandom ctx $ encodeSignedECDHParams serverParams
