@@ -145,18 +145,9 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     -- (i.e. elliptic curves and D-H groups)
     let cipherAllowed cipher = case chosenVersion of
            TLS12 -> let -- Build a list of all signature algorithms with at least
-                        -- one hash algorithm common between client and server.
+                        -- one hash algorithm in common between client and server.
                         -- May contain duplicates, as it is only used for `elem`.
-                        sigAlgExt = extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode False
-                        cHashSigs =
-                            case sigAlgExt of
-                                -- See Section 7.4.1.4.1 of RFC 5246.
-                                Nothing -> [(HashSHA1, SignatureECDSA)
-                                           ,(HashSHA1, SignatureRSA)
-                                           ,(HashSHA1, SignatureDSS)]
-                                Just (SignatureAlgorithms sas) -> sas
-                        sHashSigs = supportedHashSignatures (ctxSupported ctx)
-                        possibleSigAlgs = map snd (sHashSigs `intersect` cHashSigs)
+                        possibleSigAlgs = map snd (hashAndSignaturesInCommon ctx exts)
 
                         -- Check that a candidate cipher with a signature requiring
                         -- a hash will have at least one hash available.  This avoids
@@ -379,18 +370,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             usedVersion <- usingState_ ctx getVersion
             case usedVersion of
               TLS12 -> do
-                  let cHashSigs = case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode False of
-                          -- See Section 7.4.1.4.1 of RFC 5246.
-                          Nothing -> [(HashSHA1, SignatureECDSA)
-                                     ,(HashSHA1, SignatureRSA)
-                                     ,(HashSHA1, SignatureDSS)]
-                          Just (SignatureAlgorithms sas) -> sas
-                      sHashSigs = supportedHashSignatures $ ctxSupported ctx
-                      -- The values in the "signature_algorithms" extension
-                      -- are in descending order of preference.
-                      -- However here the algorithms are selected according
-                      -- to server preference in 'supportedHashSignatures'.
-                      hashSigs = sHashSigs `intersect` cHashSigs
+                  let hashSigs = hashAndSignaturesInCommon ctx exts
                   case filter ((==) sigAlg . snd) hashSigs of
                       []  -> error ("no hash signature for " ++ show sigAlg)
                       x:_ -> return $ Just (fst x)
@@ -551,6 +531,21 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                 Nothing -> throwCore throwerror
                 Just cc | isNullCertificateChain cc -> throwCore throwerror
                         | otherwise                 -> return ()
+
+hashAndSignaturesInCommon :: Context -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]
+hashAndSignaturesInCommon ctx exts =
+    let cHashSigs = case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode False of
+            -- See Section 7.4.1.4.1 of RFC 5246.
+            Nothing -> [(HashSHA1, SignatureECDSA)
+                       ,(HashSHA1, SignatureRSA)
+                       ,(HashSHA1, SignatureDSS)]
+            Just (SignatureAlgorithms sas) -> sas
+        sHashSigs = supportedHashSignatures $ ctxSupported ctx
+        -- The values in the "signature_algorithms" extension
+        -- are in descending order of preference.
+        -- However here the algorithms are selected according
+        -- to server preference in 'supportedHashSignatures'.
+     in sHashSigs `intersect` cHashSigs
 
 findHighestVersionFrom :: Version -> [Version] -> Maybe Version
 findHighestVersionFrom clientVersion allowedVersions =
