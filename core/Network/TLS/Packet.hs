@@ -52,6 +52,7 @@ module Network.TLS.Packet
     , generateServerFinished
 
     , generateCertificateVerify_SSL
+    , generateCertificateVerify_SSL_DSS
 
     -- * for extensions parsing
     , getSignatureHashAlgorithm
@@ -666,8 +667,19 @@ generateServerFinished ver ciph
     | ver < TLS10 = generateFinished_SSL "SRVR"
     | otherwise   = generateFinished_TLS (getPRF ver ciph) "server finished"
 
+{- returns *output* after final MD5/SHA1 -}
 generateCertificateVerify_SSL :: Bytes -> HashCtx -> Bytes
 generateCertificateVerify_SSL = generateFinished_SSL ""
+
+{- returns *input* before final SHA1 -}
+generateCertificateVerify_SSL_DSS :: Bytes -> HashCtx -> Bytes
+generateCertificateVerify_SSL_DSS mastersecret hashctx = toHash
+  where toHash = B.concat [ mastersecret, pad2, sha1left ]
+
+        sha1left = hashFinal $ flip hashUpdate pad1
+                             $ hashUpdate hashctx mastersecret
+        pad2     = B.replicate 40 0x5c
+        pad1     = B.replicate 40 0x36
 
 encodeSignedDHParams :: ServerDHParams -> ClientRandom -> ServerRandom -> Bytes
 encodeSignedDHParams dhparams cran sran = runPut $

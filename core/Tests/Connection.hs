@@ -1,11 +1,17 @@
 module Connection
     ( newPairContext
     , arbitraryPairParams
+    , arbitraryPairParamsWithVersionsAndCiphers
     , arbitraryClientCredential
     , setPairParamsSessionManager
     , setPairParamsSessionResuming
     , establishDataPipe
+    , initiateDataPipe
     , blockCipher
+    , blockCipherDHE_RSA
+    , blockCipherDHE_DSS
+    , blockCipherECDHE_RSA
+    , blockCipherECDHE_RSA_SHA384
     , streamCipher
     ) where
 
@@ -104,30 +110,49 @@ knownCiphers = [ blockCipher
 knownVersions :: [Version]
 knownVersions = [SSL3,TLS10,TLS11,TLS12]
 
-arbitraryPairParams = do
-    (dsaPub, dsaPriv) <- (\(p,r) -> (PubKeyDSA p, PrivKeyDSA r)) <$> arbitraryDSAPair
-    let (pubKey, privKey) = (\(p, r) -> (PubKeyRSA p, PrivKeyRSA r)) $ getGlobalRSAPair
-    creds              <- mapM (\(pub, priv) -> do
-                                    cert <- arbitraryX509WithKey (pub, priv)
-                                    return (CertificateChain [cert], priv)
-                               ) [ (pubKey, privKey), (dsaPub, dsaPriv) ]
-    connectVersion     <- elements knownVersions
+arbitraryCredentialsOfEachType = do
+    let (pubKey, privKey) = getGlobalRSAPair
+    (dsaPub, dsaPriv) <- arbitraryDSAPair
+    mapM (\(pub, priv) -> do
+              cert <- arbitraryX509WithKey (pub, priv)
+              return (CertificateChain [cert], priv)
+         ) [ (PubKeyRSA pubKey, PrivKeyRSA privKey)
+           , (PubKeyDSA dsaPub, PrivKeyDSA dsaPriv)
+           ]
+
+arbitraryCipherPair :: Version -> Gen ([Cipher], [Cipher])
+arbitraryCipherPair connectVersion = do
     serverCiphers      <- arbitraryCiphers `suchThat`
                                 (\cs -> or [maybe True (<= connectVersion) (cipherMinVer x) | x <- cs])
     clientCiphers      <- oneof [arbitraryCiphers] `suchThat`
                                 (\cs -> or [x `elem` serverCiphers &&
                                             maybe True (<= connectVersion) (cipherMinVer x) | x <- cs])
+    return (clientCiphers, serverCiphers)
+  where
+        arbitraryCiphers  = resize (length knownCiphers + 1) $ listOf1 (elements knownCiphers)
+
+arbitraryPairParams :: Gen (ClientParams, ServerParams)
+arbitraryPairParams = do
+    connectVersion <- elements knownVersions
+    (clientCiphers, serverCiphers) <- arbitraryCipherPair connectVersion
     -- The shared ciphers may set a floor on the compatible protocol versions
     let allowedVersions = [ v | v <- knownVersions,
                                 or [ x `elem` serverCiphers &&
                                      maybe True (<= v) (cipherMinVer x) | x <- clientCiphers ]]
     serAllowedVersions <- (:[]) `fmap` elements allowedVersions
+    arbitraryPairParamsWithVersionsAndCiphers (allowedVersions, serAllowedVersions) (clientCiphers, serverCiphers)
+
+arbitraryPairParamsWithVersionsAndCiphers :: ([Version], [Version])
+                                          -> ([Cipher], [Cipher])
+                                          -> Gen (ClientParams, ServerParams)
+arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clientCiphers, serverCiphers) = do
     secNeg             <- arbitrary
     dhparams           <- elements [dhParams,ffdhe2048,ffdhe3072]
 
+    creds              <- arbitraryCredentialsOfEachType
     let serverState = def
             { serverSupported = def { supportedCiphers  = serverCiphers
-                                    , supportedVersions = serAllowedVersions
+                                    , supportedVersions = serverVersions
                                     , supportedSecureRenegotiation = secNeg
                                     }
             , serverDHEParams = Just dhparams
@@ -135,7 +160,7 @@ arbitraryPairParams = do
             }
     let clientState = (defaultParamsClient "" B.empty)
             { clientSupported = def { supportedCiphers  = clientCiphers
-                                    , supportedVersions = allowedVersions
+                                    , supportedVersions = clientVersions
                                     , supportedSecureRenegotiation = secNeg
                                     }
             , clientShared = def { sharedValidationCache = ValidationCache
@@ -145,13 +170,9 @@ arbitraryPairParams = do
                                 }
             }
     return (clientState, serverState)
-  where
-        arbitraryCiphers  = resize (length knownCiphers + 1) $ listOf1 (elements knownCiphers)
 
-arbitraryClientCredential = do
-    let (pubKey, privKey) = getGlobalRSAPair
-    cert <- arbitraryX509WithKey (PubKeyRSA pubKey, PrivKeyRSA privKey)
-    return (CertificateChain [cert], PrivKeyRSA privKey)
+arbitraryClientCredential :: Gen Credential
+arbitraryClientCredential = arbitraryCredentialsOfEachType >>= elements
 
 setPairParamsSessionManager :: SessionManager -> (ClientParams, ServerParams) -> (ClientParams, ServerParams)
 setPairParamsSessionManager manager (clientState, serverState) = (nc,ns)
@@ -204,3 +225,27 @@ establishDataPipe params tlsServer tlsClient = do
             putStrLn $ s ++ " exception: " ++ show e ++
                            ", supported: " ++ show supported
             E.throw e
+
+initiateDataPipe params tlsServer tlsClient = do
+    -- initial setup
+    pipe        <- newPipe
+    _           <- (runPipe pipe)
+    cQueue      <- newChan
+    sQueue      <- newChan
+
+    (cCtx, sCtx) <- newPairContext pipe params
+
+    _ <- forkIO $ E.catch (tlsServer sCtx >>= writeSuccess sQueue)
+                          (writeException sQueue)
+    _ <- forkIO $ E.catch (tlsClient cCtx >>= writeSuccess cQueue)
+                          (writeException cQueue)
+
+    sRes <- readChan sQueue
+    cRes <- readChan cQueue
+    return (cRes, sRes)
+  where
+        writeException :: Chan (Either E.SomeException a) -> E.SomeException -> IO ()
+        writeException queue e = writeChan queue (Left e)
+
+        writeSuccess :: Chan (Either E.SomeException a) -> a -> IO ()
+        writeSuccess queue res = writeChan queue (Right res)

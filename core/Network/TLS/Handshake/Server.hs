@@ -20,7 +20,7 @@ import Network.TLS.Struct
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Credentials
-import Network.TLS.Crypto.ECDH
+import Network.TLS.Crypto
 import Network.TLS.Extension
 import Network.TLS.Util (catchException, fromJust)
 import Network.TLS.IO
@@ -131,10 +131,42 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
 
     extraCreds <- (onServerNameIndication $ serverHooks sparams) serverName
 
+    -- When selecting a cipher we must ensure that it is allowed for the
+    -- TLS version but also that all its key-exchange requirements
+    -- will be met.
+
+    -- Some ciphers require a signature and a hash.  With TLS 1.2 the hash
+    -- algorithm is selected from a combination of server configuration and
+    -- the client "supported_signatures" extension.  So we cannot pick
+    -- such a cipher if no hash is available for it.  It's best to skip this
+    -- cipher and pick another one (with another key exchange).
+
+    -- FIXME ciphers should also be checked for other requirements
+    -- (i.e. elliptic curves and D-H groups)
+    let cipherAllowed cipher = case chosenVersion of
+           TLS12 -> let -- Build a list of all signature algorithms with at least
+                        -- one hash algorithm in common between client and server.
+                        -- May contain duplicates, as it is only used for `elem`.
+                        possibleSigAlgs = map snd (hashAndSignaturesInCommon ctx exts)
+
+                        -- Check that a candidate cipher with a signature requiring
+                        -- a hash will have at least one hash available.  This avoids
+                        -- a failure later in 'decideHash'.
+                        hasSigningRequirements =
+                            case cipherKeyExchange cipher of
+                                CipherKeyExchange_DHE_RSA      -> SignatureRSA   `elem` possibleSigAlgs
+                                CipherKeyExchange_DHE_DSS      -> SignatureDSS   `elem` possibleSigAlgs
+                                CipherKeyExchange_ECDHE_RSA    -> SignatureRSA   `elem` possibleSigAlgs
+                                CipherKeyExchange_ECDHE_ECDSA  -> SignatureECDSA `elem` possibleSigAlgs
+                                _                              -> True -- signature not used
+
+                     in cipherAllowedForVersion chosenVersion cipher && hasSigningRequirements
+           _     -> cipherAllowedForVersion chosenVersion cipher
+
     -- The shared cipherlist can become empty after filtering for compatible
     -- creds, check now before calling onCipherChoosing, which does not handle
     -- empty lists.
-    let ciphersFilteredVersion = filter (cipherAllowedForVersion chosenVersion) (commonCiphers extraCreds)
+    let ciphersFilteredVersion = filter cipherAllowed (commonCiphers extraCreds)
     when (null ciphersFilteredVersion) $ throwCore $
         Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
 
@@ -338,16 +370,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             usedVersion <- usingState_ ctx getVersion
             case usedVersion of
               TLS12 -> do
-                  let cHashSigs = case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode False of
-                          -- See Section 7.4.1.4.1 of RFC 5246.
-                          Nothing -> [(HashSHA1, SignatureECDSA)
-                                     ,(HashSHA1, SignatureRSA)
-                                     ,(HashSHA1, SignatureDSS)]
-                          Just (SignatureAlgorithms sas) -> sas
-                      sHashSigs = supportedHashSignatures $ ctxSupported ctx
-                      -- The values in the "signature_algorithms" extension
-                      -- are in descending order of preference.
-                      hashSigs = sHashSigs `intersect` cHashSigs
+                  let hashSigs = hashAndSignaturesInCommon ctx exts
                   case filter ((==) sigAlg . snd) hashSigs of
                       []  -> error ("no hash signature for " ++ show sigAlg)
                       x:_ -> return $ Just (fst x)
@@ -432,7 +455,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
         -- Check whether the client correctly signed the handshake.
         -- If not, ask the application on how to proceed.
         --
-        processCertificateVerify (Handshake [hs@(CertVerify dsig@(DigitallySigned mbHashSig _))]) = do
+        processCertificateVerify (Handshake [hs@(CertVerify dsig)]) = do
             processHandshake ctx hs
 
             checkValidClientCertChain "change cipher message expected"
@@ -440,7 +463,12 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             usedVersion <- usingState_ ctx getVersion
             -- Fetch all handshake messages up to now.
             msgs  <- usingHState ctx $ B.concat <$> getHandshakeMessages
-            verif <- certificateVerifyCheck ctx usedVersion mbHashSig msgs dsig
+
+            sigAlgExpected <- getRemoteSignatureAlg
+
+            -- FIXME should check certificate is allowed for signing
+
+            verif <- certificateVerifyCheck ctx usedVersion sigAlgExpected msgs dsig
 
             case verif of
                 True -> do
@@ -477,6 +505,14 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                 Nothing -> return ()
             expectChangeCipher p
 
+        getRemoteSignatureAlg = do
+            pk <- usingHState ctx getRemotePublicKey
+            case pk of
+                PubKeyRSA _   -> return SignatureRSA
+                PubKeyDSA _   -> return SignatureDSS
+                PubKeyEC  _   -> return SignatureECDSA
+                _             -> throwCore $ Error_Protocol ("unsupported remote public key type", True, HandshakeFailure)
+
         expectChangeCipher ChangeCipherSpec = do
             npn <- usingState_ ctx getExtensionNPN
             return $ RecvStateHandshake $ if npn then expectNPN else expectFinish
@@ -495,6 +531,21 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                 Nothing -> throwCore throwerror
                 Just cc | isNullCertificateChain cc -> throwCore throwerror
                         | otherwise                 -> return ()
+
+hashAndSignaturesInCommon :: Context -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]
+hashAndSignaturesInCommon ctx exts =
+    let cHashSigs = case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode False of
+            -- See Section 7.4.1.4.1 of RFC 5246.
+            Nothing -> [(HashSHA1, SignatureECDSA)
+                       ,(HashSHA1, SignatureRSA)
+                       ,(HashSHA1, SignatureDSS)]
+            Just (SignatureAlgorithms sas) -> sas
+        sHashSigs = supportedHashSignatures $ ctxSupported ctx
+        -- The values in the "signature_algorithms" extension
+        -- are in descending order of preference.
+        -- However here the algorithms are selected according
+        -- to server preference in 'supportedHashSignatures'.
+     in sHashSigs `intersect` cHashSigs
 
 findHighestVersionFrom :: Version -> [Version] -> Maybe Version
 findHighestVersionFrom clientVersion allowedVersions =

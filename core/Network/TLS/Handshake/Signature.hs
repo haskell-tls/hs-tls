@@ -20,8 +20,8 @@ import Network.TLS.Crypto
 import Network.TLS.Context.Internal
 import Network.TLS.Struct
 import Network.TLS.Imports
-import Network.TLS.Packet (generateCertificateVerify_SSL, encodeSignedDHParams, encodeSignedECDHParams)
-import Network.TLS.Parameters (supportedHashSignatures)
+import Network.TLS.Packet (generateCertificateVerify_SSL, generateCertificateVerify_SSL_DSS,
+                           encodeSignedDHParams, encodeSignedECDHParams)
 import Network.TLS.State
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Key
@@ -31,49 +31,56 @@ import Control.Monad.State
 
 certificateVerifyCheck :: Context
                        -> Version
-                       -> Maybe HashAndSignatureAlgorithm
+                       -> SignatureAlgorithm
                        -> Bytes
                        -> DigitallySigned
                        -> IO Bool
-certificateVerifyCheck ctx usedVersion malg msgs dsig =
-    prepareCertificateVerifySignatureData ctx usedVersion malg msgs >>=
-    signatureVerifyWithHashDescr ctx SignatureRSA dsig
+certificateVerifyCheck ctx usedVersion sigAlgExpected msgs digSig@(DigitallySigned hashSigAlg _) =
+    case (usedVersion, hashSigAlg) of
+        (TLS12, Nothing)    -> return False
+        (TLS12, Just (h,s)) | s == sigAlgExpected -> doVerify (Just h)
+                            | otherwise           -> return False
+        (_,     Nothing)    -> doVerify Nothing
+        (_,     Just _)     -> return False
+  where
+    doVerify mhash =
+        prepareCertificateVerifySignatureData ctx usedVersion sigAlgExpected mhash msgs >>=
+        signatureVerifyWithHashDescr ctx sigAlgExpected digSig
 
 certificateVerifyCreate :: Context
                         -> Version
-                        -> Maybe HashAndSignatureAlgorithm
+                        -> SignatureAlgorithm
+                        -> Maybe HashAlgorithm -- TLS12 only
                         -> Bytes
                         -> IO DigitallySigned
-certificateVerifyCreate ctx usedVersion malg msgs =
-    prepareCertificateVerifySignatureData ctx usedVersion malg msgs >>=
-    signatureCreateWithHashDescr ctx malg
-
-getHashAndASN1 :: MonadIO m => (HashAlgorithm, SignatureAlgorithm) -> m Hash
-getHashAndASN1 hashSig = case hashSig of
-    (HashSHA1,   SignatureRSA) -> return SHA1
-    (HashSHA224, SignatureRSA) -> return SHA224
-    (HashSHA256, SignatureRSA) -> return SHA256
-    (HashSHA384, SignatureRSA) -> return SHA384
-    (HashSHA512, SignatureRSA) -> return SHA512
-    _                          -> throwCore $ Error_Misc "unsupported hash/sig algorithm"
+certificateVerifyCreate ctx usedVersion sigAlg mhash msgs =
+    prepareCertificateVerifySignatureData ctx usedVersion sigAlg mhash msgs >>=
+    signatureCreateWithHashDescr ctx (toAlg `fmap` mhash)
+  where
+    toAlg hashAlg = (hashAlg, sigAlg)
 
 type CertVerifyData = (Hash, Bytes)
 
 prepareCertificateVerifySignatureData :: Context
                                       -> Version
-                                      -> Maybe HashAndSignatureAlgorithm
+                                      -> SignatureAlgorithm
+                                      -> Maybe HashAlgorithm -- TLS12 only
                                       -> Bytes
                                       -> IO CertVerifyData
-prepareCertificateVerifySignatureData ctx usedVersion malg msgs
+prepareCertificateVerifySignatureData ctx usedVersion sigAlg mhash msgs
     | usedVersion == SSL3 = do
+        (h, generateCV_SSL) <-
+            case sigAlg of
+                SignatureRSA -> return (SHA1_MD5, generateCertificateVerify_SSL)
+                SignatureDSS -> return (SHA1, generateCertificateVerify_SSL_DSS)
+                _            -> throwCore $ Error_Misc ("unsupported CertificateVerify signature for SSL3: " ++ show sigAlg)
         Just masterSecret <- usingHState ctx $ gets hstMasterSecret
-        return (SHA1_MD5, generateCertificateVerify_SSL masterSecret (hashUpdate (hashInit SHA1_MD5) msgs))
-    | usedVersion == TLS10 || usedVersion == TLS11 = do
-        return (SHA1_MD5, hashFinal $ hashUpdate (hashInit SHA1_MD5) msgs)
-    | otherwise = do
-        let Just hashSig = malg
-        hsh <- getHashAndASN1 hashSig
-        return (hsh, msgs)
+        return (h, generateCV_SSL masterSecret (hashUpdate (hashInit h) msgs))
+    | usedVersion == TLS10 || usedVersion == TLS11 =
+        case signatureHashData sigAlg Nothing of
+            SHA1_MD5 -> return (SHA1_MD5, hashFinal $ hashUpdate (hashInit SHA1_MD5) msgs)
+            alg      -> return (alg, msgs)
+    | otherwise = return (signatureHashData sigAlg mhash, msgs)
 
 signatureHashData :: SignatureAlgorithm -> Maybe HashAlgorithm -> Hash
 signatureHashData SignatureRSA mhash =
@@ -155,7 +162,7 @@ digitallySignParams ctx signatureData sigAlg mhash = do
 digitallySignDHParams :: Context
                       -> ServerDHParams
                       -> SignatureAlgorithm
-                      -> Maybe HashAlgorithm
+                      -> Maybe HashAlgorithm -- TLS12 only
                       -> IO DigitallySigned
 digitallySignDHParams ctx serverParams sigAlg mhash = do
     dhParamsData <- withClientAndServerRandom ctx $ encodeSignedDHParams serverParams
@@ -164,7 +171,7 @@ digitallySignDHParams ctx serverParams sigAlg mhash = do
 digitallySignECDHParams :: Context
                         -> ServerECDHParams
                         -> SignatureAlgorithm
-                        -> Maybe HashAlgorithm
+                        -> Maybe HashAlgorithm -- TLS12 only
                         -> IO DigitallySigned
 digitallySignECDHParams ctx serverParams sigAlg mhash = do
     ecdhParamsData <- withClientAndServerRandom ctx $ encodeSignedECDHParams serverParams

@@ -174,6 +174,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                         Just (cc@(CertificateChain (c:_)), pk) -> do
                             case certPubKey $ getCertificate c of
                                 PubKeyRSA _ -> return ()
+                                PubKeyDSA _ -> return ()
                                 _           -> throwCore $ Error_Protocol ("no supported certificate type", True, HandshakeFailure)
                             usingHState ctx $ setPrivateKey pk
                             usingHState ctx $ setClientCertSent True
@@ -244,23 +245,37 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
             certSent <- usingHState ctx $ getClientCertSent
             case certSent of
                 True -> do
-                    malg <- case usedVersion of
+                    sigAlg <- getLocalSignatureAlg
+
+                    mhash <- case usedVersion of
                         TLS12 -> do
                             Just (_, Just hashSigs, _) <- usingHState ctx $ getClientCertRequest
+                            -- The values in the "signature_algorithms" extension
+                            -- are in descending order of preference.
+                            -- However here the algorithms are selected according
+                            -- to client preference in 'supportedHashSignatures'.
                             let suppHashSigs = supportedHashSignatures $ ctxSupported ctx
-                                hashSigs' = filter (\ a -> a `elem` hashSigs) suppHashSigs
+                                matchHashSigs = filter (\ a -> snd a == sigAlg) suppHashSigs
+                                hashSigs' = filter (\ a -> a `elem` hashSigs) matchHashSigs
 
                             when (null hashSigs') $
-                                throwCore $ Error_Protocol ("no hash/signature algorithms in common with the server", True, HandshakeFailure)
-                            return $ Just $ head hashSigs'
+                                throwCore $ Error_Protocol ("no " ++ show sigAlg ++ " hash algorithm in common with the server", True, HandshakeFailure)
+                            return $ Just $ fst $ head hashSigs'
                         _     -> return Nothing
 
                     -- Fetch all handshake messages up to now.
                     msgs   <- usingHState ctx $ B.concat <$> getHandshakeMessages
-                    sigDig <- certificateVerifyCreate ctx usedVersion malg msgs
+                    sigDig <- certificateVerifyCreate ctx usedVersion sigAlg mhash msgs
                     sendPacket ctx $ Handshake [CertVerify sigDig]
 
                 _ -> return ()
+
+        getLocalSignatureAlg = do
+            pk <- usingHState ctx getLocalPrivateKey
+            case pk of
+                PrivKeyRSA _   -> return SignatureRSA
+                PrivKeyDSA _   -> return SignatureDSS
+                _              -> throwCore $ Error_Protocol ("unsupported local private key type", True, HandshakeFailure)
 
 processServerExtension :: ExtensionRaw -> TLSSt ()
 processServerExtension (ExtensionRaw 0xff01 content) = do

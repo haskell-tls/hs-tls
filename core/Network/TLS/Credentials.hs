@@ -95,14 +95,14 @@ credentialsFindForDecrypting (Credentials l) = find forEncrypting l
 -- this change in future.
 credentialCanDecrypt :: Credential -> Maybe ()
 credentialCanDecrypt (chain, priv) =
-    case extensionGet (certExtensions cert) of
-        Nothing    -> Just ()
-        Just (ExtKeyUsage flags)
-            | KeyUsage_keyEncipherment `elem` flags ->
-                case (pub, priv) of
-                    (PubKeyRSA _, PrivKeyRSA _) -> Just ()
-                    _                           -> Nothing
-            | otherwise                         -> Nothing
+    case (pub, priv) of
+        (PubKeyRSA _, PrivKeyRSA _) ->
+            case extensionGet (certExtensions cert) of
+                Nothing                                     -> Just ()
+                Just (ExtKeyUsage flags)
+                    | KeyUsage_keyEncipherment `elem` flags -> Just ()
+                    | otherwise                             -> Nothing
+        _                           -> Nothing
     where cert   = signedObject $ getSigned signed
           pub    = certPubKey cert
           signed = getCertificateChainLeaf chain

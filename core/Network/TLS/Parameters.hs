@@ -155,6 +155,12 @@ data Supported = Supported
       -- | All supported hash/signature algorithms pair for client
       -- certificate verification and server signature in (EC)DHE,
       -- ordered by decreasing priority.
+      --
+      -- This list is sent to the peer as part of the signature_algorithms
+      -- extension.  It is also used to restrict the choice of hash and
+      -- signature algorithm, but only when the TLS version is 1.2 or above.
+      -- In order to disable SHA-1 one must then also disable earlier protocol
+      -- versions in 'supportedVersions'.
     , supportedHashSignatures :: [HashAndSignatureAlgorithm]
       -- | Secure renegotiation defined in RFC5746.
       --   If 'True', clients send the renegotiation_info extension.
