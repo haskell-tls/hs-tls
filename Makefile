@@ -14,15 +14,11 @@ reinstall:
 
 .PHONY: tests
 tests: test-scripts/TestClient
-	./test-scripts/TestClient with-local
+	stack exec TestClient with-local
 
 .PHONY: travis-tests
 travis-tests: test-scripts/TestClient
-	./test-scripts/TestClient
-
-.PHONY: test-scripts/TestClient
-test-scripts/TestClient:
-	ghc -threaded --make test-scripts/TestClient
+	stack exec TestClient
 
 .PHONY: build-openssl-server
 build-openssl-server:
