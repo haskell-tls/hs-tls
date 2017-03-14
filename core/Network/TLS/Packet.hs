@@ -72,7 +72,7 @@ import Data.ASN1.BinaryEncoding (DER(..))
 import Data.X509 (CertificateChainRaw(..), encodeCertificateChain, decodeCertificateChain)
 import Network.TLS.Crypto
 import Network.TLS.MAC
-import Network.TLS.Cipher (CipherKeyExchangeType(..), Cipher(..))
+import Network.TLS.Cipher (CipherKeyExchangeType(..), Cipher(..), shouldTrimPreMasterSecret)
 import Network.TLS.Util.Serialization (os2ip,i2ospOf_)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
@@ -596,10 +596,15 @@ generateMasterSecret_SSL premasterSecret (ClientRandom c) (ServerRandom s) =
   where computeMD5  label = hash MD5 $ B.concat [ B.convert premasterSecret, computeSHA1 label ]
         computeSHA1 label = hash SHA1 $ B.concat [ label, B.convert premasterSecret, c, s ]
 
-generateMasterSecret_TLS :: ByteArrayAccess preMaster => PRF -> preMaster -> ClientRandom -> ServerRandom -> Bytes
-generateMasterSecret_TLS prf premasterSecret (ClientRandom c) (ServerRandom s) =
-    prf (B.convert premasterSecret) seed 48
+generateMasterSecret_TLS :: ByteArrayAccess preMaster => PRF -> Version -> Cipher -> preMaster -> ClientRandom -> ServerRandom -> Bytes
+generateMasterSecret_TLS prf version cipher premasterSecret (ClientRandom c) (ServerRandom s) =
+    prf (normalizePreMasterSecret version cipher $ B.convert premasterSecret) seed 48
   where seed = B.concat [ "master secret", c, s ]
+
+normalizePreMasterSecret :: Version -> Cipher -> ByteString -> ByteString
+normalizePreMasterSecret version cipher
+    | shouldTrimPreMasterSecret version cipher = B.dropWhile (== 0)
+    | otherwise = id
 
 generateMasterSecret :: ByteArrayAccess preMaster
                      => Version
@@ -610,7 +615,7 @@ generateMasterSecret :: ByteArrayAccess preMaster
                      -> Bytes
 generateMasterSecret SSL2 _ = generateMasterSecret_SSL
 generateMasterSecret SSL3 _ = generateMasterSecret_SSL
-generateMasterSecret v    c = generateMasterSecret_TLS $ getPRF v c
+generateMasterSecret v    c = generateMasterSecret_TLS (getPRF v c) v c
 
 generateKeyBlock_TLS :: PRF -> ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
 generateKeyBlock_TLS prf (ClientRandom c) (ServerRandom s) mastersecret kbsize =
