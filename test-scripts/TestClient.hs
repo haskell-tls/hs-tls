@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Main (main) where
 
 import System.Process
@@ -117,8 +118,13 @@ simpleClient :: Int
              -> Maybe (FilePath, FilePath)
              -> IO (ExitCode, ByteString, ByteString)
 simpleClient clientPort clientHost uri ver certVal clientCert =
+#ifdef USE_CABAL
+    readProcessWithExitCodeBinary "./debug/dist/build/tls-simpleclient/tls-simpleclient"
+        (["-v", "--debug", "-O", "/dev/null", clientHost, show clientPort, "--uri", maybe "/" id uri, verString, userAgent]
+#else
     readProcessWithExitCodeBinary "stack"
         (["exec", "--", "tls-simpleclient", "-v", "--debug", "-O", "/dev/null", clientHost, show clientPort, "--uri", maybe "/" id uri, verString, userAgent]
+#endif
          ++ if certVal == CertValidation then [] else ["--no-validation"]
          ++ maybe [] (\(f,v) -> ["--client-cert=" ++ f ++ ":" ++ v ]) clientCert
         ) B.empty
