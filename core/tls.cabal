@@ -40,7 +40,7 @@ Flag hans
   Default:           False
 
 Library
-  Build-Depends:     base >= 4.6 && < 5
+  Build-Depends:     base >= 4.7 && < 5
                    , mtl >= 2
                    , transformers
                    , cereal >= 0.4
