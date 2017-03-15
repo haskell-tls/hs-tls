@@ -275,7 +275,6 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
             case pk of
                 PrivKeyRSA _   -> return SignatureRSA
                 PrivKeyDSA _   -> return SignatureDSS
-                _              -> throwCore $ Error_Protocol ("unsupported local private key type", True, HandshakeFailure)
 
 processServerExtension :: ExtensionRaw -> TLSSt ()
 processServerExtension (ExtensionRaw 0xff01 content) = do
