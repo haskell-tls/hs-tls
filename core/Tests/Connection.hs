@@ -20,7 +20,7 @@ import Certificate
 import PubKey
 import PipeChan
 import Network.TLS
-import Network.TLS.Extra.FFDHE
+import Network.TLS.Extra
 import Data.X509
 import Data.Default.Class
 import Control.Applicative
@@ -34,70 +34,23 @@ debug :: Bool
 debug = False
 
 blockCipher :: Cipher
-blockCipher = Cipher
-    { cipherID   = 0xff12
-    , cipherName = "rsa-id-const"
-    , cipherBulk = Bulk
-        { bulkName      = "id"
-        , bulkKeySize   = 16
-        , bulkIVSize    = 16
-        , bulkExplicitIV= 0
-        , bulkAuthTagLen= 0
-        , bulkBlockSize = 16
-        , bulkF         = BulkBlockF $ \_ _ _ -> (\m -> (m, B.empty))
-        }
-    , cipherHash        = MD5
-    , cipherPRFHash     = Nothing
-    , cipherKeyExchange = CipherKeyExchange_RSA
-    , cipherMinVer      = Nothing
-    }
+blockCipher = cipher_AES128_SHA1
 
 blockCipherDHE_RSA :: Cipher
-blockCipherDHE_RSA = blockCipher
-    { cipherID   = 0xff14
-    , cipherName = "dhe-rsa-id-const"
-    , cipherKeyExchange = CipherKeyExchange_DHE_RSA
-    }
+blockCipherDHE_RSA = cipher_DHE_RSA_AES128_SHA1
 
 blockCipherDHE_DSS :: Cipher
-blockCipherDHE_DSS = blockCipher
-    { cipherID   = 0xff15
-    , cipherName = "dhe-dss-id-const"
-    , cipherKeyExchange = CipherKeyExchange_DHE_DSS
-    }
+blockCipherDHE_DSS = cipher_DHE_DSS_AES128_SHA1
 
 blockCipherECDHE_RSA :: Cipher
-blockCipherECDHE_RSA = blockCipher
-    { cipherID   = 0xff16
-    , cipherName = "ecdhe-rsa-id-const"
-    , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
-    }
+blockCipherECDHE_RSA = cipher_ECDHE_RSA_AES128CBC_SHA
 
+-- TLS 1.2 only
 blockCipherECDHE_RSA_SHA384 :: Cipher
-blockCipherECDHE_RSA_SHA384 = blockCipher
-    { cipherID   = 0xff17
-    , cipherName = "ecdhe-rsa-id-const-sha384"
-    , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
-    , cipherHash        = SHA384
-    , cipherPRFHash     = Just SHA384
-    , cipherMinVer      = Just TLS12
-    }
+blockCipherECDHE_RSA_SHA384 = cipher_ECDHE_RSA_AES256GCM_SHA384
 
 streamCipher :: Cipher
-streamCipher = blockCipher
-    { cipherID   = 0xff13
-    , cipherBulk = Bulk
-        { bulkName      = "stream"
-        , bulkKeySize   = 16
-        , bulkIVSize    = 0
-        , bulkExplicitIV= 0
-        , bulkAuthTagLen= 0
-        , bulkBlockSize = 0
-        , bulkF         = BulkStreamF passThrough
-        }
-    }
-  where
-    passThrough _ _ = BulkStream go where go inp = (inp, BulkStream go)
+streamCipher = cipher_RC4_128_SHA1
 
 knownCiphers :: [Cipher]
 knownCiphers = [ blockCipher
