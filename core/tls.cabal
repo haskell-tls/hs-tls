@@ -141,7 +141,7 @@ Test-Suite test-tls
                    , x509
                    , x509-validation
                    , hourglass
-  ghc-options:       -Wall -fno-warn-orphans -fno-warn-missing-signatures -fwarn-tabs
+  ghc-options:       -Wall -fno-warn-unused-imports -fno-warn-orphans
 
 Benchmark bench-tls
   hs-source-dirs:    Benchmarks Tests

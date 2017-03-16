@@ -14,8 +14,10 @@ import qualified Data.ByteString as B
 
 import PubKey
 
+testExtensionEncode :: Extension a => Bool -> a -> ExtensionRaw
 testExtensionEncode critical ext = ExtensionRaw (extOID ext) critical (extEncode ext)
 
+arbitraryDN :: Gen DistinguishedName
 arbitraryDN = return $ DistinguishedName []
 
 instance Arbitrary Date where
@@ -39,8 +41,10 @@ instance Arbitrary TimeOfDay where
 instance Arbitrary DateTime where
     arbitrary = DateTime <$> arbitrary <*> arbitrary
 
+maxSerial :: Integer
 maxSerial = 16777216
 
+arbitraryCertificate :: PubKey -> Gen Certificate
 arbitraryCertificate pubKey = do
     serial    <- choose (0,maxSerial)
     issuerdn  <- arbitraryDN
@@ -60,6 +64,7 @@ arbitraryCertificate pubKey = do
                 ]
             }
 
+simpleCertificate :: PubKey -> Certificate
 simpleCertificate pubKey =
     Certificate
         { certVersion = 3
@@ -77,6 +82,7 @@ simpleCertificate pubKey =
         time2 = DateTime (Date 2049 January 1) (TimeOfDay 0 0 0 0)
         simpleDN = DistinguishedName []
 
+simpleX509 :: PubKey -> SignedExact Certificate
 simpleX509 pubKey = do
     let cert = simpleCertificate pubKey
         sig  = replicate 40 1
@@ -84,6 +90,7 @@ simpleX509 pubKey = do
         (signedExact, ()) = objectToSignedExact (\_ -> (B.pack sig,sigalg,())) cert
      in signedExact
 
+arbitraryX509WithKey :: (PubKey, t) -> Gen (SignedExact Certificate)
 arbitraryX509WithKey (pubKey, _) = do
     cert <- arbitraryCertificate pubKey
     sig  <- resize 40 $ listOf1 arbitrary
@@ -91,6 +98,7 @@ arbitraryX509WithKey (pubKey, _) = do
     let (signedExact, ()) = objectToSignedExact (\(!(_)) -> (B.pack sig,sigalg,())) cert
     return signedExact
 
+arbitraryX509 :: Gen (SignedExact Certificate)
 arbitraryX509 = do
     let (pubKey, privKey) = getGlobalRSAPair
     arbitraryX509WithKey (PubKeyRSA pubKey, PrivKeyRSA privKey)

@@ -43,8 +43,10 @@ prop_pipe_work = do
 
     return ()
 
+recvDataNonNull :: Context -> IO C8.ByteString
 recvDataNonNull ctx = recvData ctx >>= \l -> if B.null l then recvDataNonNull ctx else return l
 
+runTLSPipe :: (ClientParams, ServerParams) -> (Context -> Chan C8.ByteString -> IO ()) -> (Chan C8.ByteString -> Context -> IO ()) -> PropertyM IO ()
 runTLSPipe params tlsServer tlsClient = do
     (startQueue, resultQueue) <- run (establishDataPipe params tlsServer tlsClient)
     -- send some data
@@ -56,6 +58,7 @@ runTLSPipe params tlsServer tlsClient = do
     Just d `assertEq` dres
     return ()
 
+runTLSPipeSimple :: (ClientParams, ServerParams) -> PropertyM IO ()
 runTLSPipeSimple params = runTLSPipe params tlsServer tlsClient
   where tlsServer ctx queue = do
             handshake ctx
@@ -69,6 +72,7 @@ runTLSPipeSimple params = runTLSPipe params tlsServer tlsClient
             bye ctx
             return ()
 
+runTLSInitFailure :: (TLSParams a, TLSParams b) => (a, b) -> PropertyM IO ()
 runTLSInitFailure params = do
     (cRes, sRes) <- run (initiateDataPipe params tlsServer tlsClient)
     assertIsLeft cRes

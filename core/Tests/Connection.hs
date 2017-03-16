@@ -30,6 +30,7 @@ import qualified Control.Exception as E
 
 import qualified Data.ByteString as B
 
+debug :: Bool
 debug = False
 
 blockCipher :: Cipher
@@ -110,6 +111,7 @@ knownCiphers = [ blockCipher
 knownVersions :: [Version]
 knownVersions = [SSL3,TLS10,TLS11,TLS12]
 
+arbitraryCredentialsOfEachType :: Gen [(CertificateChain, PrivKey)]
 arbitraryCredentialsOfEachType = do
     let (pubKey, privKey) = getGlobalRSAPair
     (dsaPub, dsaPriv) <- arbitraryDSAPair
@@ -180,10 +182,12 @@ setPairParamsSessionManager manager (clientState, serverState) = (nc,ns)
         ns = serverState { serverShared = updateSessionManager $ serverShared serverState }
         updateSessionManager shared = shared { sharedSessionManager = manager }
 
+setPairParamsSessionResuming :: (SessionID, SessionData) -> (ClientParams, t) -> (ClientParams, t)
 setPairParamsSessionResuming sessionStuff (clientState, serverState) =
     ( clientState { clientWantSessionResume = Just sessionStuff }
     , serverState)
 
+newPairContext :: (TLSParams params, TLSParams params1) => PipeChan -> (params1, params) -> IO (Context, Context)
 newPairContext pipe (cParams, sParams) = do
     let noFlush = return ()
     let noClose = return ()
@@ -204,6 +208,7 @@ newPairContext pipe (cParams, sParams) = do
                                     , loggingPacketRecv = putStrLn . ((pre ++ "<< ") ++) }
                 else def
 
+establishDataPipe :: (ClientParams, ServerParams) -> (Context -> Chan a1 -> IO ()) -> (Chan a -> Context -> IO ()) -> IO (Chan a, Chan a1)
 establishDataPipe params tlsServer tlsClient = do
     -- initial setup
     pipe        <- newPipe
@@ -226,6 +231,7 @@ establishDataPipe params tlsServer tlsClient = do
                            ", supported: " ++ show supported
             E.throw e
 
+initiateDataPipe :: (TLSParams params1, TLSParams params) => (params1, params) -> (Context -> IO a1) -> (Context -> IO a) -> IO (Either E.SomeException a, Either E.SomeException a1)
 initiateDataPipe params tlsServer tlsClient = do
     -- initial setup
     pipe        <- newPipe
