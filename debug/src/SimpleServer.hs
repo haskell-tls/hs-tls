@@ -22,8 +22,6 @@ import Data.IORef
 import Data.Monoid
 import Data.Maybe (isJust)
 
-import Numeric (showHex)
-
 import Common
 import HexDump
 
@@ -98,23 +96,24 @@ getDefaultParams flags store sStorage cred _session = do
                 | otherwise    = ValidationCache (\_ _ _ -> return ValidationCachePass)
                                                  (\_ _ _ -> return ())
 
-            myCiphers = foldl accBogusCipher (filter withUseCipher ciphersuite_default) flags
+            myCiphers = foldl accBogusCipher getSelectedCiphers flags
               where accBogusCipher acc (BogusCipher c) =
                         case reads c of
                             [(v, "")] -> acc ++ [bogusCipher v]
                             _         -> acc
                     accBogusCipher acc _ = acc
 
-            getUsedCiphers = foldl f [] flags
-              where f acc (UseCipher am) = case readNumber am of
-                                                Nothing -> acc
-                                                Just i  -> i : acc
+            getUsedCipherIDs = foldl f [] flags
+              where f acc (UseCipher am) =
+                            case readCiphers am of
+                                Just l  -> l ++ acc
+                                Nothing -> acc
                     f acc _ = acc
 
-            withUseCipher c =
-                case getUsedCiphers of
-                    [] -> True
-                    l  -> cipherID c `elem` l
+            getSelectedCiphers =
+                case getUsedCipherIDs of
+                    [] -> ciphersuite_default
+                    l  -> filter (\c -> cipherID c `elem` l) ciphersuite_all
 
             getDHParams opts = foldl accf Nothing opts
               where accf _   (DHParams file) = Just file
@@ -295,16 +294,6 @@ runOn (sStorage, certStore) flags port
 
 printUsage =
     putStrLn $ usageInfo "usage: simpleserver [opts] [port]\n\n\t(port default to: 443)\noptions:\n" options
-
-printCiphers = do
-    putStrLn "Supported ciphers"
-    putStrLn "====================================="
-    forM_ ciphersuite_default $ \c -> do
-        putStrLn (pad 50 (cipherName c) ++ " = " ++ pad 5 (show $ cipherID c) ++ "  0x" ++ showHex (cipherID c) "")
-  where
-    pad n s
-        | length s < n = s ++ replicate (n - length s) ' '
-        | otherwise    = s
 
 main = do
     args <- getArgs
