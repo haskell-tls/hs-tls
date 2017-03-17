@@ -21,11 +21,11 @@ import System.X509
 import Data.Default.Class
 import Data.IORef
 import Data.Monoid
-import Data.Char (isDigit)
 import Data.Maybe (isJust)
 
 import Numeric (showHex)
 
+import Common
 import HexDump
 
 defaultBenchAmount = 1024 * 1024
@@ -266,11 +266,6 @@ runOn (sStorage, certStore) flags port hostname
                                             Nothing -> acc
                                             Just i  -> i
                 f acc _              = acc
-
-readNumber :: Read a => String -> Maybe a
-readNumber s
-    | all isDigit s = Just $ read s
-    | otherwise     = Nothing
 
 printUsage =
     putStrLn $ usageInfo "usage: simpleclient [opts] <hostname> [port]\n\n\t(port default to: 443)\noptions:\n" options

@@ -27,6 +27,8 @@ import Network.TLS.Extra.Cipher
 
 import qualified Crypto.PubKey.DH as DH ()
 
+import Common
+
 loopUntil :: Monad m => m Bool -> m ()
 loopUntil f = f >>= \v -> if v then return () else loopUntil f
 

@@ -20,11 +20,11 @@ import Data.X509.CertificateStore
 import Data.Default.Class
 import Data.IORef
 import Data.Monoid
-import Data.Char (isDigit)
 import Data.Maybe (isJust)
 
 import Numeric (showHex)
 
+import Common
 import HexDump
 
 defaultBenchAmount = 1024 * 1024
@@ -290,11 +290,6 @@ runOn (sStorage, certStore) flags port
                                             Nothing -> acc
                                             Just i  -> i
                 f acc _              = acc
-
-readNumber :: (Num a, Read a) => String -> Maybe a
-readNumber s
-    | all isDigit s = Just $ read s
-    | otherwise     = Nothing
 
 printUsage =
     putStrLn $ usageInfo "usage: simpleserver [opts] [port]\n\n\t(port default to: 443)\noptions:\n" options
