@@ -71,7 +71,7 @@ getDefaultParams :: [Flag] -> CertificateStore -> IORef (SessionID, SessionData)
 getDefaultParams flags store sStorage cred _session = do
     dhParams <- case getDHParams flags of
         Nothing   -> return Nothing
-        Just file -> (Just . read) `fmap` readFile file
+        Just name -> readDHParams name
 
     return ServerParams
         { serverWantClientCert = False
@@ -150,6 +150,7 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | BenchData String
           | UseCipher String
           | ListCiphers
+          | ListDHParams
           | Certificate String
           | Key String
           | DHParams String
@@ -182,11 +183,12 @@ options =
     , Option []     ["bench-data"] (ReqArg BenchData "amount") "amount of data to benchmark with"
     , Option []     ["use-cipher"] (ReqArg UseCipher "cipher-id") "use a specific cipher"
     , Option []     ["list-ciphers"] (NoArg ListCiphers) "list all ciphers supported and exit"
+    , Option []     ["list-dhparams"] (NoArg ListDHParams) "list all DH parameters supported and exit"
     , Option []     ["certificate"] (ReqArg Certificate "certificate") "certificate file"
     , Option []     ["debug-seed"] (ReqArg DebugSeed "debug-seed") "debug: set a specific seed for randomness"
     , Option []     ["debug-print-seed"] (NoArg DebugPrintSeed) "debug: set a specific seed for randomness"
     , Option []     ["key"] (ReqArg Key "key") "certificate file"
-    , Option []     ["dhparams"] (ReqArg DHParams "dhparams") "DH parameter file"
+    , Option []     ["dhparams"] (ReqArg DHParams "dhparams") "DH parameters (name or file)"
     ]
 
 noSession = Nothing
@@ -317,6 +319,10 @@ main = do
 
     when (ListCiphers `elem` opts) $ do
         printCiphers
+        exitSuccess
+
+    when (ListDHParams `elem` opts) $ do
+        printDHParams
         exitSuccess
 
     certStore <- getSystemCertificateStore

@@ -90,7 +90,7 @@ clientProcess dhParamsFile creds handle dsthandle dbg sessionStorage _ = do
 
     dhParams <- case dhParamsFile of
             Nothing   -> return Nothing
-            Just file -> (Just . read) `fmap` readFile file
+            Just name -> readDHParams name
 
     let serverstate = def
             { serverSupported = def { supportedCiphers = ciphersuite_default }
@@ -236,6 +236,7 @@ data Flag =
     | DestinationType String
     | Debug
     | Help
+    | ListDHParams
     | Certificate String
     | Key String
     | DHParams String
@@ -251,9 +252,10 @@ options =
     , Option []     ["destination-type"] (ReqArg DestinationType "source-type") "type of source (tcp, unix, fd)"
     , Option []     ["debug"]   (NoArg Debug) "debug the TLS protocol printing debugging to stdout"
     , Option ['h']  ["help"]    (NoArg Help) "request help"
+    , Option []     ["list-dhparams"] (NoArg ListDHParams) "list all DH parameters supported and exit"
     , Option []     ["certificate"] (ReqArg Certificate "certificate") "certificate file"
     , Option []     ["key"] (ReqArg Key "key") "certificate file"
-    , Option []     ["dhparams"] (ReqArg DHParams "dhparams") "DH parameter file"
+    , Option []     ["dhparams"] (ReqArg DHParams "dhparams") "DH parameters (name or file)"
     , Option []     ["no-session"] (NoArg NoSession) "disable support for session"
     , Option []     ["no-cert-validation"] (NoArg NoCertValidation) "disable certificate validation"
     ]
@@ -300,6 +302,10 @@ main = do
 
     when (Help `elem` opts) $ do
         printUsage
+        exitSuccess
+
+    when (ListDHParams `elem` opts) $ do
+        printDHParams
         exitSuccess
 
     let source      = getSource opts
