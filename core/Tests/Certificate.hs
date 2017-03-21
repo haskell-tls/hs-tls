@@ -82,7 +82,7 @@ simpleCertificate pubKey =
         time2 = DateTime (Date 2049 January 1) (TimeOfDay 0 0 0 0)
         simpleDN = DistinguishedName []
 
-simpleX509 :: PubKey -> SignedExact Certificate
+simpleX509 :: PubKey -> SignedCertificate
 simpleX509 pubKey = do
     let cert = simpleCertificate pubKey
         sig  = replicate 40 1
@@ -90,7 +90,7 @@ simpleX509 pubKey = do
         (signedExact, ()) = objectToSignedExact (\_ -> (B.pack sig,sigalg,())) cert
      in signedExact
 
-arbitraryX509WithKey :: (PubKey, t) -> Gen (SignedExact Certificate)
+arbitraryX509WithKey :: (PubKey, t) -> Gen SignedCertificate
 arbitraryX509WithKey (pubKey, _) = do
     cert <- arbitraryCertificate pubKey
     sig  <- resize 40 $ listOf1 arbitrary
@@ -98,7 +98,7 @@ arbitraryX509WithKey (pubKey, _) = do
     let (signedExact, ()) = objectToSignedExact (\(!(_)) -> (B.pack sig,sigalg,())) cert
     return signedExact
 
-arbitraryX509 :: Gen (SignedExact Certificate)
+arbitraryX509 :: Gen SignedCertificate
 arbitraryX509 = do
     let (pubKey, privKey) = getGlobalRSAPair
     arbitraryX509WithKey (PubKeyRSA pubKey, PrivKeyRSA privKey)

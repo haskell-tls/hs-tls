@@ -72,7 +72,7 @@ runTLSPipeSimple params = runTLSPipe params tlsServer tlsClient
             bye ctx
             return ()
 
-runTLSInitFailure :: (TLSParams a, TLSParams b) => (a, b) -> PropertyM IO ()
+runTLSInitFailure :: (ClientParams, ServerParams) -> PropertyM IO ()
 runTLSInitFailure params = do
     (cRes, sRes) <- run (initiateDataPipe params tlsServer tlsClient)
     assertIsLeft cRes
