@@ -29,6 +29,7 @@ module Network.TLS.Cipher
     , cipherExchangeNeedMoreData
     , hasMAC
     , hasRecordIV
+    , shouldTrimPreMasterSecret
     ) where
 
 import Crypto.Cipher.Types (AuthTag)
@@ -156,3 +157,16 @@ cipherExchangeNeedMoreData CipherKeyExchange_DH_RSA      = False
 cipherExchangeNeedMoreData CipherKeyExchange_ECDH_ECDSA  = True
 cipherExchangeNeedMoreData CipherKeyExchange_ECDH_RSA    = True
 cipherExchangeNeedMoreData CipherKeyExchange_ECDHE_ECDSA = True
+
+shouldTrimPreMasterSecret :: Version -> Cipher -> Bool
+shouldTrimPreMasterSecret version cipher = (isTrimPreMasterSecretVersion version) && (isTrimPreMasterSecretCipher cipher)
+
+isTrimPreMasterSecretCipher :: Cipher -> Bool
+isTrimPreMasterSecretCipher Cipher { cipherKeyExchange = CipherKeyExchange_DHE_DSS } = True
+isTrimPreMasterSecretCipher Cipher { cipherKeyExchange = CipherKeyExchange_DHE_RSA } = True
+isTrimPreMasterSecretCipher _                                                        = False
+
+isTrimPreMasterSecretVersion :: Version -> Bool
+isTrimPreMasterSecretVersion TLS11 = True
+isTrimPreMasterSecretVersion TLS12 = True
+isTrimPreMasterSecretVersion _     = False
