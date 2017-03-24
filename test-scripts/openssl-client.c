@@ -280,7 +280,7 @@ int main(int argc, char *argv[])
 	enum cipher_choice cipher_choice = CIPHER_ALL;
 
 	if (argc < 3) {
-		printf("Usage: %s <host> <portnum> [opts]\n", argv[0]);
+		printf("Usage: %s <host_ip> <portnum> [opts]\n", argv[0]);
 		exit(-1);
 	}
 
@@ -309,7 +309,7 @@ int main(int argc, char *argv[])
 
 	ctx = client_init(method, cipher_choice);
 
-	client_fd = connect_socket("127.0.0.1", atoi(portnum));
+	client_fd = connect_socket(host, atoi(portnum));
 
 	printf("[status] connected. handshaking\n");
 
