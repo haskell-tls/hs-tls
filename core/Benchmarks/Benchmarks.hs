@@ -10,6 +10,7 @@ import Network.TLS
 import Data.X509
 import Data.X509.Validation
 import Data.Default.Class
+import Data.IORef
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
@@ -35,12 +36,12 @@ getParams connectVer cipher = (cParams, sParams)
                         }
         (pubKey, privKey) = getGlobalRSAPair
 
-runTLSPipe params tlsServer tlsClient d name = bench name . nfIO $ do
+runTLSPipe params tlsServer tlsClient d = do
     (startQueue, resultQueue) <- establishDataPipe params tlsServer tlsClient
     writeChan startQueue d
     readChan resultQueue
 
-bench1 params !d name = runTLSPipe params tlsServer tlsClient d name
+runTLSPipeSimple params bs = runTLSPipe params tlsServer tlsClient bs
   where tlsServer ctx queue = do
             handshake ctx
             d <- recvDataNonNull ctx
@@ -53,12 +54,36 @@ bench1 params !d name = runTLSPipe params tlsServer tlsClient d name
             bye ctx
             return ()
 
+benchConnection params !d name = bench name . nfIO $ runTLSPipeSimple params d
+
+benchResumption params !d name = env initializeSession runResumption
+  where
+    initializeSession = do
+        sessionRef <- newIORef Nothing
+        let sessionManager = oneSessionManager sessionRef
+            params1 = setPairParamsSessionManager sessionManager params
+        _ <- runTLSPipeSimple params1 d
+
+        Just sessionParams <- readIORef sessionRef
+        let params2 = setPairParamsSessionResuming sessionParams params1
+        newIORef params2
+
+    runResumption paramsRef = bench name . nfIO $ do
+        params2 <- readIORef paramsRef
+        runTLSPipeSimple params2 d
+
 main = defaultMain
     [ bgroup "connection"
         -- not sure the number actually make sense for anything. improve ..
-        [ bench1 (getParams SSL3 blockCipher) (B.replicate 256 0) "SSL3-256 bytes"
-        , bench1 (getParams TLS10 blockCipher) (B.replicate 256 0) "TLS10-256 bytes"
-        , bench1 (getParams TLS11 blockCipher) (B.replicate 256 0) "TLS11-256 bytes"
-        , bench1 (getParams TLS12 blockCipher) (B.replicate 256 0) "TLS12-256 bytes"
+        [ benchConnection (getParams SSL3 blockCipher) (B.replicate 256 0) "SSL3-256 bytes"
+        , benchConnection (getParams TLS10 blockCipher) (B.replicate 256 0) "TLS10-256 bytes"
+        , benchConnection (getParams TLS11 blockCipher) (B.replicate 256 0) "TLS11-256 bytes"
+        , benchConnection (getParams TLS12 blockCipher) (B.replicate 256 0) "TLS12-256 bytes"
+        ]
+    , bgroup "resumption"
+        [ benchResumption (getParams SSL3 blockCipher) (B.replicate 256 0) "SSL3-256 bytes"
+        , benchResumption (getParams TLS10 blockCipher) (B.replicate 256 0) "TLS10-256 bytes"
+        , benchResumption (getParams TLS11 blockCipher) (B.replicate 256 0) "TLS11-256 bytes"
+        , benchResumption (getParams TLS12 blockCipher) (B.replicate 256 0) "TLS12-256 bytes"
         ]
     ]
