@@ -160,6 +160,7 @@ Benchmark bench-tls
                    , QuickCheck >= 2
                    , tasty-quickcheck
                    , tls
+  ghc-options:       -Wall -fno-warn-unused-imports -fno-warn-orphans
 
 source-repository head
   type: git
