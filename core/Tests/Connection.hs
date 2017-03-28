@@ -3,6 +3,7 @@ module Connection
     , arbitraryPairParams
     , arbitraryPairParamsWithVersionsAndCiphers
     , arbitraryClientCredential
+    , oneSessionManager
     , setPairParamsSessionManager
     , setPairParamsSessionResuming
     , establishDataPipe
@@ -23,6 +24,7 @@ import Network.TLS
 import Network.TLS.Extra
 import Data.X509
 import Data.Default.Class
+import Data.IORef
 import Control.Applicative
 import Control.Concurrent.Chan
 import Control.Concurrent
@@ -147,6 +149,19 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
 
 arbitraryClientCredential :: Gen Credential
 arbitraryClientCredential = arbitraryCredentialsOfEachType >>= elements
+
+-- | simple session manager to store one session id and session data for a single thread.
+-- a Real concurrent session manager would use an MVar and have multiples items.
+oneSessionManager :: IORef (Maybe (SessionID, SessionData)) -> SessionManager
+oneSessionManager ref = SessionManager
+    { sessionResume     = \myId     -> (>>= maybeResume myId) <$> readIORef ref
+    , sessionEstablish  = \myId dat -> writeIORef ref $ Just (myId, dat)
+    , sessionInvalidate = \_        -> return ()
+    }
+  where
+    maybeResume myId (sid, sdata)
+        | sid == myId = Just sdata
+        | otherwise   = Nothing
 
 setPairParamsSessionManager :: SessionManager -> (ClientParams, ServerParams) -> (ClientParams, ServerParams)
 setPairParamsSessionManager manager (clientState, serverState) = (nc,ns)
