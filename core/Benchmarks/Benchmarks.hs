@@ -15,8 +15,10 @@ import Data.IORef
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 
+recvDataNonNull :: Context -> IO B.ByteString
 recvDataNonNull ctx = recvData ctx >>= \l -> if B.null l then recvDataNonNull ctx else return l
 
+getParams :: Version -> Cipher -> (ClientParams, ServerParams)
 getParams connectVer cipher = (cParams, sParams)
   where sParams = def { serverSupported = supported
                       , serverShared = def {
@@ -36,11 +38,17 @@ getParams connectVer cipher = (cParams, sParams)
                         }
         (pubKey, privKey) = getGlobalRSAPair
 
+runTLSPipe :: (ClientParams, ServerParams)
+           -> (Context -> Chan b -> IO ())
+           -> (Chan a -> Context -> IO ())
+           -> a
+           -> IO b
 runTLSPipe params tlsServer tlsClient d = do
     (startQueue, resultQueue) <- establishDataPipe params tlsServer tlsClient
     writeChan startQueue d
     readChan resultQueue
 
+runTLSPipeSimple :: (ClientParams, ServerParams) -> B.ByteString -> IO B.ByteString
 runTLSPipeSimple params bs = runTLSPipe params tlsServer tlsClient bs
   where tlsServer ctx queue = do
             handshake ctx
@@ -54,8 +62,10 @@ runTLSPipeSimple params bs = runTLSPipe params tlsServer tlsClient bs
             bye ctx
             return ()
 
+benchConnection :: (ClientParams, ServerParams) -> B.ByteString -> String -> Benchmark
 benchConnection params !d name = bench name . nfIO $ runTLSPipeSimple params d
 
+benchResumption :: (ClientParams, ServerParams) -> B.ByteString -> String -> Benchmark
 benchResumption params !d name = env initializeSession runResumption
   where
     initializeSession = do
@@ -72,6 +82,7 @@ benchResumption params !d name = env initializeSession runResumption
         params2 <- readIORef paramsRef
         runTLSPipeSimple params2 d
 
+main :: IO ()
 main = defaultMain
     [ bgroup "connection"
         -- not sure the number actually make sense for anything. improve ..
