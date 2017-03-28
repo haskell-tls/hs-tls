@@ -303,7 +303,7 @@ bulk_tripledes_ede = Bulk
 -- | unencrypted cipher using RSA for key exchange and MD5 for digest
 cipher_null_MD5 :: Cipher
 cipher_null_MD5 = Cipher
-    { cipherID           = 0x1
+    { cipherID           = 0x0001
     , cipherName         = "RSA-null-MD5"
     , cipherBulk         = bulk_null
     , cipherHash         = MD5
@@ -315,7 +315,7 @@ cipher_null_MD5 = Cipher
 -- | unencrypted cipher using RSA for key exchange and SHA1 for digest
 cipher_null_SHA1 :: Cipher
 cipher_null_SHA1 = Cipher
-    { cipherID           = 0x2
+    { cipherID           = 0x0002
     , cipherName         = "RSA-null-SHA1"
     , cipherBulk         = bulk_null
     , cipherHash         = SHA1
@@ -327,7 +327,7 @@ cipher_null_SHA1 = Cipher
 -- | RC4 cipher, RSA key exchange and MD5 for digest
 cipher_RC4_128_MD5 :: Cipher
 cipher_RC4_128_MD5 = Cipher
-    { cipherID           = 0x04
+    { cipherID           = 0x0004
     , cipherName         = "RSA-rc4-128-md5"
     , cipherBulk         = bulk_rc4
     , cipherHash         = MD5
@@ -339,7 +339,7 @@ cipher_RC4_128_MD5 = Cipher
 -- | RC4 cipher, RSA key exchange and SHA1 for digest
 cipher_RC4_128_SHA1 :: Cipher
 cipher_RC4_128_SHA1 = Cipher
-    { cipherID           = 0x05
+    { cipherID           = 0x0005
     , cipherName         = "RSA-rc4-128-sha1"
     , cipherBulk         = bulk_rc4
     , cipherHash         = SHA1
@@ -351,7 +351,7 @@ cipher_RC4_128_SHA1 = Cipher
 -- | AES cipher (128 bit key), RSA key exchange and SHA1 for digest
 cipher_AES128_SHA1 :: Cipher
 cipher_AES128_SHA1 = Cipher
-    { cipherID           = 0x2f
+    { cipherID           = 0x002F
     , cipherName         = "RSA-AES128-SHA1"
     , cipherBulk         = bulk_aes128
     , cipherHash         = SHA1
@@ -363,7 +363,7 @@ cipher_AES128_SHA1 = Cipher
 -- | AES cipher (128 bit key), DHE key exchanged signed by DSA and SHA1 for digest
 cipher_DHE_DSS_AES128_SHA1 :: Cipher
 cipher_DHE_DSS_AES128_SHA1 = Cipher
-    { cipherID           = 0x32
+    { cipherID           = 0x0032
     , cipherName         = "DHE-DSA-AES128-SHA1"
     , cipherBulk         = bulk_aes128
     , cipherHash         = SHA1
@@ -375,7 +375,7 @@ cipher_DHE_DSS_AES128_SHA1 = Cipher
 -- | AES cipher (128 bit key), DHE key exchanged signed by RSA and SHA1 for digest
 cipher_DHE_RSA_AES128_SHA1 :: Cipher
 cipher_DHE_RSA_AES128_SHA1 = Cipher
-    { cipherID           = 0x33
+    { cipherID           = 0x0033
     , cipherName         = "DHE-RSA-AES128-SHA1"
     , cipherBulk         = bulk_aes128
     , cipherHash         = SHA1
@@ -387,7 +387,7 @@ cipher_DHE_RSA_AES128_SHA1 = Cipher
 -- | AES cipher (256 bit key), RSA key exchange and SHA1 for digest
 cipher_AES256_SHA1 :: Cipher
 cipher_AES256_SHA1 = Cipher
-    { cipherID           = 0x35
+    { cipherID           = 0x0035
     , cipherName         = "RSA-AES256-SHA1"
     , cipherBulk         = bulk_aes256
     , cipherHash         = SHA1
@@ -399,7 +399,7 @@ cipher_AES256_SHA1 = Cipher
 -- | AES cipher (256 bit key), DHE key exchanged signed by DSA and SHA1 for digest
 cipher_DHE_DSS_AES256_SHA1 :: Cipher
 cipher_DHE_DSS_AES256_SHA1 = cipher_DHE_DSS_AES128_SHA1
-    { cipherID           = 0x38
+    { cipherID           = 0x0038
     , cipherName         = "DHE-DSA-AES256-SHA1"
     , cipherBulk         = bulk_aes256
     }
@@ -407,7 +407,7 @@ cipher_DHE_DSS_AES256_SHA1 = cipher_DHE_DSS_AES128_SHA1
 -- | AES cipher (256 bit key), DHE key exchanged signed by RSA and SHA1 for digest
 cipher_DHE_RSA_AES256_SHA1 :: Cipher
 cipher_DHE_RSA_AES256_SHA1 = cipher_DHE_RSA_AES128_SHA1
-    { cipherID           = 0x39
+    { cipherID           = 0x0039
     , cipherName         = "DHE-RSA-AES256-SHA1"
     , cipherBulk         = bulk_aes256
     }
@@ -415,7 +415,7 @@ cipher_DHE_RSA_AES256_SHA1 = cipher_DHE_RSA_AES128_SHA1
 -- | AES cipher (128 bit key), RSA key exchange and SHA256 for digest
 cipher_AES128_SHA256 :: Cipher
 cipher_AES128_SHA256 = Cipher
-    { cipherID           = 0x3c
+    { cipherID           = 0x003C
     , cipherName         = "RSA-AES128-SHA256"
     , cipherBulk         = bulk_aes128
     , cipherHash         = SHA256
@@ -427,7 +427,7 @@ cipher_AES128_SHA256 = Cipher
 -- | AES cipher (256 bit key), RSA key exchange and SHA256 for digest
 cipher_AES256_SHA256 :: Cipher
 cipher_AES256_SHA256 = Cipher
-    { cipherID           = 0x3d
+    { cipherID           = 0x003D
     , cipherName         = "RSA-AES256-SHA256"
     , cipherBulk         = bulk_aes256
     , cipherHash         = SHA256
@@ -440,7 +440,7 @@ cipher_AES256_SHA256 = Cipher
 -- The SHA256 digest is used as a PRF, not as a MAC.
 cipher_AES128GCM_SHA256 :: Cipher
 cipher_AES128GCM_SHA256 = Cipher
-    { cipherID           = 0x9c
+    { cipherID           = 0x009C
     , cipherName         = "RSA-AES128GCM-SHA256"
     , cipherBulk         = bulk_aes128gcm
     , cipherHash         = SHA256
@@ -453,7 +453,7 @@ cipher_AES128GCM_SHA256 = Cipher
 -- The SHA384 digest is used as a PRF, not as a MAC.
 cipher_AES256GCM_SHA384 :: Cipher
 cipher_AES256GCM_SHA384 = Cipher
-    { cipherID           = 0x9d
+    { cipherID           = 0x009D
     , cipherName         = "RSA-AES256GCM-SHA384"
     , cipherBulk         = bulk_aes256gcm
     , cipherHash         = SHA384
@@ -464,14 +464,14 @@ cipher_AES256GCM_SHA384 = Cipher
 
 cipher_DHE_DSS_RC4_SHA1 :: Cipher
 cipher_DHE_DSS_RC4_SHA1 = cipher_DHE_DSS_AES128_SHA1
-    { cipherID           = 0x66
+    { cipherID           = 0x0066
     , cipherName         = "DHE-DSA-RC4-SHA1"
     , cipherBulk         = bulk_rc4
     }
 
 cipher_DHE_RSA_AES128_SHA256 :: Cipher
 cipher_DHE_RSA_AES128_SHA256 = cipher_DHE_RSA_AES128_SHA1
-    { cipherID           = 0x67
+    { cipherID           = 0x0067
     , cipherName         = "DHE-RSA-AES128-SHA256"
     , cipherHash         = SHA256
     , cipherPRFHash      = Just SHA256
@@ -480,7 +480,7 @@ cipher_DHE_RSA_AES128_SHA256 = cipher_DHE_RSA_AES128_SHA1
 
 cipher_DHE_RSA_AES256_SHA256 :: Cipher
 cipher_DHE_RSA_AES256_SHA256 = cipher_DHE_RSA_AES128_SHA256
-    { cipherID           = 0x6b
+    { cipherID           = 0x006B
     , cipherName         = "DHE-RSA-AES256-SHA256"
     , cipherBulk         = bulk_aes256
     }
@@ -488,7 +488,7 @@ cipher_DHE_RSA_AES256_SHA256 = cipher_DHE_RSA_AES128_SHA256
 -- | 3DES cipher (168 bit key), RSA key exchange and SHA1 for digest
 cipher_RSA_3DES_EDE_CBC_SHA1 :: Cipher
 cipher_RSA_3DES_EDE_CBC_SHA1 = Cipher
-    { cipherID           = 0x0a
+    { cipherID           = 0x000A
     , cipherName         = "RSA-3DES-EDE-CBC-SHA1"
     , cipherBulk         = bulk_tripledes_ede
     , cipherHash         = SHA1
@@ -499,7 +499,7 @@ cipher_RSA_3DES_EDE_CBC_SHA1 = Cipher
 
 cipher_DHE_RSA_AES128GCM_SHA256 :: Cipher
 cipher_DHE_RSA_AES128GCM_SHA256 = Cipher
-    { cipherID           = 0x9e
+    { cipherID           = 0x009E
     , cipherName         = "DHE-RSA-AES128GCM-SHA256"
     , cipherBulk         = bulk_aes128gcm
     , cipherHash         = SHA256
@@ -510,7 +510,7 @@ cipher_DHE_RSA_AES128GCM_SHA256 = Cipher
 
 cipher_DHE_RSA_AES256GCM_SHA384 :: Cipher
 cipher_DHE_RSA_AES256GCM_SHA384 = Cipher
-    { cipherID           = 0x9f
+    { cipherID           = 0x009F
     , cipherName         = "DHE-RSA-AES256GCM-SHA384"
     , cipherBulk         = bulk_aes256gcm
     , cipherHash         = SHA384
@@ -521,7 +521,7 @@ cipher_DHE_RSA_AES256GCM_SHA384 = Cipher
 
 cipher_ECDHE_ECDSA_AES128CBC_SHA :: Cipher
 cipher_ECDHE_ECDSA_AES128CBC_SHA = Cipher
-    { cipherID           = 0xc009
+    { cipherID           = 0xC009
     , cipherName         = "ECDHE-ECDSA-AES128CBC-SHA"
     , cipherBulk         = bulk_aes128
     , cipherHash         = SHA1
@@ -532,7 +532,7 @@ cipher_ECDHE_ECDSA_AES128CBC_SHA = Cipher
 
 cipher_ECDHE_ECDSA_AES256CBC_SHA :: Cipher
 cipher_ECDHE_ECDSA_AES256CBC_SHA = Cipher
-    { cipherID           = 0xc00A
+    { cipherID           = 0xC00A
     , cipherName         = "ECDHE-ECDSA-AES256CBC-SHA"
     , cipherBulk         = bulk_aes256
     , cipherHash         = SHA1
@@ -543,7 +543,7 @@ cipher_ECDHE_ECDSA_AES256CBC_SHA = Cipher
 
 cipher_ECDHE_RSA_AES128CBC_SHA :: Cipher
 cipher_ECDHE_RSA_AES128CBC_SHA = Cipher
-    { cipherID           = 0xc013
+    { cipherID           = 0xC013
     , cipherName         = "ECDHE-RSA-AES128CBC-SHA"
     , cipherBulk         = bulk_aes128
     , cipherHash         = SHA1
@@ -554,7 +554,7 @@ cipher_ECDHE_RSA_AES128CBC_SHA = Cipher
 
 cipher_ECDHE_RSA_AES256CBC_SHA :: Cipher
 cipher_ECDHE_RSA_AES256CBC_SHA = Cipher
-    { cipherID           = 0xc014
+    { cipherID           = 0xC014
     , cipherName         = "ECDHE-RSA-AES256CBC-SHA"
     , cipherBulk         = bulk_aes256
     , cipherHash         = SHA1
@@ -565,7 +565,7 @@ cipher_ECDHE_RSA_AES256CBC_SHA = Cipher
 
 cipher_ECDHE_RSA_AES128CBC_SHA256 :: Cipher
 cipher_ECDHE_RSA_AES128CBC_SHA256 = Cipher
-    { cipherID           = 0xc027
+    { cipherID           = 0xC027
     , cipherName         = "ECDHE-RSA-AES128CBC-SHA256"
     , cipherBulk         = bulk_aes128
     , cipherHash         = SHA256
@@ -576,7 +576,7 @@ cipher_ECDHE_RSA_AES128CBC_SHA256 = Cipher
 
 cipher_ECDHE_RSA_AES256CBC_SHA384 :: Cipher
 cipher_ECDHE_RSA_AES256CBC_SHA384 = Cipher
-    { cipherID           = 0xc028
+    { cipherID           = 0xC028
     , cipherName         = "ECDHE-RSA-AES256CBC-SHA384"
     , cipherBulk         = bulk_aes256
     , cipherHash         = SHA384
@@ -598,7 +598,7 @@ cipher_ECDHE_ECDSA_AES128CBC_SHA256 = Cipher
 
 cipher_ECDHE_ECDSA_AES256CBC_SHA384 :: Cipher
 cipher_ECDHE_ECDSA_AES256CBC_SHA384 = Cipher
-    { cipherID           = 0xc024
+    { cipherID           = 0xC024
     , cipherName         = "ECDHE-ECDSA-AES256CBC-SHA384"
     , cipherBulk         = bulk_aes256
     , cipherHash         = SHA384
@@ -609,7 +609,7 @@ cipher_ECDHE_ECDSA_AES256CBC_SHA384 = Cipher
 
 cipher_ECDHE_ECDSA_AES128GCM_SHA256 :: Cipher
 cipher_ECDHE_ECDSA_AES128GCM_SHA256 = Cipher
-    { cipherID           = 0xc02b
+    { cipherID           = 0xC02B
     , cipherName         = "ECDHE-ECDSA-AES128GCM-SHA256"
     , cipherBulk         = bulk_aes128gcm
     , cipherHash         = SHA256
@@ -620,7 +620,7 @@ cipher_ECDHE_ECDSA_AES128GCM_SHA256 = Cipher
 
 cipher_ECDHE_ECDSA_AES256GCM_SHA384 :: Cipher
 cipher_ECDHE_ECDSA_AES256GCM_SHA384 = Cipher
-    { cipherID           = 0xc02c
+    { cipherID           = 0xC02C
     , cipherName         = "ECDHE-ECDSA-AES256GCM-SHA384"
     , cipherBulk         = bulk_aes256gcm
     , cipherHash         = SHA384
@@ -631,7 +631,7 @@ cipher_ECDHE_ECDSA_AES256GCM_SHA384 = Cipher
 
 cipher_ECDHE_RSA_AES128GCM_SHA256 :: Cipher
 cipher_ECDHE_RSA_AES128GCM_SHA256 = Cipher
-    { cipherID           = 0xc02f
+    { cipherID           = 0xC02F
     , cipherName         = "ECDHE-RSA-AES128GCM-SHA256"
     , cipherBulk         = bulk_aes128gcm
     , cipherHash         = SHA256
@@ -642,7 +642,7 @@ cipher_ECDHE_RSA_AES128GCM_SHA256 = Cipher
 
 cipher_ECDHE_RSA_AES256GCM_SHA384 :: Cipher
 cipher_ECDHE_RSA_AES256GCM_SHA384 = Cipher
-    { cipherID           = 0xc030
+    { cipherID           = 0xC030
     , cipherName         = "ECDHE-RSA-AES256GCM-SHA384"
     , cipherBulk         = bulk_aes256gcm
     , cipherHash         = SHA384
