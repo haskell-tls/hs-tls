@@ -348,6 +348,18 @@ cipher_RC4_128_SHA1 = Cipher
     , cipherMinVer       = Nothing
     }
 
+-- | 3DES cipher (168 bit key), RSA key exchange and SHA1 for digest
+cipher_RSA_3DES_EDE_CBC_SHA1 :: Cipher
+cipher_RSA_3DES_EDE_CBC_SHA1 = Cipher
+    { cipherID           = 0x000A
+    , cipherName         = "RSA-3DES-EDE-CBC-SHA1"
+    , cipherBulk         = bulk_tripledes_ede
+    , cipherHash         = SHA1
+    , cipherPRFHash      = Nothing
+    , cipherKeyExchange  = CipherKeyExchange_RSA
+    , cipherMinVer       = Nothing
+    }
+
 -- | AES cipher (128 bit key), RSA key exchange and SHA1 for digest
 cipher_AES128_SHA1 :: Cipher
 cipher_AES128_SHA1 = Cipher
@@ -436,6 +448,29 @@ cipher_AES256_SHA256 = Cipher
     , cipherMinVer       = Just TLS12
     }
 
+cipher_DHE_DSS_RC4_SHA1 :: Cipher
+cipher_DHE_DSS_RC4_SHA1 = cipher_DHE_DSS_AES128_SHA1
+    { cipherID           = 0x0066
+    , cipherName         = "DHE-DSA-RC4-SHA1"
+    , cipherBulk         = bulk_rc4
+    }
+
+cipher_DHE_RSA_AES128_SHA256 :: Cipher
+cipher_DHE_RSA_AES128_SHA256 = cipher_DHE_RSA_AES128_SHA1
+    { cipherID           = 0x0067
+    , cipherName         = "DHE-RSA-AES128-SHA256"
+    , cipherHash         = SHA256
+    , cipherPRFHash      = Just SHA256
+    , cipherMinVer       = Just TLS12
+    }
+
+cipher_DHE_RSA_AES256_SHA256 :: Cipher
+cipher_DHE_RSA_AES256_SHA256 = cipher_DHE_RSA_AES128_SHA256
+    { cipherID           = 0x006B
+    , cipherName         = "DHE-RSA-AES256-SHA256"
+    , cipherBulk         = bulk_aes256
+    }
+
 -- | AESGCM cipher (128 bit key), RSA key exchange.
 -- The SHA256 digest is used as a PRF, not as a MAC.
 cipher_AES128GCM_SHA256 :: Cipher
@@ -460,41 +495,6 @@ cipher_AES256GCM_SHA384 = Cipher
     , cipherPRFHash      = Just SHA384
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just TLS12
-    }
-
-cipher_DHE_DSS_RC4_SHA1 :: Cipher
-cipher_DHE_DSS_RC4_SHA1 = cipher_DHE_DSS_AES128_SHA1
-    { cipherID           = 0x0066
-    , cipherName         = "DHE-DSA-RC4-SHA1"
-    , cipherBulk         = bulk_rc4
-    }
-
-cipher_DHE_RSA_AES128_SHA256 :: Cipher
-cipher_DHE_RSA_AES128_SHA256 = cipher_DHE_RSA_AES128_SHA1
-    { cipherID           = 0x0067
-    , cipherName         = "DHE-RSA-AES128-SHA256"
-    , cipherHash         = SHA256
-    , cipherPRFHash      = Just SHA256
-    , cipherMinVer       = Just TLS12
-    }
-
-cipher_DHE_RSA_AES256_SHA256 :: Cipher
-cipher_DHE_RSA_AES256_SHA256 = cipher_DHE_RSA_AES128_SHA256
-    { cipherID           = 0x006B
-    , cipherName         = "DHE-RSA-AES256-SHA256"
-    , cipherBulk         = bulk_aes256
-    }
-
--- | 3DES cipher (168 bit key), RSA key exchange and SHA1 for digest
-cipher_RSA_3DES_EDE_CBC_SHA1 :: Cipher
-cipher_RSA_3DES_EDE_CBC_SHA1 = Cipher
-    { cipherID           = 0x000A
-    , cipherName         = "RSA-3DES-EDE-CBC-SHA1"
-    , cipherBulk         = bulk_tripledes_ede
-    , cipherHash         = SHA1
-    , cipherPRFHash      = Nothing
-    , cipherKeyExchange  = CipherKeyExchange_RSA
-    , cipherMinVer       = Nothing
     }
 
 cipher_DHE_RSA_AES128GCM_SHA256 :: Cipher
