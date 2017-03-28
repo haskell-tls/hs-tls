@@ -448,6 +448,8 @@ cipher_AES256_SHA256 = Cipher
     , cipherMinVer       = Just TLS12
     }
 
+-- This is not registered in IANA.
+-- So, this will be removed in the next major release.
 cipher_DHE_DSS_RC4_SHA1 :: Cipher
 cipher_DHE_DSS_RC4_SHA1 = cipher_DHE_DSS_AES128_SHA1
     { cipherID           = 0x0066
