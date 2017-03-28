@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <inttypes.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <arpa/inet.h>
@@ -154,7 +155,7 @@ void print_time(char *label, uint64_t nb_bytes, record_time_t *t1, record_time_t
 {
 	int sec = t2->v.tv_sec - t1->v.tv_sec;
 	int usec = t2->v.tv_usec - t1->v.tv_usec;
-	uint64_t f;
+	int64_t f;
 	int unit_index = 0;
 	double val;
 	char *units[] = {
@@ -178,7 +179,7 @@ void print_time(char *label, uint64_t nb_bytes, record_time_t *t1, record_time_t
 		unit_index++;
 	}
 
-	printf("%s: %lld bytes in %lld us => %.3f %s/s\n", label, nb_bytes, f, val, units[unit_index]);
+	printf("%s: %" PRIu64 " bytes in %" PRId64 " us => %.3f %s/s\n", label, nb_bytes, f, val, units[unit_index]);
 }
 
 static void benchmark(SSL *ssl, uint64_t send_bytes, uint64_t recv_bytes)
@@ -279,7 +280,7 @@ int main(int argc, char *argv[])
 	enum cipher_choice cipher_choice = CIPHER_ALL;
 
 	if (argc < 3) {
-		printf("Usage: %s <host> <portnum> [opts]\n", argv[0]);
+		printf("Usage: %s <host_ip> <portnum> [opts]\n", argv[0]);
 		exit(-1);
 	}
 
@@ -308,7 +309,7 @@ int main(int argc, char *argv[])
 
 	ctx = client_init(method, cipher_choice);
 
-	client_fd = connect_socket("127.0.0.1", atoi(portnum));
+	client_fd = connect_socket(host, atoi(portnum));
 
 	printf("[status] connected. handshaking\n");
 
