@@ -19,6 +19,7 @@ module Network.TLS.Handshake.Common
 import Control.Concurrent.MVar
 
 import Network.TLS.Parameters
+import Network.TLS.Compression
 import Network.TLS.Context.Internal
 import Network.TLS.Session
 import Network.TLS.Struct
@@ -123,14 +124,17 @@ runRecvState ctx iniState          = recvPacketHandshake ctx >>= onRecvStateHand
 getSessionData :: Context -> IO (Maybe SessionData)
 getSessionData ctx = do
     ver <- usingState_ ctx getVersion
+    sni <- usingState_ ctx getClientSNI
     mms <- usingHState ctx (gets hstMasterSecret)
     tx  <- liftIO $ readMVar (ctxTxState ctx)
     case mms of
         Nothing -> return Nothing
         Just ms -> return $ Just $ SessionData
-                        { sessionVersion = ver
-                        , sessionCipher  = cipherID $ fromJust "cipher" $ stCipher tx
-                        , sessionSecret  = ms
+                        { sessionVersion     = ver
+                        , sessionCipher      = cipherID $ fromJust "cipher" $ stCipher tx
+                        , sessionCompression = compressionID $ stCompression tx
+                        , sessionClientSNI   = sni
+                        , sessionSecret      = ms
                         }
 
 extensionLookup :: ExtensionID -> [ExtensionRaw] -> Maybe Bytes
