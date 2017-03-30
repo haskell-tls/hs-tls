@@ -188,7 +188,9 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
                 _                           -> throwCore $ Error_Protocol ("key exchange algorithm not implemented", True, HandshakeFailure)
 
     resumeSessionData <- case clientSession of
-            (Session (Just clientSessionId)) -> liftIO $ sessionResume (sharedSessionManager $ ctxShared ctx) clientSessionId
+            (Session (Just clientSessionId)) ->
+                let resume = liftIO $ sessionResume (sharedSessionManager $ ctxShared ctx) clientSessionId
+                 in validateSession serverName <$> resume
             (Session Nothing)                -> return Nothing
 
     maybe (return ()) (usingState_ ctx . setClientSNI) serverName
@@ -210,6 +212,19 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
         commonCiphers   extra = filter (flip elem (commonCipherIDs extra) . cipherID) (ctxCiphers ctx extra)
         commonCompressions    = compressionIntersectID (supportedCompressions $ ctxSupported ctx) compressions
         usedCompression       = head commonCompressions
+
+        -- FIXME should also validate compression_methods and server_name
+        -- (see RFC 5246 at 7.4.1.2 and RFC 6066), but necessary parameters
+        -- are not stored in SessionData currently
+        validateSession _   Nothing                         = Nothing
+        validateSession _   m@(Just sd)
+            -- SessionData parameters are assumed to match the local server configuration
+            -- so we need to compare only to ClientHello inputs.  Abbreviated handshake
+            -- uses the same server_name than full handshake so the same
+            -- credentials (and thus ciphers) are available.
+            | clientVersion < sessionVersion sd             = Nothing
+            | sessionCipher sd `notElem` ciphers            = Nothing
+            | otherwise                                     = m
 
 
 handshakeServerWith _ _ _ = throwCore $ Error_Protocol ("unexpected handshake message received in handshakeServerWith", True, HandshakeFailure)
