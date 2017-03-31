@@ -207,8 +207,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     doHandshake sparams cred ctx chosenVersion usedCipher usedCompression clientSession resumeSessionData exts
 
   where
-        commonCipherIDs extra = ciphers `intersect` map cipherID (ctxCiphers ctx extra)
-        commonCiphers   extra = filter (flip elem (commonCipherIDs extra) . cipherID) (ctxCiphers ctx extra)
+        commonCiphers extra   = filter ((`elem` ciphers) . cipherID) (ctxCiphers ctx extra)
         commonCompressions    = compressionIntersectID (supportedCompressions $ ctxSupported ctx) compressions
         usedCompression       = head commonCompressions
 
