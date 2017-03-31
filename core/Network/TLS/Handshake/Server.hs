@@ -129,7 +129,10 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
             _                    -> Nothing
 
     extraCreds <- (onServerNameIndication $ serverHooks sparams) serverName
-    let creds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
+    let allCreds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
+        creds    = case chosenVersion of
+                       TLS12 -> filterCredentialsWithHashSignatures exts allCreds
+                       _     -> allCreds
 
     -- When selecting a cipher we must ensure that it is allowed for the
     -- TLS version but also that all its key-exchange requirements
@@ -539,6 +542,14 @@ negotiatedGroupsInCommon ctx exts = case extensionLookup extensionID_NegotiatedG
         let serverGroups = supportedGroups (ctxSupported ctx) `intersect` availableGroups
         in serverGroups `intersect` clientGroups
     _                                    -> []
+
+filterCredentialsWithHashSignatures :: [ExtensionRaw] -> Credentials -> Credentials
+filterCredentialsWithHashSignatures exts =
+    case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode False of
+        Nothing                        -> id
+        Just (SignatureAlgorithms sas) ->
+            let filterCredentials p (Credentials l) = Credentials (filter p l)
+             in filterCredentials (credentialMatchesHashSignatures sas)
 
 findHighestVersionFrom :: Version -> [Version] -> Maybe Version
 findHighestVersionFrom clientVersion allowedVersions =

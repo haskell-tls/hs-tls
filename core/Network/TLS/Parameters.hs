@@ -310,6 +310,9 @@ data ServerHooks = ServerHooks
       -- This is most useful for transparent proxies where
       -- credentials must be generated on the fly according to
       -- the host the client is trying to connect to.
+      --
+      -- Returned credentials may be ignored if a client does not support
+      -- the signature algorithms used in the certificate chain.
     , onServerNameIndication  :: Maybe HostName -> IO Credentials
 
       -- | at each new handshake, we call this hook to see if we allow handshake to happens.

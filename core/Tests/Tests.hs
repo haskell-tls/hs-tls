@@ -121,7 +121,19 @@ prop_handshake_hashsignatures = do
         serverParam' = serverParam { serverSupported = (serverSupported serverParam)
                                        { supportedHashSignatures = serverHashSigs }
                                    }
-        shouldFail = null (clientHashSigs `intersect` serverHashSigs)
+        -- Not only client and server must have hash/signature algorithms
+        -- in common but SHA-1 must also be supported by the client for a
+        -- common signature algorithm.  This is because server certificates
+        -- are SHA-1 only.
+        commonHashSigs = clientHashSigs `intersect` serverHashSigs
+        certSigAlgs    = [a | (HashSHA1, a) <- clientHashSigs]
+
+        hasCertSigAlg (_, SignatureRSApssSHA512) = SignatureRSA `elem` certSigAlgs
+        hasCertSigAlg (_, SignatureRSApssSHA384) = SignatureRSA `elem` certSigAlgs
+        hasCertSigAlg (_, SignatureRSApssSHA256) = SignatureRSA `elem` certSigAlgs
+        hasCertSigAlg (_, s)                     = s `elem` certSigAlgs
+
+        shouldFail     = all (not . hasCertSigAlg) commonHashSigs
     if shouldFail
         then runTLSInitFailure (clientParam',serverParam')
         else runTLSPipeSimple  (clientParam',serverParam')
