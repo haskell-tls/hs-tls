@@ -129,6 +129,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
             _                    -> Nothing
 
     extraCreds <- (onServerNameIndication $ serverHooks sparams) serverName
+    let creds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
 
     -- When selecting a cipher we must ensure that it is allowed for the
     -- TLS version but also that all its key-exchange requirements
@@ -171,12 +172,11 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     -- The shared cipherlist can become empty after filtering for compatible
     -- creds, check now before calling onCipherChoosing, which does not handle
     -- empty lists.
-    let ciphersFilteredVersion = filter cipherAllowed (commonCiphers extraCreds)
+    let ciphersFilteredVersion = filter cipherAllowed (commonCiphers creds)
     when (null ciphersFilteredVersion) $ throwCore $
         Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
 
     let usedCipher = (onCipherChoosing $ serverHooks sparams) chosenVersion ciphersFilteredVersion
-        creds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
 
     cred <- case cipherKeyExchange usedCipher of
                 CipherKeyExchange_RSA       -> return $ credentialsFindForDecrypting creds
@@ -207,7 +207,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     doHandshake sparams cred ctx chosenVersion usedCipher usedCompression clientSession resumeSessionData exts
 
   where
-        commonCiphers extra   = filter ((`elem` ciphers) . cipherID) (getCiphers sparams extra)
+        commonCiphers creds   = filter ((`elem` ciphers) . cipherID) (getCiphers sparams creds)
         commonCompressions    = compressionIntersectID (supportedCompressions $ ctxSupported ctx) compressions
         usedCompression       = head commonCompressions
 
@@ -549,7 +549,7 @@ findHighestVersionFrom clientVersion allowedVersions =
 -- on the server we filter our allowed ciphers here according
 -- to the credentials and DHE parameters loaded
 getCiphers :: ServerParams -> Credentials -> [Cipher]
-getCiphers sparams extraCreds = filter authorizedCKE (supportedCiphers $ serverSupported sparams)
+getCiphers sparams creds = filter authorizedCKE (supportedCiphers $ serverSupported sparams)
       where authorizedCKE cipher =
                 case cipherKeyExchange cipher of
                     CipherKeyExchange_RSA         -> canEncryptRSA
@@ -573,8 +573,6 @@ getCiphers sparams extraCreds = filter authorizedCKE (supportedCiphers $ serverS
             canSignRSA    = RSA `elem` signingAlgs
             canEncryptRSA = isJust $ credentialsFindForDecrypting creds
             signingAlgs   = credentialsListSigningAlgorithms creds
-            serverCreds   = sharedCredentials $ serverShared sparams
-            creds         = extraCreds `mappend` serverCreds
 
 #if !MIN_VERSION_base(4,8,0)
 sortOn :: Ord b => (a -> b) -> [a] -> [a]
