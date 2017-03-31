@@ -207,7 +207,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     doHandshake sparams cred ctx chosenVersion usedCipher usedCompression clientSession resumeSessionData exts
 
   where
-        commonCiphers extra   = filter ((`elem` ciphers) . cipherID) (ctxCiphers ctx extra)
+        commonCiphers extra   = filter ((`elem` ciphers) . cipherID) (getCiphers sparams extra)
         commonCompressions    = compressionIntersectID (supportedCompressions $ ctxSupported ctx) compressions
         usedCompression       = head commonCompressions
 
@@ -545,6 +545,36 @@ findHighestVersionFrom clientVersion allowedVersions =
     case filter (clientVersion >=) $ sortOn Down allowedVersions of
         []  -> Nothing
         v:_ -> Just v
+
+-- on the server we filter our allowed ciphers here according
+-- to the credentials and DHE parameters loaded
+getCiphers :: ServerParams -> Credentials -> [Cipher]
+getCiphers sparams extraCreds = filter authorizedCKE (supportedCiphers $ serverSupported sparams)
+      where authorizedCKE cipher =
+                case cipherKeyExchange cipher of
+                    CipherKeyExchange_RSA         -> canEncryptRSA
+                    CipherKeyExchange_DH_Anon     -> canDHE
+                    CipherKeyExchange_DHE_RSA     -> canSignRSA && canDHE
+                    CipherKeyExchange_DHE_DSS     -> canSignDSS && canDHE
+                    CipherKeyExchange_ECDHE_RSA   -> canSignRSA
+                    -- unimplemented: EC
+                    CipherKeyExchange_ECDHE_ECDSA -> False
+                    -- unimplemented: non ephemeral DH & ECDH.
+                    -- Note, these *should not* be implemented, and have
+                    -- (for example) been removed in OpenSSL 1.1.0
+                    --
+                    CipherKeyExchange_DH_DSS      -> False
+                    CipherKeyExchange_DH_RSA      -> False
+                    CipherKeyExchange_ECDH_ECDSA  -> False
+                    CipherKeyExchange_ECDH_RSA    -> False
+
+            canDHE        = isJust $ serverDHEParams sparams
+            canSignDSS    = DSS `elem` signingAlgs
+            canSignRSA    = RSA `elem` signingAlgs
+            canEncryptRSA = isJust $ credentialsFindForDecrypting creds
+            signingAlgs   = credentialsListSigningAlgorithms creds
+            serverCreds   = sharedCredentials $ serverShared sparams
+            creds         = extraCreds `mappend` serverCreds
 
 #if !MIN_VERSION_base(4,8,0)
 sortOn :: Ord b => (a -> b) -> [a] -> [a]

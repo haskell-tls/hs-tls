@@ -65,9 +65,6 @@ module Network.TLS.Context
 import Network.TLS.Backend
 import Network.TLS.Context.Internal
 import Network.TLS.Struct
-import Network.TLS.Cipher (Cipher(..), CipherKeyExchangeType(..))
-import Network.TLS.Crypto.Types
-import Network.TLS.Credentials
 import Network.TLS.State
 import Network.TLS.Hooks
 import Network.TLS.Record.State
@@ -77,12 +74,10 @@ import Network.TLS.Types (Role(..))
 import Network.TLS.Handshake (handshakeClient, handshakeClientWith, handshakeServer, handshakeServerWith)
 import Network.TLS.X509
 import Network.TLS.RNG
-import Data.Maybe (isJust)
 
 import Control.Concurrent.MVar
 import Control.Monad.State.Strict
 import Data.IORef
-import Data.Monoid (mappend)
 
 -- deprecated imports
 #ifdef INCLUDE_NETWORK
@@ -93,7 +88,6 @@ import System.IO (Handle)
 class TLSParams a where
     getTLSCommonParams :: a -> CommonParams
     getTLSRole         :: a -> Role
-    getCiphers         :: a -> Credentials -> [Cipher]
     doHandshake        :: a -> Context -> IO ()
     doHandshakeWith    :: a -> Context -> Handshake -> IO ()
 
@@ -103,7 +97,6 @@ instance TLSParams ClientParams where
                                  , clientDebug cparams
                                  )
     getTLSRole _ = ClientRole
-    getCiphers cparams _ = supportedCiphers $ clientSupported cparams
     doHandshake = handshakeClient
     doHandshakeWith = handshakeClientWith
 
@@ -113,34 +106,6 @@ instance TLSParams ServerParams where
                                  , serverDebug sparams
                                  )
     getTLSRole _ = ServerRole
-    -- on the server we filter our allowed ciphers here according
-    -- to the credentials and DHE parameters loaded
-    getCiphers sparams extraCreds = filter authorizedCKE (supportedCiphers $ serverSupported sparams)
-          where authorizedCKE cipher =
-                    case cipherKeyExchange cipher of
-                        CipherKeyExchange_RSA         -> canEncryptRSA
-                        CipherKeyExchange_DH_Anon     -> canDHE
-                        CipherKeyExchange_DHE_RSA     -> canSignRSA && canDHE
-                        CipherKeyExchange_DHE_DSS     -> canSignDSS && canDHE
-                        CipherKeyExchange_ECDHE_RSA   -> canSignRSA
-                        -- unimplemented: EC
-                        CipherKeyExchange_ECDHE_ECDSA -> False
-                        -- unimplemented: non ephemeral DH & ECDH.
-                        -- Note, these *should not* be implemented, and have
-                        -- (for example) been removed in OpenSSL 1.1.0
-                        --
-                        CipherKeyExchange_DH_DSS      -> False
-                        CipherKeyExchange_DH_RSA      -> False
-                        CipherKeyExchange_ECDH_ECDSA  -> False
-                        CipherKeyExchange_ECDH_RSA    -> False
-
-                canDHE        = isJust $ serverDHEParams sparams
-                canSignDSS    = DSS `elem` signingAlgs
-                canSignRSA    = RSA `elem` signingAlgs
-                canEncryptRSA = isJust $ credentialsFindForDecrypting creds
-                signingAlgs   = credentialsListSigningAlgorithms creds
-                serverCreds   = sharedCredentials $ serverShared sparams
-                creds         = extraCreds `mappend` serverCreds
     doHandshake = handshakeServer
     doHandshakeWith = handshakeServerWith
 
@@ -163,11 +128,6 @@ contextNew backend params = liftIO $ do
 
     let role = getTLSRole params
         st   = newTLSState rng role
-        ciphers = getCiphers params
-
---  we still might get some ciphers from SNI callback
---  If we could bail only on protocols which require the main cert??
---    when (null (ciphers mempty)) $ error "no ciphers available with those parameters"
 
     stvar <- newMVar st
     eof   <- newIORef False
@@ -189,7 +149,6 @@ contextNew backend params = liftIO $ do
             { ctxConnection   = getBackend backend
             , ctxShared       = shared
             , ctxSupported    = supported
-            , ctxCiphers      = ciphers
             , ctxState        = stvar
             , ctxTxState      = tx
             , ctxRxState      = rx
