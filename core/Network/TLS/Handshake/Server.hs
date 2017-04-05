@@ -191,8 +191,8 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
         Just (ApplicationLayerProtocolNegotiation protos) -> usingState_ ctx $ setClientALPNSuggest protos
         _ -> return ()
 
-    case extensionLookup extensionID_EllipticCurves exts >>= extensionDecode False of
-        Just (EllipticCurvesSupported es) -> usingState_ ctx $ setClientEllipticCurveSuggest es
+    case extensionLookup extensionID_Groups exts >>= extensionDecode False of
+        Just (NegotiatedGroups es) -> usingState_ ctx $ setClientEllipticCurveSuggest es
         _ -> return ()
 
     -- Currently, we don't send back EcPointFormats. In this case,
@@ -387,24 +387,21 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
 
         generateSKX_DH_Anon = SKX_DH_Anon <$> setup_DHE
 
-        setup_ECDHE curvename = do
-            let ecdhparams = ecdhParams curvename
-            (priv, pub) <- generateECDHE ctx ecdhparams
-
-            let serverParams = ServerECDHParams ecdhparams pub
-
+        setup_ECDHE grp = do
+            (srvpri, srvpub) <- groupGenerateKeyPair grp
+            let serverParams = ServerECDHParams grp srvpub
             usingHState ctx $ setServerECDHParams serverParams
-            usingHState ctx $ setECDHPrivate priv
-            return (serverParams)
+            usingHState ctx $ setECDHPrivate srvpri
+            return serverParams
 
         generateSKX_ECDHE sigAlg = do
             ncs <- usingState_ ctx getClientEllipticCurveSuggest
-            let common = availableEllipticCurves `intersect` fromJust "ClientEllipticCurveSuggest" ncs
-                -- FIXME: Currently maximum strength is chosen.
+            let common = availableGroups `intersect` fromJust "ClientEllipticCurveSuggest" ncs
+                -- FIXME: Currently head is chosen.
                 --        There may be a better way to choose EC.
-                nc = if null common then error "No common EllipticCurves"
-                                    else maximum $ map fromEnumSafe16 common
-            serverParams <- setup_ECDHE nc
+                grp = if null common then error "No common EllipticCurves"
+                                     else head common
+            serverParams <- setup_ECDHE grp
             mhash <- decideHash sigAlg
             signed <- digitallySignECDHParams ctx serverParams sigAlg mhash
             case sigAlg of

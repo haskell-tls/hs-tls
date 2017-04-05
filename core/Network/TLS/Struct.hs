@@ -69,7 +69,8 @@ import Data.Typeable
 import Control.Exception (Exception(..))
 import Network.TLS.Types
 import Network.TLS.Crypto.DH
-import Network.TLS.Crypto.ECDH
+import Network.TLS.Crypto.IES
+import Network.TLS.Crypto.Types
 import Network.TLS.Util.Serialization
 import Network.TLS.Imports
 #if MIN_VERSION_mtl(2,2,1)
@@ -276,7 +277,7 @@ serverDHParamsToPublic :: ServerDHParams -> DHPublic
 serverDHParamsToPublic serverParams =
     dhPublic (bigNumToInteger $ serverDHParams_y serverParams)
 
-data ServerECDHParams = ServerECDHParams ECDHParams ECDHPublic
+data ServerECDHParams = ServerECDHParams Group GroupPublic
     deriving (Show,Eq)
 
 data ServerRSAParams = ServerRSAParams
@@ -300,7 +301,7 @@ data ServerKeyXchgAlgorithmData =
 data ClientKeyXchgAlgorithmData =
       CKX_RSA Bytes
     | CKX_DH DHPublic
-    | CKX_ECDH ECDHPublic
+    | CKX_ECDH Bytes
     deriving (Show,Eq)
 
 type DeprecatedRecord = ByteString

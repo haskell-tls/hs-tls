@@ -76,7 +76,7 @@ data HandshakeState = HandshakeState
     , hstServerDHParams      :: !(Maybe ServerDHParams)
     , hstDHPrivate           :: !(Maybe DHPrivate)
     , hstServerECDHParams    :: !(Maybe ServerECDHParams)
-    , hstECDHPrivate         :: !(Maybe ECDHPrivate)
+    , hstECDHPrivate         :: !(Maybe GroupPrivate)
     , hstHandshakeDigest     :: !(Either [Bytes] HashCtx)
     , hstHandshakeMessages   :: [Bytes]
     , hstClientCertRequest   :: !(Maybe ClientCertRequestData) -- ^ Set to Just-value when certificate request was received
@@ -159,13 +159,13 @@ setServerECDHParams shp = modify (\hst -> hst { hstServerECDHParams = Just shp }
 getDHPrivate :: HandshakeM DHPrivate
 getDHPrivate = fromJust "server DH private" <$> gets hstDHPrivate
 
-getECDHPrivate :: HandshakeM ECDHPrivate
+getECDHPrivate :: HandshakeM GroupPrivate
 getECDHPrivate = fromJust "server ECDH private" <$> gets hstECDHPrivate
 
 setDHPrivate :: DHPrivate -> HandshakeM ()
 setDHPrivate shp = modify (\hst -> hst { hstDHPrivate = Just shp })
 
-setECDHPrivate :: ECDHPrivate -> HandshakeM ()
+setECDHPrivate :: GroupPrivate -> HandshakeM ()
 setECDHPrivate shp = modify (\hst -> hst { hstECDHPrivate = Just shp })
 
 setCertReqSent :: Bool -> HandshakeM ()
