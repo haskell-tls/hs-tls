@@ -95,7 +95,7 @@ handshakeClient cparams ctx = do
                          then return $ Just $ toExtensionRaw $ ServerName [ServerNameHostName $ fst $ clientServerIdentification cparams]
                          else return Nothing
 
-        curveExtension = return $ Just $ toExtensionRaw $ EllipticCurvesSupported availableEllipticCurves
+        curveExtension = return $ Just $ toExtensionRaw $ NegotiatedGroups availableGroups
         ecPointExtension = return $ Just $ toExtensionRaw $ EcPointFormatsSupported [EcPointFormat_Uncompressed]
                                 --[EcPointFormat_Uncompressed,EcPointFormat_AnsiX962_compressed_prime,EcPointFormat_AnsiX962_compressed_char2]
         --heartbeatExtension = return $ Just $ toExtensionRaw $ HeartBeat $ HeartBeat_PeerAllowedToSend
@@ -217,15 +217,11 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     return $ CKX_DH clientDHPub
 
                 getCKX_ECDHE = do
+                    ServerECDHParams _grp srvpub <- usingHState ctx getServerECDHParams
+                    (clipub, premaster) <- groupGetPubShared srvpub
                     xver <- usingState_ ctx getVersion
-                    (ServerECDHParams ecdhparams serverECDHPub) <- usingHState ctx getServerECDHParams
-                    (clientECDHPriv, clientECDHPub) <- generateECDHE ctx ecdhparams
-
-                    case ecdhGetShared ecdhparams clientECDHPriv serverECDHPub of
-                        Nothing        -> throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
-                        Just premaster -> do
-                            usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
-                            return $ CKX_ECDH clientECDHPub
+                    usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
+                    return $ CKX_ECDH $ encodeGroupPublic clipub
 
         -- In order to send a proper certificate verify message,
         -- we have to do the following:

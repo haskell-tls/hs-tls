@@ -83,7 +83,7 @@ data TLSState = TLSState
     , stNegotiatedProtocol  :: Maybe B.ByteString -- NPN and ALPN protocol
     , stServerNextProtocolSuggest :: Maybe [B.ByteString]
     , stClientALPNSuggest   :: Maybe [B.ByteString]
-    , stClientEllipticCurveSuggest :: Maybe [NamedCurve]
+    , stClientEllipticCurveSuggest :: Maybe [Group]
     , stClientEcPointFormatSuggest :: Maybe [EcPointFormat]
     , stClientCertificateChain :: Maybe CertificateChain
     , stClientSNI           :: Maybe HostName
@@ -226,10 +226,10 @@ setClientALPNSuggest ps = modify (\st -> st { stClientALPNSuggest = Just ps})
 getClientALPNSuggest :: TLSSt (Maybe [B.ByteString])
 getClientALPNSuggest = gets stClientALPNSuggest
 
-setClientEllipticCurveSuggest :: [NamedCurve] -> TLSSt ()
+setClientEllipticCurveSuggest :: [Group] -> TLSSt ()
 setClientEllipticCurveSuggest nc = modify (\st -> st { stClientEllipticCurveSuggest = Just nc})
 
-getClientEllipticCurveSuggest :: TLSSt (Maybe [NamedCurve])
+getClientEllipticCurveSuggest :: TLSSt (Maybe [Group])
 getClientEllipticCurveSuggest = gets stClientEllipticCurveSuggest
 
 setClientEcPointFormatSuggest :: [EcPointFormat] -> TLSSt ()
