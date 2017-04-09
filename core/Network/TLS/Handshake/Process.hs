@@ -103,7 +103,7 @@ processClientKeyXchg ctx (CKX_DH clientDHValue) = do
 processClientKeyXchg ctx (CKX_ECDH bytes) = do
     ServerECDHParams grp _ <- usingHState ctx getServerECDHParams
     case decodeGroupPublic grp bytes of
-      Left e -> error $ "processClientKeyXchg: " ++ show e
+      Left _ -> throwCore $ Error_Protocol ("client public key cannot be decoded", True, HandshakeFailure)
       Right clipub -> do
           srvpri <- usingHState ctx getECDHPrivate
           let premaster = groupGetShared clipub srvpri
