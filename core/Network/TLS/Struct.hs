@@ -70,7 +70,7 @@ import Control.Exception (Exception(..))
 import Network.TLS.Types
 import Network.TLS.Crypto.DH
 import Network.TLS.Crypto.IES
-import Network.TLS.Crypto.Types
+import Network.TLS.Extension.Group
 import Network.TLS.Util.Serialization
 import Network.TLS.Imports
 #if MIN_VERSION_mtl(2,2,1)

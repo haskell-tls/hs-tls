@@ -9,7 +9,6 @@ module Network.TLS.Crypto
     , hashFinal
 
     , module Network.TLS.Crypto.DH
-    , module Network.TLS.Crypto.Types
     , module Network.TLS.Crypto.IES
 
     -- * Hash
@@ -46,7 +45,6 @@ import Crypto.Number.Serialize (os2ip)
 
 import Data.X509 (PrivKey(..), PubKey(..), PubKeyEC(..), SerializedPoint(..))
 import Network.TLS.Crypto.DH
-import Network.TLS.Crypto.Types
 import Network.TLS.Crypto.IES
 
 import Data.ASN1.Types

@@ -22,6 +22,7 @@ import Network.TLS.Compression
 import Network.TLS.Credentials
 import Network.TLS.Crypto
 import Network.TLS.Extension
+import Network.TLS.Extension.Group
 import Network.TLS.Util (catchException, fromJust)
 import Network.TLS.IO
 import Network.TLS.Types
