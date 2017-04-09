@@ -191,7 +191,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
         Just (ApplicationLayerProtocolNegotiation protos) -> usingState_ ctx $ setClientALPNSuggest protos
         _ -> return ()
 
-    case extensionLookup extensionID_Groups exts >>= extensionDecode False of
+    case extensionLookup extensionID_NegotiatedGroups exts >>= extensionDecode False of
         Just (NegotiatedGroups es) -> usingState_ ctx $ setClientEllipticCurveSuggest es
         _ -> return ()
 
