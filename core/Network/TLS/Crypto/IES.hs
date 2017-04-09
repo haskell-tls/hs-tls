@@ -136,18 +136,18 @@ getPubShared params pub pubTag = do
     let SharedKey share = getShared params mypri pub
     return (pubTag mypub, SharedSecret share)
 
-groupGetShared ::  GroupPublic -> GroupPrivate -> GroupKey
-groupGetShared (GroupPub_P256 pub) (GroupPri_P256 pri) = deriveDecrypt p256 pub pri
-groupGetShared (GroupPub_P384 pub) (GroupPri_P384 pri) = deriveDecrypt p384 pub pri
-groupGetShared (GroupPub_P521 pub) (GroupPri_P521 pri) = deriveDecrypt p521 pub pri
-groupGetShared (GroupPub_X255 pub) (GroupPri_X255 pri) = deriveDecrypt x25519 pub pri
-groupGetShared (GroupPub_X448 pub) (GroupPri_X448 pri) = deriveDecrypt x448 pub pri
-groupGetShared (GroupPub_FFDHE2048 pub) (GroupPri_FFDHE2048 pri) = calcShared ffdhe2048 pub pri
-groupGetShared (GroupPub_FFDHE3072 pub) (GroupPri_FFDHE3072 pri) = calcShared ffdhe3072 pub pri
-groupGetShared (GroupPub_FFDHE4096 pub) (GroupPri_FFDHE4096 pri) = calcShared ffdhe4096 pub pri
-groupGetShared (GroupPub_FFDHE6144 pub) (GroupPri_FFDHE6144 pri) = calcShared ffdhe6144 pub pri
-groupGetShared (GroupPub_FFDHE8192 pub) (GroupPri_FFDHE8192 pri) = calcShared ffdhe8192 pub pri
-groupGetShared _ _ = error "groupGetShared"
+groupGetShared ::  GroupPublic -> GroupPrivate -> Maybe GroupKey
+groupGetShared (GroupPub_P256 pub) (GroupPri_P256 pri) = Just $ deriveDecrypt p256 pub pri
+groupGetShared (GroupPub_P384 pub) (GroupPri_P384 pri) = Just $ deriveDecrypt p384 pub pri
+groupGetShared (GroupPub_P521 pub) (GroupPri_P521 pri) = Just $ deriveDecrypt p521 pub pri
+groupGetShared (GroupPub_X255 pub) (GroupPri_X255 pri) = Just $ deriveDecrypt x25519 pub pri
+groupGetShared (GroupPub_X448 pub) (GroupPri_X448 pri) = Just $ deriveDecrypt x448 pub pri
+groupGetShared (GroupPub_FFDHE2048 pub) (GroupPri_FFDHE2048 pri) = Just $ calcShared ffdhe2048 pub pri
+groupGetShared (GroupPub_FFDHE3072 pub) (GroupPri_FFDHE3072 pri) = Just $ calcShared ffdhe3072 pub pri
+groupGetShared (GroupPub_FFDHE4096 pub) (GroupPri_FFDHE4096 pri) = Just $ calcShared ffdhe4096 pub pri
+groupGetShared (GroupPub_FFDHE6144 pub) (GroupPri_FFDHE6144 pri) = Just $ calcShared ffdhe6144 pub pri
+groupGetShared (GroupPub_FFDHE8192 pub) (GroupPri_FFDHE8192 pri) = Just $ calcShared ffdhe8192 pub pri
+groupGetShared _ _ = Nothing
 
 calcShared :: Params -> PublicNumber -> PrivateNumber -> SharedSecret
 calcShared params pub pri = SharedSecret share
