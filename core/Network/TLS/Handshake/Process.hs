@@ -106,10 +106,12 @@ processClientKeyXchg ctx (CKX_ECDH bytes) = do
       Left _ -> throwCore $ Error_Protocol ("client public key cannot be decoded", True, HandshakeFailure)
       Right clipub -> do
           srvpri <- usingHState ctx getECDHPrivate
-          let premaster = groupGetShared clipub srvpri
-          rver <- usingState_ ctx getVersion
-          role <- usingState_ ctx isClientContext
-          usingHState ctx $ setMasterSecretFromPre rver role premaster
+          case groupGetShared clipub srvpri of
+              Just premaster -> do
+                  rver <- usingState_ ctx getVersion
+                  role <- usingState_ ctx isClientContext
+                  usingHState ctx $ setMasterSecretFromPre rver role premaster
+              Nothing -> throwCore $ Error_Protocol ("cannote generate a shared secret on ECDH", True, HandshakeFailure)
 
 processClientFinished :: Context -> FinishedData -> IO ()
 processClientFinished ctx fdata = do
