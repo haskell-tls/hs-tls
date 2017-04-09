@@ -39,8 +39,8 @@ module Network.TLS.State
     , getServerNextProtocolSuggest
     , setClientALPNSuggest
     , getClientALPNSuggest
-    , setClientEllipticCurveSuggest
-    , getClientEllipticCurveSuggest
+    , setClientGroupSuggest
+    , getClientGroupSuggest
     , setClientEcPointFormatSuggest
     , getClientEcPointFormatSuggest
     , getClientCertificateChain
@@ -83,7 +83,7 @@ data TLSState = TLSState
     , stNegotiatedProtocol  :: Maybe B.ByteString -- NPN and ALPN protocol
     , stServerNextProtocolSuggest :: Maybe [B.ByteString]
     , stClientALPNSuggest   :: Maybe [B.ByteString]
-    , stClientEllipticCurveSuggest :: Maybe [Group]
+    , stClientGroupSuggest  :: Maybe [Group]
     , stClientEcPointFormatSuggest :: Maybe [EcPointFormat]
     , stClientCertificateChain :: Maybe CertificateChain
     , stClientSNI           :: Maybe HostName
@@ -118,7 +118,7 @@ newTLSState rng clientContext = TLSState
     , stNegotiatedProtocol  = Nothing
     , stServerNextProtocolSuggest = Nothing
     , stClientALPNSuggest   = Nothing
-    , stClientEllipticCurveSuggest = Nothing
+    , stClientGroupSuggest = Nothing
     , stClientEcPointFormatSuggest = Nothing
     , stClientCertificateChain = Nothing
     , stClientSNI           = Nothing
@@ -226,11 +226,11 @@ setClientALPNSuggest ps = modify (\st -> st { stClientALPNSuggest = Just ps})
 getClientALPNSuggest :: TLSSt (Maybe [B.ByteString])
 getClientALPNSuggest = gets stClientALPNSuggest
 
-setClientEllipticCurveSuggest :: [Group] -> TLSSt ()
-setClientEllipticCurveSuggest nc = modify (\st -> st { stClientEllipticCurveSuggest = Just nc})
+setClientGroupSuggest :: [Group] -> TLSSt ()
+setClientGroupSuggest nc = modify (\st -> st { stClientGroupSuggest = Just nc})
 
-getClientEllipticCurveSuggest :: TLSSt (Maybe [Group])
-getClientEllipticCurveSuggest = gets stClientEllipticCurveSuggest
+getClientGroupSuggest :: TLSSt (Maybe [Group])
+getClientGroupSuggest = gets stClientGroupSuggest
 
 setClientEcPointFormatSuggest :: [EcPointFormat] -> TLSSt ()
 setClientEcPointFormatSuggest epf = modify (\st -> st { stClientEcPointFormatSuggest = Just epf})

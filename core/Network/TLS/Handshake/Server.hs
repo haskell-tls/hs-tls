@@ -192,7 +192,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
         _ -> return ()
 
     case extensionLookup extensionID_NegotiatedGroups exts >>= extensionDecode False of
-        Just (NegotiatedGroups es) -> usingState_ ctx $ setClientEllipticCurveSuggest es
+        Just (NegotiatedGroups es) -> usingState_ ctx $ setClientGroupSuggest es
         _ -> return ()
 
     -- Currently, we don't send back EcPointFormats. In this case,
@@ -395,8 +395,8 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             return serverParams
 
         generateSKX_ECDHE sigAlg = do
-            ncs <- usingState_ ctx getClientEllipticCurveSuggest
-            let common = availableGroups `intersect` fromJust "ClientEllipticCurveSuggest" ncs
+            ncs <- usingState_ ctx getClientGroupSuggest
+            let common = availableGroups `intersect` fromJust "ClientGroupSuggest" ncs
                 -- FIXME: Currently head is chosen.
                 --        There may be a better way to choose EC.
                 grp = if null common then error "No common EllipticCurves"
