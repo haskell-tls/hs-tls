@@ -71,6 +71,7 @@ import Data.ASN1.Encoding (decodeASN1', encodeASN1')
 import Data.ASN1.BinaryEncoding (DER(..))
 import Data.X509 (CertificateChainRaw(..), encodeCertificateChain, decodeCertificateChain)
 import Network.TLS.Crypto
+import Network.TLS.Extension.Group
 import Network.TLS.MAC
 import Network.TLS.Cipher (CipherKeyExchangeType(..), Cipher(..))
 import Network.TLS.Util.Serialization (os2ip,i2ospOf_)

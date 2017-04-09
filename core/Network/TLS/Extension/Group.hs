@@ -1,11 +1,11 @@
 -- |
--- Module      : Network.TLS.Crypto.Types
+-- Module      : Network.TLS.Extension.Group
 -- License     : BSD-style
 -- Maintainer  : Kazu Yamamoto <kazu@iij.ad.jp>
 -- Stability   : experimental
 -- Portability : unknown
 --
-module Network.TLS.Crypto.Types where
+module Network.TLS.Extension.Group where
 
 import Data.Word (Word16)
 
