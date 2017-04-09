@@ -17,7 +17,7 @@ module Network.TLS.Extension
     , extensionID_SecureRenegotiation
     , extensionID_NextProtocolNegotiation
     , extensionID_ApplicationLayerProtocolNegotiation
-    , extensionID_Groups
+    , extensionID_NegotiatedGroups
     , extensionID_EcPointFormats
     , extensionID_Heartbeat
     , extensionID_SignatureAlgorithms
@@ -66,7 +66,7 @@ extensionID_ServerName
   , extensionID_ClientAuthz
   , extensionID_ServerAuthz
   , extensionID_CertType
-  , extensionID_Groups
+  , extensionID_NegotiatedGroups
   , extensionID_EcPointFormats
   , extensionID_SRP
   , extensionID_SignatureAlgorithms
@@ -93,7 +93,7 @@ extensionID_UserMapping                         = 0x6 -- RFC4681
 extensionID_ClientAuthz                         = 0x7 -- RFC5878
 extensionID_ServerAuthz                         = 0x8 -- RFC5878
 extensionID_CertType                            = 0x9 -- RFC6091
-extensionID_Groups                              = 0xa -- RFC4492bis and TLS 1.3
+extensionID_NegotiatedGroups                    = 0xa -- RFC4492bis and TLS 1.3
 extensionID_EcPointFormats                      = 0xb -- RFC4492
 extensionID_SRP                                 = 0xc -- RFC5054
 extensionID_SignatureAlgorithms                 = 0xd -- RFC5246
@@ -123,7 +123,7 @@ definedExtensions =
     , extensionID_ClientAuthz
     , extensionID_ServerAuthz
     , extensionID_CertType
-    , extensionID_Groups
+    , extensionID_NegotiatedGroups
     , extensionID_EcPointFormats
     , extensionID_SRP
     , extensionID_SignatureAlgorithms
@@ -149,7 +149,7 @@ supportedExtensions = [ extensionID_ServerName
                       , extensionID_ApplicationLayerProtocolNegotiation
                       , extensionID_SecureRenegotiation
                       , extensionID_NextProtocolNegotiation
-                      , extensionID_Groups
+                      , extensionID_NegotiatedGroups
                       , extensionID_EcPointFormats
                       , extensionID_SignatureAlgorithms
                       ]
@@ -257,7 +257,7 @@ data NegotiatedGroups = NegotiatedGroups [Group]
 
 -- on decode, filter all unknown curves
 instance Extension NegotiatedGroups where
-    extensionID _ = extensionID_Groups
+    extensionID _ = extensionID_NegotiatedGroups
     extensionEncode (NegotiatedGroups groups) = runPut $ putWords16 $ map fromGroup groups
     extensionDecode _ = runGetMaybe (NegotiatedGroups . catMaybes . map toGroup <$> getWords16)
 
