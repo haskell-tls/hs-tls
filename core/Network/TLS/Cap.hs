@@ -11,7 +11,7 @@ module Network.TLS.Cap
     , hasExplicitBlockIV
     ) where
 
-import Network.TLS.Struct
+import Network.TLS.Types
 
 hasHelloExtensions, hasExplicitBlockIV :: Version -> Bool
 
