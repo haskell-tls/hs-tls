@@ -219,7 +219,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
 
                 getCKX_ECDHE = do
                     ServerECDHParams _grp srvpub <- usingHState ctx getServerECDHParams
-                    (clipub, premaster) <- groupGetPubShared srvpub
+                    (clipub, premaster) <- generateECDHEShared ctx srvpub
                     xver <- usingState_ ctx getVersion
                     usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
                     return $ CKX_ECDH $ encodeGroupPublic clipub
