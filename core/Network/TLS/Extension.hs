@@ -47,7 +47,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 
-import Network.TLS.Struct (ExtensionID, EnumSafe8(..), EnumSafe16(..), HashAndSignatureAlgorithm)
+import Network.TLS.Struct (ExtensionID, EnumSafe8(..), HashAndSignatureAlgorithm)
 import Network.TLS.Extension.Group
 import Network.TLS.Wire
 import Network.TLS.Imports
