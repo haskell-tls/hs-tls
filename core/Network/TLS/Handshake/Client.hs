@@ -30,7 +30,7 @@ import Network.TLS.Util (bytesEq, catchException)
 import Network.TLS.Types
 import Network.TLS.X509
 import Data.Maybe
-import Data.List (find)
+import Data.List (find, intersect)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 
@@ -96,7 +96,7 @@ handshakeClient cparams ctx = do
                          then return $ Just $ toExtensionRaw $ ServerName [ServerNameHostName $ fst $ clientServerIdentification cparams]
                          else return Nothing
 
-        curveExtension = return $ Just $ toExtensionRaw $ NegotiatedGroups availableGroups
+        curveExtension = return $ Just $ toExtensionRaw $ NegotiatedGroups ((supportedGroups $ ctxSupported ctx) `intersect` availableGroups)
         ecPointExtension = return $ Just $ toExtensionRaw $ EcPointFormatsSupported [EcPointFormat_Uncompressed]
                                 --[EcPointFormat_Uncompressed,EcPointFormat_AnsiX962_compressed_prime,EcPointFormat_AnsiX962_compressed_char2]
         --heartbeatExtension = return $ Just $ toExtensionRaw $ HeartBeat $ HeartBeat_PeerAllowedToSend

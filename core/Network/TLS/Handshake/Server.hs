@@ -396,12 +396,11 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             return serverParams
 
         generateSKX_ECDHE sigAlg = do
-            ncs <- usingState_ ctx getClientGroupSuggest
-            let common = availableGroups `intersect` fromJust "ClientGroupSuggest" ncs
-                -- FIXME: Currently head is chosen.
-                --        There may be a better way to choose EC.
-                grp = if null common then error "No common EllipticCurves"
-                                     else head common
+            clientGroups <- fromJust "ClientGroupSuggest" <$> usingState_ ctx getClientGroupSuggest
+            let serverGroups = supportedGroups (ctxSupported ctx) `intersect` availableGroups
+                grp = case serverGroups `intersect` clientGroups of
+                       []  -> error "No common groups"
+                       g:_ -> g
             serverParams <- setup_ECDHE grp
             mhash <- decideHash sigAlg
             signed <- digitallySignECDHParams ctx serverParams sigAlg mhash
