@@ -24,7 +24,7 @@ import Crypto.Error
 import Crypto.PubKey.DH
 import Crypto.PubKey.ECIES
 import Data.Proxy
-import Network.TLS.Extension.Group
+import Network.TLS.Crypto.Types
 import Network.TLS.Extra.FFDHE
 import Network.TLS.Imports
 import Network.TLS.RNG

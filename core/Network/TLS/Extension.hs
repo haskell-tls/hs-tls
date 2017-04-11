@@ -47,8 +47,8 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 
-import Network.TLS.Struct (ExtensionID, EnumSafe8(..), HashAndSignatureAlgorithm)
-import Network.TLS.Extension.Group
+import Network.TLS.Struct (ExtensionID, EnumSafe8(..), EnumSafe16(..), HashAndSignatureAlgorithm)
+import Network.TLS.Crypto.Types
 import Network.TLS.Wire
 import Network.TLS.Imports
 import Network.TLS.Packet (putSignatureHashAlgorithm, getSignatureHashAlgorithm)
@@ -258,8 +258,8 @@ data NegotiatedGroups = NegotiatedGroups [Group]
 -- on decode, filter all unknown curves
 instance Extension NegotiatedGroups where
     extensionID _ = extensionID_NegotiatedGroups
-    extensionEncode (NegotiatedGroups groups) = runPut $ putWords16 $ map fromGroup groups
-    extensionDecode _ = runGetMaybe (NegotiatedGroups . catMaybes . map toGroup <$> getWords16)
+    extensionEncode (NegotiatedGroups groups) = runPut $ putWords16 $ map fromEnumSafe16 groups
+    extensionDecode _ = runGetMaybe (NegotiatedGroups . catMaybes . map toEnumSafe16 <$> getWords16)
 
 data EcPointFormatsSupported = EcPointFormatsSupported [EcPointFormat]
     deriving (Show,Eq)
