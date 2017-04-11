@@ -27,6 +27,7 @@ import Control.Applicative
 import Control.Concurrent.Chan
 import Control.Concurrent
 import qualified Control.Exception as E
+import Data.List (isPrefixOf, intersect)
 
 import qualified Data.ByteString as B
 
@@ -60,6 +61,9 @@ knownCiphers = [ blockCipher
                , blockCipherECDHE_RSA_SHA384
                , streamCipher
                ]
+
+isNonECCipher :: Cipher -> Bool
+isNonECCipher cipher = not ("EC" `isPrefixOf` cipherName cipher)
 
 knownVersions :: [Version]
 knownVersions = [SSL3,TLS10,TLS11,TLS12]
@@ -97,6 +101,18 @@ arbitraryPairParams = do
     serAllowedVersions <- (:[]) `fmap` elements allowedVersions
     arbitraryPairParamsWithVersionsAndCiphers (allowedVersions, serAllowedVersions) (clientCiphers, serverCiphers)
 
+arbitraryGroupPair :: ([Cipher], [Cipher]) -> Gen ([Group], [Group])
+arbitraryGroupPair (clientCiphers, serverCiphers) = do
+    groupServer <- sublistOf availableGroups
+    groupClient <- sublistOf availableGroups
+    common <- elements availableGroups
+    if hasNonEC then return (groupClient, groupServer)
+                else return (groupClient ++ [common], groupServer ++ [common])
+  where
+    commonCiphers = serverCiphers `intersect` clientCiphers
+    hasNonEC = any isNonECCipher commonCiphers
+    availableGroups = [P256,P384,P521,X25519,X448]
+
 arbitraryPairParamsWithVersionsAndCiphers :: ([Version], [Version])
                                           -> ([Cipher], [Cipher])
                                           -> Gen (ClientParams, ServerParams)
@@ -105,10 +121,12 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
     dhparams           <- elements [dhParams,ffdhe2048,ffdhe3072]
 
     creds              <- arbitraryCredentialsOfEachType
+    (groupClient, groupServer) <- arbitraryGroupPair (clientCiphers, serverCiphers)
     let serverState = def
             { serverSupported = def { supportedCiphers  = serverCiphers
                                     , supportedVersions = serverVersions
                                     , supportedSecureRenegotiation = secNeg
+                                    , supportedGroups   = groupServer
                                     }
             , serverDHEParams = Just dhparams
             , serverShared = def { sharedCredentials = Credentials creds }
@@ -117,6 +135,7 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
             { clientSupported = def { supportedCiphers  = clientCiphers
                                     , supportedVersions = clientVersions
                                     , supportedSecureRenegotiation = secNeg
+                                    , supportedGroups   = groupClient
                                     }
             , clientShared = def { sharedValidationCache = ValidationCache
                                         { cacheAdd = \_ _ _ -> return ()
