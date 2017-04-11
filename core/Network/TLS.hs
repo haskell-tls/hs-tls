@@ -138,8 +138,7 @@ import Network.TLS.Struct ( TLSError(..), TLSException(..)
                           , ClientRandom(..), ServerRandom(..)
                           , Bytes
                           , Handshake)
-import Network.TLS.Crypto (KxError(..), DHParams)
-import Network.TLS.Extension.Group (Group(..))
+import Network.TLS.Crypto (KxError(..), DHParams, Group(..))
 import Network.TLS.Cipher
 import Network.TLS.Hooks
 import Network.TLS.Measurement

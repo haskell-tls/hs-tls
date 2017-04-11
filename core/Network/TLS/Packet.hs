@@ -71,7 +71,6 @@ import Data.ASN1.Encoding (decodeASN1', encodeASN1')
 import Data.ASN1.BinaryEncoding (DER(..))
 import Data.X509 (CertificateChainRaw(..), encodeCertificateChain, decodeCertificateChain)
 import Network.TLS.Crypto
-import Network.TLS.Extension.Group
 import Network.TLS.MAC
 import Network.TLS.Cipher (CipherKeyExchangeType(..), Cipher(..))
 import Data.ByteString (ByteString)
@@ -490,7 +489,7 @@ getServerECDHParams = do
     curveType <- getWord8
     case curveType of
         3 -> do               -- ECParameters ECCurveType: curve name type
-            mgrp <- toGroup <$> getWord16  -- ECParameters NamedCurve
+            mgrp <- toEnumSafe16 <$> getWord16  -- ECParameters NamedCurve
             case mgrp of
               Nothing -> error "getServerECDHParams: unknown group"
               Just grp -> do
@@ -504,7 +503,7 @@ getServerECDHParams = do
 putServerECDHParams :: ServerECDHParams -> Put
 putServerECDHParams (ServerECDHParams grp grppub) = do
     putWord8 3                            -- ECParameters ECCurveType
-    putWord16 $ fromGroup grp             -- ECParameters NamedCurve
+    putWord16 $ fromEnumSafe16 grp        -- ECParameters NamedCurve
     putOpaque8 $ encodeGroupPublic grppub -- ECPoint
 
 getDigitallySigned :: Version -> Get DigitallySigned

@@ -20,7 +20,6 @@ import Network.TLS.Compression
 import Network.TLS.Packet
 import Network.TLS.ErrT
 import Network.TLS.Extension
-import Network.TLS.Extension.Group
 import Network.TLS.IO
 import Network.TLS.Imports
 import Network.TLS.State hiding (getNegotiatedProtocol)
