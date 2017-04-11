@@ -131,6 +131,11 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
 
     extraCreds <- (onServerNameIndication $ serverHooks sparams) serverName
 
+    let clientGroups = case extensionLookup extensionID_NegotiatedGroups exts >>= extensionDecode False of
+          Just (NegotiatedGroups es) -> es
+          _                          -> []
+    usingState_ ctx $ setClientGroupSuggest clientGroups
+
     -- When selecting a cipher we must ensure that it is allowed for the
     -- TLS version but also that all its key-exchange requirements
     -- will be met.
@@ -143,6 +148,14 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
 
     -- FIXME ciphers should also be checked for other requirements
     -- (i.e. elliptic curves and D-H groups)
+    let serverGroups = supportedGroups (ctxSupported ctx) `intersect` availableGroups
+        possibleGroups = serverGroups `intersect` clientGroups
+        hasCommonGroupForECDHE = not (null possibleGroups)
+        hasCommonGroup cipher =
+            case cipherKeyExchange cipher of
+                CipherKeyExchange_ECDHE_RSA    -> hasCommonGroupForECDHE
+                CipherKeyExchange_ECDHE_ECDSA  -> hasCommonGroupForECDHE
+                _                              -> True -- group not used
     let cipherAllowed cipher = case chosenVersion of
            TLS12 -> let -- Build a list of all signature algorithms with at least
                         -- one hash algorithm in common between client and server.
@@ -160,8 +173,8 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
                                 CipherKeyExchange_ECDHE_ECDSA  -> SignatureECDSA `elem` possibleSigAlgs
                                 _                              -> True -- signature not used
 
-                     in cipherAllowedForVersion chosenVersion cipher && hasSigningRequirements
-           _     -> cipherAllowedForVersion chosenVersion cipher
+                     in cipherAllowedForVersion chosenVersion cipher && hasSigningRequirements && hasCommonGroup cipher
+           _     -> cipherAllowedForVersion chosenVersion cipher && hasCommonGroup cipher
 
     -- The shared cipherlist can become empty after filtering for compatible
     -- creds, check now before calling onCipherChoosing, which does not handle
@@ -189,10 +202,6 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
 
     case extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts >>= extensionDecode False of
         Just (ApplicationLayerProtocolNegotiation protos) -> usingState_ ctx $ setClientALPNSuggest protos
-        _ -> return ()
-
-    case extensionLookup extensionID_NegotiatedGroups exts >>= extensionDecode False of
-        Just (NegotiatedGroups es) -> usingState_ ctx $ setClientGroupSuggest es
         _ -> return ()
 
     -- Currently, we don't send back EcPointFormats. In this case,
@@ -397,9 +406,9 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
         generateSKX_ECDHE sigAlg = do
             clientGroups <- fromJust "ClientGroupSuggest" <$> usingState_ ctx getClientGroupSuggest
             let serverGroups = supportedGroups (ctxSupported ctx) `intersect` availableGroups
-                grp = case serverGroups `intersect` clientGroups of
-                       []  -> error "No common groups"
-                       g:_ -> g
+            grp <- case serverGroups `intersect` clientGroups of
+                     []  -> throwCore $ Error_Protocol ("no common group", True, HandshakeFailure)
+                     g:_ -> return g
             serverParams <- setup_ECDHE grp
             mhash <- decideHash sigAlg
             signed <- digitallySignECDHParams ctx serverParams sigAlg mhash
