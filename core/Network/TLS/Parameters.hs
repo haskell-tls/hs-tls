@@ -186,6 +186,9 @@ data Supported = Supported
       -- cases.
     , supportedEmptyPacket         :: Bool
       -- | A list of supported elliptic curves in the preferred order.
+      --   The default value is ['P256','P384','P521'].
+      --   'P256' provides 128-bit security which is strong enough
+      --   until 2030 and is fast because its backend is written in C.
     , supportedGroups              :: [Group]
     } deriving (Show,Eq)
 
