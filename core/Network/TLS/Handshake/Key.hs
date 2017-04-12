@@ -38,13 +38,13 @@ encryptRSA ctx content = do
             Left err       -> fail ("rsa encrypt failed: " ++ show err)
             Right econtent -> return econtent
 
-signPrivate :: Context -> Role -> Hash -> ByteString -> IO ByteString
-signPrivate ctx _ hsh content = do
+signPrivate :: Context -> Role -> SignatureParams -> ByteString -> IO ByteString
+signPrivate ctx _ params content = do
     privateKey <- usingHState ctx getLocalPrivateKey
     usingState_ ctx $ do
-        r <- withRNG $ kxSign privateKey hsh content
+        r <- withRNG $ kxSign privateKey params content
         case r of
-            Left err       -> fail ("rsa sign failed: " ++ show err)
+            Left err       -> fail ("sign failed: " ++ show err)
             Right econtent -> return econtent
 
 decryptRSA :: Context -> ByteString -> IO (Either KxError ByteString)
@@ -55,10 +55,10 @@ decryptRSA ctx econtent = do
         let cipher = if ver < TLS10 then econtent else B.drop 2 econtent
         withRNG $ kxDecrypt privateKey cipher
 
-verifyPublic :: Context -> Role -> Hash -> ByteString -> ByteString -> IO Bool
-verifyPublic ctx _ hsh econtent sign = do
+verifyPublic :: Context -> Role -> SignatureParams -> ByteString -> ByteString -> IO Bool
+verifyPublic ctx _ params econtent sign = do
     publicKey <- usingHState ctx getRemotePublicKey
-    return $ kxVerify publicKey hsh econtent sign
+    return $ kxVerify publicKey params econtent sign
 
 generateDHE :: Context -> DHParams -> IO (DHPrivate, DHPublic)
 generateDHE ctx dhp = usingState_ ctx $ withRNG $ dhGenerateKeyPair dhp
