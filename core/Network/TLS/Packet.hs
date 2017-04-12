@@ -73,7 +73,6 @@ import Data.X509 (CertificateChainRaw(..), encodeCertificateChain, decodeCertifi
 import Network.TLS.Crypto
 import Network.TLS.MAC
 import Network.TLS.Cipher (CipherKeyExchangeType(..), Cipher(..))
-import Network.TLS.Util.Serialization (os2ip,i2ospOf_)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
@@ -293,22 +292,11 @@ decodeClientKeyXchg cp = -- case  ClientKeyXchg <$> (remaining >>= getBytes)
         parseCKE CipherKeyExchange_DHE_RSA = parseClientDHPublic
         parseCKE CipherKeyExchange_DHE_DSS = parseClientDHPublic
         parseCKE CipherKeyExchange_DH_Anon = parseClientDHPublic
-        parseCKE CipherKeyExchange_ECDHE_RSA = parseClientECDHPublic
+        parseCKE CipherKeyExchange_ECDHE_RSA   = parseClientECDHPublic
         parseCKE CipherKeyExchange_ECDHE_ECDSA = parseClientECDHPublic
         parseCKE _                         = error "unsupported client key exchange type"
         parseClientDHPublic = CKX_DH . dhPublic <$> getInteger16
-        parseClientECDHPublic = do
-            len      <- getWord8
-            formatTy <- getWord8
-            case formatTy of
-                4 -> do -- uncompressed
-                    let siz = fromIntegral len `div` 2
-                    xb <- getBytes siz
-                    yb <- getBytes siz
-                    let x = os2ip xb
-                        y = os2ip yb
-                    return $ CKX_ECDH $ ecdhPublic x y siz
-                _ -> error ("unsupported EC format type: " ++ show formatTy)
+        parseClientECDHPublic = CKX_ECDH <$> getOpaque8
 
 decodeServerKeyXchg_DH :: Get ServerDHParams
 decodeServerKeyXchg_DH = getServerDHParams
@@ -336,13 +324,13 @@ decodeServerKeyXchgAlgorithmData ver cke = toCKE
                 signature <- getDigitallySigned ver
                 return $ SKX_DHE_DSS dhparams signature
             CipherKeyExchange_ECDHE_RSA -> do
-                dhparams  <- getServerECDHParams
+                ecdhparams  <- getServerECDHParams
                 signature <- getDigitallySigned ver
-                return $ SKX_ECDHE_RSA dhparams signature
+                return $ SKX_ECDHE_RSA ecdhparams signature
             CipherKeyExchange_ECDHE_ECDSA -> do
-                dhparams  <- getServerECDHParams
+                ecdhparams  <- getServerECDHParams
                 signature <- getDigitallySigned ver
-                return $ SKX_ECDHE_ECDSA dhparams signature
+                return $ SKX_ECDHE_ECDSA ecdhparams signature
             _ -> do
                 bs <- remaining >>= getBytes
                 return $ SKX_Unknown bs
@@ -393,11 +381,7 @@ encodeHandshakeContent (ClientKeyXchg ckx) = do
     case ckx of
         CKX_RSA encryptedPreMaster -> putBytes encryptedPreMaster
         CKX_DH clientDHPublic      -> putInteger16 $ dhUnwrapPublic clientDHPublic
-        CKX_ECDH clientECDHPublic  -> do
-            let (x,y,siz) = ecdhUnwrapPublic clientECDHPublic
-            let xb = i2ospOf_ siz x
-                yb = i2ospOf_ siz y
-            putOpaque8 $ B.concat [B.singleton 4,xb,yb]
+        CKX_ECDH bytes             -> putOpaque8 bytes
 
 encodeHandshakeContent (ServerKeyXchg skg) =
     case skg of
@@ -504,36 +488,23 @@ getServerECDHParams :: Get ServerECDHParams
 getServerECDHParams = do
     curveType <- getWord8
     case curveType of
-        1 -> do -- explicit prime
-            _prime    <- getOpaque8
-            _a        <- getOpaque8
-            _b        <- getOpaque8
-            _base     <- getOpaque8
-            _order    <- getOpaque8
-            _cofactor <- getOpaque8
-            error "cannot handle explicit prime ECDH Params"
-        2 -> -- explicit_char2
-            error "cannot handle explicit char2 ECDH Params"
-        3 -> do -- ECParameters ECCurveType: curve name type
-            w16 <- getWord16   -- ECParameters NamedCurve
-            mxy <- getOpaque8 -- ECPoint
-            let xy = B.drop 1 mxy
-                siz = B.length xy `div` 2
-                (xb,yb) = B.splitAt siz xy
-                x = os2ip xb
-                y = os2ip yb
-            return $ ServerECDHParams (ecdhParams w16) (ecdhPublic x y siz)
+        3 -> do               -- ECParameters ECCurveType: curve name type
+            mgrp <- toEnumSafe16 <$> getWord16  -- ECParameters NamedCurve
+            case mgrp of
+              Nothing -> error "getServerECDHParams: unknown group"
+              Just grp -> do
+                  mxy <- getOpaque8 -- ECPoint
+                  case decodeGroupPublic grp mxy of
+                    Left e       -> error $ "getServerECDHParams: " ++ show e
+                    Right grppub -> return $ ServerECDHParams grp grppub
         _ ->
-            error "unknown type for ECDH Params"
+            error "getServerECDHParams: unknown type for ECDH Params"
 
 putServerECDHParams :: ServerECDHParams -> Put
-putServerECDHParams (ServerECDHParams ecdhparams ecdhpub) = do
-    let (w16,x,y,siz) = ecdhUnwrap ecdhparams ecdhpub
-    putWord8 3    -- ECParameters ECCurveType: curve name type
-    putWord16 w16 -- ECParameters NamedCurve
-    let xb = i2ospOf_ siz x
-        yb = i2ospOf_ siz y
-    putOpaque8 $ B.concat [B.singleton 4,xb,yb] -- ECPoint
+putServerECDHParams (ServerECDHParams grp grppub) = do
+    putWord8 3                            -- ECParameters ECCurveType
+    putWord16 $ fromEnumSafe16 grp        -- ECParameters NamedCurve
+    putOpaque8 $ encodeGroupPublic grppub -- ECPoint
 
 getDigitallySigned :: Version -> Get DigitallySigned
 getDigitallySigned ver

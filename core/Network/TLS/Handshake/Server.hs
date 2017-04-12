@@ -141,8 +141,13 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     -- such a cipher if no hash is available for it.  It's best to skip this
     -- cipher and pick another one (with another key exchange).
 
-    -- FIXME ciphers should also be checked for other requirements
-    -- (i.e. elliptic curves and D-H groups)
+    let possibleGroups = negotiatedGroupsInCommon ctx exts
+        hasCommonGroupForECDHE = not (null possibleGroups)
+        hasCommonGroup cipher =
+            case cipherKeyExchange cipher of
+                CipherKeyExchange_ECDHE_RSA    -> hasCommonGroupForECDHE
+                CipherKeyExchange_ECDHE_ECDSA  -> hasCommonGroupForECDHE
+                _                              -> True -- group not used
     let cipherAllowed cipher = case chosenVersion of
            TLS12 -> let -- Build a list of all signature algorithms with at least
                         -- one hash algorithm in common between client and server.
@@ -160,8 +165,8 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
                                 CipherKeyExchange_ECDHE_ECDSA  -> SignatureECDSA `elem` possibleSigAlgs
                                 _                              -> True -- signature not used
 
-                     in cipherAllowedForVersion chosenVersion cipher && hasSigningRequirements
-           _     -> cipherAllowedForVersion chosenVersion cipher
+                     in cipherAllowedForVersion chosenVersion cipher && hasSigningRequirements && hasCommonGroup cipher
+           _     -> cipherAllowedForVersion chosenVersion cipher && hasCommonGroup cipher
 
     -- The shared cipherlist can become empty after filtering for compatible
     -- creds, check now before calling onCipherChoosing, which does not handle
@@ -189,10 +194,6 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
 
     case extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts >>= extensionDecode False of
         Just (ApplicationLayerProtocolNegotiation protos) -> usingState_ ctx $ setClientALPNSuggest protos
-        _ -> return ()
-
-    case extensionLookup extensionID_EllipticCurves exts >>= extensionDecode False of
-        Just (EllipticCurvesSupported es) -> usingState_ ctx $ setClientEllipticCurveSuggest es
         _ -> return ()
 
     -- Currently, we don't send back EcPointFormats. In this case,
@@ -387,24 +388,19 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
 
         generateSKX_DH_Anon = SKX_DH_Anon <$> setup_DHE
 
-        setup_ECDHE curvename = do
-            let ecdhparams = ecdhParams curvename
-            (priv, pub) <- generateECDHE ctx ecdhparams
-
-            let serverParams = ServerECDHParams ecdhparams pub
-
+        setup_ECDHE grp = do
+            (srvpri, srvpub) <- generateECDHE ctx grp
+            let serverParams = ServerECDHParams grp srvpub
             usingHState ctx $ setServerECDHParams serverParams
-            usingHState ctx $ setECDHPrivate priv
-            return (serverParams)
+            usingHState ctx $ setECDHPrivate srvpri
+            return serverParams
 
         generateSKX_ECDHE sigAlg = do
-            ncs <- usingState_ ctx getClientEllipticCurveSuggest
-            let common = availableEllipticCurves `intersect` fromJust "ClientEllipticCurveSuggest" ncs
-                -- FIXME: Currently maximum strength is chosen.
-                --        There may be a better way to choose EC.
-                nc = if null common then error "No common EllipticCurves"
-                                    else maximum $ map fromEnumSafe16 common
-            serverParams <- setup_ECDHE nc
+            let possibleGroups = negotiatedGroupsInCommon ctx exts
+            grp <- case possibleGroups of
+                     []  -> throwCore $ Error_Protocol ("no common group", True, HandshakeFailure)
+                     g:_ -> return g
+            serverParams <- setup_ECDHE grp
             mhash <- decideHash sigAlg
             signed <- digitallySignECDHParams ctx serverParams sigAlg mhash
             case sigAlg of
@@ -546,6 +542,13 @@ hashAndSignaturesInCommon ctx exts =
         -- However here the algorithms are selected according
         -- to server preference in 'supportedHashSignatures'.
      in sHashSigs `intersect` cHashSigs
+
+negotiatedGroupsInCommon :: Context -> [ExtensionRaw] -> [Group]
+negotiatedGroupsInCommon ctx exts = case extensionLookup extensionID_NegotiatedGroups exts >>= extensionDecode False of
+    Just (NegotiatedGroups clientGroups) ->
+        let serverGroups = supportedGroups (ctxSupported ctx) `intersect` availableGroups
+        in serverGroups `intersect` clientGroups
+    _                                    -> []
 
 findHighestVersionFrom :: Version -> [Version] -> Maybe Version
 findHighestVersionFrom clientVersion allowedVersions =

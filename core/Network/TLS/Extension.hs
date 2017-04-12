@@ -17,7 +17,7 @@ module Network.TLS.Extension
     , extensionID_SecureRenegotiation
     , extensionID_NextProtocolNegotiation
     , extensionID_ApplicationLayerProtocolNegotiation
-    , extensionID_EllipticCurves
+    , extensionID_NegotiatedGroups
     , extensionID_EcPointFormats
     , extensionID_Heartbeat
     , extensionID_SignatureAlgorithms
@@ -29,16 +29,14 @@ module Network.TLS.Extension
     , SecureRenegotiation(..)
     , NextProtocolNegotiation(..)
     , ApplicationLayerProtocolNegotiation(..)
-    , EllipticCurvesSupported(..)
-    , NamedCurve(..)
-    , CurveName(..)
+    , NegotiatedGroups(..)
+    , Group(..)
     , EcPointFormatsSupported(..)
     , EcPointFormat(..)
     , SessionTicket(..)
     , HeartBeat(..)
     , HeartBeatMode(..)
     , SignatureAlgorithms(..)
-    , availableEllipticCurves
     ) where
 
 import Control.Monad
@@ -49,8 +47,8 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 
-import Network.TLS.Extension.EC
 import Network.TLS.Struct (ExtensionID, EnumSafe8(..), EnumSafe16(..), HashAndSignatureAlgorithm)
+import Network.TLS.Crypto.Types
 import Network.TLS.Wire
 import Network.TLS.Imports
 import Network.TLS.Packet (putSignatureHashAlgorithm, getSignatureHashAlgorithm)
@@ -68,7 +66,7 @@ extensionID_ServerName
   , extensionID_ClientAuthz
   , extensionID_ServerAuthz
   , extensionID_CertType
-  , extensionID_EllipticCurves
+  , extensionID_NegotiatedGroups
   , extensionID_EcPointFormats
   , extensionID_SRP
   , extensionID_SignatureAlgorithms
@@ -95,7 +93,7 @@ extensionID_UserMapping                         = 0x6 -- RFC4681
 extensionID_ClientAuthz                         = 0x7 -- RFC5878
 extensionID_ServerAuthz                         = 0x8 -- RFC5878
 extensionID_CertType                            = 0x9 -- RFC6091
-extensionID_EllipticCurves                      = 0xa -- RFC4492
+extensionID_NegotiatedGroups                    = 0xa -- RFC4492bis and TLS 1.3
 extensionID_EcPointFormats                      = 0xb -- RFC4492
 extensionID_SRP                                 = 0xc -- RFC5054
 extensionID_SignatureAlgorithms                 = 0xd -- RFC5246
@@ -125,7 +123,7 @@ definedExtensions =
     , extensionID_ClientAuthz
     , extensionID_ServerAuthz
     , extensionID_CertType
-    , extensionID_EllipticCurves
+    , extensionID_NegotiatedGroups
     , extensionID_EcPointFormats
     , extensionID_SRP
     , extensionID_SignatureAlgorithms
@@ -151,7 +149,7 @@ supportedExtensions = [ extensionID_ServerName
                       , extensionID_ApplicationLayerProtocolNegotiation
                       , extensionID_SecureRenegotiation
                       , extensionID_NextProtocolNegotiation
-                      , extensionID_EllipticCurves
+                      , extensionID_NegotiatedGroups
                       , extensionID_EcPointFormats
                       , extensionID_SignatureAlgorithms
                       ]
@@ -253,44 +251,15 @@ instance Extension ApplicationLayerProtocolNegotiation where
                      0 -> return []
                      _ -> (:) <$> getOpaque8 <*> getALPN'
 
-data EllipticCurvesSupported = EllipticCurvesSupported [NamedCurve]
+
+data NegotiatedGroups = NegotiatedGroups [Group]
     deriving (Show,Eq)
-
-data NamedCurve =
-      SEC CurveName
-    | BrainPool BrainPoolCurve
-    | NamedCurve_arbitrary_explicit_prime_curves
-    | NamedCurve_arbitrary_explicit_char2_curves
-    deriving (Show,Eq)
-
-data BrainPoolCurve =
-      BrainPoolP512R1 -- 28
-    | BrainPoolP384R1 -- 27
-    | BrainPoolP256R1 -- 26
-    deriving (Show,Eq)
-
-availableEllipticCurves :: [NamedCurve]
-availableEllipticCurves = [SEC SEC_p256r1, SEC SEC_p384r1, SEC SEC_p521r1]
-
-instance EnumSafe16 NamedCurve where
-    fromEnumSafe16 NamedCurve_arbitrary_explicit_prime_curves = 0xFF01
-    fromEnumSafe16 NamedCurve_arbitrary_explicit_char2_curves = 0xFF02
-    fromEnumSafe16 (SEC nc) = maybe (error "named curve: internal error") id $ fromCurveName nc
-    fromEnumSafe16 (BrainPool BrainPoolP512R1) = 28
-    fromEnumSafe16 (BrainPool BrainPoolP384R1) = 27
-    fromEnumSafe16 (BrainPool BrainPoolP256R1) = 26
-    toEnumSafe16 0xFF01 = Just NamedCurve_arbitrary_explicit_prime_curves
-    toEnumSafe16 0xFF02 = Just NamedCurve_arbitrary_explicit_char2_curves
-    toEnumSafe16 26     = Just (BrainPool BrainPoolP256R1)
-    toEnumSafe16 27     = Just (BrainPool BrainPoolP384R1)
-    toEnumSafe16 28     = Just (BrainPool BrainPoolP512R1)
-    toEnumSafe16 n      = SEC <$> toCurveName n
 
 -- on decode, filter all unknown curves
-instance Extension EllipticCurvesSupported where
-    extensionID _ = extensionID_EllipticCurves
-    extensionEncode (EllipticCurvesSupported curves) = runPut $ putWords16 $ map fromEnumSafe16 curves
-    extensionDecode _ = runGetMaybe (EllipticCurvesSupported . catMaybes . map toEnumSafe16 <$> getWords16)
+instance Extension NegotiatedGroups where
+    extensionID _ = extensionID_NegotiatedGroups
+    extensionEncode (NegotiatedGroups groups) = runPut $ putWords16 $ map fromEnumSafe16 groups
+    extensionDecode _ = runGetMaybe (NegotiatedGroups . catMaybes . map toEnumSafe16 <$> getWords16)
 
 data EcPointFormatsSupported = EcPointFormatsSupported [EcPointFormat]
     deriving (Show,Eq)

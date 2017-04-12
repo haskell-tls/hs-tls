@@ -39,8 +39,6 @@ module Network.TLS.State
     , getServerNextProtocolSuggest
     , setClientALPNSuggest
     , getClientALPNSuggest
-    , setClientEllipticCurveSuggest
-    , getClientEllipticCurveSuggest
     , setClientEcPointFormatSuggest
     , getClientEcPointFormatSuggest
     , getClientCertificateChain
@@ -83,7 +81,7 @@ data TLSState = TLSState
     , stNegotiatedProtocol  :: Maybe B.ByteString -- NPN and ALPN protocol
     , stServerNextProtocolSuggest :: Maybe [B.ByteString]
     , stClientALPNSuggest   :: Maybe [B.ByteString]
-    , stClientEllipticCurveSuggest :: Maybe [NamedCurve]
+    , stClientGroupSuggest  :: Maybe [Group]
     , stClientEcPointFormatSuggest :: Maybe [EcPointFormat]
     , stClientCertificateChain :: Maybe CertificateChain
     , stClientSNI           :: Maybe HostName
@@ -118,7 +116,7 @@ newTLSState rng clientContext = TLSState
     , stNegotiatedProtocol  = Nothing
     , stServerNextProtocolSuggest = Nothing
     , stClientALPNSuggest   = Nothing
-    , stClientEllipticCurveSuggest = Nothing
+    , stClientGroupSuggest = Nothing
     , stClientEcPointFormatSuggest = Nothing
     , stClientCertificateChain = Nothing
     , stClientSNI           = Nothing
@@ -225,12 +223,6 @@ setClientALPNSuggest ps = modify (\st -> st { stClientALPNSuggest = Just ps})
 
 getClientALPNSuggest :: TLSSt (Maybe [B.ByteString])
 getClientALPNSuggest = gets stClientALPNSuggest
-
-setClientEllipticCurveSuggest :: [NamedCurve] -> TLSSt ()
-setClientEllipticCurveSuggest nc = modify (\st -> st { stClientEllipticCurveSuggest = Just nc})
-
-getClientEllipticCurveSuggest :: TLSSt (Maybe [NamedCurve])
-getClientEllipticCurveSuggest = gets stClientEllipticCurveSuggest
 
 setClientEcPointFormatSuggest :: [EcPointFormat] -> TLSSt ()
 setClientEcPointFormatSuggest epf = modify (\st -> st { stClientEcPointFormatSuggest = Just epf})

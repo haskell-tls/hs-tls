@@ -125,6 +125,9 @@ module Network.TLS
     , ValidationCache(..)
     , ValidationCacheResult(..)
     , exceptionValidationCache
+
+    -- * Key exchange group
+    , Group(..)
     ) where
 
 import Network.TLS.Backend (Backend(..), HasBackend(..))
@@ -135,7 +138,7 @@ import Network.TLS.Struct ( TLSError(..), TLSException(..)
                           , ClientRandom(..), ServerRandom(..)
                           , Bytes
                           , Handshake)
-import Network.TLS.Crypto (KxError(..), DHParams)
+import Network.TLS.Crypto (KxError(..), DHParams, Group(..))
 import Network.TLS.Cipher
 import Network.TLS.Hooks
 import Network.TLS.Measurement

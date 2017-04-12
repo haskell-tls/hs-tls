@@ -14,6 +14,7 @@ module Network.TLS.Handshake.Key
     , verifyPublic
     , generateDHE
     , generateECDHE
+    , generateECDHEShared
     ) where
 
 import Data.ByteString (ByteString)
@@ -62,5 +63,8 @@ verifyPublic ctx _ hsh econtent sign = do
 generateDHE :: Context -> DHParams -> IO (DHPrivate, DHPublic)
 generateDHE ctx dhp = usingState_ ctx $ withRNG $ dhGenerateKeyPair dhp
 
-generateECDHE :: Context -> ECDHParams -> IO (ECDHPrivate, ECDHPublic)
-generateECDHE ctx dhp = usingState_ ctx $ withRNG $ ecdhGenerateKeyPair dhp
+generateECDHE :: Context -> Group -> IO (GroupPrivate, GroupPublic)
+generateECDHE ctx grp = usingState_ ctx $ withRNG $ groupGenerateKeyPair grp
+
+generateECDHEShared :: Context -> GroupPublic -> IO (GroupPublic, GroupKey)
+generateECDHEShared ctx pub = usingState_ ctx $ withRNG $ groupGetPubShared pub
