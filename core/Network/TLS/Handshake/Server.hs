@@ -131,11 +131,6 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
 
     extraCreds <- (onServerNameIndication $ serverHooks sparams) serverName
 
-    let clientGroups = case extensionLookup extensionID_NegotiatedGroups exts >>= extensionDecode False of
-          Just (NegotiatedGroups es) -> es
-          _                          -> []
-    usingState_ ctx $ setClientGroupSuggest clientGroups
-
     -- When selecting a cipher we must ensure that it is allowed for the
     -- TLS version but also that all its key-exchange requirements
     -- will be met.
@@ -148,8 +143,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
 
     -- FIXME ciphers should also be checked for other requirements
     -- (i.e. elliptic curves and D-H groups)
-    let serverGroups = supportedGroups (ctxSupported ctx) `intersect` availableGroups
-        possibleGroups = serverGroups `intersect` clientGroups
+    let possibleGroups = negotiatedGroupsInCommon ctx exts
         hasCommonGroupForECDHE = not (null possibleGroups)
         hasCommonGroup cipher =
             case cipherKeyExchange cipher of
@@ -404,9 +398,8 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             return serverParams
 
         generateSKX_ECDHE sigAlg = do
-            clientGroups <- fromJust "ClientGroupSuggest" <$> usingState_ ctx getClientGroupSuggest
-            let serverGroups = supportedGroups (ctxSupported ctx) `intersect` availableGroups
-            grp <- case serverGroups `intersect` clientGroups of
+            let possibleGroups = negotiatedGroupsInCommon ctx exts
+            grp <- case possibleGroups of
                      []  -> throwCore $ Error_Protocol ("no common group", True, HandshakeFailure)
                      g:_ -> return g
             serverParams <- setup_ECDHE grp
@@ -551,6 +544,13 @@ hashAndSignaturesInCommon ctx exts =
         -- However here the algorithms are selected according
         -- to server preference in 'supportedHashSignatures'.
      in sHashSigs `intersect` cHashSigs
+
+negotiatedGroupsInCommon :: Context -> [ExtensionRaw] -> [Group]
+negotiatedGroupsInCommon ctx exts = case extensionLookup extensionID_NegotiatedGroups exts >>= extensionDecode False of
+    Just (NegotiatedGroups clientGroups) ->
+        let serverGroups = supportedGroups (ctxSupported ctx) `intersect` availableGroups
+        in serverGroups `intersect` clientGroups
+    _                                    -> []
 
 findHighestVersionFrom :: Version -> [Version] -> Maybe Version
 findHighestVersionFrom clientVersion allowedVersions =
