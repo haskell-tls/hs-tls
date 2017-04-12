@@ -39,8 +39,6 @@ module Network.TLS.State
     , getServerNextProtocolSuggest
     , setClientALPNSuggest
     , getClientALPNSuggest
-    , setClientGroupSuggest
-    , getClientGroupSuggest
     , setClientEcPointFormatSuggest
     , getClientEcPointFormatSuggest
     , getClientCertificateChain
@@ -225,12 +223,6 @@ setClientALPNSuggest ps = modify (\st -> st { stClientALPNSuggest = Just ps})
 
 getClientALPNSuggest :: TLSSt (Maybe [B.ByteString])
 getClientALPNSuggest = gets stClientALPNSuggest
-
-setClientGroupSuggest :: [Group] -> TLSSt ()
-setClientGroupSuggest nc = modify (\st -> st { stClientGroupSuggest = Just nc})
-
-getClientGroupSuggest :: TLSSt (Maybe [Group])
-getClientGroupSuggest = gets stClientGroupSuggest
 
 setClientEcPointFormatSuggest :: [EcPointFormat] -> TLSSt ()
 setClientEcPointFormatSuggest epf = modify (\st -> st { stClientEcPointFormatSuggest = Just epf})
