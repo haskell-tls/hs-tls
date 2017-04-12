@@ -367,20 +367,20 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
         -- the "signature_algorithms" extension in a client hello.
         -- If RSA is also used for key exchange, this function is
         -- not called.
-        decideHash sigAlg = do
+        decideHashSig sigAlg = do
             usedVersion <- usingState_ ctx getVersion
             case usedVersion of
               TLS12 -> do
                   let hashSigs = hashAndSignaturesInCommon ctx exts
                   case filter ((==) sigAlg . snd) hashSigs of
                       []  -> error ("no hash signature for " ++ show sigAlg)
-                      x:_ -> return $ Just (fst x)
+                      x:_ -> return $ Just x
               _     -> return Nothing
 
         generateSKX_DHE sigAlg = do
             serverParams  <- setup_DHE
-            mhash <- decideHash sigAlg
-            signed <- digitallySignDHParams ctx serverParams sigAlg mhash
+            mhashSig <- decideHashSig sigAlg
+            signed <- digitallySignDHParams ctx serverParams sigAlg mhashSig
             case sigAlg of
                 SignatureRSA -> return $ SKX_DHE_RSA serverParams signed
                 SignatureDSS -> return $ SKX_DHE_DSS serverParams signed
@@ -401,8 +401,8 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                      []  -> throwCore $ Error_Protocol ("no common group", True, HandshakeFailure)
                      g:_ -> return g
             serverParams <- setup_ECDHE grp
-            mhash <- decideHash sigAlg
-            signed <- digitallySignECDHParams ctx serverParams sigAlg mhash
+            mhashSig <- decideHashSig sigAlg
+            signed <- digitallySignECDHParams ctx serverParams sigAlg mhashSig
             case sigAlg of
                 SignatureRSA -> return $ SKX_ECDHE_RSA serverParams signed
                 _            -> error ("generate skx_ecdhe unsupported signature type: " ++ show sigAlg)
