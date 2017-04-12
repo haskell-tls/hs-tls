@@ -322,9 +322,9 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             -- send server key exchange if needed
             skx <- case cipherKeyExchange usedCipher of
                         CipherKeyExchange_DH_Anon -> Just <$> generateSKX_DH_Anon
-                        CipherKeyExchange_DHE_RSA -> Just <$> generateSKX_DHE SignatureRSA
-                        CipherKeyExchange_DHE_DSS -> Just <$> generateSKX_DHE SignatureDSS
-                        CipherKeyExchange_ECDHE_RSA -> Just <$> generateSKX_ECDHE SignatureRSA
+                        CipherKeyExchange_DHE_RSA -> Just <$> generateSKX_DHE RSA
+                        CipherKeyExchange_DHE_DSS -> Just <$> generateSKX_DHE DSS
+                        CipherKeyExchange_ECDHE_RSA -> Just <$> generateSKX_ECDHE RSA
                         _                         -> return Nothing
             maybe (return ()) (sendPacket ctx . Handshake . (:[]) . ServerKeyXchg) skx
 
@@ -372,7 +372,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             case usedVersion of
               TLS12 -> do
                   let hashSigs = hashAndSignaturesInCommon ctx exts
-                  case filter ((==) sigAlg . snd) hashSigs of
+                  case filter (sigAlg `signatureCompatible`) hashSigs of
                       []  -> error ("no hash signature for " ++ show sigAlg)
                       x:_ -> return $ Just x
               _     -> return Nothing
@@ -382,9 +382,9 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             mhashSig <- decideHashSig sigAlg
             signed <- digitallySignDHParams ctx serverParams sigAlg mhashSig
             case sigAlg of
-                SignatureRSA -> return $ SKX_DHE_RSA serverParams signed
-                SignatureDSS -> return $ SKX_DHE_DSS serverParams signed
-                _            -> error ("generate skx_dhe unsupported signature type: " ++ show sigAlg)
+                RSA -> return $ SKX_DHE_RSA serverParams signed
+                DSS -> return $ SKX_DHE_DSS serverParams signed
+                _   -> error ("generate skx_dhe unsupported signature type: " ++ show sigAlg)
 
         generateSKX_DH_Anon = SKX_DH_Anon <$> setup_DHE
 
@@ -404,8 +404,8 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             mhashSig <- decideHashSig sigAlg
             signed <- digitallySignECDHParams ctx serverParams sigAlg mhashSig
             case sigAlg of
-                SignatureRSA -> return $ SKX_ECDHE_RSA serverParams signed
-                _            -> error ("generate skx_ecdhe unsupported signature type: " ++ show sigAlg)
+                RSA -> return $ SKX_ECDHE_RSA serverParams signed
+                _   -> error ("generate skx_ecdhe unsupported signature type: " ++ show sigAlg)
 
         -- create a DigitallySigned objects for DHParams or ECDHParams.
 
@@ -504,9 +504,9 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
         getRemoteSignatureAlg = do
             pk <- usingHState ctx getRemotePublicKey
             case pk of
-                PubKeyRSA _   -> return SignatureRSA
-                PubKeyDSA _   -> return SignatureDSS
-                PubKeyEC  _   -> return SignatureECDSA
+                PubKeyRSA _   -> return RSA
+                PubKeyDSA _   -> return DSS
+                PubKeyEC  _   -> return ECDSA
                 _             -> throwCore $ Error_Protocol ("unsupported remote public key type", True, HandshakeFailure)
 
         expectChangeCipher ChangeCipherSpec = do

@@ -251,7 +251,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                             -- However here the algorithms are selected according
                             -- to client preference in 'supportedHashSignatures'.
                             let suppHashSigs = supportedHashSignatures $ ctxSupported ctx
-                                matchHashSigs = filter (\ a -> snd a == sigAlg) suppHashSigs
+                                matchHashSigs = filter (sigAlg `signatureCompatible`) suppHashSigs
                                 hashSigs' = filter (\ a -> a `elem` hashSigs) matchHashSigs
 
                             when (null hashSigs') $
@@ -269,8 +269,8 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
         getLocalSignatureAlg = do
             pk <- usingHState ctx getLocalPrivateKey
             case pk of
-                PrivKeyRSA _   -> return SignatureRSA
-                PrivKeyDSA _   -> return SignatureDSS
+                PrivKeyRSA _   -> return RSA
+                PrivKeyDSA _   -> return DSS
 
 processServerExtension :: ExtensionRaw -> TLSSt ()
 processServerExtension (ExtensionRaw 0xff01 content) = do
@@ -381,13 +381,13 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
   where processWithCipher cipher skx =
             case (cipherKeyExchange cipher, skx) of
                 (CipherKeyExchange_DHE_RSA, SKX_DHE_RSA dhparams signature) -> do
-                    doDHESignature dhparams signature SignatureRSA
+                    doDHESignature dhparams signature RSA
                 (CipherKeyExchange_DHE_DSS, SKX_DHE_DSS dhparams signature) -> do
-                    doDHESignature dhparams signature SignatureDSS
+                    doDHESignature dhparams signature DSS
                 (CipherKeyExchange_ECDHE_RSA, SKX_ECDHE_RSA ecdhparams signature) -> do
-                    doECDHESignature ecdhparams signature SignatureRSA
+                    doECDHESignature ecdhparams signature RSA
                 (CipherKeyExchange_ECDHE_ECDSA, SKX_ECDHE_ECDSA ecdhparams signature) -> do
-                    doECDHESignature ecdhparams signature SignatureECDSA
+                    doECDHESignature ecdhparams signature ECDSA
                 (cke, SKX_Unparsed bytes) -> do
                     ver <- usingState_ ctx getVersion
                     case decodeReallyServerKeyXchgAlgorithmData ver cke bytes of
@@ -398,13 +398,13 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
         doDHESignature dhparams signature signatureType = do
             -- TODO verify DHParams
             verified <- digitallySignDHParamsVerify ctx dhparams signatureType signature
-            when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " for dhparams " ++ show dhparams, True, HandshakeFailure)
+            when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " signature for dhparams " ++ show dhparams, True, HandshakeFailure)
             usingHState ctx $ setServerDHParams dhparams
 
         doECDHESignature ecdhparams signature signatureType = do
             -- TODO verify DHParams
             verified <- digitallySignECDHParamsVerify ctx ecdhparams signatureType signature
-            when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " for ecdhparams", True, HandshakeFailure)
+            when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " signature for ecdhparams", True, HandshakeFailure)
             usingHState ctx $ setServerECDHParams ecdhparams
 
 processServerKeyExchange ctx p = processCertificateRequest ctx p

@@ -8,7 +8,8 @@
 --
 module Network.TLS.Handshake.Signature
     (
-      certificateVerifyCreate
+      DigitalSignatureAlg(..)
+    , certificateVerifyCreate
     , certificateVerifyCheck
     , digitallySignDHParams
     , digitallySignECDHParams
@@ -30,12 +31,19 @@ import Network.TLS.Util
 
 import Control.Monad.State
 
-signatureCompatible :: SignatureAlgorithm -> HashAndSignatureAlgorithm -> Bool
-signatureCompatible sigAlgExpected (_, s) = s == sigAlgExpected
+-- Digital signature algorithm, in close relation to public/private key types
+-- and cipher key exchange.
+data DigitalSignatureAlg = RSA | DSS | ECDSA deriving (Show, Eq)
+
+signatureCompatible :: DigitalSignatureAlg -> HashAndSignatureAlgorithm -> Bool
+signatureCompatible RSA   (_, SignatureRSA)   = True
+signatureCompatible DSS   (_, SignatureDSS)   = True
+signatureCompatible ECDSA (_, SignatureECDSA) = True
+signatureCompatible _     (_, _)              = False
 
 certificateVerifyCheck :: Context
                        -> Version
-                       -> SignatureAlgorithm
+                       -> DigitalSignatureAlg
                        -> Bytes
                        -> DigitallySigned
                        -> IO Bool
@@ -49,11 +57,11 @@ certificateVerifyCheck ctx usedVersion sigAlgExpected msgs digSig@(DigitallySign
   where
     doVerify =
         prepareCertificateVerifySignatureData ctx usedVersion sigAlgExpected hashSigAlg msgs >>=
-        signatureVerifyWithHashDescr ctx sigAlgExpected digSig
+        signatureVerifyWithHashDescr ctx digSig
 
 certificateVerifyCreate :: Context
                         -> Version
-                        -> SignatureAlgorithm
+                        -> DigitalSignatureAlg
                         -> Maybe HashAndSignatureAlgorithm -- TLS12 only
                         -> Bytes
                         -> IO DigitallySigned
@@ -71,7 +79,7 @@ buildVerifyData hashDescr            bs = (hashDescr, bs)
 
 prepareCertificateVerifySignatureData :: Context
                                       -> Version
-                                      -> SignatureAlgorithm
+                                      -> DigitalSignatureAlg
                                       -> Maybe HashAndSignatureAlgorithm -- TLS12 only
                                       -> Bytes
                                       -> IO CertVerifyData
@@ -79,17 +87,17 @@ prepareCertificateVerifySignatureData ctx usedVersion sigAlg hashSigAlg msgs
     | usedVersion == SSL3 = do
         (hashCtx, params, generateCV_SSL) <-
             case sigAlg of
-                SignatureRSA -> return (hashInit SHA1_MD5, RSAParams SHA1_MD5, generateCertificateVerify_SSL)
-                SignatureDSS -> return (hashInit SHA1, DSSParams, generateCertificateVerify_SSL_DSS)
-                _            -> throwCore $ Error_Misc ("unsupported CertificateVerify signature for SSL3: " ++ show sigAlg)
+                RSA -> return (hashInit SHA1_MD5, RSAParams SHA1_MD5, generateCertificateVerify_SSL)
+                DSS -> return (hashInit SHA1, DSSParams, generateCertificateVerify_SSL_DSS)
+                _   -> throwCore $ Error_Misc ("unsupported CertificateVerify signature for SSL3: " ++ show sigAlg)
         Just masterSecret <- usingHState ctx $ gets hstMasterSecret
         return (params, generateCV_SSL masterSecret $ hashUpdate hashCtx msgs)
     | usedVersion == TLS10 || usedVersion == TLS11 =
             return $ buildVerifyData (signatureParams sigAlg Nothing) msgs
     | otherwise = return (signatureParams sigAlg hashSigAlg, msgs)
 
-signatureParams :: SignatureAlgorithm -> Maybe HashAndSignatureAlgorithm -> SignatureParams
-signatureParams SignatureRSA hashSigAlg =
+signatureParams :: DigitalSignatureAlg -> Maybe HashAndSignatureAlgorithm -> SignatureParams
+signatureParams RSA hashSigAlg =
     case hashSigAlg of
         Just (HashSHA512, SignatureRSA) -> RSAParams SHA512
         Just (HashSHA384, SignatureRSA) -> RSAParams SHA384
@@ -97,14 +105,14 @@ signatureParams SignatureRSA hashSigAlg =
         Just (HashSHA1  , SignatureRSA) -> RSAParams SHA1
         Nothing                         -> RSAParams SHA1_MD5
         Just (hsh       , SignatureRSA) -> error ("unimplemented RSA signature hash type: " ++ show hsh)
-        Just (_         , sigAlg)       -> error ("signature type is incompatible with RSA: " ++ show sigAlg)
-signatureParams SignatureDSS hashSigAlg =
+        Just (_         , sigAlg)       -> error ("signature algorithm is incompatible with RSA: " ++ show sigAlg)
+signatureParams DSS hashSigAlg =
     case hashSigAlg of
         Nothing                       -> DSSParams
         Just (HashSHA1, SignatureDSS) -> DSSParams
         Just (_       , SignatureDSS) -> error "invalid DSA hash choice, only SHA1 allowed"
-        Just (_       , sigAlg)       -> error ("signature type is incompatible with DSS: " ++ show sigAlg)
-signatureParams SignatureECDSA hashSigAlg =
+        Just (_       , sigAlg)       -> error ("signature algorithm is incompatible with DSS: " ++ show sigAlg)
+signatureParams ECDSA hashSigAlg =
     case hashSigAlg of
         Just (HashSHA512, SignatureECDSA) -> ECDSAParams SHA512
         Just (HashSHA384, SignatureECDSA) -> ECDSAParams SHA384
@@ -112,8 +120,7 @@ signatureParams SignatureECDSA hashSigAlg =
         Just (HashSHA1  , SignatureECDSA) -> ECDSAParams SHA1
         Nothing                           -> ECDSAParams SHA1
         Just (hsh       , SignatureECDSA) -> error ("unimplemented ECDSA signature hash type: " ++ show hsh)
-        Just (_         , sigAlg)         -> error ("signature type is incompatible with ECDSA: " ++ show sigAlg)
-signatureParams sig _ = error ("unimplemented signature type: " ++ show sig)
+        Just (_         , sigAlg)         -> error ("signature algorithm is incompatible with ECDSA: " ++ show sigAlg)
 
 signatureCreateWithHashDescr :: Context
                              -> Maybe HashAndSignatureAlgorithm
@@ -123,7 +130,7 @@ signatureCreateWithHashDescr ctx malg (hashDescr, toSign) = do
     cc <- usingState_ ctx $ isClientContext
     DigitallySigned malg <$> signPrivate ctx cc hashDescr toSign
 
-signatureVerify :: Context -> DigitallySigned -> SignatureAlgorithm -> Bytes -> IO Bool
+signatureVerify :: Context -> DigitallySigned -> DigitalSignatureAlg -> Bytes -> IO Bool
 signatureVerify ctx digSig@(DigitallySigned hashSigAlg _) sigAlgExpected toVerifyData = do
     usedVersion <- usingState_ ctx getVersion
     let (hashDescr, toVerify) =
@@ -133,29 +140,24 @@ signatureVerify ctx digSig@(DigitallySigned hashSigAlg _) sigAlgExpected toVerif
                                  | otherwise                               -> error "expecting different signature algorithm"
                 (_,     Nothing)    -> buildVerifyData (signatureParams sigAlgExpected Nothing) toVerifyData
                 (_,     Just _)     -> error "not expecting hash and signature algorithm in a < TLS12 digitially signed structure"
-    signatureVerifyWithHashDescr ctx sigAlgExpected digSig (hashDescr, toVerify)
+    signatureVerifyWithHashDescr ctx digSig (hashDescr, toVerify)
 
 signatureVerifyWithHashDescr :: Context
-                             -> SignatureAlgorithm
                              -> DigitallySigned
                              -> CertVerifyData
                              -> IO Bool
-signatureVerifyWithHashDescr ctx sigAlgExpected (DigitallySigned _ bs) (hashDescr, toVerify) = do
+signatureVerifyWithHashDescr ctx (DigitallySigned _ bs) (hashDescr, toVerify) = do
     cc <- usingState_ ctx $ isClientContext
-    case sigAlgExpected of
-        SignatureRSA   -> verifyPublic ctx cc hashDescr toVerify bs
-        SignatureDSS   -> verifyPublic ctx cc hashDescr toVerify bs
-        SignatureECDSA -> verifyPublic ctx cc hashDescr toVerify bs
-        _              -> error "signature verification not implemented yet"
+    verifyPublic ctx cc hashDescr toVerify bs
 
-digitallySignParams :: Context -> Bytes -> SignatureAlgorithm -> Maybe HashAndSignatureAlgorithm -> IO DigitallySigned
+digitallySignParams :: Context -> Bytes -> DigitalSignatureAlg -> Maybe HashAndSignatureAlgorithm -> IO DigitallySigned
 digitallySignParams ctx signatureData sigAlg hashSigAlg =
     let hashDescr = signatureParams sigAlg hashSigAlg
      in signatureCreateWithHashDescr ctx hashSigAlg (buildVerifyData hashDescr signatureData)
 
 digitallySignDHParams :: Context
                       -> ServerDHParams
-                      -> SignatureAlgorithm
+                      -> DigitalSignatureAlg
                       -> Maybe HashAndSignatureAlgorithm -- TLS12 only
                       -> IO DigitallySigned
 digitallySignDHParams ctx serverParams sigAlg mhash = do
@@ -164,7 +166,7 @@ digitallySignDHParams ctx serverParams sigAlg mhash = do
 
 digitallySignECDHParams :: Context
                         -> ServerECDHParams
-                        -> SignatureAlgorithm
+                        -> DigitalSignatureAlg
                         -> Maybe HashAndSignatureAlgorithm -- TLS12 only
                         -> IO DigitallySigned
 digitallySignECDHParams ctx serverParams sigAlg mhash = do
@@ -173,7 +175,7 @@ digitallySignECDHParams ctx serverParams sigAlg mhash = do
 
 digitallySignDHParamsVerify :: Context
                             -> ServerDHParams
-                            -> SignatureAlgorithm
+                            -> DigitalSignatureAlg
                             -> DigitallySigned
                             -> IO Bool
 digitallySignDHParamsVerify ctx dhparams sigAlg signature = do
@@ -182,7 +184,7 @@ digitallySignDHParamsVerify ctx dhparams sigAlg signature = do
 
 digitallySignECDHParamsVerify :: Context
                               -> ServerECDHParams
-                              -> SignatureAlgorithm
+                              -> DigitalSignatureAlg
                               -> DigitallySigned
                               -> IO Bool
 digitallySignECDHParamsVerify ctx dhparams sigAlg signature = do
