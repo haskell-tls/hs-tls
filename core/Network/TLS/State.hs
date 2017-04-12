@@ -50,8 +50,6 @@ module Network.TLS.State
     , getVerifiedData
     , setSession
     , getSession
-    , setGroup
-    , getGroup
     , isSessionResuming
     , isClientContext
     -- * random
@@ -92,7 +90,6 @@ data TLSState = TLSState
     , stRandomGen           :: StateRNG
     , stVersion             :: Maybe Version
     , stClientContext       :: Role
-    , stGroup               :: Maybe Group
     }
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrT TLSError (State TLSState) a }
@@ -128,7 +125,6 @@ newTLSState rng clientContext = TLSState
     , stRandomGen           = rng
     , stVersion             = Nothing
     , stClientContext       = clientContext
-    , stGroup               = Nothing
     }
 
 updateVerifiedData :: Role -> Bytes -> TLSSt ()
@@ -253,12 +249,6 @@ setClientSNI hn = modify (\st -> st { stClientSNI = Just hn })
 
 getClientSNI :: TLSSt (Maybe HostName)
 getClientSNI = gets stClientSNI
-
-setGroup :: Group -> TLSSt ()
-setGroup grp = modify (\st -> st { stGroup = Just grp })
-
-getGroup :: TLSSt (Maybe Group)
-getGroup = gets stGroup
 
 getVerifiedData :: Role -> TLSSt Bytes
 getVerifiedData client = gets (if client == ClientRole then stClientVerifiedData else stServerVerifiedData)

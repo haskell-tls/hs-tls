@@ -150,12 +150,8 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     -- (i.e. elliptic curves and D-H groups)
     let serverGroups = supportedGroups (ctxSupported ctx) `intersect` availableGroups
         possibleGroups = serverGroups `intersect` clientGroups
-    hasCommonGroupForECDHE <- case possibleGroups of
-        []  -> return False
-        g:_ -> do
-            usingState_ ctx $ setGroup g
-            return True
-    let hasCommonGroup cipher =
+        hasCommonGroupForECDHE = not (null possibleGroups)
+        hasCommonGroup cipher =
             case cipherKeyExchange cipher of
                 CipherKeyExchange_ECDHE_RSA    -> hasCommonGroupForECDHE
                 CipherKeyExchange_ECDHE_ECDSA  -> hasCommonGroupForECDHE
@@ -408,7 +404,11 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             return serverParams
 
         generateSKX_ECDHE sigAlg = do
-            Just grp <- usingState_ ctx getGroup -- cannot be Nothing
+            clientGroups <- fromJust "ClientGroupSuggest" <$> usingState_ ctx getClientGroupSuggest
+            let serverGroups = supportedGroups (ctxSupported ctx) `intersect` availableGroups
+            grp <- case serverGroups `intersect` clientGroups of
+                     []  -> throwCore $ Error_Protocol ("no common group", True, HandshakeFailure)
+                     g:_ -> return g
             serverParams <- setup_ECDHE grp
             mhash <- decideHash sigAlg
             signed <- digitallySignECDHParams ctx serverParams sigAlg mhash
