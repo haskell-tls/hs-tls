@@ -141,8 +141,6 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     -- such a cipher if no hash is available for it.  It's best to skip this
     -- cipher and pick another one (with another key exchange).
 
-    -- FIXME ciphers should also be checked for other requirements
-    -- (i.e. elliptic curves and D-H groups)
     let possibleGroups = negotiatedGroupsInCommon ctx exts
         hasCommonGroupForECDHE = not (null possibleGroups)
         hasCommonGroup cipher =
