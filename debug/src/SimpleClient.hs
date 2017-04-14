@@ -21,7 +21,8 @@ import System.X509
 import Data.Default.Class
 import Data.IORef
 import Data.Monoid
-import Data.Maybe (isJust)
+import Data.List (find)
+import Data.Maybe (isJust, mapMaybe)
 
 import Common
 import HexDump
@@ -100,7 +101,7 @@ getDefaultParams flags host store sStorage certCredsRequest session =
             getSelectedCiphers =
                 case getUsedCipherIDs of
                     [] -> ciphersuite_all
-                    l  -> filter (\c -> cipherID c `elem` l) ciphersuite_all
+                    l  -> mapMaybe (\cid -> find ((== cid) . cipherID) ciphersuite_all) l
 
             getDebugSeed :: Maybe Seed -> Flag -> Maybe Seed
             getDebugSeed _   (DebugSeed seed) = seedFromInteger `fmap` readNumber seed

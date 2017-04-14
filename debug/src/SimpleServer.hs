@@ -20,7 +20,8 @@ import Data.X509.CertificateStore
 import Data.Default.Class
 import Data.IORef
 import Data.Monoid
-import Data.Maybe (isJust)
+import Data.List (find)
+import Data.Maybe (isJust, mapMaybe)
 
 import Common
 import HexDump
@@ -113,7 +114,7 @@ getDefaultParams flags store sStorage cred _session = do
             getSelectedCiphers =
                 case getUsedCipherIDs of
                     [] -> ciphersuite_default
-                    l  -> filter (\c -> cipherID c `elem` l) ciphersuite_all
+                    l  -> mapMaybe (\cid -> find ((== cid) . cipherID) ciphersuite_all) l
 
             getDHParams opts = foldl accf Nothing opts
               where accf _   (DHParams file) = Just file
