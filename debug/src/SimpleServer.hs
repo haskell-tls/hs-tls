@@ -244,6 +244,7 @@ runOn (sStorage, certStore) flags port
                    (IODebug `elem` flags)
                    params port $ \ctx -> do
                 handshake ctx
+                when (Verbose `elem` flags) $ printHandshakeInfo ctx
                 loopRecv out ctx
                 --sendData ctx $ query
                 bye ctx

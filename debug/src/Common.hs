@@ -4,6 +4,7 @@ module Common
     , readNumber
     , readCiphers
     , readDHParams
+    , printHandshakeInfo
     ) where
 
 import Control.Monad
@@ -71,3 +72,12 @@ printDHParams = do
     putStrLn "====================================="
     forM_ namedDHParams $ \(name, _) -> putStrLn name
     putStrLn "(or /path/to/dhparams)"
+
+printHandshakeInfo ctx = do
+    info <- contextGetInformation ctx
+    forM_ info $ \i -> do
+        putStrLn ("version: " ++ show (infoVersion i))
+        putStrLn ("cipher: " ++ show (infoCipher i))
+        putStrLn ("compression: " ++ show (infoCompression i))
+    sni <- getClientSNI ctx
+    forM_ sni $ \n -> putStrLn ("server name indication: " ++ n)

@@ -217,6 +217,7 @@ runOn (sStorage, certStore) flags port hostname
                    (IODebug `elem` flags)
                    (getDefaultParams flags hostname certStore sStorage certCredRequest sess) hostname port $ \ctx -> do
                 handshake ctx
+                when (Verbose `elem` flags) $ printHandshakeInfo ctx
                 sendData ctx $ query
                 loopRecv out ctx
                 bye ctx
