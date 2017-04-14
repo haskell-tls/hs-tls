@@ -63,7 +63,7 @@ sessionRef ref = SessionManager
     }
 
 getDefaultParams flags host store sStorage certCredsRequest session =
-    (defaultParamsClient host BC.empty)
+    (defaultParamsClient serverName BC.empty)
         { clientSupported = def { supportedVersions = supportedVers, supportedCiphers = myCiphers }
         , clientWantSessionResume = session
         , clientUseServerNameIndication = not (NoSNI `elem` flags)
@@ -80,6 +80,10 @@ getDefaultParams flags host store sStorage certCredsRequest session =
                             }
         }
     where
+            serverName = foldl f host flags
+              where f _   (SNI n) = n
+                    f acc _       = acc
+
             validateCache
                 | validateCert = def
                 | otherwise    = ValidationCache (\_ _ _ -> return ValidationCachePass)
@@ -121,6 +125,7 @@ getDefaultParams flags host store sStorage certCredsRequest session =
 
 data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | Ssl3 | Tls10 | Tls11 | Tls12
+          | SNI String
           | NoSNI
           | Uri String
           | NoVersionDowngrade
@@ -151,6 +156,7 @@ options =
     , Option []     ["client-cert"] (ReqArg ClientCert "cert-file:key-file") "add a client certificate to use with the server"
     , Option []     ["http1.1"] (NoArg Http11) "use http1.1 instead of http1.0"
     , Option []     ["ssl3"]    (NoArg Ssl3) "use SSL 3.0"
+    , Option []     ["sni"]     (ReqArg SNI "server-name") "use non-default server name indication"
     , Option []     ["no-sni"]  (NoArg NoSNI) "don't use server name indication"
     , Option []     ["user-agent"] (ReqArg UserAgent "user-agent") "use a user agent"
     , Option []     ["tls10"]   (NoArg Tls10) "use TLS 1.0"
