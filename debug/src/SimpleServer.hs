@@ -139,7 +139,6 @@ getDefaultParams flags store sStorage cred _session = do
 
 data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | Ssl3 | Tls10 | Tls11 | Tls12
-          | NoSNI
           | NoVersionDowngrade
           | AllowRenegotiation
           | Output String
@@ -170,7 +169,6 @@ options =
     , Option []     ["no-validation"] (NoArg NoValidateCert) "disable certificate validation"
     , Option []     ["http1.1"] (NoArg Http11) "use http1.1 instead of http1.0"
     , Option []     ["ssl3"]    (NoArg Ssl3) "use SSL 3.0"
-    , Option []     ["no-sni"]  (NoArg NoSNI) "don't use server name indication"
     , Option []     ["tls10"]   (NoArg Tls10) "use TLS 1.0"
     , Option []     ["tls11"]   (NoArg Tls11) "use TLS 1.1"
     , Option []     ["tls12"]   (NoArg Tls12) "use TLS 1.2 (default)"
