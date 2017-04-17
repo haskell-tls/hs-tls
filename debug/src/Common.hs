@@ -75,9 +75,13 @@ printDHParams = do
 
 printHandshakeInfo ctx = do
     info <- contextGetInformation ctx
-    forM_ info $ \i -> do
-        putStrLn ("version: " ++ show (infoVersion i))
-        putStrLn ("cipher: " ++ show (infoCipher i))
-        putStrLn ("compression: " ++ show (infoCompression i))
+    case info of
+        Nothing -> return ()
+        Just i  -> do
+            putStrLn ("version: " ++ show (infoVersion i))
+            putStrLn ("cipher: " ++ show (infoCipher i))
+            putStrLn ("compression: " ++ show (infoCompression i))
     sni <- getClientSNI ctx
-    forM_ sni $ \n -> putStrLn ("server name indication: " ++ n)
+    case sni of
+        Nothing -> return ()
+        Just n  -> putStrLn ("server name indication: " ++ n)
