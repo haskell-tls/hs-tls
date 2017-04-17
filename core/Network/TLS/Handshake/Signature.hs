@@ -57,7 +57,7 @@ checkCertificateVerify ctx usedVersion sigAlgExpected msgs digSig@(DigitallySign
   where
     doVerify =
         prepareCertificateVerifySignatureData ctx usedVersion sigAlgExpected hashSigAlg msgs >>=
-        signatureVerifyWithHashDescr ctx digSig
+        signatureVerifyWithCertVerifyData ctx digSig
 
 createCertificateVerify :: Context
                         -> Version
@@ -67,7 +67,7 @@ createCertificateVerify :: Context
                         -> IO DigitallySigned
 createCertificateVerify ctx usedVersion sigAlg hashSigAlg msgs =
     prepareCertificateVerifySignatureData ctx usedVersion sigAlg hashSigAlg msgs >>=
-    signatureCreateWithHashDescr ctx hashSigAlg
+    signatureCreateWithCertVerifyData ctx hashSigAlg
 
 type CertVerifyData = (SignatureParams, Bytes)
 
@@ -122,11 +122,11 @@ signatureParams ECDSA hashSigAlg =
         Just (hsh       , SignatureECDSA) -> error ("unimplemented ECDSA signature hash type: " ++ show hsh)
         Just (_         , sigAlg)         -> error ("signature algorithm is incompatible with ECDSA: " ++ show sigAlg)
 
-signatureCreateWithHashDescr :: Context
-                             -> Maybe HashAndSignatureAlgorithm
-                             -> CertVerifyData
-                             -> IO DigitallySigned
-signatureCreateWithHashDescr ctx malg (sigParam, toSign) = do
+signatureCreateWithCertVerifyData :: Context
+                                  -> Maybe HashAndSignatureAlgorithm
+                                  -> CertVerifyData
+                                  -> IO DigitallySigned
+signatureCreateWithCertVerifyData ctx malg (sigParam, toSign) = do
     cc <- usingState_ ctx $ isClientContext
     DigitallySigned malg <$> signPrivate ctx cc sigParam toSign
 
@@ -140,20 +140,20 @@ signatureVerify ctx digSig@(DigitallySigned hashSigAlg _) sigAlgExpected toVerif
                                  | otherwise                               -> error "expecting different signature algorithm"
                 (_,     Nothing)    -> buildVerifyData (signatureParams sigAlgExpected Nothing) toVerifyData
                 (_,     Just _)     -> error "not expecting hash and signature algorithm in a < TLS12 digitially signed structure"
-    signatureVerifyWithHashDescr ctx digSig (sigParam, toVerify)
+    signatureVerifyWithCertVerifyData ctx digSig (sigParam, toVerify)
 
-signatureVerifyWithHashDescr :: Context
-                             -> DigitallySigned
-                             -> CertVerifyData
-                             -> IO Bool
-signatureVerifyWithHashDescr ctx (DigitallySigned _ bs) (sigParam, toVerify) = do
+signatureVerifyWithCertVerifyData :: Context
+                                  -> DigitallySigned
+                                  -> CertVerifyData
+                                  -> IO Bool
+signatureVerifyWithCertVerifyData ctx (DigitallySigned _ bs) (sigParam, toVerify) = do
     cc <- usingState_ ctx $ isClientContext
     verifyPublic ctx cc sigParam toVerify bs
 
 digitallySignParams :: Context -> Bytes -> DigitalSignatureAlg -> Maybe HashAndSignatureAlgorithm -> IO DigitallySigned
 digitallySignParams ctx signatureData sigAlg hashSigAlg =
     let sigParam = signatureParams sigAlg hashSigAlg
-     in signatureCreateWithHashDescr ctx hashSigAlg (buildVerifyData sigParam signatureData)
+     in signatureCreateWithCertVerifyData ctx hashSigAlg (buildVerifyData sigParam signatureData)
 
 digitallySignDHParams :: Context
                       -> ServerDHParams
