@@ -464,7 +464,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
 
             -- FIXME should check certificate is allowed for signing
 
-            verif <- certificateVerifyCheck ctx usedVersion sigAlgExpected msgs dsig
+            verif <- checkCertificateVerify ctx usedVersion sigAlgExpected msgs dsig
 
             case verif of
                 True -> do

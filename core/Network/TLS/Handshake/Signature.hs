@@ -10,7 +10,7 @@ module Network.TLS.Handshake.Signature
     (
       DigitalSignatureAlg(..)
     , createCertificateVerify
-    , certificateVerifyCheck
+    , checkCertificateVerify
     , digitallySignDHParams
     , digitallySignECDHParams
     , digitallySignDHParamsVerify
@@ -41,13 +41,13 @@ signatureCompatible DSS   (_, SignatureDSS)   = True
 signatureCompatible ECDSA (_, SignatureECDSA) = True
 signatureCompatible _     (_, _)              = False
 
-certificateVerifyCheck :: Context
+checkCertificateVerify :: Context
                        -> Version
                        -> DigitalSignatureAlg
                        -> Bytes
                        -> DigitallySigned
                        -> IO Bool
-certificateVerifyCheck ctx usedVersion sigAlgExpected msgs digSig@(DigitallySigned hashSigAlg _) =
+checkCertificateVerify ctx usedVersion sigAlgExpected msgs digSig@(DigitallySigned hashSigAlg _) =
     case (usedVersion, hashSigAlg) of
         (TLS12, Nothing)    -> return False
         (TLS12, Just hs) | sigAlgExpected `signatureCompatible` hs -> doVerify
