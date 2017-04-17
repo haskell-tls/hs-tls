@@ -75,7 +75,7 @@ type CertVerifyData = (SignatureParams, Bytes)
 -- the SHA1_MD5 algorithm expect an already digested data
 buildVerifyData :: SignatureParams -> Bytes -> CertVerifyData
 buildVerifyData (RSAParams SHA1_MD5) bs = (RSAParams SHA1_MD5, hashFinal $ hashUpdate (hashInit SHA1_MD5) bs)
-buildVerifyData hashDescr            bs = (hashDescr, bs)
+buildVerifyData sigParam             bs = (sigParam, bs)
 
 prepareCertificateVerifySignatureData :: Context
                                       -> Version
@@ -126,34 +126,34 @@ signatureCreateWithHashDescr :: Context
                              -> Maybe HashAndSignatureAlgorithm
                              -> CertVerifyData
                              -> IO DigitallySigned
-signatureCreateWithHashDescr ctx malg (hashDescr, toSign) = do
+signatureCreateWithHashDescr ctx malg (sigParam, toSign) = do
     cc <- usingState_ ctx $ isClientContext
-    DigitallySigned malg <$> signPrivate ctx cc hashDescr toSign
+    DigitallySigned malg <$> signPrivate ctx cc sigParam toSign
 
 signatureVerify :: Context -> DigitallySigned -> DigitalSignatureAlg -> Bytes -> IO Bool
 signatureVerify ctx digSig@(DigitallySigned hashSigAlg _) sigAlgExpected toVerifyData = do
     usedVersion <- usingState_ ctx getVersion
-    let (hashDescr, toVerify) =
+    let (sigParam, toVerify) =
             case (usedVersion, hashSigAlg) of
                 (TLS12, Nothing)    -> error "expecting hash and signature algorithm in a TLS12 digitally signed structure"
                 (TLS12, Just hs) | sigAlgExpected `signatureCompatible` hs -> (signatureParams sigAlgExpected hashSigAlg, toVerifyData)
                                  | otherwise                               -> error "expecting different signature algorithm"
                 (_,     Nothing)    -> buildVerifyData (signatureParams sigAlgExpected Nothing) toVerifyData
                 (_,     Just _)     -> error "not expecting hash and signature algorithm in a < TLS12 digitially signed structure"
-    signatureVerifyWithHashDescr ctx digSig (hashDescr, toVerify)
+    signatureVerifyWithHashDescr ctx digSig (sigParam, toVerify)
 
 signatureVerifyWithHashDescr :: Context
                              -> DigitallySigned
                              -> CertVerifyData
                              -> IO Bool
-signatureVerifyWithHashDescr ctx (DigitallySigned _ bs) (hashDescr, toVerify) = do
+signatureVerifyWithHashDescr ctx (DigitallySigned _ bs) (sigParam, toVerify) = do
     cc <- usingState_ ctx $ isClientContext
-    verifyPublic ctx cc hashDescr toVerify bs
+    verifyPublic ctx cc sigParam toVerify bs
 
 digitallySignParams :: Context -> Bytes -> DigitalSignatureAlg -> Maybe HashAndSignatureAlgorithm -> IO DigitallySigned
 digitallySignParams ctx signatureData sigAlg hashSigAlg =
-    let hashDescr = signatureParams sigAlg hashSigAlg
-     in signatureCreateWithHashDescr ctx hashSigAlg (buildVerifyData hashDescr signatureData)
+    let sigParam = signatureParams sigAlg hashSigAlg
+     in signatureCreateWithHashDescr ctx hashSigAlg (buildVerifyData sigParam signatureData)
 
 digitallySignDHParams :: Context
                       -> ServerDHParams
