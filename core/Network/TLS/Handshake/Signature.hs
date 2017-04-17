@@ -9,7 +9,7 @@
 module Network.TLS.Handshake.Signature
     (
       DigitalSignatureAlg(..)
-    , certificateVerifyCreate
+    , createCertificateVerify
     , certificateVerifyCheck
     , digitallySignDHParams
     , digitallySignECDHParams
@@ -59,13 +59,13 @@ certificateVerifyCheck ctx usedVersion sigAlgExpected msgs digSig@(DigitallySign
         prepareCertificateVerifySignatureData ctx usedVersion sigAlgExpected hashSigAlg msgs >>=
         signatureVerifyWithHashDescr ctx digSig
 
-certificateVerifyCreate :: Context
+createCertificateVerify :: Context
                         -> Version
                         -> DigitalSignatureAlg
                         -> Maybe HashAndSignatureAlgorithm -- TLS12 only
                         -> Bytes
                         -> IO DigitallySigned
-certificateVerifyCreate ctx usedVersion sigAlg hashSigAlg msgs =
+createCertificateVerify ctx usedVersion sigAlg hashSigAlg msgs =
     prepareCertificateVerifySignatureData ctx usedVersion sigAlg hashSigAlg msgs >>=
     signatureCreateWithHashDescr ctx hashSigAlg
 
