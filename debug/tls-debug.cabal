@@ -14,10 +14,10 @@ Category:            Network
 stability:           experimental
 Cabal-Version:       >=1.6
 Homepage:            http://github.com/vincenthz/hs-tls
-extra-source-files:  src/HexDump.hs
 
 Executable           tls-stunnel
   Main-is:           Stunnel.hs
+  Other-modules:     Common
   Hs-Source-Dirs:    src
   Build-Depends:     base >= 4 && < 5
                    , network
@@ -62,7 +62,8 @@ Executable           tls-retrievecertificate
 
 Executable           tls-simpleclient
   Main-is:           SimpleClient.hs
-  Other-modules:     HexDump
+  Other-modules:     Common
+                   , HexDump
   Hs-Source-Dirs:    src
   Build-Depends:     base >= 4 && < 5
                    , network
@@ -76,7 +77,8 @@ Executable           tls-simpleclient
 
 Executable           tls-simpleserver
   Main-is:           SimpleServer.hs
-  Other-modules:     HexDump
+  Other-modules:     Common
+                   , HexDump
   Hs-Source-Dirs:    src
   Build-Depends:     base >= 4 && < 5
                    , network

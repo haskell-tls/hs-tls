@@ -21,11 +21,10 @@ import System.X509
 import Data.Default.Class
 import Data.IORef
 import Data.Monoid
-import Data.Char (isDigit)
-import Data.Maybe (isJust)
+import Data.List (find)
+import Data.Maybe (isJust, mapMaybe)
 
-import Numeric (showHex)
-
+import Common
 import HexDump
 
 defaultBenchAmount = 1024 * 1024
@@ -64,7 +63,7 @@ sessionRef ref = SessionManager
     }
 
 getDefaultParams flags host store sStorage certCredsRequest session =
-    (defaultParamsClient host BC.empty)
+    (defaultParamsClient serverName BC.empty)
         { clientSupported = def { supportedVersions = supportedVers, supportedCiphers = myCiphers }
         , clientWantSessionResume = session
         , clientUseServerNameIndication = not (NoSNI `elem` flags)
@@ -81,27 +80,32 @@ getDefaultParams flags host store sStorage certCredsRequest session =
                             }
         }
     where
+            serverName = foldl f host flags
+              where f _   (SNI n) = n
+                    f acc _       = acc
+
             validateCache
                 | validateCert = def
                 | otherwise    = ValidationCache (\_ _ _ -> return ValidationCachePass)
                                                  (\_ _ _ -> return ())
-            myCiphers = foldl accBogusCipher (filter withUseCipher ciphersuite_all) flags
+            myCiphers = foldl accBogusCipher getSelectedCiphers flags
               where accBogusCipher acc (BogusCipher c) =
                         case reads c of
                             [(v, "")] -> acc ++ [bogusCipher v]
                             _         -> acc
                     accBogusCipher acc _ = acc
 
-            getUsedCiphers = foldl f [] flags
-              where f acc (UseCipher am) = case readNumber am of
-                                                Nothing -> acc
-                                                Just i  -> i : acc
+            getUsedCipherIDs = foldl f [] flags
+              where f acc (UseCipher am) =
+                            case readCiphers am of
+                                Just l  -> l ++ acc
+                                Nothing -> acc
                     f acc _ = acc
 
-            withUseCipher c =
-                case getUsedCiphers of
-                    [] -> True
-                    l  -> cipherID c `elem` l
+            getSelectedCiphers =
+                case getUsedCipherIDs of
+                    [] -> ciphersuite_all
+                    l  -> mapMaybe (\cid -> find ((== cid) . cipherID) ciphersuite_all) l
 
             getDebugSeed :: Maybe Seed -> Flag -> Maybe Seed
             getDebugSeed _   (DebugSeed seed) = seedFromInteger `fmap` readNumber seed
@@ -121,6 +125,7 @@ getDefaultParams flags host store sStorage certCredsRequest session =
 
 data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | Ssl3 | Tls10 | Tls11 | Tls12
+          | SNI String
           | NoSNI
           | Uri String
           | NoVersionDowngrade
@@ -151,6 +156,7 @@ options =
     , Option []     ["client-cert"] (ReqArg ClientCert "cert-file:key-file") "add a client certificate to use with the server"
     , Option []     ["http1.1"] (NoArg Http11) "use http1.1 instead of http1.0"
     , Option []     ["ssl3"]    (NoArg Ssl3) "use SSL 3.0"
+    , Option []     ["sni"]     (ReqArg SNI "server-name") "use non-default server name indication"
     , Option []     ["no-sni"]  (NoArg NoSNI) "don't use server name indication"
     , Option []     ["user-agent"] (ReqArg UserAgent "user-agent") "use a user agent"
     , Option []     ["tls10"]   (NoArg Tls10) "use TLS 1.0"
@@ -217,6 +223,7 @@ runOn (sStorage, certStore) flags port hostname
                    (IODebug `elem` flags)
                    (getDefaultParams flags hostname certStore sStorage certCredRequest sess) hostname port $ \ctx -> do
                 handshake ctx
+                when (Verbose `elem` flags) $ printHandshakeInfo ctx
                 sendData ctx $ query
                 loopRecv out ctx
                 bye ctx
@@ -267,23 +274,8 @@ runOn (sStorage, certStore) flags port hostname
                                             Just i  -> i
                 f acc _              = acc
 
-readNumber :: Read a => String -> Maybe a
-readNumber s
-    | all isDigit s = Just $ read s
-    | otherwise     = Nothing
-
 printUsage =
     putStrLn $ usageInfo "usage: simpleclient [opts] <hostname> [port]\n\n\t(port default to: 443)\noptions:\n" options
-
-printCiphers = do
-    putStrLn "Supported ciphers"
-    putStrLn "====================================="
-    forM_ ciphersuite_all $ \c -> do
-        putStrLn (pad 50 (cipherName c) ++ " = " ++ pad 5 (show $ cipherID c) ++ "  0x" ++ showHex (cipherID c) "")
-  where
-    pad n s
-        | length s < n = s ++ replicate (n - length s) ' '
-        | otherwise    = s
 
 main = do
     args <- getArgs

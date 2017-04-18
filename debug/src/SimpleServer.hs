@@ -20,11 +20,10 @@ import Data.X509.CertificateStore
 import Data.Default.Class
 import Data.IORef
 import Data.Monoid
-import Data.Char (isDigit)
-import Data.Maybe (isJust)
+import Data.List (find)
+import Data.Maybe (isJust, mapMaybe)
 
-import Numeric (showHex)
-
+import Common
 import HexDump
 
 defaultBenchAmount = 1024 * 1024
@@ -71,7 +70,7 @@ getDefaultParams :: [Flag] -> CertificateStore -> IORef (SessionID, SessionData)
 getDefaultParams flags store sStorage cred _session = do
     dhParams <- case getDHParams flags of
         Nothing   -> return Nothing
-        Just file -> (Just . read) `fmap` readFile file
+        Just name -> readDHParams name
 
     return ServerParams
         { serverWantClientCert = False
@@ -98,23 +97,24 @@ getDefaultParams flags store sStorage cred _session = do
                 | otherwise    = ValidationCache (\_ _ _ -> return ValidationCachePass)
                                                  (\_ _ _ -> return ())
 
-            myCiphers = foldl accBogusCipher (filter withUseCipher ciphersuite_default) flags
+            myCiphers = foldl accBogusCipher getSelectedCiphers flags
               where accBogusCipher acc (BogusCipher c) =
                         case reads c of
                             [(v, "")] -> acc ++ [bogusCipher v]
                             _         -> acc
                     accBogusCipher acc _ = acc
 
-            getUsedCiphers = foldl f [] flags
-              where f acc (UseCipher am) = case readNumber am of
-                                                Nothing -> acc
-                                                Just i  -> i : acc
+            getUsedCipherIDs = foldl f [] flags
+              where f acc (UseCipher am) =
+                            case readCiphers am of
+                                Just l  -> l ++ acc
+                                Nothing -> acc
                     f acc _ = acc
 
-            withUseCipher c =
-                case getUsedCiphers of
-                    [] -> True
-                    l  -> cipherID c `elem` l
+            getSelectedCiphers =
+                case getUsedCipherIDs of
+                    [] -> ciphersuite_default
+                    l  -> mapMaybe (\cid -> find ((== cid) . cipherID) ciphersuite_all) l
 
             getDHParams opts = foldl accf Nothing opts
               where accf _   (DHParams file) = Just file
@@ -139,7 +139,6 @@ getDefaultParams flags store sStorage cred _session = do
 
 data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | Ssl3 | Tls10 | Tls11 | Tls12
-          | NoSNI
           | NoVersionDowngrade
           | AllowRenegotiation
           | Output String
@@ -150,6 +149,7 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | BenchData String
           | UseCipher String
           | ListCiphers
+          | ListDHParams
           | Certificate String
           | Key String
           | DHParams String
@@ -169,7 +169,6 @@ options =
     , Option []     ["no-validation"] (NoArg NoValidateCert) "disable certificate validation"
     , Option []     ["http1.1"] (NoArg Http11) "use http1.1 instead of http1.0"
     , Option []     ["ssl3"]    (NoArg Ssl3) "use SSL 3.0"
-    , Option []     ["no-sni"]  (NoArg NoSNI) "don't use server name indication"
     , Option []     ["tls10"]   (NoArg Tls10) "use TLS 1.0"
     , Option []     ["tls11"]   (NoArg Tls11) "use TLS 1.1"
     , Option []     ["tls12"]   (NoArg Tls12) "use TLS 1.2 (default)"
@@ -182,11 +181,12 @@ options =
     , Option []     ["bench-data"] (ReqArg BenchData "amount") "amount of data to benchmark with"
     , Option []     ["use-cipher"] (ReqArg UseCipher "cipher-id") "use a specific cipher"
     , Option []     ["list-ciphers"] (NoArg ListCiphers) "list all ciphers supported and exit"
+    , Option []     ["list-dhparams"] (NoArg ListDHParams) "list all DH parameters supported and exit"
     , Option []     ["certificate"] (ReqArg Certificate "certificate") "certificate file"
     , Option []     ["debug-seed"] (ReqArg DebugSeed "debug-seed") "debug: set a specific seed for randomness"
     , Option []     ["debug-print-seed"] (NoArg DebugPrintSeed) "debug: set a specific seed for randomness"
     , Option []     ["key"] (ReqArg Key "key") "certificate file"
-    , Option []     ["dhparams"] (ReqArg DHParams "dhparams") "DH parameter file"
+    , Option []     ["dhparams"] (ReqArg DHParams "dhparams") "DH parameters (name or file)"
     ]
 
 noSession = Nothing
@@ -244,6 +244,7 @@ runOn (sStorage, certStore) flags port
                    (IODebug `elem` flags)
                    params port $ \ctx -> do
                 handshake ctx
+                when (Verbose `elem` flags) $ printHandshakeInfo ctx
                 loopRecv out ctx
                 --sendData ctx $ query
                 bye ctx
@@ -291,23 +292,8 @@ runOn (sStorage, certStore) flags port
                                             Just i  -> i
                 f acc _              = acc
 
-readNumber :: (Num a, Read a) => String -> Maybe a
-readNumber s
-    | all isDigit s = Just $ read s
-    | otherwise     = Nothing
-
 printUsage =
     putStrLn $ usageInfo "usage: simpleserver [opts] [port]\n\n\t(port default to: 443)\noptions:\n" options
-
-printCiphers = do
-    putStrLn "Supported ciphers"
-    putStrLn "====================================="
-    forM_ ciphersuite_default $ \c -> do
-        putStrLn (pad 50 (cipherName c) ++ " = " ++ pad 5 (show $ cipherID c) ++ "  0x" ++ showHex (cipherID c) "")
-  where
-    pad n s
-        | length s < n = s ++ replicate (n - length s) ' '
-        | otherwise    = s
 
 main = do
     args <- getArgs
@@ -322,6 +308,10 @@ main = do
 
     when (ListCiphers `elem` opts) $ do
         printCiphers
+        exitSuccess
+
+    when (ListDHParams `elem` opts) $ do
+        printDHParams
         exitSuccess
 
     certStore <- getSystemCertificateStore
