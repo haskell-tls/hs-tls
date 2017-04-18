@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Certificate
     ( arbitraryX509
     , arbitraryX509WithKey

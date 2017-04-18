@@ -141,7 +141,7 @@ Test-Suite test-tls
                    , x509
                    , x509-validation
                    , hourglass
-  ghc-options:       -Wall -fno-warn-unused-imports -fno-warn-orphans
+  ghc-options:       -Wall -fno-warn-unused-imports
 
 Benchmark bench-tls
   hs-source-dirs:    Benchmarks Tests
@@ -160,7 +160,7 @@ Benchmark bench-tls
                    , QuickCheck >= 2
                    , tasty-quickcheck
                    , tls
-  ghc-options:       -Wall -fno-warn-unused-imports -fno-warn-orphans
+  ghc-options:       -Wall -fno-warn-unused-imports
 
 source-repository head
   type: git
