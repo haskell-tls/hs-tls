@@ -152,16 +152,22 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
            TLS12 -> let -- Build a list of all signature algorithms with at least
                         -- one hash algorithm in common between client and server.
                         -- May contain duplicates, as it is only used for `elem`.
-                        possibleSigAlgs = map snd (hashAndSignaturesInCommon ctx exts)
+                        possibleHashSigAlgs = hashAndSignaturesInCommon ctx exts
+                        possibleSigAlgs = map snd possibleHashSigAlgs
+
+                        elemBy _ [] = False
+                        elemBy p (x:xs)
+                          | p x       = True
+                          | otherwise = elemBy p xs
 
                         -- Check that a candidate cipher with a signature requiring
                         -- a hash will have at least one hash available.  This avoids
                         -- a failure later in 'decideHash'.
                         hasSigningRequirements =
                             case cipherKeyExchange cipher of
-                                CipherKeyExchange_DHE_RSA      -> SignatureRSA   `elem` possibleSigAlgs
+                                CipherKeyExchange_DHE_RSA      -> elemBy (RSA `signatureCompatible`) possibleHashSigAlgs
                                 CipherKeyExchange_DHE_DSS      -> SignatureDSS   `elem` possibleSigAlgs
-                                CipherKeyExchange_ECDHE_RSA    -> SignatureRSA   `elem` possibleSigAlgs
+                                CipherKeyExchange_ECDHE_RSA    -> elemBy (RSA `signatureCompatible`) possibleHashSigAlgs
                                 CipherKeyExchange_ECDHE_ECDSA  -> SignatureECDSA `elem` possibleSigAlgs
                                 _                              -> True -- signature not used
 
