@@ -36,10 +36,13 @@ import Control.Monad.State
 data DigitalSignatureAlg = RSA | DSS | ECDSA deriving (Show, Eq)
 
 signatureCompatible :: DigitalSignatureAlg -> HashAndSignatureAlgorithm -> Bool
-signatureCompatible RSA   (_, SignatureRSA)   = True
-signatureCompatible DSS   (_, SignatureDSS)   = True
-signatureCompatible ECDSA (_, SignatureECDSA) = True
-signatureCompatible _     (_, _)              = False
+signatureCompatible RSA   (_, SignatureRSA)          = True
+signatureCompatible RSA   (_, SignatureRSApssSHA256) = True
+signatureCompatible RSA   (_, SignatureRSApssSHA384) = True
+signatureCompatible RSA   (_, SignatureRSApssSHA512) = True
+signatureCompatible DSS   (_, SignatureDSS)          = True
+signatureCompatible ECDSA (_, SignatureECDSA)        = True
+signatureCompatible _     (_, _)                     = False
 
 checkCertificateVerify :: Context
                        -> Version
@@ -74,7 +77,7 @@ type CertVerifyData = (SignatureParams, Bytes)
 -- in the case of TLS < 1.2, RSA signing, then the data need to be hashed first, as
 -- the SHA1_MD5 algorithm expect an already digested data
 buildVerifyData :: SignatureParams -> Bytes -> CertVerifyData
-buildVerifyData (RSAParams SHA1_MD5) bs = (RSAParams SHA1_MD5, hashFinal $ hashUpdate (hashInit SHA1_MD5) bs)
+buildVerifyData (RSAParams SHA1_MD5 enc) bs = (RSAParams SHA1_MD5 enc, hashFinal $ hashUpdate (hashInit SHA1_MD5) bs)
 buildVerifyData sigParam             bs = (sigParam, bs)
 
 prepareCertificateVerifySignatureData :: Context
@@ -87,7 +90,7 @@ prepareCertificateVerifySignatureData ctx usedVersion sigAlg hashSigAlg msgs
     | usedVersion == SSL3 = do
         (hashCtx, params, generateCV_SSL) <-
             case sigAlg of
-                RSA -> return (hashInit SHA1_MD5, RSAParams SHA1_MD5, generateCertificateVerify_SSL)
+                RSA -> return (hashInit SHA1_MD5, RSAParams SHA1_MD5 RSApkcs1, generateCertificateVerify_SSL)
                 DSS -> return (hashInit SHA1, DSSParams, generateCertificateVerify_SSL_DSS)
                 _   -> throwCore $ Error_Misc ("unsupported CertificateVerify signature for SSL3: " ++ show sigAlg)
         Just masterSecret <- usingHState ctx $ gets hstMasterSecret
@@ -99,11 +102,14 @@ prepareCertificateVerifySignatureData ctx usedVersion sigAlg hashSigAlg msgs
 signatureParams :: DigitalSignatureAlg -> Maybe HashAndSignatureAlgorithm -> SignatureParams
 signatureParams RSA hashSigAlg =
     case hashSigAlg of
-        Just (HashSHA512, SignatureRSA) -> RSAParams SHA512
-        Just (HashSHA384, SignatureRSA) -> RSAParams SHA384
-        Just (HashSHA256, SignatureRSA) -> RSAParams SHA256
-        Just (HashSHA1  , SignatureRSA) -> RSAParams SHA1
-        Nothing                         -> RSAParams SHA1_MD5
+        Just (HashSHA512, SignatureRSA) -> RSAParams SHA512   RSApkcs1
+        Just (HashSHA384, SignatureRSA) -> RSAParams SHA384   RSApkcs1
+        Just (HashSHA256, SignatureRSA) -> RSAParams SHA256   RSApkcs1
+        Just (HashSHA1  , SignatureRSA) -> RSAParams SHA1     RSApkcs1
+        Just (HashTLS13 , SignatureRSApssSHA512) -> RSAParams SHA512 RSApss
+        Just (HashTLS13 , SignatureRSApssSHA384) -> RSAParams SHA384 RSApss
+        Just (HashTLS13 , SignatureRSApssSHA256) -> RSAParams SHA256 RSApss
+        Nothing                         -> RSAParams SHA1_MD5 RSApkcs1
         Just (hsh       , SignatureRSA) -> error ("unimplemented RSA signature hash type: " ++ show hsh)
         Just (_         , sigAlg)       -> error ("signature algorithm is incompatible with RSA: " ++ show sigAlg)
 signatureParams DSS hashSigAlg =
