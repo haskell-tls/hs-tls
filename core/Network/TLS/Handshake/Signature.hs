@@ -33,7 +33,8 @@ import Control.Monad.State
 
 -- Digital signature algorithm, in close relation to public/private key types
 -- and cipher key exchange.
-data DigitalSignatureAlg = RSA | DSS | ECDSA deriving (Show, Eq)
+data DigitalSignatureAlg = RSA | DSS | ECDSA | Ed25519 | Ed448
+                           deriving (Show, Eq)
 
 signatureCompatible :: DigitalSignatureAlg -> HashAndSignatureAlgorithm -> Bool
 signatureCompatible RSA   (_, SignatureRSA)          = True
@@ -127,6 +128,7 @@ signatureParams ECDSA hashSigAlg =
         Nothing                           -> ECDSAParams SHA1
         Just (hsh       , SignatureECDSA) -> error ("unimplemented ECDSA signature hash type: " ++ show hsh)
         Just (_         , sigAlg)         -> error ("signature algorithm is incompatible with ECDSA: " ++ show sigAlg)
+signatureParams sig _ = error ("unimplemented signature type: " ++ show sig)
 
 signatureCreateWithCertVerifyData :: Context
                                   -> Maybe HashAndSignatureAlgorithm
