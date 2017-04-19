@@ -31,7 +31,7 @@ import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Key
 import Network.TLS.Measurement
 import Data.Maybe (isJust, listToMaybe, mapMaybe)
-import Data.List (intersect)
+import Data.List (intersect, find)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 import Data.Ord (Down(..))
@@ -155,19 +155,14 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
                         possibleHashSigAlgs = hashAndSignaturesInCommon ctx exts
                         possibleSigAlgs = map snd possibleHashSigAlgs
 
-                        elemBy _ [] = False
-                        elemBy p (x:xs)
-                          | p x       = True
-                          | otherwise = elemBy p xs
-
                         -- Check that a candidate cipher with a signature requiring
                         -- a hash will have at least one hash available.  This avoids
                         -- a failure later in 'decideHash'.
                         hasSigningRequirements =
                             case cipherKeyExchange cipher of
-                                CipherKeyExchange_DHE_RSA      -> elemBy (RSA `signatureCompatible`) possibleHashSigAlgs
+                                CipherKeyExchange_DHE_RSA      -> isJust $ find (RSA `signatureCompatible`) possibleHashSigAlgs
                                 CipherKeyExchange_DHE_DSS      -> SignatureDSS   `elem` possibleSigAlgs
-                                CipherKeyExchange_ECDHE_RSA    -> elemBy (RSA `signatureCompatible`) possibleHashSigAlgs
+                                CipherKeyExchange_ECDHE_RSA    -> isJust $ find (RSA `signatureCompatible`) possibleHashSigAlgs
                                 CipherKeyExchange_ECDHE_ECDSA  -> SignatureECDSA `elem` possibleSigAlgs
                                 _                              -> True -- signature not used
 
