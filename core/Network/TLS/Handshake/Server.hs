@@ -82,7 +82,6 @@ handshakeServer sparams ctx = liftIO $ do
 --      <- client key xchg
 --      <- [cert verify]
 --      <- change cipher      -> change cipher
---      <- [NPN]
 --      <- finish             -> finish
 --      -> change cipher      <- change cipher
 --      -> finish             <- finish
@@ -239,24 +238,19 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             liftIO $ contextFlush ctx
             -- Receive client info until client Finished.
             recvClientData sparams ctx
-            sendChangeCipherAndFinish (return ()) ctx ServerRole
+            sendChangeCipherAndFinish ctx ServerRole
         Just sessionData -> do
             usingState_ ctx (setSession clientSession True)
             serverhello <- makeServerHello clientSession
             sendPacket ctx $ Handshake [serverhello]
             usingHState ctx $ setMasterSecret chosenVersion ServerRole $ sessionSecret sessionData
-            sendChangeCipherAndFinish (return ()) ctx ServerRole
+            sendChangeCipherAndFinish ctx ServerRole
             recvChangeCipherAndFinish ctx
     handshakeTerminate ctx
   where
-        clientRequestedNPN = isJust $ extensionLookup extensionID_NextProtocolNegotiation exts
         clientALPNSuggest = isJust $ extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts
 
-        applicationProtocol = do
-            protos <- alpn
-            if null protos then npn else return protos
-
-        alpn | clientALPNSuggest = do
+        applicationProtocol | clientALPNSuggest = do
             suggest <- usingState_ ctx getClientALPNSuggest
             case (onALPNClientSuggest $ serverHooks sparams, suggest) of
                 (Just io, Just protos) -> do
@@ -268,20 +262,6 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                                             (extensionEncode $ ApplicationLayerProtocolNegotiation [proto]) ]
                 (_, _)                  -> return []
              | otherwise = return []
-        npn = do
-            nextProtocols <-
-                if clientRequestedNPN
-                    then liftIO $ onSuggestNextProtocols $ serverHooks sparams
-                    else return Nothing
-            case nextProtocols of
-                Just protos -> do
-                    usingState_ ctx $ do
-                        setExtensionNPN True
-                        setServerNextProtocolSuggest protos
-                    return [ ExtensionRaw extensionID_NextProtocolNegotiation
-                             (extensionEncode $ NextProtocolNegotiation protos) ]
-                Nothing -> return []
-
 
         ---
         -- When the client sends a certificate, check whether
@@ -431,7 +411,6 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
 --      <- client key xchg
 --      <- [cert verify]
 --      <- change cipher
---      <- [NPN]
 --      <- finish
 --
 recvClientData :: ServerParams -> Context -> IO ()
@@ -526,12 +505,9 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                 _             -> throwCore $ Error_Protocol ("unsupported remote public key type", True, HandshakeFailure)
 
         expectChangeCipher ChangeCipherSpec = do
-            npn <- usingState_ ctx getExtensionNPN
-            return $ RecvStateHandshake $ if npn then expectNPN else expectFinish
-        expectChangeCipher p                = unexpected (show p) (Just "change cipher")
+            return $ RecvStateHandshake $ expectFinish
 
-        expectNPN (HsNextProtocolNegotiation _) = return $ RecvStateHandshake expectFinish
-        expectNPN p                             = unexpected (show p) (Just "Handshake NextProtocolNegotiation")
+        expectChangeCipher p                = unexpected (show p) (Just "change cipher")
 
         expectFinish (Finished _) = return RecvStateDone
         expectFinish p            = unexpected (show p) (Just "Handshake Finished")

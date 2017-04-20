@@ -76,13 +76,11 @@ handshakeTerminate ctx = do
     setEstablished ctx True
     return ()
 
-sendChangeCipherAndFinish :: IO ()   -- ^ message possibly sent between ChangeCipherSpec and Finished.
-                          -> Context
+sendChangeCipherAndFinish :: Context
                           -> Role
                           -> IO ()
-sendChangeCipherAndFinish betweenCall ctx role = do
+sendChangeCipherAndFinish ctx role = do
     sendPacket ctx ChangeCipherSpec
-    betweenCall
     liftIO $ contextFlush ctx
     cf <- usingState_ ctx getVersion >>= \ver -> usingHState ctx $ getHandshakeDigest ver role
     sendPacket ctx (Handshake [Finished cf])

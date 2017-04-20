@@ -82,7 +82,6 @@ import qualified Data.ByteArray as B (convert)
 data CurrentParams = CurrentParams
     { cParamsVersion     :: Version                     -- ^ current protocol version
     , cParamsKeyXchgType :: Maybe CipherKeyExchangeType -- ^ current key exchange type
-    , cParamsSupportNPN  :: Bool                        -- ^ support Next Protocol Negotiation extension
     } deriving (Show,Eq)
 
 {- marshall helpers -}
@@ -182,9 +181,6 @@ decodeHandshake cp ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
     HandshakeType_CertVerify      -> decodeCertVerify cp
     HandshakeType_ClientKeyXchg   -> decodeClientKeyXchg cp
     HandshakeType_Finished        -> decodeFinished
-    HandshakeType_NPN             -> do
-        unless (cParamsSupportNPN cp) $ fail "unsupported handshake type"
-        decodeNextProtocolNegotiation
 
 decodeDeprecatedHandshake :: ByteString -> Either TLSError Handshake
 decodeDeprecatedHandshake b = runGetErr "deprecatedhandshake" getDeprecated b
@@ -250,12 +246,6 @@ decodeCertificates = do
 
 decodeFinished :: Get Handshake
 decodeFinished = Finished <$> (remaining >>= getBytes)
-
-decodeNextProtocolNegotiation :: Get Handshake
-decodeNextProtocolNegotiation = do
-    opaque <- getOpaque8
-    _      <- getOpaque8 -- ignore padding
-    return $ HsNextProtocolNegotiation opaque
 
 decodeCertRequest :: CurrentParams -> Get Handshake
 decodeCertRequest cp = do
@@ -416,11 +406,6 @@ encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
 encodeHandshakeContent (CertVerify digitallySigned) = putDigitallySigned digitallySigned
 
 encodeHandshakeContent (Finished opaque) = putBytes opaque
-
-encodeHandshakeContent (HsNextProtocolNegotiation protocol) = do
-    putOpaque8 protocol
-    putOpaque8 $ B.replicate paddingLen 0
-  where paddingLen = 32 - ((B.length protocol + 2) `mod` 32)
 
 {- FIXME make sure it return error if not 32 available -}
 getRandom32 :: Get Bytes

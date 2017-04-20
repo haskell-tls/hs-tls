@@ -258,19 +258,19 @@ data ClientHooks = ClientHooks
       onCertificateRequest :: ([CertificateType],
                                Maybe [HashAndSignatureAlgorithm],
                                [DistinguishedName]) -> IO (Maybe (CertificateChain, PrivKey))
-    , onNPNServerSuggest   :: Maybe ([B.ByteString] -> IO B.ByteString)
       -- | Used by the client to validate the server certificate.  The default
       -- implementation calls 'validateDefault' which validates according to the
       -- default hooks and checks provided by "Data.X509.Validation".  This can
       -- be replaced with a custom validation function using different settings.
     , onServerCertificate  :: CertificateStore -> ValidationCache -> ServiceID -> CertificateChain -> IO [FailedReason]
+      -- | This action is called when the client sends ClientHello
+      --   to determine ALPN values such as '["h2", "http/1.1"]'.
     , onSuggestALPN :: IO (Maybe [B.ByteString])
     }
 
 defaultClientHooks :: ClientHooks
 defaultClientHooks = ClientHooks
     { onCertificateRequest = \ _ -> return Nothing
-    , onNPNServerSuggest   = Nothing
     , onServerCertificate  = validateDefault
     , onSuggestALPN        = return Nothing
     }
@@ -311,10 +311,12 @@ data ServerHooks = ServerHooks
       -- the host the client is trying to connect to.
     , onServerNameIndication  :: Maybe HostName -> IO Credentials
 
-      -- | suggested next protocols accoring to the next protocol negotiation extension.
-    , onSuggestNextProtocols  :: IO (Maybe [B.ByteString])
       -- | at each new handshake, we call this hook to see if we allow handshake to happens.
     , onNewHandshake          :: Measurement -> IO Bool
+
+      -- | Allow the server to choose an application layer protocol
+      --   suggested from the client through the ALPN
+      --   (Application Layer Protocol Negotiation) extensions.
     , onALPNClientSuggest     :: Maybe ([B.ByteString] -> IO B.ByteString)
     }
 
@@ -324,7 +326,6 @@ defaultServerHooks = ServerHooks
     , onClientCertificate    = \_ -> return $ CertificateUsageReject $ CertificateRejectOther "no client certificates expected"
     , onUnverifiedClientCert = return False
     , onServerNameIndication = \_ -> return mempty
-    , onSuggestNextProtocols = return Nothing
     , onNewHandshake         = \_ -> return True
     , onALPNClientSuggest    = Nothing
     }
