@@ -153,17 +153,17 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
                         -- one hash algorithm in common between client and server.
                         -- May contain duplicates, as it is only used for `elem`.
                         possibleHashSigAlgs = hashAndSignaturesInCommon ctx exts
-                        possibleSigAlgs = map snd possibleHashSigAlgs
 
+                        isCommon sig = any (sig `signatureCompatible`) possibleHashSigAlgs
                         -- Check that a candidate cipher with a signature requiring
                         -- a hash will have at least one hash available.  This avoids
                         -- a failure later in 'decideHash'.
                         hasSigningRequirements =
                             case cipherKeyExchange cipher of
-                                CipherKeyExchange_DHE_RSA      -> any (RSA `signatureCompatible`) possibleHashSigAlgs
-                                CipherKeyExchange_DHE_DSS      -> SignatureDSS   `elem` possibleSigAlgs
-                                CipherKeyExchange_ECDHE_RSA    -> any (RSA `signatureCompatible`) possibleHashSigAlgs
-                                CipherKeyExchange_ECDHE_ECDSA  -> SignatureECDSA `elem` possibleSigAlgs
+                                CipherKeyExchange_DHE_RSA      -> isCommon RSA
+                                CipherKeyExchange_DHE_DSS      -> isCommon DSS
+                                CipherKeyExchange_ECDHE_RSA    -> isCommon RSA
+                                CipherKeyExchange_ECDHE_ECDSA  -> isCommon ECDSA
                                 _                              -> True -- signature not used
 
                      in cipherAllowedForVersion chosenVersion cipher && hasSigningRequirements && hasCommonGroup cipher
