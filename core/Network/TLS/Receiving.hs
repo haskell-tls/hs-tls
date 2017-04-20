@@ -43,11 +43,9 @@ processPacket ctx (Record ProtocolType_ChangeCipherSpec _ fragment) =
 processPacket ctx (Record ProtocolType_Handshake ver fragment) = do
     keyxchg <- getHState ctx >>= \hs -> return $ (hs >>= hstPendingCipher >>= Just . cipherKeyExchange)
     usingState ctx $ do
-        npn     <- getExtensionNPN
         let currentParams = CurrentParams
                             { cParamsVersion     = ver
                             , cParamsKeyXchgType = keyxchg
-                            , cParamsSupportNPN  = npn
                             }
         -- get back the optional continuation, and parse as many handshake record as possible.
         mCont <- gets stHandshakeRecordCont

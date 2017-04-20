@@ -100,4 +100,4 @@ prop_handshake_marshalling_id x = (decodeHs $ encodeHandshake x) == Right x
                         GotError e   -> error ("got error: " ++ show e)
                         GotSuccessRemaining _ _ -> error "got remaining byte left"
                         GotSuccess (ty, content) -> decodeHandshake cp ty content
-        cp = CurrentParams { cParamsVersion = TLS10, cParamsKeyXchgType = Just CipherKeyExchange_RSA, cParamsSupportNPN = True }
+        cp = CurrentParams { cParamsVersion = TLS10, cParamsKeyXchgType = Just CipherKeyExchange_RSA }

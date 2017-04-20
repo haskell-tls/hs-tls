@@ -29,14 +29,10 @@ module Network.TLS.State
     , getVersionWithDefault
     , setSecureRenegotiation
     , getSecureRenegotiation
-    , setExtensionNPN
-    , getExtensionNPN
     , setExtensionALPN
     , getExtensionALPN
     , setNegotiatedProtocol
     , getNegotiatedProtocol
-    , setServerNextProtocolSuggest
-    , getServerNextProtocolSuggest
     , setClientALPNSuggest
     , getClientALPNSuggest
     , setClientEcPointFormatSuggest
@@ -75,11 +71,9 @@ data TLSState = TLSState
     , stSecureRenegotiation :: Bool  -- RFC 5746
     , stClientVerifiedData  :: Bytes -- RFC 5746
     , stServerVerifiedData  :: Bytes -- RFC 5746
-    , stExtensionNPN        :: Bool  -- NPN draft extension
     , stExtensionALPN       :: Bool  -- RFC 7301
     , stHandshakeRecordCont :: Maybe (GetContinuation (HandshakeType, Bytes))
-    , stNegotiatedProtocol  :: Maybe B.ByteString -- NPN and ALPN protocol
-    , stServerNextProtocolSuggest :: Maybe [B.ByteString]
+    , stNegotiatedProtocol  :: Maybe B.ByteString -- ALPN protocol
     , stClientALPNSuggest   :: Maybe [B.ByteString]
     , stClientGroupSuggest  :: Maybe [Group]
     , stClientEcPointFormatSuggest :: Maybe [EcPointFormat]
@@ -110,11 +104,9 @@ newTLSState rng clientContext = TLSState
     , stSecureRenegotiation = False
     , stClientVerifiedData  = B.empty
     , stServerVerifiedData  = B.empty
-    , stExtensionNPN        = False
     , stExtensionALPN       = False
     , stHandshakeRecordCont = Nothing
     , stNegotiatedProtocol  = Nothing
-    , stServerNextProtocolSuggest = Nothing
     , stClientALPNSuggest   = Nothing
     , stClientGroupSuggest = Nothing
     , stClientEcPointFormatSuggest = Nothing
@@ -143,7 +135,6 @@ finishHandshakeTypeMaterial HandshakeType_ServerKeyXchg   = True
 finishHandshakeTypeMaterial HandshakeType_CertRequest     = True
 finishHandshakeTypeMaterial HandshakeType_CertVerify      = True
 finishHandshakeTypeMaterial HandshakeType_Finished        = True
-finishHandshakeTypeMaterial HandshakeType_NPN             = True
 
 finishHandshakeMaterial :: Handshake -> Bool
 finishHandshakeMaterial = finishHandshakeTypeMaterial . typeOfHandshake
@@ -159,7 +150,6 @@ certVerifyHandshakeTypeMaterial HandshakeType_ServerKeyXchg   = True
 certVerifyHandshakeTypeMaterial HandshakeType_CertRequest     = True
 certVerifyHandshakeTypeMaterial HandshakeType_CertVerify      = False
 certVerifyHandshakeTypeMaterial HandshakeType_Finished        = False
-certVerifyHandshakeTypeMaterial HandshakeType_NPN             = False
 
 certVerifyHandshakeMaterial :: Handshake -> Bool
 certVerifyHandshakeMaterial = certVerifyHandshakeTypeMaterial . typeOfHandshake
@@ -194,12 +184,6 @@ setSecureRenegotiation b = modify (\st -> st { stSecureRenegotiation = b })
 getSecureRenegotiation :: TLSSt Bool
 getSecureRenegotiation = gets stSecureRenegotiation
 
-setExtensionNPN :: Bool -> TLSSt ()
-setExtensionNPN b = modify (\st -> st { stExtensionNPN = b })
-
-getExtensionNPN :: TLSSt Bool
-getExtensionNPN = gets stExtensionNPN
-
 setExtensionALPN :: Bool -> TLSSt ()
 setExtensionALPN b = modify (\st -> st { stExtensionALPN = b })
 
@@ -211,12 +195,6 @@ setNegotiatedProtocol s = modify (\st -> st { stNegotiatedProtocol = Just s })
 
 getNegotiatedProtocol :: TLSSt (Maybe B.ByteString)
 getNegotiatedProtocol = gets stNegotiatedProtocol
-
-setServerNextProtocolSuggest :: [B.ByteString] -> TLSSt ()
-setServerNextProtocolSuggest ps = modify (\st -> st { stServerNextProtocolSuggest = Just ps})
-
-getServerNextProtocolSuggest :: TLSSt (Maybe [B.ByteString])
-getServerNextProtocolSuggest = gets stServerNextProtocolSuggest
 
 setClientALPNSuggest :: [B.ByteString] -> TLSSt ()
 setClientALPNSuggest ps = modify (\st -> st { stClientALPNSuggest = Just ps})
