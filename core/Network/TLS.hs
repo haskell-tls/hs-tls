@@ -85,7 +85,7 @@ module Network.TLS
     , bye
     , handshake
 
-    -- * Next Protocol Negotiation
+    -- * Application Layer Protocol Negotiation
     , getNegotiatedProtocol
 
     -- * Server Name Indication

@@ -15,7 +15,6 @@ module Network.TLS.Extension
     , extensionID_ServerName
     , extensionID_MaxFragmentLength
     , extensionID_SecureRenegotiation
-    , extensionID_NextProtocolNegotiation
     , extensionID_ApplicationLayerProtocolNegotiation
     , extensionID_NegotiatedGroups
     , extensionID_EcPointFormats
@@ -27,7 +26,6 @@ module Network.TLS.Extension
     , MaxFragmentLength(..)
     , MaxFragmentEnum(..)
     , SecureRenegotiation(..)
-    , NextProtocolNegotiation(..)
     , ApplicationLayerProtocolNegotiation(..)
     , NegotiatedGroups(..)
     , Group(..)
@@ -81,7 +79,6 @@ extensionID_ServerName
   , extensionID_EncryptThenMAC
   , extensionID_ExtendedMasterSecret
   , extensionID_SessionTicket
-  , extensionID_NextProtocolNegotiation
   , extensionID_SecureRenegotiation :: ExtensionID
 extensionID_ServerName                          = 0x0 -- RFC6066
 extensionID_MaxFragmentLength                   = 0x1 -- RFC6066
@@ -108,7 +105,6 @@ extensionID_Padding                             = 0x15 -- draft-agl-tls-padding.
 extensionID_EncryptThenMAC                      = 0x16 -- RFC7366
 extensionID_ExtendedMasterSecret                = 0x17 -- draft-ietf-tls-session-hash. expires 2015-09-26
 extensionID_SessionTicket                       = 0x23 -- RFC4507
-extensionID_NextProtocolNegotiation             = 0x3374 -- obsolete
 extensionID_SecureRenegotiation                 = 0xff01 -- RFC5746
 
 definedExtensions :: [ExtensionID]
@@ -138,7 +134,6 @@ definedExtensions =
     , extensionID_EncryptThenMAC
     , extensionID_ExtendedMasterSecret
     , extensionID_SessionTicket
-    , extensionID_NextProtocolNegotiation
     , extensionID_SecureRenegotiation
     ]
 
@@ -148,7 +143,6 @@ supportedExtensions = [ extensionID_ServerName
                       , extensionID_MaxFragmentLength
                       , extensionID_ApplicationLayerProtocolNegotiation
                       , extensionID_SecureRenegotiation
-                      , extensionID_NextProtocolNegotiation
                       , extensionID_NegotiatedGroups
                       , extensionID_EcPointFormats
                       , extensionID_SignatureAlgorithms
@@ -217,21 +211,6 @@ instance Extension SecureRenegotiation where
            then let (cvd, svd) = B.splitAt (B.length opaque `div` 2) opaque
                  in return $ SecureRenegotiation cvd (Just svd)
            else return $ SecureRenegotiation opaque Nothing
-
--- | Next Protocol Negotiation
-data NextProtocolNegotiation = NextProtocolNegotiation [ByteString]
-    deriving (Show,Eq)
-
-instance Extension NextProtocolNegotiation where
-    extensionID _ = extensionID_NextProtocolNegotiation
-    extensionEncode (NextProtocolNegotiation bytes) =
-        runPut $ mapM_ putOpaque8 bytes
-    extensionDecode _ = runGetMaybe (NextProtocolNegotiation <$> getNPN)
-        where getNPN = do
-                 avail <- remaining
-                 case avail of
-                     0 -> return []
-                     _ -> do liftM2 (:) getOpaque8 getNPN
 
 -- | Application Layer Protocol Negotiation (ALPN)
 data ApplicationLayerProtocolNegotiation = ApplicationLayerProtocolNegotiation [ByteString]

@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 import Test.Tasty
 import Test.Tasty.QuickCheck
@@ -77,8 +78,8 @@ runTLSInitFailure params = do
     (cRes, sRes) <- run (initiateDataPipe params tlsServer tlsClient)
     assertIsLeft cRes
     assertIsLeft sRes
-  where tlsServer ctx = handshake ctx >> bye ctx >> return "server success"
-        tlsClient ctx = handshake ctx >> bye ctx >> return "client success"
+  where tlsServer ctx = handshake ctx >> bye ctx >> return ("server success" :: String)
+        tlsClient ctx = handshake ctx >> bye ctx >> return ("client success" :: String)
 
 prop_handshake_initiate :: PropertyM IO ()
 prop_handshake_initiate = do
@@ -134,32 +135,35 @@ prop_handshake_client_auth_initiate = do
             | chain == fst cred = return CertificateUsageAccept
             | otherwise         = return (CertificateUsageReject CertificateRejectUnknownCA)
 
-prop_handshake_npn_initiate :: PropertyM IO ()
-prop_handshake_npn_initiate = do
+prop_handshake_alpn_initiate :: PropertyM IO ()
+prop_handshake_alpn_initiate = do
     (clientParam,serverParam) <- pick arbitraryPairParams
     let clientParam' = clientParam { clientHooks = (clientHooks clientParam)
-                                       { onNPNServerSuggest = Just $ \protos -> return (head protos) }
+                                       { onSuggestALPN = return $ Just ["h2", "http/1.1"] }
                                     }
         serverParam' = serverParam { serverHooks = (serverHooks serverParam)
-                                        { onSuggestNextProtocols = return $ Just [C8.pack "spdy/2", C8.pack "http/1.1"] }
+                                        { onALPNClientSuggest = Just alpn }
                                    }
         params' = (clientParam',serverParam')
     runTLSPipe params' tlsServer tlsClient
   where tlsServer ctx queue = do
             handshake ctx
             proto <- getNegotiatedProtocol ctx
-            Just (C8.pack "spdy/2") `assertEq` proto
+            Just "h2" `assertEq` proto
             d <- recvDataNonNull ctx
             writeChan queue d
             return ()
         tlsClient queue ctx = do
             handshake ctx
             proto <- getNegotiatedProtocol ctx
-            Just (C8.pack "spdy/2") `assertEq` proto
+            Just "h2" `assertEq` proto
             d <- readChan queue
             sendData ctx (L.fromChunks [d])
             bye ctx
             return ()
+        alpn xs
+          | "h2"    `elem` xs = return "h2"
+          | otherwise         = return "http/1.1"
 
 prop_handshake_renegociation :: PropertyM IO ()
 prop_handshake_renegociation = do
@@ -240,7 +244,7 @@ main = defaultMain $ testGroup "tls"
             , testProperty "initiate" (monadicIO prop_handshake_initiate)
             , testProperty "initiate TLS12" (monadicIO prop_handshake_initiate_tls12)
             , testProperty "clientAuthInitiate" (monadicIO prop_handshake_client_auth_initiate)
-            , testProperty "npnInitiate" (monadicIO prop_handshake_npn_initiate)
+            , testProperty "alpnInitiate" (monadicIO prop_handshake_alpn_initiate)
             , testProperty "renegociation" (monadicIO prop_handshake_renegociation)
             , testProperty "resumption" (monadicIO prop_handshake_session_resumption)
             ]

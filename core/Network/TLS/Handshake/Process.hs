@@ -47,8 +47,6 @@ processHandshake ctx hs = do
         Certificates certs            -> processCertificates role certs
         ClientKeyXchg content         -> when (role == ServerRole) $ do
             processClientKeyXchg ctx content
-        HsNextProtocolNegotiation selected_protocol ->
-            when (role == ServerRole) $ usingState_ ctx $ setNegotiatedProtocol selected_protocol
         Finished fdata                -> processClientFinished ctx fdata
         _                             -> return ()
     let encoded = encodeHandshake hs

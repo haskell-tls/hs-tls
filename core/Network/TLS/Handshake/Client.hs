@@ -56,16 +56,15 @@ handshakeClient cparams ctx = do
     recvServerHello sentExtensions
     sessionResuming <- usingState_ ctx isSessionResuming
     if sessionResuming
-        then sendChangeCipherAndFinish sendMaybeNPN ctx ClientRole
+        then sendChangeCipherAndFinish ctx ClientRole
         else do sendClientData cparams ctx
-                sendChangeCipherAndFinish sendMaybeNPN ctx ClientRole
+                sendChangeCipherAndFinish ctx ClientRole
                 recvChangeCipherAndFinish ctx
     handshakeTerminate ctx
   where ciphers      = ctxCiphers ctx
         compressions = supportedCompressions $ ctxSupported ctx
         getExtensions = sequence [sniExtension
                                  ,secureReneg
-                                 ,npnExtention
                                  ,alpnExtension
                                  ,curveExtension
                                  ,ecPointExtension
@@ -81,9 +80,6 @@ handshakeClient cparams ctx = do
                 if supportedSecureRenegotiation $ ctxSupported ctx
                 then usingState_ ctx (getVerifiedData ClientRole) >>= \vd -> return $ Just $ toExtensionRaw $ SecureRenegotiation vd Nothing
                 else return Nothing
-        npnExtention = if isJust $ onNPNServerSuggest $ clientHooks cparams
-                         then return $ Just $ toExtensionRaw $ NextProtocolNegotiation []
-                         else return Nothing
         alpnExtension = do
             mprotos <- onSuggestALPN $ clientHooks cparams
             case mprotos of
@@ -115,18 +111,6 @@ handshakeClient cparams ctx = do
                               (map compressionID compressions) extensions Nothing
                 ]
             return $ map (\(ExtensionRaw i _) -> i) extensions
-
-        sendMaybeNPN = do
-            suggest <- usingState_ ctx $ getServerNextProtocolSuggest
-            case (onNPNServerSuggest $ clientHooks cparams, suggest) of
-                -- client offered, server picked up. send NPN handshake.
-                (Just io, Just protos) -> do proto <- liftIO $ io protos
-                                             sendPacket ctx (Handshake [HsNextProtocolNegotiation proto])
-                                             usingState_ ctx $ setNegotiatedProtocol proto
-                -- client offered, server didn't pick up. do nothing.
-                (Just _, Nothing) -> return ()
-                -- client didn't offer. do nothing.
-                (Nothing, _) -> return ()
 
         recvServerHello sentExts = runRecvState ctx recvState
           where recvState = RecvStateNext $ \p ->
@@ -291,8 +275,7 @@ throwMiscErrorOnException msg e =
 -- 2) check that our compression and cipher algorithms are part of the list we sent
 -- 3) check extensions received are part of the one we sent
 -- 4) process the session parameter to see if the server want to start a new session or can resume
--- 5) process NPN extension
--- 6) if no resume switch to processCertificate SM or in resume switch to expectChangeCipher
+-- 5) if no resume switch to processCertificate SM or in resume switch to expectChangeCipher
 --
 onServerHello :: Context -> ClientParams -> [ExtensionID] -> Handshake -> IO (RecvState IO)
 onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cipher compression exts) = do
@@ -331,14 +314,6 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
                     setExtensionALPN True
                     setNegotiatedProtocol proto
                 _ -> return ()
-        _ -> return ()
-
-    case extensionDecode False `fmap` (extensionLookup extensionID_NextProtocolNegotiation exts) of
-        Just (Just (NextProtocolNegotiation protos)) -> usingState_ ctx $ do
-            alpnDone <- getExtensionALPN
-            unless alpnDone $ do
-                setExtensionNPN True
-                setServerNextProtocolSuggest protos
         _ -> return ()
 
     case resumingSession of

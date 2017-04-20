@@ -248,7 +248,6 @@ data HandshakeType =
     | HandshakeType_CertVerify
     | HandshakeType_ClientKeyXchg
     | HandshakeType_Finished
-    | HandshakeType_NPN -- Next Protocol Negotiation extension
     deriving (Show,Eq)
 
 newtype BigNum = BigNum Bytes
@@ -321,7 +320,6 @@ data Handshake =
     | CertRequest [CertificateType] (Maybe [HashAndSignatureAlgorithm]) [DistinguishedName]
     | CertVerify DigitallySigned
     | Finished FinishedData
-    | HsNextProtocolNegotiation Bytes -- NPN extension
     deriving (Show,Eq)
 
 packetType :: Packet -> ProtocolType
@@ -341,7 +339,6 @@ typeOfHandshake (ServerKeyXchg {})           = HandshakeType_ServerKeyXchg
 typeOfHandshake (CertRequest {})             = HandshakeType_CertRequest
 typeOfHandshake (CertVerify {})              = HandshakeType_CertVerify
 typeOfHandshake (Finished {})                = HandshakeType_Finished
-typeOfHandshake (HsNextProtocolNegotiation {}) = HandshakeType_NPN
 
 numericalVer :: Version -> (Word8, Word8)
 numericalVer SSL2  = (2, 0)
@@ -413,7 +410,6 @@ instance TypeValuable HandshakeType where
     valOfType HandshakeType_CertVerify      = 15
     valOfType HandshakeType_ClientKeyXchg   = 16
     valOfType HandshakeType_Finished        = 20
-    valOfType HandshakeType_NPN             = 67
 
     valToType 0  = Just HandshakeType_HelloRequest
     valToType 1  = Just HandshakeType_ClientHello
@@ -425,7 +421,6 @@ instance TypeValuable HandshakeType where
     valToType 15 = Just HandshakeType_CertVerify
     valToType 16 = Just HandshakeType_ClientKeyXchg
     valToType 20 = Just HandshakeType_Finished
-    valToType 67 = Just HandshakeType_NPN
     valToType _  = Nothing
 
 instance TypeValuable AlertLevel where
