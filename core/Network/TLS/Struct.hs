@@ -104,6 +104,7 @@ data HashAlgorithm =
     | HashSHA256
     | HashSHA384
     | HashSHA512
+    | HashTLS13
     | HashOther Word8
     deriving (Show,Eq)
 
@@ -112,6 +113,11 @@ data SignatureAlgorithm =
     | SignatureRSA
     | SignatureDSS
     | SignatureECDSA
+    | SignatureRSApssSHA256
+    | SignatureRSApssSHA384
+    | SignatureRSApssSHA512
+    | SignatureEd25519
+    | SignatureEd448
     | SignatureOther Word8
     deriving (Show,Eq)
 
@@ -519,6 +525,7 @@ instance TypeValuable HashAlgorithm where
     valOfType HashSHA256    = 4
     valOfType HashSHA384    = 5
     valOfType HashSHA512    = 6
+    valOfType HashTLS13     = 8
     valOfType (HashOther i) = i
 
     valToType 0 = Just HashNone
@@ -528,19 +535,30 @@ instance TypeValuable HashAlgorithm where
     valToType 4 = Just HashSHA256
     valToType 5 = Just HashSHA384
     valToType 6 = Just HashSHA512
+    valToType 8 = Just HashTLS13
     valToType i = Just (HashOther i)
 
 instance TypeValuable SignatureAlgorithm where
-    valOfType SignatureAnonymous = 0
-    valOfType SignatureRSA       = 1
-    valOfType SignatureDSS       = 2
-    valOfType SignatureECDSA     = 3
-    valOfType (SignatureOther i) = i
+    valOfType SignatureAnonymous    = 0
+    valOfType SignatureRSA          = 1
+    valOfType SignatureDSS          = 2
+    valOfType SignatureECDSA        = 3
+    valOfType SignatureRSApssSHA256 = 4
+    valOfType SignatureRSApssSHA384 = 5
+    valOfType SignatureRSApssSHA512 = 6
+    valOfType SignatureEd25519      = 7
+    valOfType SignatureEd448        = 8
+    valOfType (SignatureOther i)    = i
 
     valToType 0 = Just SignatureAnonymous
     valToType 1 = Just SignatureRSA
     valToType 2 = Just SignatureDSS
     valToType 3 = Just SignatureECDSA
+    valToType 4 = Just SignatureRSApssSHA256
+    valToType 5 = Just SignatureRSApssSHA384
+    valToType 6 = Just SignatureRSApssSHA512
+    valToType 7 = Just SignatureEd25519
+    valToType 8 = Just SignatureEd448
     valToType i = Just (SignatureOther i)
 
 instance EnumSafe16 Group where

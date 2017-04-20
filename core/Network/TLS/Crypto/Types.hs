@@ -13,3 +13,8 @@ data Group = P256 | P384 | P521 | X25519 | X448
 
 availableGroups :: [Group]
 availableGroups = [P256,P384,P521,X25519,X448]
+
+-- Digital signature algorithm, in close relation to public/private key types
+-- and cipher key exchange.
+data DigitalSignatureAlg = RSA | DSS | ECDSA | Ed25519 | Ed448
+                           deriving (Show, Eq)

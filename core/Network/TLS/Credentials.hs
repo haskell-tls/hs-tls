@@ -20,6 +20,7 @@ module Network.TLS.Credentials
 import Data.Monoid
 import Data.Maybe (catMaybes)
 import Data.List (find)
+import Network.TLS.Crypto.Types
 import Network.TLS.Struct
 import Network.TLS.X509
 import Data.X509.File
@@ -79,12 +80,14 @@ credentialLoadX509ChainFromMemory certData chainData privateData = do
             []    -> Left "no keys found"
             (k:_) -> Right (CertificateChain . concat $ x509 : chains, k)
 
-credentialsListSigningAlgorithms :: Credentials -> [SignatureAlgorithm]
+credentialsListSigningAlgorithms :: Credentials -> [DigitalSignatureAlg]
 credentialsListSigningAlgorithms (Credentials l) = catMaybes $ map credentialCanSign l
 
-credentialsFindForSigning :: SignatureAlgorithm -> Credentials -> Maybe (CertificateChain, PrivKey)
+credentialsFindForSigning :: DigitalSignatureAlg -> Credentials -> Maybe (CertificateChain, PrivKey)
 credentialsFindForSigning sigAlg (Credentials l) = find forSigning l
-  where forSigning cred = Just sigAlg == credentialCanSign cred
+  where forSigning cred = case credentialCanSign cred of
+            Nothing  -> False
+            Just sig -> sig == sigAlg
 
 credentialsFindForDecrypting :: Credentials -> Maybe (CertificateChain, PrivKey)
 credentialsFindForDecrypting (Credentials l) = find forEncrypting l
@@ -107,7 +110,7 @@ credentialCanDecrypt (chain, priv) =
           pub    = certPubKey cert
           signed = getCertificateChainLeaf chain
 
-credentialCanSign :: Credential -> Maybe SignatureAlgorithm
+credentialCanSign :: Credential -> Maybe DigitalSignatureAlg
 credentialCanSign (chain, priv) =
     case extensionGet (certExtensions cert) of
         Nothing    -> getSignatureAlg pub priv
@@ -118,10 +121,10 @@ credentialCanSign (chain, priv) =
           pub    = certPubKey cert
           signed = getCertificateChainLeaf chain
 
-getSignatureAlg :: PubKey -> PrivKey -> Maybe SignatureAlgorithm
+getSignatureAlg :: PubKey -> PrivKey -> Maybe DigitalSignatureAlg
 getSignatureAlg pub priv =
     case (pub, priv) of
-        (PubKeyRSA _, PrivKeyRSA _)     -> Just SignatureRSA
-        (PubKeyDSA _, PrivKeyDSA _)     -> Just SignatureDSS
-        --(PubKeyECDSA _, PrivKeyECDSA _) -> Just SignatureECDSA
+        (PubKeyRSA _, PrivKeyRSA _)     -> Just RSA
+        (PubKeyDSA _, PrivKeyDSA _)     -> Just DSS
+        --(PubKeyECDSA _, PrivKeyECDSA _) -> Just ECDSA
         _                               -> Nothing

@@ -110,7 +110,8 @@ prop_handshake_initiate_tls12 = do
     if shouldFail
         then runTLSInitFailure (clientParam',serverParam')
         else runTLSPipeSimple  (clientParam',serverParam')
-  where someHashSignatures = sublistOf [ (HashSHA512, SignatureRSA)
+  where someHashSignatures = sublistOf [ (HashTLS13, SignatureRSApssSHA256)
+                                       , (HashSHA512, SignatureRSA)
                                        , (HashSHA384, SignatureRSA)
                                        , (HashSHA256, SignatureRSA)
                                        , (HashSHA1,   SignatureRSA)

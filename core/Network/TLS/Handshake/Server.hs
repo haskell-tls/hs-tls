@@ -31,7 +31,7 @@ import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Key
 import Network.TLS.Measurement
 import Data.Maybe (isJust, listToMaybe, mapMaybe)
-import Data.List (intersect)
+import Data.List (intersect, any)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 import Data.Ord (Down(..))
@@ -152,17 +152,18 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
            TLS12 -> let -- Build a list of all signature algorithms with at least
                         -- one hash algorithm in common between client and server.
                         -- May contain duplicates, as it is only used for `elem`.
-                        possibleSigAlgs = map snd (hashAndSignaturesInCommon ctx exts)
+                        possibleHashSigAlgs = hashAndSignaturesInCommon ctx exts
 
+                        isCommon sig = any (sig `signatureCompatible`) possibleHashSigAlgs
                         -- Check that a candidate cipher with a signature requiring
                         -- a hash will have at least one hash available.  This avoids
                         -- a failure later in 'decideHash'.
                         hasSigningRequirements =
                             case cipherKeyExchange cipher of
-                                CipherKeyExchange_DHE_RSA      -> SignatureRSA   `elem` possibleSigAlgs
-                                CipherKeyExchange_DHE_DSS      -> SignatureDSS   `elem` possibleSigAlgs
-                                CipherKeyExchange_ECDHE_RSA    -> SignatureRSA   `elem` possibleSigAlgs
-                                CipherKeyExchange_ECDHE_ECDSA  -> SignatureECDSA `elem` possibleSigAlgs
+                                CipherKeyExchange_DHE_RSA      -> isCommon RSA
+                                CipherKeyExchange_DHE_DSS      -> isCommon DSS
+                                CipherKeyExchange_ECDHE_RSA    -> isCommon RSA
+                                CipherKeyExchange_ECDHE_ECDSA  -> isCommon ECDSA
                                 _                              -> True -- signature not used
 
                      in cipherAllowedForVersion chosenVersion cipher && hasSigningRequirements && hasCommonGroup cipher
@@ -179,12 +180,12 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
         creds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
 
     cred <- case cipherKeyExchange usedCipher of
-                CipherKeyExchange_RSA     -> return $ credentialsFindForDecrypting creds
-                CipherKeyExchange_DH_Anon -> return $ Nothing
-                CipherKeyExchange_DHE_RSA -> return $ credentialsFindForSigning SignatureRSA creds
-                CipherKeyExchange_DHE_DSS -> return $ credentialsFindForSigning SignatureDSS creds
-                CipherKeyExchange_ECDHE_RSA -> return $ credentialsFindForSigning SignatureRSA creds
-                _                         -> throwCore $ Error_Protocol ("key exchange algorithm not implemented", True, HandshakeFailure)
+                CipherKeyExchange_RSA       -> return $ credentialsFindForDecrypting creds
+                CipherKeyExchange_DH_Anon   -> return $ Nothing
+                CipherKeyExchange_DHE_RSA   -> return $ credentialsFindForSigning RSA creds
+                CipherKeyExchange_DHE_DSS   -> return $ credentialsFindForSigning DSS creds
+                CipherKeyExchange_ECDHE_RSA -> return $ credentialsFindForSigning RSA creds
+                _                           -> throwCore $ Error_Protocol ("key exchange algorithm not implemented", True, HandshakeFailure)
 
     resumeSessionData <- case clientSession of
             (Session (Just clientSessionId)) -> liftIO $ sessionResume (sharedSessionManager $ ctxShared ctx) clientSessionId
@@ -322,9 +323,9 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             -- send server key exchange if needed
             skx <- case cipherKeyExchange usedCipher of
                         CipherKeyExchange_DH_Anon -> Just <$> generateSKX_DH_Anon
-                        CipherKeyExchange_DHE_RSA -> Just <$> generateSKX_DHE SignatureRSA
-                        CipherKeyExchange_DHE_DSS -> Just <$> generateSKX_DHE SignatureDSS
-                        CipherKeyExchange_ECDHE_RSA -> Just <$> generateSKX_ECDHE SignatureRSA
+                        CipherKeyExchange_DHE_RSA -> Just <$> generateSKX_DHE RSA
+                        CipherKeyExchange_DHE_DSS -> Just <$> generateSKX_DHE DSS
+                        CipherKeyExchange_ECDHE_RSA -> Just <$> generateSKX_ECDHE RSA
                         _                         -> return Nothing
             maybe (return ()) (sendPacket ctx . Handshake . (:[]) . ServerKeyXchg) skx
 
@@ -367,24 +368,24 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
         -- the "signature_algorithms" extension in a client hello.
         -- If RSA is also used for key exchange, this function is
         -- not called.
-        decideHash sigAlg = do
+        decideHashSig sigAlg = do
             usedVersion <- usingState_ ctx getVersion
             case usedVersion of
               TLS12 -> do
                   let hashSigs = hashAndSignaturesInCommon ctx exts
-                  case filter ((==) sigAlg . snd) hashSigs of
+                  case filter (sigAlg `signatureCompatible`) hashSigs of
                       []  -> error ("no hash signature for " ++ show sigAlg)
-                      x:_ -> return $ Just (fst x)
+                      x:_ -> return $ Just x
               _     -> return Nothing
 
         generateSKX_DHE sigAlg = do
             serverParams  <- setup_DHE
-            mhash <- decideHash sigAlg
-            signed <- digitallySignDHParams ctx serverParams sigAlg mhash
+            mhashSig <- decideHashSig sigAlg
+            signed <- digitallySignDHParams ctx serverParams sigAlg mhashSig
             case sigAlg of
-                SignatureRSA -> return $ SKX_DHE_RSA serverParams signed
-                SignatureDSS -> return $ SKX_DHE_DSS serverParams signed
-                _            -> error ("generate skx_dhe unsupported signature type: " ++ show sigAlg)
+                RSA -> return $ SKX_DHE_RSA serverParams signed
+                DSS -> return $ SKX_DHE_DSS serverParams signed
+                _   -> error ("generate skx_dhe unsupported signature type: " ++ show sigAlg)
 
         generateSKX_DH_Anon = SKX_DH_Anon <$> setup_DHE
 
@@ -401,11 +402,11 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                      []  -> throwCore $ Error_Protocol ("no common group", True, HandshakeFailure)
                      g:_ -> return g
             serverParams <- setup_ECDHE grp
-            mhash <- decideHash sigAlg
-            signed <- digitallySignECDHParams ctx serverParams sigAlg mhash
+            mhashSig <- decideHashSig sigAlg
+            signed <- digitallySignECDHParams ctx serverParams sigAlg mhashSig
             case sigAlg of
-                SignatureRSA -> return $ SKX_ECDHE_RSA serverParams signed
-                _            -> error ("generate skx_ecdhe unsupported signature type: " ++ show sigAlg)
+                RSA -> return $ SKX_ECDHE_RSA serverParams signed
+                _   -> error ("generate skx_ecdhe unsupported signature type: " ++ show sigAlg)
 
         -- create a DigitallySigned objects for DHParams or ECDHParams.
 
@@ -464,7 +465,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
 
             -- FIXME should check certificate is allowed for signing
 
-            verif <- certificateVerifyCheck ctx usedVersion sigAlgExpected msgs dsig
+            verif <- checkCertificateVerify ctx usedVersion sigAlgExpected msgs dsig
 
             case verif of
                 True -> do
@@ -504,9 +505,9 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
         getRemoteSignatureAlg = do
             pk <- usingHState ctx getRemotePublicKey
             case pk of
-                PubKeyRSA _   -> return SignatureRSA
-                PubKeyDSA _   -> return SignatureDSS
-                PubKeyEC  _   -> return SignatureECDSA
+                PubKeyRSA _   -> return RSA
+                PubKeyDSA _   -> return DSS
+                PubKeyEC  _   -> return ECDSA
                 _             -> throwCore $ Error_Protocol ("unsupported remote public key type", True, HandshakeFailure)
 
         expectChangeCipher ChangeCipherSpec = do

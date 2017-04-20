@@ -24,11 +24,13 @@ module Network.TLS.Crypto
     , PrivKey(..)
     , PublicKey
     , PrivateKey
+    , SignatureParams(..)
     , kxEncrypt
     , kxDecrypt
     , kxSign
     , kxVerify
     , KxError(..)
+    , RSAEncoding(..)
     ) where
 
 import qualified Crypto.Hash as H
@@ -42,6 +44,7 @@ import qualified Crypto.PubKey.ECC.Prim as ECC
 import qualified Crypto.PubKey.ECC.Types as ECC
 import qualified Crypto.PubKey.RSA as RSA
 import qualified Crypto.PubKey.RSA.PKCS15 as RSA
+import qualified Crypto.PubKey.RSA.PSS as PSS
 import Crypto.Number.Serialize (os2ip)
 
 import Data.X509 (PrivKey(..), PubKey(..), PubKeyEC(..), SerializedPoint(..))
@@ -155,12 +158,26 @@ kxDecrypt :: MonadRandom r => PrivateKey -> ByteString -> r (Either KxError Byte
 kxDecrypt (PrivKeyRSA pk) b = generalizeRSAError `fmap` RSA.decryptSafer pk b
 kxDecrypt _               _ = return (Left KxUnsupported)
 
+data RSAEncoding = RSApkcs1 | RSApss deriving (Show,Eq)
+
+-- Signature algorithm and associated parameters.
+--
+-- FIXME add RSAPSSParams, Ed25519Params, Ed448Params
+data SignatureParams =
+      RSAParams      Hash RSAEncoding
+    | DSSParams
+    | ECDSAParams    Hash
+    deriving (Show,Eq)
+
 -- Verify that the signature matches the given message, using the
 -- public key.
 --
-kxVerify :: PublicKey -> Hash -> ByteString -> ByteString -> Bool
-kxVerify (PubKeyRSA pk) alg msg sign = rsaVerifyHash alg pk msg sign
-kxVerify (PubKeyDSA pk) _ msg signBS =
+
+kxVerify :: PublicKey -> SignatureParams -> ByteString -> ByteString -> Bool
+kxVerify (PubKeyRSA pk) (RSAParams alg RSApkcs1) msg sign   = rsaVerifyHash alg pk msg sign
+kxVerify (PubKeyRSA pk) (RSAParams alg RSApss)   msg sign   = rsapssVerifyHash alg pk msg sign
+kxVerify (PubKeyDSA pk) DSSParams                msg signBS =
+
     case dsaToSignature signBS of
         Just sig -> DSA.verify H.SHA1 pk sig msg
         _        -> False
@@ -175,7 +192,7 @@ kxVerify (PubKeyDSA pk) _ msg signBS =
                             Just $ DSA.Signature { DSA.sign_r = r, DSA.sign_s = s }
                         _ ->
                             Nothing
-kxVerify (PubKeyEC key) alg msg sigBS = maybe False id $ do
+kxVerify (PubKeyEC key) (ECDSAParams alg) msg sigBS = maybe False id $ do
     -- get the curve name and the public key data
     (curveName, pubBS) <- case key of
             PubKeyEC_Named curveName' pub -> Just (curveName',pub)
@@ -234,17 +251,19 @@ kxVerify _              _         _   _    = False
 --
 kxSign :: MonadRandom r
        => PrivateKey
-       -> Hash
+       -> SignatureParams
        -> ByteString
        -> r (Either KxError ByteString)
-kxSign (PrivKeyRSA pk) hashAlg msg =
+kxSign (PrivKeyRSA pk) (RSAParams hashAlg RSApkcs1) msg =
     generalizeRSAError `fmap` rsaSignHash hashAlg pk msg
-kxSign (PrivKeyDSA pk) _ msg = do
+kxSign (PrivKeyRSA pk) (RSAParams hashAlg RSApss) msg =
+    generalizeRSAError `fmap` rsapssSignHash hashAlg pk msg
+kxSign (PrivKeyDSA pk) DSSParams           msg = do
     sign <- DSA.sign pk H.SHA1 msg
     return (Right $ encodeASN1' DER $ dsaSequence sign)
   where dsaSequence sign = [Start Sequence,IntVal (DSA.sign_r sign),IntVal (DSA.sign_s sign),End Sequence]
---kxSign _ _ _ =
---    return (Left KxUnsupported)
+kxSign _ _ _ =
+    return (Left KxUnsupported)
 
 rsaSignHash :: MonadRandom m => Hash -> RSA.PrivateKey -> ByteString -> m (Either RSA.Error ByteString)
 rsaSignHash SHA1_MD5 pk msg = RSA.signSafer noHash pk msg
@@ -255,6 +274,12 @@ rsaSignHash SHA256 pk msg   = RSA.signSafer (Just H.SHA256) pk msg
 rsaSignHash SHA384 pk msg   = RSA.signSafer (Just H.SHA384) pk msg
 rsaSignHash SHA512 pk msg   = RSA.signSafer (Just H.SHA512) pk msg
 
+rsapssSignHash :: MonadRandom m => Hash -> RSA.PrivateKey -> ByteString -> m (Either RSA.Error ByteString)
+rsapssSignHash SHA256 pk msg = PSS.signSafer (PSS.defaultPSSParams H.SHA256) pk msg
+rsapssSignHash SHA384 pk msg = PSS.signSafer (PSS.defaultPSSParams H.SHA384) pk msg
+rsapssSignHash SHA512 pk msg = PSS.signSafer (PSS.defaultPSSParams H.SHA512) pk msg
+rsapssSignHash _ _ _         = error "rsapssSignHash: unsupported hash"
+
 rsaVerifyHash :: Hash -> RSA.PublicKey -> ByteString -> ByteString -> Bool
 rsaVerifyHash SHA1_MD5 = RSA.verify noHash
 rsaVerifyHash MD5      = RSA.verify (Just H.MD5)
@@ -263,6 +288,12 @@ rsaVerifyHash SHA224   = RSA.verify (Just H.SHA224)
 rsaVerifyHash SHA256   = RSA.verify (Just H.SHA256)
 rsaVerifyHash SHA384   = RSA.verify (Just H.SHA384)
 rsaVerifyHash SHA512   = RSA.verify (Just H.SHA512)
+
+rsapssVerifyHash :: Hash -> RSA.PublicKey -> ByteString -> ByteString -> Bool
+rsapssVerifyHash SHA256 = PSS.verify (PSS.defaultPSSParams H.SHA256)
+rsapssVerifyHash SHA384 = PSS.verify (PSS.defaultPSSParams H.SHA384)
+rsapssVerifyHash SHA512 = PSS.verify (PSS.defaultPSSParams H.SHA512)
+rsapssVerifyHash _      = error "rsapssVerifyHash: unsupported hash"
 
 noHash :: Maybe H.MD5
 noHash = Nothing
