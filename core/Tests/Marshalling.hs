@@ -7,6 +7,7 @@ import Control.Applicative
 import Test.Tasty.QuickCheck
 import Network.TLS.Internal
 import Network.TLS
+import qualified Network.TLS.Extension as EX
 
 import qualified Data.ByteString as B
 import Data.Word
@@ -88,6 +89,12 @@ instance Arbitrary Handshake where
             , Finished <$> (genByteString 12)
             ]
 
+instance Arbitrary EX.ServerNameType where
+  arbitrary = EX.ServerNameHostName <$> arbitrary
+
+instance Arbitrary EX.ServerName where
+  arbitrary = EX.ServerName <$> arbitrary
+
 {- quickcheck property -}
 
 prop_header_marshalling_id :: Header -> Bool
@@ -101,3 +108,12 @@ prop_handshake_marshalling_id x = (decodeHs $ encodeHandshake x) == Right x
                         GotSuccessRemaining _ _ -> error "got remaining byte left"
                         GotSuccess (ty, content) -> decodeHandshake cp ty content
         cp = CurrentParams { cParamsVersion = TLS10, cParamsKeyXchgType = Just CipherKeyExchange_RSA, cParamsSupportNPN = True }
+
+prop_disallow_empty_hostname :: EX.ServerName -> Bool
+prop_disallow_empty_hostname x = case decoded of
+  Just (EX.ServerName ns) -> all checkname ns
+  Nothing -> False
+  where
+    decoded = EX.extensionDecode False . EX.extensionEncode $ x
+    checkname (EX.ServerNameHostName n) = not $ null n
+    checkname _ = False

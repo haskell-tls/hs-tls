@@ -66,6 +66,7 @@ Library
                      Network.TLS.Cipher
                      Network.TLS.Compression
                      Network.TLS.Internal
+                     Network.TLS.Extension
                      Network.TLS.Extra
                      Network.TLS.Extra.Cipher
                      Network.TLS.Extra.FFDHE
@@ -81,7 +82,6 @@ Library
                      Network.TLS.Crypto.IES
                      Network.TLS.Crypto.Types
                      Network.TLS.ErrT
-                     Network.TLS.Extension
                      Network.TLS.Handshake
                      Network.TLS.Handshake.Common
                      Network.TLS.Handshake.Certificate
