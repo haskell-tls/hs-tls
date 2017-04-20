@@ -8,8 +8,7 @@
 --
 module Network.TLS.Handshake.Signature
     (
-      DigitalSignatureAlg(..)
-    , createCertificateVerify
+      createCertificateVerify
     , checkCertificateVerify
     , digitallySignDHParams
     , digitallySignECDHParams
@@ -30,11 +29,6 @@ import Network.TLS.Handshake.Key
 import Network.TLS.Util
 
 import Control.Monad.State
-
--- Digital signature algorithm, in close relation to public/private key types
--- and cipher key exchange.
-data DigitalSignatureAlg = RSA | DSS | ECDSA | Ed25519 | Ed448
-                           deriving (Show, Eq)
 
 signatureCompatible :: DigitalSignatureAlg -> HashAndSignatureAlgorithm -> Bool
 signatureCompatible RSA   (_, SignatureRSA)          = True

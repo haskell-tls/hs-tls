@@ -66,6 +66,7 @@ import Network.TLS.Backend
 import Network.TLS.Context.Internal
 import Network.TLS.Struct
 import Network.TLS.Cipher (Cipher(..), CipherKeyExchangeType(..))
+import Network.TLS.Crypto.Types
 import Network.TLS.Credentials
 import Network.TLS.State
 import Network.TLS.Hooks
@@ -134,8 +135,8 @@ instance TLSParams ServerParams where
                         CipherKeyExchange_ECDH_RSA    -> False
 
                 canDHE        = isJust $ serverDHEParams sparams
-                canSignDSS    = SignatureDSS `elem` signingAlgs
-                canSignRSA    = SignatureRSA `elem` signingAlgs
+                canSignDSS    = DSS `elem` signingAlgs
+                canSignRSA    = RSA `elem` signingAlgs
                 canEncryptRSA = isJust $ credentialsFindForDecrypting creds
                 signingAlgs   = credentialsListSigningAlgorithms creds
                 serverCreds   = sharedCredentials $ serverShared sparams

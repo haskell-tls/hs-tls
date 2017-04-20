@@ -180,12 +180,12 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
         creds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
 
     cred <- case cipherKeyExchange usedCipher of
-                CipherKeyExchange_RSA     -> return $ credentialsFindForDecrypting creds
-                CipherKeyExchange_DH_Anon -> return $ Nothing
-                CipherKeyExchange_DHE_RSA -> return $ credentialsFindForSigning SignatureRSA creds
-                CipherKeyExchange_DHE_DSS -> return $ credentialsFindForSigning SignatureDSS creds
-                CipherKeyExchange_ECDHE_RSA -> return $ credentialsFindForSigning SignatureRSA creds
-                _                         -> throwCore $ Error_Protocol ("key exchange algorithm not implemented", True, HandshakeFailure)
+                CipherKeyExchange_RSA       -> return $ credentialsFindForDecrypting creds
+                CipherKeyExchange_DH_Anon   -> return $ Nothing
+                CipherKeyExchange_DHE_RSA   -> return $ credentialsFindForSigning RSA creds
+                CipherKeyExchange_DHE_DSS   -> return $ credentialsFindForSigning DSS creds
+                CipherKeyExchange_ECDHE_RSA -> return $ credentialsFindForSigning RSA creds
+                _                           -> throwCore $ Error_Protocol ("key exchange algorithm not implemented", True, HandshakeFailure)
 
     resumeSessionData <- case clientSession of
             (Session (Just clientSessionId)) -> liftIO $ sessionResume (sharedSessionManager $ ctxShared ctx) clientSessionId
