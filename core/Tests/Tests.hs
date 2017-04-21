@@ -11,7 +11,6 @@ import Marshalling
 import Ciphers
 
 import Data.Maybe
-import Data.List (intersect)
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
@@ -73,6 +72,7 @@ runTLSPipeSimple params = runTLSPipe params tlsServer tlsClient
             bye ctx
             return ()
 
+{-
 runTLSInitFailure :: (ClientParams, ServerParams) -> PropertyM IO ()
 runTLSInitFailure params = do
     (cRes, sRes) <- run (initiateDataPipe params tlsServer tlsClient)
@@ -80,44 +80,12 @@ runTLSInitFailure params = do
     assertIsLeft sRes
   where tlsServer ctx = handshake ctx >> bye ctx >> return ("server success" :: String)
         tlsClient ctx = handshake ctx >> bye ctx >> return ("client success" :: String)
+-}
 
 prop_handshake_initiate :: PropertyM IO ()
 prop_handshake_initiate = do
     params  <- pick arbitraryPairParams
     runTLSPipeSimple params
-
--- test TLS12 protocol extensions with non-default configuration
-prop_handshake_initiate_tls12 :: PropertyM IO ()
-prop_handshake_initiate_tls12 = do
-    let clientVersions = [TLS12]
-        serverVersions = [TLS12]
-        ciphers = [ blockCipherECDHE_RSA_SHA384
-                  , blockCipherECDHE_RSA
-                  , blockCipherDHE_RSA
-                  , blockCipherDHE_DSS
-                  ]
-    (clientParam,serverParam) <- pick $ arbitraryPairParamsWithVersionsAndCiphers
-                                            (clientVersions, serverVersions)
-                                            (ciphers, ciphers)
-    clientHashSigs <- pick someHashSignatures
-    serverHashSigs <- pick someHashSignatures
-    let clientParam' = clientParam { clientSupported = (clientSupported clientParam)
-                                       { supportedHashSignatures = clientHashSigs }
-                                   }
-        serverParam' = serverParam { serverSupported = (serverSupported serverParam)
-                                       { supportedHashSignatures = serverHashSigs }
-                                   }
-        shouldFail = null (clientHashSigs `intersect` serverHashSigs)
-    if shouldFail
-        then runTLSInitFailure (clientParam',serverParam')
-        else runTLSPipeSimple  (clientParam',serverParam')
-  where someHashSignatures = sublistOf [ (HashTLS13, SignatureRSApssSHA256)
-                                       , (HashSHA512, SignatureRSA)
-                                       , (HashSHA384, SignatureRSA)
-                                       , (HashSHA256, SignatureRSA)
-                                       , (HashSHA1,   SignatureRSA)
-                                       , (HashSHA1,   SignatureDSS)
-                                       ]
 
 prop_handshake_client_auth_initiate :: PropertyM IO ()
 prop_handshake_client_auth_initiate = do
@@ -207,9 +175,11 @@ prop_handshake_session_resumption = do
 assertEq :: (Show a, Monad m, Eq a) => a -> a -> m ()
 assertEq expected got = unless (expected == got) $ error ("got " ++ show got ++ " but was expecting " ++ show expected)
 
+{-
 assertIsLeft :: (Show b, Monad m) => Either a b -> m ()
 assertIsLeft (Left  _) = return()
 assertIsLeft (Right b) = error ("got " ++ show b ++ " but was expecting a failure")
+-}
 
 main :: IO ()
 main = defaultMain $ testGroup "tls"
@@ -229,7 +199,6 @@ main = defaultMain $ testGroup "tls"
         tests_handshake = testGroup "Handshakes"
             [ testProperty "setup" (monadicIO prop_pipe_work)
             , testProperty "initiate" (monadicIO prop_handshake_initiate)
-            , testProperty "initiate TLS12" (monadicIO prop_handshake_initiate_tls12)
             , testProperty "clientAuthInitiate" (monadicIO prop_handshake_client_auth_initiate)
             , testProperty "alpnInitiate" (monadicIO prop_handshake_alpn_initiate)
             , testProperty "renegotiation" (monadicIO prop_handshake_renegotiation)

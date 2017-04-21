@@ -8,19 +8,13 @@ module Connection
     , setPairParamsSessionResuming
     , establishDataPipe
     , initiateDataPipe
-    , blockCipher
-    , blockCipherDHE_RSA
-    , blockCipherDHE_DSS
-    , blockCipherECDHE_RSA
-    , blockCipherECDHE_RSA_SHA384
-    , streamCipher
     ) where
 
 import Test.Tasty.QuickCheck
 import Certificate
 import PubKey
 import PipeChan
-import Network.TLS
+import Network.TLS as TLS
 import Network.TLS.Extra
 import Data.X509
 import Data.Default.Class
@@ -29,43 +23,18 @@ import Control.Applicative
 import Control.Concurrent.Chan
 import Control.Concurrent
 import qualified Control.Exception as E
-import Data.List (isPrefixOf, intersect)
+import Data.List (isInfixOf)
 
 import qualified Data.ByteString as B
 
 debug :: Bool
 debug = False
 
-blockCipher :: Cipher
-blockCipher = cipher_AES128_SHA1
-
-blockCipherDHE_RSA :: Cipher
-blockCipherDHE_RSA = cipher_DHE_RSA_AES128_SHA1
-
-blockCipherDHE_DSS :: Cipher
-blockCipherDHE_DSS = cipher_DHE_DSS_AES128_SHA1
-
-blockCipherECDHE_RSA :: Cipher
-blockCipherECDHE_RSA = cipher_ECDHE_RSA_AES128CBC_SHA
-
--- TLS 1.2 only
-blockCipherECDHE_RSA_SHA384 :: Cipher
-blockCipherECDHE_RSA_SHA384 = cipher_ECDHE_RSA_AES256GCM_SHA384
-
-streamCipher :: Cipher
-streamCipher = cipher_RC4_128_SHA1
-
 knownCiphers :: [Cipher]
-knownCiphers = [ blockCipher
-               , blockCipherDHE_RSA
-               , blockCipherDHE_DSS
-               , blockCipherECDHE_RSA
-               , blockCipherECDHE_RSA_SHA384
-               , streamCipher
-               ]
-
-isNonECCipher :: Cipher -> Bool
-isNonECCipher cipher = not ("EC" `isPrefixOf` cipherName cipher)
+knownCiphers = filter nonECDSA ciphersuite_strong
+  where
+    -- arbitraryCredentialsOfEachType cannot generate ECDSA
+    nonECDSA c = not ("ECDSA" `isInfixOf` cipherName c)
 
 knownVersions :: [Version]
 knownVersions = [SSL3,TLS10,TLS11,TLS12]
@@ -90,7 +59,7 @@ arbitraryCipherPair connectVersion = do
                                             maybe True (<= connectVersion) (cipherMinVer x) | x <- cs])
     return (clientCiphers, serverCiphers)
   where
-        arbitraryCiphers  = resize (length knownCiphers + 1) $ listOf1 (elements knownCiphers)
+        arbitraryCiphers  = listOf1 $ elements knownCiphers
 
 arbitraryPairParams :: Gen (ClientParams, ServerParams)
 arbitraryPairParams = do
@@ -103,17 +72,33 @@ arbitraryPairParams = do
     serAllowedVersions <- (:[]) `fmap` elements allowedVersions
     arbitraryPairParamsWithVersionsAndCiphers (allowedVersions, serAllowedVersions) (clientCiphers, serverCiphers)
 
-arbitraryGroupPair :: ([Cipher], [Cipher]) -> Gen ([Group], [Group])
-arbitraryGroupPair (clientCiphers, serverCiphers) = do
-    groupServer <- sublistOf availableGroups
-    groupClient <- sublistOf availableGroups
-    common <- elements availableGroups
-    if hasNonEC then return (groupClient, groupServer)
-                else return (groupClient ++ [common], groupServer ++ [common])
+arbitraryGroupPair :: Gen ([Group], [Group])
+arbitraryGroupPair = do
+    serverGroups <- arbitraryGroups
+    clientGroups <- oneof [arbitraryGroups] `suchThat`
+                         (\gs -> or [x `elem` serverGroups | x <- gs])
+    return (clientGroups, serverGroups)
   where
-    commonCiphers = serverCiphers `intersect` clientCiphers
-    hasNonEC = any isNonECCipher commonCiphers
     availableGroups = [P256,P384,P521,X25519,X448]
+    arbitraryGroups = listOf1 $ elements availableGroups
+
+arbitraryHashSignaturePair :: Gen ([HashAndSignatureAlgorithm], [HashAndSignatureAlgorithm])
+arbitraryHashSignaturePair = do
+    serverHashSignatures <- shuffle availableHashSignatures
+    clientHashSignatures <- shuffle availableHashSignatures
+    return (clientHashSignatures, serverHashSignatures)
+  where
+    availableHashSignatures =
+        [ (TLS.HashTLS13,  SignatureRSApssSHA256)
+        , (TLS.HashSHA512, SignatureRSA)
+        , (TLS.HashSHA512, SignatureECDSA)
+        , (TLS.HashSHA384, SignatureRSA)
+        , (TLS.HashSHA384, SignatureECDSA)
+        , (TLS.HashSHA256, SignatureRSA)
+        , (TLS.HashSHA256, SignatureECDSA)
+        , (TLS.HashSHA1,   SignatureRSA)
+        , (TLS.HashSHA1,   SignatureDSS)
+        ]
 
 arbitraryPairParamsWithVersionsAndCiphers :: ([Version], [Version])
                                           -> ([Cipher], [Cipher])
@@ -123,12 +108,14 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
     dhparams           <- elements [dhParams,ffdhe2048,ffdhe3072]
 
     creds              <- arbitraryCredentialsOfEachType
-    (groupClient, groupServer) <- arbitraryGroupPair (clientCiphers, serverCiphers)
+    (clientGroups, serverGroups) <- arbitraryGroupPair
+    (clientHashSignatures, serverHashSignatures) <- arbitraryHashSignaturePair
     let serverState = def
             { serverSupported = def { supportedCiphers  = serverCiphers
                                     , supportedVersions = serverVersions
                                     , supportedSecureRenegotiation = secNeg
-                                    , supportedGroups   = groupServer
+                                    , supportedGroups   = serverGroups
+                                    , supportedHashSignatures = serverHashSignatures
                                     }
             , serverDHEParams = Just dhparams
             , serverShared = def { sharedCredentials = Credentials creds }
@@ -137,7 +124,8 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
             { clientSupported = def { supportedCiphers  = clientCiphers
                                     , supportedVersions = clientVersions
                                     , supportedSecureRenegotiation = secNeg
-                                    , supportedGroups   = groupClient
+                                    , supportedGroups   = clientGroups
+                                    , supportedHashSignatures = clientHashSignatures
                                     }
             , clientShared = def { sharedValidationCache = ValidationCache
                                         { cacheAdd = \_ _ _ -> return ()
