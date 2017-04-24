@@ -165,8 +165,8 @@ prop_handshake_alpn_initiate = do
           | "h2"    `elem` xs = return "h2"
           | otherwise         = return "http/1.1"
 
-prop_handshake_renegociation :: PropertyM IO ()
-prop_handshake_renegociation = do
+prop_handshake_renegotiation :: PropertyM IO ()
+prop_handshake_renegotiation = do
     (cparams, sparams) <- pick arbitraryPairParams
     let sparams' = sparams {
             serverSupported = (serverSupported sparams) {
@@ -232,6 +232,6 @@ main = defaultMain $ testGroup "tls"
             , testProperty "initiate TLS12" (monadicIO prop_handshake_initiate_tls12)
             , testProperty "clientAuthInitiate" (monadicIO prop_handshake_client_auth_initiate)
             , testProperty "alpnInitiate" (monadicIO prop_handshake_alpn_initiate)
-            , testProperty "renegociation" (monadicIO prop_handshake_renegociation)
+            , testProperty "renegotiation" (monadicIO prop_handshake_renegotiation)
             , testProperty "resumption" (monadicIO prop_handshake_session_resumption)
             ]
