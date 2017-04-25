@@ -87,6 +87,20 @@ prop_handshake_initiate = do
     params  <- pick arbitraryPairParams
     runTLSPipeSimple params
 
+prop_handshake_ciphersuites :: PropertyM IO ()
+prop_handshake_ciphersuites = do
+    let clientVersions = [TLS12]
+        serverVersions = [TLS12]
+    clientCiphers <- pick arbitraryCiphers
+    serverCiphers <- pick arbitraryCiphers
+    (clientParam,serverParam) <- pick $ arbitraryPairParamsWithVersionsAndCiphers
+                                            (clientVersions, serverVersions)
+                                            (clientCiphers, serverCiphers)
+    let shouldFail = null (clientCiphers `intersect` serverCiphers)
+    if shouldFail
+        then runTLSInitFailure (clientParam,serverParam)
+        else runTLSPipeSimple  (clientParam,serverParam)
+
 prop_handshake_hashsignatures :: PropertyM IO ()
 prop_handshake_hashsignatures = do
     let clientVersions = [TLS12]
@@ -246,6 +260,7 @@ main = defaultMain $ testGroup "tls"
             [ testProperty "Setup" (monadicIO prop_pipe_work)
             , testProperty "Initiation" (monadicIO prop_handshake_initiate)
             , testProperty "Hash and signatures" (monadicIO prop_handshake_hashsignatures)
+            , testProperty "Cipher suites" (monadicIO prop_handshake_ciphersuites)
             , testProperty "Groups" (monadicIO prop_handshake_groups)
             , testProperty "Client authentication" (monadicIO prop_handshake_client_auth)
             , testProperty "ALPN" (monadicIO prop_handshake_alpn)
