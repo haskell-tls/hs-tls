@@ -87,8 +87,8 @@ prop_handshake_initiate = do
     params  <- pick arbitraryPairParams
     runTLSPipeSimple params
 
-prop_handshake_initiate_hashsignatures :: PropertyM IO ()
-prop_handshake_initiate_hashsignatures = do
+prop_handshake_hashsignatures :: PropertyM IO ()
+prop_handshake_hashsignatures = do
     let clientVersions = [TLS12]
         serverVersions = [TLS12]
         ciphers = [ cipher_ECDHE_RSA_AES256GCM_SHA384
@@ -112,8 +112,8 @@ prop_handshake_initiate_hashsignatures = do
         then runTLSInitFailure (clientParam',serverParam')
         else runTLSPipeSimple  (clientParam',serverParam')
 
-prop_handshake_initiate_groups :: PropertyM IO ()
-prop_handshake_initiate_groups = do
+prop_handshake_groups :: PropertyM IO ()
+prop_handshake_groups = do
     let clientVersions = [TLS12]
         serverVersions = [TLS12]
         ciphers = [ cipher_ECDHE_RSA_AES256GCM_SHA384
@@ -135,8 +135,8 @@ prop_handshake_initiate_groups = do
         then runTLSInitFailure (clientParam',serverParam')
         else runTLSPipeSimple  (clientParam',serverParam')
 
-prop_handshake_client_auth_initiate :: PropertyM IO ()
-prop_handshake_client_auth_initiate = do
+prop_handshake_client_auth :: PropertyM IO ()
+prop_handshake_client_auth = do
     (clientParam,serverParam) <- pick arbitraryPairParams
     cred <- pick arbitraryClientCredential
     let clientParam' = clientParam { clientHooks = (clientHooks clientParam)
@@ -151,8 +151,8 @@ prop_handshake_client_auth_initiate = do
             | chain == fst cred = return CertificateUsageAccept
             | otherwise         = return (CertificateUsageReject CertificateRejectUnknownCA)
 
-prop_handshake_alpn_initiate :: PropertyM IO ()
-prop_handshake_alpn_initiate = do
+prop_handshake_alpn :: PropertyM IO ()
+prop_handshake_alpn = do
     (clientParam,serverParam) <- pick arbitraryPairParams
     let clientParam' = clientParam { clientHooks = (clientHooks clientParam)
                                        { onSuggestALPN = return $ Just ["h2", "http/1.1"] }
@@ -243,12 +243,12 @@ main = defaultMain $ testGroup "tls"
 
         -- high level tests between a client and server with fake ciphers.
         tests_handshake = testGroup "Handshakes"
-            [ testProperty "setup" (monadicIO prop_pipe_work)
-            , testProperty "initiate" (monadicIO prop_handshake_initiate)
-            , testProperty "initiate hash and signatures" (monadicIO prop_handshake_initiate_hashsignatures)
-            , testProperty "groups" (monadicIO prop_handshake_initiate_groups)
-            , testProperty "clientAuthInitiate" (monadicIO prop_handshake_client_auth_initiate)
-            , testProperty "alpnInitiate" (monadicIO prop_handshake_alpn_initiate)
-            , testProperty "renegotiation" (monadicIO prop_handshake_renegotiation)
-            , testProperty "resumption" (monadicIO prop_handshake_session_resumption)
+            [ testProperty "Setup" (monadicIO prop_pipe_work)
+            , testProperty "Initiation" (monadicIO prop_handshake_initiate)
+            , testProperty "Hash and signatures" (monadicIO prop_handshake_hashsignatures)
+            , testProperty "Groups" (monadicIO prop_handshake_groups)
+            , testProperty "Client authentication" (monadicIO prop_handshake_client_auth)
+            , testProperty "ALPN" (monadicIO prop_handshake_alpn)
+            , testProperty "Renegotiation" (monadicIO prop_handshake_renegotiation)
+            , testProperty "Resumption" (monadicIO prop_handshake_session_resumption)
             ]
