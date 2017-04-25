@@ -1,6 +1,9 @@
 module Connection
     ( newPairContext
+    , arbitraryCiphers
+    , arbitraryVersions
     , arbitraryHashSignatures
+    , arbitraryGroups
     , arbitraryPairParams
     , arbitraryPairParamsWithVersionsAndCiphers
     , arbitraryClientCredential
@@ -43,8 +46,14 @@ knownCiphers = filter nonECDSA (ciphersuite_all ++ ciphersuite_weak)
     -- arbitraryCredentialsOfEachType cannot generate ECDSA
     nonECDSA c = not ("ECDSA" `isInfixOf` cipherName c)
 
+arbitraryCiphers :: Gen [Cipher]
+arbitraryCiphers = listOf1 $ elements knownCiphers
+
 knownVersions :: [Version]
 knownVersions = [SSL3,TLS10,TLS11,TLS12]
+
+arbitraryVersions :: Gen [Version]
+arbitraryVersions = sublistOf knownVersions
 
 knownHashSignatures :: [HashAndSignatureAlgorithm]
 knownHashSignatures = filter nonECDSA availableHashSignatures
@@ -65,6 +74,12 @@ knownHashSignatures = filter nonECDSA availableHashSignatures
 arbitraryHashSignatures :: Gen [HashAndSignatureAlgorithm]
 arbitraryHashSignatures = sublistOf knownHashSignatures
 
+knownGroups :: [Group]
+knownGroups = [P256,P384,P521,X25519,X448]
+
+arbitraryGroups :: Gen [Group]
+arbitraryGroups = listOf1 $ elements knownGroups
+
 arbitraryCredentialsOfEachType :: Gen [(CertificateChain, PrivKey)]
 arbitraryCredentialsOfEachType = do
     let (pubKey, privKey) = getGlobalRSAPair
@@ -84,8 +99,6 @@ arbitraryCipherPair connectVersion = do
                                 (\cs -> or [x `elem` serverCiphers &&
                                             maybe True (<= connectVersion) (cipherMinVer x) | x <- cs])
     return (clientCiphers, serverCiphers)
-  where
-        arbitraryCiphers  = listOf1 $ elements knownCiphers
 
 arbitraryPairParams :: Gen (ClientParams, ServerParams)
 arbitraryPairParams = do
@@ -104,9 +117,6 @@ arbitraryGroupPair = do
     clientGroups <- oneof [arbitraryGroups] `suchThat`
                          (\gs -> or [x `elem` serverGroups | x <- gs])
     return (clientGroups, serverGroups)
-  where
-    availableGroups = [P256,P384,P521,X25519,X448]
-    arbitraryGroups = listOf1 $ elements availableGroups
 
 arbitraryHashSignaturePair :: Gen ([HashAndSignatureAlgorithm], [HashAndSignatureAlgorithm])
 arbitraryHashSignaturePair = do

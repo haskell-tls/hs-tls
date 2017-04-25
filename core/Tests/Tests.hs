@@ -112,6 +112,29 @@ prop_handshake_initiate_hashsignatures = do
         then runTLSInitFailure (clientParam',serverParam')
         else runTLSPipeSimple  (clientParam',serverParam')
 
+prop_handshake_initiate_groups :: PropertyM IO ()
+prop_handshake_initiate_groups = do
+    let clientVersions = [TLS12]
+        serverVersions = [TLS12]
+        ciphers = [ cipher_ECDHE_RSA_AES256GCM_SHA384
+                  , cipher_ECDHE_RSA_AES128CBC_SHA
+                  ]
+    (clientParam,serverParam) <- pick $ arbitraryPairParamsWithVersionsAndCiphers
+                                            (clientVersions, serverVersions)
+                                            (ciphers, ciphers)
+    clientGroups <- pick arbitraryGroups
+    serverGroups <- pick arbitraryGroups
+    let clientParam' = clientParam { clientSupported = (clientSupported clientParam)
+                                       { supportedGroups = clientGroups }
+                                   }
+        serverParam' = serverParam { serverSupported = (serverSupported serverParam)
+                                       { supportedGroups = serverGroups }
+                                   }
+        shouldFail = null (clientGroups `intersect` serverGroups)
+    if shouldFail
+        then runTLSInitFailure (clientParam',serverParam')
+        else runTLSPipeSimple  (clientParam',serverParam')
+
 prop_handshake_client_auth_initiate :: PropertyM IO ()
 prop_handshake_client_auth_initiate = do
     (clientParam,serverParam) <- pick arbitraryPairParams
@@ -222,7 +245,9 @@ main = defaultMain $ testGroup "tls"
         tests_handshake = testGroup "Handshakes"
             [ testProperty "setup" (monadicIO prop_pipe_work)
             , testProperty "initiate" (monadicIO prop_handshake_initiate)
-            , testProperty "initiate hash and signatures" (monadicIO prop_handshake_initiate_hashsignatures)       , testProperty "clientAuthInitiate" (monadicIO prop_handshake_client_auth_initiate)
+            , testProperty "initiate hash and signatures" (monadicIO prop_handshake_initiate_hashsignatures)
+            , testProperty "groups" (monadicIO prop_handshake_initiate_groups)
+            , testProperty "clientAuthInitiate" (monadicIO prop_handshake_client_auth_initiate)
             , testProperty "alpnInitiate" (monadicIO prop_handshake_alpn_initiate)
             , testProperty "renegotiation" (monadicIO prop_handshake_renegotiation)
             , testProperty "resumption" (monadicIO prop_handshake_session_resumption)
