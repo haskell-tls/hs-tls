@@ -1,5 +1,6 @@
 module Connection
     ( newPairContext
+    , arbitraryHashSignatures
     , arbitraryPairParams
     , arbitraryPairParamsWithVersionsAndCiphers
     , arbitraryClientCredential
@@ -44,6 +45,25 @@ knownCiphers = filter nonECDSA (ciphersuite_all ++ ciphersuite_weak)
 
 knownVersions :: [Version]
 knownVersions = [SSL3,TLS10,TLS11,TLS12]
+
+knownHashSignatures :: [HashAndSignatureAlgorithm]
+knownHashSignatures = filter nonECDSA availableHashSignatures
+  where
+    availableHashSignatures = [(TLS.HashTLS13,  SignatureRSApssSHA256)
+                              ,(TLS.HashSHA512, SignatureRSA)
+                              ,(TLS.HashSHA512, SignatureECDSA)
+                              ,(TLS.HashSHA384, SignatureRSA)
+                              ,(TLS.HashSHA384, SignatureECDSA)
+                              ,(TLS.HashSHA256, SignatureRSA)
+                              ,(TLS.HashSHA256, SignatureECDSA)
+                              ,(TLS.HashSHA1,   SignatureRSA)
+                              ,(TLS.HashSHA1,   SignatureDSS)
+                              ]
+    -- arbitraryCredentialsOfEachType cannot generate ECDSA
+    nonECDSA (_,s) = s /= SignatureECDSA
+
+arbitraryHashSignatures :: Gen [HashAndSignatureAlgorithm]
+arbitraryHashSignatures = sublistOf knownHashSignatures
 
 arbitraryCredentialsOfEachType :: Gen [(CertificateChain, PrivKey)]
 arbitraryCredentialsOfEachType = do
@@ -90,21 +110,9 @@ arbitraryGroupPair = do
 
 arbitraryHashSignaturePair :: Gen ([HashAndSignatureAlgorithm], [HashAndSignatureAlgorithm])
 arbitraryHashSignaturePair = do
-    serverHashSignatures <- shuffle availableHashSignatures
-    clientHashSignatures <- shuffle availableHashSignatures
+    serverHashSignatures <- shuffle knownHashSignatures
+    clientHashSignatures <- shuffle knownHashSignatures
     return (clientHashSignatures, serverHashSignatures)
-  where
-    availableHashSignatures =
-        [ (TLS.HashTLS13,  SignatureRSApssSHA256)
-        , (TLS.HashSHA512, SignatureRSA)
-        , (TLS.HashSHA512, SignatureECDSA)
-        , (TLS.HashSHA384, SignatureRSA)
-        , (TLS.HashSHA384, SignatureECDSA)
-        , (TLS.HashSHA256, SignatureRSA)
-        , (TLS.HashSHA256, SignatureECDSA)
-        , (TLS.HashSHA1,   SignatureRSA)
-        , (TLS.HashSHA1,   SignatureDSS)
-        ]
 
 arbitraryPairParamsWithVersionsAndCiphers :: ([Version], [Version])
                                           -> ([Cipher], [Cipher])

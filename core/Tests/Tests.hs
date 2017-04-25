@@ -99,8 +99,8 @@ prop_handshake_initiate_hashsignatures = do
     (clientParam,serverParam) <- pick $ arbitraryPairParamsWithVersionsAndCiphers
                                             (clientVersions, serverVersions)
                                             (ciphers, ciphers)
-    clientHashSigs <- pick someHashSignatures
-    serverHashSigs <- pick someHashSignatures
+    clientHashSigs <- pick arbitraryHashSignatures
+    serverHashSigs <- pick arbitraryHashSignatures
     let clientParam' = clientParam { clientSupported = (clientSupported clientParam)
                                        { supportedHashSignatures = clientHashSigs }
                                    }
@@ -111,14 +111,6 @@ prop_handshake_initiate_hashsignatures = do
     if shouldFail
         then runTLSInitFailure (clientParam',serverParam')
         else runTLSPipeSimple  (clientParam',serverParam')
-  where someHashSignatures = sublistOf [ (HashTLS13, SignatureRSApssSHA256)
-                                       , (HashSHA512, SignatureRSA)
-                                       , (HashSHA384, SignatureRSA)
-                                       , (HashSHA256, SignatureRSA)
-                                       , (HashSHA1,   SignatureRSA)
-                                       , (HashSHA1,   SignatureDSS)
-                                       ]
-
 
 prop_handshake_client_auth_initiate :: PropertyM IO ()
 prop_handshake_client_auth_initiate = do
