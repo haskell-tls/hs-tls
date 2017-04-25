@@ -31,8 +31,14 @@ debug :: Bool
 debug = False
 
 knownCiphers :: [Cipher]
-knownCiphers = filter nonECDSA ciphersuite_strong
+knownCiphers = filter nonECDSA (ciphersuite_all ++ ciphersuite_weak)
   where
+    ciphersuite_weak = [
+        cipher_DHE_DSS_RC4_SHA1
+      , cipher_RC4_128_MD5
+      , cipher_null_MD5
+      , cipher_null_SHA1
+      ]
     -- arbitraryCredentialsOfEachType cannot generate ECDSA
     nonECDSA c = not ("ECDSA" `isInfixOf` cipherName c)
 
