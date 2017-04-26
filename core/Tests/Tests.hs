@@ -195,6 +195,29 @@ prop_handshake_alpn = do
           | "h2"    `elem` xs = return "h2"
           | otherwise         = return "http/1.1"
 
+prop_handshake_sni :: PropertyM IO ()
+prop_handshake_sni = do
+    (clientParam,serverParam) <- pick arbitraryPairParams
+    let clientParam' = clientParam { clientServerIdentification = (serverName, "")
+                                   , clientUseServerNameIndication = True
+                                    }
+        params' = (clientParam',serverParam)
+    runTLSPipe params' tlsServer tlsClient
+  where tlsServer ctx queue = do
+            handshake ctx
+            sni <- getClientSNI ctx
+            Just serverName `assertEq` sni
+            d <- recvDataNonNull ctx
+            writeChan queue d
+            return ()
+        tlsClient queue ctx = do
+            handshake ctx
+            d <- readChan queue
+            sendData ctx (L.fromChunks [d])
+            bye ctx
+            return ()
+        serverName = "haskell.org"
+
 prop_handshake_renegotiation :: PropertyM IO ()
 prop_handshake_renegotiation = do
     (cparams, sparams) <- pick arbitraryPairParams
@@ -264,6 +287,7 @@ main = defaultMain $ testGroup "tls"
             , testProperty "Groups" (monadicIO prop_handshake_groups)
             , testProperty "Client authentication" (monadicIO prop_handshake_client_auth)
             , testProperty "ALPN" (monadicIO prop_handshake_alpn)
+            , testProperty "SNI" (monadicIO prop_handshake_sni)
             , testProperty "Renegotiation" (monadicIO prop_handshake_renegotiation)
             , testProperty "Resumption" (monadicIO prop_handshake_session_resumption)
             ]
