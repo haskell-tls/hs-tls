@@ -1,3 +1,27 @@
+## Version X.Y.Z
+
+- Removing NPN [#214](https://github.com/vincenthz/hs-tls/pull/214)
+- Supporting RSAPSS defined in TLS 1.3 [#207](https://github.com/vincenthz/hs-tls/pull/207)
+- Supporting X25519 and X448 in the IES style. [#205](https://github.com/vincenthz/hs-tls/pull/205)
+- Strip leading zeros in DHE premaster secret [#201](https://github.com/vincenthz/hs-tls/pull/201)
+
+## Version 1.3.10
+
+- Selecting a cipher based on "signature_algorithms" [#193](https://github.com/vincenthz/hs-tls/pull/193)
+- Respecting the "signature_algorithms" extension [#137](https://github.com/vincenthz/hs-tls/pull/137)
+- Fix RSA signature in CertificateVerify with TLS < 1.2 [#189](https://github.com/vincenthz/hs-tls/pull/189)
+- Fix ECDSA with TLS 1.0 / TLS 1.1 [#187](https://github.com/vincenthz/hs-tls/pull/187)
+- Sending an empty server name from a server if necessary. [#175](https://github.com/vincenthz/hs-tls/pull/175)
+- `Network.TLS.Extra` provides Finite Field Diffie-Hellman Ephemeral Parameters in RFC 7919 [#174](https://github.com/vincenthz/hs-tls/pull/174)
+- Restore ability to renegotiate[#164](https://github.com/vincenthz/hs-tls/pull/164)
+
+## Version 1.3.9
+
+- Drop support for old GHC.
+- Enable sha384 ciphers [#168](https://github.com/vincenthz/hs-tls/pull/168)
+- SNI late checks [#147](https://github.com/vincenthz/hs-tls/pull/147)
+- Expose the HasBackend(..) class fully, so that developers can use TLS over their own channels [#149](https://github.com/vincenthz/hs-tls/pull/149)
+
 ## Version 1.3.8
 
 - Fix older GHC builds
