@@ -30,13 +30,13 @@ import System.IO.Error (mkIOError, eofErrorType)
 checkValid :: Context -> IO ()
 checkValid ctx = do
     established <- ctxEstablished ctx
-    unless established $ liftIO $ throwIO ConnectionNotEstablished
+    unless established $ throwIO ConnectionNotEstablished
     eofed <- ctxEOF ctx
-    when eofed $ liftIO $ throwIO $ mkIOError eofErrorType "data" Nothing Nothing
+    when eofed $ throwIO $ mkIOError eofErrorType "data" Nothing Nothing
 
 readExact :: Context -> Int -> IO Bytes
 readExact ctx sz = do
-    hdrbs <- liftIO $ contextRecv ctx sz
+    hdrbs <- contextRecv ctx sz
     when (B.length hdrbs < sz) $ do
         setEOF ctx
         if B.null hdrbs
@@ -74,7 +74,7 @@ recvRecord compatSSLv2 ctx
               maximumSizeExceeded = Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
               getRecord :: Header -> Bytes -> IO (Either TLSError (Record Plaintext))
               getRecord header content = do
-                    liftIO $ withLog ctx $ \logging -> loggingIORecv logging header content
+                    withLog ctx $ \logging -> loggingIORecv logging header content
                     runRxState ctx $ disengageRecord $ rawToRecord header (fragmentCiphertext content)
 
 
