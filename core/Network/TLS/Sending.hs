@@ -11,7 +11,7 @@
 module Network.TLS.Sending (writePacket) where
 
 import Control.Applicative
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Control.Concurrent.MVar
 import Data.IORef
 

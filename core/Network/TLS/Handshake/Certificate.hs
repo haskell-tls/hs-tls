@@ -13,7 +13,7 @@ module Network.TLS.Handshake.Certificate
 import Network.TLS.Context.Internal
 import Network.TLS.Struct
 import Network.TLS.X509
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Control.Exception (SomeException)
 
 -- on certificate reject, throw an exception with the proper protocol alert error.

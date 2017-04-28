@@ -22,7 +22,7 @@ import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Client
 import Network.TLS.Handshake.Server
 
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Control.Exception (fromException)
 
 -- | Handshake for a new TLS connection

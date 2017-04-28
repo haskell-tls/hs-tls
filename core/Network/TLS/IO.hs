@@ -23,7 +23,7 @@ import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 
 import Data.IORef
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Control.Exception (throwIO)
 import System.IO.Error (mkIOError, eofErrorType)
 

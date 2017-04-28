@@ -14,7 +14,7 @@ module Network.TLS.Record.Disengage
         ( disengageRecord
         ) where
 
-import Control.Monad.State
+import Control.Monad.State.Strict
 
 import Crypto.Cipher.Types (AuthTag(..))
 import Network.TLS.Struct

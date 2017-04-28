@@ -42,7 +42,7 @@ import Data.List (sortBy)
 import Data.Ord (comparing)
 #endif
 
-import Control.Monad.State
+import Control.Monad.State.Strict
 
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.Common

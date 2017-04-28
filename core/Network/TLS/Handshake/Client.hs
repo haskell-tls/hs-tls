@@ -33,7 +33,7 @@ import Data.List (find, intersect)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Control.Exception (SomeException)
 
 import Network.TLS.Handshake.Common
