@@ -1,5 +1,6 @@
 ## Version X.Y.Z
 
+- Deprecating ciphersuite_medium. Putting WARNING to ciphersuite_all since this includes RC4 [#153](https://github.com/vincenthz/hs-tls/pull/153) [#222](https://github.com/vincenthz/hs-tls/pull/222)
 - Removing NPN [#214](https://github.com/vincenthz/hs-tls/pull/214)
 - Supporting RSAPSS defined in TLS 1.3 [#207](https://github.com/vincenthz/hs-tls/pull/207)
 - Supporting X25519 and X448 in the IES style. [#205](https://github.com/vincenthz/hs-tls/pull/205)
