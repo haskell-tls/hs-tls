@@ -14,7 +14,7 @@ module Network.TLS.Record.Engage
         ) where
 
 import Control.Applicative
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Crypto.Cipher.Types (AuthTag(..))
 
 import Network.TLS.Cap

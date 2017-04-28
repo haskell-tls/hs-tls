@@ -28,7 +28,7 @@ import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Key
 import Network.TLS.Util
 
-import Control.Monad.State
+import Control.Monad.State.Strict
 
 signatureCompatible :: DigitalSignatureAlg -> HashAndSignatureAlgorithm -> Bool
 signatureCompatible RSA   (_, SignatureRSA)          = True

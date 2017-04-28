@@ -14,7 +14,7 @@ module Network.TLS.Receiving
     ( processPacket
     ) where
 
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Control.Concurrent.MVar
 
 import Network.TLS.Context.Internal

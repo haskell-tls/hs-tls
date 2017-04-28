@@ -43,7 +43,7 @@ import Data.ByteString.Char8 ()
 import qualified Data.ByteString.Lazy as L
 import qualified Control.Exception as E
 
-import Control.Monad.State
+import Control.Monad.State.Strict
 
 
 -- | notify the context that this side wants to close connection.
