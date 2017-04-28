@@ -30,7 +30,6 @@ namedCiphersuites :: [(String, [CipherID])]
 namedCiphersuites =
     [ ("all",       map cipherID ciphersuite_all)
     , ("default",   map cipherID ciphersuite_default)
-    , ("medium",    map cipherID ciphersuite_medium)
     , ("strong",    map cipherID ciphersuite_strong)
     ]
 

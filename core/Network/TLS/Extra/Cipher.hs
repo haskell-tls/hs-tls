@@ -174,6 +174,7 @@ ciphersuite_default =
     -- , cipher_RSA_3DES_EDE_CBC_SHA1
     ]
 
+{-# WARNING ciphersuite_all "This ciphersuite list contains RC4. Use ciphersuite_strong or ciphersuite_default instead." #-}
 -- | The default ciphersuites + some not recommended last resort ciphers.
 ciphersuite_all :: [Cipher]
 ciphersuite_all = ciphersuite_default ++
@@ -182,6 +183,7 @@ ciphersuite_all = ciphersuite_default ++
     , cipher_RC4_128_SHA1
     ]
 
+{-# DEPRECATED ciphersuite_medium "Use ciphersuite_strong or ciphersuite_default instead." #-}
 -- | list of medium ciphers.
 ciphersuite_medium :: [Cipher]
 ciphersuite_medium = [ cipher_RC4_128_SHA1
