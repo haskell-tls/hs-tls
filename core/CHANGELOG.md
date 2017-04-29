@@ -19,7 +19,7 @@
 ## Version 1.3.9
 
 - Drop support for old GHC.
-- Enable sha384 ciphers [#168](https://github.com/vincenthz/hs-tls/pull/168)
+- Enable sha384 ciphers and provide `ciphersuite_default` as default set of ciphers for common needs [#168](https://github.com/vincenthz/hs-tls/pull/168)
 - SNI late checks [#147](https://github.com/vincenthz/hs-tls/pull/147)
 - Expose the HasBackend(..) class fully, so that developers can use TLS over their own channels [#149](https://github.com/vincenthz/hs-tls/pull/149)
 
