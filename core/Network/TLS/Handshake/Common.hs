@@ -35,7 +35,7 @@ import Network.TLS.Util
 import Data.List (find)
 import Data.ByteString.Char8 ()
 
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Control.Exception (throwIO)
 
 handshakeFailed :: TLSError -> IO ()

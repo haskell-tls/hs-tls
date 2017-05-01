@@ -69,7 +69,7 @@ import Network.TLS.Measurement
 import qualified Data.ByteString as B
 
 import Control.Concurrent.MVar
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Control.Exception (throwIO, Exception())
 import Data.IORef
 import Data.Tuple

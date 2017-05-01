@@ -58,7 +58,7 @@ import Network.TLS.Types (Role(..))
 import Network.TLS.Wire (GetContinuation)
 import Network.TLS.Extension
 import qualified Data.ByteString as B
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Network.TLS.ErrT
 import Crypto.Random
 import Data.X509 (CertificateChain)

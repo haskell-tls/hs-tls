@@ -80,7 +80,7 @@ import Network.TLS.RNG
 import Data.Maybe (isJust)
 
 import Control.Concurrent.MVar
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Data.IORef
 import Data.Monoid (mappend)
 

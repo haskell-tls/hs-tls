@@ -14,7 +14,7 @@ module Network.TLS.Handshake.Process
     ) where
 
 import Control.Concurrent.MVar
-import Control.Monad.State (gets)
+import Control.Monad.State.Strict (gets)
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
 
