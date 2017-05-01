@@ -19,6 +19,8 @@ module Network.TLS.Types
 import Data.ByteString (ByteString)
 import Data.Word
 
+type HostName = String
+
 -- | Versions known to TLS
 --
 -- SSL2 is just defined, but this version is and will not be supported.
@@ -29,9 +31,11 @@ type SessionID = ByteString
 
 -- | Session data to resume
 data SessionData = SessionData
-    { sessionVersion :: Version
-    , sessionCipher  :: CipherID
-    , sessionSecret  :: ByteString
+    { sessionVersion     :: Version
+    , sessionCipher      :: CipherID
+    , sessionCompression :: CompressionID
+    , sessionClientSNI   :: Maybe HostName
+    , sessionSecret      :: ByteString
     } deriving (Show,Eq)
 
 -- | Cipher identification

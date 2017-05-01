@@ -88,7 +88,9 @@ handshakeClient cparams ctx = do
                     usingState_ ctx $ setClientALPNSuggest protos
                     return $ Just $ toExtensionRaw $ ApplicationLayerProtocolNegotiation protos
         sniExtension = if clientUseServerNameIndication cparams
-                         then return $ Just $ toExtensionRaw $ ServerName [ServerNameHostName $ fst $ clientServerIdentification cparams]
+                         then do let sni = fst $ clientServerIdentification cparams
+                                 usingState_ ctx $ setClientSNI sni
+                                 return $ Just $ toExtensionRaw $ ServerName [ServerNameHostName sni]
                          else return Nothing
 
         curveExtension = return $ Just $ toExtensionRaw $ NegotiatedGroups ((supportedGroups $ ctxSupported ctx) `intersect` availableGroups)

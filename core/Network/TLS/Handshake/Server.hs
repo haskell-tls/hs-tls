@@ -212,17 +212,16 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
         commonCompressions    = compressionIntersectID (supportedCompressions $ ctxSupported ctx) compressions
         usedCompression       = head commonCompressions
 
-        -- FIXME should also validate compression_methods and server_name
-        -- (see RFC 5246 at 7.4.1.2 and RFC 6066), but necessary parameters
-        -- are not stored in SessionData currently
         validateSession _   Nothing                         = Nothing
-        validateSession _   m@(Just sd)
+        validateSession sni m@(Just sd)
             -- SessionData parameters are assumed to match the local server configuration
             -- so we need to compare only to ClientHello inputs.  Abbreviated handshake
             -- uses the same server_name than full handshake so the same
             -- credentials (and thus ciphers) are available.
             | clientVersion < sessionVersion sd             = Nothing
             | sessionCipher sd `notElem` ciphers            = Nothing
+            | sessionCompression sd `notElem` compressions  = Nothing
+            | isJust sni && sessionClientSNI sd /= sni      = Nothing
             | otherwise                                     = m
 
 
