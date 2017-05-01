@@ -15,6 +15,25 @@ import Data.IORef
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 
+blockCipher :: Cipher
+blockCipher = Cipher
+    { cipherID   = 0xff12
+    , cipherName = "rsa-id-const"
+    , cipherBulk = Bulk
+        { bulkName      = "id"
+        , bulkKeySize   = 16
+        , bulkIVSize    = 16
+        , bulkExplicitIV= 0
+        , bulkAuthTagLen= 0
+        , bulkBlockSize = 16
+        , bulkF         = BulkBlockF $ \_ _ _ -> (\m -> (m, B.empty))
+        }
+    , cipherHash        = MD5
+    , cipherPRFHash     = Nothing
+    , cipherKeyExchange = CipherKeyExchange_RSA
+    , cipherMinVer      = Nothing
+    }
+
 recvDataNonNull :: Context -> IO B.ByteString
 recvDataNonNull ctx = recvData ctx >>= \l -> if B.null l then recvDataNonNull ctx else return l
 
