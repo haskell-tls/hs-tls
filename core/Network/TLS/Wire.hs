@@ -56,20 +56,21 @@ import qualified Data.Serialize.Get as G
 import Data.Serialize.Put
 import Control.Applicative ((<$>))
 import Control.Monad
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import Data.Word
 import Data.Bits
 import Network.TLS.Struct
 import Network.TLS.Util.Serialization
 
-type GetContinuation a = Bytes -> GetResult a
+type GetContinuation a = ByteString -> GetResult a
 data GetResult a =
       GotError TLSError
     | GotPartial (GetContinuation a)
     | GotSuccess a
-    | GotSuccessRemaining a Bytes
+    | GotSuccessRemaining a ByteString
 
-runGet :: String -> Get a -> Bytes -> GetResult a
+runGet :: String -> Get a -> ByteString -> GetResult a
 runGet lbl f = toGetResult <$> G.runGetPartial (label lbl f)
   where toGetResult (G.Fail err _)    = GotError (Error_Packet_Parsing err)
         toGetResult (G.Partial cont)  = GotPartial (toGetResult <$> cont)
@@ -77,17 +78,17 @@ runGet lbl f = toGetResult <$> G.runGetPartial (label lbl f)
             | B.null bsLeft = GotSuccess r
             | otherwise     = GotSuccessRemaining r bsLeft
 
-runGetErr :: String -> Get a -> Bytes -> Either TLSError a
+runGetErr :: String -> Get a -> ByteString -> Either TLSError a
 runGetErr lbl getter b = toSimple $ runGet lbl getter b
   where toSimple (GotError err) = Left err
         toSimple (GotPartial _) = Left (Error_Packet_Parsing (lbl ++ ": parsing error: partial packet"))
         toSimple (GotSuccessRemaining _ _) = Left (Error_Packet_Parsing (lbl ++ ": parsing error: remaining bytes"))
         toSimple (GotSuccess r) = Right r
 
-runGetMaybe :: Get a -> Bytes -> Maybe a
+runGetMaybe :: Get a -> ByteString -> Maybe a
 runGetMaybe f = either (const Nothing) Just . G.runGet f
 
-tryGet :: Get a -> Bytes -> Maybe a
+tryGet :: Get a -> ByteString -> Maybe a
 tryGet f = either (const Nothing) Just . G.runGet f
 
 getWords8 :: Get [Word8]
@@ -109,13 +110,13 @@ getWord24 = do
 getWord32 :: Get Word32
 getWord32 = getWord32be
 
-getOpaque8 :: Get Bytes
+getOpaque8 :: Get ByteString
 getOpaque8 = getWord8 >>= getBytes . fromIntegral
 
-getOpaque16 :: Get Bytes
+getOpaque16 :: Get ByteString
 getOpaque16 = getWord16 >>= getBytes . fromIntegral
 
-getOpaque24 :: Get Bytes
+getOpaque24 :: Get ByteString
 getOpaque24 = getWord24 >>= getBytes
 
 getInteger16 :: Get Integer
@@ -157,16 +158,16 @@ putWord24 i = do
     let c = fromIntegral (i .&. 0xff)
     mapM_ putWord8 [a,b,c]
 
-putBytes :: Bytes -> Put
+putBytes :: ByteString -> Put
 putBytes = putByteString
 
-putOpaque8 :: Bytes -> Put
+putOpaque8 :: ByteString -> Put
 putOpaque8 b = putWord8 (fromIntegral $ B.length b) >> putBytes b
 
-putOpaque16 :: Bytes -> Put
+putOpaque16 :: ByteString -> Put
 putOpaque16 b = putWord16 (fromIntegral $ B.length b) >> putBytes b
 
-putOpaque24 :: Bytes -> Put
+putOpaque24 :: ByteString -> Put
 putOpaque24 b = putWord24 (B.length b) >> putBytes b
 
 putInteger16 :: Integer -> Put
@@ -175,11 +176,11 @@ putInteger16 = putOpaque16 . i2osp
 putBigNum16 :: BigNum -> Put
 putBigNum16 (BigNum b) = putOpaque16 b
 
-encodeWord16 :: Word16 -> Bytes
+encodeWord16 :: Word16 -> ByteString
 encodeWord16 = runPut . putWord16
 
-encodeWord32 :: Word32 -> Bytes
+encodeWord32 :: Word32 -> ByteString
 encodeWord32 = runPut . putWord32
 
-encodeWord64 :: Word64 -> Bytes
+encodeWord64 :: Word64 -> ByteString
 encodeWord64 = runPut . putWord64be

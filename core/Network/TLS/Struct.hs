@@ -80,9 +80,9 @@ data ConnectionEnd = ConnectionServer | ConnectionClient
 data CipherType = CipherStream | CipherBlock | CipherAEAD
 
 data CipherData = CipherData
-    { cipherDataContent :: Bytes
-    , cipherDataMAC     :: Maybe Bytes
-    , cipherDataPadding :: Maybe Bytes
+    { cipherDataContent :: ByteString
+    , cipherDataMAC     :: Maybe ByteString
+    , cipherDataPadding :: Maybe ByteString
     } deriving (Show,Eq)
 
 data CertificateType =
@@ -123,7 +123,7 @@ data SignatureAlgorithm =
 
 type HashAndSignatureAlgorithm = (HashAlgorithm, SignatureAlgorithm)
 
-type Signature = Bytes
+type Signature = ByteString
 
 data DigitallySigned = DigitallySigned (Maybe HashAndSignatureAlgorithm) Signature
     deriving (Show,Eq)
@@ -178,26 +178,26 @@ data Packet =
 
 data Header = Header ProtocolType Version Word16 deriving (Show,Eq)
 
-newtype ServerRandom = ServerRandom { unServerRandom :: Bytes } deriving (Show, Eq)
-newtype ClientRandom = ClientRandom { unClientRandom :: Bytes } deriving (Show, Eq)
+newtype ServerRandom = ServerRandom { unServerRandom :: ByteString } deriving (Show, Eq)
+newtype ClientRandom = ClientRandom { unClientRandom :: ByteString } deriving (Show, Eq)
 newtype Session = Session (Maybe SessionID) deriving (Show, Eq)
 
-type FinishedData = Bytes
+type FinishedData = ByteString
 type ExtensionID  = Word16
 
-data ExtensionRaw = ExtensionRaw ExtensionID Bytes
+data ExtensionRaw = ExtensionRaw ExtensionID ByteString
     deriving (Eq)
 
 instance Show ExtensionRaw where
     show (ExtensionRaw eid bs) = "ExtensionRaw " ++ show eid ++ " " ++ showBytesHex bs ++ ""
 
-constrRandom32 :: (Bytes -> a) -> Bytes -> Maybe a
+constrRandom32 :: (ByteString -> a) -> ByteString -> Maybe a
 constrRandom32 constr l = if B.length l == 32 then Just (constr l) else Nothing
 
-serverRandom :: Bytes -> Maybe ServerRandom
+serverRandom :: ByteString -> Maybe ServerRandom
 serverRandom l = constrRandom32 ServerRandom l
 
-clientRandom :: Bytes -> Maybe ClientRandom
+clientRandom :: ByteString -> Maybe ClientRandom
 clientRandom l = constrRandom32 ClientRandom l
 
 data AlertLevel =
@@ -250,7 +250,7 @@ data HandshakeType =
     | HandshakeType_Finished
     deriving (Show,Eq)
 
-newtype BigNum = BigNum Bytes
+newtype BigNum = BigNum ByteString
     deriving (Show,Eq)
 
 bigNumToInteger :: BigNum -> Integer
@@ -297,14 +297,14 @@ data ServerKeyXchgAlgorithmData =
     | SKX_RSA (Maybe ServerRSAParams)
     | SKX_DH_DSS (Maybe ServerRSAParams)
     | SKX_DH_RSA (Maybe ServerRSAParams)
-    | SKX_Unparsed Bytes -- if we parse the server key xchg before knowing the actual cipher, we end up with this structure.
-    | SKX_Unknown Bytes
+    | SKX_Unparsed ByteString -- if we parse the server key xchg before knowing the actual cipher, we end up with this structure.
+    | SKX_Unknown ByteString
     deriving (Show,Eq)
 
 data ClientKeyXchgAlgorithmData =
-      CKX_RSA Bytes
+      CKX_RSA ByteString
     | CKX_DH DHPublic
-    | CKX_ECDH Bytes
+    | CKX_ECDH ByteString
     deriving (Show,Eq)
 
 type DeprecatedRecord = ByteString

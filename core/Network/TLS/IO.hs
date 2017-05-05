@@ -20,7 +20,7 @@ import Network.TLS.Hooks
 import Network.TLS.Sending
 import Network.TLS.Receiving
 import qualified Data.ByteString as B
-import Data.ByteString.Char8 ()
+import Data.ByteString.Char8 (ByteString)
 
 import Data.IORef
 import Control.Monad.State.Strict
@@ -34,7 +34,7 @@ checkValid ctx = do
     eofed <- ctxEOF ctx
     when eofed $ throwIO $ mkIOError eofErrorType "data" Nothing Nothing
 
-readExact :: Context -> Int -> IO (Either TLSError Bytes)
+readExact :: Context -> Int -> IO (Either TLSError ByteString)
 readExact ctx sz = do
     hdrbs <- contextRecv ctx sz
     if B.length hdrbs == sz
@@ -83,7 +83,7 @@ recvRecord compatSSLv2 ctx
                         either (return . Left) (flip getRecord content) $ decodeDeprecatedHeader readlen content
 #endif
               maximumSizeExceeded = Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
-              getRecord :: Header -> Bytes -> IO (Either TLSError (Record Plaintext))
+              getRecord :: Header -> ByteString -> IO (Either TLSError (Record Plaintext))
               getRecord header content = do
                     withLog ctx $ \logging -> loggingIORecv logging header content
                     runRxState ctx $ disengageRecord $ rawToRecord header (fragmentCiphertext content)

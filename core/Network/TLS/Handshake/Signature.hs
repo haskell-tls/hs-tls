@@ -42,7 +42,7 @@ signatureCompatible _     (_, _)                     = False
 checkCertificateVerify :: Context
                        -> Version
                        -> DigitalSignatureAlg
-                       -> Bytes
+                       -> ByteString
                        -> DigitallySigned
                        -> IO Bool
 checkCertificateVerify ctx usedVersion sigAlgExpected msgs digSig@(DigitallySigned hashSigAlg _) =
@@ -61,17 +61,17 @@ createCertificateVerify :: Context
                         -> Version
                         -> DigitalSignatureAlg
                         -> Maybe HashAndSignatureAlgorithm -- TLS12 only
-                        -> Bytes
+                        -> ByteString
                         -> IO DigitallySigned
 createCertificateVerify ctx usedVersion sigAlg hashSigAlg msgs =
     prepareCertificateVerifySignatureData ctx usedVersion sigAlg hashSigAlg msgs >>=
     signatureCreateWithCertVerifyData ctx hashSigAlg
 
-type CertVerifyData = (SignatureParams, Bytes)
+type CertVerifyData = (SignatureParams, ByteString)
 
 -- in the case of TLS < 1.2, RSA signing, then the data need to be hashed first, as
 -- the SHA1_MD5 algorithm expect an already digested data
-buildVerifyData :: SignatureParams -> Bytes -> CertVerifyData
+buildVerifyData :: SignatureParams -> ByteString -> CertVerifyData
 buildVerifyData (RSAParams SHA1_MD5 enc) bs = (RSAParams SHA1_MD5 enc, hashFinal $ hashUpdate (hashInit SHA1_MD5) bs)
 buildVerifyData sigParam             bs = (sigParam, bs)
 
@@ -79,7 +79,7 @@ prepareCertificateVerifySignatureData :: Context
                                       -> Version
                                       -> DigitalSignatureAlg
                                       -> Maybe HashAndSignatureAlgorithm -- TLS12 only
-                                      -> Bytes
+                                      -> ByteString
                                       -> IO CertVerifyData
 prepareCertificateVerifySignatureData ctx usedVersion sigAlg hashSigAlg msgs
     | usedVersion == SSL3 = do
@@ -132,7 +132,7 @@ signatureCreateWithCertVerifyData ctx malg (sigParam, toSign) = do
     cc <- usingState_ ctx $ isClientContext
     DigitallySigned malg <$> signPrivate ctx cc sigParam toSign
 
-signatureVerify :: Context -> DigitallySigned -> DigitalSignatureAlg -> Bytes -> IO Bool
+signatureVerify :: Context -> DigitallySigned -> DigitalSignatureAlg -> ByteString -> IO Bool
 signatureVerify ctx digSig@(DigitallySigned hashSigAlg _) sigAlgExpected toVerifyData = do
     usedVersion <- usingState_ ctx getVersion
     let (sigParam, toVerify) =
@@ -152,7 +152,7 @@ signatureVerifyWithCertVerifyData ctx (DigitallySigned _ bs) (sigParam, toVerify
     cc <- usingState_ ctx $ isClientContext
     verifyPublic ctx cc sigParam toVerify bs
 
-digitallySignParams :: Context -> Bytes -> DigitalSignatureAlg -> Maybe HashAndSignatureAlgorithm -> IO DigitallySigned
+digitallySignParams :: Context -> ByteString -> DigitalSignatureAlg -> Maybe HashAndSignatureAlgorithm -> IO DigitallySigned
 digitallySignParams ctx signatureData sigAlg hashSigAlg =
     let sigParam = signatureParams sigAlg hashSigAlg
      in signatureCreateWithCertVerifyData ctx hashSigAlg (buildVerifyData sigParam signatureData)

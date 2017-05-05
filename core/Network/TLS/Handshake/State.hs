@@ -61,6 +61,7 @@ import Control.Applicative (Applicative, (<$>))
 import Control.Monad.State.Strict
 import Data.X509 (CertificateChain)
 import Data.ByteArray (ByteArrayAccess)
+import Data.ByteString (ByteString)
 
 data HandshakeKeyState = HandshakeKeyState
     { hksRemotePublicKey :: !(Maybe PubKey)
@@ -71,14 +72,14 @@ data HandshakeState = HandshakeState
     { hstClientVersion       :: !(Version)
     , hstClientRandom        :: !ClientRandom
     , hstServerRandom        :: !(Maybe ServerRandom)
-    , hstMasterSecret        :: !(Maybe Bytes)
+    , hstMasterSecret        :: !(Maybe ByteString)
     , hstKeyState            :: !HandshakeKeyState
     , hstServerDHParams      :: !(Maybe ServerDHParams)
     , hstDHPrivate           :: !(Maybe DHPrivate)
     , hstServerECDHParams    :: !(Maybe ServerECDHParams)
     , hstECDHPrivate         :: !(Maybe GroupPrivate)
-    , hstHandshakeDigest     :: !(Either [Bytes] HashCtx)
-    , hstHandshakeMessages   :: [Bytes]
+    , hstHandshakeDigest     :: !(Either [ByteString] HashCtx)
+    , hstHandshakeMessages   :: [ByteString]
     , hstClientCertRequest   :: !(Maybe ClientCertRequestData) -- ^ Set to Just-value when certificate request was received
     , hstClientCertSent      :: !Bool -- ^ Set to true when a client certificate chain was sent
     , hstCertReqSent         :: !Bool -- ^ Set to true when a certificate request was sent
@@ -195,19 +196,19 @@ getClientCertRequest = gets hstClientCertRequest
 getPendingCipher :: HandshakeM Cipher
 getPendingCipher = fromJust "pending cipher" <$> gets hstPendingCipher
 
-addHandshakeMessage :: Bytes -> HandshakeM ()
+addHandshakeMessage :: ByteString -> HandshakeM ()
 addHandshakeMessage content = modify $ \hs -> hs { hstHandshakeMessages = content : hstHandshakeMessages hs}
 
-getHandshakeMessages :: HandshakeM [Bytes]
+getHandshakeMessages :: HandshakeM [ByteString]
 getHandshakeMessages = gets (reverse . hstHandshakeMessages)
 
-updateHandshakeDigest :: Bytes -> HandshakeM ()
+updateHandshakeDigest :: ByteString -> HandshakeM ()
 updateHandshakeDigest content = modify $ \hs -> hs
     { hstHandshakeDigest = case hstHandshakeDigest hs of
                                 Left bytes    -> Left (content:bytes)
                                 Right hashCtx -> Right $ hashUpdate hashCtx content }
 
-getHandshakeDigest :: Version -> Role -> HandshakeM Bytes
+getHandshakeDigest :: Version -> Role -> HandshakeM ByteString
 getHandshakeDigest ver role = gets gen
   where gen hst = case hstHandshakeDigest hst of
                       Right hashCtx ->
@@ -236,14 +237,14 @@ setMasterSecretFromPre ver role premasterSecret = do
 
 -- | Set master secret and as a side effect generate the key block
 -- with all the right parameters, and setup the pending tx/rx state.
-setMasterSecret :: Version -> Role -> Bytes -> HandshakeM ()
+setMasterSecret :: Version -> Role -> ByteString -> HandshakeM ()
 setMasterSecret ver role masterSecret = modify $ \hst ->
     let (pendingTx, pendingRx) = computeKeyBlock hst masterSecret ver role
      in hst { hstMasterSecret   = Just masterSecret
             , hstPendingTxState = Just pendingTx
             , hstPendingRxState = Just pendingRx }
 
-computeKeyBlock :: HandshakeState -> Bytes -> Version -> Role -> (RecordState, RecordState)
+computeKeyBlock :: HandshakeState -> ByteString -> Version -> Role -> (RecordState, RecordState)
 computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
   where cipher       = fromJust "cipher" $ hstPendingCipher hst
         keyblockSize = cipherKeyBlockSize cipher

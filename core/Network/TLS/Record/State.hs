@@ -37,12 +37,13 @@ import Network.TLS.Packet
 import Network.TLS.MAC
 import Network.TLS.Util
 
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
 data CryptState = CryptState
     { cstKey        :: !BulkState
-    , cstIV         :: !Bytes
-    , cstMacSecret  :: !Bytes
+    , cstIV         :: !ByteString
+    , cstMacSecret  :: !ByteString
     } deriving (Show)
 
 newtype MacState = MacState
@@ -106,7 +107,7 @@ incrRecordState :: RecordState -> RecordState
 incrRecordState ts = ts { stMacState = MacState (ms + 1) }
   where (MacState ms) = stMacState ts
 
-setRecordIV :: Bytes -> RecordState -> RecordState
+setRecordIV :: ByteString -> RecordState -> RecordState
 setRecordIV iv st = st { stCryptState = (stCryptState st) { cstIV = iv } }
 
 withCompression :: (Compression -> (Compression, a)) -> RecordM a
@@ -116,7 +117,7 @@ withCompression f = do
     put $ st { stCompression = nc }
     return a
 
-computeDigest :: Version -> RecordState -> Header -> Bytes -> (Bytes, RecordState)
+computeDigest :: Version -> RecordState -> Header -> ByteString -> (ByteString, RecordState)
 computeDigest ver tstate hdr content = (digest, incrRecordState tstate)
   where digest = macF (cstMacSecret cst) msg
         cst    = stCryptState tstate
@@ -128,7 +129,7 @@ computeDigest ver tstate hdr content = (digest, incrRecordState tstate)
             | ver < TLS10 = (macSSL hashA, B.concat [ encodedSeq, encodeHeaderNoVer hdr, content ])
             | otherwise   = (hmac hashA, B.concat [ encodedSeq, encodeHeader hdr, content ])
 
-makeDigest :: Header -> Bytes -> RecordM Bytes
+makeDigest :: Header -> ByteString -> RecordM ByteString
 makeDigest hdr content = do
     ver <- getRecordVersion
     st <- get

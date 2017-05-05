@@ -66,6 +66,7 @@ import Network.TLS.Hooks
 import Network.TLS.Record.State
 import Network.TLS.Parameters
 import Network.TLS.Measurement
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
 import Control.Concurrent.MVar
@@ -80,7 +81,7 @@ data Information = Information
     { infoVersion      :: Version
     , infoCipher       :: Cipher
     , infoCompression  :: Compression
-    , infoMasterSecret :: Maybe Bytes
+    , infoMasterSecret :: Maybe ByteString
     , infoClientRandom :: Maybe ClientRandom
     , infoServerRandom :: Maybe ServerRandom
     } deriving (Show,Eq)
@@ -141,10 +142,10 @@ contextGetInformation ctx = do
         (Just v, Just c) -> return $ Just $ Information v c comp ms cr sr
         _                -> return Nothing
 
-contextSend :: Context -> Bytes -> IO ()
+contextSend :: Context -> ByteString -> IO ()
 contextSend c b = updateMeasure c (addBytesSent $ B.length b) >> (backendSend $ ctxConnection c) b
 
-contextRecv :: Context -> Int -> IO Bytes
+contextRecv :: Context -> Int -> IO ByteString
 contextRecv c sz = updateMeasure c (addBytesReceived sz) >> (backendRecv $ ctxConnection c) sz
 
 ctxEOF :: Context -> IO Bool
@@ -218,7 +219,7 @@ runRxState ctx f = do
             Left err         -> return (st, Left err)
             Right (a, newSt) -> return (newSt, Right a)
 
-getStateRNG :: Context -> Int -> IO Bytes
+getStateRNG :: Context -> Int -> IO ByteString
 getStateRNG ctx n = usingState_ ctx $ genRandom n
 
 withReadLock :: Context -> IO a -> IO a

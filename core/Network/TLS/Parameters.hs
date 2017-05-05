@@ -37,6 +37,7 @@ import Network.TLS.Credentials
 import Network.TLS.X509
 import Network.TLS.RNG (Seed)
 import Data.Default.Class
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 #if __GLASGOW_HASKELL__ < 710
 import Data.Monoid (mempty)
@@ -79,7 +80,7 @@ data ClientParams = ClientParams
       -- The extra blob is useful to differentiate services running on the same host, but that
       -- might have different certificates given. It's only used as part of the X509 validation
       -- infrastructure.
-    , clientServerIdentification      :: (HostName, Bytes)
+    , clientServerIdentification      :: (HostName, ByteString)
       -- | Allow the use of the Server Name Indication TLS extension during handshake, which allow
       -- the client to specify which host name, it's trying to access. This is useful to distinguish
       -- CNAME aliasing (e.g. web virtual host).
@@ -94,7 +95,7 @@ data ClientParams = ClientParams
     , clientDebug                     :: DebugParams
     } deriving (Show)
 
-defaultParamsClient :: HostName -> Bytes -> ClientParams
+defaultParamsClient :: HostName -> ByteString -> ClientParams
 defaultParamsClient serverName serverId = ClientParams
     { clientWantSessionResume    = Nothing
     , clientUseMaxFragmentLength = Nothing
