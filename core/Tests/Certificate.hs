@@ -4,6 +4,8 @@
 module Certificate
     ( arbitraryX509
     , arbitraryX509WithKey
+    , arbitraryX509WithKeyAndUsage
+    , arbitraryKeyUsage
     , simpleCertificate
     , simpleX509
     ) where
@@ -44,8 +46,8 @@ instance Arbitrary DateTime where
 maxSerial :: Integer
 maxSerial = 16777216
 
-arbitraryCertificate :: PubKey -> Gen Certificate
-arbitraryCertificate pubKey = do
+arbitraryCertificate :: [ExtKeyUsageFlag] -> PubKey -> Gen Certificate
+arbitraryCertificate usageFlags pubKey = do
     serial    <- choose (0,maxSerial)
     subjectdn <- arbitraryDN
     validity  <- (,) <$> arbitrary <*> arbitrary
@@ -59,7 +61,7 @@ arbitraryCertificate pubKey = do
             , certValidity     = validity
             , certPubKey       = pubKey
             , certExtensions   = Extensions $ Just
-                [ extensionEncode True $ ExtKeyUsage [KeyUsage_digitalSignature,KeyUsage_keyEncipherment,KeyUsage_keyCertSign]
+                [ extensionEncode True $ ExtKeyUsage usageFlags
                 ]
             }
   where issuerdn = DistinguishedName [(getObjectID DnCommonName, "Root CA")]
@@ -91,8 +93,11 @@ simpleX509 pubKey = do
      in signedExact
 
 arbitraryX509WithKey :: (PubKey, t) -> Gen SignedCertificate
-arbitraryX509WithKey (pubKey, _) = do
-    cert <- arbitraryCertificate pubKey
+arbitraryX509WithKey = arbitraryX509WithKeyAndUsage knownKeyUsage
+
+arbitraryX509WithKeyAndUsage :: [ExtKeyUsageFlag] -> (PubKey, t) -> Gen SignedCertificate
+arbitraryX509WithKeyAndUsage usageFlags (pubKey, _) = do
+    cert <- arbitraryCertificate usageFlags pubKey
     sig  <- resize 40 $ listOf1 arbitrary
     let sigalg = SignatureALG HashSHA1 (pubkeyToAlg pubKey)
     let (signedExact, ()) = objectToSignedExact (\(!(_)) -> (B.pack sig,sigalg,())) cert
@@ -102,3 +107,12 @@ arbitraryX509 :: Gen SignedCertificate
 arbitraryX509 = do
     let (pubKey, privKey) = getGlobalRSAPair
     arbitraryX509WithKey (PubKeyRSA pubKey, PrivKeyRSA privKey)
+
+arbitraryKeyUsage :: Gen [ExtKeyUsageFlag]
+arbitraryKeyUsage = sublistOf knownKeyUsage
+
+knownKeyUsage :: [ExtKeyUsageFlag]
+knownKeyUsage = [ KeyUsage_digitalSignature
+                , KeyUsage_keyEncipherment
+                , KeyUsage_keyAgreement
+                ]

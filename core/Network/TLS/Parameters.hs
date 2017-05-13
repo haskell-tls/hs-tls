@@ -281,6 +281,11 @@ data ClientHooks = ClientHooks
       -- implementation calls 'validateDefault' which validates according to the
       -- default hooks and checks provided by "Data.X509.Validation".  This can
       -- be replaced with a custom validation function using different settings.
+      --
+      -- The function is not expected to verify the key-usage extension of the
+      -- end-entity certificate, as this depends on the dynamically-selected
+      -- cipher and this part should not be cached.  Key-usage verification
+      -- is performed by the library internally.
     , onServerCertificate  :: CertificateStore -> ValidationCache -> ServiceID -> CertificateChain -> IO [FailedReason]
       -- | This action is called when the client sends ClientHello
       --   to determine ALPN values such as '["h2", "http/1.1"]'.

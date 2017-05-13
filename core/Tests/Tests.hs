@@ -23,6 +23,7 @@ import Control.Concurrent
 import Control.Monad
 
 import Data.IORef
+import Data.X509 (ExtKeyUsageFlag(..))
 
 import System.Timeout
 
@@ -194,6 +195,29 @@ prop_handshake_groups = do
         then runTLSInitFailure (clientParam',serverParam')
         else runTLSPipeSimple  (clientParam',serverParam')
 
+prop_handshake_srv_key_usage :: PropertyM IO ()
+prop_handshake_srv_key_usage = do
+    let versions = [SSL3,TLS10,TLS11,TLS12]
+        ciphers = [ cipher_ECDHE_RSA_AES128CBC_SHA
+                  , cipher_DHE_RSA_AES128_SHA1
+                  , cipher_AES256_SHA256
+                  ]
+    (clientParam,serverParam) <- pick $ arbitraryPairParamsWithVersionsAndCiphers
+                                            (versions, versions)
+                                            (ciphers, ciphers)
+    usageFlags <- pick arbitraryKeyUsage
+    cred <- pick $ arbitraryRSACredentialWithUsage usageFlags
+    let serverParam' = serverParam
+            { serverShared = (serverShared serverParam)
+                  { sharedCredentials = Credentials [cred]
+                  }
+            }
+        shouldSucceed = KeyUsage_digitalSignature `elem` usageFlags
+                            || KeyUsage_keyEncipherment `elem` usageFlags
+    if shouldSucceed
+        then runTLSPipeSimple  (clientParam,serverParam')
+        else runTLSInitFailure (clientParam,serverParam')
+
 prop_handshake_client_auth :: PropertyM IO ()
 prop_handshake_client_auth = do
     (clientParam,serverParam) <- pick arbitraryPairParams
@@ -331,6 +355,7 @@ main = defaultMain $ testGroup "tls"
             , testProperty "Cipher suites" (monadicIO prop_handshake_ciphersuites)
             , testProperty "Groups" (monadicIO prop_handshake_groups)
             , testProperty "Certificate fallback" (monadicIO prop_handshake_cert_fallback)
+            , testProperty "Server key usage" (monadicIO prop_handshake_srv_key_usage)
             , testProperty "Client authentication" (monadicIO prop_handshake_client_auth)
             , testProperty "ALPN" (monadicIO prop_handshake_alpn)
             , testProperty "SNI" (monadicIO prop_handshake_sni)

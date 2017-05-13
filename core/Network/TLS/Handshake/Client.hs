@@ -29,6 +29,7 @@ import Network.TLS.Util (bytesEq, catchException)
 import Network.TLS.Types
 import Network.TLS.X509
 import qualified Data.ByteString as B
+import Data.X509 (ExtKeyUsageFlag(..))
 
 import Control.Monad.State.Strict
 import Control.Exception (SomeException)
@@ -348,7 +349,7 @@ processCertificate cparams ctx (Certificates certs) = do
     -- then run certificate validation
     usage <- catchException (wrapCertificateChecks <$> checkCert) rejectOnException
     case usage of
-        CertificateUsageAccept        -> return ()
+        CertificateUsageAccept        -> checkLeafCertificateKeyUsage
         CertificateUsageReject reason -> certificateRejected reason
     return $ RecvStateHandshake (processServerKeyExchange ctx)
   where shared = clientShared cparams
@@ -356,6 +357,19 @@ processCertificate cparams ctx (Certificates certs) = do
                                                                 (sharedValidationCache shared)
                                                                 (clientServerIdentification cparams)
                                                                 certs
+        -- also verify that the certificate optional key usage is compatible
+        -- with the intended key-exchange.  This check is not delegated to
+        -- x509-validation 'checkLeafKeyUsage' because it depends on negotiated
+        -- cipher, which is not available from onServerCertificate parameters.
+        -- Additionally, with only one shared ValidationCache, x509-validation
+        -- would cache validation result based on a key usage and reuse it with
+        -- another key usage.
+        checkLeafCertificateKeyUsage = do
+            cipher <- usingHState ctx getPendingCipher
+            case requiredCertKeyUsage cipher of
+                Nothing   -> return ()
+                Just flag -> verifyLeafKeyUsage flag certs
+
 processCertificate _ ctx p = processServerKeyExchange ctx p
 
 expectChangeCipher :: Packet -> IO (RecvState IO)
@@ -415,3 +429,17 @@ processCertificateRequest ctx p = processServerHelloDone ctx p
 processServerHelloDone :: Context -> Handshake -> IO (RecvState m)
 processServerHelloDone _ ServerHelloDone = return RecvStateDone
 processServerHelloDone _ p = unexpected (show p) (Just "server hello data")
+
+requiredCertKeyUsage :: Cipher -> Maybe ExtKeyUsageFlag
+requiredCertKeyUsage cipher =
+    case cipherKeyExchange cipher of
+        CipherKeyExchange_RSA         -> Just KeyUsage_keyEncipherment
+        CipherKeyExchange_DH_Anon     -> Nothing
+        CipherKeyExchange_DHE_RSA     -> Just KeyUsage_digitalSignature
+        CipherKeyExchange_ECDHE_RSA   -> Just KeyUsage_digitalSignature
+        CipherKeyExchange_DHE_DSS     -> Just KeyUsage_digitalSignature
+        CipherKeyExchange_DH_DSS      -> Just KeyUsage_keyAgreement
+        CipherKeyExchange_DH_RSA      -> Just KeyUsage_keyAgreement
+        CipherKeyExchange_ECDH_ECDSA  -> Just KeyUsage_keyAgreement
+        CipherKeyExchange_ECDH_RSA    -> Just KeyUsage_keyAgreement
+        CipherKeyExchange_ECDHE_ECDSA -> Just KeyUsage_digitalSignature
