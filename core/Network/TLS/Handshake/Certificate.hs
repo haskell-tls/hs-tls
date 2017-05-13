@@ -7,6 +7,7 @@
 --
 module Network.TLS.Handshake.Certificate
     ( certificateRejected
+    , badCertificate
     , rejectOnException
     ) where
 
@@ -26,6 +27,9 @@ certificateRejected CertificateRejectUnknownCA =
     throwCore $ Error_Protocol ("certificate has unknown CA", True, UnknownCa)
 certificateRejected (CertificateRejectOther s) =
     throwCore $ Error_Protocol ("certificate rejected: " ++ s, True, CertificateUnknown)
+
+badCertificate :: MonadIO m => String -> m a
+badCertificate msg = throwCore $ Error_Protocol (msg, True, BadCertificate)
 
 rejectOnException :: SomeException -> IO CertificateUsage
 rejectOnException e = return $ CertificateUsageReject $ CertificateRejectOther $ show e

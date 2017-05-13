@@ -510,7 +510,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                         -- also commit the client certificate
                         -- chain to the context.
                         usingState_ ctx $ setClientCertificateChain certs
-                    else throwCore $ Error_Protocol ("verification failed", True, BadCertificate)
+                    else badCertificate "verification failed"
             return $ RecvStateNext expectChangeCipher
 
         processCertificateVerify p = do
