@@ -30,6 +30,7 @@ import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Key
 import Network.TLS.Measurement
 import qualified Data.ByteString as B
+import Data.X509 (ExtKeyUsageFlag(..))
 
 import Control.Monad.State.Strict
 
@@ -453,7 +454,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             --
             usage <- liftIO $ catchException (onClientCertificate (serverHooks sparams) certs) rejectOnException
             case usage of
-                CertificateUsageAccept        -> return ()
+                CertificateUsageAccept        -> verifyLeafKeyUsage KeyUsage_digitalSignature certs
                 CertificateUsageReject reason -> certificateRejected reason
 
             -- Remember cert chain for later use.
@@ -486,8 +487,6 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             msgs  <- usingHState ctx $ B.concat <$> getHandshakeMessages
 
             sigAlgExpected <- getRemoteSignatureAlg
-
-            -- FIXME should check certificate is allowed for signing
 
             verif <- checkCertificateVerify ctx usedVersion sigAlgExpected msgs dsig
 

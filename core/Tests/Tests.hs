@@ -234,6 +234,23 @@ prop_handshake_client_auth = do
             | chain == fst cred = return CertificateUsageAccept
             | otherwise         = return (CertificateUsageReject CertificateRejectUnknownCA)
 
+prop_handshake_clt_key_usage :: PropertyM IO ()
+prop_handshake_clt_key_usage = do
+    (clientParam,serverParam) <- pick arbitraryPairParams
+    usageFlags <- pick arbitraryKeyUsage
+    cred <- pick $ arbitraryRSACredentialWithUsage usageFlags
+    let clientParam' = clientParam { clientHooks = (clientHooks clientParam)
+                                       { onCertificateRequest = \_ -> return $ Just cred }
+                                   }
+        serverParam' = serverParam { serverWantClientCert = True
+                                   , serverHooks = (serverHooks serverParam)
+                                        { onClientCertificate = \_ -> return CertificateUsageAccept }
+                                   }
+        shouldSucceed = KeyUsage_digitalSignature `elem` usageFlags
+    if shouldSucceed
+        then runTLSPipeSimple  (clientParam',serverParam')
+        else runTLSInitFailure (clientParam',serverParam')
+
 prop_handshake_alpn :: PropertyM IO ()
 prop_handshake_alpn = do
     (clientParam,serverParam) <- pick arbitraryPairParams
@@ -357,6 +374,7 @@ main = defaultMain $ testGroup "tls"
             , testProperty "Certificate fallback" (monadicIO prop_handshake_cert_fallback)
             , testProperty "Server key usage" (monadicIO prop_handshake_srv_key_usage)
             , testProperty "Client authentication" (monadicIO prop_handshake_client_auth)
+            , testProperty "Client key usage" (monadicIO prop_handshake_clt_key_usage)
             , testProperty "ALPN" (monadicIO prop_handshake_alpn)
             , testProperty "SNI" (monadicIO prop_handshake_sni)
             , testProperty "Renegotiation" (monadicIO prop_handshake_renegotiation)

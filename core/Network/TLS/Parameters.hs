@@ -316,6 +316,10 @@ data ServerHooks = ServerHooks
       -- | This action is called when a client certificate chain
       -- is received from the client.  When it returns a
       -- CertificateUsageReject value, the handshake is aborted.
+      --
+      -- The function is not expected to verify the key-usage
+      -- extension of the certificate.  This verification is
+      -- performed by the library internally.
       onClientCertificate :: CertificateChain -> IO CertificateUsage
 
       -- | This action is called when the client certificate
