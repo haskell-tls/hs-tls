@@ -479,7 +479,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
         processCertificateVerify (Handshake [hs@(CertVerify dsig)]) = do
             processHandshake ctx hs
 
-            checkValidClientCertChain "change cipher message expected"
+            certs <- checkValidClientCertChain "change cipher message expected"
 
             usedVersion <- usingState_ ctx getVersion
             -- Fetch all handshake messages up to now.
@@ -495,7 +495,6 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                 -- When verification succeeds, commit the
                 -- client certificate chain to the context.
                 --
-                Just certs <- usingHState ctx getClientCertChain
                 usingState_ ctx $ setClientCertificateChain certs
                 return ()
               else do
@@ -510,7 +509,6 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                         -- application callbacks accepts, we
                         -- also commit the client certificate
                         -- chain to the context.
-                        Just certs <- usingHState ctx getClientCertChain
                         usingState_ ctx $ setClientCertificateChain certs
                     else throwCore $ Error_Protocol ("verification failed", True, BadCertificate)
             return $ RecvStateNext expectChangeCipher
@@ -545,7 +543,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             case chain of
                 Nothing -> throwCore throwerror
                 Just cc | isNullCertificateChain cc -> throwCore throwerror
-                        | otherwise                 -> return ()
+                        | otherwise                 -> return cc
 
 hashAndSignaturesInCommon :: Context -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]
 hashAndSignaturesInCommon ctx exts =
