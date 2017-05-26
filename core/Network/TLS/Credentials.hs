@@ -17,11 +17,11 @@ module Network.TLS.Credentials
     , credentialsListSigningAlgorithms
     ) where
 
+import Data.ByteString (ByteString)
 import Data.Monoid
 import Data.Maybe (catMaybes)
 import Data.List (find)
 import Network.TLS.Crypto.Types
-import Network.TLS.Struct
 import Network.TLS.X509
 import Data.X509.File
 import Data.X509.Memory
@@ -45,8 +45,8 @@ credentialLoadX509 certFile = credentialLoadX509Chain certFile []
 
 -- | similar to 'credentialLoadX509' but take the certificate
 -- and private key from memory instead of from the filesystem.
-credentialLoadX509FromMemory :: Bytes
-                  -> Bytes
+credentialLoadX509FromMemory :: ByteString
+                  -> ByteString
                   -> Either String Credential
 credentialLoadX509FromMemory certData =
   credentialLoadX509ChainFromMemory certData []
@@ -68,9 +68,9 @@ credentialLoadX509Chain certFile chainFiles privateFile = do
 
 -- | similar to 'credentialLoadX509FromMemory' but also allow
 -- specifying chain certificates.
-credentialLoadX509ChainFromMemory :: Bytes
-                  -> [Bytes]
-                  -> Bytes
+credentialLoadX509ChainFromMemory :: ByteString
+                  -> [ByteString]
+                  -> ByteString
                   -> Either String Credential
 credentialLoadX509ChainFromMemory certData chainData privateData = do
     let x509   = readSignedObjectFromMemory certData

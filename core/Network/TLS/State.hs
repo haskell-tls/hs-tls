@@ -57,6 +57,7 @@ import Network.TLS.RNG
 import Network.TLS.Types (Role(..))
 import Network.TLS.Wire (GetContinuation)
 import Network.TLS.Extension
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import Control.Monad.State.Strict
 import Network.TLS.ErrT
@@ -69,10 +70,10 @@ data TLSState = TLSState
     { stSession             :: Session
     , stSessionResuming     :: Bool
     , stSecureRenegotiation :: Bool  -- RFC 5746
-    , stClientVerifiedData  :: Bytes -- RFC 5746
-    , stServerVerifiedData  :: Bytes -- RFC 5746
+    , stClientVerifiedData  :: ByteString -- RFC 5746
+    , stServerVerifiedData  :: ByteString -- RFC 5746
     , stExtensionALPN       :: Bool  -- RFC 7301
-    , stHandshakeRecordCont :: Maybe (GetContinuation (HandshakeType, Bytes))
+    , stHandshakeRecordCont :: Maybe (GetContinuation (HandshakeType, ByteString))
     , stNegotiatedProtocol  :: Maybe B.ByteString -- ALPN protocol
     , stClientALPNSuggest   :: Maybe [B.ByteString]
     , stClientGroupSuggest  :: Maybe [Group]
@@ -117,7 +118,7 @@ newTLSState rng clientContext = TLSState
     , stClientContext       = clientContext
     }
 
-updateVerifiedData :: Role -> Bytes -> TLSSt ()
+updateVerifiedData :: Role -> ByteString -> TLSSt ()
 updateVerifiedData sending bs = do
     cc <- isClientContext
     if cc /= sending
@@ -220,13 +221,13 @@ setClientSNI hn = modify (\st -> st { stClientSNI = Just hn })
 getClientSNI :: TLSSt (Maybe HostName)
 getClientSNI = gets stClientSNI
 
-getVerifiedData :: Role -> TLSSt Bytes
+getVerifiedData :: Role -> TLSSt ByteString
 getVerifiedData client = gets (if client == ClientRole then stClientVerifiedData else stServerVerifiedData)
 
 isClientContext :: TLSSt Role
 isClientContext = gets stClientContext
 
-genRandom :: Int -> TLSSt Bytes
+genRandom :: Int -> TLSSt ByteString
 genRandom n = do
     withRNG (getRandomBytes n)
 

@@ -33,7 +33,7 @@ import Network.TLS.Types
 import Network.TLS.Cipher
 import Network.TLS.Util
 import Data.List (find)
-import Data.ByteString.Char8 ()
+import Data.ByteString.Char8 (ByteString)
 
 import Control.Monad.State.Strict
 import Control.Exception (throwIO)
@@ -137,6 +137,6 @@ getSessionData ctx = do
                         , sessionSecret      = ms
                         }
 
-extensionLookup :: ExtensionID -> [ExtensionRaw] -> Maybe Bytes
+extensionLookup :: ExtensionID -> [ExtensionRaw] -> Maybe ByteString
 extensionLookup toFind = fmap (\(ExtensionRaw _ content) -> content)
                        . find (\(ExtensionRaw eid _) -> eid == toFind)

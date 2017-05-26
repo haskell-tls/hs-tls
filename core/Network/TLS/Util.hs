@@ -13,23 +13,24 @@ module Network.TLS.Util
         ) where
 
 import Data.List (foldl')
-import Network.TLS.Imports (Bytes)
+-- import Network.TLS.Imports (ByteString)
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
 import Control.Exception (SomeException)
 import Control.Concurrent.Async
 
-sub :: Bytes -> Int -> Int -> Maybe Bytes
+sub :: ByteString -> Int -> Int -> Maybe ByteString
 sub b offset len
     | B.length b < offset + len = Nothing
     | otherwise                 = Just $ B.take len $ snd $ B.splitAt offset b
 
-takelast :: Int -> Bytes -> Maybe Bytes
+takelast :: Int -> ByteString -> Maybe ByteString
 takelast i b
     | B.length b >= i = sub b (B.length b - i) i
     | otherwise       = Nothing
 
-partition3 :: Bytes -> (Int,Int,Int) -> Maybe (Bytes, Bytes, Bytes)
+partition3 :: ByteString -> (Int,Int,Int) -> Maybe (ByteString, ByteString, ByteString)
 partition3 bytes (d1,d2,d3)
     | any (< 0) l             = Nothing
     | sum l /= B.length bytes = Nothing
@@ -39,7 +40,7 @@ partition3 bytes (d1,d2,d3)
               (p2, r2) = B.splitAt d2 r1
               (p3, _)  = B.splitAt d3 r2
 
-partition6 :: Bytes -> (Int,Int,Int,Int,Int,Int) -> Maybe (Bytes, Bytes, Bytes, Bytes, Bytes, Bytes)
+partition6 :: ByteString -> (Int,Int,Int,Int,Int,Int) -> Maybe (ByteString, ByteString, ByteString, ByteString, ByteString, ByteString)
 partition6 bytes (d1,d2,d3,d4,d5,d6) = if B.length bytes < s then Nothing else Just (p1,p2,p3,p4,p5,p6)
   where s        = sum [d1,d2,d3,d4,d5,d6]
         (p1, r1) = B.splitAt d1 bytes
@@ -67,15 +68,13 @@ False &&! False = False
 -- | verify that 2 bytestrings are equals.
 -- it's a non lazy version, that will compare every bytes.
 -- arguments with different length will bail out early
-bytesEq :: Bytes -> Bytes -> Bool
+bytesEq :: ByteString -> ByteString -> Bool
 bytesEq b1 b2
     | B.length b1 /= B.length b2 = False
     | otherwise                  = and' $ B.zipWith (==) b1 b2
 
 fmapEither :: (a -> b) -> Either l a -> Either l b
-fmapEither f e = case e of
-    Left l  -> Left l
-    Right r -> Right (f r)
+fmapEither f = fmap f
 
 catchException :: IO a -> (SomeException -> IO a) -> IO a
 catchException action handler = withAsync action waitCatch >>= either handler return

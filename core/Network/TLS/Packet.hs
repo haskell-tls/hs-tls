@@ -163,7 +163,7 @@ encodeAlerts l = runPut $ mapM_ encodeAlert l
   where encodeAlert (al, ad) = putWord8 (valOfType al) >> putWord8 (valOfType ad)
 
 {- decode and encode HANDSHAKE -}
-decodeHandshakeRecord :: ByteString -> GetResult (HandshakeType, Bytes)
+decodeHandshakeRecord :: ByteString -> GetResult (HandshakeType, ByteString)
 decodeHandshakeRecord = runGet "handshake-record" $ do
     ty      <- getHandshakeType
     content <- getOpaque24
@@ -408,7 +408,7 @@ encodeHandshakeContent (CertVerify digitallySigned) = putDigitallySigned digital
 encodeHandshakeContent (Finished opaque) = putBytes opaque
 
 {- FIXME make sure it return error if not 32 available -}
-getRandom32 :: Get Bytes
+getRandom32 :: Get ByteString
 getRandom32 = getBytes 32
 
 getServerRandom32 :: Get ServerRandom
@@ -417,7 +417,7 @@ getServerRandom32 = ServerRandom <$> getRandom32
 getClientRandom32 :: Get ClientRandom
 getClientRandom32 = ClientRandom <$> getRandom32
 
-putRandom32 :: Bytes -> Put
+putRandom32 :: ByteString -> Put
 putRandom32 = putBytes
 
 putClientRandom32 :: ClientRandom -> Put
@@ -514,11 +514,11 @@ encodeChangeCipherSpec :: ByteString
 encodeChangeCipherSpec = runPut (putWord8 1)
 
 -- rsa pre master secret
-decodePreMasterSecret :: Bytes -> Either TLSError (Version, Bytes)
+decodePreMasterSecret :: ByteString -> Either TLSError (Version, ByteString)
 decodePreMasterSecret = runGetErr "pre-master-secret" $ do
     liftM2 (,) getVersion (getBytes 46)
 
-encodePreMasterSecret :: Version -> Bytes -> Bytes
+encodePreMasterSecret :: Version -> ByteString -> ByteString
 encodePreMasterSecret version bytes = runPut (putVersion version >> putBytes bytes)
 
 -- | in certain cases, we haven't manage to decode ServerKeyExchange properly,
@@ -527,7 +527,7 @@ encodePreMasterSecret version bytes = runPut (putVersion version >> putBytes byt
 -- able to really decode the server key xchange if it's unparsed.
 decodeReallyServerKeyXchgAlgorithmData :: Version
                                        -> CipherKeyExchangeType
-                                       -> Bytes
+                                       -> ByteString
                                        -> Either TLSError ServerKeyXchgAlgorithmData
 decodeReallyServerKeyXchgAlgorithmData ver cke =
     runGetErr "server-key-xchg-algorithm-data" (decodeServerKeyXchgAlgorithmData ver cke)
@@ -536,7 +536,7 @@ decodeReallyServerKeyXchgAlgorithmData ver cke =
 {-
  - generate things for packet content
  -}
-type PRF = Bytes -> Bytes -> Int -> Bytes
+type PRF = ByteString -> ByteString -> Int -> ByteString
 
 -- | The TLS12 PRF is cipher specific, and some TLS12 algorithms use SHA384
 -- instead of the default SHA256.
@@ -546,13 +546,13 @@ getPRF ver ciph
     | maybe True (< TLS12) (cipherMinVer ciph) = prf_SHA256
     | otherwise = prf_TLS ver $ maybe SHA256 id $ cipherPRFHash ciph
 
-generateMasterSecret_SSL :: ByteArrayAccess preMaster => preMaster -> ClientRandom -> ServerRandom -> Bytes
+generateMasterSecret_SSL :: ByteArrayAccess preMaster => preMaster -> ClientRandom -> ServerRandom -> ByteString
 generateMasterSecret_SSL premasterSecret (ClientRandom c) (ServerRandom s) =
     B.concat $ map (computeMD5) ["A","BB","CCC"]
   where computeMD5  label = hash MD5 $ B.concat [ B.convert premasterSecret, computeSHA1 label ]
         computeSHA1 label = hash SHA1 $ B.concat [ label, B.convert premasterSecret, c, s ]
 
-generateMasterSecret_TLS :: ByteArrayAccess preMaster => PRF -> preMaster -> ClientRandom -> ServerRandom -> Bytes
+generateMasterSecret_TLS :: ByteArrayAccess preMaster => PRF -> preMaster -> ClientRandom -> ServerRandom -> ByteString
 generateMasterSecret_TLS prf premasterSecret (ClientRandom c) (ServerRandom s) =
     prf (B.convert premasterSecret) seed 48
   where seed = B.concat [ "master secret", c, s ]
@@ -563,16 +563,16 @@ generateMasterSecret :: ByteArrayAccess preMaster
                      -> preMaster
                      -> ClientRandom
                      -> ServerRandom
-                     -> Bytes
+                     -> ByteString
 generateMasterSecret SSL2 _ = generateMasterSecret_SSL
 generateMasterSecret SSL3 _ = generateMasterSecret_SSL
 generateMasterSecret v    c = generateMasterSecret_TLS $ getPRF v c
 
-generateKeyBlock_TLS :: PRF -> ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
+generateKeyBlock_TLS :: PRF -> ClientRandom -> ServerRandom -> ByteString -> Int -> ByteString
 generateKeyBlock_TLS prf (ClientRandom c) (ServerRandom s) mastersecret kbsize =
     prf mastersecret seed kbsize where seed = B.concat [ "key expansion", s, c ]
 
-generateKeyBlock_SSL :: ClientRandom -> ServerRandom -> Bytes -> Int -> Bytes
+generateKeyBlock_SSL :: ClientRandom -> ServerRandom -> ByteString -> Int -> ByteString
 generateKeyBlock_SSL (ClientRandom c) (ServerRandom s) mastersecret kbsize =
     B.concat $ map computeMD5 $ take ((kbsize `div` 16) + 1) labels
   where labels            = [ uncurry BC.replicate x | x <- zip [1..] ['A'..'Z'] ]
@@ -583,18 +583,18 @@ generateKeyBlock :: Version
                  -> Cipher
                  -> ClientRandom
                  -> ServerRandom
-                 -> Bytes
+                 -> ByteString
                  -> Int
-                 -> Bytes
+                 -> ByteString
 generateKeyBlock SSL2 _ = generateKeyBlock_SSL
 generateKeyBlock SSL3 _ = generateKeyBlock_SSL
 generateKeyBlock v    c = generateKeyBlock_TLS $ getPRF v c
 
-generateFinished_TLS :: PRF -> Bytes -> Bytes -> HashCtx -> Bytes
+generateFinished_TLS :: PRF -> ByteString -> ByteString -> HashCtx -> ByteString
 generateFinished_TLS prf label mastersecret hashctx = prf mastersecret seed 12
   where seed = B.concat [ label, hashFinal hashctx ]
 
-generateFinished_SSL :: Bytes -> Bytes -> HashCtx -> Bytes
+generateFinished_SSL :: ByteString -> ByteString -> HashCtx -> ByteString
 generateFinished_SSL sender mastersecret hashctx = B.concat [md5hash, sha1hash]
   where md5hash  = hash MD5 $ B.concat [ mastersecret, pad2, md5left ]
         sha1hash = hash SHA1 $ B.concat [ mastersecret, B.take 40 pad2, sha1left ]
@@ -607,28 +607,28 @@ generateFinished_SSL sender mastersecret hashctx = B.concat [md5hash, sha1hash]
 
 generateClientFinished :: Version
                        -> Cipher
-                       -> Bytes
+                       -> ByteString
                        -> HashCtx
-                       -> Bytes
+                       -> ByteString
 generateClientFinished ver ciph
     | ver < TLS10 = generateFinished_SSL "CLNT"
     | otherwise   = generateFinished_TLS (getPRF ver ciph) "client finished"
 
 generateServerFinished :: Version
                        -> Cipher
-                       -> Bytes
+                       -> ByteString
                        -> HashCtx
-                       -> Bytes
+                       -> ByteString
 generateServerFinished ver ciph
     | ver < TLS10 = generateFinished_SSL "SRVR"
     | otherwise   = generateFinished_TLS (getPRF ver ciph) "server finished"
 
 {- returns *output* after final MD5/SHA1 -}
-generateCertificateVerify_SSL :: Bytes -> HashCtx -> Bytes
+generateCertificateVerify_SSL :: ByteString -> HashCtx -> ByteString
 generateCertificateVerify_SSL = generateFinished_SSL ""
 
 {- returns *input* before final SHA1 -}
-generateCertificateVerify_SSL_DSS :: Bytes -> HashCtx -> Bytes
+generateCertificateVerify_SSL_DSS :: ByteString -> HashCtx -> ByteString
 generateCertificateVerify_SSL_DSS mastersecret hashctx = toHash
   where toHash = B.concat [ mastersecret, pad2, sha1left ]
 
@@ -637,13 +637,13 @@ generateCertificateVerify_SSL_DSS mastersecret hashctx = toHash
         pad2     = B.replicate 40 0x5c
         pad1     = B.replicate 40 0x36
 
-encodeSignedDHParams :: ServerDHParams -> ClientRandom -> ServerRandom -> Bytes
+encodeSignedDHParams :: ServerDHParams -> ClientRandom -> ServerRandom -> ByteString
 encodeSignedDHParams dhparams cran sran = runPut $
     putClientRandom32 cran >> putServerRandom32 sran >> putServerDHParams dhparams
 
 -- Combination of RFC 5246 and 4492 is ambiguous.
 -- Let's assume ecdhe_rsa and ecdhe_dss are identical to
 -- dhe_rsa and dhe_dss.
-encodeSignedECDHParams :: ServerECDHParams -> ClientRandom -> ServerRandom -> Bytes
+encodeSignedECDHParams :: ServerECDHParams -> ClientRandom -> ServerRandom -> ByteString
 encodeSignedECDHParams dhparams cran sran = runPut $
     putClientRandom32 cran >> putServerRandom32 sran >> putServerECDHParams dhparams

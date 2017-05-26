@@ -69,7 +69,7 @@ getCipherData (Record pt ver _) cdata = do
 
     return $ cipherDataContent cdata
 
-decryptData :: Version -> Record Ciphertext -> Bytes -> RecordState -> RecordM Bytes
+decryptData :: Version -> Record Ciphertext -> ByteString -> RecordState -> RecordM ByteString
 decryptData ver record econtent tst = decryptOf (cstKey cst)
   where cipher     = fromJust "cipher" $ stCipher tst
         bulk       = cipherBulk cipher
@@ -82,7 +82,7 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
 
         sanityCheckError = throwError (Error_Packet "encrypted content too small for encryption parameters")
 
-        decryptOf :: BulkState -> RecordM Bytes
+        decryptOf :: BulkState -> RecordM ByteString
         decryptOf (BulkStateBlock decryptF) = do
             let minContent = (if explicitIV then bulkIVSize bulk else 0) + max (macSize + 1) blockSize
 

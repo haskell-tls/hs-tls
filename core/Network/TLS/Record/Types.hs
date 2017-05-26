@@ -40,48 +40,49 @@ module Network.TLS.Record.Types
 
 import Network.TLS.Struct
 import Network.TLS.Record.State
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import Control.Applicative ((<$>))
 
 -- | Represent a TLS record.
 data Record a = Record !ProtocolType !Version !(Fragment a) deriving (Show,Eq)
 
-newtype Fragment a = Fragment { fragmentGetBytes :: Bytes } deriving (Show,Eq)
+newtype Fragment a = Fragment { fragmentGetBytes :: ByteString } deriving (Show,Eq)
 
 data Plaintext
 data Compressed
 data Ciphertext
 
-fragmentPlaintext :: Bytes -> Fragment Plaintext
+fragmentPlaintext :: ByteString -> Fragment Plaintext
 fragmentPlaintext bytes = Fragment bytes
 
-fragmentCiphertext :: Bytes -> Fragment Ciphertext
+fragmentCiphertext :: ByteString -> Fragment Ciphertext
 fragmentCiphertext bytes = Fragment bytes
 
 onRecordFragment :: Record a -> (Fragment a -> RecordM (Fragment b)) -> RecordM (Record b)
 onRecordFragment (Record pt ver frag) f = Record pt ver <$> f frag
 
-fragmentMap :: (Bytes -> RecordM Bytes) -> Fragment a -> RecordM (Fragment b)
+fragmentMap :: (ByteString -> RecordM ByteString) -> Fragment a -> RecordM (Fragment b)
 fragmentMap f (Fragment b) = Fragment <$> f b
 
 -- | turn a plaintext record into a compressed record using the compression function supplied
-fragmentCompress :: (Bytes -> RecordM Bytes) -> Fragment Plaintext -> RecordM (Fragment Compressed)
+fragmentCompress :: (ByteString -> RecordM ByteString) -> Fragment Plaintext -> RecordM (Fragment Compressed)
 fragmentCompress f = fragmentMap f
 
 -- | turn a compressed record into a ciphertext record using the cipher function supplied
-fragmentCipher :: (Bytes -> RecordM Bytes) -> Fragment Compressed -> RecordM (Fragment Ciphertext)
+fragmentCipher :: (ByteString -> RecordM ByteString) -> Fragment Compressed -> RecordM (Fragment Ciphertext)
 fragmentCipher f = fragmentMap f
 
 -- | turn a ciphertext fragment into a compressed fragment using the cipher function supplied
-fragmentUncipher :: (Bytes -> RecordM Bytes) -> Fragment Ciphertext -> RecordM (Fragment Compressed)
+fragmentUncipher :: (ByteString -> RecordM ByteString) -> Fragment Ciphertext -> RecordM (Fragment Compressed)
 fragmentUncipher f = fragmentMap f
 
 -- | turn a compressed fragment into a plaintext fragment using the decompression function supplied
-fragmentUncompress :: (Bytes -> RecordM Bytes) -> Fragment Compressed -> RecordM (Fragment Plaintext)
+fragmentUncompress :: (ByteString -> RecordM ByteString) -> Fragment Compressed -> RecordM (Fragment Plaintext)
 fragmentUncompress f = fragmentMap f
 
 -- | turn a record into an header and bytes
-recordToRaw :: Record a -> (Header, Bytes)
+recordToRaw :: Record a -> (Header, ByteString)
 recordToRaw (Record pt ver (Fragment bytes)) = (Header pt ver (fromIntegral $ B.length bytes), bytes)
 
 -- | turn a header and a fragment into a record

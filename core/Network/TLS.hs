@@ -136,7 +136,6 @@ import Network.TLS.Struct ( TLSError(..), TLSException(..)
                           , Header(..), ProtocolType(..), CertificateType(..)
                           , AlertDescription(..)
                           , ClientRandom(..), ServerRandom(..)
-                          , Bytes
                           , Handshake)
 import Network.TLS.Crypto (KxError(..), DHParams, Group(..))
 import Network.TLS.Cipher
@@ -152,3 +151,7 @@ import Network.TLS.X509
 import Network.TLS.Types
 import Data.X509 (PubKey(..), PrivKey(..))
 import Data.X509.Validation
+import Data.ByteString as B
+
+{-# DEPRECATED Bytes "Use Data.ByteString.Bytestring instead of Bytes." #-}
+type Bytes = B.ByteString

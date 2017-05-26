@@ -154,7 +154,7 @@ calcShared params pub pri = SharedSecret share
   where
     SharedKey share = getShared params pri pub
 
-encodeGroupPublic :: GroupPublic -> Bytes
+encodeGroupPublic :: GroupPublic -> ByteString
 encodeGroupPublic (GroupPub_P256 p) = encodePoint p256 p
 encodeGroupPublic (GroupPub_P384 p) = encodePoint p384 p
 encodeGroupPublic (GroupPub_P521 p) = encodePoint p521 p
@@ -166,10 +166,10 @@ encodeGroupPublic (GroupPub_FFDHE4096 p) = enc ffdhe4096 p
 encodeGroupPublic (GroupPub_FFDHE6144 p) = enc ffdhe6144 p
 encodeGroupPublic (GroupPub_FFDHE8192 p) = enc ffdhe8192 p
 
-enc :: Params -> PublicNumber -> Bytes
+enc :: Params -> PublicNumber -> ByteString
 enc params (PublicNumber p) = i2ospOf_ ((params_bits params + 7) `div` 8) p
 
-decodeGroupPublic :: Group -> Bytes -> Either CryptoError GroupPublic
+decodeGroupPublic :: Group -> ByteString -> Either CryptoError GroupPublic
 decodeGroupPublic P256   bs = eitherCryptoError $ GroupPub_P256 <$> decodePoint p256 bs
 decodeGroupPublic P384   bs = eitherCryptoError $ GroupPub_P384 <$> decodePoint p384 bs
 decodeGroupPublic P521   bs = eitherCryptoError $ GroupPub_P521 <$> decodePoint p521 bs
