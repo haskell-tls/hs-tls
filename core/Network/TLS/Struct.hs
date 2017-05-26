@@ -11,8 +11,7 @@
 --
 {-# LANGUAGE CPP #-}
 module Network.TLS.Struct
-    ( Bytes
-    , Version(..)
+    ( Version(..)
     , ConnectionEnd(..)
     , CipherType(..)
     , CipherData(..)

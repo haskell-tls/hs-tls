@@ -22,7 +22,6 @@ import Data.Monoid
 import Data.Maybe (catMaybes)
 import Data.List (find)
 import Network.TLS.Crypto.Types
-import Network.TLS.Struct
 import Network.TLS.X509
 import Data.X509.File
 import Data.X509.Memory
