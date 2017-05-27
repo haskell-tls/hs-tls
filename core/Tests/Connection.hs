@@ -1,3 +1,5 @@
+-- Disable this warning so we can still test deprecated functionality.
+{-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
 module Connection
     ( newPairContext
     , arbitraryCiphers
