@@ -8,6 +8,8 @@ matrix:
       addons: {apt: {packages: [cabal-install-1.22,ghc-7.10.3,libssl-dev], sources: [hvr-ghc]}}
     - env: CABALVER=1.24 GHCVER=8.0.2
       addons: {apt: {packages: [cabal-install-1.24,ghc-8.0.2,libssl-dev], sources: [hvr-ghc]}}
+    - env: CABALVER=1.24 GHCVER=8.2.1
+      addons: {apt: {packages: [cabal-install-1.24,ghc-8.2.1,libssl-dev], sources: [hvr-ghc]}}
     - env: CABALVER=head GHCVER=head RUNTEST=0
       addons: {apt: {packages: [cabal-install-head,ghc-head,libssl-dev], sources: [hvr-ghc]}}
 
