@@ -1,5 +1,6 @@
 ## Version X.Y.Z
 
+- Change Bytes to ByteString and deprecate the Bytes type alias [#230](https://github.com/vincenthz/hs-tls/pull/230)
 - Session compression and SNI [#223](https://github.com/vincenthz/hs-tls/pull/223)
 - Deprecating ciphersuite_medium. Putting WARNING to ciphersuite_all since this includes RC4 [#153](https://github.com/vincenthz/hs-tls/pull/153) [#222](https://github.com/vincenthz/hs-tls/pull/222)
 - Removing NPN [#214](https://github.com/vincenthz/hs-tls/pull/214)
