@@ -1,5 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+-- Disable this warning so we can still test deprecated functionality.
+{-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
 import Network.BSD
 import Network.Socket hiding (Debug)
 import System.IO

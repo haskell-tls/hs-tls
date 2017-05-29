@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+-- Disable this warning so we can still test deprecated functionality.
+{-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
 import Crypto.Random
 import Network.BSD
 import Network.Socket (socket, Family(..), SocketType(..), close, SockAddr(..), bind, listen, accept, iNADDR_ANY)
