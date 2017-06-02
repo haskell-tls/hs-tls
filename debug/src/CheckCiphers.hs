@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 import Network.TLS.Internal
 import Network.TLS.Cipher
@@ -106,7 +106,7 @@ openConnection s p ciphers = do
         bye ctx
         hClose handle
         return $ Just ccid
-        ) (\(_ :: SomeException) -> return Nothing)
+        ) (\(SomeException _) -> return Nothing)
 
 connectRange :: String -> String -> Int -> [Word16] -> IO (Int, [Word16])
 connectRange d p v r = do

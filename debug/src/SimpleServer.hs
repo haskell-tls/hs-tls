@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 -- Disable this warning so we can still test deprecated functionality.
 {-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
 import Crypto.Random
