@@ -1,4 +1,5 @@
-{-# LANGUAGE ScopedTypeVariables, DeriveDataTypeable, ViewPatterns #-}
+{-# LANGUAGE DeriveDataTypeable, ViewPatterns #-}
+{-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
 
 import Network.TLS
 import Network.TLS.Extra.Cipher

@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 import Network.TLS.Internal
 import Network.TLS.Cipher
@@ -106,7 +106,7 @@ openConnection s p ciphers = do
         bye ctx
         hClose handle
         return $ Just ccid
-        ) (\(_ :: SomeException) -> return Nothing)
+        ) (\(SomeException _) -> return Nothing)
 
 connectRange :: String -> String -> Int -> [Word16] -> IO (Int, [Word16])
 connectRange d p v r = do
@@ -121,7 +121,7 @@ connectRange d p v r = do
                             then splitAt (length newr `div` 2) newr
                             else (newr, [])
             (lc, ls) <- if length lr > 0
-                then connectRange d p v lr 
+                then connectRange d p v lr
                 else return (0,[])
             (rc, rs) <- if length rr > 0
                 then connectRange d p v rr

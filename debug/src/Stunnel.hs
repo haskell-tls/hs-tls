@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 -- Disable this warning so we can still test deprecated functionality.
 {-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
 import Network.BSD
@@ -17,7 +16,7 @@ import qualified Data.ByteString.Lazy as L
 
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar
-import Control.Exception (finally, throw, SomeException)
+import Control.Exception (finally, throw, SomeException(..))
 import qualified Control.Exception as E
 import Control.Monad (when, forever)
 
@@ -137,7 +136,7 @@ getAddressDescription a = error ("unrecognized source type (expecting tcp/unix/f
 connectAddressDescription (AddrSocket family sockaddr) = do
     sock <- socket family Stream defaultProtocol
     E.catch (connect sock sockaddr)
-          (\(e :: SomeException) -> close sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
+          (\(SomeException e) -> close sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
     return $ StunnelSocket sock
 
 connectAddressDescription (AddrFD h1 h2) = do
@@ -146,7 +145,7 @@ connectAddressDescription (AddrFD h1 h2) = do
 listenAddressDescription (AddrSocket family sockaddr) = do
     sock <- socket family Stream defaultProtocol
     E.catch (bind sock sockaddr >> listen sock 10 >> setSocketOption sock ReuseAddr 1)
-          (\(e :: SomeException) -> close sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
+          (\(SomeException e) -> close sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
     return $ StunnelSocket sock
 
 listenAddressDescription (AddrFD _ _) = do

@@ -1,10 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 -- Disable this warning so we can still test deprecated functionality.
 {-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
 import Crypto.Random
 import Network.BSD
 import Network.Socket (socket, Family(..), SocketType(..), close, SockAddr(..), bind, listen, accept, iNADDR_ANY)
+import qualified Network.Socket as S
 import Network.TLS
 import Network.TLS.Extra.Cipher
 import System.Console.GetOpt
@@ -33,21 +33,10 @@ defaultTimeout = 2000
 
 bogusCipher cid = cipher_AES128_SHA1 { cipherID = cid }
 
-runTLS debug ioDebug params portNumber f = do
-    sock <- socket AF_INET Stream defaultProtocol
-    let sockaddr = SockAddrInet portNumber iNADDR_ANY
-
-    bind sock sockaddr
-    listen sock 1
-    (cSock, cAddr) <- accept sock
-
-    putStrLn ("connection from " ++ show cAddr)
-
+runTLS debug ioDebug params cSock f = do
     ctx <- contextNew cSock params
     contextHookSetLogging ctx getLogging
-    () <- f ctx
-    close cSock
-    close sock
+    f ctx
   where getLogging = ioLogging $ packetLogging $ def
         packetLogging logging
             | debug = logging { loggingPacketSent = putStrLn . ("debug: >> " ++)
@@ -68,8 +57,8 @@ sessionRef ref = SessionManager
     , sessionInvalidate = \_         -> return ()
     }
 
-getDefaultParams :: [Flag] -> CertificateStore -> IORef (SessionID, SessionData) -> Credential -> Maybe (SessionID, SessionData) -> IO ServerParams
-getDefaultParams flags store sStorage cred _session = do
+getDefaultParams :: [Flag] -> CertificateStore -> IORef (SessionID, SessionData) -> Credential -> IO ServerParams
+getDefaultParams flags store sStorage cred = do
     dhParams <- case getDHParams flags of
         Nothing   -> return Nothing
         Just name -> readDHParams name
@@ -191,8 +180,6 @@ options =
     , Option []     ["dhparams"] (ReqArg DHParams "dhparams") "DH parameters (name or file)"
     ]
 
-noSession = Nothing
-
 loadCred (Just key) (Just cert) = do
     res <- credentialLoadX509 cert key
     case res of
@@ -203,25 +190,34 @@ loadCred Nothing _ =
 loadCred _       Nothing =
     error "missing credential certificate"
 
-runOn (sStorage, certStore) flags port
-    | BenchSend `elem` flags = runBench True
-    | BenchRecv `elem` flags = runBench False
-    | otherwise              = do
-        --certCredRequest <- getCredRequest
-        doTLS noSession
-        when (Session `elem` flags) $ do
-            session <- readIORef sStorage
-            doTLS (Just session)
+runOn (sStorage, certStore) flags port = do
+    sock <- socket AF_INET Stream defaultProtocol
+    S.setSocketOption sock S.ReuseAddr 1
+    let sockaddr = SockAddrInet port iNADDR_ANY
+    bind sock sockaddr
+    listen sock 10
+    runOn' sock
+    close sock
   where
-        runBench isSend = do
+        runOn' sock
+          | BenchSend `elem` flags = runBench True sock
+          | BenchRecv `elem` flags = runBench False sock
+          | otherwise              = do
+              --certCredRequest <- getCredRequest
+              doTLS sock
+              when (Session `elem` flags) $ doTLS sock
+        runBench isSend sock = do
+            (cSock, cAddr) <- accept sock
+            putStrLn ("connection from " ++ show cAddr)
             cred <- loadCred getKey getCertificate
-            params <- getDefaultParams flags certStore sStorage cred noSession
-            runTLS False False params port $ \ctx -> do
+            params <- getDefaultParams flags certStore sStorage cred
+            runTLS False False params cSock $ \ctx -> do
                 handshake ctx
                 if isSend
                     then loopSendData getBenchAmount ctx
                     else loopRecvData getBenchAmount ctx
                 bye ctx
+            close cSock
           where
             dataSend = BC.replicate 4096 'a'
             loopSendData bytes ctx
@@ -236,21 +232,24 @@ runOn (sStorage, certStore) flags port
                     d <- recvData ctx
                     loopRecvData (bytes - B.length d) ctx
 
-        doTLS sess = do
+        doTLS sock = do
+            (cSock, cAddr) <- accept sock
+            putStrLn ("connection from " ++ show cAddr)
             out <- maybe (return stdout) (flip openFile AppendMode) getOutput
 
             cred <- loadCred getKey getCertificate
-            params <- getDefaultParams flags certStore sStorage cred sess
+            params <- getDefaultParams flags certStore sStorage cred
 
             runTLS (Debug `elem` flags)
                    (IODebug `elem` flags)
-                   params port $ \ctx -> do
+                   params cSock $ \ctx -> do
                 handshake ctx
                 when (Verbose `elem` flags) $ printHandshakeInfo ctx
                 loopRecv out ctx
                 --sendData ctx $ query
                 bye ctx
                 return ()
+            close cSock
             when (isJust getOutput) $ hClose out
         loopRecv out ctx = do
             d <- timeout (timeoutMs * 1000) (recvData ctx) -- 2s per recv
