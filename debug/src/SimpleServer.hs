@@ -33,22 +33,10 @@ defaultTimeout = 2000
 
 bogusCipher cid = cipher_AES128_SHA1 { cipherID = cid }
 
-runTLS debug ioDebug params portNumber f = do
-    sock <- socket AF_INET Stream defaultProtocol
-    S.setSocketOption sock S.ReuseAddr 1
-    let sockaddr = SockAddrInet portNumber iNADDR_ANY
-
-    bind sock sockaddr
-    listen sock 1
-    (cSock, cAddr) <- accept sock
-
-    putStrLn ("connection from " ++ show cAddr)
-
+runTLS debug ioDebug params cSock f = do
     ctx <- contextNew cSock params
     contextHookSetLogging ctx getLogging
-    () <- f ctx
-    close cSock
-    close sock
+    f ctx
   where getLogging = ioLogging $ packetLogging $ def
         packetLogging logging
             | debug = logging { loggingPacketSent = putStrLn . ("debug: >> " ++)
@@ -202,23 +190,34 @@ loadCred Nothing _ =
 loadCred _       Nothing =
     error "missing credential certificate"
 
-runOn (sStorage, certStore) flags port
-    | BenchSend `elem` flags = runBench True
-    | BenchRecv `elem` flags = runBench False
-    | otherwise              = do
-        --certCredRequest <- getCredRequest
-        doTLS
-        when (Session `elem` flags) $ doTLS
+runOn (sStorage, certStore) flags port = do
+    sock <- socket AF_INET Stream defaultProtocol
+    S.setSocketOption sock S.ReuseAddr 1
+    let sockaddr = SockAddrInet port iNADDR_ANY
+    bind sock sockaddr
+    listen sock 10
+    runOn' sock
+    close sock
   where
-        runBench isSend = do
+        runOn' sock
+          | BenchSend `elem` flags = runBench True sock
+          | BenchRecv `elem` flags = runBench False sock
+          | otherwise              = do
+              --certCredRequest <- getCredRequest
+              doTLS sock
+              when (Session `elem` flags) $ doTLS sock
+        runBench isSend sock = do
+            (cSock, cAddr) <- accept sock
+            putStrLn ("connection from " ++ show cAddr)
             cred <- loadCred getKey getCertificate
             params <- getDefaultParams flags certStore sStorage cred
-            runTLS False False params port $ \ctx -> do
+            runTLS False False params cSock $ \ctx -> do
                 handshake ctx
                 if isSend
                     then loopSendData getBenchAmount ctx
                     else loopRecvData getBenchAmount ctx
                 bye ctx
+            close cSock
           where
             dataSend = BC.replicate 4096 'a'
             loopSendData bytes ctx
@@ -233,7 +232,9 @@ runOn (sStorage, certStore) flags port
                     d <- recvData ctx
                     loopRecvData (bytes - B.length d) ctx
 
-        doTLS = do
+        doTLS sock = do
+            (cSock, cAddr) <- accept sock
+            putStrLn ("connection from " ++ show cAddr)
             out <- maybe (return stdout) (flip openFile AppendMode) getOutput
 
             cred <- loadCred getKey getCertificate
@@ -241,13 +242,14 @@ runOn (sStorage, certStore) flags port
 
             runTLS (Debug `elem` flags)
                    (IODebug `elem` flags)
-                   params port $ \ctx -> do
+                   params cSock $ \ctx -> do
                 handshake ctx
                 when (Verbose `elem` flags) $ printHandshakeInfo ctx
                 loopRecv out ctx
                 --sendData ctx $ query
                 bye ctx
                 return ()
+            close cSock
             when (isJust getOutput) $ hClose out
         loopRecv out ctx = do
             d <- timeout (timeoutMs * 1000) (recvData ctx) -- 2s per recv
