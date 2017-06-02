@@ -11,7 +11,6 @@ import System.Timeout
 import qualified Data.ByteString.Lazy.Char8 as LC
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString as B
-import Control.Concurrent
 import Control.Exception
 import qualified Control.Exception as E
 import Control.Monad
@@ -185,7 +184,6 @@ runOn (sStorage, certStore) flags port hostname
         certCredRequest <- getCredRequest
         doTLS certCredRequest noSession
         when (Session `elem` flags) $ do
-            threadDelay 50000
             session <- readIORef sStorage
             doTLS certCredRequest (Just session)
   where
