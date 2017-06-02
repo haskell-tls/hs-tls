@@ -121,7 +121,7 @@ connectRange d p v r = do
                             then splitAt (length newr `div` 2) newr
                             else (newr, [])
             (lc, ls) <- if length lr > 0
-                then connectRange d p v lr 
+                then connectRange d p v lr
                 else return (0,[])
             (rc, rs) <- if length rr > 0
                 then connectRange d p v rr
