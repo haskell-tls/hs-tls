@@ -70,8 +70,8 @@ sessionRef ref = SessionManager
     , sessionInvalidate = \_         -> return ()
     }
 
-getDefaultParams :: [Flag] -> CertificateStore -> IORef (SessionID, SessionData) -> Credential -> Maybe (SessionID, SessionData) -> IO ServerParams
-getDefaultParams flags store sStorage cred _session = do
+getDefaultParams :: [Flag] -> CertificateStore -> IORef (SessionID, SessionData) -> Credential -> IO ServerParams
+getDefaultParams flags store sStorage cred = do
     dhParams <- case getDHParams flags of
         Nothing   -> return Nothing
         Just name -> readDHParams name
@@ -193,8 +193,6 @@ options =
     , Option []     ["dhparams"] (ReqArg DHParams "dhparams") "DH parameters (name or file)"
     ]
 
-noSession = Nothing
-
 loadCred (Just key) (Just cert) = do
     res <- credentialLoadX509 cert key
     case res of
@@ -210,14 +208,12 @@ runOn (sStorage, certStore) flags port
     | BenchRecv `elem` flags = runBench False
     | otherwise              = do
         --certCredRequest <- getCredRequest
-        doTLS noSession
-        when (Session `elem` flags) $ do
-            session <- readIORef sStorage
-            doTLS (Just session)
+        doTLS
+        when (Session `elem` flags) $ doTLS
   where
         runBench isSend = do
             cred <- loadCred getKey getCertificate
-            params <- getDefaultParams flags certStore sStorage cred noSession
+            params <- getDefaultParams flags certStore sStorage cred
             runTLS False False params port $ \ctx -> do
                 handshake ctx
                 if isSend
@@ -238,11 +234,11 @@ runOn (sStorage, certStore) flags port
                     d <- recvData ctx
                     loopRecvData (bytes - B.length d) ctx
 
-        doTLS sess = do
+        doTLS = do
             out <- maybe (return stdout) (flip openFile AppendMode) getOutput
 
             cred <- loadCred getKey getCertificate
-            params <- getDefaultParams flags certStore sStorage cred sess
+            params <- getDefaultParams flags certStore sStorage cred
 
             runTLS (Debug `elem` flags)
                    (IODebug `elem` flags)
