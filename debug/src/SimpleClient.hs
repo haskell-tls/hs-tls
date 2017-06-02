@@ -226,7 +226,7 @@ runOn (sStorage, certStore) flags port hostname
                 when (Verbose `elem` flags) $ printHandshakeInfo ctx
                 sendData ctx $ query
                 loopRecv out ctx
-                bye ctx
+                bye ctx `catch` \(SomeException _) -> return ()
                 return ()
             when (isJust getOutput) $ hClose out
         loopRecv out ctx = do
