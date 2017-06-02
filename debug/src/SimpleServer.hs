@@ -5,6 +5,7 @@
 import Crypto.Random
 import Network.BSD
 import Network.Socket (socket, Family(..), SocketType(..), close, SockAddr(..), bind, listen, accept, iNADDR_ANY)
+import qualified Network.Socket as S
 import Network.TLS
 import Network.TLS.Extra.Cipher
 import System.Console.GetOpt
@@ -35,6 +36,7 @@ bogusCipher cid = cipher_AES128_SHA1 { cipherID = cid }
 
 runTLS debug ioDebug params portNumber f = do
     sock <- socket AF_INET Stream defaultProtocol
+    S.setSocketOption sock S.ReuseAddr 1
     let sockaddr = SockAddrInet portNumber iNADDR_ANY
 
     bind sock sockaddr
