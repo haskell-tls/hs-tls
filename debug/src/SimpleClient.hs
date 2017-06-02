@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
 import Crypto.Random
 import Network.BSD
 import Network.Socket (socket, Family(..), SocketType(..), close, SockAddr(..), connect)
