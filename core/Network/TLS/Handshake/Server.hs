@@ -170,9 +170,24 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
                                    case credentialDigitalSignatureAlg cred of
                                        Just sig -> findIndex (sig `signatureCompatible`) possibleHashSigAlgs
                                        Nothing  -> Nothing
+
+                               -- Finally compute and use credential list pairs
+                               -- (allCreds, sigAllCreds) or (cltCreds, sigCltCreds)
+                               --
+                               -- We try to keep certificates supported by the client, but
+                               -- fallback to all credentials if this produces no suitable result
+                               -- (see RFC 5246 section 7.4.2 and TLS 1.3 section 4.4.2.2).
+                               -- The test is performed with signature credentials instead of
+                               -- ciphers so that this does not give advantage to a less secure
+                               -- key exchange like CipherKeyExchange_RSA or CipherKeyExchange_DH_Anon.
                                cltCreds    = filterCredentialsWithHashSignatures exts allCreds
                                sigCltCreds = filterSortCredentials signingRank cltCreds
-                            in (cltCreds, sigCltCreds)
+                               sigAllCreds = filterSortCredentials signingRank allCreds
+
+                               resultPair = if nullCredentials sigCltCreds
+                                                then (allCreds, sigAllCreds)
+                                                else (cltCreds, sigCltCreds)
+                            in resultPair
                   _     -> (allCreds, allCreds)
 
         -- Ciphers are selected according to TLS version, availability of ECDHE
@@ -553,6 +568,9 @@ negotiatedGroupsInCommon ctx exts = case extensionLookup extensionID_NegotiatedG
 credentialDigitalSignatureAlg :: Credential -> Maybe DigitalSignatureAlg
 credentialDigitalSignatureAlg cred =
     findDigitalSignatureAlg (credentialPublicPrivateKeys cred)
+
+nullCredentials :: Credentials -> Bool
+nullCredentials (Credentials l) = null l
 
 filterSortCredentials :: Ord a => (Credential -> Maybe a) -> Credentials -> Credentials
 filterSortCredentials rankFun (Credentials creds) =
