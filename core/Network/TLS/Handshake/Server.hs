@@ -254,9 +254,9 @@ handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverN
     cred <- case cipherKeyExchange usedCipher of
                 CipherKeyExchange_RSA       -> return $ credentialsFindForDecrypting creds
                 CipherKeyExchange_DH_Anon   -> return   Nothing
-                CipherKeyExchange_DHE_RSA   -> return $ credentialsFindForSigning DS_RSA signatureCreds
-                CipherKeyExchange_DHE_DSS   -> return $ credentialsFindForSigning DS_DSS signatureCreds
-                CipherKeyExchange_ECDHE_RSA -> return $ credentialsFindForSigning DS_RSA signatureCreds
+                CipherKeyExchange_DHE_RSA   -> return $ credentialsFindForSigning KX_RSA signatureCreds
+                CipherKeyExchange_DHE_DSS   -> return $ credentialsFindForSigning KX_DSS signatureCreds
+                CipherKeyExchange_ECDHE_RSA -> return $ credentialsFindForSigning KX_RSA signatureCreds
                 _                           -> throwCore $ Error_Protocol ("key exchange algorithm not implemented", True, HandshakeFailure)
 
     resumeSessionData <- case clientSession of
@@ -366,9 +366,9 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             -- send server key exchange if needed
             skx <- case cipherKeyExchange usedCipher of
                         CipherKeyExchange_DH_Anon -> Just <$> generateSKX_DH_Anon
-                        CipherKeyExchange_DHE_RSA -> Just <$> generateSKX_DHE DS_RSA
-                        CipherKeyExchange_DHE_DSS -> Just <$> generateSKX_DHE DS_DSS
-                        CipherKeyExchange_ECDHE_RSA -> Just <$> generateSKX_ECDHE DS_RSA
+                        CipherKeyExchange_DHE_RSA -> Just <$> generateSKX_DHE KX_RSA
+                        CipherKeyExchange_DHE_DSS -> Just <$> generateSKX_DHE KX_DSS
+                        CipherKeyExchange_ECDHE_RSA -> Just <$> generateSKX_ECDHE KX_RSA
                         _                         -> return Nothing
             maybe (return ()) (sendPacket ctx . Handshake . (:[]) . ServerKeyXchg) skx
 
@@ -441,14 +441,15 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                       x:_ -> return $ Just x
               _     -> return Nothing
 
-        generateSKX_DHE sigAlg = do
+        generateSKX_DHE kxsAlg = do
             serverParams  <- setup_DHE
+            sigAlg <- getLocalSignatureAlg kxsAlg
             mhashSig <- decideHashSig sigAlg
             signed <- digitallySignDHParams ctx serverParams sigAlg mhashSig
-            case sigAlg of
-                DS_RSA -> return $ SKX_DHE_RSA serverParams signed
-                DS_DSS -> return $ SKX_DHE_DSS serverParams signed
-                _      -> error ("generate skx_dhe unsupported key exchange signature: " ++ show sigAlg)
+            case kxsAlg of
+                KX_RSA -> return $ SKX_DHE_RSA serverParams signed
+                KX_DSS -> return $ SKX_DHE_DSS serverParams signed
+                _      -> error ("generate skx_dhe unsupported key exchange signature: " ++ show kxsAlg)
 
         generateSKX_DH_Anon = SKX_DH_Anon <$> setup_DHE
 
@@ -460,17 +461,29 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             usingHState ctx $ setGroupPrivate srvpri
             return serverParams
 
-        generateSKX_ECDHE sigAlg = do
+        generateSKX_ECDHE kxsAlg = do
             let possibleECGroups = negotiatedGroupsInCommon ctx exts `intersect` availableECGroups
             grp <- case possibleECGroups of
                      []  -> throwCore $ Error_Protocol ("no common group", True, HandshakeFailure)
                      g:_ -> return g
             serverParams <- setup_ECDHE grp
+            sigAlg <- getLocalSignatureAlg kxsAlg
             mhashSig <- decideHashSig sigAlg
             signed <- digitallySignECDHParams ctx serverParams sigAlg mhashSig
-            case sigAlg of
-                DS_RSA   -> return $ SKX_ECDHE_RSA serverParams signed
-                _   -> error ("generate skx_ecdhe unsupported signature type: " ++ show sigAlg)
+            case kxsAlg of
+                KX_RSA   -> return $ SKX_ECDHE_RSA serverParams signed
+                _        -> error ("generate skx_ecdhe unsupported key exchange signature: " ++ show kxsAlg)
+
+        -- no need to verify that sigAlg and kxsAlg are consistent: server
+        -- is supposed to select cipher and credential suitable for
+        -- actual key exchange
+        getLocalSignatureAlg kxsAlg =
+            case mcred of
+                Nothing   -> error ("no credential was selected for " ++ show kxsAlg)
+                Just cred ->
+                    case credentialDigitalSignatureAlg cred of
+                        Just sigAlg -> return sigAlg
+                        Nothing     -> error "selected credential does not support signing"
 
         -- create a DigitallySigned objects for DHParams or ECDHParams.
 
@@ -992,8 +1005,8 @@ getCiphers sparams creds sigCreds = filter authorizedCKE (supportedCiphers $ ser
                     CipherKeyExchange_ECDH_RSA    -> False
                     CipherKeyExchange_TLS13       -> False -- not reached
 
-            canSignDSS    = DS_DSS `elem` signingAlgs
-            canSignRSA    = DS_RSA `elem` signingAlgs
+            canSignDSS    = KX_DSS `elem` signingAlgs
+            canSignRSA    = KX_RSA `elem` signingAlgs
             canEncryptRSA = isJust $ credentialsFindForDecrypting creds
             signingAlgs   = credentialsListSigningAlgorithms sigCreds
 

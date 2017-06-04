@@ -90,14 +90,14 @@ credentialLoadX509ChainFromMemory certData chainData privateData = do
             []    -> Left "no keys found"
             (k:_) -> Right (CertificateChain . concat $ x509 : chains, k)
 
-credentialsListSigningAlgorithms :: Credentials -> [DigitalSignatureAlg]
+credentialsListSigningAlgorithms :: Credentials -> [KeyExchangeSignatureAlg]
 credentialsListSigningAlgorithms (Credentials l) = mapMaybe credentialCanSign l
 
-credentialsFindForSigning :: DigitalSignatureAlg -> Credentials -> Maybe Credential
-credentialsFindForSigning sigAlg (Credentials l) = find forSigning l
+credentialsFindForSigning :: KeyExchangeSignatureAlg -> Credentials -> Maybe Credential
+credentialsFindForSigning kxsAlg (Credentials l) = find forSigning l
   where forSigning cred = case credentialCanSign cred of
             Nothing  -> False
-            Just sig -> sig == sigAlg
+            Just kxs -> kxs == kxsAlg
 
 credentialsFindForDecrypting :: Credentials -> Maybe Credential
 credentialsFindForDecrypting (Credentials l) = find forEncrypting l
@@ -120,12 +120,12 @@ credentialCanDecrypt (chain, priv) =
           pub    = certPubKey cert
           signed = getCertificateChainLeaf chain
 
-credentialCanSign :: Credential -> Maybe DigitalSignatureAlg
+credentialCanSign :: Credential -> Maybe KeyExchangeSignatureAlg
 credentialCanSign (chain, priv) =
     case extensionGet (certExtensions cert) of
-        Nothing    -> findDigitalSignatureAlg (pub, priv)
+        Nothing    -> findKeyExchangeSignatureAlg (pub, priv)
         Just (ExtKeyUsage flags)
-            | KeyUsage_digitalSignature `elem` flags -> findDigitalSignatureAlg (pub, priv)
+            | KeyUsage_digitalSignature `elem` flags -> findKeyExchangeSignatureAlg (pub, priv)
             | otherwise                              -> Nothing
     where cert   = signedObject $ getSigned signed
           pub    = certPubKey cert
