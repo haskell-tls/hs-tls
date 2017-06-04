@@ -38,6 +38,8 @@ fromPubKey :: PubKey -> Maybe DigitalSignatureAlg
 fromPubKey (PubKeyRSA _) = Just DS_RSA
 fromPubKey (PubKeyDSA _) = Just DS_DSS
 fromPubKey (PubKeyEC  _) = Just DS_ECDSA
+fromPubKey (PubKeyEd25519 _) = return DS_Ed25519
+fromPubKey (PubKeyEd448   _) = return DS_Ed448
 fromPubKey _             = Nothing
 
 decryptError :: MonadIO m => String -> m a
@@ -60,6 +62,8 @@ signatureCompatible DS_RSA     (_, SignatureRSApssRSAeSHA384) = True
 signatureCompatible DS_RSA     (_, SignatureRSApssRSAeSHA512) = True
 signatureCompatible DS_DSS     (_, SignatureDSS)              = True
 signatureCompatible DS_ECDSA   (_, SignatureECDSA)            = True
+signatureCompatible DS_Ed25519 (_, SignatureEd25519)          = True
+signatureCompatible DS_Ed448   (_, SignatureEd448)            = True
 signatureCompatible _          (_, _)                         = False
 
 checkCertificateVerify :: Context
@@ -145,7 +149,18 @@ signatureParams DS_ECDSA hashSigAlg =
         Nothing                           -> ECDSAParams SHA1
         Just (hsh       , SignatureECDSA) -> error ("unimplemented ECDSA signature hash type: " ++ show hsh)
         Just (_         , sigAlg)         -> error ("signature algorithm is incompatible with ECDSA: " ++ show sigAlg)
-signatureParams sig _ = error ("unimplemented signature type: " ++ show sig)
+signatureParams DS_Ed25519 hashSigAlg =
+    case hashSigAlg of
+        Nothing                                 -> Ed25519Params
+        Just (HashIntrinsic , SignatureEd25519) -> Ed25519Params
+        Just (hsh           , SignatureEd25519) -> error ("unimplemented Ed25519 signature hash type: " ++ show hsh)
+        Just (_             , sigAlg)           -> error ("signature algorithm is incompatible with Ed25519: " ++ show sigAlg)
+signatureParams DS_Ed448 hashSigAlg =
+    case hashSigAlg of
+        Nothing                               -> Ed448Params
+        Just (HashIntrinsic , SignatureEd448) -> Ed448Params
+        Just (hsh           , SignatureEd448) -> error ("unimplemented Ed448 signature hash type: " ++ show hsh)
+        Just (_             , sigAlg)         -> error ("signature algorithm is incompatible with Ed448: " ++ show sigAlg)
 
 signatureCreateWithCertVerifyData :: Context
                                   -> Maybe HashAndSignatureAlgorithm

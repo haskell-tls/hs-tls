@@ -709,6 +709,8 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
                 (KX_RSA,   PubKeyRSA     _) -> return DS_RSA
                 (KX_DSS,   PubKeyDSA     _) -> return DS_DSS
                 (KX_ECDSA, PubKeyEC      _) -> return DS_ECDSA
+                (KX_ECDSA, PubKeyEd25519 _) -> return DS_Ed25519
+                (KX_ECDSA, PubKeyEd448   _) -> return DS_Ed448
                 _                           -> throwCore $ Error_Protocol ("server public key algorithm is incompatible with " ++ show kxsAlg, True, HandshakeFailure)
 
 processServerKeyExchange ctx p = processCertificateRequest ctx p

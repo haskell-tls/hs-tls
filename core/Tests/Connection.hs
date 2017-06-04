@@ -11,6 +11,7 @@ module Connection
     , arbitraryPairParams13
     , arbitraryPairParamsWithVersionsAndCiphers
     , arbitraryClientCredential
+    , arbitraryCredentialsOfEachCurve
     , arbitraryRSACredentialWithUsage
     , isVersionEnabled
     , isCustomDHParams
@@ -46,7 +47,7 @@ debug :: Bool
 debug = False
 
 knownCiphers :: [Cipher]
-knownCiphers = filter nonECDSA (ciphersuite_all ++ ciphersuite_weak)
+knownCiphers = ciphersuite_all ++ ciphersuite_weak
   where
     ciphersuite_weak = [
         cipher_DHE_DSS_RC4_SHA1
@@ -54,8 +55,6 @@ knownCiphers = filter nonECDSA (ciphersuite_all ++ ciphersuite_weak)
       , cipher_null_MD5
       , cipher_null_SHA1
       ]
-    -- arbitraryCredentialsOfEachType cannot generate ECDSA
-    nonECDSA c = not ("ECDSA" `isInfixOf` cipherName c)
 
 arbitraryCiphers :: Gen [Cipher]
 arbitraryCiphers = listOf1 $ elements knownCiphers
@@ -72,6 +71,8 @@ knownHashSignatures = filter nonECDSA availableHashSignatures
     availableHashSignatures = [(TLS.HashIntrinsic, SignatureRSApssRSAeSHA512)
                               ,(TLS.HashIntrinsic, SignatureRSApssRSAeSHA384)
                               ,(TLS.HashIntrinsic, SignatureRSApssRSAeSHA256)
+                              ,(TLS.HashIntrinsic, SignatureEd25519)
+                              ,(TLS.HashIntrinsic, SignatureEd448)
                               ,(TLS.HashSHA512, SignatureRSA)
                               ,(TLS.HashSHA512, SignatureECDSA)
                               ,(TLS.HashSHA384, SignatureRSA)
@@ -100,11 +101,26 @@ arbitraryCredentialsOfEachType :: Gen [(CertificateChain, PrivKey)]
 arbitraryCredentialsOfEachType = do
     let (pubKey, privKey) = getGlobalRSAPair
     (dsaPub, dsaPriv) <- arbitraryDSAPair
+    (ed25519Pub, ed25519Priv) <- arbitraryEd25519Pair
+    (ed448Pub, ed448Priv) <- arbitraryEd448Pair
     mapM (\(pub, priv) -> do
               cert <- arbitraryX509WithKey (pub, priv)
               return (CertificateChain [cert], priv)
          ) [ (PubKeyRSA pubKey, PrivKeyRSA privKey)
            , (PubKeyDSA dsaPub, PrivKeyDSA dsaPriv)
+           , (PubKeyEd25519 ed25519Pub, PrivKeyEd25519 ed25519Priv)
+           , (PubKeyEd448 ed448Pub, PrivKeyEd448 ed448Priv)
+           ]
+
+arbitraryCredentialsOfEachCurve :: Gen [(CertificateChain, PrivKey)]
+arbitraryCredentialsOfEachCurve = do
+    (ed25519Pub, ed25519Priv) <- arbitraryEd25519Pair
+    (ed448Pub, ed448Priv) <- arbitraryEd448Pair
+    mapM (\(pub, priv) -> do
+              cert <- arbitraryX509WithKey (pub, priv)
+              return (CertificateChain [cert], priv)
+         ) [ (PubKeyEd25519 ed25519Pub, PrivKeyEd25519 ed25519Priv)
+           , (PubKeyEd448 ed448Pub, PrivKeyEd448 ed448Priv)
            ]
 
 isCustomDHParams :: DHParams -> Bool
@@ -210,8 +226,12 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
             }
     return (clientState, serverState)
 
-arbitraryClientCredential :: Gen Credential
-arbitraryClientCredential = arbitraryCredentialsOfEachType >>= elements
+arbitraryClientCredential :: Version -> Gen Credential
+arbitraryClientCredential SSL3 = do
+    -- for SSL3 there is no EC but only RSA/DSA
+    creds <- arbitraryCredentialsOfEachType
+    elements (take 2 creds) -- RSA and DSA, but not Ed25519 and Ed448
+arbitraryClientCredential _    = arbitraryCredentialsOfEachType >>= elements
 
 arbitraryRSACredentialWithUsage :: [ExtKeyUsageFlag] -> Gen (CertificateChain, PrivKey)
 arbitraryRSACredentialWithUsage usageFlags = do

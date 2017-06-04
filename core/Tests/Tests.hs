@@ -391,7 +391,9 @@ prop_handshake_hashsignatures = do
     tls13 <- pick arbitrary
     let versions = if tls13 then [TLS13] else [TLS12]
         ciphers = [ cipher_ECDHE_RSA_AES256GCM_SHA384
+                  , cipher_ECDHE_ECDSA_AES256GCM_SHA384
                   , cipher_ECDHE_RSA_AES128CBC_SHA
+                  , cipher_ECDHE_ECDSA_AES128CBC_SHA
                   , cipher_DHE_RSA_AES128_SHA1
                   , cipher_DHE_DSS_AES128_SHA1
                   , cipher_TLS13_AES128GCM_SHA256
@@ -570,7 +572,8 @@ prop_handshake_srv_key_usage = do
 prop_handshake_client_auth :: PropertyM IO ()
 prop_handshake_client_auth = do
     (clientParam,serverParam) <- pick arbitraryPairParams
-    cred <- pick arbitraryClientCredential
+    let version = maximum (supportedVersions $ serverSupported serverParam)
+    cred <- pick (arbitraryClientCredential version)
     let clientParam' = clientParam { clientHooks = (clientHooks clientParam)
                                        { onCertificateRequest = \_ -> return $ Just cred }
                                    }
