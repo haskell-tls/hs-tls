@@ -1,6 +1,8 @@
 module PubKey
     ( arbitraryRSAPair
     , arbitraryDSAPair
+    , arbitraryEd25519Pair
+    , arbitraryEd448Pair
     , globalRSAPair
     , getGlobalRSAPair
     , dhParams512
@@ -12,10 +14,14 @@ module PubKey
 
 import Test.Tasty.QuickCheck
 
+import qualified Data.ByteString as B
 import qualified Crypto.PubKey.DH as DH
+import Crypto.Error
 import Crypto.Random
 import qualified Crypto.PubKey.RSA as RSA
 import qualified Crypto.PubKey.DSA as DSA
+import qualified Crypto.PubKey.Ed25519 as Ed25519
+import qualified Crypto.PubKey.Ed448 as Ed448
 
 import Control.Concurrent.MVar
 import System.IO.Unsafe
@@ -89,3 +95,15 @@ arbitraryDSAPair = do
     priv <- choose (1, DSA.params_q dsaParams)
     let pub = DSA.calculatePublic dsaParams priv
     return (DSA.PublicKey dsaParams pub, DSA.PrivateKey dsaParams priv)
+
+arbitraryEd25519Pair :: Gen (Ed25519.PublicKey, Ed25519.SecretKey)
+arbitraryEd25519Pair = do
+    bytes <- vectorOf 32 arbitrary
+    let CryptoPassed priv = Ed25519.secretKey (B.pack bytes)
+    return (Ed25519.toPublic priv, priv)
+
+arbitraryEd448Pair :: Gen (Ed448.PublicKey, Ed448.SecretKey)
+arbitraryEd448Pair = do
+    bytes <- vectorOf 57 arbitrary
+    let CryptoPassed priv = Ed448.secretKey (B.pack bytes)
+    return (Ed448.toPublic priv, priv)

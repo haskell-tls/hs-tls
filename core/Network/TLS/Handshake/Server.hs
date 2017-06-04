@@ -257,6 +257,7 @@ handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverN
                 CipherKeyExchange_DHE_RSA   -> return $ credentialsFindForSigning KX_RSA signatureCreds
                 CipherKeyExchange_DHE_DSS   -> return $ credentialsFindForSigning KX_DSS signatureCreds
                 CipherKeyExchange_ECDHE_RSA -> return $ credentialsFindForSigning KX_RSA signatureCreds
+                CipherKeyExchange_ECDHE_ECDSA -> return $ credentialsFindForSigning KX_ECDSA signatureCreds
                 _                           -> throwCore $ Error_Protocol ("key exchange algorithm not implemented", True, HandshakeFailure)
 
     resumeSessionData <- case clientSession of
@@ -369,6 +370,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                         CipherKeyExchange_DHE_RSA -> Just <$> generateSKX_DHE KX_RSA
                         CipherKeyExchange_DHE_DSS -> Just <$> generateSKX_DHE KX_DSS
                         CipherKeyExchange_ECDHE_RSA -> Just <$> generateSKX_ECDHE KX_RSA
+                        CipherKeyExchange_ECDHE_ECDSA -> Just <$> generateSKX_ECDHE KX_ECDSA
                         _                         -> return Nothing
             maybe (return ()) (sendPacket ctx . Handshake . (:[]) . ServerKeyXchg) skx
 
@@ -472,6 +474,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             signed <- digitallySignECDHParams ctx serverParams sigAlg mhashSig
             case kxsAlg of
                 KX_RSA   -> return $ SKX_ECDHE_RSA serverParams signed
+                KX_ECDSA -> return $ SKX_ECDHE_ECDSA serverParams signed
                 _        -> error ("generate skx_ecdhe unsupported key exchange signature: " ++ show kxsAlg)
 
         -- create a DigitallySigned objects for DHParams or ECDHParams.
@@ -982,8 +985,7 @@ getCiphers sparams creds sigCreds = filter authorizedCKE (supportedCiphers $ ser
                     CipherKeyExchange_DHE_RSA     -> canSignRSA
                     CipherKeyExchange_DHE_DSS     -> canSignDSS
                     CipherKeyExchange_ECDHE_RSA   -> canSignRSA
-                    -- unimplemented: EC
-                    CipherKeyExchange_ECDHE_ECDSA -> False
+                    CipherKeyExchange_ECDHE_ECDSA -> canSignECDSA
                     -- unimplemented: non ephemeral DH & ECDH.
                     -- Note, these *should not* be implemented, and have
                     -- (for example) been removed in OpenSSL 1.1.0
@@ -996,6 +998,7 @@ getCiphers sparams creds sigCreds = filter authorizedCKE (supportedCiphers $ ser
 
             canSignDSS    = KX_DSS `elem` signingAlgs
             canSignRSA    = KX_RSA `elem` signingAlgs
+            canSignECDSA  = KX_ECDSA `elem` signingAlgs
             canEncryptRSA = isJust $ credentialsFindForDecrypting creds
             signingAlgs   = credentialsListSigningAlgorithms sigCreds
 

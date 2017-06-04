@@ -39,12 +39,15 @@ module Network.TLS.Crypto
 import qualified Crypto.Hash as H
 import qualified Data.ByteString as B
 import qualified Data.ByteArray as B (convert)
+import Crypto.Error
 import Crypto.Random
 import qualified Crypto.PubKey.DH as DH
 import qualified Crypto.PubKey.DSA as DSA
 import qualified Crypto.PubKey.ECC.ECDSA as ECDSA
 import qualified Crypto.PubKey.ECC.Prim as ECC
 import qualified Crypto.PubKey.ECC.Types as ECC
+import qualified Crypto.PubKey.Ed25519 as Ed25519
+import qualified Crypto.PubKey.Ed448 as Ed448
 import qualified Crypto.PubKey.RSA as RSA
 import qualified Crypto.PubKey.RSA.PKCS15 as RSA
 import qualified Crypto.PubKey.RSA.PSS as PSS
@@ -76,6 +79,8 @@ findDigitalSignatureAlg keyPair =
         (PubKeyRSA     _, PrivKeyRSA      _)  -> Just DS_RSA
         (PubKeyDSA     _, PrivKeyDSA      _)  -> Just DS_DSS
         --(PubKeyECDSA   _, PrivKeyECDSA    _)  -> Just DS_ECDSA
+        (PubKeyEd25519 _, PrivKeyEd25519  _)  -> Just DS_Ed25519
+        (PubKeyEd448   _, PrivKeyEd448    _)  -> Just DS_Ed448
         _                                     -> Nothing
 
 findKeyExchangeSignatureAlg :: (PubKey, PrivKey) -> Maybe KeyExchangeSignatureAlg
@@ -84,6 +89,8 @@ findKeyExchangeSignatureAlg keyPair =
         (PubKeyRSA     _, PrivKeyRSA      _)  -> Just KX_RSA
         (PubKeyDSA     _, PrivKeyDSA      _)  -> Just KX_DSS
         (PubKeyEC      _, PrivKeyEC       _)  -> Just KX_ECDSA
+        (PubKeyEd25519 _, PrivKeyEd25519  _)  -> Just KX_ECDSA
+        (PubKeyEd448   _, PrivKeyEd448    _)  -> Just KX_ECDSA
         _                                     -> Nothing
 
 findFiniteFieldGroup :: DH.Params -> Maybe Group
@@ -190,11 +197,13 @@ data RSAEncoding = RSApkcs1 | RSApss deriving (Show,Eq)
 
 -- Signature algorithm and associated parameters.
 --
--- FIXME add RSAPSSParams, Ed25519Params, Ed448Params
+-- FIXME add RSAPSSParams
 data SignatureParams =
       RSAParams      Hash RSAEncoding
     | DSSParams
     | ECDSAParams    Hash
+    | Ed25519Params
+    | Ed448Params
     deriving (Show,Eq)
 
 -- Verify that the signature matches the given message, using the
@@ -273,6 +282,14 @@ kxVerify (PubKeyEC key) (ECDSAParams alg) msg sigBS = fromMaybe False $ do
                         _ -> Nothing
           where bits  = ECC.curveSizeBits curve
                 bytes = (bits + 7) `div` 8
+kxVerify (PubKeyEd25519 key) Ed25519Params msg sigBS =
+    case Ed25519.signature sigBS of
+        CryptoPassed sig -> Ed25519.verify key msg sig
+        _                -> False
+kxVerify (PubKeyEd448 key) Ed448Params msg sigBS =
+    case Ed448.signature sigBS of
+        CryptoPassed sig -> Ed448.verify key msg sig
+        _                -> False
 kxVerify _              _         _   _    = False
 
 -- Sign the given message using the private key.
@@ -291,6 +308,10 @@ kxSign (PrivKeyDSA pk) (PubKeyDSA _) DSSParams msg = do
     sign <- DSA.sign pk H.SHA1 msg
     return (Right $ encodeASN1' DER $ dsaSequence sign)
   where dsaSequence sign = [Start Sequence,IntVal (DSA.sign_r sign),IntVal (DSA.sign_s sign),End Sequence]
+kxSign (PrivKeyEd25519 pk) (PubKeyEd25519 pub) Ed25519Params msg =
+    return $ Right $ B.convert $ Ed25519.sign pk pub msg
+kxSign (PrivKeyEd448 pk) (PubKeyEd448 pub) Ed448Params msg =
+    return $ Right $ B.convert $ Ed448.sign pk pub msg
 kxSign _ _ _ _ =
     return (Left KxUnsupported)
 
