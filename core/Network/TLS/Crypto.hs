@@ -26,6 +26,7 @@ module Network.TLS.Crypto
     , PrivateKey
     , SignatureParams(..)
     , findDigitalSignatureAlg
+    , findKeyExchangeSignatureAlg
     , findFiniteFieldGroup
     , kxEncrypt
     , kxDecrypt
@@ -75,6 +76,14 @@ findDigitalSignatureAlg keyPair =
         (PubKeyRSA     _, PrivKeyRSA      _)  -> Just DS_RSA
         (PubKeyDSA     _, PrivKeyDSA      _)  -> Just DS_DSS
         --(PubKeyECDSA   _, PrivKeyECDSA    _)  -> Just DS_ECDSA
+        _                                     -> Nothing
+
+findKeyExchangeSignatureAlg :: (PubKey, PrivKey) -> Maybe KeyExchangeSignatureAlg
+findKeyExchangeSignatureAlg keyPair =
+    case keyPair of
+        (PubKeyRSA     _, PrivKeyRSA      _)  -> Just KX_RSA
+        (PubKeyDSA     _, PrivKeyDSA      _)  -> Just KX_DSS
+        (PubKeyEC      _, PrivKeyEC       _)  -> Just KX_ECDSA
         _                                     -> Nothing
 
 findFiniteFieldGroup :: DH.Params -> Maybe Group

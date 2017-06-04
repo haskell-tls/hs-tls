@@ -675,13 +675,13 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
   where processWithCipher cipher skx =
             case (cipherKeyExchange cipher, skx) of
                 (CipherKeyExchange_DHE_RSA, SKX_DHE_RSA dhparams signature) -> do
-                    doDHESignature dhparams signature DS_RSA
+                    doDHESignature dhparams signature KX_RSA
                 (CipherKeyExchange_DHE_DSS, SKX_DHE_DSS dhparams signature) -> do
-                    doDHESignature dhparams signature DS_DSS
+                    doDHESignature dhparams signature KX_DSS
                 (CipherKeyExchange_ECDHE_RSA, SKX_ECDHE_RSA ecdhparams signature) -> do
-                    doECDHESignature ecdhparams signature DS_RSA
+                    doECDHESignature ecdhparams signature KX_RSA
                 (CipherKeyExchange_ECDHE_ECDSA, SKX_ECDHE_ECDSA ecdhparams signature) -> do
-                    doECDHESignature ecdhparams signature DS_ECDSA
+                    doECDHESignature ecdhparams signature KX_ECDSA
                 (cke, SKX_Unparsed bytes) -> do
                     ver <- usingState_ ctx getVersion
                     case decodeReallyServerKeyXchgAlgorithmData ver cke bytes of
@@ -689,17 +689,27 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
                         Right realSkx -> processWithCipher cipher realSkx
                     -- we need to resolve the result. and recall processWithCipher ..
                 (c,_)           -> throwCore $ Error_Protocol ("unknown server key exchange received, expecting: " ++ show c, True, HandshakeFailure)
-        doDHESignature dhparams signature signatureType = do
+        doDHESignature dhparams signature kxsAlg = do
             -- FIXME verify if FF group is one of supported groups
+            signatureType <- getSignatureType kxsAlg
             verified <- digitallySignDHParamsVerify ctx dhparams signatureType signature
             unless verified $ decryptError ("bad " ++ show signatureType ++ " signature for dhparams " ++ show dhparams)
             usingHState ctx $ setServerDHParams dhparams
 
-        doECDHESignature ecdhparams signature signatureType = do
+        doECDHESignature ecdhparams signature kxsAlg = do
             -- FIXME verify if EC group is one of supported groups
+            signatureType <- getSignatureType kxsAlg
             verified <- digitallySignECDHParamsVerify ctx ecdhparams signatureType signature
             unless verified $ decryptError ("bad " ++ show signatureType ++ " signature for ecdhparams")
             usingHState ctx $ setServerECDHParams ecdhparams
+
+        getSignatureType kxsAlg = do
+            publicKey <- usingHState ctx getRemotePublicKey
+            case (kxsAlg, publicKey) of
+                (KX_RSA,   PubKeyRSA     _) -> return DS_RSA
+                (KX_DSS,   PubKeyDSA     _) -> return DS_DSS
+                (KX_ECDSA, PubKeyEC      _) -> return DS_ECDSA
+                _                           -> throwCore $ Error_Protocol ("server public key algorithm is incompatible with " ++ show kxsAlg, True, HandshakeFailure)
 
 processServerKeyExchange ctx p = processCertificateRequest ctx p
 
