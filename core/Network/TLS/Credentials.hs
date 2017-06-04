@@ -15,6 +15,7 @@ module Network.TLS.Credentials
     , credentialsFindForSigning
     , credentialsFindForDecrypting
     , credentialsListSigningAlgorithms
+    , credentialPublicPrivateKeys
     , credentialMatchesHashSignatures
     ) where
 
@@ -22,7 +23,7 @@ import Data.ByteString (ByteString)
 import Data.Monoid
 import Data.Maybe (catMaybes)
 import Data.List (find)
-import Network.TLS.Crypto.Types
+import Network.TLS.Crypto
 import Network.TLS.X509
 import Data.X509.File
 import Data.X509.Memory
@@ -117,21 +118,19 @@ credentialCanDecrypt (chain, priv) =
 credentialCanSign :: Credential -> Maybe DigitalSignatureAlg
 credentialCanSign (chain, priv) =
     case extensionGet (certExtensions cert) of
-        Nothing    -> getSignatureAlg pub priv
+        Nothing    -> findDigitalSignatureAlg (pub, priv)
         Just (ExtKeyUsage flags)
-            | KeyUsage_digitalSignature `elem` flags -> getSignatureAlg pub priv
+            | KeyUsage_digitalSignature `elem` flags -> findDigitalSignatureAlg (pub, priv)
             | otherwise                              -> Nothing
     where cert   = signedObject $ getSigned signed
           pub    = certPubKey cert
           signed = getCertificateChainLeaf chain
 
-getSignatureAlg :: PubKey -> PrivKey -> Maybe DigitalSignatureAlg
-getSignatureAlg pub priv =
-    case (pub, priv) of
-        (PubKeyRSA _, PrivKeyRSA _)     -> Just RSA
-        (PubKeyDSA _, PrivKeyDSA _)     -> Just DSS
-        --(PubKeyECDSA _, PrivKeyECDSA _) -> Just ECDSA
-        _                               -> Nothing
+credentialPublicPrivateKeys :: Credential -> (PubKey, PrivKey)
+credentialPublicPrivateKeys (chain, priv) = pub `seq` (pub, priv)
+    where cert   = signedObject $ getSigned signed
+          pub    = certPubKey cert
+          signed = getCertificateChainLeaf chain
 
 getHashSignature :: SignedCertificate -> Maybe TLS.HashAndSignatureAlgorithm
 getHashSignature signed =
