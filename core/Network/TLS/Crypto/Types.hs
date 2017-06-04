@@ -19,5 +19,5 @@ availableECGroups = [P256,P384,P521,X25519,X448]
 
 -- Digital signature algorithm, in close relation to public/private key types
 -- and cipher key exchange.
-data DigitalSignatureAlg = RSA | DSS | ECDSA | Ed25519 | Ed448
+data DigitalSignatureAlg = DS_RSA | DS_DSS | DS_ECDSA | DS_Ed25519 | DS_Ed448
                            deriving (Show, Eq)

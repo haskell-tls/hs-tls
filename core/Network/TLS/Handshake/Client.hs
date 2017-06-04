@@ -675,13 +675,13 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
   where processWithCipher cipher skx =
             case (cipherKeyExchange cipher, skx) of
                 (CipherKeyExchange_DHE_RSA, SKX_DHE_RSA dhparams signature) -> do
-                    doDHESignature dhparams signature RSA
+                    doDHESignature dhparams signature DS_RSA
                 (CipherKeyExchange_DHE_DSS, SKX_DHE_DSS dhparams signature) -> do
-                    doDHESignature dhparams signature DSS
+                    doDHESignature dhparams signature DS_DSS
                 (CipherKeyExchange_ECDHE_RSA, SKX_ECDHE_RSA ecdhparams signature) -> do
-                    doECDHESignature ecdhparams signature RSA
+                    doECDHESignature ecdhparams signature DS_RSA
                 (CipherKeyExchange_ECDHE_ECDSA, SKX_ECDHE_ECDSA ecdhparams signature) -> do
-                    doECDHESignature ecdhparams signature ECDSA
+                    doECDHESignature ecdhparams signature DS_ECDSA
                 (cke, SKX_Unparsed bytes) -> do
                     ver <- usingState_ ctx getVersion
                     case decodeReallyServerKeyXchgAlgorithmData ver cke bytes of

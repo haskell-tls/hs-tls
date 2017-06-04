@@ -37,14 +37,14 @@ import Network.TLS.Util
 import Control.Monad.State.Strict
 
 fromPubKey :: PubKey -> Maybe DigitalSignatureAlg
-fromPubKey (PubKeyRSA _) = Just RSA
-fromPubKey (PubKeyDSA _) = Just DSS
-fromPubKey (PubKeyEC  _) = Just ECDSA
+fromPubKey (PubKeyRSA _) = Just DS_RSA
+fromPubKey (PubKeyDSA _) = Just DS_DSS
+fromPubKey (PubKeyEC  _) = Just DS_ECDSA
 fromPubKey _             = Nothing
 
 fromPrivKey :: PrivKey -> Maybe DigitalSignatureAlg
-fromPrivKey (PrivKeyRSA _) = Just RSA
-fromPrivKey (PrivKeyDSA _) = Just DSS
+fromPrivKey (PrivKeyRSA _) = Just DS_RSA
+fromPrivKey (PrivKeyDSA _) = Just DS_DSS
 fromPrivKey _              = Nothing
 
 getLocalDigitalSignatureAlg :: MonadIO m => Context -> m DigitalSignatureAlg
@@ -61,20 +61,20 @@ decryptError msg = throwCore $ Error_Protocol (msg, True, DecryptError)
 -- 'CertificateType' values.  Ed25519 and Ed448 have no assigned code point
 -- and are checked with extension "signature_algorithms" only.
 certificateCompatible :: DigitalSignatureAlg -> [CertificateType] -> Bool
-certificateCompatible RSA     cTypes = CertificateType_RSA_Sign `elem` cTypes
-certificateCompatible DSS     cTypes = CertificateType_DSS_Sign `elem` cTypes
-certificateCompatible ECDSA   cTypes = CertificateType_ECDSA_Sign `elem` cTypes
-certificateCompatible Ed25519 _      = True
-certificateCompatible Ed448   _      = True
+certificateCompatible DS_RSA     cTypes = CertificateType_RSA_Sign `elem` cTypes
+certificateCompatible DS_DSS     cTypes = CertificateType_DSS_Sign `elem` cTypes
+certificateCompatible DS_ECDSA   cTypes = CertificateType_ECDSA_Sign `elem` cTypes
+certificateCompatible DS_Ed25519 _      = True
+certificateCompatible DS_Ed448   _      = True
 
 signatureCompatible :: DigitalSignatureAlg -> HashAndSignatureAlgorithm -> Bool
-signatureCompatible RSA   (_, SignatureRSA)              = True
-signatureCompatible RSA   (_, SignatureRSApssRSAeSHA256) = True
-signatureCompatible RSA   (_, SignatureRSApssRSAeSHA384) = True
-signatureCompatible RSA   (_, SignatureRSApssRSAeSHA512) = True
-signatureCompatible DSS   (_, SignatureDSS)              = True
-signatureCompatible ECDSA (_, SignatureECDSA)            = True
-signatureCompatible _     (_, _)                         = False
+signatureCompatible DS_RSA     (_, SignatureRSA)              = True
+signatureCompatible DS_RSA     (_, SignatureRSApssRSAeSHA256) = True
+signatureCompatible DS_RSA     (_, SignatureRSApssRSAeSHA384) = True
+signatureCompatible DS_RSA     (_, SignatureRSApssRSAeSHA512) = True
+signatureCompatible DS_DSS     (_, SignatureDSS)              = True
+signatureCompatible DS_ECDSA   (_, SignatureECDSA)            = True
+signatureCompatible _          (_, _)                         = False
 
 checkCertificateVerify :: Context
                        -> Version
@@ -122,9 +122,9 @@ prepareCertificateVerifySignatureData ctx usedVersion sigAlg hashSigAlg msgs
     | usedVersion == SSL3 = do
         (hashCtx, params, generateCV_SSL) <-
             case sigAlg of
-                RSA -> return (hashInit SHA1_MD5, RSAParams SHA1_MD5 RSApkcs1, generateCertificateVerify_SSL)
-                DSS -> return (hashInit SHA1, DSSParams, generateCertificateVerify_SSL_DSS)
-                _   -> throwCore $ Error_Misc ("unsupported CertificateVerify signature for SSL3: " ++ show sigAlg)
+                DS_RSA -> return (hashInit SHA1_MD5, RSAParams SHA1_MD5 RSApkcs1, generateCertificateVerify_SSL)
+                DS_DSS -> return (hashInit SHA1, DSSParams, generateCertificateVerify_SSL_DSS)
+                _      -> throwCore $ Error_Misc ("unsupported CertificateVerify signature for SSL3: " ++ show sigAlg)
         Just masterSecret <- usingHState ctx $ gets hstMasterSecret
         return (params, generateCV_SSL masterSecret $ hashUpdate hashCtx msgs)
     | usedVersion == TLS10 || usedVersion == TLS11 =
@@ -132,7 +132,7 @@ prepareCertificateVerifySignatureData ctx usedVersion sigAlg hashSigAlg msgs
     | otherwise = return (signatureParams sigAlg hashSigAlg, msgs)
 
 signatureParams :: DigitalSignatureAlg -> Maybe HashAndSignatureAlgorithm -> SignatureParams
-signatureParams RSA hashSigAlg =
+signatureParams DS_RSA hashSigAlg =
     case hashSigAlg of
         Just (HashSHA512, SignatureRSA) -> RSAParams SHA512   RSApkcs1
         Just (HashSHA384, SignatureRSA) -> RSAParams SHA384   RSApkcs1
@@ -144,13 +144,13 @@ signatureParams RSA hashSigAlg =
         Nothing                         -> RSAParams SHA1_MD5 RSApkcs1
         Just (hsh       , SignatureRSA) -> error ("unimplemented RSA signature hash type: " ++ show hsh)
         Just (_         , sigAlg)       -> error ("signature algorithm is incompatible with RSA: " ++ show sigAlg)
-signatureParams DSS hashSigAlg =
+signatureParams DS_DSS hashSigAlg =
     case hashSigAlg of
         Nothing                       -> DSSParams
         Just (HashSHA1, SignatureDSS) -> DSSParams
         Just (_       , SignatureDSS) -> error "invalid DSA hash choice, only SHA1 allowed"
         Just (_       , sigAlg)       -> error ("signature algorithm is incompatible with DSS: " ++ show sigAlg)
-signatureParams ECDSA hashSigAlg =
+signatureParams DS_ECDSA hashSigAlg =
     case hashSigAlg of
         Just (HashSHA512, SignatureECDSA) -> ECDSAParams SHA512
         Just (HashSHA384, SignatureECDSA) -> ECDSAParams SHA384
