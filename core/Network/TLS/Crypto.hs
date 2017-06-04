@@ -72,9 +72,9 @@ data KxError =
 findDigitalSignatureAlg :: (PubKey, PrivKey) -> Maybe DigitalSignatureAlg
 findDigitalSignatureAlg keyPair =
     case keyPair of
-        (PubKeyRSA     _, PrivKeyRSA      _)  -> Just RSA
-        (PubKeyDSA     _, PrivKeyDSA      _)  -> Just DSS
-        --(PubKeyECDSA   _, PrivKeyECDSA    _)  -> Just ECDSA
+        (PubKeyRSA     _, PrivKeyRSA      _)  -> Just DS_RSA
+        (PubKeyDSA     _, PrivKeyDSA      _)  -> Just DS_DSS
+        --(PubKeyECDSA   _, PrivKeyECDSA    _)  -> Just DS_ECDSA
         _                                     -> Nothing
 
 findFiniteFieldGroup :: DH.Params -> Maybe Group

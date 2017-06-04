@@ -254,9 +254,9 @@ handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverN
     cred <- case cipherKeyExchange usedCipher of
                 CipherKeyExchange_RSA       -> return $ credentialsFindForDecrypting creds
                 CipherKeyExchange_DH_Anon   -> return   Nothing
-                CipherKeyExchange_DHE_RSA   -> return $ credentialsFindForSigning RSA signatureCreds
-                CipherKeyExchange_DHE_DSS   -> return $ credentialsFindForSigning DSS signatureCreds
-                CipherKeyExchange_ECDHE_RSA -> return $ credentialsFindForSigning RSA signatureCreds
+                CipherKeyExchange_DHE_RSA   -> return $ credentialsFindForSigning DS_RSA signatureCreds
+                CipherKeyExchange_DHE_DSS   -> return $ credentialsFindForSigning DS_DSS signatureCreds
+                CipherKeyExchange_ECDHE_RSA -> return $ credentialsFindForSigning DS_RSA signatureCreds
                 _                           -> throwCore $ Error_Protocol ("key exchange algorithm not implemented", True, HandshakeFailure)
 
     resumeSessionData <- case clientSession of
@@ -366,9 +366,9 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             -- send server key exchange if needed
             skx <- case cipherKeyExchange usedCipher of
                         CipherKeyExchange_DH_Anon -> Just <$> generateSKX_DH_Anon
-                        CipherKeyExchange_DHE_RSA -> Just <$> generateSKX_DHE RSA
-                        CipherKeyExchange_DHE_DSS -> Just <$> generateSKX_DHE DSS
-                        CipherKeyExchange_ECDHE_RSA -> Just <$> generateSKX_ECDHE RSA
+                        CipherKeyExchange_DHE_RSA -> Just <$> generateSKX_DHE DS_RSA
+                        CipherKeyExchange_DHE_DSS -> Just <$> generateSKX_DHE DS_DSS
+                        CipherKeyExchange_ECDHE_RSA -> Just <$> generateSKX_ECDHE DS_RSA
                         _                         -> return Nothing
             maybe (return ()) (sendPacket ctx . Handshake . (:[]) . ServerKeyXchg) skx
 
@@ -446,9 +446,9 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             mhashSig <- decideHashSig sigAlg
             signed <- digitallySignDHParams ctx serverParams sigAlg mhashSig
             case sigAlg of
-                RSA -> return $ SKX_DHE_RSA serverParams signed
-                DSS -> return $ SKX_DHE_DSS serverParams signed
-                _   -> error ("generate skx_dhe unsupported signature type: " ++ show sigAlg)
+                DS_RSA -> return $ SKX_DHE_RSA serverParams signed
+                DS_DSS -> return $ SKX_DHE_DSS serverParams signed
+                _      -> error ("generate skx_dhe unsupported key exchange signature: " ++ show sigAlg)
 
         generateSKX_DH_Anon = SKX_DH_Anon <$> setup_DHE
 
@@ -469,7 +469,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             mhashSig <- decideHashSig sigAlg
             signed <- digitallySignECDHParams ctx serverParams sigAlg mhashSig
             case sigAlg of
-                RSA -> return $ SKX_ECDHE_RSA serverParams signed
+                DS_RSA   -> return $ SKX_ECDHE_RSA serverParams signed
                 _   -> error ("generate skx_ecdhe unsupported signature type: " ++ show sigAlg)
 
         -- create a DigitallySigned objects for DHParams or ECDHParams.
@@ -992,8 +992,8 @@ getCiphers sparams creds sigCreds = filter authorizedCKE (supportedCiphers $ ser
                     CipherKeyExchange_ECDH_RSA    -> False
                     CipherKeyExchange_TLS13       -> False -- not reached
 
-            canSignDSS    = DSS `elem` signingAlgs
-            canSignRSA    = RSA `elem` signingAlgs
+            canSignDSS    = DS_DSS `elem` signingAlgs
+            canSignRSA    = DS_RSA `elem` signingAlgs
             canEncryptRSA = isJust $ credentialsFindForDecrypting creds
             signingAlgs   = credentialsListSigningAlgorithms sigCreds
 
