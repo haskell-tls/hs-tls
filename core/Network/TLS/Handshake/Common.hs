@@ -167,5 +167,5 @@ storePrivInfo ctx cc privkey = do
                         ( "mismatched or unsupported private key pair"
                         , True
                         , InternalError )
-    usingHState ctx $ setPrivateKey privkey
+    usingHState ctx $ setPublicPrivateKeys (pubkey, privkey)
     return privalg

@@ -21,8 +21,8 @@ module Network.TLS.Handshake.State
     , runHandshake
     -- * key accessors
     , setPublicKey
-    , setPrivateKey
-    , getLocalPrivateKey
+    , setPublicPrivateKeys
+    , getLocalPublicPrivateKeys
     , getRemotePublicKey
     , setServerDHParams
     , getServerDHParams
@@ -88,7 +88,7 @@ data Secret13 = NoSecret
 
 data HandshakeKeyState = HandshakeKeyState
     { hksRemotePublicKey :: !(Maybe PubKey)
-    , hksLocalPrivateKey :: !(Maybe PrivKey)
+    , hksLocalPublicPrivateKeys :: !(Maybe (PubKey, PrivKey))
     } deriving (Show)
 
 data HandshakeDigest = HandshakeMessages [ByteString]
@@ -226,15 +226,15 @@ setPublicKey :: PubKey -> HandshakeM ()
 setPublicKey pk = modify (\hst -> hst { hstKeyState = setPK (hstKeyState hst) })
   where setPK hks = hks { hksRemotePublicKey = Just pk }
 
-setPrivateKey :: PrivKey -> HandshakeM ()
-setPrivateKey pk = modify (\hst -> hst { hstKeyState = setPK (hstKeyState hst) })
-  where setPK hks = hks { hksLocalPrivateKey = Just pk }
+setPublicPrivateKeys :: (PubKey, PrivKey) -> HandshakeM ()
+setPublicPrivateKeys keys = modify (\hst -> hst { hstKeyState = setKeys (hstKeyState hst) })
+  where setKeys hks = hks { hksLocalPublicPrivateKeys = Just keys }
 
 getRemotePublicKey :: HandshakeM PubKey
 getRemotePublicKey = fromJust "remote public key" <$> gets (hksRemotePublicKey . hstKeyState)
 
-getLocalPrivateKey :: HandshakeM PrivKey
-getLocalPrivateKey = fromJust "local private key" <$> gets (hksLocalPrivateKey . hstKeyState)
+getLocalPublicPrivateKeys :: HandshakeM (PubKey, PrivKey)
+getLocalPublicPrivateKeys = fromJust "local public/private key" <$> gets (hksLocalPublicPrivateKeys . hstKeyState)
 
 setServerDHParams :: ServerDHParams -> HandshakeM ()
 setServerDHParams shp = modify (\hst -> hst { hstServerDHParams = Just shp })
