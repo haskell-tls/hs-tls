@@ -279,18 +279,19 @@ kxVerify _              _         _   _    = False
 --
 kxSign :: MonadRandom r
        => PrivateKey
+       -> PublicKey
        -> SignatureParams
        -> ByteString
        -> r (Either KxError ByteString)
-kxSign (PrivKeyRSA pk) (RSAParams hashAlg RSApkcs1) msg =
+kxSign (PrivKeyRSA pk) (PubKeyRSA _) (RSAParams hashAlg RSApkcs1) msg =
     generalizeRSAError <$> rsaSignHash hashAlg pk msg
-kxSign (PrivKeyRSA pk) (RSAParams hashAlg RSApss) msg =
+kxSign (PrivKeyRSA pk) (PubKeyRSA _) (RSAParams hashAlg RSApss) msg =
     generalizeRSAError <$> rsapssSignHash hashAlg pk msg
-kxSign (PrivKeyDSA pk) DSSParams           msg = do
+kxSign (PrivKeyDSA pk) (PubKeyDSA _) DSSParams msg = do
     sign <- DSA.sign pk H.SHA1 msg
     return (Right $ encodeASN1' DER $ dsaSequence sign)
   where dsaSequence sign = [Start Sequence,IntVal (DSA.sign_r sign),IntVal (DSA.sign_s sign),End Sequence]
-kxSign _ _ _ =
+kxSign _ _ _ _ =
     return (Left KxUnsupported)
 
 rsaSignHash :: MonadRandom m => Hash -> RSA.PrivateKey -> ByteString -> m (Either RSA.Error ByteString)

@@ -443,7 +443,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
 
         generateSKX_DHE kxsAlg = do
             serverParams  <- setup_DHE
-            sigAlg <- getLocalSignatureAlg kxsAlg
+            sigAlg <- getLocalDigitalSignatureAlg ctx
             mhashSig <- decideHashSig sigAlg
             signed <- digitallySignDHParams ctx serverParams sigAlg mhashSig
             case kxsAlg of
@@ -467,23 +467,12 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                      []  -> throwCore $ Error_Protocol ("no common group", True, HandshakeFailure)
                      g:_ -> return g
             serverParams <- setup_ECDHE grp
-            sigAlg <- getLocalSignatureAlg kxsAlg
+            sigAlg <- getLocalDigitalSignatureAlg ctx
             mhashSig <- decideHashSig sigAlg
             signed <- digitallySignECDHParams ctx serverParams sigAlg mhashSig
             case kxsAlg of
                 KX_RSA   -> return $ SKX_ECDHE_RSA serverParams signed
                 _        -> error ("generate skx_ecdhe unsupported key exchange signature: " ++ show kxsAlg)
-
-        -- no need to verify that sigAlg and kxsAlg are consistent: server
-        -- is supposed to select cipher and credential suitable for
-        -- actual key exchange
-        getLocalSignatureAlg kxsAlg =
-            case mcred of
-                Nothing   -> error ("no credential was selected for " ++ show kxsAlg)
-                Just cred ->
-                    case credentialDigitalSignatureAlg cred of
-                        Just sigAlg -> return sigAlg
-                        Nothing     -> error "selected credential does not support signing"
 
         -- create a DigitallySigned objects for DHParams or ECDHParams.
 

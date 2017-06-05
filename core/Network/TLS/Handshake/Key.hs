@@ -17,7 +17,10 @@ module Network.TLS.Handshake.Key
     , generateECDHEShared
     , generateFFDHE
     , generateFFDHEShared
+    , getLocalDigitalSignatureAlg
     ) where
+
+import Control.Monad.State.Strict
 
 import qualified Data.ByteString as B
 
@@ -42,16 +45,16 @@ encryptRSA ctx content = do
 
 signPrivate :: Context -> Role -> SignatureParams -> ByteString -> IO ByteString
 signPrivate ctx _ params content = do
-    privateKey <- usingHState ctx getLocalPrivateKey
+    (publicKey, privateKey) <- usingHState ctx getLocalPublicPrivateKeys
     usingState_ ctx $ do
-        r <- withRNG $ kxSign privateKey params content
+        r <- withRNG $ kxSign privateKey publicKey params content
         case r of
             Left err       -> fail ("sign failed: " ++ show err)
             Right econtent -> return econtent
 
 decryptRSA :: Context -> ByteString -> IO (Either KxError ByteString)
 decryptRSA ctx econtent = do
-    privateKey <- usingHState ctx getLocalPrivateKey
+    (_, privateKey) <- usingHState ctx getLocalPublicPrivateKeys
     usingState_ ctx $ do
         ver <- getVersion
         let cipher = if ver < TLS10 then econtent else B.drop 2 econtent
@@ -76,3 +79,10 @@ generateFFDHE ctx grp = usingState_ ctx $ withRNG $ dhGroupGenerateKeyPair grp
 
 generateFFDHEShared :: Context -> Group -> DHPublic -> IO (Maybe (DHPublic, DHKey))
 generateFFDHEShared ctx grp pub = usingState_ ctx $ withRNG $ dhGroupGetPubShared grp pub
+
+getLocalDigitalSignatureAlg :: MonadIO m => Context -> m DigitalSignatureAlg
+getLocalDigitalSignatureAlg ctx = do
+    keys <- usingHState ctx getLocalPublicPrivateKeys
+    case findDigitalSignatureAlg keys of
+        Just sigAlg -> return sigAlg
+        Nothing     -> fail "selected credential does not support signing"

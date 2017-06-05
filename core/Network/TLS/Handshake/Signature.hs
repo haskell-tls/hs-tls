@@ -14,12 +14,10 @@ module Network.TLS.Handshake.Signature
     , digitallySignECDHParams
     , digitallySignDHParamsVerify
     , digitallySignECDHParamsVerify
-    , getLocalDigitalSignatureAlg
     , certificateCompatible
     , signatureCompatible
     , signatureParams
     , fromPubKey
-    , fromPrivKey
     , decryptError
     ) where
 
@@ -41,18 +39,6 @@ fromPubKey (PubKeyRSA _) = Just DS_RSA
 fromPubKey (PubKeyDSA _) = Just DS_DSS
 fromPubKey (PubKeyEC  _) = Just DS_ECDSA
 fromPubKey _             = Nothing
-
-fromPrivKey :: PrivKey -> Maybe DigitalSignatureAlg
-fromPrivKey (PrivKeyRSA _) = Just DS_RSA
-fromPrivKey (PrivKeyDSA _) = Just DS_DSS
-fromPrivKey _              = Nothing
-
-getLocalDigitalSignatureAlg :: MonadIO m => Context -> m DigitalSignatureAlg
-getLocalDigitalSignatureAlg ctx = do
-    privateKey <- usingHState ctx getLocalPrivateKey
-    case fromPrivKey privateKey of
-        Just sigAlg -> return sigAlg
-        Nothing     -> fail "selected credential does not support signing"
 
 decryptError :: MonadIO m => String -> m a
 decryptError msg = throwCore $ Error_Protocol (msg, True, DecryptError)
