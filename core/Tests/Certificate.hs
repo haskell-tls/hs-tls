@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Certificate
     ( arbitraryX509
@@ -9,6 +10,7 @@ module Certificate
 
 import Control.Applicative
 import Test.Tasty.QuickCheck
+import Data.ASN1.OID
 import Data.X509
 import Data.Hourglass
 import qualified Data.ByteString as B
@@ -48,7 +50,6 @@ maxSerial = 16777216
 arbitraryCertificate :: PubKey -> Gen Certificate
 arbitraryCertificate pubKey = do
     serial    <- choose (0,maxSerial)
-    issuerdn  <- arbitraryDN
     subjectdn <- arbitraryDN
     validity  <- (,) <$> arbitrary <*> arbitrary
     let sigalg = SignatureALG HashSHA1 (pubkeyToAlg pubKey)
@@ -64,6 +65,7 @@ arbitraryCertificate pubKey = do
                 [ testExtensionEncode True $ ExtKeyUsage [KeyUsage_digitalSignature,KeyUsage_keyEncipherment,KeyUsage_keyCertSign]
                 ]
             }
+  where issuerdn = DistinguishedName [(getObjectID DnCommonName, "Root CA")]
 
 simpleCertificate :: PubKey -> Certificate
 simpleCertificate pubKey =

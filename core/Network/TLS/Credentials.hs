@@ -153,8 +153,20 @@ getHashSignature signed =
     convertHash sig X509.HashSHA512 = Just (TLS.HashSHA512, sig)
     convertHash _   _               = Nothing
 
--- | Checks whether all certificates in the chain comply with a list of
--- hash/signature algorithm pairs.
+-- | Checks whether certificates in the chain comply with a list of
+-- hash/signature algorithm pairs.  Currently the verification applies only
+-- to the leaf certificate, if it is not self-signed.  This may be extended
+-- to additional chain elements in the future.
 credentialMatchesHashSignatures :: [TLS.HashAndSignatureAlgorithm] -> Credential -> Bool
-credentialMatchesHashSignatures hashSigs (CertificateChain certs, _) =
-    all (maybe False (`elem` hashSigs) . getHashSignature) certs
+credentialMatchesHashSignatures hashSigs (chain, _) =
+    case chain of
+        CertificateChain []       -> True
+        CertificateChain (leaf:_) -> isSelfSigned leaf || matchHashSig leaf
+  where
+    matchHashSig signed = case getHashSignature signed of
+                              Nothing -> False
+                              Just hs -> hs `elem` hashSigs
+
+    isSelfSigned signed =
+        let cert = signedObject $ getSigned signed
+         in certSubjectDN cert == certIssuerDN cert

@@ -138,6 +138,7 @@ Test-Suite test-tls
                    , QuickCheck
                    , cryptonite
                    , bytestring
+                   , asn1-types
                    , x509
                    , x509-validation
                    , hourglass
@@ -156,6 +157,7 @@ Benchmark bench-tls
                    , criterion >= 1.0
                    , mtl
                    , bytestring
+                   , asn1-types
                    , hourglass
                    , QuickCheck >= 2
                    , tasty-quickcheck
