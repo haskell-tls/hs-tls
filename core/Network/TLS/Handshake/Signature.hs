@@ -101,9 +101,9 @@ signatureParams RSA hashSigAlg =
         Just (HashSHA384, SignatureRSA) -> RSAParams SHA384   RSApkcs1
         Just (HashSHA256, SignatureRSA) -> RSAParams SHA256   RSApkcs1
         Just (HashSHA1  , SignatureRSA) -> RSAParams SHA1     RSApkcs1
-        Just (HashTLS13 , SignatureRSApssSHA512) -> RSAParams SHA512 RSApss
-        Just (HashTLS13 , SignatureRSApssSHA384) -> RSAParams SHA384 RSApss
-        Just (HashTLS13 , SignatureRSApssSHA256) -> RSAParams SHA256 RSApss
+        Just (HashIntrinsic , SignatureRSApssSHA512) -> RSAParams SHA512 RSApss
+        Just (HashIntrinsic , SignatureRSApssSHA384) -> RSAParams SHA384 RSApss
+        Just (HashIntrinsic , SignatureRSApssSHA256) -> RSAParams SHA256 RSApss
         Nothing                         -> RSAParams SHA1_MD5 RSApkcs1
         Just (hsh       , SignatureRSA) -> error ("unimplemented RSA signature hash type: " ++ show hsh)
         Just (_         , sigAlg)       -> error ("signature algorithm is incompatible with RSA: " ++ show sigAlg)
