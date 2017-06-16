@@ -9,6 +9,7 @@ module Connection
     , arbitraryPairParams
     , arbitraryPairParamsWithVersionsAndCiphers
     , arbitraryClientCredential
+    , leafPublicKey
     , oneSessionManager
     , setPairParamsSessionManager
     , setPairParamsSessionResuming
@@ -92,6 +93,10 @@ arbitraryCredentialsOfEachType = do
          ) [ (PubKeyRSA pubKey, PrivKeyRSA privKey)
            , (PubKeyDSA dsaPub, PrivKeyDSA dsaPriv)
            ]
+
+leafPublicKey :: CertificateChain -> Maybe PubKey
+leafPublicKey (CertificateChain [])       = Nothing
+leafPublicKey (CertificateChain (leaf:_)) = Just (certPubKey $ signedObject $ getSigned leaf)
 
 arbitraryCipherPair :: Version -> Gen ([Cipher], [Cipher])
 arbitraryCipherPair connectVersion = do
