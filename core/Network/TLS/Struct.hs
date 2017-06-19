@@ -103,7 +103,7 @@ data HashAlgorithm =
     | HashSHA256
     | HashSHA384
     | HashSHA512
-    | HashTLS13
+    | HashIntrinsic
     | HashOther Word8
     deriving (Show,Eq)
 
@@ -519,7 +519,7 @@ instance TypeValuable HashAlgorithm where
     valOfType HashSHA256    = 4
     valOfType HashSHA384    = 5
     valOfType HashSHA512    = 6
-    valOfType HashTLS13     = 8
+    valOfType HashIntrinsic = 8
     valOfType (HashOther i) = i
 
     valToType 0 = Just HashNone
@@ -529,7 +529,7 @@ instance TypeValuable HashAlgorithm where
     valToType 4 = Just HashSHA256
     valToType 5 = Just HashSHA384
     valToType 6 = Just HashSHA512
-    valToType 8 = Just HashTLS13
+    valToType 8 = Just HashIntrinsic
     valToType i = Just (HashOther i)
 
 instance TypeValuable SignatureAlgorithm where

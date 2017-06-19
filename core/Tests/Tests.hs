@@ -126,6 +126,44 @@ prop_handshake_hashsignatures = do
         then runTLSInitFailure (clientParam',serverParam')
         else runTLSPipeSimple  (clientParam',serverParam')
 
+-- Tests ability to use or ignore client "signature_algorithms" extension when
+-- choosing a server certificate.  Here peers allow DHE_RSA_AES128_SHA1 but
+-- the server RSA certificate has a SHA-1 signature that the client does not
+-- support.  Server may choose the DSA certificate only when cipher
+-- DHE_DSS_AES128_SHA1 is allowed.  Otherwise it must fallback to the RSA
+-- certificate.
+prop_handshake_cert_fallback :: PropertyM IO ()
+prop_handshake_cert_fallback = do
+    let clientVersions = [TLS12]
+        serverVersions = [TLS12]
+        commonCiphers  = [ cipher_DHE_RSA_AES128_SHA1 ]
+        otherCiphers   = [ cipher_ECDHE_RSA_AES256GCM_SHA384
+                         , cipher_ECDHE_RSA_AES128CBC_SHA
+                         , cipher_DHE_DSS_AES128_SHA1
+                         ]
+        hashSignatures = [ (HashSHA256, SignatureRSA), (HashSHA1, SignatureDSS) ]
+    chainRef <- run $ newIORef Nothing
+    clientCiphers <- pick $ sublistOf otherCiphers
+    serverCiphers <- pick $ sublistOf otherCiphers
+    (clientParam,serverParam) <- pick $ arbitraryPairParamsWithVersionsAndCiphers
+                                            (clientVersions, serverVersions)
+                                            (clientCiphers ++ commonCiphers, serverCiphers ++ commonCiphers)
+    let clientParam' = clientParam { clientSupported = (clientSupported clientParam)
+                                       { supportedHashSignatures = hashSignatures }
+                                   , clientHooks = (clientHooks clientParam)
+                                       { onServerCertificate = \_ _ _ chain ->
+                                             writeIORef chainRef (Just chain) >> return [] }
+                                   }
+        dssDisallowed = cipher_DHE_DSS_AES128_SHA1 `notElem` clientCiphers
+                            || cipher_DHE_DSS_AES128_SHA1 `notElem` serverCiphers
+    runTLSPipeSimple (clientParam',serverParam)
+    serverChain <- run $ readIORef chainRef
+    dssDisallowed `assertEq` isLeafRSA serverChain
+  where
+    isLeafRSA chain = case chain >>= leafPublicKey of
+                          Just (PubKeyRSA _) -> True
+                          _                  -> False
+
 prop_handshake_groups :: PropertyM IO ()
 prop_handshake_groups = do
     let clientVersions = [TLS12]
@@ -285,6 +323,7 @@ main = defaultMain $ testGroup "tls"
             , testProperty "Hash and signatures" (monadicIO prop_handshake_hashsignatures)
             , testProperty "Cipher suites" (monadicIO prop_handshake_ciphersuites)
             , testProperty "Groups" (monadicIO prop_handshake_groups)
+            , testProperty "Certificate fallback" (monadicIO prop_handshake_cert_fallback)
             , testProperty "Client authentication" (monadicIO prop_handshake_client_auth)
             , testProperty "ALPN" (monadicIO prop_handshake_alpn)
             , testProperty "SNI" (monadicIO prop_handshake_sni)

@@ -25,6 +25,7 @@ module Network.TLS.Crypto
     , PublicKey
     , PrivateKey
     , SignatureParams(..)
+    , findDigitalSignatureAlg
     , kxEncrypt
     , kxDecrypt
     , kxSign
@@ -66,6 +67,14 @@ data KxError =
       RSAError RSA.Error
     | KxUnsupported
     deriving (Show)
+
+findDigitalSignatureAlg :: (PubKey, PrivKey) -> Maybe DigitalSignatureAlg
+findDigitalSignatureAlg keyPair =
+    case keyPair of
+        (PubKeyRSA     _, PrivKeyRSA      _)  -> Just RSA
+        (PubKeyDSA     _, PrivKeyDSA      _)  -> Just DSS
+        --(PubKeyECDSA   _, PrivKeyECDSA    _)  -> Just ECDSA
+        _                                     -> Nothing
 
 -- functions to use the hidden class.
 hashInit :: Hash -> HashContext

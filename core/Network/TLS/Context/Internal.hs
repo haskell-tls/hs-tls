@@ -57,7 +57,6 @@ module Network.TLS.Context.Internal
 import Network.TLS.Backend
 import Network.TLS.Extension
 import Network.TLS.Cipher
-import Network.TLS.Credentials (Credentials)
 import Network.TLS.Struct
 import Network.TLS.Compression (Compression)
 import Network.TLS.State
@@ -91,8 +90,6 @@ data Context = Context
     { ctxConnection       :: Backend   -- ^ return the backend object associated with this context
     , ctxSupported        :: Supported
     , ctxShared           :: Shared
-    , ctxCiphers          :: Credentials -> [Cipher]  -- ^ list of allowed ciphers according to parameters
-                                                      -- and additional credentials
     , ctxState            :: MVar TLSState
     , ctxMeasurement      :: IORef Measurement
     , ctxEOF_             :: IORef Bool    -- ^ has the handle EOFed or not.

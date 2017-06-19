@@ -158,10 +158,10 @@ data Supported = Supported
       -- ordered by decreasing priority.
       --
       -- This list is sent to the peer as part of the signature_algorithms
-      -- extension.  It is also used to restrict the choice of hash and
-      -- signature algorithm, but only when the TLS version is 1.2 or above.
-      -- In order to disable SHA-1 one must then also disable earlier protocol
-      -- versions in 'supportedVersions'.
+      -- extension.  It is also used to restrict the choice of server
+      -- credential, signature and hash algorithm, but only when the TLS
+      -- version is 1.2 or above.  In order to disable SHA-1 one must then
+      -- also disable earlier protocol versions in 'supportedVersions'.
     , supportedHashSignatures :: [HashAndSignatureAlgorithm]
       -- | Secure renegotiation defined in RFC5746.
       --   If 'True', clients send the renegotiation_info extension.
@@ -310,6 +310,9 @@ data ServerHooks = ServerHooks
       -- This is most useful for transparent proxies where
       -- credentials must be generated on the fly according to
       -- the host the client is trying to connect to.
+      --
+      -- Returned credentials may be ignored if a client does not support
+      -- the signature algorithms used in the certificate chain.
     , onServerNameIndication  :: Maybe HostName -> IO Credentials
 
       -- | at each new handshake, we call this hook to see if we allow handshake to happens.

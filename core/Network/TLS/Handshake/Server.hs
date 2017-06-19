@@ -31,7 +31,7 @@ import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Key
 import Network.TLS.Measurement
 import Data.Maybe (isJust, listToMaybe, mapMaybe)
-import Data.List (intersect, any)
+import Data.List (findIndex, intersect)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 import Data.Ord (Down(..))
@@ -140,6 +140,11 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     -- such a cipher if no hash is available for it.  It's best to skip this
     -- cipher and pick another one (with another key exchange).
 
+    -- Cipher selection is performed in two steps: first server credentials
+    -- are flagged as not suitable for signature if not compatible with
+    -- negotiated signature parameters.  Then ciphers are evalutated from
+    -- the resulting credentials.
+
     let possibleGroups = negotiatedGroupsInCommon ctx exts
         hasCommonGroupForECDHE = not (null possibleGroups)
         hasCommonGroup cipher =
@@ -147,43 +152,64 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
                 CipherKeyExchange_ECDHE_RSA    -> hasCommonGroupForECDHE
                 CipherKeyExchange_ECDHE_ECDSA  -> hasCommonGroupForECDHE
                 _                              -> True -- group not used
-    let cipherAllowed cipher = case chosenVersion of
-           TLS12 -> let -- Build a list of all signature algorithms with at least
-                        -- one hash algorithm in common between client and server.
-                        -- May contain duplicates, as it is only used for `elem`.
-                        possibleHashSigAlgs = hashAndSignaturesInCommon ctx exts
 
-                        isCommon sig = any (sig `signatureCompatible`) possibleHashSigAlgs
-                        -- Check that a candidate cipher with a signature requiring
-                        -- a hash will have at least one hash available.  This avoids
-                        -- a failure later in 'decideHash'.
-                        hasSigningRequirements =
-                            case cipherKeyExchange cipher of
-                                CipherKeyExchange_DHE_RSA      -> isCommon RSA
-                                CipherKeyExchange_DHE_DSS      -> isCommon DSS
-                                CipherKeyExchange_ECDHE_RSA    -> isCommon RSA
-                                CipherKeyExchange_ECDHE_ECDSA  -> isCommon ECDSA
-                                _                              -> True -- signature not used
+        -- Ciphers are selected according to TLS version, availability of ECDHE
+        -- group and credential depending on key exchange.
+        cipherAllowed cipher   = cipherAllowedForVersion chosenVersion cipher && hasCommonGroup cipher
+        selectCipher credentials signatureCredentials = filter cipherAllowed (commonCiphers credentials signatureCredentials)
 
-                     in cipherAllowedForVersion chosenVersion cipher && hasSigningRequirements && hasCommonGroup cipher
-           _     -> cipherAllowedForVersion chosenVersion cipher && hasCommonGroup cipher
+        allCreds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
+        (creds, signatureCreds, ciphersFilteredVersion)
+            = case chosenVersion of
+                  TLS12 -> let -- Build a list of all hash/signature algorithms in common between
+                               -- client and server.
+                               possibleHashSigAlgs = hashAndSignaturesInCommon ctx exts
+
+                               -- Check that a candidate signature credential will be compatible with
+                               -- client & server hash/signature algorithms.  This returns Just Int
+                               -- in order to sort credentials according to server hash/signature
+                               -- preference.  When the certificate has no matching hash/signature in
+                               -- 'possibleHashSigAlgs' the result is Nothing, and the credential will
+                               -- not be used to sign.  This avoids a failure later in 'decideHashSig'.
+                               signingRank cred =
+                                   case credentialDigitalSignatureAlg cred of
+                                       Just sig -> findIndex (sig `signatureCompatible`) possibleHashSigAlgs
+                                       Nothing  -> Nothing
+
+                               -- Finally compute credential lists and resulting cipher list.
+                               --
+                               -- We try to keep certificates supported by the client, but
+                               -- fallback to all credentials if this produces no suitable result
+                               -- (see RFC 5246 section 7.4.2 and TLS 1.3 section 4.4.2.2).
+                               -- The condition is based on resulting (EC)DHE ciphers so that
+                               -- filtering credentials does not give advantage to a less secure
+                               -- key exchange like CipherKeyExchange_RSA or CipherKeyExchange_DH_Anon.
+                               cltCreds    = filterCredentialsWithHashSignatures exts allCreds
+                               sigCltCreds = filterSortCredentials signingRank cltCreds
+                               sigAllCreds = filterSortCredentials signingRank allCreds
+                               cltCiphers  = selectCipher cltCreds sigCltCreds
+                               allCiphers  = selectCipher allCreds sigAllCreds
+
+                               resultTuple = if cipherListCredentialFallback cltCiphers
+                                                 then (allCreds, sigAllCreds, allCiphers)
+                                                 else (cltCreds, sigCltCreds, cltCiphers)
+                            in resultTuple
+                  _     -> (allCreds, allCreds, selectCipher allCreds allCreds)
 
     -- The shared cipherlist can become empty after filtering for compatible
     -- creds, check now before calling onCipherChoosing, which does not handle
     -- empty lists.
-    let ciphersFilteredVersion = filter cipherAllowed (commonCiphers extraCreds)
     when (null ciphersFilteredVersion) $ throwCore $
         Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
 
     let usedCipher = (onCipherChoosing $ serverHooks sparams) chosenVersion ciphersFilteredVersion
-        creds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
 
     cred <- case cipherKeyExchange usedCipher of
                 CipherKeyExchange_RSA       -> return $ credentialsFindForDecrypting creds
                 CipherKeyExchange_DH_Anon   -> return $ Nothing
-                CipherKeyExchange_DHE_RSA   -> return $ credentialsFindForSigning RSA creds
-                CipherKeyExchange_DHE_DSS   -> return $ credentialsFindForSigning DSS creds
-                CipherKeyExchange_ECDHE_RSA -> return $ credentialsFindForSigning RSA creds
+                CipherKeyExchange_DHE_RSA   -> return $ credentialsFindForSigning RSA signatureCreds
+                CipherKeyExchange_DHE_DSS   -> return $ credentialsFindForSigning DSS signatureCreds
+                CipherKeyExchange_ECDHE_RSA -> return $ credentialsFindForSigning RSA signatureCreds
                 _                           -> throwCore $ Error_Protocol ("key exchange algorithm not implemented", True, HandshakeFailure)
 
     resumeSessionData <- case clientSession of
@@ -207,8 +233,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     doHandshake sparams cred ctx chosenVersion usedCipher usedCompression clientSession resumeSessionData exts
 
   where
-        commonCipherIDs extra = ciphers `intersect` map cipherID (ctxCiphers ctx extra)
-        commonCiphers   extra = filter (flip elem (commonCipherIDs extra) . cipherID) (ctxCiphers ctx extra)
+        commonCiphers creds sigCreds = filter ((`elem` ciphers) . cipherID) (getCiphers sparams creds sigCreds)
         commonCompressions    = compressionIntersectID (supportedCompressions $ ctxSupported ctx) compressions
         usedCompression       = head commonCompressions
 
@@ -541,11 +566,73 @@ negotiatedGroupsInCommon ctx exts = case extensionLookup extensionID_NegotiatedG
         in serverGroups `intersect` clientGroups
     _                                    -> []
 
+credentialDigitalSignatureAlg :: Credential -> Maybe DigitalSignatureAlg
+credentialDigitalSignatureAlg cred =
+    findDigitalSignatureAlg (credentialPublicPrivateKeys cred)
+
+filterSortCredentials :: Ord a => (Credential -> Maybe a) -> Credentials -> Credentials
+filterSortCredentials rankFun (Credentials creds) =
+    let orderedPairs = sortOn fst [ (rankFun cred, cred) | cred <- creds ]
+     in Credentials [ cred | (Just _, cred) <- orderedPairs ]
+
+filterCredentialsWithHashSignatures :: [ExtensionRaw] -> Credentials -> Credentials
+filterCredentialsWithHashSignatures exts =
+    case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode False of
+        Nothing                        -> id
+        Just (SignatureAlgorithms sas) ->
+            let filterCredentials p (Credentials l) = Credentials (filter p l)
+             in filterCredentials (credentialMatchesHashSignatures sas)
+
+-- returns True if "signature_algorithms" certificate filtering produced no
+-- ephemeral D-H nor TLS13 cipher (so handshake with lower security)
+cipherListCredentialFallback :: [Cipher] -> Bool
+cipherListCredentialFallback []     = True
+cipherListCredentialFallback (x:xs) =
+    case cipherKeyExchange x of
+        CipherKeyExchange_DHE_RSA     -> False
+        CipherKeyExchange_DHE_DSS     -> False
+        CipherKeyExchange_ECDHE_RSA   -> False
+        CipherKeyExchange_ECDHE_ECDSA -> False
+        --CipherKeyExchange_TLS13       -> False
+        _                             -> cipherListCredentialFallback xs
+
 findHighestVersionFrom :: Version -> [Version] -> Maybe Version
 findHighestVersionFrom clientVersion allowedVersions =
     case filter (clientVersion >=) $ sortOn Down allowedVersions of
         []  -> Nothing
         v:_ -> Just v
+
+-- We filter our allowed ciphers here according to server DHE parameters and
+-- dynamic credential lists.  Credentials 'creds' come from server parameters
+-- but also SNI callback.  When the key exchange requires a signature, we use a
+-- subset of this list named 'sigCreds'.  This list has been filtered in order
+-- to remove certificates that are not compatible with hash/signature
+-- restrictions (TLS 1.2).
+getCiphers :: ServerParams -> Credentials -> Credentials -> [Cipher]
+getCiphers sparams creds sigCreds = filter authorizedCKE (supportedCiphers $ serverSupported sparams)
+      where authorizedCKE cipher =
+                case cipherKeyExchange cipher of
+                    CipherKeyExchange_RSA         -> canEncryptRSA
+                    CipherKeyExchange_DH_Anon     -> canDHE
+                    CipherKeyExchange_DHE_RSA     -> canSignRSA && canDHE
+                    CipherKeyExchange_DHE_DSS     -> canSignDSS && canDHE
+                    CipherKeyExchange_ECDHE_RSA   -> canSignRSA
+                    -- unimplemented: EC
+                    CipherKeyExchange_ECDHE_ECDSA -> False
+                    -- unimplemented: non ephemeral DH & ECDH.
+                    -- Note, these *should not* be implemented, and have
+                    -- (for example) been removed in OpenSSL 1.1.0
+                    --
+                    CipherKeyExchange_DH_DSS      -> False
+                    CipherKeyExchange_DH_RSA      -> False
+                    CipherKeyExchange_ECDH_ECDSA  -> False
+                    CipherKeyExchange_ECDH_RSA    -> False
+
+            canDHE        = isJust $ serverDHEParams sparams
+            canSignDSS    = DSS `elem` signingAlgs
+            canSignRSA    = RSA `elem` signingAlgs
+            canEncryptRSA = isJust $ credentialsFindForDecrypting creds
+            signingAlgs   = credentialsListSigningAlgorithms sigCreds
 
 #if !MIN_VERSION_base(4,8,0)
 sortOn :: Ord b => (a -> b) -> [a] -> [a]

@@ -9,6 +9,7 @@ module Connection
     , arbitraryPairParams
     , arbitraryPairParamsWithVersionsAndCiphers
     , arbitraryClientCredential
+    , leafPublicKey
     , oneSessionManager
     , setPairParamsSessionManager
     , setPairParamsSessionResuming
@@ -60,7 +61,7 @@ arbitraryVersions = sublistOf knownVersions
 knownHashSignatures :: [HashAndSignatureAlgorithm]
 knownHashSignatures = filter nonECDSA availableHashSignatures
   where
-    availableHashSignatures = [(TLS.HashTLS13,  SignatureRSApssSHA256)
+    availableHashSignatures = [(TLS.HashIntrinsic, SignatureRSApssSHA256)
                               ,(TLS.HashSHA512, SignatureRSA)
                               ,(TLS.HashSHA512, SignatureECDSA)
                               ,(TLS.HashSHA384, SignatureRSA)
@@ -92,6 +93,10 @@ arbitraryCredentialsOfEachType = do
          ) [ (PubKeyRSA pubKey, PrivKeyRSA privKey)
            , (PubKeyDSA dsaPub, PrivKeyDSA dsaPriv)
            ]
+
+leafPublicKey :: CertificateChain -> Maybe PubKey
+leafPublicKey (CertificateChain [])       = Nothing
+leafPublicKey (CertificateChain (leaf:_)) = Just (certPubKey $ signedObject $ getSigned leaf)
 
 arbitraryCipherPair :: Version -> Gen ([Cipher], [Cipher])
 arbitraryCipherPair connectVersion = do
