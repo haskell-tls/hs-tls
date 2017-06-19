@@ -174,13 +174,12 @@ arbitraryCipherPair connectVersion = do
 arbitraryPairParams :: Gen (ClientParams, ServerParams)
 arbitraryPairParams = elements knownVersions >>= arbitraryPairParamsAt
 
--- pair of groups so that at least one EC and one FF group are in common
+-- pair of groups so that all EC groups and at least one FF group are in common
 arbitraryGroupPair :: Gen ([Group], [Group])
 arbitraryGroupPair = do
-    (serverECGroups, clientECGroups) <- arbitraryGroupPairFrom knownECGroups
     (serverFFGroups, clientFFGroups) <- arbitraryGroupPairFrom knownFFGroups
-    serverGroups <- shuffle (serverECGroups ++ serverFFGroups)
-    clientGroups <- shuffle (clientECGroups ++ clientFFGroups)
+    serverGroups <- shuffle (knownECGroups ++ serverFFGroups)
+    clientGroups <- shuffle (knownECGroups ++ clientFFGroups)
     return (clientGroups, serverGroups)
   where
     arbitraryGroupPairFrom list = do

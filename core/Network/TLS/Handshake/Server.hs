@@ -170,7 +170,7 @@ handshakeServerWithTLS12 :: ServerParams
                          -> IO ()
 handshakeServerWithTLS12 sparams ctx chosenVersion exts ciphers serverName clientVersion compressions clientSession = do
     extraCreds <- onServerNameIndication (serverHooks sparams) serverName
-    let allCreds = filterCredentials (isCredentialAllowed chosenVersion) $
+    let allCreds = filterCredentials (isCredentialAllowed chosenVersion exts) $
                        extraCreds `mappend` sharedCredentials (ctxShared ctx)
 
     -- If compression is null, commonCompressions should be [0].
@@ -603,8 +603,15 @@ filterSortCredentials rankFun (Credentials creds) =
     let orderedPairs = sortOn fst [ (rankFun cred, cred) | cred <- creds ]
      in Credentials [ cred | (Just _, cred) <- orderedPairs ]
 
-isCredentialAllowed :: Version -> Credential -> Bool
-isCredentialAllowed ver cred = pubkey `versionCompatible` ver
+isCredentialAllowed :: Version -> [ExtensionRaw] -> Credential -> Bool
+isCredentialAllowed ver exts cred =
+    let p = case extensionLookup extensionID_NegotiatedGroups exts >>= extensionDecode MsgTClientHello of
+                Nothing                    -> const True
+                Just (NegotiatedGroups sg) -> \g ->
+                    -- ECDSA keys are tested against supported elliptic curves
+                    -- until TLS12 but not after
+                    ver > TLS12 || g `elem` sg
+     in pubkey `versionCompatible` ver && satisfiesEcPredicate p pubkey
   where (pubkey, _) = credentialPublicPrivateKeys cred
 
 -- Filters a list of candidate credentials with credentialMatchesHashSignatures.
@@ -720,7 +727,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
     let authenticated = isJust binderInfo
         rtt0OK = authenticated && not hrr && rtt0 && rtt0accept && is0RTTvalid
     extraCreds <- usingState_ ctx getClientSNI >>= onServerNameIndication (serverHooks sparams)
-    let allCreds = filterCredentials (isCredentialAllowed chosenVersion) $
+    let allCreds = filterCredentials (isCredentialAllowed chosenVersion exts) $
                        extraCreds `mappend` sharedCredentials (ctxShared ctx)
     ----------------------------------------------------------------
     established <- ctxEstablished ctx
