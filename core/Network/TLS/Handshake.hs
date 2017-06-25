@@ -7,6 +7,7 @@
 --
 module Network.TLS.Handshake
     ( handshake
+    , handshakeWith
     , handshakeClientWith
     , handshakeServerWith
     , handshakeClient
@@ -29,9 +30,17 @@ import Control.Exception (fromException)
 -- This is to be called at the beginning of a connection, and during renegotiation
 handshake :: MonadIO m => Context -> m ()
 handshake ctx =
-    liftIO $ handleException $ withRWLock ctx (ctxDoHandshake ctx $ ctx)
-  where handleException f = catchException f $ \exception -> do
-            let tlserror = maybe (Error_Misc $ show exception) id $ fromException exception
-            setEstablished ctx False
-            sendPacket ctx (errorToAlert tlserror)
-            handshakeFailed tlserror
+    liftIO $ handleException ctx $ withRWLock ctx (ctxDoHandshake ctx $ ctx)
+
+-- Handshake when requested by the remote end
+-- This is called automatically by 'recvData'
+handshakeWith :: MonadIO m => Context -> Handshake -> m ()
+handshakeWith ctx hs =
+    liftIO $ handleException ctx $ withRWLock ctx ((ctxDoHandshakeWith ctx) ctx hs)
+
+handleException :: Context -> IO () -> IO ()
+handleException ctx f = catchException f $ \exception -> do
+    let tlserror = maybe (Error_Misc $ show exception) id $ fromException exception
+    setEstablished ctx False
+    sendPacket ctx (errorToAlert tlserror)
+    handshakeFailed tlserror

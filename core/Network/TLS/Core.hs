@@ -93,9 +93,9 @@ recvData ctx = liftIO $ do
             terminate err AlertLevel_Fatal InternalError (show err)
 
         process (Handshake [ch@(ClientHello {})]) =
-            withRWLock ctx ((ctxDoHandshakeWith ctx) ctx ch) >> recvData ctx
+            handshakeWith ctx ch >> recvData ctx
         process (Handshake [hr@HelloRequest]) =
-            withRWLock ctx ((ctxDoHandshakeWith ctx) ctx hr) >> recvData ctx
+            handshakeWith ctx hr >> recvData ctx
 
         process (Alert [(AlertLevel_Warning, CloseNotify)]) = tryBye >> setEOF ctx >> return B.empty
         process (Alert [(AlertLevel_Fatal, desc)]) = do
