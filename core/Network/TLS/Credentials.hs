@@ -88,13 +88,13 @@ credentialLoadX509ChainFromMemory certData chainData privateData = do
 credentialsListSigningAlgorithms :: Credentials -> [DigitalSignatureAlg]
 credentialsListSigningAlgorithms (Credentials l) = catMaybes $ map credentialCanSign l
 
-credentialsFindForSigning :: DigitalSignatureAlg -> Credentials -> Maybe (CertificateChain, PrivKey)
+credentialsFindForSigning :: DigitalSignatureAlg -> Credentials -> Maybe Credential
 credentialsFindForSigning sigAlg (Credentials l) = find forSigning l
   where forSigning cred = case credentialCanSign cred of
             Nothing  -> False
             Just sig -> sig == sigAlg
 
-credentialsFindForDecrypting :: Credentials -> Maybe (CertificateChain, PrivKey)
+credentialsFindForDecrypting :: Credentials -> Maybe Credential
 credentialsFindForDecrypting (Credentials l) = find forEncrypting l
   where forEncrypting cred = Just () == credentialCanDecrypt cred
 
