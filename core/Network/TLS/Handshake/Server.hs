@@ -586,15 +586,15 @@ filterCredentialsWithHashSignatures exts =
 -- returns True if "signature_algorithms" certificate filtering produced no
 -- ephemeral D-H nor TLS13 cipher (so handshake with lower security)
 cipherListCredentialFallback :: [Cipher] -> Bool
-cipherListCredentialFallback []     = True
-cipherListCredentialFallback (x:xs) =
-    case cipherKeyExchange x of
+cipherListCredentialFallback xs = all nonDH xs
+  where
+    nonDH x = case cipherKeyExchange x of
         CipherKeyExchange_DHE_RSA     -> False
         CipherKeyExchange_DHE_DSS     -> False
         CipherKeyExchange_ECDHE_RSA   -> False
         CipherKeyExchange_ECDHE_ECDSA -> False
         --CipherKeyExchange_TLS13       -> False
-        _                             -> cipherListCredentialFallback xs
+        _                             -> True
 
 findHighestVersionFrom :: Version -> [Version] -> Maybe Version
 findHighestVersionFrom clientVersion allowedVersions =
