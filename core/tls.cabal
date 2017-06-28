@@ -47,7 +47,7 @@ Library
                    , bytestring
                    , data-default-class
                    -- crypto related
-                   , memory
+                   , memory >= 0.14.6
                    , cryptonite >= 0.21
                    -- certificate related
                    , asn1-types >= 0.2.0
