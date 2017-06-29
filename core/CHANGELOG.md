@@ -1,5 +1,7 @@
 ## Version X.Y.Z
 
+- Wrap renegotiation failures with HandshakeFailed [#237](https://github.com/vincenthz/hs-tls/pull/237)
+- Improve selection of server certificate and use "signature_algorithms" extension [#236](https://github.com/vincenthz/hs-tls/pull/236)
 - Change Bytes to ByteString and deprecate the Bytes type alias [#230](https://github.com/vincenthz/hs-tls/pull/230)
 - Session compression and SNI [#223](https://github.com/vincenthz/hs-tls/pull/223)
 - Deprecating ciphersuite_medium. Putting WARNING to ciphersuite_all since this includes RC4 [#153](https://github.com/vincenthz/hs-tls/pull/153) [#222](https://github.com/vincenthz/hs-tls/pull/222)
@@ -7,6 +9,10 @@
 - Supporting RSAPSS defined in TLS 1.3 [#207](https://github.com/vincenthz/hs-tls/pull/207)
 - Supporting X25519 and X448 in the IES style. [#205](https://github.com/vincenthz/hs-tls/pull/205)
 - Strip leading zeros in DHE premaster secret [#201](https://github.com/vincenthz/hs-tls/pull/201)
+
+## Version 1.3.11
+
+- Using reliable versions of dependent libraries.
 
 ## Version 1.3.10
 
