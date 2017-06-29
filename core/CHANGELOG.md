@@ -1,3 +1,24 @@
+## Version 1.3.11
+
+- Using reliable versions of dependent libraries.
+
+## Version 1.3.10
+
+- Selecting a cipher based on "signature_algorithms" [#193](https://github.com/vincenthz/hs-tls/pull/193)
+- Respecting the "signature_algorithms" extension [#137](https://github.com/vincenthz/hs-tls/pull/137)
+- Fix RSA signature in CertificateVerify with TLS < 1.2 [#189](https://github.com/vincenthz/hs-tls/pull/189)
+- Fix ECDSA with TLS 1.0 / TLS 1.1 [#187](https://github.com/vincenthz/hs-tls/pull/187)
+- Sending an empty server name from a server if necessary. [#175](https://github.com/vincenthz/hs-tls/pull/175)
+- `Network.TLS.Extra` provides Finite Field Diffie-Hellman Ephemeral Parameters in RFC 7919 [#174](https://github.com/vincenthz/hs-tls/pull/174)
+- Restore ability to renegotiate[#164](https://github.com/vincenthz/hs-tls/pull/164)
+
+## Version 1.3.9
+
+- Drop support for old GHC.
+- Enable sha384 ciphers and provide `ciphersuite_default` as default set of ciphers for common needs [#168](https://github.com/vincenthz/hs-tls/pull/168)
+- SNI late checks [#147](https://github.com/vincenthz/hs-tls/pull/147)
+- Expose the HasBackend(..) class fully, so that developers can use TLS over their own channels [#149](https://github.com/vincenthz/hs-tls/pull/149)
+
 ## Version 1.3.8
 
 - Fix older GHC builds
