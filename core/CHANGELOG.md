@@ -10,6 +10,29 @@
 - Supporting X25519 and X448 in the IES style. [#205](https://github.com/vincenthz/hs-tls/pull/205)
 - Strip leading zeros in DHE premaster secret [#201](https://github.com/vincenthz/hs-tls/pull/201)
 
+FEATURES:
+
+- RSASSA-PSS signatures can be enabled with `supportedHashSignatures`.  This
+  uses assignments from TLS 1.3, for example `(HashIntrinsic, SignatureRSApssSHA256)`.
+- Diffie-Hellman with elliptic curves X25519 and X448: This can be enabled with
+  `supportedGroups`, which also gives control over curve preference.
+- ECDH with curve P-256 now uses optimized C implementation from package `cryptonite`.
+
+API CHANGES:
+
+- Cipher list `ciphersuite_medium` is now deprecated, users are advised to use
+  `ciphersuite_default` or `ciphersuite_strong`.  List `ciphersuite_all` is kept
+  for compatibility with old servers but this is discouraged and generates a
+  warning (this includes RC4 ciphers, see [#153](https://github.com/vincenthz/hs-tls/pull/153)
+  for reference).
+- Support for NPN (Next Protocol Negotiation) has been removed. The replacement
+  is ALPN (Application-Layer Protocol Negotiation).
+- Data type `SessionData` now contains fields for compression algorithm and
+  client SNI.  A `SessionManager` implementation that serializes/deserializes
+  `SessionData` values must deal with the new fields.
+- Module `Network.TLS` exports a type alias named `Bytes` which is now deprecated.
+  The replacement is to use strict `ByteString` directly.
+
 ## Version 1.3.11
 
 - Using reliable versions of dependent libraries.

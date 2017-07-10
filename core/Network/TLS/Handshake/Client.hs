@@ -204,10 +204,13 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
 
                 getCKX_ECDHE = do
                     ServerECDHParams _grp srvpub <- usingHState ctx getServerECDHParams
-                    (clipub, premaster) <- generateECDHEShared ctx srvpub
-                    xver <- usingState_ ctx getVersion
-                    usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
-                    return $ CKX_ECDH $ encodeGroupPublic clipub
+                    ecdhePair <- generateECDHEShared ctx srvpub
+                    case ecdhePair of
+                        Nothing                  -> throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
+                        Just (clipub, premaster) -> do
+                            xver <- usingState_ ctx getVersion
+                            usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
+                            return $ CKX_ECDH $ encodeGroupPublic clipub
 
         -- In order to send a proper certificate verify message,
         -- we have to do the following:

@@ -21,7 +21,6 @@ Executable           TestClient
                    , bytestring
                    , x509-system >= 1.0
                    , data-default-class
-                   , cryptonite >= 0.23
                    , directory
                    , random
                    , async

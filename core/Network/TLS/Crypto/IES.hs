@@ -108,17 +108,17 @@ gen params priTag pubTag = do
     let pub = calculatePublic params pri
     return (priTag pri, pubTag pub)
 
-groupGetPubShared :: MonadRandom r => GroupPublic -> r (GroupPublic, GroupKey)
+groupGetPubShared :: MonadRandom r => GroupPublic -> r (Maybe (GroupPublic, GroupKey))
 groupGetPubShared (GroupPub_P256 pub) =
-    first GroupPub_P256 <$> deriveEncrypt p256 pub
+    fmap (first GroupPub_P256) . maybeCryptoError <$> deriveEncrypt p256 pub
 groupGetPubShared (GroupPub_P384 pub) =
-    first GroupPub_P384 <$> deriveEncrypt p384 pub
+    fmap (first GroupPub_P384) . maybeCryptoError <$> deriveEncrypt p384 pub
 groupGetPubShared (GroupPub_P521 pub) =
-    first GroupPub_P521 <$> deriveEncrypt p521 pub
+    fmap (first GroupPub_P521) . maybeCryptoError <$> deriveEncrypt p521 pub
 groupGetPubShared (GroupPub_X255 pub) =
-    first GroupPub_X255 <$> deriveEncrypt x25519 pub
+    fmap (first GroupPub_X255) . maybeCryptoError <$> deriveEncrypt x25519 pub
 groupGetPubShared (GroupPub_X448 pub) =
-    first GroupPub_X448 <$> deriveEncrypt x448 pub
+    fmap (first GroupPub_X448) . maybeCryptoError <$> deriveEncrypt x448 pub
 groupGetPubShared (GroupPub_FFDHE2048 pub) = getPubShared ffdhe2048 pub GroupPub_FFDHE2048
 groupGetPubShared (GroupPub_FFDHE3072 pub) = getPubShared ffdhe3072 pub GroupPub_FFDHE3072
 groupGetPubShared (GroupPub_FFDHE4096 pub) = getPubShared ffdhe4096 pub GroupPub_FFDHE4096
@@ -129,19 +129,19 @@ getPubShared :: MonadRandom r
              => Params
              -> PublicNumber
              -> (PublicNumber -> GroupPublic)
-             -> r (GroupPublic, GroupKey)
+             -> r (Maybe (GroupPublic, GroupKey))
 getPubShared params pub pubTag = do
     mypri <- generatePrivate params
     let mypub = calculatePublic params mypri
     let SharedKey share = getShared params mypri pub
-    return (pubTag mypub, SharedSecret share)
+    return $ Just (pubTag mypub, SharedSecret share)
 
 groupGetShared ::  GroupPublic -> GroupPrivate -> Maybe GroupKey
-groupGetShared (GroupPub_P256 pub) (GroupPri_P256 pri) = Just $ deriveDecrypt p256 pub pri
-groupGetShared (GroupPub_P384 pub) (GroupPri_P384 pri) = Just $ deriveDecrypt p384 pub pri
-groupGetShared (GroupPub_P521 pub) (GroupPri_P521 pri) = Just $ deriveDecrypt p521 pub pri
-groupGetShared (GroupPub_X255 pub) (GroupPri_X255 pri) = Just $ deriveDecrypt x25519 pub pri
-groupGetShared (GroupPub_X448 pub) (GroupPri_X448 pri) = Just $ deriveDecrypt x448 pub pri
+groupGetShared (GroupPub_P256 pub) (GroupPri_P256 pri) = maybeCryptoError $ deriveDecrypt p256 pub pri
+groupGetShared (GroupPub_P384 pub) (GroupPri_P384 pri) = maybeCryptoError $ deriveDecrypt p384 pub pri
+groupGetShared (GroupPub_P521 pub) (GroupPri_P521 pri) = maybeCryptoError $ deriveDecrypt p521 pub pri
+groupGetShared (GroupPub_X255 pub) (GroupPri_X255 pri) = maybeCryptoError $ deriveDecrypt x25519 pub pri
+groupGetShared (GroupPub_X448 pub) (GroupPri_X448 pri) = maybeCryptoError $ deriveDecrypt x448 pub pri
 groupGetShared (GroupPub_FFDHE2048 pub) (GroupPri_FFDHE2048 pri) = Just $ calcShared ffdhe2048 pub pri
 groupGetShared (GroupPub_FFDHE3072 pub) (GroupPri_FFDHE3072 pri) = Just $ calcShared ffdhe3072 pub pri
 groupGetShared (GroupPub_FFDHE4096 pub) (GroupPri_FFDHE4096 pri) = Just $ calcShared ffdhe4096 pub pri

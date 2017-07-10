@@ -66,5 +66,5 @@ generateDHE ctx dhp = usingState_ ctx $ withRNG $ dhGenerateKeyPair dhp
 generateECDHE :: Context -> Group -> IO (GroupPrivate, GroupPublic)
 generateECDHE ctx grp = usingState_ ctx $ withRNG $ groupGenerateKeyPair grp
 
-generateECDHEShared :: Context -> GroupPublic -> IO (GroupPublic, GroupKey)
+generateECDHEShared :: Context -> GroupPublic -> IO (Maybe (GroupPublic, GroupKey))
 generateECDHEShared ctx pub = usingState_ ctx $ withRNG $ groupGetPubShared pub
