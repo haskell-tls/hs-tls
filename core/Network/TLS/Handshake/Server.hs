@@ -134,8 +134,8 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     -- negotiated signature parameters.  Then ciphers are evalutated from
     -- the resulting credentials.
 
-    let possibleGroups = negotiatedGroupsInCommon ctx exts
-        hasCommonGroupForECDHE = not (null possibleGroups)
+    let possibleECGroups = negotiatedECGroupsInCommon ctx exts
+        hasCommonGroupForECDHE = not (null possibleECGroups)
         hasCommonGroup cipher =
             case cipherKeyExchange cipher of
                 CipherKeyExchange_ECDHE_RSA    -> hasCommonGroupForECDHE
@@ -405,8 +405,8 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             return serverParams
 
         generateSKX_ECDHE sigAlg = do
-            let possibleGroups = negotiatedGroupsInCommon ctx exts
-            grp <- case possibleGroups of
+            let possibleECGroups = negotiatedECGroupsInCommon ctx exts
+            grp <- case possibleECGroups of
                      []  -> throwCore $ Error_Protocol ("no common group", True, HandshakeFailure)
                      g:_ -> return g
             serverParams <- setup_ECDHE grp
@@ -548,10 +548,10 @@ hashAndSignaturesInCommon ctx exts =
         -- to server preference in 'supportedHashSignatures'.
      in sHashSigs `intersect` cHashSigs
 
-negotiatedGroupsInCommon :: Context -> [ExtensionRaw] -> [Group]
-negotiatedGroupsInCommon ctx exts = case extensionLookup extensionID_NegotiatedGroups exts >>= extensionDecode False of
+negotiatedECGroupsInCommon :: Context -> [ExtensionRaw] -> [Group]
+negotiatedECGroupsInCommon ctx exts = case extensionLookup extensionID_NegotiatedGroups exts >>= extensionDecode False of
     Just (NegotiatedGroups clientGroups) ->
-        let serverGroups = supportedGroups (ctxSupported ctx) `intersect` availableGroups
+        let serverGroups = supportedGroups (ctxSupported ctx) `intersect` availableECGroups
         in serverGroups `intersect` clientGroups
     _                                    -> []
 

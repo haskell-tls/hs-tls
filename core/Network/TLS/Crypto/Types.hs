@@ -11,8 +11,8 @@ data Group = P256 | P384 | P521 | X25519 | X448
            | FFDHE2048 | FFDHE3072 | FFDHE4096 | FFDHE6144 | FFDHE8192
            deriving (Eq, Show)
 
-availableGroups :: [Group]
-availableGroups = [P256,P384,P521,X25519,X448]
+availableECGroups :: [Group]
+availableECGroups = [P256,P384,P521,X25519,X448]
 
 -- Digital signature algorithm, in close relation to public/private key types
 -- and cipher key exchange.

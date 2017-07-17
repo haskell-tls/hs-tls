@@ -90,7 +90,7 @@ handshakeClient cparams ctx = do
                                  return $ Just $ toExtensionRaw $ ServerName [ServerNameHostName sni]
                          else return Nothing
 
-        curveExtension = return $ Just $ toExtensionRaw $ NegotiatedGroups ((supportedGroups $ ctxSupported ctx) `intersect` availableGroups)
+        curveExtension = return $ Just $ toExtensionRaw $ NegotiatedGroups ((supportedGroups $ ctxSupported ctx) `intersect` availableECGroups)
         ecPointExtension = return $ Just $ toExtensionRaw $ EcPointFormatsSupported [EcPointFormat_Uncompressed]
                                 --[EcPointFormat_Uncompressed,EcPointFormat_AnsiX962_compressed_prime,EcPointFormat_AnsiX962_compressed_char2]
         --heartbeatExtension = return $ Just $ toExtensionRaw $ HeartBeat $ HeartBeat_PeerAllowedToSend
