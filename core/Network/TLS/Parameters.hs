@@ -181,7 +181,8 @@ data Supported = Supported
       -- 'False', empty packets will never be added, which is less secure, but might help in rare
       -- cases.
     , supportedEmptyPacket         :: Bool
-      -- | A list of supported elliptic curves in the preferred order.
+      -- | A list of supported elliptic curves and finite-field groups in the
+      --   preferred order.
       --   The default value is ['P256','P384','P521'].
       --   'P256' provides 128-bit security which is strong enough
       --   until 2030 and is fast because its backend is written in C.
