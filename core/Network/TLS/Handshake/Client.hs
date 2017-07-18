@@ -190,11 +190,16 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
           where getCKX_DHE = do
                     xver <- usingState_ ctx getVersion
                     serverParams <- usingHState ctx getServerDHParams
-                    (clientDHPriv, clientDHPub) <- generateDHE ctx (serverDHParamsToParams serverParams)
 
-                    let premaster = dhGetShared (serverDHParamsToParams serverParams)
-                                                clientDHPriv
-                                                (serverDHParamsToPublic serverParams)
+                    let params  = serverDHParamsToParams serverParams
+                        srvpub  = serverDHParamsToPublic serverParams
+
+                    unless (dhValid params $ dhUnwrapPublic srvpub) $
+                        throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
+
+                    (clientDHPriv, clientDHPub) <- generateDHE ctx params
+
+                    let premaster = dhGetShared params clientDHPriv srvpub
                     usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
 
                     return $ CKX_DH clientDHPub
@@ -373,13 +378,14 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
                     -- we need to resolve the result. and recall processWithCipher ..
                 (c,_)           -> throwCore $ Error_Protocol ("unknown server key exchange received, expecting: " ++ show c, True, HandshakeFailure)
         doDHESignature dhparams signature signatureType = do
-            -- TODO verify DHParams
+            -- FIXME verify if FF group is one of known and supported groups
+            -- (see RFC 7919 section 3) or if this is a valid custom group
             verified <- digitallySignDHParamsVerify ctx dhparams signatureType signature
             when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " signature for dhparams " ++ show dhparams, True, HandshakeFailure)
             usingHState ctx $ setServerDHParams dhparams
 
         doECDHESignature ecdhparams signature signatureType = do
-            -- TODO verify DHParams
+            -- FIXME verify if EC group is one of supported groups
             verified <- digitallySignECDHParamsVerify ctx ecdhparams signatureType signature
             when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " signature for ecdhparams", True, HandshakeFailure)
             usingHState ctx $ setServerECDHParams ecdhparams

@@ -13,6 +13,7 @@ module Network.TLS.Crypto.DH
     , dhParamsGetG
     , dhGenerateKeyPair
     , dhGetShared
+    , dhValid
     , dhUnwrap
     , dhUnwrapPublic
     ) where
@@ -49,6 +50,12 @@ dhGetShared params priv pub =
     -- strips leading zeros from the result of DH.getShared, as required
     -- for DH(E) premaster secret in SSL/TLS before version 1.3.
     stripLeadingZeros (DH.SharedKey sb) = DH.SharedKey (snd $ B.span (== 0) sb)
+
+-- Check that group element in not in the 2-element subgroup { 1, p - 1 }.
+-- See RFC 7919 section 3 and NIST SP 56A rev 2 section 5.6.2.3.1.
+-- This verification is enough when using a safe prime.
+dhValid :: DHParams -> Integer -> Bool
+dhValid (DH.Params p _ _) y = 1 < y && y < p - 1
 
 dhUnwrap :: DHParams -> DHPublic -> [Integer]
 dhUnwrap (DH.Params p g _) (DH.PublicNumber y) = [p,g,y]
