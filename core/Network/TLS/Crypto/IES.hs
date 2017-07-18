@@ -16,6 +16,8 @@ module Network.TLS.Crypto.IES
     , groupGetShared
     , encodeGroupPublic
     , decodeGroupPublic
+    -- * Compatibility with 'Network.TLS.Crypto.DH'
+    , dhParamsForGroup
     ) where
 
 import Control.Arrow
@@ -71,6 +73,14 @@ x25519 = Proxy
 
 x448 :: Proxy Curve_X448
 x448 = Proxy
+
+dhParamsForGroup :: Group -> Maybe Params
+dhParamsForGroup FFDHE2048 = Just ffdhe2048
+dhParamsForGroup FFDHE3072 = Just ffdhe3072
+dhParamsForGroup FFDHE4096 = Just ffdhe4096
+dhParamsForGroup FFDHE6144 = Just ffdhe6144
+dhParamsForGroup FFDHE8192 = Just ffdhe8192
+dhParamsForGroup _         = Nothing
 
 groupGenerateKeyPair :: MonadRandom r => Group -> r (GroupPrivate, GroupPublic)
 groupGenerateKeyPair P256   =

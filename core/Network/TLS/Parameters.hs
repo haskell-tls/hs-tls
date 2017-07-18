@@ -111,8 +111,9 @@ data ServerParams = ServerParams
       -- messages.  For TLS1.0, it should not be empty.
     , serverCACertificates :: [SignedCertificate]
 
-      -- | Server Optional Diffie Hellman parameters. If this value is not
-      -- properly set, no Diffie Hellman key exchange will take place.
+      -- | Server Optional Diffie Hellman parameters.  Setting parameters is
+      -- necessary for FFDHE key exchange when clients are not compatible
+      -- with RFC 7919.
       --
       -- Value can be one of the standardized groups from module
       -- "Network.TLS.Extra.FFDHE" or custom parameters generated with
