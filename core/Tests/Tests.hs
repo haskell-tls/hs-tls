@@ -170,6 +170,8 @@ prop_handshake_groups = do
         serverVersions = [TLS12]
         ciphers = [ cipher_ECDHE_RSA_AES256GCM_SHA384
                   , cipher_ECDHE_RSA_AES128CBC_SHA
+                  , cipher_DHE_RSA_AES256GCM_SHA384
+                  , cipher_DHE_RSA_AES128_SHA1
                   ]
     (clientParam,serverParam) <- pick $ arbitraryPairParamsWithVersionsAndCiphers
                                             (clientVersions, serverVersions)
@@ -181,6 +183,7 @@ prop_handshake_groups = do
                                    }
         serverParam' = serverParam { serverSupported = (serverSupported serverParam)
                                        { supportedGroups = serverGroups }
+                                   , serverDHEParams = Nothing
                                    }
         shouldFail = null (clientGroups `intersect` serverGroups)
     if shouldFail
