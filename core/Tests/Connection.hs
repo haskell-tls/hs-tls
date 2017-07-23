@@ -9,6 +9,7 @@ module Connection
     , arbitraryPairParams
     , arbitraryPairParamsWithVersionsAndCiphers
     , arbitraryClientCredential
+    , isCustomDHParams
     , leafPublicKey
     , oneSessionManager
     , setPairParamsSessionManager
@@ -95,6 +96,9 @@ arbitraryCredentialsOfEachType = do
          ) [ (PubKeyRSA pubKey, PrivKeyRSA privKey)
            , (PubKeyDSA dsaPub, PrivKeyDSA dsaPriv)
            ]
+
+isCustomDHParams :: DHParams -> Bool
+isCustomDHParams params = params == dhParams
 
 leafPublicKey :: CertificateChain -> Maybe PubKey
 leafPublicKey (CertificateChain [])       = Nothing

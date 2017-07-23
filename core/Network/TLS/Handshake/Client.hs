@@ -194,8 +194,18 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     let params  = serverDHParamsToParams serverParams
                         srvpub  = serverDHParamsToPublic serverParams
 
-                    unless (dhValid params $ dhUnwrapPublic srvpub) $
-                        throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
+                    groupUsage <-
+                        case findFiniteFieldGroup params of
+                            Nothing -> (onCustomFFDHEGroup $ clientHooks cparams) params srvpub `catchException`
+                                           throwMiscErrorOnException "custom group callback failed"
+                            Just _
+                                | dhValid params (dhUnwrapPublic srvpub) -> return GroupUsageValid
+                                | otherwise                              -> return GroupUsageInvalidPublic
+                    case groupUsage of
+                        GroupUsageValid              -> return ()
+                        GroupUsageInsecure           -> throwCore $ Error_Protocol ("FFDHE group is not secure enough", True, InsufficientSecurity)
+                        GroupUsageUnsupported reason -> throwCore $ Error_Protocol ("unsupported FFDHE group: " ++ reason, True, HandshakeFailure)
+                        GroupUsageInvalidPublic      -> throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
 
                     (clientDHPriv, clientDHPub) <- generateDHE ctx params
 
@@ -378,8 +388,7 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
                     -- we need to resolve the result. and recall processWithCipher ..
                 (c,_)           -> throwCore $ Error_Protocol ("unknown server key exchange received, expecting: " ++ show c, True, HandshakeFailure)
         doDHESignature dhparams signature signatureType = do
-            -- FIXME verify if FF group is one of known and supported groups
-            -- (see RFC 7919 section 3) or if this is a valid custom group
+            -- FIXME verify if FF group is one of supported groups
             verified <- digitallySignDHParamsVerify ctx dhparams signatureType signature
             when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " signature for dhparams " ++ show dhparams, True, HandshakeFailure)
             usingHState ctx $ setServerDHParams dhparams

@@ -178,14 +178,18 @@ prop_handshake_groups = do
                                             (ciphers, ciphers)
     clientGroups <- pick arbitraryGroups
     serverGroups <- pick arbitraryGroups
-    let clientParam' = clientParam { clientSupported = (clientSupported clientParam)
+    denyCustom   <- pick arbitrary
+    let groupUsage = if denyCustom then GroupUsageUnsupported "custom group denied" else GroupUsageValid
+        clientParam' = clientParam { clientSupported = (clientSupported clientParam)
                                        { supportedGroups = clientGroups }
+                                   , clientHooks = (clientHooks clientParam)
+                                       { onCustomFFDHEGroup = \_ _ -> return groupUsage }
                                    }
         serverParam' = serverParam { serverSupported = (serverSupported serverParam)
                                        { supportedGroups = serverGroups }
-                                   , serverDHEParams = Nothing
                                    }
-        shouldFail = null (clientGroups `intersect` serverGroups)
+        isCustom = maybe True isCustomDHParams (serverDHEParams serverParam')
+        shouldFail = null (clientGroups `intersect` serverGroups) && isCustom && denyCustom
     if shouldFail
         then runTLSInitFailure (clientParam',serverParam')
         else runTLSPipeSimple  (clientParam',serverParam')
