@@ -18,7 +18,7 @@ import qualified Data.ByteString as B
 import PubKey
 
 testExtensionEncode :: Extension a => Bool -> a -> ExtensionRaw
-testExtensionEncode critical ext = ExtensionRaw (extOID ext) critical (extEncode ext)
+testExtensionEncode critical ext = ExtensionRaw (extOID ext) critical (extEncodeBs ext)
 
 arbitraryDN :: Gen DistinguishedName
 arbitraryDN = return $ DistinguishedName []
