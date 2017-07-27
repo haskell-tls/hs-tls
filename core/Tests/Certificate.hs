@@ -17,9 +17,6 @@ import qualified Data.ByteString as B
 
 import PubKey
 
-testExtensionEncode :: Extension a => Bool -> a -> ExtensionRaw
-testExtensionEncode critical ext = ExtensionRaw (extOID ext) critical (extEncodeBs ext)
-
 arbitraryDN :: Gen DistinguishedName
 arbitraryDN = return $ DistinguishedName []
 
@@ -62,7 +59,7 @@ arbitraryCertificate pubKey = do
             , certValidity     = validity
             , certPubKey       = pubKey
             , certExtensions   = Extensions $ Just
-                [ testExtensionEncode True $ ExtKeyUsage [KeyUsage_digitalSignature,KeyUsage_keyEncipherment,KeyUsage_keyCertSign]
+                [ extensionEncode True $ ExtKeyUsage [KeyUsage_digitalSignature,KeyUsage_keyEncipherment,KeyUsage_keyCertSign]
                 ]
             }
   where issuerdn = DistinguishedName [(getObjectID DnCommonName, "Root CA")]
@@ -78,7 +75,7 @@ simpleCertificate pubKey =
         , certValidity     = (time1, time2)
         , certPubKey       = pubKey
         , certExtensions   = Extensions $ Just
-                [ testExtensionEncode True $ ExtKeyUsage [KeyUsage_digitalSignature,KeyUsage_keyEncipherment]
+                [ extensionEncode True $ ExtKeyUsage [KeyUsage_digitalSignature,KeyUsage_keyEncipherment]
                 ]
         }
   where time1 = DateTime (Date 1999 January 1) (TimeOfDay 0 0 0 0)
