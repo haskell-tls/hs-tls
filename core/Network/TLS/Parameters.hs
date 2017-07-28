@@ -113,6 +113,10 @@ data ServerParams = ServerParams
 
       -- | Server Optional Diffie Hellman parameters. If this value is not
       -- properly set, no Diffie Hellman key exchange will take place.
+      --
+      -- Value can be one of the standardized groups from module
+      -- "Network.TLS.Extra.FFDHE" or custom parameters generated with
+      -- 'Crypto.PubKey.DH.generateParams'.
     , serverDHEParams         :: Maybe DHParams
 
     , serverShared            :: Shared
