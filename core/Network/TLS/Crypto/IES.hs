@@ -130,7 +130,8 @@ getPubShared :: MonadRandom r
              -> PublicNumber
              -> (PublicNumber -> GroupPublic)
              -> r (Maybe (GroupPublic, GroupKey))
-getPubShared params pub pubTag = do
+getPubShared params pub pubTag | not (valid params pub) = return Nothing
+                               | otherwise = do
     mypri <- generatePrivate params
     let mypub = calculatePublic params mypri
     let SharedKey share = getShared params mypri pub
@@ -142,15 +143,17 @@ groupGetShared (GroupPub_P384 pub) (GroupPri_P384 pri) = maybeCryptoError $ deri
 groupGetShared (GroupPub_P521 pub) (GroupPri_P521 pri) = maybeCryptoError $ deriveDecrypt p521 pub pri
 groupGetShared (GroupPub_X255 pub) (GroupPri_X255 pri) = maybeCryptoError $ deriveDecrypt x25519 pub pri
 groupGetShared (GroupPub_X448 pub) (GroupPri_X448 pri) = maybeCryptoError $ deriveDecrypt x448 pub pri
-groupGetShared (GroupPub_FFDHE2048 pub) (GroupPri_FFDHE2048 pri) = Just $ calcShared ffdhe2048 pub pri
-groupGetShared (GroupPub_FFDHE3072 pub) (GroupPri_FFDHE3072 pri) = Just $ calcShared ffdhe3072 pub pri
-groupGetShared (GroupPub_FFDHE4096 pub) (GroupPri_FFDHE4096 pri) = Just $ calcShared ffdhe4096 pub pri
-groupGetShared (GroupPub_FFDHE6144 pub) (GroupPri_FFDHE6144 pri) = Just $ calcShared ffdhe6144 pub pri
-groupGetShared (GroupPub_FFDHE8192 pub) (GroupPri_FFDHE8192 pri) = Just $ calcShared ffdhe8192 pub pri
+groupGetShared (GroupPub_FFDHE2048 pub) (GroupPri_FFDHE2048 pri) = calcShared ffdhe2048 pub pri
+groupGetShared (GroupPub_FFDHE3072 pub) (GroupPri_FFDHE3072 pri) = calcShared ffdhe3072 pub pri
+groupGetShared (GroupPub_FFDHE4096 pub) (GroupPri_FFDHE4096 pri) = calcShared ffdhe4096 pub pri
+groupGetShared (GroupPub_FFDHE6144 pub) (GroupPri_FFDHE6144 pri) = calcShared ffdhe6144 pub pri
+groupGetShared (GroupPub_FFDHE8192 pub) (GroupPri_FFDHE8192 pri) = calcShared ffdhe8192 pub pri
 groupGetShared _ _ = Nothing
 
-calcShared :: Params -> PublicNumber -> PrivateNumber -> SharedSecret
-calcShared params pub pri = SharedSecret share
+calcShared :: Params -> PublicNumber -> PrivateNumber -> Maybe SharedSecret
+calcShared params pub pri
+    | valid params pub = Just $ SharedSecret share
+    | otherwise        = Nothing
   where
     SharedKey share = getShared params pri pub
 
@@ -180,3 +183,8 @@ decodeGroupPublic FFDHE3072 bs = Right . GroupPub_FFDHE3072 . PublicNumber $ os2
 decodeGroupPublic FFDHE4096 bs = Right . GroupPub_FFDHE4096 . PublicNumber $ os2ip bs
 decodeGroupPublic FFDHE6144 bs = Right . GroupPub_FFDHE6144 . PublicNumber $ os2ip bs
 decodeGroupPublic FFDHE8192 bs = Right . GroupPub_FFDHE8192 . PublicNumber $ os2ip bs
+
+-- Check that group element in not in the 2-element subgroup { 1, p - 1 }.
+-- See RFC 7919 section 3 and NIST SP 56A rev 2 section 5.6.2.3.1.
+valid :: Params -> PublicNumber -> Bool
+valid (Params p _ _) (PublicNumber y) = 1 < y && y < p - 1
