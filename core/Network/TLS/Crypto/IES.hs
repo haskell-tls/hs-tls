@@ -21,7 +21,8 @@ module Network.TLS.Crypto.IES
 import Control.Arrow
 import Crypto.ECC
 import Crypto.Error
-import Crypto.PubKey.DH
+import Crypto.Number.Generate
+import Crypto.PubKey.DH hiding (generateParams)
 import Crypto.PubKey.ECIES
 import Data.Proxy
 import Network.TLS.Crypto.Types
@@ -82,11 +83,11 @@ groupGenerateKeyPair X25519 =
     (GroupPri_X255,GroupPub_X255) `fs` curveGenerateKeyPair x25519
 groupGenerateKeyPair X448 =
     (GroupPri_X448,GroupPub_X448) `fs` curveGenerateKeyPair x448
-groupGenerateKeyPair FFDHE2048 = gen ffdhe2048 GroupPri_FFDHE2048 GroupPub_FFDHE2048
-groupGenerateKeyPair FFDHE3072 = gen ffdhe3072 GroupPri_FFDHE3072 GroupPub_FFDHE3072
-groupGenerateKeyPair FFDHE4096 = gen ffdhe4096 GroupPri_FFDHE4096 GroupPub_FFDHE4096
-groupGenerateKeyPair FFDHE6144 = gen ffdhe6144 GroupPri_FFDHE6144 GroupPub_FFDHE6144
-groupGenerateKeyPair FFDHE8192 = gen ffdhe8192 GroupPri_FFDHE8192 GroupPub_FFDHE8192
+groupGenerateKeyPair FFDHE2048 = gen ffdhe2048 exp2048 GroupPri_FFDHE2048 GroupPub_FFDHE2048
+groupGenerateKeyPair FFDHE3072 = gen ffdhe3072 exp3072 GroupPri_FFDHE3072 GroupPub_FFDHE3072
+groupGenerateKeyPair FFDHE4096 = gen ffdhe4096 exp4096 GroupPri_FFDHE4096 GroupPub_FFDHE4096
+groupGenerateKeyPair FFDHE6144 = gen ffdhe6144 exp6144 GroupPri_FFDHE6144 GroupPub_FFDHE6144
+groupGenerateKeyPair FFDHE8192 = gen ffdhe8192 exp8192 GroupPri_FFDHE8192 GroupPub_FFDHE8192
 
 fs :: MonadRandom r
    => (Scalar a -> GroupPrivate, Point a -> GroupPublic)
@@ -100,11 +101,12 @@ fs :: MonadRandom r
 
 gen :: MonadRandom r
     => Params
+    -> Int
     -> (PrivateNumber -> GroupPrivate)
     -> (PublicNumber -> GroupPublic)
     -> r (GroupPrivate, GroupPublic)
-gen params priTag pubTag = do
-    pri <- generatePrivate params
+gen params expBits priTag pubTag = do
+    pri <- generatePriv expBits
     let pub = calculatePublic params pri
     return (priTag pri, pubTag pub)
 
@@ -119,20 +121,21 @@ groupGetPubShared (GroupPub_X255 pub) =
     fmap (first GroupPub_X255) . maybeCryptoError <$> deriveEncrypt x25519 pub
 groupGetPubShared (GroupPub_X448 pub) =
     fmap (first GroupPub_X448) . maybeCryptoError <$> deriveEncrypt x448 pub
-groupGetPubShared (GroupPub_FFDHE2048 pub) = getPubShared ffdhe2048 pub GroupPub_FFDHE2048
-groupGetPubShared (GroupPub_FFDHE3072 pub) = getPubShared ffdhe3072 pub GroupPub_FFDHE3072
-groupGetPubShared (GroupPub_FFDHE4096 pub) = getPubShared ffdhe4096 pub GroupPub_FFDHE4096
-groupGetPubShared (GroupPub_FFDHE6144 pub) = getPubShared ffdhe6144 pub GroupPub_FFDHE6144
-groupGetPubShared (GroupPub_FFDHE8192 pub) = getPubShared ffdhe8192 pub GroupPub_FFDHE8192
+groupGetPubShared (GroupPub_FFDHE2048 pub) = getPubShared ffdhe2048 exp2048 pub GroupPub_FFDHE2048
+groupGetPubShared (GroupPub_FFDHE3072 pub) = getPubShared ffdhe3072 exp3072 pub GroupPub_FFDHE3072
+groupGetPubShared (GroupPub_FFDHE4096 pub) = getPubShared ffdhe4096 exp4096 pub GroupPub_FFDHE4096
+groupGetPubShared (GroupPub_FFDHE6144 pub) = getPubShared ffdhe6144 exp6144 pub GroupPub_FFDHE6144
+groupGetPubShared (GroupPub_FFDHE8192 pub) = getPubShared ffdhe8192 exp8192 pub GroupPub_FFDHE8192
 
 getPubShared :: MonadRandom r
              => Params
+             -> Int
              -> PublicNumber
              -> (PublicNumber -> GroupPublic)
              -> r (Maybe (GroupPublic, GroupKey))
-getPubShared params pub pubTag | not (valid params pub) = return Nothing
-                               | otherwise = do
-    mypri <- generatePrivate params
+getPubShared params expBits pub pubTag | not (valid params pub) = return Nothing
+                                       | otherwise = do
+    mypri <- generatePriv expBits
     let mypub = calculatePublic params mypri
     let SharedKey share = getShared params mypri pub
     return $ Just (pubTag mypub, SharedSecret share)
@@ -188,3 +191,21 @@ decodeGroupPublic FFDHE8192 bs = Right . GroupPub_FFDHE8192 . PublicNumber $ os2
 -- See RFC 7919 section 3 and NIST SP 56A rev 2 section 5.6.2.3.1.
 valid :: Params -> PublicNumber -> Bool
 valid (Params p _ _) (PublicNumber y) = 1 < y && y < p - 1
+
+-- Use short exponents as optimization, see RFC 7919 section 5.2.
+generatePriv :: MonadRandom r => Int -> r PrivateNumber
+generatePriv e = PrivateNumber <$> generateParams e (Just SetHighest) False
+
+-- Short exponent bit sizes from RFC 7919 appendix A, rounded to next
+-- multiple of 16 bits, i.e. going through a function like:
+-- let shortExp n = head [ e | i <- [1..], let e = n + i, e `mod` 16 == 0 ]
+exp2048 :: Int
+exp3072 :: Int
+exp4096 :: Int
+exp6144 :: Int
+exp8192 :: Int
+exp2048 = 240 -- shortExp 225
+exp3072 = 288 -- shortExp 275
+exp4096 = 336 -- shortExp 325
+exp6144 = 384 -- shortExp 375
+exp8192 = 416 -- shortExp 400
