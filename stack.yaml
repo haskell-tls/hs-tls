@@ -1,6 +1,7 @@
-resolver: lts-8.20
+resolver: lts-9.0
 packages:
 - core/ 
-extra-deps: []
+extra-deps:
+- cryptonite-0.24
 flags: {}
-extra-package-dbs: []
+extra-package-dbs:
