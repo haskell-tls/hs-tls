@@ -1,4 +1,4 @@
-## Version X.Y.Z
+## Version 1.4.0
 
 - Wrap renegotiation failures with HandshakeFailed [#237](https://github.com/vincenthz/hs-tls/pull/237)
 - Improve selection of server certificate and use "signature_algorithms" extension [#236](https://github.com/vincenthz/hs-tls/pull/236)
