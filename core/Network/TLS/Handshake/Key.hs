@@ -15,6 +15,8 @@ module Network.TLS.Handshake.Key
     , generateDHE
     , generateECDHE
     , generateECDHEShared
+    , generateFFDHE
+    , generateFFDHEShared
     ) where
 
 import qualified Data.ByteString as B
@@ -68,3 +70,9 @@ generateECDHE ctx grp = usingState_ ctx $ withRNG $ groupGenerateKeyPair grp
 
 generateECDHEShared :: Context -> GroupPublic -> IO (Maybe (GroupPublic, GroupKey))
 generateECDHEShared ctx pub = usingState_ ctx $ withRNG $ groupGetPubShared pub
+
+generateFFDHE :: Context -> Group -> IO (DHParams, DHPrivate, DHPublic)
+generateFFDHE ctx grp = usingState_ ctx $ withRNG $ dhGroupGenerateKeyPair grp
+
+generateFFDHEShared :: Context -> Group -> DHPublic -> IO (Maybe (DHPublic, DHKey))
+generateFFDHEShared ctx grp pub = usingState_ ctx $ withRNG $ dhGroupGetPubShared grp pub

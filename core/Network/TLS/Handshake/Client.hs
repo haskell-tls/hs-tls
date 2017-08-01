@@ -192,24 +192,28 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     serverParams <- usingHState ctx getServerDHParams
 
                     let params  = serverDHParamsToParams serverParams
+                        ffGroup = findFiniteFieldGroup params
                         srvpub  = serverDHParamsToPublic serverParams
 
-                    groupUsage <-
-                        case findFiniteFieldGroup params of
-                            Nothing -> (onCustomFFDHEGroup $ clientHooks cparams) params srvpub `catchException`
-                                           throwMiscErrorOnException "custom group callback failed"
-                            Just _
-                                | dhValid params (dhUnwrapPublic srvpub) -> return GroupUsageValid
-                                | otherwise                              -> return GroupUsageInvalidPublic
-                    case groupUsage of
-                        GroupUsageValid              -> return ()
-                        GroupUsageInsecure           -> throwCore $ Error_Protocol ("FFDHE group is not secure enough", True, InsufficientSecurity)
-                        GroupUsageUnsupported reason -> throwCore $ Error_Protocol ("unsupported FFDHE group: " ++ reason, True, HandshakeFailure)
-                        GroupUsageInvalidPublic      -> throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
+                    (clientDHPub, premaster) <-
+                        case ffGroup of
+                             Nothing  -> do
+                                 groupUsage <- (onCustomFFDHEGroup $ clientHooks cparams) params srvpub `catchException`
+                                                   throwMiscErrorOnException "custom group callback failed"
+                                 case groupUsage of
+                                     GroupUsageInsecure           -> throwCore $ Error_Protocol ("FFDHE group is not secure enough", True, InsufficientSecurity)
+                                     GroupUsageUnsupported reason -> throwCore $ Error_Protocol ("unsupported FFDHE group: " ++ reason, True, HandshakeFailure)
+                                     GroupUsageInvalidPublic      -> throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
+                                     GroupUsageValid              -> do
+                                         (clientDHPriv, clientDHPub) <- generateDHE ctx params
+                                         let premaster = dhGetShared params clientDHPriv srvpub
+                                         return (clientDHPub, premaster)
+                             Just grp -> do
+                                 dhePair <- generateFFDHEShared ctx grp srvpub
+                                 case dhePair of
+                                     Nothing   -> throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
+                                     Just pair -> return pair
 
-                    (clientDHPriv, clientDHPub) <- generateDHE ctx params
-
-                    let premaster = dhGetShared params clientDHPriv srvpub
                     usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
 
                     return $ CKX_DH clientDHPub

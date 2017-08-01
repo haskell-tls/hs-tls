@@ -4,6 +4,7 @@ module Network.TLS.Crypto.DH
       DHParams
     , DHPublic
     , DHPrivate
+    , DHKey
 
     -- * DH methods
     , dhPublic

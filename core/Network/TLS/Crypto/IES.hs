@@ -18,6 +18,8 @@ module Network.TLS.Crypto.IES
     , decodeGroupPublic
     -- * Compatibility with 'Network.TLS.Crypto.DH'
     , dhParamsForGroup
+    , dhGroupGenerateKeyPair
+    , dhGroupGetPubShared
     ) where
 
 import Control.Arrow
@@ -26,6 +28,7 @@ import Crypto.Error
 import Crypto.Number.Generate
 import Crypto.PubKey.DH hiding (generateParams)
 import Crypto.PubKey.ECIES
+import qualified Data.ByteArray as B
 import Data.Proxy
 import Network.TLS.Crypto.Types
 import Network.TLS.Extra.FFDHE
@@ -99,6 +102,17 @@ groupGenerateKeyPair FFDHE4096 = gen ffdhe4096 exp4096 GroupPri_FFDHE4096 GroupP
 groupGenerateKeyPair FFDHE6144 = gen ffdhe6144 exp6144 GroupPri_FFDHE6144 GroupPub_FFDHE6144
 groupGenerateKeyPair FFDHE8192 = gen ffdhe8192 exp8192 GroupPri_FFDHE8192 GroupPub_FFDHE8192
 
+dhGroupGenerateKeyPair :: MonadRandom r => Group -> r (Params, PrivateNumber, PublicNumber)
+dhGroupGenerateKeyPair FFDHE2048 = addParams ffdhe2048 (gen' ffdhe2048 exp2048)
+dhGroupGenerateKeyPair FFDHE3072 = addParams ffdhe3072 (gen' ffdhe3072 exp3072)
+dhGroupGenerateKeyPair FFDHE4096 = addParams ffdhe4096 (gen' ffdhe4096 exp4096)
+dhGroupGenerateKeyPair FFDHE6144 = addParams ffdhe6144 (gen' ffdhe6144 exp6144)
+dhGroupGenerateKeyPair FFDHE8192 = addParams ffdhe8192 (gen' ffdhe8192 exp8192)
+dhGroupGenerateKeyPair grp       = error ("invalid FFDHE group: " ++ show grp)
+
+addParams :: Functor f => Params -> f (a, b) -> f (Params, a, b)
+addParams params = fmap $ \(a, b) -> (params, a, b)
+
 fs :: MonadRandom r
    => (Scalar a -> GroupPrivate, Point a -> GroupPublic)
    -> r (KeyPair a)
@@ -115,10 +129,13 @@ gen :: MonadRandom r
     -> (PrivateNumber -> GroupPrivate)
     -> (PublicNumber -> GroupPublic)
     -> r (GroupPrivate, GroupPublic)
-gen params expBits priTag pubTag = do
-    pri <- generatePriv expBits
-    let pub = calculatePublic params pri
-    return (priTag pri, pubTag pub)
+gen params expBits priTag pubTag = (priTag *** pubTag) <$> gen' params expBits
+
+gen' :: MonadRandom r
+     => Params
+     -> Int
+     -> r (PrivateNumber, PublicNumber)
+gen' params expBits = (id &&& calculatePublic params) <$> generatePriv expBits
 
 groupGetPubShared :: MonadRandom r => GroupPublic -> r (Maybe (GroupPublic, GroupKey))
 groupGetPubShared (GroupPub_P256 pub) =
@@ -137,6 +154,14 @@ groupGetPubShared (GroupPub_FFDHE4096 pub) = getPubShared ffdhe4096 exp4096 pub 
 groupGetPubShared (GroupPub_FFDHE6144 pub) = getPubShared ffdhe6144 exp6144 pub GroupPub_FFDHE6144
 groupGetPubShared (GroupPub_FFDHE8192 pub) = getPubShared ffdhe8192 exp8192 pub GroupPub_FFDHE8192
 
+dhGroupGetPubShared :: MonadRandom r => Group -> PublicNumber -> r (Maybe (PublicNumber, SharedKey))
+dhGroupGetPubShared FFDHE2048 pub = getPubShared' ffdhe2048 exp2048 pub
+dhGroupGetPubShared FFDHE3072 pub = getPubShared' ffdhe3072 exp3072 pub
+dhGroupGetPubShared FFDHE4096 pub = getPubShared' ffdhe4096 exp4096 pub
+dhGroupGetPubShared FFDHE6144 pub = getPubShared' ffdhe6144 exp6144 pub
+dhGroupGetPubShared FFDHE8192 pub = getPubShared' ffdhe8192 exp8192 pub
+dhGroupGetPubShared _         _   = return Nothing
+
 getPubShared :: MonadRandom r
              => Params
              -> Int
@@ -149,6 +174,18 @@ getPubShared params expBits pub pubTag | not (valid params pub) = return Nothing
     let mypub = calculatePublic params mypri
     let SharedKey share = getShared params mypri pub
     return $ Just (pubTag mypub, SharedSecret share)
+
+getPubShared' :: MonadRandom r
+              => Params
+              -> Int
+              -> PublicNumber
+              -> r (Maybe (PublicNumber, SharedKey))
+getPubShared' params expBits pub
+    | not (valid params pub) = return Nothing
+    | otherwise = do
+        mypri <- generatePriv expBits
+        let share = stripLeadingZeros (getShared params mypri pub)
+        return $ Just (calculatePublic params mypri, SharedKey share)
 
 groupGetShared ::  GroupPublic -> GroupPrivate -> Maybe GroupKey
 groupGetShared (GroupPub_P256 pub) (GroupPri_P256 pri) = maybeCryptoError $ deriveDecrypt p256 pub pri
@@ -201,6 +238,11 @@ decodeGroupPublic FFDHE8192 bs = Right . GroupPub_FFDHE8192 . PublicNumber $ os2
 -- See RFC 7919 section 3 and NIST SP 56A rev 2 section 5.6.2.3.1.
 valid :: Params -> PublicNumber -> Bool
 valid (Params p _ _) (PublicNumber y) = 1 < y && y < p - 1
+
+-- strips leading zeros from the result of getShared, as required
+-- for DH(E) premaster secret in SSL/TLS before version 1.3.
+stripLeadingZeros :: SharedKey -> B.ScrubbedBytes
+stripLeadingZeros (SharedKey sb) = snd $ B.span (== 0) sb
 
 -- Use short exponents as optimization, see RFC 7919 section 5.2.
 generatePriv :: MonadRandom r => Int -> r PrivateNumber

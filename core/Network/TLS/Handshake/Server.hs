@@ -370,11 +370,16 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
 
         setup_DHE = do
             let possibleFFGroups = negotiatedGroupsInCommon ctx exts `intersect` availableFFGroups
-                dhparams =
+            (dhparams, priv, pub) <-
                     case possibleFFGroups of
-                        []  -> fromJust "server DHE Params" $ serverDHEParams sparams
-                        g:_ -> fromJust "group DHE Params" $ dhParamsForGroup g
-            (priv, pub) <- generateDHE ctx dhparams
+                        []  ->
+                            let dhparams = fromJust "server DHE Params" $ serverDHEParams sparams
+                             in case findFiniteFieldGroup dhparams of
+                                    Just g  -> generateFFDHE ctx g
+                                    Nothing -> do
+                                        (priv, pub) <- generateDHE ctx dhparams
+                                        return (dhparams, priv, pub)
+                        g:_ -> generateFFDHE ctx g
 
             let serverParams = serverDHParamsFrom dhparams pub
 
