@@ -1,6 +1,7 @@
 resolver: lts-9.0
 packages:
 - core/ 
+- debug/
 extra-deps:
 - cryptonite-0.24
 flags: {}
