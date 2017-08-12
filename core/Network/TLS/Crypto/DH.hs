@@ -40,7 +40,7 @@ dhParams p g = DH.Params p g (numBits p)
 dhGenerateKeyPair :: MonadRandom r => DHParams -> r (DHPrivate, DHPublic)
 dhGenerateKeyPair params = do
     priv <- DH.generatePrivate params
-    let pub        = DH.generatePublic params priv
+    let pub        = DH.calculatePublic params priv
     return (priv, pub)
 
 dhGetShared :: DHParams -> DHPrivate -> DHPublic -> DHKey
