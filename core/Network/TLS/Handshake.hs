@@ -24,7 +24,7 @@ import Network.TLS.Handshake.Client
 import Network.TLS.Handshake.Server
 
 import Control.Monad.State.Strict
-import Control.Exception (fromException)
+import Control.Exception (IOException, catch, fromException)
 
 -- | Handshake for a new TLS connection
 -- This is to be called at the beginning of a connection, and during renegotiation
@@ -42,5 +42,8 @@ handleException :: Context -> IO () -> IO ()
 handleException ctx f = catchException f $ \exception -> do
     let tlserror = maybe (Error_Misc $ show exception) id $ fromException exception
     setEstablished ctx False
-    sendPacket ctx (errorToAlert tlserror)
+    sendPacket ctx (errorToAlert tlserror) `catch` ignoreIOErr
     handshakeFailed tlserror
+  where
+    ignoreIOErr :: IOException -> IO ()
+    ignoreIOErr _ = return ()
