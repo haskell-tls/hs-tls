@@ -241,10 +241,33 @@ defaultSupported = Supported
 instance Default Supported where
     def = defaultSupported
 
+-- | Parameters that are common to clients and servers.
 data Shared = Shared
-    { sharedCredentials     :: Credentials
+    { -- | The list of certificates and private keys that a server will use as
+      -- part of authentication to clients.  Actual credentials that are used
+      -- are selected dynamically from this list based on client capabilities.
+      -- Additional credentials returned by 'onServerNameIndication' are also
+      -- considered.
+      --
+      -- When credential list is left empty (the default value), no key
+      -- exchange can take place.
+      sharedCredentials     :: Credentials
+      -- | Callbacks used by clients and servers in order to resume TLS
+      -- sessions.  The default implementation never resumes sessions.  Package
+      -- <https://hackage.haskell.org/package/tls-session-manager
+      -- tls-session-manager> provides an in-memory implementation.
     , sharedSessionManager  :: SessionManager
+      -- | A collection of trust anchors to be used by a client as
+      -- part of validation of server certificates.  This is set as
+      -- first argument to function 'onServerCertificate'.  Package
+      -- <https://hackage.haskell.org/package/x509-system x509-system>
+      -- gives access to a default certificate store configured in the
+      -- system.
     , sharedCAStore         :: CertificateStore
+      -- | Callbacks that may be used by a client to cache certificate
+      -- validation results (positive or negative) and avoid expensive
+      -- signature check.  The default implementation does not have
+      -- any caching.
     , sharedValidationCache :: ValidationCache
     }
 
