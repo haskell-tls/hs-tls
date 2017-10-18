@@ -1,3 +1,7 @@
+## Version X.Y.Z
+
+- Handle TCP reset during handshake [#251](https://github.com/vincenthz/hs-tls/pull/251)
+
 ## Version 1.4.0
 
 - Wrap renegotiation failures with HandshakeFailed [#237](https://github.com/vincenthz/hs-tls/pull/237)
