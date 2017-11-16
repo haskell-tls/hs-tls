@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE CPP #-}
 -- |
 -- Module      : Network.TLS.Handshake.Server
 -- License     : BSD-style
@@ -33,11 +32,6 @@ import Network.TLS.Measurement
 import Data.Maybe (isJust, listToMaybe, mapMaybe)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
-import Data.Ord (Down(..))
-#if MIN_VERSION_base(4,8,0)
-#else
-import Data.Ord (comparing)
-#endif
 
 import Control.Monad.State.Strict
 
@@ -630,9 +624,3 @@ getCiphers sparams creds sigCreds = filter authorizedCKE (supportedCiphers $ ser
             canSignRSA    = RSA `elem` signingAlgs
             canEncryptRSA = isJust $ credentialsFindForDecrypting creds
             signingAlgs   = credentialsListSigningAlgorithms sigCreds
-
-#if !MIN_VERSION_base(4,8,0)
-sortOn :: Ord b => (a -> b) -> [a] -> [a]
-sortOn f =
-  map snd . sortBy (comparing fst) . map (\x -> let y = f x in y `seq` (y, x))
-#endif
