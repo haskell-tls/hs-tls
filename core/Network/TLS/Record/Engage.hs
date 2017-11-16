@@ -13,7 +13,6 @@ module Network.TLS.Record.Engage
         ( engageRecord
         ) where
 
-import Control.Applicative
 import Control.Monad.State.Strict
 import Crypto.Cipher.Types (AuthTag(..))
 
@@ -24,6 +23,7 @@ import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Wire
 import Network.TLS.Packet
+import Network.TLS.Imports
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteArray as B (convert)

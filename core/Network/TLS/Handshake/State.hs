@@ -57,7 +57,7 @@ import Network.TLS.Crypto
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Types
-import Control.Applicative (Applicative, (<$>))
+import Network.TLS.Imports
 import Control.Monad.State.Strict
 import Data.X509 (CertificateChain)
 import Data.ByteArray (ByteArrayAccess)
