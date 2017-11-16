@@ -56,7 +56,6 @@ import Network.TLS.Imports
 import Data.ASN1.Types
 import Data.ASN1.Encoding
 import Data.ASN1.BinaryEncoding (DER(..), BER(..))
-import Data.List (find)
 
 {-# DEPRECATED PublicKey "use PubKey" #-}
 type PublicKey = PubKey

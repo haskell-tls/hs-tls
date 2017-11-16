@@ -31,14 +31,11 @@ import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Key
 import Network.TLS.Measurement
 import Data.Maybe (isJust, listToMaybe, mapMaybe)
-import Data.List (findIndex, intersect)
 import qualified Data.ByteString as B
 import Data.ByteString.Char8 ()
 import Data.Ord (Down(..))
 #if MIN_VERSION_base(4,8,0)
-import Data.List (sortOn)
 #else
-import Data.List (sortBy)
 import Data.Ord (comparing)
 #endif
 

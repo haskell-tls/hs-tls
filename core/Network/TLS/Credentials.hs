@@ -20,7 +20,6 @@ module Network.TLS.Credentials
     ) where
 
 import Data.Maybe (catMaybes)
-import Data.List (find)
 import Network.TLS.Crypto
 import Network.TLS.X509
 import Network.TLS.Imports
