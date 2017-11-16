@@ -16,8 +16,7 @@ module Network.TLS.Types
     , Direction(..)
     ) where
 
-import Data.ByteString (ByteString)
-import Data.Word
+import Network.TLS.Imports
 
 type HostName = String
 

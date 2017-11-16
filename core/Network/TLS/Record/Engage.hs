@@ -24,7 +24,6 @@ import Network.TLS.Compression
 import Network.TLS.Wire
 import Network.TLS.Packet
 import Network.TLS.Imports
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteArray as B (convert)
 

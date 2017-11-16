@@ -54,11 +54,7 @@ module Network.TLS.Wire
 import Data.Serialize.Get hiding (runGet)
 import qualified Data.Serialize.Get as G
 import Data.Serialize.Put
-import Control.Monad
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
-import Data.Word
-import Data.Bits
 import Network.TLS.Struct
 import Network.TLS.Imports
 import Network.TLS.Util.Serialization

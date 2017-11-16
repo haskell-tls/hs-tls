@@ -14,7 +14,7 @@ module Network.TLS.Measurement
         , incrementNbHandshakes
         ) where
 
-import Data.Word
+import Network.TLS.Imports
 
 -- | record some data about this connection.
 data Measurement = Measurement

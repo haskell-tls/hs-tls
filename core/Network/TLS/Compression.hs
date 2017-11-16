@@ -23,9 +23,8 @@ module Network.TLS.Compression
     , compressionIntersectID
     ) where
 
-import Data.Word
 import Network.TLS.Types (CompressionID)
-import Data.ByteString (ByteString)
+import Network.TLS.Imports
 import Control.Arrow (first)
 
 -- | supported compression algorithms need to be part of this class

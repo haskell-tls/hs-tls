@@ -36,7 +36,6 @@ import Network.TLS.X509
 import Network.TLS.RNG (Seed)
 import Network.TLS.Imports
 import Data.Default.Class
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
 type HostName = String

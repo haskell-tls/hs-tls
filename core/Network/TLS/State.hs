@@ -57,7 +57,6 @@ import Network.TLS.RNG
 import Network.TLS.Types (Role(..))
 import Network.TLS.Wire (GetContinuation)
 import Network.TLS.Extension
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import Control.Monad.State.Strict
 import Network.TLS.ErrT

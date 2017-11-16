@@ -19,8 +19,8 @@ import Network.TLS.Packet
 import Network.TLS.Hooks
 import Network.TLS.Sending
 import Network.TLS.Receiving
+import Network.TLS.Imports
 import qualified Data.ByteString as B
-import Data.ByteString.Char8 (ByteString)
 
 import Data.IORef
 import Control.Monad.State.Strict

@@ -37,7 +37,6 @@ module Network.TLS.Crypto
 import qualified Crypto.Hash as H
 import qualified Data.ByteString as B
 import qualified Data.ByteArray as B (convert)
-import Data.ByteString (ByteString)
 import Crypto.Random
 import qualified Crypto.PubKey.DSA as DSA
 import qualified Crypto.PubKey.ECC.ECDSA as ECDSA
@@ -52,6 +51,7 @@ import Data.X509 (PrivKey(..), PubKey(..), PubKeyEC(..), SerializedPoint(..))
 import Network.TLS.Crypto.DH
 import Network.TLS.Crypto.IES
 import Network.TLS.Crypto.Types
+import Network.TLS.Imports
 
 import Data.ASN1.Types
 import Data.ASN1.Encoding

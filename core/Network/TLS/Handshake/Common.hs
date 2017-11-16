@@ -32,8 +32,8 @@ import Network.TLS.Measurement
 import Network.TLS.Types
 import Network.TLS.Cipher
 import Network.TLS.Util
+import Network.TLS.Imports
 import Data.List (find)
-import Data.ByteString.Char8 (ByteString)
 
 import Control.Monad.State.Strict
 import Control.Exception (throwIO)

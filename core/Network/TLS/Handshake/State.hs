@@ -61,7 +61,6 @@ import Network.TLS.Imports
 import Control.Monad.State.Strict
 import Data.X509 (CertificateChain)
 import Data.ByteArray (ByteArrayAccess)
-import Data.ByteString (ByteString)
 
 data HandshakeKeyState = HandshakeKeyState
     { hksRemotePublicKey :: !(Maybe PubKey)

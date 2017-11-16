@@ -15,14 +15,20 @@ module Network.TLS.Imports
     , Data.Monoid.Monoid(..)
     -- project definition
     , showBytesHex
+    , module Data.Bits
+    , module Data.Word
+    , module Control.Monad
     ) where
 
 import qualified Control.Applicative
 import qualified Data.Monoid
 
-import           Data.ByteString (ByteString)
+import           Data.Bits
 import           Data.ByteArray.Encoding as B
+import           Data.ByteString (ByteString)
+import           Data.Word
 import qualified Prelude
+import           Control.Monad
 
 showBytesHex :: ByteString -> Prelude.String
 showBytesHex bs = Prelude.show (B.convertToBase B.Base16 bs :: ByteString)

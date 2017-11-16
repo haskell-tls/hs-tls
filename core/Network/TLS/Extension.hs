@@ -37,9 +37,7 @@ module Network.TLS.Extension
     , SignatureAlgorithms(..)
     ) where
 
-import Data.Word
 import Data.Maybe (fromMaybe, catMaybes)
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 

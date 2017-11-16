@@ -21,12 +21,11 @@ module Network.TLS.Backend
     , Backend(..)
     ) where
 
-import Data.ByteString (ByteString)
+import Network.TLS.Imports
 import qualified Data.ByteString as B
 import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush, hClose)
 
 #ifdef INCLUDE_NETWORK
-import Control.Monad
 import qualified Network.Socket as Network (Socket, close)
 import qualified Network.Socket.ByteString as Network
 #endif

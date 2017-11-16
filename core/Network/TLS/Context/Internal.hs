@@ -65,7 +65,7 @@ import Network.TLS.Hooks
 import Network.TLS.Record.State
 import Network.TLS.Parameters
 import Network.TLS.Measurement
-import Data.ByteString (ByteString)
+import Network.TLS.Imports
 import qualified Data.ByteString as B
 
 import Control.Concurrent.MVar

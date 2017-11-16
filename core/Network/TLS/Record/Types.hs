@@ -41,7 +41,6 @@ module Network.TLS.Record.Types
 import Network.TLS.Struct
 import Network.TLS.Imports
 import Network.TLS.Record.State
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
 -- | Represent a TLS record.

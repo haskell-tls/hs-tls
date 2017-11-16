@@ -12,10 +12,10 @@ module Network.TLS.Util.ASN1
     , encodeASN1Object
     ) where
 
+import Network.TLS.Imports
 import Data.ASN1.Types (fromASN1, toASN1, ASN1Object)
 import Data.ASN1.Encoding (decodeASN1', encodeASN1')
 import Data.ASN1.BinaryEncoding (DER(..))
-import Data.ByteString (ByteString)
 
 -- | Attempt to decode a bytestring representing
 -- an DER ASN.1 serialized object into the object.

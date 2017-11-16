@@ -14,7 +14,6 @@ import Control.Monad.State.Strict
 import Control.Concurrent.MVar
 import Data.IORef
 
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
 import Network.TLS.Types (Role(..))
