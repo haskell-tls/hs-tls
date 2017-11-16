@@ -28,7 +28,6 @@ import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Key
 import Network.TLS.Util
 
-import Data.ByteString (ByteString)
 import Control.Monad.State.Strict
 
 signatureCompatible :: DigitalSignatureAlg -> HashAndSignatureAlgorithm -> Bool

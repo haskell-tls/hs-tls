@@ -23,7 +23,6 @@ import Crypto.ECC
 import Crypto.Error
 import Crypto.PubKey.DH
 import Crypto.PubKey.ECIES
-import Data.ByteString (ByteString)
 import Data.Proxy
 import Network.TLS.Crypto.Types
 import Network.TLS.Extra.FFDHE
