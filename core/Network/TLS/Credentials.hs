@@ -20,11 +20,11 @@ module Network.TLS.Credentials
     ) where
 
 import Data.ByteString (ByteString)
-import Data.Monoid
 import Data.Maybe (catMaybes)
 import Data.List (find)
 import Network.TLS.Crypto
 import Network.TLS.X509
+import Network.TLS.Imports
 import Data.X509.File
 import Data.X509.Memory
 import Data.X509
