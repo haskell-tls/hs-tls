@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 -- |
 -- Module      : Network.TLS.Imports
 -- License     : BSD-style
@@ -6,44 +7,45 @@
 -- Stability   : experimental
 -- Portability : unknown
 --
-{-# LANGUAGE NoImplicitPrelude #-}
 module Network.TLS.Imports
     (
     -- generic exports
       ByteString
-    , Control.Applicative.Applicative(..)
-    , (Control.Applicative.<$>)
-    , Data.Monoid.Monoid(..)
-    -- project definition
-    , showBytesHex
+    , module Control.Applicative
+    , module Control.Monad
     , module Data.Bits
     , module Data.List
+    , module Data.Monoid
     , module Data.Ord
     , module Data.Word
-    , module Control.Monad
 #if !MIN_VERSION_base(4,8,0)
     , sortOn
 #endif
+    -- project definition
+    , showBytesHex
     ) where
 
-import qualified Control.Applicative
-import qualified Data.Monoid
+import Data.ByteString (ByteString)
 
-import           Data.Bits
-import           Data.ByteArray.Encoding as B
-import           Data.ByteString (ByteString)
-import           Data.List
-import           Data.Ord
-import           Data.Word
-import qualified Prelude
-import           Control.Monad
+import Control.Applicative
+import Control.Monad
+import Data.Bits
+import Data.List
+import Data.Monoid
+import Data.Ord
+import Data.Word
 
-showBytesHex :: ByteString -> Prelude.String
-showBytesHex bs = Prelude.show (B.convertToBase B.Base16 bs :: ByteString)
-
+import Data.ByteArray.Encoding as B
+import qualified Prelude as P
 
 #if !MIN_VERSION_base(4,8,0)
+import Prelude ((.))
+
 sortOn :: Ord b => (a -> b) -> [a] -> [a]
 sortOn f =
-  map snd . sortBy (comparing fst) . map (\x -> let y = f x in y `seq` (y, x))
+  map P.snd . sortBy (comparing P.fst) . map (\x -> let y = f x in y `P.seq` (y, x))
 #endif
+
+showBytesHex :: ByteString -> P.String
+showBytesHex bs = P.show (B.convertToBase B.Base16 bs :: ByteString)
+
