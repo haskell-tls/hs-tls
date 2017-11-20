@@ -1,5 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -fno-warn-dodgy-exports #-} -- Char8
+
 -- |
 -- Module      : Network.TLS.Imports
 -- License     : BSD-style
@@ -11,6 +13,7 @@ module Network.TLS.Imports
     (
     -- generic exports
       ByteString
+    , module Data.ByteString.Char8 -- instance
     , module Control.Applicative
     , module Control.Monad
     , module Data.Bits
@@ -26,6 +29,7 @@ module Network.TLS.Imports
     ) where
 
 import Data.ByteString (ByteString)
+import Data.ByteString.Char8 ()
 
 import Control.Applicative
 import Control.Monad

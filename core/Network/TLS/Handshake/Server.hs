@@ -31,7 +31,6 @@ import Network.TLS.Handshake.Key
 import Network.TLS.Measurement
 import Data.Maybe (isJust, listToMaybe, mapMaybe)
 import qualified Data.ByteString as B
-import Data.ByteString.Char8 ()
 
 import Control.Monad.State.Strict
 

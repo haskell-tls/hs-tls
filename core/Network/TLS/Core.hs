@@ -39,7 +39,6 @@ import Network.TLS.Handshake
 import Network.TLS.Util (catchException)
 import qualified Network.TLS.State as S
 import qualified Data.ByteString as B
-import Data.ByteString.Char8 ()
 import qualified Data.ByteString.Lazy as L
 import qualified Control.Exception as E
 
