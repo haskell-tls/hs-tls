@@ -12,10 +12,8 @@ module Network.TLS.Util
         , catchException
         ) where
 
-import Data.List (foldl')
--- import Network.TLS.Imports (ByteString)
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+import Network.TLS.Imports
 
 import Control.Exception (SomeException)
 import Control.Concurrent.Async

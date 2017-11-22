@@ -39,10 +39,9 @@ module Network.TLS.Record.Types
     ) where
 
 import Network.TLS.Struct
+import Network.TLS.Imports
 import Network.TLS.Record.State
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
-import Control.Applicative ((<$>))
 
 -- | Represent a TLS record.
 data Record a = Record !ProtocolType !Version !(Fragment a) deriving (Show,Eq)

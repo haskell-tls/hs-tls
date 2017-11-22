@@ -64,8 +64,6 @@ import Network.TLS.Struct
 import Network.TLS.Wire
 import Network.TLS.Cap
 import Data.Maybe (fromJust)
-import Data.Word
-import Control.Monad
 import Data.ASN1.Types (fromASN1, toASN1)
 import Data.ASN1.Encoding (decodeASN1', encodeASN1')
 import Data.ASN1.BinaryEncoding (DER(..))
@@ -73,7 +71,6 @@ import Data.X509 (CertificateChainRaw(..), encodeCertificateChain, decodeCertifi
 import Network.TLS.Crypto
 import Network.TLS.MAC
 import Network.TLS.Cipher (CipherKeyExchangeType(..), Cipher(..))
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import           Data.ByteArray (ByteArrayAccess)

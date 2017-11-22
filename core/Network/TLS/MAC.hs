@@ -17,9 +17,8 @@ module Network.TLS.MAC
 
 import Network.TLS.Crypto
 import Network.TLS.Types
-import Data.ByteString (ByteString)
+import Network.TLS.Imports
 import qualified Data.ByteString as B
-import Data.Bits (xor)
 
 type HMAC = ByteString -> ByteString -> ByteString
 

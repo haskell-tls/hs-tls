@@ -24,8 +24,6 @@ module Network.TLS.Record.State
     , getMacSequence
     ) where
 
-import Data.Word
-import Control.Applicative
 import Control.Monad.State.Strict
 import Network.TLS.Compression
 import Network.TLS.Cipher
@@ -36,8 +34,8 @@ import Network.TLS.Wire
 import Network.TLS.Packet
 import Network.TLS.MAC
 import Network.TLS.Util
+import Network.TLS.Imports
 
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 
 data CryptState = CryptState

@@ -29,9 +29,7 @@ import Network.TLS.Util (bytesEq, catchException)
 import Network.TLS.Types
 import Network.TLS.X509
 import Data.Maybe
-import Data.List (find, intersect)
 import qualified Data.ByteString as B
-import Data.ByteString.Char8 ()
 
 import Control.Monad.State.Strict
 import Control.Exception (SomeException)
