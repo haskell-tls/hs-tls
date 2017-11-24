@@ -28,7 +28,6 @@ import Network.TLS.Wire (encodeWord16)
 import Network.TLS.Util (bytesEq, catchException)
 import Network.TLS.Types
 import Network.TLS.X509
-import Data.Maybe
 import qualified Data.ByteString as B
 
 import Control.Monad.State.Strict
