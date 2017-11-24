@@ -18,6 +18,7 @@ module Network.TLS.Imports
     , module Control.Monad
     , module Data.Bits
     , module Data.List
+    , module Data.Maybe
     , module Data.Monoid
     , module Data.Ord
     , module Data.Word
@@ -35,6 +36,7 @@ import Control.Applicative
 import Control.Monad
 import Data.Bits
 import Data.List
+import Data.Maybe hiding (fromJust)
 import Data.Monoid
 import Data.Ord
 import Data.Word

@@ -63,7 +63,6 @@ import Network.TLS.Imports
 import Network.TLS.Struct
 import Network.TLS.Wire
 import Network.TLS.Cap
-import Data.Maybe (fromJust)
 import Data.ASN1.Types (fromASN1, toASN1)
 import Data.ASN1.Encoding (decodeASN1', encodeASN1')
 import Data.ASN1.BinaryEncoding (DER(..))
@@ -246,8 +245,8 @@ decodeFinished = Finished <$> (remaining >>= getBytes)
 
 decodeCertRequest :: CurrentParams -> Get Handshake
 decodeCertRequest cp = do
-    certTypes <- map (fromJust . valToType . fromIntegral) <$> getWords8
-
+    mcertTypes <- map (valToType . fromIntegral) <$> getWords8
+    certTypes <- mapM (fromJustM "decodeCertRequest") mcertTypes
     sigHashAlgs <- if cParamsVersion cp >= TLS12
                        then Just <$> (getWord16 >>= getSignatureHashAlgorithms)
                        else return Nothing
@@ -452,8 +451,8 @@ putExtensions es = putOpaque16 (runPut $ mapM_ putExtension es)
 
 getSignatureHashAlgorithm :: Get HashAndSignatureAlgorithm
 getSignatureHashAlgorithm = do
-    h <- fromJust . valToType <$> getWord8
-    s <- fromJust . valToType <$> getWord8
+    h <- (valToType <$> getWord8) >>= fromJustM "getSignatureHashAlgorithm"
+    s <- (valToType <$> getWord8) >>= fromJustM "getSignatureHashAlgorithm"
     return (h,s)
 
 putSignatureHashAlgorithm :: HashAndSignatureAlgorithm -> Put
@@ -644,3 +643,7 @@ encodeSignedDHParams dhparams cran sran = runPut $
 encodeSignedECDHParams :: ServerECDHParams -> ClientRandom -> ServerRandom -> ByteString
 encodeSignedECDHParams dhparams cran sran = runPut $
     putClientRandom32 cran >> putServerRandom32 sran >> putServerECDHParams dhparams
+
+fromJustM :: Monad m => String -> Maybe a -> m a
+fromJustM what Nothing  = fail ("fromJust " ++ what ++ ": Nothing")
+fromJustM _    (Just x) = return x

@@ -19,7 +19,6 @@ module Network.TLS.Credentials
     , credentialMatchesHashSignatures
     ) where
 
-import Data.Maybe (catMaybes)
 import Network.TLS.Crypto
 import Network.TLS.X509
 import Network.TLS.Imports
