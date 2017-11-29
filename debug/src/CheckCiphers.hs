@@ -7,19 +7,18 @@ import Network.TLS
 import qualified Crypto.Random.AESCtr as RNG
 
 import qualified Data.ByteString as B
-import Data.Word
 import Data.Char
 
 import Network.Socket
 import Network.BSD
 import System.IO
-import Control.Monad
-import Control.Applicative ((<$>))
 import Control.Concurrent
 import Control.Exception (SomeException(..))
 import qualified Control.Exception as E
 
 import Text.Printf
+
+import Imports
 
 tableCiphers =
     [ (0x0000, "NULL_WITH_NULL_NULL")

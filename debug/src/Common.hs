@@ -9,15 +9,14 @@ module Common
     , printHandshakeInfo
     ) where
 
-import Control.Monad
-
 import Data.Char (isDigit)
-
 import Numeric (showHex)
 
 import Network.TLS
 import Network.TLS.Extra.Cipher
 import Network.TLS.Extra.FFDHE
+
+import Imports
 
 namedDHParams :: [(String, DHParams)]
 namedDHParams =

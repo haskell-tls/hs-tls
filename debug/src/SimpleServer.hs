@@ -13,7 +13,6 @@ import System.Timeout
 import qualified Data.ByteString.Lazy.Char8 as LC
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString as B
-import Control.Monad
 import System.Environment
 import System.Exit
 import System.X509
@@ -21,12 +20,10 @@ import Data.X509.CertificateStore
 
 import Data.Default.Class
 import Data.IORef
-import Data.Monoid
-import Data.List (find)
-import Data.Maybe (isJust, mapMaybe)
 
 import Common
 import HexDump
+import Imports
 
 defaultBenchAmount = 1024 * 1024
 defaultTimeout = 2000

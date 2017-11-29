@@ -46,6 +46,7 @@ Executable           tls-stunnel
 
 Executable           tls-retrievecertificate
   Main-is:           RetrieveCertificate.hs
+  Other-modules:     Imports
   Hs-Source-Dirs:    src
   Build-Depends:     base >= 4 && < 5
                    , network
@@ -64,6 +65,7 @@ Executable           tls-simpleclient
   Main-is:           SimpleClient.hs
   Other-modules:     Common
                    , HexDump
+                   , Imports
   Hs-Source-Dirs:    src
   Build-Depends:     base >= 4 && < 5
                    , network
@@ -79,6 +81,7 @@ Executable           tls-simpleserver
   Main-is:           SimpleServer.hs
   Other-modules:     Common
                    , HexDump
+                   , Imports
   Hs-Source-Dirs:    src
   Build-Depends:     base >= 4 && < 5
                    , network

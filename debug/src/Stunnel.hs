@@ -18,7 +18,6 @@ import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar
 import Control.Exception (finally, throw, SomeException(..))
 import qualified Control.Exception as E
-import Control.Monad (when, forever)
 
 import Data.Char (isDigit)
 import Data.Default.Class
@@ -29,6 +28,7 @@ import Network.TLS.Extra.Cipher
 import qualified Crypto.PubKey.DH as DH ()
 
 import Common
+import Imports
 
 loopUntil :: Monad m => m Bool -> m ()
 loopUntil f = f >>= \v -> if v then return () else loopUntil f

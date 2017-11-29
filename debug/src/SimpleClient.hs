@@ -13,19 +13,16 @@ import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString as B
 import Control.Exception
 import qualified Control.Exception as E
-import Control.Monad
 import System.Environment
 import System.Exit
 import System.X509
 
 import Data.Default.Class
 import Data.IORef
-import Data.Monoid
-import Data.List (find)
-import Data.Maybe (isJust, mapMaybe)
 
 import Common
 import HexDump
+import Imports
 
 defaultBenchAmount = 1024 * 1024
 defaultTimeout = 2000

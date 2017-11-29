@@ -13,8 +13,6 @@ import Data.X509 as X509
 import Data.X509.Validation
 import System.X509
 
-import Control.Applicative
-import Control.Monad
 import Control.Exception
 
 import Data.Char (isDigit)
@@ -27,6 +25,8 @@ import System.Environment
 import System.Exit
 
 import qualified Data.ByteString.Char8 as B
+
+import Imports
 
 openConnection s p = do
     ref <- newIORef Nothing
