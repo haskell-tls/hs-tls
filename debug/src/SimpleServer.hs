@@ -9,8 +9,7 @@ import qualified Data.ByteString.Lazy.Char8 as LC
 import Data.Default.Class
 import Data.IORef
 import Data.X509.CertificateStore
-import Network.BSD
-import Network.Socket (socket, Family(..), SocketType(..), close, SockAddr(..), bind, listen, accept, iNADDR_ANY)
+import Network.Socket (socket, close, bind, listen, accept)
 import qualified Network.Socket as S
 import System.Console.GetOpt
 import System.Environment
@@ -189,9 +188,10 @@ loadCred _       Nothing =
     error "missing credential certificate"
 
 runOn (sStorage, certStore) flags port = do
-    sock <- socket AF_INET Stream defaultProtocol
+    ai <- makeAddrInfo Nothing port
+    sock <- socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai)
     S.setSocketOption sock S.ReuseAddr 1
-    let sockaddr = SockAddrInet port iNADDR_ANY
+    let sockaddr = addrAddress ai
     bind sock sockaddr
     listen sock 10
     runOn' sock

@@ -7,12 +7,15 @@ module Common
     , readCiphers
     , readDHParams
     , printHandshakeInfo
+    , makeAddrInfo
+    , AddrInfo(..)
     ) where
 
 import Data.Char (isDigit)
 import Numeric (showHex)
+import Network.Socket
 
-import Network.TLS
+import Network.TLS hiding (HostName)
 import Network.TLS.Extra.Cipher
 import Network.TLS.Extra.FFDHE
 
@@ -85,3 +88,12 @@ printHandshakeInfo ctx = do
     case sni of
         Nothing -> return ()
         Just n  -> putStrLn ("server name indication: " ++ n)
+
+makeAddrInfo :: Maybe HostName -> PortNumber -> IO AddrInfo
+makeAddrInfo maddr port = do
+    let flgs = [AI_ADDRCONFIG, AI_NUMERICSERV, AI_PASSIVE]
+        hints = defaultHints {
+            addrFlags = flgs
+          , addrSocketType = Stream
+          }
+    head <$> getAddrInfo (Just hints) maddr (Just $ show port)

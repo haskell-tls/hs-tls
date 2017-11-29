@@ -9,8 +9,7 @@ import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy.Char8 as LC
 import Data.Default.Class
 import Data.IORef
-import Network.BSD
-import Network.Socket (socket, Family(..), SocketType(..), close, SockAddr(..), connect)
+import Network.Socket (socket, close, connect)
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
@@ -31,9 +30,9 @@ defaultTimeout = 2000
 bogusCipher cid = cipher_AES128_SHA1 { cipherID = cid }
 
 runTLS debug ioDebug params hostname portNumber f = do
-    he   <- getHostByName hostname
-    sock <- socket AF_INET Stream defaultProtocol
-    let sockaddr = SockAddrInet portNumber (head $ hostAddresses he)
+    ai <- makeAddrInfo (Just hostname) portNumber
+    sock <- socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai)
+    let sockaddr = addrAddress ai
     E.catch (connect sock sockaddr)
           (\(SomeException e) -> close sock >> error ("cannot open socket " ++ show sockaddr ++ " " ++ show e))
     ctx <- contextNew sock params
