@@ -1,22 +1,19 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
-import Network.TLS.Internal
-import Network.TLS.Cipher
-import Network.TLS
-
-import qualified Crypto.Random.AESCtr as RNG
-
-import qualified Data.ByteString as B
-import Data.Char
-
-import Network.Socket
-import Network.BSD
-import System.IO
 import Control.Concurrent
 import Control.Exception (SomeException(..))
 import qualified Control.Exception as E
-
+import qualified Crypto.Random.AESCtr as RNG
+import qualified Data.ByteString as B
+import Data.Char
+import Network.BSD
+import Network.Socket
+import System.IO
 import Text.Printf
+
+import Network.TLS
+import Network.TLS.Cipher
+import Network.TLS.Internal
 
 import Imports
 

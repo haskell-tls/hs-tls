@@ -1,25 +1,26 @@
 {-# LANGUAGE OverloadedStrings #-}
 -- Disable this warning so we can still test deprecated functionality.
 {-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
+
 import Crypto.Random
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString.Lazy.Char8 as LC
+import Data.Default.Class
+import Data.IORef
+import Data.X509.CertificateStore
 import Network.BSD
 import Network.Socket (socket, Family(..), SocketType(..), close, SockAddr(..), bind, listen, accept, iNADDR_ANY)
 import qualified Network.Socket as S
-import Network.TLS
-import Network.TLS.Extra.Cipher
 import System.Console.GetOpt
-import System.IO
-import System.Timeout
-import qualified Data.ByteString.Lazy.Char8 as LC
-import qualified Data.ByteString.Char8 as BC
-import qualified Data.ByteString as B
 import System.Environment
 import System.Exit
+import System.IO
+import System.Timeout
 import System.X509
-import Data.X509.CertificateStore
 
-import Data.Default.Class
-import Data.IORef
+import Network.TLS
+import Network.TLS.Extra.Cipher
 
 import Common
 import HexDump
