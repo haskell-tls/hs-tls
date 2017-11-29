@@ -7,10 +7,10 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy.Char8 as LC
 import Data.Default.Class
-import Data.IORef
 import Data.X509.CertificateStore
 import Network.Socket (socket, close, bind, listen, accept)
 import qualified Network.Socket as S
+import Network.TLS.SessionManager
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
@@ -48,14 +48,8 @@ runTLS debug ioDebug params cSock f = do
                                 }
             | otherwise = logging
 
-sessionRef ref = SessionManager
-    { sessionEstablish  = \sid sdata -> writeIORef ref (sid,sdata)
-    , sessionResume     = \sid       -> readIORef ref >>= \(s,d) -> if s == sid then return (Just d) else return Nothing
-    , sessionInvalidate = \_         -> return ()
-    }
-
-getDefaultParams :: [Flag] -> CertificateStore -> IORef (SessionID, SessionData) -> Credential -> IO ServerParams
-getDefaultParams flags store sStorage cred = do
+getDefaultParams :: [Flag] -> CertificateStore -> SessionManager -> Credential -> IO ServerParams
+getDefaultParams flags store smgr cred = do
     dhParams <- case getDHParams flags of
         Nothing   -> return Nothing
         Just name -> readDHParams name
@@ -64,7 +58,7 @@ getDefaultParams flags store sStorage cred = do
         { serverWantClientCert = False
         , serverCACertificates = []
         , serverDHEParams = dhParams
-        , serverShared = def { sharedSessionManager  = sessionRef sStorage
+        , serverShared = def { sharedSessionManager  = smgr
                              , sharedCAStore         = store
                              , sharedValidationCache = validateCache
                              , sharedCredentials     = Credentials [cred]
@@ -314,7 +308,7 @@ main = do
         exitSuccess
 
     certStore <- getSystemCertificateStore
-    sStorage  <- newIORef (error "storage ioref undefined")
+    sStorage  <- newSessionManager defaultConfig
     case other of
         []     -> runOn (sStorage, certStore) opts 443
         [port] -> runOn (sStorage, certStore) opts (fromInteger $ read port)
