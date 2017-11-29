@@ -63,7 +63,7 @@ handshakeClient cparams ctx = do
         getExtensions = sequence [sniExtension
                                  ,secureReneg
                                  ,alpnExtension
-                                 ,curveExtension
+                                 ,groupExtension
                                  ,ecPointExtension
                                  --,sessionTicketExtension
                                  ,signatureAlgExtension
@@ -90,7 +90,7 @@ handshakeClient cparams ctx = do
                                  return $ Just $ toExtensionRaw $ ServerName [ServerNameHostName sni]
                          else return Nothing
 
-        curveExtension = return $ Just $ toExtensionRaw $ NegotiatedGroups ((supportedGroups $ ctxSupported ctx) `intersect` availableGroups)
+        groupExtension = return $ Just $ toExtensionRaw $ NegotiatedGroups (supportedGroups $ ctxSupported ctx)
         ecPointExtension = return $ Just $ toExtensionRaw $ EcPointFormatsSupported [EcPointFormat_Uncompressed]
                                 --[EcPointFormat_Uncompressed,EcPointFormat_AnsiX962_compressed_prime,EcPointFormat_AnsiX962_compressed_char2]
         --heartbeatExtension = return $ Just $ toExtensionRaw $ HeartBeat $ HeartBeat_PeerAllowedToSend
@@ -190,11 +190,30 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
           where getCKX_DHE = do
                     xver <- usingState_ ctx getVersion
                     serverParams <- usingHState ctx getServerDHParams
-                    (clientDHPriv, clientDHPub) <- generateDHE ctx (serverDHParamsToParams serverParams)
 
-                    let premaster = dhGetShared (serverDHParamsToParams serverParams)
-                                                clientDHPriv
-                                                (serverDHParamsToPublic serverParams)
+                    let params  = serverDHParamsToParams serverParams
+                        ffGroup = findFiniteFieldGroup params
+                        srvpub  = serverDHParamsToPublic serverParams
+
+                    (clientDHPub, premaster) <-
+                        case ffGroup of
+                             Nothing  -> do
+                                 groupUsage <- (onCustomFFDHEGroup $ clientHooks cparams) params srvpub `catchException`
+                                                   throwMiscErrorOnException "custom group callback failed"
+                                 case groupUsage of
+                                     GroupUsageInsecure           -> throwCore $ Error_Protocol ("FFDHE group is not secure enough", True, InsufficientSecurity)
+                                     GroupUsageUnsupported reason -> throwCore $ Error_Protocol ("unsupported FFDHE group: " ++ reason, True, HandshakeFailure)
+                                     GroupUsageInvalidPublic      -> throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
+                                     GroupUsageValid              -> do
+                                         (clientDHPriv, clientDHPub) <- generateDHE ctx params
+                                         let premaster = dhGetShared params clientDHPriv srvpub
+                                         return (clientDHPub, premaster)
+                             Just grp -> do
+                                 dhePair <- generateFFDHEShared ctx grp srvpub
+                                 case dhePair of
+                                     Nothing   -> throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
+                                     Just pair -> return pair
+
                     usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
 
                     return $ CKX_DH clientDHPub
@@ -373,13 +392,13 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
                     -- we need to resolve the result. and recall processWithCipher ..
                 (c,_)           -> throwCore $ Error_Protocol ("unknown server key exchange received, expecting: " ++ show c, True, HandshakeFailure)
         doDHESignature dhparams signature signatureType = do
-            -- TODO verify DHParams
+            -- FIXME verify if FF group is one of supported groups
             verified <- digitallySignDHParamsVerify ctx dhparams signatureType signature
             when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " signature for dhparams " ++ show dhparams, True, HandshakeFailure)
             usingHState ctx $ setServerDHParams dhparams
 
         doECDHESignature ecdhparams signature signatureType = do
-            -- TODO verify DHParams
+            -- FIXME verify if EC group is one of supported groups
             verified <- digitallySignECDHParamsVerify ctx ecdhparams signatureType signature
             when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " signature for ecdhparams", True, HandshakeFailure)
             usingHState ctx $ setServerECDHParams ecdhparams

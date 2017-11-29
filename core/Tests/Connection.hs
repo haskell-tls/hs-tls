@@ -9,6 +9,7 @@ module Connection
     , arbitraryPairParams
     , arbitraryPairParamsWithVersionsAndCiphers
     , arbitraryClientCredential
+    , isCustomDHParams
     , leafPublicKey
     , oneSessionManager
     , setPairParamsSessionManager
@@ -77,8 +78,10 @@ knownHashSignatures = filter nonECDSA availableHashSignatures
 arbitraryHashSignatures :: Gen [HashAndSignatureAlgorithm]
 arbitraryHashSignatures = sublistOf knownHashSignatures
 
-knownGroups :: [Group]
-knownGroups = [P256,P384,P521,X25519,X448]
+knownGroups, knownECGroups, knownFFGroups :: [Group]
+knownECGroups = [P256,P384,P521,X25519,X448]
+knownFFGroups = [FFDHE2048,FFDHE3072,FFDHE4096,FFDHE6144,FFDHE8192]
+knownGroups   = knownECGroups ++ knownFFGroups
 
 arbitraryGroups :: Gen [Group]
 arbitraryGroups = listOf1 $ elements knownGroups
@@ -94,6 +97,9 @@ arbitraryCredentialsOfEachType = do
            , (PubKeyDSA dsaPub, PrivKeyDSA dsaPriv)
            ]
 
+isCustomDHParams :: DHParams -> Bool
+isCustomDHParams params = params == dhParams
+
 leafPublicKey :: CertificateChain -> Maybe PubKey
 leafPublicKey (CertificateChain [])       = Nothing
 leafPublicKey (CertificateChain (leaf:_)) = Just (certPubKey $ signedObject $ getSigned leaf)
@@ -102,7 +108,7 @@ arbitraryCipherPair :: Version -> Gen ([Cipher], [Cipher])
 arbitraryCipherPair connectVersion = do
     serverCiphers      <- arbitraryCiphers `suchThat`
                                 (\cs -> or [maybe True (<= connectVersion) (cipherMinVer x) | x <- cs])
-    clientCiphers      <- oneof [arbitraryCiphers] `suchThat`
+    clientCiphers      <- arbitraryCiphers `suchThat`
                                 (\cs -> or [x `elem` serverCiphers &&
                                             maybe True (<= connectVersion) (cipherMinVer x) | x <- cs])
     return (clientCiphers, serverCiphers)
@@ -118,11 +124,11 @@ arbitraryPairParams = do
     serAllowedVersions <- (:[]) `fmap` elements allowedVersions
     arbitraryPairParamsWithVersionsAndCiphers (allowedVersions, serAllowedVersions) (clientCiphers, serverCiphers)
 
-arbitraryGroupPair :: Gen ([Group], [Group])
-arbitraryGroupPair = do
-    serverGroups <- arbitraryGroups
-    clientGroups <- oneof [arbitraryGroups] `suchThat`
-                         (\gs -> or [x `elem` serverGroups | x <- gs])
+arbitraryECGroupPair :: Gen ([Group], [Group])
+arbitraryECGroupPair = do
+    let arbitraryECGroups = listOf1 $ elements knownECGroups
+    serverGroups <- arbitraryECGroups
+    clientGroups <- arbitraryECGroups `suchThat` any (`elem` serverGroups)
     return (clientGroups, serverGroups)
 
 arbitraryHashSignaturePair :: Gen ([HashAndSignatureAlgorithm], [HashAndSignatureAlgorithm])
@@ -139,7 +145,7 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
     dhparams           <- elements [dhParams,ffdhe2048,ffdhe3072]
 
     creds              <- arbitraryCredentialsOfEachType
-    (clientGroups, serverGroups) <- arbitraryGroupPair
+    (clientGroups, serverGroups) <- arbitraryECGroupPair
     (clientHashSignatures, serverHashSignatures) <- arbitraryHashSignaturePair
     let serverState = def
             { serverSupported = def { supportedCiphers  = serverCiphers

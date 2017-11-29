@@ -19,6 +19,7 @@ module Network.TLS.Parameters
     , defaultParamsClient
     -- * Parameters
     , MaxFragmentEnum(..)
+    , GroupUsage(..)
     , CertificateUsage(..)
     , CertificateRejectReason(..)
     ) where
@@ -111,8 +112,13 @@ data ServerParams = ServerParams
       -- messages.  For TLS1.0, it should not be empty.
     , serverCACertificates :: [SignedCertificate]
 
-      -- | Server Optional Diffie Hellman parameters. If this value is not
-      -- properly set, no Diffie Hellman key exchange will take place.
+      -- | Server Optional Diffie Hellman parameters.  Setting parameters is
+      -- necessary for FFDHE key exchange when clients are not compatible
+      -- with RFC 7919.
+      --
+      -- Value can be one of the standardized groups from module
+      -- "Network.TLS.Extra.FFDHE" or custom parameters generated with
+      -- 'Crypto.PubKey.DH.generateParams'.
     , serverDHEParams         :: Maybe DHParams
 
     , serverShared            :: Shared
@@ -181,7 +187,8 @@ data Supported = Supported
       -- 'False', empty packets will never be added, which is less secure, but might help in rare
       -- cases.
     , supportedEmptyPacket         :: Bool
-      -- | A list of supported elliptic curves in the preferred order.
+      -- | A list of supported elliptic curves and finite-field groups in the
+      --   preferred order.
       --   The default value is ['P256','P384','P521'].
       --   'P256' provides 128-bit security which is strong enough
       --   until 2030 and is fast because its backend is written in C.
@@ -230,6 +237,21 @@ instance Default Shared where
             , sharedValidationCache = def
             }
 
+-- | Group usage callback possible return values.
+data GroupUsage =
+          GroupUsageValid                 -- ^ usage of group accepted
+        | GroupUsageInsecure              -- ^ usage of group provides insufficient security
+        | GroupUsageUnsupported String    -- ^ usage of group rejected for other reason (specified as string)
+        | GroupUsageInvalidPublic         -- ^ usage of group with an invalid public value
+        deriving (Show,Eq)
+
+defaultGroupUsage :: DHParams -> DHPublic -> IO GroupUsage
+defaultGroupUsage params public
+    | not $ odd (dhParamsGetP params)              = return $ GroupUsageUnsupported "invalid odd prime"
+    | not $ dhValid params (dhParamsGetG params)   = return $ GroupUsageUnsupported "invalid generator"
+    | not $ dhValid params (dhUnwrapPublic public) = return $ GroupUsageInvalidPublic
+    | otherwise                                    = return $ GroupUsageValid
+
 -- | A set of callbacks run by the clients for various corners of TLS establishment
 data ClientHooks = ClientHooks
     { -- | This action is called when the server sends a
@@ -262,6 +284,11 @@ data ClientHooks = ClientHooks
       -- | This action is called when the client sends ClientHello
       --   to determine ALPN values such as '["h2", "http/1.1"]'.
     , onSuggestALPN :: IO (Maybe [B.ByteString])
+      -- | This action is called to validate DHE parameters when
+      --   the server selected a finite-field group not part of
+      --   the "Supported Groups Registry".
+      --   See RFC 7919 section 3.1 for recommandations.
+    , onCustomFFDHEGroup :: DHParams -> DHPublic -> IO GroupUsage
     }
 
 defaultClientHooks :: ClientHooks
@@ -269,6 +296,7 @@ defaultClientHooks = ClientHooks
     { onCertificateRequest = \ _ -> return Nothing
     , onServerCertificate  = validateDefault
     , onSuggestALPN        = return Nothing
+    , onCustomFFDHEGroup   = defaultGroupUsage
     }
 
 instance Show ClientHooks where

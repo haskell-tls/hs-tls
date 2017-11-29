@@ -26,6 +26,7 @@ module Network.TLS.Crypto
     , PrivateKey
     , SignatureParams(..)
     , findDigitalSignatureAlg
+    , findFiniteFieldGroup
     , kxEncrypt
     , kxDecrypt
     , kxSign
@@ -38,6 +39,7 @@ import qualified Crypto.Hash as H
 import qualified Data.ByteString as B
 import qualified Data.ByteArray as B (convert)
 import Crypto.Random
+import qualified Crypto.PubKey.DH as DH
 import qualified Crypto.PubKey.DSA as DSA
 import qualified Crypto.PubKey.ECC.ECDSA as ECDSA
 import qualified Crypto.PubKey.ECC.Prim as ECC
@@ -74,6 +76,15 @@ findDigitalSignatureAlg keyPair =
         (PubKeyDSA     _, PrivKeyDSA      _)  -> Just DSS
         --(PubKeyECDSA   _, PrivKeyECDSA    _)  -> Just ECDSA
         _                                     -> Nothing
+
+findFiniteFieldGroup :: DH.Params -> Maybe Group
+findFiniteFieldGroup params = lookup (pg params) table
+  where
+    pg (DH.Params p g _) = (p, g)
+
+    table = [ (pg prms, grp) | grp <- availableFFGroups
+                             , let Just prms = dhParamsForGroup grp
+            ]
 
 -- functions to use the hidden class.
 hashInit :: Hash -> HashContext

@@ -15,6 +15,7 @@ module Network.TLS
     , ServerParams(..)
     , DebugParams(..)
     , DHParams
+    , DHPublic
     , ClientHooks(..)
     , ServerHooks(..)
     , Supported(..)
@@ -23,6 +24,7 @@ module Network.TLS
     , Handshake
     , Logging(..)
     , Measurement(..)
+    , GroupUsage(..)
     , CertificateUsage(..)
     , CertificateRejectReason(..)
     , defaultParamsClient
@@ -137,7 +139,7 @@ import Network.TLS.Struct ( TLSError(..), TLSException(..)
                           , AlertDescription(..)
                           , ClientRandom(..), ServerRandom(..)
                           , Handshake)
-import Network.TLS.Crypto (KxError(..), DHParams, Group(..))
+import Network.TLS.Crypto (KxError(..), DHParams, DHPublic, Group(..))
 import Network.TLS.Cipher
 import Network.TLS.Hooks
 import Network.TLS.Measurement
