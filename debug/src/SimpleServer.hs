@@ -2,6 +2,7 @@
 -- Disable this warning so we can still test deprecated functionality.
 {-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
 
+import Control.Concurrent
 import Crypto.Random
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
@@ -119,7 +120,7 @@ getDefaultParams flags store smgr cred = do
             validateCert = not (NoValidateCert `elem` flags)
             allowRenegotiation = AllowRenegotiation `elem` flags
 
-data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
+data Flag = Verbose | Debug | IODebug | NoValidateCert | Http11
           | Ssl3 | Tls10 | Tls11 | Tls12
           | NoVersionDowngrade
           | AllowRenegotiation
@@ -145,7 +146,6 @@ options =
     [ Option ['v']  ["verbose"] (NoArg Verbose) "verbose output on stdout"
     , Option ['d']  ["debug"]   (NoArg Debug) "TLS debug output on stdout"
     , Option []     ["io-debug"] (NoArg IODebug) "TLS IO debug output on stdout"
-    , Option ['s']  ["session"] (NoArg Session) "try to resume a session"
     , Option ['O']  ["output"]  (ReqArg Output "stdout") "output "
     , Option ['t']  ["timeout"] (ReqArg Timeout "timeout") "timeout in milliseconds (2s by default)"
     , Option []     ["no-validation"] (NoArg NoValidateCert) "disable certificate validation"
@@ -197,7 +197,6 @@ runOn (sStorage, certStore) flags port = do
           | otherwise              = do
               --certCredRequest <- getCredRequest
               doTLS sock
-              when (Session `elem` flags) $ doTLS sock
         runBench isSend sock = do
             (cSock, cAddr) <- accept sock
             putStrLn ("connection from " ++ show cAddr)
@@ -227,22 +226,26 @@ runOn (sStorage, certStore) flags port = do
         doTLS sock = do
             (cSock, cAddr) <- accept sock
             putStrLn ("connection from " ++ show cAddr)
+            -- fixme
             out <- maybe (return stdout) (flip openFile AppendMode) getOutput
 
             cred <- loadCred getKey getCertificate
             params <- getDefaultParams flags certStore sStorage cred
 
-            runTLS (Debug `elem` flags)
-                   (IODebug `elem` flags)
-                   params cSock $ \ctx -> do
-                handshake ctx
-                when (Verbose `elem` flags) $ printHandshakeInfo ctx
-                loopRecv out ctx
-                --sendData ctx $ query
-                bye ctx
-                return ()
-            close cSock
+            void $ forkIO $ do
+                runTLS (Debug `elem` flags)
+                       (IODebug `elem` flags)
+                       params cSock $ \ctx -> do
+                    handshake ctx
+                    when (Verbose `elem` flags) $ printHandshakeInfo ctx
+                    loopRecv out ctx
+                    --sendData ctx $ query
+                    bye ctx
+                    return ()
+                close cSock
             when (isJust getOutput) $ hClose out
+            doTLS sock
+
         loopRecv out ctx = do
             d <- timeout (timeoutMs * 1000) (recvData ctx) -- 2s per recv
             case d of
