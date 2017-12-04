@@ -3,6 +3,7 @@
 {-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
 
 import Control.Concurrent
+import qualified Control.Exception as E
 import Crypto.Random
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
@@ -196,7 +197,9 @@ runOn (sStorage, certStore) flags port = do
           | BenchRecv `elem` flags = runBench False sock
           | otherwise              = do
               --certCredRequest <- getCredRequest
-              doTLS sock
+              E.bracket (maybe (return stdout) (flip openFile AppendMode) getOutput)
+                        (\out -> when (isJust getOutput) $ hClose out)
+                        (doTLS sock)
         runBench isSend sock = do
             (cSock, cAddr) <- accept sock
             putStrLn ("connection from " ++ show cAddr)
@@ -223,11 +226,9 @@ runOn (sStorage, certStore) flags port = do
                     d <- recvData ctx
                     loopRecvData (bytes - B.length d) ctx
 
-        doTLS sock = do
+        doTLS sock out = do
             (cSock, cAddr) <- accept sock
             putStrLn ("connection from " ++ show cAddr)
-            -- fixme
-            out <- maybe (return stdout) (flip openFile AppendMode) getOutput
 
             cred <- loadCred getKey getCertificate
             params <- getDefaultParams flags certStore sStorage cred
@@ -243,8 +244,7 @@ runOn (sStorage, certStore) flags port = do
                     bye ctx
                     return ()
                 close cSock
-            when (isJust getOutput) $ hClose out
-            doTLS sock
+            doTLS sock out
 
         loopRecv out ctx = do
             d <- timeout (timeoutMs * 1000) (recvData ctx) -- 2s per recv
