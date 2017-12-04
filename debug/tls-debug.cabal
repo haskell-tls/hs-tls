@@ -18,6 +18,7 @@ Homepage:            http://github.com/vincenthz/hs-tls
 Executable           tls-stunnel
   Main-is:           Stunnel.hs
   Other-modules:     Common
+                   , Imports
   Hs-Source-Dirs:    src
   Build-Depends:     base >= 4 && < 5
                    , network
