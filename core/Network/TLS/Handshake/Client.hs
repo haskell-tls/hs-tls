@@ -331,7 +331,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
         Just (Just (ApplicationLayerProtocolNegotiation [proto])) -> usingState_ ctx $ do
             mprotos <- getClientALPNSuggest
             case mprotos of
-                Just protos -> when (elem proto protos) $ do
+                Just protos -> when (proto `elem` protos) $ do
                     setExtensionALPN True
                     setNegotiatedProtocol proto
                 _ -> return ()
