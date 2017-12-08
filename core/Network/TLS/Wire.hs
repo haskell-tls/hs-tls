@@ -144,7 +144,7 @@ putWord32 = putWord32be
 
 putWords16 :: [Word16] -> Put
 putWords16 l = do
-    putWord16 $ 2 * (fromIntegral $ length l)
+    putWord16 $ 2 * fromIntegral (length l)
     mapM_ putWord16 l
 
 putWord24 :: Int -> Put

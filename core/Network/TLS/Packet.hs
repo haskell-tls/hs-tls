@@ -387,7 +387,7 @@ encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
     putWords8 (map valOfType certTypes)
     case sigAlgs of
         Nothing -> return ()
-        Just l  -> putWords16 $ map (\(x,y) -> (fromIntegral $ valOfType x) * 256 + (fromIntegral $ valOfType y)) l
+        Just l  -> putWords16 $ map (\(x,y) -> fromIntegral (valOfType x) * 256 + fromIntegral (valOfType y)) l
     encodeCertAuthorities certAuthorities
   where -- Convert a distinguished name to its DER encoding.
         encodeCA dn = return $ encodeASN1' DER (toASN1 dn []) --B.concat $ L.toChunks $ encodeDN dn
