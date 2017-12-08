@@ -211,7 +211,7 @@ kxVerify (PubKeyDSA pk) DSSParams                msg signBS =
                             Just $ DSA.Signature { DSA.sign_r = r, DSA.sign_s = s }
                         _ ->
                             Nothing
-kxVerify (PubKeyEC key) (ECDSAParams alg) msg sigBS = maybe False id $ do
+kxVerify (PubKeyEC key) (ECDSAParams alg) msg sigBS = fromMaybe False $ do
     -- get the curve name and the public key data
     (curveName, pubBS) <- case key of
             PubKeyEC_Named curveName' pub -> Just (curveName',pub)

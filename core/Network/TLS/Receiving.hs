@@ -27,6 +27,7 @@ import Network.TLS.State
 import Network.TLS.Handshake.State
 import Network.TLS.Cipher
 import Network.TLS.Util
+import Network.TLS.Imports
 
 processPacket :: Context -> Record Plaintext -> IO (Either TLSError Packet)
 
@@ -53,7 +54,7 @@ processPacket ctx (Record ProtocolType_Handshake ver fragment) = do
         hss   <- parseMany currentParams mCont (fragmentGetBytes fragment)
         return $ Handshake hss
   where parseMany currentParams mCont bs =
-            case maybe decodeHandshakeRecord id mCont $ bs of
+            case fromMaybe decodeHandshakeRecord mCont $ bs of
                 GotError err                -> throwError err
                 GotPartial cont             -> modify (\st -> st { stHandshakeRecordCont = Just cont }) >> return []
                 GotSuccess (ty,content)     ->

@@ -173,10 +173,10 @@ setVersionIfUnset ver = modify maybeSet
                            Just _  -> st
 
 getVersion :: TLSSt Version
-getVersion = maybe (error $ "internal error: version hasn't been set yet") id <$> gets stVersion
+getVersion = fromMaybe (error $ "internal error: version hasn't been set yet") <$> gets stVersion
 
 getVersionWithDefault :: Version -> TLSSt Version
-getVersionWithDefault defaultVer = maybe defaultVer id <$> gets stVersion
+getVersionWithDefault defaultVer = fromMaybe defaultVer <$> gets stVersion
 
 setSecureRenegotiation :: Bool -> TLSSt ()
 setSecureRenegotiation b = modify (\st -> st { stSecureRenegotiation = b })

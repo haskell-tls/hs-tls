@@ -18,6 +18,7 @@ import Network.TLS.Context.Internal
 import Network.TLS.Struct
 import Network.TLS.IO
 import Network.TLS.Util (catchException)
+import Network.TLS.Imports
 
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Client
@@ -40,7 +41,7 @@ handshakeWith ctx hs =
 
 handleException :: Context -> IO () -> IO ()
 handleException ctx f = catchException f $ \exception -> do
-    let tlserror = maybe (Error_Misc $ show exception) id $ fromException exception
+    let tlserror = fromMaybe (Error_Misc $ show exception) $ fromException exception
     setEstablished ctx False
     sendPacket ctx (errorToAlert tlserror) `catch` ignoreIOErr
     handshakeFailed tlserror

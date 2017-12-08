@@ -540,7 +540,7 @@ getPRF :: Version -> Cipher -> PRF
 getPRF ver ciph
     | ver < TLS12 = prf_MD5SHA1
     | maybe True (< TLS12) (cipherMinVer ciph) = prf_SHA256
-    | otherwise = prf_TLS ver $ maybe SHA256 id $ cipherPRFHash ciph
+    | otherwise = prf_TLS ver $ fromMaybe SHA256 $ cipherPRFHash ciph
 
 generateMasterSecret_SSL :: ByteArrayAccess preMaster => preMaster -> ClientRandom -> ServerRandom -> ByteString
 generateMasterSecret_SSL premasterSecret (ClientRandom c) (ServerRandom s) =
