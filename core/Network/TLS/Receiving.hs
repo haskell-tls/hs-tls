@@ -62,7 +62,7 @@ processPacket ctx (Record ProtocolType_Handshake ver fragment) = do
                 GotSuccessRemaining (ty,content) left ->
                     case decodeHandshake currentParams ty content of
                         Left err -> throwError err
-                        Right hh -> (hh:) `fmap` parseMany currentParams Nothing left
+                        Right hh -> (hh:) <$> parseMany currentParams Nothing left
 
 processPacket _ (Record ProtocolType_DeprecatedHandshake _ fragment) =
     case decodeDeprecatedHandshake $ fragmentGetBytes fragment of
