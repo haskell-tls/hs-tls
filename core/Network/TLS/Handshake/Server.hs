@@ -491,31 +491,28 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
 
             verif <- checkCertificateVerify ctx usedVersion sigAlgExpected msgs dsig
 
-            case verif of
-                True -> do
-                    -- When verification succeeds, commit the
-                    -- client certificate chain to the context.
-                    --
-                    Just certs <- usingHState ctx getClientCertChain
-                    usingState_ ctx $ setClientCertificateChain certs
-                    return ()
-
-                False -> do
-                    -- Either verification failed because of an
-                    -- invalid format (with an error message), or
-                    -- the signature is wrong.  In either case,
-                    -- ask the application if it wants to
-                    -- proceed, we will do that.
-                    res <- liftIO $ onUnverifiedClientCert (serverHooks sparams)
-                    if res
-                        then do
-                            -- When verification fails, but the
-                            -- application callbacks accepts, we
-                            -- also commit the client certificate
-                            -- chain to the context.
-                            Just certs <- usingHState ctx getClientCertChain
-                            usingState_ ctx $ setClientCertificateChain certs
-                        else throwCore $ Error_Protocol ("verification failed", True, BadCertificate)
+            if verif then do
+                -- When verification succeeds, commit the
+                -- client certificate chain to the context.
+                --
+                Just certs <- usingHState ctx getClientCertChain
+                usingState_ ctx $ setClientCertificateChain certs
+                return ()
+              else do
+                -- Either verification failed because of an
+                -- invalid format (with an error message), or
+                -- the signature is wrong.  In either case,
+                -- ask the application if it wants to
+                -- proceed, we will do that.
+                res <- liftIO $ onUnverifiedClientCert (serverHooks sparams)
+                if res then do
+                        -- When verification fails, but the
+                        -- application callbacks accepts, we
+                        -- also commit the client certificate
+                        -- chain to the context.
+                        Just certs <- usingHState ctx getClientCertChain
+                        usingState_ ctx $ setClientCertificateChain certs
+                    else throwCore $ Error_Protocol ("verification failed", True, BadCertificate)
             return $ RecvStateNext expectChangeCipher
 
         processCertificateVerify p = do

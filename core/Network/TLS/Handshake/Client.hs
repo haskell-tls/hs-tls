@@ -244,32 +244,29 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
             -- have sent a non-empty list of certificates.
             --
             certSent <- usingHState ctx getClientCertSent
-            case certSent of
-                True -> do
-                    sigAlg <- getLocalSignatureAlg
+            when certSent $ do
+                sigAlg <- getLocalSignatureAlg
 
-                    mhashSig <- case usedVersion of
-                        TLS12 -> do
-                            Just (_, Just hashSigs, _) <- usingHState ctx getClientCertRequest
-                            -- The values in the "signature_algorithms" extension
-                            -- are in descending order of preference.
-                            -- However here the algorithms are selected according
-                            -- to client preference in 'supportedHashSignatures'.
-                            let suppHashSigs = supportedHashSignatures $ ctxSupported ctx
-                                matchHashSigs = filter (sigAlg `signatureCompatible`) suppHashSigs
-                                hashSigs' = filter (`elem` hashSigs) matchHashSigs
+                mhashSig <- case usedVersion of
+                    TLS12 -> do
+                        Just (_, Just hashSigs, _) <- usingHState ctx getClientCertRequest
+                        -- The values in the "signature_algorithms" extension
+                        -- are in descending order of preference.
+                        -- However here the algorithms are selected according
+                        -- to client preference in 'supportedHashSignatures'.
+                        let suppHashSigs = supportedHashSignatures $ ctxSupported ctx
+                            matchHashSigs = filter (sigAlg `signatureCompatible`) suppHashSigs
+                            hashSigs' = filter (`elem` hashSigs) matchHashSigs
 
-                            when (null hashSigs') $
-                                throwCore $ Error_Protocol ("no " ++ show sigAlg ++ " hash algorithm in common with the server", True, HandshakeFailure)
-                            return $ Just $ head hashSigs'
-                        _     -> return Nothing
+                        when (null hashSigs') $
+                            throwCore $ Error_Protocol ("no " ++ show sigAlg ++ " hash algorithm in common with the server", True, HandshakeFailure)
+                        return $ Just $ head hashSigs'
+                    _     -> return Nothing
 
-                    -- Fetch all handshake messages up to now.
-                    msgs   <- usingHState ctx $ B.concat <$> getHandshakeMessages
-                    sigDig <- createCertificateVerify ctx usedVersion sigAlg mhashSig msgs
-                    sendPacket ctx $ Handshake [CertVerify sigDig]
-
-                _ -> return ()
+                -- Fetch all handshake messages up to now.
+                msgs   <- usingHState ctx $ B.concat <$> getHandshakeMessages
+                sigDig <- createCertificateVerify ctx usedVersion sigAlg mhashSig msgs
+                sendPacket ctx $ Handshake [CertVerify sigDig]
 
         getLocalSignatureAlg = do
             pk <- usingHState ctx getLocalPrivateKey
