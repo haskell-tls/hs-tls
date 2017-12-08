@@ -247,7 +247,7 @@ data GroupUsage =
 
 defaultGroupUsage :: DHParams -> DHPublic -> IO GroupUsage
 defaultGroupUsage params public
-    | not $ odd (dhParamsGetP params)              = return $ GroupUsageUnsupported "invalid odd prime"
+    | even $ dhParamsGetP params                   = return $ GroupUsageUnsupported "invalid odd prime"
     | not $ dhValid params (dhParamsGetG params)   = return $ GroupUsageUnsupported "invalid generator"
     | not $ dhValid params (dhUnwrapPublic public) = return   GroupUsageInvalidPublic
     | otherwise                                    = return   GroupUsageValid
