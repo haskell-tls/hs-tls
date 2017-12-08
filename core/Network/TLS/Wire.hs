@@ -121,7 +121,7 @@ getInteger16 = os2ip <$> getOpaque16
 getBigNum16 :: Get BigNum
 getBigNum16 = BigNum <$> getOpaque16
 
-getList :: Int -> (Get (Int, a)) -> Get [a]
+getList :: Int -> Get (Int, a) -> Get [a]
 getList totalLen getElement = isolate totalLen (getElements totalLen)
   where getElements len
             | len < 0     = error "list consumed too much data. should never happen with isolate."

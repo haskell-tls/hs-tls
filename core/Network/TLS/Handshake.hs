@@ -37,7 +37,7 @@ handshake ctx =
 -- This is called automatically by 'recvData'
 handshakeWith :: MonadIO m => Context -> Handshake -> m ()
 handshakeWith ctx hs =
-    liftIO $ handleException ctx $ withRWLock ctx ((ctxDoHandshakeWith ctx) ctx hs)
+    liftIO $ handleException ctx $ withRWLock ctx $ ctxDoHandshakeWith ctx ctx hs
 
 handleException :: Context -> IO () -> IO ()
 handleException ctx f = catchException f $ \exception -> do

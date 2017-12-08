@@ -28,10 +28,10 @@ data Logging = Logging
 
 defaultLogging :: Logging
 defaultLogging = Logging
-    { loggingPacketSent = (\_ -> return ())
-    , loggingPacketRecv = (\_ -> return ())
-    , loggingIOSent     = (\_ -> return ())
-    , loggingIORecv     = (\_ _ -> return ())
+    { loggingPacketSent = \_ -> return ()
+    , loggingPacketRecv = \_ -> return ()
+    , loggingIOSent     = \_ -> return ()
+    , loggingIORecv     = \_ _ -> return ()
     }
 
 instance Default Logging where

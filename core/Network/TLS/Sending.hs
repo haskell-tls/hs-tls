@@ -37,7 +37,7 @@ makeRecord pkt = do
     return $ Record (packetType pkt) ver (fragmentPlaintext $ writePacketContent pkt)
   where writePacketContent (Handshake hss)    = encodeHandshakes hss
         writePacketContent (Alert a)          = encodeAlerts a
-        writePacketContent (ChangeCipherSpec) = encodeChangeCipherSpec
+        writePacketContent  ChangeCipherSpec  = encodeChangeCipherSpec
         writePacketContent (AppData x)        = x
 
 -- | marshall packet data

@@ -380,8 +380,8 @@ encodeHandshakeContent (ServerKeyXchg skg) =
         SKX_Unparsed bytes     -> putBytes bytes
         _                      -> error ("encodeHandshakeContent: cannot handle: " ++ show skg)
 
-encodeHandshakeContent (HelloRequest) = return ()
-encodeHandshakeContent (ServerHelloDone) = return ()
+encodeHandshakeContent HelloRequest    = return ()
+encodeHandshakeContent ServerHelloDone = return ()
 
 encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
     putWords8 (map valOfType certTypes)
@@ -395,7 +395,7 @@ encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
         -- Encode a list of distinguished names.
         encodeCertAuthorities certAuths = do
             enc <- mapM encodeCA certAuths
-            let totLength = sum $ map (((+) 2) . B.length) enc
+            let totLength = sum $ map ((+) 2 . B.length) enc
             putWord16 (fromIntegral totLength)
             mapM_ (\ b -> putWord16 (fromIntegral (B.length b)) >> putBytes b) enc
 
@@ -544,7 +544,7 @@ getPRF ver ciph
 
 generateMasterSecret_SSL :: ByteArrayAccess preMaster => preMaster -> ClientRandom -> ServerRandom -> ByteString
 generateMasterSecret_SSL premasterSecret (ClientRandom c) (ServerRandom s) =
-    B.concat $ map (computeMD5) ["A","BB","CCC"]
+    B.concat $ map computeMD5 ["A","BB","CCC"]
   where computeMD5  label = hash MD5 $ B.concat [ B.convert premasterSecret, computeSHA1 label ]
         computeSHA1 label = hash SHA1 $ B.concat [ label, B.convert premasterSecret, c, s ]
 

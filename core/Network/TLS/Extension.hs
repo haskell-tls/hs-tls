@@ -260,7 +260,7 @@ data SessionTicket = SessionTicket
 
 instance Extension SessionTicket where
     extensionID _ = extensionID_SessionTicket
-    extensionEncode (SessionTicket {}) = runPut $ return ()
+    extensionEncode SessionTicket{} = runPut $ return ()
     extensionDecode _ = runGetMaybe (return SessionTicket)
 
 newtype HeartBeat = HeartBeat HeartBeatMode deriving (Show,Eq)

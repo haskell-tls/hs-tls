@@ -116,7 +116,7 @@ onRecvStateHandshake ctx (RecvStateHandshake f) (x:xs) = do
 onRecvStateHandshake _ _ _   = unexpected "spurious handshake" Nothing
 
 runRecvState :: Context -> RecvState IO -> IO ()
-runRecvState _   (RecvStateDone)   = return ()
+runRecvState _    RecvStateDone    = return ()
 runRecvState ctx (RecvStateNext f) = recvPacket ctx >>= either throwCore f >>= runRecvState ctx
 runRecvState ctx iniState          = recvPacketHandshake ctx >>= onRecvStateHandshake ctx iniState >>= runRecvState ctx
 

@@ -103,7 +103,7 @@ recvPacket ctx = liftIO $ do
             pkt <- case pktRecv of
                     Right (Handshake hss) ->
                         ctxWithHooks ctx $ \hooks ->
-                            (mapM (hookRecvHandshake hooks) hss) >>= return . Right . Handshake
+                            mapM (hookRecvHandshake hooks) hss >>= return . Right . Handshake
                     _                     -> return pktRecv
             case pkt of
                 Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p

@@ -327,7 +327,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
         setVersion rver
     usingHState ctx $ setServerHelloParameters rver serverRan cipherAlg compressAlg
 
-    case extensionDecode False `fmap` (extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts) of
+    case extensionDecode False `fmap` extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts of
         Just (Just (ApplicationLayerProtocolNegotiation [proto])) -> usingState_ ctx $ do
             mprotos <- getClientALPNSuggest
             case mprotos of
