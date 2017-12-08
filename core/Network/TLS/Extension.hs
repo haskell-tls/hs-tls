@@ -229,7 +229,7 @@ newtype NegotiatedGroups = NegotiatedGroups [Group] deriving (Show,Eq)
 instance Extension NegotiatedGroups where
     extensionID _ = extensionID_NegotiatedGroups
     extensionEncode (NegotiatedGroups groups) = runPut $ putWords16 $ map fromEnumSafe16 groups
-    extensionDecode _ = runGetMaybe (NegotiatedGroups . catMaybes . map toEnumSafe16 <$> getWords16)
+    extensionDecode _ = runGetMaybe (NegotiatedGroups . mapMaybe toEnumSafe16 <$> getWords16)
 
 newtype EcPointFormatsSupported = EcPointFormatsSupported [EcPointFormat] deriving (Show,Eq)
 
@@ -253,7 +253,7 @@ instance EnumSafe8 EcPointFormat where
 instance Extension EcPointFormatsSupported where
     extensionID _ = extensionID_EcPointFormats
     extensionEncode (EcPointFormatsSupported formats) = runPut $ putWords8 $ map fromEnumSafe8 formats
-    extensionDecode _ = runGetMaybe (EcPointFormatsSupported . catMaybes . map toEnumSafe8 <$> getWords8)
+    extensionDecode _ = runGetMaybe (EcPointFormatsSupported . mapMaybe toEnumSafe8 <$> getWords8)
 
 data SessionTicket = SessionTicket
     deriving (Show,Eq)
