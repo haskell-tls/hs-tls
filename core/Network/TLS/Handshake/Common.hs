@@ -49,7 +49,7 @@ unexpected msg expected = throwCore $ Error_Packet_unexpected msg (maybe "" (" e
 
 newSession :: Context -> IO Session
 newSession ctx
-    | supportedSession $ ctxSupported ctx = getStateRNG ctx 32 >>= return . Session . Just
+    | supportedSession $ ctxSupported ctx = Session . Just <$> getStateRNG ctx 32
     | otherwise                           = return $ Session Nothing
 
 -- | when a new handshake is done, wrap up & clean up.

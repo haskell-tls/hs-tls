@@ -126,7 +126,7 @@ getList totalLen getElement = isolate totalLen (getElements totalLen)
   where getElements len
             | len < 0     = error "list consumed too much data. should never happen with isolate."
             | len == 0    = return []
-            | otherwise   = getElement >>= \(elementLen, a) -> liftM ((:) a) (getElements (len - elementLen))
+            | otherwise   = getElement >>= \(elementLen, a) -> (:) a <$> getElements (len - elementLen)
 
 processBytes :: Int -> Get a -> Get a
 processBytes i f = isolate i f

@@ -99,8 +99,8 @@ handshakeClient cparams ctx = do
         signatureAlgExtension = return $ Just $ toExtensionRaw $ SignatureAlgorithms $ supportedHashSignatures $ clientSupported cparams
 
         sendClientHello = do
-            crand <- getStateRNG ctx 32 >>= return . ClientRandom
-            let clientSession = Session . maybe Nothing (Just . fst) $ clientWantSessionResume cparams
+            crand <- ClientRandom <$> getStateRNG ctx 32
+            let clientSession = Session . (fst <$>) $ clientWantSessionResume cparams
                 highestVer = maximum $ supportedVersions $ ctxSupported ctx
             extensions <- catMaybes <$> getExtensions
             startHandshake ctx highestVer crand
