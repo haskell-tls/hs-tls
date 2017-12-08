@@ -243,14 +243,14 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
             -- Only send a certificate verify message when we
             -- have sent a non-empty list of certificates.
             --
-            certSent <- usingHState ctx $ getClientCertSent
+            certSent <- usingHState ctx getClientCertSent
             case certSent of
                 True -> do
                     sigAlg <- getLocalSignatureAlg
 
                     mhashSig <- case usedVersion of
                         TLS12 -> do
-                            Just (_, Just hashSigs, _) <- usingHState ctx $ getClientCertRequest
+                            Just (_, Just hashSigs, _) <- usingHState ctx getClientCertRequest
                             -- The values in the "signature_algorithms" extension
                             -- are in descending order of preference.
                             -- However here the algorithms are selected according
@@ -347,7 +347,7 @@ onServerHello _ _ _ p = unexpected (show p) (Just "server hello")
 processCertificate :: ClientParams -> Context -> Handshake -> IO (RecvState IO)
 processCertificate cparams ctx (Certificates certs) = do
     -- run certificate recv hook
-    ctxWithHooks ctx (\hooks -> hookRecvCertificates hooks $ certs)
+    ctxWithHooks ctx (\hooks -> hookRecvCertificates hooks certs)
     -- then run certificate validation
     usage <- catchException (wrapCertificateChecks <$> checkCert) rejectOnException
     case usage of

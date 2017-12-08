@@ -128,7 +128,7 @@ getSessionData ctx = do
     tx  <- liftIO $ readMVar (ctxTxState ctx)
     case mms of
         Nothing -> return Nothing
-        Just ms -> return $ Just $ SessionData
+        Just ms -> return $ Just SessionData
                         { sessionVersion     = ver
                         , sessionCipher      = cipherID $ fromJust "cipher" $ stCipher tx
                         , sessionCompression = compressionID $ stCompression tx

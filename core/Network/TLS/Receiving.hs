@@ -42,7 +42,7 @@ processPacket ctx (Record ProtocolType_ChangeCipherSpec _ fragment) =
                        return $ Right ChangeCipherSpec
 
 processPacket ctx (Record ProtocolType_Handshake ver fragment) = do
-    keyxchg <- getHState ctx >>= \hs -> return $ (hs >>= hstPendingCipher >>= Just . cipherKeyExchange)
+    keyxchg <- getHState ctx >>= \hs -> return (hs >>= hstPendingCipher >>= Just . cipherKeyExchange)
     usingState ctx $ do
         let currentParams = CurrentParams
                             { cParamsVersion     = ver
@@ -54,7 +54,7 @@ processPacket ctx (Record ProtocolType_Handshake ver fragment) = do
         hss   <- parseMany currentParams mCont (fragmentGetBytes fragment)
         return $ Handshake hss
   where parseMany currentParams mCont bs =
-            case fromMaybe decodeHandshakeRecord mCont $ bs of
+            case fromMaybe decodeHandshakeRecord mCont bs of
                 GotError err                -> throwError err
                 GotPartial cont             -> modify (\st -> st { stHandshakeRecordCont = Just cont }) >> return []
                 GotSuccess (ty,content)     ->

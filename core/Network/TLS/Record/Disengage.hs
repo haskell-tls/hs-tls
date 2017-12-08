@@ -87,7 +87,7 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
             let minContent = (if explicitIV then bulkIVSize bulk else 0) + max (macSize + 1) blockSize
 
             -- check if we have enough bytes to cover the minimum for this cipher
-            when ((econtentLen `mod` blockSize) /= 0 || econtentLen < minContent) $ sanityCheckError
+            when ((econtentLen `mod` blockSize) /= 0 || econtentLen < minContent) sanityCheckError
 
             {- update IV -}
             (iv, econtent') <- if explicitIV
@@ -99,7 +99,7 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
             let paddinglength = fromIntegral (B.last content') + 1
             let contentlen = B.length content' - paddinglength - macSize
             (content, mac, padding) <- get3 content' (contentlen, macSize, paddinglength)
-            getCipherData record $ CipherData
+            getCipherData record CipherData
                     { cipherDataContent = content
                     , cipherDataMAC     = Just mac
                     , cipherDataPadding = Just padding
@@ -107,14 +107,14 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
 
         decryptOf (BulkStateStream (BulkStream decryptF)) = do
             -- check if we have enough bytes to cover the minimum for this cipher
-            when (econtentLen < macSize) $ sanityCheckError
+            when (econtentLen < macSize) sanityCheckError
 
             let (content', bulkStream') = decryptF econtent
             {- update Ctx -}
             let contentlen        = B.length content' - macSize
             (content, mac) <- get2 content' (contentlen, macSize)
             modify $ \txs -> txs { stCryptState = cst { cstKey = BulkStateStream bulkStream' } }
-            getCipherData record $ CipherData
+            getCipherData record CipherData
                     { cipherDataContent = content
                     , cipherDataMAC     = Just mac
                     , cipherDataPadding = Nothing
@@ -126,7 +126,7 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
                 cipherLen   = econtentLen - authTagLen - nonceExpLen
 
             -- check if we have enough bytes to cover the minimum for this cipher
-            when (econtentLen < (authTagLen + nonceExpLen)) $ sanityCheckError
+            when (econtentLen < (authTagLen + nonceExpLen)) sanityCheckError
 
             (enonce, econtent', authTag) <- get3 econtent (nonceExpLen, cipherLen, authTagLen)
             let encodedSeq = encodeWord64 $ msSequence $ stMacState tst

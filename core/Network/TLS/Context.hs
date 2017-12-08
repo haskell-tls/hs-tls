@@ -121,7 +121,7 @@ contextNew backend params = liftIO $ do
 
     seed <- case debugSeed debug of
                 Nothing     -> do seed <- seedNew
-                                  debugPrintSeed debug $ seed
+                                  debugPrintSeed debug seed
                                   return seed
                 Just determ -> return determ
     let rng = newStateRNG seed
@@ -145,7 +145,7 @@ contextNew backend params = liftIO $ do
     lockRead  <- newMVar ()
     lockState <- newMVar ()
 
-    return $ Context
+    return Context
             { ctxConnection   = getBackend backend
             , ctxShared       = shared
             , ctxSupported    = supported

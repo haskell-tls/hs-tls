@@ -69,7 +69,7 @@ prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
 prepareRecord ctx f = do
     ver     <- usingState_ ctx (getVersionWithDefault $ maximum $ supportedVersions $ ctxSupported ctx)
     txState <- readMVar $ ctxTxState ctx
-    let sz = case stCipher $ txState of
+    let sz = case stCipher txState of
                   Nothing     -> 0
                   Just cipher -> if hasRecordIV $ bulkF $ cipherBulk cipher
                                     then bulkIVSize $ cipherBulk cipher

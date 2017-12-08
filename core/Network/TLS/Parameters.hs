@@ -249,8 +249,8 @@ defaultGroupUsage :: DHParams -> DHPublic -> IO GroupUsage
 defaultGroupUsage params public
     | not $ odd (dhParamsGetP params)              = return $ GroupUsageUnsupported "invalid odd prime"
     | not $ dhValid params (dhParamsGetG params)   = return $ GroupUsageUnsupported "invalid generator"
-    | not $ dhValid params (dhUnwrapPublic public) = return $ GroupUsageInvalidPublic
-    | otherwise                                    = return $ GroupUsageValid
+    | not $ dhValid params (dhUnwrapPublic public) = return   GroupUsageInvalidPublic
+    | otherwise                                    = return   GroupUsageValid
 
 -- | A set of callbacks run by the clients for various corners of TLS establishment
 data ClientHooks = ClientHooks

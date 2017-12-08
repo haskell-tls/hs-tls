@@ -53,7 +53,7 @@ data CertificateUsage =
 wrapCertificateChecks :: [FailedReason] -> CertificateUsage
 wrapCertificateChecks [] = CertificateUsageAccept
 wrapCertificateChecks l
-    | Expired `elem` l   = CertificateUsageReject $ CertificateRejectExpired
-    | InFuture `elem` l  = CertificateUsageReject $ CertificateRejectExpired
-    | UnknownCA `elem` l = CertificateUsageReject $ CertificateRejectUnknownCA
+    | Expired `elem` l   = CertificateUsageReject   CertificateRejectExpired
+    | InFuture `elem` l  = CertificateUsageReject   CertificateRejectExpired
+    | UnknownCA `elem` l = CertificateUsageReject   CertificateRejectUnknownCA
     | otherwise          = CertificateUsageReject $ CertificateRejectOther (show l)

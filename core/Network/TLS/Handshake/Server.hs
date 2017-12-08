@@ -203,7 +203,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
 
     cred <- case cipherKeyExchange usedCipher of
                 CipherKeyExchange_RSA       -> return $ credentialsFindForDecrypting creds
-                CipherKeyExchange_DH_Anon   -> return $ Nothing
+                CipherKeyExchange_DH_Anon   -> return   Nothing
                 CipherKeyExchange_DHE_RSA   -> return $ credentialsFindForSigning RSA signatureCreds
                 CipherKeyExchange_DHE_DSS   -> return $ credentialsFindForSigning DSS signatureCreds
                 CipherKeyExchange_ECDHE_RSA -> return $ credentialsFindForSigning RSA signatureCreds
@@ -535,7 +535,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                 _             -> throwCore $ Error_Protocol ("unsupported remote public key type", True, HandshakeFailure)
 
         expectChangeCipher ChangeCipherSpec = do
-            return $ RecvStateHandshake $ expectFinish
+            return $ RecvStateHandshake expectFinish
 
         expectChangeCipher p                = unexpected (show p) (Just "change cipher")
 

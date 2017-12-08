@@ -31,7 +31,7 @@ import Control.Exception (IOException, catch, fromException)
 -- This is to be called at the beginning of a connection, and during renegotiation
 handshake :: MonadIO m => Context -> m ()
 handshake ctx =
-    liftIO $ handleException ctx $ withRWLock ctx (ctxDoHandshake ctx $ ctx)
+    liftIO $ handleException ctx $ withRWLock ctx (ctxDoHandshake ctx ctx)
 
 -- Handshake when requested by the remote end
 -- This is called automatically by 'recvData'

@@ -129,7 +129,7 @@ signatureCreateWithCertVerifyData :: Context
                                   -> CertVerifyData
                                   -> IO DigitallySigned
 signatureCreateWithCertVerifyData ctx malg (sigParam, toSign) = do
-    cc <- usingState_ ctx $ isClientContext
+    cc <- usingState_ ctx isClientContext
     DigitallySigned malg <$> signPrivate ctx cc sigParam toSign
 
 signatureVerify :: Context -> DigitallySigned -> DigitalSignatureAlg -> ByteString -> IO Bool
@@ -149,7 +149,7 @@ signatureVerifyWithCertVerifyData :: Context
                                   -> CertVerifyData
                                   -> IO Bool
 signatureVerifyWithCertVerifyData ctx (DigitallySigned _ bs) (sigParam, toVerify) = do
-    cc <- usingState_ ctx $ isClientContext
+    cc <- usingState_ ctx isClientContext
     verifyPublic ctx cc sigParam toVerify bs
 
 digitallySignParams :: Context -> ByteString -> DigitalSignatureAlg -> Maybe HashAndSignatureAlgorithm -> IO DigitallySigned

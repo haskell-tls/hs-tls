@@ -208,7 +208,7 @@ kxVerify (PubKeyDSA pk) DSSParams                msg signBS =
                 Right asn1 ->
                     case asn1 of
                         Start Sequence:IntVal r:IntVal s:End Sequence:_ ->
-                            Just $ DSA.Signature { DSA.sign_r = r, DSA.sign_s = s }
+                            Just DSA.Signature { DSA.sign_r = r, DSA.sign_s = s }
                         _ ->
                             Nothing
 kxVerify (PubKeyEC key) (ECDSAParams alg) msg sigBS = fromMaybe False $ do

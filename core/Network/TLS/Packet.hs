@@ -147,7 +147,7 @@ decodeAlert = do
         (_, Nothing)     -> fail "cannot decode alert description"
 
 decodeAlerts :: ByteString -> Either TLSError [(AlertLevel, AlertDescription)]
-decodeAlerts = runGetErr "alerts" $ loop
+decodeAlerts = runGetErr "alerts" loop
   where loop = do
             r <- remaining
             if r == 0

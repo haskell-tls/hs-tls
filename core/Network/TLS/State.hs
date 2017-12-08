@@ -173,7 +173,7 @@ setVersionIfUnset ver = modify maybeSet
                            Just _  -> st
 
 getVersion :: TLSSt Version
-getVersion = fromMaybe (error $ "internal error: version hasn't been set yet") <$> gets stVersion
+getVersion = fromMaybe (error "internal error: version hasn't been set yet") <$> gets stVersion
 
 getVersionWithDefault :: Version -> TLSSt Version
 getVersionWithDefault defaultVer = fromMaybe defaultVer <$> gets stVersion
