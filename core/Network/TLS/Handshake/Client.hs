@@ -298,7 +298,7 @@ throwMiscErrorOnException msg e =
 onServerHello :: Context -> ClientParams -> [ExtensionID] -> Handshake -> IO (RecvState IO)
 onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cipher compression exts) = do
     when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
-    case find ((==) rver) (supportedVersions $ ctxSupported ctx) of
+    case find (== rver) (supportedVersions $ ctxSupported ctx) of
         Nothing -> throwCore $ Error_Protocol ("server version " ++ show rver ++ " is not supported", True, ProtocolVersion)
         Just _  -> return ()
     -- find the compression and cipher methods that the server want to use.
