@@ -314,7 +314,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
 
     -- intersect sent extensions in client and the received extensions from server.
     -- if server returns extensions that we didn't request, fail.
-    when (not $ null $ filter (not . flip elem sentExts . (\(ExtensionRaw i _) -> i)) exts) $
+    unless (null $ filter (not . flip elem sentExts . (\(ExtensionRaw i _) -> i)) exts) $
         throwCore $ Error_Protocol ("spurious extensions received", True, UnsupportedExtension)
 
     let resumingSession =
@@ -394,13 +394,13 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
         doDHESignature dhparams signature signatureType = do
             -- FIXME verify if FF group is one of supported groups
             verified <- digitallySignDHParamsVerify ctx dhparams signatureType signature
-            when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " signature for dhparams " ++ show dhparams, True, HandshakeFailure)
+            unless verified $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " signature for dhparams " ++ show dhparams, True, HandshakeFailure)
             usingHState ctx $ setServerDHParams dhparams
 
         doECDHESignature ecdhparams signature signatureType = do
             -- FIXME verify if EC group is one of supported groups
             verified <- digitallySignECDHParamsVerify ctx ecdhparams signatureType signature
-            when (not verified) $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " signature for ecdhparams", True, HandshakeFailure)
+            unless verified $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " signature for ecdhparams", True, HandshakeFailure)
             usingHState ctx $ setServerECDHParams ecdhparams
 
 processServerKeyExchange ctx p = processCertificateRequest ctx p
