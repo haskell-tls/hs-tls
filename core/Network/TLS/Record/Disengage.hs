@@ -62,7 +62,7 @@ getCipherData (Record pt ver _) cdata = do
         Just pad -> do
             cver <- getRecordVersion
             let b = B.length pad - 1
-            return (if cver < TLS10 then True else B.replicate (B.length pad) (fromIntegral b) `bytesEq` pad)
+            return (cver < TLS10 || B.replicate (B.length pad) (fromIntegral b) `bytesEq` pad)
 
     unless (macValid &&! paddingValid) $ do
         throwError $ Error_Protocol ("bad record mac", True, BadRecordMac)
