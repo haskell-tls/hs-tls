@@ -49,7 +49,7 @@ data Hooks = Hooks
 
 defaultHooks :: Hooks
 defaultHooks = Hooks
-    { hookRecvHandshake    = \hs -> return hs
+    { hookRecvHandshake    = return
     , hookRecvCertificates = return . const ()
     , hookLogging          = def
     }

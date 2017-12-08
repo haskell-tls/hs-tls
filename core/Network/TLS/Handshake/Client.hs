@@ -257,7 +257,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                             -- to client preference in 'supportedHashSignatures'.
                             let suppHashSigs = supportedHashSignatures $ ctxSupported ctx
                                 matchHashSigs = filter (sigAlg `signatureCompatible`) suppHashSigs
-                                hashSigs' = filter (\ a -> a `elem` hashSigs) matchHashSigs
+                                hashSigs' = filter (`elem` hashSigs) matchHashSigs
 
                             when (null hashSigs') $
                                 throwCore $ Error_Protocol ("no " ++ show sigAlg ++ " hash algorithm in common with the server", True, HandshakeFailure)
