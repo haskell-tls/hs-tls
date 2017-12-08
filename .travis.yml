@@ -34,6 +34,8 @@ install:
       cabal install random
     fi
     cabal install
+ - cd ../session
+ - if [ "${RUNTEST}" != "0" ]; then cabal install --only-dependencies --enable-tests; else cabal install --only-dependencies; fi
  - cd ../debug
  - if [ "${RUNTEST}" != "0" ]; then cabal install --only-dependencies --enable-tests; else cabal install --only-dependencies; fi
 
@@ -42,6 +44,19 @@ script:
  - if [ "${RUNTEST}" != "0" ]; then cabal configure --enable-tests -v2; else cabal configure -v2; fi
  - cabal build
  - if [ "${RUNTEST}" != "0" ]; then cabal test; fi;
+ - cabal check
+ - cabal sdist
+ - export SRC_TGZ=$(cabal info . | awk '{print $2 ".tar.gz";exit}') ;
+   cd dist/;
+   if [ -f "$SRC_TGZ" ]; then
+      cabal install --force-reinstalls "$SRC_TGZ";
+   else
+      echo "expected '$SRC_TGZ' not found";
+      exit 1;
+   fi
+ - cd ../../session
+ - cabal configure -v2
+ - cabal build
  - cabal check
  - cabal sdist
  - export SRC_TGZ=$(cabal info . | awk '{print $2 ".tar.gz";exit}') ;
