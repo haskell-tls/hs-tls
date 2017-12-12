@@ -152,8 +152,7 @@ class Extension a where
 -- | Server Name extension including the name type and the associated name.
 -- the associated name decoding is dependant of its name type.
 -- name type = 0 : hostname
-data ServerName = ServerName [ServerNameType]
-    deriving (Show,Eq)
+newtype ServerName = ServerName [ServerNameType] deriving (Show,Eq)
 
 data ServerNameType = ServerNameHostName HostName
                     | ServerNameOther    (Word8, ByteString)
@@ -173,8 +172,7 @@ instance Extension ServerName where
                       _ -> ServerNameOther (ty, sname))
 
 -- | Max fragment extension with length from 512 bytes to 4096 bytes
-data MaxFragmentLength = MaxFragmentLength MaxFragmentEnum
-    deriving (Show,Eq)
+newtype MaxFragmentLength = MaxFragmentLength MaxFragmentEnum deriving (Show,Eq)
 data MaxFragmentEnum = MaxFragment512 | MaxFragment1024 | MaxFragment2048 | MaxFragment4096
     deriving (Show,Eq)
 
@@ -208,8 +206,7 @@ instance Extension SecureRenegotiation where
            else return $ SecureRenegotiation opaque Nothing
 
 -- | Application Layer Protocol Negotiation (ALPN)
-data ApplicationLayerProtocolNegotiation = ApplicationLayerProtocolNegotiation [ByteString]
-    deriving (Show,Eq)
+newtype ApplicationLayerProtocolNegotiation = ApplicationLayerProtocolNegotiation [ByteString] deriving (Show,Eq)
 
 instance Extension ApplicationLayerProtocolNegotiation where
     extensionID _ = extensionID_ApplicationLayerProtocolNegotiation
@@ -226,8 +223,7 @@ instance Extension ApplicationLayerProtocolNegotiation where
                      _ -> (:) <$> getOpaque8 <*> getALPN'
 
 
-data NegotiatedGroups = NegotiatedGroups [Group]
-    deriving (Show,Eq)
+newtype NegotiatedGroups = NegotiatedGroups [Group] deriving (Show,Eq)
 
 -- on decode, filter all unknown curves
 instance Extension NegotiatedGroups where
@@ -235,8 +231,7 @@ instance Extension NegotiatedGroups where
     extensionEncode (NegotiatedGroups groups) = runPut $ putWords16 $ map fromEnumSafe16 groups
     extensionDecode _ = runGetMaybe (NegotiatedGroups . catMaybes . map toEnumSafe16 <$> getWords16)
 
-data EcPointFormatsSupported = EcPointFormatsSupported [EcPointFormat]
-    deriving (Show,Eq)
+newtype EcPointFormatsSupported = EcPointFormatsSupported [EcPointFormat] deriving (Show,Eq)
 
 data EcPointFormat =
       EcPointFormat_Uncompressed
@@ -268,8 +263,7 @@ instance Extension SessionTicket where
     extensionEncode (SessionTicket {}) = runPut $ return ()
     extensionDecode _ = runGetMaybe (return SessionTicket)
 
-data HeartBeat = HeartBeat HeartBeatMode
-    deriving (Show,Eq)
+newtype HeartBeat = HeartBeat HeartBeatMode deriving (Show,Eq)
 
 data HeartBeatMode =
       HeartBeat_PeerAllowedToSend
@@ -292,8 +286,7 @@ instance Extension HeartBeat where
             Just (Just mode) -> Just $ HeartBeat mode
             _                -> Nothing
 
-data SignatureAlgorithms = SignatureAlgorithms [HashAndSignatureAlgorithm]
-    deriving (Show,Eq)
+newtype SignatureAlgorithms = SignatureAlgorithms [HashAndSignatureAlgorithm] deriving (Show,Eq)
 
 instance Extension SignatureAlgorithms where
     extensionID _ = extensionID_SignatureAlgorithms
