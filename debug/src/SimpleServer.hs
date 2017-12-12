@@ -1,32 +1,31 @@
 {-# LANGUAGE OverloadedStrings #-}
 -- Disable this warning so we can still test deprecated functionality.
 {-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
+
+import Control.Concurrent
+import qualified Control.Exception as E
 import Crypto.Random
-import Network.BSD
-import Network.Socket (socket, Family(..), SocketType(..), close, SockAddr(..), bind, listen, accept, iNADDR_ANY)
-import qualified Network.Socket as S
-import Network.TLS
-import Network.TLS.Extra.Cipher
-import System.Console.GetOpt
-import System.IO
-import System.Timeout
-import qualified Data.ByteString.Lazy.Char8 as LC
-import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString as B
-import Control.Monad
+import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString.Lazy.Char8 as LC
+import Data.Default.Class
+import Data.X509.CertificateStore
+import Network.Socket (socket, close, bind, listen, accept)
+import qualified Network.Socket as S
+import Network.TLS.SessionManager
+import System.Console.GetOpt
 import System.Environment
 import System.Exit
+import System.IO
+import System.Timeout
 import System.X509
-import Data.X509.CertificateStore
 
-import Data.Default.Class
-import Data.IORef
-import Data.Monoid
-import Data.List (find)
-import Data.Maybe (isJust, mapMaybe)
+import Network.TLS
+import Network.TLS.Extra.Cipher
 
 import Common
 import HexDump
+import Imports
 
 defaultBenchAmount = 1024 * 1024
 defaultTimeout = 2000
@@ -51,14 +50,8 @@ runTLS debug ioDebug params cSock f = do
                                 }
             | otherwise = logging
 
-sessionRef ref = SessionManager
-    { sessionEstablish  = \sid sdata -> writeIORef ref (sid,sdata)
-    , sessionResume     = \sid       -> readIORef ref >>= \(s,d) -> if s == sid then return (Just d) else return Nothing
-    , sessionInvalidate = \_         -> return ()
-    }
-
-getDefaultParams :: [Flag] -> CertificateStore -> IORef (SessionID, SessionData) -> Credential -> IO ServerParams
-getDefaultParams flags store sStorage cred = do
+getDefaultParams :: [Flag] -> CertificateStore -> SessionManager -> Credential -> IO ServerParams
+getDefaultParams flags store smgr cred = do
     dhParams <- case getDHParams flags of
         Nothing   -> return Nothing
         Just name -> readDHParams name
@@ -67,7 +60,7 @@ getDefaultParams flags store sStorage cred = do
         { serverWantClientCert = False
         , serverCACertificates = []
         , serverDHEParams = dhParams
-        , serverShared = def { sharedSessionManager  = sessionRef sStorage
+        , serverShared = def { sharedSessionManager  = smgr
                              , sharedCAStore         = store
                              , sharedValidationCache = validateCache
                              , sharedCredentials     = Credentials [cred]
@@ -128,7 +121,7 @@ getDefaultParams flags store sStorage cred = do
             validateCert = not (NoValidateCert `elem` flags)
             allowRenegotiation = AllowRenegotiation `elem` flags
 
-data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
+data Flag = Verbose | Debug | IODebug | NoValidateCert | Http11
           | Ssl3 | Tls10 | Tls11 | Tls12
           | NoVersionDowngrade
           | AllowRenegotiation
@@ -154,7 +147,6 @@ options =
     [ Option ['v']  ["verbose"] (NoArg Verbose) "verbose output on stdout"
     , Option ['d']  ["debug"]   (NoArg Debug) "TLS debug output on stdout"
     , Option []     ["io-debug"] (NoArg IODebug) "TLS IO debug output on stdout"
-    , Option ['s']  ["session"] (NoArg Session) "try to resume a session"
     , Option ['O']  ["output"]  (ReqArg Output "stdout") "output "
     , Option ['t']  ["timeout"] (ReqArg Timeout "timeout") "timeout in milliseconds (2s by default)"
     , Option []     ["no-validation"] (NoArg NoValidateCert) "disable certificate validation"
@@ -191,9 +183,10 @@ loadCred _       Nothing =
     error "missing credential certificate"
 
 runOn (sStorage, certStore) flags port = do
-    sock <- socket AF_INET Stream defaultProtocol
+    ai <- makeAddrInfo Nothing port
+    sock <- socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai)
     S.setSocketOption sock S.ReuseAddr 1
-    let sockaddr = SockAddrInet port iNADDR_ANY
+    let sockaddr = addrAddress ai
     bind sock sockaddr
     listen sock 10
     runOn' sock
@@ -204,8 +197,9 @@ runOn (sStorage, certStore) flags port = do
           | BenchRecv `elem` flags = runBench False sock
           | otherwise              = do
               --certCredRequest <- getCredRequest
-              doTLS sock
-              when (Session `elem` flags) $ doTLS sock
+              E.bracket (maybe (return stdout) (flip openFile AppendMode) getOutput)
+                        (\out -> when (isJust getOutput) $ hClose out)
+                        (doTLS sock)
         runBench isSend sock = do
             (cSock, cAddr) <- accept sock
             putStrLn ("connection from " ++ show cAddr)
@@ -232,25 +226,26 @@ runOn (sStorage, certStore) flags port = do
                     d <- recvData ctx
                     loopRecvData (bytes - B.length d) ctx
 
-        doTLS sock = do
+        doTLS sock out = do
             (cSock, cAddr) <- accept sock
             putStrLn ("connection from " ++ show cAddr)
-            out <- maybe (return stdout) (flip openFile AppendMode) getOutput
 
             cred <- loadCred getKey getCertificate
             params <- getDefaultParams flags certStore sStorage cred
 
-            runTLS (Debug `elem` flags)
-                   (IODebug `elem` flags)
-                   params cSock $ \ctx -> do
-                handshake ctx
-                when (Verbose `elem` flags) $ printHandshakeInfo ctx
-                loopRecv out ctx
-                --sendData ctx $ query
-                bye ctx
-                return ()
-            close cSock
-            when (isJust getOutput) $ hClose out
+            void $ forkIO $ do
+                runTLS (Debug `elem` flags)
+                       (IODebug `elem` flags)
+                       params cSock $ \ctx -> do
+                    handshake ctx
+                    when (Verbose `elem` flags) $ printHandshakeInfo ctx
+                    loopRecv out ctx
+                    --sendData ctx $ query
+                    bye ctx
+                    return ()
+                close cSock
+            doTLS sock out
+
         loopRecv out ctx = do
             d <- timeout (timeoutMs * 1000) (recvData ctx) -- 2s per recv
             case d of
@@ -316,7 +311,7 @@ main = do
         exitSuccess
 
     certStore <- getSystemCertificateStore
-    sStorage  <- newIORef (error "storage ioref undefined")
+    sStorage  <- newSessionManager defaultConfig
     case other of
         []     -> runOn (sStorage, certStore) opts 443
         [port] -> runOn (sStorage, certStore) opts (fromInteger $ read port)

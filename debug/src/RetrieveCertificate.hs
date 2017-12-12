@@ -1,32 +1,26 @@
 {-# LANGUAGE DeriveDataTypeable, ViewPatterns #-}
 {-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
 
-import Network.TLS
-import Network.TLS.Extra.Cipher
-
-import Network.BSD
-import Network.Socket
-
+import Control.Exception
+import qualified Data.ByteString.Char8 as B
+import Data.Char (isDigit)
 import Data.Default.Class
 import Data.IORef
+import Data.PEM
 import Data.X509 as X509
 import Data.X509.Validation
-import System.X509
-
-import Control.Applicative
-import Control.Monad
-import Control.Exception
-
-import Data.Char (isDigit)
-import Data.PEM
-
-import Text.Printf
-
+import Network.BSD
+import Network.Socket
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
+import System.X509
+import Text.Printf
 
-import qualified Data.ByteString.Char8 as B
+import Network.TLS
+import Network.TLS.Extra.Cipher
+
+import Imports
 
 openConnection s p = do
     ref <- newIORef Nothing

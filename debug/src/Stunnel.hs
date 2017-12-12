@@ -1,34 +1,31 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 -- Disable this warning so we can still test deprecated functionality.
 {-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
-import Network.BSD
-import Network.Socket hiding (Debug)
-import System.IO
-import System.IO.Error (isEOFError)
-import System.Console.GetOpt
-import System.Environment (getArgs)
-import System.Exit
-import System.X509
-import Data.X509.Validation
-
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as L
 
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar
 import Control.Exception (finally, throw, SomeException(..))
 import qualified Control.Exception as E
-import Control.Monad (when, forever)
-
+import qualified Crypto.PubKey.DH as DH ()
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
 import Data.Char (isDigit)
 import Data.Default.Class
+import Data.X509.Validation
+import Network.BSD
+import Network.Socket hiding (Debug)
+import System.Console.GetOpt
+import System.Environment (getArgs)
+import System.Exit
+import System.IO
+import System.IO.Error (isEOFError)
+import System.X509
 
 import Network.TLS
 import Network.TLS.Extra.Cipher
 
-import qualified Crypto.PubKey.DH as DH ()
-
 import Common
+import Imports
 
 loopUntil :: Monad m => m Bool -> m ()
 loopUntil f = f >>= \v -> if v then return () else loopUntil f

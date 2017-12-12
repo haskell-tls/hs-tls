@@ -2,11 +2,11 @@ module HexDump
     ( hexdump
     ) where
 
-import Data.List
-import Data.Word
 import qualified Data.ByteString as B
 
-hexdump :: String -> B.ByteString -> [String]
+import Imports
+
+hexdump :: String -> ByteString -> [String]
 hexdump pre b = disptable (defaultConfig { configRowLeft = pre ++ "  | " } ) $ B.unpack b
 
 data BytedumpConfig = BytedumpConfig
