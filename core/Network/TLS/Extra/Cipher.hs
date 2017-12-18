@@ -56,6 +56,7 @@ import qualified Data.ByteString as B
 
 import Network.TLS.Types (Version(..))
 import Network.TLS.Cipher
+import Network.TLS.Imports
 import Data.Tuple (swap)
 
 import Crypto.Cipher.AES
@@ -123,7 +124,7 @@ noFail :: CryptoFailable a -> a
 noFail = throwCryptoError
 
 makeIV_ :: BlockCipher a => B.ByteString -> IV a
-makeIV_ = maybe (error "makeIV_") id . makeIV
+makeIV_ = fromMaybe (error "makeIV_") . makeIV
 
 tripledes_ede :: BulkDirection -> BulkKey -> BulkBlock
 tripledes_ede BulkEncrypt key =
@@ -134,7 +135,7 @@ tripledes_ede BulkDecrypt key =
      in (\iv input -> let output = cbcDecrypt ctx (tripledes_iv iv) input in (output, takelast 8 input))
 
 tripledes_iv :: BulkIV -> IV DES_EDE3
-tripledes_iv iv = maybe (error "tripledes cipher iv internal error") id $ makeIV iv
+tripledes_iv iv = fromMaybe (error "tripledes cipher iv internal error") $ makeIV iv
 
 rc4 :: BulkDirection -> BulkKey -> BulkStream
 rc4 _ bulkKey = BulkStream (combineRC4 $ RC4.initialize bulkKey)

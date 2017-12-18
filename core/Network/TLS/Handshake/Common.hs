@@ -44,12 +44,12 @@ errorToAlert :: TLSError -> Packet
 errorToAlert (Error_Protocol (_, _, ad)) = Alert [(AlertLevel_Fatal, ad)]
 errorToAlert _                           = Alert [(AlertLevel_Fatal, InternalError)]
 
-unexpected :: String -> Maybe [Char] -> IO a
+unexpected :: String -> Maybe String -> IO a
 unexpected msg expected = throwCore $ Error_Packet_unexpected msg (maybe "" (" expected: " ++) expected)
 
 newSession :: Context -> IO Session
 newSession ctx
-    | supportedSession $ ctxSupported ctx = getStateRNG ctx 32 >>= return . Session . Just
+    | supportedSession $ ctxSupported ctx = Session . Just <$> getStateRNG ctx 32
     | otherwise                           = return $ Session Nothing
 
 -- | when a new handshake is done, wrap up & clean up.
@@ -116,7 +116,7 @@ onRecvStateHandshake ctx (RecvStateHandshake f) (x:xs) = do
 onRecvStateHandshake _ _ _   = unexpected "spurious handshake" Nothing
 
 runRecvState :: Context -> RecvState IO -> IO ()
-runRecvState _   (RecvStateDone)   = return ()
+runRecvState _    RecvStateDone    = return ()
 runRecvState ctx (RecvStateNext f) = recvPacket ctx >>= either throwCore f >>= runRecvState ctx
 runRecvState ctx iniState          = recvPacketHandshake ctx >>= onRecvStateHandshake ctx iniState >>= runRecvState ctx
 
@@ -128,7 +128,7 @@ getSessionData ctx = do
     tx  <- liftIO $ readMVar (ctxTxState ctx)
     case mms of
         Nothing -> return Nothing
-        Just ms -> return $ Just $ SessionData
+        Just ms -> return $ Just SessionData
                         { sessionVersion     = ver
                         , sessionCipher      = cipherID $ fromJust "cipher" $ stCipher tx
                         , sessionCompression = compressionID $ stCompression tx

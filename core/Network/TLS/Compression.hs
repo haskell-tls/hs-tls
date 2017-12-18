@@ -59,7 +59,7 @@ instance Eq Compression where
 -- the function keeps the list of compression in order, to be able to find quickly the prefered
 -- compression.
 compressionIntersectID :: [Compression] -> [Word8] -> [Compression]
-compressionIntersectID l ids = filter (\c -> elem (compressionID c) ids) l
+compressionIntersectID l ids = filter (\c -> compressionID c `elem` ids) l
 
 -- | This is the default compression which is a NOOP.
 data NullCompression = NullCompression

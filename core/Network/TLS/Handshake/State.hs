@@ -68,7 +68,7 @@ data HandshakeKeyState = HandshakeKeyState
     } deriving (Show)
 
 data HandshakeState = HandshakeState
-    { hstClientVersion       :: !(Version)
+    { hstClientVersion       :: !Version
     , hstClientRandom        :: !ClientRandom
     , hstServerRandom        :: !(Maybe ServerRandom)
     , hstMasterSecret        :: !(Maybe ByteString)
@@ -98,7 +98,7 @@ newtype HandshakeM a = HandshakeM { runHandshakeM :: State HandshakeState a }
 
 instance MonadState HandshakeState HandshakeM where
     put x = HandshakeM (put x)
-    get   = HandshakeM (get)
+    get   = HandshakeM get
 #if MIN_VERSION_mtl(2,1,0)
     state f = HandshakeM (state f)
 #endif

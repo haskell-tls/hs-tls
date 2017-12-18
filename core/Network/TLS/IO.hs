@@ -44,7 +44,7 @@ readExact ctx sz = do
             return . Left $
                 if B.null hdrbs
                     then Error_EOF
-                    else Error_Packet ("partial packet: expecting " ++ show sz ++ " bytes, got: " ++ (show $B.length hdrbs))
+                    else Error_Packet ("partial packet: expecting " ++ show sz ++ " bytes, got: " ++ show (B.length hdrbs))
 
 
 -- | recvRecord receive a full TLS record (header + data), from the other side.
@@ -103,7 +103,7 @@ recvPacket ctx = liftIO $ do
             pkt <- case pktRecv of
                     Right (Handshake hss) ->
                         ctxWithHooks ctx $ \hooks ->
-                            (mapM (hookRecvHandshake hooks) hss) >>= return . Right . Handshake
+                            Right . Handshake <$> mapM (hookRecvHandshake hooks) hss
                     _                     -> return pktRecv
             case pkt of
                 Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p

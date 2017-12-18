@@ -121,12 +121,12 @@ getInteger16 = os2ip <$> getOpaque16
 getBigNum16 :: Get BigNum
 getBigNum16 = BigNum <$> getOpaque16
 
-getList :: Int -> (Get (Int, a)) -> Get [a]
+getList :: Int -> Get (Int, a) -> Get [a]
 getList totalLen getElement = isolate totalLen (getElements totalLen)
   where getElements len
             | len < 0     = error "list consumed too much data. should never happen with isolate."
             | len == 0    = return []
-            | otherwise   = getElement >>= \(elementLen, a) -> liftM ((:) a) (getElements (len - elementLen))
+            | otherwise   = getElement >>= \(elementLen, a) -> (:) a <$> getElements (len - elementLen)
 
 processBytes :: Int -> Get a -> Get a
 processBytes i f = isolate i f
@@ -144,7 +144,7 @@ putWord32 = putWord32be
 
 putWords16 :: [Word16] -> Put
 putWords16 l = do
-    putWord16 $ 2 * (fromIntegral $ length l)
+    putWord16 $ 2 * fromIntegral (length l)
     mapM_ putWord16 l
 
 putWord24 :: Int -> Put

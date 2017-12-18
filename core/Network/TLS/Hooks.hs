@@ -28,10 +28,10 @@ data Logging = Logging
 
 defaultLogging :: Logging
 defaultLogging = Logging
-    { loggingPacketSent = (\_ -> return ())
-    , loggingPacketRecv = (\_ -> return ())
-    , loggingIOSent     = (\_ -> return ())
-    , loggingIORecv     = (\_ _ -> return ())
+    { loggingPacketSent = \_ -> return ()
+    , loggingPacketRecv = \_ -> return ()
+    , loggingIOSent     = \_ -> return ()
+    , loggingIORecv     = \_ _ -> return ()
     }
 
 instance Default Logging where
@@ -49,7 +49,7 @@ data Hooks = Hooks
 
 defaultHooks :: Hooks
 defaultHooks = Hooks
-    { hookRecvHandshake    = \hs -> return hs
+    { hookRecvHandshake    = return
     , hookRecvCertificates = return . const ()
     , hookLogging          = def
     }

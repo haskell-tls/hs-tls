@@ -91,7 +91,7 @@ recvData ctx = liftIO $ do
         onError err =
             terminate err AlertLevel_Fatal InternalError (show err)
 
-        process (Handshake [ch@(ClientHello {})]) =
+        process (Handshake [ch@ClientHello{}]) =
             handshakeWith ctx ch >> recvData ctx
         process (Handshake [hr@HelloRequest]) =
             handshakeWith ctx hr >> recvData ctx

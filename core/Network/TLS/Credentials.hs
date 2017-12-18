@@ -83,7 +83,7 @@ credentialLoadX509ChainFromMemory certData chainData privateData = do
             (k:_) -> Right (CertificateChain . concat $ x509 : chains, k)
 
 credentialsListSigningAlgorithms :: Credentials -> [DigitalSignatureAlg]
-credentialsListSigningAlgorithms (Credentials l) = catMaybes $ map credentialCanSign l
+credentialsListSigningAlgorithms (Credentials l) = mapMaybe credentialCanSign l
 
 credentialsFindForSigning :: DigitalSignatureAlg -> Credentials -> Maybe Credential
 credentialsFindForSigning sigAlg (Credentials l) = find forSigning l

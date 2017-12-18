@@ -170,11 +170,11 @@ generalizeRSAError (Left e)  = Left (RSAError e)
 generalizeRSAError (Right x) = Right x
 
 kxEncrypt :: MonadRandom r => PublicKey -> ByteString -> r (Either KxError ByteString)
-kxEncrypt (PubKeyRSA pk) b = generalizeRSAError `fmap` RSA.encrypt pk b
+kxEncrypt (PubKeyRSA pk) b = generalizeRSAError <$> RSA.encrypt pk b
 kxEncrypt _              _ = return (Left KxUnsupported)
 
 kxDecrypt :: MonadRandom r => PrivateKey -> ByteString -> r (Either KxError ByteString)
-kxDecrypt (PrivKeyRSA pk) b = generalizeRSAError `fmap` RSA.decryptSafer pk b
+kxDecrypt (PrivKeyRSA pk) b = generalizeRSAError <$> RSA.decryptSafer pk b
 kxDecrypt _               _ = return (Left KxUnsupported)
 
 data RSAEncoding = RSApkcs1 | RSApss deriving (Show,Eq)
@@ -208,10 +208,10 @@ kxVerify (PubKeyDSA pk) DSSParams                msg signBS =
                 Right asn1 ->
                     case asn1 of
                         Start Sequence:IntVal r:IntVal s:End Sequence:_ ->
-                            Just $ DSA.Signature { DSA.sign_r = r, DSA.sign_s = s }
+                            Just DSA.Signature { DSA.sign_r = r, DSA.sign_s = s }
                         _ ->
                             Nothing
-kxVerify (PubKeyEC key) (ECDSAParams alg) msg sigBS = maybe False id $ do
+kxVerify (PubKeyEC key) (ECDSAParams alg) msg sigBS = fromMaybe False $ do
     -- get the curve name and the public key data
     (curveName, pubBS) <- case key of
             PubKeyEC_Named curveName' pub -> Just (curveName',pub)
@@ -274,9 +274,9 @@ kxSign :: MonadRandom r
        -> ByteString
        -> r (Either KxError ByteString)
 kxSign (PrivKeyRSA pk) (RSAParams hashAlg RSApkcs1) msg =
-    generalizeRSAError `fmap` rsaSignHash hashAlg pk msg
+    generalizeRSAError <$> rsaSignHash hashAlg pk msg
 kxSign (PrivKeyRSA pk) (RSAParams hashAlg RSApss) msg =
-    generalizeRSAError `fmap` rsapssSignHash hashAlg pk msg
+    generalizeRSAError <$> rsapssSignHash hashAlg pk msg
 kxSign (PrivKeyDSA pk) DSSParams           msg = do
     sign <- DSA.sign pk H.SHA1 msg
     return (Right $ encodeASN1' DER $ dsaSequence sign)

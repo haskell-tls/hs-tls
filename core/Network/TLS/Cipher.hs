@@ -53,7 +53,7 @@ instance Show BulkState where
     show (BulkStateStream _)      = "BulkStateStream"
     show (BulkStateBlock _)       = "BulkStateBlock"
     show (BulkStateAEAD _)        = "BulkStateAEAD"
-    show (BulkStateUninitialized) = "BulkStateUninitialized"
+    show  BulkStateUninitialized  = "BulkStateUninitialized"
 
 newtype BulkStream = BulkStream (B.ByteString -> (B.ByteString, BulkStream))
 

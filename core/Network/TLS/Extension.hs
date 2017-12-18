@@ -163,7 +163,7 @@ instance Extension ServerName where
     extensionEncode (ServerName l) = runPut $ putOpaque16 (runPut $ mapM_ encodeNameType l)
         where encodeNameType (ServerNameHostName hn)       = putWord8 0  >> putOpaque16 (BC.pack hn) -- FIXME: should be puny code conversion
               encodeNameType (ServerNameOther (nt,opaque)) = putWord8 nt >> putBytes opaque
-    extensionDecode _ = runGetMaybe (getWord16 >>= \len -> getList (fromIntegral len) getServerName >>= return . ServerName)
+    extensionDecode _ = runGetMaybe (getWord16 >>= \len -> ServerName <$> getList (fromIntegral len) getServerName)
         where getServerName = do
                   ty    <- getWord8
                   sname <- getOpaque16
@@ -229,7 +229,7 @@ newtype NegotiatedGroups = NegotiatedGroups [Group] deriving (Show,Eq)
 instance Extension NegotiatedGroups where
     extensionID _ = extensionID_NegotiatedGroups
     extensionEncode (NegotiatedGroups groups) = runPut $ putWords16 $ map fromEnumSafe16 groups
-    extensionDecode _ = runGetMaybe (NegotiatedGroups . catMaybes . map toEnumSafe16 <$> getWords16)
+    extensionDecode _ = runGetMaybe (NegotiatedGroups . mapMaybe toEnumSafe16 <$> getWords16)
 
 newtype EcPointFormatsSupported = EcPointFormatsSupported [EcPointFormat] deriving (Show,Eq)
 
@@ -253,14 +253,14 @@ instance EnumSafe8 EcPointFormat where
 instance Extension EcPointFormatsSupported where
     extensionID _ = extensionID_EcPointFormats
     extensionEncode (EcPointFormatsSupported formats) = runPut $ putWords8 $ map fromEnumSafe8 formats
-    extensionDecode _ = runGetMaybe (EcPointFormatsSupported . catMaybes . map toEnumSafe8 <$> getWords8)
+    extensionDecode _ = runGetMaybe (EcPointFormatsSupported . mapMaybe toEnumSafe8 <$> getWords8)
 
 data SessionTicket = SessionTicket
     deriving (Show,Eq)
 
 instance Extension SessionTicket where
     extensionID _ = extensionID_SessionTicket
-    extensionEncode (SessionTicket {}) = runPut $ return ()
+    extensionEncode SessionTicket{} = runPut $ return ()
     extensionDecode _ = runGetMaybe (return SessionTicket)
 
 newtype HeartBeat = HeartBeat HeartBeatMode deriving (Show,Eq)
