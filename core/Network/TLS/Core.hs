@@ -51,7 +51,9 @@ import Control.Monad.State.Strict
 --
 -- this doesn't actually close the handle
 bye :: MonadIO m => Context -> m ()
-bye ctx = sendPacket ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
+bye ctx = do
+  eof <- liftIO $ ctxEOF ctx
+  unless eof $ sendPacket ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
 
 -- | If the ALPN extensions have been used, this will
 -- return get the protocol agreed upon.
