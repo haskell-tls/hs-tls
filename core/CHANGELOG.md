@@ -1,6 +1,10 @@
-## Version X.Y.Z
+## Version 1.4.1
 
+- Enable X25519 in default parameters [#265](https://github.com/vincenthz/hs-tls/pull/265)
+- Checking EOF in bye [#262] (https://github.com/vincenthz/hs-tls/pull/262)
+- Improving validation in DH key exchange [#256](https://github.com/vincenthz/hs-tls/pull/256)
 - Handle TCP reset during handshake [#251](https://github.com/vincenthz/hs-tls/pull/251)
+- Accepting hlint suggestions.
 
 ## Version 1.4.0
 
