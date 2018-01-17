@@ -189,9 +189,10 @@ data Supported = Supported
     , supportedEmptyPacket         :: Bool
       -- | A list of supported elliptic curves and finite-field groups in the
       --   preferred order.
-      --   The default value is ['P256','P384','P521'].
-      --   'P256' provides 128-bit security which is strong enough
-      --   until 2030 and is fast because its backend is written in C.
+      --   The default value is ['X25519','P256','P384','P521'].
+      --   'X25519' and 'P256' provide 128-bit security which is strong
+      --   enough until 2030.  Both curves are fast because their
+      --   backends are written in C.
     , supportedGroups              :: [Group]
     } deriving (Show,Eq)
 
@@ -214,7 +215,7 @@ defaultSupported = Supported
     , supportedSession             = True
     , supportedFallbackScsv        = True
     , supportedEmptyPacket         = True
-    , supportedGroups              = [P256,P384,P521]
+    , supportedGroups              = [X25519,P256,P384,P521]
     }
 
 instance Default Supported where
