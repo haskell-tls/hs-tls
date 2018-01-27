@@ -9,10 +9,8 @@ import qualified Control.Exception as E
 import qualified Crypto.PubKey.DH as DH ()
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
-import Data.Char (isDigit)
 import Data.Default.Class
 import Data.X509.Validation
-import Network.BSD
 import Network.Socket hiding (Debug)
 import System.Console.GetOpt
 import System.Environment (getArgs)
@@ -114,13 +112,8 @@ getAddressDescription :: Address -> IO StunnelAddr
 getAddressDescription (Address "tcp" desc) = do
     let (s, p) = break ((==) ':') desc
     when (p == "") (error $ "missing port: expecting [source]:port got " ++ show desc)
-    pn <- if and $ map isDigit $ drop 1 p
-        then return $ fromIntegral $ (read (drop 1 p) :: Int)
-        else do
-            service <- getServiceByName (drop 1 p) "tcp"
-            return $ servicePort service
-    he <- getHostByName s
-    return $ AddrSocket AF_INET (SockAddrInet pn (head $ hostAddresses he))
+    addr:_ <- getAddrInfo Nothing (Just s) (Just $ drop 1 p)
+    return $ AddrSocket (addrFamily addr) (addrAddress addr)
 
 getAddressDescription (Address "unix" desc) = do
     return $ AddrSocket AF_UNIX (SockAddrUnix desc)

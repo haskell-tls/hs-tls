@@ -3,13 +3,11 @@
 
 import Control.Exception
 import qualified Data.ByteString.Char8 as B
-import Data.Char (isDigit)
 import Data.Default.Class
 import Data.IORef
 import Data.PEM
 import Data.X509 as X509
 import Data.X509.Validation
-import Network.BSD
 import Network.Socket
 import System.Console.GetOpt
 import System.Environment
@@ -30,13 +28,11 @@ openConnection s p = do
                     }
 
     --ctx <- connectionClient s p params rng
-    pn <- if and $ map isDigit $ p
-            then return $ fromIntegral $ (read p :: Int)
-            else servicePort <$> getServiceByName p "tcp"
-    he <- getHostByName s
+    let hints = defaultHints { addrSocketType = Stream }
+    addr:_ <- getAddrInfo (Just hints) (Just s) (Just p)
 
-    sock <- bracketOnError (socket AF_INET Stream defaultProtocol) close $ \sock -> do
-            connect sock (SockAddrInet pn (head $ hostAddresses he))
+    sock <- bracketOnError (socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)) close $ \sock -> do
+            connect sock $ addrAddress addr
             return sock
     ctx <- contextNew sock params
 
