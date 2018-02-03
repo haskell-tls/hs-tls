@@ -16,7 +16,7 @@ arbitraryKey :: Bulk -> Gen B.ByteString
 arbitraryKey bulk = B.pack `fmap` vector (bulkKeySize bulk)
 
 arbitraryIV :: Bulk -> Gen B.ByteString
-arbitraryIV bulk = B.pack `fmap` vector (bulkIVSize bulk)
+arbitraryIV bulk = B.pack `fmap` vector (bulkIVSize bulk + bulkExplicitIV bulk)
 
 arbitraryText :: Bulk -> Gen B.ByteString
 arbitraryText bulk = B.pack `fmap` vector (bulkBlockSize bulk)
