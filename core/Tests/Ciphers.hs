@@ -13,13 +13,13 @@ import Network.TLS.Cipher
 import Network.TLS.Extra.Cipher
 
 arbitraryKey :: Bulk -> Gen B.ByteString
-arbitraryKey bulk = B.pack `fmap` vector (fromIntegral $ bulkKeySize bulk)
+arbitraryKey bulk = B.pack `fmap` vector (bulkKeySize bulk)
 
 arbitraryIV :: Bulk -> Gen B.ByteString
-arbitraryIV bulk = B.pack `fmap` vector (fromIntegral $ bulkIVSize bulk)
+arbitraryIV bulk = B.pack `fmap` vector (bulkIVSize bulk + bulkExplicitIV bulk)
 
 arbitraryText :: Bulk -> Gen B.ByteString
-arbitraryText bulk = B.pack `fmap` vector (fromIntegral $ bulkBlockSize bulk)
+arbitraryText bulk = B.pack `fmap` vector (bulkBlockSize bulk)
 
 data BulkTest = BulkTest Bulk B.ByteString B.ByteString B.ByteString B.ByteString
     deriving (Show,Eq)
