@@ -218,6 +218,9 @@ ciphersuite_default =
       cipher_ECDHE_ECDSA_AES128GCM_SHA256, cipher_ECDHE_ECDSA_AES256GCM_SHA384
     , cipher_ECDHE_RSA_AES128GCM_SHA256, cipher_ECDHE_RSA_AES256GCM_SHA384
     , cipher_DHE_RSA_AES128GCM_SHA256, cipher_DHE_RSA_AES256GCM_SHA384
+    ,        -- Next the PFS + CCM + SHA2 ciphers
+      cipher_ECDHE_ECDSA_AES128CCM_SHA256, cipher_ECDHE_ECDSA_AES256CCM_SHA256
+    , cipher_DHE_RSA_AES128CCM_SHA256, cipher_DHE_RSA_AES256CCM_SHA256
              -- Next the PFS + CBC + SHA2 ciphers
     , cipher_ECDHE_ECDSA_AES128CBC_SHA256, cipher_ECDHE_ECDSA_AES256CBC_SHA384
     , cipher_ECDHE_RSA_AES128CBC_SHA256, cipher_ECDHE_RSA_AES256CBC_SHA384
@@ -228,6 +231,8 @@ ciphersuite_default =
     , cipher_DHE_RSA_AES128_SHA1, cipher_DHE_RSA_AES256_SHA1
              -- Next the non-PFS + GCM + SHA2 ciphers
     , cipher_AES128GCM_SHA256, cipher_AES256GCM_SHA384
+             -- Next the non-PFS + CCM + SHA2 ciphers
+    , cipher_AES128CCM_SHA256, cipher_AES256CCM_SHA256
              -- Next the non-PFS + CBC + SHA2 ciphers
     , cipher_AES256_SHA256, cipher_AES128_SHA256
              -- Next the non-PFS + CBC + SHA1 ciphers
@@ -242,7 +247,10 @@ ciphersuite_default =
 -- | The default ciphersuites + some not recommended last resort ciphers.
 ciphersuite_all :: [Cipher]
 ciphersuite_all = ciphersuite_default ++
-    [ cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1
+    [ cipher_ECDHE_ECDSA_AES128CCM8_SHA256, cipher_ECDHE_ECDSA_AES256CCM8_SHA256
+    , cipher_DHE_RSA_AES128CCM8_SHA256, cipher_DHE_RSA_AES256CCM8_SHA256
+    , cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1
+    , cipher_AES128CCM8_SHA256, cipher_AES256CCM8_SHA256
     , cipher_RSA_3DES_EDE_CBC_SHA1
     , cipher_RC4_128_SHA1
     ]
@@ -260,9 +268,11 @@ ciphersuite_medium = [ cipher_RC4_128_SHA1
 ciphersuite_strong :: [Cipher]
 ciphersuite_strong =
     [        -- If we have PFS + AEAD + SHA2, then allow AES128, else just 256
-      cipher_ECDHE_ECDSA_AES256GCM_SHA384, cipher_ECDHE_ECDSA_AES128GCM_SHA256
+      cipher_ECDHE_ECDSA_AES256GCM_SHA384, cipher_ECDHE_ECDSA_AES256CCM_SHA256
+    , cipher_ECDHE_ECDSA_AES128GCM_SHA256, cipher_ECDHE_ECDSA_AES128CCM_SHA256
     , cipher_ECDHE_RSA_AES256GCM_SHA384, cipher_ECDHE_RSA_AES128GCM_SHA256
-    , cipher_DHE_RSA_AES256GCM_SHA384, cipher_DHE_RSA_AES128GCM_SHA256
+    , cipher_DHE_RSA_AES256GCM_SHA384, cipher_DHE_RSA_AES256CCM_SHA256
+    , cipher_DHE_RSA_AES128GCM_SHA256, cipher_DHE_RSA_AES128CCM_SHA256
              -- No AEAD
     , cipher_ECDHE_ECDSA_AES256CBC_SHA384
     , cipher_ECDHE_RSA_AES256CBC_SHA384
@@ -273,6 +283,7 @@ ciphersuite_strong =
     , cipher_DHE_RSA_AES256_SHA1
              -- No PFS
     , cipher_AES256GCM_SHA384
+    , cipher_AES256CCM_SHA256
              -- Neither PFS nor AEAD, just SHA2
     , cipher_AES256_SHA256
              -- Last resort no PFS, AEAD or SHA2
