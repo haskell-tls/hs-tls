@@ -7,12 +7,14 @@ compiler: ghc-8.2 lts-10.5
 # options
 # option: alias x=y z=v
 
+option: cryptonitedep extradep=cryptonite-0.24
+
 # builds 
-build: ghc-7.8 nohaddock
+build: ghc-7.8 nohaddock cryptonitedep
 build: ghc-8.2
-build: ghc-7.10
-build: ghc-8.0
-build: ghc-8.0 os=osx
+build: ghc-7.10 cryptonitedep
+build: ghc-8.0 cryptonitedep
+build: ghc-8.0 os=osx cryptonitedep
 
 # packages
 package: core/ 
