@@ -8,11 +8,14 @@ compiler: ghc-8.2 lts-10.5
 # option: alias x=y z=v
 
 option: cryptonitedep extradep=cryptonite-0.24
+option: memorydeps extradep=memory-0.14.14 extradep=foundation-0.0.19 extradep=basement-0.0.6
+option: x509deps extradep=x509-1.7.2 extradep=x509-system-1.6.6 extradep=x509-validation-1.6.9 extradep=x509-store-1.6.5
+option: asn1deps extradep=asn1-parse-0.9.4 extradep=asn1-types-0.3.2
 
 # builds 
-build: ghc-7.8 nohaddock cryptonitedep
+build: ghc-7.8 nohaddock cryptonitedep memorydeps extradep=psqueues-0.2.5.0 x509deps asn1deps
 build: ghc-8.2
-build: ghc-7.10 cryptonitedep
+build: ghc-7.10 cryptonitedep memorydeps extradep=psqueues-0.2.5.0 x509deps
 build: ghc-8.0 cryptonitedep
 build: ghc-8.0 os=osx cryptonitedep
 
