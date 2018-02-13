@@ -1,0 +1,28 @@
+# compiler supported and their equivalent LTS
+compiler: ghc-7.8 lts-2.22
+compiler: ghc-7.10 lts-6.35
+compiler: ghc-8.0 lts-9.21
+compiler: ghc-8.2 lts-10.5
+
+# options
+# option: alias x=y z=v
+
+# builds 
+build: ghc-7.8 nohaddock
+build: ghc-8.2
+build: ghc-7.10
+build: ghc-8.0
+build: ghc-8.0 os=osx
+
+# packages
+package: core/ 
+package: debug/
+package: session/
+
+# extra builds
+hlint: allowed-failure
+weeder: allowed-failure
+coverall: false
+
+travis-tests: stack exec ./.travis-post.sh
+travis-apt-addon: libssl-dev
