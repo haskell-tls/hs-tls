@@ -13,9 +13,9 @@ option: x509deps extradep=x509-1.7.2 extradep=x509-system-1.6.6 extradep=x509-va
 option: asn1deps extradep=asn1-parse-0.9.4 extradep=asn1-types-0.3.2
 
 # builds 
-build: ghc-7.8 nohaddock cryptonitedep memorydeps extradep=psqueues-0.2.5.0 x509deps asn1deps
+build: ghc-7.8 nohaddock cryptonitedep memorydeps extradep=psqueues-0.2.5.0 x509deps asn1deps benchs=no
 build: ghc-8.2
-build: ghc-7.10 cryptonitedep memorydeps extradep=psqueues-0.2.5.0 x509deps
+build: ghc-7.10 cryptonitedep memorydeps extradep=psqueues-0.2.5.0 x509deps benchs=no
 build: ghc-8.0 cryptonitedep
 build: ghc-8.0 os=osx cryptonitedep
 
