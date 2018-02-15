@@ -314,7 +314,7 @@ main = do
             , "www.facebook.com"
             , "www.github.com"
             , "mail.office365.com"
-            , "login.live.com"
+            -- , "login.live.com"
             , "www.udacity.com"
             , "www.coursera.org"
             ] ++
