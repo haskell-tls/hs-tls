@@ -19,7 +19,11 @@ module Network.TLS.Imports
     , module Data.Bits
     , module Data.List
     , module Data.Maybe
+#if MIN_VERSION_base(4,9,0)
+    , module Data.Semigroup
+#else
     , module Data.Monoid
+#endif
     , module Data.Ord
     , module Data.Word
 #if !MIN_VERSION_base(4,8,0)
@@ -37,7 +41,11 @@ import Control.Monad
 import Data.Bits
 import Data.List
 import Data.Maybe hiding (fromJust)
+#if MIN_VERSION_base(4,9,0)
+import Data.Semigroup
+#else
 import Data.Monoid
+#endif
 import Data.Ord
 import Data.Word
 

@@ -5,6 +5,7 @@
 -- Stability   : experimental
 -- Portability : unknown
 --
+{-# LANGUAGE CPP #-}
 module Network.TLS.Credentials
     ( Credential
     , Credentials(..)
@@ -33,9 +34,16 @@ type Credential = (CertificateChain, PrivKey)
 
 newtype Credentials = Credentials [Credential]
 
+#if MIN_VERSION_base(4,9,0)
+instance Semigroup Credentials where
+    (Credentials l1) <> (Credentials l2) = Credentials (l1 ++ l2)
+#endif
+
 instance Monoid Credentials where
     mempty = Credentials []
+#if !(MIN_VERSION_base(4,11,0))
     mappend (Credentials l1) (Credentials l2) = Credentials (l1 ++ l2)
+#endif
 
 -- | try to create a new credential object from a public certificate
 -- and the associated private key that are stored on the filesystem
