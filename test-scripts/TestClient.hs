@@ -313,11 +313,11 @@ main = do
             [ "www.google.com"
             , "www.facebook.com"
             , "mail.office365.com"
-            -- , "login.live.com"
             , "www.udacity.com"
             , "www.coursera.org"
             ] ++
         t2 (LowerBound TLS12)
             [ "developer.apple.com"
             , "www.github.com"
+            , "login.live.com"
             ]
