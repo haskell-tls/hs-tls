@@ -313,7 +313,7 @@ main = do
             [ "www.google.com"
             , "www.facebook.com"
             , "mail.office365.com"
-            , "login.live.com"
+            -- , "login.live.com"
             , "www.udacity.com"
             , "www.coursera.org"
             ] ++
