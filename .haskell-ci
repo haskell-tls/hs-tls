@@ -1,6 +1,4 @@
 # compiler supported and their equivalent LTS
-compiler: ghc-7.8 lts-2.22
-compiler: ghc-7.10 lts-6.35
 compiler: ghc-8.0 lts-9.21
 compiler: ghc-8.2 lts-10.5
 compiler: ghc-8.4 ghc-8.4-rc1
@@ -14,9 +12,7 @@ option: x509deps extradep=x509-1.7.3 extradep=x509-system-1.6.6 extradep=x509-va
 option: asn1deps extradep=asn1-parse-0.9.4 extradep=asn1-types-0.3.2
 
 # builds 
-build: ghc-7.8 nohaddock cryptonitedep memorydeps extradep=psqueues-0.2.5.0 x509deps asn1deps benchs=no tests=no
 build: ghc-8.2
-build: ghc-7.10 cryptonitedep memorydeps extradep=psqueues-0.2.5.0 x509deps benchs=no
 build: ghc-8.0 cryptonitedep
 build: ghc-8.0 os=osx cryptonitedep
 build: ghc-8.4 memorydeps cryptonitedep asn1deps x509deps tests=no benchs=no extradep=asn1-encoding-0.9.5 extradep=async-2.2.1 extradep=auto-update-0.1.4 extradep=byteable-0.1.1 extradep=cereal-0.5.5.0 extradep=clock-0.7.2 extradep=data-default-class-0.1.2.0 extradep=hourglass-0.2.11 extradep=network-2.6.3.4 extradep=pem-0.2.3 extradep=psqueues-0.2.5.0 extradep=hashable-1.2.6.1 allow-newer
