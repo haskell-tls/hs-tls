@@ -26,10 +26,10 @@ module Network.TLS.Handshake.Common13
        , getCurrentTimeFromBase
        , getSessionData13
        , safeNonNegative32
-       , dumpKey
        , RecvHandshake13M
        , runRecvHandshake13
        , recvHandshake13
+       , dumpKey
        ) where
 
 import Data.Bits (finiteBitSize)
@@ -57,10 +57,10 @@ import Network.TLS.Struct13
 import Network.TLS.Types
 import Network.TLS.Wire
 import Network.TLS.Util
-import System.IO
 import Time.System
 
 import Control.Monad.State.Strict
+import System.IO
 
 ----------------------------------------------------------------
 
@@ -261,20 +261,6 @@ safeNonNegative32 x
   | x <= 0                = 0
   | finiteBitSize x <= 32 = x
   | otherwise             = x `min` fromIntegral (maxBound :: Word32)
-
-----------------------------------------------------------------
-
-dumpKey :: Context -> String -> ByteString -> IO ()
-dumpKey ctx label key = do
-    mhst <- getHState ctx
-    case mhst of
-      Nothing  -> return ()
-      Just hst -> do
-          let cr = unClientRandom $ hstClientRandom hst
-          hPutStrLn stderr $ label ++ " " ++ dump cr ++ " " ++ dump key
-  where
-    dump = init . tail . showBytesHex
-
 ----------------------------------------------------------------
 
 newtype RecvHandshake13M m a = RecvHandshake13M (StateT [Handshake13] m a)
@@ -308,3 +294,16 @@ runRecvHandshake13 (RecvHandshake13M f) = do
     (result, new) <- runStateT f []
     unless (null new) $ unexpected "spurious handshake 13" Nothing
     return result
+
+----------------------------------------------------------------
+
+dumpKey :: Context -> String -> ByteString -> IO ()
+dumpKey ctx label key = do
+    mhst <- getHState ctx
+    case mhst of
+      Nothing  -> return ()
+      Just hst -> do
+          let cr = unClientRandom $ hstClientRandom hst
+          hPutStrLn stderr $ label ++ " " ++ dump cr ++ " " ++ dump key
+  where
+    dump = init . tail . showBytesHex

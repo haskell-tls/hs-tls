@@ -94,7 +94,7 @@ processClientKeyXchg ctx (CKX_RSA encryptedPremaster) = do
     (rver, role, random) <- usingState_ ctx $ do
         (,,) <$> getVersion <*> isClientContext <*> genRandom 48
     ePremaster <- decryptRSA ctx encryptedPremaster
-    usingHState ctx $ do
+    masterSecret <- usingHState ctx $ do
         expectedVer <- gets hstClientVersion
         case ePremaster of
             Left _          -> setMasterSecretFromPre rver role random
@@ -103,6 +103,8 @@ processClientKeyXchg ctx (CKX_RSA encryptedPremaster) = do
                 Right (ver, _)
                     | ver /= expectedVer -> setMasterSecretFromPre rver role random
                     | otherwise          -> setMasterSecretFromPre rver role premaster
+    liftIO $ logKey ctx "CLIENT_RANDOM" masterSecret
+
 processClientKeyXchg ctx (CKX_DH clientDHValue) = do
     rver <- usingState_ ctx getVersion
     role <- usingState_ ctx isClientContext
@@ -114,7 +116,8 @@ processClientKeyXchg ctx (CKX_DH clientDHValue) = do
 
     dhpriv       <- usingHState ctx getDHPrivate
     let premaster = dhGetShared params dhpriv clientDHValue
-    usingHState ctx $ setMasterSecretFromPre rver role premaster
+    masterSecret <- usingHState ctx $ setMasterSecretFromPre rver role premaster
+    liftIO $ logKey ctx "CLIENT_RANDOM" masterSecret
 
 processClientKeyXchg ctx (CKX_ECDH bytes) = do
     ServerECDHParams grp _ <- usingHState ctx getServerECDHParams
@@ -126,7 +129,8 @@ processClientKeyXchg ctx (CKX_ECDH bytes) = do
               Just premaster -> do
                   rver <- usingState_ ctx getVersion
                   role <- usingState_ ctx isClientContext
-                  usingHState ctx $ setMasterSecretFromPre rver role premaster
+                  masterSecret <- usingHState ctx $ setMasterSecretFromPre rver role premaster
+                  liftIO $ logKey ctx "CLIENT_RANDOM" masterSecret
               Nothing -> throwCore $ Error_Protocol ("cannote generate a shared secret on ECDH", True, HandshakeFailure)
 
 processClientFinished :: Context -> FinishedData -> IO ()

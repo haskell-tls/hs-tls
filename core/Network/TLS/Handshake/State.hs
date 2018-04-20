@@ -396,10 +396,11 @@ setMasterSecretFromPre :: ByteArrayAccess preMaster
                        => Version   -- ^ chosen transmission version
                        -> Role      -- ^ the role (Client or Server) of the generating side
                        -> preMaster -- ^ the pre master secret
-                       -> HandshakeM ()
+                       -> HandshakeM ByteString
 setMasterSecretFromPre ver role premasterSecret = do
     secret <- genSecret <$> get
     setMasterSecret ver role secret
+    return secret
   where genSecret hst =
             generateMasterSecret ver (fromJust "cipher" $ hstPendingCipher hst)
                                  premasterSecret

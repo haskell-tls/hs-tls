@@ -18,6 +18,7 @@ module Network.TLS.Handshake.Key
     , generateFFDHE
     , generateFFDHEShared
     , getLocalDigitalSignatureAlg
+    , logKey
     ) where
 
 import Control.Monad.State.Strict
@@ -30,6 +31,9 @@ import Network.TLS.Crypto
 import Network.TLS.Types
 import Network.TLS.Context.Internal
 import Network.TLS.Imports
+import Network.TLS.Struct
+
+import System.IO
 
 {- if the RSA encryption fails we just return an empty bytestring, and let the protocol
  - fail by itself; however it would be probably better to just report it since it's an internal problem.
@@ -86,3 +90,16 @@ getLocalDigitalSignatureAlg ctx = do
     case findDigitalSignatureAlg keys of
         Just sigAlg -> return sigAlg
         Nothing     -> fail "selected credential does not support signing"
+
+----------------------------------------------------------------
+
+logKey :: Context -> String -> ByteString -> IO ()
+logKey ctx label key = do
+    mhst <- getHState ctx
+    case mhst of
+      Nothing  -> return ()
+      Just hst -> do
+          let cr = unClientRandom $ hstClientRandom hst
+          hPutStrLn stderr $ label ++ " " ++ dump cr ++ " " ++ dump key
+  where
+    dump = init . tail . showBytesHex
