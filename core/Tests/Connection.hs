@@ -6,9 +6,11 @@ module Connection
     , arbitraryVersions
     , arbitraryHashSignatures
     , arbitraryGroups
+    , arbitraryKeyUsage
     , arbitraryPairParams
     , arbitraryPairParamsWithVersionsAndCiphers
     , arbitraryClientCredential
+    , arbitraryRSACredentialWithUsage
     , isCustomDHParams
     , leafPublicKey
     , oneSessionManager
@@ -174,6 +176,12 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
 
 arbitraryClientCredential :: Gen Credential
 arbitraryClientCredential = arbitraryCredentialsOfEachType >>= elements
+
+arbitraryRSACredentialWithUsage :: [ExtKeyUsageFlag] -> Gen (CertificateChain, PrivKey)
+arbitraryRSACredentialWithUsage usageFlags = do
+    let (pubKey, privKey) = getGlobalRSAPair
+    cert <- arbitraryX509WithKeyAndUsage usageFlags (PubKeyRSA pubKey, ())
+    return (CertificateChain [cert], PrivKeyRSA privKey)
 
 -- | simple session manager to store one session id and session data for a single thread.
 -- a Real concurrent session manager would use an MVar and have multiples items.

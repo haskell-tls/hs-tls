@@ -30,6 +30,7 @@ import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Key
 import Network.TLS.Measurement
 import qualified Data.ByteString as B
+import Data.X509 (ExtKeyUsageFlag(..))
 
 import Control.Monad.State.Strict
 
@@ -453,7 +454,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             --
             usage <- liftIO $ catchException (onClientCertificate (serverHooks sparams) certs) rejectOnException
             case usage of
-                CertificateUsageAccept        -> return ()
+                CertificateUsageAccept        -> verifyLeafKeyUsage KeyUsage_digitalSignature certs
                 CertificateUsageReject reason -> certificateRejected reason
 
             -- Remember cert chain for later use.
@@ -479,7 +480,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
         processCertificateVerify (Handshake [hs@(CertVerify dsig)]) = do
             processHandshake ctx hs
 
-            checkValidClientCertChain "change cipher message expected"
+            certs <- checkValidClientCertChain "change cipher message expected"
 
             usedVersion <- usingState_ ctx getVersion
             -- Fetch all handshake messages up to now.
@@ -487,15 +488,12 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
 
             sigAlgExpected <- getRemoteSignatureAlg
 
-            -- FIXME should check certificate is allowed for signing
-
             verif <- checkCertificateVerify ctx usedVersion sigAlgExpected msgs dsig
 
             if verif then do
                 -- When verification succeeds, commit the
                 -- client certificate chain to the context.
                 --
-                Just certs <- usingHState ctx getClientCertChain
                 usingState_ ctx $ setClientCertificateChain certs
                 return ()
               else do
@@ -510,9 +508,8 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                         -- application callbacks accepts, we
                         -- also commit the client certificate
                         -- chain to the context.
-                        Just certs <- usingHState ctx getClientCertChain
                         usingState_ ctx $ setClientCertificateChain certs
-                    else throwCore $ Error_Protocol ("verification failed", True, BadCertificate)
+                    else badCertificate "verification failed"
             return $ RecvStateNext expectChangeCipher
 
         processCertificateVerify p = do
@@ -545,7 +542,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             case chain of
                 Nothing -> throwCore throwerror
                 Just cc | isNullCertificateChain cc -> throwCore throwerror
-                        | otherwise                 -> return ()
+                        | otherwise                 -> return cc
 
 hashAndSignaturesInCommon :: Context -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]
 hashAndSignaturesInCommon ctx exts =
