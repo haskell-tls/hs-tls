@@ -17,7 +17,6 @@ import System.Environment (getArgs)
 import System.Exit
 import System.IO
 import System.IO.Error (isEOFError)
-import System.X509
 
 import Network.TLS
 import Network.TLS.Extra.Cipher
@@ -154,7 +153,7 @@ doClient source destination@(Address a _) flags = do
                          , loggingPacketRecv = putStrLn . ("debug: recv: " ++)
                          }
 
-    store <- getSystemCertificateStore
+    store <- getTrustAnchors flags
     let validateCache
            | NoCertValidation `elem` flags =
                 ValidationCache (\_ _ _ -> return ValidationCachePass)
@@ -234,6 +233,7 @@ data Flag =
     | DHParams String
     | NoSession
     | NoCertValidation
+    | TrustAnchor String
     deriving (Show,Eq)
 
 options :: [OptDescr Flag]
@@ -250,6 +250,7 @@ options =
     , Option []     ["dhparams"] (ReqArg DHParams "dhparams") "DH parameters (name or file)"
     , Option []     ["no-session"] (NoArg NoSession) "disable support for session"
     , Option []     ["no-cert-validation"] (NoArg NoCertValidation) "disable certificate validation"
+    , Option []     ["trust-anchor"] (ReqArg TrustAnchor "pem-or-dir") "use provided CAs instead of system certificate store"
     ]
 
 data Address = Address String String
@@ -279,6 +280,10 @@ getCertificate opts = reverse $ onNull ["certificate.pem"] $ foldl accf [] opts
 getKey opts = reverse $ onNull ["certificate.key"] $ foldl accf [] opts
   where accf acc (Key key) = key : acc
         accf acc _         = acc
+
+getTrustAnchors flags = getCertificateStore (foldr getPaths [] flags)
+  where getPaths (TrustAnchor path) acc = path : acc
+        getPaths _                  acc = acc
 
 getDHParams opts = foldl accf Nothing opts
   where accf _   (DHParams file) = Just file

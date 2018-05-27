@@ -15,7 +15,6 @@ import System.Environment
 import System.Exit
 import System.IO
 import System.Timeout
-import System.X509
 
 import Network.TLS
 import Network.TLS.Extra.Cipher
@@ -150,6 +149,7 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | Timeout String
           | BogusCipher String
           | ClientCert String
+          | TrustAnchor String
           | BenchSend
           | BenchRecv
           | BenchData String
@@ -174,6 +174,7 @@ options =
     , Option ['t']  ["timeout"] (ReqArg Timeout "timeout") "timeout in milliseconds (2s by default)"
     , Option []     ["no-validation"] (NoArg NoValidateCert) "disable certificate validation"
     , Option []     ["client-cert"] (ReqArg ClientCert "cert-file:key-file") "add a client certificate to use with the server"
+    , Option []     ["trust-anchor"] (ReqArg TrustAnchor "pem-or-dir") "use provided CAs instead of system certificate store"
     , Option []     ["http1.1"] (NoArg Http11) "use http1.1 instead of http1.0"
     , Option []     ["ssl3"]    (NoArg Ssl3) "use SSL 3.0"
     , Option []     ["sni"]     (ReqArg SNI "server-name") "use non-default server name indication"
@@ -312,6 +313,10 @@ runOn (sStorage, certStore) flags port hostname
                                             Just i  -> i
                 f acc _              = acc
 
+getTrustAnchors flags = getCertificateStore (foldr getPaths [] flags)
+  where getPaths (TrustAnchor path) acc = path : acc
+        getPaths _                  acc = acc
+
 printUsage =
     putStrLn $ usageInfo "usage: simpleclient [opts] <hostname> [port]\n\n\t(port default to: 443)\noptions:\n" options
 
@@ -334,7 +339,7 @@ main = do
         printGroups
         exitSuccess
 
-    certStore <- getSystemCertificateStore
+    certStore <- getTrustAnchors opts
     sStorage <- newIORef (error "storage ioref undefined")
     case other of
         [hostname]      -> runOn (sStorage, certStore) opts 443 hostname

@@ -11,12 +11,16 @@ module Common
     , printHandshakeInfo
     , makeAddrInfo
     , AddrInfo(..)
+    , getCertificateStore
     ) where
 
 import Data.Char (isDigit)
 import Data.Maybe (fromJust)
 import Numeric (showHex)
 import Network.Socket
+
+import Data.X509.CertificateStore
+import System.X509
 
 import Network.TLS hiding (HostName)
 import Network.TLS.Extra.Cipher
@@ -134,3 +138,13 @@ split c s = case break (c==) s of
     ("",r)  -> split c (tail r)
     (s',"") -> [s']
     (s',r)  -> s' : split c (tail r)
+
+getCertificateStore :: [FilePath] -> IO CertificateStore
+getCertificateStore []    = getSystemCertificateStore
+getCertificateStore paths = foldM readPathAppend mempty paths
+  where
+    readPathAppend acc path = do
+        mstore <- readCertificateStore path
+        case mstore of
+            Nothing -> error ("invalid certificate store: " ++ path)
+            Just st -> return $! mappend st acc
