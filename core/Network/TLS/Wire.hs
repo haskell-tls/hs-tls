@@ -23,6 +23,7 @@ module Network.TLS.Wire
     , getWords16
     , getWord24
     , getWord32
+    , getWord64
     , getBytes
     , getOpaque8
     , getOpaque16
@@ -40,6 +41,7 @@ module Network.TLS.Wire
     , putWords16
     , putWord24
     , putWord32
+    , putWord64
     , putBytes
     , putOpaque8
     , putOpaque16
@@ -106,6 +108,9 @@ getWord24 = do
 getWord32 :: Get Word32
 getWord32 = getWord32be
 
+getWord64 :: Get Word64
+getWord64 = getWord64be
+
 getOpaque8 :: Get ByteString
 getOpaque8 = getWord8 >>= getBytes . fromIntegral
 
@@ -141,6 +146,9 @@ putWord16 = putWord16be
 
 putWord32 :: Word32 -> Put
 putWord32 = putWord32be
+
+putWord64 :: Word64 -> Put
+putWord64 = putWord64be
 
 putWords16 :: [Word16] -> Put
 putWords16 l = do
