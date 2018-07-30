@@ -112,7 +112,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
         Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
 
     -- SNI (Server Name Indication)
-    let serverName = case extensionLookup extensionID_ServerName exts >>= extensionDecode False of
+    let serverName = case extensionLookup extensionID_ServerName exts >>= extensionDecode MsgTClientHello of
             Just (ServerName ns) -> listToMaybe (mapMaybe toHostName ns)
                 where toHostName (ServerNameHostName hostName) = Just hostName
                       toHostName (ServerNameOther _)           = Nothing
@@ -218,13 +218,13 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
 
     maybe (return ()) (usingState_ ctx . setClientSNI) serverName
 
-    case extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts >>= extensionDecode False of
+    case extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts >>= extensionDecode MsgTClientHello of
         Just (ApplicationLayerProtocolNegotiation protos) -> usingState_ ctx $ setClientALPNSuggest protos
         _ -> return ()
 
     -- Currently, we don't send back EcPointFormats. In this case,
     -- the client chooses EcPointFormat_Uncompressed.
-    case extensionLookup extensionID_EcPointFormats exts >>= extensionDecode False of
+    case extensionLookup extensionID_EcPointFormats exts >>= extensionDecode MsgTClientHello of
         Just (EcPointFormatsSupported fs) -> usingState_ ctx $ setClientEcPointFormatSuggest fs
         _ -> return ()
 
@@ -546,7 +546,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
 
 hashAndSignaturesInCommon :: Context -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]
 hashAndSignaturesInCommon ctx exts =
-    let cHashSigs = case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode False of
+    let cHashSigs = case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode MsgTClientHello of
             -- See Section 7.4.1.4.1 of RFC 5246.
             Nothing -> [(HashSHA1, SignatureECDSA)
                        ,(HashSHA1, SignatureRSA)
@@ -560,7 +560,7 @@ hashAndSignaturesInCommon ctx exts =
      in sHashSigs `intersect` cHashSigs
 
 negotiatedGroupsInCommon :: Context -> [ExtensionRaw] -> [Group]
-negotiatedGroupsInCommon ctx exts = case extensionLookup extensionID_NegotiatedGroups exts >>= extensionDecode False of
+negotiatedGroupsInCommon ctx exts = case extensionLookup extensionID_NegotiatedGroups exts >>= extensionDecode MsgTClientHello of
     Just (NegotiatedGroups clientGroups) ->
         let serverGroups = supportedGroups (ctxSupported ctx)
         in serverGroups `intersect` clientGroups
@@ -577,7 +577,7 @@ filterSortCredentials rankFun (Credentials creds) =
 
 filterCredentialsWithHashSignatures :: [ExtensionRaw] -> Credentials -> Credentials
 filterCredentialsWithHashSignatures exts =
-    case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode False of
+    case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode MsgTClientHello of
         Nothing                        -> id
         Just (SignatureAlgorithms sas) ->
             let filterCredentials p (Credentials l) = Credentials (filter p l)
