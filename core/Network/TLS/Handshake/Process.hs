@@ -106,7 +106,7 @@ processClientKeyXchg ctx (CKX_ECDH bytes) = do
     case decodeGroupPublic grp bytes of
       Left _ -> throwCore $ Error_Protocol ("client public key cannot be decoded", True, HandshakeFailure)
       Right clipub -> do
-          srvpri <- usingHState ctx getECDHPrivate
+          srvpri <- usingHState ctx getGroupPrivate
           case groupGetShared clipub srvpri of
               Just premaster -> do
                   rver <- usingState_ ctx getVersion

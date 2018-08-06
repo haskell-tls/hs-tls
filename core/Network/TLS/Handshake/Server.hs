@@ -419,7 +419,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             (srvpri, srvpub) <- generateECDHE ctx grp
             let serverParams = ServerECDHParams grp srvpub
             usingHState ctx $ setServerECDHParams serverParams
-            usingHState ctx $ setECDHPrivate srvpri
+            usingHState ctx $ setGroupPrivate srvpri
             return serverParams
 
         generateSKX_ECDHE sigAlg = do
