@@ -357,7 +357,16 @@ instance Extension SignatureAlgorithms where
             len <- getWord16
             SignatureAlgorithms <$> getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
 
-type SignatureAlgorithmsCert = SignatureAlgorithms
+newtype SignatureAlgorithmsCert = SignatureAlgorithmsCert [HashAndSignatureAlgorithm] deriving (Show,Eq)
+
+instance Extension SignatureAlgorithmsCert where
+    extensionID _ = extensionID_SignatureAlgorithms
+    extensionEncode (SignatureAlgorithmsCert algs) =
+        runPut $ putWord16 (fromIntegral (length algs * 2)) >> mapM_ putSignatureHashAlgorithm algs
+    extensionDecode _ =
+        runGetMaybe $ do
+            len <- getWord16
+            SignatureAlgorithmsCert <$> getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
 
 data SupportedVersions =
     SupportedVersionsClientHello [Version]
