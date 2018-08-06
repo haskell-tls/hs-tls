@@ -68,7 +68,7 @@ import Network.TLS.Types (Version(..))
 
 import Network.TLS.Wire
 import Network.TLS.Imports
-import Network.TLS.Packet (putSignatureHashAlgorithm, getSignatureHashAlgorithm, putVersion', getVersion')
+import Network.TLS.Packet (putSignatureHashAlgorithm, getSignatureHashAlgorithm, putBinaryVersion, getBinaryVersion)
 
 type HostName = String
 
@@ -368,18 +368,18 @@ instance Extension SupportedVersions where
     extensionID _ = extensionID_SupportedVersions
     extensionEncode (SupportedVersionsClientHello vers) = runPut $ do
         putWord8 (fromIntegral (length vers * 2))
-        mapM_ putVersion' vers
+        mapM_ putBinaryVersion vers
     extensionEncode (SupportedVersionsServerHello ver) = runPut $
-        putVersion' ver
+        putBinaryVersion ver
     extensionDecode MsgTClientHello = runGetMaybe $ do
         len <- fromIntegral <$> getWord8
         SupportedVersionsClientHello . catMaybes <$> getList len getVer
       where
         getVer = do
-            ver <- getVersion'
+            ver <- getBinaryVersion
             return (2,ver)
     extensionDecode MsgTServerHello = runGetMaybe $ do
-        mver <- getVersion'
+        mver <- getBinaryVersion
         case mver of
           Just ver -> return $ SupportedVersionsServerHello ver
           Nothing  -> fail "extensionDecode: SupportedVersionsServerHello"
