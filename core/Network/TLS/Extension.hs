@@ -415,7 +415,7 @@ data KeyShare =
 instance Extension KeyShare where
     extensionID _ = extensionID_KeyShare
     extensionEncode (KeyShareClientHello kses) = runPut $ do
-        let !len = sum $ map (\(KeyShareEntry _ key) -> B.length key + 4) kses
+        let !len = sum [B.length key + 4 | KeyShareEntry _ key <- kses]
         putWord16 $ fromIntegral len
         mapM_ putKeyShareEntry kses
     extensionEncode (KeyShareServerHello kse) = runPut $ putKeyShareEntry kse
