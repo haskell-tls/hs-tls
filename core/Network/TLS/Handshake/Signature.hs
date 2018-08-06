@@ -31,13 +31,13 @@ import Network.TLS.Util
 import Control.Monad.State.Strict
 
 signatureCompatible :: DigitalSignatureAlg -> HashAndSignatureAlgorithm -> Bool
-signatureCompatible RSA   (_, SignatureRSA)          = True
-signatureCompatible RSA   (_, SignatureRSApssSHA256) = True
-signatureCompatible RSA   (_, SignatureRSApssSHA384) = True
-signatureCompatible RSA   (_, SignatureRSApssSHA512) = True
-signatureCompatible DSS   (_, SignatureDSS)          = True
-signatureCompatible ECDSA (_, SignatureECDSA)        = True
-signatureCompatible _     (_, _)                     = False
+signatureCompatible RSA   (_, SignatureRSA)              = True
+signatureCompatible RSA   (_, SignatureRSApssRSAeSHA256) = True
+signatureCompatible RSA   (_, SignatureRSApssRSAeSHA384) = True
+signatureCompatible RSA   (_, SignatureRSApssRSAeSHA512) = True
+signatureCompatible DSS   (_, SignatureDSS)              = True
+signatureCompatible ECDSA (_, SignatureECDSA)            = True
+signatureCompatible _     (_, _)                         = False
 
 checkCertificateVerify :: Context
                        -> Version
@@ -101,9 +101,9 @@ signatureParams RSA hashSigAlg =
         Just (HashSHA384, SignatureRSA) -> RSAParams SHA384   RSApkcs1
         Just (HashSHA256, SignatureRSA) -> RSAParams SHA256   RSApkcs1
         Just (HashSHA1  , SignatureRSA) -> RSAParams SHA1     RSApkcs1
-        Just (HashIntrinsic , SignatureRSApssSHA512) -> RSAParams SHA512 RSApss
-        Just (HashIntrinsic , SignatureRSApssSHA384) -> RSAParams SHA384 RSApss
-        Just (HashIntrinsic , SignatureRSApssSHA256) -> RSAParams SHA256 RSApss
+        Just (HashIntrinsic , SignatureRSApssRSAeSHA512) -> RSAParams SHA512 RSApss
+        Just (HashIntrinsic , SignatureRSApssRSAeSHA384) -> RSAParams SHA384 RSApss
+        Just (HashIntrinsic , SignatureRSApssRSAeSHA256) -> RSAParams SHA256 RSApss
         Nothing                         -> RSAParams SHA1_MD5 RSApkcs1
         Just (hsh       , SignatureRSA) -> error ("unimplemented RSA signature hash type: " ++ show hsh)
         Just (_         , sigAlg)       -> error ("signature algorithm is incompatible with RSA: " ++ show sigAlg)

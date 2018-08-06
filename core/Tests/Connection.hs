@@ -64,7 +64,7 @@ arbitraryVersions = sublistOf knownVersions
 knownHashSignatures :: [HashAndSignatureAlgorithm]
 knownHashSignatures = filter nonECDSA availableHashSignatures
   where
-    availableHashSignatures = [(TLS.HashIntrinsic, SignatureRSApssSHA256)
+    availableHashSignatures = [(TLS.HashIntrinsic, SignatureRSApssRSAeSHA256)
                               ,(TLS.HashSHA512, SignatureRSA)
                               ,(TLS.HashSHA512, SignatureECDSA)
                               ,(TLS.HashSHA384, SignatureRSA)
