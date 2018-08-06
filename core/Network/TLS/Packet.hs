@@ -57,6 +57,12 @@ module Network.TLS.Packet
     -- * for extensions parsing
     , getSignatureHashAlgorithm
     , putSignatureHashAlgorithm
+    , getBinaryVersion
+    , putBinaryVersion
+    , putServerRandom32
+    , putExtension
+    , getExtensions
+    , putSession
     ) where
 
 import Network.TLS.Imports
@@ -89,8 +95,14 @@ getVersion = do
         Nothing -> fail ("invalid version : " ++ show major ++ "," ++ show minor)
         Just v  -> return v
 
-putVersion :: Version -> Put
-putVersion ver = putWord8 major >> putWord8 minor
+getBinaryVersion :: Get (Maybe Version)
+getBinaryVersion = do
+    major <- getWord8
+    minor <- getWord8
+    return $ verOfNum (major, minor)
+
+putBinaryVersion :: Version -> Put
+putBinaryVersion ver = putWord8 major >> putWord8 minor
   where (major, minor) = numericalVer ver
 
 getHeaderType :: Get ProtocolType
@@ -127,7 +139,7 @@ decodeDeprecatedHeader size =
         return $ Header ProtocolType_DeprecatedHandshake version size
 
 encodeHeader :: Header -> ByteString
-encodeHeader (Header pt ver len) = runPut (putHeaderType pt >> putVersion ver >> putWord16 len)
+encodeHeader (Header pt ver len) = runPut (putHeaderType pt >> putBinaryVersion ver >> putWord16 len)
         {- FIXME check len <= 2^14 -}
 
 encodeHeaderNoVer :: Header -> ByteString
@@ -225,7 +237,7 @@ decodeServerHello = do
     compressionid <- getWord8
     r             <- remaining
     exts <- if hasHelloExtensions ver && r > 0
-            then fromIntegral <$> getWord16 >>= getExtensions
+            then fmap fromIntegral getWord16 >>= getExtensions
             else return []
     return $ ServerHello ver random session cipherid compressionid exts
 
@@ -347,7 +359,7 @@ encodeHandshakeContent :: Handshake -> Put
 encodeHandshakeContent (ClientHello _ _ _ _ _ _ (Just deprecated)) = do
     putBytes deprecated
 encodeHandshakeContent (ClientHello version random session cipherIDs compressionIDs exts Nothing) = do
-    putVersion version
+    putBinaryVersion version
     putClientRandom32 random
     putSession session
     putWords16 cipherIDs
@@ -355,10 +367,14 @@ encodeHandshakeContent (ClientHello version random session cipherIDs compression
     putExtensions exts
     return ()
 
-encodeHandshakeContent (ServerHello version random session cipherid compressionID exts) =
-    putVersion version >> putServerRandom32 random >> putSession session
-                       >> putWord16 cipherid >> putWord8 compressionID
-                       >> putExtensions exts >> return ()
+encodeHandshakeContent (ServerHello version random session cipherid compressionID exts) = do
+    putBinaryVersion version
+    putServerRandom32 random
+    putSession session
+    putWord16 cipherid
+    putWord8 compressionID
+    putExtensions exts
+    return ()
 
 encodeHandshakeContent (Certificates cc) = putOpaque24 (runPut $ mapM_ putOpaque24 certs)
   where (CertificateChainRaw certs) = encodeCertificateChain cc
@@ -465,6 +481,7 @@ getServerDHParams = ServerDHParams <$> getBigNum16 <*> getBigNum16 <*> getBigNum
 putServerDHParams :: ServerDHParams -> Put
 putServerDHParams (ServerDHParams p g y) = mapM_ putBigNum16 [p,g,y]
 
+-- RFC 4492 Section 5.4 Server Key Exchange
 getServerECDHParams :: Get ServerECDHParams
 getServerECDHParams = do
     curveType <- getWord8
@@ -481,6 +498,7 @@ getServerECDHParams = do
         _ ->
             error "getServerECDHParams: unknown type for ECDH Params"
 
+-- RFC 4492 Section 5.4 Server Key Exchange
 putServerECDHParams :: ServerECDHParams -> Put
 putServerECDHParams (ServerECDHParams grp grppub) = do
     putWord8 3                            -- ECParameters ECCurveType
@@ -515,7 +533,7 @@ decodePreMasterSecret = runGetErr "pre-master-secret" $ do
     liftM2 (,) getVersion (getBytes 46)
 
 encodePreMasterSecret :: Version -> ByteString -> ByteString
-encodePreMasterSecret version bytes = runPut (putVersion version >> putBytes bytes)
+encodePreMasterSecret version bytes = runPut (putBinaryVersion version >> putBytes bytes)
 
 -- | in certain cases, we haven't manage to decode ServerKeyExchange properly,
 -- because the decoding was too eager and the cipher wasn't been set yet.

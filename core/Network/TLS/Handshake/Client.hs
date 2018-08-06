@@ -17,7 +17,7 @@ import Network.TLS.Parameters
 import Network.TLS.Struct
 import Network.TLS.Cipher
 import Network.TLS.Compression
-import Network.TLS.Packet
+import Network.TLS.Packet hiding (getExtensions)
 import Network.TLS.ErrT
 import Network.TLS.Extension
 import Network.TLS.IO
@@ -325,7 +325,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
         setVersion rver
     usingHState ctx $ setServerHelloParameters rver serverRan cipherAlg compressAlg
 
-    case extensionDecode False <$> extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts of
+    case extensionDecode MsgTServerHello <$> extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts of
         Just (Just (ApplicationLayerProtocolNegotiation [proto])) -> usingState_ ctx $ do
             mprotos <- getClientALPNSuggest
             case mprotos of
