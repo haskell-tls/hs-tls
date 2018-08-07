@@ -56,6 +56,10 @@ module Network.TLS.Extra.Cipher
     , cipher_ECDHE_ECDSA_AES256CCM_SHA256
     , cipher_ECDHE_ECDSA_AES256CCM8_SHA256
     , cipher_ECDHE_ECDSA_AES256GCM_SHA384
+    -- TLS 1.3
+    , cipher_TLS13_AES128GCM_SHA256
+    , cipher_TLS13_AES256GCM_SHA384
+    , cipherIDtoCipher13
     -- * obsolete and non-standard ciphers
     , cipher_RSA_3DES_EDE_CBC_SHA1
     , cipher_RC4_128_MD5
@@ -241,6 +245,8 @@ ciphersuite_default =
     -- , cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1
     -- , cipher_DHE_DSS_RC4_SHA1, cipher_RC4_128_SHA1, cipher_RC4_128_MD5
     -- , cipher_RSA_3DES_EDE_CBC_SHA1
+    , cipher_TLS13_AES128GCM_SHA256
+    , cipher_TLS13_AES256GCM_SHA384
     ]
 
 {-# WARNING ciphersuite_all "This ciphersuite list contains RC4. Use ciphersuite_strong or ciphersuite_default instead." #-}
@@ -288,6 +294,8 @@ ciphersuite_strong =
     , cipher_AES256_SHA256
              -- Last resort no PFS, AEAD or SHA2
     , cipher_AES256_SHA1
+    , cipher_TLS13_AES128GCM_SHA256
+    , cipher_TLS13_AES256GCM_SHA384
     ]
 
 -- | DHE-RSA cipher suite
@@ -735,6 +743,28 @@ cipher_DHE_RSA_AES256GCM_SHA384 = Cipher
     , cipherMinVer       = Just TLS12
     }
 
+cipher_TLS13_AES128GCM_SHA256 :: Cipher
+cipher_TLS13_AES128GCM_SHA256 = Cipher
+    { cipherID           = 0x1301
+    , cipherName         = "AES128GCM-SHA256"
+    , cipherBulk         = bulk_aes128gcm
+    , cipherHash         = SHA256
+    , cipherPRFHash      = Nothing
+    , cipherKeyExchange  = CipherKeyExchange_TLS13
+    , cipherMinVer       = Just TLS13
+    }
+
+cipher_TLS13_AES256GCM_SHA384 :: Cipher
+cipher_TLS13_AES256GCM_SHA384 = Cipher
+    { cipherID           = 0x1302
+    , cipherName         = "AES256GCM-SHA384"
+    , cipherBulk         = bulk_aes256gcm
+    , cipherHash         = SHA384
+    , cipherPRFHash      = Nothing
+    , cipherKeyExchange  = CipherKeyExchange_TLS13
+    , cipherMinVer       = Just TLS13
+    }
+
 cipher_ECDHE_ECDSA_AES128CBC_SHA :: Cipher
 cipher_ECDHE_ECDSA_AES128CBC_SHA = Cipher
     { cipherID           = 0xC009
@@ -913,3 +943,8 @@ cipher_ECDHE_RSA_AES256GCM_SHA384 = Cipher
 
 -- A list of cipher suite is found from:
 -- https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-4
+
+cipherIDtoCipher13 :: CipherID -> Maybe Cipher
+cipherIDtoCipher13 0x1301 = Just cipher_TLS13_AES128GCM_SHA256
+cipherIDtoCipher13 0x1302 = Just cipher_TLS13_AES256GCM_SHA384
+cipherIDtoCipher13 _      = Nothing

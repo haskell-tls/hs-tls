@@ -593,7 +593,7 @@ cipherListCredentialFallback xs = all nonDH xs
         CipherKeyExchange_DHE_DSS     -> False
         CipherKeyExchange_ECDHE_RSA   -> False
         CipherKeyExchange_ECDHE_ECDSA -> False
-        --CipherKeyExchange_TLS13       -> False
+        CipherKeyExchange_TLS13       -> False
         _                             -> True
 
 findHighestVersionFrom :: Version -> [Version] -> Maybe Version
@@ -627,6 +627,7 @@ getCiphers sparams creds sigCreds = filter authorizedCKE (supportedCiphers $ ser
                     CipherKeyExchange_DH_RSA      -> False
                     CipherKeyExchange_ECDH_ECDSA  -> False
                     CipherKeyExchange_ECDH_RSA    -> False
+                    CipherKeyExchange_TLS13       -> True   -- dirty hack
 
             canSignDSS    = DSS `elem` signingAlgs
             canSignRSA    = RSA `elem` signingAlgs

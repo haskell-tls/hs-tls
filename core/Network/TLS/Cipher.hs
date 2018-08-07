@@ -95,6 +95,7 @@ data CipherKeyExchangeType =
     | CipherKeyExchange_ECDH_ECDSA
     | CipherKeyExchange_ECDH_RSA
     | CipherKeyExchange_ECDHE_ECDSA
+    | CipherKeyExchange_TLS13 -- not expressed in cipher suite
     deriving (Show,Eq)
 
 data Bulk = Bulk
@@ -156,3 +157,4 @@ cipherExchangeNeedMoreData CipherKeyExchange_DH_RSA      = False
 cipherExchangeNeedMoreData CipherKeyExchange_ECDH_ECDSA  = True
 cipherExchangeNeedMoreData CipherKeyExchange_ECDH_RSA    = True
 cipherExchangeNeedMoreData CipherKeyExchange_ECDHE_ECDSA = True
+cipherExchangeNeedMoreData CipherKeyExchange_TLS13       = False -- dummy
