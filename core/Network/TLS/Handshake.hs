@@ -42,7 +42,7 @@ handshakeWith ctx hs =
 handleException :: Context -> IO () -> IO ()
 handleException ctx f = catchException f $ \exception -> do
     let tlserror = fromMaybe (Error_Misc $ show exception) $ fromException exception
-    setEstablished ctx False
+    setEstablished ctx NotEstablished
     sendPacket ctx (errorToAlert tlserror) `catch` ignoreIOErr
     handshakeFailed tlserror
   where

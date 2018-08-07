@@ -73,7 +73,7 @@ handshakeTerminate ctx = do
                     }
     updateMeasure ctx resetBytesCounters
     -- mark the secure connection up and running.
-    setEstablished ctx True
+    setEstablished ctx Established
     return ()
 
 sendChangeCipherAndFinish :: Context

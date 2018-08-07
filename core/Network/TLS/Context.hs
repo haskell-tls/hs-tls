@@ -131,7 +131,7 @@ contextNew backend params = liftIO $ do
 
     stvar <- newMVar st
     eof   <- newIORef False
-    established <- newIORef False
+    established <- newIORef NotEstablished
     stats <- newIORef newMeasurement
     -- we enable the reception of SSLv2 ClientHello message only in the
     -- server context, where we might be dealing with an old/compat client.
