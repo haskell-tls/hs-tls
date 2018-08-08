@@ -141,6 +141,7 @@ contextNew backend params = liftIO $ do
     tx    <- newMVar newRecordState
     rx    <- newMVar newRecordState
     hs    <- newMVar Nothing
+    as    <- newMVar []
     lockWrite <- newMVar ()
     lockRead  <- newMVar ()
     lockState <- newMVar ()
@@ -164,6 +165,7 @@ contextNew backend params = liftIO $ do
             , ctxLockWrite        = lockWrite
             , ctxLockRead         = lockRead
             , ctxLockState        = lockState
+            , ctxPendingActions   = as
             }
 
 -- | create a new context on an handle.
