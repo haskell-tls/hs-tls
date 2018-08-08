@@ -9,16 +9,24 @@ module Network.TLS.Types
     ( Version(..)
     , SessionID
     , SessionData(..)
+    , TLS13TicketInfo(..)
     , CipherID
     , CompressionID
     , Role(..)
     , invertRole
     , Direction(..)
+--    , HostName
+    , Second
+    , Millisecond
     ) where
 
+import Data.IORef (IORef)
 import Network.TLS.Imports
+import Network.TLS.Crypto.Types (Group)
 
 type HostName = String
+type Second      = Word32
+type Millisecond = Word64
 
 -- | Versions known to TLS
 --
@@ -35,7 +43,25 @@ data SessionData = SessionData
     , sessionCompression :: CompressionID
     , sessionClientSNI   :: Maybe HostName
     , sessionSecret      :: ByteString
+    , sessionGroup       :: Maybe Group
+    , sessionTicketInfo  :: Maybe TLS13TicketInfo
+    , sessionALPN        :: Maybe ByteString
+    , sessionMaxEarlyDataSize :: Word32
     } deriving (Show,Eq)
+
+data TLS13TicketInfo = TLS13TicketInfo
+    { lifetime :: Second      -- NewSessionTicket.ticket_lifetime in seconds
+    , ageAdd   :: Second      -- NewSessionTicket.ticket_age_add
+    , txrxTime :: Millisecond -- serverSendTime or clientReceiveTime
+    , estimatedRTT :: IORef (Maybe Millisecond)
+    } deriving (Eq)
+
+instance Show TLS13TicketInfo where
+    show s = "TLS13TicketInfo { "
+        ++   "lifetime = " ++ show (lifetime s)
+        ++ ", ageAdd = "   ++ show (ageAdd s)
+        ++ ", txrxTime = " ++ show (txrxTime s)
+        ++ " }"
 
 -- | Cipher identification
 type CipherID = Word16
