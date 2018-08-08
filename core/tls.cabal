@@ -71,6 +71,7 @@ Library
                      Network.TLS.Extra.FFDHE
   other-modules:     Network.TLS.Cap
                      Network.TLS.Struct
+                     Network.TLS.Struct13
                      Network.TLS.Core
                      Network.TLS.Context
                      Network.TLS.Context.Internal
