@@ -22,6 +22,7 @@ module Network.TLS.Parameters
     , GroupUsage(..)
     , CertificateUsage(..)
     , CertificateRejectReason(..)
+    , EarlyData(..)
     ) where
 
 import Network.TLS.Extension
@@ -194,7 +195,13 @@ data Supported = Supported
       --   enough until 2030.  Both curves are fast because their
       --   backends are written in C.
     , supportedGroups              :: [Group]
+    , supportedEarlyData           :: EarlyData
     } deriving (Show,Eq)
+
+data EarlyData = NoEarlyData
+               | AcceptEarlyData Word32
+               | SendEarlyData ByteString
+               deriving (Eq, Show)
 
 defaultSupported :: Supported
 defaultSupported = Supported
@@ -216,6 +223,7 @@ defaultSupported = Supported
     , supportedFallbackScsv        = True
     , supportedEmptyPacket         = True
     , supportedGroups              = [X25519,P256,P384,P521]
+    , supportedEarlyData           = AcceptEarlyData 0
     }
 
 instance Default Supported where
