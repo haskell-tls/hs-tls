@@ -110,11 +110,14 @@ data SignatureAlgorithm =
     | SignatureRSA
     | SignatureDSS
     | SignatureECDSA
-    | SignatureRSApssSHA256
-    | SignatureRSApssSHA384
-    | SignatureRSApssSHA512
+    | SignatureRSApssRSAeSHA256
+    | SignatureRSApssRSAeSHA384
+    | SignatureRSApssRSAeSHA512
     | SignatureEd25519
     | SignatureEd448
+    | SignatureRSApsspssSHA256
+    | SignatureRSApsspssSHA384
+    | SignatureRSApsspssSHA512
     | SignatureOther Word8
     deriving (Show,Eq)
 
@@ -227,11 +230,14 @@ data AlertDescription =
     | InappropriateFallback -- RFC7507
     | UserCanceled
     | NoRenegotiation
+    | MissingExtension
     | UnsupportedExtension
     | CertificateUnobtainable
     | UnrecognizedName
     | BadCertificateStatusResponse
     | BadCertificateHashValue
+    | UnknownPskIdentity
+    | CertificateRequired
     deriving (Show,Eq)
 
 data HandshakeType =
@@ -453,11 +459,14 @@ instance TypeValuable AlertDescription where
     valOfType InappropriateFallback  = 86
     valOfType UserCanceled           = 90
     valOfType NoRenegotiation        = 100
+    valOfType MissingExtension       = 109
     valOfType UnsupportedExtension   = 110
     valOfType CertificateUnobtainable = 111
     valOfType UnrecognizedName        = 112
     valOfType BadCertificateStatusResponse = 113
     valOfType BadCertificateHashValue = 114
+    valOfType UnknownPskIdentity      = 115
+    valOfType CertificateRequired     = 116
 
     valToType 0   = Just CloseNotify
     valToType 10  = Just UnexpectedMessage
@@ -483,11 +492,14 @@ instance TypeValuable AlertDescription where
     valToType 86  = Just InappropriateFallback
     valToType 90  = Just UserCanceled
     valToType 100 = Just NoRenegotiation
+    valToType 109 = Just MissingExtension
     valToType 110 = Just UnsupportedExtension
     valToType 111 = Just CertificateUnobtainable
     valToType 112 = Just UnrecognizedName
     valToType 113 = Just BadCertificateStatusResponse
     valToType 114 = Just BadCertificateHashValue
+    valToType 115 = Just UnknownPskIdentity
+    valToType 116 = Just CertificateRequired
     valToType _   = Nothing
 
 instance TypeValuable CertificateType where
@@ -531,27 +543,33 @@ instance TypeValuable HashAlgorithm where
     valToType i = Just (HashOther i)
 
 instance TypeValuable SignatureAlgorithm where
-    valOfType SignatureAnonymous    = 0
-    valOfType SignatureRSA          = 1
-    valOfType SignatureDSS          = 2
-    valOfType SignatureECDSA        = 3
-    valOfType SignatureRSApssSHA256 = 4
-    valOfType SignatureRSApssSHA384 = 5
-    valOfType SignatureRSApssSHA512 = 6
-    valOfType SignatureEd25519      = 7
-    valOfType SignatureEd448        = 8
-    valOfType (SignatureOther i)    = i
+    valOfType SignatureAnonymous        =  0
+    valOfType SignatureRSA              =  1
+    valOfType SignatureDSS              =  2
+    valOfType SignatureECDSA            =  3
+    valOfType SignatureRSApssRSAeSHA256 =  4
+    valOfType SignatureRSApssRSAeSHA384 =  5
+    valOfType SignatureRSApssRSAeSHA512 =  6
+    valOfType SignatureEd25519          =  7
+    valOfType SignatureEd448            =  8
+    valOfType SignatureRSApsspssSHA256  =  9
+    valOfType SignatureRSApsspssSHA384  = 10
+    valOfType SignatureRSApsspssSHA512  = 11
+    valOfType (SignatureOther i)        =  i
 
-    valToType 0 = Just SignatureAnonymous
-    valToType 1 = Just SignatureRSA
-    valToType 2 = Just SignatureDSS
-    valToType 3 = Just SignatureECDSA
-    valToType 4 = Just SignatureRSApssSHA256
-    valToType 5 = Just SignatureRSApssSHA384
-    valToType 6 = Just SignatureRSApssSHA512
-    valToType 7 = Just SignatureEd25519
-    valToType 8 = Just SignatureEd448
-    valToType i = Just (SignatureOther i)
+    valToType  0 = Just SignatureAnonymous
+    valToType  1 = Just SignatureRSA
+    valToType  2 = Just SignatureDSS
+    valToType  3 = Just SignatureECDSA
+    valToType  4 = Just SignatureRSApssRSAeSHA256
+    valToType  5 = Just SignatureRSApssRSAeSHA384
+    valToType  6 = Just SignatureRSApssRSAeSHA512
+    valToType  7 = Just SignatureEd25519
+    valToType  8 = Just SignatureEd448
+    valToType  9 = Just SignatureRSApsspssSHA256
+    valToType 10 = Just SignatureRSApsspssSHA384
+    valToType 11 = Just SignatureRSApsspssSHA512
+    valToType  i = Just (SignatureOther i)
 
 instance EnumSafe16 Group where
     fromEnumSafe16 P256      =  23
