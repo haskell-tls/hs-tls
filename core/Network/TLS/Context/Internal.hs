@@ -84,6 +84,7 @@ data Information = Information
     , infoMasterSecret :: Maybe ByteString
     , infoClientRandom :: Maybe ClientRandom
     , infoServerRandom :: Maybe ServerRandom
+    , infoIsEarlyDataAccepted :: Bool
     } deriving (Show,Eq)
 
 -- | A TLS Context keep tls specific state, parameters and backend information.
@@ -143,8 +144,11 @@ contextGetInformation ctx = do
                                        hstServerRandom st)
                            Nothing -> (Nothing, Nothing, Nothing)
     (cipher,comp) <- failOnEitherError $ runRxState ctx $ gets $ \st -> (stCipher st, stCompression st)
+    let accepted = case hstate of
+            Just st -> hstTLS13RTT0Status st == RTT0Accepted
+            Nothing -> False
     case (ver, cipher) of
-        (Just v, Just c) -> return $ Just $ Information v c comp ms cr sr
+        (Just v, Just c) -> return $ Just $ Information v c comp ms cr sr accepted
         _                -> return Nothing
 
 contextSend :: Context -> ByteString -> IO ()
