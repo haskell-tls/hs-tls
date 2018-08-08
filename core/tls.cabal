@@ -56,6 +56,7 @@ Library
                    , x509-store >= 1.6
                    , x509-validation >= 1.6.5
                    , async >= 2.0
+                   , time
   if flag(network)
     Build-Depends:   network >= 2.4.0.0
     cpp-options:     -DINCLUDE_NETWORK
@@ -85,6 +86,7 @@ Library
                      Network.TLS.Extension
                      Network.TLS.Handshake
                      Network.TLS.Handshake.Common
+                     Network.TLS.Handshake.Common13
                      Network.TLS.Handshake.Certificate
                      Network.TLS.Handshake.Key
                      Network.TLS.Handshake.Client
@@ -92,23 +94,31 @@ Library
                      Network.TLS.Handshake.Process
                      Network.TLS.Handshake.Signature
                      Network.TLS.Handshake.State
+                     Network.TLS.Handshake.State13
                      Network.TLS.Hooks
                      Network.TLS.IO
                      Network.TLS.Imports
+                     Network.TLS.KeySchedule
                      Network.TLS.MAC
                      Network.TLS.Measurement
                      Network.TLS.Packet
+                     Network.TLS.Packet13
                      Network.TLS.Parameters
                      Network.TLS.Record
                      Network.TLS.Record.Types
+                     Network.TLS.Record.Types13
                      Network.TLS.Record.Engage
+                     Network.TLS.Record.Engage13
                      Network.TLS.Record.Disengage
+                     Network.TLS.Record.Disengage13
                      Network.TLS.Record.State
                      Network.TLS.RNG
                      Network.TLS.State
                      Network.TLS.Session
                      Network.TLS.Sending
+                     Network.TLS.Sending13
                      Network.TLS.Receiving
+                     Network.TLS.Receiving13
                      Network.TLS.Util
                      Network.TLS.Util.ASN1
                      Network.TLS.Util.Serialization

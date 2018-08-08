@@ -15,17 +15,18 @@ data Packet13 =
 newtype CertificateEntry13 = CertificateEntry13 [ExtensionRaw]
                            deriving (Show,Eq)
 
+-- fixme: convert ByteString to proper data types.
 data Handshake13 =
       ClientHello13 !Version !ClientRandom !Session ![CipherID] [ExtensionRaw]
     | ServerHello13 !ServerRandom !Session !CipherID [ExtensionRaw]
-    | NewSessionTicket13 Word32 Word32 ByteString ByteString [ExtensionRaw] -- fixme
+    | NewSessionTicket13 Word32 Word32 ByteString ByteString [ExtensionRaw]
     | EndOfEarlyData13
     | EncryptedExtensions13 [ExtensionRaw]
-    | CertRequest13 -- fixme
+    | CertRequest13 ByteString [ExtensionRaw]
     | Certificate13 ByteString CertificateChain [[ExtensionRaw]]
     | CertVerify13 HashAndSignatureAlgorithm ByteString
     | Finished13 FinishedData
-    | KeyUpdate13 -- fixme
+    | KeyUpdate13 Word8
     deriving (Show,Eq)
 
 data HandshakeType13 =
