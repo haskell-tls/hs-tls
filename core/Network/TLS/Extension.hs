@@ -360,7 +360,7 @@ instance Extension SignatureAlgorithms where
 newtype SignatureAlgorithmsCert = SignatureAlgorithmsCert [HashAndSignatureAlgorithm] deriving (Show,Eq)
 
 instance Extension SignatureAlgorithmsCert where
-    extensionID _ = extensionID_SignatureAlgorithms
+    extensionID _ = extensionID_SignatureAlgorithmsCert
     extensionEncode (SignatureAlgorithmsCert algs) =
         runPut $ putWord16 (fromIntegral (length algs * 2)) >> mapM_ putSignatureHashAlgorithm algs
     extensionDecode _ =
