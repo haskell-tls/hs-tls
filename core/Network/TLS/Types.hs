@@ -57,11 +57,12 @@ data TLS13TicketInfo = TLS13TicketInfo
     } deriving (Eq)
 
 instance Show TLS13TicketInfo where
-    show s = "TLS13TicketInfo { "
-        ++   "lifetime = " ++ show (lifetime s)
-        ++ ", ageAdd = "   ++ show (ageAdd s)
-        ++ ", txrxTime = " ++ show (txrxTime s)
-        ++ " }"
+    showsPrec d s = showParen (d > 10) $
+             showString "TLS13TicketInfo { "
+           . showString   "lifetime = " . shows (lifetime s)
+           . showString ", ageAdd = "   . shows (ageAdd s)
+           . showString ", txrxTime = " . shows (txrxTime s)
+           . showString " }"
 
 -- | Cipher identification
 type CipherID = Word16
