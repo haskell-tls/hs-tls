@@ -16,7 +16,7 @@ import Network.TLS.Types
 data SessionManager = SessionManager
     { -- | used on server side to decide whether to resume a client session.
       sessionResume         :: SessionID -> IO (Maybe SessionData)
-      -- | used on server side to decide whether to resume a client session for TLS 1.3 0RTT
+      -- | used on server side to decide whether to resume a client session for TLS 1.3 0RTT. For a given 'SessionID', the implementation must return its 'SessionData' only once and must not return the same 'SessionData' after the call.
     , sessionResumeOnlyOnce :: SessionID -> IO (Maybe SessionData)
       -- | used when a session is established.
     , sessionEstablish      :: SessionID -> SessionData -> IO ()
