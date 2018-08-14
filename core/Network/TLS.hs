@@ -19,6 +19,7 @@ module Network.TLS
     , ClientHooks(..)
     , ServerHooks(..)
     , Supported(..)
+    , EarlyData(..)
     , Shared(..)
     , Hooks(..)
     , Handshake
