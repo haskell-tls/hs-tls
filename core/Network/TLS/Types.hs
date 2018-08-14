@@ -46,7 +46,7 @@ data SessionData = SessionData
     , sessionGroup       :: Maybe Group
     , sessionTicketInfo  :: Maybe TLS13TicketInfo
     , sessionALPN        :: Maybe ByteString
-    , sessionMaxEarlyDataSize :: Word32
+    , sessionMaxEarlyDataSize :: Int
     } deriving (Show,Eq)
 
 data TLS13TicketInfo = TLS13TicketInfo
