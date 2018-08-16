@@ -46,6 +46,16 @@ module Network.TLS.State
     , getSession
     , isSessionResuming
     , isClientContext
+    , setExporterMasterSecret
+    , getExporterMasterSecret
+    , setTLS13KeyShare
+    , getTLS13KeyShare
+    , setTLS13PreSharedKey
+    , getTLS13PreSharedKey
+    , setTLS13HRR
+    , getTLS13HRR
+    , setTLS13Cookie
+    , getTLS13Cookie
     -- * random
     , genRandom
     , withRNG
@@ -53,6 +63,7 @@ module Network.TLS.State
 
 import Network.TLS.Imports
 import Network.TLS.Struct
+import Network.TLS.Struct13
 import Network.TLS.RNG
 import Network.TLS.Types (Role(..))
 import Network.TLS.Wire (GetContinuation)
@@ -74,6 +85,7 @@ data TLSState = TLSState
     , stExtensionALPN       :: Bool  -- RFC 7301
     , stHandshakeRecordCont :: Maybe (GetContinuation (HandshakeType, ByteString))
     , stNegotiatedProtocol  :: Maybe B.ByteString -- ALPN protocol
+    , stHandshakeRecordCont13 :: Maybe (GetContinuation (HandshakeType13, ByteString))
     , stClientALPNSuggest   :: Maybe [B.ByteString]
     , stClientGroupSuggest  :: Maybe [Group]
     , stClientEcPointFormatSuggest :: Maybe [EcPointFormat]
@@ -82,6 +94,11 @@ data TLSState = TLSState
     , stRandomGen           :: StateRNG
     , stVersion             :: Maybe Version
     , stClientContext       :: Role
+    , stTLS13KeyShare       :: Maybe KeyShare
+    , stTLS13PreSharedKey   :: Maybe PreSharedKey
+    , stTLS13HRR            :: !Bool
+    , stTLS13Cookie         :: Maybe Cookie
+    , stExporterMasterSecret :: Maybe ByteString -- TLS 1.3
     }
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrT TLSError (State TLSState) a }
@@ -106,15 +123,21 @@ newTLSState rng clientContext = TLSState
     , stServerVerifiedData  = B.empty
     , stExtensionALPN       = False
     , stHandshakeRecordCont = Nothing
+    , stHandshakeRecordCont13 = Nothing
     , stNegotiatedProtocol  = Nothing
     , stClientALPNSuggest   = Nothing
-    , stClientGroupSuggest = Nothing
+    , stClientGroupSuggest  = Nothing
     , stClientEcPointFormatSuggest = Nothing
     , stClientCertificateChain = Nothing
     , stClientSNI           = Nothing
     , stRandomGen           = rng
     , stVersion             = Nothing
     , stClientContext       = clientContext
+    , stTLS13KeyShare       = Nothing
+    , stTLS13PreSharedKey   = Nothing
+    , stTLS13HRR            = False
+    , stTLS13Cookie         = Nothing
+    , stExporterMasterSecret = Nothing
     }
 
 updateVerifiedData :: Role -> ByteString -> TLSSt ()
@@ -236,3 +259,33 @@ withRNG f = do
     let (a,rng') = withTLSRNG (stRandomGen st) f
     put (st { stRandomGen = rng' })
     return a
+
+setExporterMasterSecret :: ByteString -> TLSSt ()
+setExporterMasterSecret key = modify (\st -> st { stExporterMasterSecret = Just key })
+
+getExporterMasterSecret :: TLSSt (Maybe ByteString)
+getExporterMasterSecret = gets stExporterMasterSecret
+
+setTLS13KeyShare :: Maybe KeyShare -> TLSSt ()
+setTLS13KeyShare mks = modify (\st -> st { stTLS13KeyShare = mks })
+
+getTLS13KeyShare :: TLSSt (Maybe KeyShare)
+getTLS13KeyShare = gets stTLS13KeyShare
+
+setTLS13PreSharedKey :: Maybe PreSharedKey -> TLSSt ()
+setTLS13PreSharedKey mpsk = modify (\st -> st { stTLS13PreSharedKey = mpsk })
+
+getTLS13PreSharedKey :: TLSSt (Maybe PreSharedKey)
+getTLS13PreSharedKey = gets stTLS13PreSharedKey
+
+setTLS13HRR :: Bool -> TLSSt ()
+setTLS13HRR b = modify (\st -> st { stTLS13HRR = b })
+
+getTLS13HRR :: TLSSt Bool
+getTLS13HRR = gets stTLS13HRR
+
+setTLS13Cookie :: Cookie -> TLSSt ()
+setTLS13Cookie cookie = modify (\st -> st { stTLS13Cookie = Just cookie })
+
+getTLS13Cookie :: TLSSt (Maybe Cookie)
+getTLS13Cookie = gets stTLS13Cookie

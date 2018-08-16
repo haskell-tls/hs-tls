@@ -69,9 +69,11 @@ newSessionManager conf = do
         , reaperDelay  = pruningDelay conf * 1000000
         }
     return SessionManager {
-        sessionResume     = resume reaper MultipleUse
-      , sessionEstablish  = establish reaper lifetime
-      , sessionInvalidate = invalidate reaper
+        sessionResume         = resume reaper MultipleUse
+      , sessionResumeOnlyOnce = resume reaper SingleUse
+      , sessionEstablish      = establish reaper lifetime
+      , sessionInvalidate     = invalidate reaper
+
       }
 
 cons :: Int -> Item -> DB -> DB

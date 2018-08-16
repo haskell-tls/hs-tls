@@ -89,6 +89,10 @@ data ClientParams = ClientParams
       -- of 'supportedCiphers' with a suitable cipherlist.
     , clientSupported                 :: Supported
     , clientDebug                     :: DebugParams
+      -- ^ Client tries to send this early data in TLS 1.3 if possible.
+      -- If not accepted by the server, it is application's responsibility
+      -- to re-sent it.
+    , clientEarlyData                 :: Maybe ByteString
     } deriving (Show)
 
 defaultParamsClient :: HostName -> ByteString -> ClientParams
@@ -101,6 +105,7 @@ defaultParamsClient serverName serverId = ClientParams
     , clientHooks                = def
     , clientSupported            = def
     , clientDebug                = defaultDebugParams
+    , clientEarlyData            = Nothing
     }
 
 data ServerParams = ServerParams
@@ -125,6 +130,9 @@ data ServerParams = ServerParams
     , serverHooks             :: ServerHooks
     , serverSupported         :: Supported
     , serverDebug             :: DebugParams
+      -- ^ Server accepts this size of early data in TLS 1.3.
+      -- 0 (or lower) means that the server does not accept early data.
+    , serverEarlyDataSize     :: Int
     } deriving (Show)
 
 defaultParamsServer :: ServerParams
@@ -136,6 +144,7 @@ defaultParamsServer = ServerParams
     , serverShared           = def
     , serverSupported        = def
     , serverDebug            = defaultDebugParams
+    , serverEarlyDataSize    = 0
     }
 
 instance Default ServerParams where
@@ -201,7 +210,10 @@ defaultSupported = Supported
     { supportedVersions       = [TLS12,TLS11,TLS10]
     , supportedCiphers        = []
     , supportedCompressions   = [nullCompression]
-    , supportedHashSignatures = [ (Struct.HashSHA512, SignatureRSA)
+    , supportedHashSignatures = [ (HashIntrinsic,     SignatureRSApssRSAeSHA256)
+                                , (HashIntrinsic,     SignatureRSApssRSAeSHA384)
+                                , (HashIntrinsic,     SignatureRSApssRSAeSHA512)
+                                , (Struct.HashSHA512, SignatureRSA)
                                 , (Struct.HashSHA512, SignatureECDSA)
                                 , (Struct.HashSHA384, SignatureRSA)
                                 , (Struct.HashSHA384, SignatureECDSA)

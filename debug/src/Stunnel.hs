@@ -72,9 +72,10 @@ tlsserver srchandle dsthandle = do
 newtype MemSessionManager = MemSessionManager (MVar [(SessionID, SessionData)])
 
 memSessionManager (MemSessionManager mvar) = SessionManager
-    { sessionEstablish  = \sid sdata -> modifyMVar_ mvar (\l -> return $ (sid,sdata) : l)
-    , sessionResume     = \sid       -> withMVar mvar (return . lookup sid)
-    , sessionInvalidate = \_         -> return ()
+    { sessionEstablish      = \sid sdata -> modifyMVar_ mvar (\l -> return $ (sid,sdata) : l)
+    , sessionResume         = \sid       -> withMVar mvar (return . lookup sid)
+    , sessionResumeOnlyOnce = \sid       -> withMVar mvar (return . lookup sid)
+    , sessionInvalidate     = \_         -> return ()
     }
 
 clientProcess dhParamsFile creds handle dsthandle dbg sessionStorage _ = do

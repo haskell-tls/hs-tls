@@ -187,9 +187,10 @@ arbitraryRSACredentialWithUsage usageFlags = do
 -- a Real concurrent session manager would use an MVar and have multiples items.
 oneSessionManager :: IORef (Maybe (SessionID, SessionData)) -> SessionManager
 oneSessionManager ref = SessionManager
-    { sessionResume     = \myId     -> (>>= maybeResume myId) <$> readIORef ref
-    , sessionEstablish  = \myId dat -> writeIORef ref $ Just (myId, dat)
-    , sessionInvalidate = \_        -> return ()
+    { sessionResume         = \myId     -> (>>= maybeResume myId) <$> readIORef ref
+    , sessionResumeOnlyOnce = \myId     -> (>>= maybeResume myId) <$> readIORef ref
+    , sessionEstablish      = \myId dat -> writeIORef ref $ Just (myId, dat)
+    , sessionInvalidate     = \_        -> return ()
     }
   where
     maybeResume myId (sid, sdata)

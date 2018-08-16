@@ -14,6 +14,7 @@ module Network.TLS.Handshake.Common
     , recvPacketHandshake
     , onRecvStateHandshake
     , extensionLookup
+    , getSessionData
     ) where
 
 import Control.Concurrent.MVar
@@ -24,7 +25,7 @@ import Network.TLS.Context.Internal
 import Network.TLS.Session
 import Network.TLS.Struct
 import Network.TLS.IO
-import Network.TLS.State hiding (getNegotiatedProtocol)
+import Network.TLS.State
 import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.State
 import Network.TLS.Record.State
@@ -73,7 +74,7 @@ handshakeTerminate ctx = do
                     }
     updateMeasure ctx resetBytesCounters
     -- mark the secure connection up and running.
-    setEstablished ctx True
+    setEstablished ctx Established
     return ()
 
 sendChangeCipherAndFinish :: Context
@@ -126,6 +127,7 @@ getSessionData ctx = do
     sni <- usingState_ ctx getClientSNI
     mms <- usingHState ctx (gets hstMasterSecret)
     tx  <- liftIO $ readMVar (ctxTxState ctx)
+    alpn <- usingState_ ctx getNegotiatedProtocol
     case mms of
         Nothing -> return Nothing
         Just ms -> return $ Just SessionData
@@ -134,6 +136,10 @@ getSessionData ctx = do
                         , sessionCompression = compressionID $ stCompression tx
                         , sessionClientSNI   = sni
                         , sessionSecret      = ms
+                        , sessionGroup       = Nothing
+                        , sessionTicketInfo  = Nothing
+                        , sessionALPN        = alpn
+                        , sessionMaxEarlyDataSize = 0
                         }
 
 extensionLookup :: ExtensionID -> [ExtensionRaw] -> Maybe ByteString

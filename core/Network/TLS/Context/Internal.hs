@@ -19,6 +19,7 @@ module Network.TLS.Context.Internal
     -- * Context object and accessor
     , Context(..)
     , Hooks(..)
+    , Established(..)
     , ctxEOF
     , ctxHasSSLv2ClientHello
     , ctxDisableSSLv2ClientHello
@@ -83,6 +84,7 @@ data Information = Information
     , infoMasterSecret :: Maybe ByteString
     , infoClientRandom :: Maybe ClientRandom
     , infoServerRandom :: Maybe ServerRandom
+    , infoIsEarlyDataAccepted :: Bool
     } deriving (Show,Eq)
 
 -- | A TLS Context keep tls specific state, parameters and backend information.
@@ -93,7 +95,7 @@ data Context = Context
     , ctxState            :: MVar TLSState
     , ctxMeasurement      :: IORef Measurement
     , ctxEOF_             :: IORef Bool    -- ^ has the handle EOFed or not.
-    , ctxEstablished_     :: IORef Bool    -- ^ has the handshake been done and been successful.
+    , ctxEstablished_     :: IORef Established -- ^ has the handshake been done and been successful.
     , ctxNeedEmptyPacket  :: IORef Bool    -- ^ empty packet workaround for CBC guessability.
     , ctxSSLv2ClientHello :: IORef Bool    -- ^ enable the reception of compatibility SSLv2 client hello.
                                            -- the flag will be set to false regardless of its initial value
@@ -108,7 +110,14 @@ data Context = Context
     , ctxLockRead         :: MVar ()       -- ^ lock to use for reading data (including updating the state)
     , ctxLockState        :: MVar ()       -- ^ lock used during read/write when receiving and sending packet.
                                            -- it is usually nested in a write or read lock.
+    , ctxPendingActions   :: MVar [ByteString -> IO ()]
     }
+
+data Established = NotEstablished
+                 | EarlyDataAllowed Int
+                 | EarlyDataNotAllowed
+                 | Established
+                 deriving (Eq, Show)
 
 updateMeasure :: Context -> (Measurement -> Measurement) -> IO ()
 updateMeasure ctx f = do
@@ -135,8 +144,11 @@ contextGetInformation ctx = do
                                        hstServerRandom st)
                            Nothing -> (Nothing, Nothing, Nothing)
     (cipher,comp) <- failOnEitherError $ runRxState ctx $ gets $ \st -> (stCipher st, stCompression st)
+    let accepted = case hstate of
+            Just st -> hstTLS13RTT0Status st == RTT0Accepted
+            Nothing -> False
     case (ver, cipher) of
-        (Just v, Just c) -> return $ Just $ Information v c comp ms cr sr
+        (Just v, Just c) -> return $ Just $ Information v c comp ms cr sr accepted
         _                -> return Nothing
 
 contextSend :: Context -> ByteString -> IO ()
@@ -157,7 +169,7 @@ ctxDisableSSLv2ClientHello ctx = writeIORef (ctxSSLv2ClientHello ctx) False
 setEOF :: Context -> IO ()
 setEOF ctx = writeIORef (ctxEOF_ ctx) True
 
-ctxEstablished :: Context -> IO Bool
+ctxEstablished :: Context -> IO Established
 ctxEstablished ctx = readIORef $ ctxEstablished_ ctx
 
 ctxWithHooks :: Context -> (Hooks -> IO a) -> IO a
@@ -166,7 +178,7 @@ ctxWithHooks ctx f = readIORef (ctxHooks ctx) >>= f
 contextModifyHooks :: Context -> (Hooks -> Hooks) -> IO ()
 contextModifyHooks ctx f = modifyIORef (ctxHooks ctx) f
 
-setEstablished :: Context -> Bool -> IO ()
+setEstablished :: Context -> Established -> IO ()
 setEstablished ctx v = writeIORef (ctxEstablished_ ctx) v
 
 withLog :: Context -> (Logging -> IO ()) -> IO ()

@@ -15,6 +15,9 @@ module Network.TLS.Handshake.Signature
     , digitallySignDHParamsVerify
     , digitallySignECDHParamsVerify
     , signatureCompatible
+    , signatureParams
+    , fromPubKey
+    , fromPrivKey
     ) where
 
 import Network.TLS.Crypto
@@ -29,6 +32,16 @@ import Network.TLS.Handshake.Key
 import Network.TLS.Util
 
 import Control.Monad.State.Strict
+
+fromPubKey :: PubKey -> Maybe DigitalSignatureAlg
+fromPubKey (PubKeyRSA _) = Just RSA
+fromPubKey (PubKeyDSA _) = Just DSS
+fromPubKey (PubKeyEC  _) = Just ECDSA
+fromPubKey _             = Nothing
+
+fromPrivKey :: PrivKey -> Maybe DigitalSignatureAlg
+fromPrivKey (PrivKeyRSA _) = Just RSA
+fromPrivKey (PrivKeyDSA _) = Just DSS
 
 signatureCompatible :: DigitalSignatureAlg -> HashAndSignatureAlgorithm -> Bool
 signatureCompatible RSA   (_, SignatureRSA)              = True
