@@ -114,7 +114,7 @@ data Context = Context
     }
 
 data Established = NotEstablished
-                 | EarlyDataAllowed
+                 | EarlyDataAllowed Int
                  | EarlyDataNotAllowed
                  | Established
                  deriving (Eq, Show)

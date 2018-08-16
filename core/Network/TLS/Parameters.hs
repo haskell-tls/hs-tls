@@ -22,7 +22,6 @@ module Network.TLS.Parameters
     , GroupUsage(..)
     , CertificateUsage(..)
     , CertificateRejectReason(..)
-    , EarlyData(..)
     ) where
 
 import Network.TLS.Extension
@@ -90,6 +89,10 @@ data ClientParams = ClientParams
       -- of 'supportedCiphers' with a suitable cipherlist.
     , clientSupported                 :: Supported
     , clientDebug                     :: DebugParams
+      -- ^ Client tries to send this early data in TLS 1.3 if possible.
+      -- If not accepted by the server, it is application's responsibility
+      -- to re-sent it.
+    , clientEarlyData                 :: Maybe ByteString
     } deriving (Show)
 
 defaultParamsClient :: HostName -> ByteString -> ClientParams
@@ -102,6 +105,7 @@ defaultParamsClient serverName serverId = ClientParams
     , clientHooks                = def
     , clientSupported            = def
     , clientDebug                = defaultDebugParams
+    , clientEarlyData            = Nothing
     }
 
 data ServerParams = ServerParams
@@ -126,6 +130,9 @@ data ServerParams = ServerParams
     , serverHooks             :: ServerHooks
     , serverSupported         :: Supported
     , serverDebug             :: DebugParams
+      -- ^ Server accepts this size of early data in TLS 1.3.
+      -- 0 (or lower) means that the server does not accept early data.
+    , serverEarlyDataSize     :: Int
     } deriving (Show)
 
 defaultParamsServer :: ServerParams
@@ -137,6 +144,7 @@ defaultParamsServer = ServerParams
     , serverShared           = def
     , serverSupported        = def
     , serverDebug            = defaultDebugParams
+    , serverEarlyDataSize    = 0
     }
 
 instance Default ServerParams where
@@ -195,13 +203,7 @@ data Supported = Supported
       --   enough until 2030.  Both curves are fast because their
       --   backends are written in C.
     , supportedGroups              :: [Group]
-    , supportedEarlyData           :: EarlyData
     } deriving (Show,Eq)
-
--- | Type to control early data of TLS 1.3.
-data EarlyData = AcceptEarlyData Int      -- ^ Server accepts this size of early data. 0 (or lower) means that the server does not accept early data.
-               | SendEarlyData ByteString -- ^ Client tries to send this early data if possible. If not accepted by the server, it is application's responsibility to re-sent it.
-               deriving (Eq, Show)
 
 defaultSupported :: Supported
 defaultSupported = Supported
@@ -226,7 +228,6 @@ defaultSupported = Supported
     , supportedFallbackScsv        = True
     , supportedEmptyPacket         = True
     , supportedGroups              = [X25519,P256,P384,P521]
-    , supportedEarlyData           = AcceptEarlyData 0
     }
 
 instance Default Supported where
