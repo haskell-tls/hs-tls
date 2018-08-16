@@ -200,7 +200,7 @@ data Supported = Supported
 
 -- | Type to control early data of TLS 1.3.
 data EarlyData = AcceptEarlyData Int      -- ^ Server accepts this size of early data. 0 (or lower) means that the server does not accept early data.
-               | SendEarlyData ByteString -- ^ Client tries to send this early data if possible. If not accepted by the server, it is re-sent as 1RTT.
+               | SendEarlyData ByteString -- ^ Client tries to send this early data if possible. If not accepted by the server, it is application's responsibility to re-sent it.
                deriving (Eq, Show)
 
 defaultSupported :: Supported
