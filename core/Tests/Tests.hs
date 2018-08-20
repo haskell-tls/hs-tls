@@ -88,6 +88,11 @@ prop_handshake_initiate = do
     params  <- pick arbitraryPairParams
     runTLSPipeSimple params
 
+prop_handshake_initiate13 :: PropertyM IO ()
+prop_handshake_initiate13 = do
+    params  <- pick arbitraryPairParams13
+    runTLSPipeSimple params
+
 prop_handshake_ciphersuites :: PropertyM IO ()
 prop_handshake_ciphersuites = do
     let clientVersions = [TLS12]
@@ -368,6 +373,7 @@ main = defaultMain $ testGroup "tls"
         tests_handshake = testGroup "Handshakes"
             [ testProperty "Setup" (monadicIO prop_pipe_work)
             , testProperty "Initiation" (monadicIO prop_handshake_initiate)
+            , testProperty "Initiation 1.3" (monadicIO prop_handshake_initiate13)
             , testProperty "Hash and signatures" (monadicIO prop_handshake_hashsignatures)
             , testProperty "Cipher suites" (monadicIO prop_handshake_ciphersuites)
             , testProperty "Groups" (monadicIO prop_handshake_groups)

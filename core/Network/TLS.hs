@@ -43,6 +43,7 @@ module Network.TLS
     , SessionData(..)
     , SessionManager(..)
     , noSessionManager
+    , TLS13TicketInfo
 
     -- * Backend abstraction
     , Backend(..)
@@ -130,6 +131,9 @@ module Network.TLS
 
     -- * Key exchange group
     , Group(..)
+
+    -- * Key exporter
+    , exporter
     ) where
 
 import Network.TLS.Backend (Backend(..), HasBackend(..))

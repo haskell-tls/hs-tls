@@ -8,6 +8,7 @@ module Connection
     , arbitraryGroups
     , arbitraryKeyUsage
     , arbitraryPairParams
+    , arbitraryPairParams13
     , arbitraryPairParamsWithVersionsAndCiphers
     , arbitraryClientCredential
     , arbitraryRSACredentialWithUsage
@@ -41,7 +42,7 @@ debug :: Bool
 debug = False
 
 knownCiphers :: [Cipher]
-knownCiphers = filter nonECDSA (ciphersuite_all ++ ciphersuite_weak)
+knownCiphers = filter nonTLS13 $ filter nonECDSA (ciphersuite_all ++ ciphersuite_weak)
   where
     ciphersuite_weak = [
         cipher_DHE_DSS_RC4_SHA1
@@ -51,6 +52,13 @@ knownCiphers = filter nonECDSA (ciphersuite_all ++ ciphersuite_weak)
       ]
     -- arbitraryCredentialsOfEachType cannot generate ECDSA
     nonECDSA c = not ("ECDSA" `isInfixOf` cipherName c)
+    nonTLS13 c = cipherMinVer c /= Just TLS13
+
+knownCiphers13 :: [Cipher]
+knownCiphers13 = [
+    cipher_TLS13_AES128GCM_SHA256
+  , cipher_TLS13_AES256GCM_SHA384
+  ]
 
 arbitraryCiphers :: Gen [Cipher]
 arbitraryCiphers = listOf1 $ elements knownCiphers
@@ -64,7 +72,9 @@ arbitraryVersions = sublistOf knownVersions
 knownHashSignatures :: [HashAndSignatureAlgorithm]
 knownHashSignatures = filter nonECDSA availableHashSignatures
   where
-    availableHashSignatures = [(TLS.HashIntrinsic, SignatureRSApssRSAeSHA256)
+    availableHashSignatures = [(TLS.HashIntrinsic, SignatureRSApssRSAeSHA512)
+                              ,(TLS.HashIntrinsic, SignatureRSApssRSAeSHA384)
+                              ,(TLS.HashIntrinsic, SignatureRSApssRSAeSHA256)
                               ,(TLS.HashSHA512, SignatureRSA)
                               ,(TLS.HashSHA512, SignatureECDSA)
                               ,(TLS.HashSHA384, SignatureRSA)
@@ -132,6 +142,17 @@ arbitraryECGroupPair = do
     serverGroups <- arbitraryECGroups
     clientGroups <- arbitraryECGroups `suchThat` any (`elem` serverGroups)
     return (clientGroups, serverGroups)
+
+arbitraryPairParams13 :: Gen (ClientParams, ServerParams)
+arbitraryPairParams13 = do
+    let connectVersion = TLS13
+        allowedVersions = [connectVersion]
+        serAllowedVersions = [connectVersion]
+    (clientCiphers', serverCiphers') <- arbitraryCipherPair connectVersion
+    cipher <- elements knownCiphers13
+    let clientCiphers = clientCiphers' ++ [cipher]
+        serverCiphers = serverCiphers' ++ [cipher]
+    arbitraryPairParamsWithVersionsAndCiphers (allowedVersions, serAllowedVersions) (clientCiphers, serverCiphers)
 
 arbitraryHashSignaturePair :: Gen ([HashAndSignatureAlgorithm], [HashAndSignatureAlgorithm])
 arbitraryHashSignaturePair = do

@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- |
 -- Module      : Network.TLS.Context.Internal
 -- License     : BSD-style
@@ -53,11 +54,15 @@ module Network.TLS.Context.Internal
     , usingHState
     , getHState
     , getStateRNG
+    , tls13orLater
+
+    , exporter
     ) where
 
 import Network.TLS.Backend
 import Network.TLS.Extension
 import Network.TLS.Cipher
+import Network.TLS.Crypto
 import Network.TLS.Struct
 import Network.TLS.Compression (Compression)
 import Network.TLS.State
@@ -67,6 +72,7 @@ import Network.TLS.Record.State
 import Network.TLS.Parameters
 import Network.TLS.Measurement
 import Network.TLS.Imports
+import Network.TLS.KeySchedule
 import qualified Data.ByteString as B
 
 import Control.Concurrent.MVar
@@ -215,8 +221,15 @@ getHState ctx = liftIO $ readMVar (ctxHandshake ctx)
 runTxState :: Context -> RecordM a -> IO (Either TLSError a)
 runTxState ctx f = do
     ver <- usingState_ ctx (getVersionWithDefault $ maximum $ supportedVersions $ ctxSupported ctx)
+    hrr <- usingState_ ctx getTLS13HRR
+    -- For TLS 1.3, ver' is only used in ClientHello.
+    -- The record version of the first ClientHello SHOULD be TLS 1.0.
+    -- The record version of the second ClientHello MUST be TLS 1.2.
+    let ver'
+         | ver >= TLS13 = if hrr then TLS12 else TLS10
+         | otherwise    = ver
     modifyMVar (ctxTxState ctx) $ \st ->
-        case runRecordM f ver st of
+        case runRecordM f ver' st of
             Left err         -> return (st, Left err)
             Right (a, newSt) -> return (newSt, Right a)
 
@@ -242,3 +255,24 @@ withRWLock ctx f = withReadLock ctx $ withWriteLock ctx f
 
 withStateLock :: Context -> IO a -> IO a
 withStateLock ctx f = withMVar (ctxLockState ctx) (const f)
+
+tls13orLater :: MonadIO m => Context -> m Bool
+tls13orLater ctx = do
+    ev <- liftIO $ usingState ctx $ getVersionWithDefault TLS10 -- fixme
+    return $ case ev of
+               Left  _ -> False
+               Right v -> v >= TLS13
+
+exporter :: Context -> ByteString -> ByteString -> Int -> IO (Maybe ByteString)
+exporter ctx label context outlen = do
+    msecret <- usingState_ ctx getExporterMasterSecret
+    mcipher <- failOnEitherError $ runRxState ctx $ gets stCipher
+    return $ case (msecret, mcipher) of
+      (Just secret, Just cipher) ->
+          let h = cipherHash cipher
+              secret' = deriveSecret h secret label ""
+              label' = "exporter"
+              value' = hash h context
+              key = hkdfExpandLabel h secret' label' value' outlen
+          in Just key
+      _ -> Nothing
