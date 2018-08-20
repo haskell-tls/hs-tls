@@ -54,9 +54,10 @@ runTLS debug ioDebug params hostname portNumber f = do
             | otherwise = logging
 
 sessionRef ref = SessionManager
-    { sessionEstablish  = \sid sdata -> writeIORef ref (sid,sdata)
-    , sessionResume     = \sid       -> readIORef ref >>= \(s,d) -> if s == sid then return (Just d) else return Nothing
-    , sessionInvalidate = \_         -> return ()
+    { sessionEstablish      = \sid sdata -> writeIORef ref (sid,sdata)
+    , sessionResume         = \sid       -> readIORef ref >>= \(s,d) -> if s == sid then return (Just d) else return Nothing
+    , sessionResumeOnlyOnce = \sid       -> readIORef ref >>= \(s,d) -> if s == sid then return (Just d) else return Nothing
+    , sessionInvalidate     = \_         -> return ()
     }
 
 getDefaultParams flags host store sStorage certCredsRequest session =
