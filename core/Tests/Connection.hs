@@ -271,12 +271,13 @@ establishDataPipe params tlsServer tlsClient = do
 
     (cCtx, sCtx) <- newPairContext pipe params
 
-    _ <- forkIO $ E.catch (tlsServer sCtx resultQueue)
-                          (printAndRaise "server" (serverSupported $ snd params))
-    _ <- forkIO $ E.catch (tlsClient startQueue cCtx)
-                          (printAndRaise "client" (clientSupported $ fst params))
+    sAsync <- async $ E.catch (tlsServer sCtx resultQueue)
+                              (printAndRaise "server" (serverSupported $ snd params))
+    cAsync <- async $ E.catch (tlsClient startQueue cCtx)
+                              (printAndRaise "client" (clientSupported $ fst params))
 
-    return (writeChan startQueue, readChan resultQueue)
+    let readResult = waitBoth cAsync sAsync >> readChan resultQueue
+    return (writeChan startQueue, readResult)
   where
         printAndRaise :: String -> Supported -> E.SomeException -> IO ()
         printAndRaise s supported e = do
