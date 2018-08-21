@@ -141,6 +141,7 @@ Test-Suite test-tls
                      PubKey
   Build-Depends:     base >= 3 && < 5
                    , mtl
+                   , async >= 2.0
                    , cereal >= 0.3
                    , data-default-class
                    , tasty

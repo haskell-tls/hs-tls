@@ -31,6 +31,7 @@ import Data.X509
 import Data.Default.Class
 import Data.IORef
 import Control.Applicative
+import Control.Concurrent.Async
 import Control.Concurrent.Chan
 import Control.Concurrent
 import qualified Control.Exception as E
@@ -288,22 +289,11 @@ initiateDataPipe params tlsServer tlsClient = do
     -- initial setup
     pipe        <- newPipe
     _           <- runPipe pipe
-    cQueue      <- newChan
-    sQueue      <- newChan
 
     (cCtx, sCtx) <- newPairContext pipe params
 
-    _ <- forkIO $ E.catch (tlsServer sCtx >>= writeSuccess sQueue)
-                          (writeException sQueue)
-    _ <- forkIO $ E.catch (tlsClient cCtx >>= writeSuccess cQueue)
-                          (writeException cQueue)
-
-    sRes <- readChan sQueue
-    cRes <- readChan cQueue
-    return (cRes, sRes)
-  where
-        writeException :: Chan (Either E.SomeException a) -> E.SomeException -> IO ()
-        writeException queue e = writeChan queue (Left e)
-
-        writeSuccess :: Chan (Either E.SomeException a) -> a -> IO ()
-        writeSuccess queue res = writeChan queue (Right res)
+    withAsync (tlsServer sCtx) $ \sAsync ->
+        withAsync (tlsClient cCtx) $ \cAsync -> do
+            sRes <- waitCatch sAsync
+            cRes <- waitCatch cAsync
+            return (cRes, sRes)
