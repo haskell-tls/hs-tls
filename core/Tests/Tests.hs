@@ -88,7 +88,7 @@ runTLSPipeSimple13 params modes mEarlyData = runTLSPipe params tlsServer tlsClie
             d <- recvDataNonNull ctx
             writeChan queue d
             minfo <- contextGetInformation ctx
-            join (infoTLS13HandshakeMode <$> minfo) `assertEq` Just (snd modes)
+            (minfo >>= infoTLS13HandshakeMode) `assertEq` Just (snd modes)
             when (isJust mEarlyData) $ do
                 d' <- recvDataNonNull ctx
                 writeChan queue d'
@@ -98,7 +98,7 @@ runTLSPipeSimple13 params modes mEarlyData = runTLSPipe params tlsServer tlsClie
             d <- readChan queue
             sendData ctx (L.fromChunks [d])
             minfo <- contextGetInformation ctx
-            Just (fst modes) `assertEq` join (infoTLS13HandshakeMode <$> minfo)
+            Just (fst modes) `assertEq` (minfo >>= infoTLS13HandshakeMode)
             bye ctx
             return ()
 

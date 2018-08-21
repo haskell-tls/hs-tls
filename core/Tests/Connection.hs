@@ -264,7 +264,7 @@ establishDataPipe :: (ClientParams, ServerParams) -> (Context -> Chan result -> 
 establishDataPipe params tlsServer tlsClient = do
     -- initial setup
     pipe        <- newPipe
-    _           <- (runPipe pipe)
+    _           <- runPipe pipe
     startQueue  <- newChan
     resultQueue <- newChan
 
@@ -287,7 +287,7 @@ initiateDataPipe :: (ClientParams, ServerParams) -> (Context -> IO a1) -> (Conte
 initiateDataPipe params tlsServer tlsClient = do
     -- initial setup
     pipe        <- newPipe
-    _           <- (runPipe pipe)
+    _           <- runPipe pipe
     cQueue      <- newChan
     sQueue      <- newChan
 
