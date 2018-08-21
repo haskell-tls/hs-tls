@@ -57,13 +57,13 @@ runTLSPipe params tlsServer tlsClient mEarlyData = do
     d <- B.pack <$> pick (someWords8 256)
     run $ writeStart d
     -- receive it
-    dres <- run $ timeout 10000000 readResult
+    dres <- run $ timeout 60000000 readResult -- 60 sec
     -- check if it equal
     case mEarlyData of
       Nothing -> Just d `assertEq` dres
       Just ed -> do
           Just ed `assertEq` dres
-          dres' <- run $ timeout 10000000 readResult
+          dres' <- run $ timeout 60000000 readResult -- 60 sec
           Just d `assertEq` dres'
     return ()
 
