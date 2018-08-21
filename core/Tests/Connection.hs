@@ -261,7 +261,7 @@ newPairContext pipe (cParams, sParams) = do
                                     , loggingPacketRecv = putStrLn . ((pre ++ "<< ") ++) }
                 else def
 
-establishDataPipe :: (ClientParams, ServerParams) -> (Context -> Chan result -> IO ()) -> (Chan start -> Context -> IO ()) -> IO (Chan start, Chan result)
+establishDataPipe :: (ClientParams, ServerParams) -> (Context -> Chan result -> IO ()) -> (Chan start -> Context -> IO ()) -> IO (start -> IO (), IO result)
 establishDataPipe params tlsServer tlsClient = do
     -- initial setup
     pipe        <- newPipe
@@ -276,7 +276,7 @@ establishDataPipe params tlsServer tlsClient = do
     _ <- forkIO $ E.catch (tlsClient startQueue cCtx)
                           (printAndRaise "client" (clientSupported $ fst params))
 
-    return (startQueue, resultQueue)
+    return (writeChan startQueue, readChan resultQueue)
   where
         printAndRaise :: String -> Supported -> E.SomeException -> IO ()
         printAndRaise s supported e = do

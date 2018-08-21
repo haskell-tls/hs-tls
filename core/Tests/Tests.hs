@@ -52,18 +52,18 @@ recvDataNonNull ctx = recvData ctx >>= \l -> if B.null l then recvDataNonNull ct
 
 runTLSPipe :: (ClientParams, ServerParams) -> (Context -> Chan C8.ByteString -> IO ()) -> (Chan C8.ByteString -> Context -> IO ()) -> Maybe C8.ByteString -> PropertyM IO ()
 runTLSPipe params tlsServer tlsClient mEarlyData = do
-    (startQueue, resultQueue) <- run (establishDataPipe params tlsServer tlsClient)
+    (writeStart, readResult) <- run (establishDataPipe params tlsServer tlsClient)
     -- send some data
     d <- B.pack <$> pick (someWords8 256)
-    run $ writeChan startQueue d
+    run $ writeStart d
     -- receive it
-    dres <- run $ timeout 10000000 $ readChan resultQueue
+    dres <- run $ timeout 10000000 readResult
     -- check if it equal
     case mEarlyData of
       Nothing -> Just d `assertEq` dres
       Just ed -> do
           Just ed `assertEq` dres
-          dres' <- run $ timeout 10000000 $ readChan resultQueue
+          dres' <- run $ timeout 10000000 readResult
           Just d `assertEq` dres'
     return ()
 
