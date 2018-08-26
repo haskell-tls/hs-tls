@@ -45,6 +45,7 @@ fromPubKey _             = Nothing
 fromPrivKey :: PrivKey -> Maybe DigitalSignatureAlg
 fromPrivKey (PrivKeyRSA _) = Just RSA
 fromPrivKey (PrivKeyDSA _) = Just DSS
+fromPrivKey _              = Nothing
 
 getLocalDigitalSignatureAlg :: MonadIO m => Context -> m DigitalSignatureAlg
 getLocalDigitalSignatureAlg ctx = do
