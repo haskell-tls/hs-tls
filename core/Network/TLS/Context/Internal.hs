@@ -90,6 +90,8 @@ data Information = Information
     , infoMasterSecret :: Maybe ByteString
     , infoClientRandom :: Maybe ClientRandom
     , infoServerRandom :: Maybe ServerRandom
+    , infoTLS13Group   :: Maybe Group
+    , infoTLS13HandshakeMode  :: Maybe HandshakeMode13
     , infoIsEarlyDataAccepted :: Bool
     } deriving (Show,Eq)
 
@@ -144,17 +146,19 @@ contextGetInformation :: Context -> IO (Maybe Information)
 contextGetInformation ctx = do
     ver    <- usingState_ ctx $ gets stVersion
     hstate <- getHState ctx
-    let (ms, cr, sr) = case hstate of
+    let (ms, cr, sr, hm13, grp13) = case hstate of
                            Just st -> (hstMasterSecret st,
                                        Just (hstClientRandom st),
-                                       hstServerRandom st)
-                           Nothing -> (Nothing, Nothing, Nothing)
+                                       hstServerRandom st,
+                                       if ver == Just TLS13 then Just (hstTLS13HandshakeMode st) else Nothing,
+                                       hstTLS13Group st)
+                           Nothing -> (Nothing, Nothing, Nothing, Nothing, Nothing)
     (cipher,comp) <- failOnEitherError $ runRxState ctx $ gets $ \st -> (stCipher st, stCompression st)
     let accepted = case hstate of
             Just st -> hstTLS13RTT0Status st == RTT0Accepted
             Nothing -> False
     case (ver, cipher) of
-        (Just v, Just c) -> return $ Just $ Information v c comp ms cr sr accepted
+        (Just v, Just c) -> return $ Just $ Information v c comp ms cr sr grp13 hm13 accepted
         _                -> return Nothing
 
 contextSend :: Context -> ByteString -> IO ()

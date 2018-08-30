@@ -171,13 +171,8 @@ recvData13 ctx = liftIO $ do
             established <- ctxEstablished ctx
             case established of
               EarlyDataAllowed maxSize
-                | C8.length x <= maxSize -> do
-                    putStrLn "---- EARLY DATA ----"
-                    C8.putStrLn x
-                    return x
-                | otherwise -> do
-                    putStrLn "---- EARLY DATA ---- overflow"
-                    throwCore $ Error_Protocol ("early data overflow", True, UnexpectedMessage)
+                | C8.length x <= maxSize -> return x
+                | otherwise              -> throwCore $ Error_Protocol ("early data overflow", True, UnexpectedMessage)
               EarlyDataNotAllowed -> recvData13 ctx -- ignore "x"
               Established         -> return x
               NotEstablished      -> throwCore $ Error_Protocol ("data at not-established", True, UnexpectedMessage)

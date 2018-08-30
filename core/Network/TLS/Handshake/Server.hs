@@ -86,7 +86,6 @@ handshakeServer sparams ctx = liftIO $ do
 --
 handshakeServerWith :: ServerParams -> Context -> Handshake -> IO ()
 handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientSession ciphers compressions exts _) = do
-    putStrLn "---- handshake ----"
     -- rejecting client initiated renegotiation to prevent DOS.
     unless (supportedClientInitiatedRenegotiation (ctxSupported ctx)) $ do
         established <- ctxEstablished ctx
@@ -125,7 +124,6 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     chosenVersion <- case mver of
                         Nothing -> throwCore $ Error_Protocol ("client version " ++ show clientVersion ++ " is not supported", True, ProtocolVersion)
                         Just v  -> return v
-    print chosenVersion
 
     -- If compression is null, commonCompressions should be [0].
     when (null commonCompressions) $ throwCore $
@@ -637,20 +635,16 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
     when (null ciphersFilteredVersion) $ throwCore $
         Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
     let usedCipher = (onCipherChoosing $ serverHooks sparams) chosenVersion ciphersFilteredVersion
-    print usedCipher
     -- Deciding key exchange from key shares
     keyShares <- case extensionLookup extensionID_KeyShare exts >>= extensionDecode MsgTClientHello of
           Just (KeyShareClientHello kses) -> return kses
           _                               -> throwCore $ Error_Protocol ("key exchange not implemented", True, HandshakeFailure)
-    putStrLn $ "keyshare = " ++ show (map keyShareEntryGroup keyShares)
-{-
-    putStrLn "Handshake messages:"
-    usingHState ctx getHandshakeMessages >>= mapM_ (putStrLn . showBytesHex)
--}
+    -- putStrLn $ "keyshare = " ++ show (map keyShareEntryGroup keyShares)
+    -- putStrLn "Handshake messages:"
+    -- usingHState ctx getHandshakeMessages >>= mapM_ (putStrLn . showBytesHex)
     case findKeyShare keyShares serverGroups of
       Nothing -> helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession
       Just keyShare -> do
-        print $ keyShareEntryGroup keyShare
         -- Deciding signature algorithm
         let hashSigs = hashAndSignaturesInCommon ctx exts
             Just (cred, sigAlgo) = credentialsFindForSigning13 hashSigs allCreds
@@ -672,9 +666,6 @@ doHandshake13 :: ServerParams -> Credential -> Context -> Version
               -> Session
               -> IO ()
 doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts usedHash clientKeyShare sigAlgo clientSession = do
-    print chosenVersion
-    print usedCipher
-    print sigAlgo
     when (isNullCertificateChain certChain) $
         throwCore $ Error_Protocol ("no certification found", True, HandshakeFailure)
     newSession ctx >>= \ss -> usingState_ ctx (setSession ss False)
@@ -694,16 +685,17 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
     ----------------------------------------------------------------
     if rtt0 then
          if rtt0OK then do
+             usingHState ctx $ setTLS13HandshakeMode RTT0
              usingHState ctx $ setTLS13RTT0Status RTT0Accepted
-             putStrLn "<<<0RTT>>> accepting"
            else do
+             usingHState ctx $ setTLS13HandshakeMode RTT0
              usingHState ctx $ setTLS13RTT0Status RTT0Rejected
-             putStrLn "<<<0RTT>>> rejecting"
        else
          if authenticated then
-             putStrLn "<<<Resumption>>>"
+             usingHState ctx $ setTLS13HandshakeMode PreSharedKey
            else
-             putStrLn "<<<Full negotiation>>>"
+             -- FullHandshake or HelloRetryRequest
+             return ()
     (ecdhe,keyShare) <- makeServerKeyShare ctx clientKeyShare
     let handshakeSecret = hkdfExtract usedHash (deriveSecret usedHash earlySecret "derived" (hash usedHash "")) ecdhe
     helo <- makeServerHello keyShare srand extensions >>= writeHandshakePacket13 ctx
@@ -941,7 +933,7 @@ helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientS
               extensions = [ExtensionRaw extensionID_KeyShare serverKeyShare
                            ,ExtensionRaw extensionID_SupportedVersions selectedVersion]
               hrr = ServerHello13 (ServerRandom hrrRandom) clientSession (cipherID usedCipher) extensions
-          putStrLn $ "Sending hello retry request for " ++ show g
+          usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
           sendPacket13 ctx $ Handshake13 [hrr]
           handshakeServer sparams ctx
 

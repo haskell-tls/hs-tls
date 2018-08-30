@@ -10,6 +10,7 @@
 --
 module Network.TLS.Handshake.State
     ( HandshakeState(..)
+    , HandshakeMode13(..)
     , RTT0Status(..)
     , Secret13(..)
     , ClientCertRequestData
@@ -52,6 +53,8 @@ module Network.TLS.Handshake.State
     , setServerHelloParameters
     , setTLS13Group
     , getTLS13Group
+    , setTLS13HandshakeMode
+    , getTLS13HandshakeMode
     , setTLS13RTT0Status
     , getTLS13RTT0Status
     , setTLS13HandshakeMsgs
@@ -105,6 +108,7 @@ data HandshakeState = HandshakeState
     , hstPendingCipher       :: Maybe Cipher
     , hstPendingCompression  :: Compression
     , hstTLS13Group          :: Maybe Group
+    , hstTLS13HandshakeMode  :: HandshakeMode13
     , hstTLS13RTT0Status     :: !RTT0Status
     , hstTLS13HandshakeMsgs  :: [Handshake13]
     , hstTLS13Secret         :: Secret13
@@ -147,6 +151,7 @@ newEmptyHandshake ver crand = HandshakeState
     , hstPendingCipher       = Nothing
     , hstPendingCompression  = nullCompression
     , hstTLS13Group          = Nothing
+    , hstTLS13HandshakeMode  = FullHandshake
     , hstTLS13RTT0Status     = RTT0None
     , hstTLS13HandshakeMsgs  = []
     , hstTLS13Secret         = NoSecret
@@ -198,6 +203,18 @@ setTLS13Group g = modify (\hst -> hst { hstTLS13Group = Just g })
 
 getTLS13Group :: HandshakeM (Maybe Group)
 getTLS13Group = gets hstTLS13Group
+
+data HandshakeMode13 = FullHandshake
+                     | HelloRetryRequest -- then FullHandshake
+                     | PreSharedKey
+                     | RTT0
+                     deriving (Show,Eq)
+
+setTLS13HandshakeMode :: HandshakeMode13 -> HandshakeM ()
+setTLS13HandshakeMode s = modify (\hst -> hst { hstTLS13HandshakeMode = s })
+
+getTLS13HandshakeMode :: HandshakeM HandshakeMode13
+getTLS13HandshakeMode = gets hstTLS13HandshakeMode
 
 data RTT0Status = RTT0None
                 | RTT0Sent
