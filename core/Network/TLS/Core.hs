@@ -163,7 +163,7 @@ recvData13 ctx = liftIO $ do
             tinfo <- createTLS13TicketInfo life (Right add)
             sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
             sessionEstablish (sharedSessionManager $ ctxShared ctx) label sdata
-            putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
+            -- putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
             recvData13 ctx
         -- when receiving empty appdata, we just retry to get some data.
         process (AppData13 "") = recvData13 ctx

@@ -66,10 +66,10 @@ handshakeClient cparams ctx = do
 
 handshakeClient' :: ClientParams -> Context -> [Group] -> Maybe ClientRandom -> IO ()
 handshakeClient' cparams ctx groups mcrand = do
-    putStr $ "groups = " ++ show groups ++ ", keyshare = ["
-    case groups of
-        []  -> putStrLn "]"
-        g:_ -> putStrLn $ show g ++ "]"
+    -- putStr $ "groups = " ++ show groups ++ ", keyshare = ["
+    -- case groups of
+    --     []  -> putStrLn "]"
+    --     g:_ -> putStrLn $ show g ++ "]"
     updateMeasure ctx incrementNbHandshakes
     sentExtensions <- sendClientHello mcrand
     recvServerHello sentExtensions
@@ -83,7 +83,7 @@ handshakeClient' cparams ctx groups mcrand = do
                 case mks of
                   Just (KeyShareHRR selectedGroup)
                     | selectedGroup `elem` groups' -> do
-                          putStrLn "Retrying client hello..."
+                          usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
                           usingState_ ctx $ setTLS13HRR True
                           crand <- usingHState ctx $ hstClientRandom <$> get
                           handshakeClient' cparams ctx [selectedGroup] (Just crand)
@@ -91,7 +91,6 @@ handshakeClient' cparams ctx groups mcrand = do
           else do
             handshakeClient13 cparams ctx
       else do
-        putStrLn "TLS 1.2"
         sessionResuming <- usingState_ ctx isSessionResuming
         if sessionResuming
             then sendChangeCipherAndFinish ctx ClientRole
@@ -275,7 +274,6 @@ handshakeClient' cparams ctx groups mcrand = do
                 Right eEarlyData <- writePacket13 ctx $ AppData13 earlyData
                 sendBytes13 ctx eEarlyData
                 usingHState ctx $ setTLS13RTT0Status RTT0Sent
-                putStrLn "Sending 0RTT data..."
 
         recvServerHello sentExts = runRecvState ctx recvState
           where recvState = RecvStateNext $ \p ->
@@ -629,7 +627,6 @@ handshakeClient13 :: ClientParams -> Context -> IO ()
 handshakeClient13 _cparams ctx = do
     usedCipher <- usingHState ctx getPendingCipher
     let usedHash = cipherHash usedCipher
-    putStrLn $ "TLS 1.3: " ++ show usedCipher ++ " " ++ show usedHash
     handshakeClient13' _cparams ctx usedCipher usedHash
 
 handshakeClient13' :: ClientParams -> Context -> Cipher -> Hash -> IO ()
@@ -700,9 +697,10 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
               mSelectedIdentity <- usingState_ ctx getTLS13PreSharedKey
               case mSelectedIdentity of
                 Nothing                          -> do
-                    putStrLn "PSK is not accepted by the server ... falling back to full handshake"
                     return (hkdfExtract usedHash zero zero, False)
-                Just (PreSharedKeyServerHello 0) -> putStrLn "PSK[0] is used" >> return (sec, True)
+                Just (PreSharedKeyServerHello 0) -> do
+                    usingHState ctx $ setTLS13HandshakeMode PreSharedKey
+                    return (sec, True)
                 Just _                           -> throwCore $ Error_Protocol ("selected identity out of range", True, IllegalParameter)
           _ -> return (hkdfExtract usedHash zero zero, False)
 
@@ -714,12 +712,12 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
         if st == RTT0Sent then
             case extensionLookup extensionID_EarlyData eexts of
               Just _  -> do
+                  usingHState ctx $ setTLS13HandshakeMode RTT0
                   usingHState ctx $ setTLS13RTT0Status RTT0Accepted
-                  putStrLn "0RTT data is accepted"
                   return True
               Nothing -> do
+                  usingHState ctx $ setTLS13HandshakeMode RTT0
                   usingHState ctx $ setTLS13RTT0Status RTT0Rejected
-                  putStrLn "0RTT data is rejected"
                   return False
           else
             return False
