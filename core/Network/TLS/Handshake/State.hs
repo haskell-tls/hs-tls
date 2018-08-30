@@ -11,7 +11,7 @@
 module Network.TLS.Handshake.State
     ( HandshakeState(..)
     , RTT0Status(..)
-    , TLS13Secret(..)
+    , Secret13(..)
     , ClientCertRequestData
     , HandshakeM
     , newEmptyHandshake
@@ -74,10 +74,10 @@ import Control.Monad.State.Strict
 import Data.X509 (CertificateChain)
 import Data.ByteArray (ByteArrayAccess)
 
-data TLS13Secret = NoSecret
-                 | EarlySecret ByteString
-                 | ResuptionSecret ByteString
-                 deriving (Eq, Show)
+data Secret13 = NoSecret
+              | EarlySecret ByteString
+              | ResuptionSecret ByteString
+              deriving (Eq, Show)
 
 data HandshakeKeyState = HandshakeKeyState
     { hksRemotePublicKey :: !(Maybe PubKey)
@@ -107,7 +107,7 @@ data HandshakeState = HandshakeState
     , hstTLS13Group          :: Maybe Group
     , hstTLS13RTT0Status     :: !RTT0Status
     , hstTLS13HandshakeMsgs  :: [Handshake13]
-    , hstTLS13Secret         :: TLS13Secret
+    , hstTLS13Secret         :: Secret13
     } deriving (Show)
 
 type ClientCertRequestData = ([CertificateType],
@@ -217,10 +217,10 @@ setTLS13HandshakeMsgs hmsgs = modify (\hst -> hst { hstTLS13HandshakeMsgs = hmsg
 getTLS13HandshakeMsgs :: HandshakeM [Handshake13]
 getTLS13HandshakeMsgs = gets hstTLS13HandshakeMsgs
 
-setTLS13Secret :: TLS13Secret -> HandshakeM ()
+setTLS13Secret :: Secret13 -> HandshakeM ()
 setTLS13Secret secret = modify (\hst -> hst { hstTLS13Secret = secret })
 
-getTLS13Secret :: HandshakeM TLS13Secret
+getTLS13Secret :: HandshakeM Secret13
 getTLS13Secret = gets hstTLS13Secret
 
 setCertReqSent :: Bool -> HandshakeM ()
