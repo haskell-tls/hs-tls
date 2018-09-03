@@ -621,7 +621,7 @@ requiredCertKeyUsage cipher =
         CipherKeyExchange_ECDH_ECDSA  -> Just KeyUsage_keyAgreement
         CipherKeyExchange_ECDH_RSA    -> Just KeyUsage_keyAgreement
         CipherKeyExchange_ECDHE_ECDSA -> Just KeyUsage_digitalSignature
-        CipherKeyExchange_TLS13       -> Nothing
+        CipherKeyExchange_TLS13       -> Just KeyUsage_digitalSignature
 
 handshakeClient13 :: ClientParams -> Context -> IO ()
 handshakeClient13 _cparams ctx = do
