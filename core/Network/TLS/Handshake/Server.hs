@@ -930,7 +930,7 @@ helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientS
               selectedVersion = extensionEncode $ SupportedVersionsServerHello chosenVersion
               extensions = [ExtensionRaw extensionID_KeyShare serverKeyShare
                            ,ExtensionRaw extensionID_SupportedVersions selectedVersion]
-              hrr = ServerHello13 (ServerRandom hrrRandom) clientSession (cipherID usedCipher) extensions
+              hrr = ServerHello13 hrrRandom clientSession (cipherID usedCipher) extensions
           usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
           sendPacket13 ctx $ Handshake13 [hrr]
           handshakeServer sparams ctx
