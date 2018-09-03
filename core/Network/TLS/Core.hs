@@ -182,6 +182,7 @@ recvData13 ctx = liftIO $ do
 
         terminate = terminate' ctx (sendPacket13 ctx . Alert13)
 
+-- the other side could have close the connection already, so wrap
 -- this in a try and ignore all exceptions
 tryBye :: Context -> IO ()
 tryBye ctx = catchException (bye ctx) (\_ -> return ())
