@@ -1,5 +1,5 @@
 -- |
--- Module      : Network.TLS.Sending
+-- Module      : Network.TLS.Sending13
 -- License     : BSD-style
 -- Maintainer  : Vincent Hanquez <vincent@snarc.org>
 -- Stability   : experimental
@@ -8,7 +8,10 @@
 -- the Sending module contains calls related to marshalling packets according
 -- to the TLS state
 --
-module Network.TLS.Sending13 (writePacket13, writeHandshakePacket13) where
+module Network.TLS.Sending13
+       ( writePacket13
+       , writeHandshakePacket13
+       ) where
 
 import Control.Monad.State
 import qualified Data.ByteString as B

@@ -1,6 +1,33 @@
 {-# LANGUAGE OverloadedStrings, BangPatterns #-}
 
-module Network.TLS.Handshake.Common13 where
+-- |
+-- Module      : Network.TLS.Handshake.Common13
+-- License     : BSD-style
+-- Maintainer  : Vincent Hanquez <vincent@snarc.org>
+-- Stability   : experimental
+-- Portability : unknown
+--
+module Network.TLS.Handshake.Common13
+       ( makeFinished
+       , makeVerifyData
+       , makeServerKeyShare
+       , makeClientKeyShare
+       , fromServerKeyShare
+       , makeServerCertVerify
+       , makeClientCertVerify
+       , checkServerCertVerify
+       , makePSKBinder
+       , replacePSKBinder
+       , createTLS13TicketInfo
+       , ageToObfuscatedAge
+       , isAgeValid
+       , getAge
+       , checkFreshness
+       , getCurrentTimeFromBase
+       , getSessionData13
+       , safeNonNegative32
+       , dumpKey
+       ) where
 
 import Data.Bits (finiteBitSize)
 import qualified Data.ByteArray as BA

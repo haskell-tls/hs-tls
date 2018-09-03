@@ -1,13 +1,21 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |
--- Module      : Network.TLS.Handshake.State
+-- Module      : Network.TLS.Handshake.State13
 -- License     : BSD-style
 -- Maintainer  : Vincent Hanquez <vincent@snarc.org>
 -- Stability   : experimental
 -- Portability : unknown
 --
-module Network.TLS.Handshake.State13 where
+module Network.TLS.Handshake.State13
+       ( setTxState
+       , setRxState
+       , getCryptState
+       , setHelloParameters13
+       , transcriptHash
+       , setPendingActions
+       , popPendingAction
+       ) where
 
 import Control.Concurrent.MVar
 import Control.Monad.State

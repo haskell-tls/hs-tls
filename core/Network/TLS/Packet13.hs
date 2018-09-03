@@ -1,7 +1,21 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Network.TLS.Packet13 where
+-- |
+-- Module      : Network.TLS.Packet13
+-- License     : BSD-style
+-- Maintainer  : Vincent Hanquez <vincent@snarc.org>
+-- Stability   : experimental
+-- Portability : unknown
+--
+module Network.TLS.Packet13
+       ( encodeHandshakes13
+       , encodeHandshake13
+       , getHandshakeType13
+       , decodeHandshakeRecord13
+       , decodeHandshake13
+       , hrrRandom
+       ) where
 
 import qualified Data.ByteString as B
 import Network.TLS.Struct

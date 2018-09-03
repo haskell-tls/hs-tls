@@ -1,4 +1,19 @@
-module Network.TLS.Struct13 where
+-- |
+-- Module      : Network.TLS.Struct13
+-- License     : BSD-style
+-- Maintainer  : Vincent Hanquez <vincent@snarc.org>
+-- Stability   : experimental
+-- Portability : unknown
+--
+module Network.TLS.Struct13
+       ( Packet13(..)
+       , Handshake13(..)
+       , HandshakeType13(..)
+       , typeOfHandshake13
+       , ContentType(..)
+       , contentType
+       , protoToContent
+       ) where
 
 import Data.X509 (CertificateChain)
 import Network.TLS.Struct

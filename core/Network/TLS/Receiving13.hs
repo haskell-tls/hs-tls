@@ -1,5 +1,7 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 -- |
--- Module      : Network.TLS.Receiving
+-- Module      : Network.TLS.Receiving13
 -- License     : BSD-style
 -- Maintainer  : Vincent Hanquez <vincent@snarc.org>
 -- Stability   : experimental
@@ -8,9 +10,9 @@
 -- the Receiving module contains calls related to unmarshalling packets according
 -- to the TLS state
 --
-{-# LANGUAGE FlexibleContexts #-}
-
-module Network.TLS.Receiving13 (processPacket13) where
+module Network.TLS.Receiving13
+       ( processPacket13
+       ) where
 
 import Control.Monad.State
 

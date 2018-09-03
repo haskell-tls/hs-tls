@@ -1,12 +1,15 @@
 -- |
--- Module      : Network.TLS.Record.Types
+-- Module      : Network.TLS.Record.Types13
 -- License     : BSD-style
 -- Maintainer  : Vincent Hanquez <vincent@snarc.org>
 -- Stability   : experimental
 -- Portability : unknown
 --
 
-module Network.TLS.Record.Types13 where
+module Network.TLS.Record.Types13
+        ( Record13(..)
+        , rawToRecord13
+        ) where
 
 import Network.TLS.Struct13
 import Network.TLS.Record.Types (Header(..))

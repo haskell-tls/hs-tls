@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 -- |
--- Module      : Network.TLS.Record.Disengage
+-- Module      : Network.TLS.Record.Disengage13
 -- License     : BSD-style
 -- Maintainer  : Vincent Hanquez <vincent@snarc.org>
 -- Stability   : experimental
@@ -10,8 +11,6 @@
 -- Disengage a record from the Record layer.
 -- The record is decrypted, checked for integrity and then decompressed.
 --
-{-# LANGUAGE FlexibleContexts #-}
-
 module Network.TLS.Record.Disengage13
         ( disengageRecord13
         ) where
