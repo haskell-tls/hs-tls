@@ -12,9 +12,6 @@ data Packet13 =
     | AppData13 ByteString
     deriving (Show,Eq)
 
-newtype CertificateEntry13 = CertificateEntry13 [ExtensionRaw]
-                           deriving (Show,Eq)
-
 -- fixme: convert ByteString to proper data types.
 data Handshake13 =
       ClientHello13 !Version !ClientRandom !Session ![CipherID] [ExtensionRaw]
