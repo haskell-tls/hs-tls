@@ -294,8 +294,8 @@ ciphersuite_strong =
     , cipher_AES256_SHA256
              -- Last resort no PFS, AEAD or SHA2
     , cipher_AES256_SHA1
-    , cipher_TLS13_AES128GCM_SHA256
     , cipher_TLS13_AES256GCM_SHA384
+    , cipher_TLS13_AES128GCM_SHA256
     ]
 
 -- | DHE-RSA cipher suite
