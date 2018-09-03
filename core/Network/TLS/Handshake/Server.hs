@@ -666,8 +666,6 @@ doHandshake13 :: ServerParams -> Credential -> Context -> Version
               -> Session
               -> IO ()
 doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts usedHash clientKeyShare sigAlgo clientSession = do
-    when (isNullCertificateChain certChain) $
-        throwCore $ Error_Protocol ("no certification found", True, HandshakeFailure)
     newSession ctx >>= \ss -> usingState_ ctx (setSession ss False)
     usingHState ctx $ setTLS13Group $ keyShareEntryGroup clientKeyShare
     srand <- setServerParameter
