@@ -10,7 +10,6 @@
 module Network.TLS.Handshake.State13
        ( setTxState
        , setRxState
-       , getCryptState
        , setHelloParameters13
        , transcriptHash
        , setPendingActions
@@ -58,11 +57,6 @@ setXState func encOrDec ctx h cipher secret =
       , stCipher      = Just cipher
       , stCompression = nullCompression
       }
-
-getCryptState :: Context -> Bool -> IO CryptState
-getCryptState ctx isServer
- | isServer  = stCryptState <$> readMVar (ctxTxState ctx)
- | otherwise = stCryptState <$> readMVar (ctxRxState ctx)
 
 setHelloParameters13 :: Cipher -> Bool -> HandshakeM ()
 setHelloParameters13 cipher isHRR = modify update
