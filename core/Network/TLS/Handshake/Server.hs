@@ -116,14 +116,13 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
             Just (SupportedVersionsClientHello vers) -> vers
             _                                        -> []
         serverVersions = supportedVersions $ ctxSupported ctx
-        mver
-          | (TLS13 `elem` serverVersions) && clientVersion == TLS12 && clientVersions /= [] =
-                findHighestVersionFrom13 clientVersions serverVersions
-          | otherwise = findHighestVersionFrom clientVersion serverVersions
-
-    chosenVersion <- case mver of
-                        Nothing -> throwCore $ Error_Protocol ("client version " ++ show clientVersion ++ " is not supported", True, ProtocolVersion)
-                        Just v  -> return v
+    chosenVersion <-
+        if (TLS13 `elem` serverVersions) && clientVersion == TLS12 && clientVersions /= [] then case findHighestVersionFrom13 clientVersions serverVersions of
+                  Nothing -> throwCore $ Error_Protocol ("client versions " ++ show clientVersions ++ " is not supported", True, ProtocolVersion)
+                  Just v  -> return v
+           else case findHighestVersionFrom clientVersion serverVersions of
+                  Nothing -> throwCore $ Error_Protocol ("client version " ++ show clientVersion ++ " is not supported", True, ProtocolVersion)
+                  Just v  -> return v
 
     -- If compression is null, commonCompressions should be [0].
     when (null commonCompressions) $ throwCore $
