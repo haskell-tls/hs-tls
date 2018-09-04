@@ -965,7 +965,7 @@ getCiphers sparams creds sigCreds = filter authorizedCKE (supportedCiphers $ ser
                     CipherKeyExchange_DH_RSA      -> False
                     CipherKeyExchange_ECDH_ECDSA  -> False
                     CipherKeyExchange_ECDH_RSA    -> False
-                    CipherKeyExchange_TLS13       -> True   -- dirty hack
+                    CipherKeyExchange_TLS13       -> False -- not reached
 
             canSignDSS    = DSS `elem` signingAlgs
             canSignRSA    = RSA `elem` signingAlgs
