@@ -923,7 +923,7 @@ helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientS
           Nothing                    -> []
         possibleGroups = serverGroups `intersect` clientGroups
     case possibleGroups of
-      [] -> throwCore $ Error_Protocol ("key exchange not implemented", True, HandshakeFailure)
+      [] -> throwCore $ Error_Protocol ("key exchange not implemented in HRR", True, HandshakeFailure)
       g:_ -> do
           let serverKeyShare = extensionEncode $ KeyShareHRR g
               selectedVersion = extensionEncode $ SupportedVersionsServerHello chosenVersion
