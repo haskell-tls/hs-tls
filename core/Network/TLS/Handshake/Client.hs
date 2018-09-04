@@ -724,7 +724,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
     recvCertAndVerify = do
         cert <- recvHandshake13 ctx
         let Certificate13 _ cc@(CertificateChain certChain) _ = cert
-        processCertificate13 cparams ctx cc
+        _ <- processCertificate cparams ctx (Certificates cc)
         update ctx cert
         pubkey <- case certChain of
                     [] -> throwCore $ Error_Protocol ("server certificate missing", True, HandshakeFailure)
@@ -773,21 +773,6 @@ recvHandshake13 ctx = do
             usingHState ctx $ setTLS13HandshakeMsgs hs
             return h
 
-processCertificate13 :: ClientParams -> Context -> CertificateChain -> IO ()
-processCertificate13 cparams ctx cc = do
-    -- run certificate recv hook
-    ctxWithHooks ctx (\hooks -> hookRecvCertificates hooks $ cc)
-    -- then run certificate validation
-    usage <- catchException (wrapCertificateChecks <$> checkCert) rejectOnException
-    case usage of
-        CertificateUsageAccept        -> return ()
-        CertificateUsageReject reason -> certificateRejected reason
-    return ()
-  where shared = clientShared cparams
-        checkCert = (onServerCertificate $ clientHooks cparams) (sharedCAStore shared)
-                                                                (sharedValidationCache shared)
-                                                                (clientServerIdentification cparams)
-                                                                cc
 setALPN :: Context -> [ExtensionRaw] -> IO ()
 setALPN ctx exts = case extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts >>= extensionDecode MsgTServerHello of
     Just (ApplicationLayerProtocolNegotiation [proto]) -> usingState_ ctx $ do
