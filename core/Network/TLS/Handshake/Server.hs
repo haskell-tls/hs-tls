@@ -124,10 +124,6 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
                   Nothing -> throwCore $ Error_Protocol ("client version " ++ show clientVersion ++ " is not supported", True, ProtocolVersion)
                   Just v  -> return v
 
-    -- If compression is null, commonCompressions should be [0].
-    when (null commonCompressions) $ throwCore $
-        Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
-
     -- SNI (Server Name Indication)
     let serverName = case extensionLookup extensionID_ServerName exts >>= extensionDecode MsgTClientHello of
             Just (ServerName ns) -> listToMaybe (mapMaybe toHostName ns)
@@ -150,7 +146,6 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
       else
         handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts ciphers serverName clientSession
   where
-        commonCompressions    = compressionIntersectID (supportedCompressions $ ctxSupported ctx) compressions
 handshakeServerWith _ _ _ = throwCore $ Error_Protocol ("unexpected handshake message received in handshakeServerWith", True, HandshakeFailure)
 
 -- TLS 1.2 or earlier
@@ -166,6 +161,10 @@ handshakeServerWithTLS12 :: ServerParams
                          -> Session
                          -> IO ()
 handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverName clientVersion compressions clientSession = do
+    -- If compression is null, commonCompressions should be [0].
+    when (null commonCompressions) $ throwCore $
+        Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
+
     -- When selecting a cipher we must ensure that it is allowed for the
     -- TLS version but also that all its key-exchange requirements
     -- will be met.
