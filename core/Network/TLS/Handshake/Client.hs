@@ -231,7 +231,8 @@ handshakeClient' cparams ctx groups mcrand = do
             crand <- case mcr of
               Nothing -> ClientRandom <$> getStateRNG ctx 32
               Just cr -> return cr
-            startHandshake ctx highestVer crand
+            hrr <- usingState_ ctx getTLS13HRR
+            unless hrr $ startHandshake ctx highestVer crand
             usingState_ ctx $ setVersionIfUnset highestVer
             let ver = if tls13 then TLS12 else highestVer
                 cipherIds = map cipherID ciphers

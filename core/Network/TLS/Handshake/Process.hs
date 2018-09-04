@@ -14,6 +14,7 @@ module Network.TLS.Handshake.Process
     ) where
 
 import Control.Concurrent.MVar
+import Control.Monad (unless)
 import Control.Monad.State.Strict (gets)
 import Control.Monad.IO.Class (liftIO)
 
@@ -42,7 +43,8 @@ processHandshake ctx hs = do
             -- TLS_EMPTY_RENEGOTIATION_INFO_SCSV: {0x00, 0xFF}
             when (secureRenegotiation && (0xff `elem` cids)) $
                 usingState_ ctx $ setSecureRenegotiation True
-            startHandshake ctx cver ran
+            hrr <- usingState_ ctx getTLS13HRR
+            unless hrr $ startHandshake ctx cver ran
         Certificates certs            -> processCertificates role certs
         ClientKeyXchg content         -> when (role == ServerRole) $ do
             processClientKeyXchg ctx content
@@ -123,17 +125,8 @@ processClientFinished ctx fdata = do
     usingState_ ctx $ updateVerifiedData ServerRole fdata
     return ()
 
--- initialize a new Handshake context
+-- initialize a new Handshake context (initial handshake or renegotiations)
 startHandshake :: Context -> Version -> ClientRandom -> IO ()
-startHandshake ctx ver crand = do
-    mhst <- getHState ctx
-    hrr <- usingState_ ctx getTLS13HRR
-    let mhst' = case mhst of
-          -- Flesh negotiation
-          Nothing       -> Just $ newEmptyHandshake ver crand
-          Just oldhst
-          -- TLS 1.3 hello retry: Handshake messages etc must be preserved.
-            | hrr       -> Just oldhst
-          -- TLS 1.2 renegotiation: state must be initialized again.
-            | otherwise -> Just $ newEmptyHandshake ver crand
-    liftIO $ modifyMVar_ (ctxHandshake ctx) $ \_ -> return mhst'
+startHandshake ctx ver crand =
+    let hs = Just $ newEmptyHandshake ver crand
+    in liftIO $ void $ swapMVar (ctxHandshake ctx) hs
