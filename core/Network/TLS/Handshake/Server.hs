@@ -646,7 +646,9 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
       Just keyShare -> do
         -- Deciding signature algorithm
         let hashSigs = hashAndSignaturesInCommon ctx exts
-            Just (cred, sigAlgo) = credentialsFindForSigning13 hashSigs allCreds
+        (cred, sigAlgo) <- case credentialsFindForSigning13 hashSigs allCreds of
+            Nothing -> throwCore $ Error_Protocol ("credential not found", True, IllegalParameter)
+            Just cs -> return cs
         let usedHash = cipherHash usedCipher
         doHandshake13 sparams cred ctx chosenVersion usedCipher exts usedHash keyShare sigAlgo clientSession
   where
