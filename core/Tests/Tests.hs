@@ -147,6 +147,10 @@ runTLSInitFailure params = do
   where tlsServer ctx = do
             handshake ctx
             minfo <- contextGetInformation ctx
+            -- Note: with TLS13 server needs to call recvData in order to detect
+            -- handshake alert messages sent by the client (consequence of 0RTT
+            -- design with pending actions)
+            _ <- recvData ctx
             bye ctx
             return $ "server success: " ++ show minfo
         tlsClient ctx = do
@@ -157,11 +161,14 @@ runTLSInitFailure params = do
 
 runTLSInitFailureRenego :: (ClientParams, ServerParams) -> PropertyM IO ()
 runTLSInitFailureRenego params = do
-    (cRes, _sRes) <- run (initiateDataPipe params tlsServer tlsClient)
+    (cRes, sRes) <- run (initiateDataPipe params tlsServer tlsClient)
     assertIsLeft cRes
+    assertIsLeft sRes
   where tlsServer ctx = do
             handshake ctx
             minfo <- contextGetInformation ctx
+            -- same above Note regarding recvData
+            _ <- recvData ctx
             bye ctx
             return $ "server success: " ++ show minfo
         tlsClient ctx = do
@@ -494,8 +501,10 @@ prop_handshake_dh = do
 
 prop_handshake_srv_key_usage :: PropertyM IO ()
 prop_handshake_srv_key_usage = do
-    let versions = [SSL3,TLS10,TLS11,TLS12]
+    tls13 <- pick arbitrary
+    let versions = if tls13 then [TLS13] else [SSL3,TLS10,TLS11,TLS12]
         ciphers = [ cipher_ECDHE_RSA_AES128CBC_SHA
+                  , cipher_TLS13_AES128GCM_SHA256
                   , cipher_DHE_RSA_AES128_SHA1
                   , cipher_AES256_SHA256
                   ]
@@ -509,8 +518,9 @@ prop_handshake_srv_key_usage = do
                   { sharedCredentials = Credentials [cred]
                   }
             }
-        shouldSucceed = KeyUsage_digitalSignature `elem` usageFlags
-                            || KeyUsage_keyEncipherment `elem` usageFlags
+        hasDS = KeyUsage_digitalSignature `elem` usageFlags
+        hasKE = KeyUsage_keyEncipherment  `elem` usageFlags
+        shouldSucceed = hasDS || (hasKE && not tls13)
     if shouldSucceed
         then runTLSPipeSimple  (clientParam,serverParam')
         else runTLSInitFailure (clientParam,serverParam')
