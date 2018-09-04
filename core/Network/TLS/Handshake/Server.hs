@@ -654,7 +654,7 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
     ciphersFilteredVersion = mapMaybe cipherIDtoCipher13 commonCipherIDs
     serverCiphers = supportedCiphers $ serverSupported sparams
     commonCipherIDs = clientCiphers `intersect` map cipherID serverCiphers
-    serverGroups = supportedGroups (ctxSupported ctx) `intersect` availableGroups
+    serverGroups = supportedGroups (ctxSupported ctx)
     findKeyShare _      [] = Nothing
     findKeyShare ks (g:gs) = case find (\ent -> keyShareEntryGroup ent == g) ks of
       Just k  -> Just k

@@ -56,9 +56,8 @@ handshakeClientWith _       _   _            = throwCore $ Error_Protocol ("unex
 -- values intertwined with response from the server.
 handshakeClient :: ClientParams -> Context -> IO ()
 handshakeClient cparams ctx = do
-    let groups' = supportedGroups (ctxSupported ctx) `intersect` availableGroups
-        groups = case clientWantSessionResume cparams of
-              Nothing         -> groups'
+    let groups = case clientWantSessionResume cparams of
+              Nothing         -> supportedGroups (ctxSupported ctx)
               Just (_, sdata) -> case sessionGroup sdata of
                   Nothing  -> [] -- TLS 1.2 or earlier
                   Just grp -> [grp]
@@ -138,7 +137,7 @@ handshakeClient' cparams ctx groups mcrand = do
                                  return $ Just $ toExtensionRaw $ ServerName [ServerNameHostName sni]
                          else return Nothing
 
-        groupExtension = return $ Just $ toExtensionRaw $ NegotiatedGroups ((supportedGroups $ ctxSupported ctx) `intersect` availableGroups)
+        groupExtension = return $ Just $ toExtensionRaw $ NegotiatedGroups (supportedGroups $ ctxSupported ctx)
         ecPointExtension = return $ Just $ toExtensionRaw $ EcPointFormatsSupported [EcPointFormat_Uncompressed]
                                 --[EcPointFormat_Uncompressed,EcPointFormat_AnsiX962_compressed_prime,EcPointFormat_AnsiX962_compressed_char2]
         --heartbeatExtension = return $ Just $ toExtensionRaw $ HeartBeat $ HeartBeat_PeerAllowedToSend
