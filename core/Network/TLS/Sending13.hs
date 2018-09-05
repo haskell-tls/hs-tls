@@ -11,6 +11,7 @@
 module Network.TLS.Sending13
        ( writePacket13
        , writeHandshakePacket13
+       , updateHandshake13
        ) where
 
 import Control.Monad.State
@@ -47,10 +48,7 @@ encodeRecord (Record13 ct bytes) = return ebytes
 
 writePacket13 :: Context -> Packet13 -> IO (Either TLSError ByteString)
 writePacket13 ctx pkt@(Handshake13 hss) = do
-    forM_ hss $ \hs -> usingHState ctx $ do
-        let encoded = encodeHandshake13 hs
-        updateHandshakeDigest encoded
-        addHandshakeMessage encoded
+    forM_ hss $ updateHandshake13 ctx
     prepareRecord ctx (makeRecord pkt >>= engageRecord >>= encodeRecord)
 writePacket13 ctx pkt = prepareRecord ctx (makeRecord pkt >>= engageRecord >>= encodeRecord)
 
@@ -66,3 +64,10 @@ writeHandshakePacket13 ctx hdsk = do
 
 prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
 prepareRecord = runTxState
+
+updateHandshake13 :: Context -> Handshake13 -> IO ()
+updateHandshake13 ctx hs = usingHState ctx $ do
+    updateHandshakeDigest encoded
+    addHandshakeMessage encoded
+  where
+    encoded = encodeHandshake13 hs

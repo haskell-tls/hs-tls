@@ -707,7 +707,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
     recvEncryptedExtensions = do
         ee@(EncryptedExtensions13 eexts) <- recvHandshake13 ctx
         setALPN ctx eexts
-        update ctx ee
+        updateHandshake13 ctx ee
         st <- usingHState ctx getTLS13RTT0Status
         if st == RTT0Sent then
             case extensionLookup extensionID_EarlyData eexts of
@@ -726,7 +726,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
         cert <- recvHandshake13 ctx
         let Certificate13 _ cc@(CertificateChain certChain) _ = cert
         _ <- processCertificate cparams ctx (Certificates cc)
-        update ctx cert
+        updateHandshake13 ctx cert
         pubkey <- case certChain of
                     [] -> throwCore $ Error_Protocol ("server certificate missing", True, HandshakeFailure)
                     c:_ -> return $ certPubKey $ getCertificate c
@@ -734,7 +734,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
         let CertVerify13 ss sig = certVerify
         hChSc <- transcriptHash ctx
         checkServerCertVerify ss sig pubkey hChSc
-        update ctx certVerify
+        updateHandshake13 ctx certVerify
 
     recvFinished serverHandshakeTrafficSecret = do
         finished <- recvHandshake13 ctx
@@ -743,19 +743,12 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
         let Finished13 verifyData = finished
         when (verifyData' /= verifyData) $
             throwCore $ Error_Protocol ("cannot verify finished", True, HandshakeFailure)
-        update ctx finished
+        updateHandshake13 ctx finished
 
     setResumptionSecret masterSecret = do
         hChCf <- transcriptHash ctx
         let resumptionMasterSecret = deriveSecret usedHash masterSecret "res master" hChCf
         usingHState ctx $ setTLS13Secret $ ResuptionSecret resumptionMasterSecret
-
-update :: Context -> Handshake13 -> IO ()
-update ctx hs = usingHState ctx $ do
-    updateHandshakeDigest encoded
-    addHandshakeMessage encoded
-  where
-    encoded = encodeHandshake13 hs
 
 recvHandshake13 :: Context -> IO Handshake13
 recvHandshake13 ctx = do

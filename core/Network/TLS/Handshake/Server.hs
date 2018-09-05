@@ -722,16 +722,12 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
     ----------------------------------------------------------------
     let masterSecret = hkdfExtract usedHash (deriveSecret usedHash handshakeSecret "derived" (hash usedHash "")) zero
     hChSf <- transcriptHash ctx
-    when rtt0OK $ usingHState ctx $ do
-        let eoed = encodeHandshake13 EndOfEarlyData13
-        updateHandshakeDigest eoed
-        addHandshakeMessage eoed
+    when rtt0OK $ updateHandshake13 ctx EndOfEarlyData13
     hChEoed <- transcriptHash ctx
     let clientApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "c ap traffic" hChSf
         serverApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "s ap traffic" hChSf
         exporterMasterSecret = deriveSecret usedHash masterSecret "exp master" hChSf
         verifyData = makeVerifyData usedHash clientHandshakeTrafficSecret hChEoed
-        pendingTranscript = encodeHandshake13 $ Finished13 verifyData
     usingState_ ctx $ setExporterMasterSecret exporterMasterSecret
     ----------------------------------------------------------------
     -- putStrLn $ "hChSf: " ++ showBytesHex hChSf
@@ -761,7 +757,7 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
     -- send packets include NewSessionTicket.
     --
     -- So, NewSessionTicket should be sent with prediction here.
-    mrttref <- sendNewSessionTicket masterSecret pendingTranscript
+    mrttref <- sendNewSessionTicket masterSecret $ Finished13 verifyData
     ----------------------------------------------------------------
     let established
          | rtt0OK    = EarlyDataAllowed $ safeNonNegative32 $ serverEarlyDataSize sparams
@@ -875,11 +871,9 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
               | otherwise = extensions''
         return $ EncryptedExtensions13 extensions
 
-    sendNewSessionTicket masterSecret pendingTranscript
+    sendNewSessionTicket masterSecret pendingHandshake
       | sendNST = do
-        usingHState ctx $ do
-            updateHandshakeDigest pendingTranscript
-            addHandshakeMessage pendingTranscript
+        updateHandshake13 ctx pendingHandshake
         hChCf <- transcriptHash ctx
         nonce <- usingState_ ctx $ genRandom 32
         let resumptionMasterSecret = deriveSecret usedHash masterSecret "res master" hChCf
