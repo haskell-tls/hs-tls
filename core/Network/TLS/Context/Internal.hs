@@ -55,14 +55,11 @@ module Network.TLS.Context.Internal
     , getHState
     , getStateRNG
     , tls13orLater
-
-    , exporter
     ) where
 
 import Network.TLS.Backend
 import Network.TLS.Extension
 import Network.TLS.Cipher
-import Network.TLS.Crypto
 import Network.TLS.Struct
 import Network.TLS.Compression (Compression)
 import Network.TLS.State
@@ -72,7 +69,6 @@ import Network.TLS.Record.State
 import Network.TLS.Parameters
 import Network.TLS.Measurement
 import Network.TLS.Imports
-import Network.TLS.KeySchedule
 import qualified Data.ByteString as B
 
 import Control.Concurrent.MVar
@@ -267,17 +263,3 @@ tls13orLater ctx = do
     return $ case ev of
                Left  _ -> False
                Right v -> v >= TLS13
-
-exporter :: Context -> ByteString -> ByteString -> Int -> IO (Maybe ByteString)
-exporter ctx label context outlen = do
-    msecret <- usingState_ ctx getExporterMasterSecret
-    mcipher <- failOnEitherError $ runRxState ctx $ gets stCipher
-    return $ case (msecret, mcipher) of
-      (Just secret, Just cipher) ->
-          let h = cipherHash cipher
-              secret' = deriveSecret h secret label ""
-              label' = "exporter"
-              value' = hash h context
-              key = hkdfExpandLabel h secret' label' value' outlen
-          in Just key
-      _ -> Nothing

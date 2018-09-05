@@ -132,9 +132,6 @@ module Network.TLS
     -- * TLS 1.3
     , Group(..)
     , HandshakeMode13(..)
-
-    -- * Key exporter
-    , exporter
     ) where
 
 import Network.TLS.Backend (Backend(..), HasBackend(..))
