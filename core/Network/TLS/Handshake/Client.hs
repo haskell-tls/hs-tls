@@ -73,20 +73,22 @@ handshakeClient' cparams ctx groups mcrand = do
     sentExtensions <- sendClientHello mcrand
     recvServerHello sentExtensions
     ver <- usingState_ ctx getVersion
+    -- recvServerHello sets TLS13HRR according to the server random.
+    -- For 1st server hello, getTLS13HR returns True if it is HRR and False otherwise.
+    -- For 2nd server hello, getTLS13HR returns False since it is NOT HRR.
     hrr <- usingState_ ctx getTLS13HRR
     if ver == TLS13 then do
         if hrr then case drop 1 groups of
-            []      -> error "HRR: no common group" -- fixme
+            []      -> throwCore $ Error_Protocol ("group is exhausted in the client side", True, IllegalParameter)
             groups' -> do
                 mks <- usingState_ ctx getTLS13KeyShare
                 case mks of
                   Just (KeyShareHRR selectedGroup)
                     | selectedGroup `elem` groups' -> do
                           usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
-                          usingState_ ctx $ setTLS13HRR True
                           crand <- usingHState ctx $ hstClientRandom <$> get
                           handshakeClient' cparams ctx [selectedGroup] (Just crand)
-                  _                    -> error "HRR: no common group" -- fixme
+                  _                    -> throwCore $ Error_Protocol ("server-selected group is not supported", True, IllegalParameter)
           else do
             handshakeClient13 cparams ctx
       else do
