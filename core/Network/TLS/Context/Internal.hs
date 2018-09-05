@@ -240,6 +240,7 @@ runTxState ctx f = do
 runRxState :: Context -> RecordM a -> IO (Either TLSError a)
 runRxState ctx f = do
     ver <- usingState_ ctx getVersion
+    -- For 1.3, ver is just ignored. So, it is not necessary to convert ver.
     modifyMVar (ctxRxState ctx) $ \st ->
         case runRecordM f ver st of
             Left err         -> return (st, Left err)
