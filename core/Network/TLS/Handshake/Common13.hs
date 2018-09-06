@@ -32,6 +32,7 @@ module Network.TLS.Handshake.Common13
 import Data.Bits (finiteBitSize)
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
+import Data.Hourglass
 import Data.IORef (newIORef, readIORef)
 import Network.TLS.Context.Internal
 import Network.TLS.Cipher
@@ -51,8 +52,8 @@ import Network.TLS.Struct13
 import Network.TLS.Types
 import Network.TLS.Wire
 import Network.TLS.Util
-import Data.Time
 import System.IO
+import Time.System
 
 ----------------------------------------------------------------
 
@@ -222,15 +223,14 @@ checkFreshness tinfo obfAge = do
     isAlive = isAgeValid age tinfo
 
 getCurrentTimeFromBase :: IO Millisecond
-getCurrentTimeFromBase = millisecondsFromBase <$> getCurrentTime
+getCurrentTimeFromBase = millisecondsFromBase <$> timeCurrentP
 
--- diffTimeToPicoseconds is not available in old time package
-millisecondsFromBase :: UTCTime -> Millisecond
-millisecondsFromBase d = fromInteger ms
+millisecondsFromBase :: ElapsedP -> Millisecond
+millisecondsFromBase d = fromIntegral ms
   where
-    ss = realToFrac (diffUTCTime d base) :: Double -- xyz.abc second
-    ms = truncate (ss * 1000)
-    base = UTCTime (fromGregorian 2017 1 1) 0
+    ElapsedP (Elapsed (Seconds s)) (NanoSeconds ns) = d - timeConvert base
+    ms = (s * 1000 + ns `div` 1000000)
+    base = Date 2017 January 1
 
 ----------------------------------------------------------------
 

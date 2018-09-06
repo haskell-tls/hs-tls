@@ -56,7 +56,7 @@ Library
                    , x509-store >= 1.6
                    , x509-validation >= 1.6.5
                    , async >= 2.0
-                   , time
+                   , hourglass
   if flag(network)
     Build-Depends:   network >= 2.4.0.0
     cpp-options:     -DINCLUDE_NETWORK
