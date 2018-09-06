@@ -212,6 +212,39 @@ prop_handshake13_rtt0 = do
 
     runTLSPipeSimple13 params2 (RTT0, RTT0) False
 
+prop_handshake13_rtt0_fallback :: PropertyM IO ()
+prop_handshake13_rtt0_fallback = do
+    (cli, srv) <- pick arbitraryPairParams13
+    let cliSupported = def {
+            supportedVersions = [TLS13]
+          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+          , supportedGroups = [P256,X25519]
+          }
+        svrSupported = def {
+            supportedVersions = [TLS13]
+          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+          , supportedGroups = [X25519]
+          }
+        params0 = (cli { clientSupported = cliSupported }
+                  ,srv { serverSupported = svrSupported
+                       , serverEarlyDataSize = 0 }
+                  )
+
+    sessionRef <- run $ newIORef Nothing
+    let sessionManager = oneSessionManager sessionRef
+
+    let params = setPairParamsSessionManager sessionManager params0
+
+    runTLSPipeSimple13 params (HelloRetryRequest,HelloRetryRequest) True
+
+    -- and resume
+    sessionParams <- run $ readIORef sessionRef
+    assert (isJust sessionParams)
+    let (pc,ps) = setPairParamsSessionResuming (fromJust sessionParams) params
+        params2 = (pc { clientEarlyData = Just "Early data" } , ps)
+
+    runTLSPipeSimple13 params2 (PreSharedKey, PreSharedKey) False
+
 prop_handshake_ciphersuites :: PropertyM IO ()
 prop_handshake_ciphersuites = do
     let clientVersions = [TLS12]
@@ -508,4 +541,5 @@ main = defaultMain $ testGroup "tls"
             , testProperty "TLS 1.3 HRR"  (monadicIO prop_handshake13_hrr)
             , testProperty "TLS 1.3 PSK"  (monadicIO prop_handshake13_psk)
             , testProperty "TLS 1.3 RTT0" (monadicIO prop_handshake13_rtt0)
+            , testProperty "TLS 1.3 RTT0 -> PSK" (monadicIO prop_handshake13_rtt0_fallback)
             ]
