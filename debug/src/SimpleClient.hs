@@ -116,11 +116,12 @@ getDefaultParams flags host store sStorage certCredsRequest session earlyData =
             getDebugSeed acc _                = acc
 
             tlsConnectVer
+                | Tls13 `elem` flags = TLS13
                 | Tls12 `elem` flags = TLS12
                 | Tls11 `elem` flags = TLS11
                 | Ssl3  `elem` flags = SSL3
                 | Tls10 `elem` flags = TLS10
-                | otherwise          = TLS13
+                | otherwise          = TLS12
             supportedVers
                 | NoVersionDowngrade `elem` flags = [tlsConnectVer]
                 | otherwise = filter (<= tlsConnectVer) allVers
@@ -150,7 +151,7 @@ getGroups flags = case getGroup of
     toG _        = Nothing
 
 data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
-          | Ssl3 | Tls10 | Tls11 | Tls12
+          | Ssl3 | Tls10 | Tls11 | Tls12 | Tls13
           | SNI String
           | NoSNI
           | Uri String
@@ -192,6 +193,7 @@ options =
     , Option []     ["tls10"]   (NoArg Tls10) "use TLS 1.0"
     , Option []     ["tls11"]   (NoArg Tls11) "use TLS 1.1"
     , Option []     ["tls12"]   (NoArg Tls12) "use TLS 1.2 (default)"
+    , Option []     ["tls13"]   (NoArg Tls13) "use TLS 1.3"
     , Option []     ["bogocipher"] (ReqArg BogusCipher "cipher-id") "add a bogus cipher id for testing"
     , Option ['x']  ["no-version-downgrade"] (NoArg NoVersionDowngrade) "do not allow version downgrade"
     , Option []     ["uri"]     (ReqArg Uri "URI") "optional URI requested by default /"
