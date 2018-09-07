@@ -119,7 +119,7 @@ makeClientCertVerify ctx hs privKey hashValue =
 
 checkServerCertVerify :: HashAndSignatureAlgorithm -> ByteString -> PubKey -> ByteString -> IO ()
 checkServerCertVerify hs signature pubKey hashValue =
-    unless ok $ error "fixme"
+    unless ok $ throwCore $ Error_Protocol ("cannot verify CertificateVerify", True, BadCertificate)
   where
     sig = fromJust "fromPubKey" $ fromPubKey pubKey
     sigParams = signatureParams sig (Just hs)

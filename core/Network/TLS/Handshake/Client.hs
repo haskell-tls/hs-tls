@@ -258,10 +258,10 @@ handshakeClient' cparams ctx groups mcrand = do
         send0RTT = case check0RTT of
             Nothing -> return ()
             Just (cid, earlyData) -> do
-                let usedCipher = case cipherIDtoCipher13 cid of
-                        Just cipher -> cipher
-                        _           -> error "0RTT" -- fixme
-                    usedHash = cipherHash usedCipher
+                usedCipher <- case cipherIDtoCipher13 cid of
+                        Just cipher -> return cipher
+                        _           -> throwCore $ Error_Protocol ("cipher for 0RTT is unknown", True, IllegalParameter)
+                let usedHash = cipherHash usedCipher
                 -- fixme: not initialized yet
                 -- hCh <- transcriptHash ctx
                 hmsgs <- usingHState ctx getHandshakeMessages
