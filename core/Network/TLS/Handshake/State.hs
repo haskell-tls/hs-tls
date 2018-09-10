@@ -204,11 +204,17 @@ setTLS13Group g = modify (\hst -> hst { hstTLS13Group = Just g })
 getTLS13Group :: HandshakeM (Maybe Group)
 getTLS13Group = gets hstTLS13Group
 
-data HandshakeMode13 = FullHandshake
-                     | HelloRetryRequest -- then FullHandshake
-                     | PreSharedKey
-                     | RTT0
-                     deriving (Show,Eq)
+-- | Type to show which handshake mode is used in TLS 1.3.
+data HandshakeMode13 =
+      -- | Full handshake is used.
+      FullHandshake
+      -- | Full handshake is used with hello retry reuest.
+    | HelloRetryRequest
+      -- | Server authentication is skipped.
+    | PreSharedKey
+      -- | Server authentication is skipped and early data is sent.
+    | RTT0
+    deriving (Show,Eq)
 
 setTLS13HandshakeMode :: HandshakeMode13 -> HandshakeM ()
 setTLS13HandshakeMode s = modify (\hst -> hst { hstTLS13HandshakeMode = s })
