@@ -180,6 +180,9 @@ recvRecord13 ctx = readExact ctx 5 >>= either (return . Left) (recvLengthE . dec
 recvPacket13 :: MonadIO m => Context -> m (Either TLSError Packet13)
 recvPacket13 ctx = liftIO $ do
     st <- usingHState ctx getTLS13RTT0Status
+    -- If the server decides to reject RTT0 data but accepts RTT1
+    -- data, the server should skip all records for RTT0 data.
+    -- Currently, the server tries to skip 3 RTT0 data at maximum.
     let n = if st == RTT0Rejected then 3 else (1 :: Int) -- hardcoding
     loop n
   where
