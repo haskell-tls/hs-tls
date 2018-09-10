@@ -90,7 +90,7 @@ runTLSPipeSimple13 params modes check = runTLSPipe params tlsServer tlsClient ch
             d <- readChan queue
             sendData ctx (L.fromChunks [d])
             minfo <- contextGetInformation ctx
-            join (infoTLS13HandshakeMode <$> minfo) `assertEq` Just (fst modes)
+            Just (fst modes) `assertEq` join (infoTLS13HandshakeMode <$> minfo)
             bye ctx
             return ()
 
