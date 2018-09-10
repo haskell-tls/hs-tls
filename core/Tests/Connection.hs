@@ -41,8 +41,16 @@ import qualified Data.ByteString as B
 debug :: Bool
 debug = False
 
+-- Pre-TLS13 ciphers have TLS12 as maximum allowed version
+cipherMaxVer :: Cipher -> Maybe Version
+cipherMaxVer x =
+    case cipherMinVer x of
+        Nothing            -> Just TLS12
+        Just v | v < TLS13 -> Just TLS12
+               | otherwise -> Nothing
+
 knownCiphers :: [Cipher]
-knownCiphers = filter nonTLS13 $ filter nonECDSA (ciphersuite_all ++ ciphersuite_weak)
+knownCiphers = filter nonECDSA (ciphersuite_all ++ ciphersuite_weak)
   where
     ciphersuite_weak = [
         cipher_DHE_DSS_RC4_SHA1
@@ -52,7 +60,6 @@ knownCiphers = filter nonTLS13 $ filter nonECDSA (ciphersuite_all ++ ciphersuite
       ]
     -- arbitraryCredentialsOfEachType cannot generate ECDSA
     nonECDSA c = not ("ECDSA" `isInfixOf` cipherName c)
-    nonTLS13 c = cipherMinVer c /= Just TLS13
 
 knownCiphers13 :: [Cipher]
 knownCiphers13 = [
@@ -64,7 +71,7 @@ arbitraryCiphers :: Gen [Cipher]
 arbitraryCiphers = listOf1 $ elements knownCiphers
 
 knownVersions :: [Version]
-knownVersions = [SSL3,TLS10,TLS11,TLS12]
+knownVersions = [SSL3,TLS10,TLS11,TLS12,TLS13]
 
 arbitraryVersions :: Gen [Version]
 arbitraryVersions = sublistOf knownVersions
@@ -119,20 +126,23 @@ leafPublicKey (CertificateChain (leaf:_)) = Just (certPubKey $ signedObject $ ge
 arbitraryCipherPair :: Version -> Gen ([Cipher], [Cipher])
 arbitraryCipherPair connectVersion = do
     serverCiphers      <- arbitraryCiphers `suchThat`
-                                (\cs -> or [maybe True (<= connectVersion) (cipherMinVer x) | x <- cs])
+                                (\cs -> or [maybe True (<= connectVersion) (cipherMinVer x) &&
+                                            maybe True (>= connectVersion) (cipherMaxVer x) | x <- cs])
     clientCiphers      <- arbitraryCiphers `suchThat`
                                 (\cs -> or [x `elem` serverCiphers &&
-                                            maybe True (<= connectVersion) (cipherMinVer x) | x <- cs])
+                                            maybe True (<= connectVersion) (cipherMinVer x) &&
+                                            maybe True (>= connectVersion) (cipherMaxVer x) | x <- cs])
     return (clientCiphers, serverCiphers)
 
 arbitraryPairParams :: Gen (ClientParams, ServerParams)
 arbitraryPairParams = do
     connectVersion <- elements knownVersions
     (clientCiphers, serverCiphers) <- arbitraryCipherPair connectVersion
-    -- The shared ciphers may set a floor on the compatible protocol versions
+    -- The shared ciphers may add constraints on the compatible protocol versions
     let allowedVersions = [ v | v <- knownVersions,
                                 or [ x `elem` serverCiphers &&
-                                     maybe True (<= v) (cipherMinVer x) | x <- clientCiphers ]]
+                                     maybe True (<= v) (cipherMinVer x) &&
+                                     maybe True (>= v) (cipherMaxVer x) | x <- clientCiphers ]]
     serAllowedVersions <- (:[]) `fmap` elements allowedVersions
     arbitraryPairParamsWithVersionsAndCiphers (allowedVersions, serAllowedVersions) (clientCiphers, serverCiphers)
 

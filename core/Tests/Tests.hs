@@ -264,7 +264,8 @@ prop_handshake_ciphersuites = do
     (clientParam,serverParam) <- pick $ arbitraryPairParamsWithVersionsAndCiphers
                                             (clientVersions, serverVersions)
                                             (clientCiphers, serverCiphers)
-    let shouldFail = null (clientCiphers `intersect` serverCiphers)
+    let nonTLS13 c = cipherMinVer c /= Just TLS13
+        shouldFail = not $ any nonTLS13 (clientCiphers `intersect` serverCiphers)
     if shouldFail
         then runTLSInitFailure (clientParam,serverParam)
         else runTLSPipeSimple  (clientParam,serverParam)
