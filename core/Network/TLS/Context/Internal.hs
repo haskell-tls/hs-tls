@@ -86,7 +86,7 @@ data Information = Information
     , infoMasterSecret :: Maybe ByteString
     , infoClientRandom :: Maybe ClientRandom
     , infoServerRandom :: Maybe ServerRandom
-    , infoTLS13Group   :: Maybe Group
+    , infoNegotiatedGroup     :: Maybe Group
     , infoTLS13HandshakeMode  :: Maybe HandshakeMode13
     , infoIsEarlyDataAccepted :: Bool
     } deriving (Show,Eq)

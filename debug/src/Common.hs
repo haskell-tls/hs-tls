@@ -86,7 +86,7 @@ printHandshakeInfo ctx = do
             putStrLn ("cipher: " ++ show (infoCipher i))
             putStrLn ("compression: " ++ show (infoCompression i))
             when (infoVersion i == TLS13) $ do
-                putStrLn ("group: " ++ show (fromJust (infoTLS13Group i)))
+                putStrLn ("group: " ++ show (fromJust (infoNegotiatedGroup i)))
                 putStrLn ("handshake emode: " ++ show (fromJust (infoTLS13HandshakeMode i)))
                 putStrLn ("early data accepted: " ++ show (infoIsEarlyDataAccepted i))
     sni <- getClientSNI ctx
