@@ -118,7 +118,10 @@ prop_handshake_initiate = do
 prop_handshake13_initiate :: PropertyM IO ()
 prop_handshake13_initiate = do
     params  <- pick arbitraryPairParams13
-    runTLSPipeSimple13 params (FullHandshake,FullHandshake) Nothing
+    let cgrps = supportedGroups $ clientSupported $ fst params
+        sgrps = supportedGroups $ serverSupported $ snd params
+        hs = if head cgrps `elem` sgrps then FullHandshake else HelloRetryRequest
+    runTLSPipeSimple13 params (hs,hs) Nothing
 
 prop_handshake13_full :: PropertyM IO ()
 prop_handshake13_full = do
