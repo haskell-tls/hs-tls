@@ -86,9 +86,13 @@ handshakeServer sparams ctx = liftIO $ do
 --
 handshakeServerWith :: ServerParams -> Context -> Handshake -> IO ()
 handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientSession ciphers compressions exts _) = do
+    established <- ctxEstablished ctx
+    -- renego is not allowed in TLS 1.3
+    when (established /= NotEstablished) $ do
+        ver <- usingState_ ctx getVersion
+        when (ver == TLS13) $ throwCore $ Error_Protocol ("renegotiation is not allowed in TLS 1.3", False, NoRenegotiation)
     -- rejecting client initiated renegotiation to prevent DOS.
     unless (supportedClientInitiatedRenegotiation (ctxSupported ctx)) $ do
-        established <- ctxEstablished ctx
         eof <- ctxEOF ctx
         when (established == Established && not eof) $
             throwCore $ Error_Protocol ("renegotiation is not allowed", False, NoRenegotiation)

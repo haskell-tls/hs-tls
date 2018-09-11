@@ -110,6 +110,13 @@ runTLSInitFailure params = do
   where tlsServer ctx = handshake ctx >> bye ctx >> return ("server success" :: String)
         tlsClient ctx = handshake ctx >> bye ctx >> return ("client success" :: String)
 
+runTLSInitFailureRenego :: (ClientParams, ServerParams) -> PropertyM IO ()
+runTLSInitFailureRenego params = do
+    (cRes, sRes) <- run (initiateDataPipe params tlsServer tlsClient)
+    assertIsLeft cRes
+  where tlsServer ctx = handshake ctx >> bye ctx >> return ("server success" :: String)
+        tlsClient ctx = handshake ctx >> handshake ctx >> bye ctx >> return ("client success" :: String)
+
 prop_handshake_initiate :: PropertyM IO ()
 prop_handshake_initiate = do
     params  <- pick arbitraryPairParams
@@ -483,7 +490,11 @@ prop_handshake_renegotiation = do
                  supportedClientInitiatedRenegotiation = True
                }
           }
-    runTLSPipe (cparams, sparams') tlsServer tlsClient Nothing
+    let shouldFail = (TLS13 `elem` supportedVersions (serverSupported sparams'))
+                  && (TLS13 `elem` supportedVersions (clientSupported cparams))
+    if shouldFail
+        then runTLSInitFailureRenego (cparams, sparams')
+        else runTLSPipe (cparams, sparams') tlsServer tlsClient Nothing
   where tlsServer ctx queue = do
             handshake ctx
             d <- recvDataNonNull ctx
