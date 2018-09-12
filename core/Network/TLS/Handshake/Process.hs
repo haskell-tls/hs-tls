@@ -14,6 +14,7 @@ module Network.TLS.Handshake.Process
     ) where
 
 import Control.Concurrent.MVar
+import Control.Monad (unless)
 import Control.Monad.State.Strict (gets)
 import Control.Monad.IO.Class (liftIO)
 
@@ -42,7 +43,8 @@ processHandshake ctx hs = do
             -- TLS_EMPTY_RENEGOTIATION_INFO_SCSV: {0x00, 0xFF}
             when (secureRenegotiation && (0xff `elem` cids)) $
                 usingState_ ctx $ setSecureRenegotiation True
-            startHandshake ctx cver ran
+            hrr <- usingState_ ctx getTLS13HRR
+            unless hrr $ startHandshake ctx cver ran
         Certificates certs            -> processCertificates role certs
         ClientKeyXchg content         -> when (role == ServerRole) $ do
             processClientKeyXchg ctx content

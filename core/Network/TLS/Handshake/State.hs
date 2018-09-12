@@ -10,8 +10,9 @@
 --
 module Network.TLS.Handshake.State
     ( HandshakeState(..)
+    , HandshakeMode13(..)
     , RTT0Status(..)
-    , TLS13Secret(..)
+    , Secret13(..)
     , ClientCertRequestData
     , HandshakeM
     , newEmptyHandshake
@@ -52,6 +53,8 @@ module Network.TLS.Handshake.State
     , setServerHelloParameters
     , setTLS13Group
     , getTLS13Group
+    , setTLS13HandshakeMode
+    , getTLS13HandshakeMode
     , setTLS13RTT0Status
     , getTLS13RTT0Status
     , setTLS13HandshakeMsgs
@@ -74,10 +77,10 @@ import Control.Monad.State.Strict
 import Data.X509 (CertificateChain)
 import Data.ByteArray (ByteArrayAccess)
 
-data TLS13Secret = NoSecret
-                 | EarlySecret ByteString
-                 | ResuptionSecret ByteString
-                 deriving (Eq, Show)
+data Secret13 = NoSecret
+              | EarlySecret ByteString
+              | ResuptionSecret ByteString
+              deriving (Eq, Show)
 
 data HandshakeKeyState = HandshakeKeyState
     { hksRemotePublicKey :: !(Maybe PubKey)
@@ -105,9 +108,10 @@ data HandshakeState = HandshakeState
     , hstPendingCipher       :: Maybe Cipher
     , hstPendingCompression  :: Compression
     , hstTLS13Group          :: Maybe Group
+    , hstTLS13HandshakeMode  :: HandshakeMode13
     , hstTLS13RTT0Status     :: !RTT0Status
     , hstTLS13HandshakeMsgs  :: [Handshake13]
-    , hstTLS13Secret         :: TLS13Secret
+    , hstTLS13Secret         :: Secret13
     } deriving (Show)
 
 type ClientCertRequestData = ([CertificateType],
@@ -147,6 +151,7 @@ newEmptyHandshake ver crand = HandshakeState
     , hstPendingCipher       = Nothing
     , hstPendingCompression  = nullCompression
     , hstTLS13Group          = Nothing
+    , hstTLS13HandshakeMode  = FullHandshake
     , hstTLS13RTT0Status     = RTT0None
     , hstTLS13HandshakeMsgs  = []
     , hstTLS13Secret         = NoSecret
@@ -199,6 +204,24 @@ setTLS13Group g = modify (\hst -> hst { hstTLS13Group = Just g })
 getTLS13Group :: HandshakeM (Maybe Group)
 getTLS13Group = gets hstTLS13Group
 
+-- | Type to show which handshake mode is used in TLS 1.3.
+data HandshakeMode13 =
+      -- | Full handshake is used.
+      FullHandshake
+      -- | Full handshake is used with hello retry reuest.
+    | HelloRetryRequest
+      -- | Server authentication is skipped.
+    | PreSharedKey
+      -- | Server authentication is skipped and early data is sent.
+    | RTT0
+    deriving (Show,Eq)
+
+setTLS13HandshakeMode :: HandshakeMode13 -> HandshakeM ()
+setTLS13HandshakeMode s = modify (\hst -> hst { hstTLS13HandshakeMode = s })
+
+getTLS13HandshakeMode :: HandshakeM HandshakeMode13
+getTLS13HandshakeMode = gets hstTLS13HandshakeMode
+
 data RTT0Status = RTT0None
                 | RTT0Sent
                 | RTT0Accepted
@@ -217,10 +240,10 @@ setTLS13HandshakeMsgs hmsgs = modify (\hst -> hst { hstTLS13HandshakeMsgs = hmsg
 getTLS13HandshakeMsgs :: HandshakeM [Handshake13]
 getTLS13HandshakeMsgs = gets hstTLS13HandshakeMsgs
 
-setTLS13Secret :: TLS13Secret -> HandshakeM ()
+setTLS13Secret :: Secret13 -> HandshakeM ()
 setTLS13Secret secret = modify (\hst -> hst { hstTLS13Secret = secret })
 
-getTLS13Secret :: HandshakeM TLS13Secret
+getTLS13Secret :: HandshakeM Secret13
 getTLS13Secret = gets hstTLS13Secret
 
 setCertReqSent :: Bool -> HandshakeM ()

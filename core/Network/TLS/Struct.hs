@@ -349,6 +349,7 @@ numericalVer SSL3  = (3, 0)
 numericalVer TLS10 = (3, 1)
 numericalVer TLS11 = (3, 2)
 numericalVer TLS12 = (3, 3)
+numericalVer TLS13 = (3, 4)
 
 verOfNum :: (Word8, Word8) -> Maybe Version
 verOfNum (2, 0) = Just SSL2
@@ -356,6 +357,7 @@ verOfNum (3, 0) = Just SSL3
 verOfNum (3, 1) = Just TLS10
 verOfNum (3, 2) = Just TLS11
 verOfNum (3, 3) = Just TLS12
+verOfNum (3, 4) = Just TLS13
 verOfNum _      = Nothing
 
 class TypeValuable a where

@@ -16,20 +16,25 @@ import Network.TLS.Imports
 import Network.TLS.Context.Internal
 import Network.TLS.Session
 import Network.TLS.Struct
+import Network.TLS.Struct13
+import Network.TLS.Packet13
 import Network.TLS.Cipher
+import Network.TLS.Extra.Cipher (cipherIDtoCipher13)
 import Network.TLS.Compression
 import Network.TLS.Credentials
 import Network.TLS.Crypto
 import Network.TLS.Extension
 import Network.TLS.Util (catchException, fromJust)
 import Network.TLS.IO
+import Network.TLS.Sending13
 import Network.TLS.Types
-import Network.TLS.State hiding (getNegotiatedProtocol)
+import Network.TLS.State
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Key
 import Network.TLS.Measurement
 import qualified Data.ByteString as B
+import Data.IORef (writeIORef)
 import Data.X509 (ExtKeyUsageFlag(..))
 
 import Control.Monad.State.Strict
@@ -38,6 +43,9 @@ import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Certificate
 import Network.TLS.X509
+import Network.TLS.Handshake.State13
+import Network.TLS.KeySchedule
+import Network.TLS.Handshake.Common13
 
 -- Put the server context in handshake mode.
 --
@@ -78,9 +86,13 @@ handshakeServer sparams ctx = liftIO $ do
 --
 handshakeServerWith :: ServerParams -> Context -> Handshake -> IO ()
 handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientSession ciphers compressions exts _) = do
+    established <- ctxEstablished ctx
+    -- renego is not allowed in TLS 1.3
+    when (established /= NotEstablished) $ do
+        ver <- usingState_ ctx getVersion
+        when (ver == TLS13) $ throwCore $ Error_Protocol ("renegotiation is not allowed in TLS 1.3", False, NoRenegotiation)
     -- rejecting client initiated renegotiation to prevent DOS.
     unless (supportedClientInitiatedRenegotiation (ctxSupported ctx)) $ do
-        established <- ctxEstablished ctx
         eof <- ctxEOF ctx
         when (established == Established && not eof) $
             throwCore $ Error_Protocol ("renegotiation is not allowed", False, NoRenegotiation)
@@ -103,13 +115,18 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
           (0x5600 `elem` ciphers) &&
           clientVersion /= maxBound) $
         throwCore $ Error_Protocol ("fallback is not allowed", True, InappropriateFallback)
-    chosenVersion <- case findHighestVersionFrom clientVersion (supportedVersions $ ctxSupported ctx) of
-                        Nothing -> throwCore $ Error_Protocol ("client version " ++ show clientVersion ++ " is not supported", True, ProtocolVersion)
-                        Just v  -> return v
-
-    -- If compression is null, commonCompressions should be [0].
-    when (null commonCompressions) $ throwCore $
-        Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
+    -- choosing TLS version
+    let clientVersions = case extensionLookup extensionID_SupportedVersions exts >>= extensionDecode MsgTClientHello of
+            Just (SupportedVersionsClientHello vers) -> vers
+            _                                        -> []
+        serverVersions = supportedVersions $ ctxSupported ctx
+    chosenVersion <-
+        if (TLS13 `elem` serverVersions) && clientVersion == TLS12 && clientVersions /= [] then case findHighestVersionFrom13 clientVersions serverVersions of
+                  Nothing -> throwCore $ Error_Protocol ("client versions " ++ show clientVersions ++ " is not supported", True, ProtocolVersion)
+                  Just v  -> return v
+           else case findHighestVersionFrom clientVersion serverVersions of
+                  Nothing -> throwCore $ Error_Protocol ("client version " ++ show clientVersion ++ " is not supported", True, ProtocolVersion)
+                  Just v  -> return v
 
     -- SNI (Server Name Indication)
     let serverName = case extensionLookup extensionID_ServerName exts >>= extensionDecode MsgTClientHello of
@@ -117,8 +134,40 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
                 where toHostName (ServerNameHostName hostName) = Just hostName
                       toHostName (ServerNameOther _)           = Nothing
             _                    -> Nothing
+    maybe (return ()) (usingState_ ctx . setClientSNI) serverName
+
+    -- ALPN (Application Layer Protocol Negotiation)
+    case extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts >>= extensionDecode MsgTClientHello of
+        Just (ApplicationLayerProtocolNegotiation protos) -> usingState_ ctx $ setClientALPNSuggest protos
+        _ -> return ()
 
     extraCreds <- (onServerNameIndication $ serverHooks sparams) serverName
+    let allCreds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
+
+    -- TLS version dependent
+    if chosenVersion <= TLS12 then
+        handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverName clientVersion compressions clientSession
+      else
+        handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts ciphers serverName clientSession
+  where
+handshakeServerWith _ _ _ = throwCore $ Error_Protocol ("unexpected handshake message received in handshakeServerWith", True, HandshakeFailure)
+
+-- TLS 1.2 or earlier
+handshakeServerWithTLS12 :: ServerParams
+                         -> Context
+                         -> Version
+                         -> Credentials
+                         -> [ExtensionRaw]
+                         -> [CipherID]
+                         -> Maybe String
+                         -> Version
+                         -> [CompressionID]
+                         -> Session
+                         -> IO ()
+handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverName clientVersion compressions clientSession = do
+    -- If compression is null, commonCompressions should be [0].
+    when (null commonCompressions) $ throwCore $
+        Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
 
     -- When selecting a cipher we must ensure that it is allowed for the
     -- TLS version but also that all its key-exchange requirements
@@ -156,7 +205,6 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
         cipherAllowed cipher   = cipherAllowedForVersion chosenVersion cipher && hasCommonGroup cipher
         selectCipher credentials signatureCredentials = filter cipherAllowed (commonCiphers credentials signatureCredentials)
 
-        allCreds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
         (creds, signatureCreds, ciphersFilteredVersion)
             = case chosenVersion of
                   TLS12 -> let -- Build a list of all hash/signature algorithms in common between
@@ -216,12 +264,6 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
                  in validateSession serverName <$> resume
             (Session Nothing)                -> return Nothing
 
-    maybe (return ()) (usingState_ ctx . setClientSNI) serverName
-
-    case extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts >>= extensionDecode MsgTClientHello of
-        Just (ApplicationLayerProtocolNegotiation protos) -> usingState_ ctx $ setClientALPNSuggest protos
-        _ -> return ()
-
     -- Currently, we don't send back EcPointFormats. In this case,
     -- the client chooses EcPointFormat_Uncompressed.
     case extensionLookup extensionID_EcPointFormats exts >>= extensionDecode MsgTClientHello of
@@ -247,9 +289,6 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
             | isJust sni && sessionClientSNI sd /= sni      = Nothing
             | otherwise                                     = m
 
-
-handshakeServerWith _ _ _ = throwCore $ Error_Protocol ("unexpected handshake message received in handshakeServerWith", True, HandshakeFailure)
-
 doHandshake :: ServerParams -> Maybe Credential -> Context -> Version -> Cipher
             -> Compression -> Session -> Maybe SessionData
             -> [ExtensionRaw] -> IO ()
@@ -270,21 +309,6 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             recvChangeCipherAndFinish ctx
     handshakeTerminate ctx
   where
-        clientALPNSuggest = isJust $ extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts
-
-        applicationProtocol | clientALPNSuggest = do
-            suggest <- usingState_ ctx getClientALPNSuggest
-            case (onALPNClientSuggest $ serverHooks sparams, suggest) of
-                (Just io, Just protos) -> do
-                    proto <- liftIO $ io protos
-                    usingState_ ctx $ do
-                        setExtensionALPN True
-                        setNegotiatedProtocol proto
-                    return [ ExtensionRaw extensionID_ApplicationLayerProtocolNegotiation
-                                            (extensionEncode $ ApplicationLayerProtocolNegotiation [proto]) ]
-                (_, _)                  -> return []
-             | otherwise = return []
-
         ---
         -- When the client sends a certificate, check whether
         -- it is acceptable for the application.
@@ -307,7 +331,8 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                                     return $ extensionEncode (SecureRenegotiation cvf $ Just svf)
                             return [ ExtensionRaw extensionID_SecureRenegotiation vf ]
                     else return []
-            protoExt <- applicationProtocol
+
+            protoExt <- applicationProtocol ctx exts sparams
             sniExt   <- do
                 resuming <- usingState_ ctx isSessionResuming
                 if resuming
@@ -522,11 +547,9 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
 
         getRemoteSignatureAlg = do
             pk <- usingHState ctx getRemotePublicKey
-            case pk of
-                PubKeyRSA _   -> return RSA
-                PubKeyDSA _   -> return DSS
-                PubKeyEC  _   -> return ECDSA
-                _             -> throwCore $ Error_Protocol ("unsupported remote public key type", True, HandshakeFailure)
+            case fromPubKey pk of
+              Nothing  -> throwCore $ Error_Protocol ("unsupported remote public key type", True, HandshakeFailure)
+              Just sig -> return sig
 
         expectChangeCipher ChangeCipherSpec = do
             return $ RecvStateHandshake expectFinish
@@ -593,8 +616,322 @@ cipherListCredentialFallback xs = all nonDH xs
         CipherKeyExchange_DHE_DSS     -> False
         CipherKeyExchange_ECDHE_RSA   -> False
         CipherKeyExchange_ECDHE_ECDSA -> False
-        --CipherKeyExchange_TLS13       -> False
+        CipherKeyExchange_TLS13       -> False
         _                             -> True
+
+-- TLS 1.3 or later
+handshakeServerWithTLS13 :: ServerParams
+                         -> Context
+                         -> Version
+                         -> Credentials
+                         -> [ExtensionRaw]
+                         -> [CipherID]
+                         -> Maybe String
+                         -> Session
+                         -> IO ()
+handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _serverName clientSession = do
+    -- Deciding cipher.
+    -- The shared cipherlist can become empty after filtering for compatible
+    -- creds, check now before calling onCipherChoosing, which does not handle
+    -- empty lists.
+    when (null ciphersFilteredVersion) $ throwCore $
+        Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
+    let usedCipher = (onCipherChoosing $ serverHooks sparams) chosenVersion ciphersFilteredVersion
+    -- Deciding key exchange from key shares
+    keyShares <- case extensionLookup extensionID_KeyShare exts >>= extensionDecode MsgTClientHello of
+          Just (KeyShareClientHello kses) -> return kses
+          _                               -> throwCore $ Error_Protocol ("key exchange not implemented", True, HandshakeFailure)
+    -- putStrLn $ "keyshare = " ++ show (map keyShareEntryGroup keyShares)
+    -- putStrLn "Handshake messages:"
+    -- usingHState ctx getHandshakeMessages >>= mapM_ (putStrLn . showBytesHex)
+    case findKeyShare keyShares serverGroups of
+      Nothing -> helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession
+      Just keyShare -> do
+        -- Deciding signature algorithm
+        let hashSigs = hashAndSignaturesInCommon ctx exts
+        (cred, sigAlgo) <- case credentialsFindForSigning13 hashSigs allCreds of
+            Nothing -> throwCore $ Error_Protocol ("credential not found", True, IllegalParameter)
+            Just cs -> return cs
+        let usedHash = cipherHash usedCipher
+        doHandshake13 sparams cred ctx chosenVersion usedCipher exts usedHash keyShare sigAlgo clientSession
+  where
+    ciphersFilteredVersion = mapMaybe cipherIDtoCipher13 commonCipherIDs
+    serverCiphers = supportedCiphers $ serverSupported sparams
+    commonCipherIDs = clientCiphers `intersect` map cipherID serverCiphers
+    serverGroups = supportedGroups (ctxSupported ctx)
+    findKeyShare _      [] = Nothing
+    findKeyShare ks (g:gs) = case find (\ent -> keyShareEntryGroup ent == g) ks of
+      Just k  -> Just k
+      Nothing -> findKeyShare ks gs
+
+doHandshake13 :: ServerParams -> Credential -> Context -> Version
+              -> Cipher -> [ExtensionRaw]
+              -> Hash -> KeyShareEntry -> HashAndSignatureAlgorithm
+              -> Session
+              -> IO ()
+doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts usedHash clientKeyShare sigAlgo clientSession = do
+    newSession ctx >>= \ss -> usingState_ ctx (setSession ss False)
+    usingHState ctx $ setTLS13Group $ keyShareEntryGroup clientKeyShare
+    srand <- setServerParameter
+    (psk, binderInfo, is0RTTvalid) <- choosePSK
+    hCh <- transcriptHash ctx
+    let earlySecret = hkdfExtract usedHash zero psk
+        clientEarlyTrafficSecret = deriveSecret usedHash earlySecret "c e traffic" hCh
+    -- dumpKey ctx "CLIENT_EARLY_TRAFFIC_SECRET" clientEarlyTrafficSecret
+    -- putStrLn $ "hCh: " ++ showBytesHex hCh
+    -- putStrLn $ "earlySecret: " ++ showBytesHex earlySecret
+    -- putStrLn $ "clientEarlyTrafficSecret: " ++ showBytesHex clientEarlyTrafficSecret
+    extensions <- checkBinder earlySecret binderInfo
+    let authenticated = isJust binderInfo
+        rtt0OK = authenticated && rtt0 && rtt0accept && is0RTTvalid
+    ----------------------------------------------------------------
+    if rtt0 then
+         if rtt0OK then do
+             usingHState ctx $ setTLS13HandshakeMode RTT0
+             usingHState ctx $ setTLS13RTT0Status RTT0Accepted
+           else do
+             usingHState ctx $ setTLS13HandshakeMode RTT0
+             usingHState ctx $ setTLS13RTT0Status RTT0Rejected
+       else
+         if authenticated then
+             usingHState ctx $ setTLS13HandshakeMode PreSharedKey
+           else
+             -- FullHandshake or HelloRetryRequest
+             return ()
+    (ecdhe,keyShare) <- makeServerKeyShare ctx clientKeyShare
+    let handshakeSecret = hkdfExtract usedHash (deriveSecret usedHash earlySecret "derived" (hash usedHash "")) ecdhe
+    helo <- makeServerHello keyShare srand extensions >>= writeHandshakePacket13 ctx
+    ----------------------------------------------------------------
+    hChSh <- transcriptHash ctx
+    let clientHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
+        serverHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
+    -- putStrLn $ "handshakeSecret: " ++ showBytesHex handshakeSecret
+    -- putStrLn $ "hChSh: " ++ showBytesHex hChSh
+    -- usingHState ctx getHandshakeMessages >>= mapM_ (putStrLn . showBytesHex)
+    -- dumpKey ctx "SERVER_HANDSHAKE_TRAFFIC_SECRET" serverHandshakeTrafficSecret
+    -- dumpKey ctx "CLIENT_HANDSHAKE_TRAFFIC_SECRET" clientHandshakeTrafficSecret
+{-
+    if rtt0OK then
+       putStrLn "---- setRxState ctx usedHash usedCipher clientEarlyTrafficSecret"
+     else
+       putStrLn "---- setRxState ctx usedHash usedCipher clientHandshakeTrafficSecret"
+-}
+    setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlyTrafficSecret else clientHandshakeTrafficSecret
+    setTxState ctx usedHash usedCipher serverHandshakeTrafficSecret
+    ----------------------------------------------------------------
+    serverHandshake <- makeServerHandshake authenticated serverHandshakeTrafficSecret rtt0OK
+    Right ccs <- writePacket13 ctx ChangeCipherSpec13
+    sendBytes13 ctx $ B.concat (helo : ccs : serverHandshake)
+    sfSentTime <- getCurrentTimeFromBase
+    ----------------------------------------------------------------
+    let masterSecret = hkdfExtract usedHash (deriveSecret usedHash handshakeSecret "derived" (hash usedHash "")) zero
+    hChSf <- transcriptHash ctx
+    when rtt0OK $ updateHandshake13 ctx EndOfEarlyData13
+    hChEoed <- transcriptHash ctx
+    let clientApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "c ap traffic" hChSf
+        serverApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "s ap traffic" hChSf
+        exporterMasterSecret = deriveSecret usedHash masterSecret "exp master" hChSf
+        verifyData = makeVerifyData usedHash clientHandshakeTrafficSecret hChEoed
+    usingState_ ctx $ setExporterMasterSecret exporterMasterSecret
+    ----------------------------------------------------------------
+    -- putStrLn $ "hChSf: " ++ showBytesHex hChSf
+    -- putStrLn $ "hChEoed: " ++ showBytesHex hChEoed
+    -- putStrLn $ "masterSecret: " ++ showBytesHex masterSecret
+    -- dumpKey ctx "SERVER_TRAFFIC_SECRET_0" serverApplicationTrafficSecret0
+    -- dumpKey ctx "CLIENT_TRAFFIC_SECRET_0" clientApplicationTrafficSecret0
+    setTxState ctx usedHash usedCipher serverApplicationTrafficSecret0
+    -- Our use of "NewSessionTicket" is not session tickets which
+    -- do not require states in the server side.
+    -- Rather, it is session resumptions which require states.
+    --
+    -- NewSessionTicket contains a "ticket" field which is a key
+    -- for "resumption_secret". To calculate resumption_secret,
+    -- Client Finished is necessary. However, it is predictable.
+    -- So, we can send NewSessionTicket here.
+    --
+    -- From the API point of view, "handshake" should return just after
+    -- sending Server Finished, rather than after receiving
+    -- Client Finished. This is because mail related protocols send
+    -- greetings from servers first.
+    --
+    -- Web related servers call "recvData" just after "handshake".
+    -- recvData verifies received Client Finished and returns
+    -- after receiving application data from a client.
+    -- recvData should literally receive packets only, should not
+    -- send packets include NewSessionTicket.
+    --
+    -- So, NewSessionTicket should be sent with prediction here.
+    mrttref <- sendNewSessionTicket masterSecret $ Finished13 verifyData
+    ----------------------------------------------------------------
+    let established
+         | rtt0OK    = EarlyDataAllowed $ safeNonNegative32 $ serverEarlyDataSize sparams
+         | otherwise = EarlyDataNotAllowed
+    setEstablished ctx established
+    let finishedAction verifyData'
+          | verifyData == verifyData' = do
+              cfRecvTime <- getCurrentTimeFromBase
+              case mrttref of
+                Nothing -> return ()
+                Just rttref -> do
+                    let rtt = cfRecvTime - sfSentTime
+                    writeIORef rttref $ Just rtt
+              setEstablished ctx Established
+              setRxState ctx usedHash usedCipher clientApplicationTrafficSecret0
+          | otherwise = throwCore $ Error_Protocol ("cannot verify finished", True, HandshakeFailure)
+        endOfEarlyDataAction _ =
+            setRxState ctx usedHash usedCipher clientHandshakeTrafficSecret
+    if rtt0OK then do
+        setPendingActions ctx [endOfEarlyDataAction, finishedAction]
+      else do
+        setPendingActions ctx [finishedAction]
+  where
+    setServerParameter = do
+        srand <- ServerRandom <$> getStateRNG ctx 32
+        usingHState ctx $ setPrivateKey privKey
+        usingState_ ctx $ setVersion chosenVersion
+        usingHState ctx $ setHelloParameters13 usedCipher False
+        return srand
+
+    choosePSK = case extensionLookup extensionID_PreSharedKey exts >>= extensionDecode MsgTClientHello of
+      Just (PreSharedKeyClientHello (PskIdentity sessionId obfAge:_) bnds@(bnd:_)) -> do
+          let len = sum (map (\x -> B.length x + 1) bnds) + 2
+              mgr = sharedSessionManager $ serverShared sparams
+          msdata <- if rtt0 then sessionResumeOnlyOnce mgr sessionId
+                            else sessionResume mgr sessionId
+          case msdata of
+            Just sdata -> do
+                let Just tinfo = sessionTicketInfo sdata
+                    psk = sessionSecret sdata
+                isFresh <- checkFreshness tinfo obfAge
+                (isPSKvalid, is0RTTvalid) <- checkSessionEquality sdata
+                if isPSKvalid && isFresh then
+                    return (psk, Just (bnd,0::Int,len),is0RTTvalid)
+                  else
+                    -- fixme: fall back to full handshake
+                    throwCore $ Error_Protocol ("PSK validation failed", True, HandshakeFailure)
+            _      -> return (zero, Nothing, False)
+      _ -> return (zero, Nothing, False)
+
+    checkSessionEquality sdata = do
+        msni <- usingState_ ctx getClientSNI
+        malpn <- usingState_ ctx getNegotiatedProtocol
+        let isSameSNI = sessionClientSNI sdata == msni
+            (isSameCipher,isSameKDF) = case cipherIDtoCipher13 (sessionCipher sdata) of
+              Nothing -> (False,False)
+              Just c  -> (c == usedCipher,cipherHash c == cipherHash usedCipher)
+            isSameVersion = chosenVersion == sessionVersion sdata
+            isSameALPN = sessionALPN sdata == malpn
+            isPSKvalid = isSameKDF && isSameSNI -- fixme: SNI is not required
+            is0RTTvalid = isSameVersion && isSameCipher && isSameALPN
+        return (isPSKvalid, is0RTTvalid)
+
+    rtt0accept = serverEarlyDataSize sparams /= 0
+    rtt0 = case extensionLookup extensionID_EarlyData exts >>= extensionDecode MsgTClientHello of
+             Just (EarlyDataIndication _) -> True
+             Nothing                      -> False
+
+    checkBinder _ Nothing = return []
+    checkBinder earlySecret (Just (binder,n,tlen)) = do
+        binder' <- makePSKBinder ctx earlySecret usedHash tlen Nothing
+        when (binder /= binder') $
+            throwCore $ Error_Protocol ("PSK binder validation failed", True, HandshakeFailure)
+        let selectedIdentity = extensionEncode $ PreSharedKeyServerHello $ fromIntegral n
+        return [ExtensionRaw extensionID_PreSharedKey selectedIdentity]
+
+    makeServerHello keyShare srand extensions = do
+        let serverKeyShare = extensionEncode $ KeyShareServerHello keyShare
+            selectedVersion = extensionEncode $ SupportedVersionsServerHello chosenVersion
+            extensions' = ExtensionRaw extensionID_KeyShare serverKeyShare
+                        : ExtensionRaw extensionID_SupportedVersions selectedVersion
+                        : extensions
+        return $ ServerHello13 srand clientSession (cipherID usedCipher) extensions'
+
+    makeServerHandshake False serverHandshakeTrafficSecret rtt0OK = do
+        eext <- makeExtensions rtt0OK >>= writeHandshakePacket13 ctx
+        let CertificateChain cs = certChain
+            ess = replicate (length cs) []
+        cert <- writeHandshakePacket13 ctx $ Certificate13 "" certChain ess
+        hChSc <- transcriptHash ctx
+        vrfy <- makeServerCertVerify ctx sigAlgo privKey hChSc >>= writeHandshakePacket13 ctx
+        fish <- makeFinished ctx usedHash serverHandshakeTrafficSecret >>= writeHandshakePacket13 ctx
+        return [eext, cert, vrfy, fish]
+    makeServerHandshake True serverHandshakeTrafficSecret rtt0OK = do
+        eext <- makeExtensions rtt0OK >>= writeHandshakePacket13 ctx
+        fish <- makeFinished ctx usedHash serverHandshakeTrafficSecret >>= writeHandshakePacket13 ctx
+        return [eext, fish]
+
+    makeExtensions rtt0OK = do
+        extensions' <- applicationProtocol ctx exts sparams
+        msni <- usingState_ ctx getClientSNI
+        let extensions'' = case msni of
+              -- RFC6066: In this event, the server SHALL include
+              -- an extension of type "server_name" in the
+              -- (extended) server hello. The "extension_data"
+              -- field of this extension SHALL be empty.
+              Just _  -> ExtensionRaw extensionID_ServerName "" : extensions'
+              Nothing -> extensions'
+        let extensions
+              | rtt0OK = ExtensionRaw extensionID_EarlyData (extensionEncode (EarlyDataIndication Nothing)) : extensions''
+              | otherwise = extensions''
+        return $ EncryptedExtensions13 extensions
+
+    sendNewSessionTicket masterSecret pendingHandshake
+      | sendNST = do
+        updateHandshake13 ctx pendingHandshake
+        hChCf <- transcriptHash ctx
+        nonce <- usingState_ ctx $ genRandom 32
+        let resumptionMasterSecret = deriveSecret usedHash masterSecret "res master" hChCf
+            life = 86400 -- 1 day in second: fixme hard coding
+            psk = hkdfExpandLabel usedHash resumptionMasterSecret "resumption" nonce hashSize
+            maxSize = safeNonNegative32 $ serverEarlyDataSize sparams
+        (label, add, rttref) <- generateSession life psk maxSize
+        let nst = createNewSessionTicket life add nonce label maxSize
+        sendPacket13 ctx $ Handshake13 [nst]
+        return $ Just rttref
+      | otherwise = return Nothing
+      where
+        sendNST = (PSK_KE `elem` dhModes) || (PSK_DHE_KE `elem` dhModes)
+        dhModes = case extensionLookup extensionID_PskKeyExchangeModes exts >>= extensionDecode MsgTClientHello of
+          Just (PskKeyExchangeModes ms) -> ms
+          Nothing                       -> []
+        generateSession life psk maxSize = do
+            Session (Just sessionId) <- newSession ctx
+            tinfo <- createTLS13TicketInfo life (Left ctx)
+            sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
+            let mgr = sharedSessionManager $ serverShared sparams
+            sessionEstablish mgr sessionId sdata
+            return (sessionId, ageAdd tinfo, estimatedRTT tinfo)
+        createNewSessionTicket life add nonce label maxSize =
+            NewSessionTicket13 life add nonce label extensions
+          where
+            tedi = extensionEncode $ EarlyDataIndication $ Just $ fromIntegral maxSize
+            extensions = [ExtensionRaw extensionID_EarlyData tedi]
+
+    hashSize = hashDigestSize usedHash
+    zero = B.replicate hashSize 0
+
+helloRetryRequest :: MonadIO m => ServerParams -> Context -> Version -> Cipher -> [ExtensionRaw] -> [Group] -> Session -> m ()
+helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession = liftIO $ do
+    twice <- usingState_ ctx getTLS13HRR
+    when twice $
+        throwCore $ Error_Protocol ("Hello retry not allowed again", True, HandshakeFailure)
+    usingState_ ctx $ setTLS13HRR True
+    usingHState ctx $ setHelloParameters13 usedCipher True
+    let clientGroups = case extensionLookup extensionID_NegotiatedGroups exts >>= extensionDecode MsgTClientHello of
+          Just (NegotiatedGroups gs) -> gs
+          Nothing                    -> []
+        possibleGroups = serverGroups `intersect` clientGroups
+    case possibleGroups of
+      [] -> throwCore $ Error_Protocol ("key exchange not implemented in HRR", True, HandshakeFailure)
+      g:_ -> do
+          let serverKeyShare = extensionEncode $ KeyShareHRR g
+              selectedVersion = extensionEncode $ SupportedVersionsServerHello chosenVersion
+              extensions = [ExtensionRaw extensionID_KeyShare serverKeyShare
+                           ,ExtensionRaw extensionID_SupportedVersions selectedVersion]
+              hrr = ServerHello13 hrrRandom clientSession (cipherID usedCipher) extensions
+          usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
+          sendPacket13 ctx $ Handshake13 [hrr]
+          handshakeServer sparams ctx
 
 findHighestVersionFrom :: Version -> [Version] -> Maybe Version
 findHighestVersionFrom clientVersion allowedVersions =
@@ -627,8 +964,51 @@ getCiphers sparams creds sigCreds = filter authorizedCKE (supportedCiphers $ ser
                     CipherKeyExchange_DH_RSA      -> False
                     CipherKeyExchange_ECDH_ECDSA  -> False
                     CipherKeyExchange_ECDH_RSA    -> False
+                    CipherKeyExchange_TLS13       -> False -- not reached
 
             canSignDSS    = DSS `elem` signingAlgs
             canSignRSA    = RSA `elem` signingAlgs
             canEncryptRSA = isJust $ credentialsFindForDecrypting creds
             signingAlgs   = credentialsListSigningAlgorithms sigCreds
+
+findHighestVersionFrom13 :: [Version] -> [Version] -> Maybe Version
+findHighestVersionFrom13 clientVersions serverVersions = case svs `intersect` cvs of
+        []  -> Nothing
+        v:_ -> Just v
+  where
+    svs = sortOn Down serverVersions
+    cvs = sortOn Down clientVersions
+
+applicationProtocol :: Context -> [ExtensionRaw] -> ServerParams -> IO [ExtensionRaw]
+applicationProtocol ctx exts sparams
+    | clientALPNSuggest = do
+        suggest <- usingState_ ctx getClientALPNSuggest
+        case (onALPNClientSuggest $ serverHooks sparams, suggest) of
+            (Just io, Just protos) -> do
+                proto <- liftIO $ io protos
+                usingState_ ctx $ do
+                    setExtensionALPN True
+                    setNegotiatedProtocol proto
+                return [ ExtensionRaw extensionID_ApplicationLayerProtocolNegotiation
+                                        (extensionEncode $ ApplicationLayerProtocolNegotiation [proto]) ]
+            (_, _)                  -> return []
+    | otherwise = return []
+  where
+    clientALPNSuggest = isJust $ extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts
+
+-- fixme: should we use filterCredentialsWithHashSignatures here?
+credentialsFindForSigning13 :: [HashAndSignatureAlgorithm] -> Credentials -> Maybe (Credential, HashAndSignatureAlgorithm)
+credentialsFindForSigning13 hss0 creds = loop hss0
+  where
+    loop  []       = Nothing
+    loop  (hs:hss) = case credentialsFindForSigning13' hs creds of
+        Nothing   -> credentialsFindForSigning13 hss creds
+        Just cred -> Just (cred, hs)
+
+-- See credentialsFindForSigning.
+credentialsFindForSigning13' :: HashAndSignatureAlgorithm -> Credentials -> Maybe Credential
+credentialsFindForSigning13' sigAlg (Credentials l) = find forSigning l
+  where
+    forSigning cred = case credentialDigitalSignatureAlg cred of
+        Nothing  -> False
+        Just sig -> sig `signatureCompatible` sigAlg

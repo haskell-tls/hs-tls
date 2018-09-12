@@ -9,17 +9,27 @@
 module Network.TLS.IO
     ( checkValid
     , sendPacket
+    , sendPacket13
+    , sendBytes13
     , recvPacket
+    , recvPacket13
     ) where
 
 import Network.TLS.Context.Internal
 import Network.TLS.Struct
+import Network.TLS.Struct13
 import Network.TLS.Record
+import Network.TLS.Record.Types13
+import Network.TLS.Record.Disengage13
 import Network.TLS.Packet
 import Network.TLS.Hooks
 import Network.TLS.Sending
+import Network.TLS.Sending13
 import Network.TLS.Receiving
 import Network.TLS.Imports
+import Network.TLS.Receiving13
+import Network.TLS.State
+import Network.TLS.Handshake.State
 import qualified Data.ByteString as B
 
 import Data.IORef
@@ -88,6 +98,9 @@ recvRecord compatSSLv2 ctx
                     withLog ctx $ \logging -> loggingIORecv logging header content
                     runRxState ctx $ disengageRecord $ rawToRecord header (fragmentCiphertext content)
 
+isCCS :: Record a -> Bool
+isCCS (Record ProtocolType_ChangeCipherSpec _ _) = True
+isCCS _                                          = False
 
 -- | receive one packet from the context that contains 1 or
 -- many messages (many only in case of handshake). if will returns a
@@ -99,17 +112,21 @@ recvPacket ctx = liftIO $ do
     case erecord of
         Left err     -> return $ Left err
         Right record -> do
-            pktRecv <- processPacket ctx record
-            pkt <- case pktRecv of
-                    Right (Handshake hss) ->
-                        ctxWithHooks ctx $ \hooks ->
-                            Right . Handshake <$> mapM (hookRecvHandshake hooks) hss
-                    _                     -> return pktRecv
-            case pkt of
-                Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p
-                _       -> return ()
-            when compatSSLv2 $ ctxDisableSSLv2ClientHello ctx
-            return pkt
+            hrr <- usingState_ ctx getTLS13HRR
+            if hrr && isCCS record then
+                recvPacket ctx
+              else do
+                pktRecv <- processPacket ctx record
+                pkt <- case pktRecv of
+                        Right (Handshake hss) ->
+                            ctxWithHooks ctx $ \hooks ->
+                                Right . Handshake <$> mapM (hookRecvHandshake hooks) hss
+                        _                     -> return pktRecv
+                case pkt of
+                    Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p
+                    _       -> return ()
+                when compatSSLv2 $ ctxDisableSSLv2ClientHello ctx
+                return pkt
 
 -- | Send one packet to the context
 sendPacket :: MonadIO m => Context -> Packet -> m ()
@@ -130,3 +147,54 @@ sendPacket ctx pkt = do
             contextSend ctx dataToSend
   where isNonNullAppData (AppData b) = not $ B.null b
         isNonNullAppData _           = False
+
+sendPacket13 :: MonadIO m => Context -> Packet13 -> m ()
+sendPacket13 ctx pkt = do
+    edataToSend <- liftIO $ do
+                        withLog ctx $ \logging -> loggingPacketSent logging (show pkt)
+                        writePacket13 ctx pkt
+    case edataToSend of
+        Left err         -> throwCore err
+        Right dataToSend -> sendBytes13 ctx dataToSend
+
+sendBytes13 :: MonadIO m => Context -> ByteString -> m ()
+sendBytes13 ctx dataToSend = liftIO $ do
+    withLog ctx $ \logging -> loggingIOSent logging dataToSend
+    contextSend ctx dataToSend
+
+recvRecord13 :: Context
+            -> IO (Either TLSError Record13)
+recvRecord13 ctx = readExact ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
+  where recvLengthE = either (return . Left) recvLength
+        recvLength header@(Header _ _ readlen)
+          | readlen > 16384 + 2048 = return $ Left maximumSizeExceeded
+          | otherwise              =
+              readExact ctx (fromIntegral readlen) >>=
+                 either (return . Left) (getRecord header)
+        maximumSizeExceeded = Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
+        getRecord :: Header -> ByteString -> IO (Either TLSError Record13)
+        getRecord header content = do
+              liftIO $ withLog ctx $ \logging -> loggingIORecv logging header content
+              runRxState ctx $ disengageRecord13 $ rawToRecord13 header content
+
+recvPacket13 :: MonadIO m => Context -> m (Either TLSError Packet13)
+recvPacket13 ctx = liftIO $ do
+    st <- usingHState ctx getTLS13RTT0Status
+    -- If the server decides to reject RTT0 data but accepts RTT1
+    -- data, the server should skip all records for RTT0 data.
+    -- Currently, the server tries to skip 3 RTT0 data at maximum.
+    let n = if st == RTT0Rejected then 3 else (1 :: Int) -- hardcoding
+    loop n
+  where
+    loop n = do
+        erecord <- recvRecord13 ctx
+        case erecord of
+            Left err
+              | n == 1    -> return $ Left err
+              | otherwise -> loop (n - 1)
+            Right record -> do
+                pkt <- processPacket13 ctx record
+                case pkt of
+                    Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p
+                    _       -> return ()
+                return pkt

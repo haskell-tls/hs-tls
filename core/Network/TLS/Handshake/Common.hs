@@ -41,9 +41,9 @@ import Control.Exception (throwIO)
 handshakeFailed :: TLSError -> IO ()
 handshakeFailed err = throwIO $ HandshakeFailed err
 
-errorToAlert :: TLSError -> Packet
-errorToAlert (Error_Protocol (_, _, ad)) = Alert [(AlertLevel_Fatal, ad)]
-errorToAlert _                           = Alert [(AlertLevel_Fatal, InternalError)]
+errorToAlert :: TLSError -> [(AlertLevel, AlertDescription)]
+errorToAlert (Error_Protocol (_, _, ad)) = [(AlertLevel_Fatal, ad)]
+errorToAlert _                           = [(AlertLevel_Fatal, InternalError)]
 
 unexpected :: String -> Maybe String -> IO a
 unexpected msg expected = throwCore $ Error_Packet_unexpected msg (maybe "" (" expected: " ++) expected)

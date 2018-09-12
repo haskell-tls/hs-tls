@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- |
 -- Module      : Network.TLS.Context.Internal
 -- License     : BSD-style
@@ -53,6 +54,7 @@ module Network.TLS.Context.Internal
     , usingHState
     , getHState
     , getStateRNG
+    , tls13orLater
     ) where
 
 import Network.TLS.Backend
@@ -84,6 +86,8 @@ data Information = Information
     , infoMasterSecret :: Maybe ByteString
     , infoClientRandom :: Maybe ClientRandom
     , infoServerRandom :: Maybe ServerRandom
+    , infoNegotiatedGroup     :: Maybe Group
+    , infoTLS13HandshakeMode  :: Maybe HandshakeMode13
     , infoIsEarlyDataAccepted :: Bool
     } deriving (Show,Eq)
 
@@ -138,17 +142,19 @@ contextGetInformation :: Context -> IO (Maybe Information)
 contextGetInformation ctx = do
     ver    <- usingState_ ctx $ gets stVersion
     hstate <- getHState ctx
-    let (ms, cr, sr) = case hstate of
+    let (ms, cr, sr, hm13, grp13) = case hstate of
                            Just st -> (hstMasterSecret st,
                                        Just (hstClientRandom st),
-                                       hstServerRandom st)
-                           Nothing -> (Nothing, Nothing, Nothing)
+                                       hstServerRandom st,
+                                       if ver == Just TLS13 then Just (hstTLS13HandshakeMode st) else Nothing,
+                                       hstTLS13Group st)
+                           Nothing -> (Nothing, Nothing, Nothing, Nothing, Nothing)
     (cipher,comp) <- failOnEitherError $ runRxState ctx $ gets $ \st -> (stCipher st, stCompression st)
     let accepted = case hstate of
             Just st -> hstTLS13RTT0Status st == RTT0Accepted
             Nothing -> False
     case (ver, cipher) of
-        (Just v, Just c) -> return $ Just $ Information v c comp ms cr sr accepted
+        (Just v, Just c) -> return $ Just $ Information v c comp ms cr sr grp13 hm13 accepted
         _                -> return Nothing
 
 contextSend :: Context -> ByteString -> IO ()
@@ -215,14 +221,22 @@ getHState ctx = liftIO $ readMVar (ctxHandshake ctx)
 runTxState :: Context -> RecordM a -> IO (Either TLSError a)
 runTxState ctx f = do
     ver <- usingState_ ctx (getVersionWithDefault $ maximum $ supportedVersions $ ctxSupported ctx)
+    hrr <- usingState_ ctx getTLS13HRR
+    -- For TLS 1.3, ver' is only used in ClientHello.
+    -- The record version of the first ClientHello SHOULD be TLS 1.0.
+    -- The record version of the second ClientHello MUST be TLS 1.2.
+    let ver'
+         | ver >= TLS13 = if hrr then TLS12 else TLS10
+         | otherwise    = ver
     modifyMVar (ctxTxState ctx) $ \st ->
-        case runRecordM f ver st of
+        case runRecordM f ver' st of
             Left err         -> return (st, Left err)
             Right (a, newSt) -> return (newSt, Right a)
 
 runRxState :: Context -> RecordM a -> IO (Either TLSError a)
 runRxState ctx f = do
     ver <- usingState_ ctx getVersion
+    -- For 1.3, ver is just ignored. So, it is not necessary to convert ver.
     modifyMVar (ctxRxState ctx) $ \st ->
         case runRecordM f ver st of
             Left err         -> return (st, Left err)
@@ -242,3 +256,10 @@ withRWLock ctx f = withReadLock ctx $ withWriteLock ctx f
 
 withStateLock :: Context -> IO a -> IO a
 withStateLock ctx f = withMVar (ctxLockState ctx) (const f)
+
+tls13orLater :: MonadIO m => Context -> m Bool
+tls13orLater ctx = do
+    ev <- liftIO $ usingState ctx $ getVersionWithDefault TLS10 -- fixme
+    return $ case ev of
+               Left  _ -> False
+               Right v -> v >= TLS13

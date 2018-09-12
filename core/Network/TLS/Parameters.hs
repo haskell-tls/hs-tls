@@ -89,7 +89,7 @@ data ClientParams = ClientParams
       -- of 'supportedCiphers' with a suitable cipherlist.
     , clientSupported                 :: Supported
     , clientDebug                     :: DebugParams
-      -- ^ Client tries to send this early data in TLS 1.3 if possible.
+      -- | Client tries to send this early data in TLS 1.3 if possible.
       -- If not accepted by the server, it is application's responsibility
       -- to re-sent it.
     , clientEarlyData                 :: Maybe ByteString

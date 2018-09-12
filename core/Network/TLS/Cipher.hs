@@ -26,7 +26,6 @@ module Network.TLS.Cipher
     , BulkNonce
     , BulkAdditionalData
     , cipherAllowedForVersion
-    , cipherExchangeNeedMoreData
     , hasMAC
     , hasRecordIV
     ) where
@@ -95,6 +94,7 @@ data CipherKeyExchangeType =
     | CipherKeyExchange_ECDH_ECDSA
     | CipherKeyExchange_ECDH_RSA
     | CipherKeyExchange_ECDHE_ECDSA
+    | CipherKeyExchange_TLS13 -- not expressed in cipher suite
     deriving (Show,Eq)
 
 data Bulk = Bulk
@@ -144,15 +144,3 @@ instance Show Cipher where
 
 instance Eq Cipher where
     (==) c1 c2 = cipherID c1 == cipherID c2
-
-cipherExchangeNeedMoreData :: CipherKeyExchangeType -> Bool
-cipherExchangeNeedMoreData CipherKeyExchange_RSA         = False
-cipherExchangeNeedMoreData CipherKeyExchange_DH_Anon     = True
-cipherExchangeNeedMoreData CipherKeyExchange_DHE_RSA     = True
-cipherExchangeNeedMoreData CipherKeyExchange_ECDHE_RSA   = True
-cipherExchangeNeedMoreData CipherKeyExchange_DHE_DSS     = True
-cipherExchangeNeedMoreData CipherKeyExchange_DH_DSS      = False
-cipherExchangeNeedMoreData CipherKeyExchange_DH_RSA      = False
-cipherExchangeNeedMoreData CipherKeyExchange_ECDH_ECDSA  = True
-cipherExchangeNeedMoreData CipherKeyExchange_ECDH_RSA    = True
-cipherExchangeNeedMoreData CipherKeyExchange_ECDHE_ECDSA = True

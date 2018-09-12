@@ -1,4 +1,19 @@
-module Network.TLS.Struct13 where
+-- |
+-- Module      : Network.TLS.Struct13
+-- License     : BSD-style
+-- Maintainer  : Vincent Hanquez <vincent@snarc.org>
+-- Stability   : experimental
+-- Portability : unknown
+--
+module Network.TLS.Struct13
+       ( Packet13(..)
+       , Handshake13(..)
+       , HandshakeType13(..)
+       , typeOfHandshake13
+       , ContentType(..)
+       , contentType
+       , protoToContent
+       ) where
 
 import Data.X509 (CertificateChain)
 import Network.TLS.Struct
@@ -12,20 +27,18 @@ data Packet13 =
     | AppData13 ByteString
     deriving (Show,Eq)
 
-newtype CertificateEntry13 = CertificateEntry13 [ExtensionRaw]
-                           deriving (Show,Eq)
-
+-- fixme: convert ByteString to proper data types.
 data Handshake13 =
       ClientHello13 !Version !ClientRandom !Session ![CipherID] [ExtensionRaw]
     | ServerHello13 !ServerRandom !Session !CipherID [ExtensionRaw]
-    | NewSessionTicket13 Word32 Word32 ByteString ByteString [ExtensionRaw] -- fixme
+    | NewSessionTicket13 Word32 Word32 ByteString ByteString [ExtensionRaw]
     | EndOfEarlyData13
     | EncryptedExtensions13 [ExtensionRaw]
-    | CertRequest13 -- fixme
+    | CertRequest13 ByteString [ExtensionRaw]
     | Certificate13 ByteString CertificateChain [[ExtensionRaw]]
     | CertVerify13 HashAndSignatureAlgorithm ByteString
     | Finished13 FinishedData
-    | KeyUpdate13 -- fixme
+    | KeyUpdate13 Word8
     deriving (Show,Eq)
 
 data HandshakeType13 =

@@ -50,8 +50,8 @@ runTLS debug ioDebug params cSock f = do
                                 }
             | otherwise = logging
 
-getDefaultParams :: [Flag] -> CertificateStore -> SessionManager -> Credential -> IO ServerParams
-getDefaultParams flags store smgr cred = do
+getDefaultParams :: [Flag] -> CertificateStore -> SessionManager -> Credential -> Bool -> IO ServerParams
+getDefaultParams flags store smgr cred rtt0accept = do
     dhParams <- case getDHParams flags of
         Nothing   -> return Nothing
         Just name -> readDHParams name
@@ -68,12 +68,15 @@ getDefaultParams flags store smgr cred = do
         , serverHooks = def
         , serverSupported = def { supportedVersions = supportedVers
                                 , supportedCiphers = myCiphers
-                                , supportedClientInitiatedRenegotiation = allowRenegotiation }
+                                , supportedGroups = [X25519, P256]
+                                , supportedClientInitiatedRenegotiation = allowRenegotiation
+                                }
         , serverDebug = def { debugSeed      = foldl getDebugSeed Nothing flags
                             , debugPrintSeed = if DebugPrintSeed `elem` flags
                                                     then (\seed -> putStrLn ("seed: " ++ show (seedToInteger seed)))
                                                     else (\_ -> return ())
                             }
+        , serverEarlyDataSize = if rtt0accept then 2048 else 0
         }
     where
             validateCache
@@ -109,6 +112,7 @@ getDefaultParams flags store smgr cred = do
             getDebugSeed acc _                = acc
 
             tlsConnectVer
+                | Tls13 `elem` flags = TLS13
                 | Tls12 `elem` flags = TLS12
                 | Tls11 `elem` flags = TLS11
                 | Ssl3  `elem` flags = SSL3
@@ -117,12 +121,12 @@ getDefaultParams flags store smgr cred = do
             supportedVers
                 | NoVersionDowngrade `elem` flags = [tlsConnectVer]
                 | otherwise = filter (<= tlsConnectVer) allVers
-            allVers = [SSL3, TLS10, TLS11, TLS12]
+            allVers = [SSL3, TLS10, TLS11, TLS12, TLS13]
             validateCert = not (NoValidateCert `elem` flags)
             allowRenegotiation = AllowRenegotiation `elem` flags
 
 data Flag = Verbose | Debug | IODebug | NoValidateCert | Http11
-          | Ssl3 | Tls10 | Tls11 | Tls12
+          | Ssl3 | Tls10 | Tls11 | Tls12 | Tls13
           | NoVersionDowngrade
           | AllowRenegotiation
           | Output String
@@ -137,6 +141,7 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Http11
           | Certificate String
           | Key String
           | DHParams String
+          | Rtt0
           | DebugSeed String
           | DebugPrintSeed
           | Help
@@ -147,6 +152,7 @@ options =
     [ Option ['v']  ["verbose"] (NoArg Verbose) "verbose output on stdout"
     , Option ['d']  ["debug"]   (NoArg Debug) "TLS debug output on stdout"
     , Option []     ["io-debug"] (NoArg IODebug) "TLS IO debug output on stdout"
+    , Option ['Z']  ["zerortt"] (NoArg Rtt0) "accept TLS 1.3 0RTT data"
     , Option ['O']  ["output"]  (ReqArg Output "stdout") "output "
     , Option ['t']  ["timeout"] (ReqArg Timeout "timeout") "timeout in milliseconds (2s by default)"
     , Option []     ["no-validation"] (NoArg NoValidateCert) "disable certificate validation"
@@ -155,6 +161,7 @@ options =
     , Option []     ["tls10"]   (NoArg Tls10) "use TLS 1.0"
     , Option []     ["tls11"]   (NoArg Tls11) "use TLS 1.1"
     , Option []     ["tls12"]   (NoArg Tls12) "use TLS 1.2 (default)"
+    , Option []     ["tls13"]   (NoArg Tls13) "use TLS 1.3"
     , Option []     ["bogocipher"] (ReqArg BogusCipher "cipher-id") "add a bogus cipher id for testing"
     , Option ['x']  ["no-version-downgrade"] (NoArg NoVersionDowngrade) "do not allow version downgrade"
     , Option []     ["allow-renegotiation"] (NoArg AllowRenegotiation) "allow client-initiated renegotiation"
@@ -204,7 +211,7 @@ runOn (sStorage, certStore) flags port = do
             (cSock, cAddr) <- accept sock
             putStrLn ("connection from " ++ show cAddr)
             cred <- loadCred getKey getCertificate
-            params <- getDefaultParams flags certStore sStorage cred
+            params <- getDefaultParams flags certStore sStorage cred False
             runTLS False False params cSock $ \ctx -> do
                 handshake ctx
                 if isSend
@@ -231,7 +238,8 @@ runOn (sStorage, certStore) flags port = do
             putStrLn ("connection from " ++ show cAddr)
 
             cred <- loadCred getKey getCertificate
-            params <- getDefaultParams flags certStore sStorage cred
+            let rtt0accept = Rtt0 `elem` flags
+            params <- getDefaultParams flags certStore sStorage cred rtt0accept
 
             void $ forkIO $ do
                 runTLS (Debug `elem` flags)

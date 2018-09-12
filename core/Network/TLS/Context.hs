@@ -14,6 +14,7 @@ module Network.TLS.Context
     -- * Context object and accessor
     , Context(..)
     , Hooks(..)
+    , Established(..)
     , ctxEOF
     , ctxHasSSLv2ClientHello
     , ctxDisableSSLv2ClientHello
@@ -60,6 +61,7 @@ module Network.TLS.Context
     , usingHState
     , getHState
     , getStateRNG
+    , tls13orLater
     ) where
 
 import Network.TLS.Backend

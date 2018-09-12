@@ -43,6 +43,7 @@ module Network.TLS
     , SessionData(..)
     , SessionManager(..)
     , noSessionManager
+    , TLS13TicketInfo
 
     -- * Backend abstraction
     , Backend(..)
@@ -128,8 +129,9 @@ module Network.TLS
     , ValidationCacheResult(..)
     , exceptionValidationCache
 
-    -- * Key exchange group
+    -- * TLS 1.3
     , Group(..)
+    , HandshakeMode13(..)
     ) where
 
 import Network.TLS.Backend (Backend(..), HasBackend(..))
@@ -151,6 +153,7 @@ import Network.TLS.Core
 import Network.TLS.Session
 import Network.TLS.X509
 import Network.TLS.Types
+import Network.TLS.Handshake.State (HandshakeMode13(..))
 import Data.X509 (PubKey(..), PrivKey(..))
 import Data.X509.Validation
 import Data.ByteString as B
