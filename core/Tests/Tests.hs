@@ -112,7 +112,7 @@ runTLSInitFailure params = do
 
 runTLSInitFailureRenego :: (ClientParams, ServerParams) -> PropertyM IO ()
 runTLSInitFailureRenego params = do
-    (cRes, sRes) <- run (initiateDataPipe params tlsServer tlsClient)
+    (cRes, _sRes) <- run (initiateDataPipe params tlsServer tlsClient)
     assertIsLeft cRes
   where tlsServer ctx = handshake ctx >> bye ctx >> return ("server success" :: String)
         tlsClient ctx = handshake ctx >> handshake ctx >> bye ctx >> return ("client success" :: String)
