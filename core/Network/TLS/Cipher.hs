@@ -136,8 +136,8 @@ cipherKeyBlockSize cipher = 2 * (hashDigestSize (cipherHash cipher) + bulkIVSize
 cipherAllowedForVersion :: Version -> Cipher -> Bool
 cipherAllowedForVersion ver cipher =
     case cipherMinVer cipher of
-        Nothing   -> True
-        Just cVer -> cVer <= ver
+        Nothing   -> ver < TLS13
+        Just cVer -> cVer <= ver && (ver < TLS13 || cVer >= TLS13)
 
 instance Show Cipher where
     show c = cipherName c
