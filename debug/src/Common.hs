@@ -6,6 +6,7 @@ module Common
     , readNumber
     , readCiphers
     , readDHParams
+    , readGroups
     , printHandshakeInfo
     , makeAddrInfo
     , AddrInfo(..)
@@ -38,6 +39,20 @@ namedCiphersuites =
     , ("strong",    map cipherID ciphersuite_strong)
     ]
 
+namedGroups :: [(String, Group)]
+namedGroups =
+    [ ("ffdhe2048", FFDHE2048)
+    , ("ffdhe3072", FFDHE3072)
+    , ("ffdhe4096", FFDHE4096)
+    , ("ffdhe6144", FFDHE6144)
+    , ("ffdhe8192", FFDHE8192)
+    , ("p256", P256)
+    , ("p384", P384)
+    , ("p521", P521)
+    , ("x25519", X25519)
+    , ("x448", X448)
+    ]
+
 readNumber :: (Num a, Read a) => String -> Maybe a
 readNumber s
     | all isDigit s = Just $ read s
@@ -54,6 +69,9 @@ readDHParams s =
     case lookup s namedDHParams of
         Nothing -> (Just . read) `fmap` readFile s
         mparams -> return mparams
+
+readGroups :: String -> Maybe [Group]
+readGroups s = traverse (`lookup` namedGroups) (split ',' s)
 
 printCiphers :: IO ()
 printCiphers = do
@@ -102,3 +120,10 @@ makeAddrInfo maddr port = do
           , addrSocketType = Stream
           }
     head <$> getAddrInfo (Just hints) maddr (Just $ show port)
+
+split :: Char -> String -> [String]
+split _ "" = []
+split c s = case break (c==) s of
+    ("",r)  -> split c (tail r)
+    (s',"") -> [s']
+    (s',r)  -> s' : split c (tail r)

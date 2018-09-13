@@ -128,27 +128,15 @@ getDefaultParams flags host store sStorage certCredsRequest session earlyData =
             allVers = [SSL3, TLS10, TLS11, TLS12, TLS13]
             validateCert = not (NoValidateCert `elem` flags)
 
-getGroups flags = case getGroup of
-  Nothing -> [X448, X25519, P256]
-  Just gs -> case catMaybes $ map toG $ split ',' gs of
-    []     -> [X448, X25519, P256]
-    groups -> groups
+getGroups flags = case getGroup >>= readGroups of
+    Nothing     -> defaultGroups
+    Just []     -> defaultGroups
+    Just groups -> groups
   where
+    defaultGroups = supportedGroups def
     getGroup = foldl f Nothing flags
       where f _   (Group g)  = Just g
             f acc _          = acc
-    split :: Char -> String -> [String]
-    split _ "" = []
-    split c s = case break (c==) s of
-      ("",r)  -> split c (tail r)
-      (s',"") -> [s']
-      (s',r)  -> s' : split c (tail r)
-    toG "x25519" = Just X25519
-    toG "x448"   = Just X448
-    toG "p256"   = Just P256
-    toG "p384"   = Just P384
-    toG "p521"   = Just P521
-    toG _        = Nothing
 
 data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | Ssl3 | Tls10 | Tls11 | Tls12 | Tls13
