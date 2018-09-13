@@ -54,12 +54,130 @@ If this command return 0 certificates, it's likely that you don't have any certi
 or that your system is storing certificates in an un-expected place. All TLS operations will result
 in "CA is unknown" errors.
 
-TLS issues
-----------
+# Usage of `tls-simpleclient`
 
-When having unknown issues with TLS, if your protocol is HTTP based it's useful to use tls-simpleclient from the
-tls-debug package.
+`tls-simpleclient` takes a server name and optionally a port number then generates HTTP/1.1 GET.
 
-    tls-simpleclient -d -v <www.myserver.com> <port>
+- `--tls13`: enabling TLS 1.3
+- `-v`: verbose mode to tell TLS 1.3 handshake mode
+- `-O` <file>: logging received HTML to the file
+- `--http1.1`: ensuring that HTTP/1.1 is used instead of HTTP/1.0
+- `--no-valid`: skipping verification of a server certificate
 
-This provides useful information for debugging issues related to TLS.
+## TLS 1.3 full negotiation
+
+Specify `-g x25519` to not trigger HelloRetryRequest.
+
+```
+% tls-simpleclient --tls13 -v --no-valid -O html-log.txt --http1.1 -g x25519 127.0.0.1 443
+sending query:
+GET / HTTP/1.1
+Host: 127.0.0.1
+
+
+
+version: TLS13
+cipher: AES128GCM-SHA256
+compression: 0
+group: X25519
+handshake emode: FullHandshake
+early data accepted: False
+server name indication: 127.0.0.1
+```
+
+## TLS 1.3 HelloRetryRequest (HRR)
+
+The default value of `-g` is `x448,x25519,p256`. To trigger HRR, omit the `-g` option. The first value is only used for key-share.
+
+```
+% tls-simpleclient --tls13 -v --no-valid -O html-log.txt --http1.1 127.0.0.1 443
+sending query:
+GET / HTTP/1.1
+Host: 127.0.0.1
+
+
+
+version: TLS13
+cipher: AES128GCM-SHA256
+compression: 0
+group: X25519
+handshake emode: HelloRetryRequest
+early data accepted: False
+server name indication: 127.0.0.1
+```
+
+## Pre-Shared Key
+
+Specify `--session`. The client stores a ticket in the memory and tries to make a new connection with the ticket. Note that a proper keyshare is selected on the second try to avoid HRR.
+
+```
+% tls-simpleclient --tls13 -v --no-valid -O html-log.txt --http1.1 --session 127.0.0.1 443
+sending query:
+GET / HTTP/1.1
+Host: 127.0.0.1
+
+
+
+version: TLS13
+cipher: AES128GCM-SHA256
+compression: 0
+group: X25519
+handshake emode: HelloRetryRequest
+early data accepted: False
+server name indication: 127.0.0.1
+
+Resuming the session...
+sending query:
+GET / HTTP/1.1
+Host: 127.0.0.1
+
+
+
+version: TLS13
+cipher: AES128GCM-SHA256
+compression: 0
+group: X25519
+handshake emode: PreSharedKey
+early data accepted: False
+server name indication: 127.0.0.1
+```
+
+## 0RTT
+
+Use `-Z` to specify a file containing early-data. "0RTT is accepted" indicates that 0RTT is succeded.
+
+```
+% cat early-data.txt
+GET / HTTP/1.1
+Host: 127.0.0.1
+
+% tls-simpleclient --tls13 -v --no-valid -O html-log.txt --http1.1 --session -Z early-data.txt 127.0.0.1 443
+sending query:
+GET / HTTP/1.1
+Host: 127.0.0.1
+
+
+
+version: TLS13
+cipher: AES128GCM-SHA256
+compression: 0
+group: X25519
+handshake emode: HelloRetryRequest
+early data accepted: False
+server name indication: 127.0.0.1
+
+Resuming the session...
+sending query:
+GET / HTTP/1.1
+Host: 127.0.0.1
+
+
+
+version: TLS13
+cipher: AES128GCM-SHA256
+compression: 0
+group: X25519
+handshake emode: RTT0
+early data accepted: True
+server name indication: 127.0.0.1
+```
