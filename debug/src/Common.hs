@@ -3,6 +3,7 @@
 module Common
     ( printCiphers
     , printDHParams
+    , printGroups
     , readNumber
     , readCiphers
     , readDHParams
@@ -94,6 +95,12 @@ printDHParams = do
     putStrLn "====================================="
     forM_ namedDHParams $ \(name, _) -> putStrLn name
     putStrLn "(or /path/to/dhparams)"
+
+printGroups :: IO ()
+printGroups = do
+    putStrLn "Groups"
+    putStrLn "====================================="
+    forM_ namedGroups $ \(name, _) -> putStrLn name
 
 printHandshakeInfo ctx = do
     info <- contextGetInformation ctx

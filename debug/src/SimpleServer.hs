@@ -147,6 +147,7 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Http11
           | BenchData String
           | UseCipher String
           | ListCiphers
+          | ListGroups
           | ListDHParams
           | Certificate String
           | Key String
@@ -183,6 +184,7 @@ options =
     , Option []     ["bench-data"] (ReqArg BenchData "amount") "amount of data to benchmark with"
     , Option []     ["use-cipher"] (ReqArg UseCipher "cipher-id") "use a specific cipher"
     , Option []     ["list-ciphers"] (NoArg ListCiphers) "list all ciphers supported and exit"
+    , Option []     ["list-groups"] (NoArg ListGroups) "list all groups supported and exit"
     , Option []     ["list-dhparams"] (NoArg ListDHParams) "list all DH parameters supported and exit"
     , Option []     ["certificate"] (ReqArg Certificate "certificate") "certificate file"
     , Option []     ["debug-seed"] (ReqArg DebugSeed "debug-seed") "debug: set a specific seed for randomness"
@@ -328,6 +330,10 @@ main = do
 
     when (ListDHParams `elem` opts) $ do
         printDHParams
+        exitSuccess
+
+    when (ListGroups `elem` opts) $ do
+        printGroups
         exitSuccess
 
     certStore <- getSystemCertificateStore

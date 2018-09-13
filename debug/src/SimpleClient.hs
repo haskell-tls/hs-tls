@@ -155,6 +155,7 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | BenchData String
           | UseCipher String
           | ListCiphers
+          | ListGroups
           | DebugSeed String
           | DebugPrintSeed
           | Group String
@@ -191,6 +192,7 @@ options =
     , Option []     ["bench-data"] (ReqArg BenchData "amount") "amount of data to benchmark with"
     , Option []     ["use-cipher"] (ReqArg UseCipher "cipher-id") "use a specific cipher"
     , Option []     ["list-ciphers"] (NoArg ListCiphers) "list all ciphers supported and exit"
+    , Option []     ["list-groups"] (NoArg ListGroups) "list all groups supported and exit"
     , Option []     ["debug-seed"] (ReqArg DebugSeed "debug-seed") "debug: set a specific seed for randomness"
     , Option []     ["debug-print-seed"] (NoArg DebugPrintSeed) "debug: set a specific seed for randomness"
     ]
@@ -326,6 +328,10 @@ main = do
 
     when (ListCiphers `elem` opts) $ do
         printCiphers
+        exitSuccess
+
+    when (ListGroups `elem` opts) $ do
+        printGroups
         exitSuccess
 
     certStore <- getSystemCertificateStore
