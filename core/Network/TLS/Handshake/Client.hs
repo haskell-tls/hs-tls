@@ -365,6 +365,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                                          let premaster = dhGetShared params clientDHPriv srvpub
                                          return (clientDHPub, premaster)
                              Just grp -> do
+                                 usingHState ctx $ setNegotiatedGroup grp
                                  dhePair <- generateFFDHEShared ctx grp srvpub
                                  case dhePair of
                                      Nothing   -> throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
@@ -375,7 +376,8 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     return $ CKX_DH clientDHPub
 
                 getCKX_ECDHE = do
-                    ServerECDHParams _grp srvpub <- usingHState ctx getServerECDHParams
+                    ServerECDHParams grp srvpub <- usingHState ctx getServerECDHParams
+                    usingHState ctx $ setNegotiatedGroup grp
                     ecdhePair <- generateECDHEShared ctx srvpub
                     case ecdhePair of
                         Nothing                  -> throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
@@ -679,7 +681,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
             case mks of
               Just (KeyShareServerHello ks) -> return ks
               _                             -> throwCore $ Error_Protocol ("key exchange not implemented", True, HandshakeFailure)
-        usingHState ctx $ setTLS13Group $ keyShareEntryGroup serverKeyShare
+        usingHState ctx $ setNegotiatedGroup $ keyShareEntryGroup serverKeyShare
         usingHState ctx getGroupPrivate >>= fromServerKeyShare serverKeyShare
 
     makeEarlySecret = do

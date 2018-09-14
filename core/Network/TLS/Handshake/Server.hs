@@ -399,11 +399,15 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                         []  ->
                             let dhparams = fromJust "server DHE Params" $ serverDHEParams sparams
                              in case findFiniteFieldGroup dhparams of
-                                    Just g  -> generateFFDHE ctx g
+                                    Just g  -> do
+                                        usingHState ctx $ setNegotiatedGroup g
+                                        generateFFDHE ctx g
                                     Nothing -> do
                                         (priv, pub) <- generateDHE ctx dhparams
                                         return (dhparams, priv, pub)
-                        g:_ -> generateFFDHE ctx g
+                        g:_ -> do
+                            usingHState ctx $ setNegotiatedGroup g
+                            generateFFDHE ctx g
 
             let serverParams = serverDHParamsFrom dhparams pub
 
@@ -439,6 +443,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
         generateSKX_DH_Anon = SKX_DH_Anon <$> setup_DHE
 
         setup_ECDHE grp = do
+            usingHState ctx $ setNegotiatedGroup grp
             (srvpri, srvpub) <- generateECDHE ctx grp
             let serverParams = ServerECDHParams grp srvpub
             usingHState ctx $ setServerECDHParams serverParams
@@ -668,7 +673,7 @@ doHandshake13 :: ServerParams -> Credential -> Context -> Version
               -> IO ()
 doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts usedHash clientKeyShare sigAlgo clientSession = do
     newSession ctx >>= \ss -> usingState_ ctx (setSession ss False)
-    usingHState ctx $ setTLS13Group $ keyShareEntryGroup clientKeyShare
+    usingHState ctx $ setNegotiatedGroup $ keyShareEntryGroup clientKeyShare
     srand <- setServerParameter
     (psk, binderInfo, is0RTTvalid) <- choosePSK
     hCh <- transcriptHash ctx

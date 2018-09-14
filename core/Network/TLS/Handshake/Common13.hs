@@ -239,7 +239,7 @@ getSessionData13 ctx usedCipher tinfo maxSize psk = do
     ver   <- usingState_ ctx getVersion
     malpn <- usingState_ ctx getNegotiatedProtocol
     sni   <- usingState_ ctx getClientSNI
-    mgrp  <- usingHState ctx getTLS13Group
+    mgrp  <- usingHState ctx getNegotiatedGroup
     return SessionData {
         sessionVersion     = ver
       , sessionCipher      = cipherID usedCipher
