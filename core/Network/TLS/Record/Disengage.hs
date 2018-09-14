@@ -91,14 +91,14 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
 
             {- update IV -}
             (iv, econtent') <- if explicitIV
-                                  then get2 econtent (bulkIVSize bulk, econtentLen - bulkIVSize bulk)
+                                  then get2o econtent (bulkIVSize bulk, econtentLen - bulkIVSize bulk)
                                   else return (cstIV cst, econtent)
             let (content', iv') = decryptF iv econtent'
             modify $ \txs -> txs { stCryptState = cst { cstIV = iv' } }
 
             let paddinglength = fromIntegral (B.last content') + 1
             let contentlen = B.length content' - paddinglength - macSize
-            (content, mac, padding) <- get3 content' (contentlen, macSize, paddinglength)
+            (content, mac, padding) <- get3i content' (contentlen, macSize, paddinglength)
             getCipherData record CipherData
                     { cipherDataContent = content
                     , cipherDataMAC     = Just mac
@@ -112,7 +112,7 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
             let (content', bulkStream') = decryptF econtent
             {- update Ctx -}
             let contentlen        = B.length content' - macSize
-            (content, mac) <- get2 content' (contentlen, macSize)
+            (content, mac) <- get2i content' (contentlen, macSize)
             modify $ \txs -> txs { stCryptState = cst { cstKey = BulkStateStream bulkStream' } }
             getCipherData record CipherData
                     { cipherDataContent = content
@@ -128,7 +128,7 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
             -- check if we have enough bytes to cover the minimum for this cipher
             when (econtentLen < (authTagLen + nonceExpLen)) sanityCheckError
 
-            (enonce, econtent', authTag) <- get3 econtent (nonceExpLen, cipherLen, authTagLen)
+            (enonce, econtent', authTag) <- get3o econtent (nonceExpLen, cipherLen, authTagLen)
             let encodedSeq = encodeWord64 $ msSequence $ stMacState tst
                 iv = cstIV (stCryptState tst)
                 ivlen = B.length iv
@@ -149,5 +149,11 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
         decryptOf BulkStateUninitialized =
             throwError $ Error_Protocol ("decrypt state uninitialized", True, InternalError)
 
-        get3 s ls = maybe (throwError $ Error_Packet "record bad format") return $ partition3 s ls
-        get2 s (d1,d2) = get3 s (d1,d2,0) >>= \(r1,r2,_) -> return (r1,r2)
+        -- handling of outer format can report errors with Error_Packet
+        get3o s ls = maybe (throwError $ Error_Packet "record bad format") return $ partition3 s ls
+        get2o s (d1,d2) = get3o s (d1,d2,0) >>= \(r1,r2,_) -> return (r1,r2)
+
+        -- all format errors related to decrypted content are reported
+        -- externally as integrity failures, i.e. BadRecordMac
+        get3i s ls = maybe (throwError $ Error_Protocol ("record bad format", True, BadRecordMac)) return $ partition3 s ls
+        get2i s (d1,d2) = get3i s (d1,d2,0) >>= \(r1,r2,_) -> return (r1,r2)

@@ -55,7 +55,7 @@ decryptData econtent tst = decryptOf (cstKey cst)
             let authTagLen  = bulkAuthTagLen bulk
                 cipherLen   = econtentLen - authTagLen
 
-            (econtent', authTag) <- get2 econtent (cipherLen, authTagLen)
+            (econtent', authTag) <- get2o econtent (cipherLen, authTagLen)
             let encodedSeq = encodeWord64 $ msSequence $ stMacState tst
                 iv = cstIV cst
                 ivlen = B.length iv
@@ -72,5 +72,6 @@ decryptData econtent tst = decryptOf (cstKey cst)
         decryptOf _ =
             throwError $ Error_Protocol ("decrypt state uninitialized", True, InternalError)
 
-        get3 s ls = maybe (throwError $ Error_Packet "record bad format 1.3") return $ partition3 s ls
-        get2 s (d1,d2) = get3 s (d1,d2,0) >>= \(r1,r2,_) -> return (r1,r2)
+        -- handling of outer format can report errors with Error_Packet
+        get3o s ls = maybe (throwError $ Error_Packet "record bad format 1.3") return $ partition3 s ls
+        get2o s (d1,d2) = get3o s (d1,d2,0) >>= \(r1,r2,_) -> return (r1,r2)
