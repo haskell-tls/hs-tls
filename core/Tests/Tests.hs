@@ -92,8 +92,8 @@ runTLSPipePredicate params p = runTLSPipe params tlsServer tlsClient
 runTLSPipeSimple :: (ClientParams, ServerParams) -> PropertyM IO ()
 runTLSPipeSimple params = runTLSPipePredicate params (const True)
 
-runTLSPipeSimple13 :: (ClientParams, ServerParams) -> (HandshakeMode13, HandshakeMode13) -> Maybe C8.ByteString -> PropertyM IO ()
-runTLSPipeSimple13 params modes mEarlyData = runTLSPipe params tlsServer tlsClient
+runTLSPipeSimple13 :: (ClientParams, ServerParams) -> HandshakeMode13 -> Maybe C8.ByteString -> PropertyM IO ()
+runTLSPipeSimple13 params mode mEarlyData = runTLSPipe params tlsServer tlsClient
   where tlsServer ctx queue = do
             handshake ctx
             case mEarlyData of
@@ -104,7 +104,7 @@ runTLSPipeSimple13 params modes mEarlyData = runTLSPipe params tlsServer tlsClie
             d <- recvDataNonNull ctx
             writeChan queue [d]
             minfo <- contextGetInformation ctx
-            Just (snd modes) `assertEq` (minfo >>= infoTLS13HandshakeMode)
+            Just mode `assertEq` (minfo >>= infoTLS13HandshakeMode)
             bye ctx -- needed to interrupt recvData in tlsClient
             return ()
         tlsClient queue ctx = do
@@ -112,7 +112,7 @@ runTLSPipeSimple13 params modes mEarlyData = runTLSPipe params tlsServer tlsClie
             d <- readChan queue
             sendData ctx (L.fromChunks [d])
             minfo <- contextGetInformation ctx
-            Just (fst modes) `assertEq` (minfo >>= infoTLS13HandshakeMode)
+            Just mode `assertEq` (minfo >>= infoTLS13HandshakeMode)
             _ <- recvData ctx -- recvData receives NewSessionTicket with TLS13
             bye ctx           -- (until bye is able to do it itself)
             return ()
@@ -189,7 +189,7 @@ prop_handshake13_initiate = do
     let cgrps = supportedGroups $ clientSupported $ fst params
         sgrps = supportedGroups $ serverSupported $ snd params
         hs = if head cgrps `elem` sgrps then FullHandshake else HelloRetryRequest
-    runTLSPipeSimple13 params (hs,hs) Nothing
+    runTLSPipeSimple13 params hs Nothing
 
 prop_handshake_keyupdate :: PropertyM IO ()
 prop_handshake_keyupdate = do
@@ -212,7 +212,7 @@ prop_handshake13_full = do
         params = (cli { clientSupported = cliSupported }
                  ,srv { serverSupported = svrSupported }
                  )
-    runTLSPipeSimple13 params (FullHandshake,FullHandshake) Nothing
+    runTLSPipeSimple13 params FullHandshake Nothing
 
 prop_handshake13_hrr :: PropertyM IO ()
 prop_handshake13_hrr = do
@@ -230,7 +230,7 @@ prop_handshake13_hrr = do
         params = (cli { clientSupported = cliSupported }
                  ,srv { serverSupported = svrSupported }
                  )
-    runTLSPipeSimple13 params (HelloRetryRequest,HelloRetryRequest) Nothing
+    runTLSPipeSimple13 params HelloRetryRequest Nothing
 
 prop_handshake13_psk :: PropertyM IO ()
 prop_handshake13_psk = do
@@ -254,14 +254,14 @@ prop_handshake13_psk = do
 
     let params = setPairParamsSessionManagers sessionManagers params0
 
-    runTLSPipeSimple13 params (HelloRetryRequest,HelloRetryRequest) Nothing
+    runTLSPipeSimple13 params HelloRetryRequest Nothing
 
     -- and resume
     sessionParams <- run $ readClientSessionRef sessionRefs
     assert (isJust sessionParams)
     let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 
-    runTLSPipeSimple13 params2 (PreSharedKey, PreSharedKey) Nothing
+    runTLSPipeSimple13 params2 PreSharedKey Nothing
 
 prop_handshake13_rtt0 :: PropertyM IO ()
 prop_handshake13_rtt0 = do
@@ -286,7 +286,7 @@ prop_handshake13_rtt0 = do
 
     let params = setPairParamsSessionManagers sessionManagers params0
 
-    runTLSPipeSimple13 params (HelloRetryRequest,HelloRetryRequest) Nothing
+    runTLSPipeSimple13 params HelloRetryRequest Nothing
 
     -- and resume
     sessionParams <- run $ readClientSessionRef sessionRefs
@@ -295,7 +295,7 @@ prop_handshake13_rtt0 = do
     let (pc,ps) = setPairParamsSessionResuming (fromJust sessionParams) params
         params2 = (pc { clientEarlyData = Just earlyData } , ps)
 
-    runTLSPipeSimple13 params2 (RTT0, RTT0) (Just earlyData)
+    runTLSPipeSimple13 params2 RTT0 (Just earlyData)
 
 prop_handshake13_rtt0_fallback :: PropertyM IO ()
 prop_handshake13_rtt0_fallback = do
@@ -320,7 +320,7 @@ prop_handshake13_rtt0_fallback = do
 
     let params = setPairParamsSessionManagers sessionManagers params0
 
-    runTLSPipeSimple13 params (HelloRetryRequest,HelloRetryRequest) Nothing
+    runTLSPipeSimple13 params HelloRetryRequest Nothing
 
     -- and resume
     sessionParams <- run $ readClientSessionRef sessionRefs
@@ -329,7 +329,7 @@ prop_handshake13_rtt0_fallback = do
     let (pc,ps) = setPairParamsSessionResuming (fromJust sessionParams) params
         params2 = (pc { clientEarlyData = Just earlyData } , ps)
 
-    runTLSPipeSimple13 params2 (PreSharedKey, PreSharedKey) Nothing
+    runTLSPipeSimple13 params2 PreSharedKey Nothing
 
 prop_handshake_ciphersuites :: PropertyM IO ()
 prop_handshake_ciphersuites = do
