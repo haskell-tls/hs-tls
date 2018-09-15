@@ -348,15 +348,16 @@ prop_handshake_ciphersuites = do
 
 prop_handshake_hashsignatures :: PropertyM IO ()
 prop_handshake_hashsignatures = do
-    let clientVersions = [TLS12]
-        serverVersions = [TLS12]
+    tls13 <- pick arbitrary
+    let versions = if tls13 then [TLS13] else [TLS12]
         ciphers = [ cipher_ECDHE_RSA_AES256GCM_SHA384
                   , cipher_ECDHE_RSA_AES128CBC_SHA
                   , cipher_DHE_RSA_AES128_SHA1
                   , cipher_DHE_DSS_AES128_SHA1
+                  , cipher_TLS13_AES128GCM_SHA256
                   ]
     (clientParam,serverParam) <- pick $ arbitraryPairParamsWithVersionsAndCiphers
-                                            (clientVersions, serverVersions)
+                                            (versions, versions)
                                             (ciphers, ciphers)
     clientHashSigs <- pick arbitraryHashSignatures
     serverHashSigs <- pick arbitraryHashSignatures
