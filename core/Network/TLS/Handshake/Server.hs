@@ -679,7 +679,7 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
             Nothing ->
                 case credentialsFindForSigning13 hashSigs allCreds of
                     Just cs -> return cs
-                    Nothing -> throwCore $ Error_Protocol ("credential not found", True, IllegalParameter)
+                    Nothing -> throwCore $ Error_Protocol ("credential not found", True, HandshakeFailure)
         let usedHash = cipherHash usedCipher
         doHandshake13 sparams cred ctx chosenVersion usedCipher exts usedHash keyShare hashSig clientSession rtt0
   where
