@@ -603,11 +603,16 @@ filterSortCredentials rankFun (Credentials creds) =
 
 filterCredentialsWithHashSignatures :: [ExtensionRaw] -> Credentials -> Credentials
 filterCredentialsWithHashSignatures exts =
-    case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode MsgTClientHello of
-        Nothing                        -> id
-        Just (SignatureAlgorithms sas) ->
-            let filterCredentials p (Credentials l) = Credentials (filter p l)
-             in filterCredentials (credentialMatchesHashSignatures sas)
+    case withExt extensionID_SignatureAlgorithmsCert of
+        Just (SignatureAlgorithmsCert sas) -> withAlgs sas
+        Nothing ->
+            case withExt extensionID_SignatureAlgorithms of
+                Nothing                        -> id
+                Just (SignatureAlgorithms sas) -> withAlgs sas
+  where
+    withExt extId = extensionLookup extId exts >>= extensionDecode MsgTClientHello
+    withAlgs sas = filterCredentials (credentialMatchesHashSignatures sas)
+    filterCredentials p (Credentials l) = Credentials (filter p l)
 
 -- returns True if "signature_algorithms" certificate filtering produced no
 -- ephemeral D-H nor TLS13 cipher (so handshake with lower security)

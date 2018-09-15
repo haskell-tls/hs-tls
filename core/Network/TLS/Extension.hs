@@ -46,7 +46,7 @@ module Network.TLS.Extension
     , HeartBeat(..)
     , HeartBeatMode(..)
     , SignatureAlgorithms(..)
-    , SignatureAlgorithmsCert
+    , SignatureAlgorithmsCert(..)
     , SupportedVersions(..)
     , KeyShare(..)
     , KeyShareEntry(..)
