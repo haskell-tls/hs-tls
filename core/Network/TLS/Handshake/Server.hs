@@ -224,7 +224,7 @@ handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverN
                                --
                                -- We try to keep certificates supported by the client, but
                                -- fallback to all credentials if this produces no suitable result
-                               -- (see RFC 5246 section 7.4.2 and TLS 1.3 section 4.4.2.2).
+                               -- (see RFC 5246 section 7.4.2 and RFC 8446 section 4.4.2.2).
                                -- The condition is based on resulting (EC)DHE ciphers so that
                                -- filtering credentials does not give advantage to a less secure
                                -- key exchange like CipherKeyExchange_RSA or CipherKeyExchange_DH_Anon.
@@ -650,11 +650,18 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
     case findKeyShare keyShares serverGroups of
       Nothing -> helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession
       Just keyShare -> do
-        -- Deciding signature algorithm
+        -- When deciding signature algorithm and certificate, we try to keep
+        -- certificates supported by the client, but fallback to all credentials
+        -- if this produces no suitable result (see RFC 5246 section 7.4.2 and
+        -- RFC 8446 section 4.4.2.2).
         let hashSigs = hashAndSignaturesInCommon ctx exts
-        (cred, sigAlgo) <- case credentialsFindForSigning13 hashSigs allCreds of
-            Nothing -> throwCore $ Error_Protocol ("credential not found", True, IllegalParameter)
+            cltCreds = filterCredentialsWithHashSignatures exts allCreds
+        (cred, sigAlgo) <- case credentialsFindForSigning13 hashSigs cltCreds of
             Just cs -> return cs
+            Nothing ->
+                case credentialsFindForSigning13 hashSigs allCreds of
+                    Just cs -> return cs
+                    Nothing -> throwCore $ Error_Protocol ("credential not found", True, IllegalParameter)
         let usedHash = cipherHash usedCipher
         doHandshake13 sparams cred ctx chosenVersion usedCipher exts usedHash keyShare sigAlgo clientSession
   where
@@ -1000,7 +1007,6 @@ applicationProtocol ctx exts sparams
   where
     clientALPNSuggest = isJust $ extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts
 
--- fixme: should we use filterCredentialsWithHashSignatures here?
 credentialsFindForSigning13 :: [HashAndSignatureAlgorithm] -> Credentials -> Maybe (Credential, HashAndSignatureAlgorithm)
 credentialsFindForSigning13 hss0 creds = loop hss0
   where
