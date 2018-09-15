@@ -272,16 +272,12 @@ instance Extension ApplicationLayerProtocolNegotiation where
     extensionID _ = extensionID_ApplicationLayerProtocolNegotiation
     extensionEncode (ApplicationLayerProtocolNegotiation bytes) =
         runPut $ putOpaque16 $ runPut $ mapM_ putOpaque8 bytes
-    extensionDecode _ = runGetMaybe (ApplicationLayerProtocolNegotiation <$> getALPN)
+    extensionDecode _ = runGetMaybe $ do
+        len <- getWord16
+        ApplicationLayerProtocolNegotiation <$> getList (fromIntegral len) getALPN
         where getALPN = do
-                 _ <- getWord16
-                 getALPN'
-              getALPN' = do
-                 avail <- remaining
-                 case avail of
-                     0 -> return []
-                     _ -> (:) <$> getOpaque8 <*> getALPN'
-
+                  alpn <- getOpaque8
+                  return (B.length alpn + 1, alpn)
 
 newtype NegotiatedGroups = NegotiatedGroups [Group] deriving (Show,Eq)
 
