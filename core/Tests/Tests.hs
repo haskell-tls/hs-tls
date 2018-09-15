@@ -291,8 +291,8 @@ prop_handshake13_rtt0 = do
     -- and resume
     sessionParams <- run $ readClientSessionRef sessionRefs
     assert (isJust sessionParams)
-    let earlyData = "Early data"
-        (pc,ps) = setPairParamsSessionResuming (fromJust sessionParams) params
+    earlyData <- B.pack <$> pick (someWords8 256)
+    let (pc,ps) = setPairParamsSessionResuming (fromJust sessionParams) params
         params2 = (pc { clientEarlyData = Just earlyData } , ps)
 
     runTLSPipeSimple13 params2 (RTT0, RTT0) (Just earlyData)
@@ -325,8 +325,8 @@ prop_handshake13_rtt0_fallback = do
     -- and resume
     sessionParams <- run $ readClientSessionRef sessionRefs
     assert (isJust sessionParams)
-    let earlyData = "Early data"
-        (pc,ps) = setPairParamsSessionResuming (fromJust sessionParams) params
+    earlyData <- B.pack <$> pick (someWords8 256)
+    let (pc,ps) = setPairParamsSessionResuming (fromJust sessionParams) params
         params2 = (pc { clientEarlyData = Just earlyData } , ps)
 
     runTLSPipeSimple13 params2 (PreSharedKey, PreSharedKey) Nothing
