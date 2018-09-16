@@ -56,12 +56,6 @@ knownCiphers = filter nonECDSA (ciphersuite_all ++ ciphersuite_weak)
     -- arbitraryCredentialsOfEachType cannot generate ECDSA
     nonECDSA c = not ("ECDSA" `isInfixOf` cipherName c)
 
-knownCiphers13 :: [Cipher]
-knownCiphers13 = [
-    cipher_TLS13_AES128GCM_SHA256
-  , cipher_TLS13_AES256GCM_SHA384
-  ]
-
 arbitraryCiphers :: Gen [Cipher]
 arbitraryCiphers = listOf1 $ elements knownCiphers
 
@@ -164,10 +158,7 @@ arbitraryPairParams13 = do
     let connectVersion = TLS13
         allowedVersions = [connectVersion]
         serAllowedVersions = [connectVersion]
-    (clientCiphers', serverCiphers') <- arbitraryCipherPair connectVersion
-    cipher <- elements knownCiphers13
-    let clientCiphers = clientCiphers' ++ [cipher]
-        serverCiphers = serverCiphers' ++ [cipher]
+    (clientCiphers, serverCiphers) <- arbitraryCipherPair connectVersion
     arbitraryPairParamsWithVersionsAndCiphers (allowedVersions, serAllowedVersions) (clientCiphers, serverCiphers)
 
 arbitraryHashSignaturePair :: Gen ([HashAndSignatureAlgorithm], [HashAndSignatureAlgorithm])
