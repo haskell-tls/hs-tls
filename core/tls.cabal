@@ -170,6 +170,7 @@ Benchmark bench-tls
                    , mtl
                    , bytestring
                    , asn1-types
+                   , async >= 2.0
                    , hourglass
                    , QuickCheck >= 2
                    , tasty-quickcheck
