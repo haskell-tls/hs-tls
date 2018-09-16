@@ -62,19 +62,28 @@ runTLSPipe params tlsServer tlsClient = do
     Just d `assertEq` dres
     return ()
 
-runTLSPipeSimple :: (ClientParams, ServerParams) -> PropertyM IO ()
-runTLSPipeSimple params = runTLSPipe params tlsServer tlsClient
+runTLSPipePredicate :: (ClientParams, ServerParams) -> (Maybe Information -> Bool) -> PropertyM IO ()
+runTLSPipePredicate params p = runTLSPipe params tlsServer tlsClient
   where tlsServer ctx queue = do
             handshake ctx
+            checkInfoPredicate ctx
             d <- recvDataNonNull ctx
             writeChan queue d
             return ()
         tlsClient queue ctx = do
             handshake ctx
+            checkInfoPredicate ctx
             d <- readChan queue
             sendData ctx (L.fromChunks [d])
             bye ctx
             return ()
+        checkInfoPredicate ctx = do
+            minfo <- contextGetInformation ctx
+            unless (p minfo) $
+                fail ("unexpected information: " ++ show minfo)
+
+runTLSPipeSimple :: (ClientParams, ServerParams) -> PropertyM IO ()
+runTLSPipeSimple params = runTLSPipePredicate params (const True)
 
 runTLSPipeSimple13 :: (ClientParams, ServerParams) -> (HandshakeMode13, HandshakeMode13) -> Maybe C8.ByteString -> PropertyM IO ()
 runTLSPipeSimple13 params modes mEarlyData = runTLSPipe params tlsServer tlsClient
@@ -365,10 +374,12 @@ prop_handshake_groups = do
                                        { supportedGroups = serverGroups }
                                    }
         isCustom = maybe True isCustomDHParams (serverDHEParams serverParam')
-        shouldFail = null (clientGroups `intersect` serverGroups) && isCustom && denyCustom
+        commonGroups = clientGroups `intersect` serverGroups
+        shouldFail = null commonGroups && isCustom && denyCustom
+        p minfo = isNothing (minfo >>= infoNegotiatedGroup) == (null commonGroups && isCustom)
     if shouldFail
         then runTLSInitFailure (clientParam',serverParam')
-        else runTLSPipeSimple  (clientParam',serverParam')
+        else runTLSPipePredicate (clientParam',serverParam') p
 
 prop_handshake_srv_key_usage :: PropertyM IO ()
 prop_handshake_srv_key_usage = do
