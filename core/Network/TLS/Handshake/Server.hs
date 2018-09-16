@@ -149,7 +149,6 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
         handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverName clientVersion compressions clientSession
       else
         handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts ciphers serverName clientSession
-  where
 handshakeServerWith _ _ _ = throwCore $ Error_Protocol ("unexpected handshake message received in handshakeServerWith", True, HandshakeFailure)
 
 -- TLS 1.2 or earlier
