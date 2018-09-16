@@ -90,9 +90,10 @@ knownHashSignatures = filter nonECDSA availableHashSignatures
 arbitraryHashSignatures :: Gen [HashAndSignatureAlgorithm]
 arbitraryHashSignatures = sublistOf knownHashSignatures
 
+-- for performance reason P521, FFDHE6144, FFDHE8192 are not tested
 knownGroups, knownECGroups, knownFFGroups :: [Group]
-knownECGroups = [P256,P384,P521,X25519,X448]
-knownFFGroups = [FFDHE2048,FFDHE3072,FFDHE4096,FFDHE6144,FFDHE8192]
+knownECGroups = [P256,P384,X25519,X448]
+knownFFGroups = [FFDHE2048,FFDHE3072,FFDHE4096]
 knownGroups   = knownECGroups ++ knownFFGroups
 
 arbitraryGroups :: Gen [Group]
