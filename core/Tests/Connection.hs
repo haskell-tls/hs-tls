@@ -154,9 +154,11 @@ arbitraryGroupPair = do
     arbitraryGroupsFrom list = listOf1 $ elements list
 
 arbitraryPairParams13 :: Gen (ClientParams, ServerParams)
-arbitraryPairParams13 = do
-    let connectVersion = TLS13
-        allowedVersions = [connectVersion]
+arbitraryPairParams13 = arbitraryPairParamsAt TLS13
+
+arbitraryPairParamsAt :: Version -> Gen (ClientParams, ServerParams)
+arbitraryPairParamsAt connectVersion = do
+    let allowedVersions = [connectVersion]
         serAllowedVersions = [connectVersion]
     (clientCiphers, serverCiphers) <- arbitraryCipherPair connectVersion
     arbitraryPairParamsWithVersionsAndCiphers (allowedVersions, serAllowedVersions) (clientCiphers, serverCiphers)
