@@ -298,9 +298,11 @@ ciphersuite_strong =
     , cipher_TLS13_AES128GCM_SHA256
     ]
 
--- | DHE-RSA cipher suite
+-- | DHE-RSA cipher suite.  This only includes ciphers bound specifically to
+-- DHE-RSA so TLS 1.3 ciphers must be added separately.
 ciphersuite_dhe_rsa :: [Cipher]
-ciphersuite_dhe_rsa = [ cipher_DHE_RSA_AES256GCM_SHA384, cipher_DHE_RSA_AES128GCM_SHA256
+ciphersuite_dhe_rsa = [ cipher_DHE_RSA_AES256GCM_SHA384, cipher_DHE_RSA_AES256CCM_SHA256
+                      , cipher_DHE_RSA_AES128GCM_SHA256, cipher_DHE_RSA_AES128CCM_SHA256
                       , cipher_DHE_RSA_AES256_SHA256, cipher_DHE_RSA_AES128_SHA256
                       , cipher_DHE_RSA_AES256_SHA1, cipher_DHE_RSA_AES128_SHA1
                       ]
