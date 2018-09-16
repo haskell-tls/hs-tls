@@ -63,9 +63,9 @@ runTLSPipe :: (ClientParams, ServerParams)
            -> a
            -> IO b
 runTLSPipe params tlsServer tlsClient d = do
-    (startQueue, resultQueue) <- establishDataPipe params tlsServer tlsClient
-    writeChan startQueue d
-    readChan resultQueue
+    (writeStart, readResult) <- establishDataPipe params tlsServer tlsClient
+    writeStart d
+    readResult
 
 runTLSPipeSimple :: (ClientParams, ServerParams) -> B.ByteString -> IO B.ByteString
 runTLSPipeSimple params bs = runTLSPipe params tlsServer tlsClient bs

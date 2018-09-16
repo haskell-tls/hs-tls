@@ -31,6 +31,7 @@ import Data.X509
 import Data.Default.Class
 import Data.IORef
 import Control.Applicative
+import Control.Concurrent.Async
 import Control.Concurrent.Chan
 import Control.Concurrent
 import qualified Control.Exception as E
@@ -260,22 +261,23 @@ newPairContext pipe (cParams, sParams) = do
                                     , loggingPacketRecv = putStrLn . ((pre ++ "<< ") ++) }
                 else def
 
-establishDataPipe :: (ClientParams, ServerParams) -> (Context -> Chan result -> IO ()) -> (Chan start -> Context -> IO ()) -> IO (Chan start, Chan result)
+establishDataPipe :: (ClientParams, ServerParams) -> (Context -> Chan result -> IO ()) -> (Chan start -> Context -> IO ()) -> IO (start -> IO (), IO result)
 establishDataPipe params tlsServer tlsClient = do
     -- initial setup
     pipe        <- newPipe
-    _           <- (runPipe pipe)
+    _           <- runPipe pipe
     startQueue  <- newChan
     resultQueue <- newChan
 
     (cCtx, sCtx) <- newPairContext pipe params
 
-    _ <- forkIO $ E.catch (tlsServer sCtx resultQueue)
-                          (printAndRaise "server" (serverSupported $ snd params))
-    _ <- forkIO $ E.catch (tlsClient startQueue cCtx)
-                          (printAndRaise "client" (clientSupported $ fst params))
+    sAsync <- async $ E.catch (tlsServer sCtx resultQueue)
+                              (printAndRaise "server" (serverSupported $ snd params))
+    cAsync <- async $ E.catch (tlsClient startQueue cCtx)
+                              (printAndRaise "client" (clientSupported $ fst params))
 
-    return (startQueue, resultQueue)
+    let readResult = waitBoth cAsync sAsync >> readChan resultQueue
+    return (writeChan startQueue, readResult)
   where
         printAndRaise :: String -> Supported -> E.SomeException -> IO ()
         printAndRaise s supported e = do
@@ -287,23 +289,12 @@ initiateDataPipe :: (ClientParams, ServerParams) -> (Context -> IO a1) -> (Conte
 initiateDataPipe params tlsServer tlsClient = do
     -- initial setup
     pipe        <- newPipe
-    _           <- (runPipe pipe)
-    cQueue      <- newChan
-    sQueue      <- newChan
+    _           <- runPipe pipe
 
     (cCtx, sCtx) <- newPairContext pipe params
 
-    _ <- forkIO $ E.catch (tlsServer sCtx >>= writeSuccess sQueue)
-                          (writeException sQueue)
-    _ <- forkIO $ E.catch (tlsClient cCtx >>= writeSuccess cQueue)
-                          (writeException cQueue)
-
-    sRes <- readChan sQueue
-    cRes <- readChan cQueue
-    return (cRes, sRes)
-  where
-        writeException :: Chan (Either E.SomeException a) -> E.SomeException -> IO ()
-        writeException queue e = writeChan queue (Left e)
-
-        writeSuccess :: Chan (Either E.SomeException a) -> a -> IO ()
-        writeSuccess queue res = writeChan queue (Right res)
+    withAsync (tlsServer sCtx) $ \sAsync ->
+        withAsync (tlsClient cCtx) $ \cAsync -> do
+            sRes <- waitCatch sAsync
+            cRes <- waitCatch cAsync
+            return (cRes, sRes)

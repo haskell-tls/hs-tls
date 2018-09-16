@@ -52,18 +52,18 @@ recvDataNonNull ctx = recvData ctx >>= \l -> if B.null l then recvDataNonNull ct
 
 runTLSPipe :: (ClientParams, ServerParams) -> (Context -> Chan C8.ByteString -> IO ()) -> (Chan C8.ByteString -> Context -> IO ()) -> Maybe C8.ByteString -> PropertyM IO ()
 runTLSPipe params tlsServer tlsClient mEarlyData = do
-    (startQueue, resultQueue) <- run (establishDataPipe params tlsServer tlsClient)
+    (writeStart, readResult) <- run (establishDataPipe params tlsServer tlsClient)
     -- send some data
     d <- B.pack <$> pick (someWords8 256)
-    run $ writeChan startQueue d
+    run $ writeStart d
     -- receive it
-    dres <- run $ timeout 10000000 $ readChan resultQueue
+    dres <- run $ timeout 60000000 readResult -- 60 sec
     -- check if it equal
     case mEarlyData of
       Nothing -> Just d `assertEq` dres
       Just ed -> do
           Just ed `assertEq` dres
-          dres' <- run $ timeout 10000000 $ readChan resultQueue
+          dres' <- run $ timeout 60000000 readResult -- 60 sec
           Just d `assertEq` dres'
     return ()
 
@@ -88,7 +88,7 @@ runTLSPipeSimple13 params modes mEarlyData = runTLSPipe params tlsServer tlsClie
             d <- recvDataNonNull ctx
             writeChan queue d
             minfo <- contextGetInformation ctx
-            join (infoTLS13HandshakeMode <$> minfo) `assertEq` Just (snd modes)
+            Just (snd modes) `assertEq` (minfo >>= infoTLS13HandshakeMode)
             when (isJust mEarlyData) $ do
                 d' <- recvDataNonNull ctx
                 writeChan queue d'
@@ -98,7 +98,7 @@ runTLSPipeSimple13 params modes mEarlyData = runTLSPipe params tlsServer tlsClie
             d <- readChan queue
             sendData ctx (L.fromChunks [d])
             minfo <- contextGetInformation ctx
-            Just (fst modes) `assertEq` join (infoTLS13HandshakeMode <$> minfo)
+            Just (fst modes) `assertEq` (minfo >>= infoTLS13HandshakeMode)
             bye ctx
             return ()
 
