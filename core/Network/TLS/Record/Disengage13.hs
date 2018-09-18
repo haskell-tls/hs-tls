@@ -28,7 +28,7 @@ import Network.TLS.Cipher
 import Network.TLS.Util
 import Network.TLS.Wire
 import qualified Data.ByteString as B
-import qualified Data.ByteArray as B (convert)
+import qualified Data.ByteArray as B (convert, xor)
 
 disengageRecord13 :: Record13 -> RecordM Record13
 disengageRecord13 record@(Record13 ContentType_AppData e) = do
@@ -60,7 +60,7 @@ decryptData econtent tst = decryptOf (cstKey cst)
                 iv = cstIV cst
                 ivlen = B.length iv
                 sqnc = B.replicate (ivlen - 8) 0 `B.append` encodedSeq
-                nonce = B.pack $ B.zipWith xor iv sqnc
+                nonce = B.xor iv sqnc
                 additional = "\23\3\3" `B.append` encodeWord16 (fromIntegral econtentLen)
                 (content, authTag2) = decryptF nonce econtent' additional
 

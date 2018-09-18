@@ -26,7 +26,7 @@ import Network.TLS.Struct13
 import Network.TLS.Imports
 import Network.TLS.Util
 import qualified Data.ByteString as B
-import qualified Data.ByteArray as B (convert)
+import qualified Data.ByteArray as B (convert, xor)
 
 engageRecord :: Record13 -> RecordM Record13
 engageRecord record@(Record13 ContentType_ChangeCipherSpec _) = return record
@@ -57,7 +57,7 @@ encryptContent content = do
             let iv = cstIV cst
                 ivlen = B.length iv
                 sqnc = B.replicate (ivlen - 8) 0 `B.append` encodedSeq
-                nonce = B.pack $ B.zipWith xor iv sqnc
+                nonce = B.xor iv sqnc
                 bulk = cipherBulk $ fromJust "cipher" $ stCipher st
                 authTagLen = bulkAuthTagLen bulk
                 plainLen = B.length content
