@@ -56,7 +56,7 @@ encryptContent content = do
             encodedSeq <- encodeWord64 <$> getMacSequence
             let iv = cstIV cst
                 ivlen = B.length iv
-                sqnc = B.pack (replicate (ivlen - 8) 0) `B.append` encodedSeq
+                sqnc = B.replicate (ivlen - 8) 0 `B.append` encodedSeq
                 nonce = B.pack $ B.zipWith xor iv sqnc
                 bulk = cipherBulk $ fromJust "cipher" $ stCipher st
                 authTagLen = bulkAuthTagLen bulk
