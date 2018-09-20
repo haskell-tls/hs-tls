@@ -30,7 +30,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteArray as B (convert, xor)
 
 disengageRecord13 :: Record13 -> RecordM Record13
-disengageRecord13 record@(Record13 ProtocolType_AppData e) = do
+disengageRecord13 record@(Record13 ProtocolType_AppData ver e) = do
     st <- get
     case stCipher st of
         Nothing -> return record
@@ -39,7 +39,7 @@ disengageRecord13 record@(Record13 ProtocolType_AppData e) = do
             let (dc,_pad) = B.spanEnd (== 0) inner
                 Just (d,c) = B.unsnoc dc
                 Just ct = valToType c
-            return $ Record13 ct d
+            return $ Record13 ct ver d
 disengageRecord13 record = return record
 
 decryptData :: ByteString -> RecordState -> RecordM ByteString

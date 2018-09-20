@@ -32,7 +32,7 @@ import Network.TLS.Wire
 import Network.TLS.Imports
 
 makeRecord :: ProtocolType -> ByteString -> RecordM Record13
-makeRecord pt bs = return $ Record13 pt bs
+makeRecord pt bs = return $ Record13 pt TLS12 bs
 
 getPacketFragments :: Int -> Packet13 -> [ByteString]
 getPacketFragments len = writePacketContent
@@ -42,11 +42,11 @@ getPacketFragments len = writePacketContent
         writePacketContent ChangeCipherSpec13 = [encodeChangeCipherSpec]
 
 encodeRecord :: Record13 -> RecordM ByteString
-encodeRecord (Record13 ct bytes) = return ebytes
+encodeRecord (Record13 ct ver bytes) = return ebytes
   where
     ebytes = runPut $ do
         putWord8 $ fromIntegral $ valOfType ct
-        putWord16 0x0303 -- TLS12
+        putBinaryVersion ver
         putWord16 $ fromIntegral $ B.length bytes
         putBytes bytes
 
