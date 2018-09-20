@@ -16,9 +16,9 @@ import Network.TLS.Record.Types (Header(..))
 import Network.TLS.Imports
 
 -- | Represent a TLS record.
-data Record13 = Record13 !ProtocolType ByteString deriving (Show,Eq)
+data Record13 = Record13 !ProtocolType !Version ByteString deriving (Show,Eq)
 
 -- | turn a header and a fragment into a record
 rawToRecord13 :: Header -> ByteString -> Record13
-rawToRecord13 (Header pt _ _) = Record13 pt
+rawToRecord13 (Header pt ver _) = Record13 pt ver
 -- the second arg should be TLS12.

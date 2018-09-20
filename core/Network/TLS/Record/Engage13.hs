@@ -28,14 +28,14 @@ import qualified Data.ByteString as B
 import qualified Data.ByteArray as B (convert, xor)
 
 engageRecord :: Record13 -> RecordM Record13
-engageRecord record@(Record13 ProtocolType_ChangeCipherSpec _) = return record
-engageRecord record@(Record13 ct bytes) = do
+engageRecord record@(Record13 ProtocolType_ChangeCipherSpec _ _) = return record
+engageRecord record@(Record13 ct ver bytes) = do
     st <- get
     case stCipher st of
         Nothing -> return record
         _       -> do
             ebytes <- encryptContent $ innerPlaintext ct bytes
-            return $ Record13 ProtocolType_AppData ebytes
+            return $ Record13 ProtocolType_AppData ver ebytes
 
 innerPlaintext :: ProtocolType -> ByteString -> ByteString
 innerPlaintext ct bytes = runPut $ do
