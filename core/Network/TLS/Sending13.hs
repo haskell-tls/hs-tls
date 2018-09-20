@@ -31,8 +31,8 @@ import Network.TLS.Util
 import Network.TLS.Wire
 import Network.TLS.Imports
 
-makeRecord :: ContentType -> ByteString -> RecordM Record13
-makeRecord ct bs = return $ Record13 ct bs
+makeRecord :: ProtocolType -> ByteString -> RecordM Record13
+makeRecord pt bs = return $ Record13 pt bs
 
 getPacketFragments :: Int -> Packet13 -> [ByteString]
 getPacketFragments len = writePacketContent
