@@ -29,10 +29,10 @@ import Network.TLS.Util
 import Network.TLS.Imports
 
 processPacket13 :: Context -> Record13 -> IO (Either TLSError Packet13)
-processPacket13 _ (Record13 ContentType_ChangeCipherSpec _) = return $ Right ChangeCipherSpec13
-processPacket13 _ (Record13 ContentType_AppData fragment) = return $ Right $ AppData13 fragment
-processPacket13 _ (Record13 ContentType_Alert fragment) = return (Alert13 `fmapEither` decodeAlerts fragment)
-processPacket13 ctx (Record13 ContentType_Handshake fragment) = usingState ctx $ do
+processPacket13 _ (Record13 ProtocolType_ChangeCipherSpec _) = return $ Right ChangeCipherSpec13
+processPacket13 _ (Record13 ProtocolType_AppData fragment) = return $ Right $ AppData13 fragment
+processPacket13 _ (Record13 ProtocolType_Alert fragment) = return (Alert13 `fmapEither` decodeAlerts fragment)
+processPacket13 ctx (Record13 ProtocolType_Handshake fragment) = usingState ctx $ do
     mCont <- gets stHandshakeRecordCont13
     modify (\st -> st { stHandshakeRecordCont13 = Nothing })
     hss <- parseMany mCont fragment
@@ -47,3 +47,5 @@ processPacket13 ctx (Record13 ContentType_Handshake fragment) = usingState ctx $
                     case decodeHandshake13 ty content of
                         Left err -> throwError err
                         Right hh -> (hh:) <$> parseMany Nothing left
+processPacket13 _ (Record13 ProtocolType_DeprecatedHandshake _) =
+    return (Left $ Error_Packet "deprecated handshake packet 1.3")

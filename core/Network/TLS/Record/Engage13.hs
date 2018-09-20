@@ -21,24 +21,23 @@ import Network.TLS.Record.State
 import Network.TLS.Record.Types13
 import Network.TLS.Cipher
 import Network.TLS.Wire
-import Network.TLS.Struct (valOfType)
-import Network.TLS.Struct13
+import Network.TLS.Struct (ProtocolType(..), valOfType)
 import Network.TLS.Imports
 import Network.TLS.Util
 import qualified Data.ByteString as B
 import qualified Data.ByteArray as B (convert, xor)
 
 engageRecord :: Record13 -> RecordM Record13
-engageRecord record@(Record13 ContentType_ChangeCipherSpec _) = return record
+engageRecord record@(Record13 ProtocolType_ChangeCipherSpec _) = return record
 engageRecord record@(Record13 ct bytes) = do
     st <- get
     case stCipher st of
         Nothing -> return record
         _       -> do
             ebytes <- encryptContent $ innerPlaintext ct bytes
-            return $ Record13 ContentType_AppData ebytes
+            return $ Record13 ProtocolType_AppData ebytes
 
-innerPlaintext :: ContentType -> ByteString -> ByteString
+innerPlaintext :: ProtocolType -> ByteString -> ByteString
 innerPlaintext ct bytes = runPut $ do
     putBytes bytes
     putWord8 $ valOfType ct -- non zero!

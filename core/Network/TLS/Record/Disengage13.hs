@@ -20,7 +20,6 @@ import Control.Monad.State
 import Network.TLS.Imports
 import Crypto.Cipher.Types (AuthTag(..))
 import Network.TLS.Struct
-import Network.TLS.Struct13
 import Network.TLS.ErrT
 import Network.TLS.Record.State
 import Network.TLS.Record.Types13
@@ -31,7 +30,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteArray as B (convert, xor)
 
 disengageRecord13 :: Record13 -> RecordM Record13
-disengageRecord13 record@(Record13 ContentType_AppData e) = do
+disengageRecord13 record@(Record13 ProtocolType_AppData e) = do
     st <- get
     case stCipher st of
         Nothing -> return record
