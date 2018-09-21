@@ -20,7 +20,7 @@ import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Record (RecordM)
 import Network.TLS.Record.Types
-import Network.TLS.Record.Engage13
+import Network.TLS.Record.Engage
 import Network.TLS.Packet
 import Network.TLS.Packet13
 import Network.TLS.Context.Internal
@@ -56,7 +56,7 @@ writeFragments ctx pkt =
     let fragments = getPacketFragments 16384 pkt
         pt = contentType pkt
      in fmap B.concat <$> forEitherM fragments (\frg ->
-            prepareRecord ctx (makeRecord pt frg >>= engageRecord >>= encodeRecord))
+            prepareRecord ctx (makeRecord pt frg >>= engageRecord13 >>= encodeRecord))
 
 prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
 prepareRecord = runTxState
