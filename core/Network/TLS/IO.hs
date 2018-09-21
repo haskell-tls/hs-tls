@@ -23,7 +23,6 @@ import Network.TLS.Context.Internal
 import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Record
-import Network.TLS.Record.Types13
 import Network.TLS.Record.Disengage13
 import Network.TLS.Packet
 import Network.TLS.Hooks
@@ -174,7 +173,7 @@ sendBytes ctx dataToSend = liftIO $ do
     contextSend ctx dataToSend
 
 recvRecord13 :: Context
-            -> IO (Either TLSError Record13)
+            -> IO (Either TLSError (Record Plaintext))
 recvRecord13 ctx = readExact ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
   where recvLengthE = either (return . Left) recvLength
         recvLength header@(Header _ _ readlen)
@@ -183,10 +182,10 @@ recvRecord13 ctx = readExact ctx 5 >>= either (return . Left) (recvLengthE . dec
               readExact ctx (fromIntegral readlen) >>=
                  either (return . Left) (getRecord header)
         maximumSizeExceeded = Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
-        getRecord :: Header -> ByteString -> IO (Either TLSError Record13)
+        getRecord :: Header -> ByteString -> IO (Either TLSError (Record Plaintext))
         getRecord header content = do
               liftIO $ withLog ctx $ \logging -> loggingIORecv logging header content
-              runRxState ctx $ disengageRecord13 $ rawToRecord13 header content
+              runRxState ctx $ disengageRecord13 $ rawToRecord header (fragmentCiphertext content)
 
 recvPacket13 :: MonadIO m => Context -> m (Either TLSError Packet13)
 recvPacket13 ctx = liftIO $ do

@@ -22,6 +22,7 @@ module Network.TLS.Record.Types
     , Fragment
     , fragmentGetBytes
     , fragmentPlaintext
+    , fragmentCompressed
     , fragmentCiphertext
     , Plaintext
     , Compressed
@@ -54,6 +55,9 @@ data Ciphertext
 
 fragmentPlaintext :: ByteString -> Fragment Plaintext
 fragmentPlaintext bytes = Fragment bytes
+
+fragmentCompressed :: ByteString -> Fragment Compressed
+fragmentCompressed bytes = Fragment bytes
 
 fragmentCiphertext :: ByteString -> Fragment Ciphertext
 fragmentCiphertext bytes = Fragment bytes

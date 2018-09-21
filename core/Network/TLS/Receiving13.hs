@@ -20,7 +20,7 @@ import Network.TLS.Context.Internal
 import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.ErrT
-import Network.TLS.Record.Types13
+import Network.TLS.Record.Types
 import Network.TLS.Packet
 import Network.TLS.Packet13
 import Network.TLS.Wire
@@ -28,14 +28,14 @@ import Network.TLS.State
 import Network.TLS.Util
 import Network.TLS.Imports
 
-processPacket13 :: Context -> Record13 -> IO (Either TLSError Packet13)
-processPacket13 _ (Record13 ProtocolType_ChangeCipherSpec _ _) = return $ Right ChangeCipherSpec13
-processPacket13 _ (Record13 ProtocolType_AppData _ fragment) = return $ Right $ AppData13 fragment
-processPacket13 _ (Record13 ProtocolType_Alert _ fragment) = return (Alert13 `fmapEither` decodeAlerts fragment)
-processPacket13 ctx (Record13 ProtocolType_Handshake _ fragment) = usingState ctx $ do
+processPacket13 :: Context -> Record Plaintext -> IO (Either TLSError Packet13)
+processPacket13 _ (Record ProtocolType_ChangeCipherSpec _ _) = return $ Right ChangeCipherSpec13
+processPacket13 _ (Record ProtocolType_AppData _ fragment) = return $ Right $ AppData13 $ fragmentGetBytes fragment
+processPacket13 _ (Record ProtocolType_Alert _ fragment) = return (Alert13 `fmapEither` decodeAlerts (fragmentGetBytes fragment))
+processPacket13 ctx (Record ProtocolType_Handshake _ fragment) = usingState ctx $ do
     mCont <- gets stHandshakeRecordCont13
     modify (\st -> st { stHandshakeRecordCont13 = Nothing })
-    hss <- parseMany mCont fragment
+    hss <- parseMany mCont (fragmentGetBytes fragment)
     return $ Handshake13 hss
   where parseMany mCont bs =
             case fromMaybe decodeHandshakeRecord13 mCont bs of
@@ -47,5 +47,5 @@ processPacket13 ctx (Record13 ProtocolType_Handshake _ fragment) = usingState ct
                     case decodeHandshake13 ty content of
                         Left err -> throwError err
                         Right hh -> (hh:) <$> parseMany Nothing left
-processPacket13 _ (Record13 ProtocolType_DeprecatedHandshake _ _) =
+processPacket13 _ (Record ProtocolType_DeprecatedHandshake _ _) =
     return (Left $ Error_Packet "deprecated handshake packet 1.3")

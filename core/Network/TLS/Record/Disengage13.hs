@@ -22,25 +22,34 @@ import Crypto.Cipher.Types (AuthTag(..))
 import Network.TLS.Struct
 import Network.TLS.ErrT
 import Network.TLS.Record.State
-import Network.TLS.Record.Types13
+import Network.TLS.Record.Types
 import Network.TLS.Cipher
 import Network.TLS.Util
 import Network.TLS.Wire
 import qualified Data.ByteString as B
 import qualified Data.ByteArray as B (convert, xor)
 
-disengageRecord13 :: Record13 -> RecordM Record13
-disengageRecord13 record@(Record13 ProtocolType_AppData ver e) = do
-    st <- get
-    case stCipher st of
-        Nothing -> return record
-        _       -> do
-            inner <- decryptData e st
-            let (dc,_pad) = B.spanEnd (== 0) inner
-                Just (d,c) = B.unsnoc dc
-                Just ct = valToType c
-            return $ Record13 ct ver d
-disengageRecord13 record = return record
+disengageRecord13 :: Record Ciphertext -> RecordM (Record Plaintext)
+disengageRecord13 = decryptRecord >=> uncompressRecord
+
+uncompressRecord :: Record Compressed -> RecordM (Record Plaintext)
+uncompressRecord record = onRecordFragment record $ fragmentUncompress return
+
+decryptRecord :: Record Ciphertext -> RecordM (Record Compressed)
+decryptRecord record@(Record ct ver fragment) =
+    case ct of
+        ProtocolType_AppData -> do
+            st <- get
+            case stCipher st of
+                Nothing -> noDecryption
+                _       -> do
+                    inner <- decryptData (fragmentGetBytes fragment) st
+                    let (dc,_pad) = B.spanEnd (== 0) inner
+                        Just (d,c) = B.unsnoc dc
+                        Just ct' = valToType c
+                    return $ Record ct' ver (fragmentCompressed d)
+        _ -> noDecryption
+  where noDecryption = onRecordFragment record $ fragmentUncipher return
 
 decryptData :: ByteString -> RecordState -> RecordM ByteString
 decryptData econtent tst = decryptOf (cstKey cst)
