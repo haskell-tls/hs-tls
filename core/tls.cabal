@@ -111,7 +111,6 @@ Library
                      Network.TLS.Record.Engage
                      Network.TLS.Record.Engage13
                      Network.TLS.Record.Disengage
-                     Network.TLS.Record.Disengage13
                      Network.TLS.Record.State
                      Network.TLS.RNG
                      Network.TLS.State

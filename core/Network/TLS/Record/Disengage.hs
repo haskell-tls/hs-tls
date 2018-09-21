@@ -40,11 +40,26 @@ uncompressRecord record = onRecordFragment record $ fragmentUncompress $ \bytes 
     withCompression $ compressionInflate bytes
 
 decryptRecord :: Record Ciphertext -> RecordM (Record Compressed)
-decryptRecord record = onRecordFragment record $ fragmentUncipher $ \e -> do
+decryptRecord record@(Record ct ver fragment) = do
     st <- get
     case stCipher st of
-        Nothing -> return e
-        _       -> getRecordVersion >>= \ver -> decryptData ver record e st
+        Nothing -> noDecryption
+        _       -> do
+            mver <- getRecordVersion
+            if mver >= TLS13
+                then decryptData13 mver (fragmentGetBytes fragment) st
+                else onRecordFragment record $ fragmentUncipher $ \e ->
+                        decryptData mver record e st
+  where
+    noDecryption = onRecordFragment record $ fragmentUncipher return
+    decryptData13 mver e st
+        | ct == ProtocolType_AppData = do
+            inner <- decryptData mver record e st
+            let (dc,_pad) = B.spanEnd (== 0) inner
+                Just (d,c) = B.unsnoc dc
+                Just ct' = valToType c
+            return $ Record ct' ver (fragmentCompressed d)
+        | otherwise = noDecryption
 
 getCipherData :: Record a -> CipherData -> RecordM ByteString
 getCipherData (Record pt ver _) cdata = do
@@ -122,7 +137,8 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
 
         decryptOf (BulkStateAEAD decryptF) = do
             let authTagLen  = bulkAuthTagLen bulk
-                nonceExpLen = bulkExplicitIV bulk
+                nonceExpLen | ver >= TLS13  = 0
+                            | otherwise     = bulkExplicitIV bulk
                 cipherLen   = econtentLen - authTagLen - nonceExpLen
 
             -- check if we have enough bytes to cover the minimum for this cipher
@@ -133,8 +149,10 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
                 iv = cstIV (stCryptState tst)
                 ivlen = B.length iv
                 Header typ v _ = recordToHeader record
-                hdr = Header typ v $ fromIntegral cipherLen
-                ad = B.concat [ encodedSeq, encodeHeader hdr ]
+                hdrLen = if ver >= TLS13 then econtentLen else cipherLen
+                hdr = Header typ v $ fromIntegral hdrLen
+                ad | ver >= TLS13 = encodeHeader hdr
+                   | otherwise    = B.concat [ encodedSeq, encodeHeader hdr ]
                 sqnc = B.replicate (ivlen - 8) 0 `B.append` encodedSeq
                 nonce | nonceExpLen == 0 = B.xor iv sqnc
                       | otherwise = iv `B.append` enonce

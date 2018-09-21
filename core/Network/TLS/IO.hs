@@ -23,7 +23,6 @@ import Network.TLS.Context.Internal
 import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Record
-import Network.TLS.Record.Disengage13
 import Network.TLS.Packet
 import Network.TLS.Hooks
 import Network.TLS.Sending
@@ -185,7 +184,7 @@ recvRecord13 ctx = readExact ctx 5 >>= either (return . Left) (recvLengthE . dec
         getRecord :: Header -> ByteString -> IO (Either TLSError (Record Plaintext))
         getRecord header content = do
               liftIO $ withLog ctx $ \logging -> loggingIORecv logging header content
-              runRxState ctx $ disengageRecord13 $ rawToRecord header (fragmentCiphertext content)
+              runRxState ctx $ disengageRecord $ rawToRecord header (fragmentCiphertext content)
 
 recvPacket13 :: MonadIO m => Context -> m (Either TLSError Packet13)
 recvPacket13 ctx = liftIO $ do
