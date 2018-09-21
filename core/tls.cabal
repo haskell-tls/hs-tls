@@ -108,7 +108,6 @@ Library
                      Network.TLS.PostHandshake
                      Network.TLS.Record
                      Network.TLS.Record.Types
-                     Network.TLS.Record.Types13
                      Network.TLS.Record.Engage
                      Network.TLS.Record.Engage13
                      Network.TLS.Record.Disengage

@@ -19,7 +19,7 @@ import qualified Data.ByteString as B
 import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Record (RecordM)
-import Network.TLS.Record.Types13
+import Network.TLS.Record.Types
 import Network.TLS.Record.Engage13
 import Network.TLS.Packet
 import Network.TLS.Packet13
@@ -28,27 +28,22 @@ import Network.TLS.Handshake.Random
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.Util
-import Network.TLS.Wire
 import Network.TLS.Imports
 
-makeRecord :: ProtocolType -> ByteString -> RecordM Record13
-makeRecord pt bs = return $ Record13 pt TLS12 bs
+makeRecord :: ProtocolType -> Fragment Plaintext -> RecordM (Record Plaintext)
+makeRecord pt fragment =
+    return $ Record pt TLS12 fragment
 
-getPacketFragments :: Int -> Packet13 -> [ByteString]
-getPacketFragments len = writePacketContent
+getPacketFragments :: Int -> Packet13 -> [Fragment Plaintext]
+getPacketFragments len pkt = map fragmentPlaintext (writePacketContent pkt)
   where writePacketContent (Handshake13 hss)  = getChunks len (encodeHandshakes13 hss)
         writePacketContent (Alert13 a)        = [encodeAlerts a]
         writePacketContent (AppData13 x)      = [x]
         writePacketContent ChangeCipherSpec13 = [encodeChangeCipherSpec]
 
-encodeRecord :: Record13 -> RecordM ByteString
-encodeRecord (Record13 ct ver bytes) = return ebytes
-  where
-    ebytes = runPut $ do
-        putWord8 $ fromIntegral $ valOfType ct
-        putBinaryVersion ver
-        putWord16 $ fromIntegral $ B.length bytes
-        putBytes bytes
+encodeRecord :: Record Ciphertext -> RecordM ByteString
+encodeRecord record = return $ B.concat [ encodeHeader hdr, content ]
+  where (hdr, content) = recordToRaw record
 
 writePacket13 :: Context -> Packet13 -> IO (Either TLSError ByteString)
 writePacket13 ctx pkt@(Handshake13 hss) = do

@@ -18,7 +18,7 @@ import Control.Monad.State
 import Crypto.Cipher.Types (AuthTag(..))
 
 import Network.TLS.Record.State
-import Network.TLS.Record.Types13
+import Network.TLS.Record.Types
 import Network.TLS.Cipher
 import Network.TLS.Wire
 import Network.TLS.Struct (ProtocolType(..), valOfType)
@@ -27,15 +27,24 @@ import Network.TLS.Util
 import qualified Data.ByteString as B
 import qualified Data.ByteArray as B (convert, xor)
 
-engageRecord :: Record13 -> RecordM Record13
-engageRecord record@(Record13 ProtocolType_ChangeCipherSpec _ _) = return record
-engageRecord record@(Record13 ct ver bytes) = do
-    st <- get
-    case stCipher st of
-        Nothing -> return record
-        _       -> do
-            ebytes <- encryptContent $ innerPlaintext ct bytes
-            return $ Record13 ProtocolType_AppData ver ebytes
+engageRecord :: Record Plaintext -> RecordM (Record Ciphertext)
+engageRecord = compressRecord >=> encryptRecord
+
+compressRecord :: Record Plaintext -> RecordM (Record Compressed)
+compressRecord record = onRecordFragment record $ fragmentCompress return
+
+encryptRecord :: Record Compressed -> RecordM (Record Ciphertext)
+encryptRecord record@(Record ct ver fragment) = 
+    case ct of
+        ProtocolType_ChangeCipherSpec -> noEncryption
+        _ -> do
+            st <- get
+            case stCipher st of
+                Nothing -> noEncryption
+                _       -> do
+                    ebytes <- fragmentCipher (encryptContent . innerPlaintext ct) fragment
+                    return $ Record ProtocolType_AppData ver ebytes
+  where noEncryption = onRecordFragment record $ fragmentCipher return
 
 innerPlaintext :: ProtocolType -> ByteString -> ByteString
 innerPlaintext ct bytes = runPut $ do
