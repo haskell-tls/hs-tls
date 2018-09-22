@@ -61,7 +61,6 @@ module Network.TLS.Extra.Cipher
     , cipher_TLS13_AES256GCM_SHA384
     , cipher_TLS13_AES128CCM_SHA256
     , cipher_TLS13_AES128CCM8_SHA256
-    , cipherIDtoCipher13
     -- * obsolete and non-standard ciphers
     , cipher_RSA_3DES_EDE_CBC_SHA1
     , cipher_RC4_128_MD5
@@ -974,10 +973,3 @@ cipher_ECDHE_RSA_AES256GCM_SHA384 = Cipher
 
 -- A list of cipher suite is found from:
 -- https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-4
-
-cipherIDtoCipher13 :: CipherID -> Maybe Cipher
-cipherIDtoCipher13 0x1301 = Just cipher_TLS13_AES128GCM_SHA256
-cipherIDtoCipher13 0x1302 = Just cipher_TLS13_AES256GCM_SHA384
-cipherIDtoCipher13 0x1304 = Just cipher_TLS13_AES128CCM_SHA256
-cipherIDtoCipher13 0x1305 = Just cipher_TLS13_AES128CCM8_SHA256
-cipherIDtoCipher13 _      = Nothing

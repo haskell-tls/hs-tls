@@ -19,7 +19,6 @@ import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Packet13
 import Network.TLS.Cipher
-import Network.TLS.Extra.Cipher (cipherIDtoCipher13)
 import Network.TLS.Compression
 import Network.TLS.Credentials
 import Network.TLS.Crypto
@@ -654,9 +653,8 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
         let usedHash = cipherHash usedCipher
         doHandshake13 sparams cred ctx chosenVersion usedCipher exts usedHash keyShare sigAlgo clientSession
   where
-    ciphersFilteredVersion = mapMaybe cipherIDtoCipher13 commonCipherIDs
-    serverCiphers = supportedCiphers $ serverSupported sparams
-    commonCipherIDs = clientCiphers `intersect` map cipherID serverCiphers
+    ciphersFilteredVersion = filter ((`elem` clientCiphers) . cipherID) serverCiphers
+    serverCiphers = filter (cipherAllowedForVersion chosenVersion) (supportedCiphers $ serverSupported sparams)
     serverGroups = supportedGroups (ctxSupported ctx)
     findKeyShare _      [] = Nothing
     findKeyShare ks (g:gs) = case find (\ent -> keyShareEntryGroup ent == g) ks of
@@ -815,9 +813,11 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
         msni <- usingState_ ctx getClientSNI
         malpn <- usingState_ ctx getNegotiatedProtocol
         let isSameSNI = sessionClientSNI sdata == msni
-            (isSameCipher,isSameKDF) = case cipherIDtoCipher13 (sessionCipher sdata) of
-              Nothing -> (False,False)
-              Just c  -> (c == usedCipher,cipherHash c == cipherHash usedCipher)
+            isSameCipher = sessionCipher sdata == cipherID usedCipher
+            ciphers = supportedCiphers $ serverSupported sparams
+            isSameKDF = case find (\c -> cipherID c == sessionCipher sdata) ciphers of
+                Nothing -> False
+                Just c  -> cipherHash c == cipherHash usedCipher
             isSameVersion = chosenVersion == sessionVersion sdata
             isSameALPN = sessionALPN sdata == malpn
             isPSKvalid = isSameKDF && isSameSNI -- fixme: SNI is not required
