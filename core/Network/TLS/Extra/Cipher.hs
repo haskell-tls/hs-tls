@@ -59,6 +59,8 @@ module Network.TLS.Extra.Cipher
     -- TLS 1.3
     , cipher_TLS13_AES128GCM_SHA256
     , cipher_TLS13_AES256GCM_SHA384
+    , cipher_TLS13_AES128CCM_SHA256
+    , cipher_TLS13_AES128CCM8_SHA256
     , cipherIDtoCipher13
     -- * obsolete and non-standard ciphers
     , cipher_RSA_3DES_EDE_CBC_SHA1
@@ -245,8 +247,10 @@ ciphersuite_default =
     -- , cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1
     -- , cipher_DHE_DSS_RC4_SHA1, cipher_RC4_128_SHA1, cipher_RC4_128_MD5
     -- , cipher_RSA_3DES_EDE_CBC_SHA1
+             -- TLS13 (listed at the end but version is negotiated first)
     , cipher_TLS13_AES128GCM_SHA256
     , cipher_TLS13_AES256GCM_SHA384
+    , cipher_TLS13_AES128CCM_SHA256
     ]
 
 {-# WARNING ciphersuite_all "This ciphersuite list contains RC4. Use ciphersuite_strong or ciphersuite_default instead." #-}
@@ -259,6 +263,7 @@ ciphersuite_all = ciphersuite_default ++
     , cipher_AES128CCM8_SHA256, cipher_AES256CCM8_SHA256
     , cipher_RSA_3DES_EDE_CBC_SHA1
     , cipher_RC4_128_SHA1
+    , cipher_TLS13_AES128CCM8_SHA256
     ]
 
 {-# DEPRECATED ciphersuite_medium "Use ciphersuite_strong or ciphersuite_default instead." #-}
@@ -294,8 +299,10 @@ ciphersuite_strong =
     , cipher_AES256_SHA256
              -- Last resort no PFS, AEAD or SHA2
     , cipher_AES256_SHA1
+             -- TLS13 (listed at the end but version is negotiated first)
     , cipher_TLS13_AES256GCM_SHA384
     , cipher_TLS13_AES128GCM_SHA256
+    , cipher_TLS13_AES128CCM_SHA256
     ]
 
 -- | DHE-RSA cipher suite.  This only includes ciphers bound specifically to
@@ -767,6 +774,28 @@ cipher_TLS13_AES256GCM_SHA384 = Cipher
     , cipherMinVer       = Just TLS13
     }
 
+cipher_TLS13_AES128CCM_SHA256 :: Cipher
+cipher_TLS13_AES128CCM_SHA256 = Cipher
+    { cipherID           = 0x1304
+    , cipherName         = "AES128CCM-SHA256"
+    , cipherBulk         = bulk_aes128ccm
+    , cipherHash         = SHA256
+    , cipherPRFHash      = Nothing
+    , cipherKeyExchange  = CipherKeyExchange_TLS13
+    , cipherMinVer       = Just TLS13
+    }
+
+cipher_TLS13_AES128CCM8_SHA256 :: Cipher
+cipher_TLS13_AES128CCM8_SHA256 = Cipher
+    { cipherID           = 0x1305
+    , cipherName         = "AES128CCM8-SHA256"
+    , cipherBulk         = bulk_aes128ccm8
+    , cipherHash         = SHA256
+    , cipherPRFHash      = Nothing
+    , cipherKeyExchange  = CipherKeyExchange_TLS13
+    , cipherMinVer       = Just TLS13
+    }
+
 cipher_ECDHE_ECDSA_AES128CBC_SHA :: Cipher
 cipher_ECDHE_ECDSA_AES128CBC_SHA = Cipher
     { cipherID           = 0xC009
@@ -949,4 +978,6 @@ cipher_ECDHE_RSA_AES256GCM_SHA384 = Cipher
 cipherIDtoCipher13 :: CipherID -> Maybe Cipher
 cipherIDtoCipher13 0x1301 = Just cipher_TLS13_AES128GCM_SHA256
 cipherIDtoCipher13 0x1302 = Just cipher_TLS13_AES256GCM_SHA384
+cipherIDtoCipher13 0x1304 = Just cipher_TLS13_AES128CCM_SHA256
+cipherIDtoCipher13 0x1305 = Just cipher_TLS13_AES128CCM8_SHA256
 cipherIDtoCipher13 _      = Nothing
