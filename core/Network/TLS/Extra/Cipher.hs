@@ -40,12 +40,14 @@ module Network.TLS.Extra.Cipher
     , cipher_DHE_RSA_AES256CCM_SHA256
     , cipher_DHE_RSA_AES256CCM8_SHA256
     , cipher_DHE_RSA_AES256GCM_SHA384
+    , cipher_DHE_RSA_CHACHA20POLY1305_SHA256
     , cipher_ECDHE_RSA_AES128GCM_SHA256
     , cipher_ECDHE_RSA_AES256GCM_SHA384
     , cipher_ECDHE_RSA_AES128CBC_SHA256
     , cipher_ECDHE_RSA_AES128CBC_SHA
     , cipher_ECDHE_RSA_AES256CBC_SHA
     , cipher_ECDHE_RSA_AES256CBC_SHA384
+    , cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256
     , cipher_ECDHE_ECDSA_AES128CBC_SHA
     , cipher_ECDHE_ECDSA_AES256CBC_SHA
     , cipher_ECDHE_ECDSA_AES128CBC_SHA256
@@ -56,6 +58,7 @@ module Network.TLS.Extra.Cipher
     , cipher_ECDHE_ECDSA_AES256CCM_SHA256
     , cipher_ECDHE_ECDSA_AES256CCM8_SHA256
     , cipher_ECDHE_ECDSA_AES256GCM_SHA384
+    , cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256
     -- TLS 1.3
     , cipher_TLS13_AES128GCM_SHA256
     , cipher_TLS13_AES256GCM_SHA384
@@ -240,8 +243,11 @@ ciphersuite_default :: [Cipher]
 ciphersuite_default =
     [        -- First the PFS + GCM + SHA2 ciphers
       cipher_ECDHE_ECDSA_AES128GCM_SHA256, cipher_ECDHE_ECDSA_AES256GCM_SHA384
+    , cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256
     , cipher_ECDHE_RSA_AES128GCM_SHA256, cipher_ECDHE_RSA_AES256GCM_SHA384
+    , cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256
     , cipher_DHE_RSA_AES128GCM_SHA256, cipher_DHE_RSA_AES256GCM_SHA384
+    , cipher_DHE_RSA_CHACHA20POLY1305_SHA256
     ,        -- Next the PFS + CCM + SHA2 ciphers
       cipher_ECDHE_ECDSA_AES128CCM_SHA256, cipher_ECDHE_ECDSA_AES256CCM_SHA256
     , cipher_DHE_RSA_AES128CCM_SHA256, cipher_DHE_RSA_AES256CCM_SHA256
@@ -299,9 +305,13 @@ ciphersuite_strong :: [Cipher]
 ciphersuite_strong =
     [        -- If we have PFS + AEAD + SHA2, then allow AES128, else just 256
       cipher_ECDHE_ECDSA_AES256GCM_SHA384, cipher_ECDHE_ECDSA_AES256CCM_SHA256
+    , cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256
     , cipher_ECDHE_ECDSA_AES128GCM_SHA256, cipher_ECDHE_ECDSA_AES128CCM_SHA256
-    , cipher_ECDHE_RSA_AES256GCM_SHA384, cipher_ECDHE_RSA_AES128GCM_SHA256
+    , cipher_ECDHE_RSA_AES256GCM_SHA384
+    , cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256
+    , cipher_ECDHE_RSA_AES128GCM_SHA256
     , cipher_DHE_RSA_AES256GCM_SHA384, cipher_DHE_RSA_AES256CCM_SHA256
+    , cipher_DHE_RSA_CHACHA20POLY1305_SHA256
     , cipher_DHE_RSA_AES128GCM_SHA256, cipher_DHE_RSA_AES128CCM_SHA256
              -- No AEAD
     , cipher_ECDHE_ECDSA_AES256CBC_SHA384
@@ -778,6 +788,39 @@ cipher_DHE_RSA_AES256GCM_SHA384 = Cipher
     , cipherBulk         = bulk_aes256gcm
     , cipherHash         = SHA384
     , cipherPRFHash      = Just SHA384
+    , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
+    , cipherMinVer       = Just TLS12
+    }
+
+cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256 :: Cipher
+cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256 = Cipher
+    { cipherID           = 0xCCA8
+    , cipherName         = "ECDHE-RSA-CHACHA20POLY1305-SHA256"
+    , cipherBulk         = bulk_chacha20poly1305
+    , cipherHash         = SHA256
+    , cipherPRFHash      = Just SHA256
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
+    , cipherMinVer       = Just TLS12
+    }
+
+cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256 :: Cipher
+cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256 = Cipher
+    { cipherID           = 0xCCA9
+    , cipherName         = "ECDHE-ECDSA-CHACHA20POLY1305-SHA256"
+    , cipherBulk         = bulk_chacha20poly1305
+    , cipherHash         = SHA256
+    , cipherPRFHash      = Just SHA256
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
+    , cipherMinVer       = Just TLS12
+    }
+
+cipher_DHE_RSA_CHACHA20POLY1305_SHA256 :: Cipher
+cipher_DHE_RSA_CHACHA20POLY1305_SHA256 = Cipher
+    { cipherID           = 0xCCAA
+    , cipherName         = "DHE-RSA-CHACHA20POLY1305-SHA256"
+    , cipherBulk         = bulk_chacha20poly1305
+    , cipherHash         = SHA256
+    , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
     , cipherMinVer       = Just TLS12
     }

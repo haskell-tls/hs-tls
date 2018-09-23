@@ -25,7 +25,7 @@ import Network.TLS.Wire
 import Network.TLS.Packet
 import Network.TLS.Imports
 import qualified Data.ByteString as B
-import qualified Data.ByteArray as B (convert)
+import qualified Data.ByteArray as B (convert, xor)
 
 engageRecord :: Record Plaintext -> RecordM (Record Ciphertext)
 engageRecord = compressRecord >=> encryptRecord
@@ -59,7 +59,7 @@ encryptContent record content = do
             let content' =  B.concat [content, digest]
             encryptStream encryptF content'
         BulkStateAEAD encryptF ->
-            encryptAead encryptF content record
+            encryptAead (bulkExplicitIV bulk) encryptF content record
         BulkStateUninitialized ->
             return content
 
@@ -91,19 +91,26 @@ encryptStream (BulkStream encryptF) content = do
     modify $ \tstate -> tstate { stCryptState = cst { cstKey = BulkStateStream newBulkStream } }
     return e
 
-encryptAead :: BulkAEAD
+encryptAead :: Int
+            -> BulkAEAD
             -> ByteString -> Record Compressed
             -> RecordM ByteString
-encryptAead encryptF content record = do
+encryptAead nonceExpLen encryptF content record = do
     cst        <- getCryptState
     encodedSeq <- encodeWord64 <$> getMacSequence
 
     let hdr   = recordToHeader record
         ad    = B.concat [encodedSeq, encodeHeader hdr]
-        nonce = B.concat [cstIV cst, encodedSeq]
+        iv    = cstIV cst
+        ivlen = B.length iv
+        sqnc  = B.replicate (ivlen - 8) 0 `B.append` encodedSeq
+        nonce | nonceExpLen == 0 = B.xor iv sqnc
+              | otherwise = B.concat [iv, encodedSeq]
         (e, AuthTag authtag) = encryptF nonce content ad
+        econtent | nonceExpLen == 0 = e `B.append` B.convert authtag
+                 | otherwise = B.concat [encodedSeq, e, B.convert authtag]
     modify incrRecordState
-    return $ B.concat [encodedSeq, e, B.convert authtag]
+    return econtent
 
 getCryptState :: RecordM CryptState
 getCryptState = stCryptState <$> get
