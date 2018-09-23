@@ -59,6 +59,7 @@ module Network.TLS.Extra.Cipher
     -- TLS 1.3
     , cipher_TLS13_AES128GCM_SHA256
     , cipher_TLS13_AES256GCM_SHA384
+    , cipher_TLS13_CHACHA20POLY1305_SHA256
     , cipher_TLS13_AES128CCM_SHA256
     , cipher_TLS13_AES128CCM8_SHA256
     -- * obsolete and non-standard ciphers
@@ -77,10 +78,12 @@ import Network.TLS.Imports
 import Data.Tuple (swap)
 
 import Crypto.Cipher.AES
+import qualified Crypto.Cipher.ChaChaPoly1305 as ChaChaPoly1305
 import qualified Crypto.Cipher.RC4 as RC4
 import Crypto.Cipher.TripleDES
 import Crypto.Cipher.Types hiding (Cipher, cipherName)
 import Crypto.Error
+import qualified Crypto.MAC.Poly1305 as Poly1305
 
 takelast :: Int -> B.ByteString -> B.ByteString
 takelast i b = B.drop (B.length b - i) b
@@ -212,6 +215,22 @@ rc4 _ bulkKey = BulkStream (combineRC4 $ RC4.initialize bulkKey)
         let (ctx', output) = RC4.combine ctx input
          in (output, BulkStream (combineRC4 ctx'))
 
+chacha20poly1305 :: BulkDirection -> BulkKey -> BulkAEAD
+chacha20poly1305 BulkEncrypt key nonce =
+    let st = noFail (ChaChaPoly1305.nonce12 nonce >>= ChaChaPoly1305.initialize key)
+     in (\input ad ->
+            let st2 = ChaChaPoly1305.finalizeAAD (ChaChaPoly1305.appendAAD ad st)
+                (output, st3) = ChaChaPoly1305.encrypt input st2
+                Poly1305.Auth tag = ChaChaPoly1305.finalize st3
+            in (output, AuthTag tag))
+chacha20poly1305 BulkDecrypt key nonce =
+    let st = noFail (ChaChaPoly1305.nonce12 nonce >>= ChaChaPoly1305.initialize key)
+     in (\input ad ->
+            let st2 = ChaChaPoly1305.finalizeAAD (ChaChaPoly1305.appendAAD ad st)
+                (output, st3) = ChaChaPoly1305.decrypt input st2
+                Poly1305.Auth tag = ChaChaPoly1305.finalize st3
+            in (output, AuthTag tag))
+
 -- | All AES ciphers supported ordered from strong to weak.  This choice
 -- of ciphersuites should satisfy most normal needs.  For otherwise strong
 -- ciphers we make little distinction between AES128 and AES256, and list
@@ -249,6 +268,7 @@ ciphersuite_default =
              -- TLS13 (listed at the end but version is negotiated first)
     , cipher_TLS13_AES128GCM_SHA256
     , cipher_TLS13_AES256GCM_SHA384
+    , cipher_TLS13_CHACHA20POLY1305_SHA256
     , cipher_TLS13_AES128CCM_SHA256
     ]
 
@@ -300,6 +320,7 @@ ciphersuite_strong =
     , cipher_AES256_SHA1
              -- TLS13 (listed at the end but version is negotiated first)
     , cipher_TLS13_AES256GCM_SHA384
+    , cipher_TLS13_CHACHA20POLY1305_SHA256
     , cipher_TLS13_AES128GCM_SHA256
     , cipher_TLS13_AES128CCM_SHA256
     ]
@@ -321,7 +342,7 @@ ciphersuite_unencrypted :: [Cipher]
 ciphersuite_unencrypted = [cipher_null_MD5, cipher_null_SHA1]
 
 bulk_null, bulk_rc4, bulk_aes128, bulk_aes256, bulk_tripledes_ede, bulk_aes128gcm, bulk_aes256gcm :: Bulk
-bulk_aes128ccm, bulk_aes128ccm8, bulk_aes256ccm, bulk_aes256ccm8 :: Bulk
+bulk_aes128ccm, bulk_aes128ccm8, bulk_aes256ccm, bulk_aes256ccm8, bulk_chacha20poly1305 :: Bulk
 bulk_null = Bulk
     { bulkName         = "null"
     , bulkKeySize      = 0
@@ -432,6 +453,16 @@ bulk_tripledes_ede = Bulk
     , bulkAuthTagLen = 0
     , bulkBlockSize = 8
     , bulkF         = BulkBlockF tripledes_ede
+    }
+
+bulk_chacha20poly1305 = Bulk
+    { bulkName         = "CHACHA20POLY1305"
+    , bulkKeySize      = 32
+    , bulkIVSize       = 12 -- RFC 7905 section 2, fixed_iv_length
+    , bulkExplicitIV   = 0
+    , bulkAuthTagLen   = 16
+    , bulkBlockSize    = 0  -- dummy, not used
+    , bulkF            = BulkAeadF chacha20poly1305
     }
 
 -- | unencrypted cipher using RSA for key exchange and MD5 for digest
@@ -768,6 +799,17 @@ cipher_TLS13_AES256GCM_SHA384 = Cipher
     , cipherName         = "AES256GCM-SHA384"
     , cipherBulk         = bulk_aes256gcm
     , cipherHash         = SHA384
+    , cipherPRFHash      = Nothing
+    , cipherKeyExchange  = CipherKeyExchange_TLS13
+    , cipherMinVer       = Just TLS13
+    }
+
+cipher_TLS13_CHACHA20POLY1305_SHA256 :: Cipher
+cipher_TLS13_CHACHA20POLY1305_SHA256 = Cipher
+    { cipherID           = 0x1303
+    , cipherName         = "CHACHA20POLY1305-SHA256"
+    , cipherBulk         = bulk_chacha20poly1305
+    , cipherHash         = SHA256
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_TLS13
     , cipherMinVer       = Just TLS13
