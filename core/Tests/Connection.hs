@@ -306,8 +306,8 @@ initiateDataPipe params tlsServer tlsClient = do
 
     (cCtx, sCtx) <- newPairContext pipe params
 
-    withAsync (tlsServer sCtx) $ \sAsync ->
-        withAsync (tlsClient cCtx) $ \cAsync -> do
+    async (tlsServer sCtx) >>= \sAsync ->
+        async (tlsClient cCtx) >>= \cAsync -> do
             sRes <- waitCatch sAsync
             cRes <- waitCatch cAsync
             return (cRes, sRes)
