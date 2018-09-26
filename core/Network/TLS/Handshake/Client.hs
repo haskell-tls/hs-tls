@@ -267,9 +267,7 @@ handshakeClient' cparams ctx groups mcrand = do
                 -- dumpKey ctx "CLIENT_EARLY_TRAFFIC_SECRET" clientEarlyTrafficSecret
                 -- putStrLn "---- setTxState ctx usedHash usedCipher clientEarlyTrafficSecret"
                 setTxState ctx usedHash usedCipher clientEarlyTrafficSecret
-                -- fixme
-                Right eEarlyData <- writePacket13 ctx $ AppData13 earlyData
-                sendBytes13 ctx eEarlyData
+                sendPacket13 ctx $ AppData13 earlyData
                 usingHState ctx $ setTLS13RTT0Status RTT0Sent
 
         recvServerHello sentExts = runRecvState ctx recvState
@@ -746,15 +744,13 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
     unless resuming recvCertAndVerify
     recvFinished serverHandshakeTrafficSecret
     hChSf <- transcriptHash ctx
-    when rtt0accepted $ do
-        eoed <- writeHandshakePacket13 ctx EndOfEarlyData13
-        sendBytes13 ctx eoed
+    when rtt0accepted $ sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
+    -- putStrLn "---- setTxState ctx usedHash usedCipher clientHandshakeTrafficSecret"
     setTxState ctx usedHash usedCipher clientHandshakeTrafficSecret
     chain <- clientChain cparams ctx
     cdata <- case chain of
         Nothing -> return ""
         Just cc -> usingHState ctx getCertReqToken >>= sendClientData13 cc
-    -- putStrLn "---- setTxState ctx usedHash usedCipher clientHandshakeTrafficSecret"
     rawFinished <- makeFinished ctx usedHash clientHandshakeTrafficSecret
     writeHandshakePacket13 ctx rawFinished >>=
         sendBytes13 ctx . mappend cdata
