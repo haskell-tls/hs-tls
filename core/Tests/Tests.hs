@@ -139,13 +139,13 @@ runTLSPipeSimpleKeyUpdate params = runTLSPipeN 3 params tlsServer tlsClient
             bye ctx
             return ()
 
-runTLSInitFailure :: (ClientParams, ServerParams) -> PropertyM IO ()
-runTLSInitFailure params = do
+runTLSInitFailureGen :: (ClientParams, ServerParams) -> (Context -> IO s) -> (Context -> IO c) -> PropertyM IO ()
+runTLSInitFailureGen params hsServer hsClient = do
     (cRes, sRes) <- run (initiateDataPipe params tlsServer tlsClient)
     assertIsLeft cRes
     assertIsLeft sRes
   where tlsServer ctx = do
-            handshake ctx
+            _ <- hsServer ctx
             minfo <- contextGetInformation ctx
             -- Note: with TLS13 server needs to call recvData in order to detect
             -- handshake alert messages sent by the client (consequence of 0RTT
@@ -154,29 +154,13 @@ runTLSInitFailure params = do
             bye ctx
             return $ "server success: " ++ show minfo
         tlsClient ctx = do
-            handshake ctx
+            _ <- hsClient ctx
             minfo <- contextGetInformation ctx
             bye ctx
             return $ "client success: " ++ show minfo
 
-runTLSInitFailureRenego :: (ClientParams, ServerParams) -> PropertyM IO ()
-runTLSInitFailureRenego params = do
-    (cRes, sRes) <- run (initiateDataPipe params tlsServer tlsClient)
-    assertIsLeft cRes
-    assertIsLeft sRes
-  where tlsServer ctx = do
-            handshake ctx
-            minfo <- contextGetInformation ctx
-            -- same above Note regarding recvData
-            _ <- recvData ctx
-            bye ctx
-            return $ "server success: " ++ show minfo
-        tlsClient ctx = do
-            handshake ctx
-            handshake ctx
-            minfo <- contextGetInformation ctx
-            bye ctx
-            return $ "client success: " ++ show minfo
+runTLSInitFailure :: (ClientParams, ServerParams) -> PropertyM IO ()
+runTLSInitFailure params = runTLSInitFailureGen params handshake handshake
 
 prop_handshake_initiate :: PropertyM IO ()
 prop_handshake_initiate = do
@@ -633,20 +617,21 @@ prop_handshake_renegotiation = do
     let shouldFail = (TLS13 `elem` supportedVersions (serverSupported sparams'))
                   && (TLS13 `elem` supportedVersions (clientSupported cparams))
     if shouldFail
-        then runTLSInitFailureRenego (cparams, sparams')
+        then runTLSInitFailureGen (cparams, sparams') hsServer hsClient
         else runTLSPipe (cparams, sparams') tlsServer tlsClient
   where tlsServer ctx queue = do
-            handshake ctx
+            hsServer ctx
             d <- recvDataNonNull ctx
             writeChan queue [d]
             return ()
         tlsClient queue ctx = do
-            handshake ctx
-            handshake ctx
+            hsClient ctx
             d <- readChan queue
             sendData ctx (L.fromChunks [d])
             bye ctx
             return ()
+        hsServer     = handshake
+        hsClient ctx = handshake ctx >> handshake ctx
 
 prop_handshake_session_resumption :: PropertyM IO ()
 prop_handshake_session_resumption = do
