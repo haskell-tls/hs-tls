@@ -491,7 +491,10 @@ prop_handshake_client_auth = do
 
 prop_handshake_clt_key_usage :: PropertyM IO ()
 prop_handshake_clt_key_usage = do
-    (clientParam,serverParam) <- pick arbitraryPairParams
+    (clientParam,serverParam) <- pick $
+        -- Client authentication is not implemented for TLS 1.3.
+        -- Let's skip this test for TLS 1.3 temporarily.
+        arbitraryPairParams `suchThat` (not . isVersionEnabled TLS13)
     usageFlags <- pick arbitraryKeyUsage
     cred <- pick $ arbitraryRSACredentialWithUsage usageFlags
     let clientParam' = clientParam { clientHooks = (clientHooks clientParam)
@@ -502,13 +505,7 @@ prop_handshake_clt_key_usage = do
                                         { onClientCertificate = \_ -> return CertificateUsageAccept }
                                    }
         shouldSucceed = KeyUsage_digitalSignature `elem` usageFlags
-    let cvers = supportedVersions $ clientSupported clientParam
-        svers = supportedVersions $ serverSupported serverParam
-    -- Client authentication is not implemented for TLS 1.3.
-    -- Let's skip this test for TLS 1.3 temporarily.
-    if (TLS13 `elem` cvers) && (TLS13 `elem` svers) then
-        return ()
-      else if shouldSucceed
+    if shouldSucceed
         then runTLSPipeSimple  (clientParam',serverParam')
         else runTLSInitFailure (clientParam',serverParam')
 
@@ -577,9 +574,7 @@ prop_handshake_renegotiation = do
                  supportedClientInitiatedRenegotiation = True
                }
           }
-    let shouldFail = (TLS13 `elem` supportedVersions (serverSupported sparams'))
-                  && (TLS13 `elem` supportedVersions (clientSupported cparams))
-    if shouldFail
+    if isVersionEnabled TLS13 (cparams, sparams')
         then runTLSInitFailureGen (cparams, sparams') hsServer hsClient
         else runTLSPipe (cparams, sparams') tlsServer tlsClient
   where tlsServer ctx queue = do
