@@ -12,6 +12,7 @@ module Connection
     , arbitraryPairParamsWithVersionsAndCiphers
     , arbitraryClientCredential
     , arbitraryRSACredentialWithUsage
+    , isVersionEnabled
     , isCustomDHParams
     , isLeafRSA
     , readClientSessionRef
@@ -162,6 +163,11 @@ arbitraryPairParamsAt connectVersion = do
         serAllowedVersions = [connectVersion]
     (clientCiphers, serverCiphers) <- arbitraryCipherPair connectVersion
     arbitraryPairParamsWithVersionsAndCiphers (allowedVersions, serAllowedVersions) (clientCiphers, serverCiphers)
+
+isVersionEnabled :: Version -> (ClientParams, ServerParams) -> Bool
+isVersionEnabled ver (cparams, sparams) =
+    (ver `elem` supportedVersions (serverSupported sparams)) &&
+    (ver `elem` supportedVersions (clientSupported cparams))
 
 arbitraryHashSignaturePair :: Gen ([HashAndSignatureAlgorithm], [HashAndSignatureAlgorithm])
 arbitraryHashSignaturePair = do
