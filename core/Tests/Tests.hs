@@ -317,18 +317,18 @@ prop_handshake13_rtt0_fallback = do
 
 prop_handshake_ciphersuites :: PropertyM IO ()
 prop_handshake_ciphersuites = do
-    let clientVersions = [TLS12]
-        serverVersions = [TLS12]
+    tls13 <- pick arbitrary
+    let version = if tls13 then TLS13 else TLS12
     clientCiphers <- pick arbitraryCiphers
     serverCiphers <- pick arbitraryCiphers
     (clientParam,serverParam) <- pick $ arbitraryPairParamsWithVersionsAndCiphers
-                                            (clientVersions, serverVersions)
+                                            ([version], [version])
                                             (clientCiphers, serverCiphers)
-    let nonTLS13 c = cipherMinVer c /= Just TLS13
-        shouldFail = not $ any nonTLS13 (clientCiphers `intersect` serverCiphers)
-    if shouldFail
-        then runTLSInitFailure (clientParam,serverParam)
-        else runTLSPipeSimple  (clientParam,serverParam)
+    let adequate = cipherAllowedForVersion version
+        shouldSucceed = any adequate (clientCiphers `intersect` serverCiphers)
+    if shouldSucceed
+        then runTLSPipeSimple  (clientParam,serverParam)
+        else runTLSInitFailure (clientParam,serverParam)
 
 prop_handshake_hashsignatures :: PropertyM IO ()
 prop_handshake_hashsignatures = do
@@ -396,15 +396,16 @@ prop_handshake_cert_fallback = do
 
 prop_handshake_groups :: PropertyM IO ()
 prop_handshake_groups = do
-    let clientVersions = [TLS12]
-        serverVersions = [TLS12]
+    tls13 <- pick arbitrary
+    let versions = if tls13 then [TLS13] else [TLS12]
         ciphers = [ cipher_ECDHE_RSA_AES256GCM_SHA384
                   , cipher_ECDHE_RSA_AES128CBC_SHA
                   , cipher_DHE_RSA_AES256GCM_SHA384
                   , cipher_DHE_RSA_AES128_SHA1
+                  , cipher_TLS13_AES128GCM_SHA256
                   ]
     (clientParam,serverParam) <- pick $ arbitraryPairParamsWithVersionsAndCiphers
-                                            (clientVersions, serverVersions)
+                                            (versions, versions)
                                             (ciphers, ciphers)
     clientGroups <- pick arbitraryGroups
     serverGroups <- pick arbitraryGroups
@@ -420,7 +421,7 @@ prop_handshake_groups = do
                                    }
         isCustom = maybe True isCustomDHParams (serverDHEParams serverParam')
         commonGroups = clientGroups `intersect` serverGroups
-        shouldFail = null commonGroups && isCustom && denyCustom
+        shouldFail = null commonGroups && (tls13 || isCustom && denyCustom)
         p minfo = isNothing (minfo >>= infoNegotiatedGroup) == (null commonGroups && isCustom)
     if shouldFail
         then runTLSInitFailure (clientParam',serverParam')
