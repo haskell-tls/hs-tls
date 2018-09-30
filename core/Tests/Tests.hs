@@ -189,15 +189,15 @@ prop_handshake13_psk = do
                   ,srv { serverSupported = svrSupported }
                   )
 
-    sessionRef <- run $ newIORef Nothing
-    let sessionManager = oneSessionManager sessionRef
+    sessionRefs <- run twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
 
-    let params = setPairParamsSessionManager sessionManager params0
+    let params = setPairParamsSessionManagers sessionManagers params0
 
     runTLSPipeSimple13 params (HelloRetryRequest,HelloRetryRequest) Nothing
 
     -- and resume
-    sessionParams <- run $ readIORef sessionRef
+    sessionParams <- run $ readSessionRef sessionRefs
     assert (isJust sessionParams)
     let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 
@@ -221,15 +221,15 @@ prop_handshake13_rtt0 = do
                        , serverEarlyDataSize = 2048 }
                   )
 
-    sessionRef <- run $ newIORef Nothing
-    let sessionManager = oneSessionManager sessionRef
+    sessionRefs <- run twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
 
-    let params = setPairParamsSessionManager sessionManager params0
+    let params = setPairParamsSessionManagers sessionManagers params0
 
     runTLSPipeSimple13 params (HelloRetryRequest,HelloRetryRequest) Nothing
 
     -- and resume
-    sessionParams <- run $ readIORef sessionRef
+    sessionParams <- run $ readSessionRef sessionRefs
     assert (isJust sessionParams)
     let earlyData = "Early data"
         (pc,ps) = setPairParamsSessionResuming (fromJust sessionParams) params
@@ -255,15 +255,15 @@ prop_handshake13_rtt0_fallback = do
                        , serverEarlyDataSize = 0 }
                   )
 
-    sessionRef <- run $ newIORef Nothing
-    let sessionManager = oneSessionManager sessionRef
+    sessionRefs <- run twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
 
-    let params = setPairParamsSessionManager sessionManager params0
+    let params = setPairParamsSessionManagers sessionManagers params0
 
     runTLSPipeSimple13 params (HelloRetryRequest,HelloRetryRequest) Nothing
 
     -- and resume
-    sessionParams <- run $ readIORef sessionRef
+    sessionParams <- run $ readSessionRef sessionRefs
     assert (isJust sessionParams)
     let earlyData = "Early data"
         (pc,ps) = setPairParamsSessionResuming (fromJust sessionParams) params
@@ -524,16 +524,16 @@ prop_handshake_renegotiation = do
 
 prop_handshake_session_resumption :: PropertyM IO ()
 prop_handshake_session_resumption = do
-    sessionRef <- run $ newIORef Nothing
-    let sessionManager = oneSessionManager sessionRef
+    sessionRefs <- run twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
 
     plainParams <- pick arbitraryPairParams
-    let params = setPairParamsSessionManager sessionManager plainParams
+    let params = setPairParamsSessionManagers sessionManagers plainParams
 
     runTLSPipeSimple params
 
     -- and resume
-    sessionParams <- run $ readIORef sessionRef
+    sessionParams <- run $ readSessionRef sessionRefs
     assert (isJust sessionParams)
     let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 

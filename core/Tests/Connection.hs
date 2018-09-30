@@ -14,8 +14,10 @@ module Connection
     , arbitraryRSACredentialWithUsage
     , isCustomDHParams
     , leafPublicKey
-    , oneSessionManager
-    , setPairParamsSessionManager
+    , readSessionRef
+    , twoSessionRefs
+    , twoSessionManagers
+    , setPairParamsSessionManagers
     , setPairParamsSessionResuming
     , establishDataPipe
     , initiateDataPipe
@@ -213,6 +215,12 @@ arbitraryRSACredentialWithUsage usageFlags = do
     cert <- arbitraryX509WithKeyAndUsage usageFlags (PubKeyRSA pubKey, ())
     return (CertificateChain [cert], PrivKeyRSA privKey)
 
+readSessionRef :: (IORef client, IORef server) -> IO client
+readSessionRef refs = readIORef (fst refs)
+
+twoSessionRefs :: IO (IORef (Maybe client), IORef (Maybe server))
+twoSessionRefs = (,) <$> newIORef Nothing <*> newIORef Nothing
+
 -- | simple session manager to store one session id and session data for a single thread.
 -- a Real concurrent session manager would use an MVar and have multiples items.
 oneSessionManager :: IORef (Maybe (SessionID, SessionData)) -> SessionManager
@@ -227,11 +235,14 @@ oneSessionManager ref = SessionManager
         | sid == myId = Just sdata
         | otherwise   = Nothing
 
-setPairParamsSessionManager :: SessionManager -> (ClientParams, ServerParams) -> (ClientParams, ServerParams)
-setPairParamsSessionManager manager (clientState, serverState) = (nc,ns)
-  where nc = clientState { clientShared = updateSessionManager $ clientShared clientState }
-        ns = serverState { serverShared = updateSessionManager $ serverShared serverState }
-        updateSessionManager shared = shared { sharedSessionManager = manager }
+twoSessionManagers :: (IORef (Maybe (SessionID, SessionData)), IORef (Maybe (SessionID, SessionData))) -> (SessionManager, SessionManager)
+twoSessionManagers (cRef, sRef) = (oneSessionManager cRef, oneSessionManager sRef)
+
+setPairParamsSessionManagers :: (SessionManager, SessionManager) -> (ClientParams, ServerParams) -> (ClientParams, ServerParams)
+setPairParamsSessionManagers (clientManager, serverManager) (clientState, serverState) = (nc,ns)
+  where nc = clientState { clientShared = updateSessionManager clientManager $ clientShared clientState }
+        ns = serverState { serverShared = updateSessionManager serverManager $ serverShared serverState }
+        updateSessionManager manager shared = shared { sharedSessionManager = manager }
 
 setPairParamsSessionResuming :: (SessionID, SessionData) -> (ClientParams, ServerParams) -> (ClientParams, ServerParams)
 setPairParamsSessionResuming sessionStuff (clientState, serverState) =
