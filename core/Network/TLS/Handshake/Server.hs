@@ -764,8 +764,8 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
     setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlyTrafficSecret else clientHandshakeTrafficSecret
     setTxState ctx usedHash usedCipher serverHandshakeTrafficSecret
     ----------------------------------------------------------------
-    serverHandshake <- makeServerHandshake authenticated serverHandshakeTrafficSecret rtt0OK
     Right ccs <- writePacket13 ctx ChangeCipherSpec13
+    serverHandshake <- makeServerHandshake authenticated serverHandshakeTrafficSecret rtt0OK
     sendBytes13 ctx $ B.concat (helo : ccs : serverHandshake)
     sfSentTime <- getCurrentTimeFromBase
     ----------------------------------------------------------------
