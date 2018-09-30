@@ -663,7 +663,8 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
     -- Deciding key exchange from key shares
     keyShares <- case extensionLookup extensionID_KeyShare exts >>= extensionDecode MsgTClientHello of
           Just (KeyShareClientHello kses) -> return kses
-          _                               -> throwCore $ Error_Protocol ("key exchange not implemented", True, HandshakeFailure)
+          Just _                          -> error "handshakeServerWithTLS13: invalid KeyShare value"
+          _                               -> throwCore $ Error_Protocol ("key exchange not implemented, expected key_share extension", True, HandshakeFailure)
     case findKeyShare keyShares serverGroups of
       Nothing -> helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession
       Just keyShare -> do
@@ -946,7 +947,7 @@ helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientS
           Nothing                    -> []
         possibleGroups = serverGroups `intersect` clientGroups
     case possibleGroups of
-      [] -> throwCore $ Error_Protocol ("key exchange not implemented in HRR", True, HandshakeFailure)
+      [] -> throwCore $ Error_Protocol ("no group in common with the client for HRR", True, HandshakeFailure)
       g:_ -> do
           let serverKeyShare = extensionEncode $ KeyShareHRR g
               selectedVersion = extensionEncode $ SupportedVersionsServerHello chosenVersion

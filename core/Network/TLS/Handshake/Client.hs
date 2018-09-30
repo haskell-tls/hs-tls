@@ -94,7 +94,9 @@ handshakeClient' cparams ctx groups mcrand = do
                           let cparams' = cparams { clientEarlyData = Nothing }
                           crand <- usingHState ctx $ hstClientRandom <$> get
                           handshakeClient' cparams' ctx [selectedGroup] (Just crand)
-                  _                    -> throwCore $ Error_Protocol ("server-selected group is not supported", True, IllegalParameter)
+                    | otherwise -> throwCore $ Error_Protocol ("server-selected group is not supported", True, IllegalParameter)
+                  Just _  -> error "handshakeClient': invalid KeyShare value"
+                  Nothing -> throwCore $ Error_Protocol ("key exchange not implemented in HRR, expected key_share extension", True, HandshakeFailure)
           else do
             handshakeClient13 cparams ctx
       else do
@@ -847,7 +849,8 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
             mks <- usingState_ ctx getTLS13KeyShare
             case mks of
               Just (KeyShareServerHello ks) -> return ks
-              _                             -> throwCore $ Error_Protocol ("key exchange not implemented", True, HandshakeFailure)
+              Just _                        -> error "calcSharedKey: invalid KeyShare value"
+              Nothing                       -> throwCore $ Error_Protocol ("key exchange not implemented, expected key_share extension", True, HandshakeFailure)
         usingHState ctx $ setNegotiatedGroup $ keyShareEntryGroup serverKeyShare
         usingHState ctx getGroupPrivate >>= fromServerKeyShare serverKeyShare
 
