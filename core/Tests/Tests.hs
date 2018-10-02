@@ -606,13 +606,14 @@ prop_handshake_sni = do
 
 prop_handshake_renegotiation :: PropertyM IO ()
 prop_handshake_renegotiation = do
+    renegDisabled <- pick arbitrary
     (cparams, sparams) <- pick arbitraryPairParams
     let sparams' = sparams {
             serverSupported = (serverSupported sparams) {
-                 supportedClientInitiatedRenegotiation = True
+                 supportedClientInitiatedRenegotiation = not renegDisabled
                }
           }
-    if isVersionEnabled TLS13 (cparams, sparams')
+    if renegDisabled || isVersionEnabled TLS13 (cparams, sparams')
         then runTLSInitFailureGen (cparams, sparams') hsServer hsClient
         else runTLSPipe (cparams, sparams') tlsServer tlsClient
   where tlsServer ctx queue = do
