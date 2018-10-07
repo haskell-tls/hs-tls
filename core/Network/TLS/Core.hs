@@ -201,7 +201,7 @@ recvData13 ctx = liftIO $ do
             case mPendingAction of
                 Nothing -> let reason = "unexpected handshake message " ++ show h in
                            terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-                Just pa -> pa h >> processHandshake13 hs
+                Just pa -> withRWLock ctx (pa h) >> processHandshake13 hs
 
         terminate = terminate' ctx (sendPacket13 ctx . Alert13)
 
