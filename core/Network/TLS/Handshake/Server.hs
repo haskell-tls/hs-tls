@@ -852,8 +852,8 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
                 if isPSKvalid && isFresh then
                     return (psk, Just (bnd,0::Int,len),is0RTTvalid)
                   else
-                    -- fixme: fall back to full handshake
-                    throwCore $ Error_Protocol ("PSK validation failed", True, HandshakeFailure)
+                    -- fall back to full handshake
+                    return (zero, Nothing, False)
             _      -> return (zero, Nothing, False)
       _ -> return (zero, Nothing, False)
 

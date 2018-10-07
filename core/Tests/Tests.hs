@@ -257,6 +257,47 @@ prop_handshake13_psk = do
 
     runTLSPipeSimple13 params2 PreSharedKey Nothing
 
+prop_handshake13_psk_fallback :: PropertyM IO ()
+prop_handshake13_psk_fallback = do
+    (cli, srv) <- pick arbitraryPairParams13
+    let cliSupported = def
+            { supportedVersions = [TLS13]
+            , supportedCiphers = [ cipher_TLS13_AES128GCM_SHA256
+                                 , cipher_TLS13_AES128CCM_SHA256
+                                 ]
+            , supportedGroups = [P256,X25519]
+            }
+        svrSupported = def
+            { supportedVersions = [TLS13]
+            , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+            , supportedGroups = [X25519]
+            }
+        params0 = (cli { clientSupported = cliSupported }
+                  ,srv { serverSupported = svrSupported }
+                  )
+
+    sessionRefs <- run twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
+
+    let params = setPairParamsSessionManagers sessionManagers params0
+
+    runTLSPipeSimple13 params HelloRetryRequest Nothing
+
+    -- resumption fails because GCM cipher is not supported anymore, full
+    -- handshake is not possible because X25519 has been removed, so we are
+    -- back with P256 after hello retry
+    sessionParams <- run $ readClientSessionRef sessionRefs
+    assert (isJust sessionParams)
+    let (cli2, srv2) = setPairParamsSessionResuming (fromJust sessionParams) params
+        srv2' = srv2 { serverSupported = svrSupported' }
+        svrSupported' = def
+            { supportedVersions = [TLS13]
+            , supportedCiphers = [cipher_TLS13_AES128CCM_SHA256]
+            , supportedGroups = [P256]
+            }
+
+    runTLSPipeSimple13 (cli2, srv2') HelloRetryRequest Nothing
+
 prop_handshake13_rtt0 :: PropertyM IO ()
 prop_handshake13_rtt0 = do
     (cli, srv) <- pick arbitraryPairParams13
@@ -701,6 +742,7 @@ main = defaultMain $ testGroup "tls"
             , testProperty "TLS 1.3 Full" (monadicIO prop_handshake13_full)
             , testProperty "TLS 1.3 HRR"  (monadicIO prop_handshake13_hrr)
             , testProperty "TLS 1.3 PSK"  (monadicIO prop_handshake13_psk)
+            , testProperty "TLS 1.3 PSK -> HRR" (monadicIO prop_handshake13_psk_fallback)
             , testProperty "TLS 1.3 RTT0" (monadicIO prop_handshake13_rtt0)
             , testProperty "TLS 1.3 RTT0 -> PSK" (monadicIO prop_handshake13_rtt0_fallback)
             ]
