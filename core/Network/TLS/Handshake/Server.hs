@@ -790,7 +790,8 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
          | rtt0OK    = EarlyDataAllowed $ safeNonNegative32 $ serverEarlyDataSize sparams
          | otherwise = EarlyDataNotAllowed
     setEstablished ctx established
-    let finishedAction verifyData' = do
+
+    let finishedAction (Finished13 verifyData') = do
             hChBeforeCf <- transcriptHash ctx
             let verifyData = makeVerifyData usedHash clientHandshakeTrafficSecret hChBeforeCf
             if verifyData == verifyData' then do
@@ -802,8 +803,12 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
                 sendNewSessionTicket masterSecret rtt
               else
                 throwCore $ Error_Protocol ("cannot verify finished", True, HandshakeFailure)
-        endOfEarlyDataAction _ =
+        finishedAction hs = unexpected (show hs) (Just "finished 13")
+
+        endOfEarlyDataAction EndOfEarlyData13 =
             setRxState ctx usedHash usedCipher clientHandshakeTrafficSecret
+        endOfEarlyDataAction hs = unexpected (show hs) (Just "end of early data")
+
     if rtt0OK then do
         setPendingActions ctx [endOfEarlyDataAction, finishedAction]
       else do

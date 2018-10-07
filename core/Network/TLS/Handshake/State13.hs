@@ -113,10 +113,11 @@ transcriptHash ctx = do
       HandshakeDigestContext hashCtx -> return $ hashFinal hashCtx
       HandshakeMessages      _       -> error "un-initialized handshake digest"
 
-setPendingActions :: Context -> [ByteString -> IO ()] -> IO ()
+setPendingActions :: Context -> [PendingAction] -> IO ()
 setPendingActions ctx bss =
     modifyMVar_ (ctxPendingActions ctx) (\_ -> return bss)
 
-popPendingAction :: Context -> IO (ByteString -> IO ())
-popPendingAction ctx =
-    modifyMVar (ctxPendingActions ctx) (\(bs:bss) -> return (bss,bs)) -- fixme
+popPendingAction :: Context -> IO (Maybe PendingAction)
+popPendingAction ctx = modifyMVar (ctxPendingActions ctx) f
+  where f (bs:bss) = return (bss, Just bs)
+        f []       = return ([], Nothing)
