@@ -209,13 +209,13 @@ usingState ctx f =
 usingState_ :: Context -> TLSSt a -> IO a
 usingState_ ctx f = failOnEitherError $ usingState ctx f
 
-usingHState :: Context -> HandshakeM a -> IO a
+usingHState :: MonadIO m => Context -> HandshakeM a -> m a
 usingHState ctx f = liftIO $ modifyMVar (ctxHandshake ctx) $ \mst ->
     case mst of
         Nothing -> throwCore $ Error_Misc "missing handshake"
         Just st -> return $ swap (Just <$> runHandshake st f)
 
-getHState :: Context -> IO (Maybe HandshakeState)
+getHState :: MonadIO m => Context -> m (Maybe HandshakeState)
 getHState ctx = liftIO $ readMVar (ctxHandshake ctx)
 
 runTxState :: Context -> RecordM a -> IO (Either TLSError a)

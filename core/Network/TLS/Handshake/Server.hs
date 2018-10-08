@@ -1032,7 +1032,7 @@ applicationProtocol ctx exts sparams
         suggest <- usingState_ ctx getClientALPNSuggest
         case (onALPNClientSuggest $ serverHooks sparams, suggest) of
             (Just io, Just protos) -> do
-                proto <- liftIO $ io protos
+                proto <- io protos
                 usingState_ ctx $ do
                     setExtensionALPN True
                     setNegotiatedProtocol proto

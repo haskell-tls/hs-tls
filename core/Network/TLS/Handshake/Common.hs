@@ -48,7 +48,7 @@ errorToAlert :: TLSError -> [(AlertLevel, AlertDescription)]
 errorToAlert (Error_Protocol (_, _, ad)) = [(AlertLevel_Fatal, ad)]
 errorToAlert _                           = [(AlertLevel_Fatal, InternalError)]
 
-unexpected :: String -> Maybe String -> IO a
+unexpected :: MonadIO m => String -> Maybe String -> m a
 unexpected msg expected = throwCore $ Error_Packet_unexpected msg (maybe "" (" expected: " ++) expected)
 
 newSession :: Context -> IO Session

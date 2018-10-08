@@ -55,9 +55,11 @@ import Network.TLS.Util
 import System.IO
 import Time.System
 
+import Control.Monad.State.Strict
+
 ----------------------------------------------------------------
 
-makeFinished :: Context -> Hash -> ByteString -> IO Handshake13
+makeFinished :: MonadIO m => Context -> Hash -> ByteString -> m Handshake13
 makeFinished ctx usedHash baseKey =
     Finished13 . makeVerifyData usedHash baseKey <$> transcriptHash ctx
 
@@ -105,19 +107,19 @@ serverContextString = "TLS 1.3, server CertificateVerify"
 clientContextString :: ByteString
 clientContextString = "TLS 1.3, client CertificateVerify"
 
-makeServerCertVerify :: Context -> HashAndSignatureAlgorithm -> PrivKey -> ByteString -> IO Handshake13
+makeServerCertVerify :: MonadIO m => Context -> HashAndSignatureAlgorithm -> PrivKey -> ByteString -> m Handshake13
 makeServerCertVerify ctx hs privKey hashValue =
     CertVerify13 hs <$> sign ctx hs privKey target
   where
     target = makeTarget serverContextString hashValue
 
-makeClientCertVerify :: Context -> HashAndSignatureAlgorithm -> PrivKey -> ByteString -> IO Handshake13
+makeClientCertVerify :: MonadIO m => Context -> HashAndSignatureAlgorithm -> PrivKey -> ByteString -> m Handshake13
 makeClientCertVerify ctx hs privKey hashValue =
     CertVerify13 hs <$> sign ctx hs privKey target
  where
     target = makeTarget clientContextString hashValue
 
-checkServerCertVerify :: HashAndSignatureAlgorithm -> ByteString -> PubKey -> ByteString -> IO ()
+checkServerCertVerify :: MonadIO m => HashAndSignatureAlgorithm -> ByteString -> PubKey -> ByteString -> m ()
 checkServerCertVerify hs signature pubKey hashValue =
     unless ok $ throwCore $ Error_Protocol ("cannot verify CertificateVerify", True, BadCertificate)
   where
@@ -133,8 +135,8 @@ makeTarget contextString hashValue = runPut $ do
     putWord8 0
     putBytes hashValue
 
-sign :: Context -> HashAndSignatureAlgorithm -> PrivKey -> ByteString -> IO ByteString
-sign ctx hs privKey target = usingState_ ctx $ do
+sign :: MonadIO m => Context -> HashAndSignatureAlgorithm -> PrivKey -> ByteString -> m ByteString
+sign ctx hs privKey target = liftIO $ usingState_ ctx $ do
     r <- withRNG $ kxSign privKey sigParams target
     case r of
         Left err       -> fail ("sign failed: " ++ show err)
