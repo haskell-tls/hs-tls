@@ -745,28 +745,33 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
              return ()
     (ecdhe,keyShare) <- makeServerKeyShare ctx clientKeyShare
     let handshakeSecret = hkdfExtract usedHash (deriveSecret usedHash earlySecret "derived" (hash usedHash "")) ecdhe
-    helo <- makeServerHello keyShare srand extensions >>= writeHandshakePacket13 ctx
+    clientHandshakeTrafficSecret <- runPacketFlight ctx $ do
+        sendServerHello keyShare srand extensions
     ----------------------------------------------------------------
-    hChSh <- transcriptHash ctx
-    let clientHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
-        serverHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
-    -- putStrLn $ "handshakeSecret: " ++ showBytesHex handshakeSecret
-    -- putStrLn $ "hChSh: " ++ showBytesHex hChSh
-    -- usingHState ctx getHandshakeMessages >>= mapM_ (putStrLn . showBytesHex)
-    -- dumpKey ctx "SERVER_HANDSHAKE_TRAFFIC_SECRET" serverHandshakeTrafficSecret
-    -- dumpKey ctx "CLIENT_HANDSHAKE_TRAFFIC_SECRET" clientHandshakeTrafficSecret
+        hChSh <- transcriptHash ctx
+        let clientHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
+            serverHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
+        -- putStrLn $ "handshakeSecret: " ++ showBytesHex handshakeSecret
+        -- putStrLn $ "hChSh: " ++ showBytesHex hChSh
+        -- usingHState ctx getHandshakeMessages >>= mapM_ (putStrLn . showBytesHex)
+        -- dumpKey ctx "SERVER_HANDSHAKE_TRAFFIC_SECRET" serverHandshakeTrafficSecret
+        -- dumpKey ctx "CLIENT_HANDSHAKE_TRAFFIC_SECRET" clientHandshakeTrafficSecret
 {-
-    if rtt0OK then
-       putStrLn "---- setRxState ctx usedHash usedCipher clientEarlyTrafficSecret"
-     else
-       putStrLn "---- setRxState ctx usedHash usedCipher clientHandshakeTrafficSecret"
+        if rtt0OK then
+           putStrLn "---- setRxState ctx usedHash usedCipher clientEarlyTrafficSecret"
+         else
+           putStrLn "---- setRxState ctx usedHash usedCipher clientHandshakeTrafficSecret"
 -}
-    setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlyTrafficSecret else clientHandshakeTrafficSecret
-    setTxState ctx usedHash usedCipher serverHandshakeTrafficSecret
+        liftIO $ do
+            setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlyTrafficSecret else clientHandshakeTrafficSecret
+            setTxState ctx usedHash usedCipher serverHandshakeTrafficSecret
     ----------------------------------------------------------------
-    Right ccs <- writePacket13 ctx ChangeCipherSpec13
-    serverHandshake <- makeServerHandshake authenticated serverHandshakeTrafficSecret rtt0OK
-    sendBytes13 ctx $ B.concat (helo : ccs : serverHandshake)
+        loadPacket13 ctx ChangeCipherSpec13
+        sendExtensions rtt0OK
+        unless authenticated sendCertAndVerify
+        rawFinished <- makeFinished ctx usedHash serverHandshakeTrafficSecret
+        loadPacket13 ctx $ Handshake13 [rawFinished]
+        return clientHandshakeTrafficSecret
     sfSentTime <- getCurrentTimeFromBase
     ----------------------------------------------------------------
     let masterSecret = hkdfExtract usedHash (deriveSecret usedHash handshakeSecret "derived" (hash usedHash "")) zero
@@ -885,31 +890,26 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
         let selectedIdentity = extensionEncode $ PreSharedKeyServerHello $ fromIntegral n
         return [ExtensionRaw extensionID_PreSharedKey selectedIdentity]
 
-    makeServerHello keyShare srand extensions = do
+    sendServerHello keyShare srand extensions = do
         let serverKeyShare = extensionEncode $ KeyShareServerHello keyShare
             selectedVersion = extensionEncode $ SupportedVersionsServerHello chosenVersion
             extensions' = ExtensionRaw extensionID_KeyShare serverKeyShare
                         : ExtensionRaw extensionID_SupportedVersions selectedVersion
                         : extensions
-        return $ ServerHello13 srand clientSession (cipherID usedCipher) extensions'
+            helo = ServerHello13 srand clientSession (cipherID usedCipher) extensions'
+        loadPacket13 ctx $ Handshake13 [helo]
 
-    makeServerHandshake False serverHandshakeTrafficSecret rtt0OK = do
-        eext <- makeExtensions rtt0OK >>= writeHandshakePacket13 ctx
+    sendCertAndVerify = do
         let CertificateChain cs = certChain
             ess = replicate (length cs) []
-        cert <- writeHandshakePacket13 ctx $ Certificate13 "" certChain ess
+        loadPacket13 ctx $ Handshake13 [Certificate13 "" certChain ess]
         hChSc <- transcriptHash ctx
-        vrfy <- makeServerCertVerify ctx sigAlgo privKey hChSc >>= writeHandshakePacket13 ctx
-        fish <- makeFinished ctx usedHash serverHandshakeTrafficSecret >>= writeHandshakePacket13 ctx
-        return [eext, cert, vrfy, fish]
-    makeServerHandshake True serverHandshakeTrafficSecret rtt0OK = do
-        eext <- makeExtensions rtt0OK >>= writeHandshakePacket13 ctx
-        fish <- makeFinished ctx usedHash serverHandshakeTrafficSecret >>= writeHandshakePacket13 ctx
-        return [eext, fish]
+        vrfy <- makeServerCertVerify ctx sigAlgo privKey hChSc
+        loadPacket13 ctx $ Handshake13 [vrfy]
 
-    makeExtensions rtt0OK = do
-        extensions' <- applicationProtocol ctx exts sparams
-        msni <- usingState_ ctx getClientSNI
+    sendExtensions rtt0OK = do
+        extensions' <- liftIO $ applicationProtocol ctx exts sparams
+        msni <- liftIO $ usingState_ ctx getClientSNI
         let extensions'' = case msni of
               -- RFC6066: In this event, the server SHALL include
               -- an extension of type "server_name" in the
@@ -920,7 +920,7 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
         let extensions
               | rtt0OK = ExtensionRaw extensionID_EarlyData (extensionEncode (EarlyDataIndication Nothing)) : extensions''
               | otherwise = extensions''
-        return $ EncryptedExtensions13 extensions
+        loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 extensions]
 
     sendNewSessionTicket masterSecret pendingHandshake
       | sendNST = do

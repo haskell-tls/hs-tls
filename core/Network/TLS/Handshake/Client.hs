@@ -748,12 +748,12 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
     -- putStrLn "---- setTxState ctx usedHash usedCipher clientHandshakeTrafficSecret"
     setTxState ctx usedHash usedCipher clientHandshakeTrafficSecret
     chain <- clientChain cparams ctx
-    cdata <- case chain of
-        Nothing -> return ""
-        Just cc -> usingHState ctx getCertReqToken >>= sendClientData13 cc
-    rawFinished <- makeFinished ctx usedHash clientHandshakeTrafficSecret
-    writeHandshakePacket13 ctx rawFinished >>=
-        sendBytes13 ctx . mappend cdata
+    runPacketFlight ctx $ do
+        case chain of
+            Nothing -> return ()
+            Just cc -> usingHState ctx getCertReqToken >>= sendClientData13 cc
+        rawFinished <- makeFinished ctx usedHash clientHandshakeTrafficSecret
+        loadPacket13 ctx $ Handshake13 [rawFinished]
     masterSecret <- switchToTrafficSecret handshakeSecret hChSf
     setResumptionSecret masterSecret
     setEstablished ctx Established
@@ -764,20 +764,18 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
     sendClientData13 chain (Just token) = do
         let (CertificateChain certs) = chain
             certExts = replicate (length certs) []
-        certbytes <- writeHandshakePacket13 ctx $
-            Certificate13 token chain certExts
+        loadPacket13 ctx $ Handshake13 [Certificate13 token chain certExts]
         case certs of
-            [] -> return certbytes
+            [] -> return ()
             _  -> do
                   hChSc      <- transcriptHash ctx
                   (salg, pk) <- getSigKey
                   vfy        <- makeClientCertVerify ctx salg pk hChSc
-                  vrfybytes  <- writeHandshakePacket13 ctx vfy
-                  return $ mappend certbytes vrfybytes
+                  loadPacket13 ctx $ Handshake13 [vfy]
       where
         getSigKey = do
             (privkey, privalg) <- usingHState ctx getLocalPrivateKey
-            sigAlg  <- getLocalHashSigAlg ctx privalg
+            sigAlg <- liftIO $ getLocalHashSigAlg ctx privalg
             return (sigAlg, privkey)
     --
     sendClientData13 _ _ =

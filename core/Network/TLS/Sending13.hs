@@ -10,7 +10,6 @@
 --
 module Network.TLS.Sending13
        ( writePacket13
-       , writeHandshakePacket13
        , updateHandshake13
        ) where
 
@@ -24,7 +23,6 @@ import Network.TLS.Record.Types13
 import Network.TLS.Record.Engage13
 import Network.TLS.Packet
 import Network.TLS.Packet13
-import Network.TLS.Hooks
 import Network.TLS.Context.Internal
 import Network.TLS.Handshake.Random
 import Network.TLS.Handshake.State
@@ -53,16 +51,6 @@ writePacket13 ctx pkt@(Handshake13 hss) = do
     forM_ hss $ updateHandshake13 ctx
     prepareRecord ctx (makeRecord pkt >>= engageRecord >>= encodeRecord)
 writePacket13 ctx pkt = prepareRecord ctx (makeRecord pkt >>= engageRecord >>= encodeRecord)
-
-writeHandshakePacket13 :: MonadIO m => Context -> Handshake13 -> m ByteString
-writeHandshakePacket13 ctx hdsk = do
-    let pkt = Handshake13 [hdsk]
-    edataToSend <- liftIO $ do
-        withLog ctx $ \logging -> loggingPacketSent logging (show pkt)
-        writePacket13 ctx pkt
-    case edataToSend of
-        Left err         -> throwCore err
-        Right dataToSend -> return dataToSend
 
 prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
 prepareRecord = runTxState

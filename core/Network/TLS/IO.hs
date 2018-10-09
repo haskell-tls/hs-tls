@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 -- |
 -- Module      : Network.TLS.IO
 -- License     : BSD-style
@@ -10,9 +11,12 @@ module Network.TLS.IO
     ( checkValid
     , sendPacket
     , sendPacket13
-    , sendBytes13
     , recvPacket
     , recvPacket13
+    -- * Grouping multiple packets in the same flight
+    , PacketFlightM
+    , runPacketFlight
+    , loadPacket13
     ) where
 
 import Network.TLS.Context.Internal
@@ -142,23 +146,22 @@ sendPacket ctx pkt = do
                         writePacket ctx pkt
     case edataToSend of
         Left err         -> throwCore err
-        Right dataToSend -> liftIO $ do
-            withLog ctx $ \logging -> loggingIOSent logging dataToSend
-            contextSend ctx dataToSend
+        Right dataToSend -> sendBytes ctx dataToSend
   where isNonNullAppData (AppData b) = not $ B.null b
         isNonNullAppData _           = False
 
 sendPacket13 :: MonadIO m => Context -> Packet13 -> m ()
-sendPacket13 ctx pkt = do
+sendPacket13 ctx pkt = writePacketBytes13 ctx pkt >>= sendBytes ctx
+
+writePacketBytes13 :: MonadIO m => Context -> Packet13 -> m ByteString
+writePacketBytes13 ctx pkt = do
     edataToSend <- liftIO $ do
                         withLog ctx $ \logging -> loggingPacketSent logging (show pkt)
                         writePacket13 ctx pkt
-    case edataToSend of
-        Left err         -> throwCore err
-        Right dataToSend -> sendBytes13 ctx dataToSend
+    either throwCore return edataToSend
 
-sendBytes13 :: MonadIO m => Context -> ByteString -> m ()
-sendBytes13 ctx dataToSend = liftIO $ do
+sendBytes :: MonadIO m => Context -> ByteString -> m ()
+sendBytes ctx dataToSend = liftIO $ do
     withLog ctx $ \logging -> loggingIOSent logging dataToSend
     contextSend ctx dataToSend
 
@@ -198,3 +201,21 @@ recvPacket13 ctx = liftIO $ do
                     Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p
                     _       -> return ()
                 return pkt
+
+-- | State monad used to group several packets together and send them on wire as
+-- single flight.  When packets are loaded in the monad, they are logged
+-- immediately, update the context digest and transcript, but actual sending is
+-- deferred.  Packets are sent all at once when the monadic computation ends.
+newtype PacketFlightM m a = PacketFlightM (StateT [ByteString] m a)
+    deriving (Functor, Applicative, Monad, MonadIO)
+
+runPacketFlight :: MonadIO m => Context -> PacketFlightM m a -> m a
+runPacketFlight ctx (PacketFlightM f) = do
+    (result, st) <- runStateT f []
+    unless (null st) $ sendBytes ctx $ B.concat $ reverse st
+    return result
+
+loadPacket13 :: MonadIO m => Context -> Packet13 -> PacketFlightM m ()
+loadPacket13 ctx pkt = PacketFlightM $ do
+    bs <- writePacketBytes13 ctx pkt
+    modify (bs :)
