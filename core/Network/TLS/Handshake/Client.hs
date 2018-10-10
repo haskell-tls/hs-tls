@@ -23,7 +23,6 @@ import Network.TLS.Packet hiding (getExtensions)
 import Network.TLS.ErrT
 import Network.TLS.Extension
 import Network.TLS.IO
-import Network.TLS.Sending13
 import Network.TLS.Imports
 import Network.TLS.State
 import Network.TLS.Measurement
@@ -741,9 +740,11 @@ handshakeClient13 _cparams ctx = do
 handshakeClient13' :: ClientParams -> Context -> Cipher -> Hash -> IO ()
 handshakeClient13' cparams ctx usedCipher usedHash = do
     (resuming, handshakeSecret, clientHandshakeTrafficSecret, serverHandshakeTrafficSecret) <- switchToHandshakeSecret
-    rtt0accepted <- recvEncryptedExtensions
-    unless resuming recvCertAndVerify
-    recvFinished serverHandshakeTrafficSecret
+    rtt0accepted <- runRecvHandshake13 $ do
+        accepted <- recvHandshake13 ctx expectEncryptedExtensions
+        unless resuming $ recvHandshake13 ctx expectCertRequest
+        recvFinished serverHandshakeTrafficSecret
+        return accepted
     hChSf <- transcriptHash ctx
     when rtt0accepted $ sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
     -- putStrLn "---- setTxState ctx usedHash usedCipher clientHandshakeTrafficSecret"
@@ -840,9 +841,8 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
                 Just _                           -> throwCore $ Error_Protocol ("selected identity out of range", True, IllegalParameter)
           _ -> return (hkdfExtract usedHash zero zero, False)
 
-    recvEncryptedExtensions = do
-        EncryptedExtensions13 eexts <- recvHandshake13 ctx
-        setALPN ctx eexts
+    expectEncryptedExtensions (EncryptedExtensions13 eexts) = do
+        liftIO $ setALPN ctx eexts
         st <- usingHState ctx getTLS13RTT0Status
         if st == RTT0Sent then
             case extensionLookup extensionID_EarlyData eexts of
@@ -856,49 +856,30 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
                   return False
           else
             return False
+    expectEncryptedExtensions p = unexpected (show p) (Just "encrypted extensions")
 
-    recvCertAndVerify = do
-        hmsg <- recvHandshake13 ctx
-        cert <- case hmsg of
-            CertRequest13 token exts -> do
-                let hsextID = extensionID_SignatureAlgorithms
-                    -- caextID = extensionID_SignatureAlgorithmsCert
-                dNames <- canames exts
-                -- The @signature_algorithms@ extension is mandatory.
-                hsAlgs <- extalgs hsextID exts unsighash
-                cTypes <- case hsAlgs of
-                    Just as -> return $ sigAlgsToCertTypes ctx as
-                    Nothing -> throwCore $ Error_Protocol
-                                   ( "invalid certificate request"
-                                   , True
-                                   , HandshakeFailure )
-                -- Unused:
-                -- caAlgs <- extalgs caextID exts uncertsig
-                usingHState ctx $ do
-                    setCertReqToken  $ Just token
-                    setCertReqCBdata $ Just (cTypes, hsAlgs, dNames)
-                    -- setCertReqSigAlgsCert caAlgs
-                recvHandshake13 ctx
-            _ -> do
-                usingHState ctx $ do
-                    setCertReqToken   Nothing
-                    setCertReqCBdata  Nothing
-                    -- setCertReqSigAlgsCert Nothing
-                return hmsg
-
-        -- FIXME: What happens when the pattern match fails?
-        --
-        let Certificate13 _ cc@(CertificateChain certChain) _ = cert
-        _ <- processCertificate cparams ctx (Certificates cc)
-        pubkey <- case certChain of
-                    [] -> throwCore $ Error_Protocol ("server certificate missing", True, HandshakeFailure)
-                    c:_ -> return $ certPubKey $ getCertificate c
-        hChSc <- transcriptHash ctx
-        CertVerify13 ss sig <- recvHandshake13 ctx
-        checkServerCertVerify ss sig pubkey hChSc
+    expectCertRequest (CertRequest13 token exts) = do
+        let hsextID = extensionID_SignatureAlgorithms
+            -- caextID = extensionID_SignatureAlgorithmsCert
+        dNames <- canames
+        -- The @signature_algorithms@ extension is mandatory.
+        hsAlgs <- extalgs hsextID unsighash
+        cTypes <- case hsAlgs of
+            Just as -> return $ sigAlgsToCertTypes ctx as
+            Nothing -> throwCore $ Error_Protocol
+                            ( "invalid certificate request"
+                            , True
+                            , HandshakeFailure )
+        -- Unused:
+        -- caAlgs <- extalgs caextID uncertsig
+        usingHState ctx $ do
+            setCertReqToken  $ Just token
+            setCertReqCBdata $ Just (cTypes, hsAlgs, dNames)
+            -- setCertReqSigAlgsCert caAlgs
+        recvHandshake13 ctx expectCertAndVerify
       where
-        canames exts = case extensionLookup
-                            extensionID_CertificateAuthorities exts of
+        canames = case extensionLookup
+                       extensionID_CertificateAuthorities exts of
             Nothing   -> return []
             Just  ext -> case extensionDecode MsgTCertificateRequest ext of
                              Just (CertificateAuthorities names) -> return names
@@ -906,7 +887,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
                                       ( "invalid certificate request"
                                       , True
                                       , HandshakeFailure )
-        extalgs extID exts decons = case extensionLookup extID exts of
+        extalgs extID decons = case extensionLookup extID exts of
             Nothing   -> return Nothing
             Just  ext -> case extensionDecode MsgTCertificateRequest ext of
                              Just e
@@ -926,34 +907,40 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
         uncertsig (SignatureAlgorithmsCert a) = Just a
         -}
 
+    expectCertRequest other = do
+        usingHState ctx $ do
+            setCertReqToken   Nothing
+            setCertReqCBdata  Nothing
+            -- setCertReqSigAlgsCert Nothing
+        expectCertAndVerify other
+
+    expectCertAndVerify (Certificate13 _ cc@(CertificateChain certChain) _) = do
+        _ <- liftIO $ processCertificate cparams ctx (Certificates cc)
+        pubkey <- case certChain of
+                    [] -> throwCore $ Error_Protocol ("server certificate missing", True, HandshakeFailure)
+                    c:_ -> return $ certPubKey $ getCertificate c
+        hChSc <- transcriptHash ctx
+        recvHandshake13 ctx $ expectCertVerify pubkey hChSc
+    expectCertAndVerify p = unexpected (show p) (Just "server certificate")
+
+    expectCertVerify pubkey hChSc (CertVerify13 ss sig) =
+        checkServerCertVerify ss sig pubkey hChSc
+    expectCertVerify _ _ p = unexpected (show p) (Just "certificate verify")
+
     recvFinished serverHandshakeTrafficSecret = do
         hChSv <- transcriptHash ctx
         let verifyData' = makeVerifyData usedHash serverHandshakeTrafficSecret hChSv
-        Finished13 verifyData <- recvHandshake13 ctx
+        recvHandshake13 ctx $ expectFinished verifyData'
+
+    expectFinished verifyData' (Finished13 verifyData) =
         when (verifyData' /= verifyData) $
             throwCore $ Error_Protocol ("cannot verify finished", True, HandshakeFailure)
+    expectFinished _ p = unexpected (show p) (Just "server finished")
 
     setResumptionSecret masterSecret = do
         hChCf <- transcriptHash ctx
         let resumptionMasterSecret = deriveSecret usedHash masterSecret "res master" hChCf
         usingHState ctx $ setTLS13Secret $ ResuptionSecret resumptionMasterSecret
-
-recvHandshake13 :: Context -> IO Handshake13
-recvHandshake13 ctx = do
-    msgs <- usingHState ctx getTLS13HandshakeMsgs
-    case msgs of
-        [] -> do
-            epkt <- recvPacket13 ctx
-            case epkt of
-                Right (Handshake13 [])     -> recvHandshake13 ctx
-                Right (Handshake13 (h:hs)) -> found h hs
-                Right ChangeCipherSpec13   -> recvHandshake13 ctx
-                Right x                    -> unexpected (show x) (Just "Handshake13")
-                Left err                   -> throwCore err
-        h:hs -> found h hs
-  where
-    found h hs = do usingHState ctx $ setTLS13HandshakeMsgs hs
-                    updateHandshake13 ctx h >> return h
 
 setALPN :: Context -> [ExtensionRaw] -> IO ()
 setALPN ctx exts = case extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts >>= extensionDecode MsgTServerHello of

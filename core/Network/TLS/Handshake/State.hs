@@ -63,15 +63,12 @@ module Network.TLS.Handshake.State
     , getTLS13HandshakeMode
     , setTLS13RTT0Status
     , getTLS13RTT0Status
-    , setTLS13HandshakeMsgs
-    , getTLS13HandshakeMsgs
     , setTLS13Secret
     , getTLS13Secret
     ) where
 
 import Network.TLS.Util
 import Network.TLS.Struct
-import Network.TLS.Struct13
 import Network.TLS.Record.State
 import Network.TLS.Packet
 import Network.TLS.Crypto
@@ -126,7 +123,6 @@ data HandshakeState = HandshakeState
     , hstNegotiatedGroup     :: Maybe Group
     , hstTLS13HandshakeMode  :: HandshakeMode13
     , hstTLS13RTT0Status     :: !RTT0Status
-    , hstTLS13HandshakeMsgs  :: [Handshake13]
     , hstTLS13Secret         :: Secret13
     } deriving (Show)
 
@@ -215,7 +211,6 @@ newEmptyHandshake ver crand = HandshakeState
     , hstNegotiatedGroup     = Nothing
     , hstTLS13HandshakeMode  = FullHandshake
     , hstTLS13RTT0Status     = RTT0None
-    , hstTLS13HandshakeMsgs  = []
     , hstTLS13Secret         = NoSecret
     }
 
@@ -295,12 +290,6 @@ setTLS13RTT0Status s = modify (\hst -> hst { hstTLS13RTT0Status = s })
 
 getTLS13RTT0Status :: HandshakeM RTT0Status
 getTLS13RTT0Status = gets hstTLS13RTT0Status
-
-setTLS13HandshakeMsgs :: [Handshake13] -> HandshakeM ()
-setTLS13HandshakeMsgs hmsgs = modify (\hst -> hst { hstTLS13HandshakeMsgs = hmsgs })
-
-getTLS13HandshakeMsgs :: HandshakeM [Handshake13]
-getTLS13HandshakeMsgs = gets hstTLS13HandshakeMsgs
 
 setTLS13Secret :: Secret13 -> HandshakeM ()
 setTLS13Secret secret = modify (\hst -> hst { hstTLS13Secret = secret })
