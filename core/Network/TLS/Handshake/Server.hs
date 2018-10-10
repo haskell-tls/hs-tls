@@ -24,7 +24,6 @@ import Network.TLS.Crypto
 import Network.TLS.Extension
 import Network.TLS.Util (catchException, fromJust)
 import Network.TLS.IO
-import Network.TLS.Sending13
 import Network.TLS.Types
 import Network.TLS.State
 import Network.TLS.Handshake.State
@@ -776,7 +775,7 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
     ----------------------------------------------------------------
     let masterSecret = hkdfExtract usedHash (deriveSecret usedHash handshakeSecret "derived" (hash usedHash "")) zero
     hChSf <- transcriptHash ctx
-    when rtt0OK $ updateHandshake13 ctx EndOfEarlyData13
+    when rtt0OK $ processHandshake13 ctx EndOfEarlyData13
     hChEoed <- transcriptHash ctx
     let clientApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "c ap traffic" hChSf
         serverApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "s ap traffic" hChSf
@@ -924,7 +923,7 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
 
     sendNewSessionTicket masterSecret pendingHandshake
       | sendNST = do
-        updateHandshake13 ctx pendingHandshake
+        processHandshake13 ctx pendingHandshake
         hChCf <- transcriptHash ctx
         nonce <- usingState_ ctx $ genRandom 32
         let resumptionMasterSecret = deriveSecret usedHash masterSecret "res master" hChCf

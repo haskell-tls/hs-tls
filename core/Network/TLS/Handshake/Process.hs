@@ -9,6 +9,7 @@
 --
 module Network.TLS.Handshake.Process
     ( processHandshake
+    , processHandshake13
     , startHandshake
     , getHandshakeDigest
     ) where
@@ -23,6 +24,7 @@ import Network.TLS.Util
 import Network.TLS.Packet
 import Network.TLS.ErrT
 import Network.TLS.Struct
+import Network.TLS.Struct13
 import Network.TLS.State
 import Network.TLS.Context.Internal
 import Network.TLS.Crypto
@@ -33,6 +35,7 @@ import Network.TLS.Handshake.State13
 import Network.TLS.Handshake.Key
 import Network.TLS.Extension
 import Network.TLS.Parameters
+import Network.TLS.Sending13
 import Data.X509 (CertificateChain(..), Certificate(..), getCertificate)
 
 processHandshake :: Context -> Handshake -> IO ()
@@ -78,6 +81,9 @@ processHandshake ctx hs = do
 
         isHRR (ServerHello TLS12 srand _ _ _ _) = isHelloRetryRequest srand
         isHRR _                                 = False
+
+processHandshake13 :: Context -> Handshake13 -> IO ()
+processHandshake13 = updateHandshake13
 
 -- process the client key exchange message. the protocol expects the initial
 -- client version received in ClientHello, not the negotiated version.

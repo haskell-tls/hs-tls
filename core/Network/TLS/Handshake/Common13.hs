@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, BangPatterns #-}
+{-# LANGUAGE OverloadedStrings, GeneralizedNewtypeDeriving, BangPatterns #-}
 
 -- |
 -- Module      : Network.TLS.Handshake.Common13
@@ -27,6 +27,9 @@ module Network.TLS.Handshake.Common13
        , getSessionData13
        , safeNonNegative32
        , dumpKey
+       , RecvHandshake13M
+       , runRecvHandshake13
+       , recvHandshake13
        ) where
 
 import Data.Bits (finiteBitSize)
@@ -39,6 +42,8 @@ import Network.TLS.Cipher
 import Network.TLS.Crypto
 import qualified Network.TLS.Crypto.IES as IES
 import Network.TLS.Extension
+import Network.TLS.Handshake.Process (processHandshake13)
+import Network.TLS.Handshake.Common (unexpected)
 import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
@@ -46,6 +51,7 @@ import Network.TLS.Handshake.Signature
 import Network.TLS.Imports
 import Network.TLS.KeySchedule
 import Network.TLS.MAC
+import Network.TLS.IO
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
@@ -278,3 +284,37 @@ dumpKey ctx label key = do
           hPutStrLn stderr $ label ++ " " ++ dump cr ++ " " ++ dump key
   where
     dump = init . tail . showBytesHex
+
+----------------------------------------------------------------
+
+newtype RecvHandshake13M m a = RecvHandshake13M (StateT [Handshake13] m a)
+    deriving (Functor, Applicative, Monad, MonadIO)
+
+recvHandshake13 :: MonadIO m
+                => Context
+                -> (Handshake13 -> RecvHandshake13M m a)
+                -> RecvHandshake13M m a
+recvHandshake13 ctx f = getHandshake13 ctx >>= f
+
+getHandshake13 :: MonadIO m => Context -> RecvHandshake13M m Handshake13
+getHandshake13 ctx = RecvHandshake13M $ do
+    currentState <- get
+    case currentState of
+        (h:hs) -> found h hs
+        []     -> recvLoop
+  where
+    found h hs = liftIO (processHandshake13 ctx h) >> put hs >> return h
+    recvLoop = do
+        epkt <- recvPacket13 ctx
+        case epkt of
+            Right (Handshake13 [])     -> recvLoop
+            Right (Handshake13 (h:hs)) -> found h hs
+            Right ChangeCipherSpec13   -> recvLoop
+            Right x                    -> unexpected (show x) (Just "handshake 13")
+            Left err                   -> throwCore err
+
+runRecvHandshake13 :: MonadIO m => RecvHandshake13M m a -> m a
+runRecvHandshake13 (RecvHandshake13M f) = do
+    (result, new) <- runStateT f []
+    unless (null new) $ unexpected "spurious handshake 13" Nothing
+    return result
