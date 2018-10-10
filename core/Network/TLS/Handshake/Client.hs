@@ -45,7 +45,6 @@ import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.KeySchedule
-import Network.TLS.Extra.Cipher
 import Network.TLS.Wire
 
 handshakeClientWith :: ClientParams -> Context -> Handshake -> IO ()
@@ -163,17 +162,18 @@ handshakeClient' cparams ctx groups mcrand = do
                       return $ Just $ toExtensionRaw $ KeyShareClientHello [ent]
           | otherwise = return Nothing
 
-        sessionHash sdata = case cipherIDtoCipher13 (sessionCipher sdata) of
-          Just cipher -> cipherHash cipher
-          Nothing     -> error "sessionHash"
+        sessionAndCipherToResume13 = do
+            guard tls13
+            (sid, sdata) <- clientWantSessionResume cparams
+            guard (sessionVersion sdata >= TLS13)
+            sCipher <- find (\c -> cipherID c == sessionCipher sdata) ciphers
+            return (sid, sdata, sCipher)
 
-        preSharedKeyExtension
-          | not tls13 = return Nothing
-          | otherwise = case clientWantSessionResume cparams of
-              Nothing -> return Nothing
-              Just (sid, sdata)
-                | sessionVersion sdata >= TLS13 -> do
-                      let usedHash = sessionHash sdata
+        preSharedKeyExtension =
+            case sessionAndCipherToResume13 of
+                Nothing -> return Nothing
+                Just (sid, sdata, sCipher) -> do
+                      let usedHash = cipherHash sCipher
                           siz = hashDigestSize usedHash
                           zero = B.replicate siz 0
                           tinfo = fromJust "sessionTicketInfo" $ sessionTicketInfo sdata
@@ -185,7 +185,6 @@ handshakeClient' cparams ctx groups mcrand = do
                           return $ Just $ toExtensionRaw offeredPsks
                         else
                           return Nothing
-                | otherwise                         -> return Nothing
 
         pskExchangeModeExtension
           | tls13     = return $ Just $ toExtensionRaw $ PskKeyExchangeModes [PSK_DHE_KE]
@@ -207,13 +206,11 @@ handshakeClient' cparams ctx groups mcrand = do
               | sessionVersion sdata >= TLS13 -> Session Nothing
               | otherwise                     -> Session (Just sid)
 
-        adjustExtentions exts ch
-          | not tls13 = return exts
-          | otherwise = case clientWantSessionResume cparams of
-              Nothing -> return exts
-              Just (_, sdata)
-                | sessionVersion sdata >= TLS13 -> do
-                      let usedHash = sessionHash sdata
+        adjustExtentions exts ch =
+            case sessionAndCipherToResume13 of
+                Nothing -> return exts
+                Just (_, sdata, sCipher) -> do
+                      let usedHash = cipherHash sCipher
                           siz = hashDigestSize usedHash
                           zero = B.replicate siz 0
                           psk = sessionSecret sdata
@@ -226,7 +223,6 @@ handshakeClient' cparams ctx groups mcrand = do
                             where
                               withBinders = replacePSKBinder withoutBinders binder
                       return exts'
-                | otherwise                         -> return exts
 
         sendClientHello mcr = do
             -- fixme -- "44 4F 57 4E 47 52 44 01"
@@ -246,21 +242,15 @@ handshakeClient' cparams ctx groups mcrand = do
             send0RTT
             return $ map (\(ExtensionRaw i _) -> i) extensions
 
-        check0RTT = case clientWantSessionResume cparams of
-            Just (_, sdata)
-              | sessionVersion sdata >= TLS13 -> case clientEarlyData cparams of
-                Just earlyData
-                  | fromIntegral (B.length earlyData) <= sessionMaxEarlyDataSize sdata                                  -> Just (sessionCipher sdata, earlyData)
-                  | otherwise           -> Nothing
-                _                       -> Nothing
-            _                           -> Nothing
+        check0RTT = do
+            (_, sdata, sCipher) <- sessionAndCipherToResume13
+            earlyData <- clientEarlyData cparams
+            guard (fromIntegral (B.length earlyData) <= sessionMaxEarlyDataSize sdata)
+            return (sCipher, earlyData)
 
         send0RTT = case check0RTT of
             Nothing -> return ()
-            Just (cid, earlyData) -> do
-                usedCipher <- case cipherIDtoCipher13 cid of
-                        Just cipher -> return cipher
-                        _           -> throwCore $ Error_Protocol ("cipher for 0RTT is unknown", True, IllegalParameter)
+            Just (usedCipher, earlyData) -> do
                 let usedHash = cipherHash usedCipher
                 -- fixme: not initialized yet
                 -- hCh <- transcriptHash ctx

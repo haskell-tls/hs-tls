@@ -128,7 +128,7 @@ checkServerCertVerify hs signature pubKey hashValue =
 
 makeTarget :: ByteString -> ByteString -> ByteString
 makeTarget contextString hashValue = runPut $ do
-    putBytes $ B.pack $ replicate 64 32
+    putBytes $ B.replicate 64 32
     putBytes contextString
     putWord8 0
     putBytes hashValue

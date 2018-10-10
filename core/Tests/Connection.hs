@@ -42,14 +42,6 @@ import qualified Data.ByteString as B
 debug :: Bool
 debug = False
 
--- Pre-TLS13 ciphers have TLS12 as maximum allowed version
-cipherMaxVer :: Cipher -> Maybe Version
-cipherMaxVer x =
-    case cipherMinVer x of
-        Nothing            -> Just TLS12
-        Just v | v < TLS13 -> Just TLS12
-               | otherwise -> Nothing
-
 knownCiphers :: [Cipher]
 knownCiphers = filter nonECDSA (ciphersuite_all ++ ciphersuite_weak)
   where
@@ -127,12 +119,10 @@ leafPublicKey (CertificateChain (leaf:_)) = Just (certPubKey $ signedObject $ ge
 arbitraryCipherPair :: Version -> Gen ([Cipher], [Cipher])
 arbitraryCipherPair connectVersion = do
     serverCiphers      <- arbitraryCiphers `suchThat`
-                                (\cs -> or [maybe True (<= connectVersion) (cipherMinVer x) &&
-                                            maybe True (>= connectVersion) (cipherMaxVer x) | x <- cs])
+                                (\cs -> or [cipherAllowedForVersion connectVersion x | x <- cs])
     clientCiphers      <- arbitraryCiphers `suchThat`
                                 (\cs -> or [x `elem` serverCiphers &&
-                                            maybe True (<= connectVersion) (cipherMinVer x) &&
-                                            maybe True (>= connectVersion) (cipherMaxVer x) | x <- cs])
+                                            cipherAllowedForVersion connectVersion x | x <- cs])
     return (clientCiphers, serverCiphers)
 
 arbitraryPairParams :: Gen (ClientParams, ServerParams)
@@ -142,8 +132,7 @@ arbitraryPairParams = do
     -- The shared ciphers may add constraints on the compatible protocol versions
     let allowedVersions = [ v | v <- knownVersions,
                                 or [ x `elem` serverCiphers &&
-                                     maybe True (<= v) (cipherMinVer x) &&
-                                     maybe True (>= v) (cipherMaxVer x) | x <- clientCiphers ]]
+                                     cipherAllowedForVersion v x | x <- clientCiphers ]]
     serAllowedVersions <- (:[]) `fmap` elements allowedVersions
     arbitraryPairParamsWithVersionsAndCiphers (allowedVersions, serAllowedVersions) (clientCiphers, serverCiphers)
 

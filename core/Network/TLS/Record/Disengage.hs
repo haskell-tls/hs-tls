@@ -30,7 +30,7 @@ import Network.TLS.Wire
 import Network.TLS.Packet
 import Network.TLS.Imports
 import qualified Data.ByteString as B
-import qualified Data.ByteArray as B (convert)
+import qualified Data.ByteArray as B (convert, xor)
 
 disengageRecord :: Record Ciphertext -> RecordM (Record Plaintext)
 disengageRecord = decryptRecord >=> uncompressRecord
@@ -130,10 +130,14 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
 
             (enonce, econtent', authTag) <- get3 econtent (nonceExpLen, cipherLen, authTagLen)
             let encodedSeq = encodeWord64 $ msSequence $ stMacState tst
+                iv = cstIV (stCryptState tst)
+                ivlen = B.length iv
                 Header typ v _ = recordToHeader record
                 hdr = Header typ v $ fromIntegral cipherLen
                 ad = B.concat [ encodedSeq, encodeHeader hdr ]
-                nonce = cstIV (stCryptState tst) `B.append` enonce
+                sqnc = B.replicate (ivlen - 8) 0 `B.append` encodedSeq
+                nonce | nonceExpLen == 0 = B.xor iv sqnc
+                      | otherwise = iv `B.append` enonce
                 (content, authTag2) = decryptF nonce econtent' ad
 
             when (AuthTag (B.convert authTag) /= authTag2) $

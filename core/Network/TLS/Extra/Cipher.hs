@@ -40,12 +40,14 @@ module Network.TLS.Extra.Cipher
     , cipher_DHE_RSA_AES256CCM_SHA256
     , cipher_DHE_RSA_AES256CCM8_SHA256
     , cipher_DHE_RSA_AES256GCM_SHA384
+    , cipher_DHE_RSA_CHACHA20POLY1305_SHA256
     , cipher_ECDHE_RSA_AES128GCM_SHA256
     , cipher_ECDHE_RSA_AES256GCM_SHA384
     , cipher_ECDHE_RSA_AES128CBC_SHA256
     , cipher_ECDHE_RSA_AES128CBC_SHA
     , cipher_ECDHE_RSA_AES256CBC_SHA
     , cipher_ECDHE_RSA_AES256CBC_SHA384
+    , cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256
     , cipher_ECDHE_ECDSA_AES128CBC_SHA
     , cipher_ECDHE_ECDSA_AES256CBC_SHA
     , cipher_ECDHE_ECDSA_AES128CBC_SHA256
@@ -56,10 +58,13 @@ module Network.TLS.Extra.Cipher
     , cipher_ECDHE_ECDSA_AES256CCM_SHA256
     , cipher_ECDHE_ECDSA_AES256CCM8_SHA256
     , cipher_ECDHE_ECDSA_AES256GCM_SHA384
+    , cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256
     -- TLS 1.3
     , cipher_TLS13_AES128GCM_SHA256
     , cipher_TLS13_AES256GCM_SHA384
-    , cipherIDtoCipher13
+    , cipher_TLS13_CHACHA20POLY1305_SHA256
+    , cipher_TLS13_AES128CCM_SHA256
+    , cipher_TLS13_AES128CCM8_SHA256
     -- * obsolete and non-standard ciphers
     , cipher_RSA_3DES_EDE_CBC_SHA1
     , cipher_RC4_128_MD5
@@ -76,10 +81,12 @@ import Network.TLS.Imports
 import Data.Tuple (swap)
 
 import Crypto.Cipher.AES
+import qualified Crypto.Cipher.ChaChaPoly1305 as ChaChaPoly1305
 import qualified Crypto.Cipher.RC4 as RC4
 import Crypto.Cipher.TripleDES
 import Crypto.Cipher.Types hiding (Cipher, cipherName)
 import Crypto.Error
+import qualified Crypto.MAC.Poly1305 as Poly1305
 
 takelast :: Int -> B.ByteString -> B.ByteString
 takelast i b = B.drop (B.length b - i) b
@@ -211,6 +218,22 @@ rc4 _ bulkKey = BulkStream (combineRC4 $ RC4.initialize bulkKey)
         let (ctx', output) = RC4.combine ctx input
          in (output, BulkStream (combineRC4 ctx'))
 
+chacha20poly1305 :: BulkDirection -> BulkKey -> BulkAEAD
+chacha20poly1305 BulkEncrypt key nonce =
+    let st = noFail (ChaChaPoly1305.nonce12 nonce >>= ChaChaPoly1305.initialize key)
+     in (\input ad ->
+            let st2 = ChaChaPoly1305.finalizeAAD (ChaChaPoly1305.appendAAD ad st)
+                (output, st3) = ChaChaPoly1305.encrypt input st2
+                Poly1305.Auth tag = ChaChaPoly1305.finalize st3
+            in (output, AuthTag tag))
+chacha20poly1305 BulkDecrypt key nonce =
+    let st = noFail (ChaChaPoly1305.nonce12 nonce >>= ChaChaPoly1305.initialize key)
+     in (\input ad ->
+            let st2 = ChaChaPoly1305.finalizeAAD (ChaChaPoly1305.appendAAD ad st)
+                (output, st3) = ChaChaPoly1305.decrypt input st2
+                Poly1305.Auth tag = ChaChaPoly1305.finalize st3
+            in (output, AuthTag tag))
+
 -- | All AES ciphers supported ordered from strong to weak.  This choice
 -- of ciphersuites should satisfy most normal needs.  For otherwise strong
 -- ciphers we make little distinction between AES128 and AES256, and list
@@ -220,8 +243,11 @@ ciphersuite_default :: [Cipher]
 ciphersuite_default =
     [        -- First the PFS + GCM + SHA2 ciphers
       cipher_ECDHE_ECDSA_AES128GCM_SHA256, cipher_ECDHE_ECDSA_AES256GCM_SHA384
+    , cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256
     , cipher_ECDHE_RSA_AES128GCM_SHA256, cipher_ECDHE_RSA_AES256GCM_SHA384
+    , cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256
     , cipher_DHE_RSA_AES128GCM_SHA256, cipher_DHE_RSA_AES256GCM_SHA384
+    , cipher_DHE_RSA_CHACHA20POLY1305_SHA256
     ,        -- Next the PFS + CCM + SHA2 ciphers
       cipher_ECDHE_ECDSA_AES128CCM_SHA256, cipher_ECDHE_ECDSA_AES256CCM_SHA256
     , cipher_DHE_RSA_AES128CCM_SHA256, cipher_DHE_RSA_AES256CCM_SHA256
@@ -245,8 +271,11 @@ ciphersuite_default =
     -- , cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1
     -- , cipher_DHE_DSS_RC4_SHA1, cipher_RC4_128_SHA1, cipher_RC4_128_MD5
     -- , cipher_RSA_3DES_EDE_CBC_SHA1
+             -- TLS13 (listed at the end but version is negotiated first)
     , cipher_TLS13_AES128GCM_SHA256
     , cipher_TLS13_AES256GCM_SHA384
+    , cipher_TLS13_CHACHA20POLY1305_SHA256
+    , cipher_TLS13_AES128CCM_SHA256
     ]
 
 {-# WARNING ciphersuite_all "This ciphersuite list contains RC4. Use ciphersuite_strong or ciphersuite_default instead." #-}
@@ -259,6 +288,7 @@ ciphersuite_all = ciphersuite_default ++
     , cipher_AES128CCM8_SHA256, cipher_AES256CCM8_SHA256
     , cipher_RSA_3DES_EDE_CBC_SHA1
     , cipher_RC4_128_SHA1
+    , cipher_TLS13_AES128CCM8_SHA256
     ]
 
 {-# DEPRECATED ciphersuite_medium "Use ciphersuite_strong or ciphersuite_default instead." #-}
@@ -275,9 +305,13 @@ ciphersuite_strong :: [Cipher]
 ciphersuite_strong =
     [        -- If we have PFS + AEAD + SHA2, then allow AES128, else just 256
       cipher_ECDHE_ECDSA_AES256GCM_SHA384, cipher_ECDHE_ECDSA_AES256CCM_SHA256
+    , cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256
     , cipher_ECDHE_ECDSA_AES128GCM_SHA256, cipher_ECDHE_ECDSA_AES128CCM_SHA256
-    , cipher_ECDHE_RSA_AES256GCM_SHA384, cipher_ECDHE_RSA_AES128GCM_SHA256
+    , cipher_ECDHE_RSA_AES256GCM_SHA384
+    , cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256
+    , cipher_ECDHE_RSA_AES128GCM_SHA256
     , cipher_DHE_RSA_AES256GCM_SHA384, cipher_DHE_RSA_AES256CCM_SHA256
+    , cipher_DHE_RSA_CHACHA20POLY1305_SHA256
     , cipher_DHE_RSA_AES128GCM_SHA256, cipher_DHE_RSA_AES128CCM_SHA256
              -- No AEAD
     , cipher_ECDHE_ECDSA_AES256CBC_SHA384
@@ -294,13 +328,18 @@ ciphersuite_strong =
     , cipher_AES256_SHA256
              -- Last resort no PFS, AEAD or SHA2
     , cipher_AES256_SHA1
+             -- TLS13 (listed at the end but version is negotiated first)
     , cipher_TLS13_AES256GCM_SHA384
+    , cipher_TLS13_CHACHA20POLY1305_SHA256
     , cipher_TLS13_AES128GCM_SHA256
+    , cipher_TLS13_AES128CCM_SHA256
     ]
 
--- | DHE-RSA cipher suite
+-- | DHE-RSA cipher suite.  This only includes ciphers bound specifically to
+-- DHE-RSA so TLS 1.3 ciphers must be added separately.
 ciphersuite_dhe_rsa :: [Cipher]
-ciphersuite_dhe_rsa = [ cipher_DHE_RSA_AES256GCM_SHA384, cipher_DHE_RSA_AES128GCM_SHA256
+ciphersuite_dhe_rsa = [ cipher_DHE_RSA_AES256GCM_SHA384, cipher_DHE_RSA_AES256CCM_SHA256
+                      , cipher_DHE_RSA_AES128GCM_SHA256, cipher_DHE_RSA_AES128CCM_SHA256
                       , cipher_DHE_RSA_AES256_SHA256, cipher_DHE_RSA_AES128_SHA256
                       , cipher_DHE_RSA_AES256_SHA1, cipher_DHE_RSA_AES128_SHA1
                       ]
@@ -313,7 +352,7 @@ ciphersuite_unencrypted :: [Cipher]
 ciphersuite_unencrypted = [cipher_null_MD5, cipher_null_SHA1]
 
 bulk_null, bulk_rc4, bulk_aes128, bulk_aes256, bulk_tripledes_ede, bulk_aes128gcm, bulk_aes256gcm :: Bulk
-bulk_aes128ccm, bulk_aes128ccm8, bulk_aes256ccm, bulk_aes256ccm8 :: Bulk
+bulk_aes128ccm, bulk_aes128ccm8, bulk_aes256ccm, bulk_aes256ccm8, bulk_chacha20poly1305 :: Bulk
 bulk_null = Bulk
     { bulkName         = "null"
     , bulkKeySize      = 0
@@ -424,6 +463,16 @@ bulk_tripledes_ede = Bulk
     , bulkAuthTagLen = 0
     , bulkBlockSize = 8
     , bulkF         = BulkBlockF tripledes_ede
+    }
+
+bulk_chacha20poly1305 = Bulk
+    { bulkName         = "CHACHA20POLY1305"
+    , bulkKeySize      = 32
+    , bulkIVSize       = 12 -- RFC 7905 section 2, fixed_iv_length
+    , bulkExplicitIV   = 0
+    , bulkAuthTagLen   = 16
+    , bulkBlockSize    = 0  -- dummy, not used
+    , bulkF            = BulkAeadF chacha20poly1305
     }
 
 -- | unencrypted cipher using RSA for key exchange and MD5 for digest
@@ -743,6 +792,39 @@ cipher_DHE_RSA_AES256GCM_SHA384 = Cipher
     , cipherMinVer       = Just TLS12
     }
 
+cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256 :: Cipher
+cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256 = Cipher
+    { cipherID           = 0xCCA8
+    , cipherName         = "ECDHE-RSA-CHACHA20POLY1305-SHA256"
+    , cipherBulk         = bulk_chacha20poly1305
+    , cipherHash         = SHA256
+    , cipherPRFHash      = Just SHA256
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
+    , cipherMinVer       = Just TLS12
+    }
+
+cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256 :: Cipher
+cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256 = Cipher
+    { cipherID           = 0xCCA9
+    , cipherName         = "ECDHE-ECDSA-CHACHA20POLY1305-SHA256"
+    , cipherBulk         = bulk_chacha20poly1305
+    , cipherHash         = SHA256
+    , cipherPRFHash      = Just SHA256
+    , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
+    , cipherMinVer       = Just TLS12
+    }
+
+cipher_DHE_RSA_CHACHA20POLY1305_SHA256 :: Cipher
+cipher_DHE_RSA_CHACHA20POLY1305_SHA256 = Cipher
+    { cipherID           = 0xCCAA
+    , cipherName         = "DHE-RSA-CHACHA20POLY1305-SHA256"
+    , cipherBulk         = bulk_chacha20poly1305
+    , cipherHash         = SHA256
+    , cipherPRFHash      = Just SHA256
+    , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
+    , cipherMinVer       = Just TLS12
+    }
+
 cipher_TLS13_AES128GCM_SHA256 :: Cipher
 cipher_TLS13_AES128GCM_SHA256 = Cipher
     { cipherID           = 0x1301
@@ -760,6 +842,39 @@ cipher_TLS13_AES256GCM_SHA384 = Cipher
     , cipherName         = "AES256GCM-SHA384"
     , cipherBulk         = bulk_aes256gcm
     , cipherHash         = SHA384
+    , cipherPRFHash      = Nothing
+    , cipherKeyExchange  = CipherKeyExchange_TLS13
+    , cipherMinVer       = Just TLS13
+    }
+
+cipher_TLS13_CHACHA20POLY1305_SHA256 :: Cipher
+cipher_TLS13_CHACHA20POLY1305_SHA256 = Cipher
+    { cipherID           = 0x1303
+    , cipherName         = "CHACHA20POLY1305-SHA256"
+    , cipherBulk         = bulk_chacha20poly1305
+    , cipherHash         = SHA256
+    , cipherPRFHash      = Nothing
+    , cipherKeyExchange  = CipherKeyExchange_TLS13
+    , cipherMinVer       = Just TLS13
+    }
+
+cipher_TLS13_AES128CCM_SHA256 :: Cipher
+cipher_TLS13_AES128CCM_SHA256 = Cipher
+    { cipherID           = 0x1304
+    , cipherName         = "AES128CCM-SHA256"
+    , cipherBulk         = bulk_aes128ccm
+    , cipherHash         = SHA256
+    , cipherPRFHash      = Nothing
+    , cipherKeyExchange  = CipherKeyExchange_TLS13
+    , cipherMinVer       = Just TLS13
+    }
+
+cipher_TLS13_AES128CCM8_SHA256 :: Cipher
+cipher_TLS13_AES128CCM8_SHA256 = Cipher
+    { cipherID           = 0x1305
+    , cipherName         = "AES128CCM8-SHA256"
+    , cipherBulk         = bulk_aes128ccm8
+    , cipherHash         = SHA256
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_TLS13
     , cipherMinVer       = Just TLS13
@@ -943,8 +1058,3 @@ cipher_ECDHE_RSA_AES256GCM_SHA384 = Cipher
 
 -- A list of cipher suite is found from:
 -- https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-4
-
-cipherIDtoCipher13 :: CipherID -> Maybe Cipher
-cipherIDtoCipher13 0x1301 = Just cipher_TLS13_AES128GCM_SHA256
-cipherIDtoCipher13 0x1302 = Just cipher_TLS13_AES256GCM_SHA384
-cipherIDtoCipher13 _      = Nothing
