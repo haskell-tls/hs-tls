@@ -3,9 +3,11 @@
 module Common
     ( printCiphers
     , printDHParams
+    , printGroups
     , readNumber
     , readCiphers
     , readDHParams
+    , readGroups
     , printHandshakeInfo
     , makeAddrInfo
     , AddrInfo(..)
@@ -38,6 +40,20 @@ namedCiphersuites =
     , ("strong",    map cipherID ciphersuite_strong)
     ]
 
+namedGroups :: [(String, Group)]
+namedGroups =
+    [ ("ffdhe2048", FFDHE2048)
+    , ("ffdhe3072", FFDHE3072)
+    , ("ffdhe4096", FFDHE4096)
+    , ("ffdhe6144", FFDHE6144)
+    , ("ffdhe8192", FFDHE8192)
+    , ("p256", P256)
+    , ("p384", P384)
+    , ("p521", P521)
+    , ("x25519", X25519)
+    , ("x448", X448)
+    ]
+
 readNumber :: (Num a, Read a) => String -> Maybe a
 readNumber s
     | all isDigit s = Just $ read s
@@ -54,6 +70,9 @@ readDHParams s =
     case lookup s namedDHParams of
         Nothing -> (Just . read) `fmap` readFile s
         mparams -> return mparams
+
+readGroups :: String -> Maybe [Group]
+readGroups s = traverse (`lookup` namedGroups) (split ',' s)
 
 printCiphers :: IO ()
 printCiphers = do
@@ -77,6 +96,12 @@ printDHParams = do
     forM_ namedDHParams $ \(name, _) -> putStrLn name
     putStrLn "(or /path/to/dhparams)"
 
+printGroups :: IO ()
+printGroups = do
+    putStrLn "Groups"
+    putStrLn "====================================="
+    forM_ namedGroups $ \(name, _) -> putStrLn name
+
 printHandshakeInfo ctx = do
     info <- contextGetInformation ctx
     case info of
@@ -85,8 +110,8 @@ printHandshakeInfo ctx = do
             putStrLn ("version: " ++ show (infoVersion i))
             putStrLn ("cipher: " ++ show (infoCipher i))
             putStrLn ("compression: " ++ show (infoCompression i))
+            putStrLn ("group: " ++ maybe "(none)" show (infoNegotiatedGroup i))
             when (infoVersion i == TLS13) $ do
-                putStrLn ("group: " ++ show (fromJust (infoNegotiatedGroup i)))
                 putStrLn ("handshake emode: " ++ show (fromJust (infoTLS13HandshakeMode i)))
                 putStrLn ("early data accepted: " ++ show (infoIsEarlyDataAccepted i))
     sni <- getClientSNI ctx
@@ -102,3 +127,10 @@ makeAddrInfo maddr port = do
           , addrSocketType = Stream
           }
     head <$> getAddrInfo (Just hints) maddr (Just $ show port)
+
+split :: Char -> String -> [String]
+split _ "" = []
+split c s = case break (c==) s of
+    ("",r)  -> split c (tail r)
+    (s',"") -> [s']
+    (s',r)  -> s' : split c (tail r)

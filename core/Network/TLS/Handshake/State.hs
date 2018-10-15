@@ -51,8 +51,8 @@ module Network.TLS.Handshake.State
     -- * misc accessor
     , getPendingCipher
     , setServerHelloParameters
-    , setTLS13Group
-    , getTLS13Group
+    , setNegotiatedGroup
+    , getNegotiatedGroup
     , setTLS13HandshakeMode
     , getTLS13HandshakeMode
     , setTLS13RTT0Status
@@ -107,7 +107,7 @@ data HandshakeState = HandshakeState
     , hstPendingRxState      :: Maybe RecordState
     , hstPendingCipher       :: Maybe Cipher
     , hstPendingCompression  :: Compression
-    , hstTLS13Group          :: Maybe Group
+    , hstNegotiatedGroup     :: Maybe Group
     , hstTLS13HandshakeMode  :: HandshakeMode13
     , hstTLS13RTT0Status     :: !RTT0Status
     , hstTLS13HandshakeMsgs  :: [Handshake13]
@@ -150,7 +150,7 @@ newEmptyHandshake ver crand = HandshakeState
     , hstPendingRxState      = Nothing
     , hstPendingCipher       = Nothing
     , hstPendingCompression  = nullCompression
-    , hstTLS13Group          = Nothing
+    , hstNegotiatedGroup     = Nothing
     , hstTLS13HandshakeMode  = FullHandshake
     , hstTLS13RTT0Status     = RTT0None
     , hstTLS13HandshakeMsgs  = []
@@ -198,11 +198,11 @@ getGroupPrivate = fromJust "server ECDH private" <$> gets hstGroupPrivate
 setGroupPrivate :: GroupPrivate -> HandshakeM ()
 setGroupPrivate shp = modify (\hst -> hst { hstGroupPrivate = Just shp })
 
-setTLS13Group :: Group -> HandshakeM ()
-setTLS13Group g = modify (\hst -> hst { hstTLS13Group = Just g })
+setNegotiatedGroup :: Group -> HandshakeM ()
+setNegotiatedGroup g = modify (\hst -> hst { hstNegotiatedGroup = Just g })
 
-getTLS13Group :: HandshakeM (Maybe Group)
-getTLS13Group = gets hstTLS13Group
+getNegotiatedGroup :: HandshakeM (Maybe Group)
+getNegotiatedGroup = gets hstNegotiatedGroup
 
 -- | Type to show which handshake mode is used in TLS 1.3.
 data HandshakeMode13 =

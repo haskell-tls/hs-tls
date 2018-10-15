@@ -50,8 +50,8 @@ prop_pipe_work = do
 recvDataNonNull :: Context -> IO C8.ByteString
 recvDataNonNull ctx = recvData ctx >>= \l -> if B.null l then recvDataNonNull ctx else return l
 
-runTLSPipe :: (ClientParams, ServerParams) -> (Context -> Chan C8.ByteString -> IO ()) -> (Chan C8.ByteString -> Context -> IO ()) -> Maybe C8.ByteString -> PropertyM IO ()
-runTLSPipe params tlsServer tlsClient mEarlyData = do
+runTLSPipe :: (ClientParams, ServerParams) -> (Context -> Chan C8.ByteString -> IO ()) -> (Chan C8.ByteString -> Context -> IO ()) -> PropertyM IO ()
+runTLSPipe params tlsServer tlsClient = do
     (writeStart, readResult) <- run (establishDataPipe params tlsServer tlsClient)
     -- send some data
     d <- B.pack <$> pick (someWords8 256)
@@ -59,39 +59,45 @@ runTLSPipe params tlsServer tlsClient mEarlyData = do
     -- receive it
     dres <- run $ timeout 60000000 readResult -- 60 sec
     -- check if it equal
-    case mEarlyData of
-      Nothing -> Just d `assertEq` dres
-      Just ed -> do
-          Just ed `assertEq` dres
-          dres' <- run $ timeout 60000000 readResult -- 60 sec
-          Just d `assertEq` dres'
+    Just d `assertEq` dres
     return ()
 
-runTLSPipeSimple :: (ClientParams, ServerParams) -> PropertyM IO ()
-runTLSPipeSimple params = runTLSPipe params tlsServer tlsClient Nothing
+runTLSPipePredicate :: (ClientParams, ServerParams) -> (Maybe Information -> Bool) -> PropertyM IO ()
+runTLSPipePredicate params p = runTLSPipe params tlsServer tlsClient
   where tlsServer ctx queue = do
             handshake ctx
+            checkInfoPredicate ctx
             d <- recvDataNonNull ctx
             writeChan queue d
             return ()
         tlsClient queue ctx = do
             handshake ctx
+            checkInfoPredicate ctx
             d <- readChan queue
             sendData ctx (L.fromChunks [d])
             bye ctx
             return ()
+        checkInfoPredicate ctx = do
+            minfo <- contextGetInformation ctx
+            unless (p minfo) $
+                fail ("unexpected information: " ++ show minfo)
+
+runTLSPipeSimple :: (ClientParams, ServerParams) -> PropertyM IO ()
+runTLSPipeSimple params = runTLSPipePredicate params (const True)
 
 runTLSPipeSimple13 :: (ClientParams, ServerParams) -> (HandshakeMode13, HandshakeMode13) -> Maybe C8.ByteString -> PropertyM IO ()
-runTLSPipeSimple13 params modes mEarlyData = runTLSPipe params tlsServer tlsClient mEarlyData
+runTLSPipeSimple13 params modes mEarlyData = runTLSPipe params tlsServer tlsClient
   where tlsServer ctx queue = do
             handshake ctx
+            case mEarlyData of
+                Nothing -> return ()
+                Just ed -> do
+                    ed' <- recvDataNonNull ctx
+                    ed `assertEq` ed'
             d <- recvDataNonNull ctx
             writeChan queue d
             minfo <- contextGetInformation ctx
             Just (snd modes) `assertEq` (minfo >>= infoTLS13HandshakeMode)
-            when (isJust mEarlyData) $ do
-                d' <- recvDataNonNull ctx
-                writeChan queue d'
             return ()
         tlsClient queue ctx = do
             handshake ctx
@@ -368,10 +374,12 @@ prop_handshake_groups = do
                                        { supportedGroups = serverGroups }
                                    }
         isCustom = maybe True isCustomDHParams (serverDHEParams serverParam')
-        shouldFail = null (clientGroups `intersect` serverGroups) && isCustom && denyCustom
+        commonGroups = clientGroups `intersect` serverGroups
+        shouldFail = null commonGroups && isCustom && denyCustom
+        p minfo = isNothing (minfo >>= infoNegotiatedGroup) == (null commonGroups && isCustom)
     if shouldFail
         then runTLSInitFailure (clientParam',serverParam')
-        else runTLSPipeSimple  (clientParam',serverParam')
+        else runTLSPipePredicate (clientParam',serverParam') p
 
 prop_handshake_srv_key_usage :: PropertyM IO ()
 prop_handshake_srv_key_usage = do
@@ -445,7 +453,7 @@ prop_handshake_alpn = do
                                         { onALPNClientSuggest = Just alpn }
                                    }
         params' = (clientParam',serverParam')
-    runTLSPipe params' tlsServer tlsClient Nothing
+    runTLSPipe params' tlsServer tlsClient
   where tlsServer ctx queue = do
             handshake ctx
             proto <- getNegotiatedProtocol ctx
@@ -472,7 +480,7 @@ prop_handshake_sni = do
                                    , clientUseServerNameIndication = True
                                     }
         params' = (clientParam',serverParam)
-    runTLSPipe params' tlsServer tlsClient Nothing
+    runTLSPipe params' tlsServer tlsClient
   where tlsServer ctx queue = do
             handshake ctx
             sni <- getClientSNI ctx
@@ -500,7 +508,7 @@ prop_handshake_renegotiation = do
                   && (TLS13 `elem` supportedVersions (clientSupported cparams))
     if shouldFail
         then runTLSInitFailureRenego (cparams, sparams')
-        else runTLSPipe (cparams, sparams') tlsServer tlsClient Nothing
+        else runTLSPipe (cparams, sparams') tlsServer tlsClient
   where tlsServer ctx queue = do
             handshake ctx
             d <- recvDataNonNull ctx

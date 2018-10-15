@@ -128,27 +128,15 @@ getDefaultParams flags host store sStorage certCredsRequest session earlyData =
             allVers = [SSL3, TLS10, TLS11, TLS12, TLS13]
             validateCert = not (NoValidateCert `elem` flags)
 
-getGroups flags = case getGroup of
-  Nothing -> [X448, X25519, P256]
-  Just gs -> case catMaybes $ map toG $ split ',' gs of
-    []     -> [X448, X25519, P256]
-    groups -> groups
+getGroups flags = case getGroup >>= readGroups of
+    Nothing     -> defaultGroups
+    Just []     -> defaultGroups
+    Just groups -> groups
   where
+    defaultGroups = supportedGroups def
     getGroup = foldl f Nothing flags
       where f _   (Group g)  = Just g
             f acc _          = acc
-    split :: Char -> String -> [String]
-    split _ "" = []
-    split c s = case break (c==) s of
-      ("",r)  -> split c (tail r)
-      (s',"") -> [s']
-      (s',r)  -> s' : split c (tail r)
-    toG "x25519" = Just X25519
-    toG "x448"   = Just X448
-    toG "p256"   = Just P256
-    toG "p384"   = Just P384
-    toG "p521"   = Just P521
-    toG _        = Nothing
 
 data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | Ssl3 | Tls10 | Tls11 | Tls12 | Tls13
@@ -167,6 +155,7 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | BenchData String
           | UseCipher String
           | ListCiphers
+          | ListGroups
           | DebugSeed String
           | DebugPrintSeed
           | Group String
@@ -203,6 +192,7 @@ options =
     , Option []     ["bench-data"] (ReqArg BenchData "amount") "amount of data to benchmark with"
     , Option []     ["use-cipher"] (ReqArg UseCipher "cipher-id") "use a specific cipher"
     , Option []     ["list-ciphers"] (NoArg ListCiphers) "list all ciphers supported and exit"
+    , Option []     ["list-groups"] (NoArg ListGroups) "list all groups supported and exit"
     , Option []     ["debug-seed"] (ReqArg DebugSeed "debug-seed") "debug: set a specific seed for randomness"
     , Option []     ["debug-print-seed"] (NoArg DebugPrintSeed) "debug: set a specific seed for randomness"
     ]
@@ -338,6 +328,10 @@ main = do
 
     when (ListCiphers `elem` opts) $ do
         printCiphers
+        exitSuccess
+
+    when (ListGroups `elem` opts) $ do
+        printGroups
         exitSuccess
 
     certStore <- getSystemCertificateStore

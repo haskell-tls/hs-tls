@@ -71,6 +71,7 @@ handshakeTerminate ctx = do
                 return $ Just (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
                     { hstServerRandom = hstServerRandom hshake
                     , hstMasterSecret = hstMasterSecret hshake
+                    , hstNegotiatedGroup = hstNegotiatedGroup hshake
                     }
     updateMeasure ctx resetBytesCounters
     -- mark the secure connection up and running.

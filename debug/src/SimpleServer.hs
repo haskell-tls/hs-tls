@@ -68,7 +68,7 @@ getDefaultParams flags store smgr cred rtt0accept = do
         , serverHooks = def
         , serverSupported = def { supportedVersions = supportedVers
                                 , supportedCiphers = myCiphers
-                                , supportedGroups = [X25519, P256]
+                                , supportedGroups = getGroups flags
                                 , supportedClientInitiatedRenegotiation = allowRenegotiation
                                 }
         , serverDebug = def { debugSeed      = foldl getDebugSeed Nothing flags
@@ -125,6 +125,16 @@ getDefaultParams flags store smgr cred rtt0accept = do
             validateCert = not (NoValidateCert `elem` flags)
             allowRenegotiation = AllowRenegotiation `elem` flags
 
+getGroups flags = case getGroup >>= readGroups of
+    Nothing     -> defaultGroups
+    Just []     -> defaultGroups
+    Just groups -> groups
+  where
+    defaultGroups = supportedGroups def
+    getGroup = foldl f Nothing flags
+      where f _   (Group g)  = Just g
+            f acc _          = acc
+
 data Flag = Verbose | Debug | IODebug | NoValidateCert | Http11
           | Ssl3 | Tls10 | Tls11 | Tls12 | Tls13
           | NoVersionDowngrade
@@ -137,6 +147,7 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Http11
           | BenchData String
           | UseCipher String
           | ListCiphers
+          | ListGroups
           | ListDHParams
           | Certificate String
           | Key String
@@ -144,6 +155,7 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Http11
           | Rtt0
           | DebugSeed String
           | DebugPrintSeed
+          | Group String
           | Help
           deriving (Show,Eq)
 
@@ -154,6 +166,7 @@ options =
     , Option []     ["io-debug"] (NoArg IODebug) "TLS IO debug output on stdout"
     , Option ['Z']  ["zerortt"] (NoArg Rtt0) "accept TLS 1.3 0RTT data"
     , Option ['O']  ["output"]  (ReqArg Output "stdout") "output "
+    , Option ['g']  ["group"]  (ReqArg Group "group") "group"
     , Option ['t']  ["timeout"] (ReqArg Timeout "timeout") "timeout in milliseconds (2s by default)"
     , Option []     ["no-validation"] (NoArg NoValidateCert) "disable certificate validation"
     , Option []     ["http1.1"] (NoArg Http11) "use http1.1 instead of http1.0"
@@ -171,6 +184,7 @@ options =
     , Option []     ["bench-data"] (ReqArg BenchData "amount") "amount of data to benchmark with"
     , Option []     ["use-cipher"] (ReqArg UseCipher "cipher-id") "use a specific cipher"
     , Option []     ["list-ciphers"] (NoArg ListCiphers) "list all ciphers supported and exit"
+    , Option []     ["list-groups"] (NoArg ListGroups) "list all groups supported and exit"
     , Option []     ["list-dhparams"] (NoArg ListDHParams) "list all DH parameters supported and exit"
     , Option []     ["certificate"] (ReqArg Certificate "certificate") "certificate file"
     , Option []     ["debug-seed"] (ReqArg DebugSeed "debug-seed") "debug: set a specific seed for randomness"
@@ -316,6 +330,10 @@ main = do
 
     when (ListDHParams `elem` opts) $ do
         printDHParams
+        exitSuccess
+
+    when (ListGroups `elem` opts) $ do
+        printGroups
         exitSuccess
 
     certStore <- getSystemCertificateStore
