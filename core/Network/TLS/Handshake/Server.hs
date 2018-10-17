@@ -612,7 +612,7 @@ filterCredentialsWithHashSignatures exts =
 -- returns True if "signature_algorithms" certificate filtering produced no
 -- ephemeral D-H nor TLS13 cipher (so handshake with lower security)
 cipherListCredentialFallback :: [Cipher] -> Bool
-cipherListCredentialFallback xs = all nonDH xs
+cipherListCredentialFallback = all nonDH
   where
     nonDH x = case cipherKeyExchange x of
         CipherKeyExchange_DHE_RSA     -> False
