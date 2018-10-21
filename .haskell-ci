@@ -1,7 +1,8 @@
 # compiler supported and their equivalent LTS
 compiler: ghc-8.0 lts-9.21
-compiler: ghc-8.2 lts-11.18
-compiler: ghc-8.4 lts-12.2
+compiler: ghc-8.2 lts-11.22
+compiler: ghc-8.4 lts-12.14
+compiler: ghc-8.6 nightly-2018-10-21
 
 # options
 # option: alias x=y z=v
@@ -16,7 +17,7 @@ build: ghc-8.2
 build: ghc-8.0 memorydeps cryptonitedep
 build: ghc-8.0 os=osx cryptonitedep
 build: ghc-8.4
-
+build: ghc-8.6
 
 
 # packages
