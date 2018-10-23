@@ -41,6 +41,8 @@ import qualified Data.ByteString as B
 data CryptState = CryptState
     { cstKey        :: !BulkState
     , cstIV         :: !ByteString
+    -- In TLS 1.2 or earlier, this holds mac secret.
+    -- In TLS 1.3, this holds application traffic secret N.
     , cstMacSecret  :: !ByteString
     } deriving (Show)
 

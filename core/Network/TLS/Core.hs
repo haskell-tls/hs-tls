@@ -44,7 +44,6 @@ import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.KeySchedule
-import Network.TLS.Record.State
 import Network.TLS.Util (catchException)
 import Network.TLS.Extension
 import qualified Network.TLS.State as S
@@ -52,7 +51,6 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
 import qualified Control.Exception as E
-import Control.Concurrent.MVar (readMVar)
 
 import Control.Monad.State.Strict
 
@@ -152,11 +150,9 @@ recvData13 ctx = liftIO $ do
         -- Only the first one is used at this moment.
         process (Handshake13 (NewSessionTicket13 life add nonce label exts:_)) = do
             ResuptionSecret resumptionMasterSecret <- usingHState ctx getTLS13Secret
-            tx <- readMVar (ctxTxState ctx)
-            let Just usedCipher = stCipher tx
-                usedHash = cipherHash usedCipher
-                hashSize = hashDigestSize usedHash
-            let psk = hkdfExpandLabel usedHash resumptionMasterSecret "resumption" nonce hashSize
+            (usedHash, usedCipher, _) <- getTxState ctx
+            let hashSize = hashDigestSize usedHash
+                psk = hkdfExpandLabel usedHash resumptionMasterSecret "resumption" nonce hashSize
                 maxSize = case extensionLookup extensionID_EarlyData exts >>= extensionDecode MsgTNewSessionTicket of
                   Just (EarlyDataIndication (Just ms)) -> fromIntegral $ safeNonNegative32 ms
                   _                                    -> 0
@@ -166,6 +162,14 @@ recvData13 ctx = liftIO $ do
             -- putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
             recvData13 ctx
         -- when receiving empty appdata, we just retry to get some data.
+        process (Handshake13 [KeyUpdate13 UpdateNotdRequested]) = do
+            keyUpdate ctx getRxState setRxState
+            recvData13 ctx
+        process (Handshake13 [KeyUpdate13 UpdateRequested]) = do
+            keyUpdate ctx getRxState setRxState
+            sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotdRequested]
+            keyUpdate ctx getTxState setTxState
+            recvData13 ctx
         process (AppData13 "") = recvData13 ctx
         process (AppData13 x) = do
             established <- ctxEstablished ctx
@@ -212,3 +216,12 @@ terminate' ctx send err level desc reason = do
 -- | same as recvData but returns a lazy bytestring.
 recvData' :: MonadIO m => Context -> m L.ByteString
 recvData' ctx = recvData ctx >>= return . L.fromChunks . (:[])
+
+keyUpdate :: Context
+          -> (Context -> IO (Hash,Cipher,C8.ByteString))
+          -> (Context -> Hash -> Cipher -> C8.ByteString -> IO ())
+          -> IO ()
+keyUpdate ctx getState setState = do
+    (usedHash, usedCipher, applicationTrafficSecretN) <- getState ctx
+    let applicationTrafficSecretN1 = hkdfExpandLabel usedHash applicationTrafficSecretN "traffic upd" "" $ hashDigestSize usedHash
+    setState ctx usedHash usedCipher applicationTrafficSecretN1
