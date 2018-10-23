@@ -8,7 +8,9 @@
 -- Portability : unknown
 --
 module Network.TLS.Handshake.State13
-       ( setTxState
+       ( getTxState
+       , getRxState
+       , setTxState
        , setRxState
        , setHelloParameters13
        , transcriptHash
@@ -28,6 +30,22 @@ import Network.TLS.KeySchedule (hkdfExpandLabel)
 import Network.TLS.Record.State
 import Network.TLS.Imports
 import Network.TLS.Util
+
+getTxState :: Context -> IO (Hash, Cipher, ByteString)
+getTxState ctx = getXState ctx ctxTxState
+
+getRxState :: Context -> IO (Hash, Cipher, ByteString)
+getRxState ctx = getXState ctx ctxRxState
+
+getXState :: Context
+          -> (Context -> MVar RecordState)
+          -> IO (Hash, Cipher, ByteString)
+getXState ctx func = do
+    tx <- readMVar (func ctx)
+    let Just usedCipher = stCipher tx
+        usedHash = cipherHash usedCipher
+        secret = cstMacSecret $ stCryptState tx
+    return (usedHash, usedCipher, secret)
 
 setTxState :: Context -> Hash -> Cipher -> ByteString -> IO ()
 setTxState = setXState ctxTxState BulkEncrypt
@@ -49,7 +67,7 @@ setXState func encOrDec ctx h cipher secret =
     cst = CryptState {
         cstKey       = bulkInit bulk encOrDec key
       , cstIV        = iv
-      , cstMacSecret = "" -- not used in TLS 1.3
+      , cstMacSecret = secret
       }
     rt = RecordState {
         stCryptState  = cst
