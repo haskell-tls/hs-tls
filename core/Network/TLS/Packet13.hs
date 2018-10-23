@@ -69,6 +69,9 @@ encodeHandshake13' (NewSessionTicket13 life ageadd nonce label exts) = runPut $ 
     putOpaque16 label
     putExtensions exts
 encodeHandshake13' EndOfEarlyData13 = ""
+encodeHandshake13' (KeyUpdate13 UpdateNotdRequested) = runPut $ putWord8 0
+encodeHandshake13' (KeyUpdate13 UpdateRequested)     = runPut $ putWord8 1
+
 encodeHandshake13' _ = error "encodeHandshake13'"
 
 encodeHandshakeHeader13 :: HandshakeType13 -> Int -> ByteString
@@ -99,6 +102,7 @@ decodeHandshake13 ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
     HandshakeType_CertVerify13          -> decodeCertVerify13
     HandshakeType_NewSessionTicket13    -> decodeNewSessionTicket13
     HandshakeType_EndOfEarlyData13      -> return EndOfEarlyData13
+    HandshakeType_KeyUpdate13           -> decodeKeyUpdate13
     _fixme                              -> error $ "decodeHandshake13 " ++ show _fixme
 
 decodeFinished13 :: Get Handshake13
@@ -139,6 +143,14 @@ decodeNewSessionTicket13 = do
     len    <- fromIntegral <$> getWord16
     exts   <- getExtensions len
     return $ NewSessionTicket13 life ageadd nonce label exts
+
+decodeKeyUpdate13 :: Get Handshake13
+decodeKeyUpdate13 = do
+    ru <- getWord8
+    case ru of
+        0 -> return $ KeyUpdate13 UpdateNotdRequested
+        1 -> return $ KeyUpdate13 UpdateRequested
+        x -> fail $ "Unknown request_update: " ++ show x
 
 hrrRandom :: ServerRandom
 hrrRandom = ServerRandom $ B.pack [

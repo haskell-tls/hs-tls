@@ -13,6 +13,7 @@ module Network.TLS.Struct13
        , ContentType(..)
        , contentType
        , protoToContent
+       , KeyUpdate(..)
        ) where
 
 import Data.X509 (CertificateChain)
@@ -27,6 +28,10 @@ data Packet13 =
     | AppData13 ByteString
     deriving (Show,Eq)
 
+data KeyUpdate = UpdateNotdRequested
+               | UpdateRequested
+               deriving (Show,Eq)
+
 -- fixme: convert ByteString to proper data types.
 data Handshake13 =
       ClientHello13 !Version !ClientRandom !Session ![CipherID] [ExtensionRaw]
@@ -38,7 +43,7 @@ data Handshake13 =
     | Certificate13 ByteString CertificateChain [[ExtensionRaw]]
     | CertVerify13 HashAndSignatureAlgorithm ByteString
     | Finished13 FinishedData
-    | KeyUpdate13 Word8
+    | KeyUpdate13 KeyUpdate
     deriving (Show,Eq)
 
 data HandshakeType13 =
