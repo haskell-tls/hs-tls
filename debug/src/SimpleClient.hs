@@ -160,6 +160,7 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | DebugPrintSeed
           | Group String
           | Help
+          | UpdateKey
           deriving (Show,Eq)
 
 options :: [OptDescr Flag]
@@ -172,6 +173,7 @@ options =
     , Option ['O']  ["output"]  (ReqArg Output "stdout") "output "
     , Option ['g']  ["group"]  (ReqArg Group "group") "group"
     , Option ['t']  ["timeout"] (ReqArg Timeout "timeout") "timeout in milliseconds (2s by default)"
+    , Option ['u']  ["updatekey"]   (NoArg UpdateKey) "Updating keys after sending the first request then sending the same request again (TLS 1.3 only)"
     , Option []     ["no-validation"] (NoArg NoValidateCert) "disable certificate validation"
     , Option []     ["client-cert"] (ReqArg ClientCert "cert-file:key-file") "add a client certificate to use with the server"
     , Option []     ["http1.1"] (NoArg Http11) "use http1.1 instead of http1.0"
@@ -260,6 +262,10 @@ runOn (sStorage, certStore) flags port hostname
                     _ -> return ()
                 sendData ctx $ query
                 loopRecv out ctx
+                when (UpdateKey `elem` flags && Tls13 `elem` flags) $ do
+                    updateKey ctx
+                    sendData ctx $ query
+                    loopRecv out ctx
                 bye ctx `E.catch` \(SomeException e) -> putStrLn $ "bye failed: " ++ show e
                 return ()
         setup = maybe (return stdout) (flip openFile AppendMode) getOutput
