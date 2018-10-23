@@ -27,6 +27,7 @@ module Network.TLS.Core
     , sendData
     , recvData
     , recvData'
+    , updateKey
     ) where
 
 import Network.TLS.Cipher
@@ -225,3 +226,11 @@ keyUpdate ctx getState setState = do
     (usedHash, usedCipher, applicationTrafficSecretN) <- getState ctx
     let applicationTrafficSecretN1 = hkdfExpandLabel usedHash applicationTrafficSecretN "traffic upd" "" $ hashDigestSize usedHash
     setState ctx usedHash usedCipher applicationTrafficSecretN1
+
+-- | Updating appication traffic secrets for TLS 1.3.
+updateKey :: Context -> IO ()
+updateKey ctx = do
+    tls13 <- tls13orLater ctx
+    when tls13 $ do
+        sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateRequested]
+        keyUpdate ctx getTxState setTxState
