@@ -41,8 +41,6 @@ module Network.TLS.Struct
     , Header(..)
     , ServerRandom(..)
     , ClientRandom(..)
-    , serverRandom
-    , clientRandom
     , FinishedData
     , SessionID
     , Session(..)
@@ -60,7 +58,6 @@ module Network.TLS.Struct
     , typeOfHandshake
     ) where
 
-import qualified Data.ByteString as B (length)
 import Data.X509 (CertificateChain, DistinguishedName)
 import Data.Typeable
 import Control.Exception (Exception(..))
@@ -190,15 +187,6 @@ data ExtensionRaw = ExtensionRaw ExtensionID ByteString
 
 instance Show ExtensionRaw where
     show (ExtensionRaw eid bs) = "ExtensionRaw " ++ show eid ++ " " ++ showBytesHex bs ++ ""
-
-constrRandom32 :: (ByteString -> a) -> ByteString -> Maybe a
-constrRandom32 constr l = if B.length l == 32 then Just (constr l) else Nothing
-
-serverRandom :: ByteString -> Maybe ServerRandom
-serverRandom l = constrRandom32 ServerRandom l
-
-clientRandom :: ByteString -> Maybe ClientRandom
-clientRandom l = constrRandom32 ClientRandom l
 
 data AlertLevel =
       AlertLevel_Warning
