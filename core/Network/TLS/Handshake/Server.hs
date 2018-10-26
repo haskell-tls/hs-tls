@@ -17,7 +17,6 @@ import Network.TLS.Context.Internal
 import Network.TLS.Session
 import Network.TLS.Struct
 import Network.TLS.Struct13
-import Network.TLS.Packet13
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Credentials

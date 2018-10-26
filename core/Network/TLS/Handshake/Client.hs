@@ -19,7 +19,6 @@ import Network.TLS.Struct13
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Packet hiding (getExtensions)
-import Network.TLS.Packet13
 import Network.TLS.ErrT
 import Network.TLS.Extension
 import Network.TLS.IO
