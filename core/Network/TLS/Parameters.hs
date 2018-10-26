@@ -53,12 +53,14 @@ data DebugParams = DebugParams
       -- | Add a way to print the seed that was randomly generated. re-using the same seed
       -- will reproduce the same randomness with 'debugSeed'
     , debugPrintSeed :: Seed -> IO ()
+    , debugVersion :: Maybe Version
     }
 
 defaultDebugParams :: DebugParams
 defaultDebugParams = DebugParams
     { debugSeed = Nothing
     , debugPrintSeed = const (return ())
+    , debugVersion = Nothing
     }
 
 instance Show DebugParams where

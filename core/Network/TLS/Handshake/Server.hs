@@ -119,7 +119,10 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
             Just (SupportedVersionsClientHello vers) -> vers
             _                                        -> []
         serverVersions = supportedVersions $ ctxSupported ctx
-    chosenVersion <-
+        mVersion = debugVersion $ serverDebug sparams
+    chosenVersion <- case mVersion of
+      Just cver -> return cver
+      Nothing   ->
         if (TLS13 `elem` serverVersions) && clientVersion == TLS12 && clientVersions /= [] then case findHighestVersionFrom13 clientVersions serverVersions of
                   Nothing -> throwCore $ Error_Protocol ("client versions " ++ show clientVersions ++ " is not supported", True, ProtocolVersion)
                   Just v  -> return v
