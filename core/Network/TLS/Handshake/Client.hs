@@ -42,6 +42,7 @@ import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Certificate
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.Key
+import Network.TLS.Handshake.Random
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.KeySchedule
@@ -226,7 +227,7 @@ handshakeClient' cparams ctx groups mcrand = do
 
         sendClientHello mcr = do
             crand <- case mcr of
-              Nothing -> ClientRandom <$> getStateRNG ctx 32
+              Nothing -> clientRandom ctx
               Just cr -> return cr
             let ver = if tls13 then TLS12 else highestVer
             hrr <- usingState_ ctx getTLS13HRR
