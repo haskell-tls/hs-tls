@@ -148,6 +148,8 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     if chosenVersion <= TLS12 then
         handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverName clientVersion compressions clientSession
       else
+        -- fixme: we should check if the client random is the same as
+        -- that in the first client hello in the case of hello retry.
         handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts ciphers serverName clientSession
 handshakeServerWith _ _ _ = throwCore $ Error_Protocol ("unexpected handshake message received in handshakeServerWith", True, HandshakeFailure)
 
