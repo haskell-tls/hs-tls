@@ -233,9 +233,7 @@ handshakeClient' cparams ctx groups mcrand = do
                       return exts'
 
         sendClientHello mcr = do
-            crand <- case mcr of
-              Nothing -> clientRandom ctx
-              Just cr -> return cr
+            crand <- clientRandom ctx mcr
             let ver = if tls13 then TLS12 else highestVer
             hrr <- usingState_ ctx getTLS13HRR
             unless hrr $ startHandshake ctx ver crand
