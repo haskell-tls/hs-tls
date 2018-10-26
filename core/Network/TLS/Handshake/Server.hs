@@ -315,7 +315,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
         --
         ---
         makeServerHello session = do
-            srand <- serverRandom ctx
+            srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
             case mcred of
                 Just (_, privkey) -> usingHState ctx $ setPrivateKey privkey
                 _                 -> return () -- return a sensible error
@@ -821,7 +821,7 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
         setPendingActions ctx [finishedAction]
   where
     setServerParameter = do
-        srand <- serverRandom ctx
+        srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
         usingHState ctx $ setPrivateKey privKey
         usingState_ ctx $ setVersion chosenVersion
         usingHState ctx $ setHelloParameters13 usedCipher False

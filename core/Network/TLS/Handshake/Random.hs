@@ -3,14 +3,37 @@ module Network.TLS.Handshake.Random (
     , clientRandom
     , hrrRandom
     , isHelloRetryRequest
+    , isDowngraded
     ) where
 
 import qualified Data.ByteString as B
 import Network.TLS.Context.Internal
 import Network.TLS.Struct
 
-serverRandom :: Context -> IO ServerRandom
-serverRandom ctx = ServerRandom <$> getStateRNG ctx 32
+serverRandom :: Context -> Version -> [Version] -> IO ServerRandom
+serverRandom ctx chosenVer suppVers
+  | TLS13 `elem` suppVers = case chosenVer of
+      TLS13  -> ServerRandom <$> getStateRNG ctx 32
+      TLS12  -> ServerRandom <$> genServRand suffix12
+      _      -> ServerRandom <$> genServRand suffix11
+  | otherwise = ServerRandom <$> getStateRNG ctx 32
+  where
+    genServRand suff = do
+        pref <- getStateRNG ctx 24
+        return $ (pref `B.append` suff)
+
+isDowngraded :: [Version] -> ServerRandom -> Bool
+isDowngraded suppVers (ServerRandom sr)
+  | TLS13 `elem` suppVers = suffix12 `B.isSuffixOf` sr
+                         || suffix11 `B.isSuffixOf` sr
+  | TLS12 `elem` suppVers = suffix11 `B.isSuffixOf` sr
+  | otherwise             = False
+
+suffix12 :: B.ByteString
+suffix12 = B.pack [0x44, 0x4F, 0x57, 0x4E, 0x47, 0x52, 0x44, 0x01]
+
+suffix11 :: B.ByteString
+suffix11 = B.pack [0x44, 0x4F, 0x57, 0x4E, 0x47, 0x52, 0x44, 0x00]
 
 -- ClientRandom in the second client hello for retry must be
 -- the same as the first one.
