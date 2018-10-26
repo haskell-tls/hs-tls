@@ -490,7 +490,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
             case clientWantSessionResume cparams of
                 Just (sessionId, sessionData) -> if serverSession == Session (Just sessionId) then Just sessionData else Nothing
                 Nothing                       -> Nothing
-        isHRR = serverRan == hrrRandom
+        isHRR = isHelloRetryRequest serverRan
     usingState_ ctx $ do
         setTLS13HRR isHRR
         case extensionLookup extensionID_Cookie exts >>= extensionDecode MsgTServerHello of
