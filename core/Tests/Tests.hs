@@ -180,6 +180,13 @@ prop_handshake_keyupdate = do
     params <- pick arbitraryPairParams
     runTLSPipeSimpleKeyUpdate params
 
+prop_handshake13_downgrade :: PropertyM IO ()
+prop_handshake13_downgrade = do
+    (cparam,sparam) <- pick arbitraryPairParams13
+    let debug' = (serverDebug sparam) { debugVersion = Just TLS12 }
+        sparam' = sparam { serverDebug = debug' }
+    runTLSInitFailure (cparam,sparam')
+
 prop_handshake13_full :: PropertyM IO ()
 prop_handshake13_full = do
     (cli, srv) <- pick arbitraryPairParams13
@@ -674,6 +681,7 @@ main = defaultMain $ testGroup "tls"
             , testProperty "Initiation" (monadicIO prop_handshake_initiate)
             , testProperty "Initiation 1.3" (monadicIO prop_handshake13_initiate)
             , testProperty "Key update 1.3" (monadicIO prop_handshake_keyupdate)
+            , testProperty "Downgrade protection" (monadicIO prop_handshake13_downgrade)
             , testProperty "Hash and signatures" (monadicIO prop_handshake_hashsignatures)
             , testProperty "Cipher suites" (monadicIO prop_handshake_ciphersuites)
             , testProperty "Groups" (monadicIO prop_handshake_groups)
