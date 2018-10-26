@@ -63,6 +63,13 @@ handshakeClient cparams ctx = do
                   Just grp -> [grp]
     handshakeClient' cparams ctx groups Nothing
 
+-- https://tools.ietf.org/html/rfc8446#section-4.1.2 says:
+-- "The client will also send a
+--  ClientHello when the server has responded to its ClientHello with a
+--  HelloRetryRequest.  In that case, the client MUST send the same
+--  ClientHello without modification, except as follows:"
+--
+-- So, the ClientRandom in the first client hello is necessary.
 handshakeClient' :: ClientParams -> Context -> [Group] -> Maybe ClientRandom -> IO ()
 handshakeClient' cparams ctx groups mcrand = do
     -- putStr $ "groups = " ++ show groups ++ ", keyshare = ["
