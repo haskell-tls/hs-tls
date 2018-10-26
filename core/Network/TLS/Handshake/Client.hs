@@ -225,7 +225,6 @@ handshakeClient' cparams ctx groups mcrand = do
                       return exts'
 
         sendClientHello mcr = do
-            -- fixme -- "44 4F 57 4E 47 52 44 01"
             crand <- case mcr of
               Nothing -> ClientRandom <$> getStateRNG ctx 32
               Just cr -> return cr
