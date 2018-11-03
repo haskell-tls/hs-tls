@@ -68,13 +68,12 @@ getDefaultParams flags host store sStorage certCredsRequest session earlyData =
                                 , supportedGroups = getGroups flags
                                 }
         , clientWantSessionResume = session
-        , clientUseServerNameIndication = not (NoSNI `elem` flags)
+        , clientUseServerNameIndication = NoSNI `notElem` flags
         , clientShared = def { sharedSessionManager  = sessionRef sStorage
                              , sharedCAStore         = store
                              , sharedValidationCache = validateCache
-                             , sharedCredentials     = maybe mempty fst certCredsRequest
                              }
-        , clientHooks = def { onCertificateRequest = maybe (onCertificateRequest def) snd certCredsRequest }
+        , clientHooks = def { onCertificateRequest = fromMaybe (onCertificateRequest def) certCredsRequest }
         , clientDebug = def { debugSeed      = foldl getDebugSeed Nothing flags
                             , debugPrintSeed = if DebugPrintSeed `elem` flags
                                                     then (\seed -> putStrLn ("seed: " ++ show (seedToInteger seed)))
@@ -275,7 +274,7 @@ runOn (sStorage, certStore) flags port hostname
         getCredRequest =
             case clientCert of
                 Nothing -> return Nothing
-                Just s  -> do
+                Just s  ->
                     case break (== ':') s of
                         (_   ,"")      -> error "wrong format for client-cert, expecting 'cert-file:key-file'"
                         (cert,':':key) -> do
@@ -284,7 +283,7 @@ runOn (sStorage, certStore) flags port hostname
                                 Left err   -> error ("cannot load client certificate: " ++ err)
                                 Right cred -> do
                                     let certRequest _ = return $ Just cred
-                                    return $ Just (Credentials [cred], certRequest)
+                                    return $ Just certRequest
                         (_   ,_)      -> error "wrong format for client-cert, expecting 'cert-file:key-file'"
 
         findURI []        = "/"
