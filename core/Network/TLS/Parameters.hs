@@ -267,28 +267,59 @@ defaultGroupUsage params public
 
 -- | A set of callbacks run by the clients for various corners of TLS establishment
 data ClientHooks = ClientHooks
-    { -- | This action is called when the server sends a
-      -- certificate request.  The parameter is the information
-      -- from the request.  The action should select a certificate
-      -- chain of one of the given certificate types where the
-      -- last certificate in the chain should be signed by one of
-      -- the given distinguished names.  Each certificate should
-      -- be signed by the following one, except for the last.  At
-      -- least the first of the certificates in the chain must
-      -- have a corresponding private key, because that is used
-      -- for signing the certificate verify message.
+    { -- | This action is called when the a certificate request is
+      -- received from the server. The callback argument is the
+      -- information from the request.  The server, at its
+      -- discretion, may be willing to continue the handshake
+      -- without a client certificate.  Therefore, the callback is
+      -- free to return 'Nothing' to indicate that no client
+      -- certificate should be sent, despite the server's request.
+      -- In some cases it may be appropriate to get user consent
+      -- before sending the certificate; the content of the user's
+      -- certificate may be sensitive and intended only for
+      -- specific servers.
+      --
+      -- The action should select a certificate chain of one of
+      -- the given certificate types and one of the certificates
+      -- in the chain should (if possible) be signed by one of the
+      -- given distinguished names.  Some servers, that don't have
+      -- a narrow set of preferred issuer CAs, will send an empty
+      -- 'DistinguishedName' list, rather than send all the names
+      -- from their trusted CA bundle.  If the client does not
+      -- have a certificate chaining to a matching CA, it may
+      -- choose a default certificate instead.
+      --
+      -- Each certificate except the last should be signed by the
+      -- following one.  The returned private key must be for the
+      -- first certificates in the chain.  This key will be used
+      -- to signing the certificate verify message.
+      --
+      -- The public key in the first certificate, and the matching
+      -- returned private key must be compatible with one of the
+      -- list of 'HashAndSignatureAlgorithm' value when provided.
+      -- TLS 1.3 changes the meaning of the list elements, adding
+      -- explicit code points for each supported pair of hash and
+      -- signature (public key) algorithms, rather than combining
+      -- separate codes for the hash and key.  For details see
+      -- <https://tools.ietf.org/html/rfc8446#section-4.2.3 RFC 8446>
+      -- section 4.2.3.  When no compatible certificate chain is
+      -- available, return 'Nothing' if it is OK to continue
+      -- without a client certificate.  Returning a non-matching
+      -- certificate should result in a handshake failure.
+      --
+      -- While the TLS version is not provided to the callback,
+      -- the content of the @signature_algorithms@ list provides
+      -- a strong hint, since TLS 1.3 servers will generally list
+      -- RSA pairs with a hash component of 'Intrinsic' (@0x08@).
       --
       -- Note that is is the responsibility of this action to
       -- select a certificate matching one of the requested
-      -- certificate types.  Returning a non-matching one will
-      -- lead to handshake failure later.
-      --
-      -- Returning a certificate chain not matching the
-      -- distinguished names may lead to problems or not,
-      -- depending whether the server accepts it.
+      -- certificate types (public key algorithms).  Returning
+      -- a non-matching one will lead to handshake failure later.
       onCertificateRequest :: ([CertificateType],
                                Maybe [HashAndSignatureAlgorithm],
-                               [DistinguishedName]) -> IO (Maybe (CertificateChain, PrivKey))
+                               [DistinguishedName])
+                           -> IO (Maybe (CertificateChain, PrivKey))
       -- | Used by the client to validate the server certificate.  The default
       -- implementation calls 'validateDefault' which validates according to the
       -- default hooks and checks provided by "Data.X509.Validation".  This can

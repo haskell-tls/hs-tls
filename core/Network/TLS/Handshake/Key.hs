@@ -42,7 +42,7 @@ encryptRSA ctx content = do
 
 signPrivate :: Context -> Role -> SignatureParams -> ByteString -> IO ByteString
 signPrivate ctx _ params content = do
-    privateKey <- usingHState ctx getLocalPrivateKey
+    (privateKey, _) <- usingHState ctx getLocalPrivateKey
     usingState_ ctx $ do
         r <- withRNG $ kxSign privateKey params content
         case r of
@@ -51,7 +51,7 @@ signPrivate ctx _ params content = do
 
 decryptRSA :: Context -> ByteString -> IO (Either KxError ByteString)
 decryptRSA ctx econtent = do
-    privateKey <- usingHState ctx getLocalPrivateKey
+    (privateKey, _) <- usingHState ctx getLocalPrivateKey
     usingState_ ctx $ do
         ver <- getVersion
         let cipher = if ver < TLS10 then econtent else B.drop 2 econtent

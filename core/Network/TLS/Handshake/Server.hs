@@ -315,8 +315,8 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
         makeServerHello session = do
             srand <- ServerRandom <$> getStateRNG ctx 32
             case mcred of
-                Just (_, privkey) -> usingHState ctx $ setPrivateKey privkey
-                _                 -> return () -- return a sensible error
+                Just (cc, privkey) -> storePrivInfo ctx Nothing cc privkey
+                _                  -> return () -- return a sensible error
 
             -- in TLS12, we need to check as well the certificates we are sending if they have in the extension
             -- the necessary bits set.
@@ -371,13 +371,20 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
 
             -- FIXME we don't do this on a Anonymous server
 
-            -- When configured, send a certificate request
-            -- with the DNs of all confgure CA
-            -- certificates.
+            -- When configured, send a certificate request with the DNs of all
+            -- configured CA certificates.
+            --
+            -- FIXME, the acceptable certificate types should be derived from
+            -- the supported Signature algorithms, rather than hard-coded here,
+            -- when the client certificate is received, the server must check
+            -- that the signature matches the advertised parameters.
+            --
+            -- Client certificates MUST NOT be accepted if not requested.
             --
             when (serverWantClientCert sparams) $ do
                 usedVersion <- usingState_ ctx getVersion
-                let certTypes = [ CertificateType_RSA_Sign ]
+                let certTypes = [ CertificateType_RSA_Sign
+                                , CertificateType_DSS_Sign ]
                     hashSigs = if usedVersion < TLS12
                                    then Nothing
                                    else Just (supportedHashSignatures $ ctxSupported ctx)
@@ -789,7 +796,7 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
   where
     setServerParameter = do
         srand <- ServerRandom <$> getStateRNG ctx 32
-        usingHState ctx $ setPrivateKey privKey
+        storePrivInfo ctx Nothing certChain privKey
         usingState_ ctx $ setVersion chosenVersion
         usingHState ctx $ setHelloParameters13 usedCipher False
         return srand
