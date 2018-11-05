@@ -4,7 +4,7 @@ module Main where
 import Connection
 import Certificate
 import PubKey
-import Criterion.Main
+import Gauge.Main
 import Control.Concurrent.Chan
 import Network.TLS
 import Data.X509
