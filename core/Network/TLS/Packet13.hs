@@ -50,6 +50,9 @@ encodeHandshake13' (ServerHello13 random session cipherId exts) = runPut $ do
     putWord8 0
     putExtensions exts
 encodeHandshake13' (EncryptedExtensions13 exts) = runPut $ putExtensions exts
+encodeHandshake13' (CertRequest13 reqctx exts) = runPut $ do
+    putOpaque8 reqctx
+    putExtensions exts
 encodeHandshake13' (Certificate13 reqctx cc ess) = runPut $ do
     putOpaque8 reqctx
     putOpaque24 (runPut $ mapM_ putCert $ zip certs ess)
@@ -95,6 +98,7 @@ decodeHandshake13 :: HandshakeType13 -> ByteString -> Either TLSError Handshake1
 decodeHandshake13 ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
     HandshakeType_Finished13            -> decodeFinished13
     HandshakeType_EncryptedExtensions13 -> decodeEncryptedExtensions13
+    HandshakeType_CertRequest13         -> decodeCertRequest13
     HandshakeType_Certificate13         -> decodeCertificate13
     HandshakeType_CertVerify13          -> decodeCertVerify13
     HandshakeType_NewSessionTicket13    -> decodeNewSessionTicket13
@@ -108,6 +112,13 @@ decodeEncryptedExtensions13 :: Get Handshake13
 decodeEncryptedExtensions13 = EncryptedExtensions13 <$> do
     len <- fromIntegral <$> getWord16
     getExtensions len
+
+decodeCertRequest13 :: Get Handshake13
+decodeCertRequest13 = do
+    reqctx <- getOpaque8
+    len <- fromIntegral <$> getWord16
+    exts <- getExtensions len
+    return $ CertRequest13 reqctx exts
 
 decodeCertificate13 :: Get Handshake13
 decodeCertificate13 = do

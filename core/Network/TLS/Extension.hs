@@ -46,7 +46,7 @@ module Network.TLS.Extension
     , HeartBeat(..)
     , HeartBeatMode(..)
     , SignatureAlgorithms(..)
-    , SignatureAlgorithmsCert
+    , SignatureAlgorithmsCert(..)
     , SupportedVersions(..)
     , KeyShare(..)
     , KeyShareEntry(..)
@@ -57,18 +57,29 @@ module Network.TLS.Extension
     , PreSharedKey(..)
     , EarlyDataIndication(..)
     , Cookie(..)
+    , CertificateAuthorities(..)
     ) where
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 
-import Network.TLS.Struct (ExtensionID, EnumSafe8(..), EnumSafe16(..), HashAndSignatureAlgorithm)
+import Network.TLS.Struct ( DistinguishedName
+                          , ExtensionID
+                          , EnumSafe8(..)
+                          , EnumSafe16(..)
+                          , HashAndSignatureAlgorithm )
 import Network.TLS.Crypto.Types
 import Network.TLS.Types (Version(..))
 
 import Network.TLS.Wire
 import Network.TLS.Imports
-import Network.TLS.Packet (putSignatureHashAlgorithm, getSignatureHashAlgorithm, putBinaryVersion, getBinaryVersion)
+import Network.TLS.Packet ( putDNames
+                          , getDNames
+                          , putSignatureHashAlgorithm
+                          , getSignatureHashAlgorithm
+                          , putBinaryVersion
+                          , getBinaryVersion
+                          )
 
 type HostName = String
 
@@ -175,6 +186,14 @@ definedExtensions =
     , extensionID_EncryptThenMAC
     , extensionID_ExtendedMasterSecret
     , extensionID_SessionTicket
+    , extensionID_PreSharedKey
+    , extensionID_EarlyData
+    , extensionID_SupportedVersions
+    , extensionID_Cookie
+    , extensionID_PskKeyExchangeModes
+    , extensionID_KeyShare
+    , extensionID_SignatureAlgorithmsCert
+    , extensionID_CertificateAuthorities
     , extensionID_SecureRenegotiation
     ]
 
@@ -187,12 +206,14 @@ supportedExtensions = [ extensionID_ServerName
                       , extensionID_NegotiatedGroups
                       , extensionID_EcPointFormats
                       , extensionID_SignatureAlgorithms
+                      , extensionID_SignatureAlgorithmsCert
                       , extensionID_KeyShare
                       , extensionID_PreSharedKey
                       , extensionID_EarlyData
                       , extensionID_SupportedVersions
                       , extensionID_Cookie
                       , extensionID_PskKeyExchangeModes
+                      , extensionID_CertificateAuthorities
                       ]
 
 data MessageType = MsgTClientHello
@@ -200,6 +221,7 @@ data MessageType = MsgTClientHello
                  | MsgTHelloRetryRequest
                  | MsgTEncryptedExtensions
                  | MsgTNewSessionTicket
+                 | MsgTCertificateRequest
                  deriving (Eq,Show)
 
 -- | Extension class to transform bytes to and from a high level Extension type.
@@ -514,9 +536,25 @@ instance Extension EarlyDataIndication where
         return (EarlyDataIndication (Just w32))
     extensionDecode _                       = fail "extensionDecode: EarlyDataIndication"
 
+------------------------------------------------------------
+
 newtype Cookie = Cookie ByteString deriving (Eq, Show)
 
 instance Extension Cookie where
     extensionID _ = extensionID_Cookie
     extensionEncode (Cookie opaque) = runPut $ putOpaque16 opaque
     extensionDecode _ = runGetMaybe (Cookie <$> getOpaque16)
+
+------------------------------------------------------------
+
+newtype CertificateAuthorities = CertificateAuthorities [DistinguishedName]
+    deriving (Eq, Show)
+
+instance Extension CertificateAuthorities where
+    extensionID _ = extensionID_CertificateAuthorities
+    extensionEncode (CertificateAuthorities names) = runPut $
+        putDNames names
+    extensionDecode MsgTCertificateRequest =
+       runGetMaybe (CertificateAuthorities <$> getDNames)
+    extensionDecode msgt =
+        fail $ "unexpected CertificateAuthorities extension in: " ++ show msgt

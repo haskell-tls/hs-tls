@@ -63,6 +63,8 @@ module Network.TLS.Packet
     , putExtension
     , getExtensions
     , putSession
+    , putDNames
+    , getDNames
     ) where
 
 import Network.TLS.Imports
@@ -262,21 +264,27 @@ decodeCertRequest cp = do
     sigHashAlgs <- if cParamsVersion cp >= TLS12
                        then Just <$> (getWord16 >>= getSignatureHashAlgorithms)
                        else return Nothing
+    dNames <- getDNames
+    return $ CertRequest certTypes sigHashAlgs dNames
+  where getSignatureHashAlgorithms len = getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
+
+-- | Decode a list CA distinguished names
+getDNames :: Get [DistinguishedName]
+getDNames = do
     dNameLen <- getWord16
     -- FIXME: Decide whether to remove this check completely or to make it an option.
     -- when (cParamsVersion cp < TLS12 && dNameLen < 3) $ fail "certrequest distinguishname not of the correct size"
-    dNames <- getList (fromIntegral dNameLen) getDName
-    return $ CertRequest certTypes sigHashAlgs dNames
-  where getSignatureHashAlgorithms len = getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
-        getDName = do
-            dName <- getOpaque16
-            when (B.length dName == 0) $ fail "certrequest: invalid DN length"
-            dn <- case decodeASN1' DER dName of
-                    Left e      -> fail ("cert request decoding DistinguishedName ASN1 failed: " ++ show e)
-                    Right asn1s -> case fromASN1 asn1s of
-                                        Left e      -> fail ("cert request parsing DistinguishedName ASN1 failed: " ++ show e)
-                                        Right (d,_) -> return d
-            return (2 + B.length dName, dn)
+    getList (fromIntegral dNameLen) getDName
+  where
+    getDName = do
+        dName <- getOpaque16
+        when (B.length dName == 0) $ fail "certrequest: invalid DN length"
+        dn <- case decodeASN1' DER dName of
+                Left e      -> fail ("cert request decoding DistinguishedName ASN1 failed: " ++ show e)
+                Right asn1s -> case fromASN1 asn1s of
+                                    Left e      -> fail ("cert request parsing DistinguishedName ASN1 failed: " ++ show e)
+                                    Right (d,_) -> return d
+        return (2 + B.length dName, dn)
 
 decodeCertVerify :: CurrentParams -> Get Handshake
 decodeCertVerify cp = CertVerify <$> getDigitallySigned (cParamsVersion cp)
@@ -404,20 +412,24 @@ encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
     case sigAlgs of
         Nothing -> return ()
         Just l  -> putWords16 $ map (\(x,y) -> fromIntegral (valOfType x) * 256 + fromIntegral (valOfType y)) l
-    encodeCertAuthorities certAuthorities
-  where -- Convert a distinguished name to its DER encoding.
-        encodeCA dn = return $ encodeASN1' DER (toASN1 dn []) --B.concat $ L.toChunks $ encodeDN dn
-
-        -- Encode a list of distinguished names.
-        encodeCertAuthorities certAuths = do
-            enc <- mapM encodeCA certAuths
-            let totLength = sum $ map ((+) 2 . B.length) enc
-            putWord16 (fromIntegral totLength)
-            mapM_ (\ b -> putWord16 (fromIntegral (B.length b)) >> putBytes b) enc
+    putDNames certAuthorities
 
 encodeHandshakeContent (CertVerify digitallySigned) = putDigitallySigned digitallySigned
 
 encodeHandshakeContent (Finished opaque) = putBytes opaque
+
+------------------------------------------------------------
+
+-- | Encode a list of distinguished names.
+putDNames :: [DistinguishedName] -> Put
+putDNames dnames = do
+    enc <- mapM encodeCA dnames
+    let totLength = sum $ map ((+) 2 . B.length) enc
+    putWord16 (fromIntegral totLength)
+    mapM_ (\ b -> putWord16 (fromIntegral (B.length b)) >> putBytes b) enc
+  where
+    -- Convert a distinguished name to its DER encoding.
+    encodeCA dn = return $ encodeASN1' DER (toASN1 dn [])
 
 {- FIXME make sure it return error if not 32 available -}
 getRandom32 :: Get ByteString
