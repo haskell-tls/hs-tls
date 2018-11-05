@@ -13,7 +13,7 @@ module Network.TLS.Handshake.State
     , HandshakeMode13(..)
     , RTT0Status(..)
     , Secret13(..)
-    , ClientCertRequestData
+    , CertReqCBdata
     , HandshakeM
     , newEmptyHandshake
     , runHandshake
@@ -37,8 +37,12 @@ module Network.TLS.Handshake.State
     , getCertReqSent
     , setClientCertChain
     , getClientCertChain
-    , setClientCertRequest
-    , getClientCertRequest
+    , setCertReqToken
+    , getCertReqToken
+    , setCertReqCBdata
+    , getCertReqCBdata
+    , setCertReqSigAlgsCert
+    , getCertReqSigAlgsCert
     -- * digest accessors
     , addHandshakeMessage
     , updateHandshakeDigest
@@ -84,7 +88,7 @@ data Secret13 = NoSecret
 
 data HandshakeKeyState = HandshakeKeyState
     { hksRemotePublicKey :: !(Maybe PubKey)
-    , hksLocalPrivateKey :: !(Maybe PrivKey)
+    , hksLocalPrivateKey :: !(Maybe (PrivKey, DigitalSignatureAlg))
     } deriving (Show)
 
 data HandshakeState = HandshakeState
@@ -99,9 +103,19 @@ data HandshakeState = HandshakeState
     , hstGroupPrivate        :: !(Maybe GroupPrivate)
     , hstHandshakeDigest     :: !(Either [ByteString] HashCtx)
     , hstHandshakeMessages   :: [ByteString]
-    , hstClientCertRequest   :: !(Maybe ClientCertRequestData) -- ^ Set to Just-value when certificate request was received
-    , hstClientCertSent      :: !Bool -- ^ Set to true when a client certificate chain was sent
-    , hstCertReqSent         :: !Bool -- ^ Set to true when a certificate request was sent
+    , hstCertReqToken        :: !(Maybe ByteString)
+        -- ^ Set to Just-value when a TLS13 certificate request is received
+    , hstCertReqCBdata       :: !(Maybe CertReqCBdata)
+        -- ^ Set to Just-value when a certificate request is received
+    , hstCertReqSigAlgsCert  :: !(Maybe [HashAndSignatureAlgorithm])
+        -- ^ In TLS 1.3, these are separate from the certificate
+        -- issuer signature algorithm hints in the callback data.
+        -- In TLS 1.2 the same list is overloaded for both purposes.
+        -- Not present in TLS 1.1 and earlier
+    , hstClientCertSent      :: !Bool
+        -- ^ Set to true when a client certificate chain was sent
+    , hstCertReqSent         :: !Bool
+        -- ^ Set to true when a certificate request was sent
     , hstClientCertChain     :: !(Maybe CertificateChain)
     , hstPendingTxState      :: Maybe RecordState
     , hstPendingRxState      :: Maybe RecordState
@@ -114,9 +128,53 @@ data HandshakeState = HandshakeState
     , hstTLS13Secret         :: Secret13
     } deriving (Show)
 
-type ClientCertRequestData = ([CertificateType],
-                              Maybe [(HashAlgorithm, SignatureAlgorithm)],
-                              [DistinguishedName])
+{- | When we receive a CertificateRequest from a server, a just-in-time
+   callback is issued to the application to obtain a suitable certificate.
+   Somewhat unfortunately, the callback parameters don't abstract away the
+   details of the TLS 1.2 Certificate Request message, which combines the
+   legacy @certificate_types@ and new @supported_signature_algorithms@
+   parameters is a rather subtle way.
+
+   TLS 1.2 also (again unfortunately, in the opinion of the author of this
+   comment) overloads the signature algorithms parameter to constrain not only
+   the algorithms used in TLS, but also the algorithms used by issuing CAs in
+   the X.509 chain.  Best practice is to NOT treat such that restriction as a
+   MUST, but rather take it as merely a preference, when a choice exists.  If
+   the best chain available does not match the provided signature algorithm
+   list, go ahead and use it anyway, it will probably work, and the server may
+   not even care about the issuer CAs at all, it may be doing DANE or have
+   explicit mappings for the client's public key, ...
+
+   The TLS 1.3 @CertificateRequest@ message, drops @certificate_types@ and no
+   longer overloads @supported_signature_algorithms@ to cover X.509.  It also
+   includes a new opaque context token that the client must echo back, which
+   makes certain client authentication replay attacks more difficult.  We will
+   store that context separately, it does not need to be presented in the user
+   callback.  The certificate signature algorithms preferred by the peer are
+   now in the separate @signature_algorithms_cert@ extension, but we cannot
+   report these to the application callback without an API change.  The good
+   news is that filtering the X.509 signature types is generally unnecessary,
+   unwise and difficult.  So we just ignore this extension.
+
+   As a result, the information we provide to the callback is no longer a
+   verbatim copy of the certificate request payload.  In the case of TLS 1.3
+   The 'CertificateType' list is synthetically generated from the server's
+   @signature_algorithms@ extension, and the @signature_algorithms_certs@
+   extension is ignored.
+
+   Since the original TLS 1.2 'CertificateType' has no provision for the newer
+   certificate types that have appeared in TLS 1.3 we're adding some synthetic
+   values that have no equivalent values in the TLS 1.2 'CertificateType' as
+   defined in the IANA
+   <https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-2
+   TLS ClientCertificateType Identifiers> registry.  These values are inferred
+   from the TLS 1.3 @signature_algorithms@ extension, and will allow clients to
+   present Ed25519 and Ed448 certificates when these become supported.
+-}
+type CertReqCBdata =
+     ( [CertificateType]
+     , Maybe [HashAndSignatureAlgorithm]
+     , [DistinguishedName] )
 
 newtype HandshakeM a = HandshakeM { runHandshakeM :: State HandshakeState a }
     deriving (Functor, Applicative, Monad)
@@ -142,7 +200,9 @@ newEmptyHandshake ver crand = HandshakeState
     , hstGroupPrivate        = Nothing
     , hstHandshakeDigest     = Left []
     , hstHandshakeMessages   = []
-    , hstClientCertRequest   = Nothing
+    , hstCertReqToken        = Nothing
+    , hstCertReqCBdata       = Nothing
+    , hstCertReqSigAlgsCert  = Nothing
     , hstClientCertSent      = False
     , hstCertReqSent         = False
     , hstClientCertChain     = Nothing
@@ -164,14 +224,14 @@ setPublicKey :: PubKey -> HandshakeM ()
 setPublicKey pk = modify (\hst -> hst { hstKeyState = setPK (hstKeyState hst) })
   where setPK hks = hks { hksRemotePublicKey = Just pk }
 
-setPrivateKey :: PrivKey -> HandshakeM ()
-setPrivateKey pk = modify (\hst -> hst { hstKeyState = setPK (hstKeyState hst) })
-  where setPK hks = hks { hksLocalPrivateKey = Just pk }
+setPrivateKey :: PrivKey -> DigitalSignatureAlg -> HandshakeM ()
+setPrivateKey pk pa = modify (\hst -> hst { hstKeyState = setPK (hstKeyState hst) })
+  where setPK hks = hks { hksLocalPrivateKey = Just (pk, pa) }
 
 getRemotePublicKey :: HandshakeM PubKey
 getRemotePublicKey = fromJust "remote public key" <$> gets (hksRemotePublicKey . hstKeyState)
 
-getLocalPrivateKey :: HandshakeM PrivKey
+getLocalPrivateKey :: HandshakeM (PrivKey, DigitalSignatureAlg)
 getLocalPrivateKey = fromJust "local private key" <$> gets (hksLocalPrivateKey . hstKeyState)
 
 setServerDHParams :: ServerDHParams -> HandshakeM ()
@@ -264,12 +324,28 @@ setClientCertChain b = modify (\hst -> hst { hstClientCertChain = Just b })
 getClientCertChain :: HandshakeM (Maybe CertificateChain)
 getClientCertChain = gets hstClientCertChain
 
-setClientCertRequest :: ClientCertRequestData -> HandshakeM ()
-setClientCertRequest d = modify (\hst -> hst { hstClientCertRequest = Just d })
+--
+setCertReqToken :: Maybe ByteString -> HandshakeM ()
+setCertReqToken token = modify $ \hst -> hst { hstCertReqToken = token }
 
-getClientCertRequest :: HandshakeM (Maybe ClientCertRequestData)
-getClientCertRequest = gets hstClientCertRequest
+getCertReqToken :: HandshakeM (Maybe ByteString)
+getCertReqToken = gets hstCertReqToken
 
+--
+setCertReqCBdata :: Maybe CertReqCBdata -> HandshakeM ()
+setCertReqCBdata d = modify (\hst -> hst { hstCertReqCBdata = d })
+
+getCertReqCBdata :: HandshakeM (Maybe CertReqCBdata)
+getCertReqCBdata = gets hstCertReqCBdata
+
+-- Dead code, until we find some use for the extension
+setCertReqSigAlgsCert :: Maybe [HashAndSignatureAlgorithm] -> HandshakeM ()
+setCertReqSigAlgsCert as = modify $ \hst -> hst { hstCertReqSigAlgsCert = as }
+
+getCertReqSigAlgsCert :: HandshakeM (Maybe [HashAndSignatureAlgorithm])
+getCertReqSigAlgsCert = gets hstCertReqSigAlgsCert
+
+--
 getPendingCipher :: HandshakeM Cipher
 getPendingCipher = fromJust "pending cipher" <$> gets hstPendingCipher
 

@@ -15,6 +15,7 @@ module Network.TLS.Handshake.Common
     , onRecvStateHandshake
     , extensionLookup
     , getSessionData
+    , storePrivInfo
     ) where
 
 import Control.Concurrent.MVar
@@ -32,7 +33,9 @@ import Network.TLS.Record.State
 import Network.TLS.Measurement
 import Network.TLS.Types
 import Network.TLS.Cipher
+import Network.TLS.Crypto
 import Network.TLS.Util
+import Network.TLS.X509
 import Network.TLS.Imports
 
 import Control.Monad.State.Strict
@@ -146,3 +149,40 @@ getSessionData ctx = do
 extensionLookup :: ExtensionID -> [ExtensionRaw] -> Maybe ByteString
 extensionLookup toFind = fmap (\(ExtensionRaw _ content) -> content)
                        . find (\(ExtensionRaw eid _) -> eid == toFind)
+
+-- | Store private key and associated DigitalSignatureAlg, optionally
+-- checking the keypair is compatible with a list of 'CertificateType'
+-- values.
+--
+storePrivInfo :: Context
+              -> Maybe [CertificateType]
+              -> CertificateChain
+              -> PrivKey
+              -> IO ()
+storePrivInfo ctx cTypes cc privkey = do
+    let (CertificateChain (c:_)) = cc
+        pubkey = certPubKey $ getCertificate c
+        -- FIXME: Add ECDSA with at least the P-256, P-384
+        -- and P-521 curves.  Also Ed25519 and Ed448.
+        --
+        -- FIXME: The 'rsaok', 'dsaok' tests need a better
+        -- abstraction.
+        --
+        dsaok = any (== CertificateType_DSS_Sign) <$> cTypes
+        rsaok = any (== CertificateType_RSA_Sign) <$> cTypes
+    privalg <- case findDigitalSignatureAlg (pubkey, privkey) of
+        Just RSA | rsaok /= Just False
+                -> return RSA
+        Just DSS | dsaok /= Just False
+                -> return DSS
+        _       -> throwCore $ Error_Protocol
+                       ( keyerr
+                       , True
+                       , InternalError )
+    -- XXX: Whether the public key and private key actually
+    -- match is left for the peer to discover.  We're not
+    -- presently burning CPU to detect that misconfiguration.
+    --
+    usingHState ctx $ setPrivateKey privkey privalg
+  where
+    keyerr = "mismatched or unsupported private key pair"
