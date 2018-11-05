@@ -5,13 +5,13 @@ module Network.TLS.Util
         , partition3
         , partition6
         , fromJust
-        , and'
         , (&&!)
         , bytesEq
         , fmapEither
         , catchException
         ) where
 
+import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 import Network.TLS.Imports
 
@@ -52,10 +52,6 @@ fromJust :: String -> Maybe a -> a
 fromJust what Nothing  = error ("fromJust " ++ what ++ ": Nothing") -- yuck
 fromJust _    (Just x) = x
 
--- | This is a strict version of and
-and' :: [Bool] -> Bool
-and' l = foldl' (&&!) True l
-
 -- | This is a strict version of &&.
 (&&!) :: Bool -> Bool -> Bool
 True  &&! True  = True
@@ -67,9 +63,7 @@ False &&! False = False
 -- it's a non lazy version, that will compare every bytes.
 -- arguments with different length will bail out early
 bytesEq :: ByteString -> ByteString -> Bool
-bytesEq b1 b2
-    | B.length b1 /= B.length b2 = False
-    | otherwise                  = and' $ B.zipWith (==) b1 b2
+bytesEq = BA.constEq
 
 fmapEither :: (a -> b) -> Either l a -> Either l b
 fmapEither f = fmap f
