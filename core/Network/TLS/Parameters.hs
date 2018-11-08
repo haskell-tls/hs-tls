@@ -263,6 +263,8 @@ defaultGroupUsage params public
     | even $ dhParamsGetP params                   = return $ GroupUsageUnsupported "invalid odd prime"
     | not $ dhValid params (dhParamsGetG params)   = return $ GroupUsageUnsupported "invalid generator"
     | not $ dhValid params (dhUnwrapPublic public) = return   GroupUsageInvalidPublic
+    -- To prevent Logjam attack
+    | dhParamsGetBits params < 1024                = return   GroupUsageInsecure
     | otherwise                                    = return   GroupUsageValid
 
 -- | A set of callbacks run by the clients for various corners of TLS establishment
