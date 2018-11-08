@@ -14,7 +14,7 @@ module Connection
     , arbitraryRSACredentialWithUsage
     , isCustomDHParams
     , leafPublicKey
-    , readSessionRef
+    , readClientSessionRef
     , twoSessionRefs
     , twoSessionManagers
     , setPairParamsSessionManagers
@@ -215,8 +215,8 @@ arbitraryRSACredentialWithUsage usageFlags = do
     cert <- arbitraryX509WithKeyAndUsage usageFlags (PubKeyRSA pubKey, ())
     return (CertificateChain [cert], PrivKeyRSA privKey)
 
-readSessionRef :: (IORef client, IORef server) -> IO client
-readSessionRef refs = readIORef (fst refs)
+readClientSessionRef :: (IORef mclient, IORef mserver) -> IO mclient
+readClientSessionRef refs = readIORef (fst refs)
 
 twoSessionRefs :: IO (IORef (Maybe client), IORef (Maybe server))
 twoSessionRefs = (,) <$> newIORef Nothing <*> newIORef Nothing

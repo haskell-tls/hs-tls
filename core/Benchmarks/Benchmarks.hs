@@ -93,7 +93,7 @@ benchResumption params !d name = env initializeSession runResumption
             params1 = setPairParamsSessionManagers sessionManagers params
         _ <- runTLSPipeSimple params1 d
 
-        Just sessionParams <- readSessionRef sessionRefs
+        Just sessionParams <- readClientSessionRef sessionRefs
         let params2 = setPairParamsSessionResuming sessionParams params1
         newIORef params2
 

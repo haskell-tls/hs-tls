@@ -201,7 +201,7 @@ prop_handshake13_psk = do
     runTLSPipeSimple13 params (HelloRetryRequest,HelloRetryRequest) Nothing
 
     -- and resume
-    sessionParams <- run $ readSessionRef sessionRefs
+    sessionParams <- run $ readClientSessionRef sessionRefs
     assert (isJust sessionParams)
     let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 
@@ -233,7 +233,7 @@ prop_handshake13_rtt0 = do
     runTLSPipeSimple13 params (HelloRetryRequest,HelloRetryRequest) Nothing
 
     -- and resume
-    sessionParams <- run $ readSessionRef sessionRefs
+    sessionParams <- run $ readClientSessionRef sessionRefs
     assert (isJust sessionParams)
     let earlyData = "Early data"
         (pc,ps) = setPairParamsSessionResuming (fromJust sessionParams) params
@@ -267,7 +267,7 @@ prop_handshake13_rtt0_fallback = do
     runTLSPipeSimple13 params (HelloRetryRequest,HelloRetryRequest) Nothing
 
     -- and resume
-    sessionParams <- run $ readSessionRef sessionRefs
+    sessionParams <- run $ readClientSessionRef sessionRefs
     assert (isJust sessionParams)
     let earlyData = "Early data"
         (pc,ps) = setPairParamsSessionResuming (fromJust sessionParams) params
@@ -541,7 +541,7 @@ prop_handshake_session_resumption = do
     runTLSPipeSimple params
 
     -- and resume
-    sessionParams <- run $ readSessionRef sessionRefs
+    sessionParams <- run $ readClientSessionRef sessionRefs
     assert (isJust sessionParams)
     let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 
