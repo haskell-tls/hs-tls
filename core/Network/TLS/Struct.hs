@@ -175,11 +175,11 @@ hashSigToCertType13 :: HashAndSignatureAlgorithm
 --
 hashSigToCertType13 (HashIntrinsic, hashsig)
     | hashsig ==  SignatureRSApssRSAeSHA256
-      = Just $ CertificateType_RSA_Sign
+      = Just CertificateType_RSA_Sign
     | hashsig ==  SignatureRSApssRSAeSHA384
-      = Just $ CertificateType_RSA_Sign
+      = Just CertificateType_RSA_Sign
     | hashsig == SignatureRSApssRSAeSHA512
-      = Just $ CertificateType_RSA_Sign
+      = Just CertificateType_RSA_Sign
     | hashsig ==  SignatureEd25519
       = Just CertificateType_Ed25519_Sign
     | hashsig ==  SignatureEd448
@@ -188,11 +188,11 @@ hashSigToCertType13 (HashIntrinsic, hashsig)
 --
 hashSigToCertType13 (hashalg, SignatureECDSA)
     | hashalg == HashSHA256
-      = Just $ CertificateType_ECDSA_Sign
+      = Just CertificateType_ECDSA_Sign
     | hashalg == HashSHA384
-      = Just $ CertificateType_ECDSA_Sign
+      = Just CertificateType_ECDSA_Sign
     | hashalg == HashSHA512
-      = Just $ CertificateType_ECDSA_Sign
+      = Just CertificateType_ECDSA_Sign
     | otherwise = Nothing
 --
 hashSigToCertType13 _ = Nothing

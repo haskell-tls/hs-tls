@@ -264,8 +264,7 @@ decodeCertRequest cp = do
     sigHashAlgs <- if cParamsVersion cp >= TLS12
                        then Just <$> (getWord16 >>= getSignatureHashAlgorithms)
                        else return Nothing
-    dNames <- getDNames
-    return $ CertRequest certTypes sigHashAlgs dNames
+    CertRequest certTypes sigHashAlgs <$> getDNames
   where getSignatureHashAlgorithms len = getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
 
 -- | Decode a list CA distinguished names
