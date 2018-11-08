@@ -12,6 +12,7 @@ module Network.TLS.Crypto.DH
     , dhParams
     , dhParamsGetP
     , dhParamsGetG
+    , dhParamsGetBits
     , dhGenerateKeyPair
     , dhGetShared
     , dhValid
@@ -66,6 +67,9 @@ dhParamsGetP (DH.Params p _ _) = p
 
 dhParamsGetG :: DHParams -> Integer
 dhParamsGetG (DH.Params _ g _) = g
+
+dhParamsGetBits :: DHParams -> Int
+dhParamsGetBits (DH.Params _ _ b) = b
 
 dhUnwrapPublic :: DHPublic -> Integer
 dhUnwrapPublic (DH.PublicNumber y) = y
