@@ -757,7 +757,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
     -- putStrLn "---- setTxState ctx usedHash usedCipher clientHandshakeTrafficSecret"
     rawFinished <- makeFinished ctx usedHash clientHandshakeTrafficSecret
     writeHandshakePacket13 ctx rawFinished >>=
-        sendBytes13 ctx. mappend cdata
+        sendBytes13 ctx . mappend cdata
     masterSecret <- switchToTrafficSecret handshakeSecret hChSf
     setResumptionSecret masterSecret
     setEstablished ctx Established
