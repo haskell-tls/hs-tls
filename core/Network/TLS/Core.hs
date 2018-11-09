@@ -163,12 +163,12 @@ recvData13 ctx = liftIO $ do
             -- putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
             recvData13 ctx
         -- when receiving empty appdata, we just retry to get some data.
-        process (Handshake13 [KeyUpdate13 UpdateNotdRequested]) = do
+        process (Handshake13 [KeyUpdate13 UpdateNotRequested]) = do
             keyUpdate ctx getRxState setRxState
             recvData13 ctx
         process (Handshake13 [KeyUpdate13 UpdateRequested]) = do
             keyUpdate ctx getRxState setRxState
-            sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotdRequested]
+            sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested]
             keyUpdate ctx getTxState setTxState
             recvData13 ctx
         process (AppData13 "") = recvData13 ctx

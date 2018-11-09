@@ -69,8 +69,8 @@ encodeHandshake13' (NewSessionTicket13 life ageadd nonce label exts) = runPut $ 
     putOpaque16 label
     putExtensions exts
 encodeHandshake13' EndOfEarlyData13 = ""
-encodeHandshake13' (KeyUpdate13 UpdateNotdRequested) = runPut $ putWord8 0
-encodeHandshake13' (KeyUpdate13 UpdateRequested)     = runPut $ putWord8 1
+encodeHandshake13' (KeyUpdate13 UpdateNotRequested) = runPut $ putWord8 0
+encodeHandshake13' (KeyUpdate13 UpdateRequested)    = runPut $ putWord8 1
 
 encodeHandshake13' _ = error "encodeHandshake13'"
 
@@ -148,7 +148,7 @@ decodeKeyUpdate13 :: Get Handshake13
 decodeKeyUpdate13 = do
     ru <- getWord8
     case ru of
-        0 -> return $ KeyUpdate13 UpdateNotdRequested
+        0 -> return $ KeyUpdate13 UpdateNotRequested
         1 -> return $ KeyUpdate13 UpdateRequested
         x -> fail $ "Unknown request_update: " ++ show x
 

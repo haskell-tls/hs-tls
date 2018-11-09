@@ -28,7 +28,7 @@ data Packet13 =
     | AppData13 ByteString
     deriving (Show,Eq)
 
-data KeyUpdate = UpdateNotdRequested
+data KeyUpdate = UpdateNotRequested
                | UpdateRequested
                deriving (Show,Eq)
 
