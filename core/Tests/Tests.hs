@@ -167,10 +167,10 @@ prop_handshake13_initiate = do
         hs = if head cgrps `elem` sgrps then FullHandshake else HelloRetryRequest
     runTLSPipeSimple13 params (hs,hs) Nothing
 
-prop_handshake13_keyupdate :: PropertyM IO ()
-prop_handshake13_keyupdate = do
-    params <- pick arbitraryPairParams13
-    runTLSPipeSimple13KeyUpdate params
+prop_handshake_keyupdate :: PropertyM IO ()
+prop_handshake_keyupdate = do
+    params <- pick arbitraryPairParams
+    runTLSPipeSimpleKeyUpdate params
 
 prop_handshake13_full :: PropertyM IO ()
 prop_handshake13_full = do
@@ -626,7 +626,7 @@ main = defaultMain $ testGroup "tls"
             [ testProperty "Setup" (monadicIO prop_pipe_work)
             , testProperty "Initiation" (monadicIO prop_handshake_initiate)
             , testProperty "Initiation 1.3" (monadicIO prop_handshake13_initiate)
-            , testProperty "Key update 1.3" (monadicIO prop_handshake13_keyupdate)
+            , testProperty "Key update 1.3" (monadicIO prop_handshake_keyupdate)
             , testProperty "Hash and signatures" (monadicIO prop_handshake_hashsignatures)
             , testProperty "Cipher suites" (monadicIO prop_handshake_ciphersuites)
             , testProperty "Groups" (monadicIO prop_handshake_groups)
