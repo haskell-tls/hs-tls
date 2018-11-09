@@ -88,12 +88,12 @@ benchResumption :: (ClientParams, ServerParams) -> B.ByteString -> String -> Ben
 benchResumption params !d name = env initializeSession runResumption
   where
     initializeSession = do
-        sessionRef <- newIORef Nothing
-        let sessionManager = oneSessionManager sessionRef
-            params1 = setPairParamsSessionManager sessionManager params
+        sessionRefs <- twoSessionRefs
+        let sessionManagers = twoSessionManagers sessionRefs
+            params1 = setPairParamsSessionManagers sessionManagers params
         _ <- runTLSPipeSimple params1 d
 
-        Just sessionParams <- readIORef sessionRef
+        Just sessionParams <- readClientSessionRef sessionRefs
         let params2 = setPairParamsSessionResuming sessionParams params1
         newIORef params2
 

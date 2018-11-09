@@ -69,13 +69,15 @@ runTLSPipePredicate params p = runTLSPipe params tlsServer tlsClient
             checkInfoPredicate ctx
             d <- recvDataNonNull ctx
             writeChan queue d
+            bye ctx -- needed to interrupt recvData in tlsClient
             return ()
         tlsClient queue ctx = do
             handshake ctx
             checkInfoPredicate ctx
             d <- readChan queue
             sendData ctx (L.fromChunks [d])
-            bye ctx
+            _ <- recvData ctx -- recvData receives NewSessionTicket with TLS13
+            bye ctx           -- (until bye is able to do it itself)
             return ()
         checkInfoPredicate ctx = do
             minfo <- contextGetInformation ctx
@@ -98,6 +100,7 @@ runTLSPipeSimple13 params modes mEarlyData = runTLSPipe params tlsServer tlsClie
             writeChan queue d
             minfo <- contextGetInformation ctx
             Just (snd modes) `assertEq` (minfo >>= infoTLS13HandshakeMode)
+            bye ctx -- needed to interrupt recvData in tlsClient
             return ()
         tlsClient queue ctx = do
             handshake ctx
@@ -105,7 +108,8 @@ runTLSPipeSimple13 params modes mEarlyData = runTLSPipe params tlsServer tlsClie
             sendData ctx (L.fromChunks [d])
             minfo <- contextGetInformation ctx
             Just (fst modes) `assertEq` (minfo >>= infoTLS13HandshakeMode)
-            bye ctx
+            _ <- recvData ctx -- recvData receives NewSessionTicket with TLS13
+            bye ctx           -- (until bye is able to do it itself)
             return ()
 
 runTLSInitFailure :: (ClientParams, ServerParams) -> PropertyM IO ()
@@ -189,15 +193,15 @@ prop_handshake13_psk = do
                   ,srv { serverSupported = svrSupported }
                   )
 
-    sessionRef <- run $ newIORef Nothing
-    let sessionManager = oneSessionManager sessionRef
+    sessionRefs <- run twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
 
-    let params = setPairParamsSessionManager sessionManager params0
+    let params = setPairParamsSessionManagers sessionManagers params0
 
     runTLSPipeSimple13 params (HelloRetryRequest,HelloRetryRequest) Nothing
 
     -- and resume
-    sessionParams <- run $ readIORef sessionRef
+    sessionParams <- run $ readClientSessionRef sessionRefs
     assert (isJust sessionParams)
     let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 
@@ -221,15 +225,15 @@ prop_handshake13_rtt0 = do
                        , serverEarlyDataSize = 2048 }
                   )
 
-    sessionRef <- run $ newIORef Nothing
-    let sessionManager = oneSessionManager sessionRef
+    sessionRefs <- run twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
 
-    let params = setPairParamsSessionManager sessionManager params0
+    let params = setPairParamsSessionManagers sessionManagers params0
 
     runTLSPipeSimple13 params (HelloRetryRequest,HelloRetryRequest) Nothing
 
     -- and resume
-    sessionParams <- run $ readIORef sessionRef
+    sessionParams <- run $ readClientSessionRef sessionRefs
     assert (isJust sessionParams)
     let earlyData = "Early data"
         (pc,ps) = setPairParamsSessionResuming (fromJust sessionParams) params
@@ -255,15 +259,15 @@ prop_handshake13_rtt0_fallback = do
                        , serverEarlyDataSize = 0 }
                   )
 
-    sessionRef <- run $ newIORef Nothing
-    let sessionManager = oneSessionManager sessionRef
+    sessionRefs <- run twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
 
-    let params = setPairParamsSessionManager sessionManager params0
+    let params = setPairParamsSessionManagers sessionManagers params0
 
     runTLSPipeSimple13 params (HelloRetryRequest,HelloRetryRequest) Nothing
 
     -- and resume
-    sessionParams <- run $ readIORef sessionRef
+    sessionParams <- run $ readClientSessionRef sessionRefs
     assert (isJust sessionParams)
     let earlyData = "Early data"
         (pc,ps) = setPairParamsSessionResuming (fromJust sessionParams) params
@@ -460,6 +464,7 @@ prop_handshake_alpn = do
             Just "h2" `assertEq` proto
             d <- recvDataNonNull ctx
             writeChan queue d
+            bye ctx -- needed to interrupt recvData in tlsClient
             return ()
         tlsClient queue ctx = do
             handshake ctx
@@ -467,7 +472,8 @@ prop_handshake_alpn = do
             Just "h2" `assertEq` proto
             d <- readChan queue
             sendData ctx (L.fromChunks [d])
-            bye ctx
+            _ <- recvData ctx -- recvData receives NewSessionTicket with TLS13
+            bye ctx           -- (until bye is able to do it itself)
             return ()
         alpn xs
           | "h2"    `elem` xs = return "h2"
@@ -487,12 +493,14 @@ prop_handshake_sni = do
             Just serverName `assertEq` sni
             d <- recvDataNonNull ctx
             writeChan queue d
+            bye ctx -- needed to interrupt recvData in tlsClient
             return ()
         tlsClient queue ctx = do
             handshake ctx
             d <- readChan queue
             sendData ctx (L.fromChunks [d])
-            bye ctx
+            _ <- recvData ctx -- recvData receives NewSessionTicket with TLS13
+            bye ctx           -- (until bye is able to do it itself)
             return ()
         serverName = "haskell.org"
 
@@ -524,16 +532,16 @@ prop_handshake_renegotiation = do
 
 prop_handshake_session_resumption :: PropertyM IO ()
 prop_handshake_session_resumption = do
-    sessionRef <- run $ newIORef Nothing
-    let sessionManager = oneSessionManager sessionRef
+    sessionRefs <- run twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
 
     plainParams <- pick arbitraryPairParams
-    let params = setPairParamsSessionManager sessionManager plainParams
+    let params = setPairParamsSessionManagers sessionManagers plainParams
 
     runTLSPipeSimple params
 
     -- and resume
-    sessionParams <- run $ readIORef sessionRef
+    sessionParams <- run $ readClientSessionRef sessionRefs
     assert (isJust sessionParams)
     let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 
