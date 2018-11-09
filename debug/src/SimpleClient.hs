@@ -262,15 +262,10 @@ runOn (sStorage, certStore) flags port hostname
                     _ -> return ()
                 sendData ctx $ query
                 loopRecv out ctx
-                minfo <- contextGetInformation ctx
-                case minfo of
-                    Nothing -> return ()
-                    Just info -> do
-                        let negoVer = infoVersion info
-                        when (UpdateKey `elem` flags && negoVer == TLS13) $ do
-                            updateKey ctx
-                            sendData ctx $ query
-                            loopRecv out ctx
+                when (UpdateKey `elem` flags) $ do
+                    _tls13 <- updateKey ctx
+                    sendData ctx $ query
+                    loopRecv out ctx
                 bye ctx `E.catch` \(SomeException e) -> putStrLn $ "bye failed: " ++ show e
                 return ()
         setup = maybe (return stdout) (flip openFile AppendMode) getOutput
