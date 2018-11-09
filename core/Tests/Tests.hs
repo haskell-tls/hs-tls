@@ -117,12 +117,12 @@ runTLSPipeSimple13 params modes mEarlyData = runTLSPipe params tlsServer tlsClie
             bye ctx           -- (until bye is able to do it itself)
             return ()
 
-runTLSPipeSimple13KeyUpdate :: (ClientParams, ServerParams) -> PropertyM IO ()
-runTLSPipeSimple13KeyUpdate params = runTLSPipeN 3 params tlsServer tlsClient
+runTLSPipeSimpleKeyUpdate :: (ClientParams, ServerParams) -> PropertyM IO ()
+runTLSPipeSimpleKeyUpdate params = runTLSPipeN 3 params tlsServer tlsClient
   where tlsServer ctx queue = do
             handshake ctx
             d0 <- recvDataNonNull ctx
-            updateKey ctx
+            _ <- updateKey ctx
             d1 <- recvDataNonNull ctx
             d2 <- recvDataNonNull ctx
             writeChan queue [d0,d1,d2]
@@ -133,7 +133,7 @@ runTLSPipeSimple13KeyUpdate params = runTLSPipeN 3 params tlsServer tlsClient
             sendData ctx (L.fromChunks [d0])
             d1 <- readChan queue
             sendData ctx (L.fromChunks [d1])
-            updateKey ctx
+            _ <- updateKey ctx
             d2 <- readChan queue
             sendData ctx (L.fromChunks [d2])
             bye ctx
