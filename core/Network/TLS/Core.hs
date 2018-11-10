@@ -164,13 +164,23 @@ recvData13 ctx = liftIO $ do
             recvData13 ctx
         -- when receiving empty appdata, we just retry to get some data.
         process (Handshake13 [KeyUpdate13 UpdateNotRequested]) = do
-            keyUpdate ctx getRxState setRxState
-            recvData13 ctx
+            established <- ctxEstablished ctx
+            if established == Established then do
+                keyUpdate ctx getRxState setRxState
+                recvData13 ctx
+              else do
+                let reason = "received key update before established"
+                terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
         process (Handshake13 [KeyUpdate13 UpdateRequested]) = do
-            keyUpdate ctx getRxState setRxState
-            sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested]
-            keyUpdate ctx getTxState setTxState
-            recvData13 ctx
+            established <- ctxEstablished ctx
+            if established == Established then do
+                keyUpdate ctx getRxState setRxState
+                sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested]
+                keyUpdate ctx getTxState setTxState
+                recvData13 ctx
+              else do
+                let reason = "received key update before established"
+                terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
         process (AppData13 "") = recvData13 ctx
         process (AppData13 x) = do
             established <- ctxEstablished ctx
