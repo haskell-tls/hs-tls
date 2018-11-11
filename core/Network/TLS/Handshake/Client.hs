@@ -603,21 +603,26 @@ processServerHelloDone _ ServerHelloDone = return RecvStateDone
 processServerHelloDone _ p = unexpected (show p) (Just "server hello data")
 
 -- Unless result is empty, server certificate must be allowed for at least one
--- of the returned values.
+-- of the returned values.  Constraints for RSA-based key exchange are relaxed
+-- to avoid rejecting certificates having incomplete extension.
 requiredCertKeyUsage :: Cipher -> [ExtKeyUsageFlag]
 requiredCertKeyUsage cipher =
     case cipherKeyExchange cipher of
-        CipherKeyExchange_RSA         -> [ KeyUsage_keyEncipherment ]
+        CipherKeyExchange_RSA         -> rsaCompatibility
         CipherKeyExchange_DH_Anon     -> [] -- unrestricted
-        CipherKeyExchange_DHE_RSA     -> [ KeyUsage_digitalSignature ]
-        CipherKeyExchange_ECDHE_RSA   -> [ KeyUsage_digitalSignature ]
+        CipherKeyExchange_DHE_RSA     -> rsaCompatibility
+        CipherKeyExchange_ECDHE_RSA   -> rsaCompatibility
         CipherKeyExchange_DHE_DSS     -> [ KeyUsage_digitalSignature ]
         CipherKeyExchange_DH_DSS      -> [ KeyUsage_keyAgreement ]
-        CipherKeyExchange_DH_RSA      -> [ KeyUsage_keyAgreement ]
+        CipherKeyExchange_DH_RSA      -> rsaCompatibility
         CipherKeyExchange_ECDH_ECDSA  -> [ KeyUsage_keyAgreement ]
-        CipherKeyExchange_ECDH_RSA    -> [ KeyUsage_keyAgreement ]
+        CipherKeyExchange_ECDH_RSA    -> rsaCompatibility
         CipherKeyExchange_ECDHE_ECDSA -> [ KeyUsage_digitalSignature ]
         CipherKeyExchange_TLS13       -> [ KeyUsage_digitalSignature ]
+  where rsaCompatibility = [ KeyUsage_digitalSignature
+                           , KeyUsage_keyEncipherment
+                           , KeyUsage_keyAgreement
+                           ]
 
 handshakeClient13 :: ClientParams -> Context -> IO ()
 handshakeClient13 _cparams ctx = do
