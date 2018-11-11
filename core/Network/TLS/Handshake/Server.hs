@@ -482,7 +482,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             --
             usage <- liftIO $ catchException (onClientCertificate (serverHooks sparams) certs) rejectOnException
             case usage of
-                CertificateUsageAccept        -> verifyLeafKeyUsage KeyUsage_digitalSignature certs
+                CertificateUsageAccept        -> verifyLeafKeyUsage [KeyUsage_digitalSignature] certs
                 CertificateUsageReject reason -> certificateRejected reason
 
             -- Remember cert chain for later use.
