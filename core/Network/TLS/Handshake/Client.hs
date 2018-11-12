@@ -539,8 +539,8 @@ processCertificate cparams ctx (Certificates certs) = do
         checkLeafCertificateKeyUsage = do
             cipher <- usingHState ctx getPendingCipher
             case requiredCertKeyUsage cipher of
-                Nothing   -> return ()
-                Just flag -> verifyLeafKeyUsage flag certs
+                []    -> return ()
+                flags -> verifyLeafKeyUsage flags certs
 
 processCertificate _ ctx p = processServerKeyExchange ctx p
 
@@ -602,20 +602,27 @@ processServerHelloDone :: Context -> Handshake -> IO (RecvState m)
 processServerHelloDone _ ServerHelloDone = return RecvStateDone
 processServerHelloDone _ p = unexpected (show p) (Just "server hello data")
 
-requiredCertKeyUsage :: Cipher -> Maybe ExtKeyUsageFlag
+-- Unless result is empty, server certificate must be allowed for at least one
+-- of the returned values.  Constraints for RSA-based key exchange are relaxed
+-- to avoid rejecting certificates having incomplete extension.
+requiredCertKeyUsage :: Cipher -> [ExtKeyUsageFlag]
 requiredCertKeyUsage cipher =
     case cipherKeyExchange cipher of
-        CipherKeyExchange_RSA         -> Just KeyUsage_keyEncipherment
-        CipherKeyExchange_DH_Anon     -> Nothing
-        CipherKeyExchange_DHE_RSA     -> Just KeyUsage_digitalSignature
-        CipherKeyExchange_ECDHE_RSA   -> Just KeyUsage_digitalSignature
-        CipherKeyExchange_DHE_DSS     -> Just KeyUsage_digitalSignature
-        CipherKeyExchange_DH_DSS      -> Just KeyUsage_keyAgreement
-        CipherKeyExchange_DH_RSA      -> Just KeyUsage_keyAgreement
-        CipherKeyExchange_ECDH_ECDSA  -> Just KeyUsage_keyAgreement
-        CipherKeyExchange_ECDH_RSA    -> Just KeyUsage_keyAgreement
-        CipherKeyExchange_ECDHE_ECDSA -> Just KeyUsage_digitalSignature
-        CipherKeyExchange_TLS13       -> Just KeyUsage_digitalSignature
+        CipherKeyExchange_RSA         -> rsaCompatibility
+        CipherKeyExchange_DH_Anon     -> [] -- unrestricted
+        CipherKeyExchange_DHE_RSA     -> rsaCompatibility
+        CipherKeyExchange_ECDHE_RSA   -> rsaCompatibility
+        CipherKeyExchange_DHE_DSS     -> [ KeyUsage_digitalSignature ]
+        CipherKeyExchange_DH_DSS      -> [ KeyUsage_keyAgreement ]
+        CipherKeyExchange_DH_RSA      -> rsaCompatibility
+        CipherKeyExchange_ECDH_ECDSA  -> [ KeyUsage_keyAgreement ]
+        CipherKeyExchange_ECDH_RSA    -> rsaCompatibility
+        CipherKeyExchange_ECDHE_ECDSA -> [ KeyUsage_digitalSignature ]
+        CipherKeyExchange_TLS13       -> [ KeyUsage_digitalSignature ]
+  where rsaCompatibility = [ KeyUsage_digitalSignature
+                           , KeyUsage_keyEncipherment
+                           , KeyUsage_keyAgreement
+                           ]
 
 handshakeClient13 :: ClientParams -> Context -> IO ()
 handshakeClient13 _cparams ctx = do

@@ -36,14 +36,14 @@ badCertificate msg = throwCore $ Error_Protocol (msg, True, BadCertificate)
 rejectOnException :: SomeException -> IO CertificateUsage
 rejectOnException e = return $ CertificateUsageReject $ CertificateRejectOther $ show e
 
-verifyLeafKeyUsage :: MonadIO m => ExtKeyUsageFlag -> CertificateChain -> m ()
-verifyLeafKeyUsage _    (CertificateChain [])         = return ()
-verifyLeafKeyUsage flag (CertificateChain (signed:_)) =
-    unless verified $
-        badCertificate $ "certificate is not allowed for " ++ show flag
+verifyLeafKeyUsage :: MonadIO m => [ExtKeyUsageFlag] -> CertificateChain -> m ()
+verifyLeafKeyUsage _          (CertificateChain [])         = return ()
+verifyLeafKeyUsage validFlags (CertificateChain (signed:_)) =
+    unless verified $ badCertificate $
+        "certificate is not allowed for any of " ++ show validFlags
   where
     cert     = signedObject $ getSigned signed
     verified =
         case extensionGet (certExtensions cert) of
             Nothing                          -> True -- unrestricted cert
-            Just (ExtKeyUsage flags)         -> flag `elem` flags
+            Just (ExtKeyUsage flags)         -> any (`elem` validFlags) flags
