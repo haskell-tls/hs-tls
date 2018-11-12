@@ -1,10 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
-
-module Network.TLS.KeySchedule (
-    hkdfExtract
-  , hkdfExpandLabel
-  , deriveSecret
-  ) where
+-- |
+-- Module      : Network.TLS.KeySchedule
+-- License     : BSD-style
+-- Maintainer  : Vincent Hanquez <vincent@snarc.org>
+-- Stability   : experimental
+-- Portability : unknown
+--
+module Network.TLS.KeySchedule
+    ( hkdfExtract
+    , hkdfExpandLabel
+    , deriveSecret
+    ) where
 
 import qualified Crypto.Hash as H
 import Crypto.KDF.HKDF

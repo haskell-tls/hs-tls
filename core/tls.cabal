@@ -140,9 +140,7 @@ Test-Suite test-tls
                      PipeChan
                      PubKey
   Build-Depends:     base >= 3 && < 5
-                   , mtl
                    , async >= 2.0
-                   , cereal >= 0.3
                    , data-default-class
                    , tasty
                    , tasty-quickcheck
@@ -160,6 +158,10 @@ Benchmark bench-tls
   hs-source-dirs:    Benchmarks Tests
   Main-Is:           Benchmarks.hs
   type:              exitcode-stdio-1.0
+  other-modules:     Certificate
+                     Connection
+                     PipeChan
+                     PubKey
   Build-depends:     base >= 4 && < 5
                    , tls
                    , x509
@@ -167,7 +169,6 @@ Benchmark bench-tls
                    , data-default-class
                    , cryptonite
                    , criterion >= 1.0
-                   , mtl
                    , bytestring
                    , asn1-types
                    , async >= 2.0

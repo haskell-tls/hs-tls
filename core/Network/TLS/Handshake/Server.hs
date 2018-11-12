@@ -112,7 +112,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     -- TLS_FALLBACK_SCSV: {0x56, 0x00}
     when (supportedFallbackScsv (ctxSupported ctx) &&
           (0x5600 `elem` ciphers) &&
-          clientVersion /= maxBound) $
+          clientVersion < TLS12) $
         throwCore $ Error_Protocol ("fallback is not allowed", True, InappropriateFallback)
     -- choosing TLS version
     let clientVersions = case extensionLookup extensionID_SupportedVersions exts >>= extensionDecode MsgTClientHello of
@@ -612,7 +612,7 @@ filterCredentialsWithHashSignatures exts =
 -- returns True if "signature_algorithms" certificate filtering produced no
 -- ephemeral D-H nor TLS13 cipher (so handshake with lower security)
 cipherListCredentialFallback :: [Cipher] -> Bool
-cipherListCredentialFallback xs = all nonDH xs
+cipherListCredentialFallback = all nonDH
   where
     nonDH x = case cipherKeyExchange x of
         CipherKeyExchange_DHE_RSA     -> False
