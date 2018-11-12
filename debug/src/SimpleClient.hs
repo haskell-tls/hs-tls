@@ -15,7 +15,6 @@ import System.Environment
 import System.Exit
 import System.IO
 import System.Timeout
-import System.X509
 
 import Network.TLS
 import Network.TLS.Extra.Cipher
@@ -69,13 +68,12 @@ getDefaultParams flags host store sStorage certCredsRequest session earlyData =
                                 , supportedGroups = getGroups flags
                                 }
         , clientWantSessionResume = session
-        , clientUseServerNameIndication = not (NoSNI `elem` flags)
+        , clientUseServerNameIndication = NoSNI `notElem` flags
         , clientShared = def { sharedSessionManager  = sessionRef sStorage
                              , sharedCAStore         = store
                              , sharedValidationCache = validateCache
-                             , sharedCredentials     = maybe mempty fst certCredsRequest
                              }
-        , clientHooks = def { onCertificateRequest = maybe (onCertificateRequest def) snd certCredsRequest }
+        , clientHooks = def { onCertificateRequest = fromMaybe (onCertificateRequest def) certCredsRequest }
         , clientDebug = def { debugSeed      = foldl getDebugSeed Nothing flags
                             , debugPrintSeed = if DebugPrintSeed `elem` flags
                                                     then (\seed -> putStrLn ("seed: " ++ show (seedToInteger seed)))
@@ -150,6 +148,7 @@ data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
           | Timeout String
           | BogusCipher String
           | ClientCert String
+          | TrustAnchor String
           | BenchSend
           | BenchRecv
           | BenchData String
@@ -174,6 +173,7 @@ options =
     , Option ['t']  ["timeout"] (ReqArg Timeout "timeout") "timeout in milliseconds (2s by default)"
     , Option []     ["no-validation"] (NoArg NoValidateCert) "disable certificate validation"
     , Option []     ["client-cert"] (ReqArg ClientCert "cert-file:key-file") "add a client certificate to use with the server"
+    , Option []     ["trust-anchor"] (ReqArg TrustAnchor "pem-or-dir") "use provided CAs instead of system certificate store"
     , Option []     ["http1.1"] (NoArg Http11) "use http1.1 instead of http1.0"
     , Option []     ["ssl3"]    (NoArg Ssl3) "use SSL 3.0"
     , Option []     ["sni"]     (ReqArg SNI "server-name") "use non-default server name indication"
@@ -274,7 +274,7 @@ runOn (sStorage, certStore) flags port hostname
         getCredRequest =
             case clientCert of
                 Nothing -> return Nothing
-                Just s  -> do
+                Just s  ->
                     case break (== ':') s of
                         (_   ,"")      -> error "wrong format for client-cert, expecting 'cert-file:key-file'"
                         (cert,':':key) -> do
@@ -283,7 +283,7 @@ runOn (sStorage, certStore) flags port hostname
                                 Left err   -> error ("cannot load client certificate: " ++ err)
                                 Right cred -> do
                                     let certRequest _ = return $ Just cred
-                                    return $ Just (Credentials [cred], certRequest)
+                                    return $ Just certRequest
                         (_   ,_)      -> error "wrong format for client-cert, expecting 'cert-file:key-file'"
 
         findURI []        = "/"
@@ -312,6 +312,10 @@ runOn (sStorage, certStore) flags port hostname
                                             Just i  -> i
                 f acc _              = acc
 
+getTrustAnchors flags = getCertificateStore (foldr getPaths [] flags)
+  where getPaths (TrustAnchor path) acc = path : acc
+        getPaths _                  acc = acc
+
 printUsage =
     putStrLn $ usageInfo "usage: simpleclient [opts] <hostname> [port]\n\n\t(port default to: 443)\noptions:\n" options
 
@@ -334,7 +338,7 @@ main = do
         printGroups
         exitSuccess
 
-    certStore <- getSystemCertificateStore
+    certStore <- getTrustAnchors opts
     sStorage <- newIORef (error "storage ioref undefined")
     case other of
         [hostname]      -> runOn (sStorage, certStore) opts 443 hostname
