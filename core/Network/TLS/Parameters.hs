@@ -308,6 +308,13 @@ data ClientHooks = ClientHooks
       --   the server selected a finite-field group not part of
       --   the "Supported Groups Registry".
       --   See RFC 7919 section 3.1 for recommandations.
+      --
+      --   The default behavior with (dh_p, dh_g, dh_size) and pub as follows:
+      --
+      --   (1) rejecting if dh_p is even
+      --   (2) rejecting unless 1 < dh_g && dh_g < dh_p - 1
+      --   (3) rejecting unless 1 < dh_p && pub < dh_p - 1
+      --   (4) rejecting if dh_size < 1024 (to prevent Logjam attack)
     , onCustomFFDHEGroup :: DHParams -> DHPublic -> IO GroupUsage
     }
 
