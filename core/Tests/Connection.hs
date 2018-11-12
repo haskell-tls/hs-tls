@@ -111,7 +111,7 @@ arbitraryCredentialsOfEachType = do
            ]
 
 isCustomDHParams :: DHParams -> Bool
-isCustomDHParams params = params == dhParams
+isCustomDHParams params = params == dhParams512
 
 leafPublicKey :: CertificateChain -> Maybe PubKey
 leafPublicKey (CertificateChain [])       = Nothing
@@ -174,7 +174,7 @@ arbitraryPairParamsWithVersionsAndCiphers :: ([Version], [Version])
                                           -> Gen (ClientParams, ServerParams)
 arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clientCiphers, serverCiphers) = do
     secNeg             <- arbitrary
-    dhparams           <- elements [dhParams,ffdhe2048,ffdhe3072]
+    dhparams           <- elements [dhParams512,ffdhe2048,ffdhe3072]
 
     creds              <- arbitraryCredentialsOfEachType
     (clientGroups, serverGroups) <- arbitraryGroupPair

@@ -9,6 +9,7 @@ import PipeChan
 import Connection
 import Marshalling
 import Ciphers
+import PubKey
 
 import Data.Maybe
 import Data.Default.Class
@@ -381,6 +382,27 @@ prop_handshake_groups = do
         then runTLSInitFailure (clientParam',serverParam')
         else runTLSPipePredicate (clientParam',serverParam') p
 
+
+prop_handshake_dh :: PropertyM IO ()
+prop_handshake_dh = do
+    let clientVersions = [TLS12]
+        serverVersions = [TLS12]
+        ciphers = [ cipher_DHE_RSA_AES128_SHA1 ]
+    (clientParam,serverParam) <- pick $ arbitraryPairParamsWithVersionsAndCiphers
+                                            (clientVersions, serverVersions)
+                                            (ciphers, ciphers)
+    let clientParam' = clientParam { clientSupported = (clientSupported clientParam)
+                                       { supportedGroups = [] }
+                                   }
+    let check (dh,shouldFail) = do
+         let serverParam' = serverParam { serverDHEParams = Just dh }
+         if shouldFail
+             then runTLSInitFailure (clientParam',serverParam')
+             else runTLSPipeSimple  (clientParam',serverParam')
+    mapM_ check [(dhParams512,True)
+                ,(dhParams768,True)
+                ,(dhParams1024,False)]
+
 prop_handshake_srv_key_usage :: PropertyM IO ()
 prop_handshake_srv_key_usage = do
     let versions = [SSL3,TLS10,TLS11,TLS12]
@@ -576,6 +598,7 @@ main = defaultMain $ testGroup "tls"
             , testProperty "SNI" (monadicIO prop_handshake_sni)
             , testProperty "Renegotiation" (monadicIO prop_handshake_renegotiation)
             , testProperty "Resumption" (monadicIO prop_handshake_session_resumption)
+            , testProperty "Custom DH" (monadicIO prop_handshake_dh)
             , testProperty "TLS 1.3 Full" (monadicIO prop_handshake13_full)
             , testProperty "TLS 1.3 HRR"  (monadicIO prop_handshake13_hrr)
             , testProperty "TLS 1.3 PSK"  (monadicIO prop_handshake13_psk)
