@@ -258,13 +258,13 @@ data GroupUsage =
         | GroupUsageInvalidPublic         -- ^ usage of group with an invalid public value
         deriving (Show,Eq)
 
-defaultGroupUsage :: DHParams -> DHPublic -> IO GroupUsage
-defaultGroupUsage params public
+defaultGroupUsage :: Int -> DHParams -> DHPublic -> IO GroupUsage
+defaultGroupUsage minBits params public
     | even $ dhParamsGetP params                   = return $ GroupUsageUnsupported "invalid odd prime"
     | not $ dhValid params (dhParamsGetG params)   = return $ GroupUsageUnsupported "invalid generator"
     | not $ dhValid params (dhUnwrapPublic public) = return   GroupUsageInvalidPublic
     -- To prevent Logjam attack
-    | dhParamsGetBits params < 1024                = return   GroupUsageInsecure
+    | dhParamsGetBits params < minBits             = return   GroupUsageInsecure
     | otherwise                                    = return   GroupUsageValid
 
 -- | A set of callbacks run by the clients for various corners of TLS establishment
@@ -316,7 +316,7 @@ defaultClientHooks = ClientHooks
     { onCertificateRequest = \ _ -> return Nothing
     , onServerCertificate  = validateDefault
     , onSuggestALPN        = return Nothing
-    , onCustomFFDHEGroup   = defaultGroupUsage
+    , onCustomFFDHEGroup   = defaultGroupUsage 1024
     }
 
 instance Show ClientHooks where
