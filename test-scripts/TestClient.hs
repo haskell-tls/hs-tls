@@ -18,6 +18,7 @@ import Control.Exception
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+import Data.Maybe
 import System.IO
 
 import qualified Data.ByteString.UTF8 as UTF8
@@ -124,7 +125,7 @@ simpleClient clientPort clientHost uri ver certVal clientCert =
         (["-v", "--debug", "-O", "/dev/null", clientHost, show clientPort, "--uri", maybe "/" id uri, verString, userAgent]
 #else
     readProcessWithExitCodeBinary "stack"
-        (["exec", "--", "tls-simpleclient", "-v", "--debug", "-O", "/dev/null", clientHost, show clientPort, "--uri", maybe "/" id uri, verString, userAgent]
+        (["exec", "--", "tls-simpleclient", "-v", "--debug", "-O", "/dev/null", clientHost, show clientPort, "--uri", fromMaybe "/" uri, verString, userAgent]
 #endif
          ++ if certVal == CertValidation then [] else ["--no-validation"]
          ++ maybe [] (\(f,v) -> ["--client-cert=" ++ f ++ ":" ++ v ]) clientCert
@@ -209,7 +210,7 @@ pad n s
     | length s >= n = s
     | otherwise     = s ++ replicate (n - length s) ' '
 
-printIndented txt = mapM_ (putStrLn . ((++) "  ")) $ lines txt
+printIndented txt = mapM_ (putStrLn . ("  " ++)) $ lines txt
 
 runAgainstServices logFile pid l = do
     term <- newMVar ()
@@ -220,9 +221,9 @@ runAgainstServices logFile pid l = do
     runGroup withTerm (url, opt) = do
         r <- mapConcurrently id $ test url opt
         let (success, skipped, errs) = toStats r
-        withTerm $ do
+        withTerm $
             if null errs
-                then do
+                then
                     putRow url "SUCCESS"
                 else do
                     putRow url "FAILED"
@@ -262,13 +263,13 @@ runLocal logFile pid = do
                                 ,Cred "DSA" "test-certs/server.dsa.crt" "test-certs/server.dsa.key"]
                 ]
     haveFailed <- filter (== False) <$> mapM runOne combi
-    when (not $ null haveFailed) $ exitFailure
+    unless (null haveFailed) exitFailure
   where
     -- running between port 14000 and 16901
     pidToPort pid = 14000 + (fromIntegral pid `mod` 2901)
 
     runOne (ver,ccert,useDhe,serverCert)
-      | not useDhe && credGetType serverCert == "DSA" = do
+      | not useDhe && credGetType serverCert == "DSA" =
         putRow hdr "SKIPPED" >> return True
       | otherwise = do
         --putStrLn hdr
@@ -278,7 +279,7 @@ runLocal logFile pid = do
         removeSafe readyFile
 
         _ <- forkIO $ do
-            let useClientCert = maybe False (const True) ccert
+            let useClientCert = isJust ccert
             r <- wrapResult "openssl" (opensslServer readyFile (pidToPort pid) (credGetCert serverCert) (credGetKey serverCert) ver useClientCert useDhe)
             putMVar opensslResult r
             case r of
@@ -305,7 +306,7 @@ main = do
                     ("with-local":x:_) -> (x, True)
                     (x:_) -> (x, False)
 
-    putStrLn $ ("log file : " ++ logFile)
+    putStrLn ("log file : " ++ logFile)
 
     when doLocal $ runLocal logFile pid
     runAgainstServices logFile pid $
