@@ -22,7 +22,7 @@ import System.IO
 
 import qualified Data.ByteString.UTF8 as UTF8
 
-data Version = SSL3 | TLS10 | TLS11 | TLS12
+data Version = SSL3 | TLS10 | TLS11 | TLS12 | TLS13
     deriving (Show,Eq,Ord)
 
 data Option = Everything
@@ -105,6 +105,7 @@ userAgent = "--user-agent=haskell tls 1.2"
               --tls10                  use TLS 1.0
               --tls11                  use TLS 1.1
               --tls12                  use TLS 1.2 (default)
+              --tls13                  use TLS 1.3
               --bogocipher=cipher-id   add a bogus cipher id for testing
   -x          --no-version-downgrade   do not allow version downgrade
               --uri=URI                optional URI requested by default /
@@ -134,6 +135,7 @@ simpleClient clientPort clientHost uri ver certVal clientCert =
                 TLS10 -> "--tls10"
                 TLS11 -> "--tls11"
                 TLS12 -> "--tls12"
+                TLS13 -> "--tls13"
 
 opensslServer :: String -> Int -> String -> String -> Version -> Bool -> Bool -> IO (ExitCode, ByteString, ByteString)
 opensslServer readyFile port cert key ver useClientCert useDhe =
@@ -149,6 +151,7 @@ opensslServer readyFile port cert key ver useClientCert useDhe =
                 TLS10 -> "tls-1.0"
                 TLS11 -> "tls-1.1"
                 TLS12 -> "tls-1.2"
+                _     -> error ("opensslServer: unsupported version: " ++ show ver)
 
 data FailStatus = FailStatus
     { failName     :: String
@@ -180,8 +183,8 @@ wrapResult name f = do
         Nothing                        -> return $ Timeout name
 
 test :: String -> Option -> [IO Result]
-test url opt = do
-    map runOne [SSL3, TLS10, TLS11, TLS12]
+test url opt =
+    map runOne [SSL3, TLS10, TLS11, TLS12, TLS13]
   where
     runOne ver = if doesRun then reallyRunOne ver else return (Skipped (show ver))
       where
@@ -252,7 +255,7 @@ data Cred = Cred
 runLocal logFile pid = do
     putStrLn "running local test against OpenSSL"
     let combi = [ (ver, cert, dhe, serverCert)
-                | ver  <- [SSL3, TLS10, TLS11, TLS12]
+                | ver  <- [SSL3, TLS10, TLS11, TLS12] -- no TLS13 yet for local
                 , cert <- [Nothing, Just ("test-certs/client.crt", "test-certs/client.key") ]
                 , dhe  <- [False,True]
                 , serverCert <- [Cred "RSA" "test-certs/server.rsa.crt" "test-certs/server.rsa.key"
@@ -309,13 +312,15 @@ main = do
         -- Everything supported
         --t2 Everything [] ++
         -- SSL3 not supported
-        t2 (LowerBound TLS10)
+        t2 (RangeBound TLS10 TLS13)
+            [ "www.facebook.com"
+            ] ++
+        t2 (RangeBound TLS10 TLS12)
             [ "www.google.com"
-            , "www.facebook.com"
             , "mail.office365.com"
             , "www.udacity.com"
             ] ++
-        t2 (LowerBound TLS12)
+        t2 (RangeBound TLS12 TLS12)
             [ "developer.apple.com"
             , "www.github.com"
             , "login.live.com"
