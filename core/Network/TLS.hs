@@ -98,6 +98,7 @@ module Network.TLS
     , sendData
     , recvData
     , recvData'
+    , updateKey
 
     -- * Crypto Key
     , PubKey(..)

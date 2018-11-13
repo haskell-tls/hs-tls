@@ -51,17 +51,21 @@ prop_pipe_work = do
 recvDataNonNull :: Context -> IO C8.ByteString
 recvDataNonNull ctx = recvData ctx >>= \l -> if B.null l then recvDataNonNull ctx else return l
 
-runTLSPipe :: (ClientParams, ServerParams) -> (Context -> Chan C8.ByteString -> IO ()) -> (Chan C8.ByteString -> Context -> IO ()) -> PropertyM IO ()
-runTLSPipe params tlsServer tlsClient = do
+runTLSPipeN :: Int -> (ClientParams, ServerParams) -> (Context -> Chan [C8.ByteString] -> IO ()) -> (Chan C8.ByteString -> Context -> IO ()) -> PropertyM IO ()
+runTLSPipeN n params tlsServer tlsClient = do
     (writeStart, readResult) <- run (establishDataPipe params tlsServer tlsClient)
     -- send some data
-    d <- B.pack <$> pick (someWords8 256)
-    run $ writeStart d
+    ds <- replicateM n $ do
+        d <- B.pack <$> pick (someWords8 256)
+        _ <- run $ writeStart d
+        return d
     -- receive it
-    dres <- run $ timeout 60000000 readResult -- 60 sec
+    dsres <- run $ timeout 60000000 readResult -- 60 sec
     -- check if it equal
-    Just d `assertEq` dres
-    return ()
+    Just ds `assertEq` dsres
+
+runTLSPipe :: (ClientParams, ServerParams) -> (Context -> Chan [C8.ByteString] -> IO ()) -> (Chan C8.ByteString -> Context -> IO ()) -> PropertyM IO ()
+runTLSPipe = runTLSPipeN 1
 
 runTLSPipePredicate :: (ClientParams, ServerParams) -> (Maybe Information -> Bool) -> PropertyM IO ()
 runTLSPipePredicate params p = runTLSPipe params tlsServer tlsClient
@@ -69,7 +73,7 @@ runTLSPipePredicate params p = runTLSPipe params tlsServer tlsClient
             handshake ctx
             checkInfoPredicate ctx
             d <- recvDataNonNull ctx
-            writeChan queue d
+            writeChan queue [d]
             bye ctx -- needed to interrupt recvData in tlsClient
             return ()
         tlsClient queue ctx = do
@@ -98,7 +102,7 @@ runTLSPipeSimple13 params modes mEarlyData = runTLSPipe params tlsServer tlsClie
                     ed' <- recvDataNonNull ctx
                     ed `assertEq` ed'
             d <- recvDataNonNull ctx
-            writeChan queue d
+            writeChan queue [d]
             minfo <- contextGetInformation ctx
             Just (snd modes) `assertEq` (minfo >>= infoTLS13HandshakeMode)
             bye ctx -- needed to interrupt recvData in tlsClient
@@ -111,6 +115,28 @@ runTLSPipeSimple13 params modes mEarlyData = runTLSPipe params tlsServer tlsClie
             Just (fst modes) `assertEq` (minfo >>= infoTLS13HandshakeMode)
             _ <- recvData ctx -- recvData receives NewSessionTicket with TLS13
             bye ctx           -- (until bye is able to do it itself)
+            return ()
+
+runTLSPipeSimpleKeyUpdate :: (ClientParams, ServerParams) -> PropertyM IO ()
+runTLSPipeSimpleKeyUpdate params = runTLSPipeN 3 params tlsServer tlsClient
+  where tlsServer ctx queue = do
+            handshake ctx
+            d0 <- recvDataNonNull ctx
+            _ <- updateKey ctx
+            d1 <- recvDataNonNull ctx
+            d2 <- recvDataNonNull ctx
+            writeChan queue [d0,d1,d2]
+            return ()
+        tlsClient queue ctx = do
+            handshake ctx
+            d0 <- readChan queue
+            sendData ctx (L.fromChunks [d0])
+            d1 <- readChan queue
+            sendData ctx (L.fromChunks [d1])
+            _ <- updateKey ctx
+            d2 <- readChan queue
+            sendData ctx (L.fromChunks [d2])
+            bye ctx
             return ()
 
 runTLSInitFailure :: (ClientParams, ServerParams) -> PropertyM IO ()
@@ -140,6 +166,11 @@ prop_handshake13_initiate = do
         sgrps = supportedGroups $ serverSupported $ snd params
         hs = if head cgrps `elem` sgrps then FullHandshake else HelloRetryRequest
     runTLSPipeSimple13 params (hs,hs) Nothing
+
+prop_handshake_keyupdate :: PropertyM IO ()
+prop_handshake_keyupdate = do
+    params <- pick arbitraryPairParams
+    runTLSPipeSimpleKeyUpdate params
 
 prop_handshake13_full :: PropertyM IO ()
 prop_handshake13_full = do
@@ -485,7 +516,7 @@ prop_handshake_alpn = do
             proto <- getNegotiatedProtocol ctx
             Just "h2" `assertEq` proto
             d <- recvDataNonNull ctx
-            writeChan queue d
+            writeChan queue [d]
             bye ctx -- needed to interrupt recvData in tlsClient
             return ()
         tlsClient queue ctx = do
@@ -514,7 +545,7 @@ prop_handshake_sni = do
             sni <- getClientSNI ctx
             Just serverName `assertEq` sni
             d <- recvDataNonNull ctx
-            writeChan queue d
+            writeChan queue [d]
             bye ctx -- needed to interrupt recvData in tlsClient
             return ()
         tlsClient queue ctx = do
@@ -542,7 +573,7 @@ prop_handshake_renegotiation = do
   where tlsServer ctx queue = do
             handshake ctx
             d <- recvDataNonNull ctx
-            writeChan queue d
+            writeChan queue [d]
             return ()
         tlsClient queue ctx = do
             handshake ctx
@@ -595,6 +626,7 @@ main = defaultMain $ testGroup "tls"
             [ testProperty "Setup" (monadicIO prop_pipe_work)
             , testProperty "Initiation" (monadicIO prop_handshake_initiate)
             , testProperty "Initiation 1.3" (monadicIO prop_handshake13_initiate)
+            , testProperty "Key update 1.3" (monadicIO prop_handshake_keyupdate)
             , testProperty "Hash and signatures" (monadicIO prop_handshake_hashsignatures)
             , testProperty "Cipher suites" (monadicIO prop_handshake_ciphersuites)
             , testProperty "Groups" (monadicIO prop_handshake_groups)
