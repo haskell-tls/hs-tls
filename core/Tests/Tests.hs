@@ -144,15 +144,32 @@ runTLSInitFailure params = do
     (cRes, sRes) <- run (initiateDataPipe params tlsServer tlsClient)
     assertIsLeft cRes
     assertIsLeft sRes
-  where tlsServer ctx = handshake ctx >> bye ctx >> return ("server success" :: String)
-        tlsClient ctx = handshake ctx >> bye ctx >> return ("client success" :: String)
+  where tlsServer ctx = do
+            handshake ctx
+            minfo <- contextGetInformation ctx
+            bye ctx
+            return $ "server success: " ++ show minfo
+        tlsClient ctx = do
+            handshake ctx
+            minfo <- contextGetInformation ctx
+            bye ctx
+            return $ "client success: " ++ show minfo
 
 runTLSInitFailureRenego :: (ClientParams, ServerParams) -> PropertyM IO ()
 runTLSInitFailureRenego params = do
     (cRes, _sRes) <- run (initiateDataPipe params tlsServer tlsClient)
     assertIsLeft cRes
-  where tlsServer ctx = handshake ctx >> bye ctx >> return ("server success" :: String)
-        tlsClient ctx = handshake ctx >> handshake ctx >> bye ctx >> return ("client success" :: String)
+  where tlsServer ctx = do
+            handshake ctx
+            minfo <- contextGetInformation ctx
+            bye ctx
+            return $ "server success: " ++ show minfo
+        tlsClient ctx = do
+            handshake ctx
+            handshake ctx
+            minfo <- contextGetInformation ctx
+            bye ctx
+            return $ "client success: " ++ show minfo
 
 prop_handshake_initiate :: PropertyM IO ()
 prop_handshake_initiate = do
@@ -604,7 +621,7 @@ assertEq :: (Show a, Monad m, Eq a) => a -> a -> m ()
 assertEq expected got = unless (expected == got) $ error ("got " ++ show got ++ " but was expecting " ++ show expected)
 
 assertIsLeft :: (Show b, Monad m) => Either a b -> m ()
-assertIsLeft (Left  _) = return()
+assertIsLeft (Left  _) = return ()
 assertIsLeft (Right b) = error ("got " ++ show b ++ " but was expecting a failure")
 
 main :: IO ()
