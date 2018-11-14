@@ -601,6 +601,24 @@ filterSortCredentials rankFun (Credentials creds) =
     let orderedPairs = sortOn fst [ (rankFun cred, cred) | cred <- creds ]
      in Credentials [ cred | (Just _, cred) <- orderedPairs ]
 
+-- Filters a list of candidate credentials with credentialMatchesHashSignatures.
+--
+-- Algorithms to filter with are taken from "signature_algorithms_cert"
+-- extension when it exists, else from "signature_algorithms" when clients do
+-- not implement the new extension (see RFC 8446 section 4.2.3).
+--
+-- Resulting credential list can be used as input to the hybrid cipher-and-
+-- certificate selection for TLS12, or to the direct certificate selection
+-- simplified with TLS13.  As filtering credential signatures with client-
+-- advertised algorithms is not supposed to cause negotiation failure, in case
+-- of dead end with the subsequent selection process, this process should always
+-- be restarted with the unfiltered credential list as input (see fallback
+-- certificate chains, described in same RFC section).
+--
+-- Calling code should not forget to apply constraints of extension
+-- "signature_algorithms" to any signature-based key exchange derived from the
+-- output credentials.  Respecting client constraints on KX signatures is
+-- mandatory but not implemented by this function.
 filterCredentialsWithHashSignatures :: [ExtensionRaw] -> Credentials -> Credentials
 filterCredentialsWithHashSignatures exts =
     case withExt extensionID_SignatureAlgorithmsCert of
@@ -614,8 +632,9 @@ filterCredentialsWithHashSignatures exts =
     withAlgs sas = filterCredentials (credentialMatchesHashSignatures sas)
     filterCredentials p (Credentials l) = Credentials (filter p l)
 
--- returns True if "signature_algorithms" certificate filtering produced no
--- ephemeral D-H nor TLS13 cipher (so handshake with lower security)
+-- returns True if certificate filtering with "signature_algorithms_cert" /
+-- "signature_algorithms" produced no ephemeral D-H nor TLS13 cipher (so
+-- handshake with lower security)
 cipherListCredentialFallback :: [Cipher] -> Bool
 cipherListCredentialFallback = all nonDH
   where
