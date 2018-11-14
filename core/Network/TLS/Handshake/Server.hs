@@ -850,7 +850,7 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
             is0RTTvalid = isSameVersion && isSameCipher && isSameALPN
         return (isPSKvalid, is0RTTvalid)
 
-    rtt0accept = serverEarlyDataSize sparams /= 0
+    rtt0accept = safeNonNegative32 (serverEarlyDataSize sparams) > 0
     rtt0 = case extensionLookup extensionID_EarlyData exts >>= extensionDecode MsgTClientHello of
              Just (EarlyDataIndication _) -> True
              Nothing                      -> False
