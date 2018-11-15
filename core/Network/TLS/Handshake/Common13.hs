@@ -33,7 +33,6 @@ import Data.Bits (finiteBitSize)
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 import Data.Hourglass
-import Data.IORef (newIORef, readIORef)
 import Network.TLS.Context.Internal
 import Network.TLS.Cipher
 import Network.TLS.Crypto
@@ -169,16 +168,15 @@ replacePSKBinder pskz binder = identities `B.append` binders
 
 ----------------------------------------------------------------
 
-createTLS13TicketInfo :: Word32 -> Either Context Word32 -> IO TLS13TicketInfo
-createTLS13TicketInfo life ecw = do
+createTLS13TicketInfo :: Word32 -> Either Context Word32 -> Maybe Millisecond -> IO TLS13TicketInfo
+createTLS13TicketInfo life ecw mrtt = do
     -- Left:  serverSendTime
     -- Right: clientReceiveTime
     bTime <- getCurrentTimeFromBase
     add <- case ecw of
         Left ctx -> B.foldl' (*+) 0 <$> usingState_ ctx (genRandom 4)
         Right ad -> return ad
-    rttref <- newIORef Nothing
-    return $ TLS13TicketInfo life add bTime rttref
+    return $ TLS13TicketInfo life add bTime mrtt
   where
     x *+ y = x * 256 + fromIntegral y
 
@@ -203,23 +201,20 @@ getAge tinfo = do
 
 checkFreshness :: TLS13TicketInfo -> Word32 -> IO Bool
 checkFreshness tinfo obfAge = do
-    mrtt <- readIORef $ estimatedRTT tinfo
-    case mrtt of
-      Nothing -> return False
-      Just rtt -> do
-        let expectedArrivalTime = serverSendTime + rtt + fromIntegral age
-        serverReceiveTime <- getCurrentTimeFromBase
-        let freshness = if expectedArrivalTime > serverReceiveTime
-                        then expectedArrivalTime - serverReceiveTime
-                        else serverReceiveTime - expectedArrivalTime
-        -- Some implementations round age up to second.
-        -- We take max of 2000 and rtt in the case where rtt is too small.
-        let tolerance = max 2000 rtt
-            isFresh = freshness < tolerance
-        return $ isAlive && isFresh
+    serverReceiveTime <- getCurrentTimeFromBase
+    let freshness = if expectedArrivalTime > serverReceiveTime
+                    then expectedArrivalTime - serverReceiveTime
+                    else serverReceiveTime - expectedArrivalTime
+    -- Some implementations round age up to second.
+    -- We take max of 2000 and rtt in the case where rtt is too small.
+    let tolerance = max 2000 rtt
+        isFresh = freshness < tolerance
+    return $ isAlive && isFresh
   where
     serverSendTime = txrxTime tinfo
+    Just rtt = estimatedRTT tinfo
     age = obfuscatedAgeToAge obfAge tinfo
+    expectedArrivalTime = serverSendTime + rtt + fromIntegral age
     isAlive = isAgeValid age tinfo
 
 getCurrentTimeFromBase :: IO Millisecond

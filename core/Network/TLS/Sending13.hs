@@ -47,10 +47,15 @@ encodeRecord (Record13 ct bytes) = return ebytes
         putBytes bytes
 
 writePacket13 :: Context -> Packet13 -> IO (Either TLSError ByteString)
+writePacket13 ctx pkt@(Handshake13 [NewSessionTicket13 _ _ _ _ _]) = encodePacket13 ctx pkt
+writePacket13 ctx pkt@(Handshake13 [KeyUpdate13 _]) = encodePacket13 ctx pkt
 writePacket13 ctx pkt@(Handshake13 hss) = do
     forM_ hss $ updateHandshake13 ctx
-    prepareRecord ctx (makeRecord pkt >>= engageRecord >>= encodeRecord)
-writePacket13 ctx pkt = prepareRecord ctx (makeRecord pkt >>= engageRecord >>= encodeRecord)
+    encodePacket13 ctx pkt
+writePacket13 ctx pkt = encodePacket13 ctx pkt
+
+encodePacket13 :: Context -> Packet13 -> IO (Either TLSError ByteString)
+encodePacket13 ctx pkt = prepareRecord ctx (makeRecord pkt >>= engageRecord >>= encodeRecord)
 
 writeHandshakePacket13 :: MonadIO m => Context -> Handshake13 -> m ByteString
 writeHandshakePacket13 ctx hdsk = do
