@@ -119,7 +119,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
             Just (SupportedVersionsClientHello vers) -> vers
             _                                        -> []
         serverVersions = supportedVersions $ ctxSupported ctx
-        mVersion = debugVersion $ serverDebug sparams
+        mVersion = debugVersionForced $ serverDebug sparams
     chosenVersion <- case mVersion of
       Just cver -> return cver
       Nothing   ->

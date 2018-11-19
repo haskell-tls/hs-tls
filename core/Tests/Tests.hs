@@ -183,7 +183,7 @@ prop_handshake_keyupdate = do
 prop_handshake13_downgrade :: PropertyM IO ()
 prop_handshake13_downgrade = do
     (cparam,sparam) <- pick arbitraryPairParams13
-    let debug' = (serverDebug sparam) { debugVersion = Just TLS12 }
+    let debug' = (serverDebug sparam) { debugVersionForced = Just TLS12 }
         sparam' = sparam { serverDebug = debug' }
     runTLSInitFailure (cparam,sparam')
 
