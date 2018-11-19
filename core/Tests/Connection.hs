@@ -13,7 +13,7 @@ module Connection
     , arbitraryClientCredential
     , arbitraryRSACredentialWithUsage
     , isCustomDHParams
-    , leafPublicKey
+    , isLeafRSA
     , readClientSessionRef
     , twoSessionRefs
     , twoSessionManagers
@@ -118,6 +118,11 @@ isCustomDHParams params = params == dhParams512
 leafPublicKey :: CertificateChain -> Maybe PubKey
 leafPublicKey (CertificateChain [])       = Nothing
 leafPublicKey (CertificateChain (leaf:_)) = Just (certPubKey $ signedObject $ getSigned leaf)
+
+isLeafRSA :: Maybe CertificateChain -> Bool
+isLeafRSA chain = case chain >>= leafPublicKey of
+                        Just (PubKeyRSA _) -> True
+                        _                  -> False
 
 arbitraryCipherPair :: Version -> Gen ([Cipher], [Cipher])
 arbitraryCipherPair connectVersion = do

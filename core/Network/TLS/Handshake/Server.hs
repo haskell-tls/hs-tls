@@ -224,7 +224,7 @@ handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverN
                                --
                                -- We try to keep certificates supported by the client, but
                                -- fallback to all credentials if this produces no suitable result
-                               -- (see RFC 5246 section 7.4.2 and TLS 1.3 section 4.4.2.2).
+                               -- (see RFC 5246 section 7.4.2 and RFC 8446 section 4.4.2.2).
                                -- The condition is based on resulting (EC)DHE ciphers so that
                                -- filtering credentials does not give advantage to a less secure
                                -- key exchange like CipherKeyExchange_RSA or CipherKeyExchange_DH_Anon.
@@ -601,16 +601,40 @@ filterSortCredentials rankFun (Credentials creds) =
     let orderedPairs = sortOn fst [ (rankFun cred, cred) | cred <- creds ]
      in Credentials [ cred | (Just _, cred) <- orderedPairs ]
 
+-- Filters a list of candidate credentials with credentialMatchesHashSignatures.
+--
+-- Algorithms to filter with are taken from "signature_algorithms_cert"
+-- extension when it exists, else from "signature_algorithms" when clients do
+-- not implement the new extension (see RFC 8446 section 4.2.3).
+--
+-- Resulting credential list can be used as input to the hybrid cipher-and-
+-- certificate selection for TLS12, or to the direct certificate selection
+-- simplified with TLS13.  As filtering credential signatures with client-
+-- advertised algorithms is not supposed to cause negotiation failure, in case
+-- of dead end with the subsequent selection process, this process should always
+-- be restarted with the unfiltered credential list as input (see fallback
+-- certificate chains, described in same RFC section).
+--
+-- Calling code should not forget to apply constraints of extension
+-- "signature_algorithms" to any signature-based key exchange derived from the
+-- output credentials.  Respecting client constraints on KX signatures is
+-- mandatory but not implemented by this function.
 filterCredentialsWithHashSignatures :: [ExtensionRaw] -> Credentials -> Credentials
 filterCredentialsWithHashSignatures exts =
-    case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode MsgTClientHello of
-        Nothing                        -> id
-        Just (SignatureAlgorithms sas) ->
-            let filterCredentials p (Credentials l) = Credentials (filter p l)
-             in filterCredentials (credentialMatchesHashSignatures sas)
+    case withExt extensionID_SignatureAlgorithmsCert of
+        Just (SignatureAlgorithmsCert sas) -> withAlgs sas
+        Nothing ->
+            case withExt extensionID_SignatureAlgorithms of
+                Nothing                        -> id
+                Just (SignatureAlgorithms sas) -> withAlgs sas
+  where
+    withExt extId = extensionLookup extId exts >>= extensionDecode MsgTClientHello
+    withAlgs sas = filterCredentials (credentialMatchesHashSignatures sas)
+    filterCredentials p (Credentials l) = Credentials (filter p l)
 
--- returns True if "signature_algorithms" certificate filtering produced no
--- ephemeral D-H nor TLS13 cipher (so handshake with lower security)
+-- returns True if certificate filtering with "signature_algorithms_cert" /
+-- "signature_algorithms" produced no ephemeral D-H nor TLS13 cipher (so
+-- handshake with lower security)
 cipherListCredentialFallback :: [Cipher] -> Bool
 cipherListCredentialFallback = all nonDH
   where
@@ -650,11 +674,18 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
     case findKeyShare keyShares serverGroups of
       Nothing -> helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession
       Just keyShare -> do
-        -- Deciding signature algorithm
+        -- When deciding signature algorithm and certificate, we try to keep
+        -- certificates supported by the client, but fallback to all credentials
+        -- if this produces no suitable result (see RFC 5246 section 7.4.2 and
+        -- RFC 8446 section 4.4.2.2).
         let hashSigs = hashAndSignaturesInCommon ctx exts
-        (cred, sigAlgo) <- case credentialsFindForSigning13 hashSigs allCreds of
-            Nothing -> throwCore $ Error_Protocol ("credential not found", True, IllegalParameter)
+            cltCreds = filterCredentialsWithHashSignatures exts allCreds
+        (cred, sigAlgo) <- case credentialsFindForSigning13 hashSigs cltCreds of
             Just cs -> return cs
+            Nothing ->
+                case credentialsFindForSigning13 hashSigs allCreds of
+                    Just cs -> return cs
+                    Nothing -> throwCore $ Error_Protocol ("credential not found", True, IllegalParameter)
         let usedHash = cipherHash usedCipher
         doHandshake13 sparams cred ctx chosenVersion usedCipher exts usedHash keyShare sigAlgo clientSession
   where
@@ -1000,7 +1031,6 @@ applicationProtocol ctx exts sparams
   where
     clientALPNSuggest = isJust $ extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts
 
--- fixme: should we use filterCredentialsWithHashSignatures here?
 credentialsFindForSigning13 :: [HashAndSignatureAlgorithm] -> Credentials -> Maybe (Credential, HashAndSignatureAlgorithm)
 credentialsFindForSigning13 hss0 creds = loop hss0
   where

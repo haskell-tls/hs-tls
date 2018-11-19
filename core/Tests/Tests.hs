@@ -397,10 +397,47 @@ prop_handshake_cert_fallback = do
     runTLSPipeSimple (clientParam',serverParam)
     serverChain <- run $ readIORef chainRef
     dssDisallowed `assertEq` isLeafRSA serverChain
-  where
-    isLeafRSA chain = case chain >>= leafPublicKey of
-                          Just (PubKeyRSA _) -> True
-                          _                  -> False
+
+-- Same as above but testing with supportedHashSignatures directly instead of
+-- ciphers, and thus allowing TLS13.  Peers accept RSA with SHA-256 but the
+-- server RSA certificate has a SHA-1 signature.  When DSS is allowed by both
+-- client and server, the DSA certificate is selected.  Otherwise the server
+-- fallbacks to RSA.
+--
+-- Note: DSA and SHA-1 are supposed to be disallowed with TLS13.  Currently this
+-- is not enforced by the library, which is useful to test this scenario until
+-- ECDSA or EdDSA support is added.  SHA-1 could be replaced by another
+-- algorithm.
+prop_handshake_cert_fallback_hs :: PropertyM IO ()
+prop_handshake_cert_fallback_hs = do
+    tls13 <- pick arbitrary
+    let versions = if tls13 then [TLS13] else [TLS12]
+        ciphers  = [ cipher_ECDHE_RSA_AES128GCM_SHA256
+                   , cipher_DHE_DSS_AES128_SHA1
+                   , cipher_TLS13_AES128GCM_SHA256
+                   ]
+        commonHS = [ (HashSHA256, SignatureRSA) ]
+        otherHS  = [ (HashSHA1, SignatureDSS) ]
+    chainRef <- run $ newIORef Nothing
+    clientHS <- pick $ sublistOf otherHS
+    serverHS <- pick $ sublistOf otherHS
+    (clientParam,serverParam) <- pick $ arbitraryPairParamsWithVersionsAndCiphers
+                                            (versions, versions)
+                                            (ciphers, ciphers)
+    let clientParam' = clientParam { clientSupported = (clientSupported clientParam)
+                                       { supportedHashSignatures = commonHS ++ clientHS }
+                                   , clientHooks = (clientHooks clientParam)
+                                       { onServerCertificate = \_ _ _ chain ->
+                                             writeIORef chainRef (Just chain) >> return [] }
+                                   }
+        serverParam' = serverParam { serverSupported = (serverSupported serverParam)
+                                       { supportedHashSignatures = commonHS ++ serverHS }
+                                   }
+        dssDisallowed = (HashSHA1, SignatureDSS) `notElem` clientHS
+                            || (HashSHA1, SignatureDSS) `notElem` serverHS
+    runTLSPipeSimple (clientParam',serverParam')
+    serverChain <- run $ readIORef chainRef
+    dssDisallowed `assertEq` isLeafRSA serverChain
 
 prop_handshake_groups :: PropertyM IO ()
 prop_handshake_groups = do
@@ -647,7 +684,8 @@ main = defaultMain $ testGroup "tls"
             , testProperty "Hash and signatures" (monadicIO prop_handshake_hashsignatures)
             , testProperty "Cipher suites" (monadicIO prop_handshake_ciphersuites)
             , testProperty "Groups" (monadicIO prop_handshake_groups)
-            , testProperty "Certificate fallback" (monadicIO prop_handshake_cert_fallback)
+            , testProperty "Certificate fallback (ciphers)" (monadicIO prop_handshake_cert_fallback)
+            , testProperty "Certificate fallback (hash and signatures)" (monadicIO prop_handshake_cert_fallback_hs)
             , testProperty "Server key usage" (monadicIO prop_handshake_srv_key_usage)
             , testProperty "Client authentication" (monadicIO prop_handshake_client_auth)
             , testProperty "Client key usage" (monadicIO prop_handshake_clt_key_usage)
