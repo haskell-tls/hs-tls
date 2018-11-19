@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- |
 -- Module      : Network.TLS.Handshake.Client
@@ -285,7 +286,143 @@ handshakeClient' cparams ctx groups mcrand = do
                         _ -> fail ("unexepected type received. expecting handshake and got: " ++ show p)
                 throwAlert a = usingState_ ctx $ throwError $ Error_Protocol ("expecting server hello, got alert : " ++ show a, True, HandshakeFailure)
 
--- | send client Data after receiving all server data (hello/certificates/key).
+-- | When the server requests a client certificate, we try to
+-- obtain a suitable certificate chain and private key via the
+-- callback in the client parameters.  It is OK for the callback
+-- to return an empty chain, in many cases the client certificate
+-- is optional.  If the client wishes to abort the handshake for
+-- lack of a suitable certificate, it can throw an exception in
+-- the callback.
+--
+-- The return value is 'Nothing' when no @CertificateRequest@ was
+-- received and no @Certificate@ message needs to be sent. An empty
+-- chain means that an empty @Certificate@ message needs to be sent
+-- to the server, naturally without a @CertificateVerify@.  A non-empty
+-- 'CertificateChain' is the chain to send to the server along with
+-- a corresponding 'CertificateVerify'.
+--
+-- With TLS < 1.2 the server's @CertificateRequest@ does not carry
+-- a signature algorithm list.  It has a list of supported public
+-- key signing algorithms in the @certificate_types@ field.  The
+-- hash is implicit.  It is 'SHA1' for DSS and 'SHA1_MD5' for RSA.
+--
+-- With TLS == 1.2 the server's @CertificateRequest@ always has a
+-- @supported_signature_algorithms@ list, as a fixed component of
+-- the structure.  This list is (wrongly) overloaded to also limit
+-- X.509 signatures in the client's certificate chain.  The BCP
+-- strategy is to find a compatible chain if possible, but else
+-- ignore the constraint, and let the server verify the chain as it
+-- sees fit.  The @supported_signature_algorithms@ field is only
+-- obligatory with respect to signatures on TLS messages, in this
+-- case the @CertificateVerify@ message.  The @certificate_types@
+-- field is still included.
+--
+-- With TLS 1.3 the server's @CertificateRequest@ has a mandatory
+-- @signature_algorithms@ extension, the @signature_algorithms_cert@
+-- extension, which is optional, carries a list of algorithms the
+-- server promises to support in verifying the certificate chain.
+-- As with TLS 1.2, the client's makes a /best-effort/ to deliver
+-- a compatible certificate chain where all the CA signatures are
+-- known to be supported, but it should not abort the connection
+-- just because the chain might not work out, just send the best
+-- chain you have and let the server worry about the rest.  The
+-- supported public key algorithms are now inferred from the
+-- @signature_algorithms@ extension and @certificate_types@ is
+-- gone.
+--
+-- With TLS 1.3, we synthesize and store a @certificate_types@
+-- field at the time that the server's @CertificateRequest@
+-- message is received.  This is then present across all the
+-- protocol versions, and can be used to determine whether
+-- a @CertificateRequest@ was received or not.
+--
+-- If @signature_algorithms@ is 'Nothing', then we're doing
+-- TLS 1.0 or 1.1.  The @signature_algorithms_cert@ extension
+-- is optional in TLS 1.3, and so the application callback
+-- will not be able to distinguish between TLS 1.[01] and
+-- TLS 1.3 with no certificate algorithm hints, but this
+-- just simplifies the chain selection process, all CA
+-- signatures are OK.
+--
+clientChain :: ClientParams -> Context -> IO (Maybe CertificateChain)
+clientChain cparams ctx = do
+    usingHState ctx getCertReqCBdata >>= \case
+        Nothing     -> return Nothing
+        Just cbdata -> do
+            let callback = onCertificateRequest $ clientHooks cparams
+            chain <- liftIO $ callback cbdata `catchException`
+                throwMiscErrorOnException "certificate request callback failed"
+            case chain of
+                Nothing
+                    -> return $ Just $ CertificateChain []
+                Just (CertificateChain [], _)
+                    -> return $ Just $ CertificateChain []
+                Just (cc, privkey)
+                    -> do
+                       let (cTypes, _, _) = cbdata
+                       storePrivInfo ctx (Just cTypes) cc privkey
+                       return $ Just cc
+
+-- | Return a most preferred 'HandAndSignatureAlgorithm' that is
+-- compatible with the private key and server's signature
+-- algorithms (both already saved).  Must only be called for TLS
+-- versions 1.2 and up.
+--
+-- The values in the server's @signature_algorithms@ extension are
+-- in descending order of preference.  However here the algorithms
+-- are selected by client preference in 'supportedHashSignatures'.
+--
+getLocalHashSigAlg :: Context
+                   -> DigitalSignatureAlg
+                   -> IO HashAndSignatureAlgorithm
+getLocalHashSigAlg ctx keyAlg = do
+    -- Must be present with TLS 1.2 and up.
+    (Just (_, Just hashSigs, _)) <- usingHState ctx getCertReqCBdata
+    let want = (&&) <$> signatureCompatible keyAlg
+                    <*> flip elem hashSigs
+    case find want $ supportedHashSignatures $ ctxSupported ctx of
+        Just best -> return best
+        Nothing   -> throwCore $ Error_Protocol
+                         ( keyerr $ show keyAlg
+                         , True
+                         , HandshakeFailure
+                         )
+  where
+    keyerr alg = "no " ++ alg ++ " hash algorithm in common with the server"
+
+-- | Return the supported 'CertificateType' values that are
+-- compatible with at least one supported signature algorithm.
+--
+supportedCtypes :: [HashAndSignatureAlgorithm]
+                -> [CertificateType]
+supportedCtypes hashAlgs =
+    nub $ foldr ctfilter [] hashAlgs
+  where
+    ctfilter x acc = case hashSigToCertType13 x of
+       Just cType | cType <= lastSupportedCertificateType
+                 -> cType : acc
+       _         -> acc
+--
+clientSupportedCtypes :: Context
+                      -> [CertificateType]
+clientSupportedCtypes ctx =
+    supportedCtypes $ supportedHashSignatures $ ctxSupported ctx
+--
+sigAlgsToCertTypes :: Context
+                   -> [HashAndSignatureAlgorithm]
+                   -> [CertificateType]
+sigAlgsToCertTypes ctx hashSigs =
+    filter (`elem` supportedCtypes hashSigs) $ clientSupportedCtypes ctx
+
+-- | TLS 1.2 and below.  Send the client handshake messages that
+-- follow the @ServerHello@, etc. except for @CCS@ and @Finished@.
+--
+-- XXX: Is any buffering done here to combined these messages into
+-- a single TCP packet?  Otherwise we're prone to Nagle delays, or
+-- in any case needlessly generate multiple small packets, where
+-- a single larger packet will do.  The TLS 1.3 code path seems
+-- to separating record generation and transmission and sending
+-- multiple records in a single packet.
 --
 --       -> [certificate]
 --       -> client key exchange
@@ -293,35 +430,14 @@ handshakeClient' cparams ctx groups mcrand = do
 sendClientData :: ClientParams -> Context -> IO ()
 sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertificateVerify
   where
-        -- When the server requests a client certificate, we
-        -- fetch a certificate chain from the callback in the
-        -- client parameters and send it to the server.
-        -- Additionally, we store the private key associated
-        -- with the first certificate in the chain for later
-        -- use.
-        --
         sendCertificate = do
-            certRequested <- usingHState ctx getClientCertRequest
-            case certRequested of
-                Nothing ->
-                    return ()
-
-                Just req -> do
-                    certChain <- liftIO $ (onCertificateRequest $ clientHooks cparams) req `catchException`
-                                 throwMiscErrorOnException "certificate request callback failed"
-
-                    usingHState ctx $ setClientCertSent False
-                    case certChain of
-                        Nothing                       -> sendPacket ctx $ Handshake [Certificates (CertificateChain [])]
-                        Just (CertificateChain [], _) -> sendPacket ctx $ Handshake [Certificates (CertificateChain [])]
-                        Just (cc@(CertificateChain (c:_)), pk) -> do
-                            case certPubKey $ getCertificate c of
-                                PubKeyRSA _ -> return ()
-                                PubKeyDSA _ -> return ()
-                                _           -> throwCore $ Error_Protocol ("no supported certificate type", True, HandshakeFailure)
-                            usingHState ctx $ setPrivateKey pk
-                            usingHState ctx $ setClientCertSent True
-                            sendPacket ctx $ Handshake [Certificates cc]
+            usingHState ctx $ setClientCertSent False
+            clientChain cparams ctx >>= \case
+                Nothing                    -> return ()
+                Just cc@(CertificateChain certs) -> do
+                    when (not $ null certs) $
+                        usingHState ctx $ setClientCertSent True
+                    sendPacket ctx $ Handshake [Certificates cc]
 
         sendClientKeyXchg = do
             cipher <- usingHState ctx getPendingCipher
@@ -400,41 +516,22 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
         -- 4. Send it to the server.
         --
         sendCertificateVerify = do
-            usedVersion <- usingState_ ctx getVersion
+            ver <- usingState_ ctx getVersion
 
             -- Only send a certificate verify message when we
             -- have sent a non-empty list of certificates.
             --
             certSent <- usingHState ctx getClientCertSent
             when certSent $ do
-                sigAlg <- getLocalSignatureAlg
-
-                mhashSig <- case usedVersion of
-                    TLS12 -> do
-                        Just (_, Just hashSigs, _) <- usingHState ctx getClientCertRequest
-                        -- The values in the "signature_algorithms" extension
-                        -- are in descending order of preference.
-                        -- However here the algorithms are selected according
-                        -- to client preference in 'supportedHashSignatures'.
-                        let suppHashSigs = supportedHashSignatures $ ctxSupported ctx
-                            matchHashSigs = filter (sigAlg `signatureCompatible`) suppHashSigs
-                            hashSigs' = filter (`elem` hashSigs) matchHashSigs
-
-                        when (null hashSigs') $
-                            throwCore $ Error_Protocol ("no " ++ show sigAlg ++ " hash algorithm in common with the server", True, HandshakeFailure)
-                        return $ Just $ head hashSigs'
+                (_, keyAlg) <- usingHState ctx getLocalPrivateKey
+                mhashSig    <- case ver of
+                    TLS12 -> Just <$> getLocalHashSigAlg ctx keyAlg
                     _     -> return Nothing
 
                 -- Fetch all handshake messages up to now.
                 msgs   <- usingHState ctx $ B.concat <$> getHandshakeMessages
-                sigDig <- createCertificateVerify ctx usedVersion sigAlg mhashSig msgs
+                sigDig <- createCertificateVerify ctx ver keyAlg mhashSig msgs
                 sendPacket ctx $ Handshake [CertVerify sigDig]
-
-        getLocalSignatureAlg = do
-            pk <- usingHState ctx getLocalPrivateKey
-            case pk of
-                PrivKeyRSA _   -> return RSA
-                PrivKeyDSA _   -> return DSS
 
 processServerExtension :: ExtensionRaw -> TLSSt ()
 processServerExtension (ExtensionRaw extID content)
@@ -595,14 +692,20 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
 processServerKeyExchange ctx p = processCertificateRequest ctx p
 
 processCertificateRequest :: Context -> Handshake -> IO (RecvState IO)
-processCertificateRequest ctx (CertRequest cTypes sigAlgs dNames) = do
-    -- When the server requests a client
-    -- certificate, we simply store the
-    -- information for later.
-    --
-    usingHState ctx $ setClientCertRequest (cTypes, sigAlgs, dNames)
+processCertificateRequest ctx (CertRequest cTypesSent sigAlgs dNames) = do
+    ver <- usingState_ ctx getVersion
+    when (ver == TLS12 && sigAlgs == Nothing) $
+        throwCore $ Error_Protocol
+            ( "missing TLS 1.2 certificate request signature algorithms"
+            , True
+            , InternalError
+            )
+    let cTypes = filter (<= lastSupportedCertificateType) cTypesSent
+    usingHState ctx $ setCertReqCBdata $ Just (cTypes, sigAlgs, dNames)
     return $ RecvStateHandshake (processServerHelloDone ctx)
-processCertificateRequest ctx p = processServerHelloDone ctx p
+processCertificateRequest ctx p = do
+    usingHState ctx $ setCertReqCBdata Nothing
+    processServerHelloDone ctx p
 
 processServerHelloDone :: Context -> Handshake -> IO (RecvState m)
 processServerHelloDone _ ServerHelloDone = return RecvStateDone
@@ -646,16 +749,47 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
     when rtt0accepted $ do
         eoed <- writeHandshakePacket13 ctx EndOfEarlyData13
         sendBytes13 ctx eoed
+    setTxState ctx usedHash usedCipher clientHandshakeTrafficSecret
+    chain <- clientChain cparams ctx
+    cdata <- case chain of
+        Nothing -> return ""
+        Just cc -> usingHState ctx getCertReqToken >>= sendClientData13 cc
     -- putStrLn "---- setTxState ctx usedHash usedCipher clientHandshakeTrafficSecret"
     rawFinished <- makeFinished ctx usedHash clientHandshakeTrafficSecret
-    setTxState ctx usedHash usedCipher clientHandshakeTrafficSecret
-    writeHandshakePacket13 ctx rawFinished >>= sendBytes13 ctx
+    writeHandshakePacket13 ctx rawFinished >>=
+        sendBytes13 ctx . mappend cdata
     masterSecret <- switchToTrafficSecret handshakeSecret hChSf
     setResumptionSecret masterSecret
     setEstablished ctx Established
   where
     hashSize = hashDigestSize usedHash
     zero = B.replicate hashSize 0
+
+    sendClientData13 chain (Just token) = do
+        let (CertificateChain certs) = chain
+            certExts = replicate (length certs) []
+        certbytes <- writeHandshakePacket13 ctx $
+            Certificate13 token chain certExts
+        case certs of
+            [] -> return certbytes
+            _  -> do
+                  hChSc      <- transcriptHash ctx
+                  (salg, pk) <- getSigKey
+                  vfy        <- makeClientCertVerify ctx salg pk hChSc
+                  vrfybytes  <- writeHandshakePacket13 ctx vfy
+                  return $ mappend certbytes vrfybytes
+      where
+        getSigKey = do
+            (privkey, privalg) <- usingHState ctx getLocalPrivateKey
+            sigAlg  <- getLocalHashSigAlg ctx privalg
+            return (sigAlg, privkey)
+    --
+    sendClientData13 _ _ =
+        throwCore $ Error_Protocol
+            ( "missing TLS 1.3 certificate request context token"
+            , True
+            , InternalError
+            )
 
     switchToHandshakeSecret = do
         ecdhe <- calcSharedKey
@@ -730,7 +864,37 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
             return False
 
     recvCertAndVerify = do
-        cert <- recvHandshake13 ctx
+        hmsg <- recvHandshake13 ctx
+        cert <- case hmsg of
+            CertRequest13 token exts -> do
+                let hsextID = extensionID_SignatureAlgorithms
+                    -- caextID = extensionID_SignatureAlgorithmsCert
+                updateHandshake13 ctx hmsg
+                dNames <- canames exts
+                -- The @signature_algorithms@ extension is mandatory.
+                hsAlgs <- extalgs hsextID exts unsighash
+                cTypes <- case hsAlgs of
+                    Just as -> return $ sigAlgsToCertTypes ctx as
+                    Nothing -> throwCore $ Error_Protocol
+                                   ( "invalid certificate request"
+                                   , True
+                                   , HandshakeFailure )
+                -- Unused:
+                -- caAlgs <- extalgs caextID exts uncertsig
+                usingHState ctx $ do
+                    setCertReqToken  $ Just token
+                    setCertReqCBdata $ Just (cTypes, hsAlgs, dNames)
+                    -- setCertReqSigAlgsCert caAlgs
+                recvHandshake13 ctx
+            _ -> do
+                usingHState ctx $ do
+                    setCertReqToken   Nothing
+                    setCertReqCBdata  Nothing
+                    -- setCertReqSigAlgsCert Nothing
+                return hmsg
+
+        -- FIXME: What happens when the pattern match fails?
+        --
         let Certificate13 _ cc@(CertificateChain certChain) _ = cert
         _ <- processCertificate cparams ctx (Certificates cc)
         updateHandshake13 ctx cert
@@ -742,6 +906,35 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
         hChSc <- transcriptHash ctx
         checkServerCertVerify ss sig pubkey hChSc
         updateHandshake13 ctx certVerify
+      where
+        canames exts = case extensionLookup
+                            extensionID_CertificateAuthorities exts of
+            Nothing   -> return []
+            Just  ext -> case extensionDecode MsgTCertificateRequest ext of
+                             Just (CertificateAuthorities names) -> return names
+                             _ -> throwCore $ Error_Protocol
+                                      ( "invalid certificate request"
+                                      , True
+                                      , HandshakeFailure )
+        extalgs extID exts decons = case extensionLookup extID exts of
+            Nothing   -> return Nothing
+            Just  ext -> case extensionDecode MsgTCertificateRequest ext of
+                             Just e
+                               -> return    $ decons e
+                             _ -> throwCore $ Error_Protocol
+                                      ( "invalid certificate request"
+                                      , True
+                                      , HandshakeFailure )
+
+        unsighash :: SignatureAlgorithms
+                  -> Maybe [HashAndSignatureAlgorithm]
+        unsighash (SignatureAlgorithms a) = Just a
+
+        {- Unused for now
+        uncertsig :: SignatureAlgorithmsCert
+                  -> Maybe [HashAndSignatureAlgorithm]
+        uncertsig (SignatureAlgorithmsCert a) = Just a
+        -}
 
     recvFinished serverHandshakeTrafficSecret = do
         finished <- recvHandshake13 ctx
