@@ -19,7 +19,6 @@ import Network.TLS.Struct13
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Packet hiding (getExtensions)
-import Network.TLS.Packet13
 import Network.TLS.ErrT
 import Network.TLS.Extension
 import Network.TLS.IO
@@ -42,6 +41,7 @@ import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Certificate
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.Key
+import Network.TLS.Handshake.Random
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.KeySchedule
@@ -62,6 +62,13 @@ handshakeClient cparams ctx = do
                   Just grp -> [grp]
     handshakeClient' cparams ctx groups Nothing
 
+-- https://tools.ietf.org/html/rfc8446#section-4.1.2 says:
+-- "The client will also send a
+--  ClientHello when the server has responded to its ClientHello with a
+--  HelloRetryRequest.  In that case, the client MUST send the same
+--  ClientHello without modification, except as follows:"
+--
+-- So, the ClientRandom in the first client hello is necessary.
 handshakeClient' :: ClientParams -> Context -> [Group] -> Maybe ClientRandom -> IO ()
 handshakeClient' cparams ctx groups mcrand = do
     -- putStr $ "groups = " ++ show groups ++ ", keyshare = ["
@@ -225,10 +232,7 @@ handshakeClient' cparams ctx groups mcrand = do
                       return exts'
 
         sendClientHello mcr = do
-            -- fixme -- "44 4F 57 4E 47 52 44 01"
-            crand <- case mcr of
-              Nothing -> ClientRandom <$> getStateRNG ctx 32
-              Just cr -> return cr
+            crand <- clientRandom ctx mcr
             let ver = if tls13 then TLS12 else highestVer
             hrr <- usingState_ ctx getTLS13HRR
             unless hrr $ startHandshake ctx ver crand
@@ -465,6 +469,8 @@ throwMiscErrorOnException msg e =
 --
 onServerHello :: Context -> ClientParams -> [ExtensionID] -> Handshake -> IO (RecvState IO)
 onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cipher compression exts) = do
+    when (isDowngraded (supportedVersions $ clientSupported cparams) serverRan) $
+        throwCore $ Error_Protocol ("verion downgrade detected", True, IllegalParameter)
     when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
     -- find the compression and cipher methods that the server want to use.
     cipherAlg <- case find ((==) cipher . cipherID) (supportedCiphers $ ctxSupported ctx) of
@@ -486,7 +492,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
             case clientWantSessionResume cparams of
                 Just (sessionId, sessionData) -> if serverSession == Session (Just sessionId) then Just sessionData else Nothing
                 Nothing                       -> Nothing
-        isHRR = serverRan == hrrRandom
+        isHRR = isHelloRetryRequest serverRan
     usingState_ ctx $ do
         setTLS13HRR isHRR
         case extensionLookup extensionID_Cookie exts >>= extensionDecode MsgTServerHello of

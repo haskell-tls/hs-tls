@@ -92,6 +92,7 @@ Library
                      Network.TLS.Handshake.Client
                      Network.TLS.Handshake.Server
                      Network.TLS.Handshake.Process
+                     Network.TLS.Handshake.Random
                      Network.TLS.Handshake.Signature
                      Network.TLS.Handshake.State
                      Network.TLS.Handshake.State13

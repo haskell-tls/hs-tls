@@ -17,7 +17,6 @@ import Network.TLS.Context.Internal
 import Network.TLS.Session
 import Network.TLS.Struct
 import Network.TLS.Struct13
-import Network.TLS.Packet13
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Credentials
@@ -31,6 +30,7 @@ import Network.TLS.State
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Key
+import Network.TLS.Handshake.Random
 import Network.TLS.Measurement
 import qualified Data.ByteString as B
 import Data.IORef (writeIORef)
@@ -119,7 +119,10 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
             Just (SupportedVersionsClientHello vers) -> vers
             _                                        -> []
         serverVersions = supportedVersions $ ctxSupported ctx
-    chosenVersion <-
+        mVersion = debugVersionForced $ serverDebug sparams
+    chosenVersion <- case mVersion of
+      Just cver -> return cver
+      Nothing   ->
         if (TLS13 `elem` serverVersions) && clientVersion == TLS12 && clientVersions /= [] then case findHighestVersionFrom13 clientVersions serverVersions of
                   Nothing -> throwCore $ Error_Protocol ("client versions " ++ show clientVersions ++ " is not supported", True, ProtocolVersion)
                   Just v  -> return v
@@ -147,6 +150,8 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     if chosenVersion <= TLS12 then
         handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverName clientVersion compressions clientSession
       else
+        -- fixme: we should check if the client random is the same as
+        -- that in the first client hello in the case of hello retry.
         handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts ciphers serverName clientSession
 handshakeServerWith _ _ _ = throwCore $ Error_Protocol ("unexpected handshake message received in handshakeServerWith", True, HandshakeFailure)
 
@@ -313,7 +318,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
         --
         ---
         makeServerHello session = do
-            srand <- ServerRandom <$> getStateRNG ctx 32
+            srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
             case mcred of
                 Just (_, privkey) -> usingHState ctx $ setPrivateKey privkey
                 _                 -> return () -- return a sensible error
@@ -819,7 +824,7 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
         setPendingActions ctx [finishedAction]
   where
     setServerParameter = do
-        srand <- ServerRandom <$> getStateRNG ctx 32
+        srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
         usingHState ctx $ setPrivateKey privKey
         usingState_ ctx $ setVersion chosenVersion
         usingHState ctx $ setHelloParameters13 usedCipher False
