@@ -12,6 +12,7 @@ module Connection
     , arbitraryPairParamsWithVersionsAndCiphers
     , arbitraryClientCredential
     , arbitraryRSACredentialWithUsage
+    , isVersionEnabled
     , isCustomDHParams
     , isLeafRSA
     , readClientSessionRef
@@ -55,12 +56,6 @@ knownCiphers = filter nonECDSA (ciphersuite_all ++ ciphersuite_weak)
       ]
     -- arbitraryCredentialsOfEachType cannot generate ECDSA
     nonECDSA c = not ("ECDSA" `isInfixOf` cipherName c)
-
-knownCiphers13 :: [Cipher]
-knownCiphers13 = [
-    cipher_TLS13_AES128GCM_SHA256
-  , cipher_TLS13_AES256GCM_SHA384
-  ]
 
 arbitraryCiphers :: Gen [Cipher]
 arbitraryCiphers = listOf1 $ elements knownCiphers
@@ -160,15 +155,19 @@ arbitraryGroupPair = do
     arbitraryGroupsFrom list = listOf1 $ elements list
 
 arbitraryPairParams13 :: Gen (ClientParams, ServerParams)
-arbitraryPairParams13 = do
-    let connectVersion = TLS13
-        allowedVersions = [connectVersion]
+arbitraryPairParams13 = arbitraryPairParamsAt TLS13
+
+arbitraryPairParamsAt :: Version -> Gen (ClientParams, ServerParams)
+arbitraryPairParamsAt connectVersion = do
+    let allowedVersions = [connectVersion]
         serAllowedVersions = [connectVersion]
-    (clientCiphers', serverCiphers') <- arbitraryCipherPair connectVersion
-    cipher <- elements knownCiphers13
-    let clientCiphers = clientCiphers' ++ [cipher]
-        serverCiphers = serverCiphers' ++ [cipher]
+    (clientCiphers, serverCiphers) <- arbitraryCipherPair connectVersion
     arbitraryPairParamsWithVersionsAndCiphers (allowedVersions, serAllowedVersions) (clientCiphers, serverCiphers)
+
+isVersionEnabled :: Version -> (ClientParams, ServerParams) -> Bool
+isVersionEnabled ver (cparams, sparams) =
+    (ver `elem` supportedVersions (serverSupported sparams)) &&
+    (ver `elem` supportedVersions (clientSupported cparams))
 
 arbitraryHashSignaturePair :: Gen ([HashAndSignatureAlgorithm], [HashAndSignatureAlgorithm])
 arbitraryHashSignaturePair = do
