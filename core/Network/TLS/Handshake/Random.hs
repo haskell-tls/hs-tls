@@ -23,6 +23,9 @@ serverRandom ctx chosenVer suppVers
       TLS13  -> ServerRandom <$> getStateRNG ctx 32
       TLS12  -> ServerRandom <$> genServRand suffix12
       _      -> ServerRandom <$> genServRand suffix11
+  | TLS12 `elem` suppVers = case chosenVer of
+      TLS12  -> ServerRandom <$> getStateRNG ctx 32
+      _      -> ServerRandom <$> genServRand suffix11
   | otherwise = ServerRandom <$> getStateRNG ctx 32
   where
     genServRand suff = do
