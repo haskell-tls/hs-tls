@@ -14,6 +14,7 @@ module Network.TLS.Handshake.State13
        , setRxState
        , setHelloParameters13
        , transcriptHash
+       , wrapAsMessageHash13
        , setPendingActions
        , popPendingAction
        ) where
@@ -76,8 +77,8 @@ setXState func encOrDec ctx h cipher secret =
       , stCompression = nullCompression
       }
 
-setHelloParameters13 :: Cipher -> Bool -> HandshakeM ()
-setHelloParameters13 cipher isHRR = modify update
+setHelloParameters13 :: Cipher -> HandshakeM ()
+setHelloParameters13 cipher = modify update
   where
     update hst = case hstPendingCipher hst of
       Nothing -> hst {
@@ -89,17 +90,21 @@ setHelloParameters13 cipher isHRR = modify update
                         then hst
                         else error "TLS 1.3: cipher changed"
     hashAlg = cipherHash cipher
-    updateDigest (Left bytes) = Right $ calc $ reverse bytes
+    updateDigest (Left bytes) = Right $ foldl hashUpdate (hashInit hashAlg) $ reverse bytes
     updateDigest (Right _)    = error "cannot initialize digest with another digest"
-    calc []       = error "setHelloParameters13.calc []"
-    calc bbs@(b:bs)
-      | isHRR     = let siz = hashDigestSize hashAlg
-                        b' = B.concat [
-                              "\254\0\0"
-                            , B.singleton (fromIntegral siz)
-                            , hash hashAlg b]
-                    in foldl hashUpdate (hashInit hashAlg) (b':bs)
-      | otherwise = foldl hashUpdate (hashInit hashAlg) bbs
+
+-- When a HelloRetryRequest is sent or received, the existing transcript must be
+-- wrapped in a "message_hash" construct.  See RFC 8446 section 4.4.1.  This
+-- applies to key-schedule computations as well as the ones for PSK binders.
+wrapAsMessageHash13 :: HandshakeM ()
+wrapAsMessageHash13 = do
+    cipher <- getPendingCipher
+    foldHandshakeDigest (cipherHash cipher) foldFunc
+  where
+    foldFunc dig = B.concat [ "\254\0\0"
+                            , B.singleton (fromIntegral $ B.length dig)
+                            , dig
+                            ]
 
 transcriptHash :: Context -> IO ByteString
 transcriptHash ctx = do

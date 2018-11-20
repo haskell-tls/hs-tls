@@ -834,7 +834,7 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
         srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
         storePrivInfo ctx Nothing certChain privKey
         usingState_ ctx $ setVersion chosenVersion
-        usingHState ctx $ setHelloParameters13 usedCipher False
+        usingHState ctx $ setHelloParameters13 usedCipher
         return srand
 
     choosePSK = case extensionLookup extensionID_PreSharedKey exts >>= extensionDecode MsgTClientHello of
@@ -963,7 +963,7 @@ helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientS
     when twice $
         throwCore $ Error_Protocol ("Hello retry not allowed again", True, HandshakeFailure)
     usingState_ ctx $ setTLS13HRR True
-    usingHState ctx $ setHelloParameters13 usedCipher True
+    usingHState ctx $ setHelloParameters13 usedCipher
     let clientGroups = case extensionLookup extensionID_NegotiatedGroups exts >>= extensionDecode MsgTClientHello of
           Just (NegotiatedGroups gs) -> gs
           Nothing                    -> []

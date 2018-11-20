@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE CPP #-}
@@ -49,6 +50,7 @@ module Network.TLS.Handshake.State
     , getHandshakeMessages
     , getHandshakeMessagesRev
     , getHandshakeDigest
+    , foldHandshakeDigest
     -- * master secret
     , setMasterSecret
     , setMasterSecretFromPre
@@ -363,6 +365,25 @@ updateHandshakeDigest content = modify $ \hs -> hs
     { hstHandshakeDigest = case hstHandshakeDigest hs of
                                 Left bytes    -> Left (content:bytes)
                                 Right hashCtx -> Right $ hashUpdate hashCtx content }
+
+-- | Compress the whole transcript with the specified function.  Function @f@
+-- takes the handshake digest as input and returns an encoded handshake message
+-- to replace the transcript with.
+foldHandshakeDigest :: Hash -> (ByteString -> ByteString) -> HandshakeM ()
+foldHandshakeDigest hashAlg f = modify $ \hs ->
+    case hstHandshakeDigest hs of
+        Left bytes ->
+            let hashCtx  = foldl hashUpdate (hashInit hashAlg) $ reverse bytes
+                !folded  = f (hashFinal hashCtx)
+             in hs { hstHandshakeDigest   = Left [folded]
+                   , hstHandshakeMessages = [folded]
+                   }
+        Right hashCtx ->
+            let !folded  = f (hashFinal hashCtx)
+                hashCtx' = hashUpdate (hashInit hashAlg) folded
+             in hs { hstHandshakeDigest   = Right hashCtx'
+                   , hstHandshakeMessages = [folded]
+                   }
 
 getHandshakeDigest :: Version -> Role -> HandshakeM ByteString
 getHandshakeDigest ver role = gets gen

@@ -26,7 +26,9 @@ import Network.TLS.Packet
 import Network.TLS.Packet13
 import Network.TLS.Hooks
 import Network.TLS.Context.Internal
+import Network.TLS.Handshake.Random
 import Network.TLS.Handshake.State
+import Network.TLS.Handshake.State13
 import Network.TLS.Wire
 import Network.TLS.Imports
 
@@ -67,7 +69,11 @@ prepareRecord = runTxState
 
 updateHandshake13 :: Context -> Handshake13 -> IO ()
 updateHandshake13 ctx hs = usingHState ctx $ do
+    when (isHRR hs) wrapAsMessageHash13
     updateHandshakeDigest encoded
     addHandshakeMessage encoded
   where
     encoded = encodeHandshake13 hs
+
+    isHRR (ServerHello13 srand _ _ _) = isHelloRetryRequest srand
+    isHRR _                           = False
