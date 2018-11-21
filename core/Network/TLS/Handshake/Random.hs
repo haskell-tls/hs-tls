@@ -24,13 +24,14 @@ serverRandom ctx chosenVer suppVers
       TLS12  -> ServerRandom <$> genServRand suffix12
       _      -> ServerRandom <$> genServRand suffix11
   | TLS12 `elem` suppVers = case chosenVer of
+      TLS13  -> ServerRandom <$> getStateRNG ctx 32
       TLS12  -> ServerRandom <$> getStateRNG ctx 32
       _      -> ServerRandom <$> genServRand suffix11
   | otherwise = ServerRandom <$> getStateRNG ctx 32
   where
     genServRand suff = do
         pref <- getStateRNG ctx 24
-        return $ (pref `B.append` suff)
+        return (pref `B.append` suff)
 
 isDowngraded :: [Version] -> ServerRandom -> Bool
 isDowngraded suppVers (ServerRandom sr)
