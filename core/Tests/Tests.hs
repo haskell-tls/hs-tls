@@ -190,7 +190,7 @@ prop_handshake13_downgrade = do
         sparam' = sparam { serverDebug = debug' }
         params = (cparam,sparam')
         downgraded = (isVersionEnabled TLS13 params && versionForced < TLS13) ||
-                     (isVersionEnabled TLS12 params && versionForced /= TLS12)
+                     (isVersionEnabled TLS12 params && versionForced < TLS12)
     if downgraded
         then runTLSInitFailure params
         else runTLSPipeSimple params
