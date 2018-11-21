@@ -165,10 +165,8 @@ recvData13 ctx = liftIO $ do
         -- when receiving empty appdata, we just retry to get some data.
         process (Handshake13 [KeyUpdate13 UpdateNotRequested]) = do
             established <- ctxEstablished ctx
-            waitForNotRequested <- usingState_ ctx S.getTLS13KeyUpdateSent
-            if established == Established && waitForNotRequested then do
+            if established == Established then do
                 keyUpdate ctx getRxState setRxState
-                usingState_ ctx $ S.setTLS13KeyUpdateSent False
                 recvData13 ctx
               else do
                 let reason = "received key update before established"
@@ -247,6 +245,5 @@ updateKey ctx = do
     tls13 <- tls13orLater ctx
     when tls13 $ do
         sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateRequested]
-        usingState_ ctx $ S.setTLS13KeyUpdateSent True
         keyUpdate ctx getTxState setTxState
     return tls13
