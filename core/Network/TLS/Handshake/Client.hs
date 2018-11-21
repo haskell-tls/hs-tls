@@ -567,7 +567,7 @@ throwMiscErrorOnException msg e =
 onServerHello :: Context -> ClientParams -> [ExtensionID] -> Handshake -> IO (RecvState IO)
 onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cipher compression exts) = do
     when (isDowngraded (supportedVersions $ clientSupported cparams) serverRan) $
-        throwCore $ Error_Protocol ("verion downgrade detected", True, IllegalParameter)
+        throwCore $ Error_Protocol ("version downgrade detected", True, IllegalParameter)
     when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
     -- find the compression and cipher methods that the server want to use.
     cipherAlg <- case find ((==) cipher . cipherID) (supportedCiphers $ ctxSupported ctx) of
