@@ -165,6 +165,10 @@ recvData13 ctx = liftIO $ do
         -- when receiving empty appdata, we just retry to get some data.
         process (Handshake13 [KeyUpdate13 UpdateNotRequested]) = do
             established <- ctxEstablished ctx
+            -- Though RFC 8446 Sec 4.6.3 does not clearly says,
+            -- unidirectional key update is legal.
+            -- So, we don't have to check if this key update is corresponding
+            -- to key update (update_requested) which we sent.
             if established == Established then do
                 keyUpdate ctx getRxState setRxState
                 recvData13 ctx
