@@ -28,6 +28,7 @@ module Network.TLS.Core
     , recvData
     , recvData'
     , updateKey
+    , KeyUpdateRequest(..)
     ) where
 
 import Network.TLS.Cipher
@@ -241,13 +242,21 @@ keyUpdate ctx getState setState = do
     let applicationTrafficSecretN1 = hkdfExpandLabel usedHash applicationTrafficSecretN "traffic upd" "" $ hashDigestSize usedHash
     setState ctx usedHash usedCipher applicationTrafficSecretN1
 
+-- | How to update keys in TLS 1.3
+data KeyUpdateRequest = OneWay -- ^ Unidirectional key update
+                      | TwoWay -- ^ Bidirectional key update (normal case)
+                      deriving (Eq, Show)
+
 -- | Updating appication traffic secrets for TLS 1.3.
 --   If this API is called for TLS 1.3, 'True' is returned.
 --   Otherwise, 'False' is returned.
-updateKey :: Context -> IO Bool
-updateKey ctx = do
+updateKey :: Context -> KeyUpdateRequest -> IO Bool
+updateKey ctx way = do
     tls13 <- tls13orLater ctx
     when tls13 $ do
-        sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateRequested]
+        let req = case way of
+                OneWay -> UpdateNotRequested
+                TwoWay -> UpdateRequested
+        sendPacket13 ctx $ Handshake13 [KeyUpdate13 req]
         keyUpdate ctx getTxState setTxState
     return tls13
