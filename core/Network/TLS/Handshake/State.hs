@@ -88,7 +88,7 @@ data Secret13 = NoSecret
 
 data HandshakeKeyState = HandshakeKeyState
     { hksRemotePublicKey :: !(Maybe PubKey)
-    , hksLocalPrivateKey :: !(Maybe (PrivKey, DigitalSignatureAlg))
+    , hksLocalPrivateKey :: !(Maybe PrivKey)
     } deriving (Show)
 
 data HandshakeDigest = HandshakeMessages [ByteString]
@@ -226,14 +226,14 @@ setPublicKey :: PubKey -> HandshakeM ()
 setPublicKey pk = modify (\hst -> hst { hstKeyState = setPK (hstKeyState hst) })
   where setPK hks = hks { hksRemotePublicKey = Just pk }
 
-setPrivateKey :: PrivKey -> DigitalSignatureAlg -> HandshakeM ()
-setPrivateKey pk pa = modify (\hst -> hst { hstKeyState = setPK (hstKeyState hst) })
-  where setPK hks = hks { hksLocalPrivateKey = Just (pk, pa) }
+setPrivateKey :: PrivKey -> HandshakeM ()
+setPrivateKey pk = modify (\hst -> hst { hstKeyState = setPK (hstKeyState hst) })
+  where setPK hks = hks { hksLocalPrivateKey = Just pk }
 
 getRemotePublicKey :: HandshakeM PubKey
 getRemotePublicKey = fromJust "remote public key" <$> gets (hksRemotePublicKey . hstKeyState)
 
-getLocalPrivateKey :: HandshakeM (PrivKey, DigitalSignatureAlg)
+getLocalPrivateKey :: HandshakeM PrivKey
 getLocalPrivateKey = fromJust "local private key" <$> gets (hksLocalPrivateKey . hstKeyState)
 
 setServerDHParams :: ServerDHParams -> HandshakeM ()

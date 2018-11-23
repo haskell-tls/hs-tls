@@ -170,11 +170,11 @@ storePrivInfo ctx cTypes cc privkey = do
         --
         dsaok = elem CertificateType_DSS_Sign <$> cTypes
         rsaok = elem CertificateType_RSA_Sign <$> cTypes
-    privalg <- case findDigitalSignatureAlg (pubkey, privkey) of
+    case findDigitalSignatureAlg (pubkey, privkey) of
         Just RSA | rsaok /= Just False
-                -> return RSA
+                -> return ()
         Just DSS | dsaok /= Just False
-                -> return DSS
+                -> return ()
         _       -> throwCore $ Error_Protocol
                        ( keyerr
                        , True
@@ -183,6 +183,6 @@ storePrivInfo ctx cTypes cc privkey = do
     -- match is left for the peer to discover.  We're not
     -- presently burning CPU to detect that misconfiguration.
     --
-    usingHState ctx $ setPrivateKey privkey privalg
+    usingHState ctx $ setPrivateKey privkey
   where
     keyerr = "mismatched or unsupported private key pair"

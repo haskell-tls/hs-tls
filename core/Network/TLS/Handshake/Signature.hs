@@ -14,6 +14,7 @@ module Network.TLS.Handshake.Signature
     , digitallySignECDHParams
     , digitallySignDHParamsVerify
     , digitallySignECDHParamsVerify
+    , getLocalDigitalSignatureAlg
     , signatureCompatible
     , signatureParams
     , fromPubKey
@@ -42,6 +43,13 @@ fromPubKey _             = Nothing
 fromPrivKey :: PrivKey -> Maybe DigitalSignatureAlg
 fromPrivKey (PrivKeyRSA _) = Just RSA
 fromPrivKey (PrivKeyDSA _) = Just DSS
+
+getLocalDigitalSignatureAlg :: MonadIO m => Context -> m DigitalSignatureAlg
+getLocalDigitalSignatureAlg ctx = do
+    privateKey <- usingHState ctx getLocalPrivateKey
+    case fromPrivKey privateKey of
+        Just sigAlg -> return sigAlg
+        Nothing     -> fail "selected credential does not support signing"
 
 signatureCompatible :: DigitalSignatureAlg -> HashAndSignatureAlgorithm -> Bool
 signatureCompatible RSA   (_, SignatureRSA)              = True

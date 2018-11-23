@@ -521,7 +521,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
             --
             certSent <- usingHState ctx getClientCertSent
             when certSent $ do
-                (_, keyAlg) <- usingHState ctx getLocalPrivateKey
+                keyAlg      <- getLocalDigitalSignatureAlg ctx
                 mhashSig    <- case ver of
                     TLS12 -> Just <$> getLocalHashSigAlg ctx keyAlg
                     _     -> return Nothing
@@ -775,8 +775,9 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
                   loadPacket13 ctx $ Handshake13 [vfy]
       where
         getSigKey = do
-            (privkey, privalg) <- usingHState ctx getLocalPrivateKey
-            sigAlg <- liftIO $ getLocalHashSigAlg ctx privalg
+            privkey <- usingHState ctx getLocalPrivateKey
+            privalg <- getLocalDigitalSignatureAlg ctx
+            sigAlg  <- liftIO $ getLocalHashSigAlg ctx privalg
             return (sigAlg, privkey)
     --
     sendClientData13 _ _ =
