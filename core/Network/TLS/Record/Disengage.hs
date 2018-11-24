@@ -137,8 +137,7 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
 
         decryptOf (BulkStateAEAD decryptF) = do
             let authTagLen  = bulkAuthTagLen bulk
-                nonceExpLen | ver >= TLS13  = 0
-                            | otherwise     = bulkExplicitIV bulk
+                nonceExpLen = bulkExplicitIV bulk
                 cipherLen   = econtentLen - authTagLen - nonceExpLen
 
             -- check if we have enough bytes to cover the minimum for this cipher
