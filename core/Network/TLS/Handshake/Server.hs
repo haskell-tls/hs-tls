@@ -318,7 +318,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
         makeServerHello session = do
             srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
             case mcred of
-                Just (cc, privkey) -> storePrivInfo ctx Nothing cc privkey
+                Just cred          -> storePrivInfoServer ctx cred
                 _                  -> return () -- return a sensible error
 
             -- in TLS12, we need to check as well the certificates we are sending if they have in the extension
@@ -656,6 +656,9 @@ cipherListCredentialFallback = all nonDH
         CipherKeyExchange_TLS13       -> False
         _                             -> True
 
+storePrivInfoServer :: Context -> Credential -> IO ()
+storePrivInfoServer ctx (cc, privkey) = void (storePrivInfo ctx cc privkey)
+
 -- TLS 1.3 or later
 handshakeServerWithTLS13 :: ServerParams
                          -> Context
@@ -712,7 +715,7 @@ doHandshake13 :: ServerParams -> Credential -> Context -> Version
               -> Hash -> KeyShareEntry -> HashAndSignatureAlgorithm
               -> Session
               -> IO ()
-doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts usedHash clientKeyShare hashSig clientSession = do
+doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts usedHash clientKeyShare hashSig clientSession = do
     newSession ctx >>= \ss -> usingState_ ctx (setSession ss False)
     usingHState ctx $ setNegotiatedGroup $ keyShareEntryGroup clientKeyShare
     srand <- setServerParameter
@@ -816,7 +819,7 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
   where
     setServerParameter = do
         srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
-        storePrivInfo ctx Nothing certChain privKey
+        storePrivInfoServer ctx cred
         usingState_ ctx $ setVersion chosenVersion
         usingHState ctx $ setHelloParameters13 usedCipher
         return srand

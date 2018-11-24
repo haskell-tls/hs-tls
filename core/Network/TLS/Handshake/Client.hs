@@ -19,6 +19,7 @@ import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Cipher
 import Network.TLS.Compression
+import Network.TLS.Credentials
 import Network.TLS.Packet hiding (getExtensions)
 import Network.TLS.ErrT
 import Network.TLS.Extension
@@ -284,6 +285,20 @@ handshakeClient' cparams ctx groups mcrand = do
                         _ -> fail ("unexepected type received. expecting handshake and got: " ++ show p)
                 throwAlert a = usingState_ ctx $ throwError $ Error_Protocol ("expecting server hello, got alert : " ++ show a, True, HandshakeFailure)
 
+-- | Store the keypair and check that it is compatible with a list of
+-- 'CertificateType' values.
+storePrivInfoClient :: Context
+                    -> [CertificateType]
+                    -> Credential
+                    -> IO ()
+storePrivInfoClient ctx cTypes (cc, privkey) = do
+    privalg <- storePrivInfo ctx cc privkey
+    unless (certificateCompatible privalg cTypes) $
+        throwCore $ Error_Protocol
+            ( show privalg ++ " credential does not match allowed certificate types"
+            , True
+            , InternalError )
+
 -- | When the server requests a client certificate, we try to
 -- obtain a suitable certificate chain and private key via the
 -- callback in the client parameters.  It is OK for the callback
@@ -343,7 +358,7 @@ handshakeClient' cparams ctx groups mcrand = do
 -- signatures are OK.
 --
 clientChain :: ClientParams -> Context -> IO (Maybe CertificateChain)
-clientChain cparams ctx = do
+clientChain cparams ctx =
     usingHState ctx getCertReqCBdata >>= \case
         Nothing     -> return Nothing
         Just cbdata -> do
@@ -355,10 +370,10 @@ clientChain cparams ctx = do
                     -> return $ Just $ CertificateChain []
                 Just (CertificateChain [], _)
                     -> return $ Just $ CertificateChain []
-                Just (cc, privkey)
+                Just cred@(cc, _)
                     -> do
                        let (cTypes, _, _) = cbdata
-                       storePrivInfo ctx (Just cTypes) cc privkey
+                       storePrivInfoClient ctx cTypes cred
                        return $ Just cc
 
 -- | Return a most preferred 'HandAndSignatureAlgorithm' that is
