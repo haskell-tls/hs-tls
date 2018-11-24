@@ -482,6 +482,13 @@ bulk_chacha20poly1305 = Bulk
     , bulkF            = BulkAeadF chacha20poly1305
     }
 
+-- TLS13 bulks are same as TLS12 except they never have explicit IV
+bulk_aes128gcm_13, bulk_aes256gcm_13, bulk_aes128ccm_13, bulk_aes128ccm8_13 :: Bulk
+bulk_aes128gcm_13  = bulk_aes128gcm  { bulkIVSize = 12, bulkExplicitIV = 0 }
+bulk_aes256gcm_13  = bulk_aes256gcm  { bulkIVSize = 12, bulkExplicitIV = 0 }
+bulk_aes128ccm_13  = bulk_aes128ccm  { bulkIVSize = 12, bulkExplicitIV = 0 }
+bulk_aes128ccm8_13 = bulk_aes128ccm8 { bulkIVSize = 12, bulkExplicitIV = 0 }
+
 -- | unencrypted cipher using RSA for key exchange and MD5 for digest
 cipher_null_MD5 :: Cipher
 cipher_null_MD5 = Cipher
@@ -836,7 +843,7 @@ cipher_TLS13_AES128GCM_SHA256 :: Cipher
 cipher_TLS13_AES128GCM_SHA256 = Cipher
     { cipherID           = 0x1301
     , cipherName         = "AES128GCM-SHA256"
-    , cipherBulk         = bulk_aes128gcm
+    , cipherBulk         = bulk_aes128gcm_13
     , cipherHash         = SHA256
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_TLS13
@@ -847,7 +854,7 @@ cipher_TLS13_AES256GCM_SHA384 :: Cipher
 cipher_TLS13_AES256GCM_SHA384 = Cipher
     { cipherID           = 0x1302
     , cipherName         = "AES256GCM-SHA384"
-    , cipherBulk         = bulk_aes256gcm
+    , cipherBulk         = bulk_aes256gcm_13
     , cipherHash         = SHA384
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_TLS13
@@ -869,7 +876,7 @@ cipher_TLS13_AES128CCM_SHA256 :: Cipher
 cipher_TLS13_AES128CCM_SHA256 = Cipher
     { cipherID           = 0x1304
     , cipherName         = "AES128CCM-SHA256"
-    , cipherBulk         = bulk_aes128ccm
+    , cipherBulk         = bulk_aes128ccm_13
     , cipherHash         = SHA256
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_TLS13
@@ -880,7 +887,7 @@ cipher_TLS13_AES128CCM8_SHA256 :: Cipher
 cipher_TLS13_AES128CCM8_SHA256 = Cipher
     { cipherID           = 0x1305
     , cipherName         = "AES128CCM8-SHA256"
-    , cipherBulk         = bulk_aes128ccm8
+    , cipherBulk         = bulk_aes128ccm8_13
     , cipherHash         = SHA256
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_TLS13

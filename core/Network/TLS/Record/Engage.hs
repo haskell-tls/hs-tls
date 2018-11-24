@@ -119,8 +119,7 @@ encryptAead :: Bool
             -> RecordM ByteString
 encryptAead tls13 bulk encryptF content record = do
     let authTagLen  = bulkAuthTagLen bulk
-        nonceExpLen | tls13     = 0
-                    | otherwise = bulkExplicitIV bulk
+        nonceExpLen = bulkExplicitIV bulk
     cst        <- getCryptState
     encodedSeq <- encodeWord64 <$> getMacSequence
 
