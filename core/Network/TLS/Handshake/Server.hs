@@ -690,14 +690,14 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
         -- RFC 8446 section 4.4.2.2).
         let hashSigs = hashAndSignaturesInCommon ctx exts
             cltCreds = filterCredentialsWithHashSignatures exts allCreds
-        (cred, sigAlgo) <- case credentialsFindForSigning13 hashSigs cltCreds of
+        (cred, hashSig) <- case credentialsFindForSigning13 hashSigs cltCreds of
             Just cs -> return cs
             Nothing ->
                 case credentialsFindForSigning13 hashSigs allCreds of
                     Just cs -> return cs
                     Nothing -> throwCore $ Error_Protocol ("credential not found", True, IllegalParameter)
         let usedHash = cipherHash usedCipher
-        doHandshake13 sparams cred ctx chosenVersion usedCipher exts usedHash keyShare sigAlgo clientSession
+        doHandshake13 sparams cred ctx chosenVersion usedCipher exts usedHash keyShare hashSig clientSession
   where
     ciphersFilteredVersion = filter ((`elem` clientCiphers) . cipherID) serverCiphers
     serverCiphers = filter (cipherAllowedForVersion chosenVersion) (supportedCiphers $ serverSupported sparams)
@@ -712,7 +712,7 @@ doHandshake13 :: ServerParams -> Credential -> Context -> Version
               -> Hash -> KeyShareEntry -> HashAndSignatureAlgorithm
               -> Session
               -> IO ()
-doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts usedHash clientKeyShare sigAlgo clientSession = do
+doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts usedHash clientKeyShare hashSig clientSession = do
     newSession ctx >>= \ss -> usingState_ ctx (setSession ss False)
     usingHState ctx $ setNegotiatedGroup $ keyShareEntryGroup clientKeyShare
     srand <- setServerParameter
@@ -883,7 +883,8 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
             ess = replicate (length cs) []
         loadPacket13 ctx $ Handshake13 [Certificate13 "" certChain ess]
         hChSc <- transcriptHash ctx
-        vrfy <- makeServerCertVerify ctx sigAlgo privKey hChSc
+        sigAlg <- getLocalDigitalSignatureAlg ctx
+        vrfy <- makeServerCertVerify ctx sigAlg hashSig hChSc
         loadPacket13 ctx $ Handshake13 [vrfy]
 
     sendExtensions rtt0OK = do

@@ -112,26 +112,25 @@ serverContextString = "TLS 1.3, server CertificateVerify"
 clientContextString :: ByteString
 clientContextString = "TLS 1.3, client CertificateVerify"
 
-makeServerCertVerify :: MonadIO m => Context -> HashAndSignatureAlgorithm -> PrivKey -> ByteString -> m Handshake13
-makeServerCertVerify ctx hs privKey hashValue =
-    CertVerify13 hs <$> sign ctx hs privKey target
+makeServerCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> m Handshake13
+makeServerCertVerify ctx sig hs hashValue =
+    CertVerify13 hs <$> sign ctx sig hs target
   where
     target = makeTarget serverContextString hashValue
 
-makeClientCertVerify :: MonadIO m => Context -> HashAndSignatureAlgorithm -> PrivKey -> ByteString -> m Handshake13
-makeClientCertVerify ctx hs privKey hashValue =
-    CertVerify13 hs <$> sign ctx hs privKey target
+makeClientCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> m Handshake13
+makeClientCertVerify ctx sig hs hashValue =
+    CertVerify13 hs <$> sign ctx sig hs target
  where
     target = makeTarget clientContextString hashValue
 
-checkServerCertVerify :: MonadIO m => HashAndSignatureAlgorithm -> ByteString -> PubKey -> ByteString -> m ()
-checkServerCertVerify hs signature pubKey hashValue =
-    unless ok $ throwCore $ Error_Protocol ("cannot verify CertificateVerify", True, BadCertificate)
+checkServerCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> ByteString -> m Bool
+checkServerCertVerify ctx sig hs signature hashValue = liftIO $ do
+    cc <- usingState_ ctx isClientContext
+    verifyPublic ctx cc sigParams target signature
   where
-    sig = fromJust "fromPubKey" $ fromPubKey pubKey
     sigParams = signatureParams sig (Just hs)
     target = makeTarget serverContextString hashValue
-    ok = kxVerify pubKey sigParams target signature
 
 makeTarget :: ByteString -> ByteString -> ByteString
 makeTarget contextString hashValue = runPut $ do
@@ -140,15 +139,11 @@ makeTarget contextString hashValue = runPut $ do
     putWord8 0
     putBytes hashValue
 
-sign :: MonadIO m => Context -> HashAndSignatureAlgorithm -> PrivKey -> ByteString -> m ByteString
-sign ctx hs privKey target = liftIO $ usingState_ ctx $ do
-    r <- withRNG $ kxSign privKey sigParams target
-    case r of
-        Left err       -> fail ("sign failed: " ++ show err)
-        Right econtent -> return econtent
-  where
-    sig = fromJust "fromPrivKey" $ fromPrivKey privKey
-    sigParams = signatureParams sig (Just hs)
+sign :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> m ByteString
+sign ctx sig hs target = liftIO $ do
+    cc <- usingState_ ctx isClientContext
+    let sigParams = signatureParams sig (Just hs)
+    signPrivate ctx cc sigParams target
 
 ----------------------------------------------------------------
 

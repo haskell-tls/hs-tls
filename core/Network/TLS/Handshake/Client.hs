@@ -770,15 +770,10 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
             [] -> return ()
             _  -> do
                   hChSc      <- transcriptHash ctx
-                  (salg, pk) <- getSigKey
-                  vfy        <- makeClientCertVerify ctx salg pk hChSc
+                  keyAlg     <- getLocalDigitalSignatureAlg ctx
+                  sigAlg     <- liftIO $ getLocalHashSigAlg ctx keyAlg
+                  vfy        <- makeClientCertVerify ctx keyAlg sigAlg hChSc
                   loadPacket13 ctx $ Handshake13 [vfy]
-      where
-        getSigKey = do
-            privkey <- usingHState ctx getLocalPrivateKey
-            privalg <- getLocalDigitalSignatureAlg ctx
-            sigAlg  <- liftIO $ getLocalHashSigAlg ctx privalg
-            return (sigAlg, privkey)
     --
     sendClientData13 _ _ =
         throwCore $ Error_Protocol
@@ -919,12 +914,16 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
         pubkey <- case certChain of
                     [] -> throwCore $ Error_Protocol ("server certificate missing", True, HandshakeFailure)
                     c:_ -> return $ certPubKey $ getCertificate c
+        usingHState ctx $ setPublicKey pubkey
         hChSc <- transcriptHash ctx
         recvHandshake13 ctx $ expectCertVerify pubkey hChSc
     expectCertAndVerify p = unexpected (show p) (Just "server certificate")
 
-    expectCertVerify pubkey hChSc (CertVerify13 ss sig) =
-        checkServerCertVerify ss sig pubkey hChSc
+    expectCertVerify pubkey hChSc (CertVerify13 sigAlg sig) = do
+        let keyAlg = fromJust "fromPubKey" (fromPubKey pubkey)
+        ok <- checkServerCertVerify ctx keyAlg sigAlg sig hChSc
+        -- FIXME wrong alert?
+        unless ok $ throwCore $ Error_Protocol ("cannot verify CertificateVerify", True, BadCertificate)
     expectCertVerify _ _ p = unexpected (show p) (Just "certificate verify")
 
     recvFinished serverHandshakeTrafficSecret = do
