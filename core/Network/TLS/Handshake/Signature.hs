@@ -15,6 +15,7 @@ module Network.TLS.Handshake.Signature
     , digitallySignDHParamsVerify
     , digitallySignECDHParamsVerify
     , getLocalDigitalSignatureAlg
+    , certificateCompatible
     , signatureCompatible
     , signatureParams
     , fromPubKey
@@ -50,6 +51,16 @@ getLocalDigitalSignatureAlg ctx = do
     case fromPrivKey privateKey of
         Just sigAlg -> return sigAlg
         Nothing     -> fail "selected credential does not support signing"
+
+-- | Check that the signature algorithm is compatible with a list of
+-- 'CertificateType' values.  Ed25519 and Ed448 have no assigned code point
+-- and are checked with extension "signature_algorithms" only.
+certificateCompatible :: DigitalSignatureAlg -> [CertificateType] -> Bool
+certificateCompatible RSA     cTypes = CertificateType_RSA_Sign `elem` cTypes
+certificateCompatible DSS     cTypes = CertificateType_DSS_Sign `elem` cTypes
+certificateCompatible ECDSA   cTypes = CertificateType_ECDSA_Sign `elem` cTypes
+certificateCompatible Ed25519 _      = True
+certificateCompatible Ed448   _      = True
 
 signatureCompatible :: DigitalSignatureAlg -> HashAndSignatureAlgorithm -> Bool
 signatureCompatible RSA   (_, SignatureRSA)              = True
