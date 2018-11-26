@@ -81,6 +81,8 @@ import Network.TLS.Packet ( putDNames
                           , getBinaryVersion
                           )
 
+------------------------------------------------------------
+
 type HostName = String
 
 -- central list defined in <http://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.txt>
@@ -159,6 +161,8 @@ extensionID_SignatureAlgorithmsCert             = 0x32 -- TLS 1.3
 extensionID_KeyShare                            = 0x33 -- TLS 1.3
 extensionID_SecureRenegotiation                 = 0xff01 -- RFC5746
 
+------------------------------------------------------------
+
 definedExtensions :: [ExtensionID]
 definedExtensions =
     [ extensionID_ServerName
@@ -216,6 +220,8 @@ supportedExtensions = [ extensionID_ServerName
                       , extensionID_CertificateAuthorities
                       ]
 
+------------------------------------------------------------
+
 data MessageType = MsgTClientHello
                  | MsgTServerHello
                  | MsgTHelloRetryRequest
@@ -229,6 +235,8 @@ class Extension a where
     extensionID     :: a -> ExtensionID
     extensionDecode :: MessageType -> ByteString -> Maybe a
     extensionEncode :: a -> ByteString
+
+------------------------------------------------------------
 
 -- | Server Name extension including the name type and the associated name.
 -- the associated name decoding is dependant of its name type.
@@ -252,6 +260,8 @@ instance Extension ServerName where
                       0 -> ServerNameHostName $ BC.unpack sname -- FIXME: should be puny code conversion
                       _ -> ServerNameOther (ty, sname))
 
+------------------------------------------------------------
+
 -- | Max fragment extension with length from 512 bytes to 4096 bytes
 newtype MaxFragmentLength = MaxFragmentLength MaxFragmentEnum deriving (Show,Eq)
 data MaxFragmentEnum = MaxFragment512 | MaxFragment1024 | MaxFragment2048 | MaxFragment4096
@@ -271,6 +281,8 @@ instance Extension MaxFragmentLength where
               unmarshallSize 4 = MaxFragment4096
               unmarshallSize n = error ("unknown max fragment size " ++ show n)
 
+------------------------------------------------------------
+
 -- | Secure Renegotiation
 data SecureRenegotiation = SecureRenegotiation ByteString (Maybe ByteString)
     deriving (Show,Eq)
@@ -287,6 +299,8 @@ instance Extension SecureRenegotiation where
           MsgTClientHello -> return $ SecureRenegotiation opaque Nothing
           _               -> fail "decoding SecureRenegotiation for HRR"
 
+------------------------------------------------------------
+
 -- | Application Layer Protocol Negotiation (ALPN)
 newtype ApplicationLayerProtocolNegotiation = ApplicationLayerProtocolNegotiation [ByteString] deriving (Show,Eq)
 
@@ -301,6 +315,8 @@ instance Extension ApplicationLayerProtocolNegotiation where
                   alpn <- getOpaque8
                   return (B.length alpn + 1, alpn)
 
+------------------------------------------------------------
+
 newtype NegotiatedGroups = NegotiatedGroups [Group] deriving (Show,Eq)
 
 -- on decode, filter all unknown curves
@@ -308,6 +324,8 @@ instance Extension NegotiatedGroups where
     extensionID _ = extensionID_NegotiatedGroups
     extensionEncode (NegotiatedGroups groups) = runPut $ putWords16 $ map fromEnumSafe16 groups
     extensionDecode _ = runGetMaybe (NegotiatedGroups . mapMaybe toEnumSafe16 <$> getWords16)
+
+------------------------------------------------------------
 
 newtype EcPointFormatsSupported = EcPointFormatsSupported [EcPointFormat] deriving (Show,Eq)
 
@@ -333,6 +351,8 @@ instance Extension EcPointFormatsSupported where
     extensionEncode (EcPointFormatsSupported formats) = runPut $ putWords8 $ map fromEnumSafe8 formats
     extensionDecode _ = runGetMaybe (EcPointFormatsSupported . mapMaybe toEnumSafe8 <$> getWords8)
 
+------------------------------------------------------------
+
 data SessionTicket = SessionTicket
     deriving (Show,Eq)
 
@@ -340,6 +360,8 @@ instance Extension SessionTicket where
     extensionID _ = extensionID_SessionTicket
     extensionEncode SessionTicket{} = runPut $ return ()
     extensionDecode _ = runGetMaybe (return SessionTicket)
+
+------------------------------------------------------------
 
 newtype HeartBeat = HeartBeat HeartBeatMode deriving (Show,Eq)
 
@@ -364,6 +386,8 @@ instance Extension HeartBeat where
             Just (Just mode) -> Just $ HeartBeat mode
             _                -> Nothing
 
+------------------------------------------------------------
+
 newtype SignatureAlgorithms = SignatureAlgorithms [HashAndSignatureAlgorithm] deriving (Show,Eq)
 
 instance Extension SignatureAlgorithms where
@@ -375,6 +399,8 @@ instance Extension SignatureAlgorithms where
             len <- getWord16
             SignatureAlgorithms <$> getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
 
+------------------------------------------------------------
+
 newtype SignatureAlgorithmsCert = SignatureAlgorithmsCert [HashAndSignatureAlgorithm] deriving (Show,Eq)
 
 instance Extension SignatureAlgorithmsCert where
@@ -385,6 +411,8 @@ instance Extension SignatureAlgorithmsCert where
         runGetMaybe $ do
             len <- getWord16
             SignatureAlgorithmsCert <$> getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
+
+------------------------------------------------------------
 
 data SupportedVersions =
     SupportedVersionsClientHello [Version]
@@ -412,6 +440,8 @@ instance Extension SupportedVersions where
           Nothing  -> fail "extensionDecode: SupportedVersionsServerHello"
     extensionDecode _ = fail "extensionDecode: SupportedVersionsServerHello"
 
+------------------------------------------------------------
+
 data KeyShareEntry = KeyShareEntry {
     keyShareEntryGroup :: Group
   , keySHareEntryKeyExchange:: ByteString
@@ -432,6 +462,8 @@ putKeyShareEntry (KeyShareEntry grp key) = do
     putWord16 $ fromEnumSafe16 grp
     putWord16 $ fromIntegral $ B.length key
     putBytes key
+
+------------------------------------------------------------
 
 data KeyShare =
     KeyShareClientHello [KeyShareEntry]
@@ -463,6 +495,8 @@ instance Extension KeyShare where
           Just grp -> return $ KeyShareHRR grp
     extensionDecode _ = fail "extensionDecode: KeyShare"
 
+------------------------------------------------------------
+
 data PskKexMode = PSK_KE | PSK_DHE_KE deriving (Eq, Show)
 
 fromPskKexMode :: PskKexMode -> Word8
@@ -483,6 +517,7 @@ instance Extension PskKeyExchangeModes where
     extensionDecode _ = runGetMaybe $
         PskKeyExchangeModes . mapMaybe toPskKexMode <$> getWords8
 
+------------------------------------------------------------
 
 data PskIdentity = PskIdentity ByteString Word32 deriving (Eq, Show)
 
@@ -524,7 +559,10 @@ instance Extension PreSharedKey where
             return (len, binder)
     extensionDecode _ = fail "decoding PreShareKey"
 
+------------------------------------------------------------
+
 newtype EarlyDataIndication = EarlyDataIndication (Maybe Word32) deriving (Eq, Show)
+
 instance Extension EarlyDataIndication where
     extensionID _ = extensionID_EarlyData
     extensionEncode (EarlyDataIndication Nothing)   = runPut $ putBytes B.empty
