@@ -27,7 +27,9 @@ import Network.TLS.State
 import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import Network.TLS.Imports
+import Network.TLS.Handshake.Random
 import Network.TLS.Handshake.State
+import Network.TLS.Handshake.State13
 import Network.TLS.Handshake.Key
 import Network.TLS.Extension
 import Network.TLS.Parameters
@@ -51,6 +53,7 @@ processHandshake ctx hs = do
         Finished fdata                -> processClientFinished ctx fdata
         _                             -> return ()
     let encoded = encodeHandshake hs
+    when (isHRR hs) $ usingHState ctx wrapAsMessageHash13
     when (certVerifyHandshakeMaterial hs) $ usingHState ctx $ addHandshakeMessage encoded
     when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ usingHState ctx $ updateHandshakeDigest encoded
   where secureRenegotiation = supportedSecureRenegotiation $ ctxSupported ctx
@@ -72,6 +75,9 @@ processHandshake ctx hs = do
         processCertificates _ (CertificateChain (c:_)) =
             usingHState ctx $ setPublicKey pubkey
           where pubkey = certPubKey $ getCertificate c
+
+        isHRR (ServerHello TLS12 srand _ _ _ _) = isHelloRetryRequest srand
+        isHRR _                                 = False
 
 -- process the client key exchange message. the protocol expects the initial
 -- client version received in ClientHello, not the negotiated version.
