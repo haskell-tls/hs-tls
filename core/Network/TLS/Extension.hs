@@ -281,13 +281,21 @@ data MaxFragmentEnum = MaxFragment512
                      | MaxFragment4096
                      deriving (Show,Eq)
 
+instance EnumSafe8 MaxFragmentEnum where
+    fromEnumSafe8 MaxFragment512  = 1
+    fromEnumSafe8 MaxFragment1024 = 2
+    fromEnumSafe8 MaxFragment2048 = 3
+    fromEnumSafe8 MaxFragment4096 = 4
+
+    toEnumSafe8 1 = Just MaxFragment512
+    toEnumSafe8 2 = Just MaxFragment1024
+    toEnumSafe8 3 = Just MaxFragment2048
+    toEnumSafe8 4 = Just MaxFragment4096
+    toEnumSafe8 _ = Nothing
+
 instance Extension MaxFragmentLength where
     extensionID _ = extensionID_MaxFragmentLength
-    extensionEncode (MaxFragmentLength e) = B.singleton $ marshallSize e
-        where marshallSize MaxFragment512  = 1
-              marshallSize MaxFragment1024 = 2
-              marshallSize MaxFragment2048 = 3
-              marshallSize MaxFragment4096 = 4
+    extensionEncode (MaxFragmentLength l) = runPut $ putWord8 $ fromEnumSafe8 l
     extensionDecode MsgTClientHello = decodeMaxFragmentLength
     extensionDecode MsgTServerHello = decodeMaxFragmentLength
     extensionDecode MsgTEncryptedExtensions = decodeMaxFragmentLength
@@ -295,13 +303,10 @@ instance Extension MaxFragmentLength where
 
 decodeMaxFragmentLength :: ByteString -> Maybe MaxFragmentLength
 decodeMaxFragmentLength = runGetMaybe $ do
-        w8 <- getWord8
-        case w8 of
-          1 -> return $ MaxFragmentLength MaxFragment512
-          2 -> return $ MaxFragmentLength MaxFragment1024
-          3 -> return $ MaxFragmentLength MaxFragment2048
-          4 -> return $ MaxFragmentLength MaxFragment4096
-          n -> fail $ "unknown max fragment size " ++ show n
+    ml <- toEnumSafe8 <$> getWord8
+    case ml of
+      Just l  -> return $ MaxFragmentLength l
+      Nothing -> fail $ "unknown max fragment size"
 
 ------------------------------------------------------------
 
@@ -422,10 +427,11 @@ instance EnumSafe8 HeartBeatMode where
 instance Extension HeartBeat where
     extensionID _ = extensionID_Heartbeat
     extensionEncode (HeartBeat mode) = runPut $ putWord8 $ fromEnumSafe8 mode
-    extensionDecode _ bs =
-        case runGetMaybe (toEnumSafe8 <$> getWord8) bs of
-            Just (Just mode) -> Just $ HeartBeat mode
-            _                -> Nothing
+    extensionDecode _ = runGetMaybe $ do
+        mm <- toEnumSafe8 <$> getWord8
+        case mm of
+          Just m  -> return $ HeartBeat m
+          Nothing -> fail "unknown HeartBeatMode"
 
 ------------------------------------------------------------
 
@@ -540,23 +546,22 @@ instance Extension KeyShare where
 
 data PskKexMode = PSK_KE | PSK_DHE_KE deriving (Eq, Show)
 
-fromPskKexMode :: PskKexMode -> Word8
-fromPskKexMode PSK_KE     = 0
-fromPskKexMode PSK_DHE_KE = 1
+instance EnumSafe8 PskKexMode where
+    fromEnumSafe8 PSK_KE     = 0
+    fromEnumSafe8 PSK_DHE_KE = 1
 
-toPskKexMode :: Word8 -> Maybe PskKexMode
-toPskKexMode 0 = Just PSK_KE
-toPskKexMode 1 = Just PSK_DHE_KE
-toPskKexMode _ = Nothing
+    toEnumSafe8 1 = Just PSK_KE
+    toEnumSafe8 2 = Just PSK_DHE_KE
+    toEnumSafe8 _ = Nothing
 
 newtype PskKeyExchangeModes = PskKeyExchangeModes [PskKexMode] deriving (Eq, Show)
 
 instance Extension PskKeyExchangeModes where
     extensionID _ = extensionID_PskKeyExchangeModes
     extensionEncode (PskKeyExchangeModes pkms) = runPut $
-        putWords8 $ map fromPskKexMode pkms
+        putWords8 $ map fromEnumSafe8 pkms
     extensionDecode _ = runGetMaybe $
-        PskKeyExchangeModes . mapMaybe toPskKexMode <$> getWords8
+        PskKeyExchangeModes . mapMaybe toEnumSafe8 <$> getWords8
 
 ------------------------------------------------------------
 
