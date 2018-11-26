@@ -199,7 +199,7 @@ handshakeClient' cparams ctx groups mcrand = do
           | otherwise = return Nothing
 
         earlyDataExtension = case check0RTT of
-            Nothing -> return $ Nothing
+            Nothing -> return Nothing
             _       -> return $ Just $ toExtensionRaw (EarlyDataIndication Nothing)
 
         cookieExtension = do
@@ -433,7 +433,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
             clientChain cparams ctx >>= \case
                 Nothing                    -> return ()
                 Just cc@(CertificateChain certs) -> do
-                    when (not $ null certs) $
+                    unless (null certs) $
                         usingHState ctx $ setClientCertSent True
                     sendPacket ctx $ Handshake [Certificates cc]
 
@@ -538,7 +538,6 @@ processServerExtension (ExtensionRaw extID content)
         sv <- getVerifiedData ServerRole
         let bs = extensionEncode (SecureRenegotiation cv $ Just sv)
         unless (bs `bytesEq` content) $ throwError $ Error_Protocol ("server secure renegotiation data not matching", True, HandshakeFailure)
-        return ()
   | extID == extensionID_SupportedVersions = case extensionDecode MsgTServerHello content of
       Just (SupportedVersionsServerHello ver) -> setVersion ver
       _                                       -> return ()
@@ -580,7 +579,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
     let checkExt (ExtensionRaw i _)
           | i == extensionID_Cookie = False -- for HRR
           | otherwise               = i `notElem` sentExts
-    unless (null $ filter checkExt exts) $
+    when (any checkExt exts) $
         throwCore $ Error_Protocol ("spurious extensions received", True, UnsupportedExtension)
 
     let resumingSession =
@@ -692,7 +691,7 @@ processServerKeyExchange ctx p = processCertificateRequest ctx p
 processCertificateRequest :: Context -> Handshake -> IO (RecvState IO)
 processCertificateRequest ctx (CertRequest cTypesSent sigAlgs dNames) = do
     ver <- usingState_ ctx getVersion
-    when (ver == TLS12 && sigAlgs == Nothing) $
+    when (ver == TLS12 && isNothing sigAlgs) $
         throwCore $ Error_Protocol
             ( "missing TLS 1.2 certificate request signature algorithms"
             , True
