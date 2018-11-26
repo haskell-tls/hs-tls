@@ -341,7 +341,7 @@ instance Extension ApplicationLayerProtocolNegotiation where
     extensionDecode _               = fail "extensionDecode: ApplicationLayerProtocolNegotiation"
 
 decodeApplicationLayerProtocolNegotiation :: ByteString -> Maybe ApplicationLayerProtocolNegotiation
-decodeApplicationLayerProtocolNegotiation = runGetMaybe $do
+decodeApplicationLayerProtocolNegotiation = runGetMaybe $ do
     len <- getWord16
     ApplicationLayerProtocolNegotiation <$> getList (fromIntegral len) getALPN
   where
