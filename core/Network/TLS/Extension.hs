@@ -252,20 +252,34 @@ instance Extension ServerName where
     extensionEncode (ServerName l) = runPut $ putOpaque16 (runPut $ mapM_ encodeNameType l)
         where encodeNameType (ServerNameHostName hn)       = putWord8 0  >> putOpaque16 (BC.pack hn) -- FIXME: should be puny code conversion
               encodeNameType (ServerNameOther (nt,opaque)) = putWord8 nt >> putBytes opaque
-    extensionDecode _ = runGetMaybe (getWord16 >>= \len -> ServerName <$> getList (fromIntegral len) getServerName)
-        where getServerName = do
-                  ty    <- getWord8
-                  sname <- getOpaque16
-                  return (1+2+B.length sname, case ty of
-                      0 -> ServerNameHostName $ BC.unpack sname -- FIXME: should be puny code conversion
-                      _ -> ServerNameOther (ty, sname))
+    extensionDecode MsgTClientHello = decodeServerName
+    extensionDecode MsgTServerHello = decodeServerName
+    extensionDecode MsgTEncryptedExtensions = decodeServerName
+    extensionDecode _               = fail "extensionDecode: ServerName"
+
+decodeServerName :: ByteString -> Maybe ServerName
+decodeServerName = runGetMaybe $ do
+    len <- fromIntegral <$> getWord16
+    ServerName <$> getList len getServerName
+  where
+    getServerName = do
+        ty    <- getWord8
+        sname <- getOpaque16
+        let name = case ty of
+              0 -> ServerNameHostName $ BC.unpack sname -- FIXME: should be puny code conversion
+              _ -> ServerNameOther (ty, sname)
+        return (1+2+B.length sname, name)
 
 ------------------------------------------------------------
 
 -- | Max fragment extension with length from 512 bytes to 4096 bytes
 newtype MaxFragmentLength = MaxFragmentLength MaxFragmentEnum deriving (Show,Eq)
-data MaxFragmentEnum = MaxFragment512 | MaxFragment1024 | MaxFragment2048 | MaxFragment4096
-    deriving (Show,Eq)
+
+data MaxFragmentEnum = MaxFragment512
+                     | MaxFragment1024
+                     | MaxFragment2048
+                     | MaxFragment4096
+                     deriving (Show,Eq)
 
 instance Extension MaxFragmentLength where
     extensionID _ = extensionID_MaxFragmentLength
@@ -274,7 +288,13 @@ instance Extension MaxFragmentLength where
               marshallSize MaxFragment1024 = 2
               marshallSize MaxFragment2048 = 3
               marshallSize MaxFragment4096 = 4
-    extensionDecode _ = runGetMaybe $ do
+    extensionDecode MsgTClientHello = decodeMaxFragmentLength
+    extensionDecode MsgTServerHello = decodeMaxFragmentLength
+    extensionDecode MsgTEncryptedExtensions = decodeMaxFragmentLength
+    extensionDecode _               = fail "extensionDecode: MaxFragmentLength"
+
+decodeMaxFragmentLength :: ByteString -> Maybe MaxFragmentLength
+decodeMaxFragmentLength = runGetMaybe $ do
         w8 <- getWord8
         case w8 of
           1 -> return $ MaxFragmentLength MaxFragment512
@@ -299,7 +319,7 @@ instance Extension SecureRenegotiation where
           MsgTServerHello -> let (cvd, svd) = B.splitAt (B.length opaque `div` 2) opaque
                              in return $ SecureRenegotiation cvd (Just svd)
           MsgTClientHello -> return $ SecureRenegotiation opaque Nothing
-          _               -> fail "decoding SecureRenegotiation for HRR"
+          _               -> fail "extensionDecode: SecureRenegotiation"
 
 ------------------------------------------------------------
 
@@ -310,12 +330,19 @@ instance Extension ApplicationLayerProtocolNegotiation where
     extensionID _ = extensionID_ApplicationLayerProtocolNegotiation
     extensionEncode (ApplicationLayerProtocolNegotiation bytes) =
         runPut $ putOpaque16 $ runPut $ mapM_ putOpaque8 bytes
-    extensionDecode _ = runGetMaybe $ do
-        len <- getWord16
-        ApplicationLayerProtocolNegotiation <$> getList (fromIntegral len) getALPN
-        where getALPN = do
-                  alpn <- getOpaque8
-                  return (B.length alpn + 1, alpn)
+    extensionDecode MsgTClientHello = decodeApplicationLayerProtocolNegotiation
+    extensionDecode MsgTServerHello = decodeApplicationLayerProtocolNegotiation
+    extensionDecode MsgTEncryptedExtensions = decodeApplicationLayerProtocolNegotiation
+    extensionDecode _               = fail "extensionDecode: ApplicationLayerProtocolNegotiation"
+
+decodeApplicationLayerProtocolNegotiation :: ByteString -> Maybe ApplicationLayerProtocolNegotiation
+decodeApplicationLayerProtocolNegotiation = runGetMaybe $do
+    len <- getWord16
+    ApplicationLayerProtocolNegotiation <$> getList (fromIntegral len) getALPN
+  where
+    getALPN = do
+        alpn <- getOpaque8
+        return (B.length alpn + 1, alpn)
 
 ------------------------------------------------------------
 
@@ -325,7 +352,13 @@ newtype NegotiatedGroups = NegotiatedGroups [Group] deriving (Show,Eq)
 instance Extension NegotiatedGroups where
     extensionID _ = extensionID_NegotiatedGroups
     extensionEncode (NegotiatedGroups groups) = runPut $ putWords16 $ map fromEnumSafe16 groups
-    extensionDecode _ = runGetMaybe (NegotiatedGroups . mapMaybe toEnumSafe16 <$> getWords16)
+    extensionDecode MsgTClientHello = decodeNegotiatedGroups
+    extensionDecode MsgTEncryptedExtensions = decodeNegotiatedGroups
+    extensionDecode _               = fail "extensionDecode: NegotiatedGroups"
+
+decodeNegotiatedGroups :: ByteString -> Maybe NegotiatedGroups
+decodeNegotiatedGroups =
+    runGetMaybe (NegotiatedGroups . mapMaybe toEnumSafe16 <$> getWords16)
 
 ------------------------------------------------------------
 
@@ -351,7 +384,13 @@ instance EnumSafe8 EcPointFormat where
 instance Extension EcPointFormatsSupported where
     extensionID _ = extensionID_EcPointFormats
     extensionEncode (EcPointFormatsSupported formats) = runPut $ putWords8 $ map fromEnumSafe8 formats
-    extensionDecode _ = runGetMaybe (EcPointFormatsSupported . mapMaybe toEnumSafe8 <$> getWords8)
+    extensionDecode MsgTClientHello = decodeEcPointFormatsSupported
+    extensionDecode MsgTServerHello = decodeEcPointFormatsSupported
+    extensionDecode _ = fail "extensionDecode: EcPointFormatsSupported"
+
+decodeEcPointFormatsSupported :: ByteString -> Maybe EcPointFormatsSupported
+decodeEcPointFormatsSupported =
+    runGetMaybe (EcPointFormatsSupported . mapMaybe toEnumSafe8 <$> getWords8)
 
 ------------------------------------------------------------
 
