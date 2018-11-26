@@ -399,13 +399,17 @@ decodeEcPointFormatsSupported =
 
 ------------------------------------------------------------
 
+-- Fixme: this is incomplete
+-- newtype SessionTicket = SessionTicket ByteString
 data SessionTicket = SessionTicket
     deriving (Show,Eq)
 
 instance Extension SessionTicket where
     extensionID _ = extensionID_SessionTicket
     extensionEncode SessionTicket{} = runPut $ return ()
-    extensionDecode _ = runGetMaybe (return SessionTicket)
+    extensionDecode MsgTClientHello = runGetMaybe (return SessionTicket)
+    extensionDecode MsgTServerHello = runGetMaybe (return SessionTicket)
+    extensionDecode _               = fail "extensionDecode: SessionTicket"
 
 ------------------------------------------------------------
 
@@ -427,11 +431,16 @@ instance EnumSafe8 HeartBeatMode where
 instance Extension HeartBeat where
     extensionID _ = extensionID_Heartbeat
     extensionEncode (HeartBeat mode) = runPut $ putWord8 $ fromEnumSafe8 mode
-    extensionDecode _ = runGetMaybe $ do
-        mm <- toEnumSafe8 <$> getWord8
-        case mm of
-          Just m  -> return $ HeartBeat m
-          Nothing -> fail "unknown HeartBeatMode"
+    extensionDecode MsgTClientHello = decodeHeartBeat
+    extensionDecode MsgTServerHello = decodeHeartBeat -- fixme: not sure
+    extensionDecode _               = fail "extensionDecode: HeartBeat"
+
+decodeHeartBeat :: ByteString -> Maybe HeartBeat
+decodeHeartBeat = runGetMaybe $ do
+    mm <- toEnumSafe8 <$> getWord8
+    case mm of
+      Just m  -> return $ HeartBeat m
+      Nothing -> fail "unknown HeartBeatMode"
 
 ------------------------------------------------------------
 
@@ -441,10 +450,14 @@ instance Extension SignatureAlgorithms where
     extensionID _ = extensionID_SignatureAlgorithms
     extensionEncode (SignatureAlgorithms algs) =
         runPut $ putWord16 (fromIntegral (length algs * 2)) >> mapM_ putSignatureHashAlgorithm algs
-    extensionDecode _ =
-        runGetMaybe $ do
-            len <- getWord16
-            SignatureAlgorithms <$> getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
+    extensionDecode MsgTClientHello = decodeSignatureAlgorithms
+    extensionDecode MsgTCertificateRequest = decodeSignatureAlgorithms
+    extensionDecode _               = fail "extensionDecode: SignatureAlgorithms"
+
+decodeSignatureAlgorithms :: ByteString -> Maybe SignatureAlgorithms
+decodeSignatureAlgorithms = runGetMaybe $ do
+    len <- getWord16
+    SignatureAlgorithms <$> getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
 
 ------------------------------------------------------------
 
@@ -509,8 +522,6 @@ putKeyShareEntry (KeyShareEntry grp key) = do
     putWord16 $ fromEnumSafe16 grp
     putWord16 $ fromIntegral $ B.length key
     putBytes key
-
-------------------------------------------------------------
 
 data KeyShare =
     KeyShareClientHello [KeyShareEntry]
