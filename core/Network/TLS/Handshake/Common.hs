@@ -168,8 +168,8 @@ storePrivInfo ctx cTypes cc privkey = do
         -- FIXME: The 'rsaok', 'dsaok' tests need a better
         -- abstraction.
         --
-        dsaok = any (== CertificateType_DSS_Sign) <$> cTypes
-        rsaok = any (== CertificateType_RSA_Sign) <$> cTypes
+        dsaok = elem CertificateType_DSS_Sign <$> cTypes
+        rsaok = elem CertificateType_RSA_Sign <$> cTypes
     privalg <- case findDigitalSignatureAlg (pubkey, privkey) of
         Just RSA | rsaok /= Just False
                 -> return RSA

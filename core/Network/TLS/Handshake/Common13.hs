@@ -237,7 +237,7 @@ millisecondsFromBase :: ElapsedP -> Millisecond
 millisecondsFromBase d = fromIntegral ms
   where
     ElapsedP (Elapsed (Seconds s)) (NanoSeconds ns) = d - timeConvert base
-    ms = (s * 1000 + ns `div` 1000000)
+    ms = s * 1000 + ns `div` 1000000
     base = Date 2017 January 1
 
 ----------------------------------------------------------------
