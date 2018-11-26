@@ -508,7 +508,7 @@ toPskKexMode 0 = Just PSK_KE
 toPskKexMode 1 = Just PSK_DHE_KE
 toPskKexMode _ = Nothing
 
-data PskKeyExchangeModes = PskKeyExchangeModes [PskKexMode] deriving (Eq, Show)
+newtype PskKeyExchangeModes = PskKeyExchangeModes [PskKexMode] deriving (Eq, Show)
 
 instance Extension PskKeyExchangeModes where
     extensionID _ = extensionID_PskKeyExchangeModes
@@ -569,9 +569,8 @@ instance Extension EarlyDataIndication where
     extensionEncode (EarlyDataIndication (Just w32)) = runPut $ putWord32 w32
     extensionDecode MsgTClientHello         = return $ Just (EarlyDataIndication Nothing)
     extensionDecode MsgTEncryptedExtensions = return $ Just (EarlyDataIndication Nothing)
-    extensionDecode MsgTNewSessionTicket    = runGetMaybe $ do
-        w32 <- getWord32
-        return (EarlyDataIndication (Just w32))
+    extensionDecode MsgTNewSessionTicket    = runGetMaybe $
+        EarlyDataIndication . Just <$> getWord32
     extensionDecode _                       = fail "extensionDecode: EarlyDataIndication"
 
 ------------------------------------------------------------
