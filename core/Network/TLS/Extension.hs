@@ -274,12 +274,14 @@ instance Extension MaxFragmentLength where
               marshallSize MaxFragment1024 = 2
               marshallSize MaxFragment2048 = 3
               marshallSize MaxFragment4096 = 4
-    extensionDecode _ = runGetMaybe (MaxFragmentLength . unmarshallSize <$> getWord8)
-        where unmarshallSize 1 = MaxFragment512
-              unmarshallSize 2 = MaxFragment1024
-              unmarshallSize 3 = MaxFragment2048
-              unmarshallSize 4 = MaxFragment4096
-              unmarshallSize n = error ("unknown max fragment size " ++ show n)
+    extensionDecode _ = runGetMaybe $ do
+        w8 <- getWord8
+        case w8 of
+          1 -> return $ MaxFragmentLength MaxFragment512
+          2 -> return $ MaxFragmentLength MaxFragment1024
+          3 -> return $ MaxFragmentLength MaxFragment2048
+          4 -> return $ MaxFragmentLength MaxFragment4096
+          n -> fail $ "unknown max fragment size " ++ show n
 
 ------------------------------------------------------------
 
