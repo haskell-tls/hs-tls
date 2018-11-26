@@ -28,6 +28,7 @@ module Network.TLS.Core
     , recvData
     , recvData'
     , updateKey
+    , KeyUpdateRequest(..)
     ) where
 
 import Network.TLS.Cipher
@@ -165,10 +166,12 @@ recvData13 ctx = liftIO $ do
         -- when receiving empty appdata, we just retry to get some data.
         process (Handshake13 [KeyUpdate13 UpdateNotRequested]) = do
             established <- ctxEstablished ctx
-            waitForNotRequested <- usingState_ ctx S.getTLS13KeyUpdateSent
-            if established == Established && waitForNotRequested then do
+            -- Though RFC 8446 Sec 4.6.3 does not clearly says,
+            -- unidirectional key update is legal.
+            -- So, we don't have to check if this key update is corresponding
+            -- to key update (update_requested) which we sent.
+            if established == Established then do
                 keyUpdate ctx getRxState setRxState
-                usingState_ ctx $ S.setTLS13KeyUpdateSent False
                 recvData13 ctx
               else do
                 let reason = "received key update before established"
@@ -239,14 +242,21 @@ keyUpdate ctx getState setState = do
     let applicationTrafficSecretN1 = hkdfExpandLabel usedHash applicationTrafficSecretN "traffic upd" "" $ hashDigestSize usedHash
     setState ctx usedHash usedCipher applicationTrafficSecretN1
 
+-- | How to update keys in TLS 1.3
+data KeyUpdateRequest = OneWay -- ^ Unidirectional key update
+                      | TwoWay -- ^ Bidirectional key update (normal case)
+                      deriving (Eq, Show)
+
 -- | Updating appication traffic secrets for TLS 1.3.
 --   If this API is called for TLS 1.3, 'True' is returned.
 --   Otherwise, 'False' is returned.
-updateKey :: Context -> IO Bool
-updateKey ctx = do
+updateKey :: Context -> KeyUpdateRequest -> IO Bool
+updateKey ctx way = do
     tls13 <- tls13orLater ctx
     when tls13 $ do
-        sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateRequested]
-        usingState_ ctx $ S.setTLS13KeyUpdateSent True
+        let req = case way of
+                OneWay -> UpdateNotRequested
+                TwoWay -> UpdateRequested
+        sendPacket13 ctx $ Handshake13 [KeyUpdate13 req]
         keyUpdate ctx getTxState setTxState
     return tls13

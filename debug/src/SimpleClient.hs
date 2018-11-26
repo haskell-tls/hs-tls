@@ -263,7 +263,7 @@ runOn (sStorage, certStore) flags port hostname
                 sendData ctx $ query
                 loopRecv out ctx
                 when (UpdateKey `elem` flags) $ do
-                    _tls13 <- updateKey ctx
+                    _tls13 <- updateKey ctx TwoWay
                     sendData ctx $ query
                     loopRecv out ctx
                 bye ctx `E.catch` \(SomeException e) -> putStrLn $ "bye failed: " ++ show e

@@ -122,7 +122,8 @@ runTLSPipeSimpleKeyUpdate params = runTLSPipeN 3 params tlsServer tlsClient
   where tlsServer ctx queue = do
             handshake ctx
             d0 <- recvDataNonNull ctx
-            _ <- updateKey ctx
+            req <- generate $ elements [OneWay, TwoWay]
+            _ <- updateKey ctx req
             d1 <- recvDataNonNull ctx
             d2 <- recvDataNonNull ctx
             writeChan queue [d0,d1,d2]
@@ -133,7 +134,8 @@ runTLSPipeSimpleKeyUpdate params = runTLSPipeN 3 params tlsServer tlsClient
             sendData ctx (L.fromChunks [d0])
             d1 <- readChan queue
             sendData ctx (L.fromChunks [d1])
-            _ <- updateKey ctx
+            req <- generate $ elements [OneWay, TwoWay]
+            _ <- updateKey ctx req
             d2 <- readChan queue
             sendData ctx (L.fromChunks [d2])
             bye ctx
