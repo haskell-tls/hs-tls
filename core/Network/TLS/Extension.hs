@@ -467,10 +467,14 @@ instance Extension SignatureAlgorithmsCert where
     extensionID _ = extensionID_SignatureAlgorithmsCert
     extensionEncode (SignatureAlgorithmsCert algs) =
         runPut $ putWord16 (fromIntegral (length algs * 2)) >> mapM_ putSignatureHashAlgorithm algs
-    extensionDecode _ =
-        runGetMaybe $ do
-            len <- getWord16
-            SignatureAlgorithmsCert <$> getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
+    extensionDecode MsgTClientHello = decodeSignatureAlgorithmsCert
+    extensionDecode MsgTCertificateRequest = decodeSignatureAlgorithmsCert
+    extensionDecode _               = fail "extensionDecode: SignatureAlgorithmsCert"
+
+decodeSignatureAlgorithmsCert :: ByteString -> Maybe SignatureAlgorithmsCert
+decodeSignatureAlgorithmsCert = runGetMaybe $ do
+    len <- getWord16
+    SignatureAlgorithmsCert <$> getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
 
 ------------------------------------------------------------
 
@@ -571,8 +575,9 @@ instance Extension PskKeyExchangeModes where
     extensionID _ = extensionID_PskKeyExchangeModes
     extensionEncode (PskKeyExchangeModes pkms) = runPut $
         putWords8 $ map fromEnumSafe8 pkms
-    extensionDecode _ = runGetMaybe $
+    extensionDecode MsgTClientHello = runGetMaybe $
         PskKeyExchangeModes . mapMaybe toEnumSafe8 <$> getWords8
+    extensionDecode _ = fail "extensionDecode: PskKeyExchangeModes"
 
 ------------------------------------------------------------
 
@@ -614,7 +619,7 @@ instance Extension PreSharedKey where
             binder <- getBytes l
             let len = l + 1
             return (len, binder)
-    extensionDecode _ = fail "decoding PreShareKey"
+    extensionDecode _ = fail "extensionDecode: PreShareKey"
 
 ------------------------------------------------------------
 
@@ -637,7 +642,8 @@ newtype Cookie = Cookie ByteString deriving (Eq, Show)
 instance Extension Cookie where
     extensionID _ = extensionID_Cookie
     extensionEncode (Cookie opaque) = runPut $ putOpaque16 opaque
-    extensionDecode _ = runGetMaybe (Cookie <$> getOpaque16)
+    extensionDecode MsgTClientHello = runGetMaybe (Cookie <$> getOpaque16)
+    extensionDecode _               = fail "extensionDecode: Cookie"
 
 ------------------------------------------------------------
 
@@ -648,7 +654,8 @@ instance Extension CertificateAuthorities where
     extensionID _ = extensionID_CertificateAuthorities
     extensionEncode (CertificateAuthorities names) = runPut $
         putDNames names
+    extensionDecode MsgTClientHello =
+       runGetMaybe (CertificateAuthorities <$> getDNames)
     extensionDecode MsgTCertificateRequest =
        runGetMaybe (CertificateAuthorities <$> getDNames)
-    extensionDecode msgt =
-        fail $ "unexpected CertificateAuthorities extension in: " ++ show msgt
+    extensionDecode _ = fail "extensionDecode: CertificateAuthorities"
