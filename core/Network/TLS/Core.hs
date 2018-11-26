@@ -243,7 +243,7 @@ terminate' ctx send err level desc reason = do
 {-# DEPRECATED recvData' "use recvData that returns strict bytestring" #-}
 -- | same as recvData but returns a lazy bytestring.
 recvData' :: MonadIO m => Context -> m L.ByteString
-recvData' ctx = recvData ctx >>= return . L.fromChunks . (:[])
+recvData' ctx = L.fromChunks . (:[]) <$> recvData ctx
 
 keyUpdate :: Context
           -> (Context -> IO (Hash,Cipher,C8.ByteString))
