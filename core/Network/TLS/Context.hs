@@ -168,6 +168,7 @@ contextNew backend params = liftIO $ do
             , ctxLockRead         = lockRead
             , ctxLockState        = lockState
             , ctxPendingActions   = as
+            , ctxLogKey           = debugLogKey debug
             }
 
 -- | create a new context on an handle.

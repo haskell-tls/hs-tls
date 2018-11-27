@@ -94,7 +94,7 @@ getLocalDigitalSignatureAlg ctx = do
 ----------------------------------------------------------------
 
 logKey :: Context -> String -> ByteString -> IO ()
-logKey ctx label key = do
+logKey ctx label key = when (ctxLogKey ctx) $ do
     mhst <- getHState ctx
     case mhst of
       Nothing  -> return ()
