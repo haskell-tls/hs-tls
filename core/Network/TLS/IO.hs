@@ -37,8 +37,8 @@ import Network.TLS.Handshake.State
 import qualified Data.ByteString as B
 
 import Data.IORef
-import Control.Monad.State.Strict
-import Control.Exception (throwIO)
+import Control.Monad.Reader
+import Control.Exception (finally, throwIO)
 import System.IO.Error (mkIOError, eofErrorType)
 
 checkValid :: Context -> IO ()
@@ -205,17 +205,20 @@ recvPacket13 ctx = liftIO $ do
 -- | State monad used to group several packets together and send them on wire as
 -- single flight.  When packets are loaded in the monad, they are logged
 -- immediately, update the context digest and transcript, but actual sending is
--- deferred.  Packets are sent all at once when the monadic computation ends.
-newtype PacketFlightM m a = PacketFlightM (StateT [ByteString] m a)
+-- deferred.  Packets are sent all at once when the monadic computation ends
+-- (normal termination but also if interrupted by an exception).
+newtype PacketFlightM a = PacketFlightM (ReaderT (IORef [ByteString]) IO a)
     deriving (Functor, Applicative, Monad, MonadIO)
 
-runPacketFlight :: MonadIO m => Context -> PacketFlightM m a -> m a
+runPacketFlight :: Context -> PacketFlightM a -> IO a
 runPacketFlight ctx (PacketFlightM f) = do
-    (result, st) <- runStateT f []
-    unless (null st) $ sendBytes ctx $ B.concat $ reverse st
-    return result
+    ref <- newIORef []
+    finally (runReaderT f ref) $ do
+        st <- readIORef ref
+        unless (null st) $ sendBytes ctx $ B.concat $ reverse st
 
-loadPacket13 :: MonadIO m => Context -> Packet13 -> PacketFlightM m ()
+loadPacket13 :: Context -> Packet13 -> PacketFlightM ()
 loadPacket13 ctx pkt = PacketFlightM $ do
     bs <- writePacketBytes13 ctx pkt
-    modify (bs :)
+    ref <- ask
+    liftIO $ modifyIORef ref (bs :)
