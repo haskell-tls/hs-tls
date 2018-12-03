@@ -17,6 +17,14 @@ import qualified Data.ByteString as B
 import Network.TLS.Context.Internal
 import Network.TLS.Struct
 
+-- | Generate a server random suitable for the version selected by the server
+-- and its supported versions.  We use an 8-byte downgrade suffix when the
+-- selected version is lowered because of incomplete client support, but also
+-- when a version downgrade has been forced with 'debugVersionForced'.  This
+-- second part allows to test that the client implementation correctly detects
+-- downgrades.  The suffix is not used when forcing TLS13 to a server not
+-- officially supporting TLS13 (this is not a downgrade scenario but only the
+-- consequence of our debug API allowing this).
 serverRandom :: Context -> Version -> [Version] -> IO ServerRandom
 serverRandom ctx chosenVer suppVers
   | TLS13 `elem` suppVers = case chosenVer of
@@ -24,14 +32,17 @@ serverRandom ctx chosenVer suppVers
       TLS12  -> ServerRandom <$> genServRand suffix12
       _      -> ServerRandom <$> genServRand suffix11
   | TLS12 `elem` suppVers = case chosenVer of
+      TLS13  -> ServerRandom <$> getStateRNG ctx 32
       TLS12  -> ServerRandom <$> getStateRNG ctx 32
       _      -> ServerRandom <$> genServRand suffix11
   | otherwise = ServerRandom <$> getStateRNG ctx 32
   where
     genServRand suff = do
         pref <- getStateRNG ctx 24
-        return $ (pref `B.append` suff)
+        return (pref `B.append` suff)
 
+-- | Test if the negotiated version was artificially downgraded (that is, for
+-- other reason than the versions supported by the client).
 isDowngraded :: [Version] -> ServerRandom -> Bool
 isDowngraded suppVers (ServerRandom sr)
   | TLS13 `elem` suppVers = suffix12 `B.isSuffixOf` sr
