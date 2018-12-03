@@ -22,7 +22,7 @@ import Network.TLS.Compression
 import Network.TLS.Credentials
 import Network.TLS.Crypto
 import Network.TLS.Extension
-import Network.TLS.Util (catchException, fromJust)
+import Network.TLS.Util (bytesEq, catchException, fromJust)
 import Network.TLS.IO
 import Network.TLS.Sending13
 import Network.TLS.Types
@@ -852,8 +852,8 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
                 if isPSKvalid && isFresh then
                     return (psk, Just (bnd,0::Int,len),is0RTTvalid)
                   else
-                    -- fixme: fall back to full handshake
-                    throwCore $ Error_Protocol ("PSK validation failed", True, HandshakeFailure)
+                    -- fall back to full handshake
+                    return (zero, Nothing, False)
             _      -> return (zero, Nothing, False)
       _ -> return (zero, Nothing, False)
 
@@ -880,7 +880,7 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
     checkBinder _ Nothing = return []
     checkBinder earlySecret (Just (binder,n,tlen)) = do
         binder' <- makePSKBinder ctx earlySecret usedHash tlen Nothing
-        when (binder /= binder') $
+        unless (binder `bytesEq` binder') $
             throwCore $ Error_Protocol ("PSK binder validation failed", True, HandshakeFailure)
         let selectedIdentity = extensionEncode $ PreSharedKeyServerHello $ fromIntegral n
         return [ExtensionRaw extensionID_PreSharedKey selectedIdentity]

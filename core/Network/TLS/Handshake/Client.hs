@@ -57,10 +57,11 @@ handshakeClientWith _       _   _            = throwCore $ Error_Protocol ("unex
 handshakeClient :: ClientParams -> Context -> IO ()
 handshakeClient cparams ctx = do
     let groups = case clientWantSessionResume cparams of
-              Nothing         -> supportedGroups (ctxSupported ctx)
+              Nothing         -> groupsSupported
               Just (_, sdata) -> case sessionGroup sdata of
                   Nothing  -> [] -- TLS 1.2 or earlier
-                  Just grp -> [grp]
+                  Just grp -> grp : filter (/= grp) groupsSupported
+        groupsSupported = supportedGroups (ctxSupported ctx)
     handshakeClient' cparams ctx groups Nothing
 
 -- https://tools.ietf.org/html/rfc8446#section-4.1.2 says:
