@@ -90,8 +90,8 @@ setHelloParameters13 cipher = modify update
                         then hst
                         else error "TLS 1.3: cipher changed"
     hashAlg = cipherHash cipher
-    updateDigest (Left bytes) = Right $ foldl hashUpdate (hashInit hashAlg) $ reverse bytes
-    updateDigest (Right _)    = error "cannot initialize digest with another digest"
+    updateDigest (HandshakeMessages bytes)  = HandshakeDigestContext $ foldl hashUpdate (hashInit hashAlg) $ reverse bytes
+    updateDigest (HandshakeDigestContext _) = error "cannot initialize digest with another digest"
 
 -- When a HelloRetryRequest is sent or received, the existing transcript must be
 -- wrapped in a "message_hash" construct.  See RFC 8446 section 4.4.1.  This
@@ -110,8 +110,8 @@ transcriptHash :: MonadIO m => Context -> m ByteString
 transcriptHash ctx = do
     hst <- fromJust "HState" <$> getHState ctx
     case hstHandshakeDigest hst of
-      Right hashCtx -> return $ hashFinal hashCtx
-      Left _        -> error "un-initialized handshake digest"
+      HandshakeDigestContext hashCtx -> return $ hashFinal hashCtx
+      HandshakeMessages      _       -> error "un-initialized handshake digest"
 
 setPendingActions :: Context -> [ByteString -> IO ()] -> IO ()
 setPendingActions ctx bss =

@@ -137,55 +137,10 @@ recvData13 ctx = liftIO $ do
         process (Alert13 [(AlertLevel_Fatal, desc)]) = do
             setEOF ctx
             E.throwIO (Terminated True ("received fatal error: " ++ show desc) (Error_Protocol ("remote side fatal error", True, desc)))
-        process (Handshake13 [ClientHello13{}]) = do
-            let reason = "Client hello is not allowed"
-            terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-        process (Handshake13 [EndOfEarlyData13]) = do
-            alertAction <- popPendingAction ctx
-            alertAction "dummy"
-            recvData13 ctx
-        process (Handshake13 [Finished13 verifyData']) = do
-            finishedAction <- popPendingAction ctx
-            finishedAction verifyData'
-            recvData13 ctx
-        -- fixme: some implementations send multiple NST at the same time.
-        -- Only the first one is used at this moment.
-        process (Handshake13 (NewSessionTicket13 life add nonce label exts:_)) = do
-            ResuptionSecret resumptionMasterSecret <- usingHState ctx getTLS13Secret
-            (usedHash, usedCipher, _) <- getTxState ctx
-            let hashSize = hashDigestSize usedHash
-                psk = hkdfExpandLabel usedHash resumptionMasterSecret "resumption" nonce hashSize
-                maxSize = case extensionLookup extensionID_EarlyData exts >>= extensionDecode MsgTNewSessionTicket of
-                  Just (EarlyDataIndication (Just ms)) -> fromIntegral $ safeNonNegative32 ms
-                  _                                    -> 0
-            tinfo <- createTLS13TicketInfo life (Right add)
-            sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
-            sessionEstablish (sharedSessionManager $ ctxShared ctx) label sdata
-            -- putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
+        process (Handshake13 hs) = do
+            processHandshake13 hs
             recvData13 ctx
         -- when receiving empty appdata, we just retry to get some data.
-        process (Handshake13 [KeyUpdate13 UpdateNotRequested]) = do
-            established <- ctxEstablished ctx
-            -- Though RFC 8446 Sec 4.6.3 does not clearly says,
-            -- unidirectional key update is legal.
-            -- So, we don't have to check if this key update is corresponding
-            -- to key update (update_requested) which we sent.
-            if established == Established then do
-                keyUpdate ctx getRxState setRxState
-                recvData13 ctx
-              else do
-                let reason = "received key update before established"
-                terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-        process (Handshake13 [KeyUpdate13 UpdateRequested]) = do
-            established <- ctxEstablished ctx
-            if established == Established then do
-                keyUpdate ctx getRxState setRxState
-                sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested]
-                keyUpdate ctx getTxState setTxState
-                recvData13 ctx
-              else do
-                let reason = "received key update before established"
-                terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
         process (AppData13 "") = recvData13 ctx
         process (AppData13 x) = do
             established <- ctxEstablished ctx
@@ -199,6 +154,59 @@ recvData13 ctx = liftIO $ do
         process ChangeCipherSpec13 = recvData13 ctx
         process p             = let reason = "unexpected message " ++ show p in
                                 terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+
+        processHandshake13 [] = return ()
+        processHandshake13 (ClientHello13{}:_) = do
+            let reason = "Client hello is not allowed"
+            terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+        processHandshake13 (EndOfEarlyData13:hs) = do
+            alertAction <- popPendingAction ctx
+            alertAction "dummy"
+            processHandshake13 hs
+        processHandshake13 (Finished13 verifyData':hs) = do
+            finishedAction <- popPendingAction ctx
+            finishedAction verifyData'
+            processHandshake13 hs
+        -- fixme: some implementations send multiple NST at the same time.
+        -- Only the first one is used at this moment.
+        processHandshake13 (NewSessionTicket13 life add nonce label exts:hs) = do
+            ResuptionSecret resumptionMasterSecret <- usingHState ctx getTLS13Secret
+            (usedHash, usedCipher, _) <- getTxState ctx
+            let hashSize = hashDigestSize usedHash
+                psk = hkdfExpandLabel usedHash resumptionMasterSecret "resumption" nonce hashSize
+                maxSize = case extensionLookup extensionID_EarlyData exts >>= extensionDecode MsgTNewSessionTicket of
+                  Just (EarlyDataIndication (Just ms)) -> fromIntegral $ safeNonNegative32 ms
+                  _                                    -> 0
+            tinfo <- createTLS13TicketInfo life (Right add)
+            sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
+            sessionEstablish (sharedSessionManager $ ctxShared ctx) label sdata
+            -- putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
+            processHandshake13 hs
+        processHandshake13 (KeyUpdate13 UpdateNotRequested:hs) = do
+            established <- ctxEstablished ctx
+            -- Though RFC 8446 Sec 4.6.3 does not clearly says,
+            -- unidirectional key update is legal.
+            -- So, we don't have to check if this key update is corresponding
+            -- to key update (update_requested) which we sent.
+            if established == Established then do
+                keyUpdate ctx getRxState setRxState
+                processHandshake13 hs
+              else do
+                let reason = "received key update before established"
+                terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+        processHandshake13 (KeyUpdate13 UpdateRequested:hs) = do
+            established <- ctxEstablished ctx
+            if established == Established then do
+                keyUpdate ctx getRxState setRxState
+                sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested]
+                keyUpdate ctx getTxState setTxState
+                processHandshake13 hs
+              else do
+                let reason = "received key update before established"
+                terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+        processHandshake13 hhs = do
+            let reason = "unexpected message " ++ show hhs
+            terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
 
         terminate = terminate' ctx (sendPacket13 ctx . Alert13)
 
@@ -231,7 +239,7 @@ terminate' ctx send err level desc reason = do
 {-# DEPRECATED recvData' "use recvData that returns strict bytestring" #-}
 -- | same as recvData but returns a lazy bytestring.
 recvData' :: MonadIO m => Context -> m L.ByteString
-recvData' ctx = recvData ctx >>= return . L.fromChunks . (:[])
+recvData' ctx = L.fromChunks . (:[]) <$> recvData ctx
 
 keyUpdate :: Context
           -> (Context -> IO (Hash,Cipher,C8.ByteString))

@@ -139,10 +139,7 @@ decodeCertificate13 = do
         return (3 + l + 2 + len, (cert, exts))
 
 decodeCertVerify13 :: Get Handshake13
-decodeCertVerify13 = do
-    hs <- getSignatureHashAlgorithm
-    signature <- getOpaque16
-    return $ CertVerify13 hs signature
+decodeCertVerify13 = CertVerify13 <$> getSignatureHashAlgorithm <*> getOpaque16
 
 decodeNewSessionTicket13 :: Get Handshake13
 decodeNewSessionTicket13 = do
