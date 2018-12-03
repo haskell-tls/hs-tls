@@ -20,7 +20,6 @@ module Network.TLS.Types
     , Millisecond
     ) where
 
-import Data.IORef (IORef)
 import Network.TLS.Imports
 import Network.TLS.Crypto.Types (Group)
 
@@ -53,16 +52,8 @@ data TLS13TicketInfo = TLS13TicketInfo
     { lifetime :: Second      -- NewSessionTicket.ticket_lifetime in seconds
     , ageAdd   :: Second      -- NewSessionTicket.ticket_age_add
     , txrxTime :: Millisecond -- serverSendTime or clientReceiveTime
-    , estimatedRTT :: IORef (Maybe Millisecond)
-    } deriving (Eq)
-
-instance Show TLS13TicketInfo where
-    showsPrec d s = showParen (d > 10) $
-             showString "TLS13TicketInfo { "
-           . showString   "lifetime = " . shows (lifetime s)
-           . showString ", ageAdd = "   . shows (ageAdd s)
-           . showString ", txrxTime = " . shows (txrxTime s)
-           . showString " }"
+    , estimatedRTT :: Maybe Millisecond
+    } deriving (Show, Eq)
 
 -- | Cipher identification
 type CipherID = Word16
