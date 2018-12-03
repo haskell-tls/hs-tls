@@ -273,45 +273,45 @@ decodeServerName = runGetMaybe $ do
 ------------------------------------------------------------
 
 -- | Max fragment extension with length from 512 bytes to 4096 bytes
-newtype MaxFragmentLength = MaxFragmentLength MaxFragmentEnum deriving (Show,Eq)
-
--- | Max fragment length defined in RFC 6066.
 --
 -- RFC 6066 defines:
 -- If a server receives a maximum fragment length negotiation request
 -- for a value other than the allowed values, it MUST abort the
 -- handshake with an "illegal_parameter" alert.
 --
--- So, if a server receives MaxFragmentOther, it must send the alert.
+-- So, if a server receives MaxFragmentLengthOther, it must send the alert.
+data MaxFragmentLength = MaxFragmentLength MaxFragmentEnum
+                       | MaxFragmentLengthOther Word8
+                       deriving (Show,Eq)
+
 data MaxFragmentEnum = MaxFragment512
                      | MaxFragment1024
                      | MaxFragment2048
                      | MaxFragment4096
-                     | MaxFragmentOther Word8
                      deriving (Show,Eq)
 
 instance Extension MaxFragmentLength where
     extensionID _ = extensionID_MaxFragmentLength
     extensionEncode (MaxFragmentLength l) = runPut $ putWord8 $ fromMaxFragmentEnum l
       where
-        fromMaxFragmentEnum MaxFragment512       = 1
-        fromMaxFragmentEnum MaxFragment1024      = 2
-        fromMaxFragmentEnum MaxFragment2048      = 3
-        fromMaxFragmentEnum MaxFragment4096      = 4
-        fromMaxFragmentEnum (MaxFragmentOther n) = n
+        fromMaxFragmentEnum MaxFragment512  = 1
+        fromMaxFragmentEnum MaxFragment1024 = 2
+        fromMaxFragmentEnum MaxFragment2048 = 3
+        fromMaxFragmentEnum MaxFragment4096 = 4
+    extensionEncode (MaxFragmentLengthOther l) = runPut $ putWord8 l
     extensionDecode MsgTClientHello = decodeMaxFragmentLength
     extensionDecode MsgTServerHello = decodeMaxFragmentLength
     extensionDecode MsgTEncryptedExtensions = decodeMaxFragmentLength
     extensionDecode _               = fail "extensionDecode: MaxFragmentLength"
 
 decodeMaxFragmentLength :: ByteString -> Maybe MaxFragmentLength
-decodeMaxFragmentLength = runGetMaybe $ MaxFragmentLength . toMaxFragmentEnum <$> getWord8
+decodeMaxFragmentLength = runGetMaybe $ toMaxFragmentEnum <$> getWord8
   where
-    toMaxFragmentEnum 1 = MaxFragment512
-    toMaxFragmentEnum 2 = MaxFragment1024
-    toMaxFragmentEnum 3 = MaxFragment2048
-    toMaxFragmentEnum 4 = MaxFragment4096
-    toMaxFragmentEnum n = MaxFragmentOther n
+    toMaxFragmentEnum 1 = MaxFragmentLength MaxFragment512
+    toMaxFragmentEnum 2 = MaxFragmentLength MaxFragment1024
+    toMaxFragmentEnum 3 = MaxFragmentLength MaxFragment2048
+    toMaxFragmentEnum 4 = MaxFragmentLength MaxFragment4096
+    toMaxFragmentEnum n = MaxFragmentLengthOther n
 
 ------------------------------------------------------------
 
