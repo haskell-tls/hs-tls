@@ -106,7 +106,7 @@ wrapAsMessageHash13 = do
                             , dig
                             ]
 
-transcriptHash :: Context -> IO ByteString
+transcriptHash :: MonadIO m => Context -> m ByteString
 transcriptHash ctx = do
     hst <- fromJust "HState" <$> getHState ctx
     case hstHandshakeDigest hst of

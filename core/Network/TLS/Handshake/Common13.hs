@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, BangPatterns #-}
+{-# LANGUAGE OverloadedStrings, GeneralizedNewtypeDeriving, BangPatterns #-}
 
 -- |
 -- Module      : Network.TLS.Handshake.Common13
@@ -27,6 +27,9 @@ module Network.TLS.Handshake.Common13
        , getSessionData13
        , safeNonNegative32
        , dumpKey
+       , RecvHandshake13M
+       , runRecvHandshake13
+       , recvHandshake13
        ) where
 
 import Data.Bits (finiteBitSize)
@@ -39,6 +42,8 @@ import Network.TLS.Cipher
 import Network.TLS.Crypto
 import qualified Network.TLS.Crypto.IES as IES
 import Network.TLS.Extension
+import Network.TLS.Handshake.Process (processHandshake13)
+import Network.TLS.Handshake.Common (unexpected)
 import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
@@ -46,6 +51,7 @@ import Network.TLS.Handshake.Signature
 import Network.TLS.Imports
 import Network.TLS.KeySchedule
 import Network.TLS.MAC
+import Network.TLS.IO
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
@@ -55,9 +61,11 @@ import Network.TLS.Util
 import System.IO
 import Time.System
 
+import Control.Monad.State.Strict
+
 ----------------------------------------------------------------
 
-makeFinished :: Context -> Hash -> ByteString -> IO Handshake13
+makeFinished :: MonadIO m => Context -> Hash -> ByteString -> m Handshake13
 makeFinished ctx usedHash baseKey =
     Finished13 . makeVerifyData usedHash baseKey <$> transcriptHash ctx
 
@@ -105,19 +113,19 @@ serverContextString = "TLS 1.3, server CertificateVerify"
 clientContextString :: ByteString
 clientContextString = "TLS 1.3, client CertificateVerify"
 
-makeServerCertVerify :: Context -> HashAndSignatureAlgorithm -> PrivKey -> ByteString -> IO Handshake13
+makeServerCertVerify :: MonadIO m => Context -> HashAndSignatureAlgorithm -> PrivKey -> ByteString -> m Handshake13
 makeServerCertVerify ctx hs privKey hashValue =
     CertVerify13 hs <$> sign ctx hs privKey target
   where
     target = makeTarget serverContextString hashValue
 
-makeClientCertVerify :: Context -> HashAndSignatureAlgorithm -> PrivKey -> ByteString -> IO Handshake13
+makeClientCertVerify :: MonadIO m => Context -> HashAndSignatureAlgorithm -> PrivKey -> ByteString -> m Handshake13
 makeClientCertVerify ctx hs privKey hashValue =
     CertVerify13 hs <$> sign ctx hs privKey target
  where
     target = makeTarget clientContextString hashValue
 
-checkServerCertVerify :: HashAndSignatureAlgorithm -> ByteString -> PubKey -> ByteString -> IO ()
+checkServerCertVerify :: MonadIO m => HashAndSignatureAlgorithm -> ByteString -> PubKey -> ByteString -> m ()
 checkServerCertVerify hs signature pubKey hashValue =
     unless ok $ throwCore $ Error_Protocol ("cannot verify CertificateVerify", True, BadCertificate)
   where
@@ -133,8 +141,8 @@ makeTarget contextString hashValue = runPut $ do
     putWord8 0
     putBytes hashValue
 
-sign :: Context -> HashAndSignatureAlgorithm -> PrivKey -> ByteString -> IO ByteString
-sign ctx hs privKey target = usingState_ ctx $ do
+sign :: MonadIO m => Context -> HashAndSignatureAlgorithm -> PrivKey -> ByteString -> m ByteString
+sign ctx hs privKey target = liftIO $ usingState_ ctx $ do
     r <- withRNG $ kxSign privKey sigParams target
     case r of
         Left err       -> fail ("sign failed: " ++ show err)
@@ -276,3 +284,37 @@ dumpKey ctx label key = do
           hPutStrLn stderr $ label ++ " " ++ dump cr ++ " " ++ dump key
   where
     dump = init . tail . showBytesHex
+
+----------------------------------------------------------------
+
+newtype RecvHandshake13M m a = RecvHandshake13M (StateT [Handshake13] m a)
+    deriving (Functor, Applicative, Monad, MonadIO)
+
+recvHandshake13 :: MonadIO m
+                => Context
+                -> (Handshake13 -> RecvHandshake13M m a)
+                -> RecvHandshake13M m a
+recvHandshake13 ctx f = getHandshake13 ctx >>= f
+
+getHandshake13 :: MonadIO m => Context -> RecvHandshake13M m Handshake13
+getHandshake13 ctx = RecvHandshake13M $ do
+    currentState <- get
+    case currentState of
+        (h:hs) -> found h hs
+        []     -> recvLoop
+  where
+    found h hs = liftIO (processHandshake13 ctx h) >> put hs >> return h
+    recvLoop = do
+        epkt <- recvPacket13 ctx
+        case epkt of
+            Right (Handshake13 [])     -> recvLoop
+            Right (Handshake13 (h:hs)) -> found h hs
+            Right ChangeCipherSpec13   -> recvLoop
+            Right x                    -> unexpected (show x) (Just "handshake 13")
+            Left err                   -> throwCore err
+
+runRecvHandshake13 :: MonadIO m => RecvHandshake13M m a -> m a
+runRecvHandshake13 (RecvHandshake13M f) = do
+    (result, new) <- runStateT f []
+    unless (null new) $ unexpected "spurious handshake 13" Nothing
+    return result
