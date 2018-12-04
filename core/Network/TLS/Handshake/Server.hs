@@ -32,7 +32,6 @@ import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Random
 import Network.TLS.Measurement
 import qualified Data.ByteString as B
-import Data.IORef (writeIORef)
 import Data.X509 (ExtKeyUsageFlag(..))
 
 import Control.Monad.State.Strict
@@ -776,57 +775,33 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
     let masterSecret = hkdfExtract usedHash (deriveSecret usedHash handshakeSecret "derived" (hash usedHash "")) zero
     hChSf <- transcriptHash ctx
     when rtt0OK $ processHandshake13 ctx EndOfEarlyData13
-    hChEoed <- transcriptHash ctx
     let clientApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "c ap traffic" hChSf
         serverApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "s ap traffic" hChSf
         exporterMasterSecret = deriveSecret usedHash masterSecret "exp master" hChSf
-        verifyData = makeVerifyData usedHash clientHandshakeTrafficSecret hChEoed
     usingState_ ctx $ setExporterMasterSecret exporterMasterSecret
     ----------------------------------------------------------------
     -- putStrLn $ "hChSf: " ++ showBytesHex hChSf
-    -- putStrLn $ "hChEoed: " ++ showBytesHex hChEoed
     -- putStrLn $ "masterSecret: " ++ showBytesHex masterSecret
     -- dumpKey ctx "SERVER_TRAFFIC_SECRET_0" serverApplicationTrafficSecret0
     -- dumpKey ctx "CLIENT_TRAFFIC_SECRET_0" clientApplicationTrafficSecret0
     setTxState ctx usedHash usedCipher serverApplicationTrafficSecret0
-    -- Our use of "NewSessionTicket" is not session tickets which
-    -- do not require states in the server side.
-    -- Rather, it is session resumptions which require states.
-    --
-    -- NewSessionTicket contains a "ticket" field which is a key
-    -- for "resumption_secret". To calculate resumption_secret,
-    -- Client Finished is necessary. However, it is predictable.
-    -- So, we can send NewSessionTicket here.
-    --
-    -- From the API point of view, "handshake" should return just after
-    -- sending Server Finished, rather than after receiving
-    -- Client Finished. This is because mail related protocols send
-    -- greetings from servers first.
-    --
-    -- Web related servers call "recvData" just after "handshake".
-    -- recvData verifies received Client Finished and returns
-    -- after receiving application data from a client.
-    -- recvData should literally receive packets only, should not
-    -- send packets include NewSessionTicket.
-    --
-    -- So, NewSessionTicket should be sent with prediction here.
-    mrttref <- sendNewSessionTicket masterSecret $ Finished13 verifyData
     ----------------------------------------------------------------
     let established
          | rtt0OK    = EarlyDataAllowed $ safeNonNegative32 $ serverEarlyDataSize sparams
          | otherwise = EarlyDataNotAllowed
     setEstablished ctx established
-    let finishedAction verifyData'
-          | verifyData == verifyData' = do
-              cfRecvTime <- getCurrentTimeFromBase
-              case mrttref of
-                Nothing -> return ()
-                Just rttref -> do
-                    let rtt = cfRecvTime - sfSentTime
-                    writeIORef rttref $ Just rtt
-              setEstablished ctx Established
-              setRxState ctx usedHash usedCipher clientApplicationTrafficSecret0
-          | otherwise = throwCore $ Error_Protocol ("cannot verify finished", True, HandshakeFailure)
+    let finishedAction verifyData' = do
+            hChBeforeCf <- transcriptHash ctx
+            let verifyData = makeVerifyData usedHash clientHandshakeTrafficSecret hChBeforeCf
+            if verifyData == verifyData' then do
+                cfRecvTime <- getCurrentTimeFromBase
+                let rtt = cfRecvTime - sfSentTime
+                setEstablished ctx Established
+                setRxState ctx usedHash usedCipher clientApplicationTrafficSecret0
+                processHandshake13 ctx $ Finished13 verifyData
+                sendNewSessionTicket masterSecret rtt
+              else
+                throwCore $ Error_Protocol ("cannot verify finished", True, HandshakeFailure)
         endOfEarlyDataAction _ =
             setRxState ctx usedHash usedCipher clientHandshakeTrafficSecret
     if rtt0OK then do
@@ -876,7 +851,7 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
             is0RTTvalid = isSameVersion && isSameCipher && isSameALPN
         return (isPSKvalid, is0RTTvalid)
 
-    rtt0accept = serverEarlyDataSize sparams /= 0
+    rtt0accept = safeNonNegative32 (serverEarlyDataSize sparams) > 0
     rtt0 = case extensionLookup extensionID_EarlyData exts >>= extensionDecode MsgTClientHello of
              Just (EarlyDataIndication _) -> True
              Nothing                      -> False
@@ -921,20 +896,16 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
               | otherwise = extensions''
         loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 extensions]
 
-    sendNewSessionTicket masterSecret pendingHandshake
-      | sendNST = do
-        processHandshake13 ctx pendingHandshake
+    sendNewSessionTicket masterSecret rtt = when sendNST $ do
         hChCf <- transcriptHash ctx
         nonce <- usingState_ ctx $ genRandom 32
         let resumptionMasterSecret = deriveSecret usedHash masterSecret "res master" hChCf
             life = 86400 -- 1 day in second: fixme hard coding
             psk = hkdfExpandLabel usedHash resumptionMasterSecret "resumption" nonce hashSize
             maxSize = safeNonNegative32 $ serverEarlyDataSize sparams
-        (label, add, rttref) <- generateSession life psk maxSize
+        (label, add) <- generateSession life psk maxSize
         let nst = createNewSessionTicket life add nonce label maxSize
         sendPacket13 ctx $ Handshake13 [nst]
-        return $ Just rttref
-      | otherwise = return Nothing
       where
         sendNST = (PSK_KE `elem` dhModes) || (PSK_DHE_KE `elem` dhModes)
         dhModes = case extensionLookup extensionID_PskKeyExchangeModes exts >>= extensionDecode MsgTClientHello of
@@ -942,11 +913,11 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
           Nothing                       -> []
         generateSession life psk maxSize = do
             Session (Just sessionId) <- newSession ctx
-            tinfo <- createTLS13TicketInfo life (Left ctx)
+            tinfo <- createTLS13TicketInfo life (Left ctx) (Just rtt)
             sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
             let mgr = sharedSessionManager $ serverShared sparams
             sessionEstablish mgr sessionId sdata
-            return (sessionId, ageAdd tinfo, estimatedRTT tinfo)
+            return (sessionId, ageAdd tinfo)
         createNewSessionTicket life add nonce label maxSize =
             NewSessionTicket13 life add nonce label extensions
           where
