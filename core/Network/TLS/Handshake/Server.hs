@@ -774,7 +774,6 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
     ----------------------------------------------------------------
     let masterSecret = hkdfExtract usedHash (deriveSecret usedHash handshakeSecret "derived" (hash usedHash "")) zero
     hChSf <- transcriptHash ctx
-    when rtt0OK $ processHandshake13 ctx EndOfEarlyData13
     let clientApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "c ap traffic" hChSf
         serverApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "s ap traffic" hChSf
         exporterMasterSecret = deriveSecret usedHash masterSecret "exp master" hChSf
@@ -791,21 +790,22 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
          | otherwise = EarlyDataNotAllowed
     setEstablished ctx established
 
-    let finishedAction (Finished13 verifyData') = do
+    let finishedAction hs@(Finished13 verifyData') = do
             hChBeforeCf <- transcriptHash ctx
+            processHandshake13 ctx hs
             let verifyData = makeVerifyData usedHash clientHandshakeTrafficSecret hChBeforeCf
             if verifyData == verifyData' then do
                 cfRecvTime <- getCurrentTimeFromBase
                 let rtt = cfRecvTime - sfSentTime
                 setEstablished ctx Established
                 setRxState ctx usedHash usedCipher clientApplicationTrafficSecret0
-                processHandshake13 ctx $ Finished13 verifyData
                 sendNewSessionTicket masterSecret rtt
               else
                 throwCore $ Error_Protocol ("cannot verify finished", True, HandshakeFailure)
         finishedAction hs = unexpected (show hs) (Just "finished 13")
 
-        endOfEarlyDataAction EndOfEarlyData13 =
+        endOfEarlyDataAction hs@EndOfEarlyData13 = do
+            processHandshake13 ctx hs
             setRxState ctx usedHash usedCipher clientHandshakeTrafficSecret
         endOfEarlyDataAction hs = unexpected (show hs) (Just "end of early data")
 
