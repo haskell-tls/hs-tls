@@ -169,7 +169,7 @@ Benchmark bench-tls
                    , x509-validation
                    , data-default-class
                    , cryptonite
-                   , criterion >= 1.0
+                   , gauge
                    , bytestring
                    , asn1-types
                    , async >= 2.0
