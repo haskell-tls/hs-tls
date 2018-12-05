@@ -159,14 +159,6 @@ recvData13 ctx = liftIO $ do
         processHandshake13 (ClientHello13{}:_) = do
             let reason = "Client hello is not allowed"
             terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-        processHandshake13 (EndOfEarlyData13:hs) = do
-            alertAction <- popPendingAction ctx
-            alertAction "dummy"
-            processHandshake13 hs
-        processHandshake13 (Finished13 verifyData':hs) = do
-            finishedAction <- popPendingAction ctx
-            finishedAction verifyData'
-            processHandshake13 hs
         -- fixme: some implementations send multiple NST at the same time.
         -- Only the first one is used at this moment.
         processHandshake13 (NewSessionTicket13 life add nonce label exts:hs) = do
@@ -204,9 +196,12 @@ recvData13 ctx = liftIO $ do
               else do
                 let reason = "received key update before established"
                 terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-        processHandshake13 hhs = do
-            let reason = "unexpected message " ++ show hhs
-            terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+        processHandshake13 (h:hs) = do
+            mPendingAction <- popPendingAction ctx
+            case mPendingAction of
+                Nothing -> let reason = "unexpected handshake message " ++ show h in
+                           terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+                Just pa -> withRWLock ctx (pa h) >> processHandshake13 hs
 
         terminate = terminate' ctx (sendPacket13 ctx . Alert13)
 

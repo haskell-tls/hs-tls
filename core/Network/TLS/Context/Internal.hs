@@ -21,6 +21,7 @@ module Network.TLS.Context.Internal
     , Context(..)
     , Hooks(..)
     , Established(..)
+    , PendingAction
     , ctxEOF
     , ctxHasSSLv2ClientHello
     , ctxDisableSSLv2ClientHello
@@ -61,6 +62,7 @@ import Network.TLS.Backend
 import Network.TLS.Extension
 import Network.TLS.Cipher
 import Network.TLS.Struct
+import Network.TLS.Struct13
 import Network.TLS.Compression (Compression)
 import Network.TLS.State
 import Network.TLS.Handshake.State
@@ -114,7 +116,7 @@ data Context = Context
     , ctxLockRead         :: MVar ()       -- ^ lock to use for reading data (including updating the state)
     , ctxLockState        :: MVar ()       -- ^ lock used during read/write when receiving and sending packet.
                                            -- it is usually nested in a write or read lock.
-    , ctxPendingActions   :: MVar [ByteString -> IO ()]
+    , ctxPendingActions   :: MVar [PendingAction]
     }
 
 data Established = NotEstablished
@@ -122,6 +124,8 @@ data Established = NotEstablished
                  | EarlyDataNotAllowed
                  | Established
                  deriving (Eq, Show)
+
+type PendingAction = Handshake13 -> IO ()
 
 updateMeasure :: Context -> (Measurement -> Measurement) -> IO ()
 updateMeasure ctx f = do
