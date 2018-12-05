@@ -692,13 +692,13 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
         doDHESignature dhparams signature signatureType = do
             -- FIXME verify if FF group is one of supported groups
             verified <- digitallySignDHParamsVerify ctx dhparams signatureType signature
-            unless verified $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " signature for dhparams " ++ show dhparams, True, HandshakeFailure)
+            unless verified $ decryptError ("bad " ++ show signatureType ++ " signature for dhparams " ++ show dhparams)
             usingHState ctx $ setServerDHParams dhparams
 
         doECDHESignature ecdhparams signature signatureType = do
             -- FIXME verify if EC group is one of supported groups
             verified <- digitallySignECDHParamsVerify ctx ecdhparams signatureType signature
-            unless verified $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " signature for ecdhparams", True, HandshakeFailure)
+            unless verified $ decryptError ("bad " ++ show signatureType ++ " signature for ecdhparams")
             usingHState ctx $ setServerECDHParams ecdhparams
 
 processServerKeyExchange ctx p = processCertificateRequest ctx p
@@ -937,8 +937,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
     expectCertVerify pubkey hChSc (CertVerify13 sigAlg sig) = do
         let keyAlg = fromJust "fromPubKey" (fromPubKey pubkey)
         ok <- checkServerCertVerify ctx keyAlg sigAlg sig hChSc
-        -- FIXME wrong alert?
-        unless ok $ throwCore $ Error_Protocol ("cannot verify CertificateVerify", True, BadCertificate)
+        unless ok $ decryptError "cannot verify CertificateVerify"
     expectCertVerify _ _ p = unexpected (show p) (Just "certificate verify")
 
     recvFinished serverHandshakeTrafficSecret = do
@@ -947,8 +946,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
         recvHandshake13 ctx $ expectFinished verifyData'
 
     expectFinished verifyData' (Finished13 verifyData) =
-        when (verifyData' /= verifyData) $
-            throwCore $ Error_Protocol ("cannot verify finished", True, HandshakeFailure)
+        when (verifyData' /= verifyData) $ decryptError "cannot verify finished"
     expectFinished _ p = unexpected (show p) (Just "server finished")
 
     setResumptionSecret masterSecret = do
