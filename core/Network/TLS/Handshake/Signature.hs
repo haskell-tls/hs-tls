@@ -20,6 +20,7 @@ module Network.TLS.Handshake.Signature
     , signatureParams
     , fromPubKey
     , fromPrivKey
+    , decryptError
     ) where
 
 import Network.TLS.Crypto
@@ -51,6 +52,9 @@ getLocalDigitalSignatureAlg ctx = do
     case fromPrivKey privateKey of
         Just sigAlg -> return sigAlg
         Nothing     -> fail "selected credential does not support signing"
+
+decryptError :: MonadIO m => String -> m a
+decryptError msg = throwCore $ Error_Protocol (msg, True, DecryptError)
 
 -- | Check that the signature algorithm is compatible with a list of
 -- 'CertificateType' values.  Ed25519 and Ed448 have no assigned code point

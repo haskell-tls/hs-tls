@@ -547,7 +547,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                         -- also commit the client certificate
                         -- chain to the context.
                         usingState_ ctx $ setClientCertificateChain certs
-                    else badCertificate "verification failed"
+                    else decryptError "verification failed"
             return $ RecvStateNext expectChangeCipher
 
         processCertificateVerify p = do
@@ -804,7 +804,7 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
                 setRxState ctx usedHash usedCipher clientApplicationTrafficSecret0
                 sendNewSessionTicket masterSecret rtt
               else
-                throwCore $ Error_Protocol ("cannot verify finished", True, HandshakeFailure)
+                decryptError "cannot verify finished"
         finishedAction hs = unexpected (show hs) (Just "finished 13")
 
         endOfEarlyDataAction hs@EndOfEarlyData13 = do
@@ -869,7 +869,7 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
     checkBinder earlySecret (Just (binder,n,tlen)) = do
         binder' <- makePSKBinder ctx earlySecret usedHash tlen Nothing
         unless (binder `bytesEq` binder') $
-            throwCore $ Error_Protocol ("PSK binder validation failed", True, HandshakeFailure)
+            decryptError "PSK binder validation failed"
         let selectedIdentity = extensionEncode $ PreSharedKeyServerHello $ fromIntegral n
         return [ExtensionRaw extensionID_PreSharedKey selectedIdentity]
 
