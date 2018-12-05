@@ -11,6 +11,7 @@ import Marshalling
 import Ciphers
 import PubKey
 
+import Data.Foldable (traverse_)
 import Data.Maybe
 import Data.Default.Class
 import Data.List (intersect)
@@ -22,6 +23,7 @@ import Network.TLS
 import Network.TLS.Extra
 import Control.Applicative
 import Control.Concurrent
+import Control.Concurrent.Async
 import Control.Monad
 
 import Data.IORef
@@ -749,6 +751,30 @@ prop_handshake_session_resumption = do
 
     runTLSPipeSimple params2
 
+prop_thread_safety :: PropertyM IO ()
+prop_thread_safety = do
+    params  <- pick arbitraryPairParams
+    runTLSPipe params tlsServer tlsClient
+  where tlsServer ctx queue = do
+            handshake ctx
+            runReaderWriters ctx "client-value" "server-value"
+            d <- recvDataNonNull ctx
+            writeChan queue [d]
+            bye ctx -- needed to interrupt recvData in tlsClient
+        tlsClient queue ctx = do
+            handshake ctx
+            runReaderWriters ctx "server-value" "client-value"
+            d <- readChan queue
+            sendData ctx (L.fromChunks [d])
+            _ <- recvData ctx -- recvData receives NewSessionTicket with TLS13
+            bye ctx           -- (until bye is able to do it itself)
+        runReaderWriters ctx r w =
+            -- run concurrently 10 readers and 10 writers on the same context
+            let workers = concat $ replicate 10 [reader ctx r, writer ctx w]
+             in runConcurrently $ traverse_ Concurrently workers
+        writer         = sendData
+        reader ctx val = do { bs <- recvData ctx; val `assertEq` bs }
+
 assertEq :: (Show a, Monad m, Eq a) => a -> a -> m ()
 assertEq expected got = unless (expected == got) $ error ("got " ++ show got ++ " but was expecting " ++ show expected)
 
@@ -761,6 +787,7 @@ main = defaultMain $ testGroup "tls"
     [ tests_marshalling
     , tests_ciphers
     , tests_handshake
+    , tests_thread_safety
     ]
   where -- lowlevel tests to check the packet marshalling.
         tests_marshalling = testGroup "Marshalling"
@@ -798,3 +825,7 @@ main = defaultMain $ testGroup "tls"
             , testProperty "TLS 1.3 RTT0 -> PSK" (monadicIO prop_handshake13_rtt0_fallback)
             , testProperty "TLS 1.3 RTT0 length" (monadicIO prop_handshake13_rtt0_length)
             ]
+
+        -- test concurrent reads and writes
+        tests_thread_safety = localOption (QuickCheckTests 10) $
+            testProperty "Thread safety" (monadicIO prop_thread_safety)
