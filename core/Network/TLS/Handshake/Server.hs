@@ -783,6 +783,14 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
          | otherwise = EarlyDataNotAllowed
     setEstablished ctx established
 
+    let certificateAction hs@(Certificate13 _certctx _cchain _ext) = do
+            processHandshake13 ctx hs
+        certificateAction hs = unexpected (show hs) (Just "certificate 13")
+
+    let certVerifyAction hs@(CertVerify13 _sigalgo _verify) = do
+            processHandshake13 ctx hs
+        certVerifyAction hs = unexpected (show hs) (Just "certificate verify 13")
+
     let finishedAction hs@(Finished13 verifyData') = do
             hChBeforeCf <- transcriptHash ctx
             processHandshake13 ctx hs
@@ -797,12 +805,14 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
                 decryptError "cannot verify finished"
         finishedAction hs = unexpected (show hs) (Just "finished 13")
 
-        endOfEarlyDataAction hs@EndOfEarlyData13 = do
+    let endOfEarlyDataAction hs@EndOfEarlyData13 = do
             processHandshake13 ctx hs
             setRxState ctx usedHash usedCipher clientHandshakeTrafficSecret
         endOfEarlyDataAction hs = unexpected (show hs) (Just "end of early data")
 
-    if rtt0OK then do
+    if (serverWantClientCert sparams) then
+        setPendingActions ctx [certificateAction, certVerifyAction, finishedAction]
+      else if rtt0OK then
         setPendingActions ctx [endOfEarlyDataAction, finishedAction]
       else do
         setPendingActions ctx [finishedAction]
