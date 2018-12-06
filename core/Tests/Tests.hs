@@ -378,6 +378,42 @@ prop_handshake13_rtt0_fallback = do
 
     runTLSPipeSimple13 params2 PreSharedKey Nothing
 
+prop_handshake13_rtt0_length :: PropertyM IO ()
+prop_handshake13_rtt0_length = do
+    serverMax <- pick $ choose (0, 33792)
+    (cli, srv) <- pick arbitraryPairParams13
+    let cliSupported = def
+          { supportedVersions = [TLS13]
+          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+          , supportedGroups = [X25519]
+          }
+        svrSupported = def
+          { supportedVersions = [TLS13]
+          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+          , supportedGroups = [X25519]
+          }
+        params0 = (cli { clientSupported = cliSupported }
+                  ,srv { serverSupported = svrSupported
+                       , serverEarlyDataSize = serverMax }
+                  )
+
+    sessionRefs <- run twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
+    let params = setPairParamsSessionManagers sessionManagers params0
+    runTLSPipeSimple13 params FullHandshake Nothing
+
+    -- and resume
+    sessionParams <- run $ readClientSessionRef sessionRefs
+    assert (isJust sessionParams)
+    clientLen <- pick $ choose (0, 33792)
+    earlyData <- B.pack <$> pick (someWords8 clientLen)
+    let (pc,ps) = setPairParamsSessionResuming (fromJust sessionParams) params
+        params2 = (pc { clientEarlyData = Just earlyData } , ps)
+        (mode, mEarlyData)
+            | clientLen > serverMax = (PreSharedKey, Nothing)
+            | otherwise             = (RTT0, Just earlyData)
+    runTLSPipeSimple13 params2 mode mEarlyData
+
 prop_handshake_ciphersuites :: PropertyM IO ()
 prop_handshake_ciphersuites = do
     tls13 <- pick arbitrary
@@ -757,4 +793,5 @@ main = defaultMain $ testGroup "tls"
             , testProperty "TLS 1.3 PSK -> HRR" (monadicIO prop_handshake13_psk_fallback)
             , testProperty "TLS 1.3 RTT0" (monadicIO prop_handshake13_rtt0)
             , testProperty "TLS 1.3 RTT0 -> PSK" (monadicIO prop_handshake13_rtt0_fallback)
+            , testProperty "TLS 1.3 RTT0 length" (monadicIO prop_handshake13_rtt0_length)
             ]
