@@ -145,7 +145,9 @@ recvData13 ctx = liftIO $ do
                 | chunkLen <= maxSize -> do
                     setEstablished ctx $ EarlyDataAllowed (maxSize - chunkLen)
                     return x
-                | otherwise              -> throwCore $ Error_Protocol ("early data overflow", True, UnexpectedMessage)
+                | otherwise ->
+                    let reason = "early data overflow" in
+                    terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
               EarlyDataNotAllowed -> recvData13 ctx -- ignore "x"
               Established         -> return x
               NotEstablished      -> throwCore $ Error_Protocol ("data at not-established", True, UnexpectedMessage)
