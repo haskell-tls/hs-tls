@@ -138,10 +138,13 @@ recvData13 ctx = liftIO $ do
         -- when receiving empty appdata, we just retry to get some data.
         process (AppData13 "") = recvData13 ctx
         process (AppData13 x) = do
+            let chunkLen = C8.length x
             established <- ctxEstablished ctx
             case established of
               EarlyDataAllowed maxSize
-                | C8.length x <= maxSize -> return x
+                | chunkLen <= maxSize -> do
+                    setEstablished ctx $ EarlyDataAllowed (maxSize - chunkLen)
+                    return x
                 | otherwise              -> throwCore $ Error_Protocol ("early data overflow", True, UnexpectedMessage)
               EarlyDataNotAllowed -> recvData13 ctx -- ignore "x"
               Established         -> return x
