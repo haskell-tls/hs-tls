@@ -32,13 +32,15 @@ import Control.Exception (IOException, handle, fromException)
 -- This is to be called at the beginning of a connection, and during renegotiation
 handshake :: MonadIO m => Context -> m ()
 handshake ctx =
-    liftIO $ handleException ctx $ withRWLock ctx (ctxDoHandshake ctx ctx)
+    liftIO $ withRWLock ctx $ handleException ctx (ctxDoHandshake ctx ctx)
 
 -- Handshake when requested by the remote end
--- This is called automatically by 'recvData'
+-- This is called automatically by 'recvData', in a context where the read lock
+-- is already taken.  So contrary to 'handshake' above, here we only need to
+-- call withWriteLock.
 handshakeWith :: MonadIO m => Context -> Handshake -> m ()
 handshakeWith ctx hs =
-    liftIO $ handleException ctx $ withRWLock ctx $ ctxDoHandshakeWith ctx ctx hs
+    liftIO $ withWriteLock ctx $ handleException ctx $ ctxDoHandshakeWith ctx ctx hs
 
 handleException :: Context -> IO () -> IO ()
 handleException ctx f = catchException f $ \exception -> do

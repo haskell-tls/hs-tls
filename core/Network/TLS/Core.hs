@@ -62,13 +62,17 @@ import Control.Monad.State.Strict
 --
 -- this doesn't actually close the handle
 bye :: MonadIO m => Context -> m ()
-bye ctx = do
-  eof <- liftIO $ ctxEOF ctx
-  tls13 <- tls13orLater ctx
-  if tls13 then
-      unless eof $ sendPacket13 ctx $ Alert13 [(AlertLevel_Warning, CloseNotify)]
-    else
-      unless eof $ sendPacket ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
+bye ctx = liftIO $ do
+    -- Although setEOF is always protected by the read lock, here we don't try
+    -- to wrap ctxEOF with it, so that function bye can still be called
+    -- concurrently to a blocked recvData.
+    eof <- ctxEOF ctx
+    tls13 <- tls13orLater ctx
+    unless eof $ withWriteLock ctx $
+        if tls13 then
+            sendPacket13 ctx $ Alert13 [(AlertLevel_Warning, CloseNotify)]
+          else
+            sendPacket ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
 
 -- | If the ALPN extensions have been used, this will
 -- return get the protocol agreed upon.
@@ -85,25 +89,37 @@ getClientSNI ctx = liftIO $ usingState_ ctx S.getClientSNI
 -- | sendData sends a bunch of data.
 -- It will automatically chunk data to acceptable packet size
 sendData :: MonadIO m => Context -> L.ByteString -> m ()
-sendData ctx dataToSend = do
+sendData ctx dataToSend = liftIO $ do
     tls13 <- tls13orLater ctx
     let sendP
           | tls13     = sendPacket13 ctx . AppData13
           | otherwise = sendPacket ctx . AppData
-    liftIO (checkValid ctx)
-    mapM_ (mapChunks_ 16384 sendP) (L.toChunks dataToSend)
+    withWriteLock ctx $ do
+        checkValid ctx
+        -- All chunks are protected with the same write lock because we don't
+        -- want to interleave writes from other threads in the middle of our
+        -- possibly large write.
+        mapM_ (mapChunks_ 16384 sendP) (L.toChunks dataToSend)
 
 -- | recvData get data out of Data packet, and automatically renegotiate if
 -- a Handshake ClientHello is received
 recvData :: MonadIO m => Context -> m B.ByteString
-recvData ctx = do
+recvData ctx = liftIO $ do
     tls13 <- tls13orLater ctx
-    if tls13 then recvData13 ctx else recvData1 ctx
+    withReadLock ctx $ do
+        checkValid ctx
+        -- We protect with a read lock both reception and processing of the
+        -- packet, because don't want another thread to receive a new packet
+        -- before this one has been fully processed.
+        --
+        -- Even when recvData1/recvData13 loops, we only need to call function
+        -- checkValid once.  Since we hold the read lock, no concurrent call
+        -- will impact the validity of the context.
+        if tls13 then recvData13 ctx else recvData1 ctx
 
-recvData1 :: MonadIO m => Context -> m B.ByteString
-recvData1 ctx = liftIO $ do
-    checkValid ctx
-    pkt <- withReadLock ctx $ recvPacket ctx
+recvData1 :: Context -> IO B.ByteString
+recvData1 ctx = do
+    pkt <- recvPacket ctx
     either (onError terminate) process pkt
   where process (Handshake [ch@ClientHello{}]) =
             handshakeWith ctx ch >> recvData1 ctx
@@ -121,12 +137,11 @@ recvData1 ctx = liftIO $ do
         process p            = let reason = "unexpected message " ++ show p in
                                terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
 
-        terminate = terminate' ctx (sendPacket ctx . Alert)
+        terminate = terminateWithWriteLock ctx (sendPacket ctx . Alert)
 
-recvData13 :: MonadIO m => Context -> m B.ByteString
-recvData13 ctx = liftIO $ do
-    checkValid ctx
-    pkt <- withReadLock ctx $ recvPacket13 ctx
+recvData13 :: Context -> IO B.ByteString
+recvData13 ctx = do
+    pkt <- recvPacket13 ctx
     either (onError terminate) process pkt
   where process (Alert13 [(AlertLevel_Warning, CloseNotify)]) = tryBye ctx >> setEOF ctx >> return B.empty
         process (Alert13 [(AlertLevel_Fatal, desc)]) = do
@@ -162,17 +177,21 @@ recvData13 ctx = liftIO $ do
         -- fixme: some implementations send multiple NST at the same time.
         -- Only the first one is used at this moment.
         processHandshake13 (NewSessionTicket13 life add nonce label exts:hs) = do
-            ResuptionSecret resumptionMasterSecret <- usingHState ctx getTLS13Secret
-            (usedHash, usedCipher, _) <- getTxState ctx
-            let hashSize = hashDigestSize usedHash
-                psk = hkdfExpandLabel usedHash resumptionMasterSecret "resumption" nonce hashSize
-                maxSize = case extensionLookup extensionID_EarlyData exts >>= extensionDecode MsgTNewSessionTicket of
-                  Just (EarlyDataIndication (Just ms)) -> fromIntegral $ safeNonNegative32 ms
-                  _                                    -> 0
-            tinfo <- createTLS13TicketInfo life (Right add) Nothing
-            sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
-            sessionEstablish (sharedSessionManager $ ctxShared ctx) label sdata
-            -- putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
+            -- This part is similar to handshake code, so protected with
+            -- read+write locks (which is also what we use for all calls to the
+            -- session manager).
+            withWriteLock ctx $ do
+                ResuptionSecret resumptionMasterSecret <- usingHState ctx getTLS13Secret
+                (usedHash, usedCipher, _) <- getTxState ctx
+                let hashSize = hashDigestSize usedHash
+                    psk = hkdfExpandLabel usedHash resumptionMasterSecret "resumption" nonce hashSize
+                    maxSize = case extensionLookup extensionID_EarlyData exts >>= extensionDecode MsgTNewSessionTicket of
+                        Just (EarlyDataIndication (Just ms)) -> fromIntegral $ safeNonNegative32 ms
+                        _                                    -> 0
+                tinfo <- createTLS13TicketInfo life (Right add) Nothing
+                sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
+                sessionEstablish (sharedSessionManager $ ctxShared ctx) label sdata
+                -- putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
             processHandshake13 hs
         processHandshake13 (KeyUpdate13 UpdateNotRequested:hs) = do
             established <- ctxEstablished ctx
@@ -190,8 +209,12 @@ recvData13 ctx = liftIO $ do
             established <- ctxEstablished ctx
             if established == Established then do
                 keyUpdate ctx getRxState setRxState
-                sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested]
-                keyUpdate ctx getTxState setTxState
+                -- Write lock wraps both actions because we don't want another
+                -- packet to be sent by another thread before the Tx state is
+                -- updated.
+                withWriteLock ctx $ do
+                    sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested]
+                    keyUpdate ctx getTxState setTxState
                 processHandshake13 hs
               else do
                 let reason = "received key update before established"
@@ -201,9 +224,12 @@ recvData13 ctx = liftIO $ do
             case mPendingAction of
                 Nothing -> let reason = "unexpected handshake message " ++ show h in
                            terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-                Just pa -> withRWLock ctx (pa h) >> processHandshake13 hs
+                Just pa ->
+                    -- Pending actions are executed with read+write locks, just
+                    -- like regular handshake code.
+                    withWriteLock ctx (pa h) >> processHandshake13 hs
 
-        terminate = terminate' ctx (sendPacket13 ctx . Alert13)
+        terminate = terminateWithWriteLock ctx (sendPacket13 ctx . Alert13)
 
 -- the other side could have close the connection already, so wrap
 -- this in a try and ignore all exceptions
@@ -219,14 +245,17 @@ onError terminate err@(Error_Protocol (reason,fatal,desc)) =
 onError terminate err =
     terminate err AlertLevel_Fatal InternalError (show err)
 
-terminate' :: Context -> ([(AlertLevel, AlertDescription)] -> IO ())
-           -> TLSError -> AlertLevel -> AlertDescription -> String -> IO a
-terminate' ctx send err level desc reason = do
+terminateWithWriteLock :: Context -> ([(AlertLevel, AlertDescription)] -> IO ())
+                       -> TLSError -> AlertLevel -> AlertDescription -> String -> IO a
+terminateWithWriteLock ctx send err level desc reason = do
     session <- usingState_ ctx getSession
-    case session of
-        Session Nothing    -> return ()
-        Session (Just sid) -> sessionInvalidate (sharedSessionManager $ ctxShared ctx) sid
-    catchException (send [(level, desc)]) (\_ -> return ())
+    -- Session manager is always invoked with read+write locks, so we merge this
+    -- with the alert packet being emitted.
+    withWriteLock ctx $ do
+        case session of
+            Session Nothing    -> return ()
+            Session (Just sid) -> sessionInvalidate (sharedSessionManager $ ctxShared ctx) sid
+        catchException (send [(level, desc)]) (\_ -> return ())
     setEOF ctx
     E.throwIO (Terminated False reason err)
 
@@ -260,6 +289,9 @@ updateKey ctx way = do
         let req = case way of
                 OneWay -> UpdateNotRequested
                 TwoWay -> UpdateRequested
-        sendPacket13 ctx $ Handshake13 [KeyUpdate13 req]
-        keyUpdate ctx getTxState setTxState
+        -- Write lock wraps both actions because we don't want another packet to
+        -- be sent by another thread before the Tx state is updated.
+        withWriteLock ctx $ do
+            sendPacket13 ctx $ Handshake13 [KeyUpdate13 req]
+            keyUpdate ctx getTxState setTxState
     return tls13
