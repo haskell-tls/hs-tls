@@ -26,7 +26,7 @@ import Network.TLS.IO
 import Network.TLS.Imports
 import Network.TLS.State
 import Network.TLS.Measurement
-import Network.TLS.Util (bytesEq, catchException, fromJust)
+import Network.TLS.Util (bytesEq, catchException, fromJust, mapChunks_)
 import Network.TLS.Types
 import Network.TLS.X509
 import qualified Data.ByteString as B
@@ -267,7 +267,7 @@ handshakeClient' cparams ctx groups mcrand = do
                 -- dumpKey ctx "CLIENT_EARLY_TRAFFIC_SECRET" clientEarlyTrafficSecret
                 -- putStrLn "---- setTxState ctx usedHash usedCipher clientEarlyTrafficSecret"
                 setTxState ctx usedHash usedCipher clientEarlyTrafficSecret
-                sendPacket13 ctx $ AppData13 earlyData
+                mapChunks_ 16384 (sendPacket13 ctx . AppData13) earlyData
                 usingHState ctx $ setTLS13RTT0Status RTT0Sent
 
         recvServerHello sentExts = runRecvState ctx recvState

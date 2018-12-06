@@ -9,6 +9,7 @@ module Network.TLS.Util
         , bytesEq
         , fmapEither
         , catchException
+        , mapChunks_
         ) where
 
 import qualified Data.ByteArray as BA
@@ -70,3 +71,11 @@ fmapEither f = fmap f
 
 catchException :: IO a -> (SomeException -> IO a) -> IO a
 catchException action handler = withAsync action waitCatch >>= either handler return
+
+mapChunks_ :: Monad m
+           => Int -> (B.ByteString -> m a) -> B.ByteString -> m ()
+mapChunks_ len f bs
+    | B.length bs > len =
+        let (chunk, remain) = B.splitAt len bs
+         in f chunk >> mapChunks_ len f remain
+    | otherwise = void (f bs)

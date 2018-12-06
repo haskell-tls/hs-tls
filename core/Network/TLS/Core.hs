@@ -46,7 +46,7 @@ import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.KeySchedule
-import Network.TLS.Util (catchException)
+import Network.TLS.Util (catchException, mapChunks_)
 import Network.TLS.Extension
 import qualified Network.TLS.State as S
 import qualified Data.ByteString as B
@@ -90,13 +90,8 @@ sendData ctx dataToSend = do
     let sendP
           | tls13     = sendPacket13 ctx . AppData13
           | otherwise = sendPacket ctx . AppData
-    let sendDataChunk d
-            | B.length d > 16384 = do
-                let (sending, remain) = B.splitAt 16384 d
-                sendP sending
-                sendDataChunk remain
-            | otherwise = sendP d
-    liftIO (checkValid ctx) >> mapM_ sendDataChunk (L.toChunks dataToSend)
+    liftIO (checkValid ctx)
+    mapM_ (mapChunks_ 16384 sendP) (L.toChunks dataToSend)
 
 -- | recvData get data out of Data packet, and automatically renegotiate if
 -- a Handshake ClientHello is received

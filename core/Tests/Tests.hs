@@ -51,6 +51,12 @@ prop_pipe_work = do
 recvDataNonNull :: Context -> IO C8.ByteString
 recvDataNonNull ctx = recvData ctx >>= \l -> if B.null l then recvDataNonNull ctx else return l
 
+chunkLengths :: Int -> [Int]
+chunkLengths len
+    | len > 16384 = 16384 : chunkLengths (len - 16384)
+    | len > 0     = [len]
+    | otherwise   = []
+
 runTLSPipeN :: Int -> (ClientParams, ServerParams) -> (Context -> Chan [C8.ByteString] -> IO ()) -> (Chan C8.ByteString -> Context -> IO ()) -> PropertyM IO ()
 runTLSPipeN n params tlsServer tlsClient = do
     (writeStart, readResult) <- run (establishDataPipe params tlsServer tlsClient)
@@ -99,8 +105,9 @@ runTLSPipeSimple13 params mode mEarlyData = runTLSPipe params tlsServer tlsClien
             case mEarlyData of
                 Nothing -> return ()
                 Just ed -> do
-                    ed' <- recvDataNonNull ctx
-                    ed `assertEq` ed'
+                    let ls = chunkLengths (B.length ed)
+                    chunks <- replicateM (length ls) $ recvDataNonNull ctx
+                    (ls, ed) `assertEq` (map B.length chunks, B.concat chunks)
             d <- recvDataNonNull ctx
             writeChan queue [d]
             minfo <- contextGetInformation ctx
