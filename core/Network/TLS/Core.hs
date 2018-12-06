@@ -193,7 +193,7 @@ recvData13 ctx = do
                 sessionEstablish (sharedSessionManager $ ctxShared ctx) label sdata
                 -- putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
             processHandshake13 hs
-        processHandshake13 (KeyUpdate13 UpdateNotRequested:hs) = do
+        processHandshake13 (KeyUpdate13 mode:hs) = do
             established <- ctxEstablished ctx
             -- Though RFC 8446 Sec 4.6.3 does not clearly says,
             -- unidirectional key update is legal.
@@ -201,18 +201,10 @@ recvData13 ctx = do
             -- to key update (update_requested) which we sent.
             if established == Established then do
                 keyUpdate ctx getRxState setRxState
-                processHandshake13 hs
-              else do
-                let reason = "received key update before established"
-                terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-        processHandshake13 (KeyUpdate13 UpdateRequested:hs) = do
-            established <- ctxEstablished ctx
-            if established == Established then do
-                keyUpdate ctx getRxState setRxState
                 -- Write lock wraps both actions because we don't want another
                 -- packet to be sent by another thread before the Tx state is
                 -- updated.
-                withWriteLock ctx $ do
+                when (mode == UpdateRequested) $ withWriteLock ctx $ do
                     sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested]
                     keyUpdate ctx getTxState setTxState
                 processHandshake13 hs
