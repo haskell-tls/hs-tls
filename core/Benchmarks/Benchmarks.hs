@@ -7,6 +7,7 @@ import PubKey
 import Gauge.Main
 import Control.Concurrent.Chan
 import Network.TLS
+import Network.TLS.Extra.Cipher
 import Data.X509
 import Data.X509.Validation
 import Data.Default.Class
@@ -26,7 +27,7 @@ blockCipher = Cipher
         , bulkExplicitIV= 0
         , bulkAuthTagLen= 0
         , bulkBlockSize = 16
-        , bulkF         = BulkBlockF $ \_ _ _ -> (\m -> (m, B.empty))
+        , bulkF         = BulkBlockF $ \ _ _ _ m -> (m, B.empty)
         }
     , cipherHash        = MD5
     , cipherPRFHash     = Nothing
@@ -54,6 +55,7 @@ getParams connectVer cipher = (cParams, sParams)
             }
         supported = def { supportedCiphers = [cipher]
                         , supportedVersions = [connectVer]
+                        , supportedGroups = [X25519, FFDHE2048]
                         }
         (pubKey, privKey) = getGlobalRSAPair
 
@@ -101,19 +103,66 @@ benchResumption params !d name = env initializeSession runResumption
         params2 <- readIORef paramsRef
         runTLSPipeSimple params2 d
 
+benchResumption13 :: (ClientParams, ServerParams) -> B.ByteString -> String -> Benchmark
+benchResumption13 params !d name = env initializeSession runResumption
+  where
+    initializeSession = do
+        sessionRefs <- twoSessionRefs
+        let sessionManagers = twoSessionManagers sessionRefs
+            params1 = setPairParamsSessionManagers sessionManagers params
+        _ <- runTLSPipeSimple params1 d
+        newIORef (params1, sessionRefs)
+
+    -- with TLS13 the sessionId is constantly changing so we must update
+    -- our parameters at each iteration unfortunately
+    runResumption paramsRef = bench name . nfIO $ do
+        (params1, sessionRefs) <- readIORef paramsRef
+        Just sessionParams <- readClientSessionRef sessionRefs
+        let params2 = setPairParamsSessionResuming sessionParams params1
+        runTLSPipeSimple params2 d
+
+benchCiphers :: String -> Version -> B.ByteString -> [Cipher] -> Benchmark
+benchCiphers name connectVer d = bgroup name . map doBench
+  where
+    doBench cipher =
+        benchResumption13 (getParams connectVer cipher) d (cipherName cipher)
+
 main :: IO ()
 main = defaultMain
     [ bgroup "connection"
         -- not sure the number actually make sense for anything. improve ..
-        [ benchConnection (getParams SSL3 blockCipher) (B.replicate 256 0) "SSL3-256 bytes"
-        , benchConnection (getParams TLS10 blockCipher) (B.replicate 256 0) "TLS10-256 bytes"
-        , benchConnection (getParams TLS11 blockCipher) (B.replicate 256 0) "TLS11-256 bytes"
-        , benchConnection (getParams TLS12 blockCipher) (B.replicate 256 0) "TLS12-256 bytes"
+        [ benchConnection (getParams SSL3 blockCipher) small "SSL3-256 bytes"
+        , benchConnection (getParams TLS10 blockCipher) small "TLS10-256 bytes"
+        , benchConnection (getParams TLS11 blockCipher) small "TLS11-256 bytes"
+        , benchConnection (getParams TLS12 blockCipher) small "TLS12-256 bytes"
         ]
     , bgroup "resumption"
-        [ benchResumption (getParams SSL3 blockCipher) (B.replicate 256 0) "SSL3-256 bytes"
-        , benchResumption (getParams TLS10 blockCipher) (B.replicate 256 0) "TLS10-256 bytes"
-        , benchResumption (getParams TLS11 blockCipher) (B.replicate 256 0) "TLS11-256 bytes"
-        , benchResumption (getParams TLS12 blockCipher) (B.replicate 256 0) "TLS12-256 bytes"
+        [ benchResumption (getParams SSL3 blockCipher) small "SSL3-256 bytes"
+        , benchResumption (getParams TLS10 blockCipher) small "TLS10-256 bytes"
+        , benchResumption (getParams TLS11 blockCipher) small "TLS11-256 bytes"
+        , benchResumption (getParams TLS12 blockCipher) small "TLS12-256 bytes"
+        ]
+    -- Here we try to measure TLS12 and TLS13 performance with AEAD ciphers.
+    -- Resumption and a larger message can be a demonstration of the symmetric
+    -- crypto but for TLS13 this does not work so well because of dhe_psk.
+    , benchCiphers "TLS12" TLS12 large
+        [ cipher_DHE_RSA_AES128GCM_SHA256
+        , cipher_DHE_RSA_AES256GCM_SHA384
+        , cipher_DHE_RSA_CHACHA20POLY1305_SHA256
+        , cipher_DHE_RSA_AES128CCM_SHA256
+        , cipher_DHE_RSA_AES128CCM8_SHA256
+        , cipher_ECDHE_RSA_AES128GCM_SHA256
+        , cipher_ECDHE_RSA_AES256GCM_SHA384
+        , cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256
+        ]
+    , benchCiphers "TLS13" TLS13 large
+        [ cipher_TLS13_AES128GCM_SHA256
+        , cipher_TLS13_AES256GCM_SHA384
+        , cipher_TLS13_CHACHA20POLY1305_SHA256
+        , cipher_TLS13_AES128CCM_SHA256
+        , cipher_TLS13_AES128CCM8_SHA256
         ]
     ]
+  where
+    small = B.replicate 256 0
+    large = B.replicate 102400 0
