@@ -143,7 +143,7 @@ contextNew backend params = liftIO $ do
     tx    <- newMVar newRecordState
     rx    <- newMVar newRecordState
     hs    <- newMVar Nothing
-    as    <- newMVar []
+    as    <- newIORef []
     lockWrite <- newMVar ()
     lockRead  <- newMVar ()
     lockState <- newMVar ()
