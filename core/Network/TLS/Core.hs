@@ -274,8 +274,8 @@ data KeyUpdateRequest = OneWay -- ^ Unidirectional key update
 -- | Updating appication traffic secrets for TLS 1.3.
 --   If this API is called for TLS 1.3, 'True' is returned.
 --   Otherwise, 'False' is returned.
-updateKey :: Context -> KeyUpdateRequest -> IO Bool
-updateKey ctx way = do
+updateKey :: MonadIO m => Context -> KeyUpdateRequest -> m Bool
+updateKey ctx way = liftIO $ do
     tls13 <- tls13orLater ctx
     when tls13 $ do
         let req = case way of
