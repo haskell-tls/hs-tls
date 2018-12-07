@@ -234,11 +234,15 @@ chacha20poly1305 BulkDecrypt key nonce =
                 Poly1305.Auth tag = ChaChaPoly1305.finalize st3
             in (output, AuthTag tag))
 
--- | All AES ciphers supported ordered from strong to weak.  This choice
--- of ciphersuites should satisfy most normal needs.  For otherwise strong
--- ciphers we make little distinction between AES128 and AES256, and list
--- each but the weakest of the AES128 ciphers ahead of the corresponding AES256
--- ciphers.
+-- | All AES and ChaCha20-Poly1305 ciphers supported ordered from strong to
+-- weak.  This choice of ciphersuites should satisfy most normal needs.  For
+-- otherwise strong ciphers we make little distinction between AES128 and
+-- AES256, and list each but the weakest of the AES128 ciphers ahead of the
+-- corresponding AES256 ciphers, with the ChaCha20-Poly1305 variant placed just
+-- after.
+--
+-- The CCM ciphers all come together after the GCM variants due to their
+-- relative performance cost.
 ciphersuite_default :: [Cipher]
 ciphersuite_default =
     [        -- First the PFS + GCM + SHA2 ciphers
@@ -299,8 +303,11 @@ ciphersuite_medium = [ cipher_RC4_128_SHA1
                      ]
 
 -- | The strongest ciphers supported.  For ciphers with PFS, AEAD and SHA2, we
--- list each AES128 variant right after the corresponding AES256 variant.  For
--- weaker constructs, we use just the AES256 form.
+-- list each AES128 variant after the corresponding AES256 and ChaCha20-Poly1305
+-- variants.  For weaker constructs, we use just the AES256 form.
+--
+-- The CCM ciphers come just after the corresponding GCM ciphers despite their
+-- relative performance cost.
 ciphersuite_strong :: [Cipher]
 ciphersuite_strong =
     [        -- If we have PFS + AEAD + SHA2, then allow AES128, else just 256
