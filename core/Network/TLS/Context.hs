@@ -176,7 +176,7 @@ contextNewOnHandle :: (MonadIO m, TLSParams params)
                    => Handle -- ^ Handle of the connection.
                    -> params -- ^ Parameters of the context.
                    -> m Context
-contextNewOnHandle handle params = contextNew handle params
+contextNewOnHandle = contextNew
 {-# DEPRECATED contextNewOnHandle "use contextNew" #-}
 
 #ifdef INCLUDE_NETWORK
