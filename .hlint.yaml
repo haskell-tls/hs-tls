@@ -1,0 +1,5 @@
+- arguments: [ --cpp-define=SSLV2_COMPATIBLE
+             , --cpp-define=INCLUDE_NETWORK
+             , --cpp-define=INCLUDE_HANS
+             ]
+- ignore: { name: Use camelCase }
