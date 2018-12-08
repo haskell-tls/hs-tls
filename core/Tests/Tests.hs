@@ -351,6 +351,7 @@ prop_handshake13_rtt0 = do
 
 prop_handshake13_rtt0_fallback :: PropertyM IO ()
 prop_handshake13_rtt0_fallback = do
+    ticketSize <- pick $ choose (0, 512)
     (cli, srv) <- pick arbitraryPairParams13
     let cliSupported = def {
             supportedVersions = [TLS13]
@@ -364,7 +365,7 @@ prop_handshake13_rtt0_fallback = do
           }
         params0 = (cli { clientSupported = cliSupported }
                   ,srv { serverSupported = svrSupported
-                       , serverEarlyDataSize = 0 }
+                       , serverEarlyDataSize = ticketSize }
                   )
 
     sessionRefs <- run twoSessionRefs
@@ -379,9 +380,12 @@ prop_handshake13_rtt0_fallback = do
     assert (isJust sessionParams)
     earlyData <- B.pack <$> pick (someWords8 256)
     let (pc,ps) = setPairParamsSessionResuming (fromJust sessionParams) params
-        params2 = (pc { clientEarlyData = Just earlyData } , ps)
+        params2 = (pc { clientEarlyData = Just earlyData }
+                  ,ps { serverEarlyDataSize = 0 }
+                  )
 
-    runTLSPipeSimple13 params2 PreSharedKey Nothing
+    let mode2 = if ticketSize < 256 then PreSharedKey else RTT0
+    runTLSPipeSimple13 params2 mode2 Nothing
 
 prop_handshake13_rtt0_length :: PropertyM IO ()
 prop_handshake13_rtt0_length = do
