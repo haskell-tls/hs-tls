@@ -40,6 +40,7 @@ import Control.Concurrent.Async
 import Control.Concurrent.Chan
 import Control.Concurrent
 import qualified Control.Exception as E
+import Control.Monad (when)
 import Data.List (isInfixOf)
 
 import qualified Data.ByteString as B
@@ -254,15 +255,15 @@ twoSessionRefs = (,) <$> newIORef Nothing <*> newIORef Nothing
 -- a Real concurrent session manager would use an MVar and have multiples items.
 oneSessionManager :: IORef (Maybe (SessionID, SessionData)) -> SessionManager
 oneSessionManager ref = SessionManager
-    { sessionResume         = \myId     -> (>>= maybeResume myId) <$> readIORef ref
-    , sessionResumeOnlyOnce = \myId     -> (>>= maybeResume myId) <$> readIORef ref
+    { sessionResume         = \myId     -> readIORef ref >>= maybeResume False myId
+    , sessionResumeOnlyOnce = \myId     -> readIORef ref >>= maybeResume True myId
     , sessionEstablish      = \myId dat -> writeIORef ref $ Just (myId, dat)
     , sessionInvalidate     = \_        -> return ()
     }
   where
-    maybeResume myId (sid, sdata)
-        | sid == myId = Just sdata
-        | otherwise   = Nothing
+    maybeResume onlyOnce myId (Just (sid, sdata))
+        | sid == myId = when onlyOnce (writeIORef ref Nothing) >> return (Just sdata)
+    maybeResume _ _ _ = return Nothing
 
 twoSessionManagers :: (IORef (Maybe (SessionID, SessionData)), IORef (Maybe (SessionID, SessionData))) -> (SessionManager, SessionManager)
 twoSessionManagers (cRef, sRef) = (oneSessionManager cRef, oneSessionManager sRef)
