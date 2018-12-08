@@ -47,6 +47,7 @@ import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.KeySchedule
+import Network.TLS.Types (Role(..))
 import Network.TLS.Util (catchException, mapChunks_)
 import Network.TLS.Extension
 import qualified Network.TLS.State as S
@@ -184,6 +185,10 @@ recvData13 ctx = do
         -- fixme: some implementations send multiple NST at the same time.
         -- Only the first one is used at this moment.
         loopHandshake13 (NewSessionTicket13 life add nonce label exts:hs) = do
+            role <- usingState_ ctx S.isClientContext
+            unless (role == ClientRole) $
+                let reason = "Session ticket is allowed for client only"
+                 in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
             -- This part is similar to handshake code, so protected with
             -- read+write locks (which is also what we use for all calls to the
             -- session manager).
