@@ -24,6 +24,7 @@ module Network.TLS.Handshake.Common13
        , checkFreshness
        , getCurrentTimeFromBase
        , getSessionData13
+       , ensureNullCompression
        , isHashSignatureValid13
        , safeNonNegative32
        , RecvHandshake13M
@@ -35,6 +36,7 @@ module Network.TLS.Handshake.Common13
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 import Data.Hourglass
+import Network.TLS.Compression
 import Network.TLS.Context.Internal
 import Network.TLS.Cipher
 import Network.TLS.Crypto
@@ -250,6 +252,11 @@ getSessionData13 ctx usedCipher tinfo maxSize psk = do
       }
 
 ----------------------------------------------------------------
+
+ensureNullCompression :: MonadIO m => CompressionID -> m ()
+ensureNullCompression compression =
+    when (compression /= compressionID nullCompression) $
+        throwCore $ Error_Protocol ("compression is not allowed in TLS 1.3", True, IllegalParameter)
 
 -- Word32 is used in TLS 1.3 protocol.
 -- Int is used for API for Haskell TLS because it is natural.
