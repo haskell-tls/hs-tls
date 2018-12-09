@@ -749,7 +749,7 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
     ----------------------------------------------------------------
     let established
          | rtt0OK    = EarlyDataAllowed rtt0max
-         | otherwise = EarlyDataNotAllowed
+         | otherwise = EarlyDataNotAllowed 3 -- hardcoding
     setEstablished ctx established
 
     let expectFinished (Finished13 verifyData') = do

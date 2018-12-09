@@ -164,7 +164,13 @@ recvData13 ctx = do
                 | otherwise ->
                     let reason = "early data overflow" in
                     terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-              EarlyDataNotAllowed -> recvData13 ctx -- ignore "x"
+              EarlyDataNotAllowed n
+                | n > 0     -> do
+                    setEstablished ctx $ EarlyDataNotAllowed (n - 1)
+                    recvData13 ctx -- ignore "x"
+                | otherwise ->
+                    let reason = "early data deprotect overflow" in
+                    terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
               Established         -> return x
               NotEstablished      -> throwCore $ Error_Protocol ("data at not-established", True, UnexpectedMessage)
         process ChangeCipherSpec13 = recvData13 ctx
