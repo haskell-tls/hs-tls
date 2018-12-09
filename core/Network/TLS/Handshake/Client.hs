@@ -90,8 +90,10 @@ handshakeClient' cparams ctx groups mcrand = do
                   Just (KeyShareHRR selectedGroup)
                     | selectedGroup `elem` groups' -> do
                           usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
+                          clearTxState ctx
+                          let cparams' = cparams { clientEarlyData = Nothing }
                           crand <- usingHState ctx $ hstClientRandom <$> get
-                          handshakeClient' cparams ctx [selectedGroup] (Just crand)
+                          handshakeClient' cparams' ctx [selectedGroup] (Just crand)
                   _                    -> throwCore $ Error_Protocol ("server-selected group is not supported", True, IllegalParameter)
           else do
             handshakeClient13 cparams ctx

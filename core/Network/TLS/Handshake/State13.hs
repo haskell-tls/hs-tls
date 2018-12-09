@@ -12,6 +12,8 @@ module Network.TLS.Handshake.State13
        , getRxState
        , setTxState
        , setRxState
+       , clearTxState
+       , clearRxState
        , setHelloParameters13
        , transcriptHash
        , wrapAsMessageHash13
@@ -77,6 +79,16 @@ setXState func encOrDec ctx h cipher secret =
       , stCipher      = Just cipher
       , stCompression = nullCompression
       }
+
+clearTxState :: Context -> IO ()
+clearTxState = clearXState ctxTxState
+
+clearRxState :: Context -> IO ()
+clearRxState = clearXState ctxRxState
+
+clearXState :: (Context -> MVar RecordState) -> Context -> IO ()
+clearXState func ctx =
+    modifyMVar_ (func ctx) (\rt -> return rt { stCipher = Nothing })
 
 setHelloParameters13 :: Cipher -> HandshakeM ()
 setHelloParameters13 cipher = modify update
