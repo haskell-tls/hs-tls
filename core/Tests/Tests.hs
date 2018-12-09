@@ -353,6 +353,7 @@ prop_handshake13_rtt0_fallback :: PropertyM IO ()
 prop_handshake13_rtt0_fallback = do
     ticketSize <- pick $ choose (0, 512)
     (cli, srv) <- pick arbitraryPairParams13
+    group0 <- pick $ elements [P256,X25519]
     let cliSupported = def {
             supportedVersions = [TLS13]
           , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
@@ -361,7 +362,7 @@ prop_handshake13_rtt0_fallback = do
         svrSupported = def {
             supportedVersions = [TLS13]
           , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
-          , supportedGroups = [X25519]
+          , supportedGroups = [group0]
           }
         params0 = (cli { clientSupported = cliSupported }
                   ,srv { serverSupported = svrSupported
@@ -373,15 +374,24 @@ prop_handshake13_rtt0_fallback = do
 
     let params = setPairParamsSessionManagers sessionManagers params0
 
-    runTLSPipeSimple13 params HelloRetryRequest Nothing
+    let mode = if group0 == P256 then FullHandshake else HelloRetryRequest
+    runTLSPipeSimple13 params mode Nothing
 
     -- and resume
     sessionParams <- run $ readClientSessionRef sessionRefs
     assert (isJust sessionParams)
     earlyData <- B.pack <$> pick (someWords8 256)
+    group2 <- pick $ elements [P256,X25519]
     let (pc,ps) = setPairParamsSessionResuming (fromJust sessionParams) params
+        svrSupported2 = def {
+            supportedVersions = [TLS13]
+          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+          , supportedGroups = [group2]
+          }
         params2 = (pc { clientEarlyData = Just earlyData }
-                  ,ps { serverEarlyDataSize = 0 }
+                  ,ps { serverEarlyDataSize = 0
+                      , serverSupported = svrSupported2
+                      }
                   )
 
     let mode2 = if ticketSize < 256 then PreSharedKey else RTT0
