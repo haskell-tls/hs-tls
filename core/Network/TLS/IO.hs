@@ -186,15 +186,16 @@ recvPacket13 ctx = liftIO $ do
     -- If the server decides to reject RTT0 data but accepts RTT1
     -- data, the server should skip all records for RTT0 data.
     -- Currently, the server tries to skip 3 RTT0 data at maximum.
-    let n = if st == RTT0Rejected then 3 else (1 :: Int) -- hardcoding
+    let n = if st == RTT0Rejected then 3 else 0 -- hardcoding
     loop n
   where
+    loop :: Int -> IO (Either TLSError Packet13)
     loop n = do
         erecord <- recvRecord13 ctx
         case erecord of
-            Left err
-              | n == 1    -> return $ Left err
-              | otherwise -> loop (n - 1)
+            Left (Error_Protocol (_, True, BadRecordMac))
+                | n > 0  -> loop (n - 1)
+            Left err     -> return $ Left err
             Right record -> do
                 pkt <- processPacket13 ctx record
                 case pkt of
