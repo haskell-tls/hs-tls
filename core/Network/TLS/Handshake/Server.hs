@@ -308,7 +308,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             sendPacket ctx $ Handshake [serverhello]
             let masterSecret = sessionSecret sessionData
             usingHState ctx $ setMasterSecret chosenVersion ServerRole masterSecret
-            logKey ctx "CLIENT_RANDOM" masterSecret
+            logKey ctx (MasterSecret masterSecret)
             sendChangeCipherAndFinish ctx ServerRole
             recvChangeCipherAndFinish ctx
     handshakeTerminate ctx
@@ -727,7 +727,7 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
     hCh <- transcriptHash ctx
     let earlySecret = hkdfExtract usedHash zero psk
         clientEarlyTrafficSecret = deriveSecret usedHash earlySecret "c e traffic" hCh
-    logKey ctx "CLIENT_EARLY_TRAFFIC_SECRET" clientEarlyTrafficSecret
+    logKey ctx (ClientEarlyTrafficSecret clientEarlyTrafficSecret)
     extensions <- checkBinder earlySecret binderInfo
     let authenticated = isJust binderInfo
         rtt0OK = authenticated && rtt0 && rtt0accept && is0RTTvalid
@@ -754,8 +754,8 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
         let clientHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
             serverHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
         liftIO $ do
-            logKey ctx "SERVER_HANDSHAKE_TRAFFIC_SECRET" serverHandshakeTrafficSecret
-            logKey ctx "CLIENT_HANDSHAKE_TRAFFIC_SECRET" clientHandshakeTrafficSecret
+            logKey ctx (ServerHandshakeTrafficSecret serverHandshakeTrafficSecret)
+            logKey ctx (ClientHandshakeTrafficSecret clientHandshakeTrafficSecret)
             setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlyTrafficSecret else clientHandshakeTrafficSecret
             setTxState ctx usedHash usedCipher serverHandshakeTrafficSecret
     ----------------------------------------------------------------
@@ -774,8 +774,8 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
         exporterMasterSecret = deriveSecret usedHash masterSecret "exp master" hChSf
     usingState_ ctx $ setExporterMasterSecret exporterMasterSecret
     ----------------------------------------------------------------
-    logKey ctx "SERVER_TRAFFIC_SECRET_0" serverApplicationTrafficSecret0
-    logKey ctx "CLIENT_TRAFFIC_SECRET_0" clientApplicationTrafficSecret0
+    logKey ctx (ServerTrafficSecret0 serverApplicationTrafficSecret0)
+    logKey ctx (ClientTrafficSecret0 clientApplicationTrafficSecret0)
     setTxState ctx usedHash usedCipher serverApplicationTrafficSecret0
     ----------------------------------------------------------------
     let established

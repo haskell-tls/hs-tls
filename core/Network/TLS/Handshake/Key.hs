@@ -19,6 +19,7 @@ module Network.TLS.Handshake.Key
     , generateFFDHEShared
     , getLocalDigitalSignatureAlg
     , logKey
+    , LogKey(..)
     ) where
 
 import Control.Monad.State.Strict
@@ -91,15 +92,37 @@ getLocalDigitalSignatureAlg ctx = do
 
 ----------------------------------------------------------------
 
+data LogKey = MasterSecret ByteString
+            | ClientEarlyTrafficSecret ByteString
+            | ServerHandshakeTrafficSecret ByteString
+            | ClientHandshakeTrafficSecret ByteString
+            | ServerTrafficSecret0 ByteString
+            | ClientTrafficSecret0 ByteString
+
+labelAndKey :: LogKey -> (String, ByteString)
+labelAndKey (MasterSecret key) =
+    ("CLIENT_RANDOM", key)
+labelAndKey (ClientEarlyTrafficSecret key) =
+    ("CLIENT_EARLY_TRAFFIC_SECRET", key)
+labelAndKey (ServerHandshakeTrafficSecret key) =
+    ("SERVER_HANDSHAKE_TRAFFIC_SECRET", key)
+labelAndKey (ClientHandshakeTrafficSecret key) =
+    ("CLIENT_HANDSHAKE_TRAFFIC_SECRET", key)
+labelAndKey (ServerTrafficSecret0 key) =
+    ("SERVER_TRAFFIC_SECRET_0", key)
+labelAndKey (ClientTrafficSecret0 key) =
+    ("CLIENT_TRAFFIC_SECRET_0", key)
+
 -- NSS Key Log Format
 -- See https://developer.mozilla.org/en-US/docs/Mozilla/Projects/NSS/Key_Log_Format
-logKey :: Context -> String -> ByteString -> IO ()
-logKey ctx label key = do
+logKey :: Context -> LogKey -> IO ()
+logKey ctx logkey = do
     mhst <- getHState ctx
     case mhst of
       Nothing  -> return ()
       Just hst -> do
           let cr = unClientRandom $ hstClientRandom hst
+              (label,key) = labelAndKey logkey
           ctxKeyLogger ctx $ label ++ " " ++ dump cr ++ " " ++ dump key
   where
     dump = init . tail . showBytesHex

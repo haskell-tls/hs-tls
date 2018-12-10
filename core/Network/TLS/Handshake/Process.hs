@@ -103,7 +103,7 @@ processClientKeyXchg ctx (CKX_RSA encryptedPremaster) = do
                 Right (ver, _)
                     | ver /= expectedVer -> setMasterSecretFromPre rver role random
                     | otherwise          -> setMasterSecretFromPre rver role premaster
-    liftIO $ logKey ctx "CLIENT_RANDOM" masterSecret
+    liftIO $ logKey ctx (MasterSecret masterSecret)
 
 processClientKeyXchg ctx (CKX_DH clientDHValue) = do
     rver <- usingState_ ctx getVersion
@@ -117,7 +117,7 @@ processClientKeyXchg ctx (CKX_DH clientDHValue) = do
     dhpriv       <- usingHState ctx getDHPrivate
     let premaster = dhGetShared params dhpriv clientDHValue
     masterSecret <- usingHState ctx $ setMasterSecretFromPre rver role premaster
-    liftIO $ logKey ctx "CLIENT_RANDOM" masterSecret
+    liftIO $ logKey ctx (MasterSecret masterSecret)
 
 processClientKeyXchg ctx (CKX_ECDH bytes) = do
     ServerECDHParams grp _ <- usingHState ctx getServerECDHParams
@@ -130,7 +130,7 @@ processClientKeyXchg ctx (CKX_ECDH bytes) = do
                   rver <- usingState_ ctx getVersion
                   role <- usingState_ ctx isClientContext
                   masterSecret <- usingHState ctx $ setMasterSecretFromPre rver role premaster
-                  liftIO $ logKey ctx "CLIENT_RANDOM" masterSecret
+                  liftIO $ logKey ctx (MasterSecret masterSecret)
               Nothing -> throwCore $ Error_Protocol ("cannote generate a shared secret on ECDH", True, HandshakeFailure)
 
 processClientFinished :: Context -> FinishedData -> IO ()

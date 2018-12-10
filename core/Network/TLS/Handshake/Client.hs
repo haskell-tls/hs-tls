@@ -260,7 +260,7 @@ handshakeClient' cparams ctx groups mcrand = do
                 let hCh = hash usedHash $ B.concat hmsgs -- fixme
                 EarlySecret earlySecret <- usingHState ctx getTLS13Secret -- fixme
                 let clientEarlyTrafficSecret = deriveSecret usedHash earlySecret "c e traffic" hCh
-                logKey ctx "CLIENT_EARLY_TRAFFIC_SECRET" clientEarlyTrafficSecret
+                logKey ctx (ClientEarlyTrafficSecret clientEarlyTrafficSecret)
                 setTxState ctx usedHash usedCipher clientEarlyTrafficSecret
                 mapChunks_ 16384 (sendPacket13 ctx . AppData13) earlyData
                 usingHState ctx $ setTLS13RTT0Status RTT0Sent
@@ -455,7 +455,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
 
                     let premaster = encodePreMasterSecret clientVersion prerand
                     masterSecret <- usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
-                    logKey ctx "CLIENT_RANDOM" masterSecret
+                    logKey ctx (MasterSecret masterSecret)
                     encryptedPreMaster <- do
                         -- SSL3 implementation generally forget this length field since it's redundant,
                         -- however TLS10 make it clear that the length field need to be present.
@@ -500,7 +500,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                                      Just pair -> return pair
 
                     masterSecret <- usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
-                    logKey ctx "CLIENT_RANDOM" masterSecret
+                    logKey ctx (MasterSecret masterSecret)
                     return $ CKX_DH clientDHPub
 
                 getCKX_ECDHE = do
@@ -512,7 +512,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                         Just (clipub, premaster) -> do
                             xver <- usingState_ ctx getVersion
                             masterSecret <- usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
-                            logKey ctx "CLIENT_RANDOM" masterSecret
+                            logKey ctx (MasterSecret masterSecret)
                             return $ CKX_ECDH $ encodeGroupPublic clipub
 
         -- In order to send a proper certificate verify message,
@@ -623,7 +623,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
             Just sessionData -> do
                 let masterSecret = sessionSecret sessionData
                 usingHState ctx $ setMasterSecret rver ClientRole masterSecret
-                logKey ctx "CLIENT_RANDOM" masterSecret
+                logKey ctx (MasterSecret masterSecret)
                 return $ RecvStateNext expectChangeCipher
 onServerHello _ _ _ p = unexpected (show p) (Just "server hello")
 
@@ -813,8 +813,8 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
         hChSh <- transcriptHash ctx
         let clientHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
             serverHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
-        logKey ctx "SERVER_HANDSHAKE_TRAFFIC_SECRET" serverHandshakeTrafficSecret
-        logKey ctx "CLIENT_HANDSHAKE_TRAFFIC_SECRET" clientHandshakeTrafficSecret
+        logKey ctx (ServerHandshakeTrafficSecret serverHandshakeTrafficSecret)
+        logKey ctx (ClientHandshakeTrafficSecret clientHandshakeTrafficSecret)
         setRxState ctx usedHash usedCipher serverHandshakeTrafficSecret
         return (resuming, handshakeSecret, clientHandshakeTrafficSecret, serverHandshakeTrafficSecret)
 
@@ -824,8 +824,8 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
             serverApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "s ap traffic" hChSf
             exporterMasterSecret = deriveSecret usedHash masterSecret "exp master" hChSf
         usingState_ ctx $ setExporterMasterSecret exporterMasterSecret
-        logKey ctx "SERVER_TRAFFIC_SECRET_0" serverApplicationTrafficSecret0
-        logKey ctx "CLIENT_TRAFFIC_SECRET_0" clientApplicationTrafficSecret0
+        logKey ctx (ServerTrafficSecret0 serverApplicationTrafficSecret0)
+        logKey ctx (ClientTrafficSecret0 clientApplicationTrafficSecret0)
         setTxState ctx usedHash usedCipher clientApplicationTrafficSecret0
         setRxState ctx usedHash usedCipher serverApplicationTrafficSecret0
         return masterSecret
