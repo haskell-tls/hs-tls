@@ -786,7 +786,7 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
     setTxState ctx usedHash usedCipher serverApplicationTrafficSecret0
     ----------------------------------------------------------------
     let established
-         | rtt0OK    = EarlyDataAllowed $ safeNonNegative32 $ serverEarlyDataSize sparams
+         | rtt0OK    = EarlyDataAllowed rtt0max
          | otherwise = EarlyDataNotAllowed
     setEstablished ctx established
 
@@ -856,7 +856,8 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
             is0RTTvalid = isSameVersion && isSameCipher && isSameALPN
         return (isPSKvalid, is0RTTvalid)
 
-    rtt0accept = safeNonNegative32 (serverEarlyDataSize sparams) > 0
+    rtt0max = safeNonNegative32 $ serverEarlyDataSize sparams
+    rtt0accept = serverEarlyDataSize sparams > 0
     rtt0 = case extensionLookup extensionID_EarlyData exts >>= extensionDecode MsgTClientHello of
              Just (EarlyDataIndication _) -> True
              Nothing                      -> False
@@ -907,9 +908,8 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
         let resumptionMasterSecret = deriveSecret usedHash masterSecret "res master" hChCf
             life = 86400 -- 1 day in second: fixme hard coding
             psk = hkdfExpandLabel usedHash resumptionMasterSecret "resumption" nonce hashSize
-            maxSize = safeNonNegative32 $ serverEarlyDataSize sparams
-        (label, add) <- generateSession life psk maxSize
-        let nst = createNewSessionTicket life add nonce label maxSize
+        (label, add) <- generateSession life psk rtt0max
+        let nst = createNewSessionTicket life add nonce label rtt0max
         sendPacket13 ctx $ Handshake13 [nst]
       where
         sendNST = (PSK_KE `elem` dhModes) || (PSK_DHE_KE `elem` dhModes)

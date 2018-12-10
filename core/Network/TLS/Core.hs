@@ -46,7 +46,7 @@ import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.KeySchedule
-import Network.TLS.Util (catchException)
+import Network.TLS.Util (catchException, mapChunks_)
 import Network.TLS.Extension
 import qualified Network.TLS.State as S
 import qualified Data.ByteString as B
@@ -90,13 +90,8 @@ sendData ctx dataToSend = do
     let sendP
           | tls13     = sendPacket13 ctx . AppData13
           | otherwise = sendPacket ctx . AppData
-    let sendDataChunk d
-            | B.length d > 16384 = do
-                let (sending, remain) = B.splitAt 16384 d
-                sendP sending
-                sendDataChunk remain
-            | otherwise = sendP d
-    liftIO (checkValid ctx) >> mapM_ sendDataChunk (L.toChunks dataToSend)
+    liftIO (checkValid ctx)
+    mapM_ (mapChunks_ 16384 sendP) (L.toChunks dataToSend)
 
 -- | recvData get data out of Data packet, and automatically renegotiate if
 -- a Handshake ClientHello is received
@@ -143,11 +138,16 @@ recvData13 ctx = liftIO $ do
         -- when receiving empty appdata, we just retry to get some data.
         process (AppData13 "") = recvData13 ctx
         process (AppData13 x) = do
+            let chunkLen = C8.length x
             established <- ctxEstablished ctx
             case established of
               EarlyDataAllowed maxSize
-                | C8.length x <= maxSize -> return x
-                | otherwise              -> throwCore $ Error_Protocol ("early data overflow", True, UnexpectedMessage)
+                | chunkLen <= maxSize -> do
+                    setEstablished ctx $ EarlyDataAllowed (maxSize - chunkLen)
+                    return x
+                | otherwise ->
+                    let reason = "early data overflow" in
+                    terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
               EarlyDataNotAllowed -> recvData13 ctx -- ignore "x"
               Established         -> return x
               NotEstablished      -> throwCore $ Error_Protocol ("data at not-established", True, UnexpectedMessage)

@@ -51,6 +51,12 @@ prop_pipe_work = do
 recvDataNonNull :: Context -> IO C8.ByteString
 recvDataNonNull ctx = recvData ctx >>= \l -> if B.null l then recvDataNonNull ctx else return l
 
+chunkLengths :: Int -> [Int]
+chunkLengths len
+    | len > 16384 = 16384 : chunkLengths (len - 16384)
+    | len > 0     = [len]
+    | otherwise   = []
+
 runTLSPipeN :: Int -> (ClientParams, ServerParams) -> (Context -> Chan [C8.ByteString] -> IO ()) -> (Chan C8.ByteString -> Context -> IO ()) -> PropertyM IO ()
 runTLSPipeN n params tlsServer tlsClient = do
     (writeStart, readResult) <- run (establishDataPipe params tlsServer tlsClient)
@@ -99,8 +105,9 @@ runTLSPipeSimple13 params mode mEarlyData = runTLSPipe params tlsServer tlsClien
             case mEarlyData of
                 Nothing -> return ()
                 Just ed -> do
-                    ed' <- recvDataNonNull ctx
-                    ed `assertEq` ed'
+                    let ls = chunkLengths (B.length ed)
+                    chunks <- replicateM (length ls) $ recvDataNonNull ctx
+                    (ls, ed) `assertEq` (map B.length chunks, B.concat chunks)
             d <- recvDataNonNull ctx
             writeChan queue [d]
             minfo <- contextGetInformation ctx
@@ -370,6 +377,42 @@ prop_handshake13_rtt0_fallback = do
         params2 = (pc { clientEarlyData = Just earlyData } , ps)
 
     runTLSPipeSimple13 params2 PreSharedKey Nothing
+
+prop_handshake13_rtt0_length :: PropertyM IO ()
+prop_handshake13_rtt0_length = do
+    serverMax <- pick $ choose (0, 33792)
+    (cli, srv) <- pick arbitraryPairParams13
+    let cliSupported = def
+          { supportedVersions = [TLS13]
+          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+          , supportedGroups = [X25519]
+          }
+        svrSupported = def
+          { supportedVersions = [TLS13]
+          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+          , supportedGroups = [X25519]
+          }
+        params0 = (cli { clientSupported = cliSupported }
+                  ,srv { serverSupported = svrSupported
+                       , serverEarlyDataSize = serverMax }
+                  )
+
+    sessionRefs <- run twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
+    let params = setPairParamsSessionManagers sessionManagers params0
+    runTLSPipeSimple13 params FullHandshake Nothing
+
+    -- and resume
+    sessionParams <- run $ readClientSessionRef sessionRefs
+    assert (isJust sessionParams)
+    clientLen <- pick $ choose (0, 33792)
+    earlyData <- B.pack <$> pick (someWords8 clientLen)
+    let (pc,ps) = setPairParamsSessionResuming (fromJust sessionParams) params
+        params2 = (pc { clientEarlyData = Just earlyData } , ps)
+        (mode, mEarlyData)
+            | clientLen > serverMax = (PreSharedKey, Nothing)
+            | otherwise             = (RTT0, Just earlyData)
+    runTLSPipeSimple13 params2 mode mEarlyData
 
 prop_handshake_ciphersuites :: PropertyM IO ()
 prop_handshake_ciphersuites = do
@@ -750,4 +793,5 @@ main = defaultMain $ testGroup "tls"
             , testProperty "TLS 1.3 PSK -> HRR" (monadicIO prop_handshake13_psk_fallback)
             , testProperty "TLS 1.3 RTT0" (monadicIO prop_handshake13_rtt0)
             , testProperty "TLS 1.3 RTT0 -> PSK" (monadicIO prop_handshake13_rtt0_fallback)
+            , testProperty "TLS 1.3 RTT0 length" (monadicIO prop_handshake13_rtt0_length)
             ]
