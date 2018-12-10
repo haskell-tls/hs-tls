@@ -117,7 +117,7 @@ data Context = Context
     , ctxLockState        :: MVar ()       -- ^ lock used during read/write when receiving and sending packet.
                                            -- it is usually nested in a write or read lock.
     , ctxPendingActions   :: MVar [PendingAction]
-    , ctxLogKey           :: Bool
+    , ctxKeyLogger        :: String -> IO ()
     }
 
 data Established = NotEstablished

@@ -33,8 +33,6 @@ import Network.TLS.Context.Internal
 import Network.TLS.Imports
 import Network.TLS.Struct
 
-import System.IO
-
 {- if the RSA encryption fails we just return an empty bytestring, and let the protocol
  - fail by itself; however it would be probably better to just report it since it's an internal problem.
  -}
@@ -93,13 +91,15 @@ getLocalDigitalSignatureAlg ctx = do
 
 ----------------------------------------------------------------
 
+-- NSS Key Log Format
+-- See https://developer.mozilla.org/en-US/docs/Mozilla/Projects/NSS/Key_Log_Format
 logKey :: Context -> String -> ByteString -> IO ()
-logKey ctx label key = when (ctxLogKey ctx) $ do
+logKey ctx label key = do
     mhst <- getHState ctx
     case mhst of
       Nothing  -> return ()
       Just hst -> do
           let cr = unClientRandom $ hstClientRandom hst
-          hPutStrLn stderr $ label ++ " " ++ dump cr ++ " " ++ dump key
+          ctxKeyLogger ctx $ label ++ " " ++ dump cr ++ " " ++ dump key
   where
     dump = init . tail . showBytesHex
