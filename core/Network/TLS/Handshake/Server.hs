@@ -753,9 +753,9 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
         hChSh <- transcriptHash ctx
         let clientHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
             serverHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
-        liftIO $ logKey ctx "SERVER_HANDSHAKE_TRAFFIC_SECRET" serverHandshakeTrafficSecret
-        liftIO $ logKey ctx "CLIENT_HANDSHAKE_TRAFFIC_SECRET" clientHandshakeTrafficSecret
         liftIO $ do
+            logKey ctx "SERVER_HANDSHAKE_TRAFFIC_SECRET" serverHandshakeTrafficSecret
+            logKey ctx "CLIENT_HANDSHAKE_TRAFFIC_SECRET" clientHandshakeTrafficSecret
             setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlyTrafficSecret else clientHandshakeTrafficSecret
             setTxState ctx usedHash usedCipher serverHandshakeTrafficSecret
     ----------------------------------------------------------------
