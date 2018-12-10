@@ -21,7 +21,8 @@ Features
 * client certificates
 * permissive license: BSD3
 * supported versions: SSL3, TLS1.0, TLS1.1, TLS1.2
-* key exchange supported: RSA, DHE-RSA, DHE-DSS
+* key exchange supported: RSA, DHE-RSA, DHE-DSS, ECDHE-RSA, ECDHE-ECDSA
+* diffie-hellman groups: finite fields, elliptic curves P-256, P-384, P-521, X25519, X448
 * bulk algorithm supported: any stream or block ciphers
 * supported extensions: secure renegotiation, next protocol negotiation (draft 2), server name indication
 

@@ -150,39 +150,22 @@ extensionLookup :: ExtensionID -> [ExtensionRaw] -> Maybe ByteString
 extensionLookup toFind = fmap (\(ExtensionRaw _ content) -> content)
                        . find (\(ExtensionRaw eid _) -> eid == toFind)
 
--- | Store private key and associated DigitalSignatureAlg, optionally
--- checking the keypair is compatible with a list of 'CertificateType'
--- values.
---
+-- | Store the specified keypair.  Whether the public key and private key
+-- actually match is left for the peer to discover.  We're not presently
+-- burning  CPU to detect that misconfiguration.  We verify only that the
+-- types of keys match.
 storePrivInfo :: Context
-              -> Maybe [CertificateType]
               -> CertificateChain
               -> PrivKey
-              -> IO ()
-storePrivInfo ctx cTypes cc privkey = do
-    let (CertificateChain (c:_)) = cc
+              -> IO DigitalSignatureAlg
+storePrivInfo ctx cc privkey = do
+    let CertificateChain (c:_) = cc
         pubkey = certPubKey $ getCertificate c
-        -- FIXME: Add ECDSA with at least the P-256, P-384
-        -- and P-521 curves.  Also Ed25519 and Ed448.
-        --
-        -- FIXME: The 'rsaok', 'dsaok' tests need a better
-        -- abstraction.
-        --
-        dsaok = elem CertificateType_DSS_Sign <$> cTypes
-        rsaok = elem CertificateType_RSA_Sign <$> cTypes
     privalg <- case findDigitalSignatureAlg (pubkey, privkey) of
-        Just RSA | rsaok /= Just False
-                -> return RSA
-        Just DSS | dsaok /= Just False
-                -> return DSS
-        _       -> throwCore $ Error_Protocol
-                       ( keyerr
-                       , True
-                       , InternalError )
-    -- XXX: Whether the public key and private key actually
-    -- match is left for the peer to discover.  We're not
-    -- presently burning CPU to detect that misconfiguration.
-    --
-    usingHState ctx $ setPrivateKey privkey privalg
-  where
-    keyerr = "mismatched or unsupported private key pair"
+        Just alg -> return alg
+        Nothing  -> throwCore $ Error_Protocol
+                        ( "mismatched or unsupported private key pair"
+                        , True
+                        , InternalError )
+    usingHState ctx $ setPublicPrivateKeys (pubkey, privkey)
+    return privalg

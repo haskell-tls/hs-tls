@@ -19,6 +19,7 @@ import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Cipher
 import Network.TLS.Compression
+import Network.TLS.Credentials
 import Network.TLS.Packet hiding (getExtensions)
 import Network.TLS.ErrT
 import Network.TLS.Extension
@@ -284,6 +285,20 @@ handshakeClient' cparams ctx groups mcrand = do
                         _ -> fail ("unexepected type received. expecting handshake and got: " ++ show p)
                 throwAlert a = usingState_ ctx $ throwError $ Error_Protocol ("expecting server hello, got alert : " ++ show a, True, HandshakeFailure)
 
+-- | Store the keypair and check that it is compatible with a list of
+-- 'CertificateType' values.
+storePrivInfoClient :: Context
+                    -> [CertificateType]
+                    -> Credential
+                    -> IO ()
+storePrivInfoClient ctx cTypes (cc, privkey) = do
+    privalg <- storePrivInfo ctx cc privkey
+    unless (certificateCompatible privalg cTypes) $
+        throwCore $ Error_Protocol
+            ( show privalg ++ " credential does not match allowed certificate types"
+            , True
+            , InternalError )
+
 -- | When the server requests a client certificate, we try to
 -- obtain a suitable certificate chain and private key via the
 -- callback in the client parameters.  It is OK for the callback
@@ -343,7 +358,7 @@ handshakeClient' cparams ctx groups mcrand = do
 -- signatures are OK.
 --
 clientChain :: ClientParams -> Context -> IO (Maybe CertificateChain)
-clientChain cparams ctx = do
+clientChain cparams ctx =
     usingHState ctx getCertReqCBdata >>= \case
         Nothing     -> return Nothing
         Just cbdata -> do
@@ -355,10 +370,10 @@ clientChain cparams ctx = do
                     -> return $ Just $ CertificateChain []
                 Just (CertificateChain [], _)
                     -> return $ Just $ CertificateChain []
-                Just (cc, privkey)
+                Just cred@(cc, _)
                     -> do
                        let (cTypes, _, _) = cbdata
-                       storePrivInfo ctx (Just cTypes) cc privkey
+                       storePrivInfoClient ctx cTypes cred
                        return $ Just cc
 
 -- | Return a most preferred 'HandAndSignatureAlgorithm' that is
@@ -521,7 +536,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
             --
             certSent <- usingHState ctx getClientCertSent
             when certSent $ do
-                (_, keyAlg) <- usingHState ctx getLocalPrivateKey
+                keyAlg      <- getLocalDigitalSignatureAlg ctx
                 mhashSig    <- case ver of
                     TLS12 -> Just <$> getLocalHashSigAlg ctx keyAlg
                     _     -> return Nothing
@@ -660,13 +675,13 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
   where processWithCipher cipher skx =
             case (cipherKeyExchange cipher, skx) of
                 (CipherKeyExchange_DHE_RSA, SKX_DHE_RSA dhparams signature) -> do
-                    doDHESignature dhparams signature RSA
+                    doDHESignature dhparams signature KX_RSA
                 (CipherKeyExchange_DHE_DSS, SKX_DHE_DSS dhparams signature) -> do
-                    doDHESignature dhparams signature DSS
+                    doDHESignature dhparams signature KX_DSS
                 (CipherKeyExchange_ECDHE_RSA, SKX_ECDHE_RSA ecdhparams signature) -> do
-                    doECDHESignature ecdhparams signature RSA
+                    doECDHESignature ecdhparams signature KX_RSA
                 (CipherKeyExchange_ECDHE_ECDSA, SKX_ECDHE_ECDSA ecdhparams signature) -> do
-                    doECDHESignature ecdhparams signature ECDSA
+                    doECDHESignature ecdhparams signature KX_ECDSA
                 (cke, SKX_Unparsed bytes) -> do
                     ver <- usingState_ ctx getVersion
                     case decodeReallyServerKeyXchgAlgorithmData ver cke bytes of
@@ -674,17 +689,29 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
                         Right realSkx -> processWithCipher cipher realSkx
                     -- we need to resolve the result. and recall processWithCipher ..
                 (c,_)           -> throwCore $ Error_Protocol ("unknown server key exchange received, expecting: " ++ show c, True, HandshakeFailure)
-        doDHESignature dhparams signature signatureType = do
+        doDHESignature dhparams signature kxsAlg = do
             -- FIXME verify if FF group is one of supported groups
+            signatureType <- getSignatureType kxsAlg
             verified <- digitallySignDHParamsVerify ctx dhparams signatureType signature
-            unless verified $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " signature for dhparams " ++ show dhparams, True, HandshakeFailure)
+            unless verified $ decryptError ("bad " ++ show signatureType ++ " signature for dhparams " ++ show dhparams)
             usingHState ctx $ setServerDHParams dhparams
 
-        doECDHESignature ecdhparams signature signatureType = do
+        doECDHESignature ecdhparams signature kxsAlg = do
             -- FIXME verify if EC group is one of supported groups
+            signatureType <- getSignatureType kxsAlg
             verified <- digitallySignECDHParamsVerify ctx ecdhparams signatureType signature
-            unless verified $ throwCore $ Error_Protocol ("bad " ++ show signatureType ++ " signature for ecdhparams", True, HandshakeFailure)
+            unless verified $ decryptError ("bad " ++ show signatureType ++ " signature for ecdhparams")
             usingHState ctx $ setServerECDHParams ecdhparams
+
+        getSignatureType kxsAlg = do
+            publicKey <- usingHState ctx getRemotePublicKey
+            case (kxsAlg, publicKey) of
+                (KX_RSA,   PubKeyRSA     _) -> return DS_RSA
+                (KX_DSS,   PubKeyDSA     _) -> return DS_DSS
+                (KX_ECDSA, PubKeyEC      _) -> return DS_ECDSA
+                (KX_ECDSA, PubKeyEd25519 _) -> return DS_Ed25519
+                (KX_ECDSA, PubKeyEd448   _) -> return DS_Ed448
+                _                           -> throwCore $ Error_Protocol ("server public key algorithm is incompatible with " ++ show kxsAlg, True, HandshakeFailure)
 
 processServerKeyExchange ctx p = processCertificateRequest ctx p
 
@@ -770,14 +797,10 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
             [] -> return ()
             _  -> do
                   hChSc      <- transcriptHash ctx
-                  (salg, pk) <- getSigKey
-                  vfy        <- makeClientCertVerify ctx salg pk hChSc
+                  keyAlg     <- getLocalDigitalSignatureAlg ctx
+                  sigAlg     <- liftIO $ getLocalHashSigAlg ctx keyAlg
+                  vfy        <- makeClientCertVerify ctx keyAlg sigAlg hChSc
                   loadPacket13 ctx $ Handshake13 [vfy]
-      where
-        getSigKey = do
-            (privkey, privalg) <- usingHState ctx getLocalPrivateKey
-            sigAlg <- liftIO $ getLocalHashSigAlg ctx privalg
-            return (sigAlg, privkey)
     --
     sendClientData13 _ _ =
         throwCore $ Error_Protocol
@@ -918,12 +941,15 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
         pubkey <- case certChain of
                     [] -> throwCore $ Error_Protocol ("server certificate missing", True, HandshakeFailure)
                     c:_ -> return $ certPubKey $ getCertificate c
+        usingHState ctx $ setPublicKey pubkey
         hChSc <- transcriptHash ctx
         recvHandshake13 ctx $ expectCertVerify pubkey hChSc
     expectCertAndVerify p = unexpected (show p) (Just "server certificate")
 
-    expectCertVerify pubkey hChSc (CertVerify13 ss sig) =
-        checkServerCertVerify ss sig pubkey hChSc
+    expectCertVerify pubkey hChSc (CertVerify13 sigAlg sig) = do
+        let keyAlg = fromJust "fromPubKey" (fromPubKey pubkey)
+        ok <- checkServerCertVerify ctx keyAlg sigAlg sig hChSc
+        unless ok $ decryptError "cannot verify CertificateVerify"
     expectCertVerify _ _ p = unexpected (show p) (Just "certificate verify")
 
     recvFinished serverHandshakeTrafficSecret = do
@@ -932,8 +958,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
         recvHandshake13 ctx $ expectFinished verifyData'
 
     expectFinished verifyData' (Finished13 verifyData) =
-        when (verifyData' /= verifyData) $
-            throwCore $ Error_Protocol ("cannot verify finished", True, HandshakeFailure)
+        when (verifyData' /= verifyData) $ decryptError "cannot verify finished"
     expectFinished _ p = unexpected (show p) (Just "server finished")
 
     setResumptionSecret masterSecret = do

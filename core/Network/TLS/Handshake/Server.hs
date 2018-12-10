@@ -254,9 +254,10 @@ handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverN
     cred <- case cipherKeyExchange usedCipher of
                 CipherKeyExchange_RSA       -> return $ credentialsFindForDecrypting creds
                 CipherKeyExchange_DH_Anon   -> return   Nothing
-                CipherKeyExchange_DHE_RSA   -> return $ credentialsFindForSigning RSA signatureCreds
-                CipherKeyExchange_DHE_DSS   -> return $ credentialsFindForSigning DSS signatureCreds
-                CipherKeyExchange_ECDHE_RSA -> return $ credentialsFindForSigning RSA signatureCreds
+                CipherKeyExchange_DHE_RSA   -> return $ credentialsFindForSigning KX_RSA signatureCreds
+                CipherKeyExchange_DHE_DSS   -> return $ credentialsFindForSigning KX_DSS signatureCreds
+                CipherKeyExchange_ECDHE_RSA -> return $ credentialsFindForSigning KX_RSA signatureCreds
+                CipherKeyExchange_ECDHE_ECDSA -> return $ credentialsFindForSigning KX_ECDSA signatureCreds
                 _                           -> throwCore $ Error_Protocol ("key exchange algorithm not implemented", True, HandshakeFailure)
 
     resumeSessionData <- case clientSession of
@@ -318,7 +319,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
         makeServerHello session = do
             srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
             case mcred of
-                Just (cc, privkey) -> storePrivInfo ctx Nothing cc privkey
+                Just cred          -> storePrivInfoServer ctx cred
                 _                  -> return () -- return a sensible error
 
             -- in TLS12, we need to check as well the certificates we are sending if they have in the extension
@@ -366,9 +367,10 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             -- send server key exchange if needed
             skx <- case cipherKeyExchange usedCipher of
                         CipherKeyExchange_DH_Anon -> Just <$> generateSKX_DH_Anon
-                        CipherKeyExchange_DHE_RSA -> Just <$> generateSKX_DHE RSA
-                        CipherKeyExchange_DHE_DSS -> Just <$> generateSKX_DHE DSS
-                        CipherKeyExchange_ECDHE_RSA -> Just <$> generateSKX_ECDHE RSA
+                        CipherKeyExchange_DHE_RSA -> Just <$> generateSKX_DHE KX_RSA
+                        CipherKeyExchange_DHE_DSS -> Just <$> generateSKX_DHE KX_DSS
+                        CipherKeyExchange_ECDHE_RSA -> Just <$> generateSKX_ECDHE KX_RSA
+                        CipherKeyExchange_ECDHE_ECDSA -> Just <$> generateSKX_ECDHE KX_ECDSA
                         _                         -> return Nothing
             maybe (return ()) (sendPacket ctx . Handshake . (:[]) . ServerKeyXchg) skx
 
@@ -441,14 +443,15 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                       x:_ -> return $ Just x
               _     -> return Nothing
 
-        generateSKX_DHE sigAlg = do
+        generateSKX_DHE kxsAlg = do
             serverParams  <- setup_DHE
+            sigAlg <- getLocalDigitalSignatureAlg ctx
             mhashSig <- decideHashSig sigAlg
             signed <- digitallySignDHParams ctx serverParams sigAlg mhashSig
-            case sigAlg of
-                RSA -> return $ SKX_DHE_RSA serverParams signed
-                DSS -> return $ SKX_DHE_DSS serverParams signed
-                _   -> error ("generate skx_dhe unsupported signature type: " ++ show sigAlg)
+            case kxsAlg of
+                KX_RSA -> return $ SKX_DHE_RSA serverParams signed
+                KX_DSS -> return $ SKX_DHE_DSS serverParams signed
+                _      -> error ("generate skx_dhe unsupported key exchange signature: " ++ show kxsAlg)
 
         generateSKX_DH_Anon = SKX_DH_Anon <$> setup_DHE
 
@@ -460,17 +463,19 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             usingHState ctx $ setGroupPrivate srvpri
             return serverParams
 
-        generateSKX_ECDHE sigAlg = do
+        generateSKX_ECDHE kxsAlg = do
             let possibleECGroups = negotiatedGroupsInCommon ctx exts `intersect` availableECGroups
             grp <- case possibleECGroups of
                      []  -> throwCore $ Error_Protocol ("no common group", True, HandshakeFailure)
                      g:_ -> return g
             serverParams <- setup_ECDHE grp
+            sigAlg <- getLocalDigitalSignatureAlg ctx
             mhashSig <- decideHashSig sigAlg
             signed <- digitallySignECDHParams ctx serverParams sigAlg mhashSig
-            case sigAlg of
-                RSA -> return $ SKX_ECDHE_RSA serverParams signed
-                _   -> error ("generate skx_ecdhe unsupported signature type: " ++ show sigAlg)
+            case kxsAlg of
+                KX_RSA   -> return $ SKX_ECDHE_RSA serverParams signed
+                KX_ECDSA -> return $ SKX_ECDHE_ECDSA serverParams signed
+                _        -> error ("generate skx_ecdhe unsupported key exchange signature: " ++ show kxsAlg)
 
         -- create a DigitallySigned objects for DHParams or ECDHParams.
 
@@ -547,7 +552,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                         -- also commit the client certificate
                         -- chain to the context.
                         usingState_ ctx $ setClientCertificateChain certs
-                    else badCertificate "verification failed"
+                    else decryptError "verification failed"
             return $ RecvStateNext expectChangeCipher
 
         processCertificateVerify p = do
@@ -656,6 +661,9 @@ cipherListCredentialFallback = all nonDH
         CipherKeyExchange_TLS13       -> False
         _                             -> True
 
+storePrivInfoServer :: Context -> Credential -> IO ()
+storePrivInfoServer ctx (cc, privkey) = void (storePrivInfo ctx cc privkey)
+
 -- TLS 1.3 or later
 handshakeServerWithTLS13 :: ServerParams
                          -> Context
@@ -690,14 +698,14 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
         -- RFC 8446 section 4.4.2.2).
         let hashSigs = hashAndSignaturesInCommon ctx exts
             cltCreds = filterCredentialsWithHashSignatures exts allCreds
-        (cred, sigAlgo) <- case credentialsFindForSigning13 hashSigs cltCreds of
+        (cred, hashSig) <- case credentialsFindForSigning13 hashSigs cltCreds of
             Just cs -> return cs
             Nothing ->
                 case credentialsFindForSigning13 hashSigs allCreds of
                     Just cs -> return cs
                     Nothing -> throwCore $ Error_Protocol ("credential not found", True, IllegalParameter)
         let usedHash = cipherHash usedCipher
-        doHandshake13 sparams cred ctx chosenVersion usedCipher exts usedHash keyShare sigAlgo clientSession
+        doHandshake13 sparams cred ctx chosenVersion usedCipher exts usedHash keyShare hashSig clientSession
   where
     ciphersFilteredVersion = filter ((`elem` clientCiphers) . cipherID) serverCiphers
     serverCiphers = filter (cipherAllowedForVersion chosenVersion) (supportedCiphers $ serverSupported sparams)
@@ -712,7 +720,7 @@ doHandshake13 :: ServerParams -> Credential -> Context -> Version
               -> Hash -> KeyShareEntry -> HashAndSignatureAlgorithm
               -> Session
               -> IO ()
-doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts usedHash clientKeyShare sigAlgo clientSession = do
+doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts usedHash clientKeyShare hashSig clientSession = do
     newSession ctx >>= \ss -> usingState_ ctx (setSession ss False)
     usingHState ctx $ setNegotiatedGroup $ keyShareEntryGroup clientKeyShare
     srand <- setServerParameter
@@ -801,7 +809,7 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
                 setRxState ctx usedHash usedCipher clientApplicationTrafficSecret0
                 sendNewSessionTicket masterSecret rtt
               else
-                throwCore $ Error_Protocol ("cannot verify finished", True, HandshakeFailure)
+                decryptError "cannot verify finished"
         finishedAction hs = unexpected (show hs) (Just "finished 13")
 
         endOfEarlyDataAction hs@EndOfEarlyData13 = do
@@ -816,7 +824,7 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
   where
     setServerParameter = do
         srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
-        storePrivInfo ctx Nothing certChain privKey
+        storePrivInfoServer ctx cred
         usingState_ ctx $ setVersion chosenVersion
         usingHState ctx $ setHelloParameters13 usedCipher
         return srand
@@ -866,7 +874,7 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
     checkBinder earlySecret (Just (binder,n,tlen)) = do
         binder' <- makePSKBinder ctx earlySecret usedHash tlen Nothing
         unless (binder `bytesEq` binder') $
-            throwCore $ Error_Protocol ("PSK binder validation failed", True, HandshakeFailure)
+            decryptError "PSK binder validation failed"
         let selectedIdentity = extensionEncode $ PreSharedKeyServerHello $ fromIntegral n
         return [ExtensionRaw extensionID_PreSharedKey selectedIdentity]
 
@@ -884,7 +892,8 @@ doHandshake13 sparams (certChain, privKey) ctx chosenVersion usedCipher exts use
             ess = replicate (length cs) []
         loadPacket13 ctx $ Handshake13 [Certificate13 "" certChain ess]
         hChSc <- transcriptHash ctx
-        vrfy <- makeServerCertVerify ctx sigAlgo privKey hChSc
+        sigAlg <- getLocalDigitalSignatureAlg ctx
+        vrfy <- makeServerCertVerify ctx sigAlg hashSig hChSc
         loadPacket13 ctx $ Handshake13 [vrfy]
 
     sendExtensions rtt0OK = do
@@ -976,8 +985,7 @@ getCiphers sparams creds sigCreds = filter authorizedCKE (supportedCiphers $ ser
                     CipherKeyExchange_DHE_RSA     -> canSignRSA
                     CipherKeyExchange_DHE_DSS     -> canSignDSS
                     CipherKeyExchange_ECDHE_RSA   -> canSignRSA
-                    -- unimplemented: EC
-                    CipherKeyExchange_ECDHE_ECDSA -> False
+                    CipherKeyExchange_ECDHE_ECDSA -> canSignECDSA
                     -- unimplemented: non ephemeral DH & ECDH.
                     -- Note, these *should not* be implemented, and have
                     -- (for example) been removed in OpenSSL 1.1.0
@@ -988,8 +996,9 @@ getCiphers sparams creds sigCreds = filter authorizedCKE (supportedCiphers $ ser
                     CipherKeyExchange_ECDH_RSA    -> False
                     CipherKeyExchange_TLS13       -> False -- not reached
 
-            canSignDSS    = DSS `elem` signingAlgs
-            canSignRSA    = RSA `elem` signingAlgs
+            canSignDSS    = KX_DSS `elem` signingAlgs
+            canSignRSA    = KX_RSA `elem` signingAlgs
+            canSignECDSA  = KX_ECDSA `elem` signingAlgs
             canEncryptRSA = isJust $ credentialsFindForDecrypting creds
             signingAlgs   = credentialsListSigningAlgorithms sigCreds
 

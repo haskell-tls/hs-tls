@@ -17,7 +17,11 @@ availableFFGroups = [FFDHE2048,FFDHE3072,FFDHE4096,FFDHE6144,FFDHE8192]
 availableECGroups :: [Group]
 availableECGroups = [P256,P384,P521,X25519,X448]
 
--- Digital signature algorithm, in close relation to public/private key types
--- and cipher key exchange.
-data DigitalSignatureAlg = RSA | DSS | ECDSA | Ed25519 | Ed448
+-- Digital signature algorithm, in close relation to public/private key types.
+data DigitalSignatureAlg = DS_RSA | DS_DSS | DS_ECDSA | DS_Ed25519 | DS_Ed448
                            deriving (Show, Eq)
+
+-- Key-exchange signature algorithm, in close relation to ciphers
+-- (before TLS 1.3).
+data KeyExchangeSignatureAlg = KX_RSA | KX_DSS | KX_ECDSA
+                      deriving (Show, Eq)

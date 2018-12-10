@@ -30,6 +30,7 @@ import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import Network.TLS.Imports
 import Network.TLS.Handshake.Random
+import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.Handshake.Key
@@ -132,8 +133,7 @@ processClientFinished :: Context -> FinishedData -> IO ()
 processClientFinished ctx fdata = do
     (cc,ver) <- usingState_ ctx $ (,) <$> isClientContext <*> getVersion
     expected <- usingHState ctx $ getHandshakeDigest ver $ invertRole cc
-    when (expected /= fdata) $ do
-        throwCore $ Error_Protocol("bad record mac", True, BadRecordMac)
+    when (expected /= fdata) $ decryptError "cannot verify finished"
     usingState_ ctx $ updateVerifiedData ServerRole fdata
     return ()
 
