@@ -29,7 +29,6 @@ module Network.TLS.Handshake.Common13
        , RecvHandshake13M
        , runRecvHandshake13
        , recvHandshake13
-       , dumpKey
        ) where
 
 import Data.Bits (finiteBitSize)
@@ -60,7 +59,6 @@ import Network.TLS.Util
 import Time.System
 
 import Control.Monad.State.Strict
-import System.IO
 
 ----------------------------------------------------------------
 
@@ -294,16 +292,3 @@ runRecvHandshake13 (RecvHandshake13M f) = do
     (result, new) <- runStateT f []
     unless (null new) $ unexpected "spurious handshake 13" Nothing
     return result
-
-----------------------------------------------------------------
-
-dumpKey :: Context -> String -> ByteString -> IO ()
-dumpKey ctx label key = do
-    mhst <- getHState ctx
-    case mhst of
-      Nothing  -> return ()
-      Just hst -> do
-          let cr = unClientRandom $ hstClientRandom hst
-          hPutStrLn stderr $ label ++ " " ++ dump cr ++ " " ++ dump key
-  where
-    dump = init . tail . showBytesHex
