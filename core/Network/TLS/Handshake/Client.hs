@@ -390,12 +390,12 @@ getLocalHashSigAlg ctx keyAlg = do
     case find want $ supportedHashSignatures $ ctxSupported ctx of
         Just best -> return best
         Nothing   -> throwCore $ Error_Protocol
-                         ( keyerr $ show keyAlg
+                         ( keyerr keyAlg
                          , True
                          , HandshakeFailure
                          )
   where
-    keyerr alg = "no " ++ alg ++ " hash algorithm in common with the server"
+    keyerr alg = "no " ++ show alg ++ " hash algorithm in common with the server"
 
 -- | Return the supported 'CertificateType' values that are
 -- compatible with at least one supported signature algorithm.

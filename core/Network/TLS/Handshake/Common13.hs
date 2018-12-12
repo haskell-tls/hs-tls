@@ -31,7 +31,6 @@ module Network.TLS.Handshake.Common13
        , recvHandshake13
        ) where
 
-import Data.Bits (finiteBitSize)
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 import Data.Hourglass
