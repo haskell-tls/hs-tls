@@ -306,7 +306,9 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             usingState_ ctx (setSession clientSession True)
             serverhello <- makeServerHello clientSession
             sendPacket ctx $ Handshake [serverhello]
-            usingHState ctx $ setMasterSecret chosenVersion ServerRole $ sessionSecret sessionData
+            let masterSecret = sessionSecret sessionData
+            usingHState ctx $ setMasterSecret chosenVersion ServerRole masterSecret
+            logKey ctx (MasterSecret masterSecret)
             sendChangeCipherAndFinish ctx ServerRole
             recvChangeCipherAndFinish ctx
     handshakeTerminate ctx
@@ -686,9 +688,6 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
     keyShares <- case extensionLookup extensionID_KeyShare exts >>= extensionDecode MsgTClientHello of
           Just (KeyShareClientHello kses) -> return kses
           _                               -> throwCore $ Error_Protocol ("key exchange not implemented", True, HandshakeFailure)
-    -- putStrLn $ "keyshare = " ++ show (map keyShareEntryGroup keyShares)
-    -- putStrLn "Handshake messages:"
-    -- usingHState ctx getHandshakeMessages >>= mapM_ (putStrLn . showBytesHex)
     case findKeyShare keyShares serverGroups of
       Nothing -> helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession
       Just keyShare -> do
@@ -728,10 +727,7 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
     hCh <- transcriptHash ctx
     let earlySecret = hkdfExtract usedHash zero psk
         clientEarlyTrafficSecret = deriveSecret usedHash earlySecret "c e traffic" hCh
-    -- dumpKey ctx "CLIENT_EARLY_TRAFFIC_SECRET" clientEarlyTrafficSecret
-    -- putStrLn $ "hCh: " ++ showBytesHex hCh
-    -- putStrLn $ "earlySecret: " ++ showBytesHex earlySecret
-    -- putStrLn $ "clientEarlyTrafficSecret: " ++ showBytesHex clientEarlyTrafficSecret
+    logKey ctx (ClientEarlyTrafficSecret clientEarlyTrafficSecret)
     extensions <- checkBinder earlySecret binderInfo
     let authenticated = isJust binderInfo
         rtt0OK = authenticated && rtt0 && rtt0accept && is0RTTvalid
@@ -757,18 +753,9 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
         hChSh <- transcriptHash ctx
         let clientHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
             serverHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
-        -- putStrLn $ "handshakeSecret: " ++ showBytesHex handshakeSecret
-        -- putStrLn $ "hChSh: " ++ showBytesHex hChSh
-        -- usingHState ctx getHandshakeMessages >>= mapM_ (putStrLn . showBytesHex)
-        -- dumpKey ctx "SERVER_HANDSHAKE_TRAFFIC_SECRET" serverHandshakeTrafficSecret
-        -- dumpKey ctx "CLIENT_HANDSHAKE_TRAFFIC_SECRET" clientHandshakeTrafficSecret
-{-
-        if rtt0OK then
-           putStrLn "---- setRxState ctx usedHash usedCipher clientEarlyTrafficSecret"
-         else
-           putStrLn "---- setRxState ctx usedHash usedCipher clientHandshakeTrafficSecret"
--}
         liftIO $ do
+            logKey ctx (ServerHandshakeTrafficSecret serverHandshakeTrafficSecret)
+            logKey ctx (ClientHandshakeTrafficSecret clientHandshakeTrafficSecret)
             setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlyTrafficSecret else clientHandshakeTrafficSecret
             setTxState ctx usedHash usedCipher serverHandshakeTrafficSecret
     ----------------------------------------------------------------
@@ -787,10 +774,8 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
         exporterMasterSecret = deriveSecret usedHash masterSecret "exp master" hChSf
     usingState_ ctx $ setExporterMasterSecret exporterMasterSecret
     ----------------------------------------------------------------
-    -- putStrLn $ "hChSf: " ++ showBytesHex hChSf
-    -- putStrLn $ "masterSecret: " ++ showBytesHex masterSecret
-    -- dumpKey ctx "SERVER_TRAFFIC_SECRET_0" serverApplicationTrafficSecret0
-    -- dumpKey ctx "CLIENT_TRAFFIC_SECRET_0" clientApplicationTrafficSecret0
+    logKey ctx (ServerTrafficSecret0 serverApplicationTrafficSecret0)
+    logKey ctx (ClientTrafficSecret0 clientApplicationTrafficSecret0)
     setTxState ctx usedHash usedCipher serverApplicationTrafficSecret0
     ----------------------------------------------------------------
     let established

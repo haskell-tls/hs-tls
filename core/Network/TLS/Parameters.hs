@@ -55,6 +55,8 @@ data DebugParams = DebugParams
     , debugPrintSeed :: Seed -> IO ()
       -- | Force to choose this version in the server side.
     , debugVersionForced :: Maybe Version
+      -- | Printing master keys. The default is no printing.
+    , debugKeyLogger     :: String -> IO ()
     }
 
 defaultDebugParams :: DebugParams
@@ -62,6 +64,7 @@ defaultDebugParams = DebugParams
     { debugSeed = Nothing
     , debugPrintSeed = const (return ())
     , debugVersionForced = Nothing
+    , debugKeyLogger = \_ -> return ()
     }
 
 instance Show DebugParams where

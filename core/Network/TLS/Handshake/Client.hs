@@ -73,10 +73,6 @@ handshakeClient cparams ctx = do
 -- So, the ClientRandom in the first client hello is necessary.
 handshakeClient' :: ClientParams -> Context -> [Group] -> Maybe ClientRandom -> IO ()
 handshakeClient' cparams ctx groups mcrand = do
-    -- putStr $ "groups = " ++ show groups ++ ", keyshare = ["
-    -- case groups of
-    --     []  -> putStrLn "]"
-    --     g:_ -> putStrLn $ show g ++ "]"
     updateMeasure ctx incrementNbHandshakes
     sentExtensions <- sendClientHello mcrand
     recvServerHello sentExtensions
@@ -264,9 +260,7 @@ handshakeClient' cparams ctx groups mcrand = do
                 let hCh = hash usedHash $ B.concat hmsgs -- fixme
                 EarlySecret earlySecret <- usingHState ctx getTLS13Secret -- fixme
                 let clientEarlyTrafficSecret = deriveSecret usedHash earlySecret "c e traffic" hCh
-                -- putStrLn $ "hCh: " ++ showBytesHex hCh
-                -- dumpKey ctx "CLIENT_EARLY_TRAFFIC_SECRET" clientEarlyTrafficSecret
-                -- putStrLn "---- setTxState ctx usedHash usedCipher clientEarlyTrafficSecret"
+                logKey ctx (ClientEarlyTrafficSecret clientEarlyTrafficSecret)
                 setTxState ctx usedHash usedCipher clientEarlyTrafficSecret
                 mapChunks_ 16384 (sendPacket13 ctx . AppData13) earlyData
                 usingHState ctx $ setTLS13RTT0Status RTT0Sent
@@ -460,7 +454,8 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     (xver, prerand) <- usingState_ ctx $ (,) <$> getVersion <*> genRandom 46
 
                     let premaster = encodePreMasterSecret clientVersion prerand
-                    usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
+                    masterSecret <- usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
+                    logKey ctx (MasterSecret masterSecret)
                     encryptedPreMaster <- do
                         -- SSL3 implementation generally forget this length field since it's redundant,
                         -- however TLS10 make it clear that the length field need to be present.
@@ -504,8 +499,8 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                                      Nothing   -> throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
                                      Just pair -> return pair
 
-                    usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
-
+                    masterSecret <- usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
+                    logKey ctx (MasterSecret masterSecret)
                     return $ CKX_DH clientDHPub
 
                 getCKX_ECDHE = do
@@ -516,7 +511,8 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                         Nothing                  -> throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
                         Just (clipub, premaster) -> do
                             xver <- usingState_ ctx getVersion
-                            usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
+                            masterSecret <- usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
+                            logKey ctx (MasterSecret masterSecret)
                             return $ CKX_ECDH $ encodeGroupPublic clipub
 
         -- In order to send a proper certificate verify message,
@@ -625,7 +621,9 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
         case resumingSession of
             Nothing          -> return $ RecvStateHandshake (processCertificate cparams ctx)
             Just sessionData -> do
-                usingHState ctx (setMasterSecret rver ClientRole $ sessionSecret sessionData)
+                let masterSecret = sessionSecret sessionData
+                usingHState ctx $ setMasterSecret rver ClientRole masterSecret
+                logKey ctx (MasterSecret masterSecret)
                 return $ RecvStateNext expectChangeCipher
 onServerHello _ _ _ p = unexpected (show p) (Just "server hello")
 
@@ -773,7 +771,6 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
         return accepted
     hChSf <- transcriptHash ctx
     when rtt0accepted $ sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
-    -- putStrLn "---- setTxState ctx usedHash usedCipher clientHandshakeTrafficSecret"
     setTxState ctx usedHash usedCipher clientHandshakeTrafficSecret
     chain <- clientChain cparams ctx
     runPacketFlight ctx $ do
@@ -816,12 +813,8 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
         hChSh <- transcriptHash ctx
         let clientHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
             serverHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
-        -- putStrLn $ "earlySecret: " ++ showBytesHex earlySecret
-        -- putStrLn $ "handshakeSecret: " ++ showBytesHex handshakeSecret
-        -- putStrLn $ "hChSh: " ++ showBytesHex hChSh
-        -- usingHState ctx getHandshakeMessages >>= mapM_ (putStrLn . showBytesHex)
-        -- dumpKey ctx "SERVER_HANDSHAKE_TRAFFIC_SECRET" serverHandshakeTrafficSecret
-        -- dumpKey ctx "CLIENT_HANDSHAKE_TRAFFIC_SECRET" clientHandshakeTrafficSecret
+        logKey ctx (ServerHandshakeTrafficSecret serverHandshakeTrafficSecret)
+        logKey ctx (ClientHandshakeTrafficSecret clientHandshakeTrafficSecret)
         setRxState ctx usedHash usedCipher serverHandshakeTrafficSecret
         return (resuming, handshakeSecret, clientHandshakeTrafficSecret, serverHandshakeTrafficSecret)
 
@@ -831,11 +824,8 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
             serverApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "s ap traffic" hChSf
             exporterMasterSecret = deriveSecret usedHash masterSecret "exp master" hChSf
         usingState_ ctx $ setExporterMasterSecret exporterMasterSecret
-        -- putStrLn $ "hChSf: " ++ showBytesHex hChSf
-        -- putStrLn $ "masterSecret: " ++ showBytesHex masterSecret
-        -- dumpKey ctx "SERVER_TRAFFIC_SECRET_0" serverApplicationTrafficSecret0
-        -- dumpKey ctx "CLIENT_TRAFFIC_SECRET_0" clientApplicationTrafficSecret0
-        -- putStrLn "---- setTxState ctx usedHash usedCipher clientApplicationTrafficSecret0"
+        logKey ctx (ServerTrafficSecret0 serverApplicationTrafficSecret0)
+        logKey ctx (ClientTrafficSecret0 clientApplicationTrafficSecret0)
         setTxState ctx usedHash usedCipher clientApplicationTrafficSecret0
         setRxState ctx usedHash usedCipher serverApplicationTrafficSecret0
         return masterSecret
