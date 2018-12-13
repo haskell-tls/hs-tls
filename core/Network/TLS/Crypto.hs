@@ -55,8 +55,8 @@ import qualified Crypto.PubKey.RSA as RSA
 import qualified Crypto.PubKey.RSA.PKCS15 as RSA
 import qualified Crypto.PubKey.RSA.PSS as PSS
 
-import Data.X509 (PrivKey(..), PubKey(..), PubKeyEC(..))
-import Data.X509.EC (ecPubKeyCurveName, unserializePoint)
+import Data.X509 (PrivKey(..), PrivKeyEC(..), PubKey(..), PubKeyEC(..))
+import Data.X509.EC (ecPubKeyCurveName, ecPrivKeyCurveName, unserializePoint)
 import Network.TLS.Crypto.DH
 import Network.TLS.Crypto.IES
 import Network.TLS.Crypto.Types
@@ -310,6 +310,20 @@ kxSign (PrivKeyDSA pk) (PubKeyDSA _) DSSParams msg = do
     sign <- DSA.sign pk H.SHA1 msg
     return (Right $ encodeASN1' DER $ dsaSequence sign)
   where dsaSequence sign = [Start Sequence,IntVal (DSA.sign_r sign),IntVal (DSA.sign_s sign),End Sequence]
+kxSign (PrivKeyEC pk) (PubKeyEC _) (ECDSAParams hashAlg) msg =
+    case ecPrivKeyCurveName pk of
+        Nothing         -> return $ Left KxUnsupported
+        Just curveName  ->
+            let curve = ECC.getCurveByName curveName
+                privkey = ECDSA.PrivateKey curve (privkeyEC_priv pk)
+             in encode `fmap` ecdsaSignHash hashAlg privkey msg
+  where encode Nothing     = Left KxUnsupported
+        encode (Just sign) = Right $ encodeASN1' DER $ ecdsaSequence sign
+        ecdsaSequence sign = [ Start Sequence
+                             , IntVal (ECDSA.sign_r sign)
+                             , IntVal (ECDSA.sign_s sign)
+                             , End Sequence
+                             ]
 kxSign (PrivKeyEd25519 pk) (PubKeyEd25519 pub) Ed25519Params msg =
     return $ Right $ B.convert $ Ed25519.sign pk pub msg
 kxSign (PrivKeyEd448 pk) (PubKeyEd448 pub) Ed448Params msg =
@@ -349,3 +363,11 @@ rsapssVerifyHash _      = error "rsapssVerifyHash: unsupported hash"
 
 noHash :: Maybe H.MD5
 noHash = Nothing
+
+ecdsaSignHash :: MonadRandom m => Hash -> ECDSA.PrivateKey -> ByteString -> m (Maybe ECDSA.Signature)
+ecdsaSignHash SHA1   pk msg   = Just `fmap` ECDSA.sign pk H.SHA1   msg
+ecdsaSignHash SHA224 pk msg   = Just `fmap` ECDSA.sign pk H.SHA224 msg
+ecdsaSignHash SHA256 pk msg   = Just `fmap` ECDSA.sign pk H.SHA256 msg
+ecdsaSignHash SHA384 pk msg   = Just `fmap` ECDSA.sign pk H.SHA384 msg
+ecdsaSignHash SHA512 pk msg   = Just `fmap` ECDSA.sign pk H.SHA512 msg
+ecdsaSignHash _      _  _     = return Nothing
