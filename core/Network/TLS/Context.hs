@@ -143,7 +143,7 @@ contextNew backend params = liftIO $ do
     tx    <- newMVar newRecordState
     rx    <- newMVar newRecordState
     hs    <- newMVar Nothing
-    as    <- newMVar []
+    as    <- newIORef []
     lockWrite <- newMVar ()
     lockRead  <- newMVar ()
     lockState <- newMVar ()
@@ -176,7 +176,7 @@ contextNewOnHandle :: (MonadIO m, TLSParams params)
                    => Handle -- ^ Handle of the connection.
                    -> params -- ^ Parameters of the context.
                    -> m Context
-contextNewOnHandle handle params = contextNew handle params
+contextNewOnHandle = contextNew
 {-# DEPRECATED contextNewOnHandle "use contextNew" #-}
 
 #ifdef INCLUDE_NETWORK

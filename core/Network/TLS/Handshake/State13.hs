@@ -22,6 +22,7 @@ module Network.TLS.Handshake.State13
 import Control.Concurrent.MVar
 import Control.Monad.State
 import qualified Data.ByteString as B
+import Data.IORef
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Context.Internal
@@ -114,10 +115,12 @@ transcriptHash ctx = do
       HandshakeMessages      _       -> error "un-initialized handshake digest"
 
 setPendingActions :: Context -> [PendingAction] -> IO ()
-setPendingActions ctx bss =
-    modifyMVar_ (ctxPendingActions ctx) (\_ -> return bss)
+setPendingActions ctx = writeIORef (ctxPendingActions ctx)
 
 popPendingAction :: Context -> IO (Maybe PendingAction)
-popPendingAction ctx = modifyMVar (ctxPendingActions ctx) f
-  where f (bs:bss) = return (bss, Just bs)
-        f []       = return ([], Nothing)
+popPendingAction ctx = do
+    let ref = ctxPendingActions ctx
+    actions <- readIORef ref
+    case actions of
+        bs:bss -> writeIORef ref bss >> return (Just bs)
+        []     -> return Nothing

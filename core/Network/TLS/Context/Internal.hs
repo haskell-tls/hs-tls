@@ -116,7 +116,7 @@ data Context = Context
     , ctxLockRead         :: MVar ()       -- ^ lock to use for reading data (including updating the state)
     , ctxLockState        :: MVar ()       -- ^ lock used during read/write when receiving and sending packet.
                                            -- it is usually nested in a write or read lock.
-    , ctxPendingActions   :: MVar [PendingAction]
+    , ctxPendingActions   :: IORef [PendingAction]
     , ctxKeyLogger        :: String -> IO ()
     }
 
@@ -187,10 +187,10 @@ ctxWithHooks :: Context -> (Hooks -> IO a) -> IO a
 ctxWithHooks ctx f = readIORef (ctxHooks ctx) >>= f
 
 contextModifyHooks :: Context -> (Hooks -> Hooks) -> IO ()
-contextModifyHooks ctx f = modifyIORef (ctxHooks ctx) f
+contextModifyHooks ctx = modifyIORef (ctxHooks ctx)
 
 setEstablished :: Context -> Established -> IO ()
-setEstablished ctx v = writeIORef (ctxEstablished_ ctx) v
+setEstablished ctx = writeIORef (ctxEstablished_ ctx)
 
 withLog :: Context -> (Logging -> IO ()) -> IO ()
 withLog ctx f = ctxWithHooks ctx (f . hookLogging)
