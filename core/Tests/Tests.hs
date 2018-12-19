@@ -50,9 +50,6 @@ prop_pipe_work = do
 
     return ()
 
-recvDataNonNull :: Context -> IO C8.ByteString
-recvDataNonNull ctx = recvData ctx >>= \l -> if B.null l then recvDataNonNull ctx else return l
-
 chunkLengths :: Int -> [Int]
 chunkLengths len
     | len > 16384 = 16384 : chunkLengths (len - 16384)
@@ -80,7 +77,7 @@ runTLSPipePredicate params p = runTLSPipe params tlsServer tlsClient
   where tlsServer ctx queue = do
             handshake ctx
             checkInfoPredicate ctx
-            d <- recvDataNonNull ctx
+            d <- recvData ctx
             writeChan queue [d]
             bye ctx
         tlsClient queue ctx = do
@@ -105,9 +102,9 @@ runTLSPipeSimple13 params mode mEarlyData = runTLSPipe params tlsServer tlsClien
                 Nothing -> return ()
                 Just ed -> do
                     let ls = chunkLengths (B.length ed)
-                    chunks <- replicateM (length ls) $ recvDataNonNull ctx
+                    chunks <- replicateM (length ls) $ recvData ctx
                     (ls, ed) `assertEq` (map B.length chunks, B.concat chunks)
-            d <- recvDataNonNull ctx
+            d <- recvData ctx
             writeChan queue [d]
             minfo <- contextGetInformation ctx
             Just mode `assertEq` (minfo >>= infoTLS13HandshakeMode)
@@ -124,11 +121,11 @@ runTLSPipeSimpleKeyUpdate :: (ClientParams, ServerParams) -> PropertyM IO ()
 runTLSPipeSimpleKeyUpdate params = runTLSPipeN 3 params tlsServer tlsClient
   where tlsServer ctx queue = do
             handshake ctx
-            d0 <- recvDataNonNull ctx
+            d0 <- recvData ctx
             req <- generate $ elements [OneWay, TwoWay]
             _ <- updateKey ctx req
-            d1 <- recvDataNonNull ctx
-            d2 <- recvDataNonNull ctx
+            d1 <- recvData ctx
+            d2 <- recvData ctx
             writeChan queue [d0,d1,d2]
             bye ctx
         tlsClient queue ctx = do
@@ -655,7 +652,7 @@ prop_handshake_alpn = do
             handshake ctx
             proto <- getNegotiatedProtocol ctx
             Just "h2" `assertEq` proto
-            d <- recvDataNonNull ctx
+            d <- recvData ctx
             writeChan queue [d]
             bye ctx
         tlsClient queue ctx = do
@@ -681,7 +678,7 @@ prop_handshake_sni = do
             handshake ctx
             sni <- getClientSNI ctx
             Just serverName `assertEq` sni
-            d <- recvDataNonNull ctx
+            d <- recvData ctx
             writeChan queue [d]
             bye ctx
         tlsClient queue ctx = do
@@ -705,7 +702,7 @@ prop_handshake_renegotiation = do
         else runTLSPipe (cparams, sparams') tlsServer tlsClient
   where tlsServer ctx queue = do
             hsServer ctx
-            d <- recvDataNonNull ctx
+            d <- recvData ctx
             writeChan queue [d]
             bye ctx
         tlsClient queue ctx = do
@@ -740,7 +737,7 @@ prop_thread_safety = do
   where tlsServer ctx queue = do
             handshake ctx
             runReaderWriters ctx "client-value" "server-value"
-            d <- recvDataNonNull ctx
+            d <- recvData ctx
             writeChan queue [d]
             bye ctx
         tlsClient queue ctx = do

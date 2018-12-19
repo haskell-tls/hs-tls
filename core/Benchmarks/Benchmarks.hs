@@ -34,9 +34,6 @@ blockCipher = Cipher
     , cipherMinVer      = Nothing
     }
 
-recvDataNonNull :: Context -> IO B.ByteString
-recvDataNonNull ctx = recvData ctx >>= \l -> if B.null l then recvDataNonNull ctx else return l
-
 getParams :: Version -> Cipher -> (ClientParams, ServerParams)
 getParams connectVer cipher = (cParams, sParams)
   where sParams = def { serverSupported = supported
@@ -71,7 +68,7 @@ runTLSPipeSimple :: (ClientParams, ServerParams) -> B.ByteString -> IO B.ByteStr
 runTLSPipeSimple params = runTLSPipe params tlsServer tlsClient
   where tlsServer ctx queue = do
             handshake ctx
-            d <- recvDataNonNull ctx
+            d <- recvData ctx
             writeChan queue d
             bye ctx
         tlsClient queue ctx = do

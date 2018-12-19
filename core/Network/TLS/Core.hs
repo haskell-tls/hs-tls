@@ -102,8 +102,8 @@ sendData ctx dataToSend = liftIO $ do
         -- possibly large write.
         mapM_ (mapChunks_ 16384 sendP) (L.toChunks dataToSend)
 
--- | recvData get data out of Data packet, and automatically renegotiate if
--- a Handshake ClientHello is received
+-- | Get data out of Data packet, and automatically renegotiate if a Handshake
+-- ClientHello is received.  An empty result means EOF.
 recvData :: MonadIO m => Context -> m B.ByteString
 recvData ctx = liftIO $ do
     tls13 <- tls13orLater ctx
