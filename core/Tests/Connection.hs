@@ -24,6 +24,7 @@ module Connection
     , setPairParamsSessionResuming
     , establishDataPipe
     , initiateDataPipe
+    , byeBye
     ) where
 
 import Test.Tasty.QuickCheck
@@ -40,7 +41,7 @@ import Control.Concurrent.Async
 import Control.Concurrent.Chan
 import Control.Concurrent
 import qualified Control.Exception as E
-import Control.Monad (when)
+import Control.Monad (unless, when)
 import Data.List (isInfixOf)
 
 import qualified Data.ByteString as B
@@ -337,3 +338,14 @@ initiateDataPipe params tlsServer tlsClient = do
             sRes <- waitCatch sAsync
             cRes <- waitCatch cAsync
             return (cRes, sRes)
+
+-- Terminate the write direction and wait to receive the peer EOF.  This is
+-- necessary in situations where we want to confirm the peer status, or to make
+-- sure to receive late messages like session tickets.  In the test suite this
+-- is used each time application code ends the connection without prior call to
+-- 'recvData'.
+byeBye :: Context -> IO ()
+byeBye ctx = do
+    bye ctx
+    bs <- recvData ctx
+    unless (B.null bs) $ fail "byeBye: unexpected application data"

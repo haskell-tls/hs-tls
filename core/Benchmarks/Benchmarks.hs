@@ -68,18 +68,17 @@ runTLSPipe params tlsServer tlsClient d = do
     readResult
 
 runTLSPipeSimple :: (ClientParams, ServerParams) -> B.ByteString -> IO B.ByteString
-runTLSPipeSimple params bs = runTLSPipe params tlsServer tlsClient bs
+runTLSPipeSimple params = runTLSPipe params tlsServer tlsClient
   where tlsServer ctx queue = do
             handshake ctx
             d <- recvDataNonNull ctx
             writeChan queue d
-            return ()
+            bye ctx
         tlsClient queue ctx = do
             handshake ctx
             d <- readChan queue
             sendData ctx (L.fromChunks [d])
-            bye ctx
-            return ()
+            byeBye ctx
 
 benchConnection :: (ClientParams, ServerParams) -> B.ByteString -> String -> Benchmark
 benchConnection params !d name = bench name . nfIO $ runTLSPipeSimple params d
