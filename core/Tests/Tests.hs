@@ -626,7 +626,10 @@ prop_handshake_client_auth = do
                                    , serverHooks = (serverHooks serverParam)
                                         { onClientCertificate = validateChain cred }
                                    }
-    runTLSPipeSimple (clientParam',serverParam')
+    let shouldFail = version == TLS13 && isCredentialDSA cred
+    if shouldFail
+        then runTLSInitFailure (clientParam',serverParam')
+        else runTLSPipeSimple  (clientParam',serverParam')
   where validateChain cred chain
             | chain == fst cred = return CertificateUsageAccept
             | otherwise         = return (CertificateUsageReject CertificateRejectUnknownCA)
