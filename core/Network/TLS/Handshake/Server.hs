@@ -492,19 +492,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
 recvClientData :: ServerParams -> Context -> IO ()
 recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientCertificate)
   where processClientCertificate (Certificates certs) = do
-            -- run certificate recv hook
-            ctxWithHooks ctx (`hookRecvCertificates` certs)
-            -- Call application callback to see whether the
-            -- certificate chain is acceptable.
-            --
-            usage <- liftIO $ catchException (onClientCertificate (serverHooks sparams) certs) rejectOnException
-            case usage of
-                CertificateUsageAccept        -> verifyLeafKeyUsage [KeyUsage_digitalSignature] certs
-                CertificateUsageReject reason -> certificateRejected reason
-
-            -- Remember cert chain for later use.
-            --
-            usingHState ctx $ setClientCertChain certs
+            clientCertificate sparams ctx certs
 
             -- FIXME: We should check whether the certificate
             -- matches our request and that we support
@@ -525,7 +513,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
         processCertificateVerify (Handshake [hs@(CertVerify dsig)]) = do
             processHandshake ctx hs
 
-            certs <- checkValidClientCertChain "change cipher message expected"
+            certs <- checkValidClientCertChain ctx "change cipher message expected"
 
             usedVersion <- usingState_ ctx getVersion
             -- Fetch all handshake messages up to now.
@@ -534,27 +522,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             sigAlgExpected <- getRemoteSignatureAlg
 
             verif <- checkCertificateVerify ctx usedVersion sigAlgExpected msgs dsig
-
-            if verif then do
-                -- When verification succeeds, commit the
-                -- client certificate chain to the context.
-                --
-                usingState_ ctx $ setClientCertificateChain certs
-                return ()
-              else do
-                -- Either verification failed because of an
-                -- invalid format (with an error message), or
-                -- the signature is wrong.  In either case,
-                -- ask the application if it wants to
-                -- proceed, we will do that.
-                res <- liftIO $ onUnverifiedClientCert (serverHooks sparams)
-                if res then do
-                        -- When verification fails, but the
-                        -- application callbacks accepts, we
-                        -- also commit the client certificate
-                        -- chain to the context.
-                        usingState_ ctx $ setClientCertificateChain certs
-                    else decryptError "verification failed"
+            clientCertVerify sparams ctx certs verif
             return $ RecvStateNext expectChangeCipher
 
         processCertificateVerify p = do
@@ -579,13 +547,14 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
         expectFinish (Finished _) = return RecvStateDone
         expectFinish p            = unexpected (show p) (Just "Handshake Finished")
 
-        checkValidClientCertChain msg = do
-            chain <- usingHState ctx getClientCertChain
-            let throwerror = Error_Protocol (msg , True, UnexpectedMessage)
-            case chain of
-                Nothing -> throwCore throwerror
-                Just cc | isNullCertificateChain cc -> throwCore throwerror
-                        | otherwise                 -> return cc
+checkValidClientCertChain :: MonadIO m => Context -> String -> m CertificateChain
+checkValidClientCertChain ctx errmsg = do
+    chain <- usingHState ctx getClientCertChain
+    let throwerror = Error_Protocol (errmsg , True, UnexpectedMessage)
+    case chain of
+        Nothing -> throwCore throwerror
+        Just cc | isNullCertificateChain cc -> throwCore throwerror
+                | otherwise                 -> return cc
 
 hashAndSignaturesInCommon :: Context -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]
 hashAndSignaturesInCommon ctx exts =
@@ -783,12 +752,20 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
          | otherwise = EarlyDataNotAllowed
     setEstablished ctx established
 
-    let certificateAction hs@(Certificate13 _certctx _cchain _ext) = do
+    let certificateAction hs@(Certificate13 _certctx certs _ext) = do
+            -- fixme checking _certctx
+            -- fixme checking _ext
             processHandshake13 ctx hs
+            clientCertificate sparams ctx certs
         certificateAction hs = unexpected (show hs) (Just "certificate 13")
 
     let certVerifyAction hs@(CertVerify13 _sigalgo _verify) = do
             processHandshake13 ctx hs
+            certs <- checkValidClientCertChain ctx "change cipher message expected"
+            -- fixme
+            verif <- return True
+
+            clientCertVerify sparams ctx certs verif
         certVerifyAction hs = unexpected (show hs) (Just "certificate verify 13")
 
     let finishedAction hs@(Finished13 verifyData') = do
@@ -1044,3 +1021,42 @@ credentialsFindForSigning13' sigAlg (Credentials l) = find forSigning l
     forSigning cred = case credentialDigitalSignatureAlg cred of
         Nothing  -> False
         Just sig -> sig `signatureCompatible` sigAlg
+
+clientCertificate :: ServerParams -> Context -> CertificateChain -> IO ()
+clientCertificate sparams ctx certs = do
+    -- run certificate recv hook
+    ctxWithHooks ctx (`hookRecvCertificates` certs)
+    -- Call application callback to see whether the
+    -- certificate chain is acceptable.
+    --
+    usage <- liftIO $ catchException (onClientCertificate (serverHooks sparams) certs) rejectOnException
+    case usage of
+        CertificateUsageAccept        -> verifyLeafKeyUsage [KeyUsage_digitalSignature] certs
+        CertificateUsageReject reason -> certificateRejected reason
+
+    -- Remember cert chain for later use.
+    --
+    usingHState ctx $ setClientCertChain certs
+
+clientCertVerify :: ServerParams -> Context -> CertificateChain -> Bool -> IO ()
+clientCertVerify sparams ctx certs verif = do
+    if verif then do
+        -- When verification succeeds, commit the
+        -- client certificate chain to the context.
+        --
+        usingState_ ctx $ setClientCertificateChain certs
+        return ()
+      else do
+        -- Either verification failed because of an
+        -- invalid format (with an error message), or
+        -- the signature is wrong.  In either case,
+        -- ask the application if it wants to
+        -- proceed, we will do that.
+        res <- liftIO $ onUnverifiedClientCert (serverHooks sparams)
+        if res then do
+                -- When verification fails, but the
+                -- application callbacks accepts, we
+                -- also commit the client certificate
+                -- chain to the context.
+                usingState_ ctx $ setClientCertificateChain certs
+                else decryptError "verification failed"
