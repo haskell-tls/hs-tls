@@ -873,6 +873,13 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
         loadPacket13 ctx $ Handshake13 [helo]
 
     sendCertAndVerify = do
+        when (serverWantClientCert sparams) $ do
+            let certReqCtx = "" -- this must be zero length here.
+            let sigAlgs = extensionEncode $ SignatureAlgorithms $ supportedHashSignatures $ ctxSupported ctx
+                crexts = [ExtensionRaw extensionID_SignatureAlgorithms sigAlgs]
+            loadPacket13 ctx $ Handshake13 [CertRequest13 certReqCtx crexts]
+            usingHState ctx $ setCertReqSent True
+
         let CertificateChain cs = certChain
             ess = replicate (length cs) []
         loadPacket13 ctx $ Handshake13 [Certificate13 "" certChain ess]
