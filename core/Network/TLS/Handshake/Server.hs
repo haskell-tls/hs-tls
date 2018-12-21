@@ -759,12 +759,16 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
             clientCertificate sparams ctx certs
         expectCertificate hs = unexpected (show hs) (Just "certificate 13")
 
-    let expectCertVerify hs@(CertVerify13 _sigalgo _verify) = do
+    let expectCertVerify hs@(CertVerify13 sigAlg sig) = do
+            hChCc <- transcriptHash ctx
             processHandshake13 ctx hs
-            certs <- checkValidClientCertChain ctx "change cipher message expected"
-            -- fixme
-            verif <- return True
-
+            certs@(CertificateChain cc) <- checkValidClientCertChain ctx "change cipher message expected"
+            pubkey <- case cc of
+                        [] -> throwCore $ Error_Protocol ("client certificate missing", True, HandshakeFailure)
+                        c:_ -> return $ certPubKey $ getCertificate c
+            usingHState ctx $ setPublicKey pubkey
+            let keyAlg = fromJust "fromPubKey" (fromPubKey pubkey)
+            verif <- checkClientCertVerify ctx keyAlg sigAlg sig hChCc
             clientCertVerify sparams ctx certs verif
         expectCertVerify hs = unexpected (show hs) (Just "certificate verify 13")
 

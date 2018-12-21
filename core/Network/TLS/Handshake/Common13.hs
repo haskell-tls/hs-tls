@@ -16,6 +16,7 @@ module Network.TLS.Handshake.Common13
        , makeServerCertVerify
        , makeClientCertVerify
        , checkServerCertVerify
+       , checkClientCertVerify
        , makePSKBinder
        , replacePSKBinder
        , createTLS13TicketInfo
@@ -122,11 +123,17 @@ makeClientCertVerify ctx sig hs hashValue =
     target = makeTarget clientContextString hashValue
 
 checkServerCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> ByteString -> m Bool
-checkServerCertVerify ctx sig hs signature hashValue =
+checkServerCertVerify = checkCertVerify serverContextString
+
+checkClientCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> ByteString -> m Bool
+checkClientCertVerify = checkCertVerify clientContextString
+
+checkCertVerify :: MonadIO m => ByteString -> Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> ByteString -> m Bool
+checkCertVerify ctxStr ctx sig hs signature hashValue =
     liftIO $ verifyPublic ctx sigParams target signature
   where
     sigParams = signatureParams sig (Just hs)
-    target = makeTarget serverContextString hashValue
+    target = makeTarget ctxStr hashValue
 
 makeTarget :: ByteString -> ByteString -> ByteString
 makeTarget contextString hashValue = runPut $ do
