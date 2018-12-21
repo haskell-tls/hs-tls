@@ -128,7 +128,7 @@ getHandshakeType = do
  - decode and encode headers
  -}
 decodeHeader :: ByteString -> Either TLSError Header
-decodeHeader = runGetErr "header" $ liftM3 Header getHeaderType getVersion getWord16
+decodeHeader = runGetErr "header" $ Header <$> getHeaderType <*> getVersion <*> getWord16
 
 decodeDeprecatedHeaderLength :: ByteString -> Either TLSError Word16
 decodeDeprecatedHeaderLength = runGetErr "deprecatedheaderlength" $ subtract 0x8000 <$> getWord16
@@ -166,7 +166,7 @@ decodeAlerts = runGetErr "alerts" loop
             r <- remaining
             if r == 0
                 then return []
-                else liftM2 (:) decodeAlert loop
+                else (:) <$> decodeAlert <*> loop
 
 encodeAlerts :: [(AlertLevel, AlertDescription)] -> ByteString
 encodeAlerts l = runPut $ mapM_ encodeAlert l
@@ -540,8 +540,8 @@ encodeChangeCipherSpec = runPut (putWord8 1)
 
 -- rsa pre master secret
 decodePreMasterSecret :: ByteString -> Either TLSError (Version, ByteString)
-decodePreMasterSecret = runGetErr "pre-master-secret" $ do
-    liftM2 (,) getVersion (getBytes 46)
+decodePreMasterSecret = runGetErr "pre-master-secret" $
+    (,) <$> getVersion <*> getBytes 46
 
 encodePreMasterSecret :: Version -> ByteString -> ByteString
 encodePreMasterSecret version bytes = runPut (putBinaryVersion version >> putBytes bytes)
