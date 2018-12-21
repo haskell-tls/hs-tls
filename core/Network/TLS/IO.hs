@@ -94,7 +94,7 @@ recvRecord compatSSLv2 ctx
                     case res of
                       Left e -> return $ Left e
                       Right content ->
-                        either (return . Left) (flip getRecord content) $ decodeDeprecatedHeader readlen content
+                        either (return . Left) (`getRecord` content) $ decodeDeprecatedHeader readlen content
 #endif
               maximumSizeExceeded = Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
               getRecord :: Header -> ByteString -> IO (Either TLSError (Record Plaintext))
