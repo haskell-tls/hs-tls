@@ -78,7 +78,7 @@ instance HasBackend Network.Socket where
                         r <- safeRecv sock left
                         if B.null r
                             then return []
-                            else liftM (r:) (loop (left - B.length r))
+                            else (r:) <$> loop (left - B.length r)
 #endif
 
 #ifdef INCLUDE_HANS
