@@ -752,23 +752,23 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
          | otherwise = EarlyDataNotAllowed
     setEstablished ctx established
 
-    let certificateAction hs@(Certificate13 _certctx certs _ext) = do
+    let expectCertificate hs@(Certificate13 _certctx certs _ext) = do
             -- fixme checking _certctx
             -- fixme checking _ext
             processHandshake13 ctx hs
             clientCertificate sparams ctx certs
-        certificateAction hs = unexpected (show hs) (Just "certificate 13")
+        expectCertificate hs = unexpected (show hs) (Just "certificate 13")
 
-    let certVerifyAction hs@(CertVerify13 _sigalgo _verify) = do
+    let expectCertVerify hs@(CertVerify13 _sigalgo _verify) = do
             processHandshake13 ctx hs
             certs <- checkValidClientCertChain ctx "change cipher message expected"
             -- fixme
             verif <- return True
 
             clientCertVerify sparams ctx certs verif
-        certVerifyAction hs = unexpected (show hs) (Just "certificate verify 13")
+        expectCertVerify hs = unexpected (show hs) (Just "certificate verify 13")
 
-    let finishedAction hs@(Finished13 verifyData') = do
+    let expectFinished hs@(Finished13 verifyData') = do
             hChBeforeCf <- transcriptHash ctx
             processHandshake13 ctx hs
             let verifyData = makeVerifyData usedHash clientHandshakeTrafficSecret hChBeforeCf
@@ -780,19 +780,19 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
                 sendNewSessionTicket masterSecret rtt
               else
                 decryptError "cannot verify finished"
-        finishedAction hs = unexpected (show hs) (Just "finished 13")
+        expectFinished hs = unexpected (show hs) (Just "finished 13")
 
-    let endOfEarlyDataAction hs@EndOfEarlyData13 = do
+    let expectEndOfEarlyData hs@EndOfEarlyData13 = do
             processHandshake13 ctx hs
             setRxState ctx usedHash usedCipher clientHandshakeTrafficSecret
-        endOfEarlyDataAction hs = unexpected (show hs) (Just "end of early data")
+        expectEndOfEarlyData hs = unexpected (show hs) (Just "end of early data")
 
     if (serverWantClientCert sparams) then
-        setPendingActions ctx [certificateAction, certVerifyAction, finishedAction]
+        setPendingActions ctx [expectCertificate, expectCertVerify, expectFinished]
       else if rtt0OK then
-        setPendingActions ctx [endOfEarlyDataAction, finishedAction]
+        setPendingActions ctx [expectEndOfEarlyData, expectFinished]
       else do
-        setPendingActions ctx [finishedAction]
+        setPendingActions ctx [expectFinished]
   where
     setServerParameter = do
         srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
