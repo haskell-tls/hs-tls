@@ -63,8 +63,8 @@ decryptRSA ctx econtent = do
         let cipher = if ver < TLS10 then econtent else B.drop 2 econtent
         withRNG $ kxDecrypt privateKey cipher
 
-verifyPublic :: Context -> Role -> SignatureParams -> ByteString -> ByteString -> IO Bool
-verifyPublic ctx _ params econtent sign = do
+verifyPublic :: Context -> SignatureParams -> ByteString -> ByteString -> IO Bool
+verifyPublic ctx params econtent sign = do
     publicKey <- usingHState ctx getRemotePublicKey
     return $ kxVerify publicKey params econtent sign
 

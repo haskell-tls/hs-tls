@@ -186,9 +186,7 @@ signatureVerifyWithCertVerifyData :: Context
                                   -> DigitallySigned
                                   -> CertVerifyData
                                   -> IO Bool
-signatureVerifyWithCertVerifyData ctx (DigitallySigned _ bs) (sigParam, toVerify) = do
-    cc <- usingState_ ctx isClientContext
-    verifyPublic ctx cc sigParam toVerify bs
+signatureVerifyWithCertVerifyData ctx (DigitallySigned _ bs) (sigParam, toVerify) = verifyPublic ctx sigParam toVerify bs
 
 digitallySignParams :: Context -> ByteString -> DigitalSignatureAlg -> Maybe HashAndSignatureAlgorithm -> IO DigitallySigned
 digitallySignParams ctx signatureData sigAlg hashSigAlg =

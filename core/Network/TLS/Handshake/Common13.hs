@@ -122,9 +122,8 @@ makeClientCertVerify ctx sig hs hashValue =
     target = makeTarget clientContextString hashValue
 
 checkServerCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> ByteString -> m Bool
-checkServerCertVerify ctx sig hs signature hashValue = liftIO $ do
-    cc <- usingState_ ctx isClientContext
-    verifyPublic ctx cc sigParams target signature
+checkServerCertVerify ctx sig hs signature hashValue =
+    liftIO $ verifyPublic ctx sigParams target signature
   where
     sigParams = signatureParams sig (Just hs)
     target = makeTarget serverContextString hashValue
