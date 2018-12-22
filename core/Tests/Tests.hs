@@ -167,6 +167,9 @@ runTLSInitFailureGen params hsServer hsClient = do
         tlsClient ctx = do
             _ <- hsClient ctx
             minfo <- contextGetInformation ctx
+            -- Note: with TLS13 server needs to call recvData in order to detect
+            -- handshake alert messages sent by the server
+            _ <- recvData ctx
             bye ctx
             return $ "client success: " ++ show minfo
 
@@ -636,10 +639,7 @@ prop_handshake_client_auth = do
 
 prop_handshake_clt_key_usage :: PropertyM IO ()
 prop_handshake_clt_key_usage = do
-    (clientParam,serverParam) <- pick $
-        -- Client authentication is not implemented for TLS 1.3.
-        -- Let's skip this test for TLS 1.3 temporarily.
-        arbitraryPairParams `suchThat` (not . isVersionEnabled TLS13)
+    (clientParam,serverParam) <- pick arbitraryPairParams
     usageFlags <- pick arbitraryKeyUsage
     cred <- pick $ arbitraryRSACredentialWithUsage usageFlags
     let clientParam' = clientParam { clientHooks = (clientHooks clientParam)
