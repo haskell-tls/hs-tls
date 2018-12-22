@@ -349,7 +349,7 @@ decodeServerKeyXchg cp =
 encodeHandshake :: Handshake -> ByteString
 encodeHandshake o =
     let content = runPut $ encodeHandshakeContent o in
-    let len = fromIntegral $ B.length content in
+    let len = B.length content in
     let header = case o of
                     ClientHello _ _ _ _ _ _ (Just _) -> "" -- SSLv2 ClientHello message
                     _ -> runPut $ encodeHandshakeHeader (typeOfHandshake o) len in
