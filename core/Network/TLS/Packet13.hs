@@ -32,7 +32,7 @@ encodeHandshake13 hdsk = pkt
   where
     !tp = typeOfHandshake13 hdsk
     !content = encodeHandshake13' hdsk
-    !len = fromIntegral $ B.length content
+    !len = B.length content
     !header = encodeHandshakeHeader13 tp len
     !pkt = B.concat [header, content]
 

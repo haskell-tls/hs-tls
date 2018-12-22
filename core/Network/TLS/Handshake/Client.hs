@@ -249,7 +249,7 @@ handshakeClient' cparams ctx groups mcrand = do
         check0RTT = do
             (_, sdata, sCipher) <- sessionAndCipherToResume13
             earlyData <- clientEarlyData cparams
-            guard (fromIntegral (B.length earlyData) <= sessionMaxEarlyDataSize sdata)
+            guard (B.length earlyData <= sessionMaxEarlyDataSize sdata)
             return (sCipher, earlyData)
 
         send0RTT = case check0RTT of
