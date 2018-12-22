@@ -437,7 +437,7 @@ instance Extension HeartBeat where
     extensionID _ = extensionID_Heartbeat
     extensionEncode (HeartBeat mode) = runPut $ putWord8 $ fromEnumSafe8 mode
     extensionDecode MsgTClientHello = decodeHeartBeat
-    extensionDecode MsgTServerHello = decodeHeartBeat -- fixme: not sure
+    extensionDecode MsgTServerHello = decodeHeartBeat
     extensionDecode _               = fail "extensionDecode: HeartBeat"
 
 decodeHeartBeat :: ByteString -> Maybe HeartBeat
