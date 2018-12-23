@@ -5,7 +5,6 @@
 -- Stability   : experimental
 -- Portability : unknown
 --
-{-# LANGUAGE CPP #-}
 module Network.TLS.Extra.Cipher
     (
     -- * cipher suite
