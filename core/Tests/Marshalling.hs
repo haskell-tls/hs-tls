@@ -29,16 +29,16 @@ instance Arbitrary Header where
     arbitrary = Header <$> arbitrary <*> arbitrary <*> arbitrary
 
 instance Arbitrary ClientRandom where
-    arbitrary = ClientRandom <$> (genByteString 32)
+    arbitrary = ClientRandom <$> genByteString 32
 
 instance Arbitrary ServerRandom where
-    arbitrary = ServerRandom <$> (genByteString 32)
+    arbitrary = ServerRandom <$> genByteString 32
 
 instance Arbitrary Session where
     arbitrary = do
         i <- choose (1,2) :: Gen Int
         case i of
-            2 -> liftM (Session . Just) (genByteString 32)
+            2 -> Session . Just <$> genByteString 32
             _ -> return $ Session Nothing
 
 instance Arbitrary DigitallySigned where
@@ -68,32 +68,32 @@ instance Arbitrary Handshake where
                 <*> arbitrary
                 <*> arbitraryCiphersIDs
                 <*> arbitraryCompressionIDs
-                <*> (return [])
-                <*> (return Nothing)
+                <*> return []
+                <*> return Nothing
             , ServerHello
                 <$> arbitrary
                 <*> arbitrary
                 <*> arbitrary
                 <*> arbitrary
                 <*> arbitrary
-                <*> (return [])
-            , liftM Certificates (CertificateChain <$> (resize 2 $ listOf $ arbitraryX509))
+                <*> return []
+            , Certificates . CertificateChain <$> resize 2 (listOf arbitraryX509)
             , pure HelloRequest
             , pure ServerHelloDone
             , ClientKeyXchg . CKX_RSA <$> genByteString 48
             --, liftM  ServerKeyXchg
             , liftM3 CertRequest arbitrary (return Nothing) (return [])
             , CertVerify <$> arbitrary
-            , Finished <$> (genByteString 12)
+            , Finished <$> genByteString 12
             ]
 
 {- quickcheck property -}
 
 prop_header_marshalling_id :: Header -> Bool
-prop_header_marshalling_id x = (decodeHeader $ encodeHeader x) == Right x
+prop_header_marshalling_id x = decodeHeader (encodeHeader x) == Right x
 
 prop_handshake_marshalling_id :: Handshake -> Bool
-prop_handshake_marshalling_id x = (decodeHs $ encodeHandshake x) == Right x
+prop_handshake_marshalling_id x = decodeHs (encodeHandshake x) == Right x
   where decodeHs b = case decodeHandshakeRecord b of
                         GotPartial _ -> error "got partial"
                         GotError e   -> error ("got error: " ++ show e)
