@@ -52,7 +52,7 @@ arbitraryCompressionIDs :: Gen [Word8]
 arbitraryCompressionIDs = choose (0,200) >>= vector
 
 someWords8 :: Int -> Gen [Word8]
-someWords8 i = replicateM i (fromIntegral <$> (choose (0,255) :: Gen Int))
+someWords8 = vector
 
 instance Arbitrary CertificateType where
     arbitrary = elements
