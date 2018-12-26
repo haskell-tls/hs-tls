@@ -570,8 +570,8 @@ instance EnumSafe8 PskKexMode where
     fromEnumSafe8 PSK_KE     = 0
     fromEnumSafe8 PSK_DHE_KE = 1
 
-    toEnumSafe8 1 = Just PSK_KE
-    toEnumSafe8 2 = Just PSK_DHE_KE
+    toEnumSafe8 0 = Just PSK_KE
+    toEnumSafe8 1 = Just PSK_DHE_KE
     toEnumSafe8 _ = Nothing
 
 newtype PskKeyExchangeModes = PskKeyExchangeModes [PskKexMode] deriving (Eq, Show)
