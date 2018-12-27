@@ -831,11 +831,15 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         return [ExtensionRaw extensionID_PreSharedKey selectedIdentity]
 
     decideCredentialInfo = do
+        cHashSigs <- case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode MsgTClientHello of
+            Nothing -> throwCore $ Error_Protocol ("no signature_algorithms extension", True, MissingExtension)
+            Just (SignatureAlgorithms sas) -> return sas
         -- When deciding signature algorithm and certificate, we try to keep
         -- certificates supported by the client, but fallback to all credentials
         -- if this produces no suitable result (see RFC 5246 section 7.4.2 and
         -- RFC 8446 section 4.4.2.2).
-        let hashSigs = hashAndSignaturesInCommon ctx exts
+        let sHashSigs = supportedHashSignatures $ ctxSupported ctx
+            hashSigs = sHashSigs `intersect` cHashSigs
             cltCreds = filterCredentialsWithHashSignatures exts allCreds
         case credentialsFindForSigning13 hashSigs cltCreds of
             Nothing ->
