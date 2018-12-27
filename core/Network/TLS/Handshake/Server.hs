@@ -632,7 +632,7 @@ cipherListCredentialFallback = all nonDH
         CipherKeyExchange_TLS13       -> False
         _                             -> True
 
-storePrivInfoServer :: Context -> Credential -> IO ()
+storePrivInfoServer :: MonadIO m => Context -> Credential -> m ()
 storePrivInfoServer ctx (cc, privkey) = void (storePrivInfo ctx cc privkey)
 
 -- TLS 1.3 or later
@@ -653,6 +653,7 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
     when (null ciphersFilteredVersion) $ throwCore $
         Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
     let usedCipher = (onCipherChoosing $ serverHooks sparams) chosenVersion ciphersFilteredVersion
+        usedHash = cipherHash usedCipher
         rtt0 = case extensionLookup extensionID_EarlyData exts >>= extensionDecode MsgTClientHello of
                  Just (EarlyDataIndication _) -> True
                  Nothing                      -> False
@@ -666,21 +667,7 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
           _                               -> throwCore $ Error_Protocol ("key exchange not implemented", True, HandshakeFailure)
     case findKeyShare keyShares serverGroups of
       Nothing -> helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession
-      Just keyShare -> do
-        -- When deciding signature algorithm and certificate, we try to keep
-        -- certificates supported by the client, but fallback to all credentials
-        -- if this produces no suitable result (see RFC 5246 section 7.4.2 and
-        -- RFC 8446 section 4.4.2.2).
-        let hashSigs = hashAndSignaturesInCommon ctx exts
-            cltCreds = filterCredentialsWithHashSignatures exts allCreds
-        (cred, hashSig) <- case credentialsFindForSigning13 hashSigs cltCreds of
-            Just cs -> return cs
-            Nothing ->
-                case credentialsFindForSigning13 hashSigs allCreds of
-                    Just cs -> return cs
-                    Nothing -> throwCore $ Error_Protocol ("credential not found", True, HandshakeFailure)
-        let usedHash = cipherHash usedCipher
-        doHandshake13 sparams cred ctx chosenVersion usedCipher exts usedHash keyShare hashSig clientSession rtt0
+      Just keyShare -> doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash keyShare clientSession rtt0
   where
     ciphersFilteredVersion = filter ((`elem` clientCiphers) . cipherID) serverCiphers
     serverCiphers = filter (cipherAllowedForVersion chosenVersion) (supportedCiphers $ serverSupported sparams)
@@ -690,12 +677,12 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
       Just k  -> Just k
       Nothing -> findKeyShare ks gs
 
-doHandshake13 :: ServerParams -> Credential -> Context -> Version
+doHandshake13 :: ServerParams -> Context -> Credentials -> Version
               -> Cipher -> [ExtensionRaw]
-              -> Hash -> KeyShareEntry -> HashAndSignatureAlgorithm
+              -> Hash -> KeyShareEntry
               -> Session -> Bool
               -> IO ()
-doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts usedHash clientKeyShare hashSig clientSession rtt0 = do
+doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash clientKeyShare clientSession rtt0 = do
     newSession ctx >>= \ss -> usingState_ ctx (setSession ss False)
     usingHState ctx $ setNegotiatedGroup $ keyShareEntryGroup clientKeyShare
     srand <- setServerParameter
@@ -723,6 +710,7 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
            else
              -- FullHandshake or HelloRetryRequest
              return ()
+    mCredInfo <- if authenticated then return Nothing else decideCredentialInfo
     (ecdhe,keyShare) <- makeServerKeyShare ctx clientKeyShare
     let handshakeSecret = hkdfExtract usedHash (deriveSecret usedHash earlySecret "derived" (hash usedHash "")) ecdhe
     clientHandshakeTrafficSecret <- runPacketFlight ctx $ do
@@ -739,7 +727,9 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
     ----------------------------------------------------------------
         loadPacket13 ctx ChangeCipherSpec13
         sendExtensions rtt0OK
-        unless authenticated sendCertAndVerify
+        case mCredInfo of
+            Nothing              -> return ()
+            Just (cred, hashSig) -> sendCertAndVerify cred hashSig
         rawFinished <- makeFinished ctx usedHash serverHandshakeTrafficSecret
         loadPacket13 ctx $ Handshake13 [rawFinished]
         return clientHandshakeTrafficSecret
@@ -790,7 +780,6 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
   where
     setServerParameter = do
         srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
-        storePrivInfoServer ctx cred
         usingState_ ctx $ setVersion chosenVersion
         usingHState ctx $ setHelloParameters13 usedCipher
         return srand
@@ -841,6 +830,20 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
         let selectedIdentity = extensionEncode $ PreSharedKeyServerHello $ fromIntegral n
         return [ExtensionRaw extensionID_PreSharedKey selectedIdentity]
 
+    decideCredentialInfo = do
+        -- When deciding signature algorithm and certificate, we try to keep
+        -- certificates supported by the client, but fallback to all credentials
+        -- if this produces no suitable result (see RFC 5246 section 7.4.2 and
+        -- RFC 8446 section 4.4.2.2).
+        let hashSigs = hashAndSignaturesInCommon ctx exts
+            cltCreds = filterCredentialsWithHashSignatures exts allCreds
+        case credentialsFindForSigning13 hashSigs cltCreds of
+            Nothing ->
+                case credentialsFindForSigning13 hashSigs allCreds of
+                    Nothing -> throwCore $ Error_Protocol ("credential not found", True, HandshakeFailure)
+                    mcs -> return mcs
+            mcs -> return mcs
+
     sendServerHello keyShare srand extensions = do
         let serverKeyShare = extensionEncode $ KeyShareServerHello keyShare
             selectedVersion = extensionEncode $ SupportedVersionsServerHello chosenVersion
@@ -850,7 +853,8 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
             helo = ServerHello13 srand clientSession (cipherID usedCipher) extensions'
         loadPacket13 ctx $ Handshake13 [helo]
 
-    sendCertAndVerify = do
+    sendCertAndVerify cred@(certChain, _) hashSig = do
+        storePrivInfoServer ctx cred
         when (serverWantClientCert sparams) $ do
             let certReqCtx = "" -- this must be zero length here.
             let sigAlgs = extensionEncode $ SignatureAlgorithms $ supportedHashSignatures $ ctxSupported ctx

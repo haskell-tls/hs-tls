@@ -163,10 +163,11 @@ extensionLookup toFind = fmap (\(ExtensionRaw _ content) -> content)
 -- actually match is left for the peer to discover.  We're not presently
 -- burning  CPU to detect that misconfiguration.  We verify only that the
 -- types of keys match.
-storePrivInfo :: Context
+storePrivInfo :: MonadIO m
+              => Context
               -> CertificateChain
               -> PrivKey
-              -> IO DigitalSignatureAlg
+              -> m DigitalSignatureAlg
 storePrivInfo ctx cc privkey = do
     let CertificateChain (c:_) = cc
         pubkey = certPubKey $ getCertificate c
