@@ -791,7 +791,7 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
             setRxState ctx usedHash usedCipher clientHandshakeTrafficSecret
         expectEndOfEarlyData hs = unexpected (show hs) (Just "end of early data")
 
-    if serverWantClientCert sparams then
+    if not authenticated && serverWantClientCert sparams then
         setPendingActions ctx [expectCertificate, expectCertVerify, expectFinished]
       else if rtt0OK then
         setPendingActions ctx [expectEndOfEarlyData, expectFinished]
