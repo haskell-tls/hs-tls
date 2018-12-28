@@ -752,8 +752,8 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
          | otherwise = EarlyDataNotAllowed
     setEstablished ctx established
 
-    let expectCertificate hs@(Certificate13 _certctx certs _ext) = do
-            -- fixme checking _certctx
+    let expectCertificate hs@(Certificate13 certCtx certs _ext) = do
+            when (certCtx /= "") $ throwCore $ Error_Protocol ("certificate request context MUST be empty", True, IllegalParameter)
             -- fixme checking _ext
             processHandshake13 ctx hs
             clientCertificate sparams ctx certs
