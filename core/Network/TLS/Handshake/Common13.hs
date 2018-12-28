@@ -13,10 +13,8 @@ module Network.TLS.Handshake.Common13
        , makeServerKeyShare
        , makeClientKeyShare
        , fromServerKeyShare
-       , makeServerCertVerify
-       , makeClientCertVerify
-       , checkServerCertVerify
-       , checkClientCertVerify
+       , makeCertVerify
+       , checkCertVerify
        , makePSKBinder
        , replacePSKBinder
        , createTLS13TicketInfo
@@ -110,30 +108,22 @@ serverContextString = "TLS 1.3, server CertificateVerify"
 clientContextString :: ByteString
 clientContextString = "TLS 1.3, client CertificateVerify"
 
-makeServerCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> m Handshake13
-makeServerCertVerify ctx sig hs hashValue =
+makeCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> m Handshake13
+makeCertVerify ctx sig hs hashValue = do
+    cc <- liftIO $ usingState_ ctx isClientContext
+    let ctxStr | cc == ClientRole = clientContextString
+               | otherwise        = serverContextString
+        target = makeTarget ctxStr hashValue
     CertVerify13 hs <$> sign ctx sig hs target
-  where
-    target = makeTarget serverContextString hashValue
 
-makeClientCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> m Handshake13
-makeClientCertVerify ctx sig hs hashValue =
-    CertVerify13 hs <$> sign ctx sig hs target
- where
-    target = makeTarget clientContextString hashValue
-
-checkServerCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> ByteString -> m Bool
-checkServerCertVerify = checkCertVerify serverContextString
-
-checkClientCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> ByteString -> m Bool
-checkClientCertVerify = checkCertVerify clientContextString
-
-checkCertVerify :: MonadIO m => ByteString -> Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> ByteString -> m Bool
-checkCertVerify ctxStr ctx sig hs signature hashValue =
-    liftIO $ verifyPublic ctx sigParams target signature
-  where
-    sigParams = signatureParams sig (Just hs)
-    target = makeTarget ctxStr hashValue
+checkCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> ByteString -> m Bool
+checkCertVerify ctx sig hs signature hashValue = liftIO $ do
+    cc <- usingState_ ctx isClientContext
+    let ctxStr | cc == ClientRole = serverContextString -- opposite context
+               | otherwise        = clientContextString
+        target = makeTarget ctxStr hashValue
+        sigParams = signatureParams sig (Just hs)
+    verifyPublic ctx sigParams target signature
 
 makeTarget :: ByteString -> ByteString -> ByteString
 makeTarget contextString hashValue = runPut $ do

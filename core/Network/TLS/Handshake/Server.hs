@@ -768,7 +768,7 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
                         c:_ -> return $ certPubKey $ getCertificate c
             usingHState ctx $ setPublicKey pubkey
             let keyAlg = fromJust "fromPubKey" (fromPubKey pubkey)
-            verif <- checkClientCertVerify ctx keyAlg sigAlg sig hChCc
+            verif <- checkCertVerify ctx keyAlg sigAlg sig hChCc
             clientCertVerify sparams ctx certs verif
         expectCertVerify hs = unexpected (show hs) (Just "certificate verify 13")
 
@@ -876,7 +876,7 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
         loadPacket13 ctx $ Handshake13 [Certificate13 "" certChain ess]
         hChSc <- transcriptHash ctx
         sigAlg <- getLocalDigitalSignatureAlg ctx
-        vrfy <- makeServerCertVerify ctx sigAlg hashSig hChSc
+        vrfy <- makeCertVerify ctx sigAlg hashSig hChSc
         loadPacket13 ctx $ Handshake13 [vrfy]
 
     sendExtensions rtt0OK = do

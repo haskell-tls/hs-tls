@@ -806,7 +806,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
                   hChSc      <- transcriptHash ctx
                   keyAlg     <- getLocalDigitalSignatureAlg ctx
                   sigAlg     <- liftIO $ getLocalHashSigAlg ctx keyAlg
-                  vfy        <- makeClientCertVerify ctx keyAlg sigAlg hChSc
+                  vfy        <- makeCertVerify ctx keyAlg sigAlg hChSc
                   loadPacket13 ctx $ Handshake13 [vfy]
     --
     sendClientData13 _ _ =
@@ -948,7 +948,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
 
     expectCertVerify pubkey hChSc (CertVerify13 sigAlg sig) = do
         let keyAlg = fromJust "fromPubKey" (fromPubKey pubkey)
-        ok <- checkServerCertVerify ctx keyAlg sigAlg sig hChSc
+        ok <- checkCertVerify ctx keyAlg sigAlg sig hChSc
         unless ok $ decryptError "cannot verify CertificateVerify"
     expectCertVerify _ _ p = unexpected (show p) (Just "certificate verify")
 
