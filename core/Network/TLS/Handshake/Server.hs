@@ -762,7 +762,7 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
     let expectCertVerify hs@(CertVerify13 sigAlg sig) = do
             hChCc <- transcriptHash ctx
             processHandshake13 ctx hs
-            certs@(CertificateChain cc) <- checkValidClientCertChain ctx "change cipher message expected"
+            certs@(CertificateChain cc) <- checkValidClientCertChain ctx "finished 13 message expected"
             pubkey <- case cc of
                         [] -> throwCore $ Error_Protocol ("client certificate missing", True, HandshakeFailure)
                         c:_ -> return $ certPubKey $ getCertificate c
