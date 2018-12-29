@@ -128,8 +128,9 @@ decodeCertificate13 = do
     reqctx <- getOpaque8
     len <- fromIntegral <$> getWord24
     (certRaws, ess) <- unzip <$> getList len getCert
-    let Right certs = decodeCertificateChain $ CertificateChainRaw certRaws -- fixme
-    return $ Certificate13 reqctx certs ess
+    case decodeCertificateChain $ CertificateChainRaw certRaws of
+        Left (i, s) -> fail ("error certificate parsing " ++ show i ++ ":" ++ s)
+        Right cc    -> return $ Certificate13 reqctx cc ess
   where
     getCert = do
         l <- fromIntegral <$> getWord24
