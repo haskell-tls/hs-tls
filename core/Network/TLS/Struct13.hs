@@ -32,16 +32,19 @@ data KeyUpdate = UpdateNotRequested
                | UpdateRequested
                deriving (Show,Eq)
 
--- fixme: convert ByteString to proper data types.
+type TicketNonce = ByteString
+type CertReqContext = ByteString
+
+-- fixme: convert Word32 to proper data type
 data Handshake13 =
       ClientHello13 !Version !ClientRandom !Session ![CipherID] [ExtensionRaw]
     | ServerHello13 !ServerRandom !Session !CipherID [ExtensionRaw]
-    | NewSessionTicket13 Word32 Word32 ByteString ByteString [ExtensionRaw]
+    | NewSessionTicket13 Second Word32 TicketNonce SessionID [ExtensionRaw]
     | EndOfEarlyData13
     | EncryptedExtensions13 [ExtensionRaw]
-    | CertRequest13 ByteString [ExtensionRaw]
-    | Certificate13 ByteString CertificateChain [[ExtensionRaw]]
-    | CertVerify13 HashAndSignatureAlgorithm ByteString
+    | CertRequest13 CertReqContext [ExtensionRaw]
+    | Certificate13 CertReqContext CertificateChain [[ExtensionRaw]]
+    | CertVerify13 HashAndSignatureAlgorithm Signature
     | Finished13 FinishedData
     | KeyUpdate13 KeyUpdate
     deriving (Show,Eq)
