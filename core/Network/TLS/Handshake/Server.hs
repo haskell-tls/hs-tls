@@ -885,7 +885,7 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
         cfRecvTime <- getCurrentTimeFromBase
         let rtt = cfRecvTime - sfSentTime
         hChCf <- transcriptHash ctx
-        nonce <- usingState_ ctx $ genRandom 32
+        nonce <- getStateRNG ctx 32
         let resumptionMasterSecret = deriveSecret usedHash masterSecret "res master" hChCf
             life = 86400 -- 1 day in second: fixme hard coding
             psk = hkdfExpandLabel usedHash resumptionMasterSecret "resumption" nonce hashSize
