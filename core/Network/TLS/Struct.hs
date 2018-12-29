@@ -24,6 +24,7 @@ module Network.TLS.Struct
     , SignatureAlgorithm(..)
     , HashAndSignatureAlgorithm
     , DigitallySigned(..)
+    , Signature
     , ProtocolType(..)
     , TLSError(..)
     , TLSException(..)

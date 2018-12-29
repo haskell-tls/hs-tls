@@ -119,7 +119,7 @@ makeCertVerify ctx sig hs hashValue = do
         target = makeTarget ctxStr hashValue
     CertVerify13 hs <$> sign ctx sig hs target
 
-checkCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> ByteString -> m Bool
+checkCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> Signature -> ByteString -> m Bool
 checkCertVerify ctx sig hs signature hashValue = liftIO $ do
     cc <- usingState_ ctx isClientContext
     let ctxStr | cc == ClientRole = serverContextString -- opposite context
@@ -135,7 +135,7 @@ makeTarget contextString hashValue = runPut $ do
     putWord8 0
     putBytes hashValue
 
-sign :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> m ByteString
+sign :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> m Signature
 sign ctx sig hs target = liftIO $ do
     cc <- usingState_ ctx isClientContext
     let sigParams = signatureParams sig (Just hs)
