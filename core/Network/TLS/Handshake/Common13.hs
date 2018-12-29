@@ -171,7 +171,7 @@ createTLS13TicketInfo life ecw mrtt = do
     -- Right: clientReceiveTime
     bTime <- getCurrentTimeFromBase
     add <- case ecw of
-        Left ctx -> B.foldl' (*+) 0 <$> usingState_ ctx (genRandom 4)
+        Left ctx -> B.foldl' (*+) 0 <$> getStateRNG ctx 4
         Right ad -> return ad
     return $ TLS13TicketInfo life add bTime mrtt
   where
