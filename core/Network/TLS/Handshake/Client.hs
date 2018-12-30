@@ -483,19 +483,24 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                         ffGroup = findFiniteFieldGroup params
                         srvpub  = serverDHParamsToPublic serverParams
 
+                    unless (maybe False (isSupportedGroup ctx) ffGroup) $ do
+                        groupUsage <- (onCustomFFDHEGroup $ clientHooks cparams) params srvpub `catchException`
+                                          throwMiscErrorOnException "custom group callback failed"
+                        case groupUsage of
+                            GroupUsageInsecure           -> throwCore $ Error_Protocol ("FFDHE group is not secure enough", True, InsufficientSecurity)
+                            GroupUsageUnsupported reason -> throwCore $ Error_Protocol ("unsupported FFDHE group: " ++ reason, True, HandshakeFailure)
+                            GroupUsageInvalidPublic      -> throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
+                            GroupUsageValid              -> return ()
+
+                    -- When grp is known but not in the supported list we use it
+                    -- anyway.  This provides additional validation and a more
+                    -- efficient implementation.
                     (clientDHPub, premaster) <-
                         case ffGroup of
                              Nothing  -> do
-                                 groupUsage <- (onCustomFFDHEGroup $ clientHooks cparams) params srvpub `catchException`
-                                                   throwMiscErrorOnException "custom group callback failed"
-                                 case groupUsage of
-                                     GroupUsageInsecure           -> throwCore $ Error_Protocol ("FFDHE group is not secure enough", True, InsufficientSecurity)
-                                     GroupUsageUnsupported reason -> throwCore $ Error_Protocol ("unsupported FFDHE group: " ++ reason, True, HandshakeFailure)
-                                     GroupUsageInvalidPublic      -> throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
-                                     GroupUsageValid              -> do
-                                         (clientDHPriv, clientDHPub) <- generateDHE ctx params
-                                         let premaster = dhGetShared params clientDHPriv srvpub
-                                         return (clientDHPub, premaster)
+                                 (clientDHPriv, clientDHPub) <- generateDHE ctx params
+                                 let premaster = dhGetShared params clientDHPriv srvpub
+                                 return (clientDHPub, premaster)
                              Just grp -> do
                                  usingHState ctx $ setNegotiatedGroup grp
                                  dhePair <- generateFFDHEShared ctx grp srvpub
@@ -509,6 +514,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
 
                 getCKX_ECDHE = do
                     ServerECDHParams grp srvpub <- usingHState ctx getServerECDHParams
+                    checkSupportedGroup ctx grp
                     usingHState ctx $ setNegotiatedGroup grp
                     ecdhePair <- generateECDHEShared ctx srvpub
                     case ecdhePair of
@@ -702,14 +708,14 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
                     -- we need to resolve the result. and recall processWithCipher ..
                 (c,_)           -> throwCore $ Error_Protocol ("unknown server key exchange received, expecting: " ++ show c, True, HandshakeFailure)
         doDHESignature dhparams signature kxsAlg = do
-            -- FIXME verify if FF group is one of supported groups
+            -- FF group selected by the server is verified when generating CKX
             signatureType <- getSignatureType kxsAlg
             verified <- digitallySignDHParamsVerify ctx dhparams signatureType signature
             unless verified $ decryptError ("bad " ++ show signatureType ++ " signature for dhparams " ++ show dhparams)
             usingHState ctx $ setServerDHParams dhparams
 
         doECDHESignature ecdhparams signature kxsAlg = do
-            -- FIXME verify if EC group is one of supported groups
+            -- EC group selected by the server is verified when generating CKX
             signatureType <- getSignatureType kxsAlg
             verified <- digitallySignECDHParamsVerify ctx ecdhparams signatureType signature
             unless verified $ decryptError ("bad " ++ show signatureType ++ " signature for ecdhparams")
@@ -851,7 +857,9 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
               Just (KeyShareServerHello ks) -> return ks
               Just _                        -> error "calcSharedKey: invalid KeyShare value"
               Nothing                       -> throwCore $ Error_Protocol ("key exchange not implemented, expected key_share extension", True, HandshakeFailure)
-        usingHState ctx $ setNegotiatedGroup $ keyShareEntryGroup serverKeyShare
+        let grp = keyShareEntryGroup serverKeyShare
+        checkSupportedGroup ctx grp
+        usingHState ctx $ setNegotiatedGroup grp
         usingHState ctx getGroupPrivate >>= fromServerKeyShare serverKeyShare
 
     makeEarlySecret = do

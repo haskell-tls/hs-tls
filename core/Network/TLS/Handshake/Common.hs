@@ -16,6 +16,8 @@ module Network.TLS.Handshake.Common
     , extensionLookup
     , getSessionData
     , storePrivInfo
+    , isSupportedGroup
+    , checkSupportedGroup
     ) where
 
 import Control.Concurrent.MVar
@@ -178,3 +180,14 @@ storePrivInfo ctx cc privkey = do
                         , InternalError )
     usingHState ctx $ setPublicPrivateKeys (pubkey, privkey)
     return privalg
+
+-- verify that the group selected by the peer is supported in the local
+-- configuration
+checkSupportedGroup :: Context -> Group -> IO ()
+checkSupportedGroup ctx grp =
+    unless (isSupportedGroup ctx grp) $
+        let msg = "unsupported (EC)DHE group: " ++ show grp
+         in throwCore $ Error_Protocol (msg, True, IllegalParameter)
+
+isSupportedGroup :: Context -> Group -> Bool
+isSupportedGroup ctx grp = grp `elem` supportedGroups (ctxSupported ctx)

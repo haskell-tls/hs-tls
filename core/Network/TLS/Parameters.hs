@@ -204,6 +204,11 @@ data Supported = Supported
     , supportedEmptyPacket         :: Bool
       -- | A list of supported elliptic curves and finite-field groups in the
       --   preferred order.
+      --
+      --   The list is sent to the server as part of the "supported_groups"
+      --   extension.  It is used in both clients and servers to restrict
+      --   accepted groups in DH key exchange.
+      --
       --   The default value is ['X25519','P256','P384','P521'].
       --   'X25519' and 'P256' provide 128-bit security which is strong
       --   enough until 2030.  Both curves are fast because their
@@ -366,10 +371,13 @@ data ClientHooks = ClientHooks
       -- | This action is called when the client sends ClientHello
       --   to determine ALPN values such as '["h2", "http/1.1"]'.
     , onSuggestALPN :: IO (Maybe [B.ByteString])
-      -- | This action is called to validate DHE parameters when
-      --   the server selected a finite-field group not part of
-      --   the "Supported Groups Registry".
-      --   See RFC 7919 section 3.1 for recommandations.
+      -- | This action is called to validate DHE parameters when the server
+      --   selected a finite-field group not part of the "Supported Groups
+      --   Registry" or not part of 'supportedGroups' list.
+      --
+      --   With TLS 1.3 custom groups have been removed from the protocol, so
+      --   this callback is only used when the version negotiated is 1.2 or
+      --   below.
       --
       --   The default behavior with (dh_p, dh_g, dh_size) and pub as follows:
       --
@@ -377,6 +385,8 @@ data ClientHooks = ClientHooks
       --   (2) rejecting unless 1 < dh_g && dh_g < dh_p - 1
       --   (3) rejecting unless 1 < dh_p && pub < dh_p - 1
       --   (4) rejecting if dh_size < 1024 (to prevent Logjam attack)
+      --
+      --   See RFC 7919 section 3.1 for recommandations.
     , onCustomFFDHEGroup :: DHParams -> DHPublic -> IO GroupUsage
     }
 
