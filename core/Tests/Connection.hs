@@ -13,6 +13,7 @@ module Connection
     , arbitraryClientCredential
     , arbitraryCredentialsOfEachCurve
     , arbitraryRSACredentialWithUsage
+    , dhParamsGroup
     , isVersionEnabled
     , isCustomDHParams
     , isLeafRSA
@@ -129,6 +130,12 @@ arbitraryCredentialsOfEachCurve = do
          ) [ (PubKeyEd25519 ed25519Pub, PrivKeyEd25519 ed25519Priv)
            , (PubKeyEd448 ed448Pub, PrivKeyEd448 ed448Priv)
            ]
+
+dhParamsGroup :: DHParams -> Maybe Group
+dhParamsGroup params
+    | params == ffdhe2048 = Just FFDHE2048
+    | params == ffdhe3072 = Just FFDHE3072
+    | otherwise           = Nothing
 
 isCustomDHParams :: DHParams -> Bool
 isCustomDHParams params = params == dhParams512
