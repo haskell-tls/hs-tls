@@ -684,13 +684,13 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
     return $ RecvStateHandshake (processCertificateRequest ctx)
   where processWithCipher cipher skx =
             case (cipherKeyExchange cipher, skx) of
-                (CipherKeyExchange_DHE_RSA, SKX_DHE_RSA dhparams signature) -> do
+                (CipherKeyExchange_DHE_RSA, SKX_DHE_RSA dhparams signature) ->
                     doDHESignature dhparams signature KX_RSA
-                (CipherKeyExchange_DHE_DSS, SKX_DHE_DSS dhparams signature) -> do
+                (CipherKeyExchange_DHE_DSS, SKX_DHE_DSS dhparams signature) ->
                     doDHESignature dhparams signature KX_DSS
-                (CipherKeyExchange_ECDHE_RSA, SKX_ECDHE_RSA ecdhparams signature) -> do
+                (CipherKeyExchange_ECDHE_RSA, SKX_ECDHE_RSA ecdhparams signature) ->
                     doECDHESignature ecdhparams signature KX_RSA
-                (CipherKeyExchange_ECDHE_ECDSA, SKX_ECDHE_ECDSA ecdhparams signature) -> do
+                (CipherKeyExchange_ECDHE_ECDSA, SKX_ECDHE_ECDSA ecdhparams signature) ->
                     doECDHESignature ecdhparams signature KX_ECDSA
                 (cke, SKX_Unparsed bytes) -> do
                     ver <- usingState_ ctx getVersion
@@ -857,7 +857,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
           EarlySecret sec -> do
               mSelectedIdentity <- usingState_ ctx getTLS13PreSharedKey
               case mSelectedIdentity of
-                Nothing                          -> do
+                Nothing                          ->
                     return (hkdfExtract usedHash zero zero, False)
                 Just (PreSharedKeyServerHello 0) -> do
                     usingHState ctx $ setTLS13HandshakeMode PreSharedKey
