@@ -126,6 +126,7 @@ checkCertVerify ctx sig hs signature hashValue = liftIO $ do
                | otherwise        = clientContextString
         target = makeTarget ctxStr hashValue
         sigParams = signatureParams sig (Just hs)
+    checkSupportedHashSignature ctx (Just hs)
     verifyPublic ctx sigParams target signature
 
 makeTarget :: ByteString -> ByteString -> ByteString

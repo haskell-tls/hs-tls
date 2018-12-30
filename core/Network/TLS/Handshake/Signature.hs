@@ -14,6 +14,7 @@ module Network.TLS.Handshake.Signature
     , digitallySignECDHParams
     , digitallySignDHParamsVerify
     , digitallySignECDHParamsVerify
+    , checkSupportedHashSignature
     , certificateCompatible
     , signatureCompatible
     , signatureParams
@@ -23,6 +24,7 @@ module Network.TLS.Handshake.Signature
 
 import Network.TLS.Crypto
 import Network.TLS.Context.Internal
+import Network.TLS.Parameters
 import Network.TLS.Struct
 import Network.TLS.Imports
 import Network.TLS.Packet (generateCertificateVerify_SSL, generateCertificateVerify_SSL_DSS,
@@ -186,7 +188,9 @@ signatureVerifyWithCertVerifyData :: Context
                                   -> DigitallySigned
                                   -> CertVerifyData
                                   -> IO Bool
-signatureVerifyWithCertVerifyData ctx (DigitallySigned _ bs) (sigParam, toVerify) = verifyPublic ctx sigParam toVerify bs
+signatureVerifyWithCertVerifyData ctx (DigitallySigned hs bs) (sigParam, toVerify) = do
+    checkSupportedHashSignature ctx hs
+    verifyPublic ctx sigParam toVerify bs
 
 digitallySignParams :: Context -> ByteString -> DigitalSignatureAlg -> Maybe HashAndSignatureAlgorithm -> IO DigitallySigned
 digitallySignParams ctx signatureData sigAlg hashSigAlg =
@@ -234,3 +238,12 @@ withClientAndServerRandom ctx f = do
     (cran, sran) <- usingHState ctx $ (,) <$> gets hstClientRandom
                                           <*> (fromJust "withClientAndServer : server random" <$> gets hstServerRandom)
     return $ f cran sran
+
+-- verify that the hash and signature selected by the peer is supported in
+-- the local configuration
+checkSupportedHashSignature :: Context -> Maybe HashAndSignatureAlgorithm -> IO ()
+checkSupportedHashSignature _   Nothing   = return ()
+checkSupportedHashSignature ctx (Just hs) =
+    unless (hs `elem` supportedHashSignatures (ctxSupported ctx)) $
+        let msg = "unsupported hash and signature algorithm: " ++ show hs
+         in throwCore $ Error_Protocol (msg, True, IllegalParameter)
