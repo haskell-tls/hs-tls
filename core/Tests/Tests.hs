@@ -495,24 +495,24 @@ prop_handshake_cert_fallback = do
 
 -- Same as above but testing with supportedHashSignatures directly instead of
 -- ciphers, and thus allowing TLS13.  Peers accept RSA with SHA-256 but the
--- server RSA certificate has a SHA-1 signature.  When DSS is allowed by both
--- client and server, the DSA certificate is selected.  Otherwise the server
--- fallbacks to RSA.
+-- server RSA certificate has a SHA-1 signature.  When Ed25519 is allowed by
+-- both client and server, the Ed25519 certificate is selected.  Otherwise the
+-- server fallbacks to RSA.
 --
--- Note: DSA and SHA-1 are supposed to be disallowed with TLS13.  Currently this
--- is not enforced by the library, which is useful to test this scenario until
--- ECDSA or EdDSA support is added.  SHA-1 could be replaced by another
--- algorithm.
+-- Note: SHA-1 is supposed to be disallowed in X.509 signatures with TLS13
+-- unless client advertises explicit support.  Currently this is not enforced by
+-- the library, which is useful to test this scenario.  SHA-1 could be replaced
+-- by another algorithm.
 prop_handshake_cert_fallback_hs :: PropertyM IO ()
 prop_handshake_cert_fallback_hs = do
     tls13 <- pick arbitrary
     let versions = if tls13 then [TLS13] else [TLS12]
         ciphers  = [ cipher_ECDHE_RSA_AES128GCM_SHA256
-                   , cipher_DHE_DSS_AES128_SHA1
+                   , cipher_ECDHE_ECDSA_AES128GCM_SHA256
                    , cipher_TLS13_AES128GCM_SHA256
                    ]
         commonHS = [ (HashSHA256, SignatureRSA) ]
-        otherHS  = [ (HashSHA1, SignatureDSS) ]
+        otherHS  = [ (HashIntrinsic, SignatureEd25519) ]
     chainRef <- run $ newIORef Nothing
     clientHS <- pick $ sublistOf otherHS
     serverHS <- pick $ sublistOf otherHS
@@ -528,11 +528,11 @@ prop_handshake_cert_fallback_hs = do
         serverParam' = serverParam { serverSupported = (serverSupported serverParam)
                                        { supportedHashSignatures = commonHS ++ serverHS }
                                    }
-        dssDisallowed = (HashSHA1, SignatureDSS) `notElem` clientHS
-                            || (HashSHA1, SignatureDSS) `notElem` serverHS
+        eddsaDisallowed = (HashIntrinsic, SignatureEd25519) `notElem` clientHS
+                              || (HashIntrinsic, SignatureEd25519) `notElem` serverHS
     runTLSPipeSimple (clientParam',serverParam')
     serverChain <- run $ readIORef chainRef
-    dssDisallowed `assertEq` isLeafRSA serverChain
+    eddsaDisallowed `assertEq` isLeafRSA serverChain
 
 prop_handshake_groups :: PropertyM IO ()
 prop_handshake_groups = do
