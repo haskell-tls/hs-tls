@@ -181,6 +181,9 @@ data Supported = Supported
       --
       -- The list also impacts the selection of possible algorithms when
       -- generating signatures.
+      --
+      -- Note: with TLS 1.3 some algorithms have been deprecated and will not be
+      -- used even when listed in the parameter: MD5, SHA-1, RSA PKCS#1, DSS.
     , supportedHashSignatures :: [HashAndSignatureAlgorithm]
       -- | Secure renegotiation defined in RFC5746.
       --   If 'True', clients send the renegotiation_info extension.

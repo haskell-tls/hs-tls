@@ -839,7 +839,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         -- certificates supported by the client, but fallback to all credentials
         -- if this produces no suitable result (see RFC 5246 section 7.4.2 and
         -- RFC 8446 section 4.4.2.2).
-        let sHashSigs = supportedHashSignatures $ ctxSupported ctx
+        let sHashSigs = filter isHashSignatureValid13 $ supportedHashSignatures $ ctxSupported ctx
             hashSigs = sHashSigs `intersect` cHashSigs
             cltCreds = filterCredentialsWithHashSignatures exts allCreds
         case credentialsFindForSigning13 hashSigs cltCreds of

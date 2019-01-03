@@ -24,6 +24,7 @@ module Network.TLS.Handshake.Common13
        , checkFreshness
        , getCurrentTimeFromBase
        , getSessionData13
+       , isHashSignatureValid13
        , safeNonNegative32
        , RecvHandshake13M
        , runRecvHandshake13
@@ -126,6 +127,7 @@ checkCertVerify ctx sig hs signature hashValue = liftIO $ do
                | otherwise        = clientContextString
         target = makeTarget ctxStr hashValue
         sigParams = signatureParams sig (Just hs)
+    checkHashSignatureValid13 hs
     checkSupportedHashSignature ctx (Just hs)
     verifyPublic ctx sigParams target signature
 
@@ -304,3 +306,28 @@ runRecvHandshake13 (RecvHandshake13M f) = do
     (result, new) <- runStateT f []
     unless (null new) $ unexpected "spurious handshake 13" Nothing
     return result
+
+----------------------------------------------------------------
+
+-- some hash/signature combinations have been deprecated in TLS13 and should
+-- not be used
+checkHashSignatureValid13 :: HashAndSignatureAlgorithm -> IO ()
+checkHashSignatureValid13 hs =
+    unless (isHashSignatureValid13 hs) $
+        let msg = "invalid TLS13 hash and signature algorithm: " ++ show hs
+         in throwCore $ Error_Protocol (msg, True, IllegalParameter)
+
+isHashSignatureValid13 :: HashAndSignatureAlgorithm -> Bool
+isHashSignatureValid13 (HashIntrinsic, s) =
+    s `elem` [ SignatureRSApssRSAeSHA256
+             , SignatureRSApssRSAeSHA384
+             , SignatureRSApssRSAeSHA512
+             , SignatureEd25519
+             , SignatureEd448
+             , SignatureRSApsspssSHA256
+             , SignatureRSApsspssSHA384
+             , SignatureRSApsspssSHA512
+             ]
+isHashSignatureValid13 (h, SignatureECDSA) =
+    h `elem` [ HashSHA256, HashSHA384, HashSHA512 ]
+isHashSignatureValid13 _ = False
