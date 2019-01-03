@@ -434,7 +434,7 @@ prop_handshake_ciphersuites = do
 prop_handshake_hashsignatures :: PropertyM IO ()
 prop_handshake_hashsignatures = do
     tls13 <- pick arbitrary
-    let versions = if tls13 then [TLS13] else [TLS12]
+    let version = if tls13 then TLS13 else TLS12
         ciphers = [ cipher_ECDHE_RSA_AES256GCM_SHA384
                   , cipher_ECDHE_ECDSA_AES256GCM_SHA384
                   , cipher_ECDHE_RSA_AES128CBC_SHA
@@ -444,10 +444,10 @@ prop_handshake_hashsignatures = do
                   , cipher_TLS13_AES128GCM_SHA256
                   ]
     (clientParam,serverParam) <- pick $ arbitraryPairParamsWithVersionsAndCiphers
-                                            (versions, versions)
+                                            ([version], [version])
                                             (ciphers, ciphers)
-    clientHashSigs <- pick arbitraryHashSignatures
-    serverHashSigs <- pick arbitraryHashSignatures
+    clientHashSigs <- pick $ arbitraryHashSignatures version
+    serverHashSigs <- pick $ arbitraryHashSignatures version
     let clientParam' = clientParam { clientSupported = (clientSupported clientParam)
                                        { supportedHashSignatures = clientHashSigs }
                                    }
@@ -511,7 +511,9 @@ prop_handshake_cert_fallback_hs = do
                    , cipher_ECDHE_ECDSA_AES128GCM_SHA256
                    , cipher_TLS13_AES128GCM_SHA256
                    ]
-        commonHS = [ (HashSHA256, SignatureRSA) ]
+        commonHS = [ (HashSHA256, SignatureRSA)
+                   , (HashIntrinsic, SignatureRSApssRSAeSHA256)
+                   ]
         otherHS  = [ (HashIntrinsic, SignatureEd25519) ]
     chainRef <- run $ newIORef Nothing
     clientHS <- pick $ sublistOf otherHS

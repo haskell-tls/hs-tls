@@ -379,17 +379,18 @@ clientChain cparams ctx =
 --
 -- The values in the server's @signature_algorithms@ extension are
 -- in descending order of preference.  However here the algorithms
--- are selected by client preference in 'supportedHashSignatures'.
+-- are selected by client preference in @cHashSigs@.
 --
 getLocalHashSigAlg :: Context
+                   -> [HashAndSignatureAlgorithm]
                    -> DigitalSignatureAlg
                    -> IO HashAndSignatureAlgorithm
-getLocalHashSigAlg ctx keyAlg = do
+getLocalHashSigAlg ctx cHashSigs keyAlg = do
     -- Must be present with TLS 1.2 and up.
     (Just (_, Just hashSigs, _)) <- usingHState ctx getCertReqCBdata
     let want = (&&) <$> signatureCompatible keyAlg
                     <*> flip elem hashSigs
-    case find want $ supportedHashSignatures $ ctxSupported ctx of
+    case find want cHashSigs of
         Just best -> return best
         Nothing   -> throwCore $ Error_Protocol
                          ( keyerr keyAlg
@@ -536,7 +537,9 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
             when certSent $ do
                 keyAlg      <- getLocalDigitalSignatureAlg ctx
                 mhashSig    <- case ver of
-                    TLS12 -> Just <$> getLocalHashSigAlg ctx keyAlg
+                    TLS12 ->
+                        let cHashSigs = supportedHashSignatures $ ctxSupported ctx
+                         in Just <$> getLocalHashSigAlg ctx cHashSigs keyAlg
                     _     -> return Nothing
 
                 -- Fetch all handshake messages up to now.
@@ -801,13 +804,14 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
     sendClientData13 chain (Just token) = do
         let (CertificateChain certs) = chain
             certExts = replicate (length certs) []
+            cHashSigs = filter isHashSignatureValid13 $ supportedHashSignatures $ ctxSupported ctx
         loadPacket13 ctx $ Handshake13 [Certificate13 token chain certExts]
         case certs of
             [] -> return ()
             _  -> do
                   hChSc      <- transcriptHash ctx
                   keyAlg     <- getLocalDigitalSignatureAlg ctx
-                  sigAlg     <- liftIO $ getLocalHashSigAlg ctx keyAlg
+                  sigAlg     <- liftIO $ getLocalHashSigAlg ctx cHashSigs keyAlg
                   vfy        <- makeCertVerify ctx keyAlg sigAlg hChSc
                   loadPacket13 ctx $ Handshake13 [vfy]
     --
@@ -889,7 +893,9 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
         -- The @signature_algorithms@ extension is mandatory.
         hsAlgs <- extalgs hsextID unsighash
         cTypes <- case hsAlgs of
-            Just as -> return $ sigAlgsToCertTypes ctx as
+            Just as ->
+                let validAs = filter isHashSignatureValid13 as
+                 in return $ sigAlgsToCertTypes ctx validAs
             Nothing -> throwCore $ Error_Protocol
                             ( "invalid certificate request"
                             , True
