@@ -43,11 +43,13 @@ serverRandom ctx chosenVer suppVers
 
 -- | Test if the negotiated version was artificially downgraded (that is, for
 -- other reason than the versions supported by the client).
-isDowngraded :: [Version] -> ServerRandom -> Bool
-isDowngraded suppVers (ServerRandom sr)
-  | TLS13 `elem` suppVers = suffix12 `B.isSuffixOf` sr
+isDowngraded :: Version -> [Version] -> ServerRandom -> Bool
+isDowngraded ver suppVers (ServerRandom sr)
+  | ver <= TLS12
+  , TLS13 `elem` suppVers = suffix12 `B.isSuffixOf` sr
                          || suffix11 `B.isSuffixOf` sr
-  | TLS12 `elem` suppVers = suffix11 `B.isSuffixOf` sr
+  | ver <= TLS11
+  , TLS12 `elem` suppVers = suffix11 `B.isSuffixOf` sr
   | otherwise             = False
 
 suffix12 :: B.ByteString

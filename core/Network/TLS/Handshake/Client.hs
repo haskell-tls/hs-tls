@@ -574,8 +574,6 @@ throwMiscErrorOnException msg e =
 --
 onServerHello :: Context -> ClientParams -> [ExtensionID] -> Handshake -> IO (RecvState IO)
 onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cipher compression exts) = do
-    when (isDowngraded (supportedVersions $ clientSupported cparams) serverRan) $
-        throwCore $ Error_Protocol ("version downgrade detected", True, IllegalParameter)
     when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
     -- find the compression and cipher methods that the server want to use.
     cipherAlg <- case find ((==) cipher . cipherID) (supportedCiphers $ ctxSupported ctx) of
@@ -610,6 +608,18 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
     setALPN ctx exts
 
     ver <- usingState_ ctx getVersion
+
+    -- Some servers set TLS 1.2 as the legacy server hello version, and TLS 1.3
+    -- in the supported_versions extension, *AND ALSO* set the TLS 1.2
+    -- downgrade signal in the server random.  If we support TLS 1.3 and
+    -- actually negotiate TLS 1.3, we must ignore the server random downgrade
+    -- signal.  Therefore, 'isDowngraded' needs to take into account the
+    -- negotiated version and the server random, as well as the list of
+    -- client-side enabled protocol versions.
+    --
+    when (isDowngraded ver (supportedVersions $ clientSupported cparams) serverRan) $
+        throwCore $ Error_Protocol ("version downgrade detected", True, IllegalParameter)
+
     case find (== ver) (supportedVersions $ ctxSupported ctx) of
         Nothing -> throwCore $ Error_Protocol ("server version " ++ show ver ++ " is not supported", True, ProtocolVersion)
         Just _  -> return ()
