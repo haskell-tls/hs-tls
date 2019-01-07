@@ -752,16 +752,15 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
          | otherwise = EarlyDataNotAllowed
     setEstablished ctx established
 
-    let expectCertificate hs@(Certificate13 certCtx certs _ext) = do
+    let expectCertificate (Certificate13 certCtx certs _ext) = do
             when (certCtx /= "") $ throwCore $ Error_Protocol ("certificate request context MUST be empty", True, IllegalParameter)
             -- fixme checking _ext
-            processHandshake13 ctx hs
             clientCertificate sparams ctx certs
+            return $ return ()
         expectCertificate hs = unexpected (show hs) (Just "certificate 13")
 
-    let expectCertVerify hs@(CertVerify13 sigAlg sig) = do
+    let expectCertVerify (CertVerify13 sigAlg sig) = do
             hChCc <- transcriptHash ctx
-            processHandshake13 ctx hs
             certs@(CertificateChain cc) <- checkValidClientCertChain ctx "finished 13 message expected"
             pubkey <- case cc of
                         [] -> throwCore $ Error_Protocol ("client certificate missing", True, HandshakeFailure)
@@ -770,25 +769,23 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
             let keyAlg = fromJust "fromPubKey" (fromPubKey pubkey)
             verif <- checkCertVerify ctx keyAlg sigAlg sig hChCc
             clientCertVerify sparams ctx certs verif
+            return $ return ()
         expectCertVerify hs = unexpected (show hs) (Just "certificate verify 13")
 
-    let expectFinished hs@(Finished13 verifyData') = do
+    let expectFinished (Finished13 verifyData') = do
             hChBeforeCf <- transcriptHash ctx
-            processHandshake13 ctx hs
             let verifyData = makeVerifyData usedHash clientHandshakeTrafficSecret hChBeforeCf
             if verifyData == verifyData' then do
-                cfRecvTime <- getCurrentTimeFromBase
-                let rtt = cfRecvTime - sfSentTime
                 setEstablished ctx Established
                 setRxState ctx usedHash usedCipher clientApplicationTrafficSecret0
-                sendNewSessionTicket masterSecret rtt
+                return $ sendNewSessionTicket masterSecret sfSentTime
               else
                 decryptError "cannot verify finished"
         expectFinished hs = unexpected (show hs) (Just "finished 13")
 
-    let expectEndOfEarlyData hs@EndOfEarlyData13 = do
-            processHandshake13 ctx hs
+    let expectEndOfEarlyData EndOfEarlyData13 = do
             setRxState ctx usedHash usedCipher clientHandshakeTrafficSecret
+            return $ return ()
         expectEndOfEarlyData hs = unexpected (show hs) (Just "end of early data")
 
     if not authenticated && serverWantClientCert sparams then
@@ -894,13 +891,15 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
               | otherwise = extensions''
         loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 extensions]
 
-    sendNewSessionTicket masterSecret rtt = when sendNST $ do
+    sendNewSessionTicket masterSecret sfSentTime = when sendNST $ do
+        cfRecvTime <- getCurrentTimeFromBase
+        let rtt = cfRecvTime - sfSentTime
         hChCf <- transcriptHash ctx
         nonce <- usingState_ ctx $ genRandom 32
         let resumptionMasterSecret = deriveSecret usedHash masterSecret "res master" hChCf
             life = 86400 -- 1 day in second: fixme hard coding
             psk = hkdfExpandLabel usedHash resumptionMasterSecret "resumption" nonce hashSize
-        (label, add) <- generateSession life psk rtt0max
+        (label, add) <- generateSession life psk rtt0max rtt
         let nst = createNewSessionTicket life add nonce label rtt0max
         sendPacket13 ctx $ Handshake13 [nst]
       where
@@ -908,7 +907,7 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
         dhModes = case extensionLookup extensionID_PskKeyExchangeModes exts >>= extensionDecode MsgTClientHello of
           Just (PskKeyExchangeModes ms) -> ms
           Nothing                       -> []
-        generateSession life psk maxSize = do
+        generateSession life psk maxSize rtt = do
             Session (Just sessionId) <- newSession ctx
             tinfo <- createTLS13TicketInfo life (Left ctx) (Just rtt)
             sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk

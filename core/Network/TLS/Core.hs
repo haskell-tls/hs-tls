@@ -43,6 +43,7 @@ import Network.TLS.Session
 import Network.TLS.Handshake
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Common13
+import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.KeySchedule
@@ -216,10 +217,14 @@ recvData13 ctx = do
             case mPendingAction of
                 Nothing -> let reason = "unexpected handshake message " ++ show h in
                            terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-                Just pa ->
+                Just pa -> do
                     -- Pending actions are executed with read+write locks, just
                     -- like regular handshake code.
-                    withWriteLock ctx (pa h) >> loopHandshake13 hs
+                    withWriteLock ctx $ do
+                        postAction <- pa h
+                        processHandshake13 ctx h
+                        postAction
+                    loopHandshake13 hs
 
         terminate = terminateWithWriteLock ctx (sendPacket13 ctx . Alert13)
 
