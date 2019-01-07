@@ -775,8 +775,8 @@ handshakeClient13' :: ClientParams -> Context -> Cipher -> Hash -> IO ()
 handshakeClient13' cparams ctx usedCipher usedHash = do
     (resuming, handshakeSecret, clientHandshakeTrafficSecret, serverHandshakeTrafficSecret) <- switchToHandshakeSecret
     rtt0accepted <- runRecvHandshake13 $ do
-        accepted <- recvHandshake13 ctx expectEncryptedExtensions
-        unless resuming $ recvHandshake13 ctx expectCertRequest
+        accepted <- recvHandshake13 ctx True expectEncryptedExtensions
+        unless resuming $ recvHandshake13 ctx True expectCertRequest
         recvFinished serverHandshakeTrafficSecret
         return accepted
     hChSf <- transcriptHash ctx
@@ -898,7 +898,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
             setCertReqToken  $ Just token
             setCertReqCBdata $ Just (cTypes, hsAlgs, dNames)
             -- setCertReqSigAlgsCert caAlgs
-        recvHandshake13 ctx expectCertAndVerify
+        recvHandshake13 ctx True expectCertAndVerify
       where
         canames = case extensionLookup
                        extensionID_CertificateAuthorities exts of
@@ -943,7 +943,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
                     c:_ -> return $ certPubKey $ getCertificate c
         usingHState ctx $ setPublicKey pubkey
         hChSc <- transcriptHash ctx
-        recvHandshake13 ctx $ expectCertVerify pubkey hChSc
+        recvHandshake13 ctx True $ expectCertVerify pubkey hChSc
     expectCertAndVerify p = unexpected (show p) (Just "server certificate")
 
     expectCertVerify pubkey hChSc (CertVerify13 sigAlg sig) = do
@@ -955,7 +955,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
     recvFinished serverHandshakeTrafficSecret = do
         hChSv <- transcriptHash ctx
         let verifyData' = makeVerifyData usedHash serverHandshakeTrafficSecret hChSv
-        recvHandshake13 ctx $ expectFinished verifyData'
+        recvHandshake13 ctx True $ expectFinished verifyData'
 
     expectFinished verifyData' (Finished13 verifyData) =
         when (verifyData' /= verifyData) $ decryptError "cannot verify finished"

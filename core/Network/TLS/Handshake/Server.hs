@@ -752,14 +752,15 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
          | otherwise = EarlyDataNotAllowed
     setEstablished ctx established
 
-    let expectCertificate (Certificate13 certCtx certs _ext) = do
+    let expectCertificate :: Handshake13 -> IO ()
+        expectCertificate (Certificate13 certCtx certs _ext) = do
             when (certCtx /= "") $ throwCore $ Error_Protocol ("certificate request context MUST be empty", True, IllegalParameter)
             -- fixme checking _ext
             clientCertificate sparams ctx certs
-            return $ return ()
         expectCertificate hs = unexpected (show hs) (Just "certificate 13")
 
-    let expectCertVerify (CertVerify13 sigAlg sig) = do
+    let expectCertVerify :: Handshake13 -> IO ()
+        expectCertVerify (CertVerify13 sigAlg sig) = do
             hChCc <- transcriptHash ctx
             certs@(CertificateChain cc) <- checkValidClientCertChain ctx "finished 13 message expected"
             pubkey <- case cc of
@@ -769,7 +770,6 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
             let keyAlg = fromJust "fromPubKey" (fromPubKey pubkey)
             verif <- checkCertVerify ctx keyAlg sigAlg sig hChCc
             clientCertVerify sparams ctx certs verif
-            return $ return ()
         expectCertVerify hs = unexpected (show hs) (Just "certificate verify 13")
 
     let expectFinished (Finished13 verifyData') = do
@@ -778,22 +778,26 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
             if verifyData == verifyData' then do
                 setEstablished ctx Established
                 setRxState ctx usedHash usedCipher clientApplicationTrafficSecret0
-                return $ sendNewSessionTicket masterSecret sfSentTime
-              else
+               else
                 decryptError "cannot verify finished"
         expectFinished hs = unexpected (show hs) (Just "finished 13")
 
-    let expectEndOfEarlyData EndOfEarlyData13 = do
+    let expectEndOfEarlyData EndOfEarlyData13 =
             setRxState ctx usedHash usedCipher clientHandshakeTrafficSecret
-            return $ return ()
         expectEndOfEarlyData hs = unexpected (show hs) (Just "end of early data")
+    let sendNST = sendNewSessionTicket masterSecret sfSentTime
 
     if not authenticated && serverWantClientCert sparams then
-        setPendingActions ctx [expectCertificate, expectCertVerify, expectFinished]
+        runRecvHandshake13 $ do
+          recvHandshake13 ctx False $ lift13 expectCertificate
+          recvHandshake13 ctx False $ lift13 expectCertVerify
+          recvHandshake13 ctx False $ lift13 expectFinished
+          liftIO sendNST
       else if rtt0OK then
-        setPendingActions ctx [expectEndOfEarlyData, expectFinished]
+        setPendingActions ctx [(expectEndOfEarlyData, return ())
+                              ,(expectFinished, sendNST)]
       else do
-        setPendingActions ctx [expectFinished]
+        setPendingActions ctx [(expectFinished, sendNST)]
   where
     setServerParameter = do
         srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams

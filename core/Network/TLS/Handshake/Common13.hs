@@ -28,6 +28,7 @@ module Network.TLS.Handshake.Common13
        , RecvHandshake13M
        , runRecvHandshake13
        , recvHandshake13
+       , lift13
        ) where
 
 import qualified Data.ByteArray as BA
@@ -259,11 +260,23 @@ safeNonNegative32 x
 newtype RecvHandshake13M m a = RecvHandshake13M (StateT [Handshake13] m a)
     deriving (Functor, Applicative, Monad, MonadIO)
 
+lift13 :: (Handshake13 -> IO a) -> Handshake13 -> RecvHandshake13M IO a
+lift13 action h = RecvHandshake13M $ liftIO $ action h
+
 recvHandshake13 :: MonadIO m
                 => Context
+                -> Bool
                 -> (Handshake13 -> RecvHandshake13M m a)
                 -> RecvHandshake13M m a
-recvHandshake13 ctx f = getHandshake13 ctx >>= f
+recvHandshake13 ctx True f = do
+    h <- getHandshake13 ctx
+    liftIO $ processHandshake13 ctx h
+    f h
+recvHandshake13 ctx False f = do
+    h <- getHandshake13 ctx
+    v <- f h
+    liftIO $ processHandshake13 ctx h
+    return v
 
 getHandshake13 :: MonadIO m => Context -> RecvHandshake13M m Handshake13
 getHandshake13 ctx = RecvHandshake13M $ do
@@ -272,7 +285,7 @@ getHandshake13 ctx = RecvHandshake13M $ do
         (h:hs) -> found h hs
         []     -> recvLoop
   where
-    found h hs = liftIO (processHandshake13 ctx h) >> put hs >> return h
+    found h hs = put hs >> return h
     recvLoop = do
         epkt <- recvPacket13 ctx
         case epkt of

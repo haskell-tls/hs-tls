@@ -217,11 +217,11 @@ recvData13 ctx = do
             case mPendingAction of
                 Nothing -> let reason = "unexpected handshake message " ++ show h in
                            terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-                Just pa -> do
+                Just (pa, postAction) -> do
                     -- Pending actions are executed with read+write locks, just
                     -- like regular handshake code.
                     withWriteLock ctx $ do
-                        postAction <- pa h
+                        pa h
                         processHandshake13 ctx h
                         postAction
                     loopHandshake13 hs
