@@ -1,3 +1,4 @@
+{-# LANGUAGE PatternGuards #-}
 -- |
 -- Module      : Network.TLS.Handshake.Random
 -- License     : BSD-style
