@@ -27,7 +27,8 @@ module Network.TLS.Handshake.Common13
        , safeNonNegative32
        , RecvHandshake13M
        , runRecvHandshake13
-       , recvHandshake13
+       , recvHandshake13preUpdate
+       , recvHandshake13postUpdate
        , lift13
        ) where
 
@@ -263,16 +264,20 @@ newtype RecvHandshake13M m a = RecvHandshake13M (StateT [Handshake13] m a)
 lift13 :: (Handshake13 -> IO a) -> Handshake13 -> RecvHandshake13M IO a
 lift13 action h = RecvHandshake13M $ liftIO $ action h
 
-recvHandshake13 :: MonadIO m
-                => Context
-                -> Bool
-                -> (Handshake13 -> RecvHandshake13M m a)
-                -> RecvHandshake13M m a
-recvHandshake13 ctx True f = do
+recvHandshake13preUpdate :: MonadIO m
+                         => Context
+                         -> (Handshake13 -> RecvHandshake13M m a)
+                         -> RecvHandshake13M m a
+recvHandshake13preUpdate ctx f = do
     h <- getHandshake13 ctx
     liftIO $ processHandshake13 ctx h
     f h
-recvHandshake13 ctx False f = do
+
+recvHandshake13postUpdate :: MonadIO m
+                          => Context
+                          -> (Handshake13 -> RecvHandshake13M m a)
+                          -> RecvHandshake13M m a
+recvHandshake13postUpdate ctx f = do
     h <- getHandshake13 ctx
     v <- f h
     liftIO $ processHandshake13 ctx h

@@ -789,9 +789,9 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
 
     if not authenticated && serverWantClientCert sparams then
         runRecvHandshake13 $ do
-          recvHandshake13 ctx False $ lift13 expectCertificate
-          recvHandshake13 ctx False $ lift13 expectCertVerify
-          recvHandshake13 ctx False $ lift13 expectFinished
+          recvHandshake13postUpdate ctx $ lift13 expectCertificate
+          recvHandshake13postUpdate ctx $ lift13 expectCertVerify
+          recvHandshake13postUpdate ctx $ lift13 expectFinished
           liftIO sendNST
       else if rtt0OK then
         setPendingActions ctx [(expectEndOfEarlyData, return ())
