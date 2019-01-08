@@ -752,26 +752,6 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
          | otherwise = EarlyDataNotAllowed
     setEstablished ctx established
 
-    let expectCertificate :: Handshake13 -> IO ()
-        expectCertificate (Certificate13 certCtx certs _ext) = do
-            when (certCtx /= "") $ throwCore $ Error_Protocol ("certificate request context MUST be empty", True, IllegalParameter)
-            -- fixme checking _ext
-            clientCertificate sparams ctx certs
-        expectCertificate hs = unexpected (show hs) (Just "certificate 13")
-
-    let expectCertVerify :: Handshake13 -> IO ()
-        expectCertVerify (CertVerify13 sigAlg sig) = do
-            hChCc <- transcriptHash ctx
-            certs@(CertificateChain cc) <- checkValidClientCertChain ctx "finished 13 message expected"
-            pubkey <- case cc of
-                        [] -> throwCore $ Error_Protocol ("client certificate missing", True, HandshakeFailure)
-                        c:_ -> return $ certPubKey $ getCertificate c
-            usingHState ctx $ setPublicKey pubkey
-            let keyAlg = fromJust "fromPubKey" (fromPubKey pubkey)
-            verif <- checkCertVerify ctx keyAlg sigAlg sig hChCc
-            clientCertVerify sparams ctx certs verif
-        expectCertVerify hs = unexpected (show hs) (Just "certificate verify 13")
-
     let expectFinished (Finished13 verifyData') = do
             hChBeforeCf <- transcriptHash ctx
             let verifyData = makeVerifyData usedHash clientHandshakeTrafficSecret hChBeforeCf
@@ -789,8 +769,8 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
 
     if not authenticated && serverWantClientCert sparams then
         runRecvHandshake13 $ do
-          recvHandshake13postUpdate ctx $ lift13 expectCertificate
-          recvHandshake13postUpdate ctx $ lift13 expectCertVerify
+          skip <- recvHandshake13postUpdate ctx expectCertificate
+          unless skip $ recvHandshake13postUpdate ctx expectCertVerify
           recvHandshake13postUpdate ctx $ lift13 expectFinished
           liftIO sendNST
       else if rtt0OK then
@@ -923,6 +903,27 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
           where
             tedi = extensionEncode $ EarlyDataIndication $ Just $ fromIntegral maxSize
             extensions = [ExtensionRaw extensionID_EarlyData tedi]
+
+    expectCertificate :: Handshake13 -> RecvHandshake13M IO Bool
+    expectCertificate (Certificate13 certCtx certs _ext) = liftIO $ do
+        when (certCtx /= "") $ throwCore $ Error_Protocol ("certificate request context MUST be empty", True, IllegalParameter)
+        -- fixme checking _ext
+        clientCertificate sparams ctx certs
+        return $ isNullCertificateChain certs
+    expectCertificate hs = unexpected (show hs) (Just "certificate 13")
+
+    expectCertVerify :: Handshake13 -> RecvHandshake13M IO ()
+    expectCertVerify (CertVerify13 sigAlg sig) = liftIO $ do
+        hChCc <- transcriptHash ctx
+        certs@(CertificateChain cc) <- checkValidClientCertChain ctx "finished 13 message expected"
+        pubkey <- case cc of
+                    [] -> throwCore $ Error_Protocol ("client certificate missing", True, HandshakeFailure)
+                    c:_ -> return $ certPubKey $ getCertificate c
+        usingHState ctx $ setPublicKey pubkey
+        let keyAlg = fromJust "fromPubKey" (fromPubKey pubkey)
+        verif <- checkCertVerify ctx keyAlg sigAlg sig hChCc
+        clientCertVerify sparams ctx certs verif
+    expectCertVerify hs = unexpected (show hs) (Just "certificate verify 13")
 
     hashSize = hashDigestSize usedHash
     zero = B.replicate hashSize 0
