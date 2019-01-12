@@ -764,7 +764,7 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
     let expectFinished (Finished13 verifyData') = do
             hChBeforeCf <- transcriptHash ctx
             let verifyData = makeVerifyData usedHash clientHandshakeTrafficSecret hChBeforeCf
-            if verifyData == verifyData' then do
+            if verifyData == verifyData' then liftIO $ do
                 setEstablished ctx Established
                 setRxState ctx usedHash usedCipher clientApplicationTrafficSecret0
                else
@@ -780,7 +780,7 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
         runRecvHandshake13 $ do
           skip <- recvHandshake13postUpdate ctx expectCertificate
           unless skip $ recvHandshake13postUpdate ctx expectCertVerify
-          recvHandshake13postUpdate ctx $ lift13 expectFinished
+          recvHandshake13postUpdate ctx expectFinished
           liftIO sendNST
       else if rtt0OK then
         setPendingActions ctx [(expectEndOfEarlyData, return ())
