@@ -13,9 +13,8 @@ module Network.TLS.Handshake.Common13
        , makeServerKeyShare
        , makeClientKeyShare
        , fromServerKeyShare
-       , makeServerCertVerify
-       , makeClientCertVerify
-       , checkServerCertVerify
+       , makeCertVerify
+       , checkCertVerify
        , makePSKBinder
        , replacePSKBinder
        , createTLS13TicketInfo
@@ -28,7 +27,9 @@ module Network.TLS.Handshake.Common13
        , safeNonNegative32
        , RecvHandshake13M
        , runRecvHandshake13
-       , recvHandshake13
+       , recvHandshake13preUpdate
+       , recvHandshake13postUpdate
+       , lift13
        ) where
 
 import qualified Data.ByteArray as BA
@@ -109,25 +110,22 @@ serverContextString = "TLS 1.3, server CertificateVerify"
 clientContextString :: ByteString
 clientContextString = "TLS 1.3, client CertificateVerify"
 
-makeServerCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> m Handshake13
-makeServerCertVerify ctx sig hs hashValue =
+makeCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> m Handshake13
+makeCertVerify ctx sig hs hashValue = do
+    cc <- liftIO $ usingState_ ctx isClientContext
+    let ctxStr | cc == ClientRole = clientContextString
+               | otherwise        = serverContextString
+        target = makeTarget ctxStr hashValue
     CertVerify13 hs <$> sign ctx sig hs target
-  where
-    target = makeTarget serverContextString hashValue
 
-makeClientCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> m Handshake13
-makeClientCertVerify ctx sig hs hashValue =
-    CertVerify13 hs <$> sign ctx sig hs target
- where
-    target = makeTarget clientContextString hashValue
-
-checkServerCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> ByteString -> m Bool
-checkServerCertVerify ctx sig hs signature hashValue = liftIO $ do
+checkCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> ByteString -> m Bool
+checkCertVerify ctx sig hs signature hashValue = liftIO $ do
     cc <- usingState_ ctx isClientContext
-    verifyPublic ctx cc sigParams target signature
-  where
-    sigParams = signatureParams sig (Just hs)
-    target = makeTarget serverContextString hashValue
+    let ctxStr | cc == ClientRole = serverContextString -- opposite context
+               | otherwise        = clientContextString
+        target = makeTarget ctxStr hashValue
+        sigParams = signatureParams sig (Just hs)
+    verifyPublic ctx sigParams target signature
 
 makeTarget :: ByteString -> ByteString -> ByteString
 makeTarget contextString hashValue = runPut $ do
@@ -263,11 +261,27 @@ safeNonNegative32 x
 newtype RecvHandshake13M m a = RecvHandshake13M (StateT [Handshake13] m a)
     deriving (Functor, Applicative, Monad, MonadIO)
 
-recvHandshake13 :: MonadIO m
-                => Context
-                -> (Handshake13 -> RecvHandshake13M m a)
-                -> RecvHandshake13M m a
-recvHandshake13 ctx f = getHandshake13 ctx >>= f
+lift13 :: (Handshake13 -> IO a) -> Handshake13 -> RecvHandshake13M IO a
+lift13 action h = RecvHandshake13M $ liftIO $ action h
+
+recvHandshake13preUpdate :: MonadIO m
+                         => Context
+                         -> (Handshake13 -> RecvHandshake13M m a)
+                         -> RecvHandshake13M m a
+recvHandshake13preUpdate ctx f = do
+    h <- getHandshake13 ctx
+    liftIO $ processHandshake13 ctx h
+    f h
+
+recvHandshake13postUpdate :: MonadIO m
+                          => Context
+                          -> (Handshake13 -> RecvHandshake13M m a)
+                          -> RecvHandshake13M m a
+recvHandshake13postUpdate ctx f = do
+    h <- getHandshake13 ctx
+    v <- f h
+    liftIO $ processHandshake13 ctx h
+    return v
 
 getHandshake13 :: MonadIO m => Context -> RecvHandshake13M m Handshake13
 getHandshake13 ctx = RecvHandshake13M $ do
@@ -276,7 +290,7 @@ getHandshake13 ctx = RecvHandshake13M $ do
         (h:hs) -> found h hs
         []     -> recvLoop
   where
-    found h hs = liftIO (processHandshake13 ctx h) >> put hs >> return h
+    found h hs = put hs >> return h
     recvLoop = do
         epkt <- recvPacket13 ctx
         case epkt of

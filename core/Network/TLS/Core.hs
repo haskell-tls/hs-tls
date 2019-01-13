@@ -43,6 +43,7 @@ import Network.TLS.Session
 import Network.TLS.Handshake
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Common13
+import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.KeySchedule
@@ -148,7 +149,7 @@ recvData13 ctx = do
             setEOF ctx
             E.throwIO (Terminated True ("received fatal error: " ++ show desc) (Error_Protocol ("remote side fatal error", True, desc)))
         process (Handshake13 hs) = do
-            processHandshake13 hs
+            loopHandshake13 hs
             recvData13 ctx
         -- when receiving empty appdata, we just retry to get some data.
         process (AppData13 "") = recvData13 ctx
@@ -170,13 +171,13 @@ recvData13 ctx = do
         process p             = let reason = "unexpected message " ++ show p in
                                 terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
 
-        processHandshake13 [] = return ()
-        processHandshake13 (ClientHello13{}:_) = do
+        loopHandshake13 [] = return ()
+        loopHandshake13 (ClientHello13{}:_) = do
             let reason = "Client hello is not allowed"
             terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
         -- fixme: some implementations send multiple NST at the same time.
         -- Only the first one is used at this moment.
-        processHandshake13 (NewSessionTicket13 life add nonce label exts:hs) = do
+        loopHandshake13 (NewSessionTicket13 life add nonce label exts:hs) = do
             -- This part is similar to handshake code, so protected with
             -- read+write locks (which is also what we use for all calls to the
             -- session manager).
@@ -192,8 +193,8 @@ recvData13 ctx = do
                 sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
                 sessionEstablish (sharedSessionManager $ ctxShared ctx) label sdata
                 -- putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
-            processHandshake13 hs
-        processHandshake13 (KeyUpdate13 mode:hs) = do
+            loopHandshake13 hs
+        loopHandshake13 (KeyUpdate13 mode:hs) = do
             established <- ctxEstablished ctx
             -- Though RFC 8446 Sec 4.6.3 does not clearly says,
             -- unidirectional key update is legal.
@@ -207,19 +208,23 @@ recvData13 ctx = do
                 when (mode == UpdateRequested) $ withWriteLock ctx $ do
                     sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested]
                     keyUpdate ctx getTxState setTxState
-                processHandshake13 hs
+                loopHandshake13 hs
               else do
                 let reason = "received key update before established"
                 terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-        processHandshake13 (h:hs) = do
+        loopHandshake13 (h:hs) = do
             mPendingAction <- popPendingAction ctx
             case mPendingAction of
                 Nothing -> let reason = "unexpected handshake message " ++ show h in
                            terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-                Just pa ->
+                Just (pa, postAction) -> do
                     -- Pending actions are executed with read+write locks, just
                     -- like regular handshake code.
-                    withWriteLock ctx (pa h) >> processHandshake13 hs
+                    withWriteLock ctx $ do
+                        pa h
+                        processHandshake13 ctx h
+                        postAction
+                    loopHandshake13 hs
 
         terminate = terminateWithWriteLock ctx (sendPacket13 ctx . Alert13)
 

@@ -492,19 +492,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
 recvClientData :: ServerParams -> Context -> IO ()
 recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientCertificate)
   where processClientCertificate (Certificates certs) = do
-            -- run certificate recv hook
-            ctxWithHooks ctx (`hookRecvCertificates` certs)
-            -- Call application callback to see whether the
-            -- certificate chain is acceptable.
-            --
-            usage <- liftIO $ catchException (onClientCertificate (serverHooks sparams) certs) rejectOnException
-            case usage of
-                CertificateUsageAccept        -> verifyLeafKeyUsage [KeyUsage_digitalSignature] certs
-                CertificateUsageReject reason -> certificateRejected reason
-
-            -- Remember cert chain for later use.
-            --
-            usingHState ctx $ setClientCertChain certs
+            clientCertificate sparams ctx certs
 
             -- FIXME: We should check whether the certificate
             -- matches our request and that we support
@@ -525,7 +513,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
         processCertificateVerify (Handshake [hs@(CertVerify dsig)]) = do
             processHandshake ctx hs
 
-            certs <- checkValidClientCertChain "change cipher message expected"
+            certs <- checkValidClientCertChain ctx "change cipher message expected"
 
             usedVersion <- usingState_ ctx getVersion
             -- Fetch all handshake messages up to now.
@@ -534,27 +522,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             sigAlgExpected <- getRemoteSignatureAlg
 
             verif <- checkCertificateVerify ctx usedVersion sigAlgExpected msgs dsig
-
-            if verif then do
-                -- When verification succeeds, commit the
-                -- client certificate chain to the context.
-                --
-                usingState_ ctx $ setClientCertificateChain certs
-                return ()
-              else do
-                -- Either verification failed because of an
-                -- invalid format (with an error message), or
-                -- the signature is wrong.  In either case,
-                -- ask the application if it wants to
-                -- proceed, we will do that.
-                res <- liftIO $ onUnverifiedClientCert (serverHooks sparams)
-                if res then do
-                        -- When verification fails, but the
-                        -- application callbacks accepts, we
-                        -- also commit the client certificate
-                        -- chain to the context.
-                        usingState_ ctx $ setClientCertificateChain certs
-                    else decryptError "verification failed"
+            clientCertVerify sparams ctx certs verif
             return $ RecvStateNext expectChangeCipher
 
         processCertificateVerify p = do
@@ -579,13 +547,14 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
         expectFinish (Finished _) = return RecvStateDone
         expectFinish p            = unexpected (show p) (Just "Handshake Finished")
 
-        checkValidClientCertChain msg = do
-            chain <- usingHState ctx getClientCertChain
-            let throwerror = Error_Protocol (msg , True, UnexpectedMessage)
-            case chain of
-                Nothing -> throwCore throwerror
-                Just cc | isNullCertificateChain cc -> throwCore throwerror
-                        | otherwise                 -> return cc
+checkValidClientCertChain :: MonadIO m => Context -> String -> m CertificateChain
+checkValidClientCertChain ctx errmsg = do
+    chain <- usingHState ctx getClientCertChain
+    let throwerror = Error_Protocol (errmsg , True, UnexpectedMessage)
+    case chain of
+        Nothing -> throwCore throwerror
+        Just cc | isNullCertificateChain cc -> throwCore throwerror
+                | otherwise                 -> return cc
 
 hashAndSignaturesInCommon :: Context -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]
 hashAndSignaturesInCommon ctx exts =
@@ -783,29 +752,32 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
          | otherwise = EarlyDataNotAllowed
     setEstablished ctx established
 
-    let finishedAction hs@(Finished13 verifyData') = do
+    let expectFinished (Finished13 verifyData') = do
             hChBeforeCf <- transcriptHash ctx
-            processHandshake13 ctx hs
             let verifyData = makeVerifyData usedHash clientHandshakeTrafficSecret hChBeforeCf
             if verifyData == verifyData' then do
-                cfRecvTime <- getCurrentTimeFromBase
-                let rtt = cfRecvTime - sfSentTime
                 setEstablished ctx Established
                 setRxState ctx usedHash usedCipher clientApplicationTrafficSecret0
-                sendNewSessionTicket masterSecret rtt
-              else
+               else
                 decryptError "cannot verify finished"
-        finishedAction hs = unexpected (show hs) (Just "finished 13")
+        expectFinished hs = unexpected (show hs) (Just "finished 13")
 
-        endOfEarlyDataAction hs@EndOfEarlyData13 = do
-            processHandshake13 ctx hs
+    let expectEndOfEarlyData EndOfEarlyData13 =
             setRxState ctx usedHash usedCipher clientHandshakeTrafficSecret
-        endOfEarlyDataAction hs = unexpected (show hs) (Just "end of early data")
+        expectEndOfEarlyData hs = unexpected (show hs) (Just "end of early data")
+    let sendNST = sendNewSessionTicket masterSecret sfSentTime
 
-    if rtt0OK then do
-        setPendingActions ctx [endOfEarlyDataAction, finishedAction]
+    if not authenticated && serverWantClientCert sparams then
+        runRecvHandshake13 $ do
+          skip <- recvHandshake13postUpdate ctx expectCertificate
+          unless skip $ recvHandshake13postUpdate ctx expectCertVerify
+          recvHandshake13postUpdate ctx $ lift13 expectFinished
+          liftIO sendNST
+      else if rtt0OK then
+        setPendingActions ctx [(expectEndOfEarlyData, return ())
+                              ,(expectFinished, sendNST)]
       else do
-        setPendingActions ctx [finishedAction]
+        setPendingActions ctx [(expectFinished, sendNST)]
   where
     setServerParameter = do
         srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
@@ -873,12 +845,19 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
         loadPacket13 ctx $ Handshake13 [helo]
 
     sendCertAndVerify = do
+        when (serverWantClientCert sparams) $ do
+            let certReqCtx = "" -- this must be zero length here.
+            let sigAlgs = extensionEncode $ SignatureAlgorithms $ supportedHashSignatures $ ctxSupported ctx
+                crexts = [ExtensionRaw extensionID_SignatureAlgorithms sigAlgs]
+            loadPacket13 ctx $ Handshake13 [CertRequest13 certReqCtx crexts]
+            usingHState ctx $ setCertReqSent True
+
         let CertificateChain cs = certChain
             ess = replicate (length cs) []
         loadPacket13 ctx $ Handshake13 [Certificate13 "" certChain ess]
         hChSc <- transcriptHash ctx
         sigAlg <- getLocalDigitalSignatureAlg ctx
-        vrfy <- makeServerCertVerify ctx sigAlg hashSig hChSc
+        vrfy <- makeCertVerify ctx sigAlg hashSig hChSc
         loadPacket13 ctx $ Handshake13 [vrfy]
 
     sendExtensions rtt0OK = do
@@ -896,13 +875,15 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
               | otherwise = extensions''
         loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 extensions]
 
-    sendNewSessionTicket masterSecret rtt = when sendNST $ do
+    sendNewSessionTicket masterSecret sfSentTime = when sendNST $ do
+        cfRecvTime <- getCurrentTimeFromBase
+        let rtt = cfRecvTime - sfSentTime
         hChCf <- transcriptHash ctx
         nonce <- usingState_ ctx $ genRandom 32
         let resumptionMasterSecret = deriveSecret usedHash masterSecret "res master" hChCf
             life = 86400 -- 1 day in second: fixme hard coding
             psk = hkdfExpandLabel usedHash resumptionMasterSecret "resumption" nonce hashSize
-        (label, add) <- generateSession life psk rtt0max
+        (label, add) <- generateSession life psk rtt0max rtt
         let nst = createNewSessionTicket life add nonce label rtt0max
         sendPacket13 ctx $ Handshake13 [nst]
       where
@@ -910,7 +891,7 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
         dhModes = case extensionLookup extensionID_PskKeyExchangeModes exts >>= extensionDecode MsgTClientHello of
           Just (PskKeyExchangeModes ms) -> ms
           Nothing                       -> []
-        generateSession life psk maxSize = do
+        generateSession life psk maxSize rtt = do
             Session (Just sessionId) <- newSession ctx
             tinfo <- createTLS13TicketInfo life (Left ctx) (Just rtt)
             sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
@@ -922,6 +903,27 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
           where
             tedi = extensionEncode $ EarlyDataIndication $ Just $ fromIntegral maxSize
             extensions = [ExtensionRaw extensionID_EarlyData tedi]
+
+    expectCertificate :: Handshake13 -> RecvHandshake13M IO Bool
+    expectCertificate (Certificate13 certCtx certs _ext) = liftIO $ do
+        when (certCtx /= "") $ throwCore $ Error_Protocol ("certificate request context MUST be empty", True, IllegalParameter)
+        -- fixme checking _ext
+        clientCertificate sparams ctx certs
+        return $ isNullCertificateChain certs
+    expectCertificate hs = unexpected (show hs) (Just "certificate 13")
+
+    expectCertVerify :: Handshake13 -> RecvHandshake13M IO ()
+    expectCertVerify (CertVerify13 sigAlg sig) = liftIO $ do
+        hChCc <- transcriptHash ctx
+        certs@(CertificateChain cc) <- checkValidClientCertChain ctx "finished 13 message expected"
+        pubkey <- case cc of
+                    [] -> throwCore $ Error_Protocol ("client certificate missing", True, HandshakeFailure)
+                    c:_ -> return $ certPubKey $ getCertificate c
+        usingHState ctx $ setPublicKey pubkey
+        let keyAlg = fromJust "fromPubKey" (fromPubKey pubkey)
+        verif <- checkCertVerify ctx keyAlg sigAlg sig hChCc
+        clientCertVerify sparams ctx certs verif
+    expectCertVerify hs = unexpected (show hs) (Just "certificate verify 13")
 
     hashSize = hashDigestSize usedHash
     zero = B.replicate hashSize 0
@@ -1027,3 +1029,42 @@ credentialsFindForSigning13' sigAlg (Credentials l) = find forSigning l
     forSigning cred = case credentialDigitalSignatureAlg cred of
         Nothing  -> False
         Just sig -> sig `signatureCompatible` sigAlg
+
+clientCertificate :: ServerParams -> Context -> CertificateChain -> IO ()
+clientCertificate sparams ctx certs = do
+    -- run certificate recv hook
+    ctxWithHooks ctx (`hookRecvCertificates` certs)
+    -- Call application callback to see whether the
+    -- certificate chain is acceptable.
+    --
+    usage <- liftIO $ catchException (onClientCertificate (serverHooks sparams) certs) rejectOnException
+    case usage of
+        CertificateUsageAccept        -> verifyLeafKeyUsage [KeyUsage_digitalSignature] certs
+        CertificateUsageReject reason -> certificateRejected reason
+
+    -- Remember cert chain for later use.
+    --
+    usingHState ctx $ setClientCertChain certs
+
+clientCertVerify :: ServerParams -> Context -> CertificateChain -> Bool -> IO ()
+clientCertVerify sparams ctx certs verif = do
+    if verif then do
+        -- When verification succeeds, commit the
+        -- client certificate chain to the context.
+        --
+        usingState_ ctx $ setClientCertificateChain certs
+        return ()
+      else do
+        -- Either verification failed because of an
+        -- invalid format (with an error message), or
+        -- the signature is wrong.  In either case,
+        -- ask the application if it wants to
+        -- proceed, we will do that.
+        res <- liftIO $ onUnverifiedClientCert (serverHooks sparams)
+        if res then do
+                -- When verification fails, but the
+                -- application callbacks accepts, we
+                -- also commit the client certificate
+                -- chain to the context.
+                usingState_ ctx $ setClientCertificateChain certs
+                else decryptError "verification failed"

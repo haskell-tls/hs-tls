@@ -775,8 +775,8 @@ handshakeClient13' :: ClientParams -> Context -> Cipher -> Hash -> IO ()
 handshakeClient13' cparams ctx usedCipher usedHash = do
     (resuming, handshakeSecret, clientHandshakeTrafficSecret, serverHandshakeTrafficSecret) <- switchToHandshakeSecret
     rtt0accepted <- runRecvHandshake13 $ do
-        accepted <- recvHandshake13 ctx expectEncryptedExtensions
-        unless resuming $ recvHandshake13 ctx expectCertRequest
+        accepted <- recvHandshake13preUpdate ctx expectEncryptedExtensions
+        unless resuming $ recvHandshake13preUpdate ctx expectCertRequest
         recvFinished serverHandshakeTrafficSecret
         return accepted
     hChSf <- transcriptHash ctx
@@ -806,7 +806,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
                   hChSc      <- transcriptHash ctx
                   keyAlg     <- getLocalDigitalSignatureAlg ctx
                   sigAlg     <- liftIO $ getLocalHashSigAlg ctx keyAlg
-                  vfy        <- makeClientCertVerify ctx keyAlg sigAlg hChSc
+                  vfy        <- makeCertVerify ctx keyAlg sigAlg hChSc
                   loadPacket13 ctx $ Handshake13 [vfy]
     --
     sendClientData13 _ _ =
@@ -898,7 +898,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
             setCertReqToken  $ Just token
             setCertReqCBdata $ Just (cTypes, hsAlgs, dNames)
             -- setCertReqSigAlgsCert caAlgs
-        recvHandshake13 ctx expectCertAndVerify
+        recvHandshake13preUpdate ctx expectCertAndVerify
       where
         canames = case extensionLookup
                        extensionID_CertificateAuthorities exts of
@@ -943,19 +943,19 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
                     c:_ -> return $ certPubKey $ getCertificate c
         usingHState ctx $ setPublicKey pubkey
         hChSc <- transcriptHash ctx
-        recvHandshake13 ctx $ expectCertVerify pubkey hChSc
+        recvHandshake13preUpdate ctx $ expectCertVerify pubkey hChSc
     expectCertAndVerify p = unexpected (show p) (Just "server certificate")
 
     expectCertVerify pubkey hChSc (CertVerify13 sigAlg sig) = do
         let keyAlg = fromJust "fromPubKey" (fromPubKey pubkey)
-        ok <- checkServerCertVerify ctx keyAlg sigAlg sig hChSc
+        ok <- checkCertVerify ctx keyAlg sigAlg sig hChSc
         unless ok $ decryptError "cannot verify CertificateVerify"
     expectCertVerify _ _ p = unexpected (show p) (Just "certificate verify")
 
     recvFinished serverHandshakeTrafficSecret = do
         hChSv <- transcriptHash ctx
         let verifyData' = makeVerifyData usedHash serverHandshakeTrafficSecret hChSv
-        recvHandshake13 ctx $ expectFinished verifyData'
+        recvHandshake13preUpdate ctx $ expectFinished verifyData'
 
     expectFinished verifyData' (Finished13 verifyData) =
         when (verifyData' /= verifyData) $ decryptError "cannot verify finished"

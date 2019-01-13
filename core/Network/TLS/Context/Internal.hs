@@ -126,7 +126,7 @@ data Established = NotEstablished
                  | Established
                  deriving (Eq, Show)
 
-type PendingAction = Handshake13 -> IO ()
+type PendingAction = (Handshake13 -> IO (), IO ())
 
 updateMeasure :: Context -> (Measurement -> Measurement) -> IO ()
 updateMeasure ctx f = do

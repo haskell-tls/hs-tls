@@ -35,12 +35,12 @@ import Network.TLS.Util
 import Control.Monad.State.Strict
 
 fromPubKey :: PubKey -> Maybe DigitalSignatureAlg
-fromPubKey (PubKeyRSA _) = Just DS_RSA
-fromPubKey (PubKeyDSA _) = Just DS_DSS
-fromPubKey (PubKeyEC  _) = Just DS_ECDSA
-fromPubKey (PubKeyEd25519 _) = return DS_Ed25519
-fromPubKey (PubKeyEd448   _) = return DS_Ed448
-fromPubKey _             = Nothing
+fromPubKey (PubKeyRSA _)     = Just DS_RSA
+fromPubKey (PubKeyDSA _)     = Just DS_DSS
+fromPubKey (PubKeyEC  _)     = Just DS_ECDSA
+fromPubKey (PubKeyEd25519 _) = Just DS_Ed25519
+fromPubKey (PubKeyEd448   _) = Just DS_Ed448
+fromPubKey _                 = Nothing
 
 decryptError :: MonadIO m => String -> m a
 decryptError msg = throwCore $ Error_Protocol (msg, True, DecryptError)
@@ -186,9 +186,7 @@ signatureVerifyWithCertVerifyData :: Context
                                   -> DigitallySigned
                                   -> CertVerifyData
                                   -> IO Bool
-signatureVerifyWithCertVerifyData ctx (DigitallySigned _ bs) (sigParam, toVerify) = do
-    cc <- usingState_ ctx isClientContext
-    verifyPublic ctx cc sigParam toVerify bs
+signatureVerifyWithCertVerifyData ctx (DigitallySigned _ bs) (sigParam, toVerify) = verifyPublic ctx sigParam toVerify bs
 
 digitallySignParams :: Context -> ByteString -> DigitalSignatureAlg -> Maybe HashAndSignatureAlgorithm -> IO DigitallySigned
 digitallySignParams ctx signatureData sigAlg hashSigAlg =

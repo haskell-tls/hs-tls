@@ -16,6 +16,7 @@ module Connection
     , isVersionEnabled
     , isCustomDHParams
     , isLeafRSA
+    , isCredentialDSA
     , readClientSessionRef
     , twoSessionRefs
     , twoSessionManagers
@@ -96,6 +97,10 @@ knownGroups   = knownECGroups ++ knownFFGroups
 
 arbitraryGroups :: Gen [Group]
 arbitraryGroups = listOf1 $ elements knownGroups
+
+isCredentialDSA :: (CertificateChain, PrivKey) -> Bool
+isCredentialDSA (_, PrivKeyDSA _) = True
+isCredentialDSA _                 = False
 
 arbitraryCredentialsOfEachType :: Gen [(CertificateChain, PrivKey)]
 arbitraryCredentialsOfEachType = do
