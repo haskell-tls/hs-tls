@@ -408,7 +408,7 @@ supportedCtypes :: [HashAndSignatureAlgorithm]
 supportedCtypes hashAlgs =
     nub $ foldr ctfilter [] hashAlgs
   where
-    ctfilter x acc = case hashSigToCertType13 x of
+    ctfilter x acc = case hashSigToCertType x of
        Just cType | cType <= lastSupportedCertificateType
                  -> cType : acc
        _         -> acc

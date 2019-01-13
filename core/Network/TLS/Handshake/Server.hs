@@ -381,20 +381,19 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             -- When configured, send a certificate request with the DNs of all
             -- configured CA certificates.
             --
-            -- FIXME, the acceptable certificate types should be derived from
-            -- the supported Signature algorithms, rather than hard-coded here,
-            -- when the client certificate is received, the server must check
-            -- that the signature matches the advertised parameters.
-            --
             -- Client certificates MUST NOT be accepted if not requested.
             --
             when (serverWantClientCert sparams) $ do
                 usedVersion <- usingState_ ctx getVersion
-                let certTypes = [ CertificateType_RSA_Sign
-                                , CertificateType_DSS_Sign ]
-                    hashSigs = if usedVersion < TLS12
-                                   then Nothing
-                                   else Just (supportedHashSignatures $ ctxSupported ctx)
+                let defaultCertTypes = [ CertificateType_RSA_Sign
+                                       , CertificateType_DSS_Sign
+                                       , CertificateType_ECDSA_Sign
+                                       ]
+                    (certTypes, hashSigs)
+                        | usedVersion < TLS12 = (defaultCertTypes, Nothing)
+                        | otherwise =
+                            let as = supportedHashSignatures $ ctxSupported ctx
+                             in (nub $ mapMaybe hashSigToCertType as, Just as)
                     creq = CertRequest certTypes hashSigs
                                (map extractCAname $ serverCACertificates sparams)
                 usingHState ctx $ setCertReqSent True
