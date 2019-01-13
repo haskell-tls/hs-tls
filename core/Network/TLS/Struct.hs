@@ -19,7 +19,6 @@ module Network.TLS.Struct
     , ExtensionRaw(..)
     , CertificateType(..)
     , lastSupportedCertificateType
-    , hashSigToCertType13
     , HashAlgorithm(..)
     , SignatureAlgorithm(..)
     , HashAndSignatureAlgorithm
@@ -147,56 +146,6 @@ data SignatureAlgorithm =
 
 type HashAndSignatureAlgorithm = (HashAlgorithm, SignatureAlgorithm)
 
-------------------------------------------------------------
-
--- | For TLS 1.3, translate a 'HashAndSignatureAlgorithm' to an
--- acceptable 'CertificateType'.  Perhaps this needs to take
--- supported groups into account, so that, for example, if we
--- don't support any shared ECDSA groups with the server, we
--- return 'Nothing' rather than 'CertificateType_ECDSA_Sign'.
---
--- Therefore, this interface is preliminary.  It gets us moving
--- in the right direction.  The interplay between all the various
--- TLS extensions and certificate selection is rather complex.
---
--- The goal is to ensure that the client certificate request
--- callback only sees 'CertificateType' values that are supported
--- by the library and also compatible with the server signature
--- algorithms extension.
---
--- Since we don't yet support ECDSA private keys, the caller
--- will use 'lastSupportedCertificateType' to filter those
--- out for now, leaving just @RSA@ as the only supported
--- client certificate algorithm for TLS 1.3.
---
--- FIXME: Add RSA_PSS_PSS signatures when supported.
---
-hashSigToCertType13 :: HashAndSignatureAlgorithm
-                    -> Maybe CertificateType
---
-hashSigToCertType13 (HashIntrinsic, hashsig)
-    | hashsig ==  SignatureRSApssRSAeSHA256
-      = Just CertificateType_RSA_Sign
-    | hashsig ==  SignatureRSApssRSAeSHA384
-      = Just CertificateType_RSA_Sign
-    | hashsig == SignatureRSApssRSAeSHA512
-      = Just CertificateType_RSA_Sign
-    | hashsig ==  SignatureEd25519
-      = Just CertificateType_Ed25519_Sign
-    | hashsig ==  SignatureEd448
-      = Just CertificateType_Ed448_Sign
-    | otherwise = Nothing
---
-hashSigToCertType13 (hashalg, SignatureECDSA)
-    | hashalg == HashSHA256
-      = Just CertificateType_ECDSA_Sign
-    | hashalg == HashSHA384
-      = Just CertificateType_ECDSA_Sign
-    | hashalg == HashSHA512
-      = Just CertificateType_ECDSA_Sign
-    | otherwise = Nothing
---
-hashSigToCertType13 _ = Nothing
 ------------------------------------------------------------
 
 type Signature = ByteString
