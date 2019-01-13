@@ -57,7 +57,7 @@ runTLS debug ioDebug params hostname portNumber f =
 sessionRef ref = SessionManager
     { sessionEstablish      = \sid sdata -> writeIORef ref (sid,sdata)
     , sessionResume         = \sid       -> readIORef ref >>= \(s,d) -> if s == sid then return (Just d) else return Nothing
-    , sessionResumeOnlyOnce = \sid       -> fail "sessionResumeOnlyOnce not implemented for simple client"
+    , sessionResumeOnlyOnce = \_         -> fail "sessionResumeOnlyOnce not implemented for simple client"
     , sessionInvalidate     = \_         -> return ()
     }
 
