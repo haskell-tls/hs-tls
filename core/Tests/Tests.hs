@@ -50,9 +50,6 @@ prop_pipe_work = do
 
     return ()
 
-recvDataNonNull :: Context -> IO C8.ByteString
-recvDataNonNull ctx = recvData ctx >>= \l -> if B.null l then recvDataNonNull ctx else return l
-
 chunkLengths :: Int -> [Int]
 chunkLengths len
     | len > 16384 = 16384 : chunkLengths (len - 16384)
@@ -80,18 +77,15 @@ runTLSPipePredicate params p = runTLSPipe params tlsServer tlsClient
   where tlsServer ctx queue = do
             handshake ctx
             checkInfoPredicate ctx
-            d <- recvDataNonNull ctx
+            d <- recvData ctx
             writeChan queue [d]
-            bye ctx -- needed to interrupt recvData in tlsClient
-            return ()
+            bye ctx
         tlsClient queue ctx = do
             handshake ctx
             checkInfoPredicate ctx
             d <- readChan queue
             sendData ctx (L.fromChunks [d])
-            _ <- recvData ctx -- recvData receives NewSessionTicket with TLS13
-            bye ctx           -- (until bye is able to do it itself)
-            return ()
+            byeBye ctx
         checkInfoPredicate ctx = do
             minfo <- contextGetInformation ctx
             unless (p minfo) $
@@ -108,35 +102,32 @@ runTLSPipeSimple13 params mode mEarlyData = runTLSPipe params tlsServer tlsClien
                 Nothing -> return ()
                 Just ed -> do
                     let ls = chunkLengths (B.length ed)
-                    chunks <- replicateM (length ls) $ recvDataNonNull ctx
+                    chunks <- replicateM (length ls) $ recvData ctx
                     (ls, ed) `assertEq` (map B.length chunks, B.concat chunks)
-            d <- recvDataNonNull ctx
+            d <- recvData ctx
             writeChan queue [d]
             minfo <- contextGetInformation ctx
             Just mode `assertEq` (minfo >>= infoTLS13HandshakeMode)
-            bye ctx -- needed to interrupt recvData in tlsClient
-            return ()
+            bye ctx
         tlsClient queue ctx = do
             handshake ctx
             d <- readChan queue
             sendData ctx (L.fromChunks [d])
             minfo <- contextGetInformation ctx
             Just mode `assertEq` (minfo >>= infoTLS13HandshakeMode)
-            _ <- recvData ctx -- recvData receives NewSessionTicket with TLS13
-            bye ctx           -- (until bye is able to do it itself)
-            return ()
+            byeBye ctx
 
 runTLSPipeSimpleKeyUpdate :: (ClientParams, ServerParams) -> PropertyM IO ()
 runTLSPipeSimpleKeyUpdate params = runTLSPipeN 3 params tlsServer tlsClient
   where tlsServer ctx queue = do
             handshake ctx
-            d0 <- recvDataNonNull ctx
+            d0 <- recvData ctx
             req <- generate $ elements [OneWay, TwoWay]
             _ <- updateKey ctx req
-            d1 <- recvDataNonNull ctx
-            d2 <- recvDataNonNull ctx
+            d1 <- recvData ctx
+            d2 <- recvData ctx
             writeChan queue [d0,d1,d2]
-            return ()
+            bye ctx
         tlsClient queue ctx = do
             handshake ctx
             d0 <- readChan queue
@@ -147,8 +138,7 @@ runTLSPipeSimpleKeyUpdate params = runTLSPipeN 3 params tlsServer tlsClient
             _ <- updateKey ctx req
             d2 <- readChan queue
             sendData ctx (L.fromChunks [d2])
-            bye ctx
-            return ()
+            byeBye ctx
 
 runTLSInitFailureGen :: (ClientParams, ServerParams) -> (Context -> IO s) -> (Context -> IO c) -> PropertyM IO ()
 runTLSInitFailureGen params hsServer hsClient = do
@@ -158,19 +148,12 @@ runTLSInitFailureGen params hsServer hsClient = do
   where tlsServer ctx = do
             _ <- hsServer ctx
             minfo <- contextGetInformation ctx
-            -- Note: with TLS13 server needs to call recvData in order to detect
-            -- handshake alert messages sent by the client (consequence of 0RTT
-            -- design with pending actions)
-            _ <- recvData ctx
-            bye ctx
+            byeBye ctx
             return $ "server success: " ++ show minfo
         tlsClient ctx = do
             _ <- hsClient ctx
             minfo <- contextGetInformation ctx
-            -- Note: with TLS13 server needs to call recvData in order to detect
-            -- handshake alert messages sent by the server
-            _ <- recvData ctx
-            bye ctx
+            byeBye ctx
             return $ "client success: " ++ show minfo
 
 runTLSInitFailure :: (ClientParams, ServerParams) -> PropertyM IO ()
@@ -669,19 +652,16 @@ prop_handshake_alpn = do
             handshake ctx
             proto <- getNegotiatedProtocol ctx
             Just "h2" `assertEq` proto
-            d <- recvDataNonNull ctx
+            d <- recvData ctx
             writeChan queue [d]
-            bye ctx -- needed to interrupt recvData in tlsClient
-            return ()
+            bye ctx
         tlsClient queue ctx = do
             handshake ctx
             proto <- getNegotiatedProtocol ctx
             Just "h2" `assertEq` proto
             d <- readChan queue
             sendData ctx (L.fromChunks [d])
-            _ <- recvData ctx -- recvData receives NewSessionTicket with TLS13
-            bye ctx           -- (until bye is able to do it itself)
-            return ()
+            byeBye ctx
         alpn xs
           | "h2"    `elem` xs = return "h2"
           | otherwise         = return "http/1.1"
@@ -698,17 +678,14 @@ prop_handshake_sni = do
             handshake ctx
             sni <- getClientSNI ctx
             Just serverName `assertEq` sni
-            d <- recvDataNonNull ctx
+            d <- recvData ctx
             writeChan queue [d]
-            bye ctx -- needed to interrupt recvData in tlsClient
-            return ()
+            bye ctx
         tlsClient queue ctx = do
             handshake ctx
             d <- readChan queue
             sendData ctx (L.fromChunks [d])
-            _ <- recvData ctx -- recvData receives NewSessionTicket with TLS13
-            bye ctx           -- (until bye is able to do it itself)
-            return ()
+            byeBye ctx
         serverName = "haskell.org"
 
 prop_handshake_renegotiation :: PropertyM IO ()
@@ -725,15 +702,14 @@ prop_handshake_renegotiation = do
         else runTLSPipe (cparams, sparams') tlsServer tlsClient
   where tlsServer ctx queue = do
             hsServer ctx
-            d <- recvDataNonNull ctx
+            d <- recvData ctx
             writeChan queue [d]
-            return ()
+            bye ctx
         tlsClient queue ctx = do
             hsClient ctx
             d <- readChan queue
             sendData ctx (L.fromChunks [d])
-            bye ctx
-            return ()
+            byeBye ctx
         hsServer     = handshake
         hsClient ctx = handshake ctx >> handshake ctx
 
@@ -761,16 +737,15 @@ prop_thread_safety = do
   where tlsServer ctx queue = do
             handshake ctx
             runReaderWriters ctx "client-value" "server-value"
-            d <- recvDataNonNull ctx
+            d <- recvData ctx
             writeChan queue [d]
-            bye ctx -- needed to interrupt recvData in tlsClient
+            bye ctx
         tlsClient queue ctx = do
             handshake ctx
             runReaderWriters ctx "server-value" "client-value"
             d <- readChan queue
             sendData ctx (L.fromChunks [d])
-            _ <- recvData ctx -- recvData receives NewSessionTicket with TLS13
-            bye ctx           -- (until bye is able to do it itself)
+            byeBye ctx
         runReaderWriters ctx r w =
             -- run concurrently 10 readers and 10 writers on the same context
             let workers = concat $ replicate 10 [reader ctx r, writer ctx w]

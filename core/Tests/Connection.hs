@@ -24,6 +24,7 @@ module Connection
     , setPairParamsSessionResuming
     , establishDataPipe
     , initiateDataPipe
+    , byeBye
     ) where
 
 import Test.Tasty.QuickCheck
@@ -40,6 +41,7 @@ import Control.Concurrent.Async
 import Control.Concurrent.Chan
 import Control.Concurrent
 import qualified Control.Exception as E
+import Control.Monad (unless, when)
 import Data.List (isInfixOf)
 
 import qualified Data.ByteString as B
@@ -254,15 +256,15 @@ twoSessionRefs = (,) <$> newIORef Nothing <*> newIORef Nothing
 -- a Real concurrent session manager would use an MVar and have multiples items.
 oneSessionManager :: IORef (Maybe (SessionID, SessionData)) -> SessionManager
 oneSessionManager ref = SessionManager
-    { sessionResume         = \myId     -> (>>= maybeResume myId) <$> readIORef ref
-    , sessionResumeOnlyOnce = \myId     -> (>>= maybeResume myId) <$> readIORef ref
+    { sessionResume         = \myId     -> readIORef ref >>= maybeResume False myId
+    , sessionResumeOnlyOnce = \myId     -> readIORef ref >>= maybeResume True myId
     , sessionEstablish      = \myId dat -> writeIORef ref $ Just (myId, dat)
     , sessionInvalidate     = \_        -> return ()
     }
   where
-    maybeResume myId (sid, sdata)
-        | sid == myId = Just sdata
-        | otherwise   = Nothing
+    maybeResume onlyOnce myId (Just (sid, sdata))
+        | sid == myId = when onlyOnce (writeIORef ref Nothing) >> return (Just sdata)
+    maybeResume _ _ _ = return Nothing
 
 twoSessionManagers :: (IORef (Maybe (SessionID, SessionData)), IORef (Maybe (SessionID, SessionData))) -> (SessionManager, SessionManager)
 twoSessionManagers (cRef, sRef) = (oneSessionManager cRef, oneSessionManager sRef)
@@ -336,3 +338,14 @@ initiateDataPipe params tlsServer tlsClient = do
             sRes <- waitCatch sAsync
             cRes <- waitCatch cAsync
             return (cRes, sRes)
+
+-- Terminate the write direction and wait to receive the peer EOF.  This is
+-- necessary in situations where we want to confirm the peer status, or to make
+-- sure to receive late messages like session tickets.  In the test suite this
+-- is used each time application code ends the connection without prior call to
+-- 'recvData'.
+byeBye :: Context -> IO ()
+byeBye ctx = do
+    bye ctx
+    bs <- recvData ctx
+    unless (B.null bs) $ fail "byeBye: unexpected application data"
