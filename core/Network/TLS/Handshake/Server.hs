@@ -86,7 +86,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     established <- ctxEstablished ctx
     -- renego is not allowed in TLS 1.3
     when (established /= NotEstablished) $ do
-        ver <- usingState_ ctx getVersion
+        ver <- usingState_ ctx (getVersionWithDefault TLS10)
         when (ver == TLS13) $ throwCore $ Error_Protocol ("renegotiation is not allowed in TLS 1.3", False, NoRenegotiation)
     -- rejecting client initiated renegotiation to prevent DOS.
     unless (supportedClientInitiatedRenegotiation (ctxSupported ctx)) $ do
@@ -653,6 +653,13 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
     when (null ciphersFilteredVersion) $ throwCore $
         Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
     let usedCipher = (onCipherChoosing $ serverHooks sparams) chosenVersion ciphersFilteredVersion
+        rtt0 = case extensionLookup extensionID_EarlyData exts >>= extensionDecode MsgTClientHello of
+                 Just (EarlyDataIndication _) -> True
+                 Nothing                      -> False
+    when rtt0 $
+        -- mark a 0-RTT attempt before a possible HRR, and before updating the
+        -- status again if 0-RTT successful
+        setEstablished ctx (EarlyDataNotAllowed 3) -- hardcoding
     -- Deciding key exchange from key shares
     keyShares <- case extensionLookup extensionID_KeyShare exts >>= extensionDecode MsgTClientHello of
           Just (KeyShareClientHello kses) -> return kses
@@ -673,7 +680,7 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
                     Just cs -> return cs
                     Nothing -> throwCore $ Error_Protocol ("credential not found", True, IllegalParameter)
         let usedHash = cipherHash usedCipher
-        doHandshake13 sparams cred ctx chosenVersion usedCipher exts usedHash keyShare hashSig clientSession
+        doHandshake13 sparams cred ctx chosenVersion usedCipher exts usedHash keyShare hashSig clientSession rtt0
   where
     ciphersFilteredVersion = filter ((`elem` clientCiphers) . cipherID) serverCiphers
     serverCiphers = filter (cipherAllowedForVersion chosenVersion) (supportedCiphers $ serverSupported sparams)
@@ -686,9 +693,9 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
 doHandshake13 :: ServerParams -> Credential -> Context -> Version
               -> Cipher -> [ExtensionRaw]
               -> Hash -> KeyShareEntry -> HashAndSignatureAlgorithm
-              -> Session
+              -> Session -> Bool
               -> IO ()
-doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts usedHash clientKeyShare hashSig clientSession = do
+doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts usedHash clientKeyShare hashSig clientSession rtt0 = do
     newSession ctx >>= \ss -> usingState_ ctx (setSession ss False)
     usingHState ctx $ setNegotiatedGroup $ keyShareEntryGroup clientKeyShare
     srand <- setServerParameter
@@ -698,10 +705,12 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
         clientEarlyTrafficSecret = deriveSecret usedHash earlySecret "c e traffic" hCh
     logKey ctx (ClientEarlyTrafficSecret clientEarlyTrafficSecret)
     extensions <- checkBinder earlySecret binderInfo
+    hrr <- usingState_ ctx getTLS13HRR
     let authenticated = isJust binderInfo
-        rtt0OK = authenticated && rtt0 && rtt0accept && is0RTTvalid
+        rtt0OK = authenticated && not hrr && rtt0 && rtt0accept && is0RTTvalid
     ----------------------------------------------------------------
-    if rtt0 then
+    established <- ctxEstablished ctx
+    if established /= NotEstablished then
          if rtt0OK then do
              usingHState ctx $ setTLS13HandshakeMode RTT0
              usingHState ctx $ setTLS13RTT0Status RTT0Accepted
@@ -747,15 +756,15 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
     logKey ctx (ClientTrafficSecret0 clientApplicationTrafficSecret0)
     setTxState ctx usedHash usedCipher serverApplicationTrafficSecret0
     ----------------------------------------------------------------
-    let established
-         | rtt0OK    = EarlyDataAllowed rtt0max
-         | otherwise = EarlyDataNotAllowed
-    setEstablished ctx established
+    if rtt0OK then
+        setEstablished ctx (EarlyDataAllowed rtt0max)
+      else when (established == NotEstablished) $
+        setEstablished ctx (EarlyDataNotAllowed 3) -- hardcoding
 
     let expectFinished (Finished13 verifyData') = do
             hChBeforeCf <- transcriptHash ctx
             let verifyData = makeVerifyData usedHash clientHandshakeTrafficSecret hChBeforeCf
-            if verifyData == verifyData' then do
+            if verifyData == verifyData' then liftIO $ do
                 setEstablished ctx Established
                 setRxState ctx usedHash usedCipher clientApplicationTrafficSecret0
                else
@@ -771,7 +780,7 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
         runRecvHandshake13 $ do
           skip <- recvHandshake13postUpdate ctx expectCertificate
           unless skip $ recvHandshake13postUpdate ctx expectCertVerify
-          recvHandshake13postUpdate ctx $ lift13 expectFinished
+          recvHandshake13postUpdate ctx expectFinished
           liftIO sendNST
       else if rtt0OK then
         setPendingActions ctx [(expectEndOfEarlyData, return ())
@@ -823,9 +832,6 @@ doHandshake13 sparams cred@(certChain, _) ctx chosenVersion usedCipher exts used
 
     rtt0max = safeNonNegative32 $ serverEarlyDataSize sparams
     rtt0accept = serverEarlyDataSize sparams > 0
-    rtt0 = case extensionLookup extensionID_EarlyData exts >>= extensionDecode MsgTClientHello of
-             Just (EarlyDataIndication _) -> True
-             Nothing                      -> False
 
     checkBinder _ Nothing = return []
     checkBinder earlySecret (Just (binder,n,tlen)) = do

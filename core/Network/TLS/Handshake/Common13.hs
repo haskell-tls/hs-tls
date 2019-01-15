@@ -29,7 +29,6 @@ module Network.TLS.Handshake.Common13
        , runRecvHandshake13
        , recvHandshake13preUpdate
        , recvHandshake13postUpdate
-       , lift13
        ) where
 
 import qualified Data.ByteArray as BA
@@ -260,9 +259,6 @@ safeNonNegative32 x
 
 newtype RecvHandshake13M m a = RecvHandshake13M (StateT [Handshake13] m a)
     deriving (Functor, Applicative, Monad, MonadIO)
-
-lift13 :: (Handshake13 -> IO a) -> Handshake13 -> RecvHandshake13M IO a
-lift13 action h = RecvHandshake13M $ liftIO $ action h
 
 recvHandshake13preUpdate :: MonadIO m
                          => Context

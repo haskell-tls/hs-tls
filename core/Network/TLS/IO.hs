@@ -33,7 +33,6 @@ import Network.TLS.Receiving
 import Network.TLS.Imports
 import Network.TLS.Receiving13
 import Network.TLS.State
-import Network.TLS.Handshake.State
 import qualified Data.ByteString as B
 
 import Data.IORef
@@ -182,25 +181,24 @@ recvRecord13 ctx = readExact ctx 5 >>= either (return . Left) (recvLengthE . dec
 
 recvPacket13 :: MonadIO m => Context -> m (Either TLSError Packet13)
 recvPacket13 ctx = liftIO $ do
-    st <- usingHState ctx getTLS13RTT0Status
-    -- If the server decides to reject RTT0 data but accepts RTT1
-    -- data, the server should skip all records for RTT0 data.
-    -- Currently, the server tries to skip 3 RTT0 data at maximum.
-    let n = if st == RTT0Rejected then 3 else (1 :: Int) -- hardcoding
-    loop n
-  where
-    loop n = do
-        erecord <- recvRecord13 ctx
-        case erecord of
-            Left err
-              | n == 1    -> return $ Left err
-              | otherwise -> loop (n - 1)
-            Right record -> do
-                pkt <- processPacket13 ctx record
-                case pkt of
-                    Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p
-                    _       -> return ()
-                return pkt
+    erecord <- recvRecord13 ctx
+    case erecord of
+        Left err@(Error_Protocol (_, True, BadRecordMac)) -> do
+            -- If the server decides to reject RTT0 data but accepts RTT1
+            -- data, the server should skip all records for RTT0 data.
+            established <- ctxEstablished ctx
+            case established of
+                EarlyDataNotAllowed n
+                    | n > 0 -> do setEstablished ctx $ EarlyDataNotAllowed (n - 1)
+                                  recvPacket13 ctx
+                _           -> return $ Left err
+        Left err      -> return $ Left err
+        Right record -> do
+            pkt <- processPacket13 ctx record
+            case pkt of
+                Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p
+                _       -> return ()
+            return pkt
 
 -- | State monad used to group several packets together and send them on wire as
 -- single flight.  When packets are loaded in the monad, they are logged

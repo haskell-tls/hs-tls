@@ -121,8 +121,8 @@ data Context = Context
     }
 
 data Established = NotEstablished
-                 | EarlyDataAllowed Int
-                 | EarlyDataNotAllowed
+                 | EarlyDataAllowed Int    -- remaining 0-RTT bytes allowed
+                 | EarlyDataNotAllowed Int -- remaining 0-RTT packets allowed to skip
                  | Established
                  deriving (Eq, Show)
 

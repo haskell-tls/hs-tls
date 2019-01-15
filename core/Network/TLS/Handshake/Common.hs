@@ -108,6 +108,15 @@ recvPacketHandshake ctx = do
     pkts <- recvPacket ctx
     case pkts of
         Right (Handshake l) -> return l
+        Right x@(AppData _) -> do
+            -- If a TLS13 server decides to reject RTT0 data, the server should
+            -- skip records for RTT0 data up to the maximum limit.
+            established <- ctxEstablished ctx
+            case established of
+                EarlyDataNotAllowed n
+                    | n > 0 -> do setEstablished ctx $ EarlyDataNotAllowed (n - 1)
+                                  recvPacketHandshake ctx
+                _           -> fail ("unexpected type received. expecting handshake and got: " ++ show x)
         Right x             -> fail ("unexpected type received. expecting handshake and got: " ++ show x)
         Left err            -> throwCore err
 
