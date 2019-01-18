@@ -130,7 +130,7 @@ processClientKeyXchg ctx (CKX_ECDH bytes) = do
                   role <- usingState_ ctx isClientContext
                   masterSecret <- usingHState ctx $ setMasterSecretFromPre rver role premaster
                   liftIO $ logKey ctx (MasterSecret masterSecret)
-              Nothing -> throwCore $ Error_Protocol ("cannote generate a shared secret on ECDH", True, HandshakeFailure)
+              Nothing -> throwCore $ Error_Protocol ("cannot generate a shared secret on ECDH", True, HandshakeFailure)
 
 processClientFinished :: Context -> FinishedData -> IO ()
 processClientFinished ctx fdata = do
