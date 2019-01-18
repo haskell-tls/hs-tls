@@ -505,7 +505,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                                  usingHState ctx $ setNegotiatedGroup grp
                                  dhePair <- generateFFDHEShared ctx grp srvpub
                                  case dhePair of
-                                     Nothing   -> throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
+                                     Nothing   -> throwCore $ Error_Protocol ("invalid server " ++ show grp ++ " public key", True, HandshakeFailure)
                                      Just pair -> return pair
 
                     masterSecret <- usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
@@ -518,7 +518,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     usingHState ctx $ setNegotiatedGroup grp
                     ecdhePair <- generateECDHEShared ctx srvpub
                     case ecdhePair of
-                        Nothing                  -> throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
+                        Nothing                  -> throwCore $ Error_Protocol ("invalid server " ++ show grp ++ " public key", True, HandshakeFailure)
                         Just (clipub, premaster) -> do
                             xver <- usingState_ ctx getVersion
                             masterSecret <- usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster

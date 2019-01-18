@@ -54,7 +54,6 @@ import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types
 import Network.TLS.Wire
-import Network.TLS.Util
 import Time.System
 
 import Control.Monad.State.Strict
@@ -77,13 +76,16 @@ makeServerKeyShare :: Context -> KeyShareEntry -> IO (ByteString, KeyShareEntry)
 makeServerKeyShare ctx (KeyShareEntry grp wcpub) = case ecpub of
   Left  e    -> throwCore $ Error_Protocol (show e, True, HandshakeFailure)
   Right cpub -> do
-      (spub, share) <- fromJust "ECDHEShared" <$> generateECDHEShared ctx cpub
-      let wspub = IES.encodeGroupPublic spub
-          serverKeyShare = KeyShareEntry grp wspub
-          key = BA.convert share
-      return (key, serverKeyShare)
+      ecdhePair <- generateECDHEShared ctx cpub
+      case ecdhePair of
+          Nothing -> throwCore $ Error_Protocol (msgInvalidPublic, True, HandshakeFailure)
+          Just (spub, share) ->
+              let wspub = IES.encodeGroupPublic spub
+                  serverKeyShare = KeyShareEntry grp wspub
+               in return (BA.convert share, serverKeyShare)
   where
     ecpub = IES.decodeGroupPublic grp wcpub
+    msgInvalidPublic = "invalid server " ++ show grp ++ " public key"
 
 makeClientKeyShare :: Context -> Group -> IO (IES.GroupPrivate, KeyShareEntry)
 makeClientKeyShare ctx grp = do
@@ -97,7 +99,7 @@ fromServerKeyShare (KeyShareEntry grp wspub) cpri = case espub of
   Left  e    -> throwCore $ Error_Protocol (show e, True, HandshakeFailure)
   Right spub -> case IES.groupGetShared spub cpri of
     Just shared -> return $ BA.convert shared
-    Nothing     -> throwCore $ Error_Protocol ("cannote generate a shared secret on (EC)DH", True, HandshakeFailure)
+    Nothing     -> throwCore $ Error_Protocol ("cannot generate a shared secret on (EC)DH", True, HandshakeFailure)
   where
     espub = IES.decodeGroupPublic grp wspub
 
