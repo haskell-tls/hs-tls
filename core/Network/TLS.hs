@@ -8,10 +8,16 @@
 --
 module Network.TLS
     (
+    -- * Basic APIs
+      contextNew
+    , handshake
+    , sendData
+    , recvData
+    , bye
+
     -- * Context configuration
-      ClientParams(..)
+    , ClientParams(..)
     , HostName
-    , Bytes
     , ServerParams(..)
     , DebugParams(..)
     , DHParams
@@ -54,12 +60,7 @@ module Network.TLS
     , TLSParams
     , HasBackend(..)
 
-    -- * Creating a context
-    , contextNew
-    , contextNewOnHandle
-#ifdef INCLUDE_NETWORK
-    , contextNewOnSocket
-#endif
+    -- * Context
     , contextFlush
     , contextClose
     , contextHookSetHandshakeRecv
@@ -84,10 +85,6 @@ module Network.TLS
     , credentialLoadX509Chain
     , credentialLoadX509ChainFromMemory
 
-    -- * Initialisation and Termination of context
-    , bye
-    , handshake
-
     -- * Application Layer Protocol Negotiation
     , getNegotiatedProtocol
 
@@ -95,9 +92,6 @@ module Network.TLS
     , getClientSNI
 
     -- * High level API
-    , sendData
-    , recvData
-    , recvData'
     , updateKey
     , KeyUpdateRequest(..)
 
@@ -134,6 +128,14 @@ module Network.TLS
     -- * TLS 1.3
     , Group(..)
     , HandshakeMode13(..)
+
+    -- * Deprecated
+    , recvData'
+    , contextNewOnHandle
+#ifdef INCLUDE_NETWORK
+    , contextNewOnSocket
+#endif
+    , Bytes
     ) where
 
 import Network.TLS.Backend (Backend(..), HasBackend(..))
