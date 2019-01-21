@@ -27,6 +27,8 @@ module Network.TLS
     , ServerParams(..)
     -- ** Hooks
     , ClientHooks(..)
+    , OnCertificateRequest
+    , OnServerCertificate
     , ServerHooks(..)
     -- ** Supported
     , Supported(..)
