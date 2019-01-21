@@ -484,7 +484,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                         srvpub  = serverDHParamsToPublic serverParams
 
                     unless (maybe False (isSupportedGroup ctx) ffGroup) $ do
-                        groupUsage <- (onCustomFFDHEGroup $ clientHooks cparams) params srvpub `catchException`
+                        groupUsage <- onCustomFFDHEGroup (clientHooks cparams) params srvpub `catchException`
                                           throwMiscErrorOnException "custom group callback failed"
                         case groupUsage of
                             GroupUsageInsecure           -> throwCore $ Error_Protocol ("FFDHE group is not secure enough", True, InsufficientSecurity)
