@@ -12,6 +12,8 @@ module Network.TLS.Parameters
     , CommonParams
     , DebugParams(..)
     , ClientHooks(..)
+    , OnCertificateRequest
+    , OnServerCertificate
     , ServerHooks(..)
     , Supported(..)
     , Shared(..)
@@ -312,6 +314,17 @@ defaultGroupUsage minBits params public
     | dhParamsGetBits params < minBits             = return   GroupUsageInsecure
     | otherwise                                    = return   GroupUsageValid
 
+-- | Type for 'onCertificateRequest'. This type synonym is to make
+--   document readable.
+type OnCertificateRequest = ([CertificateType],
+                             Maybe [HashAndSignatureAlgorithm],
+                             [DistinguishedName])
+                           -> IO (Maybe (CertificateChain, PrivKey))
+
+-- | Type for 'onServerCertificate'. This type synonym is to make
+--   document readable.
+type OnServerCertificate = CertificateStore -> ValidationCache -> ServiceID -> CertificateChain -> IO [FailedReason]
+
 -- | A set of callbacks run by the clients for various corners of TLS establishment
 data ClientHooks = ClientHooks
     { -- | This action is called when the a certificate request is
@@ -363,10 +376,7 @@ data ClientHooks = ClientHooks
       -- select a certificate matching one of the requested
       -- certificate types (public key algorithms).  Returning
       -- a non-matching one will lead to handshake failure later.
-      onCertificateRequest :: ([CertificateType],
-                               Maybe [HashAndSignatureAlgorithm],
-                               [DistinguishedName])
-                           -> IO (Maybe (CertificateChain, PrivKey))
+      onCertificateRequest :: OnCertificateRequest
       -- | Used by the client to validate the server certificate.  The default
       -- implementation calls 'validateDefault' which validates according to the
       -- default hooks and checks provided by "Data.X509.Validation".  This can
@@ -376,7 +386,7 @@ data ClientHooks = ClientHooks
       -- end-entity certificate, as this depends on the dynamically-selected
       -- cipher and this part should not be cached.  Key-usage verification
       -- is performed by the library internally.
-    , onServerCertificate  :: CertificateStore -> ValidationCache -> ServiceID -> CertificateChain -> IO [FailedReason]
+    , onServerCertificate  :: OnServerCertificate
       -- | This action is called when the client sends ClientHello
       --   to determine ALPN values such as '["h2", "http/1.1"]'.
     , onSuggestALPN :: IO (Maybe [B.ByteString])
