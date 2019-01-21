@@ -46,4 +46,4 @@ processPacket13 ctx (Record13 ContentType_Handshake fragment) = usingState ctx $
                 GotSuccessRemaining (ty,content) left ->
                     case decodeHandshake13 ty content of
                         Left err -> throwError err
-                        Right hh -> (hh:) `fmap` parseMany Nothing left
+                        Right hh -> (hh:) <$> parseMany Nothing left

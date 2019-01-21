@@ -239,7 +239,7 @@ decodeServerHello = do
     compressionid <- getWord8
     r             <- remaining
     exts <- if hasHelloExtensions ver && r > 0
-            then fmap fromIntegral getWord16 >>= getExtensions
+            then fromIntegral <$> getWord16 >>= getExtensions
             else return []
     return $ ServerHello ver random session cipherid compressionid exts
 

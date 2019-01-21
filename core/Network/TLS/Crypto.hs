@@ -240,7 +240,7 @@ kxVerify (PubKeyEC key) (ECDSAParams alg) msg sigBS = fromMaybe False $ do
 
     -- decode the public key related to the curve
     let curve = ECC.getCurveByName curveName
-    pubkey <- ECDSA.PublicKey curve `fmap` unserializePoint curve pubBS
+    pubkey <- ECDSA.PublicKey curve <$> unserializePoint curve pubBS
 
     verifyF <- case alg of
                     MD5    -> Just (ECDSA.verify H.MD5)
