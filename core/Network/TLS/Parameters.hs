@@ -254,8 +254,8 @@ data Shared = Shared
       sharedCredentials     :: Credentials
       -- | Callbacks used by clients and servers in order to resume TLS
       -- sessions.  The default implementation never resumes sessions.  Package
-      -- <https://hackage.haskell.org/package/tls-session-manager
-      -- tls-session-manager> provides an in-memory implementation.
+      -- <https://hackage.haskell.org/package/tls-session-manager tls-session-manager>
+      -- provides an in-memory implementation.
     , sharedSessionManager  :: SessionManager
       -- | A collection of trust anchors to be used by a client as
       -- part of validation of server certificates.  This is set as
