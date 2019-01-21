@@ -44,16 +44,15 @@ import Crypto.Random
 import qualified Crypto.PubKey.DH as DH
 import qualified Crypto.PubKey.DSA as DSA
 import qualified Crypto.PubKey.ECC.ECDSA as ECDSA
-import qualified Crypto.PubKey.ECC.Prim as ECC
 import qualified Crypto.PubKey.ECC.Types as ECC
 import qualified Crypto.PubKey.Ed25519 as Ed25519
 import qualified Crypto.PubKey.Ed448 as Ed448
 import qualified Crypto.PubKey.RSA as RSA
 import qualified Crypto.PubKey.RSA.PKCS15 as RSA
 import qualified Crypto.PubKey.RSA.PSS as PSS
-import Crypto.Number.Serialize (os2ip)
 
-import Data.X509 (PrivKey(..), PubKey(..), PubKeyEC(..), SerializedPoint(..))
+import Data.X509 (PrivKey(..), PubKey(..), PubKeyEC(..))
+import Data.X509.EC (ecPubKeyCurveName, unserializePoint)
 import Network.TLS.Crypto.DH
 import Network.TLS.Crypto.IES
 import Network.TLS.Crypto.Types
@@ -231,12 +230,8 @@ kxVerify (PubKeyDSA pk) DSSParams                msg signBS =
                             Nothing
 kxVerify (PubKeyEC key) (ECDSAParams alg) msg sigBS = fromMaybe False $ do
     -- get the curve name and the public key data
-    (curveName, pubBS) <- case key of
-            PubKeyEC_Named curveName' pub -> Just (curveName',pub)
-            PubKeyEC_Prime {}            ->
-                case find matchPrimeCurve $ enumFrom $ toEnum 0 of
-                    Nothing        -> Nothing
-                    Just curveName' -> Just (curveName', pubkeyEC_pub key)
+    let pubBS = pubkeyEC_pub key
+    curveName <- ecPubKeyCurveName key
     -- decode the signature
     signature <- case decodeASN1' BER sigBS of
         Left _ -> Nothing
@@ -244,7 +239,8 @@ kxVerify (PubKeyEC key) (ECDSAParams alg) msg sigBS = fromMaybe False $ do
         Right _ -> Nothing
 
     -- decode the public key related to the curve
-    pubkey <- unserializePoint (ECC.getCurveByName curveName) pubBS
+    let curve = ECC.getCurveByName curveName
+    pubkey <- ECDSA.PublicKey curve <$> unserializePoint curve pubBS
 
     verifyF <- case alg of
                     MD5    -> Just (ECDSA.verify H.MD5)
@@ -255,33 +251,6 @@ kxVerify (PubKeyEC key) (ECDSAParams alg) msg sigBS = fromMaybe False $ do
                     SHA512 -> Just (ECDSA.verify H.SHA512)
                     _      -> Nothing
     return $ verifyF pubkey signature msg
-  where
-        matchPrimeCurve c =
-            case ECC.getCurveByName c of
-                ECC.CurveFP (ECC.CurvePrime p cc) ->
-                    ECC.ecc_a cc == pubkeyEC_a key     &&
-                    ECC.ecc_b cc == pubkeyEC_b key     &&
-                    ECC.ecc_n cc == pubkeyEC_order key &&
-                    p            == pubkeyEC_prime key
-                _                                 -> False
-
-        unserializePoint curve (SerializedPoint bs) =
-            case B.uncons bs of
-                Nothing                -> Nothing
-                Just (ptFormat, input) ->
-                    case ptFormat of
-                        4 -> if B.length input /= 2 * bytes
-                                then Nothing
-                                else
-                                    let (x, y) = B.splitAt bytes input
-                                        p      = ECC.Point (os2ip x) (os2ip y)
-                                     in if ECC.isPointValid curve p
-                                            then Just $ ECDSA.PublicKey curve p
-                                            else Nothing
-                        -- 2 and 3 for compressed format.
-                        _ -> Nothing
-          where bits  = ECC.curveSizeBits curve
-                bytes = (bits + 7) `div` 8
 kxVerify (PubKeyEd25519 key) Ed25519Params msg sigBS =
     case Ed25519.signature sigBS of
         CryptoPassed sig -> Ed25519.verify key msg sig

@@ -53,7 +53,7 @@ hmacIter :: HMAC -> ByteString -> ByteString -> ByteString -> Int -> [ByteString
 hmacIter f secret seed aprev len =
     let an = f secret aprev in
     let out = f secret (B.concat [an, seed]) in
-    let digestsize = fromIntegral $ B.length out in
+    let digestsize = B.length out in
     if digestsize >= len
         then [ B.take (fromIntegral len) out ]
         else out : hmacIter f secret seed an (len - digestsize)
