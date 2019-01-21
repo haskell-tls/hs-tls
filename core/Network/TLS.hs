@@ -15,17 +15,41 @@ module Network.TLS
     , recvData
     , bye
 
+    -- * Backend abstraction
+    , HasBackend(..)
+    , Backend(..)
+
     -- * Context configuration
+    -- ** Parameters
+    , TLSParams
     , ClientParams(..)
-    , HostName
+    , defaultParamsClient
     , ServerParams(..)
-    , DebugParams(..)
-    , DHParams
-    , DHPublic
+    -- ** Hooks
     , ClientHooks(..)
     , ServerHooks(..)
+    -- ** Supported
     , Supported(..)
+    -- ** Shared
     , Shared(..)
+    -- ** Credentials
+    , Credentials(..)
+    , Credential
+    , credentialLoadX509
+    , credentialLoadX509FromMemory
+    , credentialLoadX509Chain
+    , credentialLoadX509ChainFromMemory
+    -- ** Session
+    , SessionID
+    , SessionData(..)
+    , SessionManager(..)
+    , noSessionManager
+    , TLS13TicketInfo
+    -- ** Misc
+    , DebugParams(..)
+    , HostName
+    , DHParams
+    , DHPublic
     , Hooks(..)
     , Handshake
     , Logging(..)
@@ -33,34 +57,25 @@ module Network.TLS
     , GroupUsage(..)
     , CertificateUsage(..)
     , CertificateRejectReason(..)
-    , defaultParamsClient
     , MaxFragmentEnum(..)
     , HashAndSignatureAlgorithm
     , HashAlgorithm(..)
     , SignatureAlgorithm(..)
     , CertificateType(..)
 
-    -- * raw types
-    , ProtocolType(..)
-    , Header(..)
+    -- * X509
+    -- ** X509 Validation
+    , ValidationChecks(..)
+    , ValidationHooks(..)
 
-    -- * Session
-    , SessionID
-    , SessionData(..)
-    , SessionManager(..)
-    , noSessionManager
-    , TLS13TicketInfo
-
-    -- * Backend abstraction
-    , Backend(..)
-
-    -- * Context object
-    , Context
-    , ctxConnection
-    , TLSParams
-    , HasBackend(..)
+    -- ** X509 Validation Cache
+    , ValidationCache(..)
+    , ValidationCacheResult(..)
+    , exceptionValidationCache
 
     -- * Context
+    , Context
+    , ctxConnection
     , contextFlush
     , contextClose
     , contextHookSetHandshakeRecv
@@ -68,66 +83,44 @@ module Network.TLS
     , contextHookSetLogging
     , contextModifyHooks
 
-    -- * Information gathering
+    -- ** Information gathering
     , Information(..)
+    , contextGetInformation
     , ClientRandom
     , ServerRandom
-
     , unClientRandom
     , unServerRandom
-    , contextGetInformation
 
-    -- * Credentials
-    , Credentials(..)
-    , Credential
-    , credentialLoadX509
-    , credentialLoadX509FromMemory
-    , credentialLoadX509Chain
-    , credentialLoadX509ChainFromMemory
-
-    -- * Application Layer Protocol Negotiation
+    -- ** Negotiated
     , getNegotiatedProtocol
-
-    -- * Server Name Indication
     , getClientSNI
-
-    -- * High level API
+    -- ** Updating keys
     , updateKey
     , KeyUpdateRequest(..)
 
-    -- * Crypto Key
+    -- * Raw types
+    , ProtocolType(..)
+    , Header(..)
+    , Version(..)
+    -- ** Compressions & Predefined compressions
+    , module Network.TLS.Compression
+    -- ** Ciphers & Predefined ciphers
+    , module Network.TLS.Cipher
+    -- ** Crypto Key
     , PubKey(..)
     , PrivKey(..)
+    -- ** TLS 1.3
+    , Group(..)
+    , HandshakeMode13(..)
 
-    -- * Compressions & Predefined compressions
-    , module Network.TLS.Compression
-
-    -- * Ciphers & Predefined ciphers
-    , module Network.TLS.Cipher
-
-    -- * Versions
-    , Version(..)
-
-    -- * Errors
+    -- * Errors and exceptions
+    -- ** Errors
     , TLSError(..)
     , KxError(..)
     , AlertDescription(..)
 
-    -- * Exceptions
+    -- ** Exceptions
     , TLSException(..)
-
-    -- * X509 Validation
-    , ValidationChecks(..)
-    , ValidationHooks(..)
-
-    -- * X509 Validation Cache
-    , ValidationCache(..)
-    , ValidationCacheResult(..)
-    , exceptionValidationCache
-
-    -- * TLS 1.3
-    , Group(..)
-    , HandshakeMode13(..)
 
     -- * Deprecated
     , recvData'
