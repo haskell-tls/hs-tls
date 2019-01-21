@@ -14,8 +14,10 @@ module Network.TLS.Handshake.Signature
     , digitallySignECDHParams
     , digitallySignDHParamsVerify
     , digitallySignECDHParamsVerify
+    , checkSupportedHashSignature
     , certificateCompatible
     , signatureCompatible
+    , hashSigToCertType
     , signatureParams
     , fromPubKey
     , decryptError
@@ -23,6 +25,7 @@ module Network.TLS.Handshake.Signature
 
 import Network.TLS.Crypto
 import Network.TLS.Context.Internal
+import Network.TLS.Parameters
 import Network.TLS.Struct
 import Network.TLS.Imports
 import Network.TLS.Packet (generateCertificateVerify_SSL, generateCertificateVerify_SSL_DSS,
@@ -65,6 +68,46 @@ signatureCompatible DS_ECDSA   (_, SignatureECDSA)            = True
 signatureCompatible DS_Ed25519 (_, SignatureEd25519)          = True
 signatureCompatible DS_Ed448   (_, SignatureEd448)            = True
 signatureCompatible _          (_, _)                         = False
+
+-- | Translate a 'HashAndSignatureAlgorithm' to an acceptable 'CertificateType'.
+-- Perhaps this needs to take supported groups into account, so that, for
+-- example, if we don't support any shared ECDSA groups with the server, we
+-- return 'Nothing' rather than 'CertificateType_ECDSA_Sign'.
+--
+-- Therefore, this interface is preliminary.  It gets us moving in the right
+-- direction.  The interplay between all the various TLS extensions and
+-- certificate selection is rather complex.
+--
+-- The goal is to ensure that the client certificate request callback only sees
+-- 'CertificateType' values that are supported by the library and also
+-- compatible with the server signature algorithms extension.
+--
+-- Since we don't yet support ECDSA private keys, the caller will use
+-- 'lastSupportedCertificateType' to filter those out for now, leaving just
+-- @RSA@ as the only supported client certificate algorithm for TLS 1.3.
+--
+-- FIXME: Add RSA_PSS_PSS signatures when supported.
+--
+hashSigToCertType :: HashAndSignatureAlgorithm -> Maybe CertificateType
+--
+hashSigToCertType (_, SignatureRSA)   = Just CertificateType_RSA_Sign
+--
+hashSigToCertType (_, SignatureDSS)   = Just CertificateType_DSS_Sign
+--
+hashSigToCertType (_, SignatureECDSA) = Just CertificateType_ECDSA_Sign
+--
+hashSigToCertType (HashIntrinsic, SignatureRSApssRSAeSHA256)
+    = Just CertificateType_RSA_Sign
+hashSigToCertType (HashIntrinsic, SignatureRSApssRSAeSHA384)
+    = Just CertificateType_RSA_Sign
+hashSigToCertType (HashIntrinsic, SignatureRSApssRSAeSHA512)
+    = Just CertificateType_RSA_Sign
+hashSigToCertType (HashIntrinsic, SignatureEd25519)
+    = Just CertificateType_Ed25519_Sign
+hashSigToCertType (HashIntrinsic, SignatureEd448)
+    = Just CertificateType_Ed448_Sign
+--
+hashSigToCertType _ = Nothing
 
 checkCertificateVerify :: Context
                        -> Version
@@ -186,7 +229,9 @@ signatureVerifyWithCertVerifyData :: Context
                                   -> DigitallySigned
                                   -> CertVerifyData
                                   -> IO Bool
-signatureVerifyWithCertVerifyData ctx (DigitallySigned _ bs) (sigParam, toVerify) = verifyPublic ctx sigParam toVerify bs
+signatureVerifyWithCertVerifyData ctx (DigitallySigned hs bs) (sigParam, toVerify) = do
+    checkSupportedHashSignature ctx hs
+    verifyPublic ctx sigParam toVerify bs
 
 digitallySignParams :: Context -> ByteString -> DigitalSignatureAlg -> Maybe HashAndSignatureAlgorithm -> IO DigitallySigned
 digitallySignParams ctx signatureData sigAlg hashSigAlg =
@@ -234,3 +279,12 @@ withClientAndServerRandom ctx f = do
     (cran, sran) <- usingHState ctx $ (,) <$> gets hstClientRandom
                                           <*> (fromJust "withClientAndServer : server random" <$> gets hstServerRandom)
     return $ f cran sran
+
+-- verify that the hash and signature selected by the peer is supported in
+-- the local configuration
+checkSupportedHashSignature :: Context -> Maybe HashAndSignatureAlgorithm -> IO ()
+checkSupportedHashSignature _   Nothing   = return ()
+checkSupportedHashSignature ctx (Just hs) =
+    unless (hs `elem` supportedHashSignatures (ctxSupported ctx)) $
+        let msg = "unsupported hash and signature algorithm: " ++ show hs
+         in throwCore $ Error_Protocol (msg, True, IllegalParameter)

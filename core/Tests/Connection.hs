@@ -89,8 +89,14 @@ knownHashSignatures = filter nonECDSA availableHashSignatures
     -- arbitraryCredentialsOfEachType cannot generate ECDSA
     nonECDSA (_,s) = s /= SignatureECDSA
 
-arbitraryHashSignatures :: Gen [HashAndSignatureAlgorithm]
-arbitraryHashSignatures = sublistOf knownHashSignatures
+knownHashSignatures13 :: [HashAndSignatureAlgorithm]
+knownHashSignatures13 = filter compat knownHashSignatures
+  where
+    compat (h,s) = h /= TLS.HashSHA1 && s /= SignatureDSS && s /= SignatureRSA
+
+arbitraryHashSignatures :: Version -> Gen [HashAndSignatureAlgorithm]
+arbitraryHashSignatures v = sublistOf l
+    where l = if v < TLS13 then knownHashSignatures else knownHashSignatures13
 
 -- for performance reason P521, FFDHE6144, FFDHE8192 are not tested
 knownGroups, knownECGroups, knownFFGroups :: [Group]

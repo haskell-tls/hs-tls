@@ -161,10 +161,10 @@ getHashSignature signed =
     convertHash sig X509.HashSHA512 = Just (TLS.HashSHA512, sig)
     convertHash _   _               = Nothing
 
--- | Checks whether certificates in the chain comply with a list of
--- hash/signature algorithm pairs.  Currently the verification applies only
--- to the leaf certificate, if it is not self-signed.  This may be extended
--- to additional chain elements in the future.
+-- | Checks whether certificate signatures in the chain comply with a list of
+-- hash/signature algorithm pairs.  Currently the verification applies only to
+-- the signature of the leaf certificate, and when not self-signed.  This may
+-- be extended to additional chain elements in the future.
 credentialMatchesHashSignatures :: [TLS.HashAndSignatureAlgorithm] -> Credential -> Bool
 credentialMatchesHashSignatures hashSigs (chain, _) =
     case chain of
