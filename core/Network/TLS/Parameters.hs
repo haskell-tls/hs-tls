@@ -314,11 +314,15 @@ defaultGroupUsage minBits params public
     | dhParamsGetBits params < minBits             = return   GroupUsageInsecure
     | otherwise                                    = return   GroupUsageValid
 
+-- | Type for 'onCertificateRequest'. This type synonym is to make
+--   document readable.
 type OnCertificateRequest = ([CertificateType],
                              Maybe [HashAndSignatureAlgorithm],
                              [DistinguishedName])
                            -> IO (Maybe (CertificateChain, PrivKey))
 
+-- | Type for 'onServerCertificate'. This type synonym is to make
+--   document readable.
 type OnServerCertificate = CertificateStore -> ValidationCache -> ServiceID -> CertificateChain -> IO [FailedReason]
 
 -- | A set of callbacks run by the clients for various corners of TLS establishment
