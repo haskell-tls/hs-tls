@@ -559,8 +559,10 @@ prop_handshake_groups = do
                                        { supportedGroups = serverGroups }
                                    }
         isCustom = maybe True isCustomDHParams (serverDHEParams serverParam')
+        mCustomGroup = serverDHEParams serverParam' >>= dhParamsGroup
+        isClientCustom = maybe True (`notElem` clientGroups) mCustomGroup
         commonGroups = clientGroups `intersect` serverGroups
-        shouldFail = null commonGroups && (tls13 || isCustom && denyCustom)
+        shouldFail = null commonGroups && (tls13 || isClientCustom && denyCustom)
         p minfo = isNothing (minfo >>= infoNegotiatedGroup) == (null commonGroups && isCustom)
     if shouldFail
         then runTLSInitFailure (clientParam',serverParam')
