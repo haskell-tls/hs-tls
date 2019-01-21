@@ -147,7 +147,8 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     -- TLS version dependent
     if chosenVersion <= TLS12 then
         handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverName clientVersion compressions clientSession
-      else
+      else do
+        mapM_ ensureNullCompression compressions
         -- fixme: we should check if the client random is the same as
         -- that in the first client hello in the case of hello retry.
         handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts ciphers serverName clientSession

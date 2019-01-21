@@ -167,7 +167,10 @@ data Supported = Supported
       -- cipher list.  'Network.TLS.Extra.Cipher.ciphersuite_default' is often
       -- a good choice.
     , supportedCiphers        :: [Cipher]
-      -- | supported compressions methods
+      -- | Supported compressions methods.  By default only the "null"
+      -- compression is supported, which means no compression will be performed.
+      -- Allowing other compression method is not advised as it causes a
+      -- connection failure when TLS 1.3 is negotiated.
     , supportedCompressions   :: [Compression]
       -- | All supported hash/signature algorithms pair for client
       -- certificate verification and server signature in (EC)DHE,

@@ -46,7 +46,7 @@ encodeHandshake13' (ServerHello13 random session cipherId exts) = runPut $ do
     putServerRandom32 random
     putSession session
     putWord16 cipherId
-    putWord8 0
+    putWord8 0 -- compressionID nullCompression
     putExtensions exts
 encodeHandshake13' (EncryptedExtensions13 exts) = runPut $ putExtensions exts
 encodeHandshake13' (CertRequest13 reqctx exts) = runPut $ do

@@ -636,7 +636,8 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
     case find (== ver) (supportedVersions $ ctxSupported ctx) of
         Nothing -> throwCore $ Error_Protocol ("server version " ++ show ver ++ " is not supported", True, ProtocolVersion)
         Just _  -> return ()
-    if ver == TLS13 then do
+    if ver > TLS12 then do
+        ensureNullCompression compression
         usingHState ctx $ setHelloParameters13 cipherAlg
         return RecvStateDone
       else do
