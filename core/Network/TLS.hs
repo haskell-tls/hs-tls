@@ -84,7 +84,7 @@ module Network.TLS
     , ValidationCacheResult(..)
     , exceptionValidationCache
 
-    -- * Context
+    -- * APIs
     -- ** Backend
     , ctxConnection
     , contextFlush
