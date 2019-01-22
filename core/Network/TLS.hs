@@ -9,7 +9,8 @@
 module Network.TLS
     (
     -- * Basic APIs
-      contextNew
+      Context
+    , contextNew
     , handshake
     , sendData
     , recvData
@@ -84,11 +85,10 @@ module Network.TLS
     , exceptionValidationCache
 
     -- * Context
-    , Context
+    -- ** Backend
     , ctxConnection
     , contextFlush
     , contextClose
-
     -- ** Information gathering
     , Information(..)
     , contextGetInformation
@@ -96,7 +96,6 @@ module Network.TLS
     , ServerRandom
     , unClientRandom
     , unServerRandom
-
     -- ** Negotiated
     , getNegotiatedProtocol
     , getClientSNI
