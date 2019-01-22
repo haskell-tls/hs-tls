@@ -662,10 +662,10 @@ processCertificate cparams ctx (Certificates certs) = do
         CertificateUsageReject reason -> certificateRejected reason
     return $ RecvStateHandshake (processServerKeyExchange ctx)
   where shared = clientShared cparams
-        checkCert = (onServerCertificate $ clientHooks cparams) (sharedCAStore shared)
-                                                                (sharedValidationCache shared)
-                                                                (clientServerIdentification cparams)
-                                                                certs
+        checkCert = onServerCertificate (clientHooks cparams) (sharedCAStore shared)
+                                                              (sharedValidationCache shared)
+                                                              (clientServerIdentification cparams)
+                                                              certs
         -- also verify that the certificate optional key usage is compatible
         -- with the intended key-exchange.  This check is not delegated to
         -- x509-validation 'checkLeafKeyUsage' because it depends on negotiated
