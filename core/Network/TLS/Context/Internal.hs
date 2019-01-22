@@ -136,9 +136,11 @@ updateMeasure ctx f = do
 withMeasure :: Context -> (Measurement -> IO a) -> IO a
 withMeasure ctx f = readIORef (ctxMeasurement ctx) >>= f
 
+-- | A shortcut for 'backendFlush . ctxConnection'.
 contextFlush :: Context -> IO ()
 contextFlush = backendFlush . ctxConnection
 
+-- | A shortcut for 'backendClose . ctxConnection'.
 contextClose :: Context -> IO ()
 contextClose = backendClose . ctxConnection
 

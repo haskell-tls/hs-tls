@@ -47,7 +47,7 @@ import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.KeySchedule
-import Network.TLS.Types (Role(..))
+import Network.TLS.Types (Role(..), HostName)
 import Network.TLS.Util (catchException, mapChunks_)
 import Network.TLS.Extension
 import qualified Network.TLS.State as S
@@ -80,8 +80,6 @@ bye ctx = liftIO $ do
 -- return get the protocol agreed upon.
 getNegotiatedProtocol :: MonadIO m => Context -> m (Maybe B.ByteString)
 getNegotiatedProtocol ctx = liftIO $ usingState_ ctx S.getNegotiatedProtocol
-
-type HostName = String
 
 -- | If the Server Name Indication extension has been used, return the
 -- hostname specified by the client.

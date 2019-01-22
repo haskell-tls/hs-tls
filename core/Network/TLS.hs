@@ -9,7 +9,8 @@
 module Network.TLS
     (
     -- * Basic APIs
-      contextNew
+      Context
+    , contextNew
     , handshake
     , sendData
     , recvData
@@ -21,19 +22,24 @@ module Network.TLS
 
     -- * Context configuration
     -- ** Parameters
+    -- intentionally hide the internal methods even haddock warns.
     , TLSParams
     , ClientParams(..)
     , defaultParamsClient
     , ServerParams(..)
-    -- ** Hooks
-    , ClientHooks(..)
-    , OnCertificateRequest
-    , OnServerCertificate
-    , ServerHooks(..)
+    , CommonParams
+    , Role
     -- ** Supported
     , Supported(..)
     -- ** Shared
     , Shared(..)
+    -- ** Debug parameters
+    , DebugParams(..)
+    -- ** Client Server Hooks
+    , ClientHooks(..)
+    , OnCertificateRequest
+    , OnServerCertificate
+    , ServerHooks(..)
     -- ** Credentials
     , Credentials(..)
     , Credential
@@ -47,14 +53,18 @@ module Network.TLS
     , SessionManager(..)
     , noSessionManager
     , TLS13TicketInfo
-    -- ** Misc
-    , DebugParams(..)
-    , HostName
-    , DHParams
-    , DHPublic
+    -- ** Hooks
     , Hooks(..)
     , Handshake
     , Logging(..)
+    , contextHookSetHandshakeRecv
+    , contextHookSetCertificateRecv
+    , contextHookSetLogging
+    , contextModifyHooks
+    -- ** Misc
+    , HostName
+    , DHParams
+    , DHPublic
     , Measurement(..)
     , GroupUsage(..)
     , CertificateUsage(..)
@@ -75,16 +85,11 @@ module Network.TLS
     , ValidationCacheResult(..)
     , exceptionValidationCache
 
-    -- * Context
-    , Context
+    -- * APIs
+    -- ** Backend
     , ctxConnection
     , contextFlush
     , contextClose
-    , contextHookSetHandshakeRecv
-    , contextHookSetCertificateRecv
-    , contextHookSetLogging
-    , contextModifyHooks
-
     -- ** Information gathering
     , Information(..)
     , contextGetInformation
@@ -92,7 +97,6 @@ module Network.TLS
     , ServerRandom
     , unClientRandom
     , unServerRandom
-
     -- ** Negotiated
     , getNegotiatedProtocol
     , getClientSNI
@@ -106,6 +110,7 @@ module Network.TLS
     , Version(..)
     -- ** Compressions & Predefined compressions
     , module Network.TLS.Compression
+    , CompressionID
     -- ** Ciphers & Predefined ciphers
     , module Network.TLS.Cipher
     -- ** Crypto Key
@@ -154,7 +159,7 @@ import Network.TLS.X509
 import Network.TLS.Types
 import Network.TLS.Handshake.State (HandshakeMode13(..))
 import Data.X509 (PubKey(..), PrivKey(..))
-import Data.X509.Validation
+import Data.X509.Validation hiding (HostName)
 import Data.ByteString as B
 
 {-# DEPRECATED Bytes "Use Data.ByteString.Bytestring instead of Bytes." #-}

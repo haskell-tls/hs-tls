@@ -38,10 +38,10 @@ import Network.TLS.Credentials
 import Network.TLS.X509
 import Network.TLS.RNG (Seed)
 import Network.TLS.Imports
+import Network.TLS.Types (HostName)
 import Data.Default.Class
 import qualified Data.ByteString as B
 
-type HostName = String
 
 type CommonParams = (Supported, Shared, DebugParams)
 

@@ -15,7 +15,7 @@ module Network.TLS.Types
     , Role(..)
     , invertRole
     , Direction(..)
---    , HostName
+    , HostName
     , Second
     , Millisecond
     ) where
@@ -23,7 +23,7 @@ module Network.TLS.Types
 import Network.TLS.Imports
 import Network.TLS.Crypto.Types (Group)
 
-type HostName = String
+type HostName    = String
 type Second      = Word32
 type Millisecond = Word64
 

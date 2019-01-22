@@ -141,7 +141,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
         Just (ApplicationLayerProtocolNegotiation protos) -> usingState_ ctx $ setClientALPNSuggest protos
         _ -> return ()
 
-    extraCreds <- (onServerNameIndication $ serverHooks sparams) serverName
+    extraCreds <- onServerNameIndication (serverHooks sparams) serverName
     let allCreds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
 
     -- TLS version dependent
@@ -250,7 +250,7 @@ handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverN
     when (null ciphersFilteredVersion) $ throwCore $
         Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
 
-    let usedCipher = (onCipherChoosing $ serverHooks sparams) chosenVersion ciphersFilteredVersion
+    let usedCipher = onCipherChoosing (serverHooks sparams) chosenVersion ciphersFilteredVersion
 
     cred <- case cipherKeyExchange usedCipher of
                 CipherKeyExchange_RSA       -> return $ credentialsFindForDecrypting creds
@@ -652,7 +652,7 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
     -- empty lists.
     when (null ciphersFilteredVersion) $ throwCore $
         Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
-    let usedCipher = (onCipherChoosing $ serverHooks sparams) chosenVersion ciphersFilteredVersion
+    let usedCipher = onCipherChoosing (serverHooks sparams) chosenVersion ciphersFilteredVersion
         usedHash = cipherHash usedCipher
         rtt0 = case extensionLookup extensionID_EarlyData exts >>= extensionDecode MsgTClientHello of
                  Just (EarlyDataIndication _) -> True
