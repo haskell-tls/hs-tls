@@ -158,7 +158,7 @@ import Network.TLS.X509
 import Network.TLS.Types
 import Network.TLS.Handshake.State (HandshakeMode13(..))
 import Data.X509 (PubKey(..), PrivKey(..))
-import Data.X509.Validation
+import Data.X509.Validation hiding (HostName)
 import Data.ByteString as B
 
 {-# DEPRECATED Bytes "Use Data.ByteString.Bytestring instead of Bytes." #-}

@@ -65,7 +65,7 @@ import Network.TLS.Imports
 import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.RNG
-import Network.TLS.Types (Role(..))
+import Network.TLS.Types (Role(..), HostName)
 import Network.TLS.Wire (GetContinuation)
 import Network.TLS.Extension
 import qualified Data.ByteString as B
@@ -73,8 +73,6 @@ import Control.Monad.State.Strict
 import Network.TLS.ErrT
 import Crypto.Random
 import Data.X509 (CertificateChain)
-
-type HostName = String
 
 data TLSState = TLSState
     { stSession             :: Session

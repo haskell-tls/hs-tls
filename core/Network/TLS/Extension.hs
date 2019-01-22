@@ -69,7 +69,7 @@ import Network.TLS.Struct ( DistinguishedName
                           , EnumSafe16(..)
                           , HashAndSignatureAlgorithm )
 import Network.TLS.Crypto.Types
-import Network.TLS.Types (Version(..))
+import Network.TLS.Types (Version(..), HostName)
 
 import Network.TLS.Wire
 import Network.TLS.Imports
@@ -82,8 +82,6 @@ import Network.TLS.Packet ( putDNames
                           )
 
 ------------------------------------------------------------
-
-type HostName = String
 
 -- central list defined in <http://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.txt>
 extensionID_ServerName
