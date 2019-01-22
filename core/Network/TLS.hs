@@ -22,7 +22,8 @@ module Network.TLS
 
     -- * Context configuration
     -- ** Parameters
-    , TLSParams(..)
+    -- intentionally hide the internal methods even haddock warns.
+    , TLSParams
     , ClientParams(..)
     , defaultParamsClient
     , ServerParams(..)
