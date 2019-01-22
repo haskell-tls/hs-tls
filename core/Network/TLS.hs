@@ -33,7 +33,7 @@ module Network.TLS
     , Shared(..)
     -- ** Debug parameters
     , DebugParams(..)
-    -- ** Hooks
+    -- ** Client Server Hooks
     , ClientHooks(..)
     , OnCertificateRequest
     , OnServerCertificate
@@ -51,13 +51,18 @@ module Network.TLS
     , SessionManager(..)
     , noSessionManager
     , TLS13TicketInfo
+    -- ** Hooks
+    , Hooks(..)
+    , Handshake
+    , Logging(..)
+    , contextHookSetHandshakeRecv
+    , contextHookSetCertificateRecv
+    , contextHookSetLogging
+    , contextModifyHooks
     -- ** Misc
     , HostName
     , DHParams
     , DHPublic
-    , Hooks(..)
-    , Handshake
-    , Logging(..)
     , Measurement(..)
     , GroupUsage(..)
     , CertificateUsage(..)
@@ -83,10 +88,6 @@ module Network.TLS
     , ctxConnection
     , contextFlush
     , contextClose
-    , contextHookSetHandshakeRecv
-    , contextHookSetCertificateRecv
-    , contextHookSetLogging
-    , contextModifyHooks
 
     -- ** Information gathering
     , Information(..)
