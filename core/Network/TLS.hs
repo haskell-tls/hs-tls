@@ -27,15 +27,17 @@ module Network.TLS
     , ServerParams(..)
     , CommonParams
     , Role
+    -- ** Supported
+    , Supported(..)
+    -- ** Shared
+    , Shared(..)
+    -- ** Debug parameters
+    , DebugParams(..)
     -- ** Hooks
     , ClientHooks(..)
     , OnCertificateRequest
     , OnServerCertificate
     , ServerHooks(..)
-    -- ** Supported
-    , Supported(..)
-    -- ** Shared
-    , Shared(..)
     -- ** Credentials
     , Credentials(..)
     , Credential
@@ -50,7 +52,6 @@ module Network.TLS
     , noSessionManager
     , TLS13TicketInfo
     -- ** Misc
-    , DebugParams(..)
     , HostName
     , DHParams
     , DHPublic
