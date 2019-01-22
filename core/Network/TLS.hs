@@ -21,10 +21,12 @@ module Network.TLS
 
     -- * Context configuration
     -- ** Parameters
-    , TLSParams
+    , TLSParams(..)
     , ClientParams(..)
     , defaultParamsClient
     , ServerParams(..)
+    , CommonParams
+    , Role
     -- ** Hooks
     , ClientHooks(..)
     , OnCertificateRequest
@@ -106,6 +108,7 @@ module Network.TLS
     , Version(..)
     -- ** Compressions & Predefined compressions
     , module Network.TLS.Compression
+    , CompressionID
     -- ** Ciphers & Predefined ciphers
     , module Network.TLS.Cipher
     -- ** Crypto Key
