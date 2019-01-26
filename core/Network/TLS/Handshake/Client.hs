@@ -611,9 +611,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
         isHRR = isHelloRetryRequest serverRan
     usingState_ ctx $ do
         setTLS13HRR isHRR
-        case extensionLookup extensionID_Cookie exts >>= extensionDecode MsgTServerHello of
-          Just cookie -> setTLS13Cookie cookie
-          _           -> return ()
+        setTLS13Cookie (guard isHRR >> extensionLookup extensionID_Cookie exts >>= extensionDecode MsgTServerHello)
         setSession serverSession (isJust resumingSession)
         setVersion rver -- must be before processing supportedVersions ext
         mapM_ processServerExtension exts
