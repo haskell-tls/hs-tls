@@ -482,18 +482,14 @@ getSession = do
         len -> Session . Just <$> getBytes len
 
 getCookie :: Get Cookie
-getCookie = do
-    len8 <- getWord8
-    case fromIntegral len8 of
-        0   -> return $ Cookie B.empty
-        len -> Cookie <$> getBytes len
+getCookie = Cookie <$> getOpaque8
 
 putSession :: Session -> Put
 putSession (Session Nothing)  = putWord8 0
 putSession (Session (Just s)) = putOpaque8 s
 
 putCookie :: Cookie -> Put
-putCookie (Cookie c) = putWord8 (fromIntegral $ B.length c) >> putOpaque8 c
+putCookie (Cookie c) = putOpaque8 c
 
 getExtensions :: Int -> Get [ExtensionRaw]
 getExtensions 0   = return []
