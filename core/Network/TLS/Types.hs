@@ -30,7 +30,7 @@ type Millisecond = Word64
 -- | Versions known to TLS
 --
 -- SSL2 is just defined, but this version is and will not be supported.
-data Version = SSL2 | SSL3 | TLS10 | TLS11 | TLS12 | TLS13 deriving (Show, Eq, Ord, Bounded)
+data Version = SSL2 | SSL3 | TLS10 | DTLS10 | TLS11 | TLS12 | DTLS12 | TLS13 deriving (Show, Eq, Ord, Bounded)
 
 -- | A session ID
 type SessionID = ByteString

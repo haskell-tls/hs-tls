@@ -128,7 +128,14 @@ getHandshakeType = do
  - decode and encode headers
  -}
 decodeHeader :: ByteString -> Either TLSError Header
-decodeHeader = runGetErr "header" $ Header <$> getHeaderType <*> getVersion <*> getWord16
+decodeHeader = runGetErr "header" $ do
+  pt <- getHeaderType
+  ver <- getVersion
+  sn <- if isDTLS ver
+        then getWord64
+        else return 0
+  len <- getWord16
+  return $ Header pt ver sn len
 
 decodeDeprecatedHeaderLength :: ByteString -> Either TLSError Word16
 decodeDeprecatedHeaderLength = runGetErr "deprecatedheaderlength" $ subtract 0x8000 <$> getWord16
@@ -138,14 +145,17 @@ decodeDeprecatedHeader size =
     runGetErr "deprecatedheader" $ do
         1 <- getWord8
         version <- getVersion
-        return $ Header ProtocolType_DeprecatedHandshake version size
+        return $ Header ProtocolType_DeprecatedHandshake version 0 size
 
 encodeHeader :: Header -> ByteString
-encodeHeader (Header pt ver len) = runPut (putHeaderType pt >> putBinaryVersion ver >> putWord16 len)
+encodeHeader (Header pt ver sn len) = runPut (putHeaderType pt >>
+                                              putBinaryVersion ver >>
+                                              (when (isDTLS ver) $ putWord64 sn) >>
+                                              putWord16 len)
         {- FIXME check len <= 2^14 -}
 
 encodeHeaderNoVer :: Header -> ByteString
-encodeHeaderNoVer (Header pt _ len) = runPut (putHeaderType pt >> putWord16 len)
+encodeHeaderNoVer (Header pt _ _ len) = runPut (putHeaderType pt >> putWord16 len)
         {- FIXME check len <= 2^14 -}
 
 {-
@@ -183,6 +193,7 @@ decodeHandshake :: CurrentParams -> HandshakeType -> ByteString -> Either TLSErr
 decodeHandshake cp ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
     HandshakeType_HelloRequest    -> decodeHelloRequest
     HandshakeType_ClientHello     -> decodeClientHello
+    HandshakeType_HelloVerifyRequest -> decodeHelloVerifyRequest
     HandshakeType_ServerHello     -> decodeServerHello
     HandshakeType_Certificate     -> decodeCertificates
     HandshakeType_ServerKeyXchg   -> decodeServerKeyXchg cp
@@ -204,7 +215,8 @@ decodeDeprecatedHandshake b = runGetErr "deprecatedhandshake" getDeprecated b
             session <- getSessionId sessionIdLen
             random <- getChallenge challengeLen
             let compressions = [0]
-            return $ ClientHello ver random session ciphers compressions [] (Just b)
+                cookie = Cookie B.empty
+            return $ ClientHello ver random session cookie ciphers compressions [] (Just b)
         getCipherSpec len | len < 3 = return []
         getCipherSpec len = do
             [c0,c1,c2] <- map fromEnum <$> replicateM 3 getWord8
@@ -222,13 +234,20 @@ decodeClientHello = do
     ver          <- getVersion
     random       <- getClientRandom32
     session      <- getSession
+    cookie       <- if isDTLS ver
+                    then getCookie
+                    else return $ Cookie B.empty
     ciphers      <- getWords16
     compressions <- getWords8
     r            <- remaining
     exts <- if hasHelloExtensions ver && r > 0
             then fromIntegral <$> getWord16 >>= getExtensions
             else return []
-    return $ ClientHello ver random session ciphers compressions exts Nothing
+    return $ ClientHello ver random session cookie ciphers compressions exts Nothing
+
+decodeHelloVerifyRequest :: Get Handshake
+decodeHelloVerifyRequest = HelloVerifyRequest <$> getVersion <*> getCookie
+    
 
 decodeServerHello :: Get Handshake
 decodeServerHello = do
@@ -351,7 +370,7 @@ encodeHandshake o =
     let content = runPut $ encodeHandshakeContent o in
     let len = B.length content in
     let header = case o of
-                    ClientHello _ _ _ _ _ _ (Just _) -> "" -- SSLv2 ClientHello message
+                    ClientHello _ _ _ _ _ _ _ (Just _) -> "" -- SSLv2 ClientHello message
                     _ -> runPut $ encodeHandshakeHeader (typeOfHandshake o) len in
     B.concat [ header, content ]
 
@@ -362,16 +381,22 @@ encodeHandshakeHeader :: HandshakeType -> Int -> Put
 encodeHandshakeHeader ty len = putWord8 (valOfType ty) >> putWord24 len
 
 encodeHandshakeContent :: Handshake -> Put
-
-encodeHandshakeContent (ClientHello _ _ _ _ _ _ (Just deprecated)) = do
+encodeHandshakeContent (ClientHello _ _ _ _ _ _ _ (Just deprecated)) = do
     putBytes deprecated
-encodeHandshakeContent (ClientHello version random session cipherIDs compressionIDs exts Nothing) = do
+
+encodeHandshakeContent (ClientHello version random session cookie cipherIDs compressionIDs exts Nothing) = do
     putBinaryVersion version
     putClientRandom32 random
     putSession session
+    when (isDTLS version) $ putCookie cookie
     putWords16 cipherIDs
     putWords8 compressionIDs
     putExtensions exts
+    return ()
+
+encodeHandshakeContent (HelloVerifyRequest version cookie) = do
+    putBinaryVersion version
+    putCookie cookie
     return ()
 
 encodeHandshakeContent (ServerHello version random session cipherid compressionID exts) = do
@@ -456,9 +481,19 @@ getSession = do
         0   -> return $ Session Nothing
         len -> Session . Just <$> getBytes len
 
+getCookie :: Get Cookie
+getCookie = do
+    len8 <- getWord8
+    case fromIntegral len8 of
+        0   -> return $ Cookie B.empty
+        len -> Cookie <$> getBytes len
+
 putSession :: Session -> Put
 putSession (Session Nothing)  = putWord8 0
 putSession (Session (Just s)) = putOpaque8 s
+
+putCookie :: Cookie -> Put
+putCookie (Cookie c) = putWord8 (fromIntegral $ B.length c) >> putOpaque8 c
 
 getExtensions :: Int -> Get [ExtensionRaw]
 getExtensions 0   = return []

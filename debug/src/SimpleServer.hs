@@ -116,6 +116,7 @@ getDefaultParams flags store smgr cred rtt0accept = do
                 | Tls11 `elem` flags = TLS11
                 | Ssl3  `elem` flags = SSL3
                 | Tls10 `elem` flags = TLS10
+                | Dtls  `elem` flags = DTLS12
                 | otherwise          = TLS12
             supportedVers
                 | NoVersionDowngrade `elem` flags = [tlsConnectVer]
@@ -135,7 +136,7 @@ getGroups flags = case getGroup >>= readGroups of
             f acc _          = acc
 
 data Flag = Verbose | Debug | IODebug | NoValidateCert | Http11
-          | Ssl3 | Tls10 | Tls11 | Tls12 | Tls13
+          | Ssl3 | Tls10 | Tls11 | Tls12 | Tls13 | Dtls
           | NoVersionDowngrade
           | AllowRenegotiation
           | Output String
