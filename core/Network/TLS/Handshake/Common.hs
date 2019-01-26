@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Network.TLS.Handshake.Common
     ( handshakeFailed
@@ -143,12 +144,14 @@ getSessionData ctx = do
     mms <- usingHState ctx (gets hstMasterSecret)
     tx  <- liftIO $ readMVar (ctxTxState ctx)
     alpn <- usingState_ ctx getNegotiatedProtocol
+    let !cipher      = cipherID $ fromJust "cipher" $ stCipher tx
+        !compression = compressionID $ stCompression tx
     case mms of
         Nothing -> return Nothing
         Just ms -> return $ Just SessionData
                         { sessionVersion     = ver
-                        , sessionCipher      = cipherID $ fromJust "cipher" $ stCipher tx
-                        , sessionCompression = compressionID $ stCompression tx
+                        , sessionCipher      = cipher
+                        , sessionCompression = compression
                         , sessionClientSNI   = sni
                         , sessionSecret      = ms
                         , sessionGroup       = Nothing
