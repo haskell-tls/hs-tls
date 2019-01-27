@@ -188,7 +188,8 @@ data Supported = Supported
       -- generating signatures.
       --
       -- Note: with TLS 1.3 some algorithms have been deprecated and will not be
-      -- used even when listed in the parameter: MD5, SHA-1, RSA PKCS#1, DSS.
+      -- used even when listed in the parameter: MD5, SHA-1, SHA-224, RSA
+      -- PKCS#1, DSS.
     , supportedHashSignatures :: [HashAndSignatureAlgorithm]
       -- | Secure renegotiation defined in RFC5746.
       --   If 'True', clients send the renegotiation_info extension.
@@ -232,17 +233,17 @@ defaultSupported = Supported
     { supportedVersions       = [TLS12,TLS11,TLS10]
     , supportedCiphers        = []
     , supportedCompressions   = [nullCompression]
-    , supportedHashSignatures = [ (HashIntrinsic,     SignatureRSApssRSAeSHA256)
-                                , (HashIntrinsic,     SignatureRSApssRSAeSHA384)
-                                , (HashIntrinsic,     SignatureRSApssRSAeSHA512)
-                                , (Struct.HashSHA512, SignatureRSA)
-                                , (Struct.HashSHA512, SignatureECDSA)
-                                , (Struct.HashIntrinsic, SignatureEd448)
-                                , (Struct.HashSHA384, SignatureRSA)
-                                , (Struct.HashSHA384, SignatureECDSA)
-                                , (Struct.HashIntrinsic, SignatureEd25519)
-                                , (Struct.HashSHA256, SignatureRSA)
+    , supportedHashSignatures = [ (HashIntrinsic,     SignatureEd448)
+                                , (HashIntrinsic,     SignatureEd25519)
                                 , (Struct.HashSHA256, SignatureECDSA)
+                                , (Struct.HashSHA384, SignatureECDSA)
+                                , (Struct.HashSHA512, SignatureECDSA)
+                                , (HashIntrinsic,     SignatureRSApssRSAeSHA512)
+                                , (HashIntrinsic,     SignatureRSApssRSAeSHA384)
+                                , (HashIntrinsic,     SignatureRSApssRSAeSHA256)
+                                , (Struct.HashSHA512, SignatureRSA)
+                                , (Struct.HashSHA384, SignatureRSA)
+                                , (Struct.HashSHA256, SignatureRSA)
                                 , (Struct.HashSHA1,   SignatureRSA)
                                 , (Struct.HashSHA1,   SignatureDSS)
                                 ]
