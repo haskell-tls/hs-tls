@@ -645,7 +645,7 @@ newtype Cookie = Cookie ByteString deriving (Eq, Show)
 instance Extension Cookie where
     extensionID _ = extensionID_Cookie
     extensionEncode (Cookie opaque) = runPut $ putOpaque16 opaque
-    extensionDecode MsgTClientHello = runGetMaybe (Cookie <$> getOpaque16)
+    extensionDecode MsgTServerHello = runGetMaybe (Cookie <$> getOpaque16)
     extensionDecode _               = fail "extensionDecode: Cookie"
 
 ------------------------------------------------------------

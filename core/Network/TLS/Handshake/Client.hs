@@ -123,8 +123,8 @@ handshakeClient' cparams ctx groups mcrand = do
                                  ,earlyDataExtension
                                  ,keyshareExtension
                                  ,pskExchangeModeExtension
-                                 ,preSharedKeyExtension
                                  ,cookieExtension
+                                 ,preSharedKeyExtension -- MUST be last
                                  ]
 
         toExtensionRaw :: Extension e => e -> ExtensionRaw
