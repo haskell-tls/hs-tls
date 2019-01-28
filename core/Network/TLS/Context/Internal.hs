@@ -56,6 +56,10 @@ module Network.TLS.Context.Internal
     , getHState
     , getStateRNG
     , tls13orLater
+
+    -- * DTLS related
+    , nextSequenceNumber
+    , nextEpoch
     ) where
 
 import Network.TLS.Backend
@@ -118,6 +122,9 @@ data Context = Context
                                            -- it is usually nested in a write or read lock.
     , ctxPendingActions   :: IORef [PendingAction]
     , ctxKeyLogger        :: String -> IO ()
+
+    , ctxSequenceNumber   :: IORef SequenceNumber -- ^ DTLS next record sequence number
+    , ctxHelloVerifySecret:: B.ByteString -- ^ transient secret for HelloVerifyRequest cookies
     }
 
 data Established = NotEstablished
@@ -270,3 +277,15 @@ tls13orLater ctx = do
     return $ case ev of
                Left  _ -> False
                Right v -> v >= TLS13
+
+nextSequenceNumber :: Context -> IO SequenceNumber
+nextSequenceNumber ctx = atomicModifyIORef' (ctxSequenceNumber ctx) (\sn -> (sn+1, sn))
+-- fixme: check and prohibit 48-bit integer wraparound.
+
+nextEpoch :: Context -> IO SequenceNumber
+nextEpoch ctx = atomicModifyIORef' (ctxSequenceNumber ctx)
+                (\sn -> let epochMask = 0xffff000000000000
+                            oneEpoch  = 0x0001000000000000
+                            epoch = sn .&. epochMask
+                            newEpoch = epoch + oneEpoch
+                        in (newEpoch+1, newEpoch))

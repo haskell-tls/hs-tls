@@ -40,10 +40,11 @@ module Network.TLS.Struct
     , ServerKeyXchgAlgorithmData(..)
     , ClientKeyXchgAlgorithmData(..)
     , Packet(..)
+    , SequenceNumber
     , Header(..)
     , ServerRandom(..)
     , ClientRandom(..)
-    , Cookie(..)
+    , HelloCookie(..)
     , FinishedData
     , SessionID
     , Session(..)
@@ -203,13 +204,18 @@ data Packet =
     | AppData ByteString
     deriving (Show,Eq)
 
-data Header = Header ProtocolType Version Word64 Word16 deriving (Show,Eq)
+type SequenceNumber = Word64
+-- ^ Record sequence number for DTLS. Not used in non-dtls protocols.
+--   Actually that's 16 (most signigicant) bits of epoch
+--   and 48 (least significant) bits of sequence number
+
+data Header = Header ProtocolType Version SequenceNumber Word16 deriving (Show,Eq)
 
 newtype ServerRandom = ServerRandom { unServerRandom :: ByteString } deriving (Show, Eq)
 newtype ClientRandom = ClientRandom { unClientRandom :: ByteString } deriving (Show, Eq)
 newtype Session = Session (Maybe SessionID) deriving (Show, Eq)
 
-newtype Cookie = Cookie { unCookie :: ByteString } deriving (Show, Eq)
+newtype HelloCookie = HelloCookie ByteString deriving (Show, Eq)
 
 type FinishedData = ByteString
 type ExtensionID  = Word16
@@ -334,8 +340,8 @@ data ClientKeyXchgAlgorithmData =
 type DeprecatedRecord = ByteString
 
 data Handshake =
-      ClientHello !Version !ClientRandom !Session !Cookie ![CipherID] ![CompressionID] [ExtensionRaw] (Maybe DeprecatedRecord)
-    | HelloVerifyRequest !Version !Cookie
+      ClientHello !Version !ClientRandom !Session !HelloCookie ![CipherID] ![CompressionID] [ExtensionRaw] (Maybe DeprecatedRecord)
+    | HelloVerifyRequest !Version !HelloCookie
     | ServerHello !Version !ServerRandom !Session !CipherID !CompressionID [ExtensionRaw]
     | Certificates CertificateChain
     | HelloRequest

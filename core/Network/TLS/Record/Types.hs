@@ -44,7 +44,7 @@ import Network.TLS.Record.State
 import qualified Data.ByteString as B
 
 -- | Represent a TLS record.
-data Record a = Record !ProtocolType !Version !(Fragment a) deriving (Show,Eq)
+data Record a = Record !ProtocolType !Version !SequenceNumber !(Fragment a) deriving (Show,Eq)
 
 newtype Fragment a = Fragment { fragmentGetBytes :: ByteString } deriving (Show,Eq)
 
@@ -59,7 +59,7 @@ fragmentCiphertext :: ByteString -> Fragment Ciphertext
 fragmentCiphertext bytes = Fragment bytes
 
 onRecordFragment :: Record a -> (Fragment a -> RecordM (Fragment b)) -> RecordM (Record b)
-onRecordFragment (Record pt ver frag) f = Record pt ver <$> f frag
+onRecordFragment (Record pt ver sn frag) f = Record pt ver sn <$> f frag
 
 fragmentMap :: (ByteString -> RecordM ByteString) -> Fragment a -> RecordM (Fragment b)
 fragmentMap f (Fragment b) = Fragment <$> f b
@@ -82,12 +82,12 @@ fragmentUncompress f = fragmentMap f
 
 -- | turn a record into an header and bytes
 recordToRaw :: Record a -> (Header, ByteString)
-recordToRaw (Record pt ver (Fragment bytes)) = (Header pt ver (fromIntegral $ B.length bytes), bytes)
+recordToRaw (Record pt ver sn (Fragment bytes)) = (Header pt ver sn (fromIntegral $ B.length bytes), bytes)
 
 -- | turn a header and a fragment into a record
 rawToRecord :: Header -> Fragment a -> Record a
-rawToRecord (Header pt ver _) fragment = Record pt ver fragment
+rawToRecord (Header pt ver sn _) fragment = Record pt ver sn fragment
 
 -- | turn a record into a header
 recordToHeader :: Record a -> Header
-recordToHeader (Record pt ver (Fragment bytes)) = Header pt ver (fromIntegral $ B.length bytes)
+recordToHeader (Record pt ver sn (Fragment bytes)) = Header pt ver sn (fromIntegral $ B.length bytes)

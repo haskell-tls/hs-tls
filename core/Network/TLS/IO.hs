@@ -74,7 +74,7 @@ recvRecord compatSSLv2 ctx
 
         where recvLengthE = either (return . Left) recvLength
 
-              recvLength header@(Header _ _ readlen)
+              recvLength header@(Header _ _ _ readlen)
                 | readlen > 16384 + 2048 = return $ Left maximumSizeExceeded
                 | otherwise              =
                     readExact ctx (fromIntegral readlen) >>=
@@ -102,8 +102,8 @@ recvRecord compatSSLv2 ctx
                     runRxState ctx $ disengageRecord $ rawToRecord header (fragmentCiphertext content)
 
 isCCS :: Record a -> Bool
-isCCS (Record ProtocolType_ChangeCipherSpec _ _) = True
-isCCS _                                          = False
+isCCS (Record ProtocolType_ChangeCipherSpec _ _ _) = True
+isCCS _                                            = False
 
 -- | receive one packet from the context that contains 1 or
 -- many messages (many only in case of handshake). if will returns a
@@ -168,7 +168,7 @@ recvRecord13 :: Context
             -> IO (Either TLSError Record13)
 recvRecord13 ctx = readExact ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
   where recvLengthE = either (return . Left) recvLength
-        recvLength header@(Header _ _ readlen)
+        recvLength header@(Header _ _ _ readlen)
           | readlen > 16384 + 2048 = return $ Left maximumSizeExceeded
           | otherwise              =
               readExact ctx (fromIntegral readlen) >>=

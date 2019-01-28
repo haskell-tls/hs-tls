@@ -27,10 +27,13 @@ module Network.TLS.Packet
 
     -- * marshall functions for handshake messages
     , decodeHandshakeRecord
+    , decodeHandshakeRecordsDTLS
     , decodeHandshake
     , decodeDeprecatedHandshake
     , encodeHandshake
     , encodeHandshakes
+    , encodeHandshakeDTLS
+    , encodeHandshakesDTLS
     , encodeHandshakeHeader
     , encodeHandshakeContent
 
@@ -189,6 +192,53 @@ decodeHandshakeRecord = runGet "handshake-record" $ do
     content <- getOpaque24
     return (ty, content)
 
+
+-- DTLS-related context for handshake message reassembly.
+data HandshakeReassembleCtx = HandshakeReassembleCtx {
+    hrcHandshakeType :: HandshakeType,
+    hrcMessageSeq :: Word16,
+    hrcLengthExpected :: Int,
+    hrcReadyData :: ByteString }
+
+-- Assumes the records on the input are already properly reordered.
+decodeHandshakeRecordsDTLS :: ByteString -> GetResult (HandshakeType, ByteString)
+decodeHandshakeRecordsDTLS =
+  let getFragment = do
+        ty      <- getHandshakeType
+        len     <- getWord24
+        msgSeq  <- getWord16
+        fragOff <- getWord24
+        fragLen <- getWord24
+        content <- getBytes fragLen
+        return (ty, len, msgSeq, fragOff, fragLen, content)
+      processFragment mhrc = do
+        (ty, len, msgSeq, fragOff, fragLen, content) <- getFragment
+        case mhrc of
+          Nothing -> if 0 == fragOff
+                     then processFragment $ Just $ HandshakeReassembleCtx ty msgSeq len content
+                     else fail $ "Got a fragment of non-zero offset. "++
+                          "Reassemble expects fragments to be reordered at record layer"
+          Just hrc -> do
+            let ready = hrcReadyData hrc
+            when (hrcHandshakeType hrc /= ty) $
+              fail "Handshake type does not match in a subsequent handshake fragment"
+            when (hrcLengthExpected hrc /= len) $
+              fail "Expected message length does not match in a subsequent handshake"
+            when (hrcMessageSeq hrc /= msgSeq) $
+              fail "Handshake message sequence number does not match in subsequent fragment"
+            when (fragOff > B.length ready) $
+              fail "Some handshake fragment is missing, reassemly not possible"
+            when (fragOff < B.length ready) $
+              fail "Handshake fragment overlaps with previously received data"
+            when (fragOff+fragLen > hrcLengthExpected hrc) $
+              fail "Excessive length of handshake fragment"
+            let hrc' = hrc { hrcReadyData = ready <> content }
+            if B.length (hrcReadyData hrc') < hrcLengthExpected hrc'
+              then processFragment $ Just hrc'
+              else return (hrcHandshakeType hrc', hrcReadyData hrc')
+  in runGet "handshake-record-dtls" $ processFragment Nothing
+
+
 decodeHandshake :: CurrentParams -> HandshakeType -> ByteString -> Either TLSError Handshake
 decodeHandshake cp ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
     HandshakeType_HelloRequest    -> decodeHelloRequest
@@ -215,7 +265,7 @@ decodeDeprecatedHandshake b = runGetErr "deprecatedhandshake" getDeprecated b
             session <- getSessionId sessionIdLen
             random <- getChallenge challengeLen
             let compressions = [0]
-                cookie = Cookie B.empty
+                cookie = HelloCookie B.empty
             return $ ClientHello ver random session cookie ciphers compressions [] (Just b)
         getCipherSpec len | len < 3 = return []
         getCipherSpec len = do
@@ -235,8 +285,8 @@ decodeClientHello = do
     random       <- getClientRandom32
     session      <- getSession
     cookie       <- if isDTLS ver
-                    then getCookie
-                    else return $ Cookie B.empty
+                    then getHelloCookie
+                    else return $ HelloCookie B.empty
     ciphers      <- getWords16
     compressions <- getWords8
     r            <- remaining
@@ -246,7 +296,7 @@ decodeClientHello = do
     return $ ClientHello ver random session cookie ciphers compressions exts Nothing
 
 decodeHelloVerifyRequest :: Get Handshake
-decodeHelloVerifyRequest = HelloVerifyRequest <$> getVersion <*> getCookie
+decodeHelloVerifyRequest = HelloVerifyRequest <$> getVersion <*> getHelloCookie
     
 
 decodeServerHello :: Get Handshake
@@ -374,11 +424,37 @@ encodeHandshake o =
                     _ -> runPut $ encodeHandshakeHeader (typeOfHandshake o) len in
     B.concat [ header, content ]
 
+encodeHandshakeDTLS :: Word16 -> Word16 -> Handshake -> [ByteString]
+encodeHandshakeDTLS mtu messageSeq o =
+    let content = runPut $ encodeHandshakeContent o
+        len = B.length content
+        ty = typeOfHandshake o
+        encodeFragments bs fragOffset =
+          if B.null bs
+          then []
+          else let (frag, rest) = B.splitAt (fromIntegral mtu) bs
+                   fragLength = B.length frag
+                   header = runPut $ encodeHandshakeHeaderDTLS ty len messageSeq fragOffset fragLength
+               in (header <> frag : encodeFragments rest (fragOffset+fragLength))
+    in encodeFragments content 0
+
 encodeHandshakes :: [Handshake] -> ByteString
 encodeHandshakes hss = B.concat $ map encodeHandshake hss
 
+encodeHandshakesDTLS :: Word16 -> [(Word16, Handshake)] -> [ByteString]
+encodeHandshakesDTLS mtu hss = mconcat $ map (uncurry $ encodeHandshakeDTLS mtu) hss
+
+
 encodeHandshakeHeader :: HandshakeType -> Int -> Put
 encodeHandshakeHeader ty len = putWord8 (valOfType ty) >> putWord24 len
+
+encodeHandshakeHeaderDTLS :: HandshakeType -> Int -> Word16 -> Int -> Int -> Put
+encodeHandshakeHeaderDTLS ty len messageSeq fragOffset fragLength = do
+    putWord8 (valOfType ty)
+    putWord24 len
+    putWord16 messageSeq
+    putWord24 fragOffset
+    putWord24 fragLength
 
 encodeHandshakeContent :: Handshake -> Put
 encodeHandshakeContent (ClientHello _ _ _ _ _ _ _ (Just deprecated)) = do
@@ -388,7 +464,7 @@ encodeHandshakeContent (ClientHello version random session cookie cipherIDs comp
     putBinaryVersion version
     putClientRandom32 random
     putSession session
-    when (isDTLS version) $ putCookie cookie
+    when (isDTLS version) $ putHelloCookie cookie
     putWords16 cipherIDs
     putWords8 compressionIDs
     putExtensions exts
@@ -396,7 +472,7 @@ encodeHandshakeContent (ClientHello version random session cookie cipherIDs comp
 
 encodeHandshakeContent (HelloVerifyRequest version cookie) = do
     putBinaryVersion version
-    putCookie cookie
+    putHelloCookie cookie
     return ()
 
 encodeHandshakeContent (ServerHello version random session cipherid compressionID exts) = do
@@ -481,15 +557,15 @@ getSession = do
         0   -> return $ Session Nothing
         len -> Session . Just <$> getBytes len
 
-getCookie :: Get Cookie
-getCookie = Cookie <$> getOpaque8
+getHelloCookie :: Get HelloCookie
+getHelloCookie = HelloCookie <$> getOpaque8
 
 putSession :: Session -> Put
 putSession (Session Nothing)  = putWord8 0
 putSession (Session (Just s)) = putOpaque8 s
 
-putCookie :: Cookie -> Put
-putCookie (Cookie c) = putOpaque8 c
+putHelloCookie :: HelloCookie -> Put
+putHelloCookie (HelloCookie c) = putOpaque8 c
 
 getExtensions :: Int -> Get [ExtensionRaw]
 getExtensions 0   = return []

@@ -147,6 +147,7 @@ updateVerifiedData sending bs = do
 
 finishHandshakeTypeMaterial :: HandshakeType -> Bool
 finishHandshakeTypeMaterial HandshakeType_ClientHello     = True
+finishHandshakeTypeMaterial HandshakeType_HelloVerifyRequest = True
 finishHandshakeTypeMaterial HandshakeType_ServerHello     = True
 finishHandshakeTypeMaterial HandshakeType_Certificate     = True
 finishHandshakeTypeMaterial HandshakeType_HelloRequest    = False
@@ -162,6 +163,7 @@ finishHandshakeMaterial = finishHandshakeTypeMaterial . typeOfHandshake
 
 certVerifyHandshakeTypeMaterial :: HandshakeType -> Bool
 certVerifyHandshakeTypeMaterial HandshakeType_ClientHello     = True
+certVerifyHandshakeTypeMaterial HandshakeType_HelloVerifyRequest = True
 certVerifyHandshakeTypeMaterial HandshakeType_ServerHello     = True
 certVerifyHandshakeTypeMaterial HandshakeType_Certificate     = True
 certVerifyHandshakeTypeMaterial HandshakeType_HelloRequest    = False

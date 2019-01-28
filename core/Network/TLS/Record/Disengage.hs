@@ -47,12 +47,12 @@ decryptRecord record = onRecordFragment record $ fragmentUncipher $ \e -> do
         _       -> getRecordVersion >>= \ver -> decryptData ver record e st
 
 getCipherData :: Record a -> CipherData -> RecordM ByteString
-getCipherData (Record pt ver _) cdata = do
+getCipherData (Record pt ver sn _) cdata = do
     -- check if the MAC is valid.
     macValid <- case cipherDataMAC cdata of
         Nothing     -> return True
         Just digest -> do
-            let new_hdr = Header pt ver (fromIntegral $ B.length $ cipherDataContent cdata)
+            let new_hdr = Header pt ver sn (fromIntegral $ B.length $ cipherDataContent cdata)
             expected_digest <- makeDigest new_hdr $ cipherDataContent cdata
             return (expected_digest `bytesEq` digest)
 
@@ -132,8 +132,8 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
             let encodedSeq = encodeWord64 $ msSequence $ stMacState tst
                 iv = cstIV (stCryptState tst)
                 ivlen = B.length iv
-                Header typ v _ = recordToHeader record
-                hdr = Header typ v $ fromIntegral cipherLen
+                Header typ v sn _ = recordToHeader record
+                hdr = Header typ v sn $ fromIntegral cipherLen
                 ad = B.concat [ encodedSeq, encodeHeader hdr ]
                 sqnc = B.replicate (ivlen - 8) 0 `B.append` encodedSeq
                 nonce | nonceExpLen == 0 = B.xor iv sqnc

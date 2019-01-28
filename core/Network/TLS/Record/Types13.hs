@@ -20,5 +20,5 @@ data Record13 = Record13 !ContentType ByteString deriving (Show,Eq)
 
 -- | turn a header and a fragment into a record
 rawToRecord13 :: Header -> ByteString -> Record13
-rawToRecord13 (Header pt _ _) fragment = Record13 (protoToContent pt) fragment
+rawToRecord13 (Header pt _ _ _) fragment = Record13 (protoToContent pt) fragment
 -- the second arg should be TLS12.

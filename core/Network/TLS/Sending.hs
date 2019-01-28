@@ -31,10 +31,10 @@ import Network.TLS.Imports
 
 -- | 'makePacketData' create a Header and a content bytestring related to a packet
 -- this doesn't change any state
-makeRecord :: Packet -> RecordM (Record Plaintext)
-makeRecord pkt = do
+makeRecord :: SequenceNumber -> Packet -> RecordM (Record Plaintext)
+makeRecord sn pkt = do
     ver <- getRecordVersion
-    return $ Record (packetType pkt) ver (fragmentPlaintext $ writePacketContent pkt)
+    return $ Record (packetType pkt) ver sn (fragmentPlaintext $ writePacketContent pkt)
   where writePacketContent (Handshake hss)    = encodeHandshakes hss
         writePacketContent (Alert a)          = encodeAlerts a
         writePacketContent  ChangeCipherSpec  = encodeChangeCipherSpec
@@ -49,6 +49,7 @@ encodeRecord record = return $ B.concat [ encodeHeader hdr, content ]
 -- and updating state on the go
 writePacket :: Context -> Packet -> IO (Either TLSError ByteString)
 writePacket ctx pkt@(Handshake hss) = do
+    sn <- nextSequenceNumber ctx
     forM_ hss $ \hs -> do
         case hs of
             Finished fdata -> usingState_ ctx $ updateVerifiedData ClientRole fdata
@@ -57,9 +58,12 @@ writePacket ctx pkt@(Handshake hss) = do
         usingHState ctx $ do
             when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage encoded
             when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ updateHandshakeDigest encoded
-    prepareRecord ctx (makeRecord pkt >>= engageRecord >>= encodeRecord)
+    prepareRecord ctx (makeRecord sn pkt >>= engageRecord >>= encodeRecord)
 writePacket ctx pkt = do
-    d <- prepareRecord ctx (makeRecord pkt >>= engageRecord >>= encodeRecord)
+    sn <- if (pkt == ChangeCipherSpec)
+          then nextEpoch ctx
+          else nextSequenceNumber ctx
+    d <- prepareRecord ctx (makeRecord sn pkt >>= engageRecord >>= encodeRecord)
     when (pkt == ChangeCipherSpec) $ switchTxEncryption ctx
     return d
 
