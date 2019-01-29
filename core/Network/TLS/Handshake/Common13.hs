@@ -29,8 +29,18 @@ module Network.TLS.Handshake.Common13
        , safeNonNegative32
        , RecvHandshake13M
        , runRecvHandshake13
-       , recvHandshake13preUpdate
-       , recvHandshake13postUpdate
+       , runRecvHandshake13'
+       , recvHandshake13
+       , recvHandshake13'
+       , pushbackHandshake13
+       , Choice(..)
+       , makeChoice
+       , calcEarlySecret
+       , calculateEarlySecret
+       , calculateHandshakeSecret
+       , calculateTrafficSecret
+       , calculateResumptionSecret
+       , calcPSK
        ) where
 
 import qualified Data.ByteArray as BA
@@ -148,20 +158,21 @@ sign ctx sig hs target = liftIO $ do
 
 ----------------------------------------------------------------
 
-makePSKBinder :: Context -> ByteString -> Hash -> Int -> Maybe ByteString -> IO ByteString
-makePSKBinder ctx earlySecret usedHash truncLen mch = do
+makePSKBinder :: Context -> Secret13 -> Hash -> Int -> Maybe ByteString -> IO ByteString
+makePSKBinder ctx (EarlySecret sec) usedHash truncLen mch = do
     rmsgs0 <- usingHState ctx getHandshakeMessagesRev -- fixme
     let rmsgs = case mch of
           Just ch -> trunc ch : rmsgs0
           Nothing -> trunc (head rmsgs0) : tail rmsgs0
         hChTruncated = hash usedHash $ B.concat $ reverse rmsgs
-        binderKey = deriveSecret usedHash earlySecret "res binder" (hash usedHash "")
+        binderKey = deriveSecret usedHash sec "res binder" (hash usedHash "")
     return $ makeVerifyData usedHash binderKey hChTruncated
   where
     trunc x = B.take takeLen x
       where
         totalLen = B.length x
         takeLen = totalLen - truncLen
+makePSKBinder _ _ _ _ _ = error "makePSKBinder"
 
 replacePSKBinder :: ByteString -> ByteString -> ByteString
 replacePSKBinder pskz binder = identities `B.append` binders
@@ -272,24 +283,48 @@ safeNonNegative32 x
 newtype RecvHandshake13M m a = RecvHandshake13M (StateT [Handshake13] m a)
     deriving (Functor, Applicative, Monad, MonadIO)
 
-recvHandshake13preUpdate :: MonadIO m
-                         => Context
-                         -> (Handshake13 -> RecvHandshake13M m a)
-                         -> RecvHandshake13M m a
-recvHandshake13preUpdate ctx f = do
-    h <- getHandshake13 ctx
-    liftIO $ processHandshake13 ctx h
-    f h
-
-recvHandshake13postUpdate :: MonadIO m
-                          => Context
-                          -> (Handshake13 -> RecvHandshake13M m a)
-                          -> RecvHandshake13M m a
-recvHandshake13postUpdate ctx f = do
+recvHandshake13 :: MonadIO m
+                => Context
+                -> (Handshake13 -> RecvHandshake13M m a)
+                -> RecvHandshake13M m a
+recvHandshake13 ctx f = do
     h <- getHandshake13 ctx
     v <- f h
-    liftIO $ processHandshake13 ctx h
+    newhs <- RecvHandshake13M $ get
+    case newhs of
+      []            -> liftIO $ processHandshake13 ctx h
+      newh:_
+        | h == newh -> return () -- push backed
+        | otherwise -> liftIO $ processHandshake13 ctx h
     return v
+
+recvHandshake13' :: MonadIO m
+                 => Context
+                 -> (Handshake13 -> RecvHandshake13M m a)
+                 -> RecvHandshake13M m a
+recvHandshake13' ctx f = do
+    h <- getHS
+    v <- f h
+    newbss <- RecvHandshake13M $ get
+    case newbss of
+      []            -> liftIO $ processHandshake13 ctx h
+      newh:_
+        | h == newh -> return () -- push backed
+        | otherwise -> liftIO $ processHandshake13 ctx h
+    return v
+  where
+    getHS = RecvHandshake13M $ do
+        current <- get
+        case current of
+          []     -> error "getHS"
+          h:hs -> do
+              put hs
+              return h
+
+pushbackHandshake13 :: Monad m => Handshake13 -> RecvHandshake13M m ()
+pushbackHandshake13 h = RecvHandshake13M $ do
+    hs <- get
+    put (h:hs)
 
 getHandshake13 :: MonadIO m => Context -> RecvHandshake13M m Handshake13
 getHandshake13 ctx = RecvHandshake13M $ do
@@ -311,6 +346,12 @@ getHandshake13 ctx = RecvHandshake13M $ do
 runRecvHandshake13 :: MonadIO m => RecvHandshake13M m a -> m a
 runRecvHandshake13 (RecvHandshake13M f) = do
     (result, new) <- runStateT f []
+    unless (null new) $ unexpected "spurious handshake 13" Nothing
+    return result
+
+runRecvHandshake13' :: MonadIO m => [Handshake13] -> RecvHandshake13M m a -> m a
+runRecvHandshake13' hss (RecvHandshake13M f) = do
+    (result, new) <- runStateT f hss
     unless (null new) $ unexpected "spurious handshake 13" Nothing
     return result
 
@@ -338,3 +379,101 @@ isHashSignatureValid13 (HashIntrinsic, s) =
 isHashSignatureValid13 (h, SignatureECDSA) =
     h `elem` [ HashSHA256, HashSHA384, HashSHA512 ]
 isHashSignatureValid13 _ = False
+
+data Choice = Choice {
+    cVersion :: Version
+  , cCipher  :: Cipher
+  , cHash    :: Hash
+  , cZero    :: !ByteString
+  }
+
+makeChoice :: Version -> Cipher -> Choice
+makeChoice ver cipher = Choice ver cipher h zero
+  where
+    h = cipherHash cipher
+    zero = B.replicate (hashDigestSize h) 0
+
+calculateEarlySecret :: Context -> Choice
+                     -> Either ByteString Secret13
+                     -> Bool -> IO SecretTriple
+calculateEarlySecret ctx choice maux initialized = do
+    hCh <- if initialized then
+               transcriptHash ctx
+             else do
+               hmsgs <- usingHState ctx getHandshakeMessages
+               return $ hash usedHash $ B.concat hmsgs
+    let earlySecret = case maux of
+          Right (EarlySecret sec) -> sec
+          Right _                 -> error "calculateEarlySecret"
+          Left  psk               -> hkdfExtract usedHash zero psk
+        clientEarlySecret = deriveSecret usedHash earlySecret "c e traffic" hCh
+        cets = ClientEarlySecret clientEarlySecret
+    logKey ctx cets
+    return $ SecretTriple (EarlySecret earlySecret) cets cets {- dummy -}
+  where
+    usedHash = cHash choice
+    zero = cZero choice
+
+calcEarlySecret :: Choice -> Maybe ByteString -> Secret13
+calcEarlySecret choice mpsk = EarlySecret sec
+  where
+    sec = hkdfExtract usedHash zero zeroOrPSK
+    usedHash = cHash choice
+    zero = cZero choice
+    zeroOrPSK = case mpsk of
+      Just psk -> psk
+      Nothing  -> zero
+
+calculateHandshakeSecret :: Context -> Choice -> Secret13 -> ByteString
+                         -> IO SecretTriple
+calculateHandshakeSecret ctx choice (EarlySecret sec) ecdhe = do
+        hChSh <- transcriptHash ctx
+        let handshakeSecret = hkdfExtract usedHash (deriveSecret usedHash sec "derived" (hash usedHash "")) ecdhe
+        let clientHandshakeSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
+            serverHandshakeSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
+        let shts = ServerHandshakeSecret serverHandshakeSecret
+            chts = ClientHandshakeSecret clientHandshakeSecret
+        logKey ctx shts
+        logKey ctx chts
+        return $ SecretTriple (HandshakeSecret handshakeSecret) chts shts
+  where
+    usedHash = cHash choice
+calculateHandshakeSecret _ _ _ _ = error "calculateHandshakeSecret"
+
+calculateTrafficSecret :: Context -> Choice -> Secret13 -> Maybe ByteString
+                       -> IO SecretTriple
+calculateTrafficSecret ctx choice (HandshakeSecret sec) mhChSf = do
+    hChSf <- case mhChSf of
+      Nothing -> transcriptHash ctx
+      Just h  -> return h
+    let applicationSecret = hkdfExtract usedHash (deriveSecret usedHash sec "derived" (hash usedHash "")) zero
+    let clientApplicationSecret0 = deriveSecret usedHash applicationSecret "c ap traffic" hChSf
+        serverApplicationSecret0 = deriveSecret usedHash applicationSecret "s ap traffic" hChSf
+        exporterMasterSecret = deriveSecret usedHash applicationSecret "exp master" hChSf
+    usingState_ ctx $ setExporterMasterSecret exporterMasterSecret
+    let sts0 = ServerApplicationSecret0 serverApplicationSecret0
+    let cts0 = ClientApplicationSecret0 clientApplicationSecret0
+    logKey ctx sts0
+    logKey ctx cts0
+    return $ SecretTriple (ApplicationSecret applicationSecret) cts0 sts0
+  where
+    usedHash = cHash choice
+    zero = cZero choice
+calculateTrafficSecret _ _ _ _ = error "calculateTrafficSecret"
+
+calculateResumptionSecret :: Context -> Choice -> Secret13 -> IO Secret13
+calculateResumptionSecret ctx choice (ApplicationSecret sec) = do
+    hChCf <- transcriptHash ctx
+    let resumptionMasterSecret = deriveSecret usedHash sec "res master" hChCf
+    return $ ResumptionSecret resumptionMasterSecret
+  where
+    usedHash = cHash choice
+calculateResumptionSecret _ _ _ = error "calculateResumptionSecret"
+
+calcPSK :: Choice -> Secret13 -> ByteString -> ByteString
+calcPSK choice (ResumptionSecret sec) nonce =
+    hkdfExpandLabel usedHash sec "resumption" nonce hashSize
+  where
+    usedHash = cHash choice
+    hashSize = hashDigestSize usedHash
+calcPSK _ _ _ = error "calcPSK"

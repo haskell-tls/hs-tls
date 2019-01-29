@@ -11,6 +11,7 @@
 module Network.TLS.Sending13
        ( writePacket13
        , updateHandshake13
+       , update13
        ) where
 
 import Control.Monad.State
@@ -56,12 +57,16 @@ prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
 prepareRecord = runTxState
 
 updateHandshake13 :: Context -> Handshake13 -> IO ()
-updateHandshake13 ctx hs = usingHState ctx $ do
-    when (isHRR hs) wrapAsMessageHash13
-    updateHandshakeDigest encoded
-    addHandshakeMessage encoded
+updateHandshake13 ctx hs = do
+    usingHState ctx $ when (isHRR hs) wrapAsMessageHash13
+    update13 ctx encoded
   where
     encoded = encodeHandshake13 hs
 
     isHRR (ServerHello13 srand _ _ _) = isHelloRetryRequest srand
     isHRR _                           = False
+
+update13 :: Context -> ByteString -> IO ()
+update13 ctx bs = usingHState ctx $ do
+    updateHandshakeDigest bs
+    addHandshakeMessage bs

@@ -18,6 +18,9 @@ module Network.TLS.Types
     , HostName
     , Second
     , Millisecond
+    , SecretTriple(..)
+    , Secret13(..)
+    , TrafficSecret(..)
     ) where
 
 import Network.TLS.Imports
@@ -72,3 +75,27 @@ data Direction = Tx | Rx
 invertRole :: Role -> Role
 invertRole ClientRole = ServerRole
 invertRole ServerRole = ClientRole
+
+data SecretTriple = SecretTriple {
+    triBase   :: Secret13
+  , triClient :: TrafficSecret
+  , triServer :: TrafficSecret
+  } deriving (Eq, Show)
+
+data Secret13 = NoSecret
+              | EarlySecret ByteString
+              | HandshakeSecret ByteString
+              | ApplicationSecret ByteString -- TLS 1.3 master secret
+              | ResumptionSecret ByteString
+              deriving (Eq, Show)
+
+data TrafficSecret =
+    -- TLS 1.2 or earlier
+    MasterSecret12 ByteString
+    -- TLS 1.3
+  | ClientEarlySecret        ByteString
+  | ServerHandshakeSecret    ByteString
+  | ClientHandshakeSecret    ByteString
+  | ServerApplicationSecret0 ByteString
+  | ClientApplicationSecret0 ByteString
+  deriving (Eq, Show)

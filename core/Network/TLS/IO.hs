@@ -17,6 +17,9 @@ module Network.TLS.IO
     , PacketFlightM
     , runPacketFlight
     , loadPacket13
+    , PacketFlightM2
+    , runPacketFlight2
+    , appendHandshake13
     ) where
 
 import Network.TLS.Context.Internal
@@ -26,6 +29,7 @@ import Network.TLS.Record
 import Network.TLS.Record.Types13
 import Network.TLS.Record.Disengage13
 import Network.TLS.Packet
+import Network.TLS.Packet13
 import Network.TLS.Hooks
 import Network.TLS.Sending
 import Network.TLS.Sending13
@@ -218,5 +222,22 @@ runPacketFlight ctx (PacketFlightM f) = do
 loadPacket13 :: Context -> Packet13 -> PacketFlightM ()
 loadPacket13 ctx pkt = PacketFlightM $ do
     bs <- writePacketBytes13 ctx pkt
+    ref <- ask
+    liftIO $ modifyIORef ref (bs :)
+
+newtype PacketFlightM2 a = PacketFlightM2 (ReaderT (IORef [ByteString]) IO a)
+    deriving (Functor, Applicative, Monad, MonadFail, MonadIO)
+
+runPacketFlight2 :: PacketFlightM2 a -> IO (a, [ByteString])
+runPacketFlight2 (PacketFlightM2 f) = do
+    ref <- newIORef []
+    res <- runReaderT f ref
+    hss <- reverse <$> readIORef ref
+    return (res, hss)
+
+appendHandshake13 :: Context -> Handshake13 -> PacketFlightM2 ()
+appendHandshake13 ctx h = PacketFlightM2 $ do
+    let bs = encodeHandshake13 h
+    liftIO $ update13 ctx bs
     ref <- ask
     liftIO $ modifyIORef ref (bs :)
