@@ -125,6 +125,7 @@ recvPacketHandshake ctx = do
 -- | process a list of handshakes message in the recv state machine.
 onRecvStateHandshake :: Context -> RecvState IO -> [Handshake] -> IO (RecvState IO)
 onRecvStateHandshake _   recvState [] = return recvState
+onRecvStateHandshake _   (RecvStateNext f) hms = f (Handshake hms)
 onRecvStateHandshake ctx (RecvStateHandshake f) (x:xs) = do
     nstate <- f x
     processHandshake ctx x
