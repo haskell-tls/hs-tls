@@ -78,6 +78,7 @@ setXState func encOrDec ctx h cipher secret =
       , stMacState    = MacState { msSequence = 0 }
       , stCipher      = Just cipher
       , stCompression = nullCompression
+      , stSeqNumber   = 0xffffffffffffffff
       }
 
 clearTxState :: Context -> IO ()

@@ -74,5 +74,7 @@ processPacket _ (Record ProtocolType_DeprecatedHandshake _ _ fragment) =
 
 switchRxEncryption :: Context -> IO ()
 switchRxEncryption ctx =
-    usingHState ctx (gets hstPendingRxState) >>= \rx ->
-    liftIO $ modifyMVar_ (ctxRxState ctx) (\_ -> return $ fromJust "rx-state" rx)
+    usingHState ctx (gets hstPendingRxState) >>= \mrx ->
+    liftIO $ modifyMVar_ (ctxRxState ctx) (\rxprev -> return $ let rx = fromJust "rx-state" mrx
+                                                                   epoch = stSeqNumber rxprev
+                                                               in rx { stSeqNumber = nextEpoch epoch })

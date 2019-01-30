@@ -82,7 +82,7 @@ handshakeServer sparams ctx = liftIO $ do
 --      -> finish             <- finish
 --
 handshakeServerWith :: ServerParams -> Context -> Handshake -> IO ()
-handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientSession ciphers compressions exts _) = do
+handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientSession cookie ciphers compressions exts _) = guardDTLSHello ctx clientVersion cookie $ do
     established <- ctxEstablished ctx
     -- renego is not allowed in TLS 1.3
     when (established /= NotEstablished) $ do
@@ -1083,3 +1083,13 @@ clientCertVerify sparams ctx certs verif = do
                 -- chain to the context.
                 usingState_ ctx $ setClientCertificateChain certs
                 else decryptError "verification failed"
+
+guardDTLSHello :: Context -> Version -> HelloCookie -> IO () -> IO ()
+guardDTLSHello ctx clientVersion cookie handshakeActions =
+    if isDTLS clientVersion
+    then if cookie == HelloCookie B.empty
+         then do cookie' <- ctxHelloCookieGen ctx
+                 sendPacket ctx $ Handshake [HelloVerifyRequest DTLS10 cookie']
+         else do verified <- ctxHelloCookieVerify ctx cookie
+                 when verified handshakeActions
+    else handshakeActions

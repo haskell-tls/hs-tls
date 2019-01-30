@@ -56,10 +56,6 @@ module Network.TLS.Context.Internal
     , getHState
     , getStateRNG
     , tls13orLater
-
-    -- * DTLS related
-    , nextSequenceNumber
-    , nextEpoch
     ) where
 
 import Network.TLS.Backend
@@ -82,7 +78,6 @@ import Control.Monad.State.Strict
 import Control.Exception (throwIO, Exception())
 import Data.IORef
 import Data.Tuple
-
 
 -- | Information related to a running context, e.g. current cipher
 data Information = Information
@@ -123,8 +118,11 @@ data Context = Context
     , ctxPendingActions   :: IORef [PendingAction]
     , ctxKeyLogger        :: String -> IO ()
 
-    , ctxSequenceNumber   :: IORef SequenceNumber -- ^ DTLS next record sequence number
-    , ctxHelloVerifySecret:: B.ByteString -- ^ transient secret for HelloVerifyRequest cookies
+    -- DTLS related
+    , ctxMTU              :: Word16        -- DTLS fragment size
+    , ctxHelloCookieGen   :: IO HelloCookie
+    , ctxHelloCookieVerify:: HelloCookie -> IO Bool
+    , ctxNextHsMsgSeq     :: Word16 -> IO [Word16] -- generator for next handshake messages' DTLS sequence numbers
     }
 
 data Established = NotEstablished
@@ -277,15 +275,3 @@ tls13orLater ctx = do
     return $ case ev of
                Left  _ -> False
                Right v -> v >= TLS13
-
-nextSequenceNumber :: Context -> IO SequenceNumber
-nextSequenceNumber ctx = atomicModifyIORef' (ctxSequenceNumber ctx) (\sn -> (sn+1, sn))
--- fixme: check and prohibit 48-bit integer wraparound.
-
-nextEpoch :: Context -> IO SequenceNumber
-nextEpoch ctx = atomicModifyIORef' (ctxSequenceNumber ctx)
-                (\sn -> let epochMask = 0xffff000000000000
-                            oneEpoch  = 0x0001000000000000
-                            epoch = sn .&. epochMask
-                            newEpoch = epoch + oneEpoch
-                        in (newEpoch+1, newEpoch))

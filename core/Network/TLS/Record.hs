@@ -34,6 +34,9 @@ module Network.TLS.Record
     , newRecordState
     , getRecordVersion
     , setRecordIV
+    -- * DTLS related record sequence number handling
+    , nextEpoch
+    , incrSeqNumber
     ) where
 
 import Network.TLS.Record.Types

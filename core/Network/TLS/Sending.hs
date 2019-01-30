@@ -8,7 +8,7 @@
 -- the Sending module contains calls related to marshalling packets according
 -- to the TLS state
 --
-module Network.TLS.Sending (writePacket) where
+module Network.TLS.Sending (writePacket, writePacketDTLS) where
 
 import Control.Monad.State.Strict
 import Control.Concurrent.MVar
@@ -31,14 +31,33 @@ import Network.TLS.Imports
 
 -- | 'makePacketData' create a Header and a content bytestring related to a packet
 -- this doesn't change any state
-makeRecord :: SequenceNumber -> Packet -> RecordM (Record Plaintext)
-makeRecord sn pkt = do
+makeRecord :: Packet -> RecordM (Record Plaintext)
+makeRecord pkt = do
     ver <- getRecordVersion
-    return $ Record (packetType pkt) ver sn (fragmentPlaintext $ writePacketContent pkt)
+    return $ Record (packetType pkt) ver 0 (fragmentPlaintext $ writePacketContent pkt)
   where writePacketContent (Handshake hss)    = encodeHandshakes hss
         writePacketContent (Alert a)          = encodeAlerts a
         writePacketContent  ChangeCipherSpec  = encodeChangeCipherSpec
         writePacketContent (AppData x)        = x
+
+
+makeRecordFragmentDTLS :: ProtocolType -> Fragment Plaintext -> RecordM (Record Plaintext)
+makeRecordFragmentDTLS ty fragment = do
+  ver <- getRecordVersion
+  sn <- incrSeqNumber
+  return $ Record ty ver sn fragment
+
+
+makeNonHsRecordDTLS :: Word16 -> Packet -> RecordM (Record Plaintext)
+makeNonHsRecordDTLS _ pkt = makeRecordFragmentDTLS (packetType pkt) (fragmentPlaintext $ packetContent pkt)
+  where packetContent (Alert a)          = encodeAlerts a
+        packetContent  ChangeCipherSpec  = encodeChangeCipherSpec
+        packetContent (AppData x)        = x
+        packetContent _                  = error "makeNonHsRecordDTLS called for Handshake packet"
+
+makeHsRecordDTLS :: Word16 -> [(Word16, Handshake)] -> [RecordM (Record Plaintext)]
+makeHsRecordDTLS mtu hss = map (makeRecordFragmentDTLS ProtocolType_Handshake) $
+                           map fragmentPlaintext $ encodeHandshakesDTLS mtu hss
 
 -- | marshall packet data
 encodeRecord :: Record Ciphertext -> RecordM ByteString
@@ -49,7 +68,6 @@ encodeRecord record = return $ B.concat [ encodeHeader hdr, content ]
 -- and updating state on the go
 writePacket :: Context -> Packet -> IO (Either TLSError ByteString)
 writePacket ctx pkt@(Handshake hss) = do
-    sn <- nextSequenceNumber ctx
     forM_ hss $ \hs -> do
         case hs of
             Finished fdata -> usingState_ ctx $ updateVerifiedData ClientRole fdata
@@ -58,12 +76,32 @@ writePacket ctx pkt@(Handshake hss) = do
         usingHState ctx $ do
             when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage encoded
             when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ updateHandshakeDigest encoded
-    prepareRecord ctx (makeRecord sn pkt >>= engageRecord >>= encodeRecord)
+    prepareRecord ctx (makeRecord pkt >>= engageRecord >>= encodeRecord)
 writePacket ctx pkt = do
-    sn <- if (pkt == ChangeCipherSpec)
-          then nextEpoch ctx
-          else nextSequenceNumber ctx
-    d <- prepareRecord ctx (makeRecord sn pkt >>= engageRecord >>= encodeRecord)
+    d <- prepareRecord ctx (makeRecord pkt >>= engageRecord >>= encodeRecord)
+    when (pkt == ChangeCipherSpec) $ switchTxEncryption ctx
+    return d
+
+engageAndEncode :: RecordM (Record Plaintext) -> RecordM ByteString
+engageAndEncode record = record >>= engageRecord >>= encodeRecord
+
+writePacketDTLS :: Context -> Packet -> IO (Either TLSError [ByteString])
+writePacketDTLS ctx (Handshake hss) = do
+    let mtu = ctxMTU ctx
+    msgSeq <- ctxNextHsMsgSeq ctx (fromIntegral $ length hss)
+    let msgAndSeq = (zip msgSeq hss)
+    forM_ hss $ \hs -> do
+        case hs of
+            Finished fdata -> usingState_ ctx $ updateVerifiedData ClientRole fdata
+            _              -> return ()
+        let encoded = encodeHandshakesDTLS mtu msgAndSeq
+        usingHState ctx $ do
+            when (certVerifyHandshakeMaterial hs) $ mapM_ addHandshakeMessage encoded
+            when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ mapM_ updateHandshakeDigest encoded
+    prepareRecord ctx $ sequence $ map engageAndEncode $ makeHsRecordDTLS mtu msgAndSeq
+writePacketDTLS ctx pkt = do
+    let mtu = ctxMTU ctx
+    d <- prepareRecord ctx $ return <$> (engageAndEncode $ makeNonHsRecordDTLS mtu pkt)
     when (pkt == ChangeCipherSpec) $ switchTxEncryption ctx
     return d
 
@@ -89,7 +127,7 @@ switchTxEncryption ctx = do
     (ver, cc) <- usingState_ ctx $ do v <- getVersion
                                       c <- isClientContext
                                       return (v, c)
-    liftIO $ modifyMVar_ (ctxTxState ctx) (\_ -> return tx)
+    liftIO $ modifyMVar_ (ctxTxState ctx) (\txprev -> return $ tx { stSeqNumber = nextEpoch $ stSeqNumber txprev })
     -- set empty packet counter measure if condition are met
     when (ver <= TLS10 && cc == ClientRole && isCBC tx && supportedEmptyPacket (ctxSupported ctx)) $ liftIO $ writeIORef (ctxNeedEmptyPacket ctx) True
   where isCBC tx = maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stCipher tx)

@@ -241,7 +241,8 @@ handshakeClient' cparams ctx groups mcrand = do
             usingState_ ctx $ setVersionIfUnset highestVer
             let cipherIds = map cipherID ciphers
                 compIds = map compressionID compressions
-                mkClientHello exts = ClientHello ver crand clientSession cipherIds compIds exts Nothing
+                cookie = HelloCookie B.empty
+                mkClientHello exts = ClientHello ver crand clientSession cookie cipherIds compIds exts Nothing
             extensions0 <- catMaybes <$> getExtensions
             extensions <- adjustExtentions extensions0 $ mkClientHello extensions0
             sendPacket ctx $ Handshake [mkClientHello extensions]
