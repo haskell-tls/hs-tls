@@ -13,6 +13,7 @@ data (HasSequenceNumber a) => Window a = Window
                                          !Word64 -- bitmask of cached records
                                          ![(Word64, a)] -- the cache itself
 
+-- Extract a record from cache, if there's a record with expected sequence number
 maybeGetNext :: (HasSequenceNumber a) => Window a -> (Window a, Maybe a)
 maybeGetNext window@(Window next mask cache) =
   if 0 /= mask .&. 1
@@ -23,6 +24,13 @@ maybeGetNext window@(Window next mask cache) =
        in (Window next' mask' cache', mrecord)
   else (window, Nothing)
 
+-- Add a record to the cache.
+-- If this cannot be done within current window, then
+--   - either "shift" it by exactly the number if missing records,
+--     if there's not too many of them missing to catch up with the new record,
+--   - or, if that won't help (i.e. the new arrived record with way too different
+--     sequence number) - then reset the window
+--     and make the new record the next expected one.
 cacheRecord :: (HasSequenceNumber a) => a -> Window a -> Window a
 cacheRecord record window@(Window next mask cache) =
   let sn = getSequenceNumber record

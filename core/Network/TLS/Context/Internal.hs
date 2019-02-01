@@ -71,6 +71,7 @@ import Network.TLS.Record.State
 import Network.TLS.Parameters
 import Network.TLS.Measurement
 import Network.TLS.Imports
+import Network.TLS.Record
 import qualified Data.ByteString as B
 
 import Control.Concurrent.MVar
@@ -123,6 +124,7 @@ data Context = Context
     , ctxHelloCookieGen   :: IO HelloCookie
     , ctxHelloCookieVerify:: HelloCookie -> IO Bool
     , ctxNextHsMsgSeq     :: Word16 -> IO [Word16] -- generator for next handshake messages' DTLS sequence numbers
+    , ctxRecordCache      :: Maybe (Record Plaintext) -> IO (Maybe (Record Plaintext))
     }
 
 data Established = NotEstablished

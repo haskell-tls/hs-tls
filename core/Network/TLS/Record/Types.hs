@@ -41,6 +41,7 @@ module Network.TLS.Record.Types
 import Network.TLS.Struct
 import Network.TLS.Imports
 import Network.TLS.Record.State
+import Network.TLS.Context.Window(HasSequenceNumber(..))
 import qualified Data.ByteString as B
 
 -- | Represent a TLS record.
@@ -91,3 +92,6 @@ rawToRecord (Header pt ver sn _) fragment = Record pt ver sn fragment
 -- | turn a record into a header
 recordToHeader :: Record a -> Header
 recordToHeader (Record pt ver sn (Fragment bytes)) = Header pt ver sn (fromIntegral $ B.length bytes)
+
+instance HasSequenceNumber (Record a) where
+  getSequenceNumber (Record _ _ sn _) = sn
