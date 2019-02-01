@@ -9,6 +9,7 @@ module Network.TLS.Extra.Cipher
     (
     -- * cipher suite
       ciphersuite_default
+    , ciphersuite_default_DTLS
     , ciphersuite_all
     , ciphersuite_medium
     , ciphersuite_strong
@@ -70,6 +71,8 @@ module Network.TLS.Extra.Cipher
     , cipher_RC4_128_SHA1
     , cipher_null_MD5
     , cipher_DHE_DSS_RC4_SHA1
+    -- * just in case
+    , test_ciphersuite_DTLS_OK
     ) where
 
 import qualified Data.ByteString as B
@@ -280,6 +283,9 @@ ciphersuite_default =
     , cipher_TLS13_CHACHA20POLY1305_SHA256
     , cipher_TLS13_AES128CCM_SHA256
     ]
+
+ciphersuite_default_DTLS :: [Cipher]
+ciphersuite_default_DTLS = filter cipherDTLS_OK ciphersuite_default
 
 {-# WARNING ciphersuite_all "This ciphersuite list contains RC4. Use ciphersuite_strong or ciphersuite_default instead." #-}
 -- | The default ciphersuites + some not recommended last resort ciphers.
@@ -492,6 +498,7 @@ cipher_null_MD5 = Cipher
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Nothing
+    , cipherDTLS_OK      = True
     }
 
 -- | unencrypted cipher using RSA for key exchange and SHA1 for digest
@@ -504,6 +511,7 @@ cipher_null_SHA1 = Cipher
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Nothing
+    , cipherDTLS_OK      = True
     }
 
 -- | RC4 cipher, RSA key exchange and MD5 for digest
@@ -516,6 +524,7 @@ cipher_RC4_128_MD5 = Cipher
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Nothing
+    , cipherDTLS_OK      = False
     }
 
 -- | RC4 cipher, RSA key exchange and SHA1 for digest
@@ -528,6 +537,7 @@ cipher_RC4_128_SHA1 = Cipher
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Nothing
+    , cipherDTLS_OK      = False
     }
 
 -- | 3DES cipher (168 bit key), RSA key exchange and SHA1 for digest
@@ -540,6 +550,7 @@ cipher_RSA_3DES_EDE_CBC_SHA1 = Cipher
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Nothing
+    , cipherDTLS_OK      = True
     }
 
 -- | AES cipher (128 bit key), RSA key exchange and SHA1 for digest
@@ -552,6 +563,7 @@ cipher_AES128_SHA1 = Cipher
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just SSL3
+    , cipherDTLS_OK      = True
     }
 
 -- | AES cipher (128 bit key), DHE key exchanged signed by DSA and SHA1 for digest
@@ -564,6 +576,7 @@ cipher_DHE_DSS_AES128_SHA1 = Cipher
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_DHE_DSS
     , cipherMinVer       = Nothing
+    , cipherDTLS_OK      = True
     }
 
 -- | AES cipher (128 bit key), DHE key exchanged signed by RSA and SHA1 for digest
@@ -576,6 +589,7 @@ cipher_DHE_RSA_AES128_SHA1 = Cipher
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
     , cipherMinVer       = Nothing
+    , cipherDTLS_OK      = True
     }
 
 -- | AES cipher (256 bit key), RSA key exchange and SHA1 for digest
@@ -588,6 +602,7 @@ cipher_AES256_SHA1 = Cipher
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just SSL3
+    , cipherDTLS_OK      = True
     }
 
 -- | AES cipher (256 bit key), DHE key exchanged signed by DSA and SHA1 for digest
@@ -616,6 +631,7 @@ cipher_AES128_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just TLS12
+    , cipherDTLS_OK      = True
     }
 
 -- | AES cipher (256 bit key), RSA key exchange and SHA256 for digest
@@ -628,6 +644,7 @@ cipher_AES256_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just TLS12
+    , cipherDTLS_OK      = True
     }
 
 -- This is not registered in IANA.
@@ -637,6 +654,7 @@ cipher_DHE_DSS_RC4_SHA1 = cipher_DHE_DSS_AES128_SHA1
     { cipherID           = 0x0066
     , cipherName         = "DHE-DSA-RC4-SHA1"
     , cipherBulk         = bulk_rc4
+    , cipherDTLS_OK      = False
     }
 
 cipher_DHE_RSA_AES128_SHA256 :: Cipher
@@ -666,6 +684,7 @@ cipher_AES128CCM_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just TLS12 -- RFC 6655 Sec 3
+    , cipherDTLS_OK      = True
     }
 
 -- | AESCCM8 cipher (128 bit key), RSA key exchange.
@@ -679,6 +698,7 @@ cipher_AES128CCM8_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just TLS12 -- RFC 6655 Sec 3
+    , cipherDTLS_OK      = True
     }
 
 -- | AESGCM cipher (128 bit key), RSA key exchange.
@@ -692,6 +712,7 @@ cipher_AES128GCM_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just TLS12
+    , cipherDTLS_OK      = True
     }
 
 -- | AESCCM cipher (256 bit key), RSA key exchange.
@@ -705,6 +726,7 @@ cipher_AES256CCM_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just TLS12 -- RFC 6655 Sec 3
+    , cipherDTLS_OK      = True
     }
 
 -- | AESCCM8 cipher (256 bit key), RSA key exchange.
@@ -718,6 +740,7 @@ cipher_AES256CCM8_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just TLS12 -- RFC 6655 Sec 3
+    , cipherDTLS_OK      = True
     }
 
 -- | AESGCM cipher (256 bit key), RSA key exchange.
@@ -731,6 +754,7 @@ cipher_AES256GCM_SHA384 = Cipher
     , cipherPRFHash      = Just SHA384
     , cipherKeyExchange  = CipherKeyExchange_RSA
     , cipherMinVer       = Just TLS12
+    , cipherDTLS_OK      = True
     }
 
 cipher_DHE_RSA_AES128CCM_SHA256 :: Cipher
@@ -742,6 +766,7 @@ cipher_DHE_RSA_AES128CCM_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
     , cipherMinVer       = Just TLS12 -- RFC 6655 Sec 3
+    , cipherDTLS_OK      = True
     }
 
 cipher_DHE_RSA_AES128CCM8_SHA256 :: Cipher
@@ -753,6 +778,7 @@ cipher_DHE_RSA_AES128CCM8_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
     , cipherMinVer       = Just TLS12 -- RFC 6655 Sec 3
+    , cipherDTLS_OK      = True
     }
 
 cipher_DHE_RSA_AES128GCM_SHA256 :: Cipher
@@ -764,6 +790,7 @@ cipher_DHE_RSA_AES128GCM_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
     , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
+    , cipherDTLS_OK      = True
     }
 
 cipher_DHE_RSA_AES256CCM_SHA256 :: Cipher
@@ -775,6 +802,7 @@ cipher_DHE_RSA_AES256CCM_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
     , cipherMinVer       = Just TLS12 -- RFC 6655 Sec 3
+    , cipherDTLS_OK      = True
     }
 
 cipher_DHE_RSA_AES256CCM8_SHA256 :: Cipher
@@ -786,6 +814,7 @@ cipher_DHE_RSA_AES256CCM8_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
     , cipherMinVer       = Just TLS12 -- RFC 6655 Sec 3
+    , cipherDTLS_OK      = True
     }
 
 cipher_DHE_RSA_AES256GCM_SHA384 :: Cipher
@@ -797,6 +826,7 @@ cipher_DHE_RSA_AES256GCM_SHA384 = Cipher
     , cipherPRFHash      = Just SHA384
     , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
     , cipherMinVer       = Just TLS12
+    , cipherDTLS_OK      = True
     }
 
 cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256 :: Cipher
@@ -808,6 +838,7 @@ cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
     , cipherMinVer       = Just TLS12
+    , cipherDTLS_OK      = True
     }
 
 cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256 :: Cipher
@@ -819,6 +850,7 @@ cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
     , cipherMinVer       = Just TLS12
+    , cipherDTLS_OK      = True
     }
 
 cipher_DHE_RSA_CHACHA20POLY1305_SHA256 :: Cipher
@@ -830,6 +862,7 @@ cipher_DHE_RSA_CHACHA20POLY1305_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_DHE_RSA
     , cipherMinVer       = Just TLS12
+    , cipherDTLS_OK      = True
     }
 
 cipher_TLS13_AES128GCM_SHA256 :: Cipher
@@ -841,6 +874,7 @@ cipher_TLS13_AES128GCM_SHA256 = Cipher
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_TLS13
     , cipherMinVer       = Just TLS13
+    , cipherDTLS_OK      = True
     }
 
 cipher_TLS13_AES256GCM_SHA384 :: Cipher
@@ -852,6 +886,7 @@ cipher_TLS13_AES256GCM_SHA384 = Cipher
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_TLS13
     , cipherMinVer       = Just TLS13
+    , cipherDTLS_OK      = True
     }
 
 cipher_TLS13_CHACHA20POLY1305_SHA256 :: Cipher
@@ -863,6 +898,7 @@ cipher_TLS13_CHACHA20POLY1305_SHA256 = Cipher
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_TLS13
     , cipherMinVer       = Just TLS13
+    , cipherDTLS_OK      = True
     }
 
 cipher_TLS13_AES128CCM_SHA256 :: Cipher
@@ -874,6 +910,7 @@ cipher_TLS13_AES128CCM_SHA256 = Cipher
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_TLS13
     , cipherMinVer       = Just TLS13
+    , cipherDTLS_OK      = True
     }
 
 cipher_TLS13_AES128CCM8_SHA256 :: Cipher
@@ -885,6 +922,7 @@ cipher_TLS13_AES128CCM8_SHA256 = Cipher
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_TLS13
     , cipherMinVer       = Just TLS13
+    , cipherDTLS_OK      = True
     }
 
 cipher_ECDHE_ECDSA_AES128CBC_SHA :: Cipher
@@ -896,6 +934,7 @@ cipher_ECDHE_ECDSA_AES128CBC_SHA = Cipher
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
     , cipherMinVer       = Just TLS10
+    , cipherDTLS_OK      = True
     }
 
 cipher_ECDHE_ECDSA_AES256CBC_SHA :: Cipher
@@ -907,6 +946,7 @@ cipher_ECDHE_ECDSA_AES256CBC_SHA = Cipher
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
     , cipherMinVer       = Just TLS10
+    , cipherDTLS_OK      = True
     }
 
 cipher_ECDHE_RSA_AES128CBC_SHA :: Cipher
@@ -918,6 +958,7 @@ cipher_ECDHE_RSA_AES128CBC_SHA = Cipher
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
     , cipherMinVer       = Just TLS10
+    , cipherDTLS_OK      = True
     }
 
 cipher_ECDHE_RSA_AES256CBC_SHA :: Cipher
@@ -929,6 +970,7 @@ cipher_ECDHE_RSA_AES256CBC_SHA = Cipher
     , cipherPRFHash      = Nothing
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
     , cipherMinVer       = Just TLS10
+    , cipherDTLS_OK      = True
     }
 
 cipher_ECDHE_RSA_AES128CBC_SHA256 :: Cipher
@@ -940,6 +982,7 @@ cipher_ECDHE_RSA_AES128CBC_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
     , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
+    , cipherDTLS_OK      = True
     }
 
 cipher_ECDHE_RSA_AES256CBC_SHA384 :: Cipher
@@ -951,6 +994,7 @@ cipher_ECDHE_RSA_AES256CBC_SHA384 = Cipher
     , cipherPRFHash      = Just SHA384
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
     , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
+    , cipherDTLS_OK      = True
     }
 
 cipher_ECDHE_ECDSA_AES128CBC_SHA256 :: Cipher
@@ -962,6 +1006,7 @@ cipher_ECDHE_ECDSA_AES128CBC_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
     , cipherMinVer       = Just TLS12 -- RFC 5289
+    , cipherDTLS_OK      = True
     }
 
 cipher_ECDHE_ECDSA_AES256CBC_SHA384 :: Cipher
@@ -973,6 +1018,7 @@ cipher_ECDHE_ECDSA_AES256CBC_SHA384 = Cipher
     , cipherPRFHash      = Just SHA384
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
     , cipherMinVer       = Just TLS12 -- RFC 5289
+    , cipherDTLS_OK      = True
     }
 
 cipher_ECDHE_ECDSA_AES128CCM_SHA256 :: Cipher
@@ -984,6 +1030,7 @@ cipher_ECDHE_ECDSA_AES128CCM_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
     , cipherMinVer       = Just TLS12 -- RFC 7251
+    , cipherDTLS_OK      = True
     }
 
 cipher_ECDHE_ECDSA_AES128CCM8_SHA256 :: Cipher
@@ -995,6 +1042,7 @@ cipher_ECDHE_ECDSA_AES128CCM8_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
     , cipherMinVer       = Just TLS12 -- RFC 7251
+    , cipherDTLS_OK      = True
     }
 
 cipher_ECDHE_ECDSA_AES128GCM_SHA256 :: Cipher
@@ -1006,6 +1054,7 @@ cipher_ECDHE_ECDSA_AES128GCM_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
     , cipherMinVer       = Just TLS12 -- RFC 5289
+    , cipherDTLS_OK      = True
     }
 
 cipher_ECDHE_ECDSA_AES256CCM_SHA256 :: Cipher
@@ -1017,6 +1066,7 @@ cipher_ECDHE_ECDSA_AES256CCM_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
     , cipherMinVer       = Just TLS12 -- RFC 7251
+    , cipherDTLS_OK      = True
     }
 
 cipher_ECDHE_ECDSA_AES256CCM8_SHA256 :: Cipher
@@ -1028,6 +1078,7 @@ cipher_ECDHE_ECDSA_AES256CCM8_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
     , cipherMinVer       = Just TLS12 -- RFC 7251
+    , cipherDTLS_OK      = True
     }
 
 cipher_ECDHE_ECDSA_AES256GCM_SHA384 :: Cipher
@@ -1039,6 +1090,7 @@ cipher_ECDHE_ECDSA_AES256GCM_SHA384 = Cipher
     , cipherPRFHash      = Just SHA384
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_ECDSA
     , cipherMinVer       = Just TLS12 -- RFC 5289
+    , cipherDTLS_OK      = True
     }
 
 cipher_ECDHE_RSA_AES128GCM_SHA256 :: Cipher
@@ -1050,6 +1102,7 @@ cipher_ECDHE_RSA_AES128GCM_SHA256 = Cipher
     , cipherPRFHash      = Just SHA256
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
     , cipherMinVer       = Just TLS12 -- RFC 5288 Sec 4
+    , cipherDTLS_OK      = True
     }
 
 cipher_ECDHE_RSA_AES256GCM_SHA384 :: Cipher
@@ -1061,7 +1114,18 @@ cipher_ECDHE_RSA_AES256GCM_SHA384 = Cipher
     , cipherPRFHash      = Just SHA384
     , cipherKeyExchange  = CipherKeyExchange_ECDHE_RSA
     , cipherMinVer       = Just TLS12 -- RFC 5289
+    , cipherDTLS_OK      = True
     }
 
 -- A list of cipher suite is found from:
 -- https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-4
+
+-- DTLS-related cipher ban list. According to https://tools.ietf.org/html/rfc6347 section 7.
+testDTLS_Banned :: [CipherID]
+testDTLS_Banned = [0x0003, 0x0004, 0x0005, 0x0017, 0x0018, 0x0020,
+                   0x0024, 0x0028, 0x002b, 0x008a, 0x008e, 0x0092,
+                   0xc002, 0xc007, 0xc00c, 0xc011, 0xc016, 0xc033]
+
+-- check that our cipherDTLS_OK flags match the ban list above.
+test_ciphersuite_DTLS_OK :: Bool
+test_ciphersuite_DTLS_OK = null $ testDTLS_Banned `intersect` (map cipherID $ filter cipherDTLS_OK ciphersuite_all)
