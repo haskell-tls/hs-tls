@@ -60,6 +60,19 @@ readExact ctx sz = do
                     else Error_Packet ("partial packet: expecting " ++ show sz ++ " bytes, got: " ++ show (B.length hdrbs))
 
 
+
+-- Read out the bytes necessary for Header deserialization.
+-- This depends on version (5 bytes for TLS, plus 8 more bytes for DTLS).
+readHeaderBytes :: Context -> IO (Either TLSError ByteString)
+readHeaderBytes ctx = do
+  eb <- readExact ctx 5
+  case eb of
+    Left _ -> return eb
+    Right b -> let verMajor = b `B.index` 1
+               in if verMajor /= 254 -- non DTLS record
+                  then return eb
+                  else liftM (b <>) <$> readExact ctx 8
+
 -- | recvRecord receive a full TLS record (header + data), from the other side.
 --
 -- The record is disengaged from the record layer
@@ -70,8 +83,7 @@ recvRecord compatSSLv2 ctx
 #ifdef SSLV2_COMPATIBLE
     | compatSSLv2 = readExact ctx 2 >>= either (return . Left) sslv2Header
 #endif
-    | otherwise = readExact ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
-
+    | otherwise = readHeaderBytes ctx >>= either (return . Left) (recvLengthE . decodeHeader)
         where recvLengthE = either (return . Left) recvLength
 
               recvLength header@(Header _ _ _ readlen)
@@ -105,13 +117,32 @@ isCCS :: Record a -> Bool
 isCCS (Record ProtocolType_ChangeCipherSpec _ _ _) = True
 isCCS _                                            = False
 
+-- Receive records and pass them through cache/replay window/reorder procedures (in case of DTLS)
+recvRecordCacheAware :: Bool -> Context -> IO (Either TLSError (Record Plaintext))
+recvRecordCacheAware sslv2 ctx = do
+  mr <- ctxRecordCache ctx Nothing
+  case mr of
+    Just r -> return $ Right r
+    Nothing -> do
+      er <- recvRecord sslv2 ctx
+      case er of
+        Left _ -> return er
+        Right r@(Record _ ver _ _) -> 
+          if not $ isDTLS ver
+          then return er
+          else do
+            mr' <- ctxRecordCache ctx (Just r)
+            case mr' of
+              Just r' -> return $ Right r'
+              Nothing -> recvRecordCacheAware sslv2 ctx
+
 -- | receive one packet from the context that contains 1 or
 -- many messages (many only in case of handshake). if will returns a
 -- TLSError if the packet is unexpected or malformed
 recvPacket :: MonadIO m => Context -> m (Either TLSError Packet)
 recvPacket ctx = liftIO $ do
     compatSSLv2 <- ctxHasSSLv2ClientHello ctx
-    erecord     <- recvRecord compatSSLv2 ctx
+    erecord     <- recvRecordCacheAware compatSSLv2 ctx
     case erecord of
         Left err     -> return $ Left err
         Right record -> do
