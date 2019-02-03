@@ -28,9 +28,13 @@ defaultTimeout = 2000
 
 bogusCipher cid = cipher_AES128_SHA1 { cipherID = cid }
 
-runTLS debug ioDebug params hostname portNumber f =
-    E.bracket setup teardown $ \sock -> do
-        ctx <- contextNew sock params
+runTLS debug ioDebug dtls params hostname portNumber f =
+    E.bracket setup teardown $ \(sock, sockaddr) -> do
+        backend <- if not dtls
+                   then do initializeBackend sock
+                           return $  getBackend sock
+                   else makeDgramSocketBackend sock sockaddr
+        ctx <- contextNew backend params
         contextHookSetLogging ctx getLogging
         f ctx
   where getLogging = ioLogging $ packetLogging $ def
@@ -47,12 +51,12 @@ runTLS debug ioDebug params hostname portNumber f =
                                 }
             | otherwise = logging
         setup = do
-            ai <- makeAddrInfo (Just hostname) portNumber
+            ai <- makeAddrInfo dtls (Just hostname) portNumber
             sock <- socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai)
             let sockaddr = addrAddress ai
-            connect sock sockaddr
-            return sock
-        teardown sock = close sock
+            unless dtls $ connect sock sockaddr
+            return (sock, sockaddr)
+        teardown (sock, _) = close sock
 
 sessionRef ref = SessionManager
     { sessionEstablish      = \sid sdata -> writeIORef ref (sid,sdata)
@@ -119,9 +123,11 @@ getDefaultParams flags host store sStorage certCredsRequest session earlyData =
                 | Tls11 `elem` flags = TLS11
                 | Ssl3  `elem` flags = SSL3
                 | Tls10 `elem` flags = TLS10
+                | Dtls  `elem` flags = DTLS12
                 | otherwise          = TLS12
             supportedVers
                 | NoVersionDowngrade `elem` flags = [tlsConnectVer]
+                | Dtls `elem` flags = [DTLS10,DTLS12]
                 | otherwise = filter (<= tlsConnectVer) allVers
             allVers = [SSL3, TLS10, TLS11, TLS12, TLS13]
             validateCert = not (NoValidateCert `elem` flags)
@@ -137,7 +143,7 @@ getGroups flags = case getGroup >>= readGroups of
             f acc _          = acc
 
 data Flag = Verbose | Debug | IODebug | NoValidateCert | Session | Http11
-          | Ssl3 | Tls10 | Tls11 | Tls12 | Tls13
+          | Ssl3 | Tls10 | Tls11 | Tls12 | Tls13 | Dtls
           | SNI String
           | NoSNI
           | Uri String
@@ -185,6 +191,7 @@ options =
     , Option []     ["tls11"]   (NoArg Tls11) "use TLS 1.1"
     , Option []     ["tls12"]   (NoArg Tls12) "use TLS 1.2 (default)"
     , Option []     ["tls13"]   (NoArg Tls13) "use TLS 1.3"
+    , Option []     ["dtls"]    (NoArg Dtls)  "use DTLS 1.2"
     , Option []     ["bogocipher"] (ReqArg BogusCipher "cipher-id") "add a bogus cipher id for testing"
     , Option ['x']  ["no-version-downgrade"] (NoArg NoVersionDowngrade) "do not allow version downgrade"
     , Option []     ["uri"]     (ReqArg Uri "URI") "optional URI requested by default /"
@@ -218,6 +225,7 @@ runOn (sStorage, certStore) flags port hostname
         runBench isSend =
             runTLS (Debug `elem` flags)
                    (IODebug `elem` flags)
+                   (Dtls `elem` flags)
                    (getDefaultParams flags hostname certStore sStorage Nothing noSession Nothing) hostname port $ \ctx -> do
                 handshake ctx
                 if isSend
@@ -248,6 +256,7 @@ runOn (sStorage, certStore) flags port hostname
             when (Verbose `elem` flags) (putStrLn "sending query:" >> LC.putStrLn query >> putStrLn "")
             runTLS (Debug `elem` flags)
                    (IODebug `elem` flags)
+                   (Dtls `elem` flags)
                    (getDefaultParams flags hostname certStore sStorage certCredRequest sess earlyData) hostname port $ \ctx -> do
                 handshake ctx
                 when (Verbose `elem` flags) $ printHandshakeInfo ctx

@@ -19,19 +19,22 @@
 module Network.TLS.Backend
     ( HasBackend(..)
     , Backend(..)
+    , makeStreamRecvFromDgram
+    , makeDgramSocketBackend
     ) where
 
 import Network.TLS.Imports
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
 import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush, hClose)
+import Control.Concurrent.MVar
 
 #ifdef INCLUDE_NETWORK
-import qualified Network.Socket as Network (Socket, close)
+import qualified Network.Socket as Network (Socket, close, SockAddr)
 import qualified Network.Socket.ByteString as Network
 #endif
 
 #ifdef INCLUDE_HANS
-import qualified Data.ByteString.Lazy as L
 import qualified Hans.NetworkStack as Hans
 #endif
 
@@ -68,6 +71,29 @@ safeRecv s buf = do
     takeMVar var
 #endif
 
+-- It does not make much sense to instantiate a Backend directly from a datagram-oriented socket
+-- because in order to send we need to know a peer address (unless the socket is
+-- "connected"), and when we receive a datagram, there is also peer address
+-- which might be useful for an application.
+-- Therefore we'll just prepare a helper function which makes a recvFrom
+-- to look like a regular recv from stream-oriented socket.
+makeStreamRecvFromDgram :: IO B.ByteString -> IO (Int -> IO B.ByteString)
+makeStreamRecvFromDgram recvDgram = do
+  buf <- newMVar L.empty
+  let recvStream len dgram = do
+        b' <- takeMVar buf
+        let b = b' <> L.fromStrict dgram
+            (nb, mr) = if L.length b >= fromIntegral len
+                       then let (result, rest) = L.splitAt (fromIntegral len) b
+                            in (rest, Just $ L.toStrict result)
+                       else (b, Nothing)
+        putMVar buf nb
+        case mr of
+          Just result -> return result
+          Nothing -> recvDgram >>= recvStream len
+  return $ \len -> recvStream len B.empty
+
+
 #ifdef INCLUDE_NETWORK
 instance HasBackend Network.Socket where
     initializeBackend _ = return ()
@@ -79,6 +105,14 @@ instance HasBackend Network.Socket where
                         if B.null r
                             then return []
                             else (r:) <$> loop (left - B.length r)
+
+-- | Create a backend from a datagram-oriented socket sock to communicate with a peer
+-- whose address is specified as sockaddr
+makeDgramSocketBackend :: Network.Socket -> Network.SockAddr -> IO Backend
+makeDgramSocketBackend sock sockaddr = do
+  recv' <- makeStreamRecvFromDgram $ (fst <$> Network.recvFrom sock 65535)
+  let send' = \b -> Network.sendTo sock b sockaddr >> return ()
+  return $ Backend (return ()) (Network.close sock) send' recv'
 #endif
 
 #ifdef INCLUDE_HANS

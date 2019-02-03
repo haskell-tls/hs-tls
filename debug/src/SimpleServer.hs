@@ -12,6 +12,7 @@ import Data.Default.Class
 import Data.X509.CertificateStore
 import Network.Socket (socket, close, bind, listen, accept)
 import qualified Network.Socket as S
+import Network.Socket.ByteString(recvFrom)
 import Network.TLS.SessionManager
 import System.Console.GetOpt
 import System.Environment
@@ -120,6 +121,7 @@ getDefaultParams flags store smgr cred rtt0accept = do
                 | otherwise          = TLS12
             supportedVers
                 | NoVersionDowngrade `elem` flags = [tlsConnectVer]
+                | Dtls `elem` flags = [DTLS10, DTLS12]
                 | otherwise = filter (<= tlsConnectVer) allVers
             allVers = [SSL3, TLS10, TLS11, TLS12, TLS13]
             validateCert = not (NoValidateCert `elem` flags)
@@ -177,6 +179,7 @@ options =
     , Option []     ["tls11"]   (NoArg Tls11) "use TLS 1.1"
     , Option []     ["tls12"]   (NoArg Tls12) "use TLS 1.2 (default)"
     , Option []     ["tls13"]   (NoArg Tls13) "use TLS 1.3"
+    , Option []     ["dtls"]    (NoArg Dtls)  "use DTLS 1.2"
     , Option []     ["bogocipher"] (ReqArg BogusCipher "cipher-id") "add a bogus cipher id for testing"
     , Option ['x']  ["no-version-downgrade"] (NoArg NoVersionDowngrade) "do not allow version downgrade"
     , Option []     ["allow-renegotiation"] (NoArg AllowRenegotiation) "allow client-initiated renegotiation"
@@ -206,12 +209,14 @@ loadCred _       Nothing =
     error "missing credential certificate"
 
 runOn (sStorage, certStore) flags port = do
-    ai <- makeAddrInfo Nothing port
+    let dtls = Dtls `elem` flags
+    ai <- makeAddrInfo dtls Nothing port
     sock <- socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai)
     S.setSocketOption sock S.ReuseAddr 1
     let sockaddr = addrAddress ai
-    bind sock sockaddr
-    listen sock 10
+    when (not dtls) $ do
+        bind sock sockaddr
+        listen sock 10
     runOn' sock
     close sock
   where
@@ -250,17 +255,25 @@ runOn (sStorage, certStore) flags port = do
                     loopRecvData (bytes - B.length d) ctx
 
         doTLS sock out = do
-            (cSock, cAddr) <- accept sock
+            let dtls = Dtls `elem` flags
+            (cSock, cAddr) <- if (not dtls)
+                              then do accept sock
+                              else do (_, addr) <- recvFrom sock 65535
+                                      return (sock, addr)
             putStrLn ("connection from " ++ show cAddr)
 
             cred <- loadCred getKey getCertificate
             let rtt0accept = Rtt0 `elem` flags
             params <- getDefaultParams flags certStore sStorage cred rtt0accept
+            backend <- if not dtls
+                       then do initializeBackend cSock
+                               return $ getBackend cSock
+                       else do makeDgramSocketBackend sock cAddr
 
             void $ forkIO $ do
                 runTLS (Debug `elem` flags)
                        (IODebug `elem` flags)
-                       params cSock $ \ctx -> do
+                       params backend $ \ctx -> do
                     handshake ctx
                     when (Verbose `elem` flags) $ printHandshakeInfo ctx
                     loopRecv out ctx

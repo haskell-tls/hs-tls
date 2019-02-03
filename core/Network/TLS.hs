@@ -19,7 +19,9 @@ module Network.TLS
     -- * Backend abstraction
     , HasBackend(..)
     , Backend(..)
-
+    , makeStreamRecvFromDgram
+    , makeDgramSocketBackend
+  
     -- * Context configuration
     -- ** Parameters
     -- intentionally hide the internal methods even haddock warns.
@@ -138,7 +140,7 @@ module Network.TLS
     , Bytes
     ) where
 
-import Network.TLS.Backend (Backend(..), HasBackend(..))
+import Network.TLS.Backend (Backend(..), HasBackend(..), makeStreamRecvFromDgram, makeDgramSocketBackend)
 import Network.TLS.Struct ( TLSError(..), TLSException(..)
                           , HashAndSignatureAlgorithm, HashAlgorithm(..), SignatureAlgorithm(..)
                           , Header(..), ProtocolType(..), CertificateType(..)

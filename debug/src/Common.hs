@@ -123,12 +123,12 @@ printHandshakeInfo ctx = do
         Nothing -> return ()
         Just n  -> putStrLn ("server name indication: " ++ n)
 
-makeAddrInfo :: Maybe HostName -> PortNumber -> IO AddrInfo
-makeAddrInfo maddr port = do
+makeAddrInfo :: Bool -> Maybe HostName -> PortNumber -> IO AddrInfo
+makeAddrInfo dtls maddr port = do
     let flgs = [AI_ADDRCONFIG, AI_NUMERICSERV, AI_PASSIVE]
         hints = defaultHints {
             addrFlags = flgs
-          , addrSocketType = Stream
+          , addrSocketType = if dtls then Datagram else Stream
           }
     head <$> getAddrInfo (Just hints) maddr (Just $ show port)
 
