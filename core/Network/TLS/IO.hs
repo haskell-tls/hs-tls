@@ -131,7 +131,7 @@ recvRecordCacheAware sslv2 ctx = do
           if not $ isDTLS ver
           then return er
           else do
-            mr' <- ctxRecordCache ctx (Just r)
+            mr' <- ctxRecordCache ctx $ Just r
             case mr' of
               Just r' -> return $ Right r'
               Nothing -> recvRecordCacheAware sslv2 ctx
@@ -163,8 +163,8 @@ recvPacket ctx = liftIO $ do
                 return pkt
 
 -- | Send one packet to the context
-sendPacket :: MonadIO m => Context -> Packet -> m ()
-sendPacket ctx pkt = do
+sendPacketTLS :: MonadIO m => Context -> Packet -> m ()
+sendPacketTLS ctx pkt = do
     -- in ver <= TLS1.0, block ciphers using CBC are using CBC residue as IV, which can be guessed
     -- by an attacker. Hence, an empty packet is sent before a normal data packet, to
     -- prevent guessability.
@@ -179,6 +179,22 @@ sendPacket ctx pkt = do
         Right dataToSend -> sendBytes ctx dataToSend
   where isNonNullAppData (AppData b) = not $ B.null b
         isNonNullAppData _           = False
+
+sendPacketDTLS :: MonadIO m => Context -> Packet -> m ()
+sendPacketDTLS ctx pkt = do
+    edataToSend <- liftIO $ do
+                        withLog ctx $ \logging -> loggingPacketSent logging (show pkt)
+                        writePacketDTLS ctx pkt
+    case edataToSend of
+        Left err         -> throwCore err
+        Right dataToSend -> mapM_ (sendBytes ctx) dataToSend
+
+sendPacket :: MonadIO m => Context -> Packet -> m ()
+sendPacket ctx pkt =
+  if ctxIsDTLS ctx
+  then sendPacketDTLS ctx pkt
+  else sendPacketTLS ctx pkt
+
 
 sendPacket13 :: MonadIO m => Context -> Packet13 -> m ()
 sendPacket13 ctx pkt = writePacketBytes13 ctx pkt >>= sendBytes ctx

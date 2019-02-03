@@ -335,6 +335,7 @@ printUsage =
     putStrLn $ usageInfo "usage: simpleclient [opts] <hostname> [port]\n\n\t(port default to: 443)\noptions:\n" options
 
 main = do
+    hSetBuffering stdout NoBuffering
     args <- getArgs
     let (opts,other,errs) = getOpt Permute options args
     when (not $ null errs) $ do

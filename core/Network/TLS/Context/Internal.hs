@@ -56,6 +56,7 @@ module Network.TLS.Context.Internal
     , getHState
     , getStateRNG
     , tls13orLater
+    , ctxIsDTLS
     ) where
 
 import Network.TLS.Backend
@@ -277,3 +278,7 @@ tls13orLater ctx = do
     return $ case ev of
                Left  _ -> False
                Right v -> v >= TLS13
+
+ctxIsDTLS :: Context -> Bool
+ctxIsDTLS ctx = DTLS12 `elem` vers || DTLS10 `elem` vers
+  where vers = supportedVersions $ ctxSupported ctx

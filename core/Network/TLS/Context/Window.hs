@@ -12,6 +12,7 @@ data (HasSequenceNumber a) => Window a = Window
                                          !Word64 -- sequence number of a next expected record
                                          !Word64 -- bitmask of cached records
                                          ![(Word64, a)] -- the cache itself
+                                         deriving(Show)
 
 -- Extract a record from cache, if there's a record with expected sequence number
 maybeGetNext :: (HasSequenceNumber a) => Window a -> (Window a, Maybe a)
@@ -40,7 +41,7 @@ cacheRecord record window@(Window next mask cache) =
      else if nbit < 64
           then let mask' = mask .|. (1 `shiftL` nbit)
                    cache' = ((sn, record) : cache)
-               in if mask /= mask
+               in if mask /= mask'
                   then Window next mask' cache'
                   else window
           else let nmissing = ctz mask
@@ -69,3 +70,17 @@ maybeCacheMaybeGetNext ctx (Just record) = atomicModifyIORef' ctx $ maybeGetNext
 
 newWindow :: (HasSequenceNumber a) => Window a
 newWindow = Window 0 0 []
+
+{-
+instance HasSequenceNumber Word64 where
+  getSequenceNumber = id
+
+test = do
+  w <- newIORef newWindow
+  let s :: Maybe Word64 -> IO ()
+      s = putStrLn . show
+      x = [Just 0,Just 1,Just 2,Just 0,Just 5,Just 4,Nothing,Just 3,Nothing,Nothing,Nothing,Just 3,Just 6]
+  mapM (maybeCacheMaybeGetNext w) x >>= mapM_ s
+  readIORef w >>= putStrLn . show
+-}
+
