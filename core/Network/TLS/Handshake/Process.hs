@@ -55,8 +55,6 @@ processHandshake ctx hs = do
                              else return True
             --let hverify = isDTLS cver && verifyHelloCookie ctx cookie
             unless (hrr || (not helloVerified)) $ startHandshake ctx cver ran
-        HelloVerifyRequest ver cookie -> when ((role == ClientRole) && (isDTLS ver)) $ do
-            usingHState ctx $ setHelloCookie cookie
         Certificates certs            -> processCertificates role certs
         ClientKeyXchg content         -> when (role == ServerRole) $ do
             processClientKeyXchg ctx content

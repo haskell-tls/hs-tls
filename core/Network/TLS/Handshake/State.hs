@@ -66,8 +66,6 @@ module Network.TLS.Handshake.State
     , getTLS13RTT0Status
     , setTLS13Secret
     , getTLS13Secret
-    , setHelloCookie
-    , getHelloCookie
     ) where
 
 import Network.TLS.Util
@@ -131,8 +129,6 @@ data HandshakeState = HandshakeState
     , hstTLS13HandshakeMode  :: HandshakeMode13
     , hstTLS13RTT0Status     :: !RTT0Status
     , hstTLS13Secret         :: Secret13
-    -- DTLS related
-    , hstHelloCookie         :: !(Maybe HelloCookie)
     } deriving (Show)
 
 {- | When we receive a CertificateRequest from a server, a just-in-time
@@ -221,7 +217,6 @@ newEmptyHandshake ver crand = HandshakeState
     , hstTLS13HandshakeMode  = FullHandshake
     , hstTLS13RTT0Status     = RTT0None
     , hstTLS13Secret         = NoSecret
-    , hstHelloCookie         = Nothing
     }
 
 runHandshake :: HandshakeState -> HandshakeM a -> (a, HandshakeState)
@@ -490,10 +485,3 @@ getHash ver ciph
     | ver < TLS12                              = SHA1_MD5
     | maybe True (< TLS12) (cipherMinVer ciph) = SHA256
     | otherwise                                = cipherHash ciph
-
-
-setHelloCookie :: HelloCookie -> HandshakeM ()
-setHelloCookie cookie = modify $ \hst -> hst { hstHelloCookie = Just cookie }
-
-getHelloCookie :: HandshakeM (Maybe HelloCookie)
-getHelloCookie = gets hstHelloCookie

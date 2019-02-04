@@ -59,6 +59,9 @@ module Network.TLS.State
     -- * random
     , genRandom
     , withRNG
+    , setHelloCookie
+    , getHelloCookie
+    , clearHelloCookie
     ) where
 
 import Network.TLS.Imports
@@ -97,6 +100,8 @@ data TLSState = TLSState
     , stTLS13HRR            :: !Bool
     , stTLS13Cookie         :: Maybe Cookie
     , stExporterMasterSecret :: Maybe ByteString -- TLS 1.3
+    -- DTLS related
+    , stHelloCookie         :: !(Maybe HelloCookie)
     }
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrT TLSError (State TLSState) a }
@@ -136,6 +141,7 @@ newTLSState rng clientContext = TLSState
     , stTLS13HRR            = False
     , stTLS13Cookie         = Nothing
     , stExporterMasterSecret = Nothing
+    , stHelloCookie         = Nothing
     }
 
 updateVerifiedData :: Role -> ByteString -> TLSSt ()
@@ -289,3 +295,12 @@ setTLS13Cookie cookie = modify (\st -> st { stTLS13Cookie = Just cookie })
 
 getTLS13Cookie :: TLSSt (Maybe Cookie)
 getTLS13Cookie = gets stTLS13Cookie
+
+setHelloCookie :: HelloCookie -> TLSSt ()
+setHelloCookie cookie = modify $ \st -> st { stHelloCookie = Just cookie }
+
+getHelloCookie :: TLSSt (Maybe HelloCookie)
+getHelloCookie = gets stHelloCookie
+
+clearHelloCookie :: TLSSt ()
+clearHelloCookie = modify $ \st -> st { stHelloCookie = Nothing }

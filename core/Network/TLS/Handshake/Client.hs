@@ -77,6 +77,10 @@ handshakeClient' cparams ctx groups mcrand = do
     sentExtensions <- sendClientHello mcrand
     recvServerHello sentExtensions
     ver <- usingState_ ctx getVersion
+    helloCookie <- usingState_ ctx getHelloCookie 
+    if isDTLS ver && Nothing /= helloCookie
+      then handshakeClient' cparams ctx groups mcrand -- just restart with requested hello cookie set
+      else do
     -- recvServerHello sets TLS13HRR according to the server random.
     -- For 1st server hello, getTLS13HR returns True if it is HRR and False otherwise.
     -- For 2nd server hello, getTLS13HR returns False since it is NOT HRR.
@@ -234,6 +238,7 @@ handshakeClient' cparams ctx groups mcrand = do
                       return exts'
 
         sendClientHello mcr = do
+            mcookie <- usingState_ ctx getHelloCookie
             crand <- clientRandom ctx mcr
             let ver = if tls13 then TLS12 else highestVer
             hrr <- usingState_ ctx getTLS13HRR
@@ -241,7 +246,7 @@ handshakeClient' cparams ctx groups mcrand = do
             usingState_ ctx $ setVersionIfUnset highestVer
             let cipherIds = map cipherID ciphers
                 compIds = map compressionID compressions
-                cookie = HelloCookie B.empty
+                cookie = maybe (HelloCookie B.empty) id mcookie
                 mkClientHello exts = ClientHello ver crand clientSession cookie cipherIds compIds exts Nothing
             extensions0 <- catMaybes <$> getExtensions
             extensions <- adjustExtentions extensions0 $ mkClientHello extensions0
@@ -611,6 +616,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
                 Nothing                       -> Nothing
         isHRR = isHelloRetryRequest serverRan
     usingState_ ctx $ do
+        clearHelloCookie -- so that we do not restart handshake
         setTLS13HRR isHRR
         case extensionLookup extensionID_Cookie exts >>= extensionDecode MsgTServerHello of
           Just cookie -> setTLS13Cookie cookie
@@ -650,6 +656,13 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
                 usingHState ctx $ setMasterSecret rver ClientRole masterSecret
                 logKey ctx (MasterSecret masterSecret)
                 return $ RecvStateNext expectChangeCipher
+onServerHello ctx _ _ (HelloVerifyRequest _ cookie) = do
+    usingState_ ctx $ do
+      mcookie <- getHelloCookie
+      case mcookie of
+        Nothing -> setHelloCookie cookie
+        _ -> fail "refusing to go for a second attempt of HelloVerifyRequest"
+    return RecvStateDone
 onServerHello _ _ _ p = unexpected (show p) (Just "server hello")
 
 processCertificate :: ClientParams -> Context -> Handshake -> IO (RecvState IO)

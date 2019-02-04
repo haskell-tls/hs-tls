@@ -215,7 +215,9 @@ decodeHandshakeRecordsDTLS =
         (ty, len, msgSeq, fragOff, fragLen, content) <- getFragment
         case mhrc of
           Nothing -> if 0 == fragOff
-                     then processFragment $ Just $ HandshakeReassembleCtx ty msgSeq len content
+                     then if len == fragLen
+                          then return (ty, content)
+                          else processFragment $ Just $ HandshakeReassembleCtx ty msgSeq len content
                      else fail $ "Got a fragment of non-zero offset. "++
                           "Reassemble expects fragments to be reordered at record layer"
           Just hrc -> do
