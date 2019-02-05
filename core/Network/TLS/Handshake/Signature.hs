@@ -216,11 +216,12 @@ signatureCreateWithCertVerifyData ctx malg (sigParam, toSign) = do
 signatureVerify :: Context -> DigitallySigned -> DigitalSignatureAlg -> ByteString -> IO Bool
 signatureVerify ctx digSig@(DigitallySigned hashSigAlg _) sigAlgExpected toVerifyData = do
     usedVersion <- usingState_ ctx getVersion
+    let isTLS12 = (usedVersion == TLS12) || (usedVersion == DTLS12)
     let (sigParam, toVerify) =
-            case (usedVersion, hashSigAlg) of
-                (TLS12, Nothing)    -> error "expecting hash and signature algorithm in a TLS12 digitally signed structure"
-                (TLS12, Just hs) | sigAlgExpected `signatureCompatible` hs -> (signatureParams sigAlgExpected hashSigAlg, toVerifyData)
-                                 | otherwise                               -> error "expecting different signature algorithm"
+            case (isTLS12, hashSigAlg) of
+                (True, Nothing)    -> error "expecting hash and signature algorithm in a TLS12 digitally signed structure"
+                (True, Just hs) | sigAlgExpected `signatureCompatible` hs -> (signatureParams sigAlgExpected hashSigAlg, toVerifyData)
+                                | otherwise                               -> error "expecting different signature algorithm"
                 (_,     Nothing)    -> buildVerifyData (signatureParams sigAlgExpected Nothing) toVerifyData
                 (_,     Just _)     -> error "not expecting hash and signature algorithm in a < TLS12 digitially signed structure"
     signatureVerifyWithCertVerifyData ctx digSig (sigParam, toVerify)
