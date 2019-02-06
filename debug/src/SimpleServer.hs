@@ -272,7 +272,9 @@ runOn (sStorage, certStore) flags port = do
                                return $ getBackend cSock
                        else do makeDgramSocketBackend [firstDgram] cSock cAddr
 
-            void $ forkIO $ do
+            let runConnection conn = if dtls then conn else void (forkIO conn)
+
+            runConnection $ do
                 runTLS (Debug `elem` flags)
                        (IODebug `elem` flags)
                        params backend $ \ctx -> do
@@ -283,7 +285,7 @@ runOn (sStorage, certStore) flags port = do
                     bye ctx
                     return ()
                 close cSock
-            doTLS sock out
+            when (not dtls) $ doTLS sock out
 
         loopRecv out ctx = do
             d <- timeout (timeoutMs * 1000) (recvData ctx) -- 2s per recv
