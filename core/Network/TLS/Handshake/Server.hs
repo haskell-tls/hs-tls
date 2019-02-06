@@ -207,9 +207,10 @@ handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverN
         cipherAllowed cipher   = cipherAllowedForVersion chosenVersion cipher && hasCommonGroup cipher
         selectCipher credentials signatureCredentials = filter cipherAllowed (commonCiphers credentials signatureCredentials)
 
+        isXTLS12 = chosenVersion `elem` [TLS12, DTLS12]
         (creds, signatureCreds, ciphersFilteredVersion)
-            = case chosenVersion of
-                  TLS12 -> let -- Build a list of all hash/signature algorithms in common between
+            = case isXTLS12 of
+                  True  -> let -- Build a list of all hash/signature algorithms in common between
                                -- client and server.
                                possibleHashSigAlgs = hashAndSignaturesInCommon ctx exts
 
@@ -437,8 +438,9 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
         -- not called.
         decideHashSig sigAlg = do
             usedVersion <- usingState_ ctx getVersion
-            case usedVersion of
-              TLS12 -> do
+            let isXTLS12 = usedVersion `elem` [TLS12, DTLS12]
+            case isXTLS12 of
+              True  -> do
                   let hashSigs = hashAndSignaturesInCommon ctx exts
                   case filter (sigAlg `signatureCompatible`) hashSigs of
                       []  -> error ("no hash signature for " ++ show sigAlg)
