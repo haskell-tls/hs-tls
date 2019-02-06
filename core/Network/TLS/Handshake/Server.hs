@@ -82,7 +82,7 @@ handshakeServer sparams ctx = liftIO $ do
 --      -> finish             <- finish
 --
 handshakeServerWith :: ServerParams -> Context -> Handshake -> IO ()
-handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientSession cookie ciphers compressions exts _) = guardDTLSHello ctx clientVersion cookie $ do
+handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientSession cookie ciphers compressions exts _) = guardDTLSHello sparams ctx clientVersion cookie $ do
     established <- ctxEstablished ctx
     -- renego is not allowed in TLS 1.3
     when (established /= NotEstablished) $ do
@@ -145,7 +145,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     let allCreds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
 
     -- TLS version dependent
-    if chosenVersion <= TLS12 then
+    if chosenVersion < TLS13 then
         handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverName clientVersion compressions clientSession
       else do
         mapM_ ensureNullCompression compressions
@@ -1084,12 +1084,18 @@ clientCertVerify sparams ctx certs verif = do
                 usingState_ ctx $ setClientCertificateChain certs
                 else decryptError "verification failed"
 
-guardDTLSHello :: Context -> Version -> HelloCookie -> IO () -> IO ()
-guardDTLSHello ctx clientVersion cookie handshakeActions =
+guardDTLSHello :: ServerParams -> Context -> Version -> HelloCookie -> IO () -> IO ()
+guardDTLSHello sparams ctx clientVersion cookie handshakeActions =
     if isDTLS clientVersion
     then if cookie == HelloCookie B.empty
          then do cookie' <- ctxHelloCookieGen ctx
                  sendPacket ctx $ Handshake [HelloVerifyRequest DTLS10 cookie']
+                 hss <- recvPacketHandshake ctx
+                 case hss of
+                   [ch] -> handshakeServerWith sparams ctx ch
+                   _    -> fail ("unexpected handshake received, excepting client hello and received " ++ show hss)
          else do verified <- ctxHelloCookieVerify ctx cookie
-                 when verified handshakeActions
+                 if verified
+                   then handshakeActions
+                   else fail "HelloVerify mechanism failed (cookie verification failed)"
     else handshakeActions
