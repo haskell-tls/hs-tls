@@ -90,7 +90,8 @@ writePacketDTLS ctx (Handshake hss) = do
     let mtu = ctxMTU ctx
     msgSeq <- ctxNextHsMsgSeq ctx (fromIntegral $ length hss)
     let msgAndSeq = (zip msgSeq hss)
-    forM_ hss $ \hs -> do
+    let updateCtx (HelloVerifyRequest _ _) = return ()
+        updateCtx hs = do
         case hs of
             Finished fdata -> usingState_ ctx $ updateVerifiedData ClientRole fdata
             _              -> return ()
@@ -98,6 +99,7 @@ writePacketDTLS ctx (Handshake hss) = do
         usingHState ctx $ do
             when (certVerifyHandshakeMaterial hs) $ mapM_ addHandshakeMessage encoded
             when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ mapM_ updateHandshakeDigest encoded
+    mapM_ updateCtx hss 
     prepareRecord ctx $ sequence $ map engageAndEncode $ makeHsRecordDTLS mtu msgAndSeq
 writePacketDTLS ctx pkt = do
     let mtu = ctxMTU ctx
