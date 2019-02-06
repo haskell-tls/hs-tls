@@ -149,7 +149,9 @@ contextNew backend params = liftIO $ do
     stats <- newIORef newMeasurement
     -- we enable the reception of SSLv2 ClientHello message only in the
     -- server context, where we might be dealing with an old/compat client.
-    sslv2Compat <- newIORef (role == ServerRole)
+    let versions = supportedVersions supported
+        dtls = DTLS12 `elem` versions || DTLS10 `elem` versions
+    sslv2Compat <- newIORef (role == ServerRole && not dtls)
     needEmptyPacket <- newIORef False
     hooks <- newIORef defaultHooks
     tx    <- newMVar newRecordState
