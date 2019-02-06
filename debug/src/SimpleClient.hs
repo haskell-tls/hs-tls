@@ -33,7 +33,7 @@ runTLS debug ioDebug dtls params hostname portNumber f =
         backend <- if not dtls
                    then do initializeBackend sock
                            return $  getBackend sock
-                   else makeDgramSocketBackend sock sockaddr
+                   else makeDgramSocketBackend [] sock sockaddr
         ctx <- contextNew backend params
         contextHookSetLogging ctx getLogging
         f ctx

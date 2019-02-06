@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE OverloadedStrings #-}
 -- Disable this warning so we can still test deprecated functionality.
 {-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
@@ -214,8 +215,8 @@ runOn (sStorage, certStore) flags port = do
     sock <- socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai)
     S.setSocketOption sock S.ReuseAddr 1
     let sockaddr = addrAddress ai
+    bind sock sockaddr
     when (not dtls) $ do
-        bind sock sockaddr
         listen sock 10
     runOn' sock
     close sock
@@ -256,10 +257,11 @@ runOn (sStorage, certStore) flags port = do
 
         doTLS sock out = do
             let dtls = Dtls `elem` flags
-            (cSock, cAddr) <- if (not dtls)
-                              then do accept sock
-                              else do (_, addr) <- recvFrom sock 65535
-                                      return (sock, addr)
+            (cSock, cAddr, firstDgram) <- if (not dtls)
+                                          then do (sock', addr) <- accept sock
+                                                  return (sock', addr, B.empty)
+                                          else do (firstDgram, addr) <- recvFrom sock 65535
+                                                  return (sock, addr, firstDgram)
             putStrLn ("connection from " ++ show cAddr)
 
             cred <- loadCred getKey getCertificate
@@ -268,7 +270,7 @@ runOn (sStorage, certStore) flags port = do
             backend <- if not dtls
                        then do initializeBackend cSock
                                return $ getBackend cSock
-                       else do makeDgramSocketBackend sock cAddr
+                       else do makeDgramSocketBackend [firstDgram] cSock cAddr
 
             void $ forkIO $ do
                 runTLS (Debug `elem` flags)
@@ -333,6 +335,7 @@ printUsage =
     putStrLn $ usageInfo "usage: simpleserver [opts] [port]\n\n\t(port default to: 443)\noptions:\n" options
 
 main = do
+    hSetBuffering stdout LineBuffering
     args <- getArgs
     let (opts,other,errs) = getOpt Permute options args
     when (not $ null errs) $ do

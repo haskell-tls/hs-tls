@@ -77,9 +77,12 @@ safeRecv s buf = do
 -- which might be useful for an application.
 -- Therefore we'll just prepare a helper function which makes a recvFrom
 -- to look like a regular recv from stream-oriented socket.
-makeStreamRecvFromDgram :: IO B.ByteString -> IO (Int -> IO B.ByteString)
-makeStreamRecvFromDgram recvDgram = do
-  buf <- newMVar L.empty
+-- The "leftovers" argument is the contents that is to be "read out" in the first place,
+-- before the actual recvFrom would occurs. This is convenient for simple (test purpose) servers
+-- where we have to recvFrom to know the address of our peer.
+makeStreamRecvFromDgram :: [B.ByteString] -> IO B.ByteString -> IO (Int -> IO B.ByteString)
+makeStreamRecvFromDgram leftovers recvDgram = do
+  buf <- newMVar $ L.fromChunks leftovers
   let recvStream len dgram = do
         b' <- takeMVar buf
         let b = b' <> L.fromStrict dgram
@@ -108,11 +111,13 @@ instance HasBackend Network.Socket where
 
 -- | Create a backend from a datagram-oriented socket sock to communicate with a peer
 -- whose address is specified as sockaddr
-makeDgramSocketBackend :: Network.Socket -> Network.SockAddr -> IO Backend
-makeDgramSocketBackend sock sockaddr = do
-  recv' <- makeStreamRecvFromDgram $ (fst <$> Network.recvFrom sock 65535)
+makeDgramSocketBackend :: [B.ByteString] -> Network.Socket -> Network.SockAddr -> IO Backend
+makeDgramSocketBackend leftovers sock sockaddr = do
+  recv' <- makeStreamRecvFromDgram leftovers $ (fst <$> Network.recvFrom sock 65535)
   let send' = \b -> Network.sendTo sock b sockaddr >> return ()
   return $ Backend (return ()) (Network.close sock) send' recv'
+
+  
 #endif
 
 #ifdef INCLUDE_HANS
