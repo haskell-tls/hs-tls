@@ -432,12 +432,12 @@ encodeHandshakeDTLS mtu messageSeq o =
         len = B.length content
         ty = typeOfHandshake o
         encodeFragments bs fragOffset =
-          if B.null bs
-          then []
-          else let (frag, rest) = B.splitAt (fromIntegral mtu) bs
-                   fragLength = B.length frag
-                   header = runPut $ encodeHandshakeHeaderDTLS ty len messageSeq fragOffset fragLength
-               in (header <> frag : encodeFragments rest (fragOffset+fragLength))
+          let (frag, rest) = B.splitAt (fromIntegral mtu) bs
+              fragLength = B.length frag
+              header = runPut $ encodeHandshakeHeaderDTLS ty len messageSeq fragOffset fragLength
+          in (header <> frag : if B.null rest
+                               then []
+                               else encodeFragments rest (fragOffset+fragLength))
     in encodeFragments content 0
 
 encodeHandshakes :: [Handshake] -> ByteString
