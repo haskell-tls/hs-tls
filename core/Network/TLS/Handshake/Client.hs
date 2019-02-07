@@ -548,10 +548,11 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
             -- have sent a non-empty list of certificates.
             --
             certSent <- usingHState ctx getClientCertSent
+            let isXTLS12 = ver `elem` [TLS12, DTLS12]
             when certSent $ do
                 keyAlg      <- getLocalDigitalSignatureAlg ctx
-                mhashSig    <- case ver of
-                    TLS12 ->
+                mhashSig    <- case isXTLS12 of
+                    True ->
                         let cHashSigs = supportedHashSignatures $ ctxSupported ctx
                          in Just <$> getLocalHashSigAlg ctx cHashSigs keyAlg
                     _     -> return Nothing
@@ -754,7 +755,8 @@ processServerKeyExchange ctx p = processCertificateRequest ctx p
 processCertificateRequest :: Context -> Handshake -> IO (RecvState IO)
 processCertificateRequest ctx (CertRequest cTypesSent sigAlgs dNames) = do
     ver <- usingState_ ctx getVersion
-    when (ver == TLS12 && isNothing sigAlgs) $
+    let isXTLS12 = ver `elem` [TLS12, DTLS12]
+    when (isXTLS12 && isNothing sigAlgs) $
         throwCore $ Error_Protocol
             ( "missing TLS 1.2 certificate request signature algorithms"
             , True
