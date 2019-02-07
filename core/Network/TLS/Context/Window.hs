@@ -35,19 +35,19 @@ maybeGetNext window@(Window next mask cache) =
 cacheRecord :: (HasSequenceNumber a) => a -> Window a -> Window a
 cacheRecord record window@(Window next mask cache) =
   let sn = getSequenceNumber record
-      nbit = fromIntegral $ sn - next
+      nbit = sn - next
   in if nbit < 0
      then window
      else if nbit < 64
-          then let mask' = mask .|. (1 `shiftL` nbit)
+          then let mask' = mask .|. (1 `shiftL` (fromIntegral nbit))
                    cache' = ((sn, record) : cache)
                in if mask /= mask'
                   then Window next mask' cache'
                   else window
           else let nmissing = ctz mask
-                   nbit' = nbit - nmissing
+                   nbit' = nbit - (fromIntegral nmissing)
                in if nbit' < 64
-                  then let mask' = (mask `shiftR` nmissing) .|. (1 `shiftL` nbit')
+                  then let mask' = (mask `shiftR` nmissing) .|. (1 `shiftL` (fromIntegral nbit'))
                            next' = next + (fromIntegral $ nmissing)
                            cache' = ((sn, record) : cache)
                        in Window next' mask' cache'
@@ -79,7 +79,8 @@ test = do
   w <- newIORef newWindow
   let s :: Maybe Word64 -> IO ()
       s = putStrLn . show
-      x = [Just 0,Just 1,Just 2,Just 0,Just 5,Just 4,Nothing,Just 3,Nothing,Nothing,Nothing,Just 3,Just 6]
+      x = [Just 0,Just 1,Just 2,Just 0,Just 5,Just 4,Nothing,Just 3,Nothing,Nothing,Nothing,Just 3,Just 6
+          ,Just 0x0001000000000000, Just 80, Just 0x0001000000000002, Just 0x0001000000000001]
   mapM (maybeCacheMaybeGetNext w) x >>= mapM_ s
   readIORef w >>= putStrLn . show
 -}
