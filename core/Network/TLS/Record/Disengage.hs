@@ -129,12 +129,12 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
             when (econtentLen < (authTagLen + nonceExpLen)) sanityCheckError
 
             (enonce, econtent', authTag) <- get3o econtent (nonceExpLen, cipherLen, authTagLen)
-            let encodedSeq = encodeWord64 $ msSequence $ stMacState tst
+            let encodedSeq = encodeWord64 $ if isDTLS v then sn else msSequence $ stMacState tst
                 iv = cstIV (stCryptState tst)
                 ivlen = B.length iv
                 Header typ v sn _ = recordToHeader record
                 hdr = Header typ v sn $ fromIntegral cipherLen
-                ad = B.concat [ encodedSeq, encodeHeader hdr ]
+                ad = B.concat [ encodedSeq, encodeHeaderMAC hdr ]
                 sqnc = B.replicate (ivlen - 8) 0 `B.append` encodedSeq
                 nonce | nonceExpLen == 0 = B.xor iv sqnc
                       | otherwise = iv `B.append` enonce

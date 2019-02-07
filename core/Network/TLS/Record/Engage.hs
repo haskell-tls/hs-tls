@@ -24,6 +24,7 @@ import Network.TLS.Compression
 import Network.TLS.Wire
 import Network.TLS.Packet
 import Network.TLS.Imports
+import Network.TLS.Struct(isDTLS)
 import qualified Data.ByteString as B
 import qualified Data.ByteArray as B (convert, xor)
 
@@ -97,10 +98,11 @@ encryptAead :: Int
             -> RecordM ByteString
 encryptAead nonceExpLen encryptF content record = do
     cst        <- getCryptState
-    encodedSeq <- encodeWord64 <$> getMacSequence
+    let (Record _ ver sn _) = record
+    encodedSeq <- encodeWord64 <$> if isDTLS ver then return sn else getMacSequence
 
     let hdr   = recordToHeader record
-        ad    = B.concat [encodedSeq, encodeHeader hdr]
+        ad    = B.concat [encodedSeq, encodeHeaderMAC hdr]
         iv    = cstIV cst
         ivlen = B.length iv
         sqnc  = B.replicate (ivlen - 8) 0 `B.append` encodedSeq

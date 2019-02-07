@@ -17,7 +17,8 @@ module Network.TLS.Packet
     , decodeHeader
     , decodeDeprecatedHeaderLength
     , decodeDeprecatedHeader
-    , encodeHeader
+    , encodeHeader -- for serialization
+    , encodeHeaderMAC -- for MAC computation
     , encodeHeaderNoVer -- use for SSL3
 
     -- * marshall functions for alert messages
@@ -155,6 +156,12 @@ encodeHeader (Header pt ver sn len) = runPut (putHeaderType pt >>
                                               putBinaryVersion ver >>
                                               (when (isDTLS ver) $ putWord64 sn) >>
                                               putWord16 len)
+        {- FIXME check len <= 2^14 -}
+
+encodeHeaderMAC :: Header -> ByteString
+encodeHeaderMAC (Header pt ver _ len) = runPut (putHeaderType pt >>
+                                                putBinaryVersion ver >>
+                                                putWord16 len)
         {- FIXME check len <= 2^14 -}
 
 encodeHeaderNoVer :: Header -> ByteString

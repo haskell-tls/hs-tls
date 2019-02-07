@@ -153,11 +153,12 @@ computeDigest ver tstate hdr content = (digest, incrRecordState tstate)
         cst    = stCryptState tstate
         cipher = fromJust "cipher" $ stCipher tstate
         hashA  = cipherHash cipher
-        encodedSeq = encodeWord64 $ msSequence $ stMacState tstate
+        (Header _ _ sn _) = hdr
+        encodedSeq = encodeWord64 $ if isDTLS ver then sn else msSequence $ stMacState tstate
 
         (macF, msg)
             | ver < TLS10 = (macSSL hashA, B.concat [ encodedSeq, encodeHeaderNoVer hdr, content ])
-            | otherwise   = (hmac hashA, B.concat [ encodedSeq, encodeHeader hdr, content ])
+            | otherwise   = (hmac hashA, B.concat [ encodedSeq, encodeHeaderMAC hdr, content ])
 
 makeDigest :: Header -> ByteString -> RecordM ByteString
 makeDigest hdr content = do
