@@ -278,7 +278,7 @@ handshakeClient' cparams ctx groups mcrand = do
         recvServerHello sentExts = runRecvState ctx recvState
           where recvState = RecvStateNext $ \p ->
                     case p of
-                        Handshake hs -> onRecvStateHandshake ctx (RecvStateHandshake $ onServerHello ctx cparams sentExts) hs -- this adds SH to hstHandshakeMessages
+                        Handshake hs -> onRecvStateHandshake ctx (RecvStateHandshake $ onServerHello ctx cparams sentExts . unDtlsHandshake) hs -- this adds SH to hstHandshakeMessages
                         Alert a      ->
                             case a of
                                 [(AlertLevel_Warning, UnrecognizedName)] ->
@@ -651,7 +651,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
       else do
         usingHState ctx $ setServerHelloParameters rver serverRan cipherAlg compressAlg
         case resumingSession of
-            Nothing          -> return $ RecvStateHandshake (processCertificate cparams ctx)
+            Nothing          -> return $ RecvStateHandshake (processCertificate cparams ctx . unDtlsHandshake)
             Just sessionData -> do
                 let masterSecret = sessionSecret sessionData
                 usingHState ctx $ setMasterSecret rver ClientRole masterSecret
@@ -675,7 +675,7 @@ processCertificate cparams ctx (Certificates certs) = do
     case usage of
         CertificateUsageAccept        -> checkLeafCertificateKeyUsage
         CertificateUsageReject reason -> certificateRejected reason
-    return $ RecvStateHandshake (processServerKeyExchange ctx)
+    return $ RecvStateHandshake (processServerKeyExchange ctx . unDtlsHandshake)
   where shared = clientShared cparams
         checkCert = onServerCertificate (clientHooks cparams) (sharedCAStore shared)
                                                               (sharedValidationCache shared)
@@ -697,7 +697,7 @@ processCertificate cparams ctx (Certificates certs) = do
 processCertificate _ ctx p = processServerKeyExchange ctx p
 
 expectChangeCipher :: Packet -> IO (RecvState IO)
-expectChangeCipher ChangeCipherSpec = return $ RecvStateHandshake expectFinish
+expectChangeCipher ChangeCipherSpec = return $ RecvStateHandshake $ expectFinish . unDtlsHandshake
 expectChangeCipher p                = unexpected (show p) (Just "change cipher")
 
 expectFinish :: Handshake -> IO (RecvState IO)
@@ -708,7 +708,7 @@ processServerKeyExchange :: Context -> Handshake -> IO (RecvState IO)
 processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
     cipher <- usingHState ctx getPendingCipher
     processWithCipher cipher origSkx
-    return $ RecvStateHandshake (processCertificateRequest ctx)
+    return $ RecvStateHandshake (processCertificateRequest ctx . unDtlsHandshake)
   where processWithCipher cipher skx =
             case (cipherKeyExchange cipher, skx) of
                 (CipherKeyExchange_DHE_RSA, SKX_DHE_RSA dhparams signature) ->
@@ -764,7 +764,7 @@ processCertificateRequest ctx (CertRequest cTypesSent sigAlgs dNames) = do
             )
     let cTypes = filter (<= lastSupportedCertificateType) cTypesSent
     usingHState ctx $ setCertReqCBdata $ Just (cTypes, sigAlgs, dNames)
-    return $ RecvStateHandshake (processServerHelloDone ctx)
+    return $ RecvStateHandshake (processServerHelloDone ctx . unDtlsHandshake)
 processCertificateRequest ctx p = do
     usingHState ctx $ setCertReqCBdata Nothing
     processServerHelloDone ctx p
