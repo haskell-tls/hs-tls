@@ -61,6 +61,7 @@ module Network.TLS.Struct
     , EnumSafe16(..)
     , packetType
     , typeOfHandshake
+    , unDtlsHandshake
     ) where
 
 import Data.X509 (CertificateChain, DistinguishedName)
@@ -351,6 +352,8 @@ data Handshake =
     | CertRequest [CertificateType] (Maybe [HashAndSignatureAlgorithm]) [DistinguishedName]
     | CertVerify DigitallySigned
     | Finished FinishedData
+
+    | DtlsHandshake Word16 Handshake -- handshake message sequence number, then the message itself
     deriving (Show,Eq)
 
 packetType :: Packet -> ProtocolType
@@ -371,6 +374,11 @@ typeOfHandshake ServerKeyXchg{}           = HandshakeType_ServerKeyXchg
 typeOfHandshake CertRequest{}             = HandshakeType_CertRequest
 typeOfHandshake CertVerify{}              = HandshakeType_CertVerify
 typeOfHandshake Finished{}                = HandshakeType_Finished
+typeOfHandshake (DtlsHandshake _ hs)      = typeOfHandshake hs
+
+unDtlsHandshake :: Handshake -> Handshake
+unDtlsHandshake (DtlsHandshake _ hs) = hs
+unDtlsHandshake hs = hs
 
 numericalVer :: Version -> (Word8, Word8)
 numericalVer SSL2  = (2, 0)

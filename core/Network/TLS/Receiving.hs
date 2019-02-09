@@ -60,12 +60,12 @@ processPacket ctx (Record ProtocolType_Handshake ver _ fragment) = do
             case fromMaybe decodeHandshakeRecordX mCont bs of
                 GotError err                -> throwError err
                 GotPartial cont             -> modify (\st -> st { stHandshakeRecordCont = Just cont }) >> return []
-                GotSuccess (ty,content)     ->
-                    either throwError (return . (:[])) $ decodeHandshake currentParams ty content
-                GotSuccessRemaining (ty,content) left ->
+                GotSuccess (ty,decorate,content) ->
+                    either throwError (return . (:[]) . decorate) $ decodeHandshake currentParams ty content
+                GotSuccessRemaining (ty,decorate,content) left ->
                     case decodeHandshake currentParams ty content of
                         Left err -> throwError err
-                        Right hh -> (hh:) <$> parseMany currentParams Nothing left
+                        Right hh -> (decorate hh:) <$> parseMany currentParams Nothing left
 
 processPacket _ (Record ProtocolType_DeprecatedHandshake _ _ fragment) =
     case decodeDeprecatedHandshake $ fragmentGetBytes fragment of

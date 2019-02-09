@@ -34,7 +34,6 @@ module Network.TLS.Packet
     , encodeHandshake
     , encodeHandshakes
     , encodeHandshakeDTLS
-    , encodeHandshakesDTLS
     , encodeHandshakeHeader
     , encodeHandshakeContent
 
@@ -193,11 +192,11 @@ encodeAlerts l = runPut $ mapM_ encodeAlert l
   where encodeAlert (al, ad) = putWord8 (valOfType al) >> putWord8 (valOfType ad)
 
 {- decode and encode HANDSHAKE -}
-decodeHandshakeRecord :: ByteString -> GetResult (HandshakeType, ByteString)
+decodeHandshakeRecord :: ByteString -> GetResult (HandshakeType, Handshake -> Handshake, ByteString)
 decodeHandshakeRecord = runGet "handshake-record" $ do
     ty      <- getHandshakeType
     content <- getOpaque24
-    return (ty, content)
+    return (ty, id, content)
 
 
 -- DTLS-related context for handshake message reassembly.
@@ -208,7 +207,7 @@ data HandshakeReassembleCtx = HandshakeReassembleCtx {
     hrcReadyData :: ByteString }
 
 -- Assumes the records on the input are already properly reordered.
-decodeHandshakeRecordsDTLS :: ByteString -> GetResult (HandshakeType, ByteString)
+decodeHandshakeRecordsDTLS :: ByteString -> GetResult (HandshakeType, Handshake -> Handshake, ByteString)
 decodeHandshakeRecordsDTLS =
   let getFragment = do
         ty      <- getHandshakeType
@@ -223,7 +222,7 @@ decodeHandshakeRecordsDTLS =
         case mhrc of
           Nothing -> if 0 == fragOff
                      then if len == fragLen
-                          then return (ty, content)
+                          then return (ty, DtlsHandshake msgSeq, content)
                           else processFragment $ Just $ HandshakeReassembleCtx ty msgSeq len content
                      else fail $ "Got a fragment of non-zero offset. "++
                           "Reassemble expects fragments to be reordered at record layer"
@@ -244,7 +243,7 @@ decodeHandshakeRecordsDTLS =
             let hrc' = hrc { hrcReadyData = ready <> content }
             if B.length (hrcReadyData hrc') < hrcLengthExpected hrc'
               then processFragment $ Just hrc'
-              else return (hrcHandshakeType hrc', hrcReadyData hrc')
+              else return (hrcHandshakeType hrc', DtlsHandshake msgSeq, hrcReadyData hrc')
   in runGet "handshake-record-dtls" $ processFragment Nothing
 
 
@@ -433,8 +432,8 @@ encodeHandshake o =
                     _ -> runPut $ encodeHandshakeHeader (typeOfHandshake o) len in
     B.concat [ header, content ]
 
-encodeHandshakeDTLS :: Word16 -> Word16 -> Handshake -> [ByteString]
-encodeHandshakeDTLS mtu messageSeq o =
+encodeHandshakeDTLS :: Word16 -> Handshake -> [ByteString]
+encodeHandshakeDTLS mtu (DtlsHandshake messageSeq o) =
     let content = runPut $ encodeHandshakeContent o
         len = B.length content
         ty = typeOfHandshake o
@@ -446,13 +445,10 @@ encodeHandshakeDTLS mtu messageSeq o =
                                then []
                                else encodeFragments rest (fragOffset+fragLength))
     in encodeFragments content 0
+encodeHandshakeDTLS _ h = error $ "encodeHandshakeDTLS called for a non-dtls hanshake message "++(show h)
 
 encodeHandshakes :: [Handshake] -> ByteString
 encodeHandshakes hss = B.concat $ map encodeHandshake hss
-
-encodeHandshakesDTLS :: Word16 -> [(Word16, Handshake)] -> [ByteString]
-encodeHandshakesDTLS mtu hss = mconcat $ map (uncurry $ encodeHandshakeDTLS mtu) hss
-
 
 encodeHandshakeHeader :: HandshakeType -> Int -> Put
 encodeHandshakeHeader ty len = putWord8 (valOfType ty) >> putWord24 len
@@ -526,6 +522,8 @@ encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
 encodeHandshakeContent (CertVerify digitallySigned) = putDigitallySigned digitallySigned
 
 encodeHandshakeContent (Finished opaque) = putBytes opaque
+
+encodeHandshakeContent (DtlsHandshake _ hs) = encodeHandshakeContent hs
 
 ------------------------------------------------------------
 

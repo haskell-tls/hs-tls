@@ -40,7 +40,8 @@ import Data.X509 (CertificateChain(..), Certificate(..), getCertificate)
 
 
 processHandshake :: Context -> Handshake -> IO ()
-processHandshake ctx hs = do
+processHandshake ctx hs' = do
+    let hs = unDtlsHandshake hs'
     role <- usingState_ ctx isClientContext
     case hs of
         ClientHello cver ran _ cookie cids _ ex _ -> when (role == ServerRole) $ do
@@ -60,7 +61,14 @@ processHandshake ctx hs = do
             processClientKeyXchg ctx content
         Finished fdata                -> processClientFinished ctx fdata
         _                             -> return ()
-    let encoded = encodeHandshake hs
+    let encoded = if ctxIsDTLS ctx
+                     -- https://tools.ietf.org/html/rfc6347#section-4.2.6
+                     -- "in order to remove sensitivity to handshake message
+                     -- fragmentation, the Finished MAC MUST be computed as if each
+                     -- handshake message had been sent as a single fragment."
+                     -- This is why we use 65535 instead of mtu size
+                  then mconcat $ encodeHandshakeDTLS 65535 hs'
+                  else encodeHandshake hs
     when (isHRR hs) $ usingHState ctx wrapAsMessageHash13
     when (certVerifyHandshakeMaterial hs) $ usingHState ctx $ addHandshakeMessage encoded
     when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ usingHState ctx $ updateHandshakeDigest encoded

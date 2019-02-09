@@ -55,9 +55,9 @@ makeNonHsRecordDTLS _ pkt = makeRecordFragmentDTLS (packetType pkt) (fragmentPla
         packetContent (AppData x)        = x
         packetContent _                  = error "makeNonHsRecordDTLS called for Handshake packet"
 
-makeHsRecordDTLS :: Word16 -> [(Word16, Handshake)] -> [RecordM (Record Plaintext)]
+makeHsRecordDTLS :: Word16 -> [Handshake] -> [RecordM (Record Plaintext)]
 makeHsRecordDTLS mtu hss = map (makeRecordFragmentDTLS ProtocolType_Handshake) $
-                           map fragmentPlaintext $ encodeHandshakesDTLS mtu hss
+                           map fragmentPlaintext $ mconcat $ map (encodeHandshakeDTLS mtu) hss
 
 -- | marshall packet data
 encodeRecord :: Record Ciphertext -> RecordM ByteString
@@ -86,21 +86,25 @@ engageAndEncode :: RecordM (Record Plaintext) -> RecordM ByteString
 engageAndEncode record = record >>= engageRecord >>= encodeRecord
 
 writePacketDTLS :: Context -> Packet -> IO (Either TLSError [ByteString])
-writePacketDTLS ctx (Handshake hss) = do
+writePacketDTLS ctx (Handshake hss') = do
     let mtu = ctxMTU ctx
-    msgSeq <- ctxNextHsMsgSeq ctx (fromIntegral $ length hss)
-    let msgAndSeq = (zip msgSeq hss)
-    let updateCtx (HelloVerifyRequest _ _) = return ()
+    msgSeq <- ctxNextHsMsgSeq ctx (fromIntegral $ length hss')
+    let hss = zipWith DtlsHandshake msgSeq hss'
+    let updateCtx (DtlsHandshake _ (HelloVerifyRequest _ _)) = return ()
         updateCtx hs = do
         case hs of
             Finished fdata -> usingState_ ctx $ updateVerifiedData ClientRole fdata
             _              -> return ()
-        let encoded = encodeHandshakesDTLS mtu msgAndSeq
+        -- https://tools.ietf.org/html/rfc6347#section-4.2.6 "in order
+        -- to remove sensitivity to handshake message fragmentation,
+        -- the Finished MAC MUST be computed as if each handshake
+        -- message had been sent as a single fragment." - this is why 65535.
+        let encodedForFinDgst = mconcat $ map (encodeHandshakeDTLS 65535) hss
         usingHState ctx $ do
-            when (certVerifyHandshakeMaterial hs) $ mapM_ addHandshakeMessage encoded
-            when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ mapM_ updateHandshakeDigest encoded
+            when (certVerifyHandshakeMaterial hs) $ mapM_ addHandshakeMessage encodedForFinDgst
+            when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ mapM_ updateHandshakeDigest encodedForFinDgst
     mapM_ updateCtx hss 
-    prepareRecord ctx $ sequence $ map engageAndEncode $ makeHsRecordDTLS mtu msgAndSeq
+    prepareRecord ctx $ sequence $ map engageAndEncode $ makeHsRecordDTLS mtu hss
 writePacketDTLS ctx pkt = do
     let mtu = ctxMTU ctx
     d <- prepareRecord ctx $ return <$> (engageAndEncode $ makeNonHsRecordDTLS mtu pkt)
