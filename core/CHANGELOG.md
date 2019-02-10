@@ -1,7 +1,47 @@
+## Version 1.5.0
+
+- Add and enable AES CCM ciphers [#271](https://github.com/vincenthz/hs-tls/pull/271) [#287](https://github.com/vincenthz/hs-tls/pull/287)
+- Verify certificate key usage [#274](https://github.com/vincenthz/hs-tls/pull/274) [#301](https://github.com/vincenthz/hs-tls/pull/301)
+- TLS 1.3 support [#278](https://github.com/vincenthz/hs-tls/pull/278) [#279](https://github.com/vincenthz/hs-tls/pull/279) [#280](https://github.com/vincenthz/hs-tls/pull/280) [#283](https://github.com/vincenthz/hs-tls/pull/283) [#298](https://github.com/vincenthz/hs-tls/pull/298) [#331](https://github.com/vincenthz/hs-tls/pull/331) [#290](https://github.com/vincenthz/hs-tls/pull/290) [#314](https://github.com/vincenthz/hs-tls/pull/314)
+- Enable RSASSA-PSS [#280](https://github.com/vincenthz/hs-tls/pull/280) [#353](https://github.com/vincenthz/hs-tls/pull/353)
+- Add and enable ChaCha20-Poly1305 ciphers [#287](https://github.com/vincenthz/hs-tls/pull/287) [#340](https://github.com/vincenthz/hs-tls/pull/340)
+- Certificate selection with extension "signature_algorithms_cert" [#302](https://github.com/vincenthz/hs-tls/pull/302)
+- Preventing Logjam attack [#300](https://github.com/vincenthz/hs-tls/pull/300)
+- Downgrade protection [#308](https://github.com/vincenthz/hs-tls/pull/308)
+- Support for EdDSA certificates [#328](https://github.com/vincenthz/hs-tls/pull/328) [#353](https://github.com/vincenthz/hs-tls/pull/353)
+- Key logging [#317](https://github.com/vincenthz/hs-tls/pull/317)
+- Thread safety for writes [#329](https://github.com/vincenthz/hs-tls/pull/329)
+- Verify signature schemes and (EC)DHE groups received [#337](https://github.com/vincenthz/hs-tls/pull/337) [#338](https://github.com/vincenthz/hs-tls/pull/338)
+- Throw BadRecordMac when the decrypted record has invalid format [#347](https://github.com/vincenthz/hs-tls/pull/347)
+- Improve documentation format [#341](https://github.com/vincenthz/hs-tls/pull/341) [#343](https://github.com/vincenthz/hs-tls/pull/343)
+- Fix recvClientData with single Handshake packet [#352](https://github.com/vincenthz/hs-tls/pull/352)
+- Decrease memory footprint of SessionData values [#354](https://github.com/vincenthz/hs-tls/pull/354)
+
+FEATURES:
+
+- TLS version 1.3 is available with most features but is not enabled by default.
+  One notable omission is post-handshake authentication.  Scenarios where
+  servers previously used renegotiation to conditionally request a certificate
+  are not possible yet when `TLS13` is negotiated.  Users may enable the version
+  in `supportedVersions` only when sure post-handshake authentication is not
+  required.
+
+API CHANGES:
+
+- `SessionManager` implementations need to provide a `sessionResumeOnlyOnce`
+  function to accomodate resumption scenarios with 0-RTT data.  The function is
+  called only on the server side.
+- Data type `SessionData` is extended with four new fields for TLS version 1.3.
+  `SessionManager` implementations that serializes/deserializes `SessionData`
+  values must deal with the new fields.
+- New configuration parameters and constructors are added for TLS version 1.3
+  but the API change should be backward compatible for most use-cases.
+- Function `cipherExchangeNeedMoreData` has been removed.
+
 ## Version 1.4.1
 
 - Enable X25519 in default parameters [#265](https://github.com/vincenthz/hs-tls/pull/265)
-- Checking EOF in bye [#262] (https://github.com/vincenthz/hs-tls/pull/262)
+- Checking EOF in bye [#262](https://github.com/vincenthz/hs-tls/pull/262)
 - Improving validation in DH key exchange [#256](https://github.com/vincenthz/hs-tls/pull/256)
 - Handle TCP reset during handshake [#251](https://github.com/vincenthz/hs-tls/pull/251)
 - Accepting hlint suggestions.

@@ -29,8 +29,6 @@ module Network.TLS
     , ClientParams(..)
     , defaultParamsClient
     , ServerParams(..)
-    , CommonParams
-    , Role
     -- ** Supported
     , Supported(..)
     -- ** Shared

@@ -127,8 +127,8 @@ handshakeClient' cparams ctx groups mcrand = do
                                  ,earlyDataExtension
                                  ,keyshareExtension
                                  ,pskExchangeModeExtension
-                                 ,preSharedKeyExtension
                                  ,cookieExtension
+                                 ,preSharedKeyExtension -- MUST be last
                                  ]
 
         toExtensionRaw :: Extension e => e -> ExtensionRaw
@@ -619,9 +619,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
     usingState_ ctx $ do
         clearHelloCookie -- so that we do not restart handshake
         setTLS13HRR isHRR
-        case extensionLookup extensionID_Cookie exts >>= extensionDecode MsgTServerHello of
-          Just cookie -> setTLS13Cookie cookie
-          _           -> return ()
+        setTLS13Cookie (guard isHRR >> extensionLookup extensionID_Cookie exts >>= extensionDecode MsgTServerHello)
         setSession serverSession (isJust resumingSession)
         setVersion rver -- must be before processing supportedVersions ext
         mapM_ processServerExtension exts

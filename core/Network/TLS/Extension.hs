@@ -262,8 +262,9 @@ decodeServerName = runGetMaybe $ do
   where
     getServerName = do
         ty    <- getWord8
-        sname <- getOpaque16
-        let name = case ty of
+        snameParsed <- getOpaque16
+        let !sname = B.copy snameParsed
+            name = case ty of
               0 -> ServerNameHostName $ BC.unpack sname -- FIXME: should be puny code conversion
               _ -> ServerNameOther (ty, sname)
         return (1+2+B.length sname, name)
@@ -349,7 +350,8 @@ decodeApplicationLayerProtocolNegotiation = runGetMaybe $ do
     ApplicationLayerProtocolNegotiation <$> getList (fromIntegral len) getALPN
   where
     getALPN = do
-        alpn <- getOpaque8
+        alpnParsed <- getOpaque8
+        let !alpn = B.copy alpnParsed
         return (B.length alpn + 1, alpn)
 
 ------------------------------------------------------------
@@ -645,7 +647,7 @@ newtype Cookie = Cookie ByteString deriving (Eq, Show)
 instance Extension Cookie where
     extensionID _ = extensionID_Cookie
     extensionEncode (Cookie opaque) = runPut $ putOpaque16 opaque
-    extensionDecode MsgTClientHello = runGetMaybe (Cookie <$> getOpaque16)
+    extensionDecode MsgTServerHello = runGetMaybe (Cookie <$> getOpaque16)
     extensionDecode _               = fail "extensionDecode: Cookie"
 
 ------------------------------------------------------------

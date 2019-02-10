@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 
 -- | In-memory TLS session manager.
 --
@@ -70,7 +71,9 @@ newSessionManager conf = do
         }
     return SessionManager {
         sessionResume         = resume reaper MultipleUse
+#if MIN_VERSION_tls(1,5,0)
       , sessionResumeOnlyOnce = resume reaper SingleUse
+#endif
       , sessionEstablish      = establish reaper lifetime
       , sessionInvalidate     = invalidate reaper
 

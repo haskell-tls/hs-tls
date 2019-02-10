@@ -302,8 +302,8 @@ setTLS13HRR b = modify (\st -> st { stTLS13HRR = b })
 getTLS13HRR :: TLSSt Bool
 getTLS13HRR = gets stTLS13HRR
 
-setTLS13Cookie :: Cookie -> TLSSt ()
-setTLS13Cookie cookie = modify (\st -> st { stTLS13Cookie = Just cookie })
+setTLS13Cookie :: Maybe Cookie -> TLSSt ()
+setTLS13Cookie mcookie = modify (\st -> st { stTLS13Cookie = mcookie })
 
 getTLS13Cookie :: TLSSt (Maybe Cookie)
 getTLS13Cookie = gets stTLS13Cookie

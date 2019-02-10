@@ -9,7 +9,7 @@
 module Network.TLS.Context
     (
     -- * Context configuration
-      TLSParams(..)
+      TLSParams
 
     -- * Context object and accessor
     , Context(..)
