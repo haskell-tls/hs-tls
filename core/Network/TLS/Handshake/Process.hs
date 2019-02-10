@@ -38,24 +38,19 @@ import Network.TLS.Parameters
 import Network.TLS.Sending13
 import Data.X509 (CertificateChain(..), Certificate(..), getCertificate)
 
-
 processHandshake :: Context -> Handshake -> IO ()
 processHandshake ctx hs' = do
     let hs = unDtlsHandshake hs'
     role <- usingState_ ctx isClientContext
     case hs of
-        ClientHello cver ran _ cookie cids _ ex _ -> when (role == ServerRole) $ do
+        ClientHello cver ran _ _ cids _ ex _ -> when (role == ServerRole) $ do
             mapM_ (usingState_ ctx . processClientExtension) ex
             -- RFC 5746: secure renegotiation
             -- TLS_EMPTY_RENEGOTIATION_INFO_SCSV: {0x00, 0xFF}
             when (secureRenegotiation && (0xff `elem` cids)) $
                 usingState_ ctx $ setSecureRenegotiation True
             hrr <- usingState_ ctx getTLS13HRR
-            helloVerified <- if isDTLS cver
-                             then ctxHelloCookieVerify ctx cookie
-                             else return True
-            --let hverify = isDTLS cver && verifyHelloCookie ctx cookie
-            unless (hrr || (not helloVerified)) $ startHandshake ctx cver ran
+            unless hrr $ startHandshake ctx cver ran
         Certificates certs            -> processCertificates role certs
         ClientKeyXchg content         -> when (role == ServerRole) $ do
             processClientKeyXchg ctx content
@@ -71,7 +66,7 @@ processHandshake ctx hs' = do
                   else encodeHandshake hs
     when (isHRR hs) $ usingHState ctx wrapAsMessageHash13
     when (certVerifyHandshakeMaterial hs) $ usingHState ctx $ addHandshakeMessage encoded
-    when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ usingHState ctx $ updateHandshakeDigest encoded
+    when (finishHandshakeMaterial hs) $ usingHState ctx $ updateHandshakeDigest encoded
   where secureRenegotiation = supportedSecureRenegotiation $ ctxSupported ctx
         -- RFC5746: secure renegotiation
         -- the renegotiation_info extension: 0xff01

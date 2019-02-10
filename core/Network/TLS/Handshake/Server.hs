@@ -85,7 +85,7 @@ handshakeServerWith :: ServerParams -> Context -> Handshake -> IO ()
 -- there is a call for processHanshake in here, therefore we preserve DtlsHanshake decorator
 -- and even more, mock it up for the non-dtls implementations to avoid code duplication
 handshakeServerWith sparams ctx clientHello@(ClientHello {}) = handshakeServerWith sparams ctx (DtlsHandshake 0 clientHello)
-handshakeServerWith sparams ctx clientHello@(DtlsHandshake _ (ClientHello clientVersion _ clientSession cookie ciphers compressions exts _)) = guardDTLSHello sparams ctx clientVersion cookie $ do
+handshakeServerWith sparams ctx clientHello@(DtlsHandshake _ (ClientHello clientVersion _ clientSession _ ciphers compressions exts _)) = guardDTLSHello sparams ctx clientHello $ do
     established <- ctxEstablished ctx
     -- renego is not allowed in TLS 1.3
     when (established /= NotEstablished) $ do
@@ -102,8 +102,7 @@ handshakeServerWith sparams ctx clientHello@(DtlsHandshake _ (ClientHello client
     updateMeasure ctx incrementNbHandshakes
 
     -- Handle Client hello
-    processHandshake ctx $ if ctxIsDTLS ctx then clientHello else unDtlsHandshake clientHello
-
+    processHandshake ctx clientHello
     -- rejecting SSL2. RFC 6176
     when (clientVersion == SSL2) $ throwCore $ Error_Protocol ("SSL 2.0 is not supported", True, ProtocolVersion)
     -- rejecting SSL3. RFC 7568
@@ -1096,11 +1095,12 @@ clientCertVerify sparams ctx certs verif = do
                 usingState_ ctx $ setClientCertificateChain certs
                 else decryptError "verification failed"
 
-guardDTLSHello :: ServerParams -> Context -> Version -> HelloCookie -> IO () -> IO ()
-guardDTLSHello sparams ctx clientVersion cookie handshakeActions =
-    if isDTLS clientVersion
+guardDTLSHello :: ServerParams -> Context -> Handshake -> IO () -> IO ()
+guardDTLSHello sparams ctx clientHello@(DtlsHandshake _ (ClientHello cver _ _ cookie _ _ _ _)) handshakeActions =
+    if isDTLS cver
     then if cookie == HelloCookie B.empty
-         then do cookie' <- ctxHelloCookieGen ctx
+         then do processHandshake ctx clientHello
+                 cookie' <- ctxHelloCookieGen ctx
                  sendPacket ctx $ Handshake [HelloVerifyRequest DTLS10 cookie']
                  hss <- recvPacketHandshake ctx
                  case hss of
@@ -1111,3 +1111,4 @@ guardDTLSHello sparams ctx clientVersion cookie handshakeActions =
                    then handshakeActions
                    else fail "HelloVerify mechanism failed (cookie verification failed)"
     else handshakeActions
+guardDTLSHello _ _ _ _ = error "guardDTLSHello should only be called on DTLS ClientHello handshake messages"

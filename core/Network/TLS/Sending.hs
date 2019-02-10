@@ -75,7 +75,7 @@ writePacket ctx pkt@(Handshake hss) = do
         let encoded = encodeHandshake hs
         usingHState ctx $ do
             when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage encoded
-            when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ updateHandshakeDigest encoded
+            when (finishHandshakeMaterial hs) $ updateHandshakeDigest encoded
     prepareRecord ctx (makeRecord pkt >>= engageRecord >>= encodeRecord)
 writePacket ctx pkt = do
     d <- prepareRecord ctx (makeRecord pkt >>= engageRecord >>= encodeRecord)
@@ -90,8 +90,7 @@ writePacketDTLS ctx (Handshake hss') = do
     let mtu = ctxMTU ctx
     msgSeq <- ctxNextHsMsgSeq ctx (fromIntegral $ length hss')
     let hss = zipWith DtlsHandshake msgSeq hss'
-    let updateCtx (DtlsHandshake _ (HelloVerifyRequest _ _)) = return ()
-        updateCtx hs = do
+    let updateCtx hs = do
         case hs of
             Finished fdata -> usingState_ ctx $ updateVerifiedData ClientRole fdata
             _              -> return ()
@@ -99,10 +98,10 @@ writePacketDTLS ctx (Handshake hss') = do
         -- to remove sensitivity to handshake message fragmentation,
         -- the Finished MAC MUST be computed as if each handshake
         -- message had been sent as a single fragment." - this is why 65535.
-        let encodedForFinDgst = mconcat $ map (encodeHandshakeDTLS 65535) hss
+        let encodedForFinDgst = encodeHandshakeDTLS 65535 hs
         usingHState ctx $ do
             when (certVerifyHandshakeMaterial hs) $ mapM_ addHandshakeMessage encodedForFinDgst
-            when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ mapM_ updateHandshakeDigest encodedForFinDgst
+            when (finishHandshakeMaterial hs) $ mapM_ updateHandshakeDigest encodedForFinDgst
     mapM_ updateCtx hss 
     prepareRecord ctx $ sequence $ map engageAndEncode $ makeHsRecordDTLS mtu hss
 writePacketDTLS ctx pkt = do

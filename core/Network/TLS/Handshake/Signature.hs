@@ -116,9 +116,9 @@ checkCertificateVerify :: Context
                        -> DigitallySigned
                        -> IO Bool
 checkCertificateVerify ctx usedVersion sigAlgExpected msgs digSig@(DigitallySigned hashSigAlg _) =
-    case (usedVersion, hashSigAlg) of
-        (TLS12, Nothing)    -> return False
-        (TLS12, Just hs) | sigAlgExpected `signatureCompatible` hs -> doVerify
+    case (isXTLS12, hashSigAlg) of
+        (True , Nothing)    -> return False
+        (True , Just hs) | sigAlgExpected `signatureCompatible` hs -> doVerify
                          | otherwise                               -> return False
         (_,     Nothing)    -> doVerify
         (_,     Just _)     -> return False
@@ -126,6 +126,7 @@ checkCertificateVerify ctx usedVersion sigAlgExpected msgs digSig@(DigitallySign
     doVerify =
         prepareCertificateVerifySignatureData ctx usedVersion sigAlgExpected hashSigAlg msgs >>=
         signatureVerifyWithCertVerifyData ctx digSig
+    isXTLS12 = usedVersion `elem` [TLS12, DTLS12]
 
 createCertificateVerify :: Context
                         -> Version
@@ -216,9 +217,9 @@ signatureCreateWithCertVerifyData ctx malg (sigParam, toSign) = do
 signatureVerify :: Context -> DigitallySigned -> DigitalSignatureAlg -> ByteString -> IO Bool
 signatureVerify ctx digSig@(DigitallySigned hashSigAlg _) sigAlgExpected toVerifyData = do
     usedVersion <- usingState_ ctx getVersion
-    let isTLS12 = (usedVersion == TLS12) || (usedVersion == DTLS12)
+    let isXTLS12 = usedVersion `elem` [TLS12, DTLS12]
     let (sigParam, toVerify) =
-            case (isTLS12, hashSigAlg) of
+            case (isXTLS12, hashSigAlg) of
                 (True, Nothing)    -> error "expecting hash and signature algorithm in a TLS12 digitally signed structure"
                 (True, Just hs) | sigAlgExpected `signatureCompatible` hs -> (signatureParams sigAlgExpected hashSigAlg, toVerifyData)
                                 | otherwise                               -> error "expecting different signature algorithm"
