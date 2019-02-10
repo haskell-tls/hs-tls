@@ -55,11 +55,22 @@ decryptRecord record@(Record ct ver fragment) = do
     decryptData13 mver e st
         | ct == ProtocolType_AppData = do
             inner <- decryptData mver record e st
-            let (dc,_pad) = B.spanEnd (== 0) inner
-                Just (d,c) = B.unsnoc dc
-                Just ct' = valToType c
-            return $ Record ct' ver (fragmentCompressed d)
+            case unInnerPlaintext inner of
+                Left message   -> throwError $ Error_Protocol (message, True, UnexpectedMessage)
+                Right (ct', d) -> return $ Record ct' ver (fragmentCompressed d)
         | otherwise = noDecryption
+
+unInnerPlaintext :: ByteString -> Either String (ProtocolType, ByteString)
+unInnerPlaintext inner =
+    case B.unsnoc dc of
+        Nothing         -> Left $ unknownContentType13 (0 :: Word8)
+        Just (bytes,c)  ->
+            case valToType c of
+                Nothing -> Left $ unknownContentType13 c
+                Just ct -> Right (ct, bytes)
+  where
+    (dc,_pad) = B.spanEnd (== 0) inner
+    unknownContentType13 c = "unknown TLS 1.3 content type: " ++ show c
 
 getCipherData :: Record a -> CipherData -> RecordM ByteString
 getCipherData (Record pt ver _) cdata = do
