@@ -26,7 +26,7 @@ instance Arbitrary ProtocolType where
             , ProtocolType_AppData ]
 
 instance Arbitrary Header where
-    arbitrary = Header <$> arbitrary <*> arbitrary <*> arbitrary
+    arbitrary = Header <$> arbitrary <*> arbitrary <*> (return 0) <*> arbitrary
 
 instance Arbitrary ClientRandom where
     arbitrary = ClientRandom <$> genByteString 32
@@ -60,12 +60,16 @@ instance Arbitrary CertificateType where
             , CertificateType_RSA_Ephemeral_DH, CertificateType_DSS_Ephemeral_DH
             , CertificateType_fortezza_dms ]
 
+instance Arbitrary HelloCookie where
+    arbitrary = HelloCookie <$> genByteString 20
+
 instance Arbitrary Handshake where
     arbitrary = oneof
             [ ClientHello
                 <$> arbitrary
                 <*> arbitrary
                 <*> arbitrary
+                <*> return (HelloCookie B.empty)
                 <*> arbitraryCiphersIDs
                 <*> arbitraryCompressionIDs
                 <*> return []
@@ -98,5 +102,5 @@ prop_handshake_marshalling_id x = decodeHs (encodeHandshake x) == Right x
                         GotPartial _ -> error "got partial"
                         GotError e   -> error ("got error: " ++ show e)
                         GotSuccessRemaining _ _ -> error "got remaining byte left"
-                        GotSuccess (ty, content) -> decodeHandshake cp ty content
+                        GotSuccess (ty, _, content) -> decodeHandshake cp ty content
         cp = CurrentParams { cParamsVersion = TLS10, cParamsKeyXchgType = Just CipherKeyExchange_RSA }
