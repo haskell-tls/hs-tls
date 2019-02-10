@@ -95,7 +95,7 @@ sendChangeCipherAndFinish ctx role = do
 
 recvChangeCipherAndFinish :: Context -> IO ()
 recvChangeCipherAndFinish ctx = runRecvState ctx (RecvStateNext expectChangeCipher)
-  where expectChangeCipher ChangeCipherSpec = return $ RecvStateHandshake expectFinish
+  where expectChangeCipher ChangeCipherSpec = return $ RecvStateHandshake $ expectFinish . unDtlsHandshake
         expectChangeCipher p                = unexpected (show p) (Just "change cipher")
         expectFinish (Finished _) = return RecvStateDone
         expectFinish p            = unexpected (show p) (Just "Handshake Finished")

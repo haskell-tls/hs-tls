@@ -159,7 +159,7 @@ updateVerifiedData sending bs = do
 
 finishHandshakeTypeMaterial :: HandshakeType -> Bool
 finishHandshakeTypeMaterial HandshakeType_ClientHello     = True
-finishHandshakeTypeMaterial HandshakeType_HelloVerifyRequest = False
+finishHandshakeTypeMaterial HandshakeType_HelloVerifyRequest = True
 finishHandshakeTypeMaterial HandshakeType_ServerHello     = True
 finishHandshakeTypeMaterial HandshakeType_Certificate     = True
 finishHandshakeTypeMaterial HandshakeType_HelloRequest    = False
@@ -174,13 +174,17 @@ finishHandshakeMaterial :: Handshake -> Bool
 -- https://tools.ietf.org/html/rfc6347#section-4.2.6 "initial
 -- ClientHello and HelloVerifyRequest MUST NOT be included in the
 -- CertificateVerify or Finished MAC computations."
-finishHandshakeMaterial (ClientHello ver _ _ (HelloCookie cookie) _ _ _ _) =
-  if isDTLS ver && B.null cookie then False else True
+
+-- finishHandshakeMaterial (ClientHello ver _ _ (HelloCookie cookie) _ _ _ _) =
+--  if isDTLS ver && B.null cookie then False else True
+
+-- BUT THEY ARE. OpenSSL does include both initial ClientHello with an empty cookie,
+-- and the HelloVerifyRequest to hanshake Finished digest computation
 finishHandshakeMaterial x = finishHandshakeTypeMaterial $ typeOfHandshake x
 
 certVerifyHandshakeTypeMaterial :: HandshakeType -> Bool
 certVerifyHandshakeTypeMaterial HandshakeType_ClientHello     = True
-certVerifyHandshakeTypeMaterial HandshakeType_HelloVerifyRequest = False
+certVerifyHandshakeTypeMaterial HandshakeType_HelloVerifyRequest = True
 certVerifyHandshakeTypeMaterial HandshakeType_ServerHello     = True
 certVerifyHandshakeTypeMaterial HandshakeType_Certificate     = True
 certVerifyHandshakeTypeMaterial HandshakeType_HelloRequest    = False
@@ -193,8 +197,8 @@ certVerifyHandshakeTypeMaterial HandshakeType_Finished        = False
 
 certVerifyHandshakeMaterial :: Handshake -> Bool
 -- https://tools.ietf.org/html/rfc6347#section-4.2.6, see comment above
-certVerifyHandshakeMaterial (ClientHello ver _ _ (HelloCookie cookie) _ _ _ _) =
-  if isDTLS ver && B.null cookie then False else True
+--certVerifyHandshakeMaterial (ClientHello ver _ _ (HelloCookie cookie) _ _ _ _) =
+--  if isDTLS ver && B.null cookie then False else True
 certVerifyHandshakeMaterial x = certVerifyHandshakeTypeMaterial $ typeOfHandshake x
 
 setSession :: Session -> Bool -> TLSSt ()
