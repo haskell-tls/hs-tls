@@ -11,7 +11,6 @@
 {-# LANGUAGE BangPatterns #-}
 module Network.TLS.Record.Engage
         ( engageRecord
-        , engageRecord13
         ) where
 
 import Control.Monad.State.Strict
@@ -30,10 +29,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteArray as B (convert, xor)
 
 engageRecord :: Record Plaintext -> RecordM (Record Ciphertext)
-engageRecord = compressRecord >=> encryptRecord False
-
-engageRecord13 :: Record Plaintext -> RecordM (Record Ciphertext)
-engageRecord13 = compressRecord >=> encryptRecord True
+engageRecord = compressRecord >=> encryptRecord
 
 compressRecord :: Record Plaintext -> RecordM (Record Compressed)
 compressRecord record =
@@ -43,13 +39,16 @@ compressRecord record =
 -- when Tx Encrypted is set, we pass the data through encryptContent, otherwise
 -- we just return the compress payload directly as the ciphered one
 --
-encryptRecord :: Bool -> Record Compressed -> RecordM (Record Ciphertext)
-encryptRecord tls13 record@(Record ct ver fragment) = do
+encryptRecord :: Record Compressed -> RecordM (Record Ciphertext)
+encryptRecord record@(Record ct ver fragment) = do
     st <- get
     case stCipher st of
         Nothing -> noEncryption
-        _ | tls13     -> encryptContent13
-          | otherwise -> onRecordFragment record $ fragmentCipher (encryptContent False record)
+        _ -> do
+            recOpts <- getRecordOptions
+            if recordTLS13 recOpts
+                then encryptContent13
+                else onRecordFragment record $ fragmentCipher (encryptContent False record)
   where
     noEncryption = onRecordFragment record $ fragmentCipher return
     encryptContent13

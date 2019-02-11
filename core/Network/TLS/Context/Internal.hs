@@ -251,8 +251,11 @@ runTxState ctx f = do
     let ver'
          | ver >= TLS13 = if hrr then TLS12 else TLS10
          | otherwise    = ver
+        opt = RecordOptions { recordVersion = ver'
+                            , recordTLS13   = ver >= TLS13
+                            }
     modifyMVar (ctxTxState ctx) $ \st ->
-        case runRecordM f ver' st of
+        case runRecordM f opt st of
             Left err         -> return (st, Left err)
             Right (a, newSt) -> return (newSt, Right a)
 
@@ -260,8 +263,11 @@ runRxState :: Context -> RecordM a -> IO (Either TLSError a)
 runRxState ctx f = do
     ver <- usingState_ ctx getVersion
     -- For 1.3, ver is just ignored. So, it is not necessary to convert ver.
+    let opt = RecordOptions { recordVersion = ver
+                            , recordTLS13   = ver >= TLS13
+                            }
     modifyMVar (ctxRxState ctx) $ \st ->
-        case runRecordM f ver st of
+        case runRecordM f opt st of
             Left err         -> return (st, Left err)
             Right (a, newSt) -> return (newSt, Right a)
 

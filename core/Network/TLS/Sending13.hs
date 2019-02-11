@@ -56,7 +56,7 @@ writeFragments ctx pkt =
     let fragments = getPacketFragments 16384 pkt
         pt = contentType pkt
      in fmap B.concat <$> forEitherM fragments (\frg ->
-            prepareRecord ctx (makeRecord pt frg >>= engageRecord13 >>= encodeRecord))
+            prepareRecord ctx (makeRecord pt frg >>= engageRecord >>= encodeRecord))
 
 prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
 prepareRecord = runTxState

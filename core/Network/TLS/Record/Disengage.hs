@@ -45,8 +45,9 @@ decryptRecord record@(Record ct ver fragment) = do
     case stCipher st of
         Nothing -> noDecryption
         _       -> do
-            mver <- getRecordVersion
-            if mver >= TLS13
+            recOpts <- getRecordOptions
+            let mver = recordVersion recOpts
+            if recordTLS13 recOpts
                 then decryptData13 mver (fragmentGetBytes fragment) st
                 else onRecordFragment record $ fragmentUncipher $ \e ->
                         decryptData mver record e st
