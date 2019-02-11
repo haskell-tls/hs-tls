@@ -240,7 +240,7 @@ decodeHandshakeRecordsDTLS =
               fail "Handshake fragment overlaps with previously received data"
             when (fragOff+fragLen > hrcLengthExpected hrc) $
               fail "Excessive length of handshake fragment"
-            let hrc' = hrc { hrcReadyData = ready <> content }
+            let hrc' = hrc { hrcReadyData = ready `mappend` content }
             if B.length (hrcReadyData hrc') < hrcLengthExpected hrc'
               then processFragment $ Just hrc'
               else return (hrcHandshakeType hrc', DtlsHandshake msgSeq, hrcReadyData hrc')
@@ -441,9 +441,9 @@ encodeHandshakeDTLS mtu (DtlsHandshake messageSeq o) =
           let (frag, rest) = B.splitAt (fromIntegral mtu) bs
               fragLength = B.length frag
               header = runPut $ encodeHandshakeHeaderDTLS ty len messageSeq fragOffset fragLength
-          in (header <> frag : if B.null rest
-                               then []
-                               else encodeFragments rest (fragOffset+fragLength))
+          in (header `mappend` frag : if B.null rest
+                                      then []
+                                      else encodeFragments rest (fragOffset+fragLength))
     in encodeFragments content 0
 encodeHandshakeDTLS _ h = error $ "encodeHandshakeDTLS called for a non-dtls hanshake message "++(show h)
 

@@ -71,7 +71,7 @@ readHeaderBytes ctx = do
     Right b -> let verMajor = b `B.index` 1
                in if verMajor /= 254 -- non DTLS record
                   then return eb
-                  else liftM (b <>) <$> readExact ctx 8
+                  else liftM (mappend b) <$> readExact ctx 8
 
 -- | recvRecord receive a full TLS record (header + data), from the other side.
 --

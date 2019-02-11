@@ -85,7 +85,7 @@ makeStreamRecvFromDgram leftovers recvDgram = do
   buf <- newMVar $ L.fromChunks leftovers
   let recvStream len dgram = do
         b' <- takeMVar buf
-        let b = b' <> L.fromStrict dgram
+        let b = b' `mappend` L.fromStrict dgram
             (nb, mr) = if L.length b >= fromIntegral len
                        then let (result, rest) = L.splitAt (fromIntegral len) b
                             in (rest, Just $ L.toStrict result)

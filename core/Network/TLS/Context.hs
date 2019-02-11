@@ -244,15 +244,15 @@ makeHelloCookieMethods = do
           let tsbs = encode ts
           salt <- mkrandom 8
           let mac :: HMAC.HMAC MD5
-              mac = HMAC.hmac secret $ salt <> tsbs
-          return $ HelloCookie $ salt <> tsbs <> (BA.convert $ HMAC.hmacGetDigest mac)
+              mac = HMAC.hmac secret $ salt `mappend` tsbs
+          return $ HelloCookie $ salt `mappend` tsbs `mappend` (BA.convert $ HMAC.hmacGetDigest mac)
         verify (HelloCookie cbs) = do
           (Elapsed (Seconds ts')) <- timeCurrent
           let (salt, r) = B.splitAt 8 cbs
               (tsbs, mac') = B.splitAt 8 r
               ets = decode tsbs
               mac :: HMAC.HMAC MD5
-              mac = HMAC.hmac secret $ salt <> tsbs
+              mac = HMAC.hmac secret $ salt `mappend` tsbs
               macVerified = (BA.convert mac) == mac'
           case ets of
             Left _ -> return False
