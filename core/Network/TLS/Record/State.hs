@@ -10,11 +10,13 @@
 module Network.TLS.Record.State
     ( CryptState(..)
     , MacState(..)
+    , RecordOptions(..)
     , RecordState(..)
     , newRecordState
     , incrRecordState
     , RecordM
     , runRecordM
+    , getRecordOptions
     , getRecordVersion
     , setRecordIV
     , withCompression
@@ -50,6 +52,11 @@ newtype MacState = MacState
     { msSequence :: Word64
     } deriving (Show)
 
+data RecordOptions = RecordOptions
+    { recordVersion :: Version                -- version to use when sending/receiving
+    , recordTLS13 :: Bool                     -- TLS13 record processing
+    }
+
 data RecordState = RecordState
     { stCipher      :: Maybe Cipher
     , stCompression :: Compression
@@ -57,7 +64,7 @@ data RecordState = RecordState
     , stMacState    :: !MacState
     } deriving (Show)
 
-newtype RecordM a = RecordM { runRecordM :: Version
+newtype RecordM a = RecordM { runRecordM :: RecordOptions
                                          -> RecordState
                                          -> Either TLSError (a, RecordState) }
 
@@ -67,19 +74,22 @@ instance Applicative RecordM where
 
 instance Monad RecordM where
     return a  = RecordM $ \_ st  -> Right (a, st)
-    m1 >>= m2 = RecordM $ \ver st -> do
-                    case runRecordM m1 ver st of
+    m1 >>= m2 = RecordM $ \opt st ->
+                    case runRecordM m1 opt st of
                         Left err       -> Left err
-                        Right (a, st2) -> runRecordM (m2 a) ver st2
+                        Right (a, st2) -> runRecordM (m2 a) opt st2
 
 instance Functor RecordM where
-    fmap f m = RecordM $ \ver st ->
-                case runRecordM m ver st of
+    fmap f m = RecordM $ \opt st ->
+                case runRecordM m opt st of
                     Left err       -> Left err
                     Right (a, st2) -> Right (f a, st2)
 
+getRecordOptions :: RecordM RecordOptions
+getRecordOptions = RecordM $ \opt st -> Right (opt, st)
+
 getRecordVersion :: RecordM Version
-getRecordVersion = RecordM $ \ver st -> Right (ver, st)
+getRecordVersion = recordVersion <$> getRecordOptions
 
 instance MonadState RecordState RecordM where
     put x = RecordM $ \_  _  -> Right ((), x)
@@ -90,9 +100,9 @@ instance MonadState RecordState RecordM where
 
 instance MonadError TLSError RecordM where
     throwError e   = RecordM $ \_ _ -> Left e
-    catchError m f = RecordM $ \ver st ->
-                        case runRecordM m ver st of
-                            Left err -> runRecordM (f err) ver st
+    catchError m f = RecordM $ \opt st ->
+                        case runRecordM m opt st of
+                            Left err -> runRecordM (f err) opt st
                             r        -> r
 
 newRecordState :: RecordState
