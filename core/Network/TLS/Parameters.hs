@@ -161,9 +161,13 @@ instance Default ServerParams where
 -- | List all the supported algorithms, versions, ciphers, etc supported.
 data Supported = Supported
     {
-      -- | Supported Versions by this context
-      -- On the client side, the highest version will be used to establish the connection.
-      -- On the server side, the highest version that is less or equal than the client version will be chosed.
+      -- | Supported versions by this context.  On the client side, the highest
+      -- version will be used to establish the connection.  On the server side,
+      -- the highest version that is less or equal than the client version will
+      -- be chosen.
+      --
+      -- Versions should be listed in preference order, i.e. higher versions
+      -- first.
       supportedVersions       :: [Version]
       -- | Supported cipher methods.  The default is empty, specify a suitable
       -- cipher list.  'Network.TLS.Extra.Cipher.ciphersuite_default' is often
