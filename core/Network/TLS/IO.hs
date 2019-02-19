@@ -169,7 +169,7 @@ recvRecord13 :: Context
 recvRecord13 ctx = readExact ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
   where recvLengthE = either (return . Left) recvLength
         recvLength header@(Header _ _ readlen)
-          | readlen > 16384 + 2048 = return $ Left maximumSizeExceeded
+          | readlen > 16384 + 256  = return $ Left maximumSizeExceeded
           | otherwise              =
               readExact ctx (fromIntegral readlen) >>=
                  either (return . Left) (getRecord header)
