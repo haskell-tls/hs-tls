@@ -120,16 +120,25 @@ recvPacket ctx = liftIO $ do
                 recvPacket ctx
               else do
                 pktRecv <- processPacket ctx record
-                pkt <- case pktRecv of
-                        Right (Handshake hss) ->
-                            ctxWithHooks ctx $ \hooks ->
-                                Right . Handshake <$> mapM (hookRecvHandshake hooks) hss
-                        _                     -> return pktRecv
-                case pkt of
-                    Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p
-                    _       -> return ()
-                when compatSSLv2 $ ctxDisableSSLv2ClientHello ctx
-                return pkt
+                if isEmptyHandshake pktRecv then
+                    -- When a handshake record is fragmented we continue
+                    -- receiving in order to feed stHandshakeRecordCont
+                    recvPacket ctx
+                  else do
+                    pkt <- case pktRecv of
+                            Right (Handshake hss) ->
+                                ctxWithHooks ctx $ \hooks ->
+                                    Right . Handshake <$> mapM (hookRecvHandshake hooks) hss
+                            _                     -> return pktRecv
+                    case pkt of
+                        Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p
+                        _       -> return ()
+                    when compatSSLv2 $ ctxDisableSSLv2ClientHello ctx
+                    return pkt
+
+isEmptyHandshake :: Either TLSError Packet -> Bool
+isEmptyHandshake (Right (Handshake [])) = True
+isEmptyHandshake _                      = False
 
 -- | Send one packet to the context
 sendPacket :: MonadIO m => Context -> Packet -> m ()
@@ -195,10 +204,19 @@ recvPacket13 ctx = liftIO $ do
         Left err      -> return $ Left err
         Right record -> do
             pkt <- processPacket13 ctx record
-            case pkt of
-                Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p
-                _       -> return ()
-            return pkt
+            if isEmptyHandshake13 pkt then
+                -- When a handshake record is fragmented we continue receiving
+                -- in order to feed stHandshakeRecordCont13
+                recvPacket13 ctx
+              else do
+                case pkt of
+                    Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p
+                    _       -> return ()
+                return pkt
+
+isEmptyHandshake13 :: Either TLSError Packet13 -> Bool
+isEmptyHandshake13 (Right (Handshake13 [])) = True
+isEmptyHandshake13 _                        = False
 
 -- | State monad used to group several packets together and send them on wire as
 -- single flight.  When packets are loaded in the monad, they are logged
