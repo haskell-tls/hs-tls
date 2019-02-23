@@ -27,15 +27,19 @@ import Network.TLS.Context.Internal
 import Network.TLS.Handshake.Random
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
+import Network.TLS.Util
 import Network.TLS.Wire
 import Network.TLS.Imports
 
-makeRecord :: Packet13 -> RecordM Record13
-makeRecord pkt = return $ Record13 (contentType pkt) $ writePacketContent pkt
-  where writePacketContent (Handshake13 hss)  = encodeHandshakes13 hss
-        writePacketContent (Alert13 a)        = encodeAlerts a
-        writePacketContent (AppData13 x)      = x
-        writePacketContent ChangeCipherSpec13 = encodeChangeCipherSpec
+makeRecord :: ContentType -> ByteString -> RecordM Record13
+makeRecord ct bs = return $ Record13 ct bs
+
+getPacketFragments :: Int -> Packet13 -> [ByteString]
+getPacketFragments len = writePacketContent
+  where writePacketContent (Handshake13 hss)  = getChunks len (encodeHandshakes13 hss)
+        writePacketContent (Alert13 a)        = [encodeAlerts a]
+        writePacketContent (AppData13 x)      = [x]
+        writePacketContent ChangeCipherSpec13 = [encodeChangeCipherSpec]
 
 encodeRecord :: Record13 -> RecordM ByteString
 encodeRecord (Record13 ct bytes) = return ebytes
@@ -49,8 +53,15 @@ encodeRecord (Record13 ct bytes) = return ebytes
 writePacket13 :: Context -> Packet13 -> IO (Either TLSError ByteString)
 writePacket13 ctx pkt@(Handshake13 hss) = do
     forM_ hss $ updateHandshake13 ctx
-    prepareRecord ctx (makeRecord pkt >>= engageRecord >>= encodeRecord)
-writePacket13 ctx pkt = prepareRecord ctx (makeRecord pkt >>= engageRecord >>= encodeRecord)
+    writeFragments ctx pkt
+writePacket13 ctx pkt = writeFragments ctx pkt
+
+writeFragments :: Context -> Packet13 -> IO (Either TLSError ByteString)
+writeFragments ctx pkt =
+    let fragments = getPacketFragments 16384 pkt
+        pt = contentType pkt
+     in fmap B.concat <$> forEitherM fragments (\frg ->
+            prepareRecord ctx (makeRecord pt frg >>= engageRecord >>= encodeRecord))
 
 prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
 prepareRecord = runTxState

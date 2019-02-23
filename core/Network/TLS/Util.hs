@@ -9,7 +9,9 @@ module Network.TLS.Util
         , bytesEq
         , fmapEither
         , catchException
+        , forEitherM
         , mapChunks_
+        , getChunks
         , Saved
         , saveMVar
         , restoreMVar
@@ -76,13 +78,23 @@ fmapEither f = fmap f
 catchException :: IO a -> (SomeException -> IO a) -> IO a
 catchException action handler = withAsync action waitCatch >>= either handler return
 
+forEitherM :: Monad m => [a] -> (a -> m (Either l b)) -> m (Either l [b])
+forEitherM []     _ = return (pure [])
+forEitherM (x:xs) f = f x >>= doTail
+  where
+    doTail (Right b) = fmap (b :) <$> forEitherM xs f
+    doTail (Left e)  = return (Left e)
+
 mapChunks_ :: Monad m
            => Int -> (B.ByteString -> m a) -> B.ByteString -> m ()
-mapChunks_ len f bs
+mapChunks_ len f = mapM_ f . getChunks len
+
+getChunks :: Int -> B.ByteString -> [B.ByteString]
+getChunks len bs
     | B.length bs > len =
         let (chunk, remain) = B.splitAt len bs
-         in f chunk >> mapChunks_ len f remain
-    | otherwise = void (f bs)
+         in chunk : getChunks len remain
+    | otherwise = [bs]
 
 -- | An opaque newtype wrapper to prevent from poking inside content that has
 -- been saved.
