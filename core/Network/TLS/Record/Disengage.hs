@@ -68,9 +68,13 @@ unInnerPlaintext inner =
         Just (bytes,c)  ->
             case valToType c of
                 Nothing -> Left $ unknownContentType13 c
-                Just ct -> Right (ct, bytes)
+                Just ct
+                    | B.null bytes && ct `elem` nonEmptyContentTypes ->
+                        Left ("empty " ++ show ct ++ " record disallowed")
+                    | otherwise -> Right (ct, bytes)
   where
     (dc,_pad) = B.spanEnd (== 0) inner
+    nonEmptyContentTypes   = [ ProtocolType_Handshake, ProtocolType_Alert ]
     unknownContentType13 c = "unknown TLS 1.3 content type: " ++ show c
 
 getCipherData :: Record a -> CipherData -> RecordM ByteString
