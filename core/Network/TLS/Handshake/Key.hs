@@ -83,7 +83,7 @@ generateFFDHE ctx grp = usingState_ ctx $ withRNG $ dhGroupGenerateKeyPair grp
 generateFFDHEShared :: Context -> Group -> DHPublic -> IO (Maybe (DHPublic, DHKey))
 generateFFDHEShared ctx grp pub = usingState_ ctx $ withRNG $ dhGroupGetPubShared grp pub
 
-getLocalDigitalSignatureAlg :: MonadIO m => Context -> m DigitalSignatureAlg
+getLocalDigitalSignatureAlg :: (MonadFail m, MonadIO m) => Context -> m DigitalSignatureAlg
 getLocalDigitalSignatureAlg ctx = do
     keys <- usingHState ctx getLocalPublicPrivateKeys
     case findDigitalSignatureAlg keys of

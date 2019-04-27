@@ -206,7 +206,7 @@ recvPacket13 ctx = liftIO $ do
 -- deferred.  Packets are sent all at once when the monadic computation ends
 -- (normal termination but also if interrupted by an exception).
 newtype PacketFlightM a = PacketFlightM (ReaderT (IORef [ByteString]) IO a)
-    deriving (Functor, Applicative, Monad, MonadIO)
+    deriving (Functor, Applicative, Monad, MonadFail, MonadIO)
 
 runPacketFlight :: Context -> PacketFlightM a -> IO a
 runPacketFlight ctx (PacketFlightM f) = do

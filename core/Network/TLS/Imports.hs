@@ -16,6 +16,9 @@ module Network.TLS.Imports
     , module Data.ByteString.Char8 -- instance
     , module Control.Applicative
     , module Control.Monad
+#if !MIN_VERSION_base(4,13,0)
+    , MonadFail
+#endif
     , module Data.Bits
     , module Data.List
     , module Data.Maybe
@@ -38,6 +41,9 @@ import Data.ByteString.Char8 ()
 
 import Control.Applicative
 import Control.Monad
+#if !MIN_VERSION_base(4,13,0)
+import Control.Monad.Fail (MonadFail)
+#endif
 import Data.Bits
 import Data.List
 import Data.Maybe hiding (fromJust)
