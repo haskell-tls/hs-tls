@@ -43,7 +43,7 @@ encryptRSA ctx content = do
     usingState_ ctx $ do
         v <- withRNG $ kxEncrypt publicKey content
         case v of
-            Left err       -> fail ("rsa encrypt failed: " ++ show err)
+            Left err       -> error ("rsa encrypt failed: " ++ show err)
             Right econtent -> return econtent
 
 signPrivate :: Context -> Role -> SignatureParams -> ByteString -> IO ByteString
@@ -52,7 +52,7 @@ signPrivate ctx _ params content = do
     usingState_ ctx $ do
         r <- withRNG $ kxSign privateKey publicKey params content
         case r of
-            Left err       -> fail ("sign failed: " ++ show err)
+            Left err       -> error ("sign failed: " ++ show err)
             Right econtent -> return econtent
 
 decryptRSA :: Context -> ByteString -> IO (Either KxError ByteString)
