@@ -78,6 +78,7 @@ import Data.X509 (CertificateChainRaw(..), encodeCertificateChain, decodeCertifi
 import Network.TLS.Crypto
 import Network.TLS.MAC
 import Network.TLS.Cipher (CipherKeyExchangeType(..), Cipher(..))
+import qualified Control.Monad.Fail as Fail
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import           Data.ByteArray (ByteArrayAccess)
@@ -673,6 +674,6 @@ encodeSignedECDHParams :: ServerECDHParams -> ClientRandom -> ServerRandom -> By
 encodeSignedECDHParams dhparams cran sran = runPut $
     putClientRandom32 cran >> putServerRandom32 sran >> putServerECDHParams dhparams
 
-fromJustM :: Monad m => String -> Maybe a -> m a
+fromJustM :: Fail.MonadFail m => String -> Maybe a -> m a
 fromJustM what Nothing  = fail ("fromJustM " ++ what ++ ": Nothing")
 fromJustM _    (Just x) = return x

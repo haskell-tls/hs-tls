@@ -69,6 +69,7 @@ import Network.TLS.Types (Role(..), HostName)
 import Network.TLS.Wire (GetContinuation)
 import Network.TLS.Extension
 import qualified Data.ByteString as B
+import Control.Monad.Fail (MonadFail(..))
 import Control.Monad.State.Strict
 import Network.TLS.ErrT
 import Crypto.Random
@@ -101,6 +102,9 @@ data TLSState = TLSState
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrT TLSError (State TLSState) a }
     deriving (Monad, MonadError TLSError, Functor, Applicative)
+
+instance MonadFail TLSSt where
+    fail = TLSSt . throwError . Error_Misc
 
 instance MonadState TLSState TLSSt where
     put x = TLSSt (lift $ put x)

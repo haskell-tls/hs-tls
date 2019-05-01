@@ -88,7 +88,7 @@ getLocalDigitalSignatureAlg ctx = do
     keys <- usingHState ctx getLocalPublicPrivateKeys
     case findDigitalSignatureAlg keys of
         Just sigAlg -> return sigAlg
-        Nothing     -> fail "selected credential does not support signing"
+        Nothing     -> error "selected credential does not support signing"
 
 ----------------------------------------------------------------
 
