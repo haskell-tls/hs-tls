@@ -673,6 +673,6 @@ encodeSignedECDHParams :: ServerECDHParams -> ClientRandom -> ServerRandom -> By
 encodeSignedECDHParams dhparams cran sran = runPut $
     putClientRandom32 cran >> putServerRandom32 sran >> putServerECDHParams dhparams
 
-fromJustM :: Monad m => String -> Maybe a -> m a
+fromJustM :: MonadFail m => String -> Maybe a -> m a
 fromJustM what Nothing  = fail ("fromJustM " ++ what ++ ": Nothing")
 fromJustM _    (Just x) = return x
