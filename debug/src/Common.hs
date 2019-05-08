@@ -15,7 +15,6 @@ module Common
     ) where
 
 import Data.Char (isDigit)
-import Data.Maybe (fromJust)
 import Numeric (showHex)
 import Network.Socket
 
