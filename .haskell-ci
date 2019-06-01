@@ -2,7 +2,7 @@
 compiler: ghc-8.0 lts-9.21
 compiler: ghc-8.2 lts-11.22
 compiler: ghc-8.4 lts-12.26
-compiler: ghc-8.6 lts-13.2
+compiler: ghc-8.6 lts-13.23
 
 # options
 # option: alias x=y z=v
