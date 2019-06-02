@@ -1,5 +1,5 @@
 Name:                tls-debug
-Version:             0.4.5
+Version:             0.4.6
 Description:
    A set of program to test and debug various aspect of the TLS package.
    .
@@ -28,7 +28,7 @@ Executable           tls-stunnel
                    , x509-validation >= 1.5
                    , data-default-class
                    , cryptonite >= 0.24
-                   , tls >= 1.5.0 && < 1.6
+                   , tls >= 1.5.0
                    , tls-session-manager
   if os(windows)
     Buildable:       False
