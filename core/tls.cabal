@@ -22,7 +22,7 @@ Synopsis:            TLS/SSL protocol native implementation (Server and Client)
 Build-Type:          Simple
 Category:            Network
 stability:           experimental
-Cabal-Version:       >=1.8
+Cabal-Version:       >= 1.10
 Homepage:            http://github.com/vincenthz/hs-tls
 extra-source-files:  Tests/*.hs
                      CHANGELOG.md
@@ -127,6 +127,9 @@ Library
   ghc-options:       -Wall
   if flag(compat)
     cpp-options:     -DSSLV2_COMPATIBLE
+  if impl(ghc >= 8)
+      default-extensions:  Strict StrictData
+  default-language:    Haskell2010
 
 Test-Suite test-tls
   type:              exitcode-stdio-1.0
@@ -152,6 +155,9 @@ Test-Suite test-tls
                    , x509-validation
                    , hourglass
   ghc-options:       -Wall -fno-warn-unused-imports
+  if impl(ghc >= 8)
+      default-extensions:  Strict StrictData
+  default-language:    Haskell2010
 
 Benchmark bench-tls
   hs-source-dirs:    Benchmarks Tests
@@ -176,6 +182,9 @@ Benchmark bench-tls
                    , tasty-quickcheck
                    , tls
   ghc-options:       -Wall -fno-warn-unused-imports
+  if impl(ghc >= 8)
+      default-extensions:  Strict StrictData
+  default-language:    Haskell2010
 
 source-repository head
   type: git
