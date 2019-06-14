@@ -1,5 +1,5 @@
 {-# OPTIONS_HADDOCK hide #-}
-{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, BangPatterns #-}
 -- |
 -- Module      : Network.TLS.Core
 -- License     : BSD-style
@@ -202,7 +202,8 @@ recvData13 ctx = do
                         _                                    -> 0
                 tinfo <- createTLS13TicketInfo life (Right add) Nothing
                 sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
-                sessionEstablish (sharedSessionManager $ ctxShared ctx) label sdata
+                let !label' = B.copy label
+                sessionEstablish (sharedSessionManager $ ctxShared ctx) label' sdata
                 -- putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
             loopHandshake13 hs
         loopHandshake13 (KeyUpdate13 mode:hs) = do
