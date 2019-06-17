@@ -36,12 +36,12 @@ data Config = Config {
     , dbMaxSize      :: !Int
     }
 
--- | Lifetime: 1 day , delay: 10 minutes, limit: 10,000 entries.
+-- | Lifetime: 1 day , delay: 10 minutes, max size: 1000 entries.
 defaultConfig :: Config
 defaultConfig = Config {
       ticketLifetime = 86400
     , pruningDelay   = 6000
-    , dbMaxSize      = 10000
+    , dbMaxSize      = 1000
     }
 
 ----------------------------------------------------------------
