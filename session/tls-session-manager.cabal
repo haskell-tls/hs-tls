@@ -18,6 +18,7 @@ library
   -- other-extensions:
   build-depends:       base >= 4.7 && < 5
                      , auto-update
+                     , bytestring
                      , clock
                      , psqueues >= 0.2.3
                      , tls

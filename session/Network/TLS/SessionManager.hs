@@ -14,12 +14,15 @@ module Network.TLS.SessionManager (
   , newSessionManager
   ) where
 
+import Data.ByteString (ByteString)
+import Data.ByteString.Short (ShortByteString)
+import qualified Data.ByteString.Short as Short
 import Control.Exception (assert)
 import Control.Reaper
 import Data.IORef
 import Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as Q
-import Network.TLS (SessionID, SessionData, SessionManager(..))
+import Network.TLS
 import qualified System.Clock as C
 
 import Network.TLS.Imports
@@ -46,10 +49,42 @@ defaultConfig = Config {
 
 ----------------------------------------------------------------
 
+toKey :: ByteString -> ShortByteString
+toKey = Short.toShort
+
+toValue :: SessionData -> SessionDataCopy
+toValue (SessionData v cid comp msni sec mg mti malpn siz) =
+    SessionDataCopy v cid comp msni sec' mg mti malpn' siz
+  where
+    !sec' = Short.toShort sec
+    !malpn' = Short.toShort <$> malpn
+
+fromValue :: SessionDataCopy -> SessionData
+fromValue (SessionDataCopy v cid comp msni sec' mg mti malpn' siz) =
+    (SessionData v cid comp msni sec mg mti malpn siz)
+  where
+    !sec = Short.fromShort sec'
+    !malpn = Short.fromShort <$> malpn'
+
+----------------------------------------------------------------
+
+type SessionIDCopy = ShortByteString
+data SessionDataCopy = SessionDataCopy {
+      ssVersion     :: !Version
+    , ssCipher      :: !CipherID
+    , ssCompression :: !CompressionID
+    , ssClientSNI   :: !(Maybe HostName)
+    , ssSecret      :: !ShortByteString
+    , ssGroup       :: !(Maybe Group)
+    , ssTicketInfo  :: !(Maybe TLS13TicketInfo)
+    , ssALPN        :: !(Maybe ShortByteString)
+    , ssMaxEarlyDataSize :: Int
+    } deriving (Show,Eq)
+
 type Sec = Int64
-type Value = (SessionData, IORef Availability)
-type DB = OrdPSQ SessionID Sec Value
-type Item = (SessionID, Sec, Value, Operation)
+type Value = (SessionDataCopy, IORef Availability)
+type DB = OrdPSQ SessionIDCopy Sec Value
+type Item = (SessionIDCopy, Sec, Value, Operation)
 
 data Operation = Add | Del
 data Use = SingleUse | MultipleUse
@@ -108,30 +143,36 @@ establish :: Reaper DB Item -> Sec
 establish reaper lifetime k sd = do
     ref <- newIORef Fresh
     !p <- ((+ lifetime) . C.sec) <$> C.getTime C.Monotonic
-    let !v = (sd,ref)
-    reaperAdd reaper (k,p,v,Add)
+    let !v = (sd',ref)
+    reaperAdd reaper (k',p,v,Add)
+  where
+    !k' = toKey k
+    !sd' = toValue sd
 
 resume :: Reaper DB Item -> Use
        -> SessionID -> IO (Maybe SessionData)
 resume reaper use k = do
     db <- reaperRead reaper
-    case Q.lookup k db of
+    case Q.lookup k' db of
       Nothing             -> return Nothing
       Just (p,v@(sd,ref)) -> do
            case use of
                SingleUse -> do
                    available <- atomicModifyIORef' ref check
-                   reaperAdd reaper (k,p,v,Del)
-                   return $ if available then Just sd else Nothing
-               MultipleUse -> return $ Just sd
+                   reaperAdd reaper (k',p,v,Del)
+                   return $ if available then Just (fromValue sd) else Nothing
+               MultipleUse -> return $ Just (fromValue sd)
   where
     check Fresh = (Used,True)
     check Used  = (Used,False)
+    !k' = toKey k
 
 invalidate :: Reaper DB Item
            -> SessionID -> IO ()
 invalidate reaper k = do
     db <- reaperRead reaper
-    case Q.lookup k db of
+    case Q.lookup k' db of
       Nothing    -> return ()
-      Just (p,v) -> reaperAdd reaper (k,p,v,Del)
+      Just (p,v) -> reaperAdd reaper (k',p,v,Del)
+  where
+    !k' = toKey k
