@@ -1016,9 +1016,9 @@ setALPN ctx exts = case extensionLookup extensionID_ApplicationLayerProtocolNego
             _ -> return ()
     _ -> return ()
 
-postHandshakeAuthClientWith :: MonadIO m => ClientParams -> Context -> Handshake13 -> m ()
+postHandshakeAuthClientWith :: ClientParams -> Context -> Handshake13 -> IO ()
 postHandshakeAuthClientWith cparams ctx h@(CertRequest13 certReqCtx exts) =
-    liftIO $ bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
+    bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
         processHandshake13 ctx h
         processCertRequest13 ctx certReqCtx exts
         (usedHash, _, applicationTrafficSecretN) <- getTxState ctx
