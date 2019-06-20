@@ -51,7 +51,7 @@ import Network.TLS.Handshake.Common13
 --
 -- This is just a helper to pop the next message from the recv layer,
 -- and call handshakeServerWith.
-handshakeServer :: MonadIO m => ServerParams -> Context -> m ()
+handshakeServer :: ServerParams -> Context -> IO ()
 handshakeServer sparams ctx = liftIO $ do
     hss <- recvPacketHandshake ctx
     case hss of
