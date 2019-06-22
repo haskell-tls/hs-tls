@@ -10,6 +10,7 @@
 module Network.TLS.Handshake.Client
     ( handshakeClient
     , handshakeClientWith
+    , postHandshakeAuthClientWith
     ) where
 
 import Network.TLS.Crypto
@@ -994,3 +995,7 @@ setALPN ctx exts = case extensionLookup extensionID_ApplicationLayerProtocolNego
                 setNegotiatedProtocol proto
             _ -> return ()
     _ -> return ()
+
+postHandshakeAuthClientWith :: MonadIO m => ClientParams -> Context -> Handshake13 -> m ()
+postHandshakeAuthClientWith _ _ _ =
+    throwCore $ Error_Protocol ("postHandshakeAuthClientWith not implemented", True, HandshakeFailure)

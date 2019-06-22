@@ -67,6 +67,7 @@ module Network.TLS.Context
 import Network.TLS.Backend
 import Network.TLS.Context.Internal
 import Network.TLS.Struct
+import Network.TLS.Struct13
 import Network.TLS.State
 import Network.TLS.Hooks
 import Network.TLS.Record.State
@@ -74,6 +75,7 @@ import Network.TLS.Parameters
 import Network.TLS.Measurement
 import Network.TLS.Types (Role(..))
 import Network.TLS.Handshake (handshakeClient, handshakeClientWith, handshakeServer, handshakeServerWith)
+import Network.TLS.PostHandshake (postHandshakeAuthClientWith, postHandshakeAuthServerWith)
 import Network.TLS.X509
 import Network.TLS.RNG
 
@@ -92,6 +94,7 @@ class TLSParams a where
     getTLSRole         :: a -> Role
     doHandshake        :: a -> Context -> IO ()
     doHandshakeWith    :: a -> Context -> Handshake -> IO ()
+    doPostHandshakeAuthWith :: a -> Context -> Handshake13 -> IO ()
 
 instance TLSParams ClientParams where
     getTLSCommonParams cparams = ( clientSupported cparams
@@ -101,6 +104,7 @@ instance TLSParams ClientParams where
     getTLSRole _ = ClientRole
     doHandshake = handshakeClient
     doHandshakeWith = handshakeClientWith
+    doPostHandshakeAuthWith = postHandshakeAuthClientWith
 
 instance TLSParams ServerParams where
     getTLSCommonParams sparams = ( serverSupported sparams
@@ -110,6 +114,7 @@ instance TLSParams ServerParams where
     getTLSRole _ = ServerRole
     doHandshake = handshakeServer
     doHandshakeWith = handshakeServerWith
+    doPostHandshakeAuthWith = postHandshakeAuthServerWith
 
 -- | create a new context using the backend and parameters specified.
 contextNew :: (MonadIO m, HasBackend backend, TLSParams params)
@@ -158,6 +163,7 @@ contextNew backend params = liftIO $ do
             , ctxHandshake    = hs
             , ctxDoHandshake  = doHandshake params
             , ctxDoHandshakeWith  = doHandshakeWith params
+            , ctxDoPostHandshakeAuthWith = doPostHandshakeAuthWith params
             , ctxMeasurement  = stats
             , ctxEOF_         = eof
             , ctxEstablished_ = established

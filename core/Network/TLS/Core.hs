@@ -46,6 +46,7 @@ import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
+import Network.TLS.PostHandshake
 import Network.TLS.KeySchedule
 import Network.TLS.Types (Role(..), HostName)
 import Network.TLS.Util (catchException, mapChunks_)
@@ -221,6 +222,10 @@ recvData13 ctx = do
               else do
                 let reason = "received key update before established"
                 terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+        loopHandshake13 (h@CertRequest13{}:hs) =
+            postHandshakeAuthWith ctx h >> loopHandshake13 hs
+        loopHandshake13 (h@Certificate13{}:hs) =
+            postHandshakeAuthWith ctx h >> loopHandshake13 hs
         loopHandshake13 (h:hs) = do
             mPendingAction <- popPendingAction ctx
             case mPendingAction of

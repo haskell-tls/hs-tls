@@ -105,6 +105,7 @@ Library
                      Network.TLS.Packet
                      Network.TLS.Packet13
                      Network.TLS.Parameters
+                     Network.TLS.PostHandshake
                      Network.TLS.Record
                      Network.TLS.Record.Types
                      Network.TLS.Record.Types13

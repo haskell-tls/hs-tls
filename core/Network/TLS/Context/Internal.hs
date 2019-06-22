@@ -114,6 +114,7 @@ data Context = Context
     , ctxHandshake        :: MVar (Maybe HandshakeState) -- ^ optional handshake state
     , ctxDoHandshake      :: Context -> IO ()
     , ctxDoHandshakeWith  :: Context -> Handshake -> IO ()
+    , ctxDoPostHandshakeAuthWith :: Context -> Handshake13 -> IO ()
     , ctxHooks            :: IORef Hooks   -- ^ hooks for this context
     , ctxLockWrite        :: MVar ()       -- ^ lock to use for writing data (including updating the state)
     , ctxLockRead         :: MVar ()       -- ^ lock to use for reading data (including updating the state)

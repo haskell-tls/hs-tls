@@ -9,6 +9,7 @@
 module Network.TLS.Handshake.Server
     ( handshakeServer
     , handshakeServerWith
+    , postHandshakeAuthServerWith
     ) where
 
 import Network.TLS.Parameters
@@ -1083,3 +1084,7 @@ clientCertVerify sparams ctx certs verif = do
                 -- chain to the context.
                 usingState_ ctx $ setClientCertificateChain certs
                 else decryptError "verification failed"
+
+postHandshakeAuthServerWith :: ServerParams -> Context -> Handshake13 -> IO ()
+postHandshakeAuthServerWith _ _ _ =
+    throwCore $ Error_Protocol ("postHandshakeAuthServerWith not implemented", True, HandshakeFailure)
