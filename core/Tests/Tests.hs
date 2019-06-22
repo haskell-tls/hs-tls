@@ -765,10 +765,8 @@ prop_thread_safety = do
             byeBye ctx
         runReaderWriters ctx r w =
             -- run concurrently 10 readers and 10 writers on the same context
-            let workers = concat $ replicate 10 [reader ctx r, writer ctx w]
+            let workers = concat $ replicate 10 [recvDataAssert ctx r, sendData ctx w]
              in runConcurrently $ traverse_ Concurrently workers
-        writer         = sendData
-        reader ctx val = do { bs <- recvData ctx; val `assertEq` bs }
 
 assertEq :: (Show a, Monad m, Eq a) => a -> a -> m ()
 assertEq expected got = unless (expected == got) $ error ("got " ++ show got ++ " but was expecting " ++ show expected)
@@ -776,6 +774,11 @@ assertEq expected got = unless (expected == got) $ error ("got " ++ show got ++ 
 assertIsLeft :: (Show b, Monad m) => Either a b -> m ()
 assertIsLeft (Left  _) = return ()
 assertIsLeft (Right b) = error ("got " ++ show b ++ " but was expecting a failure")
+
+recvDataAssert :: Context -> C8.ByteString -> IO ()
+recvDataAssert ctx expected = do
+    got <- recvData ctx
+    assertEq expected got
 
 main :: IO ()
 main = defaultMain $ testGroup "tls"
