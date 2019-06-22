@@ -54,6 +54,8 @@ module Network.TLS.Context.Internal
     , runRxState
     , usingHState
     , getHState
+    , saveHState
+    , restoreHState
     , getStateRNG
     , tls13orLater
     ) where
@@ -71,6 +73,7 @@ import Network.TLS.Record.State
 import Network.TLS.Parameters
 import Network.TLS.Measurement
 import Network.TLS.Imports
+import Network.TLS.Util
 import qualified Data.ByteString as B
 
 import Control.Concurrent.MVar
@@ -224,6 +227,14 @@ usingHState ctx f = liftIO $ modifyMVar (ctxHandshake ctx) $ \mst ->
 
 getHState :: MonadIO m => Context -> m (Maybe HandshakeState)
 getHState ctx = liftIO $ readMVar (ctxHandshake ctx)
+
+saveHState :: Context -> IO (Saved (Maybe HandshakeState))
+saveHState ctx = saveMVar (ctxHandshake ctx)
+
+restoreHState :: Context
+              -> Saved (Maybe HandshakeState)
+              -> IO (Saved (Maybe HandshakeState))
+restoreHState ctx = restoreMVar (ctxHandshake ctx)
 
 runTxState :: Context -> RecordM a -> IO (Either TLSError a)
 runTxState ctx f = do
