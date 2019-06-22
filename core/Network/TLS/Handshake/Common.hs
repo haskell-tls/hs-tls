@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Network.TLS.Handshake.Common
     ( handshakeFailed
-    , errorToAlert
+    , handleException
     , unexpected
     , newSession
     , handshakeTerminate
@@ -28,6 +28,7 @@ import Network.TLS.Compression
 import Network.TLS.Context.Internal
 import Network.TLS.Session
 import Network.TLS.Struct
+import Network.TLS.Struct13
 import Network.TLS.IO
 import Network.TLS.State
 import Network.TLS.Handshake.Process
@@ -42,10 +43,25 @@ import Network.TLS.X509
 import Network.TLS.Imports
 
 import Control.Monad.State.Strict
-import Control.Exception (throwIO)
+import Control.Exception (IOException, handle, fromException, throwIO)
 
 handshakeFailed :: TLSError -> IO ()
 handshakeFailed err = throwIO $ HandshakeFailed err
+
+handleException :: Context -> IO () -> IO ()
+handleException ctx f = catchException f $ \exception -> do
+    let tlserror = fromMaybe (Error_Misc $ show exception) $ fromException exception
+    setEstablished ctx NotEstablished
+    handle ignoreIOErr $ do
+        tls13 <- tls13orLater ctx
+        if tls13 then
+            sendPacket13 ctx $ Alert13 $ errorToAlert tlserror
+          else
+            sendPacket ctx $ Alert $ errorToAlert tlserror
+    handshakeFailed tlserror
+  where
+    ignoreIOErr :: IOException -> IO ()
+    ignoreIOErr _ = return ()
 
 errorToAlert :: TLSError -> [(AlertLevel, AlertDescription)]
 errorToAlert (Error_Protocol (_, _, ad)) = [(AlertLevel_Fatal, ad)]
