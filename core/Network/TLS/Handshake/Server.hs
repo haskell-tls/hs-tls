@@ -771,7 +771,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
     if not authenticated && serverWantClientCert sparams then
         runRecvHandshake13 $ do
           skip <- recvHandshake13postUpdate ctx expectCertificate
-          unless skip $ recvHandshake13postUpdate ctx expectCertVerify
+          unless skip $ recvHandshake13postUpdate ctx (expectCertVerify sparams ctx)
           recvHandshake13postUpdate ctx expectFinished
           liftIO sendNST
       else if rtt0OK then
@@ -928,21 +928,21 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         return $ isNullCertificateChain certs
     expectCertificate hs = unexpected (show hs) (Just "certificate 13")
 
-    expectCertVerify :: Handshake13 -> RecvHandshake13M IO ()
-    expectCertVerify (CertVerify13 sigAlg sig) = liftIO $ do
-        hChCc <- transcriptHash ctx
-        certs@(CertificateChain cc) <- checkValidClientCertChain ctx "finished 13 message expected"
-        pubkey <- case cc of
-                    [] -> throwCore $ Error_Protocol ("client certificate missing", True, HandshakeFailure)
-                    c:_ -> return $ certPubKey $ getCertificate c
-        usingHState ctx $ setPublicKey pubkey
-        let keyAlg = fromJust "fromPubKey" (fromPubKey pubkey)
-        verif <- checkCertVerify ctx keyAlg sigAlg sig hChCc
-        clientCertVerify sparams ctx certs verif
-    expectCertVerify hs = unexpected (show hs) (Just "certificate verify 13")
-
     hashSize = hashDigestSize usedHash
     zero = B.replicate hashSize 0
+
+expectCertVerify :: MonadIO m => ServerParams -> Context -> Handshake13 -> m ()
+expectCertVerify sparams ctx (CertVerify13 sigAlg sig) = liftIO $ do
+    hChCc <- transcriptHash ctx
+    certs@(CertificateChain cc) <- checkValidClientCertChain ctx "finished 13 message expected"
+    pubkey <- case cc of
+                [] -> throwCore $ Error_Protocol ("client certificate missing", True, HandshakeFailure)
+                c:_ -> return $ certPubKey $ getCertificate c
+    usingHState ctx $ setPublicKey pubkey
+    let keyAlg = fromJust "fromPubKey" (fromPubKey pubkey)
+    verif <- checkCertVerify ctx keyAlg sigAlg sig hChCc
+    clientCertVerify sparams ctx certs verif
+expectCertVerify _ _ hs = unexpected (show hs) (Just "certificate verify 13")
 
 helloRetryRequest :: MonadIO m => ServerParams -> Context -> Version -> Cipher -> [ExtensionRaw] -> [Group] -> Session -> m ()
 helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession = liftIO $ do
