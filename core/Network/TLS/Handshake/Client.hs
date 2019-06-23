@@ -35,7 +35,7 @@ import qualified Data.ByteString as B
 import Data.X509 (ExtKeyUsageFlag(..))
 
 import Control.Monad.State.Strict
-import Control.Exception (SomeException)
+import Control.Exception (SomeException, bracket)
 
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Common13
@@ -125,6 +125,7 @@ handshakeClient' cparams ctx groups mcrand = do
                                  ,keyshareExtension
                                  ,pskExchangeModeExtension
                                  ,cookieExtension
+                                 ,postHandshakeAuthExtension
                                  ,preSharedKeyExtension -- MUST be last
                                  ]
 
@@ -209,6 +210,10 @@ handshakeClient' cparams ctx groups mcrand = do
             case mcookie of
               Nothing     -> return Nothing
               Just cookie -> return $ Just $ toExtensionRaw cookie
+
+        postHandshakeAuthExtension
+          | tls13     = return $ Just $ toExtensionRaw PostHandshakeAuth
+          | otherwise = return Nothing
 
         clientSession = case clientWantSessionResume cparams of
             Nothing -> Session Nothing
@@ -1003,5 +1008,12 @@ setALPN ctx exts = case extensionLookup extensionID_ApplicationLayerProtocolNego
     _ -> return ()
 
 postHandshakeAuthClientWith :: MonadIO m => ClientParams -> Context -> Handshake13 -> m ()
+postHandshakeAuthClientWith cparams ctx h@(CertRequest13 certReqCtx exts) =
+    liftIO $ bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
+        processHandshake13 ctx h
+        processCertRequest13 ctx certReqCtx exts
+        (usedHash, _, applicationTrafficSecretN) <- getTxState ctx
+        sendClientFlight13 cparams ctx usedHash applicationTrafficSecretN
+
 postHandshakeAuthClientWith _ _ _ =
-    throwCore $ Error_Protocol ("postHandshakeAuthClientWith not implemented", True, HandshakeFailure)
+    throwCore $ Error_Protocol ("unexpected handshake message received in postHandshakeAuthClientWith", True, UnexpectedMessage)
