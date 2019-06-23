@@ -898,55 +898,8 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
     expectEncryptedExtensions p = unexpected (show p) (Just "encrypted extensions")
 
     expectCertRequest (CertRequest13 token exts) = do
-        let hsextID = extensionID_SignatureAlgorithms
-            -- caextID = extensionID_SignatureAlgorithmsCert
-        dNames <- canames
-        -- The @signature_algorithms@ extension is mandatory.
-        hsAlgs <- extalgs hsextID unsighash
-        cTypes <- case hsAlgs of
-            Just as ->
-                let validAs = filter isHashSignatureValid13 as
-                 in return $ sigAlgsToCertTypes ctx validAs
-            Nothing -> throwCore $ Error_Protocol
-                            ( "invalid certificate request"
-                            , True
-                            , HandshakeFailure )
-        -- Unused:
-        -- caAlgs <- extalgs caextID uncertsig
-        usingHState ctx $ do
-            setCertReqToken  $ Just token
-            setCertReqCBdata $ Just (cTypes, hsAlgs, dNames)
-            -- setCertReqSigAlgsCert caAlgs
+        processCertRequest13 ctx token exts
         recvHandshake13preUpdate ctx expectCertAndVerify
-      where
-        canames = case extensionLookup
-                       extensionID_CertificateAuthorities exts of
-            Nothing   -> return []
-            Just  ext -> case extensionDecode MsgTCertificateRequest ext of
-                             Just (CertificateAuthorities names) -> return names
-                             _ -> throwCore $ Error_Protocol
-                                      ( "invalid certificate request"
-                                      , True
-                                      , HandshakeFailure )
-        extalgs extID decons = case extensionLookup extID exts of
-            Nothing   -> return Nothing
-            Just  ext -> case extensionDecode MsgTCertificateRequest ext of
-                             Just e
-                               -> return    $ decons e
-                             _ -> throwCore $ Error_Protocol
-                                      ( "invalid certificate request"
-                                      , True
-                                      , HandshakeFailure )
-
-        unsighash :: SignatureAlgorithms
-                  -> Maybe [HashAndSignatureAlgorithm]
-        unsighash (SignatureAlgorithms a) = Just a
-
-        {- Unused for now
-        uncertsig :: SignatureAlgorithmsCert
-                  -> Maybe [HashAndSignatureAlgorithm]
-        uncertsig (SignatureAlgorithmsCert a) = Just a
-        -}
 
     expectCertRequest other = do
         usingHState ctx $ do
@@ -984,6 +937,55 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
         hChCf <- transcriptHash ctx
         let resumptionMasterSecret = deriveSecret usedHash masterSecret "res master" hChCf
         usingHState ctx $ setTLS13Secret $ ResuptionSecret resumptionMasterSecret
+
+processCertRequest13 :: MonadIO m => Context -> CertReqContext -> [ExtensionRaw] -> m ()
+processCertRequest13 ctx token exts = do
+    let hsextID = extensionID_SignatureAlgorithms
+        -- caextID = extensionID_SignatureAlgorithmsCert
+    dNames <- canames
+    -- The @signature_algorithms@ extension is mandatory.
+    hsAlgs <- extalgs hsextID unsighash
+    cTypes <- case hsAlgs of
+        Just as ->
+            let validAs = filter isHashSignatureValid13 as
+             in return $ sigAlgsToCertTypes ctx validAs
+        Nothing -> throwCore $ Error_Protocol
+                        ( "invalid certificate request"
+                        , True
+                        , HandshakeFailure )
+    -- Unused:
+    -- caAlgs <- extalgs caextID uncertsig
+    usingHState ctx $ do
+        setCertReqToken  $ Just token
+        setCertReqCBdata $ Just (cTypes, hsAlgs, dNames)
+        -- setCertReqSigAlgsCert caAlgs
+  where
+    canames = case extensionLookup
+                   extensionID_CertificateAuthorities exts of
+        Nothing   -> return []
+        Just  ext -> case extensionDecode MsgTCertificateRequest ext of
+                         Just (CertificateAuthorities names) -> return names
+                         _ -> throwCore $ Error_Protocol
+                                  ( "invalid certificate request"
+                                  , True
+                                  , HandshakeFailure )
+    extalgs extID decons = case extensionLookup extID exts of
+        Nothing   -> return Nothing
+        Just  ext -> case extensionDecode MsgTCertificateRequest ext of
+                         Just e
+                           -> return    $ decons e
+                         _ -> throwCore $ Error_Protocol
+                                  ( "invalid certificate request"
+                                  , True
+                                  , HandshakeFailure )
+    unsighash :: SignatureAlgorithms
+              -> Maybe [HashAndSignatureAlgorithm]
+    unsighash (SignatureAlgorithms a) = Just a
+    {- Unused for now
+    uncertsig :: SignatureAlgorithmsCert
+              -> Maybe [HashAndSignatureAlgorithm]
+    uncertsig (SignatureAlgorithmsCert a) = Just a
+    -}
 
 setALPN :: Context -> [ExtensionRaw] -> IO ()
 setALPN ctx exts = case extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts >>= extensionDecode MsgTServerHello of
