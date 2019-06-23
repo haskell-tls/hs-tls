@@ -795,40 +795,13 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
     hChSf <- transcriptHash ctx
     when rtt0accepted $ sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
     setTxState ctx usedHash usedCipher clientHandshakeTrafficSecret
-    chain <- clientChain cparams ctx
-    runPacketFlight ctx $ do
-        case chain of
-            Nothing -> return ()
-            Just cc -> usingHState ctx getCertReqToken >>= sendClientData13 cc
-        rawFinished <- makeFinished ctx usedHash clientHandshakeTrafficSecret
-        loadPacket13 ctx $ Handshake13 [rawFinished]
+    sendClientFlight13 cparams ctx usedHash clientHandshakeTrafficSecret
     masterSecret <- switchToTrafficSecret handshakeSecret hChSf
     setResumptionSecret masterSecret
     setEstablished ctx Established
   where
     hashSize = hashDigestSize usedHash
     zero = B.replicate hashSize 0
-
-    sendClientData13 chain (Just token) = do
-        let (CertificateChain certs) = chain
-            certExts = replicate (length certs) []
-            cHashSigs = filter isHashSignatureValid13 $ supportedHashSignatures $ ctxSupported ctx
-        loadPacket13 ctx $ Handshake13 [Certificate13 token chain certExts]
-        case certs of
-            [] -> return ()
-            _  -> do
-                  hChSc      <- transcriptHash ctx
-                  keyAlg     <- getLocalDigitalSignatureAlg ctx
-                  sigAlg     <- liftIO $ getLocalHashSigAlg ctx cHashSigs keyAlg
-                  vfy        <- makeCertVerify ctx keyAlg sigAlg hChSc
-                  loadPacket13 ctx $ Handshake13 [vfy]
-    --
-    sendClientData13 _ _ =
-        throwCore $ Error_Protocol
-            ( "missing TLS 1.3 certificate request context token"
-            , True
-            , InternalError
-            )
 
     switchToHandshakeSecret = do
         ecdhe <- calcSharedKey
@@ -986,6 +959,37 @@ processCertRequest13 ctx token exts = do
               -> Maybe [HashAndSignatureAlgorithm]
     uncertsig (SignatureAlgorithmsCert a) = Just a
     -}
+
+sendClientFlight13 :: ClientParams -> Context -> Hash -> ByteString -> IO ()
+sendClientFlight13 cparams ctx usedHash baseKey = do
+    chain <- clientChain cparams ctx
+    runPacketFlight ctx $ do
+        case chain of
+            Nothing -> return ()
+            Just cc -> usingHState ctx getCertReqToken >>= sendClientData13 cc
+        rawFinished <- makeFinished ctx usedHash baseKey
+        loadPacket13 ctx $ Handshake13 [rawFinished]
+  where
+    sendClientData13 chain (Just token) = do
+        let (CertificateChain certs) = chain
+            certExts = replicate (length certs) []
+            cHashSigs = filter isHashSignatureValid13 $ supportedHashSignatures $ ctxSupported ctx
+        loadPacket13 ctx $ Handshake13 [Certificate13 token chain certExts]
+        case certs of
+            [] -> return ()
+            _  -> do
+                  hChSc      <- transcriptHash ctx
+                  keyAlg     <- getLocalDigitalSignatureAlg ctx
+                  sigAlg     <- liftIO $ getLocalHashSigAlg ctx cHashSigs keyAlg
+                  vfy        <- makeCertVerify ctx keyAlg sigAlg hChSc
+                  loadPacket13 ctx $ Handshake13 [vfy]
+    --
+    sendClientData13 _ _ =
+        throwCore $ Error_Protocol
+            ( "missing TLS 1.3 certificate request context token"
+            , True
+            , InternalError
+            )
 
 setALPN :: Context -> [ExtensionRaw] -> IO ()
 setALPN ctx exts = case extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts >>= extensionDecode MsgTServerHello of
