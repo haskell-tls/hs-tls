@@ -29,6 +29,7 @@ module Network.TLS.Core
     , recvData'
     , updateKey
     , KeyUpdateRequest(..)
+    , requestCertificate
     ) where
 
 import Network.TLS.Cipher

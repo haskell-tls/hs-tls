@@ -58,6 +58,8 @@ module Network.TLS.Context.Internal
     , restoreHState
     , getStateRNG
     , tls13orLater
+    , addCertRequest13
+    , getCertRequest13
     ) where
 
 import Network.TLS.Backend
@@ -73,6 +75,7 @@ import Network.TLS.Record.State
 import Network.TLS.Parameters
 import Network.TLS.Measurement
 import Network.TLS.Imports
+import Network.TLS.Types
 import Network.TLS.Util
 import qualified Data.ByteString as B
 
@@ -121,6 +124,7 @@ data Context = Context
     , ctxLockState        :: MVar ()       -- ^ lock used during read/write when receiving and sending packet.
                                            -- it is usually nested in a write or read lock.
     , ctxPendingActions   :: IORef [PendingAction]
+    , ctxCertRequests     :: IORef [Handshake13]  -- ^ pending PHA requests
     , ctxKeyLogger        :: String -> IO ()
     }
 
@@ -282,3 +286,15 @@ tls13orLater ctx = do
     return $ case ev of
                Left  _ -> False
                Right v -> v >= TLS13
+
+addCertRequest13 :: Context -> Handshake13 -> IO ()
+addCertRequest13 ctx certReq = modifyIORef (ctxCertRequests ctx) (certReq:)
+
+getCertRequest13 :: Context -> CertReqContext -> IO (Maybe Handshake13)
+getCertRequest13 ctx context = do
+    let ref = ctxCertRequests ctx
+    l <- readIORef ref
+    let (matched, others) = partition (\(CertRequest13 c _) -> context == c) l
+    case matched of
+        []          -> return Nothing
+        (certReq:_) -> writeIORef ref others >> return (Just certReq)

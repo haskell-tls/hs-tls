@@ -685,7 +685,9 @@ doHandshake13 :: ServerParams -> Context -> Credentials -> Version
               -> Session -> Bool
               -> IO ()
 doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash clientKeyShare clientSession rtt0 = do
-    newSession ctx >>= \ss -> usingState_ ctx (setSession ss False)
+    newSession ctx >>= \ss -> usingState_ ctx $ do
+        setSession ss False
+        setClientSupportsPHA supportsPHA
     usingHState ctx $ setNegotiatedGroup $ keyShareEntryGroup clientKeyShare
     srand <- setServerParameter
     (psk, binderInfo, is0RTTvalid) <- choosePSK
@@ -785,6 +787,10 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         usingState_ ctx $ setVersion chosenVersion
         usingHState ctx $ setHelloParameters13 usedCipher
         return srand
+
+    supportsPHA = case extensionLookup extensionID_PostHandshakeAuth exts >>= extensionDecode MsgTClientHello of
+        Just PostHandshakeAuth -> True
+        Nothing                -> False
 
     choosePSK = case extensionLookup extensionID_PreSharedKey exts >>= extensionDecode MsgTClientHello of
       Just (PreSharedKeyClientHello (PskIdentity sessionId obfAge:_) bnds@(bnd:_)) -> do
@@ -1086,5 +1092,37 @@ clientCertVerify sparams ctx certs verif = do
                 else decryptError "verification failed"
 
 postHandshakeAuthServerWith :: ServerParams -> Context -> Handshake13 -> IO ()
+postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = do
+    mCertReq <- getCertRequest13 ctx certCtx
+    when (isNothing mCertReq) $ throwCore $ Error_Protocol ("unknown certificate request context", True, DecodeError)
+    let certReq = fromJust "certReq" mCertReq
+
+    -- fixme checking _ext
+    clientCertificate sparams ctx certs
+
+    baseHState <- saveHState ctx
+    processHandshake13 ctx certReq
+    processHandshake13 ctx h
+
+    (usedHash, _, applicationTrafficSecretN) <- getRxState ctx
+
+    let expectFinished (Finished13 verifyData') = do
+            hChBeforeCf <- transcriptHash ctx
+            let verifyData = makeVerifyData usedHash applicationTrafficSecretN hChBeforeCf
+            unless (verifyData == verifyData') $
+                decryptError "cannot verify finished"
+        expectFinished hs = unexpected (show hs) (Just "finished 13")
+
+        postAction = void $ restoreHState ctx baseHState
+
+    -- Note: here the server could send updated NST too, however the library
+    -- currently has no API to handle resumption and client authentication
+    -- together, see discussion in #133
+    if isNullCertificateChain certs
+        then setPendingActions ctx [ (expectFinished, postAction) ]
+        else setPendingActions ctx [ (expectCertVerify sparams ctx, mempty)
+                                   , (expectFinished, postAction)
+                                   ]
+
 postHandshakeAuthServerWith _ _ _ =
-    throwCore $ Error_Protocol ("postHandshakeAuthServerWith not implemented", True, HandshakeFailure)
+    throwCore $ Error_Protocol ("unexpected handshake message received in postHandshakeAuthServerWith", True, UnexpectedMessage)
