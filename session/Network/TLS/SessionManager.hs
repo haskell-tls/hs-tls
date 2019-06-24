@@ -14,11 +14,11 @@ module Network.TLS.SessionManager (
   , newSessionManager
   ) where
 
-import Data.ByteString (ByteString)
-import Data.ByteString.Short (ShortByteString)
-import qualified Data.ByteString.Short as Short
+import Basement.Block (Block)
+import Data.ByteArray (convert)
 import Control.Exception (assert)
 import Control.Reaper
+import Data.ByteString (ByteString)
 import Data.IORef
 import Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as Q
@@ -49,35 +49,35 @@ defaultConfig = Config {
 
 ----------------------------------------------------------------
 
-toKey :: ByteString -> ShortByteString
-toKey = Short.toShort
+toKey :: ByteString -> Block Word8
+toKey = convert
 
 toValue :: SessionData -> SessionDataCopy
 toValue (SessionData v cid comp msni sec mg mti malpn siz) =
     SessionDataCopy v cid comp msni sec' mg mti malpn' siz
   where
-    !sec' = Short.toShort sec
-    !malpn' = Short.toShort <$> malpn
+    !sec' = convert sec
+    !malpn' = convert <$> malpn
 
 fromValue :: SessionDataCopy -> SessionData
 fromValue (SessionDataCopy v cid comp msni sec' mg mti malpn' siz) =
     (SessionData v cid comp msni sec mg mti malpn siz)
   where
-    !sec = Short.fromShort sec'
-    !malpn = Short.fromShort <$> malpn'
+    !sec = convert sec'
+    !malpn = convert <$> malpn'
 
 ----------------------------------------------------------------
 
-type SessionIDCopy = ShortByteString
+type SessionIDCopy = Block Word8
 data SessionDataCopy = SessionDataCopy {
       ssVersion     :: !Version
     , ssCipher      :: !CipherID
     , ssCompression :: !CompressionID
     , ssClientSNI   :: !(Maybe HostName)
-    , ssSecret      :: !ShortByteString
+    , ssSecret      :: Block Word8
     , ssGroup       :: !(Maybe Group)
     , ssTicketInfo  :: !(Maybe TLS13TicketInfo)
-    , ssALPN        :: !(Maybe ShortByteString)
+    , ssALPN        :: !(Maybe (Block Word8))
     , ssMaxEarlyDataSize :: Int
     } deriving (Show,Eq)
 
