@@ -90,10 +90,10 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
         ver <- usingState_ ctx (getVersionWithDefault TLS10)
         when (ver == TLS13) $ throwCore $ Error_Protocol ("renegotiation is not allowed in TLS 1.3", False, NoRenegotiation)
     -- rejecting client initiated renegotiation to prevent DOS.
-    unless (supportedClientInitiatedRenegotiation (ctxSupported ctx)) $ do
-        eof <- ctxEOF ctx
-        when (established == Established && not eof) $
-            throwCore $ Error_Protocol ("renegotiation is not allowed", False, NoRenegotiation)
+    eof <- ctxEOF ctx
+    let renegotiation = established == Established && not eof
+    when (renegotiation && not (supportedClientInitiatedRenegotiation $ ctxSupported ctx)) $
+        throwCore $ Error_Protocol ("renegotiation is not allowed", False, NoRenegotiation)
     -- check if policy allow this new handshake to happens
     handshakeAuthorized <- withMeasure ctx (onNewHandshake $ serverHooks sparams)
     unless handshakeAuthorized (throwCore $ Error_HandshakePolicy "server: handshake denied")
@@ -118,7 +118,9 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
             Just (SupportedVersionsClientHello vers) -> vers
             _                                        -> []
         clientVersion = min TLS12 legacyVersion
-        serverVersions = supportedVersions $ ctxSupported ctx
+        serverVersions
+            | renegotiation = filter (< TLS13) (supportedVersions $ ctxSupported ctx)
+            | otherwise     = supportedVersions $ ctxSupported ctx
         mVersion = debugVersionForced $ serverDebug sparams
     chosenVersion <- case mVersion of
       Just cver -> return cver
