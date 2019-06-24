@@ -125,7 +125,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
     chosenVersion <- case mVersion of
       Just cver -> return cver
       Nothing   ->
-        if (TLS13 `elem` serverVersions) && clientVersion == TLS12 && clientVersions /= [] then case findHighestVersionFrom13 clientVersions serverVersions of
+        if (TLS13 `elem` serverVersions) && clientVersions /= [] then case findHighestVersionFrom13 clientVersions serverVersions of
                   Nothing -> throwCore $ Error_Protocol ("client versions " ++ show clientVersions ++ " is not supported", True, ProtocolVersion)
                   Just v  -> return v
            else case findHighestVersionFrom clientVersion serverVersions of
