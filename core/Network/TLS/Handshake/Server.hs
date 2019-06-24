@@ -83,7 +83,7 @@ handshakeServer sparams ctx = liftIO $ do
 --      -> finish             <- finish
 --
 handshakeServerWith :: ServerParams -> Context -> Handshake -> IO ()
-handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientSession ciphers compressions exts _) = do
+handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientSession ciphers compressions exts _) = do
     established <- ctxEstablished ctx
     -- renego is not allowed in TLS 1.3
     when (established /= NotEstablished) $ do
@@ -103,20 +103,21 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     processHandshake ctx clientHello
 
     -- rejecting SSL2. RFC 6176
-    when (clientVersion == SSL2) $ throwCore $ Error_Protocol ("SSL 2.0 is not supported", True, ProtocolVersion)
+    when (legacyVersion == SSL2) $ throwCore $ Error_Protocol ("SSL 2.0 is not supported", True, ProtocolVersion)
     -- rejecting SSL3. RFC 7568
-    -- when (clientVersion == SSL3) $ throwCore $ Error_Protocol ("SSL 3.0 is not supported", True, ProtocolVersion)
+    -- when (legacyVersion == SSL3) $ throwCore $ Error_Protocol ("SSL 3.0 is not supported", True, ProtocolVersion)
 
     -- Fallback SCSV: RFC7507
     -- TLS_FALLBACK_SCSV: {0x56, 0x00}
     when (supportedFallbackScsv (ctxSupported ctx) &&
           (0x5600 `elem` ciphers) &&
-          clientVersion < TLS12) $
+          legacyVersion < TLS12) $
         throwCore $ Error_Protocol ("fallback is not allowed", True, InappropriateFallback)
     -- choosing TLS version
     let clientVersions = case extensionLookup extensionID_SupportedVersions exts >>= extensionDecode MsgTClientHello of
             Just (SupportedVersionsClientHello vers) -> vers
             _                                        -> []
+        clientVersion = min TLS12 legacyVersion
         serverVersions = supportedVersions $ ctxSupported ctx
         mVersion = debugVersionForced $ serverDebug sparams
     chosenVersion <- case mVersion of
