@@ -119,7 +119,8 @@ data HandshakeState = HandshakeState
     , hstClientCertSent      :: !Bool
         -- ^ Set to true when a client certificate chain was sent
     , hstCertReqSent         :: !Bool
-        -- ^ Set to true when a certificate request was sent
+        -- ^ Set to true when a certificate request was sent.  This applies
+        -- only to requests sent during handshake (not post-handshake).
     , hstClientCertChain     :: !(Maybe CertificateChain)
     , hstPendingTxState      :: Maybe RecordState
     , hstPendingRxState      :: Maybe RecordState

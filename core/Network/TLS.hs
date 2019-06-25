@@ -98,9 +98,10 @@ module Network.TLS
     -- ** Negotiated
     , getNegotiatedProtocol
     , getClientSNI
-    -- ** Updating keys
+    -- ** Post-handshake actions
     , updateKey
     , KeyUpdateRequest(..)
+    , requestCertificate
 
     -- * Raw types
     , ProtocolType(..)

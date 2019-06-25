@@ -54,8 +54,12 @@ module Network.TLS.Context.Internal
     , runRxState
     , usingHState
     , getHState
+    , saveHState
+    , restoreHState
     , getStateRNG
     , tls13orLater
+    , addCertRequest13
+    , getCertRequest13
     ) where
 
 import Network.TLS.Backend
@@ -71,6 +75,8 @@ import Network.TLS.Record.State
 import Network.TLS.Parameters
 import Network.TLS.Measurement
 import Network.TLS.Imports
+import Network.TLS.Types
+import Network.TLS.Util
 import qualified Data.ByteString as B
 
 import Control.Concurrent.MVar
@@ -111,12 +117,14 @@ data Context = Context
     , ctxHandshake        :: MVar (Maybe HandshakeState) -- ^ optional handshake state
     , ctxDoHandshake      :: Context -> IO ()
     , ctxDoHandshakeWith  :: Context -> Handshake -> IO ()
+    , ctxDoPostHandshakeAuthWith :: Context -> Handshake13 -> IO ()
     , ctxHooks            :: IORef Hooks   -- ^ hooks for this context
     , ctxLockWrite        :: MVar ()       -- ^ lock to use for writing data (including updating the state)
     , ctxLockRead         :: MVar ()       -- ^ lock to use for reading data (including updating the state)
     , ctxLockState        :: MVar ()       -- ^ lock used during read/write when receiving and sending packet.
                                            -- it is usually nested in a write or read lock.
     , ctxPendingActions   :: IORef [PendingAction]
+    , ctxCertRequests     :: IORef [Handshake13]  -- ^ pending PHA requests
     , ctxKeyLogger        :: String -> IO ()
     }
 
@@ -225,6 +233,14 @@ usingHState ctx f = liftIO $ modifyMVar (ctxHandshake ctx) $ \mst ->
 getHState :: MonadIO m => Context -> m (Maybe HandshakeState)
 getHState ctx = liftIO $ readMVar (ctxHandshake ctx)
 
+saveHState :: Context -> IO (Saved (Maybe HandshakeState))
+saveHState ctx = saveMVar (ctxHandshake ctx)
+
+restoreHState :: Context
+              -> Saved (Maybe HandshakeState)
+              -> IO (Saved (Maybe HandshakeState))
+restoreHState ctx = restoreMVar (ctxHandshake ctx)
+
 runTxState :: Context -> RecordM a -> IO (Either TLSError a)
 runTxState ctx f = do
     ver <- usingState_ ctx (getVersionWithDefault $ maximum $ supportedVersions $ ctxSupported ctx)
@@ -270,3 +286,15 @@ tls13orLater ctx = do
     return $ case ev of
                Left  _ -> False
                Right v -> v >= TLS13
+
+addCertRequest13 :: Context -> Handshake13 -> IO ()
+addCertRequest13 ctx certReq = modifyIORef (ctxCertRequests ctx) (certReq:)
+
+getCertRequest13 :: Context -> CertReqContext -> IO (Maybe Handshake13)
+getCertRequest13 ctx context = do
+    let ref = ctxCertRequests ctx
+    l <- readIORef ref
+    let (matched, others) = partition (\(CertRequest13 c _) -> context == c) l
+    case matched of
+        []          -> return Nothing
+        (certReq:_) -> writeIORef ref others >> return (Just certReq)

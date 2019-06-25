@@ -9,6 +9,7 @@ module Network.TLS.Types
     ( Version(..)
     , SessionID
     , SessionData(..)
+    , CertReqContext
     , TLS13TicketInfo(..)
     , CipherID
     , CompressionID
@@ -47,6 +48,9 @@ data SessionData = SessionData
     , sessionALPN        :: Maybe ByteString
     , sessionMaxEarlyDataSize :: Int
     } deriving (Show,Eq)
+
+-- | Certificate request context for TLS 1.3.
+type CertReqContext = ByteString
 
 data TLS13TicketInfo = TLS13TicketInfo
     { lifetime :: Second      -- NewSessionTicket.ticket_lifetime in seconds

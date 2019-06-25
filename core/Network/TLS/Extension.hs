@@ -51,6 +51,7 @@ module Network.TLS.Extension
     , KeyShare(..)
     , KeyShareEntry(..)
     , MessageType(..)
+    , PostHandshakeAuth(..)
     , PskKexMode(..)
     , PskKeyExchangeModes(..)
     , PskIdentity(..)
@@ -463,6 +464,16 @@ decodeSignatureAlgorithms :: ByteString -> Maybe SignatureAlgorithms
 decodeSignatureAlgorithms = runGetMaybe $ do
     len <- getWord16
     SignatureAlgorithms <$> getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
+
+------------------------------------------------------------
+
+data PostHandshakeAuth = PostHandshakeAuth deriving (Show,Eq)
+
+instance Extension PostHandshakeAuth where
+    extensionID _ = extensionID_PostHandshakeAuth
+    extensionEncode _               = B.empty
+    extensionDecode MsgTClientHello = runGetMaybe $ return PostHandshakeAuth
+    extensionDecode _               = error "extensionDecode: PostHandshakeAuth"
 
 ------------------------------------------------------------
 

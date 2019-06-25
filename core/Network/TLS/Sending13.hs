@@ -56,12 +56,18 @@ prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
 prepareRecord = runTxState
 
 updateHandshake13 :: Context -> Handshake13 -> IO ()
-updateHandshake13 ctx hs = usingHState ctx $ do
-    when (isHRR hs) wrapAsMessageHash13
-    updateHandshakeDigest encoded
-    addHandshakeMessage encoded
+updateHandshake13 ctx hs
+    | isIgnored hs = return ()
+    | otherwise    = usingHState ctx $ do
+        when (isHRR hs) wrapAsMessageHash13
+        updateHandshakeDigest encoded
+        addHandshakeMessage encoded
   where
     encoded = encodeHandshake13 hs
 
     isHRR (ServerHello13 srand _ _ _) = isHelloRetryRequest srand
     isHRR _                           = False
+
+    isIgnored NewSessionTicket13{} = True
+    isIgnored KeyUpdate13{}        = True
+    isIgnored _                    = False

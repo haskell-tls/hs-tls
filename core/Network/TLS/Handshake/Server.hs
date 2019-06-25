@@ -9,6 +9,7 @@
 module Network.TLS.Handshake.Server
     ( handshakeServer
     , handshakeServerWith
+    , postHandshakeAuthServerWith
     ) where
 
 import Network.TLS.Parameters
@@ -684,7 +685,9 @@ doHandshake13 :: ServerParams -> Context -> Credentials -> Version
               -> Session -> Bool
               -> IO ()
 doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash clientKeyShare clientSession rtt0 = do
-    newSession ctx >>= \ss -> usingState_ ctx (setSession ss False)
+    newSession ctx >>= \ss -> usingState_ ctx $ do
+        setSession ss False
+        setClientSupportsPHA supportsPHA
     usingHState ctx $ setNegotiatedGroup $ keyShareEntryGroup clientKeyShare
     srand <- setServerParameter
     (psk, binderInfo, is0RTTvalid) <- choosePSK
@@ -770,7 +773,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
     if not authenticated && serverWantClientCert sparams then
         runRecvHandshake13 $ do
           skip <- recvHandshake13postUpdate ctx expectCertificate
-          unless skip $ recvHandshake13postUpdate ctx expectCertVerify
+          unless skip $ recvHandshake13postUpdate ctx (expectCertVerify sparams ctx)
           recvHandshake13postUpdate ctx expectFinished
           liftIO sendNST
       else if rtt0OK then
@@ -784,6 +787,10 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         usingState_ ctx $ setVersion chosenVersion
         usingHState ctx $ setHelloParameters13 usedCipher
         return srand
+
+    supportsPHA = case extensionLookup extensionID_PostHandshakeAuth exts >>= extensionDecode MsgTClientHello of
+        Just PostHandshakeAuth -> True
+        Nothing                -> False
 
     choosePSK = case extensionLookup extensionID_PreSharedKey exts >>= extensionDecode MsgTClientHello of
       Just (PreSharedKeyClientHello (PskIdentity sessionId obfAge:_) bnds@(bnd:_)) -> do
@@ -927,21 +934,21 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         return $ isNullCertificateChain certs
     expectCertificate hs = unexpected (show hs) (Just "certificate 13")
 
-    expectCertVerify :: Handshake13 -> RecvHandshake13M IO ()
-    expectCertVerify (CertVerify13 sigAlg sig) = liftIO $ do
-        hChCc <- transcriptHash ctx
-        certs@(CertificateChain cc) <- checkValidClientCertChain ctx "finished 13 message expected"
-        pubkey <- case cc of
-                    [] -> throwCore $ Error_Protocol ("client certificate missing", True, HandshakeFailure)
-                    c:_ -> return $ certPubKey $ getCertificate c
-        usingHState ctx $ setPublicKey pubkey
-        let keyAlg = fromJust "fromPubKey" (fromPubKey pubkey)
-        verif <- checkCertVerify ctx keyAlg sigAlg sig hChCc
-        clientCertVerify sparams ctx certs verif
-    expectCertVerify hs = unexpected (show hs) (Just "certificate verify 13")
-
     hashSize = hashDigestSize usedHash
     zero = B.replicate hashSize 0
+
+expectCertVerify :: MonadIO m => ServerParams -> Context -> Handshake13 -> m ()
+expectCertVerify sparams ctx (CertVerify13 sigAlg sig) = liftIO $ do
+    hChCc <- transcriptHash ctx
+    certs@(CertificateChain cc) <- checkValidClientCertChain ctx "finished 13 message expected"
+    pubkey <- case cc of
+                [] -> throwCore $ Error_Protocol ("client certificate missing", True, HandshakeFailure)
+                c:_ -> return $ certPubKey $ getCertificate c
+    usingHState ctx $ setPublicKey pubkey
+    let keyAlg = fromJust "fromPubKey" (fromPubKey pubkey)
+    verif <- checkCertVerify ctx keyAlg sigAlg sig hChCc
+    clientCertVerify sparams ctx certs verif
+expectCertVerify _ _ hs = unexpected (show hs) (Just "certificate verify 13")
 
 helloRetryRequest :: MonadIO m => ServerParams -> Context -> Version -> Cipher -> [ExtensionRaw] -> [Group] -> Session -> m ()
 helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession = liftIO $ do
@@ -1083,3 +1090,39 @@ clientCertVerify sparams ctx certs verif = do
                 -- chain to the context.
                 usingState_ ctx $ setClientCertificateChain certs
                 else decryptError "verification failed"
+
+postHandshakeAuthServerWith :: ServerParams -> Context -> Handshake13 -> IO ()
+postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = do
+    mCertReq <- getCertRequest13 ctx certCtx
+    when (isNothing mCertReq) $ throwCore $ Error_Protocol ("unknown certificate request context", True, DecodeError)
+    let certReq = fromJust "certReq" mCertReq
+
+    -- fixme checking _ext
+    clientCertificate sparams ctx certs
+
+    baseHState <- saveHState ctx
+    processHandshake13 ctx certReq
+    processHandshake13 ctx h
+
+    (usedHash, _, applicationTrafficSecretN) <- getRxState ctx
+
+    let expectFinished (Finished13 verifyData') = do
+            hChBeforeCf <- transcriptHash ctx
+            let verifyData = makeVerifyData usedHash applicationTrafficSecretN hChBeforeCf
+            unless (verifyData == verifyData') $
+                decryptError "cannot verify finished"
+        expectFinished hs = unexpected (show hs) (Just "finished 13")
+
+        postAction = void $ restoreHState ctx baseHState
+
+    -- Note: here the server could send updated NST too, however the library
+    -- currently has no API to handle resumption and client authentication
+    -- together, see discussion in #133
+    if isNullCertificateChain certs
+        then setPendingActions ctx [ (expectFinished, postAction) ]
+        else setPendingActions ctx [ (expectCertVerify sparams ctx, mempty)
+                                   , (expectFinished, postAction)
+                                   ]
+
+postHandshakeAuthServerWith _ _ _ =
+    throwCore $ Error_Protocol ("unexpected handshake message received in postHandshakeAuthServerWith", True, UnexpectedMessage)

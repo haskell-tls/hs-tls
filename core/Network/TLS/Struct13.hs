@@ -33,7 +33,6 @@ data KeyUpdate = UpdateNotRequested
                deriving (Show,Eq)
 
 type TicketNonce = ByteString
-type CertReqContext = ByteString
 
 -- fixme: convert Word32 to proper data type
 data Handshake13 =

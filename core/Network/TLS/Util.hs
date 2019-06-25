@@ -10,6 +10,9 @@ module Network.TLS.Util
         , fmapEither
         , catchException
         , mapChunks_
+        , Saved
+        , saveMVar
+        , restoreMVar
         ) where
 
 import qualified Data.ByteArray as BA
@@ -18,6 +21,7 @@ import Network.TLS.Imports
 
 import Control.Exception (SomeException)
 import Control.Concurrent.Async
+import Control.Concurrent.MVar
 
 sub :: ByteString -> Int -> Int -> Maybe ByteString
 sub b offset len
@@ -79,3 +83,16 @@ mapChunks_ len f bs
         let (chunk, remain) = B.splitAt len bs
          in f chunk >> mapChunks_ len f remain
     | otherwise = void (f bs)
+
+-- | An opaque newtype wrapper to prevent from poking inside content that has
+-- been saved.
+newtype Saved a = Saved a
+
+-- | Save the content of an 'MVar' to restore it later.
+saveMVar :: MVar a -> IO (Saved a)
+saveMVar ref = Saved <$> readMVar ref
+
+-- | Restore the content of an 'MVar' to a previous saved value and return the
+-- content that has just been replaced.
+restoreMVar :: MVar a -> Saved a -> IO (Saved a)
+restoreMVar ref (Saved val) = Saved <$> swapMVar ref val

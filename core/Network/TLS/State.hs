@@ -56,6 +56,8 @@ module Network.TLS.State
     , getTLS13HRR
     , setTLS13Cookie
     , getTLS13Cookie
+    , setClientSupportsPHA
+    , getClientSupportsPHA
     -- * random
     , genRandom
     , withRNG
@@ -97,6 +99,7 @@ data TLSState = TLSState
     , stTLS13HRR            :: !Bool
     , stTLS13Cookie         :: Maybe Cookie
     , stExporterMasterSecret :: Maybe ByteString -- TLS 1.3
+    , stClientSupportsPHA   :: !Bool -- Post-Handshake Authentication (TLS 1.3)
     }
 
 newtype TLSSt a = TLSSt { runTLSSt :: ErrT TLSError (State TLSState) a }
@@ -136,6 +139,7 @@ newTLSState rng clientContext = TLSState
     , stTLS13HRR            = False
     , stTLS13Cookie         = Nothing
     , stExporterMasterSecret = Nothing
+    , stClientSupportsPHA   = False
     }
 
 updateVerifiedData :: Role -> ByteString -> TLSSt ()
@@ -287,3 +291,9 @@ setTLS13Cookie mcookie = modify (\st -> st { stTLS13Cookie = mcookie })
 
 getTLS13Cookie :: TLSSt (Maybe Cookie)
 getTLS13Cookie = gets stTLS13Cookie
+
+setClientSupportsPHA :: Bool -> TLSSt ()
+setClientSupportsPHA b = modify (\st -> st { stClientSupportsPHA = b })
+
+getClientSupportsPHA :: TLSSt Bool
+getClientSupportsPHA = gets stClientSupportsPHA

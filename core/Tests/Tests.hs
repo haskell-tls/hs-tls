@@ -637,6 +637,48 @@ prop_handshake_client_auth = do
             | chain == fst cred = return CertificateUsageAccept
             | otherwise         = return (CertificateUsageReject CertificateRejectUnknownCA)
 
+prop_post_handshake_auth :: PropertyM IO ()
+prop_post_handshake_auth = do
+    (clientParam,serverParam) <- pick arbitraryPairParams13
+    cred <- pick (arbitraryClientCredential TLS13)
+    let clientParam' = clientParam { clientHooks = (clientHooks clientParam)
+                                       { onCertificateRequest = \_ -> return $ Just cred }
+                                   }
+        serverParam' = serverParam { serverHooks = (serverHooks serverParam)
+                                        { onClientCertificate = validateChain cred }
+                                   }
+    if isCredentialDSA cred
+        then runTLSInitFailureGen (clientParam',serverParam') hsServer hsClient
+        else runTLSPipe (clientParam',serverParam') tlsServer tlsClient
+  where validateChain cred chain
+            | chain == fst cred = return CertificateUsageAccept
+            | otherwise         = return (CertificateUsageReject CertificateRejectUnknownCA)
+        tlsServer ctx queue = do
+            hsServer ctx
+            d <- recvData ctx
+            writeChan queue [d]
+            bye ctx
+        tlsClient queue ctx = do
+            hsClient ctx
+            d <- readChan queue
+            sendData ctx (L.fromChunks [d])
+            byeBye ctx
+        hsServer ctx = do
+            handshake ctx
+            recvDataAssert ctx "request 1"
+            _ <- requestCertificate ctx  -- single request
+            sendData ctx "response 1"
+            recvDataAssert ctx "request 2"
+            _ <- requestCertificate ctx
+            _ <- requestCertificate ctx  -- two simultaneously
+            sendData ctx "response 2"
+        hsClient ctx = do
+            handshake ctx
+            sendData ctx "request 1"
+            recvDataAssert ctx "response 1"
+            sendData ctx "request 2"
+            recvDataAssert ctx "response 2"
+
 prop_handshake_clt_key_usage :: PropertyM IO ()
 prop_handshake_clt_key_usage = do
     (clientParam,serverParam) <- pick arbitraryPairParams
@@ -765,10 +807,8 @@ prop_thread_safety = do
             byeBye ctx
         runReaderWriters ctx r w =
             -- run concurrently 10 readers and 10 writers on the same context
-            let workers = concat $ replicate 10 [reader ctx r, writer ctx w]
+            let workers = concat $ replicate 10 [recvDataAssert ctx r, sendData ctx w]
              in runConcurrently $ traverse_ Concurrently workers
-        writer         = sendData
-        reader ctx val = do { bs <- recvData ctx; val `assertEq` bs }
 
 assertEq :: (Show a, Monad m, Eq a) => a -> a -> m ()
 assertEq expected got = unless (expected == got) $ error ("got " ++ show got ++ " but was expecting " ++ show expected)
@@ -776,6 +816,11 @@ assertEq expected got = unless (expected == got) $ error ("got " ++ show got ++ 
 assertIsLeft :: (Show b, Monad m) => Either a b -> m ()
 assertIsLeft (Left  _) = return ()
 assertIsLeft (Right b) = error ("got " ++ show b ++ " but was expecting a failure")
+
+recvDataAssert :: Context -> C8.ByteString -> IO ()
+recvDataAssert ctx expected = do
+    got <- recvData ctx
+    assertEq expected got
 
 main :: IO ()
 main = defaultMain $ testGroup "tls"
@@ -819,6 +864,7 @@ main = defaultMain $ testGroup "tls"
             , testProperty "TLS 1.3 RTT0" (monadicIO prop_handshake13_rtt0)
             , testProperty "TLS 1.3 RTT0 -> PSK" (monadicIO prop_handshake13_rtt0_fallback)
             , testProperty "TLS 1.3 RTT0 length" (monadicIO prop_handshake13_rtt0_length)
+            , testProperty "TLS 1.3 Post-handshake auth" (monadicIO prop_post_handshake_auth)
             ]
 
         -- test concurrent reads and writes
