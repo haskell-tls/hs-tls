@@ -18,7 +18,10 @@ library
   -- other-extensions:
   build-depends:       base >= 4.7 && < 5
                      , auto-update
+                     , basement
+                     , bytestring
                      , clock
+                     , memory
                      , psqueues >= 0.2.3
                      , tls
   -- hs-source-dirs:

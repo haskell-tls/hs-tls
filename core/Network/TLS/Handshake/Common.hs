@@ -21,6 +21,7 @@ module Network.TLS.Handshake.Common
     , checkSupportedGroup
     ) where
 
+import qualified Data.ByteString as B
 import Control.Concurrent.MVar
 
 import Network.TLS.Parameters
@@ -83,7 +84,8 @@ handshakeTerminate ctx = do
     case session of
         Session (Just sessionId) -> do
             sessionData <- getSessionData ctx
-            liftIO $ sessionEstablish (sharedSessionManager $ ctxShared ctx) sessionId (fromJust "session-data" sessionData)
+            let !sessionId' = B.copy sessionId
+            liftIO $ sessionEstablish (sharedSessionManager $ ctxShared ctx) sessionId' (fromJust "session-data" sessionData)
         _ -> return ()
     -- forget most handshake data and reset bytes counters.
     liftIO $ modifyMVar_ (ctxHandshake ctx) $ \ mhshake ->
