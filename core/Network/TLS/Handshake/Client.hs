@@ -159,7 +159,7 @@ handshakeClient' cparams ctx groups mcrand = do
 
         versionExtension
           | tls13 = do
-                let vers = filter (>= TLS12) $ supportedVersions $ ctxSupported ctx
+                let vers = filter (>= TLS10) $ supportedVersions $ ctxSupported ctx
                 return $ Just $ toExtensionRaw $ SupportedVersionsClientHello vers
           | otherwise = return Nothing
 
