@@ -1,3 +1,8 @@
+## Version 1.5.1
+
+- Post-handshake authentication [#363](https://github.com/vincenthz/hs-tls/pull/363)
+- Fixing memory leak [#366](https://github.com/vincenthz/hs-tls/pull/366)
+
 ## Version 1.5.0
 
 - Add and enable AES CCM ciphers [#271](https://github.com/vincenthz/hs-tls/pull/271) [#287](https://github.com/vincenthz/hs-tls/pull/287)
