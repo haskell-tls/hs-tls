@@ -88,7 +88,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
     -- renego is not allowed in TLS 1.3
     when (established /= NotEstablished) $ do
         ver <- usingState_ ctx (getVersionWithDefault TLS10)
-        when (ver == TLS13) $ throwCore $ Error_Protocol ("renegotiation is not allowed in TLS 1.3", False, NoRenegotiation)
+        when (ver == TLS13) $ throwCore $ Error_Protocol ("renegotiation is not allowed in TLS 1.3", True, UnexpectedMessage)
     -- rejecting client initiated renegotiation to prevent DOS.
     eof <- ctxEOF ctx
     let renegotiation = established == Established && not eof
