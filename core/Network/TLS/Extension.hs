@@ -472,7 +472,7 @@ data PostHandshakeAuth = PostHandshakeAuth deriving (Show,Eq)
 instance Extension PostHandshakeAuth where
     extensionID _ = extensionID_PostHandshakeAuth
     extensionEncode _               = B.empty
-    extensionDecode MsgTClientHello = runGetMaybe (pure PostHandshakeAuth)
+    extensionDecode MsgTClientHello = runGetMaybe $ return PostHandshakeAuth
     extensionDecode _               = error "extensionDecode: PostHandshakeAuth"
 
 ------------------------------------------------------------
