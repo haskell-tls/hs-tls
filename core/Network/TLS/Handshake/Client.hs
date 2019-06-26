@@ -76,7 +76,7 @@ handshakeClient' :: ClientParams -> Context -> [Group] -> Maybe (ClientRandom, S
 handshakeClient' cparams ctx groups mparams = do
     updateMeasure ctx incrementNbHandshakes
     (crand, clientSession) <- generateClientHelloParams
-    sentExtensions <- sendClientHello clientSession crand
+    (rtt0, sentExtensions) <- sendClientHello clientSession crand
     recvServerHello clientSession sentExtensions
     ver <- usingState_ ctx getVersion
     unless (maybe True (\(_, _, v) -> v == ver) mparams) $
@@ -106,6 +106,8 @@ handshakeClient' cparams ctx groups mparams = do
           else do
             handshakeClient13 cparams ctx groupToSend
       else do
+        when rtt0 $
+            throwCore $ Error_Protocol ("server denied TLS 1.3 when connecting with early data", True, HandshakeFailure)
         sessionResuming <- usingState_ ctx isSessionResuming
         if sessionResuming
             then sendChangeCipherAndFinish ctx ClientRole
@@ -279,7 +281,7 @@ handshakeClient' cparams ctx groups mparams = do
             extensions <- adjustExtentions pskInfo extensions0 $ mkClientHello extensions0
             sendPacket ctx $ Handshake [mkClientHello extensions]
             mapM_ send0RTT rtt0info
-            return $ map (\(ExtensionRaw i _) -> i) extensions
+            return (rtt0, map (\(ExtensionRaw i _) -> i) extensions)
 
         get0RTTinfo (_, sdata, sCipher, _) = do
             earlyData <- clientEarlyData cparams
