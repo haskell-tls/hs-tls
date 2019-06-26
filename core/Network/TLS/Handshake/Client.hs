@@ -288,7 +288,7 @@ handshakeClient' cparams ctx groups mparams = do
         recvServerHello sentExts = runRecvState ctx recvState
           where recvState = RecvStateNext $ \p ->
                     case p of
-                        Handshake hs -> onRecvStateHandshake ctx (RecvStateHandshake $ onServerHello ctx cparams sentExts) hs -- this adds SH to hstHandshakeMessages
+                        Handshake hs -> onRecvStateHandshake ctx (RecvStateHandshake $ onServerHello ctx cparams clientSession sentExts) hs -- this adds SH to hstHandshakeMessages
                         Alert a      ->
                             case a of
                                 [(AlertLevel_Warning, UnrecognizedName)] ->
@@ -601,8 +601,8 @@ throwMiscErrorOnException msg e =
 -- 4) process the session parameter to see if the server want to start a new session or can resume
 -- 5) if no resume switch to processCertificate SM or in resume switch to expectChangeCipher
 --
-onServerHello :: Context -> ClientParams -> [ExtensionID] -> Handshake -> IO (RecvState IO)
-onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cipher compression exts) = do
+onServerHello :: Context -> ClientParams -> Session -> [ExtensionID] -> Handshake -> IO (RecvState IO)
+onServerHello ctx cparams clientSession sentExts (ServerHello rver serverRan serverSession cipher compression exts) = do
     when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
     -- find the compression and cipher methods that the server want to use.
     cipherAlg <- case find ((==) cipher . cipherID) (supportedCiphers $ ctxSupported ctx) of
@@ -651,6 +651,8 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
         Nothing -> throwCore $ Error_Protocol ("server version " ++ show ver ++ " is not supported", True, ProtocolVersion)
         Just _  -> return ()
     if ver > TLS12 then do
+        when (serverSession /= clientSession) $
+            throwCore $ Error_Protocol ("received mismatched legacy session", True, IllegalParameter)
         established <- ctxEstablished ctx
         eof <- ctxEOF ctx
         when (established == Established && not eof) $
@@ -667,7 +669,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
                 usingHState ctx $ setMasterSecret rver ClientRole masterSecret
                 logKey ctx (MasterSecret masterSecret)
                 return $ RecvStateNext expectChangeCipher
-onServerHello _ _ _ p = unexpected (show p) (Just "server hello")
+onServerHello _ _ _ _ p = unexpected (show p) (Just "server hello")
 
 processCertificate :: ClientParams -> Context -> Handshake -> IO (RecvState IO)
 processCertificate cparams ctx (Certificates certs) = do
