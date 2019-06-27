@@ -605,10 +605,10 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
     when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
     -- find the compression and cipher methods that the server want to use.
     cipherAlg <- case find ((==) cipher . cipherID) (supportedCiphers $ ctxSupported ctx) of
-                     Nothing  -> throwCore $ Error_Protocol ("server choose unknown cipher", True, HandshakeFailure)
+                     Nothing  -> throwCore $ Error_Protocol ("server choose unknown cipher", True, IllegalParameter)
                      Just alg -> return alg
     compressAlg <- case find ((==) compression . compressionID) (supportedCompressions $ ctxSupported ctx) of
-                       Nothing  -> throwCore $ Error_Protocol ("server choose unknown compression", True, HandshakeFailure)
+                       Nothing  -> throwCore $ Error_Protocol ("server choose unknown compression", True, IllegalParameter)
                        Just alg -> return alg
 
     -- intersect sent extensions in client and the received extensions from server.
