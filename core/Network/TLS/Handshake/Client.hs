@@ -82,10 +82,12 @@ handshakeClient' cparams ctx groups mcrand = do
     -- For 1st server hello, getTLS13HR returns True if it is HRR and False otherwise.
     -- For 2nd server hello, getTLS13HR returns False since it is NOT HRR.
     hrr <- usingState_ ctx getTLS13HRR
-    if ver == TLS13 then do
+    if ver == TLS13 then
         if hrr then case drop 1 groups of
             []      -> throwCore $ Error_Protocol ("group is exhausted in the client side", True, IllegalParameter)
             groups' -> do
+                when (isJust mcrand) $
+                    throwCore $ Error_Protocol ("server sent too many hello retries", True, UnexpectedMessage)
                 mks <- usingState_ ctx getTLS13KeyShare
                 case mks of
                   Just (KeyShareHRR selectedGroup)
