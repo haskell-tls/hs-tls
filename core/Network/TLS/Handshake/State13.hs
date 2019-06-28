@@ -32,6 +32,7 @@ import Network.TLS.Crypto
 import Network.TLS.Handshake.State
 import Network.TLS.KeySchedule (hkdfExpandLabel)
 import Network.TLS.Record.State
+import Network.TLS.Struct
 import Network.TLS.Imports
 import Network.TLS.Util
 
@@ -90,18 +91,21 @@ clearXState :: (Context -> MVar RecordState) -> Context -> IO ()
 clearXState func ctx =
     modifyMVar_ (func ctx) (\rt -> return rt { stCipher = Nothing })
 
-setHelloParameters13 :: Cipher -> HandshakeM ()
-setHelloParameters13 cipher = modify update
-  where
-    update hst = case hstPendingCipher hst of
-      Nothing -> hst {
+setHelloParameters13 :: Cipher -> HandshakeM (Either TLSError ())
+setHelloParameters13 cipher = do
+    hst <- get
+    case hstPendingCipher hst of
+        Nothing -> do
+            put hst {
                   hstPendingCipher      = Just cipher
                 , hstPendingCompression = nullCompression
                 , hstHandshakeDigest    = updateDigest $ hstHandshakeDigest hst
                 }
-      Just oldcipher -> if cipher == oldcipher
-                        then hst
-                        else error "TLS 1.3: cipher changed"
+            return $ Right ()
+        Just oldcipher
+            | cipher == oldcipher -> return $ Right ()
+            | otherwise -> return $ Left $ Error_Protocol ("TLS 1.3 cipher changed after hello retry", True, IllegalParameter)
+  where
     hashAlg = cipherHash cipher
     updateDigest (HandshakeMessages bytes)  = HandshakeDigestContext $ foldl hashUpdate (hashInit hashAlg) $ reverse bytes
     updateDigest (HandshakeDigestContext _) = error "cannot initialize digest with another digest"
