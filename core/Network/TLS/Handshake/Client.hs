@@ -653,7 +653,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
         when (established == Established && not eof) $
             throwCore $ Error_Protocol ("renegotiation to TLS 1.3 or later is not allowed", True, ProtocolVersion)
         ensureNullCompression compression
-        usingHState ctx $ setHelloParameters13 cipherAlg
+        failOnEitherError $ usingHState ctx $ setHelloParameters13 cipherAlg
         return RecvStateDone
       else do
         usingHState ctx $ setServerHelloParameters rver serverRan cipherAlg compressAlg
