@@ -23,6 +23,9 @@ import Data.IORef
 import Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as Q
 import Network.TLS
+#if !MIN_VERSION_tls(1,5,0)
+import Network.TLS.Compression
+#endif
 import qualified System.Clock as C
 
 import Network.TLS.Imports
@@ -53,18 +56,32 @@ toKey :: ByteString -> Block Word8
 toKey = convert
 
 toValue :: SessionData -> SessionDataCopy
+#if MIN_VERSION_tls(1,5,0)
 toValue (SessionData v cid comp msni sec mg mti malpn siz) =
     SessionDataCopy v cid comp msni sec' mg mti malpn' siz
   where
     !sec' = convert sec
     !malpn' = convert <$> malpn
+#else
+toValue (SessionData v cid comp msni sec) =
+    SessionDataCopy v cid comp msni sec'
+  where
+    !sec' = convert sec
+#endif
 
 fromValue :: SessionDataCopy -> SessionData
+#if MIN_VERSION_tls(1,5,0)
 fromValue (SessionDataCopy v cid comp msni sec' mg mti malpn' siz) =
     (SessionData v cid comp msni sec mg mti malpn siz)
   where
     !sec = convert sec'
     !malpn = convert <$> malpn'
+#else
+fromValue (SessionDataCopy v cid comp msni sec') =
+    (SessionData v cid comp msni sec)
+  where
+    !sec = convert sec'
+#endif
 
 ----------------------------------------------------------------
 
@@ -75,10 +92,12 @@ data SessionDataCopy = SessionDataCopy {
     , ssCompression :: !CompressionID
     , ssClientSNI   :: !(Maybe HostName)
     , ssSecret      :: Block Word8
+#if MIN_VERSION_tls(1,5,0)
     , ssGroup       :: !(Maybe Group)
     , ssTicketInfo  :: !(Maybe TLS13TicketInfo)
     , ssALPN        :: !(Maybe (Block Word8))
     , ssMaxEarlyDataSize :: Int
+#endif
     } deriving (Show,Eq)
 
 type Sec = Int64
