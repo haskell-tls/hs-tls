@@ -874,9 +874,8 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         storePrivInfoServer ctx cred
         when (serverWantClientCert sparams) $ do
             let certReqCtx = "" -- this must be zero length here.
-            let sigAlgs = extensionEncode $ SignatureAlgorithms $ supportedHashSignatures $ ctxSupported ctx
-                crexts = [ExtensionRaw extensionID_SignatureAlgorithms sigAlgs]
-            loadPacket13 ctx $ Handshake13 [CertRequest13 certReqCtx crexts]
+                certReq = makeCertRequest ctx certReqCtx
+            loadPacket13 ctx $ Handshake13 [certReq]
             usingHState ctx $ setCertReqSent True
 
         let CertificateChain cs = certChain
@@ -1106,9 +1105,7 @@ requestCertificateServer _ ctx = do
     let ok = tls13 && supportsPHA
     when ok $ do
         certReqCtx <- newCertReqContext ctx
-        let sigAlgs = extensionEncode $ SignatureAlgorithms $ supportedHashSignatures $ ctxSupported ctx
-            crexts = [ExtensionRaw extensionID_SignatureAlgorithms sigAlgs]
-            certReq = CertRequest13 certReqCtx crexts
+        let certReq = makeCertRequest ctx certReqCtx
         bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
             addCertRequest13 ctx certReq
             sendPacket13 ctx $ Handshake13 [certReq]
