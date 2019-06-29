@@ -409,9 +409,6 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             -- Send HelloDone
             sendPacket ctx (Handshake [ServerHelloDone])
 
-        extractCAname :: SignedCertificate -> DistinguishedName
-        extractCAname cert = certSubjectDN $ getCertificate cert
-
         setup_DHE = do
             let possibleFFGroups = negotiatedGroupsInCommon ctx exts `intersect` availableFFGroups
             (dhparams, priv, pub) <-
@@ -874,7 +871,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         storePrivInfoServer ctx cred
         when (serverWantClientCert sparams) $ do
             let certReqCtx = "" -- this must be zero length here.
-                certReq = makeCertRequest ctx certReqCtx
+                certReq = makeCertRequest sparams ctx certReqCtx
             loadPacket13 ctx $ Handshake13 [certReq]
             usingHState ctx $ setCertReqSent True
 
@@ -1099,13 +1096,13 @@ newCertReqContext :: Context -> IO CertReqContext
 newCertReqContext ctx = getStateRNG ctx 32
 
 requestCertificateServer :: ServerParams -> Context -> IO Bool
-requestCertificateServer _ ctx = do
+requestCertificateServer sparams ctx = do
     tls13 <- tls13orLater ctx
     supportsPHA <- usingState_ ctx getClientSupportsPHA
     let ok = tls13 && supportsPHA
     when ok $ do
         certReqCtx <- newCertReqContext ctx
-        let certReq = makeCertRequest ctx certReqCtx
+        let certReq = makeCertRequest sparams ctx certReqCtx
         bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
             addCertRequest13 ctx certReq
             sendPacket13 ctx $ Handshake13 [certReq]
