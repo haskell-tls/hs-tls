@@ -897,10 +897,16 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
               -- field of this extension SHALL be empty.
               Just _  -> Just $ ExtensionRaw extensionID_ServerName ""
               Nothing -> Nothing
+        mgroup <- usingHState ctx getNegotiatedGroup 
+        let serverGroups = supportedGroups (ctxSupported ctx)
+            groupExtension
+              | null serverGroups = Nothing
+              | maybe True (== head serverGroups) mgroup = Nothing
+              | otherwise = Just $ ExtensionRaw extensionID_NegotiatedGroups $ extensionEncode (NegotiatedGroups serverGroups)
         let earlyDataExtension
               | rtt0OK = Just $ ExtensionRaw extensionID_EarlyData $ extensionEncode (EarlyDataIndication Nothing)
               | otherwise = Nothing
-        let extensions = catMaybes [earlyDataExtension, sniExtension] ++ extensions'
+        let extensions = catMaybes [earlyDataExtension, groupExtension, sniExtension] ++ extensions'
         loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 extensions]
 
     sendNewSessionTicket masterSecret sfSentTime = when sendNST $ do
