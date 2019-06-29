@@ -9,6 +9,7 @@
 module Network.TLS.Handshake.Server
     ( handshakeServer
     , handshakeServerWith
+    , requestCertificateServer
     , postHandshakeAuthServerWith
     ) where
 
@@ -36,6 +37,7 @@ import qualified Data.ByteString as B
 import Data.X509 (ExtKeyUsageFlag(..))
 
 import Control.Monad.State.Strict
+import Control.Exception (bracket)
 
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.Common
@@ -1096,6 +1098,24 @@ clientCertVerify sparams ctx certs verif = do
                 -- chain to the context.
                 usingState_ ctx $ setClientCertificateChain certs
                 else decryptError "verification failed"
+
+newCertReqContext :: Context -> IO CertReqContext
+newCertReqContext ctx = getStateRNG ctx 32
+
+requestCertificateServer :: ServerParams -> Context -> IO Bool
+requestCertificateServer _ ctx = do
+    tls13 <- tls13orLater ctx
+    supportsPHA <- usingState_ ctx getClientSupportsPHA
+    let ok = tls13 && supportsPHA
+    when ok $ do
+        certReqCtx <- newCertReqContext ctx
+        let sigAlgs = extensionEncode $ SignatureAlgorithms $ supportedHashSignatures $ ctxSupported ctx
+            crexts = [ExtensionRaw extensionID_SignatureAlgorithms sigAlgs]
+            certReq = CertRequest13 certReqCtx crexts
+        bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
+            addCertRequest13 ctx certReq
+            sendPacket13 ctx $ Handshake13 [certReq]
+    return ok
 
 postHandshakeAuthServerWith :: ServerParams -> Context -> Handshake13 -> IO ()
 postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = do

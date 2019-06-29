@@ -75,7 +75,7 @@ import Network.TLS.Parameters
 import Network.TLS.Measurement
 import Network.TLS.Types (Role(..))
 import Network.TLS.Handshake (handshakeClient, handshakeClientWith, handshakeServer, handshakeServerWith)
-import Network.TLS.PostHandshake (postHandshakeAuthClientWith, postHandshakeAuthServerWith)
+import Network.TLS.PostHandshake (requestCertificateServer, postHandshakeAuthClientWith, postHandshakeAuthServerWith)
 import Network.TLS.X509
 import Network.TLS.RNG
 
@@ -94,6 +94,7 @@ class TLSParams a where
     getTLSRole         :: a -> Role
     doHandshake        :: a -> Context -> IO ()
     doHandshakeWith    :: a -> Context -> Handshake -> IO ()
+    doRequestCertificate :: a -> Context -> IO Bool
     doPostHandshakeAuthWith :: a -> Context -> Handshake13 -> IO ()
 
 instance TLSParams ClientParams where
@@ -104,6 +105,7 @@ instance TLSParams ClientParams where
     getTLSRole _ = ClientRole
     doHandshake = handshakeClient
     doHandshakeWith = handshakeClientWith
+    doRequestCertificate _ _ = return False
     doPostHandshakeAuthWith = postHandshakeAuthClientWith
 
 instance TLSParams ServerParams where
@@ -114,6 +116,7 @@ instance TLSParams ServerParams where
     getTLSRole _ = ServerRole
     doHandshake = handshakeServer
     doHandshakeWith = handshakeServerWith
+    doRequestCertificate = requestCertificateServer
     doPostHandshakeAuthWith = postHandshakeAuthServerWith
 
 -- | create a new context using the backend and parameters specified.
@@ -164,6 +167,7 @@ contextNew backend params = liftIO $ do
             , ctxHandshake    = hs
             , ctxDoHandshake  = doHandshake params
             , ctxDoHandshakeWith  = doHandshakeWith params
+            , ctxDoRequestCertificate = doRequestCertificate params
             , ctxDoPostHandshakeAuthWith = doPostHandshakeAuthWith params
             , ctxMeasurement  = stats
             , ctxEOF_         = eof
