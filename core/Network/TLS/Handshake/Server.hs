@@ -890,16 +890,17 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
     sendExtensions rtt0OK = do
         extensions' <- liftIO $ applicationProtocol ctx exts sparams
         msni <- liftIO $ usingState_ ctx getClientSNI
-        let extensions'' = case msni of
+        let sniExtension = case msni of
               -- RFC6066: In this event, the server SHALL include
               -- an extension of type "server_name" in the
               -- (extended) server hello. The "extension_data"
               -- field of this extension SHALL be empty.
-              Just _  -> ExtensionRaw extensionID_ServerName "" : extensions'
-              Nothing -> extensions'
-        let extensions
-              | rtt0OK = ExtensionRaw extensionID_EarlyData (extensionEncode (EarlyDataIndication Nothing)) : extensions''
-              | otherwise = extensions''
+              Just _  -> Just $ ExtensionRaw extensionID_ServerName ""
+              Nothing -> Nothing
+        let earlyDataExtension
+              | rtt0OK = Just $ ExtensionRaw extensionID_EarlyData $ extensionEncode (EarlyDataIndication Nothing)
+              | otherwise = Nothing
+        let extensions = catMaybes [earlyDataExtension, sniExtension] ++ extensions'
         loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 extensions]
 
     sendNewSessionTicket masterSecret sfSentTime = when sendNST $ do
