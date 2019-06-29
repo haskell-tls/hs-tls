@@ -17,6 +17,7 @@ module Network.TLS.Handshake.Common13
        , checkCertVerify
        , makePSKBinder
        , replacePSKBinder
+       , makeCertRequest
        , createTLS13TicketInfo
        , ageToObfuscatedAge
        , isAgeValid
@@ -51,6 +52,7 @@ import Network.TLS.Handshake.Signature
 import Network.TLS.Imports
 import Network.TLS.KeySchedule
 import Network.TLS.MAC
+import Network.TLS.Parameters
 import Network.TLS.IO
 import Network.TLS.State
 import Network.TLS.Struct
@@ -169,6 +171,14 @@ replacePSKBinder pskz binder = identities `B.append` binders
     bindersSize = B.length binder + 3
     identities  = B.take (B.length pskz - bindersSize) pskz
     binders     = runPut $ putOpaque16 $ runPut $ putOpaque8 binder
+
+----------------------------------------------------------------
+
+makeCertRequest :: Context -> CertReqContext -> Handshake13
+makeCertRequest ctx certReqCtx =
+    let sigAlgs = extensionEncode $ SignatureAlgorithms $ supportedHashSignatures $ ctxSupported ctx
+        crexts = [ExtensionRaw extensionID_SignatureAlgorithms sigAlgs]
+     in CertRequest13 certReqCtx crexts
 
 ----------------------------------------------------------------
 
