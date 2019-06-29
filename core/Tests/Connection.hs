@@ -148,7 +148,7 @@ isCustomDHParams params = params == dhParams512
 
 leafPublicKey :: CertificateChain -> Maybe PubKey
 leafPublicKey (CertificateChain [])       = Nothing
-leafPublicKey (CertificateChain (leaf:_)) = Just (certPubKey $ signedObject $ getSigned leaf)
+leafPublicKey (CertificateChain (leaf:_)) = Just (certPubKey $ getCertificate leaf)
 
 isLeafRSA :: Maybe CertificateChain -> Bool
 isLeafRSA chain = case chain >>= leafPublicKey of

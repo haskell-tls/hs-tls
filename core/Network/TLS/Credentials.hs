@@ -116,7 +116,7 @@ credentialCanDecrypt (chain, priv) =
                     | KeyUsage_keyEncipherment `elem` flags -> Just ()
                     | otherwise                             -> Nothing
         _                           -> Nothing
-    where cert   = signedObject $ getSigned signed
+    where cert   = getCertificate signed
           pub    = certPubKey cert
           signed = getCertificateChainLeaf chain
 
@@ -127,13 +127,13 @@ credentialCanSign (chain, priv) =
         Just (ExtKeyUsage flags)
             | KeyUsage_digitalSignature `elem` flags -> findKeyExchangeSignatureAlg (pub, priv)
             | otherwise                              -> Nothing
-    where cert   = signedObject $ getSigned signed
+    where cert   = getCertificate signed
           pub    = certPubKey cert
           signed = getCertificateChainLeaf chain
 
 credentialPublicPrivateKeys :: Credential -> (PubKey, PrivKey)
 credentialPublicPrivateKeys (chain, priv) = pub `seq` (pub, priv)
-    where cert   = signedObject $ getSigned signed
+    where cert   = getCertificate signed
           pub    = certPubKey cert
           signed = getCertificateChainLeaf chain
 
@@ -176,5 +176,5 @@ credentialMatchesHashSignatures hashSigs (chain, _) =
                               Just hs -> hs `elem` hashSigs
 
     isSelfSigned signed =
-        let cert = signedObject $ getSigned signed
+        let cert = getCertificate signed
          in certSubjectDN cert == certIssuerDN cert

@@ -18,7 +18,7 @@ import Network.TLS.Struct
 import Network.TLS.X509
 import Control.Monad.State.Strict
 import Control.Exception (SomeException)
-import Data.X509 (ExtKeyUsage(..), ExtKeyUsageFlag, extensionGet, getSigned, signedObject)
+import Data.X509 (ExtKeyUsage(..), ExtKeyUsageFlag, extensionGet)
 
 -- on certificate reject, throw an exception with the proper protocol alert error.
 certificateRejected :: MonadIO m => CertificateRejectReason -> m a
@@ -43,7 +43,7 @@ verifyLeafKeyUsage validFlags (CertificateChain (signed:_)) =
     unless verified $ badCertificate $
         "certificate is not allowed for any of " ++ show validFlags
   where
-    cert     = signedObject $ getSigned signed
+    cert     = getCertificate signed
     verified =
         case extensionGet (certExtensions cert) of
             Nothing                          -> True -- unrestricted cert
