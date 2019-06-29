@@ -28,6 +28,8 @@ certificateRejected CertificateRejectExpired =
     throwCore $ Error_Protocol ("certificate has expired", True, CertificateExpired)
 certificateRejected CertificateRejectUnknownCA =
     throwCore $ Error_Protocol ("certificate has unknown CA", True, UnknownCa)
+certificateRejected CertificateRejectAbsent =
+    throwCore $ Error_Protocol ("certificate is missing", True, CertificateRequired)
 certificateRejected (CertificateRejectOther s) =
     throwCore $ Error_Protocol ("certificate rejected: " ++ s, True, CertificateUnknown)
 
