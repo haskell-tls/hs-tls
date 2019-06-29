@@ -43,6 +43,7 @@ import Network.TLS.Cipher
 import Network.TLS.Crypto
 import qualified Network.TLS.Crypto.IES as IES
 import Network.TLS.Extension
+import Network.TLS.Handshake.Certificate (extractCAname)
 import Network.TLS.Handshake.Process (processHandshake13)
 import Network.TLS.Handshake.Common (unexpected)
 import Network.TLS.Handshake.Key
@@ -174,10 +175,15 @@ replacePSKBinder pskz binder = identities `B.append` binders
 
 ----------------------------------------------------------------
 
-makeCertRequest :: Context -> CertReqContext -> Handshake13
-makeCertRequest ctx certReqCtx =
+makeCertRequest :: ServerParams -> Context -> CertReqContext -> Handshake13
+makeCertRequest sparams ctx certReqCtx =
     let sigAlgs = extensionEncode $ SignatureAlgorithms $ supportedHashSignatures $ ctxSupported ctx
-        crexts = [ExtensionRaw extensionID_SignatureAlgorithms sigAlgs]
+        caDns = map extractCAname $ serverCACertificates sparams
+        caDnsEncoded = extensionEncode $ CertificateAuthorities caDns
+        caExtension
+            | null caDns = []
+            | otherwise  = [ExtensionRaw extensionID_CertificateAuthorities caDnsEncoded]
+        crexts = ExtensionRaw extensionID_SignatureAlgorithms sigAlgs : caExtension
      in CertRequest13 certReqCtx crexts
 
 ----------------------------------------------------------------

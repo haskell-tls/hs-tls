@@ -10,6 +10,7 @@ module Network.TLS.Handshake.Certificate
     , badCertificate
     , rejectOnException
     , verifyLeafKeyUsage
+    , extractCAname
     ) where
 
 import Network.TLS.Context.Internal
@@ -47,3 +48,6 @@ verifyLeafKeyUsage validFlags (CertificateChain (signed:_)) =
         case extensionGet (certExtensions cert) of
             Nothing                          -> True -- unrestricted cert
             Just (ExtKeyUsage flags)         -> any (`elem` validFlags) flags
+
+extractCAname :: SignedCertificate -> DistinguishedName
+extractCAname cert = certSubjectDN $ getCertificate cert
