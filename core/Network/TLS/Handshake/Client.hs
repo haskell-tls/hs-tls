@@ -112,22 +112,23 @@ handshakeClient' cparams ctx groups mcrand = do
         compressions = supportedCompressions $ ctxSupported ctx
         highestVer = maximum $ supportedVersions $ ctxSupported ctx
         tls13 = highestVer >= TLS13
-        getExtensions = sequence [sniExtension
-                                 ,secureReneg
-                                 ,alpnExtension
-                                 ,groupExtension
-                                 ,ecPointExtension
-                                 --,sessionTicketExtension
-                                 ,signatureAlgExtension
-                                 -- ,heartbeatExtension
-                                 ,versionExtension
-                                 ,earlyDataExtension
-                                 ,keyshareExtension
-                                 ,pskExchangeModeExtension
-                                 ,cookieExtension
-                                 ,postHandshakeAuthExtension
-                                 ,preSharedKeyExtension -- MUST be last
-                                 ]
+        getExtensions pskInfo rtt0 = sequence
+            [ sniExtension
+            , secureReneg
+            , alpnExtension
+            , groupExtension
+            , ecPointExtension
+            --, sessionTicketExtension
+            , signatureAlgExtension
+            --, heartbeatExtension
+            , versionExtension
+            , earlyDataExtension rtt0
+            , keyshareExtension
+            , pskExchangeModeExtension
+            , cookieExtension
+            , postHandshakeAuthExtension
+            , preSharedKeyExtension pskInfo -- MUST be last
+            ]
 
         toExtensionRaw :: Extension e => e -> ExtensionRaw
         toExtensionRaw ext = ExtensionRaw (extensionID ext) (extensionEncode ext)
@@ -180,30 +181,34 @@ handshakeClient' cparams ctx groups mcrand = do
             sCipher <- find (\c -> cipherID c == sessionCipher sdata) ciphers
             return (sid, sdata, sCipher)
 
-        preSharedKeyExtension =
+        getPskInfo =
             case sessionAndCipherToResume13 of
                 Nothing -> return Nothing
                 Just (sid, sdata, sCipher) -> do
-                      let usedHash = cipherHash sCipher
-                          siz = hashDigestSize usedHash
-                          zero = B.replicate siz 0
-                          tinfo = fromJust "sessionTicketInfo" $ sessionTicketInfo sdata
-                      age <- getAge tinfo
-                      if isAgeValid age tinfo then do
-                          let obfAge = ageToObfuscatedAge age tinfo
-                          let identity = PskIdentity sid obfAge
-                              offeredPsks = PreSharedKeyClientHello [identity] [zero]
-                          return $ Just $ toExtensionRaw offeredPsks
-                        else
-                          return Nothing
+                    let tinfo = fromJust "sessionTicketInfo" $ sessionTicketInfo sdata
+                    age <- getAge tinfo
+                    return $ if isAgeValid age tinfo
+                        then Just (sid, sdata, sCipher, ageToObfuscatedAge age tinfo)
+                        else Nothing
+
+        preSharedKeyExtension pskInfo =
+            case pskInfo of
+                Nothing -> return Nothing
+                Just (sid, _, sCipher, obfAge) ->
+                    let usedHash = cipherHash sCipher
+                        siz = hashDigestSize usedHash
+                        zero = B.replicate siz 0
+                        identity = PskIdentity sid obfAge
+                        offeredPsks = PreSharedKeyClientHello [identity] [zero]
+                     in return $ Just $ toExtensionRaw offeredPsks
 
         pskExchangeModeExtension
           | tls13     = return $ Just $ toExtensionRaw $ PskKeyExchangeModes [PSK_DHE_KE]
           | otherwise = return Nothing
 
-        earlyDataExtension = case check0RTT of
-            Nothing -> return Nothing
-            _       -> return $ Just $ toExtensionRaw (EarlyDataIndication Nothing)
+        earlyDataExtension rtt0
+          | rtt0 = return $ Just $ toExtensionRaw (EarlyDataIndication Nothing)
+          | otherwise = return Nothing
 
         cookieExtension = do
             mcookie <- usingState_ ctx getTLS13Cookie
@@ -221,10 +226,10 @@ handshakeClient' cparams ctx groups mcrand = do
               | sessionVersion sdata >= TLS13 -> Session Nothing
               | otherwise                     -> Session (Just sid)
 
-        adjustExtentions exts ch =
-            case sessionAndCipherToResume13 of
+        adjustExtentions pskInfo exts ch =
+            case pskInfo of
                 Nothing -> return exts
-                Just (_, sdata, sCipher) -> do
+                Just (_, sdata, sCipher, _) -> do
                       let usedHash = cipherHash sCipher
                           siz = hashDigestSize usedHash
                           zero = B.replicate siz 0
@@ -248,21 +253,21 @@ handshakeClient' cparams ctx groups mcrand = do
             let cipherIds = map cipherID ciphers
                 compIds = map compressionID compressions
                 mkClientHello exts = ClientHello ver crand clientSession cipherIds compIds exts Nothing
-            extensions0 <- catMaybes <$> getExtensions
-            extensions <- adjustExtentions extensions0 $ mkClientHello extensions0
+            pskInfo <- getPskInfo
+            let rtt0info = pskInfo >>= get0RTTinfo
+                rtt0 = isJust rtt0info
+            extensions0 <- catMaybes <$> getExtensions pskInfo rtt0
+            extensions <- adjustExtentions pskInfo extensions0 $ mkClientHello extensions0
             sendPacket ctx $ Handshake [mkClientHello extensions]
-            send0RTT
+            mapM_ send0RTT rtt0info
             return $ map (\(ExtensionRaw i _) -> i) extensions
 
-        check0RTT = do
-            (_, sdata, sCipher) <- sessionAndCipherToResume13
+        get0RTTinfo (_, sdata, sCipher, _) = do
             earlyData <- clientEarlyData cparams
             guard (B.length earlyData <= sessionMaxEarlyDataSize sdata)
             return (sCipher, earlyData)
 
-        send0RTT = case check0RTT of
-            Nothing -> return ()
-            Just (usedCipher, earlyData) -> do
+        send0RTT (usedCipher, earlyData) = do
                 let usedHash = cipherHash usedCipher
                 -- fixme: not initialized yet
                 -- hCh <- transcriptHash ctx
