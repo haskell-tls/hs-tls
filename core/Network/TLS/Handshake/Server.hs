@@ -914,7 +914,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         let nst = createNewSessionTicket life add nonce label rtt0max
         sendPacket13 ctx $ Handshake13 [nst]
       where
-        sendNST = (PSK_KE `elem` dhModes) || (PSK_DHE_KE `elem` dhModes)
+        sendNST = PSK_DHE_KE `elem` dhModes
         generateSession life psk maxSize rtt = do
             Session (Just sessionId) <- newSession ctx
             tinfo <- createTLS13TicketInfo life (Left ctx) (Just rtt)
