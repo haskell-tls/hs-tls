@@ -796,22 +796,26 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
 
     choosePSK = case extensionLookup extensionID_PreSharedKey exts >>= extensionDecode MsgTClientHello of
       Just (PreSharedKeyClientHello (PskIdentity sessionId obfAge:_) bnds@(bnd:_)) -> do
-          let len = sum (map (\x -> B.length x + 1) bnds) + 2
-              mgr = sharedSessionManager $ serverShared sparams
-          msdata <- if rtt0 then sessionResumeOnlyOnce mgr sessionId
-                            else sessionResume mgr sessionId
-          case msdata of
-            Just sdata -> do
-                let Just tinfo = sessionTicketInfo sdata
-                    psk = sessionSecret sdata
-                isFresh <- checkFreshness tinfo obfAge
-                (isPSKvalid, is0RTTvalid) <- checkSessionEquality sdata
-                if isPSKvalid && isFresh then
-                    return (psk, Just (bnd,0::Int,len),is0RTTvalid)
-                  else
-                    -- fall back to full handshake
-                    return (zero, Nothing, False)
-            _      -> return (zero, Nothing, False)
+          when (null dhModes) $
+              throwCore $ Error_Protocol ("no psk_key_exchange_modes extension", True, MissingExtension)
+          if PSK_DHE_KE `elem` dhModes then do
+              let len = sum (map (\x -> B.length x + 1) bnds) + 2
+                  mgr = sharedSessionManager $ serverShared sparams
+              msdata <- if rtt0 then sessionResumeOnlyOnce mgr sessionId
+                                else sessionResume mgr sessionId
+              case msdata of
+                Just sdata -> do
+                    let Just tinfo = sessionTicketInfo sdata
+                        psk = sessionSecret sdata
+                    isFresh <- checkFreshness tinfo obfAge
+                    (isPSKvalid, is0RTTvalid) <- checkSessionEquality sdata
+                    if isPSKvalid && isFresh then
+                        return (psk, Just (bnd,0::Int,len),is0RTTvalid)
+                      else
+                        -- fall back to full handshake
+                        return (zero, Nothing, False)
+                _      -> return (zero, Nothing, False)
+              else return (zero, Nothing, False)
       _ -> return (zero, Nothing, False)
 
     checkSessionEquality sdata = do
@@ -911,9 +915,6 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         sendPacket13 ctx $ Handshake13 [nst]
       where
         sendNST = (PSK_KE `elem` dhModes) || (PSK_DHE_KE `elem` dhModes)
-        dhModes = case extensionLookup extensionID_PskKeyExchangeModes exts >>= extensionDecode MsgTClientHello of
-          Just (PskKeyExchangeModes ms) -> ms
-          Nothing                       -> []
         generateSession life psk maxSize rtt = do
             Session (Just sessionId) <- newSession ctx
             tinfo <- createTLS13TicketInfo life (Left ctx) (Just rtt)
@@ -929,6 +930,10 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         toSeconds i | i < 0      = 0
                     | i > 604800 = 604800
                     | otherwise  = fromIntegral i
+
+    dhModes = case extensionLookup extensionID_PskKeyExchangeModes exts >>= extensionDecode MsgTClientHello of
+      Just (PskKeyExchangeModes ms) -> ms
+      Nothing                       -> []
 
     expectCertificate :: Handshake13 -> RecvHandshake13M IO Bool
     expectCertificate (Certificate13 certCtx certs _ext) = liftIO $ do
