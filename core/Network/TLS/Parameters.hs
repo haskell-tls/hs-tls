@@ -138,7 +138,7 @@ data ServerParams = ServerParams
     , serverHooks             :: ServerHooks
     , serverSupported         :: Supported
     , serverDebug             :: DebugParams
-      -- ^ Server accepts this size of early data in TLS 1.3.
+      -- | Server accepts this size of early data in TLS 1.3.
       -- 0 (or lower) means that the server does not accept early data.
     , serverEarlyDataSize     :: Int
     } deriving (Show)
