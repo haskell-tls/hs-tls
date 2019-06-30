@@ -906,7 +906,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         hChCf <- transcriptHash ctx
         nonce <- getStateRNG ctx 32
         let resumptionMasterSecret = deriveSecret usedHash masterSecret "res master" hChCf
-            life = 86400 -- 1 day in second: fixme hard coding
+            life = toSeconds $ serverTicketLifetime sparams
             psk = hkdfExpandLabel usedHash resumptionMasterSecret "resumption" nonce hashSize
         (label, add) <- generateSession life psk rtt0max rtt
         let nst = createNewSessionTicket life add nonce label rtt0max
@@ -928,6 +928,9 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
           where
             tedi = extensionEncode $ EarlyDataIndication $ Just $ fromIntegral maxSize
             extensions = [ExtensionRaw extensionID_EarlyData tedi]
+        toSeconds i | i < 0      = 0
+                    | i > 604800 = 604800
+                    | otherwise  = fromIntegral i
 
     expectCertificate :: Handshake13 -> RecvHandshake13M IO Bool
     expectCertificate (Certificate13 certCtx certs _ext) = liftIO $ do
