@@ -55,7 +55,7 @@ getDefaultParams flags store smgr cred rtt0accept = do
         Nothing   -> return Nothing
         Just name -> readDHParams name
 
-    return ServerParams
+    return def
         { serverWantClientCert = False
         , serverCACertificates = []
         , serverDHEParams = dhParams
@@ -64,7 +64,6 @@ getDefaultParams flags store smgr cred rtt0accept = do
                              , sharedValidationCache = validateCache
                              , sharedCredentials     = Credentials [cred]
                              }
-        , serverHooks = def
         , serverSupported = def { supportedVersions = supportedVers
                                 , supportedCiphers = myCiphers
                                 , supportedGroups = getGroups flags
