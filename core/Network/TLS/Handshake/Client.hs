@@ -103,7 +103,7 @@ handshakeClient' cparams ctx groups mparams = do
                   Just _  -> error "handshakeClient': invalid KeyShare value"
                   Nothing -> throwCore $ Error_Protocol ("key exchange not implemented in HRR, expected key_share extension", True, HandshakeFailure)
           else do
-            handshakeClient13 cparams ctx
+            handshakeClient13 cparams ctx groupToSend
       else do
         sessionResuming <- usingState_ ctx isSessionResuming
         if sessionResuming
@@ -116,6 +116,7 @@ handshakeClient' cparams ctx groups mparams = do
         compressions = supportedCompressions $ ctxSupported ctx
         highestVer = maximum $ supportedVersions $ ctxSupported ctx
         tls13 = highestVer >= TLS13
+        groupToSend = listToMaybe groups
         getExtensions pskInfo rtt0 = sequence
             [ sniExtension
             , secureReneg
@@ -170,9 +171,9 @@ handshakeClient' cparams ctx groups mparams = do
 
         -- FIXME
         keyshareExtension
-          | tls13 = case groups of
-                  []    -> return Nothing
-                  grp:_ -> do
+          | tls13 = case groupToSend of
+                  Nothing  -> return Nothing
+                  Just grp -> do
                       (cpri, ent) <- makeClientKeyShare ctx grp
                       usingHState ctx $ setGroupPrivate cpri
                       return $ Just $ toExtensionRaw $ KeyShareClientHello [ent]
@@ -798,14 +799,14 @@ requiredCertKeyUsage cipher =
                            , KeyUsage_keyAgreement
                            ]
 
-handshakeClient13 :: ClientParams -> Context -> IO ()
-handshakeClient13 _cparams ctx = do
+handshakeClient13 :: ClientParams -> Context -> Maybe Group -> IO ()
+handshakeClient13 cparams ctx groupSent = do
     usedCipher <- usingHState ctx getPendingCipher
     let usedHash = cipherHash usedCipher
-    handshakeClient13' _cparams ctx usedCipher usedHash
+    handshakeClient13' cparams ctx groupSent usedCipher usedHash
 
-handshakeClient13' :: ClientParams -> Context -> Cipher -> Hash -> IO ()
-handshakeClient13' cparams ctx usedCipher usedHash = do
+handshakeClient13' :: ClientParams -> Context -> Maybe Group -> Cipher -> Hash -> IO ()
+handshakeClient13' cparams ctx groupSent usedCipher usedHash = do
     (resuming, handshakeSecret, clientHandshakeTrafficSecret, serverHandshakeTrafficSecret) <- switchToHandshakeSecret
     rtt0accepted <- runRecvHandshake13 $ do
         accepted <- recvHandshake13 ctx expectEncryptedExtensions
@@ -855,7 +856,8 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
               Just _                        -> error "calcSharedKey: invalid KeyShare value"
               Nothing                       -> throwCore $ Error_Protocol ("key exchange not implemented, expected key_share extension", True, HandshakeFailure)
         let grp = keyShareEntryGroup serverKeyShare
-        checkSupportedGroup ctx grp
+        unless (groupSent == Just grp) $
+            throwCore $ Error_Protocol ("received incompatible group for (EC)DHE", True, IllegalParameter)
         usingHState ctx $ setNegotiatedGroup grp
         usingHState ctx getGroupPrivate >>= fromServerKeyShare serverKeyShare
 
