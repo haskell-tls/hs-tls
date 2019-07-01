@@ -83,17 +83,17 @@ handshakeServer sparams ctx = liftIO $ do
 --      -> finish             <- finish
 --
 handshakeServerWith :: ServerParams -> Context -> Handshake -> IO ()
-handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientSession ciphers compressions exts _) = do
+handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientSession ciphers compressions exts _) = do
     established <- ctxEstablished ctx
     -- renego is not allowed in TLS 1.3
     when (established /= NotEstablished) $ do
         ver <- usingState_ ctx (getVersionWithDefault TLS10)
-        when (ver == TLS13) $ throwCore $ Error_Protocol ("renegotiation is not allowed in TLS 1.3", False, NoRenegotiation)
+        when (ver == TLS13) $ throwCore $ Error_Protocol ("renegotiation is not allowed in TLS 1.3", True, UnexpectedMessage)
     -- rejecting client initiated renegotiation to prevent DOS.
-    unless (supportedClientInitiatedRenegotiation (ctxSupported ctx)) $ do
-        eof <- ctxEOF ctx
-        when (established == Established && not eof) $
-            throwCore $ Error_Protocol ("renegotiation is not allowed", False, NoRenegotiation)
+    eof <- ctxEOF ctx
+    let renegotiation = established == Established && not eof
+    when (renegotiation && not (supportedClientInitiatedRenegotiation $ ctxSupported ctx)) $
+        throwCore $ Error_Protocol ("renegotiation is not allowed", False, NoRenegotiation)
     -- check if policy allow this new handshake to happens
     handshakeAuthorized <- withMeasure ctx (onNewHandshake $ serverHooks sparams)
     unless handshakeAuthorized (throwCore $ Error_HandshakePolicy "server: handshake denied")
@@ -103,26 +103,29 @@ handshakeServerWith sparams ctx clientHello@(ClientHello clientVersion _ clientS
     processHandshake ctx clientHello
 
     -- rejecting SSL2. RFC 6176
-    when (clientVersion == SSL2) $ throwCore $ Error_Protocol ("SSL 2.0 is not supported", True, ProtocolVersion)
+    when (legacyVersion == SSL2) $ throwCore $ Error_Protocol ("SSL 2.0 is not supported", True, ProtocolVersion)
     -- rejecting SSL3. RFC 7568
-    -- when (clientVersion == SSL3) $ throwCore $ Error_Protocol ("SSL 3.0 is not supported", True, ProtocolVersion)
+    -- when (legacyVersion == SSL3) $ throwCore $ Error_Protocol ("SSL 3.0 is not supported", True, ProtocolVersion)
 
     -- Fallback SCSV: RFC7507
     -- TLS_FALLBACK_SCSV: {0x56, 0x00}
     when (supportedFallbackScsv (ctxSupported ctx) &&
           (0x5600 `elem` ciphers) &&
-          clientVersion < TLS12) $
+          legacyVersion < TLS12) $
         throwCore $ Error_Protocol ("fallback is not allowed", True, InappropriateFallback)
     -- choosing TLS version
     let clientVersions = case extensionLookup extensionID_SupportedVersions exts >>= extensionDecode MsgTClientHello of
             Just (SupportedVersionsClientHello vers) -> vers
             _                                        -> []
-        serverVersions = supportedVersions $ ctxSupported ctx
+        clientVersion = min TLS12 legacyVersion
+        serverVersions
+            | renegotiation = filter (< TLS13) (supportedVersions $ ctxSupported ctx)
+            | otherwise     = supportedVersions $ ctxSupported ctx
         mVersion = debugVersionForced $ serverDebug sparams
     chosenVersion <- case mVersion of
       Just cver -> return cver
       Nothing   ->
-        if (TLS13 `elem` serverVersions) && clientVersion == TLS12 && clientVersions /= [] then case findHighestVersionFrom13 clientVersions serverVersions of
+        if (TLS13 `elem` serverVersions) && clientVersions /= [] then case findHighestVersionFrom13 clientVersions serverVersions of
                   Nothing -> throwCore $ Error_Protocol ("client versions " ++ show clientVersions ++ " is not supported", True, ProtocolVersion)
                   Just v  -> return v
            else case findHighestVersionFrom clientVersion serverVersions of

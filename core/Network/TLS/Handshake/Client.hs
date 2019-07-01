@@ -160,7 +160,7 @@ handshakeClient' cparams ctx groups mcrand = do
 
         versionExtension
           | tls13 = do
-                let vers = filter (>= TLS12) $ supportedVersions $ ctxSupported ctx
+                let vers = filter (>= TLS10) $ supportedVersions $ ctxSupported ctx
                 return $ Just $ toExtensionRaw $ SupportedVersionsClientHello vers
           | otherwise = return Nothing
 
@@ -646,6 +646,10 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
         Nothing -> throwCore $ Error_Protocol ("server version " ++ show ver ++ " is not supported", True, ProtocolVersion)
         Just _  -> return ()
     if ver > TLS12 then do
+        established <- ctxEstablished ctx
+        eof <- ctxEOF ctx
+        when (established == Established && not eof) $
+            throwCore $ Error_Protocol ("renegotiation to TLS 1.3 or later is not allowed", True, ProtocolVersion)
         ensureNullCompression compression
         usingHState ctx $ setHelloParameters13 cipherAlg
         return RecvStateDone

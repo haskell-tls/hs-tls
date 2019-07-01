@@ -594,7 +594,7 @@ prop_handshake_dh = do
 prop_handshake_srv_key_usage :: PropertyM IO ()
 prop_handshake_srv_key_usage = do
     tls13 <- pick arbitrary
-    let versions = if tls13 then [TLS13] else [SSL3,TLS10,TLS11,TLS12]
+    let versions = if tls13 then [TLS13] else [TLS12,TLS11,TLS10,SSL3]
         ciphers = [ cipher_ECDHE_RSA_AES128CBC_SHA
                   , cipher_TLS13_AES128GCM_SHA256
                   , cipher_DHE_RSA_AES128_SHA1
