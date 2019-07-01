@@ -649,6 +649,8 @@ handshakeServerWithTLS13 :: ServerParams
                          -> Session
                          -> IO ()
 handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _serverName clientSession = do
+    when (any (\(ExtensionRaw eid _) -> eid == extensionID_PreSharedKey) $ init exts) $
+        throwCore $ Error_Protocol ("extension pre_shared_key must be last", True, IllegalParameter)
     -- Deciding cipher.
     -- The shared cipherlist can become empty after filtering for compatible
     -- creds, check now before calling onCipherChoosing, which does not handle
