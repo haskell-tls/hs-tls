@@ -29,16 +29,20 @@ import Network.TLS.Cipher
 import Network.TLS.Util
 import Network.TLS.Imports
 
--- | 'makePacketData' create a Header and a content bytestring related to a packet
--- this doesn't change any state
-makeRecord :: Packet -> RecordM (Record Plaintext)
-makeRecord pkt = do
+makeRecord :: ProtocolType -> Fragment Plaintext -> RecordM (Record Plaintext)
+makeRecord pt fragment = do
     ver <- getRecordVersion
-    return $ Record (packetType pkt) ver (fragmentPlaintext $ writePacketContent pkt)
-  where writePacketContent (Handshake hss)    = encodeHandshakes hss
-        writePacketContent (Alert a)          = encodeAlerts a
-        writePacketContent  ChangeCipherSpec  = encodeChangeCipherSpec
-        writePacketContent (AppData x)        = x
+    return $ Record pt ver fragment
+
+-- Decompose handshake packets into fragments of the specified length.  AppData
+-- packets are not fragmented here but by callers of sendPacket, so that the
+-- empty-packet countermeasure may be applied to each fragment independently.
+getPacketFragments :: Int -> Packet -> [Fragment Plaintext]
+getPacketFragments len pkt = map fragmentPlaintext (writePacketContent pkt)
+  where writePacketContent (Handshake hss)    = getChunks len (encodeHandshakes hss)
+        writePacketContent (Alert a)          = [encodeAlerts a]
+        writePacketContent  ChangeCipherSpec  = [encodeChangeCipherSpec]
+        writePacketContent (AppData x)        = [x]
 
 -- | marshall packet data
 encodeRecord :: Record Ciphertext -> RecordM ByteString
@@ -57,11 +61,18 @@ writePacket ctx pkt@(Handshake hss) = do
         usingHState ctx $ do
             when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage encoded
             when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ updateHandshakeDigest encoded
-    prepareRecord ctx (makeRecord pkt >>= engageRecord >>= encodeRecord)
+    writeFragments ctx pkt
 writePacket ctx pkt = do
-    d <- prepareRecord ctx (makeRecord pkt >>= engageRecord >>= encodeRecord)
+    d <- writeFragments ctx pkt
     when (pkt == ChangeCipherSpec) $ switchTxEncryption ctx
     return d
+
+writeFragments :: Context-> Packet -> IO (Either TLSError ByteString)
+writeFragments ctx pkt =
+    let fragments = getPacketFragments 16384 pkt
+        pt = packetType pkt
+     in fmap B.concat <$> forEitherM fragments (\frg ->
+            prepareRecord ctx (makeRecord pt frg >>= engageRecord >>= encodeRecord))
 
 -- before TLS 1.1, the block cipher IV is made of the residual of the previous block,
 -- so we use cstIV as is, however in other case we generate an explicit IV

@@ -302,7 +302,7 @@ getHandshake13 ctx = RecvHandshake13M $ do
     recvLoop = do
         epkt <- recvPacket13 ctx
         case epkt of
-            Right (Handshake13 [])     -> recvLoop
+            Right (Handshake13 [])     -> error "invalid recvPacket13 result"
             Right (Handshake13 (h:hs)) -> found h hs
             Right ChangeCipherSpec13   -> recvLoop
             Right x                    -> unexpected (show x) (Just "handshake 13")
