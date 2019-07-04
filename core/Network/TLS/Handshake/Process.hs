@@ -111,7 +111,7 @@ processClientKeyXchg ctx (CKX_DH clientDHValue) = do
     serverParams <- usingHState ctx getServerDHParams
     let params = serverDHParamsToParams serverParams
     unless (dhValid params $ dhUnwrapPublic clientDHValue) $
-        throwCore $ Error_Protocol ("invalid client public key", True, HandshakeFailure)
+        throwCore $ Error_Protocol ("invalid client public key", True, IllegalParameter)
 
     dhpriv       <- usingHState ctx getDHPrivate
     let premaster = dhGetShared params dhpriv clientDHValue
@@ -121,7 +121,7 @@ processClientKeyXchg ctx (CKX_DH clientDHValue) = do
 processClientKeyXchg ctx (CKX_ECDH bytes) = do
     ServerECDHParams grp _ <- usingHState ctx getServerECDHParams
     case decodeGroupPublic grp bytes of
-      Left _ -> throwCore $ Error_Protocol ("client public key cannot be decoded", True, HandshakeFailure)
+      Left _ -> throwCore $ Error_Protocol ("client public key cannot be decoded", True, IllegalParameter)
       Right clipub -> do
           srvpri <- usingHState ctx getGroupPrivate
           case groupGetShared clipub srvpri of
@@ -130,7 +130,7 @@ processClientKeyXchg ctx (CKX_ECDH bytes) = do
                   role <- usingState_ ctx isClientContext
                   masterSecret <- usingHState ctx $ setMasterSecretFromPre rver role premaster
                   liftIO $ logKey ctx (MasterSecret masterSecret)
-              Nothing -> throwCore $ Error_Protocol ("cannot generate a shared secret on ECDH", True, HandshakeFailure)
+              Nothing -> throwCore $ Error_Protocol ("cannot generate a shared secret on ECDH", True, IllegalParameter)
 
 processClientFinished :: Context -> FinishedData -> IO ()
 processClientFinished ctx fdata = do

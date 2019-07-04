@@ -505,7 +505,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                         case groupUsage of
                             GroupUsageInsecure           -> throwCore $ Error_Protocol ("FFDHE group is not secure enough", True, InsufficientSecurity)
                             GroupUsageUnsupported reason -> throwCore $ Error_Protocol ("unsupported FFDHE group: " ++ reason, True, HandshakeFailure)
-                            GroupUsageInvalidPublic      -> throwCore $ Error_Protocol ("invalid server public key", True, HandshakeFailure)
+                            GroupUsageInvalidPublic      -> throwCore $ Error_Protocol ("invalid server public key", True, IllegalParameter)
                             GroupUsageValid              -> return ()
 
                     -- When grp is known but not in the supported list we use it
@@ -521,7 +521,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                                  usingHState ctx $ setNegotiatedGroup grp
                                  dhePair <- generateFFDHEShared ctx grp srvpub
                                  case dhePair of
-                                     Nothing   -> throwCore $ Error_Protocol ("invalid server " ++ show grp ++ " public key", True, HandshakeFailure)
+                                     Nothing   -> throwCore $ Error_Protocol ("invalid server " ++ show grp ++ " public key", True, IllegalParameter)
                                      Just pair -> return pair
 
                     masterSecret <- usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
@@ -534,7 +534,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     usingHState ctx $ setNegotiatedGroup grp
                     ecdhePair <- generateECDHEShared ctx srvpub
                     case ecdhePair of
-                        Nothing                  -> throwCore $ Error_Protocol ("invalid server " ++ show grp ++ " public key", True, HandshakeFailure)
+                        Nothing                  -> throwCore $ Error_Protocol ("invalid server " ++ show grp ++ " public key", True, IllegalParameter)
                         Just (clipub, premaster) -> do
                             xver <- usingState_ ctx getVersion
                             masterSecret <- usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
