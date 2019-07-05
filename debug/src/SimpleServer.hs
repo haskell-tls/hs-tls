@@ -232,7 +232,7 @@ runOn (sStorage, certStore) flags port = do
                     then loopSendData getBenchAmount ctx
                     else loopRecvData getBenchAmount ctx
                 bye ctx
-            close cSock
+              `E.finally` close cSock
           where
             dataSend = BC.replicate 4096 'a'
             loopSendData bytes ctx
@@ -255,7 +255,7 @@ runOn (sStorage, certStore) flags port = do
             let rtt0accept = Rtt0 `elem` flags
             params <- getDefaultParams flags certStore sStorage cred rtt0accept
 
-            void $ forkIO $ do
+            void $ forkIO $
                 runTLS (Debug `elem` flags)
                        (IODebug `elem` flags)
                        params cSock $ \ctx -> do
@@ -265,7 +265,7 @@ runOn (sStorage, certStore) flags port = do
                     --sendData ctx $ query
                     bye ctx
                     return ()
-                close cSock
+                  `E.finally` close cSock
             doTLS sock out
 
         loopRecv out ctx = do
