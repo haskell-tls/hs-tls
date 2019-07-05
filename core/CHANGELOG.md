@@ -2,6 +2,9 @@
 
 - Post-handshake authentication [#363](https://github.com/vincenthz/hs-tls/pull/363)
 - Fixing memory leak [#366](https://github.com/vincenthz/hs-tls/pull/366)
+- Improve version negotiation [#368](https://github.com/vincenthz/hs-tls/pull/368)
+- Don't send 0-RTT data when ticket is expired [#370](https://github.com/vincenthz/hs-tls/pull/370)
+- Handshake packet fragmentation [#371](https://github.com/vincenthz/hs-tls/pull/371)
 
 ## Version 1.5.0
 
