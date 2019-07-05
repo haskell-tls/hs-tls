@@ -91,7 +91,7 @@ makeServerKeyShare ctx (KeyShareEntry grp wcpub) = case ecpub of
                in return (BA.convert share, serverKeyShare)
   where
     ecpub = IES.decodeGroupPublic grp wcpub
-    msgInvalidPublic = "invalid server " ++ show grp ++ " public key"
+    msgInvalidPublic = "invalid client " ++ show grp ++ " public key"
 
 makeClientKeyShare :: Context -> Group -> IO (IES.GroupPrivate, KeyShareEntry)
 makeClientKeyShare ctx grp = do
