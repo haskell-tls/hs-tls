@@ -237,7 +237,7 @@ recvData13 ctx = do
                 Just (pa, postAction) -> do
                     -- Pending actions are executed with read+write locks, just
                     -- like regular handshake code.
-                    withWriteLock ctx $ do
+                    withWriteLock ctx $ handleException ctx $ do
                         pa h
                         processHandshake13 ctx h
                         postAction
