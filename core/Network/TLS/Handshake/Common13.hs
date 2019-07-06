@@ -30,8 +30,8 @@ module Network.TLS.Handshake.Common13
        , safeNonNegative32
        , RecvHandshake13M
        , runRecvHandshake13
-       , recvHandshake13preUpdate
-       , recvHandshake13postUpdate
+       , recvHandshake13
+       , recvHandshake13hash
        ) where
 
 import qualified Data.ByteArray as BA
@@ -288,24 +288,19 @@ safeNonNegative32 x
 newtype RecvHandshake13M m a = RecvHandshake13M (StateT [Handshake13] m a)
     deriving (Functor, Applicative, Monad, MonadIO)
 
-recvHandshake13preUpdate :: MonadIO m
-                         => Context
-                         -> (Handshake13 -> RecvHandshake13M m a)
-                         -> RecvHandshake13M m a
-recvHandshake13preUpdate ctx f = do
-    h <- getHandshake13 ctx
-    liftIO $ processHandshake13 ctx h
-    f h
+recvHandshake13 :: MonadIO m
+                => Context
+                -> (Handshake13 -> RecvHandshake13M m a)
+                -> RecvHandshake13M m a
+recvHandshake13 ctx f = getHandshake13 ctx >>= f
 
-recvHandshake13postUpdate :: MonadIO m
-                          => Context
-                          -> (Handshake13 -> RecvHandshake13M m a)
-                          -> RecvHandshake13M m a
-recvHandshake13postUpdate ctx f = do
-    h <- getHandshake13 ctx
-    v <- f h
-    liftIO $ processHandshake13 ctx h
-    return v
+recvHandshake13hash :: MonadIO m
+                    => Context
+                    -> (ByteString -> Handshake13 -> RecvHandshake13M m a)
+                    -> RecvHandshake13M m a
+recvHandshake13hash ctx f = do
+    d <- transcriptHash ctx
+    getHandshake13 ctx >>= f d
 
 getHandshake13 :: MonadIO m => Context -> RecvHandshake13M m Handshake13
 getHandshake13 ctx = RecvHandshake13M $ do
@@ -314,7 +309,7 @@ getHandshake13 ctx = RecvHandshake13M $ do
         (h:hs) -> found h hs
         []     -> recvLoop
   where
-    found h hs = put hs >> return h
+    found h hs = liftIO (processHandshake13 ctx h) >> put hs >> return h
     recvLoop = do
         epkt <- recvPacket13 ctx
         case epkt of
