@@ -14,6 +14,7 @@ module Network.TLS.Handshake.Common
     , runRecvState
     , recvPacketHandshake
     , onRecvStateHandshake
+    , ensureRecvComplete
     , extensionLookup
     , getSessionData
     , storePrivInfo
@@ -157,6 +158,12 @@ runRecvState :: Context -> RecvState IO -> IO ()
 runRecvState _    RecvStateDone    = return ()
 runRecvState ctx (RecvStateNext f) = recvPacket ctx >>= either throwCore f >>= runRecvState ctx
 runRecvState ctx iniState          = recvPacketHandshake ctx >>= onRecvStateHandshake ctx iniState >>= runRecvState ctx
+
+ensureRecvComplete :: MonadIO m => Context -> m ()
+ensureRecvComplete ctx = do
+    complete <- liftIO $ isRecvComplete ctx
+    unless complete $
+        throwCore $ Error_Protocol ("received incomplete message at key change", True, UnexpectedMessage)
 
 getSessionData :: Context -> IO (Maybe SessionData)
 getSessionData ctx = do

@@ -825,6 +825,7 @@ handshakeClient13' cparams ctx groupSent usedCipher usedHash = do
     zero = B.replicate hashSize 0
 
     switchToHandshakeSecret = do
+        ensureRecvComplete ctx
         ecdhe <- calcSharedKey
         (earlySecret, resuming) <- makeEarlySecret
         let handshakeSecret = hkdfExtract usedHash (deriveSecret usedHash earlySecret "derived" (hash usedHash "")) ecdhe
@@ -837,6 +838,7 @@ handshakeClient13' cparams ctx groupSent usedCipher usedHash = do
         return (resuming, handshakeSecret, clientHandshakeTrafficSecret, serverHandshakeTrafficSecret)
 
     switchToTrafficSecret handshakeSecret hChSf = do
+        ensureRecvComplete ctx
         let masterSecret = hkdfExtract usedHash (deriveSecret usedHash handshakeSecret "derived" (hash usedHash "")) zero
         let clientApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "c ap traffic" hChSf
             serverApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "s ap traffic" hChSf
