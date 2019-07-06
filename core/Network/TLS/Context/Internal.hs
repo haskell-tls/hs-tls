@@ -21,7 +21,7 @@ module Network.TLS.Context.Internal
     , Context(..)
     , Hooks(..)
     , Established(..)
-    , PendingAction
+    , PendingAction(..)
     , ctxEOF
     , ctxHasSSLv2ClientHello
     , ctxDisableSSLv2ClientHello
@@ -135,7 +135,11 @@ data Established = NotEstablished
                  | Established
                  deriving (Eq, Show)
 
-type PendingAction = (Handshake13 -> IO (), IO ())
+data PendingAction
+    = PendingAction (Handshake13 -> IO ())
+      -- ^ simple pending action
+    | PendingActionHash (ByteString -> Handshake13 -> IO ())
+      -- ^ pending action taking transcript hash up to preceding message
 
 updateMeasure :: Context -> (Measurement -> Measurement) -> IO ()
 updateMeasure ctx f = do
