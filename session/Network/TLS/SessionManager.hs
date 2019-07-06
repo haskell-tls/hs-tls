@@ -86,19 +86,19 @@ fromValue (SessionDataCopy v cid comp msni sec') =
 ----------------------------------------------------------------
 
 type SessionIDCopy = Block Word8
-data SessionDataCopy = SessionDataCopy {
-      ssVersion     :: !Version
-    , ssCipher      :: !CipherID
-    , ssCompression :: !CompressionID
-    , ssClientSNI   :: !(Maybe HostName)
-    , ssSecret      :: Block Word8
+data SessionDataCopy = SessionDataCopy
+    {- ssVersion     -} !Version
+    {- ssCipher      -} !CipherID
+    {- ssCompression -} !CompressionID
+    {- ssClientSNI   -} !(Maybe HostName)
+    {- ssSecret      -} (Block Word8)
 #if MIN_VERSION_tls(1,5,0)
-    , ssGroup       :: !(Maybe Group)
-    , ssTicketInfo  :: !(Maybe TLS13TicketInfo)
-    , ssALPN        :: !(Maybe (Block Word8))
-    , ssMaxEarlyDataSize :: Int
+    {- ssGroup       -} !(Maybe Group)
+    {- ssTicketInfo  -} !(Maybe TLS13TicketInfo)
+    {- ssALPN        -} !(Maybe (Block Word8))
+    {- ssMaxEarlyDataSize -} Int
 #endif
-    } deriving (Show,Eq)
+    deriving (Show,Eq)
 
 type Sec = Int64
 type Value = (SessionDataCopy, IORef Availability)
