@@ -295,7 +295,7 @@ handshakeClient' cparams ctx groups mparams = do
                                         then return recvState
                                         else throwAlert a
                                 _ -> throwAlert a
-                        _ -> fail ("unexepected type received. expecting handshake and got: " ++ show p)
+                        _ -> unexpected (show p) (Just "handshake")
                 throwAlert a = usingState_ ctx $ throwError $ Error_Protocol ("expecting server hello, got alert : " ++ show a, True, HandshakeFailure)
 
 -- | Store the keypair and check that it is compatible with a list of

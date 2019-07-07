@@ -58,7 +58,7 @@ handshakeServer sparams ctx = liftIO $ do
     hss <- recvPacketHandshake ctx
     case hss of
         [ch] -> handshakeServerWith sparams ctx ch
-        _    -> fail ("unexpected handshake received, excepting client hello and received " ++ show hss)
+        _    -> unexpected (show hss) (Just "client hello")
 
 -- | Put the server context in handshake mode.
 --
