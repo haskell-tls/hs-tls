@@ -65,8 +65,10 @@ handleException ctx f = catchException f $ \exception -> do
     ignoreIOErr _ = return ()
 
 errorToAlert :: TLSError -> [(AlertLevel, AlertDescription)]
-errorToAlert (Error_Protocol (_, _, ad)) = [(AlertLevel_Fatal, ad)]
-errorToAlert _                           = [(AlertLevel_Fatal, InternalError)]
+errorToAlert (Error_Protocol (_, _, ad))   = [(AlertLevel_Fatal, ad)]
+errorToAlert (Error_Packet_unexpected _ _) = [(AlertLevel_Fatal, UnexpectedMessage)]
+errorToAlert (Error_Packet_Parsing _)      = [(AlertLevel_Fatal, DecodeError)]
+errorToAlert _                             = [(AlertLevel_Fatal, InternalError)]
 
 unexpected :: MonadIO m => String -> Maybe String -> m a
 unexpected msg expected = throwCore $ Error_Packet_unexpected msg (maybe "" (" expected: " ++) expected)
