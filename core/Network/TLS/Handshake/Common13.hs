@@ -18,6 +18,7 @@ module Network.TLS.Handshake.Common13
        , makePSKBinder
        , replacePSKBinder
        , sendChangeCipherSpec13
+       , handshakeTerminate13
        , makeCertRequest
        , createTLS13TicketInfo
        , ageToObfuscatedAge
@@ -63,6 +64,7 @@ import Network.TLS.Types
 import Network.TLS.Wire
 import Time.System
 
+import Control.Concurrent.MVar
 import Control.Monad.State.Strict
 
 ----------------------------------------------------------------
@@ -183,6 +185,31 @@ sendChangeCipherSpec13 ctx = do
                 unless b $ setCCS13Sent True
                 return b
     unless sent $ loadPacket13 ctx ChangeCipherSpec13
+
+----------------------------------------------------------------
+
+handshakeTerminate13 :: Context -> IO ()
+handshakeTerminate13 ctx = do
+    -- forget most handshake data
+    liftIO $ modifyMVar_ (ctxHandshake ctx) $ \ mhshake ->
+        case mhshake of
+            Nothing -> return Nothing
+            Just hshake ->
+                return $ Just (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
+                    { hstServerRandom = hstServerRandom hshake
+                    , hstMasterSecret = hstMasterSecret hshake
+                    , hstNegotiatedGroup = hstNegotiatedGroup hshake
+                    , hstHandshakeDigest = hstHandshakeDigest hshake
+                    , hstTLS13HandshakeMode = hstTLS13HandshakeMode hshake
+                    , hstTLS13RTT0Status = hstTLS13RTT0Status hshake
+                    , hstTLS13Secret = hstTLS13Secret hshake
+                    }
+    -- forget handshake data stored in TLS state
+    usingState_ ctx $ do
+        setTLS13KeyShare Nothing
+        setTLS13PreSharedKey Nothing
+    -- mark the secure connection up and running.
+    setEstablished ctx Established
 
 ----------------------------------------------------------------
 

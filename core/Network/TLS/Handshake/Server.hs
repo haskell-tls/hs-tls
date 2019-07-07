@@ -763,7 +763,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
     let expectFinished hChBeforeCf (Finished13 verifyData') = do
             let verifyData = makeVerifyData usedHash clientHandshakeTrafficSecret hChBeforeCf
             if verifyData == verifyData' then liftIO $ do
-                setEstablished ctx Established
+                handshakeTerminate13 ctx
                 setRxState ctx usedHash usedCipher clientApplicationTrafficSecret0
                else
                 decryptError "cannot verify finished"

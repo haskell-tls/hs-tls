@@ -837,7 +837,7 @@ handshakeClient13' cparams ctx groupSent usedCipher usedHash = do
     sendClientFlight13 cparams ctx usedHash clientHandshakeTrafficSecret
     masterSecret <- switchToTrafficSecret handshakeSecret hChSf
     setResumptionSecret masterSecret
-    setEstablished ctx Established
+    handshakeTerminate13 ctx
   where
     hashSize = hashDigestSize usedHash
     zero = B.replicate hashSize 0
