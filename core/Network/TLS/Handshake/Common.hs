@@ -139,8 +139,8 @@ recvPacketHandshake ctx = do
                 EarlyDataNotAllowed n
                     | n > 0 -> do setEstablished ctx $ EarlyDataNotAllowed (n - 1)
                                   recvPacketHandshake ctx
-                _           -> fail ("unexpected type received. expecting handshake and got: " ++ show x)
-        Right x             -> fail ("unexpected type received. expecting handshake and got: " ++ show x)
+                _           -> unexpected (show x) (Just "handshake")
+        Right x             -> unexpected (show x) (Just "handshake")
         Left err            -> throwCore err
 
 -- | process a list of handshakes message in the recv state machine.
