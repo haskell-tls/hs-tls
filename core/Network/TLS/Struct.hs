@@ -254,6 +254,7 @@ data AlertDescription =
     | BadCertificateHashValue
     | UnknownPskIdentity
     | CertificateRequired
+    | NoApplicationProtocol -- RFC7301
     deriving (Show,Eq)
 
 data HandshakeType =
@@ -485,6 +486,7 @@ instance TypeValuable AlertDescription where
     valOfType BadCertificateHashValue = 114
     valOfType UnknownPskIdentity      = 115
     valOfType CertificateRequired     = 116
+    valOfType NoApplicationProtocol   = 120
 
     valToType 0   = Just CloseNotify
     valToType 10  = Just UnexpectedMessage
@@ -518,6 +520,7 @@ instance TypeValuable AlertDescription where
     valToType 114 = Just BadCertificateHashValue
     valToType 115 = Just UnknownPskIdentity
     valToType 116 = Just CertificateRequired
+    valToType 120 = Just NoApplicationProtocol
     valToType _   = Nothing
 
 instance TypeValuable CertificateType where

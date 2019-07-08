@@ -200,7 +200,8 @@ recvData13 ctx = do
                     maxSize = case extensionLookup extensionID_EarlyData exts >>= extensionDecode MsgTNewSessionTicket of
                         Just (EarlyDataIndication (Just ms)) -> fromIntegral $ safeNonNegative32 ms
                         _                                    -> 0
-                tinfo <- createTLS13TicketInfo life (Right add) Nothing
+                    life7d = min life 604800  -- 7 days max
+                tinfo <- createTLS13TicketInfo life7d (Right add) Nothing
                 sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
                 let !label' = B.copy label
                 sessionEstablish (sharedSessionManager $ ctxShared ctx) label' sdata
