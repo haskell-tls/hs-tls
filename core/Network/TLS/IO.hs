@@ -20,11 +20,10 @@ module Network.TLS.IO
     ) where
 
 import Network.TLS.Context.Internal
+import Network.TLS.ErrT
 import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Record
-import Network.TLS.Record.Types13
-import Network.TLS.Record.Disengage13
 import Network.TLS.Packet
 import Network.TLS.Hooks
 import Network.TLS.Sending
@@ -59,14 +58,31 @@ readExact ctx sz = do
                     then Error_EOF
                     else Error_Packet ("partial packet: expecting " ++ show sz ++ " bytes, got: " ++ show (B.length hdrbs))
 
+getRecord :: Context -> Int -> Header -> ByteString -> IO (Either TLSError (Record Plaintext))
+getRecord ctx appDataOverhead header@(Header pt _ _) content = do
+    withLog ctx $ \logging -> loggingIORecv logging header content
+    runRxState ctx $ do
+        r <- disengageRecord $ rawToRecord header (fragmentCiphertext content)
+        let Record _ _ fragment = r
+        when (B.length (fragmentGetBytes fragment) > 16384 + overhead) $
+            throwError contentSizeExceeded
+        return r
+  where overhead = if pt == ProtocolType_AppData then appDataOverhead else 0
+
+contentSizeExceeded :: TLSError
+contentSizeExceeded = Error_Protocol ("record content exceeding maximum size", True, RecordOverflow)
+
+maximumSizeExceeded :: TLSError
+maximumSizeExceeded = Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
 
 -- | recvRecord receive a full TLS record (header + data), from the other side.
 --
 -- The record is disengaged from the record layer
 recvRecord :: Bool    -- ^ flag to enable SSLv2 compat ClientHello reception
+           -> Int     -- ^ number of AppData bytes to accept above normal maximum size
            -> Context -- ^ TLS context
            -> IO (Either TLSError (Record Plaintext))
-recvRecord compatSSLv2 ctx
+recvRecord compatSSLv2 appDataOverhead ctx
 #ifdef SSLV2_COMPATIBLE
     | compatSSLv2 = readExact ctx 2 >>= either (return . Left) sslv2Header
 #endif
@@ -78,7 +94,7 @@ recvRecord compatSSLv2 ctx
                 | readlen > 16384 + 2048 = return $ Left maximumSizeExceeded
                 | otherwise              =
                     readExact ctx (fromIntegral readlen) >>=
-                        either (return . Left) (getRecord header)
+                        either (return . Left) (getRecord ctx appDataOverhead header)
 #ifdef SSLV2_COMPATIBLE
               sslv2Header header =
                 if B.head header >= 0x80
@@ -93,13 +109,8 @@ recvRecord compatSSLv2 ctx
                     case res of
                       Left e -> return $ Left e
                       Right content ->
-                        either (return . Left) (`getRecord` content) $ decodeDeprecatedHeader readlen content
+                        either (return . Left) (\h -> getRecord ctx appDataOverhead h content) $ decodeDeprecatedHeader readlen content
 #endif
-              maximumSizeExceeded = Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
-              getRecord :: Header -> ByteString -> IO (Either TLSError (Record Plaintext))
-              getRecord header content = do
-                    withLog ctx $ \logging -> loggingIORecv logging header content
-                    runRxState ctx $ disengageRecord $ rawToRecord header (fragmentCiphertext content)
 
 isCCS :: Record a -> Bool
 isCCS (Record ProtocolType_ChangeCipherSpec _ _) = True
@@ -111,11 +122,16 @@ isCCS _                                          = False
 recvPacket :: MonadIO m => Context -> m (Either TLSError Packet)
 recvPacket ctx = liftIO $ do
     compatSSLv2 <- ctxHasSSLv2ClientHello ctx
-    erecord     <- recvRecord compatSSLv2 ctx
+    hrr         <- usingState_ ctx getTLS13HRR
+    -- When a client sends 0-RTT data to a server which rejects and sends a HRR,
+    -- the server will not decrypt AppData segments.  The server needs to accept
+    -- AppData with maximum size 2^14 + 256.  In all other scenarios and record
+    -- types the maximum size is 2^14.
+    let appDataOverhead = if hrr then 256 else 0
+    erecord     <- recvRecord compatSSLv2 appDataOverhead ctx
     case erecord of
         Left err     -> return $ Left err
-        Right record -> do
-            hrr <- usingState_ ctx getTLS13HRR
+        Right record ->
             if hrr && isCCS record then
                 recvPacket ctx
               else do
@@ -174,19 +190,14 @@ sendBytes ctx dataToSend = liftIO $ do
     contextSend ctx dataToSend
 
 recvRecord13 :: Context
-            -> IO (Either TLSError Record13)
+            -> IO (Either TLSError (Record Plaintext))
 recvRecord13 ctx = readExact ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
   where recvLengthE = either (return . Left) recvLength
         recvLength header@(Header _ _ readlen)
           | readlen > 16384 + 256  = return $ Left maximumSizeExceeded
           | otherwise              =
               readExact ctx (fromIntegral readlen) >>=
-                 either (return . Left) (getRecord header)
-        maximumSizeExceeded = Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
-        getRecord :: Header -> ByteString -> IO (Either TLSError Record13)
-        getRecord header content = do
-              liftIO $ withLog ctx $ \logging -> loggingIORecv logging header content
-              runRxState ctx $ disengageRecord13 $ rawToRecord13 header content
+                 either (return . Left) (getRecord ctx 0 header)
 
 recvPacket13 :: MonadIO m => Context -> m (Either TLSError Packet13)
 recvPacket13 ctx = liftIO $ do

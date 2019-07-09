@@ -10,9 +10,7 @@ module Network.TLS.Struct13
        , Handshake13(..)
        , HandshakeType13(..)
        , typeOfHandshake13
-       , ContentType(..)
        , contentType
-       , protoToContent
        , KeyUpdate(..)
        ) where
 
@@ -97,35 +95,8 @@ instance TypeValuable HandshakeType13 where
   valToType 24 = Just HandshakeType_KeyUpdate13
   valToType _  = Nothing
 
-data ContentType =
-      ContentType_ChangeCipherSpec
-    | ContentType_Alert
-    | ContentType_Handshake
-    | ContentType_AppData
-    deriving (Eq, Show)
-
-
-instance TypeValuable ContentType where
-    valOfType ContentType_ChangeCipherSpec    = 20
-    valOfType ContentType_Alert               = 21
-    valOfType ContentType_Handshake           = 22
-    valOfType ContentType_AppData             = 23
-
-    valToType 20 = Just ContentType_ChangeCipherSpec
-    valToType 21 = Just ContentType_Alert
-    valToType 22 = Just ContentType_Handshake
-    valToType 23 = Just ContentType_AppData
-    valToType _  = Nothing
-
-contentType :: Packet13 -> ContentType
-contentType ChangeCipherSpec13 = ContentType_ChangeCipherSpec
-contentType (Handshake13 _)    = ContentType_Handshake
-contentType (Alert13 _)        = ContentType_Alert
-contentType (AppData13 _)      = ContentType_AppData
-
-protoToContent :: ProtocolType -> ContentType
-protoToContent ProtocolType_ChangeCipherSpec = ContentType_ChangeCipherSpec
-protoToContent ProtocolType_Alert            = ContentType_Alert
-protoToContent ProtocolType_Handshake        = ContentType_Handshake
-protoToContent ProtocolType_AppData          = ContentType_AppData
-protoToContent _                             = error "protoToContent"
+contentType :: Packet13 -> ProtocolType
+contentType ChangeCipherSpec13 = ProtocolType_ChangeCipherSpec
+contentType (Handshake13 _)    = ProtocolType_Handshake
+contentType (Alert13 _)        = ProtocolType_Alert
+contentType (AppData13 _)      = ProtocolType_AppData

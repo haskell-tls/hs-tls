@@ -8,6 +8,10 @@
 -- Engage a record into the Record layer.
 -- The record is compressed, added some integrity field, then encrypted.
 --
+-- Starting with TLS v1.3, only the "null" compression method is negotiated in
+-- the handshake, so the compression step will be a no-op.  Integrity and
+-- encryption are performed using an AEAD cipher only.
+--
 {-# LANGUAGE BangPatterns #-}
 module Network.TLS.Record.Engage
         ( engageRecord
@@ -23,6 +27,7 @@ import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Wire
 import Network.TLS.Packet
+import Network.TLS.Struct
 import Network.TLS.Imports
 import qualified Data.ByteString as B
 import qualified Data.ByteArray as B (convert, xor)
@@ -39,14 +44,33 @@ compressRecord record =
 -- we just return the compress payload directly as the ciphered one
 --
 encryptRecord :: Record Compressed -> RecordM (Record Ciphertext)
-encryptRecord record = onRecordFragment record $ fragmentCipher $ \bytes -> do
+encryptRecord record@(Record ct ver fragment) = do
     st <- get
     case stCipher st of
-        Nothing -> return bytes
-        _       -> encryptContent record bytes
+        Nothing -> noEncryption
+        _ -> do
+            recOpts <- getRecordOptions
+            if recordTLS13 recOpts
+                then encryptContent13
+                else onRecordFragment record $ fragmentCipher (encryptContent False record)
+  where
+    noEncryption = onRecordFragment record $ fragmentCipher return
+    encryptContent13
+        | ct == ProtocolType_ChangeCipherSpec = noEncryption
+        | otherwise = do
+            let bytes     = fragmentGetBytes fragment
+                fragment' = fragmentCompressed $ innerPlaintext ct bytes
+                record'   = Record ProtocolType_AppData ver fragment'
+            onRecordFragment record' $ fragmentCipher (encryptContent True record')
 
-encryptContent :: Record Compressed -> ByteString -> RecordM ByteString
-encryptContent record content = do
+innerPlaintext :: ProtocolType -> ByteString -> ByteString
+innerPlaintext ct bytes = runPut $ do
+    putBytes bytes
+    putWord8 $ valOfType ct -- non zero!
+    -- fixme: zeros padding
+
+encryptContent :: Bool -> Record Compressed -> ByteString -> RecordM ByteString
+encryptContent tls13 record content = do
     cst  <- getCryptState
     bulk <- getBulk
     case cstKey cst of
@@ -59,7 +83,7 @@ encryptContent record content = do
             let content' =  B.concat [content, digest]
             encryptStream encryptF content'
         BulkStateAEAD encryptF ->
-            encryptAead (bulkExplicitIV bulk) encryptF content record
+            encryptAead tls13 bulk encryptF content record
         BulkStateUninitialized ->
             return content
 
@@ -91,18 +115,24 @@ encryptStream (BulkStream encryptF) content = do
     modify $ \tstate -> tstate { stCryptState = cst { cstKey = BulkStateStream newBulkStream } }
     return e
 
-encryptAead :: Int
+encryptAead :: Bool
+            -> Bulk
             -> BulkAEAD
             -> ByteString -> Record Compressed
             -> RecordM ByteString
-encryptAead nonceExpLen encryptF content record = do
+encryptAead tls13 bulk encryptF content record = do
+    let authTagLen  = bulkAuthTagLen bulk
+        nonceExpLen = bulkExplicitIV bulk
     cst        <- getCryptState
     encodedSeq <- encodeWord64 <$> getMacSequence
 
-    let hdr   = recordToHeader record
-        ad    = B.concat [encodedSeq, encodeHeader hdr]
-        iv    = cstIV cst
+    let iv    = cstIV cst
         ivlen = B.length iv
+        Header typ v plainLen = recordToHeader record
+        hdrLen = if tls13 then plainLen + fromIntegral authTagLen else plainLen
+        hdr = Header typ v hdrLen
+        ad | tls13     = encodeHeader hdr
+           | otherwise = B.concat [ encodedSeq, encodeHeader hdr ]
         sqnc  = B.replicate (ivlen - 8) 0 `B.append` encodedSeq
         nonce | nonceExpLen == 0 = B.xor iv sqnc
               | otherwise = B.concat [iv, encodedSeq]

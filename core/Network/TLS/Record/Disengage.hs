@@ -8,6 +8,10 @@
 -- Disengage a record from the Record layer.
 -- The record is decrypted, checked for integrity and then decompressed.
 --
+-- Starting with TLS v1.3, only the "null" compression method is negotiated in
+-- the handshake, so the decompression step will be a no-op.  Decryption and
+-- integrity verification are performed using an AEAD cipher only.
+--
 {-# LANGUAGE FlexibleContexts #-}
 
 module Network.TLS.Record.Disengage
@@ -40,11 +44,42 @@ uncompressRecord record = onRecordFragment record $ fragmentUncompress $ \bytes 
     withCompression $ compressionInflate bytes
 
 decryptRecord :: Record Ciphertext -> RecordM (Record Compressed)
-decryptRecord record = onRecordFragment record $ fragmentUncipher $ \e -> do
+decryptRecord record@(Record ct ver fragment) = do
     st <- get
     case stCipher st of
-        Nothing -> return e
-        _       -> getRecordVersion >>= \ver -> decryptData ver record e st
+        Nothing -> noDecryption
+        _       -> do
+            recOpts <- getRecordOptions
+            let mver = recordVersion recOpts
+            if recordTLS13 recOpts
+                then decryptData13 mver (fragmentGetBytes fragment) st
+                else onRecordFragment record $ fragmentUncipher $ \e ->
+                        decryptData mver record e st
+  where
+    noDecryption = onRecordFragment record $ fragmentUncipher return
+    decryptData13 mver e st
+        | ct == ProtocolType_AppData = do
+            inner <- decryptData mver record e st
+            case unInnerPlaintext inner of
+                Left message   -> throwError $ Error_Protocol (message, True, UnexpectedMessage)
+                Right (ct', d) -> return $ Record ct' ver (fragmentCompressed d)
+        | otherwise = noDecryption
+
+unInnerPlaintext :: ByteString -> Either String (ProtocolType, ByteString)
+unInnerPlaintext inner =
+    case B.unsnoc dc of
+        Nothing         -> Left $ unknownContentType13 (0 :: Word8)
+        Just (bytes,c)  ->
+            case valToType c of
+                Nothing -> Left $ unknownContentType13 c
+                Just ct
+                    | B.null bytes && ct `elem` nonEmptyContentTypes ->
+                        Left ("empty " ++ show ct ++ " record disallowed")
+                    | otherwise -> Right (ct, bytes)
+  where
+    (dc,_pad) = B.spanEnd (== 0) inner
+    nonEmptyContentTypes   = [ ProtocolType_Handshake, ProtocolType_Alert ]
+    unknownContentType13 c = "unknown TLS 1.3 content type: " ++ show c
 
 getCipherData :: Record a -> CipherData -> RecordM ByteString
 getCipherData (Record pt ver _) cdata = do
@@ -133,8 +168,10 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
                 iv = cstIV (stCryptState tst)
                 ivlen = B.length iv
                 Header typ v _ = recordToHeader record
-                hdr = Header typ v $ fromIntegral cipherLen
-                ad = B.concat [ encodedSeq, encodeHeader hdr ]
+                hdrLen = if ver >= TLS13 then econtentLen else cipherLen
+                hdr = Header typ v $ fromIntegral hdrLen
+                ad | ver >= TLS13 = encodeHeader hdr
+                   | otherwise    = B.concat [ encodedSeq, encodeHeader hdr ]
                 sqnc = B.replicate (ivlen - 8) 0 `B.append` encodedSeq
                 nonce | nonceExpLen == 0 = B.xor iv sqnc
                       | otherwise = iv `B.append` enonce
