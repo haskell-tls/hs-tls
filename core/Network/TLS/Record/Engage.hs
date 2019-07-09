@@ -8,6 +8,10 @@
 -- Engage a record into the Record layer.
 -- The record is compressed, added some integrity field, then encrypted.
 --
+-- Starting with TLS v1.3, only the "null" compression method is negotiated in
+-- the handshake, so the compression step will be a no-op.  Integrity and
+-- encryption are performed using an AEAD cipher only.
+--
 {-# LANGUAGE BangPatterns #-}
 module Network.TLS.Record.Engage
         ( engageRecord
