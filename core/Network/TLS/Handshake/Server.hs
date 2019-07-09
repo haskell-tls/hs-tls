@@ -9,6 +9,7 @@
 module Network.TLS.Handshake.Server
     ( handshakeServer
     , handshakeServerWith
+    , requestCertificateServer
     , postHandshakeAuthServerWith
     ) where
 
@@ -36,6 +37,7 @@ import qualified Data.ByteString as B
 import Data.X509 (ExtKeyUsageFlag(..))
 
 import Control.Monad.State.Strict
+import Control.Exception (bracket)
 
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.Common
@@ -51,7 +53,7 @@ import Network.TLS.Handshake.Common13
 --
 -- This is just a helper to pop the next message from the recv layer,
 -- and call handshakeServerWith.
-handshakeServer :: MonadIO m => ServerParams -> Context -> m ()
+handshakeServer :: ServerParams -> Context -> IO ()
 handshakeServer sparams ctx = liftIO $ do
     hss <- recvPacketHandshake ctx
     case hss of
@@ -406,9 +408,6 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
 
             -- Send HelloDone
             sendPacket ctx (Handshake [ServerHelloDone])
-
-        extractCAname :: SignedCertificate -> DistinguishedName
-        extractCAname cert = certSubjectDN $ getCertificate cert
 
         setup_DHE = do
             let possibleFFGroups = negotiatedGroupsInCommon ctx exts `intersect` availableFFGroups
@@ -872,9 +871,8 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         storePrivInfoServer ctx cred
         when (serverWantClientCert sparams) $ do
             let certReqCtx = "" -- this must be zero length here.
-            let sigAlgs = extensionEncode $ SignatureAlgorithms $ supportedHashSignatures $ ctxSupported ctx
-                crexts = [ExtensionRaw extensionID_SignatureAlgorithms sigAlgs]
-            loadPacket13 ctx $ Handshake13 [CertRequest13 certReqCtx crexts]
+                certReq = makeCertRequest sparams ctx certReqCtx
+            loadPacket13 ctx $ Handshake13 [certReq]
             usingHState ctx $ setCertReqSent True
 
         let CertificateChain cs = certChain
@@ -1096,6 +1094,22 @@ clientCertVerify sparams ctx certs verif = do
                 -- chain to the context.
                 usingState_ ctx $ setClientCertificateChain certs
                 else decryptError "verification failed"
+
+newCertReqContext :: Context -> IO CertReqContext
+newCertReqContext ctx = getStateRNG ctx 32
+
+requestCertificateServer :: ServerParams -> Context -> IO Bool
+requestCertificateServer sparams ctx = do
+    tls13 <- tls13orLater ctx
+    supportsPHA <- usingState_ ctx getClientSupportsPHA
+    let ok = tls13 && supportsPHA
+    when ok $ do
+        certReqCtx <- newCertReqContext ctx
+        let certReq = makeCertRequest sparams ctx certReqCtx
+        bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
+            addCertRequest13 ctx certReq
+            sendPacket13 ctx $ Handshake13 [certReq]
+    return ok
 
 postHandshakeAuthServerWith :: ServerParams -> Context -> Handshake13 -> IO ()
 postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = do

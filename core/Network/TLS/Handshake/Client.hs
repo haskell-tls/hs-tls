@@ -666,6 +666,8 @@ onServerHello _ _ _ p = unexpected (show p) (Just "server hello")
 
 processCertificate :: ClientParams -> Context -> Handshake -> IO (RecvState IO)
 processCertificate cparams ctx (Certificates certs) = do
+    when (isNullCertificateChain certs) $
+        throwCore $ Error_Protocol ("server certificate missing", True, DecodeError)
     -- run certificate recv hook
     ctxWithHooks ctx (`hookRecvCertificates` certs)
     -- then run certificate validation
@@ -895,11 +897,9 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
             -- setCertReqSigAlgsCert Nothing
         expectCertAndVerify other
 
-    expectCertAndVerify (Certificate13 _ cc@(CertificateChain certChain) _) = do
+    expectCertAndVerify (Certificate13 _ cc _) = do
         _ <- liftIO $ processCertificate cparams ctx (Certificates cc)
-        pubkey <- case certChain of
-                    [] -> throwCore $ Error_Protocol ("server certificate missing", True, HandshakeFailure)
-                    c:_ -> return $ certPubKey $ getCertificate c
+        let pubkey = certPubKey $ getCertificate $ getCertificateChainLeaf cc
         usingHState ctx $ setPublicKey pubkey
         hChSc <- transcriptHash ctx
         recvHandshake13preUpdate ctx $ expectCertVerify pubkey hChSc
@@ -1016,9 +1016,9 @@ setALPN ctx exts = case extensionLookup extensionID_ApplicationLayerProtocolNego
             _ -> return ()
     _ -> return ()
 
-postHandshakeAuthClientWith :: MonadIO m => ClientParams -> Context -> Handshake13 -> m ()
+postHandshakeAuthClientWith :: ClientParams -> Context -> Handshake13 -> IO ()
 postHandshakeAuthClientWith cparams ctx h@(CertRequest13 certReqCtx exts) =
-    liftIO $ bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
+    bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
         processHandshake13 ctx h
         processCertRequest13 ctx certReqCtx exts
         (usedHash, _, applicationTrafficSecretN) <- getTxState ctx

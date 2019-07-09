@@ -17,6 +17,7 @@ module Network.TLS.Handshake.Common13
        , checkCertVerify
        , makePSKBinder
        , replacePSKBinder
+       , makeCertRequest
        , createTLS13TicketInfo
        , ageToObfuscatedAge
        , isAgeValid
@@ -42,6 +43,7 @@ import Network.TLS.Cipher
 import Network.TLS.Crypto
 import qualified Network.TLS.Crypto.IES as IES
 import Network.TLS.Extension
+import Network.TLS.Handshake.Certificate (extractCAname)
 import Network.TLS.Handshake.Process (processHandshake13)
 import Network.TLS.Handshake.Common (unexpected)
 import Network.TLS.Handshake.Key
@@ -51,6 +53,7 @@ import Network.TLS.Handshake.Signature
 import Network.TLS.Imports
 import Network.TLS.KeySchedule
 import Network.TLS.MAC
+import Network.TLS.Parameters
 import Network.TLS.IO
 import Network.TLS.State
 import Network.TLS.Struct
@@ -169,6 +172,19 @@ replacePSKBinder pskz binder = identities `B.append` binders
     bindersSize = B.length binder + 3
     identities  = B.take (B.length pskz - bindersSize) pskz
     binders     = runPut $ putOpaque16 $ runPut $ putOpaque8 binder
+
+----------------------------------------------------------------
+
+makeCertRequest :: ServerParams -> Context -> CertReqContext -> Handshake13
+makeCertRequest sparams ctx certReqCtx =
+    let sigAlgs = extensionEncode $ SignatureAlgorithms $ supportedHashSignatures $ ctxSupported ctx
+        caDns = map extractCAname $ serverCACertificates sparams
+        caDnsEncoded = extensionEncode $ CertificateAuthorities caDns
+        caExtension
+            | null caDns = []
+            | otherwise  = [ExtensionRaw extensionID_CertificateAuthorities caDnsEncoded]
+        crexts = ExtensionRaw extensionID_SignatureAlgorithms sigAlgs : caExtension
+     in CertRequest13 certReqCtx crexts
 
 ----------------------------------------------------------------
 
