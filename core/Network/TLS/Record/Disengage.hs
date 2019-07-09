@@ -8,6 +8,10 @@
 -- Disengage a record from the Record layer.
 -- The record is decrypted, checked for integrity and then decompressed.
 --
+-- Starting with TLS v1.3, only the "null" compression method is negotiated in
+-- the handshake, so the decompression step will be a no-op.  Decryption and
+-- integrity verification are performed using an AEAD cipher only.
+--
 {-# LANGUAGE FlexibleContexts #-}
 
 module Network.TLS.Record.Disengage
