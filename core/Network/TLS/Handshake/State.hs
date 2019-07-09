@@ -66,6 +66,8 @@ module Network.TLS.Handshake.State
     , getTLS13RTT0Status
     , setTLS13Secret
     , getTLS13Secret
+    , setCCS13Sent
+    , getCCS13Sent
     ) where
 
 import Network.TLS.Util
@@ -130,6 +132,7 @@ data HandshakeState = HandshakeState
     , hstTLS13HandshakeMode  :: HandshakeMode13
     , hstTLS13RTT0Status     :: !RTT0Status
     , hstTLS13Secret         :: Secret13
+    , hstCCS13Sent           :: !Bool
     } deriving (Show)
 
 {- | When we receive a CertificateRequest from a server, a just-in-time
@@ -218,6 +221,7 @@ newEmptyHandshake ver crand = HandshakeState
     , hstTLS13HandshakeMode  = FullHandshake
     , hstTLS13RTT0Status     = RTT0None
     , hstTLS13Secret         = NoSecret
+    , hstCCS13Sent           = False
     }
 
 runHandshake :: HandshakeState -> HandshakeM a -> (a, HandshakeState)
@@ -302,6 +306,12 @@ setTLS13Secret secret = modify (\hst -> hst { hstTLS13Secret = secret })
 
 getTLS13Secret :: HandshakeM Secret13
 getTLS13Secret = gets hstTLS13Secret
+
+setCCS13Sent :: Bool -> HandshakeM ()
+setCCS13Sent sent = modify (\hst -> hst { hstCCS13Sent = sent })
+
+getCCS13Sent :: HandshakeM Bool
+getCCS13Sent = gets hstCCS13Sent
 
 setCertReqSent :: Bool -> HandshakeM ()
 setCertReqSent b = modify (\hst -> hst { hstCertReqSent = b })
