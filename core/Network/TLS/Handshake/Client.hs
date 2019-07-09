@@ -72,13 +72,14 @@ handshakeClient cparams ctx = do
 --  ClientHello without modification, except as follows:"
 --
 -- So, the ClientRandom in the first client hello is necessary.
-handshakeClient' :: ClientParams -> Context -> [Group] -> Maybe (ClientRandom, Version) -> IO ()
+handshakeClient' :: ClientParams -> Context -> [Group] -> Maybe (ClientRandom, Session, Version) -> IO ()
 handshakeClient' cparams ctx groups mparams = do
     updateMeasure ctx incrementNbHandshakes
-    sentExtensions <- sendClientHello (fst <$> mparams)
-    recvServerHello sentExtensions
+    (crand, clientSession) <- generateClientHelloParams
+    sentExtensions <- sendClientHello clientSession crand
+    recvServerHello clientSession sentExtensions
     ver <- usingState_ ctx getVersion
-    unless (maybe True (\(_, v) -> v == ver) mparams) $
+    unless (maybe True (\(_, _, v) -> v == ver) mparams) $
         throwCore $ Error_Protocol ("version changed after hello retry", True, IllegalParameter)
     -- recvServerHello sets TLS13HRR according to the server random.
     -- For 1st server hello, getTLS13HR returns True if it is HRR and False otherwise.
@@ -97,8 +98,8 @@ handshakeClient' cparams ctx groups mparams = do
                           usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
                           clearTxState ctx
                           let cparams' = cparams { clientEarlyData = Nothing }
-                          crand <- usingHState ctx $ hstClientRandom <$> get
-                          handshakeClient' cparams' ctx [selectedGroup] (Just (crand, ver))
+                          runPacketFlight ctx $ sendChangeCipherSpec13 ctx
+                          handshakeClient' cparams' ctx [selectedGroup] (Just (crand, clientSession, ver))
                     | otherwise -> throwCore $ Error_Protocol ("server-selected group is not supported", True, IllegalParameter)
                   Just _  -> error "handshakeClient': invalid KeyShare value"
                   Nothing -> throwCore $ Error_Protocol ("key exchange not implemented in HRR, expected key_share extension", True, HandshakeFailure)
@@ -225,12 +226,6 @@ handshakeClient' cparams ctx groups mparams = do
           | tls13     = return $ Just $ toExtensionRaw PostHandshakeAuth
           | otherwise = return Nothing
 
-        clientSession = case clientWantSessionResume cparams of
-            Nothing -> Session Nothing
-            Just (sid, sdata)
-              | sessionVersion sdata >= TLS13 -> Session Nothing
-              | otherwise                     -> Session (Just sid)
-
         adjustExtentions pskInfo exts ch =
             case pskInfo of
                 Nothing -> return exts
@@ -249,8 +244,27 @@ handshakeClient' cparams ctx groups mparams = do
                               withBinders = replacePSKBinder withoutBinders binder
                       return exts'
 
-        sendClientHello mcr = do
-            crand <- clientRandom ctx mcr
+        generateClientHelloParams =
+            case mparams of
+                -- Client random and session in the second client hello for
+                -- retry must be the same as the first one.
+                Just (crand, clientSession, _) -> return (crand, clientSession)
+                Nothing -> do
+                    crand <- clientRandom ctx
+                    let paramSession = case clientWantSessionResume cparams of
+                            Nothing -> Session Nothing
+                            Just (sid, sdata)
+                                | sessionVersion sdata >= TLS13 -> Session Nothing
+                                | otherwise                     -> Session (Just sid)
+                    -- In compatibility mode a client not offering a pre-TLS 1.3
+                    -- session MUST generate a new 32-byte value
+                    if tls13 && paramSession == Session Nothing
+                        then do
+                            randomSession <- newSession ctx
+                            return (crand, randomSession)
+                        else return (crand, paramSession)
+
+        sendClientHello clientSession crand = do
             let ver = if tls13 then TLS12 else highestVer
             hrr <- usingState_ ctx getTLS13HRR
             unless hrr $ startHandshake ctx ver crand
@@ -281,11 +295,12 @@ handshakeClient' cparams ctx groups mparams = do
                 EarlySecret earlySecret <- usingHState ctx getTLS13Secret -- fixme
                 let clientEarlyTrafficSecret = deriveSecret usedHash earlySecret "c e traffic" hCh
                 logKey ctx (ClientEarlyTrafficSecret clientEarlyTrafficSecret)
+                runPacketFlight ctx $ sendChangeCipherSpec13 ctx
                 setTxState ctx usedHash usedCipher clientEarlyTrafficSecret
                 mapChunks_ 16384 (sendPacket13 ctx . AppData13) earlyData
                 usingHState ctx $ setTLS13RTT0Status RTT0Sent
 
-        recvServerHello sentExts = runRecvState ctx recvState
+        recvServerHello clientSession sentExts = runRecvState ctx recvState
           where recvState = RecvStateNext $ \p ->
                     case p of
                         Handshake hs -> onRecvStateHandshake ctx (RecvStateHandshake $ onServerHello ctx cparams clientSession sentExts) hs -- this adds SH to hstHandshakeMessages
@@ -816,6 +831,7 @@ handshakeClient13' cparams ctx groupSent usedCipher usedHash = do
         recvHandshake13hash ctx $ expectFinished serverHandshakeTrafficSecret
         return accepted
     hChSf <- transcriptHash ctx
+    runPacketFlight ctx $ sendChangeCipherSpec13 ctx
     when rtt0accepted $ sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
     setTxState ctx usedHash usedCipher clientHandshakeTrafficSecret
     sendClientFlight13 cparams ctx usedHash clientHandshakeTrafficSecret

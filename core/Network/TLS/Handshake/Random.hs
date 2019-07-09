@@ -59,11 +59,8 @@ suffix12 = B.pack [0x44, 0x4F, 0x57, 0x4E, 0x47, 0x52, 0x44, 0x01]
 suffix11 :: B.ByteString
 suffix11 = B.pack [0x44, 0x4F, 0x57, 0x4E, 0x47, 0x52, 0x44, 0x00]
 
--- ClientRandom in the second client hello for retry must be
--- the same as the first one.
-clientRandom :: Context -> Maybe ClientRandom -> IO ClientRandom
-clientRandom ctx Nothing   = ClientRandom <$> getStateRNG ctx 32
-clientRandom _   (Just cr) = return cr
+clientRandom :: Context -> IO ClientRandom
+clientRandom ctx = ClientRandom <$> getStateRNG ctx 32
 
 hrrRandom :: ServerRandom
 hrrRandom = ServerRandom $ B.pack [
