@@ -9,7 +9,7 @@
 --
 module Network.TLS.Handshake.Common13
        ( makeFinished
-       , makeVerifyData
+       , checkFinished
        , makeServerKeyShare
        , makeClientKeyShare
        , fromServerKeyShare
@@ -73,8 +73,13 @@ makeFinished :: MonadIO m => Context -> Hash -> ByteString -> m Handshake13
 makeFinished ctx usedHash baseKey =
     Finished13 . makeVerifyData usedHash baseKey <$> transcriptHash ctx
 
+checkFinished :: MonadIO m => Hash -> ByteString -> ByteString -> ByteString -> m ()
+checkFinished usedHash baseKey hashValue verifyData = do
+    let verifyData' = makeVerifyData usedHash baseKey hashValue
+    unless (verifyData' == verifyData) $ decryptError "cannot verify finished"
+
 makeVerifyData :: Hash -> ByteString -> ByteString -> ByteString
-makeVerifyData usedHash baseKey hashValue = hmac usedHash finishedKey hashValue
+makeVerifyData usedHash baseKey = hmac usedHash finishedKey
   where
     hashSize = hashDigestSize usedHash
     finishedKey = hkdfExpandLabel usedHash baseKey "finished" "" hashSize

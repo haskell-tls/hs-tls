@@ -760,14 +760,11 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
       else when (established == NotEstablished) $
         setEstablished ctx (EarlyDataNotAllowed 3) -- hardcoding
 
-    let expectFinished hChBeforeCf (Finished13 verifyData') = do
-            let verifyData = makeVerifyData usedHash clientHandshakeTrafficSecret hChBeforeCf
-            if verifyData == verifyData' then liftIO $ do
-                handshakeTerminate13 ctx
-                setRxState ctx usedHash usedCipher clientApplicationTrafficSecret0
-               else
-                decryptError "cannot verify finished"
-            liftIO $ sendNewSessionTicket masterSecret sfSentTime
+    let expectFinished hChBeforeCf (Finished13 verifyData) = liftIO $ do
+            checkFinished usedHash clientHandshakeTrafficSecret hChBeforeCf verifyData
+            handshakeTerminate13 ctx
+            setRxState ctx usedHash usedCipher clientApplicationTrafficSecret0
+            sendNewSessionTicket masterSecret sfSentTime
         expectFinished _ hs = unexpected (show hs) (Just "finished 13")
 
     let expectEndOfEarlyData EndOfEarlyData13 =
@@ -1143,10 +1140,8 @@ postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = d
 
     (usedHash, _, applicationTrafficSecretN) <- getRxState ctx
 
-    let expectFinished hChBeforeCf (Finished13 verifyData') = do
-            let verifyData = makeVerifyData usedHash applicationTrafficSecretN hChBeforeCf
-            unless (verifyData == verifyData') $
-                decryptError "cannot verify finished"
+    let expectFinished hChBeforeCf (Finished13 verifyData) = do
+            checkFinished usedHash applicationTrafficSecretN hChBeforeCf verifyData
             void $ restoreHState ctx baseHState
         expectFinished _ hs = unexpected (show hs) (Just "finished 13")
 
