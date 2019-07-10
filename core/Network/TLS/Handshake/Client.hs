@@ -940,9 +940,8 @@ handshakeClient13' cparams ctx groupSent usedCipher usedHash = do
         unless ok $ decryptError "cannot verify CertificateVerify"
     expectCertVerify _ _ p = unexpected (show p) (Just "certificate verify")
 
-    expectFinished baseKey hashValue (Finished13 verifyData) = do
-        let verifyData' = makeVerifyData usedHash baseKey hashValue
-        when (verifyData' /= verifyData) $ decryptError "cannot verify finished"
+    expectFinished baseKey hashValue (Finished13 verifyData) =
+        checkFinished usedHash baseKey hashValue verifyData
     expectFinished _ _ p = unexpected (show p) (Just "server finished")
 
     setResumptionSecret masterSecret = do
