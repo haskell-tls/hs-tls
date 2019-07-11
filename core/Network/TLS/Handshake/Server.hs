@@ -781,8 +781,8 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
       else if rtt0OK then
         setPendingActions ctx [PendingAction expectEndOfEarlyData
                               ,PendingActionHash expectFinished]
-      else do
-        setPendingActions ctx [PendingActionHash expectFinished]
+      else
+        runRecvHandshake13 $ recvHandshake13hash ctx expectFinished
   where
     setServerParameter = do
         srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
