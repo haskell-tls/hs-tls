@@ -203,12 +203,17 @@ recvPacket13 ctx = liftIO $ do
                 _           -> return $ Left err
         Left err      -> return $ Left err
         Right record -> do
-            pkt <- processPacket13 ctx record
-            if isEmptyHandshake13 pkt then
+            pktRecv <- processPacket13 ctx record
+            if isEmptyHandshake13 pktRecv then
                 -- When a handshake record is fragmented we continue receiving
                 -- in order to feed stHandshakeRecordCont13
                 recvPacket13 ctx
               else do
+                pkt <- case pktRecv of
+                        Right (Handshake13 hss) ->
+                            ctxWithHooks ctx $ \hooks ->
+                                Right . Handshake13 <$> mapM (hookRecvHandshake13 hooks) hss
+                        _                       -> return pktRecv
                 case pkt of
                     Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p
                     _       -> return ()

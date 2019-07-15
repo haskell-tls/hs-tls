@@ -49,6 +49,7 @@ module Network.TLS.Context
 
     -- * Context hooks
     , contextHookSetHandshakeRecv
+    , contextHookSetHandshake13Recv
     , contextHookSetCertificateRecv
     , contextHookSetLogging
 
@@ -200,6 +201,10 @@ contextNewOnSocket sock params = contextNew sock params
 contextHookSetHandshakeRecv :: Context -> (Handshake -> IO Handshake) -> IO ()
 contextHookSetHandshakeRecv context f =
     contextModifyHooks context (\hooks -> hooks { hookRecvHandshake = f })
+
+contextHookSetHandshake13Recv :: Context -> (Handshake13 -> IO Handshake13) -> IO ()
+contextHookSetHandshake13Recv context f =
+    contextModifyHooks context (\hooks -> hooks { hookRecvHandshake13 = f })
 
 contextHookSetCertificateRecv :: Context -> (CertificateChain -> IO ()) -> IO ()
 contextHookSetCertificateRecv context f =

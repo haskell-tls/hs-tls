@@ -8,7 +8,9 @@
 --
 module Network.TLS.Internal
     ( module Network.TLS.Struct
+    , module Network.TLS.Struct13
     , module Network.TLS.Packet
+    , module Network.TLS.Packet13
     , module Network.TLS.Receiving
     , module Network.TLS.Sending
     , module Network.TLS.Wire
@@ -17,7 +19,9 @@ module Network.TLS.Internal
     ) where
 
 import Network.TLS.Struct
+import Network.TLS.Struct13
 import Network.TLS.Packet
+import Network.TLS.Packet13
 import Network.TLS.Receiving
 import Network.TLS.Sending
 import Network.TLS.Wire

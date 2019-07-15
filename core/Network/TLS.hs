@@ -56,6 +56,7 @@ module Network.TLS
     , Handshake
     , Logging(..)
     , contextHookSetHandshakeRecv
+    , contextHookSetHandshake13Recv
     , contextHookSetCertificateRecv
     , contextHookSetLogging
     , contextModifyHooks
