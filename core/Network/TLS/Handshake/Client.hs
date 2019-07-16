@@ -72,20 +72,24 @@ handshakeClient cparams ctx = do
 --  ClientHello without modification, except as follows:"
 --
 -- So, the ClientRandom in the first client hello is necessary.
-handshakeClient' :: ClientParams -> Context -> [Group] -> Maybe ClientRandom -> IO ()
-handshakeClient' cparams ctx groups mcrand = do
+handshakeClient' :: ClientParams -> Context -> [Group] -> Maybe (ClientRandom, Version) -> IO ()
+handshakeClient' cparams ctx groups mparams = do
     updateMeasure ctx incrementNbHandshakes
-    sentExtensions <- sendClientHello mcrand
+    sentExtensions <- sendClientHello (fst <$> mparams)
     recvServerHello sentExtensions
     ver <- usingState_ ctx getVersion
+    unless (maybe True (\(_, v) -> v == ver) mparams) $
+        throwCore $ Error_Protocol ("version changed after hello retry", True, IllegalParameter)
     -- recvServerHello sets TLS13HRR according to the server random.
     -- For 1st server hello, getTLS13HR returns True if it is HRR and False otherwise.
     -- For 2nd server hello, getTLS13HR returns False since it is NOT HRR.
     hrr <- usingState_ ctx getTLS13HRR
-    if ver == TLS13 then do
+    if ver == TLS13 then
         if hrr then case drop 1 groups of
             []      -> throwCore $ Error_Protocol ("group is exhausted in the client side", True, IllegalParameter)
             groups' -> do
+                when (isJust mparams) $
+                    throwCore $ Error_Protocol ("server sent too many hello retries", True, UnexpectedMessage)
                 mks <- usingState_ ctx getTLS13KeyShare
                 case mks of
                   Just (KeyShareHRR selectedGroup)
@@ -94,7 +98,7 @@ handshakeClient' cparams ctx groups mcrand = do
                           clearTxState ctx
                           let cparams' = cparams { clientEarlyData = Nothing }
                           crand <- usingHState ctx $ hstClientRandom <$> get
-                          handshakeClient' cparams' ctx [selectedGroup] (Just crand)
+                          handshakeClient' cparams' ctx [selectedGroup] (Just (crand, ver))
                     | otherwise -> throwCore $ Error_Protocol ("server-selected group is not supported", True, IllegalParameter)
                   Just _  -> error "handshakeClient': invalid KeyShare value"
                   Nothing -> throwCore $ Error_Protocol ("key exchange not implemented in HRR, expected key_share extension", True, HandshakeFailure)
@@ -651,7 +655,7 @@ onServerHello ctx cparams sentExts (ServerHello rver serverRan serverSession cip
         when (established == Established && not eof) $
             throwCore $ Error_Protocol ("renegotiation to TLS 1.3 or later is not allowed", True, ProtocolVersion)
         ensureNullCompression compression
-        usingHState ctx $ setHelloParameters13 cipherAlg
+        failOnEitherError $ usingHState ctx $ setHelloParameters13 cipherAlg
         return RecvStateDone
       else do
         usingHState ctx $ setServerHelloParameters rver serverRan cipherAlg compressAlg

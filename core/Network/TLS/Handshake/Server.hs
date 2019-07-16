@@ -787,7 +787,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
     setServerParameter = do
         srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
         usingState_ ctx $ setVersion chosenVersion
-        usingHState ctx $ setHelloParameters13 usedCipher
+        failOnEitherError $ usingHState ctx $ setHelloParameters13 usedCipher
         return srand
 
     supportsPHA = case extensionLookup extensionID_PostHandshakeAuth exts >>= extensionDecode MsgTClientHello of
@@ -965,7 +965,7 @@ helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientS
     when twice $
         throwCore $ Error_Protocol ("Hello retry not allowed again", True, HandshakeFailure)
     usingState_ ctx $ setTLS13HRR True
-    usingHState ctx $ setHelloParameters13 usedCipher
+    failOnEitherError $ usingHState ctx $ setHelloParameters13 usedCipher
     let clientGroups = case extensionLookup extensionID_NegotiatedGroups exts >>= extensionDecode MsgTClientHello of
           Just (NegotiatedGroups gs) -> gs
           Nothing                    -> []

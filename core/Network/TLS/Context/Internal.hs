@@ -48,6 +48,7 @@ module Network.TLS.Context.Internal
 
     -- * Using context states
     , throwCore
+    , failOnEitherError
     , usingState
     , usingState_
     , runTxState
