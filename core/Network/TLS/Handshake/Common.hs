@@ -65,8 +65,10 @@ handleException ctx f = catchException f $ \exception -> do
     ignoreIOErr _ = return ()
 
 errorToAlert :: TLSError -> [(AlertLevel, AlertDescription)]
-errorToAlert (Error_Protocol (_, _, ad)) = [(AlertLevel_Fatal, ad)]
-errorToAlert _                           = [(AlertLevel_Fatal, InternalError)]
+errorToAlert (Error_Protocol (_, _, ad))   = [(AlertLevel_Fatal, ad)]
+errorToAlert (Error_Packet_unexpected _ _) = [(AlertLevel_Fatal, UnexpectedMessage)]
+errorToAlert (Error_Packet_Parsing _)      = [(AlertLevel_Fatal, DecodeError)]
+errorToAlert _                             = [(AlertLevel_Fatal, InternalError)]
 
 unexpected :: MonadIO m => String -> Maybe String -> m a
 unexpected msg expected = throwCore $ Error_Packet_unexpected msg (maybe "" (" expected: " ++) expected)
@@ -137,8 +139,8 @@ recvPacketHandshake ctx = do
                 EarlyDataNotAllowed n
                     | n > 0 -> do setEstablished ctx $ EarlyDataNotAllowed (n - 1)
                                   recvPacketHandshake ctx
-                _           -> fail ("unexpected type received. expecting handshake and got: " ++ show x)
-        Right x             -> fail ("unexpected type received. expecting handshake and got: " ++ show x)
+                _           -> unexpected (show x) (Just "handshake")
+        Right x             -> unexpected (show x) (Just "handshake")
         Left err            -> throwCore err
 
 -- | process a list of handshakes message in the recv state machine.
