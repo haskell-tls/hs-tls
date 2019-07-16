@@ -109,7 +109,8 @@ recvRecord compatSSLv2 appDataOverhead ctx
                     case res of
                       Left e -> return $ Left e
                       Right content ->
-                        either (return . Left) (\h -> getRecord ctx appDataOverhead h content) $ decodeDeprecatedHeader readlen content
+                        let hdr = decodeDeprecatedHeader readlen (B.take 3 content)
+                         in either (return . Left) (\h -> getRecord ctx appDataOverhead h content) hdr
 #endif
 
 isCCS :: Record a -> Bool
