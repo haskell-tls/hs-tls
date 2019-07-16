@@ -20,6 +20,7 @@ import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
 import Network.TLS
 import Network.TLS.Extra
+import Network.TLS.Internal
 import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.Async
@@ -115,6 +116,30 @@ runTLSPipeSimple13 params mode mEarlyData = runTLSPipe params tlsServer tlsClien
             minfo <- contextGetInformation ctx
             Just mode `assertEq` (minfo >>= infoTLS13HandshakeMode)
             byeBye ctx
+
+runTLSPipeCapture13 :: (ClientParams, ServerParams) -> PropertyM IO ([Handshake13], [Handshake13])
+runTLSPipeCapture13 params = do
+    sRef <- run $ newIORef []
+    cRef <- run $ newIORef []
+    runTLSPipe params (tlsServer sRef) (tlsClient cRef)
+    sReceived <- run $ readIORef sRef
+    cReceived <- run $ readIORef cRef
+    return (reverse sReceived, reverse cReceived)
+  where tlsServer ref ctx queue = do
+            installHook ctx ref
+            handshake ctx
+            d <- recvData ctx
+            writeChan queue [d]
+            bye ctx
+        tlsClient ref queue ctx = do
+            installHook ctx ref
+            handshake ctx
+            d <- readChan queue
+            sendData ctx (L.fromChunks [d])
+            byeBye ctx
+        installHook ctx ref =
+            let recv hss = modifyIORef ref (hss :) >> return hss
+             in contextHookSetHandshake13Recv ctx recv
 
 runTLSPipeSimpleKeyUpdate :: (ClientParams, ServerParams) -> PropertyM IO ()
 runTLSPipeSimpleKeyUpdate params = runTLSPipeN 3 params tlsServer tlsClient
@@ -414,6 +439,20 @@ prop_handshake13_rtt0_length = do
             | clientLen > serverMax = (PreSharedKey, Nothing)
             | otherwise             = (RTT0, Just earlyData)
     runTLSPipeSimple13 params2 mode mEarlyData
+
+prop_handshake13_ee_groups :: PropertyM IO ()
+prop_handshake13_ee_groups = do
+    (cli, srv) <- pick arbitraryPairParams13
+    let cliSupported = (clientSupported cli) { supportedGroups = [P256,X25519] }
+        svrSupported = (serverSupported srv) { supportedGroups = [X25519,P256] }
+        params = (cli { clientSupported = cliSupported }
+                 ,srv { serverSupported = svrSupported }
+                 )
+    (_, serverMessages) <- runTLSPipeCapture13 params
+    let isNegotiatedGroups (ExtensionRaw eid _) = eid == 0xa
+        eeMessagesHaveExt = [ any isNegotiatedGroups exts |
+                              EncryptedExtensions13 exts <- serverMessages ]
+    [True] `assertEq` eeMessagesHaveExt  -- one EE message with extension
 
 prop_handshake_ciphersuites :: PropertyM IO ()
 prop_handshake_ciphersuites = do
@@ -864,6 +903,7 @@ main = defaultMain $ testGroup "tls"
             , testProperty "TLS 1.3 RTT0" (monadicIO prop_handshake13_rtt0)
             , testProperty "TLS 1.3 RTT0 -> PSK" (monadicIO prop_handshake13_rtt0_fallback)
             , testProperty "TLS 1.3 RTT0 length" (monadicIO prop_handshake13_rtt0_length)
+            , testProperty "TLS 1.3 EE groups" (monadicIO prop_handshake13_ee_groups)
             , testProperty "TLS 1.3 Post-handshake auth" (monadicIO prop_post_handshake_auth)
             ]
 
