@@ -864,6 +864,8 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
                 Nothing                          ->
                     return (hkdfExtract usedHash zero zero, False)
                 Just (PreSharedKeyServerHello 0) -> do
+                    unless (B.length sec == hashSize) $
+                        throwCore $ Error_Protocol ("selected cipher is incompatible with selected PSK", True, IllegalParameter)
                     usingHState ctx $ setTLS13HandshakeMode PreSharedKey
                     return (sec, True)
                 Just _                           -> throwCore $ Error_Protocol ("selected identity out of range", True, IllegalParameter)
