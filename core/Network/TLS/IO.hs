@@ -163,17 +163,21 @@ sendPacket ctx pkt = do
     -- in ver <= TLS1.0, block ciphers using CBC are using CBC residue as IV, which can be guessed
     -- by an attacker. Hence, an empty packet is sent before a normal data packet, to
     -- prevent guessability.
-    withEmptyPacket <- liftIO $ readIORef $ ctxNeedEmptyPacket ctx
-    when (isNonNullAppData pkt && withEmptyPacket) $ sendPacket ctx $ AppData B.empty
+    when (isNonNullAppData pkt) $ do
+        withEmptyPacket <- liftIO $ readIORef $ ctxNeedEmptyPacket ctx
+        when withEmptyPacket $
+            writePacketBytes ctx (AppData B.empty) >>= sendBytes ctx
 
+    writePacketBytes ctx pkt >>= sendBytes ctx
+  where isNonNullAppData (AppData b) = not $ B.null b
+        isNonNullAppData _           = False
+
+writePacketBytes :: MonadIO m => Context -> Packet -> m ByteString
+writePacketBytes ctx pkt = do
     edataToSend <- liftIO $ do
                         withLog ctx $ \logging -> loggingPacketSent logging (show pkt)
                         writePacket ctx pkt
-    case edataToSend of
-        Left err         -> throwCore err
-        Right dataToSend -> sendBytes ctx dataToSend
-  where isNonNullAppData (AppData b) = not $ B.null b
-        isNonNullAppData _           = False
+    either throwCore return edataToSend
 
 sendPacket13 :: MonadIO m => Context -> Packet13 -> m ()
 sendPacket13 ctx pkt = writePacketBytes13 ctx pkt >>= sendBytes ctx
