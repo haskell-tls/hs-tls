@@ -808,9 +808,9 @@ handshakeClient13' :: ClientParams -> Context -> Cipher -> Hash -> IO ()
 handshakeClient13' cparams ctx usedCipher usedHash = do
     (resuming, handshakeSecret, clientHandshakeTrafficSecret, serverHandshakeTrafficSecret) <- switchToHandshakeSecret
     rtt0accepted <- runRecvHandshake13 $ do
-        accepted <- recvHandshake13preUpdate ctx expectEncryptedExtensions
-        unless resuming $ recvHandshake13preUpdate ctx expectCertRequest
-        recvFinished serverHandshakeTrafficSecret
+        accepted <- recvHandshake13 ctx expectEncryptedExtensions
+        unless resuming $ recvHandshake13 ctx expectCertRequest
+        recvHandshake13hash ctx $ expectFinished serverHandshakeTrafficSecret
         return accepted
     hChSf <- transcriptHash ctx
     when rtt0accepted $ sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
@@ -894,7 +894,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
 
     expectCertRequest (CertRequest13 token exts) = do
         processCertRequest13 ctx token exts
-        recvHandshake13preUpdate ctx expectCertAndVerify
+        recvHandshake13 ctx expectCertAndVerify
 
     expectCertRequest other = do
         usingHState ctx $ do
@@ -907,8 +907,7 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
         _ <- liftIO $ processCertificate cparams ctx (Certificates cc)
         let pubkey = certPubKey $ getCertificate $ getCertificateChainLeaf cc
         usingHState ctx $ setPublicKey pubkey
-        hChSc <- transcriptHash ctx
-        recvHandshake13preUpdate ctx $ expectCertVerify pubkey hChSc
+        recvHandshake13hash ctx $ expectCertVerify pubkey
     expectCertAndVerify p = unexpected (show p) (Just "server certificate")
 
     expectCertVerify pubkey hChSc (CertVerify13 sigAlg sig) = do
@@ -917,14 +916,10 @@ handshakeClient13' cparams ctx usedCipher usedHash = do
         unless ok $ decryptError "cannot verify CertificateVerify"
     expectCertVerify _ _ p = unexpected (show p) (Just "certificate verify")
 
-    recvFinished serverHandshakeTrafficSecret = do
-        hChSv <- transcriptHash ctx
-        let verifyData' = makeVerifyData usedHash serverHandshakeTrafficSecret hChSv
-        recvHandshake13preUpdate ctx $ expectFinished verifyData'
-
-    expectFinished verifyData' (Finished13 verifyData) =
+    expectFinished baseKey hashValue (Finished13 verifyData) = do
+        let verifyData' = makeVerifyData usedHash baseKey hashValue
         when (verifyData' /= verifyData) $ decryptError "cannot verify finished"
-    expectFinished _ p = unexpected (show p) (Just "server finished")
+    expectFinished _ _ p = unexpected (show p) (Just "server finished")
 
     setResumptionSecret masterSecret = do
         hChCf <- transcriptHash ctx

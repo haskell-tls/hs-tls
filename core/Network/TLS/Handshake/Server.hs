@@ -759,32 +759,30 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
       else when (established == NotEstablished) $
         setEstablished ctx (EarlyDataNotAllowed 3) -- hardcoding
 
-    let expectFinished (Finished13 verifyData') = do
-            hChBeforeCf <- transcriptHash ctx
+    let expectFinished hChBeforeCf (Finished13 verifyData') = do
             let verifyData = makeVerifyData usedHash clientHandshakeTrafficSecret hChBeforeCf
             if verifyData == verifyData' then liftIO $ do
                 setEstablished ctx Established
                 setRxState ctx usedHash usedCipher clientApplicationTrafficSecret0
                else
                 decryptError "cannot verify finished"
-        expectFinished hs = unexpected (show hs) (Just "finished 13")
+            liftIO $ sendNewSessionTicket masterSecret sfSentTime
+        expectFinished _ hs = unexpected (show hs) (Just "finished 13")
 
     let expectEndOfEarlyData EndOfEarlyData13 =
             setRxState ctx usedHash usedCipher clientHandshakeTrafficSecret
         expectEndOfEarlyData hs = unexpected (show hs) (Just "end of early data")
-    let sendNST = sendNewSessionTicket masterSecret sfSentTime
 
     if not authenticated && serverWantClientCert sparams then
         runRecvHandshake13 $ do
-          skip <- recvHandshake13postUpdate ctx expectCertificate
-          unless skip $ recvHandshake13postUpdate ctx (expectCertVerify sparams ctx)
-          recvHandshake13postUpdate ctx expectFinished
-          liftIO sendNST
+          skip <- recvHandshake13 ctx expectCertificate
+          unless skip $ recvHandshake13hash ctx (expectCertVerify sparams ctx)
+          recvHandshake13hash ctx expectFinished
       else if rtt0OK then
-        setPendingActions ctx [(expectEndOfEarlyData, return ())
-                              ,(expectFinished, sendNST)]
-      else do
-        setPendingActions ctx [(expectFinished, sendNST)]
+        setPendingActions ctx [PendingAction expectEndOfEarlyData
+                              ,PendingActionHash expectFinished]
+      else
+        runRecvHandshake13 $ recvHandshake13hash ctx expectFinished
   where
     setServerParameter = do
         srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
@@ -948,9 +946,8 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
     hashSize = hashDigestSize usedHash
     zero = B.replicate hashSize 0
 
-expectCertVerify :: MonadIO m => ServerParams -> Context -> Handshake13 -> m ()
-expectCertVerify sparams ctx (CertVerify13 sigAlg sig) = liftIO $ do
-    hChCc <- transcriptHash ctx
+expectCertVerify :: MonadIO m => ServerParams -> Context -> ByteString -> Handshake13 -> m ()
+expectCertVerify sparams ctx hChCc (CertVerify13 sigAlg sig) = liftIO $ do
     certs@(CertificateChain cc) <- checkValidClientCertChain ctx "finished 13 message expected"
     pubkey <- case cc of
                 [] -> throwCore $ Error_Protocol ("client certificate missing", True, HandshakeFailure)
@@ -959,7 +956,7 @@ expectCertVerify sparams ctx (CertVerify13 sigAlg sig) = liftIO $ do
     let keyAlg = fromJust "fromPubKey" (fromPubKey pubkey)
     verif <- checkCertVerify ctx keyAlg sigAlg sig hChCc
     clientCertVerify sparams ctx certs verif
-expectCertVerify _ _ hs = unexpected (show hs) (Just "certificate verify 13")
+expectCertVerify _ _ _ hs = unexpected (show hs) (Just "certificate verify 13")
 
 helloRetryRequest :: MonadIO m => ServerParams -> Context -> Version -> Cipher -> [ExtensionRaw] -> [Group] -> Session -> m ()
 helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession = liftIO $ do
@@ -1133,22 +1130,20 @@ postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = d
 
     (usedHash, _, applicationTrafficSecretN) <- getRxState ctx
 
-    let expectFinished (Finished13 verifyData') = do
-            hChBeforeCf <- transcriptHash ctx
+    let expectFinished hChBeforeCf (Finished13 verifyData') = do
             let verifyData = makeVerifyData usedHash applicationTrafficSecretN hChBeforeCf
             unless (verifyData == verifyData') $
                 decryptError "cannot verify finished"
-        expectFinished hs = unexpected (show hs) (Just "finished 13")
-
-        postAction = void $ restoreHState ctx baseHState
+            void $ restoreHState ctx baseHState
+        expectFinished _ hs = unexpected (show hs) (Just "finished 13")
 
     -- Note: here the server could send updated NST too, however the library
     -- currently has no API to handle resumption and client authentication
     -- together, see discussion in #133
     if isNullCertificateChain certs
-        then setPendingActions ctx [ (expectFinished, postAction) ]
-        else setPendingActions ctx [ (expectCertVerify sparams ctx, mempty)
-                                   , (expectFinished, postAction)
+        then setPendingActions ctx [ PendingActionHash expectFinished ]
+        else setPendingActions ctx [ PendingActionHash (expectCertVerify sparams ctx)
+                                   , PendingActionHash expectFinished
                                    ]
 
 postHandshakeAuthServerWith _ _ _ =

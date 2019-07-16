@@ -17,6 +17,7 @@ module Network.TLS.Handshake.State13
        , setHelloParameters13
        , transcriptHash
        , wrapAsMessageHash13
+       , PendingAction(..)
        , setPendingActions
        , popPendingAction
        ) where
