@@ -72,13 +72,13 @@ toValue (SessionData v cid comp msni sec) =
 fromValue :: SessionDataCopy -> SessionData
 #if MIN_VERSION_tls(1,5,0)
 fromValue (SessionDataCopy v cid comp msni sec' mg mti malpn' siz) =
-    (SessionData v cid comp msni sec mg mti malpn siz)
+    SessionData v cid comp msni sec mg mti malpn siz
   where
     !sec = convert sec'
     !malpn = convert <$> malpn'
 #else
 fromValue (SessionDataCopy v cid comp msni sec') =
-    (SessionData v cid comp msni sec)
+    SessionData v cid comp msni sec
   where
     !sec = convert sec'
 #endif
@@ -86,19 +86,19 @@ fromValue (SessionDataCopy v cid comp msni sec') =
 ----------------------------------------------------------------
 
 type SessionIDCopy = Block Word8
-data SessionDataCopy = SessionDataCopy {
-      ssVersion     :: !Version
-    , ssCipher      :: !CipherID
-    , ssCompression :: !CompressionID
-    , ssClientSNI   :: !(Maybe HostName)
-    , ssSecret      :: Block Word8
+data SessionDataCopy = SessionDataCopy
+    {- ssVersion     -} !Version
+    {- ssCipher      -} !CipherID
+    {- ssCompression -} !CompressionID
+    {- ssClientSNI   -} !(Maybe HostName)
+    {- ssSecret      -} (Block Word8)
 #if MIN_VERSION_tls(1,5,0)
-    , ssGroup       :: !(Maybe Group)
-    , ssTicketInfo  :: !(Maybe TLS13TicketInfo)
-    , ssALPN        :: !(Maybe (Block Word8))
-    , ssMaxEarlyDataSize :: Int
+    {- ssGroup       -} !(Maybe Group)
+    {- ssTicketInfo  -} !(Maybe TLS13TicketInfo)
+    {- ssALPN        -} !(Maybe (Block Word8))
+    {- ssMaxEarlyDataSize -} Int
 #endif
-    } deriving (Show,Eq)
+    deriving (Show,Eq)
 
 type Sec = Int64
 type Value = (SessionDataCopy, IORef Availability)
@@ -161,7 +161,7 @@ establish :: Reaper DB Item -> Sec
           -> SessionID -> SessionData -> IO ()
 establish reaper lifetime k sd = do
     ref <- newIORef Fresh
-    !p <- ((+ lifetime) . C.sec) <$> C.getTime C.Monotonic
+    !p <- (+ lifetime) . C.sec <$> C.getTime C.Monotonic
     let !v = (sd',ref)
     reaperAdd reaper (k',p,v,Add)
   where
@@ -174,7 +174,7 @@ resume reaper use k = do
     db <- reaperRead reaper
     case Q.lookup k' db of
       Nothing             -> return Nothing
-      Just (p,v@(sd,ref)) -> do
+      Just (p,v@(sd,ref)) ->
            case use of
                SingleUse -> do
                    available <- atomicModifyIORef' ref check
