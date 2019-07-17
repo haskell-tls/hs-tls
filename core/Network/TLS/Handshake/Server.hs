@@ -888,7 +888,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         loadPacket13 ctx $ Handshake13 [vrfy]
 
     sendExtensions rtt0OK = do
-        extensions' <- liftIO $ applicationProtocol ctx exts sparams
+        protoExt <- liftIO $ applicationProtocol ctx exts sparams
         msni <- liftIO $ usingState_ ctx getClientSNI
         let sniExtension = case msni of
               -- RFC6066: In this event, the server SHALL include
@@ -897,7 +897,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
               -- field of this extension SHALL be empty.
               Just _  -> Just $ ExtensionRaw extensionID_ServerName ""
               Nothing -> Nothing
-        mgroup <- usingHState ctx getNegotiatedGroup 
+        mgroup <- usingHState ctx getNegotiatedGroup
         let serverGroups = supportedGroups (ctxSupported ctx)
             groupExtension
               | null serverGroups = Nothing
@@ -906,7 +906,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         let earlyDataExtension
               | rtt0OK = Just $ ExtensionRaw extensionID_EarlyData $ extensionEncode (EarlyDataIndication Nothing)
               | otherwise = Nothing
-        let extensions = catMaybes [earlyDataExtension, groupExtension, sniExtension] ++ extensions'
+        let extensions = catMaybes [earlyDataExtension, groupExtension, sniExtension] ++ protoExt
         loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 extensions]
 
     sendNewSessionTicket masterSecret sfSentTime = when sendNST $ do
