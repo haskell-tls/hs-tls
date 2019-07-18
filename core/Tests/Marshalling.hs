@@ -1,5 +1,10 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Marshalling where
+module Marshalling
+    ( someWords8
+    , prop_header_marshalling_id
+    , prop_handshake_marshalling_id
+    , prop_handshake13_marshalling_id
+    ) where
 
 import Control.Monad
 import Control.Applicative
@@ -16,7 +21,7 @@ genByteString :: Int -> Gen B.ByteString
 genByteString i = B.pack <$> vector i
 
 instance Arbitrary Version where
-    arbitrary = elements [ SSL2, SSL3, TLS10, TLS11, TLS12 ]
+    arbitrary = elements [ SSL2, SSL3, TLS10, TLS11, TLS12, TLS13 ]
 
 instance Arbitrary ProtocolType where
     arbitrary = elements
@@ -40,6 +45,34 @@ instance Arbitrary Session where
         case i of
             2 -> Session . Just <$> genByteString 32
             _ -> return $ Session Nothing
+
+instance Arbitrary HashAlgorithm where
+    arbitrary = elements
+        [ Network.TLS.HashNone
+        , Network.TLS.HashMD5
+        , Network.TLS.HashSHA1
+        , Network.TLS.HashSHA224
+        , Network.TLS.HashSHA256
+        , Network.TLS.HashSHA384
+        , Network.TLS.HashSHA512
+        , Network.TLS.HashIntrinsic
+        ]
+
+instance Arbitrary SignatureAlgorithm where
+    arbitrary = elements
+        [ SignatureAnonymous
+        , SignatureRSA
+        , SignatureDSS
+        , SignatureECDSA
+        , SignatureRSApssRSAeSHA256
+        , SignatureRSApssRSAeSHA384
+        , SignatureRSApssRSAeSHA512
+        , SignatureEd25519
+        , SignatureEd448
+        , SignatureRSApsspssSHA256
+        , SignatureRSApsspssSHA384
+        , SignatureRSApsspssSHA512
+        ]
 
 instance Arbitrary DigitallySigned where
     arbitrary = DigitallySigned Nothing <$> genByteString 32
@@ -87,6 +120,31 @@ instance Arbitrary Handshake where
             , Finished <$> genByteString 12
             ]
 
+arbitraryCertReqContext :: Gen B.ByteString
+arbitraryCertReqContext = oneof [ return B.empty, genByteString 32 ]
+
+instance Arbitrary Handshake13 where
+    arbitrary = oneof
+            [ NewSessionTicket13
+                <$> arbitrary
+                <*> arbitrary
+                <*> genByteString 32 -- nonce
+                <*> genByteString 32 -- session ID
+                <*> return []
+            , pure EndOfEarlyData13
+            , EncryptedExtensions13 <$> return []
+            , CertRequest13
+                <$> arbitraryCertReqContext
+                <*> return []
+            , resize 2 (listOf arbitraryX509) >>= \certs -> Certificate13
+                <$> arbitraryCertReqContext
+                <*> return (CertificateChain certs)
+                <*> return (replicate (length certs) [])
+            , CertVerify13 <$> arbitrary <*> genByteString 32
+            , Finished13 <$> genByteString 12
+            , KeyUpdate13 <$> elements [ UpdateNotRequested, UpdateRequested ]
+            ]
+
 {- quickcheck property -}
 
 prop_header_marshalling_id :: Header -> Bool
@@ -94,9 +152,17 @@ prop_header_marshalling_id x = decodeHeader (encodeHeader x) == Right x
 
 prop_handshake_marshalling_id :: Handshake -> Bool
 prop_handshake_marshalling_id x = decodeHs (encodeHandshake x) == Right x
-  where decodeHs b = case decodeHandshakeRecord b of
-                        GotPartial _ -> error "got partial"
-                        GotError e   -> error ("got error: " ++ show e)
-                        GotSuccessRemaining _ _ -> error "got remaining byte left"
-                        GotSuccess (ty, content) -> decodeHandshake cp ty content
+  where decodeHs b = verifyResult (decodeHandshake cp) $ decodeHandshakeRecord b
         cp = CurrentParams { cParamsVersion = TLS10, cParamsKeyXchgType = Just CipherKeyExchange_RSA }
+
+prop_handshake13_marshalling_id :: Handshake13 -> Bool
+prop_handshake13_marshalling_id x = decodeHs (encodeHandshake13 x) == Right x
+  where decodeHs b = verifyResult decodeHandshake13 $ decodeHandshakeRecord13 b
+
+verifyResult :: (t -> b -> r) -> GetResult (t, b) -> r
+verifyResult fn result =
+    case result of
+        GotPartial _ -> error "got partial"
+        GotError e   -> error ("got error: " ++ show e)
+        GotSuccessRemaining _ _ -> error "got remaining byte left"
+        GotSuccess (ty, content) -> fn ty content
