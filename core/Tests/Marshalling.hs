@@ -14,7 +14,7 @@ import Network.TLS
 
 import qualified Data.ByteString as B
 import Data.Word
-import Data.X509
+import Data.X509 (CertificateChain(..))
 import Certificate
 
 genByteString :: Int -> Gen B.ByteString
@@ -86,6 +86,16 @@ arbitraryCompressionIDs = choose (0,200) >>= vector
 someWords8 :: Int -> Gen [Word8]
 someWords8 = vector
 
+instance Arbitrary ExtensionRaw where
+    arbitrary =
+        let arbitraryContent = choose (0,40) >>= genByteString
+         in ExtensionRaw <$> arbitrary <*> arbitraryContent
+
+arbitraryHelloExtensions :: Version -> Gen [ExtensionRaw]
+arbitraryHelloExtensions ver
+    | ver >= SSL3 = arbitrary
+    | otherwise   = return []  -- no hello extension with SSLv2
+
 instance Arbitrary CertificateType where
     arbitrary = elements
             [ CertificateType_RSA_Sign, CertificateType_DSS_Sign
@@ -95,27 +105,25 @@ instance Arbitrary CertificateType where
 
 instance Arbitrary Handshake where
     arbitrary = oneof
-            [ ClientHello
+            [ arbitrary >>= \ver -> ClientHello ver
                 <$> arbitrary
-                <*> arbitrary
                 <*> arbitrary
                 <*> arbitraryCiphersIDs
                 <*> arbitraryCompressionIDs
-                <*> return []
+                <*> arbitraryHelloExtensions ver
                 <*> return Nothing
-            , ServerHello
+            , arbitrary >>= \ver -> ServerHello ver
                 <$> arbitrary
                 <*> arbitrary
                 <*> arbitrary
                 <*> arbitrary
-                <*> arbitrary
-                <*> return []
+                <*> arbitraryHelloExtensions ver
             , Certificates . CertificateChain <$> resize 2 (listOf arbitraryX509)
             , pure HelloRequest
             , pure ServerHelloDone
             , ClientKeyXchg . CKX_RSA <$> genByteString 48
             --, liftM  ServerKeyXchg
-            , liftM3 CertRequest arbitrary (return Nothing) (return [])
+            , liftM3 CertRequest arbitrary (return Nothing) (listOf arbitraryDN)
             , CertVerify <$> arbitrary
             , Finished <$> genByteString 12
             ]
@@ -130,16 +138,16 @@ instance Arbitrary Handshake13 where
                 <*> arbitrary
                 <*> genByteString 32 -- nonce
                 <*> genByteString 32 -- session ID
-                <*> return []
+                <*> arbitrary
             , pure EndOfEarlyData13
-            , EncryptedExtensions13 <$> return []
+            , EncryptedExtensions13 <$> arbitrary
             , CertRequest13
                 <$> arbitraryCertReqContext
-                <*> return []
+                <*> arbitrary
             , resize 2 (listOf arbitraryX509) >>= \certs -> Certificate13
                 <$> arbitraryCertReqContext
                 <*> return (CertificateChain certs)
-                <*> return (replicate (length certs) [])
+                <*> replicateM (length certs) arbitrary
             , CertVerify13 <$> arbitrary <*> genByteString 32
             , Finished13 <$> genByteString 12
             , KeyUpdate13 <$> elements [ UpdateNotRequested, UpdateRequested ]

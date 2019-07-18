@@ -5,6 +5,7 @@ module Certificate
     ( arbitraryX509
     , arbitraryX509WithKey
     , arbitraryX509WithKeyAndUsage
+    , arbitraryDN
     , arbitraryKeyUsage
     , simpleCertificate
     , simpleX509
