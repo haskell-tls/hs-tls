@@ -872,6 +872,7 @@ main = defaultMain $ testGroup "tls"
         tests_marshalling = testGroup "Marshalling"
             [ testProperty "Header" prop_header_marshalling_id
             , testProperty "Handshake" prop_handshake_marshalling_id
+            , testProperty "Handshake13" prop_handshake13_marshalling_id
             ]
         tests_ciphers = testGroup "Ciphers"
             [ testProperty "Bulk" propertyBulkFunctional ]
