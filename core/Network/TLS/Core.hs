@@ -208,6 +208,7 @@ recvData13 ctx = do
                 -- putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
             loopHandshake13 hs
         loopHandshake13 (KeyUpdate13 mode:hs) = do
+            checkAlignment hs
             established <- ctxEstablished ctx
             -- Though RFC 8446 Sec 4.6.3 does not clearly says,
             -- unidirectional key update is legal.
@@ -239,15 +240,23 @@ recvData13 ctx = do
                     -- like regular handshake code.
                     withWriteLock ctx $ handleException ctx $
                         case action of
-                            PendingAction pa ->
+                            PendingAction needAligned pa -> do
+                                when needAligned $ checkAlignment hs
                                 processHandshake13 ctx h >> pa h
-                            PendingActionHash pa -> do
+                            PendingActionHash needAligned pa -> do
+                                when needAligned $ checkAlignment hs
                                 d <- transcriptHash ctx
                                 processHandshake13 ctx h
                                 pa d h
                     loopHandshake13 hs
 
         terminate = terminateWithWriteLock ctx (sendPacket13 ctx . Alert13)
+
+        checkAlignment hs = do
+            complete <- isRecvComplete ctx
+            unless (complete && null hs) $
+                let reason = "received message not aligned with record boundary"
+                 in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
 
 -- the other side could have close the connection already, so wrap
 -- this in a try and ignore all exceptions

@@ -137,9 +137,9 @@ data Established = NotEstablished
                  deriving (Eq, Show)
 
 data PendingAction
-    = PendingAction (Handshake13 -> IO ())
+    = PendingAction Bool (Handshake13 -> IO ())
       -- ^ simple pending action
-    | PendingActionHash (ByteString -> Handshake13 -> IO ())
+    | PendingActionHash Bool (ByteString -> Handshake13 -> IO ())
       -- ^ pending action taking transcript hash up to preceding message
 
 updateMeasure :: Context -> (Measurement -> Measurement) -> IO ()

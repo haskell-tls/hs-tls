@@ -13,6 +13,7 @@ module Network.TLS.IO
     , sendPacket13
     , recvPacket
     , recvPacket13
+    , isRecvComplete
     -- * Grouping multiple packets in the same flight
     , PacketFlightM
     , runPacketFlight
@@ -36,6 +37,7 @@ import qualified Data.ByteString as B
 
 import Data.IORef
 import Control.Monad.Reader
+import Control.Monad.State.Strict
 import Control.Exception (finally, throwIO)
 import System.IO.Error (mkIOError, eofErrorType)
 
@@ -238,6 +240,12 @@ recvPacket13 ctx = liftIO $ do
 isEmptyHandshake13 :: Either TLSError Packet13 -> Bool
 isEmptyHandshake13 (Right (Handshake13 [])) = True
 isEmptyHandshake13 _                        = False
+
+isRecvComplete :: Context -> IO Bool
+isRecvComplete ctx = usingState_ ctx $ do
+    cont <- gets stHandshakeRecordCont
+    cont13 <- gets stHandshakeRecordCont13
+    return $! isNothing cont && isNothing cont13
 
 -- | State monad used to group several packets together and send them on wire as
 -- single flight.  When packets are loaded in the monad, they are logged

@@ -720,6 +720,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
              return ()
     mCredInfo <- if authenticated then return Nothing else decideCredentialInfo
     (ecdhe,keyShare) <- makeServerKeyShare ctx clientKeyShare
+    ensureRecvComplete ctx
     let handshakeSecret = hkdfExtract usedHash (deriveSecret usedHash earlySecret "derived" (hash usedHash "")) ecdhe
     clientHandshakeTrafficSecret <- runPacketFlight ctx $ do
         sendServerHello keyShare srand extensions
@@ -778,11 +779,14 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
           skip <- recvHandshake13 ctx expectCertificate
           unless skip $ recvHandshake13hash ctx (expectCertVerify sparams ctx)
           recvHandshake13hash ctx expectFinished
+          ensureRecvComplete ctx
       else if rtt0OK then
-        setPendingActions ctx [PendingAction expectEndOfEarlyData
-                              ,PendingActionHash expectFinished]
+        setPendingActions ctx [PendingAction True expectEndOfEarlyData
+                              ,PendingActionHash True expectFinished]
       else
-        runRecvHandshake13 $ recvHandshake13hash ctx expectFinished
+        runRecvHandshake13 $ do
+          recvHandshake13hash ctx expectFinished
+          ensureRecvComplete ctx
   where
     setServerParameter = do
         srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
@@ -1148,9 +1152,9 @@ postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = d
     -- currently has no API to handle resumption and client authentication
     -- together, see discussion in #133
     if isNullCertificateChain certs
-        then setPendingActions ctx [ PendingActionHash expectFinished ]
-        else setPendingActions ctx [ PendingActionHash (expectCertVerify sparams ctx)
-                                   , PendingActionHash expectFinished
+        then setPendingActions ctx [ PendingActionHash False expectFinished ]
+        else setPendingActions ctx [ PendingActionHash False (expectCertVerify sparams ctx)
+                                   , PendingActionHash False expectFinished
                                    ]
 
 postHandshakeAuthServerWith _ _ _ =
