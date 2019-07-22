@@ -17,6 +17,7 @@ module Network.TLS.Handshake.Common13
        , checkCertVerify
        , makePSKBinder
        , replacePSKBinder
+       , sendChangeCipherSpec13
        , makeCertRequest
        , createTLS13TicketInfo
        , ageToObfuscatedAge
@@ -172,6 +173,16 @@ replacePSKBinder pskz binder = identities `B.append` binders
     bindersSize = B.length binder + 3
     identities  = B.take (B.length pskz - bindersSize) pskz
     binders     = runPut $ putOpaque16 $ runPut $ putOpaque8 binder
+
+----------------------------------------------------------------
+
+sendChangeCipherSpec13 :: Context -> PacketFlightM ()
+sendChangeCipherSpec13 ctx = do
+    sent <- usingHState ctx $ do
+                b <- getCCS13Sent
+                unless b $ setCCS13Sent True
+                return b
+    unless sent $ loadPacket13 ctx ChangeCipherSpec13
 
 ----------------------------------------------------------------
 

@@ -724,6 +724,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
     let handshakeSecret = hkdfExtract usedHash (deriveSecret usedHash earlySecret "derived" (hash usedHash "")) ecdhe
     clientHandshakeTrafficSecret <- runPacketFlight ctx $ do
         sendServerHello keyShare srand extensions
+        sendChangeCipherSpec13 ctx
     ----------------------------------------------------------------
         hChSh <- transcriptHash ctx
         let clientHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
@@ -734,7 +735,6 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
             setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlyTrafficSecret else clientHandshakeTrafficSecret
             setTxState ctx usedHash usedCipher serverHandshakeTrafficSecret
     ----------------------------------------------------------------
-        loadPacket13 ctx ChangeCipherSpec13
         sendExtensions rtt0OK
         case mCredInfo of
             Nothing              -> return ()
@@ -989,7 +989,9 @@ helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientS
                            ,ExtensionRaw extensionID_SupportedVersions selectedVersion]
               hrr = ServerHello13 hrrRandom clientSession (cipherID usedCipher) extensions
           usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
-          sendPacket13 ctx $ Handshake13 [hrr]
+          runPacketFlight ctx $ do
+                loadPacket13 ctx $ Handshake13 [hrr]
+                sendChangeCipherSpec13 ctx
           handshakeServer sparams ctx
 
 findHighestVersionFrom :: Version -> [Version] -> Maybe Version
