@@ -193,6 +193,11 @@ sendChangeCipherSpec13 ctx = do
 
 ----------------------------------------------------------------
 
+-- | TLS13 handshake wrap up & clean up.  Contrary to @handshakeTerminate@, this
+-- does not handle session, which is managed separately for TLS 1.3.  This does
+-- not reset byte counters because renegotiation is not allowed.  And a few more
+-- state attributes are preserved, necessary for TLS13 handshake modes, session
+-- tickets and post-handshake authentication.
 handshakeTerminate13 :: Context -> IO ()
 handshakeTerminate13 ctx = do
     -- forget most handshake data
