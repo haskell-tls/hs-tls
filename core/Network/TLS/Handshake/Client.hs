@@ -839,7 +839,7 @@ handshakeClient13' cparams ctx groupSent usedCipher usedHash = do
     sendClientFlight13 cparams ctx usedHash clientHandshakeTrafficSecret
     masterSecret <- switchToTrafficSecret handshakeSecret hChSf
     setResumptionSecret masterSecret
-    setEstablished ctx Established
+    handshakeTerminate13 ctx
   where
     hashSize = hashDigestSize usedHash
     zero = B.replicate hashSize 0
@@ -940,9 +940,8 @@ handshakeClient13' cparams ctx groupSent usedCipher usedHash = do
         unless ok $ decryptError "cannot verify CertificateVerify"
     expectCertVerify _ _ p = unexpected (show p) (Just "certificate verify")
 
-    expectFinished baseKey hashValue (Finished13 verifyData) = do
-        let verifyData' = makeVerifyData usedHash baseKey hashValue
-        when (verifyData' /= verifyData) $ decryptError "cannot verify finished"
+    expectFinished baseKey hashValue (Finished13 verifyData) =
+        checkFinished usedHash baseKey hashValue verifyData
     expectFinished _ _ p = unexpected (show p) (Just "server finished")
 
     setResumptionSecret masterSecret = do

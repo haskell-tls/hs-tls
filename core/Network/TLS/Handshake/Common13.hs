@@ -9,7 +9,7 @@
 --
 module Network.TLS.Handshake.Common13
        ( makeFinished
-       , makeVerifyData
+       , checkFinished
        , makeServerKeyShare
        , makeClientKeyShare
        , fromServerKeyShare
@@ -18,6 +18,7 @@ module Network.TLS.Handshake.Common13
        , makePSKBinder
        , replacePSKBinder
        , sendChangeCipherSpec13
+       , handshakeTerminate13
        , makeCertRequest
        , createTLS13TicketInfo
        , ageToObfuscatedAge
@@ -63,6 +64,7 @@ import Network.TLS.Types
 import Network.TLS.Wire
 import Time.System
 
+import Control.Concurrent.MVar
 import Control.Monad.State.Strict
 
 ----------------------------------------------------------------
@@ -71,8 +73,13 @@ makeFinished :: MonadIO m => Context -> Hash -> ByteString -> m Handshake13
 makeFinished ctx usedHash baseKey =
     Finished13 . makeVerifyData usedHash baseKey <$> transcriptHash ctx
 
+checkFinished :: MonadIO m => Hash -> ByteString -> ByteString -> ByteString -> m ()
+checkFinished usedHash baseKey hashValue verifyData = do
+    let verifyData' = makeVerifyData usedHash baseKey hashValue
+    unless (verifyData' == verifyData) $ decryptError "cannot verify finished"
+
 makeVerifyData :: Hash -> ByteString -> ByteString -> ByteString
-makeVerifyData usedHash baseKey hashValue = hmac usedHash finishedKey hashValue
+makeVerifyData usedHash baseKey = hmac usedHash finishedKey
   where
     hashSize = hashDigestSize usedHash
     finishedKey = hkdfExpandLabel usedHash baseKey "finished" "" hashSize
@@ -183,6 +190,36 @@ sendChangeCipherSpec13 ctx = do
                 unless b $ setCCS13Sent True
                 return b
     unless sent $ loadPacket13 ctx ChangeCipherSpec13
+
+----------------------------------------------------------------
+
+-- | TLS13 handshake wrap up & clean up.  Contrary to @handshakeTerminate@, this
+-- does not handle session, which is managed separately for TLS 1.3.  This does
+-- not reset byte counters because renegotiation is not allowed.  And a few more
+-- state attributes are preserved, necessary for TLS13 handshake modes, session
+-- tickets and post-handshake authentication.
+handshakeTerminate13 :: Context -> IO ()
+handshakeTerminate13 ctx = do
+    -- forget most handshake data
+    liftIO $ modifyMVar_ (ctxHandshake ctx) $ \ mhshake ->
+        case mhshake of
+            Nothing -> return Nothing
+            Just hshake ->
+                return $ Just (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
+                    { hstServerRandom = hstServerRandom hshake
+                    , hstMasterSecret = hstMasterSecret hshake
+                    , hstNegotiatedGroup = hstNegotiatedGroup hshake
+                    , hstHandshakeDigest = hstHandshakeDigest hshake
+                    , hstTLS13HandshakeMode = hstTLS13HandshakeMode hshake
+                    , hstTLS13RTT0Status = hstTLS13RTT0Status hshake
+                    , hstTLS13Secret = hstTLS13Secret hshake
+                    }
+    -- forget handshake data stored in TLS state
+    usingState_ ctx $ do
+        setTLS13KeyShare Nothing
+        setTLS13PreSharedKey Nothing
+    -- mark the secure connection up and running.
+    setEstablished ctx Established
 
 ----------------------------------------------------------------
 
