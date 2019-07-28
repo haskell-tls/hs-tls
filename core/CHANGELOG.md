@@ -1,10 +1,13 @@
 ## Version 1.5.1
 
 - Post-handshake authentication [#363](https://github.com/vincenthz/hs-tls/pull/363)
+- Middlebox compatibility [#386](https://github.com/vincenthz/hs-tls/pull/386)
+- Verification and configuration of session-ticket lifetime [#373](https://github.com/vincenthz/hs-tls/pull/373)
 - Fixing memory leak [#366](https://github.com/vincenthz/hs-tls/pull/366)
-- Improve version negotiation [#368](https://github.com/vincenthz/hs-tls/pull/368)
 - Don't send 0-RTT data when ticket is expired [#370](https://github.com/vincenthz/hs-tls/pull/370)
 - Handshake packet fragmentation [#371](https://github.com/vincenthz/hs-tls/pull/371)
+- Fix SSLv2 deprecated header [#383](https://github.com/vincenthz/hs-tls/pull/383)
+- Other improvements to TLS 1.3 and RFC conformance [#368](https://github.com/vincenthz/hs-tls/pull/368) [#372](https://github.com/vincenthz/hs-tls/pull/372) [#375](https://github.com/vincenthz/hs-tls/pull/375) [#376](https://github.com/vincenthz/hs-tls/pull/376) [#377](https://github.com/vincenthz/hs-tls/pull/377) [#378](https://github.com/vincenthz/hs-tls/pull/378) [#380](https://github.com/vincenthz/hs-tls/pull/380) [#382](https://github.com/vincenthz/hs-tls/pull/382) [#385](https://github.com/vincenthz/hs-tls/pull/385) [#387](https://github.com/vincenthz/hs-tls/pull/387) [#388](https://github.com/vincenthz/hs-tls/pull/388)
 
 ## Version 1.5.0
 
