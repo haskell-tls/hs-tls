@@ -226,8 +226,8 @@ handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverN
                                -- 'possibleHashSigAlgs' the result is Nothing, and the credential will
                                -- not be used to sign.  This avoids a failure later in 'decideHashSig'.
                                signingRank cred =
-                                   case credentialDigitalSignatureAlg cred of
-                                       Just sig -> findIndex (sig `signatureCompatible`) possibleHashSigAlgs
+                                   case credentialDigitalSignatureKey cred of
+                                       Just pub -> findIndex (pub `signatureCompatible`) possibleHashSigAlgs
                                        Nothing  -> Nothing
 
                                -- Finally compute credential lists and resulting cipher list.
@@ -438,21 +438,21 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
         -- the "signature_algorithms" extension in a client hello.
         -- If RSA is also used for key exchange, this function is
         -- not called.
-        decideHashSig sigAlg = do
+        decideHashSig pubKey = do
             usedVersion <- usingState_ ctx getVersion
             case usedVersion of
               TLS12 -> do
                   let hashSigs = hashAndSignaturesInCommon ctx exts
-                  case filter (sigAlg `signatureCompatible`) hashSigs of
-                      []  -> error ("no hash signature for " ++ show sigAlg)
+                  case filter (pubKey `signatureCompatible`) hashSigs of
+                      []  -> error ("no hash signature for " ++ pubkeyType pubKey)
                       x:_ -> return $ Just x
               _     -> return Nothing
 
         generateSKX_DHE kxsAlg = do
             serverParams  <- setup_DHE
-            sigAlg <- getLocalDigitalSignatureAlg ctx
-            mhashSig <- decideHashSig sigAlg
-            signed <- digitallySignDHParams ctx serverParams sigAlg mhashSig
+            pubKey <- getLocalDigitalSignatureKey ctx
+            mhashSig <- decideHashSig pubKey
+            signed <- digitallySignDHParams ctx serverParams pubKey mhashSig
             case kxsAlg of
                 KX_RSA -> return $ SKX_DHE_RSA serverParams signed
                 KX_DSS -> return $ SKX_DHE_DSS serverParams signed
@@ -474,9 +474,9 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                      []  -> throwCore $ Error_Protocol ("no common group", True, HandshakeFailure)
                      g:_ -> return g
             serverParams <- setup_ECDHE grp
-            sigAlg <- getLocalDigitalSignatureAlg ctx
-            mhashSig <- decideHashSig sigAlg
-            signed <- digitallySignECDHParams ctx serverParams sigAlg mhashSig
+            pubKey <- getLocalDigitalSignatureKey ctx
+            mhashSig <- decideHashSig pubKey
+            signed <- digitallySignECDHParams ctx serverParams pubKey mhashSig
             case kxsAlg of
                 KX_RSA   -> return $ SKX_ECDHE_RSA serverParams signed
                 KX_ECDSA -> return $ SKX_ECDHE_ECDSA serverParams signed
@@ -522,9 +522,10 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             -- Fetch all handshake messages up to now.
             msgs  <- usingHState ctx $ B.concat <$> getHandshakeMessages
 
-            sigAlgExpected <- getRemoteSignatureAlg
+            pubKey <- usingHState ctx getRemotePublicKey
+            checkDigitalSignatureKey pubKey
 
-            verif <- checkCertificateVerify ctx usedVersion sigAlgExpected msgs dsig
+            verif <- checkCertificateVerify ctx usedVersion pubKey msgs dsig
             clientCertVerify sparams ctx certs verif
             return $ RecvStateNext expectChangeCipher
 
@@ -535,12 +536,6 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
                         | otherwise                 -> throwCore $ Error_Protocol ("cert verify message missing", True, UnexpectedMessage)
                 Nothing -> return ()
             expectChangeCipher p
-
-        getRemoteSignatureAlg = do
-            pk <- usingHState ctx getRemotePublicKey
-            case fromPubKey pk of
-              Nothing  -> throwCore $ Error_Protocol ("unsupported remote public key type", True, HandshakeFailure)
-              Just sig -> return sig
 
         expectChangeCipher ChangeCipherSpec = do
             return $ RecvStateHandshake expectFinish
@@ -581,9 +576,11 @@ negotiatedGroupsInCommon ctx exts = case extensionLookup extensionID_NegotiatedG
         in serverGroups `intersect` clientGroups
     _                                    -> []
 
-credentialDigitalSignatureAlg :: Credential -> Maybe DigitalSignatureAlg
-credentialDigitalSignatureAlg cred =
-    findDigitalSignatureAlg (credentialPublicPrivateKeys cred)
+credentialDigitalSignatureKey :: Credential -> Maybe PubKey
+credentialDigitalSignatureKey cred
+    | isDigitalSignaturePair keys = Just pubkey
+    | otherwise = Nothing
+  where keys@(pubkey, _) = credentialPublicPrivateKeys cred
 
 filterSortCredentials :: Ord a => (Credential -> Maybe a) -> Credentials -> Credentials
 filterSortCredentials rankFun (Credentials creds) =
@@ -884,8 +881,8 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
             ess = replicate (length cs) []
         loadPacket13 ctx $ Handshake13 [Certificate13 "" certChain ess]
         hChSc <- transcriptHash ctx
-        sigAlg <- getLocalDigitalSignatureAlg ctx
-        vrfy <- makeCertVerify ctx sigAlg hashSig hChSc
+        pubkey <- getLocalDigitalSignatureKey ctx
+        vrfy <- makeCertVerify ctx pubkey hashSig hChSc
         loadPacket13 ctx $ Handshake13 [vrfy]
 
     sendExtensions rtt0OK = do
@@ -960,9 +957,9 @@ expectCertVerify sparams ctx hChCc (CertVerify13 sigAlg sig) = liftIO $ do
     pubkey <- case cc of
                 [] -> throwCore $ Error_Protocol ("client certificate missing", True, HandshakeFailure)
                 c:_ -> return $ certPubKey $ getCertificate c
+    checkDigitalSignatureKey pubkey
     usingHState ctx $ setPublicKey pubkey
-    let keyAlg = fromJust "fromPubKey" (fromPubKey pubkey)
-    verif <- checkCertVerify ctx keyAlg sigAlg sig hChCc
+    verif <- checkCertVerify ctx pubkey sigAlg sig hChCc
     clientCertVerify sparams ctx certs verif
 expectCertVerify _ _ _ hs = unexpected (show hs) (Just "certificate verify 13")
 
@@ -1066,9 +1063,9 @@ credentialsFindForSigning13 hss0 creds = loop hss0
 credentialsFindForSigning13' :: HashAndSignatureAlgorithm -> Credentials -> Maybe Credential
 credentialsFindForSigning13' sigAlg (Credentials l) = find forSigning l
   where
-    forSigning cred = case credentialDigitalSignatureAlg cred of
+    forSigning cred = case credentialDigitalSignatureKey cred of
         Nothing  -> False
-        Just sig -> sig `signatureCompatible` sigAlg
+        Just pub -> pub `signatureCompatible` sigAlg
 
 clientCertificate :: ServerParams -> Context -> CertificateChain -> IO ()
 clientCertificate sparams ctx certs = do

@@ -25,7 +25,6 @@ module Network.TLS.Crypto
     , PublicKey
     , PrivateKey
     , SignatureParams(..)
-    , findDigitalSignatureAlg
     , findKeyExchangeSignatureAlg
     , findFiniteFieldGroup
     , kxEncrypt
@@ -71,16 +70,6 @@ data KxError =
       RSAError RSA.Error
     | KxUnsupported
     deriving (Show)
-
-findDigitalSignatureAlg :: (PubKey, PrivKey) -> Maybe DigitalSignatureAlg
-findDigitalSignatureAlg keyPair =
-    case keyPair of
-        (PubKeyRSA     _, PrivKeyRSA      _)  -> Just DS_RSA
-        (PubKeyDSA     _, PrivKeyDSA      _)  -> Just DS_DSS
-        --(PubKeyECDSA   _, PrivKeyECDSA    _)  -> Just DS_ECDSA
-        (PubKeyEd25519 _, PrivKeyEd25519  _)  -> Just DS_Ed25519
-        (PubKeyEd448   _, PrivKeyEd448    _)  -> Just DS_Ed448
-        _                                     -> Nothing
 
 findKeyExchangeSignatureAlg :: (PubKey, PrivKey) -> Maybe KeyExchangeSignatureAlg
 findKeyExchangeSignatureAlg keyPair =

@@ -23,6 +23,7 @@ module Network.TLS.X509
     , FailedReason
     , ServiceID
     , wrapCertificateChecks
+    , pubkeyType
     ) where
 
 import Data.X509
@@ -60,3 +61,6 @@ wrapCertificateChecks l
     | SelfSigned `elem` l = CertificateUsageReject  CertificateRejectUnknownCA
     | EmptyChain `elem` l = CertificateUsageReject  CertificateRejectAbsent
     | otherwise          = CertificateUsageReject $ CertificateRejectOther (show l)
+
+pubkeyType :: PubKey -> String
+pubkeyType = show . pubkeyToAlg
