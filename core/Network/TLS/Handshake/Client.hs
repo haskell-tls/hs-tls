@@ -766,13 +766,9 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
 
         getSignaturePublicKey kxsAlg = do
             publicKey <- usingHState ctx getRemotePublicKey
-            case (kxsAlg, publicKey) of
-                (KX_RSA,   PubKeyRSA     _) -> return publicKey
-                (KX_DSS,   PubKeyDSA     _) -> return publicKey
-                (KX_ECDSA, PubKeyEC      _) -> return publicKey
-                (KX_ECDSA, PubKeyEd25519 _) -> return publicKey
-                (KX_ECDSA, PubKeyEd448   _) -> return publicKey
-                _                           -> throwCore $ Error_Protocol ("server public key algorithm is incompatible with " ++ show kxsAlg, True, HandshakeFailure)
+            unless (isKeyExchangeSignatureKey kxsAlg publicKey) $
+                throwCore $ Error_Protocol ("server public key algorithm is incompatible with " ++ show kxsAlg, True, HandshakeFailure)
+            return publicKey
 
 processServerKeyExchange ctx p = processCertificateRequest ctx p
 

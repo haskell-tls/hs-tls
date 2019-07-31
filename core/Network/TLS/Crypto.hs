@@ -25,6 +25,7 @@ module Network.TLS.Crypto
     , PublicKey
     , PrivateKey
     , SignatureParams(..)
+    , isKeyExchangeSignatureKey
     , findKeyExchangeSignatureAlg
     , findFiniteFieldGroup
     , kxEncrypt
@@ -70,6 +71,16 @@ data KxError =
       RSAError RSA.Error
     | KxUnsupported
     deriving (Show)
+
+isKeyExchangeSignatureKey :: KeyExchangeSignatureAlg -> PubKey -> Bool
+isKeyExchangeSignatureKey = f
+  where
+    f KX_RSA   (PubKeyRSA     _)   = True
+    f KX_DSS   (PubKeyDSA     _)   = True
+    f KX_ECDSA (PubKeyEC      _)   = True
+    f KX_ECDSA (PubKeyEd25519 _)   = True
+    f KX_ECDSA (PubKeyEd448   _)   = True
+    f _        _                   = False
 
 findKeyExchangeSignatureAlg :: (PubKey, PrivKey) -> Maybe KeyExchangeSignatureAlg
 findKeyExchangeSignatureAlg keyPair =
