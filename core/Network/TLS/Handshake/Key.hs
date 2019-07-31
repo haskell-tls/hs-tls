@@ -19,7 +19,7 @@ module Network.TLS.Handshake.Key
     , generateFFDHEShared
     , isDigitalSignaturePair
     , checkDigitalSignatureKey
-    , getLocalDigitalSignatureKey
+    , getLocalPublicKey
     , logKey
     , LogKey(..)
     ) where
@@ -114,12 +114,9 @@ isDigitalSignaturePair keyPair =
         (PubKeyEd448    _, PrivKeyEd448    _)  -> True
         _                                      -> False
 
-getLocalDigitalSignatureKey :: (MonadFail m, MonadIO m) => Context -> m PubKey
-getLocalDigitalSignatureKey ctx = do
-    keys@(pubKey, _) <- usingHState ctx getLocalPublicPrivateKeys
-    if isDigitalSignaturePair keys
-        then return pubKey
-        else fail "selected credential does not support signing"
+getLocalPublicKey :: MonadIO m => Context -> m PubKey
+getLocalPublicKey ctx =
+    usingHState ctx (fst <$> getLocalPublicPrivateKeys)
 
 ----------------------------------------------------------------
 

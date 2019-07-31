@@ -450,7 +450,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
 
         generateSKX_DHE kxsAlg = do
             serverParams  <- setup_DHE
-            pubKey <- getLocalDigitalSignatureKey ctx
+            pubKey <- getLocalPublicKey ctx
             mhashSig <- decideHashSig pubKey
             signed <- digitallySignDHParams ctx serverParams pubKey mhashSig
             case kxsAlg of
@@ -474,7 +474,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                      []  -> throwCore $ Error_Protocol ("no common group", True, HandshakeFailure)
                      g:_ -> return g
             serverParams <- setup_ECDHE grp
-            pubKey <- getLocalDigitalSignatureKey ctx
+            pubKey <- getLocalPublicKey ctx
             mhashSig <- decideHashSig pubKey
             signed <- digitallySignECDHParams ctx serverParams pubKey mhashSig
             case kxsAlg of
@@ -881,7 +881,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
             ess = replicate (length cs) []
         loadPacket13 ctx $ Handshake13 [Certificate13 "" certChain ess]
         hChSc <- transcriptHash ctx
-        pubkey <- getLocalDigitalSignatureKey ctx
+        pubkey <- getLocalPublicKey ctx
         vrfy <- makeCertVerify ctx pubkey hashSig hChSc
         loadPacket13 ctx $ Handshake13 [vrfy]
 

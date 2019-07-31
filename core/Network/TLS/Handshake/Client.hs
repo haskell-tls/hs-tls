@@ -576,7 +576,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
             --
             certSent <- usingHState ctx getClientCertSent
             when certSent $ do
-                pubKey      <- getLocalDigitalSignatureKey ctx
+                pubKey      <- getLocalPublicKey ctx
                 mhashSig    <- case ver of
                     TLS12 ->
                         let cHashSigs = supportedHashSignatures $ ctxSupported ctx
@@ -1017,7 +1017,7 @@ sendClientFlight13 cparams ctx usedHash baseKey = do
             [] -> return ()
             _  -> do
                   hChSc      <- transcriptHash ctx
-                  pubKey     <- getLocalDigitalSignatureKey ctx
+                  pubKey     <- getLocalPublicKey ctx
                   sigAlg     <- liftIO $ getLocalHashSigAlg ctx cHashSigs pubKey
                   vfy        <- makeCertVerify ctx pubKey sigAlg hChSc
                   loadPacket13 ctx $ Handshake13 [vfy]
