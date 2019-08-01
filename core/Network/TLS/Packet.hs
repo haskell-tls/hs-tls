@@ -59,9 +59,13 @@ module Network.TLS.Packet
     , putSignatureHashAlgorithm
     , getBinaryVersion
     , putBinaryVersion
+    , getClientRandom32
+    , putClientRandom32
+    , getServerRandom32
     , putServerRandom32
-    , putExtension
     , getExtensions
+    , putExtension
+    , getSession
     , putSession
     , putDNames
     , getDNames
