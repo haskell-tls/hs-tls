@@ -52,10 +52,13 @@ certificateCompatible (PubKeyEd448 _)    _      = True
 certificateCompatible _                  _      = False
 
 signatureCompatible :: PubKey -> HashAndSignatureAlgorithm -> Bool
-signatureCompatible (PubKeyRSA _)       (_, SignatureRSA)              = True
-signatureCompatible (PubKeyRSA _)       (_, SignatureRSApssRSAeSHA256) = True
-signatureCompatible (PubKeyRSA _)       (_, SignatureRSApssRSAeSHA384) = True
-signatureCompatible (PubKeyRSA _)       (_, SignatureRSApssRSAeSHA512) = True
+signatureCompatible (PubKeyRSA pk)      (HashSHA1,   SignatureRSA)     = kxCanUseRSApkcs1 pk SHA1
+signatureCompatible (PubKeyRSA pk)      (HashSHA256, SignatureRSA)     = kxCanUseRSApkcs1 pk SHA256
+signatureCompatible (PubKeyRSA pk)      (HashSHA384, SignatureRSA)     = kxCanUseRSApkcs1 pk SHA384
+signatureCompatible (PubKeyRSA pk)      (HashSHA512, SignatureRSA)     = kxCanUseRSApkcs1 pk SHA512
+signatureCompatible (PubKeyRSA pk)      (_, SignatureRSApssRSAeSHA256) = kxCanUseRSApss pk SHA256
+signatureCompatible (PubKeyRSA pk)      (_, SignatureRSApssRSAeSHA384) = kxCanUseRSApss pk SHA384
+signatureCompatible (PubKeyRSA pk)      (_, SignatureRSApssRSAeSHA512) = kxCanUseRSApss pk SHA512
 signatureCompatible (PubKeyDSA _)       (_, SignatureDSS)              = True
 signatureCompatible (PubKeyEC _)        (_, SignatureECDSA)            = True
 signatureCompatible (PubKeyEd25519 _)   (_, SignatureEd25519)          = True
