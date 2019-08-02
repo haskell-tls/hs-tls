@@ -193,7 +193,7 @@ recvData13 ctx = do
             -- read+write locks (which is also what we use for all calls to the
             -- session manager).
             withWriteLock ctx $ do
-                ResuptionSecret resumptionMasterSecret <- usingHState ctx getTLS13Secret
+                ResumptionSecret resumptionMasterSecret <- usingHState ctx getTLS13Secret
                 (usedHash, usedCipher, _) <- getTxState ctx
                 let hashSize = hashDigestSize usedHash
                     psk = hkdfExpandLabel usedHash resumptionMasterSecret "resumption" nonce hashSize

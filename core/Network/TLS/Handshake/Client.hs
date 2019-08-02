@@ -947,7 +947,7 @@ handshakeClient13' cparams ctx groupSent usedCipher usedHash = do
     setResumptionSecret masterSecret = do
         hChCf <- transcriptHash ctx
         let resumptionMasterSecret = deriveSecret usedHash masterSecret "res master" hChCf
-        usingHState ctx $ setTLS13Secret $ ResuptionSecret resumptionMasterSecret
+        usingHState ctx $ setTLS13Secret $ ResumptionSecret resumptionMasterSecret
 
 processCertRequest13 :: MonadIO m => Context -> CertReqContext -> [ExtensionRaw] -> m ()
 processCertRequest13 ctx token exts = do

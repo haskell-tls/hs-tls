@@ -85,7 +85,7 @@ import Data.ByteArray (ByteArrayAccess)
 
 data Secret13 = NoSecret
               | EarlySecret ByteString
-              | ResuptionSecret ByteString
+              | ResumptionSecret ByteString
               deriving (Eq, Show)
 
 data HandshakeKeyState = HandshakeKeyState
