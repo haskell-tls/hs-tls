@@ -1135,10 +1135,10 @@ postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = d
     processHandshake13 ctx certReq
     processHandshake13 ctx h
 
-    (usedHash, _, applicationTrafficSecretN) <- getRxState ctx
+    (usedHash, _, applicationSecretN) <- getRxState ctx
 
     let expectFinished hChBeforeCf (Finished13 verifyData) = do
-            checkFinished usedHash applicationTrafficSecretN hChBeforeCf verifyData
+            checkFinished usedHash applicationSecretN hChBeforeCf verifyData
             void $ restoreHState ctx baseHState
         expectFinished _ hs = unexpected (show hs) (Just "finished 13")
 

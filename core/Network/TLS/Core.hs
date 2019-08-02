@@ -297,9 +297,9 @@ keyUpdate :: Context
           -> (Context -> Hash -> Cipher -> C8.ByteString -> IO ())
           -> IO ()
 keyUpdate ctx getState setState = do
-    (usedHash, usedCipher, applicationTrafficSecretN) <- getState ctx
-    let applicationTrafficSecretN1 = hkdfExpandLabel usedHash applicationTrafficSecretN "traffic upd" "" $ hashDigestSize usedHash
-    setState ctx usedHash usedCipher applicationTrafficSecretN1
+    (usedHash, usedCipher, applicationSecretN) <- getState ctx
+    let applicationSecretN1 = hkdfExpandLabel usedHash applicationSecretN "traffic upd" "" $ hashDigestSize usedHash
+    setState ctx usedHash usedCipher applicationSecretN1
 
 -- | How to update keys in TLS 1.3
 data KeyUpdateRequest = OneWay -- ^ Unidirectional key update
