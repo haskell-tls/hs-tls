@@ -34,6 +34,14 @@ module Network.TLS.Handshake.Common13
        , runRecvHandshake13
        , recvHandshake13
        , recvHandshake13hash
+       , Choice(..)
+       , makeChoice
+       , calcEarlySecret
+       , calculateEarlySecret
+       , calculateHandshakeSecret
+       , calculateApplicationSecret
+       , calculateResumptionSecret
+       , calcPSK
        ) where
 
 import qualified Data.ByteArray as BA
@@ -399,3 +407,103 @@ isHashSignatureValid13 (HashIntrinsic, s) =
 isHashSignatureValid13 (h, SignatureECDSA) =
     h `elem` [ HashSHA256, HashSHA384, HashSHA512 ]
 isHashSignatureValid13 _ = False
+
+data Choice = Choice {
+    cVersion :: Version
+  , cCipher  :: Cipher
+  , cHash    :: Hash
+  , cZero    :: !ByteString
+  }
+
+makeChoice :: Version -> Cipher -> Choice
+makeChoice ver cipher = Choice ver cipher h zero
+  where
+    h = cipherHash cipher
+    zero = B.replicate (hashDigestSize h) 0
+
+----------------------------------------------------------------
+
+calculateEarlySecret :: Context -> Choice
+                     -> Either ByteString Secret13
+                     -> Bool -> IO SecretTriple
+calculateEarlySecret ctx choice maux initialized = do
+    hCh <- if initialized then
+               transcriptHash ctx
+             else do
+               hmsgs <- usingHState ctx getHandshakeMessages
+               return $ hash usedHash $ B.concat hmsgs
+    let earlySecret = case maux of
+          Right (EarlySecret sec) -> sec
+          Right _                 -> error "calculateEarlySecret"
+          Left  psk               -> hkdfExtract usedHash zero psk
+        clientEarlySecret = deriveSecret usedHash earlySecret "c e traffic" hCh
+        cets = ClientEarlySecret clientEarlySecret
+    logKey ctx cets
+    return $ SecretTriple (EarlySecret earlySecret) cets cets {- dummy -}
+  where
+    usedHash = cHash choice
+    zero = cZero choice
+
+calcEarlySecret :: Choice -> Maybe ByteString -> Secret13
+calcEarlySecret choice mpsk = EarlySecret sec
+  where
+    sec = hkdfExtract usedHash zero zeroOrPSK
+    usedHash = cHash choice
+    zero = cZero choice
+    zeroOrPSK = case mpsk of
+      Just psk -> psk
+      Nothing  -> zero
+
+calculateHandshakeSecret :: Context -> Choice -> Secret13 -> ByteString
+                         -> IO SecretTriple
+calculateHandshakeSecret ctx choice (EarlySecret sec) ecdhe = do
+        hChSh <- transcriptHash ctx
+        let handshakeSecret = hkdfExtract usedHash (deriveSecret usedHash sec "derived" (hash usedHash "")) ecdhe
+        let clientHandshakeSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
+            serverHandshakeSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
+        let shts = ServerHandshakeSecret serverHandshakeSecret
+            chts = ClientHandshakeSecret clientHandshakeSecret
+        logKey ctx shts
+        logKey ctx chts
+        return $ SecretTriple (HandshakeSecret handshakeSecret) chts shts
+  where
+    usedHash = cHash choice
+calculateHandshakeSecret _ _ _ _ = error "calculateHandshakeSecret"
+
+calculateApplicationSecret :: Context -> Choice -> Secret13 -> Maybe ByteString
+                       -> IO SecretTriple
+calculateApplicationSecret ctx choice (HandshakeSecret sec) mhChSf = do
+    hChSf <- case mhChSf of
+      Nothing -> transcriptHash ctx
+      Just h  -> return h
+    let applicationSecret = hkdfExtract usedHash (deriveSecret usedHash sec "derived" (hash usedHash "")) zero
+    let clientApplicationSecret0 = deriveSecret usedHash applicationSecret "c ap traffic" hChSf
+        serverApplicationSecret0 = deriveSecret usedHash applicationSecret "s ap traffic" hChSf
+        exporterMasterSecret = deriveSecret usedHash applicationSecret "exp master" hChSf
+    usingState_ ctx $ setExporterMasterSecret exporterMasterSecret
+    let sts0 = ServerApplicationSecret0 serverApplicationSecret0
+    let cts0 = ClientApplicationSecret0 clientApplicationSecret0
+    logKey ctx sts0
+    logKey ctx cts0
+    return $ SecretTriple (ApplicationSecret applicationSecret) cts0 sts0
+  where
+    usedHash = cHash choice
+    zero = cZero choice
+calculateApplicationSecret _ _ _ _ = error "calculateApplicationSecret"
+
+calculateResumptionSecret :: Context -> Choice -> Secret13 -> IO Secret13
+calculateResumptionSecret ctx choice (ApplicationSecret sec) = do
+    hChCf <- transcriptHash ctx
+    let resumptionMasterSecret = deriveSecret usedHash sec "res master" hChCf
+    return $ ResumptionSecret resumptionMasterSecret
+  where
+    usedHash = cHash choice
+calculateResumptionSecret _ _ _ = error "calculateResumptionSecret"
+
+calcPSK :: Choice -> Secret13 -> ByteString -> ByteString
+calcPSK choice (ResumptionSecret sec) nonce =
+    hkdfExpandLabel usedHash sec "resumption" nonce hashSize
+  where
+    usedHash = cHash choice
+    hashSize = hashDigestSize usedHash
+calcPSK _ _ _ = error "calcPSK"

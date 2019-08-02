@@ -19,6 +19,7 @@ module Network.TLS.Types
     , HostName
     , Second
     , Millisecond
+    , SecretTriple(..)
     , Secret13(..)
     , TrafficSecret(..)
     ) where
@@ -78,6 +79,12 @@ data Direction = Tx | Rx
 invertRole :: Role -> Role
 invertRole ClientRole = ServerRole
 invertRole ServerRole = ClientRole
+
+data SecretTriple = SecretTriple {
+    triBase   :: Secret13
+  , triClient :: TrafficSecret
+  , triServer :: TrafficSecret
+  } deriving (Eq, Show)
 
 data Secret13 = NoSecret
               | EarlySecret ByteString
