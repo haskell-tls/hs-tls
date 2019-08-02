@@ -14,7 +14,6 @@ module Network.TLS.Handshake.State
     , HandshakeDigest(..)
     , HandshakeMode13(..)
     , RTT0Status(..)
-    , Secret13(..)
     , CertReqCBdata
     , HandshakeM
     , newEmptyHandshake
@@ -82,11 +81,6 @@ import Network.TLS.Imports
 import Control.Monad.State.Strict
 import Data.X509 (CertificateChain)
 import Data.ByteArray (ByteArrayAccess)
-
-data Secret13 = NoSecret
-              | EarlySecret ByteString
-              | ResumptionSecret ByteString
-              deriving (Eq, Show)
 
 data HandshakeKeyState = HandshakeKeyState
     { hksRemotePublicKey :: !(Maybe PubKey)

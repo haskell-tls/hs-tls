@@ -49,7 +49,7 @@ import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.PostHandshake
 import Network.TLS.KeySchedule
-import Network.TLS.Types (Role(..), HostName)
+import Network.TLS.Types (Role(..), HostName, Secret13(..))
 import Network.TLS.Util (catchException, mapChunks_)
 import Network.TLS.Extension
 import qualified Network.TLS.State as S

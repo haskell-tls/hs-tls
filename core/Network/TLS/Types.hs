@@ -19,6 +19,7 @@ module Network.TLS.Types
     , HostName
     , Second
     , Millisecond
+    , Secret13(..)
     ) where
 
 import Network.TLS.Imports
@@ -76,3 +77,8 @@ data Direction = Tx | Rx
 invertRole :: Role -> Role
 invertRole ClientRole = ServerRole
 invertRole ServerRole = ClientRole
+
+data Secret13 = NoSecret
+              | EarlySecret ByteString
+              | ResumptionSecret ByteString
+              deriving (Eq, Show)
