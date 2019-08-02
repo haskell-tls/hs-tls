@@ -267,7 +267,7 @@ runTxState ctx f = do
 
 runRxState :: Context -> RecordM a -> IO (Either TLSError a)
 runRxState ctx f = do
-    ver <- usingState_ ctx (getVersionWithDefault $ maximum $ supportedVersions $ ctxSupported ctx)
+    ver <- usingState_ ctx getVersion
     -- For 1.3, ver is just ignored. So, it is not necessary to convert ver.
     let opt = RecordOptions { recordVersion = ver
                             , recordTLS13   = ver >= TLS13
