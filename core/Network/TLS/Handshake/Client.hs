@@ -295,10 +295,10 @@ handshakeClient' cparams ctx groups mparams = do
                 hmsgs <- usingHState ctx getHandshakeMessages
                 let hCh = hash usedHash $ B.concat hmsgs -- fixme
                 EarlySecret earlySecret <- usingHState ctx getTLS13Secret -- fixme
-                let clientEarlyTrafficSecret = deriveSecret usedHash earlySecret "c e traffic" hCh
-                logKey ctx (ClientEarlySecret clientEarlyTrafficSecret)
+                let clientEarlySecret = deriveSecret usedHash earlySecret "c e traffic" hCh
+                logKey ctx (ClientEarlySecret clientEarlySecret)
                 runPacketFlight ctx $ sendChangeCipherSpec13 ctx
-                setTxState ctx usedHash usedCipher clientEarlyTrafficSecret
+                setTxState ctx usedHash usedCipher clientEarlySecret
                 mapChunks_ 16384 (sendPacket13 ctx . AppData13) earlyData
                 usingHState ctx $ setTLS13RTT0Status RTT0Sent
 
@@ -822,17 +822,17 @@ handshakeClient13 cparams ctx groupSent = do
 
 handshakeClient13' :: ClientParams -> Context -> Maybe Group -> Cipher -> Hash -> IO ()
 handshakeClient13' cparams ctx groupSent usedCipher usedHash = do
-    (resuming, handshakeSecret, clientHandshakeTrafficSecret, serverHandshakeTrafficSecret) <- switchToHandshakeSecret
+    (resuming, handshakeSecret, clientHandshakeSecret, serverHandshakeSecret) <- switchToHandshakeSecret
     rtt0accepted <- runRecvHandshake13 $ do
         accepted <- recvHandshake13 ctx expectEncryptedExtensions
         unless resuming $ recvHandshake13 ctx expectCertRequest
-        recvHandshake13hash ctx $ expectFinished serverHandshakeTrafficSecret
+        recvHandshake13hash ctx $ expectFinished serverHandshakeSecret
         return accepted
     hChSf <- transcriptHash ctx
     runPacketFlight ctx $ sendChangeCipherSpec13 ctx
     when rtt0accepted $ sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
-    setTxState ctx usedHash usedCipher clientHandshakeTrafficSecret
-    sendClientFlight13 cparams ctx usedHash clientHandshakeTrafficSecret
+    setTxState ctx usedHash usedCipher clientHandshakeSecret
+    sendClientFlight13 cparams ctx usedHash clientHandshakeSecret
     masterSecret <- switchToTrafficSecret handshakeSecret hChSf
     setResumptionSecret masterSecret
     handshakeTerminate13 ctx
@@ -846,24 +846,24 @@ handshakeClient13' cparams ctx groupSent usedCipher usedHash = do
         (earlySecret, resuming) <- makeEarlySecret
         let handshakeSecret = hkdfExtract usedHash (deriveSecret usedHash earlySecret "derived" (hash usedHash "")) ecdhe
         hChSh <- transcriptHash ctx
-        let clientHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
-            serverHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
-        logKey ctx (ServerHandshakeSecret serverHandshakeTrafficSecret)
-        logKey ctx (ClientHandshakeSecret clientHandshakeTrafficSecret)
-        setRxState ctx usedHash usedCipher serverHandshakeTrafficSecret
-        return (resuming, handshakeSecret, clientHandshakeTrafficSecret, serverHandshakeTrafficSecret)
+        let clientHandshakeSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
+            serverHandshakeSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
+        logKey ctx (ServerHandshakeSecret serverHandshakeSecret)
+        logKey ctx (ClientHandshakeSecret clientHandshakeSecret)
+        setRxState ctx usedHash usedCipher serverHandshakeSecret
+        return (resuming, handshakeSecret, clientHandshakeSecret, serverHandshakeSecret)
 
     switchToTrafficSecret handshakeSecret hChSf = do
         ensureRecvComplete ctx
         let masterSecret = hkdfExtract usedHash (deriveSecret usedHash handshakeSecret "derived" (hash usedHash "")) zero
-        let clientApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "c ap traffic" hChSf
-            serverApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "s ap traffic" hChSf
+        let clientApplicationSecret0 = deriveSecret usedHash masterSecret "c ap traffic" hChSf
+            serverApplicationSecret0 = deriveSecret usedHash masterSecret "s ap traffic" hChSf
             exporterMasterSecret = deriveSecret usedHash masterSecret "exp master" hChSf
         usingState_ ctx $ setExporterMasterSecret exporterMasterSecret
-        logKey ctx (ServerApplicationSecret0 serverApplicationTrafficSecret0)
-        logKey ctx (ClientApplicationSecret0 clientApplicationTrafficSecret0)
-        setTxState ctx usedHash usedCipher clientApplicationTrafficSecret0
-        setRxState ctx usedHash usedCipher serverApplicationTrafficSecret0
+        logKey ctx (ServerApplicationSecret0 serverApplicationSecret0)
+        logKey ctx (ClientApplicationSecret0 clientApplicationSecret0)
+        setTxState ctx usedHash usedCipher clientApplicationSecret0
+        setRxState ctx usedHash usedCipher serverApplicationSecret0
         return masterSecret
 
     calcSharedKey = do

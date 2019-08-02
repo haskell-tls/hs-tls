@@ -694,8 +694,8 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
     (psk, binderInfo, is0RTTvalid) <- choosePSK
     hCh <- transcriptHash ctx
     let earlySecret = hkdfExtract usedHash zero psk
-        clientEarlyTrafficSecret = deriveSecret usedHash earlySecret "c e traffic" hCh
-    logKey ctx (ClientEarlySecret clientEarlyTrafficSecret)
+        clientEarlySecret = deriveSecret usedHash earlySecret "c e traffic" hCh
+    logKey ctx (ClientEarlySecret clientEarlySecret)
     extensions <- checkBinder earlySecret binderInfo
     hrr <- usingState_ ctx getTLS13HRR
     let authenticated = isJust binderInfo
@@ -719,38 +719,38 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
     (ecdhe,keyShare) <- makeServerKeyShare ctx clientKeyShare
     ensureRecvComplete ctx
     let handshakeSecret = hkdfExtract usedHash (deriveSecret usedHash earlySecret "derived" (hash usedHash "")) ecdhe
-    clientHandshakeTrafficSecret <- runPacketFlight ctx $ do
+    clientHandshakeSecret <- runPacketFlight ctx $ do
         sendServerHello keyShare srand extensions
         sendChangeCipherSpec13 ctx
     ----------------------------------------------------------------
         hChSh <- transcriptHash ctx
-        let clientHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
-            serverHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
+        let clientHandshakeSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
+            serverHandshakeSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
         liftIO $ do
-            logKey ctx (ServerHandshakeSecret serverHandshakeTrafficSecret)
-            logKey ctx (ClientHandshakeSecret clientHandshakeTrafficSecret)
-            setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlyTrafficSecret else clientHandshakeTrafficSecret
-            setTxState ctx usedHash usedCipher serverHandshakeTrafficSecret
+            logKey ctx (ServerHandshakeSecret serverHandshakeSecret)
+            logKey ctx (ClientHandshakeSecret clientHandshakeSecret)
+            setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlySecret else clientHandshakeSecret
+            setTxState ctx usedHash usedCipher serverHandshakeSecret
     ----------------------------------------------------------------
         sendExtensions rtt0OK
         case mCredInfo of
             Nothing              -> return ()
             Just (cred, hashSig) -> sendCertAndVerify cred hashSig
-        rawFinished <- makeFinished ctx usedHash serverHandshakeTrafficSecret
+        rawFinished <- makeFinished ctx usedHash serverHandshakeSecret
         loadPacket13 ctx $ Handshake13 [rawFinished]
-        return clientHandshakeTrafficSecret
+        return clientHandshakeSecret
     sfSentTime <- getCurrentTimeFromBase
     ----------------------------------------------------------------
     let masterSecret = hkdfExtract usedHash (deriveSecret usedHash handshakeSecret "derived" (hash usedHash "")) zero
     hChSf <- transcriptHash ctx
-    let clientApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "c ap traffic" hChSf
-        serverApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "s ap traffic" hChSf
+    let clientApplicationSecret0 = deriveSecret usedHash masterSecret "c ap traffic" hChSf
+        serverApplicationSecret0 = deriveSecret usedHash masterSecret "s ap traffic" hChSf
         exporterMasterSecret = deriveSecret usedHash masterSecret "exp master" hChSf
     usingState_ ctx $ setExporterMasterSecret exporterMasterSecret
     ----------------------------------------------------------------
-    logKey ctx (ServerApplicationSecret0 serverApplicationTrafficSecret0)
-    logKey ctx (ClientApplicationSecret0 clientApplicationTrafficSecret0)
-    setTxState ctx usedHash usedCipher serverApplicationTrafficSecret0
+    logKey ctx (ServerApplicationSecret0 serverApplicationSecret0)
+    logKey ctx (ClientApplicationSecret0 clientApplicationSecret0)
+    setTxState ctx usedHash usedCipher serverApplicationSecret0
     ----------------------------------------------------------------
     if rtt0OK then
         setEstablished ctx (EarlyDataAllowed rtt0max)
@@ -758,14 +758,14 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         setEstablished ctx (EarlyDataNotAllowed 3) -- hardcoding
 
     let expectFinished hChBeforeCf (Finished13 verifyData) = liftIO $ do
-            checkFinished usedHash clientHandshakeTrafficSecret hChBeforeCf verifyData
+            checkFinished usedHash clientHandshakeSecret hChBeforeCf verifyData
             handshakeTerminate13 ctx
-            setRxState ctx usedHash usedCipher clientApplicationTrafficSecret0
+            setRxState ctx usedHash usedCipher clientApplicationSecret0
             sendNewSessionTicket masterSecret sfSentTime
         expectFinished _ hs = unexpected (show hs) (Just "finished 13")
 
     let expectEndOfEarlyData EndOfEarlyData13 =
-            setRxState ctx usedHash usedCipher clientHandshakeTrafficSecret
+            setRxState ctx usedHash usedCipher clientHandshakeSecret
         expectEndOfEarlyData hs = unexpected (show hs) (Just "end of early data")
 
     if not authenticated && serverWantClientCert sparams then
