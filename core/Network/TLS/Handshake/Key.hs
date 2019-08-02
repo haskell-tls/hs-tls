@@ -21,7 +21,6 @@ module Network.TLS.Handshake.Key
     , checkDigitalSignatureKey
     , getLocalPublicKey
     , logKey
-    , LogKey(..)
     ) where
 
 import Control.Monad.State.Strict
@@ -120,30 +119,23 @@ getLocalPublicKey ctx =
 
 ----------------------------------------------------------------
 
-data LogKey = MasterSecret ByteString
-            | ClientEarlyTrafficSecret ByteString
-            | ServerHandshakeTrafficSecret ByteString
-            | ClientHandshakeTrafficSecret ByteString
-            | ServerTrafficSecret0 ByteString
-            | ClientTrafficSecret0 ByteString
-
-labelAndKey :: LogKey -> (String, ByteString)
-labelAndKey (MasterSecret key) =
+labelAndKey :: TrafficSecret -> (String, ByteString)
+labelAndKey (MasterSecret12 key) =
     ("CLIENT_RANDOM", key)
-labelAndKey (ClientEarlyTrafficSecret key) =
+labelAndKey (ClientEarlySecret key) =
     ("CLIENT_EARLY_TRAFFIC_SECRET", key)
-labelAndKey (ServerHandshakeTrafficSecret key) =
+labelAndKey (ServerHandshakeSecret key) =
     ("SERVER_HANDSHAKE_TRAFFIC_SECRET", key)
-labelAndKey (ClientHandshakeTrafficSecret key) =
+labelAndKey (ClientHandshakeSecret key) =
     ("CLIENT_HANDSHAKE_TRAFFIC_SECRET", key)
-labelAndKey (ServerTrafficSecret0 key) =
+labelAndKey (ServerApplicationSecret0 key) =
     ("SERVER_TRAFFIC_SECRET_0", key)
-labelAndKey (ClientTrafficSecret0 key) =
+labelAndKey (ClientApplicationSecret0 key) =
     ("CLIENT_TRAFFIC_SECRET_0", key)
 
 -- NSS Key Log Format
 -- See https://developer.mozilla.org/en-US/docs/Mozilla/Projects/NSS/Key_Log_Format
-logKey :: Context -> LogKey -> IO ()
+logKey :: Context -> TrafficSecret -> IO ()
 logKey ctx logkey = do
     mhst <- getHState ctx
     case mhst of

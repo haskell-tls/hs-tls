@@ -315,7 +315,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             sendPacket ctx $ Handshake [serverhello]
             let masterSecret = sessionSecret sessionData
             usingHState ctx $ setMasterSecret chosenVersion ServerRole masterSecret
-            logKey ctx (MasterSecret masterSecret)
+            logKey ctx (MasterSecret12 masterSecret)
             sendChangeCipherAndFinish ctx ServerRole
             recvChangeCipherAndFinish ctx
     handshakeTerminate ctx
@@ -695,7 +695,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
     hCh <- transcriptHash ctx
     let earlySecret = hkdfExtract usedHash zero psk
         clientEarlyTrafficSecret = deriveSecret usedHash earlySecret "c e traffic" hCh
-    logKey ctx (ClientEarlyTrafficSecret clientEarlyTrafficSecret)
+    logKey ctx (ClientEarlySecret clientEarlyTrafficSecret)
     extensions <- checkBinder earlySecret binderInfo
     hrr <- usingState_ ctx getTLS13HRR
     let authenticated = isJust binderInfo
@@ -727,8 +727,8 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         let clientHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
             serverHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
         liftIO $ do
-            logKey ctx (ServerHandshakeTrafficSecret serverHandshakeTrafficSecret)
-            logKey ctx (ClientHandshakeTrafficSecret clientHandshakeTrafficSecret)
+            logKey ctx (ServerHandshakeSecret serverHandshakeTrafficSecret)
+            logKey ctx (ClientHandshakeSecret clientHandshakeTrafficSecret)
             setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlyTrafficSecret else clientHandshakeTrafficSecret
             setTxState ctx usedHash usedCipher serverHandshakeTrafficSecret
     ----------------------------------------------------------------
@@ -748,8 +748,8 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         exporterMasterSecret = deriveSecret usedHash masterSecret "exp master" hChSf
     usingState_ ctx $ setExporterMasterSecret exporterMasterSecret
     ----------------------------------------------------------------
-    logKey ctx (ServerTrafficSecret0 serverApplicationTrafficSecret0)
-    logKey ctx (ClientTrafficSecret0 clientApplicationTrafficSecret0)
+    logKey ctx (ServerApplicationSecret0 serverApplicationTrafficSecret0)
+    logKey ctx (ClientApplicationSecret0 clientApplicationTrafficSecret0)
     setTxState ctx usedHash usedCipher serverApplicationTrafficSecret0
     ----------------------------------------------------------------
     if rtt0OK then

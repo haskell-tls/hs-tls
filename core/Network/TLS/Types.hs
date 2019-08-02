@@ -20,6 +20,7 @@ module Network.TLS.Types
     , Second
     , Millisecond
     , Secret13(..)
+    , TrafficSecret(..)
     ) where
 
 import Network.TLS.Imports
@@ -80,5 +81,18 @@ invertRole ServerRole = ClientRole
 
 data Secret13 = NoSecret
               | EarlySecret ByteString
+              | HandshakeSecret ByteString
+              | ApplicationSecret ByteString -- TLS 1.3 master secret
               | ResumptionSecret ByteString
               deriving (Eq, Show)
+
+data TrafficSecret =
+    -- TLS 1.2 or earlier
+    MasterSecret12 ByteString
+    -- TLS 1.3
+  | ClientEarlySecret        ByteString
+  | ServerHandshakeSecret    ByteString
+  | ClientHandshakeSecret    ByteString
+  | ServerApplicationSecret0 ByteString
+  | ClientApplicationSecret0 ByteString
+  deriving (Eq, Show)
