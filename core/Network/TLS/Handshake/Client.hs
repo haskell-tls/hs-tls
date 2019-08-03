@@ -644,7 +644,7 @@ onServerHello ctx cparams clientSession sentExts (ServerHello rver serverRan ser
         setVersion rver -- must be before processing supportedVersions ext
         mapM_ processServerExtension exts
 
-    setALPN ctx exts
+    setALPN ctx MsgTServerHello exts
 
     ver <- usingState_ ctx getVersion
 
@@ -888,7 +888,7 @@ handshakeClient13' cparams ctx groupSent choice = do
                  Just _                           -> throwCore $ Error_Protocol ("selected identity out of range", True, IllegalParameter)
 
     expectEncryptedExtensions (EncryptedExtensions13 eexts) = do
-        liftIO $ setALPN ctx eexts
+        liftIO $ setALPN ctx MsgTEncryptedExtensions eexts
         st <- usingHState ctx getTLS13RTT0Status
         if st == RTT0Sent then
             case extensionLookup extensionID_EarlyData eexts of
@@ -1016,8 +1016,8 @@ sendClientFlight13 cparams ctx usedHash baseKey = do
             , InternalError
             )
 
-setALPN :: Context -> [ExtensionRaw] -> IO ()
-setALPN ctx exts = case extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts >>= extensionDecode MsgTServerHello of
+setALPN :: Context -> MessageType -> [ExtensionRaw] -> IO ()
+setALPN ctx msgt exts = case extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts >>= extensionDecode msgt of
     Just (ApplicationLayerProtocolNegotiation [proto]) -> usingState_ ctx $ do
         mprotos <- getClientALPNSuggest
         case mprotos of
