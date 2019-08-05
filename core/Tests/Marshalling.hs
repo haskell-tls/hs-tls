@@ -133,7 +133,17 @@ arbitraryCertReqContext = oneof [ return B.empty, genByteString 32 ]
 
 instance Arbitrary Handshake13 where
     arbitrary = oneof
-            [ NewSessionTicket13
+            [ arbitrary >>= \ver -> ClientHello13 ver
+                <$> arbitrary
+                <*> arbitrary
+                <*> arbitraryCiphersIDs
+                <*> arbitraryHelloExtensions ver
+            , arbitrary >>= \ver -> ServerHello13
+                <$> arbitrary
+                <*> arbitrary
+                <*> arbitrary
+                <*> arbitraryHelloExtensions ver
+            , NewSessionTicket13
                 <$> arbitrary
                 <*> arbitrary
                 <*> genByteString 32 -- nonce
