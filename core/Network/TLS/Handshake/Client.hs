@@ -46,7 +46,6 @@ import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Random
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
-import Network.TLS.KeySchedule
 import Network.TLS.Wire
 
 handshakeClientWith :: ClientParams -> Context -> Handshake -> IO ()
@@ -203,9 +202,7 @@ handshakeClient' cparams ctx groups mparams = do
             case pskInfo of
                 Nothing -> return Nothing
                 Just (sid, _, sCipher, obfAge) ->
-                    let usedHash = cipherHash sCipher
-                        siz = hashDigestSize usedHash
-                        zero = B.replicate siz 0
+                    let zero = cZero $ makeChoice TLS13 sCipher
                         identity = PskIdentity sid obfAge
                         offeredPsks = PreSharedKeyClientHello [identity] [zero]
                      in return $ Just $ toExtensionRaw offeredPsks
@@ -232,14 +229,14 @@ handshakeClient' cparams ctx groups mparams = do
             case pskInfo of
                 Nothing -> return exts
                 Just (_, sdata, sCipher, _) -> do
-                      let usedHash = cipherHash sCipher
-                          siz = hashDigestSize usedHash
-                          zero = B.replicate siz 0
+                      let choice = makeChoice TLS13 sCipher
                           psk = sessionSecret sdata
-                          earlySecret = hkdfExtract usedHash zero psk
-                      usingHState ctx $ setTLS13Secret (EarlySecret earlySecret)
+                          earlySecret = calcEarlySecret choice (Just psk)
+                      usingHState ctx $ setTLS13Secret earlySecret
                       let ech = encodeHandshake ch
-                      binder <- makePSKBinder ctx earlySecret usedHash (siz + 3) (Just ech)
+                          h = cHash choice
+                          siz = hashDigestSize h
+                      binder <- makePSKBinder ctx earlySecret h (siz + 3) (Just ech)
                       let exts' = init exts ++ [adjust (last exts)]
                           adjust (ExtensionRaw eid withoutBinders) = ExtensionRaw eid withBinders
                             where
@@ -289,14 +286,13 @@ handshakeClient' cparams ctx groups mparams = do
             return (sCipher, earlyData)
 
         send0RTT (usedCipher, earlyData) = do
-                let usedHash = cipherHash usedCipher
-                -- fixme: not initialized yet
-                -- hCh <- transcriptHash ctx
-                hmsgs <- usingHState ctx getHandshakeMessages
-                let hCh = hash usedHash $ B.concat hmsgs -- fixme
-                EarlySecret earlySecret <- usingHState ctx getTLS13Secret -- fixme
-                let clientEarlySecret = deriveSecret usedHash earlySecret "c e traffic" hCh
-                logKey ctx (ClientEarlySecret clientEarlySecret)
+                let choice = makeChoice TLS13 usedCipher
+                    usedHash = cHash choice
+                earlySecret <- usingHState ctx getTLS13Secret
+                -- Client hello is stored in hstHandshakeDigest
+                -- But HandshakeDigestContext is not created yet.
+                earlyKey <- calculateEarlySecret ctx choice (Right earlySecret) False
+                let ClientEarlySecret clientEarlySecret = triClient earlyKey
                 runPacketFlight ctx $ sendChangeCipherSpec13 ctx
                 setTxState ctx usedHash usedCipher clientEarlySecret
                 mapChunks_ 16384 (sendPacket13 ctx . AppData13) earlyData
@@ -816,13 +812,15 @@ requiredCertKeyUsage cipher =
 
 handshakeClient13 :: ClientParams -> Context -> Maybe Group -> IO ()
 handshakeClient13 cparams ctx groupSent = do
-    usedCipher <- usingHState ctx getPendingCipher
-    let usedHash = cipherHash usedCipher
-    handshakeClient13' cparams ctx groupSent usedCipher usedHash
+    choice <- makeChoice TLS13 <$> usingHState ctx getPendingCipher
+    handshakeClient13' cparams ctx groupSent choice
 
-handshakeClient13' :: ClientParams -> Context -> Maybe Group -> Cipher -> Hash -> IO ()
-handshakeClient13' cparams ctx groupSent usedCipher usedHash = do
-    (resuming, handshakeSecret, clientHandshakeSecret, serverHandshakeSecret) <- switchToHandshakeSecret
+handshakeClient13' :: ClientParams -> Context -> Maybe Group -> Choice -> IO ()
+handshakeClient13' cparams ctx groupSent choice = do
+    (_, hkey, resuming) <- switchToHandshakeSecret
+    let handshakeSecret = triBase hkey
+        ClientHandshakeSecret clientHandshakeSecret = triClient hkey
+        ServerHandshakeSecret serverHandshakeSecret = triServer hkey
     rtt0accepted <- runRecvHandshake13 $ do
         accepted <- recvHandshake13 ctx expectEncryptedExtensions
         unless resuming $ recvHandshake13 ctx expectCertRequest
@@ -833,38 +831,33 @@ handshakeClient13' cparams ctx groupSent usedCipher usedHash = do
     when rtt0accepted $ sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
     setTxState ctx usedHash usedCipher clientHandshakeSecret
     sendClientFlight13 cparams ctx usedHash clientHandshakeSecret
-    masterSecret <- switchToTrafficSecret handshakeSecret hChSf
-    setResumptionSecret masterSecret
+    appKey <- switchToApplicationSecret handshakeSecret hChSf
+    let applicationSecret = triBase appKey
+    setResumptionSecret applicationSecret
     handshakeTerminate13 ctx
   where
+    usedCipher = cCipher choice
+    usedHash   = cHash choice
+
     hashSize = hashDigestSize usedHash
-    zero = B.replicate hashSize 0
 
     switchToHandshakeSecret = do
         ensureRecvComplete ctx
         ecdhe <- calcSharedKey
         (earlySecret, resuming) <- makeEarlySecret
-        let handshakeSecret = hkdfExtract usedHash (deriveSecret usedHash earlySecret "derived" (hash usedHash "")) ecdhe
-        hChSh <- transcriptHash ctx
-        let clientHandshakeSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
-            serverHandshakeSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
-        logKey ctx (ServerHandshakeSecret serverHandshakeSecret)
-        logKey ctx (ClientHandshakeSecret clientHandshakeSecret)
+        handKey <- calculateHandshakeSecret ctx choice earlySecret ecdhe
+        let ServerHandshakeSecret serverHandshakeSecret = triServer handKey
         setRxState ctx usedHash usedCipher serverHandshakeSecret
-        return (resuming, handshakeSecret, clientHandshakeSecret, serverHandshakeSecret)
+        return (usedCipher, handKey, resuming)
 
-    switchToTrafficSecret handshakeSecret hChSf = do
+    switchToApplicationSecret handshakeSecret hChSf = do
         ensureRecvComplete ctx
-        let masterSecret = hkdfExtract usedHash (deriveSecret usedHash handshakeSecret "derived" (hash usedHash "")) zero
-        let clientApplicationSecret0 = deriveSecret usedHash masterSecret "c ap traffic" hChSf
-            serverApplicationSecret0 = deriveSecret usedHash masterSecret "s ap traffic" hChSf
-            exporterMasterSecret = deriveSecret usedHash masterSecret "exp master" hChSf
-        usingState_ ctx $ setExporterMasterSecret exporterMasterSecret
-        logKey ctx (ServerApplicationSecret0 serverApplicationSecret0)
-        logKey ctx (ClientApplicationSecret0 clientApplicationSecret0)
+        appKey <- calculateApplicationSecret ctx choice handshakeSecret (Just hChSf)
+        let ServerApplicationSecret0 serverApplicationSecret0 = triServer appKey
+        let ClientApplicationSecret0 clientApplicationSecret0 = triClient appKey
         setTxState ctx usedHash usedCipher clientApplicationSecret0
         setRxState ctx usedHash usedCipher serverApplicationSecret0
-        return masterSecret
+        return appKey
 
     calcSharedKey = do
         serverKeyShare <- do
@@ -882,18 +875,18 @@ handshakeClient13' cparams ctx groupSent usedCipher usedHash = do
     makeEarlySecret = do
         secret <- usingHState ctx getTLS13Secret
         case secret of
-          EarlySecret sec -> do
+          earlySecretPSK@(EarlySecret sec) -> do
               mSelectedIdentity <- usingState_ ctx getTLS13PreSharedKey
               case mSelectedIdentity of
                 Nothing                          ->
-                    return (hkdfExtract usedHash zero zero, False)
+                    return (calcEarlySecret choice Nothing, False)
                 Just (PreSharedKeyServerHello 0) -> do
                     unless (B.length sec == hashSize) $
                         throwCore $ Error_Protocol ("selected cipher is incompatible with selected PSK", True, IllegalParameter)
                     usingHState ctx $ setTLS13HandshakeMode PreSharedKey
-                    return (sec, True)
+                    return (earlySecretPSK, True)
                 Just _                           -> throwCore $ Error_Protocol ("selected identity out of range", True, IllegalParameter)
-          _ -> return (hkdfExtract usedHash zero zero, False)
+          _ -> return (calcEarlySecret choice Nothing, False)
 
     expectEncryptedExtensions (EncryptedExtensions13 eexts) = do
         liftIO $ setALPN ctx eexts
@@ -940,10 +933,9 @@ handshakeClient13' cparams ctx groupSent usedCipher usedHash = do
         checkFinished usedHash baseKey hashValue verifyData
     expectFinished _ _ p = unexpected (show p) (Just "server finished")
 
-    setResumptionSecret masterSecret = do
-        hChCf <- transcriptHash ctx
-        let resumptionMasterSecret = deriveSecret usedHash masterSecret "res master" hChCf
-        usingHState ctx $ setTLS13Secret $ ResumptionSecret resumptionMasterSecret
+    setResumptionSecret applicationSecret = do
+        resumptionSecret <- calculateResumptionSecret ctx choice applicationSecret
+        usingHState ctx $ setTLS13Secret resumptionSecret
 
 processCertRequest13 :: MonadIO m => Context -> CertReqContext -> [ExtensionRaw] -> m ()
 processCertRequest13 ctx token exts = do

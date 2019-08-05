@@ -44,7 +44,6 @@ import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Certificate
 import Network.TLS.X509
 import Network.TLS.Handshake.State13
-import Network.TLS.KeySchedule
 import Network.TLS.Handshake.Common13
 
 -- Put the server context in handshake mode.
@@ -692,10 +691,9 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
     usingHState ctx $ setNegotiatedGroup $ keyShareEntryGroup clientKeyShare
     srand <- setServerParameter
     (psk, binderInfo, is0RTTvalid) <- choosePSK
-    hCh <- transcriptHash ctx
-    let earlySecret = hkdfExtract usedHash zero psk
-        clientEarlySecret = deriveSecret usedHash earlySecret "c e traffic" hCh
-    logKey ctx (ClientEarlySecret clientEarlySecret)
+    earlyKey <- calculateEarlySecret ctx choice (Left psk) True
+    let earlySecret = triBase earlyKey
+        ClientEarlySecret clientEarlySecret = triClient earlyKey
     extensions <- checkBinder earlySecret binderInfo
     hrr <- usingState_ ctx getTLS13HRR
     let authenticated = isJust binderInfo
@@ -718,17 +716,14 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
     mCredInfo <- if authenticated then return Nothing else decideCredentialInfo
     (ecdhe,keyShare) <- makeServerKeyShare ctx clientKeyShare
     ensureRecvComplete ctx
-    let handshakeSecret = hkdfExtract usedHash (deriveSecret usedHash earlySecret "derived" (hash usedHash "")) ecdhe
-    clientHandshakeSecret <- runPacketFlight ctx $ do
+    (clientHandshakeSecret, handshakeSecret) <- runPacketFlight ctx $ do
         sendServerHello keyShare srand extensions
         sendChangeCipherSpec13 ctx
     ----------------------------------------------------------------
-        hChSh <- transcriptHash ctx
-        let clientHandshakeSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
-            serverHandshakeSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
+        handKey <- liftIO $ calculateHandshakeSecret ctx choice earlySecret ecdhe
+        let ServerHandshakeSecret serverHandshakeSecret = triServer handKey
+            ClientHandshakeSecret clientHandshakeSecret = triClient handKey
         liftIO $ do
-            logKey ctx (ServerHandshakeSecret serverHandshakeSecret)
-            logKey ctx (ClientHandshakeSecret clientHandshakeSecret)
             setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlySecret else clientHandshakeSecret
             setTxState ctx usedHash usedCipher serverHandshakeSecret
     ----------------------------------------------------------------
@@ -738,18 +733,13 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
             Just (cred, hashSig) -> sendCertAndVerify cred hashSig
         rawFinished <- makeFinished ctx usedHash serverHandshakeSecret
         loadPacket13 ctx $ Handshake13 [rawFinished]
-        return clientHandshakeSecret
+        return (clientHandshakeSecret, triBase handKey)
     sfSentTime <- getCurrentTimeFromBase
     ----------------------------------------------------------------
-    let masterSecret = hkdfExtract usedHash (deriveSecret usedHash handshakeSecret "derived" (hash usedHash "")) zero
-    hChSf <- transcriptHash ctx
-    let clientApplicationSecret0 = deriveSecret usedHash masterSecret "c ap traffic" hChSf
-        serverApplicationSecret0 = deriveSecret usedHash masterSecret "s ap traffic" hChSf
-        exporterMasterSecret = deriveSecret usedHash masterSecret "exp master" hChSf
-    usingState_ ctx $ setExporterMasterSecret exporterMasterSecret
-    ----------------------------------------------------------------
-    logKey ctx (ServerApplicationSecret0 serverApplicationSecret0)
-    logKey ctx (ClientApplicationSecret0 clientApplicationSecret0)
+    appKey <- calculateApplicationSecret ctx choice handshakeSecret Nothing
+    let ClientApplicationSecret0 clientApplicationSecret0 = triClient appKey
+        ServerApplicationSecret0 serverApplicationSecret0 = triServer appKey
+        applicationSecret = triBase appKey
     setTxState ctx usedHash usedCipher serverApplicationSecret0
     ----------------------------------------------------------------
     if rtt0OK then
@@ -761,7 +751,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
             checkFinished usedHash clientHandshakeSecret hChBeforeCf verifyData
             handshakeTerminate13 ctx
             setRxState ctx usedHash usedCipher clientApplicationSecret0
-            sendNewSessionTicket masterSecret sfSentTime
+            sendNewSessionTicket applicationSecret sfSentTime
         expectFinished _ hs = unexpected (show hs) (Just "finished 13")
 
     let expectEndOfEarlyData EndOfEarlyData13 =
@@ -782,6 +772,8 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
           recvHandshake13hash ctx expectFinished
           ensureRecvComplete ctx
   where
+    choice = makeChoice chosenVersion usedCipher
+
     setServerParameter = do
         srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
         usingState_ ctx $ setVersion chosenVersion
@@ -907,14 +899,13 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         let extensions = catMaybes [earlyDataExtension, groupExtension, sniExtension] ++ protoExt
         loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 extensions]
 
-    sendNewSessionTicket masterSecret sfSentTime = when sendNST $ do
+    sendNewSessionTicket applicationSecret sfSentTime = when sendNST $ do
         cfRecvTime <- getCurrentTimeFromBase
         let rtt = cfRecvTime - sfSentTime
-        hChCf <- transcriptHash ctx
         nonce <- getStateRNG ctx 32
-        let resumptionMasterSecret = deriveSecret usedHash masterSecret "res master" hChCf
-            life = toSeconds $ serverTicketLifetime sparams
-            psk = hkdfExpandLabel usedHash resumptionMasterSecret "resumption" nonce hashSize
+        resumptionMasterSecret <- calculateResumptionSecret ctx choice applicationSecret
+        let life = toSeconds $ serverTicketLifetime sparams
+            psk = calcPSK choice resumptionMasterSecret nonce
         (label, add) <- generateSession life psk rtt0max rtt
         let nst = createNewSessionTicket life add nonce label rtt0max
         sendPacket13 ctx $ Handshake13 [nst]

@@ -169,20 +169,21 @@ sign ctx pub hs target = liftIO $ do
 
 ----------------------------------------------------------------
 
-makePSKBinder :: Context -> ByteString -> Hash -> Int -> Maybe ByteString -> IO ByteString
-makePSKBinder ctx earlySecret usedHash truncLen mch = do
+makePSKBinder :: Context -> Secret13 -> Hash -> Int -> Maybe ByteString -> IO ByteString
+makePSKBinder ctx (EarlySecret sec) usedHash truncLen mch = do
     rmsgs0 <- usingHState ctx getHandshakeMessagesRev -- fixme
     let rmsgs = case mch of
           Just ch -> trunc ch : rmsgs0
           Nothing -> trunc (head rmsgs0) : tail rmsgs0
         hChTruncated = hash usedHash $ B.concat $ reverse rmsgs
-        binderKey = deriveSecret usedHash earlySecret "res binder" (hash usedHash "")
+        binderKey = deriveSecret usedHash sec "res binder" (hash usedHash "")
     return $ makeVerifyData usedHash binderKey hChTruncated
   where
     trunc x = B.take takeLen x
       where
         totalLen = B.length x
         takeLen = totalLen - truncLen
+makePSKBinder _ _ _ _ _ = error "makePSKBinder"
 
 replacePSKBinder :: ByteString -> ByteString -> ByteString
 replacePSKBinder pskz binder = identities `B.append` binders
