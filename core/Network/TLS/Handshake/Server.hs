@@ -655,6 +655,19 @@ handshakeServerWithTLS13 :: ServerParams
 handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _serverName clientSession = do
     when (any (\(ExtensionRaw eid _) -> eid == extensionID_PreSharedKey) $ init exts) $
         throwCore $ Error_Protocol ("extension pre_shared_key must be last", True, IllegalParameter)
+    (choice, keyShares, rtt0) <- chooseParameters13 sparams ctx chosenVersion exts clientCiphers
+    case findKeyShare keyShares serverGroups of
+      Nothing -> helloRetryRequest sparams ctx choice exts clientSession serverGroups
+      Just clientKeyShare -> doHandshake13 sparams ctx choice exts clientSession allCreds clientKeyShare rtt0
+  where
+    serverGroups = supportedGroups (ctxSupported ctx)
+    findKeyShare _      [] = Nothing
+    findKeyShare ks (g:gs) = case find (\ent -> keyShareEntryGroup ent == g) ks of
+      Just k  -> Just k
+      Nothing -> findKeyShare ks gs
+
+chooseParameters13 :: ServerParams -> Context -> Version -> [ExtensionRaw] -> [CipherID] -> IO (CipherChoice, [KeyShareEntry], Bool)
+chooseParameters13 sparams ctx chosenVersion exts clientCiphers = do
     -- Deciding cipher.
     -- The shared cipherlist can become empty after filtering for compatible
     -- creds, check now before calling onCipherChoosing, which does not handle
@@ -662,7 +675,7 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
     when (null ciphersFilteredVersion) $ throwCore $
         Error_Protocol ("no cipher in common with the client", True, HandshakeFailure)
     let usedCipher = onCipherChoosing (serverHooks sparams) chosenVersion ciphersFilteredVersion
-        usedHash = cipherHash usedCipher
+        choice = makeCipherChoice chosenVersion usedCipher
         rtt0 = case extensionLookup extensionID_EarlyData exts >>= extensionDecode MsgTClientHello of
                  Just (EarlyDataIndication _) -> True
                  Nothing                      -> False
@@ -675,24 +688,13 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
           Just (KeyShareClientHello kses) -> return kses
           Just _                          -> error "handshakeServerWithTLS13: invalid KeyShare value"
           _                               -> throwCore $ Error_Protocol ("key exchange not implemented, expected key_share extension", True, HandshakeFailure)
-    case findKeyShare keyShares serverGroups of
-      Nothing -> helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession
-      Just keyShare -> doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash keyShare clientSession rtt0
+    return (choice, keyShares, rtt0)
   where
     ciphersFilteredVersion = filter ((`elem` clientCiphers) . cipherID) serverCiphers
     serverCiphers = filter (cipherAllowedForVersion chosenVersion) (supportedCiphers $ serverSupported sparams)
-    serverGroups = supportedGroups (ctxSupported ctx)
-    findKeyShare _      [] = Nothing
-    findKeyShare ks (g:gs) = case find (\ent -> keyShareEntryGroup ent == g) ks of
-      Just k  -> Just k
-      Nothing -> findKeyShare ks gs
 
-doHandshake13 :: ServerParams -> Context -> Credentials -> Version
-              -> Cipher -> [ExtensionRaw]
-              -> Hash -> KeyShareEntry
-              -> Session -> Bool
-              -> IO ()
-doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash clientKeyShare clientSession rtt0 = do
+doHandshake13 :: ServerParams -> Context -> CipherChoice -> [ExtensionRaw] -> Session -> Credentials -> KeyShareEntry -> Bool -> IO ()
+doHandshake13 sparams ctx choice exts clientSession allCreds clientKeyShare rtt0 = do
     newSession ctx >>= \ss -> usingState_ ctx $ do
         setSession ss False
         setClientSupportsPHA supportsPHA
@@ -781,8 +783,6 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
           recvHandshake13hash ctx expectFinished
           ensureRecvComplete ctx
   where
-    choice = makeCipherChoice chosenVersion usedCipher
-
     setServerParameter = do
         srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
         usingState_ ctx $ setVersion chosenVersion
@@ -948,6 +948,9 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         return $ isNullCertificateChain certs
     expectCertificate hs = unexpected (show hs) (Just "certificate 13")
 
+    usedCipher    = cCipher choice
+    usedHash      = cHash choice
+    chosenVersion = cVersion choice
     hashSize = hashDigestSize usedHash
     zero = B.replicate hashSize 0
 
@@ -963,8 +966,8 @@ expectCertVerify sparams ctx hChCc (CertVerify13 sigAlg sig) = liftIO $ do
     clientCertVerify sparams ctx certs verif
 expectCertVerify _ _ _ hs = unexpected (show hs) (Just "certificate verify 13")
 
-helloRetryRequest :: MonadIO m => ServerParams -> Context -> Version -> Cipher -> [ExtensionRaw] -> [Group] -> Session -> m ()
-helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession = liftIO $ do
+helloRetryRequest :: MonadIO m => ServerParams -> Context -> CipherChoice -> [ExtensionRaw] -> Session -> [Group] -> m ()
+helloRetryRequest sparams ctx choice exts clientSession serverGroups = liftIO $ do
     twice <- usingState_ ctx getTLS13HRR
     when twice $
         throwCore $ Error_Protocol ("Hello retry not allowed again", True, HandshakeFailure)
@@ -987,6 +990,9 @@ helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientS
                 loadPacket13 ctx $ Handshake13 [hrr]
                 sendChangeCipherSpec13 ctx
           handshakeServer sparams ctx
+  where
+    usedCipher    = cCipher choice
+    chosenVersion = cVersion choice
 
 findHighestVersionFrom :: Version -> [Version] -> Maybe Version
 findHighestVersionFrom clientVersion allowedVersions =
