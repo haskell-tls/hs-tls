@@ -10,6 +10,7 @@ cabal.sandbox.config
 *.csr
 *.crt
 *.key
+stack.yaml.lock
 test-scripts/TestClient
 test-scripts/openssl-server
 test-scripts/openssl-client
