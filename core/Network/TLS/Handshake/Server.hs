@@ -530,7 +530,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             msgs  <- usingHState ctx $ B.concat <$> getHandshakeMessages
 
             pubKey <- usingHState ctx getRemotePublicKey
-            checkDigitalSignatureKey pubKey
+            checkDigitalSignatureKey usedVersion pubKey
 
             verif <- checkCertificateVerify ctx usedVersion pubKey msgs dsig
             clientCertVerify sparams ctx certs verif
@@ -959,7 +959,8 @@ expectCertVerify sparams ctx hChCc (CertVerify13 sigAlg sig) = liftIO $ do
     pubkey <- case cc of
                 [] -> throwCore $ Error_Protocol ("client certificate missing", True, HandshakeFailure)
                 c:_ -> return $ certPubKey $ getCertificate c
-    checkDigitalSignatureKey pubkey
+    ver <- usingState_ ctx getVersion
+    checkDigitalSignatureKey ver pubkey
     usingHState ctx $ setPublicKey pubkey
     verif <- checkCertVerify ctx pubkey sigAlg sig hChCc
     clientCertVerify sparams ctx certs verif

@@ -775,6 +775,9 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
             publicKey <- usingHState ctx getRemotePublicKey
             unless (isKeyExchangeSignatureKey kxsAlg publicKey) $
                 throwCore $ Error_Protocol ("server public key algorithm is incompatible with " ++ show kxsAlg, True, HandshakeFailure)
+            ver <- usingState_ ctx getVersion
+            unless (publicKey `versionCompatible` ver) $
+                throwCore $ Error_Protocol (show ver ++ " has no support for " ++ pubkeyType publicKey, True, IllegalParameter)
             return publicKey
 
 processServerKeyExchange ctx p = processCertificateRequest ctx p
@@ -930,7 +933,8 @@ handshakeClient13' cparams ctx groupSent choice = do
     expectCertAndVerify (Certificate13 _ cc _) = do
         _ <- liftIO $ processCertificate cparams ctx (Certificates cc)
         let pubkey = certPubKey $ getCertificate $ getCertificateChainLeaf cc
-        checkDigitalSignatureKey pubkey
+        ver <- liftIO $ usingState_ ctx getVersion
+        checkDigitalSignatureKey ver pubkey
         usingHState ctx $ setPublicKey pubkey
         recvHandshake13hash ctx $ expectCertVerify pubkey
     expectCertAndVerify p = unexpected (show p) (Just "server certificate")

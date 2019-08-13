@@ -18,6 +18,7 @@ module Network.TLS.Handshake.Key
     , generateECDHEShared
     , generateFFDHE
     , generateFFDHEShared
+    , versionCompatible
     , isDigitalSignaturePair
     , checkDigitalSignatureKey
     , getLocalPublicKey
@@ -35,6 +36,7 @@ import Network.TLS.Types
 import Network.TLS.Context.Internal
 import Network.TLS.Imports
 import Network.TLS.Struct
+import Network.TLS.X509
 
 {- if the RSA encryption fails we just return an empty bytestring, and let the protocol
  - fail by itself; however it would be probably better to just report it since it's an internal problem.
@@ -93,13 +95,24 @@ isDigitalSignatureKey (PubKeyEd25519 _)  = True
 isDigitalSignatureKey (PubKeyEd448   _)  = True
 isDigitalSignatureKey _                  = False
 
--- | Test whether the argument is a public key supported for signature.  This
--- also accepts a key for RSA encryption.  This test is performed by clients or
--- servers before verifying a remote Certificate Verify.
-checkDigitalSignatureKey :: MonadIO m => PubKey -> m ()
-checkDigitalSignatureKey key =
+versionCompatible :: PubKey -> Version -> Bool
+versionCompatible (PubKeyRSA _)       _ = True
+versionCompatible (PubKeyDSA _)       v = v <= TLS12
+versionCompatible (PubKeyEC _)        v = v >= TLS10
+versionCompatible (PubKeyEd25519 _)   v = v >= TLS12
+versionCompatible (PubKeyEd448 _)     v = v >= TLS12
+versionCompatible _                   _ = False
+
+-- | Test whether the argument is a public key supported for signature at the
+-- specified TLS version.  This also accepts a key for RSA encryption.  This
+-- test is performed by clients or servers before verifying a remote
+-- Certificate Verify.
+checkDigitalSignatureKey :: MonadIO m => Version -> PubKey -> m ()
+checkDigitalSignatureKey usedVersion key = do
     unless (isDigitalSignatureKey key) $
         throwCore $ Error_Protocol ("unsupported remote public key type", True, HandshakeFailure)
+    unless (key `versionCompatible` usedVersion) $
+        throwCore $ Error_Protocol (show usedVersion ++ " has no support for " ++ pubkeyType key, True, IllegalParameter)
 
 -- | Test whether the argument is matching key pair supported for signature.
 -- This also accepts material for RSA encryption.  This test is performed by
