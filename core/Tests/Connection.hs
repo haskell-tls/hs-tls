@@ -63,6 +63,14 @@ knownCiphers = ciphersuite_all ++ ciphersuite_weak
       , cipher_null_SHA1
       ]
 
+-- local restriction: EdDSA credentials are not usable before TLS12 so without
+-- ECDSA support it is not possible for ECDHE_ECDSA to be successful with TLS10
+-- and TLS11
+cipherAllowedForVersion' :: Version -> Cipher -> Bool
+cipherAllowedForVersion' connectVersion x =
+    cipherAllowedForVersion connectVersion x &&
+    (connectVersion >= TLS12 || cipherKeyExchange x /= CipherKeyExchange_ECDHE_ECDSA)
+
 arbitraryCiphers :: Gen [Cipher]
 arbitraryCiphers = listOf1 $ elements knownCiphers
 
@@ -161,10 +169,10 @@ isLeafRSA chain = case chain >>= leafPublicKey of
 arbitraryCipherPair :: Version -> Gen ([Cipher], [Cipher])
 arbitraryCipherPair connectVersion = do
     serverCiphers      <- arbitraryCiphers `suchThat`
-                                (\cs -> or [cipherAllowedForVersion connectVersion x | x <- cs])
+                                (\cs -> or [cipherAllowedForVersion' connectVersion x | x <- cs])
     clientCiphers      <- arbitraryCiphers `suchThat`
                                 (\cs -> or [x `elem` serverCiphers &&
-                                            cipherAllowedForVersion connectVersion x | x <- cs])
+                                            cipherAllowedForVersion' connectVersion x | x <- cs])
     return (clientCiphers, serverCiphers)
 
 arbitraryPairParams :: Gen (ClientParams, ServerParams)
@@ -196,7 +204,7 @@ arbitraryPairParamsAt connectVersion = do
     -- ensure we can test version downgrade.
     let allowedVersions = [ v | v <- knownVersions,
                                 or [ x `elem` serverCiphers &&
-                                     cipherAllowedForVersion v x | x <- clientCiphers ]]
+                                     cipherAllowedForVersion' v x | x <- clientCiphers ]]
         allowedVersionsFiltered = filter (<= connectVersion) allowedVersions
     -- Server or client is allowed to have versions > connectVersion, but not
     -- both simultaneously.
@@ -277,6 +285,10 @@ arbitraryClientCredential SSL3 = do
     -- for SSL3 there is no EC but only RSA/DSA
     creds <- arbitraryCredentialsOfEachType
     elements (take 2 creds) -- RSA and DSA, but not Ed25519 and Ed448
+arbitraryClientCredential v | v < TLS12 = do
+    -- for TLS10 and TLS11 there is no EdDSA but only RSA/DSA/ECDSA
+    creds <- arbitraryCredentialsOfEachType
+    elements (take 2 creds) -- RSA and DSA (ECDSA later), but not EdDSA
 arbitraryClientCredential _    = arbitraryCredentialsOfEachType >>= elements
 
 arbitraryRSACredentialWithUsage :: [ExtKeyUsageFlag] -> Gen (CertificateChain, PrivKey)
