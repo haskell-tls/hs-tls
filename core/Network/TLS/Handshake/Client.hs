@@ -319,8 +319,8 @@ handshakeClient' cparams ctx groups mparams = do
                         _ -> unexpected (show p) (Just "handshake")
                 throwAlert a = usingState_ ctx $ throwError $ Error_Protocol ("expecting server hello, got alert : " ++ show a, True, HandshakeFailure)
 
--- | Store the keypair and check that it is compatible with a list of
--- 'CertificateType' values.
+-- | Store the keypair and check that it is compatible with the current protocol
+-- version and a list of 'CertificateType' values.
 storePrivInfoClient :: Context
                     -> [CertificateType]
                     -> Credential
@@ -330,6 +330,12 @@ storePrivInfoClient ctx cTypes (cc, privkey) = do
     unless (certificateCompatible pubkey cTypes) $
         throwCore $ Error_Protocol
             ( pubkeyType pubkey ++ " credential does not match allowed certificate types"
+            , True
+            , InternalError )
+    ver <- usingState_ ctx getVersion
+    unless (pubkey `versionCompatible` ver) $
+        throwCore $ Error_Protocol
+            ( pubkeyType pubkey ++ " credential is not supported at version " ++ show ver
             , True
             , InternalError )
 

@@ -169,7 +169,8 @@ handshakeServerWithTLS12 :: ServerParams
                          -> IO ()
 handshakeServerWithTLS12 sparams ctx chosenVersion exts ciphers serverName clientVersion compressions clientSession = do
     extraCreds <- onServerNameIndication (serverHooks sparams) serverName
-    let allCreds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
+    let allCreds = filterCredentials (isCredentialAllowed chosenVersion) $
+                       extraCreds `mappend` sharedCredentials (ctxShared ctx)
 
     -- If compression is null, commonCompressions should be [0].
     when (null commonCompressions) $ throwCore $
@@ -589,10 +590,17 @@ credentialDigitalSignatureKey cred
     | otherwise = Nothing
   where keys@(pubkey, _) = credentialPublicPrivateKeys cred
 
+filterCredentials :: (Credential -> Bool) -> Credentials -> Credentials
+filterCredentials p (Credentials l) = Credentials (filter p l)
+
 filterSortCredentials :: Ord a => (Credential -> Maybe a) -> Credentials -> Credentials
 filterSortCredentials rankFun (Credentials creds) =
     let orderedPairs = sortOn fst [ (rankFun cred, cred) | cred <- creds ]
      in Credentials [ cred | (Just _, cred) <- orderedPairs ]
+
+isCredentialAllowed :: Version -> Credential -> Bool
+isCredentialAllowed ver cred = pubkey `versionCompatible` ver
+  where (pubkey, _) = credentialPublicPrivateKeys cred
 
 -- Filters a list of candidate credentials with credentialMatchesHashSignatures.
 --
@@ -623,7 +631,6 @@ filterCredentialsWithHashSignatures exts =
   where
     withExt extId = extensionLookup extId exts >>= extensionDecode MsgTClientHello
     withAlgs sas = filterCredentials (credentialMatchesHashSignatures sas)
-    filterCredentials p (Credentials l) = Credentials (filter p l)
 
 -- returns True if certificate filtering with "signature_algorithms_cert" /
 -- "signature_algorithms" produced no ephemeral D-H nor TLS13 cipher (so
@@ -708,7 +715,8 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
     let authenticated = isJust binderInfo
         rtt0OK = authenticated && not hrr && rtt0 && rtt0accept && is0RTTvalid
     extraCreds <- usingState_ ctx getClientSNI >>= onServerNameIndication (serverHooks sparams)
-    let allCreds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
+    let allCreds = filterCredentials (isCredentialAllowed chosenVersion) $
+                       extraCreds `mappend` sharedCredentials (ctxShared ctx)
     ----------------------------------------------------------------
     established <- ctxEstablished ctx
     if established /= NotEstablished then
