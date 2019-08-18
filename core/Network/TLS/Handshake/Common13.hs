@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, GeneralizedNewtypeDeriving, BangPatterns #-}
+{-# LANGUAGE OverloadedStrings, GeneralizedNewtypeDeriving, BangPatterns, ScopedTypeVariables #-}
 
 -- |
 -- Module      : Network.TLS.Handshake.Common13
@@ -362,7 +362,7 @@ recvHandshake13hash ctx f = do
 
 getHandshake13 :: MonadIO m => Context -> RecvHandshake13M m Handshake13
 getHandshake13 ctx = RecvHandshake13M $ do
-    currentState <- get
+    currentState :: [Handshake13] <- get
     case currentState of
         (h:hs) -> found h hs
         []     -> recvLoop
