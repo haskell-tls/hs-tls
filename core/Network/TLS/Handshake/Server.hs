@@ -1066,7 +1066,8 @@ clientCertificate sparams ctx certs = do
     -- Call application callback to see whether the
     -- certificate chain is acceptable.
     --
-    usage <- liftIO $ catchException (onClientCertificate (serverHooks sparams) certs) rejectOnException
+    let ioref = ctxClientCerts ctx
+    usage <- liftIO $ catchException (onClientCertificate (serverHooks sparams) certs ioref) rejectOnException
     case usage of
         CertificateUsageAccept        -> verifyLeafKeyUsage [KeyUsage_digitalSignature] certs
         CertificateUsageReject reason -> certificateRejected reason

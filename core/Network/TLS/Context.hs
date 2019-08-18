@@ -157,6 +157,7 @@ contextNew backend params = liftIO $ do
     lockWrite <- newMVar ()
     lockRead  <- newMVar ()
     lockState <- newMVar ()
+    certChain <- newIORef Nothing
 
     return Context
             { ctxConnection   = getBackend backend
@@ -182,6 +183,7 @@ contextNew backend params = liftIO $ do
             , ctxPendingActions   = as
             , ctxCertRequests     = crs
             , ctxKeyLogger        = debugKeyLogger debug
+            , ctxClientCerts      = certChain
             }
 
 -- | create a new context on an handle.

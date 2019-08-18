@@ -79,6 +79,7 @@ import Network.TLS.Measurement
 import Network.TLS.Imports
 import Network.TLS.Types
 import Network.TLS.Util
+import Data.X509 (CertificateChain)
 import qualified Data.ByteString as B
 
 import Control.Concurrent.MVar
@@ -129,6 +130,7 @@ data Context = Context
     , ctxPendingActions   :: IORef [PendingAction]
     , ctxCertRequests     :: IORef [Handshake13]  -- ^ pending PHA requests
     , ctxKeyLogger        :: String -> IO ()
+    , ctxClientCerts      :: IORef (Maybe CertificateChain)
     }
 
 data Established = NotEstablished

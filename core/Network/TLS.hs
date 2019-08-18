@@ -97,6 +97,8 @@ module Network.TLS
     -- * Advanced APIs
     -- ** Backend
     , ctxConnection
+    , ctxClientCerts
+    , CertificateChain
     , contextFlush
     , contextClose
     -- ** Information gathering
@@ -179,7 +181,7 @@ import Network.TLS.Types
 import Network.TLS.X509
 
 import Data.ByteString as B
-import Data.X509 (PubKey(..), PrivKey(..))
+import Data.X509 (PubKey(..), PrivKey(..), CertificateChain)
 import Data.X509.Validation hiding (HostName)
 
 {-# DEPRECATED Bytes "Use Data.ByteString.Bytestring instead of Bytes." #-}

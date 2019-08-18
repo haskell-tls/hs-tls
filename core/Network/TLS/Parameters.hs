@@ -26,6 +26,8 @@ module Network.TLS.Parameters
     , CertificateRejectReason(..)
     ) where
 
+import Data.IORef
+
 import Network.TLS.Extension
 import Network.TLS.Struct
 import qualified Network.TLS.Struct as Struct
@@ -440,7 +442,7 @@ data ServerHooks = ServerHooks
       -- The function is not expected to verify the key-usage
       -- extension of the certificate.  This verification is
       -- performed by the library internally.
-      onClientCertificate :: CertificateChain -> IO CertificateUsage
+      onClientCertificate :: CertificateChain -> IORef (Maybe CertificateChain) -> IO CertificateUsage
 
       -- | This action is called when the client certificate
       -- cannot be verified. Return 'True' to accept the certificate
@@ -480,7 +482,7 @@ data ServerHooks = ServerHooks
 defaultServerHooks :: ServerHooks
 defaultServerHooks = ServerHooks
     { onCipherChoosing       = \_ -> head
-    , onClientCertificate    = \_ -> return $ CertificateUsageReject $ CertificateRejectOther "no client certificates expected"
+    , onClientCertificate    = \_ _ -> return $ CertificateUsageReject $ CertificateRejectOther "no client certificates expected"
     , onUnverifiedClientCert = return False
     , onServerNameIndication = \_ -> return mempty
     , onNewHandshake         = \_ -> return True
