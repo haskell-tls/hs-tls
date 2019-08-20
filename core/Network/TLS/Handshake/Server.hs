@@ -1076,7 +1076,7 @@ credentialsFindForSigning13' sigAlg (Credentials l) = find forSigning l
   where
     forSigning cred = case credentialDigitalSignatureKey cred of
         Nothing  -> False
-        Just pub -> pub `signatureCompatible` sigAlg
+        Just pub -> pub `signatureCompatible13` sigAlg
 
 clientCertificate :: ServerParams -> Context -> CertificateChain -> IO ()
 clientCertificate sparams ctx certs = do

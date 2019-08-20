@@ -143,7 +143,7 @@ makeCertVerify ctx pub hs hashValue = do
 
 checkCertVerify :: MonadIO m => Context -> PubKey -> HashAndSignatureAlgorithm -> Signature -> ByteString -> m Bool
 checkCertVerify ctx pub hs signature hashValue
-    | pub `signatureCompatible` hs = liftIO $ do
+    | pub `signatureCompatible13` hs = liftIO $ do
         cc <- usingState_ ctx isClientContext
         let ctxStr | cc == ClientRole = serverContextString -- opposite context
                 | otherwise        = clientContextString

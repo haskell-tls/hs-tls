@@ -416,23 +416,24 @@ clientChain cparams ctx =
                        storePrivInfoClient ctx cTypes cred
                        return $ Just cc
 
--- | Return a most preferred 'HandAndSignatureAlgorithm' that is
--- compatible with the local key and server's signature
--- algorithms (both already saved).  Must only be called for TLS
--- versions 1.2 and up.
+-- | Return a most preferred 'HandAndSignatureAlgorithm' that is compatible with
+-- the local key and server's signature algorithms (both already saved).  Must
+-- only be called for TLS versions 1.2 and up, with compatibility function
+-- 'signatureCompatible' or 'signatureCompatible13' based on version.
 --
 -- The values in the server's @signature_algorithms@ extension are
 -- in descending order of preference.  However here the algorithms
 -- are selected by client preference in @cHashSigs@.
 --
 getLocalHashSigAlg :: Context
+                   -> (PubKey -> HashAndSignatureAlgorithm -> Bool)
                    -> [HashAndSignatureAlgorithm]
                    -> PubKey
                    -> IO HashAndSignatureAlgorithm
-getLocalHashSigAlg ctx cHashSigs pubKey = do
+getLocalHashSigAlg ctx isCompatible cHashSigs pubKey = do
     -- Must be present with TLS 1.2 and up.
     (Just (_, Just hashSigs, _)) <- usingHState ctx getCertReqCBdata
-    let want = (&&) <$> signatureCompatible pubKey
+    let want = (&&) <$> isCompatible pubKey
                     <*> flip elem hashSigs
     case find want cHashSigs of
         Just best -> return best
@@ -588,7 +589,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                 mhashSig    <- case ver of
                     TLS12 ->
                         let cHashSigs = supportedHashSignatures $ ctxSupported ctx
-                         in Just <$> getLocalHashSigAlg ctx cHashSigs pubKey
+                         in Just <$> getLocalHashSigAlg ctx signatureCompatible cHashSigs pubKey
                     _     -> return Nothing
 
                 -- Fetch all handshake messages up to now.
@@ -1027,7 +1028,7 @@ sendClientFlight13 cparams ctx usedHash baseKey = do
             _  -> do
                   hChSc      <- transcriptHash ctx
                   pubKey     <- getLocalPublicKey ctx
-                  sigAlg     <- liftIO $ getLocalHashSigAlg ctx cHashSigs pubKey
+                  sigAlg     <- liftIO $ getLocalHashSigAlg ctx signatureCompatible13 cHashSigs pubKey
                   vfy        <- makeCertVerify ctx pubKey sigAlg hChSc
                   loadPacket13 ctx $ Handshake13 [vfy]
     --
