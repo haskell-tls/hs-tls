@@ -22,6 +22,7 @@ module Network.TLS.Handshake.Key
     , isDigitalSignaturePair
     , checkDigitalSignatureKey
     , getLocalPublicKey
+    , satisfiesEcPredicate
     , logKey
     ) where
 
@@ -130,6 +131,14 @@ isDigitalSignaturePair keyPair =
 getLocalPublicKey :: MonadIO m => Context -> m PubKey
 getLocalPublicKey ctx =
     usingHState ctx (fst <$> getLocalPublicPrivateKeys)
+
+-- | Test whether the public key satisfies a predicate about the elliptic curve.
+-- When the public key is not suitable for ECDSA, like RSA for instance, the
+-- predicate is not used and the result is 'True'.
+satisfiesEcPredicate :: (Group -> Bool) -> PubKey -> Bool
+satisfiesEcPredicate p (PubKeyEC ecPub) =
+    maybe False p $ findEllipticCurveGroup ecPub
+satisfiesEcPredicate _ _                = True
 
 ----------------------------------------------------------------
 

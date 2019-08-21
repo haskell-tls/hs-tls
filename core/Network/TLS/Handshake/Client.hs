@@ -785,6 +785,9 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
             ver <- usingState_ ctx getVersion
             unless (publicKey `versionCompatible` ver) $
                 throwCore $ Error_Protocol (show ver ++ " has no support for " ++ pubkeyType publicKey, True, IllegalParameter)
+            let groups = supportedGroups (ctxSupported ctx)
+            unless (satisfiesEcPredicate (`elem` groups) publicKey) $
+                throwCore $ Error_Protocol ("server public key has unsupported elliptic curve", True, IllegalParameter)
             return publicKey
 
 processServerKeyExchange ctx p = processCertificateRequest ctx p
