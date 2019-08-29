@@ -315,15 +315,17 @@ main = do
         -- SSL3 not supported
         t2 (RangeBound TLS10 TLS13)
             [ "www.facebook.com"
-            ] ++
-        t2 (RangeBound TLS10 TLS12)
-            [ "www.google.com"
-            , "mail.office365.com"
+            , "www.google.com"
             , "www.udacity.com"
             ] ++
-        t2 (RangeBound TLS12 TLS12)
+        t2 (RangeBound TLS10 TLS12)
+            [ "mail.office365.com"
+            ] ++
+        t2 (RangeBound TLS12 TLS13)
             [ "developer.apple.com"
             , "www.github.com"
-            , "login.live.com"
+            ] ++
+        t2 (RangeBound TLS12 TLS12)
+            [ "login.live.com"
             , "www.coursera.org"
             ]

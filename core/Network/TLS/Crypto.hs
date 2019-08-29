@@ -25,13 +25,15 @@ module Network.TLS.Crypto
     , PublicKey
     , PrivateKey
     , SignatureParams(..)
-    , findDigitalSignatureAlg
+    , isKeyExchangeSignatureKey
     , findKeyExchangeSignatureAlg
     , findFiniteFieldGroup
     , kxEncrypt
     , kxDecrypt
     , kxSign
     , kxVerify
+    , kxCanUseRSApkcs1
+    , kxCanUseRSApss
     , KxError(..)
     , RSAEncoding(..)
     ) where
@@ -40,6 +42,7 @@ import qualified Crypto.Hash as H
 import qualified Data.ByteString as B
 import qualified Data.ByteArray as B (convert)
 import Crypto.Error
+import Crypto.Number.Basic (numBits)
 import Crypto.Random
 import qualified Crypto.PubKey.DH as DH
 import qualified Crypto.PubKey.DSA as DSA
@@ -72,15 +75,15 @@ data KxError =
     | KxUnsupported
     deriving (Show)
 
-findDigitalSignatureAlg :: (PubKey, PrivKey) -> Maybe DigitalSignatureAlg
-findDigitalSignatureAlg keyPair =
-    case keyPair of
-        (PubKeyRSA     _, PrivKeyRSA      _)  -> Just DS_RSA
-        (PubKeyDSA     _, PrivKeyDSA      _)  -> Just DS_DSS
-        --(PubKeyECDSA   _, PrivKeyECDSA    _)  -> Just DS_ECDSA
-        (PubKeyEd25519 _, PrivKeyEd25519  _)  -> Just DS_Ed25519
-        (PubKeyEd448   _, PrivKeyEd448    _)  -> Just DS_Ed448
-        _                                     -> Nothing
+isKeyExchangeSignatureKey :: KeyExchangeSignatureAlg -> PubKey -> Bool
+isKeyExchangeSignatureKey = f
+  where
+    f KX_RSA   (PubKeyRSA     _)   = True
+    f KX_DSS   (PubKeyDSA     _)   = True
+    f KX_ECDSA (PubKeyEC      _)   = True
+    f KX_ECDSA (PubKeyEd25519 _)   = True
+    f KX_ECDSA (PubKeyEd448   _)   = True
+    f _        _                   = False
 
 findKeyExchangeSignatureAlg :: (PubKey, PrivKey) -> Maybe KeyExchangeSignatureAlg
 findKeyExchangeSignatureAlg keyPair =
@@ -193,6 +196,26 @@ kxDecrypt (PrivKeyRSA pk) b = generalizeRSAError <$> RSA.decryptSafer pk b
 kxDecrypt _               _ = return (Left KxUnsupported)
 
 data RSAEncoding = RSApkcs1 | RSApss deriving (Show,Eq)
+
+-- | Test the RSASSA-PKCS1 length condition described in RFC 8017 section 9.2,
+-- i.e. @emLen >= tLen + 11@.  Lengths are in bytes.
+kxCanUseRSApkcs1 :: RSA.PublicKey -> Hash -> Bool
+kxCanUseRSApkcs1 pk h = RSA.public_size pk >= tLen + 11
+  where
+    tLen = prefixSize h + hashDigestSize h
+
+    prefixSize MD5    = 18
+    prefixSize SHA1   = 15
+    prefixSize SHA224 = 19
+    prefixSize SHA256 = 19
+    prefixSize SHA384 = 19
+    prefixSize SHA512 = 19
+    prefixSize _      = error (show h ++ " is not supported for RSASSA-PKCS1")
+
+-- | Test the RSASSA-PSS length condition described in RFC 8017 section 9.1.1,
+-- i.e. @emBits >= 8hLen + 8sLen + 9@.  Lengths are in bits.
+kxCanUseRSApss :: RSA.PublicKey -> Hash -> Bool
+kxCanUseRSApss pk h = numBits (RSA.public_n pk) >= 16 * hashDigestSize h + 10
 
 -- Signature algorithm and associated parameters.
 --

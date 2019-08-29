@@ -33,6 +33,7 @@ import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.IO
 import Network.TLS.State
+import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.State
 import Network.TLS.Record.State
@@ -200,18 +201,17 @@ storePrivInfo :: MonadIO m
               => Context
               -> CertificateChain
               -> PrivKey
-              -> m DigitalSignatureAlg
+              -> m PubKey
 storePrivInfo ctx cc privkey = do
     let CertificateChain (c:_) = cc
         pubkey = certPubKey $ getCertificate c
-    privalg <- case findDigitalSignatureAlg (pubkey, privkey) of
-        Just alg -> return alg
-        Nothing  -> throwCore $ Error_Protocol
-                        ( "mismatched or unsupported private key pair"
-                        , True
-                        , InternalError )
+    unless (isDigitalSignaturePair (pubkey, privkey)) $
+        throwCore $ Error_Protocol
+            ( "mismatched or unsupported private key pair"
+            , True
+            , InternalError )
     usingHState ctx $ setPublicPrivateKeys (pubkey, privkey)
-    return privalg
+    return pubkey
 
 -- verify that the group selected by the peer is supported in the local
 -- configuration

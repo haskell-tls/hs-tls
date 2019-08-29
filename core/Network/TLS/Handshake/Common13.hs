@@ -125,24 +125,26 @@ serverContextString = "TLS 1.3, server CertificateVerify"
 clientContextString :: ByteString
 clientContextString = "TLS 1.3, client CertificateVerify"
 
-makeCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> m Handshake13
-makeCertVerify ctx sig hs hashValue = do
+makeCertVerify :: MonadIO m => Context -> PubKey -> HashAndSignatureAlgorithm -> ByteString -> m Handshake13
+makeCertVerify ctx pub hs hashValue = do
     cc <- liftIO $ usingState_ ctx isClientContext
     let ctxStr | cc == ClientRole = clientContextString
                | otherwise        = serverContextString
         target = makeTarget ctxStr hashValue
-    CertVerify13 hs <$> sign ctx sig hs target
+    CertVerify13 hs <$> sign ctx pub hs target
 
-checkCertVerify :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> Signature -> ByteString -> m Bool
-checkCertVerify ctx sig hs signature hashValue = liftIO $ do
-    cc <- usingState_ ctx isClientContext
-    let ctxStr | cc == ClientRole = serverContextString -- opposite context
-               | otherwise        = clientContextString
-        target = makeTarget ctxStr hashValue
-        sigParams = signatureParams sig (Just hs)
-    checkHashSignatureValid13 hs
-    checkSupportedHashSignature ctx (Just hs)
-    verifyPublic ctx sigParams target signature
+checkCertVerify :: MonadIO m => Context -> PubKey -> HashAndSignatureAlgorithm -> Signature -> ByteString -> m Bool
+checkCertVerify ctx pub hs signature hashValue
+    | pub `signatureCompatible` hs = liftIO $ do
+        cc <- usingState_ ctx isClientContext
+        let ctxStr | cc == ClientRole = serverContextString -- opposite context
+                | otherwise        = clientContextString
+            target = makeTarget ctxStr hashValue
+            sigParams = signatureParams pub (Just hs)
+        checkHashSignatureValid13 hs
+        checkSupportedHashSignature ctx (Just hs)
+        verifyPublic ctx sigParams target signature
+    | otherwise = return False
 
 makeTarget :: ByteString -> ByteString -> ByteString
 makeTarget contextString hashValue = runPut $ do
@@ -151,10 +153,10 @@ makeTarget contextString hashValue = runPut $ do
     putWord8 0
     putBytes hashValue
 
-sign :: MonadIO m => Context -> DigitalSignatureAlg -> HashAndSignatureAlgorithm -> ByteString -> m Signature
-sign ctx sig hs target = liftIO $ do
+sign :: MonadIO m => Context -> PubKey -> HashAndSignatureAlgorithm -> ByteString -> m Signature
+sign ctx pub hs target = liftIO $ do
     cc <- usingState_ ctx isClientContext
-    let sigParams = signatureParams sig (Just hs)
+    let sigParams = signatureParams pub (Just hs)
     signPrivate ctx cc sigParams target
 
 ----------------------------------------------------------------

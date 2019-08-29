@@ -323,10 +323,10 @@ storePrivInfoClient :: Context
                     -> Credential
                     -> IO ()
 storePrivInfoClient ctx cTypes (cc, privkey) = do
-    privalg <- storePrivInfo ctx cc privkey
-    unless (certificateCompatible privalg cTypes) $
+    pubkey <- storePrivInfo ctx cc privkey
+    unless (certificateCompatible pubkey cTypes) $
         throwCore $ Error_Protocol
-            ( show privalg ++ " credential does not match allowed certificate types"
+            ( pubkeyType pubkey ++ " credential does not match allowed certificate types"
             , True
             , InternalError )
 
@@ -408,7 +408,7 @@ clientChain cparams ctx =
                        return $ Just cc
 
 -- | Return a most preferred 'HandAndSignatureAlgorithm' that is
--- compatible with the private key and server's signature
+-- compatible with the local key and server's signature
 -- algorithms (both already saved).  Must only be called for TLS
 -- versions 1.2 and up.
 --
@@ -418,22 +418,22 @@ clientChain cparams ctx =
 --
 getLocalHashSigAlg :: Context
                    -> [HashAndSignatureAlgorithm]
-                   -> DigitalSignatureAlg
+                   -> PubKey
                    -> IO HashAndSignatureAlgorithm
-getLocalHashSigAlg ctx cHashSigs keyAlg = do
+getLocalHashSigAlg ctx cHashSigs pubKey = do
     -- Must be present with TLS 1.2 and up.
     (Just (_, Just hashSigs, _)) <- usingHState ctx getCertReqCBdata
-    let want = (&&) <$> signatureCompatible keyAlg
+    let want = (&&) <$> signatureCompatible pubKey
                     <*> flip elem hashSigs
     case find want cHashSigs of
         Just best -> return best
         Nothing   -> throwCore $ Error_Protocol
-                         ( keyerr keyAlg
+                         ( keyerr pubKey
                          , True
                          , HandshakeFailure
                          )
   where
-    keyerr alg = "no " ++ show alg ++ " hash algorithm in common with the server"
+    keyerr k = "no " ++ pubkeyType k ++ " hash algorithm in common with the server"
 
 -- | Return the supported 'CertificateType' values that are
 -- compatible with at least one supported signature algorithm.
@@ -576,16 +576,16 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
             --
             certSent <- usingHState ctx getClientCertSent
             when certSent $ do
-                keyAlg      <- getLocalDigitalSignatureAlg ctx
+                pubKey      <- getLocalPublicKey ctx
                 mhashSig    <- case ver of
                     TLS12 ->
                         let cHashSigs = supportedHashSignatures $ ctxSupported ctx
-                         in Just <$> getLocalHashSigAlg ctx cHashSigs keyAlg
+                         in Just <$> getLocalHashSigAlg ctx cHashSigs pubKey
                     _     -> return Nothing
 
                 -- Fetch all handshake messages up to now.
                 msgs   <- usingHState ctx $ B.concat <$> getHandshakeMessages
-                sigDig <- createCertificateVerify ctx ver keyAlg mhashSig msgs
+                sigDig <- createCertificateVerify ctx ver pubKey mhashSig msgs
                 sendPacket ctx $ Handshake [CertVerify sigDig]
 
 processServerExtension :: ExtensionRaw -> TLSSt ()
@@ -752,27 +752,23 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
                 (c,_)           -> throwCore $ Error_Protocol ("unknown server key exchange received, expecting: " ++ show c, True, HandshakeFailure)
         doDHESignature dhparams signature kxsAlg = do
             -- FF group selected by the server is verified when generating CKX
-            signatureType <- getSignatureType kxsAlg
-            verified <- digitallySignDHParamsVerify ctx dhparams signatureType signature
-            unless verified $ decryptError ("bad " ++ show signatureType ++ " signature for dhparams " ++ show dhparams)
+            publicKey <- getSignaturePublicKey kxsAlg
+            verified <- digitallySignDHParamsVerify ctx dhparams publicKey signature
+            unless verified $ decryptError ("bad " ++ pubkeyType publicKey ++ " signature for dhparams " ++ show dhparams)
             usingHState ctx $ setServerDHParams dhparams
 
         doECDHESignature ecdhparams signature kxsAlg = do
             -- EC group selected by the server is verified when generating CKX
-            signatureType <- getSignatureType kxsAlg
-            verified <- digitallySignECDHParamsVerify ctx ecdhparams signatureType signature
-            unless verified $ decryptError ("bad " ++ show signatureType ++ " signature for ecdhparams")
+            publicKey <- getSignaturePublicKey kxsAlg
+            verified <- digitallySignECDHParamsVerify ctx ecdhparams publicKey signature
+            unless verified $ decryptError ("bad " ++ pubkeyType publicKey ++ " signature for ecdhparams")
             usingHState ctx $ setServerECDHParams ecdhparams
 
-        getSignatureType kxsAlg = do
+        getSignaturePublicKey kxsAlg = do
             publicKey <- usingHState ctx getRemotePublicKey
-            case (kxsAlg, publicKey) of
-                (KX_RSA,   PubKeyRSA     _) -> return DS_RSA
-                (KX_DSS,   PubKeyDSA     _) -> return DS_DSS
-                (KX_ECDSA, PubKeyEC      _) -> return DS_ECDSA
-                (KX_ECDSA, PubKeyEd25519 _) -> return DS_Ed25519
-                (KX_ECDSA, PubKeyEd448   _) -> return DS_Ed448
-                _                           -> throwCore $ Error_Protocol ("server public key algorithm is incompatible with " ++ show kxsAlg, True, HandshakeFailure)
+            unless (isKeyExchangeSignatureKey kxsAlg publicKey) $
+                throwCore $ Error_Protocol ("server public key algorithm is incompatible with " ++ show kxsAlg, True, HandshakeFailure)
+            return publicKey
 
 processServerKeyExchange ctx p = processCertificateRequest ctx p
 
@@ -930,13 +926,13 @@ handshakeClient13' cparams ctx groupSent usedCipher usedHash = do
     expectCertAndVerify (Certificate13 _ cc _) = do
         _ <- liftIO $ processCertificate cparams ctx (Certificates cc)
         let pubkey = certPubKey $ getCertificate $ getCertificateChainLeaf cc
+        checkDigitalSignatureKey pubkey
         usingHState ctx $ setPublicKey pubkey
         recvHandshake13hash ctx $ expectCertVerify pubkey
     expectCertAndVerify p = unexpected (show p) (Just "server certificate")
 
     expectCertVerify pubkey hChSc (CertVerify13 sigAlg sig) = do
-        let keyAlg = fromJust "fromPubKey" (fromPubKey pubkey)
-        ok <- checkCertVerify ctx keyAlg sigAlg sig hChSc
+        ok <- checkCertVerify ctx pubkey sigAlg sig hChSc
         unless ok $ decryptError "cannot verify CertificateVerify"
     expectCertVerify _ _ p = unexpected (show p) (Just "certificate verify")
 
@@ -1017,9 +1013,9 @@ sendClientFlight13 cparams ctx usedHash baseKey = do
             [] -> return ()
             _  -> do
                   hChSc      <- transcriptHash ctx
-                  keyAlg     <- getLocalDigitalSignatureAlg ctx
-                  sigAlg     <- liftIO $ getLocalHashSigAlg ctx cHashSigs keyAlg
-                  vfy        <- makeCertVerify ctx keyAlg sigAlg hChSc
+                  pubKey     <- getLocalPublicKey ctx
+                  sigAlg     <- liftIO $ getLocalHashSigAlg ctx cHashSigs pubKey
+                  vfy        <- makeCertVerify ctx pubKey sigAlg hChSc
                   loadPacket13 ctx $ Handshake13 [vfy]
     --
     sendClientData13 _ _ =

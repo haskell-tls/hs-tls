@@ -17,7 +17,9 @@ module Network.TLS.Handshake.Key
     , generateECDHEShared
     , generateFFDHE
     , generateFFDHEShared
-    , getLocalDigitalSignatureAlg
+    , isDigitalSignaturePair
+    , checkDigitalSignatureKey
+    , getLocalPublicKey
     , logKey
     , LogKey(..)
     ) where
@@ -83,12 +85,38 @@ generateFFDHE ctx grp = usingState_ ctx $ withRNG $ dhGroupGenerateKeyPair grp
 generateFFDHEShared :: Context -> Group -> DHPublic -> IO (Maybe (DHPublic, DHKey))
 generateFFDHEShared ctx grp pub = usingState_ ctx $ withRNG $ dhGroupGetPubShared grp pub
 
-getLocalDigitalSignatureAlg :: (MonadFail m, MonadIO m) => Context -> m DigitalSignatureAlg
-getLocalDigitalSignatureAlg ctx = do
-    keys <- usingHState ctx getLocalPublicPrivateKeys
-    case findDigitalSignatureAlg keys of
-        Just sigAlg -> return sigAlg
-        Nothing     -> fail "selected credential does not support signing"
+isDigitalSignatureKey :: PubKey -> Bool
+isDigitalSignatureKey (PubKeyRSA _)      = True
+isDigitalSignatureKey (PubKeyDSA _)      = True
+isDigitalSignatureKey (PubKeyEC  _)      = True
+isDigitalSignatureKey (PubKeyEd25519 _)  = True
+isDigitalSignatureKey (PubKeyEd448   _)  = True
+isDigitalSignatureKey _                  = False
+
+-- | Test whether the argument is a public key supported for signature.  This
+-- also accepts a key for RSA encryption.  This test is performed by clients or
+-- servers before verifying a remote Certificate Verify.
+checkDigitalSignatureKey :: MonadIO m => PubKey -> m ()
+checkDigitalSignatureKey key =
+    unless (isDigitalSignatureKey key) $
+        throwCore $ Error_Protocol ("unsupported remote public key type", True, HandshakeFailure)
+
+-- | Test whether the argument is matching key pair supported for signature.
+-- This also accepts material for RSA encryption.  This test is performed by
+-- servers or clients before using a credential from the local configuration.
+isDigitalSignaturePair :: (PubKey, PrivKey) -> Bool
+isDigitalSignaturePair keyPair =
+    case keyPair of
+        (PubKeyRSA      _, PrivKeyRSA      _)  -> True
+        (PubKeyDSA      _, PrivKeyDSA      _)  -> True
+        --(PubKeyECDSA    _, PrivKeyECDSA    _)  -> True
+        (PubKeyEd25519  _, PrivKeyEd25519  _)  -> True
+        (PubKeyEd448    _, PrivKeyEd448    _)  -> True
+        _                                      -> False
+
+getLocalPublicKey :: MonadIO m => Context -> m PubKey
+getLocalPublicKey ctx =
+    usingHState ctx (fst <$> getLocalPublicPrivateKeys)
 
 ----------------------------------------------------------------
 
