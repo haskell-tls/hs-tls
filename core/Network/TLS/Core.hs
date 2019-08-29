@@ -49,7 +49,7 @@ import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.PostHandshake
 import Network.TLS.KeySchedule
-import Network.TLS.Types (Role(..), HostName, Secret13(..))
+import Network.TLS.Types (Role(..), HostName, BaseSecret(..))
 import Network.TLS.Util (catchException, mapChunks_)
 import Network.TLS.Extension
 import qualified Network.TLS.State as S
@@ -193,7 +193,7 @@ recvData13 ctx = do
             -- read+write locks (which is also what we use for all calls to the
             -- session manager).
             withWriteLock ctx $ do
-                ResumptionSecret resumptionMasterSecret <- usingHState ctx getTLS13Secret
+                BaseSecret resumptionMasterSecret <- usingHState ctx getTLS13ResumptionSecret
                 (usedHash, usedCipher, _) <- getTxState ctx
                 let hashSize = hashDigestSize usedHash
                     psk = hkdfExpandLabel usedHash resumptionMasterSecret "resumption" nonce hashSize

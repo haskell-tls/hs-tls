@@ -232,7 +232,7 @@ handshakeClient' cparams ctx groups mparams = do
                       let choice = makeChoice TLS13 sCipher
                           psk = sessionSecret sdata
                           earlySecret = calcEarlySecret choice (Just psk)
-                      usingHState ctx $ setTLS13Secret earlySecret
+                      usingHState ctx $ setTLS13EarlySecret earlySecret
                       let ech = encodeHandshake ch
                           h = cHash choice
                           siz = hashDigestSize h
@@ -288,11 +288,11 @@ handshakeClient' cparams ctx groups mparams = do
         send0RTT (usedCipher, earlyData) = do
                 let choice = makeChoice TLS13 usedCipher
                     usedHash = cHash choice
-                earlySecret <- usingHState ctx getTLS13Secret
+                earlySecret <- usingHState ctx getTLS13EarlySecret
                 -- Client hello is stored in hstHandshakeDigest
                 -- But HandshakeDigestContext is not created yet.
                 earlyKey <- calculateEarlySecret ctx choice (Right earlySecret) False
-                let ClientEarlySecret clientEarlySecret = triClient earlyKey
+                let ClientTrafficSecret clientEarlySecret = triClient earlyKey
                 runPacketFlight ctx $ sendChangeCipherSpec13 ctx
                 setTxState ctx usedHash usedCipher clientEarlySecret
                 mapChunks_ 16384 (sendPacket13 ctx . AppData13) earlyData
@@ -819,8 +819,8 @@ handshakeClient13' :: ClientParams -> Context -> Maybe Group -> Choice -> IO ()
 handshakeClient13' cparams ctx groupSent choice = do
     (_, hkey, resuming) <- switchToHandshakeSecret
     let handshakeSecret = triBase hkey
-        ClientHandshakeSecret clientHandshakeSecret = triClient hkey
-        ServerHandshakeSecret serverHandshakeSecret = triServer hkey
+        ClientTrafficSecret clientHandshakeSecret = triClient hkey
+        ServerTrafficSecret serverHandshakeSecret = triServer hkey
     rtt0accepted <- runRecvHandshake13 $ do
         accepted <- recvHandshake13 ctx expectEncryptedExtensions
         unless resuming $ recvHandshake13 ctx expectCertRequest
@@ -846,15 +846,15 @@ handshakeClient13' cparams ctx groupSent choice = do
         ecdhe <- calcSharedKey
         (earlySecret, resuming) <- makeEarlySecret
         handKey <- calculateHandshakeSecret ctx choice earlySecret ecdhe
-        let ServerHandshakeSecret serverHandshakeSecret = triServer handKey
+        let ServerTrafficSecret serverHandshakeSecret = triServer handKey
         setRxState ctx usedHash usedCipher serverHandshakeSecret
         return (usedCipher, handKey, resuming)
 
     switchToApplicationSecret handshakeSecret hChSf = do
         ensureRecvComplete ctx
         appKey <- calculateApplicationSecret ctx choice handshakeSecret (Just hChSf)
-        let ServerApplicationSecret0 serverApplicationSecret0 = triServer appKey
-        let ClientApplicationSecret0 clientApplicationSecret0 = triClient appKey
+        let ServerTrafficSecret serverApplicationSecret0 = triServer appKey
+        let ClientTrafficSecret clientApplicationSecret0 = triClient appKey
         setTxState ctx usedHash usedCipher clientApplicationSecret0
         setRxState ctx usedHash usedCipher serverApplicationSecret0
         return appKey
@@ -873,20 +873,17 @@ handshakeClient13' cparams ctx groupSent choice = do
         usingHState ctx getGroupPrivate >>= fromServerKeyShare serverKeyShare
 
     makeEarlySecret = do
-        secret <- usingHState ctx getTLS13Secret
-        case secret of
-          earlySecretPSK@(EarlySecret sec) -> do
-              mSelectedIdentity <- usingState_ ctx getTLS13PreSharedKey
-              case mSelectedIdentity of
-                Nothing                          ->
-                    return (calcEarlySecret choice Nothing, False)
-                Just (PreSharedKeyServerHello 0) -> do
-                    unless (B.length sec == hashSize) $
-                        throwCore $ Error_Protocol ("selected cipher is incompatible with selected PSK", True, IllegalParameter)
-                    usingHState ctx $ setTLS13HandshakeMode PreSharedKey
-                    return (earlySecretPSK, True)
-                Just _                           -> throwCore $ Error_Protocol ("selected identity out of range", True, IllegalParameter)
-          _ -> return (calcEarlySecret choice Nothing, False)
+        earlySecretPSK@(BaseSecret sec) <- usingHState ctx getTLS13EarlySecret
+        mSelectedIdentity <- usingState_ ctx getTLS13PreSharedKey
+        case mSelectedIdentity of
+          Nothing                          ->
+              return (calcEarlySecret choice Nothing, False)
+          Just (PreSharedKeyServerHello 0) -> do
+              unless (B.length sec == hashSize) $
+                  throwCore $ Error_Protocol ("selected cipher is incompatible with selected PSK", True, IllegalParameter)
+              usingHState ctx $ setTLS13HandshakeMode PreSharedKey
+              return (earlySecretPSK, True)
+          Just _                           -> throwCore $ Error_Protocol ("selected identity out of range", True, IllegalParameter)
 
     expectEncryptedExtensions (EncryptedExtensions13 eexts) = do
         liftIO $ setALPN ctx eexts
@@ -935,7 +932,7 @@ handshakeClient13' cparams ctx groupSent choice = do
 
     setResumptionSecret applicationSecret = do
         resumptionSecret <- calculateResumptionSecret ctx choice applicationSecret
-        usingHState ctx $ setTLS13Secret resumptionSecret
+        usingHState ctx $ setTLS13ResumptionSecret resumptionSecret
 
 processCertRequest13 :: MonadIO m => Context -> CertReqContext -> [ExtensionRaw] -> m ()
 processCertRequest13 ctx token exts = do

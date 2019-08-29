@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE CPP #-}
 -- |
 -- Module      : Network.TLS.Handshake.State
@@ -63,8 +64,10 @@ module Network.TLS.Handshake.State
     , getTLS13HandshakeMode
     , setTLS13RTT0Status
     , getTLS13RTT0Status
-    , setTLS13Secret
-    , getTLS13Secret
+    , setTLS13EarlySecret
+    , getTLS13EarlySecret
+    , setTLS13ResumptionSecret
+    , getTLS13ResumptionSecret
     , setCCS13Sent
     , getCCS13Sent
     ) where
@@ -125,7 +128,8 @@ data HandshakeState = HandshakeState
     , hstNegotiatedGroup     :: Maybe Group
     , hstTLS13HandshakeMode  :: HandshakeMode13
     , hstTLS13RTT0Status     :: !RTT0Status
-    , hstTLS13Secret         :: Secret13
+    , hstTLS13EarlySecret    :: BaseSecret EarlySecret
+    , hstTLS13ResumptionSecret :: BaseSecret ResumptionSecret
     , hstCCS13Sent           :: !Bool
     } deriving (Show)
 
@@ -214,7 +218,8 @@ newEmptyHandshake ver crand = HandshakeState
     , hstNegotiatedGroup     = Nothing
     , hstTLS13HandshakeMode  = FullHandshake
     , hstTLS13RTT0Status     = RTT0None
-    , hstTLS13Secret         = NoSecret
+    , hstTLS13EarlySecret    = BaseSecret ""
+    , hstTLS13ResumptionSecret = BaseSecret ""
     , hstCCS13Sent           = False
     }
 
@@ -295,11 +300,17 @@ setTLS13RTT0Status s = modify (\hst -> hst { hstTLS13RTT0Status = s })
 getTLS13RTT0Status :: HandshakeM RTT0Status
 getTLS13RTT0Status = gets hstTLS13RTT0Status
 
-setTLS13Secret :: Secret13 -> HandshakeM ()
-setTLS13Secret secret = modify (\hst -> hst { hstTLS13Secret = secret })
+setTLS13EarlySecret :: BaseSecret EarlySecret -> HandshakeM ()
+setTLS13EarlySecret secret = modify (\hst -> hst { hstTLS13EarlySecret = secret })
 
-getTLS13Secret :: HandshakeM Secret13
-getTLS13Secret = gets hstTLS13Secret
+getTLS13EarlySecret :: HandshakeM (BaseSecret EarlySecret)
+getTLS13EarlySecret = gets hstTLS13EarlySecret
+
+setTLS13ResumptionSecret :: BaseSecret ResumptionSecret -> HandshakeM ()
+setTLS13ResumptionSecret secret = modify (\hst -> hst { hstTLS13ResumptionSecret = secret })
+
+getTLS13ResumptionSecret :: HandshakeM (BaseSecret ResumptionSecret)
+getTLS13ResumptionSecret = gets hstTLS13ResumptionSecret
 
 setCCS13Sent :: Bool -> HandshakeM ()
 setCCS13Sent sent = modify (\hst -> hst { hstCCS13Sent = sent })

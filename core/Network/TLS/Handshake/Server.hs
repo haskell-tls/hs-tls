@@ -693,7 +693,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
     (psk, binderInfo, is0RTTvalid) <- choosePSK
     earlyKey <- calculateEarlySecret ctx choice (Left psk) True
     let earlySecret = triBase earlyKey
-        ClientEarlySecret clientEarlySecret = triClient earlyKey
+        ClientTrafficSecret clientEarlySecret = triClient earlyKey
     extensions <- checkBinder earlySecret binderInfo
     hrr <- usingState_ ctx getTLS13HRR
     let authenticated = isJust binderInfo
@@ -721,8 +721,8 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         sendChangeCipherSpec13 ctx
     ----------------------------------------------------------------
         handKey <- liftIO $ calculateHandshakeSecret ctx choice earlySecret ecdhe
-        let ServerHandshakeSecret serverHandshakeSecret = triServer handKey
-            ClientHandshakeSecret clientHandshakeSecret = triClient handKey
+        let ServerTrafficSecret serverHandshakeSecret = triServer handKey
+            ClientTrafficSecret clientHandshakeSecret = triClient handKey
         liftIO $ do
             setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlySecret else clientHandshakeSecret
             setTxState ctx usedHash usedCipher serverHandshakeSecret
@@ -737,8 +737,8 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
     sfSentTime <- getCurrentTimeFromBase
     ----------------------------------------------------------------
     appKey <- calculateApplicationSecret ctx choice handshakeSecret Nothing
-    let ClientApplicationSecret0 clientApplicationSecret0 = triClient appKey
-        ServerApplicationSecret0 serverApplicationSecret0 = triServer appKey
+    let ClientTrafficSecret clientApplicationSecret0 = triClient appKey
+        ServerTrafficSecret serverApplicationSecret0 = triServer appKey
         applicationSecret = triBase appKey
     setTxState ctx usedHash usedCipher serverApplicationSecret0
     ----------------------------------------------------------------

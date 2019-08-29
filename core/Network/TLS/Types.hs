@@ -1,3 +1,4 @@
+{-# LANGUAGE EmptyDataDecls #-}
 -- |
 -- Module      : Network.TLS.Types
 -- License     : BSD-style
@@ -19,9 +20,15 @@ module Network.TLS.Types
     , HostName
     , Second
     , Millisecond
+    , EarlySecret
+    , HandshakeSecret
+    , ApplicationSecret
+    , ResumptionSecret
+    , BaseSecret(..)
+    , ClientTrafficSecret(..)
+    , ServerTrafficSecret(..)
     , SecretTriple(..)
-    , Secret13(..)
-    , TrafficSecret(..)
+    , MasterSecret12(..)
     ) where
 
 import Network.TLS.Imports
@@ -80,26 +87,19 @@ invertRole :: Role -> Role
 invertRole ClientRole = ServerRole
 invertRole ServerRole = ClientRole
 
-data SecretTriple = SecretTriple {
-    triBase   :: Secret13
-  , triClient :: TrafficSecret
-  , triServer :: TrafficSecret
-  } deriving (Eq, Show)
+data EarlySecret
+data HandshakeSecret
+data ApplicationSecret
+data ResumptionSecret
 
-data Secret13 = NoSecret
-              | EarlySecret ByteString
-              | HandshakeSecret ByteString
-              | ApplicationSecret ByteString -- TLS 1.3 master secret
-              | ResumptionSecret ByteString
-              deriving (Eq, Show)
+newtype BaseSecret a = BaseSecret ByteString deriving Show
+newtype ClientTrafficSecret a = ClientTrafficSecret ByteString deriving Show
+newtype ServerTrafficSecret a = ServerTrafficSecret ByteString deriving Show
 
-data TrafficSecret =
-    -- TLS 1.2 or earlier
-    MasterSecret12 ByteString
-    -- TLS 1.3
-  | ClientEarlySecret        ByteString
-  | ServerHandshakeSecret    ByteString
-  | ClientHandshakeSecret    ByteString
-  | ServerApplicationSecret0 ByteString
-  | ClientApplicationSecret0 ByteString
-  deriving (Eq, Show)
+data SecretTriple a = SecretTriple
+    { triBase   :: BaseSecret a
+    , triClient :: ClientTrafficSecret a
+    , triServer :: ServerTrafficSecret a
+    }
+
+newtype MasterSecret12 = MasterSecret12 ByteString deriving Show

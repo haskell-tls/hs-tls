@@ -18,7 +18,7 @@ import Control.Concurrent.MVar
 import Control.Monad.State.Strict (gets)
 import Control.Monad.IO.Class (liftIO)
 
-import Network.TLS.Types (Role(..), invertRole, TrafficSecret(..))
+import Network.TLS.Types (Role(..), invertRole, MasterSecret12(..))
 import Network.TLS.Util
 import Network.TLS.Packet
 import Network.TLS.ErrT
