@@ -78,7 +78,7 @@ data CipherType = CipherStream | CipherBlock | CipherAEAD
 data CipherData = CipherData
     { cipherDataContent :: ByteString
     , cipherDataMAC     :: Maybe ByteString
-    , cipherDataPadding :: Maybe ByteString
+    , cipherDataPadding :: Maybe (ByteString, Int)
     } deriving (Show,Eq)
 
 -- | Some of the IANA registered code points for 'CertificateType' are not

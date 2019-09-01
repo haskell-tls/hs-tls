@@ -92,14 +92,17 @@ getCipherData (Record pt ver _) cdata = do
             return (expected_digest `bytesEq` digest)
 
     -- check if the padding is filled with the correct pattern if it exists
+    -- (before TLS10 this checks instead that the padding length is minimal)
     paddingValid <- case cipherDataPadding cdata of
-        Nothing  -> return True
-        Just pad -> do
+        Nothing           -> return True
+        Just (pad, blksz) -> do
             cver <- getRecordVersion
             let b = B.length pad - 1
-            return (cver < TLS10 || B.replicate (B.length pad) (fromIntegral b) `bytesEq` pad)
+            return $ if cver < TLS10
+                then b < blksz
+                else B.replicate (B.length pad) (fromIntegral b) `bytesEq` pad
 
-    unless (macValid &&! paddingValid) $ do
+    unless (macValid &&! paddingValid) $
         throwError $ Error_Protocol ("bad record mac", True, BadRecordMac)
 
     return $ cipherDataContent cdata
@@ -137,7 +140,7 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
             getCipherData record CipherData
                     { cipherDataContent = content
                     , cipherDataMAC     = Just mac
-                    , cipherDataPadding = Just padding
+                    , cipherDataPadding = Just (padding, blockSize)
                     }
 
         decryptOf (BulkStateStream (BulkStream decryptF)) = do
