@@ -222,7 +222,6 @@ handshakeTerminate13 ctx = do
                     , hstHandshakeDigest = hstHandshakeDigest hshake
                     , hstTLS13HandshakeMode = hstTLS13HandshakeMode hshake
                     , hstTLS13RTT0Status = hstTLS13RTT0Status hshake
---                    , hstTLS13EarlySecret = hstTLS13EarlySecret hshake
                     , hstTLS13ResumptionSecret = hstTLS13ResumptionSecret hshake
                     }
     -- forget handshake data stored in TLS state
