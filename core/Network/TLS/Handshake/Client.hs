@@ -195,14 +195,14 @@ handshakeClient' cparams ctx groups mparams = do
                     let tinfo = fromJust "sessionTicketInfo" $ sessionTicketInfo sdata
                     age <- getAge tinfo
                     return $ if isAgeValid age tinfo
-                        then Just (sid, sdata, sCipher, ageToObfuscatedAge age tinfo)
+                        then Just (sid, sdata, makeChoice TLS13 sCipher, ageToObfuscatedAge age tinfo)
                         else Nothing
 
         preSharedKeyExtension pskInfo =
             case pskInfo of
                 Nothing -> return Nothing
-                Just (sid, _, sCipher, obfAge) ->
-                    let zero = cZero $ makeChoice TLS13 sCipher
+                Just (sid, _, choice, obfAge) ->
+                    let zero = cZero choice
                         identity = PskIdentity sid obfAge
                         offeredPsks = PreSharedKeyClientHello [identity] [zero]
                      in return $ Just $ toExtensionRaw offeredPsks
@@ -228,9 +228,8 @@ handshakeClient' cparams ctx groups mparams = do
         adjustExtentions pskInfo exts ch =
             case pskInfo of
                 Nothing -> return exts
-                Just (_, sdata, sCipher, _) -> do
-                      let choice = makeChoice TLS13 sCipher
-                          psk = sessionSecret sdata
+                Just (_, sdata, choice, _) -> do
+                      let psk = sessionSecret sdata
                           earlySecret = calcEarlySecret choice (Just psk)
                       usingHState ctx $ setTLS13EarlySecret earlySecret
                       let ech = encodeHandshake ch
@@ -280,13 +279,13 @@ handshakeClient' cparams ctx groups mparams = do
             mapM_ send0RTT rtt0info
             return (rtt0, map (\(ExtensionRaw i _) -> i) extensions)
 
-        get0RTTinfo (_, sdata, sCipher, _) = do
+        get0RTTinfo (_, sdata, choice, _) = do
             earlyData <- clientEarlyData cparams
             guard (B.length earlyData <= sessionMaxEarlyDataSize sdata)
-            return (sCipher, earlyData)
+            return (choice, earlyData)
 
-        send0RTT (usedCipher, earlyData) = do
-                let choice = makeChoice TLS13 usedCipher
+        send0RTT (choice, earlyData) = do
+                let usedCipher = cCipher choice
                     usedHash = cHash choice
                 Just earlySecret <- usingHState ctx getTLS13EarlySecret
                 -- Client hello is stored in hstHandshakeDigest
