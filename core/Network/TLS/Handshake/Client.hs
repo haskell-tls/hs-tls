@@ -195,7 +195,7 @@ handshakeClient' cparams ctx groups mparams = do
                     let tinfo = fromJust "sessionTicketInfo" $ sessionTicketInfo sdata
                     age <- getAge tinfo
                     return $ if isAgeValid age tinfo
-                        then Just (sid, sdata, makeChoice TLS13 sCipher, ageToObfuscatedAge age tinfo)
+                        then Just (sid, sdata, makeCipherChoice TLS13 sCipher, ageToObfuscatedAge age tinfo)
                         else Nothing
 
         preSharedKeyExtension pskInfo =
@@ -811,10 +811,10 @@ requiredCertKeyUsage cipher =
 
 handshakeClient13 :: ClientParams -> Context -> Maybe Group -> IO ()
 handshakeClient13 cparams ctx groupSent = do
-    choice <- makeChoice TLS13 <$> usingHState ctx getPendingCipher
+    choice <- makeCipherChoice TLS13 <$> usingHState ctx getPendingCipher
     handshakeClient13' cparams ctx groupSent choice
 
-handshakeClient13' :: ClientParams -> Context -> Maybe Group -> Choice -> IO ()
+handshakeClient13' :: ClientParams -> Context -> Maybe Group -> CipherChoice -> IO ()
 handshakeClient13' cparams ctx groupSent choice = do
     (_, hkey, resuming) <- switchToHandshakeSecret
     let handshakeSecret = triBase hkey

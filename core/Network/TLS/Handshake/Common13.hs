@@ -34,8 +34,8 @@ module Network.TLS.Handshake.Common13
        , runRecvHandshake13
        , recvHandshake13
        , recvHandshake13hash
-       , Choice(..)
-       , makeChoice
+       , CipherChoice(..)
+       , makeCipherChoice
        , calcEarlySecret
        , calculateEarlySecret
        , calculateHandshakeSecret
@@ -408,22 +408,22 @@ isHashSignatureValid13 (h, SignatureECDSA) =
     h `elem` [ HashSHA256, HashSHA384, HashSHA512 ]
 isHashSignatureValid13 _ = False
 
-data Choice = Choice {
+data CipherChoice = CipherChoice {
     cVersion :: Version
   , cCipher  :: Cipher
   , cHash    :: Hash
   , cZero    :: !ByteString
   }
 
-makeChoice :: Version -> Cipher -> Choice
-makeChoice ver cipher = Choice ver cipher h zero
+makeCipherChoice :: Version -> Cipher -> CipherChoice
+makeCipherChoice ver cipher = CipherChoice ver cipher h zero
   where
     h = cipherHash cipher
     zero = B.replicate (hashDigestSize h) 0
 
 ----------------------------------------------------------------
 
-calculateEarlySecret :: Context -> Choice
+calculateEarlySecret :: Context -> CipherChoice
                      -> Either ByteString (BaseSecret EarlySecret)
                      -> Bool -> IO (SecretTriple EarlySecret)
 calculateEarlySecret ctx choice maux initialized = do
@@ -444,7 +444,7 @@ calculateEarlySecret ctx choice maux initialized = do
     usedHash = cHash choice
     zero = cZero choice
 
-calcEarlySecret :: Choice -> Maybe ByteString -> BaseSecret EarlySecret
+calcEarlySecret :: CipherChoice -> Maybe ByteString -> BaseSecret EarlySecret
 calcEarlySecret choice mpsk = BaseSecret sec
   where
     sec = hkdfExtract usedHash zero zeroOrPSK
@@ -454,7 +454,7 @@ calcEarlySecret choice mpsk = BaseSecret sec
       Just psk -> psk
       Nothing  -> zero
 
-calculateHandshakeSecret :: Context -> Choice -> BaseSecret EarlySecret -> ByteString
+calculateHandshakeSecret :: Context -> CipherChoice -> BaseSecret EarlySecret -> ByteString
                          -> IO (SecretTriple HandshakeSecret)
 calculateHandshakeSecret ctx choice (BaseSecret sec) ecdhe = do
         hChSh <- transcriptHash ctx
@@ -469,7 +469,7 @@ calculateHandshakeSecret ctx choice (BaseSecret sec) ecdhe = do
   where
     usedHash = cHash choice
 
-calculateApplicationSecret :: Context -> Choice -> BaseSecret HandshakeSecret -> Maybe ByteString
+calculateApplicationSecret :: Context -> CipherChoice -> BaseSecret HandshakeSecret -> Maybe ByteString
                            -> IO (SecretTriple ApplicationSecret)
 calculateApplicationSecret ctx choice (BaseSecret sec) mhChSf = do
     hChSf <- case mhChSf of
@@ -489,7 +489,7 @@ calculateApplicationSecret ctx choice (BaseSecret sec) mhChSf = do
     usedHash = cHash choice
     zero = cZero choice
 
-calculateResumptionSecret :: Context -> Choice -> BaseSecret ApplicationSecret
+calculateResumptionSecret :: Context -> CipherChoice -> BaseSecret ApplicationSecret
                           -> IO (BaseSecret ResumptionSecret)
 calculateResumptionSecret ctx choice (BaseSecret sec) = do
     hChCf <- transcriptHash ctx
@@ -498,7 +498,7 @@ calculateResumptionSecret ctx choice (BaseSecret sec) = do
   where
     usedHash = cHash choice
 
-calcPSK :: Choice -> BaseSecret ResumptionSecret -> ByteString -> ByteString
+calcPSK :: CipherChoice -> BaseSecret ResumptionSecret -> ByteString -> ByteString
 calcPSK choice (BaseSecret sec) nonce =
     hkdfExpandLabel usedHash sec "resumption" nonce hashSize
   where

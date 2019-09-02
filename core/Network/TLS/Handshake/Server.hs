@@ -772,7 +772,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
           recvHandshake13hash ctx expectFinished
           ensureRecvComplete ctx
   where
-    choice = makeChoice chosenVersion usedCipher
+    choice = makeCipherChoice chosenVersion usedCipher
 
     setServerParameter = do
         srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
