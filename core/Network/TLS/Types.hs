@@ -28,7 +28,7 @@ module Network.TLS.Types
     , ClientTrafficSecret(..)
     , ServerTrafficSecret(..)
     , SecretTriple(..)
-    , MasterSecret12(..)
+    , MasterSecret(..)
     ) where
 
 import Network.TLS.Imports
@@ -102,4 +102,5 @@ data SecretTriple a = SecretTriple
     , triServer :: ServerTrafficSecret a
     }
 
-newtype MasterSecret12 = MasterSecret12 ByteString deriving Show
+-- Master secret for TLS 1.2 or earlier.
+newtype MasterSecret = MasterSecret ByteString deriving Show

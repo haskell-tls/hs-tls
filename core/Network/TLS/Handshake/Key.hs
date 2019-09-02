@@ -123,8 +123,8 @@ getLocalPublicKey ctx =
 class LogLabel a where
     labelAndKey :: a -> (String, ByteString)
 
-instance LogLabel MasterSecret12 where
-    labelAndKey (MasterSecret12 key) = ("CLIENT_RANDOM", key)
+instance LogLabel MasterSecret where
+    labelAndKey (MasterSecret key) = ("CLIENT_RANDOM", key)
 
 instance LogLabel (ClientTrafficSecret EarlySecret) where
     labelAndKey (ClientTrafficSecret key) = ("CLIENT_EARLY_TRAFFIC_SECRET", key)

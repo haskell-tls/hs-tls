@@ -18,7 +18,7 @@ import Control.Concurrent.MVar
 import Control.Monad.State.Strict (gets)
 import Control.Monad.IO.Class (liftIO)
 
-import Network.TLS.Types (Role(..), invertRole, MasterSecret12(..))
+import Network.TLS.Types (Role(..), invertRole, MasterSecret(..))
 import Network.TLS.Util
 import Network.TLS.Packet
 import Network.TLS.ErrT
@@ -102,7 +102,7 @@ processClientKeyXchg ctx (CKX_RSA encryptedPremaster) = do
                 Right (ver, _)
                     | ver /= expectedVer -> setMasterSecretFromPre rver role random
                     | otherwise          -> setMasterSecretFromPre rver role premaster
-    liftIO $ logKey ctx (MasterSecret12 masterSecret)
+    liftIO $ logKey ctx (MasterSecret masterSecret)
 
 processClientKeyXchg ctx (CKX_DH clientDHValue) = do
     rver <- usingState_ ctx getVersion
@@ -116,7 +116,7 @@ processClientKeyXchg ctx (CKX_DH clientDHValue) = do
     dhpriv       <- usingHState ctx getDHPrivate
     let premaster = dhGetShared params dhpriv clientDHValue
     masterSecret <- usingHState ctx $ setMasterSecretFromPre rver role premaster
-    liftIO $ logKey ctx (MasterSecret12 masterSecret)
+    liftIO $ logKey ctx (MasterSecret masterSecret)
 
 processClientKeyXchg ctx (CKX_ECDH bytes) = do
     ServerECDHParams grp _ <- usingHState ctx getServerECDHParams
@@ -129,7 +129,7 @@ processClientKeyXchg ctx (CKX_ECDH bytes) = do
                   rver <- usingState_ ctx getVersion
                   role <- usingState_ ctx isClientContext
                   masterSecret <- usingHState ctx $ setMasterSecretFromPre rver role premaster
-                  liftIO $ logKey ctx (MasterSecret12 masterSecret)
+                  liftIO $ logKey ctx (MasterSecret masterSecret)
               Nothing -> throwCore $ Error_Protocol ("cannot generate a shared secret on ECDH", True, IllegalParameter)
 
 processClientFinished :: Context -> FinishedData -> IO ()

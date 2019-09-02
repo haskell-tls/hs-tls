@@ -314,7 +314,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             sendPacket ctx $ Handshake [serverhello]
             let masterSecret = sessionSecret sessionData
             usingHState ctx $ setMasterSecret chosenVersion ServerRole masterSecret
-            logKey ctx (MasterSecret12 masterSecret)
+            logKey ctx (MasterSecret masterSecret)
             sendChangeCipherAndFinish ctx ServerRole
             recvChangeCipherAndFinish ctx
     handshakeTerminate ctx

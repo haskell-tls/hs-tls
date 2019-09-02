@@ -488,7 +488,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
 
                     let premaster = encodePreMasterSecret clientVersion prerand
                     masterSecret <- usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
-                    logKey ctx (MasterSecret12 masterSecret)
+                    logKey ctx (MasterSecret masterSecret)
                     encryptedPreMaster <- do
                         -- SSL3 implementation generally forget this length field since it's redundant,
                         -- however TLS10 make it clear that the length field need to be present.
@@ -538,7 +538,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                                      Just pair -> return pair
 
                     masterSecret <- usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
-                    logKey ctx (MasterSecret12 masterSecret)
+                    logKey ctx (MasterSecret masterSecret)
                     return $ CKX_DH clientDHPub
 
                 getCKX_ECDHE = do
@@ -551,7 +551,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                         Just (clipub, premaster) -> do
                             xver <- usingState_ ctx getVersion
                             masterSecret <- usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
-                            logKey ctx (MasterSecret12 masterSecret)
+                            logKey ctx (MasterSecret masterSecret)
                             return $ CKX_ECDH $ encodeGroupPublic clipub
 
         -- In order to send a proper certificate verify message,
@@ -679,7 +679,7 @@ onServerHello ctx cparams clientSession sentExts (ServerHello rver serverRan ser
             Just sessionData -> do
                 let masterSecret = sessionSecret sessionData
                 usingHState ctx $ setMasterSecret rver ClientRole masterSecret
-                logKey ctx (MasterSecret12 masterSecret)
+                logKey ctx (MasterSecret masterSecret)
                 return $ RecvStateNext expectChangeCipher
 onServerHello _ _ _ _ p = unexpected (show p) (Just "server hello")
 
