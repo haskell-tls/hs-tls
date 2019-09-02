@@ -41,7 +41,7 @@ module Network.TLS.Handshake.Common13
        , calculateHandshakeSecret
        , calculateApplicationSecret
        , calculateResumptionSecret
-       , calcPSK
+       , derivePSK
        ) where
 
 import qualified Data.ByteArray as BA
@@ -498,8 +498,8 @@ calculateResumptionSecret ctx choice (BaseSecret sec) = do
   where
     usedHash = cHash choice
 
-calcPSK :: CipherChoice -> BaseSecret ResumptionSecret -> ByteString -> ByteString
-calcPSK choice (BaseSecret sec) nonce =
+derivePSK :: CipherChoice -> BaseSecret ResumptionSecret -> ByteString -> ByteString
+derivePSK choice (BaseSecret sec) nonce =
     hkdfExpandLabel usedHash sec "resumption" nonce hashSize
   where
     usedHash = cHash choice

@@ -905,7 +905,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         nonce <- getStateRNG ctx 32
         resumptionMasterSecret <- calculateResumptionSecret ctx choice applicationSecret
         let life = toSeconds $ serverTicketLifetime sparams
-            psk = calcPSK choice resumptionMasterSecret nonce
+            psk = derivePSK choice resumptionMasterSecret nonce
         (label, add) <- generateSession life psk rtt0max rtt
         let nst = createNewSessionTicket life add nonce label rtt0max
         sendPacket13 ctx $ Handshake13 [nst]
