@@ -36,7 +36,7 @@ module Network.TLS.Handshake.Common13
        , recvHandshake13hash
        , CipherChoice(..)
        , makeCipherChoice
-       , calcEarlySecret
+       , initEarlySecret
        , calculateEarlySecret
        , calculateHandshakeSecret
        , calculateApplicationSecret
@@ -444,8 +444,8 @@ calculateEarlySecret ctx choice maux initialized = do
     usedHash = cHash choice
     zero = cZero choice
 
-calcEarlySecret :: CipherChoice -> Maybe ByteString -> BaseSecret EarlySecret
-calcEarlySecret choice mpsk = BaseSecret sec
+initEarlySecret :: CipherChoice -> Maybe ByteString -> BaseSecret EarlySecret
+initEarlySecret choice mpsk = BaseSecret sec
   where
     sec = hkdfExtract usedHash zero zeroOrPSK
     usedHash = cHash choice
