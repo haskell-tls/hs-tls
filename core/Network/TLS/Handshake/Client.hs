@@ -851,7 +851,7 @@ handshakeClient13' cparams ctx groupSent choice = do
 
     switchToApplicationSecret handshakeSecret hChSf = do
         ensureRecvComplete ctx
-        appKey <- calculateApplicationSecret ctx choice handshakeSecret (Just hChSf)
+        appKey <- calculateApplicationSecret ctx choice handshakeSecret hChSf
         let ServerTrafficSecret serverApplicationSecret0 = triServer appKey
         let ClientTrafficSecret clientApplicationSecret0 = triClient appKey
         setTxState ctx usedHash usedCipher clientApplicationSecret0

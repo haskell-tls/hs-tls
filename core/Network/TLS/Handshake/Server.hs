@@ -736,7 +736,8 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         return (clientHandshakeSecret, triBase handKey)
     sfSentTime <- getCurrentTimeFromBase
     ----------------------------------------------------------------
-    appKey <- calculateApplicationSecret ctx choice handshakeSecret Nothing
+    hChSf <- transcriptHash ctx
+    appKey <- calculateApplicationSecret ctx choice handshakeSecret hChSf
     let ClientTrafficSecret clientApplicationSecret0 = triClient appKey
         ServerTrafficSecret serverApplicationSecret0 = triServer appKey
         applicationSecret = triBase appKey

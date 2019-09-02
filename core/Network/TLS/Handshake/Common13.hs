@@ -469,12 +469,9 @@ calculateHandshakeSecret ctx choice (BaseSecret sec) ecdhe = do
   where
     usedHash = cHash choice
 
-calculateApplicationSecret :: Context -> CipherChoice -> BaseSecret HandshakeSecret -> Maybe ByteString
+calculateApplicationSecret :: Context -> CipherChoice -> BaseSecret HandshakeSecret -> ByteString
                            -> IO (SecretTriple ApplicationSecret)
-calculateApplicationSecret ctx choice (BaseSecret sec) mhChSf = do
-    hChSf <- case mhChSf of
-      Nothing -> transcriptHash ctx
-      Just h  -> return h
+calculateApplicationSecret ctx choice (BaseSecret sec) hChSf = do
     let applicationSecret = hkdfExtract usedHash (deriveSecret usedHash sec "derived" (hash usedHash "")) zero
     let clientApplicationSecret0 = deriveSecret usedHash applicationSecret "c ap traffic" hChSf
         serverApplicationSecret0 = deriveSecret usedHash applicationSecret "s ap traffic" hChSf
