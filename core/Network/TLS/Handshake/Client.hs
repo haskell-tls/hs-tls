@@ -288,7 +288,7 @@ handshakeClient' cparams ctx groups mparams = do
         send0RTT (usedCipher, earlyData) = do
                 let choice = makeChoice TLS13 usedCipher
                     usedHash = cHash choice
-                earlySecret <- usingHState ctx getTLS13EarlySecret
+                Just earlySecret <- usingHState ctx getTLS13EarlySecret
                 -- Client hello is stored in hstHandshakeDigest
                 -- But HandshakeDigestContext is not created yet.
                 earlyKey <- calculateEarlySecret ctx choice (Right earlySecret) False
@@ -873,12 +873,12 @@ handshakeClient13' cparams ctx groupSent choice = do
         usingHState ctx getGroupPrivate >>= fromServerKeyShare serverKeyShare
 
     makeEarlySecret = do
-        earlySecretPSK@(BaseSecret sec) <- usingHState ctx getTLS13EarlySecret
         mSelectedIdentity <- usingState_ ctx getTLS13PreSharedKey
         case mSelectedIdentity of
           Nothing                          ->
               return (calcEarlySecret choice Nothing, False)
           Just (PreSharedKeyServerHello 0) -> do
+              Just earlySecretPSK@(BaseSecret sec) <- usingHState ctx getTLS13EarlySecret
               unless (B.length sec == hashSize) $
                   throwCore $ Error_Protocol ("selected cipher is incompatible with selected PSK", True, IllegalParameter)
               usingHState ctx $ setTLS13HandshakeMode PreSharedKey

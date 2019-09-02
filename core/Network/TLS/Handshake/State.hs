@@ -128,8 +128,8 @@ data HandshakeState = HandshakeState
     , hstNegotiatedGroup     :: Maybe Group
     , hstTLS13HandshakeMode  :: HandshakeMode13
     , hstTLS13RTT0Status     :: !RTT0Status
-    , hstTLS13EarlySecret    :: BaseSecret EarlySecret
-    , hstTLS13ResumptionSecret :: BaseSecret ResumptionSecret
+    , hstTLS13EarlySecret    :: Maybe (BaseSecret EarlySecret)
+    , hstTLS13ResumptionSecret :: Maybe (BaseSecret ResumptionSecret)
     , hstCCS13Sent           :: !Bool
     } deriving (Show)
 
@@ -218,8 +218,8 @@ newEmptyHandshake ver crand = HandshakeState
     , hstNegotiatedGroup     = Nothing
     , hstTLS13HandshakeMode  = FullHandshake
     , hstTLS13RTT0Status     = RTT0None
-    , hstTLS13EarlySecret    = BaseSecret ""
-    , hstTLS13ResumptionSecret = BaseSecret ""
+    , hstTLS13EarlySecret    = Nothing
+    , hstTLS13ResumptionSecret = Nothing
     , hstCCS13Sent           = False
     }
 
@@ -301,15 +301,15 @@ getTLS13RTT0Status :: HandshakeM RTT0Status
 getTLS13RTT0Status = gets hstTLS13RTT0Status
 
 setTLS13EarlySecret :: BaseSecret EarlySecret -> HandshakeM ()
-setTLS13EarlySecret secret = modify (\hst -> hst { hstTLS13EarlySecret = secret })
+setTLS13EarlySecret secret = modify (\hst -> hst { hstTLS13EarlySecret = Just secret })
 
-getTLS13EarlySecret :: HandshakeM (BaseSecret EarlySecret)
+getTLS13EarlySecret :: HandshakeM (Maybe (BaseSecret EarlySecret))
 getTLS13EarlySecret = gets hstTLS13EarlySecret
 
 setTLS13ResumptionSecret :: BaseSecret ResumptionSecret -> HandshakeM ()
-setTLS13ResumptionSecret secret = modify (\hst -> hst { hstTLS13ResumptionSecret = secret })
+setTLS13ResumptionSecret secret = modify (\hst -> hst { hstTLS13ResumptionSecret = Just secret })
 
-getTLS13ResumptionSecret :: HandshakeM (BaseSecret ResumptionSecret)
+getTLS13ResumptionSecret :: HandshakeM (Maybe (BaseSecret ResumptionSecret))
 getTLS13ResumptionSecret = gets hstTLS13ResumptionSecret
 
 setCCS13Sent :: Bool -> HandshakeM ()
