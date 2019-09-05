@@ -28,6 +28,7 @@ module Network.TLS.Types
     , ClientTrafficSecret(..)
     , ServerTrafficSecret(..)
     , SecretTriple(..)
+    , SecretPair(..)
     , MasterSecret(..)
     ) where
 
@@ -100,6 +101,11 @@ data SecretTriple a = SecretTriple
     { triBase   :: BaseSecret a
     , triClient :: ClientTrafficSecret a
     , triServer :: ServerTrafficSecret a
+    }
+
+data SecretPair a = SecretPair
+    { pairBase   :: BaseSecret a
+    , pairClient :: ClientTrafficSecret a
     }
 
 -- Master secret for TLS 1.2 or earlier.

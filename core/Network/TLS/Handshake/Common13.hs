@@ -425,7 +425,7 @@ makeCipherChoice ver cipher = CipherChoice ver cipher h zero
 
 calculateEarlySecret :: Context -> CipherChoice
                      -> Either ByteString (BaseSecret EarlySecret)
-                     -> Bool -> IO (SecretTriple EarlySecret)
+                     -> Bool -> IO (SecretPair EarlySecret)
 calculateEarlySecret ctx choice maux initialized = do
     hCh <- if initialized then
                transcriptHash ctx
@@ -437,9 +437,8 @@ calculateEarlySecret ctx choice maux initialized = do
           Left  psk              -> hkdfExtract usedHash zero psk
         clientEarlySecret = deriveSecret usedHash earlySecret "c e traffic" hCh
         cets = ClientTrafficSecret clientEarlySecret :: ClientTrafficSecret EarlySecret
-        sets = ServerTrafficSecret "" -- dummy
     logKey ctx cets
-    return $ SecretTriple (BaseSecret earlySecret) cets sets
+    return $ SecretPair (BaseSecret earlySecret) cets
   where
     usedHash = cHash choice
     zero = cZero choice

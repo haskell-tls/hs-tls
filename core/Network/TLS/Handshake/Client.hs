@@ -291,7 +291,7 @@ handshakeClient' cparams ctx groups mparams = do
                 -- Client hello is stored in hstHandshakeDigest
                 -- But HandshakeDigestContext is not created yet.
                 earlyKey <- calculateEarlySecret ctx choice (Right earlySecret) False
-                let ClientTrafficSecret clientEarlySecret = triClient earlyKey
+                let ClientTrafficSecret clientEarlySecret = pairClient earlyKey
                 runPacketFlight ctx $ sendChangeCipherSpec13 ctx
                 setTxState ctx usedHash usedCipher clientEarlySecret
                 mapChunks_ 16384 (sendPacket13 ctx . AppData13) earlyData

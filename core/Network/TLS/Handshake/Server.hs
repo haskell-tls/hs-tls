@@ -692,8 +692,8 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
     srand <- setServerParameter
     (psk, binderInfo, is0RTTvalid) <- choosePSK
     earlyKey <- calculateEarlySecret ctx choice (Left psk) True
-    let earlySecret = triBase earlyKey
-        ClientTrafficSecret clientEarlySecret = triClient earlyKey
+    let earlySecret = pairBase earlyKey
+        ClientTrafficSecret clientEarlySecret = pairClient earlyKey
     extensions <- checkBinder earlySecret binderInfo
     hrr <- usingState_ ctx getTLS13HRR
     let authenticated = isJust binderInfo
