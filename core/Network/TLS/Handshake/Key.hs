@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 -- |
 -- Module      : Network.TLS.Handshake.Key
 -- License     : BSD-style
@@ -21,7 +22,6 @@ module Network.TLS.Handshake.Key
     , checkDigitalSignatureKey
     , getLocalPublicKey
     , logKey
-    , LogKey(..)
     ) where
 
 import Control.Monad.State.Strict
@@ -120,30 +120,30 @@ getLocalPublicKey ctx =
 
 ----------------------------------------------------------------
 
-data LogKey = MasterSecret ByteString
-            | ClientEarlyTrafficSecret ByteString
-            | ServerHandshakeTrafficSecret ByteString
-            | ClientHandshakeTrafficSecret ByteString
-            | ServerTrafficSecret0 ByteString
-            | ClientTrafficSecret0 ByteString
+class LogLabel a where
+    labelAndKey :: a -> (String, ByteString)
 
-labelAndKey :: LogKey -> (String, ByteString)
-labelAndKey (MasterSecret key) =
-    ("CLIENT_RANDOM", key)
-labelAndKey (ClientEarlyTrafficSecret key) =
-    ("CLIENT_EARLY_TRAFFIC_SECRET", key)
-labelAndKey (ServerHandshakeTrafficSecret key) =
-    ("SERVER_HANDSHAKE_TRAFFIC_SECRET", key)
-labelAndKey (ClientHandshakeTrafficSecret key) =
-    ("CLIENT_HANDSHAKE_TRAFFIC_SECRET", key)
-labelAndKey (ServerTrafficSecret0 key) =
-    ("SERVER_TRAFFIC_SECRET_0", key)
-labelAndKey (ClientTrafficSecret0 key) =
-    ("CLIENT_TRAFFIC_SECRET_0", key)
+instance LogLabel MasterSecret where
+    labelAndKey (MasterSecret key) = ("CLIENT_RANDOM", key)
+
+instance LogLabel (ClientTrafficSecret EarlySecret) where
+    labelAndKey (ClientTrafficSecret key) = ("CLIENT_EARLY_TRAFFIC_SECRET", key)
+
+instance LogLabel (ServerTrafficSecret HandshakeSecret) where
+    labelAndKey (ServerTrafficSecret key) = ("SERVER_HANDSHAKE_TRAFFIC_SECRET", key)
+
+instance LogLabel (ClientTrafficSecret HandshakeSecret) where
+    labelAndKey (ClientTrafficSecret key) = ("CLIENT_HANDSHAKE_TRAFFIC_SECRET", key)
+
+instance LogLabel (ServerTrafficSecret ApplicationSecret) where
+    labelAndKey (ServerTrafficSecret key) = ("SERVER_TRAFFIC_SECRET_0", key)
+
+instance LogLabel (ClientTrafficSecret ApplicationSecret) where
+    labelAndKey (ClientTrafficSecret key) = ("CLIENT_TRAFFIC_SECRET_0", key)
 
 -- NSS Key Log Format
 -- See https://developer.mozilla.org/en-US/docs/Mozilla/Projects/NSS/Key_Log_Format
-logKey :: Context -> LogKey -> IO ()
+logKey :: LogLabel a => Context -> a -> IO ()
 logKey ctx logkey = do
     mhst <- getHState ctx
     case mhst of

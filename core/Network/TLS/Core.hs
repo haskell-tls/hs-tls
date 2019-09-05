@@ -193,10 +193,10 @@ recvData13 ctx = do
             -- read+write locks (which is also what we use for all calls to the
             -- session manager).
             withWriteLock ctx $ do
-                ResumptionSecret resumptionMasterSecret <- usingHState ctx getTLS13Secret
-                (usedHash, usedCipher, _) <- getTxState ctx
-                let hashSize = hashDigestSize usedHash
-                    psk = hkdfExpandLabel usedHash resumptionMasterSecret "resumption" nonce hashSize
+                Just resumptionMasterSecret <- usingHState ctx getTLS13ResumptionSecret
+                (_, usedCipher, _) <- getTxState ctx
+                let choice = makeCipherChoice TLS13 usedCipher
+                    psk = derivePSK choice resumptionMasterSecret nonce
                     maxSize = case extensionLookup extensionID_EarlyData exts >>= extensionDecode MsgTNewSessionTicket of
                         Just (EarlyDataIndication (Just ms)) -> fromIntegral $ safeNonNegative32 ms
                         _                                    -> 0
@@ -297,9 +297,9 @@ keyUpdate :: Context
           -> (Context -> Hash -> Cipher -> C8.ByteString -> IO ())
           -> IO ()
 keyUpdate ctx getState setState = do
-    (usedHash, usedCipher, applicationTrafficSecretN) <- getState ctx
-    let applicationTrafficSecretN1 = hkdfExpandLabel usedHash applicationTrafficSecretN "traffic upd" "" $ hashDigestSize usedHash
-    setState ctx usedHash usedCipher applicationTrafficSecretN1
+    (usedHash, usedCipher, applicationSecretN) <- getState ctx
+    let applicationSecretN1 = hkdfExpandLabel usedHash applicationSecretN "traffic upd" "" $ hashDigestSize usedHash
+    setState ctx usedHash usedCipher applicationSecretN1
 
 -- | How to update keys in TLS 1.3
 data KeyUpdateRequest = OneWay -- ^ Unidirectional key update

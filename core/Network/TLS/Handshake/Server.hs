@@ -44,7 +44,6 @@ import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Certificate
 import Network.TLS.X509
 import Network.TLS.Handshake.State13
-import Network.TLS.KeySchedule
 import Network.TLS.Handshake.Common13
 
 -- Put the server context in handshake mode.
@@ -692,10 +691,9 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
     usingHState ctx $ setNegotiatedGroup $ keyShareEntryGroup clientKeyShare
     srand <- setServerParameter
     (psk, binderInfo, is0RTTvalid) <- choosePSK
-    hCh <- transcriptHash ctx
-    let earlySecret = hkdfExtract usedHash zero psk
-        clientEarlyTrafficSecret = deriveSecret usedHash earlySecret "c e traffic" hCh
-    logKey ctx (ClientEarlyTrafficSecret clientEarlyTrafficSecret)
+    earlyKey <- calculateEarlySecret ctx choice (Left psk) True
+    let earlySecret = pairBase earlyKey
+        ClientTrafficSecret clientEarlySecret = pairClient earlyKey
     extensions <- checkBinder earlySecret binderInfo
     hrr <- usingState_ ctx getTLS13HRR
     let authenticated = isJust binderInfo
@@ -718,39 +716,32 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
     mCredInfo <- if authenticated then return Nothing else decideCredentialInfo
     (ecdhe,keyShare) <- makeServerKeyShare ctx clientKeyShare
     ensureRecvComplete ctx
-    let handshakeSecret = hkdfExtract usedHash (deriveSecret usedHash earlySecret "derived" (hash usedHash "")) ecdhe
-    clientHandshakeTrafficSecret <- runPacketFlight ctx $ do
+    (clientHandshakeSecret, handshakeSecret) <- runPacketFlight ctx $ do
         sendServerHello keyShare srand extensions
         sendChangeCipherSpec13 ctx
     ----------------------------------------------------------------
-        hChSh <- transcriptHash ctx
-        let clientHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
-            serverHandshakeTrafficSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
+        handKey <- liftIO $ calculateHandshakeSecret ctx choice earlySecret ecdhe
+        let ServerTrafficSecret serverHandshakeSecret = triServer handKey
+            ClientTrafficSecret clientHandshakeSecret = triClient handKey
         liftIO $ do
-            logKey ctx (ServerHandshakeTrafficSecret serverHandshakeTrafficSecret)
-            logKey ctx (ClientHandshakeTrafficSecret clientHandshakeTrafficSecret)
-            setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlyTrafficSecret else clientHandshakeTrafficSecret
-            setTxState ctx usedHash usedCipher serverHandshakeTrafficSecret
+            setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlySecret else clientHandshakeSecret
+            setTxState ctx usedHash usedCipher serverHandshakeSecret
     ----------------------------------------------------------------
         sendExtensions rtt0OK
         case mCredInfo of
             Nothing              -> return ()
             Just (cred, hashSig) -> sendCertAndVerify cred hashSig
-        rawFinished <- makeFinished ctx usedHash serverHandshakeTrafficSecret
+        rawFinished <- makeFinished ctx usedHash serverHandshakeSecret
         loadPacket13 ctx $ Handshake13 [rawFinished]
-        return clientHandshakeTrafficSecret
+        return (clientHandshakeSecret, triBase handKey)
     sfSentTime <- getCurrentTimeFromBase
     ----------------------------------------------------------------
-    let masterSecret = hkdfExtract usedHash (deriveSecret usedHash handshakeSecret "derived" (hash usedHash "")) zero
     hChSf <- transcriptHash ctx
-    let clientApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "c ap traffic" hChSf
-        serverApplicationTrafficSecret0 = deriveSecret usedHash masterSecret "s ap traffic" hChSf
-        exporterMasterSecret = deriveSecret usedHash masterSecret "exp master" hChSf
-    usingState_ ctx $ setExporterMasterSecret exporterMasterSecret
-    ----------------------------------------------------------------
-    logKey ctx (ServerTrafficSecret0 serverApplicationTrafficSecret0)
-    logKey ctx (ClientTrafficSecret0 clientApplicationTrafficSecret0)
-    setTxState ctx usedHash usedCipher serverApplicationTrafficSecret0
+    appKey <- calculateApplicationSecret ctx choice handshakeSecret hChSf
+    let ClientTrafficSecret clientApplicationSecret0 = triClient appKey
+        ServerTrafficSecret serverApplicationSecret0 = triServer appKey
+        applicationSecret = triBase appKey
+    setTxState ctx usedHash usedCipher serverApplicationSecret0
     ----------------------------------------------------------------
     if rtt0OK then
         setEstablished ctx (EarlyDataAllowed rtt0max)
@@ -758,14 +749,14 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         setEstablished ctx (EarlyDataNotAllowed 3) -- hardcoding
 
     let expectFinished hChBeforeCf (Finished13 verifyData) = liftIO $ do
-            checkFinished usedHash clientHandshakeTrafficSecret hChBeforeCf verifyData
+            checkFinished usedHash clientHandshakeSecret hChBeforeCf verifyData
             handshakeTerminate13 ctx
-            setRxState ctx usedHash usedCipher clientApplicationTrafficSecret0
-            sendNewSessionTicket masterSecret sfSentTime
+            setRxState ctx usedHash usedCipher clientApplicationSecret0
+            sendNewSessionTicket applicationSecret sfSentTime
         expectFinished _ hs = unexpected (show hs) (Just "finished 13")
 
     let expectEndOfEarlyData EndOfEarlyData13 =
-            setRxState ctx usedHash usedCipher clientHandshakeTrafficSecret
+            setRxState ctx usedHash usedCipher clientHandshakeSecret
         expectEndOfEarlyData hs = unexpected (show hs) (Just "end of early data")
 
     if not authenticated && serverWantClientCert sparams then
@@ -782,6 +773,8 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
           recvHandshake13hash ctx expectFinished
           ensureRecvComplete ctx
   where
+    choice = makeCipherChoice chosenVersion usedCipher
+
     setServerParameter = do
         srand <- serverRandom ctx chosenVersion $ supportedVersions $ serverSupported sparams
         usingState_ ctx $ setVersion chosenVersion
@@ -907,14 +900,13 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         let extensions = catMaybes [earlyDataExtension, groupExtension, sniExtension] ++ protoExt
         loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 extensions]
 
-    sendNewSessionTicket masterSecret sfSentTime = when sendNST $ do
+    sendNewSessionTicket applicationSecret sfSentTime = when sendNST $ do
         cfRecvTime <- getCurrentTimeFromBase
         let rtt = cfRecvTime - sfSentTime
-        hChCf <- transcriptHash ctx
         nonce <- getStateRNG ctx 32
-        let resumptionMasterSecret = deriveSecret usedHash masterSecret "res master" hChCf
-            life = toSeconds $ serverTicketLifetime sparams
-            psk = hkdfExpandLabel usedHash resumptionMasterSecret "resumption" nonce hashSize
+        resumptionMasterSecret <- calculateResumptionSecret ctx choice applicationSecret
+        let life = toSeconds $ serverTicketLifetime sparams
+            psk = derivePSK choice resumptionMasterSecret nonce
         (label, add) <- generateSession life psk rtt0max rtt
         let nst = createNewSessionTicket life add nonce label rtt0max
         sendPacket13 ctx $ Handshake13 [nst]
@@ -1135,10 +1127,10 @@ postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = d
     processHandshake13 ctx certReq
     processHandshake13 ctx h
 
-    (usedHash, _, applicationTrafficSecretN) <- getRxState ctx
+    (usedHash, _, applicationSecretN) <- getRxState ctx
 
     let expectFinished hChBeforeCf (Finished13 verifyData) = do
-            checkFinished usedHash applicationTrafficSecretN hChBeforeCf verifyData
+            checkFinished usedHash applicationSecretN hChBeforeCf verifyData
             void $ restoreHState ctx baseHState
         expectFinished _ hs = unexpected (show hs) (Just "finished 13")
 

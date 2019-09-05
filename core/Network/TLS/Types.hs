@@ -1,3 +1,4 @@
+{-# LANGUAGE EmptyDataDecls #-}
 -- |
 -- Module      : Network.TLS.Types
 -- License     : BSD-style
@@ -19,6 +20,16 @@ module Network.TLS.Types
     , HostName
     , Second
     , Millisecond
+    , EarlySecret
+    , HandshakeSecret
+    , ApplicationSecret
+    , ResumptionSecret
+    , BaseSecret(..)
+    , ClientTrafficSecret(..)
+    , ServerTrafficSecret(..)
+    , SecretTriple(..)
+    , SecretPair(..)
+    , MasterSecret(..)
     ) where
 
 import Network.TLS.Imports
@@ -76,3 +87,26 @@ data Direction = Tx | Rx
 invertRole :: Role -> Role
 invertRole ClientRole = ServerRole
 invertRole ServerRole = ClientRole
+
+data EarlySecret
+data HandshakeSecret
+data ApplicationSecret
+data ResumptionSecret
+
+newtype BaseSecret a = BaseSecret ByteString deriving Show
+newtype ClientTrafficSecret a = ClientTrafficSecret ByteString deriving Show
+newtype ServerTrafficSecret a = ServerTrafficSecret ByteString deriving Show
+
+data SecretTriple a = SecretTriple
+    { triBase   :: BaseSecret a
+    , triClient :: ClientTrafficSecret a
+    , triServer :: ServerTrafficSecret a
+    }
+
+data SecretPair a = SecretPair
+    { pairBase   :: BaseSecret a
+    , pairClient :: ClientTrafficSecret a
+    }
+
+-- Master secret for TLS 1.2 or earlier.
+newtype MasterSecret = MasterSecret ByteString deriving Show

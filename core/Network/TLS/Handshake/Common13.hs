@@ -34,6 +34,14 @@ module Network.TLS.Handshake.Common13
        , runRecvHandshake13
        , recvHandshake13
        , recvHandshake13hash
+       , CipherChoice(..)
+       , makeCipherChoice
+       , initEarlySecret
+       , calculateEarlySecret
+       , calculateHandshakeSecret
+       , calculateApplicationSecret
+       , calculateResumptionSecret
+       , derivePSK
        ) where
 
 import qualified Data.ByteArray as BA
@@ -161,14 +169,14 @@ sign ctx pub hs target = liftIO $ do
 
 ----------------------------------------------------------------
 
-makePSKBinder :: Context -> ByteString -> Hash -> Int -> Maybe ByteString -> IO ByteString
-makePSKBinder ctx earlySecret usedHash truncLen mch = do
+makePSKBinder :: Context -> BaseSecret EarlySecret -> Hash -> Int -> Maybe ByteString -> IO ByteString
+makePSKBinder ctx (BaseSecret sec) usedHash truncLen mch = do
     rmsgs0 <- usingHState ctx getHandshakeMessagesRev -- fixme
     let rmsgs = case mch of
           Just ch -> trunc ch : rmsgs0
           Nothing -> trunc (head rmsgs0) : tail rmsgs0
         hChTruncated = hash usedHash $ B.concat $ reverse rmsgs
-        binderKey = deriveSecret usedHash earlySecret "res binder" (hash usedHash "")
+        binderKey = deriveSecret usedHash sec "res binder" (hash usedHash "")
     return $ makeVerifyData usedHash binderKey hChTruncated
   where
     trunc x = B.take takeLen x
@@ -214,7 +222,7 @@ handshakeTerminate13 ctx = do
                     , hstHandshakeDigest = hstHandshakeDigest hshake
                     , hstTLS13HandshakeMode = hstTLS13HandshakeMode hshake
                     , hstTLS13RTT0Status = hstTLS13RTT0Status hshake
-                    , hstTLS13Secret = hstTLS13Secret hshake
+                    , hstTLS13ResumptionSecret = hstTLS13ResumptionSecret hshake
                     }
     -- forget handshake data stored in TLS state
     usingState_ ctx $ do
@@ -399,3 +407,96 @@ isHashSignatureValid13 (HashIntrinsic, s) =
 isHashSignatureValid13 (h, SignatureECDSA) =
     h `elem` [ HashSHA256, HashSHA384, HashSHA512 ]
 isHashSignatureValid13 _ = False
+
+data CipherChoice = CipherChoice {
+    cVersion :: Version
+  , cCipher  :: Cipher
+  , cHash    :: Hash
+  , cZero    :: !ByteString
+  }
+
+makeCipherChoice :: Version -> Cipher -> CipherChoice
+makeCipherChoice ver cipher = CipherChoice ver cipher h zero
+  where
+    h = cipherHash cipher
+    zero = B.replicate (hashDigestSize h) 0
+
+----------------------------------------------------------------
+
+calculateEarlySecret :: Context -> CipherChoice
+                     -> Either ByteString (BaseSecret EarlySecret)
+                     -> Bool -> IO (SecretPair EarlySecret)
+calculateEarlySecret ctx choice maux initialized = do
+    hCh <- if initialized then
+               transcriptHash ctx
+             else do
+               hmsgs <- usingHState ctx getHandshakeMessages
+               return $ hash usedHash $ B.concat hmsgs
+    let earlySecret = case maux of
+          Right (BaseSecret sec) -> sec
+          Left  psk              -> hkdfExtract usedHash zero psk
+        clientEarlySecret = deriveSecret usedHash earlySecret "c e traffic" hCh
+        cets = ClientTrafficSecret clientEarlySecret :: ClientTrafficSecret EarlySecret
+    logKey ctx cets
+    return $ SecretPair (BaseSecret earlySecret) cets
+  where
+    usedHash = cHash choice
+    zero = cZero choice
+
+initEarlySecret :: CipherChoice -> Maybe ByteString -> BaseSecret EarlySecret
+initEarlySecret choice mpsk = BaseSecret sec
+  where
+    sec = hkdfExtract usedHash zero zeroOrPSK
+    usedHash = cHash choice
+    zero = cZero choice
+    zeroOrPSK = case mpsk of
+      Just psk -> psk
+      Nothing  -> zero
+
+calculateHandshakeSecret :: Context -> CipherChoice -> BaseSecret EarlySecret -> ByteString
+                         -> IO (SecretTriple HandshakeSecret)
+calculateHandshakeSecret ctx choice (BaseSecret sec) ecdhe = do
+        hChSh <- transcriptHash ctx
+        let handshakeSecret = hkdfExtract usedHash (deriveSecret usedHash sec "derived" (hash usedHash "")) ecdhe
+        let clientHandshakeSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
+            serverHandshakeSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
+        let shts = ServerTrafficSecret serverHandshakeSecret :: ServerTrafficSecret HandshakeSecret
+            chts = ClientTrafficSecret clientHandshakeSecret :: ClientTrafficSecret HandshakeSecret
+        logKey ctx shts
+        logKey ctx chts
+        return $ SecretTriple (BaseSecret handshakeSecret) chts shts
+  where
+    usedHash = cHash choice
+
+calculateApplicationSecret :: Context -> CipherChoice -> BaseSecret HandshakeSecret -> ByteString
+                           -> IO (SecretTriple ApplicationSecret)
+calculateApplicationSecret ctx choice (BaseSecret sec) hChSf = do
+    let applicationSecret = hkdfExtract usedHash (deriveSecret usedHash sec "derived" (hash usedHash "")) zero
+    let clientApplicationSecret0 = deriveSecret usedHash applicationSecret "c ap traffic" hChSf
+        serverApplicationSecret0 = deriveSecret usedHash applicationSecret "s ap traffic" hChSf
+        exporterMasterSecret = deriveSecret usedHash applicationSecret "exp master" hChSf
+    usingState_ ctx $ setExporterMasterSecret exporterMasterSecret
+    let sts0 = ServerTrafficSecret serverApplicationSecret0 :: ServerTrafficSecret ApplicationSecret
+    let cts0 = ClientTrafficSecret clientApplicationSecret0 :: ClientTrafficSecret ApplicationSecret
+    logKey ctx sts0
+    logKey ctx cts0
+    return $ SecretTriple (BaseSecret applicationSecret) cts0 sts0
+  where
+    usedHash = cHash choice
+    zero = cZero choice
+
+calculateResumptionSecret :: Context -> CipherChoice -> BaseSecret ApplicationSecret
+                          -> IO (BaseSecret ResumptionSecret)
+calculateResumptionSecret ctx choice (BaseSecret sec) = do
+    hChCf <- transcriptHash ctx
+    let resumptionMasterSecret = deriveSecret usedHash sec "res master" hChCf
+    return $ BaseSecret resumptionMasterSecret
+  where
+    usedHash = cHash choice
+
+derivePSK :: CipherChoice -> BaseSecret ResumptionSecret -> ByteString -> ByteString
+derivePSK choice (BaseSecret sec) nonce =
+    hkdfExpandLabel usedHash sec "resumption" nonce hashSize
+  where
+    usedHash = cHash choice
+    hashSize = hashDigestSize usedHash
