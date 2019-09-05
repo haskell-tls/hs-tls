@@ -872,17 +872,20 @@ handshakeClient13' cparams ctx groupSent choice = do
         usingHState ctx getGroupPrivate >>= fromServerKeyShare serverKeyShare
 
     makeEarlySecret = do
-        mSelectedIdentity <- usingState_ ctx getTLS13PreSharedKey
-        case mSelectedIdentity of
-          Nothing                          ->
-              return (initEarlySecret choice Nothing, False)
-          Just (PreSharedKeyServerHello 0) -> do
-              Just earlySecretPSK@(BaseSecret sec) <- usingHState ctx getTLS13EarlySecret
-              unless (B.length sec == hashSize) $
-                  throwCore $ Error_Protocol ("selected cipher is incompatible with selected PSK", True, IllegalParameter)
-              usingHState ctx $ setTLS13HandshakeMode PreSharedKey
-              return (earlySecretPSK, True)
-          Just _                           -> throwCore $ Error_Protocol ("selected identity out of range", True, IllegalParameter)
+         mEarlySecretPSK <- usingHState ctx getTLS13EarlySecret
+         case mEarlySecretPSK of
+           Nothing -> return (initEarlySecret choice Nothing, False)
+           Just earlySecretPSK@(BaseSecret sec) -> do
+               mSelectedIdentity <- usingState_ ctx getTLS13PreSharedKey
+               case mSelectedIdentity of
+                 Nothing                          ->
+                     return (initEarlySecret choice Nothing, False)
+                 Just (PreSharedKeyServerHello 0) -> do
+                     unless (B.length sec == hashSize) $
+                         throwCore $ Error_Protocol ("selected cipher is incompatible with selected PSK", True, IllegalParameter)
+                     usingHState ctx $ setTLS13HandshakeMode PreSharedKey
+                     return (earlySecretPSK, True)
+                 Just _                           -> throwCore $ Error_Protocol ("selected identity out of range", True, IllegalParameter)
 
     expectEncryptedExtensions (EncryptedExtensions13 eexts) = do
         liftIO $ setALPN ctx eexts
