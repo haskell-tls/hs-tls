@@ -816,125 +816,27 @@ handshakeClient13 cparams ctx groupSent = do
 
 handshakeClient13' :: ClientParams -> Context -> Maybe Group -> CipherChoice -> IO ()
 handshakeClient13' cparams ctx groupSent choice = do
-    (_, hkey, resuming) <- switchToHandshakeSecret
+    (_, hkey, resuming) <- switchToHandshakeSecret ctx choice groupSent
     let handshakeSecret = triBase hkey
         ClientTrafficSecret clientHandshakeSecret = triClient hkey
         ServerTrafficSecret serverHandshakeSecret = triServer hkey
     rtt0accepted <- runRecvHandshake13 $ do
-        accepted <- recvHandshake13 ctx expectEncryptedExtensions
-        unless resuming $ recvHandshake13 ctx expectCertRequest
-        recvHandshake13hash ctx $ expectFinished serverHandshakeSecret
+        accepted <- recvHandshake13 ctx $ expectEncryptedExtensions ctx
+        unless resuming $ recvHandshake13 ctx $ expectCertRequest cparams ctx
+        recvHandshake13hash ctx $ expectFinished choice serverHandshakeSecret
         return accepted
     hChSf <- transcriptHash ctx
     runPacketFlight ctx $ sendChangeCipherSpec13 ctx
     when rtt0accepted $ sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
     setTxState ctx usedHash usedCipher clientHandshakeSecret
     sendClientFlight13 cparams ctx usedHash clientHandshakeSecret
-    appKey <- switchToApplicationSecret handshakeSecret hChSf
+    appKey <- switchToApplicationSecret ctx choice handshakeSecret hChSf
     let applicationSecret = triBase appKey
-    setResumptionSecret applicationSecret
+    setResumptionSecret ctx choice applicationSecret
     handshakeTerminate13 ctx
   where
     usedCipher = cCipher choice
     usedHash   = cHash choice
-
-    hashSize = hashDigestSize usedHash
-
-    switchToHandshakeSecret = do
-        ensureRecvComplete ctx
-        ecdhe <- calcSharedKey
-        (earlySecret, resuming) <- makeEarlySecret
-        handKey <- calculateHandshakeSecret ctx choice earlySecret ecdhe
-        let ServerTrafficSecret serverHandshakeSecret = triServer handKey
-        setRxState ctx usedHash usedCipher serverHandshakeSecret
-        return (usedCipher, handKey, resuming)
-
-    switchToApplicationSecret handshakeSecret hChSf = do
-        ensureRecvComplete ctx
-        appKey <- calculateApplicationSecret ctx choice handshakeSecret hChSf
-        let ServerTrafficSecret serverApplicationSecret0 = triServer appKey
-        let ClientTrafficSecret clientApplicationSecret0 = triClient appKey
-        setTxState ctx usedHash usedCipher clientApplicationSecret0
-        setRxState ctx usedHash usedCipher serverApplicationSecret0
-        return appKey
-
-    calcSharedKey = do
-        serverKeyShare <- do
-            mks <- usingState_ ctx getTLS13KeyShare
-            case mks of
-              Just (KeyShareServerHello ks) -> return ks
-              Just _                        -> error "calcSharedKey: invalid KeyShare value"
-              Nothing                       -> throwCore $ Error_Protocol ("key exchange not implemented, expected key_share extension", True, HandshakeFailure)
-        let grp = keyShareEntryGroup serverKeyShare
-        unless (groupSent == Just grp) $
-            throwCore $ Error_Protocol ("received incompatible group for (EC)DHE", True, IllegalParameter)
-        usingHState ctx $ setNegotiatedGroup grp
-        usingHState ctx getGroupPrivate >>= fromServerKeyShare serverKeyShare
-
-    makeEarlySecret = do
-         mEarlySecretPSK <- usingHState ctx getTLS13EarlySecret
-         case mEarlySecretPSK of
-           Nothing -> return (initEarlySecret choice Nothing, False)
-           Just earlySecretPSK@(BaseSecret sec) -> do
-               mSelectedIdentity <- usingState_ ctx getTLS13PreSharedKey
-               case mSelectedIdentity of
-                 Nothing                          ->
-                     return (initEarlySecret choice Nothing, False)
-                 Just (PreSharedKeyServerHello 0) -> do
-                     unless (B.length sec == hashSize) $
-                         throwCore $ Error_Protocol ("selected cipher is incompatible with selected PSK", True, IllegalParameter)
-                     usingHState ctx $ setTLS13HandshakeMode PreSharedKey
-                     return (earlySecretPSK, True)
-                 Just _                           -> throwCore $ Error_Protocol ("selected identity out of range", True, IllegalParameter)
-
-    expectEncryptedExtensions (EncryptedExtensions13 eexts) = do
-        liftIO $ setALPN ctx eexts
-        st <- usingHState ctx getTLS13RTT0Status
-        if st == RTT0Sent then
-            case extensionLookup extensionID_EarlyData eexts of
-              Just _  -> do
-                  usingHState ctx $ setTLS13HandshakeMode RTT0
-                  usingHState ctx $ setTLS13RTT0Status RTT0Accepted
-                  return True
-              Nothing -> do
-                  usingHState ctx $ setTLS13HandshakeMode RTT0
-                  usingHState ctx $ setTLS13RTT0Status RTT0Rejected
-                  return False
-          else
-            return False
-    expectEncryptedExtensions p = unexpected (show p) (Just "encrypted extensions")
-
-    expectCertRequest (CertRequest13 token exts) = do
-        processCertRequest13 ctx token exts
-        recvHandshake13 ctx expectCertAndVerify
-
-    expectCertRequest other = do
-        usingHState ctx $ do
-            setCertReqToken   Nothing
-            setCertReqCBdata  Nothing
-            -- setCertReqSigAlgsCert Nothing
-        expectCertAndVerify other
-
-    expectCertAndVerify (Certificate13 _ cc _) = do
-        _ <- liftIO $ processCertificate cparams ctx (Certificates cc)
-        let pubkey = certPubKey $ getCertificate $ getCertificateChainLeaf cc
-        checkDigitalSignatureKey pubkey
-        usingHState ctx $ setPublicKey pubkey
-        recvHandshake13hash ctx $ expectCertVerify pubkey
-    expectCertAndVerify p = unexpected (show p) (Just "server certificate")
-
-    expectCertVerify pubkey hChSc (CertVerify13 sigAlg sig) = do
-        ok <- checkCertVerify ctx pubkey sigAlg sig hChSc
-        unless ok $ decryptError "cannot verify CertificateVerify"
-    expectCertVerify _ _ p = unexpected (show p) (Just "certificate verify")
-
-    expectFinished baseKey hashValue (Finished13 verifyData) =
-        checkFinished usedHash baseKey hashValue verifyData
-    expectFinished _ _ p = unexpected (show p) (Just "server finished")
-
-    setResumptionSecret applicationSecret = do
-        resumptionSecret <- calculateResumptionSecret ctx choice applicationSecret
-        usingHState ctx $ setTLS13ResumptionSecret resumptionSecret
 
 processCertRequest13 :: MonadIO m => Context -> CertReqContext -> [ExtensionRaw] -> m ()
 processCertRequest13 ctx token exts = do
@@ -984,6 +886,120 @@ processCertRequest13 ctx token exts = do
               -> Maybe [HashAndSignatureAlgorithm]
     uncertsig (SignatureAlgorithmsCert a) = Just a
     -}
+
+----------------------------------------------------------------
+
+switchToHandshakeSecret :: Context -> CipherChoice -> Maybe Group -> IO (Cipher, SecretTriple HandshakeSecret, Bool)
+switchToHandshakeSecret ctx choice groupSent  = do
+    ensureRecvComplete ctx
+    ecdhe <- calcSharedKey
+    (earlySecret, resuming) <- makeEarlySecret
+    handKey <- calculateHandshakeSecret ctx choice earlySecret ecdhe
+    let ServerTrafficSecret serverHandshakeSecret = triServer handKey
+    setRxState ctx usedHash usedCipher serverHandshakeSecret
+    return (usedCipher, handKey, resuming)
+  where
+    usedCipher = cCipher choice
+    usedHash   = cHash choice
+    hashSize   = hashDigestSize usedHash
+    calcSharedKey = do
+        serverKeyShare <- do
+            mks <- usingState_ ctx getTLS13KeyShare
+            case mks of
+              Just (KeyShareServerHello ks) -> return ks
+              Just _                        -> error "calcSharedKey: invalid KeyShare value"
+              Nothing                       -> throwCore $ Error_Protocol ("key exchange not implemented, expected key_share extension", True, HandshakeFailure)
+        let grp = keyShareEntryGroup serverKeyShare
+        unless (groupSent == Just grp) $
+            throwCore $ Error_Protocol ("received incompatible group for (EC)DHE", True, IllegalParameter)
+        usingHState ctx $ setNegotiatedGroup grp
+        usingHState ctx getGroupPrivate >>= fromServerKeyShare serverKeyShare
+
+    makeEarlySecret = do
+         mEarlySecretPSK <- usingHState ctx getTLS13EarlySecret
+         case mEarlySecretPSK of
+           Nothing -> return (initEarlySecret choice Nothing, False)
+           Just earlySecretPSK@(BaseSecret sec) -> do
+               mSelectedIdentity <- usingState_ ctx getTLS13PreSharedKey
+               case mSelectedIdentity of
+                 Nothing                          ->
+                     return (initEarlySecret choice Nothing, False)
+                 Just (PreSharedKeyServerHello 0) -> do
+                     unless (B.length sec == hashSize) $
+                         throwCore $ Error_Protocol ("selected cipher is incompatible with selected PSK", True, IllegalParameter)
+                     usingHState ctx $ setTLS13HandshakeMode PreSharedKey
+                     return (earlySecretPSK, True)
+                 Just _                           -> throwCore $ Error_Protocol ("selected identity out of range", True, IllegalParameter)
+
+switchToApplicationSecret :: Context -> CipherChoice -> BaseSecret HandshakeSecret -> ByteString -> IO (SecretTriple ApplicationSecret)
+switchToApplicationSecret ctx choice handshakeSecret hChSf = do
+    ensureRecvComplete ctx
+    appKey <- calculateApplicationSecret ctx choice handshakeSecret hChSf
+    let ServerTrafficSecret serverApplicationSecret0 = triServer appKey
+    let ClientTrafficSecret clientApplicationSecret0 = triClient appKey
+    setTxState ctx usedHash usedCipher clientApplicationSecret0
+    setRxState ctx usedHash usedCipher serverApplicationSecret0
+    return appKey
+  where
+    usedCipher = cCipher choice
+    usedHash   = cHash choice
+
+expectEncryptedExtensions :: MonadIO m => Context -> Handshake13 -> m Bool
+expectEncryptedExtensions ctx (EncryptedExtensions13 eexts) = do
+    liftIO $ setALPN ctx eexts
+    st <- usingHState ctx getTLS13RTT0Status
+    if st == RTT0Sent then
+        case extensionLookup extensionID_EarlyData eexts of
+          Just _  -> do
+              usingHState ctx $ setTLS13HandshakeMode RTT0
+              usingHState ctx $ setTLS13RTT0Status RTT0Accepted
+              return True
+          Nothing -> do
+              usingHState ctx $ setTLS13HandshakeMode RTT0
+              usingHState ctx $ setTLS13RTT0Status RTT0Rejected
+              return False
+      else
+        return False
+expectEncryptedExtensions _ p = unexpected (show p) (Just "encrypted extensions")
+
+expectCertRequest :: MonadIO m => ClientParams -> Context -> Handshake13 -> RecvHandshake13M m ()
+expectCertRequest cparams ctx (CertRequest13 token exts) = do
+    processCertRequest13 ctx token exts
+    recvHandshake13 ctx $ expectCertAndVerify cparams ctx
+expectCertRequest cparams ctx other = do
+    usingHState ctx $ do
+        setCertReqToken   Nothing
+        setCertReqCBdata  Nothing
+        -- setCertReqSigAlgsCert Nothing
+    expectCertAndVerify cparams ctx other
+
+expectCertAndVerify :: MonadIO m => ClientParams -> Context -> Handshake13 -> RecvHandshake13M m ()
+expectCertAndVerify cparams ctx (Certificate13 _ cc _) = do
+    _ <- liftIO $ processCertificate cparams ctx (Certificates cc)
+    let pubkey = certPubKey $ getCertificate $ getCertificateChainLeaf cc
+    checkDigitalSignatureKey pubkey
+    usingHState ctx $ setPublicKey pubkey
+    recvHandshake13hash ctx $ expectCertVerify ctx pubkey
+expectCertAndVerify _ _ p = unexpected (show p) (Just "server certificate")
+
+expectCertVerify :: MonadIO m => Context -> PubKey -> ByteString -> Handshake13 -> m ()
+expectCertVerify ctx pubkey hChSc (CertVerify13 sigAlg sig) = do
+    ok <- checkCertVerify ctx pubkey sigAlg sig hChSc
+    unless ok $ decryptError "cannot verify CertificateVerify"
+expectCertVerify _ _ _ p = unexpected (show p) (Just "certificate verify")
+
+expectFinished :: MonadIO m => CipherChoice -> ByteString -> ByteString -> Handshake13 -> m ()
+expectFinished choice baseKey hashValue (Finished13 verifyData) = do
+    let usedHash = cHash choice
+    checkFinished usedHash baseKey hashValue verifyData
+expectFinished _ _ _ p = unexpected (show p) (Just "server finished")
+
+setResumptionSecret :: Context -> CipherChoice -> BaseSecret ApplicationSecret -> IO ()
+setResumptionSecret ctx choice applicationSecret = do
+    resumptionSecret <- calculateResumptionSecret ctx choice applicationSecret
+    usingHState ctx $ setTLS13ResumptionSecret resumptionSecret
+
+----------------------------------------------------------------
 
 sendClientFlight13 :: ClientParams -> Context -> Hash -> ByteString -> IO ()
 sendClientFlight13 cparams ctx usedHash baseKey = do
