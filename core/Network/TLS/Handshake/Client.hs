@@ -75,7 +75,7 @@ handshakeClient' :: ClientParams -> Context -> [Group] -> Maybe (ClientRandom, S
 handshakeClient' cparams ctx groups mparams = do
     updateMeasure ctx incrementNbHandshakes
     (crand, clientSession) <- generateClientHelloParams
-    (rtt0, sentExtensions) <- sendClientHello clientSession crand
+    (rtt0, sentExtensions) <- sendClientHello cparams ctx clientSession groups crand
     recvServerHello clientSession sentExtensions
     ver <- usingState_ ctx getVersion
     unless (maybe True (\(_, _, v) -> v == ver) mparams) $
@@ -114,133 +114,9 @@ handshakeClient' cparams ctx groups mparams = do
                     sendChangeCipherAndFinish ctx ClientRole
                     recvChangeCipherAndFinish ctx
         handshakeTerminate ctx
-  where ciphers      = supportedCiphers $ ctxSupported ctx
-        compressions = supportedCompressions $ ctxSupported ctx
-        highestVer = maximum $ supportedVersions $ ctxSupported ctx
+  where highestVer = maximum $ supportedVersions $ ctxSupported ctx
         tls13 = highestVer >= TLS13
         groupToSend = listToMaybe groups
-        getExtensions pskInfo rtt0 = sequence
-            [ sniExtension
-            , secureReneg
-            , alpnExtension
-            , groupExtension
-            , ecPointExtension
-            --, sessionTicketExtension
-            , signatureAlgExtension
-            --, heartbeatExtension
-            , versionExtension
-            , earlyDataExtension rtt0
-            , keyshareExtension
-            , pskExchangeModeExtension
-            , cookieExtension
-            , postHandshakeAuthExtension
-            , preSharedKeyExtension pskInfo -- MUST be last
-            ]
-
-        toExtensionRaw :: Extension e => e -> ExtensionRaw
-        toExtensionRaw ext = ExtensionRaw (extensionID ext) (extensionEncode ext)
-
-        secureReneg  =
-                if supportedSecureRenegotiation $ ctxSupported ctx
-                then usingState_ ctx (getVerifiedData ClientRole) >>= \vd -> return $ Just $ toExtensionRaw $ SecureRenegotiation vd Nothing
-                else return Nothing
-        alpnExtension = do
-            mprotos <- onSuggestALPN $ clientHooks cparams
-            case mprotos of
-                Nothing -> return Nothing
-                Just protos -> do
-                    usingState_ ctx $ setClientALPNSuggest protos
-                    return $ Just $ toExtensionRaw $ ApplicationLayerProtocolNegotiation protos
-        sniExtension = if clientUseServerNameIndication cparams
-                         then do let sni = fst $ clientServerIdentification cparams
-                                 usingState_ ctx $ setClientSNI sni
-                                 return $ Just $ toExtensionRaw $ ServerName [ServerNameHostName sni]
-                         else return Nothing
-
-        groupExtension = return $ Just $ toExtensionRaw $ NegotiatedGroups (supportedGroups $ ctxSupported ctx)
-        ecPointExtension = return $ Just $ toExtensionRaw $ EcPointFormatsSupported [EcPointFormat_Uncompressed]
-                                --[EcPointFormat_Uncompressed,EcPointFormat_AnsiX962_compressed_prime,EcPointFormat_AnsiX962_compressed_char2]
-        --heartbeatExtension = return $ Just $ toExtensionRaw $ HeartBeat $ HeartBeat_PeerAllowedToSend
-        --sessionTicketExtension = return $ Just $ toExtensionRaw $ SessionTicket
-
-        signatureAlgExtension = return $ Just $ toExtensionRaw $ SignatureAlgorithms $ supportedHashSignatures $ clientSupported cparams
-
-        versionExtension
-          | tls13 = do
-                let vers = filter (>= TLS10) $ supportedVersions $ ctxSupported ctx
-                return $ Just $ toExtensionRaw $ SupportedVersionsClientHello vers
-          | otherwise = return Nothing
-
-        -- FIXME
-        keyshareExtension
-          | tls13 = case groupToSend of
-                  Nothing  -> return Nothing
-                  Just grp -> do
-                      (cpri, ent) <- makeClientKeyShare ctx grp
-                      usingHState ctx $ setGroupPrivate cpri
-                      return $ Just $ toExtensionRaw $ KeyShareClientHello [ent]
-          | otherwise = return Nothing
-
-        sessionAndCipherToResume13 = do
-            guard tls13
-            (sid, sdata) <- clientWantSessionResume cparams
-            guard (sessionVersion sdata >= TLS13)
-            sCipher <- find (\c -> cipherID c == sessionCipher sdata) ciphers
-            return (sid, sdata, sCipher)
-
-        getPskInfo =
-            case sessionAndCipherToResume13 of
-                Nothing -> return Nothing
-                Just (sid, sdata, sCipher) -> do
-                    let tinfo = fromJust "sessionTicketInfo" $ sessionTicketInfo sdata
-                    age <- getAge tinfo
-                    return $ if isAgeValid age tinfo
-                        then Just (sid, sdata, makeCipherChoice TLS13 sCipher, ageToObfuscatedAge age tinfo)
-                        else Nothing
-
-        preSharedKeyExtension pskInfo =
-            case pskInfo of
-                Nothing -> return Nothing
-                Just (sid, _, choice, obfAge) ->
-                    let zero = cZero choice
-                        identity = PskIdentity sid obfAge
-                        offeredPsks = PreSharedKeyClientHello [identity] [zero]
-                     in return $ Just $ toExtensionRaw offeredPsks
-
-        pskExchangeModeExtension
-          | tls13     = return $ Just $ toExtensionRaw $ PskKeyExchangeModes [PSK_DHE_KE]
-          | otherwise = return Nothing
-
-        earlyDataExtension rtt0
-          | rtt0 = return $ Just $ toExtensionRaw (EarlyDataIndication Nothing)
-          | otherwise = return Nothing
-
-        cookieExtension = do
-            mcookie <- usingState_ ctx getTLS13Cookie
-            case mcookie of
-              Nothing     -> return Nothing
-              Just cookie -> return $ Just $ toExtensionRaw cookie
-
-        postHandshakeAuthExtension
-          | tls13     = return $ Just $ toExtensionRaw PostHandshakeAuth
-          | otherwise = return Nothing
-
-        adjustExtentions pskInfo exts ch =
-            case pskInfo of
-                Nothing -> return exts
-                Just (_, sdata, choice, _) -> do
-                      let psk = sessionSecret sdata
-                          earlySecret = initEarlySecret choice (Just psk)
-                      usingHState ctx $ setTLS13EarlySecret earlySecret
-                      let ech = encodeHandshake ch
-                          h = cHash choice
-                          siz = hashDigestSize h
-                      binder <- makePSKBinder ctx earlySecret h (siz + 3) (Just ech)
-                      let exts' = init exts ++ [adjust (last exts)]
-                          adjust (ExtensionRaw eid withoutBinders) = ExtensionRaw eid withBinders
-                            where
-                              withBinders = replacePSKBinder withoutBinders binder
-                      return exts'
 
         generateClientHelloParams =
             case mparams of
@@ -262,41 +138,6 @@ handshakeClient' cparams ctx groups mparams = do
                             return (crand, randomSession)
                         else return (crand, paramSession)
 
-        sendClientHello clientSession crand = do
-            let ver = if tls13 then TLS12 else highestVer
-            hrr <- usingState_ ctx getTLS13HRR
-            unless hrr $ startHandshake ctx ver crand
-            usingState_ ctx $ setVersionIfUnset highestVer
-            let cipherIds = map cipherID ciphers
-                compIds = map compressionID compressions
-                mkClientHello exts = ClientHello ver crand clientSession cipherIds compIds exts Nothing
-            pskInfo <- getPskInfo
-            let rtt0info = pskInfo >>= get0RTTinfo
-                rtt0 = isJust rtt0info
-            extensions0 <- catMaybes <$> getExtensions pskInfo rtt0
-            extensions <- adjustExtentions pskInfo extensions0 $ mkClientHello extensions0
-            sendPacket ctx $ Handshake [mkClientHello extensions]
-            mapM_ send0RTT rtt0info
-            return (rtt0, map (\(ExtensionRaw i _) -> i) extensions)
-
-        get0RTTinfo (_, sdata, choice, _) = do
-            earlyData <- clientEarlyData cparams
-            guard (B.length earlyData <= sessionMaxEarlyDataSize sdata)
-            return (choice, earlyData)
-
-        send0RTT (choice, earlyData) = do
-                let usedCipher = cCipher choice
-                    usedHash = cHash choice
-                Just earlySecret <- usingHState ctx getTLS13EarlySecret
-                -- Client hello is stored in hstHandshakeDigest
-                -- But HandshakeDigestContext is not created yet.
-                earlyKey <- calculateEarlySecret ctx choice (Right earlySecret) False
-                let ClientTrafficSecret clientEarlySecret = pairClient earlyKey
-                runPacketFlight ctx $ sendChangeCipherSpec13 ctx
-                setTxState ctx usedHash usedCipher clientEarlySecret
-                mapChunks_ 16384 (sendPacket13 ctx . AppData13) earlyData
-                usingHState ctx $ setTLS13RTT0Status RTT0Sent
-
         recvServerHello clientSession sentExts = runRecvState ctx recvState
           where recvState = RecvStateNext $ \p ->
                     case p of
@@ -310,6 +151,180 @@ handshakeClient' cparams ctx groups mparams = do
                                 _ -> throwAlert a
                         _ -> unexpected (show p) (Just "handshake")
                 throwAlert a = usingState_ ctx $ throwError $ Error_Protocol ("expecting server hello, got alert : " ++ show a, True, HandshakeFailure)
+
+
+makeClientHello :: ClientParams -> Context -> [Group] -> ClientRandom -> Session -> IO (Handshake, Maybe (CipherChoice, ByteString), Bool, [ExtensionID])
+makeClientHello cparams ctx groups crand clientSession = do
+    let ver = if tls13 then TLS12 else highestVer
+    hrr <- usingState_ ctx getTLS13HRR
+    unless hrr $ startHandshake ctx ver crand
+    usingState_ ctx $ setVersionIfUnset highestVer
+    let cipherIds = map cipherID ciphers
+        compIds = map compressionID compressions
+        mkClientHello exts = ClientHello ver crand clientSession cipherIds compIds exts Nothing
+    pskInfo <- getPskInfo
+    let rtt0info = pskInfo >>= get0RTTinfo
+        rtt0 = isJust rtt0info
+    extensions0 <- catMaybes <$> getExtensions pskInfo rtt0
+    extensions <- adjustExtentions pskInfo extensions0 $ mkClientHello extensions0
+    let clientHello = mkClientHello extensions
+        ext = map (\(ExtensionRaw i _) -> i) extensions
+    return (clientHello, rtt0info, rtt0, ext)
+  where
+    ciphers      = supportedCiphers $ ctxSupported ctx
+    compressions = supportedCompressions $ ctxSupported ctx
+    highestVer = maximum $ supportedVersions $ ctxSupported ctx
+    tls13 = highestVer >= TLS13
+    groupToSend = listToMaybe groups
+
+    getExtensions pskInfo rtt0 = sequence
+        [ sniExtension
+        , secureReneg
+        , alpnExtension
+        , groupExtension
+        , ecPointExtension
+        --, sessionTicketExtension
+        , signatureAlgExtension
+        --, heartbeatExtension
+        , versionExtension
+        , earlyDataExtension rtt0
+        , keyshareExtension
+        , pskExchangeModeExtension
+        , cookieExtension
+        , postHandshakeAuthExtension
+        , preSharedKeyExtension pskInfo -- MUST be last
+        ]
+
+    toExtensionRaw :: Extension e => e -> ExtensionRaw
+    toExtensionRaw ext = ExtensionRaw (extensionID ext) (extensionEncode ext)
+
+    secureReneg  =
+            if supportedSecureRenegotiation $ ctxSupported ctx
+            then usingState_ ctx (getVerifiedData ClientRole) >>= \vd -> return $ Just $ toExtensionRaw $ SecureRenegotiation vd Nothing
+            else return Nothing
+    alpnExtension = do
+        mprotos <- onSuggestALPN $ clientHooks cparams
+        case mprotos of
+            Nothing -> return Nothing
+            Just protos -> do
+                usingState_ ctx $ setClientALPNSuggest protos
+                return $ Just $ toExtensionRaw $ ApplicationLayerProtocolNegotiation protos
+    sniExtension = if clientUseServerNameIndication cparams
+                     then do let sni = fst $ clientServerIdentification cparams
+                             usingState_ ctx $ setClientSNI sni
+                             return $ Just $ toExtensionRaw $ ServerName [ServerNameHostName sni]
+                     else return Nothing
+
+    groupExtension = return $ Just $ toExtensionRaw $ NegotiatedGroups (supportedGroups $ ctxSupported ctx)
+    ecPointExtension = return $ Just $ toExtensionRaw $ EcPointFormatsSupported [EcPointFormat_Uncompressed]
+                            --[EcPointFormat_Uncompressed,EcPointFormat_AnsiX962_compressed_prime,EcPointFormat_AnsiX962_compressed_char2]
+    --heartbeatExtension = return $ Just $ toExtensionRaw $ HeartBeat $ HeartBeat_PeerAllowedToSend
+    --sessionTicketExtension = return $ Just $ toExtensionRaw $ SessionTicket
+
+    signatureAlgExtension = return $ Just $ toExtensionRaw $ SignatureAlgorithms $ supportedHashSignatures $ clientSupported cparams
+
+    versionExtension
+      | tls13 = do
+            let vers = filter (>= TLS10) $ supportedVersions $ ctxSupported ctx
+            return $ Just $ toExtensionRaw $ SupportedVersionsClientHello vers
+      | otherwise = return Nothing
+
+    -- FIXME
+    keyshareExtension
+      | tls13 = case groupToSend of
+              Nothing  -> return Nothing
+              Just grp -> do
+                  (cpri, ent) <- makeClientKeyShare ctx grp
+                  usingHState ctx $ setGroupPrivate cpri
+                  return $ Just $ toExtensionRaw $ KeyShareClientHello [ent]
+      | otherwise = return Nothing
+
+    sessionAndCipherToResume13 = do
+        guard tls13
+        (sid, sdata) <- clientWantSessionResume cparams
+        guard (sessionVersion sdata >= TLS13)
+        sCipher <- find (\c -> cipherID c == sessionCipher sdata) ciphers
+        return (sid, sdata, sCipher)
+
+    getPskInfo =
+        case sessionAndCipherToResume13 of
+            Nothing -> return Nothing
+            Just (sid, sdata, sCipher) -> do
+                let tinfo = fromJust "sessionTicketInfo" $ sessionTicketInfo sdata
+                age <- getAge tinfo
+                return $ if isAgeValid age tinfo
+                    then Just (sid, sdata, makeCipherChoice TLS13 sCipher, ageToObfuscatedAge age tinfo)
+                    else Nothing
+
+    preSharedKeyExtension pskInfo =
+        case pskInfo of
+            Nothing -> return Nothing
+            Just (sid, _, choice, obfAge) ->
+                let zero = cZero choice
+                    identity = PskIdentity sid obfAge
+                    offeredPsks = PreSharedKeyClientHello [identity] [zero]
+                 in return $ Just $ toExtensionRaw offeredPsks
+
+    pskExchangeModeExtension
+      | tls13     = return $ Just $ toExtensionRaw $ PskKeyExchangeModes [PSK_DHE_KE]
+      | otherwise = return Nothing
+
+    earlyDataExtension rtt0
+      | rtt0 = return $ Just $ toExtensionRaw (EarlyDataIndication Nothing)
+      | otherwise = return Nothing
+
+    cookieExtension = do
+        mcookie <- usingState_ ctx getTLS13Cookie
+        case mcookie of
+          Nothing     -> return Nothing
+          Just cookie -> return $ Just $ toExtensionRaw cookie
+
+    postHandshakeAuthExtension
+      | tls13     = return $ Just $ toExtensionRaw PostHandshakeAuth
+      | otherwise = return Nothing
+
+    adjustExtentions pskInfo exts ch =
+        case pskInfo of
+            Nothing -> return exts
+            Just (_, sdata, choice, _) -> do
+                  let psk = sessionSecret sdata
+                      earlySecret = initEarlySecret choice (Just psk)
+                  usingHState ctx $ setTLS13EarlySecret earlySecret
+                  let ech = encodeHandshake ch
+                      h = cHash choice
+                      siz = hashDigestSize h
+                  binder <- makePSKBinder ctx earlySecret h (siz + 3) (Just ech)
+                  let exts' = init exts ++ [adjust (last exts)]
+                      adjust (ExtensionRaw eid withoutBinders) = ExtensionRaw eid withBinders
+                        where
+                          withBinders = replacePSKBinder withoutBinders binder
+                  return exts'
+
+    get0RTTinfo (_, sdata, choice, _) = do
+        earlyData <- clientEarlyData cparams
+        guard (B.length earlyData <= sessionMaxEarlyDataSize sdata)
+        return (choice, earlyData)
+
+sendClientHello :: ClientParams -> Context -> Session -> [Group] -> ClientRandom -> IO (Bool, [ExtensionID])
+sendClientHello cparams ctx clientSession groups crand = do
+    (clientHello, rtt0info, rtt0, ext) <- makeClientHello cparams ctx groups crand clientSession
+    sendPacket ctx $ Handshake [clientHello]
+    mapM_ send0RTT rtt0info
+    return (rtt0, ext)
+  where
+    send0RTT (choice, earlyData) = do
+        let usedCipher = cCipher choice
+            usedHash = cHash choice
+        Just earlySecret <- usingHState ctx getTLS13EarlySecret
+        -- Client hello is stored in hstHandshakeDigest
+        -- But HandshakeDigestContext is not created yet.
+        earlyKey <- calculateEarlySecret ctx choice (Right earlySecret) False
+        let ClientTrafficSecret clientEarlySecret = pairClient earlyKey
+        runPacketFlight ctx $ sendChangeCipherSpec13 ctx
+        setTxState ctx usedHash usedCipher clientEarlySecret
+        mapChunks_ 16384 (sendPacket13 ctx . AppData13) earlyData
+        usingHState ctx $ setTLS13RTT0Status RTT0Sent
+
 
 -- | Store the keypair and check that it is compatible with a list of
 -- 'CertificateType' values.
