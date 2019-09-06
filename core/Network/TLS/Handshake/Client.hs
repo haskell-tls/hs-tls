@@ -74,9 +74,9 @@ handshakeClient cparams ctx = do
 handshakeClient' :: ClientParams -> Context -> [Group] -> Maybe (ClientRandom, Session, Version) -> IO ()
 handshakeClient' cparams ctx groups mparams = do
     updateMeasure ctx incrementNbHandshakes
-    (crand, clientSession) <- generateClientHelloParams
-    (rtt0, sentExtensions) <- sendClientHello cparams ctx clientSession groups crand
-    recvServerHello clientSession sentExtensions
+    (ClientHello _ crand clientSession _ _ exts _, rtt0) <- sendClientHello cparams ctx groups mparams
+    let extIds = map (\(ExtensionRaw i _) -> i) exts
+    recvServerHello clientSession extIds
     ver <- usingState_ ctx getVersion
     unless (maybe True (\(_, _, v) -> v == ver) mparams) $
         throwCore $ Error_Protocol ("version changed after hello retry", True, IllegalParameter)
@@ -100,30 +100,7 @@ handshakeClient' cparams ctx groups mparams = do
                     sendChangeCipherAndFinish ctx ClientRole
                     recvChangeCipherAndFinish ctx
         handshakeTerminate ctx
-  where highestVer = maximum $ supportedVersions $ ctxSupported ctx
-        tls13 = highestVer >= TLS13
-        groupToSend = listToMaybe groups
-
-        generateClientHelloParams =
-            case mparams of
-                -- Client random and session in the second client hello for
-                -- retry must be the same as the first one.
-                Just (crand, clientSession, _) -> return (crand, clientSession)
-                Nothing -> do
-                    crand <- clientRandom ctx
-                    let paramSession = case clientWantSessionResume cparams of
-                            Nothing -> Session Nothing
-                            Just (sid, sdata)
-                                | sessionVersion sdata >= TLS13 -> Session Nothing
-                                | otherwise                     -> Session (Just sid)
-                    -- In compatibility mode a client not offering a pre-TLS 1.3
-                    -- session MUST generate a new 32-byte value
-                    if tls13 && paramSession == Session Nothing
-                        then do
-                            randomSession <- newSession ctx
-                            return (crand, randomSession)
-                        else return (crand, paramSession)
-
+  where groupToSend = listToMaybe groups
         recvServerHello clientSession sentExts = runRecvState ctx recvState
           where recvState = RecvStateNext $ \p ->
                     case p of
@@ -156,8 +133,9 @@ handshakeClient' cparams ctx groups mparams = do
               Nothing -> throwCore $ Error_Protocol ("key exchange not implemented in HRR, expected key_share extension", True, HandshakeFailure)
 
 
-makeClientHello :: ClientParams -> Context -> [Group] -> ClientRandom -> Session -> IO (Handshake, Maybe (CipherChoice, ByteString), Bool, [ExtensionID])
-makeClientHello cparams ctx groups crand clientSession = do
+makeClientHello :: ClientParams -> Context -> [Group] -> Maybe (ClientRandom, Session, Version) -> IO (Handshake, Maybe (CipherChoice, ByteString))
+makeClientHello cparams ctx groups mparams = do
+    (crand, clientSession) <- generateClientHelloParams
     let ver = if tls13 then TLS12 else highestVer
     hrr <- usingState_ ctx getTLS13HRR
     unless hrr $ startHandshake ctx ver crand
@@ -171,14 +149,10 @@ makeClientHello cparams ctx groups crand clientSession = do
     extensions0 <- catMaybes <$> getExtensions pskInfo rtt0
     extensions <- adjustExtentions pskInfo extensions0 $ mkClientHello extensions0
     let clientHello = mkClientHello extensions
-        ext = map (\(ExtensionRaw i _) -> i) extensions
-    return (clientHello, rtt0info, rtt0, ext)
+    return (clientHello, rtt0info)
   where
     ciphers      = supportedCiphers $ ctxSupported ctx
     compressions = supportedCompressions $ ctxSupported ctx
-    highestVer = maximum $ supportedVersions $ ctxSupported ctx
-    tls13 = highestVer >= TLS13
-    groupToSend = listToMaybe groups
 
     getExtensions pskInfo rtt0 = sequence
         [ sniExtension
@@ -308,12 +282,37 @@ makeClientHello cparams ctx groups crand clientSession = do
         guard (B.length earlyData <= sessionMaxEarlyDataSize sdata)
         return (choice, earlyData)
 
-sendClientHello :: ClientParams -> Context -> Session -> [Group] -> ClientRandom -> IO (Bool, [ExtensionID])
-sendClientHello cparams ctx clientSession groups crand = do
-    (clientHello, rtt0info, rtt0, ext) <- makeClientHello cparams ctx groups crand clientSession
+    highestVer = maximum $ supportedVersions $ ctxSupported ctx
+    tls13 = highestVer >= TLS13
+    groupToSend = listToMaybe groups
+
+    generateClientHelloParams =
+        case mparams of
+            -- Client random and session in the second client hello for
+            -- retry must be the same as the first one.
+            Just (crand, clientSession, _) -> return (crand, clientSession)
+            Nothing -> do
+                crand <- clientRandom ctx
+                let paramSession = case clientWantSessionResume cparams of
+                        Nothing -> Session Nothing
+                        Just (sid, sdata)
+                            | sessionVersion sdata >= TLS13 -> Session Nothing
+                            | otherwise                     -> Session (Just sid)
+                -- In compatibility mode a client not offering a pre-TLS 1.3
+                -- session MUST generate a new 32-byte value
+                if tls13 && paramSession == Session Nothing
+                    then do
+                        randomSession <- newSession ctx
+                        return (crand, randomSession)
+                    else return (crand, paramSession)
+
+sendClientHello :: ClientParams -> Context -> [Group] -> Maybe (ClientRandom, Session, Version) -> IO (Handshake, Bool)
+sendClientHello cparams ctx groups mparams = do
+    (clientHello, rtt0info) <- makeClientHello cparams ctx groups mparams
     sendPacket ctx $ Handshake [clientHello]
     mapM_ send0RTT rtt0info
-    return (rtt0, ext)
+    let rtt0 = isJust rtt0info
+    return (clientHello, rtt0)
   where
     send0RTT (choice, earlyData) = do
         let usedCipher = cCipher choice
