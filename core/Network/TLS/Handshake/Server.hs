@@ -114,6 +114,22 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
           (0x5600 `elem` ciphers) &&
           legacyVersion < TLS12) $
         throwCore $ Error_Protocol ("fallback is not allowed", True, InappropriateFallback)
+
+    (chosenVersion, clientVersion, serverName, allCreds) <- chooseParameters sparams ctx legacyVersion exts renegotiation
+
+    -- TLS version dependent
+    if chosenVersion <= TLS12 then
+        handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverName clientVersion compressions clientSession
+      else do
+        mapM_ ensureNullCompression compressions
+        -- fixme: we should check if the client random is the same as
+        -- that in the first client hello in the case of hello retry.
+        handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts ciphers serverName clientSession
+
+handshakeServerWith _ _ _ = throwCore $ Error_Protocol ("unexpected handshake message received in handshakeServerWith", True, HandshakeFailure)
+
+chooseParameters :: ServerParams -> Context -> Version -> [ExtensionRaw] -> Bool -> IO (Version, Version, Maybe HostName, Credentials)
+chooseParameters sparams ctx legacyVersion exts renegotiation = do
     -- choosing TLS version
     let clientVersions = case extensionLookup extensionID_SupportedVersions exts >>= extensionDecode MsgTClientHello of
             Just (SupportedVersionsClientHello vers) -> vers
@@ -149,15 +165,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
     extraCreds <- onServerNameIndication (serverHooks sparams) serverName
     let allCreds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
 
-    -- TLS version dependent
-    if chosenVersion <= TLS12 then
-        handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverName clientVersion compressions clientSession
-      else do
-        mapM_ ensureNullCompression compressions
-        -- fixme: we should check if the client random is the same as
-        -- that in the first client hello in the case of hello retry.
-        handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts ciphers serverName clientSession
-handshakeServerWith _ _ _ = throwCore $ Error_Protocol ("unexpected handshake message received in handshakeServerWith", True, HandshakeFailure)
+    return (chosenVersion, clientVersion, serverName, allCreds)
 
 -- TLS 1.2 or earlier
 handshakeServerWithTLS12 :: ServerParams
