@@ -214,8 +214,47 @@ data ExtensionRaw = ExtensionRaw ExtensionID ByteString
     deriving (Eq)
 
 instance Show ExtensionRaw where
-    show (ExtensionRaw eid bs) = "ExtensionRaw " ++ show eid ++ " " ++ showBytesHex bs ++ ""
+    show (ExtensionRaw eid bs) = "ExtensionRaw " ++ showEID eid ++ " " ++ showBytesHex bs ++ ""
 
+showEID :: Word16 -> String
+showEID 0x0 = "ServerName"
+showEID 0x1 = "MaxFragmentLength"
+showEID 0x2 = "ClientCertificateUrl"
+showEID 0x3 = "TrustedCAKeys"
+showEID 0x4 = "TruncatedHMAC"
+showEID 0x5 = "StatusRequest"
+showEID 0x6 = "UserMapping"
+showEID 0x7 = "ClientAuthz"
+showEID 0x8 = "ServerAuthz"
+showEID 0x9 = "CertType"
+showEID 0xa = "NegotiatedGroups"
+showEID 0xb = "EcPointFormats"
+showEID 0xc = "SRP"
+showEID 0xd = "SignatureAlgorithm"
+showEID 0xe = "SRTP"
+showEID 0xf = "Heartbeat"
+showEID 0x10 = "ApplicationLayerProtocolNegotiation"
+showEID 0x11 = "StatusRequestv2"
+showEID 0x12 = "SignedCertificateTimestamp"
+showEID 0x13 = "ClientCertificateType"
+showEID 0x14 = "ServerCertificateType"
+showEID 0x15 = "Padding"
+showEID 0x16 = "EncryptThenMAC"
+showEID 0x17 = "ExtendedMasterSecret"
+showEID 0x23 = "SessionTicket"
+showEID 0x29 = "PreShardeKey"
+showEID 0x2a = "EarlyData"
+showEID 0x2b = "SupportedVersions"
+showEID 0x2c = "Cookie"
+showEID 0x2d = "PskKeyExchangeModes"
+showEID 0x2f = "CertificateAuthorities"
+showEID 0x30 = "OidFilters"
+showEID 0x31 = "PostHandshakeAuth"
+showEID 0x32 = "SignatureAlgorithmsCert"
+showEID 0x33 = "KeyShare"
+showEID 0xff01 = "SecureRenegotiation"
+showEID 0xffa5 = "QuicTransportParameters"
+showEID x      = show x
 data AlertLevel =
       AlertLevel_Warning
     | AlertLevel_Fatal
