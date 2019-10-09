@@ -8,7 +8,7 @@
 -- the Sending module contains calls related to marshalling packets according
 -- to the TLS state
 --
-module Network.TLS.Sending (writePacket) where
+module Network.TLS.Sending (encodePacket) where
 
 import Network.TLS.Cap
 import Network.TLS.Cipher
@@ -28,10 +28,10 @@ import Control.Monad.State.Strict
 import qualified Data.ByteString as B
 import Data.IORef
 
--- | writePacket transform a packet into marshalled data related to current state
+-- | encodePacket transform a packet into marshalled data related to current state
 -- and updating state on the go
-writePacket :: Context -> Packet -> IO (Either TLSError ByteString)
-writePacket ctx pkt@(Handshake hss) = do
+encodePacket :: Context -> Packet -> IO (Either TLSError ByteString)
+encodePacket ctx pkt@(Handshake hss) = do
     forM_ hss $ \hs -> do
         case hs of
             Finished fdata -> usingState_ ctx $ updateVerifiedData ClientRole fdata
@@ -40,14 +40,14 @@ writePacket ctx pkt@(Handshake hss) = do
         usingHState ctx $ do
             when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage encoded
             when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ updateHandshakeDigest encoded
-    writeFragments ctx pkt
-writePacket ctx pkt = do
-    d <- writeFragments ctx pkt
+    encodeFragments ctx pkt
+encodePacket ctx pkt = do
+    d <- encodeFragments ctx pkt
     when (pkt == ChangeCipherSpec) $ switchTxEncryption ctx
     return d
 
-writeFragments :: Context-> Packet -> IO (Either TLSError ByteString)
-writeFragments ctx pkt =
+encodeFragments :: Context-> Packet -> IO (Either TLSError ByteString)
+encodeFragments ctx pkt =
     let fragments = getPacketFragments 16384 pkt
         pt = packetType pkt
      in fmap B.concat <$> forEitherM fragments (\frg ->
@@ -57,11 +57,11 @@ writeFragments ctx pkt =
 -- packets are not fragmented here but by callers of sendPacket, so that the
 -- empty-packet countermeasure may be applied to each fragment independently.
 getPacketFragments :: Int -> Packet -> [Fragment Plaintext]
-getPacketFragments len pkt = map fragmentPlaintext (writePacketContent pkt)
-  where writePacketContent (Handshake hss)    = getChunks len (encodeHandshakes hss)
-        writePacketContent (Alert a)          = [encodeAlerts a]
-        writePacketContent  ChangeCipherSpec  = [encodeChangeCipherSpec]
-        writePacketContent (AppData x)        = [x]
+getPacketFragments len pkt = map fragmentPlaintext (encodePacketContent pkt)
+  where encodePacketContent (Handshake hss)    = getChunks len (encodeHandshakes hss)
+        encodePacketContent (Alert a)          = [encodeAlerts a]
+        encodePacketContent  ChangeCipherSpec  = [encodeChangeCipherSpec]
+        encodePacketContent (AppData x)        = [x]
 
 -- before TLS 1.1, the block cipher IV is made of the residual of the previous block,
 -- so we use cstIV as is, however in other case we generate an explicit IV

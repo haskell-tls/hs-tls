@@ -62,7 +62,7 @@ writePacketBytes :: MonadIO m => Context -> Packet -> m ByteString
 writePacketBytes ctx pkt = do
     edataToSend <- liftIO $ do
                         withLog ctx $ \logging -> loggingPacketSent logging (show pkt)
-                        writePacket ctx pkt
+                        encodePacket ctx pkt
     either throwCore return edataToSend
 
 ----------------------------------------------------------------
@@ -74,7 +74,7 @@ writePacketBytes13 :: MonadIO m => Context -> Packet13 -> m ByteString
 writePacketBytes13 ctx pkt = do
     edataToSend <- liftIO $ do
                         withLog ctx $ \logging -> loggingPacketSent logging (show pkt)
-                        writePacket13 ctx pkt
+                        encodePacket13 ctx pkt
     either throwCore return edataToSend
 
 sendBytes :: MonadIO m => Context -> ByteString -> m ()

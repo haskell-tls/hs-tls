@@ -9,7 +9,7 @@
 -- to the TLS state
 --
 module Network.TLS.Sending13
-       ( writePacket13
+       ( encodePacket13
        , updateHandshake13
        ) where
 
@@ -29,25 +29,25 @@ import Network.TLS.Util
 
 import qualified Data.ByteString as B
 
-writePacket13 :: Context -> Packet13 -> IO (Either TLSError ByteString)
-writePacket13 ctx pkt@(Handshake13 hss) = do
+encodePacket13 :: Context -> Packet13 -> IO (Either TLSError ByteString)
+encodePacket13 ctx pkt@(Handshake13 hss) = do
     forM_ hss $ updateHandshake13 ctx
-    writeFragments ctx pkt
-writePacket13 ctx pkt = writeFragments ctx pkt
+    encodeFragments ctx pkt
+encodePacket13 ctx pkt = encodeFragments ctx pkt
 
-writeFragments :: Context -> Packet13 -> IO (Either TLSError ByteString)
-writeFragments ctx pkt =
+encodeFragments :: Context -> Packet13 -> IO (Either TLSError ByteString)
+encodeFragments ctx pkt =
     let fragments = getPacketFragments 16384 pkt
         pt = contentType pkt
      in fmap B.concat <$> forEitherM fragments (\frg ->
             prepareRecord ctx (makeRecord pt frg >>= engageRecord >>= encodeRecord))
 
 getPacketFragments :: Int -> Packet13 -> [Fragment Plaintext]
-getPacketFragments len pkt = map fragmentPlaintext (writePacketContent pkt)
-  where writePacketContent (Handshake13 hss)  = getChunks len (encodeHandshakes13 hss)
-        writePacketContent (Alert13 a)        = [encodeAlerts a]
-        writePacketContent (AppData13 x)      = [x]
-        writePacketContent ChangeCipherSpec13 = [encodeChangeCipherSpec]
+getPacketFragments len pkt = map fragmentPlaintext (encodePacketContent pkt)
+  where encodePacketContent (Handshake13 hss)  = getChunks len (encodeHandshakes13 hss)
+        encodePacketContent (Alert13 a)        = [encodeAlerts a]
+        encodePacketContent (AppData13 x)      = [x]
+        encodePacketContent ChangeCipherSpec13 = [encodeChangeCipherSpec]
 
 prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
 prepareRecord = runTxState
