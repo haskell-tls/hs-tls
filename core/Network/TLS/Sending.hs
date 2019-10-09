@@ -40,28 +40,36 @@ encodePacket ctx pkt@(Handshake hss) = do
         usingHState ctx $ do
             when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage encoded
             when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ updateHandshakeDigest encoded
-    encodeFragments ctx pkt
+    encodePacket' ctx pkt
 encodePacket ctx pkt = do
-    d <- encodeFragments ctx pkt
+    d <- encodePacket' ctx pkt
     when (pkt == ChangeCipherSpec) $ switchTxEncryption ctx
     return d
 
-encodeFragments :: Context-> Packet -> IO (Either TLSError ByteString)
-encodeFragments ctx pkt =
-    let fragments = getPacketFragments 16384 pkt
-        pt = packetType pkt
-     in fmap B.concat <$> forEitherM fragments (\frg ->
-            prepareRecord ctx (makeRecord pt frg >>= engageRecord >>= encodeRecord))
+encodePacket' :: Context -> Packet -> IO (Either TLSError ByteString)
+encodePacket' ctx pkt = do
+    Right ver <- runTxState ctx getRecordVersion
+    let pt = packetType pkt
+        mkRecord = Record pt ver
+        records = dividePacket 16384 pkt mkRecord
+    fmap B.concat <$> forEitherM records (encodeRecord ctx)
 
 -- Decompose handshake packets into fragments of the specified length.  AppData
 -- packets are not fragmented here but by callers of sendPacket, so that the
 -- empty-packet countermeasure may be applied to each fragment independently.
-getPacketFragments :: Int -> Packet -> [Fragment Plaintext]
-getPacketFragments len pkt = map fragmentPlaintext (encodePacketContent pkt)
-  where encodePacketContent (Handshake hss)    = getChunks len (encodeHandshakes hss)
-        encodePacketContent (Alert a)          = [encodeAlerts a]
-        encodePacketContent  ChangeCipherSpec  = [encodeChangeCipherSpec]
-        encodePacketContent (AppData x)        = [x]
+dividePacket :: Int -> Packet -> (Fragment Plaintext -> Record Plaintext) -> [Record Plaintext]
+dividePacket len pkt mkRecord = mkRecord . fragmentPlaintext <$> encodePacketContent pkt
+  where
+    encodePacketContent (Handshake hss)    = getChunks len (encodeHandshakes hss)
+    encodePacketContent (Alert a)          = [encodeAlerts a]
+    encodePacketContent  ChangeCipherSpec  = [encodeChangeCipherSpec]
+    encodePacketContent (AppData x)        = [x]
+
+encodeRecord :: Context -> Record Plaintext -> IO (Either TLSError ByteString)
+encodeRecord ctx record = prepareRecord ctx $ do
+    erecord <- engageRecord record
+    let (hdr, content) = recordToRaw erecord
+    return $ B.concat [ encodeHeader hdr, content ]
 
 -- before TLS 1.1, the block cipher IV is made of the residual of the previous block,
 -- so we use cstIV as is, however in other case we generate an explicit IV
@@ -78,16 +86,6 @@ prepareRecord ctx f = do
         then do newIV <- getStateRNG ctx sz
                 runTxState ctx (modify (setRecordIV newIV) >> f)
         else runTxState ctx f
-
-makeRecord :: ProtocolType -> Fragment Plaintext -> RecordM (Record Plaintext)
-makeRecord pt fragment = do
-    ver <- getRecordVersion
-    return $ Record pt ver fragment
-
--- | marshall packet data
-encodeRecord :: Record Ciphertext -> RecordM ByteString
-encodeRecord record = return $ B.concat [ encodeHeader hdr, content ]
-  where (hdr, content) = recordToRaw record
 
 switchTxEncryption :: Context -> IO ()
 switchTxEncryption ctx = do

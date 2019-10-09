@@ -20,7 +20,6 @@ import Network.TLS.Handshake.State13
 import Network.TLS.Imports
 import Network.TLS.Packet
 import Network.TLS.Packet13
-import Network.TLS.Record (RecordM)
 import Network.TLS.Record.Engage
 import Network.TLS.Record.Types
 import Network.TLS.Struct
@@ -32,33 +31,29 @@ import qualified Data.ByteString as B
 encodePacket13 :: Context -> Packet13 -> IO (Either TLSError ByteString)
 encodePacket13 ctx pkt@(Handshake13 hss) = do
     forM_ hss $ updateHandshake13 ctx
-    encodeFragments ctx pkt
-encodePacket13 ctx pkt = encodeFragments ctx pkt
+    encodePacket13' ctx pkt
+encodePacket13 ctx pkt = encodePacket13' ctx pkt
 
-encodeFragments :: Context -> Packet13 -> IO (Either TLSError ByteString)
-encodeFragments ctx pkt =
-    let fragments = getPacketFragments 16384 pkt
-        pt = contentType pkt
-     in fmap B.concat <$> forEitherM fragments (\frg ->
-            prepareRecord ctx (makeRecord pt frg >>= engageRecord >>= encodeRecord))
+encodePacket13' :: Context -> Packet13 -> IO (Either TLSError ByteString)
+encodePacket13' ctx pkt = do
+    let pt = contentType pkt
+        mkRecord = Record pt TLS12
+        records = dividePacket13 16384 pkt mkRecord
+    fmap B.concat <$> forEitherM records (encodeRecord13 ctx)
 
-getPacketFragments :: Int -> Packet13 -> [Fragment Plaintext]
-getPacketFragments len pkt = map fragmentPlaintext (encodePacketContent pkt)
-  where encodePacketContent (Handshake13 hss)  = getChunks len (encodeHandshakes13 hss)
-        encodePacketContent (Alert13 a)        = [encodeAlerts a]
-        encodePacketContent (AppData13 x)      = [x]
-        encodePacketContent ChangeCipherSpec13 = [encodeChangeCipherSpec]
+dividePacket13 :: Int -> Packet13 -> (Fragment Plaintext -> Record Plaintext) -> [Record Plaintext]
+dividePacket13 len pkt mkRecord = mkRecord . fragmentPlaintext <$> encodePacketContent pkt
+  where
+    encodePacketContent (Handshake13 hss)  = getChunks len (encodeHandshakes13 hss)
+    encodePacketContent (Alert13 a)        = [encodeAlerts a]
+    encodePacketContent (AppData13 x)      = [x]
+    encodePacketContent ChangeCipherSpec13 = [encodeChangeCipherSpec]
 
-prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
-prepareRecord = runTxState
-
-makeRecord :: ProtocolType -> Fragment Plaintext -> RecordM (Record Plaintext)
-makeRecord pt fragment =
-    return $ Record pt TLS12 fragment
-
-encodeRecord :: Record Ciphertext -> RecordM ByteString
-encodeRecord record = return $ B.concat [ encodeHeader hdr, content ]
-  where (hdr, content) = recordToRaw record
+encodeRecord13 :: Context -> Record Plaintext -> IO (Either TLSError ByteString)
+encodeRecord13 ctx record = runTxState ctx $ do
+    erecord <- engageRecord record
+    let (hdr, content) = recordToRaw erecord
+    return $ B.concat [ encodeHeader hdr, content ]
 
 updateHandshake13 :: Context -> Handshake13 -> IO ()
 updateHandshake13 ctx hs
