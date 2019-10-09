@@ -127,28 +127,28 @@ recvRecord :: Bool    -- ^ flag to enable SSLv2 compat ClientHello reception
            -> IO (Either TLSError (Record Plaintext))
 recvRecord compatSSLv2 appDataOverhead ctx
 #ifdef SSLV2_COMPATIBLE
-    | compatSSLv2 = readExact ctx 2 >>= either (return . Left) sslv2Header
+    | compatSSLv2 = readBytes ctx 2 >>= either (return . Left) sslv2Header
 #endif
-    | otherwise = readExact ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
+    | otherwise = readBytes ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
 
         where recvLengthE = either (return . Left) recvLength
 
               recvLength header@(Header _ _ readlen)
                 | readlen > 16384 + 2048 = return $ Left maximumSizeExceeded
                 | otherwise              =
-                    readExact ctx (fromIntegral readlen) >>=
+                    readBytes ctx (fromIntegral readlen) >>=
                         either (return . Left) (getRecord ctx appDataOverhead header)
 #ifdef SSLV2_COMPATIBLE
               sslv2Header header =
                 if B.head header >= 0x80
                     then either (return . Left) recvDeprecatedLength $ decodeDeprecatedHeaderLength header
-                    else readExact ctx 3 >>=
+                    else readBytes ctx 3 >>=
                             either (return . Left) (recvLengthE . decodeHeader . B.append header)
 
               recvDeprecatedLength readlen
                 | readlen > 1024 * 4     = return $ Left maximumSizeExceeded
                 | otherwise              = do
-                    res <- readExact ctx (fromIntegral readlen)
+                    res <- readBytes ctx (fromIntegral readlen)
                     case res of
                       Left e -> return $ Left e
                       Right content ->
@@ -199,12 +199,12 @@ recvPacket13 ctx = liftIO $ do
 
 recvRecord13 :: Context
             -> IO (Either TLSError (Record Plaintext))
-recvRecord13 ctx = readExact ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
+recvRecord13 ctx = readBytes ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
   where recvLengthE = either (return . Left) recvLength
         recvLength header@(Header _ _ readlen)
           | readlen > 16384 + 256  = return $ Left maximumSizeExceeded
           | otherwise              =
-              readExact ctx (fromIntegral readlen) >>=
+              readBytes ctx (fromIntegral readlen) >>=
                  either (return . Left) (getRecord ctx 0 header)
 
 isEmptyHandshake13 :: Either TLSError Packet13 -> Bool
@@ -217,8 +217,8 @@ isEmptyHandshake13 _                        = False
 maximumSizeExceeded :: TLSError
 maximumSizeExceeded = Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
 
-readExact :: Context -> Int -> IO (Either TLSError ByteString)
-readExact ctx sz = do
+readBytes :: Context -> Int -> IO (Either TLSError ByteString)
+readBytes ctx sz = do
     hdrbs <- contextRecv ctx sz
     if B.length hdrbs == sz
         then return $ Right hdrbs
