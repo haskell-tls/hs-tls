@@ -20,26 +20,25 @@ module Network.TLS.IO
     , loadPacket13
     ) where
 
-import Network.TLS.Context.Internal
-import Network.TLS.ErrT
-import Network.TLS.Struct
-import Network.TLS.Struct13
-import Network.TLS.Record
-import Network.TLS.Packet
-import Network.TLS.Hooks
-import Network.TLS.Sending
-import Network.TLS.Sending13
-import Network.TLS.Receiving
-import Network.TLS.Imports
-import Network.TLS.Receiving13
-import Network.TLS.State
-import qualified Data.ByteString as B
-
-import Data.IORef
+import Control.Exception (finally, throwIO)
 import Control.Monad.Reader
 import Control.Monad.State.Strict
-import Control.Exception (finally, throwIO)
+import qualified Data.ByteString as B
+import Data.IORef
 import System.IO.Error (mkIOError, eofErrorType)
+
+import Network.TLS.Context.Internal
+import Network.TLS.Hooks
+import Network.TLS.Imports
+import Network.TLS.Packet
+import Network.TLS.Receiving
+import Network.TLS.Receiving13
+import Network.TLS.Record
+import Network.TLS.Sending
+import Network.TLS.Sending13
+import Network.TLS.State
+import Network.TLS.Struct
+import Network.TLS.Struct13
 
 checkValid :: Context -> IO ()
 checkValid ctx = do
@@ -59,20 +58,6 @@ readExact ctx sz = do
                 if B.null hdrbs
                     then Error_EOF
                     else Error_Packet ("partial packet: expecting " ++ show sz ++ " bytes, got: " ++ show (B.length hdrbs))
-
-getRecord :: Context -> Int -> Header -> ByteString -> IO (Either TLSError (Record Plaintext))
-getRecord ctx appDataOverhead header@(Header pt _ _) content = do
-    withLog ctx $ \logging -> loggingIORecv logging header content
-    runRxState ctx $ do
-        r <- disengageRecord $ rawToRecord header (fragmentCiphertext content)
-        let Record _ _ fragment = r
-        when (B.length (fragmentGetBytes fragment) > 16384 + overhead) $
-            throwError contentSizeExceeded
-        return r
-  where overhead = if pt == ProtocolType_AppData then appDataOverhead else 0
-
-contentSizeExceeded :: TLSError
-contentSizeExceeded = Error_Protocol ("record content exceeding maximum size", True, RecordOverflow)
 
 maximumSizeExceeded :: TLSError
 maximumSizeExceeded = Error_Protocol ("record exceeding maximum size", True, RecordOverflow)
