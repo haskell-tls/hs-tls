@@ -8,7 +8,10 @@
 -- the Sending module contains calls related to marshalling packets according
 -- to the TLS state
 --
-module Network.TLS.Sending (encodePacket) where
+module Network.TLS.Sending (
+    encodePacket
+  , encodeRecord
+  ) where
 
 import Network.TLS.Cap
 import Network.TLS.Cipher
@@ -52,7 +55,7 @@ encodePacket' ctx pkt = do
     let pt = packetType pkt
         mkRecord = Record pt ver
         records = dividePacket 16384 pkt mkRecord
-    fmap B.concat <$> forEitherM records (encodeRecord ctx)
+    fmap B.concat <$> forEitherM records (runEncodeRecord ctx)
 
 -- Decompose handshake packets into fragments of the specified length.  AppData
 -- packets are not fragmented here but by callers of sendPacket, so that the
@@ -65,16 +68,10 @@ dividePacket len pkt mkRecord = mkRecord . fragmentPlaintext <$> encodePacketCon
     encodePacketContent  ChangeCipherSpec  = [encodeChangeCipherSpec]
     encodePacketContent (AppData x)        = [x]
 
-encodeRecord :: Context -> Record Plaintext -> IO (Either TLSError ByteString)
-encodeRecord ctx record = prepareRecord ctx $ do
-    erecord <- engageRecord record
-    let (hdr, content) = recordToRaw erecord
-    return $ B.concat [ encodeHeader hdr, content ]
-
 -- before TLS 1.1, the block cipher IV is made of the residual of the previous block,
 -- so we use cstIV as is, however in other case we generate an explicit IV
-prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
-prepareRecord ctx f = do
+runEncodeRecord :: Context -> Record Plaintext -> IO (Either TLSError ByteString)
+runEncodeRecord ctx record = do
     ver     <- usingState_ ctx (getVersionWithDefault $ maximum $ supportedVersions $ ctxSupported ctx)
     txState <- readMVar $ ctxTxState ctx
     let sz = case stCipher txState of
@@ -84,8 +81,14 @@ prepareRecord ctx f = do
                                     else 0 -- to not generate IV
     if hasExplicitBlockIV ver && sz > 0
         then do newIV <- getStateRNG ctx sz
-                runTxState ctx (modify (setRecordIV newIV) >> f)
-        else runTxState ctx f
+                runTxState ctx (modify (setRecordIV newIV) >> encodeRecord record)
+        else runTxState ctx $ encodeRecord record
+
+encodeRecord :: Record Plaintext -> RecordM ByteString
+encodeRecord record = do
+    erecord <- engageRecord record
+    let (hdr, content) = recordToRaw erecord
+    return $ B.concat [ encodeHeader hdr, content ]
 
 switchTxEncryption :: Context -> IO ()
 switchTxEncryption ctx = do

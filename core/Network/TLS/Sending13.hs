@@ -20,8 +20,8 @@ import Network.TLS.Handshake.State13
 import Network.TLS.Imports
 import Network.TLS.Packet
 import Network.TLS.Packet13
-import Network.TLS.Record.Engage
 import Network.TLS.Record.Types
+import Network.TLS.Sending
 import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Util
@@ -39,7 +39,7 @@ encodePacket13' ctx pkt = do
     let pt = contentType pkt
         mkRecord = Record pt TLS12
         records = dividePacket13 16384 pkt mkRecord
-    fmap B.concat <$> forEitherM records (encodeRecord13 ctx)
+    fmap B.concat <$> forEitherM records (runTxState ctx . encodeRecord)
 
 dividePacket13 :: Int -> Packet13 -> (Fragment Plaintext -> Record Plaintext) -> [Record Plaintext]
 dividePacket13 len pkt mkRecord = mkRecord . fragmentPlaintext <$> encodePacketContent pkt
@@ -48,12 +48,6 @@ dividePacket13 len pkt mkRecord = mkRecord . fragmentPlaintext <$> encodePacketC
     encodePacketContent (Alert13 a)        = [encodeAlerts a]
     encodePacketContent (AppData13 x)      = [x]
     encodePacketContent ChangeCipherSpec13 = [encodeChangeCipherSpec]
-
-encodeRecord13 :: Context -> Record Plaintext -> IO (Either TLSError ByteString)
-encodeRecord13 ctx record = runTxState ctx $ do
-    erecord <- engageRecord record
-    let (hdr, content) = recordToRaw erecord
-    return $ B.concat [ encodeHeader hdr, content ]
 
 updateHandshake13 :: Context -> Handshake13 -> IO ()
 updateHandshake13 ctx hs
