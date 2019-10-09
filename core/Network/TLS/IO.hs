@@ -12,9 +12,10 @@ module Network.TLS.IO
     , sendPacket13
     , recvPacket
     , recvPacket13
-    -- * Grouping multiple packets in the same flight
+    --
     , isRecvComplete
     , checkValid
+    -- * Grouping multiple packets in the same flight
     , PacketFlightM
     , runPacketFlight
     , loadPacket13
