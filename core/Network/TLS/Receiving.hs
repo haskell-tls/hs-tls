@@ -15,10 +15,6 @@ module Network.TLS.Receiving
     , getRecord
     ) where
 
-import Control.Monad.State.Strict
-import Control.Concurrent.MVar
-import qualified Data.ByteString as B
-
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
 import Network.TLS.ErrT
@@ -31,6 +27,10 @@ import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Util
 import Network.TLS.Wire
+
+import Control.Concurrent.MVar
+import Control.Monad.State.Strict
+import qualified Data.ByteString as B
 
 processPacket :: Context -> Record Plaintext -> IO (Either TLSError Packet)
 

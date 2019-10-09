@@ -14,19 +14,19 @@ module Network.TLS.Receiving13
        ( processPacket13
        ) where
 
-import Control.Monad.State
-
 import Network.TLS.Context.Internal
-import Network.TLS.Struct
-import Network.TLS.Struct13
 import Network.TLS.ErrT
-import Network.TLS.Record.Types
+import Network.TLS.Imports
 import Network.TLS.Packet
 import Network.TLS.Packet13
-import Network.TLS.Wire
+import Network.TLS.Record.Types
 import Network.TLS.State
+import Network.TLS.Struct
+import Network.TLS.Struct13
 import Network.TLS.Util
-import Network.TLS.Imports
+import Network.TLS.Wire
+
+import Control.Monad.State
 
 processPacket13 :: Context -> Record Plaintext -> IO (Either TLSError Packet13)
 processPacket13 _ (Record ProtocolType_ChangeCipherSpec _ _) = return $ Right ChangeCipherSpec13
