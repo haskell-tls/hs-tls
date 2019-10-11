@@ -83,7 +83,7 @@ processHandshake ctx hs = do
         isHRR _                                 = False
 
 processHandshake13 :: Context -> Handshake13 -> IO ()
-processHandshake13 = updateHandshake13
+processHandshake13 ctx = void . updateHandshake13 ctx
 
 -- process the client key exchange message. the protocol expects the initial
 -- client version received in ClientHello, not the negotiated version.

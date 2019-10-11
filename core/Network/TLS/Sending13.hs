@@ -29,33 +29,29 @@ import Network.TLS.Util
 import qualified Data.ByteString as B
 
 encodePacket13 :: Context -> Packet13 -> IO (Either TLSError ByteString)
-encodePacket13 ctx pkt@(Handshake13 hss) = do
-    forM_ hss $ updateHandshake13 ctx
-    encodePacket13' ctx pkt
-encodePacket13 ctx pkt = encodePacket13' ctx pkt
-
-encodePacket13' :: Context -> Packet13 -> IO (Either TLSError ByteString)
-encodePacket13' ctx pkt = do
+encodePacket13 ctx pkt = do
     let pt = contentType pkt
-        mkRecord = Record pt TLS12
-        records = dividePacket13 16384 pkt mkRecord
+        mkRecord bs = Record pt TLS12 (fragmentPlaintext bs)
+    records <- map mkRecord <$> packetToFragments ctx 16384 pkt
     fmap B.concat <$> forEitherM records (runTxState ctx . encodeRecord)
 
-dividePacket13 :: Int -> Packet13 -> (Fragment Plaintext -> Record Plaintext) -> [Record Plaintext]
-dividePacket13 len pkt mkRecord = mkRecord . fragmentPlaintext <$> encodePacketContent pkt
+packetToFragments :: Context -> Int -> Packet13 -> IO [ByteString]
+packetToFragments ctx len pkt = encodePacketContent pkt
   where
-    encodePacketContent (Handshake13 hss)  = getChunks len (encodeHandshakes13 hss)
-    encodePacketContent (Alert13 a)        = [encodeAlerts a]
-    encodePacketContent (AppData13 x)      = [x]
-    encodePacketContent ChangeCipherSpec13 = [encodeChangeCipherSpec]
+    encodePacketContent (Handshake13 hss)  =
+        getChunks len . B.concat <$> mapM (updateHandshake13 ctx) hss
+    encodePacketContent (Alert13 a)        = return [encodeAlerts a]
+    encodePacketContent (AppData13 x)      = return [x]
+    encodePacketContent ChangeCipherSpec13 = return [encodeChangeCipherSpec]
 
-updateHandshake13 :: Context -> Handshake13 -> IO ()
+updateHandshake13 :: Context -> Handshake13 -> IO ByteString
 updateHandshake13 ctx hs
-    | isIgnored hs = return ()
+    | isIgnored hs = return encoded
     | otherwise    = usingHState ctx $ do
         when (isHRR hs) wrapAsMessageHash13
         updateHandshakeDigest encoded
         addHandshakeMessage encoded
+        return encoded
   where
     encoded = encodeHandshake13 hs
 
