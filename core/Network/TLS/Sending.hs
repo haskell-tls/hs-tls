@@ -34,32 +34,26 @@ import Data.IORef
 -- | encodePacket transform a packet into marshalled data related to current state
 -- and updating state on the go
 encodePacket :: Context -> Packet -> IO (Either TLSError ByteString)
-encodePacket ctx pkt@(Handshake hss) = do
-    forM_ hss (updateHandshake ctx)
-    encodePacket' ctx pkt
 encodePacket ctx pkt = do
-    d <- encodePacket' ctx pkt
-    when (pkt == ChangeCipherSpec) $ switchTxEncryption ctx
-    return d
-
-encodePacket' :: Context -> Packet -> IO (Either TLSError ByteString)
-encodePacket' ctx pkt = do
     Right ver <- runTxState ctx getRecordVersion
     let pt = packetType pkt
-        mkRecord = Record pt ver
-        records = dividePacket 16384 pkt mkRecord
-    fmap B.concat <$> forEitherM records (runEncodeRecord ctx)
+        mkRecord bs = Record pt ver (fragmentPlaintext bs)
+    records <- map mkRecord <$> packetToFragments ctx 16384 pkt
+    bs <- fmap B.concat <$> forEitherM records (runEncodeRecord ctx)
+    when (pkt == ChangeCipherSpec) $ switchTxEncryption ctx
+    return bs
 
 -- Decompose handshake packets into fragments of the specified length.  AppData
 -- packets are not fragmented here but by callers of sendPacket, so that the
 -- empty-packet countermeasure may be applied to each fragment independently.
-dividePacket :: Int -> Packet -> (Fragment Plaintext -> Record Plaintext) -> [Record Plaintext]
-dividePacket len pkt mkRecord = mkRecord . fragmentPlaintext <$> encodePacketContent pkt
+packetToFragments :: Context -> Int -> Packet -> IO [ByteString]
+packetToFragments ctx len pkt  = encodePacketContent pkt
   where
-    encodePacketContent (Handshake hss)    = getChunks len (encodeHandshakes hss)
-    encodePacketContent (Alert a)          = [encodeAlerts a]
-    encodePacketContent  ChangeCipherSpec  = [encodeChangeCipherSpec]
-    encodePacketContent (AppData x)        = [x]
+    encodePacketContent (Handshake hss)    =
+        getChunks len . B.concat <$> mapM (updateHandshake ctx) hss
+    encodePacketContent (Alert a)          = return [encodeAlerts a]
+    encodePacketContent  ChangeCipherSpec  = return [encodeChangeCipherSpec]
+    encodePacketContent (AppData x)        = return [x]
 
 -- before TLS 1.1, the block cipher IV is made of the residual of the previous block,
 -- so we use cstIV as is, however in other case we generate an explicit IV
