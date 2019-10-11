@@ -35,14 +35,7 @@ import Data.IORef
 -- and updating state on the go
 encodePacket :: Context -> Packet -> IO (Either TLSError ByteString)
 encodePacket ctx pkt@(Handshake hss) = do
-    forM_ hss $ \hs -> do
-        case hs of
-            Finished fdata -> usingState_ ctx $ updateVerifiedData ClientRole fdata
-            _              -> return ()
-        let encoded = encodeHandshake hs
-        usingHState ctx $ do
-            when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage encoded
-            when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ updateHandshakeDigest encoded
+    forM_ hss (updateHandshake ctx)
     encodePacket' ctx pkt
 encodePacket ctx pkt = do
     d <- encodePacket' ctx pkt
@@ -100,3 +93,15 @@ switchTxEncryption ctx = do
     -- set empty packet counter measure if condition are met
     when (ver <= TLS10 && cc == ClientRole && isCBC tx && supportedEmptyPacket (ctxSupported ctx)) $ liftIO $ writeIORef (ctxNeedEmptyPacket ctx) True
   where isCBC tx = maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stCipher tx)
+
+updateHandshake :: Context -> Handshake -> IO ByteString
+updateHandshake ctx hs = do
+    case hs of
+        Finished fdata -> usingState_ ctx $ updateVerifiedData ClientRole fdata
+        _              -> return ()
+    usingHState ctx $ do
+        when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage encoded
+        when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ updateHandshakeDigest encoded
+    return encoded
+  where
+    encoded = encodeHandshake hs
