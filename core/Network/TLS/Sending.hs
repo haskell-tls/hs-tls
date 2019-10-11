@@ -10,7 +10,7 @@
 --
 module Network.TLS.Sending (
     encodePacket
-  , encodeRecord
+  , encodeRecordM
   , updateHandshake
   ) where
 
@@ -40,7 +40,7 @@ encodePacket ctx pkt = do
     let pt = packetType pkt
         mkRecord bs = Record pt ver (fragmentPlaintext bs)
     records <- map mkRecord <$> packetToFragments ctx 16384 pkt
-    bs <- fmap B.concat <$> forEitherM records (runEncodeRecord ctx)
+    bs <- fmap B.concat <$> forEitherM records (encodeRecord ctx)
     when (pkt == ChangeCipherSpec) $ switchTxEncryption ctx
     return bs
 
@@ -58,8 +58,8 @@ packetToFragments ctx len pkt  = encodePacketContent pkt
 
 -- before TLS 1.1, the block cipher IV is made of the residual of the previous block,
 -- so we use cstIV as is, however in other case we generate an explicit IV
-runEncodeRecord :: Context -> Record Plaintext -> IO (Either TLSError ByteString)
-runEncodeRecord ctx record = do
+encodeRecord :: Context -> Record Plaintext -> IO (Either TLSError ByteString)
+encodeRecord ctx record = do
     ver     <- usingState_ ctx (getVersionWithDefault $ maximum $ supportedVersions $ ctxSupported ctx)
     txState <- readMVar $ ctxTxState ctx
     let sz = case stCipher txState of
@@ -69,11 +69,11 @@ runEncodeRecord ctx record = do
                     | otherwise -> 0 -- to not generate IV
     if hasExplicitBlockIV ver && sz > 0
         then do newIV <- getStateRNG ctx sz
-                runTxState ctx (modify (setRecordIV newIV) >> encodeRecord record)
-        else runTxState ctx $ encodeRecord record
+                runTxState ctx (modify (setRecordIV newIV) >> encodeRecordM record)
+        else runTxState ctx $ encodeRecordM record
 
-encodeRecord :: Record Plaintext -> RecordM ByteString
-encodeRecord record = do
+encodeRecordM :: Record Plaintext -> RecordM ByteString
+encodeRecordM record = do
     erecord <- engageRecord record
     let (hdr, content) = recordToRaw erecord
     return $ B.concat [ encodeHeader hdr, content ]

@@ -33,7 +33,10 @@ encodePacket13 ctx pkt = do
     let pt = contentType pkt
         mkRecord bs = Record pt TLS12 (fragmentPlaintext bs)
     records <- map mkRecord <$> packetToFragments ctx 16384 pkt
-    fmap B.concat <$> forEitherM records (runTxState ctx . encodeRecord)
+    fmap B.concat <$> forEitherM records (encodeRecord ctx)
+
+encodeRecord :: Context -> Record Plaintext -> IO (Either TLSError ByteString)
+encodeRecord ctx = runTxState ctx . encodeRecordM
 
 packetToFragments :: Context -> Int -> Packet13 -> IO [ByteString]
 packetToFragments ctx len pkt = encodePacketContent pkt

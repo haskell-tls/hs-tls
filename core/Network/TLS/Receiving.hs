@@ -81,15 +81,15 @@ getRecord :: Context -> Int -> Header -> ByteString -> IO (Either TLSError (Reco
 getRecord ctx appDataOverhead header@(Header pt _ _) content = do
     withLog ctx $ \logging -> loggingIORecv logging header content
     runRxState ctx $ do
-        r <- decodeRecord header content
+        r <- decodeRecordM header content
         let Record _ _ fragment = r
         when (B.length (fragmentGetBytes fragment) > 16384 + overhead) $
             throwError contentSizeExceeded
         return r
   where overhead = if pt == ProtocolType_AppData then appDataOverhead else 0
 
-decodeRecord :: Header -> ByteString -> RecordM (Record Plaintext)
-decodeRecord header content = disengageRecord erecord
+decodeRecordM :: Header -> ByteString -> RecordM (Record Plaintext)
+decodeRecordM header content = disengageRecord erecord
    where
      erecord = rawToRecord header (fragmentCiphertext content)
 
