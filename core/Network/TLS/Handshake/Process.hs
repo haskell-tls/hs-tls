@@ -14,28 +14,29 @@ module Network.TLS.Handshake.Process
     , getHandshakeDigest
     ) where
 
-import Control.Concurrent.MVar
-import Control.Monad.State.Strict (gets)
-import Control.Monad.IO.Class (liftIO)
-
-import Network.TLS.Types (Role(..), invertRole, MasterSecret(..))
-import Network.TLS.Util
-import Network.TLS.Packet
-import Network.TLS.ErrT
-import Network.TLS.Struct
-import Network.TLS.Struct13
-import Network.TLS.State
 import Network.TLS.Context.Internal
 import Network.TLS.Crypto
-import Network.TLS.Imports
+import Network.TLS.ErrT
+import Network.TLS.Extension
+import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Random
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
-import Network.TLS.Handshake.Key
-import Network.TLS.Extension
+import Network.TLS.Imports
+import Network.TLS.Packet
 import Network.TLS.Parameters
+import Network.TLS.Sending
 import Network.TLS.Sending13
+import Network.TLS.State
+import Network.TLS.Struct
+import Network.TLS.Struct13
+import Network.TLS.Types (Role(..), invertRole, MasterSecret(..))
+import Network.TLS.Util
+
+import Control.Concurrent.MVar
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.State.Strict (gets)
 import Data.X509 (CertificateChain(..), Certificate(..), getCertificate)
 
 processHandshake :: Context -> Handshake -> IO ()
@@ -55,10 +56,8 @@ processHandshake ctx hs = do
             processClientKeyXchg ctx content
         Finished fdata                -> processClientFinished ctx fdata
         _                             -> return ()
-    let encoded = encodeHandshake hs
     when (isHRR hs) $ usingHState ctx wrapAsMessageHash13
-    when (certVerifyHandshakeMaterial hs) $ usingHState ctx $ addHandshakeMessage encoded
-    when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ usingHState ctx $ updateHandshakeDigest encoded
+    void $ updateHandshake ctx ServerRole hs
   where secureRenegotiation = supportedSecureRenegotiation $ ctxSupported ctx
         -- RFC5746: secure renegotiation
         -- the renegotiation_info extension: 0xff01
@@ -137,8 +136,6 @@ processClientFinished ctx fdata = do
     (cc,ver) <- usingState_ ctx $ (,) <$> isClientContext <*> getVersion
     expected <- usingHState ctx $ getHandshakeDigest ver $ invertRole cc
     when (expected /= fdata) $ decryptError "cannot verify finished"
-    usingState_ ctx $ updateVerifiedData ServerRole fdata
-    return ()
 
 -- initialize a new Handshake context (initial handshake or renegotiations)
 startHandshake :: Context -> Version -> ClientRandom -> IO ()

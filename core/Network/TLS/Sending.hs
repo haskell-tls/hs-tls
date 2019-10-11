@@ -11,6 +11,7 @@
 module Network.TLS.Sending (
     encodePacket
   , encodeRecord
+  , updateHandshake
   ) where
 
 import Network.TLS.Cap
@@ -50,7 +51,7 @@ packetToFragments :: Context -> Int -> Packet -> IO [ByteString]
 packetToFragments ctx len pkt  = encodePacketContent pkt
   where
     encodePacketContent (Handshake hss)    =
-        getChunks len . B.concat <$> mapM (updateHandshake ctx) hss
+        getChunks len . B.concat <$> mapM (updateHandshake ctx ClientRole) hss
     encodePacketContent (Alert a)          = return [encodeAlerts a]
     encodePacketContent  ChangeCipherSpec  = return [encodeChangeCipherSpec]
     encodePacketContent (AppData x)        = return [x]
@@ -88,10 +89,10 @@ switchTxEncryption ctx = do
     when (ver <= TLS10 && cc == ClientRole && isCBC tx && supportedEmptyPacket (ctxSupported ctx)) $ liftIO $ writeIORef (ctxNeedEmptyPacket ctx) True
   where isCBC tx = maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stCipher tx)
 
-updateHandshake :: Context -> Handshake -> IO ByteString
-updateHandshake ctx hs = do
+updateHandshake :: Context -> Role -> Handshake -> IO ByteString
+updateHandshake ctx role hs = do
     case hs of
-        Finished fdata -> usingState_ ctx $ updateVerifiedData ClientRole fdata
+        Finished fdata -> usingState_ ctx $ updateVerifiedData role fdata
         _              -> return ()
     usingHState ctx $ do
         when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage encoded
