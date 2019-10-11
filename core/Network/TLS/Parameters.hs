@@ -239,7 +239,7 @@ data Supported = Supported
 
 defaultSupported :: Supported
 defaultSupported = Supported
-    { supportedVersions       = [TLS12,TLS11,TLS10]
+    { supportedVersions       = [TLS13,TLS12,TLS11,TLS10]
     , supportedCiphers        = []
     , supportedCompressions   = [nullCompression]
     , supportedHashSignatures = [ (HashIntrinsic,     SignatureEd448)
