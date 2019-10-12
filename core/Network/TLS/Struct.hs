@@ -214,9 +214,9 @@ data ExtensionRaw = ExtensionRaw ExtensionID ByteString
     deriving (Eq)
 
 instance Show ExtensionRaw where
-    show (ExtensionRaw eid bs) = "ExtensionRaw " ++ showEID eid ++ " " ++ showBytesHex bs ++ ""
+    show (ExtensionRaw eid bs) = "ExtensionRaw " ++ showEID eid ++ " " ++ showBytesHex bs
 
-showEID :: Word16 -> String
+showEID :: ExtensionID -> String
 showEID 0x0 = "ServerName"
 showEID 0x1 = "MaxFragmentLength"
 showEID 0x2 = "ClientCertificateUrl"
@@ -255,6 +255,7 @@ showEID 0x33 = "KeyShare"
 showEID 0xff01 = "SecureRenegotiation"
 showEID 0xffa5 = "QuicTransportParameters"
 showEID x      = show x
+
 data AlertLevel =
       AlertLevel_Warning
     | AlertLevel_Fatal
