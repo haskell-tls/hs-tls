@@ -1,3 +1,8 @@
+## Version 1.5.2
+
+- Enabled TLS 1.3 by default by adding TLS13 to supportedVersions.
+- Avoid handshake failure with small RSA keys [#394](https://github.com/vincenthz/hs-tls/pull/394)
+
 ## Version 1.5.1
 
 - Post-handshake authentication [#363](https://github.com/vincenthz/hs-tls/pull/363)
