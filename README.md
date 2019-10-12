@@ -20,7 +20,7 @@ Features
 * tiny codebase (more than 20 times smaller than OpenSSL, and 10 times smaller than gnuTLS)
 * client certificates
 * permissive license: BSD3
-* supported versions: SSL3, TLS1.0, TLS1.1, TLS1.2
+* supported versions: SSL3, TLS1.0, TLS1.1, TLS1.2, TLS1.3
 * key exchange supported: RSA, DHE-RSA, DHE-DSS, ECDHE-RSA, ECDHE-ECDSA
 * diffie-hellman groups: finite fields, elliptic curves P-256, P-384, P-521, X25519, X448
 * bulk algorithm supported: any stream or block ciphers

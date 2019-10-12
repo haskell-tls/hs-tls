@@ -1,7 +1,15 @@
 ## Version 1.5.2
 
-- Enabled TLS 1.3 by default by adding TLS13 to supportedVersions.
+- Enabled TLS 1.3 by default [#398](https://github.com/vincenthz/hs-tls/pull/398)
 - Avoid handshake failure with small RSA keys [#394](https://github.com/vincenthz/hs-tls/pull/394)
+
+NOTES:
+
+- Starting with tls-1.5.0, the parameter `supportedVersions` contains values
+  ordered by decreasing preference, so typically the higher versions first.
+  This departs from code samples previously available.  For maximum
+  interoperability, users overriding the default value should verify and adapt
+  their code.
 
 ## Version 1.5.1
 
