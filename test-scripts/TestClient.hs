@@ -105,8 +105,8 @@ userAgent = "--user-agent=haskell tls 1.2"
               --user-agent=user-agent  use a user agent
               --tls10                  use TLS 1.0
               --tls11                  use TLS 1.1
-              --tls12                  use TLS 1.2 (default)
-              --tls13                  use TLS 1.3
+              --tls12                  use TLS 1.2
+              --tls13                  use TLS 1.3 (default)
               --bogocipher=cipher-id   add a bogus cipher id for testing
   -x          --no-version-downgrade   do not allow version downgrade
               --uri=URI                optional URI requested by default /

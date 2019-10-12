@@ -119,7 +119,7 @@ getDefaultParams flags host store sStorage certCredsRequest session earlyData =
                 | Tls11 `elem` flags = TLS11
                 | Ssl3  `elem` flags = SSL3
                 | Tls10 `elem` flags = TLS10
-                | otherwise          = TLS12
+                | otherwise          = TLS13
             supportedVers
                 | NoVersionDowngrade `elem` flags = [tlsConnectVer]
                 | otherwise = filter (<= tlsConnectVer) allVers
@@ -183,8 +183,8 @@ options =
     , Option []     ["user-agent"] (ReqArg UserAgent "user-agent") "use a user agent"
     , Option []     ["tls10"]   (NoArg Tls10) "use TLS 1.0"
     , Option []     ["tls11"]   (NoArg Tls11) "use TLS 1.1"
-    , Option []     ["tls12"]   (NoArg Tls12) "use TLS 1.2 (default)"
-    , Option []     ["tls13"]   (NoArg Tls13) "use TLS 1.3"
+    , Option []     ["tls12"]   (NoArg Tls12) "use TLS 1.2"
+    , Option []     ["tls13"]   (NoArg Tls13) "use TLS 1.3 (default)"
     , Option []     ["bogocipher"] (ReqArg BogusCipher "cipher-id") "add a bogus cipher id for testing"
     , Option ['x']  ["no-version-downgrade"] (NoArg NoVersionDowngrade) "do not allow version downgrade"
     , Option []     ["uri"]     (ReqArg Uri "URI") "optional URI requested by default /"
