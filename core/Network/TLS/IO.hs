@@ -18,6 +18,7 @@ module Network.TLS.IO
     -- * Grouping multiple packets in the same flight
     , PacketFlightM
     , runPacketFlight
+    , runPacketNonFlight
     , loadPacket13
     ) where
 
@@ -272,26 +273,41 @@ checkValid ctx = do
 
 ----------------------------------------------------------------
 
+type Builder = [ByteString] -> [ByteString]
+
 -- | State monad used to group several packets together and send them on wire as
 -- single flight.  When packets are loaded in the monad, they are logged
 -- immediately, update the context digest and transcript, but actual sending is
 -- deferred.  Packets are sent all at once when the monadic computation ends
 -- (normal termination but also if interrupted by an exception).
-newtype PacketFlightM a = PacketFlightM (ReaderT (IORef [ByteString]) IO a)
+newtype PacketFlightM a = PacketFlightM (ReaderT (IORef Builder) IO a)
     deriving (Functor, Applicative, Monad, MonadFail, MonadIO)
 
-runPacketFlight :: Context -> PacketFlightM a -> IO a
-runPacketFlight ctx (PacketFlightM f) = do
-    ref <- newIORef []
+runPacketFlight :: Context -> [ByteString] -> PacketFlightM a -> IO a
+runPacketFlight ctx bss0 (PacketFlightM f) = do
+    ref <- newIORef id
     finally (runReaderT f ref) $ do
-        st <- readIORef ref
-        unless (null st) $ contextSendBytes ctx $ B.concat $ reverse st
+        build <- readIORef ref
+        let bss = bss0 ++ build []
+        unless (null bss) $ contextSendBytes ctx $ B.concat bss
+
+runPacketNonFlight :: Context -> PacketFlightM () -> IO [ByteString]
+runPacketNonFlight ctx (PacketFlightM f) = do
+    ref <- newIORef id
+    runReaderT f ref
+    build <- readIORef ref
+    let bss = build []
+    case ctxRecordLayer ctx of
+      Nothing -> return bss
+      Just rl -> do
+          RL.sendBytes rl $ B.concat bss
+          return []
 
 loadPacket13 :: Context -> Packet13 -> PacketFlightM ()
 loadPacket13 ctx pkt = PacketFlightM $ do
     bs <- writePacketBytes13 ctx pkt
     ref <- ask
-    liftIO $ modifyIORef ref (bs :)
+    liftIO $ modifyIORef ref (. (bs :))
 
 ----------------------------------------------------------------
 

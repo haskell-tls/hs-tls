@@ -28,6 +28,7 @@ module Network.TLS.Types
     , BaseSecret(..)
     , ClientTrafficSecret(..)
     , ServerTrafficSecret(..)
+    , TrafficSecrets
     , SecretTriple(..)
     , SecretPair(..)
     , MasterSecret(..)
@@ -114,6 +115,8 @@ data SecretPair a = SecretPair
     { pairBase   :: BaseSecret a
     , pairClient :: ClientTrafficSecret a
     }
+
+type TrafficSecrets a = (ClientTrafficSecret a, ServerTrafficSecret a)
 
 -- Master secret for TLS 1.2 or earlier.
 newtype MasterSecret = MasterSecret ByteString deriving Show

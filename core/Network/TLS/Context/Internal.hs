@@ -68,6 +68,7 @@ import Network.TLS.Backend
 import Network.TLS.Cipher
 import Network.TLS.Compression (Compression)
 import Network.TLS.Extension
+import Network.TLS.Handshake.Control
 import Network.TLS.Handshake.State
 import Network.TLS.Hooks
 import Network.TLS.Imports
@@ -87,7 +88,6 @@ import Control.Monad.State.Strict
 import qualified Data.ByteString as B
 import Data.IORef
 import Data.Tuple
-
 
 -- | Information related to a running context, e.g. current cipher
 data Information = Information
@@ -133,6 +133,7 @@ data Context = Context
     , ctxCertRequests     :: IORef [Handshake13]  -- ^ pending PHA requests
     , ctxKeyLogger        :: String -> IO ()
     , ctxRecordLayer      :: Maybe RecordLayer
+    , ctxHandshakeSync    :: Maybe HandshakeSync
     }
 
 data Established = NotEstablished
