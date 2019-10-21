@@ -32,6 +32,7 @@ module Network.TLS.Extension
     , extensionID_PostHandshakeAuth
     , extensionID_SignatureAlgorithmsCert
     , extensionID_KeyShare
+    , extensionID_QuicTransportParameters
     -- all implemented extensions
     , ServerNameType(..)
     , ServerName(..)
@@ -122,7 +123,8 @@ extensionID_ServerName
   , extensionID_PostHandshakeAuth
   , extensionID_SignatureAlgorithmsCert
   , extensionID_KeyShare
-  , extensionID_SecureRenegotiation :: ExtensionID
+  , extensionID_SecureRenegotiation
+  , extensionID_QuicTransportParameters :: ExtensionID
 extensionID_ServerName                          = 0x0 -- RFC6066
 extensionID_MaxFragmentLength                   = 0x1 -- RFC6066
 extensionID_ClientCertificateUrl                = 0x2 -- RFC6066
@@ -161,6 +163,7 @@ extensionID_PostHandshakeAuth                   = 0x31 -- TLS 1.3
 extensionID_SignatureAlgorithmsCert             = 0x32 -- TLS 1.3
 extensionID_KeyShare                            = 0x33 -- TLS 1.3
 extensionID_SecureRenegotiation                 = 0xff01 -- RFC5746
+extensionID_QuicTransportParameters             = 0xffa5
 
 ------------------------------------------------------------
 
@@ -200,6 +203,7 @@ definedExtensions =
     , extensionID_SignatureAlgorithmsCert
     , extensionID_CertificateAuthorities
     , extensionID_SecureRenegotiation
+    , extensionID_QuicTransportParameters
     ]
 
 -- | all supported extensions by the implementation
@@ -220,6 +224,7 @@ supportedExtensions = [ extensionID_ServerName
                       , extensionID_Cookie
                       , extensionID_PskKeyExchangeModes
                       , extensionID_CertificateAuthorities
+                      , extensionID_QuicTransportParameters
                       ]
 
 ------------------------------------------------------------
