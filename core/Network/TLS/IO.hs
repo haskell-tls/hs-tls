@@ -36,6 +36,7 @@ import Network.TLS.Packet
 import Network.TLS.Receiving
 import Network.TLS.Receiving13
 import Network.TLS.Record
+import qualified Network.TLS.Record.Layer as RL
 import Network.TLS.Sending
 import Network.TLS.Sending13
 import Network.TLS.State
@@ -45,7 +46,7 @@ import Network.TLS.Struct13
 ----------------------------------------------------------------
 
 -- | Send one packet to the context
-sendPacket :: MonadIO m => Context -> Packet -> m ()
+sendPacket :: Context -> Packet -> IO ()
 sendPacket ctx pkt = do
     -- in ver <= TLS1.0, block ciphers using CBC are using CBC residue as IV, which can be guessed
     -- by an attacker. Hence, an empty packet is sent before a normal data packet, to
@@ -53,9 +54,9 @@ sendPacket ctx pkt = do
     when (isNonNullAppData pkt) $ do
         withEmptyPacket <- liftIO $ readIORef $ ctxNeedEmptyPacket ctx
         when withEmptyPacket $
-            writePacketBytes ctx (AppData B.empty) >>= sendBytes ctx
+            writePacketBytes ctx (AppData B.empty) >>= contextSendBytes ctx
 
-    writePacketBytes ctx pkt >>= sendBytes ctx
+    writePacketBytes ctx pkt >>= contextSendBytes ctx
   where isNonNullAppData (AppData b) = not $ B.null b
         isNonNullAppData _           = False
 
@@ -68,8 +69,8 @@ writePacketBytes ctx pkt = do
 
 ----------------------------------------------------------------
 
-sendPacket13 :: MonadIO m => Context -> Packet13 -> m ()
-sendPacket13 ctx pkt = writePacketBytes13 ctx pkt >>= sendBytes ctx
+sendPacket13 :: Context -> Packet13 -> IO ()
+sendPacket13 ctx pkt = writePacketBytes13 ctx pkt >>= contextSendBytes ctx
 
 writePacketBytes13 :: MonadIO m => Context -> Packet13 -> m ByteString
 writePacketBytes13 ctx pkt = do
@@ -119,7 +120,7 @@ recvPacket ctx = liftIO $ do
     -- AppData with maximum size 2^14 + 256.  In all other scenarios and record
     -- types the maximum size is 2^14.
     let appDataOverhead = if hrr then 256 else 0
-    erecord     <- recvRecord compatSSLv2 appDataOverhead ctx
+    erecord     <- contextRecvRecord ctx compatSSLv2 appDataOverhead
     case erecord of
         Left err     -> return $ Left err
         Right record ->
@@ -193,7 +194,7 @@ isEmptyHandshake _                      = False
 
 recvPacket13 :: MonadIO m => Context -> m (Either TLSError Packet13)
 recvPacket13 ctx = liftIO $ do
-    erecord <- recvRecord13 ctx
+    erecord <- contextRecvRecord13 ctx
     case erecord of
         Left err@(Error_Protocol (_, True, BadRecordMac)) -> do
             -- If the server decides to reject RTT0 data but accepts RTT1
@@ -284,10 +285,27 @@ runPacketFlight ctx (PacketFlightM f) = do
     ref <- newIORef []
     finally (runReaderT f ref) $ do
         st <- readIORef ref
-        unless (null st) $ sendBytes ctx $ B.concat $ reverse st
+        unless (null st) $ contextSendBytes ctx $ B.concat $ reverse st
 
 loadPacket13 :: Context -> Packet13 -> PacketFlightM ()
 loadPacket13 ctx pkt = PacketFlightM $ do
     bs <- writePacketBytes13 ctx pkt
     ref <- ask
     liftIO $ modifyIORef ref (bs :)
+
+----------------------------------------------------------------
+
+contextSendBytes :: Context -> ByteString -> IO ()
+contextSendBytes ctx = case ctxRecordLayer ctx of
+  Nothing -> sendBytes ctx
+  Just rl -> RL.sendBytes rl
+
+contextRecvRecord :: Context -> Bool -> Int -> IO (Either TLSError (Record Plaintext))
+contextRecvRecord ctx compatSSLv2 appDataOverhead = case ctxRecordLayer ctx of
+  Nothing -> recvRecord compatSSLv2 appDataOverhead ctx
+  Just rl -> RL.recvRecord rl
+
+contextRecvRecord13 :: Context -> IO (Either TLSError (Record Plaintext))
+contextRecvRecord13 ctx = case ctxRecordLayer ctx of
+  Nothing -> recvRecord13 ctx
+  Just rl -> RL.recvRecord rl

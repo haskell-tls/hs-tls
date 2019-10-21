@@ -65,25 +65,26 @@ module Network.TLS.Context.Internal
     ) where
 
 import Network.TLS.Backend
-import Network.TLS.Extension
 import Network.TLS.Cipher
-import Network.TLS.Struct
-import Network.TLS.Struct13
 import Network.TLS.Compression (Compression)
-import Network.TLS.State
+import Network.TLS.Extension
 import Network.TLS.Handshake.State
 import Network.TLS.Hooks
-import Network.TLS.Record.State
-import Network.TLS.Parameters
-import Network.TLS.Measurement
 import Network.TLS.Imports
+import Network.TLS.Measurement
+import Network.TLS.Parameters
+import Network.TLS.Record.Layer
+import Network.TLS.Record.State
+import Network.TLS.State
+import Network.TLS.Struct
+import Network.TLS.Struct13
 import Network.TLS.Types
 import Network.TLS.Util
-import qualified Data.ByteString as B
 
 import Control.Concurrent.MVar
-import Control.Monad.State.Strict
 import Control.Exception (throwIO, Exception())
+import Control.Monad.State.Strict
+import qualified Data.ByteString as B
 import Data.IORef
 import Data.Tuple
 
@@ -131,6 +132,7 @@ data Context = Context
     , ctxPendingActions   :: IORef [PendingAction]
     , ctxCertRequests     :: IORef [Handshake13]  -- ^ pending PHA requests
     , ctxKeyLogger        :: String -> IO ()
+    , ctxRecordLayer      :: Maybe RecordLayer
     }
 
 data Established = NotEstablished

@@ -21,6 +21,7 @@ import Network.TLS.Imports
 import Network.TLS.Packet
 import Network.TLS.Packet13
 import Network.TLS.Record
+import qualified Network.TLS.Record.Layer as RL
 import Network.TLS.Sending
 import Network.TLS.Struct
 import Network.TLS.Struct13
@@ -34,7 +35,7 @@ encodePacket13 ctx pkt = do
         mkRecord bs = Record pt TLS12 (fragmentPlaintext bs)
         len = ctxFragmentSize ctx
     records <- map mkRecord <$> packetToFragments ctx len pkt
-    fmap B.concat <$> forEitherM records (encodeRecord ctx)
+    fmap B.concat <$> forEitherM records (contextEncodeRecord ctx)
 
 prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
 prepareRecord = runTxState
@@ -66,3 +67,8 @@ updateHandshake13 ctx hs
     isIgnored NewSessionTicket13{} = True
     isIgnored KeyUpdate13{}        = True
     isIgnored _                    = False
+
+contextEncodeRecord :: Context -> Record Plaintext -> IO (Either TLSError ByteString)
+contextEncodeRecord ctx = case ctxRecordLayer ctx of
+  Nothing -> encodeRecord ctx
+  Just rl -> RL.encodeRecord rl
