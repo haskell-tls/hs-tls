@@ -918,7 +918,12 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
         let earlyDataExtension
               | rtt0OK = Just $ ExtensionRaw extensionID_EarlyData $ extensionEncode (EarlyDataIndication Nothing)
               | otherwise = Nothing
-        let extensions = catMaybes [earlyDataExtension, groupExtension, sniExtension] ++ protoExt
+        let extensions = sharedExtensions (serverShared sparams)
+                      ++ catMaybes [earlyDataExtension
+                                   ,groupExtension
+                                   ,sniExtension
+                                   ]
+                      ++ protoExt
         loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 extensions]
 
     sendNewSessionTicket applicationSecret sfSentTime = when sendNST $ do
