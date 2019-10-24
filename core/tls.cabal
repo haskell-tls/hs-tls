@@ -70,6 +70,7 @@ Library
                      Network.TLS.Extra
                      Network.TLS.Extra.Cipher
                      Network.TLS.Extra.FFDHE
+                     Network.TLS.QUIC
   other-modules:     Network.TLS.Cap
                      Network.TLS.Struct
                      Network.TLS.Struct13
