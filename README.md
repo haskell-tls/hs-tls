@@ -88,10 +88,12 @@ server name indication: 127.0.0.1
 
 ## TLS 1.3 HelloRetryRequest (HRR)
 
-The default value of `-g` is `x448,x25519,p256`. To trigger HRR, omit the `-g` option. The first value is only used for key-share.
+The first value of `-g` is used for key-share.  To trigger HRR, add in first
+position a value which will not be accepted by the server, for example use
+`ffdhe2048,x25519,p256`.
 
 ```
-% tls-simpleclient --tls13 -v --no-valid -O html-log.txt --http1.1 127.0.0.1 443
+% tls-simpleclient --tls13 -v --no-valid -O html-log.txt --http1.1 -g ffdhe2048,x25519,p256 127.0.0.1 443
 sending query:
 GET / HTTP/1.1
 Host: 127.0.0.1

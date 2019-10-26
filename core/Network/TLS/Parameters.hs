@@ -230,10 +230,8 @@ data Supported = Supported
       --   extension.  It is used in both clients and servers to restrict
       --   accepted groups in DH key exchange.
       --
-      --   The default value is ['X25519','P256','P384','P521'].
-      --   'X25519' and 'P256' provide 128-bit security which is strong
-      --   enough until 2030.  Both curves are fast because their
-      --   backends are written in C.
+      --   The default value includes all groups with security strength of 128
+      --   bits or more.
     , supportedGroups              :: [Group]
     } deriving (Show,Eq)
 
@@ -261,7 +259,7 @@ defaultSupported = Supported
     , supportedSession             = True
     , supportedFallbackScsv        = True
     , supportedEmptyPacket         = True
-    , supportedGroups              = [X25519,P256,P384,P521]
+    , supportedGroups              = [X25519,X448,P256,FFDHE3072,FFDHE4096,P384,FFDHE6144,FFDHE8192,P521]
     }
 
 instance Default Supported where
