@@ -61,6 +61,7 @@ module Network.TLS.Context.Internal
     , tls13orLater
     , addCertRequest13
     , getCertRequest13
+    , decideRecordVersion
     ) where
 
 import Network.TLS.Backend
@@ -247,18 +248,20 @@ restoreHState :: Context
               -> IO (Saved (Maybe HandshakeState))
 restoreHState ctx = restoreMVar (ctxHandshake ctx)
 
-runTxState :: Context -> RecordM a -> IO (Either TLSError a)
-runTxState ctx f = do
+decideRecordVersion :: Context -> IO (Version, Bool)
+decideRecordVersion ctx = do
     ver <- usingState_ ctx (getVersionWithDefault $ maximum $ supportedVersions $ ctxSupported ctx)
     hrr <- usingState_ ctx getTLS13HRR
-    -- For TLS 1.3, ver' is only used in ClientHello.
-    -- The record version of the first ClientHello SHOULD be TLS 1.0.
-    -- The record version of the second ClientHello MUST be TLS 1.2.
     let ver'
          | ver >= TLS13 = if hrr then TLS12 else TLS10
          | otherwise    = ver
-        opt = RecordOptions { recordVersion = ver'
-                            , recordTLS13   = ver >= TLS13
+    return (ver', ver >= TLS13)
+
+runTxState :: Context -> RecordM a -> IO (Either TLSError a)
+runTxState ctx f = do
+    (ver, tls13) <- decideRecordVersion ctx
+    let opt = RecordOptions { recordVersion = ver
+                            , recordTLS13   = tls13
                             }
     modifyMVar (ctxTxState ctx) $ \st ->
         case runRecordM f opt st of

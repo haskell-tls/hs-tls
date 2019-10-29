@@ -12,22 +12,23 @@
 
 module Network.TLS.Receiving
     ( processPacket
+    , decodeRecordM
     ) where
 
-import Control.Monad.State.Strict
-import Control.Concurrent.MVar
-
-import Network.TLS.Context.Internal
-import Network.TLS.Struct
-import Network.TLS.ErrT
-import Network.TLS.Record
-import Network.TLS.Packet
-import Network.TLS.Wire
-import Network.TLS.State
-import Network.TLS.Handshake.State
 import Network.TLS.Cipher
-import Network.TLS.Util
+import Network.TLS.Context.Internal
+import Network.TLS.ErrT
+import Network.TLS.Handshake.State
 import Network.TLS.Imports
+import Network.TLS.Packet
+import Network.TLS.Record
+import Network.TLS.State
+import Network.TLS.Struct
+import Network.TLS.Util
+import Network.TLS.Wire
+
+import Control.Concurrent.MVar
+import Control.Monad.State.Strict
 
 processPacket :: Context -> Record Plaintext -> IO (Either TLSError Packet)
 
@@ -73,3 +74,8 @@ switchRxEncryption :: Context -> IO ()
 switchRxEncryption ctx =
     usingHState ctx (gets hstPendingRxState) >>= \rx ->
     liftIO $ modifyMVar_ (ctxRxState ctx) (\_ -> return $ fromJust "rx-state" rx)
+
+decodeRecordM :: Header -> ByteString -> RecordM (Record Plaintext)
+decodeRecordM header content = disengageRecord erecord
+   where
+     erecord = rawToRecord header (fragmentCiphertext content)

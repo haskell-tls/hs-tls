@@ -8,71 +8,51 @@
 -- the Sending module contains calls related to marshalling packets according
 -- to the TLS state
 --
-module Network.TLS.Sending (writePacket) where
+module Network.TLS.Sending (
+    encodePacket
+  , encodeRecordM
+  , updateHandshake
+  ) where
 
-import Control.Monad.State.Strict
+import Network.TLS.Cap
+import Network.TLS.Cipher
+import Network.TLS.Context.Internal
+import Network.TLS.Handshake.State
+import Network.TLS.Imports
+import Network.TLS.Packet
+import Network.TLS.Parameters
+import Network.TLS.Record
+import Network.TLS.State
+import Network.TLS.Struct
+import Network.TLS.Types (Role(..))
+import Network.TLS.Util
+
 import Control.Concurrent.MVar
+import Control.Monad.State.Strict
+import qualified Data.ByteString as B
 import Data.IORef
 
-import qualified Data.ByteString as B
-
-import Network.TLS.Types (Role(..))
-import Network.TLS.Cap
-import Network.TLS.Struct
-import Network.TLS.Record
-import Network.TLS.Packet
-import Network.TLS.Context.Internal
-import Network.TLS.Parameters
-import Network.TLS.State
-import Network.TLS.Handshake.State
-import Network.TLS.Cipher
-import Network.TLS.Util
-import Network.TLS.Imports
-
-makeRecord :: ProtocolType -> Fragment Plaintext -> RecordM (Record Plaintext)
-makeRecord pt fragment = do
-    ver <- getRecordVersion
-    return $ Record pt ver fragment
+-- | encodePacket transform a packet into marshalled data related to current state
+-- and updating state on the go
+encodePacket :: Context -> Packet -> IO (Either TLSError ByteString)
+encodePacket ctx pkt = do
+    (ver, _) <- decideRecordVersion ctx
+    let pt = packetType pkt
+        mkRecord bs = Record pt ver (fragmentPlaintext bs)
+    records <- map mkRecord <$> packetToFragments ctx 16384 pkt
+    bs <- fmap B.concat <$> forEitherM records (encodeRecord ctx)
+    when (pkt == ChangeCipherSpec) $ switchTxEncryption ctx
+    return bs
 
 -- Decompose handshake packets into fragments of the specified length.  AppData
 -- packets are not fragmented here but by callers of sendPacket, so that the
 -- empty-packet countermeasure may be applied to each fragment independently.
-getPacketFragments :: Int -> Packet -> [Fragment Plaintext]
-getPacketFragments len pkt = map fragmentPlaintext (writePacketContent pkt)
-  where writePacketContent (Handshake hss)    = getChunks len (encodeHandshakes hss)
-        writePacketContent (Alert a)          = [encodeAlerts a]
-        writePacketContent  ChangeCipherSpec  = [encodeChangeCipherSpec]
-        writePacketContent (AppData x)        = [x]
-
--- | marshall packet data
-encodeRecord :: Record Ciphertext -> RecordM ByteString
-encodeRecord record = return $ B.concat [ encodeHeader hdr, content ]
-  where (hdr, content) = recordToRaw record
-
--- | writePacket transform a packet into marshalled data related to current state
--- and updating state on the go
-writePacket :: Context -> Packet -> IO (Either TLSError ByteString)
-writePacket ctx pkt@(Handshake hss) = do
-    forM_ hss $ \hs -> do
-        case hs of
-            Finished fdata -> usingState_ ctx $ updateVerifiedData ClientRole fdata
-            _              -> return ()
-        let encoded = encodeHandshake hs
-        usingHState ctx $ do
-            when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage encoded
-            when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ updateHandshakeDigest encoded
-    writeFragments ctx pkt
-writePacket ctx pkt = do
-    d <- writeFragments ctx pkt
-    when (pkt == ChangeCipherSpec) $ switchTxEncryption ctx
-    return d
-
-writeFragments :: Context-> Packet -> IO (Either TLSError ByteString)
-writeFragments ctx pkt =
-    let fragments = getPacketFragments 16384 pkt
-        pt = packetType pkt
-     in fmap B.concat <$> forEitherM fragments (\frg ->
-            prepareRecord ctx (makeRecord pt frg >>= engageRecord >>= encodeRecord))
+packetToFragments :: Context -> Int -> Packet -> IO [ByteString]
+packetToFragments ctx len (Handshake hss)  =
+    getChunks len . B.concat <$> mapM (updateHandshake ctx ClientRole) hss
+packetToFragments _   _   (Alert a)        = return [encodeAlerts a]
+packetToFragments _   _   ChangeCipherSpec = return [encodeChangeCipherSpec]
+packetToFragments _   _   (AppData x)      = return [x]
 
 -- before TLS 1.1, the block cipher IV is made of the residual of the previous block,
 -- so we use cstIV as is, however in other case we generate an explicit IV
@@ -90,6 +70,15 @@ prepareRecord ctx f = do
                 runTxState ctx (modify (setRecordIV newIV) >> f)
         else runTxState ctx f
 
+encodeRecord :: Context -> Record Plaintext -> IO (Either TLSError ByteString)
+encodeRecord ctx = prepareRecord ctx . encodeRecordM
+
+encodeRecordM :: Record Plaintext -> RecordM ByteString
+encodeRecordM record = do
+    erecord <- engageRecord record
+    let (hdr, content) = recordToRaw erecord
+    return $ B.concat [ encodeHeader hdr, content ]
+
 switchTxEncryption :: Context -> IO ()
 switchTxEncryption ctx = do
     tx  <- usingHState ctx (fromJust "tx-state" <$> gets hstPendingTxState)
@@ -100,3 +89,15 @@ switchTxEncryption ctx = do
     -- set empty packet counter measure if condition are met
     when (ver <= TLS10 && cc == ClientRole && isCBC tx && supportedEmptyPacket (ctxSupported ctx)) $ liftIO $ writeIORef (ctxNeedEmptyPacket ctx) True
   where isCBC tx = maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stCipher tx)
+
+updateHandshake :: Context -> Role -> Handshake -> IO ByteString
+updateHandshake ctx role hs = do
+    case hs of
+        Finished fdata -> usingState_ ctx $ updateVerifiedData role fdata
+        _              -> return ()
+    usingHState ctx $ do
+        when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage encoded
+        when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $ updateHandshakeDigest encoded
+    return encoded
+  where
+    encoded = encodeHandshake hs
