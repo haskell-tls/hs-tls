@@ -39,13 +39,11 @@ encodeRecord :: Context -> Record Plaintext -> IO (Either TLSError ByteString)
 encodeRecord ctx = runTxState ctx . encodeRecordM
 
 packetToFragments :: Context -> Int -> Packet13 -> IO [ByteString]
-packetToFragments ctx len pkt = encodePacketContent pkt
-  where
-    encodePacketContent (Handshake13 hss)  =
-        getChunks len . B.concat <$> mapM (updateHandshake13 ctx) hss
-    encodePacketContent (Alert13 a)        = return [encodeAlerts a]
-    encodePacketContent (AppData13 x)      = return [x]
-    encodePacketContent ChangeCipherSpec13 = return [encodeChangeCipherSpec]
+packetToFragments ctx len (Handshake13 hss)  =
+    getChunks len . B.concat <$> mapM (updateHandshake13 ctx) hss
+packetToFragments _   _   (Alert13 a)        = return [encodeAlerts a]
+packetToFragments _   _   (AppData13 x)      = return [x]
+packetToFragments _   _   ChangeCipherSpec13 = return [encodeChangeCipherSpec]
 
 updateHandshake13 :: Context -> Handshake13 -> IO ByteString
 updateHandshake13 ctx hs

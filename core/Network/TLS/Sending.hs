@@ -48,13 +48,11 @@ encodePacket ctx pkt = do
 -- packets are not fragmented here but by callers of sendPacket, so that the
 -- empty-packet countermeasure may be applied to each fragment independently.
 packetToFragments :: Context -> Int -> Packet -> IO [ByteString]
-packetToFragments ctx len pkt  = encodePacketContent pkt
-  where
-    encodePacketContent (Handshake hss)    =
-        getChunks len . B.concat <$> mapM (updateHandshake ctx ClientRole) hss
-    encodePacketContent (Alert a)          = return [encodeAlerts a]
-    encodePacketContent  ChangeCipherSpec  = return [encodeChangeCipherSpec]
-    encodePacketContent (AppData x)        = return [x]
+packetToFragments ctx len (Handshake hss)  =
+    getChunks len . B.concat <$> mapM (updateHandshake ctx ClientRole) hss
+packetToFragments _   _   (Alert a)        = return [encodeAlerts a]
+packetToFragments _   _   ChangeCipherSpec = return [encodeChangeCipherSpec]
+packetToFragments _   _   (AppData x)      = return [x]
 
 -- before TLS 1.1, the block cipher IV is made of the residual of the previous block,
 -- so we use cstIV as is, however in other case we generate an explicit IV
