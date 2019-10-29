@@ -36,7 +36,7 @@ import Data.IORef
 -- and updating state on the go
 encodePacket :: Context -> Packet -> IO (Either TLSError ByteString)
 encodePacket ctx pkt = do
-    Right ver <- runTxState ctx getRecordVersion
+    (ver, _) <- decideRecordVersion ctx
     let pt = packetType pkt
         mkRecord bs = Record pt ver (fragmentPlaintext bs)
     records <- map mkRecord <$> packetToFragments ctx 16384 pkt
