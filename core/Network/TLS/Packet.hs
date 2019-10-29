@@ -30,7 +30,6 @@ module Network.TLS.Packet
     , decodeHandshake
     , decodeDeprecatedHandshake
     , encodeHandshake
-    , encodeHandshakes
     , encodeHandshakeHeader
     , encodeHandshakeContent
 
@@ -358,9 +357,6 @@ encodeHandshake o =
                     ClientHello _ _ _ _ _ _ (Just _) -> "" -- SSLv2 ClientHello message
                     _ -> runPut $ encodeHandshakeHeader (typeOfHandshake o) len in
     B.concat [ header, content ]
-
-encodeHandshakes :: [Handshake] -> ByteString
-encodeHandshakes hss = B.concat $ map encodeHandshake hss
 
 encodeHandshakeHeader :: HandshakeType -> Int -> Put
 encodeHandshakeHeader ty len = putWord8 (valOfType ty) >> putWord24 len
