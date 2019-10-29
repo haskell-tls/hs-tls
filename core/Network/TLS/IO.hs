@@ -29,6 +29,7 @@ import Data.IORef
 import System.IO.Error (mkIOError, eofErrorType)
 
 import Network.TLS.Context.Internal
+import Network.TLS.ErrT
 import Network.TLS.Hooks
 import Network.TLS.Imports
 import Network.TLS.Packet
@@ -81,6 +82,23 @@ sendBytes :: MonadIO m => Context -> ByteString -> m ()
 sendBytes ctx dataToSend = liftIO $ do
     withLog ctx $ \logging -> loggingIOSent logging dataToSend
     contextSend ctx dataToSend
+
+----------------------------------------------------------------
+
+getRecord :: Context -> Int -> Header -> ByteString -> IO (Either TLSError (Record Plaintext))
+getRecord ctx appDataOverhead header@(Header pt _ _) content = do
+    withLog ctx $ \logging -> loggingIORecv logging header content
+    runRxState ctx $ do
+        r <- decodeRecordM header content
+        let Record _ _ fragment = r
+        when (B.length (fragmentGetBytes fragment) > 16384 + overhead) $
+            throwError contentSizeExceeded
+        return r
+  where overhead = if pt == ProtocolType_AppData then appDataOverhead else 0
+
+
+contentSizeExceeded :: TLSError
+contentSizeExceeded = Error_Protocol ("record content exceeding maximum size", True, RecordOverflow)
 
 ----------------------------------------------------------------
 -- | receive one packet from the context that contains 1 or

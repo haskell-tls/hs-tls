@@ -12,14 +12,13 @@
 
 module Network.TLS.Receiving
     ( processPacket
-    , getRecord
+    , decodeRecordM
     ) where
 
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
 import Network.TLS.ErrT
 import Network.TLS.Handshake.State
-import Network.TLS.Hooks
 import Network.TLS.Imports
 import Network.TLS.Packet
 import Network.TLS.Record
@@ -30,7 +29,6 @@ import Network.TLS.Wire
 
 import Control.Concurrent.MVar
 import Control.Monad.State.Strict
-import qualified Data.ByteString as B
 
 processPacket :: Context -> Record Plaintext -> IO (Either TLSError Packet)
 
@@ -77,21 +75,7 @@ switchRxEncryption ctx =
     usingHState ctx (gets hstPendingRxState) >>= \rx ->
     liftIO $ modifyMVar_ (ctxRxState ctx) (\_ -> return $ fromJust "rx-state" rx)
 
-getRecord :: Context -> Int -> Header -> ByteString -> IO (Either TLSError (Record Plaintext))
-getRecord ctx appDataOverhead header@(Header pt _ _) content = do
-    withLog ctx $ \logging -> loggingIORecv logging header content
-    runRxState ctx $ do
-        r <- decodeRecordM header content
-        let Record _ _ fragment = r
-        when (B.length (fragmentGetBytes fragment) > 16384 + overhead) $
-            throwError contentSizeExceeded
-        return r
-  where overhead = if pt == ProtocolType_AppData then appDataOverhead else 0
-
 decodeRecordM :: Header -> ByteString -> RecordM (Record Plaintext)
 decodeRecordM header content = disengageRecord erecord
    where
      erecord = rawToRecord header (fragmentCiphertext content)
-
-contentSizeExceeded :: TLSError
-contentSizeExceeded = Error_Protocol ("record content exceeding maximum size", True, RecordOverflow)
