@@ -20,7 +20,7 @@ import Network.TLS.Handshake.State13
 import Network.TLS.Imports
 import Network.TLS.Packet
 import Network.TLS.Packet13
-import Network.TLS.Record.Types
+import Network.TLS.Record
 import Network.TLS.Sending
 import Network.TLS.Struct
 import Network.TLS.Struct13
@@ -35,8 +35,11 @@ encodePacket13 ctx pkt = do
     records <- map mkRecord <$> packetToFragments ctx 16384 pkt
     fmap B.concat <$> forEitherM records (encodeRecord ctx)
 
+prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
+prepareRecord = runTxState
+
 encodeRecord :: Context -> Record Plaintext -> IO (Either TLSError ByteString)
-encodeRecord ctx = runTxState ctx . encodeRecordM
+encodeRecord ctx = prepareRecord ctx . encodeRecordM
 
 packetToFragments :: Context -> Int -> Packet13 -> IO [ByteString]
 packetToFragments ctx len (Handshake13 hss)  =
