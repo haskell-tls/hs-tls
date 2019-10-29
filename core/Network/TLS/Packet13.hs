@@ -10,8 +10,7 @@
 -- Portability : unknown
 --
 module Network.TLS.Packet13
-       ( encodeHandshakes13
-       , encodeHandshake13
+       ( encodeHandshake13
        , getHandshakeType13
        , decodeHandshakeRecord13
        , decodeHandshake13
@@ -26,9 +25,6 @@ import Network.TLS.Wire
 import Network.TLS.Imports
 import Data.X509 (CertificateChainRaw(..), encodeCertificateChain, decodeCertificateChain)
 import Network.TLS.ErrT
-
-encodeHandshakes13 :: [Handshake13] -> ByteString
-encodeHandshakes13 hss = B.concat $ map encodeHandshake13 hss
 
 encodeHandshake13 :: Handshake13 -> ByteString
 encodeHandshake13 hdsk = pkt
