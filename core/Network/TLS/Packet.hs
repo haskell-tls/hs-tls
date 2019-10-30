@@ -74,13 +74,11 @@ import Network.TLS.Imports
 import Network.TLS.Struct
 import Network.TLS.Wire
 import Network.TLS.Cap
-import Data.ASN1.Types (fromASN1, toASN1)
-import Data.ASN1.Encoding (decodeASN1', encodeASN1')
-import Data.ASN1.BinaryEncoding (DER(..))
 import Data.X509 (CertificateChainRaw(..), encodeCertificateChain, decodeCertificateChain)
 import Network.TLS.Crypto
 import Network.TLS.MAC
 import Network.TLS.Cipher (CipherKeyExchangeType(..), Cipher(..))
+import Network.TLS.Util.ASN1
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import           Data.ByteArray (ByteArrayAccess)
@@ -281,11 +279,7 @@ getDNames = do
     getDName = do
         dName <- getOpaque16
         when (B.length dName == 0) $ fail "certrequest: invalid DN length"
-        dn <- case decodeASN1' DER dName of
-                Left e      -> fail ("cert request decoding DistinguishedName ASN1 failed: " ++ show e)
-                Right asn1s -> case fromASN1 asn1s of
-                                    Left e      -> fail ("cert request parsing DistinguishedName ASN1 failed: " ++ show e)
-                                    Right (d,_) -> return d
+        dn <- either fail return $ decodeASN1Object "cert request DistinguishedName" dName
         return (2 + B.length dName, dn)
 
 decodeCertVerify :: CurrentParams -> Get Handshake
@@ -428,7 +422,7 @@ putDNames dnames = do
     mapM_ (\ b -> putWord16 (fromIntegral (B.length b)) >> putBytes b) enc
   where
     -- Convert a distinguished name to its DER encoding.
-    encodeCA dn = return $ encodeASN1' DER (toASN1 dn [])
+    encodeCA dn = return $ encodeASN1Object dn
 
 {- FIXME make sure it return error if not 32 available -}
 getRandom32 :: Get ByteString
