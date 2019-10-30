@@ -54,6 +54,7 @@ module Network.TLS
     -- ** Hooks
     , Hooks(..)
     , Handshake
+    , Handshake13
     , Logging(..)
     , contextHookSetHandshakeRecv
     , contextHookSetHandshake13Recv
@@ -156,6 +157,7 @@ import Network.TLS.Struct ( TLSError(..), TLSException(..)
                           , AlertDescription(..)
                           , ClientRandom(..), ServerRandom(..)
                           , Handshake)
+import Network.TLS.Struct13 ( Handshake13 )
 import Network.TLS.Types
 import Network.TLS.X509
 
