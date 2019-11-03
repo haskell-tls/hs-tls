@@ -659,7 +659,9 @@ prop_handshake_srv_key_usage = do
 prop_handshake_client_auth :: PropertyM IO ()
 prop_handshake_client_auth = do
     (clientParam,serverParam) <- pick arbitraryPairParams
-    let version = maximum (supportedVersions $ serverSupported serverParam)
+    let clientVersions = supportedVersions $ clientSupported clientParam
+        serverVersions = supportedVersions $ serverSupported serverParam
+        version = maximum (clientVersions `intersect` serverVersions)
     cred <- pick (arbitraryClientCredential version)
     let clientParam' = clientParam { clientHooks = (clientHooks clientParam)
                                        { onCertificateRequest = \_ -> return $ Just cred }
