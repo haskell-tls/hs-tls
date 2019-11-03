@@ -105,7 +105,7 @@ knownFFGroups = [FFDHE2048,FFDHE3072,FFDHE4096]
 knownGroups   = knownECGroups ++ knownFFGroups
 
 arbitraryGroups :: Gen [Group]
-arbitraryGroups = listOf1 $ elements knownGroups
+arbitraryGroups = scale (min 5) $ listOf1 $ elements knownGroups
 
 isCredentialDSA :: (CertificateChain, PrivKey) -> Bool
 isCredentialDSA (_, PrivKeyDSA _) = True
