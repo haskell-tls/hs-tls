@@ -146,24 +146,20 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
         Just (ApplicationLayerProtocolNegotiation protos) -> usingState_ ctx $ setClientALPNSuggest protos
         _ -> return ()
 
-    extraCreds <- onServerNameIndication (serverHooks sparams) serverName
-    let allCreds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
-
     -- TLS version dependent
     if chosenVersion <= TLS12 then
-        handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverName clientVersion compressions clientSession
+        handshakeServerWithTLS12 sparams ctx chosenVersion exts ciphers serverName clientVersion compressions clientSession
       else do
         mapM_ ensureNullCompression compressions
         -- fixme: we should check if the client random is the same as
         -- that in the first client hello in the case of hello retry.
-        handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts ciphers serverName clientSession
+        handshakeServerWithTLS13 sparams ctx chosenVersion exts ciphers serverName clientSession
 handshakeServerWith _ _ _ = throwCore $ Error_Protocol ("unexpected handshake message received in handshakeServerWith", True, HandshakeFailure)
 
 -- TLS 1.2 or earlier
 handshakeServerWithTLS12 :: ServerParams
                          -> Context
                          -> Version
-                         -> Credentials
                          -> [ExtensionRaw]
                          -> [CipherID]
                          -> Maybe String
@@ -171,7 +167,10 @@ handshakeServerWithTLS12 :: ServerParams
                          -> [CompressionID]
                          -> Session
                          -> IO ()
-handshakeServerWithTLS12 sparams ctx chosenVersion allCreds exts ciphers serverName clientVersion compressions clientSession = do
+handshakeServerWithTLS12 sparams ctx chosenVersion exts ciphers serverName clientVersion compressions clientSession = do
+    extraCreds <- onServerNameIndication (serverHooks sparams) serverName
+    let allCreds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
+
     -- If compression is null, commonCompressions should be [0].
     when (null commonCompressions) $ throwCore $
         Error_Protocol ("no compression in common with the client", True, HandshakeFailure)
@@ -638,13 +637,12 @@ storePrivInfoServer ctx (cc, privkey) = void (storePrivInfo ctx cc privkey)
 handshakeServerWithTLS13 :: ServerParams
                          -> Context
                          -> Version
-                         -> Credentials
                          -> [ExtensionRaw]
                          -> [CipherID]
                          -> Maybe String
                          -> Session
                          -> IO ()
-handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _serverName clientSession = do
+handshakeServerWithTLS13 sparams ctx chosenVersion exts clientCiphers _serverName clientSession = do
     when (any (\(ExtensionRaw eid _) -> eid == extensionID_PreSharedKey) $ init exts) $
         throwCore $ Error_Protocol ("extension pre_shared_key must be last", True, IllegalParameter)
     -- Deciding cipher.
@@ -669,7 +667,7 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
           _                               -> throwCore $ Error_Protocol ("key exchange not implemented, expected key_share extension", True, HandshakeFailure)
     case findKeyShare keyShares serverGroups of
       Nothing -> helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession
-      Just keyShare -> doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash keyShare clientSession rtt0
+      Just keyShare -> doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash keyShare clientSession rtt0
   where
     ciphersFilteredVersion = filter ((`elem` clientCiphers) . cipherID) serverCiphers
     serverCiphers = filter (cipherAllowedForVersion chosenVersion) (supportedCiphers $ serverSupported sparams)
@@ -679,12 +677,12 @@ handshakeServerWithTLS13 sparams ctx chosenVersion allCreds exts clientCiphers _
       Just k  -> Just k
       Nothing -> findKeyShare ks gs
 
-doHandshake13 :: ServerParams -> Context -> Credentials -> Version
+doHandshake13 :: ServerParams -> Context -> Version
               -> Cipher -> [ExtensionRaw]
               -> Hash -> KeyShareEntry
               -> Session -> Bool
               -> IO ()
-doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash clientKeyShare clientSession rtt0 = do
+doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare clientSession rtt0 = do
     newSession ctx >>= \ss -> usingState_ ctx $ do
         setSession ss False
         setClientSupportsPHA supportsPHA
@@ -698,6 +696,8 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
     hrr <- usingState_ ctx getTLS13HRR
     let authenticated = isJust binderInfo
         rtt0OK = authenticated && not hrr && rtt0 && rtt0accept && is0RTTvalid
+    extraCreds <- usingState_ ctx getClientSNI >>= onServerNameIndication (serverHooks sparams)
+    let allCreds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
     ----------------------------------------------------------------
     established <- ctxEstablished ctx
     if established /= NotEstablished then
@@ -713,7 +713,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
            else
              -- FullHandshake or HelloRetryRequest
              return ()
-    mCredInfo <- if authenticated then return Nothing else decideCredentialInfo
+    mCredInfo <- if authenticated then return Nothing else decideCredentialInfo allCreds
     (ecdhe,keyShare) <- makeServerKeyShare ctx clientKeyShare
     ensureRecvComplete ctx
     (clientHandshakeSecret, handshakeSecret) <- runPacketFlight ctx $ do
@@ -835,7 +835,7 @@ doHandshake13 sparams ctx allCreds chosenVersion usedCipher exts usedHash client
         let selectedIdentity = extensionEncode $ PreSharedKeyServerHello $ fromIntegral n
         return [ExtensionRaw extensionID_PreSharedKey selectedIdentity]
 
-    decideCredentialInfo = do
+    decideCredentialInfo allCreds = do
         cHashSigs <- case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode MsgTClientHello of
             Nothing -> throwCore $ Error_Protocol ("no signature_algorithms extension", True, MissingExtension)
             Just (SignatureAlgorithms sas) -> return sas

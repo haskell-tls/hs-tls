@@ -766,12 +766,17 @@ prop_handshake_alpn = do
 
 prop_handshake_sni :: PropertyM IO ()
 prop_handshake_sni = do
+    ref <- run $ newIORef Nothing
     (clientParam,serverParam) <- pick arbitraryPairParams
     let clientParam' = clientParam { clientServerIdentification = (serverName, "")
-                                   , clientUseServerNameIndication = True
-                                    }
-        params' = (clientParam',serverParam)
+                                   }
+        serverParam' = serverParam { serverHooks = (serverHooks serverParam)
+                                        { onServerNameIndication = onSNI ref }
+                                   }
+        params' = (clientParam',serverParam')
     runTLSPipe params' tlsServer tlsClient
+    receivedName <- run $ readIORef ref
+    Just (Just serverName) `assertEq` receivedName
   where tlsServer ctx queue = do
             handshake ctx
             sni <- getClientSNI ctx
@@ -781,9 +786,13 @@ prop_handshake_sni = do
             bye ctx
         tlsClient queue ctx = do
             handshake ctx
+            sni <- getClientSNI ctx
+            Just serverName `assertEq` sni
             d <- readChan queue
             sendData ctx (L.fromChunks [d])
             byeBye ctx
+        onSNI ref name = assertEmptyRef ref >> writeIORef ref (Just name) >>
+                         return (Credentials [])
         serverName = "haskell.org"
 
 prop_handshake_renegotiation :: PropertyM IO ()
@@ -855,6 +864,10 @@ assertEq expected got = unless (expected == got) $ error ("got " ++ show got ++ 
 assertIsLeft :: (Show b, Monad m) => Either a b -> m ()
 assertIsLeft (Left  _) = return ()
 assertIsLeft (Right b) = error ("got " ++ show b ++ " but was expecting a failure")
+
+assertEmptyRef :: Show a => IORef (Maybe a) -> IO ()
+assertEmptyRef ref = readIORef ref >>= maybe (return ()) (\a ->
+    error ("got " ++ show a ++ " but was expecting empty reference"))
 
 recvDataAssert :: Context -> C8.ByteString -> IO ()
 recvDataAssert ctx expected = do
