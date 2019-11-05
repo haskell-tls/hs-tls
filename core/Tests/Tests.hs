@@ -217,14 +217,12 @@ prop_handshake13_downgrade = do
 prop_handshake13_full :: PropertyM IO ()
 prop_handshake13_full = do
     (cli, srv) <- pick arbitraryPairParams13
-    let cliSupported = def {
-            supportedVersions = [TLS13]
-          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+    let cliSupported = def
+          { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
           , supportedGroups = [X25519]
           }
-        svrSupported = def {
-            supportedVersions = [TLS13]
-          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+        svrSupported = def
+          { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
           , supportedGroups = [X25519]
           }
         params = (cli { clientSupported = cliSupported }
@@ -235,14 +233,12 @@ prop_handshake13_full = do
 prop_handshake13_hrr :: PropertyM IO ()
 prop_handshake13_hrr = do
     (cli, srv) <- pick arbitraryPairParams13
-    let cliSupported = def {
-            supportedVersions = [TLS13]
-          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+    let cliSupported = def
+          { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
           , supportedGroups = [P256,X25519]
           }
-        svrSupported = def {
-            supportedVersions = [TLS13]
-          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+        svrSupported = def
+          { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
           , supportedGroups = [X25519]
           }
         params = (cli { clientSupported = cliSupported }
@@ -253,14 +249,12 @@ prop_handshake13_hrr = do
 prop_handshake13_psk :: PropertyM IO ()
 prop_handshake13_psk = do
     (cli, srv) <- pick arbitraryPairParams13
-    let cliSupported = def {
-            supportedVersions = [TLS13]
-          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+    let cliSupported = def
+          { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
           , supportedGroups = [P256,X25519]
           }
-        svrSupported = def {
-            supportedVersions = [TLS13]
-          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+        svrSupported = def
+          { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
           , supportedGroups = [X25519]
           }
         params0 = (cli { clientSupported = cliSupported }
@@ -285,15 +279,13 @@ prop_handshake13_psk_fallback :: PropertyM IO ()
 prop_handshake13_psk_fallback = do
     (cli, srv) <- pick arbitraryPairParams13
     let cliSupported = def
-            { supportedVersions = [TLS13]
-            , supportedCiphers = [ cipher_TLS13_AES128GCM_SHA256
+            { supportedCiphers = [ cipher_TLS13_AES128GCM_SHA256
                                  , cipher_TLS13_AES128CCM_SHA256
                                  ]
             , supportedGroups = [P256,X25519]
             }
         svrSupported = def
-            { supportedVersions = [TLS13]
-            , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+            { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
             , supportedGroups = [X25519]
             }
         params0 = (cli { clientSupported = cliSupported }
@@ -315,8 +307,7 @@ prop_handshake13_psk_fallback = do
     let (cli2, srv2) = setPairParamsSessionResuming (fromJust sessionParams) params
         srv2' = srv2 { serverSupported = svrSupported' }
         svrSupported' = def
-            { supportedVersions = [TLS13]
-            , supportedCiphers = [cipher_TLS13_AES128CCM_SHA256]
+            { supportedCiphers = [cipher_TLS13_AES128CCM_SHA256]
             , supportedGroups = [P256]
             }
 
@@ -325,14 +316,12 @@ prop_handshake13_psk_fallback = do
 prop_handshake13_rtt0 :: PropertyM IO ()
 prop_handshake13_rtt0 = do
     (cli, srv) <- pick arbitraryPairParams13
-    let cliSupported = def {
-            supportedVersions = [TLS13]
-          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+    let cliSupported = def
+          { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
           , supportedGroups = [P256,X25519]
           }
-        svrSupported = def {
-            supportedVersions = [TLS13]
-          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+        svrSupported = def
+          { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
           , supportedGroups = [X25519]
           }
         params0 = (cli { clientSupported = cliSupported }
@@ -361,14 +350,12 @@ prop_handshake13_rtt0_fallback = do
     ticketSize <- pick $ choose (0, 512)
     (cli, srv) <- pick arbitraryPairParams13
     group0 <- pick $ elements [P256,X25519]
-    let cliSupported = def {
-            supportedVersions = [TLS13]
-          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+    let cliSupported = def
+          { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
           , supportedGroups = [P256,X25519]
           }
-        svrSupported = def {
-            supportedVersions = [TLS13]
-          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+        svrSupported = def
+          { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
           , supportedGroups = [group0]
           }
         params0 = (cli { clientSupported = cliSupported }
@@ -390,9 +377,8 @@ prop_handshake13_rtt0_fallback = do
     earlyData <- B.pack <$> pick (someWords8 256)
     group2 <- pick $ elements [P256,X25519]
     let (pc,ps) = setPairParamsSessionResuming (fromJust sessionParams) params
-        svrSupported2 = def {
-            supportedVersions = [TLS13]
-          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+        svrSupported2 = def
+          { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
           , supportedGroups = [group2]
           }
         params2 = (pc { clientEarlyData = Just earlyData }
@@ -409,13 +395,11 @@ prop_handshake13_rtt0_length = do
     serverMax <- pick $ choose (0, 33792)
     (cli, srv) <- pick arbitraryPairParams13
     let cliSupported = def
-          { supportedVersions = [TLS13]
-          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+          { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
           , supportedGroups = [X25519]
           }
         svrSupported = def
-          { supportedVersions = [TLS13]
-          , supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+          { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
           , supportedGroups = [X25519]
           }
         params0 = (cli { clientSupported = cliSupported }
@@ -659,7 +643,9 @@ prop_handshake_srv_key_usage = do
 prop_handshake_client_auth :: PropertyM IO ()
 prop_handshake_client_auth = do
     (clientParam,serverParam) <- pick arbitraryPairParams
-    let version = maximum (supportedVersions $ serverSupported serverParam)
+    let clientVersions = supportedVersions $ clientSupported clientParam
+        serverVersions = supportedVersions $ serverSupported serverParam
+        version = maximum (clientVersions `intersect` serverVersions)
     cred <- pick (arbitraryClientCredential version)
     let clientParam' = clientParam { clientHooks = (clientHooks clientParam)
                                        { onCertificateRequest = \_ -> return $ Just cred }

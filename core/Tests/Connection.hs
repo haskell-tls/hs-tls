@@ -105,7 +105,7 @@ knownFFGroups = [FFDHE2048,FFDHE3072,FFDHE4096]
 knownGroups   = knownECGroups ++ knownFFGroups
 
 arbitraryGroups :: Gen [Group]
-arbitraryGroups = listOf1 $ elements knownGroups
+arbitraryGroups = scale (min 5) $ listOf1 $ elements knownGroups
 
 isCredentialDSA :: (CertificateChain, PrivKey) -> Bool
 isCredentialDSA (_, PrivKeyDSA _) = True
@@ -165,15 +165,7 @@ arbitraryCipherPair connectVersion = do
     return (clientCiphers, serverCiphers)
 
 arbitraryPairParams :: Gen (ClientParams, ServerParams)
-arbitraryPairParams = do
-    connectVersion <- elements knownVersions
-    (clientCiphers, serverCiphers) <- arbitraryCipherPair connectVersion
-    -- The shared ciphers may add constraints on the compatible protocol versions
-    let allowedVersions = [ v | v <- knownVersions,
-                                or [ x `elem` serverCiphers &&
-                                     cipherAllowedForVersion v x | x <- clientCiphers ]]
-    serAllowedVersions <- (:[]) `fmap` elements allowedVersions
-    arbitraryPairParamsWithVersionsAndCiphers (allowedVersions, serAllowedVersions) (clientCiphers, serverCiphers)
+arbitraryPairParams = elements knownVersions >>= arbitraryPairParamsAt
 
 -- pair of groups so that at least one EC and one FF group are in common
 arbitraryGroupPair :: Gen ([Group], [Group])
@@ -195,10 +187,35 @@ arbitraryPairParams13 = arbitraryPairParamsAt TLS13
 
 arbitraryPairParamsAt :: Version -> Gen (ClientParams, ServerParams)
 arbitraryPairParamsAt connectVersion = do
-    let allowedVersions = [connectVersion]
-        serAllowedVersions = [connectVersion]
     (clientCiphers, serverCiphers) <- arbitraryCipherPair connectVersion
-    arbitraryPairParamsWithVersionsAndCiphers (allowedVersions, serAllowedVersions) (clientCiphers, serverCiphers)
+    -- Select version lists containing connectVersion, as well as some other
+    -- versions for which we have compatible ciphers.  Criteria about cipher
+    -- ensure we can test version downgrade.
+    let allowedVersions = [ v | v <- knownVersions,
+                                or [ x `elem` serverCiphers &&
+                                     cipherAllowedForVersion v x | x <- clientCiphers ]]
+        allowedVersionsFiltered = filter (<= connectVersion) allowedVersions
+    -- Server or client is allowed to have versions > connectVersion, but not
+    -- both simultaneously.
+    filterSrv <- arbitrary
+    let (clientAllowedVersions, serverAllowedVersions)
+            | filterSrv = (allowedVersions, allowedVersionsFiltered)
+            | otherwise = (allowedVersionsFiltered, allowedVersions)
+    -- Generate version lists containing less than 127 elements, otherwise the
+    -- "supported_versions" extension cannot be correctly serialized
+    clientVersions <- listWithOthers connectVersion 126 clientAllowedVersions
+    serverVersions <- listWithOthers connectVersion 126 serverAllowedVersions
+    arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clientCiphers, serverCiphers)
+  where
+    listWithOthers :: a -> Int -> [a] -> Gen [a]
+    listWithOthers fixedElement maxOthers others
+        | maxOthers < 1 = return [fixedElement]
+        | otherwise     = sized $ \n -> do
+            num <- choose (0, min n maxOthers)
+            pos <- choose (0, num)
+            prefix <- vectorOf pos $ elements others
+            suffix <- vectorOf (num - pos) $ elements others
+            return $ prefix ++ (fixedElement : suffix)
 
 isVersionEnabled :: Version -> (ClientParams, ServerParams) -> Bool
 isVersionEnabled ver (cparams, sparams) =
