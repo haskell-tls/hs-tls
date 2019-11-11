@@ -31,6 +31,7 @@ module Network.TLS.QUIC (
     , ServerHello
     , Finished
     , SessionTicket
+    , errorToAlert
     ) where
 
 import Network.TLS.Backend
@@ -39,6 +40,7 @@ import Network.TLS.Context.Internal
 import Network.TLS.Core
 import Network.TLS.Crypto (hashDigestSize)
 import Network.TLS.Extension (extensionID_QuicTransportParameters)
+import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Control
 import Network.TLS.Handshake.QUIC
 import Network.TLS.Imports
@@ -48,6 +50,7 @@ import Network.TLS.Struct (ExtensionRaw(..), ExtensionID)
 import Network.TLS.Types
 
 import Control.Concurrent
+import qualified Control.Exception as E
 import Data.IORef
 
 nullBackend :: Backend
@@ -86,7 +89,8 @@ newQUICClient cparams = do
             ctxRecordLayer   = Just rl
           , ctxHandshakeSync = Just (HandshakeSync sync (\_ -> return ()))
           }
-    tid <- forkIO $ do
+        failed = sync . ClientHandshakeFailedI
+    tid <- forkIO $ E.handle failed $ do
         handshake ctx'
         void $ recvData ctx'
     return (quicClient tid ask get put ref)
@@ -99,7 +103,8 @@ newQUICServer sparams = do
             ctxRecordLayer   = Just rl
           , ctxHandshakeSync = Just (HandshakeSync (\_ -> return ()) sync)
           }
-    tid <- forkIO $ do
+        failed = sync . ServerHandshakeFailedI
+    tid <- forkIO $ E.handle failed $ do
         handshake ctx'
         void $ recvData ctx'
     return (quicServer tid ask get put ref)

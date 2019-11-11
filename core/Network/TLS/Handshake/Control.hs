@@ -69,6 +69,7 @@ data ClientStatusI =
   | RecvServerHelloI Cipher (TrafficSecrets HandshakeSecret)
   | SendClientFinishedI [ExtensionRaw] (Maybe NegotiatedProtocol) (TrafficSecrets ApplicationSecret)
   | RecvSessionTicketI
+  | ClientHandshakeFailedI TLSError
 
 data ServerStatus =
     ServerNeedsMore
@@ -101,6 +102,7 @@ data ServerStatusI =
   | SendServerFinishedI (Maybe NegotiatedProtocol)
                         (TrafficSecrets ApplicationSecret)
   | SendSessionTicketI
+  | ServerHandshakeFailedI TLSError
 
 ----------------------------------------------------------------
 

@@ -21,6 +21,7 @@ module Network.TLS.Handshake.Common
     , storePrivInfo
     , isSupportedGroup
     , checkSupportedGroup
+    , errorToAlert
     ) where
 
 import qualified Data.ByteString as B

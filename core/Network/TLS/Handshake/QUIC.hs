@@ -9,6 +9,7 @@ import Network.TLS.Struct
 import Network.TLS.Struct13
 
 import Control.Concurrent
+import qualified Control.Exception as E
 import Data.IORef
 
 type ServerController = ServerControl -> IO ServerStatus
@@ -29,6 +30,7 @@ quicServer _ ask get put ref (PutClientHello ch) =
               sh <- get
               let exts' = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters) exts
               return $ SendServerHello sh exts' cipher earlySec hndSecs
+          ServerHandshakeFailedI e -> E.throwIO e
           _ -> error "quicServer"
 quicServer _ ask get _ _ GetServerFinished = do
     rsp <- ask
@@ -36,12 +38,14 @@ quicServer _ ask get _ _ GetServerFinished = do
       SendServerFinishedI alpn appSecs -> do
           sf <- get
           return $ SendServerFinished sf alpn appSecs
+      ServerHandshakeFailedI e -> E.throwIO e
       _ -> error "quicServer"
 quicServer _ ask get put ref (PutClientFinished cf) =
     putRecordWith put ref cf HandshakeType_Finished13 ServerNeedsMore $ do
         rsp <- ask
         case rsp of
           SendSessionTicketI -> SendSessionTicket <$> get
+          ServerHandshakeFailedI e -> E.throwIO e
           _ -> error "quicServer"
 quicServer tid _ _ _ _ ExitServer = do
     killThread tid
@@ -59,6 +63,7 @@ quicClient _ ask get _ _ GetClientHello = do
       SendClientHelloI early -> do
           ch <- get
           return $ SendClientHello ch early
+      ClientHandshakeFailedI e -> E.throwIO e
       _ -> error "quicClient"
 quicClient _ ask get put ref (PutServerHello sh) =
     putRecordWith put ref sh HandshakeType_ServerHello13 ClientNeedsMore $ do
@@ -69,6 +74,7 @@ quicClient _ ask get put ref (PutServerHello sh) =
                 return $ SendClientHello ch early
             RecvServerHelloI c handSecs -> do
                 return $ RecvServerHello c handSecs
+            ClientHandshakeFailedI e -> E.throwIO e
             _ -> error "quicClient"
 quicClient _ ask get put ref (PutServerFinished sf) =
     putRecordWith put ref sf HandshakeType_Finished13 ClientNeedsMore $ do
@@ -78,12 +84,14 @@ quicClient _ ask get put ref (PutServerFinished sf) =
               let exts' = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters) exts
               cf <- get
               return $ SendClientFinished cf exts' alpn appSecs
+          ClientHandshakeFailedI e -> E.throwIO e
           _ -> error "quicClient"
 quicClient _ ask _ put ref (PutSessionTicket nst) =
     putRecordWith put ref nst HandshakeType_NewSessionTicket13 ClientNeedsMore $ do
         rsp <- ask
         case rsp of
           RecvSessionTicketI -> return RecvSessionTicket
+          ClientHandshakeFailedI e -> E.throwIO e
           _ -> error "quicClient"
 quicClient tid _ _ _ _ ExitClient = do
     killThread tid
