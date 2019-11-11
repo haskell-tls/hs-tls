@@ -23,6 +23,7 @@ import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types
 
+import qualified Control.Exception as E
 import qualified Data.ByteString as B
 import Data.IORef
 
@@ -130,14 +131,16 @@ handshakeCheck put htyp bs0 = loop bs0
   where
     loop bs
       | B.length bs < 4 = return (False, Just bs)
-    loop bs = case B.length bs `compare` (len + 4) of
-          EQ | typ == styp -> do
+    loop bs = case mhtyp0 of
+      Nothing    -> E.throwIO $ Error_Packet_Parsing "Unknown Handshake13 type"
+      Just htyp0 -> case B.length bs `compare` (len + 4) of
+          EQ | htyp == htyp0 -> do
                    put bs
                    return (True, Nothing)
              | otherwise   -> do
                    put bs
                    return (False, Nothing)
-          GT | typ == styp -> do
+          GT | htyp == htyp0 -> do
                    let (record, rest) = B.splitAt (len + 4) bs
                    put record
                    return (True, Just rest)
@@ -147,8 +150,7 @@ handshakeCheck put htyp bs0 = loop bs0
                    loop rest
           LT               -> return (False, Just bs)
       where
-        styp = valOfType htyp
-        typ  = bs `B.index` 0
+        mhtyp0 = valToType (bs `B.index` 0)
         len1 = fromIntegral (bs `B.index` 1)
         len2 = fromIntegral (bs `B.index` 2)
         len3 = fromIntegral (bs `B.index` 3)
