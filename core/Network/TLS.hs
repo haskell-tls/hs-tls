@@ -20,48 +20,24 @@ module Network.TLS
     , HasBackend(..)
     , Backend(..)
 
-    -- * Context configuration
-    -- ** Parameters
+    -- * Parameters
     -- intentionally hide the internal methods even haddock warns.
     , TLSParams
     , ClientParams(..)
     , defaultParamsClient
     , ServerParams(..)
-    -- ** Supported
-    , Supported(..)
     -- ** Shared
     , Shared(..)
-    -- ** Debug parameters
-    , DebugParams(..)
-    -- ** Client Server Hooks
+    -- ** Hooks
     , ClientHooks(..)
     , OnCertificateRequest
     , OnServerCertificate
     , ServerHooks(..)
-    -- ** Credentials
-    , Credentials(..)
-    , Credential
-    , credentialLoadX509
-    , credentialLoadX509FromMemory
-    , credentialLoadX509Chain
-    , credentialLoadX509ChainFromMemory
-    -- ** Session
-    , SessionID
-    , SessionData(..)
-    , SessionManager(..)
-    , noSessionManager
-    , TLS13TicketInfo
-    -- ** Hooks
-    , Hooks(..)
-    , Handshake
-    , Handshake13
-    , Logging(..)
-    , contextHookSetHandshakeRecv
-    , contextHookSetHandshake13Recv
-    , contextHookSetCertificateRecv
-    , contextHookSetLogging
-    , contextModifyHooks
-    -- ** Misc
+    -- ** Supported
+    , Supported(..)
+    -- ** Debug parameters
+    , DebugParams(..)
+    -- ** Types
     , HostName
     , DHParams
     , DHPublic
@@ -75,17 +51,28 @@ module Network.TLS
     , SignatureAlgorithm(..)
     , CertificateType(..)
 
-    -- * X509
-    -- ** X509 Validation
-    , ValidationChecks(..)
-    , ValidationHooks(..)
-
-    -- ** X509 Validation Cache
+    -- * Shared parameters
+    -- ** Credentials
+    , Credentials(..)
+    , Credential
+    , credentialLoadX509
+    , credentialLoadX509FromMemory
+    , credentialLoadX509Chain
+    , credentialLoadX509ChainFromMemory
+    -- ** Session manager
+    , SessionManager(..)
+    , noSessionManager
+    , SessionID
+    , SessionData(..)
+    , TLS13TicketInfo
+    -- ** Validation Cache
     , ValidationCache(..)
+    , ValidationCacheQueryCallback
+    , ValidationCacheAddCallback
     , ValidationCacheResult(..)
     , exceptionValidationCache
 
-    -- * APIs
+    -- * Advanced APIs
     -- ** Backend
     , ctxConnection
     , contextFlush
@@ -104,6 +91,16 @@ module Network.TLS
     , updateKey
     , KeyUpdateRequest(..)
     , requestCertificate
+    -- ** Modifying context
+    , Hooks(..)
+    , contextModifyHooks
+    , Handshake
+    , contextHookSetHandshakeRecv
+    , Handshake13
+    , contextHookSetHandshake13Recv
+    , contextHookSetCertificateRecv
+    , Logging(..)
+    , contextHookSetLogging
 
     -- * Raw types
     , ProtocolType(..)
@@ -137,6 +134,8 @@ module Network.TLS
     , contextNewOnSocket
 #endif
     , Bytes
+    , ValidationChecks(..)
+    , ValidationHooks(..)
     ) where
 
 import Network.TLS.Backend (Backend(..), HasBackend(..))
