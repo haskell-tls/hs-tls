@@ -99,7 +99,7 @@ module Network.TLS
     , updateKey
     , KeyUpdateRequest(..)
     , requestCertificate
-    -- ** Modifying context
+    -- ** Modifying hooks in context
     , Hooks(..)
     , contextModifyHooks
     , Handshake
@@ -108,6 +108,8 @@ module Network.TLS
     , contextHookSetHandshake13Recv
     , contextHookSetCertificateRecv
     , Logging(..)
+    , Header(..)
+    , ProtocolType(..)
     , contextHookSetLogging
 
     -- * Errors and exceptions
@@ -119,8 +121,6 @@ module Network.TLS
     , TLSException(..)
 
     -- * Raw types
-    , Header(..)
-    , ProtocolType(..)
     -- ** Compressions class
     , CompressionC(..)
     , CompressionID
