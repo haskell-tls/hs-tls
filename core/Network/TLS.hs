@@ -33,23 +33,11 @@ module Network.TLS
     , OnCertificateRequest
     , OnServerCertificate
     , ServerHooks(..)
+    , Measurement(..)
     -- ** Supported
     , Supported(..)
     -- ** Debug parameters
     , DebugParams(..)
-    -- ** Types
-    , HostName
-    , DHParams
-    , DHPublic
-    , Measurement(..)
-    , GroupUsage(..)
-    , CertificateUsage(..)
-    , CertificateRejectReason(..)
-    , MaxFragmentEnum(..)
-    , HashAndSignatureAlgorithm
-    , HashAlgorithm(..)
-    , SignatureAlgorithm(..)
-    , CertificateType(..)
 
     -- * Shared parameters
     -- ** Credentials
@@ -72,6 +60,25 @@ module Network.TLS
     , ValidationCacheResult(..)
     , exceptionValidationCache
 
+    -- * Types
+    -- ** For 'Supported'
+    , Version(..)
+    , Compression(..)
+    , nullCompression
+    , HashAndSignatureAlgorithm
+    , HashAlgorithm(..)
+    , SignatureAlgorithm(..)
+    , Group(..)
+    -- ** For parameters and hooks
+    , DHParams
+    , DHPublic
+    , GroupUsage(..)
+    , CertificateUsage(..)
+    , CertificateRejectReason(..)
+    , CertificateType(..)
+    , HostName
+    , MaxFragmentEnum(..)
+
     -- * Advanced APIs
     -- ** Backend
     , ctxConnection
@@ -84,6 +91,7 @@ module Network.TLS
     , ServerRandom
     , unClientRandom
     , unServerRandom
+    , HandshakeMode13(..)
     -- ** Negotiated
     , getNegotiatedProtocol
     , getClientSNI
@@ -102,30 +110,25 @@ module Network.TLS
     , Logging(..)
     , contextHookSetLogging
 
-    -- * Raw types
-    , ProtocolType(..)
-    , Header(..)
-    , Version(..)
-    -- ** Compressions & Predefined compressions
-    , module Network.TLS.Compression
-    , CompressionID
-    -- ** Ciphers & Predefined ciphers
-    , module Network.TLS.Cipher
-    -- ** Crypto Key
-    , PubKey(..)
-    , PrivKey(..)
-    -- ** TLS 1.3
-    , Group(..)
-    , HandshakeMode13(..)
-
     -- * Errors and exceptions
     -- ** Errors
     , TLSError(..)
     , KxError(..)
     , AlertDescription(..)
-
     -- ** Exceptions
     , TLSException(..)
+
+    -- * Raw types
+    , Header(..)
+    , ProtocolType(..)
+    -- ** Compressions class
+    , CompressionC(..)
+    , CompressionID
+    -- ** Crypto Key
+    , PubKey(..)
+    , PrivKey(..)
+    -- ** Ciphers & Predefined ciphers
+    , module Network.TLS.Cipher
 
     -- * Deprecated
     , recvData'
