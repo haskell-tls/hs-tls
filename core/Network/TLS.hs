@@ -6,6 +6,21 @@
 -- Stability   : experimental
 -- Portability : unknown
 --
+-- Native Haskell TLS and SSL protocol implementation for server and
+-- client.
+--
+-- This provides a high-level implementation of a sensitive security
+-- protocol, eliminating a common set of security issues through the
+-- use of the advanced type system, high level constructions and
+-- common Haskell features.
+--
+-- Currently implement the SSL3.0, TLS1.0, TLS1.1, TLS1.2 and TLS 1.3
+-- protocol, and support RSA and Ephemeral (Elliptic curve and
+-- regular) Diffie Hellman key exchanges, and many extensions.
+--
+-- Some debug tools linked with tls, are available through the
+-- http://hackage.haskell.org/package/tls-debug/.
+
 module Network.TLS
     (
     -- * Basic APIs
