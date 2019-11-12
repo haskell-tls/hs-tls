@@ -11,11 +11,12 @@ import Network.TLS.Struct13
 import Control.Concurrent
 import qualified Control.Exception as E
 import Data.IORef
+import System.Mem.Weak
 
 type ServerController = ServerControl -> IO ServerStatus
 type ClientController = ClientControl -> IO ClientStatus
 
-quicServer :: ThreadId
+quicServer :: Weak ThreadId
            -> IO ServerStatusI
            -> IO ByteString
            -> (ByteString -> IO ())
@@ -47,11 +48,14 @@ quicServer _ ask get put ref (PutClientFinished cf) =
           SendSessionTicketI -> SendSessionTicket <$> get
           ServerHandshakeFailedI e -> E.throwIO e
           _ -> error "quicServer"
-quicServer tid _ _ _ _ ExitServer = do
-    killThread tid
+quicServer wtid _ _ _ _ ExitServer = do
+    mtid <- deRefWeak wtid
+    case mtid of
+      Nothing  -> return ()
+      Just tid -> killThread tid
     return ServerHandshakeDone
 
-quicClient :: ThreadId
+quicClient :: Weak ThreadId
            -> IO ClientStatusI
            -> IO ByteString
            -> (ByteString -> IO ())
@@ -93,6 +97,9 @@ quicClient _ ask _ put ref (PutSessionTicket nst) =
           RecvSessionTicketI -> return RecvSessionTicket
           ClientHandshakeFailedI e -> E.throwIO e
           _ -> error "quicClient"
-quicClient tid _ _ _ _ ExitClient = do
-    killThread tid
+quicClient wtid _ _ _ _ ExitClient = do
+    mtid <- deRefWeak wtid
+    case mtid of
+      Nothing  -> return ()
+      Just tid -> killThread tid
     return ClientHandshakeDone

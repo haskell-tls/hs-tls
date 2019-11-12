@@ -95,7 +95,8 @@ newQUICClient cparams = do
     tid <- forkIO $ E.handle failed $ do
         handshake ctx'
         void $ recvData ctx'
-    return (quicClient tid ask get put ref)
+    wtid <- mkWeakThreadId tid
+    return (quicClient wtid ask get put ref)
 
 newQUICServer :: ServerParams -> IO ServerController
 newQUICServer sparams = do
@@ -109,7 +110,8 @@ newQUICServer sparams = do
     tid <- forkIO $ E.handle failed $ do
         handshake ctx'
         void $ recvData ctx'
-    return (quicServer tid ask get put ref)
+    wtid <- mkWeakThreadId tid
+    return (quicServer wtid ask get put ref)
 
 errorToAlertDescription :: TLSError -> AlertDescription
 errorToAlertDescription = snd . head . errorToAlert
