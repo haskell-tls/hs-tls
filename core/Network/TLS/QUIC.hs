@@ -31,7 +31,9 @@ module Network.TLS.QUIC (
     , ServerHello
     , Finished
     , SessionTicket
-    , errorToAlert
+    , errorToAlertDescription
+    , fromAlertDescription
+    , toAlertDescription
     ) where
 
 import Network.TLS.Backend
@@ -46,7 +48,7 @@ import Network.TLS.Handshake.QUIC
 import Network.TLS.Imports
 import Network.TLS.KeySchedule (hkdfExtract, hkdfExpandLabel)
 import Network.TLS.Record.Layer
-import Network.TLS.Struct (ExtensionRaw(..), ExtensionID)
+import Network.TLS.Struct
 import Network.TLS.Types
 
 import Control.Concurrent
@@ -108,3 +110,12 @@ newQUICServer sparams = do
         handshake ctx'
         void $ recvData ctx'
     return (quicServer tid ask get put ref)
+
+errorToAlertDescription :: TLSError -> AlertDescription
+errorToAlertDescription = snd . head . errorToAlert
+
+fromAlertDescription :: AlertDescription -> Word8
+fromAlertDescription = valOfType
+
+toAlertDescription :: Word8 -> Maybe AlertDescription
+toAlertDescription = valToType
