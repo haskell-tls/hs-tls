@@ -6,6 +6,21 @@
 -- Stability   : experimental
 -- Portability : unknown
 --
+-- Native Haskell TLS and SSL protocol implementation for server and
+-- client.
+--
+-- This provides a high-level implementation of a sensitive security
+-- protocol, eliminating a common set of security issues through the
+-- use of the advanced type system, high level constructions and
+-- common Haskell features.
+--
+-- Currently implement the SSL3.0, TLS1.0, TLS1.1, TLS1.2 and TLS 1.3
+-- protocol, and support RSA and Ephemeral (Elliptic curve and
+-- regular) Diffie Hellman key exchanges, and many extensions.
+--
+-- Some debug tools linked with tls, are available through the
+-- http://hackage.haskell.org/package/tls-debug/.
+
 module Network.TLS
     (
     -- * Basic APIs
@@ -20,24 +35,26 @@ module Network.TLS
     , HasBackend(..)
     , Backend(..)
 
-    -- * Context configuration
-    -- ** Parameters
+    -- * Parameters
     -- intentionally hide the internal methods even haddock warns.
     , TLSParams
     , ClientParams(..)
     , defaultParamsClient
     , ServerParams(..)
-    -- ** Supported
-    , Supported(..)
     -- ** Shared
     , Shared(..)
-    -- ** Debug parameters
-    , DebugParams(..)
-    -- ** Client Server Hooks
+    -- ** Hooks
     , ClientHooks(..)
     , OnCertificateRequest
     , OnServerCertificate
     , ServerHooks(..)
+    , Measurement(..)
+    -- ** Supported
+    , Supported(..)
+    -- ** Debug parameters
+    , DebugParams(..)
+
+    -- * Shared parameters
     -- ** Credentials
     , Credentials(..)
     , Credential
@@ -45,47 +62,39 @@ module Network.TLS
     , credentialLoadX509FromMemory
     , credentialLoadX509Chain
     , credentialLoadX509ChainFromMemory
-    -- ** Session
-    , SessionID
-    , SessionData(..)
+    -- ** Session manager
     , SessionManager(..)
     , noSessionManager
+    , SessionID
+    , SessionData(..)
     , TLS13TicketInfo
-    -- ** Hooks
-    , Hooks(..)
-    , Handshake
-    , Handshake13
-    , Logging(..)
-    , contextHookSetHandshakeRecv
-    , contextHookSetHandshake13Recv
-    , contextHookSetCertificateRecv
-    , contextHookSetLogging
-    , contextModifyHooks
-    -- ** Misc
-    , HostName
-    , DHParams
-    , DHPublic
-    , Measurement(..)
-    , GroupUsage(..)
-    , CertificateUsage(..)
-    , CertificateRejectReason(..)
-    , MaxFragmentEnum(..)
-    , HashAndSignatureAlgorithm
-    , HashAlgorithm(..)
-    , SignatureAlgorithm(..)
-    , CertificateType(..)
-
-    -- * X509
-    -- ** X509 Validation
-    , ValidationChecks(..)
-    , ValidationHooks(..)
-
-    -- ** X509 Validation Cache
+    -- ** Validation Cache
     , ValidationCache(..)
+    , ValidationCacheQueryCallback
+    , ValidationCacheAddCallback
     , ValidationCacheResult(..)
     , exceptionValidationCache
 
-    -- * APIs
+    -- * Types
+    -- ** For 'Supported'
+    , Version(..)
+    , Compression(..)
+    , nullCompression
+    , HashAndSignatureAlgorithm
+    , HashAlgorithm(..)
+    , SignatureAlgorithm(..)
+    , Group(..)
+    -- ** For parameters and hooks
+    , DHParams
+    , DHPublic
+    , GroupUsage(..)
+    , CertificateUsage(..)
+    , CertificateRejectReason(..)
+    , CertificateType(..)
+    , HostName
+    , MaxFragmentEnum(..)
+
+    -- * Advanced APIs
     -- ** Backend
     , ctxConnection
     , contextFlush
@@ -97,6 +106,7 @@ module Network.TLS
     , ServerRandom
     , unClientRandom
     , unServerRandom
+    , HandshakeMode13(..)
     -- ** Negotiated
     , getNegotiatedProtocol
     , getClientSNI
@@ -104,31 +114,36 @@ module Network.TLS
     , updateKey
     , KeyUpdateRequest(..)
     , requestCertificate
-
-    -- * Raw types
-    , ProtocolType(..)
+    -- ** Modifying hooks in context
+    , Hooks(..)
+    , contextModifyHooks
+    , Handshake
+    , contextHookSetHandshakeRecv
+    , Handshake13
+    , contextHookSetHandshake13Recv
+    , contextHookSetCertificateRecv
+    , Logging(..)
     , Header(..)
-    , Version(..)
-    -- ** Compressions & Predefined compressions
-    , module Network.TLS.Compression
-    , CompressionID
-    -- ** Ciphers & Predefined ciphers
-    , module Network.TLS.Cipher
-    -- ** Crypto Key
-    , PubKey(..)
-    , PrivKey(..)
-    -- ** TLS 1.3
-    , Group(..)
-    , HandshakeMode13(..)
+    , ProtocolType(..)
+    , contextHookSetLogging
 
     -- * Errors and exceptions
     -- ** Errors
     , TLSError(..)
     , KxError(..)
     , AlertDescription(..)
-
     -- ** Exceptions
     , TLSException(..)
+
+    -- * Raw types
+    -- ** Compressions class
+    , CompressionC(..)
+    , CompressionID
+    -- ** Crypto Key
+    , PubKey(..)
+    , PrivKey(..)
+    -- ** Ciphers & Predefined ciphers
+    , module Network.TLS.Cipher
 
     -- * Deprecated
     , recvData'
@@ -137,6 +152,8 @@ module Network.TLS
     , contextNewOnSocket
 #endif
     , Bytes
+    , ValidationChecks(..)
+    , ValidationHooks(..)
     ) where
 
 import Network.TLS.Backend (Backend(..), HasBackend(..))
