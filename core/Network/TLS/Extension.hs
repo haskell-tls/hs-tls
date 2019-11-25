@@ -17,6 +17,7 @@ module Network.TLS.Extension
     , extensionID_MaxFragmentLength
     , extensionID_SecureRenegotiation
     , extensionID_ApplicationLayerProtocolNegotiation
+    , extensionID_ExtendedMasterSecret
     , extensionID_NegotiatedGroups
     , extensionID_EcPointFormats
     , extensionID_Heartbeat
@@ -38,6 +39,7 @@ module Network.TLS.Extension
     , MaxFragmentEnum(..)
     , SecureRenegotiation(..)
     , ApplicationLayerProtocolNegotiation(..)
+    , ExtendedMasterSecret(..)
     , NegotiatedGroups(..)
     , Group(..)
     , EcPointFormatsSupported(..)
@@ -144,7 +146,7 @@ extensionID_ClientCertificateType               = 0x13 -- RFC7250
 extensionID_ServerCertificateType               = 0x14 -- RFC7250
 extensionID_Padding                             = 0x15 -- draft-agl-tls-padding. expires 2015-03-12
 extensionID_EncryptThenMAC                      = 0x16 -- RFC7366
-extensionID_ExtendedMasterSecret                = 0x17 -- draft-ietf-tls-session-hash. expires 2015-09-26
+extensionID_ExtendedMasterSecret                = 0x17 -- REF7627
 extensionID_SessionTicket                       = 0x23 -- RFC4507
 -- Reserved                                       0x28 -- TLS 1.3
 extensionID_PreSharedKey                        = 0x29 -- TLS 1.3
@@ -205,6 +207,7 @@ supportedExtensions :: [ExtensionID]
 supportedExtensions = [ extensionID_ServerName
                       , extensionID_MaxFragmentLength
                       , extensionID_ApplicationLayerProtocolNegotiation
+                      , extensionID_ExtendedMasterSecret
                       , extensionID_SecureRenegotiation
                       , extensionID_NegotiatedGroups
                       , extensionID_EcPointFormats
@@ -354,6 +357,18 @@ decodeApplicationLayerProtocolNegotiation = runGetMaybe $ do
         alpnParsed <- getOpaque8
         let !alpn = B.copy alpnParsed
         return (B.length alpn + 1, alpn)
+
+------------------------------------------------------------
+
+-- | Extended Master Secret
+data ExtendedMasterSecret = ExtendedMasterSecret deriving (Show,Eq)
+
+instance Extension ExtendedMasterSecret where
+    extensionID _ = extensionID_ExtendedMasterSecret
+    extensionEncode ExtendedMasterSecret = B.empty
+    extensionDecode MsgTClientHello _ = Just ExtendedMasterSecret
+    extensionDecode MsgTServerHello _ = Just ExtendedMasterSecret
+    extensionDecode _               _ = error "extensionDecode: ExtendedMasterSecret"
 
 ------------------------------------------------------------
 
