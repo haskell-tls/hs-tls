@@ -94,6 +94,7 @@ data Information = Information
     , infoCipher       :: Cipher
     , infoCompression  :: Compression
     , infoMasterSecret :: Maybe ByteString
+    , infoExtendedMasterSec   :: Bool
     , infoClientRandom :: Maybe ClientRandom
     , infoServerRandom :: Maybe ServerRandom
     , infoNegotiatedGroup     :: Maybe Group
@@ -164,19 +165,21 @@ contextGetInformation :: Context -> IO (Maybe Information)
 contextGetInformation ctx = do
     ver    <- usingState_ ctx $ gets stVersion
     hstate <- getHState ctx
-    let (ms, cr, sr, hm13, grp) = case hstate of
-                           Just st -> (hstMasterSecret st,
-                                       Just (hstClientRandom st),
-                                       hstServerRandom st,
-                                       if ver == Just TLS13 then Just (hstTLS13HandshakeMode st) else Nothing,
-                                       hstNegotiatedGroup st)
-                           Nothing -> (Nothing, Nothing, Nothing, Nothing, Nothing)
+    let (ms, ems, cr, sr, hm13, grp) =
+            case hstate of
+                Just st -> (hstMasterSecret st,
+                            hstExtendedMasterSec st,
+                            Just (hstClientRandom st),
+                            hstServerRandom st,
+                            if ver == Just TLS13 then Just (hstTLS13HandshakeMode st) else Nothing,
+                            hstNegotiatedGroup st)
+                Nothing -> (Nothing, False, Nothing, Nothing, Nothing, Nothing)
     (cipher,comp) <- failOnEitherError $ runRxState ctx $ gets $ \st -> (stCipher st, stCompression st)
     let accepted = case hstate of
             Just st -> hstTLS13RTT0Status st == RTT0Accepted
             Nothing -> False
     case (ver, cipher) of
-        (Just v, Just c) -> return $ Just $ Information v c comp ms cr sr grp hm13 accepted
+        (Just v, Just c) -> return $ Just $ Information v c comp ms ems cr sr grp hm13 accepted
         _                -> return Nothing
 
 contextSend :: Context -> ByteString -> IO ()

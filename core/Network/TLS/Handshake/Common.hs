@@ -99,6 +99,7 @@ handshakeTerminate ctx = do
                 return $ Just (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
                     { hstServerRandom = hstServerRandom hshake
                     , hstMasterSecret = hstMasterSecret hshake
+                    , hstExtendedMasterSec = hstExtendedMasterSec hshake
                     , hstNegotiatedGroup = hstNegotiatedGroup hshake
                     }
     updateMeasure ctx resetBytesCounters
