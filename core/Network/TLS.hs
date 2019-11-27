@@ -109,6 +109,7 @@ module Network.TLS
     , unClientRandom
     , unServerRandom
     , HandshakeMode13(..)
+    , getClientCertificateChain
     -- ** Negotiated
     , getNegotiatedProtocol
     , getClientSNI
@@ -170,6 +171,7 @@ import Network.TLS.Hooks
 import Network.TLS.Measurement
 import Network.TLS.Parameters
 import Network.TLS.Session
+import qualified Network.TLS.State as S
 import Network.TLS.Struct ( TLSError(..), TLSException(..)
                           , HashAndSignatureAlgorithm, HashAlgorithm(..), SignatureAlgorithm(..)
                           , Header(..), ProtocolType(..), CertificateType(..)
@@ -186,3 +188,6 @@ import Data.X509.Validation hiding (HostName)
 
 {-# DEPRECATED Bytes "Use Data.ByteString.Bytestring instead of Bytes." #-}
 type Bytes = B.ByteString
+
+getClientCertificateChain :: Context -> IO (Maybe CertificateChain)
+getClientCertificateChain ctx = usingState_ ctx S.getClientCertificateChain
