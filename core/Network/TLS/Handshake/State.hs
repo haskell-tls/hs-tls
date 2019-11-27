@@ -58,6 +58,8 @@ module Network.TLS.Handshake.State
     -- * misc accessor
     , getPendingCipher
     , setServerHelloParameters
+    , setExtendedMasterSec
+    , getExtendedMasterSec
     , setNegotiatedGroup
     , getNegotiatedGroup
     , setTLS13HandshakeMode
@@ -125,6 +127,7 @@ data HandshakeState = HandshakeState
     , hstPendingRxState      :: Maybe RecordState
     , hstPendingCipher       :: Maybe Cipher
     , hstPendingCompression  :: Compression
+    , hstExtendedMasterSec   :: Bool
     , hstNegotiatedGroup     :: Maybe Group
     , hstTLS13HandshakeMode  :: HandshakeMode13
     , hstTLS13RTT0Status     :: !RTT0Status
@@ -215,6 +218,7 @@ newEmptyHandshake ver crand = HandshakeState
     , hstPendingRxState      = Nothing
     , hstPendingCipher       = Nothing
     , hstPendingCompression  = nullCompression
+    , hstExtendedMasterSec   = False
     , hstNegotiatedGroup     = Nothing
     , hstTLS13HandshakeMode  = FullHandshake
     , hstTLS13RTT0Status     = RTT0None
@@ -263,6 +267,12 @@ getGroupPrivate = fromJust "server ECDH private" <$> gets hstGroupPrivate
 
 setGroupPrivate :: GroupPrivate -> HandshakeM ()
 setGroupPrivate shp = modify (\hst -> hst { hstGroupPrivate = Just shp })
+
+setExtendedMasterSec :: Bool -> HandshakeM ()
+setExtendedMasterSec b = modify (\hst -> hst { hstExtendedMasterSec = b })
+
+getExtendedMasterSec :: HandshakeM Bool
+getExtendedMasterSec = gets hstExtendedMasterSec
 
 setNegotiatedGroup :: Group -> HandshakeM ()
 setNegotiatedGroup g = modify (\hst -> hst { hstNegotiatedGroup = Just g })
@@ -395,6 +405,12 @@ foldHandshakeDigest hashAlg f = modify $ \hs ->
                    , hstHandshakeMessages = [folded]
                    }
 
+getSessionHash :: HandshakeM ByteString
+getSessionHash = gets $ \hst ->
+    case hstHandshakeDigest hst of
+        HandshakeDigestContext hashCtx -> hashFinal hashCtx
+        HandshakeMessages _ -> error "un-initialized session hash"
+
 getHandshakeDigest :: Version -> Role -> HandshakeM ByteString
 getHandshakeDigest ver role = gets gen
   where gen hst = case hstHandshakeDigest hst of
@@ -414,7 +430,8 @@ setMasterSecretFromPre :: ByteArrayAccess preMaster
                        -> preMaster -- ^ the pre master secret
                        -> HandshakeM ByteString
 setMasterSecretFromPre ver role premasterSecret = do
-    secret <- genSecret <$> get
+    ems <- getExtendedMasterSec
+    secret <- if ems then get >>= genExtendedSecret else genSecret <$> get
     setMasterSecret ver role secret
     return secret
   where genSecret hst =
@@ -422,6 +439,10 @@ setMasterSecretFromPre ver role premasterSecret = do
                                  premasterSecret
                                  (hstClientRandom hst)
                                  (fromJust "server random" $ hstServerRandom hst)
+        genExtendedSecret hst =
+            generateExtendedMasterSec ver (fromJust "cipher" $ hstPendingCipher hst)
+                                      premasterSecret
+                <$> getSessionHash
 
 -- | Set master secret and as a side effect generate the key block
 -- with all the right parameters, and setup the pending tx/rx state.
