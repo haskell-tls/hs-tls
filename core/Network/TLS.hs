@@ -67,6 +67,7 @@ module Network.TLS
     , noSessionManager
     , SessionID
     , SessionData(..)
+    , SessionFlag(..)
     , TLS13TicketInfo
     -- ** Validation Cache
     , ValidationCache(..)

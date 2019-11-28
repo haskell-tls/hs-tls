@@ -57,8 +57,13 @@ toKey = convert
 
 toValue :: SessionData -> SessionDataCopy
 #if MIN_VERSION_tls(1,5,0)
+#if MIN_VERSION_tls(1,5,3)
+toValue (SessionData v cid comp msni sec mg mti malpn siz flg) =
+    SessionDataCopy v cid comp msni sec' mg mti malpn' siz flg
+#else
 toValue (SessionData v cid comp msni sec mg mti malpn siz) =
     SessionDataCopy v cid comp msni sec' mg mti malpn' siz
+#endif
   where
     !sec' = convert sec
     !malpn' = convert <$> malpn
@@ -71,8 +76,13 @@ toValue (SessionData v cid comp msni sec) =
 
 fromValue :: SessionDataCopy -> SessionData
 #if MIN_VERSION_tls(1,5,0)
+#if MIN_VERSION_tls(1,5,3)
+fromValue (SessionDataCopy v cid comp msni sec' mg mti malpn' siz flg) =
+    SessionData v cid comp msni sec mg mti malpn siz flg
+#else
 fromValue (SessionDataCopy v cid comp msni sec' mg mti malpn' siz) =
     SessionData v cid comp msni sec mg mti malpn siz
+#endif
   where
     !sec = convert sec'
     !malpn = convert <$> malpn'
@@ -97,6 +107,9 @@ data SessionDataCopy = SessionDataCopy
     {- ssTicketInfo  -} !(Maybe TLS13TicketInfo)
     {- ssALPN        -} !(Maybe (Block Word8))
     {- ssMaxEarlyDataSize -} Int
+#endif
+#if MIN_VERSION_tls(1,5,3)
+    {- ssFlags       -} [SessionFlag]
 #endif
     deriving (Show,Eq)
 

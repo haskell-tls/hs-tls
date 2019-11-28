@@ -10,6 +10,7 @@ module Network.TLS.Types
     ( Version(..)
     , SessionID
     , SessionData(..)
+    , SessionFlag(..)
     , CertReqContext
     , TLS13TicketInfo(..)
     , CipherID
@@ -58,7 +59,13 @@ data SessionData = SessionData
     , sessionTicketInfo  :: Maybe TLS13TicketInfo
     , sessionALPN        :: Maybe ByteString
     , sessionMaxEarlyDataSize :: Int
+    , sessionFlags       :: [SessionFlag]
     } deriving (Show,Eq)
+
+-- | Some session flags
+data SessionFlag
+    = SessionEMS        -- ^ Session created with Extended Master Secret
+    deriving (Show,Eq,Enum)
 
 -- | Certificate request context for TLS 1.3.
 type CertReqContext = ByteString

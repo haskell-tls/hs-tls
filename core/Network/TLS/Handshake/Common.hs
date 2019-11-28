@@ -172,10 +172,12 @@ getSessionData ctx = do
     ver <- usingState_ ctx getVersion
     sni <- usingState_ ctx getClientSNI
     mms <- usingHState ctx (gets hstMasterSecret)
+    ems <- usingHState ctx getExtendedMasterSec
     tx  <- liftIO $ readMVar (ctxTxState ctx)
     alpn <- usingState_ ctx getNegotiatedProtocol
     let !cipher      = cipherID $ fromJust "cipher" $ stCipher tx
         !compression = compressionID $ stCompression tx
+        flags = [SessionEMS | ems]
     case mms of
         Nothing -> return Nothing
         Just ms -> return $ Just SessionData
@@ -188,6 +190,7 @@ getSessionData ctx = do
                         , sessionTicketInfo  = Nothing
                         , sessionALPN        = alpn
                         , sessionMaxEarlyDataSize = 0
+                        , sessionFlags       = flags
                         }
 
 extensionLookup :: ExtensionID -> [ExtensionRaw] -> Maybe ByteString

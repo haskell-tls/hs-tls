@@ -323,6 +323,7 @@ getSessionData13 ctx usedCipher tinfo maxSize psk = do
       , sessionTicketInfo  = Just tinfo
       , sessionALPN        = malpn
       , sessionMaxEarlyDataSize = maxSize
+      , sessionFlags       = []
       }
 
 ----------------------------------------------------------------
