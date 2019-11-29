@@ -11,7 +11,6 @@ module Network.TLS.Handshake.Process
     ( processHandshake
     , processHandshake13
     , startHandshake
-    , getHandshakeDigest
     ) where
 
 import Network.TLS.Context.Internal
