@@ -85,6 +85,7 @@ module Network.TLS
     , HashAlgorithm(..)
     , SignatureAlgorithm(..)
     , Group(..)
+    , EMSMode(..)
     -- ** For parameters and hooks
     , DHParams
     , DHPublic
