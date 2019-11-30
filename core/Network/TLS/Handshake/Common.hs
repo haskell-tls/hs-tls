@@ -187,7 +187,7 @@ getSessionData ctx = do
     ver <- usingState_ ctx getVersion
     sni <- usingState_ ctx getClientSNI
     mms <- usingHState ctx (gets hstMasterSecret)
-    ems <- usingHState ctx getExtendedMasterSec
+    !ems <- usingHState ctx getExtendedMasterSec
     tx  <- liftIO $ readMVar (ctxTxState ctx)
     alpn <- usingState_ ctx getNegotiatedProtocol
     let !cipher      = cipherID $ fromJust "cipher" $ stCipher tx
