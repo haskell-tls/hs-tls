@@ -14,10 +14,13 @@ module Connection
     , arbitraryCredentialsOfEachCurve
     , arbitraryRSACredentialWithUsage
     , dhParamsGroup
+    , getConnectVersion
     , isVersionEnabled
     , isCustomDHParams
     , isLeafRSA
     , isCredentialDSA
+    , arbitraryEMSMode
+    , setEMSMode
     , readClientSessionRef
     , twoSessionRefs
     , twoSessionManagers
@@ -43,7 +46,7 @@ import Control.Concurrent.Chan
 import Control.Concurrent
 import qualified Control.Exception as E
 import Control.Monad (unless, when)
-import Data.List (isInfixOf)
+import Data.List (intersect, isInfixOf)
 
 import qualified Data.ByteString as B
 
@@ -217,6 +220,12 @@ arbitraryPairParamsAt connectVersion = do
             suffix <- vectorOf (num - pos) $ elements others
             return $ prefix ++ (fixedElement : suffix)
 
+getConnectVersion :: (ClientParams, ServerParams) -> Version
+getConnectVersion (cparams, sparams) = maximum (cver `intersect` sver)
+  where
+    sver = supportedVersions (serverSupported sparams)
+    cver = supportedVersions (clientSupported cparams)
+
 isVersionEnabled :: Version -> (ClientParams, ServerParams) -> Bool
 isVersionEnabled ver (cparams, sparams) =
     (ver `elem` supportedVersions (serverSupported sparams)) &&
@@ -275,6 +284,20 @@ arbitraryRSACredentialWithUsage usageFlags = do
     let (pubKey, privKey) = getGlobalRSAPair
     cert <- arbitraryX509WithKeyAndUsage usageFlags (PubKeyRSA pubKey, ())
     return (CertificateChain [cert], PrivKeyRSA privKey)
+
+arbitraryEMSMode :: Gen (EMSMode, EMSMode)
+arbitraryEMSMode = (,) <$> gen <*> gen
+  where gen = elements [ NoEMS, AllowEMS, RequireEMS ]
+
+setEMSMode :: (EMSMode, EMSMode) -> (ClientParams, ServerParams) -> (ClientParams, ServerParams)
+setEMSMode (cems, sems) (clientParam, serverParam) = (clientParam', serverParam')
+  where
+    clientParam' = clientParam { clientSupported = (clientSupported clientParam)
+                                   { supportedExtendedMasterSec = cems }
+                               }
+    serverParam' = serverParam { serverSupported = (serverSupported serverParam)
+                                   { supportedExtendedMasterSec = sems }
+                               }
 
 readClientSessionRef :: (IORef mclient, IORef mserver) -> IO mclient
 readClientSessionRef refs = readIORef (fst refs)
