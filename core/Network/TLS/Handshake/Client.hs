@@ -118,11 +118,13 @@ handshakeClient' cparams ctx groups mparams = do
         compressions = supportedCompressions $ ctxSupported ctx
         highestVer = maximum $ supportedVersions $ ctxSupported ctx
         tls13 = highestVer >= TLS13
+        ems = supportedExtendedMasterSec $ ctxSupported ctx
         groupToSend = listToMaybe groups
         getExtensions pskInfo rtt0 = sequence
             [ sniExtension
             , secureReneg
             , alpnExtension
+            , emsExtension
             , groupExtension
             , ecPointExtension
             --, sessionTicketExtension
@@ -151,6 +153,10 @@ handshakeClient' cparams ctx groups mparams = do
                 Just protos -> do
                     usingState_ ctx $ setClientALPNSuggest protos
                     return $ Just $ toExtensionRaw $ ApplicationLayerProtocolNegotiation protos
+        emsExtension = return $
+            if ems == NoEMS || all (>= TLS13) (supportedVersions $ ctxSupported ctx)
+                then Nothing
+                else Just $ toExtensionRaw ExtendedMasterSecret
         sniExtension = if clientUseServerNameIndication cparams
                          then do let sni = fst $ clientServerIdentification cparams
                                  usingState_ ctx $ setClientSNI sni
@@ -253,7 +259,9 @@ handshakeClient' cparams ctx groups mparams = do
                             Nothing -> Session Nothing
                             Just (sid, sdata)
                                 | sessionVersion sdata >= TLS13 -> Session Nothing
+                                | ems /= NoEMS && noSessionEMS  -> Session Nothing
                                 | otherwise                     -> Session (Just sid)
+                              where noSessionEMS = SessionEMS `notElem` sessionFlags sdata
                     -- In compatibility mode a client not offering a pre-TLS 1.3
                     -- session MUST generate a new 32-byte value
                     if tls13 && paramSession == Session Nothing
@@ -672,10 +680,15 @@ onServerHello ctx cparams clientSession sentExts (ServerHello rver serverRan ser
         failOnEitherError $ usingHState ctx $ setHelloParameters13 cipherAlg
         return RecvStateDone
       else do
+        ems <- processExtendedMasterSec ctx ver MsgTServerHello exts
         usingHState ctx $ setServerHelloParameters rver serverRan cipherAlg compressAlg
         case resumingSession of
             Nothing          -> return $ RecvStateHandshake (processCertificate cparams ctx)
             Just sessionData -> do
+                let emsSession = SessionEMS `elem` sessionFlags sessionData
+                when (ems /= emsSession) $
+                    let err = "server resumes a session which is not EMS consistent"
+                     in throwCore $ Error_Protocol (err, True, HandshakeFailure)
                 let masterSecret = sessionSecret sessionData
                 usingHState ctx $ setMasterSecret rver ClientRole masterSecret
                 logKey ctx (MasterSecret masterSecret)

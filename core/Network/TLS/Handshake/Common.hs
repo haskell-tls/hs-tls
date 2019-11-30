@@ -15,6 +15,7 @@ module Network.TLS.Handshake.Common
     , recvPacketHandshake
     , onRecvStateHandshake
     , ensureRecvComplete
+    , processExtendedMasterSec
     , extensionLookup
     , getSessionData
     , storePrivInfo
@@ -28,6 +29,7 @@ import Control.Concurrent.MVar
 import Network.TLS.Parameters
 import Network.TLS.Compression
 import Network.TLS.Context.Internal
+import Network.TLS.Extension
 import Network.TLS.Session
 import Network.TLS.Struct
 import Network.TLS.Struct13
@@ -166,6 +168,19 @@ ensureRecvComplete ctx = do
     complete <- liftIO $ isRecvComplete ctx
     unless complete $
         throwCore $ Error_Protocol ("received incomplete message at key change", True, UnexpectedMessage)
+
+processExtendedMasterSec :: MonadIO m => Context -> Version -> MessageType -> [ExtensionRaw] -> m Bool
+processExtendedMasterSec ctx ver msgt exts
+    | ver < TLS10  = return False
+    | ver > TLS12  = error "EMS processing is not compatible with TLS 1.3"
+    | ems == NoEMS = return False
+    | otherwise    =
+        case extensionLookup extensionID_ExtendedMasterSecret exts >>= extensionDecode msgt of
+            Just ExtendedMasterSecret -> usingHState ctx (setExtendedMasterSec True) >> return True
+            Nothing | ems == RequireEMS -> throwCore $ Error_Protocol (err, True, HandshakeFailure)
+                    | otherwise -> return False
+  where ems = supportedExtendedMasterSec (ctxSupported ctx)
+        err = "peer does not support Extended Master Secret"
 
 getSessionData :: Context -> IO (Maybe SessionData)
 getSessionData ctx = do
