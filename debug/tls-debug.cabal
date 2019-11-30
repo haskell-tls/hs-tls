@@ -28,7 +28,7 @@ Executable           tls-stunnel
                    , x509-validation >= 1.5
                    , data-default-class
                    , cryptonite >= 0.24
-                   , tls >= 1.5.0
+                   , tls >= 1.5.3
                    , tls-session-manager
   if os(windows)
     Buildable:       False
@@ -77,7 +77,7 @@ Executable           tls-simpleclient
                    , cryptonite >= 0.14
                    , x509-store
                    , x509-system >= 1.0
-                   , tls >= 1.5.0 && < 1.6
+                   , tls >= 1.5.3 && < 1.6
   Buildable:         True
   ghc-options:       -Wall -fno-warn-missing-signatures
 
@@ -94,7 +94,7 @@ Executable           tls-simpleserver
                    , cryptonite
                    , x509-store
                    , x509-system >= 1.0
-                   , tls >= 1.5.0 && < 1.6
+                   , tls >= 1.5.3 && < 1.6
                    , tls-session-manager
   Buildable:         True
   ghc-options:       -Wall -fno-warn-missing-signatures
