@@ -258,9 +258,9 @@ handshakeClient' cparams ctx groups mparams = do
                     let paramSession = case clientWantSessionResume cparams of
                             Nothing -> Session Nothing
                             Just (sid, sdata)
-                                | sessionVersion sdata >= TLS13 -> Session Nothing
-                                | ems /= NoEMS && noSessionEMS  -> Session Nothing
-                                | otherwise                     -> Session (Just sid)
+                                | sessionVersion sdata >= TLS13     -> Session Nothing
+                                | ems == RequireEMS && noSessionEMS -> Session Nothing
+                                | otherwise                         -> Session (Just sid)
                               where noSessionEMS = SessionEMS `notElem` sessionFlags sdata
                     -- In compatibility mode a client not offering a pre-TLS 1.3
                     -- session MUST generate a new 32-byte value

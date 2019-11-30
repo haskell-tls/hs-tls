@@ -759,7 +759,12 @@ prop_handshake_session_resumption_ems = do
 
     if emsVersion && use ems && not (use ems2)
         then runTLSInitFailure params2
-        else runTLSPipeSimple params2
+        else do
+            runTLSPipeSimple params2
+            sessionParams2 <- run $ readClientSessionRef sessionRefs
+            let sameSession = sessionParams == sessionParams2
+                sameUse     = use ems == use ems2
+            when emsVersion $ assert (sameSession == sameUse)
   where
     compatible (NoEMS, RequireEMS) = False
     compatible (RequireEMS, NoEMS) = False
