@@ -15,6 +15,7 @@ module Network.TLS.Handshake.Common
     , recvPacketHandshake
     , onRecvStateHandshake
     , ensureRecvComplete
+    , processExtendedMasterSec
     , extensionLookup
     , getSessionData
     , storePrivInfo
@@ -28,6 +29,7 @@ import Control.Concurrent.MVar
 import Network.TLS.Parameters
 import Network.TLS.Compression
 import Network.TLS.Context.Internal
+import Network.TLS.Extension
 import Network.TLS.Session
 import Network.TLS.Struct
 import Network.TLS.Struct13
@@ -99,6 +101,7 @@ handshakeTerminate ctx = do
                 return $ Just (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
                     { hstServerRandom = hstServerRandom hshake
                     , hstMasterSecret = hstMasterSecret hshake
+                    , hstExtendedMasterSec = hstExtendedMasterSec hshake
                     , hstNegotiatedGroup = hstNegotiatedGroup hshake
                     }
     updateMeasure ctx resetBytesCounters
@@ -166,15 +169,30 @@ ensureRecvComplete ctx = do
     unless complete $
         throwCore $ Error_Protocol ("received incomplete message at key change", True, UnexpectedMessage)
 
+processExtendedMasterSec :: MonadIO m => Context -> Version -> MessageType -> [ExtensionRaw] -> m Bool
+processExtendedMasterSec ctx ver msgt exts
+    | ver < TLS10  = return False
+    | ver > TLS12  = error "EMS processing is not compatible with TLS 1.3"
+    | ems == NoEMS = return False
+    | otherwise    =
+        case extensionLookup extensionID_ExtendedMasterSecret exts >>= extensionDecode msgt of
+            Just ExtendedMasterSecret -> usingHState ctx (setExtendedMasterSec True) >> return True
+            Nothing | ems == RequireEMS -> throwCore $ Error_Protocol (err, True, HandshakeFailure)
+                    | otherwise -> return False
+  where ems = supportedExtendedMasterSec (ctxSupported ctx)
+        err = "peer does not support Extended Master Secret"
+
 getSessionData :: Context -> IO (Maybe SessionData)
 getSessionData ctx = do
     ver <- usingState_ ctx getVersion
     sni <- usingState_ ctx getClientSNI
     mms <- usingHState ctx (gets hstMasterSecret)
+    !ems <- usingHState ctx getExtendedMasterSec
     tx  <- liftIO $ readMVar (ctxTxState ctx)
     alpn <- usingState_ ctx getNegotiatedProtocol
     let !cipher      = cipherID $ fromJust "cipher" $ stCipher tx
         !compression = compressionID $ stCompression tx
+        flags = [SessionEMS | ems]
     case mms of
         Nothing -> return Nothing
         Just ms -> return $ Just SessionData
@@ -187,6 +205,7 @@ getSessionData ctx = do
                         , sessionTicketInfo  = Nothing
                         , sessionALPN        = alpn
                         , sessionMaxEarlyDataSize = 0
+                        , sessionFlags       = flags
                         }
 
 extensionLookup :: ExtensionID -> [ExtensionRaw] -> Maybe ByteString

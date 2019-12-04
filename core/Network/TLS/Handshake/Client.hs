@@ -118,11 +118,13 @@ handshakeClient' cparams ctx groups mparams = do
         compressions = supportedCompressions $ ctxSupported ctx
         highestVer = maximum $ supportedVersions $ ctxSupported ctx
         tls13 = highestVer >= TLS13
+        ems = supportedExtendedMasterSec $ ctxSupported ctx
         groupToSend = listToMaybe groups
         getExtensions pskInfo rtt0 = sequence
             [ sniExtension
             , secureReneg
             , alpnExtension
+            , emsExtension
             , groupExtension
             , ecPointExtension
             --, sessionTicketExtension
@@ -151,6 +153,10 @@ handshakeClient' cparams ctx groups mparams = do
                 Just protos -> do
                     usingState_ ctx $ setClientALPNSuggest protos
                     return $ Just $ toExtensionRaw $ ApplicationLayerProtocolNegotiation protos
+        emsExtension = return $
+            if ems == NoEMS || all (>= TLS13) (supportedVersions $ ctxSupported ctx)
+                then Nothing
+                else Just $ toExtensionRaw ExtendedMasterSecret
         sniExtension = if clientUseServerNameIndication cparams
                          then do let sni = fst $ clientServerIdentification cparams
                                  usingState_ ctx $ setClientSNI sni
@@ -252,8 +258,10 @@ handshakeClient' cparams ctx groups mparams = do
                     let paramSession = case clientWantSessionResume cparams of
                             Nothing -> Session Nothing
                             Just (sid, sdata)
-                                | sessionVersion sdata >= TLS13 -> Session Nothing
-                                | otherwise                     -> Session (Just sid)
+                                | sessionVersion sdata >= TLS13     -> Session Nothing
+                                | ems == RequireEMS && noSessionEMS -> Session Nothing
+                                | otherwise                         -> Session (Just sid)
+                              where noSessionEMS = SessionEMS `notElem` sessionFlags sdata
                     -- In compatibility mode a client not offering a pre-TLS 1.3
                     -- session MUST generate a new 32-byte value
                     if tls13 && paramSession == Session Nothing
@@ -481,14 +489,13 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
 
         sendClientKeyXchg = do
             cipher <- usingHState ctx getPendingCipher
-            ckx <- case cipherKeyExchange cipher of
+            (ckx, setMasterSec) <- case cipherKeyExchange cipher of
                 CipherKeyExchange_RSA -> do
                     clientVersion <- usingHState ctx $ gets hstClientVersion
                     (xver, prerand) <- usingState_ ctx $ (,) <$> getVersion <*> genRandom 46
 
                     let premaster = encodePreMasterSecret clientVersion prerand
-                    masterSecret <- usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
-                    logKey ctx (MasterSecret masterSecret)
+                        setMasterSec = setMasterSecretFromPre xver ClientRole premaster
                     encryptedPreMaster <- do
                         -- SSL3 implementation generally forget this length field since it's redundant,
                         -- however TLS10 make it clear that the length field need to be present.
@@ -497,13 +504,15 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                                         then B.empty
                                         else encodeWord16 $ fromIntegral $ B.length e
                         return $ extra `B.append` e
-                    return $ CKX_RSA encryptedPreMaster
+                    return (CKX_RSA encryptedPreMaster, setMasterSec)
                 CipherKeyExchange_DHE_RSA -> getCKX_DHE
                 CipherKeyExchange_DHE_DSS -> getCKX_DHE
                 CipherKeyExchange_ECDHE_RSA -> getCKX_ECDHE
                 CipherKeyExchange_ECDHE_ECDSA -> getCKX_ECDHE
                 _ -> throwCore $ Error_Protocol ("client key exchange unsupported type", True, HandshakeFailure)
             sendPacket ctx $ Handshake [ClientKeyXchg ckx]
+            masterSecret <- usingHState ctx setMasterSec
+            logKey ctx (MasterSecret masterSecret)
           where getCKX_DHE = do
                     xver <- usingState_ ctx getVersion
                     serverParams <- usingHState ctx getServerDHParams
@@ -537,9 +546,8 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                                      Nothing   -> throwCore $ Error_Protocol ("invalid server " ++ show grp ++ " public key", True, IllegalParameter)
                                      Just pair -> return pair
 
-                    masterSecret <- usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
-                    logKey ctx (MasterSecret masterSecret)
-                    return $ CKX_DH clientDHPub
+                    let setMasterSec = setMasterSecretFromPre xver ClientRole premaster
+                    return (CKX_DH clientDHPub, setMasterSec)
 
                 getCKX_ECDHE = do
                     ServerECDHParams grp srvpub <- usingHState ctx getServerECDHParams
@@ -550,9 +558,8 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                         Nothing                  -> throwCore $ Error_Protocol ("invalid server " ++ show grp ++ " public key", True, IllegalParameter)
                         Just (clipub, premaster) -> do
                             xver <- usingState_ ctx getVersion
-                            masterSecret <- usingHState ctx $ setMasterSecretFromPre xver ClientRole premaster
-                            logKey ctx (MasterSecret masterSecret)
-                            return $ CKX_ECDH $ encodeGroupPublic clipub
+                            let setMasterSec = setMasterSecretFromPre xver ClientRole premaster
+                            return (CKX_ECDH $ encodeGroupPublic clipub, setMasterSec)
 
         -- In order to send a proper certificate verify message,
         -- we have to do the following:
@@ -673,10 +680,15 @@ onServerHello ctx cparams clientSession sentExts (ServerHello rver serverRan ser
         failOnEitherError $ usingHState ctx $ setHelloParameters13 cipherAlg
         return RecvStateDone
       else do
+        ems <- processExtendedMasterSec ctx ver MsgTServerHello exts
         usingHState ctx $ setServerHelloParameters rver serverRan cipherAlg compressAlg
         case resumingSession of
             Nothing          -> return $ RecvStateHandshake (processCertificate cparams ctx)
             Just sessionData -> do
+                let emsSession = SessionEMS `elem` sessionFlags sessionData
+                when (ems /= emsSession) $
+                    let err = "server resumes a session which is not EMS consistent"
+                     in throwCore $ Error_Protocol (err, True, HandshakeFailure)
                 let masterSecret = sessionSecret sessionData
                 usingHState ctx $ setMasterSecret rver ClientRole masterSecret
                 logKey ctx (MasterSecret masterSecret)

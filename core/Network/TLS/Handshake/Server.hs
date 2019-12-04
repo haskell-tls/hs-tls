@@ -265,10 +265,11 @@ handshakeServerWithTLS12 sparams ctx chosenVersion exts ciphers serverName clien
                 CipherKeyExchange_ECDHE_ECDSA -> return $ credentialsFindForSigning KX_ECDSA signatureCreds
                 _                           -> throwCore $ Error_Protocol ("key exchange algorithm not implemented", True, HandshakeFailure)
 
+    ems <- processExtendedMasterSec ctx chosenVersion MsgTClientHello exts
     resumeSessionData <- case clientSession of
-            (Session (Just clientSessionId)) ->
+            (Session (Just clientSessionId)) -> do
                 let resume = liftIO $ sessionResume (sharedSessionManager $ ctxShared ctx) clientSessionId
-                 in validateSession serverName <$> resume
+                resume >>= validateSession serverName ems
             (Session Nothing)                -> return Nothing
 
     -- Currently, we don't send back EcPointFormats. In this case,
@@ -284,17 +285,22 @@ handshakeServerWithTLS12 sparams ctx chosenVersion exts ciphers serverName clien
         commonCompressions    = compressionIntersectID (supportedCompressions $ ctxSupported ctx) compressions
         usedCompression       = head commonCompressions
 
-        validateSession _   Nothing                         = Nothing
-        validateSession sni m@(Just sd)
+        validateSession _   _   Nothing                     = return Nothing
+        validateSession sni ems m@(Just sd)
             -- SessionData parameters are assumed to match the local server configuration
             -- so we need to compare only to ClientHello inputs.  Abbreviated handshake
             -- uses the same server_name than full handshake so the same
             -- credentials (and thus ciphers) are available.
-            | clientVersion < sessionVersion sd             = Nothing
-            | sessionCipher sd `notElem` ciphers            = Nothing
-            | sessionCompression sd `notElem` compressions  = Nothing
-            | isJust sni && sessionClientSNI sd /= sni      = Nothing
-            | otherwise                                     = m
+            | clientVersion < sessionVersion sd             = return Nothing
+            | sessionCipher sd `notElem` ciphers            = return Nothing
+            | sessionCompression sd `notElem` compressions  = return Nothing
+            | isJust sni && sessionClientSNI sd /= sni      = return Nothing
+            | ems && not emsSession                         = return Nothing
+            | not ems && emsSession                         =
+                let err = "client resumes an EMS session without EMS"
+                 in throwCore $ Error_Protocol (err, True, HandshakeFailure)
+            | otherwise                                     = return m
+          where emsSession = SessionEMS `elem` sessionFlags sd
 
 doHandshake :: ServerParams -> Maybe Credential -> Context -> Version -> Cipher
             -> Compression -> Session -> Maybe SessionData
@@ -340,7 +346,10 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                                     return $ extensionEncode (SecureRenegotiation cvf $ Just svf)
                             return [ ExtensionRaw extensionID_SecureRenegotiation vf ]
                     else return []
-
+            ems <- usingHState ctx getExtendedMasterSec
+            let emsExt | ems = let raw = extensionEncode ExtendedMasterSecret
+                                in [ ExtensionRaw extensionID_ExtendedMasterSecret raw ]
+                       | otherwise = []
             protoExt <- applicationProtocol ctx exts sparams
             sniExt   <- do
                 resuming <- usingState_ ctx isSessionResuming
@@ -355,7 +364,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                       -- field of this extension SHALL be empty.
                       Just _  -> return [ ExtensionRaw extensionID_ServerName ""]
                       Nothing -> return []
-            let extensions = secRengExt ++ protoExt ++ sniExt
+            let extensions = secRengExt ++ emsExt ++ protoExt ++ sniExt
             usingState_ ctx (setVersion chosenVersion)
             usingHState ctx $ setServerHelloParameters chosenVersion srand usedCipher usedCompression
             return $ ServerHello chosenVersion srand session (cipherID usedCipher)

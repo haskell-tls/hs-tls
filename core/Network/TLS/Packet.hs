@@ -46,6 +46,7 @@ module Network.TLS.Packet
 
     -- * generate things for packet content
     , generateMasterSecret
+    , generateExtendedMasterSec
     , generateKeyBlock
     , generateClientFinished
     , generateServerFinished
@@ -586,6 +587,16 @@ generateMasterSecret :: ByteArrayAccess preMaster
 generateMasterSecret SSL2 _ = generateMasterSecret_SSL
 generateMasterSecret SSL3 _ = generateMasterSecret_SSL
 generateMasterSecret v    c = generateMasterSecret_TLS $ getPRF v c
+
+generateExtendedMasterSec :: ByteArrayAccess preMaster
+                          => Version
+                          -> Cipher
+                          -> preMaster
+                          -> ByteString
+                          -> ByteString
+generateExtendedMasterSec v c premasterSecret sessionHash =
+    getPRF v c (B.convert premasterSecret) seed 48
+  where seed = B.append "extended master secret" sessionHash
 
 generateKeyBlock_TLS :: PRF -> ClientRandom -> ServerRandom -> ByteString -> Int -> ByteString
 generateKeyBlock_TLS prf (ClientRandom c) (ServerRandom s) mastersecret kbsize =

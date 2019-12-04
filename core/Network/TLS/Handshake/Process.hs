@@ -11,7 +11,6 @@ module Network.TLS.Handshake.Process
     ( processHandshake
     , processHandshake13
     , startHandshake
-    , getHandshakeDigest
     ) where
 
 import Network.TLS.Context.Internal
@@ -52,12 +51,14 @@ processHandshake ctx hs = do
             hrr <- usingState_ ctx getTLS13HRR
             unless hrr $ startHandshake ctx cver ran
         Certificates certs            -> processCertificates role certs
-        ClientKeyXchg content         -> when (role == ServerRole) $ do
-            processClientKeyXchg ctx content
         Finished fdata                -> processClientFinished ctx fdata
         _                             -> return ()
     when (isHRR hs) $ usingHState ctx wrapAsMessageHash13
     void $ updateHandshake ctx ServerRole hs
+    case hs of
+        ClientKeyXchg content  -> when (role == ServerRole) $
+            processClientKeyXchg ctx content
+        _                      -> return ()
   where secureRenegotiation = supportedSecureRenegotiation $ ctxSupported ctx
         -- RFC5746: secure renegotiation
         -- the renegotiation_info extension: 0xff01

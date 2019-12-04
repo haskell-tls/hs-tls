@@ -21,6 +21,7 @@ module Network.TLS.Parameters
     , defaultParamsClient
     -- * Parameters
     , MaxFragmentEnum(..)
+    , EMSMode(..)
     , GroupUsage(..)
     , CertificateUsage(..)
     , CertificateRejectReason(..)
@@ -210,6 +211,15 @@ data Supported = Supported
       --   If 'False', renegotiation is allowed only from the server side
       --   via HelloRequest.
     , supportedClientInitiatedRenegotiation :: Bool
+      -- | The mode regarding extended master secret.  Enabling this extension
+      -- provides better security for TLS versions 1.0 to 1.2.  TLS 1.3 provides
+      -- the security properties natively and does not need the extension.
+      --
+      -- By default the extension is enabled but not required.  If mode is set
+      -- to 'RequireEMS', the handshake will fail when the peer does not support
+      -- the extension.  It is also advised to disable SSLv3 which does not have
+      -- this mechanism.
+    , supportedExtendedMasterSec   :: EMSMode
       -- | Set if we support session.
     , supportedSession             :: Bool
       -- | Support for fallback SCSV defined in RFC7507.
@@ -235,6 +245,13 @@ data Supported = Supported
     , supportedGroups              :: [Group]
     } deriving (Show,Eq)
 
+-- | Client or server policy regarding Extended Master Secret
+data EMSMode
+    = NoEMS       -- ^ Extended Master Secret is not used
+    | AllowEMS    -- ^ Extended Master Secret is allowed
+    | RequireEMS  -- ^ Extended Master Secret is required
+    deriving (Show,Eq)
+
 defaultSupported :: Supported
 defaultSupported = Supported
     { supportedVersions       = [TLS13,TLS12,TLS11,TLS10]
@@ -256,6 +273,7 @@ defaultSupported = Supported
                                 ]
     , supportedSecureRenegotiation = True
     , supportedClientInitiatedRenegotiation = False
+    , supportedExtendedMasterSec   = AllowEMS
     , supportedSession             = True
     , supportedFallbackScsv        = True
     , supportedEmptyPacket         = True

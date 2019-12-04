@@ -721,6 +721,59 @@ prop_handshake_clt_key_usage = do
         then runTLSPipeSimple  (clientParam',serverParam')
         else runTLSInitFailure (clientParam',serverParam')
 
+prop_handshake_ems :: PropertyM IO ()
+prop_handshake_ems = do
+    (cems, sems) <- pick arbitraryEMSMode
+    params <- pick arbitraryPairParams
+    let params' = setEMSMode (cems, sems) params
+        version = getConnectVersion params'
+        emsVersion = version >= TLS10 && version <= TLS12
+        use = cems /= NoEMS && sems /= NoEMS
+        require = cems == RequireEMS || sems == RequireEMS
+        p info = infoExtendedMasterSec info == (emsVersion && use)
+    if emsVersion && require && not use
+        then runTLSInitFailure params'
+        else runTLSPipePredicate params' (maybe False p)
+
+prop_handshake_session_resumption_ems :: PropertyM IO ()
+prop_handshake_session_resumption_ems = do
+    sessionRefs <- run twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
+
+    plainParams <- pick arbitraryPairParams
+    ems <- pick (arbitraryEMSMode `suchThat` compatible)
+    let params = setEMSMode ems $
+            setPairParamsSessionManagers sessionManagers plainParams
+
+    runTLSPipeSimple params
+
+    -- and resume
+    sessionParams <- run $ readClientSessionRef sessionRefs
+    assert (isJust sessionParams)
+    ems2 <- pick (arbitraryEMSMode `suchThat` compatible)
+    let params2 = setEMSMode ems2 $
+            setPairParamsSessionResuming (fromJust sessionParams) params
+
+    let version    = getConnectVersion params2
+        emsVersion = version >= TLS10 && version <= TLS12
+
+    if emsVersion && use ems && not (use ems2)
+        then runTLSInitFailure params2
+        else do
+            runTLSPipeSimple params2
+            sessionParams2 <- run $ readClientSessionRef sessionRefs
+            let sameSession = sessionParams == sessionParams2
+                sameUse     = use ems == use ems2
+            when emsVersion $ assert (sameSession == sameUse)
+  where
+    compatible (NoEMS, RequireEMS) = False
+    compatible (RequireEMS, NoEMS) = False
+    compatible _                   = True
+
+    use (NoEMS, _) = False
+    use (_, NoEMS) = False
+    use _          = True
+
 prop_handshake_alpn :: PropertyM IO ()
 prop_handshake_alpn = do
     (clientParam,serverParam) <- pick arbitraryPairParams
@@ -891,6 +944,8 @@ main = defaultMain $ testGroup "tls"
             , testProperty "Server key usage" (monadicIO prop_handshake_srv_key_usage)
             , testProperty "Client authentication" (monadicIO prop_handshake_client_auth)
             , testProperty "Client key usage" (monadicIO prop_handshake_clt_key_usage)
+            , testProperty "Extended Master Secret" (monadicIO prop_handshake_ems)
+            , testProperty "Extended Master Secret (resumption)" (monadicIO prop_handshake_session_resumption_ems)
             , testProperty "ALPN" (monadicIO prop_handshake_alpn)
             , testProperty "SNI" (monadicIO prop_handshake_sni)
             , testProperty "Renegotiation" (monadicIO prop_handshake_renegotiation)

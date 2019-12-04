@@ -67,6 +67,7 @@ module Network.TLS
     , noSessionManager
     , SessionID
     , SessionData(..)
+    , SessionFlag(..)
     , TLS13TicketInfo
     -- ** Validation Cache
     , ValidationCache(..)
@@ -84,6 +85,7 @@ module Network.TLS
     , HashAlgorithm(..)
     , SignatureAlgorithm(..)
     , Group(..)
+    , EMSMode(..)
     -- ** For parameters and hooks
     , DHParams
     , DHPublic
