@@ -18,6 +18,7 @@ module Network.TLS.Handshake.Control (
   ) where
 
 import Network.TLS.Cipher
+import Network.TLS.Handshake.State
 import Network.TLS.Imports
 import Network.TLS.Struct
 import Network.TLS.Struct13
@@ -52,7 +53,7 @@ data ClientStatus =
     ClientNeedsMore
   | SendClientHello ClientHello (Maybe (ClientTrafficSecret EarlySecret))
   | RecvServerHello Cipher (TrafficSecrets HandshakeSecret)
-  | SendClientFinished Finished [ExtensionRaw] (Maybe NegotiatedProtocol) (TrafficSecrets ApplicationSecret)
+  | SendClientFinished Finished [ExtensionRaw] (Maybe NegotiatedProtocol) (TrafficSecrets ApplicationSecret) HandshakeMode13
   | RecvSessionTicket
   | ClientHandshakeDone
 
@@ -67,7 +68,7 @@ instance Show ClientStatus where
 data ClientStatusI =
     SendClientHelloI (Maybe (ClientTrafficSecret EarlySecret))
   | RecvServerHelloI Cipher (TrafficSecrets HandshakeSecret)
-  | SendClientFinishedI [ExtensionRaw] (Maybe NegotiatedProtocol) (TrafficSecrets ApplicationSecret)
+  | SendClientFinishedI [ExtensionRaw] (Maybe NegotiatedProtocol) (TrafficSecrets ApplicationSecret) HandshakeMode13
   | RecvSessionTicketI
   | ClientHandshakeFailedI TLSError
 
@@ -82,7 +83,7 @@ data ServerStatus =
   | SendServerFinished Finished
                        (Maybe NegotiatedProtocol)
                        (TrafficSecrets ApplicationSecret)
-  | SendSessionTicket SessionTicket
+  | SendSessionTicket SessionTicket HandshakeMode13
   | ServerHandshakeDone
 
 instance Show ServerStatus where
@@ -101,7 +102,7 @@ data ServerStatusI =
                      (TrafficSecrets HandshakeSecret)
   | SendServerFinishedI (Maybe NegotiatedProtocol)
                         (TrafficSecrets ApplicationSecret)
-  | SendSessionTicketI
+  | SendSessionTicketI HandshakeMode13
   | ServerHandshakeFailedI TLSError
 
 ----------------------------------------------------------------

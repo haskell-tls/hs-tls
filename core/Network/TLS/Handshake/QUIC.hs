@@ -45,7 +45,9 @@ quicServer _ ask get put ref (PutClientFinished cf) =
     putRecordWith put ref cf HandshakeType_Finished13 ServerNeedsMore $ do
         rsp <- ask
         case rsp of
-          SendSessionTicketI -> SendSessionTicket <$> get
+          SendSessionTicketI mode -> do
+              nst <- get
+              return $ SendSessionTicket nst mode
           ServerHandshakeFailedI e -> E.throwIO e
           _ -> error "quicServer"
 quicServer wtid _ _ _ _ ExitServer = do
@@ -84,10 +86,10 @@ quicClient _ ask get put ref (PutServerFinished sf) =
     putRecordWith put ref sf HandshakeType_Finished13 ClientNeedsMore $ do
         rsp <- ask
         case rsp of
-          SendClientFinishedI exts alpn appSecs -> do
+          SendClientFinishedI exts alpn appSecs mode -> do
               let exts' = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters) exts
               cf <- get
-              return $ SendClientFinished cf exts' alpn appSecs
+              return $ SendClientFinished cf exts' alpn appSecs mode
           ClientHandshakeFailedI e -> E.throwIO e
           _ -> error "quicClient"
 quicClient _ ask _ put ref (PutSessionTicket nst) =

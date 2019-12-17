@@ -31,6 +31,7 @@ module Network.TLS.QUIC (
     , ServerHello
     , Finished
     , SessionTicket
+    , HandshakeMode13(..)
     , errorToAlertDescription
     , fromAlertDescription
     , toAlertDescription
@@ -45,6 +46,7 @@ import Network.TLS.Extension (extensionID_QuicTransportParameters)
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Control
 import Network.TLS.Handshake.QUIC
+import Network.TLS.Handshake.State
 import Network.TLS.Imports
 import Network.TLS.KeySchedule (hkdfExtract, hkdfExpandLabel)
 import Network.TLS.Record.Layer
