@@ -24,6 +24,7 @@ data SessionManager = SessionManager
     , sessionInvalidate     :: SessionID -> IO ()
     }
 
+-- | The session manager to do nothing.
 noSessionManager :: SessionManager
 noSessionManager = SessionManager
     { sessionResume         = \_   -> return Nothing
