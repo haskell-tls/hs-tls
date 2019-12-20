@@ -7,6 +7,9 @@ module Network.TLS.Handshake.Control (
   , ClientStatusI(..)
   , ServerStatus(..)
   , ServerStatusI(..)
+  , EarlySecretInfo(..)
+  , HandshakeSecretInfo(..)
+  , ApplicationSecretInfo(..)
   , NegotiatedProtocol
   , ClientHello
   , ServerHello
@@ -38,6 +41,17 @@ type SessionTicket = ByteString
 
 ----------------------------------------------------------------
 
+data EarlySecretInfo = EarlySecretInfo Cipher (ClientTrafficSecret EarlySecret)
+                       deriving (Eq, Show)
+
+data HandshakeSecretInfo = HandshakeSecretInfo Cipher (TrafficSecrets HandshakeSecret)
+                         deriving (Eq, Show)
+
+data ApplicationSecretInfo = ApplicationSecretInfo HandshakeMode13 (Maybe NegotiatedProtocol) (TrafficSecrets ApplicationSecret)
+                         deriving (Eq, Show)
+
+----------------------------------------------------------------
+
 data ClientControl = GetClientHello                 -- ^ 'SendClientHello'
                    | PutServerHello ServerHello     -- ^ 'SendClientHello', 'RecvServerHello', 'ClientNeedsMore'
                    | PutServerFinished Finished     -- ^ 'SendClientFinished'
@@ -51,9 +65,9 @@ data ServerControl = PutClientHello ClientHello -- ^ 'SendRequestRetry', 'SendSe
 
 data ClientStatus =
     ClientNeedsMore
-  | SendClientHello ClientHello (Maybe (ClientTrafficSecret EarlySecret))
-  | RecvServerHello Cipher (TrafficSecrets HandshakeSecret)
-  | SendClientFinished Finished [ExtensionRaw] (Maybe NegotiatedProtocol) (TrafficSecrets ApplicationSecret) HandshakeMode13
+  | SendClientHello ClientHello (Maybe EarlySecretInfo)
+  | RecvServerHello HandshakeSecretInfo
+  | SendClientFinished Finished [ExtensionRaw] ApplicationSecretInfo
   | RecvSessionTicket
   | ClientHandshakeDone
 
@@ -66,24 +80,17 @@ instance Show ClientStatus where
     show ClientHandshakeDone{} = "ClientHandshakeDone"
 
 data ClientStatusI =
-    SendClientHelloI (Maybe (ClientTrafficSecret EarlySecret))
-  | RecvServerHelloI Cipher (TrafficSecrets HandshakeSecret)
-  | SendClientFinishedI [ExtensionRaw] (Maybe NegotiatedProtocol) (TrafficSecrets ApplicationSecret) HandshakeMode13
+    SendClientHelloI (Maybe EarlySecretInfo)
+  | RecvServerHelloI HandshakeSecretInfo
+  | SendClientFinishedI [ExtensionRaw] ApplicationSecretInfo
   | RecvSessionTicketI
   | ClientHandshakeFailedI TLSError
 
 data ServerStatus =
     ServerNeedsMore
   | SendRequestRetry ServerHello
-  | SendServerHello ServerHello
-                    [ExtensionRaw]
-                    Cipher
-                    (Maybe (ClientTrafficSecret EarlySecret))
-                    (TrafficSecrets HandshakeSecret)
-  | SendServerFinished Finished
-                       (Maybe NegotiatedProtocol)
-                       (TrafficSecrets ApplicationSecret)
-                       HandshakeMode13
+  | SendServerHello ServerHello [ExtensionRaw] (Maybe EarlySecretInfo) HandshakeSecretInfo
+  | SendServerFinished Finished ApplicationSecretInfo
   | SendSessionTicket SessionTicket
   | ServerHandshakeDone
 
@@ -97,13 +104,8 @@ instance Show ServerStatus where
 
 data ServerStatusI =
     SendRequestRetryI
-  | SendServerHelloI [ExtensionRaw]
-                     Cipher
-                     (Maybe (ClientTrafficSecret EarlySecret))
-                     (TrafficSecrets HandshakeSecret)
-  | SendServerFinishedI (Maybe NegotiatedProtocol)
-                        (TrafficSecrets ApplicationSecret)
-                        HandshakeMode13
+  | SendServerHelloI [ExtensionRaw] (Maybe EarlySecretInfo) HandshakeSecretInfo
+  | SendServerFinishedI ApplicationSecretInfo
   | SendSessionTicketI
   | ServerHandshakeFailedI TLSError
 

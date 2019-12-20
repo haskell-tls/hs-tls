@@ -27,18 +27,18 @@ quicServer _ ask get put ref (PutClientHello ch) =
         rsp <- ask
         case rsp of
           SendRequestRetryI -> SendRequestRetry <$> get
-          SendServerHelloI exts cipher earlySec hndSecs -> do
+          SendServerHelloI exts earlySec handSec  -> do
               sh <- get
               let exts' = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters) exts
-              return $ SendServerHello sh exts' cipher earlySec hndSecs
+              return $ SendServerHello sh exts' earlySec handSec
           ServerHandshakeFailedI e -> E.throwIO e
           _ -> error "quicServer"
 quicServer _ ask get _ _ GetServerFinished = do
     rsp <- ask
     case rsp of
-      SendServerFinishedI alpn appSecs mode -> do
+      SendServerFinishedI appSec -> do
           sf <- get
-          return $ SendServerFinished sf alpn appSecs mode
+          return $ SendServerFinished sf appSec
       ServerHandshakeFailedI e -> E.throwIO e
       _ -> error "quicServer"
 quicServer _ ask get put ref (PutClientFinished cf) =
@@ -78,18 +78,18 @@ quicClient _ ask get put ref (PutServerHello sh) =
             SendClientHelloI early -> do
                 ch <- get
                 return $ SendClientHello ch early
-            RecvServerHelloI c handSecs -> do
-                return $ RecvServerHello c handSecs
+            RecvServerHelloI handSec -> do
+                return $ RecvServerHello handSec
             ClientHandshakeFailedI e -> E.throwIO e
             _ -> error "quicClient"
 quicClient _ ask get put ref (PutServerFinished sf) =
     putRecordWith put ref sf HandshakeType_Finished13 ClientNeedsMore $ do
         rsp <- ask
         case rsp of
-          SendClientFinishedI exts alpn appSecs mode -> do
+          SendClientFinishedI exts appSec -> do
               let exts' = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters) exts
               cf <- get
-              return $ SendClientFinished cf exts' alpn appSecs mode
+              return $ SendClientFinished cf exts' appSec
           ClientHandshakeFailedI e -> E.throwIO e
           _ -> error "quicClient"
 quicClient _ ask _ put ref (PutSessionTicket nst) =

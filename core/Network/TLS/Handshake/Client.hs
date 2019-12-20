@@ -295,10 +295,10 @@ handshakeClient' cparams ctx groups mparams = do
             let extensions1 = sharedExtensions (clientShared cparams) ++ extensions0
             extensions <- adjustExtentions pskInfo extensions1 $ mkClientHello extensions1
             sendPacket ctx $ Handshake [mkClientHello extensions]
-            mces <- case rtt0info of
+            mEarlySecInfo <- case rtt0info of
                Nothing   -> return Nothing
                Just info -> Just <$> send0RTT info
-            contextSync ctx $ SendClientHelloI mces
+            contextSync ctx $ SendClientHelloI mEarlySecInfo
             return (rtt0, map (\(ExtensionRaw i _) -> i) extensions)
 
         get0RTTinfo (_, sdata, choice, _) = do
@@ -320,7 +320,7 @@ handshakeClient' cparams ctx groups mparams = do
                     let len = ctxFragmentSize ctx
                     mapChunks_ len (sendPacket13 ctx . AppData13) earlyData
                     usingHState ctx $ setTLS13RTT0Status RTT0Sent
-                return ces
+                return $ EarlySecretInfo usedCipher ces
 
         recvServerHello clientSession sentExts = runRecvState ctx recvState
           where recvState = RecvStateNext $ \p ->
@@ -862,7 +862,8 @@ handshakeClient13' cparams ctx groupSent choice = do
     let handshakeSecret = triBase hkey
         chs@(ClientTrafficSecret clientHandshakeSecret) = triClient hkey
         shs@(ServerTrafficSecret serverHandshakeSecret) = triServer hkey
-    contextSync ctx $ RecvServerHelloI usedCipher (chs,shs)
+        handSecInfo = HandshakeSecretInfo usedCipher (chs,shs)
+    contextSync ctx $ RecvServerHelloI handSecInfo
     (rtt0accepted,eexts) <- runRecvHandshake13 $ do
         accext <- recvHandshake13 ctx expectEncryptedExtensions
         unless resuming $ recvHandshake13 ctx expectCertRequest
@@ -878,7 +879,8 @@ handshakeClient13' cparams ctx groupSent choice = do
     setResumptionSecret applicationSecret
     alpn <- usingState_ ctx getNegotiatedProtocol
     mode <- usingHState ctx getTLS13HandshakeMode
-    contextSync ctx $ SendClientFinishedI eexts alpn (triClient appKey, triServer appKey) mode
+    let appSecInfo = ApplicationSecretInfo mode alpn (triClient appKey, triServer appKey)
+    contextSync ctx $ SendClientFinishedI eexts appSecInfo
     handshakeTerminate13 ctx
   where
     usedCipher = cCipher choice

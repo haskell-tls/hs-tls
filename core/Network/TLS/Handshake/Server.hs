@@ -749,10 +749,11 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
         handSecret = triBase handKey
     setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlySecret else clientHandshakeSecret
     setTxState ctx usedHash usedCipher serverHandshakeSecret
-    let mces
-         | is0RTTvalid = Just ces
+    let mEarlySecInfo
+         | is0RTTvalid = Just $ EarlySecretInfo usedCipher ces
          | otherwise   = Nothing
-    contextSync ctx $ SendServerHelloI exts usedCipher mces (chs,shs)
+        handSecInfo = HandshakeSecretInfo usedCipher (chs,shs)
+    contextSync ctx $ SendServerHelloI exts mEarlySecInfo handSecInfo
     ----------------------------------------------------------------
     runPacketFlight ctx hss $ do
         sendExtensions rtt0OK protoExt
@@ -771,7 +772,8 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
     setTxState ctx usedHash usedCipher serverApplicationSecret0
     alpn <- usingState_ ctx getNegotiatedProtocol
     mode <- usingHState ctx getTLS13HandshakeMode
-    contextSync ctx $ SendServerFinishedI alpn (cas,sas) mode
+    let appSecInfo = ApplicationSecretInfo mode alpn (cas,sas)
+    contextSync ctx $ SendServerFinishedI appSecInfo
     ----------------------------------------------------------------
     if rtt0OK then
         setEstablished ctx (EarlyDataAllowed rtt0max)

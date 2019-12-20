@@ -15,6 +15,9 @@ module Network.TLS.QUIC (
     , HandshakeSecret
     , ApplicationSecret
     , TrafficSecrets
+    , EarlySecretInfo(..)
+    , HandshakeSecretInfo(..)
+    , ApplicationSecretInfo(..)
     -- * Client handshake controller
     , newQUICClient
     , ClientController
