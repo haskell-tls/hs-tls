@@ -36,18 +36,18 @@ quicServer _ ask get put ref (PutClientHello ch) =
 quicServer _ ask get _ _ GetServerFinished = do
     rsp <- ask
     case rsp of
-      SendServerFinishedI alpn appSecs -> do
+      SendServerFinishedI alpn appSecs mode -> do
           sf <- get
-          return $ SendServerFinished sf alpn appSecs
+          return $ SendServerFinished sf alpn appSecs mode
       ServerHandshakeFailedI e -> E.throwIO e
       _ -> error "quicServer"
 quicServer _ ask get put ref (PutClientFinished cf) =
     putRecordWith put ref cf HandshakeType_Finished13 ServerNeedsMore $ do
         rsp <- ask
         case rsp of
-          SendSessionTicketI mode -> do
+          SendSessionTicketI -> do
               nst <- get
-              return $ SendSessionTicket nst mode
+              return $ SendSessionTicket nst
           ServerHandshakeFailedI e -> E.throwIO e
           _ -> error "quicServer"
 quicServer wtid _ _ _ _ ExitServer = do

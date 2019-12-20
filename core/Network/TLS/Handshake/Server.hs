@@ -770,7 +770,8 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
         applicationSecret = triBase appKey
     setTxState ctx usedHash usedCipher serverApplicationSecret0
     alpn <- usingState_ ctx getNegotiatedProtocol
-    contextSync ctx $ SendServerFinishedI alpn (cas,sas)
+    mode <- usingHState ctx getTLS13HandshakeMode
+    contextSync ctx $ SendServerFinishedI alpn (cas,sas) mode
     ----------------------------------------------------------------
     if rtt0OK then
         setEstablished ctx (EarlyDataAllowed rtt0max)
@@ -782,8 +783,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
             handshakeTerminate13 ctx
             setRxState ctx usedHash usedCipher clientApplicationSecret0
             sendNewSessionTicket applicationSecret sfSentTime
-            mode <- usingHState ctx getTLS13HandshakeMode
-            contextSync ctx $ SendSessionTicketI mode
+            contextSync ctx $ SendSessionTicketI
         expectFinished _ hs = unexpected (show hs) (Just "finished 13")
 
     let expectEndOfEarlyData EndOfEarlyData13 =

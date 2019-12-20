@@ -83,7 +83,8 @@ data ServerStatus =
   | SendServerFinished Finished
                        (Maybe NegotiatedProtocol)
                        (TrafficSecrets ApplicationSecret)
-  | SendSessionTicket SessionTicket HandshakeMode13
+                       HandshakeMode13
+  | SendSessionTicket SessionTicket
   | ServerHandshakeDone
 
 instance Show ServerStatus where
@@ -102,7 +103,8 @@ data ServerStatusI =
                      (TrafficSecrets HandshakeSecret)
   | SendServerFinishedI (Maybe NegotiatedProtocol)
                         (TrafficSecrets ApplicationSecret)
-  | SendSessionTicketI HandshakeMode13
+                        HandshakeMode13
+  | SendSessionTicketI
   | ServerHandshakeFailedI TLSError
 
 ----------------------------------------------------------------
