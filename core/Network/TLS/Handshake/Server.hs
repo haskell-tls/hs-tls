@@ -771,7 +771,13 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
         applicationSecret = triBase appKey
     setTxState ctx usedHash usedCipher serverApplicationSecret0
     alpn <- usingState_ ctx getNegotiatedProtocol
-    mode <- usingHState ctx getTLS13HandshakeMode
+    -- TLS13RTT0Status is not exposed, so needs to distinguish
+    -- RTT0 and PreSharedKey.
+    let mode
+         | rtt0OK                   = RTT0
+         | authenticated && not hrr = PreSharedKey
+         | hrr                      = HelloRetryRequest
+         | otherwise                = FullHandshake
     let appSecInfo = ApplicationSecretInfo mode alpn (cas,sas)
     contextSync ctx $ SendServerFinishedI appSecInfo
     ----------------------------------------------------------------
