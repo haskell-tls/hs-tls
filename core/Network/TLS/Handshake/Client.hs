@@ -872,7 +872,9 @@ handshakeClient13' cparams ctx groupSent choice = do
         return accext
     hChSf <- transcriptHash ctx
     runPacketFlight ctx [] $ sendChangeCipherSpec13 ctx
-    when rtt0accepted $ sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
+    let earlyData = clientEarlyData cparams
+    when (rtt0accepted && earlyData /= Just "") $ -- QUIC
+        sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
     setTxState ctx usedHash usedCipher clientHandshakeSecret
     sendClientFlight13 cparams ctx usedHash clientHandshakeSecret
     appKey <- switchToApplicationSecret handshakeSecret hChSf
