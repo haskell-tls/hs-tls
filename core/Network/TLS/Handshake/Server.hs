@@ -698,7 +698,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
     usingHState ctx $ setNegotiatedGroup $ keyShareEntryGroup clientKeyShare
     srand <- setServerParameter
     -- ALPN is used in choosePSK
-    protoExt <- liftIO $ applicationProtocol ctx exts sparams
+    protoExt <- applicationProtocol ctx exts sparams
     (psk, binderInfo, is0RTTvalid) <- choosePSK
     earlyKey <- calculateEarlySecret ctx choice (Left psk) True
     let earlySecret = pairBase earlyKey
