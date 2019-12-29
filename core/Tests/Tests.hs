@@ -324,8 +324,17 @@ prop_handshake13_rtt0 = do
           { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
           , supportedGroups = [X25519]
           }
-        params0 = (cli { clientSupported = cliSupported }
+        cliHooks = def {
+            onSuggestALPN = return $ Just ["h2"]
+          }
+        svrHooks = def {
+            onALPNClientSuggest = Just (\protos -> return $ head protos)
+          }
+        params0 = (cli { clientSupported = cliSupported
+                       , clientHooks = cliHooks
+                       }
                   ,srv { serverSupported = svrSupported
+                       , serverHooks = svrHooks
                        , serverEarlyDataSize = 2048 }
                   )
 

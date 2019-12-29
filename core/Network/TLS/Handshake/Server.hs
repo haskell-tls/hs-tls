@@ -697,6 +697,8 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
         setClientSupportsPHA supportsPHA
     usingHState ctx $ setNegotiatedGroup $ keyShareEntryGroup clientKeyShare
     srand <- setServerParameter
+    -- ALPN is used in choosePSK
+    protoExt <- applicationProtocol ctx exts sparams
     (psk, binderInfo, is0RTTvalid) <- choosePSK
     earlyKey <- calculateEarlySecret ctx choice (Left psk) True
     let earlySecret = pairBase earlyKey
@@ -736,7 +738,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
             setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlySecret else clientHandshakeSecret
             setTxState ctx usedHash usedCipher serverHandshakeSecret
     ----------------------------------------------------------------
-        sendExtensions rtt0OK
+        sendExtensions rtt0OK protoExt
         case mCredInfo of
             Nothing              -> return ()
             Just (cred, hashSig) -> sendCertAndVerify cred hashSig
@@ -887,8 +889,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
         vrfy <- makeCertVerify ctx pubkey hashSig hChSc
         loadPacket13 ctx $ Handshake13 [vrfy]
 
-    sendExtensions rtt0OK = do
-        protoExt <- liftIO $ applicationProtocol ctx exts sparams
+    sendExtensions rtt0OK protoExt = do
         msni <- liftIO $ usingState_ ctx getClientSNI
         let sniExtension = case msni of
               -- RFC6066: In this event, the server SHALL include
