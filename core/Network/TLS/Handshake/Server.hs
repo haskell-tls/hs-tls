@@ -247,7 +247,10 @@ handshakeServerWithTLS12 sparams ctx chosenVersion exts ciphers serverName clien
                                                  then (allCreds, sigAllCreds, allCiphers)
                                                  else (cltCreds, sigCltCreds, cltCiphers)
                             in resultTuple
-                  _     -> (allCreds, allCreds, selectCipher allCreds allCreds)
+                  _     ->
+                    let sigAllCreds = filterCredentials (isJust . credentialDigitalSignatureKey) allCreds
+                        allCiphers  = selectCipher allCreds sigAllCreds
+                     in (allCreds, sigAllCreds, allCiphers)
 
     -- The shared cipherlist can become empty after filtering for compatible
     -- creds, check now before calling onCipherChoosing, which does not handle
