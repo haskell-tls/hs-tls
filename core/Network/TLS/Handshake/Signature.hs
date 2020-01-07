@@ -17,6 +17,7 @@ module Network.TLS.Handshake.Signature
     , checkSupportedHashSignature
     , certificateCompatible
     , signatureCompatible
+    , signatureCompatible13
     , hashSigToCertType
     , signatureParams
     , decryptError
@@ -64,6 +65,18 @@ signatureCompatible (PubKeyEC _)        (_, SignatureECDSA)            = True
 signatureCompatible (PubKeyEd25519 _)   (_, SignatureEd25519)          = True
 signatureCompatible (PubKeyEd448 _)     (_, SignatureEd448)            = True
 signatureCompatible _                   (_, _)                         = False
+
+-- Same as 'signatureCompatible' but for TLS13: for ECDSA this also checks the
+-- relation between hash in the HashAndSignatureAlgorithm and elliptic curve
+signatureCompatible13 :: PubKey -> HashAndSignatureAlgorithm -> Bool
+signatureCompatible13 (PubKeyEC ecPub) (h, SignatureECDSA) =
+    maybe False (\g -> findEllipticCurveGroup ecPub == Just g) (hashCurve h)
+  where
+    hashCurve HashSHA256 = Just P256
+    hashCurve HashSHA384 = Just P384
+    hashCurve HashSHA512 = Just P521
+    hashCurve _          = Nothing
+signatureCompatible13 pub hs = signatureCompatible pub hs
 
 -- | Translate a 'HashAndSignatureAlgorithm' to an acceptable 'CertificateType'.
 -- Perhaps this needs to take supported groups into account, so that, for

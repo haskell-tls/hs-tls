@@ -169,7 +169,8 @@ handshakeServerWithTLS12 :: ServerParams
                          -> IO ()
 handshakeServerWithTLS12 sparams ctx chosenVersion exts ciphers serverName clientVersion compressions clientSession = do
     extraCreds <- onServerNameIndication (serverHooks sparams) serverName
-    let allCreds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
+    let allCreds = filterCredentials (isCredentialAllowed chosenVersion) $
+                       extraCreds `mappend` sharedCredentials (ctxShared ctx)
 
     -- If compression is null, commonCompressions should be [0].
     when (null commonCompressions) $ throwCore $
@@ -246,7 +247,10 @@ handshakeServerWithTLS12 sparams ctx chosenVersion exts ciphers serverName clien
                                                  then (allCreds, sigAllCreds, allCiphers)
                                                  else (cltCreds, sigCltCreds, cltCiphers)
                             in resultTuple
-                  _     -> (allCreds, allCreds, selectCipher allCreds allCreds)
+                  _     ->
+                    let sigAllCreds = filterCredentials (isJust . credentialDigitalSignatureKey) allCreds
+                        allCiphers  = selectCipher allCreds sigAllCreds
+                     in (allCreds, sigAllCreds, allCiphers)
 
     -- The shared cipherlist can become empty after filtering for compatible
     -- creds, check now before calling onCipherChoosing, which does not handle
@@ -530,7 +534,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             msgs  <- usingHState ctx $ B.concat <$> getHandshakeMessages
 
             pubKey <- usingHState ctx getRemotePublicKey
-            checkDigitalSignatureKey pubKey
+            checkDigitalSignatureKey usedVersion pubKey
 
             verif <- checkCertificateVerify ctx usedVersion pubKey msgs dsig
             clientCertVerify sparams ctx certs verif
@@ -589,10 +593,17 @@ credentialDigitalSignatureKey cred
     | otherwise = Nothing
   where keys@(pubkey, _) = credentialPublicPrivateKeys cred
 
+filterCredentials :: (Credential -> Bool) -> Credentials -> Credentials
+filterCredentials p (Credentials l) = Credentials (filter p l)
+
 filterSortCredentials :: Ord a => (Credential -> Maybe a) -> Credentials -> Credentials
 filterSortCredentials rankFun (Credentials creds) =
     let orderedPairs = sortOn fst [ (rankFun cred, cred) | cred <- creds ]
      in Credentials [ cred | (Just _, cred) <- orderedPairs ]
+
+isCredentialAllowed :: Version -> Credential -> Bool
+isCredentialAllowed ver cred = pubkey `versionCompatible` ver
+  where (pubkey, _) = credentialPublicPrivateKeys cred
 
 -- Filters a list of candidate credentials with credentialMatchesHashSignatures.
 --
@@ -623,7 +634,6 @@ filterCredentialsWithHashSignatures exts =
   where
     withExt extId = extensionLookup extId exts >>= extensionDecode MsgTClientHello
     withAlgs sas = filterCredentials (credentialMatchesHashSignatures sas)
-    filterCredentials p (Credentials l) = Credentials (filter p l)
 
 -- returns True if certificate filtering with "signature_algorithms_cert" /
 -- "signature_algorithms" produced no ephemeral D-H nor TLS13 cipher (so
@@ -708,7 +718,8 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
     let authenticated = isJust binderInfo
         rtt0OK = authenticated && not hrr && rtt0 && rtt0accept && is0RTTvalid
     extraCreds <- usingState_ ctx getClientSNI >>= onServerNameIndication (serverHooks sparams)
-    let allCreds = extraCreds `mappend` sharedCredentials (ctxShared ctx)
+    let allCreds = filterCredentials (isCredentialAllowed chosenVersion) $
+                       extraCreds `mappend` sharedCredentials (ctxShared ctx)
     ----------------------------------------------------------------
     established <- ctxEstablished ctx
     if established /= NotEstablished then
@@ -959,7 +970,8 @@ expectCertVerify sparams ctx hChCc (CertVerify13 sigAlg sig) = liftIO $ do
     pubkey <- case cc of
                 [] -> throwCore $ Error_Protocol ("client certificate missing", True, HandshakeFailure)
                 c:_ -> return $ certPubKey $ getCertificate c
-    checkDigitalSignatureKey pubkey
+    ver <- usingState_ ctx getVersion
+    checkDigitalSignatureKey ver pubkey
     usingHState ctx $ setPublicKey pubkey
     verif <- checkCertVerify ctx pubkey sigAlg sig hChCc
     clientCertVerify sparams ctx certs verif
@@ -1067,7 +1079,7 @@ credentialsFindForSigning13' sigAlg (Credentials l) = find forSigning l
   where
     forSigning cred = case credentialDigitalSignatureKey cred of
         Nothing  -> False
-        Just pub -> pub `signatureCompatible` sigAlg
+        Just pub -> pub `signatureCompatible13` sigAlg
 
 clientCertificate :: ServerParams -> Context -> CertificateChain -> IO ()
 clientCertificate sparams ctx certs = do

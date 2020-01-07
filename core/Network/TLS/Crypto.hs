@@ -28,6 +28,7 @@ module Network.TLS.Crypto
     , isKeyExchangeSignatureKey
     , findKeyExchangeSignatureAlg
     , findFiniteFieldGroup
+    , findEllipticCurveGroup
     , kxEncrypt
     , kxDecrypt
     , kxSign
@@ -103,6 +104,14 @@ findFiniteFieldGroup params = lookup (pg params) table
     table = [ (pg prms, grp) | grp <- availableFFGroups
                              , let Just prms = dhParamsForGroup grp
             ]
+
+findEllipticCurveGroup :: PubKeyEC -> Maybe Group
+findEllipticCurveGroup ecPub =
+    case ecPubKeyCurveName ecPub of
+        Just ECC.SEC_p256r1 -> Just P256
+        Just ECC.SEC_p384r1 -> Just P384
+        Just ECC.SEC_p521r1 -> Just P521
+        _                   -> Nothing
 
 -- functions to use the hidden class.
 hashInit :: Hash -> HashContext

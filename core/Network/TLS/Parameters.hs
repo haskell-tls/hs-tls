@@ -312,7 +312,9 @@ data Supported = Supported
       --
       --   The list is sent to the server as part of the "supported_groups"
       --   extension.  It is used in both clients and servers to restrict
-      --   accepted groups in DH key exchange.
+      --   accepted groups in DH key exchange.  Up until TLS v1.2, it is also
+      --   used by a client to restrict accepted elliptic curves in ECDSA
+      --   signatures.
       --
       --   The default value includes all groups with security strength of 128
       --   bits or more.

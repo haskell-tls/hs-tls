@@ -319,8 +319,8 @@ handshakeClient' cparams ctx groups mparams = do
                         _ -> unexpected (show p) (Just "handshake")
                 throwAlert a = usingState_ ctx $ throwError $ Error_Protocol ("expecting server hello, got alert : " ++ show a, True, HandshakeFailure)
 
--- | Store the keypair and check that it is compatible with a list of
--- 'CertificateType' values.
+-- | Store the keypair and check that it is compatible with the current protocol
+-- version and a list of 'CertificateType' values.
 storePrivInfoClient :: Context
                     -> [CertificateType]
                     -> Credential
@@ -330,6 +330,12 @@ storePrivInfoClient ctx cTypes (cc, privkey) = do
     unless (certificateCompatible pubkey cTypes) $
         throwCore $ Error_Protocol
             ( pubkeyType pubkey ++ " credential does not match allowed certificate types"
+            , True
+            , InternalError )
+    ver <- usingState_ ctx getVersion
+    unless (pubkey `versionCompatible` ver) $
+        throwCore $ Error_Protocol
+            ( pubkeyType pubkey ++ " credential is not supported at version " ++ show ver
             , True
             , InternalError )
 
@@ -410,23 +416,24 @@ clientChain cparams ctx =
                        storePrivInfoClient ctx cTypes cred
                        return $ Just cc
 
--- | Return a most preferred 'HandAndSignatureAlgorithm' that is
--- compatible with the local key and server's signature
--- algorithms (both already saved).  Must only be called for TLS
--- versions 1.2 and up.
+-- | Return a most preferred 'HandAndSignatureAlgorithm' that is compatible with
+-- the local key and server's signature algorithms (both already saved).  Must
+-- only be called for TLS versions 1.2 and up, with compatibility function
+-- 'signatureCompatible' or 'signatureCompatible13' based on version.
 --
 -- The values in the server's @signature_algorithms@ extension are
 -- in descending order of preference.  However here the algorithms
 -- are selected by client preference in @cHashSigs@.
 --
 getLocalHashSigAlg :: Context
+                   -> (PubKey -> HashAndSignatureAlgorithm -> Bool)
                    -> [HashAndSignatureAlgorithm]
                    -> PubKey
                    -> IO HashAndSignatureAlgorithm
-getLocalHashSigAlg ctx cHashSigs pubKey = do
+getLocalHashSigAlg ctx isCompatible cHashSigs pubKey = do
     -- Must be present with TLS 1.2 and up.
     (Just (_, Just hashSigs, _)) <- usingHState ctx getCertReqCBdata
-    let want = (&&) <$> signatureCompatible pubKey
+    let want = (&&) <$> isCompatible pubKey
                     <*> flip elem hashSigs
     case find want cHashSigs of
         Just best -> return best
@@ -582,7 +589,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                 mhashSig    <- case ver of
                     TLS12 ->
                         let cHashSigs = supportedHashSignatures $ ctxSupported ctx
-                         in Just <$> getLocalHashSigAlg ctx cHashSigs pubKey
+                         in Just <$> getLocalHashSigAlg ctx signatureCompatible cHashSigs pubKey
                     _     -> return Nothing
 
                 -- Fetch all handshake messages up to now.
@@ -775,6 +782,12 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
             publicKey <- usingHState ctx getRemotePublicKey
             unless (isKeyExchangeSignatureKey kxsAlg publicKey) $
                 throwCore $ Error_Protocol ("server public key algorithm is incompatible with " ++ show kxsAlg, True, HandshakeFailure)
+            ver <- usingState_ ctx getVersion
+            unless (publicKey `versionCompatible` ver) $
+                throwCore $ Error_Protocol (show ver ++ " has no support for " ++ pubkeyType publicKey, True, IllegalParameter)
+            let groups = supportedGroups (ctxSupported ctx)
+            unless (satisfiesEcPredicate (`elem` groups) publicKey) $
+                throwCore $ Error_Protocol ("server public key has unsupported elliptic curve", True, IllegalParameter)
             return publicKey
 
 processServerKeyExchange ctx p = processCertificateRequest ctx p
@@ -930,7 +943,8 @@ handshakeClient13' cparams ctx groupSent choice = do
     expectCertAndVerify (Certificate13 _ cc _) = do
         _ <- liftIO $ processCertificate cparams ctx (Certificates cc)
         let pubkey = certPubKey $ getCertificate $ getCertificateChainLeaf cc
-        checkDigitalSignatureKey pubkey
+        ver <- liftIO $ usingState_ ctx getVersion
+        checkDigitalSignatureKey ver pubkey
         usingHState ctx $ setPublicKey pubkey
         recvHandshake13hash ctx $ expectCertVerify pubkey
     expectCertAndVerify p = unexpected (show p) (Just "server certificate")
@@ -1017,7 +1031,7 @@ sendClientFlight13 cparams ctx usedHash baseKey = do
             _  -> do
                   hChSc      <- transcriptHash ctx
                   pubKey     <- getLocalPublicKey ctx
-                  sigAlg     <- liftIO $ getLocalHashSigAlg ctx cHashSigs pubKey
+                  sigAlg     <- liftIO $ getLocalHashSigAlg ctx signatureCompatible13 cHashSigs pubKey
                   vfy        <- makeCertVerify ctx pubKey sigAlg hChSc
                   loadPacket13 ctx $ Handshake13 [vfy]
     --
