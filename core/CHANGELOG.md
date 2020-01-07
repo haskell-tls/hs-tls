@@ -1,3 +1,28 @@
+## Version 1.5.3
+
+- Additional verification regarding EC signatures
+  [#412](https://github.com/vincenthz/hs-tls/pull/412)
+- Fixing ALPN
+  [#411](https://github.com/vincenthz/hs-tls/pull/411)
+- Check SSLv3 padding length
+  [#410](https://github.com/vincenthz/hs-tls/pull/410)
+- Exposing getClientCertificateChain
+  [#407](https://github.com/vincenthz/hs-tls/pull/407)
+- Extended Master Secret
+  [#406](https://github.com/vincenthz/hs-tls/pull/406)
+- Brushing up the documentation
+  [#404](https://github.com/vincenthz/hs-tls/pull/404)
+  [#408](https://github.com/vincenthz/hs-tls/pull/408)
+- Improving tests
+  [#403](https://github.com/vincenthz/hs-tls/pull/403)
+- Avoid calling onServerNameIndication twice with HRR
+  [#402](https://github.com/vincenthz/hs-tls/pull/402)
+- Enable X448 and FFDHE groups
+  [#401](https://github.com/vincenthz/hs-tls/pull/401)
+- Refactoring
+  [#400](https://github.com/vincenthz/hs-tls/pull/400)
+  [#399](https://github.com/vincenthz/hs-tls/pull/399)
+
 ## Version 1.5.2
 
 - Enabled TLS 1.3 by default [#398](https://github.com/vincenthz/hs-tls/pull/398)
