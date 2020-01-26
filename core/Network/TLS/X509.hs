@@ -14,20 +14,27 @@ module Network.TLS.X509
     , getCertificate
     , isNullCertificateChain
     , getCertificateChainLeaf
+    , getSystemCertificateStore
     , CertificateRejectReason(..)
     , CertificateUsage(..)
     , CertificateStore
     , ValidationCache
     , exceptionValidationCache
+    , makeCertificateStore
     , validateDefault
     , FailedReason
+    , readCertificateStore
+    , readCertificates
+    , readKeyFile
     , ServiceID
     , wrapCertificateChecks
     ) where
 
 import Data.X509
+import Data.X509.File (readKeyFile, readSignedObject)
 import Data.X509.Validation
 import Data.X509.CertificateStore
+import System.X509 (getSystemCertificateStore)
 
 isNullCertificateChain :: CertificateChain -> Bool
 isNullCertificateChain (CertificateChain l) = null l
