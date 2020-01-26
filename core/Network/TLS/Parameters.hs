@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 -- |
 -- Module      : Network.TLS.Parameters
 -- License     : BSD-style
@@ -25,8 +27,18 @@ module Network.TLS.Parameters
     , GroupUsage(..)
     , CertificateUsage(..)
     , CertificateRejectReason(..)
+    -- * Helpers
+    , clientParamsSetClientCert
+    , clientParamsUpdateCAFromStore
+    , clientParamsUpdateCA'
+    , clientParamsUpdateCA
+    , clientParamsAddCA
+    , clientParamsSetCA
+    , clientParamsResetFromSystem
     ) where
 
+import qualified Control.Exception as E
+import Control.Monad.Except (runExceptT, ExceptT(..))
 import Network.TLS.Extension
 import Network.TLS.Struct
 import qualified Network.TLS.Struct as Struct
@@ -140,6 +152,58 @@ defaultParamsClient serverName serverId = ClientParams
     , clientDebug                   = defaultDebugParams
     , clientEarlyData               = Nothing
     }
+
+-- | Loads the client cert to provide when the server requests client authentication.
+clientParamsSetClientCert :: FilePath -> FilePath -> ClientParams -> IO (Either String ClientParams)
+clientParamsSetClientCert keyFile certificateFile params = do
+    keys <- E.handle (\(_ :: E.IOException) -> pure []) $ readKeyFile keyFile
+    certs <- readCertificates certificateFile
+    case (keys, certs) of
+        ([], []) -> return $ Left $ "Couldn't read key from key file: " ++ keyFile ++ "\nCouldn't read certs from: " ++ certificateFile
+        ([], _) -> return $ Left $ "Couldn't read key from key file: " ++ keyFile
+        (_:_:_, _) -> return $ Left $ "Multiple keys in key file: " ++ keyFile
+        (_, []) -> return $ Left $ "Couldn't read certs from: " ++ certificateFile
+        ([key], _) ->
+            let hooks = clientHooks params in
+            return $ Right params {
+                      clientHooks = hooks
+                          { onCertificateRequest = \_ -> return (Just (CertificateChain certs, key))}
+                      }
+
+readStore :: FilePath -> IO (Either String CertificateStore)
+readStore path = maybe (Left $ "Couldn't read certs from: " ++ path) Right <$> readCertificateStore path
+
+-- | Apply the merge function to the CA store and the certificate store read from the provided path.
+clientParamsUpdateCAFromStore :: (CertificateStore -> CertificateStore -> CertificateStore) -> FilePath -> ClientParams -> IO (Either String ClientParams)
+clientParamsUpdateCAFromStore mergeStores path = clientParamsUpdateCA mergeStores (readStore path)
+
+-- | Modify the CA store with the provided function.
+clientParamsUpdateCA' :: (CertificateStore -> CertificateStore) -> ClientParams -> ClientParams
+clientParamsUpdateCA' updateStore params =
+      params {
+        clientShared = oldShared { sharedCAStore = store }
+      }
+    where
+      oldShared = clientShared params
+      store = updateStore $ sharedCAStore oldShared
+
+-- | Apply the merge function to the CA store and the certificate store obtained from the action.
+clientParamsUpdateCA :: (CertificateStore -> CertificateStore -> CertificateStore) -> IO (Either String CertificateStore) -> ClientParams -> IO (Either String ClientParams)
+clientParamsUpdateCA mergeStores storeReader params = runExceptT $ do
+    customStore <- ExceptT storeReader
+    return $ clientParamsUpdateCA' (mergeStores customStore) params
+
+-- | Add to the CA store the certificate store obtained from the action.
+clientParamsAddCA :: IO (Either String CertificateStore) -> ClientParams -> IO (Either String ClientParams)
+clientParamsAddCA = clientParamsUpdateCA (<>)
+
+-- | Overwrites the CA store with the certificate store obtained from the action.
+clientParamsSetCA :: IO (Either String CertificateStore) -> ClientParams -> IO (Either String ClientParams)
+clientParamsSetCA = clientParamsUpdateCA const
+
+-- | Overwrites the CA store with the system certificate store.
+clientParamsResetFromSystem :: ClientParams -> IO (Either String ClientParams)
+clientParamsResetFromSystem = clientParamsSetCA (fmap pure getSystemCertificateStore)
 
 data ServerParams = ServerParams
     { -- | Request a certificate from client.

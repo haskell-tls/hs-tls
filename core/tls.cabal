@@ -54,8 +54,9 @@ Library
                    , asn1-types >= 0.2.0
                    , asn1-encoding
                    , x509 >= 1.7.5
-                   , x509-store >= 1.6
+                   , x509-store >= 1.6.8
                    , x509-validation >= 1.6.5
+                   , x509-system >= 1.4
                    , async >= 2.0
                    , hourglass
   if flag(network)
