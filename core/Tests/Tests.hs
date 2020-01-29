@@ -58,14 +58,17 @@ chunkLengths len
 
 runTLSPipeN :: Int -> (ClientParams, ServerParams) -> (Context -> Chan [C8.ByteString] -> IO ()) -> (Chan C8.ByteString -> Context -> IO ()) -> PropertyM IO ()
 runTLSPipeN n params tlsServer tlsClient = do
-    (writeStart, readResult) <- run (establishDataPipe params tlsServer tlsClient)
-    -- send some data
+    -- generate some data to send
     ds <- replicateM n $ do
         d <- B.pack <$> pick (someWords8 256)
-        _ <- run $ writeStart d
         return d
-    -- receive it
-    m_dsres <- run $ timeout 60000000 readResult -- 60 sec
+    -- send it
+    m_dsres <- run $ do
+        withDataPipe params tlsServer tlsClient $ \(writeStart, readResult) -> do
+            forM_ ds $ \d -> do
+                writeStart d
+            -- receive it
+            timeout 60000000 readResult -- 60 sec
     case m_dsres of
         Nothing -> error "timed out"
         Just dsres -> ds `assertEq` dsres

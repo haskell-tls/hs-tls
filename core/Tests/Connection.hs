@@ -26,7 +26,7 @@ module Connection
     , twoSessionManagers
     , setPairParamsSessionManagers
     , setPairParamsSessionResuming
-    , establishDataPipe
+    , withDataPipe
     , initiateDataPipe
     , byeBye
     ) where
@@ -366,8 +366,8 @@ newPairContext pipe (cParams, sParams) = do
                                     , loggingPacketRecv = putStrLn . ((pre ++ "<< ") ++) }
                 else def
 
-establishDataPipe :: (ClientParams, ServerParams) -> (Context -> Chan result -> IO ()) -> (Chan start -> Context -> IO ()) -> IO (start -> IO (), IO result)
-establishDataPipe params tlsServer tlsClient = do
+withDataPipe :: (ClientParams, ServerParams) -> (Context -> Chan result -> IO ()) -> (Chan start -> Context -> IO ()) -> ((start -> IO (), IO result) -> IO a) -> IO a
+withDataPipe params tlsServer tlsClient cont = do
     -- initial setup
     pipe        <- newPipe
     _           <- runPipe pipe
@@ -376,19 +376,20 @@ establishDataPipe params tlsServer tlsClient = do
 
     (cCtx, sCtx) <- newPairContext pipe params
 
-    sAsync <- async $ E.catch (tlsServer sCtx resultQueue)
-                              (printAndRaise "server" (serverSupported $ snd params))
-    cAsync <- async $ E.catch (tlsClient startQueue cCtx)
-                              (printAndRaise "client" (clientSupported $ fst params))
+    withAsync (E.catch (tlsServer sCtx resultQueue)
+                       (printAndRaise "server" (serverSupported $ snd params))) $ \sAsync -> do
+    withAsync (E.catch (tlsClient startQueue cCtx)
+                       (printAndRaise "client" (clientSupported $ fst params))) $ \cAsync -> do
 
-    let readResult = waitBoth cAsync sAsync >> readChan resultQueue
-    return (writeChan startQueue, readResult)
+      let readResult = waitBoth cAsync sAsync >> readChan resultQueue
+      cont (writeChan startQueue, readResult)
+
   where
         printAndRaise :: String -> Supported -> E.SomeException -> IO ()
         printAndRaise s supported e = do
             putStrLn $ s ++ " exception: " ++ show e ++
-                           ", supported: " ++ show supported
-            E.throw e
+                            ", supported: " ++ show supported
+            E.throwIO e
 
 initiateDataPipe :: (ClientParams, ServerParams) -> (Context -> IO a1) -> (Context -> IO a) -> IO (Either E.SomeException a, Either E.SomeException a1)
 initiateDataPipe params tlsServer tlsClient = do
