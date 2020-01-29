@@ -65,9 +65,10 @@ runTLSPipeN n params tlsServer tlsClient = do
         _ <- run $ writeStart d
         return d
     -- receive it
-    dsres <- run $ timeout 60000000 readResult -- 60 sec
-    -- check if it equal
-    Just ds `assertEq` dsres
+    m_dsres <- run $ timeout 60000000 readResult -- 60 sec
+    case m_dsres of
+        Nothing -> error "timed out"
+        Just dsres -> ds `assertEq` dsres
 
 runTLSPipe :: (ClientParams, ServerParams) -> (Context -> Chan [C8.ByteString] -> IO ()) -> (Chan C8.ByteString -> Context -> IO ()) -> PropertyM IO ()
 runTLSPipe = runTLSPipeN 1
