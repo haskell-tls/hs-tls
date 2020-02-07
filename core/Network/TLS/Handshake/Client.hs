@@ -314,7 +314,7 @@ handshakeClient' cparams ctx groups mparams = do
                 -- But HandshakeDigestContext is not created yet.
                 earlyKey <- calculateEarlySecret ctx choice (Right earlySecret) False
                 let ces@(ClientTrafficSecret clientEarlySecret) = pairClient earlyKey
-                when (earlyData /= "") $ do -- for QUIC
+                when (earlyData /= quicEarlyData) $ do
                     runPacketFlight ctx [] $ sendChangeCipherSpec13 ctx
                     setTxState ctx usedHash usedCipher clientEarlySecret
                     let len = ctxFragmentSize ctx
@@ -873,7 +873,7 @@ handshakeClient13' cparams ctx groupSent choice = do
     hChSf <- transcriptHash ctx
     runPacketFlight ctx [] $ sendChangeCipherSpec13 ctx
     let earlyData = clientEarlyData cparams
-    when (rtt0accepted && earlyData /= Just "") $ -- QUIC
+    when (rtt0accepted && earlyData /= Just quicEarlyData) $
         sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
     setTxState ctx usedHash usedCipher clientHandshakeSecret
     sendClientFlight13 cparams ctx usedHash clientHandshakeSecret
@@ -1094,3 +1094,6 @@ contextSync :: Context -> ClientStatusI -> IO ()
 contextSync ctx ctl = case ctxHandshakeSync ctx of
   Nothing                     -> return ()
   Just (HandshakeSync sync _) -> sync ctl
+
+quicEarlyData :: ByteString
+quicEarlyData = ""

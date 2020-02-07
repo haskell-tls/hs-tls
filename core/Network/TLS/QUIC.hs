@@ -38,6 +38,7 @@ module Network.TLS.QUIC (
     , errorToAlertDescription
     , fromAlertDescription
     , toAlertDescription
+    , quicMaxEarlyDataSize
     ) where
 
 import Network.TLS.Backend
@@ -48,6 +49,7 @@ import Network.TLS.Crypto (hashDigestSize)
 import Network.TLS.Extension (extensionID_QuicTransportParameters)
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Control
+import Network.TLS.Handshake.Server
 import Network.TLS.Handshake.QUIC
 import Network.TLS.Handshake.State
 import Network.TLS.Imports
