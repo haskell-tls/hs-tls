@@ -120,6 +120,15 @@ handshakeClient' cparams ctx groups mparams = do
         tls13 = highestVer >= TLS13
         ems = supportedExtendedMasterSec $ ctxSupported ctx
         groupToSend = listToMaybe groups
+
+        -- List of extensions to send in ClientHello, ordered such that we never
+        -- terminate with a zero-length extension.  Some buggy implementations
+        -- are allergic to an extension with empty data at final position.
+        --
+        -- Without TLS 1.3, the list ends with extension "signature_algorithms"
+        -- with length >= 2 bytes.  When TLS 1.3 is enabled, extensions
+        -- "psk_key_exchange_modes" (currently always sent) and "pre_shared_key"
+        -- (not always present) have length > 0.
         getExtensions pskInfo rtt0 = sequence
             [ sniExtension
             , secureReneg
@@ -133,10 +142,10 @@ handshakeClient' cparams ctx groups mparams = do
             , versionExtension
             , earlyDataExtension rtt0
             , keyshareExtension
-            , pskExchangeModeExtension
             , cookieExtension
             , postHandshakeAuthExtension
-            , preSharedKeyExtension pskInfo -- MUST be last
+            , pskExchangeModeExtension
+            , preSharedKeyExtension pskInfo -- MUST be last (RFC 8446)
             ]
 
         toExtensionRaw :: Extension e => e -> ExtensionRaw
