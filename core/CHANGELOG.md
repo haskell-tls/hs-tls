@@ -1,3 +1,10 @@
+## Version 1.5.4
+
+- Restore interoperability with early Java 6
+  [#422](https://github.com/vincenthz/hs-tls/pull/422)
+- Test cleanups for timeout and async usage
+  [#416](https://github.com/vincenthz/hs-tls/pull/416)
+
 ## Version 1.5.3
 
 - Additional verification regarding EC signatures
