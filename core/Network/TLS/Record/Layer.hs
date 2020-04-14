@@ -13,19 +13,27 @@ import qualified Control.Exception as E
 import qualified Data.ByteString as B
 
 data RecordLayer = RecordLayer {
-    -- Sending.hs and Sending13.hs
-    encodeRecord :: Record Plaintext -> IO (Either TLSError ByteString)
+    -- Sending.hs
+    recordEncode    :: Record Plaintext -> IO (Either TLSError ByteString)
+
+    -- Sending13.hs
+  , recordEncode13  :: Record Plaintext -> IO (Either TLSError ByteString)
+
     -- IO.hs
-  , sendBytes    :: ByteString -> IO ()
-    -- IO.hs
-  , recvRecord   :: IO (Either TLSError (Record Plaintext))
+  , recordSendBytes :: ByteString -> IO ()
+  , recordRecv      :: Bool -> Int -> IO (Either TLSError (Record Plaintext))
+  , recordRecv13    :: IO (Either TLSError (Record Plaintext))
+  , recordNeedFlush :: Bool
   }
 
 newTransparentRecordLayer :: (ByteString -> IO ()) -> IO ByteString -> RecordLayer
 newTransparentRecordLayer send recv = RecordLayer {
-    encodeRecord = transparentEncodeRecord
-  , sendBytes    = transparentSendBytes send
-  , recvRecord   = transparentRecvRecord recv
+    recordEncode    = transparentEncodeRecord
+  , recordEncode13  = transparentEncodeRecord
+  , recordSendBytes = transparentSendBytes send
+  , recordRecv      = \_ _ -> transparentRecvRecord recv
+  , recordRecv13    = transparentRecvRecord recv
+  , recordNeedFlush = True
   }
 
 transparentEncodeRecord :: Record Plaintext -> IO (Either TLSError ByteString)

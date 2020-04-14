@@ -72,6 +72,10 @@ import Network.TLS.Struct13
 import Network.TLS.State
 import Network.TLS.Hooks
 import Network.TLS.Record.State
+import Network.TLS.Record.Layer
+import Network.TLS.IO
+import Network.TLS.Sending
+import Network.TLS.Sending13
 import Network.TLS.Parameters
 import Network.TLS.Measurement
 import Network.TLS.Types (Role(..))
@@ -159,9 +163,7 @@ contextNew backend params = liftIO $ do
     lockRead  <- newMVar ()
     lockState <- newMVar ()
 
-    let syncNoOp _ = return ()
-
-    return Context
+    let ctx = Context
             { ctxConnection   = getBackend backend
             , ctxShared       = shared
             , ctxSupported    = supported
@@ -186,9 +188,22 @@ contextNew backend params = liftIO $ do
             , ctxPendingActions   = as
             , ctxCertRequests     = crs
             , ctxKeyLogger        = debugKeyLogger debug
-            , ctxRecordLayer      = Nothing
+            , ctxRecordLayer      = recordLayer
             , ctxHandshakeSync    = HandshakeSync syncNoOp syncNoOp
             }
+
+        syncNoOp _ = return ()
+
+        recordLayer = RecordLayer
+            { recordEncode    = encodeRecord ctx
+            , recordEncode13  = encodeRecord13 ctx
+            , recordSendBytes = sendBytes ctx
+            , recordRecv      = recvRecord ctx
+            , recordRecv13    = recvRecord13 ctx
+            , recordNeedFlush = False
+            }
+
+    return ctx
 
 -- | create a new context on an handle.
 contextNewOnHandle :: (MonadIO m, TLSParams params)

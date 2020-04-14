@@ -95,7 +95,7 @@ newQUICClient cparams = do
     (get, put, sync, ask, rl, ref) <- prepare
     ctx <- contextNew nullBackend cparams
     let ctx' = ctx {
-            ctxRecordLayer   = Just rl
+            ctxRecordLayer   = rl
           , ctxHandshakeSync = HandshakeSync sync (\_ -> return ())
           }
         failed = sync . ClientHandshakeFailedI
@@ -110,7 +110,7 @@ newQUICServer sparams = do
     (get, put, sync, ask, rl, ref) <- prepare
     ctx <- contextNew nullBackend sparams
     let ctx' = ctx {
-            ctxRecordLayer   = Just rl
+            ctxRecordLayer   = rl
           , ctxHandshakeSync = HandshakeSync (\_ -> return ()) sync
           }
         failed = sync . ServerHandshakeFailedI
