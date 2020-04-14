@@ -50,6 +50,5 @@ transparentSendBytes _    "" = return ()
 transparentSendBytes send bs = send bs
 
 transparentRecvRecord :: IO ByteString -> IO (Either TLSError (Record Plaintext))
-transparentRecvRecord recv = do
-    bs <- recv
-    return $ Right $ Record ProtocolType_Handshake TLS12 (fragmentPlaintext bs)
+transparentRecvRecord recv =
+    Right . Record ProtocolType_Handshake TLS12 . fragmentPlaintext <$> recv
