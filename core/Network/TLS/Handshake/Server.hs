@@ -1196,8 +1196,7 @@ postHandshakeAuthServerWith _ _ _ =
 
 contextSync :: Context -> ServerStatusI -> IO ()
 contextSync ctx ctl = case ctxHandshakeSync ctx of
-  Nothing                     -> return ()
-  Just (HandshakeSync _ sync) -> sync ctl
+    HandshakeSync _ sync -> sync ctl
 
 -- | Max early data size for QUIC.
 quicMaxEarlyDataSize :: Int

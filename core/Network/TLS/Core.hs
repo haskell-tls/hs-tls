@@ -328,5 +328,4 @@ updateKey ctx way = liftIO $ do
 
 contextSync :: Context -> ClientStatusI -> IO ()
 contextSync ctx ctl = case ctxHandshakeSync ctx of
-  Nothing                     -> return ()
-  Just (HandshakeSync sync _) -> sync ctl
+    HandshakeSync sync _ -> sync ctl

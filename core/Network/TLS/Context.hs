@@ -76,6 +76,7 @@ import Network.TLS.Parameters
 import Network.TLS.Measurement
 import Network.TLS.Types (Role(..))
 import Network.TLS.Handshake (handshakeClient, handshakeClientWith, handshakeServer, handshakeServerWith)
+import Network.TLS.Handshake.Control (HandshakeSync(..))
 import Network.TLS.PostHandshake (requestCertificateServer, postHandshakeAuthClientWith, postHandshakeAuthServerWith)
 import Network.TLS.X509
 import Network.TLS.RNG
@@ -158,6 +159,8 @@ contextNew backend params = liftIO $ do
     lockRead  <- newMVar ()
     lockState <- newMVar ()
 
+    let syncNoOp _ = return ()
+
     return Context
             { ctxConnection   = getBackend backend
             , ctxShared       = shared
@@ -184,7 +187,7 @@ contextNew backend params = liftIO $ do
             , ctxCertRequests     = crs
             , ctxKeyLogger        = debugKeyLogger debug
             , ctxRecordLayer      = Nothing
-            , ctxHandshakeSync    = Nothing
+            , ctxHandshakeSync    = HandshakeSync syncNoOp syncNoOp
             }
 
 -- | create a new context on an handle.

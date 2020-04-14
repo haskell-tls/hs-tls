@@ -133,7 +133,7 @@ data Context = Context
     , ctxCertRequests     :: IORef [Handshake13]  -- ^ pending PHA requests
     , ctxKeyLogger        :: String -> IO ()
     , ctxRecordLayer      :: Maybe RecordLayer
-    , ctxHandshakeSync    :: Maybe HandshakeSync
+    , ctxHandshakeSync    :: HandshakeSync
     }
 
 data Established = NotEstablished
