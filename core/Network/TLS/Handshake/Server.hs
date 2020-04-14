@@ -740,29 +740,31 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
     mCredInfo <- if authenticated then return Nothing else decideCredentialInfo allCreds
     (ecdhe,keyShare) <- makeServerKeyShare ctx clientKeyShare
     ensureRecvComplete ctx
-    hss <- runPacketNonFlight ctx $ do
+    (clientHandshakeSecret, handSecret) <- runPacketFlight ctx $ do
         sendServerHello keyShare srand extensions
         sendChangeCipherSpec13 ctx
     ----------------------------------------------------------------
-    handKey <- liftIO $ calculateHandshakeSecret ctx choice earlySecret ecdhe
-    let shs@(ServerTrafficSecret serverHandshakeSecret) = triServer handKey
-        chs@(ClientTrafficSecret clientHandshakeSecret) = triClient handKey
-        handSecret = triBase handKey
-    setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlySecret else clientHandshakeSecret
-    setTxState ctx usedHash usedCipher serverHandshakeSecret
-    let mEarlySecInfo
-         | is0RTTvalid = Just $ EarlySecretInfo usedCipher ces
-         | otherwise   = Nothing
-        handSecInfo = HandshakeSecretInfo usedCipher (chs,shs)
-    contextSync ctx $ SendServerHelloI exts mEarlySecInfo handSecInfo
+        handKey <- liftIO $ calculateHandshakeSecret ctx choice earlySecret ecdhe
+        let shs@(ServerTrafficSecret serverHandshakeSecret) = triServer handKey
+            chs@(ClientTrafficSecret clientHandshakeSecret) = triClient handKey
+            handSecret = triBase handKey
+        flushFlightIfNeeded ctx
+        liftIO $ do
+            setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlySecret else clientHandshakeSecret
+            setTxState ctx usedHash usedCipher serverHandshakeSecret
+            let mEarlySecInfo
+                 | is0RTTvalid = Just $ EarlySecretInfo usedCipher ces
+                 | otherwise   = Nothing
+                handSecInfo = HandshakeSecretInfo usedCipher (chs,shs)
+            contextSync ctx $ SendServerHelloI exts mEarlySecInfo handSecInfo
     ----------------------------------------------------------------
-    runPacketFlight ctx hss $ do
         sendExtensions rtt0OK protoExt
         case mCredInfo of
             Nothing              -> return ()
             Just (cred, hashSig) -> sendCertAndVerify cred hashSig
         rawFinished <- makeFinished ctx usedHash serverHandshakeSecret
         loadPacket13 ctx $ Handshake13 [rawFinished]
+        return (clientHandshakeSecret, handSecret)
     sfSentTime <- getCurrentTimeFromBase
     ----------------------------------------------------------------
     hChSf <- transcriptHash ctx
@@ -1022,7 +1024,7 @@ helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientS
                            ,ExtensionRaw extensionID_SupportedVersions selectedVersion]
               hrr = ServerHello13 hrrRandom clientSession (cipherID usedCipher) extensions
           usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
-          runPacketFlight ctx [] $ do
+          runPacketFlight ctx $ do
                 loadPacket13 ctx $ Handshake13 [hrr]
                 sendChangeCipherSpec13 ctx
           contextSync ctx SendRequestRetryI

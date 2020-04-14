@@ -98,7 +98,7 @@ handshakeClient' cparams ctx groups mparams = do
                           usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
                           clearTxState ctx
                           let cparams' = cparams { clientEarlyData = Nothing }
-                          runPacketFlight ctx [] $ sendChangeCipherSpec13 ctx
+                          runPacketFlight ctx $ sendChangeCipherSpec13 ctx
                           handshakeClient' cparams' ctx [selectedGroup] (Just (crand, clientSession, ver))
                     | otherwise -> throwCore $ Error_Protocol ("server-selected group is not supported", True, IllegalParameter)
                   Just _  -> error "handshakeClient': invalid KeyShare value"
@@ -315,7 +315,7 @@ handshakeClient' cparams ctx groups mparams = do
                 earlyKey <- calculateEarlySecret ctx choice (Right earlySecret) False
                 let ces@(ClientTrafficSecret clientEarlySecret) = pairClient earlyKey
                 when (earlyData /= quicEarlyData) $ do
-                    runPacketFlight ctx [] $ sendChangeCipherSpec13 ctx
+                    runPacketFlight ctx $ sendChangeCipherSpec13 ctx
                     setTxState ctx usedHash usedCipher clientEarlySecret
                     let len = ctxFragmentSize ctx
                     mapChunks_ len (sendPacket13 ctx . AppData13) earlyData
@@ -871,7 +871,7 @@ handshakeClient13' cparams ctx groupSent choice = do
         recvHandshake13hash ctx $ expectFinished serverHandshakeSecret
         return accext
     hChSf <- transcriptHash ctx
-    runPacketFlight ctx [] $ sendChangeCipherSpec13 ctx
+    runPacketFlight ctx $ sendChangeCipherSpec13 ctx
     let earlyData = clientEarlyData cparams
     when (rtt0accepted && earlyData /= Just quicEarlyData) $
         sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
@@ -1040,7 +1040,7 @@ processCertRequest13 ctx token exts = do
 sendClientFlight13 :: ClientParams -> Context -> Hash -> ByteString -> IO ()
 sendClientFlight13 cparams ctx usedHash baseKey = do
     chain <- clientChain cparams ctx
-    runPacketFlight ctx [] $ do
+    runPacketFlight ctx $ do
         case chain of
             Nothing -> return ()
             Just cc -> usingHState ctx getCertReqToken >>= sendClientData13 cc

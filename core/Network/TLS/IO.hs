@@ -18,8 +18,8 @@ module Network.TLS.IO
     -- * Grouping multiple packets in the same flight
     , PacketFlightM
     , runPacketFlight
-    , runPacketNonFlight
     , loadPacket13
+    , flushFlightIfNeeded
     ) where
 
 import Control.Exception (finally, throwIO)
@@ -283,31 +283,30 @@ type Builder = [ByteString] -> [ByteString]
 newtype PacketFlightM a = PacketFlightM (ReaderT (IORef Builder) IO a)
     deriving (Functor, Applicative, Monad, MonadFail, MonadIO)
 
-runPacketFlight :: Context -> [ByteString] -> PacketFlightM a -> IO a
-runPacketFlight ctx bss0 (PacketFlightM f) = do
+runPacketFlight :: Context -> PacketFlightM a -> IO a
+runPacketFlight ctx (PacketFlightM f) = do
     ref <- newIORef id
-    finally (runReaderT f ref) $ do
-        build <- readIORef ref
-        let bss = bss0 ++ build []
-        unless (null bss) $ contextSendBytes ctx $ B.concat bss
+    finally (runReaderT f ref) $ sendPendingFlight ctx ref
 
-runPacketNonFlight :: Context -> PacketFlightM () -> IO [ByteString]
-runPacketNonFlight ctx (PacketFlightM f) = do
-    ref <- newIORef id
-    runReaderT f ref
+sendPendingFlight :: Context -> IORef Builder -> IO ()
+sendPendingFlight ctx ref = do
     build <- readIORef ref
     let bss = build []
-    case ctxRecordLayer ctx of
-      Nothing -> return bss
-      Just rl -> do
-          RL.sendBytes rl $ B.concat bss
-          return []
+    unless (null bss) $ contextSendBytes ctx $ B.concat bss
 
 loadPacket13 :: Context -> Packet13 -> PacketFlightM ()
 loadPacket13 ctx pkt = PacketFlightM $ do
     bs <- writePacketBytes13 ctx pkt
     ref <- ask
     liftIO $ modifyIORef ref (. (bs :))
+
+-- | The record layer may require to flush the current flight and send pending
+-- packets before changing the Tx key.  This function should be used before each
+-- call to setTxState inside a PacketFlightM computation.
+flushFlightIfNeeded :: Context -> PacketFlightM ()
+flushFlightIfNeeded ctx = PacketFlightM $
+    when (isJust $ ctxRecordLayer ctx) $ ask >>= \ref ->
+        liftIO $ sendPendingFlight ctx ref >> writeIORef ref id
 
 ----------------------------------------------------------------
 
