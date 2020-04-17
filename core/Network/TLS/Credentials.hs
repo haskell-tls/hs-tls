@@ -80,7 +80,7 @@ credentialLoadX509ChainFromMemory :: ByteString
                   -> [ByteString]
                   -> ByteString
                   -> Either String Credential
-credentialLoadX509ChainFromMemory certData chainData privateData = do
+credentialLoadX509ChainFromMemory certData chainData privateData =
     let x509   = readSignedObjectFromMemory certData
         chains = map readSignedObjectFromMemory chainData
         keys   = readKeyFileFromMemory privateData

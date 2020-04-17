@@ -102,7 +102,7 @@ handshakeClient' cparams ctx groups mparams = do
                     | otherwise -> throwCore $ Error_Protocol ("server-selected group is not supported", True, IllegalParameter)
                   Just _  -> error "handshakeClient': invalid KeyShare value"
                   Nothing -> throwCore $ Error_Protocol ("key exchange not implemented in HRR, expected key_share extension", True, HandshakeFailure)
-          else do
+          else
             handshakeClient13 cparams ctx groupToSend
       else do
         when rtt0 $
