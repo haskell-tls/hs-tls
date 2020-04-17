@@ -163,6 +163,7 @@ contextNew backend params = liftIO $ do
             , ctxShared       = shared
             , ctxSupported    = supported
             , ctxState        = stvar
+            , ctxFragmentSize = Just 16384
             , ctxTxState      = tx
             , ctxRxState      = rx
             , ctxHandshake    = hs

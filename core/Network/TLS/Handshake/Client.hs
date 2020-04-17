@@ -311,7 +311,8 @@ handshakeClient' cparams ctx groups mparams = do
                 let ClientTrafficSecret clientEarlySecret = pairClient earlyKey
                 runPacketFlight ctx $ sendChangeCipherSpec13 ctx
                 setTxState ctx usedHash usedCipher clientEarlySecret
-                mapChunks_ 16384 (sendPacket13 ctx . AppData13) earlyData
+                let len = ctxFragmentSize ctx
+                mapChunks_ len (sendPacket13 ctx . AppData13) earlyData
                 usingHState ctx $ setTLS13RTT0Status RTT0Sent
 
         recvServerHello clientSession sentExts = runRecvState ctx recvState

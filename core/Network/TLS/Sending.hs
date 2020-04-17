@@ -39,7 +39,8 @@ encodePacket ctx pkt = do
     (ver, _) <- decideRecordVersion ctx
     let pt = packetType pkt
         mkRecord bs = Record pt ver (fragmentPlaintext bs)
-    records <- map mkRecord <$> packetToFragments ctx 16384 pkt
+        len = ctxFragmentSize ctx
+    records <- map mkRecord <$> packetToFragments ctx len pkt
     bs <- fmap B.concat <$> forEitherM records (encodeRecord ctx)
     when (pkt == ChangeCipherSpec) $ switchTxEncryption ctx
     return bs
@@ -47,7 +48,7 @@ encodePacket ctx pkt = do
 -- Decompose handshake packets into fragments of the specified length.  AppData
 -- packets are not fragmented here but by callers of sendPacket, so that the
 -- empty-packet countermeasure may be applied to each fragment independently.
-packetToFragments :: Context -> Int -> Packet -> IO [ByteString]
+packetToFragments :: Context -> Maybe Int -> Packet -> IO [ByteString]
 packetToFragments ctx len (Handshake hss)  =
     getChunks len . B.concat <$> mapM (updateHandshake ctx ClientRole) hss
 packetToFragments _   _   (Alert a)        = return [encodeAlerts a]
