@@ -119,9 +119,14 @@ newQUICClient cparams callbacks = do
     return (quicClient wtid ask get put ref)
 
   where
-    processI (SendClientFinishedI exts _) =
+    processI (SendClientHelloI mEarlySecInfo) =
+        quicNotifySecretEvent callbacks (SyncEarlySecret mEarlySecInfo)
+    processI (RecvServerHelloI handSecInfo) =
+        quicNotifySecretEvent callbacks (SyncHandshakeSecret handSecInfo)
+    processI (SendClientFinishedI exts appSecInfo) = do
+        quicNotifySecretEvent callbacks (SyncApplicationSecret appSecInfo)
         let exts' = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters) exts
-         in quicNotifyExtensions callbacks exts'
+        quicNotifyExtensions callbacks exts'
     processI _ = return ()
 
 newQUICServer :: ServerParams -> QuicCallbacks -> IO ServerController

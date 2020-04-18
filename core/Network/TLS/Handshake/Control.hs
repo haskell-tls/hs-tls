@@ -65,9 +65,9 @@ data ServerControl = PutClientHello ClientHello -- ^ 'SendRequestRetry', 'SendSe
 
 data ClientStatus =
     ClientNeedsMore
-  | SendClientHello ClientHello (Maybe EarlySecretInfo)
-  | RecvServerHello HandshakeSecretInfo
-  | SendClientFinished Finished ApplicationSecretInfo
+  | SendClientHello ClientHello
+  | RecvServerHello
+  | SendClientFinished Finished
   | RecvSessionTicket
   | ClientHandshakeDone
 

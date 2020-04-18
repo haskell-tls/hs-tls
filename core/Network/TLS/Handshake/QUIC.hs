@@ -63,29 +63,22 @@ quicClient :: Weak ThreadId
 quicClient _ ask get _ _ GetClientHello = do
     rsp <- ask
     case rsp of
-      SendClientHelloI early -> do
-          ch <- get
-          return $ SendClientHello ch early
+      SendClientHelloI _ -> SendClientHello <$> get
       ClientHandshakeFailedI e -> E.throwIO e
       _ -> error "quicClient"
 quicClient _ ask get put ref (PutServerHello sh) =
     putRecordWith put ref sh HandshakeType_ServerHello13 ClientNeedsMore $ do
         rsp <- ask
         case rsp of
-            SendClientHelloI early -> do
-                ch <- get
-                return $ SendClientHello ch early
-            RecvServerHelloI handSec -> do
-                return $ RecvServerHello handSec
+            SendClientHelloI _ -> SendClientHello <$> get
+            RecvServerHelloI _ -> return RecvServerHello
             ClientHandshakeFailedI e -> E.throwIO e
             _ -> error "quicClient"
 quicClient _ ask get put ref (PutServerFinished sf) =
     putRecordWith put ref sf HandshakeType_Finished13 ClientNeedsMore $ do
         rsp <- ask
         case rsp of
-          SendClientFinishedI _ appSec -> do
-              cf <- get
-              return $ SendClientFinished cf appSec
+          SendClientFinishedI _ _ -> SendClientFinished <$> get
           ClientHandshakeFailedI e -> E.throwIO e
           _ -> error "quicClient"
 quicClient _ ask _ put ref (PutSessionTicket nst) =
