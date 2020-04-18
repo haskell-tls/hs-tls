@@ -87,7 +87,7 @@ prepare :: (a -> IO ())
               ,ByteString -> IO ()
               ,a -> IO ()
               ,IO a
-              ,RecordLayer
+              ,RecordLayer ByteString
               ,IORef (Maybe ByteString))
 prepare processI = do
     c1 <- newChan
@@ -107,9 +107,8 @@ newQUICClient :: ClientParams -> QuicCallbacks -> IO ClientController
 newQUICClient cparams callbacks = do
     (get, put, sync, ask, rl, ref) <- prepare processI
     ctx <- contextNew nullBackend cparams
-    let ctx' = ctx {
-            ctxRecordLayer   = rl
-          , ctxHandshakeSync = HandshakeSync sync (\_ -> return ())
+    let ctx' = updateRecordLayer rl ctx
+          { ctxHandshakeSync = HandshakeSync sync (\_ -> return ())
           }
         failed = sync . ClientHandshakeFailedI
     tid <- forkIO $ E.handle failed $ do
@@ -133,9 +132,8 @@ newQUICServer :: ServerParams -> QuicCallbacks -> IO ServerController
 newQUICServer sparams callbacks = do
     (get, put, sync, ask, rl, ref) <- prepare processI
     ctx <- contextNew nullBackend sparams
-    let ctx' = ctx {
-            ctxRecordLayer   = rl
-          , ctxHandshakeSync = HandshakeSync (\_ -> return ()) sync
+    let ctx' = updateRecordLayer rl ctx
+          { ctxHandshakeSync = HandshakeSync (\_ -> return ()) sync
           }
         failed = sync . ServerHandshakeFailedI
     tid <- forkIO $ E.handle failed $ do

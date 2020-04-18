@@ -193,7 +193,7 @@ replacePSKBinder pskz binder = identities `B.append` binders
 
 ----------------------------------------------------------------
 
-sendChangeCipherSpec13 :: Context -> PacketFlightM ()
+sendChangeCipherSpec13 :: Monoid b => Context -> PacketFlightM b ()
 sendChangeCipherSpec13 ctx = do
     sent <- usingHState ctx $ do
                 b <- getCCS13Sent

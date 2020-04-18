@@ -12,21 +12,21 @@ import Network.TLS.Struct
 import qualified Control.Exception as E
 import qualified Data.ByteString as B
 
-data RecordLayer = RecordLayer {
+data RecordLayer bytes = RecordLayer {
     -- Sending.hs
-    recordEncode    :: Record Plaintext -> IO (Either TLSError ByteString)
+    recordEncode    :: Record Plaintext -> IO (Either TLSError bytes)
 
     -- Sending13.hs
-  , recordEncode13  :: Record Plaintext -> IO (Either TLSError ByteString)
+  , recordEncode13  :: Record Plaintext -> IO (Either TLSError bytes)
 
     -- IO.hs
-  , recordSendBytes :: ByteString -> IO ()
+  , recordSendBytes :: bytes -> IO ()
   , recordRecv      :: Bool -> Int -> IO (Either TLSError (Record Plaintext))
   , recordRecv13    :: IO (Either TLSError (Record Plaintext))
   , recordNeedFlush :: Bool
   }
 
-newTransparentRecordLayer :: (ByteString -> IO ()) -> IO ByteString -> RecordLayer
+newTransparentRecordLayer :: (ByteString -> IO ()) -> IO ByteString -> RecordLayer ByteString
 newTransparentRecordLayer send recv = RecordLayer {
     recordEncode    = transparentEncodeRecord
   , recordEncode13  = transparentEncodeRecord

@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RankNTypes #-}
 -- |
 -- Module      : Network.TLS.IO
 -- License     : BSD-style
@@ -52,36 +53,40 @@ import Network.TLS.Struct13
 
 -- | Send one packet to the context
 sendPacket :: Context -> Packet -> IO ()
-sendPacket ctx pkt = do
+sendPacket ctx@Context{ctxRecordLayer = recordLayer} pkt = do
     -- in ver <= TLS1.0, block ciphers using CBC are using CBC residue as IV, which can be guessed
     -- by an attacker. Hence, an empty packet is sent before a normal data packet, to
     -- prevent guessability.
     when (isNonNullAppData pkt) $ do
         withEmptyPacket <- liftIO $ readIORef $ ctxNeedEmptyPacket ctx
         when withEmptyPacket $
-            writePacketBytes ctx (AppData B.empty) >>= recordSendBytes (ctxRecordLayer ctx)
+            writePacketBytes ctx recordLayer (AppData B.empty) >>=
+                recordSendBytes recordLayer
 
-    writePacketBytes ctx pkt >>= recordSendBytes (ctxRecordLayer ctx)
+    writePacketBytes ctx recordLayer pkt >>= recordSendBytes recordLayer
   where isNonNullAppData (AppData b) = not $ B.null b
         isNonNullAppData _           = False
 
-writePacketBytes :: MonadIO m => Context -> Packet -> m ByteString
-writePacketBytes ctx pkt = do
+writePacketBytes :: (MonadIO m, Monoid bytes)
+                 => Context -> RecordLayer bytes -> Packet -> m bytes
+writePacketBytes ctx recordLayer pkt = do
     edataToSend <- liftIO $ do
                         withLog ctx $ \logging -> loggingPacketSent logging (show pkt)
-                        encodePacket ctx pkt
+                        encodePacket ctx recordLayer pkt
     either throwCore return edataToSend
 
 ----------------------------------------------------------------
 
 sendPacket13 :: Context -> Packet13 -> IO ()
-sendPacket13 ctx pkt = writePacketBytes13 ctx pkt >>= recordSendBytes (ctxRecordLayer ctx)
+sendPacket13 ctx@Context{ctxRecordLayer = recordLayer} pkt =
+    writePacketBytes13 ctx recordLayer pkt >>= recordSendBytes recordLayer
 
-writePacketBytes13 :: MonadIO m => Context -> Packet13 -> m ByteString
-writePacketBytes13 ctx pkt = do
+writePacketBytes13 :: (MonadIO m, Monoid bytes)
+                   => Context -> RecordLayer bytes -> Packet13 -> m bytes
+writePacketBytes13 ctx recordLayer pkt = do
     edataToSend <- liftIO $ do
                         withLog ctx $ \logging -> loggingPacketSent logging (show pkt)
-                        encodePacket13 ctx pkt
+                        encodePacket13 ctx recordLayer pkt
     either throwCore return edataToSend
 
 sendBytes :: MonadIO m => Context -> ByteString -> m ()
@@ -117,7 +122,7 @@ contentSizeExceeded = Error_Protocol ("record content exceeding maximum size", T
 -- many messages (many only in case of handshake). if will returns a
 -- TLSError if the packet is unexpected or malformed
 recvPacket :: MonadIO m => Context -> m (Either TLSError Packet)
-recvPacket ctx = liftIO $ do
+recvPacket ctx@Context{ctxRecordLayer = recordLayer} = liftIO $ do
     compatSSLv2 <- ctxHasSSLv2ClientHello ctx
     hrr         <- usingState_ ctx getTLS13HRR
     -- When a client sends 0-RTT data to a server which rejects and sends a HRR,
@@ -125,7 +130,7 @@ recvPacket ctx = liftIO $ do
     -- AppData with maximum size 2^14 + 256.  In all other scenarios and record
     -- types the maximum size is 2^14.
     let appDataOverhead = if hrr then 256 else 0
-    erecord <- recordRecv (ctxRecordLayer ctx) compatSSLv2 appDataOverhead
+    erecord <- recordRecv recordLayer compatSSLv2 appDataOverhead
     case erecord of
         Left err     -> return $ Left err
         Right record ->
@@ -198,8 +203,8 @@ isEmptyHandshake _                      = False
 ----------------------------------------------------------------
 
 recvPacket13 :: MonadIO m => Context -> m (Either TLSError Packet13)
-recvPacket13 ctx = liftIO $ do
-    erecord <- recordRecv13 (ctxRecordLayer ctx)
+recvPacket13 ctx@Context{ctxRecordLayer = recordLayer} = liftIO $ do
+    erecord <- recordRecv13 recordLayer
     case erecord of
         Left err@(Error_Protocol (_, True, BadRecordMac)) -> do
             -- If the server decides to reject RTT0 data but accepts RTT1
@@ -277,37 +282,37 @@ checkValid ctx = do
 
 ----------------------------------------------------------------
 
-type Builder = [ByteString] -> [ByteString]
+type Builder b = [b] -> [b]
 
 -- | State monad used to group several packets together and send them on wire as
 -- single flight.  When packets are loaded in the monad, they are logged
 -- immediately, update the context digest and transcript, but actual sending is
 -- deferred.  Packets are sent all at once when the monadic computation ends
 -- (normal termination but also if interrupted by an exception).
-newtype PacketFlightM a = PacketFlightM (ReaderT (IORef Builder) IO a)
+newtype PacketFlightM b a = PacketFlightM (ReaderT (RecordLayer b, IORef (Builder b)) IO a)
     deriving (Functor, Applicative, Monad, MonadFail, MonadIO)
 
-runPacketFlight :: Context -> PacketFlightM a -> IO a
-runPacketFlight ctx (PacketFlightM f) = do
+runPacketFlight :: Context -> (forall b . Monoid b => PacketFlightM b a) -> IO a
+runPacketFlight Context{ctxRecordLayer = recordLayer} (PacketFlightM f) = do
     ref <- newIORef id
-    finally (runReaderT f ref) $ sendPendingFlight ctx ref
+    runReaderT f (recordLayer, ref) `finally` sendPendingFlight recordLayer ref
 
-sendPendingFlight :: Context -> IORef Builder -> IO ()
-sendPendingFlight ctx ref = do
+sendPendingFlight :: Monoid b => RecordLayer b -> IORef (Builder b) -> IO ()
+sendPendingFlight recordLayer ref = do
     build <- readIORef ref
     let bss = build []
-    unless (null bss) $ recordSendBytes (ctxRecordLayer ctx) $ B.concat bss
+    unless (null bss) $ recordSendBytes recordLayer $ mconcat bss
 
-loadPacket13 :: Context -> Packet13 -> PacketFlightM ()
+loadPacket13 :: Monoid b => Context -> Packet13 -> PacketFlightM b ()
 loadPacket13 ctx pkt = PacketFlightM $ do
-    bs <- writePacketBytes13 ctx pkt
-    ref <- ask
+    (recordLayer, ref) <- ask
+    bs <- writePacketBytes13 ctx recordLayer pkt
     liftIO $ modifyIORef ref (. (bs :))
 
 -- | The record layer may require to flush the current flight and send pending
 -- packets before changing the Tx key.  This function should be used before each
 -- call to setTxState inside a PacketFlightM computation.
-flushFlightIfNeeded :: Context -> PacketFlightM ()
-flushFlightIfNeeded ctx = PacketFlightM $
-    when (recordNeedFlush $ ctxRecordLayer ctx) $ ask >>= \ref ->
-        liftIO $ sendPendingFlight ctx ref >> writeIORef ref id
+flushFlightIfNeeded :: Monoid b => Context -> PacketFlightM b ()
+flushFlightIfNeeded _ = PacketFlightM $
+    ask >>= \(recordLayer, ref) -> when (recordNeedFlush recordLayer) $
+        liftIO $ sendPendingFlight recordLayer ref >> writeIORef ref id

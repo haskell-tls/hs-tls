@@ -30,13 +30,14 @@ import Network.TLS.Util
 
 import qualified Data.ByteString as B
 
-encodePacket13 :: Context -> Packet13 -> IO (Either TLSError ByteString)
-encodePacket13 ctx pkt = do
+encodePacket13 :: Monoid bytes
+               => Context -> RecordLayer bytes -> Packet13 -> IO (Either TLSError bytes)
+encodePacket13 ctx recordLayer pkt = do
     let pt = contentType pkt
         mkRecord bs = Record pt TLS12 (fragmentPlaintext bs)
         len = ctxFragmentSize ctx
     records <- map mkRecord <$> packetToFragments ctx len pkt
-    fmap B.concat <$> forEitherM records (recordEncode13 $ ctxRecordLayer ctx)
+    fmap mconcat <$> forEitherM records (recordEncode13 recordLayer)
 
 prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
 prepareRecord = runTxState
