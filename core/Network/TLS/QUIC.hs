@@ -29,6 +29,7 @@ module Network.TLS.QUIC (
     , ServerControl(..)
     , ServerStatus(..)
     -- * Common
+    , QuicCallbacks(..)
     , NegotiatedProtocol
     , ClientHello
     , ServerHello
@@ -70,13 +71,16 @@ nullBackend = Backend {
   , backendRecv  = \_ -> return ""
   }
 
-prepare :: IO (IO ByteString
+data QuicCallbacks = QuicCallbacks
+
+prepare :: QuicCallbacks
+        -> IO (IO ByteString
               ,ByteString -> IO ()
               ,a -> IO ()
               ,IO a
               ,RecordLayer
               ,IORef (Maybe ByteString))
-prepare = do
+prepare _callbacks = do
     c1 <- newChan
     c2 <- newChan
     mvar <- newEmptyMVar
@@ -90,9 +94,9 @@ prepare = do
         rl   =  newTransparentRecordLayer send recv
     return (get, put, sync, ask, rl, ref)
 
-newQUICClient :: ClientParams -> IO ClientController
-newQUICClient cparams = do
-    (get, put, sync, ask, rl, ref) <- prepare
+newQUICClient :: ClientParams -> QuicCallbacks -> IO ClientController
+newQUICClient cparams callbacks = do
+    (get, put, sync, ask, rl, ref) <- prepare callbacks
     ctx <- contextNew nullBackend cparams
     let ctx' = ctx {
             ctxRecordLayer   = rl
@@ -105,9 +109,9 @@ newQUICClient cparams = do
     wtid <- mkWeakThreadId tid
     return (quicClient wtid ask get put ref)
 
-newQUICServer :: ServerParams -> IO ServerController
-newQUICServer sparams = do
-    (get, put, sync, ask, rl, ref) <- prepare
+newQUICServer :: ServerParams -> QuicCallbacks -> IO ServerController
+newQUICServer sparams callbacks = do
+    (get, put, sync, ask, rl, ref) <- prepare callbacks
     ctx <- contextNew nullBackend sparams
     let ctx' = ctx {
             ctxRecordLayer   = rl
