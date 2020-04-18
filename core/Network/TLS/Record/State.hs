@@ -9,6 +9,7 @@
 --
 module Network.TLS.Record.State
     ( CryptState(..)
+    , CryptLevel(..)
     , MacState(..)
     , RecordOptions(..)
     , RecordState(..)
@@ -57,9 +58,18 @@ data RecordOptions = RecordOptions
     , recordTLS13 :: Bool                     -- TLS13 record processing
     }
 
+data CryptLevel
+    = CryptInitial
+    | CryptMasterSecret
+    | CryptEarlySecret
+    | CryptHandshakeSecret
+    | CryptApplicationSecret
+    deriving (Show)
+
 data RecordState = RecordState
     { stCipher      :: Maybe Cipher
     , stCompression :: Compression
+    , stCryptLevel  :: !CryptLevel
     , stCryptState  :: !CryptState
     , stMacState    :: !MacState
     } deriving (Show)
@@ -109,6 +119,7 @@ newRecordState :: RecordState
 newRecordState = RecordState
     { stCipher      = Nothing
     , stCompression = nullCompression
+    , stCryptLevel  = CryptInitial
     , stCryptState  = CryptState BulkStateUninitialized B.empty B.empty
     , stMacState    = MacState 0
     }

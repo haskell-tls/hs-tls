@@ -750,8 +750,10 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
             handSecret = triBase handKey
         flushFlightIfNeeded ctx
         liftIO $ do
-            setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlySecret else clientHandshakeSecret
-            setTxState ctx usedHash usedCipher serverHandshakeSecret
+            if rtt0OK
+                then setRxState ctx usedHash usedCipher CryptEarlySecret clientEarlySecret
+                else setRxState ctx usedHash usedCipher CryptHandshakeSecret clientHandshakeSecret
+            setTxState ctx usedHash usedCipher CryptHandshakeSecret serverHandshakeSecret
             let mEarlySecInfo
                  | is0RTTvalid = Just $ EarlySecretInfo usedCipher ces
                  | otherwise   = Nothing
@@ -772,7 +774,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
     let cas@(ClientTrafficSecret clientApplicationSecret0) = triClient appKey
         sas@(ServerTrafficSecret serverApplicationSecret0) = triServer appKey
         applicationSecret = triBase appKey
-    setTxState ctx usedHash usedCipher serverApplicationSecret0
+    setTxState ctx usedHash usedCipher CryptApplicationSecret serverApplicationSecret0
     alpn <- usingState_ ctx getNegotiatedProtocol
     -- TLS13RTT0Status is not exposed, so needs to distinguish
     -- RTT0 and PreSharedKey.
@@ -792,13 +794,13 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
     let expectFinished hChBeforeCf (Finished13 verifyData) = liftIO $ do
             checkFinished usedHash clientHandshakeSecret hChBeforeCf verifyData
             handshakeTerminate13 ctx
-            setRxState ctx usedHash usedCipher clientApplicationSecret0
+            setRxState ctx usedHash usedCipher CryptApplicationSecret clientApplicationSecret0
             sendNewSessionTicket applicationSecret sfSentTime
             contextSync ctx $ SendSessionTicketI
         expectFinished _ hs = unexpected (show hs) (Just "finished 13")
 
     let expectEndOfEarlyData EndOfEarlyData13 =
-            setRxState ctx usedHash usedCipher clientHandshakeSecret
+            setRxState ctx usedHash usedCipher CryptHandshakeSecret clientHandshakeSecret
         expectEndOfEarlyData hs = unexpected (show hs) (Just "end of early data")
 
     if not authenticated && serverWantClientCert sparams then
@@ -1177,7 +1179,7 @@ postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = d
     processHandshake13 ctx certReq
     processHandshake13 ctx h
 
-    (usedHash, _, applicationSecretN) <- getRxState ctx
+    (usedHash, _, CryptApplicationSecret, applicationSecretN) <- getRxState ctx
 
     let expectFinished hChBeforeCf (Finished13 verifyData) = do
             checkFinished usedHash applicationSecretN hChBeforeCf verifyData

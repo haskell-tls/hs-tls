@@ -482,12 +482,14 @@ computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
         pendingTx = RecordState
                   { stCryptState  = if cc == ClientRole then cstClient else cstServer
                   , stMacState    = if cc == ClientRole then msClient else msServer
+                  , stCryptLevel  = CryptMasterSecret
                   , stCipher      = Just cipher
                   , stCompression = hstPendingCompression hst
                   }
         pendingRx = RecordState
                   { stCryptState  = if cc == ClientRole then cstServer else cstClient
                   , stMacState    = if cc == ClientRole then msServer else msClient
+                  , stCryptLevel  = CryptMasterSecret
                   , stCipher      = Just cipher
                   , stCompression = hstPendingCompression hst
                   }

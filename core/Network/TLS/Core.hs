@@ -196,7 +196,7 @@ recvData13 ctx = do
             -- session manager).
             withWriteLock ctx $ do
                 Just resumptionMasterSecret <- usingHState ctx getTLS13ResumptionSecret
-                (_, usedCipher, _) <- getTxState ctx
+                (_, usedCipher, _, _) <- getTxState ctx
                 let choice = makeCipherChoice TLS13 usedCipher
                     psk = derivePSK choice resumptionMasterSecret nonce
                     maxSize = case extensionLookup extensionID_EarlyData exts >>= extensionDecode MsgTNewSessionTicket of
@@ -296,13 +296,13 @@ recvData' :: MonadIO m => Context -> m L.ByteString
 recvData' ctx = L.fromChunks . (:[]) <$> recvData ctx
 
 keyUpdate :: Context
-          -> (Context -> IO (Hash,Cipher,C8.ByteString))
-          -> (Context -> Hash -> Cipher -> C8.ByteString -> IO ())
+          -> (Context -> IO (Hash,Cipher,CryptLevel,C8.ByteString))
+          -> (Context -> Hash -> Cipher -> CryptLevel -> C8.ByteString -> IO ())
           -> IO ()
 keyUpdate ctx getState setState = do
-    (usedHash, usedCipher, applicationSecretN) <- getState ctx
+    (usedHash, usedCipher, level, applicationSecretN) <- getState ctx
     let applicationSecretN1 = hkdfExpandLabel usedHash applicationSecretN "traffic upd" "" $ hashDigestSize usedHash
-    setState ctx usedHash usedCipher applicationSecretN1
+    setState ctx usedHash usedCipher level applicationSecretN1
 
 -- | How to update keys in TLS 1.3
 data KeyUpdateRequest = OneWay -- ^ Unidirectional key update

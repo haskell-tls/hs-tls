@@ -8,7 +8,11 @@
 -- Portability : unknown
 --
 module Network.TLS.Handshake.State13
-       ( getTxState
+       ( CryptLevel ( CryptEarlySecret
+                    , CryptHandshakeSecret
+                    , CryptApplicationSecret
+                    )
+       , getTxState
        , getRxState
        , setTxState
        , setRxState
@@ -37,32 +41,33 @@ import Network.TLS.Struct
 import Network.TLS.Imports
 import Network.TLS.Util
 
-getTxState :: Context -> IO (Hash, Cipher, ByteString)
+getTxState :: Context -> IO (Hash, Cipher, CryptLevel, ByteString)
 getTxState ctx = getXState ctx ctxTxState
 
-getRxState :: Context -> IO (Hash, Cipher, ByteString)
+getRxState :: Context -> IO (Hash, Cipher, CryptLevel, ByteString)
 getRxState ctx = getXState ctx ctxRxState
 
 getXState :: Context
           -> (Context -> MVar RecordState)
-          -> IO (Hash, Cipher, ByteString)
+          -> IO (Hash, Cipher, CryptLevel, ByteString)
 getXState ctx func = do
     tx <- readMVar (func ctx)
     let Just usedCipher = stCipher tx
         usedHash = cipherHash usedCipher
+        level = stCryptLevel tx
         secret = cstMacSecret $ stCryptState tx
-    return (usedHash, usedCipher, secret)
+    return (usedHash, usedCipher, level, secret)
 
-setTxState :: Context -> Hash -> Cipher -> ByteString -> IO ()
+setTxState :: Context -> Hash -> Cipher -> CryptLevel -> ByteString -> IO ()
 setTxState = setXState ctxTxState BulkEncrypt
 
-setRxState :: Context -> Hash -> Cipher -> ByteString -> IO ()
+setRxState :: Context -> Hash -> Cipher -> CryptLevel -> ByteString -> IO ()
 setRxState = setXState ctxRxState BulkDecrypt
 
 setXState :: (Context -> MVar RecordState) -> BulkDirection
-          -> Context -> Hash -> Cipher -> ByteString
+          -> Context -> Hash -> Cipher -> CryptLevel -> ByteString
           -> IO ()
-setXState func encOrDec ctx h cipher secret =
+setXState func encOrDec ctx h cipher lvl secret =
     modifyMVar_ (func ctx) (\_ -> return rt)
   where
     bulk    = cipherBulk cipher
@@ -78,6 +83,7 @@ setXState func encOrDec ctx h cipher secret =
     rt = RecordState {
         stCryptState  = cst
       , stMacState    = MacState { msSequence = 0 }
+      , stCryptLevel  = lvl
       , stCipher      = Just cipher
       , stCompression = nullCompression
       }

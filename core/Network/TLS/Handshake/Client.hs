@@ -316,7 +316,7 @@ handshakeClient' cparams ctx groups mparams = do
                 let ces@(ClientTrafficSecret clientEarlySecret) = pairClient earlyKey
                 when (earlyData /= quicEarlyData) $ do
                     runPacketFlight ctx $ sendChangeCipherSpec13 ctx
-                    setTxState ctx usedHash usedCipher clientEarlySecret
+                    setTxState ctx usedHash usedCipher CryptEarlySecret clientEarlySecret
                     let len = ctxFragmentSize ctx
                     mapChunks_ len (sendPacket13 ctx . AppData13) earlyData
                 -- We set RTT0Sent for QUIC even if earlyData == "".
@@ -875,7 +875,7 @@ handshakeClient13' cparams ctx groupSent choice = do
     let earlyData = clientEarlyData cparams
     when (rtt0accepted && earlyData /= Just quicEarlyData) $
         sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
-    setTxState ctx usedHash usedCipher clientHandshakeSecret
+    setTxState ctx usedHash usedCipher CryptHandshakeSecret clientHandshakeSecret
     sendClientFlight13 cparams ctx usedHash clientHandshakeSecret
     appKey <- switchToApplicationSecret handshakeSecret hChSf
     let applicationSecret = triBase appKey
@@ -897,7 +897,7 @@ handshakeClient13' cparams ctx groupSent choice = do
         (earlySecret, resuming) <- makeEarlySecret
         handKey <- calculateHandshakeSecret ctx choice earlySecret ecdhe
         let ServerTrafficSecret serverHandshakeSecret = triServer handKey
-        setRxState ctx usedHash usedCipher serverHandshakeSecret
+        setRxState ctx usedHash usedCipher CryptHandshakeSecret serverHandshakeSecret
         return (usedCipher, handKey, resuming)
 
     switchToApplicationSecret handshakeSecret hChSf = do
@@ -905,8 +905,8 @@ handshakeClient13' cparams ctx groupSent choice = do
         appKey <- calculateApplicationSecret ctx choice handshakeSecret hChSf
         let ServerTrafficSecret serverApplicationSecret0 = triServer appKey
         let ClientTrafficSecret clientApplicationSecret0 = triClient appKey
-        setTxState ctx usedHash usedCipher clientApplicationSecret0
-        setRxState ctx usedHash usedCipher serverApplicationSecret0
+        setTxState ctx usedHash usedCipher CryptApplicationSecret clientApplicationSecret0
+        setRxState ctx usedHash usedCipher CryptApplicationSecret serverApplicationSecret0
         return appKey
 
     calcSharedKey = do
@@ -1084,7 +1084,7 @@ postHandshakeAuthClientWith cparams ctx h@(CertRequest13 certReqCtx exts) =
     bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
         processHandshake13 ctx h
         processCertRequest13 ctx certReqCtx exts
-        (usedHash, _, applicationSecretN) <- getTxState ctx
+        (usedHash, _, CryptApplicationSecret, applicationSecretN) <- getTxState ctx
         sendClientFlight13 cparams ctx usedHash applicationSecretN
 
 postHandshakeAuthClientWith _ _ _ =
