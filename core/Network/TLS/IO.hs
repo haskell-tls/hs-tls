@@ -24,7 +24,6 @@ module Network.TLS.IO
     , PacketFlightM
     , runPacketFlight
     , loadPacket13
-    , flushFlightIfNeeded
     ) where
 
 import Control.Exception (finally, throwIO)
@@ -308,11 +307,3 @@ loadPacket13 ctx pkt = PacketFlightM $ do
     (recordLayer, ref) <- ask
     bs <- writePacketBytes13 ctx recordLayer pkt
     liftIO $ modifyIORef ref (. (bs :))
-
--- | The record layer may require to flush the current flight and send pending
--- packets before changing the Tx key.  This function should be used before each
--- call to setTxState inside a PacketFlightM computation.
-flushFlightIfNeeded :: Monoid b => Context -> PacketFlightM b ()
-flushFlightIfNeeded _ = PacketFlightM $
-    ask >>= \(recordLayer, ref) -> when (recordNeedFlush recordLayer) $
-        liftIO $ sendPendingFlight recordLayer ref >> writeIORef ref id

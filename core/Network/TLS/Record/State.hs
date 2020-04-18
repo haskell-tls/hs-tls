@@ -64,7 +64,7 @@ data CryptLevel
     | CryptEarlySecret
     | CryptHandshakeSecret
     | CryptApplicationSecret
-    deriving (Show)
+    deriving (Eq,Show)
 
 data RecordState = RecordState
     { stCipher      :: Maybe Cipher

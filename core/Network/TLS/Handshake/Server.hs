@@ -748,7 +748,6 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
         let shs@(ServerTrafficSecret serverHandshakeSecret) = triServer handKey
             chs@(ClientTrafficSecret clientHandshakeSecret) = triClient handKey
             handSecret = triBase handKey
-        flushFlightIfNeeded ctx
         liftIO $ do
             if rtt0OK
                 then setRxState ctx usedHash usedCipher CryptEarlySecret clientEarlySecret

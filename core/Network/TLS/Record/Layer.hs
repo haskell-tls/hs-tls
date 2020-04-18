@@ -23,32 +23,38 @@ data RecordLayer bytes = RecordLayer {
   , recordSendBytes :: bytes -> IO ()
   , recordRecv      :: Bool -> Int -> IO (Either TLSError (Record Plaintext))
   , recordRecv13    :: IO (Either TLSError (Record Plaintext))
-  , recordNeedFlush :: Bool
   }
 
-newTransparentRecordLayer :: (ByteString -> IO ()) -> IO ByteString -> RecordLayer ByteString
-newTransparentRecordLayer send recv = RecordLayer {
-    recordEncode    = transparentEncodeRecord
-  , recordEncode13  = transparentEncodeRecord
+newTransparentRecordLayer :: Eq ann
+                          => IO ann -> (ByteString -> IO ()) -> IO ByteString
+                          -> RecordLayer [(ann, ByteString)]
+newTransparentRecordLayer get send recv = RecordLayer {
+    recordEncode    = transparentEncodeRecord get
+  , recordEncode13  = transparentEncodeRecord get
   , recordSendBytes = transparentSendBytes send
   , recordRecv      = \_ _ -> transparentRecvRecord recv
   , recordRecv13    = transparentRecvRecord recv
-  , recordNeedFlush = True
   }
 
-transparentEncodeRecord :: Record Plaintext -> IO (Either TLSError ByteString)
-transparentEncodeRecord (Record ProtocolType_ChangeCipherSpec _ _) =
-    return $ Right ""
-transparentEncodeRecord (Record ProtocolType_Alert _ frag) = do
+transparentEncodeRecord :: IO ann -> Record Plaintext -> IO (Either TLSError [(ann, ByteString)])
+transparentEncodeRecord _ (Record ProtocolType_ChangeCipherSpec _ _) =
+    return $ Right []
+transparentEncodeRecord _ (Record ProtocolType_Alert _ frag) = do
     let Just desc = valToType (fragmentGetBytes frag `B.index` 1)
     E.throwIO $ Error_Protocol ("transparentEncodeRecord", True, desc)
-transparentEncodeRecord (Record _ _ frag) =
-    return $ Right $ fragmentGetBytes frag
+transparentEncodeRecord get (Record _ _ frag) =
+    get >>= \a -> return $ Right [(a, fragmentGetBytes frag)]
 
-transparentSendBytes :: (ByteString -> IO ()) -> ByteString -> IO ()
-transparentSendBytes _    "" = return ()
-transparentSendBytes send bs = send bs
+transparentSendBytes :: Eq ann => (ByteString -> IO ()) -> [(ann, ByteString)] -> IO ()
+transparentSendBytes send =
+    mapM_ send . filter (not . B.null) . map (B.concat . snd) . compress
 
 transparentRecvRecord :: IO ByteString -> IO (Either TLSError (Record Plaintext))
 transparentRecvRecord recv =
     Right . Record ProtocolType_Handshake TLS12 . fragmentPlaintext <$> recv
+
+compress :: Eq ann => [(ann, val)] -> [(ann, [val])]
+compress []         = []
+compress ((a,v):xs) =
+    let (ys, zs) = span ((== a) . fst) xs
+     in (a, v : map snd ys) : compress zs

@@ -54,6 +54,7 @@ import Network.TLS.Handshake.Control
 import Network.TLS.Handshake.Server
 import Network.TLS.Handshake.QUIC
 import Network.TLS.Handshake.State
+import Network.TLS.Handshake.State13
 import Network.TLS.Imports
 import Network.TLS.KeySchedule (hkdfExtract, hkdfExpandLabel)
 import Network.TLS.Record.Layer
@@ -82,12 +83,18 @@ data QuicCallbacks = QuicCallbacks
     , quicNotifyExtensions  :: [ExtensionRaw] -> IO ()
     }
 
+getLevel :: Context -> IO CryptLevel
+getLevel ctx = do
+    (_, _, level, _) <- getTxState ctx
+    return level
+
 prepare :: (a -> IO ())
         -> IO (IO ByteString
               ,ByteString -> IO ()
               ,a -> IO ()
               ,IO a
-              ,RecordLayer ByteString
+              ,ByteString -> IO ()
+              ,IO ByteString
               ,IORef (Maybe ByteString))
 prepare processI = do
     c1 <- newChan
@@ -100,16 +107,16 @@ prepare processI = do
         put  = writeChan c2
         sync a = processI a >> putMVar mvar a
         ask  = takeMVar mvar
-        rl   =  newTransparentRecordLayer send recv
-    return (get, put, sync, ask, rl, ref)
+    return (get, put, sync, ask, send, recv, ref)
 
 newQUICClient :: ClientParams -> QuicCallbacks -> IO ClientController
 newQUICClient cparams callbacks = do
-    (get, put, sync, ask, rl, ref) <- prepare processI
+    (get, put, sync, ask, send, recv, ref) <- prepare processI
     ctx <- contextNew nullBackend cparams
     let ctx' = updateRecordLayer rl ctx
           { ctxHandshakeSync = HandshakeSync sync (\_ -> return ())
           }
+        rl = newTransparentRecordLayer (getLevel ctx') send recv
         failed = sync . ClientHandshakeFailedI
     tid <- forkIO $ E.handle failed $ do
         handshake ctx'
@@ -130,11 +137,12 @@ newQUICClient cparams callbacks = do
 
 newQUICServer :: ServerParams -> QuicCallbacks -> IO ServerController
 newQUICServer sparams callbacks = do
-    (get, put, sync, ask, rl, ref) <- prepare processI
+    (get, put, sync, ask, send, recv, ref) <- prepare processI
     ctx <- contextNew nullBackend sparams
     let ctx' = updateRecordLayer rl ctx
           { ctxHandshakeSync = HandshakeSync (\_ -> return ()) sync
           }
+        rl = newTransparentRecordLayer (getLevel ctx') send recv
         failed = sync . ServerHandshakeFailedI
     tid <- forkIO $ E.handle failed $ do
         handshake ctx'

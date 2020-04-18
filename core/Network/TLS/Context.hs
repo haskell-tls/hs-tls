@@ -200,7 +200,6 @@ contextNew backend params = liftIO $ do
             , recordSendBytes = sendBytes ctx
             , recordRecv      = recvRecord ctx
             , recordRecv13    = recvRecord13 ctx
-            , recordNeedFlush = False
             }
 
     return ctx
