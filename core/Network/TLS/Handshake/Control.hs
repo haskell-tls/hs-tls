@@ -67,7 +67,7 @@ data ClientStatus =
     ClientNeedsMore
   | SendClientHello ClientHello (Maybe EarlySecretInfo)
   | RecvServerHello HandshakeSecretInfo
-  | SendClientFinished Finished [ExtensionRaw] ApplicationSecretInfo
+  | SendClientFinished Finished ApplicationSecretInfo
   | RecvSessionTicket
   | ClientHandshakeDone
 
@@ -89,7 +89,7 @@ data ClientStatusI =
 data ServerStatus =
     ServerNeedsMore
   | SendRequestRetry ServerHello
-  | SendServerHello ServerHello [ExtensionRaw] (Maybe EarlySecretInfo) HandshakeSecretInfo
+  | SendServerHello ServerHello (Maybe EarlySecretInfo) HandshakeSecretInfo
   | SendServerFinished Finished ApplicationSecretInfo
   | SendSessionTicket SessionTicket
   | ServerHandshakeDone

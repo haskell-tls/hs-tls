@@ -2,10 +2,8 @@
 
 module Network.TLS.Handshake.QUIC where
 
-import Network.TLS.Extension
 import Network.TLS.Handshake.Control
 import Network.TLS.Imports
-import Network.TLS.Struct
 import Network.TLS.Struct13
 
 import Control.Concurrent
@@ -27,10 +25,9 @@ quicServer _ ask get put ref (PutClientHello ch) =
         rsp <- ask
         case rsp of
           SendRequestRetryI -> SendRequestRetry <$> get
-          SendServerHelloI exts earlySec handSec  -> do
+          SendServerHelloI _ earlySec handSec  -> do
               sh <- get
-              let exts' = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters) exts
-              return $ SendServerHello sh exts' earlySec handSec
+              return $ SendServerHello sh earlySec handSec
           ServerHandshakeFailedI e -> E.throwIO e
           _ -> error "quicServer"
 quicServer _ ask get _ _ GetServerFinished = do
@@ -86,10 +83,9 @@ quicClient _ ask get put ref (PutServerFinished sf) =
     putRecordWith put ref sf HandshakeType_Finished13 ClientNeedsMore $ do
         rsp <- ask
         case rsp of
-          SendClientFinishedI exts appSec -> do
-              let exts' = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters) exts
+          SendClientFinishedI _ appSec -> do
               cf <- get
-              return $ SendClientFinished cf exts' appSec
+              return $ SendClientFinished cf appSec
           ClientHandshakeFailedI e -> E.throwIO e
           _ -> error "quicClient"
 quicClient _ ask _ put ref (PutSessionTicket nst) =

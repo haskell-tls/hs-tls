@@ -72,15 +72,17 @@ nullBackend = Backend {
   }
 
 data QuicCallbacks = QuicCallbacks
+    { quicNotifyExtensions :: [ExtensionRaw] -> IO ()
+    }
 
-prepare :: QuicCallbacks
+prepare :: (a -> IO ())
         -> IO (IO ByteString
               ,ByteString -> IO ()
               ,a -> IO ()
               ,IO a
               ,RecordLayer
               ,IORef (Maybe ByteString))
-prepare _callbacks = do
+prepare processI = do
     c1 <- newChan
     c2 <- newChan
     mvar <- newEmptyMVar
@@ -89,14 +91,14 @@ prepare _callbacks = do
         get  = readChan  c1
         recv = readChan  c2
         put  = writeChan c2
-        sync = putMVar mvar
+        sync a = processI a >> putMVar mvar a
         ask  = takeMVar mvar
         rl   =  newTransparentRecordLayer send recv
     return (get, put, sync, ask, rl, ref)
 
 newQUICClient :: ClientParams -> QuicCallbacks -> IO ClientController
 newQUICClient cparams callbacks = do
-    (get, put, sync, ask, rl, ref) <- prepare callbacks
+    (get, put, sync, ask, rl, ref) <- prepare processI
     ctx <- contextNew nullBackend cparams
     let ctx' = ctx {
             ctxRecordLayer   = rl
@@ -109,9 +111,15 @@ newQUICClient cparams callbacks = do
     wtid <- mkWeakThreadId tid
     return (quicClient wtid ask get put ref)
 
+  where
+    processI (SendClientFinishedI exts _) =
+        let exts' = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters) exts
+         in quicNotifyExtensions callbacks exts'
+    processI _ = return ()
+
 newQUICServer :: ServerParams -> QuicCallbacks -> IO ServerController
 newQUICServer sparams callbacks = do
-    (get, put, sync, ask, rl, ref) <- prepare callbacks
+    (get, put, sync, ask, rl, ref) <- prepare processI
     ctx <- contextNew nullBackend sparams
     let ctx' = ctx {
             ctxRecordLayer   = rl
@@ -123,6 +131,12 @@ newQUICServer sparams callbacks = do
         void $ recvData ctx'
     wtid <- mkWeakThreadId tid
     return (quicServer wtid ask get put ref)
+
+  where
+    processI (SendServerHelloI exts _ _) =
+        let exts' = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters) exts
+         in quicNotifyExtensions callbacks exts'
+    processI _ = return ()
 
 errorToAlertDescription :: TLSError -> AlertDescription
 errorToAlertDescription = snd . head . errorToAlert
