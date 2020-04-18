@@ -145,9 +145,13 @@ newQUICServer sparams callbacks = do
     return (quicServer wtid ask get put ref)
 
   where
-    processI (SendServerHelloI exts _ _) =
+    processI (SendServerHelloI exts mEarlySecInfo handSecInfo) = do
+        quicNotifySecretEvent callbacks (SyncEarlySecret mEarlySecInfo)
+        quicNotifySecretEvent callbacks (SyncHandshakeSecret handSecInfo)
         let exts' = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters) exts
-         in quicNotifyExtensions callbacks exts'
+        quicNotifyExtensions callbacks exts'
+    processI (SendServerFinishedI appSecInfo) =
+        quicNotifySecretEvent callbacks (SyncApplicationSecret appSecInfo)
     processI _ = return ()
 
 errorToAlertDescription :: TLSError -> AlertDescription

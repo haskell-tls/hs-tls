@@ -25,26 +25,20 @@ quicServer _ ask get put ref (PutClientHello ch) =
         rsp <- ask
         case rsp of
           SendRequestRetryI -> SendRequestRetry <$> get
-          SendServerHelloI _ earlySec handSec  -> do
-              sh <- get
-              return $ SendServerHello sh earlySec handSec
+          SendServerHelloI{} -> SendServerHello <$> get
           ServerHandshakeFailedI e -> E.throwIO e
           _ -> error "quicServer"
 quicServer _ ask get _ _ GetServerFinished = do
     rsp <- ask
     case rsp of
-      SendServerFinishedI appSec -> do
-          sf <- get
-          return $ SendServerFinished sf appSec
+      SendServerFinishedI _ -> SendServerFinished <$> get
       ServerHandshakeFailedI e -> E.throwIO e
       _ -> error "quicServer"
 quicServer _ ask get put ref (PutClientFinished cf) =
     putRecordWith put ref cf HandshakeType_Finished13 ServerNeedsMore $ do
         rsp <- ask
         case rsp of
-          SendSessionTicketI -> do
-              nst <- get
-              return $ SendSessionTicket nst
+          SendSessionTicketI -> SendSessionTicket <$> get
           ServerHandshakeFailedI e -> E.throwIO e
           _ -> error "quicServer"
 quicServer wtid _ _ _ _ ExitServer = do

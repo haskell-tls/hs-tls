@@ -89,8 +89,8 @@ data ClientStatusI =
 data ServerStatus =
     ServerNeedsMore
   | SendRequestRetry ServerHello
-  | SendServerHello ServerHello (Maybe EarlySecretInfo) HandshakeSecretInfo
-  | SendServerFinished Finished ApplicationSecretInfo
+  | SendServerHello ServerHello
+  | SendServerFinished Finished
   | SendSessionTicket SessionTicket
   | ServerHandshakeDone
 
