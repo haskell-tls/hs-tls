@@ -32,7 +32,8 @@ encodePacket13 :: Context -> Packet13 -> IO (Either TLSError ByteString)
 encodePacket13 ctx pkt = do
     let pt = contentType pkt
         mkRecord bs = Record pt TLS12 (fragmentPlaintext bs)
-    records <- map mkRecord <$> packetToFragments ctx 16384 pkt
+        len = ctxFragmentSize ctx
+    records <- map mkRecord <$> packetToFragments ctx len pkt
     fmap B.concat <$> forEitherM records (encodeRecord ctx)
 
 prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
@@ -41,7 +42,7 @@ prepareRecord = runTxState
 encodeRecord :: Context -> Record Plaintext -> IO (Either TLSError ByteString)
 encodeRecord ctx = prepareRecord ctx . encodeRecordM
 
-packetToFragments :: Context -> Int -> Packet13 -> IO [ByteString]
+packetToFragments :: Context -> Maybe Int -> Packet13 -> IO [ByteString]
 packetToFragments ctx len (Handshake13 hss)  =
     getChunks len . B.concat <$> mapM (updateHandshake13 ctx) hss
 packetToFragments _   _   (Alert13 a)        = return [encodeAlerts a]

@@ -85,13 +85,19 @@ sendBytes ctx dataToSend = liftIO $ do
 
 ----------------------------------------------------------------
 
+exceeds :: Integral ty => Context -> Int -> ty -> Bool
+exceeds ctx overhead actual =
+    case ctxFragmentSize ctx of
+        Nothing -> False
+        Just sz -> fromIntegral actual > sz + overhead
+
 getRecord :: Context -> Int -> Header -> ByteString -> IO (Either TLSError (Record Plaintext))
 getRecord ctx appDataOverhead header@(Header pt _ _) content = do
     withLog ctx $ \logging -> loggingIORecv logging header content
     runRxState ctx $ do
         r <- decodeRecordM header content
         let Record _ _ fragment = r
-        when (B.length (fragmentGetBytes fragment) > 16384 + overhead) $
+        when (exceeds ctx overhead $ B.length (fragmentGetBytes fragment)) $
             throwError contentSizeExceeded
         return r
   where overhead = if pt == ProtocolType_AppData then appDataOverhead else 0
@@ -153,8 +159,8 @@ recvRecord compatSSLv2 appDataOverhead ctx
         where recvLengthE = either (return . Left) recvLength
 
               recvLength header@(Header _ _ readlen)
-                | readlen > 16384 + 2048 = return $ Left maximumSizeExceeded
-                | otherwise              =
+                | exceeds ctx 2048 readlen = return $ Left maximumSizeExceeded
+                | otherwise                =
                     readExactBytes ctx (fromIntegral readlen) >>=
                         either (return . Left) (getRecord ctx appDataOverhead header)
 #ifdef SSLV2_COMPATIBLE
@@ -221,8 +227,8 @@ recvRecord13 :: Context
 recvRecord13 ctx = readExactBytes ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
   where recvLengthE = either (return . Left) recvLength
         recvLength header@(Header _ _ readlen)
-          | readlen > 16384 + 256  = return $ Left maximumSizeExceeded
-          | otherwise              =
+          | exceeds ctx 256 readlen = return $ Left maximumSizeExceeded
+          | otherwise               =
               readExactBytes ctx (fromIntegral readlen) >>=
                  either (return . Left) (getRecord ctx 0 header)
 

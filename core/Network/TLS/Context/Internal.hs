@@ -115,6 +115,7 @@ data Context = Context
     , ctxSSLv2ClientHello :: IORef Bool    -- ^ enable the reception of compatibility SSLv2 client hello.
                                            -- the flag will be set to false regardless of its initial value
                                            -- after the first packet received.
+    , ctxFragmentSize     :: Maybe Int        -- ^ maximum size of plaintext fragments
     , ctxTxState          :: MVar RecordState -- ^ current tx state
     , ctxRxState          :: MVar RecordState -- ^ current rx state
     , ctxHandshake        :: MVar (Maybe HandshakeState) -- ^ optional handshake state

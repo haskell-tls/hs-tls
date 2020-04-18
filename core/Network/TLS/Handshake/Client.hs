@@ -102,7 +102,7 @@ handshakeClient' cparams ctx groups mparams = do
                     | otherwise -> throwCore $ Error_Protocol ("server-selected group is not supported", True, IllegalParameter)
                   Just _  -> error "handshakeClient': invalid KeyShare value"
                   Nothing -> throwCore $ Error_Protocol ("key exchange not implemented in HRR, expected key_share extension", True, HandshakeFailure)
-          else do
+          else
             handshakeClient13 cparams ctx groupToSend
       else do
         when rtt0 $
@@ -311,7 +311,8 @@ handshakeClient' cparams ctx groups mparams = do
                 let ClientTrafficSecret clientEarlySecret = pairClient earlyKey
                 runPacketFlight ctx $ sendChangeCipherSpec13 ctx
                 setTxState ctx usedHash usedCipher clientEarlySecret
-                mapChunks_ 16384 (sendPacket13 ctx . AppData13) earlyData
+                let len = ctxFragmentSize ctx
+                mapChunks_ len (sendPacket13 ctx . AppData13) earlyData
                 usingHState ctx $ setTLS13RTT0Status RTT0Sent
 
         recvServerHello clientSession sentExts = runRecvState ctx recvState

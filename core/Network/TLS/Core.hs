@@ -101,7 +101,8 @@ sendData ctx dataToSend = liftIO $ do
         -- All chunks are protected with the same write lock because we don't
         -- want to interleave writes from other threads in the middle of our
         -- possibly large write.
-        mapM_ (mapChunks_ 16384 sendP) (L.toChunks dataToSend)
+        let len = ctxFragmentSize ctx
+        mapM_ (mapChunks_ len sendP) (L.toChunks dataToSend)
 
 -- | Get data out of Data packet, and automatically renegotiate if a Handshake
 -- ClientHello is received.  An empty result means EOF.

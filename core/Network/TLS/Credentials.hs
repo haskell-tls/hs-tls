@@ -34,10 +34,8 @@ type Credential = (CertificateChain, PrivKey)
 
 newtype Credentials = Credentials [Credential]
 
-#if MIN_VERSION_base(4,9,0)
 instance Semigroup Credentials where
     Credentials l1 <> Credentials l2 = Credentials (l1 ++ l2)
-#endif
 
 instance Monoid Credentials where
     mempty = Credentials []
@@ -82,7 +80,7 @@ credentialLoadX509ChainFromMemory :: ByteString
                   -> [ByteString]
                   -> ByteString
                   -> Either String Credential
-credentialLoadX509ChainFromMemory certData chainData privateData = do
+credentialLoadX509ChainFromMemory certData chainData privateData =
     let x509   = readSignedObjectFromMemory certData
         chains = map readSignedObjectFromMemory chainData
         keys   = readKeyFileFromMemory privateData

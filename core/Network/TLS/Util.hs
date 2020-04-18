@@ -86,15 +86,17 @@ forEitherM (x:xs) f = f x >>= doTail
     doTail (Left e)  = return (Left e)
 
 mapChunks_ :: Monad m
-           => Int -> (B.ByteString -> m a) -> B.ByteString -> m ()
+           => Maybe Int -> (B.ByteString -> m a) -> B.ByteString -> m ()
 mapChunks_ len f = mapM_ f . getChunks len
 
-getChunks :: Int -> B.ByteString -> [B.ByteString]
-getChunks len bs
-    | B.length bs > len =
-        let (chunk, remain) = B.splitAt len bs
-         in chunk : getChunks len remain
-    | otherwise = [bs]
+getChunks :: Maybe Int -> B.ByteString -> [B.ByteString]
+getChunks Nothing    = (: [])
+getChunks (Just len) = go
+  where
+    go bs | B.length bs > len =
+              let (chunk, remain) = B.splitAt len bs
+               in chunk : go remain
+          | otherwise = [bs]
 
 -- | An opaque newtype wrapper to prevent from poking inside content that has
 -- been saved.
