@@ -29,6 +29,7 @@ module Network.TLS.QUIC (
     , ServerControl(..)
     , ServerStatus(..)
     -- * Common
+    , QuicSecretEvent(..)
     , QuicCallbacks(..)
     , NegotiatedProtocol
     , ClientHello
@@ -71,8 +72,14 @@ nullBackend = Backend {
   , backendRecv  = \_ -> return ""
   }
 
+data QuicSecretEvent
+    = SyncEarlySecret (Maybe EarlySecretInfo)
+    | SyncHandshakeSecret HandshakeSecretInfo
+    | SyncApplicationSecret ApplicationSecretInfo
+
 data QuicCallbacks = QuicCallbacks
-    { quicNotifyExtensions :: [ExtensionRaw] -> IO ()
+    { quicNotifySecretEvent :: QuicSecretEvent -> IO ()
+    , quicNotifyExtensions  :: [ExtensionRaw] -> IO ()
     }
 
 prepare :: (a -> IO ())
