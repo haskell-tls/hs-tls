@@ -26,7 +26,7 @@ data RecordLayer bytes = RecordLayer {
   }
 
 newTransparentRecordLayer :: Eq ann
-                          => IO ann -> (ByteString -> IO ()) -> IO ByteString
+                          => IO ann -> ([(ann, ByteString)] -> IO ()) -> IO ByteString
                           -> RecordLayer [(ann, ByteString)]
 newTransparentRecordLayer get send recv = RecordLayer {
     recordEncode    = transparentEncodeRecord get
@@ -45,9 +45,12 @@ transparentEncodeRecord _ (Record ProtocolType_Alert _ frag) = do
 transparentEncodeRecord get (Record _ _ frag) =
     get >>= \a -> return $ Right [(a, fragmentGetBytes frag)]
 
-transparentSendBytes :: Eq ann => (ByteString -> IO ()) -> [(ann, ByteString)] -> IO ()
-transparentSendBytes send =
-    mapM_ send . filter (not . B.null) . map (B.concat . snd) . compress
+transparentSendBytes :: Eq ann => ([(ann, ByteString)] -> IO ()) -> [(ann, ByteString)] -> IO ()
+transparentSendBytes send input = send
+    [ (a, bs) | (a, frgs) <- compress input
+              , let bs = B.concat frgs
+              , not (B.null bs)
+    ]
 
 transparentRecvRecord :: IO ByteString -> IO (Either TLSError (Record Plaintext))
 transparentRecvRecord recv =

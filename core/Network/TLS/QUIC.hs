@@ -80,7 +80,8 @@ data QuicSecretEvent
     | SyncApplicationSecret ApplicationSecretInfo
 
 data QuicCallbacks = QuicCallbacks
-    { quicRecv              :: CryptLevel -> IO ByteString
+    { quicSend              :: [(CryptLevel, ByteString)] -> IO ()
+    , quicRecv              :: CryptLevel -> IO ByteString
     , quicNotifySecretEvent :: QuicSecretEvent -> IO ()
     , quicNotifyExtensions  :: [ExtensionRaw] -> IO ()
     }
@@ -95,42 +96,35 @@ getRxLevel ctx = do
     (_, _, level, _) <- getRxState ctx
     return level
 
-prepare :: (a -> IO ())
-        -> IO (IO ByteString
-              ,a -> IO ()
-              ,IO a
-              ,ByteString -> IO ())
+prepare :: (a -> IO ()) -> IO (a -> IO (), IO a)
 prepare processI = do
-    c1 <- newChan
     mvar <- newEmptyMVar
-    let send = writeChan c1
-        get  = readChan  c1
-        sync a = processI a >> putMVar mvar a
+    let sync a = processI a >> putMVar mvar a
         ask  = takeMVar mvar
-    return (get, sync, ask, send)
+    return (sync, ask)
 
 newRecordLayer :: Context -> QuicCallbacks
-               -> (ByteString -> IO ())
                -> RecordLayer [(CryptLevel, ByteString)]
-newRecordLayer ctx callbacks send = newTransparentRecordLayer get send recv
+newRecordLayer ctx callbacks = newTransparentRecordLayer get send recv
   where
     get     = getTxLevel ctx
+    send    = quicSend callbacks
     recv    = getRxLevel ctx >>= quicRecv callbacks
 
 newQUICClient :: ClientParams -> QuicCallbacks -> IO ClientController
 newQUICClient cparams callbacks = do
-    (get, sync, ask, send) <- prepare processI
+    (sync, ask) <- prepare processI
     ctx <- contextNew nullBackend cparams
     let ctx' = updateRecordLayer rl ctx
           { ctxHandshakeSync = HandshakeSync sync (\_ -> return ())
           }
-        rl = newRecordLayer ctx callbacks send
+        rl = newRecordLayer ctx callbacks
         failed = sync . ClientHandshakeFailedI
     tid <- forkIO $ E.handle failed $ do
         handshake ctx'
         void $ recvData ctx'
     wtid <- mkWeakThreadId tid
-    return (quicClient wtid ask get)
+    return (quicClient wtid ask)
 
   where
     processI (SendClientHelloI mEarlySecInfo) =
@@ -145,18 +139,18 @@ newQUICClient cparams callbacks = do
 
 newQUICServer :: ServerParams -> QuicCallbacks -> IO ServerController
 newQUICServer sparams callbacks = do
-    (get, sync, ask, send) <- prepare processI
+    (sync, ask) <- prepare processI
     ctx <- contextNew nullBackend sparams
     let ctx' = updateRecordLayer rl ctx
           { ctxHandshakeSync = HandshakeSync (\_ -> return ()) sync
           }
-        rl = newRecordLayer ctx callbacks send
+        rl = newRecordLayer ctx callbacks
         failed = sync . ServerHandshakeFailedI
     tid <- forkIO $ E.handle failed $ do
         handshake ctx'
         void $ recvData ctx'
     wtid <- mkWeakThreadId tid
-    return (quicServer wtid ask get)
+    return (quicServer wtid ask)
 
   where
     processI (SendServerHelloI exts mEarlySecInfo handSecInfo) = do

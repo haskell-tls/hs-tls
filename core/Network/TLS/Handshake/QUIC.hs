@@ -3,7 +3,6 @@
 module Network.TLS.Handshake.QUIC where
 
 import Network.TLS.Handshake.Control
-import Network.TLS.Imports
 
 import Control.Concurrent
 import qualified Control.Exception as E
@@ -14,28 +13,27 @@ type ClientController = ClientControl -> IO ClientStatus
 
 quicServer :: Weak ThreadId
            -> IO ServerStatusI
-           -> IO ByteString
            -> ServerController
-quicServer _ ask get PutClientHello = do
+quicServer _ ask PutClientHello = do
         rsp <- ask
         case rsp of
-          SendRequestRetryI -> SendRequestRetry <$> get
-          SendServerHelloI{} -> SendServerHello <$> get
+          SendRequestRetryI -> return SendRequestRetry
+          SendServerHelloI{} -> return SendServerHello
           ServerHandshakeFailedI e -> E.throwIO e
           _ -> error "quicServer"
-quicServer _ ask get GetServerFinished = do
+quicServer _ ask GetServerFinished = do
     rsp <- ask
     case rsp of
-      SendServerFinishedI _ -> SendServerFinished <$> get
+      SendServerFinishedI _ -> return SendServerFinished
       ServerHandshakeFailedI e -> E.throwIO e
       _ -> error "quicServer"
-quicServer _ ask get PutClientFinished = do
+quicServer _ ask PutClientFinished = do
         rsp <- ask
         case rsp of
-          SendSessionTicketI -> SendSessionTicket <$> get
+          SendSessionTicketI -> return SendSessionTicket
           ServerHandshakeFailedI e -> E.throwIO e
           _ -> error "quicServer"
-quicServer wtid _ _ ExitServer = do
+quicServer wtid _ ExitServer = do
     mtid <- deRefWeak wtid
     case mtid of
       Nothing  -> return ()
@@ -44,34 +42,33 @@ quicServer wtid _ _ ExitServer = do
 
 quicClient :: Weak ThreadId
            -> IO ClientStatusI
-           -> IO ByteString
            -> ClientController
-quicClient _ ask get GetClientHello = do
+quicClient _ ask GetClientHello = do
     rsp <- ask
     case rsp of
-      SendClientHelloI _ -> SendClientHello <$> get
+      SendClientHelloI _ -> return SendClientHello
       ClientHandshakeFailedI e -> E.throwIO e
       _ -> error "quicClient"
-quicClient _ ask get PutServerHello = do
+quicClient _ ask PutServerHello = do
         rsp <- ask
         case rsp of
-            SendClientHelloI _ -> SendClientHello <$> get
+            SendClientHelloI _ -> return SendClientHello
             RecvServerHelloI _ -> return RecvServerHello
             ClientHandshakeFailedI e -> E.throwIO e
             _ -> error "quicClient"
-quicClient _ ask get PutServerFinished = do
+quicClient _ ask PutServerFinished = do
         rsp <- ask
         case rsp of
-          SendClientFinishedI _ _ -> SendClientFinished <$> get
+          SendClientFinishedI _ _ -> return SendClientFinished
           ClientHandshakeFailedI e -> E.throwIO e
           _ -> error "quicClient"
-quicClient _ ask _ PutSessionTicket = do
+quicClient _ ask PutSessionTicket = do
         rsp <- ask
         case rsp of
           RecvSessionTicketI -> return RecvSessionTicket
           ClientHandshakeFailedI e -> E.throwIO e
           _ -> error "quicClient"
-quicClient wtid _ _ ExitClient = do
+quicClient wtid _ ExitClient = do
     mtid <- deRefWeak wtid
     case mtid of
       Nothing  -> return ()

@@ -57,9 +57,9 @@ data ServerControl = PutClientHello       -- ^ 'SendRequestRetry', 'SendServerHe
                    | ExitServer           -- ^ 'ServerHandshakeDone'
 
 data ClientStatus =
-    SendClientHello ClientHello
+    SendClientHello
   | RecvServerHello
-  | SendClientFinished Finished
+  | SendClientFinished
   | RecvSessionTicket
   | ClientHandshakeDone
 
@@ -78,10 +78,10 @@ data ClientStatusI =
   | ClientHandshakeFailedI TLSError
 
 data ServerStatus =
-    SendRequestRetry ServerHello
-  | SendServerHello ServerHello
-  | SendServerFinished Finished
-  | SendSessionTicket SessionTicket
+    SendRequestRetry
+  | SendServerHello
+  | SendServerFinished
+  | SendSessionTicket
   | ServerHandshakeDone
 
 instance Show ServerStatus where
