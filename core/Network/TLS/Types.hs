@@ -26,6 +26,7 @@ module Network.TLS.Types
     , ApplicationSecret
     , ResumptionSecret
     , BaseSecret(..)
+    , AnyTrafficSecret(..)
     , ClientTrafficSecret(..)
     , ServerTrafficSecret(..)
     , TrafficSecrets
@@ -102,6 +103,7 @@ data ApplicationSecret
 data ResumptionSecret
 
 newtype BaseSecret a = BaseSecret ByteString deriving (Eq, Show)
+newtype AnyTrafficSecret a = AnyTrafficSecret ByteString deriving (Eq, Show)
 newtype ClientTrafficSecret a = ClientTrafficSecret ByteString deriving (Eq, Show)
 newtype ServerTrafficSecret a = ServerTrafficSecret ByteString deriving (Eq, Show)
 

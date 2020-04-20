@@ -10,6 +10,7 @@
 module Network.TLS.Record.State
     ( CryptState(..)
     , CryptLevel(..)
+    , HasCryptLevel(..)
     , MacState(..)
     , RecordOptions(..)
     , RecordState(..)
@@ -38,6 +39,7 @@ import Network.TLS.Packet
 import Network.TLS.MAC
 import Network.TLS.Util
 import Network.TLS.Imports
+import Network.TLS.Types
 
 import qualified Data.ByteString as B
 
@@ -65,6 +67,11 @@ data CryptLevel
     | CryptHandshakeSecret
     | CryptApplicationSecret
     deriving (Eq,Show)
+
+class HasCryptLevel a where getCryptLevel :: proxy a -> CryptLevel
+instance HasCryptLevel EarlySecret where getCryptLevel _ = CryptEarlySecret
+instance HasCryptLevel HandshakeSecret where getCryptLevel _ = CryptHandshakeSecret
+instance HasCryptLevel ApplicationSecret where getCryptLevel _ = CryptApplicationSecret
 
 data RecordState = RecordState
     { stCipher      :: Maybe Cipher

@@ -50,7 +50,7 @@ import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.PostHandshake
 import Network.TLS.KeySchedule
-import Network.TLS.Types (Role(..), HostName)
+import Network.TLS.Types (Role(..), HostName, AnyTrafficSecret(..), ApplicationSecret)
 import Network.TLS.Util (catchException, mapChunks_)
 import Network.TLS.Extension
 import qualified Network.TLS.State as S
@@ -297,14 +297,14 @@ recvData' ctx = L.fromChunks . (:[]) <$> recvData ctx
 
 keyUpdate :: Context
           -> (Context -> IO (Hash,Cipher,CryptLevel,C8.ByteString))
-          -> (Context -> Hash -> Cipher -> CryptLevel -> C8.ByteString -> IO ())
+          -> (Context -> Hash -> Cipher -> AnyTrafficSecret ApplicationSecret -> IO ())
           -> IO ()
 keyUpdate ctx getState setState = do
     (usedHash, usedCipher, level, applicationSecretN) <- getState ctx
     unless (level == CryptApplicationSecret) $
         throwCore $ Error_Protocol ("tried key update without application traffic secret", True, InternalError)
     let applicationSecretN1 = hkdfExpandLabel usedHash applicationSecretN "traffic upd" "" $ hashDigestSize usedHash
-    setState ctx usedHash usedCipher level applicationSecretN1
+    setState ctx usedHash usedCipher (AnyTrafficSecret applicationSecretN1)
 
 -- | How to update keys in TLS 1.3
 data KeyUpdateRequest = OneWay -- ^ Unidirectional key update
