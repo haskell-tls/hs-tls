@@ -749,7 +749,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
             clientHandshakeSecret = triClient handKey
             handSecret = triBase handKey
         liftIO $ do
-            if rtt0OK
+            if rtt0OK && rtt0max /= quicMaxEarlyDataSize
                 then setRxState ctx usedHash usedCipher clientEarlySecret
                 else setRxState ctx usedHash usedCipher clientHandshakeSecret
             setTxState ctx usedHash usedCipher serverHandshakeSecret
