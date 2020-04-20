@@ -301,6 +301,8 @@ keyUpdate :: Context
           -> IO ()
 keyUpdate ctx getState setState = do
     (usedHash, usedCipher, level, applicationSecretN) <- getState ctx
+    unless (level == CryptApplicationSecret) $
+        throwCore $ Error_Protocol ("tried key update without application traffic secret", True, InternalError)
     let applicationSecretN1 = hkdfExpandLabel usedHash applicationSecretN "traffic upd" "" $ hashDigestSize usedHash
     setState ctx usedHash usedCipher level applicationSecretN1
 

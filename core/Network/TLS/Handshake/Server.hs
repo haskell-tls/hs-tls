@@ -1178,7 +1178,9 @@ postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = d
     processHandshake13 ctx certReq
     processHandshake13 ctx h
 
-    (usedHash, _, CryptApplicationSecret, applicationSecretN) <- getRxState ctx
+    (usedHash, _, level, applicationSecretN) <- getRxState ctx
+    unless (level == CryptApplicationSecret) $
+        throwCore $ Error_Protocol ("tried post-handshake authentication without application traffic secret", True, InternalError)
 
     let expectFinished hChBeforeCf (Finished13 verifyData) = do
             checkFinished usedHash applicationSecretN hChBeforeCf verifyData

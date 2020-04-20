@@ -1084,7 +1084,9 @@ postHandshakeAuthClientWith cparams ctx h@(CertRequest13 certReqCtx exts) =
     bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
         processHandshake13 ctx h
         processCertRequest13 ctx certReqCtx exts
-        (usedHash, _, CryptApplicationSecret, applicationSecretN) <- getTxState ctx
+        (usedHash, _, level, applicationSecretN) <- getTxState ctx
+        unless (level == CryptApplicationSecret) $
+            throwCore $ Error_Protocol ("unexpected post-handshake authentication request", True, UnexpectedMessage)
         sendClientFlight13 cparams ctx usedHash applicationSecretN
 
 postHandshakeAuthClientWith _ _ _ =
