@@ -15,13 +15,6 @@ quicServer :: Weak ThreadId
            -> IO ServerStatusI
            -> ServerController
 quicServer _ ask PutClientHello = do
-        rsp <- ask
-        case rsp of
-          SendRequestRetryI -> return SendRequestRetry
-          SendServerHelloI{} -> return SendServerHello
-          ServerHandshakeFailedI e -> E.throwIO e
-          _ -> error "quicServer"
-quicServer _ ask GetServerFinished = do
     rsp <- ask
     case rsp of
       SendServerFinishedI _ -> return SendServerFinished

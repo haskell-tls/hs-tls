@@ -51,8 +51,7 @@ data ClientControl = GetClientHello       -- ^ 'SendClientHello'
                    | PutSessionTicket     -- ^ 'RecvSessionTicket'
                    | ExitClient           -- ^ 'ClientHandshakeDone'
 
-data ServerControl = PutClientHello       -- ^ 'SendRequestRetry', 'SendServerHello'
-                   | GetServerFinished    -- ^ 'SendServerFinished'
+data ServerControl = PutClientHello       -- ^ 'SendServerFinished'
                    | PutClientFinished    -- ^ 'SendSessionTicket'
                    | ExitServer           -- ^ 'ServerHandshakeDone'
 
@@ -79,21 +78,18 @@ data ClientStatusI =
 
 data ServerStatus =
     SendRequestRetry
-  | SendServerHello
   | SendServerFinished
   | SendSessionTicket
   | ServerHandshakeDone
 
 instance Show ServerStatus where
     show SendRequestRetry{}    = "SendRequestRetry"
-    show SendServerHello{}     = "SendServerHello"
     show SendServerFinished{}  = "SendServerFinished"
     show SendSessionTicket{}   = "SendSessionTicket"
     show ServerHandshakeDone{} = "ServerHandshakeDone"
 
 data ServerStatusI =
-    SendRequestRetryI
-  | SendServerHelloI [ExtensionRaw] (Maybe EarlySecretInfo) HandshakeSecretInfo
+    SendServerHelloI [ExtensionRaw] (Maybe EarlySecretInfo) HandshakeSecretInfo
   | SendServerFinishedI ApplicationSecretInfo
   | SendSessionTicketI
   | ServerHandshakeFailedI TLSError

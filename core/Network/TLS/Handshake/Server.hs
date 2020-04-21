@@ -1030,7 +1030,6 @@ helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientS
           runPacketFlight ctx $ do
                 loadPacket13 ctx $ Handshake13 [hrr]
                 sendChangeCipherSpec13 ctx
-          contextSync ctx SendRequestRetryI
           handshakeServer sparams ctx
 
 findHighestVersionFrom :: Version -> [Version] -> Maybe Version

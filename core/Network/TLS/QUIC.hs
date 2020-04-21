@@ -156,15 +156,13 @@ newQUICServer sparams callbacks = do
     return (quicServer wtid ask)
 
   where
-    processI notify (SendServerHelloI exts mEarlySecInfo handSecInfo) = do
+    processI _      (SendServerHelloI exts mEarlySecInfo handSecInfo) = do
         quicNotifySecretEvent callbacks (SyncEarlySecret mEarlySecInfo)
         quicNotifySecretEvent callbacks (SyncHandshakeSecret handSecInfo)
         quicNotifyExtensions callbacks (filterQTP exts)
-        notify
     processI notify (SendServerFinishedI appSecInfo) = do
         quicNotifySecretEvent callbacks (SyncApplicationSecret appSecInfo)
         notify
-    processI notify SendRequestRetryI = notify
     processI notify SendSessionTicketI = notify
     processI notify (ServerHandshakeFailedI _) = notify
 
