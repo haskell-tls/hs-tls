@@ -96,10 +96,10 @@ getRxLevel ctx = do
     (_, _, level, _) <- getRxState ctx
     return level
 
-prepare :: (a -> IO ()) -> IO (a -> IO (), IO a)
+prepare :: (IO () -> a -> IO ()) -> IO (a -> IO (), IO a)
 prepare processI = do
     mvar <- newEmptyMVar
-    let sync a = processI a >> putMVar mvar a
+    let sync a = processI (putMVar mvar a) a
         ask  = takeMVar mvar
     return (sync, ask)
 
@@ -127,15 +127,18 @@ newQUICClient cparams callbacks = do
     return (quicClient wtid ask)
 
   where
-    processI (SendClientHelloI mEarlySecInfo) =
+    processI notify (SendClientHelloI mEarlySecInfo) = do
         quicNotifySecretEvent callbacks (SyncEarlySecret mEarlySecInfo)
-    processI (RecvServerHelloI handSecInfo) =
+        notify
+    processI notify (RecvServerHelloI handSecInfo) = do
         quicNotifySecretEvent callbacks (SyncHandshakeSecret handSecInfo)
-    processI (SendClientFinishedI exts appSecInfo) = do
+        notify
+    processI notify (SendClientFinishedI exts appSecInfo) = do
         quicNotifySecretEvent callbacks (SyncApplicationSecret appSecInfo)
-        let exts' = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters) exts
-        quicNotifyExtensions callbacks exts'
-    processI _ = return ()
+        quicNotifyExtensions callbacks (filterQTP exts)
+        notify
+    processI notify RecvSessionTicketI = notify
+    processI notify (ClientHandshakeFailedI _) = notify
 
 newQUICServer :: ServerParams -> QuicCallbacks -> IO ServerController
 newQUICServer sparams callbacks = do
@@ -153,14 +156,20 @@ newQUICServer sparams callbacks = do
     return (quicServer wtid ask)
 
   where
-    processI (SendServerHelloI exts mEarlySecInfo handSecInfo) = do
+    processI notify (SendServerHelloI exts mEarlySecInfo handSecInfo) = do
         quicNotifySecretEvent callbacks (SyncEarlySecret mEarlySecInfo)
         quicNotifySecretEvent callbacks (SyncHandshakeSecret handSecInfo)
-        let exts' = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters) exts
-        quicNotifyExtensions callbacks exts'
-    processI (SendServerFinishedI appSecInfo) =
+        quicNotifyExtensions callbacks (filterQTP exts)
+        notify
+    processI notify (SendServerFinishedI appSecInfo) = do
         quicNotifySecretEvent callbacks (SyncApplicationSecret appSecInfo)
-    processI _ = return ()
+        notify
+    processI notify SendRequestRetryI = notify
+    processI notify SendSessionTicketI = notify
+    processI notify (ServerHandshakeFailedI _) = notify
+
+filterQTP :: [ExtensionRaw] -> [ExtensionRaw]
+filterQTP = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters)
 
 errorToAlertDescription :: TLSError -> AlertDescription
 errorToAlertDescription = snd . head . errorToAlert
