@@ -45,9 +45,7 @@ data ApplicationSecretInfo = ApplicationSecretInfo HandshakeMode13 (Maybe Negoti
 
 ----------------------------------------------------------------
 
-data ClientControl = GetClientHello       -- ^ 'SendClientHello'
-                   | PutServerHello       -- ^ 'SendClientHello', 'RecvServerHello'
-                   | PutServerFinished    -- ^ 'SendClientFinished'
+data ClientControl = GetClientHello       -- ^ 'SendClientFinished'
                    | PutSessionTicket     -- ^ 'RecvSessionTicket'
                    | ExitClient           -- ^ 'ClientHandshakeDone'
 
@@ -56,15 +54,11 @@ data ServerControl = PutClientHello       -- ^ 'SendServerFinished'
                    | ExitServer           -- ^ 'ServerHandshakeDone'
 
 data ClientStatus =
-    SendClientHello
-  | RecvServerHello
-  | SendClientFinished
+    SendClientFinished
   | RecvSessionTicket
   | ClientHandshakeDone
 
 instance Show ClientStatus where
-    show SendClientHello{}     = "SendClientHello"
-    show RecvServerHello{}     = "RecvServerHello"
     show SendClientFinished{}  = "SendClientFinished"
     show RecvSessionTicket{}   = "RecvSessionTicket"
     show ClientHandshakeDone{} = "ClientHandshakeDone"

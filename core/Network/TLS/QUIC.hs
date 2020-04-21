@@ -127,12 +127,10 @@ newQUICClient cparams callbacks = do
     return (quicClient wtid ask)
 
   where
-    processI notify (SendClientHelloI mEarlySecInfo) = do
+    processI _      (SendClientHelloI mEarlySecInfo) =
         quicNotifySecretEvent callbacks (SyncEarlySecret mEarlySecInfo)
-        notify
-    processI notify (RecvServerHelloI handSecInfo) = do
+    processI _      (RecvServerHelloI handSecInfo) =
         quicNotifySecretEvent callbacks (SyncHandshakeSecret handSecInfo)
-        notify
     processI notify (SendClientFinishedI exts appSecInfo) = do
         quicNotifySecretEvent callbacks (SyncApplicationSecret appSecInfo)
         quicNotifyExtensions callbacks (filterQTP exts)
