@@ -33,10 +33,6 @@ module Network.TLS.QUIC (
     , QuicSecretEvent(..)
     , QuicCallbacks(..)
     , NegotiatedProtocol
-    , ClientHello
-    , ServerHello
-    , Finished
-    , SessionTicket
     , HandshakeMode13(..)
     , errorToAlertDescription
     , fromAlertDescription

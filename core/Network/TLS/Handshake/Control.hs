@@ -11,10 +11,6 @@ module Network.TLS.Handshake.Control (
   , HandshakeSecretInfo(..)
   , ApplicationSecretInfo(..)
   , NegotiatedProtocol
-  , ClientHello
-  , ServerHello
-  , Finished
-  , SessionTicket
   , HandshakeSync(..)
   ) where
 
@@ -27,12 +23,6 @@ import Network.TLS.Types
 ----------------------------------------------------------------
 
 type NegotiatedProtocol = ByteString
-type ClientHello = ByteString
-type ServerHello = ByteString
-type Finished = ByteString
-type SessionTicket = ByteString
-
-----------------------------------------------------------------
 
 data EarlySecretInfo = EarlySecretInfo Cipher (ClientTrafficSecret EarlySecret)
                        deriving (Eq, Show)
@@ -71,13 +61,11 @@ data ClientStatusI =
   | ClientHandshakeFailedI TLSError
 
 data ServerStatus =
-    SendRequestRetry
-  | SendServerFinished
+    SendServerFinished
   | SendSessionTicket
   | ServerHandshakeDone
 
 instance Show ServerStatus where
-    show SendRequestRetry{}    = "SendRequestRetry"
     show SendServerFinished{}  = "SendServerFinished"
     show SendSessionTicket{}   = "SendSessionTicket"
     show ServerHandshakeDone{} = "ServerHandshakeDone"
