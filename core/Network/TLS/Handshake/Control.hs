@@ -47,11 +47,8 @@ data ClientStatus =
     SendClientFinished
   | RecvSessionTicket
   | ClientHandshakeDone
-
-instance Show ClientStatus where
-    show SendClientFinished{}  = "SendClientFinished"
-    show RecvSessionTicket{}   = "RecvSessionTicket"
-    show ClientHandshakeDone{} = "ClientHandshakeDone"
+  | ClientHandshakeFailed TLSError
+  deriving Show
 
 data ClientStatusI =
     SendClientHelloI (Maybe EarlySecretInfo)
@@ -64,11 +61,8 @@ data ServerStatus =
     SendServerFinished
   | SendSessionTicket
   | ServerHandshakeDone
-
-instance Show ServerStatus where
-    show SendServerFinished{}  = "SendServerFinished"
-    show SendSessionTicket{}   = "SendSessionTicket"
-    show ServerHandshakeDone{} = "ServerHandshakeDone"
+  | ServerHandshakeFailed TLSError
+  deriving Show
 
 data ServerStatusI =
     SendServerHelloI [ExtensionRaw] (Maybe EarlySecretInfo) HandshakeSecretInfo

@@ -92,10 +92,11 @@ getRxLevel ctx = do
     (_, _, level, _) <- getRxState ctx
     return level
 
-prepare :: (IO () -> a -> IO ()) -> IO (a -> IO (), IO a)
+prepare :: ((status -> IO ()) -> statusI -> IO ())
+        -> IO (statusI -> IO (), IO status)
 prepare processI = do
     mvar <- newEmptyMVar
-    let sync a = let put = putMVar mvar a in processI put a
+    let sync a = let put = putMVar mvar in processI put a
         ask  = takeMVar mvar
     return (sync, ask)
 
@@ -130,9 +131,9 @@ newQUICClient cparams callbacks = do
     processI put (SendClientFinishedI exts appSecInfo) = do
         quicInstallKeys callbacks (InstallApplicationKeys appSecInfo)
         quicNotifyExtensions callbacks (filterQTP exts)
-        put
-    processI put RecvSessionTicketI = put
-    processI put (ClientHandshakeFailedI _) = put
+        put SendClientFinished
+    processI put RecvSessionTicketI = put RecvSessionTicket
+    processI put (ClientHandshakeFailedI e) = put (ClientHandshakeFailed e)
 
 newQUICServer :: ServerParams -> QUICCallbacks -> IO ServerController
 newQUICServer sparams callbacks = do
@@ -156,9 +157,9 @@ newQUICServer sparams callbacks = do
         quicNotifyExtensions callbacks (filterQTP exts)
     processI put (SendServerFinishedI appSecInfo) = do
         quicInstallKeys callbacks (InstallApplicationKeys appSecInfo)
-        put
-    processI put SendSessionTicketI = put
-    processI put (ServerHandshakeFailedI _) = put
+        put SendServerFinished
+    processI put SendSessionTicketI = put SendSessionTicket
+    processI put (ServerHandshakeFailedI e) = put (ServerHandshakeFailed e)
 
 filterQTP :: [ExtensionRaw] -> [ExtensionRaw]
 filterQTP = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters)
