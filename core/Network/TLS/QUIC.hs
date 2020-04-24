@@ -30,8 +30,8 @@ module Network.TLS.QUIC (
     , ServerStatus(..)
     -- * Common
     , CryptLevel(..)
-    , QuicSecretEvent(..)
-    , QuicCallbacks(..)
+    , KeyScheduleEvent(..)
+    , QUICCallbacks(..)
     , NegotiatedProtocol
     , HandshakeMode13(..)
     , errorToAlertDescription
@@ -70,15 +70,15 @@ nullBackend = Backend {
   , backendRecv  = \_ -> return ""
   }
 
-data QuicSecretEvent
-    = SyncEarlySecret (Maybe EarlySecretInfo)
-    | SyncHandshakeSecret HandshakeSecretInfo
-    | SyncApplicationSecret ApplicationSecretInfo
+data KeyScheduleEvent
+    = InstallEarlyKeys (Maybe EarlySecretInfo)
+    | InstallHandshakeKeys HandshakeSecretInfo
+    | InstallApplicationKeys ApplicationSecretInfo
 
-data QuicCallbacks = QuicCallbacks
+data QUICCallbacks = QUICCallbacks
     { quicSend              :: [(CryptLevel, ByteString)] -> IO ()
     , quicRecv              :: CryptLevel -> IO ByteString
-    , quicNotifySecretEvent :: QuicSecretEvent -> IO ()
+    , quicInstallKeys       :: KeyScheduleEvent -> IO ()
     , quicNotifyExtensions  :: [ExtensionRaw] -> IO ()
     }
 
@@ -95,11 +95,11 @@ getRxLevel ctx = do
 prepare :: (IO () -> a -> IO ()) -> IO (a -> IO (), IO a)
 prepare processI = do
     mvar <- newEmptyMVar
-    let sync a = processI (putMVar mvar a) a
+    let sync a = let put = putMVar mvar a in processI put a
         ask  = takeMVar mvar
     return (sync, ask)
 
-newRecordLayer :: Context -> QuicCallbacks
+newRecordLayer :: Context -> QUICCallbacks
                -> RecordLayer [(CryptLevel, ByteString)]
 newRecordLayer ctx callbacks = newTransparentRecordLayer get send recv
   where
@@ -107,7 +107,7 @@ newRecordLayer ctx callbacks = newTransparentRecordLayer get send recv
     send    = quicSend callbacks
     recv    = getRxLevel ctx >>= quicRecv callbacks
 
-newQUICClient :: ClientParams -> QuicCallbacks -> IO ClientController
+newQUICClient :: ClientParams -> QUICCallbacks -> IO ClientController
 newQUICClient cparams callbacks = do
     (sync, ask) <- prepare processI
     ctx <- contextNew nullBackend cparams
@@ -123,18 +123,18 @@ newQUICClient cparams callbacks = do
     return (quicClient wtid ask)
 
   where
-    processI _      (SendClientHelloI mEarlySecInfo) =
-        quicNotifySecretEvent callbacks (SyncEarlySecret mEarlySecInfo)
-    processI _      (RecvServerHelloI handSecInfo) =
-        quicNotifySecretEvent callbacks (SyncHandshakeSecret handSecInfo)
-    processI notify (SendClientFinishedI exts appSecInfo) = do
-        quicNotifySecretEvent callbacks (SyncApplicationSecret appSecInfo)
+    processI _ (SendClientHelloI mEarlySecInfo) =
+        quicInstallKeys callbacks (InstallEarlyKeys mEarlySecInfo)
+    processI _ (RecvServerHelloI handSecInfo) =
+        quicInstallKeys callbacks (InstallHandshakeKeys handSecInfo)
+    processI put (SendClientFinishedI exts appSecInfo) = do
+        quicInstallKeys callbacks (InstallApplicationKeys appSecInfo)
         quicNotifyExtensions callbacks (filterQTP exts)
-        notify
-    processI notify RecvSessionTicketI = notify
-    processI notify (ClientHandshakeFailedI _) = notify
+        put
+    processI put RecvSessionTicketI = put
+    processI put (ClientHandshakeFailedI _) = put
 
-newQUICServer :: ServerParams -> QuicCallbacks -> IO ServerController
+newQUICServer :: ServerParams -> QUICCallbacks -> IO ServerController
 newQUICServer sparams callbacks = do
     (sync, ask) <- prepare processI
     ctx <- contextNew nullBackend sparams
@@ -150,15 +150,15 @@ newQUICServer sparams callbacks = do
     return (quicServer wtid ask)
 
   where
-    processI _      (SendServerHelloI exts mEarlySecInfo handSecInfo) = do
-        quicNotifySecretEvent callbacks (SyncEarlySecret mEarlySecInfo)
-        quicNotifySecretEvent callbacks (SyncHandshakeSecret handSecInfo)
+    processI _ (SendServerHelloI exts mEarlySecInfo handSecInfo) = do
+        quicInstallKeys callbacks (InstallEarlyKeys mEarlySecInfo)
+        quicInstallKeys callbacks (InstallHandshakeKeys handSecInfo)
         quicNotifyExtensions callbacks (filterQTP exts)
-    processI notify (SendServerFinishedI appSecInfo) = do
-        quicNotifySecretEvent callbacks (SyncApplicationSecret appSecInfo)
-        notify
-    processI notify SendSessionTicketI = notify
-    processI notify (ServerHandshakeFailedI _) = notify
+    processI put (SendServerFinishedI appSecInfo) = do
+        quicInstallKeys callbacks (InstallApplicationKeys appSecInfo)
+        put
+    processI put SendSessionTicketI = put
+    processI put (ServerHandshakeFailedI _) = put
 
 filterQTP :: [ExtensionRaw] -> [ExtensionRaw]
 filterQTP = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters)
