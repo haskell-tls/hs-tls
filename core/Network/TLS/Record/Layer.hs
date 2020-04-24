@@ -9,7 +9,6 @@ import Network.TLS.Imports
 import Network.TLS.Record
 import Network.TLS.Struct
 
-import qualified Control.Exception as E
 import qualified Data.ByteString as B
 
 data RecordLayer bytes = RecordLayer {
@@ -26,7 +25,8 @@ data RecordLayer bytes = RecordLayer {
   }
 
 newTransparentRecordLayer :: Eq ann
-                          => IO ann -> ([(ann, ByteString)] -> IO ()) -> IO ByteString
+                          => IO ann -> ([(ann, ByteString)] -> IO ())
+                          -> IO (Either TLSError ByteString)
                           -> RecordLayer [(ann, ByteString)]
 newTransparentRecordLayer get send recv = RecordLayer {
     recordEncode    = transparentEncodeRecord get
@@ -39,9 +39,10 @@ newTransparentRecordLayer get send recv = RecordLayer {
 transparentEncodeRecord :: IO ann -> Record Plaintext -> IO (Either TLSError [(ann, ByteString)])
 transparentEncodeRecord _ (Record ProtocolType_ChangeCipherSpec _ _) =
     return $ Right []
-transparentEncodeRecord _ (Record ProtocolType_Alert _ frag) = do
-    let Just desc = valToType (fragmentGetBytes frag `B.index` 1)
-    E.throwIO $ Error_Protocol ("transparentEncodeRecord", True, desc)
+transparentEncodeRecord _ (Record ProtocolType_Alert _ _) =
+    -- all alerts are silent and must be transported externally based on
+    -- TLS exceptions raised by the library
+    return $ Right []
 transparentEncodeRecord get (Record _ _ frag) =
     get >>= \a -> return $ Right [(a, fragmentGetBytes frag)]
 
@@ -52,9 +53,10 @@ transparentSendBytes send input = send
               , not (B.null bs)
     ]
 
-transparentRecvRecord :: IO ByteString -> IO (Either TLSError (Record Plaintext))
+transparentRecvRecord :: IO (Either TLSError ByteString)
+                      -> IO (Either TLSError (Record Plaintext))
 transparentRecvRecord recv =
-    Right . Record ProtocolType_Handshake TLS12 . fragmentPlaintext <$> recv
+    fmap (Record ProtocolType_Handshake TLS12 . fragmentPlaintext) <$> recv
 
 compress :: Eq ann => [(ann, val)] -> [(ann, [val])]
 compress []         = []

@@ -34,7 +34,9 @@ module Network.TLS.QUIC (
     , QUICCallbacks(..)
     , NegotiatedProtocol
     , HandshakeMode13(..)
+    , errorTLS
     , errorToAlertDescription
+    , errorToAlertMessage
     , fromAlertDescription
     , toAlertDescription
     , quicMaxEarlyDataSize
@@ -77,7 +79,7 @@ data KeyScheduleEvent
 
 data QUICCallbacks = QUICCallbacks
     { quicSend              :: [(CryptLevel, ByteString)] -> IO ()
-    , quicRecv              :: CryptLevel -> IO ByteString
+    , quicRecv              :: CryptLevel -> IO (Either TLSError ByteString)
     , quicInstallKeys       :: KeyScheduleEvent -> IO ()
     , quicNotifyExtensions  :: [ExtensionRaw] -> IO ()
     }
@@ -116,7 +118,7 @@ newQUICClient cparams callbacks = do
           { ctxHandshakeSync = HandshakeSync sync (\_ -> return ())
           }
         rl = newRecordLayer ctx callbacks
-        failed = sync . ClientHandshakeFailedI
+        failed = sync . ClientHandshakeFailedI . getErrorCause
     tid <- forkIO $ E.handle failed $ do
         handshake ctx'
         void $ recvData ctx'
@@ -143,7 +145,7 @@ newQUICServer sparams callbacks = do
           { ctxHandshakeSync = HandshakeSync (\_ -> return ()) sync
           }
         rl = newRecordLayer ctx callbacks
-        failed = sync . ServerHandshakeFailedI
+        failed = sync . ServerHandshakeFailedI . getErrorCause
     tid <- forkIO $ E.handle failed $ do
         handshake ctx'
         void $ recvData ctx'
@@ -161,8 +163,20 @@ newQUICServer sparams callbacks = do
     processI put SendSessionTicketI = put SendSessionTicket
     processI put (ServerHandshakeFailedI e) = put (ServerHandshakeFailed e)
 
+getErrorCause :: TLSException -> TLSError
+getErrorCause (HandshakeFailed e) = e
+getErrorCause (Terminated _ _ e) = e
+getErrorCause e =
+    let msg = "unexpected TLS exception: " ++ show e
+     in Error_Protocol (msg, True, InternalError)
+
 filterQTP :: [ExtensionRaw] -> [ExtensionRaw]
 filterQTP = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters)
+
+-- | Can be used by callbacks to signal an unexpected condition.  This will then
+-- generate an "internal_error" alert in the TLS stack.
+errorTLS :: String -> IO a
+errorTLS msg = throwCore $ Error_Protocol (msg, True, InternalError)
 
 errorToAlertDescription :: TLSError -> AlertDescription
 errorToAlertDescription = snd . head . errorToAlert
