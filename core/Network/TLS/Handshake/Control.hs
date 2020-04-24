@@ -25,13 +25,13 @@ import Network.TLS.Types
 type NegotiatedProtocol = ByteString
 
 data EarlySecretInfo = EarlySecretInfo Cipher (ClientTrafficSecret EarlySecret)
-                       deriving (Eq, Show)
+                       deriving Show
 
 data HandshakeSecretInfo = HandshakeSecretInfo Cipher (TrafficSecrets HandshakeSecret)
-                         deriving (Eq, Show)
+                         deriving Show
 
 data ApplicationSecretInfo = ApplicationSecretInfo HandshakeMode13 (Maybe NegotiatedProtocol) (TrafficSecrets ApplicationSecret)
-                         deriving (Eq, Show)
+                         deriving Show
 
 ----------------------------------------------------------------
 

@@ -102,23 +102,23 @@ data HandshakeSecret
 data ApplicationSecret
 data ResumptionSecret
 
-newtype BaseSecret a = BaseSecret ByteString deriving (Eq, Show)
-newtype AnyTrafficSecret a = AnyTrafficSecret ByteString deriving (Eq, Show)
-newtype ClientTrafficSecret a = ClientTrafficSecret ByteString deriving (Eq, Show)
-newtype ServerTrafficSecret a = ServerTrafficSecret ByteString deriving (Eq, Show)
+newtype BaseSecret a = BaseSecret ByteString deriving Show
+newtype AnyTrafficSecret a = AnyTrafficSecret ByteString deriving Show
+newtype ClientTrafficSecret a = ClientTrafficSecret ByteString deriving Show
+newtype ServerTrafficSecret a = ServerTrafficSecret ByteString deriving Show
 
 data SecretTriple a = SecretTriple
     { triBase   :: BaseSecret a
     , triClient :: ClientTrafficSecret a
     , triServer :: ServerTrafficSecret a
-    } deriving (Eq, Show)
+    }
 
 data SecretPair a = SecretPair
     { pairBase   :: BaseSecret a
     , pairClient :: ClientTrafficSecret a
-    } deriving (Eq, Show)
+    }
 
 type TrafficSecrets a = (ClientTrafficSecret a, ServerTrafficSecret a)
 
 -- Master secret for TLS 1.2 or earlier.
-newtype MasterSecret = MasterSecret ByteString deriving (Eq, Show)
+newtype MasterSecret = MasterSecret ByteString deriving Show
