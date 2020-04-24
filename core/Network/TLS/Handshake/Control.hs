@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module Network.TLS.Handshake.Control (
     ClientControl(..)
   , ServerControl(..)
@@ -35,17 +33,17 @@ data ApplicationSecretInfo = ApplicationSecretInfo HandshakeMode13 (Maybe Negoti
 
 ----------------------------------------------------------------
 
-data ClientControl = GetClientHello       -- ^ 'SendClientFinished'
-                   | PutSessionTicket     -- ^ 'RecvSessionTicket'
+data ClientControl = EnterClient          -- ^ 'ClientHandshakeComplete', 'ClientHandshakeFailed'
+                   | RecvSessionTickets   -- ^ 'ClientRecvSessionTicket', 'ClientHandshakeFailed'
                    | ExitClient           -- ^ 'ClientHandshakeDone'
 
-data ServerControl = PutClientHello       -- ^ 'SendServerFinished'
-                   | PutClientFinished    -- ^ 'SendSessionTicket'
+data ServerControl = EnterServer          -- ^ 'ServerFinishedSent', 'ServerHandshakeFailed'
+                   | CompleteServer       -- ^ 'ServerHandshakeComplete', 'ServerHandshakeFailed'
                    | ExitServer           -- ^ 'ServerHandshakeDone'
 
 data ClientStatus =
-    SendClientFinished
-  | RecvSessionTicket
+    ClientHandshakeComplete
+  | ClientRecvSessionTicket
   | ClientHandshakeDone
   | ClientHandshakeFailed TLSError
   deriving Show
@@ -58,8 +56,8 @@ data ClientStatusI =
   | ClientHandshakeFailedI TLSError
 
 data ServerStatus =
-    SendServerFinished
-  | SendSessionTicket
+    ServerFinishedSent
+  | ServerHandshakeComplete
   | ServerHandshakeDone
   | ServerHandshakeFailed TLSError
   deriving Show

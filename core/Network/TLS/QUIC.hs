@@ -133,8 +133,8 @@ newQUICClient cparams callbacks = do
     processI put (SendClientFinishedI exts appSecInfo) = do
         quicInstallKeys callbacks (InstallApplicationKeys appSecInfo)
         quicNotifyExtensions callbacks (filterQTP exts)
-        put SendClientFinished
-    processI put RecvSessionTicketI = put RecvSessionTicket
+        put ClientHandshakeComplete
+    processI put RecvSessionTicketI = put ClientRecvSessionTicket
     processI put (ClientHandshakeFailedI e) = put (ClientHandshakeFailed e)
 
 newQUICServer :: ServerParams -> QUICCallbacks -> IO ServerController
@@ -159,8 +159,8 @@ newQUICServer sparams callbacks = do
         quicNotifyExtensions callbacks (filterQTP exts)
     processI put (SendServerFinishedI appSecInfo) = do
         quicInstallKeys callbacks (InstallApplicationKeys appSecInfo)
-        put SendServerFinished
-    processI put SendSessionTicketI = put SendSessionTicket
+        put ServerFinishedSent
+    processI put SendSessionTicketI = put ServerHandshakeComplete
     processI put (ServerHandshakeFailedI e) = put (ServerHandshakeFailed e)
 
 getErrorCause :: TLSException -> TLSError
