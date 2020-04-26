@@ -11,6 +11,7 @@ module Network.TLS.Handshake.Server
     , handshakeServerWith
     , requestCertificateServer
     , postHandshakeAuthServerWith
+    , quicMaxEarlyDataSize
     ) where
 
 import Network.TLS.Parameters
@@ -28,6 +29,7 @@ import Network.TLS.Util (bytesEq, catchException, fromJust)
 import Network.TLS.IO
 import Network.TLS.Types
 import Network.TLS.State
+import Network.TLS.Handshake.Control
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Key
@@ -712,7 +714,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
     (psk, binderInfo, is0RTTvalid) <- choosePSK
     earlyKey <- calculateEarlySecret ctx choice (Left psk) True
     let earlySecret = pairBase earlyKey
-        ClientTrafficSecret clientEarlySecret = pairClient earlyKey
+        clientEarlySecret = pairClient earlyKey
     extensions <- checkBinder earlySecret binderInfo
     hrr <- usingState_ ctx getTLS13HRR
     let authenticated = isJust binderInfo
@@ -738,32 +740,51 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
     mCredInfo <- if authenticated then return Nothing else decideCredentialInfo allCreds
     (ecdhe,keyShare) <- makeServerKeyShare ctx clientKeyShare
     ensureRecvComplete ctx
-    (clientHandshakeSecret, handshakeSecret) <- runPacketFlight ctx $ do
+    (clientHandshakeSecret, handSecret) <- runPacketFlight ctx $ do
         sendServerHello keyShare srand extensions
         sendChangeCipherSpec13 ctx
     ----------------------------------------------------------------
         handKey <- liftIO $ calculateHandshakeSecret ctx choice earlySecret ecdhe
-        let ServerTrafficSecret serverHandshakeSecret = triServer handKey
-            ClientTrafficSecret clientHandshakeSecret = triClient handKey
+        let serverHandshakeSecret = triServer handKey
+            clientHandshakeSecret = triClient handKey
+            handSecret = triBase handKey
         liftIO $ do
-            setRxState ctx usedHash usedCipher $ if rtt0OK then clientEarlySecret else clientHandshakeSecret
+            if rtt0OK && rtt0max /= quicMaxEarlyDataSize
+                then setRxState ctx usedHash usedCipher clientEarlySecret
+                else setRxState ctx usedHash usedCipher clientHandshakeSecret
             setTxState ctx usedHash usedCipher serverHandshakeSecret
+            let mEarlySecInfo
+                 | is0RTTvalid = Just $ EarlySecretInfo usedCipher clientEarlySecret
+                 | otherwise   = Nothing
+                handSecInfo = HandshakeSecretInfo usedCipher (clientHandshakeSecret,serverHandshakeSecret)
+            contextSync ctx $ SendServerHelloI exts mEarlySecInfo handSecInfo
     ----------------------------------------------------------------
         sendExtensions rtt0OK protoExt
         case mCredInfo of
             Nothing              -> return ()
             Just (cred, hashSig) -> sendCertAndVerify cred hashSig
-        rawFinished <- makeFinished ctx usedHash serverHandshakeSecret
+        let ServerTrafficSecret shs = serverHandshakeSecret
+        rawFinished <- makeFinished ctx usedHash shs
         loadPacket13 ctx $ Handshake13 [rawFinished]
-        return (clientHandshakeSecret, triBase handKey)
+        return (clientHandshakeSecret, handSecret)
     sfSentTime <- getCurrentTimeFromBase
     ----------------------------------------------------------------
     hChSf <- transcriptHash ctx
-    appKey <- calculateApplicationSecret ctx choice handshakeSecret hChSf
-    let ClientTrafficSecret clientApplicationSecret0 = triClient appKey
-        ServerTrafficSecret serverApplicationSecret0 = triServer appKey
+    appKey <- calculateApplicationSecret ctx choice handSecret hChSf
+    let clientApplicationSecret0 = triClient appKey
+        serverApplicationSecret0 = triServer appKey
         applicationSecret = triBase appKey
     setTxState ctx usedHash usedCipher serverApplicationSecret0
+    alpn <- usingState_ ctx getNegotiatedProtocol
+    -- TLS13RTT0Status is not exposed, so needs to distinguish
+    -- RTT0 and PreSharedKey.
+    let mode
+         | rtt0OK                   = RTT0
+         | authenticated && not hrr = PreSharedKey
+         | hrr                      = HelloRetryRequest
+         | otherwise                = FullHandshake
+    let appSecInfo = ApplicationSecretInfo mode alpn (clientApplicationSecret0,serverApplicationSecret0)
+    contextSync ctx $ SendServerFinishedI appSecInfo
     ----------------------------------------------------------------
     if rtt0OK then
         setEstablished ctx (EarlyDataAllowed rtt0max)
@@ -771,10 +792,12 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
         setEstablished ctx (EarlyDataNotAllowed 3) -- hardcoding
 
     let expectFinished hChBeforeCf (Finished13 verifyData) = liftIO $ do
-            checkFinished usedHash clientHandshakeSecret hChBeforeCf verifyData
+            let ClientTrafficSecret chs = clientHandshakeSecret
+            checkFinished usedHash chs hChBeforeCf verifyData
             handshakeTerminate13 ctx
             setRxState ctx usedHash usedCipher clientApplicationSecret0
             sendNewSessionTicket applicationSecret sfSentTime
+            contextSync ctx $ SendSessionTicketI
         expectFinished _ hs = unexpected (show hs) (Just "finished 13")
 
     let expectEndOfEarlyData EndOfEarlyData13 =
@@ -787,6 +810,8 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
           unless skip $ recvHandshake13hash ctx (expectCertVerify sparams ctx)
           recvHandshake13hash ctx expectFinished
           ensureRecvComplete ctx
+      else if rtt0OK && rtt0max == quicMaxEarlyDataSize then
+        setPendingActions ctx [PendingActionHash True expectFinished]
       else if rtt0OK then
         setPendingActions ctx [PendingAction True expectEndOfEarlyData
                               ,PendingActionHash True expectFinished]
@@ -918,7 +943,12 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
         let earlyDataExtension
               | rtt0OK = Just $ ExtensionRaw extensionID_EarlyData $ extensionEncode (EarlyDataIndication Nothing)
               | otherwise = Nothing
-        let extensions = catMaybes [earlyDataExtension, groupExtension, sniExtension] ++ protoExt
+        let extensions = sharedExtensions (serverShared sparams)
+                      ++ catMaybes [earlyDataExtension
+                                   ,groupExtension
+                                   ,sniExtension
+                                   ]
+                      ++ protoExt
         loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 extensions]
 
     sendNewSessionTicket applicationSecret sfSentTime = when sendNST $ do
@@ -1149,7 +1179,9 @@ postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = d
     processHandshake13 ctx certReq
     processHandshake13 ctx h
 
-    (usedHash, _, applicationSecretN) <- getRxState ctx
+    (usedHash, _, level, applicationSecretN) <- getRxState ctx
+    unless (level == CryptApplicationSecret) $
+        throwCore $ Error_Protocol ("tried post-handshake authentication without application traffic secret", True, InternalError)
 
     let expectFinished hChBeforeCf (Finished13 verifyData) = do
             checkFinished usedHash applicationSecretN hChBeforeCf verifyData
@@ -1167,3 +1199,11 @@ postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = d
 
 postHandshakeAuthServerWith _ _ _ =
     throwCore $ Error_Protocol ("unexpected handshake message received in postHandshakeAuthServerWith", True, UnexpectedMessage)
+
+contextSync :: Context -> ServerStatusI -> IO ()
+contextSync ctx ctl = case ctxHandshakeSync ctx of
+    HandshakeSync _ sync -> sync ctl
+
+-- | Max early data size for QUIC.
+quicMaxEarlyDataSize :: Int
+quicMaxEarlyDataSize = 0xffffffff

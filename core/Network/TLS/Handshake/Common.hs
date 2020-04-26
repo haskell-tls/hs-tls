@@ -21,6 +21,8 @@ module Network.TLS.Handshake.Common
     , storePrivInfo
     , isSupportedGroup
     , checkSupportedGroup
+    , errorToAlert
+    , errorToAlertMessage
     ) where
 
 import qualified Data.ByteString as B
@@ -73,6 +75,12 @@ errorToAlert (Error_Protocol (_, _, ad))   = [(AlertLevel_Fatal, ad)]
 errorToAlert (Error_Packet_unexpected _ _) = [(AlertLevel_Fatal, UnexpectedMessage)]
 errorToAlert (Error_Packet_Parsing _)      = [(AlertLevel_Fatal, DecodeError)]
 errorToAlert _                             = [(AlertLevel_Fatal, InternalError)]
+
+errorToAlertMessage :: TLSError -> String
+errorToAlertMessage (Error_Protocol (msg, _, _))    = msg
+errorToAlertMessage (Error_Packet_unexpected msg _) = msg
+errorToAlertMessage (Error_Packet_Parsing msg)      = msg
+errorToAlertMessage e                               = show e
 
 unexpected :: MonadIO m => String -> Maybe String -> m a
 unexpected msg expected = throwCore $ Error_Packet_unexpected msg (maybe "" (" expected: " ++) expected)

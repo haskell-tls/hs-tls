@@ -26,8 +26,10 @@ module Network.TLS.Types
     , ApplicationSecret
     , ResumptionSecret
     , BaseSecret(..)
+    , AnyTrafficSecret(..)
     , ClientTrafficSecret(..)
     , ServerTrafficSecret(..)
+    , TrafficSecrets
     , SecretTriple(..)
     , SecretPair(..)
     , MasterSecret(..)
@@ -101,6 +103,7 @@ data ApplicationSecret
 data ResumptionSecret
 
 newtype BaseSecret a = BaseSecret ByteString deriving Show
+newtype AnyTrafficSecret a = AnyTrafficSecret ByteString deriving Show
 newtype ClientTrafficSecret a = ClientTrafficSecret ByteString deriving Show
 newtype ServerTrafficSecret a = ServerTrafficSecret ByteString deriving Show
 
@@ -114,6 +117,8 @@ data SecretPair a = SecretPair
     { pairBase   :: BaseSecret a
     , pairClient :: ClientTrafficSecret a
     }
+
+type TrafficSecrets a = (ClientTrafficSecret a, ServerTrafficSecret a)
 
 -- Master secret for TLS 1.2 or earlier.
 newtype MasterSecret = MasterSecret ByteString deriving Show

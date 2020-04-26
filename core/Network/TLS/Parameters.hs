@@ -397,6 +397,8 @@ data Shared = Shared
       --
       -- See the default value of 'ValidationCache'.
     , sharedValidationCache :: ValidationCache
+      -- | Additional extensions for ClientHello and EncryptedExtensions.
+    , sharedExtensions      :: [ExtensionRaw]
     }
 
 instance Show Shared where
@@ -407,6 +409,7 @@ instance Default Shared where
             , sharedSessionManager  = noSessionManager
             , sharedCAStore         = mempty
             , sharedValidationCache = def
+            , sharedExtensions      = []
             }
 
 -- | Group usage callback possible return values.

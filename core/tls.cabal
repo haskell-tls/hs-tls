@@ -70,6 +70,7 @@ Library
                      Network.TLS.Extra
                      Network.TLS.Extra.Cipher
                      Network.TLS.Extra.FFDHE
+                     Network.TLS.QUIC
   other-modules:     Network.TLS.Cap
                      Network.TLS.Struct
                      Network.TLS.Struct13
@@ -85,14 +86,16 @@ Library
                      Network.TLS.ErrT
                      Network.TLS.Extension
                      Network.TLS.Handshake
+                     Network.TLS.Handshake.Certificate
+                     Network.TLS.Handshake.Client
                      Network.TLS.Handshake.Common
                      Network.TLS.Handshake.Common13
-                     Network.TLS.Handshake.Certificate
+                     Network.TLS.Handshake.Control
                      Network.TLS.Handshake.Key
-                     Network.TLS.Handshake.Client
-                     Network.TLS.Handshake.Server
                      Network.TLS.Handshake.Process
+                     Network.TLS.Handshake.QUIC
                      Network.TLS.Handshake.Random
+                     Network.TLS.Handshake.Server
                      Network.TLS.Handshake.Signature
                      Network.TLS.Handshake.State
                      Network.TLS.Handshake.State13
@@ -107,10 +110,11 @@ Library
                      Network.TLS.Parameters
                      Network.TLS.PostHandshake
                      Network.TLS.Record
-                     Network.TLS.Record.Types
-                     Network.TLS.Record.Engage
                      Network.TLS.Record.Disengage
+                     Network.TLS.Record.Engage
+                     Network.TLS.Record.Layer
                      Network.TLS.Record.State
+                     Network.TLS.Record.Types
                      Network.TLS.RNG
                      Network.TLS.State
                      Network.TLS.Session
