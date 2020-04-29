@@ -5,6 +5,8 @@ module Network.TLS.Handshake.Control (
   , ClientStatusI(..)
   , ServerStatus(..)
   , ServerStatusI(..)
+  , ClientController
+  , ServerController
   , EarlySecretInfo(..)
   , HandshakeSecretInfo(..)
   , ApplicationSecretInfo(..)
@@ -32,6 +34,9 @@ data ApplicationSecretInfo = ApplicationSecretInfo HandshakeMode13 (Maybe Negoti
                          deriving Show
 
 ----------------------------------------------------------------
+
+type ClientController = ClientControl -> IO ClientStatus
+type ServerController = ServerControl -> IO ServerStatus
 
 data ClientControl = EnterClient          -- ^ 'ClientHandshakeComplete', 'ClientHandshakeFailed'
                    | RecvSessionTickets   -- ^ 'ClientRecvSessionTicket', 'ClientHandshakeFailed'

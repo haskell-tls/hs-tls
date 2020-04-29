@@ -51,7 +51,6 @@ import Network.TLS.Extension (extensionID_QuicTransportParameters)
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Control
 import Network.TLS.Handshake.Server
-import Network.TLS.Handshake.QUIC
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.Imports
@@ -63,6 +62,7 @@ import Network.TLS.Types
 
 import Control.Concurrent
 import qualified Control.Exception as E
+import System.Mem.Weak
 
 nullBackend :: Backend
 nullBackend = Backend {
@@ -137,6 +137,12 @@ newQUICClient cparams callbacks = do
     processI put RecvSessionTicketI = put ClientRecvSessionTicket
     processI put (ClientHandshakeFailedI e) = put (ClientHandshakeFailed e)
 
+    quicClient wtid _ ExitClient = do
+        mtid <- deRefWeak wtid
+        forM_ mtid killThread
+        return ClientHandshakeDone
+    quicClient _ ask _ = ask
+
 newQUICServer :: ServerParams -> QUICCallbacks -> IO ServerController
 newQUICServer sparams callbacks = do
     (sync, ask) <- prepare processI
@@ -162,6 +168,12 @@ newQUICServer sparams callbacks = do
         put ServerFinishedSent
     processI put SendSessionTicketI = put ServerHandshakeComplete
     processI put (ServerHandshakeFailedI e) = put (ServerHandshakeFailed e)
+
+    quicServer wtid _ ExitServer = do
+        mtid <- deRefWeak wtid
+        forM_ mtid killThread
+        return ServerHandshakeDone
+    quicServer _ ask _ = ask
 
 getErrorCause :: TLSException -> TLSError
 getErrorCause (HandshakeFailed e) = e

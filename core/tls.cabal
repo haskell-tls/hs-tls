@@ -93,7 +93,6 @@ Library
                      Network.TLS.Handshake.Control
                      Network.TLS.Handshake.Key
                      Network.TLS.Handshake.Process
-                     Network.TLS.Handshake.QUIC
                      Network.TLS.Handshake.Random
                      Network.TLS.Handshake.Server
                      Network.TLS.Handshake.Signature
