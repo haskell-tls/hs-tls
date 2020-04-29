@@ -3,6 +3,7 @@
 module Network.TLS.Handshake.QUIC where
 
 import Network.TLS.Handshake.Control
+import Network.TLS.Imports
 
 import Control.Concurrent
 import System.Mem.Weak
@@ -15,9 +16,7 @@ quicServer :: Weak ThreadId
            -> ServerController
 quicServer wtid _ ExitServer = do
     mtid <- deRefWeak wtid
-    case mtid of
-      Nothing  -> return ()
-      Just tid -> killThread tid
+    forM_ mtid killThread
     return ServerHandshakeDone
 quicServer _ ask _ = ask
 
@@ -26,8 +25,6 @@ quicClient :: Weak ThreadId
            -> ClientController
 quicClient wtid _ ExitClient = do
     mtid <- deRefWeak wtid
-    case mtid of
-      Nothing  -> return ()
-      Just tid -> killThread tid
+    forM_ mtid killThread
     return ClientHandshakeDone
 quicClient _ ask _ = ask
