@@ -22,6 +22,8 @@ import Network.TLS.Imports
 
 ----------------------------------------------------------------
 
+-- | @HKDF-Extract@ function.  Returns the pseudorandom key (PRK) from salt and
+-- input keying material (IKM).
 hkdfExtract :: Hash -> ByteString -> ByteString -> ByteString
 hkdfExtract SHA1   salt ikm = convert (extract salt ikm :: PRK H.SHA1)
 hkdfExtract SHA256 salt ikm = convert (extract salt ikm :: PRK H.SHA256)
@@ -39,6 +41,8 @@ deriveSecret h secret label hashedMsgs =
 
 ----------------------------------------------------------------
 
+-- | @HKDF-Expand-Label@ function.  Returns output keying material of the
+-- specified length from the PRK, customized for a TLS label and context.
 hkdfExpandLabel :: Hash
                 -> ByteString
                 -> ByteString

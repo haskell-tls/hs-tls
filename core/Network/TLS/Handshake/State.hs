@@ -284,7 +284,7 @@ getNegotiatedGroup = gets hstNegotiatedGroup
 data HandshakeMode13 =
       -- | Full handshake is used.
       FullHandshake
-      -- | Full handshake is used with hello retry reuest.
+      -- | Full handshake is used with hello retry request.
     | HelloRetryRequest
       -- | Server authentication is skipped.
     | PreSharedKey
