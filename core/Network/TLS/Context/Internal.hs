@@ -86,7 +86,7 @@ import Network.TLS.Types
 import Network.TLS.Util
 
 import Control.Concurrent.MVar
-import Control.Exception (throwIO, Exception())
+import Control.Exception (throwIO)
 import Control.Monad.State.Strict
 import qualified Data.ByteString as B
 import Data.IORef
@@ -227,7 +227,7 @@ setEstablished ctx = writeIORef (ctxEstablished_ ctx)
 withLog :: Context -> (Logging -> IO ()) -> IO ()
 withLog ctx f = ctxWithHooks ctx (f . hookLogging)
 
-throwCore :: (MonadIO m, Exception e) => e -> m a
+throwCore :: MonadIO m => TLSError -> m a
 throwCore = liftIO . throwIO
 
 failOnEitherError :: MonadIO m => m (Either TLSError a) -> m a
