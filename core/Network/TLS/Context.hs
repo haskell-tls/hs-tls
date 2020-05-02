@@ -190,6 +190,7 @@ contextNew backend params = liftIO $ do
             , ctxKeyLogger        = debugKeyLogger debug
             , ctxRecordLayer      = recordLayer
             , ctxHandshakeSync    = HandshakeSync syncNoOp syncNoOp
+            , ctxQUICMode         = False
             }
 
         syncNoOp _ = return ()

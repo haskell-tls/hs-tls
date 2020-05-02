@@ -137,6 +137,7 @@ data Context = forall bytes . Monoid bytes => Context
     , ctxKeyLogger        :: String -> IO ()
     , ctxRecordLayer      :: RecordLayer bytes
     , ctxHandshakeSync    :: HandshakeSync
+    , ctxQUICMode         :: Bool
     }
 
 updateRecordLayer :: Monoid bytes => RecordLayer bytes -> Context -> Context
