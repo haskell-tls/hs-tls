@@ -212,8 +212,6 @@ newQUICClient cparams callbacks = do
     sync (SendClientFinishedI exts appSecInfo) = do
         quicInstallKeys callbacks (InstallApplicationKeys appSecInfo)
         quicNotifyExtensions callbacks (filterQTP exts)
-    sync RecvSessionTicketI = return ()
-    sync (ClientHandshakeFailedI _e) = return ()
 
 -- | Start a TLS handshake thread for a QUIC server.  The server will use the
 -- specified TLS parameters and call the provided callback functions to send and
@@ -240,8 +238,6 @@ newQUICServer sparams callbacks = do
         quicNotifyExtensions callbacks (filterQTP exts)
     sync (SendServerFinishedI appSecInfo) = do
         quicInstallKeys callbacks (InstallApplicationKeys appSecInfo)
-    sync SendSessionTicketI = return ()
-    sync (ServerHandshakeFailedI _e) = return ()
 
 {-
 getErrorCause :: TLSException -> TLSError

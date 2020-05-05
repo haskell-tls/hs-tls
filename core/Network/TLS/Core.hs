@@ -42,7 +42,6 @@ import Network.TLS.Parameters
 import Network.TLS.IO
 import Network.TLS.Session
 import Network.TLS.Handshake
-import Network.TLS.Handshake.Control
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.Process
@@ -208,7 +207,6 @@ recvData13 ctx = do
                 let !label' = B.copy label
                 sessionEstablish (sharedSessionManager $ ctxShared ctx) label' sdata
                 -- putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
-            contextSync ctx RecvSessionTicketI
             loopHandshake13 hs
         loopHandshake13 (KeyUpdate13 mode:hs) = do
             checkAlignment hs
@@ -327,7 +325,3 @@ updateKey ctx way = liftIO $ do
             sendPacket13 ctx $ Handshake13 [KeyUpdate13 req]
             keyUpdate ctx getTxState setTxState
     return tls13
-
-contextSync :: Context -> ClientStatusI -> IO ()
-contextSync ctx ctl = case ctxHandshakeSync ctx of
-    HandshakeSync sync _ -> sync ctl

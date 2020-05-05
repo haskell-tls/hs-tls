@@ -796,7 +796,6 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
             handshakeTerminate13 ctx
             setRxState ctx usedHash usedCipher clientApplicationSecret0
             sendNewSessionTicket applicationSecret sfSentTime
-            contextSync ctx $ SendSessionTicketI
         expectFinished _ hs = unexpected (show hs) (Just "finished 13")
 
     let expectEndOfEarlyData EndOfEarlyData13 =

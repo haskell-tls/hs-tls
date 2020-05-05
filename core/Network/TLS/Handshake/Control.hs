@@ -45,14 +45,10 @@ data ClientStatusI =
     SendClientHelloI (Maybe EarlySecretInfo)
   | RecvServerHelloI HandshakeSecretInfo
   | SendClientFinishedI [ExtensionRaw] ApplicationSecretInfo
-  | RecvSessionTicketI
-  | ClientHandshakeFailedI TLSError
 
 data ServerStatusI =
     SendServerHelloI [ExtensionRaw] (Maybe EarlySecretInfo) HandshakeSecretInfo
   | SendServerFinishedI ApplicationSecretInfo
-  | SendSessionTicketI
-  | ServerHandshakeFailedI TLSError
 
 ----------------------------------------------------------------
 
