@@ -756,7 +756,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
                  | is0RTTvalid = Just $ EarlySecretInfo usedCipher clientEarlySecret
                  | otherwise   = Nothing
                 handSecInfo = HandshakeSecretInfo usedCipher (clientHandshakeSecret,serverHandshakeSecret)
-            contextSync ctx $ SendServerHelloI exts mEarlySecInfo handSecInfo
+            contextSync ctx $ SendServerHello exts mEarlySecInfo handSecInfo
     ----------------------------------------------------------------
         sendExtensions rtt0OK protoExt
         case mCredInfo of
@@ -783,7 +783,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
          | hrr                      = HelloRetryRequest
          | otherwise                = FullHandshake
     let appSecInfo = ApplicationSecretInfo mode alpn (clientApplicationSecret0,serverApplicationSecret0)
-    contextSync ctx $ SendServerFinishedI appSecInfo
+    contextSync ctx $ SendServerFinished appSecInfo
     ----------------------------------------------------------------
     if rtt0OK then
         setEstablished ctx (EarlyDataAllowed rtt0max)
@@ -1198,6 +1198,6 @@ postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = d
 postHandshakeAuthServerWith _ _ _ =
     throwCore $ Error_Protocol ("unexpected handshake message received in postHandshakeAuthServerWith", True, UnexpectedMessage)
 
-contextSync :: Context -> ServerStatusI -> IO ()
+contextSync :: Context -> ServerState -> IO ()
 contextSync ctx ctl = case ctxHandshakeSync ctx of
     HandshakeSync _ sync -> sync ctl

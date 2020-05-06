@@ -207,11 +207,11 @@ newQUICClient cparams callbacks = do
     handshake ctx2
     void $ recvData ctx2
   where
-    sync (SendClientHelloI mEarlySecInfo) =
+    sync (SendClientHello mEarlySecInfo) =
         quicInstallKeys callbacks (InstallEarlyKeys mEarlySecInfo)
-    sync (RecvServerHelloI handSecInfo) =
+    sync (RecvServerHello handSecInfo) =
         quicInstallKeys callbacks (InstallHandshakeKeys handSecInfo)
-    sync (SendClientFinishedI exts appSecInfo) = do
+    sync (SendClientFinished exts appSecInfo) = do
         quicInstallKeys callbacks (InstallApplicationKeys appSecInfo)
         quicNotifyExtensions callbacks (filterQTP exts)
 
@@ -234,11 +234,11 @@ newQUICServer sparams callbacks = do
     handshake ctx2
     quicDone callbacks
   where
-    sync (SendServerHelloI exts mEarlySecInfo handSecInfo) = do
+    sync (SendServerHello exts mEarlySecInfo handSecInfo) = do
         quicInstallKeys callbacks (InstallEarlyKeys mEarlySecInfo)
         quicInstallKeys callbacks (InstallHandshakeKeys handSecInfo)
         quicNotifyExtensions callbacks (filterQTP exts)
-    sync (SendServerFinishedI appSecInfo) = do
+    sync (SendServerFinished appSecInfo) = do
         quicInstallKeys callbacks (InstallApplicationKeys appSecInfo)
 
 {-

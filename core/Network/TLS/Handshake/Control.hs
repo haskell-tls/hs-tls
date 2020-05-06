@@ -6,8 +6,8 @@
 -- Portability : unknown
 --
 module Network.TLS.Handshake.Control (
-    ClientStatusI(..)
-  , ServerStatusI(..)
+    ClientState(..)
+  , ServerState(..)
   , EarlySecretInfo(..)
   , HandshakeSecretInfo(..)
   , ApplicationSecretInfo(..)
@@ -41,16 +41,16 @@ data ApplicationSecretInfo = ApplicationSecretInfo HandshakeMode13 (Maybe Negoti
 
 ----------------------------------------------------------------
 
-data ClientStatusI =
-    SendClientHelloI (Maybe EarlySecretInfo)
-  | RecvServerHelloI HandshakeSecretInfo
-  | SendClientFinishedI [ExtensionRaw] ApplicationSecretInfo
+data ClientState =
+    SendClientHello (Maybe EarlySecretInfo)
+  | RecvServerHello HandshakeSecretInfo
+  | SendClientFinished [ExtensionRaw] ApplicationSecretInfo
 
-data ServerStatusI =
-    SendServerHelloI [ExtensionRaw] (Maybe EarlySecretInfo) HandshakeSecretInfo
-  | SendServerFinishedI ApplicationSecretInfo
+data ServerState =
+    SendServerHello [ExtensionRaw] (Maybe EarlySecretInfo) HandshakeSecretInfo
+  | SendServerFinished ApplicationSecretInfo
 
 ----------------------------------------------------------------
 
-data HandshakeSync = HandshakeSync (ClientStatusI -> IO ())
-                                   (ServerStatusI -> IO ())
+data HandshakeSync = HandshakeSync (ClientState -> IO ())
+                                   (ServerState -> IO ())
