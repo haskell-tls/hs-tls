@@ -27,42 +27,44 @@
 -- * TLS server calls 'quicDone' when the handshake is done.
 --
 module Network.TLS.QUIC (
-    -- * Supported
-      defaultSupported
-    -- * Hash
-    , hkdfExpandLabel
-    , hkdfExtract
-    , hashDigestSize
-    -- * Extensions
-    , ExtensionRaw(..)
-    , ExtensionID
-    , extensionID_QuicTransportParameters
+    -- * Handshakers
+      newQUICClient
+    , newQUICServer
+    -- * Callback
+    , QUICCallbacks(..)
+    , CryptLevel(..)
+    , KeyScheduleEvent(..)
     -- * Secrets
-    , ServerTrafficSecret(..)
-    , ClientTrafficSecret(..)
+    , EarlySecretInfo(..)
+    , HandshakeSecretInfo(..)
+    , ApplicationSecretInfo(..)
     , EarlySecret
     , HandshakeSecret
     , ApplicationSecret
     , TrafficSecrets
-    , EarlySecretInfo(..)
-    , HandshakeSecretInfo(..)
-    , ApplicationSecretInfo(..)
-    -- * Handshakers
-    , newQUICClient
-    , newQUICServer
-    -- * Callback
-    , CryptLevel(..)
-    , KeyScheduleEvent(..)
-    , QUICCallbacks(..)
+    , ServerTrafficSecret(..)
+    , ClientTrafficSecret(..)
+    -- * Negotiated parameters
     , NegotiatedProtocol
     , HandshakeMode13(..)
-    -- * Common
+    -- * Extensions
+    , ExtensionRaw(..)
+    , ExtensionID
+    , extensionID_QuicTransportParameters
+    -- * Errors
     , errorTLS
     , errorToAlertDescription
     , errorToAlertMessage
     , fromAlertDescription
     , toAlertDescription
+    -- * Hash
+    , hkdfExpandLabel
+    , hkdfExtract
+    , hashDigestSize
+    -- * Constants
     , quicMaxEarlyDataSize
+    -- * Supported
+    , defaultSupported
     ) where
 
 import Network.TLS.Backend
