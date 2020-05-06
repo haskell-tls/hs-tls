@@ -13,30 +13,7 @@
 -- * QUIC starts a TLS client or server thread with 'newQUICClient' or
 --   'newQUICServer'.
 --
--- * QUIC executes and monitors the progress of the handshake with the
---   'ClientController' or 'ServerController' functions.  It sends continuation
---   messages and listens for the resulting status, success or failure.  At any
---   point it can decide to terminate the current handshake with constructors
---   'ExitClient' and 'ExitServer' .
---
--- The main steps of the handshake defined in the 'ClientController' /
--- 'ServerController' state machines are:
---
--- * @FinishedSent@: message Finished has been sent, endpoint is ready to send
---   application traffic
---
--- * @HandshakeComplete@: peer message Finished has been received and verified,
---   endpoint is ready to receive application traffic
---
--- * @HandshakeConfirmed@: TLS handshake is no more needed, session tickets have
---   all been transferred
---
--- Out of those three defined steps, only two are really used.  For a client,
--- steps @FinishedSent@ and @HandshakeComplete@ are the same.  For a server,
--- steps @HandshakeComplete@ and @HandshakeConfirmed@ are the same.
---
--- On the southbound API, TLS invokes QUIC callbacks to use the QUIC transport
--- protocol:
+--  TLS invokes QUIC callbacks to use the QUIC transport
 --
 -- * TLS uses 'quicSend' and 'quicRecv' to send and receive handshake message
 --   fragments.
@@ -46,6 +23,8 @@
 --
 -- * TLS calls 'quicNotifyExtensions' to notify to QUIC the transport parameters
 --   exchanged through the handshake protocol.
+--
+-- * TLS server calls 'quicDone' when the handshake is done.
 --
 module Network.TLS.QUIC (
     -- * Supported
@@ -68,16 +47,16 @@ module Network.TLS.QUIC (
     , EarlySecretInfo(..)
     , HandshakeSecretInfo(..)
     , ApplicationSecretInfo(..)
-    -- * Client handshake controller
+    -- * Handshakers
     , newQUICClient
-    -- * Server handshake controller
     , newQUICServer
-    -- * Common
+    -- * Callback
     , CryptLevel(..)
     , KeyScheduleEvent(..)
     , QUICCallbacks(..)
     , NegotiatedProtocol
     , HandshakeMode13(..)
+    -- * Common
     , errorTLS
     , errorToAlertDescription
     , errorToAlertMessage
