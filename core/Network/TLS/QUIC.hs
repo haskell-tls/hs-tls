@@ -166,6 +166,8 @@ data QUICCallbacks = QUICCallbacks
     , quicNotifyExtensions  :: [ExtensionRaw] -> IO ()
       -- ^ Called by TLS when QUIC-specific extensions have been received from
       -- the peer.
+    , quicDone :: IO ()
+      -- ^ Called by Server TLS when the handshake is done.
     }
 
 getTxLevel :: Context -> IO CryptLevel
@@ -230,7 +232,7 @@ newQUICServer sparams callbacks = do
         rl = newRecordLayer ctx1 callbacks
         ctx2 = updateRecordLayer rl ctx1
     handshake ctx2
-    void $ recvData ctx2
+    quicDone callbacks
   where
     sync (SendServerHelloI exts mEarlySecInfo handSecInfo) = do
         quicInstallKeys callbacks (InstallEarlyKeys mEarlySecInfo)
