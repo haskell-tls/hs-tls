@@ -11,7 +11,6 @@ module Network.TLS.Handshake.Server
     , handshakeServerWith
     , requestCertificateServer
     , postHandshakeAuthServerWith
-    , quicMaxEarlyDataSize
     ) where
 
 import Network.TLS.Parameters
@@ -749,7 +748,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
             clientHandshakeSecret = triClient handKey
             handSecret = triBase handKey
         liftIO $ do
-            if rtt0OK && rtt0max /= quicMaxEarlyDataSize
+            if rtt0OK && not (ctxQUICMode ctx)
                 then setRxState ctx usedHash usedCipher clientEarlySecret
                 else setRxState ctx usedHash usedCipher clientHandshakeSecret
             setTxState ctx usedHash usedCipher serverHandshakeSecret
@@ -810,7 +809,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
           unless skip $ recvHandshake13hash ctx (expectCertVerify sparams ctx)
           recvHandshake13hash ctx expectFinished
           ensureRecvComplete ctx
-      else if rtt0OK && rtt0max == quicMaxEarlyDataSize then
+      else if rtt0OK && ctxQUICMode ctx then
         setPendingActions ctx [PendingActionHash True expectFinished]
       else if rtt0OK then
         setPendingActions ctx [PendingAction True expectEndOfEarlyData
@@ -1203,7 +1202,3 @@ postHandshakeAuthServerWith _ _ _ =
 contextSync :: Context -> ServerStatusI -> IO ()
 contextSync ctx ctl = case ctxHandshakeSync ctx of
     HandshakeSync _ sync -> sync ctl
-
--- | Max early data size for QUIC.
-quicMaxEarlyDataSize :: Int
-quicMaxEarlyDataSize = 0xffffffff

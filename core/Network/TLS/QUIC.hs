@@ -48,8 +48,10 @@
 --   exchanged through the handshake protocol.
 --
 module Network.TLS.QUIC (
+    -- * Supported
+      defaultSupported
     -- * Hash
-      hkdfExpandLabel
+    , hkdfExpandLabel
     , hkdfExtract
     , hashDigestSize
     -- * Extensions
@@ -95,14 +97,16 @@ import Network.TLS.Context
 import Network.TLS.Context.Internal
 import Network.TLS.Core
 import Network.TLS.Crypto (hashDigestSize)
+import Network.TLS.Crypto.Types
 import Network.TLS.Extension (extensionID_QuicTransportParameters)
+import Network.TLS.Extra.Cipher
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Control
-import Network.TLS.Handshake.Server
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.Imports
 import Network.TLS.KeySchedule (hkdfExtract, hkdfExpandLabel)
+import Network.TLS.Parameters
 import Network.TLS.Record.Layer
 import Network.TLS.Record.State
 import Network.TLS.Struct
@@ -110,6 +114,7 @@ import Network.TLS.Types
 
 import Control.Concurrent
 import qualified Control.Exception as E
+import Data.Default.Class
 import System.Mem.Weak
 
 nullBackend :: Backend
@@ -207,15 +212,18 @@ newRecordLayer ctx callbacks = newTransparentRecordLayer get send recv
 newQUICClient :: ClientParams -> QUICCallbacks -> IO ClientController
 newQUICClient cparams callbacks = do
     (sync, ask) <- prepare processI
-    ctx <- contextNew nullBackend cparams
-    let ctx' = updateRecordLayer rl ctx
-          { ctxHandshakeSync = HandshakeSync sync (\_ -> return ())
-          }
-        rl = newRecordLayer ctx callbacks
+    ctx0 <- contextNew nullBackend cparams
+    let ctx1 = ctx0
+           { ctxHandshakeSync = HandshakeSync sync (\_ -> return ())
+           , ctxFragmentSize = Nothing
+           , ctxQUICMode = True
+           }
+        rl = newRecordLayer ctx1 callbacks
+        ctx2 = updateRecordLayer rl ctx1
         failed = sync . ClientHandshakeFailedI . getErrorCause
     tid <- forkIO $ E.handle failed $ do
-        handshake ctx'
-        void $ recvData ctx'
+        handshake ctx2
+        void $ recvData ctx2
     wtid <- mkWeakThreadId tid
     return (quicClient wtid ask)
 
@@ -246,15 +254,18 @@ newQUICClient cparams callbacks = do
 newQUICServer :: ServerParams -> QUICCallbacks -> IO ServerController
 newQUICServer sparams callbacks = do
     (sync, ask) <- prepare processI
-    ctx <- contextNew nullBackend sparams
-    let ctx' = updateRecordLayer rl ctx
+    ctx0 <- contextNew nullBackend sparams
+    let ctx1 = ctx0
           { ctxHandshakeSync = HandshakeSync (\_ -> return ()) sync
+          , ctxFragmentSize = Nothing
+          , ctxQUICMode = True
           }
-        rl = newRecordLayer ctx callbacks
+        rl = newRecordLayer ctx1 callbacks
+        ctx2 = updateRecordLayer rl ctx1
         failed = sync . ServerHandshakeFailedI . getErrorCause
     tid <- forkIO $ E.handle failed $ do
-        handshake ctx'
-        void $ recvData ctx'
+        handshake ctx2
+        void $ recvData ctx2
     wtid <- mkWeakThreadId tid
     return (quicServer wtid ask)
 
@@ -302,3 +313,17 @@ fromAlertDescription = valOfType
 -- | Decode an alert from the assigned value.
 toAlertDescription :: Word8 -> Maybe AlertDescription
 toAlertDescription = valToType
+
+defaultSupported :: Supported
+defaultSupported = def
+    { supportedVersions       = [TLS13]
+    , supportedCiphers        = [ cipher_TLS13_AES256GCM_SHA384
+                                , cipher_TLS13_AES128GCM_SHA256
+                                , cipher_TLS13_AES128CCM_SHA256
+                                ]
+    , supportedGroups         = [X25519,X448,P256,P384,P521]
+    }
+
+-- | Max early data size for QUIC.
+quicMaxEarlyDataSize :: Int
+quicMaxEarlyDataSize = 0xffffffff
