@@ -70,14 +70,8 @@ module Network.TLS.QUIC (
     , ApplicationSecretInfo(..)
     -- * Client handshake controller
     , newQUICClient
-    , ClientController
-    , ClientControl(..)
-    , ClientStatus(..)
     -- * Server handshake controller
     , newQUICServer
-    , ServerController
-    , ServerControl(..)
-    , ServerStatus(..)
     -- * Common
     , CryptLevel(..)
     , KeyScheduleEvent(..)
@@ -112,10 +106,7 @@ import Network.TLS.Record.State
 import Network.TLS.Struct
 import Network.TLS.Types
 
-import Control.Concurrent
-import qualified Control.Exception as E
 import Data.Default.Class
-import System.Mem.Weak
 
 nullBackend :: Backend
 nullBackend = Backend {
@@ -187,14 +178,6 @@ getRxLevel ctx = do
     (_, _, level, _) <- getRxState ctx
     return level
 
-prepare :: ((status -> IO ()) -> statusI -> IO ())
-        -> IO (statusI -> IO (), IO status)
-prepare processI = do
-    mvar <- newEmptyMVar
-    let sync a = let put = putMVar mvar in processI put a
-        ask  = takeMVar mvar
-    return (sync, ask)
-
 newRecordLayer :: Context -> QUICCallbacks
                -> RecordLayer [(CryptLevel, ByteString)]
 newRecordLayer ctx callbacks = newTransparentRecordLayer get send recv
@@ -209,9 +192,8 @@ newRecordLayer ctx callbacks = newTransparentRecordLayer get send recv
 --
 -- Execution and synchronization between the internal TLS thread and external
 -- QUIC threads is done through the 'ClientController' interface returned.
-newQUICClient :: ClientParams -> QUICCallbacks -> IO ClientController
+newQUICClient :: ClientParams -> QUICCallbacks -> IO ()
 newQUICClient cparams callbacks = do
-    (sync, ask) <- prepare processI
     ctx0 <- contextNew nullBackend cparams
     let ctx1 = ctx0
            { ctxHandshakeSync = HandshakeSync sync (\_ -> return ())
@@ -220,30 +202,18 @@ newQUICClient cparams callbacks = do
            }
         rl = newRecordLayer ctx1 callbacks
         ctx2 = updateRecordLayer rl ctx1
-        failed = sync . ClientHandshakeFailedI . getErrorCause
-    tid <- forkIO $ E.handle failed $ do
-        handshake ctx2
-        void $ recvData ctx2
-    wtid <- mkWeakThreadId tid
-    return (quicClient wtid ask)
-
+    handshake ctx2
+    void $ recvData ctx2
   where
-    processI _ (SendClientHelloI mEarlySecInfo) =
+    sync (SendClientHelloI mEarlySecInfo) =
         quicInstallKeys callbacks (InstallEarlyKeys mEarlySecInfo)
-    processI _ (RecvServerHelloI handSecInfo) =
+    sync (RecvServerHelloI handSecInfo) =
         quicInstallKeys callbacks (InstallHandshakeKeys handSecInfo)
-    processI put (SendClientFinishedI exts appSecInfo) = do
+    sync (SendClientFinishedI exts appSecInfo) = do
         quicInstallKeys callbacks (InstallApplicationKeys appSecInfo)
         quicNotifyExtensions callbacks (filterQTP exts)
-        put ClientHandshakeComplete
-    processI put RecvSessionTicketI = put ClientRecvSessionTicket
-    processI put (ClientHandshakeFailedI e) = put (ClientHandshakeFailed e)
-
-    quicClient wtid _ ExitClient = do
-        mtid <- deRefWeak wtid
-        forM_ mtid killThread
-        return ClientHandshakeDone
-    quicClient _ ask _ = ask
+    sync RecvSessionTicketI = return ()
+    sync (ClientHandshakeFailedI _e) = return ()
 
 -- | Start a TLS handshake thread for a QUIC server.  The server will use the
 -- specified TLS parameters and call the provided callback functions to send and
@@ -251,9 +221,8 @@ newQUICClient cparams callbacks = do
 --
 -- Execution and synchronization between the internal TLS thread and external
 -- QUIC threads is done through the 'ServerController' interface returned.
-newQUICServer :: ServerParams -> QUICCallbacks -> IO ServerController
+newQUICServer :: ServerParams -> QUICCallbacks -> IO ()
 newQUICServer sparams callbacks = do
-    (sync, ask) <- prepare processI
     ctx0 <- contextNew nullBackend sparams
     let ctx1 = ctx0
           { ctxHandshakeSync = HandshakeSync (\_ -> return ()) sync
@@ -262,36 +231,26 @@ newQUICServer sparams callbacks = do
           }
         rl = newRecordLayer ctx1 callbacks
         ctx2 = updateRecordLayer rl ctx1
-        failed = sync . ServerHandshakeFailedI . getErrorCause
-    tid <- forkIO $ E.handle failed $ do
-        handshake ctx2
-        void $ recvData ctx2
-    wtid <- mkWeakThreadId tid
-    return (quicServer wtid ask)
-
+    handshake ctx2
+    void $ recvData ctx2
   where
-    processI _ (SendServerHelloI exts mEarlySecInfo handSecInfo) = do
+    sync (SendServerHelloI exts mEarlySecInfo handSecInfo) = do
         quicInstallKeys callbacks (InstallEarlyKeys mEarlySecInfo)
         quicInstallKeys callbacks (InstallHandshakeKeys handSecInfo)
         quicNotifyExtensions callbacks (filterQTP exts)
-    processI put (SendServerFinishedI appSecInfo) = do
+    sync (SendServerFinishedI appSecInfo) = do
         quicInstallKeys callbacks (InstallApplicationKeys appSecInfo)
-        put ServerFinishedSent
-    processI put SendSessionTicketI = put ServerHandshakeComplete
-    processI put (ServerHandshakeFailedI e) = put (ServerHandshakeFailed e)
+    sync SendSessionTicketI = return ()
+    sync (ServerHandshakeFailedI _e) = return ()
 
-    quicServer wtid _ ExitServer = do
-        mtid <- deRefWeak wtid
-        forM_ mtid killThread
-        return ServerHandshakeDone
-    quicServer _ ask _ = ask
-
+{-
 getErrorCause :: TLSException -> TLSError
 getErrorCause (HandshakeFailed e) = e
 getErrorCause (Terminated _ _ e) = e
 getErrorCause e =
     let msg = "unexpected TLS exception: " ++ show e
      in Error_Protocol (msg, True, InternalError)
+-}
 
 filterQTP :: [ExtensionRaw] -> [ExtensionRaw]
 filterQTP = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters)
