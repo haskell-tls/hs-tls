@@ -60,12 +60,13 @@ data RecordOptions = RecordOptions
     , recordTLS13 :: Bool                     -- TLS13 record processing
     }
 
+-- | TLS encryption level.
 data CryptLevel
-    = CryptInitial
-    | CryptMasterSecret
-    | CryptEarlySecret
-    | CryptHandshakeSecret
-    | CryptApplicationSecret
+    = CryptInitial            -- ^ Unprotected traffic
+    | CryptMasterSecret       -- ^ Protected with master secret (TLS < 1.3)
+    | CryptEarlySecret        -- ^ Protected with early traffic secret (TLS 1.3)
+    | CryptHandshakeSecret    -- ^ Protected with handshake traffic secret (TLS 1.3)
+    | CryptApplicationSecret  -- ^ Protected with application traffic secret (TLS 1.3)
     deriving (Eq,Show)
 
 class HasCryptLevel a where getCryptLevel :: proxy a -> CryptLevel

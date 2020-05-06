@@ -208,8 +208,11 @@ newtype ClientRandom = ClientRandom { unClientRandom :: ByteString } deriving (S
 newtype Session = Session (Maybe SessionID) deriving (Show, Eq)
 
 type FinishedData = ByteString
+
+-- | Identifier of a TLS extension.
 type ExtensionID  = Word16
 
+-- | The raw content of a TLS extension.
 data ExtensionRaw = ExtensionRaw ExtensionID ByteString
     deriving (Eq)
 

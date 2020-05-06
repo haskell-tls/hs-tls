@@ -172,6 +172,7 @@ hash SHA1_MD5 b =
 hashName :: Hash -> String
 hashName = show
 
+-- | Digest size in bytes.
 hashDigestSize :: Hash -> Int
 hashDigestSize MD5    = 16
 hashDigestSize SHA1   = 20

@@ -97,14 +97,26 @@ invertRole :: Role -> Role
 invertRole ClientRole = ServerRole
 invertRole ServerRole = ClientRole
 
+-- | Phantom type indicating early traffic secret.
 data EarlySecret
+
+-- | Phantom type indicating handshake traffic secrets.
 data HandshakeSecret
+
+-- | Phantom type indicating application traffic secrets.
 data ApplicationSecret
+
 data ResumptionSecret
 
 newtype BaseSecret a = BaseSecret ByteString deriving Show
 newtype AnyTrafficSecret a = AnyTrafficSecret ByteString deriving Show
+
+-- | A client traffic secret, typed with a parameter indicating a step in the
+-- TLS key schedule.
 newtype ClientTrafficSecret a = ClientTrafficSecret ByteString deriving Show
+
+-- | A server traffic secret, typed with a parameter indicating a step in the
+-- TLS key schedule.
 newtype ServerTrafficSecret a = ServerTrafficSecret ByteString deriving Show
 
 data SecretTriple a = SecretTriple
@@ -118,6 +130,7 @@ data SecretPair a = SecretPair
     , pairClient :: ClientTrafficSecret a
     }
 
+-- | Hold both client and server traffic secrets at the same step.
 type TrafficSecrets a = (ClientTrafficSecret a, ServerTrafficSecret a)
 
 -- Master secret for TLS 1.2 or earlier.

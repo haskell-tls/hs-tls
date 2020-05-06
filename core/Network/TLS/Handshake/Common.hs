@@ -76,6 +76,8 @@ errorToAlert (Error_Packet_unexpected _ _) = [(AlertLevel_Fatal, UnexpectedMessa
 errorToAlert (Error_Packet_Parsing _)      = [(AlertLevel_Fatal, DecodeError)]
 errorToAlert _                             = [(AlertLevel_Fatal, InternalError)]
 
+-- | Return the message that a TLS endpoint can add to its local log for the
+-- specified library error.
 errorToAlertMessage :: TLSError -> String
 errorToAlertMessage (Error_Protocol (msg, _, _))    = msg
 errorToAlertMessage (Error_Packet_unexpected msg _) = msg
