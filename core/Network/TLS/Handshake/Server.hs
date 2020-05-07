@@ -808,9 +808,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
           unless skip $ recvHandshake13hash ctx (expectCertVerify sparams ctx)
           recvHandshake13hash ctx expectFinished
           ensureRecvComplete ctx
-      else if rtt0OK && ctxQUICMode ctx then
-        setPendingActions ctx [PendingActionHash True expectFinished]
-      else if rtt0OK then
+      else if rtt0OK && not (ctxQUICMode ctx) then
         setPendingActions ctx [PendingAction True expectEndOfEarlyData
                               ,PendingActionHash True expectFinished]
       else
