@@ -370,7 +370,7 @@ getHandshake13 ctx = RecvHandshake13M $ do
   where
     found h hs = liftIO (processHandshake13 ctx h) >> put hs >> return h
     recvLoop = do
-        epkt <- recvPacket13 ctx
+        epkt <- liftIO (recvPacket13 ctx)
         case epkt of
             Right (Handshake13 [])     -> error "invalid recvPacket13 result"
             Right (Handshake13 (h:hs)) -> found h hs

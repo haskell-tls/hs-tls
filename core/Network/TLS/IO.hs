@@ -118,8 +118,8 @@ contentSizeExceeded = Error_Protocol ("record content exceeding maximum size", T
 -- | receive one packet from the context that contains 1 or
 -- many messages (many only in case of handshake). if will returns a
 -- TLSError if the packet is unexpected or malformed
-recvPacket :: MonadIO m => Context -> m (Either TLSError Packet)
-recvPacket ctx@Context{ctxRecordLayer = recordLayer} = liftIO $ do
+recvPacket :: Context -> IO (Either TLSError Packet)
+recvPacket ctx@Context{ctxRecordLayer = recordLayer} = do
     compatSSLv2 <- ctxHasSSLv2ClientHello ctx
     hrr         <- usingState_ ctx getTLS13HRR
     -- When a client sends 0-RTT data to a server which rejects and sends a HRR,
@@ -199,8 +199,8 @@ isEmptyHandshake _                      = False
 
 ----------------------------------------------------------------
 
-recvPacket13 :: MonadIO m => Context -> m (Either TLSError Packet13)
-recvPacket13 ctx@Context{ctxRecordLayer = recordLayer} = liftIO $ do
+recvPacket13 :: Context -> IO (Either TLSError Packet13)
+recvPacket13 ctx@Context{ctxRecordLayer = recordLayer} = do
     erecord <- recordRecv13 recordLayer
     case erecord of
         Left err@(Error_Protocol (_, True, BadRecordMac)) -> do
