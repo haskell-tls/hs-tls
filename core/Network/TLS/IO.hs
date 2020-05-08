@@ -57,7 +57,7 @@ sendPacket ctx@Context{ctxRecordLayer = recordLayer} pkt = do
     -- by an attacker. Hence, an empty packet is sent before a normal data packet, to
     -- prevent guessability.
     when (isNonNullAppData pkt) $ do
-        withEmptyPacket <- liftIO $ readIORef $ ctxNeedEmptyPacket ctx
+        withEmptyPacket <- readIORef $ ctxNeedEmptyPacket ctx
         when withEmptyPacket $
             writePacketBytes ctx recordLayer (AppData B.empty) >>=
                 recordSendBytes recordLayer
@@ -66,12 +66,11 @@ sendPacket ctx@Context{ctxRecordLayer = recordLayer} pkt = do
   where isNonNullAppData (AppData b) = not $ B.null b
         isNonNullAppData _           = False
 
-writePacketBytes :: (MonadIO m, Monoid bytes)
-                 => Context -> RecordLayer bytes -> Packet -> m bytes
+writePacketBytes :: Monoid bytes
+                 => Context -> RecordLayer bytes -> Packet -> IO bytes
 writePacketBytes ctx recordLayer pkt = do
-    edataToSend <- liftIO $ do
-                        withLog ctx $ \logging -> loggingPacketSent logging (show pkt)
-                        encodePacket ctx recordLayer pkt
+    withLog ctx $ \logging -> loggingPacketSent logging (show pkt)
+    edataToSend <- encodePacket ctx recordLayer pkt
     either throwCore return edataToSend
 
 ----------------------------------------------------------------
@@ -80,16 +79,15 @@ sendPacket13 :: Context -> Packet13 -> IO ()
 sendPacket13 ctx@Context{ctxRecordLayer = recordLayer} pkt =
     writePacketBytes13 ctx recordLayer pkt >>= recordSendBytes recordLayer
 
-writePacketBytes13 :: (MonadIO m, Monoid bytes)
-                   => Context -> RecordLayer bytes -> Packet13 -> m bytes
+writePacketBytes13 :: Monoid bytes
+                   => Context -> RecordLayer bytes -> Packet13 -> IO bytes
 writePacketBytes13 ctx recordLayer pkt = do
-    edataToSend <- liftIO $ do
-                        withLog ctx $ \logging -> loggingPacketSent logging (show pkt)
-                        encodePacket13 ctx recordLayer pkt
+    withLog ctx $ \logging -> loggingPacketSent logging (show pkt)
+    edataToSend <- encodePacket13 ctx recordLayer pkt
     either throwCore return edataToSend
 
-sendBytes :: MonadIO m => Context -> ByteString -> m ()
-sendBytes ctx dataToSend = liftIO $ do
+sendBytes :: Context -> ByteString -> IO ()
+sendBytes ctx dataToSend = do
     withLog ctx $ \logging -> loggingIOSent logging dataToSend
     contextSend ctx dataToSend
 
@@ -305,5 +303,6 @@ sendPendingFlight recordLayer ref = do
 loadPacket13 :: Monoid b => Context -> Packet13 -> PacketFlightM b ()
 loadPacket13 ctx pkt = PacketFlightM $ do
     (recordLayer, ref) <- ask
-    bs <- writePacketBytes13 ctx recordLayer pkt
-    liftIO $ modifyIORef ref (. (bs :))
+    liftIO $ do
+        bs <- writePacketBytes13 ctx recordLayer pkt
+        modifyIORef ref (. (bs :))
