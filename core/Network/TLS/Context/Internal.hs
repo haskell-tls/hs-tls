@@ -157,9 +157,7 @@ data PendingAction
       -- ^ pending action taking transcript hash up to preceding message
 
 updateMeasure :: Context -> (Measurement -> Measurement) -> IO ()
-updateMeasure ctx f = do
-    x <- readIORef (ctxMeasurement ctx)
-    writeIORef (ctxMeasurement ctx) $! f x
+updateMeasure ctx = modifyIORef' (ctxMeasurement ctx)
 
 withMeasure :: Context -> (Measurement -> IO a) -> IO a
 withMeasure ctx f = readIORef (ctxMeasurement ctx) >>= f
