@@ -186,7 +186,7 @@ contextGetInformation ctx = do
                             if ver == Just TLS13 then Just (hstTLS13HandshakeMode st) else Nothing,
                             hstNegotiatedGroup st)
                 Nothing -> (Nothing, False, Nothing, Nothing, Nothing, Nothing)
-    (cipher,comp) <- failOnEitherError $ runRxState ctx $ gets $ \st -> (stCipher st, stCompression st)
+    (cipher,comp) <- readMVar (ctxRxState ctx) <&> \st -> (stCipher st, stCompression st)
     let accepted = case hstate of
             Just st -> hstTLS13RTT0Status st == RTT0Accepted
             Nothing -> False
