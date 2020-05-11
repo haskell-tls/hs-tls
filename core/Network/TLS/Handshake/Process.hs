@@ -26,7 +26,6 @@ import Network.TLS.Imports
 import Network.TLS.Packet
 import Network.TLS.Parameters
 import Network.TLS.Sending
-import Network.TLS.Sending13
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13

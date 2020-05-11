@@ -32,11 +32,9 @@ import Network.TLS.Context.Internal
 import Network.TLS.Hooks
 import Network.TLS.Imports
 import Network.TLS.Receiving
-import Network.TLS.Receiving13
 import Network.TLS.Record
 import Network.TLS.Record.Layer
 import Network.TLS.Sending
-import Network.TLS.Sending13
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13

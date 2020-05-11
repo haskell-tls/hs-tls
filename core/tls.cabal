@@ -120,9 +120,7 @@ Library
                      Network.TLS.State
                      Network.TLS.Session
                      Network.TLS.Sending
-                     Network.TLS.Sending13
                      Network.TLS.Receiving
-                     Network.TLS.Receiving13
                      Network.TLS.Util
                      Network.TLS.Util.ASN1
                      Network.TLS.Util.Serialization
