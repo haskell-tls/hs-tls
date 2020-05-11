@@ -12,7 +12,6 @@
 
 module Network.TLS.Receiving
     ( processPacket
-    , decodeRecordM
     ) where
 
 import Network.TLS.Cipher
@@ -74,8 +73,3 @@ switchRxEncryption :: Context -> IO ()
 switchRxEncryption ctx =
     usingHState ctx (gets hstPendingRxState) >>= \rx ->
     liftIO $ modifyMVar_ (ctxRxState ctx) (\_ -> return $ fromJust "rx-state" rx)
-
-decodeRecordM :: Header -> ByteString -> RecordM (Record Plaintext)
-decodeRecordM header content = disengageRecord erecord
-   where
-     erecord = rawToRecord header (fragmentCiphertext content)

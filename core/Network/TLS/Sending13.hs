@@ -10,7 +10,6 @@
 --
 module Network.TLS.Sending13
        ( encodePacket13
-       , encodeRecord13
        , updateHandshake13
        ) where
 
@@ -23,7 +22,6 @@ import Network.TLS.Packet
 import Network.TLS.Packet13
 import Network.TLS.Record
 import Network.TLS.Record.Layer
-import Network.TLS.Sending
 import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Util
@@ -38,12 +36,6 @@ encodePacket13 ctx recordLayer pkt = do
         len = ctxFragmentSize ctx
     records <- map mkRecord <$> packetToFragments ctx len pkt
     fmap mconcat <$> forEitherM records (recordEncode13 recordLayer)
-
-prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
-prepareRecord = runTxState
-
-encodeRecord13 :: Context -> Record Plaintext -> IO (Either TLSError ByteString)
-encodeRecord13 ctx = prepareRecord ctx . encodeRecordM
 
 packetToFragments :: Context -> Maybe Int -> Packet13 -> IO [ByteString]
 packetToFragments ctx len (Handshake13 hss)  =

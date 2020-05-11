@@ -112,6 +112,8 @@ Library
                      Network.TLS.Record.Disengage
                      Network.TLS.Record.Engage
                      Network.TLS.Record.Layer
+                     Network.TLS.Record.Reading
+                     Network.TLS.Record.Writing
                      Network.TLS.Record.State
                      Network.TLS.Record.Types
                      Network.TLS.RNG
