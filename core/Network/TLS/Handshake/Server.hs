@@ -1006,8 +1006,8 @@ expectCertVerify sparams ctx hChCc (CertVerify13 sigAlg sig) = liftIO $ do
     clientCertVerify sparams ctx certs verif
 expectCertVerify _ _ _ hs = unexpected (show hs) (Just "certificate verify 13")
 
-helloRetryRequest :: MonadIO m => ServerParams -> Context -> Version -> Cipher -> [ExtensionRaw] -> [Group] -> Session -> m ()
-helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession = liftIO $ do
+helloRetryRequest :: ServerParams -> Context -> Version -> Cipher -> [ExtensionRaw] -> [Group] -> Session -> IO ()
+helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession = do
     twice <- usingState_ ctx getTLS13HRR
     when twice $
         throwCore $ Error_Protocol ("Hello retry not allowed again", True, HandshakeFailure)
