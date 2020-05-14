@@ -24,7 +24,7 @@
 -- * TLS calls 'quicNotifyExtensions' to notify to QUIC the transport parameters
 --   exchanged through the handshake protocol.
 --
--- * TLS server calls 'quicDone' when the handshake is done.
+-- * TLS calls 'quicDone' when the handshake is done.
 --
 module Network.TLS.QUIC (
     -- * Handshakers
@@ -148,7 +148,10 @@ data QUICCallbacks = QUICCallbacks
       -- ^ Called by TLS when QUIC-specific extensions have been received from
       -- the peer.
     , quicDone :: Context -> IO ()
-      -- ^ Called by Server TLS when the handshake is done.
+      -- ^ Called when 'handshake' is done. 'newQUICServer' is
+      -- finished after calling this hook. 'newQUICClinet' calls
+      -- 'recvData' after calling this hook to wait for new session
+      -- tickets.
     }
 
 getTxLevel :: Context -> IO CryptLevel
@@ -186,7 +189,8 @@ newQUICClient cparams callbacks = do
         rl = newRecordLayer ctx1 callbacks
         ctx2 = updateRecordLayer rl ctx1
     handshake ctx2
-    void $ recvData ctx2
+    quicDone callbacks ctx2
+    void $ recvData ctx2 -- waiting for new session tickets
   where
     sync (SendClientHello mEarlySecInfo) =
         quicInstallKeys callbacks (InstallEarlyKeys mEarlySecInfo)
