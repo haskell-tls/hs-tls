@@ -10,8 +10,8 @@
 --
 -- On the northbound API:
 --
--- * QUIC starts a TLS client or server thread with 'newQUICClient' or
---   'newQUICServer'.
+-- * QUIC starts a TLS client or server thread with 'quicClient' or
+--   'quicServer'.
 --
 --  TLS invokes QUIC callbacks to use the QUIC transport
 --
@@ -28,8 +28,8 @@
 --
 module Network.TLS.QUIC (
     -- * Handshakers
-      newQUICClient
-    , newQUICServer
+      tlsQUICClient
+    , tlsQUICServer
     -- * Callback
     , QUICCallbacks(..)
     , CryptLevel(..)
@@ -148,7 +148,7 @@ data QUICCallbacks = QUICCallbacks
       -- ^ Called by TLS when QUIC-specific extensions have been received from
       -- the peer.
     , quicDone :: Context -> IO ()
-      -- ^ Called when 'handshake' is done. 'newQUICServer' is
+      -- ^ Called when 'handshake' is done. 'tlsQUICServer' is
       -- finished after calling this hook. 'newQUICClinet' calls
       -- 'recvData' after calling this hook to wait for new session
       -- tickets.
@@ -178,8 +178,8 @@ newRecordLayer ctx callbacks = newTransparentRecordLayer get send recv
 --
 -- Execution and synchronization between the internal TLS thread and external
 -- QUIC threads is done through the 'ClientController' interface returned.
-newQUICClient :: ClientParams -> QUICCallbacks -> IO ()
-newQUICClient cparams callbacks = do
+tlsQUICClient :: ClientParams -> QUICCallbacks -> IO ()
+tlsQUICClient cparams callbacks = do
     ctx0 <- contextNew nullBackend cparams
     let ctx1 = ctx0
            { ctxHandshakeSync = HandshakeSync sync (\_ -> return ())
@@ -206,8 +206,8 @@ newQUICClient cparams callbacks = do
 --
 -- Execution and synchronization between the internal TLS thread and external
 -- QUIC threads is done through the 'ServerController' interface returned.
-newQUICServer :: ServerParams -> QUICCallbacks -> IO ()
-newQUICServer sparams callbacks = do
+tlsQUICServer :: ServerParams -> QUICCallbacks -> IO ()
+tlsQUICServer sparams callbacks = do
     ctx0 <- contextNew nullBackend sparams
     let ctx1 = ctx0
           { ctxHandshakeSync = HandshakeSync (\_ -> return ()) sync
