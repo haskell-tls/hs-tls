@@ -12,7 +12,7 @@
 
 module Network.TLS.Receiving
     ( processPacket
-    , decodeRecordM
+    , processPacket13
     ) where
 
 import Network.TLS.Cipher
@@ -21,9 +21,11 @@ import Network.TLS.ErrT
 import Network.TLS.Handshake.State
 import Network.TLS.Imports
 import Network.TLS.Packet
+import Network.TLS.Packet13
 import Network.TLS.Record
 import Network.TLS.State
 import Network.TLS.Struct
+import Network.TLS.Struct13
 import Network.TLS.Util
 import Network.TLS.Wire
 
@@ -75,7 +77,26 @@ switchRxEncryption ctx =
     usingHState ctx (gets hstPendingRxState) >>= \rx ->
     liftIO $ modifyMVar_ (ctxRxState ctx) (\_ -> return $ fromJust "rx-state" rx)
 
-decodeRecordM :: Header -> ByteString -> RecordM (Record Plaintext)
-decodeRecordM header content = disengageRecord erecord
-   where
-     erecord = rawToRecord header (fragmentCiphertext content)
+----------------------------------------------------------------
+
+processPacket13 :: Context -> Record Plaintext -> IO (Either TLSError Packet13)
+processPacket13 _ (Record ProtocolType_ChangeCipherSpec _ _) = return $ Right ChangeCipherSpec13
+processPacket13 _ (Record ProtocolType_AppData _ fragment) = return $ Right $ AppData13 $ fragmentGetBytes fragment
+processPacket13 _ (Record ProtocolType_Alert _ fragment) = return (Alert13 `fmapEither` decodeAlerts (fragmentGetBytes fragment))
+processPacket13 ctx (Record ProtocolType_Handshake _ fragment) = usingState ctx $ do
+    mCont <- gets stHandshakeRecordCont13
+    modify (\st -> st { stHandshakeRecordCont13 = Nothing })
+    hss <- parseMany mCont (fragmentGetBytes fragment)
+    return $ Handshake13 hss
+  where parseMany mCont bs =
+            case fromMaybe decodeHandshakeRecord13 mCont bs of
+                GotError err                -> throwError err
+                GotPartial cont             -> modify (\st -> st { stHandshakeRecordCont13 = Just cont }) >> return []
+                GotSuccess (ty,content)     ->
+                    either throwError (return . (:[])) $ decodeHandshake13 ty content
+                GotSuccessRemaining (ty,content) left ->
+                    case decodeHandshake13 ty content of
+                        Left err -> throwError err
+                        Right hh -> (hh:) <$> parseMany Nothing left
+processPacket13 _ (Record ProtocolType_DeprecatedHandshake _ _) =
+    return (Left $ Error_Packet "deprecated handshake packet 1.3")

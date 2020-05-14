@@ -12,14 +12,12 @@ import Network.TLS.Struct
 import qualified Data.ByteString as B
 
 data RecordLayer bytes = RecordLayer {
-    -- Sending.hs
+    -- Writing.hs
     recordEncode    :: Record Plaintext -> IO (Either TLSError bytes)
-
-    -- Sending13.hs
   , recordEncode13  :: Record Plaintext -> IO (Either TLSError bytes)
-
-    -- IO.hs
   , recordSendBytes :: bytes -> IO ()
+
+    -- Reading.hs
   , recordRecv      :: Bool -> Int -> IO (Either TLSError (Record Plaintext))
   , recordRecv13    :: IO (Either TLSError (Record Plaintext))
   }

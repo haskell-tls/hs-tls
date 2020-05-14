@@ -335,7 +335,7 @@ handshakeClient' cparams ctx groups mparams = do
                                         else throwAlert a
                                 _ -> throwAlert a
                         _ -> unexpected (show p) (Just "handshake")
-                throwAlert a = usingState_ ctx $ throwError $ Error_Protocol ("expecting server hello, got alert : " ++ show a, True, HandshakeFailure)
+                throwAlert a = throwCore $ Error_Protocol ("expecting server hello, got alert : " ++ show a, True, HandshakeFailure)
 
 -- | Store the keypair and check that it is compatible with the current protocol
 -- version and a list of 'CertificateType' values.

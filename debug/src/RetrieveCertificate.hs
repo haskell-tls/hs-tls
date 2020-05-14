@@ -36,7 +36,7 @@ openConnection s p = do
             return sock
     ctx <- contextNew sock params
 
-    contextHookSetCertificateRecv ctx $ \l -> modifyIORef ref (const $ Just l)
+    contextHookSetCertificateRecv ctx $ \l -> writeIORef ref (Just l)
 
     _   <- handshake ctx
     bye ctx
