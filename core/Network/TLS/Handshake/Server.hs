@@ -774,8 +774,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
         serverApplicationSecret0 = triServer appKey
         applicationSecret = triBase appKey
     setTxState ctx usedHash usedCipher serverApplicationSecret0
-    alpn <- usingState_ ctx getNegotiatedProtocol
-    let appSecInfo = ApplicationSecretInfo alpn (clientApplicationSecret0,serverApplicationSecret0)
+    let appSecInfo = ApplicationSecretInfo (clientApplicationSecret0,serverApplicationSecret0)
     contextSync ctx $ SendServerFinished appSecInfo
     ----------------------------------------------------------------
     if rtt0OK then

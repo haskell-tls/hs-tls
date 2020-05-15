@@ -35,7 +35,7 @@ data HandshakeSecretInfo = HandshakeSecretInfo Cipher (TrafficSecrets HandshakeS
                          deriving Show
 
 -- | Handshake information generated for traffic at application level.
-data ApplicationSecretInfo = ApplicationSecretInfo (Maybe NegotiatedProtocol) (TrafficSecrets ApplicationSecret)
+data ApplicationSecretInfo = ApplicationSecretInfo (TrafficSecrets ApplicationSecret)
                          deriving Show
 
 ----------------------------------------------------------------
