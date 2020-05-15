@@ -16,7 +16,6 @@ module Network.TLS.Handshake.Control (
   ) where
 
 import Network.TLS.Cipher
-import Network.TLS.Handshake.State
 import Network.TLS.Imports
 import Network.TLS.Struct
 import Network.TLS.Types
@@ -36,7 +35,7 @@ data HandshakeSecretInfo = HandshakeSecretInfo Cipher (TrafficSecrets HandshakeS
                          deriving Show
 
 -- | Handshake information generated for traffic at application level.
-data ApplicationSecretInfo = ApplicationSecretInfo HandshakeMode13 (Maybe NegotiatedProtocol) (TrafficSecrets ApplicationSecret)
+data ApplicationSecretInfo = ApplicationSecretInfo (Maybe NegotiatedProtocol) (TrafficSecrets ApplicationSecret)
                          deriving Show
 
 ----------------------------------------------------------------
