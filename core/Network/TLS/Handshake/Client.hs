@@ -292,7 +292,7 @@ handshakeClient' cparams ctx groups mparams = do
             let rtt0info = pskInfo >>= get0RTTinfo
                 rtt0 = isJust rtt0info
             extensions0 <- catMaybes <$> getExtensions pskInfo rtt0
-            let extensions1 = sharedExtensions (clientShared cparams) ++ extensions0
+            let extensions1 = sharedHelloExtensions (clientShared cparams) ++ extensions0
             extensions <- adjustExtentions pskInfo extensions1 $ mkClientHello extensions1
             sendPacket ctx $ Handshake [mkClientHello extensions]
             mEarlySecInfo <- case rtt0info of

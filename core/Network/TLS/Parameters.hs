@@ -404,7 +404,7 @@ data Shared = Shared
       -- based on the TLS version.
       --
       -- Default: @[]@
-    , sharedExtensions      :: [ExtensionRaw]
+    , sharedHelloExtensions :: [ExtensionRaw]
     }
 
 instance Show Shared where
@@ -415,7 +415,7 @@ instance Default Shared where
             , sharedSessionManager  = noSessionManager
             , sharedCAStore         = mempty
             , sharedValidationCache = def
-            , sharedExtensions      = []
+            , sharedHelloExtensions = []
             }
 
 -- | Group usage callback possible return values.

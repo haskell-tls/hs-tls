@@ -369,7 +369,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                       -- field of this extension SHALL be empty.
                       Just _  -> return [ ExtensionRaw extensionID_ServerName ""]
                       Nothing -> return []
-            let extensions = sharedExtensions (serverShared sparams)
+            let extensions = sharedHelloExtensions (serverShared sparams)
                           ++ secRengExt ++ emsExt ++ protoExt ++ sniExt
             usingState_ ctx (setVersion chosenVersion)
             usingHState ctx $ setServerHelloParameters chosenVersion srand usedCipher usedCompression
@@ -932,7 +932,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
         let earlyDataExtension
               | rtt0OK = Just $ ExtensionRaw extensionID_EarlyData $ extensionEncode (EarlyDataIndication Nothing)
               | otherwise = Nothing
-        let extensions = sharedExtensions (serverShared sparams)
+        let extensions = sharedHelloExtensions (serverShared sparams)
                       ++ catMaybes [earlyDataExtension
                                    ,groupExtension
                                    ,sniExtension
