@@ -186,7 +186,7 @@ tlsQUICClient cparams callbacks = do
            , ctxFragmentSize = Nothing
            , ctxQUICMode = True
            }
-        rl = newRecordLayer ctx1 callbacks
+        rl = newRecordLayer ctx2 callbacks
         ctx2 = updateRecordLayer rl ctx1
     handshake ctx2
     quicDone callbacks ctx2
@@ -214,7 +214,7 @@ tlsQUICServer sparams callbacks = do
           , ctxFragmentSize = Nothing
           , ctxQUICMode = True
           }
-        rl = newRecordLayer ctx1 callbacks
+        rl = newRecordLayer ctx2 callbacks
         ctx2 = updateRecordLayer rl ctx1
     handshake ctx2
     quicDone callbacks ctx2
@@ -223,7 +223,7 @@ tlsQUICServer sparams callbacks = do
         quicInstallKeys callbacks (InstallEarlyKeys mEarlySecInfo)
         quicInstallKeys callbacks (InstallHandshakeKeys handSecInfo)
         quicNotifyExtensions callbacks (filterQTP exts)
-    sync (SendServerFinished appSecInfo) = do
+    sync (SendServerFinished appSecInfo) =
         quicInstallKeys callbacks (InstallApplicationKeys appSecInfo)
 
 {-
