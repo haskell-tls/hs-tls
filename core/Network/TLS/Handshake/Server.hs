@@ -369,7 +369,8 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                       -- field of this extension SHALL be empty.
                       Just _  -> return [ ExtensionRaw extensionID_ServerName ""]
                       Nothing -> return []
-            let extensions = secRengExt ++ emsExt ++ protoExt ++ sniExt
+            let extensions = sharedExtensions (serverShared sparams)
+                          ++ secRengExt ++ emsExt ++ protoExt ++ sniExt
             usingState_ ctx (setVersion chosenVersion)
             usingHState ctx $ setServerHelloParameters chosenVersion srand usedCipher usedCompression
             return $ ServerHello chosenVersion srand session (cipherID usedCipher)
