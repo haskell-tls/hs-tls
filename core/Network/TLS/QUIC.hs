@@ -226,15 +226,6 @@ tlsQUICServer sparams callbacks = do
     sync (SendServerFinished appSecInfo) =
         quicInstallKeys callbacks (InstallApplicationKeys appSecInfo)
 
-{-
-getErrorCause :: TLSException -> TLSError
-getErrorCause (HandshakeFailed e) = e
-getErrorCause (Terminated _ _ e) = e
-getErrorCause e =
-    let msg = "unexpected TLS exception: " ++ show e
-     in Error_Protocol (msg, True, InternalError)
--}
-
 filterQTP :: [ExtensionRaw] -> [ExtensionRaw]
 filterQTP = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters)
 
