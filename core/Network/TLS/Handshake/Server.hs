@@ -754,7 +754,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
                 else setRxState ctx usedHash usedCipher clientHandshakeSecret
             setTxState ctx usedHash usedCipher serverHandshakeSecret
             let mEarlySecInfo
-                 | is0RTTvalid = Just $ EarlySecretInfo usedCipher clientEarlySecret
+                 | rtt0OK      = Just $ EarlySecretInfo usedCipher clientEarlySecret
                  | otherwise   = Nothing
                 handSecInfo = HandshakeSecretInfo usedCipher (clientHandshakeSecret,serverHandshakeSecret)
             contextSync ctx $ SendServerHello exts mEarlySecInfo handSecInfo
