@@ -298,7 +298,7 @@ handshakeClient' cparams ctx groups mparams = do
             mEarlySecInfo <- case rtt0info of
                Nothing   -> return Nothing
                Just info -> Just <$> send0RTT info
-            contextSync ctx $ SendClientHello mEarlySecInfo
+            unless hrr $ contextSync ctx $ SendClientHello mEarlySecInfo
             return (rtt0, map (\(ExtensionRaw i _) -> i) extensions)
 
         get0RTTinfo (_, sdata, choice, _) = do
