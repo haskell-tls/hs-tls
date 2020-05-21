@@ -238,8 +238,9 @@ handshakeClient' cparams ctx groups mparams = do
               Just cookie -> return $ Just $ toExtensionRaw cookie
 
         postHandshakeAuthExtension
-          | tls13     = return $ Just $ toExtensionRaw PostHandshakeAuth
-          | otherwise = return Nothing
+          | ctxQUICMode ctx = return Nothing
+          | tls13           = return $ Just $ toExtensionRaw PostHandshakeAuth
+          | otherwise       = return Nothing
 
         adjustExtentions pskInfo exts ch =
             case pskInfo of
@@ -292,13 +293,13 @@ handshakeClient' cparams ctx groups mparams = do
             let rtt0info = pskInfo >>= get0RTTinfo
                 rtt0 = isJust rtt0info
             extensions0 <- catMaybes <$> getExtensions pskInfo rtt0
-            let extensions1 = sharedExtensions (clientShared cparams) ++ extensions0
+            let extensions1 = sharedHelloExtensions (clientShared cparams) ++ extensions0
             extensions <- adjustExtentions pskInfo extensions1 $ mkClientHello extensions1
             sendPacket ctx $ Handshake [mkClientHello extensions]
             mEarlySecInfo <- case rtt0info of
                Nothing   -> return Nothing
                Just info -> Just <$> send0RTT info
-            contextSync ctx $ SendClientHelloI mEarlySecInfo
+            unless hrr $ contextSync ctx $ SendClientHello mEarlySecInfo
             return (rtt0, map (\(ExtensionRaw i _) -> i) extensions)
 
         get0RTTinfo (_, sdata, choice, _) = do
@@ -864,7 +865,7 @@ handshakeClient13' cparams ctx groupSent choice = do
         clientHandshakeSecret = triClient hkey
         serverHandshakeSecret = triServer hkey
         handSecInfo = HandshakeSecretInfo usedCipher (clientHandshakeSecret,serverHandshakeSecret)
-    contextSync ctx $ RecvServerHelloI handSecInfo
+    contextSync ctx $ RecvServerHello handSecInfo
     (rtt0accepted,eexts) <- runRecvHandshake13 $ do
         accext <- recvHandshake13 ctx expectEncryptedExtensions
         unless resuming $ recvHandshake13 ctx expectCertRequest
@@ -879,10 +880,8 @@ handshakeClient13' cparams ctx groupSent choice = do
     appKey <- switchToApplicationSecret handshakeSecret hChSf
     let applicationSecret = triBase appKey
     setResumptionSecret applicationSecret
-    alpn <- usingState_ ctx getNegotiatedProtocol
-    mode <- usingHState ctx getTLS13HandshakeMode
-    let appSecInfo = ApplicationSecretInfo mode alpn (triClient appKey, triServer appKey)
-    contextSync ctx $ SendClientFinishedI eexts appSecInfo
+    let appSecInfo = ApplicationSecretInfo (triClient appKey, triServer appKey)
+    contextSync ctx $ SendClientFinished eexts appSecInfo
     handshakeTerminate13 ctx
   where
     usedCipher = cCipher choice
@@ -1091,6 +1090,6 @@ postHandshakeAuthClientWith cparams ctx h@(CertRequest13 certReqCtx exts) =
 postHandshakeAuthClientWith _ _ _ =
     throwCore $ Error_Protocol ("unexpected handshake message received in postHandshakeAuthClientWith", True, UnexpectedMessage)
 
-contextSync :: Context -> ClientStatusI -> IO ()
+contextSync :: Context -> ClientState -> IO ()
 contextSync ctx ctl = case ctxHandshakeSync ctx of
     HandshakeSync sync _ -> sync ctl

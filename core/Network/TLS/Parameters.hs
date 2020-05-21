@@ -397,8 +397,14 @@ data Shared = Shared
       --
       -- See the default value of 'ValidationCache'.
     , sharedValidationCache :: ValidationCache
-      -- | Additional extensions for ClientHello and EncryptedExtensions.
-    , sharedExtensions      :: [ExtensionRaw]
+      -- | Additional extensions to be sent during the Hello sequence.
+      --
+      -- For a client this is always included in message ClientHello.  For a
+      -- server, this is sent in messages ServerHello or EncryptedExtensions
+      -- based on the TLS version.
+      --
+      -- Default: @[]@
+    , sharedHelloExtensions :: [ExtensionRaw]
     }
 
 instance Show Shared where
@@ -409,7 +415,7 @@ instance Default Shared where
             , sharedSessionManager  = noSessionManager
             , sharedCAStore         = mempty
             , sharedValidationCache = def
-            , sharedExtensions      = []
+            , sharedHelloExtensions = []
             }
 
 -- | Group usage callback possible return values.

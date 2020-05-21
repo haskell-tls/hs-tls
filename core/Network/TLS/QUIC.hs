@@ -10,33 +10,10 @@
 --
 -- On the northbound API:
 --
--- * QUIC starts a TLS client or server thread with 'newQUICClient' or
---   'newQUICServer'.
+-- * QUIC starts a TLS client or server thread with 'quicClient' or
+--   'quicServer'.
 --
--- * QUIC executes and monitors the progress of the handshake with the
---   'ClientController' or 'ServerController' functions.  It sends continuation
---   messages and listens for the resulting status, success or failure.  At any
---   point it can decide to terminate the current handshake with constructors
---   'ExitClient' and 'ExitServer' .
---
--- The main steps of the handshake defined in the 'ClientController' /
--- 'ServerController' state machines are:
---
--- * @FinishedSent@: message Finished has been sent, endpoint is ready to send
---   application traffic
---
--- * @HandshakeComplete@: peer message Finished has been received and verified,
---   endpoint is ready to receive application traffic
---
--- * @HandshakeConfirmed@: TLS handshake is no more needed, session tickets have
---   all been transferred
---
--- Out of those three defined steps, only two are really used.  For a client,
--- steps @FinishedSent@ and @HandshakeComplete@ are the same.  For a server,
--- steps @HandshakeComplete@ and @HandshakeConfirmed@ are the same.
---
--- On the southbound API, TLS invokes QUIC callbacks to use the QUIC transport
--- protocol:
+--  TLS invokes QUIC callbacks to use the QUIC transport
 --
 -- * TLS uses 'quicSend' and 'quicRecv' to send and receive handshake message
 --   fragments.
@@ -47,49 +24,47 @@
 -- * TLS calls 'quicNotifyExtensions' to notify to QUIC the transport parameters
 --   exchanged through the handshake protocol.
 --
+-- * TLS calls 'quicDone' when the handshake is done.
+--
 module Network.TLS.QUIC (
-    -- * Supported
-      defaultSupported
-    -- * Hash
-    , hkdfExpandLabel
-    , hkdfExtract
-    , hashDigestSize
-    -- * Extensions
-    , ExtensionRaw(..)
-    , ExtensionID
-    , extensionID_QuicTransportParameters
+    -- * Handshakers
+      tlsQUICClient
+    , tlsQUICServer
+    -- * Callback
+    , QUICCallbacks(..)
+    , CryptLevel(..)
+    , KeyScheduleEvent(..)
     -- * Secrets
-    , ServerTrafficSecret(..)
-    , ClientTrafficSecret(..)
+    , EarlySecretInfo(..)
+    , HandshakeSecretInfo(..)
+    , ApplicationSecretInfo(..)
     , EarlySecret
     , HandshakeSecret
     , ApplicationSecret
     , TrafficSecrets
-    , EarlySecretInfo(..)
-    , HandshakeSecretInfo(..)
-    , ApplicationSecretInfo(..)
-    -- * Client handshake controller
-    , newQUICClient
-    , ClientController
-    , ClientControl(..)
-    , ClientStatus(..)
-    -- * Server handshake controller
-    , newQUICServer
-    , ServerController
-    , ServerControl(..)
-    , ServerStatus(..)
-    -- * Common
-    , CryptLevel(..)
-    , KeyScheduleEvent(..)
-    , QUICCallbacks(..)
+    , ServerTrafficSecret(..)
+    , ClientTrafficSecret(..)
+    -- * Negotiated parameters
     , NegotiatedProtocol
     , HandshakeMode13(..)
+    -- * Extensions
+    , ExtensionRaw(..)
+    , ExtensionID
+    , extensionID_QuicTransportParameters
+    -- * Errors
     , errorTLS
     , errorToAlertDescription
     , errorToAlertMessage
     , fromAlertDescription
     , toAlertDescription
+    -- * Hash
+    , hkdfExpandLabel
+    , hkdfExtract
+    , hashDigestSize
+    -- * Constants
     , quicMaxEarlyDataSize
+    -- * Supported
+    , defaultSupported
     ) where
 
 import Network.TLS.Backend
@@ -112,10 +87,7 @@ import Network.TLS.Record.State
 import Network.TLS.Struct
 import Network.TLS.Types
 
-import Control.Concurrent
-import qualified Control.Exception as E
 import Data.Default.Class
-import System.Mem.Weak
 
 nullBackend :: Backend
 nullBackend = Backend {
@@ -175,6 +147,11 @@ data QUICCallbacks = QUICCallbacks
     , quicNotifyExtensions  :: [ExtensionRaw] -> IO ()
       -- ^ Called by TLS when QUIC-specific extensions have been received from
       -- the peer.
+    , quicDone :: Context -> IO ()
+      -- ^ Called when 'handshake' is done. 'tlsQUICServer' is
+      -- finished after calling this hook. 'newQUICClinet' calls
+      -- 'recvData' after calling this hook to wait for new session
+      -- tickets.
     }
 
 getTxLevel :: Context -> IO CryptLevel
@@ -186,14 +163,6 @@ getRxLevel :: Context -> IO CryptLevel
 getRxLevel ctx = do
     (_, _, level, _) <- getRxState ctx
     return level
-
-prepare :: ((status -> IO ()) -> statusI -> IO ())
-        -> IO (statusI -> IO (), IO status)
-prepare processI = do
-    mvar <- newEmptyMVar
-    let sync a = let put = putMVar mvar in processI put a
-        ask  = takeMVar mvar
-    return (sync, ask)
 
 newRecordLayer :: Context -> QUICCallbacks
                -> RecordLayer [(CryptLevel, ByteString)]
@@ -209,41 +178,27 @@ newRecordLayer ctx callbacks = newTransparentRecordLayer get send recv
 --
 -- Execution and synchronization between the internal TLS thread and external
 -- QUIC threads is done through the 'ClientController' interface returned.
-newQUICClient :: ClientParams -> QUICCallbacks -> IO ClientController
-newQUICClient cparams callbacks = do
-    (sync, ask) <- prepare processI
+tlsQUICClient :: ClientParams -> QUICCallbacks -> IO ()
+tlsQUICClient cparams callbacks = do
     ctx0 <- contextNew nullBackend cparams
     let ctx1 = ctx0
            { ctxHandshakeSync = HandshakeSync sync (\_ -> return ())
            , ctxFragmentSize = Nothing
            , ctxQUICMode = True
            }
-        rl = newRecordLayer ctx1 callbacks
+        rl = newRecordLayer ctx2 callbacks
         ctx2 = updateRecordLayer rl ctx1
-        failed = sync . ClientHandshakeFailedI . getErrorCause
-    tid <- forkIO $ E.handle failed $ do
-        handshake ctx2
-        void $ recvData ctx2
-    wtid <- mkWeakThreadId tid
-    return (quicClient wtid ask)
-
+    handshake ctx2
+    quicDone callbacks ctx2
+    void $ recvData ctx2 -- waiting for new session tickets
   where
-    processI _ (SendClientHelloI mEarlySecInfo) =
+    sync (SendClientHello mEarlySecInfo) =
         quicInstallKeys callbacks (InstallEarlyKeys mEarlySecInfo)
-    processI _ (RecvServerHelloI handSecInfo) =
+    sync (RecvServerHello handSecInfo) =
         quicInstallKeys callbacks (InstallHandshakeKeys handSecInfo)
-    processI put (SendClientFinishedI exts appSecInfo) = do
+    sync (SendClientFinished exts appSecInfo) = do
         quicInstallKeys callbacks (InstallApplicationKeys appSecInfo)
         quicNotifyExtensions callbacks (filterQTP exts)
-        put ClientHandshakeComplete
-    processI put RecvSessionTicketI = put ClientRecvSessionTicket
-    processI put (ClientHandshakeFailedI e) = put (ClientHandshakeFailed e)
-
-    quicClient wtid _ ExitClient = do
-        mtid <- deRefWeak wtid
-        forM_ mtid killThread
-        return ClientHandshakeDone
-    quicClient _ ask _ = ask
 
 -- | Start a TLS handshake thread for a QUIC server.  The server will use the
 -- specified TLS parameters and call the provided callback functions to send and
@@ -251,47 +206,25 @@ newQUICClient cparams callbacks = do
 --
 -- Execution and synchronization between the internal TLS thread and external
 -- QUIC threads is done through the 'ServerController' interface returned.
-newQUICServer :: ServerParams -> QUICCallbacks -> IO ServerController
-newQUICServer sparams callbacks = do
-    (sync, ask) <- prepare processI
+tlsQUICServer :: ServerParams -> QUICCallbacks -> IO ()
+tlsQUICServer sparams callbacks = do
     ctx0 <- contextNew nullBackend sparams
     let ctx1 = ctx0
           { ctxHandshakeSync = HandshakeSync (\_ -> return ()) sync
           , ctxFragmentSize = Nothing
           , ctxQUICMode = True
           }
-        rl = newRecordLayer ctx1 callbacks
+        rl = newRecordLayer ctx2 callbacks
         ctx2 = updateRecordLayer rl ctx1
-        failed = sync . ServerHandshakeFailedI . getErrorCause
-    tid <- forkIO $ E.handle failed $ do
-        handshake ctx2
-        void $ recvData ctx2
-    wtid <- mkWeakThreadId tid
-    return (quicServer wtid ask)
-
+    handshake ctx2
+    quicDone callbacks ctx2
   where
-    processI _ (SendServerHelloI exts mEarlySecInfo handSecInfo) = do
+    sync (SendServerHello exts mEarlySecInfo handSecInfo) = do
         quicInstallKeys callbacks (InstallEarlyKeys mEarlySecInfo)
         quicInstallKeys callbacks (InstallHandshakeKeys handSecInfo)
         quicNotifyExtensions callbacks (filterQTP exts)
-    processI put (SendServerFinishedI appSecInfo) = do
+    sync (SendServerFinished appSecInfo) =
         quicInstallKeys callbacks (InstallApplicationKeys appSecInfo)
-        put ServerFinishedSent
-    processI put SendSessionTicketI = put ServerHandshakeComplete
-    processI put (ServerHandshakeFailedI e) = put (ServerHandshakeFailed e)
-
-    quicServer wtid _ ExitServer = do
-        mtid <- deRefWeak wtid
-        forM_ mtid killThread
-        return ServerHandshakeDone
-    quicServer _ ask _ = ask
-
-getErrorCause :: TLSException -> TLSError
-getErrorCause (HandshakeFailed e) = e
-getErrorCause (Terminated _ _ e) = e
-getErrorCause e =
-    let msg = "unexpected TLS exception: " ++ show e
-     in Error_Protocol (msg, True, InternalError)
 
 filterQTP :: [ExtensionRaw] -> [ExtensionRaw]
 filterQTP = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters)

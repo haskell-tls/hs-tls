@@ -369,7 +369,8 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                       -- field of this extension SHALL be empty.
                       Just _  -> return [ ExtensionRaw extensionID_ServerName ""]
                       Nothing -> return []
-            let extensions = secRengExt ++ emsExt ++ protoExt ++ sniExt
+            let extensions = sharedHelloExtensions (serverShared sparams)
+                          ++ secRengExt ++ emsExt ++ protoExt ++ sniExt
             usingState_ ctx (setVersion chosenVersion)
             usingHState ctx $ setServerHelloParameters chosenVersion srand usedCipher usedCompression
             return $ ServerHello chosenVersion srand session (cipherID usedCipher)
@@ -753,10 +754,10 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
                 else setRxState ctx usedHash usedCipher clientHandshakeSecret
             setTxState ctx usedHash usedCipher serverHandshakeSecret
             let mEarlySecInfo
-                 | is0RTTvalid = Just $ EarlySecretInfo usedCipher clientEarlySecret
+                 | rtt0OK      = Just $ EarlySecretInfo usedCipher clientEarlySecret
                  | otherwise   = Nothing
                 handSecInfo = HandshakeSecretInfo usedCipher (clientHandshakeSecret,serverHandshakeSecret)
-            contextSync ctx $ SendServerHelloI exts mEarlySecInfo handSecInfo
+            contextSync ctx $ SendServerHello exts mEarlySecInfo handSecInfo
     ----------------------------------------------------------------
         sendExtensions rtt0OK protoExt
         case mCredInfo of
@@ -774,16 +775,8 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
         serverApplicationSecret0 = triServer appKey
         applicationSecret = triBase appKey
     setTxState ctx usedHash usedCipher serverApplicationSecret0
-    alpn <- usingState_ ctx getNegotiatedProtocol
-    -- TLS13RTT0Status is not exposed, so needs to distinguish
-    -- RTT0 and PreSharedKey.
-    let mode
-         | rtt0OK                   = RTT0
-         | authenticated && not hrr = PreSharedKey
-         | hrr                      = HelloRetryRequest
-         | otherwise                = FullHandshake
-    let appSecInfo = ApplicationSecretInfo mode alpn (clientApplicationSecret0,serverApplicationSecret0)
-    contextSync ctx $ SendServerFinishedI appSecInfo
+    let appSecInfo = ApplicationSecretInfo (clientApplicationSecret0,serverApplicationSecret0)
+    contextSync ctx $ SendServerFinished appSecInfo
     ----------------------------------------------------------------
     if rtt0OK then
         setEstablished ctx (EarlyDataAllowed rtt0max)
@@ -796,7 +789,6 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
             handshakeTerminate13 ctx
             setRxState ctx usedHash usedCipher clientApplicationSecret0
             sendNewSessionTicket applicationSecret sfSentTime
-            contextSync ctx $ SendSessionTicketI
         expectFinished _ hs = unexpected (show hs) (Just "finished 13")
 
     let expectEndOfEarlyData EndOfEarlyData13 =
@@ -809,9 +801,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
           unless skip $ recvHandshake13hash ctx (expectCertVerify sparams ctx)
           recvHandshake13hash ctx expectFinished
           ensureRecvComplete ctx
-      else if rtt0OK && ctxQUICMode ctx then
-        setPendingActions ctx [PendingActionHash True expectFinished]
-      else if rtt0OK then
+      else if rtt0OK && not (ctxQUICMode ctx) then
         setPendingActions ctx [PendingAction True expectEndOfEarlyData
                               ,PendingActionHash True expectFinished]
       else
@@ -942,7 +932,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
         let earlyDataExtension
               | rtt0OK = Just $ ExtensionRaw extensionID_EarlyData $ extensionEncode (EarlyDataIndication Nothing)
               | otherwise = Nothing
-        let extensions = sharedExtensions (serverShared sparams)
+        let extensions = sharedHelloExtensions (serverShared sparams)
                       ++ catMaybes [earlyDataExtension
                                    ,groupExtension
                                    ,sniExtension
@@ -1199,6 +1189,6 @@ postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = d
 postHandshakeAuthServerWith _ _ _ =
     throwCore $ Error_Protocol ("unexpected handshake message received in postHandshakeAuthServerWith", True, UnexpectedMessage)
 
-contextSync :: Context -> ServerStatusI -> IO ()
+contextSync :: Context -> ServerState -> IO ()
 contextSync ctx ctl = case ctxHandshakeSync ctx of
     HandshakeSync _ sync -> sync ctl
