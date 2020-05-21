@@ -238,8 +238,9 @@ handshakeClient' cparams ctx groups mparams = do
               Just cookie -> return $ Just $ toExtensionRaw cookie
 
         postHandshakeAuthExtension
-          | tls13     = return $ Just $ toExtensionRaw PostHandshakeAuth
-          | otherwise = return Nothing
+          | ctxQUICMode ctx = return Nothing
+          | tls13           = return $ Just $ toExtensionRaw PostHandshakeAuth
+          | otherwise       = return Nothing
 
         adjustExtentions pskInfo exts ch =
             case pskInfo of
