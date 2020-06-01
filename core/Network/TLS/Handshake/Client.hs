@@ -880,7 +880,8 @@ handshakeClient13' cparams ctx groupSent choice = do
     appKey <- switchToApplicationSecret handshakeSecret hChSf
     let applicationSecret = triBase appKey
     setResumptionSecret applicationSecret
-    let appSecInfo = ApplicationSecretInfo (triClient appKey, triServer appKey)
+    alpn <- usingState_ ctx getNegotiatedProtocol
+    let appSecInfo = ApplicationSecretInfo alpn (triClient appKey, triServer appKey)
     contextSync ctx $ SendClientFinished eexts appSecInfo
     handshakeTerminate13 ctx
   where
