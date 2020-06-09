@@ -197,8 +197,8 @@ tlsQUICClient cparams callbacks = do
     sync ctx (RecvServerHello handSecInfo) =
         quicInstallKeys callbacks ctx (InstallHandshakeKeys handSecInfo)
     sync ctx (SendClientFinished exts appSecInfo) = do
-        quicInstallKeys callbacks ctx (InstallApplicationKeys appSecInfo)
         quicNotifyExtensions callbacks ctx (filterQTP exts)
+        quicInstallKeys callbacks ctx (InstallApplicationKeys appSecInfo)
 
 -- | Start a TLS handshake thread for a QUIC server.  The server will use the
 -- specified TLS parameters and call the provided callback functions to send and
@@ -220,9 +220,9 @@ tlsQUICServer sparams callbacks = do
     quicDone callbacks ctx2
   where
     sync ctx (SendServerHello exts mEarlySecInfo handSecInfo) = do
+        quicNotifyExtensions callbacks ctx (filterQTP exts)
         quicInstallKeys callbacks ctx (InstallEarlyKeys mEarlySecInfo)
         quicInstallKeys callbacks ctx (InstallHandshakeKeys handSecInfo)
-        quicNotifyExtensions callbacks ctx (filterQTP exts)
     sync ctx (SendServerFinished appSecInfo) =
         quicInstallKeys callbacks ctx (InstallApplicationKeys appSecInfo)
 
