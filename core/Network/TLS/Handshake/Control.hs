@@ -12,7 +12,6 @@ module Network.TLS.Handshake.Control (
   , HandshakeSecretInfo(..)
   , ApplicationSecretInfo(..)
   , NegotiatedProtocol
-  , HandshakeSync(..)
   ) where
 
 import Network.TLS.Cipher
@@ -48,8 +47,3 @@ data ClientState =
 data ServerState =
     SendServerHello [ExtensionRaw] (Maybe EarlySecretInfo) HandshakeSecretInfo
   | SendServerFinished ApplicationSecretInfo
-
-----------------------------------------------------------------
-
-data HandshakeSync = HandshakeSync (ClientState -> IO ())
-                                   (ServerState -> IO ())
