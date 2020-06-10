@@ -1191,4 +1191,4 @@ postHandshakeAuthServerWith _ _ _ =
 
 contextSync :: Context -> ServerState -> IO ()
 contextSync ctx ctl = case ctxHandshakeSync ctx of
-    HandshakeSync _ sync -> sync ctl
+    HandshakeSync _ sync -> sync ctx ctl

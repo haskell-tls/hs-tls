@@ -1092,4 +1092,4 @@ postHandshakeAuthClientWith _ _ _ =
 
 contextSync :: Context -> ClientState -> IO ()
 contextSync ctx ctl = case ctxHandshakeSync ctx of
-    HandshakeSync sync _ -> sync ctl
+    HandshakeSync sync _ -> sync ctx ctl

@@ -65,6 +65,9 @@ module Network.TLS.Context.Internal
     , addCertRequest13
     , getCertRequest13
     , decideRecordVersion
+
+    -- * Misc
+    , HandshakeSync(..)
     ) where
 
 import Network.TLS.Backend
@@ -139,6 +142,9 @@ data Context = forall bytes . Monoid bytes => Context
     , ctxHandshakeSync    :: HandshakeSync
     , ctxQUICMode         :: Bool
     }
+
+data HandshakeSync = HandshakeSync (Context -> ClientState -> IO ())
+                                   (Context -> ServerState -> IO ())
 
 updateRecordLayer :: Monoid bytes => RecordLayer bytes -> Context -> Context
 updateRecordLayer recordLayer Context{..} =

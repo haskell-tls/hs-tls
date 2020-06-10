@@ -139,12 +139,12 @@ data QUICCallbacks = QUICCallbacks
       -- proceed any longer.  If the TLS handshake protocol cannot recover from
       -- this error, the failure condition will be reported back to QUIC through
       -- the control interface.
-    , quicInstallKeys       :: KeyScheduleEvent -> IO ()
+    , quicInstallKeys       :: Context -> KeyScheduleEvent -> IO ()
       -- ^ Called by TLS when new encryption material is ready to be used in the
       -- handshake.  The next 'quicSend' or 'quicRecv' may now use the
       -- associated encryption level (although the previous level is also
       -- possible: directions Send/Recv do not change at the same time).
-    , quicNotifyExtensions  :: [ExtensionRaw] -> IO ()
+    , quicNotifyExtensions  :: Context -> [ExtensionRaw] -> IO ()
       -- ^ Called by TLS when QUIC-specific extensions have been received from
       -- the peer.
     , quicDone :: Context -> IO ()
@@ -182,7 +182,7 @@ tlsQUICClient :: ClientParams -> QUICCallbacks -> IO ()
 tlsQUICClient cparams callbacks = do
     ctx0 <- contextNew nullBackend cparams
     let ctx1 = ctx0
-           { ctxHandshakeSync = HandshakeSync sync (\_ -> return ())
+           { ctxHandshakeSync = HandshakeSync sync (\_ _ -> return ())
            , ctxFragmentSize = Nothing
            , ctxQUICMode = True
            }
@@ -192,13 +192,13 @@ tlsQUICClient cparams callbacks = do
     quicDone callbacks ctx2
     void $ recvData ctx2 -- waiting for new session tickets
   where
-    sync (SendClientHello mEarlySecInfo) =
-        quicInstallKeys callbacks (InstallEarlyKeys mEarlySecInfo)
-    sync (RecvServerHello handSecInfo) =
-        quicInstallKeys callbacks (InstallHandshakeKeys handSecInfo)
-    sync (SendClientFinished exts appSecInfo) = do
-        quicInstallKeys callbacks (InstallApplicationKeys appSecInfo)
-        quicNotifyExtensions callbacks (filterQTP exts)
+    sync ctx (SendClientHello mEarlySecInfo) =
+        quicInstallKeys callbacks ctx (InstallEarlyKeys mEarlySecInfo)
+    sync ctx (RecvServerHello handSecInfo) =
+        quicInstallKeys callbacks ctx (InstallHandshakeKeys handSecInfo)
+    sync ctx (SendClientFinished exts appSecInfo) = do
+        quicNotifyExtensions callbacks ctx (filterQTP exts)
+        quicInstallKeys callbacks ctx (InstallApplicationKeys appSecInfo)
 
 -- | Start a TLS handshake thread for a QUIC server.  The server will use the
 -- specified TLS parameters and call the provided callback functions to send and
@@ -210,7 +210,7 @@ tlsQUICServer :: ServerParams -> QUICCallbacks -> IO ()
 tlsQUICServer sparams callbacks = do
     ctx0 <- contextNew nullBackend sparams
     let ctx1 = ctx0
-          { ctxHandshakeSync = HandshakeSync (\_ -> return ()) sync
+          { ctxHandshakeSync = HandshakeSync (\_ _ -> return ()) sync
           , ctxFragmentSize = Nothing
           , ctxQUICMode = True
           }
@@ -219,12 +219,12 @@ tlsQUICServer sparams callbacks = do
     handshake ctx2
     quicDone callbacks ctx2
   where
-    sync (SendServerHello exts mEarlySecInfo handSecInfo) = do
-        quicInstallKeys callbacks (InstallEarlyKeys mEarlySecInfo)
-        quicInstallKeys callbacks (InstallHandshakeKeys handSecInfo)
-        quicNotifyExtensions callbacks (filterQTP exts)
-    sync (SendServerFinished appSecInfo) =
-        quicInstallKeys callbacks (InstallApplicationKeys appSecInfo)
+    sync ctx (SendServerHello exts mEarlySecInfo handSecInfo) = do
+        quicNotifyExtensions callbacks ctx (filterQTP exts)
+        quicInstallKeys callbacks ctx (InstallEarlyKeys mEarlySecInfo)
+        quicInstallKeys callbacks ctx (InstallHandshakeKeys handSecInfo)
+    sync ctx (SendServerFinished appSecInfo) =
+        quicInstallKeys callbacks ctx (InstallApplicationKeys appSecInfo)
 
 filterQTP :: [ExtensionRaw] -> [ExtensionRaw]
 filterQTP = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters)

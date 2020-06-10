@@ -79,7 +79,6 @@ import Network.TLS.Parameters
 import Network.TLS.Measurement
 import Network.TLS.Types (Role(..))
 import Network.TLS.Handshake (handshakeClient, handshakeClientWith, handshakeServer, handshakeServerWith)
-import Network.TLS.Handshake.Control (HandshakeSync(..))
 import Network.TLS.PostHandshake (requestCertificateServer, postHandshakeAuthClientWith, postHandshakeAuthServerWith)
 import Network.TLS.X509
 import Network.TLS.RNG
@@ -192,7 +191,7 @@ contextNew backend params = liftIO $ do
             , ctxQUICMode         = False
             }
 
-        syncNoOp _ = return ()
+        syncNoOp _ _ = return ()
 
         recordLayer = RecordLayer
             { recordEncode    = encodeRecord ctx
