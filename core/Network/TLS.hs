@@ -53,6 +53,10 @@ module Network.TLS
     , Supported(..)
     -- ** Debug parameters
     , DebugParams(..)
+    -- ** Helpers
+    , clientParamsSetClientCert
+    , clientParamsUpdateCAFromStore
+    , clientParamsResetFromSystem
 
     -- * Shared parameters
     -- ** Credentials
