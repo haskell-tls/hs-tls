@@ -2,6 +2,7 @@ dist
 .stack-work
 .cabal-sandbox
 cabal.sandbox.config
+dist-newstyle/
 *.o
 *.hi
 *.tix
