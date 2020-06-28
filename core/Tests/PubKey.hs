@@ -7,7 +7,6 @@ module PubKey
     , globalRSAPair
     , getGlobalRSAPair
     , knownECCurves
-    , arbitraryECCurve
     , defaultECCurve
     , dhParams512
     , dhParams768
@@ -108,9 +107,6 @@ knownECCurves :: [ECC.CurveName]
 knownECCurves = [ ECC.SEC_p256r1
                 , ECC.SEC_p384r1
                 ]
-
-arbitraryECCurve :: Gen ECC.CurveName
-arbitraryECCurve = elements knownECCurves
 
 defaultECCurve :: ECC.CurveName
 defaultECCurve = ECC.SEC_p256r1
