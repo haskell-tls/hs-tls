@@ -605,12 +605,13 @@ filterSortCredentials rankFun (Credentials creds) =
 
 isCredentialAllowed :: Version -> [ExtensionRaw] -> Credential -> Bool
 isCredentialAllowed ver exts cred =
-    let p = case extensionLookup extensionID_NegotiatedGroups exts >>= extensionDecode MsgTClientHello of
-                Nothing                    -> const True
-                Just (NegotiatedGroups sg) -> \g ->
-                    -- ECDSA keys are tested against supported elliptic curves
-                    -- until TLS12 but not after
-                    ver > TLS12 || g `elem` sg
+    -- ECDSA keys are tested against supported elliptic curves until TLS12 but
+    -- not after.  With TLS13, the curve is linked to the signature algorithm
+    -- and client support is tested with signatureCompatible13.
+    let p | ver > TLS12 = const True
+          | otherwise   = case extensionLookup extensionID_NegotiatedGroups exts >>= extensionDecode MsgTClientHello of
+              Nothing                    -> const True
+              Just (NegotiatedGroups sg) -> (`elem` sg)
      in pubkey `versionCompatible` ver && satisfiesEcPredicate p pubkey
   where (pubkey, _) = credentialPublicPrivateKeys cred
 
