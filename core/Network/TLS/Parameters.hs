@@ -373,10 +373,6 @@ data Shared = Shared
       -- exchange can take place.
       --
       -- Default: 'mempty'
-      --
-      -- /WARNING:/ Implementation of ECDSA signature is vulnerable to
-      -- timing attacks.  This private key type should be used for
-      -- test purposes only.
       sharedCredentials     :: Credentials
       -- | Callbacks used by clients and servers in order to resume TLS
       -- sessions.  The default implementation never resumes sessions.  Package
@@ -503,10 +499,6 @@ data ClientHooks = ClientHooks
       -- a non-matching one will lead to handshake failure later.
       --
       -- Default: returns 'Nothing' anyway.
-      --
-      -- /WARNING:/ Implementation of ECDSA signature is vulnerable to
-      -- timing attacks.  This private key type should be used for
-      -- test purposes only.
       onCertificateRequest :: OnCertificateRequest
       -- | Used by the client to validate the server certificate.  The default
       -- implementation calls 'validateDefault' which validates according to the
@@ -605,10 +597,6 @@ data ServerHooks = ServerHooks
       -- the signature algorithms used in the certificate chain.
       --
       -- Default: returns 'mempty'
-      --
-      -- /WARNING:/ Implementation of ECDSA signature is vulnerable to
-      -- timing attacks.  This private key type should be used for
-      -- test purposes only.
     , onServerNameIndication  :: Maybe HostName -> IO Credentials
 
       -- | At each new handshake, we call this hook to see if we allow handshake to happens.

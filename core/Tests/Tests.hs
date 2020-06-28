@@ -666,10 +666,9 @@ prop_handshake_ec = do
                      , cipher_ECDHE_ECDSA_AES128CBC_SHA
                      , cipher_TLS13_AES128GCM_SHA256
                      ]
-        sigGroups  = [P256, P384]
+        sigGroups  = [P256]
         ecdhGroups = [X25519, X448] -- always enabled, so no ECDHE failure
         hashSignatures = [ (HashSHA256, SignatureECDSA)
-                         , (HashSHA384, SignatureECDSA)
                          ]
     clientVersion <- pick $ elements versions
     (clientParam,serverParam) <- pick $ arbitraryPairParamsWithVersionsAndCiphers
