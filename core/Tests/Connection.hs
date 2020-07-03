@@ -103,6 +103,12 @@ knownECGroups = [P256,P384,X25519,X448]
 knownFFGroups = [FFDHE2048,FFDHE3072,FFDHE4096]
 knownGroups   = knownECGroups ++ knownFFGroups
 
+defaultECGroup :: Group
+defaultECGroup = P256  -- same as defaultECCurve
+
+otherKnownECGroups :: [Group]
+otherKnownECGroups = filter (/= defaultECGroup) knownECGroups
+
 arbitraryGroups :: Gen [Group]
 arbitraryGroups = scale (min 5) $ listOf1 $ elements knownGroups
 
@@ -174,19 +180,23 @@ arbitraryCipherPair connectVersion = do
 arbitraryPairParams :: Gen (ClientParams, ServerParams)
 arbitraryPairParams = elements knownVersions >>= arbitraryPairParamsAt
 
--- pair of groups so that all EC groups and at least one FF group are in common
+-- Pair of groups so that at least the default EC group P256 and one FF group
+-- are in common.  This makes DHE and ECDHE ciphers always compatible with
+-- extension "Supported Elliptic Curves" / "Supported Groups".
 arbitraryGroupPair :: Gen ([Group], [Group])
 arbitraryGroupPair = do
+    (serverECGroups, clientECGroups) <- arbitraryGroupPairWith defaultECGroup otherKnownECGroups
     (serverFFGroups, clientFFGroups) <- arbitraryGroupPairFrom knownFFGroups
-    serverGroups <- shuffle (knownECGroups ++ serverFFGroups)
-    clientGroups <- shuffle (knownECGroups ++ clientFFGroups)
+    serverGroups <- shuffle (serverECGroups ++ serverFFGroups)
+    clientGroups <- shuffle (clientECGroups ++ clientFFGroups)
     return (clientGroups, serverGroups)
   where
-    arbitraryGroupPairFrom list = do
-        s <- arbitraryGroupsFrom list
-        c <- arbitraryGroupsFrom list `suchThat` any (`elem` s)
-        return (c, s)
-    arbitraryGroupsFrom list = listOf1 $ elements list
+    arbitraryGroupPairFrom list = elements list >>= \e ->
+        arbitraryGroupPairWith e (filter (/= e) list)
+    arbitraryGroupPairWith e es = do
+        s <- sublistOf es
+        c <- sublistOf es
+        return (e : s, e : c)
 
 arbitraryPairParams13 :: Gen (ClientParams, ServerParams)
 arbitraryPairParams13 = arbitraryPairParamsAt TLS13
