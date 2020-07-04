@@ -117,7 +117,10 @@ isCredentialDSA (_, PrivKeyDSA _) = True
 isCredentialDSA _                 = False
 
 arbitraryCredentialsOfEachType :: Gen [(CertificateChain, PrivKey)]
-arbitraryCredentialsOfEachType = do
+arbitraryCredentialsOfEachType = arbitraryCredentialsOfEachType' >>= shuffle
+
+arbitraryCredentialsOfEachType' :: Gen [(CertificateChain, PrivKey)]
+arbitraryCredentialsOfEachType' = do
     let (pubKey, privKey) = getGlobalRSAPair
         curveName = defaultECCurve
     (dsaPub, dsaPriv) <- arbitraryDSAPair
@@ -135,7 +138,10 @@ arbitraryCredentialsOfEachType = do
            ]
 
 arbitraryCredentialsOfEachCurve :: Gen [(CertificateChain, PrivKey)]
-arbitraryCredentialsOfEachCurve = do
+arbitraryCredentialsOfEachCurve = arbitraryCredentialsOfEachCurve' >>= shuffle
+
+arbitraryCredentialsOfEachCurve' :: Gen [(CertificateChain, PrivKey)]
+arbitraryCredentialsOfEachCurve' = do
     ecdsaPairs <-
         mapM (\curveName -> do
                  (ecdsaPub, ecdsaPriv) <- arbitraryECDSAPair curveName
@@ -288,13 +294,13 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
 arbitraryClientCredential :: Version -> Gen Credential
 arbitraryClientCredential SSL3 = do
     -- for SSL3 there is no EC but only RSA/DSA
-    creds <- arbitraryCredentialsOfEachType
+    creds <- arbitraryCredentialsOfEachType'
     elements (take 2 creds) -- RSA and DSA, but not ECDSA, Ed25519 and Ed448
 arbitraryClientCredential v | v < TLS12 = do
     -- for TLS10 and TLS11 there is no EdDSA but only RSA/DSA/ECDSA
-    creds <- arbitraryCredentialsOfEachType
+    creds <- arbitraryCredentialsOfEachType'
     elements (take 3 creds) -- RSA, DSA and ECDSA, but not EdDSA
-arbitraryClientCredential _    = arbitraryCredentialsOfEachType >>= elements
+arbitraryClientCredential _    = arbitraryCredentialsOfEachType' >>= elements
 
 arbitraryRSACredentialWithUsage :: [ExtKeyUsageFlag] -> Gen (CertificateChain, PrivKey)
 arbitraryRSACredentialWithUsage usageFlags = do
