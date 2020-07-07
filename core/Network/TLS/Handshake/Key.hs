@@ -123,7 +123,7 @@ isDigitalSignaturePair keyPair =
     case keyPair of
         (PubKeyRSA      _, PrivKeyRSA      _)  -> True
         (PubKeyDSA      _, PrivKeyDSA      _)  -> True
-        --(PubKeyECDSA    _, PrivKeyECDSA    _)  -> True
+        (PubKeyEC       _, PrivKeyEC       k)  -> kxSupportedPrivKeyEC k
         (PubKeyEd25519  _, PrivKeyEd25519  _)  -> True
         (PubKeyEd448    _, PrivKeyEd448    _)  -> True
         _                                      -> False

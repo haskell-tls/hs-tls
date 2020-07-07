@@ -8,15 +8,16 @@ compiler: ghc-8.8 lts-15.13
 # options
 # option: alias x=y z=v
 
-option: cryptonitedep extradep=cryptonite-0.25 extradep=memory-0.14.14 extradep=foundation-0.0.19 extradep=basement-0.0.6
+option: memorydep extradep=memory-0.14.18 extradep=basement-0.0.8
+option: cryptonitedep extradep=cryptonite-0.27
 option: x509deps extradep=x509-1.7.5 extradep=x509-system-1.6.6 extradep=x509-validation-1.6.11 extradep=x509-store-1.6.7
 
 # builds 
-build: ghc-8.0 cryptonitedep x509deps
-build: ghc-8.2 x509deps
-build: ghc-8.4
-build: ghc-8.6 os=linux,osx
-build: ghc-8.8
+build: ghc-8.0 memorydep cryptonitedep x509deps
+build: ghc-8.2 memorydep cryptonitedep x509deps
+build: ghc-8.4 cryptonitedep
+build: ghc-8.6 cryptonitedep os=linux,osx
+build: ghc-8.8 cryptonitedep
 
 # packages
 package: core/ 

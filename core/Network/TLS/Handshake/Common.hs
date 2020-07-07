@@ -225,7 +225,8 @@ extensionLookup toFind = fmap (\(ExtensionRaw _ content) -> content)
 -- | Store the specified keypair.  Whether the public key and private key
 -- actually match is left for the peer to discover.  We're not presently
 -- burning  CPU to detect that misconfiguration.  We verify only that the
--- types of keys match.
+-- types of keys match and that it does not include an algorithm that would
+-- not be safe.
 storePrivInfo :: MonadIO m
               => Context
               -> CertificateChain

@@ -489,10 +489,16 @@ prop_handshake_hashsignatures = do
         serverParam' = serverParam { serverSupported = (serverSupported serverParam)
                                        { supportedHashSignatures = serverHashSigs }
                                    }
-        shouldFail = null (clientHashSigs `intersect` serverHashSigs)
+        commonHashSigs = clientHashSigs `intersect` serverHashSigs
+        shouldFail
+            | tls13     = all incompatibleWithDefaultCurve commonHashSigs
+            | otherwise = null commonHashSigs
     if shouldFail
         then runTLSInitFailure (clientParam',serverParam')
         else runTLSPipeSimple  (clientParam',serverParam')
+  where
+    incompatibleWithDefaultCurve (h, SignatureECDSA) = h /= HashSHA256
+    incompatibleWithDefaultCurve _                   = False
 
 -- Tests ability to use or ignore client "signature_algorithms" extension when
 -- choosing a server certificate.  Here peers allow DHE_RSA_AES128_SHA1 but
@@ -652,6 +658,44 @@ prop_handshake_srv_key_usage = do
     if shouldSucceed
         then runTLSPipeSimple  (clientParam,serverParam')
         else runTLSInitFailure (clientParam,serverParam')
+
+prop_handshake_ec :: PropertyM IO ()
+prop_handshake_ec = do
+    let versions   = [TLS10, TLS11, TLS12, TLS13]
+        ciphers    = [ cipher_ECDHE_ECDSA_AES256GCM_SHA384
+                     , cipher_ECDHE_ECDSA_AES128CBC_SHA
+                     , cipher_TLS13_AES128GCM_SHA256
+                     ]
+        sigGroups  = [P256]
+        ecdhGroups = [X25519, X448] -- always enabled, so no ECDHE failure
+        hashSignatures = [ (HashSHA256, SignatureECDSA)
+                         ]
+    clientVersion <- pick $ elements versions
+    (clientParam,serverParam) <- pick $ arbitraryPairParamsWithVersionsAndCiphers
+                                            ([clientVersion], versions)
+                                            (ciphers, ciphers)
+    clientGroups         <- pick $ sublistOf sigGroups
+    clientHashSignatures <- pick $ sublistOf hashSignatures
+    serverHashSignatures <- pick $ sublistOf hashSignatures
+    credentials          <- pick arbitraryCredentialsOfEachCurve
+    let clientParam' = clientParam { clientSupported = (clientSupported clientParam)
+                                       { supportedGroups = clientGroups ++ ecdhGroups
+                                       , supportedHashSignatures = clientHashSignatures
+                                       }
+                                   }
+        serverParam' = serverParam { serverSupported = (serverSupported serverParam)
+                                       { supportedGroups = sigGroups ++ ecdhGroups
+                                       , supportedHashSignatures = serverHashSignatures
+                                       }
+                                   , serverShared = (serverShared serverParam)
+                                       { sharedCredentials = Credentials credentials }
+                                   }
+        sigAlgs = map snd (clientHashSignatures `intersect` serverHashSignatures)
+        ecdsaDenied = (clientVersion < TLS13 && null clientGroups) ||
+                      (clientVersion >= TLS12 && SignatureECDSA `notElem` sigAlgs)
+    if ecdsaDenied
+        then runTLSInitFailure (clientParam',serverParam')
+        else runTLSPipeSimple  (clientParam',serverParam')
 
 prop_handshake_client_auth :: PropertyM IO ()
 prop_handshake_client_auth = do
@@ -952,6 +996,7 @@ main = defaultMain $ testGroup "tls"
             , testProperty "Hash and signatures" (monadicIO prop_handshake_hashsignatures)
             , testProperty "Cipher suites" (monadicIO prop_handshake_ciphersuites)
             , testProperty "Groups" (monadicIO prop_handshake_groups)
+            , testProperty "Elliptic curves" (monadicIO prop_handshake_ec)
             , testProperty "Certificate fallback (ciphers)" (monadicIO prop_handshake_cert_fallback)
             , testProperty "Certificate fallback (hash and signatures)" (monadicIO prop_handshake_cert_fallback_hs)
             , testProperty "Server key usage" (monadicIO prop_handshake_srv_key_usage)

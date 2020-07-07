@@ -1,10 +1,13 @@
 module PubKey
     ( arbitraryRSAPair
     , arbitraryDSAPair
+    , arbitraryECDSAPair
     , arbitraryEd25519Pair
     , arbitraryEd448Pair
     , globalRSAPair
     , getGlobalRSAPair
+    , knownECCurves
+    , defaultECCurve
     , dhParams512
     , dhParams768
     , dhParams1024
@@ -20,6 +23,9 @@ import Crypto.Error
 import Crypto.Random
 import qualified Crypto.PubKey.RSA as RSA
 import qualified Crypto.PubKey.DSA as DSA
+import qualified Crypto.PubKey.ECC.ECDSA as ECDSA
+import qualified Crypto.PubKey.ECC.Prim  as ECC
+import qualified Crypto.PubKey.ECC.Types as ECC
 import qualified Crypto.PubKey.Ed25519 as Ed25519
 import qualified Crypto.PubKey.Ed448 as Ed448
 
@@ -95,6 +101,24 @@ arbitraryDSAPair = do
     priv <- choose (1, DSA.params_q dsaParams)
     let pub = DSA.calculatePublic dsaParams priv
     return (DSA.PublicKey dsaParams pub, DSA.PrivateKey dsaParams priv)
+
+-- for performance reason P521 is not tested
+knownECCurves :: [ECC.CurveName]
+knownECCurves = [ ECC.SEC_p256r1
+                , ECC.SEC_p384r1
+                ]
+
+defaultECCurve :: ECC.CurveName
+defaultECCurve = ECC.SEC_p256r1
+
+arbitraryECDSAPair :: ECC.CurveName -> Gen (ECDSA.PublicKey, ECDSA.PrivateKey)
+arbitraryECDSAPair curveName = do
+    d <- choose (1, n - 1)
+    let p = ECC.pointBaseMul curve d
+    return (ECDSA.PublicKey curve p, ECDSA.PrivateKey curve d)
+  where
+    curve = ECC.getCurveByName curveName
+    n     = ECC.ecc_n . ECC.common_curve $ curve
 
 arbitraryEd25519Pair :: Gen (Ed25519.PublicKey, Ed25519.SecretKey)
 arbitraryEd25519Pair = do

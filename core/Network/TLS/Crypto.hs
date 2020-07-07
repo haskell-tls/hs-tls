@@ -1,5 +1,6 @@
 {-# OPTIONS_HADDOCK hide #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE RankNTypes #-}
 module Network.TLS.Crypto
     ( HashContext
     , HashCtx
@@ -35,6 +36,7 @@ module Network.TLS.Crypto
     , kxVerify
     , kxCanUseRSApkcs1
     , kxCanUseRSApss
+    , kxSupportedPrivKeyEC
     , KxError(..)
     , RSAEncoding(..)
     ) where
@@ -45,18 +47,21 @@ import qualified Data.ByteArray as B (convert)
 import Crypto.Error
 import Crypto.Number.Basic (numBits)
 import Crypto.Random
+import qualified Crypto.ECC as ECDSA
 import qualified Crypto.PubKey.DH as DH
 import qualified Crypto.PubKey.DSA as DSA
-import qualified Crypto.PubKey.ECC.ECDSA as ECDSA
+import qualified Crypto.PubKey.ECC.ECDSA as ECDSA_ECC
 import qualified Crypto.PubKey.ECC.Types as ECC
+import qualified Crypto.PubKey.ECDSA as ECDSA
 import qualified Crypto.PubKey.Ed25519 as Ed25519
 import qualified Crypto.PubKey.Ed448 as Ed448
 import qualified Crypto.PubKey.RSA as RSA
 import qualified Crypto.PubKey.RSA.PKCS15 as RSA
 import qualified Crypto.PubKey.RSA.PSS as PSS
 
-import Data.X509 (PrivKey(..), PubKey(..), PubKeyEC(..))
-import Data.X509.EC (ecPubKeyCurveName, unserializePoint)
+import Data.X509 (PrivKey(..), PubKey(..), PrivKeyEC(..), PubKeyEC(..),
+                  SerializedPoint(..))
+import Data.X509.EC (ecPrivKeyCurveName, ecPubKeyCurveName, unserializePoint)
 import Network.TLS.Crypto.DH
 import Network.TLS.Crypto.IES
 import Network.TLS.Crypto.Types
@@ -65,6 +70,8 @@ import Network.TLS.Imports
 import Data.ASN1.Types
 import Data.ASN1.Encoding
 import Data.ASN1.BinaryEncoding (DER(..), BER(..))
+
+import Data.Proxy
 
 {-# DEPRECATED PublicKey "use PubKey" #-}
 type PublicKey = PubKey
@@ -261,29 +268,34 @@ kxVerify (PubKeyDSA pk) DSSParams                msg signBS =
                             Just DSA.Signature { DSA.sign_r = r, DSA.sign_s = s }
                         _ ->
                             Nothing
-kxVerify (PubKeyEC key) (ECDSAParams alg) msg sigBS = fromMaybe False $ do
-    -- get the curve name and the public key data
-    let pubBS = pubkeyEC_pub key
-    curveName <- ecPubKeyCurveName key
-    -- decode the signature
-    signature <- case decodeASN1' BER sigBS of
-        Left _ -> Nothing
-        Right [Start Sequence,IntVal r,IntVal s,End Sequence] -> Just $ ECDSA.Signature r s
-        Right _ -> Nothing
-
-    -- decode the public key related to the curve
-    let curve = ECC.getCurveByName curveName
-    pubkey <- ECDSA.PublicKey curve <$> unserializePoint curve pubBS
-
-    verifyF <- case alg of
-                    MD5    -> Just (ECDSA.verify H.MD5)
-                    SHA1   -> Just (ECDSA.verify H.SHA1)
-                    SHA224 -> Just (ECDSA.verify H.SHA224)
-                    SHA256 -> Just (ECDSA.verify H.SHA256)
-                    SHA384 -> Just (ECDSA.verify H.SHA384)
-                    SHA512 -> Just (ECDSA.verify H.SHA512)
+kxVerify (PubKeyEC key) (ECDSAParams alg) msg sigBS =
+    fromMaybe False $ join $
+        withPubKeyEC key verifyProxy verifyClassic Nothing
+  where
+    decodeSignatureASN1 buildRS =
+        case decodeASN1' BER sigBS of
+            Left _  -> Nothing
+            Right [Start Sequence,IntVal r,IntVal s,End Sequence] ->
+                Just (buildRS r s)
+            Right _ -> Nothing
+    verifyProxy prx pubkey = do
+        rs <- decodeSignatureASN1 (,)
+        signature <- maybeCryptoError $ ECDSA.signatureFromIntegers prx rs
+        verifyF <- withAlg (ECDSA.verify prx)
+        return $ verifyF pubkey signature msg
+    verifyClassic pubkey = do
+        signature <- decodeSignatureASN1 ECDSA_ECC.Signature
+        verifyF <- withAlg ECDSA_ECC.verify
+        return $ verifyF pubkey signature msg
+    withAlg :: (forall hash . H.HashAlgorithm hash => hash -> a) -> Maybe a
+    withAlg f = case alg of
+                    MD5    -> Just (f H.MD5)
+                    SHA1   -> Just (f H.SHA1)
+                    SHA224 -> Just (f H.SHA224)
+                    SHA256 -> Just (f H.SHA256)
+                    SHA384 -> Just (f H.SHA384)
+                    SHA512 -> Just (f H.SHA512)
                     _      -> Nothing
-    return $ verifyF pubkey signature msg
 kxVerify (PubKeyEd25519 key) Ed25519Params msg sigBS =
     case Ed25519.signature sigBS of
         CryptoPassed sig -> Ed25519.verify key msg sig
@@ -310,6 +322,18 @@ kxSign (PrivKeyDSA pk) (PubKeyDSA _) DSSParams msg = do
     sign <- DSA.sign pk H.SHA1 msg
     return (Right $ encodeASN1' DER $ dsaSequence sign)
   where dsaSequence sign = [Start Sequence,IntVal (DSA.sign_r sign),IntVal (DSA.sign_s sign),End Sequence]
+kxSign (PrivKeyEC pk) (PubKeyEC _) (ECDSAParams hashAlg) msg =
+    case withPrivKeyEC pk doSign (const unsupported) unsupported of
+        Nothing  -> unsupported
+        Just run -> fmap encode <$> run
+  where encode (r, s) = encodeASN1' DER
+            [ Start Sequence, IntVal r, IntVal s, End Sequence ]
+        doSign prx privkey = do
+            msig <- ecdsaSignHash prx hashAlg privkey msg
+            return $ case msig of
+                         Nothing   -> Left KxUnsupported
+                         Just sign -> Right (ECDSA.signatureToIntegers prx sign)
+        unsupported = return $ Left KxUnsupported
 kxSign (PrivKeyEd25519 pk) (PubKeyEd25519 pub) Ed25519Params msg =
     return $ Right $ B.convert $ Ed25519.sign pk pub msg
 kxSign (PrivKeyEd448 pk) (PubKeyEd448 pub) Ed448Params msg =
@@ -349,3 +373,59 @@ rsapssVerifyHash _      = error "rsapssVerifyHash: unsupported hash"
 
 noHash :: Maybe H.MD5
 noHash = Nothing
+
+ecdsaSignHash :: (MonadRandom m, ECDSA.EllipticCurveECDSA curve)
+              => proxy curve -> Hash -> ECDSA.Scalar curve -> ByteString -> m (Maybe (ECDSA.Signature curve))
+ecdsaSignHash prx SHA1   pk msg   = Just <$> ECDSA.sign prx pk H.SHA1   msg
+ecdsaSignHash prx SHA224 pk msg   = Just <$> ECDSA.sign prx pk H.SHA224 msg
+ecdsaSignHash prx SHA256 pk msg   = Just <$> ECDSA.sign prx pk H.SHA256 msg
+ecdsaSignHash prx SHA384 pk msg   = Just <$> ECDSA.sign prx pk H.SHA384 msg
+ecdsaSignHash prx SHA512 pk msg   = Just <$> ECDSA.sign prx pk H.SHA512 msg
+ecdsaSignHash _   _      _  _     = return Nothing
+
+-- Currently we generate ECDSA signatures in constant time for P256 only.
+kxSupportedPrivKeyEC :: PrivKeyEC -> Bool
+kxSupportedPrivKeyEC privkey =
+    case ecPrivKeyCurveName privkey of
+        Just ECC.SEC_p256r1 -> True
+        _                   -> False
+
+-- Perform a public-key operation with a parameterized ECC implementation when
+-- available, otherwise fallback to the classic ECC implementation.
+withPubKeyEC :: PubKeyEC
+             -> (forall curve . ECDSA.EllipticCurveECDSA curve => Proxy curve -> ECDSA.PublicKey curve -> a)
+             -> (ECDSA_ECC.PublicKey -> a)
+             -> a
+             -> Maybe a
+withPubKeyEC pubkey withProxy withClassic whenUnknown =
+    case ecPubKeyCurveName pubkey of
+        Nothing             -> Just whenUnknown
+        Just ECC.SEC_p256r1 ->
+            maybeCryptoError $ withProxy p256 <$> ECDSA.decodePublic p256 bs
+        Just curveName      ->
+            let curve = ECC.getCurveByName curveName
+                pub   = unserializePoint curve pt
+             in withClassic . ECDSA_ECC.PublicKey curve <$> pub
+  where pt@(SerializedPoint bs) = pubkeyEC_pub pubkey
+
+-- Perform a private-key operation with a parameterized ECC implementation when
+-- available.  Calls for an unsupported curve can be prevented with
+-- kxSupportedEcPrivKey.
+withPrivKeyEC :: PrivKeyEC
+              -> (forall curve . ECDSA.EllipticCurveECDSA curve => Proxy curve -> ECDSA.PrivateKey curve -> a)
+              -> (ECC.CurveName -> a)
+              -> a
+              -> Maybe a
+withPrivKeyEC privkey withProxy withUnsupported whenUnknown =
+    case ecPrivKeyCurveName privkey of
+        Nothing             -> Just whenUnknown
+        Just ECC.SEC_p256r1 ->
+            -- Private key should rather be stored as bytearray and converted
+            -- using ECDSA.decodePrivate, unfortunately the data type chosen in
+            -- x509 was Integer.
+            maybeCryptoError $ withProxy p256 <$> ECDSA.scalarFromInteger p256 d
+        Just curveName      -> Just $ withUnsupported curveName
+  where d = privkeyEC_priv privkey
+
+p256 :: Proxy ECDSA.Curve_P256R1
+p256 = Proxy

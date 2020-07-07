@@ -63,14 +63,6 @@ knownCiphers = ciphersuite_all ++ ciphersuite_weak
       , cipher_null_SHA1
       ]
 
--- local restriction: EdDSA credentials are not usable before TLS12 so without
--- ECDSA support it is not possible for ECDHE_ECDSA to be successful with TLS10
--- and TLS11
-cipherAllowedForVersion' :: Version -> Cipher -> Bool
-cipherAllowedForVersion' connectVersion x =
-    cipherAllowedForVersion connectVersion x &&
-    (connectVersion >= TLS12 || cipherKeyExchange x /= CipherKeyExchange_ECDHE_ECDSA)
-
 arbitraryCiphers :: Gen [Cipher]
 arbitraryCiphers = listOf1 $ elements knownCiphers
 
@@ -80,16 +72,14 @@ knownVersions = [TLS13,TLS12,TLS11,TLS10,SSL3]
 arbitraryVersions :: Gen [Version]
 arbitraryVersions = sublistOf knownVersions
 
+-- for performance reason ecdsa_secp521r1_sha512 is not tested
 knownHashSignatures :: [HashAndSignatureAlgorithm]
-knownHashSignatures = filter nonECDSA availableHashSignatures
-  where
-    availableHashSignatures = [(TLS.HashIntrinsic, SignatureRSApssRSAeSHA512)
+knownHashSignatures =         [(TLS.HashIntrinsic, SignatureRSApssRSAeSHA512)
                               ,(TLS.HashIntrinsic, SignatureRSApssRSAeSHA384)
                               ,(TLS.HashIntrinsic, SignatureRSApssRSAeSHA256)
                               ,(TLS.HashIntrinsic, SignatureEd25519)
                               ,(TLS.HashIntrinsic, SignatureEd448)
                               ,(TLS.HashSHA512, SignatureRSA)
-                              ,(TLS.HashSHA512, SignatureECDSA)
                               ,(TLS.HashSHA384, SignatureRSA)
                               ,(TLS.HashSHA384, SignatureECDSA)
                               ,(TLS.HashSHA256, SignatureRSA)
@@ -97,8 +87,6 @@ knownHashSignatures = filter nonECDSA availableHashSignatures
                               ,(TLS.HashSHA1,   SignatureRSA)
                               ,(TLS.HashSHA1,   SignatureDSS)
                               ]
-    -- arbitraryCredentialsOfEachType cannot generate ECDSA
-    nonECDSA (_,s) = s /= SignatureECDSA
 
 knownHashSignatures13 :: [HashAndSignatureAlgorithm]
 knownHashSignatures13 = filter compat knownHashSignatures
@@ -115,6 +103,12 @@ knownECGroups = [P256,P384,X25519,X448]
 knownFFGroups = [FFDHE2048,FFDHE3072,FFDHE4096]
 knownGroups   = knownECGroups ++ knownFFGroups
 
+defaultECGroup :: Group
+defaultECGroup = P256  -- same as defaultECCurve
+
+otherKnownECGroups :: [Group]
+otherKnownECGroups = filter (/= defaultECGroup) knownECGroups
+
 arbitraryGroups :: Gen [Group]
 arbitraryGroups = scale (min 5) $ listOf1 $ elements knownGroups
 
@@ -123,9 +117,14 @@ isCredentialDSA (_, PrivKeyDSA _) = True
 isCredentialDSA _                 = False
 
 arbitraryCredentialsOfEachType :: Gen [(CertificateChain, PrivKey)]
-arbitraryCredentialsOfEachType = do
+arbitraryCredentialsOfEachType = arbitraryCredentialsOfEachType' >>= shuffle
+
+arbitraryCredentialsOfEachType' :: Gen [(CertificateChain, PrivKey)]
+arbitraryCredentialsOfEachType' = do
     let (pubKey, privKey) = getGlobalRSAPair
+        curveName = defaultECCurve
     (dsaPub, dsaPriv) <- arbitraryDSAPair
+    (ecdsaPub, ecdsaPriv) <- arbitraryECDSAPair curveName
     (ed25519Pub, ed25519Priv) <- arbitraryEd25519Pair
     (ed448Pub, ed448Priv) <- arbitraryEd448Pair
     mapM (\(pub, priv) -> do
@@ -133,20 +132,29 @@ arbitraryCredentialsOfEachType = do
               return (CertificateChain [cert], priv)
          ) [ (PubKeyRSA pubKey, PrivKeyRSA privKey)
            , (PubKeyDSA dsaPub, PrivKeyDSA dsaPriv)
+           , (toPubKeyEC curveName ecdsaPub, toPrivKeyEC curveName ecdsaPriv)
            , (PubKeyEd25519 ed25519Pub, PrivKeyEd25519 ed25519Priv)
            , (PubKeyEd448 ed448Pub, PrivKeyEd448 ed448Priv)
            ]
 
 arbitraryCredentialsOfEachCurve :: Gen [(CertificateChain, PrivKey)]
-arbitraryCredentialsOfEachCurve = do
+arbitraryCredentialsOfEachCurve = arbitraryCredentialsOfEachCurve' >>= shuffle
+
+arbitraryCredentialsOfEachCurve' :: Gen [(CertificateChain, PrivKey)]
+arbitraryCredentialsOfEachCurve' = do
+    ecdsaPairs <-
+        mapM (\curveName -> do
+                 (ecdsaPub, ecdsaPriv) <- arbitraryECDSAPair curveName
+                 return (toPubKeyEC curveName ecdsaPub, toPrivKeyEC curveName ecdsaPriv)
+             ) knownECCurves
     (ed25519Pub, ed25519Priv) <- arbitraryEd25519Pair
     (ed448Pub, ed448Priv) <- arbitraryEd448Pair
     mapM (\(pub, priv) -> do
               cert <- arbitraryX509WithKey (pub, priv)
               return (CertificateChain [cert], priv)
-         ) [ (PubKeyEd25519 ed25519Pub, PrivKeyEd25519 ed25519Priv)
-           , (PubKeyEd448 ed448Pub, PrivKeyEd448 ed448Priv)
-           ]
+         ) $ [ (PubKeyEd25519 ed25519Pub, PrivKeyEd25519 ed25519Priv)
+             , (PubKeyEd448 ed448Pub, PrivKeyEd448 ed448Priv)
+             ] ++ ecdsaPairs
 
 dhParamsGroup :: DHParams -> Maybe Group
 dhParamsGroup params
@@ -169,29 +177,32 @@ isLeafRSA chain = case chain >>= leafPublicKey of
 arbitraryCipherPair :: Version -> Gen ([Cipher], [Cipher])
 arbitraryCipherPair connectVersion = do
     serverCiphers      <- arbitraryCiphers `suchThat`
-                                (\cs -> or [cipherAllowedForVersion' connectVersion x | x <- cs])
+                                (\cs -> or [cipherAllowedForVersion connectVersion x | x <- cs])
     clientCiphers      <- arbitraryCiphers `suchThat`
                                 (\cs -> or [x `elem` serverCiphers &&
-                                            cipherAllowedForVersion' connectVersion x | x <- cs])
+                                            cipherAllowedForVersion connectVersion x | x <- cs])
     return (clientCiphers, serverCiphers)
 
 arbitraryPairParams :: Gen (ClientParams, ServerParams)
 arbitraryPairParams = elements knownVersions >>= arbitraryPairParamsAt
 
--- pair of groups so that at least one EC and one FF group are in common
+-- Pair of groups so that at least the default EC group P256 and one FF group
+-- are in common.  This makes DHE and ECDHE ciphers always compatible with
+-- extension "Supported Elliptic Curves" / "Supported Groups".
 arbitraryGroupPair :: Gen ([Group], [Group])
 arbitraryGroupPair = do
-    (serverECGroups, clientECGroups) <- arbitraryGroupPairFrom knownECGroups
+    (serverECGroups, clientECGroups) <- arbitraryGroupPairWith defaultECGroup otherKnownECGroups
     (serverFFGroups, clientFFGroups) <- arbitraryGroupPairFrom knownFFGroups
     serverGroups <- shuffle (serverECGroups ++ serverFFGroups)
     clientGroups <- shuffle (clientECGroups ++ clientFFGroups)
     return (clientGroups, serverGroups)
   where
-    arbitraryGroupPairFrom list = do
-        s <- arbitraryGroupsFrom list
-        c <- arbitraryGroupsFrom list `suchThat` any (`elem` s)
-        return (c, s)
-    arbitraryGroupsFrom list = listOf1 $ elements list
+    arbitraryGroupPairFrom list = elements list >>= \e ->
+        arbitraryGroupPairWith e (filter (/= e) list)
+    arbitraryGroupPairWith e es = do
+        s <- sublistOf es
+        c <- sublistOf es
+        return (e : s, e : c)
 
 arbitraryPairParams13 :: Gen (ClientParams, ServerParams)
 arbitraryPairParams13 = arbitraryPairParamsAt TLS13
@@ -204,7 +215,7 @@ arbitraryPairParamsAt connectVersion = do
     -- ensure we can test version downgrade.
     let allowedVersions = [ v | v <- knownVersions,
                                 or [ x `elem` serverCiphers &&
-                                     cipherAllowedForVersion' v x | x <- clientCiphers ]]
+                                     cipherAllowedForVersion v x | x <- clientCiphers ]]
         allowedVersionsFiltered = filter (<= connectVersion) allowedVersions
     -- Server or client is allowed to have versions > connectVersion, but not
     -- both simultaneously.
@@ -283,13 +294,13 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
 arbitraryClientCredential :: Version -> Gen Credential
 arbitraryClientCredential SSL3 = do
     -- for SSL3 there is no EC but only RSA/DSA
-    creds <- arbitraryCredentialsOfEachType
-    elements (take 2 creds) -- RSA and DSA, but not Ed25519 and Ed448
+    creds <- arbitraryCredentialsOfEachType'
+    elements (take 2 creds) -- RSA and DSA, but not ECDSA, Ed25519 and Ed448
 arbitraryClientCredential v | v < TLS12 = do
     -- for TLS10 and TLS11 there is no EdDSA but only RSA/DSA/ECDSA
-    creds <- arbitraryCredentialsOfEachType
-    elements (take 2 creds) -- RSA and DSA (ECDSA later), but not EdDSA
-arbitraryClientCredential _    = arbitraryCredentialsOfEachType >>= elements
+    creds <- arbitraryCredentialsOfEachType'
+    elements (take 3 creds) -- RSA, DSA and ECDSA, but not EdDSA
+arbitraryClientCredential _    = arbitraryCredentialsOfEachType' >>= elements
 
 arbitraryRSACredentialWithUsage :: [ExtKeyUsageFlag] -> Gen (CertificateChain, PrivKey)
 arbitraryRSACredentialWithUsage usageFlags = do

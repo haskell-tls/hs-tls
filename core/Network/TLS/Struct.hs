@@ -113,7 +113,7 @@ data CertificateType =
 -- via the client certificate request callback.
 --
 lastSupportedCertificateType :: CertificateType
-lastSupportedCertificateType = CertificateType_DSS_Sign
+lastSupportedCertificateType = CertificateType_ECDSA_Sign
 
 
 data HashAlgorithm =
