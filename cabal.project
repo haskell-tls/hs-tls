@@ -1,0 +1,9 @@
+packages:
+  core
+  debug
+  session
+  test-scripts
+
+test-show-details: direct
+
+tests: True
