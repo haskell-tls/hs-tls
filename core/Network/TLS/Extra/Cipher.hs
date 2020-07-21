@@ -9,9 +9,12 @@ module Network.TLS.Extra.Cipher
     (
     -- * cipher suite
       ciphersuite_default
+    , ciphersuite_default_det
     , ciphersuite_all
+    , ciphersuite_all_det
     , ciphersuite_medium
     , ciphersuite_strong
+    , ciphersuite_strong_det
     , ciphersuite_unencrypted
     , ciphersuite_dhe_rsa
     , ciphersuite_dhe_dss
@@ -86,6 +89,7 @@ import Crypto.Cipher.TripleDES
 import Crypto.Cipher.Types hiding (Cipher, cipherName)
 import Crypto.Error
 import qualified Crypto.MAC.Poly1305 as Poly1305
+import Crypto.System.CPU
 
 takelast :: Int -> B.ByteString -> B.ByteString
 takelast i b = B.drop (B.length b - i) b
@@ -233,58 +237,111 @@ chacha20poly1305 BulkDecrypt key nonce =
                 Poly1305.Auth tag = ChaChaPoly1305.finalize st3
             in (output, AuthTag tag))
 
+data CipherSet
+    = SetAead [Cipher] [Cipher] [Cipher]  -- gcm, chacha, ccm
+    | SetOther [Cipher]
+
+-- Preference between AEAD ciphers having equivalent properties is based on
+-- hardware-acceleration support in the cryptonite implementation.
+sortOptimized :: [CipherSet] -> [Cipher]
+sortOptimized = concatMap f
+  where
+    f (SetAead gcm chacha ccm)
+        | AESNI  `notElem` processorOptions = chacha ++ gcm ++ ccm
+        | PCLMUL `notElem` processorOptions = ccm ++ chacha ++ gcm
+        | otherwise                         = gcm ++ ccm ++ chacha
+    f (SetOther ciphers) = ciphers
+
+-- Order which is deterministic but not optimized for the CPU.
+sortDeterministic :: [CipherSet] -> [Cipher]
+sortDeterministic = concatMap f
+  where
+    f (SetAead gcm chacha ccm) = gcm ++ chacha ++ ccm
+    f (SetOther ciphers) = ciphers
+
 -- | All AES and ChaCha20-Poly1305 ciphers supported ordered from strong to
 -- weak.  This choice of ciphersuites should satisfy most normal needs.  For
 -- otherwise strong ciphers we make little distinction between AES128 and
 -- AES256, and list each but the weakest of the AES128 ciphers ahead of the
--- corresponding AES256 ciphers, with the ChaCha20-Poly1305 variant placed just
--- after.
+-- corresponding AES256 ciphers.
 --
--- The CCM ciphers all come together after the GCM variants due to their
--- relative performance cost.
+-- AEAD ciphers with equivalent security properties are ordered based on CPU
+-- hardware-acceleration support.  If this dynamic runtime behavior is not
+-- desired, use 'ciphersuite_default_det' instead.
 ciphersuite_default :: [Cipher]
-ciphersuite_default =
+ciphersuite_default = sortOptimized sets_default
+
+-- | Same as 'ciphersuite_default', but using deterministic preference not
+-- influenced by the CPU.
+ciphersuite_default_det :: [Cipher]
+ciphersuite_default_det = sortDeterministic sets_default
+
+sets_default :: [CipherSet]
+sets_default =
     [        -- First the PFS + GCM + SHA2 ciphers
-      cipher_ECDHE_ECDSA_AES128GCM_SHA256, cipher_ECDHE_ECDSA_AES256GCM_SHA384
-    , cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256
-    , cipher_ECDHE_RSA_AES128GCM_SHA256, cipher_ECDHE_RSA_AES256GCM_SHA384
-    , cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256
-    , cipher_DHE_RSA_AES128GCM_SHA256, cipher_DHE_RSA_AES256GCM_SHA384
-    , cipher_DHE_RSA_CHACHA20POLY1305_SHA256
-    ,        -- Next the PFS + CCM + SHA2 ciphers
-      cipher_ECDHE_ECDSA_AES128CCM_SHA256, cipher_ECDHE_ECDSA_AES256CCM_SHA256
-    , cipher_DHE_RSA_AES128CCM_SHA256, cipher_DHE_RSA_AES256CCM_SHA256
+      SetAead
+        [ cipher_ECDHE_ECDSA_AES128GCM_SHA256, cipher_ECDHE_ECDSA_AES256GCM_SHA384 ]
+        [ cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256 ]
+        [ cipher_ECDHE_ECDSA_AES128CCM_SHA256, cipher_ECDHE_ECDSA_AES256CCM_SHA256 ]
+    , SetAead
+        [ cipher_ECDHE_RSA_AES128GCM_SHA256, cipher_ECDHE_RSA_AES256GCM_SHA384 ]
+        [ cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256 ]
+        []
+    , SetAead
+        [ cipher_DHE_RSA_AES128GCM_SHA256, cipher_DHE_RSA_AES256GCM_SHA384 ]
+        [ cipher_DHE_RSA_CHACHA20POLY1305_SHA256 ]
+        [ cipher_DHE_RSA_AES128CCM_SHA256, cipher_DHE_RSA_AES256CCM_SHA256 ]
              -- Next the PFS + CBC + SHA2 ciphers
-    , cipher_ECDHE_ECDSA_AES128CBC_SHA256, cipher_ECDHE_ECDSA_AES256CBC_SHA384
-    , cipher_ECDHE_RSA_AES128CBC_SHA256, cipher_ECDHE_RSA_AES256CBC_SHA384
-    , cipher_DHE_RSA_AES128_SHA256, cipher_DHE_RSA_AES256_SHA256
+    , SetOther
+          [ cipher_ECDHE_ECDSA_AES128CBC_SHA256, cipher_ECDHE_ECDSA_AES256CBC_SHA384
+          , cipher_ECDHE_RSA_AES128CBC_SHA256, cipher_ECDHE_RSA_AES256CBC_SHA384
+          , cipher_DHE_RSA_AES128_SHA256, cipher_DHE_RSA_AES256_SHA256
+          ]
              -- Next the PFS + CBC + SHA1 ciphers
-    , cipher_ECDHE_ECDSA_AES128CBC_SHA, cipher_ECDHE_ECDSA_AES256CBC_SHA
-    , cipher_ECDHE_RSA_AES128CBC_SHA, cipher_ECDHE_RSA_AES256CBC_SHA
-    , cipher_DHE_RSA_AES128_SHA1, cipher_DHE_RSA_AES256_SHA1
-             -- Next the non-PFS + GCM + SHA2 ciphers
-    , cipher_AES128GCM_SHA256, cipher_AES256GCM_SHA384
-             -- Next the non-PFS + CCM + SHA2 ciphers
-    , cipher_AES128CCM_SHA256, cipher_AES256CCM_SHA256
+    , SetOther
+          [ cipher_ECDHE_ECDSA_AES128CBC_SHA, cipher_ECDHE_ECDSA_AES256CBC_SHA
+          , cipher_ECDHE_RSA_AES128CBC_SHA, cipher_ECDHE_RSA_AES256CBC_SHA
+          , cipher_DHE_RSA_AES128_SHA1, cipher_DHE_RSA_AES256_SHA1
+          ]
+             -- Next the non-PFS + AEAD + SHA2 ciphers
+    , SetAead
+        [ cipher_AES128GCM_SHA256, cipher_AES256GCM_SHA384 ]
+        []
+        [ cipher_AES128CCM_SHA256, cipher_AES256CCM_SHA256 ]
              -- Next the non-PFS + CBC + SHA2 ciphers
-    , cipher_AES256_SHA256, cipher_AES128_SHA256
+    , SetOther [ cipher_AES256_SHA256, cipher_AES128_SHA256 ]
              -- Next the non-PFS + CBC + SHA1 ciphers
-    , cipher_AES256_SHA1, cipher_AES128_SHA1
+    , SetOther [ cipher_AES256_SHA1, cipher_AES128_SHA1 ]
              -- Nobody uses or should use DSS, RC4,  3DES or MD5
-    -- , cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1
-    -- , cipher_DHE_DSS_RC4_SHA1, cipher_RC4_128_SHA1, cipher_RC4_128_MD5
-    -- , cipher_RSA_3DES_EDE_CBC_SHA1
+--  , SetOther
+--      [ cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1
+--      , cipher_DHE_DSS_RC4_SHA1, cipher_RC4_128_SHA1, cipher_RC4_128_MD5
+--      , cipher_RSA_3DES_EDE_CBC_SHA1
+--      ]
              -- TLS13 (listed at the end but version is negotiated first)
-    , cipher_TLS13_AES128GCM_SHA256
-    , cipher_TLS13_AES256GCM_SHA384
-    , cipher_TLS13_CHACHA20POLY1305_SHA256
-    , cipher_TLS13_AES128CCM_SHA256
+    , SetAead
+        [ cipher_TLS13_AES128GCM_SHA256, cipher_TLS13_AES256GCM_SHA384 ]
+        [ cipher_TLS13_CHACHA20POLY1305_SHA256 ]
+        [ cipher_TLS13_AES128CCM_SHA256 ]
     ]
 
 {-# WARNING ciphersuite_all "This ciphersuite list contains RC4. Use ciphersuite_strong or ciphersuite_default instead." #-}
 -- | The default ciphersuites + some not recommended last resort ciphers.
+--
+-- AEAD ciphers with equivalent security properties are ordered based on CPU
+-- hardware-acceleration support.  If this dynamic runtime behavior is not
+-- desired, use 'ciphersuite_all_det' instead.
 ciphersuite_all :: [Cipher]
-ciphersuite_all = ciphersuite_default ++
+ciphersuite_all = ciphersuite_default ++ complement_all
+
+{-# WARNING ciphersuite_all_det "This ciphersuite list contains RC4. Use ciphersuite_strong_det or ciphersuite_default_det instead." #-}
+-- | Same as 'ciphersuite_all', but using deterministic preference not
+-- influenced by the CPU.
+ciphersuite_all_det :: [Cipher]
+ciphersuite_all_det = ciphersuite_default_det ++ complement_all
+
+complement_all :: [Cipher]
+complement_all =
     [ cipher_ECDHE_ECDSA_AES128CCM8_SHA256, cipher_ECDHE_ECDSA_AES256CCM8_SHA256
     , cipher_DHE_RSA_AES128CCM8_SHA256, cipher_DHE_RSA_AES256CCM8_SHA256
     , cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1
@@ -305,40 +362,65 @@ ciphersuite_medium = [ cipher_RC4_128_SHA1
 -- list each AES128 variant after the corresponding AES256 and ChaCha20-Poly1305
 -- variants.  For weaker constructs, we use just the AES256 form.
 --
--- The CCM ciphers come just after the corresponding GCM ciphers despite their
--- relative performance cost.
+-- AEAD ciphers with equivalent security properties are ordered based on CPU
+-- hardware-acceleration support.  If this dynamic runtime behavior is not
+-- desired, use 'ciphersuite_strong_det' instead.
 ciphersuite_strong :: [Cipher]
-ciphersuite_strong =
+ciphersuite_strong = sortOptimized sets_strong
+
+-- | Same as 'ciphersuite_strong', but using deterministic preference not
+-- influenced by the CPU.
+ciphersuite_strong_det :: [Cipher]
+ciphersuite_strong_det = sortDeterministic sets_strong
+
+sets_strong :: [CipherSet]
+sets_strong =
     [        -- If we have PFS + AEAD + SHA2, then allow AES128, else just 256
-      cipher_ECDHE_ECDSA_AES256GCM_SHA384, cipher_ECDHE_ECDSA_AES256CCM_SHA256
-    , cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256
-    , cipher_ECDHE_ECDSA_AES128GCM_SHA256, cipher_ECDHE_ECDSA_AES128CCM_SHA256
-    , cipher_ECDHE_RSA_AES256GCM_SHA384
-    , cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256
-    , cipher_ECDHE_RSA_AES128GCM_SHA256
-    , cipher_DHE_RSA_AES256GCM_SHA384, cipher_DHE_RSA_AES256CCM_SHA256
-    , cipher_DHE_RSA_CHACHA20POLY1305_SHA256
-    , cipher_DHE_RSA_AES128GCM_SHA256, cipher_DHE_RSA_AES128CCM_SHA256
+      SetAead [ cipher_ECDHE_ECDSA_AES256GCM_SHA384 ]
+              [ cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256 ]
+              [ cipher_ECDHE_ECDSA_AES256CCM_SHA256 ]
+    , SetAead [ cipher_ECDHE_ECDSA_AES128GCM_SHA256 ]
+              []
+              [ cipher_ECDHE_ECDSA_AES128CCM_SHA256 ]
+    , SetAead [ cipher_ECDHE_RSA_AES256GCM_SHA384 ]
+              [ cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256 ]
+              []
+    , SetAead [ cipher_ECDHE_RSA_AES128GCM_SHA256 ]
+              []
+              []
+    , SetAead [ cipher_DHE_RSA_AES256GCM_SHA384 ]
+              [ cipher_DHE_RSA_CHACHA20POLY1305_SHA256 ]
+              [ cipher_DHE_RSA_AES256CCM_SHA256 ]
+    , SetAead [ cipher_DHE_RSA_AES128GCM_SHA256 ]
+              []
+              [ cipher_DHE_RSA_AES128CCM_SHA256 ]
              -- No AEAD
-    , cipher_ECDHE_ECDSA_AES256CBC_SHA384
-    , cipher_ECDHE_RSA_AES256CBC_SHA384
-    , cipher_DHE_RSA_AES256_SHA256
+    , SetOther
+        [ cipher_ECDHE_ECDSA_AES256CBC_SHA384
+        , cipher_ECDHE_RSA_AES256CBC_SHA384
+        , cipher_DHE_RSA_AES256_SHA256
+        ]
              -- No SHA2
-    , cipher_ECDHE_ECDSA_AES256CBC_SHA
-    , cipher_ECDHE_RSA_AES256CBC_SHA
-    , cipher_DHE_RSA_AES256_SHA1
+    , SetOther
+        [ cipher_ECDHE_ECDSA_AES256CBC_SHA
+        , cipher_ECDHE_RSA_AES256CBC_SHA
+        , cipher_DHE_RSA_AES256_SHA1
+        ]
              -- No PFS
-    , cipher_AES256GCM_SHA384
-    , cipher_AES256CCM_SHA256
+    , SetAead [ cipher_AES256GCM_SHA384 ]
+              []
+              [ cipher_AES256CCM_SHA256 ]
              -- Neither PFS nor AEAD, just SHA2
-    , cipher_AES256_SHA256
+    , SetOther [ cipher_AES256_SHA256 ]
              -- Last resort no PFS, AEAD or SHA2
-    , cipher_AES256_SHA1
+    , SetOther [ cipher_AES256_SHA1 ]
              -- TLS13 (listed at the end but version is negotiated first)
-    , cipher_TLS13_AES256GCM_SHA384
-    , cipher_TLS13_CHACHA20POLY1305_SHA256
-    , cipher_TLS13_AES128GCM_SHA256
-    , cipher_TLS13_AES128CCM_SHA256
+    , SetAead [ cipher_TLS13_AES256GCM_SHA384 ]
+              [ cipher_TLS13_CHACHA20POLY1305_SHA256 ]
+              []
+    , SetAead [ cipher_TLS13_AES128GCM_SHA256 ]
+              []
+              [ cipher_TLS13_AES128CCM_SHA256 ]
     ]
 
 -- | DHE-RSA cipher suite.  This only includes ciphers bound specifically to

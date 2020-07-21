@@ -1,5 +1,6 @@
 -- Disable this warning so we can still test deprecated functionality.
 {-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
+{-# LANGUAGE CPP #-}
 module Common
     ( printCiphers
     , printDHParams
@@ -18,6 +19,7 @@ import Data.Char (isDigit)
 import Numeric (showHex)
 import Network.Socket
 
+import Crypto.System.CPU
 import Data.X509.CertificateStore
 import System.X509
 
@@ -81,16 +83,22 @@ printCiphers :: IO ()
 printCiphers = do
     putStrLn "Supported ciphers"
     putStrLn "====================================="
-    forM_ ciphersuite_all $ \c -> do
+    forM_ ciphersuite_all_det $ \c ->
         putStrLn (pad 50 (cipherName c) ++ " = " ++ pad 5 (show $ cipherID c) ++ "  0x" ++ showHex (cipherID c) "")
     putStrLn ""
     putStrLn "Ciphersuites"
     putStrLn "====================================="
     forM_ namedCiphersuites $ \(name, _) -> putStrLn name
+    putStrLn ""
+    putStrLn ("Using cryptonite-" ++ VERSION_cryptonite ++ " with CPU support for: " ++ cpuSupport)
   where
     pad n s
         | length s < n = s ++ replicate (n - length s) ' '
         | otherwise    = s
+
+    cpuSupport
+        | null processorOptions = "(nothing)"
+        | otherwise = intercalate ", " (map show processorOptions)
 
 printDHParams :: IO ()
 printDHParams = do
