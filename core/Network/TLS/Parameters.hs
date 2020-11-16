@@ -607,6 +607,8 @@ data ServerHooks = ServerHooks
       -- | Allow the server to choose an application layer protocol
       --   suggested from the client through the ALPN
       --   (Application Layer Protocol Negotiation) extensions.
+      --   If the server supports no protocols that the client advertises
+      --   an empty 'ByteString' should be returned.
       --
       -- Default: 'Nothing'
     , onALPNClientSuggest     :: Maybe ([B.ByteString] -> IO B.ByteString)

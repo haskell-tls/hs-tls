@@ -1080,6 +1080,8 @@ applicationProtocol ctx exts sparams = do
             case onALPNClientSuggest $ serverHooks sparams of
                 Just io -> do
                     proto <- io protos
+                    when (proto == "") $
+                        throwCore $ Error_Protocol ("no supported application protocols", True, NoApplicationProtocol)
                     usingState_ ctx $ do
                         setExtensionALPN True
                         setNegotiatedProtocol proto
