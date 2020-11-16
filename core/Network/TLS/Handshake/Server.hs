@@ -1077,7 +1077,6 @@ applicationProtocol ctx exts sparams = do
     case extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts >>= extensionDecode MsgTClientHello of
         Nothing -> return []
         Just (ApplicationLayerProtocolNegotiation protos) -> do
-            usingState_ ctx $ setClientALPNSuggest protos
             case onALPNClientSuggest $ serverHooks sparams of
                 Just io -> do
                     proto <- io protos
