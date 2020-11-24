@@ -197,7 +197,10 @@ tlsQUICClient cparams callbacks = do
     sync ctx (RecvServerHello handSecInfo) =
         quicInstallKeys callbacks ctx (InstallHandshakeKeys handSecInfo)
     sync ctx (SendClientFinished exts appSecInfo) = do
-        quicNotifyExtensions callbacks ctx (filterQTP exts)
+        let qexts = filterQTP exts
+        when (null qexts) $ do
+            throwCore $ Error_Protocol ("QUIC transport parameters are mssing", True, MissingExtension)
+        quicNotifyExtensions callbacks ctx qexts
         quicInstallKeys callbacks ctx (InstallApplicationKeys appSecInfo)
 
 -- | Start a TLS handshake thread for a QUIC server.  The server will use the
@@ -220,7 +223,10 @@ tlsQUICServer sparams callbacks = do
     quicDone callbacks ctx2
   where
     sync ctx (SendServerHello exts mEarlySecInfo handSecInfo) = do
-        quicNotifyExtensions callbacks ctx (filterQTP exts)
+        let qexts = filterQTP exts
+        when (null qexts) $ do
+            throwCore $ Error_Protocol ("QUIC transport parameters are mssing", True, MissingExtension)
+        quicNotifyExtensions callbacks ctx qexts
         quicInstallKeys callbacks ctx (InstallEarlyKeys mEarlySecInfo)
         quicInstallKeys callbacks ctx (InstallHandshakeKeys handSecInfo)
     sync ctx (SendServerFinished appSecInfo) =
