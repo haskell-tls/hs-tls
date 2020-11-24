@@ -142,11 +142,6 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
             _                    -> Nothing
     maybe (return ()) (usingState_ ctx . setClientSNI) serverName
 
-    -- ALPN (Application Layer Protocol Negotiation)
-    case extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts >>= extensionDecode MsgTClientHello of
-        Just (ApplicationLayerProtocolNegotiation protos) -> usingState_ ctx $ setClientALPNSuggest protos
-        _ -> return ()
-
     -- TLS version dependent
     if chosenVersion <= TLS12 then
         handshakeServerWithTLS12 sparams ctx chosenVersion exts ciphers serverName clientVersion compressions clientSession
@@ -1077,21 +1072,22 @@ findHighestVersionFrom13 clientVersions serverVersions = case svs `intersect` cv
     cvs = sortOn Down clientVersions
 
 applicationProtocol :: Context -> [ExtensionRaw] -> ServerParams -> IO [ExtensionRaw]
-applicationProtocol ctx exts sparams
-    | clientALPNSuggest = do
-        suggest <- usingState_ ctx getClientALPNSuggest
-        case (onALPNClientSuggest $ serverHooks sparams, suggest) of
-            (Just io, Just protos) -> do
-                proto <- io protos
-                usingState_ ctx $ do
-                    setExtensionALPN True
-                    setNegotiatedProtocol proto
-                return [ ExtensionRaw extensionID_ApplicationLayerProtocolNegotiation
-                                        (extensionEncode $ ApplicationLayerProtocolNegotiation [proto]) ]
-            (_, _)                  -> return []
-    | otherwise = return []
-  where
-    clientALPNSuggest = isJust $ extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts
+applicationProtocol ctx exts sparams = do
+    -- ALPN (Application Layer Protocol Negotiation)
+    case extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts >>= extensionDecode MsgTClientHello of
+        Nothing -> return []
+        Just (ApplicationLayerProtocolNegotiation protos) -> do
+            case onALPNClientSuggest $ serverHooks sparams of
+                Just io -> do
+                    proto <- io protos
+                    when (proto == "") $
+                        throwCore $ Error_Protocol ("no supported application protocols", True, NoApplicationProtocol)
+                    usingState_ ctx $ do
+                        setExtensionALPN True
+                        setNegotiatedProtocol proto
+                    return [ ExtensionRaw extensionID_ApplicationLayerProtocolNegotiation
+                                            (extensionEncode $ ApplicationLayerProtocolNegotiation [proto]) ]
+                _ -> return []
 
 credentialsFindForSigning13 :: [HashAndSignatureAlgorithm] -> Credentials -> Maybe (Credential, HashAndSignatureAlgorithm)
 credentialsFindForSigning13 hss0 creds = loop hss0
