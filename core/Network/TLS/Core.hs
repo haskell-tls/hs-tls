@@ -209,8 +209,9 @@ recvData13 ctx = do
                 -- putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
             loopHandshake13 hs
         loopHandshake13 (KeyUpdate13 mode:hs) = do
-            when (ctxQUICMode ctx) $
-                throwCore $ Error_Protocol ("KeyUpdate is not allowed for QUIC", True, UnexpectedMessage)
+            when (ctxQUICMode ctx) $ do
+                let reason = "KeyUpdate is not allowed for QUIC"
+                terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
             checkAlignment hs
             established <- ctxEstablished ctx
             -- Though RFC 8446 Sec 4.6.3 does not clearly says,
