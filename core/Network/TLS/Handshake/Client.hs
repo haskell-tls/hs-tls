@@ -872,7 +872,8 @@ handshakeClient13' cparams ctx groupSent choice = do
         recvHandshake13hash ctx $ expectFinished serverHandshakeSecret
         return accext
     hChSf <- transcriptHash ctx
-    runPacketFlight ctx $ sendChangeCipherSpec13 ctx
+    unless (ctxQUICMode ctx) $
+        runPacketFlight ctx $ sendChangeCipherSpec13 ctx
     when (rtt0accepted && not (ctxQUICMode ctx)) $
         sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
     setTxState ctx usedHash usedCipher clientHandshakeSecret
