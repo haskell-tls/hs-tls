@@ -233,7 +233,7 @@ tlsQUICServer sparams callbacks = do
         quicInstallKeys callbacks ctx (InstallApplicationKeys appSecInfo)
 
 filterQTP :: [ExtensionRaw] -> [ExtensionRaw]
-filterQTP = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters)
+filterQTP = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters || eid == 0xffa5) -- to be deleted
 
 -- | Can be used by callbacks to signal an unexpected condition.  This will then
 -- generate an "internal_error" alert in the TLS stack.
