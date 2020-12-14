@@ -162,8 +162,8 @@ extensionID_OidFilters                          = 0x30 -- TLS 1.3
 extensionID_PostHandshakeAuth                   = 0x31 -- TLS 1.3
 extensionID_SignatureAlgorithmsCert             = 0x32 -- TLS 1.3
 extensionID_KeyShare                            = 0x33 -- TLS 1.3
+extensionID_QuicTransportParameters             = 0x39 -- QUIC
 extensionID_SecureRenegotiation                 = 0xff01 -- RFC5746
-extensionID_QuicTransportParameters             = 0xffa5
 
 ------------------------------------------------------------
 
