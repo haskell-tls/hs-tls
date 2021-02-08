@@ -22,7 +22,7 @@ Synopsis:            TLS/SSL protocol native implementation (Server and Client)
 Build-Type:          Simple
 Category:            Network
 stability:           experimental
-Cabal-Version:       >=1.8
+Cabal-Version:       >=1.10
 Homepage:            http://github.com/vincenthz/hs-tls
 extra-source-files:  Tests/*.hs
                      CHANGELOG.md
