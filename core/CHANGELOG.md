@@ -1,3 +1,22 @@
+## Version 1.5.5
+
+- QUIC support
+  [#419](https://github.com/vincenthz/hs-tls/pull/419)
+  [#427](https://github.com/vincenthz/hs-tls/pull/427)
+  [#428](https://github.com/vincenthz/hs-tls/pull/428)
+  [#430](https://github.com/vincenthz/hs-tls/pull/430)
+  [#433](https://github.com/vincenthz/hs-tls/pull/433)
+  [#441](https://github.com/vincenthz/hs-tls/pull/441)
+- Server ECDSA for P-256
+  [#436](https://github.com/vincenthz/hs-tls/pull/436)
+- Sort ciphersuites based on hardware-acceleration support
+  [#439](https://github.com/vincenthz/hs-tls/pull/439)
+- Sending no_application_protocol
+  [#440](https://github.com/vincenthz/hs-tls/pull/440)
+- Internal improvements
+  [#426](https://github.com/vincenthz/hs-tls/pull/426)
+  [#431](https://github.com/vincenthz/hs-tls/pull/431)
+
 ## Version 1.5.4
 
 - Restore interoperability with early Java 6
