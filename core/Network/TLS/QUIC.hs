@@ -10,8 +10,8 @@
 --
 -- On the northbound API:
 --
--- * QUIC starts a TLS client or server thread with 'quicClient' or
---   'quicServer'.
+-- * QUIC starts a TLS client or server thread with 'tlsQUICClient' or
+--   'tlsQUICServer'.
 --
 --  TLS invokes QUIC callbacks to use the QUIC transport
 --
@@ -149,7 +149,7 @@ data QUICCallbacks = QUICCallbacks
       -- the peer.
     , quicDone :: Context -> IO ()
       -- ^ Called when 'handshake' is done. 'tlsQUICServer' is
-      -- finished after calling this hook. 'newQUICClinet' calls
+      -- finished after calling this hook. 'tlsQUICClient' calls
       -- 'recvData' after calling this hook to wait for new session
       -- tickets.
     }
@@ -175,9 +175,6 @@ newRecordLayer ctx callbacks = newTransparentRecordLayer get send recv
 -- | Start a TLS handshake thread for a QUIC client.  The client will use the
 -- specified TLS parameters and call the provided callback functions to send and
 -- receive handshake data.
---
--- Execution and synchronization between the internal TLS thread and external
--- QUIC threads is done through the 'ClientController' interface returned.
 tlsQUICClient :: ClientParams -> QUICCallbacks -> IO ()
 tlsQUICClient cparams callbacks = do
     ctx0 <- contextNew nullBackend cparams
@@ -206,9 +203,6 @@ tlsQUICClient cparams callbacks = do
 -- | Start a TLS handshake thread for a QUIC server.  The server will use the
 -- specified TLS parameters and call the provided callback functions to send and
 -- receive handshake data.
---
--- Execution and synchronization between the internal TLS thread and external
--- QUIC threads is done through the 'ServerController' interface returned.
 tlsQUICServer :: ServerParams -> QUICCallbacks -> IO ()
 tlsQUICServer sparams callbacks = do
     ctx0 <- contextNew nullBackend sparams
