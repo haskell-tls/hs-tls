@@ -388,10 +388,8 @@ withDataPipe params tlsServer tlsClient cont = do
     (cCtx, sCtx) <- newPairContext pipe params
 
     withAsync (E.catch (tlsServer sCtx resultQueue)
-                       (printAndRaise "server" (serverSupported $ snd params))) $ \sAsync -> do
-    withAsync (E.catch (tlsClient startQueue cCtx)
-                       (printAndRaise "client" (clientSupported $ fst params))) $ \cAsync -> do
-
+                       (printAndRaise "server" (serverSupported $ snd params))) $ \sAsync -> withAsync (E.catch (tlsClient startQueue cCtx)
+                                (printAndRaise "client" (clientSupported $ fst params))) $ \cAsync -> do
       let readResult = waitBoth cAsync sAsync >> readChan resultQueue
       cont (writeChan startQueue, readResult)
 
