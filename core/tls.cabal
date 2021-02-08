@@ -40,6 +40,7 @@ Flag hans
   Default:           False
 
 Library
+  Default-Language:  Haskell2010
   Build-Depends:     base >= 4.9 && < 5
                    , mtl >= 2
                    , transformers
@@ -132,6 +133,7 @@ Library
     cpp-options:     -DSSLV2_COMPATIBLE
 
 Test-Suite test-tls
+  Default-Language:  Haskell2010
   type:              exitcode-stdio-1.0
   hs-source-dirs:    Tests
   Main-is:           Tests.hs
@@ -157,6 +159,7 @@ Test-Suite test-tls
   ghc-options:       -Wall -fno-warn-unused-imports
 
 Benchmark bench-tls
+  Default-Language:  Haskell2010
   hs-source-dirs:    Benchmarks Tests
   Main-Is:           Benchmarks.hs
   type:              exitcode-stdio-1.0
