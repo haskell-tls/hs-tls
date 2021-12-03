@@ -255,6 +255,7 @@ showEID 0x30 = "OidFilters"
 showEID 0x31 = "PostHandshakeAuth"
 showEID 0x32 = "SignatureAlgorithmsCert"
 showEID 0x33 = "KeyShare"
+showEID 0x39 = "QuicTransportParameters"
 showEID 0xff01 = "SecureRenegotiation"
 showEID 0xffa5 = "QuicTransportParameters"
 showEID x      = show x
