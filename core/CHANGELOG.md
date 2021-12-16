@@ -1,3 +1,7 @@
+## Version 1.5.6
+
+- Dynamically setting enctypted extensions [#444](https://github.com/vincenthz/hs-tls/pull/444)
+
 ## Version 1.5.5
 
 - QUIC support
