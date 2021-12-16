@@ -942,7 +942,8 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
                                    ,sniExtension
                                    ]
                       ++ protoExt
-        loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 extensions]
+        extensions' <- liftIO $ onEncryptedExtensionsCreating (serverHooks sparams) extensions
+        loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 extensions']
 
     sendNewSessionTicket applicationSecret sfSentTime = when sendNST $ do
         cfRecvTime <- getCurrentTimeFromBase

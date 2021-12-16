@@ -612,6 +612,11 @@ data ServerHooks = ServerHooks
       --
       -- Default: 'Nothing'
     , onALPNClientSuggest     :: Maybe ([B.ByteString] -> IO B.ByteString)
+      -- | Allow to modify extensions to be sent in EncryptedExtensions
+      --  of TLS 1.3.
+      --
+      -- Default: 'return . id'
+    , onEncryptedExtensionsCreating :: [ExtensionRaw] -> IO [ExtensionRaw]
     }
 
 defaultServerHooks :: ServerHooks
@@ -622,6 +627,7 @@ defaultServerHooks = ServerHooks
     , onServerNameIndication = \_ -> return mempty
     , onNewHandshake         = \_ -> return True
     , onALPNClientSuggest    = Nothing
+    , onEncryptedExtensionsCreating = return . id
     }
 
 instance Show ServerHooks where
