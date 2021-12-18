@@ -141,6 +141,8 @@ data Context = forall bytes . Monoid bytes => Context
     , ctxRecordLayer      :: RecordLayer bytes
     , ctxHandshakeSync    :: HandshakeSync
     , ctxQUICMode         :: Bool
+    , ctxFinished         :: IORef (Maybe FinishedData)
+    , ctxPeerFinished     :: IORef (Maybe FinishedData)
     }
 
 data HandshakeSync = HandshakeSync (Context -> ClientState -> IO ())

@@ -63,6 +63,8 @@ module Network.TLS.Context
     , getHState
     , getStateRNG
     , tls13orLater
+    , getFinished
+    , getPeerFinished
     ) where
 
 import Network.TLS.Backend
@@ -160,6 +162,8 @@ contextNew backend params = liftIO $ do
     lockWrite <- newMVar ()
     lockRead  <- newMVar ()
     lockState <- newMVar ()
+    finished <- newIORef Nothing
+    peerFinished <- newIORef Nothing
 
     let ctx = Context
             { ctxConnection   = getBackend backend
@@ -189,6 +193,8 @@ contextNew backend params = liftIO $ do
             , ctxRecordLayer      = recordLayer
             , ctxHandshakeSync    = HandshakeSync syncNoOp syncNoOp
             , ctxQUICMode         = False
+            , ctxFinished         = finished
+            , ctxPeerFinished     = peerFinished
             }
 
         syncNoOp _ _ = return ()
@@ -236,3 +242,11 @@ contextHookSetCertificateRecv context f =
 contextHookSetLogging :: Context -> Logging -> IO ()
 contextHookSetLogging context loggingCallbacks =
     contextModifyHooks context (\hooks -> hooks { hookLogging = loggingCallbacks })
+
+-- | Get TLS Finished sent to peer
+getFinished :: Context -> IO (Maybe FinishedData)
+getFinished = readIORef . ctxFinished
+
+-- | Get TLS Finished received from peer
+getPeerFinished :: Context -> IO (Maybe FinishedData)
+getPeerFinished = readIORef . ctxPeerFinished
