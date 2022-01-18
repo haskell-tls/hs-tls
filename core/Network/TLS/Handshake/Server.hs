@@ -789,7 +789,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
 
     let expectFinished hChBeforeCf (Finished13 verifyData) = liftIO $ do
             let ClientTrafficSecret chs = clientHandshakeSecret
-            checkFinished usedHash chs hChBeforeCf verifyData
+            checkFinished ctx usedHash chs hChBeforeCf verifyData
             handshakeTerminate13 ctx
             setRxState ctx usedHash usedCipher clientApplicationSecret0
             sendNewSessionTicket applicationSecret sfSentTime
@@ -1179,7 +1179,7 @@ postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = d
         throwCore $ Error_Protocol ("tried post-handshake authentication without application traffic secret", True, InternalError)
 
     let expectFinished hChBeforeCf (Finished13 verifyData) = do
-            checkFinished usedHash applicationSecretN hChBeforeCf verifyData
+            checkFinished ctx usedHash applicationSecretN hChBeforeCf verifyData
             void $ restoreHState ctx baseHState
         expectFinished _ hs = unexpected (show hs) (Just "finished 13")
 
