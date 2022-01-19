@@ -980,7 +980,7 @@ handshakeClient13' cparams ctx groupSent choice = do
     expectCertVerify _ _ p = unexpected (show p) (Just "certificate verify")
 
     expectFinished (ServerTrafficSecret baseKey) hashValue (Finished13 verifyData) =
-        checkFinished usedHash baseKey hashValue verifyData
+        checkFinished ctx usedHash baseKey hashValue verifyData
     expectFinished _ _ p = unexpected (show p) (Just "server finished")
 
     setResumptionSecret applicationSecret = do

@@ -36,6 +36,7 @@ import Control.Concurrent.MVar
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.State.Strict (gets)
 import Data.X509 (CertificateChain(..), Certificate(..), getCertificate)
+import Data.IORef (writeIORef)
 
 processHandshake :: Context -> Handshake -> IO ()
 processHandshake ctx hs = do
@@ -136,6 +137,7 @@ processClientFinished ctx fdata = do
     (cc,ver) <- usingState_ ctx $ (,) <$> isClientContext <*> getVersion
     expected <- usingHState ctx $ getHandshakeDigest ver $ invertRole cc
     when (expected /= fdata) $ decryptError "cannot verify finished"
+    writeIORef (ctxPeerFinished ctx) $ Just fdata
 
 -- initialize a new Handshake context (initial handshake or renegotiations)
 startHandshake :: Context -> Version -> ClientRandom -> IO ()

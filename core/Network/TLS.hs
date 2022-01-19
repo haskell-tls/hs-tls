@@ -117,6 +117,8 @@ module Network.TLS
     , updateKey
     , KeyUpdateRequest(..)
     , requestCertificate
+    , getFinished
+    , getPeerFinished
     -- ** Modifying hooks in context
     , Hooks(..)
     , contextModifyHooks

@@ -51,6 +51,7 @@ import Network.TLS.Imports
 
 import Control.Monad.State.Strict
 import Control.Exception (IOException, handle, fromException, throwIO)
+import Data.IORef (writeIORef)
 
 handshakeFailed :: TLSError -> IO ()
 handshakeFailed err = throwIO $ HandshakeFailed err
@@ -127,6 +128,7 @@ sendChangeCipherAndFinish ctx role = do
     liftIO $ contextFlush ctx
     cf <- usingState_ ctx getVersion >>= \ver -> usingHState ctx $ getHandshakeDigest ver role
     sendPacket ctx (Handshake [Finished cf])
+    writeIORef (ctxFinished ctx) $ Just cf
     liftIO $ contextFlush ctx
 
 recvChangeCipherAndFinish :: Context -> IO ()
