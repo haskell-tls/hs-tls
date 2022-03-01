@@ -587,6 +587,7 @@ instance Extension KeyShare where
             Just ent -> return $ KeyShareServerHello ent
     extensionDecode MsgTClientHello = runGetMaybe $ do
         len <- fromIntegral <$> getWord16
+        when (len == 0) $ fail "decoding KeyShare: length is 0"
         grps <- getList len getKeyShareEntry
         return $ KeyShareClientHello $ catMaybes grps
     extensionDecode MsgTHelloRetryRequest = runGetMaybe $ do

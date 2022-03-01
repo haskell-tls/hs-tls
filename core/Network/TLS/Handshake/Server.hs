@@ -686,10 +686,12 @@ handshakeServerWithTLS13 sparams ctx chosenVersion exts clientCiphers _serverNam
         -- status again if 0-RTT successful
         setEstablished ctx (EarlyDataNotAllowed 3) -- hardcoding
     -- Deciding key exchange from key shares
-    keyShares <- case extensionLookup extensionID_KeyShare exts >>= extensionDecode MsgTClientHello of
-          Just (KeyShareClientHello kses) -> return kses
-          Just _                          -> error "handshakeServerWithTLS13: invalid KeyShare value"
-          _                               -> throwCore $ Error_Protocol ("key exchange not implemented, expected key_share extension", True, HandshakeFailure)
+    keyShares <- case extensionLookup extensionID_KeyShare exts of
+          Nothing -> throwCore $ Error_Protocol ("key exchange not implemented, expected key_share extension", True, MissingExtension)
+          Just kss -> case extensionDecode MsgTClientHello kss of
+            Just (KeyShareClientHello kses) -> return kses
+            Just _                          -> error "handshakeServerWithTLS13: invalid KeyShare value"
+            _                               -> throwCore $ Error_Protocol ("broken key_share", True, DecodeError)
     mshare <- findKeyShare keyShares serverGroups
     case mshare of
       Nothing -> helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession
