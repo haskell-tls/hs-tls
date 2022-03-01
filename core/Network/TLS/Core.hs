@@ -176,7 +176,13 @@ recvData13 ctx = do
                     terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
               Established         -> return x
               NotEstablished      -> throwCore $ Error_Protocol ("data at not-established", True, UnexpectedMessage)
-        process ChangeCipherSpec13 = recvData13 ctx
+        process ChangeCipherSpec13 = do
+            established <- ctxEstablished ctx
+            if established /= Established then
+                recvData13 ctx
+              else do
+                let reason = "CSS after Finished"
+                terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
         process p             = let reason = "unexpected message " ++ show p in
                                 terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
 
