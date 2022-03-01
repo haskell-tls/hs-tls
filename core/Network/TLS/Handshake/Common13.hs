@@ -518,7 +518,7 @@ checkKeyShareKeyLength ks = keyShareKeyLength grp == B.length key
 keyShareKeyLength :: Group -> Int
 keyShareKeyLength P256      =   65 -- 32 * 2 + 1
 keyShareKeyLength P384      =   97 -- 48 * 2 + 1
-keyShareKeyLength P521      =  129 -- 64 * 2 + 1
+keyShareKeyLength P521      =  133 -- 66 * 2 + 1
 keyShareKeyLength X25519    =   32
 keyShareKeyLength X448      =   56
 keyShareKeyLength FFDHE2048 =  256
