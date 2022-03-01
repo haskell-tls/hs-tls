@@ -88,6 +88,7 @@ makeFinished ctx usedHash baseKey = do
 checkFinished :: MonadIO m => Context -> Hash -> ByteString -> ByteString -> ByteString -> m ()
 checkFinished ctx usedHash baseKey hashValue verifyData = do
     let verifyData' = makeVerifyData usedHash baseKey hashValue
+    when (B.length verifyData /= B.length verifyData') $ throwCore $ Error_Protocol ("broken Finished", True, DecodeError)
     unless (verifyData' == verifyData) $ decryptError "cannot verify finished"
     liftIO $ writeIORef (ctxPeerFinished ctx) (Just verifyData)
 
