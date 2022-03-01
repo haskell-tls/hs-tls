@@ -690,17 +690,27 @@ handshakeServerWithTLS13 sparams ctx chosenVersion exts clientCiphers _serverNam
           Just (KeyShareClientHello kses) -> return kses
           Just _                          -> error "handshakeServerWithTLS13: invalid KeyShare value"
           _                               -> throwCore $ Error_Protocol ("key exchange not implemented, expected key_share extension", True, HandshakeFailure)
-    case findKeyShare keyShares serverGroups of
+    mshare <- findKeyShare keyShares serverGroups
+    case mshare of
       Nothing -> helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession
       Just keyShare -> doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash keyShare clientSession rtt0
   where
     ciphersFilteredVersion = filter ((`elem` clientCiphers) . cipherID) serverCiphers
     serverCiphers = filter (cipherAllowedForVersion chosenVersion) (supportedCiphers $ serverSupported sparams)
     serverGroups = supportedGroups (ctxSupported ctx)
-    findKeyShare _      [] = Nothing
-    findKeyShare ks (g:gs) = case find (\ent -> keyShareEntryGroup ent == g) ks of
-      Just k  -> Just k
-      Nothing -> findKeyShare ks gs
+
+findKeyShare :: [KeyShareEntry] -> [Group] -> IO (Maybe KeyShareEntry)
+findKeyShare ks ggs = go ggs
+  where
+    go []     = return Nothing
+    go (g:gs) = case filter (grpEq g) ks of
+      []  -> go gs
+      [k] -> do
+          unless (checkKeyShareKeyLength k) $
+              throwCore $ Error_Protocol ("broken key_share", True, IllegalParameter)
+          return $ Just k
+      _   -> throwCore $ Error_Protocol ("duplicated key_share", True, IllegalParameter)
+    grpEq g ent = g == keyShareEntryGroup ent
 
 doHandshake13 :: ServerParams -> Context -> Version
               -> Cipher -> [ExtensionRaw]
