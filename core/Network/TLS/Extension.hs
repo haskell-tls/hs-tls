@@ -483,7 +483,10 @@ instance Extension SignatureAlgorithms where
 decodeSignatureAlgorithms :: ByteString -> Maybe SignatureAlgorithms
 decodeSignatureAlgorithms = runGetMaybe $ do
     len <- getWord16
-    SignatureAlgorithms <$> getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
+    sas <- getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
+    leftoverLen <- remaining
+    when (leftoverLen /= 0) $ fail "decodeSignatureAlgorithms: broken length"
+    return $ SignatureAlgorithms sas
 
 ------------------------------------------------------------
 
