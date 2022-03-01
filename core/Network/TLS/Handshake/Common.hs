@@ -74,7 +74,9 @@ handleException ctx f = catchException f $ \exception -> do
 errorToAlert :: TLSError -> [(AlertLevel, AlertDescription)]
 errorToAlert (Error_Protocol (_, _, ad))   = [(AlertLevel_Fatal, ad)]
 errorToAlert (Error_Packet_unexpected _ _) = [(AlertLevel_Fatal, UnexpectedMessage)]
-errorToAlert (Error_Packet_Parsing _)      = [(AlertLevel_Fatal, DecodeError)]
+errorToAlert (Error_Packet_Parsing msg)
+  | "invalid version" `isInfixOf` msg      = [(AlertLevel_Fatal, ProtocolVersion)]
+  | otherwise                              = [(AlertLevel_Fatal, DecodeError)]
 errorToAlert _                             = [(AlertLevel_Fatal, InternalError)]
 
 -- | Return the message that a TLS endpoint can add to its local log for the

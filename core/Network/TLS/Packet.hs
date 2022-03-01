@@ -229,7 +229,10 @@ decodeClientHello = do
     r            <- remaining
     exts <- if hasHelloExtensions ver && r > 0
             then fromIntegral <$> getWord16 >>= getExtensions
-            else return []
+            else do
+               rest <- remaining
+               _ <- getBytes rest
+               return []
     return $ ClientHello ver random session ciphers compressions exts Nothing
 
 decodeServerHello :: Get Handshake
