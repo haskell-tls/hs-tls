@@ -63,7 +63,8 @@ decryptRecord record@(Record ct ver fragment) = do
             case unInnerPlaintext inner of
                 Left message   -> throwError $ Error_Protocol (message, True, UnexpectedMessage)
                 Right (ct', d) -> return $ Record ct' ver (fragmentCompressed d)
-        | otherwise = noDecryption
+        | ct == ProtocolType_ChangeCipherSpec = noDecryption
+        | otherwise = throwError $ Error_Protocol ("illegal plain text", True, UnexpectedMessage)
 
 unInnerPlaintext :: ByteString -> Either String (ProtocolType, ByteString)
 unInnerPlaintext inner =
