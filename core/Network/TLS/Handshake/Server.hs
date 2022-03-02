@@ -117,7 +117,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
         throwCore $ Error_Protocol ("fallback is not allowed", True, InappropriateFallback)
     -- choosing TLS version
     let clientVersions = case extensionLookup extensionID_SupportedVersions exts >>= extensionDecode MsgTClientHello of
-            Just (SupportedVersionsClientHello vers) -> vers
+            Just (SupportedVersionsClientHello vers) -> vers -- fixme: vers == []
             _                                        -> []
         clientVersion = min TLS12 legacyVersion
         serverVersions
@@ -1084,7 +1084,7 @@ findHighestVersionFrom13 clientVersions serverVersions = case svs `intersect` cv
         v:_ -> Just v
   where
     svs = sortOn Down serverVersions
-    cvs = sortOn Down clientVersions
+    cvs = sortOn Down $ filter (> SSL3) clientVersions
 
 applicationProtocol :: Context -> [ExtensionRaw] -> ServerParams -> IO [ExtensionRaw]
 applicationProtocol ctx exts sparams = do
