@@ -77,6 +77,7 @@ errorToAlert (Error_Protocol (_, b, ad))   = let lvl = if b then AlertLevel_Fata
 errorToAlert (Error_Packet_unexpected _ _) = (AlertLevel_Fatal, UnexpectedMessage)
 errorToAlert (Error_Packet_Parsing msg)
   | "invalid version" `isInfixOf` msg      = (AlertLevel_Fatal, ProtocolVersion)
+  | "request_update"  `isInfixOf` msg      = (AlertLevel_Fatal, IllegalParameter)
   | otherwise                              = (AlertLevel_Fatal, DecodeError)
 errorToAlert _                             = (AlertLevel_Fatal, InternalError)
 
