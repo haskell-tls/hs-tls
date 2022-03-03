@@ -1109,7 +1109,7 @@ credentialsFindForSigning13 hss0 creds = loop hss0
   where
     loop  []       = Nothing
     loop  (hs:hss) = case credentialsFindForSigning13' hs creds of
-        Nothing   -> credentialsFindForSigning13 hss creds
+        Nothing   -> loop hss
         Just cred -> Just (cred, hs)
 
 -- See credentialsFindForSigning.
