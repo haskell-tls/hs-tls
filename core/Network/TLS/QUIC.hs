@@ -237,7 +237,7 @@ errorTLS msg = throwCore $ Error_Protocol (msg, True, InternalError)
 -- | Return the alert that a TLS endpoint would send to the peer for the
 -- specified library error.
 errorToAlertDescription :: TLSError -> AlertDescription
-errorToAlertDescription = snd . head . errorToAlert
+errorToAlertDescription = snd . errorToAlert
 
 -- | Encode an alert to the assigned value.
 fromAlertDescription :: AlertDescription -> Word8

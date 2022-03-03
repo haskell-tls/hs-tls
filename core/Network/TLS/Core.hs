@@ -278,10 +278,8 @@ onError :: Monad m => (TLSError -> AlertLevel -> AlertDescription -> String -> m
                    -> TLSError -> m B.ByteString
 onError _ Error_EOF = -- Not really an error.
             return B.empty
-onError terminate err@(Error_Protocol (reason,fatal,desc)) =
-    terminate err (if fatal then AlertLevel_Fatal else AlertLevel_Warning) desc reason
-onError terminate err =
-    terminate err AlertLevel_Fatal InternalError (show err)
+onError terminate err = let (lvl,ad) = errorToAlert err
+                        in terminate err lvl ad (errorToAlertMessage err)
 
 terminateWithWriteLock :: Context -> ([(AlertLevel, AlertDescription)] -> IO ())
                        -> TLSError -> AlertLevel -> AlertDescription -> String -> IO a
