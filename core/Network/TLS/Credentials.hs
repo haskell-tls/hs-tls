@@ -32,7 +32,7 @@ import qualified Network.TLS.Struct    as TLS
 
 type Credential = (CertificateChain, PrivKey)
 
-newtype Credentials = Credentials [Credential]
+newtype Credentials = Credentials [Credential] deriving (Show)
 
 instance Semigroup Credentials where
     Credentials l1 <> Credentials l2 = Credentials (l1 ++ l2)
