@@ -16,6 +16,7 @@ module Network.TLS.Handshake.Certificate
 import Network.TLS.Context.Internal
 import Network.TLS.Struct
 import Network.TLS.X509
+import Control.Monad (unless)
 import Control.Monad.State.Strict
 import Control.Exception (SomeException)
 import Data.X509 (ExtKeyUsage(..), ExtKeyUsageFlag, extensionGet)

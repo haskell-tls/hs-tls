@@ -56,6 +56,7 @@ import qualified Network.TLS.State as S
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
+import           Control.Monad (unless, when)
 import qualified Control.Exception as E
 
 import Control.Monad.State.Strict
