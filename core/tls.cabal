@@ -42,7 +42,7 @@ Flag hans
 Library
   Default-Language:  Haskell2010
   Build-Depends:     base >= 4.9 && < 5
-                   , mtl >= 2
+                   , mtl >= 2.2.1
                    , transformers
                    , cereal >= 0.5.3
                    , bytestring

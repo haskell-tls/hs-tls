@@ -1,5 +1,4 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE CPP #-}
 -- |
 -- Module      : Network.TLS.Record.State
 -- License     : BSD-style
@@ -112,9 +111,7 @@ getRecordVersion = recordVersion <$> getRecordOptions
 instance MonadState RecordState RecordM where
     put x = RecordM $ \_  _  -> Right ((), x)
     get   = RecordM $ \_  st -> Right (st, st)
-#if MIN_VERSION_mtl(2,1,0)
     state f = RecordM $ \_ st -> Right (f st)
-#endif
 
 instance MonadError TLSError RecordM where
     throwError e   = RecordM $ \_ _ -> Left e

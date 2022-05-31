@@ -2,7 +2,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE CPP #-}
 -- |
 -- Module      : Network.TLS.Handshake.State
 -- License     : BSD-style
@@ -190,9 +189,7 @@ newtype HandshakeM a = HandshakeM { runHandshakeM :: State HandshakeState a }
 instance MonadState HandshakeState HandshakeM where
     put x = HandshakeM (put x)
     get   = HandshakeM get
-#if MIN_VERSION_mtl(2,1,0)
     state f = HandshakeM (state f)
-#endif
 
 -- create a new empty handshake state
 newEmptyHandshake :: Version -> ClientRandom -> HandshakeState

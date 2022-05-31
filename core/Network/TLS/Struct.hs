@@ -9,7 +9,6 @@
 --
 -- the Struct module contains all definitions and values of the TLS protocol
 --
-{-# LANGUAGE CPP #-}
 module Network.TLS.Struct
     ( Version(..)
     , ConnectionEnd(..)
@@ -67,10 +66,6 @@ import Network.TLS.Types
 import Network.TLS.Crypto
 import Network.TLS.Util.Serialization
 import Network.TLS.Imports
-#if MIN_VERSION_mtl(2,2,1)
-#else
-import Control.Monad.Error
-#endif
 
 data ConnectionEnd = ConnectionServer | ConnectionClient
 data CipherType = CipherStream | CipherBlock | CipherAEAD
@@ -172,13 +167,6 @@ data TLSError =
     | Error_Packet_unexpected String String
     | Error_Packet_Parsing String
     deriving (Eq, Show, Typeable)
-
-#if MIN_VERSION_mtl(2,2,1)
-#else
-instance Error TLSError where
-    noMsg  = Error_Misc ""
-    strMsg = Error_Misc
-#endif
 
 instance Exception TLSError
 
