@@ -1,3 +1,8 @@
+## Version 1.5.8
+
+- Require mtl-2.2.1 or newer
+  [#448](https://github.com/haskell-tls/hs-tls/pull/448)
+
 ## Version 1.5.7
 
 - New APIs: getFinished and getPeerFinished
