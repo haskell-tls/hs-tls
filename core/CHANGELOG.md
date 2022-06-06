@@ -1,3 +1,8 @@
+## Version 1.6.0
+
+- Major version up because of disabling SSL3
+- Some fixes against tlsfuzzer
+
 ## Version 1.5.8
 
 - Require mtl-2.2.1 or newer
