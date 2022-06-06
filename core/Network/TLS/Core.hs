@@ -176,7 +176,13 @@ recvData13 ctx = do
                     terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
               Established         -> return x
               NotEstablished      -> throwCore $ Error_Protocol ("data at not-established", True, UnexpectedMessage)
-        process ChangeCipherSpec13 = recvData13 ctx
+        process ChangeCipherSpec13 = do
+            established <- ctxEstablished ctx
+            if established /= Established then
+                recvData13 ctx
+              else do
+                let reason = "CSS after Finished"
+                terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
         process p             = let reason = "unexpected message " ++ show p in
                                 terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
 
@@ -272,10 +278,8 @@ onError :: Monad m => (TLSError -> AlertLevel -> AlertDescription -> String -> m
                    -> TLSError -> m B.ByteString
 onError _ Error_EOF = -- Not really an error.
             return B.empty
-onError terminate err@(Error_Protocol (reason,fatal,desc)) =
-    terminate err (if fatal then AlertLevel_Fatal else AlertLevel_Warning) desc reason
-onError terminate err =
-    terminate err AlertLevel_Fatal InternalError (show err)
+onError terminate err = let (lvl,ad) = errorToAlert err
+                        in terminate err lvl ad (errorToAlertMessage err)
 
 terminateWithWriteLock :: Context -> ([(AlertLevel, AlertDescription)] -> IO ())
                        -> TLSError -> AlertLevel -> AlertDescription -> String -> IO a

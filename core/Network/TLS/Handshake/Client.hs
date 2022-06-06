@@ -648,7 +648,8 @@ throwMiscErrorOnException msg e =
 --
 onServerHello :: Context -> ClientParams -> Session -> [ExtensionID] -> Handshake -> IO (RecvState IO)
 onServerHello ctx cparams clientSession sentExts (ServerHello rver serverRan serverSession cipher compression exts) = do
-    when (rver == SSL2) $ throwCore $ Error_Protocol ("ssl2 is not supported", True, ProtocolVersion)
+    when (rver == SSL2) $ throwCore $ Error_Protocol ("SSL2 is not supported", True, ProtocolVersion)
+    when (rver == SSL3) $ throwCore $ Error_Protocol ("SSL3 is not supported", True, ProtocolVersion)
     -- find the compression and cipher methods that the server want to use.
     cipherAlg <- case find ((==) cipher . cipherID) (supportedCiphers $ ctxSupported ctx) of
                      Nothing  -> throwCore $ Error_Protocol ("server choose unknown cipher", True, IllegalParameter)
@@ -913,9 +914,11 @@ handshakeClient13' cparams ctx groupSent choice = do
             mks <- usingState_ ctx getTLS13KeyShare
             case mks of
               Just (KeyShareServerHello ks) -> return ks
-              Just _                        -> error "calcSharedKey: invalid KeyShare value"
+              Just _                        -> throwCore $ Error_Protocol ("invalid key_share value", True, IllegalParameter)
               Nothing                       -> throwCore $ Error_Protocol ("key exchange not implemented, expected key_share extension", True, HandshakeFailure)
         let grp = keyShareEntryGroup serverKeyShare
+        unless (checkKeyShareKeyLength serverKeyShare) $
+            throwCore $ Error_Protocol ("broken key_share", True, IllegalParameter)
         unless (groupSent == Just grp) $
             throwCore $ Error_Protocol ("received incompatible group for (EC)DHE", True, IllegalParameter)
         usingHState ctx $ setNegotiatedGroup grp

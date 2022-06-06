@@ -57,13 +57,15 @@ decryptRecord record@(Record ct ver fragment) = do
                         decryptData mver record e st
   where
     noDecryption = onRecordFragment record $ fragmentUncipher return
-    decryptData13 mver e st
-        | ct == ProtocolType_AppData = do
-            inner <- decryptData mver record e st
-            case unInnerPlaintext inner of
-                Left message   -> throwError $ Error_Protocol (message, True, UnexpectedMessage)
-                Right (ct', d) -> return $ Record ct' ver (fragmentCompressed d)
-        | otherwise = noDecryption
+    decryptData13 mver e st = case ct of
+      ProtocolType_AppData -> do
+          inner <- decryptData mver record e st
+          case unInnerPlaintext inner of
+            Left message   -> throwError $ Error_Protocol (message, True, UnexpectedMessage)
+            Right (ct', d) -> return $ Record ct' ver (fragmentCompressed d)
+      ProtocolType_ChangeCipherSpec -> noDecryption
+      ProtocolType_Alert            -> noDecryption
+      _                             -> throwError $ Error_Protocol ("illegal plain text", True, UnexpectedMessage)
 
 unInnerPlaintext :: ByteString -> Either String (ProtocolType, ByteString)
 unInnerPlaintext inner =

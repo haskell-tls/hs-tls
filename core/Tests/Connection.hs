@@ -67,7 +67,7 @@ arbitraryCiphers :: Gen [Cipher]
 arbitraryCiphers = listOf1 $ elements knownCiphers
 
 knownVersions :: [Version]
-knownVersions = [TLS13,TLS12,TLS11,TLS10,SSL3]
+knownVersions = [TLS13,TLS12,TLS11,TLS10]
 
 arbitraryVersions :: Gen [Version]
 arbitraryVersions = sublistOf knownVersions

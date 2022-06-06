@@ -107,7 +107,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
     -- rejecting SSL2. RFC 6176
     when (legacyVersion == SSL2) $ throwCore $ Error_Protocol ("SSL 2.0 is not supported", True, ProtocolVersion)
     -- rejecting SSL3. RFC 7568
-    -- when (legacyVersion == SSL3) $ throwCore $ Error_Protocol ("SSL 3.0 is not supported", True, ProtocolVersion)
+    when (legacyVersion == SSL3) $ throwCore $ Error_Protocol ("SSL 3.0 is not supported", True, ProtocolVersion)
 
     -- Fallback SCSV: RFC7507
     -- TLS_FALLBACK_SCSV: {0x56, 0x00}
@@ -117,7 +117,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
         throwCore $ Error_Protocol ("fallback is not allowed", True, InappropriateFallback)
     -- choosing TLS version
     let clientVersions = case extensionLookup extensionID_SupportedVersions exts >>= extensionDecode MsgTClientHello of
-            Just (SupportedVersionsClientHello vers) -> vers
+            Just (SupportedVersionsClientHello vers) -> vers -- fixme: vers == []
             _                                        -> []
         clientVersion = min TLS12 legacyVersion
         serverVersions
@@ -686,21 +686,33 @@ handshakeServerWithTLS13 sparams ctx chosenVersion exts clientCiphers _serverNam
         -- status again if 0-RTT successful
         setEstablished ctx (EarlyDataNotAllowed 3) -- hardcoding
     -- Deciding key exchange from key shares
-    keyShares <- case extensionLookup extensionID_KeyShare exts >>= extensionDecode MsgTClientHello of
-          Just (KeyShareClientHello kses) -> return kses
-          Just _                          -> error "handshakeServerWithTLS13: invalid KeyShare value"
-          _                               -> throwCore $ Error_Protocol ("key exchange not implemented, expected key_share extension", True, HandshakeFailure)
-    case findKeyShare keyShares serverGroups of
+    keyShares <- case extensionLookup extensionID_KeyShare exts of
+          Nothing -> throwCore $ Error_Protocol ("key exchange not implemented, expected key_share extension", True, MissingExtension)
+          Just kss -> case extensionDecode MsgTClientHello kss of
+            Just (KeyShareClientHello kses) -> return kses
+            Just _                          -> error "handshakeServerWithTLS13: invalid KeyShare value"
+            _                               -> throwCore $ Error_Protocol ("broken key_share", True, DecodeError)
+    mshare <- findKeyShare keyShares serverGroups
+    case mshare of
       Nothing -> helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession
       Just keyShare -> doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash keyShare clientSession rtt0
   where
     ciphersFilteredVersion = filter ((`elem` clientCiphers) . cipherID) serverCiphers
     serverCiphers = filter (cipherAllowedForVersion chosenVersion) (supportedCiphers $ serverSupported sparams)
     serverGroups = supportedGroups (ctxSupported ctx)
-    findKeyShare _      [] = Nothing
-    findKeyShare ks (g:gs) = case find (\ent -> keyShareEntryGroup ent == g) ks of
-      Just k  -> Just k
-      Nothing -> findKeyShare ks gs
+
+findKeyShare :: [KeyShareEntry] -> [Group] -> IO (Maybe KeyShareEntry)
+findKeyShare ks ggs = go ggs
+  where
+    go []     = return Nothing
+    go (g:gs) = case filter (grpEq g) ks of
+      []  -> go gs
+      [k] -> do
+          unless (checkKeyShareKeyLength k) $
+              throwCore $ Error_Protocol ("broken key_share", True, IllegalParameter)
+          return $ Just k
+      _   -> throwCore $ Error_Protocol ("duplicated key_share", True, IllegalParameter)
+    grpEq g ent = g == keyShareEntryGroup ent
 
 doHandshake13 :: ServerParams -> Context -> Version
               -> Cipher -> [ExtensionRaw]
@@ -876,9 +888,11 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
         return [ExtensionRaw extensionID_PreSharedKey selectedIdentity]
 
     decideCredentialInfo allCreds = do
-        cHashSigs <- case extensionLookup extensionID_SignatureAlgorithms exts >>= extensionDecode MsgTClientHello of
+        cHashSigs <- case extensionLookup extensionID_SignatureAlgorithms exts of
             Nothing -> throwCore $ Error_Protocol ("no signature_algorithms extension", True, MissingExtension)
-            Just (SignatureAlgorithms sas) -> return sas
+            Just sa -> case extensionDecode MsgTClientHello sa of
+              Nothing -> throwCore $ Error_Protocol ("broken signature_algorithms extension", True, DecodeError)
+              Just (SignatureAlgorithms sas) -> return sas
         -- When deciding signature algorithm and certificate, we try to keep
         -- certificates supported by the client, but fallback to all credentials
         -- if this produces no suitable result (see RFC 5246 section 7.4.2 and
@@ -1070,7 +1084,7 @@ findHighestVersionFrom13 clientVersions serverVersions = case svs `intersect` cv
         v:_ -> Just v
   where
     svs = sortOn Down serverVersions
-    cvs = sortOn Down clientVersions
+    cvs = sortOn Down $ filter (> SSL3) clientVersions
 
 applicationProtocol :: Context -> [ExtensionRaw] -> ServerParams -> IO [ExtensionRaw]
 applicationProtocol ctx exts sparams = do
@@ -1095,7 +1109,7 @@ credentialsFindForSigning13 hss0 creds = loop hss0
   where
     loop  []       = Nothing
     loop  (hs:hss) = case credentialsFindForSigning13' hs creds of
-        Nothing   -> credentialsFindForSigning13 hss creds
+        Nothing   -> loop hss
         Just cred -> Just (cred, hs)
 
 -- See credentialsFindForSigning.

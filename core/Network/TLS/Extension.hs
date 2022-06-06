@@ -483,7 +483,10 @@ instance Extension SignatureAlgorithms where
 decodeSignatureAlgorithms :: ByteString -> Maybe SignatureAlgorithms
 decodeSignatureAlgorithms = runGetMaybe $ do
     len <- getWord16
-    SignatureAlgorithms <$> getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
+    sas <- getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
+    leftoverLen <- remaining
+    when (leftoverLen /= 0) $ fail "decodeSignatureAlgorithms: broken length"
+    return $ SignatureAlgorithms sas
 
 ------------------------------------------------------------
 
@@ -544,7 +547,7 @@ instance Extension SupportedVersions where
 
 data KeyShareEntry = KeyShareEntry {
     keyShareEntryGroup :: Group
-  , keySHareEntryKeyExchange:: ByteString
+  , keyShareEntryKeyExchange :: ByteString
   } deriving (Show,Eq)
 
 getKeyShareEntry :: Get (Int, Maybe KeyShareEntry)
@@ -584,6 +587,7 @@ instance Extension KeyShare where
             Just ent -> return $ KeyShareServerHello ent
     extensionDecode MsgTClientHello = runGetMaybe $ do
         len <- fromIntegral <$> getWord16
+--      len == 0 allows for HRR
         grps <- getList len getKeyShareEntry
         return $ KeyShareClientHello $ catMaybes grps
     extensionDecode MsgTHelloRetryRequest = runGetMaybe $ do

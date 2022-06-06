@@ -63,19 +63,23 @@ handleException ctx f = catchException f $ \exception -> do
     handle ignoreIOErr $ do
         tls13 <- tls13orLater ctx
         if tls13 then
-            sendPacket13 ctx $ Alert13 $ errorToAlert tlserror
+            sendPacket13 ctx $ Alert13 [errorToAlert tlserror]
           else
-            sendPacket ctx $ Alert $ errorToAlert tlserror
+            sendPacket ctx $ Alert [errorToAlert tlserror]
     handshakeFailed tlserror
   where
     ignoreIOErr :: IOException -> IO ()
     ignoreIOErr _ = return ()
 
-errorToAlert :: TLSError -> [(AlertLevel, AlertDescription)]
-errorToAlert (Error_Protocol (_, _, ad))   = [(AlertLevel_Fatal, ad)]
-errorToAlert (Error_Packet_unexpected _ _) = [(AlertLevel_Fatal, UnexpectedMessage)]
-errorToAlert (Error_Packet_Parsing _)      = [(AlertLevel_Fatal, DecodeError)]
-errorToAlert _                             = [(AlertLevel_Fatal, InternalError)]
+errorToAlert :: TLSError -> (AlertLevel, AlertDescription)
+errorToAlert (Error_Protocol (_, b, ad))   = let lvl = if b then AlertLevel_Fatal else AlertLevel_Warning
+                                             in (lvl, ad)
+errorToAlert (Error_Packet_unexpected _ _) = (AlertLevel_Fatal, UnexpectedMessage)
+errorToAlert (Error_Packet_Parsing msg)
+  | "invalid version" `isInfixOf` msg      = (AlertLevel_Fatal, ProtocolVersion)
+  | "request_update"  `isInfixOf` msg      = (AlertLevel_Fatal, IllegalParameter)
+  | otherwise                              = (AlertLevel_Fatal, DecodeError)
+errorToAlert _                             = (AlertLevel_Fatal, InternalError)
 
 -- | Return the message that a TLS endpoint can add to its local log for the
 -- specified library error.

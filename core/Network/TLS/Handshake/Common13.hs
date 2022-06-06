@@ -42,6 +42,7 @@ module Network.TLS.Handshake.Common13
        , calculateApplicationSecret
        , calculateResumptionSecret
        , derivePSK
+       , checkKeyShareKeyLength
        ) where
 
 import qualified Data.ByteArray as BA
@@ -87,6 +88,7 @@ makeFinished ctx usedHash baseKey = do
 checkFinished :: MonadIO m => Context -> Hash -> ByteString -> ByteString -> ByteString -> m ()
 checkFinished ctx usedHash baseKey hashValue verifyData = do
     let verifyData' = makeVerifyData usedHash baseKey hashValue
+    when (B.length verifyData /= B.length verifyData') $ throwCore $ Error_Protocol ("broken Finished", True, DecodeError)
     unless (verifyData' == verifyData) $ decryptError "cannot verify finished"
     liftIO $ writeIORef (ctxPeerFinished ctx) (Just verifyData)
 
@@ -505,3 +507,23 @@ derivePSK choice (BaseSecret sec) nonce =
   where
     usedHash = cHash choice
     hashSize = hashDigestSize usedHash
+
+----------------------------------------------------------------
+
+checkKeyShareKeyLength :: KeyShareEntry -> Bool
+checkKeyShareKeyLength ks = keyShareKeyLength grp == B.length key
+  where
+    grp = keyShareEntryGroup ks
+    key = keyShareEntryKeyExchange ks
+
+keyShareKeyLength :: Group -> Int
+keyShareKeyLength P256      =   65 -- 32 * 2 + 1
+keyShareKeyLength P384      =   97 -- 48 * 2 + 1
+keyShareKeyLength P521      =  133 -- 66 * 2 + 1
+keyShareKeyLength X25519    =   32
+keyShareKeyLength X448      =   56
+keyShareKeyLength FFDHE2048 =  256
+keyShareKeyLength FFDHE3072 =  384
+keyShareKeyLength FFDHE4096 =  512
+keyShareKeyLength FFDHE6144 =  768
+keyShareKeyLength FFDHE8192 = 1024
