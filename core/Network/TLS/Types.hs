@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE EmptyDataDecls #-}
 -- |
 -- Module      : Network.TLS.Types
@@ -35,10 +36,16 @@ module Network.TLS.Types
     , MasterSecret(..)
     ) where
 
+#ifdef INCLUDE_NETWORK
+import Network.Socket (HostName)
+#endif
+
 import Network.TLS.Imports
 import Network.TLS.Crypto.Types (Group)
 
+#ifndef INCLUDE_NETWORK
 type HostName    = String
+#endif
 type Second      = Word32
 type Millisecond = Word64
 
