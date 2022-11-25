@@ -47,31 +47,31 @@ module Network.TLS.Handshake.Common13
 
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
-import Data.Hourglass
+import Data.UnixTime
+import Foreign.C.Types (CTime(..))
+import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Context.Internal
-import Network.TLS.Cipher
 import Network.TLS.Crypto
 import qualified Network.TLS.Crypto.IES as IES
 import Network.TLS.Extension
 import Network.TLS.Handshake.Certificate (extractCAname)
-import Network.TLS.Handshake.Process (processHandshake13)
 import Network.TLS.Handshake.Common (unexpected)
 import Network.TLS.Handshake.Key
+import Network.TLS.Handshake.Process (processHandshake13)
+import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
-import Network.TLS.Handshake.Signature
+import Network.TLS.IO
 import Network.TLS.Imports
 import Network.TLS.KeySchedule
 import Network.TLS.MAC
 import Network.TLS.Parameters
-import Network.TLS.IO
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types
 import Network.TLS.Wire
-import Time.System
 
 import Control.Concurrent.MVar
 import Control.Monad.State.Strict
@@ -302,14 +302,13 @@ checkFreshness tinfo obfAge = do
     isAlive = isAgeValid age tinfo
 
 getCurrentTimeFromBase :: IO Millisecond
-getCurrentTimeFromBase = millisecondsFromBase <$> timeCurrentP
+getCurrentTimeFromBase = millisecondsFromBase <$> getUnixTime
 
-millisecondsFromBase :: ElapsedP -> Millisecond
-millisecondsFromBase d = fromIntegral ms
+millisecondsFromBase :: UnixTime -> Millisecond
+millisecondsFromBase (UnixTime (CTime s) us) =
+    fromIntegral ((s - base) * 1000) + fromIntegral (us `div` 1000)
   where
-    ElapsedP (Elapsed (Seconds s)) (NanoSeconds ns) = d - timeConvert base
-    ms = s * 1000 + ns `div` 1000000
-    base = Date 2017 January 1
+    UnixTime (CTime base) _= parseUnixTimeGMT webDateFormat "Sun, 01 Jan 2017 00:00:00 GMT"
 
 ----------------------------------------------------------------
 
