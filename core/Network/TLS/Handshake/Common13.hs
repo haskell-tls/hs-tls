@@ -308,7 +308,8 @@ millisecondsFromBase :: UnixTime -> Millisecond
 millisecondsFromBase (UnixTime (CTime s) us) =
     fromIntegral ((s - base) * 1000) + fromIntegral (us `div` 1000)
   where
-    UnixTime (CTime base) _= parseUnixTimeGMT webDateFormat "Sun, 01 Jan 2017 00:00:00 GMT"
+    base = 1483228800
+    -- UnixTime (CTime base) _= parseUnixTimeGMT webDateFormat "Sun, 01 Jan 2017 00:00:00 GMT"
 
 ----------------------------------------------------------------
 
