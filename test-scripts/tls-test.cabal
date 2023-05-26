@@ -1,38 +1,38 @@
-Name:                tls-test
-Version:             0.0.0
-Description:
-   client And server test
-License:             BSD3
-Copyright:           Vincent Hanquez <vincent@snarc.org>
-Author:              Vincent Hanquez <vincent@snarc.org>
-Maintainer:          Vincent Hanquez <vincent@snarc.org>
-Synopsis:            Set of programs for TLS testing and debugging
-Build-Type:          Simple
-Category:            Network
-stability:           experimental
-Cabal-Version:       >=1.6
-Homepage:            http://github.com/vincenthz/hs-tls
-
-Executable           TestClient
-  if os(windows)
-      buildable: False
-  Main-is:           TestClient.hs
-  Hs-Source-Dirs:    .
-  Build-Depends:     base >= 4 && < 5
-                   , network
-                   , bytestring
-                   , x509-system >= 1.0
-                   , data-default-class
-                   , directory
-                   , random
-                   , async
-                   , unix
-                   , process
-                   , utf8-string
-                   , tls
-  Buildable:       True
-  ghc-options:       -Wall -fno-warn-missing-signatures -threaded
+cabal-version: >=1.10
+name:          tls-test
+version:       0.0.0
+license:       BSD3
+copyright:     Vincent Hanquez <vincent@snarc.org>
+maintainer:    Vincent Hanquez <vincent@snarc.org>
+author:        Vincent Hanquez <vincent@snarc.org>
+stability:     experimental
+homepage:      http://github.com/vincenthz/hs-tls
+synopsis:      Set of programs for TLS testing and debugging
+description:   client And server test
+category:      Network
+build-type:    Simple
 
 source-repository head
-  type: git
-  location: https://github.com/vincenthz/hs-tls
+    type:     git
+    location: https://github.com/vincenthz/hs-tls
+
+executable TestClient
+    main-is:        TestClient.hs
+    hs-source-dirs: .
+    ghc-options:    -Wall -fno-warn-missing-signatures -threaded
+    build-depends:
+        base >=4 && <5,
+        network,
+        bytestring,
+        x509-system >=1.0,
+        data-default-class,
+        directory,
+        random,
+        async,
+        unix,
+        process,
+        utf8-string,
+        tls
+
+    if os(windows)
+        buildable: False

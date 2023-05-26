@@ -1,104 +1,101 @@
-Name:                tls-debug
-Version:             0.4.8
-Description:
-   A set of program to test and debug various aspect of the TLS package.
-   .
-License:             BSD3
-License-file:        LICENSE
-Copyright:           Vincent Hanquez <vincent@snarc.org>
-Author:              Vincent Hanquez <vincent@snarc.org>
-Maintainer:          Vincent Hanquez <vincent@snarc.org>
-Synopsis:            Set of programs for TLS testing and debugging
-Build-Type:          Simple
-Category:            Network
-stability:           experimental
-Cabal-Version:       >=1.8
-Homepage:            http://github.com/vincenthz/hs-tls
+cabal-version: >=1.10
+name:          tls-debug
+version:       0.4.8
+license:       BSD3
+license-file:  LICENSE
+copyright:     Vincent Hanquez <vincent@snarc.org>
+maintainer:    Vincent Hanquez <vincent@snarc.org>
+author:        Vincent Hanquez <vincent@snarc.org>
+stability:     experimental
+homepage:      http://github.com/vincenthz/hs-tls
+synopsis:      Set of programs for TLS testing and debugging
+description:
+    A set of program to test and debug various aspect of the TLS package.
+    .
 
-Executable           tls-stunnel
-  Main-is:           Stunnel.hs
-  Other-modules:     Common
-                   , Imports
-  Hs-Source-Dirs:    src
-  Build-Depends:     base >= 4 && < 5
-                   , network
-                   , bytestring
-                   , x509-store
-                   , x509-system >= 1.0
-                   , x509-validation >= 1.5
-                   , data-default-class
-                   , cryptonite >= 0.27
-                   , tls >= 1.5.5
-                   , tls-session-manager
-  if os(windows)
-    Buildable:       False
-  else
-    Buildable:       True
-  ghc-options:       -Wall -fno-warn-missing-signatures
-
--- Executable           tls-checkciphers
---   Main-is:           CheckCiphers.hs
---   Hs-Source-Dirs:    src
---   Build-Depends:     base >= 4 && < 5
---                    , network
---                    , bytestring
---                    , cprng-aes
---                    , x509-system >= 1.0
---                    , tls >= 1.2
---   Buildable:         True
---   ghc-options:       -Wall -fno-warn-missing-signatures
-
-Executable           tls-retrievecertificate
-  Main-is:           RetrieveCertificate.hs
-  Other-modules:     Imports
-  Hs-Source-Dirs:    src
-  Build-Depends:     base >= 4 && < 5
-                   , network
-                   , bytestring
-                   , pem
-                   , x509
-                   , x509-system >= 1.4
-                   , x509-validation >= 1.5
-                   , data-default-class
-                   , tls >= 1.3
-  Buildable:         True
-  ghc-options:       -Wall -fno-warn-missing-signatures
-
-Executable           tls-simpleclient
-  Main-is:           SimpleClient.hs
-  Other-modules:     Common
-                   , HexDump
-                   , Imports
-  Hs-Source-Dirs:    src
-  Build-Depends:     base >= 4 && < 5
-                   , network
-                   , bytestring
-                   , data-default-class
-                   , cryptonite >= 0.27
-                   , x509-store
-                   , x509-system >= 1.0
-                   , tls >= 1.5.5
-  Buildable:         True
-  ghc-options:       -Wall -fno-warn-missing-signatures
-
-Executable           tls-simpleserver
-  Main-is:           SimpleServer.hs
-  Other-modules:     Common
-                   , HexDump
-                   , Imports
-  Hs-Source-Dirs:    src
-  Build-Depends:     base >= 4 && < 5
-                   , network
-                   , bytestring
-                   , data-default-class
-                   , cryptonite >= 0.27
-                   , x509-store
-                   , x509-system >= 1.0
-                   , tls >= 1.5.5
-                   , tls-session-manager
-  Buildable:         True
-  ghc-options:       -Wall -fno-warn-missing-signatures
+category:      Network
+build-type:    Simple
 
 source-repository head
-  type: git
-  location: https://github.com/vincenthz/hs-tls
+    type:     git
+    location: https://github.com/vincenthz/hs-tls
+
+executable tls-stunnel
+    main-is:        Stunnel.hs
+    hs-source-dirs: src
+    other-modules:
+        Common
+        Imports
+
+    ghc-options:    -Wall -fno-warn-missing-signatures
+    build-depends:
+        base >=4 && <5,
+        network,
+        bytestring,
+        x509-store,
+        x509-system >=1.0,
+        x509-validation >=1.5,
+        data-default-class,
+        cryptonite >=0.27,
+        tls >=1.5.5,
+        tls-session-manager
+
+    if os(windows)
+        buildable: False
+
+    else
+
+executable tls-retrievecertificate
+    main-is:        RetrieveCertificate.hs
+    hs-source-dirs: src
+    other-modules:  Imports
+    ghc-options:    -Wall -fno-warn-missing-signatures
+    build-depends:
+        base >=4 && <5,
+        network,
+        bytestring,
+        pem,
+        x509,
+        x509-system >=1.4,
+        x509-validation >=1.5,
+        data-default-class,
+        tls >=1.3
+
+executable tls-simpleclient
+    main-is:        SimpleClient.hs
+    hs-source-dirs: src
+    other-modules:
+        Common
+        HexDump
+        Imports
+
+    ghc-options:    -Wall -fno-warn-missing-signatures
+    build-depends:
+        base >=4 && <5,
+        network,
+        bytestring,
+        data-default-class,
+        cryptonite >=0.27,
+        x509-store,
+        x509-system >=1.0,
+        tls >=1.5.5
+
+executable tls-simpleserver
+    main-is:        SimpleServer.hs
+    hs-source-dirs: src
+    other-modules:
+        Common
+        HexDump
+        Imports
+
+    ghc-options:    -Wall -fno-warn-missing-signatures
+    build-depends:
+        base >=4 && <5,
+        network,
+        bytestring,
+        data-default-class,
+        cryptonite >=0.27,
+        x509-store,
+        x509-system >=1.0,
+        tls >=1.5.5,
+        tls-session-manager
