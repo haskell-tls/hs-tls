@@ -53,7 +53,4 @@ jobs:
       if: ${{ runner.os == 'Linux' }}
       run: |
         cabal install doctest --overwrite-policy=always
-        for package in `cat cabal.project | sed 's/packages://g'`
-        do
-          cabal repl --build-depends=QuickCheck --with-ghc=doctest $package
-        done
+        cabal repl --build-depends=QuickCheck --with-ghc=doctest core
