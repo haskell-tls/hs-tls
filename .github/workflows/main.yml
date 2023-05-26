@@ -1,0 +1,59 @@
+name: Haskell CI
+
+on:
+  push:
+    branches: [ 'main', 'ci' ]
+  pull_request:
+    branches: [ 'main' ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:  [ 'ubuntu-latest', 'macOS-latest', 'windows-latest' ]
+        ghc: [ '9.2', '9.4', '9.6' ]
+
+    steps:
+    - run: git config --global core.autocrlf false
+
+    - uses: actions/checkout@v3
+
+    - uses: haskell/actions/setup@v2
+      with:
+        ghc-version: ${{ matrix.ghc }}
+        cabal-version: latest
+
+    - name: Cache
+      uses: actions/cache@v3
+      env:
+        cache-name: cache-cabal
+      with:
+        path: ~/.cabal
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+        restore-keys: |
+          ${{ runner.os }}-build-${{ env.cache-name }}-
+          ${{ runner.os }}-build-
+          ${{ runner.os }}-
+
+    - name: Install dependencies
+      run: |
+        cabal update
+        cabal build --only-dependencies --enable-tests --disable-benchmarks all
+
+    - name: Build
+      run: cabal build --enable-tests --disable-benchmarks all
+
+    - name: Run tests
+      run: cabal test --test-show-details=streaming all
+
+    - name: Run doctest
+      if: ${{ runner.os == 'Linux' }}
+      run: |
+        cabal install doctest --overwrite-policy=always
+        for package in `cat cabal.project | sed 's/packages://g'`
+        do
+          cabal repl --build-depends=QuickCheck --with-ghc=doctest $package
+        done
