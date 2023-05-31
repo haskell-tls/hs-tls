@@ -54,6 +54,9 @@ If this command return 0 certificates, it's likely that you don't have any certi
 or that your system is storing certificates in an un-expected place. All TLS operations will result
 in "CA is unknown" errors.
 
+If you need to use a custom path use `SYSTEM_CERTIFICATE_PATH` environment variable, 
+but keep in mind that if it's set default locations will be ignored.
+
 # Usage of `tls-simpleclient`
 
 `tls-simpleclient` takes a server name and optionally a port number then generates HTTP/1.1 GET.
