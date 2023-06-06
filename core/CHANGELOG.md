@@ -1,3 +1,7 @@
+## Version 1.7.0
+
+* Major version up because "crypton" is used instead of "cryptonite"
+
 ## Version 1.6.0
 
 - Major version up because of disabling SSL3
