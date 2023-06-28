@@ -147,7 +147,8 @@ recvData13 :: Context -> IO B.ByteString
 recvData13 ctx = do
     pkt <- recvPacket13 ctx
     either (onError terminate) process pkt
-  where process (Alert13 [(AlertLevel_Warning, CloseNotify)]) = tryBye ctx >> setEOF ctx >> return B.empty
+  where process (Alert13 [(AlertLevel_Warning, UserCanceled)]) = return B.empty
+        process (Alert13 [(AlertLevel_Warning, CloseNotify)]) = tryBye ctx >> setEOF ctx >> return B.empty
         process (Alert13 [(AlertLevel_Fatal, desc)]) = do
             setEOF ctx
             E.throwIO (Terminated True ("received fatal error: " ++ show desc) (Error_Protocol ("remote side fatal error", True, desc)))
