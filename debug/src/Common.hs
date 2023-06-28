@@ -90,7 +90,7 @@ printCiphers = do
     putStrLn "====================================="
     forM_ namedCiphersuites $ \(name, _) -> putStrLn name
     putStrLn ""
-    putStrLn ("Using cryptonite-" ++ VERSION_cryptonite ++ " with CPU support for: " ++ cpuSupport)
+    putStrLn ("Using crypton-" ++ VERSION_crypton ++ " with CPU support for: " ++ cpuSupport)
   where
     pad n s
         | length s < n = s ++ replicate (n - length s) ' '

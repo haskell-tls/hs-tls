@@ -242,7 +242,7 @@ data CipherSet
     | SetOther [Cipher]
 
 -- Preference between AEAD ciphers having equivalent properties is based on
--- hardware-acceleration support in the cryptonite implementation.
+-- hardware-acceleration support in the crypton implementation.
 sortOptimized :: [CipherSet] -> [Cipher]
 sortOptimized = concatMap f
   where
