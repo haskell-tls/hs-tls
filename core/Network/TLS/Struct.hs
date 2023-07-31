@@ -156,7 +156,11 @@ data ProtocolType =
     | ProtocolType_DeprecatedHandshake
     deriving (Eq, Show)
 
--- | TLSError that might be returned through the TLS stack
+-- | TLSError that might be returned through the TLS stack.
+--
+-- Prior to version 1.8.0, this type had an @Exception@ instance.
+-- In version 1.8.0, this instance was removed, and functions in
+-- this library now only throw 'TLSException'.
 data TLSError =
       Error_Misc String        -- ^ mainly for instance of Error
     | Error_Protocol (String, Bool, AlertDescription)
@@ -168,16 +172,29 @@ data TLSError =
     | Error_Packet_Parsing String
     deriving (Eq, Show, Typeable)
 
-instance Exception TLSError
-
--- | TLS Exceptions related to bad user usage or
--- asynchronous errors
+-- | TLS Exceptions. Some of the data constructors indicate incorrect use of
+--   the library, and the documentation for those data constructors calls
+--   this out. The others wrap 'TLSError' with some kind of context to explain
+--   when the exception occurred.
 data TLSException =
-      Terminated Bool String TLSError -- ^ Early termination exception with the reason
-                                      --   and the error associated
-    | HandshakeFailed TLSError        -- ^ Handshake failed for the reason attached
-    | ConnectionNotEstablished        -- ^ Usage error when the connection has not been established
-                                      --   and the user is trying to send or receive data
+      Terminated Bool String TLSError
+      -- ^ Early termination exception with the reason and the error associated
+    | HandshakeFailed TLSError
+      -- ^ Handshake failed for the reason attached.
+    | PostHandshake TLSError
+      -- ^ Failure occurred while sending or receiving data after the
+      --   TLS handshake succeeded.
+    | Uncontextualized TLSError
+      -- ^ Lifts a 'TLSError' into 'TLSException' without provided any context
+      --   around when the error happened.
+    | ConnectionNotEstablished
+      -- ^ Usage error when the connection has not been established
+      --   and the user is trying to send or receive data.
+      --   Indicates that this library has been used incorrectly. 
+    | MissingHandshake
+      -- ^ Expected that a TLS handshake had already taken place, but no TLS
+      --   handshake had occurred.
+      --   Indicates that this library has been used incorrectly. 
     deriving (Show,Eq,Typeable)
 
 instance Exception TLSException
