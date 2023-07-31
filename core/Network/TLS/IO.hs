@@ -26,7 +26,6 @@ import Control.Monad.Reader
 import Control.Monad.State.Strict
 import qualified Data.ByteString as B
 import Data.IORef
-import System.IO.Error (mkIOError, eofErrorType)
 
 import Network.TLS.Context.Internal
 import Network.TLS.Hooks
@@ -172,7 +171,7 @@ checkValid ctx = do
     established <- ctxEstablished ctx
     when (established == NotEstablished) $ throwIO ConnectionNotEstablished
     eofed <- ctxEOF ctx
-    when eofed $ throwIO $ mkIOError eofErrorType "data" Nothing Nothing
+    when eofed $ throwIO $ PostHandshake Error_EOF
 
 ----------------------------------------------------------------
 

@@ -31,6 +31,9 @@ module Network.TLS
     , recvData
     , bye
 
+    -- * Exceptions
+    -- $exceptions
+
     -- * Backend abstraction
     , HasBackend(..)
     , Backend(..)
@@ -198,3 +201,10 @@ type Bytes = B.ByteString
 --   both cases of full-negotiation and resumption.
 getClientCertificateChain :: Context -> IO (Maybe CertificateChain)
 getClientCertificateChain ctx = usingState_ ctx S.getClientCertificateChain
+
+{- $exceptions
+    Since 1.8.0, this library only throws exceptions of type 'TLSException'.
+    In the common case where the chosen backend is socket, 'IOException'
+    may be thrown as well. This happens because the backend for sockets,
+    opaque to most modules in the @tls@ library, throws those exceptions.
+-}
