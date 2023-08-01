@@ -1,3 +1,8 @@
+## Version 1.7.1
+
+* NOP on UserCanceled event
+  [#454](https://github.com/haskell-tls/hs-tls/pull/454)
+
 ## Version 1.7.0
 
 * Major version up because "crypton" is used instead of "cryptonite"
