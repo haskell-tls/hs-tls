@@ -234,7 +234,7 @@ withLog :: Context -> (Logging -> IO ()) -> IO ()
 withLog ctx f = ctxWithHooks ctx (f . hookLogging)
 
 throwCore :: MonadIO m => TLSError -> m a
-throwCore = liftIO . throwIO
+throwCore = liftIO . throwIO . Uncontextualized
 
 failOnEitherError :: MonadIO m => m (Either TLSError a) -> m a
 failOnEitherError f = do
@@ -255,7 +255,7 @@ usingState_ ctx f = failOnEitherError $ usingState ctx f
 usingHState :: MonadIO m => Context -> HandshakeM a -> m a
 usingHState ctx f = liftIO $ modifyMVar (ctxHandshake ctx) $ \mst ->
     case mst of
-        Nothing -> throwCore $ Error_Misc "missing handshake"
+        Nothing -> liftIO $ throwIO $ MissingHandshake
         Just st -> return $ swap (Just <$> runHandshake st f)
 
 getHState :: MonadIO m => Context -> m (Maybe HandshakeState)
