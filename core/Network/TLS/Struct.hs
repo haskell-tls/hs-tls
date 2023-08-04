@@ -172,9 +172,6 @@ data TLSError =
     | Error_Packet_Parsing String
     deriving (Eq, Show, Typeable)
 
--- | This is for backward compatibility purposes only.
-instance Exception TLSError
-
 -- | TLS Exceptions. Some of the data constructors indicate incorrect use of
 --   the library, and the documentation for those data constructors calls
 --   this out. The others wrap 'TLSError' with some kind of context to explain
