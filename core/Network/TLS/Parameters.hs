@@ -384,7 +384,7 @@ data Shared = Shared
       -- | A collection of trust anchors to be used by a client as
       -- part of validation of server certificates.  This is set as
       -- first argument to function 'onServerCertificate'.  Package
-      -- <https://hackage.haskell.org/package/x509-system x509-system>
+      -- <https://hackage.haskell.org/package/crypton-x509-system crypton-x509-system>
       -- gives access to a default certificate store configured in the
       -- system.
       --
