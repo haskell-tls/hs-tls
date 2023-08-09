@@ -7,7 +7,7 @@ copyright:          Vincent Hanquez <vincent@snarc.org>
 maintainer:         Kazu Yamamoto <kazu@iij.ad.jp>
 author:             Vincent Hanquez <vincent@snarc.org>
 stability:          experimental
-homepage:           http://github.com/vincenthz/hs-tls
+homepage:           https://github.com/haskell-tls/hs-tls
 synopsis:           TLS/SSL protocol native implementation (Server and Client)
 description:
     Native Haskell TLS and SSL protocol implementation for server and client.
@@ -31,7 +31,7 @@ extra-source-files:
 
 source-repository head
     type:     git
-    location: https://github.com/vincenthz/hs-tls
+    location: https://github.com/haskell-tls/hs-tls
     subdir:   core
 
 flag compat
