@@ -1,6 +1,7 @@
 ## Version 1.8.0
 
-* Remove Exception instance for TLSError.
+* BREAKING CHANGE: Remove `Exception` instance for `TLSError`.
+  The library now throws `TLSException` only.
   If you need to change your code, please refer to
   [this example](https://github.com/snoyberg/http-client/commit/73d1a4eb451c089878ba95e96371d0b18287ffb8) first.
   [#457](https://github.com/haskell-tls/hs-tls/pull/457)
