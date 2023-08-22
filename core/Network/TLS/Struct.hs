@@ -164,6 +164,9 @@ data ProtocolType =
 data TLSError =
       Error_Misc String        -- ^ mainly for instance of Error
     | Error_Protocol (String, Bool, AlertDescription)
+      -- ^ An error occurred at a low level.  The elements of the tuple give
+      -- (freeform text description, fatal indicator, structured error
+      -- description)
     | Error_Certificate String
     | Error_HandshakePolicy String -- ^ handshake policy failed.
     | Error_EOF
