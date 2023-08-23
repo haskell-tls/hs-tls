@@ -61,11 +61,11 @@ decryptRecord record@(Record ct ver fragment) = do
       ProtocolType_AppData -> do
           inner <- decryptData mver record e st
           case unInnerPlaintext inner of
-            Left message   -> throwError $ Error_Protocol (message, True, UnexpectedMessage)
+            Left message   -> throwError $ Error_Protocol (message, AlertLevel_Fatal, UnexpectedMessage)
             Right (ct', d) -> return $ Record ct' ver (fragmentCompressed d)
       ProtocolType_ChangeCipherSpec -> noDecryption
       ProtocolType_Alert            -> noDecryption
-      _                             -> throwError $ Error_Protocol ("illegal plain text", True, UnexpectedMessage)
+      _                             -> throwError $ Error_Protocol ("illegal plain text", AlertLevel_Fatal, UnexpectedMessage)
 
 unInnerPlaintext :: ByteString -> Either String (ProtocolType, ByteString)
 unInnerPlaintext inner =
@@ -105,7 +105,7 @@ getCipherData (Record pt ver _) cdata = do
                 else B.replicate (B.length pad) (fromIntegral b) `bytesEq` pad
 
     unless (macValid &&! paddingValid) $
-        throwError $ Error_Protocol ("bad record mac", True, BadRecordMac)
+        throwError $ Error_Protocol ("bad record mac", AlertLevel_Fatal, BadRecordMac)
 
     return $ cipherDataContent cdata
 
@@ -183,13 +183,13 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
                 (content, authTag2) = decryptF nonce econtent' ad
 
             when (AuthTag (B.convert authTag) /= authTag2) $
-                throwError $ Error_Protocol ("bad record mac", True, BadRecordMac)
+                throwError $ Error_Protocol ("bad record mac", AlertLevel_Fatal, BadRecordMac)
 
             modify incrRecordState
             return content
 
         decryptOf BulkStateUninitialized =
-            throwError $ Error_Protocol ("decrypt state uninitialized", True, InternalError)
+            throwError $ Error_Protocol ("decrypt state uninitialized", AlertLevel_Fatal, InternalError)
 
         -- handling of outer format can report errors with Error_Packet
         get3o s ls = maybe (throwError $ Error_Packet "record bad format") return $ partition3 s ls
@@ -197,5 +197,5 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
 
         -- all format errors related to decrypted content are reported
         -- externally as integrity failures, i.e. BadRecordMac
-        get3i s ls = maybe (throwError $ Error_Protocol ("record bad format", True, BadRecordMac)) return $ partition3 s ls
+        get3i s ls = maybe (throwError $ Error_Protocol ("record bad format", AlertLevel_Fatal, BadRecordMac)) return $ partition3 s ls
         get2i s (d1,d2) = get3i s (d1,d2,0) >>= \(r1,r2,_) -> return (r1,r2)

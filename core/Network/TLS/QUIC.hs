@@ -196,7 +196,7 @@ tlsQUICClient cparams callbacks = do
     sync ctx (SendClientFinished exts appSecInfo) = do
         let qexts = filterQTP exts
         when (null qexts) $ do
-            throwCore $ Error_Protocol ("QUIC transport parameters are mssing", True, MissingExtension)
+            throwCore $ Error_Protocol ("QUIC transport parameters are mssing", AlertLevel_Fatal, MissingExtension)
         quicNotifyExtensions callbacks ctx qexts
         quicInstallKeys callbacks ctx (InstallApplicationKeys appSecInfo)
 
@@ -219,7 +219,7 @@ tlsQUICServer sparams callbacks = do
     sync ctx (SendServerHello exts mEarlySecInfo handSecInfo) = do
         let qexts = filterQTP exts
         when (null qexts) $ do
-            throwCore $ Error_Protocol ("QUIC transport parameters are mssing", True, MissingExtension)
+            throwCore $ Error_Protocol ("QUIC transport parameters are mssing", AlertLevel_Fatal, MissingExtension)
         quicNotifyExtensions callbacks ctx qexts
         quicInstallKeys callbacks ctx (InstallEarlyKeys mEarlySecInfo)
         quicInstallKeys callbacks ctx (InstallHandshakeKeys handSecInfo)
@@ -232,7 +232,7 @@ filterQTP = filter (\(ExtensionRaw eid _) -> eid == extensionID_QuicTransportPar
 -- | Can be used by callbacks to signal an unexpected condition.  This will then
 -- generate an "internal_error" alert in the TLS stack.
 errorTLS :: String -> IO a
-errorTLS msg = throwCore $ Error_Protocol (msg, True, InternalError)
+errorTLS msg = throwCore $ Error_Protocol (msg, AlertLevel_Fatal, InternalError)
 
 -- | Return the alert that a TLS endpoint would send to the peer for the
 -- specified library error.
