@@ -1,3 +1,7 @@
+## Version X.Y.Z
+
+* BREAKING CHANGE: The type of the `Error_Protocol` constructor of `TLSError` has changed.
+
 ## Version 1.8.0
 
 * BREAKING CHANGE: Remove `Exception` instance for `TLSError`.
