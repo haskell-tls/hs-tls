@@ -127,7 +127,7 @@ recvPacket13 :: Context -> IO (Either TLSError Packet13)
 recvPacket13 ctx@Context{ctxRecordLayer = recordLayer} = do
     erecord <- recordRecv13 recordLayer
     case erecord of
-        Left err@(Error_Protocol (_, AlertLevel_Fatal, BadRecordMac)) -> do
+        Left err@(Error_Protocol (_, BadRecordMac)) -> do
             -- If the server decides to reject RTT0 data but accepts RTT1
             -- data, the server should skip all records for RTT0 data.
             established <- ctxEstablished ctx

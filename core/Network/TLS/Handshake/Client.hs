@@ -51,7 +51,7 @@ import Network.TLS.Wire
 
 handshakeClientWith :: ClientParams -> Context -> Handshake -> IO ()
 handshakeClientWith cparams ctx HelloRequest = handshakeClient cparams ctx
-handshakeClientWith _       _   _            = throwCore $ Error_Protocol ("unexpected handshake message received in handshakeClientWith", AlertLevel_Fatal, HandshakeFailure)
+handshakeClientWith _       _   _            = throwCore $ Error_Protocol ("unexpected handshake message received in handshakeClientWith", HandshakeFailure)
 
 -- client part of handshake. send a bunch of handshake of client
 -- values intertwined with response from the server.
@@ -80,17 +80,17 @@ handshakeClient' cparams ctx groups mparams = do
     recvServerHello clientSession sentExtensions
     ver <- usingState_ ctx getVersion
     unless (maybe True (\(_, _, v) -> v == ver) mparams) $
-        throwCore $ Error_Protocol ("version changed after hello retry", AlertLevel_Fatal, IllegalParameter)
+        throwCore $ Error_Protocol ("version changed after hello retry", IllegalParameter)
     -- recvServerHello sets TLS13HRR according to the server random.
     -- For 1st server hello, getTLS13HR returns True if it is HRR and False otherwise.
     -- For 2nd server hello, getTLS13HR returns False since it is NOT HRR.
     hrr <- usingState_ ctx getTLS13HRR
     if ver == TLS13 then
         if hrr then case drop 1 groups of
-            []      -> throwCore $ Error_Protocol ("group is exhausted in the client side", AlertLevel_Fatal, IllegalParameter)
+            []      -> throwCore $ Error_Protocol ("group is exhausted in the client side", IllegalParameter)
             groups' -> do
                 when (isJust mparams) $
-                    throwCore $ Error_Protocol ("server sent too many hello retries", AlertLevel_Fatal, UnexpectedMessage)
+                    throwCore $ Error_Protocol ("server sent too many hello retries", UnexpectedMessage)
                 mks <- usingState_ ctx getTLS13KeyShare
                 case mks of
                   Just (KeyShareHRR selectedGroup)
@@ -100,14 +100,14 @@ handshakeClient' cparams ctx groups mparams = do
                           let cparams' = cparams { clientEarlyData = Nothing }
                           runPacketFlight ctx $ sendChangeCipherSpec13 ctx
                           handshakeClient' cparams' ctx [selectedGroup] (Just (crand, clientSession, ver))
-                    | otherwise -> throwCore $ Error_Protocol ("server-selected group is not supported", AlertLevel_Fatal, IllegalParameter)
+                    | otherwise -> throwCore $ Error_Protocol ("server-selected group is not supported", IllegalParameter)
                   Just _  -> error "handshakeClient': invalid KeyShare value"
-                  Nothing -> throwCore $ Error_Protocol ("key exchange not implemented in HRR, expected key_share extension", AlertLevel_Fatal, HandshakeFailure)
+                  Nothing -> throwCore $ Error_Protocol ("key exchange not implemented in HRR, expected key_share extension", HandshakeFailure)
           else
             handshakeClient13 cparams ctx groupToSend
       else do
         when rtt0 $
-            throwCore $ Error_Protocol ("server denied TLS 1.3 when connecting with early data", AlertLevel_Fatal, HandshakeFailure)
+            throwCore $ Error_Protocol ("server denied TLS 1.3 when connecting with early data", HandshakeFailure)
         sessionResuming <- usingState_ ctx isSessionResuming
         if sessionResuming
             then sendChangeCipherAndFinish ctx ClientRole
@@ -336,7 +336,7 @@ handshakeClient' cparams ctx groups mparams = do
                                         else throwAlert a
                                 _ -> throwAlert a
                         _ -> unexpected (show p) (Just "handshake")
-                throwAlert a = throwCore $ Error_Protocol ("expecting server hello, got alert : " ++ show a, AlertLevel_Fatal, HandshakeFailure)
+                throwAlert a = throwCore $ Error_Protocol ("expecting server hello, got alert : " ++ show a, HandshakeFailure)
 
 -- | Store the keypair and check that it is compatible with the current protocol
 -- version and a list of 'CertificateType' values.
@@ -349,13 +349,11 @@ storePrivInfoClient ctx cTypes (cc, privkey) = do
     unless (certificateCompatible pubkey cTypes) $
         throwCore $ Error_Protocol
             ( pubkeyType pubkey ++ " credential does not match allowed certificate types"
-            , AlertLevel_Fatal
             , InternalError )
     ver <- usingState_ ctx getVersion
     unless (pubkey `versionCompatible` ver) $
         throwCore $ Error_Protocol
             ( pubkeyType pubkey ++ " credential is not supported at version " ++ show ver
-            , AlertLevel_Fatal
             , InternalError )
 
 -- | When the server requests a client certificate, we try to
@@ -458,7 +456,6 @@ getLocalHashSigAlg ctx isCompatible cHashSigs pubKey = do
         Just best -> return best
         Nothing   -> throwCore $ Error_Protocol
                          ( keyerr pubKey
-                         , AlertLevel_Fatal
                          , HandshakeFailure
                          )
   where
@@ -535,7 +532,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                 CipherKeyExchange_DHE_DSS -> getCKX_DHE
                 CipherKeyExchange_ECDHE_RSA -> getCKX_ECDHE
                 CipherKeyExchange_ECDHE_ECDSA -> getCKX_ECDHE
-                _ -> throwCore $ Error_Protocol ("client key exchange unsupported type", AlertLevel_Fatal, HandshakeFailure)
+                _ -> throwCore $ Error_Protocol ("client key exchange unsupported type", HandshakeFailure)
             sendPacket ctx $ Handshake [ClientKeyXchg ckx]
             masterSecret <- usingHState ctx setMasterSec
             logKey ctx (MasterSecret masterSecret)
@@ -551,9 +548,9 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                         groupUsage <- onCustomFFDHEGroup (clientHooks cparams) params srvpub `catchException`
                                           throwMiscErrorOnException "custom group callback failed"
                         case groupUsage of
-                            GroupUsageInsecure           -> throwCore $ Error_Protocol ("FFDHE group is not secure enough", AlertLevel_Fatal, InsufficientSecurity)
-                            GroupUsageUnsupported reason -> throwCore $ Error_Protocol ("unsupported FFDHE group: " ++ reason, AlertLevel_Fatal, HandshakeFailure)
-                            GroupUsageInvalidPublic      -> throwCore $ Error_Protocol ("invalid server public key", AlertLevel_Fatal, IllegalParameter)
+                            GroupUsageInsecure           -> throwCore $ Error_Protocol ("FFDHE group is not secure enough", InsufficientSecurity)
+                            GroupUsageUnsupported reason -> throwCore $ Error_Protocol ("unsupported FFDHE group: " ++ reason, HandshakeFailure)
+                            GroupUsageInvalidPublic      -> throwCore $ Error_Protocol ("invalid server public key", IllegalParameter)
                             GroupUsageValid              -> return ()
 
                     -- When grp is known but not in the supported list we use it
@@ -569,7 +566,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                                  usingHState ctx $ setNegotiatedGroup grp
                                  dhePair <- generateFFDHEShared ctx grp srvpub
                                  case dhePair of
-                                     Nothing   -> throwCore $ Error_Protocol ("invalid server " ++ show grp ++ " public key", AlertLevel_Fatal, IllegalParameter)
+                                     Nothing   -> throwCore $ Error_Protocol ("invalid server " ++ show grp ++ " public key", IllegalParameter)
                                      Just pair -> return pair
 
                     let setMasterSec = setMasterSecretFromPre xver ClientRole premaster
@@ -581,7 +578,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     usingHState ctx $ setNegotiatedGroup grp
                     ecdhePair <- generateECDHEShared ctx srvpub
                     case ecdhePair of
-                        Nothing                  -> throwCore $ Error_Protocol ("invalid server " ++ show grp ++ " public key", AlertLevel_Fatal, IllegalParameter)
+                        Nothing                  -> throwCore $ Error_Protocol ("invalid server " ++ show grp ++ " public key", IllegalParameter)
                         Just (clipub, premaster) -> do
                             xver <- usingState_ ctx getVersion
                             let setMasterSec = setMasterSecretFromPre xver ClientRole premaster
@@ -622,7 +619,7 @@ processServerExtension (ExtensionRaw extID content)
         cv <- getVerifiedData ClientRole
         sv <- getVerifiedData ServerRole
         let bs = extensionEncode (SecureRenegotiation cv $ Just sv)
-        unless (bs `bytesEq` content) $ throwError $ Error_Protocol ("server secure renegotiation data not matching", AlertLevel_Fatal, HandshakeFailure)
+        unless (bs `bytesEq` content) $ throwError $ Error_Protocol ("server secure renegotiation data not matching", HandshakeFailure)
   | extID == extensionID_SupportedVersions = case extensionDecode MsgTServerHello content of
       Just (SupportedVersionsServerHello ver) -> setVersion ver
       _                                       -> return ()
@@ -648,14 +645,14 @@ throwMiscErrorOnException msg e =
 --
 onServerHello :: Context -> ClientParams -> Session -> [ExtensionID] -> Handshake -> IO (RecvState IO)
 onServerHello ctx cparams clientSession sentExts (ServerHello rver serverRan serverSession cipher compression exts) = do
-    when (rver == SSL2) $ throwCore $ Error_Protocol ("SSL2 is not supported", AlertLevel_Fatal, ProtocolVersion)
-    when (rver == SSL3) $ throwCore $ Error_Protocol ("SSL3 is not supported", AlertLevel_Fatal, ProtocolVersion)
+    when (rver == SSL2) $ throwCore $ Error_Protocol ("SSL2 is not supported", ProtocolVersion)
+    when (rver == SSL3) $ throwCore $ Error_Protocol ("SSL3 is not supported", ProtocolVersion)
     -- find the compression and cipher methods that the server want to use.
     cipherAlg <- case find ((==) cipher . cipherID) (supportedCiphers $ ctxSupported ctx) of
-                     Nothing  -> throwCore $ Error_Protocol ("server choose unknown cipher", AlertLevel_Fatal, IllegalParameter)
+                     Nothing  -> throwCore $ Error_Protocol ("server choose unknown cipher", IllegalParameter)
                      Just alg -> return alg
     compressAlg <- case find ((==) compression . compressionID) (supportedCompressions $ ctxSupported ctx) of
-                       Nothing  -> throwCore $ Error_Protocol ("server choose unknown compression", AlertLevel_Fatal, IllegalParameter)
+                       Nothing  -> throwCore $ Error_Protocol ("server choose unknown compression", IllegalParameter)
                        Just alg -> return alg
 
     -- intersect sent extensions in client and the received extensions from server.
@@ -664,7 +661,7 @@ onServerHello ctx cparams clientSession sentExts (ServerHello rver serverRan ser
           | i == extensionID_Cookie = False -- for HRR
           | otherwise               = i `notElem` sentExts
     when (any checkExt exts) $
-        throwCore $ Error_Protocol ("spurious extensions received", AlertLevel_Fatal, UnsupportedExtension)
+        throwCore $ Error_Protocol ("spurious extensions received", UnsupportedExtension)
 
     let resumingSession =
             case clientWantSessionResume cparams of
@@ -691,18 +688,18 @@ onServerHello ctx cparams clientSession sentExts (ServerHello rver serverRan ser
     -- client-side enabled protocol versions.
     --
     when (isDowngraded ver (supportedVersions $ clientSupported cparams) serverRan) $
-        throwCore $ Error_Protocol ("version downgrade detected", AlertLevel_Fatal, IllegalParameter)
+        throwCore $ Error_Protocol ("version downgrade detected", IllegalParameter)
 
     case find (== ver) (supportedVersions $ ctxSupported ctx) of
-        Nothing -> throwCore $ Error_Protocol ("server version " ++ show ver ++ " is not supported", AlertLevel_Fatal, ProtocolVersion)
+        Nothing -> throwCore $ Error_Protocol ("server version " ++ show ver ++ " is not supported", ProtocolVersion)
         Just _  -> return ()
     if ver > TLS12 then do
         when (serverSession /= clientSession) $
-            throwCore $ Error_Protocol ("received mismatched legacy session", AlertLevel_Fatal, IllegalParameter)
+            throwCore $ Error_Protocol ("received mismatched legacy session", IllegalParameter)
         established <- ctxEstablished ctx
         eof <- ctxEOF ctx
         when (established == Established && not eof) $
-            throwCore $ Error_Protocol ("renegotiation to TLS 1.3 or later is not allowed", AlertLevel_Fatal, ProtocolVersion)
+            throwCore $ Error_Protocol ("renegotiation to TLS 1.3 or later is not allowed", ProtocolVersion)
         ensureNullCompression compression
         failOnEitherError $ usingHState ctx $ setHelloParameters13 cipherAlg
         return RecvStateDone
@@ -715,7 +712,7 @@ onServerHello ctx cparams clientSession sentExts (ServerHello rver serverRan ser
                 let emsSession = SessionEMS `elem` sessionFlags sessionData
                 when (ems /= emsSession) $
                     let err = "server resumes a session which is not EMS consistent"
-                     in throwCore $ Error_Protocol (err, AlertLevel_Fatal, HandshakeFailure)
+                     in throwCore $ Error_Protocol (err, HandshakeFailure)
                 let masterSecret = sessionSecret sessionData
                 usingHState ctx $ setMasterSecret rver ClientRole masterSecret
                 logKey ctx (MasterSecret masterSecret)
@@ -725,7 +722,7 @@ onServerHello _ _ _ _ p = unexpected (show p) (Just "server hello")
 processCertificate :: ClientParams -> Context -> Handshake -> IO (RecvState IO)
 processCertificate cparams ctx (Certificates certs) = do
     when (isNullCertificateChain certs) $
-        throwCore $ Error_Protocol ("server certificate missing", AlertLevel_Fatal, DecodeError)
+        throwCore $ Error_Protocol ("server certificate missing", DecodeError)
     -- run certificate recv hook
     ctxWithHooks ctx (`hookRecvCertificates` certs)
     -- then run certificate validation
@@ -780,10 +777,10 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
                 (cke, SKX_Unparsed bytes) -> do
                     ver <- usingState_ ctx getVersion
                     case decodeReallyServerKeyXchgAlgorithmData ver cke bytes of
-                        Left _        -> throwCore $ Error_Protocol ("unknown server key exchange received, expecting: " ++ show cke, AlertLevel_Fatal, HandshakeFailure)
+                        Left _        -> throwCore $ Error_Protocol ("unknown server key exchange received, expecting: " ++ show cke, HandshakeFailure)
                         Right realSkx -> processWithCipher cipher realSkx
                     -- we need to resolve the result. and recall processWithCipher ..
-                (c,_)           -> throwCore $ Error_Protocol ("unknown server key exchange received, expecting: " ++ show c, AlertLevel_Fatal, HandshakeFailure)
+                (c,_)           -> throwCore $ Error_Protocol ("unknown server key exchange received, expecting: " ++ show c, HandshakeFailure)
         doDHESignature dhparams signature kxsAlg = do
             -- FF group selected by the server is verified when generating CKX
             publicKey <- getSignaturePublicKey kxsAlg
@@ -801,13 +798,13 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
         getSignaturePublicKey kxsAlg = do
             publicKey <- usingHState ctx getRemotePublicKey
             unless (isKeyExchangeSignatureKey kxsAlg publicKey) $
-                throwCore $ Error_Protocol ("server public key algorithm is incompatible with " ++ show kxsAlg, AlertLevel_Fatal, HandshakeFailure)
+                throwCore $ Error_Protocol ("server public key algorithm is incompatible with " ++ show kxsAlg, HandshakeFailure)
             ver <- usingState_ ctx getVersion
             unless (publicKey `versionCompatible` ver) $
-                throwCore $ Error_Protocol (show ver ++ " has no support for " ++ pubkeyType publicKey, AlertLevel_Fatal, IllegalParameter)
+                throwCore $ Error_Protocol (show ver ++ " has no support for " ++ pubkeyType publicKey, IllegalParameter)
             let groups = supportedGroups (ctxSupported ctx)
             unless (satisfiesEcPredicate (`elem` groups) publicKey) $
-                throwCore $ Error_Protocol ("server public key has unsupported elliptic curve", AlertLevel_Fatal, IllegalParameter)
+                throwCore $ Error_Protocol ("server public key has unsupported elliptic curve", IllegalParameter)
             return publicKey
 
 processServerKeyExchange ctx p = processCertificateRequest ctx p
@@ -818,7 +815,6 @@ processCertificateRequest ctx (CertRequest cTypesSent sigAlgs dNames) = do
     when (ver == TLS12 && isNothing sigAlgs) $
         throwCore $ Error_Protocol
             ( "missing TLS 1.2 certificate request signature algorithms"
-            , AlertLevel_Fatal
             , InternalError
             )
     let cTypes = filter (<= lastSupportedCertificateType) cTypesSent
@@ -914,13 +910,13 @@ handshakeClient13' cparams ctx groupSent choice = do
             mks <- usingState_ ctx getTLS13KeyShare
             case mks of
               Just (KeyShareServerHello ks) -> return ks
-              Just _                        -> throwCore $ Error_Protocol ("invalid key_share value", AlertLevel_Fatal, IllegalParameter)
-              Nothing                       -> throwCore $ Error_Protocol ("key exchange not implemented, expected key_share extension", AlertLevel_Fatal, HandshakeFailure)
+              Just _                        -> throwCore $ Error_Protocol ("invalid key_share value", IllegalParameter)
+              Nothing                       -> throwCore $ Error_Protocol ("key exchange not implemented, expected key_share extension", HandshakeFailure)
         let grp = keyShareEntryGroup serverKeyShare
         unless (checkKeyShareKeyLength serverKeyShare) $
-            throwCore $ Error_Protocol ("broken key_share", AlertLevel_Fatal, IllegalParameter)
+            throwCore $ Error_Protocol ("broken key_share", IllegalParameter)
         unless (groupSent == Just grp) $
-            throwCore $ Error_Protocol ("received incompatible group for (EC)DHE", AlertLevel_Fatal, IllegalParameter)
+            throwCore $ Error_Protocol ("received incompatible group for (EC)DHE", IllegalParameter)
         usingHState ctx $ setNegotiatedGroup grp
         usingHState ctx getGroupPrivate >>= fromServerKeyShare serverKeyShare
 
@@ -935,10 +931,10 @@ handshakeClient13' cparams ctx groupSent choice = do
                      return (initEarlySecret choice Nothing, False)
                  Just (PreSharedKeyServerHello 0) -> do
                      unless (B.length sec == hashSize) $
-                         throwCore $ Error_Protocol ("selected cipher is incompatible with selected PSK", AlertLevel_Fatal, IllegalParameter)
+                         throwCore $ Error_Protocol ("selected cipher is incompatible with selected PSK", IllegalParameter)
                      usingHState ctx $ setTLS13HandshakeMode PreSharedKey
                      return (earlySecretPSK, True)
-                 Just _                           -> throwCore $ Error_Protocol ("selected identity out of range", AlertLevel_Fatal, IllegalParameter)
+                 Just _                           -> throwCore $ Error_Protocol ("selected identity out of range", IllegalParameter)
 
     expectEncryptedExtensions (EncryptedExtensions13 eexts) = do
         liftIO $ setALPN ctx MsgTEncryptedExtensions eexts
@@ -1003,7 +999,6 @@ processCertRequest13 ctx token exts = do
              in return $ sigAlgsToCertTypes ctx validAs
         Nothing -> throwCore $ Error_Protocol
                         ( "invalid certificate request"
-                        , AlertLevel_Fatal
                         , HandshakeFailure )
     -- Unused:
     -- caAlgs <- extalgs caextID uncertsig
@@ -1019,7 +1014,6 @@ processCertRequest13 ctx token exts = do
                          Just (CertificateAuthorities names) -> return names
                          _ -> throwCore $ Error_Protocol
                                   ( "invalid certificate request"
-                                  , AlertLevel_Fatal
                                   , HandshakeFailure )
     extalgs extID decons = case extensionLookup extID exts of
         Nothing   -> return Nothing
@@ -1028,7 +1022,6 @@ processCertRequest13 ctx token exts = do
                            -> return    $ decons e
                          _ -> throwCore $ Error_Protocol
                                   ( "invalid certificate request"
-                                  , AlertLevel_Fatal
                                   , HandshakeFailure )
     unsighash :: SignatureAlgorithms
               -> Maybe [HashAndSignatureAlgorithm]
@@ -1066,7 +1059,6 @@ sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
     sendClientData13 _ _ =
         throwCore $ Error_Protocol
             ( "missing TLS 1.3 certificate request context token"
-            , AlertLevel_Fatal
             , InternalError
             )
 
@@ -1088,11 +1080,11 @@ postHandshakeAuthClientWith cparams ctx h@(CertRequest13 certReqCtx exts) =
         processCertRequest13 ctx certReqCtx exts
         (usedHash, _, level, applicationSecretN) <- getTxState ctx
         unless (level == CryptApplicationSecret) $
-            throwCore $ Error_Protocol ("unexpected post-handshake authentication request", AlertLevel_Fatal, UnexpectedMessage)
+            throwCore $ Error_Protocol ("unexpected post-handshake authentication request", UnexpectedMessage)
         sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret applicationSecretN)
 
 postHandshakeAuthClientWith _ _ _ =
-    throwCore $ Error_Protocol ("unexpected handshake message received in postHandshakeAuthClientWith", AlertLevel_Fatal, UnexpectedMessage)
+    throwCore $ Error_Protocol ("unexpected handshake message received in postHandshakeAuthClientWith", UnexpectedMessage)
 
 contextSync :: Context -> ClientState -> IO ()
 contextSync ctx ctl = case ctxHandshakeSync ctx of

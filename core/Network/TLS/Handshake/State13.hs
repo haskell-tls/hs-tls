@@ -133,7 +133,7 @@ setHelloParameters13 cipher = do
             return $ Right ()
         Just oldcipher
             | cipher == oldcipher -> return $ Right ()
-            | otherwise -> return $ Left $ Error_Protocol ("TLS 1.3 cipher changed after hello retry", AlertLevel_Fatal, IllegalParameter)
+            | otherwise -> return $ Left $ Error_Protocol ("TLS 1.3 cipher changed after hello retry", IllegalParameter)
   where
     hashAlg = cipherHash cipher
     updateDigest (HandshakeMessages bytes)  = HandshakeDigestContext $ foldl hashUpdate (hashInit hashAlg) $ reverse bytes

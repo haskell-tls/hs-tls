@@ -90,12 +90,12 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
     -- renego is not allowed in TLS 1.3
     when (established /= NotEstablished) $ do
         ver <- usingState_ ctx (getVersionWithDefault TLS10)
-        when (ver == TLS13) $ throwCore $ Error_Protocol ("renegotiation is not allowed in TLS 1.3", AlertLevel_Fatal, UnexpectedMessage)
+        when (ver == TLS13) $ throwCore $ Error_Protocol ("renegotiation is not allowed in TLS 1.3", UnexpectedMessage)
     -- rejecting client initiated renegotiation to prevent DOS.
     eof <- ctxEOF ctx
     let renegotiation = established == Established && not eof
     when (renegotiation && not (supportedClientInitiatedRenegotiation $ ctxSupported ctx)) $
-        throwCore $ Error_Protocol ("renegotiation is not allowed", AlertLevel_Warning, NoRenegotiation)
+        throwCore $ Error_Protocol_Warning ("renegotiation is not allowed", NoRenegotiation)
     -- check if policy allow this new handshake to happens
     handshakeAuthorized <- withMeasure ctx (onNewHandshake $ serverHooks sparams)
     unless handshakeAuthorized (throwCore $ Error_HandshakePolicy "server: handshake denied")
@@ -105,16 +105,16 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
     processHandshake ctx clientHello
 
     -- rejecting SSL2. RFC 6176
-    when (legacyVersion == SSL2) $ throwCore $ Error_Protocol ("SSL 2.0 is not supported", AlertLevel_Fatal, ProtocolVersion)
+    when (legacyVersion == SSL2) $ throwCore $ Error_Protocol ("SSL 2.0 is not supported", ProtocolVersion)
     -- rejecting SSL3. RFC 7568
-    when (legacyVersion == SSL3) $ throwCore $ Error_Protocol ("SSL 3.0 is not supported", AlertLevel_Fatal, ProtocolVersion)
+    when (legacyVersion == SSL3) $ throwCore $ Error_Protocol ("SSL 3.0 is not supported", ProtocolVersion)
 
     -- Fallback SCSV: RFC7507
     -- TLS_FALLBACK_SCSV: {0x56, 0x00}
     when (supportedFallbackScsv (ctxSupported ctx) &&
           (0x5600 `elem` ciphers) &&
           legacyVersion < TLS12) $
-        throwCore $ Error_Protocol ("fallback is not allowed", AlertLevel_Fatal, InappropriateFallback)
+        throwCore $ Error_Protocol ("fallback is not allowed", InappropriateFallback)
     -- choosing TLS version
     let clientVersions = case extensionLookup extensionID_SupportedVersions exts >>= extensionDecode MsgTClientHello of
             Just (SupportedVersionsClientHello vers) -> vers -- fixme: vers == []
@@ -128,10 +128,10 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
       Just cver -> return cver
       Nothing   ->
         if (TLS13 `elem` serverVersions) && clientVersions /= [] then case findHighestVersionFrom13 clientVersions serverVersions of
-                  Nothing -> throwCore $ Error_Protocol ("client versions " ++ show clientVersions ++ " is not supported", AlertLevel_Fatal, ProtocolVersion)
+                  Nothing -> throwCore $ Error_Protocol ("client versions " ++ show clientVersions ++ " is not supported", ProtocolVersion)
                   Just v  -> return v
            else case findHighestVersionFrom clientVersion serverVersions of
-                  Nothing -> throwCore $ Error_Protocol ("client version " ++ show clientVersion ++ " is not supported", AlertLevel_Fatal, ProtocolVersion)
+                  Nothing -> throwCore $ Error_Protocol ("client version " ++ show clientVersion ++ " is not supported", ProtocolVersion)
                   Just v  -> return v
 
     -- SNI (Server Name Indication)
@@ -150,7 +150,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
         -- fixme: we should check if the client random is the same as
         -- that in the first client hello in the case of hello retry.
         handshakeServerWithTLS13 sparams ctx chosenVersion exts ciphers serverName clientSession
-handshakeServerWith _ _ _ = throwCore $ Error_Protocol ("unexpected handshake message received in handshakeServerWith", AlertLevel_Fatal, HandshakeFailure)
+handshakeServerWith _ _ _ = throwCore $ Error_Protocol ("unexpected handshake message received in handshakeServerWith", HandshakeFailure)
 
 -- TLS 1.2 or earlier
 handshakeServerWithTLS12 :: ServerParams
@@ -170,7 +170,7 @@ handshakeServerWithTLS12 sparams ctx chosenVersion exts ciphers serverName clien
 
     -- If compression is null, commonCompressions should be [0].
     when (null commonCompressions) $ throwCore $
-        Error_Protocol ("no compression in common with the client", AlertLevel_Fatal, HandshakeFailure)
+        Error_Protocol ("no compression in common with the client", HandshakeFailure)
 
     -- When selecting a cipher we must ensure that it is allowed for the
     -- TLS version but also that all its key-exchange requirements
@@ -252,7 +252,7 @@ handshakeServerWithTLS12 sparams ctx chosenVersion exts ciphers serverName clien
     -- creds, check now before calling onCipherChoosing, which does not handle
     -- empty lists.
     when (null ciphersFilteredVersion) $ throwCore $
-        Error_Protocol ("no cipher in common with the client", AlertLevel_Fatal, HandshakeFailure)
+        Error_Protocol ("no cipher in common with the client", HandshakeFailure)
 
     let usedCipher = onCipherChoosing (serverHooks sparams) chosenVersion ciphersFilteredVersion
 
@@ -263,7 +263,7 @@ handshakeServerWithTLS12 sparams ctx chosenVersion exts ciphers serverName clien
                 CipherKeyExchange_DHE_DSS   -> return $ credentialsFindForSigning KX_DSS signatureCreds
                 CipherKeyExchange_ECDHE_RSA -> return $ credentialsFindForSigning KX_RSA signatureCreds
                 CipherKeyExchange_ECDHE_ECDSA -> return $ credentialsFindForSigning KX_ECDSA signatureCreds
-                _                           -> throwCore $ Error_Protocol ("key exchange algorithm not implemented", AlertLevel_Fatal, HandshakeFailure)
+                _                           -> throwCore $ Error_Protocol ("key exchange algorithm not implemented", HandshakeFailure)
 
     ems <- processExtendedMasterSec ctx chosenVersion MsgTClientHello exts
     resumeSessionData <- case clientSession of
@@ -298,7 +298,7 @@ handshakeServerWithTLS12 sparams ctx chosenVersion exts ciphers serverName clien
             | ems && not emsSession                         = return Nothing
             | not ems && emsSession                         =
                 let err = "client resumes an EMS session without EMS"
-                 in throwCore $ Error_Protocol (err, AlertLevel_Fatal, HandshakeFailure)
+                 in throwCore $ Error_Protocol (err, HandshakeFailure)
             | otherwise                                     = return m
           where emsSession = SessionEMS `elem` sessionFlags sd
 
@@ -479,7 +479,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
         generateSKX_ECDHE kxsAlg = do
             let possibleECGroups = negotiatedGroupsInCommon ctx exts `intersect` availableECGroups
             grp <- case possibleECGroups of
-                     []  -> throwCore $ Error_Protocol ("no common group", AlertLevel_Fatal, HandshakeFailure)
+                     []  -> throwCore $ Error_Protocol ("no common group", HandshakeFailure)
                      g:_ -> return g
             serverParams <- setup_ECDHE grp
             pubKey <- getLocalPublicKey ctx
@@ -541,7 +541,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
             chain <- usingHState ctx getClientCertChain
             case chain of
                 Just cc | isNullCertificateChain cc -> return ()
-                        | otherwise                 -> throwCore $ Error_Protocol ("cert verify message missing", AlertLevel_Fatal, UnexpectedMessage)
+                        | otherwise                 -> throwCore $ Error_Protocol ("cert verify message missing", UnexpectedMessage)
                 Nothing -> return ()
             expectChangeCipher p
 
@@ -556,7 +556,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
 checkValidClientCertChain :: MonadIO m => Context -> String -> m CertificateChain
 checkValidClientCertChain ctx errmsg = do
     chain <- usingHState ctx getClientCertChain
-    let throwerror = Error_Protocol (errmsg , AlertLevel_Fatal, UnexpectedMessage)
+    let throwerror = Error_Protocol (errmsg , UnexpectedMessage)
     case chain of
         Nothing -> throwCore throwerror
         Just cc | isNullCertificateChain cc -> throwCore throwerror
@@ -669,13 +669,13 @@ handshakeServerWithTLS13 :: ServerParams
                          -> IO ()
 handshakeServerWithTLS13 sparams ctx chosenVersion exts clientCiphers _serverName clientSession = do
     when (any (\(ExtensionRaw eid _) -> eid == extensionID_PreSharedKey) $ init exts) $
-        throwCore $ Error_Protocol ("extension pre_shared_key must be last", AlertLevel_Fatal, IllegalParameter)
+        throwCore $ Error_Protocol ("extension pre_shared_key must be last", IllegalParameter)
     -- Deciding cipher.
     -- The shared cipherlist can become empty after filtering for compatible
     -- creds, check now before calling onCipherChoosing, which does not handle
     -- empty lists.
     when (null ciphersFilteredVersion) $ throwCore $
-        Error_Protocol ("no cipher in common with the client", AlertLevel_Fatal, HandshakeFailure)
+        Error_Protocol ("no cipher in common with the client", HandshakeFailure)
     let usedCipher = onCipherChoosing (serverHooks sparams) chosenVersion ciphersFilteredVersion
         usedHash = cipherHash usedCipher
         rtt0 = case extensionLookup extensionID_EarlyData exts >>= extensionDecode MsgTClientHello of
@@ -687,11 +687,11 @@ handshakeServerWithTLS13 sparams ctx chosenVersion exts clientCiphers _serverNam
         setEstablished ctx (EarlyDataNotAllowed 3) -- hardcoding
     -- Deciding key exchange from key shares
     keyShares <- case extensionLookup extensionID_KeyShare exts of
-          Nothing -> throwCore $ Error_Protocol ("key exchange not implemented, expected key_share extension", AlertLevel_Fatal, MissingExtension)
+          Nothing -> throwCore $ Error_Protocol ("key exchange not implemented, expected key_share extension", MissingExtension)
           Just kss -> case extensionDecode MsgTClientHello kss of
             Just (KeyShareClientHello kses) -> return kses
             Just _                          -> error "handshakeServerWithTLS13: invalid KeyShare value"
-            _                               -> throwCore $ Error_Protocol ("broken key_share", AlertLevel_Fatal, DecodeError)
+            _                               -> throwCore $ Error_Protocol ("broken key_share", DecodeError)
     mshare <- findKeyShare keyShares serverGroups
     case mshare of
       Nothing -> helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession
@@ -709,9 +709,9 @@ findKeyShare ks ggs = go ggs
       []  -> go gs
       [k] -> do
           unless (checkKeyShareKeyLength k) $
-              throwCore $ Error_Protocol ("broken key_share", AlertLevel_Fatal, IllegalParameter)
+              throwCore $ Error_Protocol ("broken key_share", IllegalParameter)
           return $ Just k
-      _   -> throwCore $ Error_Protocol ("duplicated key_share", AlertLevel_Fatal, IllegalParameter)
+      _   -> throwCore $ Error_Protocol ("duplicated key_share", IllegalParameter)
     grpEq g ent = g == keyShareEntryGroup ent
 
 doHandshake13 :: ServerParams -> Context -> Version
@@ -840,7 +840,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
     choosePSK = case extensionLookup extensionID_PreSharedKey exts >>= extensionDecode MsgTClientHello of
       Just (PreSharedKeyClientHello (PskIdentity sessionId obfAge:_) bnds@(bnd:_)) -> do
           when (null dhModes) $
-              throwCore $ Error_Protocol ("no psk_key_exchange_modes extension", AlertLevel_Fatal, MissingExtension)
+              throwCore $ Error_Protocol ("no psk_key_exchange_modes extension", MissingExtension)
           if PSK_DHE_KE `elem` dhModes then do
               let len = sum (map (\x -> B.length x + 1) bnds) + 2
                   mgr = sharedSessionManager $ serverShared sparams
@@ -889,9 +889,9 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
 
     decideCredentialInfo allCreds = do
         cHashSigs <- case extensionLookup extensionID_SignatureAlgorithms exts of
-            Nothing -> throwCore $ Error_Protocol ("no signature_algorithms extension", AlertLevel_Fatal, MissingExtension)
+            Nothing -> throwCore $ Error_Protocol ("no signature_algorithms extension", MissingExtension)
             Just sa -> case extensionDecode MsgTClientHello sa of
-              Nothing -> throwCore $ Error_Protocol ("broken signature_algorithms extension", AlertLevel_Fatal, DecodeError)
+              Nothing -> throwCore $ Error_Protocol ("broken signature_algorithms extension", DecodeError)
               Just (SignatureAlgorithms sas) -> return sas
         -- When deciding signature algorithm and certificate, we try to keep
         -- certificates supported by the client, but fallback to all credentials
@@ -903,7 +903,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
         case credentialsFindForSigning13 hashSigs cltCreds of
             Nothing ->
                 case credentialsFindForSigning13 hashSigs allCreds of
-                    Nothing -> throwCore $ Error_Protocol ("credential not found", AlertLevel_Fatal, HandshakeFailure)
+                    Nothing -> throwCore $ Error_Protocol ("credential not found", HandshakeFailure)
                     mcs -> return mcs
             mcs -> return mcs
 
@@ -993,7 +993,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
 
     expectCertificate :: Handshake13 -> RecvHandshake13M IO Bool
     expectCertificate (Certificate13 certCtx certs _ext) = liftIO $ do
-        when (certCtx /= "") $ throwCore $ Error_Protocol ("certificate request context MUST be empty", AlertLevel_Fatal, IllegalParameter)
+        when (certCtx /= "") $ throwCore $ Error_Protocol ("certificate request context MUST be empty", IllegalParameter)
         -- fixme checking _ext
         clientCertificate sparams ctx certs
         return $ isNullCertificateChain certs
@@ -1006,7 +1006,7 @@ expectCertVerify :: MonadIO m => ServerParams -> Context -> ByteString -> Handsh
 expectCertVerify sparams ctx hChCc (CertVerify13 sigAlg sig) = liftIO $ do
     certs@(CertificateChain cc) <- checkValidClientCertChain ctx "finished 13 message expected"
     pubkey <- case cc of
-                [] -> throwCore $ Error_Protocol ("client certificate missing", AlertLevel_Fatal, HandshakeFailure)
+                [] -> throwCore $ Error_Protocol ("client certificate missing", HandshakeFailure)
                 c:_ -> return $ certPubKey $ getCertificate c
     ver <- usingState_ ctx getVersion
     checkDigitalSignatureKey ver pubkey
@@ -1019,7 +1019,7 @@ helloRetryRequest :: ServerParams -> Context -> Version -> Cipher -> [ExtensionR
 helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientSession = do
     twice <- usingState_ ctx getTLS13HRR
     when twice $
-        throwCore $ Error_Protocol ("Hello retry not allowed again", AlertLevel_Fatal, HandshakeFailure)
+        throwCore $ Error_Protocol ("Hello retry not allowed again", HandshakeFailure)
     usingState_ ctx $ setTLS13HRR True
     failOnEitherError $ usingHState ctx $ setHelloParameters13 usedCipher
     let clientGroups = case extensionLookup extensionID_NegotiatedGroups exts >>= extensionDecode MsgTClientHello of
@@ -1027,7 +1027,7 @@ helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientS
           Nothing                    -> []
         possibleGroups = serverGroups `intersect` clientGroups
     case possibleGroups of
-      [] -> throwCore $ Error_Protocol ("no group in common with the client for HRR", AlertLevel_Fatal, HandshakeFailure)
+      [] -> throwCore $ Error_Protocol ("no group in common with the client for HRR", HandshakeFailure)
       g:_ -> do
           let serverKeyShare = extensionEncode $ KeyShareHRR g
               selectedVersion = extensionEncode $ SupportedVersionsServerHello chosenVersion
@@ -1096,7 +1096,7 @@ applicationProtocol ctx exts sparams = do
                 Just io -> do
                     proto <- io protos
                     when (proto == "") $
-                        throwCore $ Error_Protocol ("no supported application protocols", AlertLevel_Fatal, NoApplicationProtocol)
+                        throwCore $ Error_Protocol ("no supported application protocols", NoApplicationProtocol)
                     usingState_ ctx $ do
                         setExtensionALPN True
                         setNegotiatedProtocol proto
@@ -1178,7 +1178,7 @@ requestCertificateServer sparams ctx = do
 postHandshakeAuthServerWith :: ServerParams -> Context -> Handshake13 -> IO ()
 postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = do
     mCertReq <- getCertRequest13 ctx certCtx
-    when (isNothing mCertReq) $ throwCore $ Error_Protocol ("unknown certificate request context", AlertLevel_Fatal, DecodeError)
+    when (isNothing mCertReq) $ throwCore $ Error_Protocol ("unknown certificate request context", DecodeError)
     let certReq = fromJust "certReq" mCertReq
 
     -- fixme checking _ext
@@ -1190,7 +1190,7 @@ postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = d
 
     (usedHash, _, level, applicationSecretN) <- getRxState ctx
     unless (level == CryptApplicationSecret) $
-        throwCore $ Error_Protocol ("tried post-handshake authentication without application traffic secret", AlertLevel_Fatal, InternalError)
+        throwCore $ Error_Protocol ("tried post-handshake authentication without application traffic secret", InternalError)
 
     let expectFinished hChBeforeCf (Finished13 verifyData) = do
             checkFinished ctx usedHash applicationSecretN hChBeforeCf verifyData
@@ -1207,7 +1207,7 @@ postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = d
                                    ]
 
 postHandshakeAuthServerWith _ _ _ =
-    throwCore $ Error_Protocol ("unexpected handshake message received in postHandshakeAuthServerWith", AlertLevel_Fatal, UnexpectedMessage)
+    throwCore $ Error_Protocol ("unexpected handshake message received in postHandshakeAuthServerWith", UnexpectedMessage)
 
 contextSync :: Context -> ServerState -> IO ()
 contextSync ctx ctl = case ctxHandshakeSync ctx of

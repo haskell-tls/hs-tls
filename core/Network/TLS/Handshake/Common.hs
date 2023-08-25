@@ -77,7 +77,8 @@ handleException ctx f = catchException f $ \exception -> do
     ignoreIOErr _ = return ()
 
 errorToAlert :: TLSError -> (AlertLevel, AlertDescription)
-errorToAlert (Error_Protocol (_, lvl, ad))   = (lvl, ad)
+errorToAlert (Error_Protocol (_, ad))   = (AlertLevel_Fatal, ad)
+errorToAlert (Error_Protocol_Warning (_, ad))   = (AlertLevel_Warning, ad)
 errorToAlert (Error_Packet_unexpected _ _) = (AlertLevel_Fatal, UnexpectedMessage)
 errorToAlert (Error_Packet_Parsing msg)
   | "invalid version" `isInfixOf` msg      = (AlertLevel_Fatal, ProtocolVersion)
@@ -88,10 +89,11 @@ errorToAlert _                             = (AlertLevel_Fatal, InternalError)
 -- | Return the message that a TLS endpoint can add to its local log for the
 -- specified library error.
 errorToAlertMessage :: TLSError -> String
-errorToAlertMessage (Error_Protocol (msg, _, _))    = msg
-errorToAlertMessage (Error_Packet_unexpected msg _) = msg
-errorToAlertMessage (Error_Packet_Parsing msg)      = msg
-errorToAlertMessage e                               = show e
+errorToAlertMessage (Error_Protocol (msg, _))         = msg
+errorToAlertMessage (Error_Protocol_Warning (msg, _)) = msg
+errorToAlertMessage (Error_Packet_unexpected msg _)   = msg
+errorToAlertMessage (Error_Packet_Parsing msg)        = msg
+errorToAlertMessage e                                 = show e
 
 unexpected :: MonadIO m => String -> Maybe String -> m a
 unexpected msg expected = throwCore $ Error_Packet_unexpected msg (maybe "" (" expected: " ++) expected)
@@ -187,7 +189,7 @@ ensureRecvComplete :: MonadIO m => Context -> m ()
 ensureRecvComplete ctx = do
     complete <- liftIO $ isRecvComplete ctx
     unless complete $
-        throwCore $ Error_Protocol ("received incomplete message at key change", AlertLevel_Fatal, UnexpectedMessage)
+        throwCore $ Error_Protocol ("received incomplete message at key change", UnexpectedMessage)
 
 processExtendedMasterSec :: MonadIO m => Context -> Version -> MessageType -> [ExtensionRaw] -> m Bool
 processExtendedMasterSec ctx ver msgt exts
@@ -197,7 +199,7 @@ processExtendedMasterSec ctx ver msgt exts
     | otherwise    =
         case extensionLookup extensionID_ExtendedMasterSecret exts >>= extensionDecode msgt of
             Just ExtendedMasterSecret -> usingHState ctx (setExtendedMasterSec True) >> return True
-            Nothing | ems == RequireEMS -> throwCore $ Error_Protocol (err, AlertLevel_Fatal, HandshakeFailure)
+            Nothing | ems == RequireEMS -> throwCore $ Error_Protocol (err, HandshakeFailure)
                     | otherwise -> return False
   where ems = supportedExtendedMasterSec (ctxSupported ctx)
         err = "peer does not support Extended Master Secret"
@@ -248,7 +250,6 @@ storePrivInfo ctx cc privkey = do
     unless (isDigitalSignaturePair (pubkey, privkey)) $
         throwCore $ Error_Protocol
             ( "mismatched or unsupported private key pair"
-            , AlertLevel_Fatal
             , InternalError )
     usingHState ctx $ setPublicPrivateKeys (pubkey, privkey)
     return pubkey
@@ -259,7 +260,7 @@ checkSupportedGroup :: Context -> Group -> IO ()
 checkSupportedGroup ctx grp =
     unless (isSupportedGroup ctx grp) $
         let msg = "unsupported (EC)DHE group: " ++ show grp
-         in throwCore $ Error_Protocol (msg, AlertLevel_Fatal, IllegalParameter)
+         in throwCore $ Error_Protocol (msg, IllegalParameter)
 
 isSupportedGroup :: Context -> Group -> Bool
 isSupportedGroup ctx grp = grp `elem` supportedGroups (ctxSupported ctx)

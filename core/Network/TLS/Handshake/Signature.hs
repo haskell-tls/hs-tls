@@ -39,7 +39,7 @@ import Network.TLS.X509
 import Control.Monad.State.Strict
 
 decryptError :: MonadIO m => String -> m a
-decryptError msg = throwCore $ Error_Protocol (msg, AlertLevel_Fatal, DecryptError)
+decryptError msg = throwCore $ Error_Protocol (msg, DecryptError)
 
 -- | Check that the key is compatible with a list of 'CertificateType' values.
 -- Ed25519 and Ed448 have no assigned code point and are checked with extension
@@ -297,4 +297,4 @@ checkSupportedHashSignature _   Nothing   = return ()
 checkSupportedHashSignature ctx (Just hs) =
     unless (hs `elem` supportedHashSignatures (ctxSupported ctx)) $
         let msg = "unsupported hash and signature algorithm: " ++ show hs
-         in throwCore $ Error_Protocol (msg, AlertLevel_Fatal, IllegalParameter)
+         in throwCore $ Error_Protocol (msg, IllegalParameter)
