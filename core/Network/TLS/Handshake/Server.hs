@@ -95,7 +95,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
     eof <- ctxEOF ctx
     let renegotiation = established == Established && not eof
     when (renegotiation && not (supportedClientInitiatedRenegotiation $ ctxSupported ctx)) $
-        throwCore $ Error_Protocol "renegotiation is not allowed" NoRenegotiation
+        throwCore $ Error_Protocol_Warning "renegotiation is not allowed" NoRenegotiation
     -- check if policy allow this new handshake to happens
     handshakeAuthorized <- withMeasure ctx (onNewHandshake $ serverHooks sparams)
     unless handshakeAuthorized (throwCore $ Error_HandshakePolicy "server: handshake denied")
