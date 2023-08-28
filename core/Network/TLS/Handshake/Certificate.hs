@@ -24,18 +24,18 @@ import Data.X509 (ExtKeyUsage(..), ExtKeyUsageFlag, extensionGet)
 -- on certificate reject, throw an exception with the proper protocol alert error.
 certificateRejected :: MonadIO m => CertificateRejectReason -> m a
 certificateRejected CertificateRejectRevoked =
-    throwCore $ Error_Protocol ("certificate is revoked", CertificateRevoked)
+    throwCore $ Error_Protocol "certificate is revoked" CertificateRevoked
 certificateRejected CertificateRejectExpired =
-    throwCore $ Error_Protocol ("certificate has expired", CertificateExpired)
+    throwCore $ Error_Protocol "certificate has expired" CertificateExpired
 certificateRejected CertificateRejectUnknownCA =
-    throwCore $ Error_Protocol ("certificate has unknown CA", UnknownCa)
+    throwCore $ Error_Protocol "certificate has unknown CA" UnknownCa
 certificateRejected CertificateRejectAbsent =
-    throwCore $ Error_Protocol ("certificate is missing", CertificateRequired)
+    throwCore $ Error_Protocol "certificate is missing" CertificateRequired
 certificateRejected (CertificateRejectOther s) =
-    throwCore $ Error_Protocol ("certificate rejected: " ++ s, CertificateUnknown)
+    throwCore $ Error_Protocol ("certificate rejected: " ++ s) CertificateUnknown
 
 badCertificate :: MonadIO m => String -> m a
-badCertificate msg = throwCore $ Error_Protocol (msg, BadCertificate)
+badCertificate msg = throwCore $ Error_Protocol msg BadCertificate
 
 rejectOnException :: SomeException -> IO CertificateUsage
 rejectOnException e = return $ CertificateUsageReject $ CertificateRejectOther $ show e

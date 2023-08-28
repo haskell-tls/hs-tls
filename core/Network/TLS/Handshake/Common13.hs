@@ -88,7 +88,7 @@ makeFinished ctx usedHash baseKey = do
 checkFinished :: MonadIO m => Context -> Hash -> ByteString -> ByteString -> ByteString -> m ()
 checkFinished ctx usedHash baseKey hashValue verifyData = do
     let verifyData' = makeVerifyData usedHash baseKey hashValue
-    when (B.length verifyData /= B.length verifyData') $ throwCore $ Error_Protocol ("broken Finished", DecodeError)
+    when (B.length verifyData /= B.length verifyData') $ throwCore $ Error_Protocol "broken Finished" DecodeError
     unless (verifyData' == verifyData) $ decryptError "cannot verify finished"
     liftIO $ writeIORef (ctxPeerFinished ctx) (Just verifyData)
 
@@ -102,11 +102,11 @@ makeVerifyData usedHash baseKey = hmac usedHash finishedKey
 
 makeServerKeyShare :: Context -> KeyShareEntry -> IO (ByteString, KeyShareEntry)
 makeServerKeyShare ctx (KeyShareEntry grp wcpub) = case ecpub of
-  Left  e    -> throwCore $ Error_Protocol (show e, IllegalParameter)
+  Left  e    -> throwCore $ Error_Protocol (show e) IllegalParameter
   Right cpub -> do
       ecdhePair <- generateECDHEShared ctx cpub
       case ecdhePair of
-          Nothing -> throwCore $ Error_Protocol (msgInvalidPublic, IllegalParameter)
+          Nothing -> throwCore $ Error_Protocol msgInvalidPublic IllegalParameter
           Just (spub, share) ->
               let wspub = IES.encodeGroupPublic spub
                   serverKeyShare = KeyShareEntry grp wspub
@@ -124,10 +124,10 @@ makeClientKeyShare ctx grp = do
 
 fromServerKeyShare :: KeyShareEntry -> IES.GroupPrivate -> IO ByteString
 fromServerKeyShare (KeyShareEntry grp wspub) cpri = case espub of
-  Left  e    -> throwCore $ Error_Protocol (show e, IllegalParameter)
+  Left  e    -> throwCore $ Error_Protocol (show e) IllegalParameter
   Right spub -> case IES.groupGetShared spub cpri of
     Just shared -> return $ BA.convert shared
-    Nothing     -> throwCore $ Error_Protocol ("cannot generate a shared secret on (EC)DH", IllegalParameter)
+    Nothing     -> throwCore $ Error_Protocol "cannot generate a shared secret on (EC)DH" IllegalParameter
   where
     espub = IES.decodeGroupPublic grp wspub
 
@@ -337,7 +337,7 @@ getSessionData13 ctx usedCipher tinfo maxSize psk = do
 ensureNullCompression :: MonadIO m => CompressionID -> m ()
 ensureNullCompression compression =
     when (compression /= compressionID nullCompression) $
-        throwCore $ Error_Protocol ("compression is not allowed in TLS 1.3", IllegalParameter)
+        throwCore $ Error_Protocol "compression is not allowed in TLS 1.3" IllegalParameter
 
 -- Word32 is used in TLS 1.3 protocol.
 -- Int is used for API for Haskell TLS because it is natural.
@@ -398,7 +398,7 @@ checkHashSignatureValid13 :: HashAndSignatureAlgorithm -> IO ()
 checkHashSignatureValid13 hs =
     unless (isHashSignatureValid13 hs) $
         let msg = "invalid TLS13 hash and signature algorithm: " ++ show hs
-         in throwCore $ Error_Protocol (msg, IllegalParameter)
+         in throwCore $ Error_Protocol msg IllegalParameter
 
 isHashSignatureValid13 :: HashAndSignatureAlgorithm -> Bool
 isHashSignatureValid13 (HashIntrinsic, s) =

@@ -49,7 +49,7 @@ decodeRecordM header content = disengageRecord erecord
      erecord = rawToRecord header (fragmentCiphertext content)
 
 contentSizeExceeded :: TLSError
-contentSizeExceeded = Error_Protocol ("record content exceeding maximum size", RecordOverflow)
+contentSizeExceeded = Error_Protocol "record content exceeding maximum size" RecordOverflow
 
 ----------------------------------------------------------------
 
@@ -101,7 +101,7 @@ recvRecord13 ctx = readExactBytes ctx 5 >>= either (return . Left) (recvLengthE 
                  either (return . Left) (getRecord ctx 0 header)
 
 maximumSizeExceeded :: TLSError
-maximumSizeExceeded = Error_Protocol ("record exceeding maximum size", RecordOverflow)
+maximumSizeExceeded = Error_Protocol "record exceeding maximum size" RecordOverflow
 
 ----------------------------------------------------------------
 
