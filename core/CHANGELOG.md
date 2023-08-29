@@ -1,4 +1,4 @@
-## Version X.Y.Z
+## Version 1.9.0
 
 * BREAKING CHANGE: The type of the `Error_Protocol` constructor of `TLSError` has changed.
   The "warning" case has been split off into a new `Error_Protocol_Warning` constructor.
