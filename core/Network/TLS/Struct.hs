@@ -163,7 +163,14 @@ data ProtocolType =
 -- this library now only throw 'TLSException'.
 data TLSError =
       Error_Misc String        -- ^ mainly for instance of Error
-    | Error_Protocol (String, Bool, AlertDescription)
+    | Error_Protocol String AlertDescription
+      -- ^ A fatal error condition was encountered at a low level.  The
+      -- elements of the tuple give (freeform text description, structured
+      -- error description).
+    | Error_Protocol_Warning String AlertDescription
+      -- ^ A non-fatal error condition was encountered at a low level at a low
+      -- level.  The elements of the tuple give (freeform text description,
+      -- structured error description).
     | Error_Certificate String
     | Error_HandshakePolicy String -- ^ handshake policy failed.
     | Error_EOF

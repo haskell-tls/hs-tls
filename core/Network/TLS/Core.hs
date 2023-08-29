@@ -133,7 +133,7 @@ recvData1 ctx = do
         process (Alert [(AlertLevel_Warning, CloseNotify)]) = tryBye ctx >> setEOF ctx >> return B.empty
         process (Alert [(AlertLevel_Fatal, desc)]) = do
             setEOF ctx
-            E.throwIO (Terminated True ("received fatal error: " ++ show desc) (Error_Protocol ("remote side fatal error", True, desc)))
+            E.throwIO (Terminated True ("received fatal error: " ++ show desc) (Error_Protocol "remote side fatal error" desc))
 
         -- when receiving empty appdata, we just retry to get some data.
         process (AppData "") = recvData1 ctx
@@ -151,7 +151,7 @@ recvData13 ctx = do
         process (Alert13 [(AlertLevel_Warning, CloseNotify)]) = tryBye ctx >> setEOF ctx >> return B.empty
         process (Alert13 [(AlertLevel_Fatal, desc)]) = do
             setEOF ctx
-            E.throwIO (Terminated True ("received fatal error: " ++ show desc) (Error_Protocol ("remote side fatal error", True, desc)))
+            E.throwIO (Terminated True ("received fatal error: " ++ show desc) (Error_Protocol "remote side fatal error" desc))
         process (Handshake13 hs) = do
             loopHandshake13 hs
             recvData13 ctx
@@ -176,7 +176,7 @@ recvData13 ctx = do
                     let reason = "early data deprotect overflow" in
                     terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
               Established         -> return x
-              NotEstablished      -> throwCore $ Error_Protocol ("data at not-established", True, UnexpectedMessage)
+              NotEstablished      -> throwCore $ Error_Protocol "data at not-established" UnexpectedMessage
         process ChangeCipherSpec13 = do
             established <- ctxEstablished ctx
             if established /= Established then
@@ -309,7 +309,7 @@ keyUpdate :: Context
 keyUpdate ctx getState setState = do
     (usedHash, usedCipher, level, applicationSecretN) <- getState ctx
     unless (level == CryptApplicationSecret) $
-        throwCore $ Error_Protocol ("tried key update without application traffic secret", True, InternalError)
+        throwCore $ Error_Protocol "tried key update without application traffic secret" InternalError
     let applicationSecretN1 = hkdfExpandLabel usedHash applicationSecretN "traffic upd" "" $ hashDigestSize usedHash
     setState ctx usedHash usedCipher (AnyTrafficSecret applicationSecretN1)
 

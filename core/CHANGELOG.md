@@ -1,3 +1,9 @@
+## Version X.Y.Z
+
+* BREAKING CHANGE: The type of the `Error_Protocol` constructor of `TLSError` has changed.
+  The "warning" case has been split off into a new `Error_Protocol_Warning` constructor.
+  [#460](https://github.com/haskell-tls/hs-tls/pull/460)
+
 ## Version 1.8.0
 
 * BREAKING CHANGE: Remove `Exception` instance for `TLSError`.

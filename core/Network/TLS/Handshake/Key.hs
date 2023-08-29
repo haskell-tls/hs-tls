@@ -111,9 +111,9 @@ versionCompatible _                   _ = False
 checkDigitalSignatureKey :: MonadIO m => Version -> PubKey -> m ()
 checkDigitalSignatureKey usedVersion key = do
     unless (isDigitalSignatureKey key) $
-        throwCore $ Error_Protocol ("unsupported remote public key type", True, HandshakeFailure)
+        throwCore $ Error_Protocol "unsupported remote public key type" HandshakeFailure
     unless (key `versionCompatible` usedVersion) $
-        throwCore $ Error_Protocol (show usedVersion ++ " has no support for " ++ pubkeyType key, True, IllegalParameter)
+        throwCore $ Error_Protocol (show usedVersion ++ " has no support for " ++ pubkeyType key) IllegalParameter
 
 -- | Test whether the argument is matching key pair supported for signature.
 -- This also accepts material for RSA encryption.  This test is performed by

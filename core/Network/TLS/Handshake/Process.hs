@@ -65,7 +65,7 @@ processHandshake ctx hs = do
         processClientExtension (ExtensionRaw 0xff01 content) | secureRenegotiation = do
             v <- getVerifiedData ClientRole
             let bs = extensionEncode (SecureRenegotiation v Nothing)
-            unless (bs `bytesEq` content) $ throwError $ Error_Protocol ("client verified data not matching: " ++ show v ++ ":" ++ show content, True, HandshakeFailure)
+            unless (bs `bytesEq` content) $ throwError $ Error_Protocol ("client verified data not matching: " ++ show v ++ ":" ++ show content) HandshakeFailure
 
             setSecureRenegotiation True
         -- unknown extensions
@@ -74,7 +74,7 @@ processHandshake ctx hs = do
         processCertificates :: Role -> CertificateChain -> IO ()
         processCertificates ServerRole (CertificateChain []) = return ()
         processCertificates ClientRole (CertificateChain []) =
-            throwCore $ Error_Protocol ("server certificate missing", True, HandshakeFailure)
+            throwCore $ Error_Protocol "server certificate missing" HandshakeFailure
         processCertificates _ (CertificateChain (c:_)) =
             usingHState ctx $ setPublicKey pubkey
           where pubkey = certPubKey $ getCertificate c
@@ -111,7 +111,7 @@ processClientKeyXchg ctx (CKX_DH clientDHValue) = do
     serverParams <- usingHState ctx getServerDHParams
     let params = serverDHParamsToParams serverParams
     unless (dhValid params $ dhUnwrapPublic clientDHValue) $
-        throwCore $ Error_Protocol ("invalid client public key", True, IllegalParameter)
+        throwCore $ Error_Protocol "invalid client public key" IllegalParameter
 
     dhpriv       <- usingHState ctx getDHPrivate
     let premaster = dhGetShared params dhpriv clientDHValue
@@ -121,7 +121,7 @@ processClientKeyXchg ctx (CKX_DH clientDHValue) = do
 processClientKeyXchg ctx (CKX_ECDH bytes) = do
     ServerECDHParams grp _ <- usingHState ctx getServerECDHParams
     case decodeGroupPublic grp bytes of
-      Left _ -> throwCore $ Error_Protocol ("client public key cannot be decoded", True, IllegalParameter)
+      Left _ -> throwCore $ Error_Protocol "client public key cannot be decoded" IllegalParameter
       Right clipub -> do
           srvpri <- usingHState ctx getGroupPrivate
           case groupGetShared clipub srvpri of
@@ -130,7 +130,7 @@ processClientKeyXchg ctx (CKX_ECDH bytes) = do
                   role <- usingState_ ctx isClientContext
                   masterSecret <- usingHState ctx $ setMasterSecretFromPre rver role premaster
                   liftIO $ logKey ctx (MasterSecret masterSecret)
-              Nothing -> throwCore $ Error_Protocol ("cannot generate a shared secret on ECDH", True, IllegalParameter)
+              Nothing -> throwCore $ Error_Protocol "cannot generate a shared secret on ECDH" IllegalParameter
 
 processClientFinished :: Context -> FinishedData -> IO ()
 processClientFinished ctx fdata = do
