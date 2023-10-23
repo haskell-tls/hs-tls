@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 -- |
 -- Module      : Network.TLS.Backend
 -- License     : BSD-style
@@ -24,16 +23,8 @@ module Network.TLS.Backend
 import Network.TLS.Imports
 import qualified Data.ByteString as B
 import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush, hClose)
-
-#ifdef INCLUDE_NETWORK
-import qualified Network.Socket as Network (Socket, close)
+import qualified Network.Socket as Network
 import qualified Network.Socket.ByteString as Network
-#endif
-
-#ifdef INCLUDE_HANS
-import qualified Data.ByteString.Lazy as L
-import qualified Hans.NetworkStack as Hans
-#endif
 
 -- | Connection IO backend
 data Backend = Backend
@@ -51,24 +42,9 @@ instance HasBackend Backend where
     initializeBackend _ = return ()
     getBackend = id
 
-#if defined(__GLASGOW_HASKELL__) && WINDOWS
--- Socket recv and accept calls on Windows platform cannot be interrupted when compiled with -threaded.
--- See https://ghc.haskell.org/trac/ghc/ticket/5797 for details.
--- The following enables simple workaround
-#define SOCKET_ACCEPT_RECV_WORKAROUND
-#endif
-
 safeRecv :: Network.Socket -> Int -> IO ByteString
-#ifndef SOCKET_ACCEPT_RECV_WORKAROUND
 safeRecv = Network.recv
-#else
-safeRecv s buf = do
-    var <- newEmptyMVar
-    forkIO $ Network.recv s buf `E.catch` (\(_::IOException) -> return S8.empty) >>= putMVar var
-    takeMVar var
-#endif
 
-#ifdef INCLUDE_NETWORK
 instance HasBackend Network.Socket where
     initializeBackend _ = return ()
     getBackend sock = Backend (return ()) (Network.close sock) (Network.sendAll sock) recvAll
@@ -79,25 +55,6 @@ instance HasBackend Network.Socket where
                         if B.null r
                             then return []
                             else (r:) <$> loop (left - B.length r)
-#endif
-
-#ifdef INCLUDE_HANS
-instance HasBackend Hans.Socket where
-    initializeBackend _ = return ()
-    getBackend sock = Backend (return ()) (Hans.close sock) sendAll recvAll
-      where sendAll x = do
-              amt <- fromIntegral <$> Hans.sendBytes sock (L.fromStrict x)
-              if (amt == 0) || (amt == B.length x)
-                 then return ()
-                 else sendAll (B.drop amt x)
-            recvAll n = loop (fromIntegral n) L.empty
-            loop    0 acc = return (L.toStrict acc)
-            loop left acc = do
-                r <- Hans.recvBytes sock left
-                if L.null r
-                   then loop 0 acc
-                   else loop (left - L.length r) (acc `L.append` r)
-#endif
 
 instance HasBackend Handle where
     initializeBackend handle = hSetBuffering handle NoBuffering

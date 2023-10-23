@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 -- |
 -- Module      : Network.TLS.Record.Reading
 -- License     : BSD-style
@@ -61,9 +60,6 @@ recvRecord :: Context -- ^ TLS context
            -> Int     -- ^ number of AppData bytes to accept above normal maximum size
            -> IO (Either TLSError (Record Plaintext))
 recvRecord ctx compatSSLv2 appDataOverhead
-#ifdef SSLV2_COMPATIBLE
-    | compatSSLv2 = readExactBytes ctx 2 >>= either (return . Left) sslv2Header
-#endif
     | otherwise = readExactBytes ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
 
         where recvLengthE = either (return . Left) recvLength
@@ -73,23 +69,6 @@ recvRecord ctx compatSSLv2 appDataOverhead
                 | otherwise                =
                     readExactBytes ctx (fromIntegral readlen) >>=
                         either (return . Left) (getRecord ctx appDataOverhead header)
-#ifdef SSLV2_COMPATIBLE
-              sslv2Header header =
-                if B.head header >= 0x80
-                    then either (return . Left) recvDeprecatedLength $ decodeDeprecatedHeaderLength header
-                    else readExactBytes ctx 3 >>=
-                            either (return . Left) (recvLengthE . decodeHeader . B.append header)
-
-              recvDeprecatedLength readlen
-                | readlen > 1024 * 4     = return $ Left maximumSizeExceeded
-                | otherwise              = do
-                    res <- readExactBytes ctx (fromIntegral readlen)
-                    case res of
-                      Left e -> return $ Left e
-                      Right content ->
-                        let hdr = decodeDeprecatedHeader readlen (B.take 3 content)
-                         in either (return . Left) (\h -> getRecord ctx appDataOverhead h content) hdr
-#endif
 
 recvRecord13 :: Context -> IO (Either TLSError (Record Plaintext))
 recvRecord13 ctx = readExactBytes ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)

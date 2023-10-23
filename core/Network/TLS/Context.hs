@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 -- |
 -- Module      : Network.TLS.Context
 -- License     : BSD-style
@@ -43,9 +42,7 @@ module Network.TLS.Context
     , contextNew
     -- * Deprecated new contexts methods
     , contextNewOnHandle
-#ifdef INCLUDE_NETWORK
     , contextNewOnSocket
-#endif
 
     -- * Context hooks
     , contextHookSetHandshakeRecv
@@ -90,9 +87,7 @@ import Control.Monad.State.Strict
 import Data.IORef
 
 -- deprecated imports
-#ifdef INCLUDE_NETWORK
 import Network.Socket (Socket)
-#endif
 import System.IO (Handle)
 
 class TLSParams a where
@@ -217,7 +212,6 @@ contextNewOnHandle :: (MonadIO m, TLSParams params)
 contextNewOnHandle = contextNew
 {-# DEPRECATED contextNewOnHandle "use contextNew" #-}
 
-#ifdef INCLUDE_NETWORK
 -- | create a new context on a socket.
 contextNewOnSocket :: (MonadIO m, TLSParams params)
                    => Socket -- ^ Socket of the connection.
@@ -225,7 +219,6 @@ contextNewOnSocket :: (MonadIO m, TLSParams params)
                    -> m Context
 contextNewOnSocket sock params = contextNew sock params
 {-# DEPRECATED contextNewOnSocket "use contextNew" #-}
-#endif
 
 contextHookSetHandshakeRecv :: Context -> (Handshake -> IO Handshake) -> IO ()
 contextHookSetHandshakeRecv context f =

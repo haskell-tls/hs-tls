@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 -- |
 -- Module      : Network.TLS
 -- License     : BSD-style
@@ -156,9 +155,7 @@ module Network.TLS
     -- * Deprecated
     , recvData'
     , contextNewOnHandle
-#ifdef INCLUDE_NETWORK
     , contextNewOnSocket
-#endif
     , Bytes
     , ValidationChecks(..)
     , ValidationHooks(..)

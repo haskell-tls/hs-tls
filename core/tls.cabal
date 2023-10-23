@@ -34,17 +34,6 @@ source-repository head
     location: https://github.com/haskell-tls/hs-tls
     subdir:   core
 
-flag compat
-    description:
-        Accept SSLv2 client hello for beginning SSLv3 / TLS handshake
-
-flag network
-    description: Use the base network library
-
-flag hans
-    description: Use the Haskell Network Stack (HaNS)
-    default:     False
-
 library
     exposed-modules:
         Network.TLS
@@ -117,32 +106,22 @@ library
     default-language: Haskell2010
     ghc-options:      -Wall
     build-depends:
-        base >=4.9 && <5,
-        mtl >=2.2.1,
-        transformers,
-        cereal >=0.5.3,
-        bytestring,
-        data-default-class,
-        memory >=0.14.6,
-        crypton,
-        asn1-types >=0.2.0,
         asn1-encoding,
+        asn1-types >=0.2.0,
+        async >=2.0,
+        base >=4.9 && <5,
+        bytestring,
+        cereal >=0.5.3,
+        crypton,
         crypton-x509 >=1.7.5,
         crypton-x509-store >=1.6,
         crypton-x509-validation >=1.6.5,
-        async >=2.0,
+        data-default-class,
+        memory >=0.14.6,
+        mtl >=2.2.1,
+        network >=2.4.0.0,
+        transformers,
         unix-time
-
-    if flag(network)
-        cpp-options:   -DINCLUDE_NETWORK
-        build-depends: network >=2.4.0.0
-
-    if flag(hans)
-        cpp-options:   -DINCLUDE_HANS
-        build-depends: hans
-
-    if flag(compat)
-        cpp-options: -DSSLV2_COMPATIBLE
 
 test-suite test-tls
     type:             exitcode-stdio-1.0
