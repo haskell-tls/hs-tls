@@ -12,7 +12,6 @@ module Network.TLS.Imports (
     (<&>),
     module Control.Applicative,
     module Control.Monad,
-    MonadFail,
     module Data.Bits,
     module Data.List,
     module Data.Maybe,

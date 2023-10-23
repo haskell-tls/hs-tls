@@ -172,8 +172,6 @@ module Network.TLS (
 
     -- * Deprecated
     recvData',
-    contextNewOnHandle,
-    contextNewOnSocket,
     Bytes,
     ValidationChecks (..),
     ValidationHooks (..),

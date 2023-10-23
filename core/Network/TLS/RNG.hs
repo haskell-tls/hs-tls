@@ -13,7 +13,6 @@ module Network.TLS.RNG (
 ) where
 
 import Crypto.Random
-import Crypto.Random.Types
 
 newtype StateRNG = StateRNG ChaChaDRG
     deriving (DRG)

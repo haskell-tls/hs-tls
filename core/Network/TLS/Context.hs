@@ -39,10 +39,6 @@ module Network.TLS.Context (
     -- * New contexts
     contextNew,
 
-    -- * Deprecated new contexts methods
-    contextNewOnHandle,
-    contextNewOnSocket,
-
     -- * Context hooks
     contextHookSetHandshakeRecv,
     contextHookSetHandshake13Recv,
@@ -93,10 +89,6 @@ import Network.TLS.X509
 import Control.Concurrent.MVar
 import Control.Monad.State.Strict
 import Data.IORef
-
--- deprecated imports
-import Network.Socket (Socket)
-import System.IO (Handle)
 
 class TLSParams a where
     getTLSCommonParams :: a -> CommonParams
@@ -219,28 +211,6 @@ contextNew backend params = liftIO $ do
                 }
 
     return ctx
-
--- | create a new context on an handle.
-contextNewOnHandle
-    :: (MonadIO m, TLSParams params)
-    => Handle
-    -- ^ Handle of the connection.
-    -> params
-    -- ^ Parameters of the context.
-    -> m Context
-contextNewOnHandle = contextNew
-{-# DEPRECATED contextNewOnHandle "use contextNew" #-}
-
--- | create a new context on a socket.
-contextNewOnSocket
-    :: (MonadIO m, TLSParams params)
-    => Socket
-    -- ^ Socket of the connection.
-    -> params
-    -- ^ Parameters of the context.
-    -> m Context
-contextNewOnSocket sock params = contextNew sock params
-{-# DEPRECATED contextNewOnSocket "use contextNew" #-}
 
 contextHookSetHandshakeRecv :: Context -> (Handshake -> IO Handshake) -> IO ()
 contextHookSetHandshakeRecv context f =
