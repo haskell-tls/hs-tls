@@ -4,15 +4,14 @@
 -- Maintainer  : Vincent Hanquez <vincent@snarc.org>
 -- Stability   : experimental
 -- Portability : unknown
---
 module Network.TLS.Handshake.Control (
-    ClientState(..)
-  , ServerState(..)
-  , EarlySecretInfo(..)
-  , HandshakeSecretInfo(..)
-  , ApplicationSecretInfo(..)
-  , NegotiatedProtocol
-  ) where
+    ClientState (..),
+    ServerState (..),
+    EarlySecretInfo (..),
+    HandshakeSecretInfo (..),
+    ApplicationSecretInfo (..),
+    NegotiatedProtocol,
+) where
 
 import Network.TLS.Cipher
 import Network.TLS.Imports
@@ -27,23 +26,24 @@ type NegotiatedProtocol = ByteString
 
 -- | Handshake information generated for traffic at 0-RTT level.
 data EarlySecretInfo = EarlySecretInfo Cipher (ClientTrafficSecret EarlySecret)
-                       deriving Show
+    deriving (Show)
 
 -- | Handshake information generated for traffic at handshake level.
-data HandshakeSecretInfo = HandshakeSecretInfo Cipher (TrafficSecrets HandshakeSecret)
-                         deriving Show
+data HandshakeSecretInfo
+    = HandshakeSecretInfo Cipher (TrafficSecrets HandshakeSecret)
+    deriving (Show)
 
 -- | Handshake information generated for traffic at application level.
 newtype ApplicationSecretInfo = ApplicationSecretInfo (TrafficSecrets ApplicationSecret)
-                         deriving Show
+    deriving (Show)
 
 ----------------------------------------------------------------
 
-data ClientState =
-    SendClientHello (Maybe EarlySecretInfo)
-  | RecvServerHello HandshakeSecretInfo
-  | SendClientFinished [ExtensionRaw] ApplicationSecretInfo
+data ClientState
+    = SendClientHello (Maybe EarlySecretInfo)
+    | RecvServerHello HandshakeSecretInfo
+    | SendClientFinished [ExtensionRaw] ApplicationSecretInfo
 
-data ServerState =
-    SendServerHello [ExtensionRaw] (Maybe EarlySecretInfo) HandshakeSecretInfo
-  | SendServerFinished ApplicationSecretInfo
+data ServerState
+    = SendServerHello [ExtensionRaw] (Maybe EarlySecretInfo) HandshakeSecretInfo
+    | SendServerFinished ApplicationSecretInfo

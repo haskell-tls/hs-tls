@@ -19,173 +19,203 @@
 --
 -- Some debug tools linked with tls, are available through the
 -- http://hackage.haskell.org/package/tls-debug/.
-
-module Network.TLS
-    (
+module Network.TLS (
     -- * Basic APIs
-      Context
-    , contextNew
-    , handshake
-    , sendData
-    , recvData
-    , bye
+    Context,
+    contextNew,
+    handshake,
+    sendData,
+    recvData,
+    bye,
 
     -- * Exceptions
     -- $exceptions
 
     -- * Backend abstraction
-    , HasBackend(..)
-    , Backend(..)
+    HasBackend (..),
+    Backend (..),
 
     -- * Parameters
+
     -- intentionally hide the internal methods even haddock warns.
-    , TLSParams
-    , ClientParams(..)
-    , defaultParamsClient
-    , ServerParams(..)
+    TLSParams,
+    ClientParams (..),
+    defaultParamsClient,
+    ServerParams (..),
+
     -- ** Shared
-    , Shared(..)
+    Shared (..),
+
     -- ** Hooks
-    , ClientHooks(..)
-    , OnCertificateRequest
-    , OnServerCertificate
-    , ServerHooks(..)
-    , Measurement(..)
+    ClientHooks (..),
+    OnCertificateRequest,
+    OnServerCertificate,
+    ServerHooks (..),
+    Measurement (..),
+
     -- ** Supported
-    , Supported(..)
+    Supported (..),
+
     -- ** Debug parameters
-    , DebugParams(..)
+    DebugParams (..),
 
     -- * Shared parameters
+
     -- ** Credentials
-    , Credentials(..)
-    , Credential
-    , credentialLoadX509
-    , credentialLoadX509FromMemory
-    , credentialLoadX509Chain
-    , credentialLoadX509ChainFromMemory
+    Credentials (..),
+    Credential,
+    credentialLoadX509,
+    credentialLoadX509FromMemory,
+    credentialLoadX509Chain,
+    credentialLoadX509ChainFromMemory,
+
     -- ** Session manager
-    , SessionManager(..)
-    , noSessionManager
-    , SessionID
-    , SessionData(..)
-    , SessionFlag(..)
-    , TLS13TicketInfo
+    SessionManager (..),
+    noSessionManager,
+    SessionID,
+    SessionData (..),
+    SessionFlag (..),
+    TLS13TicketInfo,
+
     -- ** Validation Cache
-    , ValidationCache(..)
-    , ValidationCacheQueryCallback
-    , ValidationCacheAddCallback
-    , ValidationCacheResult(..)
-    , exceptionValidationCache
+    ValidationCache (..),
+    ValidationCacheQueryCallback,
+    ValidationCacheAddCallback,
+    ValidationCacheResult (..),
+    exceptionValidationCache,
 
     -- * Types
+
     -- ** For 'Supported'
-    , Version(..)
-    , Compression(..)
-    , nullCompression
-    , HashAndSignatureAlgorithm
-    , HashAlgorithm(..)
-    , SignatureAlgorithm(..)
-    , Group(..)
-    , EMSMode(..)
+    Version (..),
+    Compression (..),
+    nullCompression,
+    HashAndSignatureAlgorithm,
+    HashAlgorithm (..),
+    SignatureAlgorithm (..),
+    Group (..),
+    EMSMode (..),
+
     -- ** For parameters and hooks
-    , DHParams
-    , DHPublic
-    , GroupUsage(..)
-    , CertificateUsage(..)
-    , CertificateRejectReason(..)
-    , CertificateType(..)
-    , HostName
-    , MaxFragmentEnum(..)
+    DHParams,
+    DHPublic,
+    GroupUsage (..),
+    CertificateUsage (..),
+    CertificateRejectReason (..),
+    CertificateType (..),
+    HostName,
+    MaxFragmentEnum (..),
 
     -- * Advanced APIs
+
     -- ** Backend
-    , ctxConnection
-    , contextFlush
-    , contextClose
+    ctxConnection,
+    contextFlush,
+    contextClose,
+
     -- ** Information gathering
-    , Information(..)
-    , contextGetInformation
-    , ClientRandom
-    , ServerRandom
-    , unClientRandom
-    , unServerRandom
-    , HandshakeMode13(..)
-    , getClientCertificateChain
+    Information (..),
+    contextGetInformation,
+    ClientRandom,
+    ServerRandom,
+    unClientRandom,
+    unServerRandom,
+    HandshakeMode13 (..),
+    getClientCertificateChain,
+
     -- ** Negotiated
-    , getNegotiatedProtocol
-    , getClientSNI
+    getNegotiatedProtocol,
+    getClientSNI,
+
     -- ** Post-handshake actions
-    , updateKey
-    , KeyUpdateRequest(..)
-    , requestCertificate
-    , getFinished
-    , getPeerFinished
+    updateKey,
+    KeyUpdateRequest (..),
+    requestCertificate,
+    getFinished,
+    getPeerFinished,
+
     -- ** Modifying hooks in context
-    , Hooks(..)
-    , contextModifyHooks
-    , Handshake
-    , contextHookSetHandshakeRecv
-    , Handshake13
-    , contextHookSetHandshake13Recv
-    , contextHookSetCertificateRecv
-    , Logging(..)
-    , Header(..)
-    , ProtocolType(..)
-    , contextHookSetLogging
+    Hooks (..),
+    contextModifyHooks,
+    Handshake,
+    contextHookSetHandshakeRecv,
+    Handshake13,
+    contextHookSetHandshake13Recv,
+    contextHookSetCertificateRecv,
+    Logging (..),
+    Header (..),
+    ProtocolType (..),
+    contextHookSetLogging,
 
     -- * Errors and exceptions
+
     -- ** Errors
-    , TLSError(..)
-    , KxError(..)
-    , AlertDescription(..)
+    TLSError (..),
+    KxError (..),
+    AlertDescription (..),
+
     -- ** Exceptions
-    , TLSException(..)
+    TLSException (..),
 
     -- * Raw types
+
     -- ** Compressions class
-    , CompressionC(..)
-    , CompressionID
+    CompressionC (..),
+    CompressionID,
+
     -- ** Crypto Key
-    , PubKey(..)
-    , PrivKey(..)
+    PubKey (..),
+    PrivKey (..),
+
     -- ** Ciphers & Predefined ciphers
-    , module Network.TLS.Cipher
+    module Network.TLS.Cipher,
 
     -- * Deprecated
-    , recvData'
-    , contextNewOnHandle
-    , contextNewOnSocket
-    , Bytes
-    , ValidationChecks(..)
-    , ValidationHooks(..)
-    ) where
+    recvData',
+    contextNewOnHandle,
+    contextNewOnSocket,
+    Bytes,
+    ValidationChecks (..),
+    ValidationHooks (..),
+) where
 
-import Network.TLS.Backend (Backend(..), HasBackend(..))
+import Network.TLS.Backend (Backend (..), HasBackend (..))
 import Network.TLS.Cipher
-import Network.TLS.Compression (CompressionC(..), Compression(..), nullCompression)
+import Network.TLS.Compression (
+    Compression (..),
+    CompressionC (..),
+    nullCompression,
+ )
 import Network.TLS.Context
 import Network.TLS.Core
 import Network.TLS.Credentials
-import Network.TLS.Crypto (KxError(..), DHParams, DHPublic, Group(..))
-import Network.TLS.Handshake.State (HandshakeMode13(..))
+import Network.TLS.Crypto (DHParams, DHPublic, Group (..), KxError (..))
+import Network.TLS.Handshake.State (HandshakeMode13 (..))
 import Network.TLS.Hooks
 import Network.TLS.Measurement
 import Network.TLS.Parameters
 import Network.TLS.Session
 import qualified Network.TLS.State as S
-import Network.TLS.Struct ( TLSError(..), TLSException(..)
-                          , HashAndSignatureAlgorithm, HashAlgorithm(..), SignatureAlgorithm(..)
-                          , Header(..), ProtocolType(..), CertificateType(..)
-                          , AlertDescription(..)
-                          , ClientRandom(..), ServerRandom(..)
-                          , Handshake)
-import Network.TLS.Struct13 ( Handshake13 )
+import Network.TLS.Struct (
+    AlertDescription (..),
+    CertificateType (..),
+    ClientRandom (..),
+    Handshake,
+    HashAlgorithm (..),
+    HashAndSignatureAlgorithm,
+    Header (..),
+    ProtocolType (..),
+    ServerRandom (..),
+    SignatureAlgorithm (..),
+    TLSError (..),
+    TLSException (..),
+ )
+import Network.TLS.Struct13 (Handshake13)
 import Network.TLS.Types
 import Network.TLS.X509
 
 import Data.ByteString as B
-import Data.X509 (PubKey(..), PrivKey(..))
+import Data.X509 (PrivKey (..), PubKey (..))
 import Data.X509.Validation hiding (HostName)
 
 {-# DEPRECATED Bytes "Use Data.ByteString.Bytestring instead of Bytes." #-}
@@ -199,9 +229,8 @@ type Bytes = B.ByteString
 getClientCertificateChain :: Context -> IO (Maybe CertificateChain)
 getClientCertificateChain ctx = usingState_ ctx S.getClientCertificateChain
 
-{- $exceptions
-    Since 1.8.0, this library only throws exceptions of type 'TLSException'.
-    In the common case where the chosen backend is socket, 'IOException'
-    may be thrown as well. This happens because the backend for sockets,
-    opaque to most modules in the @tls@ library, throws those exceptions.
--}
+-- $exceptions
+--     Since 1.8.0, this library only throws exceptions of type 'TLSException'.
+--     In the common case where the chosen backend is socket, 'IOException'
+--     may be thrown as well. This happens because the backend for sockets,
+--     opaque to most modules in the @tls@ library, throws those exceptions.

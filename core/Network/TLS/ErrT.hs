@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 -- |
 -- Module      : Network.TLS.ErrT
 -- License     : BSD-style
@@ -6,14 +8,13 @@
 -- Portability : unknown
 --
 -- a simple compat ErrorT and other error stuff
-{-# LANGUAGE CPP #-}
-module Network.TLS.ErrT
-    ( runErrT
-    , ErrT
-    , MonadError(..)
-    ) where
+module Network.TLS.ErrT (
+    runErrT,
+    ErrT,
+    MonadError (..),
+) where
 
-import Control.Monad.Except (MonadError(..))
+import Control.Monad.Except (MonadError (..))
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
 
 runErrT :: ExceptT e m a -> m (Either e a)

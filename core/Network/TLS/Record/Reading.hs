@@ -6,11 +6,10 @@
 -- Portability : unknown
 --
 -- TLS record layer in Rx direction
---
-module Network.TLS.Record.Reading
-    ( recvRecord
-    , recvRecord13
-    ) where
+module Network.TLS.Record.Reading (
+    recvRecord,
+    recvRecord13,
+) where
 
 import Control.Monad.Reader
 import qualified Data.ByteString as B
@@ -31,7 +30,12 @@ exceeds ctx overhead actual =
         Nothing -> False
         Just sz -> fromIntegral actual > sz + overhead
 
-getRecord :: Context -> Int -> Header -> ByteString -> IO (Either TLSError (Record Plaintext))
+getRecord
+    :: Context
+    -> Int
+    -> Header
+    -> ByteString
+    -> IO (Either TLSError (Record Plaintext))
 getRecord ctx appDataOverhead header@(Header pt _ _) content = do
     withLog ctx $ \logging -> loggingIORecv logging header content
     runRxState ctx $ do
@@ -40,12 +44,13 @@ getRecord ctx appDataOverhead header@(Header pt _ _) content = do
         when (exceeds ctx overhead $ B.length (fragmentGetBytes fragment)) $
             throwError contentSizeExceeded
         return r
-  where overhead = if pt == ProtocolType_AppData then appDataOverhead else 0
+  where
+    overhead = if pt == ProtocolType_AppData then appDataOverhead else 0
 
 decodeRecordM :: Header -> ByteString -> RecordM (Record Plaintext)
 decodeRecordM header content = disengageRecord erecord
-   where
-     erecord = rawToRecord header (fragmentCiphertext content)
+  where
+    erecord = rawToRecord header (fragmentCiphertext content)
 
 contentSizeExceeded :: TLSError
 contentSizeExceeded = Error_Protocol "record content exceeding maximum size" RecordOverflow
@@ -55,29 +60,35 @@ contentSizeExceeded = Error_Protocol "record content exceeding maximum size" Rec
 -- | recvRecord receive a full TLS record (header + data), from the other side.
 --
 -- The record is disengaged from the record layer
-recvRecord :: Context -- ^ TLS context
-           -> Bool    -- ^ flag to enable SSLv2 compat ClientHello reception
-           -> Int     -- ^ number of AppData bytes to accept above normal maximum size
-           -> IO (Either TLSError (Record Plaintext))
+recvRecord
+    :: Context
+    -- ^ TLS context
+    -> Bool
+    -- ^ flag to enable SSLv2 compat ClientHello reception
+    -> Int
+    -- ^ number of AppData bytes to accept above normal maximum size
+    -> IO (Either TLSError (Record Plaintext))
 recvRecord ctx compatSSLv2 appDataOverhead
-    | otherwise = readExactBytes ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
+    | otherwise =
+        readExactBytes ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
+  where
+    recvLengthE = either (return . Left) recvLength
 
-        where recvLengthE = either (return . Left) recvLength
-
-              recvLength header@(Header _ _ readlen)
-                | exceeds ctx 2048 readlen = return $ Left maximumSizeExceeded
-                | otherwise                =
-                    readExactBytes ctx (fromIntegral readlen) >>=
-                        either (return . Left) (getRecord ctx appDataOverhead header)
+    recvLength header@(Header _ _ readlen)
+        | exceeds ctx 2048 readlen = return $ Left maximumSizeExceeded
+        | otherwise =
+            readExactBytes ctx (fromIntegral readlen)
+                >>= either (return . Left) (getRecord ctx appDataOverhead header)
 
 recvRecord13 :: Context -> IO (Either TLSError (Record Plaintext))
 recvRecord13 ctx = readExactBytes ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
-  where recvLengthE = either (return . Left) recvLength
-        recvLength header@(Header _ _ readlen)
-          | exceeds ctx 256 readlen = return $ Left maximumSizeExceeded
-          | otherwise               =
-              readExactBytes ctx (fromIntegral readlen) >>=
-                 either (return . Left) (getRecord ctx 0 header)
+  where
+    recvLengthE = either (return . Left) recvLength
+    recvLength header@(Header _ _ readlen)
+        | exceeds ctx 256 readlen = return $ Left maximumSizeExceeded
+        | otherwise =
+            readExactBytes ctx (fromIntegral readlen)
+                >>= either (return . Left) (getRecord ctx 0 header)
 
 maximumSizeExceeded :: TLSError
 maximumSizeExceeded = Error_Protocol "record exceeding maximum size" RecordOverflow
@@ -94,4 +105,10 @@ readExactBytes ctx sz = do
             return . Left $
                 if B.null hdrbs
                     then Error_EOF
-                    else Error_Packet ("partial packet: expecting " ++ show sz ++ " bytes, got: " ++ show (B.length hdrbs))
+                    else
+                        Error_Packet
+                            ( "partial packet: expecting "
+                                ++ show sz
+                                ++ " bytes, got: "
+                                ++ show (B.length hdrbs)
+                            )

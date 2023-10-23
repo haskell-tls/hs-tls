@@ -7,81 +7,82 @@
 --
 -- the Wire module is a specialized marshalling/unmarshalling package related to the TLS protocol.
 -- all multibytes values are written as big endian.
---
-module Network.TLS.Wire
-    ( Get
-    , GetResult(..)
-    , GetContinuation
-    , runGet
-    , runGetErr
-    , runGetMaybe
-    , tryGet
-    , remaining
-    , getWord8
-    , getWords8
-    , getWord16
-    , getWords16
-    , getWord24
-    , getWord32
-    , getWord64
-    , getBytes
-    , getOpaque8
-    , getOpaque16
-    , getOpaque24
-    , getInteger16
-    , getBigNum16
-    , getList
-    , processBytes
-    , isEmpty
-    , Put
-    , runPut
-    , putWord8
-    , putWords8
-    , putWord16
-    , putWords16
-    , putWord24
-    , putWord32
-    , putWord64
-    , putBytes
-    , putOpaque8
-    , putOpaque16
-    , putOpaque24
-    , putInteger16
-    , putBigNum16
-    , encodeWord16
-    , encodeWord32
-    , encodeWord64
-    ) where
+module Network.TLS.Wire (
+    Get,
+    GetResult (..),
+    GetContinuation,
+    runGet,
+    runGetErr,
+    runGetMaybe,
+    tryGet,
+    remaining,
+    getWord8,
+    getWords8,
+    getWord16,
+    getWords16,
+    getWord24,
+    getWord32,
+    getWord64,
+    getBytes,
+    getOpaque8,
+    getOpaque16,
+    getOpaque24,
+    getInteger16,
+    getBigNum16,
+    getList,
+    processBytes,
+    isEmpty,
+    Put,
+    runPut,
+    putWord8,
+    putWords8,
+    putWord16,
+    putWords16,
+    putWord24,
+    putWord32,
+    putWord64,
+    putBytes,
+    putOpaque8,
+    putOpaque16,
+    putOpaque24,
+    putInteger16,
+    putBigNum16,
+    encodeWord16,
+    encodeWord32,
+    encodeWord64,
+) where
 
+import qualified Data.ByteString as B
 import Data.Serialize.Get hiding (runGet)
 import qualified Data.Serialize.Get as G
 import Data.Serialize.Put
-import qualified Data.ByteString as B
-import Network.TLS.Struct
 import Network.TLS.Imports
+import Network.TLS.Struct
 import Network.TLS.Util.Serialization
 
 type GetContinuation a = ByteString -> GetResult a
-data GetResult a =
-      GotError TLSError
+data GetResult a
+    = GotError TLSError
     | GotPartial (GetContinuation a)
     | GotSuccess a
     | GotSuccessRemaining a ByteString
 
 runGet :: String -> Get a -> ByteString -> GetResult a
 runGet lbl f = toGetResult <$> G.runGetPartial (label lbl f)
-  where toGetResult (G.Fail err _)    = GotError (Error_Packet_Parsing err)
-        toGetResult (G.Partial cont)  = GotPartial (toGetResult <$> cont)
-        toGetResult (G.Done r bsLeft)
-            | B.null bsLeft = GotSuccess r
-            | otherwise     = GotSuccessRemaining r bsLeft
+  where
+    toGetResult (G.Fail err _) = GotError (Error_Packet_Parsing err)
+    toGetResult (G.Partial cont) = GotPartial (toGetResult <$> cont)
+    toGetResult (G.Done r bsLeft)
+        | B.null bsLeft = GotSuccess r
+        | otherwise = GotSuccessRemaining r bsLeft
 
 runGetErr :: String -> Get a -> ByteString -> Either TLSError a
 runGetErr lbl getter b = toSimple $ runGet lbl getter b
-  where toSimple (GotError err) = Left err
-        toSimple (GotPartial _) = Left (Error_Packet_Parsing (lbl ++ ": parsing error: partial packet"))
-        toSimple (GotSuccessRemaining _ _) = Left (Error_Packet_Parsing (lbl ++ ": parsing error: remaining bytes"))
-        toSimple (GotSuccess r) = Right r
+  where
+    toSimple (GotError err) = Left err
+    toSimple (GotPartial _) = Left (Error_Packet_Parsing (lbl ++ ": parsing error: partial packet"))
+    toSimple (GotSuccessRemaining _ _) = Left (Error_Packet_Parsing (lbl ++ ": parsing error: remaining bytes"))
+    toSimple (GotSuccess r) = Right r
 
 runGetMaybe :: Get a -> ByteString -> Maybe a
 runGetMaybe f = either (const Nothing) Just . G.runGet f
@@ -128,10 +129,13 @@ getBigNum16 = BigNum <$> getOpaque16
 
 getList :: Int -> Get (Int, a) -> Get [a]
 getList totalLen getElement = isolate totalLen (getElements totalLen)
-  where getElements len
-            | len < 0     = error "list consumed too much data. should never happen with isolate."
-            | len == 0    = return []
-            | otherwise   = getElement >>= \(elementLen, a) -> (:) a <$> getElements (len - elementLen)
+  where
+    getElements len
+        | len < 0 =
+            error "list consumed too much data. should never happen with isolate."
+        | len == 0 = return []
+        | otherwise =
+            getElement >>= \(elementLen, a) -> (:) a <$> getElements (len - elementLen)
 
 processBytes :: Int -> Get a -> Get a
 processBytes i f = isolate i f
@@ -160,7 +164,7 @@ putWord24 i = do
     let a = fromIntegral ((i `shiftR` 16) .&. 0xff)
     let b = fromIntegral ((i `shiftR` 8) .&. 0xff)
     let c = fromIntegral (i .&. 0xff)
-    mapM_ putWord8 [a,b,c]
+    mapM_ putWord8 [a, b, c]
 
 putBytes :: ByteString -> Put
 putBytes = putByteString

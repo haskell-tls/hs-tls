@@ -14,24 +14,27 @@
 -- * a way to write data
 -- * a way to close the stream
 -- * a way to flush the stream
---
-module Network.TLS.Backend
-    ( HasBackend(..)
-    , Backend(..)
-    ) where
+module Network.TLS.Backend (
+    HasBackend (..),
+    Backend (..),
+) where
 
-import Network.TLS.Imports
 import qualified Data.ByteString as B
-import System.IO (Handle, hSetBuffering, BufferMode(..), hFlush, hClose)
 import qualified Network.Socket as Network
 import qualified Network.Socket.ByteString as Network
+import Network.TLS.Imports
+import System.IO (BufferMode (..), Handle, hClose, hFlush, hSetBuffering)
 
 -- | Connection IO backend
 data Backend = Backend
-    { backendFlush :: IO ()                -- ^ Flush the connection sending buffer, if any.
-    , backendClose :: IO ()                -- ^ Close the connection.
-    , backendSend  :: ByteString -> IO ()  -- ^ Send a bytestring through the connection.
-    , backendRecv  :: Int -> IO ByteString -- ^ Receive specified number of bytes from the connection.
+    { backendFlush :: IO ()
+    -- ^ Flush the connection sending buffer, if any.
+    , backendClose :: IO ()
+    -- ^ Close the connection.
+    , backendSend :: ByteString -> IO ()
+    -- ^ Send a bytestring through the connection.
+    , backendRecv :: Int -> IO ByteString
+    -- ^ Receive specified number of bytes from the connection.
     }
 
 class HasBackend a where
@@ -48,13 +51,15 @@ safeRecv = Network.recv
 instance HasBackend Network.Socket where
     initializeBackend _ = return ()
     getBackend sock = Backend (return ()) (Network.close sock) (Network.sendAll sock) recvAll
-      where recvAll n = B.concat <$> loop n
-              where loop 0    = return []
-                    loop left = do
-                        r <- safeRecv sock left
-                        if B.null r
-                            then return []
-                            else (r:) <$> loop (left - B.length r)
+      where
+        recvAll n = B.concat <$> loop n
+          where
+            loop 0 = return []
+            loop left = do
+                r <- safeRecv sock left
+                if B.null r
+                    then return []
+                    else (r :) <$> loop (left - B.length r)
 
 instance HasBackend Handle where
     initializeBackend handle = hSetBuffering handle NoBuffering

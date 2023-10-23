@@ -10,33 +10,35 @@
 -- a MAC, encrypts, and transmits the result.  Received data is
 -- decrypted, verified, decompressed, reassembled, and then delivered to
 -- higher-level clients.
---
-module Network.TLS.Record
-    ( Record(..)
-    -- * Fragment manipulation types
-    , Fragment
-    , fragmentGetBytes
-    , fragmentPlaintext
-    , fragmentCiphertext
-    , recordToRaw
-    , rawToRecord
-    , recordToHeader
-    , Plaintext
-    , Compressed
-    , Ciphertext
-    -- * Engage and disengage from the record layer
-    , engageRecord
-    , disengageRecord
-    -- * State tracking
-    , RecordM
-    , runRecordM
-    , RecordState(..)
-    , newRecordState
-    , getRecordVersion
-    , setRecordIV
-    ) where
+module Network.TLS.Record (
+    Record (..),
 
-import Network.TLS.Record.Types
-import Network.TLS.Record.Engage
+    -- * Fragment manipulation types
+    Fragment,
+    fragmentGetBytes,
+    fragmentPlaintext,
+    fragmentCiphertext,
+    recordToRaw,
+    rawToRecord,
+    recordToHeader,
+    Plaintext,
+    Compressed,
+    Ciphertext,
+
+    -- * Engage and disengage from the record layer
+    engageRecord,
+    disengageRecord,
+
+    -- * State tracking
+    RecordM,
+    runRecordM,
+    RecordState (..),
+    newRecordState,
+    getRecordVersion,
+    setRecordIV,
+) where
+
 import Network.TLS.Record.Disengage
+import Network.TLS.Record.Engage
 import Network.TLS.Record.State
+import Network.TLS.Record.Types
