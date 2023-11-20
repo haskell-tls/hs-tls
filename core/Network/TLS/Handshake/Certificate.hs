@@ -4,22 +4,21 @@
 -- Maintainer  : Vincent Hanquez <vincent@snarc.org>
 -- Stability   : experimental
 -- Portability : unknown
---
-module Network.TLS.Handshake.Certificate
-    ( certificateRejected
-    , badCertificate
-    , rejectOnException
-    , verifyLeafKeyUsage
-    , extractCAname
-    ) where
+module Network.TLS.Handshake.Certificate (
+    certificateRejected,
+    badCertificate,
+    rejectOnException,
+    verifyLeafKeyUsage,
+    extractCAname,
+) where
 
+import Control.Exception (SomeException)
+import Control.Monad (unless)
+import Control.Monad.State.Strict
+import Data.X509 (ExtKeyUsage (..), ExtKeyUsageFlag, extensionGet)
 import Network.TLS.Context.Internal
 import Network.TLS.Struct
 import Network.TLS.X509
-import Control.Monad (unless)
-import Control.Monad.State.Strict
-import Control.Exception (SomeException)
-import Data.X509 (ExtKeyUsage(..), ExtKeyUsageFlag, extensionGet)
 
 -- on certificate reject, throw an exception with the proper protocol alert error.
 certificateRejected :: MonadIO m => CertificateRejectReason -> m a
@@ -41,16 +40,17 @@ rejectOnException :: SomeException -> IO CertificateUsage
 rejectOnException e = return $ CertificateUsageReject $ CertificateRejectOther $ show e
 
 verifyLeafKeyUsage :: MonadIO m => [ExtKeyUsageFlag] -> CertificateChain -> m ()
-verifyLeafKeyUsage _          (CertificateChain [])         = return ()
-verifyLeafKeyUsage validFlags (CertificateChain (signed:_)) =
-    unless verified $ badCertificate $
-        "certificate is not allowed for any of " ++ show validFlags
+verifyLeafKeyUsage _ (CertificateChain []) = return ()
+verifyLeafKeyUsage validFlags (CertificateChain (signed : _)) =
+    unless verified $
+        badCertificate $
+            "certificate is not allowed for any of " ++ show validFlags
   where
-    cert     = getCertificate signed
+    cert = getCertificate signed
     verified =
         case extensionGet (certExtensions cert) of
-            Nothing                          -> True -- unrestricted cert
-            Just (ExtKeyUsage flags)         -> any (`elem` validFlags) flags
+            Nothing -> True -- unrestricted cert
+            Just (ExtKeyUsage flags) -> any (`elem` validFlags) flags
 
 extractCAname :: SignedCertificate -> DistinguishedName
 extractCAname cert = certSubjectDN $ getCertificate cert

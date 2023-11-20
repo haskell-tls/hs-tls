@@ -4,16 +4,13 @@
 -- Maintainer  : Vincent Hanquez <vincent@snarc.org>
 -- Stability   : experimental
 -- Portability : unknown
---
-
-module Network.TLS.Cap
-    ( hasHelloExtensions
-    , hasExplicitBlockIV
-    ) where
+module Network.TLS.Cap (
+    hasHelloExtensions,
+    hasExplicitBlockIV,
+) where
 
 import Network.TLS.Types
 
 hasHelloExtensions, hasExplicitBlockIV :: Version -> Bool
-
 hasHelloExtensions ver = ver >= SSL3
 hasExplicitBlockIV ver = ver >= TLS11

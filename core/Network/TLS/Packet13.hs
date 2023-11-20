@@ -1,6 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 -- |
 -- Module      : Network.TLS.Packet13
@@ -8,23 +8,26 @@
 -- Maintainer  : Vincent Hanquez <vincent@snarc.org>
 -- Stability   : experimental
 -- Portability : unknown
---
-module Network.TLS.Packet13
-       ( encodeHandshake13
-       , getHandshakeType13
-       , decodeHandshakeRecord13
-       , decodeHandshake13
-       , decodeHandshakes13
-       ) where
+module Network.TLS.Packet13 (
+    encodeHandshake13,
+    getHandshakeType13,
+    decodeHandshakeRecord13,
+    decodeHandshake13,
+    decodeHandshakes13,
+) where
 
 import qualified Data.ByteString as B
+import Data.X509 (
+    CertificateChainRaw (..),
+    decodeCertificateChain,
+    encodeCertificateChain,
+ )
+import Network.TLS.ErrT
+import Network.TLS.Imports
+import Network.TLS.Packet
 import Network.TLS.Struct
 import Network.TLS.Struct13
-import Network.TLS.Packet
 import Network.TLS.Wire
-import Network.TLS.Imports
-import Data.X509 (CertificateChainRaw(..), encodeCertificateChain, decodeCertificateChain)
-import Network.TLS.ErrT
 
 encodeHandshake13 :: Handshake13 -> ByteString
 encodeHandshake13 hdsk = pkt
@@ -63,7 +66,7 @@ encodeHandshake13' (Certificate13 reqctx cc ess) = runPut $ do
     putOpaque24 (runPut $ mapM_ putCert $ zip certs ess)
   where
     CertificateChainRaw certs = encodeCertificateChain cc
-    putCert (certRaw,exts) = do
+    putCert (certRaw, exts) = do
         putOpaque24 certRaw
         putExtensions exts
 encodeHandshake13' (CertVerify13 hs signature) = runPut $ do
@@ -78,7 +81,7 @@ encodeHandshake13' (NewSessionTicket13 life ageadd nonce label exts) = runPut $ 
     putExtensions exts
 encodeHandshake13' EndOfEarlyData13 = ""
 encodeHandshake13' (KeyUpdate13 UpdateNotRequested) = runPut $ putWord8 0
-encodeHandshake13' (KeyUpdate13 UpdateRequested)    = runPut $ putWord8 1
+encodeHandshake13' (KeyUpdate13 UpdateRequested) = runPut $ putWord8 1
 
 encodeHandshakeHeader13 :: HandshakeType13 -> Int -> ByteString
 encodeHandshakeHeader13 ty len = runPut $ do
@@ -87,14 +90,14 @@ encodeHandshakeHeader13 ty len = runPut $ do
 
 decodeHandshakes13 :: MonadError TLSError m => ByteString -> m [Handshake13]
 decodeHandshakes13 bs = case decodeHandshakeRecord13 bs of
-  GotError err                -> throwError err
-  GotPartial _cont            -> error "decodeHandshakes13"
-  GotSuccess (ty,content)     -> case decodeHandshake13 ty content of
-    Left  e -> throwError e
-    Right h -> return [h]
-  GotSuccessRemaining (ty,content) left -> case decodeHandshake13 ty content of
-    Left  e -> throwError e
-    Right h -> (h:) <$> decodeHandshakes13 left
+    GotError err -> throwError err
+    GotPartial _cont -> error "decodeHandshakes13"
+    GotSuccess (ty, content) -> case decodeHandshake13 ty content of
+        Left e -> throwError e
+        Right h -> return [h]
+    GotSuccessRemaining (ty, content) left -> case decodeHandshake13 ty content of
+        Left e -> throwError e
+        Right h -> (h :) <$> decodeHandshakes13 left
 
 {- decode and encode HANDSHAKE -}
 getHandshakeType13 :: Get HandshakeType13
@@ -102,54 +105,56 @@ getHandshakeType13 = do
     ty <- getWord8
     case valToType ty of
         Nothing -> fail ("invalid handshake type: " ++ show ty)
-        Just t  -> return t
+        Just t -> return t
 
 decodeHandshakeRecord13 :: ByteString -> GetResult (HandshakeType13, ByteString)
 decodeHandshakeRecord13 = runGet "handshake-record" $ do
-    ty      <- getHandshakeType13
+    ty <- getHandshakeType13
     content <- getOpaque24
     return (ty, content)
 
-decodeHandshake13 :: HandshakeType13 -> ByteString -> Either TLSError Handshake13
+decodeHandshake13
+    :: HandshakeType13 -> ByteString -> Either TLSError Handshake13
 decodeHandshake13 ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
-    HandshakeType_ClientHello13         -> decodeClientHello13
-    HandshakeType_ServerHello13         -> decodeServerHello13
-    HandshakeType_Finished13            -> decodeFinished13
+    HandshakeType_ClientHello13 -> decodeClientHello13
+    HandshakeType_ServerHello13 -> decodeServerHello13
+    HandshakeType_Finished13 -> decodeFinished13
     HandshakeType_EncryptedExtensions13 -> decodeEncryptedExtensions13
-    HandshakeType_CertRequest13         -> decodeCertRequest13
-    HandshakeType_Certificate13         -> decodeCertificate13
-    HandshakeType_CertVerify13          -> decodeCertVerify13
-    HandshakeType_NewSessionTicket13    -> decodeNewSessionTicket13
-    HandshakeType_EndOfEarlyData13      -> return EndOfEarlyData13
-    HandshakeType_KeyUpdate13           -> decodeKeyUpdate13
+    HandshakeType_CertRequest13 -> decodeCertRequest13
+    HandshakeType_Certificate13 -> decodeCertificate13
+    HandshakeType_CertVerify13 -> decodeCertVerify13
+    HandshakeType_NewSessionTicket13 -> decodeNewSessionTicket13
+    HandshakeType_EndOfEarlyData13 -> return EndOfEarlyData13
+    HandshakeType_KeyUpdate13 -> decodeKeyUpdate13
 
 decodeClientHello13 :: Get Handshake13
 decodeClientHello13 = do
     Just ver <- getBinaryVersion
-    random   <- getClientRandom32
-    session  <- getSession
-    ciphers  <- getWords16
-    _comp    <- getWords8
-    exts     <- fromIntegral <$> getWord16 >>= getExtensions
+    random <- getClientRandom32
+    session <- getSession
+    ciphers <- getWords16
+    _comp <- getWords8
+    exts <- fromIntegral <$> getWord16 >>= getExtensions
     return $ ClientHello13 ver random session ciphers exts
 
 decodeServerHello13 :: Get Handshake13
 decodeServerHello13 = do
     Just _ver <- getBinaryVersion
-    random    <- getServerRandom32
-    session   <- getSession
-    cipherid  <- getWord16
-    _comp     <- getWord8
-    exts      <- fromIntegral <$> getWord16 >>= getExtensions
+    random <- getServerRandom32
+    session <- getSession
+    cipherid <- getWord16
+    _comp <- getWord8
+    exts <- fromIntegral <$> getWord16 >>= getExtensions
     return $ ServerHello13 random session cipherid exts
 
 decodeFinished13 :: Get Handshake13
 decodeFinished13 = Finished13 <$> (remaining >>= getBytes)
 
 decodeEncryptedExtensions13 :: Get Handshake13
-decodeEncryptedExtensions13 = EncryptedExtensions13 <$> do
-    len <- fromIntegral <$> getWord16
-    getExtensions len
+decodeEncryptedExtensions13 =
+    EncryptedExtensions13 <$> do
+        len <- fromIntegral <$> getWord16
+        getExtensions len
 
 decodeCertRequest13 :: Get Handshake13
 decodeCertRequest13 = do
@@ -165,7 +170,7 @@ decodeCertificate13 = do
     (certRaws, ess) <- unzip <$> getList len getCert
     case decodeCertificateChain $ CertificateChainRaw certRaws of
         Left (i, s) -> fail ("error certificate parsing " ++ show i ++ ":" ++ s)
-        Right cc    -> return $ Certificate13 reqctx cc ess
+        Right cc -> return $ Certificate13 reqctx cc ess
   where
     getCert = do
         l <- fromIntegral <$> getWord24
@@ -179,12 +184,12 @@ decodeCertVerify13 = CertVerify13 <$> getSignatureHashAlgorithm <*> getOpaque16
 
 decodeNewSessionTicket13 :: Get Handshake13
 decodeNewSessionTicket13 = do
-    life   <- getWord32
+    life <- getWord32
     ageadd <- getWord32
-    nonce  <- getOpaque8
-    label  <- getOpaque16
-    len    <- fromIntegral <$> getWord16
-    exts   <- getExtensions len
+    nonce <- getOpaque8
+    label <- getOpaque16
+    len <- fromIntegral <$> getWord16
+    exts <- getExtensions len
     return $ NewSessionTicket13 life ageadd nonce label exts
 
 decodeKeyUpdate13 :: Get Handshake13

@@ -20,13 +20,13 @@ library
     ghc-options:      -Wall
     build-depends:
         base >=4.7 && <5,
-        auto-update,
-        basement,
-        bytestring,
-        clock,
-        memory,
-        psqueues >=0.2.3,
-        tls
+        auto-update >= 0.1.6 && < 0.2,
+        basement >= 0.0.16 && < 0.1,
+        bytestring >= 0.11.5 && < 0.12,
+        clock >= 0.8.4 && < 0.9,
+        memory >= 0.18.0 && < 0.19,
+        psqueues >= 0.2.8 && < 0.3,
+        tls >= 1.9.0 && < 1.10
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData

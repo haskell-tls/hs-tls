@@ -4,21 +4,20 @@
 -- Maintainer  : Vincent Hanquez <vincent@snarc.org>
 -- Stability   : experimental
 -- Portability : unknown
---
-module Network.TLS.Handshake
-    ( handshake
-    , handshakeWith
-    , handshakeClientWith
-    , handshakeServerWith
-    , handshakeClient
-    , handshakeServer
-    ) where
+module Network.TLS.Handshake (
+    handshake,
+    handshakeWith,
+    handshakeClientWith,
+    handshakeServerWith,
+    handshakeClient,
+    handshakeServer,
+) where
 
 import Network.TLS.Context.Internal
 import Network.TLS.Struct
 
-import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Client
+import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Server
 
 import Control.Monad.State.Strict

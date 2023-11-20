@@ -6,12 +6,11 @@
 -- Portability : unknown
 --
 -- TLS record layer in Tx direction
---
-module Network.TLS.Record.Writing
-    ( encodeRecord
-    , encodeRecord13
-    , sendBytes
-    ) where
+module Network.TLS.Record.Writing (
+    encodeRecord,
+    encodeRecord13,
+    sendBytes,
+) where
 
 import Network.TLS.Cap
 import Network.TLS.Cipher
@@ -35,23 +34,28 @@ encodeRecord ctx = prepareRecord ctx . encodeRecordM
 -- so we use cstIV as is, however in other case we generate an explicit IV
 prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
 prepareRecord ctx f = do
-    ver     <- usingState_ ctx (getVersionWithDefault $ maximum $ supportedVersions $ ctxSupported ctx)
+    ver <-
+        usingState_
+            ctx
+            (getVersionWithDefault $ maximum $ supportedVersions $ ctxSupported ctx)
     txState <- readMVar $ ctxTxState ctx
     let sz = case stCipher txState of
-                  Nothing     -> 0
-                  Just cipher -> if hasRecordIV $ bulkF $ cipherBulk cipher
-                                    then bulkIVSize $ cipherBulk cipher
-                                    else 0 -- to not generate IV
+            Nothing -> 0
+            Just cipher ->
+                if hasRecordIV $ bulkF $ cipherBulk cipher
+                    then bulkIVSize $ cipherBulk cipher
+                    else 0 -- to not generate IV
     if hasExplicitBlockIV ver && sz > 0
-        then do newIV <- getStateRNG ctx sz
-                runTxState ctx (modify (setRecordIV newIV) >> f)
+        then do
+            newIV <- getStateRNG ctx sz
+            runTxState ctx (modify (setRecordIV newIV) >> f)
         else runTxState ctx f
 
 encodeRecordM :: Record Plaintext -> RecordM ByteString
 encodeRecordM record = do
     erecord <- engageRecord record
     let (hdr, content) = recordToRaw erecord
-    return $ B.concat [ encodeHeader hdr, content ]
+    return $ B.concat [encodeHeader hdr, content]
 
 ----------------------------------------------------------------
 

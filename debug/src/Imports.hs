@@ -1,12 +1,12 @@
 module Imports (
-    ByteString
-  , module Control.Applicative
-  , module Control.Monad
-  , module Data.List
-  , module Data.Maybe
-  , module Data.Monoid
-  , module Data.Word
-  ) where
+    ByteString,
+    module Control.Applicative,
+    module Control.Monad,
+    module Data.List,
+    module Data.Maybe,
+    module Data.Monoid,
+    module Data.Word,
+) where
 
 import Control.Applicative
 import Control.Monad

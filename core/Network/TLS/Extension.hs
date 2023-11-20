@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+
 -- |
 -- Module      : Network.TLS.Extension
 -- License     : BSD-style
@@ -7,21 +8,114 @@
 -- Portability : unknown
 --
 -- basic extensions are defined in RFC 6066
---
-module Network.TLS.Extension
-    ( Extension(..)
-    , supportedExtensions
-    , definedExtensions
+module Network.TLS.Extension (
+    Extension (..),
+    supportedExtensions,
+    definedExtensions,
     -- all extensions ID supported
-    , extensionID_ServerName
+    extensionID_ServerName,
+    extensionID_MaxFragmentLength,
+    extensionID_SecureRenegotiation,
+    extensionID_ApplicationLayerProtocolNegotiation,
+    extensionID_ExtendedMasterSecret,
+    extensionID_NegotiatedGroups,
+    extensionID_EcPointFormats,
+    extensionID_Heartbeat,
+    extensionID_SignatureAlgorithms,
+    extensionID_PreSharedKey,
+    extensionID_EarlyData,
+    extensionID_SupportedVersions,
+    extensionID_Cookie,
+    extensionID_PskKeyExchangeModes,
+    extensionID_CertificateAuthorities,
+    extensionID_OidFilters,
+    extensionID_PostHandshakeAuth,
+    extensionID_SignatureAlgorithmsCert,
+    extensionID_KeyShare,
+    extensionID_QuicTransportParameters,
+    -- all implemented extensions
+    ServerNameType (..),
+    ServerName (..),
+    MaxFragmentLength (..),
+    MaxFragmentEnum (..),
+    SecureRenegotiation (..),
+    ApplicationLayerProtocolNegotiation (..),
+    ExtendedMasterSecret (..),
+    NegotiatedGroups (..),
+    Group (..),
+    EcPointFormatsSupported (..),
+    EcPointFormat (..),
+    SessionTicket (..),
+    HeartBeat (..),
+    HeartBeatMode (..),
+    SignatureAlgorithms (..),
+    SignatureAlgorithmsCert (..),
+    SupportedVersions (..),
+    KeyShare (..),
+    KeyShareEntry (..),
+    MessageType (..),
+    PostHandshakeAuth (..),
+    PskKexMode (..),
+    PskKeyExchangeModes (..),
+    PskIdentity (..),
+    PreSharedKey (..),
+    EarlyDataIndication (..),
+    Cookie (..),
+    CertificateAuthorities (..),
+) where
+
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as BC
+
+import Network.TLS.Crypto.Types
+import Network.TLS.Struct (
+    DistinguishedName,
+    EnumSafe16 (..),
+    EnumSafe8 (..),
+    ExtensionID,
+    HashAndSignatureAlgorithm,
+ )
+import Network.TLS.Types (HostName, Version (..))
+
+import Network.TLS.Imports
+import Network.TLS.Packet (
+    getBinaryVersion,
+    getDNames,
+    getSignatureHashAlgorithm,
+    putBinaryVersion,
+    putDNames,
+    putSignatureHashAlgorithm,
+ )
+import Network.TLS.Wire
+
+------------------------------------------------------------
+
+-- central list defined in <http://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.txt>
+extensionID_ServerName
     , extensionID_MaxFragmentLength
-    , extensionID_SecureRenegotiation
-    , extensionID_ApplicationLayerProtocolNegotiation
-    , extensionID_ExtendedMasterSecret
+    , extensionID_ClientCertificateUrl
+    , extensionID_TrustedCAKeys
+    , extensionID_TruncatedHMAC
+    , extensionID_StatusRequest
+    , extensionID_UserMapping
+    , extensionID_ClientAuthz
+    , extensionID_ServerAuthz
+    , extensionID_CertType
     , extensionID_NegotiatedGroups
     , extensionID_EcPointFormats
-    , extensionID_Heartbeat
+    , extensionID_SRP
     , extensionID_SignatureAlgorithms
+    , extensionID_SRTP
+    , extensionID_Heartbeat
+    , extensionID_ApplicationLayerProtocolNegotiation
+    , extensionID_StatusRequestv2
+    , extensionID_SignedCertificateTimestamp
+    , extensionID_ClientCertificateType
+    , extensionID_ServerCertificateType
+    , extensionID_Padding
+    , extensionID_EncryptThenMAC
+    , extensionID_ExtendedMasterSecret
+    , extensionID_SessionTicket
     , extensionID_PreSharedKey
     , extensionID_EarlyData
     , extensionID_SupportedVersions
@@ -32,138 +126,48 @@ module Network.TLS.Extension
     , extensionID_PostHandshakeAuth
     , extensionID_SignatureAlgorithmsCert
     , extensionID_KeyShare
+    , extensionID_SecureRenegotiation
     , extensionID_QuicTransportParameters
-    -- all implemented extensions
-    , ServerNameType(..)
-    , ServerName(..)
-    , MaxFragmentLength(..)
-    , MaxFragmentEnum(..)
-    , SecureRenegotiation(..)
-    , ApplicationLayerProtocolNegotiation(..)
-    , ExtendedMasterSecret(..)
-    , NegotiatedGroups(..)
-    , Group(..)
-    , EcPointFormatsSupported(..)
-    , EcPointFormat(..)
-    , SessionTicket(..)
-    , HeartBeat(..)
-    , HeartBeatMode(..)
-    , SignatureAlgorithms(..)
-    , SignatureAlgorithmsCert(..)
-    , SupportedVersions(..)
-    , KeyShare(..)
-    , KeyShareEntry(..)
-    , MessageType(..)
-    , PostHandshakeAuth(..)
-    , PskKexMode(..)
-    , PskKeyExchangeModes(..)
-    , PskIdentity(..)
-    , PreSharedKey(..)
-    , EarlyDataIndication(..)
-    , Cookie(..)
-    , CertificateAuthorities(..)
-    ) where
-
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8 as BC
-
-import Network.TLS.Struct ( DistinguishedName
-                          , ExtensionID
-                          , EnumSafe8(..)
-                          , EnumSafe16(..)
-                          , HashAndSignatureAlgorithm )
-import Network.TLS.Crypto.Types
-import Network.TLS.Types (Version(..), HostName)
-
-import Network.TLS.Wire
-import Network.TLS.Imports
-import Network.TLS.Packet ( putDNames
-                          , getDNames
-                          , putSignatureHashAlgorithm
-                          , getSignatureHashAlgorithm
-                          , putBinaryVersion
-                          , getBinaryVersion
-                          )
-
-------------------------------------------------------------
-
--- central list defined in <http://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.txt>
-extensionID_ServerName
-  , extensionID_MaxFragmentLength
-  , extensionID_ClientCertificateUrl
-  , extensionID_TrustedCAKeys
-  , extensionID_TruncatedHMAC
-  , extensionID_StatusRequest
-  , extensionID_UserMapping
-  , extensionID_ClientAuthz
-  , extensionID_ServerAuthz
-  , extensionID_CertType
-  , extensionID_NegotiatedGroups
-  , extensionID_EcPointFormats
-  , extensionID_SRP
-  , extensionID_SignatureAlgorithms
-  , extensionID_SRTP
-  , extensionID_Heartbeat
-  , extensionID_ApplicationLayerProtocolNegotiation
-  , extensionID_StatusRequestv2
-  , extensionID_SignedCertificateTimestamp
-  , extensionID_ClientCertificateType
-  , extensionID_ServerCertificateType
-  , extensionID_Padding
-  , extensionID_EncryptThenMAC
-  , extensionID_ExtendedMasterSecret
-  , extensionID_SessionTicket
-  , extensionID_PreSharedKey
-  , extensionID_EarlyData
-  , extensionID_SupportedVersions
-  , extensionID_Cookie
-  , extensionID_PskKeyExchangeModes
-  , extensionID_CertificateAuthorities
-  , extensionID_OidFilters
-  , extensionID_PostHandshakeAuth
-  , extensionID_SignatureAlgorithmsCert
-  , extensionID_KeyShare
-  , extensionID_SecureRenegotiation
-  , extensionID_QuicTransportParameters :: ExtensionID
-extensionID_ServerName                          = 0x0 -- RFC6066
-extensionID_MaxFragmentLength                   = 0x1 -- RFC6066
-extensionID_ClientCertificateUrl                = 0x2 -- RFC6066
-extensionID_TrustedCAKeys                       = 0x3 -- RFC6066
-extensionID_TruncatedHMAC                       = 0x4 -- RFC6066
-extensionID_StatusRequest                       = 0x5 -- RFC6066
-extensionID_UserMapping                         = 0x6 -- RFC4681
-extensionID_ClientAuthz                         = 0x7 -- RFC5878
-extensionID_ServerAuthz                         = 0x8 -- RFC5878
-extensionID_CertType                            = 0x9 -- RFC6091
-extensionID_NegotiatedGroups                    = 0xa -- RFC4492bis and TLS 1.3
-extensionID_EcPointFormats                      = 0xb -- RFC4492
-extensionID_SRP                                 = 0xc -- RFC5054
-extensionID_SignatureAlgorithms                 = 0xd -- RFC5246, TLS 1.3
-extensionID_SRTP                                = 0xe -- RFC5764
-extensionID_Heartbeat                           = 0xf -- RFC6520
+        :: ExtensionID
+extensionID_ServerName = 0x0 -- RFC6066
+extensionID_MaxFragmentLength = 0x1 -- RFC6066
+extensionID_ClientCertificateUrl = 0x2 -- RFC6066
+extensionID_TrustedCAKeys = 0x3 -- RFC6066
+extensionID_TruncatedHMAC = 0x4 -- RFC6066
+extensionID_StatusRequest = 0x5 -- RFC6066
+extensionID_UserMapping = 0x6 -- RFC4681
+extensionID_ClientAuthz = 0x7 -- RFC5878
+extensionID_ServerAuthz = 0x8 -- RFC5878
+extensionID_CertType = 0x9 -- RFC6091
+extensionID_NegotiatedGroups = 0xa -- RFC4492bis and TLS 1.3
+extensionID_EcPointFormats = 0xb -- RFC4492
+extensionID_SRP = 0xc -- RFC5054
+extensionID_SignatureAlgorithms = 0xd -- RFC5246, TLS 1.3
+extensionID_SRTP = 0xe -- RFC5764
+extensionID_Heartbeat = 0xf -- RFC6520
 extensionID_ApplicationLayerProtocolNegotiation = 0x10 -- RFC7301
-extensionID_StatusRequestv2                     = 0x11 -- RFC6961
-extensionID_SignedCertificateTimestamp          = 0x12 -- RFC6962
-extensionID_ClientCertificateType               = 0x13 -- RFC7250
-extensionID_ServerCertificateType               = 0x14 -- RFC7250
-extensionID_Padding                             = 0x15 -- draft-agl-tls-padding. expires 2015-03-12
-extensionID_EncryptThenMAC                      = 0x16 -- RFC7366
-extensionID_ExtendedMasterSecret                = 0x17 -- REF7627
-extensionID_SessionTicket                       = 0x23 -- RFC4507
+extensionID_StatusRequestv2 = 0x11 -- RFC6961
+extensionID_SignedCertificateTimestamp = 0x12 -- RFC6962
+extensionID_ClientCertificateType = 0x13 -- RFC7250
+extensionID_ServerCertificateType = 0x14 -- RFC7250
+extensionID_Padding = 0x15 -- draft-agl-tls-padding. expires 2015-03-12
+extensionID_EncryptThenMAC = 0x16 -- RFC7366
+extensionID_ExtendedMasterSecret = 0x17 -- REF7627
+extensionID_SessionTicket = 0x23 -- RFC4507
 -- Reserved                                       0x28 -- TLS 1.3
-extensionID_PreSharedKey                        = 0x29 -- TLS 1.3
-extensionID_EarlyData                           = 0x2a -- TLS 1.3
-extensionID_SupportedVersions                   = 0x2b -- TLS 1.3
-extensionID_Cookie                              = 0x2c -- TLS 1.3
-extensionID_PskKeyExchangeModes                 = 0x2d -- TLS 1.3
+extensionID_PreSharedKey = 0x29 -- TLS 1.3
+extensionID_EarlyData = 0x2a -- TLS 1.3
+extensionID_SupportedVersions = 0x2b -- TLS 1.3
+extensionID_Cookie = 0x2c -- TLS 1.3
+extensionID_PskKeyExchangeModes = 0x2d -- TLS 1.3
 -- Reserved                                       0x2e -- TLS 1.3
-extensionID_CertificateAuthorities              = 0x2f -- TLS 1.3
-extensionID_OidFilters                          = 0x30 -- TLS 1.3
-extensionID_PostHandshakeAuth                   = 0x31 -- TLS 1.3
-extensionID_SignatureAlgorithmsCert             = 0x32 -- TLS 1.3
-extensionID_KeyShare                            = 0x33 -- TLS 1.3
-extensionID_QuicTransportParameters             = 0x39 -- QUIC
-extensionID_SecureRenegotiation                 = 0xff01 -- RFC5746
+extensionID_CertificateAuthorities = 0x2f -- TLS 1.3
+extensionID_OidFilters = 0x30 -- TLS 1.3
+extensionID_PostHandshakeAuth = 0x31 -- TLS 1.3
+extensionID_SignatureAlgorithmsCert = 0x32 -- TLS 1.3
+extensionID_KeyShare = 0x33 -- TLS 1.3
+extensionID_QuicTransportParameters = 0x39 -- QUIC
+extensionID_SecureRenegotiation = 0xff01 -- RFC5746
 
 ------------------------------------------------------------
 
@@ -208,38 +212,40 @@ definedExtensions =
 
 -- | all supported extensions by the implementation
 supportedExtensions :: [ExtensionID]
-supportedExtensions = [ extensionID_ServerName
-                      , extensionID_MaxFragmentLength
-                      , extensionID_ApplicationLayerProtocolNegotiation
-                      , extensionID_ExtendedMasterSecret
-                      , extensionID_SecureRenegotiation
-                      , extensionID_NegotiatedGroups
-                      , extensionID_EcPointFormats
-                      , extensionID_SignatureAlgorithms
-                      , extensionID_SignatureAlgorithmsCert
-                      , extensionID_KeyShare
-                      , extensionID_PreSharedKey
-                      , extensionID_EarlyData
-                      , extensionID_SupportedVersions
-                      , extensionID_Cookie
-                      , extensionID_PskKeyExchangeModes
-                      , extensionID_CertificateAuthorities
-                      , extensionID_QuicTransportParameters
-                      ]
+supportedExtensions =
+    [ extensionID_ServerName
+    , extensionID_MaxFragmentLength
+    , extensionID_ApplicationLayerProtocolNegotiation
+    , extensionID_ExtendedMasterSecret
+    , extensionID_SecureRenegotiation
+    , extensionID_NegotiatedGroups
+    , extensionID_EcPointFormats
+    , extensionID_SignatureAlgorithms
+    , extensionID_SignatureAlgorithmsCert
+    , extensionID_KeyShare
+    , extensionID_PreSharedKey
+    , extensionID_EarlyData
+    , extensionID_SupportedVersions
+    , extensionID_Cookie
+    , extensionID_PskKeyExchangeModes
+    , extensionID_CertificateAuthorities
+    , extensionID_QuicTransportParameters
+    ]
 
 ------------------------------------------------------------
 
-data MessageType = MsgTClientHello
-                 | MsgTServerHello
-                 | MsgTHelloRetryRequest
-                 | MsgTEncryptedExtensions
-                 | MsgTNewSessionTicket
-                 | MsgTCertificateRequest
-                 deriving (Eq,Show)
+data MessageType
+    = MsgTClientHello
+    | MsgTServerHello
+    | MsgTHelloRetryRequest
+    | MsgTEncryptedExtensions
+    | MsgTNewSessionTicket
+    | MsgTCertificateRequest
+    deriving (Eq, Show)
 
 -- | Extension class to transform bytes to and from a high level Extension type.
 class Extension a where
-    extensionID     :: a -> ExtensionID
+    extensionID :: a -> ExtensionID
     extensionDecode :: MessageType -> ByteString -> Maybe a
     extensionEncode :: a -> ByteString
 
@@ -248,21 +254,23 @@ class Extension a where
 -- | Server Name extension including the name type and the associated name.
 -- the associated name decoding is dependant of its name type.
 -- name type = 0 : hostname
-newtype ServerName = ServerName [ServerNameType] deriving (Show,Eq)
+newtype ServerName = ServerName [ServerNameType] deriving (Show, Eq)
 
-data ServerNameType = ServerNameHostName HostName
-                    | ServerNameOther    (Word8, ByteString)
-                    deriving (Show,Eq)
+data ServerNameType
+    = ServerNameHostName HostName
+    | ServerNameOther (Word8, ByteString)
+    deriving (Show, Eq)
 
 instance Extension ServerName where
     extensionID _ = extensionID_ServerName
     extensionEncode (ServerName l) = runPut $ putOpaque16 (runPut $ mapM_ encodeNameType l)
-        where encodeNameType (ServerNameHostName hn)       = putWord8 0  >> putOpaque16 (BC.pack hn) -- FIXME: should be puny code conversion
-              encodeNameType (ServerNameOther (nt,opaque)) = putWord8 nt >> putBytes opaque
+      where
+        encodeNameType (ServerNameHostName hn) = putWord8 0 >> putOpaque16 (BC.pack hn) -- FIXME: should be puny code conversion
+        encodeNameType (ServerNameOther (nt, opaque)) = putWord8 nt >> putBytes opaque
     extensionDecode MsgTClientHello = decodeServerName
     extensionDecode MsgTServerHello = decodeServerName
     extensionDecode MsgTEncryptedExtensions = decodeServerName
-    extensionDecode _               = error "extensionDecode: ServerName"
+    extensionDecode _ = error "extensionDecode: ServerName"
 
 decodeServerName :: ByteString -> Maybe ServerName
 decodeServerName = runGetMaybe $ do
@@ -270,13 +278,13 @@ decodeServerName = runGetMaybe $ do
     ServerName <$> getList len getServerName
   where
     getServerName = do
-        ty    <- getWord8
+        ty <- getWord8
         snameParsed <- getOpaque16
         let !sname = B.copy snameParsed
             name = case ty of
-              0 -> ServerNameHostName $ BC.unpack sname -- FIXME: should be puny code conversion
-              _ -> ServerNameOther (ty, sname)
-        return (1+2+B.length sname, name)
+                0 -> ServerNameHostName $ BC.unpack sname -- FIXME: should be puny code conversion
+                _ -> ServerNameOther (ty, sname)
+        return (1 + 2 + B.length sname, name)
 
 ------------------------------------------------------------
 
@@ -288,21 +296,23 @@ decodeServerName = runGetMaybe $ do
 -- handshake with an "illegal_parameter" alert.
 --
 -- So, if a server receives MaxFragmentLengthOther, it must send the alert.
-data MaxFragmentLength = MaxFragmentLength MaxFragmentEnum
-                       | MaxFragmentLengthOther Word8
-                       deriving (Show,Eq)
+data MaxFragmentLength
+    = MaxFragmentLength MaxFragmentEnum
+    | MaxFragmentLengthOther Word8
+    deriving (Show, Eq)
 
-data MaxFragmentEnum = MaxFragment512
-                     | MaxFragment1024
-                     | MaxFragment2048
-                     | MaxFragment4096
-                     deriving (Show,Eq)
+data MaxFragmentEnum
+    = MaxFragment512
+    | MaxFragment1024
+    | MaxFragment2048
+    | MaxFragment4096
+    deriving (Show, Eq)
 
 instance Extension MaxFragmentLength where
     extensionID _ = extensionID_MaxFragmentLength
     extensionEncode (MaxFragmentLength l) = runPut $ putWord8 $ fromMaxFragmentEnum l
       where
-        fromMaxFragmentEnum MaxFragment512  = 1
+        fromMaxFragmentEnum MaxFragment512 = 1
         fromMaxFragmentEnum MaxFragment1024 = 2
         fromMaxFragmentEnum MaxFragment2048 = 3
         fromMaxFragmentEnum MaxFragment4096 = 4
@@ -310,7 +320,7 @@ instance Extension MaxFragmentLength where
     extensionDecode MsgTClientHello = decodeMaxFragmentLength
     extensionDecode MsgTServerHello = decodeMaxFragmentLength
     extensionDecode MsgTEncryptedExtensions = decodeMaxFragmentLength
-    extensionDecode _               = error "extensionDecode: MaxFragmentLength"
+    extensionDecode _ = error "extensionDecode: MaxFragmentLength"
 
 decodeMaxFragmentLength :: ByteString -> Maybe MaxFragmentLength
 decodeMaxFragmentLength = runGetMaybe $ toMaxFragmentEnum <$> getWord8
@@ -325,7 +335,7 @@ decodeMaxFragmentLength = runGetMaybe $ toMaxFragmentEnum <$> getWord8
 
 -- | Secure Renegotiation
 data SecureRenegotiation = SecureRenegotiation ByteString (Maybe ByteString)
-    deriving (Show,Eq)
+    deriving (Show, Eq)
 
 instance Extension SecureRenegotiation where
     extensionID _ = extensionID_SecureRenegotiation
@@ -334,15 +344,18 @@ instance Extension SecureRenegotiation where
     extensionDecode msgtype = runGetMaybe $ do
         opaque <- getOpaque8
         case msgtype of
-          MsgTServerHello -> let (cvd, svd) = B.splitAt (B.length opaque `div` 2) opaque
-                             in return $ SecureRenegotiation cvd (Just svd)
-          MsgTClientHello -> return $ SecureRenegotiation opaque Nothing
-          _               -> error "extensionDecode: SecureRenegotiation"
+            MsgTServerHello ->
+                let (cvd, svd) = B.splitAt (B.length opaque `div` 2) opaque
+                 in return $ SecureRenegotiation cvd (Just svd)
+            MsgTClientHello -> return $ SecureRenegotiation opaque Nothing
+            _ -> error "extensionDecode: SecureRenegotiation"
 
 ------------------------------------------------------------
 
 -- | Application Layer Protocol Negotiation (ALPN)
-newtype ApplicationLayerProtocolNegotiation = ApplicationLayerProtocolNegotiation [ByteString] deriving (Show,Eq)
+newtype ApplicationLayerProtocolNegotiation
+    = ApplicationLayerProtocolNegotiation [ByteString]
+    deriving (Show, Eq)
 
 instance Extension ApplicationLayerProtocolNegotiation where
     extensionID _ = extensionID_ApplicationLayerProtocolNegotiation
@@ -351,9 +364,10 @@ instance Extension ApplicationLayerProtocolNegotiation where
     extensionDecode MsgTClientHello = decodeApplicationLayerProtocolNegotiation
     extensionDecode MsgTServerHello = decodeApplicationLayerProtocolNegotiation
     extensionDecode MsgTEncryptedExtensions = decodeApplicationLayerProtocolNegotiation
-    extensionDecode _               = error "extensionDecode: ApplicationLayerProtocolNegotiation"
+    extensionDecode _ = error "extensionDecode: ApplicationLayerProtocolNegotiation"
 
-decodeApplicationLayerProtocolNegotiation :: ByteString -> Maybe ApplicationLayerProtocolNegotiation
+decodeApplicationLayerProtocolNegotiation
+    :: ByteString -> Maybe ApplicationLayerProtocolNegotiation
 decodeApplicationLayerProtocolNegotiation = runGetMaybe $ do
     len <- getWord16
     ApplicationLayerProtocolNegotiation <$> getList (fromIntegral len) getALPN
@@ -366,18 +380,18 @@ decodeApplicationLayerProtocolNegotiation = runGetMaybe $ do
 ------------------------------------------------------------
 
 -- | Extended Master Secret
-data ExtendedMasterSecret = ExtendedMasterSecret deriving (Show,Eq)
+data ExtendedMasterSecret = ExtendedMasterSecret deriving (Show, Eq)
 
 instance Extension ExtendedMasterSecret where
     extensionID _ = extensionID_ExtendedMasterSecret
     extensionEncode ExtendedMasterSecret = B.empty
     extensionDecode MsgTClientHello _ = Just ExtendedMasterSecret
     extensionDecode MsgTServerHello _ = Just ExtendedMasterSecret
-    extensionDecode _               _ = error "extensionDecode: ExtendedMasterSecret"
+    extensionDecode _ _ = error "extensionDecode: ExtendedMasterSecret"
 
 ------------------------------------------------------------
 
-newtype NegotiatedGroups = NegotiatedGroups [Group] deriving (Show,Eq)
+newtype NegotiatedGroups = NegotiatedGroups [Group] deriving (Show, Eq)
 
 -- on decode, filter all unknown curves
 instance Extension NegotiatedGroups where
@@ -385,7 +399,7 @@ instance Extension NegotiatedGroups where
     extensionEncode (NegotiatedGroups groups) = runPut $ putWords16 $ map fromEnumSafe16 groups
     extensionDecode MsgTClientHello = decodeNegotiatedGroups
     extensionDecode MsgTEncryptedExtensions = decodeNegotiatedGroups
-    extensionDecode _               = error "extensionDecode: NegotiatedGroups"
+    extensionDecode _ = error "extensionDecode: NegotiatedGroups"
 
 decodeNegotiatedGroups :: ByteString -> Maybe NegotiatedGroups
 decodeNegotiatedGroups =
@@ -393,13 +407,14 @@ decodeNegotiatedGroups =
 
 ------------------------------------------------------------
 
-newtype EcPointFormatsSupported = EcPointFormatsSupported [EcPointFormat] deriving (Show,Eq)
+newtype EcPointFormatsSupported = EcPointFormatsSupported [EcPointFormat]
+    deriving (Show, Eq)
 
-data EcPointFormat =
-      EcPointFormat_Uncompressed
+data EcPointFormat
+    = EcPointFormat_Uncompressed
     | EcPointFormat_AnsiX962_compressed_prime
     | EcPointFormat_AnsiX962_compressed_char2
-    deriving (Show,Eq)
+    deriving (Show, Eq)
 
 instance EnumSafe8 EcPointFormat where
     fromEnumSafe8 EcPointFormat_Uncompressed = 0
@@ -428,26 +443,26 @@ decodeEcPointFormatsSupported =
 -- Fixme: this is incomplete
 -- newtype SessionTicket = SessionTicket ByteString
 data SessionTicket = SessionTicket
-    deriving (Show,Eq)
+    deriving (Show, Eq)
 
 instance Extension SessionTicket where
     extensionID _ = extensionID_SessionTicket
     extensionEncode SessionTicket{} = runPut $ return ()
     extensionDecode MsgTClientHello = runGetMaybe (return SessionTicket)
     extensionDecode MsgTServerHello = runGetMaybe (return SessionTicket)
-    extensionDecode _               = error "extensionDecode: SessionTicket"
+    extensionDecode _ = error "extensionDecode: SessionTicket"
 
 ------------------------------------------------------------
 
-newtype HeartBeat = HeartBeat HeartBeatMode deriving (Show,Eq)
+newtype HeartBeat = HeartBeat HeartBeatMode deriving (Show, Eq)
 
-data HeartBeatMode =
-      HeartBeat_PeerAllowedToSend
+data HeartBeatMode
+    = HeartBeat_PeerAllowedToSend
     | HeartBeat_PeerNotAllowedToSend
-    deriving (Show,Eq)
+    deriving (Show, Eq)
 
 instance EnumSafe8 HeartBeatMode where
-    fromEnumSafe8 HeartBeat_PeerAllowedToSend    = 1
+    fromEnumSafe8 HeartBeat_PeerAllowedToSend = 1
     fromEnumSafe8 HeartBeat_PeerNotAllowedToSend = 2
 
     toEnumSafe8 1 = Just HeartBeat_PeerAllowedToSend
@@ -459,96 +474,106 @@ instance Extension HeartBeat where
     extensionEncode (HeartBeat mode) = runPut $ putWord8 $ fromEnumSafe8 mode
     extensionDecode MsgTClientHello = decodeHeartBeat
     extensionDecode MsgTServerHello = decodeHeartBeat
-    extensionDecode _               = error "extensionDecode: HeartBeat"
+    extensionDecode _ = error "extensionDecode: HeartBeat"
 
 decodeHeartBeat :: ByteString -> Maybe HeartBeat
 decodeHeartBeat = runGetMaybe $ do
     mm <- toEnumSafe8 <$> getWord8
     case mm of
-      Just m  -> return $ HeartBeat m
-      Nothing -> fail "unknown HeartBeatMode"
+        Just m -> return $ HeartBeat m
+        Nothing -> fail "unknown HeartBeatMode"
 
 ------------------------------------------------------------
 
-newtype SignatureAlgorithms = SignatureAlgorithms [HashAndSignatureAlgorithm] deriving (Show,Eq)
+newtype SignatureAlgorithms = SignatureAlgorithms [HashAndSignatureAlgorithm]
+    deriving (Show, Eq)
 
 instance Extension SignatureAlgorithms where
     extensionID _ = extensionID_SignatureAlgorithms
     extensionEncode (SignatureAlgorithms algs) =
-        runPut $ putWord16 (fromIntegral (length algs * 2)) >> mapM_ putSignatureHashAlgorithm algs
+        runPut $
+            putWord16 (fromIntegral (length algs * 2))
+                >> mapM_ putSignatureHashAlgorithm algs
     extensionDecode MsgTClientHello = decodeSignatureAlgorithms
     extensionDecode MsgTCertificateRequest = decodeSignatureAlgorithms
-    extensionDecode _               = error "extensionDecode: SignatureAlgorithms"
+    extensionDecode _ = error "extensionDecode: SignatureAlgorithms"
 
 decodeSignatureAlgorithms :: ByteString -> Maybe SignatureAlgorithms
 decodeSignatureAlgorithms = runGetMaybe $ do
     len <- getWord16
-    sas <- getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
+    sas <-
+        getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
     leftoverLen <- remaining
     when (leftoverLen /= 0) $ fail "decodeSignatureAlgorithms: broken length"
     return $ SignatureAlgorithms sas
 
 ------------------------------------------------------------
 
-data PostHandshakeAuth = PostHandshakeAuth deriving (Show,Eq)
+data PostHandshakeAuth = PostHandshakeAuth deriving (Show, Eq)
 
 instance Extension PostHandshakeAuth where
     extensionID _ = extensionID_PostHandshakeAuth
-    extensionEncode _               = B.empty
+    extensionEncode _ = B.empty
     extensionDecode MsgTClientHello = runGetMaybe $ return PostHandshakeAuth
-    extensionDecode _               = error "extensionDecode: PostHandshakeAuth"
+    extensionDecode _ = error "extensionDecode: PostHandshakeAuth"
 
 ------------------------------------------------------------
 
-newtype SignatureAlgorithmsCert = SignatureAlgorithmsCert [HashAndSignatureAlgorithm] deriving (Show,Eq)
+newtype SignatureAlgorithmsCert = SignatureAlgorithmsCert [HashAndSignatureAlgorithm]
+    deriving (Show, Eq)
 
 instance Extension SignatureAlgorithmsCert where
     extensionID _ = extensionID_SignatureAlgorithmsCert
     extensionEncode (SignatureAlgorithmsCert algs) =
-        runPut $ putWord16 (fromIntegral (length algs * 2)) >> mapM_ putSignatureHashAlgorithm algs
+        runPut $
+            putWord16 (fromIntegral (length algs * 2))
+                >> mapM_ putSignatureHashAlgorithm algs
     extensionDecode MsgTClientHello = decodeSignatureAlgorithmsCert
     extensionDecode MsgTCertificateRequest = decodeSignatureAlgorithmsCert
-    extensionDecode _               = error "extensionDecode: SignatureAlgorithmsCert"
+    extensionDecode _ = error "extensionDecode: SignatureAlgorithmsCert"
 
 decodeSignatureAlgorithmsCert :: ByteString -> Maybe SignatureAlgorithmsCert
 decodeSignatureAlgorithmsCert = runGetMaybe $ do
     len <- getWord16
-    SignatureAlgorithmsCert <$> getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
+    SignatureAlgorithmsCert
+        <$> getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
 
 ------------------------------------------------------------
 
-data SupportedVersions =
-    SupportedVersionsClientHello [Version]
-  | SupportedVersionsServerHello Version
-    deriving (Show,Eq)
+data SupportedVersions
+    = SupportedVersionsClientHello [Version]
+    | SupportedVersionsServerHello Version
+    deriving (Show, Eq)
 
 instance Extension SupportedVersions where
     extensionID _ = extensionID_SupportedVersions
     extensionEncode (SupportedVersionsClientHello vers) = runPut $ do
         putWord8 (fromIntegral (length vers * 2))
         mapM_ putBinaryVersion vers
-    extensionEncode (SupportedVersionsServerHello ver) = runPut $
-        putBinaryVersion ver
+    extensionEncode (SupportedVersionsServerHello ver) =
+        runPut $
+            putBinaryVersion ver
     extensionDecode MsgTClientHello = runGetMaybe $ do
         len <- fromIntegral <$> getWord8
         SupportedVersionsClientHello . catMaybes <$> getList len getVer
       where
         getVer = do
             ver <- getBinaryVersion
-            return (2,ver)
+            return (2, ver)
     extensionDecode MsgTServerHello = runGetMaybe $ do
         mver <- getBinaryVersion
         case mver of
-          Just ver -> return $ SupportedVersionsServerHello ver
-          Nothing  -> fail "extensionDecode: SupportedVersionsServerHello"
+            Just ver -> return $ SupportedVersionsServerHello ver
+            Nothing -> fail "extensionDecode: SupportedVersionsServerHello"
     extensionDecode _ = error "extensionDecode: SupportedVersionsServerHello"
 
 ------------------------------------------------------------
 
-data KeyShareEntry = KeyShareEntry {
-    keyShareEntryGroup :: Group
-  , keyShareEntryKeyExchange :: ByteString
-  } deriving (Show,Eq)
+data KeyShareEntry = KeyShareEntry
+    { keyShareEntryGroup :: Group
+    , keyShareEntryKeyExchange :: ByteString
+    }
+    deriving (Show, Eq)
 
 getKeyShareEntry :: Get (Int, Maybe KeyShareEntry)
 getKeyShareEntry = do
@@ -557,8 +582,8 @@ getKeyShareEntry = do
     key <- getBytes l
     let !len = l + 4
     case toEnumSafe16 g of
-      Nothing  -> return (len, Nothing)
-      Just grp -> return (len, Just $ KeyShareEntry grp key)
+        Nothing -> return (len, Nothing)
+        Just grp -> return (len, Just $ KeyShareEntry grp key)
 
 putKeyShareEntry :: KeyShareEntry -> Put
 putKeyShareEntry (KeyShareEntry grp key) = do
@@ -566,11 +591,11 @@ putKeyShareEntry (KeyShareEntry grp key) = do
     putWord16 $ fromIntegral $ B.length key
     putBytes key
 
-data KeyShare =
-    KeyShareClientHello [KeyShareEntry]
-  | KeyShareServerHello KeyShareEntry
-  | KeyShareHRR Group
-    deriving (Show,Eq)
+data KeyShare
+    = KeyShareClientHello [KeyShareEntry]
+    | KeyShareServerHello KeyShareEntry
+    | KeyShareHRR Group
+    deriving (Show, Eq)
 
 instance Extension KeyShare where
     extensionID _ = extensionID_KeyShare
@@ -580,21 +605,21 @@ instance Extension KeyShare where
         mapM_ putKeyShareEntry kses
     extensionEncode (KeyShareServerHello kse) = runPut $ putKeyShareEntry kse
     extensionEncode (KeyShareHRR grp) = runPut $ putWord16 $ fromEnumSafe16 grp
-    extensionDecode MsgTServerHello  = runGetMaybe $ do
+    extensionDecode MsgTServerHello = runGetMaybe $ do
         (_, ment) <- getKeyShareEntry
         case ment of
-            Nothing  -> fail "decoding KeyShare for ServerHello"
+            Nothing -> fail "decoding KeyShare for ServerHello"
             Just ent -> return $ KeyShareServerHello ent
     extensionDecode MsgTClientHello = runGetMaybe $ do
         len <- fromIntegral <$> getWord16
---      len == 0 allows for HRR
+        --      len == 0 allows for HRR
         grps <- getList len getKeyShareEntry
         return $ KeyShareClientHello $ catMaybes grps
     extensionDecode MsgTHelloRetryRequest = runGetMaybe $ do
         mgrp <- toEnumSafe16 <$> getWord16
         case mgrp of
-          Nothing  -> fail "decoding KeyShare for HRR"
-          Just grp -> return $ KeyShareHRR grp
+            Nothing -> fail "decoding KeyShare for HRR"
+            Just grp -> return $ KeyShareHRR grp
     extensionDecode _ = error "extensionDecode: KeyShare"
 
 ------------------------------------------------------------
@@ -602,31 +627,35 @@ instance Extension KeyShare where
 data PskKexMode = PSK_KE | PSK_DHE_KE deriving (Eq, Show)
 
 instance EnumSafe8 PskKexMode where
-    fromEnumSafe8 PSK_KE     = 0
+    fromEnumSafe8 PSK_KE = 0
     fromEnumSafe8 PSK_DHE_KE = 1
 
     toEnumSafe8 0 = Just PSK_KE
     toEnumSafe8 1 = Just PSK_DHE_KE
     toEnumSafe8 _ = Nothing
 
-newtype PskKeyExchangeModes = PskKeyExchangeModes [PskKexMode] deriving (Eq, Show)
+newtype PskKeyExchangeModes = PskKeyExchangeModes [PskKexMode]
+    deriving (Eq, Show)
 
 instance Extension PskKeyExchangeModes where
     extensionID _ = extensionID_PskKeyExchangeModes
-    extensionEncode (PskKeyExchangeModes pkms) = runPut $
-        putWords8 $ map fromEnumSafe8 pkms
-    extensionDecode MsgTClientHello = runGetMaybe $
-        PskKeyExchangeModes . mapMaybe toEnumSafe8 <$> getWords8
+    extensionEncode (PskKeyExchangeModes pkms) =
+        runPut $
+            putWords8 $
+                map fromEnumSafe8 pkms
+    extensionDecode MsgTClientHello =
+        runGetMaybe $
+            PskKeyExchangeModes . mapMaybe toEnumSafe8 <$> getWords8
     extensionDecode _ = error "extensionDecode: PskKeyExchangeModes"
 
 ------------------------------------------------------------
 
 data PskIdentity = PskIdentity ByteString Word32 deriving (Eq, Show)
 
-data PreSharedKey =
-    PreSharedKeyClientHello [PskIdentity] [ByteString]
-  | PreSharedKeyServerHello Int
-   deriving (Eq, Show)
+data PreSharedKey
+    = PreSharedKeyClientHello [PskIdentity] [ByteString]
+    | PreSharedKeyServerHello Int
+    deriving (Eq, Show)
 
 instance Extension PreSharedKey where
     extensionID _ = extensionID_PreSharedKey
@@ -638,10 +667,13 @@ instance Extension PreSharedKey where
             putOpaque16 bs
             putWord32 w
         putBinder = putOpaque8
-    extensionEncode (PreSharedKeyServerHello w16) = runPut $
-        putWord16 $ fromIntegral w16
-    extensionDecode MsgTServerHello = runGetMaybe $
-        PreSharedKeyServerHello . fromIntegral <$> getWord16
+    extensionEncode (PreSharedKeyServerHello w16) =
+        runPut $
+            putWord16 $
+                fromIntegral w16
+    extensionDecode MsgTServerHello =
+        runGetMaybe $
+            PreSharedKeyServerHello . fromIntegral <$> getWord16
     extensionDecode MsgTClientHello = runGetMaybe $ do
         len1 <- fromIntegral <$> getWord16
         identities <- getList len1 getIdentity
@@ -663,17 +695,19 @@ instance Extension PreSharedKey where
 
 ------------------------------------------------------------
 
-newtype EarlyDataIndication = EarlyDataIndication (Maybe Word32) deriving (Eq, Show)
+newtype EarlyDataIndication = EarlyDataIndication (Maybe Word32)
+    deriving (Eq, Show)
 
 instance Extension EarlyDataIndication where
     extensionID _ = extensionID_EarlyData
-    extensionEncode (EarlyDataIndication Nothing)   = runPut $ putBytes B.empty
+    extensionEncode (EarlyDataIndication Nothing) = runPut $ putBytes B.empty
     extensionEncode (EarlyDataIndication (Just w32)) = runPut $ putWord32 w32
-    extensionDecode MsgTClientHello         = return $ Just (EarlyDataIndication Nothing)
+    extensionDecode MsgTClientHello = return $ Just (EarlyDataIndication Nothing)
     extensionDecode MsgTEncryptedExtensions = return $ Just (EarlyDataIndication Nothing)
-    extensionDecode MsgTNewSessionTicket    = runGetMaybe $
-        EarlyDataIndication . Just <$> getWord32
-    extensionDecode _                       = error "extensionDecode: EarlyDataIndication"
+    extensionDecode MsgTNewSessionTicket =
+        runGetMaybe $
+            EarlyDataIndication . Just <$> getWord32
+    extensionDecode _ = error "extensionDecode: EarlyDataIndication"
 
 ------------------------------------------------------------
 
@@ -683,7 +717,7 @@ instance Extension Cookie where
     extensionID _ = extensionID_Cookie
     extensionEncode (Cookie opaque) = runPut $ putOpaque16 opaque
     extensionDecode MsgTServerHello = runGetMaybe (Cookie <$> getOpaque16)
-    extensionDecode _               = error "extensionDecode: Cookie"
+    extensionDecode _ = error "extensionDecode: Cookie"
 
 ------------------------------------------------------------
 
@@ -692,10 +726,11 @@ newtype CertificateAuthorities = CertificateAuthorities [DistinguishedName]
 
 instance Extension CertificateAuthorities where
     extensionID _ = extensionID_CertificateAuthorities
-    extensionEncode (CertificateAuthorities names) = runPut $
-        putDNames names
+    extensionEncode (CertificateAuthorities names) =
+        runPut $
+            putDNames names
     extensionDecode MsgTClientHello =
-       runGetMaybe (CertificateAuthorities <$> getDNames)
+        runGetMaybe (CertificateAuthorities <$> getDNames)
     extensionDecode MsgTCertificateRequest =
-       runGetMaybe (CertificateAuthorities <$> getDNames)
+        runGetMaybe (CertificateAuthorities <$> getDNames)
     extensionDecode _ = error "extensionDecode: CertificateAuthorities"

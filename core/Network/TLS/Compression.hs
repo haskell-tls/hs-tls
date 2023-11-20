@@ -1,40 +1,40 @@
-{-# OPTIONS_HADDOCK hide #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# OPTIONS_HADDOCK hide #-}
+
 -- |
 -- Module      : Network.TLS.Compression
 -- License     : BSD-style
 -- Maintainer  : Vincent Hanquez <vincent@snarc.org>
 -- Stability   : experimental
 -- Portability : unknown
---
-module Network.TLS.Compression
-    ( CompressionC(..)
-    , Compression(..)
-    , CompressionID
-    , nullCompression
-    , NullCompression
+module Network.TLS.Compression (
+    CompressionC (..),
+    Compression (..),
+    CompressionID,
+    nullCompression,
+    NullCompression,
 
     -- * member redefined for the class abstraction
-    , compressionID
-    , compressionDeflate
-    , compressionInflate
+    compressionID,
+    compressionDeflate,
+    compressionInflate,
 
     -- * helper
-    , compressionIntersectID
-    ) where
+    compressionIntersectID,
+) where
 
-import Network.TLS.Types (CompressionID)
-import Network.TLS.Imports
 import Control.Arrow (first)
+import Network.TLS.Imports
+import Network.TLS.Types (CompressionID)
 
 -- | supported compression algorithms need to be part of this class
 class CompressionC a where
-    compressionCID      :: a -> CompressionID
+    compressionCID :: a -> CompressionID
     compressionCDeflate :: a -> ByteString -> (a, ByteString)
     compressionCInflate :: a -> ByteString -> (a, ByteString)
 
 -- | every compression need to be wrapped in this, to fit in structure
-data Compression = forall a . CompressionC a => Compression a
+data Compression = forall a. CompressionC a => Compression a
 
 -- | return the associated ID for this algorithm
 compressionID :: Compression -> CompressionID
@@ -65,7 +65,7 @@ compressionIntersectID l ids = filter (\c -> compressionID c `elem` ids) l
 data NullCompression = NullCompression
 
 instance CompressionC NullCompression where
-    compressionCID _        = 0
+    compressionCID _ = 0
     compressionCDeflate s b = (s, b)
     compressionCInflate s b = (s, b)
 
