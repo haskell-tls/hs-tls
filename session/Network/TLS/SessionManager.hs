@@ -1,5 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
-
 -- | In-memory TLS session manager.
 --
 -- * Limitation: you can set the maximum size of the session data database.
@@ -29,11 +27,11 @@ import Network.TLS.Imports
 
 -- | Configuration for session managers.
 data Config = Config
-    { ticketLifetime :: !Int
+    { ticketLifetime :: Int
     -- ^ Ticket lifetime in seconds.
-    , pruningDelay :: !Int
+    , pruningDelay :: Int
     -- ^ Pruning delay in seconds. This is set to 'reaperDelay'.
-    , dbMaxSize :: !Int
+    , dbMaxSize :: Int
     -- ^ The limit size of session data entries.
     }
 
@@ -55,29 +53,29 @@ toValue :: SessionData -> SessionDataCopy
 toValue (SessionData v cid comp msni sec mg mti malpn siz flg) =
     SessionDataCopy v cid comp msni sec' mg mti malpn' siz flg
   where
-    !sec' = convert sec
-    !malpn' = convert <$> malpn
+    sec' = convert sec
+    malpn' = convert <$> malpn
 
 fromValue :: SessionDataCopy -> SessionData
 fromValue (SessionDataCopy v cid comp msni sec' mg mti malpn' siz flg) =
     SessionData v cid comp msni sec mg mti malpn siz flg
   where
-    !sec = convert sec'
-    !malpn = convert <$> malpn'
+    sec = convert sec'
+    malpn = convert <$> malpn'
 
 ----------------------------------------------------------------
 
 type SessionIDCopy = Block Word8
 data SessionDataCopy
     = SessionDataCopy
-        {- ssVersion     -} !Version
-        {- ssCipher      -} !CipherID
-        {- ssCompression -} !CompressionID
-        {- ssClientSNI   -} !(Maybe HostName)
+        {- ssVersion     -} Version
+        {- ssCipher      -} CipherID
+        {- ssCompression -} CompressionID
+        {- ssClientSNI   -} (Maybe HostName)
         {- ssSecret      -} (Block Word8)
-        {- ssGroup       -} !(Maybe Group)
-        {- ssTicketInfo  -} !(Maybe TLS13TicketInfo)
-        {- ssALPN        -} !(Maybe (Block Word8))
+        {- ssGroup       -} (Maybe Group)
+        {- ssTicketInfo  -} (Maybe TLS13TicketInfo)
+        {- ssALPN        -} (Maybe (Block Word8))
         {- ssMaxEarlyDataSize -} Int
         {- ssFlags       -} [SessionFlag]
     deriving (Show, Eq)
@@ -127,7 +125,7 @@ cons _ (k, _, _, Del) db = Q.delete k db
 clean :: DB -> IO (DB -> DB)
 clean olddb = do
     currentTime <- C.sec <$> C.getTime C.Monotonic
-    let !pruned = snd $ Q.atMostView currentTime olddb
+    let pruned = snd $ Q.atMostView currentTime olddb
     return $ merge pruned
   where
     ins db (k, p, v) = Q.insert k p v db
@@ -147,12 +145,12 @@ establish
     -> IO ()
 establish reaper lifetime k sd = do
     ref <- newIORef Fresh
-    !p <- (+ lifetime) . C.sec <$> C.getTime C.Monotonic
-    let !v = (sd', ref)
+    p <- (+ lifetime) . C.sec <$> C.getTime C.Monotonic
+    let v = (sd', ref)
     reaperAdd reaper (k', p, v, Add)
   where
-    !k' = toKey k
-    !sd' = toValue sd
+    k' = toKey k
+    sd' = toValue sd
 
 resume
     :: Reaper DB Item
@@ -173,7 +171,7 @@ resume reaper use k = do
   where
     check Fresh = (Used, True)
     check Used = (Used, False)
-    !k' = toKey k
+    k' = toKey k
 
 invalidate
     :: Reaper DB Item
@@ -185,4 +183,4 @@ invalidate reaper k = do
         Nothing -> return ()
         Just (p, v) -> reaperAdd reaper (k', p, v, Del)
   where
-    !k' = toKey k
+    k' = toKey k
