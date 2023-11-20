@@ -24,6 +24,7 @@ module Network.TLS.Imports (
 
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 ()
+
 -- instance
 import Data.Functor
 
