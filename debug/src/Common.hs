@@ -1,23 +1,24 @@
+{-# LANGUAGE CPP #-}
 -- Disable this warning so we can still test deprecated functionality.
 {-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
-{-# LANGUAGE CPP #-}
-module Common
-    ( printCiphers
-    , printDHParams
-    , printGroups
-    , readNumber
-    , readCiphers
-    , readDHParams
-    , readGroups
-    , printHandshakeInfo
-    , makeAddrInfo
-    , AddrInfo(..)
-    , getCertificateStore
-    ) where
+
+module Common (
+    printCiphers,
+    printDHParams,
+    printGroups,
+    readNumber,
+    readCiphers,
+    readDHParams,
+    readGroups,
+    printHandshakeInfo,
+    makeAddrInfo,
+    AddrInfo (..),
+    getCertificateStore,
+) where
 
 import Data.Char (isDigit)
-import Numeric (showHex)
 import Network.Socket
+import Numeric (showHex)
 
 import Crypto.System.CPU
 import Data.X509.CertificateStore
@@ -40,9 +41,9 @@ namedDHParams =
 
 namedCiphersuites :: [(String, [CipherID])]
 namedCiphersuites =
-    [ ("all",       map cipherID ciphersuite_all)
-    , ("default",   map cipherID ciphersuite_default)
-    , ("strong",    map cipherID ciphersuite_strong)
+    [ ("all", map cipherID ciphersuite_all)
+    , ("default", map cipherID ciphersuite_default)
+    , ("strong", map cipherID ciphersuite_strong)
     ]
 
 namedGroups :: [(String, Group)]
@@ -62,13 +63,13 @@ namedGroups =
 readNumber :: (Num a, Read a) => String -> Maybe a
 readNumber s
     | all isDigit s = Just $ read s
-    | otherwise     = Nothing
+    | otherwise = Nothing
 
 readCiphers :: String -> Maybe [CipherID]
 readCiphers s =
     case lookup s namedCiphersuites of
-        Nothing -> (:[]) `fmap` readNumber s
-        just    -> just
+        Nothing -> (: []) `fmap` readNumber s
+        just -> just
 
 readDHParams :: String -> IO (Maybe DHParams)
 readDHParams s =
@@ -84,17 +85,24 @@ printCiphers = do
     putStrLn "Supported ciphers"
     putStrLn "====================================="
     forM_ ciphersuite_all_det $ \c ->
-        putStrLn (pad 50 (cipherName c) ++ " = " ++ pad 5 (show $ cipherID c) ++ "  0x" ++ showHex (cipherID c) "")
+        putStrLn
+            ( pad 50 (cipherName c)
+                ++ " = "
+                ++ pad 5 (show $ cipherID c)
+                ++ "  0x"
+                ++ showHex (cipherID c) ""
+            )
     putStrLn ""
     putStrLn "Ciphersuites"
     putStrLn "====================================="
     forM_ namedCiphersuites $ \(name, _) -> putStrLn name
     putStrLn ""
-    putStrLn ("Using crypton-" ++ VERSION_crypton ++ " with CPU support for: " ++ cpuSupport)
+    putStrLn
+        ("Using crypton-" ++ VERSION_crypton ++ " with CPU support for: " ++ cpuSupport)
   where
     pad n s
         | length s < n = s ++ replicate (n - length s) ' '
-        | otherwise    = s
+        | otherwise = s
 
     cpuSupport
         | null processorOptions = "(nothing)"
@@ -117,7 +125,7 @@ printHandshakeInfo ctx = do
     info <- contextGetInformation ctx
     case info of
         Nothing -> return ()
-        Just i  -> do
+        Just i -> do
             putStrLn ("version: " ++ show (infoVersion i))
             putStrLn ("cipher: " ++ show (infoCipher i))
             putStrLn ("compression: " ++ show (infoCompression i))
@@ -130,26 +138,27 @@ printHandshakeInfo ctx = do
     sni <- getClientSNI ctx
     case sni of
         Nothing -> return ()
-        Just n  -> putStrLn ("server name indication: " ++ n)
+        Just n -> putStrLn ("server name indication: " ++ n)
 
 makeAddrInfo :: Maybe HostName -> PortNumber -> IO AddrInfo
 makeAddrInfo maddr port = do
     let flgs = [AI_ADDRCONFIG, AI_NUMERICSERV, AI_PASSIVE]
-        hints = defaultHints {
-            addrFlags = flgs
-          , addrSocketType = Stream
-          }
+        hints =
+            defaultHints
+                { addrFlags = flgs
+                , addrSocketType = Stream
+                }
     head <$> getAddrInfo (Just hints) maddr (Just $ show port)
 
 split :: Char -> String -> [String]
 split _ "" = []
-split c s = case break (c==) s of
-    ("",r)  -> split c (tail r)
-    (s',"") -> [s']
-    (s',r)  -> s' : split c (tail r)
+split c s = case break (c ==) s of
+    ("", r) -> split c (tail r)
+    (s', "") -> [s']
+    (s', r) -> s' : split c (tail r)
 
 getCertificateStore :: [FilePath] -> IO CertificateStore
-getCertificateStore []    = getSystemCertificateStore
+getCertificateStore [] = getSystemCertificateStore
 getCertificateStore paths = foldM readPathAppend mempty paths
   where
     readPathAppend acc path = do

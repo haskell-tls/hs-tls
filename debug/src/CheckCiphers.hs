@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
 import Control.Concurrent
-import Control.Exception (SomeException(..))
+import Control.Exception (SomeException (..))
 import qualified Control.Exception as E
 import qualified Crypto.Random.AESCtr as RNG
 import qualified Data.ByteString as B
@@ -57,80 +57,103 @@ tableCiphers =
     , (0x006D, "DH_anon_WITH_AES_256_CBC_SHA256")
     ]
 
-fakeCipher cid = Cipher
-    { cipherID           = cid
-    , cipherName         = "cipher-" ++ show cid
-    , cipherBulk         = Bulk
-        { bulkName         = "fake"
-        , bulkKeySize      = 0
-        , bulkIVSize       = 0
-        , bulkBlockSize    = 0
-        , bulkF            = undefined
+fakeCipher cid =
+    Cipher
+        { cipherID = cid
+        , cipherName = "cipher-" ++ show cid
+        , cipherBulk =
+            Bulk
+                { bulkName = "fake"
+                , bulkKeySize = 0
+                , bulkIVSize = 0
+                , bulkBlockSize = 0
+                , bulkF = undefined
+                }
+        , cipherKeyExchange = CipherKeyExchange_RSA
+        , cipherHash =
+            Hash
+                { hashName = "fake"
+                , hashSize = 0
+                , hashF = undefined
+                }
+        , cipherMinVer = Nothing
         }
-    , cipherKeyExchange  = CipherKeyExchange_RSA
-    , cipherHash         = Hash
-        { hashName = "fake"
-        , hashSize = 0
-        , hashF    = undefined
-        }
-    , cipherMinVer       = Nothing
-    }
 
-clienthello ciphers = ClientHello TLS10 (ClientRandom $ B.pack [0..31]) (Session Nothing) ciphers [0] [] Nothing
+clienthello ciphers =
+    ClientHello
+        TLS10
+        (ClientRandom $ B.pack [0 .. 31])
+        (Session Nothing)
+        ciphers
+        [0]
+        []
+        Nothing
 
 openConnection :: String -> String -> [Word16] -> IO (Maybe Word16)
 openConnection s p ciphers = do
-    pn     <- if and $ map isDigit $ p
+    pn <-
+        if and $ map isDigit $ p
             then return $ fromIntegral $ (read p :: Int)
             else do
                 service <- getServiceByName p "tcp"
                 return $ servicePort service
-    he     <- getHostByName s
-    sock   <- socket AF_INET Stream defaultProtocol
+    he <- getHostByName s
+    sock <- socket AF_INET Stream defaultProtocol
     connect sock (SockAddrInet pn (head $ hostAddresses he))
     handle <- socketToHandle sock ReadWriteMode
 
     rng <- RNG.makeSystem
-    let params = defaultParamsClient { pCiphers = map fakeCipher ciphers }
+    let params = defaultParamsClient{pCiphers = map fakeCipher ciphers}
     ctx <- contextNewOnHandle handle params rng
     sendPacket ctx $ Handshake [clienthello ciphers]
-    E.catch (do
-        rpkt <- recvPacket ctx
-        ccid <- case rpkt of
-            Right (Handshake ((ServerHello _ _ _ i _ _):_)) -> return i
-            _                                               -> error ("expecting server hello, packet received: " ++ show rpkt)
-        bye ctx
-        hClose handle
-        return $ Just ccid
-        ) (\(SomeException _) -> return Nothing)
+    E.catch
+        ( do
+            rpkt <- recvPacket ctx
+            ccid <- case rpkt of
+                Right (Handshake ((ServerHello _ _ _ i _ _) : _)) -> return i
+                _ ->
+                    error ("expecting server hello, packet received: " ++ show rpkt)
+            bye ctx
+            hClose handle
+            return $ Just ccid
+        )
+        (\(SomeException _) -> return Nothing)
 
 connectRange :: String -> String -> Int -> [Word16] -> IO (Int, [Word16])
 connectRange d p v r = do
     ccidopt <- openConnection d p r
     threadDelay v
     case ccidopt of
-        Nothing   -> return (1, [])
+        Nothing -> return (1, [])
         Just ccid -> do
             {-divide and conquer TLS-}
             let newr = filter ((/=) ccid) r
-            let (lr, rr) = if length newr > 2
-                            then splitAt (length newr `div` 2) newr
-                            else (newr, [])
-            (lc, ls) <- if length lr > 0
-                then connectRange d p v lr
-                else return (0,[])
-            (rc, rs) <- if length rr > 0
-                then connectRange d p v rr
-                else return (0,[])
+            let (lr, rr) =
+                    if length newr > 2
+                        then splitAt (length newr `div` 2) newr
+                        else (newr, [])
+            (lc, ls) <-
+                if length lr > 0
+                    then connectRange d p v lr
+                    else return (0, [])
+            (rc, rs) <-
+                if length rr > 0
+                    then connectRange d p v rr
+                    else return (0, [])
             return (1 + lc + rc, [ccid] ++ ls ++ rs)
 
-connectBetween d p v chunkSize ep sp = concat <$> loop sp where
-    loop a = liftM2 (:) (snd <$> connectRange d p v range)
-                        (if a + chunkSize > ep then return [] else loop (a+64))
-        where
-            range = if a + chunkSize > ep
-                then [a..ep]
-                else [a..sp+chunkSize]
+connectBetween d p v chunkSize ep sp = concat <$> loop sp
+  where
+    loop a =
+        liftM2
+            (:)
+            (snd <$> connectRange d p v range)
+            (if a + chunkSize > ep then return [] else loop (a + 64))
+      where
+        range =
+            if a + chunkSize > ep
+                then [a .. ep]
+                else [a .. sp + chunkSize]
 
 {-
 data PArgs = PArgs
@@ -159,6 +182,7 @@ progArgs = PArgs
 
 main = do
     putStrLn "broken"
+
 {-
     _ <- printf "connecting to %s on port %s ...\n" (destination a) (port a)
     supported <- connectBetween (destination a) (port a) (speed a) (fromIntegral $ nb a) (fromIntegral $ end a) (fromIntegral $ start a)
