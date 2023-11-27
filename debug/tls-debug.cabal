@@ -21,13 +21,14 @@ source-repository head
     location: https://github.com/vincenthz/hs-tls
 
 executable tls-stunnel
-    main-is:        Stunnel.hs
-    hs-source-dirs: src
+    main-is:          Stunnel.hs
+    hs-source-dirs:   src
     other-modules:
         Common
         Imports
 
-    ghc-options:    -Wall -fno-warn-missing-signatures
+    default-language: Haskell2010
+    ghc-options:      -Wall -fno-warn-missing-signatures
     build-depends:
         base >=4 && <5,
         network,
@@ -46,10 +47,11 @@ executable tls-stunnel
     else
 
 executable tls-retrievecertificate
-    main-is:        RetrieveCertificate.hs
-    hs-source-dirs: src
-    other-modules:  Imports
-    ghc-options:    -Wall -fno-warn-missing-signatures
+    main-is:          RetrieveCertificate.hs
+    hs-source-dirs:   src
+    other-modules:    Imports
+    default-language: Haskell2010
+    ghc-options:      -Wall -fno-warn-missing-signatures
     build-depends:
         base >=4 && <5,
         network,
@@ -62,14 +64,15 @@ executable tls-retrievecertificate
         tls >=1.3
 
 executable tls-simpleclient
-    main-is:        SimpleClient.hs
-    hs-source-dirs: src
+    main-is:          SimpleClient.hs
+    hs-source-dirs:   src
     other-modules:
         Common
         HexDump
         Imports
 
-    ghc-options:    -Wall -fno-warn-missing-signatures
+    default-language: Haskell2010
+    ghc-options:      -Wall -fno-warn-missing-signatures
     build-depends:
         base >=4 && <5,
         network,
@@ -81,14 +84,15 @@ executable tls-simpleclient
         tls >=1.5.5
 
 executable tls-simpleserver
-    main-is:        SimpleServer.hs
-    hs-source-dirs: src
+    main-is:          SimpleServer.hs
+    hs-source-dirs:   src
     other-modules:
         Common
         HexDump
         Imports
 
-    ghc-options:    -Wall -fno-warn-missing-signatures
+    default-language: Haskell2010
+    ghc-options:      -Wall -fno-warn-missing-signatures
     build-depends:
         base >=4 && <5,
         network,
