@@ -121,6 +121,7 @@ printGroups = do
     putStrLn "====================================="
     forM_ namedGroups $ \(name, _) -> putStrLn name
 
+printHandshakeInfo :: Context -> IO ()
 printHandshakeInfo ctx = do
     info <- contextGetInformation ctx
     case info of

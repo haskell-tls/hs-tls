@@ -9,7 +9,8 @@ import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy.Char8 as LC
 import Data.Default.Class
 import Data.IORef
-import Network.Socket (close, connect, socket)
+import Data.X509.CertificateStore
+import Network.Socket (PortNumber, close, connect, socket)
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
@@ -23,11 +24,23 @@ import Common
 import HexDump
 import Imports
 
+defaultBenchAmount :: Int
 defaultBenchAmount = 1024 * 1024
+
+defaultTimeout :: Int
 defaultTimeout = 2000
 
+bogusCipher :: CipherID -> Cipher
 bogusCipher cid = cipher_AES128_SHA1{cipherID = cid}
 
+runTLS
+    :: Bool
+    -> Bool
+    -> ClientParams
+    -> String
+    -> PortNumber
+    -> (Context -> IO a)
+    -> IO a
 runTLS debug ioDebug params hostname portNumber f =
     E.bracket setup teardown $ \sock -> do
         ctx <- contextNew sock params
@@ -59,6 +72,7 @@ runTLS debug ioDebug params hostname portNumber f =
         return sock
     teardown sock = close sock
 
+sessionRef :: IORef (SessionID, SessionData) -> SessionManager
 sessionRef ref =
     SessionManager
         { sessionEstablish = \sid sdata -> writeIORef ref (sid, sdata)
@@ -68,6 +82,15 @@ sessionRef ref =
         , sessionInvalidate = \_ -> return ()
         }
 
+getDefaultParams
+    :: [Flag]
+    -> String
+    -> CertificateStore
+    -> IORef (SessionID, SessionData)
+    -> Maybe OnCertificateRequest
+    -> Maybe (SessionID, SessionData)
+    -> Maybe ByteString
+    -> ClientParams
 getDefaultParams flags host store sStorage certCredsRequest session earlyData =
     (defaultParamsClient serverName BC.empty)
         { clientSupported =
@@ -148,6 +171,7 @@ getDefaultParams flags host store sStorage certCredsRequest session earlyData =
     allVers = [TLS13, TLS12, TLS11, TLS10, SSL3]
     validateCert = not (NoValidateCert `elem` flags)
 
+getGroups :: [Flag] -> [Group]
 getGroups flags = case getGroup >>= readGroups of
     Nothing -> defaultGroups
     Just [] -> defaultGroups
@@ -304,8 +328,15 @@ options =
         "debug: set a specific seed for randomness"
     ]
 
+noSession :: Maybe (SessionID, SessionData)
 noSession = Nothing
 
+runOn
+    :: (IORef (SessionID, SessionData), CertificateStore)
+    -> [Flag]
+    -> PortNumber
+    -> String
+    -> IO ()
 runOn (sStorage, certStore) flags port hostname
     | BenchSend `elem` flags = runBench True
     | BenchRecv `elem` flags = runBench False
@@ -454,17 +485,20 @@ runOn (sStorage, certStore) flags port hostname
             Just i -> i
         f acc _ = acc
 
+getTrustAnchors :: [Flag] -> IO CertificateStore
 getTrustAnchors flags = getCertificateStore (foldr getPaths [] flags)
   where
     getPaths (TrustAnchor path) acc = path : acc
     getPaths _ acc = acc
 
+printUsage :: IO ()
 printUsage =
     putStrLn $
         usageInfo
             "usage: simpleclient [opts] <hostname> [port]\n\n\t(port default to: 443)\noptions:\n"
             options
 
+main :: IO ()
 main = do
     args <- getArgs
     let (opts, other, errs) = getOpt Permute options args

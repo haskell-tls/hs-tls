@@ -26,11 +26,16 @@ import Common
 import HexDump
 import Imports
 
+defaultBenchAmount :: Int
 defaultBenchAmount = 1024 * 1024
+
+defaultTimeout :: Int
 defaultTimeout = 2000
 
+bogusCipher :: CipherID -> Cipher
 bogusCipher cid = cipher_AES128_SHA1{cipherID = cid}
 
+runTLS :: Bool -> Bool -> ServerParams -> S.Socket -> (Context -> IO a) -> IO a
 runTLS debug ioDebug params cSock f = do
     ctx <- contextNew cSock params
     contextHookSetLogging ctx getLogging
@@ -147,6 +152,7 @@ getDefaultParams flags store smgr cred rtt0accept = do
     validateCert = not (NoValidateCert `elem` flags)
     allowRenegotiation = AllowRenegotiation `elem` flags
 
+getGroups :: [Flag] -> [Group]
 getGroups flags = case getGroup >>= readGroups of
     Nothing -> defaultGroups
     Just [] -> defaultGroups
@@ -295,6 +301,7 @@ options =
         "DH parameters (name or file)"
     ]
 
+loadCred :: Maybe FilePath -> Maybe FilePath -> IO Credential
 loadCred (Just key) (Just cert) = do
     res <- credentialLoadX509 cert key
     case res of
@@ -305,6 +312,7 @@ loadCred Nothing _ =
 loadCred _ Nothing =
     error "missing credential certificate"
 
+runOn :: (SessionManager, CertificateStore) -> [Flag] -> S.PortNumber -> IO ()
 runOn (sStorage, certStore) flags port = do
     ai <- makeAddrInfo Nothing port
     sock <- socket (addrFamily ai) (addrSocketType ai) (addrProtocol ai)
@@ -428,17 +436,20 @@ runOn (sStorage, certStore) flags port = do
             Just i -> i
         f acc _ = acc
 
+getTrustAnchors :: [Flag] -> IO CertificateStore
 getTrustAnchors flags = getCertificateStore (foldr getPaths [] flags)
   where
     getPaths (TrustAnchor path) acc = path : acc
     getPaths _ acc = acc
 
+printUsage :: IO ()
 printUsage =
     putStrLn $
         usageInfo
             "usage: simpleserver [opts] [port]\n\n\t(port default to: 443)\noptions:\n"
             options
 
+main :: IO ()
 main = do
     args <- getArgs
     let (opts, other, errs) = getOpt Permute options args

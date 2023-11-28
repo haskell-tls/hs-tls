@@ -35,9 +35,10 @@ openConnection s p = do
 
     sock <- bracketOnError
         (socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr))
-        close $ \sock -> do
-        connect sock $ addrAddress addr
-        return sock
+        close
+        $ \sock -> do
+            connect sock $ addrAddress addr
+            return sock
     ctx <- contextNew sock params
 
     contextHookSetCertificateRecv ctx $ \l -> writeIORef ref (Just l)
