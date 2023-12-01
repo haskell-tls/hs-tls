@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# OPTIONS_HADDOCK hide #-}
 
 -- |
@@ -23,7 +24,13 @@ module Network.TLS.Struct (
     HashAndSignatureAlgorithm,
     DigitallySigned (..),
     Signature,
-    ProtocolType (..),
+    ProtocolType (
+        ProtocolType,
+        ProtocolType_ChangeCipherSpec,
+        ProtocolType_Alert,
+        ProtocolType_Handshake,
+        ProtocolType_AppData
+    ),
     TLSError (..),
     TLSException (..),
     DistinguishedName,
@@ -153,13 +160,28 @@ type Signature = ByteString
 data DigitallySigned = DigitallySigned (Maybe HashAndSignatureAlgorithm) Signature
     deriving (Show, Eq)
 
-data ProtocolType
-    = ProtocolType_ChangeCipherSpec
-    | ProtocolType_Alert
-    | ProtocolType_Handshake
-    | ProtocolType_AppData
-    | ProtocolType_DeprecatedHandshake
-    deriving (Eq, Show)
+newtype ProtocolType = ProtocolType Word8 deriving (Eq)
+
+{- FOURMOLU_DISABLE -}
+pattern ProtocolType_ChangeCipherSpec :: ProtocolType
+pattern ProtocolType_ChangeCipherSpec  = ProtocolType 20
+
+pattern ProtocolType_Alert            :: ProtocolType
+pattern ProtocolType_Alert             = ProtocolType 21
+
+pattern ProtocolType_Handshake        :: ProtocolType
+pattern ProtocolType_Handshake         = ProtocolType 22
+
+pattern ProtocolType_AppData          :: ProtocolType
+pattern ProtocolType_AppData           = ProtocolType 23
+
+instance Show ProtocolType where
+    show ProtocolType_ChangeCipherSpec = "ChangeCipherSpec"
+    show ProtocolType_Alert            = "Alert"
+    show ProtocolType_Handshake        = "Handshake"
+    show ProtocolType_AppData          = "AppData"
+    show (ProtocolType x)              = "ProtocolType " ++ show x
+{- FOURMOLU_ENABLE -}
 
 -- | TLSError that might be returned through the TLS stack.
 --
@@ -492,19 +514,6 @@ instance TypeValuable CipherType where
     valToType 0 = Just CipherStream
     valToType 1 = Just CipherBlock
     valToType 2 = Just CipherAEAD
-    valToType _ = Nothing
-
-instance TypeValuable ProtocolType where
-    valOfType ProtocolType_ChangeCipherSpec = 20
-    valOfType ProtocolType_Alert = 21
-    valOfType ProtocolType_Handshake = 22
-    valOfType ProtocolType_AppData = 23
-    valOfType ProtocolType_DeprecatedHandshake = 128 -- unused
-
-    valToType 20 = Just ProtocolType_ChangeCipherSpec
-    valToType 21 = Just ProtocolType_Alert
-    valToType 22 = Just ProtocolType_Handshake
-    valToType 23 = Just ProtocolType_AppData
     valToType _ = Nothing
 
 instance TypeValuable HandshakeType where

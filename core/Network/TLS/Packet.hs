@@ -15,8 +15,6 @@ module Network.TLS.Packet (
 
     -- * marshall functions for header messages
     decodeHeader,
-    decodeDeprecatedHeaderLength,
-    decodeDeprecatedHeader,
     encodeHeader,
     encodeHeaderNoVer, -- use for SSL3
 
@@ -115,14 +113,10 @@ putBinaryVersion ver = putWord8 major >> putWord8 minor
     (major, minor) = numericalVer ver
 
 getHeaderType :: Get ProtocolType
-getHeaderType = do
-    ty <- getWord8
-    case valToType ty of
-        Nothing -> fail ("invalid header type: " ++ show ty)
-        Just t -> return t
+getHeaderType = ProtocolType <$> getWord8
 
 putHeaderType :: ProtocolType -> Put
-putHeaderType = putWord8 . valOfType
+putHeaderType (ProtocolType pt) = putWord8 pt
 
 getHandshakeType :: Get HandshakeType
 getHandshakeType = do
@@ -136,16 +130,6 @@ getHandshakeType = do
  -}
 decodeHeader :: ByteString -> Either TLSError Header
 decodeHeader = runGetErr "header" $ Header <$> getHeaderType <*> getVersion <*> getWord16
-
-decodeDeprecatedHeaderLength :: ByteString -> Either TLSError Word16
-decodeDeprecatedHeaderLength = runGetErr "deprecatedheaderlength" $ subtract 0x8000 <$> getWord16
-
-decodeDeprecatedHeader :: Word16 -> ByteString -> Either TLSError Header
-decodeDeprecatedHeader size =
-    runGetErr "deprecatedheader" $ do
-        1 <- getWord8
-        version <- getVersion
-        return $ Header ProtocolType_DeprecatedHandshake version size
 
 encodeHeader :: Header -> ByteString
 encodeHeader (Header pt ver len) = runPut (putHeaderType pt >> putBinaryVersion ver >> putWord16 len)

@@ -67,10 +67,7 @@ processPacket ctx (Record ProtocolType_Handshake ver fragment) = do
                 case decodeHandshake currentParams ty content of
                     Left err -> throwError err
                     Right hh -> (hh :) <$> parseMany currentParams Nothing left
-processPacket _ (Record ProtocolType_DeprecatedHandshake _ fragment) =
-    case decodeDeprecatedHandshake $ fragmentGetBytes fragment of
-        Left err -> return $ Left err
-        Right hs -> return $ Right $ Handshake [hs]
+processPacket _ _ = return $ Left (Error_Packet_Parsing "unknown protocol type")
 
 switchRxEncryption :: Context -> IO ()
 switchRxEncryption ctx =
@@ -100,5 +97,4 @@ processPacket13 ctx (Record ProtocolType_Handshake _ fragment) = usingState ctx 
                 case decodeHandshake13 ty content of
                     Left err -> throwError err
                     Right hh -> (hh :) <$> parseMany Nothing left
-processPacket13 _ (Record ProtocolType_DeprecatedHandshake _ _) =
-    return (Left $ Error_Packet "deprecated handshake packet 1.3")
+processPacket13 _ _ = return $ Left (Error_Packet_Parsing "unknown protocol type")
