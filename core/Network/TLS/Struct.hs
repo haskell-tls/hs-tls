@@ -59,7 +59,21 @@ module Network.TLS.Struct (
     CertificateType (..),
     lastSupportedCertificateType,
     HashAlgorithm (..),
-    SignatureAlgorithm (..),
+    SignatureAlgorithm (
+        SignatureAlgorithm,
+        SignatureAnonymous,
+        SignatureRSA,
+        SignatureDSS,
+        SignatureECDSA,
+        SignatureRSApssRSAeSHA256,
+        SignatureRSApssRSAeSHA384,
+        SignatureRSApssRSAeSHA512,
+        SignatureEd25519,
+        SignatureEd448,
+        SignatureRSApsspssSHA256,
+        SignatureRSApsspssSHA384,
+        SignatureRSApsspssSHA512
+    ),
     HashAndSignatureAlgorithm,
     DigitallySigned (..),
     Signature,
@@ -113,6 +127,8 @@ import Network.TLS.Imports
 import Network.TLS.Types
 import Network.TLS.Util.Serialization
 
+------------------------------------------------------------
+
 data ConnectionEnd = ConnectionServer | ConnectionClient
 data CipherType = CipherStream | CipherBlock | CipherAEAD
 
@@ -122,6 +138,8 @@ data CipherData = CipherData
     , cipherDataPadding :: Maybe (ByteString, Int)
     }
     deriving (Show, Eq)
+
+------------------------------------------------------------
 
 -- | Some of the IANA registered code points for 'CertificateType' are not
 -- currently supported by the library.  Nor should they be, they're are either
@@ -160,6 +178,8 @@ data CertificateType
 lastSupportedCertificateType :: CertificateType
 lastSupportedCertificateType = CertificateType_ECDSA_Sign
 
+------------------------------------------------------------
+
 data HashAlgorithm
     = HashNone
     | HashMD5
@@ -172,21 +192,53 @@ data HashAlgorithm
     | HashOther Word8
     deriving (Show, Eq)
 
-data SignatureAlgorithm
-    = SignatureAnonymous
-    | SignatureRSA
-    | SignatureDSS
-    | SignatureECDSA
-    | SignatureRSApssRSAeSHA256
-    | SignatureRSApssRSAeSHA384
-    | SignatureRSApssRSAeSHA512
-    | SignatureEd25519
-    | SignatureEd448
-    | SignatureRSApsspssSHA256
-    | SignatureRSApsspssSHA384
-    | SignatureRSApsspssSHA512
-    | SignatureOther Word8
-    deriving (Show, Eq)
+------------------------------------------------------------
+
+newtype SignatureAlgorithm = SignatureAlgorithm Word8 deriving (Eq)
+
+{- FOURMOLU_DISABLE -}
+pattern SignatureAnonymous        :: SignatureAlgorithm
+pattern SignatureAnonymous         = SignatureAlgorithm 0
+pattern SignatureRSA              :: SignatureAlgorithm
+pattern SignatureRSA               = SignatureAlgorithm 1
+pattern SignatureDSS              :: SignatureAlgorithm
+pattern SignatureDSS               = SignatureAlgorithm 2
+pattern SignatureECDSA            :: SignatureAlgorithm
+pattern SignatureECDSA             = SignatureAlgorithm 3
+pattern SignatureRSApssRSAeSHA256 :: SignatureAlgorithm
+pattern SignatureRSApssRSAeSHA256  = SignatureAlgorithm 4
+pattern SignatureRSApssRSAeSHA384 :: SignatureAlgorithm
+pattern SignatureRSApssRSAeSHA384  = SignatureAlgorithm 5
+pattern SignatureRSApssRSAeSHA512 :: SignatureAlgorithm
+pattern SignatureRSApssRSAeSHA512  = SignatureAlgorithm 6
+pattern SignatureEd25519          :: SignatureAlgorithm
+pattern SignatureEd25519           = SignatureAlgorithm 7
+pattern SignatureEd448            :: SignatureAlgorithm
+pattern SignatureEd448             = SignatureAlgorithm 8
+pattern SignatureRSApsspssSHA256  :: SignatureAlgorithm
+pattern SignatureRSApsspssSHA256   = SignatureAlgorithm 9
+pattern SignatureRSApsspssSHA384  :: SignatureAlgorithm
+pattern SignatureRSApsspssSHA384   = SignatureAlgorithm 10
+pattern SignatureRSApsspssSHA512  :: SignatureAlgorithm
+pattern SignatureRSApsspssSHA512   = SignatureAlgorithm 11
+
+instance Show SignatureAlgorithm where
+    show SignatureAnonymous        = "SignatureAnonymous"
+    show SignatureRSA              = "SignatureRSA"
+    show SignatureDSS              = "SignatureDSS"
+    show SignatureECDSA            = "SignatureECDSA"
+    show SignatureRSApssRSAeSHA256 = "SignatureRSApssRSAeSHA256"
+    show SignatureRSApssRSAeSHA384 = "SignatureRSApssRSAeSHA384"
+    show SignatureRSApssRSAeSHA512 = "SignatureRSApssRSAeSHA512"
+    show SignatureEd25519          = "SignatureEd25519"
+    show SignatureEd448            = "SignatureEd448"
+    show SignatureRSApsspssSHA256  = "SignatureRSApsspssSHA256"
+    show SignatureRSApsspssSHA384  = "SignatureRSApsspssSHA384"
+    show SignatureRSApsspssSHA512  = "SignatureRSApsspssSHA512"
+    show (SignatureAlgorithm x)    = "SignatureAlgorithm " ++ show x
+{- FOURMOLU_ENABLE -}
+
+------------------------------------------------------------
 
 type HashAndSignatureAlgorithm = (HashAlgorithm, SignatureAlgorithm)
 
@@ -774,32 +826,3 @@ instance TypeValuable HashAlgorithm where
     valToType 6 = Just HashSHA512
     valToType 8 = Just HashIntrinsic
     valToType i = Just (HashOther i)
-
-instance TypeValuable SignatureAlgorithm where
-    valOfType SignatureAnonymous = 0
-    valOfType SignatureRSA = 1
-    valOfType SignatureDSS = 2
-    valOfType SignatureECDSA = 3
-    valOfType SignatureRSApssRSAeSHA256 = 4
-    valOfType SignatureRSApssRSAeSHA384 = 5
-    valOfType SignatureRSApssRSAeSHA512 = 6
-    valOfType SignatureEd25519 = 7
-    valOfType SignatureEd448 = 8
-    valOfType SignatureRSApsspssSHA256 = 9
-    valOfType SignatureRSApsspssSHA384 = 10
-    valOfType SignatureRSApsspssSHA512 = 11
-    valOfType (SignatureOther i) = i
-
-    valToType 0 = Just SignatureAnonymous
-    valToType 1 = Just SignatureRSA
-    valToType 2 = Just SignatureDSS
-    valToType 3 = Just SignatureECDSA
-    valToType 4 = Just SignatureRSApssRSAeSHA256
-    valToType 5 = Just SignatureRSApssRSAeSHA384
-    valToType 6 = Just SignatureRSApssRSAeSHA512
-    valToType 7 = Just SignatureEd25519
-    valToType 8 = Just SignatureEd448
-    valToType 9 = Just SignatureRSApsspssSHA256
-    valToType 10 = Just SignatureRSApsspssSHA384
-    valToType 11 = Just SignatureRSApsspssSHA512
-    valToType i = Just (SignatureOther i)

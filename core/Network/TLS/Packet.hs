@@ -403,7 +403,7 @@ encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
         Nothing -> return ()
         Just l ->
             putWords16 $
-                map (\(x, y) -> fromIntegral (valOfType x) * 256 + fromIntegral (valOfType y)) l
+                map (\(x, (SignatureAlgorithm y)) -> fromIntegral (valOfType x) * 256 + fromIntegral y) l
     putDNames certAuthorities
 encodeHandshakeContent (CertVerify digitallySigned) = putDigitallySigned digitallySigned
 encodeHandshakeContent (Finished opaque) = putBytes opaque
@@ -470,12 +470,12 @@ putExtensions es = putOpaque16 (runPut $ mapM_ putExtension es)
 getSignatureHashAlgorithm :: Get HashAndSignatureAlgorithm
 getSignatureHashAlgorithm = do
     h <- (valToType <$> getWord8) >>= fromJustM "getSignatureHashAlgorithm"
-    s <- (valToType <$> getWord8) >>= fromJustM "getSignatureHashAlgorithm"
+    s <- SignatureAlgorithm <$> getWord8
     return (h, s)
 
 putSignatureHashAlgorithm :: HashAndSignatureAlgorithm -> Put
-putSignatureHashAlgorithm (h, s) =
-    putWord8 (valOfType h) >> putWord8 (valOfType s)
+putSignatureHashAlgorithm (h, (SignatureAlgorithm s)) =
+    putWord8 (valOfType h) >> putWord8 s
 
 getServerDHParams :: Get ServerDHParams
 getServerDHParams = ServerDHParams <$> getBigNum16 <*> getBigNum16 <*> getBigNum16
