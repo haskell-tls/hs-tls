@@ -271,13 +271,16 @@ storePrivInfo
     -> PrivKey
     -> m PubKey
 storePrivInfo ctx cc privkey = do
-    let CertificateChain (c : _) = cc
+    let c = fromCC cc
         pubkey = certPubKey $ getCertificate c
     unless (isDigitalSignaturePair (pubkey, privkey)) $
         throwCore $
             Error_Protocol "mismatched or unsupported private key pair" InternalError
     usingHState ctx $ setPublicPrivateKeys (pubkey, privkey)
     return pubkey
+  where
+    fromCC (CertificateChain (c : _)) = c
+    fromCC _ = error "fromCC"
 
 -- verify that the group selected by the peer is supported in the local
 -- configuration
