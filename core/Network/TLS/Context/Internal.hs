@@ -349,7 +349,10 @@ getCertRequest13 :: Context -> CertReqContext -> IO (Maybe Handshake13)
 getCertRequest13 ctx context = do
     let ref = ctxCertRequests ctx
     l <- readIORef ref
-    let (matched, others) = partition (\(CertRequest13 c _) -> context == c) l
+    let (matched, others) = partition (\cr -> context == fromCertRequest13 cr) l
     case matched of
         [] -> return Nothing
         (certReq : _) -> writeIORef ref others >> return (Just certReq)
+  where
+    fromCertRequest13 (CertRequest13 c _) = c
+    fromCertRequest13 _ = error "fromCertRequest13"
