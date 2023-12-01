@@ -14,7 +14,6 @@ module Certificate (
     toPrivKeyEC,
 ) where
 
-import Control.Applicative
 import Crypto.Number.Serialize (i2ospOf_)
 import qualified Crypto.PubKey.ECC.ECDSA as ECDSA
 import qualified Crypto.PubKey.ECC.Types as ECC

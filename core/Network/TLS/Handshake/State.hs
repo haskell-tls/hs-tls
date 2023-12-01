@@ -78,9 +78,9 @@ module Network.TLS.Handshake.State (
     getCCS13Sent,
 ) where
 
-import Data.Maybe (fromJust)
 import Control.Monad.State.Strict
 import Data.ByteArray (ByteArrayAccess)
+import Data.Maybe (fromJust)
 import Data.X509 (CertificateChain)
 import Network.TLS.Cipher
 import Network.TLS.Compression

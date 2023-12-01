@@ -46,9 +46,9 @@ module Network.TLS.Handshake.Common13 (
     checkKeyShareKeyLength,
 ) where
 
-import Data.Maybe (fromJust)
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
+import Data.Maybe (fromJust)
 import Data.UnixTime
 import Foreign.C.Types (CTime (..))
 import Network.TLS.Cipher

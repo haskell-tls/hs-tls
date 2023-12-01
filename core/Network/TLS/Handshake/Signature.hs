@@ -22,8 +22,8 @@ module Network.TLS.Handshake.Signature (
     decryptError,
 ) where
 
-import Data.Maybe (fromJust)
 import Control.Monad.State.Strict
+import Data.Maybe (fromJust)
 
 import Network.TLS.Context.Internal
 import Network.TLS.Crypto

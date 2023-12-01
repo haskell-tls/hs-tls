@@ -41,7 +41,6 @@ module Network.TLS.Crypto (
     RSAEncoding (..),
 ) where
 
-import Data.Maybe (fromJust)
 import qualified Crypto.ECC as ECDSA
 import Crypto.Error
 import qualified Crypto.Hash as H
@@ -59,6 +58,7 @@ import qualified Crypto.PubKey.RSA.PSS as PSS
 import Crypto.Random
 import qualified Data.ByteArray as B (convert)
 import qualified Data.ByteString as B
+import Data.Maybe (fromJust)
 
 import Data.X509 (
     PrivKey (..),

@@ -28,12 +28,12 @@ module Network.TLS.Handshake.Common (
     errorToAlertMessage,
 ) where
 
-import Data.Maybe (fromJust)
 import Control.Concurrent.MVar
-import qualified Data.ByteString as B
 import Control.Exception (IOException, fromException, handle, throwIO)
 import Control.Monad.State.Strict
+import qualified Data.ByteString as B
 import Data.IORef (writeIORef)
+import Data.Maybe (fromJust)
 
 import Network.TLS.Cipher
 import Network.TLS.Compression

@@ -13,11 +13,11 @@ module Network.TLS.Handshake.Server (
     postHandshakeAuthServerWith,
 ) where
 
-import Data.Maybe (fromJust)
-import qualified Data.ByteString as B
-import Data.X509 (ExtKeyUsageFlag (..))
 import Control.Exception (bracket)
 import Control.Monad.State.Strict
+import qualified Data.ByteString as B
+import Data.Maybe (fromJust)
+import Data.X509 (ExtKeyUsageFlag (..))
 
 import Network.TLS.Cipher
 import Network.TLS.Compression
@@ -25,11 +25,16 @@ import Network.TLS.Context.Internal
 import Network.TLS.Credentials
 import Network.TLS.Crypto
 import Network.TLS.Extension
+import Network.TLS.Handshake.Certificate
+import Network.TLS.Handshake.Common
+import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.Control
 import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Random
+import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
+import Network.TLS.Handshake.State13
 import Network.TLS.IO
 import Network.TLS.Imports
 import Network.TLS.Measurement
@@ -40,11 +45,6 @@ import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types
 import Network.TLS.Util (bytesEq, catchException)
-import Network.TLS.Handshake.Certificate
-import Network.TLS.Handshake.Common
-import Network.TLS.Handshake.Common13
-import Network.TLS.Handshake.Signature
-import Network.TLS.Handshake.State13
 import Network.TLS.X509
 
 -- Put the server context in handshake mode.

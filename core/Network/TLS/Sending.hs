@@ -14,11 +14,11 @@ module Network.TLS.Sending (
     updateHandshake13,
 ) where
 
-import Data.Maybe (fromJust)
 import Control.Concurrent.MVar
 import Control.Monad.State.Strict
 import qualified Data.ByteString as B
 import Data.IORef
+import Data.Maybe (fromJust)
 
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal

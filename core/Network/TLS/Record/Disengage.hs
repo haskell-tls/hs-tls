@@ -18,10 +18,10 @@ module Network.TLS.Record.Disengage (
 ) where
 
 import Control.Monad.State.Strict
-import Data.Maybe (fromJust)
 import Crypto.Cipher.Types (AuthTag (..))
 import qualified Data.ByteArray as B (convert, xor)
 import qualified Data.ByteString as B
+import Data.Maybe (fromJust)
 import Network.TLS.Cap
 import Network.TLS.Cipher
 import Network.TLS.Compression

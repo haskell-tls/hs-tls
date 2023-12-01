@@ -27,19 +27,19 @@ module Network.TLS.Record.State (
     getMacSequence,
 ) where
 
-import Data.Maybe (fromJust)
 import Control.Monad.State.Strict
 import qualified Data.ByteString as B
+import Data.Maybe (fromJust)
 
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.ErrT
-import Network.TLS.Struct
-import Network.TLS.Wire
 import Network.TLS.Imports
 import Network.TLS.MAC
 import Network.TLS.Packet
+import Network.TLS.Struct
 import Network.TLS.Types
+import Network.TLS.Wire
 
 data CryptState = CryptState
     { cstKey :: !BulkState
