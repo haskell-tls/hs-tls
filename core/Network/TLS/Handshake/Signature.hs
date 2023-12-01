@@ -22,6 +22,9 @@ module Network.TLS.Handshake.Signature (
     decryptError,
 ) where
 
+import Data.Maybe (fromJust)
+import Control.Monad.State.Strict
+
 import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import Network.TLS.Handshake.Key
@@ -36,10 +39,7 @@ import Network.TLS.Packet (
 import Network.TLS.Parameters
 import Network.TLS.State
 import Network.TLS.Struct
-import Network.TLS.Util
 import Network.TLS.X509
-
-import Control.Monad.State.Strict
 
 decryptError :: MonadIO m => String -> m a
 decryptError msg = throwCore $ Error_Protocol msg DecryptError
@@ -330,7 +330,7 @@ withClientAndServerRandom ctx f = do
         usingHState ctx $
             (,)
                 <$> gets hstClientRandom
-                <*> (fromJust "withClientAndServer : server random" <$> gets hstServerRandom)
+                <*> (fromJust <$> gets hstServerRandom)
     return $ f cran sran
 
 -- verify that the hash and signature selected by the peer is supported in

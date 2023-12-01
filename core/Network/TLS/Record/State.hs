@@ -27,20 +27,19 @@ module Network.TLS.Record.State (
     getMacSequence,
 ) where
 
+import Data.Maybe (fromJust)
 import Control.Monad.State.Strict
+import qualified Data.ByteString as B
+
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.ErrT
 import Network.TLS.Struct
 import Network.TLS.Wire
-
 import Network.TLS.Imports
 import Network.TLS.MAC
 import Network.TLS.Packet
 import Network.TLS.Types
-import Network.TLS.Util
-
-import qualified Data.ByteString as B
 
 data CryptState = CryptState
     { cstKey :: !BulkState
@@ -164,7 +163,7 @@ computeDigest ver tstate hdr content = (digest, incrRecordState tstate)
   where
     digest = macF (cstMacSecret cst) msg
     cst = stCryptState tstate
-    cipher = fromJust "cipher" $ stCipher tstate
+    cipher = fromJust $ stCipher tstate
     hashA = cipherHash cipher
     encodedSeq = encodeWord64 $ msSequence $ stMacState tstate
 
@@ -182,7 +181,7 @@ makeDigest hdr content = do
     return digest
 
 getBulk :: RecordM Bulk
-getBulk = cipherBulk . fromJust "cipher" . stCipher <$> get
+getBulk = cipherBulk . fromJust . stCipher <$> get
 
 getMacSequence :: RecordM Word64
 getMacSequence = msSequence . stMacState <$> get

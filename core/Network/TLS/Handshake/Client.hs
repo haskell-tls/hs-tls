@@ -15,6 +15,10 @@ module Network.TLS.Handshake.Client (
 
 import qualified Data.ByteString as B
 import Data.X509 (ExtKeyUsageFlag (..))
+import Control.Exception (SomeException, bracket)
+import Control.Monad.State.Strict
+import Data.Maybe (fromJust)
+
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Context.Internal
@@ -31,12 +35,8 @@ import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types
-import Network.TLS.Util (bytesEq, catchException, fromJust, mapChunks_)
+import Network.TLS.Util (bytesEq, catchException, mapChunks_)
 import Network.TLS.X509
-
-import Control.Exception (SomeException, bracket)
-import Control.Monad.State.Strict
-
 import Network.TLS.Handshake.Certificate
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Common13
@@ -252,7 +252,7 @@ handshakeClient' cparams ctx groups mparams = do
         case sessionAndCipherToResume13 of
             Nothing -> return Nothing
             Just (sid, sdata, sCipher) -> do
-                let tinfo = fromJust "sessionTicketInfo" $ sessionTicketInfo sdata
+                let tinfo = fromJust $ sessionTicketInfo sdata
                 age <- getAge tinfo
                 return $
                     if isAgeValid age tinfo

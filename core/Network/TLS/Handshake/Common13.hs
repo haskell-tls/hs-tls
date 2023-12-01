@@ -46,6 +46,7 @@ module Network.TLS.Handshake.Common13 (
     checkKeyShareKeyLength,
 ) where
 
+import Data.Maybe (fromJust)
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 import Data.UnixTime
@@ -337,7 +338,7 @@ checkFreshness tinfo obfAge = do
     return $ isAlive && isFresh
   where
     serverSendTime = txrxTime tinfo
-    Just rtt = estimatedRTT tinfo
+    rtt = fromJust $ estimatedRTT tinfo
     age = obfuscatedAgeToAge obfAge tinfo
     expectedArrivalTime = serverSendTime + rtt + fromIntegral age
     isAlive = isAgeValid age tinfo

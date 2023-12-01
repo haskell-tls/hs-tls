@@ -41,6 +41,7 @@ module Network.TLS.Crypto (
     RSAEncoding (..),
 ) where
 
+import Data.Maybe (fromJust)
 import qualified Crypto.ECC as ECDSA
 import Crypto.Error
 import qualified Crypto.Hash as H
@@ -115,7 +116,7 @@ findFiniteFieldGroup params = lookup (pg params) table
     pg (DH.Params p g _) = (p, g)
 
     table =
-        [ (pg prms, grp) | grp <- availableFFGroups, let Just prms = dhParamsForGroup grp
+        [ (pg prms, grp) | grp <- availableFFGroups, let prms = fromJust $ dhParamsForGroup grp
         ]
 
 findEllipticCurveGroup :: PubKeyEC -> Maybe Group

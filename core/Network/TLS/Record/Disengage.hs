@@ -18,7 +18,7 @@ module Network.TLS.Record.Disengage (
 ) where
 
 import Control.Monad.State.Strict
-
+import Data.Maybe (fromJust)
 import Crypto.Cipher.Types (AuthTag (..))
 import qualified Data.ByteArray as B (convert, xor)
 import qualified Data.ByteString as B
@@ -115,7 +115,7 @@ decryptData
     :: Version -> Record Ciphertext -> ByteString -> RecordState -> RecordM ByteString
 decryptData ver record econtent tst = decryptOf (cstKey cst)
   where
-    cipher = fromJust "cipher" $ stCipher tst
+    cipher = fromJust $ stCipher tst
     bulk = cipherBulk cipher
     cst = stCryptState tst
     macSize = hashDigestSize $ cipherHash cipher
