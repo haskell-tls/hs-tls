@@ -466,14 +466,14 @@ putSession (Session (Just s)) = putOpaque8 s
 getExtensions :: Int -> Get [ExtensionRaw]
 getExtensions 0 = return []
 getExtensions len = do
-    extty <- getWord16
+    extty <- ExtensionID <$> getWord16
     extdatalen <- getWord16
     extdata <- getBytes $ fromIntegral extdatalen
     extxs <- getExtensions (len - fromIntegral extdatalen - 4)
     return $ ExtensionRaw extty extdata : extxs
 
 putExtension :: ExtensionRaw -> Put
-putExtension (ExtensionRaw ty l) = putWord16 ty >> putOpaque16 l
+putExtension (ExtensionRaw (ExtensionID ty) l) = putWord16 ty >> putOpaque16 l
 
 putExtensions :: [ExtensionRaw] -> Put
 putExtensions [] = return ()

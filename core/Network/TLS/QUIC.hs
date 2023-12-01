@@ -53,8 +53,7 @@ module Network.TLS.QUIC (
 
     -- * Extensions
     ExtensionRaw (..),
-    ExtensionID,
-    extensionID_QuicTransportParameters,
+    ExtensionID (EID_QuicTransportParameters),
 
     -- * Errors
     errorTLS,
@@ -81,7 +80,6 @@ import Network.TLS.Context.Internal
 import Network.TLS.Core
 import Network.TLS.Crypto (hashDigestSize)
 import Network.TLS.Crypto.Types
-import Network.TLS.Extension (extensionID_QuicTransportParameters)
 import Network.TLS.Extra.Cipher
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Control
@@ -244,8 +242,7 @@ tlsQUICServer sparams callbacks = do
 filterQTP :: [ExtensionRaw] -> [ExtensionRaw]
 filterQTP =
     filter
-        ( \(ExtensionRaw eid _) -> eid == extensionID_QuicTransportParameters || eid == 0xffa5 -- to be deleted
-        )
+        (\(ExtensionRaw eid _) -> eid == EID_QuicTransportParameters)
 
 -- | Can be used by callbacks to signal an unexpected condition.  This will then
 -- generate an "internal_error" alert in the TLS stack.

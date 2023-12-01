@@ -63,8 +63,7 @@ processHandshake ctx hs = do
   where
     secureRenegotiation = supportedSecureRenegotiation $ ctxSupported ctx
     -- RFC5746: secure renegotiation
-    -- the renegotiation_info extension: 0xff01
-    processClientExtension (ExtensionRaw 0xff01 content) | secureRenegotiation = do
+    processClientExtension (ExtensionRaw EID_SecureRenegotiation content) | secureRenegotiation = do
         v <- getVerifiedData ClientRole
         let bs = extensionEncode (SecureRenegotiation v Nothing)
         unless (bs `bytesEq` content) $

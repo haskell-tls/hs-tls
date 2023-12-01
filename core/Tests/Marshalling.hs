@@ -94,7 +94,7 @@ someWords8 = vector
 instance Arbitrary ExtensionRaw where
     arbitrary =
         let arbitraryContent = choose (0, 40) >>= genByteString
-         in ExtensionRaw <$> arbitrary <*> arbitraryContent
+         in ExtensionRaw <$> (ExtensionID <$> arbitrary) <*> arbitraryContent
 
 arbitraryHelloExtensions :: Version -> Gen [ExtensionRaw]
 arbitraryHelloExtensions ver

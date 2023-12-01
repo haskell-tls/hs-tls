@@ -29,7 +29,6 @@ import Network.TLS.Imports
 import Network.TLS.Packet
 import Network.TLS.Record.State
 import Network.TLS.Record.Types
-import Network.TLS.Struct
 import Network.TLS.Wire
 
 engageRecord :: Record Plaintext -> RecordM (Record Ciphertext)

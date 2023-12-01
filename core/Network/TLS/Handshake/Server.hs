@@ -129,7 +129,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
         $ throwCore
         $ Error_Protocol "fallback is not allowed" InappropriateFallback
     -- choosing TLS version
-    let clientVersions = case extensionLookup extensionID_SupportedVersions exts
+    let clientVersions = case extensionLookup EID_SupportedVersions exts
             >>= extensionDecode MsgTClientHello of
             Just (SupportedVersionsClientHello vers) -> vers -- fixme: vers == []
             _ -> []
@@ -158,7 +158,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
                     Just v -> return v
 
     -- SNI (Server Name Indication)
-    let serverName = case extensionLookup extensionID_ServerName exts >>= extensionDecode MsgTClientHello of
+    let serverName = case extensionLookup EID_ServerName exts >>= extensionDecode MsgTClientHello of
             Just (ServerName ns) -> listToMaybe (mapMaybe toHostName ns)
               where
                 toHostName (ServerNameHostName hostName) = Just hostName
@@ -327,7 +327,7 @@ handshakeServerWithTLS12 sparams ctx chosenVersion exts ciphers serverName clien
 
     -- Currently, we don't send back EcPointFormats. In this case,
     -- the client chooses EcPointFormat_Uncompressed.
-    case extensionLookup extensionID_EcPointFormats exts
+    case extensionLookup EID_EcPointFormats exts
         >>= extensionDecode MsgTClientHello of
         Just (EcPointFormatsSupported fs) -> usingState_ ctx $ setClientEcPointFormatSuggest fs
         _ -> return ()
@@ -418,13 +418,13 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                         cvf <- getVerifiedData ClientRole
                         svf <- getVerifiedData ServerRole
                         return $ extensionEncode (SecureRenegotiation cvf $ Just svf)
-                    return [ExtensionRaw extensionID_SecureRenegotiation vf]
+                    return [ExtensionRaw EID_SecureRenegotiation vf]
                 else return []
         ems <- usingHState ctx getExtendedMasterSec
         let emsExt
                 | ems =
                     let raw = extensionEncode ExtendedMasterSecret
-                     in [ExtensionRaw extensionID_ExtendedMasterSecret raw]
+                     in [ExtensionRaw EID_ExtendedMasterSecret raw]
                 | otherwise = []
         protoExt <- applicationProtocol ctx exts sparams
         sniExt <- do
@@ -438,7 +438,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                         -- an extension of type "server_name" in the
                         -- (extended) server hello. The "extension_data"
                         -- field of this extension SHALL be empty.
-                        Just _ -> return [ExtensionRaw extensionID_ServerName ""]
+                        Just _ -> return [ExtensionRaw EID_ServerName ""]
                         Nothing -> return []
         let extensions =
                 sharedHelloExtensions (serverShared sparams)
@@ -516,13 +516,13 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
                     let dhparams = fromJust $ serverDHEParams sparams
                      in case findFiniteFieldGroup dhparams of
                             Just g -> do
-                                usingHState ctx $ setNegotiatedGroup g
+                                usingHState ctx $ setSupportedGroup g
                                 generateFFDHE ctx g
                             Nothing -> do
                                 (priv, pub) <- generateDHE ctx dhparams
                                 return (dhparams, priv, pub)
                 g : _ -> do
-                    usingHState ctx $ setNegotiatedGroup g
+                    usingHState ctx $ setSupportedGroup g
                     generateFFDHE ctx g
 
         let serverParams = serverDHParamsFrom dhparams pub
@@ -561,7 +561,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
     generateSKX_DH_Anon = SKX_DH_Anon <$> setup_DHE
 
     setup_ECDHE grp = do
-        usingHState ctx $ setNegotiatedGroup grp
+        usingHState ctx $ setSupportedGroup grp
         (srvpri, srvpub) <- generateECDHE ctx grp
         let serverParams = ServerECDHParams grp srvpub
         usingHState ctx $ setServerECDHParams serverParams
@@ -659,7 +659,7 @@ checkValidClientCertChain ctx errmsg = do
 hashAndSignaturesInCommon
     :: Context -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]
 hashAndSignaturesInCommon ctx exts =
-    let cHashSigs = case extensionLookup extensionID_SignatureAlgorithms exts
+    let cHashSigs = case extensionLookup EID_SignatureAlgorithms exts
             >>= extensionDecode MsgTClientHello of
             -- See Section 7.4.1.4.1 of RFC 5246.
             Nothing ->
@@ -676,9 +676,9 @@ hashAndSignaturesInCommon ctx exts =
         sHashSigs `intersect` cHashSigs
 
 negotiatedGroupsInCommon :: Context -> [ExtensionRaw] -> [Group]
-negotiatedGroupsInCommon ctx exts = case extensionLookup extensionID_NegotiatedGroups exts
+negotiatedGroupsInCommon ctx exts = case extensionLookup EID_SupportedGroups exts
     >>= extensionDecode MsgTClientHello of
-    Just (NegotiatedGroups clientGroups) ->
+    Just (SupportedGroups clientGroups) ->
         let serverGroups = supportedGroups (ctxSupported ctx)
          in serverGroups `intersect` clientGroups
     _ -> []
@@ -708,10 +708,10 @@ isCredentialAllowed ver exts cred =
     -- not after.  With TLS13, the curve is linked to the signature algorithm
     -- and client support is tested with signatureCompatible13.
     p
-        | ver < TLS13 = case extensionLookup extensionID_NegotiatedGroups exts
+        | ver < TLS13 = case extensionLookup EID_SupportedGroups exts
             >>= extensionDecode MsgTClientHello of
             Nothing -> const True
-            Just (NegotiatedGroups sg) -> (`elem` sg)
+            Just (SupportedGroups sg) -> (`elem` sg)
         | otherwise = const True
 
 -- Filters a list of candidate credentials with credentialMatchesHashSignatures.
@@ -735,10 +735,10 @@ isCredentialAllowed ver exts cred =
 filterCredentialsWithHashSignatures
     :: [ExtensionRaw] -> Credentials -> Credentials
 filterCredentialsWithHashSignatures exts =
-    case withExt extensionID_SignatureAlgorithmsCert of
+    case withExt EID_SignatureAlgorithmsCert of
         Just (SignatureAlgorithmsCert sas) -> withAlgs sas
         Nothing ->
-            case withExt extensionID_SignatureAlgorithms of
+            case withExt EID_SignatureAlgorithms of
                 Nothing -> id
                 Just (SignatureAlgorithms sas) -> withAlgs sas
   where
@@ -774,7 +774,7 @@ handshakeServerWithTLS13
     -> IO ()
 handshakeServerWithTLS13 sparams ctx chosenVersion exts clientCiphers _serverName clientSession = do
     when
-        (any (\(ExtensionRaw eid _) -> eid == extensionID_PreSharedKey) $ init exts)
+        (any (\(ExtensionRaw eid _) -> eid == EID_PreSharedKey) $ init exts)
         $ throwCore
         $ Error_Protocol "extension pre_shared_key must be last" IllegalParameter
     -- Deciding cipher.
@@ -786,7 +786,7 @@ handshakeServerWithTLS13 sparams ctx chosenVersion exts clientCiphers _serverNam
             Error_Protocol "no cipher in common with the client" HandshakeFailure
     let usedCipher = onCipherChoosing (serverHooks sparams) chosenVersion ciphersFilteredVersion
         usedHash = cipherHash usedCipher
-        rtt0 = case extensionLookup extensionID_EarlyData exts >>= extensionDecode MsgTClientHello of
+        rtt0 = case extensionLookup EID_EarlyData exts >>= extensionDecode MsgTClientHello of
             Just (EarlyDataIndication _) -> True
             Nothing -> False
     when rtt0 $
@@ -794,7 +794,7 @@ handshakeServerWithTLS13 sparams ctx chosenVersion exts clientCiphers _serverNam
         -- status again if 0-RTT successful
         setEstablished ctx (EarlyDataNotAllowed 3) -- hardcoding
         -- Deciding key exchange from key shares
-    keyShares <- case extensionLookup extensionID_KeyShare exts of
+    keyShares <- case extensionLookup EID_KeyShare exts of
         Nothing ->
             throwCore $
                 Error_Protocol
@@ -865,7 +865,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
     newSession ctx >>= \ss -> usingState_ ctx $ do
         setSession ss False
         setClientSupportsPHA supportsPHA
-    usingHState ctx $ setNegotiatedGroup $ keyShareEntryGroup clientKeyShare
+    usingHState ctx $ setSupportedGroup $ keyShareEntryGroup clientKeyShare
     srand <- setServerParameter
     -- ALPN is used in choosePSK
     protoExt <- applicationProtocol ctx exts sparams
@@ -981,12 +981,12 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
         failOnEitherError $ usingHState ctx $ setHelloParameters13 usedCipher
         return srand
 
-    supportsPHA = case extensionLookup extensionID_PostHandshakeAuth exts
+    supportsPHA = case extensionLookup EID_PostHandshakeAuth exts
         >>= extensionDecode MsgTClientHello of
         Just PostHandshakeAuth -> True
         Nothing -> False
 
-    choosePSK = case extensionLookup extensionID_PreSharedKey exts
+    choosePSK = case extensionLookup EID_PreSharedKey exts
         >>= extensionDecode MsgTClientHello of
         Just (PreSharedKeyClientHello (PskIdentity sessionId obfAge : _) bnds@(bnd : _)) -> do
             when (null dhModes) $
@@ -1038,10 +1038,10 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
         unless (binder `bytesEq` binder') $
             decryptError "PSK binder validation failed"
         let selectedIdentity = extensionEncode $ PreSharedKeyServerHello $ fromIntegral n
-        return [ExtensionRaw extensionID_PreSharedKey selectedIdentity]
+        return [ExtensionRaw EID_PreSharedKey selectedIdentity]
 
     decideCredentialInfo allCreds = do
-        cHashSigs <- case extensionLookup extensionID_SignatureAlgorithms exts of
+        cHashSigs <- case extensionLookup EID_SignatureAlgorithms exts of
             Nothing ->
                 throwCore $ Error_Protocol "no signature_algorithms extension" MissingExtension
             Just sa -> case extensionDecode MsgTClientHello sa of
@@ -1066,8 +1066,8 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
         let serverKeyShare = extensionEncode $ KeyShareServerHello keyShare
             selectedVersion = extensionEncode $ SupportedVersionsServerHello chosenVersion
             extensions' =
-                ExtensionRaw extensionID_KeyShare serverKeyShare
-                    : ExtensionRaw extensionID_SupportedVersions selectedVersion
+                ExtensionRaw EID_KeyShare serverKeyShare
+                    : ExtensionRaw EID_SupportedVersions selectedVersion
                     : extensions
             helo = ServerHello13 srand clientSession (cipherID usedCipher) extensions'
         loadPacket13 ctx $ Handshake13 [helo]
@@ -1095,21 +1095,21 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
                 -- an extension of type "server_name" in the
                 -- (extended) server hello. The "extension_data"
                 -- field of this extension SHALL be empty.
-                Just _ -> Just $ ExtensionRaw extensionID_ServerName ""
+                Just _ -> Just $ ExtensionRaw EID_ServerName ""
                 Nothing -> Nothing
-        mgroup <- usingHState ctx getNegotiatedGroup
+        mgroup <- usingHState ctx getSupportedGroup
         let serverGroups = supportedGroups (ctxSupported ctx)
             groupExtension
                 | null serverGroups = Nothing
                 | maybe True (== head serverGroups) mgroup = Nothing
                 | otherwise =
                     Just $
-                        ExtensionRaw extensionID_NegotiatedGroups $
-                            extensionEncode (NegotiatedGroups serverGroups)
+                        ExtensionRaw EID_SupportedGroups $
+                            extensionEncode (SupportedGroups serverGroups)
         let earlyDataExtension
                 | rtt0OK =
                     Just $
-                        ExtensionRaw extensionID_EarlyData $
+                        ExtensionRaw EID_EarlyData $
                             extensionEncode (EarlyDataIndication Nothing)
                 | otherwise = Nothing
         let extensions =
@@ -1147,13 +1147,13 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
             NewSessionTicket13 life add nonce label extensions
           where
             tedi = extensionEncode $ EarlyDataIndication $ Just $ fromIntegral maxSize
-            extensions = [ExtensionRaw extensionID_EarlyData tedi]
+            extensions = [ExtensionRaw EID_EarlyData tedi]
         toSeconds i
             | i < 0 = 0
             | i > 604800 = 604800
             | otherwise = fromIntegral i
 
-    dhModes = case extensionLookup extensionID_PskKeyExchangeModes exts
+    dhModes = case extensionLookup EID_PskKeyExchangeModes exts
         >>= extensionDecode MsgTClientHello of
         Just (PskKeyExchangeModes ms) -> ms
         Nothing -> []
@@ -1202,9 +1202,9 @@ helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientS
             Error_Protocol "Hello retry not allowed again" HandshakeFailure
     usingState_ ctx $ setTLS13HRR True
     failOnEitherError $ usingHState ctx $ setHelloParameters13 usedCipher
-    let clientGroups = case extensionLookup extensionID_NegotiatedGroups exts
+    let clientGroups = case extensionLookup EID_SupportedGroups exts
             >>= extensionDecode MsgTClientHello of
-            Just (NegotiatedGroups gs) -> gs
+            Just (SupportedGroups gs) -> gs
             Nothing -> []
         possibleGroups = serverGroups `intersect` clientGroups
     case possibleGroups of
@@ -1215,8 +1215,8 @@ helloRetryRequest sparams ctx chosenVersion usedCipher exts serverGroups clientS
             let serverKeyShare = extensionEncode $ KeyShareHRR g
                 selectedVersion = extensionEncode $ SupportedVersionsServerHello chosenVersion
                 extensions =
-                    [ ExtensionRaw extensionID_KeyShare serverKeyShare
-                    , ExtensionRaw extensionID_SupportedVersions selectedVersion
+                    [ ExtensionRaw EID_KeyShare serverKeyShare
+                    , ExtensionRaw EID_SupportedVersions selectedVersion
                     ]
                 hrr = ServerHello13 hrrRandom clientSession (cipherID usedCipher) extensions
             usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
@@ -1275,7 +1275,7 @@ applicationProtocol
     :: Context -> [ExtensionRaw] -> ServerParams -> IO [ExtensionRaw]
 applicationProtocol ctx exts sparams = do
     -- ALPN (Application Layer Protocol Negotiation)
-    case extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts
+    case extensionLookup EID_ApplicationLayerProtocolNegotiation exts
         >>= extensionDecode MsgTClientHello of
         Nothing -> return []
         Just (ApplicationLayerProtocolNegotiation protos) -> do
@@ -1290,7 +1290,7 @@ applicationProtocol ctx exts sparams = do
                         setNegotiatedProtocol proto
                     return
                         [ ExtensionRaw
-                            extensionID_ApplicationLayerProtocolNegotiation
+                            EID_ApplicationLayerProtocolNegotiation
                             (extensionEncode $ ApplicationLayerProtocolNegotiation [proto])
                         ]
                 _ -> return []

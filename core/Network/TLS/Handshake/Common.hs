@@ -132,7 +132,7 @@ handshakeTerminate ctx = do
                             { hstServerRandom = hstServerRandom hshake
                             , hstMasterSecret = hstMasterSecret hshake
                             , hstExtendedMasterSec = hstExtendedMasterSec hshake
-                            , hstNegotiatedGroup = hstNegotiatedGroup hshake
+                            , hstSupportedGroup = hstSupportedGroup hshake
                             }
     updateMeasure ctx resetBytesCounters
     -- mark the secure connection up and running.
@@ -216,7 +216,7 @@ processExtendedMasterSec ctx ver msgt exts
     | ver > TLS12 = error "EMS processing is not compatible with TLS 1.3"
     | ems == NoEMS = return False
     | otherwise =
-        case extensionLookup extensionID_ExtendedMasterSecret exts >>= extensionDecode msgt of
+        case extensionLookup EID_ExtendedMasterSecret exts >>= extensionDecode msgt of
             Just ExtendedMasterSecret -> usingHState ctx (setExtendedMasterSec True) >> return True
             Nothing
                 | ems == RequireEMS -> throwCore $ Error_Protocol err HandshakeFailure
