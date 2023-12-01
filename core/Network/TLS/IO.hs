@@ -93,14 +93,13 @@ writePacketBytes13 ctx recordLayer pkt = do
 -- TLSError if the packet is unexpected or malformed
 recvPacket :: Context -> IO (Either TLSError Packet)
 recvPacket ctx@Context{ctxRecordLayer = recordLayer} = do
-    compatSSLv2 <- ctxHasSSLv2ClientHello ctx
     hrr <- usingState_ ctx getTLS13HRR
     -- When a client sends 0-RTT data to a server which rejects and sends a HRR,
     -- the server will not decrypt AppData segments.  The server needs to accept
     -- AppData with maximum size 2^14 + 256.  In all other scenarios and record
     -- types the maximum size is 2^14.
     let appDataOverhead = if hrr then 256 else 0
-    erecord <- recordRecv recordLayer compatSSLv2 appDataOverhead
+    erecord <- recordRecv recordLayer appDataOverhead
     case erecord of
         Left err -> return $ Left err
         Right record ->
@@ -121,7 +120,6 @@ recvPacket ctx@Context{ctxRecordLayer = recordLayer} = do
                             case pkt of
                                 Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p
                                 _ -> return ()
-                            when compatSSLv2 $ ctxDisableSSLv2ClientHello ctx
                             return pkt
 
 isCCS :: Record a -> Bool

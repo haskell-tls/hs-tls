@@ -48,6 +48,7 @@ module Network.TLS.Handshake.Common13 (
 
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
+import Data.Maybe (fromJust)
 import Data.UnixTime
 import Foreign.C.Types (CTime (..))
 import Network.TLS.Cipher
@@ -337,7 +338,7 @@ checkFreshness tinfo obfAge = do
     return $ isAlive && isFresh
   where
     serverSendTime = txrxTime tinfo
-    Just rtt = estimatedRTT tinfo
+    rtt = fromJust $ estimatedRTT tinfo
     age = obfuscatedAgeToAge obfAge tinfo
     expectedArrivalTime = serverSendTime + rtt + fromIntegral age
     isAlive = isAgeValid age tinfo

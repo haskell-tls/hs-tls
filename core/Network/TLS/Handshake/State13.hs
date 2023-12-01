@@ -31,6 +31,8 @@ import Control.Concurrent.MVar
 import Control.Monad.State
 import qualified Data.ByteString as B
 import Data.IORef
+import Data.Maybe (fromJust)
+
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Context.Internal
@@ -41,7 +43,6 @@ import Network.TLS.KeySchedule (hkdfExpandLabel)
 import Network.TLS.Record.State
 import Network.TLS.Struct
 import Network.TLS.Types
-import Network.TLS.Util
 
 getTxState :: Context -> IO (Hash, Cipher, CryptLevel, ByteString)
 getTxState ctx = getXState ctx ctxTxState
@@ -55,7 +56,7 @@ getXState
     -> IO (Hash, Cipher, CryptLevel, ByteString)
 getXState ctx func = do
     tx <- readMVar (func ctx)
-    let Just usedCipher = stCipher tx
+    let usedCipher = fromJust $ stCipher tx
         usedHash = cipherHash usedCipher
         level = stCryptLevel tx
         secret = cstMacSecret $ stCryptState tx
@@ -174,7 +175,7 @@ wrapAsMessageHash13 = do
 
 transcriptHash :: MonadIO m => Context -> m ByteString
 transcriptHash ctx = do
-    hst <- fromJust "HState" <$> getHState ctx
+    hst <- fromJust <$> getHState ctx
     case hstHandshakeDigest hst of
         HandshakeDigestContext hashCtx -> return $ hashFinal hashCtx
         HandshakeMessages _ -> error "un-initialized handshake digest"

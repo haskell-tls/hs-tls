@@ -17,7 +17,7 @@ data RecordLayer bytes = RecordLayer
     , recordEncode13 :: Record Plaintext -> IO (Either TLSError bytes)
     , recordSendBytes :: bytes -> IO ()
     , -- Reading.hs
-      recordRecv :: Bool -> Int -> IO (Either TLSError (Record Plaintext))
+      recordRecv :: Int -> IO (Either TLSError (Record Plaintext))
     , recordRecv13 :: IO (Either TLSError (Record Plaintext))
     }
 
@@ -32,7 +32,7 @@ newTransparentRecordLayer get send recv =
         { recordEncode = transparentEncodeRecord get
         , recordEncode13 = transparentEncodeRecord get
         , recordSendBytes = transparentSendBytes send
-        , recordRecv = \_ _ -> transparentRecvRecord recv
+        , recordRecv = \_ -> transparentRecvRecord recv
         , recordRecv13 = transparentRecvRecord recv
         }
 

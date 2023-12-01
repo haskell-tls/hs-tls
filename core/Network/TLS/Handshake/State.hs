@@ -80,6 +80,7 @@ module Network.TLS.Handshake.State (
 
 import Control.Monad.State.Strict
 import Data.ByteArray (ByteArrayAccess)
+import Data.Maybe (fromJust)
 import Data.X509 (CertificateChain)
 import Network.TLS.Cipher
 import Network.TLS.Compression
@@ -247,33 +248,32 @@ setPublicPrivateKeys keys = modify (\hst -> hst{hstKeyState = setKeys (hstKeySta
     setKeys hks = hks{hksLocalPublicPrivateKeys = Just keys}
 
 getRemotePublicKey :: HandshakeM PubKey
-getRemotePublicKey = fromJust "remote public key" <$> gets (hksRemotePublicKey . hstKeyState)
+getRemotePublicKey = fromJust <$> gets (hksRemotePublicKey . hstKeyState)
 
 getLocalPublicPrivateKeys :: HandshakeM (PubKey, PrivKey)
 getLocalPublicPrivateKeys =
-    fromJust "local public/private key"
-        <$> gets (hksLocalPublicPrivateKeys . hstKeyState)
+    fromJust <$> gets (hksLocalPublicPrivateKeys . hstKeyState)
 
 setServerDHParams :: ServerDHParams -> HandshakeM ()
 setServerDHParams shp = modify (\hst -> hst{hstServerDHParams = Just shp})
 
 getServerDHParams :: HandshakeM ServerDHParams
-getServerDHParams = fromJust "server DH params" <$> gets hstServerDHParams
+getServerDHParams = fromJust <$> gets hstServerDHParams
 
 setServerECDHParams :: ServerECDHParams -> HandshakeM ()
 setServerECDHParams shp = modify (\hst -> hst{hstServerECDHParams = Just shp})
 
 getServerECDHParams :: HandshakeM ServerECDHParams
-getServerECDHParams = fromJust "server ECDH params" <$> gets hstServerECDHParams
+getServerECDHParams = fromJust <$> gets hstServerECDHParams
 
 setDHPrivate :: DHPrivate -> HandshakeM ()
 setDHPrivate shp = modify (\hst -> hst{hstDHPrivate = Just shp})
 
 getDHPrivate :: HandshakeM DHPrivate
-getDHPrivate = fromJust "server DH private" <$> gets hstDHPrivate
+getDHPrivate = fromJust <$> gets hstDHPrivate
 
 getGroupPrivate :: HandshakeM GroupPrivate
-getGroupPrivate = fromJust "server ECDH private" <$> gets hstGroupPrivate
+getGroupPrivate = fromJust <$> gets hstGroupPrivate
 
 setGroupPrivate :: GroupPrivate -> HandshakeM ()
 setGroupPrivate shp = modify (\hst -> hst{hstGroupPrivate = Just shp})
@@ -380,7 +380,7 @@ getCertReqSigAlgsCert = gets hstCertReqSigAlgsCert
 
 --
 getPendingCipher :: HandshakeM Cipher
-getPendingCipher = fromJust "pending cipher" <$> gets hstPendingCipher
+getPendingCipher = fromJust <$> gets hstPendingCipher
 
 addHandshakeMessage :: ByteString -> HandshakeM ()
 addHandshakeMessage content = modify $ \hs -> hs{hstHandshakeMessages = content : hstHandshakeMessages hs}
@@ -431,8 +431,8 @@ getHandshakeDigest ver role = gets gen
   where
     gen hst = case hstHandshakeDigest hst of
         HandshakeDigestContext hashCtx ->
-            let msecret = fromJust "master secret" $ hstMasterSecret hst
-                cipher = fromJust "cipher" $ hstPendingCipher hst
+            let msecret = fromJust $ hstMasterSecret hst
+                cipher = fromJust $ hstPendingCipher hst
              in generateFinish ver cipher msecret hashCtx
         HandshakeMessages _ ->
             error "un-initialized handshake digest"
@@ -459,14 +459,14 @@ setMasterSecretFromPre ver role premasterSecret = do
     genSecret hst =
         generateMasterSecret
             ver
-            (fromJust "cipher" $ hstPendingCipher hst)
+            (fromJust $ hstPendingCipher hst)
             premasterSecret
             (hstClientRandom hst)
-            (fromJust "server random" $ hstServerRandom hst)
+            (fromJust $ hstServerRandom hst)
     genExtendedSecret hst =
         generateExtendedMasterSec
             ver
-            (fromJust "cipher" $ hstPendingCipher hst)
+            (fromJust $ hstPendingCipher hst)
             premasterSecret
             <$> getSessionHash
 
@@ -485,7 +485,7 @@ computeKeyBlock
     :: HandshakeState -> ByteString -> Version -> Role -> (RecordState, RecordState)
 computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
   where
-    cipher = fromJust "cipher" $ hstPendingCipher hst
+    cipher = fromJust $ hstPendingCipher hst
     keyblockSize = cipherKeyBlockSize cipher
 
     bulk = cipherBulk cipher
@@ -500,12 +500,12 @@ computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
             ver
             cipher
             (hstClientRandom hst)
-            (fromJust "server random" $ hstServerRandom hst)
+            (fromJust $ hstServerRandom hst)
             masterSecret
             keyblockSize
 
     (cMACSecret, sMACSecret, cWriteKey, sWriteKey, cWriteIV, sWriteIV) =
-        fromJust "p6" $
+        fromJust $
             partition6 kb (digestSize, digestSize, keySize, keySize, ivSize, ivSize)
 
     cstClient =

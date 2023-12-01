@@ -29,7 +29,11 @@ module Network.TLS.Handshake.Common (
 ) where
 
 import Control.Concurrent.MVar
+import Control.Exception (IOException, fromException, handle, throwIO)
+import Control.Monad.State.Strict
 import qualified Data.ByteString as B
+import Data.IORef (writeIORef)
+import Data.Maybe (fromJust)
 
 import Network.TLS.Cipher
 import Network.TLS.Compression
@@ -51,10 +55,6 @@ import Network.TLS.Struct13
 import Network.TLS.Types
 import Network.TLS.Util
 import Network.TLS.X509
-
-import Control.Exception (IOException, fromException, handle, throwIO)
-import Control.Monad.State.Strict
-import Data.IORef (writeIORef)
 
 handshakeFailed :: TLSError -> IO ()
 handshakeFailed err = throwIO $ HandshakeFailed err
@@ -119,7 +119,7 @@ handshakeTerminate ctx = do
                 sessionEstablish
                     (sharedSessionManager $ ctxShared ctx)
                     sessionId'
-                    (fromJust "session-data" sessionData)
+                    (fromJust sessionData)
         _ -> return ()
     -- forget most handshake data and reset bytes counters.
     liftIO $ modifyMVar_ (ctxHandshake ctx) $ \mhshake ->
@@ -233,7 +233,7 @@ getSessionData ctx = do
     !ems <- usingHState ctx getExtendedMasterSec
     tx <- liftIO $ readMVar (ctxTxState ctx)
     alpn <- usingState_ ctx getNegotiatedProtocol
-    let !cipher = cipherID $ fromJust "cipher" $ stCipher tx
+    let !cipher = cipherID $ fromJust $ stCipher tx
         !compression = compressionID $ stCompression tx
         flags = [SessionEMS | ems]
     case mms of
@@ -271,13 +271,16 @@ storePrivInfo
     -> PrivKey
     -> m PubKey
 storePrivInfo ctx cc privkey = do
-    let CertificateChain (c : _) = cc
+    let c = fromCC cc
         pubkey = certPubKey $ getCertificate c
     unless (isDigitalSignaturePair (pubkey, privkey)) $
         throwCore $
             Error_Protocol "mismatched or unsupported private key pair" InternalError
     usingHState ctx $ setPublicPrivateKeys (pubkey, privkey)
     return pubkey
+  where
+    fromCC (CertificateChain (c : _)) = c
+    fromCC _ = error "fromCC"
 
 -- verify that the group selected by the peer is supported in the local
 -- configuration

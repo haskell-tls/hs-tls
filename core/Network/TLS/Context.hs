@@ -13,8 +13,6 @@ module Network.TLS.Context (
     Hooks (..),
     Established (..),
     ctxEOF,
-    ctxHasSSLv2ClientHello,
-    ctxDisableSSLv2ClientHello,
     ctxEstablished,
     withLog,
     ctxWithHooks,
@@ -150,9 +148,6 @@ contextNew backend params = liftIO $ do
     eof <- newIORef False
     established <- newIORef NotEstablished
     stats <- newIORef newMeasurement
-    -- we enable the reception of SSLv2 ClientHello message only in the
-    -- server context, where we might be dealing with an old/compat client.
-    sslv2Compat <- newIORef (role == ServerRole)
     needEmptyPacket <- newIORef False
     hooks <- newIORef defaultHooks
     tx <- newMVar newRecordState
@@ -183,7 +178,6 @@ contextNew backend params = liftIO $ do
                 , ctxMeasurement = stats
                 , ctxEOF_ = eof
                 , ctxEstablished_ = established
-                , ctxSSLv2ClientHello = sslv2Compat
                 , ctxNeedEmptyPacket = needEmptyPacket
                 , ctxHooks = hooks
                 , ctxLockWrite = lockWrite

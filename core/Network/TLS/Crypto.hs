@@ -58,6 +58,7 @@ import qualified Crypto.PubKey.RSA.PSS as PSS
 import Crypto.Random
 import qualified Data.ByteArray as B (convert)
 import qualified Data.ByteString as B
+import Data.Maybe (fromJust)
 
 import Data.X509 (
     PrivKey (..),
@@ -115,7 +116,7 @@ findFiniteFieldGroup params = lookup (pg params) table
     pg (DH.Params p g _) = (p, g)
 
     table =
-        [ (pg prms, grp) | grp <- availableFFGroups, let Just prms = dhParamsForGroup grp
+        [ (pg prms, grp) | grp <- availableFFGroups, let prms = fromJust $ dhParamsForGroup grp
         ]
 
 findEllipticCurveGroup :: PubKeyEC -> Maybe Group

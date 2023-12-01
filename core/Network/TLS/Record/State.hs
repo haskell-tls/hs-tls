@@ -28,19 +28,18 @@ module Network.TLS.Record.State (
 ) where
 
 import Control.Monad.State.Strict
+import qualified Data.ByteString as B
+import Data.Maybe (fromJust)
+
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.ErrT
-import Network.TLS.Struct
-import Network.TLS.Wire
-
 import Network.TLS.Imports
 import Network.TLS.MAC
 import Network.TLS.Packet
+import Network.TLS.Struct
 import Network.TLS.Types
-import Network.TLS.Util
-
-import qualified Data.ByteString as B
+import Network.TLS.Wire
 
 data CryptState = CryptState
     { cstKey :: !BulkState
@@ -99,11 +98,10 @@ newtype RecordM a = RecordM
     }
 
 instance Applicative RecordM where
-    pure = return
+    pure a = RecordM $ \_ st -> Right (a, st)
     (<*>) = ap
 
 instance Monad RecordM where
-    return a = RecordM $ \_ st -> Right (a, st)
     m1 >>= m2 = RecordM $ \opt st ->
         case runRecordM m1 opt st of
             Left err -> Left err
@@ -164,7 +162,7 @@ computeDigest ver tstate hdr content = (digest, incrRecordState tstate)
   where
     digest = macF (cstMacSecret cst) msg
     cst = stCryptState tstate
-    cipher = fromJust "cipher" $ stCipher tstate
+    cipher = fromJust $ stCipher tstate
     hashA = cipherHash cipher
     encodedSeq = encodeWord64 $ msSequence $ stMacState tstate
 
@@ -182,7 +180,7 @@ makeDigest hdr content = do
     return digest
 
 getBulk :: RecordM Bulk
-getBulk = cipherBulk . fromJust "cipher" . stCipher <$> get
+getBulk = cipherBulk . fromJust . stCipher <$> get
 
 getMacSequence :: RecordM Word64
 getMacSequence = msSequence . stMacState <$> get

@@ -14,6 +14,10 @@ module Network.TLS.Receiving (
     processPacket13,
 ) where
 
+import Control.Concurrent.MVar
+import Control.Monad.State.Strict
+import Data.Maybe (fromJust)
+
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
 import Network.TLS.ErrT
@@ -27,9 +31,6 @@ import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Util
 import Network.TLS.Wire
-
-import Control.Concurrent.MVar
-import Control.Monad.State.Strict
 
 processPacket :: Context -> Record Plaintext -> IO (Either TLSError Packet)
 processPacket _ (Record ProtocolType_AppData _ fragment) = return $ Right $ AppData $ fragmentGetBytes fragment
@@ -74,7 +75,7 @@ processPacket _ (Record ProtocolType_DeprecatedHandshake _ fragment) =
 switchRxEncryption :: Context -> IO ()
 switchRxEncryption ctx =
     usingHState ctx (gets hstPendingRxState) >>= \rx ->
-        liftIO $ modifyMVar_ (ctxRxState ctx) (\_ -> return $ fromJust "rx-state" rx)
+        liftIO $ modifyMVar_ (ctxRxState ctx) (\_ -> return $ fromJust rx)
 
 ----------------------------------------------------------------
 

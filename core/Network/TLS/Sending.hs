@@ -14,6 +14,12 @@ module Network.TLS.Sending (
     updateHandshake13,
 ) where
 
+import Control.Concurrent.MVar
+import Control.Monad.State.Strict
+import qualified Data.ByteString as B
+import Data.IORef
+import Data.Maybe (fromJust)
+
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
 import Network.TLS.Handshake.Random
@@ -30,11 +36,6 @@ import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types (Role (..))
 import Network.TLS.Util
-
-import Control.Concurrent.MVar
-import Control.Monad.State.Strict
-import qualified Data.ByteString as B
-import Data.IORef
 
 -- | encodePacket transform a packet into marshalled data related to current state
 -- and updating state on the go
@@ -66,7 +67,7 @@ packetToFragments _ _ (AppData x) = return [x]
 
 switchTxEncryption :: Context -> IO ()
 switchTxEncryption ctx = do
-    tx <- usingHState ctx (fromJust "tx-state" <$> gets hstPendingTxState)
+    tx <- usingHState ctx (fromJust <$> gets hstPendingTxState)
     (ver, cc) <- usingState_ ctx $ do
         v <- getVersion
         c <- isClientContext

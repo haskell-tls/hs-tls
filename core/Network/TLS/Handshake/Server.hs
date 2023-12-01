@@ -13,19 +13,28 @@ module Network.TLS.Handshake.Server (
     postHandshakeAuthServerWith,
 ) where
 
+import Control.Exception (bracket)
+import Control.Monad.State.Strict
 import qualified Data.ByteString as B
+import Data.Maybe (fromJust)
 import Data.X509 (ExtKeyUsageFlag (..))
+
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Context.Internal
 import Network.TLS.Credentials
 import Network.TLS.Crypto
 import Network.TLS.Extension
+import Network.TLS.Handshake.Certificate
+import Network.TLS.Handshake.Common
+import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.Control
 import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Random
+import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
+import Network.TLS.Handshake.State13
 import Network.TLS.IO
 import Network.TLS.Imports
 import Network.TLS.Measurement
@@ -35,16 +44,7 @@ import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types
-import Network.TLS.Util (bytesEq, catchException, fromJust)
-
-import Control.Exception (bracket)
-import Control.Monad.State.Strict
-
-import Network.TLS.Handshake.Certificate
-import Network.TLS.Handshake.Common
-import Network.TLS.Handshake.Common13
-import Network.TLS.Handshake.Signature
-import Network.TLS.Handshake.State13
+import Network.TLS.Util (bytesEq, catchException)
 import Network.TLS.X509
 
 -- Put the server context in handshake mode.
@@ -513,7 +513,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
         (dhparams, priv, pub) <-
             case possibleFFGroups of
                 [] ->
-                    let dhparams = fromJust "server DHE Params" $ serverDHEParams sparams
+                    let dhparams = fromJust $ serverDHEParams sparams
                      in case findFiniteFieldGroup dhparams of
                             Just g -> do
                                 usingHState ctx $ setNegotiatedGroup g
@@ -1005,7 +1005,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
                             else sessionResume mgr sessionId
                     case msdata of
                         Just sdata -> do
-                            let Just tinfo = sessionTicketInfo sdata
+                            let tinfo = fromJust $ sessionTicketInfo sdata
                                 psk = sessionSecret sdata
                             isFresh <- checkFreshness tinfo obfAge
                             (isPSKvalid, is0RTTvalid) <- checkSessionEquality sdata
@@ -1385,7 +1385,7 @@ postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = d
     when (isNothing mCertReq) $
         throwCore $
             Error_Protocol "unknown certificate request context" DecodeError
-    let certReq = fromJust "certReq" mCertReq
+    let certReq = fromJust mCertReq
 
     -- fixme checking _ext
     clientCertificate sparams ctx certs
