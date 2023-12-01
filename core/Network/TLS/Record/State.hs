@@ -98,11 +98,10 @@ newtype RecordM a = RecordM
     }
 
 instance Applicative RecordM where
-    pure = return
+    pure a = RecordM $ \_ st -> Right (a, st)
     (<*>) = ap
 
 instance Monad RecordM where
-    return a = RecordM $ \_ st -> Right (a, st)
     m1 >>= m2 = RecordM $ \opt st ->
         case runRecordM m1 opt st of
             Left err -> Left err
