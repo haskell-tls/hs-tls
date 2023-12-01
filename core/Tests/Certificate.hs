@@ -144,7 +144,7 @@ getSignatureALG pubKey =
 
 toPubKeyEC :: ECC.CurveName -> ECDSA.PublicKey -> PubKey
 toPubKeyEC curveName key =
-    let ECC.Point x y = ECDSA.public_q key
+    let (x, y) = fromPoint $ ECDSA.public_q key
         pub = SerializedPoint bs
         bs = B.cons 4 (i2ospOf_ bytes x `B.append` i2ospOf_ bytes y)
         bits = ECC.curveSizeBits (ECC.getCurveByName curveName)
@@ -155,3 +155,7 @@ toPrivKeyEC :: ECC.CurveName -> ECDSA.PrivateKey -> PrivKey
 toPrivKeyEC curveName key =
     let priv = ECDSA.private_d key
      in PrivKeyEC (PrivKeyEC_Named curveName priv)
+
+fromPoint :: ECC.Point -> (Integer, Integer)
+fromPoint (ECC.Point x y) = (x, y)
+fromPoint _ = error "fromPoint"
