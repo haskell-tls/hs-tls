@@ -266,7 +266,7 @@ usingState_ ctx f = failOnEitherError $ usingState ctx f
 usingHState :: MonadIO m => Context -> HandshakeM a -> m a
 usingHState ctx f = liftIO $ modifyMVar (ctxHandshake ctx) $ \mst ->
     case mst of
-        Nothing -> liftIO $ throwIO $ MissingHandshake
+        Nothing -> liftIO $ throwIO MissingHandshake
         Just st -> return $ swap (Just <$> runHandshake st f)
 
 getHState :: MonadIO m => Context -> m (Maybe HandshakeState)

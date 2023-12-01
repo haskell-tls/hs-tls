@@ -633,7 +633,7 @@ data ServerHooks = ServerHooks
     -- ^ Allow to modify extensions to be sent in EncryptedExtensions
     --  of TLS 1.3.
     --
-    -- Default: 'return . id'
+    -- Default: 'return'
     }
 
 defaultServerHooks :: ServerHooks
@@ -648,7 +648,7 @@ defaultServerHooks =
         , onServerNameIndication = \_ -> return mempty
         , onNewHandshake = \_ -> return True
         , onALPNClientSuggest = Nothing
-        , onEncryptedExtensionsCreating = return . id
+        , onEncryptedExtensionsCreating = return
         }
 
 instance Show ServerHooks where

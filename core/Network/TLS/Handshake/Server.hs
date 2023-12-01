@@ -893,11 +893,8 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
                 else do
                     usingHState ctx $ setTLS13HandshakeMode RTT0
                     usingHState ctx $ setTLS13RTT0Status RTT0Rejected
-        else
-            if authenticated
-                then usingHState ctx $ setTLS13HandshakeMode PreSharedKey
-                else -- FullHandshake or HelloRetryRequest
-                    return ()
+        else when authenticated $ usingHState ctx $ setTLS13HandshakeMode PreSharedKey
+    -- else : FullHandshake or HelloRetryRequest
     mCredInfo <-
         if authenticated then return Nothing else decideCredentialInfo allCreds
     (ecdhe, keyShare) <- makeServerKeyShare ctx clientKeyShare
