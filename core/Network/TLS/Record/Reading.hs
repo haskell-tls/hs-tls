@@ -11,7 +11,6 @@ module Network.TLS.Record.Reading (
     recvRecord13,
 ) where
 
-import Control.Monad.Reader
 import qualified Data.ByteString as B
 
 import Network.TLS.Context.Internal
@@ -63,12 +62,10 @@ contentSizeExceeded = Error_Protocol "record content exceeding maximum size" Rec
 recvRecord
     :: Context
     -- ^ TLS context
-    -> Bool
-    -- ^ flag to enable SSLv2 compat ClientHello reception
     -> Int
     -- ^ number of AppData bytes to accept above normal maximum size
     -> IO (Either TLSError (Record Plaintext))
-recvRecord ctx compatSSLv2 appDataOverhead
+recvRecord ctx appDataOverhead
     | otherwise =
         readExactBytes ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
   where

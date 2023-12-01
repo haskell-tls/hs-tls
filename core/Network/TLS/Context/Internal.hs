@@ -24,8 +24,6 @@ module Network.TLS.Context.Internal (
     Established (..),
     PendingAction (..),
     ctxEOF,
-    ctxHasSSLv2ClientHello,
-    ctxDisableSSLv2ClientHello,
     ctxEstablished,
     withLog,
     ctxWithHooks,
@@ -125,10 +123,6 @@ data Context = forall bytes.
     -- ^ has the handshake been done and been successful.
     , ctxNeedEmptyPacket :: IORef Bool
     -- ^ empty packet workaround for CBC guessability.
-    , ctxSSLv2ClientHello :: IORef Bool
-    -- ^ enable the reception of compatibility SSLv2 client hello.
-    -- the flag will be set to false regardless of its initial value
-    -- after the first packet received.
     , ctxFragmentSize :: Maybe Int
     -- ^ maximum size of plaintext fragments
     , ctxTxState :: MVar RecordState
@@ -231,12 +225,6 @@ contextRecv c sz = updateMeasure c (addBytesReceived sz) >> (backendRecv $ ctxCo
 
 ctxEOF :: Context -> IO Bool
 ctxEOF ctx = readIORef $ ctxEOF_ ctx
-
-ctxHasSSLv2ClientHello :: Context -> IO Bool
-ctxHasSSLv2ClientHello ctx = readIORef $ ctxSSLv2ClientHello ctx
-
-ctxDisableSSLv2ClientHello :: Context -> IO ()
-ctxDisableSSLv2ClientHello ctx = writeIORef (ctxSSLv2ClientHello ctx) False
 
 setEOF :: Context -> IO ()
 setEOF ctx = writeIORef (ctxEOF_ ctx) True
