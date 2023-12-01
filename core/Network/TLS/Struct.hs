@@ -113,7 +113,6 @@ module Network.TLS.Struct (
     TypeValuable,
     valOfType,
     valToType,
-    EnumSafe8 (..),
     EnumSafe16 (..),
     packetType,
     typeOfHandshake,
@@ -637,11 +636,6 @@ typeOfHandshake Finished{} = HandshakeType_Finished
 class TypeValuable a where
     valOfType :: a -> Word8
     valToType :: Word8 -> Maybe a
-
--- a better name for TypeValuable
-class EnumSafe8 a where
-    fromEnumSafe8 :: a -> Word8
-    toEnumSafe8 :: Word8 -> Maybe a
 
 class EnumSafe16 a where
     fromEnumSafe16 :: a -> Word16

@@ -403,7 +403,10 @@ encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
         Nothing -> return ()
         Just l ->
             putWords16 $
-                map (\(x, (SignatureAlgorithm y)) -> fromIntegral (valOfType x) * 256 + fromIntegral y) l
+                map
+                    ( \(x, (SignatureAlgorithm y)) -> fromIntegral (valOfType x) * 256 + fromIntegral y
+                    )
+                    l
     putDNames certAuthorities
 encodeHandshakeContent (CertVerify digitallySigned) = putDigitallySigned digitallySigned
 encodeHandshakeContent (Finished opaque) = putBytes opaque

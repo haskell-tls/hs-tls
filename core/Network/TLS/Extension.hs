@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 -- |
 -- Module      : Network.TLS.Extension
@@ -23,10 +24,19 @@ module Network.TLS.Extension (
     SupportedGroups (..),
     Group (..),
     EcPointFormatsSupported (..),
-    EcPointFormat (..),
+    EcPointFormat (
+        EcPointFormat,
+        EcPointFormat_Uncompressed,
+        EcPointFormat_AnsiX962_compressed_prime,
+        EcPointFormat_AnsiX962_compressed_char2
+    ),
     SessionTicket (..),
     HeartBeat (..),
-    HeartBeatMode (..),
+    HeartBeatMode (
+        HeartBeatMode,
+        HeartBeat_PeerAllowedToSend,
+        HeartBeat_PeerNotAllowedToSend
+    ),
     SignatureAlgorithms (..),
     SignatureAlgorithmsCert (..),
     SupportedVersions (..),
@@ -34,7 +44,7 @@ module Network.TLS.Extension (
     KeyShareEntry (..),
     MessageType (..),
     PostHandshakeAuth (..),
-    PskKexMode (..),
+    PskKexMode (PskKexMode, PSK_KE, PSK_DHE_KE),
     PskKeyExchangeModes (..),
     PskIdentity (..),
     PreSharedKey (..),
@@ -302,33 +312,35 @@ decodeSupportedGroups =
 newtype EcPointFormatsSupported = EcPointFormatsSupported [EcPointFormat]
     deriving (Show, Eq)
 
-data EcPointFormat
-    = EcPointFormat_Uncompressed
-    | EcPointFormat_AnsiX962_compressed_prime
-    | EcPointFormat_AnsiX962_compressed_char2
-    deriving (Show, Eq)
+newtype EcPointFormat = EcPointFormat {fromEcPointFormat :: Word8}
+    deriving (Eq)
 
-instance EnumSafe8 EcPointFormat where
-    fromEnumSafe8 EcPointFormat_Uncompressed = 0
-    fromEnumSafe8 EcPointFormat_AnsiX962_compressed_prime = 1
-    fromEnumSafe8 EcPointFormat_AnsiX962_compressed_char2 = 2
+{- FOURMOLU_DISABLE -}
+pattern EcPointFormat_Uncompressed              :: EcPointFormat
+pattern EcPointFormat_Uncompressed               = EcPointFormat 0
+pattern EcPointFormat_AnsiX962_compressed_prime :: EcPointFormat
+pattern EcPointFormat_AnsiX962_compressed_prime  = EcPointFormat 1
+pattern EcPointFormat_AnsiX962_compressed_char2 :: EcPointFormat
+pattern EcPointFormat_AnsiX962_compressed_char2  = EcPointFormat 2
 
-    toEnumSafe8 0 = Just EcPointFormat_Uncompressed
-    toEnumSafe8 1 = Just EcPointFormat_AnsiX962_compressed_prime
-    toEnumSafe8 2 = Just EcPointFormat_AnsiX962_compressed_char2
-    toEnumSafe8 _ = Nothing
+instance Show EcPointFormat where
+    show EcPointFormat_Uncompressed = "EcPointFormat_Uncompressed"
+    show EcPointFormat_AnsiX962_compressed_prime = "EcPointFormat_AnsiX962_compressed_prime"
+    show EcPointFormat_AnsiX962_compressed_char2 = "EcPointFormat_AnsiX962_compressed_char2"
+    show (EcPointFormat x) = "EcPointFormat " ++ show x
+{- FOURMOLU_ENABLE -}
 
 -- on decode, filter all unknown formats
 instance Extension EcPointFormatsSupported where
     extensionID _ = EID_EcPointFormats
-    extensionEncode (EcPointFormatsSupported formats) = runPut $ putWords8 $ map fromEnumSafe8 formats
+    extensionEncode (EcPointFormatsSupported formats) = runPut $ putWords8 $ map fromEcPointFormat formats
     extensionDecode MsgTClientHello = decodeEcPointFormatsSupported
     extensionDecode MsgTServerHello = decodeEcPointFormatsSupported
     extensionDecode _ = error "extensionDecode: EcPointFormatsSupported"
 
 decodeEcPointFormatsSupported :: ByteString -> Maybe EcPointFormatsSupported
 decodeEcPointFormatsSupported =
-    runGetMaybe (EcPointFormatsSupported . mapMaybe toEnumSafe8 <$> getWords8)
+    runGetMaybe (EcPointFormatsSupported . map EcPointFormat <$> getWords8)
 
 ------------------------------------------------------------
 
@@ -348,32 +360,30 @@ instance Extension SessionTicket where
 
 newtype HeartBeat = HeartBeat HeartBeatMode deriving (Show, Eq)
 
-data HeartBeatMode
-    = HeartBeat_PeerAllowedToSend
-    | HeartBeat_PeerNotAllowedToSend
-    deriving (Show, Eq)
+newtype HeartBeatMode = HeartBeatMode {fromHeartBeatMode :: Word8}
+    deriving (Eq)
 
-instance EnumSafe8 HeartBeatMode where
-    fromEnumSafe8 HeartBeat_PeerAllowedToSend = 1
-    fromEnumSafe8 HeartBeat_PeerNotAllowedToSend = 2
+{- FOURMOLU_DISABLE -}
+pattern HeartBeat_PeerAllowedToSend    :: HeartBeatMode
+pattern HeartBeat_PeerAllowedToSend     = HeartBeatMode 1
+pattern HeartBeat_PeerNotAllowedToSend :: HeartBeatMode
+pattern HeartBeat_PeerNotAllowedToSend  = HeartBeatMode 2
 
-    toEnumSafe8 1 = Just HeartBeat_PeerAllowedToSend
-    toEnumSafe8 2 = Just HeartBeat_PeerNotAllowedToSend
-    toEnumSafe8 _ = Nothing
+instance Show HeartBeatMode where
+    show HeartBeat_PeerAllowedToSend    = "HeartBeat_PeerAllowedToSend"
+    show HeartBeat_PeerNotAllowedToSend = "HeartBeat_PeerNotAllowedToSend"
+    show (HeartBeatMode x)              = "HeartBeatMode " ++ show x
+{- FOURMOLU_ENABLE -}
 
 instance Extension HeartBeat where
     extensionID _ = EID_Heartbeat
-    extensionEncode (HeartBeat mode) = runPut $ putWord8 $ fromEnumSafe8 mode
+    extensionEncode (HeartBeat mode) = runPut $ putWord8 $ fromHeartBeatMode mode
     extensionDecode MsgTClientHello = decodeHeartBeat
     extensionDecode MsgTServerHello = decodeHeartBeat
     extensionDecode _ = error "extensionDecode: HeartBeat"
 
 decodeHeartBeat :: ByteString -> Maybe HeartBeat
-decodeHeartBeat = runGetMaybe $ do
-    mm <- toEnumSafe8 <$> getWord8
-    case mm of
-        Just m -> return $ HeartBeat m
-        Nothing -> fail "unknown HeartBeatMode"
+decodeHeartBeat = runGetMaybe $ HeartBeat . HeartBeatMode <$> getWord8
 
 ------------------------------------------------------------
 
@@ -509,15 +519,19 @@ instance Extension KeyShare where
 
 ------------------------------------------------------------
 
-data PskKexMode = PSK_KE | PSK_DHE_KE deriving (Eq, Show)
+newtype PskKexMode = PskKexMode {fromPskKexMode :: Word8} deriving (Eq)
 
-instance EnumSafe8 PskKexMode where
-    fromEnumSafe8 PSK_KE = 0
-    fromEnumSafe8 PSK_DHE_KE = 1
+{- FOURMOLU_DISABLE -}
+pattern PSK_KE     :: PskKexMode
+pattern PSK_KE      = PskKexMode 0
+pattern PSK_DHE_KE :: PskKexMode
+pattern PSK_DHE_KE  = PskKexMode 1
 
-    toEnumSafe8 0 = Just PSK_KE
-    toEnumSafe8 1 = Just PSK_DHE_KE
-    toEnumSafe8 _ = Nothing
+instance Show PskKexMode where
+    show PSK_KE     = "PSK_KE"
+    show PSK_DHE_KE = "PSK_DHE_KE"
+    show (PskKexMode x) = "PskKexMode " ++ show x
+{- FOURMOLU_ENABLE -}
 
 newtype PskKeyExchangeModes = PskKeyExchangeModes [PskKexMode]
     deriving (Eq, Show)
@@ -527,10 +541,10 @@ instance Extension PskKeyExchangeModes where
     extensionEncode (PskKeyExchangeModes pkms) =
         runPut $
             putWords8 $
-                map fromEnumSafe8 pkms
+                map fromPskKexMode pkms
     extensionDecode MsgTClientHello =
         runGetMaybe $
-            PskKeyExchangeModes . mapMaybe toEnumSafe8 <$> getWords8
+            PskKeyExchangeModes . map PskKexMode <$> getWords8
     extensionDecode _ = error "extensionDecode: PskKeyExchangeModes"
 
 ------------------------------------------------------------
