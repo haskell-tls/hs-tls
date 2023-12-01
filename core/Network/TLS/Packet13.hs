@@ -129,7 +129,7 @@ decodeHandshake13 ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
 
 decodeClientHello13 :: Get Handshake13
 decodeClientHello13 = do
-    Just ver <- getBinaryVersion
+    ver <- getBinaryVersion
     random <- getClientRandom32
     session <- getSession
     ciphers <- getWords16
@@ -139,7 +139,7 @@ decodeClientHello13 = do
 
 decodeServerHello13 :: Get Handshake13
 decodeServerHello13 = do
-    Just _ver <- getBinaryVersion
+    _ver <- getBinaryVersion
     random <- getServerRandom32
     session <- getSession
     cipherid <- getWord16

@@ -447,16 +447,13 @@ instance Extension SupportedVersions where
             putBinaryVersion ver
     extensionDecode MsgTClientHello = runGetMaybe $ do
         len <- fromIntegral <$> getWord8
-        SupportedVersionsClientHello . catMaybes <$> getList len getVer
+        SupportedVersionsClientHello <$> getList len getVer
       where
         getVer = do
             ver <- getBinaryVersion
             return (2, ver)
-    extensionDecode MsgTServerHello = runGetMaybe $ do
-        mver <- getBinaryVersion
-        case mver of
-            Just ver -> return $ SupportedVersionsServerHello ver
-            Nothing -> fail "extensionDecode: SupportedVersionsServerHello"
+    extensionDecode MsgTServerHello =
+        runGetMaybe (SupportedVersionsServerHello <$> getBinaryVersion)
     extensionDecode _ = error "extensionDecode: SupportedVersionsServerHello"
 
 ------------------------------------------------------------

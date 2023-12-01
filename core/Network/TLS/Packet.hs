@@ -93,24 +93,11 @@ data CurrentParams = CurrentParams
     deriving (Show, Eq)
 
 {- marshall helpers -}
-getVersion :: Get Version
-getVersion = do
-    major <- getWord8
-    minor <- getWord8
-    case verOfNum (major, minor) of
-        Nothing -> fail ("invalid version : " ++ show major ++ "," ++ show minor)
-        Just v -> return v
-
-getBinaryVersion :: Get (Maybe Version)
-getBinaryVersion = do
-    major <- getWord8
-    minor <- getWord8
-    return $ verOfNum (major, minor)
+getBinaryVersion :: Get Version
+getBinaryVersion = Version <$> getWord16
 
 putBinaryVersion :: Version -> Put
-putBinaryVersion ver = putWord8 major >> putWord8 minor
-  where
-    (major, minor) = numericalVer ver
+putBinaryVersion (Version ver) = putWord16 ver
 
 getHeaderType :: Get ProtocolType
 getHeaderType = ProtocolType <$> getWord8
@@ -129,7 +116,7 @@ getHandshakeType = do
  - decode and encode headers
  -}
 decodeHeader :: ByteString -> Either TLSError Header
-decodeHeader = runGetErr "header" $ Header <$> getHeaderType <*> getVersion <*> getWord16
+decodeHeader = runGetErr "header" $ Header <$> getHeaderType <*> getBinaryVersion <*> getWord16
 
 encodeHeader :: Header -> ByteString
 encodeHeader (Header pt ver len) = runPut (putHeaderType pt >> putBinaryVersion ver >> putWord16 len)
@@ -193,7 +180,7 @@ decodeDeprecatedHandshake b = runGetErr "deprecatedhandshake" getDeprecated b
   where
     getDeprecated = do
         1 <- getWord8
-        ver <- getVersion
+        ver <- getBinaryVersion
         cipherSpecLen <- fromEnum <$> getWord16
         sessionIdLen <- fromEnum <$> getWord16
         challengeLen <- fromEnum <$> getWord16
@@ -216,7 +203,7 @@ decodeHelloRequest = return HelloRequest
 
 decodeClientHello :: Get Handshake
 decodeClientHello = do
-    ver <- getVersion
+    ver <- getBinaryVersion
     random <- getClientRandom32
     session <- getSession
     ciphers <- getWords16
@@ -233,7 +220,7 @@ decodeClientHello = do
 
 decodeServerHello :: Get Handshake
 decodeServerHello = do
-    ver <- getVersion
+    ver <- getBinaryVersion
     random <- getServerRandom32
     session <- getSession
     cipherid <- getWord16
@@ -548,7 +535,7 @@ encodeChangeCipherSpec = runPut (putWord8 1)
 decodePreMasterSecret :: ByteString -> Either TLSError (Version, ByteString)
 decodePreMasterSecret =
     runGetErr "pre-master-secret" $
-        (,) <$> getVersion <*> getBytes 46
+        (,) <$> getBinaryVersion <*> getBytes 46
 
 encodePreMasterSecret :: Version -> ByteString -> ByteString
 encodePreMasterSecret version bytes = runPut (putBinaryVersion version >> putBytes bytes)
