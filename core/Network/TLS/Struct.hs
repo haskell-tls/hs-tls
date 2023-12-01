@@ -803,27 +803,3 @@ instance TypeValuable SignatureAlgorithm where
     valToType 10 = Just SignatureRSApsspssSHA384
     valToType 11 = Just SignatureRSApsspssSHA512
     valToType i = Just (SignatureOther i)
-
-instance EnumSafe16 Group where
-    fromEnumSafe16 P256 = 23
-    fromEnumSafe16 P384 = 24
-    fromEnumSafe16 P521 = 25
-    fromEnumSafe16 X25519 = 29
-    fromEnumSafe16 X448 = 30
-    fromEnumSafe16 FFDHE2048 = 256
-    fromEnumSafe16 FFDHE3072 = 257
-    fromEnumSafe16 FFDHE4096 = 258
-    fromEnumSafe16 FFDHE6144 = 259
-    fromEnumSafe16 FFDHE8192 = 260
-
-    toEnumSafe16 23 = Just P256
-    toEnumSafe16 24 = Just P384
-    toEnumSafe16 25 = Just P521
-    toEnumSafe16 29 = Just X25519
-    toEnumSafe16 30 = Just X448
-    toEnumSafe16 256 = Just FFDHE2048
-    toEnumSafe16 257 = Just FFDHE3072
-    toEnumSafe16 258 = Just FFDHE4096
-    toEnumSafe16 259 = Just FFDHE6144
-    toEnumSafe16 260 = Just FFDHE8192
-    toEnumSafe16 _ = Nothing

@@ -288,14 +288,14 @@ newtype SupportedGroups = SupportedGroups [Group] deriving (Show, Eq)
 -- on decode, filter all unknown curves
 instance Extension SupportedGroups where
     extensionID _ = EID_SupportedGroups
-    extensionEncode (SupportedGroups groups) = runPut $ putWords16 $ map fromEnumSafe16 groups
+    extensionEncode (SupportedGroups groups) = runPut $ putWords16 $ map (\(Group g) -> g) groups
     extensionDecode MsgTClientHello = decodeSupportedGroups
     extensionDecode MsgTEncryptedExtensions = decodeSupportedGroups
     extensionDecode _ = error "extensionDecode: SupportedGroups"
 
 decodeSupportedGroups :: ByteString -> Maybe SupportedGroups
 decodeSupportedGroups =
-    runGetMaybe (SupportedGroups . mapMaybe toEnumSafe16 <$> getWords16)
+    runGetMaybe (SupportedGroups . map Group <$> getWords16)
 
 ------------------------------------------------------------
 
@@ -466,17 +466,15 @@ data KeyShareEntry = KeyShareEntry
 
 getKeyShareEntry :: Get (Int, Maybe KeyShareEntry)
 getKeyShareEntry = do
-    g <- getWord16
+    grp <- Group <$> getWord16
     l <- fromIntegral <$> getWord16
     key <- getBytes l
     let !len = l + 4
-    case toEnumSafe16 g of
-        Nothing -> return (len, Nothing)
-        Just grp -> return (len, Just $ KeyShareEntry grp key)
+    return (len, Just $ KeyShareEntry grp key)
 
 putKeyShareEntry :: KeyShareEntry -> Put
-putKeyShareEntry (KeyShareEntry grp key) = do
-    putWord16 $ fromEnumSafe16 grp
+putKeyShareEntry (KeyShareEntry (Group grp) key) = do
+    putWord16 grp
     putWord16 $ fromIntegral $ B.length key
     putBytes key
 
@@ -493,7 +491,7 @@ instance Extension KeyShare where
         putWord16 $ fromIntegral len
         mapM_ putKeyShareEntry kses
     extensionEncode (KeyShareServerHello kse) = runPut $ putKeyShareEntry kse
-    extensionEncode (KeyShareHRR grp) = runPut $ putWord16 $ fromEnumSafe16 grp
+    extensionEncode (KeyShareHRR (Group grp)) = runPut $ putWord16 grp
     extensionDecode MsgTServerHello = runGetMaybe $ do
         (_, ment) <- getKeyShareEntry
         case ment of
@@ -504,11 +502,9 @@ instance Extension KeyShare where
         --      len == 0 allows for HRR
         grps <- getList len getKeyShareEntry
         return $ KeyShareClientHello $ catMaybes grps
-    extensionDecode MsgTHelloRetryRequest = runGetMaybe $ do
-        mgrp <- toEnumSafe16 <$> getWord16
-        case mgrp of
-            Nothing -> fail "decoding KeyShare for HRR"
-            Just grp -> return $ KeyShareHRR grp
+    extensionDecode MsgTHelloRetryRequest =
+        runGetMaybe $
+            KeyShareHRR . Group <$> getWord16
     extensionDecode _ = error "extensionDecode: KeyShare"
 
 ------------------------------------------------------------

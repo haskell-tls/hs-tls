@@ -607,3 +607,4 @@ keyShareKeyLength FFDHE3072 = 384
 keyShareKeyLength FFDHE4096 = 512
 keyShareKeyLength FFDHE6144 = 768
 keyShareKeyLength FFDHE8192 = 1024
+keyShareKeyLength _ = error "keyShareKeyLength"

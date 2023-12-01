@@ -116,7 +116,8 @@ getHandshakeType = do
  - decode and encode headers
  -}
 decodeHeader :: ByteString -> Either TLSError Header
-decodeHeader = runGetErr "header" $ Header <$> getHeaderType <*> getBinaryVersion <*> getWord16
+decodeHeader =
+    runGetErr "header" $ Header <$> getHeaderType <*> getBinaryVersion <*> getWord16
 
 encodeHeader :: Header -> ByteString
 encodeHeader (Header pt ver len) = runPut (putHeaderType pt >> putBinaryVersion ver >> putWord16 len)
@@ -489,22 +490,19 @@ getServerECDHParams = do
     case curveType of
         3 -> do
             -- ECParameters ECCurveType: curve name type
-            mgrp <- toEnumSafe16 <$> getWord16 -- ECParameters NamedCurve
-            case mgrp of
-                Nothing -> error "getServerECDHParams: unknown group"
-                Just grp -> do
-                    mxy <- getOpaque8 -- ECPoint
-                    case decodeGroupPublic grp mxy of
-                        Left e -> error $ "getServerECDHParams: " ++ show e
-                        Right grppub -> return $ ServerECDHParams grp grppub
+            grp <- Group <$> getWord16 -- ECParameters NamedCurve
+            mxy <- getOpaque8 -- ECPoint
+            case decodeGroupPublic grp mxy of
+                Left e -> error $ "getServerECDHParams: " ++ show e
+                Right grppub -> return $ ServerECDHParams grp grppub
         _ ->
             error "getServerECDHParams: unknown type for ECDH Params"
 
 -- RFC 4492 Section 5.4 Server Key Exchange
 putServerECDHParams :: ServerECDHParams -> Put
-putServerECDHParams (ServerECDHParams grp grppub) = do
+putServerECDHParams (ServerECDHParams (Group grp) grppub) = do
     putWord8 3 -- ECParameters ECCurveType
-    putWord16 $ fromEnumSafe16 grp -- ECParameters NamedCurve
+    putWord16 grp -- ECParameters NamedCurve
     putOpaque8 $ encodeGroupPublic grppub -- ECPoint
 
 getDigitallySigned :: Version -> Get DigitallySigned
