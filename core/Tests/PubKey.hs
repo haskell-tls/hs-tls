@@ -143,11 +143,15 @@ arbitraryECDSAPair curveName = do
 arbitraryEd25519Pair :: Gen (Ed25519.PublicKey, Ed25519.SecretKey)
 arbitraryEd25519Pair = do
     bytes <- vectorOf 32 arbitrary
-    let CryptoPassed priv = Ed25519.secretKey (B.pack bytes)
+    let priv = fromCryptoPassed $ Ed25519.secretKey (B.pack bytes)
     return (Ed25519.toPublic priv, priv)
 
 arbitraryEd448Pair :: Gen (Ed448.PublicKey, Ed448.SecretKey)
 arbitraryEd448Pair = do
     bytes <- vectorOf 57 arbitrary
-    let CryptoPassed priv = Ed448.secretKey (B.pack bytes)
+    let priv = fromCryptoPassed $ Ed448.secretKey (B.pack bytes)
     return (Ed448.toPublic priv, priv)
+
+fromCryptoPassed :: CryptoFailable a -> a
+fromCryptoPassed (CryptoPassed x) = x
+fromCryptoPassed _ = error "fromCryptoPassed"
