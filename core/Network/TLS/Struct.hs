@@ -141,7 +141,7 @@ import Network.TLS.Imports
 import Network.TLS.Types
 import Network.TLS.Util.Serialization
 
-------------------------------------------------------------
+----------------------------------------------------------------
 
 data CipherData = CipherData
     { cipherDataContent :: ByteString
@@ -150,7 +150,7 @@ data CipherData = CipherData
     }
     deriving (Show, Eq)
 
-------------------------------------------------------------
+----------------------------------------------------------------
 
 -- | Some of the IANA registered code points for 'CertificateType' are not
 -- currently supported by the library.  Nor should they be, they're are either
@@ -288,6 +288,8 @@ type Signature = ByteString
 data DigitallySigned = DigitallySigned (Maybe HashAndSignatureAlgorithm) Signature
     deriving (Show, Eq)
 
+----------------------------------------------------------------
+
 newtype ProtocolType = ProtocolType Word8 deriving (Eq)
 
 {- FOURMOLU_DISABLE -}
@@ -310,6 +312,8 @@ instance Show ProtocolType where
     show ProtocolType_AppData          = "AppData"
     show (ProtocolType x)              = "ProtocolType " ++ show x
 {- FOURMOLU_ENABLE -}
+
+----------------------------------------------------------------
 
 -- | TLSError that might be returned through the TLS stack.
 --
@@ -335,6 +339,8 @@ data TLSError
     | Error_Packet_unexpected String String
     | Error_Packet_Parsing String
     deriving (Eq, Show, Typeable)
+
+----------------------------------------------------------------
 
 -- | TLS Exceptions. Some of the data constructors indicate incorrect use of
 --   the library, and the documentation for those data constructors calls
@@ -363,6 +369,8 @@ data TLSException
 
 instance Exception TLSException
 
+----------------------------------------------------------------
+
 data Packet
     = Handshake [Handshake]
     | Alert [(AlertLevel, AlertDescription)]
@@ -379,6 +387,8 @@ newtype ClientRandom = ClientRandom {unClientRandom :: ByteString}
 newtype Session = Session (Maybe SessionID) deriving (Show, Eq)
 
 type FinishedData = ByteString
+
+----------------------------------------------------------------
 
 -- | Identifier of a TLS extension.
 --   <http://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.txt>
@@ -501,12 +511,16 @@ instance Show ExtensionID where
     show (ExtensionID x)         = "ExtensionID " ++ show x
 {- FOURMOLU_ENABLE -}
 
+----------------------------------------------------------------
+
 -- | The raw content of a TLS extension.
 data ExtensionRaw = ExtensionRaw ExtensionID ByteString
     deriving (Eq)
 
 instance Show ExtensionRaw where
     show (ExtensionRaw eid bs) = "ExtensionRaw " ++ show eid ++ " " ++ showBytesHex bs
+
+----------------------------------------------------------------
 
 data AlertLevel
     = AlertLevel_Warning
@@ -563,6 +577,8 @@ data HandshakeType
     | HandshakeType_Finished
     deriving (Show, Eq)
 
+----------------------------------------------------------------
+
 newtype BigNum = BigNum ByteString
     deriving (Show, Eq)
 
@@ -571,6 +587,8 @@ bigNumToInteger (BigNum b) = os2ip b
 
 bigNumFromInteger :: Integer -> BigNum
 bigNumFromInteger i = BigNum $ i2osp i
+
+----------------------------------------------------------------
 
 data ServerDHParams = ServerDHParams
     { serverDHParams_p :: BigNum
@@ -596,14 +614,20 @@ serverDHParamsToPublic :: ServerDHParams -> DHPublic
 serverDHParamsToPublic serverParams =
     dhPublic (bigNumToInteger $ serverDHParams_y serverParams)
 
+----------------------------------------------------------------
+
 data ServerECDHParams = ServerECDHParams Group GroupPublic
     deriving (Show, Eq)
+
+----------------------------------------------------------------
 
 data ServerRSAParams = ServerRSAParams
     { rsa_modulus :: Integer
     , rsa_exponent :: Integer
     }
     deriving (Show, Eq)
+
+----------------------------------------------------------------
 
 data ServerKeyXchgAlgorithmData
     = SKX_DH_Anon ServerDHParams
@@ -618,6 +642,8 @@ data ServerKeyXchgAlgorithmData
     | SKX_Unknown ByteString
     deriving (Show, Eq)
 
+----------------------------------------------------------------
+
 data ClientKeyXchgAlgorithmData
     = CKX_RSA ByteString
     | CKX_DH DHPublic
@@ -625,6 +651,8 @@ data ClientKeyXchgAlgorithmData
     deriving (Show, Eq)
 
 type DeprecatedRecord = ByteString
+
+----------------------------------------------------------------
 
 data Handshake
     = ClientHello
@@ -655,23 +683,27 @@ data Handshake
     | Finished FinishedData
     deriving (Show, Eq)
 
+{- FOURMOLU_DISABLE -}
 packetType :: Packet -> ProtocolType
-packetType (Handshake _) = ProtocolType_Handshake
-packetType (Alert _) = ProtocolType_Alert
+packetType (Handshake _)    = ProtocolType_Handshake
+packetType (Alert _)        = ProtocolType_Alert
 packetType ChangeCipherSpec = ProtocolType_ChangeCipherSpec
-packetType (AppData _) = ProtocolType_AppData
+packetType (AppData _)      = ProtocolType_AppData
 
 typeOfHandshake :: Handshake -> HandshakeType
-typeOfHandshake ClientHello{} = HandshakeType_ClientHello
-typeOfHandshake ServerHello{} = HandshakeType_ServerHello
-typeOfHandshake Certificates{} = HandshakeType_Certificate
-typeOfHandshake HelloRequest = HandshakeType_HelloRequest
+typeOfHandshake ClientHello{}   = HandshakeType_ClientHello
+typeOfHandshake ServerHello{}   = HandshakeType_ServerHello
+typeOfHandshake Certificates{}  = HandshakeType_Certificate
+typeOfHandshake HelloRequest    = HandshakeType_HelloRequest
 typeOfHandshake ServerHelloDone = HandshakeType_ServerHelloDone
 typeOfHandshake ClientKeyXchg{} = HandshakeType_ClientKeyXchg
 typeOfHandshake ServerKeyXchg{} = HandshakeType_ServerKeyXchg
-typeOfHandshake CertRequest{} = HandshakeType_CertRequest
-typeOfHandshake CertVerify{} = HandshakeType_CertVerify
-typeOfHandshake Finished{} = HandshakeType_Finished
+typeOfHandshake CertRequest{}   = HandshakeType_CertRequest
+typeOfHandshake CertVerify{}    = HandshakeType_CertVerify
+typeOfHandshake Finished{}      = HandshakeType_Finished
+{- FOURMOLU_ENABLE -}
+
+----------------------------------------------------------------
 
 class TypeValuable a where
     valOfType :: a -> Word8
