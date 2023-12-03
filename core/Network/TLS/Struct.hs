@@ -56,7 +56,15 @@ module Network.TLS.Struct (
         EID_SecureRenegotiation
     ),
     ExtensionRaw (..),
-    CertificateType (..),
+    CertificateType (
+        CertificateType,
+        CertificateType_RSA_Sign,
+        CertificateType_DSS_Sign,
+        CertificateType_ECDSA_Sign,
+        CertificateType_Ed25519_Sign,
+        CertificateType_Ed448_Sign
+    ),
+    fromCertificateType,
     lastSupportedCertificateType,
     HashAlgorithm (
         HashAlgorithm,
@@ -156,28 +164,36 @@ data CipherData = CipherData
 -- filtered to exclude unsupported values.  If the user cannot find a certificate
 -- for a supported code point, we'll go ahead without a client certificate and
 -- hope for the best, unless the user's callback decides to throw an exception.
-data CertificateType
-    = -- | TLS10 and up, RFC5246
-      CertificateType_RSA_Sign
-    | -- | TLS10 and up, RFC5246
-      CertificateType_DSS_Sign
-    | -- | TLS10 and up, RFC8422
-      CertificateType_ECDSA_Sign
-    | -- | TLS13 and up, synthetic
-      CertificateType_Ed25519_Sign
-    | -- | TLS13 and up, synthetic
-      -- | None of the below will ever be presented to the callback.  Any future
-      -- public key algorithms valid for client certificates go above this line.
-      CertificateType_Ed448_Sign
-    | CertificateType_RSA_Fixed_DH -- Obsolete, unsupported
-    | CertificateType_DSS_Fixed_DH -- Obsolete, unsupported
-    | CertificateType_RSA_Ephemeral_DH -- Obsolete, unsupported
-    | CertificateType_DSS_Ephemeral_DH -- Obsolete, unsupported
-    | CertificateType_fortezza_dms -- Obsolete, unsupported
-    | CertificateType_RSA_Fixed_ECDH -- Obsolete, unsupported
-    | CertificateType_ECDSA_Fixed_ECDH -- Obsolete, unsupported
-    | CertificateType_Unknown Word8 -- Obsolete, unsupported
-    deriving (Eq, Ord, Show)
+newtype CertificateType = CertificateType {fromCertificateType :: Word8}
+    deriving (Eq, Ord)
+
+{- FOURMOLU_DISABLE -}
+-- | TLS10 and up, RFC5246
+pattern CertificateType_RSA_Sign     :: CertificateType
+pattern CertificateType_RSA_Sign      = CertificateType 1
+-- | TLS10 and up, RFC5246
+pattern CertificateType_DSS_Sign     :: CertificateType
+pattern CertificateType_DSS_Sign      = CertificateType 2
+-- | TLS10 and up, RFC8422
+pattern CertificateType_ECDSA_Sign   :: CertificateType
+pattern CertificateType_ECDSA_Sign    = CertificateType 64
+-- \| There are no code points that map to the below synthetic types, these
+-- are inferred indirectly from the @signature_algorithms@ extension of the
+-- TLS 1.3 @CertificateRequest@ message.  the value assignments are there
+-- only to avoid partial function warnings.
+pattern CertificateType_Ed25519_Sign :: CertificateType
+pattern CertificateType_Ed25519_Sign  = CertificateType 254 -- fixme: dummy value
+pattern CertificateType_Ed448_Sign   :: CertificateType
+pattern CertificateType_Ed448_Sign    = CertificateType 255 -- fixme:  dummy value
+
+instance Show CertificateType where
+    show CertificateType_RSA_Sign     = "CertificateType_RSA_Sign"
+    show CertificateType_DSS_Sign     = "CertificateType_DSS_Sign"
+    show CertificateType_ECDSA_Sign   = "CertificateType_ECDSA_Sign"
+    show CertificateType_Ed25519_Sign = "CertificateType_Ed25519_Sign"
+    show CertificateType_Ed448_Sign   = "CertificateType_Ed448_Sign"
+    show (CertificateType x)          = "CertificateType " ++ show x
+{- FOURMOLU_ENABLE -}
 
 -- | Last supported certificate type, no 'CertificateType that
 -- compares greater than this one (based on the 'Ord' instance,
@@ -785,34 +801,3 @@ instance TypeValuable AlertDescription where
     valToType 116 = Just CertificateRequired
     valToType 120 = Just NoApplicationProtocol
     valToType _ = Nothing
-
-instance TypeValuable CertificateType where
-    valOfType CertificateType_RSA_Sign = 1
-    valOfType CertificateType_ECDSA_Sign = 64
-    valOfType CertificateType_DSS_Sign = 2
-    valOfType CertificateType_RSA_Fixed_DH = 3
-    valOfType CertificateType_DSS_Fixed_DH = 4
-    valOfType CertificateType_RSA_Ephemeral_DH = 5
-    valOfType CertificateType_DSS_Ephemeral_DH = 6
-    valOfType CertificateType_fortezza_dms = 20
-    valOfType CertificateType_RSA_Fixed_ECDH = 65
-    valOfType CertificateType_ECDSA_Fixed_ECDH = 66
-    valOfType (CertificateType_Unknown i) = i
-    -- \| There are no code points that map to the below synthetic types, these
-    -- are inferred indirectly from the @signature_algorithms@ extension of the
-    -- TLS 1.3 @CertificateRequest@ message.  the value assignments are there
-    -- only to avoid partial function warnings.
-    valOfType CertificateType_Ed25519_Sign = 0
-    valOfType CertificateType_Ed448_Sign = 0
-
-    valToType 1 = Just CertificateType_RSA_Sign
-    valToType 2 = Just CertificateType_DSS_Sign
-    valToType 3 = Just CertificateType_RSA_Fixed_DH
-    valToType 4 = Just CertificateType_DSS_Fixed_DH
-    valToType 5 = Just CertificateType_RSA_Ephemeral_DH
-    valToType 6 = Just CertificateType_DSS_Ephemeral_DH
-    valToType 20 = Just CertificateType_fortezza_dms
-    valToType 64 = Just CertificateType_ECDSA_Sign
-    valToType 65 = Just CertificateType_RSA_Fixed_ECDH
-    valToType 66 = Just CertificateType_ECDSA_Fixed_ECDH
-    valToType i = Just (CertificateType_Unknown i)

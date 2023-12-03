@@ -106,11 +106,7 @@ instance Arbitrary CertificateType where
         elements
             [ CertificateType_RSA_Sign
             , CertificateType_DSS_Sign
-            , CertificateType_RSA_Fixed_DH
-            , CertificateType_DSS_Fixed_DH
-            , CertificateType_RSA_Ephemeral_DH
-            , CertificateType_DSS_Ephemeral_DH
-            , CertificateType_fortezza_dms
+            , CertificateType_ECDSA_Sign
             ]
 
 instance Arbitrary Handshake where

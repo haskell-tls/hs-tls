@@ -252,8 +252,7 @@ decodeFinished = Finished <$> (remaining >>= getBytes)
 
 decodeCertRequest :: CurrentParams -> Get Handshake
 decodeCertRequest cp = do
-    mcertTypes <- map (valToType . fromIntegral) <$> getWords8
-    certTypes <- mapM (fromJustM "decodeCertRequest") mcertTypes
+    certTypes <- map CertificateType <$> getWords8
     sigHashAlgs <-
         if cParamsVersion cp >= TLS12
             then Just <$> (getWord16 >>= getSignatureHashAlgorithms)
@@ -398,7 +397,7 @@ encodeHandshakeContent (ServerKeyXchg skg) =
 encodeHandshakeContent HelloRequest = return ()
 encodeHandshakeContent ServerHelloDone = return ()
 encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
-    putWords8 (map valOfType certTypes)
+    putWords8 (map fromCertificateType certTypes)
     case sigAlgs of
         Nothing -> return ()
         Just l ->
@@ -714,7 +713,3 @@ encodeSignedECDHParams
 encodeSignedECDHParams dhparams cran sran =
     runPut $
         putClientRandom32 cran >> putServerRandom32 sran >> putServerECDHParams dhparams
-
-fromJustM :: MonadFail m => String -> Maybe a -> m a
-fromJustM what Nothing = fail ("fromJustM " ++ what ++ ": Nothing")
-fromJustM _ (Just x) = return x
