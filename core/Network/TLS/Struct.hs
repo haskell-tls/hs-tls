@@ -58,7 +58,17 @@ module Network.TLS.Struct (
     ExtensionRaw (..),
     CertificateType (..),
     lastSupportedCertificateType,
-    HashAlgorithm (..),
+    HashAlgorithm (
+        HashAlgorithm,
+        HashNone,
+        HashMD5,
+        HashSHA1,
+        HashSHA224,
+        HashSHA256,
+        HashSHA384,
+        HashSHA512,
+        HashIntrinsic
+    ),
     SignatureAlgorithm (
         SignatureAlgorithm,
         SignatureAnonymous,
@@ -178,17 +188,37 @@ lastSupportedCertificateType = CertificateType_ECDSA_Sign
 
 ------------------------------------------------------------
 
-data HashAlgorithm
-    = HashNone
-    | HashMD5
-    | HashSHA1
-    | HashSHA224
-    | HashSHA256
-    | HashSHA384
-    | HashSHA512
-    | HashIntrinsic
-    | HashOther Word8
-    deriving (Show, Eq)
+newtype HashAlgorithm = HashAlgorithm Word8 deriving (Eq)
+
+{- FOURMOLU_DISABLE -}
+pattern HashNone      :: HashAlgorithm
+pattern HashNone       = HashAlgorithm 0
+pattern HashMD5       :: HashAlgorithm
+pattern HashMD5        = HashAlgorithm 1
+pattern HashSHA1      :: HashAlgorithm
+pattern HashSHA1       = HashAlgorithm 2
+pattern HashSHA224    :: HashAlgorithm
+pattern HashSHA224     = HashAlgorithm 3
+pattern HashSHA256    :: HashAlgorithm
+pattern HashSHA256     = HashAlgorithm 4
+pattern HashSHA384    :: HashAlgorithm
+pattern HashSHA384     = HashAlgorithm 5
+pattern HashSHA512    :: HashAlgorithm
+pattern HashSHA512     = HashAlgorithm 6
+pattern HashIntrinsic :: HashAlgorithm
+pattern HashIntrinsic  = HashAlgorithm 8
+
+instance Show HashAlgorithm where
+    show HashNone          = "HashNone"
+    show HashMD5           = "HashMD5"
+    show HashSHA1          = "HashSHA1"
+    show HashSHA224        = "HashSHA224"
+    show HashSHA256        = "HashSHA256"
+    show HashSHA384        = "HashSHA384"
+    show HashSHA512        = "HashSHA512"
+    show HashIntrinsic     = "HashIntrinsic"
+    show (HashAlgorithm x) = "HashAlgorithm " ++ show x
+{- FOURMOLU_ENABLE -}
 
 ------------------------------------------------------------
 
@@ -786,32 +816,3 @@ instance TypeValuable CertificateType where
     valToType 65 = Just CertificateType_RSA_Fixed_ECDH
     valToType 66 = Just CertificateType_ECDSA_Fixed_ECDH
     valToType i = Just (CertificateType_Unknown i)
-
--- \| There are no code points that map to the below synthetic types, these
--- are inferred indirectly from the @signature_algorithms@ extension of the
--- TLS 1.3 @CertificateRequest@ message.
--- @
--- CertificateType_Ed25519_Sign
--- CertificateType_Ed448_Sign
--- @
-
-instance TypeValuable HashAlgorithm where
-    valOfType HashNone = 0
-    valOfType HashMD5 = 1
-    valOfType HashSHA1 = 2
-    valOfType HashSHA224 = 3
-    valOfType HashSHA256 = 4
-    valOfType HashSHA384 = 5
-    valOfType HashSHA512 = 6
-    valOfType HashIntrinsic = 8
-    valOfType (HashOther i) = i
-
-    valToType 0 = Just HashNone
-    valToType 1 = Just HashMD5
-    valToType 2 = Just HashSHA1
-    valToType 3 = Just HashSHA224
-    valToType 4 = Just HashSHA256
-    valToType 5 = Just HashSHA384
-    valToType 6 = Just HashSHA512
-    valToType 8 = Just HashIntrinsic
-    valToType i = Just (HashOther i)
