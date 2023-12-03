@@ -12,7 +12,6 @@
 -- the Struct module contains all definitions and values of the TLS protocol
 module Network.TLS.Struct (
     Version (..),
-    ConnectionEnd (..),
     CipherType (..),
     CipherData (..),
     ExtensionID (
@@ -145,7 +144,6 @@ import Network.TLS.Util.Serialization
 
 ------------------------------------------------------------
 
-data ConnectionEnd = ConnectionServer | ConnectionClient
 data CipherType = CipherStream | CipherBlock | CipherAEAD
 
 data CipherData = CipherData
@@ -681,14 +679,6 @@ typeOfHandshake Finished{} = HandshakeType_Finished
 class TypeValuable a where
     valOfType :: a -> Word8
     valToType :: Word8 -> Maybe a
-
-instance TypeValuable ConnectionEnd where
-    valOfType ConnectionServer = 0
-    valOfType ConnectionClient = 1
-
-    valToType 0 = Just ConnectionServer
-    valToType 1 = Just ConnectionClient
-    valToType _ = Nothing
 
 instance TypeValuable CipherType where
     valOfType CipherStream = 0
