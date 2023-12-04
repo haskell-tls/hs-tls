@@ -11,6 +11,8 @@ module Network.TLS.Struct13 (
     typeOfHandshake13,
     contentType,
     KeyUpdate (..),
+    valOfType,
+    valToType,
 ) where
 
 import Data.X509 (CertificateChain)
@@ -70,6 +72,10 @@ typeOfHandshake13 Certificate13{} = HandshakeType_Certificate13
 typeOfHandshake13 CertVerify13{} = HandshakeType_CertVerify13
 typeOfHandshake13 Finished13{} = HandshakeType_Finished13
 typeOfHandshake13 KeyUpdate13{} = HandshakeType_KeyUpdate13
+
+class TypeValuable a where
+    valOfType :: a -> Word8
+    valToType :: Word8 -> Maybe a
 
 instance TypeValuable HandshakeType13 where
     valOfType HandshakeType_ClientHello13 = 1

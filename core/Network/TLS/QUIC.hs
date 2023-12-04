@@ -254,13 +254,9 @@ errorTLS msg = throwCore $ Error_Protocol msg InternalError
 errorToAlertDescription :: TLSError -> AlertDescription
 errorToAlertDescription = snd . errorToAlert
 
--- | Encode an alert to the assigned value.
-fromAlertDescription :: AlertDescription -> Word8
-fromAlertDescription = valOfType
-
 -- | Decode an alert from the assigned value.
-toAlertDescription :: Word8 -> Maybe AlertDescription
-toAlertDescription = valToType
+toAlertDescription :: Word8 -> AlertDescription
+toAlertDescription = AlertDescription
 
 defaultSupported :: Supported
 defaultSupported =

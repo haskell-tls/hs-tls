@@ -127,7 +127,42 @@ module Network.TLS.Struct (
         AlertLevel_Warning,
         AlertLevel_Fatal
     ),
-    AlertDescription (..),
+    AlertDescription (
+        ..,
+        CloseNotify,
+        UnexpectedMessage,
+        BadRecordMac,
+        DecryptionFailed,
+        RecordOverflow,
+        DecompressionFailure,
+        HandshakeFailure,
+        BadCertificate,
+        UnsupportedCertificate,
+        CertificateRevoked,
+        CertificateExpired,
+        CertificateUnknown,
+        IllegalParameter,
+        UnknownCa,
+        AccessDenied,
+        DecodeError,
+        DecryptError,
+        ExportRestriction,
+        ProtocolVersion,
+        InsufficientSecurity,
+        InternalError,
+        InappropriateFallback,
+        UserCanceled,
+        NoRenegotiation,
+        MissingExtension,
+        UnsupportedExtension,
+        CertificateUnobtainable,
+        UnrecognizedName,
+        BadCertificateStatusResponse,
+        BadCertificateHashValue,
+        UnknownPskIdentity,
+        CertificateRequired,
+        NoApplicationProtocol
+    ),
     HandshakeType (
         ..,
         HandshakeType_HelloRequest,
@@ -142,9 +177,6 @@ module Network.TLS.Struct (
         HandshakeType_Finished
     ),
     Handshake (..),
-    TypeValuable,
-    valOfType,
-    valToType,
     packetType,
     typeOfHandshake,
 ) where
@@ -554,42 +586,113 @@ instance Show AlertLevel where
 
 ----------------------------------------------------------------
 
-data AlertDescription
-    = CloseNotify
-    | UnexpectedMessage
-    | BadRecordMac
-    | -- | deprecated alert, should never be sent by compliant implementation
-      DecryptionFailed
-    | RecordOverflow
-    | DecompressionFailure
-    | HandshakeFailure
-    | BadCertificate
-    | UnsupportedCertificate
-    | CertificateRevoked
-    | CertificateExpired
-    | CertificateUnknown
-    | IllegalParameter
-    | UnknownCa
-    | AccessDenied
-    | DecodeError
-    | DecryptError
-    | ExportRestriction
-    | ProtocolVersion
-    | InsufficientSecurity
-    | InternalError
-    | InappropriateFallback -- RFC7507
-    | UserCanceled
-    | NoRenegotiation
-    | MissingExtension
-    | UnsupportedExtension
-    | CertificateUnobtainable
-    | UnrecognizedName
-    | BadCertificateStatusResponse
-    | BadCertificateHashValue
-    | UnknownPskIdentity
-    | CertificateRequired
-    | NoApplicationProtocol -- RFC7301
-    deriving (Show, Eq)
+newtype AlertDescription = AlertDescription {fromAlertDescription :: Word8}
+    deriving (Eq)
+
+{- FOURMOLU_DISABLE -}
+pattern CloseNotify                  :: AlertDescription
+pattern CloseNotify                   = AlertDescription 0
+pattern UnexpectedMessage            :: AlertDescription
+pattern UnexpectedMessage             = AlertDescription 10
+pattern BadRecordMac                 :: AlertDescription
+pattern BadRecordMac                  = AlertDescription 20
+pattern DecryptionFailed             :: AlertDescription
+pattern DecryptionFailed              = AlertDescription 21
+pattern RecordOverflow               :: AlertDescription
+pattern RecordOverflow                = AlertDescription 22
+pattern DecompressionFailure         :: AlertDescription
+pattern DecompressionFailure          = AlertDescription 30
+pattern HandshakeFailure             :: AlertDescription
+pattern HandshakeFailure              = AlertDescription 40
+pattern BadCertificate               :: AlertDescription
+pattern BadCertificate                = AlertDescription 42
+pattern UnsupportedCertificate       :: AlertDescription
+pattern UnsupportedCertificate        = AlertDescription 43
+pattern CertificateRevoked           :: AlertDescription
+pattern CertificateRevoked            = AlertDescription 44
+pattern CertificateExpired           :: AlertDescription
+pattern CertificateExpired            = AlertDescription 45
+pattern CertificateUnknown           :: AlertDescription
+pattern CertificateUnknown            = AlertDescription 46
+pattern IllegalParameter             :: AlertDescription
+pattern IllegalParameter              = AlertDescription 47
+pattern UnknownCa                    :: AlertDescription
+pattern UnknownCa                     = AlertDescription 48
+pattern AccessDenied                 :: AlertDescription
+pattern AccessDenied                  = AlertDescription 49
+pattern DecodeError                  :: AlertDescription
+pattern DecodeError                   = AlertDescription 50
+pattern DecryptError                 :: AlertDescription
+pattern DecryptError                  = AlertDescription 51
+pattern ExportRestriction            :: AlertDescription
+pattern ExportRestriction             = AlertDescription 60
+pattern ProtocolVersion              :: AlertDescription
+pattern ProtocolVersion               = AlertDescription 70
+pattern InsufficientSecurity         :: AlertDescription
+pattern InsufficientSecurity          = AlertDescription 71
+pattern InternalError                :: AlertDescription
+pattern InternalError                 = AlertDescription 80
+pattern InappropriateFallback        :: AlertDescription
+pattern InappropriateFallback         = AlertDescription 86  -- RFC7507
+pattern UserCanceled                 :: AlertDescription
+pattern UserCanceled                  = AlertDescription 90
+pattern NoRenegotiation              :: AlertDescription
+pattern NoRenegotiation               = AlertDescription 100
+pattern MissingExtension             :: AlertDescription
+pattern MissingExtension              = AlertDescription 109
+pattern UnsupportedExtension         :: AlertDescription
+pattern UnsupportedExtension          = AlertDescription 110
+pattern CertificateUnobtainable      :: AlertDescription
+pattern CertificateUnobtainable       = AlertDescription 111
+pattern UnrecognizedName             :: AlertDescription
+pattern UnrecognizedName              = AlertDescription 112
+pattern BadCertificateStatusResponse :: AlertDescription
+pattern BadCertificateStatusResponse  = AlertDescription 113
+pattern BadCertificateHashValue      :: AlertDescription
+pattern BadCertificateHashValue       = AlertDescription 114
+pattern UnknownPskIdentity           :: AlertDescription
+pattern UnknownPskIdentity            = AlertDescription 115
+pattern CertificateRequired          :: AlertDescription
+pattern CertificateRequired           = AlertDescription 116
+pattern NoApplicationProtocol        :: AlertDescription
+pattern NoApplicationProtocol         = AlertDescription 120 -- RFC7301
+
+instance Show AlertDescription where
+    show CloseNotify                  = "CloseNotify"
+    show UnexpectedMessage            = "UnexpectedMessage"
+    show BadRecordMac                 = "BadRecordMac"
+    show DecryptionFailed             = "DecryptionFailed"
+    show RecordOverflow               = "RecordOverflow"
+    show DecompressionFailure         = "DecompressionFailure"
+    show HandshakeFailure             = "HandshakeFailure"
+    show BadCertificate               = "BadCertificate"
+    show UnsupportedCertificate       = "UnsupportedCertificate"
+    show CertificateRevoked           = "CertificateRevoked"
+    show CertificateExpired           = "CertificateExpired"
+    show CertificateUnknown           = "CertificateUnknown"
+    show IllegalParameter             = "IllegalParameter"
+    show UnknownCa                    = "UnknownCa"
+    show AccessDenied                 = "AccessDenied"
+    show DecodeError                  = "DecodeError"
+    show DecryptError                 = "DecryptError"
+    show ExportRestriction            = "ExportRestriction"
+    show ProtocolVersion              = "ProtocolVersion"
+    show InsufficientSecurity         = "InsufficientSecurity"
+    show InternalError                = "InternalError"
+    show InappropriateFallback        = "InappropriateFallback"
+    show UserCanceled                 = "UserCanceled"
+    show NoRenegotiation              = "NoRenegotiation"
+    show MissingExtension             = "MissingExtension"
+    show UnsupportedExtension         = "UnsupportedExtension"
+    show CertificateUnobtainable      = "CertificateUnobtainable"
+    show UnrecognizedName             = "UnrecognizedName"
+    show BadCertificateStatusResponse = "BadCertificateStatusResponse"
+    show BadCertificateHashValue      = "BadCertificateHashValue"
+    show UnknownPskIdentity           = "UnknownPskIdentity"
+    show CertificateRequired          = "CertificateRequired"
+    show NoApplicationProtocol        = "NoApplicationProtocol"
+    show (AlertDescription x)         = "AlertDescription " ++ show x
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
@@ -758,79 +861,3 @@ typeOfHandshake CertRequest{}   = HandshakeType_CertRequest
 typeOfHandshake CertVerify{}    = HandshakeType_CertVerify
 typeOfHandshake Finished{}      = HandshakeType_Finished
 {- FOURMOLU_ENABLE -}
-
-----------------------------------------------------------------
-
-class TypeValuable a where
-    valOfType :: a -> Word8
-    valToType :: Word8 -> Maybe a
-
-instance TypeValuable AlertDescription where
-    valOfType CloseNotify = 0
-    valOfType UnexpectedMessage = 10
-    valOfType BadRecordMac = 20
-    valOfType DecryptionFailed = 21
-    valOfType RecordOverflow = 22
-    valOfType DecompressionFailure = 30
-    valOfType HandshakeFailure = 40
-    valOfType BadCertificate = 42
-    valOfType UnsupportedCertificate = 43
-    valOfType CertificateRevoked = 44
-    valOfType CertificateExpired = 45
-    valOfType CertificateUnknown = 46
-    valOfType IllegalParameter = 47
-    valOfType UnknownCa = 48
-    valOfType AccessDenied = 49
-    valOfType DecodeError = 50
-    valOfType DecryptError = 51
-    valOfType ExportRestriction = 60
-    valOfType ProtocolVersion = 70
-    valOfType InsufficientSecurity = 71
-    valOfType InternalError = 80
-    valOfType InappropriateFallback = 86
-    valOfType UserCanceled = 90
-    valOfType NoRenegotiation = 100
-    valOfType MissingExtension = 109
-    valOfType UnsupportedExtension = 110
-    valOfType CertificateUnobtainable = 111
-    valOfType UnrecognizedName = 112
-    valOfType BadCertificateStatusResponse = 113
-    valOfType BadCertificateHashValue = 114
-    valOfType UnknownPskIdentity = 115
-    valOfType CertificateRequired = 116
-    valOfType NoApplicationProtocol = 120
-
-    valToType 0 = Just CloseNotify
-    valToType 10 = Just UnexpectedMessage
-    valToType 20 = Just BadRecordMac
-    valToType 21 = Just DecryptionFailed
-    valToType 22 = Just RecordOverflow
-    valToType 30 = Just DecompressionFailure
-    valToType 40 = Just HandshakeFailure
-    valToType 42 = Just BadCertificate
-    valToType 43 = Just UnsupportedCertificate
-    valToType 44 = Just CertificateRevoked
-    valToType 45 = Just CertificateExpired
-    valToType 46 = Just CertificateUnknown
-    valToType 47 = Just IllegalParameter
-    valToType 48 = Just UnknownCa
-    valToType 49 = Just AccessDenied
-    valToType 50 = Just DecodeError
-    valToType 51 = Just DecryptError
-    valToType 60 = Just ExportRestriction
-    valToType 70 = Just ProtocolVersion
-    valToType 71 = Just InsufficientSecurity
-    valToType 80 = Just InternalError
-    valToType 86 = Just InappropriateFallback
-    valToType 90 = Just UserCanceled
-    valToType 100 = Just NoRenegotiation
-    valToType 109 = Just MissingExtension
-    valToType 110 = Just UnsupportedExtension
-    valToType 111 = Just CertificateUnobtainable
-    valToType 112 = Just UnrecognizedName
-    valToType 113 = Just BadCertificateStatusResponse
-    valToType 114 = Just BadCertificateHashValue
-    valToType 115 = Just UnknownPskIdentity
-    valToType 116 = Just CertificateRequired
-    valToType 120 = Just NoApplicationProtocol
-    valToType _ = Nothing
