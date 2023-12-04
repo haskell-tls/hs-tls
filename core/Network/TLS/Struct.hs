@@ -124,7 +124,19 @@ module Network.TLS.Struct (
     SessionData (..),
     AlertLevel (..),
     AlertDescription (..),
-    HandshakeType (..),
+    HandshakeType (
+        ..,
+        HandshakeType_HelloRequest,
+        HandshakeType_ClientHello,
+        HandshakeType_ServerHello,
+        HandshakeType_Certificate,
+        HandshakeType_ServerKeyXchg,
+        HandshakeType_CertRequest,
+        HandshakeType_ServerHelloDone,
+        HandshakeType_CertVerify,
+        HandshakeType_ClientKeyXchg,
+        HandshakeType_Finished
+    ),
     Handshake (..),
     TypeValuable,
     valOfType,
@@ -564,18 +576,47 @@ data AlertDescription
     | NoApplicationProtocol -- RFC7301
     deriving (Show, Eq)
 
-data HandshakeType
-    = HandshakeType_HelloRequest
-    | HandshakeType_ClientHello
-    | HandshakeType_ServerHello
-    | HandshakeType_Certificate
-    | HandshakeType_ServerKeyXchg
-    | HandshakeType_CertRequest
-    | HandshakeType_ServerHelloDone
-    | HandshakeType_CertVerify
-    | HandshakeType_ClientKeyXchg
-    | HandshakeType_Finished
-    deriving (Show, Eq)
+----------------------------------------------------------------
+
+newtype HandshakeType = HandshakeType {fromHandshakeType :: Word8}
+    deriving (Eq)
+
+{- FOURMOLU_DIABLE -}
+pattern HandshakeType_HelloRequest :: HandshakeType
+pattern HandshakeType_HelloRequest = HandshakeType 0
+pattern HandshakeType_ClientHello :: HandshakeType
+pattern HandshakeType_ClientHello = HandshakeType 1
+pattern HandshakeType_ServerHello :: HandshakeType
+pattern HandshakeType_ServerHello = HandshakeType 2
+pattern HandshakeType_Certificate :: HandshakeType
+pattern HandshakeType_Certificate = HandshakeType 11
+pattern HandshakeType_ServerKeyXchg :: HandshakeType
+pattern HandshakeType_ServerKeyXchg = HandshakeType 12
+pattern HandshakeType_CertRequest :: HandshakeType
+pattern HandshakeType_CertRequest = HandshakeType 13
+pattern HandshakeType_ServerHelloDone :: HandshakeType
+pattern HandshakeType_ServerHelloDone = HandshakeType 14
+pattern HandshakeType_CertVerify :: HandshakeType
+pattern HandshakeType_CertVerify = HandshakeType 15
+pattern HandshakeType_ClientKeyXchg :: HandshakeType
+pattern HandshakeType_ClientKeyXchg = HandshakeType 16
+pattern HandshakeType_Finished :: HandshakeType
+pattern HandshakeType_Finished = HandshakeType 20
+
+instance Show HandshakeType where
+    show HandshakeType_HelloRequest = "HandshakeType_HelloRequest"
+    show HandshakeType_ClientHello = "HandshakeType_ClientHello"
+    show HandshakeType_ServerHello = "HandshakeType_ServerHello"
+    show HandshakeType_Certificate = "HandshakeType_Certificate"
+    show HandshakeType_ServerKeyXchg = "HandshakeType_ServerKeyXchg"
+    show HandshakeType_CertRequest = "HandshakeType_CertRequest"
+    show HandshakeType_ServerHelloDone = "HandshakeType_ServerHelloDone"
+    show HandshakeType_CertVerify = "HandshakeType_CertVerify"
+    show HandshakeType_ClientKeyXchg = "HandshakeType_ClientKeyXchg"
+    show HandshakeType_Finished = "HandshakeType_Finished"
+    show (HandshakeType x) = "HandshakeType " ++ show x
+
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
@@ -708,30 +749,6 @@ typeOfHandshake Finished{}      = HandshakeType_Finished
 class TypeValuable a where
     valOfType :: a -> Word8
     valToType :: Word8 -> Maybe a
-
-instance TypeValuable HandshakeType where
-    valOfType HandshakeType_HelloRequest = 0
-    valOfType HandshakeType_ClientHello = 1
-    valOfType HandshakeType_ServerHello = 2
-    valOfType HandshakeType_Certificate = 11
-    valOfType HandshakeType_ServerKeyXchg = 12
-    valOfType HandshakeType_CertRequest = 13
-    valOfType HandshakeType_ServerHelloDone = 14
-    valOfType HandshakeType_CertVerify = 15
-    valOfType HandshakeType_ClientKeyXchg = 16
-    valOfType HandshakeType_Finished = 20
-
-    valToType 0 = Just HandshakeType_HelloRequest
-    valToType 1 = Just HandshakeType_ClientHello
-    valToType 2 = Just HandshakeType_ServerHello
-    valToType 11 = Just HandshakeType_Certificate
-    valToType 12 = Just HandshakeType_ServerKeyXchg
-    valToType 13 = Just HandshakeType_CertRequest
-    valToType 14 = Just HandshakeType_ServerHelloDone
-    valToType 15 = Just HandshakeType_CertVerify
-    valToType 16 = Just HandshakeType_ClientKeyXchg
-    valToType 20 = Just HandshakeType_Finished
-    valToType _ = Nothing
 
 instance TypeValuable AlertLevel where
     valOfType AlertLevel_Warning = 1

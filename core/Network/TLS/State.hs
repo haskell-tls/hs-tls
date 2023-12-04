@@ -159,6 +159,7 @@ finishHandshakeTypeMaterial HandshakeType_ServerKeyXchg = True
 finishHandshakeTypeMaterial HandshakeType_CertRequest = True
 finishHandshakeTypeMaterial HandshakeType_CertVerify = True
 finishHandshakeTypeMaterial HandshakeType_Finished = True
+finishHandshakeTypeMaterial _ = True -- checkme
 
 finishHandshakeMaterial :: Handshake -> Bool
 finishHandshakeMaterial = finishHandshakeTypeMaterial . typeOfHandshake
@@ -174,6 +175,7 @@ certVerifyHandshakeTypeMaterial HandshakeType_ServerKeyXchg = True
 certVerifyHandshakeTypeMaterial HandshakeType_CertRequest = True
 certVerifyHandshakeTypeMaterial HandshakeType_CertVerify = False
 certVerifyHandshakeTypeMaterial HandshakeType_Finished = False
+certVerifyHandshakeTypeMaterial _ = False -- checkme
 
 certVerifyHandshakeMaterial :: Handshake -> Bool
 certVerifyHandshakeMaterial = certVerifyHandshakeTypeMaterial . typeOfHandshake

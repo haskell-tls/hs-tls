@@ -106,11 +106,7 @@ putHeaderType :: ProtocolType -> Put
 putHeaderType (ProtocolType pt) = putWord8 pt
 
 getHandshakeType :: Get HandshakeType
-getHandshakeType = do
-    ty <- getWord8
-    case valToType ty of
-        Nothing -> fail ("invalid handshake type: " ++ show ty)
-        Just t -> return t
+getHandshakeType = HandshakeType <$> getWord8
 
 {-
  - decode and encode headers
@@ -175,6 +171,7 @@ decodeHandshake cp ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
     HandshakeType_CertVerify -> decodeCertVerify cp
     HandshakeType_ClientKeyXchg -> decodeClientKeyXchg cp
     HandshakeType_Finished -> decodeFinished
+    x -> fail $ "Unsupported HandshakeType " ++ show x
 
 decodeDeprecatedHandshake :: ByteString -> Either TLSError Handshake
 decodeDeprecatedHandshake b = runGetErr "deprecatedhandshake" getDeprecated b
@@ -354,7 +351,7 @@ encodeHandshake o =
              in B.concat [header, content]
 
 encodeHandshakeHeader :: HandshakeType -> Int -> Put
-encodeHandshakeHeader ty len = putWord8 (valOfType ty) >> putWord24 len
+encodeHandshakeHeader ty len = putWord8 (fromHandshakeType ty) >> putWord24 len
 
 encodeHandshakeContent :: Handshake -> Put
 encodeHandshakeContent (ClientHello _ _ _ _ _ _ (Just deprecated)) = do
