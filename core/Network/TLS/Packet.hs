@@ -242,12 +242,9 @@ decodeFinished :: Get Handshake
 decodeFinished = Finished <$> (remaining >>= getBytes)
 
 decodeCertRequest :: CurrentParams -> Get Handshake
-decodeCertRequest cp = do
+decodeCertRequest _cp = do
     certTypes <- map CertificateType <$> getWords8
-    sigHashAlgs <-
-        if cParamsVersion cp >= TLS12
-            then Just <$> (getWord16 >>= getSignatureHashAlgorithms)
-            else return Nothing
+    sigHashAlgs <- getWord16 >>= getSignatureHashAlgorithms
     CertRequest certTypes sigHashAlgs <$> getDNames
   where
     getSignatureHashAlgorithms len =
@@ -389,14 +386,11 @@ encodeHandshakeContent HelloRequest = return ()
 encodeHandshakeContent ServerHelloDone = return ()
 encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
     putWords8 (map fromCertificateType certTypes)
-    case sigAlgs of
-        Nothing -> return ()
-        Just l ->
-            putWords16 $
-                map
-                    ( \(HashAlgorithm x, SignatureAlgorithm y) -> fromIntegral x * 256 + fromIntegral y
-                    )
-                    l
+    putWords16 $
+        map
+            ( \(HashAlgorithm x, SignatureAlgorithm y) -> fromIntegral x * 256 + fromIntegral y
+            )
+            sigAlgs
     putDNames certAuthorities
 encodeHandshakeContent (CertVerify digitallySigned) = putDigitallySigned digitallySigned
 encodeHandshakeContent (Finished opaque) = putBytes opaque
@@ -499,16 +493,14 @@ putServerECDHParams (ServerECDHParams (Group grp) grppub) = do
     putOpaque8 $ encodeGroupPublic grppub -- ECPoint
 
 getDigitallySigned :: Version -> Get DigitallySigned
-getDigitallySigned ver
-    | ver >= TLS12 =
+getDigitallySigned _ver =
         DigitallySigned
-            <$> (Just <$> getSignatureHashAlgorithm)
+            <$> getSignatureHashAlgorithm
             <*> getOpaque16
-    | otherwise = DigitallySigned Nothing <$> getOpaque16
 
 putDigitallySigned :: DigitallySigned -> Put
-putDigitallySigned (DigitallySigned mhash sig) =
-    maybe (return ()) putSignatureHashAlgorithm mhash >> putOpaque16 sig
+putDigitallySigned (DigitallySigned h sig) =
+    putSignatureHashAlgorithm h >> putOpaque16 sig
 
 {-
  - decode and encode ALERT

@@ -486,17 +486,9 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
         -- Client certificates MUST NOT be accepted if not requested.
         --
         when (serverWantClientCert sparams) $ do
-            usedVersion <- usingState_ ctx getVersion
-            let defaultCertTypes =
-                    [ CertificateType_RSA_Sign
-                    , CertificateType_DSA_Sign
-                    , CertificateType_ECDSA_Sign
-                    ]
-                (certTypes, hashSigs)
-                    | usedVersion < TLS12 = (defaultCertTypes, Nothing)
-                    | otherwise =
+            let (certTypes, hashSigs) =
                         let as = supportedHashSignatures $ ctxSupported ctx
-                         in (nub $ mapMaybe hashSigToCertType as, Just as)
+                         in (nub $ mapMaybe hashSigToCertType as, as)
                 creq =
                     CertRequest
                         certTypes
@@ -538,14 +530,10 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
     -- If RSA is also used for key exchange, this function is
     -- not called.
     decideHashSig pubKey = do
-        usedVersion <- usingState_ ctx getVersion
-        case usedVersion of
-            TLS12 -> do
-                let hashSigs = hashAndSignaturesInCommon ctx exts
-                case filter (pubKey `signatureCompatible`) hashSigs of
-                    [] -> error ("no hash signature for " ++ pubkeyType pubKey)
-                    x : _ -> return $ Just x
-            _ -> return Nothing
+            let hashSigs = hashAndSignaturesInCommon ctx exts
+            case filter (pubKey `signatureCompatible`) hashSigs of
+                [] -> error ("no hash signature for " ++ pubkeyType pubKey)
+                x : _ -> return x
 
     generateSKX_DHE kxsAlg = do
         serverParams <- setup_DHE

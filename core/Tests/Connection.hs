@@ -66,7 +66,7 @@ arbitraryCiphers :: Gen [Cipher]
 arbitraryCiphers = listOf1 $ elements knownCiphers
 
 knownVersions :: [Version]
-knownVersions = [TLS13, TLS12, TLS11, TLS10]
+knownVersions = [TLS13, TLS12]
 
 arbitraryVersions :: Gen [Version]
 arbitraryVersions = sublistOf knownVersions
@@ -326,14 +326,6 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
     return (clientState, serverState)
 
 arbitraryClientCredential :: Version -> Gen Credential
-arbitraryClientCredential SSL3 = do
-    -- for SSL3 there is no EC but only RSA/DSA
-    creds <- arbitraryCredentialsOfEachType'
-    elements (take 2 creds) -- RSA and DSA, but not ECDSA, Ed25519 and Ed448
-arbitraryClientCredential v | v < TLS12 = do
-    -- for TLS10 and TLS11 there is no EdDSA but only RSA/DSA/ECDSA
-    creds <- arbitraryCredentialsOfEachType'
-    elements (take 3 creds) -- RSA, DSA and ECDSA, but not EdDSA
 arbitraryClientCredential _ = arbitraryCredentialsOfEachType' >>= elements
 
 arbitraryRSACredentialWithUsage

@@ -340,7 +340,7 @@ type HashAndSignatureAlgorithm = (HashAlgorithm, SignatureAlgorithm)
 
 type Signature = ByteString
 
-data DigitallySigned = DigitallySigned (Maybe HashAndSignatureAlgorithm) Signature
+data DigitallySigned = DigitallySigned HashAndSignatureAlgorithm Signature
     deriving (Show, Eq)
 
 ----------------------------------------------------------------
@@ -854,7 +854,7 @@ data Handshake
     | ServerKeyXchg ServerKeyXchgAlgorithmData
     | CertRequest
         [CertificateType]
-        (Maybe [HashAndSignatureAlgorithm])
+        [HashAndSignatureAlgorithm]
         [DistinguishedName]
     | CertVerify DigitallySigned
     | Finished FinishedData

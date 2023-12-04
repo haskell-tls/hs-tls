@@ -176,9 +176,9 @@ checkCertVerify ctx pub hs signature hashValue
                 | cc == ClientRole = serverContextString -- opposite context
                 | otherwise = clientContextString
             target = makeTarget ctxStr hashValue
-            sigParams = signatureParams pub (Just hs)
+            sigParams = signatureParams pub hs
         checkHashSignatureValid13 hs
-        checkSupportedHashSignature ctx (Just hs)
+        checkSupportedHashSignature ctx hs
         verifyPublic ctx sigParams target signature
     | otherwise = return False
 
@@ -198,7 +198,7 @@ sign
     -> m Signature
 sign ctx pub hs target = liftIO $ do
     cc <- usingState_ ctx isClientContext
-    let sigParams = signatureParams pub (Just hs)
+    let sigParams = signatureParams pub hs
     signPrivate ctx cc sigParams target
 
 ----------------------------------------------------------------

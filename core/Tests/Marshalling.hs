@@ -21,7 +21,7 @@ genByteString :: Int -> Gen B.ByteString
 genByteString i = B.pack <$> vector i
 
 instance Arbitrary Version where
-    arbitrary = elements [SSL2, SSL3, TLS10, TLS11, TLS12, TLS13]
+    arbitrary = elements [TLS12, TLS13]
 
 instance Arbitrary ProtocolType where
     arbitrary =
@@ -79,7 +79,7 @@ instance Arbitrary SignatureAlgorithm where
             ]
 
 instance Arbitrary DigitallySigned where
-    arbitrary = DigitallySigned Nothing <$> genByteString 32
+    arbitrary = DigitallySigned <$> arbitrary <*> genByteString 32
 
 arbitraryCiphersIDs :: Gen [Word16]
 arbitraryCiphersIDs = choose (0, 200) >>= vector
@@ -96,9 +96,7 @@ instance Arbitrary ExtensionRaw where
          in ExtensionRaw <$> (ExtensionID <$> arbitrary) <*> arbitraryContent
 
 arbitraryHelloExtensions :: Version -> Gen [ExtensionRaw]
-arbitraryHelloExtensions ver
-    | ver >= SSL3 = arbitrary
-    | otherwise = return [] -- no hello extension with SSLv2
+arbitraryHelloExtensions _ver = arbitrary
 
 instance Arbitrary CertificateType where
     arbitrary =
@@ -130,8 +128,7 @@ instance Arbitrary Handshake where
             , pure HelloRequest
             , pure ServerHelloDone
             , ClientKeyXchg . CKX_RSA <$> genByteString 48
-            , -- , liftM  ServerKeyXchg
-              liftM3 CertRequest arbitrary (return Nothing) (listOf arbitraryDN)
+            , CertRequest <$> arbitrary <*> arbitrary <*> listOf arbitraryDN
             , CertVerify <$> arbitrary
             , Finished <$> genByteString 12
             ]
@@ -186,7 +183,7 @@ prop_handshake_marshalling_id x = decodeHs (encodeHandshake x) == Right x
     decodeHs b = verifyResult (decodeHandshake cp) $ decodeHandshakeRecord b
     cp =
         CurrentParams
-            { cParamsVersion = TLS10
+            { cParamsVersion = TLS12
             , cParamsKeyXchgType = Just CipherKeyExchange_RSA
             }
 

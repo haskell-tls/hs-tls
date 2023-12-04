@@ -676,12 +676,9 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
         certSent <- usingHState ctx getClientCertSent
         when certSent $ do
             pubKey <- getLocalPublicKey ctx
-            mhashSig <- case ver of
-                TLS12 ->
+            mhashSig <-
                     let cHashSigs = supportedHashSignatures $ ctxSupported ctx
-                     in Just <$> getLocalHashSigAlg ctx signatureCompatible cHashSigs pubKey
-                _ -> return Nothing
-
+                     in getLocalHashSigAlg ctx signatureCompatible cHashSigs pubKey
             -- Fetch all handshake messages up to now.
             msgs <- usingHState ctx $ B.concat <$> getHandshakeMessages
             sigDig <- createCertificateVerify ctx ver pubKey mhashSig msgs
@@ -939,14 +936,8 @@ processServerKeyExchange ctx p = processCertificateRequest ctx p
 
 processCertificateRequest :: Context -> Handshake -> IO (RecvState IO)
 processCertificateRequest ctx (CertRequest cTypesSent sigAlgs dNames) = do
-    ver <- usingState_ ctx getVersion
-    when (ver == TLS12 && isNothing sigAlgs) $
-        throwCore $
-            Error_Protocol
-                "missing TLS 1.2 certificate request signature algorithms"
-                InternalError
     let cTypes = filter (<= lastSupportedCertificateType) cTypesSent
-    usingHState ctx $ setCertReqCBdata $ Just (cTypes, sigAlgs, dNames)
+    usingHState ctx $ setCertReqCBdata $ Just (cTypes, Just sigAlgs, dNames)
     return $ RecvStateHandshake (processServerHelloDone ctx)
 processCertificateRequest ctx p = do
     usingHState ctx $ setCertReqCBdata Nothing
