@@ -56,10 +56,7 @@ knownCiphers :: [Cipher]
 knownCiphers = ciphersuite_all ++ ciphersuite_weak
   where
     ciphersuite_weak =
-        [ cipher_DHE_DSA_RC4_SHA1
-        , cipher_RC4_128_MD5
-        , cipher_null_MD5
-        , cipher_null_SHA1
+        [ cipher_null_SHA1
         ]
 
 arbitraryCiphers :: Gen [Cipher]

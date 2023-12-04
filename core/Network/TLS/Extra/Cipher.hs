@@ -10,7 +10,6 @@ module Network.TLS.Extra.Cipher (
     ciphersuite_default_det,
     ciphersuite_all,
     ciphersuite_all_det,
-    ciphersuite_medium,
     ciphersuite_strong,
     ciphersuite_strong_det,
     ciphersuite_unencrypted,
@@ -64,13 +63,6 @@ module Network.TLS.Extra.Cipher (
     cipher_TLS13_CHACHA20POLY1305_SHA256,
     cipher_TLS13_AES128CCM_SHA256,
     cipher_TLS13_AES128CCM8_SHA256,
-
-    -- * obsolete and non-standard ciphers
-    cipher_RSA_3DES_EDE_CBC_SHA1,
-    cipher_RC4_128_MD5,
-    cipher_RC4_128_SHA1,
-    cipher_null_MD5,
-    cipher_DHE_DSA_RC4_SHA1,
 ) where
 
 import qualified Data.ByteString as B
@@ -82,8 +74,6 @@ import Network.TLS.Types (Version (..))
 
 import Crypto.Cipher.AES
 import qualified Crypto.Cipher.ChaChaPoly1305 as ChaChaPoly1305
-import qualified Crypto.Cipher.RC4 as RC4
-import Crypto.Cipher.TripleDES
 import Crypto.Cipher.Types hiding (Cipher, cipherName)
 import Crypto.Error
 import qualified Crypto.MAC.Poly1305 as Poly1305
@@ -222,30 +212,6 @@ noFail = throwCryptoError
 makeIV_ :: BlockCipher a => B.ByteString -> IV a
 makeIV_ = fromMaybe (error "makeIV_") . makeIV
 
-tripledes_ede :: BulkDirection -> BulkKey -> BulkBlock
-tripledes_ede BulkEncrypt key =
-    let ctx = noFail $ cipherInit key
-     in ( \iv input ->
-            let output = cbcEncrypt ctx (tripledes_iv iv) input
-             in (output, takelast 8 output)
-        )
-tripledes_ede BulkDecrypt key =
-    let ctx = noFail $ cipherInit key
-     in ( \iv input ->
-            let output = cbcDecrypt ctx (tripledes_iv iv) input
-             in (output, takelast 8 input)
-        )
-
-tripledes_iv :: BulkIV -> IV DES_EDE3
-tripledes_iv iv = fromMaybe (error "tripledes cipher iv internal error") $ makeIV iv
-
-rc4 :: BulkDirection -> BulkKey -> BulkStream
-rc4 _ bulkKey = BulkStream (combineRC4 $ RC4.initialize bulkKey)
-  where
-    combineRC4 ctx input =
-        let (ctx', output) = RC4.combine ctx input
-         in (output, BulkStream (combineRC4 ctx'))
-
 chacha20poly1305 :: BulkDirection -> BulkKey -> BulkAEAD
 chacha20poly1305 BulkEncrypt key nonce =
     let st = noFail (ChaChaPoly1305.nonce12 nonce >>= ChaChaPoly1305.initialize key)
@@ -383,17 +349,7 @@ complement_all =
     , cipher_DHE_DSA_AES128_SHA1
     , cipher_AES128CCM8_SHA256
     , cipher_AES256CCM8_SHA256
-    , cipher_RSA_3DES_EDE_CBC_SHA1
-    , cipher_RC4_128_SHA1
     , cipher_TLS13_AES128CCM8_SHA256
-    ]
-
-{-# DEPRECATED ciphersuite_medium "Use ciphersuite_strong or ciphersuite_default instead." #-}
-
--- | list of medium ciphers.
-ciphersuite_medium :: [Cipher]
-ciphersuite_medium =
-    [ cipher_RC4_128_SHA1
     ]
 
 -- | The strongest ciphers supported.  For ciphers with PFS, AEAD and SHA2, we
@@ -487,18 +443,15 @@ ciphersuite_dhe_dss :: [Cipher]
 ciphersuite_dhe_dss =
     [ cipher_DHE_DSA_AES256_SHA1
     , cipher_DHE_DSA_AES128_SHA1
-    , cipher_DHE_DSA_RC4_SHA1
     ]
 
 -- | all unencrypted ciphers, do not use on insecure network.
 ciphersuite_unencrypted :: [Cipher]
-ciphersuite_unencrypted = [cipher_null_MD5, cipher_null_SHA1]
+ciphersuite_unencrypted = [cipher_null_SHA1]
 
 bulk_null
-    , bulk_rc4
     , bulk_aes128
     , bulk_aes256
-    , bulk_tripledes_ede
     , bulk_aes128gcm
     , bulk_aes256gcm
         :: Bulk
@@ -520,16 +473,6 @@ bulk_null =
         }
   where
     passThrough _ _ = BulkStream go where go inp = (inp, BulkStream go)
-bulk_rc4 =
-    Bulk
-        { bulkName = "RC4-128"
-        , bulkKeySize = 16
-        , bulkIVSize = 0
-        , bulkExplicitIV = 0
-        , bulkAuthTagLen = 0
-        , bulkBlockSize = 0
-        , bulkF = BulkStreamF rc4
-        }
 bulk_aes128 =
     Bulk
         { bulkName = "AES128"
@@ -618,17 +561,6 @@ bulk_aes256 =
         , bulkF = BulkBlockF aes256cbc
         }
 
-bulk_tripledes_ede =
-    Bulk
-        { bulkName = "3DES-EDE-CBC"
-        , bulkKeySize = 24
-        , bulkIVSize = 8
-        , bulkExplicitIV = 0
-        , bulkAuthTagLen = 0
-        , bulkBlockSize = 8
-        , bulkF = BulkBlockF tripledes_ede
-        }
-
 bulk_chacha20poly1305 =
     Bulk
         { bulkName = "CHACHA20POLY1305"
@@ -651,19 +583,6 @@ bulk_aes256gcm_13 = bulk_aes256gcm{bulkIVSize = 12, bulkExplicitIV = 0}
 bulk_aes128ccm_13 = bulk_aes128ccm{bulkIVSize = 12, bulkExplicitIV = 0}
 bulk_aes128ccm8_13 = bulk_aes128ccm8{bulkIVSize = 12, bulkExplicitIV = 0}
 
--- | unencrypted cipher using RSA for key exchange and MD5 for digest
-cipher_null_MD5 :: Cipher
-cipher_null_MD5 =
-    Cipher
-        { cipherID = 0x0001
-        , cipherName = "RSA-null-MD5"
-        , cipherBulk = bulk_null
-        , cipherHash = MD5
-        , cipherPRFHash = Nothing
-        , cipherKeyExchange = CipherKeyExchange_RSA
-        , cipherMinVer = Nothing
-        }
-
 -- | unencrypted cipher using RSA for key exchange and SHA1 for digest
 cipher_null_SHA1 :: Cipher
 cipher_null_SHA1 =
@@ -671,45 +590,6 @@ cipher_null_SHA1 =
         { cipherID = 0x0002
         , cipherName = "RSA-null-SHA1"
         , cipherBulk = bulk_null
-        , cipherHash = SHA1
-        , cipherPRFHash = Nothing
-        , cipherKeyExchange = CipherKeyExchange_RSA
-        , cipherMinVer = Nothing
-        }
-
--- | RC4 cipher, RSA key exchange and MD5 for digest
-cipher_RC4_128_MD5 :: Cipher
-cipher_RC4_128_MD5 =
-    Cipher
-        { cipherID = 0x0004
-        , cipherName = "RSA-rc4-128-md5"
-        , cipherBulk = bulk_rc4
-        , cipherHash = MD5
-        , cipherPRFHash = Nothing
-        , cipherKeyExchange = CipherKeyExchange_RSA
-        , cipherMinVer = Nothing
-        }
-
--- | RC4 cipher, RSA key exchange and SHA1 for digest
-cipher_RC4_128_SHA1 :: Cipher
-cipher_RC4_128_SHA1 =
-    Cipher
-        { cipherID = 0x0005
-        , cipherName = "RSA-rc4-128-sha1"
-        , cipherBulk = bulk_rc4
-        , cipherHash = SHA1
-        , cipherPRFHash = Nothing
-        , cipherKeyExchange = CipherKeyExchange_RSA
-        , cipherMinVer = Nothing
-        }
-
--- | 3DES cipher (168 bit key), RSA key exchange and SHA1 for digest
-cipher_RSA_3DES_EDE_CBC_SHA1 :: Cipher
-cipher_RSA_3DES_EDE_CBC_SHA1 =
-    Cipher
-        { cipherID = 0x000A
-        , cipherName = "RSA-3DES-EDE-CBC-SHA1"
-        , cipherBulk = bulk_tripledes_ede
         , cipherHash = SHA1
         , cipherPRFHash = Nothing
         , cipherKeyExchange = CipherKeyExchange_RSA
@@ -784,16 +664,6 @@ cipher_AES256_SHA256 =
         , cipherPRFHash = Just SHA256
         , cipherKeyExchange = CipherKeyExchange_RSA
         , cipherMinVer = Just TLS12
-        }
-
--- This is not registered in IANA.
--- So, this will be removed in the next major release.
-cipher_DHE_DSA_RC4_SHA1 :: Cipher
-cipher_DHE_DSA_RC4_SHA1 =
-    cipher_DHE_DSA_AES128_SHA1
-        { cipherID = 0x0066
-        , cipherName = "DHE-DSA-RC4-SHA1"
-        , cipherBulk = bulk_rc4
         }
 
 cipher_DHE_RSA_AES128_SHA256 :: Cipher
