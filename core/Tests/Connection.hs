@@ -33,15 +33,13 @@ module Connection (
 ) where
 
 import Certificate
-import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.Async
-import Control.Concurrent.Chan
 import qualified Control.Exception as E
 import Control.Monad (unless, when)
 import Data.Default.Class
 import Data.IORef
-import Data.List (intersect, isInfixOf)
+import Data.List (intersect)
 import Data.X509
 import Network.TLS as TLS
 import Network.TLS.Extra

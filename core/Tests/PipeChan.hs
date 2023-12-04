@@ -9,9 +9,7 @@ module PipeChan (
     writePipeB,
 ) where
 
-import Control.Applicative
 import Control.Concurrent
-import Control.Concurrent.Chan
 import Control.Monad (forever)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B

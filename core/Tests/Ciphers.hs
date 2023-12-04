@@ -5,8 +5,6 @@ module Ciphers (
     propertyBulkFunctional,
 ) where
 
-import Control.Applicative ((<$>), (<*>))
-
 import Test.Tasty.QuickCheck
 
 import qualified Data.ByteString as B

@@ -15,7 +15,6 @@ import Data.Foldable (traverse_)
 import Data.List (intersect)
 import Data.Maybe
 
-import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Monad

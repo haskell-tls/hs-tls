@@ -7,7 +7,6 @@ module Marshalling (
     prop_handshake13_marshalling_id,
 ) where
 
-import Control.Applicative
 import Control.Monad
 import Network.TLS
 import Network.TLS.Internal

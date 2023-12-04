@@ -136,7 +136,7 @@ test-suite test-tls
         PubKey
 
     default-language: Haskell2010
-    ghc-options:      -Wall -fno-warn-unused-imports
+    ghc-options:      -Wall
     build-depends:
         base >=3 && <5,
         async >=2.0,
