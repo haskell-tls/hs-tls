@@ -64,6 +64,7 @@ module Network.TLS.Packet (
     putSession,
     putDNames,
     getDNames,
+    getHandshakeType,
 ) where
 
 import Data.ByteArray (ByteArrayAccess)

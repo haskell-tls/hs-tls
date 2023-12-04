@@ -168,13 +168,17 @@ module Network.TLS.Struct (
         HandshakeType_HelloRequest,
         HandshakeType_ClientHello,
         HandshakeType_ServerHello,
+        HandshakeType_NewSessionTicket,
+        HandshakeType_EndOfEarlyData,
+        HandshakeType_EncryptedExtensions,
         HandshakeType_Certificate,
         HandshakeType_ServerKeyXchg,
         HandshakeType_CertRequest,
         HandshakeType_ServerHelloDone,
         HandshakeType_CertVerify,
         HandshakeType_ClientKeyXchg,
-        HandshakeType_Finished
+        HandshakeType_Finished,
+        HandshakeType_KeyUpdate
     ),
     Handshake (..),
     packetType,
@@ -700,26 +704,34 @@ newtype HandshakeType = HandshakeType {fromHandshakeType :: Word8}
     deriving (Eq)
 
 {- FOURMOLU_DIABLE -}
-pattern HandshakeType_HelloRequest    :: HandshakeType
-pattern HandshakeType_HelloRequest     = HandshakeType 0
-pattern HandshakeType_ClientHello     :: HandshakeType
-pattern HandshakeType_ClientHello      = HandshakeType 1
-pattern HandshakeType_ServerHello     :: HandshakeType
-pattern HandshakeType_ServerHello      = HandshakeType 2
-pattern HandshakeType_Certificate     :: HandshakeType
-pattern HandshakeType_Certificate      = HandshakeType 11
-pattern HandshakeType_ServerKeyXchg   :: HandshakeType
-pattern HandshakeType_ServerKeyXchg    = HandshakeType 12
-pattern HandshakeType_CertRequest     :: HandshakeType
-pattern HandshakeType_CertRequest      = HandshakeType 13
-pattern HandshakeType_ServerHelloDone :: HandshakeType
-pattern HandshakeType_ServerHelloDone  = HandshakeType 14
-pattern HandshakeType_CertVerify      :: HandshakeType
-pattern HandshakeType_CertVerify       = HandshakeType 15
-pattern HandshakeType_ClientKeyXchg   :: HandshakeType
-pattern HandshakeType_ClientKeyXchg    = HandshakeType 16
-pattern HandshakeType_Finished        :: HandshakeType
-pattern HandshakeType_Finished         = HandshakeType 20
+pattern HandshakeType_HelloRequest        :: HandshakeType
+pattern HandshakeType_HelloRequest         = HandshakeType 0
+pattern HandshakeType_ClientHello         :: HandshakeType
+pattern HandshakeType_ClientHello          = HandshakeType 1
+pattern HandshakeType_ServerHello         :: HandshakeType
+pattern HandshakeType_ServerHello          = HandshakeType 2
+pattern HandshakeType_NewSessionTicket    :: HandshakeType
+pattern HandshakeType_NewSessionTicket     = HandshakeType 4
+pattern HandshakeType_EndOfEarlyData      :: HandshakeType
+pattern HandshakeType_EndOfEarlyData       = HandshakeType 5
+pattern HandshakeType_EncryptedExtensions :: HandshakeType
+pattern HandshakeType_EncryptedExtensions  = HandshakeType 8
+pattern HandshakeType_Certificate         :: HandshakeType
+pattern HandshakeType_Certificate          = HandshakeType 11
+pattern HandshakeType_ServerKeyXchg       :: HandshakeType
+pattern HandshakeType_ServerKeyXchg        = HandshakeType 12
+pattern HandshakeType_CertRequest         :: HandshakeType
+pattern HandshakeType_CertRequest          = HandshakeType 13
+pattern HandshakeType_ServerHelloDone     :: HandshakeType
+pattern HandshakeType_ServerHelloDone      = HandshakeType 14
+pattern HandshakeType_CertVerify          :: HandshakeType
+pattern HandshakeType_CertVerify           = HandshakeType 15
+pattern HandshakeType_ClientKeyXchg       :: HandshakeType
+pattern HandshakeType_ClientKeyXchg        = HandshakeType 16
+pattern HandshakeType_Finished            :: HandshakeType
+pattern HandshakeType_Finished             = HandshakeType 20
+pattern HandshakeType_KeyUpdate           :: HandshakeType
+pattern HandshakeType_KeyUpdate            = HandshakeType 24
 
 instance Show HandshakeType where
     show HandshakeType_HelloRequest    = "HandshakeType_HelloRequest"
