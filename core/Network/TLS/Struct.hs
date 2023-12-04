@@ -700,40 +700,39 @@ newtype HandshakeType = HandshakeType {fromHandshakeType :: Word8}
     deriving (Eq)
 
 {- FOURMOLU_DIABLE -}
-pattern HandshakeType_HelloRequest :: HandshakeType
-pattern HandshakeType_HelloRequest = HandshakeType 0
-pattern HandshakeType_ClientHello :: HandshakeType
-pattern HandshakeType_ClientHello = HandshakeType 1
-pattern HandshakeType_ServerHello :: HandshakeType
-pattern HandshakeType_ServerHello = HandshakeType 2
-pattern HandshakeType_Certificate :: HandshakeType
-pattern HandshakeType_Certificate = HandshakeType 11
-pattern HandshakeType_ServerKeyXchg :: HandshakeType
-pattern HandshakeType_ServerKeyXchg = HandshakeType 12
-pattern HandshakeType_CertRequest :: HandshakeType
-pattern HandshakeType_CertRequest = HandshakeType 13
+pattern HandshakeType_HelloRequest    :: HandshakeType
+pattern HandshakeType_HelloRequest     = HandshakeType 0
+pattern HandshakeType_ClientHello     :: HandshakeType
+pattern HandshakeType_ClientHello      = HandshakeType 1
+pattern HandshakeType_ServerHello     :: HandshakeType
+pattern HandshakeType_ServerHello      = HandshakeType 2
+pattern HandshakeType_Certificate     :: HandshakeType
+pattern HandshakeType_Certificate      = HandshakeType 11
+pattern HandshakeType_ServerKeyXchg   :: HandshakeType
+pattern HandshakeType_ServerKeyXchg    = HandshakeType 12
+pattern HandshakeType_CertRequest     :: HandshakeType
+pattern HandshakeType_CertRequest      = HandshakeType 13
 pattern HandshakeType_ServerHelloDone :: HandshakeType
-pattern HandshakeType_ServerHelloDone = HandshakeType 14
-pattern HandshakeType_CertVerify :: HandshakeType
-pattern HandshakeType_CertVerify = HandshakeType 15
-pattern HandshakeType_ClientKeyXchg :: HandshakeType
-pattern HandshakeType_ClientKeyXchg = HandshakeType 16
-pattern HandshakeType_Finished :: HandshakeType
-pattern HandshakeType_Finished = HandshakeType 20
+pattern HandshakeType_ServerHelloDone  = HandshakeType 14
+pattern HandshakeType_CertVerify      :: HandshakeType
+pattern HandshakeType_CertVerify       = HandshakeType 15
+pattern HandshakeType_ClientKeyXchg   :: HandshakeType
+pattern HandshakeType_ClientKeyXchg    = HandshakeType 16
+pattern HandshakeType_Finished        :: HandshakeType
+pattern HandshakeType_Finished         = HandshakeType 20
 
 instance Show HandshakeType where
-    show HandshakeType_HelloRequest = "HandshakeType_HelloRequest"
-    show HandshakeType_ClientHello = "HandshakeType_ClientHello"
-    show HandshakeType_ServerHello = "HandshakeType_ServerHello"
-    show HandshakeType_Certificate = "HandshakeType_Certificate"
-    show HandshakeType_ServerKeyXchg = "HandshakeType_ServerKeyXchg"
-    show HandshakeType_CertRequest = "HandshakeType_CertRequest"
+    show HandshakeType_HelloRequest    = "HandshakeType_HelloRequest"
+    show HandshakeType_ClientHello     = "HandshakeType_ClientHello"
+    show HandshakeType_ServerHello     = "HandshakeType_ServerHello"
+    show HandshakeType_Certificate     = "HandshakeType_Certificate"
+    show HandshakeType_ServerKeyXchg   = "HandshakeType_ServerKeyXchg"
+    show HandshakeType_CertRequest     = "HandshakeType_CertRequest"
     show HandshakeType_ServerHelloDone = "HandshakeType_ServerHelloDone"
-    show HandshakeType_CertVerify = "HandshakeType_CertVerify"
-    show HandshakeType_ClientKeyXchg = "HandshakeType_ClientKeyXchg"
-    show HandshakeType_Finished = "HandshakeType_Finished"
-    show (HandshakeType x) = "HandshakeType " ++ show x
-
+    show HandshakeType_CertVerify      = "HandshakeType_CertVerify"
+    show HandshakeType_ClientKeyXchg   = "HandshakeType_ClientKeyXchg"
+    show HandshakeType_Finished        = "HandshakeType_Finished"
+    show (HandshakeType x)             = "HandshakeType " ++ show x
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
