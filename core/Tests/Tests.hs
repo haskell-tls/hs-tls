@@ -550,7 +550,7 @@ prop_handshake_hashsignatures = do
             , cipher_ECDHE_RSA_AES128CBC_SHA
             , cipher_ECDHE_ECDSA_AES128CBC_SHA
             , cipher_DHE_RSA_AES128_SHA1
-            , cipher_DHE_DSS_AES128_SHA1
+            , cipher_DHE_DSA_AES128_SHA1
             , cipher_TLS13_AES128GCM_SHA256
             ]
     (clientParam, serverParam) <-
@@ -589,7 +589,7 @@ prop_handshake_hashsignatures = do
 -- choosing a server certificate.  Here peers allow DHE_RSA_AES128_SHA1 but
 -- the server RSA certificate has a SHA-1 signature that the client does not
 -- support.  Server may choose the DSA certificate only when cipher
--- DHE_DSS_AES128_SHA1 is allowed.  Otherwise it must fallback to the RSA
+-- DHE_DSA_AES128_SHA1 is allowed.  Otherwise it must fallback to the RSA
 -- certificate.
 prop_handshake_cert_fallback :: PropertyM IO ()
 prop_handshake_cert_fallback = do
@@ -599,9 +599,9 @@ prop_handshake_cert_fallback = do
         otherCiphers =
             [ cipher_ECDHE_RSA_AES256GCM_SHA384
             , cipher_ECDHE_RSA_AES128CBC_SHA
-            , cipher_DHE_DSS_AES128_SHA1
+            , cipher_DHE_DSA_AES128_SHA1
             ]
-        hashSignatures = [(HashSHA256, SignatureRSA), (HashSHA1, SignatureDSS)]
+        hashSignatures = [(HashSHA256, SignatureRSA), (HashSHA1, SignatureDSA)]
     chainRef <- run $ newIORef Nothing
     clientCiphers <- pick $ sublistOf otherCiphers
     serverCiphers <- pick $ sublistOf otherCiphers
@@ -623,8 +623,8 @@ prop_handshake_cert_fallback = do
                         }
                 }
         dssDisallowed =
-            cipher_DHE_DSS_AES128_SHA1 `notElem` clientCiphers
-                || cipher_DHE_DSS_AES128_SHA1 `notElem` serverCiphers
+            cipher_DHE_DSA_AES128_SHA1 `notElem` clientCiphers
+                || cipher_DHE_DSA_AES128_SHA1 `notElem` serverCiphers
     runTLSPipeSimple (clientParam', serverParam)
     serverChain <- run $ readIORef chainRef
     dssDisallowed `assertEq` isLeafRSA serverChain

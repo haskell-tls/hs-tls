@@ -73,5 +73,5 @@ availableECGroups = [P256, P384, P521, X25519, X448]
 
 -- Key-exchange signature algorithm, in close relation to ciphers
 -- (before TLS 1.3).
-data KeyExchangeSignatureAlg = KX_RSA | KX_DSS | KX_ECDSA
+data KeyExchangeSignatureAlg = KX_RSA | KX_DSA | KX_ECDSA
     deriving (Show, Eq)

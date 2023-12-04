@@ -34,7 +34,7 @@ import Network.TLS.Packet (
     encodeSignedDHParams,
     encodeSignedECDHParams,
     generateCertificateVerify_SSL,
-    generateCertificateVerify_SSL_DSS,
+    generateCertificateVerify_SSL_DSA,
  )
 import Network.TLS.Parameters
 import Network.TLS.State
@@ -49,7 +49,7 @@ decryptError msg = throwCore $ Error_Protocol msg DecryptError
 -- "signature_algorithms" only.
 certificateCompatible :: PubKey -> [CertificateType] -> Bool
 certificateCompatible (PubKeyRSA _) cTypes = CertificateType_RSA_Sign `elem` cTypes
-certificateCompatible (PubKeyDSA _) cTypes = CertificateType_DSS_Sign `elem` cTypes
+certificateCompatible (PubKeyDSA _) cTypes = CertificateType_DSA_Sign `elem` cTypes
 certificateCompatible (PubKeyEC _) cTypes = CertificateType_ECDSA_Sign `elem` cTypes
 certificateCompatible (PubKeyEd25519 _) _ = True
 certificateCompatible (PubKeyEd448 _) _ = True
@@ -63,7 +63,7 @@ signatureCompatible (PubKeyRSA pk) (HashSHA512, SignatureRSA) = kxCanUseRSApkcs1
 signatureCompatible (PubKeyRSA pk) (_, SignatureRSApssRSAeSHA256) = kxCanUseRSApss pk SHA256
 signatureCompatible (PubKeyRSA pk) (_, SignatureRSApssRSAeSHA384) = kxCanUseRSApss pk SHA384
 signatureCompatible (PubKeyRSA pk) (_, SignatureRSApssRSAeSHA512) = kxCanUseRSApss pk SHA512
-signatureCompatible (PubKeyDSA _) (_, SignatureDSS) = True
+signatureCompatible (PubKeyDSA _) (_, SignatureDSA) = True
 signatureCompatible (PubKeyEC _) (_, SignatureECDSA) = True
 signatureCompatible (PubKeyEd25519 _) (_, SignatureEd25519) = True
 signatureCompatible (PubKeyEd448 _) (_, SignatureEd448) = True
@@ -103,7 +103,7 @@ hashSigToCertType :: HashAndSignatureAlgorithm -> Maybe CertificateType
 --
 hashSigToCertType (_, SignatureRSA) = Just CertificateType_RSA_Sign
 --
-hashSigToCertType (_, SignatureDSS) = Just CertificateType_DSS_Sign
+hashSigToCertType (_, SignatureDSA) = Just CertificateType_DSA_Sign
 --
 hashSigToCertType (_, SignatureECDSA) = Just CertificateType_ECDSA_Sign
 --
@@ -173,7 +173,7 @@ prepareCertificateVerifySignatureData ctx usedVersion pubKey hashSigAlg msgs
                 PubKeyRSA _ ->
                     return
                         (hashInit SHA1_MD5, RSAParams SHA1_MD5 RSApkcs1, generateCertificateVerify_SSL)
-                PubKeyDSA _ -> return (hashInit SHA1, DSSParams, generateCertificateVerify_SSL_DSS)
+                PubKeyDSA _ -> return (hashInit SHA1, DSAParams, generateCertificateVerify_SSL_DSA)
                 _ ->
                     throwCore $
                         Error_Misc
@@ -200,11 +200,11 @@ signatureParams (PubKeyRSA _) hashSigAlg =
             error ("signature algorithm is incompatible with RSA: " ++ show sigAlg)
 signatureParams (PubKeyDSA _) hashSigAlg =
     case hashSigAlg of
-        Nothing -> DSSParams
-        Just (HashSHA1, SignatureDSS) -> DSSParams
-        Just (_, SignatureDSS) -> error "invalid DSA hash choice, only SHA1 allowed"
+        Nothing -> DSAParams
+        Just (HashSHA1, SignatureDSA) -> DSAParams
+        Just (_, SignatureDSA) -> error "invalid DSA hash choice, only SHA1 allowed"
         Just (_, sigAlg) ->
-            error ("signature algorithm is incompatible with DSS: " ++ show sigAlg)
+            error ("signature algorithm is incompatible with DSA: " ++ show sigAlg)
 signatureParams (PubKeyEC _) hashSigAlg =
     case hashSigAlg of
         Just (HashSHA512, SignatureECDSA) -> ECDSAParams SHA512

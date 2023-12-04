@@ -432,7 +432,7 @@ storePrivInfoClient ctx cTypes (cc, privkey) = do
 -- With TLS < 1.2 the server's @CertificateRequest@ does not carry
 -- a signature algorithm list.  It has a list of supported public
 -- key signing algorithms in the @certificate_types@ field.  The
--- hash is implicit.  It is 'SHA1' for DSS and 'SHA1_MD5' for RSA.
+-- hash is implicit.  It is 'SHA1' for DSA and 'SHA1_MD5' for RSA.
 --
 -- With TLS == 1.2 the server's @CertificateRequest@ always has a
 -- @supported_signature_algorithms@ list, as a fixed component of
@@ -594,7 +594,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     return $ extra `B.append` e
                 return (CKX_RSA encryptedPreMaster, setMasterSec)
             CipherKeyExchange_DHE_RSA -> getCKX_DHE
-            CipherKeyExchange_DHE_DSS -> getCKX_DHE
+            CipherKeyExchange_DHE_DSA -> getCKX_DHE
             CipherKeyExchange_ECDHE_RSA -> getCKX_ECDHE
             CipherKeyExchange_ECDHE_ECDSA -> getCKX_ECDHE
             _ ->
@@ -880,8 +880,8 @@ processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
         case (cipherKeyExchange cipher, skx) of
             (CipherKeyExchange_DHE_RSA, SKX_DHE_RSA dhparams signature) ->
                 doDHESignature dhparams signature KX_RSA
-            (CipherKeyExchange_DHE_DSS, SKX_DHE_DSS dhparams signature) ->
-                doDHESignature dhparams signature KX_DSS
+            (CipherKeyExchange_DHE_DSA, SKX_DHE_DSA dhparams signature) ->
+                doDHESignature dhparams signature KX_DSA
             (CipherKeyExchange_ECDHE_RSA, SKX_ECDHE_RSA ecdhparams signature) ->
                 doECDHESignature ecdhparams signature KX_RSA
             (CipherKeyExchange_ECDHE_ECDSA, SKX_ECDHE_ECDSA ecdhparams signature) ->
@@ -969,8 +969,8 @@ requiredCertKeyUsage cipher =
         CipherKeyExchange_DH_Anon -> [] -- unrestricted
         CipherKeyExchange_DHE_RSA -> rsaCompatibility
         CipherKeyExchange_ECDHE_RSA -> rsaCompatibility
-        CipherKeyExchange_DHE_DSS -> [KeyUsage_digitalSignature]
-        CipherKeyExchange_DH_DSS -> [KeyUsage_keyAgreement]
+        CipherKeyExchange_DHE_DSA -> [KeyUsage_digitalSignature]
+        CipherKeyExchange_DH_DSA -> [KeyUsage_keyAgreement]
         CipherKeyExchange_DH_RSA -> rsaCompatibility
         CipherKeyExchange_ECDH_ECDSA -> [KeyUsage_keyAgreement]
         CipherKeyExchange_ECDH_RSA -> rsaCompatibility

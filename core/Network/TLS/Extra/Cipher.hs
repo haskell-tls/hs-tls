@@ -33,8 +33,8 @@ module Network.TLS.Extra.Cipher (
     cipher_DHE_RSA_AES256_SHA1,
     cipher_DHE_RSA_AES128_SHA256,
     cipher_DHE_RSA_AES256_SHA256,
-    cipher_DHE_DSS_AES128_SHA1,
-    cipher_DHE_DSS_AES256_SHA1,
+    cipher_DHE_DSA_AES128_SHA1,
+    cipher_DHE_DSA_AES256_SHA1,
     cipher_DHE_RSA_AES128CCM_SHA256,
     cipher_DHE_RSA_AES128CCM8_SHA256,
     cipher_DHE_RSA_AES128GCM_SHA256,
@@ -72,7 +72,7 @@ module Network.TLS.Extra.Cipher (
     cipher_RC4_128_MD5,
     cipher_RC4_128_SHA1,
     cipher_null_MD5,
-    cipher_DHE_DSS_RC4_SHA1,
+    cipher_DHE_DSA_RC4_SHA1,
 ) where
 
 import qualified Data.ByteString as B
@@ -347,10 +347,10 @@ sets_default =
       SetOther [cipher_AES256_SHA256, cipher_AES128_SHA256]
     , -- Next the non-PFS + CBC + SHA1 ciphers
       SetOther [cipher_AES256_SHA1, cipher_AES128_SHA1]
-    , -- Nobody uses or should use DSS, RC4,  3DES or MD5
+    , -- Nobody uses or should use DSA, RC4,  3DES or MD5
       --  , SetOther
-      --      [ cipher_DHE_DSS_AES256_SHA1, cipher_DHE_DSS_AES128_SHA1
-      --      , cipher_DHE_DSS_RC4_SHA1, cipher_RC4_128_SHA1, cipher_RC4_128_MD5
+      --      [ cipher_DHE_DSA_AES256_SHA1, cipher_DHE_DSA_AES128_SHA1
+      --      , cipher_DHE_DSA_RC4_SHA1, cipher_RC4_128_SHA1, cipher_RC4_128_MD5
       --      , cipher_RSA_3DES_EDE_CBC_SHA1
       --      ]
       -- TLS13 (listed at the end but version is negotiated first)
@@ -389,8 +389,8 @@ complement_all =
     , cipher_ECDHE_ECDSA_AES256CCM8_SHA256
     , cipher_DHE_RSA_AES128CCM8_SHA256
     , cipher_DHE_RSA_AES256CCM8_SHA256
-    , cipher_DHE_DSS_AES256_SHA1
-    , cipher_DHE_DSS_AES128_SHA1
+    , cipher_DHE_DSA_AES256_SHA1
+    , cipher_DHE_DSA_AES128_SHA1
     , cipher_AES128CCM8_SHA256
     , cipher_AES256CCM8_SHA256
     , cipher_RSA_3DES_EDE_CBC_SHA1
@@ -498,9 +498,9 @@ ciphersuite_dhe_rsa =
 
 ciphersuite_dhe_dss :: [Cipher]
 ciphersuite_dhe_dss =
-    [ cipher_DHE_DSS_AES256_SHA1
-    , cipher_DHE_DSS_AES128_SHA1
-    , cipher_DHE_DSS_RC4_SHA1
+    [ cipher_DHE_DSA_AES256_SHA1
+    , cipher_DHE_DSA_AES128_SHA1
+    , cipher_DHE_DSA_RC4_SHA1
     ]
 
 -- | all unencrypted ciphers, do not use on insecure network.
@@ -743,15 +743,15 @@ cipher_AES128_SHA1 =
         }
 
 -- | AES cipher (128 bit key), DHE key exchanged signed by DSA and SHA1 for digest
-cipher_DHE_DSS_AES128_SHA1 :: Cipher
-cipher_DHE_DSS_AES128_SHA1 =
+cipher_DHE_DSA_AES128_SHA1 :: Cipher
+cipher_DHE_DSA_AES128_SHA1 =
     Cipher
         { cipherID = 0x0032
         , cipherName = "DHE-DSA-AES128-SHA1"
         , cipherBulk = bulk_aes128
         , cipherHash = SHA1
         , cipherPRFHash = Nothing
-        , cipherKeyExchange = CipherKeyExchange_DHE_DSS
+        , cipherKeyExchange = CipherKeyExchange_DHE_DSA
         , cipherMinVer = Nothing
         }
 
@@ -782,9 +782,9 @@ cipher_AES256_SHA1 =
         }
 
 -- | AES cipher (256 bit key), DHE key exchanged signed by DSA and SHA1 for digest
-cipher_DHE_DSS_AES256_SHA1 :: Cipher
-cipher_DHE_DSS_AES256_SHA1 =
-    cipher_DHE_DSS_AES128_SHA1
+cipher_DHE_DSA_AES256_SHA1 :: Cipher
+cipher_DHE_DSA_AES256_SHA1 =
+    cipher_DHE_DSA_AES128_SHA1
         { cipherID = 0x0038
         , cipherName = "DHE-DSA-AES256-SHA1"
         , cipherBulk = bulk_aes256
@@ -827,9 +827,9 @@ cipher_AES256_SHA256 =
 
 -- This is not registered in IANA.
 -- So, this will be removed in the next major release.
-cipher_DHE_DSS_RC4_SHA1 :: Cipher
-cipher_DHE_DSS_RC4_SHA1 =
-    cipher_DHE_DSS_AES128_SHA1
+cipher_DHE_DSA_RC4_SHA1 :: Cipher
+cipher_DHE_DSA_RC4_SHA1 =
+    cipher_DHE_DSA_AES128_SHA1
         { cipherID = 0x0066
         , cipherName = "DHE-DSA-RC4-SHA1"
         , cipherBulk = bulk_rc4

@@ -243,7 +243,7 @@ data Supported = Supported
     --
     -- Note: with TLS 1.3 some algorithms have been deprecated and will not be
     -- used even when listed in the parameter: MD5, SHA-1, SHA-224, RSA
-    -- PKCS#1, DSS.
+    -- PKCS#1, DSA.
     --
     -- Default:
     --
@@ -260,7 +260,7 @@ data Supported = Supported
     --   , (Struct.HashSHA384, SignatureRSA)
     --   , (Struct.HashSHA256, SignatureRSA)
     --   , (Struct.HashSHA1,   SignatureRSA)
-    --   , (Struct.HashSHA1,   SignatureDSS)
+    --   , (Struct.HashSHA1,   SignatureDSA)
     --   ]
     -- @
     , supportedSecureRenegotiation :: Bool
@@ -353,7 +353,7 @@ defaultSupported =
             , (Struct.HashSHA384, SignatureRSA)
             , (Struct.HashSHA256, SignatureRSA)
             , (Struct.HashSHA1, SignatureRSA)
-            , (Struct.HashSHA1, SignatureDSS)
+            , (Struct.HashSHA1, SignatureDSA)
             ]
         , supportedSecureRenegotiation = True
         , supportedClientInitiatedRenegotiation = False

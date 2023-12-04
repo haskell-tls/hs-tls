@@ -87,8 +87,8 @@ data CipherKeyExchangeType
     | CipherKeyExchange_DH_Anon
     | CipherKeyExchange_DHE_RSA
     | CipherKeyExchange_ECDHE_RSA
-    | CipherKeyExchange_DHE_DSS
-    | CipherKeyExchange_DH_DSS
+    | CipherKeyExchange_DHE_DSA
+    | CipherKeyExchange_DH_DSA
     | CipherKeyExchange_DH_RSA
     | CipherKeyExchange_ECDH_ECDSA
     | CipherKeyExchange_ECDH_RSA

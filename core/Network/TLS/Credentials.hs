@@ -154,7 +154,7 @@ getHashSignature :: SignedCertificate -> Maybe TLS.HashAndSignatureAlgorithm
 getHashSignature signed =
     case signedAlg $ getSigned signed of
         SignatureALG hashAlg PubKeyALG_RSA -> convertHash TLS.SignatureRSA hashAlg
-        SignatureALG hashAlg PubKeyALG_DSA -> convertHash TLS.SignatureDSS hashAlg
+        SignatureALG hashAlg PubKeyALG_DSA -> convertHash TLS.SignatureDSA hashAlg
         SignatureALG hashAlg PubKeyALG_EC -> convertHash TLS.SignatureECDSA hashAlg
         SignatureALG X509.HashSHA256 PubKeyALG_RSAPSS -> Just (TLS.HashIntrinsic, TLS.SignatureRSApssRSAeSHA256)
         SignatureALG X509.HashSHA384 PubKeyALG_RSAPSS -> Just (TLS.HashIntrinsic, TLS.SignatureRSApssRSAeSHA384)

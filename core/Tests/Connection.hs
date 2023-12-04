@@ -56,7 +56,7 @@ knownCiphers :: [Cipher]
 knownCiphers = ciphersuite_all ++ ciphersuite_weak
   where
     ciphersuite_weak =
-        [ cipher_DHE_DSS_RC4_SHA1
+        [ cipher_DHE_DSA_RC4_SHA1
         , cipher_RC4_128_MD5
         , cipher_null_MD5
         , cipher_null_SHA1
@@ -85,13 +85,13 @@ knownHashSignatures =
     , (TLS.HashSHA256, SignatureRSA)
     , (TLS.HashSHA256, SignatureECDSA)
     , (TLS.HashSHA1, SignatureRSA)
-    , (TLS.HashSHA1, SignatureDSS)
+    , (TLS.HashSHA1, SignatureDSA)
     ]
 
 knownHashSignatures13 :: [HashAndSignatureAlgorithm]
 knownHashSignatures13 = filter compat knownHashSignatures
   where
-    compat (h, s) = h /= TLS.HashSHA1 && s /= SignatureDSS && s /= SignatureRSA
+    compat (h, s) = h /= TLS.HashSHA1 && s /= SignatureDSA && s /= SignatureRSA
 
 arbitraryHashSignatures :: Version -> Gen [HashAndSignatureAlgorithm]
 arbitraryHashSignatures v = sublistOf l

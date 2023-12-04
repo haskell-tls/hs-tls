@@ -57,7 +57,7 @@ module Network.TLS.Struct (
     CertificateType (
         CertificateType,
         CertificateType_RSA_Sign,
-        CertificateType_DSS_Sign,
+        CertificateType_DSA_Sign,
         CertificateType_ECDSA_Sign,
         CertificateType_Ed25519_Sign,
         CertificateType_Ed448_Sign
@@ -79,7 +79,7 @@ module Network.TLS.Struct (
         ..,
         SignatureAnonymous,
         SignatureRSA,
-        SignatureDSS,
+        SignatureDSA,
         SignatureECDSA,
         SignatureRSApssRSAeSHA256,
         SignatureRSApssRSAeSHA384,
@@ -219,8 +219,8 @@ newtype CertificateType = CertificateType {fromCertificateType :: Word8}
 pattern CertificateType_RSA_Sign     :: CertificateType
 pattern CertificateType_RSA_Sign      = CertificateType 1
 -- | TLS10 and up, RFC5246
-pattern CertificateType_DSS_Sign     :: CertificateType
-pattern CertificateType_DSS_Sign      = CertificateType 2
+pattern CertificateType_DSA_Sign     :: CertificateType
+pattern CertificateType_DSA_Sign      = CertificateType 2
 -- | TLS10 and up, RFC8422
 pattern CertificateType_ECDSA_Sign   :: CertificateType
 pattern CertificateType_ECDSA_Sign    = CertificateType 64
@@ -235,7 +235,7 @@ pattern CertificateType_Ed448_Sign    = CertificateType 255 -- fixme:  dummy val
 
 instance Show CertificateType where
     show CertificateType_RSA_Sign     = "CertificateType_RSA_Sign"
-    show CertificateType_DSS_Sign     = "CertificateType_DSS_Sign"
+    show CertificateType_DSA_Sign     = "CertificateType_DSA_Sign"
     show CertificateType_ECDSA_Sign   = "CertificateType_ECDSA_Sign"
     show CertificateType_Ed25519_Sign = "CertificateType_Ed25519_Sign"
     show CertificateType_Ed448_Sign   = "CertificateType_Ed448_Sign"
@@ -294,10 +294,11 @@ pattern SignatureAnonymous        :: SignatureAlgorithm
 pattern SignatureAnonymous         = SignatureAlgorithm 0
 pattern SignatureRSA              :: SignatureAlgorithm
 pattern SignatureRSA               = SignatureAlgorithm 1
-pattern SignatureDSS              :: SignatureAlgorithm
-pattern SignatureDSS               = SignatureAlgorithm 2
+pattern SignatureDSA              :: SignatureAlgorithm
+pattern SignatureDSA               = SignatureAlgorithm 2
 pattern SignatureECDSA            :: SignatureAlgorithm
 pattern SignatureECDSA             = SignatureAlgorithm 3
+-- TLS 1.3 from here
 pattern SignatureRSApssRSAeSHA256 :: SignatureAlgorithm
 pattern SignatureRSApssRSAeSHA256  = SignatureAlgorithm 4
 pattern SignatureRSApssRSAeSHA384 :: SignatureAlgorithm
@@ -318,7 +319,7 @@ pattern SignatureRSApsspssSHA512   = SignatureAlgorithm 11
 instance Show SignatureAlgorithm where
     show SignatureAnonymous        = "SignatureAnonymous"
     show SignatureRSA              = "SignatureRSA"
-    show SignatureDSS              = "SignatureDSS"
+    show SignatureDSA              = "SignatureDSA"
     show SignatureECDSA            = "SignatureECDSA"
     show SignatureRSApssRSAeSHA256 = "SignatureRSApssRSAeSHA256"
     show SignatureRSApssRSAeSHA384 = "SignatureRSApssRSAeSHA384"
@@ -803,12 +804,12 @@ data ServerRSAParams = ServerRSAParams
 
 data ServerKeyXchgAlgorithmData
     = SKX_DH_Anon ServerDHParams
-    | SKX_DHE_DSS ServerDHParams DigitallySigned
+    | SKX_DHE_DSA ServerDHParams DigitallySigned
     | SKX_DHE_RSA ServerDHParams DigitallySigned
     | SKX_ECDHE_RSA ServerECDHParams DigitallySigned
     | SKX_ECDHE_ECDSA ServerECDHParams DigitallySigned
     | SKX_RSA (Maybe ServerRSAParams)
-    | SKX_DH_DSS (Maybe ServerRSAParams)
+    | SKX_DH_DSA (Maybe ServerRSAParams)
     | SKX_DH_RSA (Maybe ServerRSAParams)
     | SKX_Unparsed ByteString -- if we parse the server key xchg before knowing the actual cipher, we end up with this structure.
     | SKX_Unknown ByteString

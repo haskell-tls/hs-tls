@@ -66,7 +66,7 @@ instance Arbitrary SignatureAlgorithm where
         elements
             [ SignatureAnonymous
             , SignatureRSA
-            , SignatureDSS
+            , SignatureDSA
             , SignatureECDSA
             , SignatureRSApssRSAeSHA256
             , SignatureRSApssRSAeSHA384
@@ -104,7 +104,7 @@ instance Arbitrary CertificateType where
     arbitrary =
         elements
             [ CertificateType_RSA_Sign
-            , CertificateType_DSS_Sign
+            , CertificateType_DSA_Sign
             , CertificateType_ECDSA_Sign
             ]
 

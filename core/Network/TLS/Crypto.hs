@@ -93,7 +93,7 @@ isKeyExchangeSignatureKey :: KeyExchangeSignatureAlg -> PubKey -> Bool
 isKeyExchangeSignatureKey = f
   where
     f KX_RSA (PubKeyRSA _) = True
-    f KX_DSS (PubKeyDSA _) = True
+    f KX_DSA (PubKeyDSA _) = True
     f KX_ECDSA (PubKeyEC _) = True
     f KX_ECDSA (PubKeyEd25519 _) = True
     f KX_ECDSA (PubKeyEd448 _) = True
@@ -104,7 +104,7 @@ findKeyExchangeSignatureAlg
 findKeyExchangeSignatureAlg keyPair =
     case keyPair of
         (PubKeyRSA _, PrivKeyRSA _) -> Just KX_RSA
-        (PubKeyDSA _, PrivKeyDSA _) -> Just KX_DSS
+        (PubKeyDSA _, PrivKeyDSA _) -> Just KX_DSA
         (PubKeyEC _, PrivKeyEC _) -> Just KX_ECDSA
         (PubKeyEd25519 _, PrivKeyEd25519 _) -> Just KX_ECDSA
         (PubKeyEd448 _, PrivKeyEd448 _) -> Just KX_ECDSA
@@ -251,7 +251,7 @@ kxCanUseRSApss pk h = numBits (RSA.public_n pk) >= 16 * hashDigestSize h + 10
 -- FIXME add RSAPSSParams
 data SignatureParams
     = RSAParams Hash RSAEncoding
-    | DSSParams
+    | DSAParams
     | ECDSAParams Hash
     | Ed25519Params
     | Ed448Params
@@ -264,7 +264,7 @@ data SignatureParams
 kxVerify :: PublicKey -> SignatureParams -> ByteString -> ByteString -> Bool
 kxVerify (PubKeyRSA pk) (RSAParams alg RSApkcs1) msg sign = rsaVerifyHash alg pk msg sign
 kxVerify (PubKeyRSA pk) (RSAParams alg RSApss) msg sign = rsapssVerifyHash alg pk msg sign
-kxVerify (PubKeyDSA pk) DSSParams msg signBS =
+kxVerify (PubKeyDSA pk) DSAParams msg signBS =
     case dsaToSignature signBS of
         Just sig -> DSA.verify H.SHA1 pk sig msg
         _ -> False
@@ -331,7 +331,7 @@ kxSign (PrivKeyRSA pk) (PubKeyRSA _) (RSAParams hashAlg RSApkcs1) msg =
     generalizeRSAError <$> rsaSignHash hashAlg pk msg
 kxSign (PrivKeyRSA pk) (PubKeyRSA _) (RSAParams hashAlg RSApss) msg =
     generalizeRSAError <$> rsapssSignHash hashAlg pk msg
-kxSign (PrivKeyDSA pk) (PubKeyDSA _) DSSParams msg = do
+kxSign (PrivKeyDSA pk) (PubKeyDSA _) DSAParams msg = do
     sign <- DSA.sign pk H.SHA1 msg
     return (Right $ encodeASN1' DER $ dsaSequence sign)
   where

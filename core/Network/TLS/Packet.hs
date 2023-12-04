@@ -47,7 +47,7 @@ module Network.TLS.Packet (
     generateClientFinished,
     generateServerFinished,
     generateCertificateVerify_SSL,
-    generateCertificateVerify_SSL_DSS,
+    generateCertificateVerify_SSL_DSA,
 
     -- * for extensions parsing
     getSignatureHashAlgorithm,
@@ -284,7 +284,7 @@ decodeClientKeyXchg cp =
   where
     parseCKE CipherKeyExchange_RSA = CKX_RSA <$> (remaining >>= getBytes)
     parseCKE CipherKeyExchange_DHE_RSA = parseClientDHPublic
-    parseCKE CipherKeyExchange_DHE_DSS = parseClientDHPublic
+    parseCKE CipherKeyExchange_DHE_DSA = parseClientDHPublic
     parseCKE CipherKeyExchange_DH_Anon = parseClientDHPublic
     parseCKE CipherKeyExchange_ECDHE_RSA = parseClientECDHPublic
     parseCKE CipherKeyExchange_ECDHE_ECDSA = parseClientECDHPublic
@@ -317,10 +317,10 @@ decodeServerKeyXchgAlgorithmData ver cke = toCKE
             dhparams <- getServerDHParams
             signature <- getDigitallySigned ver
             return $ SKX_DHE_RSA dhparams signature
-        CipherKeyExchange_DHE_DSS -> do
+        CipherKeyExchange_DHE_DSA -> do
             dhparams <- getServerDHParams
             signature <- getDigitallySigned ver
-            return $ SKX_DHE_DSS dhparams signature
+            return $ SKX_DHE_DSA dhparams signature
         CipherKeyExchange_ECDHE_RSA -> do
             ecdhparams <- getServerECDHParams
             signature <- getDigitallySigned ver
@@ -383,7 +383,7 @@ encodeHandshakeContent (ServerKeyXchg skg) =
         SKX_RSA _ -> error "encodeHandshakeContent SKX_RSA not implemented"
         SKX_DH_Anon params -> putServerDHParams params
         SKX_DHE_RSA params sig -> putServerDHParams params >> putDigitallySigned sig
-        SKX_DHE_DSS params sig -> putServerDHParams params >> putDigitallySigned sig
+        SKX_DHE_DSA params sig -> putServerDHParams params >> putDigitallySigned sig
         SKX_ECDHE_RSA params sig -> putServerECDHParams params >> putDigitallySigned sig
         SKX_ECDHE_ECDSA params sig -> putServerECDHParams params >> putDigitallySigned sig
         SKX_Unparsed bytes -> putBytes bytes
@@ -682,8 +682,8 @@ generateCertificateVerify_SSL :: ByteString -> HashCtx -> ByteString
 generateCertificateVerify_SSL = generateFinished_SSL ""
 
 {- returns *input* before final SHA1 -}
-generateCertificateVerify_SSL_DSS :: ByteString -> HashCtx -> ByteString
-generateCertificateVerify_SSL_DSS mastersecret hashctx = toHash
+generateCertificateVerify_SSL_DSA :: ByteString -> HashCtx -> ByteString
+generateCertificateVerify_SSL_DSA mastersecret hashctx = toHash
   where
     toHash = B.concat [mastersecret, pad2, sha1left]
 
