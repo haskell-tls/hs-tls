@@ -802,6 +802,10 @@ data ServerRSAParams = ServerRSAParams
 
 ----------------------------------------------------------------
 
+data ServerDSAParams = ServerDSAParams deriving (Show, Eq)
+
+----------------------------------------------------------------
+
 data ServerKeyXchgAlgorithmData
     = SKX_DH_Anon ServerDHParams
     | SKX_DHE_DSA ServerDHParams DigitallySigned
@@ -809,7 +813,7 @@ data ServerKeyXchgAlgorithmData
     | SKX_ECDHE_RSA ServerECDHParams DigitallySigned
     | SKX_ECDHE_ECDSA ServerECDHParams DigitallySigned
     | SKX_RSA (Maybe ServerRSAParams)
-    | SKX_DH_DSA (Maybe ServerRSAParams)
+    | SKX_DH_DSA (Maybe ServerDSAParams)
     | SKX_DH_RSA (Maybe ServerRSAParams)
     | SKX_Unparsed ByteString -- if we parse the server key xchg before knowing the actual cipher, we end up with this structure.
     | SKX_Unknown ByteString
