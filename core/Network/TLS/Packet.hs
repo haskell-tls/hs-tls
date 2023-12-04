@@ -130,11 +130,10 @@ encodeHeaderNoVer (Header pt _ len) = runPut (putHeaderType pt >> putWord16 len)
  -}
 decodeAlert :: Get (AlertLevel, AlertDescription)
 decodeAlert = do
-    al <- getWord8
+    al <- AlertLevel <$> getWord8
     ad <- getWord8
-    case (valToType al, valToType ad) of
-        (Just a, Just d) -> return (a, d)
-        (Nothing, _) -> fail "cannot decode alert level"
+    case (al, valToType ad) of
+        (a, Just d) -> return (a, d)
         (_, Nothing) -> fail "cannot decode alert description"
 
 decodeAlerts :: ByteString -> Either TLSError [(AlertLevel, AlertDescription)]
@@ -149,7 +148,7 @@ decodeAlerts = runGetErr "alerts" loop
 encodeAlerts :: [(AlertLevel, AlertDescription)] -> ByteString
 encodeAlerts l = runPut $ mapM_ encodeAlert l
   where
-    encodeAlert (al, ad) = putWord8 (valOfType al) >> putWord8 (valOfType ad)
+    encodeAlert (al, ad) = putWord8 (fromAlertLevel al) >> putWord8 (valOfType ad)
 
 {- decode and encode HANDSHAKE -}
 decodeHandshakeRecord :: ByteString -> GetResult (HandshakeType, ByteString)

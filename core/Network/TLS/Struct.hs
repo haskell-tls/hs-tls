@@ -122,7 +122,11 @@ module Network.TLS.Struct (
     SessionID,
     Session (..),
     SessionData (..),
-    AlertLevel (..),
+    AlertLevel (
+        ..,
+        AlertLevel_Warning,
+        AlertLevel_Fatal
+    ),
     AlertDescription (..),
     HandshakeType (
         ..,
@@ -534,10 +538,21 @@ instance Show ExtensionRaw where
 
 ----------------------------------------------------------------
 
-data AlertLevel
-    = AlertLevel_Warning
-    | AlertLevel_Fatal
-    deriving (Show, Eq)
+newtype AlertLevel = AlertLevel {fromAlertLevel :: Word8} deriving (Eq)
+
+{- FOURMOLU_DISABLE -}
+pattern AlertLevel_Warning :: AlertLevel
+pattern AlertLevel_Warning  = AlertLevel 1
+pattern AlertLevel_Fatal   :: AlertLevel
+pattern AlertLevel_Fatal    = AlertLevel 2
+
+instance Show AlertLevel where
+    show AlertLevel_Warning = "AlertLevel_Warning"
+    show AlertLevel_Fatal   = "AlertLevel_Fatal"
+    show (AlertLevel x)     = "AlertLevel " ++ show x
+{- FOURMOLU_ENABLE -}
+
+----------------------------------------------------------------
 
 data AlertDescription
     = CloseNotify
@@ -749,14 +764,6 @@ typeOfHandshake Finished{}      = HandshakeType_Finished
 class TypeValuable a where
     valOfType :: a -> Word8
     valToType :: Word8 -> Maybe a
-
-instance TypeValuable AlertLevel where
-    valOfType AlertLevel_Warning = 1
-    valOfType AlertLevel_Fatal = 2
-
-    valToType 1 = Just AlertLevel_Warning
-    valToType 2 = Just AlertLevel_Fatal
-    valToType _ = Nothing
 
 instance TypeValuable AlertDescription where
     valOfType CloseNotify = 0
