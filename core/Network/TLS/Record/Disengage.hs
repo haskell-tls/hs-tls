@@ -22,7 +22,6 @@ import Crypto.Cipher.Types (AuthTag (..))
 import qualified Data.ByteArray as B (convert, xor)
 import qualified Data.ByteString as B
 import Data.Maybe (fromJust)
-import Network.TLS.Cap
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Crypto
@@ -119,15 +118,13 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
     blockSize = bulkBlockSize bulk
     econtentLen = B.length econtent
 
-    explicitIV = hasExplicitBlockIV ver
-
     sanityCheckError =
         throwError
             (Error_Packet "encrypted content too small for encryption parameters")
 
     decryptOf :: BulkState -> RecordM ByteString
     decryptOf (BulkStateBlock decryptF) = do
-        let minContent = (if explicitIV then bulkIVSize bulk else 0) + max (macSize + 1) blockSize
+        let minContent = bulkIVSize bulk + max (macSize + 1) blockSize
 
         -- check if we have enough bytes to cover the minimum for this cipher
         when
@@ -135,10 +132,7 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
             sanityCheckError
 
         {- update IV -}
-        (iv, econtent') <-
-            if explicitIV
-                then get2o econtent (bulkIVSize bulk, econtentLen - bulkIVSize bulk)
-                else return (cstIV cst, econtent)
+        (iv, econtent') <- get2o econtent (bulkIVSize bulk, econtentLen - bulkIVSize bulk)
         let (content', iv') = decryptF iv econtent'
         modify $ \txs -> txs{stCryptState = cst{cstIV = iv'}}
 

@@ -46,8 +46,6 @@ module Network.TLS.Packet (
     generateKeyBlock,
     generateClientFinished,
     generateServerFinished,
-    generateCertificateVerify_SSL,
-    generateCertificateVerify_SSL_DSA,
 
     -- * for extensions parsing
     getSignatureHashAlgorithm,
@@ -70,13 +68,11 @@ module Network.TLS.Packet (
 import Data.ByteArray (ByteArrayAccess)
 import qualified Data.ByteArray as B (convert)
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8 as BC
 import Data.X509 (
     CertificateChainRaw (..),
     decodeCertificateChain,
     encodeCertificateChain,
  )
-import Network.TLS.Cap
 import Network.TLS.Cipher (Cipher (..), CipherKeyExchangeType (..))
 import Network.TLS.Crypto
 import Network.TLS.Imports
@@ -206,7 +202,7 @@ decodeClientHello = do
     compressions <- getWords8
     r <- remaining
     exts <-
-        if hasHelloExtensions ver && r > 0
+        if r > 0
             then fromIntegral <$> getWord16 >>= getExtensions
             else do
                 rest <- remaining
@@ -223,7 +219,7 @@ decodeServerHello = do
     compressionid <- getWord8
     r <- remaining
     exts <-
-        if hasHelloExtensions ver && r > 0
+        if r > 0
             then fromIntegral <$> getWord16 >>= getExtensions
             else return []
     return $ ServerHello ver random session cipherid compressionid exts
@@ -562,18 +558,6 @@ getPRF ver ciph
     | maybe True (< TLS12) (cipherMinVer ciph) = prf_SHA256
     | otherwise = prf_TLS ver $ fromMaybe SHA256 $ cipherPRFHash ciph
 
-generateMasterSecret_SSL
-    :: ByteArrayAccess preMaster
-    => preMaster
-    -> ClientRandom
-    -> ServerRandom
-    -> ByteString
-generateMasterSecret_SSL premasterSecret (ClientRandom c) (ServerRandom s) =
-    B.concat $ map computeMD5 ["A", "BB", "CCC"]
-  where
-    computeMD5 label = hash MD5 $ B.concat [B.convert premasterSecret, computeSHA1 label]
-    computeSHA1 label = hash SHA1 $ B.concat [label, B.convert premasterSecret, c, s]
-
 generateMasterSecret_TLS
     :: ByteArrayAccess preMaster
     => PRF
@@ -594,8 +578,6 @@ generateMasterSecret
     -> ClientRandom
     -> ServerRandom
     -> ByteString
-generateMasterSecret SSL2 _ = generateMasterSecret_SSL
-generateMasterSecret SSL3 _ = generateMasterSecret_SSL
 generateMasterSecret v c = generateMasterSecret_TLS $ getPRF v c
 
 generateExtendedMasterSec
@@ -617,15 +599,6 @@ generateKeyBlock_TLS prf (ClientRandom c) (ServerRandom s) mastersecret kbsize =
   where
     seed = B.concat ["key expansion", s, c]
 
-generateKeyBlock_SSL
-    :: ClientRandom -> ServerRandom -> ByteString -> Int -> ByteString
-generateKeyBlock_SSL (ClientRandom c) (ServerRandom s) mastersecret kbsize =
-    B.concat $ map computeMD5 $ take ((kbsize `div` 16) + 1) labels
-  where
-    labels = [uncurry BC.replicate x | x <- zip [1 ..] ['A' .. 'Z']]
-    computeMD5 label = hash MD5 $ B.concat [mastersecret, computeSHA1 label]
-    computeSHA1 label = hash SHA1 $ B.concat [label, mastersecret, s, c]
-
 generateKeyBlock
     :: Version
     -> Cipher
@@ -634,28 +607,12 @@ generateKeyBlock
     -> ByteString
     -> Int
     -> ByteString
-generateKeyBlock SSL2 _ = generateKeyBlock_SSL
-generateKeyBlock SSL3 _ = generateKeyBlock_SSL
 generateKeyBlock v c = generateKeyBlock_TLS $ getPRF v c
 
 generateFinished_TLS :: PRF -> ByteString -> ByteString -> HashCtx -> ByteString
 generateFinished_TLS prf label mastersecret hashctx = prf mastersecret seed 12
   where
     seed = B.concat [label, hashFinal hashctx]
-
-generateFinished_SSL :: ByteString -> ByteString -> HashCtx -> ByteString
-generateFinished_SSL sender mastersecret hashctx = B.concat [md5hash, sha1hash]
-  where
-    md5hash = hash MD5 $ B.concat [mastersecret, pad2, md5left]
-    sha1hash = hash SHA1 $ B.concat [mastersecret, B.take 40 pad2, sha1left]
-
-    lefthash =
-        hashFinal $
-            flip hashUpdateSSL (pad1, B.take 40 pad1) $
-                foldl hashUpdate hashctx [sender, mastersecret]
-    (md5left, sha1left) = B.splitAt 16 lefthash
-    pad2 = B.replicate 48 0x5c
-    pad1 = B.replicate 48 0x36
 
 generateClientFinished
     :: Version
@@ -664,8 +621,7 @@ generateClientFinished
     -> HashCtx
     -> ByteString
 generateClientFinished ver ciph
-    | ver < TLS10 = generateFinished_SSL "CLNT"
-    | otherwise = generateFinished_TLS (getPRF ver ciph) "client finished"
+    = generateFinished_TLS (getPRF ver ciph) "client finished"
 
 generateServerFinished
     :: Version
@@ -674,25 +630,7 @@ generateServerFinished
     -> HashCtx
     -> ByteString
 generateServerFinished ver ciph
-    | ver < TLS10 = generateFinished_SSL "SRVR"
-    | otherwise = generateFinished_TLS (getPRF ver ciph) "server finished"
-
-{- returns *output* after final MD5/SHA1 -}
-generateCertificateVerify_SSL :: ByteString -> HashCtx -> ByteString
-generateCertificateVerify_SSL = generateFinished_SSL ""
-
-{- returns *input* before final SHA1 -}
-generateCertificateVerify_SSL_DSA :: ByteString -> HashCtx -> ByteString
-generateCertificateVerify_SSL_DSA mastersecret hashctx = toHash
-  where
-    toHash = B.concat [mastersecret, pad2, sha1left]
-
-    sha1left =
-        hashFinal $
-            flip hashUpdate pad1 $
-                hashUpdate hashctx mastersecret
-    pad2 = B.replicate 40 0x5c
-    pad1 = B.replicate 40 0x36
+     = generateFinished_TLS (getPRF ver ciph) "server finished"
 
 encodeSignedDHParams
     :: ServerDHParams -> ClientRandom -> ServerRandom -> ByteString

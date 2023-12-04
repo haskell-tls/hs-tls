@@ -13,7 +13,7 @@
 -- use of the advanced type system, high level constructions and
 -- common Haskell features.
 --
--- Currently implement the SSL3.0, TLS1.0, TLS1.1, TLS1.2 and TLS 1.3
+-- Currently implement the TLS1.2 and TLS 1.3
 -- protocol, and support RSA and Ephemeral (Elliptic curve and
 -- regular) Diffie Hellman key exchanges, and many extensions.
 --

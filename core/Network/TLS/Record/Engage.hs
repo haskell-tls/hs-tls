@@ -22,7 +22,6 @@ import Crypto.Cipher.Types (AuthTag (..))
 
 import qualified Data.ByteArray as B (convert, xor)
 import qualified Data.ByteString as B
-import Network.TLS.Cap
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Imports
@@ -89,7 +88,6 @@ encryptContent tls13 record content = do
 encryptBlock :: BulkBlock -> ByteString -> Bulk -> RecordM ByteString
 encryptBlock encryptF content bulk = do
     cst <- getCryptState
-    ver <- getRecordVersion
     let blockSize = fromIntegral $ bulkBlockSize bulk
     let msg_len = B.length content
     let padding =
@@ -100,13 +98,9 @@ encryptBlock encryptF content bulk = do
                          in B.replicate padbyte' (fromIntegral (padbyte' - 1))
                 else B.empty
 
-    let (e, iv') = encryptF (cstIV cst) $ B.concat [content, padding]
+    let (e, _iv') = encryptF (cstIV cst) $ B.concat [content, padding]
 
-    if hasExplicitBlockIV ver
-        then return $ B.concat [cstIV cst, e]
-        else do
-            modify $ \tstate -> tstate{stCryptState = cst{cstIV = iv'}}
-            return e
+    return $ B.concat [cstIV cst, e]
 
 encryptStream :: BulkStream -> ByteString -> RecordM ByteString
 encryptStream (BulkStream encryptF) content = do

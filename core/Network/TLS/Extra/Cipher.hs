@@ -19,8 +19,6 @@ module Network.TLS.Extra.Cipher (
 
     -- * individual ciphers
     cipher_null_SHA1,
-    cipher_AES128_SHA1,
-    cipher_AES256_SHA1,
     cipher_AES128_SHA256,
     cipher_AES256_SHA256,
     cipher_AES128CCM_SHA256,
@@ -345,15 +343,7 @@ sets_default =
         [cipher_AES128CCM_SHA256, cipher_AES256CCM_SHA256]
     , -- Next the non-PFS + CBC + SHA2 ciphers
       SetOther [cipher_AES256_SHA256, cipher_AES128_SHA256]
-    , -- Next the non-PFS + CBC + SHA1 ciphers
-      SetOther [cipher_AES256_SHA1, cipher_AES128_SHA1]
-    , -- Nobody uses or should use DSA, RC4,  3DES or MD5
-      --  , SetOther
-      --      [ cipher_DHE_DSA_AES256_SHA1, cipher_DHE_DSA_AES128_SHA1
-      --      , cipher_DHE_DSA_RC4_SHA1, cipher_RC4_128_SHA1, cipher_RC4_128_MD5
-      --      , cipher_RSA_3DES_EDE_CBC_SHA1
-      --      ]
-      -- TLS13 (listed at the end but version is negotiated first)
+    , -- TLS13 (listed at the end but version is negotiated first)
       SetAead
         [cipher_TLS13_AES128GCM_SHA256, cipher_TLS13_AES256GCM_SHA384]
         [cipher_TLS13_CHACHA20POLY1305_SHA256]
@@ -404,7 +394,6 @@ complement_all =
 ciphersuite_medium :: [Cipher]
 ciphersuite_medium =
     [ cipher_RC4_128_SHA1
-    , cipher_AES128_SHA1
     ]
 
 -- | The strongest ciphers supported.  For ciphers with PFS, AEAD and SHA2, we
@@ -468,8 +457,6 @@ sets_strong =
         [cipher_AES256CCM_SHA256]
     , -- Neither PFS nor AEAD, just SHA2
       SetOther [cipher_AES256_SHA256]
-    , -- Last resort no PFS, AEAD or SHA2
-      SetOther [cipher_AES256_SHA1]
     , -- TLS13 (listed at the end but version is negotiated first)
       SetAead
         [cipher_TLS13_AES256GCM_SHA384]
@@ -729,19 +716,6 @@ cipher_RSA_3DES_EDE_CBC_SHA1 =
         , cipherMinVer = Nothing
         }
 
--- | AES cipher (128 bit key), RSA key exchange and SHA1 for digest
-cipher_AES128_SHA1 :: Cipher
-cipher_AES128_SHA1 =
-    Cipher
-        { cipherID = 0x002F
-        , cipherName = "RSA-AES128-SHA1"
-        , cipherBulk = bulk_aes128
-        , cipherHash = SHA1
-        , cipherPRFHash = Nothing
-        , cipherKeyExchange = CipherKeyExchange_RSA
-        , cipherMinVer = Just SSL3
-        }
-
 -- | AES cipher (128 bit key), DHE key exchanged signed by DSA and SHA1 for digest
 cipher_DHE_DSA_AES128_SHA1 :: Cipher
 cipher_DHE_DSA_AES128_SHA1 =
@@ -766,19 +740,6 @@ cipher_DHE_RSA_AES128_SHA1 =
         , cipherPRFHash = Nothing
         , cipherKeyExchange = CipherKeyExchange_DHE_RSA
         , cipherMinVer = Nothing
-        }
-
--- | AES cipher (256 bit key), RSA key exchange and SHA1 for digest
-cipher_AES256_SHA1 :: Cipher
-cipher_AES256_SHA1 =
-    Cipher
-        { cipherID = 0x0035
-        , cipherName = "RSA-AES256-SHA1"
-        , cipherBulk = bulk_aes256
-        , cipherHash = SHA1
-        , cipherPRFHash = Nothing
-        , cipherKeyExchange = CipherKeyExchange_RSA
-        , cipherMinVer = Just SSL3
         }
 
 -- | AES cipher (256 bit key), DHE key exchanged signed by DSA and SHA1 for digest

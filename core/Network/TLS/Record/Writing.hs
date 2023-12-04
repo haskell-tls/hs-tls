@@ -12,15 +12,12 @@ module Network.TLS.Record.Writing (
     sendBytes,
 ) where
 
-import Network.TLS.Cap
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
 import Network.TLS.Hooks
 import Network.TLS.Imports
 import Network.TLS.Packet
-import Network.TLS.Parameters
 import Network.TLS.Record
-import Network.TLS.State
 import Network.TLS.Struct
 
 import Control.Concurrent.MVar
@@ -34,10 +31,6 @@ encodeRecord ctx = prepareRecord ctx . encodeRecordM
 -- so we use cstIV as is, however in other case we generate an explicit IV
 prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
 prepareRecord ctx f = do
-    ver <-
-        usingState_
-            ctx
-            (getVersionWithDefault $ maximum $ supportedVersions $ ctxSupported ctx)
     txState <- readMVar $ ctxTxState ctx
     let sz = case stCipher txState of
             Nothing -> 0
@@ -45,7 +38,7 @@ prepareRecord ctx f = do
                 if hasRecordIV $ bulkF $ cipherBulk cipher
                     then bulkIVSize $ cipherBulk cipher
                     else 0 -- to not generate IV
-    if hasExplicitBlockIV ver && sz > 0
+    if sz > 0
         then do
             newIV <- getStateRNG ctx sz
             runTxState ctx (modify (setRecordIV newIV) >> f)

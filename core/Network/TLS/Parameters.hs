@@ -213,7 +213,7 @@ data Supported = Supported
     -- Versions should be listed in preference order, i.e. higher versions
     -- first.
     --
-    -- Default: @[TLS13,TLS12,TLS11,TLS10]@
+    -- Default: @[TLS13,TLS12]@
     , supportedCiphers :: [Cipher]
     -- ^ Supported cipher methods.  The default is empty, specify a suitable
     -- cipher list.  'Network.TLS.Extra.Cipher.ciphersuite_default' is often
@@ -337,7 +337,7 @@ data EMSMode
 defaultSupported :: Supported
 defaultSupported =
     Supported
-        { supportedVersions = [TLS13, TLS12, TLS11, TLS10]
+        { supportedVersions = [TLS13, TLS12]
         , supportedCiphers = []
         , supportedCompressions = [nullCompression]
         , supportedHashSignatures =

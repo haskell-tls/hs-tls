@@ -33,8 +33,6 @@ import Network.TLS.Imports
 import Network.TLS.Packet (
     encodeSignedDHParams,
     encodeSignedECDHParams,
-    generateCertificateVerify_SSL,
-    generateCertificateVerify_SSL_DSA,
  )
 import Network.TLS.Parameters
 import Network.TLS.State
@@ -167,19 +165,6 @@ prepareCertificateVerifySignatureData
     -> ByteString
     -> IO CertVerifyData
 prepareCertificateVerifySignatureData ctx usedVersion pubKey hashSigAlg msgs
-    | usedVersion == SSL3 = do
-        (hashCtx, params, generateCV_SSL) <-
-            case pubKey of
-                PubKeyRSA _ ->
-                    return
-                        (hashInit SHA1_MD5, RSAParams SHA1_MD5 RSApkcs1, generateCertificateVerify_SSL)
-                PubKeyDSA _ -> return (hashInit SHA1, DSAParams, generateCertificateVerify_SSL_DSA)
-                _ ->
-                    throwCore $
-                        Error_Misc
-                            ("unsupported CertificateVerify signature for SSL3: " ++ pubkeyType pubKey)
-        Just masterSecret <- usingHState ctx $ gets hstMasterSecret
-        return (params, generateCV_SSL masterSecret $ hashUpdate hashCtx msgs)
     | usedVersion == TLS10 || usedVersion == TLS11 =
         return $ buildVerifyData (signatureParams pubKey Nothing) msgs
     | otherwise = return (signatureParams pubKey hashSigAlg, msgs)

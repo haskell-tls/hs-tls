@@ -88,7 +88,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
     established <- ctxEstablished ctx
     -- renego is not allowed in TLS 1.3
     when (established /= NotEstablished) $ do
-        ver <- usingState_ ctx (getVersionWithDefault TLS10)
+        ver <- usingState_ ctx (getVersionWithDefault TLS12)
         when (ver == TLS13) $
             throwCore $
                 Error_Protocol "renegotiation is not allowed in TLS 1.3" UnexpectedMessage
@@ -114,7 +114,7 @@ handshakeServerWith sparams ctx clientHello@(ClientHello legacyVersion _ clientS
     when (legacyVersion == SSL2) $
         throwCore $
             Error_Protocol "SSL 2.0 is not supported" ProtocolVersion
-    -- rejecting SSL3. RFC 7568
+    -- rejecting SSL. RFC 7568
     when (legacyVersion == SSL3) $
         throwCore $
             Error_Protocol "SSL 3.0 is not supported" ProtocolVersion
@@ -1269,7 +1269,7 @@ findHighestVersionFrom13 clientVersions serverVersions = case svs `intersect` cv
     v : _ -> Just v
   where
     svs = sortOn Down serverVersions
-    cvs = sortOn Down $ filter (> SSL3) clientVersions
+    cvs = sortOn Down $ filter (>= TLS12) clientVersions
 
 applicationProtocol
     :: Context -> [ExtensionRaw] -> ServerParams -> IO [ExtensionRaw]
