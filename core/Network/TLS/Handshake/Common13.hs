@@ -260,7 +260,7 @@ handshakeTerminate13 ctx = do
                         (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
                             { hstServerRandom = hstServerRandom hshake
                             , hstMasterSecret = hstMasterSecret hshake
-                            , hstNegotiatedGroup = hstNegotiatedGroup hshake
+                            , hstSupportedGroup = hstSupportedGroup hshake
                             , hstHandshakeDigest = hstHandshakeDigest hshake
                             , hstTLS13HandshakeMode = hstTLS13HandshakeMode hshake
                             , hstTLS13RTT0Status = hstTLS13RTT0Status hshake
@@ -286,8 +286,8 @@ makeCertRequest sparams ctx certReqCtx =
         caDnsEncoded = extensionEncode $ CertificateAuthorities caDns
         caExtension
             | null caDns = []
-            | otherwise = [ExtensionRaw extensionID_CertificateAuthorities caDnsEncoded]
-        crexts = ExtensionRaw extensionID_SignatureAlgorithms sigAlgs : caExtension
+            | otherwise = [ExtensionRaw EID_CertificateAuthorities caDnsEncoded]
+        crexts = ExtensionRaw EID_SignatureAlgorithms sigAlgs : caExtension
      in CertRequest13 certReqCtx crexts
 
 ----------------------------------------------------------------
@@ -362,7 +362,7 @@ getSessionData13 ctx usedCipher tinfo maxSize psk = do
     ver <- usingState_ ctx getVersion
     malpn <- usingState_ ctx getNegotiatedProtocol
     sni <- usingState_ ctx getClientSNI
-    mgrp <- usingHState ctx getNegotiatedGroup
+    mgrp <- usingHState ctx getSupportedGroup
     return
         SessionData
             { sessionVersion = ver
@@ -607,3 +607,4 @@ keyShareKeyLength FFDHE3072 = 384
 keyShareKeyLength FFDHE4096 = 512
 keyShareKeyLength FFDHE6144 = 768
 keyShareKeyLength FFDHE8192 = 1024
+keyShareKeyLength _ = error "keyShareKeyLength"

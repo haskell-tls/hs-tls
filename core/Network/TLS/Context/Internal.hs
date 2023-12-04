@@ -101,7 +101,7 @@ data Information = Information
     , infoExtendedMasterSec :: Bool
     , infoClientRandom :: Maybe ClientRandom
     , infoServerRandom :: Maybe ServerRandom
-    , infoNegotiatedGroup :: Maybe Group
+    , infoSupportedGroup :: Maybe Group
     , infoTLS13HandshakeMode :: Maybe HandshakeMode13
     , infoIsEarlyDataAccepted :: Bool
     }
@@ -204,7 +204,7 @@ contextGetInformation ctx = do
                     , Just (hstClientRandom st)
                     , hstServerRandom st
                     , if ver == Just TLS13 then Just (hstTLS13HandshakeMode st) else Nothing
-                    , hstNegotiatedGroup st
+                    , hstSupportedGroup st
                     )
                 Nothing -> (Nothing, False, Nothing, Nothing, Nothing, Nothing)
     (cipher, comp) <-

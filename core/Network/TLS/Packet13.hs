@@ -10,7 +10,6 @@
 -- Portability : unknown
 module Network.TLS.Packet13 (
     encodeHandshake13,
-    getHandshakeType13,
     decodeHandshakeRecord13,
     decodeHandshake13,
     decodeHandshakes13,
@@ -83,9 +82,9 @@ encodeHandshake13' EndOfEarlyData13 = ""
 encodeHandshake13' (KeyUpdate13 UpdateNotRequested) = runPut $ putWord8 0
 encodeHandshake13' (KeyUpdate13 UpdateRequested) = runPut $ putWord8 1
 
-encodeHandshakeHeader13 :: HandshakeType13 -> Int -> ByteString
+encodeHandshakeHeader13 :: HandshakeType -> Int -> ByteString
 encodeHandshakeHeader13 ty len = runPut $ do
-    putWord8 (valOfType ty)
+    putWord8 (fromHandshakeType ty)
     putWord24 len
 
 decodeHandshakes13 :: MonadError TLSError m => ByteString -> m [Handshake13]
@@ -99,37 +98,30 @@ decodeHandshakes13 bs = case decodeHandshakeRecord13 bs of
         Left e -> throwError e
         Right h -> (h :) <$> decodeHandshakes13 left
 
-{- decode and encode HANDSHAKE -}
-getHandshakeType13 :: Get HandshakeType13
-getHandshakeType13 = do
-    ty <- getWord8
-    case valToType ty of
-        Nothing -> fail ("invalid handshake type: " ++ show ty)
-        Just t -> return t
-
-decodeHandshakeRecord13 :: ByteString -> GetResult (HandshakeType13, ByteString)
+decodeHandshakeRecord13 :: ByteString -> GetResult (HandshakeType, ByteString)
 decodeHandshakeRecord13 = runGet "handshake-record" $ do
-    ty <- getHandshakeType13
+    ty <- getHandshakeType
     content <- getOpaque24
     return (ty, content)
 
 decodeHandshake13
-    :: HandshakeType13 -> ByteString -> Either TLSError Handshake13
+    :: HandshakeType -> ByteString -> Either TLSError Handshake13
 decodeHandshake13 ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
-    HandshakeType_ClientHello13 -> decodeClientHello13
-    HandshakeType_ServerHello13 -> decodeServerHello13
-    HandshakeType_Finished13 -> decodeFinished13
-    HandshakeType_EncryptedExtensions13 -> decodeEncryptedExtensions13
-    HandshakeType_CertRequest13 -> decodeCertRequest13
-    HandshakeType_Certificate13 -> decodeCertificate13
-    HandshakeType_CertVerify13 -> decodeCertVerify13
-    HandshakeType_NewSessionTicket13 -> decodeNewSessionTicket13
-    HandshakeType_EndOfEarlyData13 -> return EndOfEarlyData13
-    HandshakeType_KeyUpdate13 -> decodeKeyUpdate13
+    HandshakeType_ClientHello -> decodeClientHello13
+    HandshakeType_ServerHello -> decodeServerHello13
+    HandshakeType_Finished -> decodeFinished13
+    HandshakeType_EncryptedExtensions -> decodeEncryptedExtensions13
+    HandshakeType_CertRequest -> decodeCertRequest13
+    HandshakeType_Certificate -> decodeCertificate13
+    HandshakeType_CertVerify -> decodeCertVerify13
+    HandshakeType_NewSessionTicket -> decodeNewSessionTicket13
+    HandshakeType_EndOfEarlyData -> return EndOfEarlyData13
+    HandshakeType_KeyUpdate -> decodeKeyUpdate13
+    (HandshakeType x) -> fail $ "Unsupported HandshakeType " ++ show x
 
 decodeClientHello13 :: Get Handshake13
 decodeClientHello13 = do
-    Just ver <- getBinaryVersion
+    ver <- getBinaryVersion
     random <- getClientRandom32
     session <- getSession
     ciphers <- getWords16
@@ -139,7 +131,7 @@ decodeClientHello13 = do
 
 decodeServerHello13 :: Get Handshake13
 decodeServerHello13 = do
-    Just _ver <- getBinaryVersion
+    _ver <- getBinaryVersion
     random <- getServerRandom32
     session <- getSession
     cipherid <- getWord16

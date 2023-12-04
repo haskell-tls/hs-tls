@@ -29,7 +29,6 @@ import Network.TLS.Imports
 import Network.TLS.Packet
 import Network.TLS.Record.State
 import Network.TLS.Record.Types
-import Network.TLS.Struct
 import Network.TLS.Wire
 
 engageRecord :: Record Plaintext -> RecordM (Record Ciphertext)
@@ -64,9 +63,9 @@ encryptRecord record@(Record ct ver fragment) = do
             onRecordFragment record' $ fragmentCipher (encryptContent True record')
 
 innerPlaintext :: ProtocolType -> ByteString -> ByteString
-innerPlaintext ct bytes = runPut $ do
+innerPlaintext (ProtocolType c) bytes = runPut $ do
     putBytes bytes
-    putWord8 $ valOfType ct -- non zero!
+    putWord8 c -- non zero!
     -- fixme: zeros padding
 
 encryptContent :: Bool -> Record Compressed -> ByteString -> RecordM ByteString

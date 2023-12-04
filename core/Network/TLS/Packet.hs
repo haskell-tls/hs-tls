@@ -15,8 +15,6 @@ module Network.TLS.Packet (
 
     -- * marshall functions for header messages
     decodeHeader,
-    decodeDeprecatedHeaderLength,
-    decodeDeprecatedHeader,
     encodeHeader,
     encodeHeaderNoVer, -- use for SSL3
 
@@ -66,6 +64,7 @@ module Network.TLS.Packet (
     putSession,
     putDNames,
     getDNames,
+    getHandshakeType,
 ) where
 
 import Data.ByteArray (ByteArrayAccess)
@@ -95,57 +94,27 @@ data CurrentParams = CurrentParams
     deriving (Show, Eq)
 
 {- marshall helpers -}
-getVersion :: Get Version
-getVersion = do
-    major <- getWord8
-    minor <- getWord8
-    case verOfNum (major, minor) of
-        Nothing -> fail ("invalid version : " ++ show major ++ "," ++ show minor)
-        Just v -> return v
-
-getBinaryVersion :: Get (Maybe Version)
-getBinaryVersion = do
-    major <- getWord8
-    minor <- getWord8
-    return $ verOfNum (major, minor)
+getBinaryVersion :: Get Version
+getBinaryVersion = Version <$> getWord16
 
 putBinaryVersion :: Version -> Put
-putBinaryVersion ver = putWord8 major >> putWord8 minor
-  where
-    (major, minor) = numericalVer ver
+putBinaryVersion (Version ver) = putWord16 ver
 
 getHeaderType :: Get ProtocolType
-getHeaderType = do
-    ty <- getWord8
-    case valToType ty of
-        Nothing -> fail ("invalid header type: " ++ show ty)
-        Just t -> return t
+getHeaderType = ProtocolType <$> getWord8
 
 putHeaderType :: ProtocolType -> Put
-putHeaderType = putWord8 . valOfType
+putHeaderType (ProtocolType pt) = putWord8 pt
 
 getHandshakeType :: Get HandshakeType
-getHandshakeType = do
-    ty <- getWord8
-    case valToType ty of
-        Nothing -> fail ("invalid handshake type: " ++ show ty)
-        Just t -> return t
+getHandshakeType = HandshakeType <$> getWord8
 
 {-
  - decode and encode headers
  -}
 decodeHeader :: ByteString -> Either TLSError Header
-decodeHeader = runGetErr "header" $ Header <$> getHeaderType <*> getVersion <*> getWord16
-
-decodeDeprecatedHeaderLength :: ByteString -> Either TLSError Word16
-decodeDeprecatedHeaderLength = runGetErr "deprecatedheaderlength" $ subtract 0x8000 <$> getWord16
-
-decodeDeprecatedHeader :: Word16 -> ByteString -> Either TLSError Header
-decodeDeprecatedHeader size =
-    runGetErr "deprecatedheader" $ do
-        1 <- getWord8
-        version <- getVersion
-        return $ Header ProtocolType_DeprecatedHandshake version size
+decodeHeader =
+    runGetErr "header" $ Header <$> getHeaderType <*> getBinaryVersion <*> getWord16
 
 encodeHeader :: Header -> ByteString
 encodeHeader (Header pt ver len) = runPut (putHeaderType pt >> putBinaryVersion ver >> putWord16 len)
@@ -162,12 +131,9 @@ encodeHeaderNoVer (Header pt _ len) = runPut (putHeaderType pt >> putWord16 len)
  -}
 decodeAlert :: Get (AlertLevel, AlertDescription)
 decodeAlert = do
-    al <- getWord8
-    ad <- getWord8
-    case (valToType al, valToType ad) of
-        (Just a, Just d) -> return (a, d)
-        (Nothing, _) -> fail "cannot decode alert level"
-        (_, Nothing) -> fail "cannot decode alert description"
+    al <- AlertLevel <$> getWord8
+    ad <- AlertDescription <$> getWord8
+    return (al, ad)
 
 decodeAlerts :: ByteString -> Either TLSError [(AlertLevel, AlertDescription)]
 decodeAlerts = runGetErr "alerts" loop
@@ -181,7 +147,7 @@ decodeAlerts = runGetErr "alerts" loop
 encodeAlerts :: [(AlertLevel, AlertDescription)] -> ByteString
 encodeAlerts l = runPut $ mapM_ encodeAlert l
   where
-    encodeAlert (al, ad) = putWord8 (valOfType al) >> putWord8 (valOfType ad)
+    encodeAlert (al, ad) = putWord8 (fromAlertLevel al) >> putWord8 (fromAlertDescription ad)
 
 {- decode and encode HANDSHAKE -}
 decodeHandshakeRecord :: ByteString -> GetResult (HandshakeType, ByteString)
@@ -203,13 +169,14 @@ decodeHandshake cp ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
     HandshakeType_CertVerify -> decodeCertVerify cp
     HandshakeType_ClientKeyXchg -> decodeClientKeyXchg cp
     HandshakeType_Finished -> decodeFinished
+    x -> fail $ "Unsupported HandshakeType " ++ show x
 
 decodeDeprecatedHandshake :: ByteString -> Either TLSError Handshake
 decodeDeprecatedHandshake b = runGetErr "deprecatedhandshake" getDeprecated b
   where
     getDeprecated = do
         1 <- getWord8
-        ver <- getVersion
+        ver <- getBinaryVersion
         cipherSpecLen <- fromEnum <$> getWord16
         sessionIdLen <- fromEnum <$> getWord16
         challengeLen <- fromEnum <$> getWord16
@@ -232,7 +199,7 @@ decodeHelloRequest = return HelloRequest
 
 decodeClientHello :: Get Handshake
 decodeClientHello = do
-    ver <- getVersion
+    ver <- getBinaryVersion
     random <- getClientRandom32
     session <- getSession
     ciphers <- getWords16
@@ -249,7 +216,7 @@ decodeClientHello = do
 
 decodeServerHello :: Get Handshake
 decodeServerHello = do
-    ver <- getVersion
+    ver <- getBinaryVersion
     random <- getServerRandom32
     session <- getSession
     cipherid <- getWord16
@@ -280,8 +247,7 @@ decodeFinished = Finished <$> (remaining >>= getBytes)
 
 decodeCertRequest :: CurrentParams -> Get Handshake
 decodeCertRequest cp = do
-    mcertTypes <- map (valToType . fromIntegral) <$> getWords8
-    certTypes <- mapM (fromJustM "decodeCertRequest") mcertTypes
+    certTypes <- map CertificateType <$> getWords8
     sigHashAlgs <-
         if cParamsVersion cp >= TLS12
             then Just <$> (getWord16 >>= getSignatureHashAlgorithms)
@@ -383,7 +349,7 @@ encodeHandshake o =
              in B.concat [header, content]
 
 encodeHandshakeHeader :: HandshakeType -> Int -> Put
-encodeHandshakeHeader ty len = putWord8 (valOfType ty) >> putWord24 len
+encodeHandshakeHeader ty len = putWord8 (fromHandshakeType ty) >> putWord24 len
 
 encodeHandshakeContent :: Handshake -> Put
 encodeHandshakeContent (ClientHello _ _ _ _ _ _ (Just deprecated)) = do
@@ -426,12 +392,15 @@ encodeHandshakeContent (ServerKeyXchg skg) =
 encodeHandshakeContent HelloRequest = return ()
 encodeHandshakeContent ServerHelloDone = return ()
 encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
-    putWords8 (map valOfType certTypes)
+    putWords8 (map fromCertificateType certTypes)
     case sigAlgs of
         Nothing -> return ()
         Just l ->
             putWords16 $
-                map (\(x, y) -> fromIntegral (valOfType x) * 256 + fromIntegral (valOfType y)) l
+                map
+                    ( \(HashAlgorithm x, SignatureAlgorithm y) -> fromIntegral x * 256 + fromIntegral y
+                    )
+                    l
     putDNames certAuthorities
 encodeHandshakeContent (CertVerify digitallySigned) = putDigitallySigned digitallySigned
 encodeHandshakeContent (Finished opaque) = putBytes opaque
@@ -482,14 +451,14 @@ putSession (Session (Just s)) = putOpaque8 s
 getExtensions :: Int -> Get [ExtensionRaw]
 getExtensions 0 = return []
 getExtensions len = do
-    extty <- getWord16
+    extty <- ExtensionID <$> getWord16
     extdatalen <- getWord16
     extdata <- getBytes $ fromIntegral extdatalen
     extxs <- getExtensions (len - fromIntegral extdatalen - 4)
     return $ ExtensionRaw extty extdata : extxs
 
 putExtension :: ExtensionRaw -> Put
-putExtension (ExtensionRaw ty l) = putWord16 ty >> putOpaque16 l
+putExtension (ExtensionRaw (ExtensionID ty) l) = putWord16 ty >> putOpaque16 l
 
 putExtensions :: [ExtensionRaw] -> Put
 putExtensions [] = return ()
@@ -497,13 +466,13 @@ putExtensions es = putOpaque16 (runPut $ mapM_ putExtension es)
 
 getSignatureHashAlgorithm :: Get HashAndSignatureAlgorithm
 getSignatureHashAlgorithm = do
-    h <- (valToType <$> getWord8) >>= fromJustM "getSignatureHashAlgorithm"
-    s <- (valToType <$> getWord8) >>= fromJustM "getSignatureHashAlgorithm"
+    h <- HashAlgorithm <$> getWord8
+    s <- SignatureAlgorithm <$> getWord8
     return (h, s)
 
 putSignatureHashAlgorithm :: HashAndSignatureAlgorithm -> Put
-putSignatureHashAlgorithm (h, s) =
-    putWord8 (valOfType h) >> putWord8 (valOfType s)
+putSignatureHashAlgorithm (HashAlgorithm h, SignatureAlgorithm s) =
+    putWord8 h >> putWord8 s
 
 getServerDHParams :: Get ServerDHParams
 getServerDHParams = ServerDHParams <$> getBigNum16 <*> getBigNum16 <*> getBigNum16
@@ -518,22 +487,19 @@ getServerECDHParams = do
     case curveType of
         3 -> do
             -- ECParameters ECCurveType: curve name type
-            mgrp <- toEnumSafe16 <$> getWord16 -- ECParameters NamedCurve
-            case mgrp of
-                Nothing -> error "getServerECDHParams: unknown group"
-                Just grp -> do
-                    mxy <- getOpaque8 -- ECPoint
-                    case decodeGroupPublic grp mxy of
-                        Left e -> error $ "getServerECDHParams: " ++ show e
-                        Right grppub -> return $ ServerECDHParams grp grppub
+            grp <- Group <$> getWord16 -- ECParameters NamedCurve
+            mxy <- getOpaque8 -- ECPoint
+            case decodeGroupPublic grp mxy of
+                Left e -> error $ "getServerECDHParams: " ++ show e
+                Right grppub -> return $ ServerECDHParams grp grppub
         _ ->
             error "getServerECDHParams: unknown type for ECDH Params"
 
 -- RFC 4492 Section 5.4 Server Key Exchange
 putServerECDHParams :: ServerECDHParams -> Put
-putServerECDHParams (ServerECDHParams grp grppub) = do
+putServerECDHParams (ServerECDHParams (Group grp) grppub) = do
     putWord8 3 -- ECParameters ECCurveType
-    putWord16 $ fromEnumSafe16 grp -- ECParameters NamedCurve
+    putWord16 grp -- ECParameters NamedCurve
     putOpaque8 $ encodeGroupPublic grppub -- ECPoint
 
 getDigitallySigned :: Version -> Get DigitallySigned
@@ -564,7 +530,7 @@ encodeChangeCipherSpec = runPut (putWord8 1)
 decodePreMasterSecret :: ByteString -> Either TLSError (Version, ByteString)
 decodePreMasterSecret =
     runGetErr "pre-master-secret" $
-        (,) <$> getVersion <*> getBytes 46
+        (,) <$> getBinaryVersion <*> getBytes 46
 
 encodePreMasterSecret :: Version -> ByteString -> ByteString
 encodePreMasterSecret version bytes = runPut (putBinaryVersion version >> putBytes bytes)
@@ -742,7 +708,3 @@ encodeSignedECDHParams
 encodeSignedECDHParams dhparams cran sran =
     runPut $
         putClientRandom32 cran >> putServerRandom32 sran >> putServerECDHParams dhparams
-
-fromJustM :: MonadFail m => String -> Maybe a -> m a
-fromJustM what Nothing = fail ("fromJustM " ++ what ++ ": Nothing")
-fromJustM _ (Just x) = return x

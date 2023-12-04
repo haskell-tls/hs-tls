@@ -225,7 +225,7 @@ recvData13 ctx = do
             (_, usedCipher, _, _) <- getTxState ctx
             let choice = makeCipherChoice TLS13 usedCipher
                 psk = derivePSK choice resumptionMasterSecret nonce
-                maxSize = case extensionLookup extensionID_EarlyData exts
+                maxSize = case extensionLookup EID_EarlyData exts
                     >>= extensionDecode MsgTNewSessionTicket of
                     Just (EarlyDataIndication (Just ms)) -> fromIntegral $ safeNonNegative32 ms
                     _ -> 0

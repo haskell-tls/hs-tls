@@ -207,7 +207,7 @@ handshakeClient' cparams ctx groups mparams = do
         return $
             Just $
                 toExtensionRaw $
-                    NegotiatedGroups (supportedGroups $ ctxSupported ctx)
+                    SupportedGroups (supportedGroups $ ctxSupported ctx)
     ecPointExtension =
         return $
             Just $
@@ -636,7 +636,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                         let premaster = dhGetShared params clientDHPriv srvpub
                         return (clientDHPub, premaster)
                     Just grp -> do
-                        usingHState ctx $ setNegotiatedGroup grp
+                        usingHState ctx $ setSupportedGroup grp
                         dhePair <- generateFFDHEShared ctx grp srvpub
                         case dhePair of
                             Nothing ->
@@ -650,7 +650,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
         getCKX_ECDHE = do
             ServerECDHParams grp srvpub <- usingHState ctx getServerECDHParams
             checkSupportedGroup ctx grp
-            usingHState ctx $ setNegotiatedGroup grp
+            usingHState ctx $ setSupportedGroup grp
             ecdhePair <- generateECDHEShared ctx srvpub
             case ecdhePair of
                 Nothing ->
@@ -692,21 +692,21 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
 
 processServerExtension :: ExtensionRaw -> TLSSt ()
 processServerExtension (ExtensionRaw extID content)
-    | extID == extensionID_SecureRenegotiation = do
+    | extID == EID_SecureRenegotiation = do
         cv <- getVerifiedData ClientRole
         sv <- getVerifiedData ServerRole
         let bs = extensionEncode (SecureRenegotiation cv $ Just sv)
         unless (bs `bytesEq` content) $
             throwError $
                 Error_Protocol "server secure renegotiation data not matching" HandshakeFailure
-    | extID == extensionID_SupportedVersions = case extensionDecode MsgTServerHello content of
+    | extID == EID_SupportedVersions = case extensionDecode MsgTServerHello content of
         Just (SupportedVersionsServerHello ver) -> setVersion ver
         _ -> return ()
-    | extID == extensionID_KeyShare = do
+    | extID == EID_KeyShare = do
         hrr <- getTLS13HRR
         let msgt = if hrr then MsgTHelloRetryRequest else MsgTServerHello
         setTLS13KeyShare $ extensionDecode msgt content
-    | extID == extensionID_PreSharedKey =
+    | extID == EID_PreSharedKey =
         setTLS13PreSharedKey $ extensionDecode MsgTServerHello content
 processServerExtension _ = return ()
 
@@ -749,7 +749,7 @@ onServerHello ctx cparams clientSession sentExts (ServerHello rver serverRan ser
     -- intersect sent extensions in client and the received extensions from server.
     -- if server returns extensions that we didn't request, fail.
     let checkExt (ExtensionRaw i _)
-            | i == extensionID_Cookie = False -- for HRR
+            | i == EID_Cookie = False -- for HRR
             | otherwise = i `notElem` sentExts
     when (any checkExt exts) $
         throwCore $
@@ -765,7 +765,7 @@ onServerHello ctx cparams clientSession sentExts (ServerHello rver serverRan ser
         setTLS13HRR isHRR
         setTLS13Cookie
             ( guard isHRR
-                >> extensionLookup extensionID_Cookie exts
+                >> extensionLookup EID_Cookie exts
                 >>= extensionDecode MsgTServerHello
             )
         setSession serverSession (isJust resumingSession)
@@ -1059,7 +1059,7 @@ handshakeClient13' cparams ctx groupSent choice = do
         unless (groupSent == Just grp) $
             throwCore $
                 Error_Protocol "received incompatible group for (EC)DHE" IllegalParameter
-        usingHState ctx $ setNegotiatedGroup grp
+        usingHState ctx $ setSupportedGroup grp
         usingHState ctx getGroupPrivate >>= fromServerKeyShare serverKeyShare
 
     makeEarlySecret = do
@@ -1086,7 +1086,7 @@ handshakeClient13' cparams ctx groupSent choice = do
         liftIO $ setALPN ctx MsgTEncryptedExtensions eexts
         st <- usingHState ctx getTLS13RTT0Status
         if st == RTT0Sent
-            then case extensionLookup extensionID_EarlyData eexts of
+            then case extensionLookup EID_EarlyData eexts of
                 Just _ -> do
                     usingHState ctx $ setTLS13HandshakeMode RTT0
                     usingHState ctx $ setTLS13RTT0Status RTT0Accepted
@@ -1133,8 +1133,8 @@ handshakeClient13' cparams ctx groupSent choice = do
 processCertRequest13
     :: MonadIO m => Context -> CertReqContext -> [ExtensionRaw] -> m ()
 processCertRequest13 ctx token exts = do
-    let hsextID = extensionID_SignatureAlgorithms
-    -- caextID = extensionID_SignatureAlgorithmsCert
+    let hsextID = EID_SignatureAlgorithms
+    -- caextID = EID_SignatureAlgorithmsCert
     dNames <- canames
     -- The @signature_algorithms@ extension is mandatory.
     hsAlgs <- extalgs hsextID unsighash
@@ -1152,7 +1152,7 @@ processCertRequest13 ctx token exts = do
     -- setCertReqSigAlgsCert caAlgs
 
     canames = case extensionLookup
-        extensionID_CertificateAuthorities
+        EID_CertificateAuthorities
         exts of
         Nothing -> return []
         Just ext -> case extensionDecode MsgTCertificateRequest ext of
@@ -1206,7 +1206,7 @@ sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
             Error_Protocol "missing TLS 1.3 certificate request context token" InternalError
 
 setALPN :: Context -> MessageType -> [ExtensionRaw] -> IO ()
-setALPN ctx msgt exts = case extensionLookup extensionID_ApplicationLayerProtocolNegotiation exts
+setALPN ctx msgt exts = case extensionLookup EID_ApplicationLayerProtocolNegotiation exts
     >>= extensionDecode msgt of
     Just (ApplicationLayerProtocolNegotiation [proto]) -> usingState_ ctx $ do
         mprotos <- getClientALPNSuggest

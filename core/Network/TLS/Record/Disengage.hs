@@ -71,13 +71,10 @@ unInnerPlaintext :: ByteString -> Either String (ProtocolType, ByteString)
 unInnerPlaintext inner =
     case B.unsnoc dc of
         Nothing -> Left $ unknownContentType13 (0 :: Word8)
-        Just (bytes, c) ->
-            case valToType c of
-                Nothing -> Left $ unknownContentType13 c
-                Just ct
-                    | B.null bytes && ct `elem` nonEmptyContentTypes ->
-                        Left ("empty " ++ show ct ++ " record disallowed")
-                    | otherwise -> Right (ct, bytes)
+        Just (bytes, c)
+            | B.null bytes && ProtocolType c `elem` nonEmptyContentTypes ->
+                Left ("empty " ++ show (ProtocolType c) ++ " record disallowed")
+            | otherwise -> Right (ProtocolType c, bytes)
   where
     (dc, _pad) = B.spanEnd (== 0) inner
     nonEmptyContentTypes = [ProtocolType_Handshake, ProtocolType_Alert]

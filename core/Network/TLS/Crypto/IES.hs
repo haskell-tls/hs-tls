@@ -103,6 +103,7 @@ groupGenerateKeyPair FFDHE3072 = gen ffdhe3072 exp3072 GroupPri_FFDHE3072 GroupP
 groupGenerateKeyPair FFDHE4096 = gen ffdhe4096 exp4096 GroupPri_FFDHE4096 GroupPub_FFDHE4096
 groupGenerateKeyPair FFDHE6144 = gen ffdhe6144 exp6144 GroupPri_FFDHE6144 GroupPub_FFDHE6144
 groupGenerateKeyPair FFDHE8192 = gen ffdhe8192 exp8192 GroupPri_FFDHE8192 GroupPub_FFDHE8192
+groupGenerateKeyPair _ = error "groupGenerateKeyPair"
 
 dhGroupGenerateKeyPair
     :: MonadRandom r => Group -> r (Params, PrivateNumber, PublicNumber)
@@ -244,6 +245,7 @@ decodeGroupPublic FFDHE3072 bs = Right . GroupPub_FFDHE3072 . PublicNumber $ os2
 decodeGroupPublic FFDHE4096 bs = Right . GroupPub_FFDHE4096 . PublicNumber $ os2ip bs
 decodeGroupPublic FFDHE6144 bs = Right . GroupPub_FFDHE6144 . PublicNumber $ os2ip bs
 decodeGroupPublic FFDHE8192 bs = Right . GroupPub_FFDHE8192 . PublicNumber $ os2ip bs
+decodeGroupPublic _ _ = error "decodeGroupPublic"
 
 -- Check that group element in not in the 2-element subgroup { 1, p - 1 }.
 -- See RFC 7919 section 3 and NIST SP 56A rev 2 section 5.6.2.3.1.

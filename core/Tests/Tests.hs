@@ -517,9 +517,9 @@ prop_handshake13_ee_groups = do
             , srv{serverSupported = svrSupported}
             )
     (_, serverMessages) <- runTLSPipeCapture13 params
-    let isNegotiatedGroups (ExtensionRaw eid _) = eid == 0xa
+    let isSupportedGroups (ExtensionRaw eid _) = eid == EID_SupportedGroups
         eeMessagesHaveExt =
-            [ any isNegotiatedGroups exts
+            [ any isSupportedGroups exts
             | EncryptedExtensions13 exts <- serverMessages
             ]
     [True] `assertEq` eeMessagesHaveExt -- one EE message with extension
@@ -734,7 +734,7 @@ prop_handshake_groups = do
         isClientCustom = maybe True (`notElem` clientGroups) mCustomGroup
         commonGroups = clientGroups `intersect` serverGroups
         shouldFail = null commonGroups && (tls13 || isClientCustom && denyCustom)
-        p minfo = isNothing (minfo >>= infoNegotiatedGroup) == (null commonGroups && isCustom)
+        p minfo = isNothing (minfo >>= infoSupportedGroup) == (null commonGroups && isCustom)
     if shouldFail
         then runTLSInitFailure (clientParam', serverParam')
         else runTLSPipePredicate (clientParam', serverParam') p

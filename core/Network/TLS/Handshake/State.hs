@@ -64,8 +64,8 @@ module Network.TLS.Handshake.State (
     setServerHelloParameters,
     setExtendedMasterSec,
     getExtendedMasterSec,
-    setNegotiatedGroup,
-    getNegotiatedGroup,
+    setSupportedGroup,
+    getSupportedGroup,
     setTLS13HandshakeMode,
     getTLS13HandshakeMode,
     setTLS13RTT0Status,
@@ -135,7 +135,7 @@ data HandshakeState = HandshakeState
     , hstPendingCipher :: Maybe Cipher
     , hstPendingCompression :: Compression
     , hstExtendedMasterSec :: Bool
-    , hstNegotiatedGroup :: Maybe Group
+    , hstSupportedGroup :: Maybe Group
     , hstTLS13HandshakeMode :: HandshakeMode13
     , hstTLS13RTT0Status :: !RTT0Status
     , hstTLS13EarlySecret :: Maybe (BaseSecret EarlySecret)
@@ -226,7 +226,7 @@ newEmptyHandshake ver crand =
         , hstPendingCipher = Nothing
         , hstPendingCompression = nullCompression
         , hstExtendedMasterSec = False
-        , hstNegotiatedGroup = Nothing
+        , hstSupportedGroup = Nothing
         , hstTLS13HandshakeMode = FullHandshake
         , hstTLS13RTT0Status = RTT0None
         , hstTLS13EarlySecret = Nothing
@@ -284,11 +284,11 @@ setExtendedMasterSec b = modify (\hst -> hst{hstExtendedMasterSec = b})
 getExtendedMasterSec :: HandshakeM Bool
 getExtendedMasterSec = gets hstExtendedMasterSec
 
-setNegotiatedGroup :: Group -> HandshakeM ()
-setNegotiatedGroup g = modify (\hst -> hst{hstNegotiatedGroup = Just g})
+setSupportedGroup :: Group -> HandshakeM ()
+setSupportedGroup g = modify (\hst -> hst{hstSupportedGroup = Just g})
 
-getNegotiatedGroup :: HandshakeM (Maybe Group)
-getNegotiatedGroup = gets hstNegotiatedGroup
+getSupportedGroup :: HandshakeM (Maybe Group)
+getSupportedGroup = gets hstSupportedGroup
 
 -- | Type to show which handshake mode is used in TLS 1.3.
 data HandshakeMode13

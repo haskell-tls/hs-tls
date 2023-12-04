@@ -94,7 +94,7 @@ someWords8 = vector
 instance Arbitrary ExtensionRaw where
     arbitrary =
         let arbitraryContent = choose (0, 40) >>= genByteString
-         in ExtensionRaw <$> arbitrary <*> arbitraryContent
+         in ExtensionRaw <$> (ExtensionID <$> arbitrary) <*> arbitraryContent
 
 arbitraryHelloExtensions :: Version -> Gen [ExtensionRaw]
 arbitraryHelloExtensions ver
@@ -106,11 +106,7 @@ instance Arbitrary CertificateType where
         elements
             [ CertificateType_RSA_Sign
             , CertificateType_DSS_Sign
-            , CertificateType_RSA_Fixed_DH
-            , CertificateType_DSS_Fixed_DH
-            , CertificateType_RSA_Ephemeral_DH
-            , CertificateType_DSS_Ephemeral_DH
-            , CertificateType_fortezza_dms
+            , CertificateType_ECDSA_Sign
             ]
 
 instance Arbitrary Handshake where
