@@ -14,7 +14,7 @@ module Network.TLS.Struct (
     Version (..),
     CipherData (..),
     ExtensionID (
-        ExtensionID,
+        ..,
         EID_ServerName,
         EID_MaxFragmentLength,
         EID_ClientCertificateUrl,
@@ -65,7 +65,7 @@ module Network.TLS.Struct (
     fromCertificateType,
     lastSupportedCertificateType,
     HashAlgorithm (
-        HashAlgorithm,
+        ..,
         HashNone,
         HashMD5,
         HashSHA1,
@@ -76,7 +76,7 @@ module Network.TLS.Struct (
         HashIntrinsic
     ),
     SignatureAlgorithm (
-        SignatureAlgorithm,
+        ..,
         SignatureAnonymous,
         SignatureRSA,
         SignatureDSS,
@@ -94,7 +94,7 @@ module Network.TLS.Struct (
     DigitallySigned (..),
     Signature,
     ProtocolType (
-        ProtocolType,
+        ..,
         ProtocolType_ChangeCipherSpec,
         ProtocolType_Alert,
         ProtocolType_Handshake,
@@ -251,7 +251,8 @@ lastSupportedCertificateType = CertificateType_ECDSA_Sign
 
 ------------------------------------------------------------
 
-newtype HashAlgorithm = HashAlgorithm Word8 deriving (Eq)
+newtype HashAlgorithm = HashAlgorithm {fromHashAlgorithm :: Word8}
+    deriving (Eq)
 
 {- FOURMOLU_DISABLE -}
 pattern HashNone      :: HashAlgorithm
@@ -285,7 +286,8 @@ instance Show HashAlgorithm where
 
 ------------------------------------------------------------
 
-newtype SignatureAlgorithm = SignatureAlgorithm Word8 deriving (Eq)
+newtype SignatureAlgorithm = SignatureAlgorithm {fromSignatureAlgorithm :: Word8}
+    deriving (Eq)
 
 {- FOURMOLU_DISABLE -}
 pattern SignatureAnonymous        :: SignatureAlgorithm
@@ -342,7 +344,7 @@ data DigitallySigned = DigitallySigned (Maybe HashAndSignatureAlgorithm) Signatu
 
 ----------------------------------------------------------------
 
-newtype ProtocolType = ProtocolType Word8 deriving (Eq)
+newtype ProtocolType = ProtocolType {fromProtocolType :: Word8} deriving (Eq)
 
 {- FOURMOLU_DISABLE -}
 pattern ProtocolType_ChangeCipherSpec :: ProtocolType
@@ -444,7 +446,7 @@ type FinishedData = ByteString
 
 -- | Identifier of a TLS extension.
 --   <http://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.txt>
-newtype ExtensionID = ExtensionID Word16 deriving (Eq)
+newtype ExtensionID = ExtensionID {fromExtensionID :: Word16} deriving (Eq)
 
 {- FOURMOLU_DISABLE -}
 pattern EID_ServerName                          :: ExtensionID -- RFC6066
