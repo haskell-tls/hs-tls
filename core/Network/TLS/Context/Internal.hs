@@ -337,7 +337,7 @@ withStateLock ctx f = withMVar (ctxLockState ctx) (const f)
 
 tls13orLater :: MonadIO m => Context -> m Bool
 tls13orLater ctx = do
-    ev <- liftIO $ usingState ctx $ getVersionWithDefault TLS10 -- fixme
+    ev <- liftIO $ usingState ctx $ getVersionWithDefault TLS12
     return $ case ev of
         Left _ -> False
         Right v -> v >= TLS13

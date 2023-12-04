@@ -158,7 +158,7 @@ withCompression f = do
 
 computeDigest
     :: Version -> RecordState -> Header -> ByteString -> (ByteString, RecordState)
-computeDigest ver tstate hdr content = (digest, incrRecordState tstate)
+computeDigest _ver tstate hdr content = (digest, incrRecordState tstate)
   where
     digest = macF (cstMacSecret cst) msg
     cst = stCryptState tstate
@@ -166,10 +166,7 @@ computeDigest ver tstate hdr content = (digest, incrRecordState tstate)
     hashA = cipherHash cipher
     encodedSeq = encodeWord64 $ msSequence $ stMacState tstate
 
-    (macF, msg)
-        | ver < TLS10 =
-            (macSSL hashA, B.concat [encodedSeq, encodeHeaderNoVer hdr, content])
-        | otherwise = (hmac hashA, B.concat [encodedSeq, encodeHeader hdr, content])
+    (macF, msg) = (hmac hashA, B.concat [encodedSeq, encodeHeader hdr, content])
 
 makeDigest :: Header -> ByteString -> RecordM ByteString
 makeDigest hdr content = do

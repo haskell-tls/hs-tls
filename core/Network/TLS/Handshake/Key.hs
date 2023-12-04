@@ -34,7 +34,7 @@ import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import Network.TLS.Handshake.State
 import Network.TLS.Imports
-import Network.TLS.State (getVersion, withRNG)
+import Network.TLS.State (withRNG)
 import Network.TLS.Struct
 import Network.TLS.Types
 import Network.TLS.X509
@@ -64,8 +64,7 @@ decryptRSA :: Context -> ByteString -> IO (Either KxError ByteString)
 decryptRSA ctx econtent = do
     (_, privateKey) <- usingHState ctx getLocalPublicPrivateKeys
     usingState_ ctx $ do
-        ver <- getVersion
-        let cipher = if ver < TLS10 then econtent else B.drop 2 econtent
+        let cipher = B.drop 2 econtent
         withRNG $ kxDecrypt privateKey cipher
 
 verifyPublic

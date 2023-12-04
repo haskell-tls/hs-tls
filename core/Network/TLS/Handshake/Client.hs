@@ -587,10 +587,7 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
                     -- SSL3 implementation generally forget this length field since it's redundant,
                     -- however TLS10 make it clear that the length field need to be present.
                     e <- encryptRSA ctx premaster
-                    let extra =
-                            if xver < TLS10
-                                then B.empty
-                                else encodeWord16 $ fromIntegral $ B.length e
+                    let extra = encodeWord16 $ fromIntegral $ B.length e
                     return $ extra `B.append` e
                 return (CKX_RSA encryptedPreMaster, setMasterSec)
             CipherKeyExchange_DHE_RSA -> getCKX_DHE

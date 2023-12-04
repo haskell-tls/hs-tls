@@ -93,13 +93,9 @@ getCipherData (Record pt ver _) cdata = do
     -- (before TLS10 this checks instead that the padding length is minimal)
     paddingValid <- case cipherDataPadding cdata of
         Nothing -> return True
-        Just (pad, blksz) -> do
-            cver <- getRecordVersion
+        Just (pad, _blksz) -> do
             let b = B.length pad - 1
-            return $
-                if cver < TLS10
-                    then b < blksz
-                    else B.replicate (B.length pad) (fromIntegral b) `bytesEq` pad
+            return $ B.replicate (B.length pad) (fromIntegral b) `bytesEq` pad
 
     unless (macValid &&! paddingValid) $
         throwError $
