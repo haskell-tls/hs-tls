@@ -90,21 +90,23 @@ generateFFDHEShared
     :: Context -> Group -> DHPublic -> IO (Maybe (DHPublic, DHKey))
 generateFFDHEShared ctx grp pub = usingState_ ctx $ withRNG $ dhGroupGetPubShared grp pub
 
+{- FOURMOLU_DISABLE -}
 isDigitalSignatureKey :: PubKey -> Bool
-isDigitalSignatureKey (PubKeyRSA _) = True
-isDigitalSignatureKey (PubKeyDSA _) = True
-isDigitalSignatureKey (PubKeyEC _) = True
+isDigitalSignatureKey (PubKeyRSA _)     = True
+isDigitalSignatureKey (PubKeyDSA _)     = True
+isDigitalSignatureKey (PubKeyEC _)      = True
 isDigitalSignatureKey (PubKeyEd25519 _) = True
-isDigitalSignatureKey (PubKeyEd448 _) = True
-isDigitalSignatureKey _ = False
+isDigitalSignatureKey (PubKeyEd448 _)   = True
+isDigitalSignatureKey _                 = False
 
 versionCompatible :: PubKey -> Version -> Bool
-versionCompatible (PubKeyRSA _) _ = True
-versionCompatible (PubKeyDSA _) v = v <= TLS12
-versionCompatible (PubKeyEC _) v = v >= TLS10
+versionCompatible (PubKeyRSA _) _     = True
+versionCompatible (PubKeyDSA _) v     = v <= TLS12
+versionCompatible (PubKeyEC _) v      = v >= TLS10
 versionCompatible (PubKeyEd25519 _) v = v >= TLS12
-versionCompatible (PubKeyEd448 _) v = v >= TLS12
-versionCompatible _ _ = False
+versionCompatible (PubKeyEd448 _) v   = v >= TLS12
+versionCompatible _ _                 = False
+{- FOURMOLU_ENABLE -}
 
 -- | Test whether the argument is a public key supported for signature at the
 -- specified TLS version.  This also accepts a key for RSA encryption.  This
