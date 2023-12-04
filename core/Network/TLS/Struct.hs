@@ -705,7 +705,7 @@ instance Show AlertDescription where
 newtype HandshakeType = HandshakeType {fromHandshakeType :: Word8}
     deriving (Eq)
 
-{- FOURMOLU_DIABLE -}
+{- FOURMOLU_DISABLE -}
 pattern HandshakeType_HelloRequest        :: HandshakeType
 pattern HandshakeType_HelloRequest         = HandshakeType 0
 pattern HandshakeType_ClientHello         :: HandshakeType
