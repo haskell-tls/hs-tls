@@ -2,6 +2,7 @@ module HandshakeSpec where
 
 import qualified Data.ByteString as B
 import Data.List
+import Data.Maybe
 import Network.TLS
 import Network.TLS.Extra.Cipher
 import Test.Hspec
@@ -15,13 +16,15 @@ import Run
 spec :: Spec
 spec = do
     describe "pipe" $ do
-        it "can setup a channel" $ pipe_work
+        it "can setup a channel" pipe_work
     describe "handshake" $ do
         prop "can run TLS 1.2" handshake_simple
         prop "can run TLS 1.3" handshake13_simple
         prop "can update key for TLS 1.3" handshake_update_key
         prop "can prevent downgrade attack" handshake13_downgrade
-        prop "can select hash and signature" handshake_hashsignatures
+        prop "can negotiate hash and signature" handshake_hashsignatures
+        prop "can negotiate cipher suite" handshake_ciphersuites
+        prop "can negotiate group" handshake_groups
 
 pipe_work :: IO ()
 pipe_work = do
@@ -109,3 +112,67 @@ handshake_hashsignatures tls13 = do
   where
     incompatibleWithDefaultCurve (h, SignatureECDSA) = h /= HashSHA256
     incompatibleWithDefaultCurve _ = False
+
+handshake_ciphersuites :: ([Cipher], [Cipher]) -> IO ()
+handshake_ciphersuites (clientCiphers, serverCiphers) = do
+    tls13 <- generate arbitrary
+    let version = if tls13 then TLS13 else TLS12
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([version], [version])
+                (clientCiphers, serverCiphers)
+    let adequate = cipherAllowedForVersion version
+        shouldSucceed = any adequate (clientCiphers `intersect` serverCiphers)
+    if shouldSucceed
+        then runTLSPipeSimple (clientParam, serverParam)
+        else runTLSInitFailure (clientParam, serverParam)
+
+handshake_groups :: ([Group], [Group]) -> IO ()
+handshake_groups (clientGroups, serverGroups) = do
+    tls13 <- generate arbitrary
+    let versions = if tls13 then [TLS13] else [TLS12]
+        ciphers =
+            [ cipher_ECDHE_RSA_AES256GCM_SHA384
+            , cipher_ECDHE_RSA_AES128CBC_SHA
+            , cipher_DHE_RSA_AES256GCM_SHA384
+            , cipher_DHE_RSA_AES128_SHA1
+            , cipher_TLS13_AES128GCM_SHA256
+            ]
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                (versions, versions)
+                (ciphers, ciphers)
+    denyCustom <- generate arbitrary
+    let groupUsage =
+            if denyCustom
+                then GroupUsageUnsupported "custom group denied"
+                else GroupUsageValid
+        clientParam' =
+            clientParam
+                { clientSupported =
+                    (clientSupported clientParam)
+                        { supportedGroups = clientGroups
+                        }
+                , clientHooks =
+                    (clientHooks clientParam)
+                        { onCustomFFDHEGroup = \_ _ -> return groupUsage
+                        }
+                }
+        serverParam' =
+            serverParam
+                { serverSupported =
+                    (serverSupported serverParam)
+                        { supportedGroups = serverGroups
+                        }
+                }
+        isCustom = maybe True isCustomDHParams (serverDHEParams serverParam')
+        mCustomGroup = serverDHEParams serverParam' >>= dhParamsGroup
+        isClientCustom = maybe True (`notElem` clientGroups) mCustomGroup
+        commonGroups = clientGroups `intersect` serverGroups
+        shouldFail = null commonGroups && (tls13 || isClientCustom && denyCustom)
+        p minfo = isNothing (minfo >>= infoSupportedGroup) == (null commonGroups && isCustom)
+    if shouldFail
+        then runTLSInitFailure (clientParam', serverParam')
+        else runTLSPipePredicate (clientParam', serverParam') p

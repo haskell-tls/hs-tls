@@ -6,6 +6,7 @@ module Run (
     runTLSPipeSimple,
     runTLSPipeSimple13,
     runTLSPipeSimpleKeyUpdate,
+    runTLSPipePredicate,
     runTLSInitFailure,
 ) where
 

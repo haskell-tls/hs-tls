@@ -184,8 +184,8 @@ knownCiphers = ciphersuite_all ++ ciphersuite_weak
         [ cipher_null_SHA1
         ]
 
-arbitraryCiphers :: Gen [Cipher]
-arbitraryCiphers = listOf1 $ elements knownCiphers
+instance Arbitrary Cipher where
+    arbitrary = elements knownCiphers
 
 knownVersions :: [Version]
 knownVersions = [TLS13, TLS12]
@@ -232,8 +232,8 @@ defaultECGroup = P256 -- same as defaultECCurve
 otherKnownECGroups :: [Group]
 otherKnownECGroups = filter (/= defaultECGroup) knownECGroups
 
-arbitraryGroups :: Gen [Group]
-arbitraryGroups = scale (min 5) $ listOf1 $ elements knownGroups
+instance Arbitrary Group where
+    arbitrary = elements knownGroups
 
 isCredentialDSA :: (CertificateChain, PrivKey) -> Bool
 isCredentialDSA (_, PrivKeyDSA _) = True
@@ -307,10 +307,10 @@ isLeafRSA chain = case chain >>= leafPublicKey of
 arbitraryCipherPair :: Version -> Gen ([Cipher], [Cipher])
 arbitraryCipherPair connectVersion = do
     serverCiphers <-
-        arbitraryCiphers
+        arbitrary
             `suchThat` (\cs -> or [cipherAllowedForVersion connectVersion x | x <- cs])
     clientCiphers <-
-        arbitraryCiphers
+        arbitrary
             `suchThat` ( \cs ->
                             or
                                 [ x `elem` serverCiphers
@@ -328,17 +328,22 @@ instance Arbitrary CSP where
 arbitraryPairParams :: Gen (ClientParams, ServerParams)
 arbitraryPairParams = elements knownVersions >>= arbitraryPairParamsAt
 
+data GGP = GGP [Group] [Group] deriving (Show)
+
+instance Arbitrary GGP where
+    arbitrary = arbitraryGroupPair
+
 -- Pair of groups so that at least the default EC group P256 and one FF group
 -- are in common.  This makes DHE and ECDHE ciphers always compatible with
 -- extension "Supported Elliptic Curves" / "Supported Groups".
-arbitraryGroupPair :: Gen ([Group], [Group])
+arbitraryGroupPair :: Gen GGP
 arbitraryGroupPair = do
     (serverECGroups, clientECGroups) <-
         arbitraryGroupPairWith defaultECGroup otherKnownECGroups
     (serverFFGroups, clientFFGroups) <- arbitraryGroupPairFrom knownFFGroups
     serverGroups <- shuffle (serverECGroups ++ serverFFGroups)
     clientGroups <- shuffle (clientECGroups ++ clientFFGroups)
-    return (clientGroups, serverGroups)
+    return $ GGP clientGroups serverGroups
   where
     arbitraryGroupPairFrom list =
         elements list >>= \e ->
@@ -421,7 +426,7 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
     dhparams <- elements [dhParams512, ffdhe2048, ffdhe3072]
 
     creds <- arbitraryCredentialsOfEachType
-    (clientGroups, serverGroups) <- arbitraryGroupPair
+    GGP clientGroups serverGroups <- arbitraryGroupPair
     (clientHashSignatures, serverHashSignatures) <- arbitraryHashSignaturePair
     let serverState =
             def
