@@ -128,9 +128,10 @@ test-suite spec
     build-tool-depends: hspec-discover:hspec-discover
     hs-source-dirs:     test
     other-modules:
-        EncodeSpec
         Arbitrary
         Certificate
+        CiphersSpec
+        EncodeSpec
         PubKey
 
     default-language:   Haskell2010
