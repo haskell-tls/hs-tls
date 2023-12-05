@@ -132,21 +132,26 @@ test-suite spec
         Certificate
         CiphersSpec
         EncodeSpec
+        PipeChan
         PubKey
+        Run
+        ThreadSpec
 
     default-language:   Haskell2010
     ghc-options:        -Wall -threaded -rtsopts
     build-depends:
         base >=4.9 && <5,
         QuickCheck,
-        hspec,
-        tls,
+        asn1-types,
+        async,
         bytestring,
+        crypton,
         crypton-x509,
         crypton-x509-validation,
+        data-default-class,
         hourglass,
-        crypton,
-        asn1-types
+        hspec,
+        tls
 
 benchmark bench-tls
     type:             exitcode-stdio-1.0
