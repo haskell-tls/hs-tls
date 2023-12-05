@@ -3,6 +3,7 @@ module HandshakeSpec where
 import qualified Data.ByteString as B
 import Network.TLS
 import Test.Hspec
+import Test.Hspec.QuickCheck
 import Test.QuickCheck
 
 import Arbitrary
@@ -14,12 +15,8 @@ spec = do
     describe "pipe" $ do
         it "can setup a channel" $ pipe_work
     describe "handshake" $ do
-        it "can run TLS 1.2" $ do
-            params <- generate arbitraryPairParams
-            runTLSPipeSimple params
-
-        it "can run TLS 1.3" $ do
-            params <- generate arbitraryPairParams13
+        prop "can run TLS 1.2" $ \(CSP params) -> runTLSPipeSimple params
+        prop "can run TLS 1.3" $ \(CSP13 params) -> do
             let cgrps = supportedGroups $ clientSupported $ fst params
                 sgrps = supportedGroups $ serverSupported $ snd params
                 hs = if head cgrps `elem` sgrps then FullHandshake else HelloRetryRequest

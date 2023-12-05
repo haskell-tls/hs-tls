@@ -320,6 +320,11 @@ arbitraryCipherPair connectVersion = do
                        )
     return (clientCiphers, serverCiphers)
 
+newtype CSP = CSP (ClientParams, ServerParams) deriving (Show)
+
+instance Arbitrary CSP where
+    arbitrary = CSP <$> arbitraryPairParams
+
 arbitraryPairParams :: Gen (ClientParams, ServerParams)
 arbitraryPairParams = elements knownVersions >>= arbitraryPairParamsAt
 
@@ -342,6 +347,11 @@ arbitraryGroupPair = do
         s <- sublistOf es
         c <- sublistOf es
         return (e : s, e : c)
+
+newtype CSP13 = CSP13 (ClientParams, ServerParams) deriving (Show)
+
+instance Arbitrary CSP13 where
+    arbitrary = CSP13 <$> arbitraryPairParams13
 
 arbitraryPairParams13 :: Gen (ClientParams, ServerParams)
 arbitraryPairParams13 = arbitraryPairParamsAt TLS13

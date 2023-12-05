@@ -9,7 +9,7 @@ import qualified Data.ByteString.Lazy as L
 import Data.Foldable (traverse_)
 import Network.TLS
 import Test.Hspec
-import Test.QuickCheck
+import Test.Hspec.QuickCheck
 
 import Arbitrary
 import Run
@@ -17,8 +17,7 @@ import Run
 spec :: Spec
 spec = do
     describe "thread safety" $ do
-        it "can read/write concurrently" $ do
-            params <- generate arbitraryPairParams
+        prop "can read/write concurrently" $ \(CSP params) ->
             runTLSPipe params tlsServer tlsClient
 
 tlsServer :: Context -> Chan [ByteString] -> IO ()
