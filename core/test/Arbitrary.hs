@@ -23,8 +23,7 @@ import Test.QuickCheck
 import Certificate
 import PubKey
 
-genByteString :: Int -> Gen B.ByteString
-genByteString i = B.pack <$> vector i
+----------------------------------------------------------------
 
 instance Arbitrary Version where
     arbitrary = elements [TLS12, TLS13]
@@ -60,22 +59,10 @@ instance {-# OVERLAPS #-} Arbitrary [HashAndSignatureAlgorithm] where
 instance Arbitrary DigitallySigned where
     arbitrary = DigitallySigned <$> (head <$> arbitrary) <*> genByteString 32
 
-arbitraryCiphersIDs :: Gen [Word16]
-arbitraryCiphersIDs = choose (0, 200) >>= vector
-
-arbitraryCompressionIDs :: Gen [Word8]
-arbitraryCompressionIDs = choose (0, 200) >>= vector
-
-someWords8 :: Int -> Gen [Word8]
-someWords8 = vector
-
 instance Arbitrary ExtensionRaw where
     arbitrary =
         let arbitraryContent = choose (0, 40) >>= genByteString
          in ExtensionRaw <$> (ExtensionID <$> arbitrary) <*> arbitraryContent
-
-arbitraryHelloExtensions :: Version -> Gen [ExtensionRaw]
-arbitraryHelloExtensions _ver = arbitrary
 
 instance Arbitrary CertificateType where
     arbitrary =
@@ -111,9 +98,6 @@ instance Arbitrary Handshake where
             , CertVerify <$> arbitrary
             , Finished <$> genByteString 12
             ]
-
-arbitraryCertReqContext :: Gen B.ByteString
-arbitraryCertReqContext = oneof [return B.empty, genByteString 32]
 
 instance Arbitrary Handshake13 where
     arbitrary =
@@ -151,6 +135,25 @@ instance Arbitrary Handshake13 where
             , KeyUpdate13 <$> elements [UpdateNotRequested, UpdateRequested]
             ]
 
+----------------------------------------------------------------
+
+arbitraryCiphersIDs :: Gen [Word16]
+arbitraryCiphersIDs = choose (0, 200) >>= vector
+
+arbitraryCompressionIDs :: Gen [Word8]
+arbitraryCompressionIDs = choose (0, 200) >>= vector
+
+someWords8 :: Int -> Gen [Word8]
+someWords8 = vector
+
+arbitraryHelloExtensions :: Version -> Gen [ExtensionRaw]
+arbitraryHelloExtensions _ver = arbitrary
+
+arbitraryCertReqContext :: Gen B.ByteString
+arbitraryCertReqContext = oneof [return B.empty, genByteString 32]
+
+----------------------------------------------------------------
+
 knownCiphers :: [Cipher]
 knownCiphers = ciphersuite_all ++ ciphersuite_weak
   where
@@ -185,6 +188,8 @@ instance Arbitrary Group where
 isCredentialDSA :: (CertificateChain, PrivKey) -> Bool
 isCredentialDSA (_, PrivKeyDSA _) = True
 isCredentialDSA _ = False
+
+----------------------------------------------------------------
 
 arbitraryCredentialsOfEachType :: Gen [(CertificateChain, PrivKey)]
 arbitraryCredentialsOfEachType = arbitraryCredentialsOfEachType' >>= shuffle
@@ -233,6 +238,8 @@ arbitraryCredentialsOfEachCurve' = do
           ]
             ++ ecdsaPairs
 
+----------------------------------------------------------------
+
 dhParamsGroup :: DHParams -> Maybe Group
 dhParamsGroup params
     | params == ffdhe2048 = Just FFDHE2048
@@ -267,6 +274,8 @@ arbitraryCipherPair connectVersion = do
                        )
     return (clientCiphers, serverCiphers)
 
+----------------------------------------------------------------
+
 newtype CSP = CSP (ClientParams, ServerParams) deriving (Show)
 
 instance Arbitrary CSP where
@@ -299,6 +308,8 @@ arbitraryGroupPair = do
         s <- sublistOf es
         c <- sublistOf es
         return (e : s, e : c)
+
+----------------------------------------------------------------
 
 newtype CSP13 = CSP13 (ClientParams, ServerParams) deriving (Show)
 
@@ -345,6 +356,8 @@ arbitraryPairParamsAt connectVersion = do
             prefix <- vectorOf pos $ elements others
             suffix <- vectorOf (num - pos) $ elements others
             return $ prefix ++ (fixedElement : suffix)
+
+----------------------------------------------------------------
 
 getConnectVersion :: (ClientParams, ServerParams) -> Version
 getConnectVersion (cparams, sparams) = maximum (cver `intersect` sver)
@@ -438,3 +451,6 @@ setEMSMode (cems, sems) (clientParam, serverParam) = (clientParam', serverParam'
                     { supportedExtendedMasterSec = sems
                     }
             }
+
+genByteString :: Int -> Gen B.ByteString
+genByteString i = B.pack <$> vector i
