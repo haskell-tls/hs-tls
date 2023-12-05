@@ -1,7 +1,9 @@
 module HandshakeSpec where
 
 import qualified Data.ByteString as B
+import Data.List
 import Network.TLS
+import Network.TLS.Extra.Cipher
 import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck
@@ -15,12 +17,11 @@ spec = do
     describe "pipe" $ do
         it "can setup a channel" $ pipe_work
     describe "handshake" $ do
-        prop "can run TLS 1.2" $ \(CSP params) -> runTLSPipeSimple params
-        prop "can run TLS 1.3" $ \(CSP13 params) -> do
-            let cgrps = supportedGroups $ clientSupported $ fst params
-                sgrps = supportedGroups $ serverSupported $ snd params
-                hs = if head cgrps `elem` sgrps then FullHandshake else HelloRetryRequest
-            runTLSPipeSimple13 params hs Nothing
+        prop "can run TLS 1.2" handshake_simple
+        prop "can run TLS 1.3" handshake13_simple
+        prop "can update key for TLS 1.3" handshake_update_key
+        prop "can prevent downgrade attack" handshake13_downgrade
+        prop "can select hash and signature" handshake_hashsignatures
 
 pipe_work :: IO ()
 pipe_work = do
@@ -38,3 +39,73 @@ pipe_work = do
 
     d2' <- writePipeB pipe d2 >> readPipeA pipe (B.length d2)
     d2 `shouldBe` d2'
+
+handshake_simple :: CSP -> IO ()
+handshake_simple (CSP params) = runTLSPipeSimple params
+
+handshake13_simple :: CSP13 -> IO ()
+handshake13_simple (CSP13 params) = runTLSPipeSimple13 params hs Nothing
+  where
+    cgrps = supportedGroups $ clientSupported $ fst params
+    sgrps = supportedGroups $ serverSupported $ snd params
+    hs = if head cgrps `elem` sgrps then FullHandshake else HelloRetryRequest
+
+handshake13_downgrade :: CSP -> IO ()
+handshake13_downgrade (CSP (cparam,sparam)) = do
+    versionForced <- generate $ elements (supportedVersions $ clientSupported cparam)
+    let debug' = (serverDebug sparam){debugVersionForced = Just versionForced}
+        sparam' = sparam{serverDebug = debug'}
+        params = (cparam, sparam')
+        downgraded =
+            (isVersionEnabled TLS13 params && versionForced < TLS13)
+                || (isVersionEnabled TLS12 params && versionForced < TLS12)
+    if downgraded
+        then runTLSInitFailure params
+        else runTLSPipeSimple params
+
+handshake_update_key :: CSP -> IO ()
+handshake_update_key (CSP params) = runTLSPipeSimpleKeyUpdate params
+
+handshake_hashsignatures :: Bool -> IO ()
+handshake_hashsignatures tls13 = do
+    let version = if tls13 then TLS13 else TLS12
+        ciphers =
+            [ cipher_ECDHE_RSA_AES256GCM_SHA384
+            , cipher_ECDHE_ECDSA_AES256GCM_SHA384
+            , cipher_ECDHE_RSA_AES128CBC_SHA
+            , cipher_ECDHE_ECDSA_AES128CBC_SHA
+            , cipher_DHE_RSA_AES128_SHA1
+            , cipher_DHE_DSA_AES128_SHA1
+            , cipher_TLS13_AES128GCM_SHA256
+            ]
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([version], [version])
+                (ciphers, ciphers)
+    clientHashSigs <- generate $ arbitraryHashSignatures version
+    serverHashSigs <- generate $ arbitraryHashSignatures version
+    let clientParam' =
+            clientParam
+                { clientSupported =
+                    (clientSupported clientParam)
+                        { supportedHashSignatures = clientHashSigs
+                        }
+                }
+        serverParam' =
+            serverParam
+                { serverSupported =
+                    (serverSupported serverParam)
+                        { supportedHashSignatures = serverHashSigs
+                        }
+                }
+        commonHashSigs = clientHashSigs `intersect` serverHashSigs
+        shouldFail
+            | tls13 = all incompatibleWithDefaultCurve commonHashSigs
+            | otherwise = null commonHashSigs
+    if shouldFail
+        then runTLSInitFailure (clientParam', serverParam')
+        else runTLSPipeSimple (clientParam', serverParam')
+  where
+    incompatibleWithDefaultCurve (h, SignatureECDSA) = h /= HashSHA256
+    incompatibleWithDefaultCurve _ = False

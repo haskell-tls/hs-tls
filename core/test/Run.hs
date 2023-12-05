@@ -5,6 +5,8 @@ module Run (
     runTLSPipe,
     runTLSPipeSimple,
     runTLSPipeSimple13,
+    runTLSPipeSimpleKeyUpdate,
+    runTLSInitFailure,
 ) where
 
 import Control.Concurrent
@@ -15,6 +17,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Data.Default.Class
+import Data.Either
 import Data.IORef
 import Data.Maybe
 import Network.TLS
@@ -248,8 +251,61 @@ runTLSPipeCapture13 params = do
         let recv hss = modifyIORef ref (hss :) >> return hss
          in contextHookSetHandshake13Recv ctx recv
 
+runTLSPipeSimpleKeyUpdate :: (ClientParams, ServerParams) -> IO ()
+runTLSPipeSimpleKeyUpdate params = runTLSPipeN 3 params tlsServer tlsClient
+  where
+    tlsServer ctx queue = do
+        handshake ctx
+        checkCtxFinished ctx
+        d0 <- recvData ctx
+        req <- generate $ elements [OneWay, TwoWay]
+        _ <- updateKey ctx req
+        d1 <- recvData ctx
+        d2 <- recvData ctx
+        writeChan queue [d0, d1, d2]
+        bye ctx
+    tlsClient queue ctx = do
+        handshake ctx
+        checkCtxFinished ctx
+        d0 <- readChan queue
+        sendData ctx (L.fromChunks [d0])
+        d1 <- readChan queue
+        sendData ctx (L.fromChunks [d1])
+        req <- generate $ elements [OneWay, TwoWay]
+        _ <- updateKey ctx req
+        d2 <- readChan queue
+        sendData ctx (L.fromChunks [d2])
+        byeBye ctx
+
 chunkLengths :: Int -> [Int]
 chunkLengths len
     | len > 16384 = 16384 : chunkLengths (len - 16384)
     | len > 0 = [len]
     | otherwise = []
+
+
+runTLSInitFailureGen
+    :: (ClientParams, ServerParams)
+    -> (Context -> IO s)
+    -> (Context -> IO c)
+    -> IO ()
+runTLSInitFailureGen params hsServer hsClient = do
+    (cRes, sRes) <- initiateDataPipe params tlsServer tlsClient
+    cRes `shouldSatisfy` isLeft
+    sRes `shouldSatisfy` isLeft
+  where
+    tlsServer ctx = do
+        _ <- hsServer ctx
+        checkCtxFinished ctx
+        minfo <- contextGetInformation ctx
+        byeBye ctx
+        return $ "server success: " ++ show minfo
+    tlsClient ctx = do
+        _ <- hsClient ctx
+        checkCtxFinished ctx
+        minfo <- contextGetInformation ctx
+        byeBye ctx
+        return $ "client success: " ++ show minfo
+
+runTLSInitFailure :: (ClientParams, ServerParams) -> IO ()
+runTLSInitFailure params = runTLSInitFailureGen params handshake handshake
