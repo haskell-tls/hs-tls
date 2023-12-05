@@ -78,7 +78,6 @@ handshake_hashsignatures tls13 = do
             , cipher_ECDHE_RSA_AES128CBC_SHA
             , cipher_ECDHE_ECDSA_AES128CBC_SHA
             , cipher_DHE_RSA_AES128_SHA1
-            , cipher_DHE_DSA_AES128_SHA1
             , cipher_TLS13_AES128GCM_SHA256
             ]
     (clientParam, serverParam) <-

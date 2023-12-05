@@ -195,20 +195,7 @@ arbitraryVersions = sublistOf knownVersions
 
 -- for performance reason ecdsa_secp521r1_sha512 is not tested
 knownHashSignatures :: [HashAndSignatureAlgorithm]
-knownHashSignatures =
-    [ (HashIntrinsic, SignatureRSApssRSAeSHA512)
-    , (HashIntrinsic, SignatureRSApssRSAeSHA384)
-    , (HashIntrinsic, SignatureRSApssRSAeSHA256)
-    , (HashIntrinsic, SignatureEd25519)
-    , (HashIntrinsic, SignatureEd448)
-    , (HashSHA512, SignatureRSA)
-    , (HashSHA384, SignatureRSA)
-    , (HashSHA384, SignatureECDSA)
-    , (HashSHA256, SignatureRSA)
-    , (HashSHA256, SignatureECDSA)
-    , (HashSHA1, SignatureRSA)
-    , (HashSHA1, SignatureDSA)
-    ]
+knownHashSignatures = supportedSignatureSchemes
 
 knownHashSignatures13 :: [HashAndSignatureAlgorithm]
 knownHashSignatures13 = filter compat knownHashSignatures
