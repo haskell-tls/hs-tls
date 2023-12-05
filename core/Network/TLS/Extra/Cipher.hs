@@ -318,7 +318,7 @@ sets_default =
 
 {-# WARNING
     ciphersuite_all
-    "This ciphersuite list contains RC4. Use ciphersuite_strong or ciphersuite_default instead."
+    "Use ciphersuite_strong or ciphersuite_default instead."
     #-}
 
 -- | The default ciphersuites + some not recommended last resort ciphers.
@@ -331,7 +331,7 @@ ciphersuite_all = ciphersuite_default ++ complement_all
 
 {-# WARNING
     ciphersuite_all_det
-    "This ciphersuite list contains RC4. Use ciphersuite_strong_det or ciphersuite_default_det instead."
+    "Use ciphersuite_strong_det or ciphersuite_default_det instead."
     #-}
 
 -- | Same as 'ciphersuite_all', but using deterministic preference not
