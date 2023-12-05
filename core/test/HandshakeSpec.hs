@@ -25,6 +25,7 @@ spec = do
         prop "can negotiate hash and signature" handshake_hashsignatures
         prop "can negotiate cipher suite" handshake_ciphersuites
         prop "can negotiate group" handshake_groups
+        prop "can negotiate elliptic curve" handshake_ec
 
 pipe_work :: IO ()
 pipe_work = do
@@ -176,3 +177,54 @@ handshake_groups (clientGroups, serverGroups) = do
     if shouldFail
         then runTLSInitFailure (clientParam', serverParam')
         else runTLSPipePredicate (clientParam', serverParam') p
+
+handshake_ec :: [Group] -> IO ()
+handshake_ec sigGroups' = do
+    let versions = [TLS12, TLS13]
+        ciphers =
+            [ cipher_ECDHE_ECDSA_AES256GCM_SHA384
+            , cipher_ECDHE_ECDSA_AES128CBC_SHA
+            , cipher_TLS13_AES128GCM_SHA256
+            ]
+        sigGroups = [P256]
+        ecdhGroups = [X25519, X448] -- always enabled, so no ECDHE failure
+        hashSignatures =
+            [ (HashSHA256, SignatureECDSA)
+            ]
+    clientVersion <- generate $ elements versions
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([clientVersion], versions)
+                (ciphers, ciphers)
+    clientGroups <- generate $ sublistOf sigGroups
+    clientHashSignatures <- generate $ sublistOf hashSignatures
+    serverHashSignatures <- generate $ sublistOf hashSignatures
+    credentials <- generate arbitraryCredentialsOfEachCurve
+    let clientParam' =
+            clientParam
+                { clientSupported =
+                    (clientSupported clientParam)
+                        { supportedGroups = clientGroups ++ ecdhGroups
+                        , supportedHashSignatures = clientHashSignatures
+                        }
+                }
+        serverParam' =
+            serverParam
+                { serverSupported =
+                    (serverSupported serverParam)
+                        { supportedGroups = sigGroups ++ ecdhGroups
+                        , supportedHashSignatures = serverHashSignatures
+                        }
+                , serverShared =
+                    (serverShared serverParam)
+                        { sharedCredentials = Credentials credentials
+                        }
+                }
+        sigAlgs = map snd (clientHashSignatures `intersect` serverHashSignatures)
+        ecdsaDenied =
+            (clientVersion < TLS13 && null clientGroups)
+                || (clientVersion >= TLS12 && SignatureECDSA `notElem` sigAlgs)
+    if ecdsaDenied
+        then runTLSInitFailure (clientParam', serverParam')
+        else runTLSPipeSimple (clientParam', serverParam')

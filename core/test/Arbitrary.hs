@@ -185,6 +185,9 @@ otherKnownECGroups = filter (/= defaultECGroup) knownECGroups
 instance Arbitrary Group where
     arbitrary = elements knownGroups
 
+instance {-# OVERLAPS #-} Arbitrary [Group] where
+    arbitrary = sublistOf knownGroups
+
 isCredentialDSA :: (CertificateChain, PrivKey) -> Bool
 isCredentialDSA (_, PrivKeyDSA _) = True
 isCredentialDSA _ = False
