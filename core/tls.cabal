@@ -122,34 +122,30 @@ library
         network >= 3.1 && < 3.2,
         unix-time >= 0.4.11 && < 0.5
 
-test-suite test-tls
-    type:             exitcode-stdio-1.0
-    main-is:          Tests.hs
-    hs-source-dirs:   Tests
+test-suite spec
+    type:               exitcode-stdio-1.0
+    main-is:            Spec.hs
+    build-tool-depends: hspec-discover:hspec-discover
+    hs-source-dirs:     test
     other-modules:
+        EncodeSpec
+        Arbitrary
         Certificate
-        Ciphers
-        Connection
-        Marshalling
-        PipeChan
         PubKey
 
-    default-language: Haskell2010
-    ghc-options:      -Wall
+    default-language:   Haskell2010
+    ghc-options:        -Wall -threaded -rtsopts
     build-depends:
-        base >=3 && <5,
-        async >=2.0,
-        data-default-class,
-        tasty,
-        tasty-quickcheck,
-        tls,
+        base >=4.9 && <5,
         QuickCheck,
-        crypton,
+        hspec,
+        tls,
         bytestring,
-        asn1-types,
         crypton-x509,
         crypton-x509-validation,
-        hourglass
+        hourglass,
+        crypton,
+        asn1-types
 
 benchmark bench-tls
     type:             exitcode-stdio-1.0
