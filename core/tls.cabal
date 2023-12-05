@@ -132,6 +132,7 @@ test-suite spec
         Certificate
         CiphersSpec
         EncodeSpec
+        HandshakeSpec
         PipeChan
         PubKey
         Run

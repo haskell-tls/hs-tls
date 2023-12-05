@@ -3,6 +3,8 @@ module Run (
     recvDataAssert,
     byeBye,
     runTLSPipe,
+    runTLSPipeSimple,
+    runTLSPipeSimple13,
 ) where
 
 import Control.Concurrent
@@ -11,7 +13,9 @@ import qualified Control.Exception as E
 import Control.Monad
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
 import Data.Default.Class
+import Data.IORef
 import Data.Maybe
 import Network.TLS
 import System.Timeout
@@ -159,3 +163,93 @@ byeBye ctx = do
     bye ctx
     bs <- recvData ctx
     unless (B.null bs) $ fail "byeBye: unexpected application data"
+
+runTLSPipePredicate
+    :: (ClientParams, ServerParams) -> (Maybe Information -> Bool) -> IO ()
+runTLSPipePredicate params p = runTLSPipe params tlsServer tlsClient
+  where
+    tlsServer ctx queue = do
+        handshake ctx
+        checkCtxFinished ctx
+        checkInfoPredicate ctx
+        d <- recvData ctx
+        writeChan queue [d]
+        bye ctx
+    tlsClient queue ctx = do
+        handshake ctx
+        checkCtxFinished ctx
+        checkInfoPredicate ctx
+        d <- readChan queue
+        sendData ctx (L.fromChunks [d])
+        byeBye ctx
+    checkInfoPredicate ctx = do
+        minfo <- contextGetInformation ctx
+        unless (p minfo) $
+            fail ("unexpected information: " ++ show minfo)
+
+runTLSPipeSimple :: (ClientParams, ServerParams) -> IO ()
+runTLSPipeSimple params = runTLSPipePredicate params (const True)
+
+runTLSPipeSimple13
+    :: (ClientParams, ServerParams)
+    -> HandshakeMode13
+    -> Maybe ByteString
+    -> IO ()
+runTLSPipeSimple13 params mode mEarlyData = runTLSPipe params tlsServer tlsClient
+  where
+    tlsServer ctx queue = do
+        handshake ctx
+        case mEarlyData of
+            Nothing -> return ()
+            Just ed -> do
+                let ls = chunkLengths (B.length ed)
+                chunks <- replicateM (length ls) $ recvData ctx
+                (ls, ed) `shouldBe` (map B.length chunks, B.concat chunks)
+        d <- recvData ctx
+        checkCtxFinished ctx
+        writeChan queue [d]
+        minfo <- contextGetInformation ctx
+        Just mode `shouldBe` (minfo >>= infoTLS13HandshakeMode)
+        bye ctx
+    tlsClient queue ctx = do
+        handshake ctx
+        checkCtxFinished ctx
+        d <- readChan queue
+        sendData ctx (L.fromChunks [d])
+        minfo <- contextGetInformation ctx
+        Just mode `shouldBe` (minfo >>= infoTLS13HandshakeMode)
+        byeBye ctx
+
+runTLSPipeCapture13
+    :: (ClientParams, ServerParams) -> IO ([Handshake13], [Handshake13])
+runTLSPipeCapture13 params = do
+    sRef <- newIORef []
+    cRef <- newIORef []
+    runTLSPipe params (tlsServer sRef) (tlsClient cRef)
+    sReceived <- readIORef sRef
+    cReceived <- readIORef cRef
+    return (reverse sReceived, reverse cReceived)
+  where
+    tlsServer ref ctx queue = do
+        installHook ctx ref
+        handshake ctx
+        checkCtxFinished ctx
+        d <- recvData ctx
+        writeChan queue [d]
+        bye ctx
+    tlsClient ref queue ctx = do
+        installHook ctx ref
+        handshake ctx
+        checkCtxFinished ctx
+        d <- readChan queue
+        sendData ctx (L.fromChunks [d])
+        byeBye ctx
+    installHook ctx ref =
+        let recv hss = modifyIORef ref (hss :) >> return hss
+         in contextHookSetHandshake13Recv ctx recv
+
+chunkLengths :: Int -> [Int]
+chunkLengths len
+    | len > 16384 = 16384 : chunkLengths (len - 16384)
+    | len > 0 = [len]
+    | otherwise = []
