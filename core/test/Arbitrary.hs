@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Arbitrary where
@@ -53,38 +54,11 @@ instance Arbitrary Session where
             2 -> Session . Just <$> genByteString 32
             _ -> return $ Session Nothing
 
-instance Arbitrary HashAlgorithm where
-    arbitrary =
-        elements
-            [ HashNone
-            , HashMD5
-            , HashSHA1
-            , HashSHA224
-            , HashSHA256
-            , HashSHA384
-            , HashSHA512
-            , HashIntrinsic
-            ]
-
-instance Arbitrary SignatureAlgorithm where
-    arbitrary =
-        elements
-            [ SignatureAnonymous
-            , SignatureRSA
-            , SignatureDSA
-            , SignatureECDSA
-            , SignatureRSApssRSAeSHA256
-            , SignatureRSApssRSAeSHA384
-            , SignatureRSApssRSAeSHA512
-            , SignatureEd25519
-            , SignatureEd448
-            , SignatureRSApsspssSHA256
-            , SignatureRSApsspssSHA384
-            , SignatureRSApsspssSHA512
-            ]
+instance {-# OVERLAPS #-} Arbitrary [HashAndSignatureAlgorithm] where
+    arbitrary = shuffle supportedSignatureSchemes
 
 instance Arbitrary DigitallySigned where
-    arbitrary = DigitallySigned <$> arbitrary <*> genByteString 32
+    arbitrary = DigitallySigned <$> (head <$> arbitrary) <*> genByteString 32
 
 arbitraryCiphersIDs :: Gen [Word16]
 arbitraryCiphersIDs = choose (0, 200) >>= vector
@@ -172,7 +146,7 @@ instance Arbitrary Handshake13 where
                     <$> arbitraryCertReqContext
                     <*> return (CertificateChain certs)
                     <*> replicateM (length certs) arbitrary
-            , CertVerify13 <$> arbitrary <*> genByteString 32
+            , CertVerify13 <$> (head <$> arbitrary) <*> genByteString 32
             , Finished13 <$> genByteString 12
             , KeyUpdate13 <$> elements [UpdateNotRequested, UpdateRequested]
             ]
@@ -192,20 +166,6 @@ knownVersions = [TLS13, TLS12]
 
 arbitraryVersions :: Gen [Version]
 arbitraryVersions = sublistOf knownVersions
-
--- for performance reason ecdsa_secp521r1_sha512 is not tested
-knownHashSignatures :: [HashAndSignatureAlgorithm]
-knownHashSignatures = supportedSignatureSchemes
-
-knownHashSignatures13 :: [HashAndSignatureAlgorithm]
-knownHashSignatures13 = filter compat knownHashSignatures
-  where
-    compat (h, s) = h /= HashSHA1 && s /= SignatureDSA && s /= SignatureRSA
-
-arbitraryHashSignatures :: Version -> Gen [HashAndSignatureAlgorithm]
-arbitraryHashSignatures v = sublistOf l
-  where
-    l = if v < TLS13 then knownHashSignatures else knownHashSignatures13
 
 -- for performance reason P521, FFDHE6144, FFDHE8192 are not tested
 knownGroups, knownECGroups, knownFFGroups :: [Group]
@@ -397,13 +357,6 @@ isVersionEnabled ver (cparams, sparams) =
     (ver `elem` supportedVersions (serverSupported sparams))
         && (ver `elem` supportedVersions (clientSupported cparams))
 
-arbitraryHashSignaturePair
-    :: Gen ([HashAndSignatureAlgorithm], [HashAndSignatureAlgorithm])
-arbitraryHashSignaturePair = do
-    serverHashSignatures <- shuffle knownHashSignatures
-    clientHashSignatures <- shuffle knownHashSignatures
-    return (clientHashSignatures, serverHashSignatures)
-
 arbitraryPairParamsWithVersionsAndCiphers
     :: ([Version], [Version])
     -> ([Cipher], [Cipher])
@@ -414,7 +367,8 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
 
     creds <- arbitraryCredentialsOfEachType
     GGP clientGroups serverGroups <- arbitraryGroupPair
-    (clientHashSignatures, serverHashSignatures) <- arbitraryHashSignaturePair
+    clientHashSignatures <- arbitrary
+    serverHashSignatures <- arbitrary
     let serverState =
             def
                 { serverSupported =

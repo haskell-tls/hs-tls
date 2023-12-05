@@ -69,8 +69,9 @@ handshake13_downgrade (CSP (cparam,sparam)) = do
 handshake_update_key :: CSP -> IO ()
 handshake_update_key (CSP params) = runTLSPipeSimpleKeyUpdate params
 
-handshake_hashsignatures :: Bool -> IO ()
-handshake_hashsignatures tls13 = do
+handshake_hashsignatures :: ([HashAndSignatureAlgorithm], [HashAndSignatureAlgorithm]) -> IO ()
+handshake_hashsignatures (clientHashSigs, serverHashSigs) = do
+    tls13 <- generate arbitrary
     let version = if tls13 then TLS13 else TLS12
         ciphers =
             [ cipher_ECDHE_RSA_AES256GCM_SHA384
@@ -85,8 +86,6 @@ handshake_hashsignatures tls13 = do
             arbitraryPairParamsWithVersionsAndCiphers
                 ([version], [version])
                 (ciphers, ciphers)
-    clientHashSigs <- generate $ arbitraryHashSignatures version
-    serverHashSigs <- generate $ arbitraryHashSignatures version
     let clientParam' =
             clientParam
                 { clientSupported =
