@@ -340,21 +340,7 @@ defaultSupported =
         { supportedVersions = [TLS13, TLS12]
         , supportedCiphers = []
         , supportedCompressions = [nullCompression]
-        , supportedHashSignatures =
-            [ (HashIntrinsic, SignatureEd448)
-            , (HashIntrinsic, SignatureEd25519)
-            , (Struct.HashSHA256, SignatureECDSA)
-            , (Struct.HashSHA384, SignatureECDSA)
-            , (Struct.HashSHA512, SignatureECDSA)
-            , (HashIntrinsic, SignatureRSApssRSAeSHA512)
-            , (HashIntrinsic, SignatureRSApssRSAeSHA384)
-            , (HashIntrinsic, SignatureRSApssRSAeSHA256)
-            , (Struct.HashSHA512, SignatureRSA)
-            , (Struct.HashSHA384, SignatureRSA)
-            , (Struct.HashSHA256, SignatureRSA)
-            , (Struct.HashSHA1, SignatureRSA)
-            , (Struct.HashSHA1, SignatureDSA)
-            ]
+        , supportedHashSignatures = Struct.supportedSignatureSchemes
         , supportedSecureRenegotiation = True
         , supportedClientInitiatedRenegotiation = False
         , supportedExtendedMasterSec = AllowEMS
