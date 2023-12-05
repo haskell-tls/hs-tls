@@ -677,8 +677,8 @@ sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertifi
         when certSent $ do
             pubKey <- getLocalPublicKey ctx
             mhashSig <-
-                    let cHashSigs = supportedHashSignatures $ ctxSupported ctx
-                     in getLocalHashSigAlg ctx signatureCompatible cHashSigs pubKey
+                let cHashSigs = supportedHashSignatures $ ctxSupported ctx
+                 in getLocalHashSigAlg ctx signatureCompatible cHashSigs pubKey
             -- Fetch all handshake messages up to now.
             msgs <- usingHState ctx $ B.concat <$> getHandshakeMessages
             sigDig <- createCertificateVerify ctx ver pubKey mhashSig msgs

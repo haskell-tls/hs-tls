@@ -494,9 +494,9 @@ putServerECDHParams (ServerECDHParams (Group grp) grppub) = do
 
 getDigitallySigned :: Version -> Get DigitallySigned
 getDigitallySigned _ver =
-        DigitallySigned
-            <$> getSignatureHashAlgorithm
-            <*> getOpaque16
+    DigitallySigned
+        <$> getSignatureHashAlgorithm
+        <*> getOpaque16
 
 putDigitallySigned :: DigitallySigned -> Put
 putDigitallySigned (DigitallySigned h sig) =
@@ -612,8 +612,8 @@ generateClientFinished
     -> ByteString
     -> HashCtx
     -> ByteString
-generateClientFinished ver ciph
-    = generateFinished_TLS (getPRF ver ciph) "client finished"
+generateClientFinished ver ciph =
+    generateFinished_TLS (getPRF ver ciph) "client finished"
 
 generateServerFinished
     :: Version
@@ -621,8 +621,8 @@ generateServerFinished
     -> ByteString
     -> HashCtx
     -> ByteString
-generateServerFinished ver ciph
-     = generateFinished_TLS (getPRF ver ciph) "server finished"
+generateServerFinished ver ciph =
+    generateFinished_TLS (getPRF ver ciph) "server finished"
 
 encodeSignedDHParams
     :: ServerDHParams -> ClientRandom -> ServerRandom -> ByteString

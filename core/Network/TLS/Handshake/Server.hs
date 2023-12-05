@@ -487,8 +487,8 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
         --
         when (serverWantClientCert sparams) $ do
             let (certTypes, hashSigs) =
-                        let as = supportedHashSignatures $ ctxSupported ctx
-                         in (nub $ mapMaybe hashSigToCertType as, as)
+                    let as = supportedHashSignatures $ ctxSupported ctx
+                     in (nub $ mapMaybe hashSigToCertType as, as)
                 creq =
                     CertRequest
                         certTypes
@@ -530,10 +530,10 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
     -- If RSA is also used for key exchange, this function is
     -- not called.
     decideHashSig pubKey = do
-            let hashSigs = hashAndSignaturesInCommon ctx exts
-            case filter (pubKey `signatureCompatible`) hashSigs of
-                [] -> error ("no hash signature for " ++ pubkeyType pubKey)
-                x : _ -> return x
+        let hashSigs = hashAndSignaturesInCommon ctx exts
+        case filter (pubKey `signatureCompatible`) hashSigs of
+            [] -> error ("no hash signature for " ++ pubkeyType pubKey)
+            x : _ -> return x
 
     generateSKX_DHE kxsAlg = do
         serverParams <- setup_DHE

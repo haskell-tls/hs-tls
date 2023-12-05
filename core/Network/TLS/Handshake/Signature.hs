@@ -126,8 +126,8 @@ checkCertificateVerify
     -> DigitallySigned
     -> IO Bool
 checkCertificateVerify ctx usedVersion pubKey msgs digSig@(DigitallySigned hashSigAlg _)
-   | pubKey `signatureCompatible` hashSigAlg = doVerify
-   | otherwise = return False
+    | pubKey `signatureCompatible` hashSigAlg = doVerify
+    | otherwise = return False
   where
     doVerify =
         prepareCertificateVerifySignatureData ctx usedVersion pubKey hashSigAlg msgs
@@ -159,8 +159,8 @@ prepareCertificateVerifySignatureData
     -> HashAndSignatureAlgorithm -- TLS12 only
     -> ByteString
     -> IO CertVerifyData
-prepareCertificateVerifySignatureData _ctx _usedVersion pubKey hashSigAlg msgs
-    = return (signatureParams pubKey hashSigAlg, msgs)
+prepareCertificateVerifySignatureData _ctx _usedVersion pubKey hashSigAlg msgs =
+    return (signatureParams pubKey hashSigAlg, msgs)
 
 signatureParams :: PubKey -> HashAndSignatureAlgorithm -> SignatureParams
 signatureParams (PubKeyRSA _) hashSigAlg =

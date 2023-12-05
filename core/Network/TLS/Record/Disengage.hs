@@ -128,7 +128,8 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
             sanityCheckError
 
         {- update IV -}
-        (iv, econtent') <- get2o econtent (bulkIVSize bulk, econtentLen - bulkIVSize bulk)
+        (iv, econtent') <-
+            get2o econtent (bulkIVSize bulk, econtentLen - bulkIVSize bulk)
         let (content', iv') = decryptF iv econtent'
         modify $ \txs -> txs{stCryptState = cst{cstIV = iv'}}
 
