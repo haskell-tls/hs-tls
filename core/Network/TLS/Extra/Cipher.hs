@@ -436,7 +436,7 @@ ciphersuite_dhe_rsa =
     ]
 
 ciphersuite_dhe_dss :: [Cipher]
-ciphersuite_dhe_dss = [ ]
+ciphersuite_dhe_dss = []
 
 -- | all unencrypted ciphers, do not use on insecure network.
 ciphersuite_unencrypted :: [Cipher]

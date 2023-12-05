@@ -54,8 +54,9 @@ handshake13_simple (CSP13 params) = runTLSPipeSimple13 params hs Nothing
     hs = if head cgrps `elem` sgrps then FullHandshake else HelloRetryRequest
 
 handshake13_downgrade :: CSP -> IO ()
-handshake13_downgrade (CSP (cparam,sparam)) = do
-    versionForced <- generate $ elements (supportedVersions $ clientSupported cparam)
+handshake13_downgrade (CSP (cparam, sparam)) = do
+    versionForced <-
+        generate $ elements (supportedVersions $ clientSupported cparam)
     let debug' = (serverDebug sparam){debugVersionForced = Just versionForced}
         sparam' = sparam{serverDebug = debug'}
         params = (cparam, sparam')
@@ -69,7 +70,8 @@ handshake13_downgrade (CSP (cparam,sparam)) = do
 handshake_update_key :: CSP -> IO ()
 handshake_update_key (CSP params) = runTLSPipeSimpleKeyUpdate params
 
-handshake_hashsignatures :: ([HashAndSignatureAlgorithm], [HashAndSignatureAlgorithm]) -> IO ()
+handshake_hashsignatures
+    :: ([HashAndSignatureAlgorithm], [HashAndSignatureAlgorithm]) -> IO ()
 handshake_hashsignatures (clientHashSigs, serverHashSigs) = do
     tls13 <- generate arbitrary
     let version = if tls13 then TLS13 else TLS12

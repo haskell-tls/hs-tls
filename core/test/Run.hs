@@ -284,7 +284,6 @@ chunkLengths len
     | len > 0 = [len]
     | otherwise = []
 
-
 runTLSInitFailureGen
     :: (ClientParams, ServerParams)
     -> (Context -> IO s)
