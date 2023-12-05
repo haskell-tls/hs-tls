@@ -1,17 +1,17 @@
 module CiphersSpec where
 
-import Test.Hspec
-import Test.QuickCheck
-
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import Network.TLS.Cipher
 import Network.TLS.Extra.Cipher
+import Test.Hspec
+import Test.Hspec.QuickCheck
+import Test.QuickCheck
 
 spec :: Spec
 spec = do
     describe "ciphers" $ do
-        it "can ecnrypt/decrypt" $ property $ \(BulkTest bulk key iv t additional) -> do
+        prop "can ecnrypt/decrypt" $ \(BulkTest bulk key iv t additional) -> do
             let enc = bulkInit bulk BulkEncrypt key
                 dec = bulkInit bulk BulkDecrypt key
             case (enc, dec) of

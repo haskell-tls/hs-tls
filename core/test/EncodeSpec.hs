@@ -4,18 +4,18 @@ import Data.ByteString (ByteString)
 import Network.TLS
 import Network.TLS.Internal
 import Test.Hspec
-import Test.QuickCheck
+import Test.Hspec.QuickCheck
 
 import Arbitrary ()
 
 spec :: Spec
 spec = do
     describe "encoder/decoder" $ do
-        it "can encode/decode Header" $ property $ \x -> do
+        prop "can encode/decode Header" $ \x -> do
             decodeHeader (encodeHeader x) `shouldBe` Right x
-        it "can encode/decode Handshake" $ property $ \x -> do
+        prop "can encode/decode Handshake" $ \x -> do
             decodeHs (encodeHandshake x) `shouldBe` Right x
-        it "can encode/decode Handshake13" $ property $ \x -> do
+        prop "can encode/decode Handshake13" $ \x -> do
             decodeHs13 (encodeHandshake13 x) `shouldBe` Right x
 
 decodeHs :: ByteString -> Either TLSError Handshake
