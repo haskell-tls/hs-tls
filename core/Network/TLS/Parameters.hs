@@ -347,8 +347,7 @@ defaultSupported =
         , supportedSession = True
         , supportedFallbackScsv = True
         , supportedEmptyPacket = True
-        , supportedGroups =
-            [X25519, X448, P256, FFDHE3072, FFDHE4096, P384, FFDHE6144, FFDHE8192, P521]
+        , supportedGroups = supportedNamedGroups
         }
 
 instance Default Supported where

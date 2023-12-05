@@ -95,6 +95,7 @@ module Network.TLS (
     HashAlgorithm (..),
     SignatureAlgorithm (..),
     Group (..),
+    supportedNamedGroups,
     EMSMode (..),
 
     -- ** For parameters and hooks
@@ -188,7 +189,13 @@ import Network.TLS.Compression (
 import Network.TLS.Context
 import Network.TLS.Core
 import Network.TLS.Credentials
-import Network.TLS.Crypto (DHParams, DHPublic, Group (..), KxError (..))
+import Network.TLS.Crypto (
+    DHParams,
+    DHPublic,
+    Group (..),
+    KxError (..),
+    supportedNamedGroups,
+ )
 import Network.TLS.Handshake.State (HandshakeMode13 (..))
 import Network.TLS.Hooks
 import Network.TLS.Measurement
@@ -202,13 +209,13 @@ import Network.TLS.Struct (
     Handshake,
     HashAlgorithm (..),
     HashAndSignatureAlgorithm,
-    supportedSignatureSchemes,
     Header (..),
     ProtocolType (..),
     ServerRandom (..),
     SignatureAlgorithm (..),
     TLSError (..),
     TLSException (..),
+    supportedSignatureSchemes,
  )
 import Network.TLS.Struct13 (Handshake13)
 import Network.TLS.Types
