@@ -6,12 +6,14 @@ import Control.Concurrent
 import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
+import Data.Default.Class
 import Data.IORef
 import Data.List
 import Data.Maybe
-import Data.X509 hiding (HashSHA1, HashSHA256)
+import Data.X509 (ExtKeyUsageFlag (..))
 import Network.TLS
 import Network.TLS.Extra.Cipher
+import Network.TLS.Internal
 import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck
@@ -46,6 +48,15 @@ spec = do
         prop "can re-negotiate" handshake_renegotiation
         prop "can resume session" handshake_session_resumption
         prop "can handshake with DH" handshake_dh
+        prop "can handshake with TLS 1.3 Full" handshake13_full
+        prop "can handshake with TLS 1.3 HRR" handshake13_hrr
+        prop "can handshake with TLS 1.3 PSK" handshake13_psk
+        prop "can handshake with TLS 1.3 PSK -> HRR" handshake13_psk_fallback
+        prop "can handshake with TLS 1.3 RTT0" handshake13_rtt0
+        prop "can handshake with TLS 1.3 RTT0 -> PSK" handshake13_rtt0_fallback
+        prop "can handshake with TLS 1.3 RTT0 length" handshake13_rtt0_length
+        prop "can handshake with TLS 1.3 EE groups" handshake13_ee_groups
+        prop "can handshake with TLS 1.3 Post-handshake auth" post_handshake_auth
 
 --------------------------------------------------------------
 
@@ -692,3 +703,321 @@ handshake_dh (DHP (clientParam, serverParam)) = do
         , (dhParams768, True)
         , (dhParams1024, False)
         ]
+
+--------------------------------------------------------------
+
+handshake13_full :: CSP13 -> IO ()
+handshake13_full (CSP13 (cli, srv)) = do
+    let cliSupported =
+            def
+                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                , supportedGroups = [X25519]
+                }
+        svrSupported =
+            def
+                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                , supportedGroups = [X25519]
+                }
+        params =
+            ( cli{clientSupported = cliSupported}
+            , srv{serverSupported = svrSupported}
+            )
+    runTLSPipeSimple13 params FullHandshake Nothing
+
+handshake13_hrr :: CSP13 -> IO ()
+handshake13_hrr (CSP13 (cli, srv)) = do
+    let cliSupported =
+            def
+                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                , supportedGroups = [P256, X25519]
+                }
+        svrSupported =
+            def
+                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                , supportedGroups = [X25519]
+                }
+        params =
+            ( cli{clientSupported = cliSupported}
+            , srv{serverSupported = svrSupported}
+            )
+    runTLSPipeSimple13 params HelloRetryRequest Nothing
+
+handshake13_psk :: CSP13 -> IO ()
+handshake13_psk (CSP13 (cli, srv)) = do
+    let cliSupported =
+            def
+                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                , supportedGroups = [P256, X25519]
+                }
+        svrSupported =
+            def
+                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                , supportedGroups = [X25519]
+                }
+        params0 =
+            ( cli{clientSupported = cliSupported}
+            , srv{serverSupported = svrSupported}
+            )
+
+    sessionRefs <- twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
+
+    let params = setPairParamsSessionManagers sessionManagers params0
+
+    runTLSPipeSimple13 params HelloRetryRequest Nothing
+
+    -- and resume
+    sessionParams <- readClientSessionRef sessionRefs
+    sessionParams `shouldSatisfy` isJust
+    let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
+
+    runTLSPipeSimple13 params2 PreSharedKey Nothing
+
+handshake13_psk_fallback :: CSP13 -> IO ()
+handshake13_psk_fallback (CSP13 (cli, srv)) = do
+    let cliSupported =
+            def
+                { supportedCiphers =
+                    [ cipher_TLS13_AES128GCM_SHA256
+                    , cipher_TLS13_AES128CCM_SHA256
+                    ]
+                , supportedGroups = [P256, X25519]
+                }
+        svrSupported =
+            def
+                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                , supportedGroups = [X25519]
+                }
+        params0 =
+            ( cli{clientSupported = cliSupported}
+            , srv{serverSupported = svrSupported}
+            )
+
+    sessionRefs <- twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
+
+    let params = setPairParamsSessionManagers sessionManagers params0
+
+    runTLSPipeSimple13 params HelloRetryRequest Nothing
+
+    -- resumption fails because GCM cipher is not supported anymore, full
+    -- handshake is not possible because X25519 has been removed, so we are
+    -- back with P256 after hello retry
+    sessionParams <- readClientSessionRef sessionRefs
+    sessionParams `shouldSatisfy` isJust
+    let (cli2, srv2) = setPairParamsSessionResuming (fromJust sessionParams) params
+        srv2' = srv2{serverSupported = svrSupported'}
+        svrSupported' =
+            def
+                { supportedCiphers = [cipher_TLS13_AES128CCM_SHA256]
+                , supportedGroups = [P256]
+                }
+
+    runTLSPipeSimple13 (cli2, srv2') HelloRetryRequest Nothing
+
+handshake13_rtt0 :: CSP13 -> IO ()
+handshake13_rtt0 (CSP13 (cli, srv)) = do
+    let cliSupported =
+            def
+                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                , supportedGroups = [P256, X25519]
+                }
+        svrSupported =
+            def
+                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                , supportedGroups = [X25519]
+                }
+        cliHooks =
+            def
+                { onSuggestALPN = return $ Just ["h2"]
+                }
+        svrHooks =
+            def
+                { onALPNClientSuggest = Just (\protos -> return $ head protos)
+                }
+        params0 =
+            ( cli
+                { clientSupported = cliSupported
+                , clientHooks = cliHooks
+                }
+            , srv
+                { serverSupported = svrSupported
+                , serverHooks = svrHooks
+                , serverEarlyDataSize = 2048
+                }
+            )
+
+    sessionRefs <- twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
+
+    let params = setPairParamsSessionManagers sessionManagers params0
+
+    runTLSPipeSimple13 params HelloRetryRequest Nothing
+
+    -- and resume
+    sessionParams <- readClientSessionRef sessionRefs
+    sessionParams `shouldSatisfy` isJust
+    earlyData <- B.pack <$> generate (someWords8 256)
+    let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
+        params2 = (pc{clientEarlyData = Just earlyData}, ps)
+
+    runTLSPipeSimple13 params2 RTT0 (Just earlyData)
+
+handshake13_rtt0_fallback :: IO ()
+handshake13_rtt0_fallback = do
+    ticketSize <- generate $ choose (0, 512)
+    (cli, srv) <- generate arbitraryPairParams13
+    group0 <- generate $ elements [P256, X25519]
+    let cliSupported =
+            def
+                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                , supportedGroups = [P256, X25519]
+                }
+        svrSupported =
+            def
+                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                , supportedGroups = [group0]
+                }
+        params0 =
+            ( cli{clientSupported = cliSupported}
+            , srv
+                { serverSupported = svrSupported
+                , serverEarlyDataSize = ticketSize
+                }
+            )
+
+    sessionRefs <- twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
+
+    let params = setPairParamsSessionManagers sessionManagers params0
+
+    let mode = if group0 == P256 then FullHandshake else HelloRetryRequest
+    runTLSPipeSimple13 params mode Nothing
+
+    -- and resume
+    sessionParams <- readClientSessionRef sessionRefs
+    sessionParams `shouldSatisfy` isJust
+    earlyData <- B.pack <$> generate (someWords8 256)
+    group2 <- generate $ elements [P256, X25519]
+    let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
+        svrSupported2 =
+            def
+                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                , supportedGroups = [group2]
+                }
+        params2 =
+            ( pc{clientEarlyData = Just earlyData}
+            , ps
+                { serverEarlyDataSize = 0
+                , serverSupported = svrSupported2
+                }
+            )
+
+    let mode2 = if ticketSize < 256 then PreSharedKey else RTT0
+    runTLSPipeSimple13 params2 mode2 Nothing
+
+handshake13_rtt0_length :: CSP13 -> IO ()
+handshake13_rtt0_length (CSP13 (cli, srv)) = do
+    serverMax <- generate $ choose (0, 33792)
+    let cliSupported =
+            def
+                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                , supportedGroups = [X25519]
+                }
+        svrSupported =
+            def
+                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                , supportedGroups = [X25519]
+                }
+        params0 =
+            ( cli{clientSupported = cliSupported}
+            , srv
+                { serverSupported = svrSupported
+                , serverEarlyDataSize = serverMax
+                }
+            )
+
+    sessionRefs <- twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
+    let params = setPairParamsSessionManagers sessionManagers params0
+    runTLSPipeSimple13 params FullHandshake Nothing
+
+    -- and resume
+    sessionParams <- readClientSessionRef sessionRefs
+    sessionParams `shouldSatisfy` isJust
+    clientLen <- generate $ choose (0, 33792)
+    earlyData <- B.pack <$> generate (someWords8 clientLen)
+    let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
+        params2 = (pc{clientEarlyData = Just earlyData}, ps)
+        (mode, mEarlyData)
+            | clientLen > serverMax = (PreSharedKey, Nothing)
+            | otherwise = (RTT0, Just earlyData)
+    runTLSPipeSimple13 params2 mode mEarlyData
+
+handshake13_ee_groups :: CSP13 -> IO ()
+handshake13_ee_groups (CSP13 (cli, srv)) = do
+    let cliSupported = (clientSupported cli){supportedGroups = [P256, X25519]}
+        svrSupported = (serverSupported srv){supportedGroups = [X25519, P256]}
+        params =
+            ( cli{clientSupported = cliSupported}
+            , srv{serverSupported = svrSupported}
+            )
+    (_, serverMessages) <- runTLSPipeCapture13 params
+    let isSupportedGroups (ExtensionRaw eid _) = eid == EID_SupportedGroups
+        eeMessagesHaveExt =
+            [ any isSupportedGroups exts
+            | EncryptedExtensions13 exts <- serverMessages
+            ]
+    eeMessagesHaveExt `shouldBe` [True] -- one EE message with extension
+
+post_handshake_auth :: CSP13 -> IO ()
+post_handshake_auth (CSP13 (clientParam, serverParam)) = do
+    cred <- generate (arbitraryClientCredential TLS13)
+    let clientParam' =
+            clientParam
+                { clientHooks =
+                    (clientHooks clientParam)
+                        { onCertificateRequest = \_ -> return $ Just cred
+                        }
+                }
+        serverParam' =
+            serverParam
+                { serverHooks =
+                    (serverHooks serverParam)
+                        { onClientCertificate = validateChain cred
+                        }
+                }
+    if isCredentialDSA cred
+        then runTLSInitFailureGen (clientParam', serverParam') hsServer hsClient
+        else runTLSPipe (clientParam', serverParam') tlsServer tlsClient
+  where
+    validateChain cred chain
+        | chain == fst cred = return CertificateUsageAccept
+        | otherwise = return (CertificateUsageReject CertificateRejectUnknownCA)
+    tlsServer ctx queue = do
+        hsServer ctx
+        d <- recvData ctx
+        writeChan queue [d]
+        bye ctx
+    tlsClient queue ctx = do
+        hsClient ctx
+        d <- readChan queue
+        sendData ctx (L.fromChunks [d])
+        byeBye ctx
+    hsServer ctx = do
+        handshake ctx
+        checkCtxFinished ctx
+        recvDataAssert ctx "request 1"
+        _ <- requestCertificate ctx -- single request
+        sendData ctx "response 1"
+        recvDataAssert ctx "request 2"
+        _ <- requestCertificate ctx
+        _ <- requestCertificate ctx -- two simultaneously
+        sendData ctx "response 2"
+    hsClient ctx = do
+        handshake ctx
+        checkCtxFinished ctx
+        sendData ctx "request 1"
+        recvDataAssert ctx "response 1"
+        sendData ctx "request 2"
+        recvDataAssert ctx "response 2"
