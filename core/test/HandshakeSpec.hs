@@ -1,7 +1,11 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module HandshakeSpec where
 
+import Control.Concurrent
 import Control.Monad
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
 import Data.IORef
 import Data.List
 import Data.Maybe
@@ -36,6 +40,8 @@ spec = do
         prop "can authenticate client" handshake_client_auth
         prop "can handle extended master secret" handshake_ems
         prop "can resume with extended master secret" handshake_ems
+        prop "can handle ALPN" handshake_alpn
+        prop "can handle SNI" handshake_sni
 
 --------------------------------------------------------------
 
@@ -518,3 +524,86 @@ handshake_session_resumption_ems (CompatEMS ems, CompatEMS ems2) = do
     use (NoEMS, _) = False
     use (_, NoEMS) = False
     use _ = True
+
+--------------------------------------------------------------
+
+handshake_alpn :: (ClientParams, ServerParams) -> IO ()
+handshake_alpn (clientParam, serverParam) = do
+    let clientParam' =
+            clientParam
+                { clientHooks =
+                    (clientHooks clientParam)
+                        { onSuggestALPN = return $ Just ["h2", "http/1.1"]
+                        }
+                }
+        serverParam' =
+            serverParam
+                { serverHooks =
+                    (serverHooks serverParam)
+                        { onALPNClientSuggest = Just alpn
+                        }
+                }
+        params' = (clientParam', serverParam')
+    runTLSPipe params' tlsServer tlsClient
+  where
+    tlsServer ctx queue = do
+        handshake ctx
+        checkCtxFinished ctx
+        proto <- getNegotiatedProtocol ctx
+        proto `shouldBe` Just "h2"
+        d <- recvData ctx
+        writeChan queue [d]
+        bye ctx
+    tlsClient queue ctx = do
+        handshake ctx
+        checkCtxFinished ctx
+        proto <- getNegotiatedProtocol ctx
+        proto `shouldBe` Just "h2"
+        d <- readChan queue
+        sendData ctx (L.fromChunks [d])
+        byeBye ctx
+    alpn xs
+        | "h2" `elem` xs = return "h2"
+        | otherwise = return "http/1.1"
+
+handshake_sni :: (ClientParams, ServerParams) -> IO ()
+handshake_sni (clientParam, serverParam) = do
+    ref <- newIORef Nothing
+    let clientParam' =
+            clientParam
+                { clientServerIdentification = (serverName, "")
+                }
+        serverParam' =
+            serverParam
+                { serverHooks =
+                    (serverHooks serverParam)
+                        { onServerNameIndication = onSNI ref
+                        }
+                }
+        params' = (clientParam', serverParam')
+    runTLSPipe params' tlsServer tlsClient
+    receivedName <- readIORef ref
+    Just (Just serverName) `shouldBe` receivedName
+  where
+    tlsServer ctx queue = do
+        handshake ctx
+        checkCtxFinished ctx
+        sni <- getClientSNI ctx
+        sni `shouldBe` Just serverName
+        d <- recvData ctx
+        writeChan queue [d]
+        bye ctx
+    tlsClient queue ctx = do
+        handshake ctx
+        checkCtxFinished ctx
+        sni <- getClientSNI ctx
+        sni `shouldBe` Just serverName
+        d <- readChan queue
+        sendData ctx (L.fromChunks [d])
+        byeBye ctx
+    onSNI ref name = do
+        mx <- readIORef ref
+        mx `shouldBe` Nothing
+        writeIORef ref (Just name)
+        return (Credentials [])
+    serverName = "haskell.org"
