@@ -18,6 +18,7 @@ import Test.QuickCheck
 
 import Arbitrary
 import PipeChan
+import PubKey
 import Run
 
 spec :: Spec
@@ -44,6 +45,7 @@ spec = do
         prop "can handle SNI" handshake_sni
         prop "can re-negotiate" handshake_renegotiation
         prop "can resume session" handshake_session_resumption
+        prop "can handshake with DH" handshake_dh
 
 --------------------------------------------------------------
 
@@ -656,3 +658,37 @@ handshake_session_resumption plainParams = do
     let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 
     runTLSPipeSimple params2
+
+--------------------------------------------------------------
+
+newtype DHP = DHP (ClientParams, ServerParams) deriving (Show)
+
+instance Arbitrary DHP where
+    arbitrary = DHP <$> arbitraryPairParamsWithVersionsAndCiphers
+                (clientVersions, serverVersions)
+                (ciphers, ciphers)
+      where
+        clientVersions = [TLS12]
+        serverVersions = [TLS12]
+        ciphers = [cipher_DHE_RSA_AES128_SHA1]
+
+handshake_dh :: DHP -> IO ()
+handshake_dh (DHP (clientParam, serverParam)) = do
+    let clientParam' =
+            clientParam
+                { clientSupported =
+                    (clientSupported clientParam)
+                        { supportedGroups = []
+                        }
+                }
+    let check (dh, shouldFail) = do
+            let serverParam' = serverParam{serverDHEParams = Just dh}
+            if shouldFail
+                then runTLSInitFailure (clientParam', serverParam')
+                else runTLSPipeSimple (clientParam', serverParam')
+    mapM_
+        check
+        [ (dhParams512, True)
+        , (dhParams768, True)
+        , (dhParams1024, False)
+        ]
