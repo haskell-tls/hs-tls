@@ -20,7 +20,6 @@ import Test.QuickCheck
 
 import Arbitrary
 import PipeChan
-import PubKey
 import Run
 
 spec :: Spec
@@ -47,7 +46,6 @@ spec = do
         prop "can handle SNI" handshake_sni
         prop "can re-negotiate" handshake_renegotiation
         prop "can resume session" handshake_session_resumption
-        prop "can handshake with DH" handshake_dh
         prop "can handshake with TLS 1.3 Full" handshake13_full
         prop "can handshake with TLS 1.3 HRR" handshake13_hrr
         prop "can handshake with TLS 1.3 PSK" handshake13_psk
@@ -125,7 +123,6 @@ handshake_hashsignatures (clientHashSigs, serverHashSigs) = do
         ciphers =
             [ cipher_ECDHE_RSA_AES256GCM_SHA384
             , cipher_ECDHE_ECDSA_AES256GCM_SHA384
-            , cipher_DHE_RSA_AES128CCM_SHA256
             , cipher_TLS13_AES128GCM_SHA256
             ]
     (clientParam, serverParam) <-
@@ -175,15 +172,11 @@ handshake_ciphersuites (clientCiphers, serverCiphers) = do
 
 --------------------------------------------------------------
 
-handshake_groups :: ([Group], [Group]) -> IO ()
-handshake_groups (clientGroups, serverGroups) = do
+handshake_groups :: GGP -> IO ()
+handshake_groups (GGP clientGroups serverGroups) = do
     tls13 <- generate arbitrary
     let versions = if tls13 then [TLS13] else [TLS12]
-        ciphers =
-            [ cipher_ECDHE_RSA_AES256GCM_SHA384
-            , cipher_DHE_RSA_AES256GCM_SHA384
-            , cipher_TLS13_AES128GCM_SHA256
-            ]
+        ciphers = ciphersuite_strong
     (clientParam, serverParam) <-
         generate $
             arbitraryPairParamsWithVersionsAndCiphers
@@ -301,7 +294,7 @@ handshake_cert_fallback_cipher :: OC -> IO ()
 handshake_cert_fallback_cipher (OC clientCiphers serverCiphers)= do
     let clientVersions = [TLS12]
         serverVersions = [TLS12]
-        commonCiphers = [cipher_DHE_RSA_AES128GCM_SHA256]
+        commonCiphers = [cipher_ECDHE_RSA_AES128GCM_SHA256]
         hashSignatures = [(HashSHA256, SignatureRSA), (HashSHA1, SignatureDSA)]
     chainRef <- newIORef Nothing
     (clientParam, serverParam) <-
@@ -394,14 +387,7 @@ handshake_server_key_usage :: [ExtKeyUsageFlag] -> IO ()
 handshake_server_key_usage usageFlags = do
     tls13 <- generate arbitrary
     let versions = if tls13 then [TLS13] else [TLS12]
-        ciphers = ciphersuite_strong
-{- fixme
-            [ cipher_ECDHE_RSA_AES128GCM_SHA256
-            , cipher_TLS13_AES128GCM_SHA256
-            , cipher_DHE_RSA_AES128GCM_SHA256
-            , cipher_ECDHE_ECDSA_AES128GCM_SHA256
-            ]
--}
+        ciphers = ciphersuite_all
     (clientParam, serverParam) <-
         generate $
             arbitraryPairParamsWithVersionsAndCiphers
@@ -415,9 +401,7 @@ handshake_server_key_usage usageFlags = do
                         { sharedCredentials = Credentials [cred]
                         }
                 }
-        hasDS = KeyUsage_digitalSignature `elem` usageFlags
-        hasKE = KeyUsage_keyEncipherment `elem` usageFlags
-        shouldSucceed = hasDS || (hasKE && not tls13)
+        shouldSucceed = KeyUsage_digitalSignature `elem` usageFlags
     if shouldSucceed
         then runTLSPipeSimple (clientParam, serverParam')
         else runTLSInitFailure (clientParam, serverParam')
@@ -666,40 +650,6 @@ handshake_session_resumption plainParams = do
     let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 
     runTLSPipeSimple params2
-
---------------------------------------------------------------
-
-newtype DHP = DHP (ClientParams, ServerParams) deriving (Show)
-
-instance Arbitrary DHP where
-    arbitrary = DHP <$> arbitraryPairParamsWithVersionsAndCiphers
-                (clientVersions, serverVersions)
-                (ciphers, ciphers)
-      where
-        clientVersions = [TLS12]
-        serverVersions = [TLS12]
-        ciphers = [cipher_DHE_RSA_AES128GCM_SHA256]
-
-handshake_dh :: DHP -> IO ()
-handshake_dh (DHP (clientParam, serverParam)) = do
-    let clientParam' =
-            clientParam
-                { clientSupported =
-                    (clientSupported clientParam)
-                        { supportedGroups = []
-                        }
-                }
-    let check (dh, shouldFail) = do
-            let serverParam' = serverParam{serverDHEParams = Just dh}
-            if shouldFail
-                then runTLSInitFailure (clientParam', serverParam')
-                else runTLSPipeSimple (clientParam', serverParam')
-    mapM_
-        check
-        [ (dhParams512, True)
-        , (dhParams768, True)
-        , (dhParams1024, False)
-        ]
 
 --------------------------------------------------------------
 
