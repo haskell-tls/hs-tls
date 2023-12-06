@@ -421,10 +421,10 @@ arbitraryRSACredentialWithUsage usageFlags = do
     cert <- arbitraryX509WithKeyAndUsage usageFlags (PubKeyRSA pubKey, ())
     return (CertificateChain [cert], PrivKeyRSA privKey)
 
-arbitraryEMSMode :: Gen (EMSMode, EMSMode)
-arbitraryEMSMode = (,) <$> gen <*> gen
-  where
-    gen = elements [NoEMS, AllowEMS, RequireEMS]
+instance {-# OVERLAPS #-} Arbitrary (EMSMode, EMSMode) where
+    arbitrary = (,) <$> gen <*> gen
+      where
+        gen = elements [NoEMS, AllowEMS, RequireEMS]
 
 setEMSMode
     :: (EMSMode, EMSMode)

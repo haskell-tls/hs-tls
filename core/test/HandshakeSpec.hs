@@ -1,5 +1,6 @@
 module HandshakeSpec where
 
+import Control.Monad
 import qualified Data.ByteString as B
 import Data.IORef
 import Data.List
@@ -33,6 +34,8 @@ spec = do
         prop "can handle server key usage" handshake_server_key_usage
         prop "can handle client key usage" handshake_client_key_usage
         prop "can authenticate client" handshake_client_auth
+        prop "can handle extended master secret" handshake_ems
+        prop "can resume with extended master secret" handshake_ems
 
 --------------------------------------------------------------
 
@@ -456,3 +459,62 @@ handshake_client_auth (clientParam, serverParam) = do
     validateChain cred chain
         | chain == fst cred = return CertificateUsageAccept
         | otherwise = return (CertificateUsageReject CertificateRejectUnknownCA)
+
+--------------------------------------------------------------
+
+handshake_ems :: (EMSMode, EMSMode) -> IO ()
+handshake_ems (cems, sems) = do
+    params <- generate arbitrary
+    let params' = setEMSMode (cems, sems) params
+        version = getConnectVersion params'
+        emsVersion = version >= TLS10 && version <= TLS12
+        use = cems /= NoEMS && sems /= NoEMS
+        require = cems == RequireEMS || sems == RequireEMS
+        p info = infoExtendedMasterSec info == (emsVersion && use)
+    if emsVersion && require && not use
+        then runTLSInitFailure params'
+        else runTLSPipePredicate params' (maybe False p)
+
+newtype CompatEMS = CompatEMS (EMSMode,EMSMode) deriving (Show)
+
+instance Arbitrary CompatEMS where
+    arbitrary = CompatEMS <$> (arbitrary `suchThat` compatible)
+      where
+        compatible (NoEMS, RequireEMS) = False
+        compatible (RequireEMS, NoEMS) = False
+        compatible _ = True
+
+handshake_session_resumption_ems :: (CompatEMS, CompatEMS) -> IO ()
+handshake_session_resumption_ems (CompatEMS ems, CompatEMS ems2) = do
+    sessionRefs <- twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
+
+    plainParams <- generate arbitrary
+    let params =
+            setEMSMode ems $
+                setPairParamsSessionManagers sessionManagers plainParams
+
+    runTLSPipeSimple params
+
+    -- and resume
+    sessionParams <- readClientSessionRef sessionRefs
+    sessionParams `shouldSatisfy` isJust
+    let params2 =
+            setEMSMode ems2 $
+                setPairParamsSessionResuming (fromJust sessionParams) params
+
+    let version = getConnectVersion params2
+        emsVersion = version >= TLS10 && version <= TLS12
+
+    if emsVersion && use ems && not (use ems2)
+        then runTLSInitFailure params2
+        else do
+            runTLSPipeSimple params2
+            sessionParams2 <- readClientSessionRef sessionRefs
+            let sameSession = sessionParams == sessionParams2
+                sameUse = use ems == use ems2
+            when emsVersion $ (sameSession `shouldBe` sameUse)
+  where
+    use (NoEMS, _) = False
+    use (_, NoEMS) = False
+    use _ = True
