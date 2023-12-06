@@ -33,7 +33,7 @@ defaultTimeout :: Int
 defaultTimeout = 2000
 
 bogusCipher :: CipherID -> Cipher
-bogusCipher cid = cipher_AES128_SHA1{cipherID = cid}
+bogusCipher cid = cipher_ECDHE_RSA_AES128GCM_SHA256{cipherID = cid}
 
 runTLS :: Bool -> Bool -> ServerParams -> S.Socket -> (Context -> IO a) -> IO a
 runTLS debug ioDebug params cSock f = do
@@ -161,7 +161,7 @@ getGroups flags = case getGroup >>= readGroups of
     defaultGroups = supportedGroups def
     getGroup = foldl f Nothing flags
       where
-        f _ (Group g) = Just g
+        f _ (NGroup g) = Just g
         f acc _ = acc
 
 data Flag
@@ -194,7 +194,7 @@ data Flag
     | Rtt0
     | DebugSeed String
     | DebugPrintSeed
-    | Group String
+    | NGroup String
     | Help
     deriving (Show, Eq)
 
@@ -205,7 +205,7 @@ options =
     , Option [] ["io-debug"] (NoArg IODebug) "TLS IO debug output on stdout"
     , Option ['Z'] ["zerortt"] (NoArg Rtt0) "accept TLS 1.3 0RTT data"
     , Option ['O'] ["output"] (ReqArg Output "stdout") "output "
-    , Option ['g'] ["group"] (ReqArg Group "group") "group"
+    , Option ['g'] ["group"] (ReqArg NGroup "group") "group"
     , Option
         ['t']
         ["timeout"]
