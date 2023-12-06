@@ -15,8 +15,7 @@ module PubKey (
     rsaParams,
 ) where
 
-import Test.Tasty.QuickCheck
-
+import Control.Concurrent.MVar
 import Crypto.Error
 import qualified Crypto.PubKey.DH as DH
 import qualified Crypto.PubKey.DSA as DSA
@@ -28,9 +27,8 @@ import qualified Crypto.PubKey.Ed448 as Ed448
 import qualified Crypto.PubKey.RSA as RSA
 import Crypto.Random
 import qualified Data.ByteString as B
-
-import Control.Concurrent.MVar
 import System.IO.Unsafe
+import Test.QuickCheck
 
 arbitraryRSAPair :: Gen (RSA.PublicKey, RSA.PrivateKey)
 arbitraryRSAPair = (rngToRSA . drgNewTest) `fmap` arbitrary

@@ -1,56 +1,158 @@
--- Disable this warning so we can still test deprecated functionality.
-{-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Connection (
-    newPairContext,
-    arbitraryCiphers,
-    arbitraryVersions,
-    arbitraryHashSignatures,
-    arbitraryGroups,
-    arbitraryKeyUsage,
-    arbitraryPairParams,
-    arbitraryPairParams13,
-    arbitraryPairParamsWithVersionsAndCiphers,
-    arbitraryClientCredential,
-    arbitraryCredentialsOfEachCurve,
-    arbitraryRSACredentialWithUsage,
-    dhParamsGroup,
-    getConnectVersion,
-    isVersionEnabled,
-    isCustomDHParams,
-    isLeafRSA,
-    isCredentialDSA,
-    arbitraryEMSMode,
-    setEMSMode,
-    readClientSessionRef,
-    twoSessionRefs,
-    twoSessionManagers,
-    setPairParamsSessionManagers,
-    setPairParamsSessionResuming,
-    withDataPipe,
-    initiateDataPipe,
-    byeBye,
-) where
+module Arbitrary where
+
+import Control.Monad
+import qualified Data.ByteString as B
+import Data.Default.Class
+import Data.List
+import Data.Word
+import Data.X509 (
+    CertificateChain (..),
+    ExtKeyUsageFlag,
+    certPubKey,
+    getCertificate,
+ )
+import Network.TLS
+import Network.TLS.Extra.Cipher
+import Network.TLS.Extra.FFDHE
+import Network.TLS.Internal
+import Test.QuickCheck
 
 import Certificate
-import Control.Concurrent
-import Control.Concurrent.Async
-import qualified Control.Exception as E
-import Control.Monad (unless, when)
-import Data.Default.Class
-import Data.IORef
-import Data.List (intersect)
-import Data.X509
-import Network.TLS as TLS
-import Network.TLS.Extra
-import PipeChan
 import PubKey
-import Test.Tasty.QuickCheck
 
-import qualified Data.ByteString as B
+----------------------------------------------------------------
 
-debug :: Bool
-debug = False
+instance Arbitrary Version where
+    arbitrary = elements [TLS12, TLS13]
+
+instance Arbitrary ProtocolType where
+    arbitrary =
+        elements
+            [ ProtocolType_ChangeCipherSpec
+            , ProtocolType_Alert
+            , ProtocolType_Handshake
+            , ProtocolType_AppData
+            ]
+
+instance Arbitrary Header where
+    arbitrary = Header <$> arbitrary <*> arbitrary <*> arbitrary
+
+instance Arbitrary ClientRandom where
+    arbitrary = ClientRandom <$> genByteString 32
+
+instance Arbitrary ServerRandom where
+    arbitrary = ServerRandom <$> genByteString 32
+
+instance Arbitrary Session where
+    arbitrary = do
+        i <- choose (1, 2) :: Gen Int
+        case i of
+            2 -> Session . Just <$> genByteString 32
+            _ -> return $ Session Nothing
+
+instance {-# OVERLAPS #-} Arbitrary [HashAndSignatureAlgorithm] where
+    arbitrary = shuffle supportedSignatureSchemes
+
+instance Arbitrary DigitallySigned where
+    arbitrary = DigitallySigned <$> (head <$> arbitrary) <*> genByteString 32
+
+instance Arbitrary ExtensionRaw where
+    arbitrary =
+        let arbitraryContent = choose (0, 40) >>= genByteString
+         in ExtensionRaw <$> (ExtensionID <$> arbitrary) <*> arbitraryContent
+
+instance Arbitrary CertificateType where
+    arbitrary =
+        elements
+            [ CertificateType_RSA_Sign
+            , CertificateType_DSA_Sign
+            , CertificateType_ECDSA_Sign
+            ]
+
+instance Arbitrary Handshake where
+    arbitrary =
+        oneof
+            [ arbitrary >>= \ver ->
+                ClientHello ver
+                    <$> arbitrary
+                    <*> arbitrary
+                    <*> arbitraryCiphersIDs
+                    <*> arbitraryCompressionIDs
+                    <*> arbitraryHelloExtensions ver
+                    <*> return Nothing
+            , arbitrary >>= \ver ->
+                ServerHello ver
+                    <$> arbitrary
+                    <*> arbitrary
+                    <*> arbitrary
+                    <*> arbitrary
+                    <*> arbitraryHelloExtensions ver
+            , Certificates . CertificateChain <$> resize 2 (listOf arbitraryX509)
+            , pure HelloRequest
+            , pure ServerHelloDone
+            , ClientKeyXchg . CKX_RSA <$> genByteString 48
+            , CertRequest <$> arbitrary <*> arbitrary <*> listOf arbitraryDN
+            , CertVerify <$> arbitrary
+            , Finished <$> genByteString 12
+            ]
+
+instance Arbitrary Handshake13 where
+    arbitrary =
+        oneof
+            [ arbitrary >>= \ver ->
+                ClientHello13 ver
+                    <$> arbitrary
+                    <*> arbitrary
+                    <*> arbitraryCiphersIDs
+                    <*> arbitraryHelloExtensions ver
+            , arbitrary >>= \ver ->
+                ServerHello13
+                    <$> arbitrary
+                    <*> arbitrary
+                    <*> arbitrary
+                    <*> arbitraryHelloExtensions ver
+            , NewSessionTicket13
+                <$> arbitrary
+                <*> arbitrary
+                <*> genByteString 32 -- nonce
+                <*> genByteString 32 -- session ID
+                <*> arbitrary
+            , pure EndOfEarlyData13
+            , EncryptedExtensions13 <$> arbitrary
+            , CertRequest13
+                <$> arbitraryCertReqContext
+                <*> arbitrary
+            , resize 2 (listOf arbitraryX509) >>= \certs ->
+                Certificate13
+                    <$> arbitraryCertReqContext
+                    <*> return (CertificateChain certs)
+                    <*> replicateM (length certs) arbitrary
+            , CertVerify13 <$> (head <$> arbitrary) <*> genByteString 32
+            , Finished13 <$> genByteString 12
+            , KeyUpdate13 <$> elements [UpdateNotRequested, UpdateRequested]
+            ]
+
+----------------------------------------------------------------
+
+arbitraryCiphersIDs :: Gen [Word16]
+arbitraryCiphersIDs = choose (0, 200) >>= vector
+
+arbitraryCompressionIDs :: Gen [Word8]
+arbitraryCompressionIDs = choose (0, 200) >>= vector
+
+someWords8 :: Int -> Gen [Word8]
+someWords8 = vector
+
+arbitraryHelloExtensions :: Version -> Gen [ExtensionRaw]
+arbitraryHelloExtensions _ver = arbitrary
+
+arbitraryCertReqContext :: Gen B.ByteString
+arbitraryCertReqContext = oneof [return B.empty, genByteString 32]
+
+----------------------------------------------------------------
 
 knownCiphers :: [Cipher]
 knownCiphers = ciphersuite_all ++ ciphersuite_weak
@@ -59,41 +161,14 @@ knownCiphers = ciphersuite_all ++ ciphersuite_weak
         [ cipher_null_SHA1
         ]
 
-arbitraryCiphers :: Gen [Cipher]
-arbitraryCiphers = listOf1 $ elements knownCiphers
+instance Arbitrary Cipher where
+    arbitrary = elements knownCiphers
 
 knownVersions :: [Version]
 knownVersions = [TLS13, TLS12]
 
 arbitraryVersions :: Gen [Version]
 arbitraryVersions = sublistOf knownVersions
-
--- for performance reason ecdsa_secp521r1_sha512 is not tested
-knownHashSignatures :: [HashAndSignatureAlgorithm]
-knownHashSignatures =
-    [ (TLS.HashIntrinsic, SignatureRSApssRSAeSHA512)
-    , (TLS.HashIntrinsic, SignatureRSApssRSAeSHA384)
-    , (TLS.HashIntrinsic, SignatureRSApssRSAeSHA256)
-    , (TLS.HashIntrinsic, SignatureEd25519)
-    , (TLS.HashIntrinsic, SignatureEd448)
-    , (TLS.HashSHA512, SignatureRSA)
-    , (TLS.HashSHA384, SignatureRSA)
-    , (TLS.HashSHA384, SignatureECDSA)
-    , (TLS.HashSHA256, SignatureRSA)
-    , (TLS.HashSHA256, SignatureECDSA)
-    , (TLS.HashSHA1, SignatureRSA)
-    , (TLS.HashSHA1, SignatureDSA)
-    ]
-
-knownHashSignatures13 :: [HashAndSignatureAlgorithm]
-knownHashSignatures13 = filter compat knownHashSignatures
-  where
-    compat (h, s) = h /= TLS.HashSHA1 && s /= SignatureDSA && s /= SignatureRSA
-
-arbitraryHashSignatures :: Version -> Gen [HashAndSignatureAlgorithm]
-arbitraryHashSignatures v = sublistOf l
-  where
-    l = if v < TLS13 then knownHashSignatures else knownHashSignatures13
 
 -- for performance reason P521, FFDHE6144, FFDHE8192 are not tested
 knownGroups, knownECGroups, knownFFGroups :: [Group]
@@ -107,12 +182,17 @@ defaultECGroup = P256 -- same as defaultECCurve
 otherKnownECGroups :: [Group]
 otherKnownECGroups = filter (/= defaultECGroup) knownECGroups
 
-arbitraryGroups :: Gen [Group]
-arbitraryGroups = scale (min 5) $ listOf1 $ elements knownGroups
+instance Arbitrary Group where
+    arbitrary = elements knownGroups
+
+instance {-# OVERLAPS #-} Arbitrary [Group] where
+    arbitrary = sublistOf knownGroups
 
 isCredentialDSA :: (CertificateChain, PrivKey) -> Bool
 isCredentialDSA (_, PrivKeyDSA _) = True
 isCredentialDSA _ = False
+
+----------------------------------------------------------------
 
 arbitraryCredentialsOfEachType :: Gen [(CertificateChain, PrivKey)]
 arbitraryCredentialsOfEachType = arbitraryCredentialsOfEachType' >>= shuffle
@@ -121,7 +201,7 @@ arbitraryCredentialsOfEachType' :: Gen [(CertificateChain, PrivKey)]
 arbitraryCredentialsOfEachType' = do
     let (pubKey, privKey) = getGlobalRSAPair
         curveName = defaultECCurve
-    (dsaPub, dsaPriv) <- arbitraryDSAPair
+--    (dsaPub, dsaPriv) <- arbitraryDSAPair
     (ecdsaPub, ecdsaPriv) <- arbitraryECDSAPair curveName
     (ed25519Pub, ed25519Priv) <- arbitraryEd25519Pair
     (ed448Pub, ed448Priv) <- arbitraryEd448Pair
@@ -131,7 +211,7 @@ arbitraryCredentialsOfEachType' = do
             return (CertificateChain [cert], priv)
         )
         [ (PubKeyRSA pubKey, PrivKeyRSA privKey)
-        , (PubKeyDSA dsaPub, PrivKeyDSA dsaPriv)
+--        , (PubKeyDSA dsaPub, PrivKeyDSA dsaPriv)
         , (toPubKeyEC curveName ecdsaPub, toPrivKeyEC curveName ecdsaPriv)
         , (PubKeyEd25519 ed25519Pub, PrivKeyEd25519 ed25519Priv)
         , (PubKeyEd448 ed448Pub, PrivKeyEd448 ed448Priv)
@@ -161,6 +241,8 @@ arbitraryCredentialsOfEachCurve' = do
           ]
             ++ ecdsaPairs
 
+----------------------------------------------------------------
+
 dhParamsGroup :: DHParams -> Maybe Group
 dhParamsGroup params
     | params == ffdhe2048 = Just FFDHE2048
@@ -182,10 +264,10 @@ isLeafRSA chain = case chain >>= leafPublicKey of
 arbitraryCipherPair :: Version -> Gen ([Cipher], [Cipher])
 arbitraryCipherPair connectVersion = do
     serverCiphers <-
-        arbitraryCiphers
+        arbitrary
             `suchThat` (\cs -> or [cipherAllowedForVersion connectVersion x | x <- cs])
     clientCiphers <-
-        arbitraryCiphers
+        arbitrary
             `suchThat` ( \cs ->
                             or
                                 [ x `elem` serverCiphers
@@ -195,20 +277,29 @@ arbitraryCipherPair connectVersion = do
                        )
     return (clientCiphers, serverCiphers)
 
-arbitraryPairParams :: Gen (ClientParams, ServerParams)
-arbitraryPairParams = elements knownVersions >>= arbitraryPairParamsAt
+----------------------------------------------------------------
+
+instance {-# OVERLAPS #-} Arbitrary (ClientParams, ServerParams) where
+    arbitrary = elements knownVersions >>= arbitraryPairParamsAt
+
+----------------------------------------------------------------
+
+data GGP = GGP [Group] [Group] deriving (Show)
+
+instance Arbitrary GGP where
+    arbitrary = arbitraryGroupPair
 
 -- Pair of groups so that at least the default EC group P256 and one FF group
 -- are in common.  This makes DHE and ECDHE ciphers always compatible with
 -- extension "Supported Elliptic Curves" / "Supported Groups".
-arbitraryGroupPair :: Gen ([Group], [Group])
+arbitraryGroupPair :: Gen GGP
 arbitraryGroupPair = do
     (serverECGroups, clientECGroups) <-
         arbitraryGroupPairWith defaultECGroup otherKnownECGroups
     (serverFFGroups, clientFFGroups) <- arbitraryGroupPairFrom knownFFGroups
     serverGroups <- shuffle (serverECGroups ++ serverFFGroups)
     clientGroups <- shuffle (clientECGroups ++ clientFFGroups)
-    return (clientGroups, serverGroups)
+    return $ GGP clientGroups serverGroups
   where
     arbitraryGroupPairFrom list =
         elements list >>= \e ->
@@ -217,6 +308,8 @@ arbitraryGroupPair = do
         s <- sublistOf es
         c <- sublistOf es
         return (e : s, e : c)
+
+----------------------------------------------------------------
 
 arbitraryPairParams13 :: Gen (ClientParams, ServerParams)
 arbitraryPairParams13 = arbitraryPairParamsAt TLS13
@@ -259,6 +352,8 @@ arbitraryPairParamsAt connectVersion = do
             suffix <- vectorOf (num - pos) $ elements others
             return $ prefix ++ (fixedElement : suffix)
 
+----------------------------------------------------------------
+
 getConnectVersion :: (ClientParams, ServerParams) -> Version
 getConnectVersion (cparams, sparams) = maximum (cver `intersect` sver)
   where
@@ -270,13 +365,6 @@ isVersionEnabled ver (cparams, sparams) =
     (ver `elem` supportedVersions (serverSupported sparams))
         && (ver `elem` supportedVersions (clientSupported cparams))
 
-arbitraryHashSignaturePair
-    :: Gen ([HashAndSignatureAlgorithm], [HashAndSignatureAlgorithm])
-arbitraryHashSignaturePair = do
-    serverHashSignatures <- shuffle knownHashSignatures
-    clientHashSignatures <- shuffle knownHashSignatures
-    return (clientHashSignatures, serverHashSignatures)
-
 arbitraryPairParamsWithVersionsAndCiphers
     :: ([Version], [Version])
     -> ([Cipher], [Cipher])
@@ -286,8 +374,9 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
     dhparams <- elements [dhParams512, ffdhe2048, ffdhe3072]
 
     creds <- arbitraryCredentialsOfEachType
-    (clientGroups, serverGroups) <- arbitraryGroupPair
-    (clientHashSignatures, serverHashSignatures) <- arbitraryHashSignaturePair
+    GGP clientGroups serverGroups <- arbitraryGroupPair
+    clientHashSignatures <- arbitrary
+    serverHashSignatures <- arbitrary
     let serverState =
             def
                 { serverSupported =
@@ -332,10 +421,10 @@ arbitraryRSACredentialWithUsage usageFlags = do
     cert <- arbitraryX509WithKeyAndUsage usageFlags (PubKeyRSA pubKey, ())
     return (CertificateChain [cert], PrivKeyRSA privKey)
 
-arbitraryEMSMode :: Gen (EMSMode, EMSMode)
-arbitraryEMSMode = (,) <$> gen <*> gen
-  where
-    gen = elements [NoEMS, AllowEMS, RequireEMS]
+instance {-# OVERLAPS #-} Arbitrary (EMSMode, EMSMode) where
+    arbitrary = (,) <$> gen <*> gen
+      where
+        gen = elements [NoEMS, AllowEMS, RequireEMS]
 
 setEMSMode
     :: (EMSMode, EMSMode)
@@ -358,146 +447,5 @@ setEMSMode (cems, sems) (clientParam, serverParam) = (clientParam', serverParam'
                     }
             }
 
-readClientSessionRef :: (IORef mclient, IORef mserver) -> IO mclient
-readClientSessionRef refs = readIORef (fst refs)
-
-twoSessionRefs :: IO (IORef (Maybe client), IORef (Maybe server))
-twoSessionRefs = (,) <$> newIORef Nothing <*> newIORef Nothing
-
--- | simple session manager to store one session id and session data for a single thread.
--- a Real concurrent session manager would use an MVar and have multiples items.
-oneSessionManager :: IORef (Maybe (SessionID, SessionData)) -> SessionManager
-oneSessionManager ref =
-    SessionManager
-        { sessionResume = \myId -> readIORef ref >>= maybeResume False myId
-        , sessionResumeOnlyOnce = \myId -> readIORef ref >>= maybeResume True myId
-        , sessionEstablish = \myId dat -> writeIORef ref $ Just (myId, dat)
-        , sessionInvalidate = \_ -> return ()
-        }
-  where
-    maybeResume onlyOnce myId (Just (sid, sdata))
-        | sid == myId = when onlyOnce (writeIORef ref Nothing) >> return (Just sdata)
-    maybeResume _ _ _ = return Nothing
-
-twoSessionManagers
-    :: (IORef (Maybe (SessionID, SessionData)), IORef (Maybe (SessionID, SessionData)))
-    -> (SessionManager, SessionManager)
-twoSessionManagers (cRef, sRef) = (oneSessionManager cRef, oneSessionManager sRef)
-
-setPairParamsSessionManagers
-    :: (SessionManager, SessionManager)
-    -> (ClientParams, ServerParams)
-    -> (ClientParams, ServerParams)
-setPairParamsSessionManagers (clientManager, serverManager) (clientState, serverState) = (nc, ns)
-  where
-    nc =
-        clientState
-            { clientShared = updateSessionManager clientManager $ clientShared clientState
-            }
-    ns =
-        serverState
-            { serverShared = updateSessionManager serverManager $ serverShared serverState
-            }
-    updateSessionManager manager shared = shared{sharedSessionManager = manager}
-
-setPairParamsSessionResuming
-    :: (SessionID, SessionData)
-    -> (ClientParams, ServerParams)
-    -> (ClientParams, ServerParams)
-setPairParamsSessionResuming sessionStuff (clientState, serverState) =
-    ( clientState{clientWantSessionResume = Just sessionStuff}
-    , serverState
-    )
-
-newPairContext
-    :: PipeChan -> (ClientParams, ServerParams) -> IO (Context, Context)
-newPairContext pipe (cParams, sParams) = do
-    let noFlush = return ()
-    let noClose = return ()
-
-    let cBackend = Backend noFlush noClose (writePipeA pipe) (readPipeA pipe)
-    let sBackend = Backend noFlush noClose (writePipeB pipe) (readPipeB pipe)
-    cCtx' <- contextNew cBackend cParams
-    sCtx' <- contextNew sBackend sParams
-
-    contextHookSetLogging cCtx' (logging "client: ")
-    contextHookSetLogging sCtx' (logging "server: ")
-
-    return (cCtx', sCtx')
-  where
-    logging pre =
-        if debug
-            then
-                def
-                    { loggingPacketSent = putStrLn . ((pre ++ ">> ") ++)
-                    , loggingPacketRecv = putStrLn . ((pre ++ "<< ") ++)
-                    }
-            else def
-
-withDataPipe
-    :: (ClientParams, ServerParams)
-    -> (Context -> Chan result -> IO ())
-    -> (Chan start -> Context -> IO ())
-    -> ((start -> IO (), IO result) -> IO a)
-    -> IO a
-withDataPipe params tlsServer tlsClient cont = do
-    -- initial setup
-    pipe <- newPipe
-    _ <- runPipe pipe
-    startQueue <- newChan
-    resultQueue <- newChan
-
-    (cCtx, sCtx) <- newPairContext pipe params
-
-    withAsync
-        ( E.catch
-            (tlsServer sCtx resultQueue)
-            (printAndRaise "server" (serverSupported $ snd params))
-        )
-        $ \sAsync -> withAsync
-            ( E.catch
-                (tlsClient startQueue cCtx)
-                (printAndRaise "client" (clientSupported $ fst params))
-            )
-            $ \cAsync -> do
-                let readResult = waitBoth cAsync sAsync >> readChan resultQueue
-                cont (writeChan startQueue, readResult)
-  where
-    printAndRaise :: String -> Supported -> E.SomeException -> IO ()
-    printAndRaise s supported e = do
-        putStrLn $
-            s
-                ++ " exception: "
-                ++ show e
-                ++ ", supported: "
-                ++ show supported
-        E.throwIO e
-
-initiateDataPipe
-    :: (ClientParams, ServerParams)
-    -> (Context -> IO a1)
-    -> (Context -> IO a)
-    -> IO (Either E.SomeException a, Either E.SomeException a1)
-initiateDataPipe params tlsServer tlsClient = do
-    -- initial setup
-    pipe <- newPipe
-    _ <- runPipe pipe
-
-    (cCtx, sCtx) <- newPairContext pipe params
-
-    async (tlsServer sCtx) >>= \sAsync ->
-        async (tlsClient cCtx) >>= \cAsync -> do
-            sRes <- waitCatch sAsync
-            cRes <- waitCatch cAsync
-            return (cRes, sRes)
-
--- Terminate the write direction and wait to receive the peer EOF.  This is
--- necessary in situations where we want to confirm the peer status, or to make
--- sure to receive late messages like session tickets.  In the test suite this
--- is used each time application code ends the connection without prior call to
--- 'recvData'.
-byeBye :: Context -> IO ()
-byeBye ctx = do
-    bye ctx
-    bs <- recvData ctx
-    unless (B.null bs) $ fail "byeBye: unexpected application data"
+genByteString :: Int -> Gen B.ByteString
+genByteString i = B.pack <$> vector i

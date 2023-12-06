@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -7,7 +8,6 @@ module Certificate (
     arbitraryX509WithKey,
     arbitraryX509WithKeyAndUsage,
     arbitraryDN,
-    arbitraryKeyUsage,
     simpleCertificate,
     simpleX509,
     toPubKeyEC,
@@ -21,7 +21,7 @@ import Data.ASN1.OID
 import qualified Data.ByteString as B
 import Data.Hourglass
 import Data.X509
-import Test.Tasty.QuickCheck
+import Test.QuickCheck
 
 import PubKey
 
@@ -123,8 +123,8 @@ arbitraryX509 = do
     let (pubKey, privKey) = getGlobalRSAPair
     arbitraryX509WithKey (PubKeyRSA pubKey, PrivKeyRSA privKey)
 
-arbitraryKeyUsage :: Gen [ExtKeyUsageFlag]
-arbitraryKeyUsage = sublistOf knownKeyUsage
+instance {-# OVERLAPS #-} Arbitrary [ExtKeyUsageFlag] where
+    arbitrary = sublistOf knownKeyUsage
 
 knownKeyUsage :: [ExtKeyUsageFlag]
 knownKeyUsage =

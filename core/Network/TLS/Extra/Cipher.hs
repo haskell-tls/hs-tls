@@ -30,8 +30,6 @@ module Network.TLS.Extra.Cipher (
     cipher_DHE_RSA_AES256_SHA1,
     cipher_DHE_RSA_AES128_SHA256,
     cipher_DHE_RSA_AES256_SHA256,
-    cipher_DHE_DSA_AES128_SHA1,
-    cipher_DHE_DSA_AES256_SHA1,
     cipher_DHE_RSA_AES128CCM_SHA256,
     cipher_DHE_RSA_AES128CCM8_SHA256,
     cipher_DHE_RSA_AES128GCM_SHA256,
@@ -345,8 +343,6 @@ complement_all =
     , cipher_ECDHE_ECDSA_AES256CCM8_SHA256
     , cipher_DHE_RSA_AES128CCM8_SHA256
     , cipher_DHE_RSA_AES256CCM8_SHA256
-    , cipher_DHE_DSA_AES256_SHA1
-    , cipher_DHE_DSA_AES128_SHA1
     , cipher_AES128CCM8_SHA256
     , cipher_AES256CCM8_SHA256
     , cipher_TLS13_AES128CCM8_SHA256
@@ -440,10 +436,7 @@ ciphersuite_dhe_rsa =
     ]
 
 ciphersuite_dhe_dss :: [Cipher]
-ciphersuite_dhe_dss =
-    [ cipher_DHE_DSA_AES256_SHA1
-    , cipher_DHE_DSA_AES128_SHA1
-    ]
+ciphersuite_dhe_dss = []
 
 -- | all unencrypted ciphers, do not use on insecure network.
 ciphersuite_unencrypted :: [Cipher]
@@ -596,19 +589,6 @@ cipher_null_SHA1 =
         , cipherMinVer = Nothing
         }
 
--- | AES cipher (128 bit key), DHE key exchanged signed by DSA and SHA1 for digest
-cipher_DHE_DSA_AES128_SHA1 :: Cipher
-cipher_DHE_DSA_AES128_SHA1 =
-    Cipher
-        { cipherID = 0x0032
-        , cipherName = "DHE-DSA-AES128-SHA1"
-        , cipherBulk = bulk_aes128
-        , cipherHash = SHA1
-        , cipherPRFHash = Nothing
-        , cipherKeyExchange = CipherKeyExchange_DHE_DSA
-        , cipherMinVer = Nothing
-        }
-
 -- | AES cipher (128 bit key), DHE key exchanged signed by RSA and SHA1 for digest
 cipher_DHE_RSA_AES128_SHA1 :: Cipher
 cipher_DHE_RSA_AES128_SHA1 =
@@ -620,15 +600,6 @@ cipher_DHE_RSA_AES128_SHA1 =
         , cipherPRFHash = Nothing
         , cipherKeyExchange = CipherKeyExchange_DHE_RSA
         , cipherMinVer = Nothing
-        }
-
--- | AES cipher (256 bit key), DHE key exchanged signed by DSA and SHA1 for digest
-cipher_DHE_DSA_AES256_SHA1 :: Cipher
-cipher_DHE_DSA_AES256_SHA1 =
-    cipher_DHE_DSA_AES128_SHA1
-        { cipherID = 0x0038
-        , cipherName = "DHE-DSA-AES256-SHA1"
-        , cipherBulk = bulk_aes256
         }
 
 -- | AES cipher (256 bit key), DHE key exchanged signed by RSA and SHA1 for digest
