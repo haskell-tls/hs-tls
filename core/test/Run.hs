@@ -8,6 +8,7 @@ module Run (
     runTLSPipeSimpleKeyUpdate,
     runTLSPipePredicate,
     runTLSInitFailure,
+    runTLSInitFailureGen,
     readClientSessionRef,
     twoSessionRefs,
     twoSessionManagers,

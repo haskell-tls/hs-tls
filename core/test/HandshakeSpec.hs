@@ -42,6 +42,8 @@ spec = do
         prop "can resume with extended master secret" handshake_ems
         prop "can handle ALPN" handshake_alpn
         prop "can handle SNI" handshake_sni
+        prop "can re-negotiate" handshake_renegotiation
+        prop "can resume session" handshake_session_resumption
 
 --------------------------------------------------------------
 
@@ -607,3 +609,50 @@ handshake_sni (clientParam, serverParam) = do
         writeIORef ref (Just name)
         return (Credentials [])
     serverName = "haskell.org"
+
+--------------------------------------------------------------
+
+handshake_renegotiation :: (ClientParams, ServerParams) -> IO ()
+handshake_renegotiation (cparams, sparams) = do
+    renegDisabled <- generate arbitrary
+    let sparams' =
+            sparams
+                { serverSupported =
+                    (serverSupported sparams)
+                        { supportedClientInitiatedRenegotiation = not renegDisabled
+                        }
+                }
+    if renegDisabled || isVersionEnabled TLS13 (cparams, sparams')
+        then runTLSInitFailureGen (cparams, sparams') hsServer hsClient
+        else runTLSPipe (cparams, sparams') tlsServer tlsClient
+  where
+    tlsServer ctx queue = do
+        hsServer ctx
+        checkCtxFinished ctx
+        d <- recvData ctx
+        writeChan queue [d]
+        bye ctx
+    tlsClient queue ctx = do
+        hsClient ctx
+        checkCtxFinished ctx
+        d <- readChan queue
+        sendData ctx (L.fromChunks [d])
+        byeBye ctx
+    hsServer = handshake
+    hsClient ctx = handshake ctx >> handshake ctx
+
+handshake_session_resumption :: (ClientParams, ServerParams) -> IO ()
+handshake_session_resumption plainParams = do
+    sessionRefs <- twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
+
+    let params = setPairParamsSessionManagers sessionManagers plainParams
+
+    runTLSPipeSimple params
+
+    -- and resume
+    sessionParams <- readClientSessionRef sessionRefs
+    sessionParams `shouldSatisfy` isJust
+    let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
+
+    runTLSPipeSimple params2
