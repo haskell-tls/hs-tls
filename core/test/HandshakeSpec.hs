@@ -125,9 +125,7 @@ handshake_hashsignatures (clientHashSigs, serverHashSigs) = do
         ciphers =
             [ cipher_ECDHE_RSA_AES256GCM_SHA384
             , cipher_ECDHE_ECDSA_AES256GCM_SHA384
-            , cipher_ECDHE_RSA_AES128CBC_SHA
-            , cipher_ECDHE_ECDSA_AES128CBC_SHA
-            , cipher_DHE_RSA_AES128_SHA1
+            , cipher_DHE_RSA_AES128CCM_SHA256
             , cipher_TLS13_AES128GCM_SHA256
             ]
     (clientParam, serverParam) <-
@@ -183,9 +181,7 @@ handshake_groups (clientGroups, serverGroups) = do
     let versions = if tls13 then [TLS13] else [TLS12]
         ciphers =
             [ cipher_ECDHE_RSA_AES256GCM_SHA384
-            , cipher_ECDHE_RSA_AES128CBC_SHA
             , cipher_DHE_RSA_AES256GCM_SHA384
-            , cipher_DHE_RSA_AES128_SHA1
             , cipher_TLS13_AES128GCM_SHA256
             ]
     (clientParam, serverParam) <-
@@ -240,7 +236,6 @@ handshake_ec (SG sigGroups) = do
     let versions = [TLS12, TLS13]
         ciphers =
             [ cipher_ECDHE_ECDSA_AES256GCM_SHA384
-            , cipher_ECDHE_ECDSA_AES128CBC_SHA
             , cipher_TLS13_AES128GCM_SHA256
             ]
         ecdhGroups = [X25519, X448] -- always enabled, so no ECDHE failure
@@ -299,14 +294,14 @@ instance Arbitrary OC where
       where
         otherCiphers =
             [ cipher_ECDHE_RSA_AES256GCM_SHA384
-            , cipher_ECDHE_RSA_AES128CBC_SHA
+            , cipher_ECDHE_RSA_AES128GCM_SHA256
             ]
 
 handshake_cert_fallback_cipher :: OC -> IO ()
 handshake_cert_fallback_cipher (OC clientCiphers serverCiphers)= do
     let clientVersions = [TLS12]
         serverVersions = [TLS12]
-        commonCiphers = [cipher_DHE_RSA_AES128_SHA1]
+        commonCiphers = [cipher_DHE_RSA_AES128GCM_SHA256]
         hashSignatures = [(HashSHA256, SignatureRSA), (HashSHA1, SignatureDSA)]
     chainRef <- newIORef Nothing
     (clientParam, serverParam) <-
@@ -399,12 +394,14 @@ handshake_server_key_usage :: [ExtKeyUsageFlag] -> IO ()
 handshake_server_key_usage usageFlags = do
     tls13 <- generate arbitrary
     let versions = if tls13 then [TLS13] else [TLS12]
-        ciphers =
-            [ cipher_ECDHE_RSA_AES128CBC_SHA
+        ciphers = ciphersuite_strong
+{- fixme
+            [ cipher_ECDHE_RSA_AES128GCM_SHA256
             , cipher_TLS13_AES128GCM_SHA256
-            , cipher_DHE_RSA_AES128_SHA1
-            , cipher_AES256_SHA256
+            , cipher_DHE_RSA_AES128GCM_SHA256
+            , cipher_ECDHE_ECDSA_AES128GCM_SHA256
             ]
+-}
     (clientParam, serverParam) <-
         generate $
             arbitraryPairParamsWithVersionsAndCiphers
@@ -681,7 +678,7 @@ instance Arbitrary DHP where
       where
         clientVersions = [TLS12]
         serverVersions = [TLS12]
-        ciphers = [cipher_DHE_RSA_AES128_SHA1]
+        ciphers = [cipher_DHE_RSA_AES128GCM_SHA256]
 
 handshake_dh :: DHP -> IO ()
 handshake_dh (DHP (clientParam, serverParam)) = do
