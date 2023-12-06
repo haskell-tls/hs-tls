@@ -1,6 +1,7 @@
 module HandshakeSpec where
 
 import qualified Data.ByteString as B
+import Data.IORef
 import Data.List
 import Data.Maybe
 import Network.TLS
@@ -26,6 +27,8 @@ spec = do
         prop "can negotiate cipher suite" handshake_ciphersuites
         prop "can negotiate group" handshake_groups
         prop "can negotiate elliptic curve" handshake_ec
+        prop "can fallback for certificate with cipher" handshake_cert_fallback_cipher
+        prop "can fallback for certificate with hash and signature" handshake_cert_fallback_hs
 
 pipe_work :: IO ()
 pipe_work = do
@@ -228,3 +231,111 @@ handshake_ec sigGroups' = do
     if ecdsaDenied
         then runTLSInitFailure (clientParam', serverParam')
         else runTLSPipeSimple (clientParam', serverParam')
+
+-- Tests ability to use or ignore client "signature_algorithms" extension when
+-- choosing a server certificate.  Here peers allow DHE_RSA_AES128_SHA1 but
+-- the server RSA certificate has a SHA-1 signature that the client does not
+-- support.  Server may choose the DSA certificate only when cipher
+-- DHE_DSA_AES128_SHA1 is allowed.  Otherwise it must fallback to the RSA
+-- certificate.
+
+data OC = OC [Cipher] [Cipher] deriving (Show)
+
+instance Arbitrary OC where
+    arbitrary = OC <$> sublistOf otherCiphers <*> sublistOf otherCiphers
+      where
+        otherCiphers =
+            [ cipher_ECDHE_RSA_AES256GCM_SHA384
+            , cipher_ECDHE_RSA_AES128CBC_SHA
+            ]
+
+handshake_cert_fallback_cipher :: OC -> IO ()
+handshake_cert_fallback_cipher (OC clientCiphers serverCiphers)= do
+    let clientVersions = [TLS12]
+        serverVersions = [TLS12]
+        commonCiphers = [cipher_DHE_RSA_AES128_SHA1]
+        hashSignatures = [(HashSHA256, SignatureRSA), (HashSHA1, SignatureDSA)]
+    chainRef <- newIORef Nothing
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                (clientVersions, serverVersions)
+                (clientCiphers ++ commonCiphers, serverCiphers ++ commonCiphers)
+    let clientParam' =
+            clientParam
+                { clientSupported =
+                    (clientSupported clientParam)
+                        { supportedHashSignatures = hashSignatures
+                        }
+                , clientHooks =
+                    (clientHooks clientParam)
+                        { onServerCertificate = \_ _ _ chain ->
+                            writeIORef chainRef (Just chain) >> return []
+                        }
+                }
+    runTLSPipeSimple (clientParam', serverParam)
+    serverChain <- readIORef chainRef
+    isLeafRSA serverChain `shouldBe` True
+
+-- Same as above but testing with supportedHashSignatures directly instead of
+-- ciphers, and thus allowing TLS13.  Peers accept RSA with SHA-256 but the
+-- server RSA certificate has a SHA-1 signature.  When Ed25519 is allowed by
+-- both client and server, the Ed25519 certificate is selected.  Otherwise the
+-- server fallbacks to RSA.
+--
+-- Note: SHA-1 is supposed to be disallowed in X.509 signatures with TLS13
+-- unless client advertises explicit support.  Currently this is not enforced by
+-- the library, which is useful to test this scenario.  SHA-1 could be replaced
+-- by another algorithm.
+
+data OHS = OHS [HashAndSignatureAlgorithm] [HashAndSignatureAlgorithm] deriving (Show)
+
+instance Arbitrary OHS where
+    arbitrary = OHS <$> sublistOf otherHS <*> sublistOf otherHS
+      where
+        otherHS = [(HashIntrinsic, SignatureEd25519)]
+
+handshake_cert_fallback_hs :: OHS -> IO ()
+handshake_cert_fallback_hs (OHS clientHS serverHS)= do
+    tls13 <- generate arbitrary
+    let versions = if tls13 then [TLS13] else [TLS12]
+        ciphers =
+            [ cipher_ECDHE_RSA_AES128GCM_SHA256
+            , cipher_ECDHE_ECDSA_AES128GCM_SHA256
+            , cipher_TLS13_AES128GCM_SHA256
+            ]
+        commonHS =
+            [ (HashSHA256, SignatureRSA)
+            , (HashIntrinsic, SignatureRSApssRSAeSHA256)
+            ]
+    chainRef <- newIORef Nothing
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                (versions, versions)
+                (ciphers, ciphers)
+    let clientParam' =
+            clientParam
+                { clientSupported =
+                    (clientSupported clientParam)
+                        { supportedHashSignatures = commonHS ++ clientHS
+                        }
+                , clientHooks =
+                    (clientHooks clientParam)
+                        { onServerCertificate = \_ _ _ chain ->
+                            writeIORef chainRef (Just chain) >> return []
+                        }
+                }
+        serverParam' =
+            serverParam
+                { serverSupported =
+                    (serverSupported serverParam)
+                        { supportedHashSignatures = commonHS ++ serverHS
+                        }
+                }
+        eddsaDisallowed =
+            (HashIntrinsic, SignatureEd25519) `notElem` clientHS
+                || (HashIntrinsic, SignatureEd25519) `notElem` serverHS
+    runTLSPipeSimple (clientParam', serverParam')
+    serverChain <- readIORef chainRef
+    isLeafRSA serverChain `shouldBe` eddsaDisallowed
