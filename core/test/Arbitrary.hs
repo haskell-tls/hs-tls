@@ -155,11 +155,7 @@ arbitraryCertReqContext = oneof [return B.empty, genByteString 32]
 ----------------------------------------------------------------
 
 knownCiphers :: [Cipher]
-knownCiphers = ciphersuite_all ++ ciphersuite_weak
-  where
-    ciphersuite_weak =
-        [ cipher_null_SHA1
-        ]
+knownCiphers = ciphersuite_all
 
 instance Arbitrary Cipher where
     arbitrary = elements knownCiphers
@@ -171,10 +167,10 @@ arbitraryVersions :: Gen [Version]
 arbitraryVersions = sublistOf knownVersions
 
 -- for performance reason P521, FFDHE6144, FFDHE8192 are not tested
-knownGroups, knownECGroups, knownFFGroups :: [Group]
+knownGroups, knownECGroups :: [Group]
 knownECGroups = [P256, P384, X25519, X448]
-knownFFGroups = [FFDHE2048, FFDHE3072, FFDHE4096]
-knownGroups = knownECGroups ++ knownFFGroups
+-- knownFFGroups = [FFDHE2048, FFDHE3072, FFDHE4096]
+knownGroups = knownECGroups
 
 defaultECGroup :: Group
 defaultECGroup = P256 -- same as defaultECCurve
@@ -296,14 +292,10 @@ arbitraryGroupPair :: Gen GGP
 arbitraryGroupPair = do
     (serverECGroups, clientECGroups) <-
         arbitraryGroupPairWith defaultECGroup otherKnownECGroups
-    (serverFFGroups, clientFFGroups) <- arbitraryGroupPairFrom knownFFGroups
-    serverGroups <- shuffle (serverECGroups ++ serverFFGroups)
-    clientGroups <- shuffle (clientECGroups ++ clientFFGroups)
+    serverGroups <- shuffle serverECGroups
+    clientGroups <- shuffle clientECGroups
     return $ GGP clientGroups serverGroups
   where
-    arbitraryGroupPairFrom list =
-        elements list >>= \e ->
-            arbitraryGroupPairWith e (filter (/= e) list)
     arbitraryGroupPairWith e es = do
         s <- sublistOf es
         c <- sublistOf es
@@ -371,7 +363,6 @@ arbitraryPairParamsWithVersionsAndCiphers
     -> Gen (ClientParams, ServerParams)
 arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clientCiphers, serverCiphers) = do
     secNeg <- arbitrary
-    dhparams <- elements [dhParams512, ffdhe2048, ffdhe3072]
 
     creds <- arbitraryCredentialsOfEachType
     GGP clientGroups serverGroups <- arbitraryGroupPair
@@ -387,7 +378,6 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
                         , supportedGroups = serverGroups
                         , supportedHashSignatures = serverHashSignatures
                         }
-                , serverDHEParams = Just dhparams
                 , serverShared = def{sharedCredentials = Credentials creds}
                 }
     let clientState =

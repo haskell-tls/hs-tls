@@ -303,7 +303,7 @@ handshakeServerWithTLS12 sparams ctx chosenVersion exts ciphers serverName clien
     -- empty lists.
     when (null ciphersFilteredVersion) $
         throwCore $
-            Error_Protocol "no cipher in common with the client" HandshakeFailure
+            Error_Protocol "no cipher in common with the TLS 1.2 client" HandshakeFailure
 
     let usedCipher = onCipherChoosing (serverHooks sparams) chosenVersion ciphersFilteredVersion
 
@@ -771,7 +771,7 @@ handshakeServerWithTLS13 sparams ctx chosenVersion exts clientCiphers _serverNam
     -- empty lists.
     when (null ciphersFilteredVersion) $
         throwCore $
-            Error_Protocol "no cipher in common with the client" HandshakeFailure
+            Error_Protocol "no cipher in common with the TLS 1.3 client" HandshakeFailure
     let usedCipher = onCipherChoosing (serverHooks sparams) chosenVersion ciphersFilteredVersion
         usedHash = cipherHash usedCipher
         rtt0 = case extensionLookup EID_EarlyData exts >>= extensionDecode MsgTClientHello of
