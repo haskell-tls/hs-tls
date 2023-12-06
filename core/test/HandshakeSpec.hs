@@ -36,7 +36,9 @@ spec = do
         prop "can negotiate group" handshake_groups
         prop "can negotiate elliptic curve" handshake_ec
         prop "can fallback for certificate with cipher" handshake_cert_fallback_cipher
-        prop "can fallback for certificate with hash and signature" handshake_cert_fallback_hs
+        prop
+            "can fallback for certificate with hash and signature"
+            handshake_cert_fallback_hs
         prop "can handle server key usage" handshake_server_key_usage
         prop "can handle client key usage" handshake_client_key_usage
         prop "can authenticate client" handshake_client_auth
@@ -291,7 +293,7 @@ instance Arbitrary OC where
             ]
 
 handshake_cert_fallback_cipher :: OC -> IO ()
-handshake_cert_fallback_cipher (OC clientCiphers serverCiphers)= do
+handshake_cert_fallback_cipher (OC clientCiphers serverCiphers) = do
     let clientVersions = [TLS12]
         serverVersions = [TLS12]
         commonCiphers = [cipher_ECDHE_RSA_AES128GCM_SHA256]
@@ -329,7 +331,8 @@ handshake_cert_fallback_cipher (OC clientCiphers serverCiphers)= do
 -- the library, which is useful to test this scenario.  SHA-1 could be replaced
 -- by another algorithm.
 
-data OHS = OHS [HashAndSignatureAlgorithm] [HashAndSignatureAlgorithm] deriving (Show)
+data OHS = OHS [HashAndSignatureAlgorithm] [HashAndSignatureAlgorithm]
+    deriving (Show)
 
 instance Arbitrary OHS where
     arbitrary = OHS <$> sublistOf otherHS <*> sublistOf otherHS
@@ -337,7 +340,7 @@ instance Arbitrary OHS where
         otherHS = [(HashIntrinsic, SignatureEd25519)]
 
 handshake_cert_fallback_hs :: OHS -> IO ()
-handshake_cert_fallback_hs (OHS clientHS serverHS)= do
+handshake_cert_fallback_hs (OHS clientHS serverHS) = do
     tls13 <- generate arbitrary
     let versions = if tls13 then [TLS13] else [TLS12]
         ciphers =
@@ -477,7 +480,7 @@ handshake_ems (cems, sems) = do
         then runTLSInitFailure params'
         else runTLSPipePredicate params' (maybe False p)
 
-newtype CompatEMS = CompatEMS (EMSMode,EMSMode) deriving (Show)
+newtype CompatEMS = CompatEMS (EMSMode, EMSMode) deriving (Show)
 
 instance Arbitrary CompatEMS where
     arbitrary = CompatEMS <$> (arbitrary `suchThat` compatible)

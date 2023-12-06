@@ -562,6 +562,7 @@ cipher_ECDHE_ECDSA_AES256CCM8_SHA256 =
         , cipherKeyExchange = CipherKeyExchange_ECDHE_ECDSA
         , cipherMinVer = Just TLS12 -- RFC 7251
         }
+
 ----------------------------------------------------------------
 -- RFC 7905
 

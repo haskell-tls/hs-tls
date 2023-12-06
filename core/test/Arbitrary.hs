@@ -197,7 +197,6 @@ arbitraryCredentialsOfEachType' :: Gen [(CertificateChain, PrivKey)]
 arbitraryCredentialsOfEachType' = do
     let (pubKey, privKey) = getGlobalRSAPair
         curveName = defaultECCurve
---    (dsaPub, dsaPriv) <- arbitraryDSAPair
     (ecdsaPub, ecdsaPriv) <- arbitraryECDSAPair curveName
     (ed25519Pub, ed25519Priv) <- arbitraryEd25519Pair
     (ed448Pub, ed448Priv) <- arbitraryEd448Pair
@@ -207,7 +206,6 @@ arbitraryCredentialsOfEachType' = do
             return (CertificateChain [cert], priv)
         )
         [ (PubKeyRSA pubKey, PrivKeyRSA privKey)
---        , (PubKeyDSA dsaPub, PrivKeyDSA dsaPriv)
         , (toPubKeyEC curveName ecdsaPub, toPrivKeyEC curveName ecdsaPriv)
         , (PubKeyEd25519 ed25519Pub, PrivKeyEd25519 ed25519Priv)
         , (PubKeyEd448 ed448Pub, PrivKeyEd448 ed448Priv)
