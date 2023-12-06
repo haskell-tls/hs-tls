@@ -279,13 +279,13 @@ arbitraryCipherPair connectVersion = do
 
 ----------------------------------------------------------------
 
-newtype CSP = CSP (ClientParams, ServerParams) deriving (Show)
-
-instance Arbitrary CSP where
-    arbitrary = CSP <$> arbitraryPairParams
+instance {-# OVERLAPS #-} Arbitrary (ClientParams, ServerParams) where
+    arbitrary = elements knownVersions >>= arbitraryPairParamsAt
 
 arbitraryPairParams :: Gen (ClientParams, ServerParams)
 arbitraryPairParams = elements knownVersions >>= arbitraryPairParamsAt
+
+----------------------------------------------------------------
 
 data GGP = GGP [Group] [Group] deriving (Show)
 
@@ -313,11 +313,6 @@ arbitraryGroupPair = do
         return (e : s, e : c)
 
 ----------------------------------------------------------------
-
-newtype CSP13 = CSP13 (ClientParams, ServerParams) deriving (Show)
-
-instance Arbitrary CSP13 where
-    arbitrary = CSP13 <$> arbitraryPairParams13
 
 arbitraryPairParams13 :: Gen (ClientParams, ServerParams)
 arbitraryPairParams13 = arbitraryPairParamsAt TLS13

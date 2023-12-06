@@ -11,13 +11,13 @@ import Network.TLS
 import Test.Hspec
 import Test.Hspec.QuickCheck
 
-import Arbitrary
+import Arbitrary ()
 import Run
 
 spec :: Spec
 spec = do
     describe "thread safety" $ do
-        prop "can read/write concurrently" $ \(CSP params) ->
+        prop "can read/write concurrently" $ \params ->
             runTLSPipe params tlsServer tlsClient
 
 tlsServer :: Context -> Chan [ByteString] -> IO ()

@@ -30,6 +30,8 @@ spec = do
         prop "can fallback for certificate with cipher" handshake_cert_fallback_cipher
         prop "can fallback for certificate with hash and signature" handshake_cert_fallback_hs
 
+--------------------------------------------------------------
+
 pipe_work :: IO ()
 pipe_work = do
     pipe <- newPipe
@@ -47,8 +49,17 @@ pipe_work = do
     d2' <- writePipeB pipe d2 >> readPipeA pipe (B.length d2)
     d2 `shouldBe` d2'
 
-handshake_simple :: CSP -> IO ()
-handshake_simple (CSP params) = runTLSPipeSimple params
+--------------------------------------------------------------
+
+handshake_simple :: (ClientParams, ServerParams) -> IO ()
+handshake_simple = runTLSPipeSimple
+
+--------------------------------------------------------------
+
+newtype CSP13 = CSP13 (ClientParams, ServerParams) deriving (Show)
+
+instance Arbitrary CSP13 where
+    arbitrary = CSP13 <$> arbitraryPairParams13
 
 handshake13_simple :: CSP13 -> IO ()
 handshake13_simple (CSP13 params) = runTLSPipeSimple13 params hs Nothing
@@ -57,8 +68,10 @@ handshake13_simple (CSP13 params) = runTLSPipeSimple13 params hs Nothing
     sgrps = supportedGroups $ serverSupported $ snd params
     hs = if head cgrps `elem` sgrps then FullHandshake else HelloRetryRequest
 
-handshake13_downgrade :: CSP -> IO ()
-handshake13_downgrade (CSP (cparam, sparam)) = do
+--------------------------------------------------------------
+
+handshake13_downgrade :: (ClientParams, ServerParams) -> IO ()
+handshake13_downgrade (cparam, sparam) = do
     versionForced <-
         generate $ elements (supportedVersions $ clientSupported cparam)
     let debug' = (serverDebug sparam){debugVersionForced = Just versionForced}
@@ -71,8 +84,10 @@ handshake13_downgrade (CSP (cparam, sparam)) = do
         then runTLSInitFailure params
         else runTLSPipeSimple params
 
-handshake_update_key :: CSP -> IO ()
-handshake_update_key (CSP params) = runTLSPipeSimpleKeyUpdate params
+handshake_update_key :: (ClientParams, ServerParams) -> IO ()
+handshake_update_key = runTLSPipeSimpleKeyUpdate
+
+--------------------------------------------------------------
 
 handshake_hashsignatures
     :: ([HashAndSignatureAlgorithm], [HashAndSignatureAlgorithm]) -> IO ()
@@ -131,6 +146,8 @@ handshake_ciphersuites (clientCiphers, serverCiphers) = do
     if shouldSucceed
         then runTLSPipeSimple (clientParam, serverParam)
         else runTLSInitFailure (clientParam, serverParam)
+
+--------------------------------------------------------------
 
 handshake_groups :: ([Group], [Group]) -> IO ()
 handshake_groups (clientGroups, serverGroups) = do
