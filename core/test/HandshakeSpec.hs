@@ -31,6 +31,7 @@ spec = do
         prop "can fallback for certificate with cipher" handshake_cert_fallback_cipher
         prop "can fallback for certificate with hash and signature" handshake_cert_fallback_hs
         prop "can handle key usage" handshake_srv_key_usage
+        prop "can authenticate client" handshake_client_auth
 
 --------------------------------------------------------------
 
@@ -396,3 +397,33 @@ handshake_srv_key_usage usageFlags = do
     if shouldSucceed
         then runTLSPipeSimple (clientParam, serverParam')
         else runTLSInitFailure (clientParam, serverParam')
+
+handshake_client_auth :: (ClientParams, ServerParams) -> IO ()
+handshake_client_auth (clientParam, serverParam) = do
+    let clientVersions = supportedVersions $ clientSupported clientParam
+        serverVersions = supportedVersions $ serverSupported serverParam
+        version = maximum (clientVersions `intersect` serverVersions)
+    cred <- generate (arbitraryClientCredential version)
+    let clientParam' =
+            clientParam
+                { clientHooks =
+                    (clientHooks clientParam)
+                        { onCertificateRequest = \_ -> return $ Just cred
+                        }
+                }
+        serverParam' =
+            serverParam
+                { serverWantClientCert = True
+                , serverHooks =
+                    (serverHooks serverParam)
+                        { onClientCertificate = validateChain cred
+                        }
+                }
+    let shouldFail = version == TLS13 && isCredentialDSA cred
+    if shouldFail
+        then runTLSInitFailure (clientParam', serverParam')
+        else runTLSPipeSimple (clientParam', serverParam')
+  where
+    validateChain cred chain
+        | chain == fst cred = return CertificateUsageAccept
+        | otherwise = return (CertificateUsageReject CertificateRejectUnknownCA)
