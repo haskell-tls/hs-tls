@@ -282,9 +282,6 @@ arbitraryCipherPair connectVersion = do
 instance {-# OVERLAPS #-} Arbitrary (ClientParams, ServerParams) where
     arbitrary = elements knownVersions >>= arbitraryPairParamsAt
 
-arbitraryPairParams :: Gen (ClientParams, ServerParams)
-arbitraryPairParams = elements knownVersions >>= arbitraryPairParamsAt
-
 ----------------------------------------------------------------
 
 data GGP = GGP [Group] [Group] deriving (Show)
