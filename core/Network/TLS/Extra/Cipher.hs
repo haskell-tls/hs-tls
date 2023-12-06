@@ -12,25 +12,8 @@ module Network.TLS.Extra.Cipher (
     ciphersuite_all_det,
     ciphersuite_strong,
     ciphersuite_strong_det,
-    ciphersuite_unencrypted,
-    ciphersuite_dhe_rsa,
-    ciphersuite_dhe_dss,
 
     -- * individual ciphers
-    cipher_null_SHA1,
-    cipher_AES128CCM_SHA256,
-    cipher_AES128CCM8_SHA256,
-    cipher_AES128GCM_SHA256,
-    cipher_AES256CCM_SHA256,
-    cipher_AES256CCM8_SHA256,
-    cipher_AES256GCM_SHA384,
-    cipher_DHE_RSA_AES128CCM_SHA256,
-    cipher_DHE_RSA_AES128CCM8_SHA256,
-    cipher_DHE_RSA_AES128GCM_SHA256,
-    cipher_DHE_RSA_AES256CCM_SHA256,
-    cipher_DHE_RSA_AES256CCM8_SHA256,
-    cipher_DHE_RSA_AES256GCM_SHA384,
-    cipher_DHE_RSA_CHACHA20POLY1305_SHA256,
     cipher_ECDHE_RSA_AES128GCM_SHA256,
     cipher_ECDHE_RSA_AES256GCM_SHA384,
     cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256,
@@ -237,15 +220,6 @@ sets_default =
         [cipher_ECDHE_RSA_AES128GCM_SHA256, cipher_ECDHE_RSA_AES256GCM_SHA384]
         [cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256]
         []
-    , SetAead
-        [cipher_DHE_RSA_AES128GCM_SHA256, cipher_DHE_RSA_AES256GCM_SHA384]
-        [cipher_DHE_RSA_CHACHA20POLY1305_SHA256]
-        [cipher_DHE_RSA_AES128CCM_SHA256, cipher_DHE_RSA_AES256CCM_SHA256]
-    , -- Next the non-PFS + AEAD + SHA2 ciphers
-      SetAead
-        [cipher_AES128GCM_SHA256, cipher_AES256GCM_SHA384]
-        []
-        [cipher_AES128CCM_SHA256, cipher_AES256CCM_SHA256]
     , -- TLS13 (listed at the end but version is negotiated first)
       SetAead
         [cipher_TLS13_AES128GCM_SHA256, cipher_TLS13_AES256GCM_SHA384]
@@ -272,10 +246,6 @@ complement_all :: [Cipher]
 complement_all =
     [ cipher_ECDHE_ECDSA_AES128CCM8_SHA256
     , cipher_ECDHE_ECDSA_AES256CCM8_SHA256
-    , cipher_DHE_RSA_AES128CCM8_SHA256
-    , cipher_DHE_RSA_AES256CCM8_SHA256
-    , cipher_AES128CCM8_SHA256
-    , cipher_AES256CCM8_SHA256
     , cipher_TLS13_AES128CCM8_SHA256
     ]
 
@@ -313,19 +283,6 @@ sets_strong =
         [cipher_ECDHE_RSA_AES128GCM_SHA256]
         []
         []
-    , SetAead
-        [cipher_DHE_RSA_AES256GCM_SHA384]
-        [cipher_DHE_RSA_CHACHA20POLY1305_SHA256]
-        [cipher_DHE_RSA_AES256CCM_SHA256]
-    , SetAead
-        [cipher_DHE_RSA_AES128GCM_SHA256]
-        []
-        [cipher_DHE_RSA_AES128CCM_SHA256]
-    , -- No PFS
-      SetAead
-        [cipher_AES256GCM_SHA384]
-        []
-        [cipher_AES256CCM_SHA256]
     , -- TLS13 (listed at the end but version is negotiated first)
       SetAead
         [cipher_TLS13_AES256GCM_SHA384]
@@ -337,39 +294,7 @@ sets_strong =
         [cipher_TLS13_AES128CCM_SHA256]
     ]
 
--- | DHE-RSA cipher suite.  This only includes ciphers bound specifically to
--- DHE-RSA so TLS 1.3 ciphers must be added separately.
-ciphersuite_dhe_rsa :: [Cipher]
-ciphersuite_dhe_rsa =
-    [ cipher_DHE_RSA_AES256GCM_SHA384
-    , cipher_DHE_RSA_AES256CCM_SHA256
-    , cipher_DHE_RSA_CHACHA20POLY1305_SHA256
-    , cipher_DHE_RSA_AES128GCM_SHA256
-    , cipher_DHE_RSA_AES128CCM_SHA256
-    ]
-
-ciphersuite_dhe_dss :: [Cipher]
-ciphersuite_dhe_dss = []
-
--- | all unencrypted ciphers, do not use on insecure network.
-ciphersuite_unencrypted :: [Cipher]
-ciphersuite_unencrypted = [cipher_null_SHA1]
-
 ----------------------------------------------------------------
-
-bulk_null :: Bulk
-bulk_null =
-    Bulk
-        { bulkName = "null"
-        , bulkKeySize = 0
-        , bulkIVSize = 0
-        , bulkExplicitIV = 0
-        , bulkAuthTagLen = 0
-        , bulkBlockSize = 0
-        , bulkF = BulkStreamF passThrough
-        }
-  where
-    passThrough _ _ = BulkStream go where go inp = (inp, BulkStream go)
 
 bulk_aes128ccm :: Bulk
 bulk_aes128ccm =
@@ -472,77 +397,6 @@ bulk_aes128ccm8_13 = bulk_aes128ccm8{bulkIVSize = 12, bulkExplicitIV = 0}
 
 -- A list of cipher suite is found from:
 -- https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-4
-
-----------------------------------------------------------------
--- RFC 5246
-
--- | unencrypted cipher using RSA for key exchange and SHA1 for digest
-cipher_null_SHA1 :: Cipher
-cipher_null_SHA1 =
-    Cipher
-        { cipherID = 0x0002
-        , cipherName = "TLS_RSA_WITH_NULL_SHA"
-        , cipherBulk = bulk_null
-        , cipherHash = SHA1
-        , cipherPRFHash = Nothing
-        , cipherKeyExchange = CipherKeyExchange_RSA
-        , cipherMinVer = Nothing
-        }
-
-----------------------------------------------------------------
--- RFC 5288
-
--- | AESGCM cipher (128 bit key), RSA key exchange.
--- The SHA256 digest is used as a PRF, not as a MAC.
-cipher_AES128GCM_SHA256 :: Cipher
-cipher_AES128GCM_SHA256 =
-    Cipher
-        { cipherID = 0x009C
-        , cipherName = "TLS_RSA_WITH_AES_128_GCM_SHA256"
-        , cipherBulk = bulk_aes128gcm
-        , cipherHash = SHA256
-        , cipherPRFHash = Just SHA256
-        , cipherKeyExchange = CipherKeyExchange_RSA
-        , cipherMinVer = Just TLS12
-        }
-
--- | AESGCM cipher (256 bit key), RSA key exchange.
--- The SHA384 digest is used as a PRF, not as a MAC.
-cipher_AES256GCM_SHA384 :: Cipher
-cipher_AES256GCM_SHA384 =
-    Cipher
-        { cipherID = 0x009D
-        , cipherName = "TLS_RSA_WITH_AES_256_GCM_SHA384"
-        , cipherBulk = bulk_aes256gcm
-        , cipherHash = SHA384
-        , cipherPRFHash = Just SHA384
-        , cipherKeyExchange = CipherKeyExchange_RSA
-        , cipherMinVer = Just TLS12
-        }
-
-cipher_DHE_RSA_AES128GCM_SHA256 :: Cipher
-cipher_DHE_RSA_AES128GCM_SHA256 =
-    Cipher
-        { cipherID = 0x009E
-        , cipherName = "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256"
-        , cipherBulk = bulk_aes128gcm
-        , cipherHash = SHA256
-        , cipherPRFHash = Just SHA256
-        , cipherKeyExchange = CipherKeyExchange_DHE_RSA
-        , cipherMinVer = Just TLS12 -- RFC 5288 Sec 4
-        }
-
-cipher_DHE_RSA_AES256GCM_SHA384 :: Cipher
-cipher_DHE_RSA_AES256GCM_SHA384 =
-    Cipher
-        { cipherID = 0x009F
-        , cipherName = "TLS_DHE_RSA_WITH_AES_256_GCM_SHA384"
-        , cipherBulk = bulk_aes256gcm
-        , cipherHash = SHA384
-        , cipherPRFHash = Just SHA384
-        , cipherKeyExchange = CipherKeyExchange_DHE_RSA
-        , cipherMinVer = Just TLS12
-        }
 
 ----------------------------------------------------------------
 -- RFC 8446
@@ -659,113 +513,6 @@ cipher_ECDHE_RSA_AES256GCM_SHA384 =
         }
 
 ----------------------------------------------------------------
--- CCM: RFC 6655
-
--- | AESCCM cipher (128 bit key), RSA key exchange.
--- The SHA256 digest is used as a PRF, not as a MAC.
-cipher_AES128CCM_SHA256 :: Cipher
-cipher_AES128CCM_SHA256 =
-    Cipher
-        { cipherID = 0xC09C
-        , cipherName = "TLS_RSA_WITH_AES_128_CCM"
-        , cipherBulk = bulk_aes128ccm
-        , cipherHash = SHA256
-        , cipherPRFHash = Just SHA256
-        , cipherKeyExchange = CipherKeyExchange_RSA
-        , cipherMinVer = Just TLS12 -- RFC 6655 Sec 3
-        }
-
--- | AESCCM cipher (256 bit key), RSA key exchange.
--- The SHA256 digest is used as a PRF, not as a MAC.
-cipher_AES256CCM_SHA256 :: Cipher
-cipher_AES256CCM_SHA256 =
-    Cipher
-        { cipherID = 0xC09D
-        , cipherName = "TLS_RSA_WITH_AES_256_CCM"
-        , cipherBulk = bulk_aes256ccm
-        , cipherHash = SHA256
-        , cipherPRFHash = Just SHA256
-        , cipherKeyExchange = CipherKeyExchange_RSA
-        , cipherMinVer = Just TLS12 -- RFC 6655 Sec 3
-        }
-
-cipher_DHE_RSA_AES128CCM_SHA256 :: Cipher
-cipher_DHE_RSA_AES128CCM_SHA256 =
-    Cipher
-        { cipherID = 0xC09E
-        , cipherName = "TLS_DHE_RSA_WITH_AES_128_CCM"
-        , cipherBulk = bulk_aes128ccm
-        , cipherHash = SHA256
-        , cipherPRFHash = Just SHA256
-        , cipherKeyExchange = CipherKeyExchange_DHE_RSA
-        , cipherMinVer = Just TLS12 -- RFC 6655 Sec 3
-        }
-
-cipher_DHE_RSA_AES256CCM_SHA256 :: Cipher
-cipher_DHE_RSA_AES256CCM_SHA256 =
-    Cipher
-        { cipherID = 0xC09F
-        , cipherName = "TLS_DHE_RSA_WITH_AES_256_CCM"
-        , cipherBulk = bulk_aes256ccm
-        , cipherHash = SHA256
-        , cipherPRFHash = Just SHA256
-        , cipherKeyExchange = CipherKeyExchange_DHE_RSA
-        , cipherMinVer = Just TLS12 -- RFC 6655 Sec 3
-        }
-
--- | AESCCM8 cipher (128 bit key), RSA key exchange.
--- The SHA256 digest is used as a PRF, not as a MAC.
-cipher_AES128CCM8_SHA256 :: Cipher
-cipher_AES128CCM8_SHA256 =
-    Cipher
-        { cipherID = 0xC0A0
-        , cipherName = "TLS_RSA_WITH_AES_128_CCM_8"
-        , cipherBulk = bulk_aes128ccm8
-        , cipherHash = SHA256
-        , cipherPRFHash = Just SHA256
-        , cipherKeyExchange = CipherKeyExchange_RSA
-        , cipherMinVer = Just TLS12 -- RFC 6655 Sec 3
-        }
-
--- | AESCCM8 cipher (256 bit key), RSA key exchange.
--- The SHA256 digest is used as a PRF, not as a MAC.
-cipher_AES256CCM8_SHA256 :: Cipher
-cipher_AES256CCM8_SHA256 =
-    Cipher
-        { cipherID = 0xC0A1
-        , cipherName = "TLS_RSA_WITH_AES_256_CCM_8"
-        , cipherBulk = bulk_aes256ccm8
-        , cipherHash = SHA256
-        , cipherPRFHash = Just SHA256
-        , cipherKeyExchange = CipherKeyExchange_RSA
-        , cipherMinVer = Just TLS12 -- RFC 6655 Sec 3
-        }
-
-cipher_DHE_RSA_AES128CCM8_SHA256 :: Cipher
-cipher_DHE_RSA_AES128CCM8_SHA256 =
-    Cipher
-        { cipherID = 0xC0A2
-        , cipherName = "TLS_DHE_RSA_WITH_AES_128_CCM_8"
-        , cipherBulk = bulk_aes128ccm8
-        , cipherHash = SHA256
-        , cipherPRFHash = Just SHA256
-        , cipherKeyExchange = CipherKeyExchange_DHE_RSA
-        , cipherMinVer = Just TLS12 -- RFC 6655 Sec 3
-        }
-
-cipher_DHE_RSA_AES256CCM8_SHA256 :: Cipher
-cipher_DHE_RSA_AES256CCM8_SHA256 =
-    Cipher
-        { cipherID = 0xC0A3
-        , cipherName = "TLS_DHE_RSA_WITH_AES_256_CCM_8"
-        , cipherBulk = bulk_aes256ccm8
-        , cipherHash = SHA256
-        , cipherPRFHash = Just SHA256
-        , cipherKeyExchange = CipherKeyExchange_DHE_RSA
-        , cipherMinVer = Just TLS12 -- RFC 6655 Sec 3
-        }
-
-----------------------------------------------------------------
 -- CCM/ECC: RFC 7251
 
 cipher_ECDHE_ECDSA_AES128CCM_SHA256 :: Cipher
@@ -839,17 +586,5 @@ cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256 =
         , cipherHash = SHA256
         , cipherPRFHash = Just SHA256
         , cipherKeyExchange = CipherKeyExchange_ECDHE_ECDSA
-        , cipherMinVer = Just TLS12
-        }
-
-cipher_DHE_RSA_CHACHA20POLY1305_SHA256 :: Cipher
-cipher_DHE_RSA_CHACHA20POLY1305_SHA256 =
-    Cipher
-        { cipherID = 0xCCAA
-        , cipherName = "TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
-        , cipherBulk = bulk_chacha20poly1305
-        , cipherHash = SHA256
-        , cipherPRFHash = Just SHA256
-        , cipherKeyExchange = CipherKeyExchange_DHE_RSA
         , cipherMinVer = Just TLS12
         }
