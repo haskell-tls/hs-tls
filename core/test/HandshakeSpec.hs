@@ -30,7 +30,8 @@ spec = do
         prop "can negotiate elliptic curve" handshake_ec
         prop "can fallback for certificate with cipher" handshake_cert_fallback_cipher
         prop "can fallback for certificate with hash and signature" handshake_cert_fallback_hs
-        prop "can handle key usage" handshake_srv_key_usage
+        prop "can handle server key usage" handshake_server_key_usage
+        prop "can handle client key usage" handshake_client_key_usage
         prop "can authenticate client" handshake_client_auth
 
 --------------------------------------------------------------
@@ -368,8 +369,10 @@ handshake_cert_fallback_hs (OHS clientHS serverHS)= do
     serverChain <- readIORef chainRef
     isLeafRSA serverChain `shouldBe` eddsaDisallowed
 
-handshake_srv_key_usage :: [ExtKeyUsageFlag] -> IO ()
-handshake_srv_key_usage usageFlags = do
+--------------------------------------------------------------
+
+handshake_server_key_usage :: [ExtKeyUsageFlag] -> IO ()
+handshake_server_key_usage usageFlags = do
     tls13 <- generate arbitrary
     let versions = if tls13 then [TLS13] else [TLS12]
         ciphers =
@@ -397,6 +400,32 @@ handshake_srv_key_usage usageFlags = do
     if shouldSucceed
         then runTLSPipeSimple (clientParam, serverParam')
         else runTLSInitFailure (clientParam, serverParam')
+
+handshake_client_key_usage :: [ExtKeyUsageFlag] -> IO ()
+handshake_client_key_usage usageFlags = do
+    (clientParam, serverParam) <- generate arbitrary
+    cred <- generate $ arbitraryRSACredentialWithUsage usageFlags
+    let clientParam' =
+            clientParam
+                { clientHooks =
+                    (clientHooks clientParam)
+                        { onCertificateRequest = \_ -> return $ Just cred
+                        }
+                }
+        serverParam' =
+            serverParam
+                { serverWantClientCert = True
+                , serverHooks =
+                    (serverHooks serverParam)
+                        { onClientCertificate = \_ -> return CertificateUsageAccept
+                        }
+                }
+        shouldSucceed = KeyUsage_digitalSignature `elem` usageFlags
+    if shouldSucceed
+        then runTLSPipeSimple (clientParam', serverParam')
+        else runTLSInitFailure (clientParam', serverParam')
+
+--------------------------------------------------------------
 
 handshake_client_auth :: (ClientParams, ServerParams) -> IO ()
 handshake_client_auth (clientParam, serverParam) = do
