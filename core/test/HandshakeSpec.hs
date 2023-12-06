@@ -198,15 +198,23 @@ handshake_groups (clientGroups, serverGroups) = do
         then runTLSInitFailure (clientParam', serverParam')
         else runTLSPipePredicate (clientParam', serverParam') p
 
-handshake_ec :: [Group] -> IO ()
-handshake_ec sigGroups' = do
+--------------------------------------------------------------
+
+newtype SG = SG [Group] deriving (Show)
+
+instance Arbitrary SG where
+    arbitrary = SG <$> sublistOf sigGroups
+      where
+        sigGroups = [P256]
+
+handshake_ec :: SG -> IO ()
+handshake_ec (SG sigGroups) = do
     let versions = [TLS12, TLS13]
         ciphers =
             [ cipher_ECDHE_ECDSA_AES256GCM_SHA384
             , cipher_ECDHE_ECDSA_AES128CBC_SHA
             , cipher_TLS13_AES128GCM_SHA256
             ]
-        sigGroups = [P256]
         ecdhGroups = [X25519, X448] -- always enabled, so no ECDHE failure
         hashSignatures =
             [ (HashSHA256, SignatureECDSA)
