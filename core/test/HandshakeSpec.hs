@@ -4,6 +4,7 @@ import qualified Data.ByteString as B
 import Data.IORef
 import Data.List
 import Data.Maybe
+import Data.X509 hiding (HashSHA1, HashSHA256)
 import Network.TLS
 import Network.TLS.Extra.Cipher
 import Test.Hspec
@@ -29,6 +30,7 @@ spec = do
         prop "can negotiate elliptic curve" handshake_ec
         prop "can fallback for certificate with cipher" handshake_cert_fallback_cipher
         prop "can fallback for certificate with hash and signature" handshake_cert_fallback_hs
+        prop "can handle key usage" handshake_srv_key_usage
 
 --------------------------------------------------------------
 
@@ -364,3 +366,33 @@ handshake_cert_fallback_hs (OHS clientHS serverHS)= do
     runTLSPipeSimple (clientParam', serverParam')
     serverChain <- readIORef chainRef
     isLeafRSA serverChain `shouldBe` eddsaDisallowed
+
+handshake_srv_key_usage :: [ExtKeyUsageFlag] -> IO ()
+handshake_srv_key_usage usageFlags = do
+    tls13 <- generate arbitrary
+    let versions = if tls13 then [TLS13] else [TLS12]
+        ciphers =
+            [ cipher_ECDHE_RSA_AES128CBC_SHA
+            , cipher_TLS13_AES128GCM_SHA256
+            , cipher_DHE_RSA_AES128_SHA1
+            , cipher_AES256_SHA256
+            ]
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                (versions, versions)
+                (ciphers, ciphers)
+    cred <- generate $ arbitraryRSACredentialWithUsage usageFlags
+    let serverParam' =
+            serverParam
+                { serverShared =
+                    (serverShared serverParam)
+                        { sharedCredentials = Credentials [cred]
+                        }
+                }
+        hasDS = KeyUsage_digitalSignature `elem` usageFlags
+        hasKE = KeyUsage_keyEncipherment `elem` usageFlags
+        shouldSucceed = hasDS || (hasKE && not tls13)
+    if shouldSucceed
+        then runTLSPipeSimple (clientParam, serverParam')
+        else runTLSInitFailure (clientParam, serverParam')
