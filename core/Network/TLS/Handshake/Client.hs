@@ -88,7 +88,7 @@ handshakeClient' cparams ctx groups mparams = do
     updateMeasure ctx incrementNbHandshakes
     (crand, clientSession) <- generateClientHelloParams
     (rtt0, sentExtensions) <- sendClientHello clientSession crand
-    recvServerHello clientSession sentExtensions
+    recvServerHello ctx cparams clientSession sentExtensions
     ver <- usingState_ ctx getVersion
     unless (maybe True (\(_, _, v) -> v == ver) mparams) $
         throwCore $
@@ -340,29 +340,6 @@ handshakeClient' cparams ctx groups mparams = do
         usingHState ctx $ setTLS13RTT0Status RTT0Sent
         return $ EarlySecretInfo usedCipher clientEarlySecret
 
-    recvServerHello clientSession sentExts = runRecvState ctx recvState
-      where
-        recvState = RecvStateNext $ \p ->
-            case p of
-                Handshake hs ->
-                    onRecvStateHandshake
-                        ctx
-                        (RecvStateHandshake $ onServerHello ctx cparams clientSession sentExts)
-                        hs -- this adds SH to hstHandshakeMessages
-                Alert a ->
-                    case a of
-                        [(AlertLevel_Warning, UnrecognizedName)] ->
-                            if clientUseServerNameIndication cparams
-                                then return recvState
-                                else throwAlert a
-                        _ -> throwAlert a
-                _ -> unexpected (show p) (Just "handshake")
-        throwAlert a =
-            throwCore $
-                Error_Protocol
-                    ("expecting server hello, got alert : " ++ show a)
-                    HandshakeFailure
-
     helloRetry ver crand clientSession = case drop 1 groups of
         [] ->
             throwCore $
@@ -389,6 +366,30 @@ handshakeClient' cparams ctx groups mparams = do
                         Error_Protocol
                             "key exchange not implemented in HRR, expected key_share extension"
                             HandshakeFailure
+
+recvServerHello :: Context -> ClientParams -> Session -> [ExtensionID] -> IO ()
+recvServerHello ctx cparams clientSession sentExts = runRecvState ctx recvState
+  where
+    recvState = RecvStateNext $ \p ->
+        case p of
+            Handshake hs ->
+                onRecvStateHandshake
+                    ctx
+                    (RecvStateHandshake $ onServerHello ctx cparams clientSession sentExts)
+                    hs -- this adds SH to hstHandshakeMessages
+            Alert a ->
+                case a of
+                    [(AlertLevel_Warning, UnrecognizedName)] ->
+                        if clientUseServerNameIndication cparams
+                            then return recvState
+                            else throwAlert a
+                    _ -> throwAlert a
+            _ -> unexpected (show p) (Just "handshake")
+    throwAlert a =
+        throwCore $
+            Error_Protocol
+                ("expecting server hello, got alert : " ++ show a)
+                HandshakeFailure
 
 ----------------------------------------------------------------
 
