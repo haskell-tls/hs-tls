@@ -26,7 +26,7 @@ description:
 category:           Network
 build-type:         Simple
 extra-source-files:
-    Tests/*.hs
+    test/*.hs
     CHANGELOG.md
 
 source-repository head
@@ -157,7 +157,7 @@ test-suite spec
 benchmark bench-tls
     type:             exitcode-stdio-1.0
     main-is:          Benchmarks.hs
-    hs-source-dirs:   Benchmarks Tests
+    hs-source-dirs:   Benchmarks
     other-modules:
         Certificate
         Connection
