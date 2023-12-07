@@ -384,21 +384,16 @@ sendClientHello cparams ctx groups clientSession crand = do
 recvServerHello :: Context -> ClientParams -> Session -> [ExtensionID] -> IO ()
 recvServerHello ctx cparams clientSession sentExts = runRecvState ctx recvState
   where
-    recvState = RecvStateNext $ \p ->
-        case p of
-            Handshake hs ->
-                onRecvStateHandshake
-                    ctx
-                    (RecvStateHandshake $ onServerHello ctx cparams clientSession sentExts)
-                    hs -- this adds SH to hstHandshakeMessages
-            Alert a ->
-                case a of
-                    [(AlertLevel_Warning, UnrecognizedName)] ->
-                        if clientUseServerNameIndication cparams
-                            then return recvState
-                            else throwAlert a
-                    _ -> throwAlert a
-            _ -> unexpected (show p) (Just "handshake")
+    recvState = RecvStateNext next
+    next (Handshake hs) =
+        onRecvStateHandshake
+            ctx
+            (RecvStateHandshake $ onServerHello ctx cparams clientSession sentExts)
+            hs -- this adds SH to hstHandshakeMessages
+    next (Alert [(AlertLevel_Warning, UnrecognizedName)])
+        | clientUseServerNameIndication cparams = return recvState
+    next (Alert a) = throwAlert a
+    next p = unexpected (show p) (Just "handshake")
     throwAlert a =
         throwCore $
             Error_Protocol
