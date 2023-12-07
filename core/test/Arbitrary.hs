@@ -16,7 +16,6 @@ import Data.X509 (
  )
 import Network.TLS
 import Network.TLS.Extra.Cipher
-import Network.TLS.Extra.FFDHE
 import Network.TLS.Internal
 import Test.QuickCheck
 
@@ -167,10 +166,10 @@ arbitraryVersions :: Gen [Version]
 arbitraryVersions = sublistOf knownVersions
 
 -- for performance reason P521, FFDHE6144, FFDHE8192 are not tested
-knownGroups, knownECGroups :: [Group]
+knownGroups, knownECGroups, knownFFGroups :: [Group]
 knownECGroups = [P256, P384, X25519, X448]
--- knownFFGroups = [FFDHE2048, FFDHE3072, FFDHE4096]
-knownGroups = knownECGroups
+knownFFGroups = [FFDHE2048, FFDHE3072, FFDHE4096]
+knownGroups = knownECGroups ++ knownFFGroups
 
 defaultECGroup :: Group
 defaultECGroup = P256 -- same as defaultECCurve
@@ -183,6 +182,16 @@ instance Arbitrary Group where
 
 instance {-# OVERLAPS #-} Arbitrary [Group] where
     arbitrary = sublistOf knownGroups
+
+newtype EC = EC [Group] deriving (Show)
+
+instance Arbitrary EC where
+    arbitrary = EC <$> shuffle knownECGroups
+
+newtype FFDHE = FFDHE [Group] deriving (Show)
+
+instance Arbitrary FFDHE where
+    arbitrary = FFDHE <$> shuffle knownFFGroups
 
 isCredentialDSA :: (CertificateChain, PrivKey) -> Bool
 isCredentialDSA (_, PrivKeyDSA _) = True
@@ -236,15 +245,6 @@ arbitraryCredentialsOfEachCurve' = do
             ++ ecdsaPairs
 
 ----------------------------------------------------------------
-
-dhParamsGroup :: DHParams -> Maybe Group
-dhParamsGroup params
-    | params == ffdhe2048 = Just FFDHE2048
-    | params == ffdhe3072 = Just FFDHE3072
-    | otherwise = Nothing
-
-isCustomDHParams :: DHParams -> Bool
-isCustomDHParams params = params == dhParams512
 
 leafPublicKey :: CertificateChain -> Maybe PubKey
 leafPublicKey (CertificateChain []) = Nothing

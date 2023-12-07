@@ -8,16 +8,12 @@ module PubKey (
     getGlobalRSAPair,
     knownECCurves,
     defaultECCurve,
-    dhParams512,
-    dhParams768,
-    dhParams1024,
     dsaParams,
     rsaParams,
 ) where
 
 import Control.Concurrent.MVar
 import Crypto.Error
-import qualified Crypto.PubKey.DH as DH
 import qualified Crypto.PubKey.DSA as DSA
 import qualified Crypto.PubKey.ECC.ECDSA as ECDSA
 import qualified Crypto.PubKey.ECC.Prim as ECC
@@ -73,35 +69,6 @@ rsaParams = (pub, priv)
     e = 0x10001
     d =
         0x3edc3cae28e4717818b1385ba7088d0038c3e176a606d2a5dbfc38cc46fe500824e62ec312fde04a803f61afac13a5b95c5c9c26b346879b54429083df488b4f29bb7b9722d366d6f5d2b512150a2e950eacfe0fd9dd56b87b0322f74ae3c8d8674ace62bc723f7c05e9295561efd70d7a924c6abac2e482880fc0149d5ad481
-
-dhParams512 :: DH.Params
-dhParams512 =
-    DH.Params
-        { DH.params_p =
-            0x00ccaa3884b50789ebea8d39bef8bbc66e20f2a78f537a76f26b4edde5de8b0ff15a8193abf0873cbdc701323a2bf6e860affa6e043fe8300d47e95baf9f6354cb
-        , DH.params_g = 0x2
-        , DH.params_bits = 512
-        }
-
--- from RFC 2409
-
-dhParams768 :: DH.Params
-dhParams768 =
-    DH.Params
-        { DH.params_p =
-            0xffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a63a3620ffffffffffffffff
-        , DH.params_g = 0x2
-        , DH.params_bits = 768
-        }
-
-dhParams1024 :: DH.Params
-dhParams1024 =
-    DH.Params
-        { DH.params_p =
-            0xffffffffffffffffc90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b139b22514a08798e3404ddef9519b3cd3a431b302b0a6df25f14374fe1356d6d51c245e485b576625e7ec6f44c42e9a637ed6b0bff5cb6f406b7edee386bfb5a899fa5ae9f24117c4b1fe649286651ece65381ffffffffffffffff
-        , DH.params_g = 0x2
-        , DH.params_bits = 1024
-        }
 
 dsaParams :: DSA.Params
 dsaParams =

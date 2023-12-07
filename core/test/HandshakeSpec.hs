@@ -55,7 +55,9 @@ spec = do
         prop "can handshake with TLS 1.3 RTT0" handshake13_rtt0
         prop "can handshake with TLS 1.3 RTT0 -> PSK" handshake13_rtt0_fallback
         prop "can handshake with TLS 1.3 RTT0 length" handshake13_rtt0_length
-        prop "can handshake with TLS 1.3 EE groups" handshake13_ee_groups
+        prop "can handshake with TLS 1.3 EE" handshake13_ee_groups
+        prop "can handshake with TLS 1.3 EC groups" handshake13_ec
+        prop "can handshake with TLS 1.3 FFDHE groups" handshake13_ffdhe
         prop "can handshake with TLS 1.3 Post-handshake auth" post_handshake_auth
 
 --------------------------------------------------------------
@@ -207,12 +209,9 @@ handshake_groups (GGP clientGroups serverGroups) = do
                         { supportedGroups = serverGroups
                         }
                 }
-        isCustom = maybe True isCustomDHParams (serverDHEParams serverParam')
-        mCustomGroup = serverDHEParams serverParam' >>= dhParamsGroup
-        isClientCustom = maybe True (`notElem` clientGroups) mCustomGroup
         commonGroups = clientGroups `intersect` serverGroups
-        shouldFail = null commonGroups && (tls13 || isClientCustom && denyCustom)
-        p minfo = isNothing (minfo >>= infoSupportedGroup) == (null commonGroups && isCustom)
+        shouldFail = null commonGroups
+        p minfo = isNothing (minfo >>= infoSupportedGroup) == (null commonGroups)
     if shouldFail
         then runTLSInitFailure (clientParam', serverParam')
         else runTLSPipePredicate (clientParam', serverParam') p
@@ -222,28 +221,25 @@ handshake_groups (GGP clientGroups serverGroups) = do
 newtype SG = SG [Group] deriving (Show)
 
 instance Arbitrary SG where
-    arbitrary = SG <$> sublistOf sigGroups
+    arbitrary = SG <$> shuffle sigGroups
       where
-        sigGroups = [P256]
+        sigGroups = [P256, P521]
 
 handshake_ec :: SG -> IO ()
 handshake_ec (SG sigGroups) = do
-    let versions = [TLS12, TLS13]
+    let versions = [TLS12]
         ciphers =
             [ cipher_ECDHE_ECDSA_AES256GCM_SHA384
-            , cipher_TLS13_AES128GCM_SHA256
             ]
-        ecdhGroups = [X25519, X448] -- always enabled, so no ECDHE failure
         hashSignatures =
             [ (HashSHA256, SignatureECDSA)
             ]
-    clientVersion <- generate $ elements versions
     (clientParam, serverParam) <-
         generate $
             arbitraryPairParamsWithVersionsAndCiphers
-                ([clientVersion], versions)
+                (versions, versions)
                 (ciphers, ciphers)
-    clientGroups <- generate $ sublistOf sigGroups
+    clientGroups <- generate $ shuffle sigGroups
     clientHashSignatures <- generate $ sublistOf hashSignatures
     serverHashSignatures <- generate $ sublistOf hashSignatures
     credentials <- generate arbitraryCredentialsOfEachCurve
@@ -251,7 +247,7 @@ handshake_ec (SG sigGroups) = do
             clientParam
                 { clientSupported =
                     (clientSupported clientParam)
-                        { supportedGroups = clientGroups ++ ecdhGroups
+                        { supportedGroups = clientGroups
                         , supportedHashSignatures = clientHashSignatures
                         }
                 }
@@ -259,7 +255,7 @@ handshake_ec (SG sigGroups) = do
             serverParam
                 { serverSupported =
                     (serverSupported serverParam)
-                        { supportedGroups = sigGroups ++ ecdhGroups
+                        { supportedGroups = sigGroups
                         , supportedHashSignatures = serverHashSignatures
                         }
                 , serverShared =
@@ -268,9 +264,8 @@ handshake_ec (SG sigGroups) = do
                         }
                 }
         sigAlgs = map snd (clientHashSignatures `intersect` serverHashSignatures)
-        ecdsaDenied =
-            (clientVersion < TLS13 && null clientGroups)
-                || (clientVersion >= TLS12 && SignatureECDSA `notElem` sigAlgs)
+        ecdsaDenied = SignatureECDSA `notElem` sigAlgs
+    print sigAlgs
     if ecdsaDenied
         then runTLSInitFailure (clientParam', serverParam')
         else runTLSPipeSimple (clientParam', serverParam')
@@ -906,19 +901,46 @@ handshake13_rtt0_length (CSP13 (cli, srv)) = do
 
 handshake13_ee_groups :: CSP13 -> IO ()
 handshake13_ee_groups (CSP13 (cli, srv)) = do
-    let cliSupported = (clientSupported cli){supportedGroups = [P256, X25519]}
+    let -- The client prefers P256
+        cliSupported = (clientSupported cli){supportedGroups = [P256, X25519]}
+        -- The server prefers X25519
         svrSupported = (serverSupported srv){supportedGroups = [X25519, P256]}
         params =
             ( cli{clientSupported = cliSupported}
             , srv{serverSupported = svrSupported}
             )
     (_, serverMessages) <- runTLSPipeCapture13 params
+    -- The server should tell X25519 in supported_groups in EE to clinet
     let isSupportedGroups (ExtensionRaw eid _) = eid == EID_SupportedGroups
         eeMessagesHaveExt =
             [ any isSupportedGroups exts
             | EncryptedExtensions13 exts <- serverMessages
             ]
-    eeMessagesHaveExt `shouldBe` [True] -- one EE message with extension
+    eeMessagesHaveExt `shouldBe` [True]
+
+handshake13_ec :: CSP13 -> IO ()
+handshake13_ec (CSP13 (cli, srv)) = do
+    EC cgrps <- generate arbitrary
+    EC sgrps <- generate arbitrary
+    let cliSupported = (clientSupported cli){supportedGroups = cgrps}
+        svrSupported = (serverSupported srv){supportedGroups = sgrps}
+        params =
+            ( cli{clientSupported = cliSupported}
+            , srv{serverSupported = svrSupported}
+            )
+    runTLSPipeSimple13 params FullHandshake Nothing
+
+handshake13_ffdhe :: CSP13 -> IO ()
+handshake13_ffdhe (CSP13 (cli, srv)) = do
+    FFDHE cgrps <- generate arbitrary
+    FFDHE sgrps <- generate arbitrary
+    let cliSupported = (clientSupported cli){supportedGroups = cgrps}
+        svrSupported = (serverSupported srv){supportedGroups = sgrps}
+        params =
+            ( cli{clientSupported = cliSupported}
+            , srv{serverSupported = svrSupported}
+            )
+    runTLSPipeSimple13 params FullHandshake Nothing
 
 post_handshake_auth :: CSP13 -> IO ()
 post_handshake_auth (CSP13 (clientParam, serverParam)) = do
