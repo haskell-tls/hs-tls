@@ -138,7 +138,7 @@ handshakeClient' cparams ctx groups mparams = do
                     sendClientData cparams ctx
                     sendChangeCipherAndFinish ctx ClientRole
                     recvChangeCipherAndFinish ctx
-            handshakeTerminate ctx
+            handshakeDone ctx
   where
     ciphers = supportedCiphers $ ctxSupported ctx
     compressions = supportedCompressions $ ctxSupported ctx
@@ -1007,7 +1007,7 @@ handshakeClient13' cparams ctx groupSent choice = do
     setResumptionSecret applicationSecret
     let appSecInfo = ApplicationSecretInfo (triClient appKey, triServer appKey)
     contextSync ctx $ SendClientFinished eexts appSecInfo
-    handshakeTerminate13 ctx
+    handshakeDone13 ctx
   where
     usedCipher = cCipher choice
     usedHash = cHash choice

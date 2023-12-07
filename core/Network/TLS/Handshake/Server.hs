@@ -394,7 +394,7 @@ doHandshake sparams mcred ctx chosenVersion usedCipher usedCompression clientSes
             logKey ctx (MasterSecret masterSecret)
             sendChangeCipherAndFinish ctx ServerRole
             recvChangeCipherAndFinish ctx
-    handshakeTerminate ctx
+    handshakeDone ctx
   where
     ---
     -- When the client sends a certificate, check whether
@@ -933,7 +933,7 @@ doHandshake13 sparams ctx chosenVersion usedCipher exts usedHash clientKeyShare 
     let expectFinished hChBeforeCf (Finished13 verifyData) = liftIO $ do
             let ClientTrafficSecret chs = clientHandshakeSecret
             checkFinished ctx usedHash chs hChBeforeCf verifyData
-            handshakeTerminate13 ctx
+            handshakeDone13 ctx
             setRxState ctx usedHash usedCipher clientApplicationSecret0
             sendNewSessionTicket applicationSecret sfSentTime
         expectFinished _ hs = unexpected (show hs) (Just "finished 13")

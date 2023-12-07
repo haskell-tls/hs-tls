@@ -19,7 +19,7 @@ module Network.TLS.Handshake.Common13 (
     makePSKBinder,
     replacePSKBinder,
     sendChangeCipherSpec13,
-    handshakeTerminate13,
+    handshakeDone13,
     makeCertRequest,
     createTLS13TicketInfo,
     ageToObfuscatedAge,
@@ -243,13 +243,13 @@ sendChangeCipherSpec13 ctx = do
 
 ----------------------------------------------------------------
 
--- | TLS13 handshake wrap up & clean up.  Contrary to @handshakeTerminate@, this
+-- | TLS13 handshake wrap up & clean up.  Contrary to @handshakeDone@, this
 -- does not handle session, which is managed separately for TLS 1.3.  This does
 -- not reset byte counters because renegotiation is not allowed.  And a few more
 -- state attributes are preserved, necessary for TLS13 handshake modes, session
 -- tickets and post-handshake authentication.
-handshakeTerminate13 :: Context -> IO ()
-handshakeTerminate13 ctx = do
+handshakeDone13 :: Context -> IO ()
+handshakeDone13 ctx = do
     -- forget most handshake data
     liftIO $ modifyMVar_ (ctxHandshake ctx) $ \mhshake ->
         case mhshake of
