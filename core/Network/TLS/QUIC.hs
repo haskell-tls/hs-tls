@@ -53,7 +53,7 @@ module Network.TLS.QUIC (
 
     -- * Extensions
     ExtensionRaw (..),
-    ExtensionID (EID_QuicTransportParameters),
+    ExtensionID (ExtensionID, EID_QuicTransportParameters),
 
     -- * Errors
     errorTLS,
