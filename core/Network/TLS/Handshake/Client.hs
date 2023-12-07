@@ -87,7 +87,7 @@ handshakeClient'
 handshakeClient' cparams ctx groups mparams = do
     updateMeasure ctx incrementNbHandshakes
     (crand, clientSession) <- generateClientHelloParams
-    (rtt0, sentExtensions) <- sendClientHello clientSession crand
+    (rtt0, sentExtensions) <- sendClientHello cparams ctx groups clientSession crand
     recvServerHello ctx cparams clientSession sentExtensions
     ver <- usingState_ ctx getVersion
     unless (maybe True (\(_, _, v) -> v == ver) mparams) $
@@ -109,6 +109,85 @@ handshakeClient' cparams ctx groups mparams = do
                         "server denied TLS 1.3 when connecting with early data"
                         HandshakeFailure
             handshakeClient12 cparams ctx
+  where
+    highestVer = maximum $ supportedVersions $ ctxSupported ctx
+    tls13 = highestVer >= TLS13
+    ems = supportedExtendedMasterSec $ ctxSupported ctx
+    groupToSend = listToMaybe groups
+
+    generateClientHelloParams =
+        case mparams of
+            -- Client random and session in the second client hello for
+            -- retry must be the same as the first one.
+            Just (crand, clientSession, _) -> return (crand, clientSession)
+            Nothing -> do
+                crand <- clientRandom ctx
+                let paramSession = case clientWantSessionResume cparams of
+                        Nothing -> Session Nothing
+                        Just (sid, sdata)
+                            | sessionVersion sdata >= TLS13 -> Session Nothing
+                            | ems == RequireEMS && noSessionEMS -> Session Nothing
+                            | otherwise -> Session (Just sid)
+                          where
+                            noSessionEMS = SessionEMS `notElem` sessionFlags sdata
+                -- In compatibility mode a client not offering a pre-TLS 1.3
+                -- session MUST generate a new 32-byte value
+                if tls13 && paramSession == Session Nothing && not (ctxQUICMode ctx)
+                    then do
+                        randomSession <- newSession ctx
+                        return (crand, randomSession)
+                    else return (crand, paramSession)
+
+    helloRetry ver crand clientSession = case drop 1 groups of
+        [] ->
+            throwCore $
+                Error_Protocol "group is exhausted in the client side" IllegalParameter
+        groups' -> do
+            when (isJust mparams) $
+                throwCore $
+                    Error_Protocol "server sent too many hello retries" UnexpectedMessage
+            mks <- usingState_ ctx getTLS13KeyShare
+            case mks of
+                Just (KeyShareHRR selectedGroup)
+                    | selectedGroup `elem` groups' -> do
+                        usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
+                        clearTxState ctx
+                        let cparams' = cparams{clientEarlyData = Nothing}
+                        runPacketFlight ctx $ sendChangeCipherSpec13 ctx
+                        handshakeClient' cparams' ctx [selectedGroup] (Just (crand, clientSession, ver))
+                    | otherwise ->
+                        throwCore $
+                            Error_Protocol "server-selected group is not supported" IllegalParameter
+                Just _ -> error "handshakeClient': invalid KeyShare value"
+                Nothing ->
+                    throwCore $
+                        Error_Protocol
+                            "key exchange not implemented in HRR, expected key_share extension"
+                            HandshakeFailure
+
+----------------------------------------------------------------
+
+sendClientHello :: ClientParams -> Context -> [Group] -> Session -> ClientRandom -> IO (Bool, [ExtensionID])
+sendClientHello cparams ctx groups clientSession crand = do
+    let ver = if tls13 then TLS12 else highestVer
+    hrr <- usingState_ ctx getTLS13HRR
+    unless hrr $ startHandshake ctx ver crand
+    usingState_ ctx $ setVersionIfUnset highestVer
+    let cipherIds = map cipherID ciphers
+        compIds = map compressionID compressions
+        mkClientHello exts = ClientHello ver crand clientSession cipherIds compIds exts Nothing
+    pskInfo <- getPskInfo
+    let rtt0info = pskInfo >>= get0RTTinfo
+        rtt0 = isJust rtt0info
+    extensions0 <- catMaybes <$> getExtensions pskInfo rtt0
+    let extensions1 = sharedHelloExtensions (clientShared cparams) ++ extensions0
+    extensions <- adjustExtentions pskInfo extensions1 $ mkClientHello extensions1
+    sendPacket ctx $ Handshake [mkClientHello extensions]
+    mEarlySecInfo <- case rtt0info of
+        Nothing -> return Nothing
+        Just info -> Just <$> send0RTT info
+    unless hrr $ contextSync ctx $ SendClientHello mEarlySecInfo
+    return (rtt0, map (\(ExtensionRaw i _) -> i) extensions)
   where
     ciphers = supportedCiphers $ ctxSupported ctx
     compressions = supportedCompressions $ ctxSupported ctx
@@ -274,50 +353,6 @@ handshakeClient' cparams ctx groups mparams = do
                         withBinders = replacePSKBinder withoutBinders binder
                 return exts'
 
-    generateClientHelloParams =
-        case mparams of
-            -- Client random and session in the second client hello for
-            -- retry must be the same as the first one.
-            Just (crand, clientSession, _) -> return (crand, clientSession)
-            Nothing -> do
-                crand <- clientRandom ctx
-                let paramSession = case clientWantSessionResume cparams of
-                        Nothing -> Session Nothing
-                        Just (sid, sdata)
-                            | sessionVersion sdata >= TLS13 -> Session Nothing
-                            | ems == RequireEMS && noSessionEMS -> Session Nothing
-                            | otherwise -> Session (Just sid)
-                          where
-                            noSessionEMS = SessionEMS `notElem` sessionFlags sdata
-                -- In compatibility mode a client not offering a pre-TLS 1.3
-                -- session MUST generate a new 32-byte value
-                if tls13 && paramSession == Session Nothing && not (ctxQUICMode ctx)
-                    then do
-                        randomSession <- newSession ctx
-                        return (crand, randomSession)
-                    else return (crand, paramSession)
-
-    sendClientHello clientSession crand = do
-        let ver = if tls13 then TLS12 else highestVer
-        hrr <- usingState_ ctx getTLS13HRR
-        unless hrr $ startHandshake ctx ver crand
-        usingState_ ctx $ setVersionIfUnset highestVer
-        let cipherIds = map cipherID ciphers
-            compIds = map compressionID compressions
-            mkClientHello exts = ClientHello ver crand clientSession cipherIds compIds exts Nothing
-        pskInfo <- getPskInfo
-        let rtt0info = pskInfo >>= get0RTTinfo
-            rtt0 = isJust rtt0info
-        extensions0 <- catMaybes <$> getExtensions pskInfo rtt0
-        let extensions1 = sharedHelloExtensions (clientShared cparams) ++ extensions0
-        extensions <- adjustExtentions pskInfo extensions1 $ mkClientHello extensions1
-        sendPacket ctx $ Handshake [mkClientHello extensions]
-        mEarlySecInfo <- case rtt0info of
-            Nothing -> return Nothing
-            Just info -> Just <$> send0RTT info
-        unless hrr $ contextSync ctx $ SendClientHello mEarlySecInfo
-        return (rtt0, map (\(ExtensionRaw i _) -> i) extensions)
-
     get0RTTinfo (_, sdata, choice, _) = do
         earlyData <- clientEarlyData cparams
         guard (B.length earlyData <= sessionMaxEarlyDataSize sdata)
@@ -340,32 +375,7 @@ handshakeClient' cparams ctx groups mparams = do
         usingHState ctx $ setTLS13RTT0Status RTT0Sent
         return $ EarlySecretInfo usedCipher clientEarlySecret
 
-    helloRetry ver crand clientSession = case drop 1 groups of
-        [] ->
-            throwCore $
-                Error_Protocol "group is exhausted in the client side" IllegalParameter
-        groups' -> do
-            when (isJust mparams) $
-                throwCore $
-                    Error_Protocol "server sent too many hello retries" UnexpectedMessage
-            mks <- usingState_ ctx getTLS13KeyShare
-            case mks of
-                Just (KeyShareHRR selectedGroup)
-                    | selectedGroup `elem` groups' -> do
-                        usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
-                        clearTxState ctx
-                        let cparams' = cparams{clientEarlyData = Nothing}
-                        runPacketFlight ctx $ sendChangeCipherSpec13 ctx
-                        handshakeClient' cparams' ctx [selectedGroup] (Just (crand, clientSession, ver))
-                    | otherwise ->
-                        throwCore $
-                            Error_Protocol "server-selected group is not supported" IllegalParameter
-                Just _ -> error "handshakeClient': invalid KeyShare value"
-                Nothing ->
-                    throwCore $
-                        Error_Protocol
-                            "key exchange not implemented in HRR, expected key_share extension"
-                            HandshakeFailure
+----------------------------------------------------------------
 
 recvServerHello :: Context -> ClientParams -> Session -> [ExtensionID] -> IO ()
 recvServerHello ctx cparams clientSession sentExts = runRecvState ctx recvState
