@@ -770,6 +770,10 @@ onServerHello ctx cparams clientSession sentExts (ServerHello rver serverRan ser
 
     ver <- usingState_ ctx getVersion
 
+    when (ver == TLS13 && clientSession /= serverSession) $
+        throwCore $
+            Error_Protocol "session is not matched in compatibility mode" IllegalParameter
+
     -- Some servers set TLS 1.2 as the legacy server hello version, and TLS 1.3
     -- in the supported_versions extension, *AND ALSO* set the TLS 1.2
     -- downgrade signal in the server random.  If we support TLS 1.3 and
