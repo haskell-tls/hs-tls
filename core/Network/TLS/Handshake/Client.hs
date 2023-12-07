@@ -98,32 +98,7 @@ handshakeClient' cparams ctx groups mparams = do
     if ver == TLS13
         then
             if hrr
-                then case drop 1 groups of
-                    [] ->
-                        throwCore $
-                            Error_Protocol "group is exhausted in the client side" IllegalParameter
-                    groups' -> do
-                        when (isJust mparams) $
-                            throwCore $
-                                Error_Protocol "server sent too many hello retries" UnexpectedMessage
-                        mks <- usingState_ ctx getTLS13KeyShare
-                        case mks of
-                            Just (KeyShareHRR selectedGroup)
-                                | selectedGroup `elem` groups' -> do
-                                    usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
-                                    clearTxState ctx
-                                    let cparams' = cparams{clientEarlyData = Nothing}
-                                    runPacketFlight ctx $ sendChangeCipherSpec13 ctx
-                                    handshakeClient' cparams' ctx [selectedGroup] (Just (crand, clientSession, ver))
-                                | otherwise ->
-                                    throwCore $
-                                        Error_Protocol "server-selected group is not supported" IllegalParameter
-                            Just _ -> error "handshakeClient': invalid KeyShare value"
-                            Nothing ->
-                                throwCore $
-                                    Error_Protocol
-                                        "key exchange not implemented in HRR, expected key_share extension"
-                                        HandshakeFailure
+                then helloRetry ver crand clientSession
                 else handshakeClient13 cparams ctx groupToSend
         else do
             when rtt0 $
@@ -392,6 +367,34 @@ handshakeClient' cparams ctx groups mparams = do
                 Error_Protocol
                     ("expecting server hello, got alert : " ++ show a)
                     HandshakeFailure
+
+    helloRetry ver crand clientSession = case drop 1 groups of
+        [] ->
+            throwCore $
+                Error_Protocol "group is exhausted in the client side" IllegalParameter
+        groups' -> do
+            when (isJust mparams) $
+                throwCore $
+                    Error_Protocol "server sent too many hello retries" UnexpectedMessage
+            mks <- usingState_ ctx getTLS13KeyShare
+            case mks of
+                Just (KeyShareHRR selectedGroup)
+                    | selectedGroup `elem` groups' -> do
+                        usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
+                        clearTxState ctx
+                        let cparams' = cparams{clientEarlyData = Nothing}
+                        runPacketFlight ctx $ sendChangeCipherSpec13 ctx
+                        handshakeClient' cparams' ctx [selectedGroup] (Just (crand, clientSession, ver))
+                    | otherwise ->
+                        throwCore $
+                            Error_Protocol "server-selected group is not supported" IllegalParameter
+                Just _ -> error "handshakeClient': invalid KeyShare value"
+                Nothing ->
+                    throwCore $
+                        Error_Protocol
+                            "key exchange not implemented in HRR, expected key_share extension"
+                            HandshakeFailure
+
 
 -- | Store the keypair and check that it is compatible with the current protocol
 -- version and a list of 'CertificateType' values.
