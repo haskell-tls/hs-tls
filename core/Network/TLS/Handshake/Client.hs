@@ -49,6 +49,8 @@ import Network.TLS.Util (bytesEq, catchException, mapChunks_)
 import Network.TLS.Wire
 import Network.TLS.X509
 
+----------------------------------------------------------------
+
 handshakeClientWith :: ClientParams -> Context -> Handshake -> IO ()
 handshakeClientWith cparams ctx HelloRequest = handshakeClient cparams ctx
 handshakeClientWith _ _ _ =
@@ -106,14 +108,7 @@ handshakeClient' cparams ctx groups mparams = do
                     Error_Protocol
                         "server denied TLS 1.3 when connecting with early data"
                         HandshakeFailure
-            sessionResuming <- usingState_ ctx isSessionResuming
-            if sessionResuming
-                then sendChangeCipherAndFinish ctx ClientRole
-                else do
-                    sendClientData cparams ctx
-                    sendChangeCipherAndFinish ctx ClientRole
-                    recvChangeCipherAndFinish ctx
-            handshakeDone ctx
+            handshakeClient12 cparams ctx
   where
     ciphers = supportedCiphers $ ctxSupported ctx
     compressions = supportedCompressions $ ctxSupported ctx
@@ -395,6 +390,20 @@ handshakeClient' cparams ctx groups mparams = do
                             "key exchange not implemented in HRR, expected key_share extension"
                             HandshakeFailure
 
+----------------------------------------------------------------
+
+handshakeClient12 :: ClientParams -> Context -> IO ()
+handshakeClient12 cparams ctx = do
+    sessionResuming <- usingState_ ctx isSessionResuming
+    if sessionResuming
+        then sendChangeCipherAndFinish ctx ClientRole
+        else do
+            sendClientData cparams ctx
+            sendChangeCipherAndFinish ctx ClientRole
+            recvChangeCipherAndFinish ctx
+    handshakeDone ctx
+
+----------------------------------------------------------------
 
 -- | Store the keypair and check that it is compatible with the current protocol
 -- version and a list of 'CertificateType' values.
@@ -978,6 +987,8 @@ requiredCertKeyUsage cipher =
         , KeyUsage_keyAgreement
         ]
 
+----------------------------------------------------------------
+
 handshakeClient13 :: ClientParams -> Context -> Maybe Group -> IO ()
 handshakeClient13 cparams ctx groupSent = do
     choice <- makeCipherChoice TLS13 <$> usingHState ctx getPendingCipher
@@ -1124,6 +1135,8 @@ handshakeClient13' cparams ctx groupSent choice = do
     setResumptionSecret applicationSecret = do
         resumptionSecret <- calculateResumptionSecret ctx choice applicationSecret
         usingHState ctx $ setTLS13ResumptionSecret resumptionSecret
+
+----------------------------------------------------------------
 
 processCertRequest13
     :: MonadIO m => Context -> CertReqContext -> [ExtensionRaw] -> m ()
