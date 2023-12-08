@@ -35,7 +35,7 @@ type TicketNonce = ByteString
 data Handshake13
     = ClientHello13 !Version !ClientRandom !Session ![CipherID] [ExtensionRaw]
     | ServerHello13 !ServerRandom !Session !CipherID [ExtensionRaw]
-    | NewSessionTicket13 Second Word32 TicketNonce SessionID [ExtensionRaw]
+    | NewSessionTicket13 Second Word32 TicketNonce SessionIDorTicket [ExtensionRaw]
     | EndOfEarlyData13
     | EncryptedExtensions13 [ExtensionRaw]
     | CertRequest13 CertReqContext [ExtensionRaw]
