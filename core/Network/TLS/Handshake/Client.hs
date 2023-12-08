@@ -63,13 +63,13 @@ handshakeClientWith _ _ _ =
 -- values intertwined with response from the server.
 handshakeClient :: ClientParams -> Context -> IO ()
 handshakeClient cparams ctx = do
-    let groups = case clientWantSessionResume cparams of
+    let groupsSupported = supportedGroups (ctxSupported ctx)
+        groups = case clientWantSessionResume cparams of
             Nothing -> groupsSupported
             Just (_, sdata) -> case sessionGroup sdata of
                 Nothing -> [] -- TLS 1.2 or earlier
                 Just grp -> grp : filter (/= grp) groupsSupported
-        groupsSupported = supportedGroups (ctxSupported ctx)
-    handshakeClient' cparams ctx groups Nothing
+    firstFlight cparams ctx groups Nothing
 
 -- https://tools.ietf.org/html/rfc8446#section-4.1.2 says:
 -- "The client will also send a
@@ -78,13 +78,13 @@ handshakeClient cparams ctx = do
 --  ClientHello without modification, except as follows:"
 --
 -- So, the ClientRandom in the first client hello is necessary.
-handshakeClient'
+firstFlight
     :: ClientParams
     -> Context
     -> [Group]
     -> Maybe (ClientRandom, Session, Version)
     -> IO ()
-handshakeClient' cparams ctx groups mparams = do
+firstFlight cparams ctx groups mparams = do
     updateMeasure ctx incrementNbHandshakes
     (crand, clientSession) <- generateClientHelloParams mparams
     (rtt0, sentExtensions) <- sendClientHello cparams ctx groups clientSession crand
@@ -101,14 +101,14 @@ handshakeClient' cparams ctx groups mparams = do
         then
             if hrr
                 then helloRetry ver crand clientSession $ drop 1 groups
-                else handshakeClient13 cparams ctx groupToSend
+                else secondFlight13 cparams ctx groupToSend
         else do
             when rtt0 $
                 throwCore $
                     Error_Protocol
                         "server denied TLS 1.3 when connecting with early data"
                         HandshakeFailure
-            handshakeClient12 cparams ctx
+            secondFlight12 cparams ctx
   where
     highestVer = maximum $ supportedVersions $ ctxSupported ctx
     tls13 = highestVer >= TLS13
@@ -152,11 +152,11 @@ handshakeClient' cparams ctx groups mparams = do
                     clearTxState ctx
                     let cparams' = cparams{clientEarlyData = Nothing}
                     runPacketFlight ctx $ sendChangeCipherSpec13 ctx
-                    handshakeClient' cparams' ctx [selectedGroup] (Just (crand, clientSession, ver))
+                    firstFlight cparams' ctx [selectedGroup] (Just (crand, clientSession, ver))
                 | otherwise ->
                     throwCore $
                         Error_Protocol "server-selected group is not supported" IllegalParameter
-            Just _ -> error "handshakeClient': invalid KeyShare value"
+            Just _ -> error "firstFlight: invalid KeyShare value"
             Nothing ->
                 throwCore $
                     Error_Protocol
@@ -402,8 +402,8 @@ recvServerHello ctx cparams clientSession sentExts = runRecvState ctx recvState
 
 ----------------------------------------------------------------
 
-handshakeClient12 :: ClientParams -> Context -> IO ()
-handshakeClient12 cparams ctx = do
+secondFlight12 :: ClientParams -> Context -> IO ()
+secondFlight12 cparams ctx = do
     sessionResuming <- usingState_ ctx isSessionResuming
     if sessionResuming
         then sendChangeCipherAndFinish ctx ClientRole
@@ -815,7 +815,7 @@ onServerHello ctx cparams clientSession sentExts (ServerHello rver serverRan ser
                     ("server version " ++ show ver ++ " is not supported")
                     ProtocolVersion
         Just _ -> return ()
-    if ver > TLS12
+    if ver == TLS13
         then do
             when (serverSession /= clientSession) $
                 throwCore $
@@ -999,14 +999,14 @@ requiredCertKeyUsage cipher =
 
 ----------------------------------------------------------------
 
-handshakeClient13 :: ClientParams -> Context -> Maybe Group -> IO ()
-handshakeClient13 cparams ctx groupSent = do
+secondFlight13 :: ClientParams -> Context -> Maybe Group -> IO ()
+secondFlight13 cparams ctx groupSent = do
     choice <- makeCipherChoice TLS13 <$> usingHState ctx getPendingCipher
-    handshakeClient13' cparams ctx groupSent choice
+    secondFlight13' cparams ctx groupSent choice
 
-handshakeClient13'
+secondFlight13'
     :: ClientParams -> Context -> Maybe Group -> CipherChoice -> IO ()
-handshakeClient13' cparams ctx groupSent choice = do
+secondFlight13' cparams ctx groupSent choice = do
     (_, hkey, resuming) <- switchToHandshakeSecret
     let handshakeSecret = triBase hkey
         clientHandshakeSecret = triClient hkey
