@@ -15,6 +15,7 @@ module Network.TLS.Handshake.Common (
     recvChangeCipherAndFinish,
     RecvState (..),
     runRecvState,
+    runRecvStateHS,
     recvPacketHandshake,
     onRecvStateHandshake,
     ensureRecvComplete,
@@ -153,7 +154,7 @@ sendChangeCipherAndFinish ctx role = do
     liftIO $ contextFlush ctx
 
 recvChangeCipherAndFinish :: Context -> IO ()
-recvChangeCipherAndFinish ctx = runRecvState ctx (RecvStateNext expectChangeCipher)
+recvChangeCipherAndFinish ctx = runRecvState ctx (RecvStatePacket expectChangeCipher)
   where
     expectChangeCipher ChangeCipherSpec = return $ RecvStateHandshake expectFinish
     expectChangeCipher p = unexpected (show p) (Just "change cipher")
@@ -161,7 +162,7 @@ recvChangeCipherAndFinish ctx = runRecvState ctx (RecvStateNext expectChangeCiph
     expectFinish p = unexpected (show p) (Just "Handshake Finished")
 
 data RecvState m
-    = RecvStateNext (Packet -> m (RecvState m))
+    = RecvStatePacket (Packet -> m (RecvState m)) -- CCS is not Handshake
     | RecvStateHandshake (Handshake -> m (RecvState m))
     | RecvStateDone
 
@@ -187,20 +188,23 @@ recvPacketHandshake ctx = do
 onRecvStateHandshake
     :: Context -> RecvState IO -> [Handshake] -> IO (RecvState IO)
 onRecvStateHandshake _ recvState [] = return recvState
-onRecvStateHandshake _ (RecvStateNext f) hms = f (Handshake hms)
+onRecvStateHandshake _ (RecvStatePacket f) hms = f (Handshake hms)
 onRecvStateHandshake ctx (RecvStateHandshake f) (x : xs) = do
     nstate <- f x
     processHandshake ctx x
     onRecvStateHandshake ctx nstate xs
-onRecvStateHandshake _ _ _ = unexpected "spurious handshake" Nothing
+onRecvStateHandshake _ RecvStateDone _xs = unexpected "spurious handshake" Nothing
 
 runRecvState :: Context -> RecvState IO -> IO ()
 runRecvState _ RecvStateDone = return ()
-runRecvState ctx (RecvStateNext f) = recvPacket ctx >>= either throwCore f >>= runRecvState ctx
+runRecvState ctx (RecvStatePacket f) = recvPacket ctx >>= either throwCore f >>= runRecvState ctx
 runRecvState ctx iniState =
     recvPacketHandshake ctx
         >>= onRecvStateHandshake ctx iniState
         >>= runRecvState ctx
+
+runRecvStateHS :: Context -> RecvState IO -> [Handshake] -> IO ()
+runRecvStateHS ctx iniState hs = onRecvStateHandshake ctx iniState hs >>= runRecvState ctx
 
 ensureRecvComplete :: MonadIO m => Context -> m ()
 ensureRecvComplete ctx = do

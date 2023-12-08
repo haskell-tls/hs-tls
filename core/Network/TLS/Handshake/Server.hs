@@ -595,7 +595,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
 
     -- cannot use RecvStateHandshake, as the next message could be a ChangeCipher,
     -- so we must process any packet, and in case of handshake call processHandshake manually.
-    processClientKeyExchange (ClientKeyXchg _) = return $ RecvStateNext processCertificateVerify
+    processClientKeyExchange (ClientKeyXchg _) = return $ RecvStatePacket processCertificateVerify
     processClientKeyExchange p = unexpected (show p) (Just "client key exchange")
 
     -- Check whether the client correctly signed the handshake.
@@ -615,7 +615,7 @@ recvClientData sparams ctx = runRecvState ctx (RecvStateHandshake processClientC
 
         verif <- checkCertificateVerify ctx usedVersion pubKey msgs dsig
         clientCertVerify sparams ctx certs verif
-        return $ RecvStateNext expectChangeCipher
+        return $ RecvStatePacket expectChangeCipher
     processCertificateVerify p = do
         chain <- usingHState ctx getClientCertChain
         case chain of

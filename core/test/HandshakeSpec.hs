@@ -265,7 +265,6 @@ handshake_ec (SG sigGroups) = do
                 }
         sigAlgs = map snd (clientHashSignatures `intersect` serverHashSignatures)
         ecdsaDenied = SignatureECDSA `notElem` sigAlgs
-    print sigAlgs
     if ecdsaDenied
         then runTLSInitFailure (clientParam', serverParam')
         else runTLSPipeSimple (clientParam', serverParam')
