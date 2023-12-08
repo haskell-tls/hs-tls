@@ -85,7 +85,7 @@ data SessionData = SessionData
     , sessionALPN :: Maybe ByteString
     , sessionMaxEarlyDataSize :: Int
     , sessionFlags :: [SessionFlag]
-    }
+    } -- sessionFromTicket :: Bool
     deriving (Show, Eq)
 
 -- | Some session flags

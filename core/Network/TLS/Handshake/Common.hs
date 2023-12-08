@@ -6,7 +6,7 @@ module Network.TLS.Handshake.Common (
     handleException,
     unexpected,
     newSession,
-    handshakeTerminate,
+    handshakeDone,
 
     -- * sending packets
     sendChangeCipherAndFinish,
@@ -107,8 +107,8 @@ newSession ctx
     | otherwise = return $ Session Nothing
 
 -- | when a new handshake is done, wrap up & clean up.
-handshakeTerminate :: Context -> IO ()
-handshakeTerminate ctx = do
+handshakeDone :: Context -> IO ()
+handshakeDone ctx = do
     session <- usingState_ ctx getSession
     -- only callback the session established if we have a session
     case session of
