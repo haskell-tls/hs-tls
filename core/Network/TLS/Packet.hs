@@ -165,6 +165,7 @@ decodeHandshake cp ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
     HandshakeType_CertVerify -> decodeCertVerify cp
     HandshakeType_ClientKeyXchg -> decodeClientKeyXchg cp
     HandshakeType_Finished -> decodeFinished
+    HandshakeType_NewSessionTicket -> decodeNewSessionTicket
     x -> fail $ "Unsupported HandshakeType " ++ show x
 
 decodeDeprecatedHandshake :: ByteString -> Either TLSError Handshake
@@ -240,6 +241,9 @@ decodeCertificates = do
 
 decodeFinished :: Get Handshake
 decodeFinished = Finished <$> (remaining >>= getBytes)
+
+decodeNewSessionTicket :: Get Handshake
+decodeNewSessionTicket = NewSessionTicket <$> getWord32 <*> getOpaque16
 
 decodeCertRequest :: CurrentParams -> Get Handshake
 decodeCertRequest _cp = do
@@ -394,6 +398,9 @@ encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
     putDNames certAuthorities
 encodeHandshakeContent (CertVerify digitallySigned) = putDigitallySigned digitallySigned
 encodeHandshakeContent (Finished opaque) = putBytes opaque
+encodeHandshakeContent (NewSessionTicket life ticket) = do
+    putWord32 life
+    putOpaque16 ticket
 
 ------------------------------------------------------------
 

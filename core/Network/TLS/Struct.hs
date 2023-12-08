@@ -883,6 +883,7 @@ data Handshake
         [DistinguishedName]
     | CertVerify DigitallySigned
     | Finished FinishedData
+    | NewSessionTicket Second Ticket
     deriving (Show, Eq)
 
 {- FOURMOLU_DISABLE -}
@@ -893,14 +894,15 @@ packetType ChangeCipherSpec = ProtocolType_ChangeCipherSpec
 packetType (AppData _)      = ProtocolType_AppData
 
 typeOfHandshake :: Handshake -> HandshakeType
-typeOfHandshake ClientHello{}   = HandshakeType_ClientHello
-typeOfHandshake ServerHello{}   = HandshakeType_ServerHello
-typeOfHandshake Certificates{}  = HandshakeType_Certificate
-typeOfHandshake HelloRequest    = HandshakeType_HelloRequest
-typeOfHandshake ServerHelloDone = HandshakeType_ServerHelloDone
-typeOfHandshake ClientKeyXchg{} = HandshakeType_ClientKeyXchg
-typeOfHandshake ServerKeyXchg{} = HandshakeType_ServerKeyXchg
-typeOfHandshake CertRequest{}   = HandshakeType_CertRequest
-typeOfHandshake CertVerify{}    = HandshakeType_CertVerify
-typeOfHandshake Finished{}      = HandshakeType_Finished
+typeOfHandshake ClientHello{}      = HandshakeType_ClientHello
+typeOfHandshake ServerHello{}      = HandshakeType_ServerHello
+typeOfHandshake Certificates{}     = HandshakeType_Certificate
+typeOfHandshake HelloRequest       = HandshakeType_HelloRequest
+typeOfHandshake ServerHelloDone    = HandshakeType_ServerHelloDone
+typeOfHandshake ClientKeyXchg{}    = HandshakeType_ClientKeyXchg
+typeOfHandshake ServerKeyXchg{}    = HandshakeType_ServerKeyXchg
+typeOfHandshake CertRequest{}      = HandshakeType_CertRequest
+typeOfHandshake CertVerify{}       = HandshakeType_CertVerify
+typeOfHandshake Finished{}         = HandshakeType_Finished
+typeOfHandshake NewSessionTicket{} = HandshakeType_NewSessionTicket
 {- FOURMOLU_ENABLE -}
