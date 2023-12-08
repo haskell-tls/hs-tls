@@ -58,7 +58,7 @@ import qualified Data.ByteString.Char8 as BC
 
 import Network.TLS.Crypto.Types
 import Network.TLS.Struct
-import Network.TLS.Types (HostName)
+import Network.TLS.Types (HostName, Ticket)
 
 import Network.TLS.Imports
 import Network.TLS.Packet (
@@ -344,16 +344,15 @@ decodeEcPointFormatsSupported =
 
 ------------------------------------------------------------
 
--- Fixme: this is incomplete
--- newtype SessionTicket = SessionTicket ByteString
-data SessionTicket = SessionTicket
+data SessionTicket = SessionTicket Ticket
     deriving (Show, Eq)
 
+-- https://datatracker.ietf.org/doc/html/rfc5077#appendix-A
 instance Extension SessionTicket where
     extensionID _ = EID_SessionTicket
-    extensionEncode SessionTicket{} = runPut $ return ()
-    extensionDecode MsgTClientHello = runGetMaybe (return SessionTicket)
-    extensionDecode MsgTServerHello = runGetMaybe (return SessionTicket)
+    extensionEncode (SessionTicket ticket) = runPut $ putOpaque16 ticket
+    extensionDecode MsgTClientHello = runGetMaybe $ SessionTicket <$> getOpaque16
+    extensionDecode MsgTServerHello = runGetMaybe $ SessionTicket <$> getOpaque16
     extensionDecode _ = error "extensionDecode: SessionTicket"
 
 ------------------------------------------------------------
