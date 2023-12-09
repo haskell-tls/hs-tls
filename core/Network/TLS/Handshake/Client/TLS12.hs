@@ -4,6 +4,7 @@
 module Network.TLS.Handshake.Client.TLS12 (
     recvServerFirstFlight12,
     sendClientSecondFlight12,
+    recvServerSecondFlight12,
 ) where
 
 import Control.Monad.State.Strict
@@ -82,9 +83,13 @@ sendClientSecondFlight12 cparams ctx = do
     if sessionResuming
         then sendChangeCipherAndFinish ctx ClientRole
         else do
-            sendClientData cparams ctx
+            sendClientCCC cparams ctx
             sendChangeCipherAndFinish ctx ClientRole
-            recvChangeCipherAndFinish ctx
+
+recvServerSecondFlight12 :: Context -> IO ()
+recvServerSecondFlight12 ctx = do
+    sessionResuming <- usingState_ ctx isSessionResuming
+    unless sessionResuming $ recvChangeCipherAndFinish ctx
     handshakeDone ctx
 
 ----------------------------------------------------------------
@@ -102,8 +107,11 @@ sendClientSecondFlight12 cparams ctx = do
 --       -> [certificate]
 --       -> client key exchange
 --       -> [cert verify]
-sendClientData :: ClientParams -> Context -> IO ()
-sendClientData cparams ctx = sendCertificate >> sendClientKeyXchg >> sendCertificateVerify
+sendClientCCC :: ClientParams -> Context -> IO ()
+sendClientCCC cparams ctx = do
+    sendCertificate
+    sendClientKeyXchg
+    sendCertificateVerify
   where
     sendCertificate = do
         usingHState ctx $ setClientCertSent False
