@@ -73,6 +73,8 @@ module Network.TLS (
     SessionManager (..),
     noSessionManager,
     SessionID,
+    SessionIDorTicket,
+    Ticket,
     SessionData (..),
     SessionFlag (..),
     TLS13TicketInfo,

@@ -10,6 +10,8 @@
 module Network.TLS.Types (
     Version (Version, SSL2, SSL3, TLS10, TLS11, TLS12, TLS13),
     SessionID,
+    SessionIDorTicket,
+    Ticket,
     SessionData (..),
     SessionFlag (..),
     CertReqContext,
@@ -72,6 +74,8 @@ instance Show Version where
 
 -- | A session ID
 type SessionID = ByteString
+type SessionIDorTicket = ByteString
+type Ticket = ByteString
 
 -- | Session data to resume
 data SessionData = SessionData
