@@ -60,9 +60,13 @@ handshake
     -> Maybe (ClientRandom, Session, Version)
     -> IO ()
 handshake cparams ctx groups mparams = do
+    --------------------------------
+    -- Sending ClientHello
     updateMeasure ctx incrementNbHandshakes
     (crand, clientSession, rtt0, sentExtensions) <-
         sendClientHello cparams ctx groups mparams
+    --------------------------------
+    -- Receiving ServerHello
     hss <- recvServerHello ctx cparams clientSession sentExtensions
     ver <- usingState_ ctx getVersion
     unless (maybe True (\(_, _, v) -> v == ver) mparams) $
@@ -73,6 +77,8 @@ handshake cparams ctx groups mparams = do
     -- False otherwise.  For 2nd server hello, getTLS13HR returns
     -- False since it is NOT HRR.
     hrr <- usingState_ ctx getTLS13HRR
+    --------------------------------
+    -- Switching to HRR, TLS 1.2 or TLS 1.3
     case ver of
         TLS13
             | hrr       -> helloRetry cparams ctx mparams ver crand clientSession $ drop 1 groups
