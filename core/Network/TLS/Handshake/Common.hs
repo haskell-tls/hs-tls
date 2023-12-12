@@ -7,6 +7,7 @@ module Network.TLS.Handshake.Common (
     unexpected,
     newSession,
     handshakeDone,
+    ensureNullCompression,
 
     -- * sending packets
     sendChangeCipherAndFinish,
@@ -116,14 +117,13 @@ handshakeDone ctx = do
         Session (Just sessionId) -> do
             sessionData <- getSessionData ctx
             let !sessionId' = B.copy sessionId
-            liftIO $
-                sessionEstablish
-                    (sharedSessionManager $ ctxShared ctx)
-                    sessionId'
-                    (fromJust sessionData)
+            sessionEstablish
+                (sharedSessionManager $ ctxShared ctx)
+                sessionId'
+                (fromJust sessionData)
         _ -> return ()
     -- forget most handshake data and reset bytes counters.
-    liftIO $ modifyMVar_ (ctxHandshake ctx) $ \mhshake ->
+    modifyMVar_ (ctxHandshake ctx) $ \mhshake ->
         case mhshake of
             Nothing -> return Nothing
             Just hshake ->
@@ -146,12 +146,12 @@ sendChangeCipherAndFinish
     -> IO ()
 sendChangeCipherAndFinish ctx role = do
     sendPacket ctx ChangeCipherSpec
-    liftIO $ contextFlush ctx
+    contextFlush ctx
     cf <-
         usingState_ ctx getVersion >>= \ver -> usingHState ctx $ getHandshakeDigest ver role
     sendPacket ctx (Handshake [Finished cf])
     writeIORef (ctxFinished ctx) $ Just cf
-    liftIO $ contextFlush ctx
+    contextFlush ctx
 
 recvChangeCipherAndFinish :: Context -> IO ()
 recvChangeCipherAndFinish ctx = runRecvState ctx (RecvStatePacket expectChangeCipher)
@@ -235,7 +235,7 @@ getSessionData ctx = do
     sni <- usingState_ ctx getClientSNI
     mms <- usingHState ctx (gets hstMasterSecret)
     !ems <- usingHState ctx getExtendedMasterSec
-    tx <- liftIO $ readMVar (ctxTxState ctx)
+    tx <- readMVar (ctxTxState ctx)
     alpn <- usingState_ ctx getNegotiatedProtocol
     let !cipher = cipherID $ fromJust $ stCipher tx
         !compression = compressionID $ stCompression tx
@@ -296,3 +296,9 @@ checkSupportedGroup ctx grp =
 
 isSupportedGroup :: Context -> Group -> Bool
 isSupportedGroup ctx grp = grp `elem` supportedGroups (ctxSupported ctx)
+
+ensureNullCompression :: MonadIO m => CompressionID -> m ()
+ensureNullCompression compression =
+    when (compression /= compressionID nullCompression) $
+        throwCore $
+            Error_Protocol "compression is not allowed in TLS 1.3" IllegalParameter

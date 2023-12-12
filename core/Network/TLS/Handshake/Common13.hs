@@ -28,7 +28,6 @@ module Network.TLS.Handshake.Common13 (
     checkFreshness,
     getCurrentTimeFromBase,
     getSessionData13,
-    ensureNullCompression,
     isHashSignatureValid13,
     safeNonNegative32,
     RecvHandshake13M,
@@ -52,7 +51,6 @@ import Data.Maybe (fromJust)
 import Data.UnixTime
 import Foreign.C.Types (CTime (..))
 import Network.TLS.Cipher
-import Network.TLS.Compression
 import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import qualified Network.TLS.Crypto.IES as IES
@@ -251,7 +249,7 @@ sendChangeCipherSpec13 ctx = do
 handshakeDone13 :: Context -> IO ()
 handshakeDone13 ctx = do
     -- forget most handshake data
-    liftIO $ modifyMVar_ (ctxHandshake ctx) $ \mhshake ->
+    modifyMVar_ (ctxHandshake ctx) $ \mhshake ->
         case mhshake of
             Nothing -> return Nothing
             Just hshake ->
@@ -378,12 +376,6 @@ getSessionData13 ctx usedCipher tinfo maxSize psk = do
             }
 
 ----------------------------------------------------------------
-
-ensureNullCompression :: MonadIO m => CompressionID -> m ()
-ensureNullCompression compression =
-    when (compression /= compressionID nullCompression) $
-        throwCore $
-            Error_Protocol "compression is not allowed in TLS 1.3" IllegalParameter
 
 -- Word32 is used in TLS 1.3 protocol.
 -- Int is used for API for Haskell TLS because it is natural.

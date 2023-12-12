@@ -11,7 +11,6 @@ import Network.TLS.ErrT
 import Network.TLS.Extension
 import Network.TLS.Handshake.Client.Common
 import Network.TLS.Handshake.Common
-import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Random

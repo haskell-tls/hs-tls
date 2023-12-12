@@ -99,7 +99,6 @@ filterCredentialsWithHashSignatures exts =
 storePrivInfoServer :: MonadIO m => Context -> Credential -> m ()
 storePrivInfoServer ctx (cc, privkey) = void (storePrivInfo ctx cc privkey)
 
-
 applicationProtocol
     :: Context -> [ExtensionRaw] -> ServerParams -> IO [ExtensionRaw]
 applicationProtocol ctx exts sparams = do

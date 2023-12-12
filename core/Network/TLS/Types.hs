@@ -74,6 +74,7 @@ instance Show Version where
 
 -- | A session ID
 type SessionID = ByteString
+
 type SessionIDorTicket = ByteString
 type Ticket = ByteString
 

@@ -74,7 +74,12 @@ library
         Network.TLS.Handshake.Process
         Network.TLS.Handshake.Random
         Network.TLS.Handshake.Server
+        Network.TLS.Handshake.Server.ClientHello
+        Network.TLS.Handshake.Server.ClientHello12
+        Network.TLS.Handshake.Server.ClientHello13
         Network.TLS.Handshake.Server.Common
+        Network.TLS.Handshake.Server.ServerHello12
+        Network.TLS.Handshake.Server.ServerHello13
         Network.TLS.Handshake.Server.TLS12
         Network.TLS.Handshake.Server.TLS13
         Network.TLS.Handshake.Signature

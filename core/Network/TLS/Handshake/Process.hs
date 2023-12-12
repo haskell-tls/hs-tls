@@ -32,7 +32,6 @@ import Network.TLS.Types (MasterSecret (..), Role (..), invertRole)
 import Network.TLS.Util
 
 import Control.Concurrent.MVar
-import Control.Monad.IO.Class (liftIO)
 import Control.Monad.State.Strict (gets)
 import Data.IORef (writeIORef)
 import Data.X509 (Certificate (..), CertificateChain (..), getCertificate)
@@ -108,7 +107,7 @@ processClientKeyXchg ctx (CKX_RSA encryptedPremaster) = do
                 Right (ver, _)
                     | ver /= expectedVer -> setMasterSecretFromPre rver role random
                     | otherwise -> setMasterSecretFromPre rver role premaster
-    liftIO $ logKey ctx (MasterSecret masterSecret)
+    logKey ctx (MasterSecret masterSecret)
 processClientKeyXchg ctx (CKX_DH clientDHValue) = do
     rver <- usingState_ ctx getVersion
     role <- usingState_ ctx isClientContext
@@ -122,7 +121,7 @@ processClientKeyXchg ctx (CKX_DH clientDHValue) = do
     dhpriv <- usingHState ctx getDHPrivate
     let premaster = dhGetShared params dhpriv clientDHValue
     masterSecret <- usingHState ctx $ setMasterSecretFromPre rver role premaster
-    liftIO $ logKey ctx (MasterSecret masterSecret)
+    logKey ctx (MasterSecret masterSecret)
 processClientKeyXchg ctx (CKX_ECDH bytes) = do
     ServerECDHParams grp _ <- usingHState ctx getServerECDHParams
     case decodeGroupPublic grp bytes of
@@ -136,7 +135,7 @@ processClientKeyXchg ctx (CKX_ECDH bytes) = do
                     rver <- usingState_ ctx getVersion
                     role <- usingState_ ctx isClientContext
                     masterSecret <- usingHState ctx $ setMasterSecretFromPre rver role premaster
-                    liftIO $ logKey ctx (MasterSecret masterSecret)
+                    logKey ctx (MasterSecret masterSecret)
                 Nothing ->
                     throwCore $
                         Error_Protocol "cannot generate a shared secret on ECDH" IllegalParameter
@@ -152,4 +151,4 @@ processClientFinished ctx fdata = do
 startHandshake :: Context -> Version -> ClientRandom -> IO ()
 startHandshake ctx ver crand =
     let hs = Just $ newEmptyHandshake ver crand
-     in liftIO $ void $ swapMVar (ctxHandshake ctx) hs
+     in void $ swapMVar (ctxHandshake ctx) hs
