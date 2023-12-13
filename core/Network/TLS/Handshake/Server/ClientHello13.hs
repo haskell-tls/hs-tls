@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Network.TLS.Handshake.Server.ClientHello13 (
     processClientHello13,
@@ -25,11 +26,11 @@ import Network.TLS.Struct13
 processClientHello13
     :: ServerParams
     -> Context
-    -> Handshake
+    -> CH
     -> IO (Maybe KeyShareEntry, (Cipher, Hash, Bool))
-processClientHello13 sparams ctx (ClientHello _ _ _ clientCiphers _ exts _) = do
+processClientHello13 sparams ctx CH{..} = do
     when
-        (any (\(ExtensionRaw eid _) -> eid == EID_PreSharedKey) $ init exts)
+        (any (\(ExtensionRaw eid _) -> eid == EID_PreSharedKey) $ init chExtensions)
         $ throwCore
         $ Error_Protocol "extension pre_shared_key must be last" IllegalParameter
     -- Deciding cipher.
@@ -41,7 +42,7 @@ processClientHello13 sparams ctx (ClientHello _ _ _ clientCiphers _ exts _) = do
             Error_Protocol "no cipher in common with the TLS 1.3 client" HandshakeFailure
     let usedCipher = onCipherChoosing (serverHooks sparams) TLS13 ciphersFilteredVersion
         usedHash = cipherHash usedCipher
-        rtt0 = case extensionLookup EID_EarlyData exts >>= extensionDecode MsgTClientHello of
+        rtt0 = case extensionLookup EID_EarlyData chExtensions >>= extensionDecode MsgTClientHello of
             Just (EarlyDataIndication _) -> True
             Nothing -> False
     when rtt0 $
@@ -49,7 +50,7 @@ processClientHello13 sparams ctx (ClientHello _ _ _ clientCiphers _ exts _) = do
         -- status again if 0-RTT successful
         setEstablished ctx (EarlyDataNotAllowed 3) -- hardcoding
         -- Deciding key exchange from key shares
-    keyShares <- case extensionLookup EID_KeyShare exts of
+    keyShares <- case extensionLookup EID_KeyShare chExtensions of
         Nothing ->
             throwCore $
                 Error_Protocol
@@ -64,13 +65,12 @@ processClientHello13 sparams ctx (ClientHello _ _ _ clientCiphers _ exts _) = do
     mshare <- findKeyShare keyShares serverGroups
     return (mshare, (usedCipher, usedHash, rtt0))
   where
-    ciphersFilteredVersion = filter ((`elem` clientCiphers) . cipherID) serverCiphers
+    ciphersFilteredVersion = filter ((`elem` chCiphers) . cipherID) serverCiphers
     serverCiphers =
         filter
             (cipherAllowedForVersion TLS13)
             (supportedCiphers $ serverSupported sparams)
     serverGroups = supportedGroups (ctxSupported ctx)
-processClientHello13 _ _ _ = error "processClientHello13"
 
 findKeyShare :: [KeyShareEntry] -> [Group] -> IO (Maybe KeyShareEntry)
 findKeyShare ks ggs = go ggs
@@ -86,15 +86,15 @@ findKeyShare ks ggs = go ggs
         _ -> throwCore $ Error_Protocol "duplicated key_share" IllegalParameter
     grpEq g ent = g == keyShareEntryGroup ent
 
-sendHRR :: Context -> (Cipher, a, b) -> Handshake -> IO ()
-sendHRR ctx (usedCipher, _, _) (ClientHello _ _ clientSession _ _ exts _) = do
+sendHRR :: Context -> (Cipher, a, b) -> CH -> IO ()
+sendHRR ctx (usedCipher, _, _) CH{..} = do
     twice <- usingState_ ctx getTLS13HRR
     when twice $
         throwCore $
             Error_Protocol "Hello retry not allowed again" HandshakeFailure
     usingState_ ctx $ setTLS13HRR True
     failOnEitherError $ usingHState ctx $ setHelloParameters13 usedCipher
-    let clientGroups = case extensionLookup EID_SupportedGroups exts
+    let clientGroups = case extensionLookup EID_SupportedGroups chExtensions
             >>= extensionDecode MsgTClientHello of
             Just (SupportedGroups gs) -> gs
             Nothing -> []
@@ -110,11 +110,10 @@ sendHRR ctx (usedCipher, _, _) (ClientHello _ _ clientSession _ _ exts _) = do
                     [ ExtensionRaw EID_KeyShare serverKeyShare
                     , ExtensionRaw EID_SupportedVersions selectedVersion
                     ]
-                hrr = ServerHello13 hrrRandom clientSession (cipherID usedCipher) extensions
+                hrr = ServerHello13 hrrRandom chSession (cipherID usedCipher) extensions
             usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
             runPacketFlight ctx $ do
                 loadPacket13 ctx $ Handshake13 [hrr]
                 sendChangeCipherSpec13 ctx
   where
     serverGroups = supportedGroups (ctxSupported ctx)
-sendHRR _ _ _ = error "sendHRR"

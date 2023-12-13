@@ -74,14 +74,11 @@ instance Arbitrary CertificateType where
 instance Arbitrary Handshake where
     arbitrary =
         oneof
-            [ arbitrary >>= \ver ->
+            [ arbitrary >>= \ver -> do
                 ClientHello ver
                     <$> arbitrary
-                    <*> arbitrary
-                    <*> arbitraryCiphersIDs
                     <*> arbitraryCompressionIDs
-                    <*> arbitraryHelloExtensions ver
-                    <*> return Nothing
+                    <*> (CH <$> arbitrary <*> arbitraryCiphersIDs <*> arbitraryHelloExtensions ver)
             , arbitrary >>= \ver ->
                 ServerHello ver
                     <$> arbitrary

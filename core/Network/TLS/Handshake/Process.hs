@@ -1,10 +1,6 @@
+{-# LANGUAGE RecordWildCards #-}
+
 -- |
--- Module      : Network.TLS.Handshake.Process
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
---
 -- process handshake message received
 module Network.TLS.Handshake.Process (
     processHandshake,
@@ -40,11 +36,11 @@ processHandshake :: Context -> Handshake -> IO ()
 processHandshake ctx hs = do
     role <- usingState_ ctx isClientContext
     case hs of
-        ClientHello cver ran _ cids _ ex _ -> when (role == ServerRole) $ do
-            mapM_ (usingState_ ctx . processClientExtension) ex
+        ClientHello cver ran _ CH{..} -> when (role == ServerRole) $ do
+            mapM_ (usingState_ ctx . processClientExtension) chExtensions
             -- RFC 5746: secure renegotiation
             -- TLS_EMPTY_RENEGOTIATION_INFO_SCSV: {0x00, 0xFF}
-            when (secureRenegotiation && (0xff `elem` cids)) $
+            when (secureRenegotiation && (0xff `elem` chCiphers)) $
                 usingState_ ctx $
                     setSecureRenegotiation True
             hrr <- usingState_ ctx getTLS13HRR

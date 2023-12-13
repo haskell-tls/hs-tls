@@ -86,7 +86,7 @@ sendClientHello' cparams ctx groups clientSession crand = do
     usingState_ ctx $ setVersionIfUnset highestVer
     let cipherIds = map cipherID ciphers
         compIds = map compressionID compressions
-        mkClientHello exts = ClientHello ver crand clientSession cipherIds compIds exts Nothing
+        mkClientHello exts = ClientHello ver crand compIds $ CH clientSession cipherIds exts
     pskInfo <- getPskInfo
     let rtt0info = pskInfo >>= get0RTTinfo
         rtt0 = isJust rtt0info

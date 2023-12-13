@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Network.TLS.Handshake.Server.ClientHello12 (
     processClinetHello12,
@@ -21,13 +22,13 @@ import Network.TLS.Struct
 processClinetHello12
     :: ServerParams
     -> Context
-    -> Handshake
+    -> CH
     -> IO (Cipher, Maybe Credential)
-processClinetHello12 sparams ctx (ClientHello _ _ _ ciphers _ exts _) = do
+processClinetHello12 sparams ctx CH{..} = do
     serverName <- usingState_ ctx getClientSNI
     extraCreds <- onServerNameIndication (serverHooks sparams) serverName
     let allCreds =
-            filterCredentials (isCredentialAllowed TLS12 exts) $
+            filterCredentials (isCredentialAllowed TLS12 chExtensions) $
                 extraCreds `mappend` sharedCredentials (ctxShared ctx)
 
     -- When selecting a cipher we must ensure that it is allowed for the
@@ -45,7 +46,7 @@ processClinetHello12 sparams ctx (ClientHello _ _ _ ciphers _ exts _) = do
     -- negotiated signature parameters.  Then ciphers are evalutated from
     -- the resulting credentials.
 
-    let possibleGroups = negotiatedGroupsInCommon ctx exts
+    let possibleGroups = negotiatedGroupsInCommon ctx chExtensions
         possibleECGroups = possibleGroups `intersect` availableECGroups
         possibleFFGroups = possibleGroups `intersect` availableFFGroups
         hasCommonGroupForECDHE = not (null possibleECGroups)
@@ -69,7 +70,7 @@ processClinetHello12 sparams ctx (ClientHello _ _ _ ciphers _ exts _) = do
         (creds, signatureCreds, ciphersFilteredVersion) =
             let -- Build a list of all hash/signature algorithms in common between
                 -- client and server.
-                possibleHashSigAlgs = hashAndSignaturesInCommon ctx exts
+                possibleHashSigAlgs = hashAndSignaturesInCommon ctx chExtensions
 
                 -- Check that a candidate signature credential will be compatible with
                 -- client & server hash/signature algorithms.  This returns Just Int
@@ -90,7 +91,7 @@ processClinetHello12 sparams ctx (ClientHello _ _ _ ciphers _ exts _) = do
                 -- The condition is based on resulting (EC)DHE ciphers so that
                 -- filtering credentials does not give advantage to a less secure
                 -- key exchange like CipherKeyExchange_RSA or CipherKeyExchange_DH_Anon.
-                cltCreds = filterCredentialsWithHashSignatures exts allCreds
+                cltCreds = filterCredentialsWithHashSignatures chExtensions allCreds
                 sigCltCreds = filterSortCredentials signingRank cltCreds
                 sigAllCreds = filterSortCredentials signingRank allCreds
                 cltCiphers = selectCipher cltCreds sigCltCreds
@@ -124,8 +125,7 @@ processClinetHello12 sparams ctx (ClientHello _ _ _ ciphers _ exts _) = do
 
     return (usedCipher, cred)
   where
-    commonCiphers creds sigCreds = filter ((`elem` ciphers) . cipherID) (getCiphers sparams creds sigCreds)
-processClinetHello12 _ _ _ = error "processClinetHello12"
+    commonCiphers creds sigCreds = filter ((`elem` chCiphers) . cipherID) (getCiphers sparams creds sigCreds)
 
 hashAndSignaturesInCommon
     :: Context -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]

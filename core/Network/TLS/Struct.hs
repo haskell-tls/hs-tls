@@ -182,6 +182,7 @@ module Network.TLS.Struct (
         HandshakeType_KeyUpdate
     ),
     Handshake (..),
+    CH (..),
     packetType,
     typeOfHandshake,
 ) where
@@ -852,19 +853,21 @@ data ClientKeyXchgAlgorithmData
     | CKX_ECDH ByteString
     deriving (Show, Eq)
 
-type DeprecatedRecord = ByteString
-
 ----------------------------------------------------------------
+
+data CH = CH
+    { chSession :: Session
+    , chCiphers :: [CipherID]
+    , chExtensions :: [ExtensionRaw]
+    }
+    deriving (Show, Eq)
 
 data Handshake
     = ClientHello
         Version
         ClientRandom
-        Session
-        [CipherID]
         [CompressionID]
-        [ExtensionRaw]
-        (Maybe DeprecatedRecord)
+        CH
     | ServerHello
         Version
         ServerRandom

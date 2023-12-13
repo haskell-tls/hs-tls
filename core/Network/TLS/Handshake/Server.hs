@@ -52,26 +52,26 @@ handshakeServerWith = handshake
 -- On any error, a HandshakeFailed exception is raised.
 handshake :: ServerParams -> Context -> Handshake -> IO ()
 handshake sparams ctx clientHello = do
-    chosenVersion <- processClientHello sparams ctx clientHello
+    (chosenVersion, ch) <- processClientHello sparams ctx clientHello
     if chosenVersion == TLS13
         then do
             -- fixme: we should check if the client random is the same as
             -- that in the first client hello in the case of hello retry.
             (mClientKeyShare, r0) <-
-                processClientHello13 sparams ctx clientHello
+                processClientHello13 sparams ctx ch
             case mClientKeyShare of
                 Nothing -> do
-                    sendHRR ctx r0 clientHello
+                    sendHRR ctx r0 ch
                     handshakeServer sparams ctx
                 Just cliKeyShare -> do
                     r1 <-
-                        sendServerHello13 sparams ctx cliKeyShare r0 clientHello
-                    recvClientSecondFlight13 sparams ctx r1 clientHello
+                        sendServerHello13 sparams ctx cliKeyShare r0 ch
+                    recvClientSecondFlight13 sparams ctx r1 ch
         else do
             r <-
-                processClinetHello12 sparams ctx clientHello
+                processClinetHello12 sparams ctx ch
             resumeSessionData <-
-                sendServerHello12 sparams ctx r clientHello
+                sendServerHello12 sparams ctx r ch
             recvClientSecondFlight12 sparams ctx resumeSessionData
 
 newCertReqContext :: Context -> IO CertReqContext

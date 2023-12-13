@@ -1,3 +1,5 @@
+{-# LANGUAGE RecordWildCards #-}
+
 module Network.TLS.Handshake.Server.ClientHello (
     processClientHello,
 ) where
@@ -13,8 +15,8 @@ import Network.TLS.State
 import Network.TLS.Struct
 
 processClientHello
-    :: ServerParams -> Context -> Handshake -> IO Version
-processClientHello sparams ctx clientHello@(ClientHello legacyVersion _ _ ciphers compressions exts _) = do
+    :: ServerParams -> Context -> Handshake -> IO (Version, CH)
+processClientHello sparams ctx clientHello@(ClientHello legacyVersion _ compressions ch@CH{..}) = do
     mapM_ ensureNullCompression compressions
     established <- ctxEstablished ctx
     -- renego is not allowed in TLS 1.3
@@ -54,13 +56,13 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion _ _ cipher
     -- TLS_FALLBACK_SCSV: {0x56, 0x00}
     when
         ( supportedFallbackScsv (ctxSupported ctx)
-            && (0x5600 `elem` ciphers)
+            && (0x5600 `elem` chCiphers)
             && legacyVersion < TLS12
         )
         $ throwCore
         $ Error_Protocol "fallback is not allowed" InappropriateFallback
     -- choosing TLS version
-    let clientVersions = case extensionLookup EID_SupportedVersions exts
+    let clientVersions = case extensionLookup EID_SupportedVersions chExtensions
             >>= extensionDecode MsgTClientHello of
             Just (SupportedVersionsClientHello vers) -> vers -- fixme: vers == []
             _ -> []
@@ -89,14 +91,14 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion _ _ cipher
                     Just v -> return v
 
     -- SNI (Server Name Indication)
-    let serverName = case extensionLookup EID_ServerName exts >>= extensionDecode MsgTClientHello of
+    let serverName = case extensionLookup EID_ServerName chExtensions >>= extensionDecode MsgTClientHello of
             Just (ServerName ns) -> listToMaybe (mapMaybe toHostName ns)
               where
                 toHostName (ServerNameHostName hostName) = Just hostName
                 toHostName (ServerNameOther _) = Nothing
             _ -> Nothing
     maybe (return ()) (usingState_ ctx . setClientSNI) serverName
-    return chosenVersion
+    return (chosenVersion, ch)
 processClientHello _ _ _ =
     throwCore $
         Error_Protocol

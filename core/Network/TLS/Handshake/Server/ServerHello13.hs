@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Network.TLS.Handshake.Server.ServerHello13 (
     sendServerHello13,
@@ -38,21 +39,21 @@ sendServerHello13
     -> Context
     -> KeyShareEntry
     -> (Cipher, Hash, Bool)
-    -> Handshake
+    -> CH
     -> IO
         ( SecretTriple ApplicationSecret
         , ClientTrafficSecret HandshakeSecret
         , Bool
         , Bool
         )
-sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (ClientHello _ _ clientSession _ _ exts _) = do
+sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..} = do
     newSession ctx >>= \ss -> usingState_ ctx $ do
         setSession ss False
         setClientSupportsPHA supportsPHA
     usingHState ctx $ setSupportedGroup $ keyShareEntryGroup clientKeyShare
     srand <- setServerParameter
     -- ALPN is used in choosePSK
-    protoExt <- applicationProtocol ctx exts sparams
+    protoExt <- applicationProtocol ctx chExtensions sparams
     (psk, binderInfo, is0RTTvalid) <- choosePSK
     earlyKey <- calculateEarlySecret ctx choice (Left psk) True
     let earlySecret = pairBase earlyKey
@@ -64,7 +65,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (Clien
     extraCreds <-
         usingState_ ctx getClientSNI >>= onServerNameIndication (serverHooks sparams)
     let allCreds =
-            filterCredentials (isCredentialAllowed TLS13 exts) $
+            filterCredentials (isCredentialAllowed TLS13 chExtensions) $
                 extraCreds `mappend` sharedCredentials (ctxShared ctx)
     ----------------------------------------------------------------
     established <- ctxEstablished ctx
@@ -100,7 +101,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (Clien
                     | rtt0OK = Just $ EarlySecretInfo usedCipher clientEarlySecret
                     | otherwise = Nothing
                 handSecInfo = HandshakeSecretInfo usedCipher (clientHandshakeSecret, serverHandshakeSecret)
-            contextSync ctx $ SendServerHello exts mEarlySecInfo handSecInfo
+            contextSync ctx $ SendServerHello chExtensions mEarlySecInfo handSecInfo
         ----------------------------------------------------------------
         sendExtensions rtt0OK protoExt
         case mCredInfo of
@@ -135,12 +136,12 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (Clien
         failOnEitherError $ usingHState ctx $ setHelloParameters13 usedCipher
         return srand
 
-    supportsPHA = case extensionLookup EID_PostHandshakeAuth exts
+    supportsPHA = case extensionLookup EID_PostHandshakeAuth chExtensions
         >>= extensionDecode MsgTClientHello of
         Just PostHandshakeAuth -> True
         Nothing -> False
 
-    choosePSK = case extensionLookup EID_PreSharedKey exts
+    choosePSK = case extensionLookup EID_PreSharedKey chExtensions
         >>= extensionDecode MsgTClientHello of
         Just (PreSharedKeyClientHello (PskIdentity sessionId obfAge : _) bnds@(bnd : _)) -> do
             when (null dhModes) $
@@ -195,7 +196,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (Clien
         return [ExtensionRaw EID_PreSharedKey selectedIdentity]
 
     decideCredentialInfo allCreds = do
-        cHashSigs <- case extensionLookup EID_SignatureAlgorithms exts of
+        cHashSigs <- case extensionLookup EID_SignatureAlgorithms chExtensions of
             Nothing ->
                 throwCore $ Error_Protocol "no signature_algorithms extension" MissingExtension
             Just sa -> case extensionDecode MsgTClientHello sa of
@@ -208,7 +209,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (Clien
         -- RFC 8446 section 4.4.2.2).
         let sHashSigs = filter isHashSignatureValid13 $ supportedHashSignatures $ ctxSupported ctx
             hashSigs = sHashSigs `intersect` cHashSigs
-            cltCreds = filterCredentialsWithHashSignatures exts allCreds
+            cltCreds = filterCredentialsWithHashSignatures chExtensions allCreds
         case credentialsFindForSigning13 hashSigs cltCreds of
             Nothing ->
                 case credentialsFindForSigning13 hashSigs allCreds of
@@ -223,7 +224,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (Clien
                 ExtensionRaw EID_KeyShare serverKeyShare
                     : ExtensionRaw EID_SupportedVersions selectedVersion
                     : extensions
-            helo = ServerHello13 srand clientSession (cipherID usedCipher) extensions'
+            helo = ServerHello13 srand chSession (cipherID usedCipher) extensions'
         loadPacket13 ctx $ Handshake13 [helo]
 
     sendCertAndVerify cred@(certChain, _) hashSig = do
@@ -278,14 +279,13 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (Clien
             liftIO $ onEncryptedExtensionsCreating (serverHooks sparams) extensions
         loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 extensions']
 
-    dhModes = case extensionLookup EID_PskKeyExchangeModes exts
+    dhModes = case extensionLookup EID_PskKeyExchangeModes chExtensions
         >>= extensionDecode MsgTClientHello of
         Just (PskKeyExchangeModes ms) -> ms
         Nothing -> []
 
     hashSize = hashDigestSize usedHash
     zero = B.replicate hashSize 0
-sendServerHello13 _ _ _ _ _ = error "sendServerHello13"
 
 credentialsFindForSigning13
     :: [HashAndSignatureAlgorithm]

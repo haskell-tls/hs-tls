@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Network.TLS.Handshake.Server.ServerHello12 (
     sendServerHello12,
@@ -32,37 +33,36 @@ sendServerHello12
     :: ServerParams
     -> Context
     -> (Cipher, Maybe Credential)
-    -> Handshake
+    -> CH
     -> IO (Maybe SessionData)
-sendServerHello12 sparams ctx (usedCipher, mcred) (ClientHello _ _ clientSession ciphers _ exts _) = do
+sendServerHello12 sparams ctx (usedCipher, mcred) CH{..} = do
     serverName <- usingState_ ctx getClientSNI
-    ems <- processExtendedMasterSec ctx TLS12 MsgTClientHello exts
-    resumeSessionData <- case clientSession of
+    ems <- processExtendedMasterSec ctx TLS12 MsgTClientHello chExtensions
+    resumeSessionData <- case chSession of
         (Session (Just clientSessionId)) -> do
             let resume = sessionResume (sharedSessionManager $ ctxShared ctx) clientSessionId
-            resume >>= validateSession ciphers serverName ems
+            resume >>= validateSession chCiphers serverName ems
         (Session Nothing) -> return Nothing
     case resumeSessionData of
         Nothing -> do
             serverSession <- newSession ctx
             usingState_ ctx (setSession serverSession False)
             serverhello <-
-                makeServerHello sparams ctx usedCipher mcred exts serverSession
+                makeServerHello sparams ctx usedCipher mcred chExtensions serverSession
             sendPacket ctx $ Handshake [serverhello]
-            sendServerFirstFlight sparams ctx usedCipher mcred exts
+            sendServerFirstFlight sparams ctx usedCipher mcred chExtensions
             sendPacket ctx (Handshake [ServerHelloDone])
             contextFlush ctx
         Just sessionData -> do
-            usingState_ ctx (setSession clientSession True)
+            usingState_ ctx (setSession chSession True)
             serverhello <-
-                makeServerHello sparams ctx usedCipher mcred exts clientSession
+                makeServerHello sparams ctx usedCipher mcred chExtensions chSession
             sendPacket ctx $ Handshake [serverhello]
             let masterSecret = sessionSecret sessionData
             usingHState ctx $ setMasterSecret TLS12 ServerRole masterSecret
             logKey ctx (MasterSecret masterSecret)
             sendChangeCipherAndFinish ctx ServerRole
     return resumeSessionData
-sendServerHello12 _ _ _ _ = error "sendServerHello12"
 
 validateSession
     :: [CipherID]

@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 -- |
 -- Module      : Network.TLS.Packet
@@ -16,7 +17,6 @@ module Network.TLS.Packet (
     -- * marshall functions for header messages
     decodeHeader,
     encodeHeader,
-    encodeHeaderNoVer, -- use for SSL3
 
     -- * marshall functions for alert messages
     decodeAlert,
@@ -26,7 +26,6 @@ module Network.TLS.Packet (
     -- * marshall functions for handshake messages
     decodeHandshakeRecord,
     decodeHandshake,
-    decodeDeprecatedHandshake,
     encodeHandshake,
     encodeHandshakeHeader,
     encodeHandshakeContent,
@@ -117,11 +116,6 @@ encodeHeader (Header pt ver len) = runPut (putHeaderType pt >> putBinaryVersion 
 
 {- FIXME check len <= 2^14 -}
 
-encodeHeaderNoVer :: Header -> ByteString
-encodeHeaderNoVer (Header pt _ len) = runPut (putHeaderType pt >> putWord16 len)
-
-{- FIXME check len <= 2^14 -}
-
 {-
  - decode and encode ALERT
  -}
@@ -168,29 +162,6 @@ decodeHandshake cp ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
     HandshakeType_NewSessionTicket -> decodeNewSessionTicket
     x -> fail $ "Unsupported HandshakeType " ++ show x
 
-decodeDeprecatedHandshake :: ByteString -> Either TLSError Handshake
-decodeDeprecatedHandshake b = runGetErr "deprecatedhandshake" getDeprecated b
-  where
-    getDeprecated = do
-        1 <- getWord8
-        ver <- getBinaryVersion
-        cipherSpecLen <- fromEnum <$> getWord16
-        sessionIdLen <- fromEnum <$> getWord16
-        challengeLen <- fromEnum <$> getWord16
-        ciphers <- getCipherSpec cipherSpecLen
-        session <- getSessionId sessionIdLen
-        random <- getChallenge challengeLen
-        let compressions = [0]
-        return $ ClientHello ver random session ciphers compressions [] (Just b)
-    getCipherSpec len | len < 3 = return []
-    getCipherSpec len = do
-        [c0, c1, c2] <- map fromEnum <$> replicateM 3 getWord8
-        ([toEnum $ c1 * 0x100 + c2 | c0 == 0] ++) <$> getCipherSpec (len - 3)
-    getSessionId 0 = return $ Session Nothing
-    getSessionId len = Session . Just <$> getBytes len
-    getChallenge len | 32 < len = getBytes (len - 32) >> getChallenge 32
-    getChallenge len = ClientRandom . B.append (B.replicate (32 - len) 0) <$> getBytes len
-
 decodeHelloRequest :: Get Handshake
 decodeHelloRequest = return HelloRequest
 
@@ -209,7 +180,8 @@ decodeClientHello = do
                 rest <- remaining
                 _ <- getBytes rest
                 return []
-    return $ ClientHello ver random session ciphers compressions exts Nothing
+    let ch = CH session ciphers exts
+    return $ ClientHello ver random compressions ch
 
 decodeServerHello :: Get Handshake
 decodeServerHello = do
@@ -340,24 +312,20 @@ encodeHandshake :: Handshake -> ByteString
 encodeHandshake o =
     let content = runPut $ encodeHandshakeContent o
      in let len = B.length content
-         in let header = case o of
-                    ClientHello _ _ _ _ _ _ (Just _) -> "" -- SSLv2 ClientHello message
-                    _ -> runPut $ encodeHandshakeHeader (typeOfHandshake o) len
+         in let header = runPut $ encodeHandshakeHeader (typeOfHandshake o) len
              in B.concat [header, content]
 
 encodeHandshakeHeader :: HandshakeType -> Int -> Put
 encodeHandshakeHeader ty len = putWord8 (fromHandshakeType ty) >> putWord24 len
 
 encodeHandshakeContent :: Handshake -> Put
-encodeHandshakeContent (ClientHello _ _ _ _ _ _ (Just deprecated)) = do
-    putBytes deprecated
-encodeHandshakeContent (ClientHello version random session cipherIDs compressionIDs exts Nothing) = do
+encodeHandshakeContent (ClientHello version random compressionIDs CH{..}) = do
     putBinaryVersion version
     putClientRandom32 random
-    putSession session
-    putWords16 cipherIDs
+    putSession chSession
+    putWords16 chCiphers
     putWords8 compressionIDs
-    putExtensions exts
+    putExtensions chExtensions
     return ()
 encodeHandshakeContent (ServerHello version random session cipherid compressionID exts) = do
     putBinaryVersion version

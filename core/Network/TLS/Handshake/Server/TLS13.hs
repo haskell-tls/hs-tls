@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Network.TLS.Handshake.Server.TLS13 (
     recvClientSecondFlight13,
@@ -37,11 +38,11 @@ recvClientSecondFlight13
        , Bool
        , Bool
        )
-    -> Handshake
+    -> CH
     -> IO ()
-recvClientSecondFlight13 sparams ctx (appKey, clientHandshakeSecret, authenticated, rtt0OK) (ClientHello _ _ _ _ _ exts _) = do
+recvClientSecondFlight13 sparams ctx (appKey, clientHandshakeSecret, authenticated, rtt0OK) CH{..} = do
     sfSentTime <- getCurrentTimeFromBase
-    let expectFinished' = expectFinished sparams ctx exts appKey clientHandshakeSecret sfSentTime
+    let expectFinished' = expectFinished sparams ctx chExtensions appKey clientHandshakeSecret sfSentTime
     if not authenticated && serverWantClientCert sparams
         then runRecvHandshake13 $ do
             skip <- recvHandshake13 ctx $ expectCertificate sparams ctx
@@ -55,12 +56,11 @@ recvClientSecondFlight13 sparams ctx (appKey, clientHandshakeSecret, authenticat
                         ctx
                         [ PendingAction True $ expectEndOfEarlyData ctx clientHandshakeSecret
                         , PendingActionHash True $
-                            expectFinished sparams ctx exts appKey clientHandshakeSecret sfSentTime
+                            expectFinished sparams ctx chExtensions appKey clientHandshakeSecret sfSentTime
                         ]
                 else runRecvHandshake13 $ do
                     recvHandshake13hash ctx expectFinished'
                     ensureRecvComplete ctx
-recvClientSecondFlight13 _ _ _ _ = error "recvClientSecondFlight13"
 
 expectFinished
     :: MonadIO m
