@@ -12,6 +12,8 @@ module Network.TLS.Types (
     SessionID,
     SessionIDorTicket,
     Ticket,
+    isTicket,
+    toSessionID,
     SessionData (..),
     SessionFlag (..),
     CertReqContext,
@@ -38,8 +40,9 @@ module Network.TLS.Types (
     MasterSecret (..),
 ) where
 
+import qualified Data.ByteString as B
 import Network.Socket (HostName)
-import Network.TLS.Crypto.Types (Group)
+import Network.TLS.Crypto (Group, hash, Hash (..))
 import Network.TLS.Imports
 
 type Second = Word32
@@ -76,7 +79,15 @@ instance Show Version where
 type SessionID = ByteString
 
 type SessionIDorTicket = ByteString
+-- | Encrypted session ticket (encrypt(encode 'SessionData')).
 type Ticket = ByteString
+
+isTicket :: SessionIDorTicket -> Bool
+isTicket x | B.length x > 32 = True
+           | otherwise       = False
+
+toSessionID :: Ticket -> SessionID
+toSessionID = hash SHA256
 
 -- | Session data to resume
 data SessionData = SessionData
