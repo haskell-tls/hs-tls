@@ -330,8 +330,9 @@ oneSessionManager ref =
     SessionManager
         { sessionResume = \myId -> readIORef ref >>= maybeResume False myId
         , sessionResumeOnlyOnce = \myId -> readIORef ref >>= maybeResume True myId
-        , sessionEstablish = \myId dat -> writeIORef ref $ Just (myId, dat)
+        , sessionEstablish = \myId dat -> writeIORef ref (Just (myId, dat)) >> return Nothing
         , sessionInvalidate = \_ -> return ()
+        , sessionUseTicket = False
         }
   where
     maybeResume onlyOnce myId (Just (sid, sdata))

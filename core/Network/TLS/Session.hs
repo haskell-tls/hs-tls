@@ -13,14 +13,16 @@ import Network.TLS.Types
 
 -- | A session manager
 data SessionManager = SessionManager
-    { sessionResume :: SessionID -> IO (Maybe SessionData)
-    -- ^ used on server side to decide whether to resume a client session.
-    , sessionResumeOnlyOnce :: SessionID -> IO (Maybe SessionData)
-    -- ^ used on server side to decide whether to resume a client session for TLS 1.3 0RTT. For a given 'SessionID', the implementation must return its 'SessionData' only once and must not return the same 'SessionData' after the call.
-    , sessionEstablish :: SessionID -> SessionData -> IO ()
-    -- ^ used when a session is established.
+    { sessionResume :: SessionIDorTicket -> IO (Maybe SessionData)
+    -- ^ Used on TLS 1.2\/1.3 server to lookup 'SessionData' with 'SessionID' or to decrypt 'Ticket' to get 'SessionData'.
+    , sessionResumeOnlyOnce :: SessionIDorTicket -> IO (Maybe SessionData)
+    -- ^ Used for 0RTT on TLS 1.3 server to lookup 'SessionData' with 'SessionID' or to decrypt 'Ticket' to get 'SessionData'.
+    , sessionEstablish :: SessionIDorTicket -> SessionData -> IO (Maybe Ticket)
+    -- ^ Used TLS 1.2\/1.3 server\/client to store 'SessionData' with 'SessionID' or to encrypt 'SessionData' to get 'Ticket'.
     , sessionInvalidate :: SessionID -> IO ()
-    -- ^ used when a session is invalidated.
+    -- ^ Used TLS 1.2\/1.3 server to delete 'SessionData' with 'SessionID' if @sessionUseTicket@ is 'True'.
+    , sessionUseTicket :: Bool
+    -- ^ Used on TLS 1.2\/1.3 server to decide to use 'SessionID' or 'Ticket'.
     }
 
 -- | The session manager to do nothing.
@@ -29,6 +31,9 @@ noSessionManager =
     SessionManager
         { sessionResume = \_ -> return Nothing
         , sessionResumeOnlyOnce = \_ -> return Nothing
-        , sessionEstablish = \_ _ -> return ()
+        , sessionEstablish = \_ _ -> return Nothing
         , sessionInvalidate = \_ -> return ()
+        -- Don't send NewSessionTicket in TLS 1.2 by default.
+        -- Send NewSessionTicket with SessionID in TLS 1.3 by default.
+        , sessionUseTicket = False
         }

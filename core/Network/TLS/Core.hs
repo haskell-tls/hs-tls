@@ -33,7 +33,7 @@ module Network.TLS.Core (
 ) where
 
 import qualified Control.Exception as E
-import Control.Monad (unless, when)
+import Control.Monad (unless, when, void)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
@@ -229,7 +229,7 @@ recvData13 ctx = do
             tinfo <- createTLS13TicketInfo life7d (Right add) Nothing
             sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
             let label' = B.copy label
-            sessionEstablish (sharedSessionManager $ ctxShared ctx) label' sdata
+            void $ sessionEstablish (sharedSessionManager $ ctxShared ctx) label' sdata
         -- putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
         loopHandshake13 hs
     loopHandshake13 (KeyUpdate13 mode : hs) = do

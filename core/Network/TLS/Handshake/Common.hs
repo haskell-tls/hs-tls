@@ -116,7 +116,7 @@ handshakeDone ctx = do
         Session (Just sessionId) -> do
             sessionData <- getSessionData ctx
             let sessionId' = B.copy sessionId
-            sessionEstablish
+            void $ sessionEstablish
                 (sharedSessionManager $ ctxShared ctx)
                 sessionId'
                 (fromJust sessionData)
