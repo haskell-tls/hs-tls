@@ -18,18 +18,41 @@ import Network.TLS.Parameters
 import Network.TLS.State
 import Network.TLS.Struct
 
+----------------------------------------------------------------
+
 -- TLS 1.2 or earlier
 processClinetHello12
     :: ServerParams
     -> Context
     -> CH
     -> IO (Cipher, Maybe Credential)
-processClinetHello12 sparams ctx CH{..} = do
+processClinetHello12 sparams ctx ch = do
     serverName <- usingState_ ctx getClientSNI
     extraCreds <- onServerNameIndication (serverHooks sparams) serverName
-    let allCreds =
-            filterCredentials (isCredentialAllowed TLS12 chExtensions) $
-                extraCreds `mappend` sharedCredentials (ctxShared ctx)
+    let (creds, signatureCreds, ciphersFilteredVersion) =
+            credsTriple sparams ctx ch extraCreds
+    -- The shared cipherlist can become empty after filtering for compatible
+    -- creds, check now before calling onCipherChoosing, which does not handle
+    -- empty lists.
+    when (null ciphersFilteredVersion) $
+        throwCore $
+            Error_Protocol "no cipher in common with the TLS 1.2 client" HandshakeFailure
+    let usedCipher = onCipherChoosing (serverHooks sparams) TLS12 ciphersFilteredVersion
+    mcred <- chooseCreds usedCipher creds signatureCreds
+    return (usedCipher, mcred)
+
+----------------------------------------------------------------
+
+credsTriple :: ServerParams -> Context -> CH -> Credentials -> (Credentials, Credentials, [Cipher])
+credsTriple sparams ctx CH{..} extraCreds
+  | cipherListCredentialFallback cltCiphers = (allCreds, sigAllCreds, allCiphers)
+  | otherwise = (cltCreds, sigCltCreds, cltCiphers)
+  where
+    commonCiphers creds sigCreds = filter ((`elem` chCiphers) . cipherID) (getCiphers sparams creds sigCreds)
+
+    allCreds =
+        filterCredentials (isCredentialAllowed TLS12 chExtensions) $
+            extraCreds `mappend` sharedCredentials (ctxShared ctx)
 
     -- When selecting a cipher we must ensure that it is allowed for the
     -- TLS version but also that all its key-exchange requirements
@@ -46,86 +69,69 @@ processClinetHello12 sparams ctx CH{..} = do
     -- negotiated signature parameters.  Then ciphers are evalutated from
     -- the resulting credentials.
 
-    let possibleGroups = negotiatedGroupsInCommon ctx chExtensions
-        possibleECGroups = possibleGroups `intersect` availableECGroups
-        possibleFFGroups = possibleGroups `intersect` availableFFGroups
-        hasCommonGroupForECDHE = not (null possibleECGroups)
-        hasCommonGroupForFFDHE = not (null possibleFFGroups)
-        hasCustomGroupForFFDHE = isJust (serverDHEParams sparams)
-        canFFDHE = hasCustomGroupForFFDHE || hasCommonGroupForFFDHE
-        hasCommonGroup cipher =
-            case cipherKeyExchange cipher of
-                CipherKeyExchange_DH_Anon -> canFFDHE
-                CipherKeyExchange_DHE_RSA -> canFFDHE
-                CipherKeyExchange_DHE_DSA -> canFFDHE
-                CipherKeyExchange_ECDHE_RSA -> hasCommonGroupForECDHE
-                CipherKeyExchange_ECDHE_ECDSA -> hasCommonGroupForECDHE
-                _ -> True -- group not used
+    possibleGroups = negotiatedGroupsInCommon ctx chExtensions
+    possibleECGroups = possibleGroups `intersect` availableECGroups
+    possibleFFGroups = possibleGroups `intersect` availableFFGroups
+    hasCommonGroupForECDHE = not (null possibleECGroups)
+    hasCommonGroupForFFDHE = not (null possibleFFGroups)
+    hasCustomGroupForFFDHE = isJust (serverDHEParams sparams)
+    canFFDHE = hasCustomGroupForFFDHE || hasCommonGroupForFFDHE
+    hasCommonGroup cipher =
+        case cipherKeyExchange cipher of
+            CipherKeyExchange_DH_Anon -> canFFDHE
+            CipherKeyExchange_DHE_RSA -> canFFDHE
+            CipherKeyExchange_DHE_DSA -> canFFDHE
+            CipherKeyExchange_ECDHE_RSA -> hasCommonGroupForECDHE
+            CipherKeyExchange_ECDHE_ECDSA -> hasCommonGroupForECDHE
+            _ -> True -- group not used
 
-        -- Ciphers are selected according to TLS version, availability of
-        -- (EC)DHE group and credential depending on key exchange.
-        cipherAllowed cipher = cipherAllowedForVersion TLS12 cipher && hasCommonGroup cipher
-        selectCipher credentials signatureCredentials = filter cipherAllowed (commonCiphers credentials signatureCredentials)
+    -- Ciphers are selected according to TLS version, availability of
+    -- (EC)DHE group and credential depending on key exchange.
+    cipherAllowed cipher = cipherAllowedForVersion TLS12 cipher && hasCommonGroup cipher
+    selectCipher credentials signatureCredentials = filter cipherAllowed (commonCiphers credentials signatureCredentials)
 
-        (creds, signatureCreds, ciphersFilteredVersion) =
-            let -- Build a list of all hash/signature algorithms in common between
-                -- client and server.
-                possibleHashSigAlgs = hashAndSignaturesInCommon ctx chExtensions
+    -- Build a list of all hash/signature algorithms in common between
+    -- client and server.
+    possibleHashSigAlgs = hashAndSignaturesInCommon ctx chExtensions
 
-                -- Check that a candidate signature credential will be compatible with
-                -- client & server hash/signature algorithms.  This returns Just Int
-                -- in order to sort credentials according to server hash/signature
-                -- preference.  When the certificate has no matching hash/signature in
-                -- 'possibleHashSigAlgs' the result is Nothing, and the credential will
-                -- not be used to sign.  This avoids a failure later in 'decideHashSig'.
-                signingRank cred =
-                    case credentialDigitalSignatureKey cred of
-                        Just pub -> findIndex (pub `signatureCompatible`) possibleHashSigAlgs
-                        Nothing -> Nothing
+    -- Check that a candidate signature credential will be compatible with
+    -- client & server hash/signature algorithms.  This returns Just Int
+    -- in order to sort credentials according to server hash/signature
+    -- preference.  When the certificate has no matching hash/signature in
+    -- 'possibleHashSigAlgs' the result is Nothing, and the credential will
+    -- not be used to sign.  This avoids a failure later in 'decideHashSig'.
+    signingRank cred =
+        case credentialDigitalSignatureKey cred of
+            Just pub -> findIndex (pub `signatureCompatible`) possibleHashSigAlgs
+            Nothing -> Nothing
 
-                -- Finally compute credential lists and resulting cipher list.
-                --
-                -- We try to keep certificates supported by the client, but
-                -- fallback to all credentials if this produces no suitable result
-                -- (see RFC 5246 section 7.4.2 and RFC 8446 section 4.4.2.2).
-                -- The condition is based on resulting (EC)DHE ciphers so that
-                -- filtering credentials does not give advantage to a less secure
-                -- key exchange like CipherKeyExchange_RSA or CipherKeyExchange_DH_Anon.
-                cltCreds = filterCredentialsWithHashSignatures chExtensions allCreds
-                sigCltCreds = filterSortCredentials signingRank cltCreds
-                sigAllCreds = filterSortCredentials signingRank allCreds
-                cltCiphers = selectCipher cltCreds sigCltCreds
-                allCiphers = selectCipher allCreds sigAllCreds
+    -- Finally compute credential lists and resulting cipher list.
+    --
+    -- We try to keep certificates supported by the client, but
+    -- fallback to all credentials if this produces no suitable result
+    -- (see RFC 5246 section 7.4.2 and RFC 8446 section 4.4.2.2).
+    -- The condition is based on resulting (EC)DHE ciphers so that
+    -- filtering credentials does not give advantage to a less secure
+    -- key exchange like CipherKeyExchange_RSA or CipherKeyExchange_DH_Anon.
+    cltCreds = filterCredentialsWithHashSignatures chExtensions allCreds
+    sigCltCreds = filterSortCredentials signingRank cltCreds
+    sigAllCreds = filterSortCredentials signingRank allCreds
+    cltCiphers = selectCipher cltCreds sigCltCreds
+    allCiphers = selectCipher allCreds sigAllCreds
 
-                resultTuple =
-                    if cipherListCredentialFallback cltCiphers
-                        then (allCreds, sigAllCreds, allCiphers)
-                        else (cltCreds, sigCltCreds, cltCiphers)
-             in resultTuple
-
-    -- The shared cipherlist can become empty after filtering for compatible
-    -- creds, check now before calling onCipherChoosing, which does not handle
-    -- empty lists.
-    when (null ciphersFilteredVersion) $
+chooseCreds :: Cipher -> Credentials -> Credentials -> IO (Maybe Credential)
+chooseCreds usedCipher creds signatureCreds = case cipherKeyExchange usedCipher of
+    CipherKeyExchange_RSA -> return $ credentialsFindForDecrypting creds
+    CipherKeyExchange_DH_Anon -> return Nothing
+    CipherKeyExchange_DHE_RSA -> return $ credentialsFindForSigning KX_RSA signatureCreds
+    CipherKeyExchange_DHE_DSA -> return $ credentialsFindForSigning KX_DSA signatureCreds
+    CipherKeyExchange_ECDHE_RSA -> return $ credentialsFindForSigning KX_RSA signatureCreds
+    CipherKeyExchange_ECDHE_ECDSA -> return $ credentialsFindForSigning KX_ECDSA signatureCreds
+    _ ->
         throwCore $
-            Error_Protocol "no cipher in common with the TLS 1.2 client" HandshakeFailure
+            Error_Protocol "key exchange algorithm not implemented" HandshakeFailure
 
-    let usedCipher = onCipherChoosing (serverHooks sparams) TLS12 ciphersFilteredVersion
-
-    cred <- case cipherKeyExchange usedCipher of
-        CipherKeyExchange_RSA -> return $ credentialsFindForDecrypting creds
-        CipherKeyExchange_DH_Anon -> return Nothing
-        CipherKeyExchange_DHE_RSA -> return $ credentialsFindForSigning KX_RSA signatureCreds
-        CipherKeyExchange_DHE_DSA -> return $ credentialsFindForSigning KX_DSA signatureCreds
-        CipherKeyExchange_ECDHE_RSA -> return $ credentialsFindForSigning KX_RSA signatureCreds
-        CipherKeyExchange_ECDHE_ECDSA -> return $ credentialsFindForSigning KX_ECDSA signatureCreds
-        _ ->
-            throwCore $
-                Error_Protocol "key exchange algorithm not implemented" HandshakeFailure
-
-    return (usedCipher, cred)
-  where
-    commonCiphers creds sigCreds = filter ((`elem` chCiphers) . cipherID) (getCiphers sparams creds sigCreds)
+----------------------------------------------------------------
 
 hashAndSignaturesInCommon
     :: Context -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]
@@ -153,6 +159,8 @@ negotiatedGroupsInCommon ctx exts = case extensionLookup EID_SupportedGroups ext
         let serverGroups = supportedGroups (ctxSupported ctx)
          in serverGroups `intersect` clientGroups
     _ -> []
+
+----------------------------------------------------------------
 
 filterSortCredentials
     :: Ord a => (Credential -> Maybe a) -> Credentials -> Credentials

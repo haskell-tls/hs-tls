@@ -91,7 +91,7 @@ sendServerFirstFlight
     :: ServerParams
     -> Context
     -> Cipher
-    -> Maybe (CertificateChain, b)
+    -> Maybe Credential
     -> [ExtensionRaw]
     -> IO ()
 sendServerFirstFlight sparams ctx usedCipher mcred exts = do
