@@ -56,10 +56,11 @@ sendClientHello cparams ctx groups mparams = do
         crand <- clientRandom ctx
         let paramSession = case clientWantSessionResume cparams of
                 Nothing -> Session Nothing
-                Just (sid, sdata)
+                Just (sidOrTkt, sdata)
                     | sessionVersion sdata >= TLS13 -> Session Nothing
                     | ems == RequireEMS && noSessionEMS -> Session Nothing
-                    | otherwise -> Session (Just sid)
+                    | isTicket sidOrTkt -> Session $ Just $ toSessionID sidOrTkt
+                    | otherwise -> Session (Just sidOrTkt)
                   where
                     noSessionEMS = SessionEMS `notElem` sessionFlags sdata
         -- In compatibility mode a client not offering a pre-TLS 1.3
@@ -123,8 +124,8 @@ sendClientHello' cparams ctx groups clientSession crand = do
             , emsExtension
             , groupExtension
             , ecPointExtension
-            , -- , sessionTicketExtension
-              signatureAlgExtension
+            , sessionTicketExtension
+            , signatureAlgExtension
             , -- , heartbeatExtension
               versionExtension
             , earlyDataExtension rtt0
@@ -175,7 +176,14 @@ sendClientHello' cparams ctx groups clientSession crand = do
                     EcPointFormatsSupported [EcPointFormat_Uncompressed]
     -- [EcPointFormat_Uncompressed,EcPointFormat_AnsiX962_compressed_prime,EcPointFormat_AnsiX962_compressed_char2]
     -- heartbeatExtension = return $ Just $ toExtensionRaw $ HeartBeat $ HeartBeat_PeerAllowedToSend
-    -- sessionTicketExtension = return $ Just $ toExtensionRaw $ SessionTicket
+
+    sessionTicketExtension = do
+        case clientWantSessionResume cparams of
+          Nothing -> return $ Just $ toExtensionRaw $ SessionTicket ""
+          Just (sidOrTkt, sdata)
+            | sessionVersion sdata >= TLS13 -> return Nothing
+            | isTicket sidOrTkt -> return $ Just $ toExtensionRaw $ SessionTicket sidOrTkt
+            | otherwise -> return Nothing
 
     signatureAlgExtension =
         return $
