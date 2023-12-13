@@ -353,15 +353,15 @@ setPairParamsSessionManagers
     :: (SessionManager, SessionManager)
     -> (ClientParams, ServerParams)
     -> (ClientParams, ServerParams)
-setPairParamsSessionManagers (clientManager, serverManager) (clientState, serverState) = (nc, ns)
+setPairParamsSessionManagers (clientManager, serverManager) (clientParams, serverParams) = (nc, ns)
   where
     nc =
-        clientState
-            { clientShared = updateSessionManager clientManager $ clientShared clientState
+        clientParams
+            { clientShared = updateSessionManager clientManager $ clientShared clientParams
             }
     ns =
-        serverState
-            { serverShared = updateSessionManager serverManager $ serverShared serverState
+        serverParams
+            { serverShared = updateSessionManager serverManager $ serverShared serverParams
             }
     updateSessionManager manager shared = shared{sharedSessionManager = manager}
 
@@ -369,9 +369,9 @@ setPairParamsSessionResuming
     :: (SessionID, SessionData)
     -> (ClientParams, ServerParams)
     -> (ClientParams, ServerParams)
-setPairParamsSessionResuming sessionStuff (clientState, serverState) =
-    ( clientState{clientWantSessionResume = Just sessionStuff}
-    , serverState
+setPairParamsSessionResuming sessionStuff (clientParams, serverParams) =
+    ( clientParams{clientWantSessionResume = Just sessionStuff}
+    , serverParams
     )
 
 instance Serialise Group
