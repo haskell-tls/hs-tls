@@ -99,12 +99,6 @@ instance Arbitrary Handshake13 where
     arbitrary =
         oneof
             [ arbitrary >>= \ver ->
-                ClientHello13 ver
-                    <$> arbitrary
-                    <*> arbitrary
-                    <*> arbitraryCiphersIDs
-                    <*> arbitraryHelloExtensions ver
-            , arbitrary >>= \ver ->
                 ServerHello13
                     <$> arbitrary
                     <*> arbitrary

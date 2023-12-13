@@ -41,13 +41,6 @@ putExtensions :: [ExtensionRaw] -> Put
 putExtensions es = putOpaque16 (runPut $ mapM_ putExtension es)
 
 encodeHandshake13' :: Handshake13 -> ByteString
-encodeHandshake13' (ClientHello13 version random session cipherIDs exts) = runPut $ do
-    putBinaryVersion version
-    putClientRandom32 random
-    putSession session
-    putWords16 cipherIDs
-    putWords8 [0]
-    putExtensions exts
 encodeHandshake13' (ServerHello13 random session cipherId exts) = runPut $ do
     putBinaryVersion TLS12
     putServerRandom32 random
@@ -106,7 +99,6 @@ decodeHandshakeRecord13 = runGet "handshake-record" $ do
 decodeHandshake13
     :: HandshakeType -> ByteString -> Either TLSError Handshake13
 decodeHandshake13 ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
-    HandshakeType_ClientHello -> decodeClientHello13
     HandshakeType_ServerHello -> decodeServerHello13
     HandshakeType_Finished -> decodeFinished13
     HandshakeType_EncryptedExtensions -> decodeEncryptedExtensions13
@@ -117,16 +109,6 @@ decodeHandshake13 ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
     HandshakeType_EndOfEarlyData -> return EndOfEarlyData13
     HandshakeType_KeyUpdate -> decodeKeyUpdate13
     (HandshakeType x) -> fail $ "Unsupported HandshakeType " ++ show x
-
-decodeClientHello13 :: Get Handshake13
-decodeClientHello13 = do
-    ver <- getBinaryVersion
-    random <- getClientRandom32
-    session <- getSession
-    ciphers <- getWords16
-    _comp <- getWords8
-    exts <- fromIntegral <$> getWord16 >>= getExtensions
-    return $ ClientHello13 ver random session ciphers exts
 
 decodeServerHello13 :: Get Handshake13
 decodeServerHello13 = do

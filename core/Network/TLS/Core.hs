@@ -206,9 +206,6 @@ recvData13 ctx = do
          in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
 
     loopHandshake13 [] = return ()
-    loopHandshake13 (ClientHello13{} : _) = do
-        let reason = "Client hello is not allowed"
-        terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
     -- fixme: some implementations send multiple NST at the same time.
     -- Only the first one is used at this moment.
     loopHandshake13 (NewSessionTicket13 life add nonce label exts : hs) = do

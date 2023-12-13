@@ -33,8 +33,7 @@ type TicketNonce = ByteString
 
 -- fixme: convert Word32 to proper data type
 data Handshake13
-    = ClientHello13 Version ClientRandom Session [CipherID] [ExtensionRaw]
-    | ServerHello13 ServerRandom Session CipherID [ExtensionRaw]
+    = ServerHello13 ServerRandom Session CipherID [ExtensionRaw]
     | NewSessionTicket13 Second Word32 TicketNonce SessionIDorTicket [ExtensionRaw]
     | EndOfEarlyData13
     | EncryptedExtensions13 [ExtensionRaw]
@@ -47,7 +46,6 @@ data Handshake13
 
 {- FOURMOLU_DISABLE -}
 typeOfHandshake13 :: Handshake13 -> HandshakeType
-typeOfHandshake13 ClientHello13{}         = HandshakeType_ClientHello
 typeOfHandshake13 ServerHello13{}         = HandshakeType_ServerHello
 typeOfHandshake13 EndOfEarlyData13{}      = HandshakeType_EndOfEarlyData
 typeOfHandshake13 NewSessionTicket13{}    = HandshakeType_NewSessionTicket
