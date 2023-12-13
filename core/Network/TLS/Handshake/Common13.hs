@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -306,12 +305,12 @@ createTLS13TicketInfo life ecw mrtt = do
 ageToObfuscatedAge :: Second -> TLS13TicketInfo -> Second
 ageToObfuscatedAge age tinfo = obfage
   where
-    !obfage = age + ageAdd tinfo
+    obfage = age + ageAdd tinfo
 
 obfuscatedAgeToAge :: Second -> TLS13TicketInfo -> Second
 obfuscatedAgeToAge obfage tinfo = age
   where
-    !age = obfage - ageAdd tinfo
+    age = obfage - ageAdd tinfo
 
 isAgeValid :: Second -> TLS13TicketInfo -> Bool
 isAgeValid age tinfo = age <= lifetime tinfo * 1000
@@ -320,7 +319,7 @@ getAge :: TLS13TicketInfo -> IO Second
 getAge tinfo = do
     let clientReceiveTime = txrxTime tinfo
     clientSendTime <- getCurrentTimeFromBase
-    return $! fromIntegral (clientSendTime - clientReceiveTime) -- milliseconds
+    return $ fromIntegral (clientSendTime - clientReceiveTime) -- milliseconds
 
 checkFreshness :: TLS13TicketInfo -> Second -> IO Bool
 checkFreshness tinfo obfAge = do
@@ -461,7 +460,7 @@ data CipherChoice = CipherChoice
     { cVersion :: Version
     , cCipher :: Cipher
     , cHash :: Hash
-    , cZero :: !ByteString
+    , cZero :: ByteString
     }
 
 makeCipherChoice :: Version -> Cipher -> CipherChoice

@@ -174,7 +174,7 @@ isRecvComplete :: Context -> IO Bool
 isRecvComplete ctx = usingState_ ctx $ do
     cont <- gets stHandshakeRecordCont
     cont13 <- gets stHandshakeRecordCont13
-    return $! isNothing cont && isNothing cont13
+    return $ isNothing cont && isNothing cont13
 
 checkValid :: Context -> IO ()
 checkValid ctx = do

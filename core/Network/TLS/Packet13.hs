@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -31,11 +30,11 @@ import Network.TLS.Wire
 encodeHandshake13 :: Handshake13 -> ByteString
 encodeHandshake13 hdsk = pkt
   where
-    !tp = typeOfHandshake13 hdsk
-    !content = encodeHandshake13' hdsk
-    !len = B.length content
-    !header = encodeHandshakeHeader13 tp len
-    !pkt = B.concat [header, content]
+    tp = typeOfHandshake13 hdsk
+    content = encodeHandshake13' hdsk
+    len = B.length content
+    header = encodeHandshakeHeader13 tp len
+    pkt = B.concat [header, content]
 
 -- TLS 1.3 does not use "select (extensions_present)".
 putExtensions :: [ExtensionRaw] -> Put

@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE PatternSynonyms #-}
 
 -- |
@@ -182,7 +181,7 @@ decodeServerName = runGetMaybe $ do
     getServerName = do
         ty <- getWord8
         snameParsed <- getOpaque16
-        let !sname = B.copy snameParsed
+        let sname = B.copy snameParsed
             name = case ty of
                 0 -> ServerNameHostName $ BC.unpack sname -- FIXME: should be puny code conversion
                 _ -> ServerNameOther (ty, sname)
@@ -276,7 +275,7 @@ decodeApplicationLayerProtocolNegotiation = runGetMaybe $ do
   where
     getALPN = do
         alpnParsed <- getOpaque8
-        let !alpn = B.copy alpnParsed
+        let alpn = B.copy alpnParsed
         return (B.length alpn + 1, alpn)
 
 ------------------------------------------------------------
@@ -478,7 +477,7 @@ getKeyShareEntry = do
     grp <- Group <$> getWord16
     l <- fromIntegral <$> getWord16
     key <- getBytes l
-    let !len = l + 4
+    let len = l + 4
     return (len, Just $ KeyShareEntry grp key)
 
 putKeyShareEntry :: KeyShareEntry -> Put
@@ -496,7 +495,7 @@ data KeyShare
 instance Extension KeyShare where
     extensionID _ = EID_KeyShare
     extensionEncode (KeyShareClientHello kses) = runPut $ do
-        let !len = sum [B.length key + 4 | KeyShareEntry _ key <- kses]
+        let len = sum [B.length key + 4 | KeyShareEntry _ key <- kses]
         putWord16 $ fromIntegral len
         mapM_ putKeyShareEntry kses
     extensionEncode (KeyShareServerHello kse) = runPut $ putKeyShareEntry kse

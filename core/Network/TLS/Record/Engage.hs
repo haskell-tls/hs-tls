@@ -1,12 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
-
 -- |
--- Module      : Network.TLS.Record.Engage
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
---
 -- Engage a record into the Record layer.
 -- The record is compressed, added some integrity field, then encrypted.
 --

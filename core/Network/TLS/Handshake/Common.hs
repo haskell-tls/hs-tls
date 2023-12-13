@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Network.TLS.Handshake.Common (
@@ -116,7 +115,7 @@ handshakeDone ctx = do
     case session of
         Session (Just sessionId) -> do
             sessionData <- getSessionData ctx
-            let !sessionId' = B.copy sessionId
+            let sessionId' = B.copy sessionId
             sessionEstablish
                 (sharedSessionManager $ ctxShared ctx)
                 sessionId'
@@ -234,11 +233,11 @@ getSessionData ctx = do
     ver <- usingState_ ctx getVersion
     sni <- usingState_ ctx getClientSNI
     mms <- usingHState ctx (gets hstMasterSecret)
-    !ems <- usingHState ctx getExtendedMasterSec
+    ems <- usingHState ctx getExtendedMasterSec
     tx <- readMVar (ctxTxState ctx)
     alpn <- usingState_ ctx getNegotiatedProtocol
-    let !cipher = cipherID $ fromJust $ stCipher tx
-        !compression = compressionID $ stCompression tx
+    let cipher = cipherID $ fromJust $ stCipher tx
+        compression = compressionID $ stCompression tx
         flags = [SessionEMS | ems]
     case mms of
         Nothing -> return Nothing

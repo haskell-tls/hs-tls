@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -93,8 +92,8 @@ import Network.TLS.Types
 import Network.TLS.Util
 
 data HandshakeKeyState = HandshakeKeyState
-    { hksRemotePublicKey :: !(Maybe PubKey)
-    , hksLocalPublicPrivateKeys :: !(Maybe (PubKey, PrivKey))
+    { hksRemotePublicKey :: Maybe PubKey
+    , hksLocalPublicPrivateKeys :: Maybe (PubKey, PrivKey)
     }
     deriving (Show)
 
@@ -104,32 +103,32 @@ data HandshakeDigest
     deriving (Show)
 
 data HandshakeState = HandshakeState
-    { hstClientVersion :: !Version
-    , hstClientRandom :: !ClientRandom
-    , hstServerRandom :: !(Maybe ServerRandom)
-    , hstMasterSecret :: !(Maybe ByteString)
-    , hstKeyState :: !HandshakeKeyState
-    , hstServerDHParams :: !(Maybe ServerDHParams)
-    , hstDHPrivate :: !(Maybe DHPrivate)
-    , hstServerECDHParams :: !(Maybe ServerECDHParams)
-    , hstGroupPrivate :: !(Maybe GroupPrivate)
-    , hstHandshakeDigest :: !HandshakeDigest
+    { hstClientVersion :: Version
+    , hstClientRandom :: ClientRandom
+    , hstServerRandom :: Maybe ServerRandom
+    , hstMasterSecret :: Maybe ByteString
+    , hstKeyState :: HandshakeKeyState
+    , hstServerDHParams :: Maybe ServerDHParams
+    , hstDHPrivate :: Maybe DHPrivate
+    , hstServerECDHParams :: Maybe ServerECDHParams
+    , hstGroupPrivate :: Maybe GroupPrivate
+    , hstHandshakeDigest :: HandshakeDigest
     , hstHandshakeMessages :: [ByteString]
-    , hstCertReqToken :: !(Maybe ByteString)
+    , hstCertReqToken :: Maybe ByteString
     -- ^ Set to Just-value when a TLS13 certificate request is received
-    , hstCertReqCBdata :: !(Maybe CertReqCBdata)
+    , hstCertReqCBdata :: Maybe CertReqCBdata
     -- ^ Set to Just-value when a certificate request is received
-    , hstCertReqSigAlgsCert :: !(Maybe [HashAndSignatureAlgorithm])
+    , hstCertReqSigAlgsCert :: Maybe [HashAndSignatureAlgorithm]
     -- ^ In TLS 1.3, these are separate from the certificate
     -- issuer signature algorithm hints in the callback data.
     -- In TLS 1.2 the same list is overloaded for both purposes.
     -- Not present in TLS 1.1 and earlier
-    , hstClientCertSent :: !Bool
+    , hstClientCertSent :: Bool
     -- ^ Set to true when a client certificate chain was sent
-    , hstCertReqSent :: !Bool
+    , hstCertReqSent :: Bool
     -- ^ Set to true when a certificate request was sent.  This applies
     -- only to requests sent during handshake (not post-handshake).
-    , hstClientCertChain :: !(Maybe CertificateChain)
+    , hstClientCertChain :: Maybe CertificateChain
     , hstPendingTxState :: Maybe RecordState
     , hstPendingRxState :: Maybe RecordState
     , hstPendingCipher :: Maybe Cipher
@@ -137,10 +136,10 @@ data HandshakeState = HandshakeState
     , hstExtendedMasterSec :: Bool
     , hstSupportedGroup :: Maybe Group
     , hstTLS13HandshakeMode :: HandshakeMode13
-    , hstTLS13RTT0Status :: !RTT0Status
+    , hstTLS13RTT0Status :: RTT0Status
     , hstTLS13EarlySecret :: Maybe (BaseSecret EarlySecret)
     , hstTLS13ResumptionSecret :: Maybe (BaseSecret ResumptionSecret)
-    , hstCCS13Sent :: !Bool
+    , hstCCS13Sent :: Bool
     }
     deriving (Show)
 
@@ -407,13 +406,13 @@ foldHandshakeDigest hashAlg f = modify $ \hs ->
     case hstHandshakeDigest hs of
         HandshakeMessages bytes ->
             let hashCtx = foldl hashUpdate (hashInit hashAlg) $ reverse bytes
-                !folded = f (hashFinal hashCtx)
+                folded = f (hashFinal hashCtx)
              in hs
                     { hstHandshakeDigest = HandshakeMessages [folded]
                     , hstHandshakeMessages = [folded]
                     }
         HandshakeDigestContext hashCtx ->
-            let !folded = f (hashFinal hashCtx)
+            let folded = f (hashFinal hashCtx)
                 hashCtx' = hashUpdate (hashInit hashAlg) folded
              in hs
                     { hstHandshakeDigest = HandshakeDigestContext hashCtx'

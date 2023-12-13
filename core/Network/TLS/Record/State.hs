@@ -42,11 +42,11 @@ import Network.TLS.Types
 import Network.TLS.Wire
 
 data CryptState = CryptState
-    { cstKey :: !BulkState
-    , cstIV :: !ByteString
+    { cstKey :: BulkState
+    , cstIV :: ByteString
     , -- In TLS 1.2 or earlier, this holds mac secret.
       -- In TLS 1.3, this holds application traffic secret N.
-      cstMacSecret :: !ByteString
+      cstMacSecret :: ByteString
     }
     deriving (Show)
 
@@ -84,9 +84,9 @@ instance HasCryptLevel ApplicationSecret where
 data RecordState = RecordState
     { stCipher :: Maybe Cipher
     , stCompression :: Compression
-    , stCryptLevel :: !CryptLevel
-    , stCryptState :: !CryptState
-    , stMacState :: !MacState
+    , stCryptLevel :: CryptLevel
+    , stCryptState :: CryptState
+    , stMacState :: MacState
     }
     deriving (Show)
 

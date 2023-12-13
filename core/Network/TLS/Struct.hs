@@ -858,19 +858,19 @@ type DeprecatedRecord = ByteString
 
 data Handshake
     = ClientHello
-        !Version
-        !ClientRandom
-        !Session
-        ![CipherID]
-        ![CompressionID]
+        Version
+        ClientRandom
+        Session
+        [CipherID]
+        [CompressionID]
         [ExtensionRaw]
         (Maybe DeprecatedRecord)
     | ServerHello
-        !Version
-        !ServerRandom
-        !Session
-        !CipherID
-        !CompressionID
+        Version
+        ServerRandom
+        Session
+        CipherID
+        CompressionID
         [ExtensionRaw]
     | Certificates CertificateChain
     | HelloRequest

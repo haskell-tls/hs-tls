@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_HADDOCK hide #-}
@@ -232,7 +231,7 @@ recvData13 ctx = do
                 life7d = min life 604800 -- 7 days max
             tinfo <- createTLS13TicketInfo life7d (Right add) Nothing
             sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
-            let !label' = B.copy label
+            let label' = B.copy label
             sessionEstablish (sharedSessionManager $ ctxShared ctx) label' sdata
         -- putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
         loopHandshake13 hs

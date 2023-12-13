@@ -24,11 +24,11 @@ type HMAC = ByteString -> ByteString -> ByteString
 
 macSSL :: Hash -> HMAC
 macSSL alg secret msg =
-    f $!
+    f $
         B.concat
             [ secret
             , B.replicate padLen 0x5c
-            , f $! B.concat [secret, B.replicate padLen 0x36, msg]
+            , f $ B.concat [secret, B.replicate padLen 0x36, msg]
             ]
   where
     padLen = case alg of
@@ -38,7 +38,7 @@ macSSL alg secret msg =
     f = hash alg
 
 hmac :: Hash -> HMAC
-hmac alg secret msg = f $! B.append opad (f $! B.append ipad msg)
+hmac alg secret msg = f $ B.append opad (f $ B.append ipad msg)
   where
     opad = B.map (xor 0x5c) k'
     ipad = B.map (xor 0x36) k'

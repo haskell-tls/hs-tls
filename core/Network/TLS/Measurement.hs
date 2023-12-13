@@ -17,11 +17,11 @@ import Network.TLS.Imports
 
 -- | record some data about this connection.
 data Measurement = Measurement
-    { nbHandshakes :: !Word32
+    { nbHandshakes :: Word32
     -- ^ number of handshakes on this context
-    , bytesReceived :: !Word32
+    , bytesReceived :: Word32
     -- ^ bytes received since last handshake
-    , bytesSent :: !Word32
+    , bytesSent :: Word32
     -- ^ bytes sent since last handshake
     }
     deriving (Show, Eq)

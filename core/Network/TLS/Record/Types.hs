@@ -49,7 +49,7 @@ import Network.TLS.Record.State
 import Network.TLS.Struct
 
 -- | Represent a TLS record.
-data Record a = Record !ProtocolType !Version !(Fragment a) deriving (Show, Eq)
+data Record a = Record ProtocolType Version (Fragment a) deriving (Show, Eq)
 
 newtype Fragment a = Fragment {fragmentGetBytes :: ByteString}
     deriving (Show, Eq)

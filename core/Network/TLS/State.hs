@@ -95,10 +95,10 @@ data TLSState = TLSState
     , stClientContext :: Role
     , stTLS13KeyShare :: Maybe KeyShare
     , stTLS13PreSharedKey :: Maybe PreSharedKey
-    , stTLS13HRR :: !Bool
+    , stTLS13HRR :: Bool
     , stTLS13Cookie :: Maybe Cookie
     , stExporterMasterSecret :: Maybe ByteString -- TLS 1.3
-    , stClientSupportsPHA :: !Bool -- Post-Handshake Authentication (TLS 1.3)
+    , stClientSupportsPHA :: Bool -- Post-Handshake Authentication (TLS 1.3)
     }
 
 newtype TLSSt a = TLSSt {runTLSSt :: ErrT TLSError (State TLSState) a}
