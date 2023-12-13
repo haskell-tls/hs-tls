@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+
 -- |
 -- Engage a record into the Record layer.
 -- The record is compressed, added some integrity field, then encrypted.

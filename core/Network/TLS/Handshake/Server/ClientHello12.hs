@@ -43,10 +43,15 @@ processClinetHello12 sparams ctx ch = do
 
 ----------------------------------------------------------------
 
-credsTriple :: ServerParams -> Context -> CH -> Credentials -> (Credentials, Credentials, [Cipher])
+credsTriple
+    :: ServerParams
+    -> Context
+    -> CH
+    -> Credentials
+    -> (Credentials, Credentials, [Cipher])
 credsTriple sparams ctx CH{..} extraCreds
-  | cipherListCredentialFallback cltCiphers = (allCreds, sigAllCreds, allCiphers)
-  | otherwise = (cltCreds, sigCltCreds, cltCiphers)
+    | cipherListCredentialFallback cltCiphers = (allCreds, sigAllCreds, allCiphers)
+    | otherwise = (cltCreds, sigCltCreds, cltCiphers)
   where
     commonCiphers creds sigCreds = filter ((`elem` chCiphers) . cipherID) (getCiphers sparams creds sigCreds)
 

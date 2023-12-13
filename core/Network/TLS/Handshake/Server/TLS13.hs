@@ -42,7 +42,8 @@ recvClientSecondFlight13
     -> IO ()
 recvClientSecondFlight13 sparams ctx (appKey, clientHandshakeSecret, authenticated, rtt0OK) CH{..} = do
     sfSentTime <- getCurrentTimeFromBase
-    let expectFinished' = expectFinished sparams ctx chExtensions appKey clientHandshakeSecret sfSentTime
+    let expectFinished' =
+            expectFinished sparams ctx chExtensions appKey clientHandshakeSecret sfSentTime
     if not authenticated && serverWantClientCert sparams
         then runRecvHandshake13 $ do
             skip <- recvHandshake13 ctx $ expectCertificate sparams ctx
