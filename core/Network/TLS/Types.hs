@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE PatternSynonyms #-}
 
@@ -41,6 +42,7 @@ module Network.TLS.Types (
 ) where
 
 import qualified Data.ByteString as B
+import GHC.Generics
 import Network.Socket (HostName)
 import Network.TLS.Crypto (Group, hash, Hash (..))
 import Network.TLS.Imports
@@ -49,8 +51,7 @@ type Second = Word32
 type Millisecond = Word64
 
 -- | Versions known to TLS
-newtype Version = Version Word16 deriving (Eq, Ord)
-
+newtype Version = Version Word16 deriving (Eq, Ord, Generic)
 {- FOURMOLU_DISABLE -}
 pattern SSL2  :: Version
 pattern SSL2   = Version 0x0200
@@ -102,13 +103,13 @@ data SessionData = SessionData
     , sessionMaxEarlyDataSize :: Int
     , sessionFlags :: [SessionFlag]
     } -- sessionFromTicket :: Bool
-    deriving (Show, Eq)
+    deriving (Show, Eq, Generic)
 
 -- | Some session flags
 data SessionFlag
     = -- | Session created with Extended Master Secret
       SessionEMS
-    deriving (Show, Eq, Enum)
+    deriving (Show, Eq, Enum, Generic)
 
 -- | Certificate request context for TLS 1.3.
 type CertReqContext = ByteString
@@ -119,7 +120,7 @@ data TLS13TicketInfo = TLS13TicketInfo
     , txrxTime :: Millisecond -- serverSendTime or clientReceiveTime
     , estimatedRTT :: Maybe Millisecond
     }
-    deriving (Show, Eq)
+    deriving (Show, Eq, Generic)
 
 -- | Cipher identification
 type CipherID = Word16
