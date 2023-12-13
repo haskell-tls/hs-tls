@@ -77,7 +77,7 @@ instance Show Version where
 
 -- | A session ID
 type SessionID = ByteString
-
+-- | Identity
 type SessionIDorTicket = ByteString
 -- | Encrypted session ticket (encrypt(encode 'SessionData')).
 type Ticket = ByteString

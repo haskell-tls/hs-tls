@@ -219,21 +219,21 @@ sendClientHello' cparams ctx groups clientSession crand = do
     getPskInfo =
         case sessionAndCipherToResume13 of
             Nothing -> return Nothing
-            Just (sid, sdata, sCipher) -> do
+            Just (identity, sdata, sCipher) -> do
                 let tinfo = fromJust $ sessionTicketInfo sdata
                 age <- getAge tinfo
                 return $
                     if isAgeValid age tinfo
-                        then Just (sid, sdata, makeCipherChoice TLS13 sCipher, ageToObfuscatedAge age tinfo)
+                        then Just (identity, sdata, makeCipherChoice TLS13 sCipher, ageToObfuscatedAge age tinfo)
                         else Nothing
 
     preSharedKeyExtension pskInfo =
         case pskInfo of
             Nothing -> return Nothing
-            Just (sid, _, choice, obfAge) ->
+            Just (identity, _, choice, obfAge) ->
                 let zero = cZero choice
-                    identity = PskIdentity sid obfAge
-                    offeredPsks = PreSharedKeyClientHello [identity] [zero]
+                    pskIdentity = PskIdentity identity obfAge
+                    offeredPsks = PreSharedKeyClientHello [pskIdentity] [zero]
                  in return $ Just $ toExtensionRaw offeredPsks
 
     pskExchangeModeExtension
