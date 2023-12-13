@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 module Run (
     checkCtxFinished,
     recvDataAssert,
@@ -15,8 +17,11 @@ module Run (
     twoSessionManagers,
     setPairParamsSessionManagers,
     setPairParamsSessionResuming,
+    oneSessionTicket,
 ) where
 
+import qualified Data.ByteString.Lazy as BL
+import Codec.Serialise
 import Control.Concurrent
 import Control.Concurrent.Async
 import qualified Control.Exception as E
@@ -368,3 +373,19 @@ setPairParamsSessionResuming sessionStuff (clientState, serverState) =
     ( clientState{clientWantSessionResume = Just sessionStuff}
     , serverState
     )
+
+instance Serialise Group
+instance Serialise Version
+instance Serialise TLS13TicketInfo
+instance Serialise SessionFlag
+instance Serialise SessionData
+
+oneSessionTicket :: SessionManager
+oneSessionTicket =
+    SessionManager
+        { sessionResume = \ticket -> return $ Just $ deserialise $ BL.fromStrict ticket
+        , sessionResumeOnlyOnce = \ticket -> return $ Just $ deserialise $ BL.fromStrict ticket
+        , sessionEstablish = \_ dat -> return $ Just $ BL.toStrict $ serialise dat
+        , sessionInvalidate = \_ -> return ()
+        , sessionUseTicket = True
+        }

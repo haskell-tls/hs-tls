@@ -51,6 +51,7 @@ spec = do
         prop "can handshake with TLS 1.3 Full" handshake13_full
         prop "can handshake with TLS 1.3 HRR" handshake13_hrr
         prop "can handshake with TLS 1.3 PSK" handshake13_psk
+        prop "can handshake with TLS 1.3 PSK ticket" handshake13_psk_ticket
         prop "can handshake with TLS 1.3 PSK -> HRR" handshake13_psk_fallback
         prop "can handshake with TLS 1.3 RTT0" handshake13_rtt0
         prop "can handshake with TLS 1.3 RTT0 -> PSK" handshake13_rtt0_fallback
@@ -705,6 +706,38 @@ handshake13_psk (CSP13 (cli, srv)) = do
 
     sessionRefs <- twoSessionRefs
     let sessionManagers = twoSessionManagers sessionRefs
+
+    let params = setPairParamsSessionManagers sessionManagers params0
+
+    runTLSPipeSimple13 params HelloRetryRequest Nothing
+
+    -- and resume
+    sessionParams <- readClientSessionRef sessionRefs
+    sessionParams `shouldSatisfy` isJust
+    let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
+
+    runTLSPipeSimple13 params2 PreSharedKey Nothing
+
+handshake13_psk_ticket :: CSP13 -> IO ()
+handshake13_psk_ticket (CSP13 (cli, srv)) = do
+    let cliSupported =
+            def
+                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                , supportedGroups = [P256, X25519]
+                }
+        svrSupported =
+            def
+                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                , supportedGroups = [X25519]
+                }
+        params0 =
+            ( cli{clientSupported = cliSupported}
+            , srv{serverSupported = svrSupported}
+            )
+
+    sessionRefs <- twoSessionRefs
+    let sessionManagers0 = twoSessionManagers sessionRefs
+        sessionManagers = (fst sessionManagers0, oneSessionTicket)
 
     let params = setPairParamsSessionManagers sessionManagers params0
 

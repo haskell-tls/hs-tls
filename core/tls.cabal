@@ -166,6 +166,7 @@ test-suite spec
         data-default-class,
         hourglass,
         hspec,
+        serialise,
         tls
 
 benchmark bench-tls
