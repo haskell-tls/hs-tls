@@ -343,7 +343,7 @@ decodeEcPointFormatsSupported =
 
 ------------------------------------------------------------
 
-data SessionTicket = SessionTicket Ticket
+newtype SessionTicket = SessionTicket Ticket
     deriving (Show, Eq)
 
 -- https://datatracker.ietf.org/doc/html/rfc5077#appendix-A
