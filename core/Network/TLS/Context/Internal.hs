@@ -102,7 +102,7 @@ data Information = Information
     , infoClientRandom :: Maybe ClientRandom
     , infoServerRandom :: Maybe ServerRandom
     , infoSupportedGroup :: Maybe Group
-    , infoTLS12Resumption  :: Bool
+    , infoTLS12Resumption :: Bool
     , infoTLS13HandshakeMode :: Maybe HandshakeMode13
     , infoIsEarlyDataAccepted :: Bool
     }
@@ -215,7 +215,10 @@ contextGetInformation ctx = do
             Nothing -> False
     tls12resumption <- usingState_ ctx isSessionResuming
     case (ver, cipher) of
-        (Just v, Just c) -> return $ Just $ Information v c comp ms ems cr sr grp tls12resumption hm13 accepted
+        (Just v, Just c) ->
+            return $
+                Just $
+                    Information v c comp ms ems cr sr grp tls12resumption hm13 accepted
         _ -> return Nothing
 
 contextSend :: Context -> ByteString -> IO ()

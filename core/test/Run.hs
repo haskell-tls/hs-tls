@@ -394,5 +394,5 @@ oneSessionTicket =
 
 resume :: Ticket -> IO (Maybe SessionData)
 resume ticket
-  | isTicket ticket = return $ Just $ deserialise $ BL.fromStrict ticket
-  | otherwise = return Nothing
+    | isTicket ticket = return $ Just $ deserialise $ BL.fromStrict ticket
+    | otherwise = return Nothing

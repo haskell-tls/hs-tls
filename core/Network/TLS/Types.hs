@@ -44,7 +44,7 @@ module Network.TLS.Types (
 import qualified Data.ByteString as B
 import GHC.Generics
 import Network.Socket (HostName)
-import Network.TLS.Crypto (Group, hash, Hash (..))
+import Network.TLS.Crypto (Group, Hash (..), hash)
 import Network.TLS.Imports
 
 type Second = Word32
@@ -78,14 +78,17 @@ instance Show Version where
 
 -- | A session ID
 type SessionID = ByteString
+
 -- | Identity
 type SessionIDorTicket = ByteString
+
 -- | Encrypted session ticket (encrypt(encode 'SessionData')).
 type Ticket = ByteString
 
 isTicket :: SessionIDorTicket -> Bool
-isTicket x | B.length x > 32 = True
-           | otherwise       = False
+isTicket x
+    | B.length x > 32 = True
+    | otherwise = False
 
 toSessionID :: Ticket -> SessionID
 toSessionID = hash SHA256

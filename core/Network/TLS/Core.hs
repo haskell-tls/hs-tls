@@ -33,7 +33,7 @@ module Network.TLS.Core (
 ) where
 
 import qualified Control.Exception as E
-import Control.Monad (unless, when, void)
+import Control.Monad (unless, void, when)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L

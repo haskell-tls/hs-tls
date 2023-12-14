@@ -137,7 +137,7 @@ sendNewSessionTicket sparams ctx usedCipher exts applicationSecret sfSentTime = 
         tinfo <- createTLS13TicketInfo life (Left ctx) (Just rtt)
         sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
         let mgr = sharedSessionManager $ serverShared sparams
-        mticket <-  sessionEstablish mgr sessionId sdata
+        mticket <- sessionEstablish mgr sessionId sdata
         let identity = fromMaybe sessionId mticket
         return (identity, ageAdd tinfo)
 

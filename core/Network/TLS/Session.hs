@@ -33,7 +33,7 @@ noSessionManager =
         , sessionResumeOnlyOnce = \_ -> return Nothing
         , sessionEstablish = \_ _ -> return Nothing
         , sessionInvalidate = \_ -> return ()
-        -- Don't send NewSessionTicket in TLS 1.2 by default.
-        -- Send NewSessionTicket with SessionID in TLS 1.3 by default.
-        , sessionUseTicket = False
+        , -- Don't send NewSessionTicket in TLS 1.2 by default.
+          -- Send NewSessionTicket with SessionID in TLS 1.3 by default.
+          sessionUseTicket = False
         }

@@ -179,11 +179,11 @@ sendClientHello' cparams ctx groups clientSession crand = do
 
     sessionTicketExtension = do
         case clientWantSessionResume cparams of
-          Nothing -> return $ Just $ toExtensionRaw $ SessionTicket ""
-          Just (sidOrTkt, sdata)
-            | sessionVersion sdata >= TLS13 -> return Nothing
-            | isTicket sidOrTkt -> return $ Just $ toExtensionRaw $ SessionTicket sidOrTkt
-            | otherwise -> return Nothing
+            Nothing -> return $ Just $ toExtensionRaw $ SessionTicket ""
+            Just (sidOrTkt, sdata)
+                | sessionVersion sdata >= TLS13 -> return Nothing
+                | isTicket sidOrTkt -> return $ Just $ toExtensionRaw $ SessionTicket sidOrTkt
+                | otherwise -> return Nothing
 
     signatureAlgExtension =
         return $
@@ -224,7 +224,9 @@ sendClientHello' cparams ctx groups clientSession crand = do
                 age <- getAge tinfo
                 return $
                     if isAgeValid age tinfo
-                        then Just (identity, sdata, makeCipherChoice TLS13 sCipher, ageToObfuscatedAge age tinfo)
+                        then
+                            Just
+                                (identity, sdata, makeCipherChoice TLS13 sCipher, ageToObfuscatedAge age tinfo)
                         else Nothing
 
     preSharedKeyExtension pskInfo =
