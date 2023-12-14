@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Run (
@@ -20,7 +21,6 @@ module Run (
     oneSessionTicket,
 ) where
 
-import qualified Data.ByteString.Lazy as BL
 import Codec.Serialise
 import Control.Concurrent
 import Control.Concurrent.Async
@@ -28,12 +28,14 @@ import qualified Control.Exception as E
 import Control.Monad
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy as L
 import Data.Default.Class
 import Data.Either
 import Data.IORef
 import Data.Maybe
 import Network.TLS
+import Network.TLS.Internal
 import System.Timeout
 import Test.Hspec
 import Test.QuickCheck
@@ -383,9 +385,14 @@ instance Serialise SessionData
 oneSessionTicket :: SessionManager
 oneSessionTicket =
     SessionManager
-        { sessionResume = \ticket -> return $ Just $ deserialise $ BL.fromStrict ticket
-        , sessionResumeOnlyOnce = \ticket -> return $ Just $ deserialise $ BL.fromStrict ticket
+        { sessionResume = resume
+        , sessionResumeOnlyOnce = resume
         , sessionEstablish = \_ dat -> return $ Just $ BL.toStrict $ serialise dat
         , sessionInvalidate = \_ -> return ()
         , sessionUseTicket = True
         }
+
+resume :: Ticket -> IO (Maybe SessionData)
+resume ticket
+  | isTicket ticket = return $ Just $ deserialise $ BL.fromStrict ticket
+  | otherwise = return Nothing

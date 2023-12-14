@@ -46,8 +46,9 @@ spec = do
         prop "can resume with extended master secret" handshake_resumption_ems
         prop "can handle ALPN" handshake_alpn
         prop "can handle SNI" handshake_sni
-        prop "can re-negotiate" handshake_renegotiation
-        prop "can resume session" handshake_session_resumption
+        prop "can re-negotiate with TLS 1.2" handshake12_renegotiation
+        prop "can resume session with TLS 1.2" handshake12_session_resumption
+        prop "can resume session ticket with TLS 1.2" handshake12_session_ticket
         prop "can handshake with TLS 1.3 Full" handshake13_full
         prop "can handshake with TLS 1.3 HRR" handshake13_hrr
         prop "can handshake with TLS 1.3 PSK" handshake13_psk
@@ -604,8 +605,13 @@ handshake_sni (clientParam, serverParam) = do
 
 --------------------------------------------------------------
 
-handshake_renegotiation :: (ClientParams, ServerParams) -> IO ()
-handshake_renegotiation (cparams, sparams) = do
+newtype CSP12 = CSP12 (ClientParams, ServerParams) deriving (Show)
+
+instance Arbitrary CSP12 where
+    arbitrary = CSP12 <$> arbitraryPairParams12
+
+handshake12_renegotiation :: CSP12 -> IO ()
+handshake12_renegotiation (CSP12 (cparams, sparams)) = do
     renegDisabled <- generate arbitrary
     let sparams' =
             sparams
@@ -614,7 +620,7 @@ handshake_renegotiation (cparams, sparams) = do
                         { supportedClientInitiatedRenegotiation = not renegDisabled
                         }
                 }
-    if renegDisabled || isVersionEnabled TLS13 (cparams, sparams')
+    if renegDisabled
         then runTLSInitFailureGen (cparams, sparams') hsServer hsClient
         else runTLSPipe (cparams, sparams') tlsServer tlsClient
   where
@@ -633,10 +639,27 @@ handshake_renegotiation (cparams, sparams) = do
     hsServer = handshake
     hsClient ctx = handshake ctx >> handshake ctx
 
-handshake_session_resumption :: (ClientParams, ServerParams) -> IO ()
-handshake_session_resumption plainParams = do
+handshake12_session_resumption :: CSP12 -> IO ()
+handshake12_session_resumption (CSP12 plainParams) = do
     sessionRefs <- twoSessionRefs
     let sessionManagers = twoSessionManagers sessionRefs
+
+    let params = setPairParamsSessionManagers sessionManagers plainParams
+
+    runTLSPipeSimple params
+
+    -- and resume
+    sessionParams <- readClientSessionRef sessionRefs
+    sessionParams `shouldSatisfy` isJust
+    let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
+
+    runTLSPipePredicate params2 (maybe False infoTLS12Resumption)
+
+handshake12_session_ticket :: CSP12 -> IO ()
+handshake12_session_ticket (CSP12 plainParams) = do
+    sessionRefs <- twoSessionRefs
+    let sessionManagers0 = twoSessionManagers sessionRefs
+        sessionManagers = (fst sessionManagers0, oneSessionTicket)
 
     let params = setPairParamsSessionManagers sessionManagers plainParams
 
