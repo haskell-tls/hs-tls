@@ -670,7 +670,7 @@ handshake12_session_ticket (CSP12 plainParams) = do
     sessionParams `shouldSatisfy` isJust
     let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 
-    runTLSPipeSimple params2
+    runTLSPipePredicate params2 (maybe False infoTLS12Resumption)
 
 --------------------------------------------------------------
 
