@@ -43,7 +43,7 @@ spec = do
         prop "can handle client key usage" handshake_client_key_usage
         prop "can authenticate client" handshake_client_auth
         prop "can handle extended master secret" handshake_ems
-        prop "can resume with extended master secret" handshake_ems
+        prop "can resume with extended master secret" handshake_resumption_ems
         prop "can handle ALPN" handshake_alpn
         prop "can handle SNI" handshake_sni
         prop "can re-negotiate" handshake_renegotiation
@@ -484,8 +484,8 @@ instance Arbitrary CompatEMS where
         compatible (RequireEMS, NoEMS) = False
         compatible _ = True
 
-handshake_session_resumption_ems :: (CompatEMS, CompatEMS) -> IO ()
-handshake_session_resumption_ems (CompatEMS ems, CompatEMS ems2) = do
+handshake_resumption_ems :: (CompatEMS, CompatEMS) -> IO ()
+handshake_resumption_ems (CompatEMS ems, CompatEMS ems2) = do
     sessionRefs <- twoSessionRefs
     let sessionManagers = twoSessionManagers sessionRefs
 
