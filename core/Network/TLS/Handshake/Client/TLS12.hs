@@ -90,7 +90,8 @@ recvServerSecondFlight12 :: Context -> IO ()
 recvServerSecondFlight12 ctx = do
     sessionResuming <- usingState_ ctx isSessionResuming
     unless sessionResuming $ recvChangeCipherAndFinish ctx
-    handshakeDone ctx
+    _ <- sessionEstablished ctx
+    handshakeDone12 ctx
 
 ----------------------------------------------------------------
 

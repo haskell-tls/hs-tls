@@ -28,10 +28,13 @@ recvClientSecondFlight12 sparams ctx resumeSessionData = do
     case resumeSessionData of
         Nothing -> do
             recvClientCCC sparams ctx
+            mticket <- sessionEstablished ctx
+            -- XXX sending NewSessionTicket
             sendChangeCipherAndFinish ctx ServerRole
         Just _ -> do
+            _ <- sessionEstablished ctx
             recvChangeCipherAndFinish ctx
-    handshakeDone ctx
+    handshakeDone12 ctx
 
 -- | receive Client data in handshake until the Finished handshake.
 --

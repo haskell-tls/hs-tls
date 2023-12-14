@@ -5,7 +5,8 @@ module Network.TLS.Handshake.Common (
     handleException,
     unexpected,
     newSession,
-    handshakeDone,
+    sessionEstablished,
+    handshakeDone12,
     ensureNullCompression,
 
     -- * sending packets
@@ -48,7 +49,6 @@ import Network.TLS.IO
 import Network.TLS.Imports
 import Network.TLS.Measurement
 import Network.TLS.Parameters
-import Network.TLS.Record.State
 import Network.TLS.Session
 import Network.TLS.State
 import Network.TLS.Struct
@@ -107,20 +107,23 @@ newSession ctx
     | supportedSession $ ctxSupported ctx = Session . Just <$> getStateRNG ctx 32
     | otherwise = return $ Session Nothing
 
--- | when a new handshake is done, wrap up & clean up.
-handshakeDone :: Context -> IO ()
-handshakeDone ctx = do
+sessionEstablished :: Context -> IO (Maybe Ticket)
+sessionEstablished ctx = do
     session <- usingState_ ctx getSession
     -- only callback the session established if we have a session
     case session of
         Session (Just sessionId) -> do
             sessionData <- getSessionData ctx
             let sessionId' = B.copy sessionId
-            void $ sessionEstablish
+            sessionEstablish
                 (sharedSessionManager $ ctxShared ctx)
                 sessionId'
                 (fromJust sessionData)
-        _ -> return ()
+        _ -> return Nothing -- never reach
+
+-- | when a new handshake is done, wrap up & clean up.
+handshakeDone12 :: Context -> IO ()
+handshakeDone12 ctx = do
     -- forget most handshake data and reset bytes counters.
     modifyMVar_ (ctxHandshake ctx) $ \mhshake ->
         case mhshake of
@@ -232,12 +235,11 @@ getSessionData :: Context -> IO (Maybe SessionData)
 getSessionData ctx = do
     ver <- usingState_ ctx getVersion
     sni <- usingState_ ctx getClientSNI
-    mms <- usingHState ctx (gets hstMasterSecret)
+    mms <- usingHState ctx $ gets hstMasterSecret
     ems <- usingHState ctx getExtendedMasterSec
-    tx <- readMVar (ctxTxState ctx)
+    cipher <- cipherID <$> usingHState ctx getPendingCipher
     alpn <- usingState_ ctx getNegotiatedProtocol
-    let cipher = cipherID $ fromJust $ stCipher tx
-        compression = compressionID $ stCompression tx
+    let compression = 0
         flags = [SessionEMS | ems]
     case mms of
         Nothing -> return Nothing
