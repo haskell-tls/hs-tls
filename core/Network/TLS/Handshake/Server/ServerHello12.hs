@@ -94,7 +94,7 @@ sendServerFirstFlight
     -> Maybe Credential
     -> [ExtensionRaw]
     -> IO ()
-sendServerFirstFlight sparams ctx usedCipher mcred exts = do
+sendServerFirstFlight sparams ctx usedCipher mcred chExts = do
     let certMsg = case mcred of
             Just (srvCerts, _) -> Certificates srvCerts
             _ -> Certificates $ CertificateChain []
@@ -130,7 +130,7 @@ sendServerFirstFlight sparams ctx usedCipher mcred exts = do
         sendPacket ctx (Handshake [creq])
   where
     setup_DHE = do
-        let possibleFFGroups = negotiatedGroupsInCommon ctx exts `intersect` availableFFGroups
+        let possibleFFGroups = negotiatedGroupsInCommon ctx chExts `intersect` availableFFGroups
         (dhparams, priv, pub) <-
             case possibleFFGroups of
                 [] ->
@@ -159,7 +159,7 @@ sendServerFirstFlight sparams ctx usedCipher mcred exts = do
     -- If RSA is also used for key exchange, this function is
     -- not called.
     decideHashSig pubKey = do
-        let hashSigs = hashAndSignaturesInCommon ctx exts
+        let hashSigs = hashAndSignaturesInCommon ctx chExts
         case filter (pubKey `signatureCompatible`) hashSigs of
             [] -> error ("no hash signature for " ++ pubkeyType pubKey)
             x : _ -> return x
@@ -186,7 +186,7 @@ sendServerFirstFlight sparams ctx usedCipher mcred exts = do
         return serverParams
 
     generateSKX_ECDHE kxsAlg = do
-        let possibleECGroups = negotiatedGroupsInCommon ctx exts `intersect` availableECGroups
+        let possibleECGroups = negotiatedGroupsInCommon ctx chExts `intersect` availableECGroups
         grp <- case possibleECGroups of
             [] -> throwCore $ Error_Protocol "no common group" HandshakeFailure
             g : _ -> return g
@@ -213,7 +213,8 @@ makeServerHello
     -> [ExtensionRaw]
     -> Session
     -> IO Handshake
-makeServerHello sparams ctx usedCipher mcred exts session = do
+    -- xxx sessionUseTicket && not resumed -> empty extension
+makeServerHello sparams ctx usedCipher mcred chExts session = do
     srand <-
         serverRandom ctx TLS12 $ supportedVersions $ serverSupported sparams
     case mcred of
@@ -238,7 +239,7 @@ makeServerHello sparams ctx usedCipher mcred exts session = do
                 let raw = extensionEncode ExtendedMasterSecret
                  in [ExtensionRaw EID_ExtendedMasterSecret raw]
             | otherwise = []
-    protoExt <- applicationProtocol ctx exts sparams
+    protoExt <- applicationProtocol ctx chExts sparams
     sniExt <- do
         resuming <- usingState_ ctx isSessionResuming
         if resuming
@@ -252,7 +253,7 @@ makeServerHello sparams ctx usedCipher mcred exts session = do
                     -- field of this extension SHALL be empty.
                     Just _ -> return [ExtensionRaw EID_ServerName ""]
                     Nothing -> return []
-    let extensions =
+    let shExts =
             sharedHelloExtensions (serverShared sparams)
                 ++ secRengExt
                 ++ emsExt
@@ -268,12 +269,12 @@ makeServerHello sparams ctx usedCipher mcred exts session = do
             session
             (cipherID usedCipher)
             (compressionID nullCompression)
-            extensions
+            shExts
 
 hashAndSignaturesInCommon
     :: Context -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]
-hashAndSignaturesInCommon ctx exts =
-    let cHashSigs = case extensionLookup EID_SignatureAlgorithms exts
+hashAndSignaturesInCommon ctx chExts =
+    let cHashSigs = case extensionLookup EID_SignatureAlgorithms chExts
             >>= extensionDecode MsgTClientHello of
             -- See Section 7.4.1.4.1 of RFC 5246.
             Nothing ->
@@ -290,7 +291,7 @@ hashAndSignaturesInCommon ctx exts =
         sHashSigs `intersect` cHashSigs
 
 negotiatedGroupsInCommon :: Context -> [ExtensionRaw] -> [Group]
-negotiatedGroupsInCommon ctx exts = case extensionLookup EID_SupportedGroups exts
+negotiatedGroupsInCommon ctx chExts = case extensionLookup EID_SupportedGroups chExts
     >>= extensionDecode MsgTClientHello of
     Just (SupportedGroups clientGroups) ->
         let serverGroups = supportedGroups (ctxSupported ctx)
