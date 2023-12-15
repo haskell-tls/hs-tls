@@ -349,9 +349,9 @@ newtype SessionTicket = SessionTicket Ticket
 -- https://datatracker.ietf.org/doc/html/rfc5077#appendix-A
 instance Extension SessionTicket where
     extensionID _ = EID_SessionTicket
-    extensionEncode (SessionTicket ticket) = runPut $ putOpaque16 ticket
-    extensionDecode MsgTClientHello = runGetMaybe $ SessionTicket <$> getOpaque16
-    extensionDecode MsgTServerHello = runGetMaybe $ SessionTicket <$> getOpaque16
+    extensionEncode (SessionTicket ticket) = runPut $ putBytes ticket
+    extensionDecode MsgTClientHello = runGetMaybe $ SessionTicket <$> (remaining >>= getBytes)
+    extensionDecode MsgTServerHello = runGetMaybe $ SessionTicket <$> (remaining >>= getBytes)
     extensionDecode _ = error "extensionDecode: SessionTicket"
 
 ------------------------------------------------------------
