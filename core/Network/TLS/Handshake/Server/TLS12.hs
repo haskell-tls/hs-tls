@@ -13,6 +13,7 @@ import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Server.Common
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
+import Network.TLS.IO
 import Network.TLS.Parameters
 import Network.TLS.State
 import Network.TLS.Struct
@@ -29,7 +30,10 @@ recvClientSecondFlight12 sparams ctx resumeSessionData = do
         Nothing -> do
             recvClientCCC sparams ctx
             mticket <- sessionEstablished ctx
-            -- XXX sending NewSessionTicket
+            case mticket of
+              Nothing -> return ()
+              Just ticket ->
+                  sendPacket ctx $ Handshake [NewSessionTicket 3600 ticket] -- xxx fixme
             sendChangeCipherAndFinish ctx ServerRole
         Just _ -> do
             _ <- sessionEstablished ctx

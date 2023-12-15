@@ -35,45 +35,35 @@ recvServerFirstFlight12 :: ClientParams -> Context -> [Handshake] -> IO ()
 recvServerFirstFlight12 cparams ctx hs = do
     resuming <- usingState_ ctx isSessionResuming
     if resuming
-        then do
-            let st = RecvStatePacket expectChangeCipher
-            runRecvStateHS ctx st hs
+        then recvChangeCipherAndFinish ctx
         else do
-            let st = RecvStateHandshake (processCertificate cparams ctx)
+            let st = RecvStateHandshake (expectCertificate cparams ctx)
             runRecvStateHS ctx st hs
 
-expectChangeCipher :: Packet -> IO (RecvState IO)
-expectChangeCipher ChangeCipherSpec = return $ RecvStateHandshake expectFinish
-expectChangeCipher p = unexpected (show p) (Just "change cipher")
-
-expectFinish :: Handshake -> IO (RecvState IO)
-expectFinish (Finished _) = return RecvStateDone
-expectFinish p = unexpected (show p) (Just "Handshake Finished")
-
-processCertificate :: ClientParams -> Context -> Handshake -> IO (RecvState IO)
-processCertificate cparams ctx (Certificates certs) = do
+expectCertificate :: ClientParams -> Context -> Handshake -> IO (RecvState IO)
+expectCertificate cparams ctx (Certificates certs) = do
     doCertificate cparams ctx certs
-    return $ RecvStateHandshake (processServerKeyExchange ctx)
-processCertificate _ ctx p = processServerKeyExchange ctx p
+    return $ RecvStateHandshake (expectServerKeyExchange ctx)
+expectCertificate _ ctx p = expectServerKeyExchange ctx p
 
-processServerKeyExchange :: Context -> Handshake -> IO (RecvState IO)
-processServerKeyExchange ctx (ServerKeyXchg origSkx) = do
+expectServerKeyExchange :: Context -> Handshake -> IO (RecvState IO)
+expectServerKeyExchange ctx (ServerKeyXchg origSkx) = do
     doServerKeyExchange ctx origSkx
-    return $ RecvStateHandshake (processCertificateRequest ctx)
-processServerKeyExchange ctx p = processCertificateRequest ctx p
+    return $ RecvStateHandshake (expectCertificateRequest ctx)
+expectServerKeyExchange ctx p = expectCertificateRequest ctx p
 
-processCertificateRequest :: Context -> Handshake -> IO (RecvState IO)
-processCertificateRequest ctx (CertRequest cTypesSent sigAlgs dNames) = do
+expectCertificateRequest :: Context -> Handshake -> IO (RecvState IO)
+expectCertificateRequest ctx (CertRequest cTypesSent sigAlgs dNames) = do
     let cTypes = filter (<= lastSupportedCertificateType) cTypesSent
     usingHState ctx $ setCertReqCBdata $ Just (cTypes, Just sigAlgs, dNames)
-    return $ RecvStateHandshake (processServerHelloDone ctx)
-processCertificateRequest ctx p = do
+    return $ RecvStateHandshake (expectServerHelloDone ctx)
+expectCertificateRequest ctx p = do
     usingHState ctx $ setCertReqCBdata Nothing
-    processServerHelloDone ctx p
+    expectServerHelloDone ctx p
 
-processServerHelloDone :: Context -> Handshake -> IO (RecvState m)
-processServerHelloDone _ ServerHelloDone = return RecvStateDone
-processServerHelloDone _ p = unexpected (show p) (Just "server hello data")
+expectServerHelloDone :: Context -> Handshake -> IO (RecvState m)
+expectServerHelloDone _ ServerHelloDone = return RecvStateDone
+expectServerHelloDone _ p = unexpected (show p) (Just "server hello data")
 
 ----------------------------------------------------------------
 

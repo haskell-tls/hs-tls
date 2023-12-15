@@ -213,8 +213,8 @@ makeServerHello
     -> [ExtensionRaw]
     -> Session
     -> IO Handshake
-    -- xxx sessionUseTicket && not resumed -> empty extension
 makeServerHello sparams ctx usedCipher mcred chExts session = do
+    resuming <- usingState_ ctx isSessionResuming
     srand <-
         serverRandom ctx TLS12 $ supportedVersions $ serverSupported sparams
     case mcred of
@@ -241,7 +241,6 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
             | otherwise = []
     protoExt <- applicationProtocol ctx chExts sparams
     sniExt <- do
-        resuming <- usingState_ ctx isSessionResuming
         if resuming
             then return []
             else do
@@ -253,12 +252,19 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
                     -- field of this extension SHALL be empty.
                     Just _ -> return [ExtensionRaw EID_ServerName ""]
                     Nothing -> return []
+    let useTicket = sessionUseTicket $ sharedSessionManager $ serverShared sparams
+        ticktExt
+            | not resuming && useTicket =
+                let raw = extensionEncode $ SessionTicket ""
+                 in [ExtensionRaw EID_SessionTicket raw]
+            | otherwise = []
     let shExts =
             sharedHelloExtensions (serverShared sparams)
                 ++ secRengExt
                 ++ emsExt
                 ++ protoExt
                 ++ sniExt
+                ++ ticktExt
     usingState_ ctx $ setVersion TLS12
     usingHState ctx $
         setServerHelloParameters TLS12 srand usedCipher nullCompression
