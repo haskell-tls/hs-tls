@@ -121,9 +121,11 @@ clientCertVerify sparams ctx certs verif = do
 recvChangeCipherAndFinish :: Context -> IO ()
 recvChangeCipherAndFinish ctx = runRecvState ctx $ RecvStatePacket expectChangeCipher
 
+expectChangeCipher :: Packet -> IO (RecvState IO)
 expectChangeCipher ChangeCipherSpec = do
     return $ RecvStateHandshake expectFinish
 expectChangeCipher p = unexpected (show p) (Just "change cipher")
 
+expectFinish :: Handshake -> IO (RecvState IO)
 expectFinish (Finished _) = return RecvStateDone
 expectFinish p = unexpected (show p) (Just "Handshake Finished")
