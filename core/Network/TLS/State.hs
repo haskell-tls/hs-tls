@@ -80,6 +80,7 @@ import Network.TLS.Wire (GetContinuation)
 data TLSState = TLSState
     { stSession :: Session
     , stSessionResuming :: Bool
+      -- RFC 5746, Renegotiation Indication Extension
     , stSecureRenegotiation :: Bool -- RFC 5746
     , stClientVerifiedData :: ByteString -- RFC 5746
     , stServerVerifiedData :: ByteString -- RFC 5746
