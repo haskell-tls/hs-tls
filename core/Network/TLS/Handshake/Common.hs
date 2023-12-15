@@ -5,7 +5,6 @@ module Network.TLS.Handshake.Common (
     handleException,
     unexpected,
     newSession,
-    sessionEstablished,
     handshakeDone12,
     ensureNullCompression,
 
@@ -104,20 +103,6 @@ newSession :: Context -> IO Session
 newSession ctx
     | supportedSession $ ctxSupported ctx = Session . Just <$> getStateRNG ctx 32
     | otherwise = return $ Session Nothing
-
-sessionEstablished :: Context -> IO (Maybe Ticket)
-sessionEstablished ctx = do
-    session <- usingState_ ctx getSession
-    -- only callback the session established if we have a session
-    case session of
-        Session (Just sessionId) -> do
-            sessionData <- getSessionData ctx
-            let sessionId' = B.copy sessionId
-            sessionEstablish
-                (sharedSessionManager $ ctxShared ctx)
-                sessionId'
-                (fromJust sessionData)
-        _ -> return Nothing -- never reach
 
 -- | when a new handshake is done, wrap up & clean up.
 handshakeDone12 :: Context -> IO ()

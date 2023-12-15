@@ -161,7 +161,7 @@ processServerExtension (ExtensionRaw extID content)
         setTLS13KeyShare $ extensionDecode msgt content
     | extID == EID_PreSharedKey =
         setTLS13PreSharedKey $ extensionDecode MsgTServerHello content
-    | extID == EID_SessionTicket = setTLS12SessionTicket True
+    | extID == EID_SessionTicket = setTLS12SessionTicket "" -- empty ticket
 processServerExtension _ = return ()
 
 ----------------------------------------------------------------

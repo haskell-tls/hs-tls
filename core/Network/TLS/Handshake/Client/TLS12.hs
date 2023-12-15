@@ -20,7 +20,7 @@ import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
 import Network.TLS.IO
 import Network.TLS.Imports
-import Network.TLS.Packet hiding (getExtensions)
+import Network.TLS.Packet hiding (getExtensions, getSession)
 import Network.TLS.Parameters
 import Network.TLS.Session
 import Network.TLS.State
@@ -81,24 +81,30 @@ recvServerSecondFlight12 :: Context -> IO ()
 recvServerSecondFlight12 ctx = do
     sessionResuming <- usingState_ ctx isSessionResuming
     unless sessionResuming $ recvNSTandCCSandFinish ctx
-    st <- usingState_ ctx getTLS12SessionTicket
-    unless st $ void $ sessionEstablished ctx
+    mticket <- usingState_ ctx getTLS12SessionTicket
+    identity <- case mticket of
+      Just ticket -> return ticket
+      Nothing -> do
+          session <- usingState_ ctx getSession
+          case session of
+            Session (Just sessionId) -> return $ B.copy sessionId
+            _ -> return "" -- never reach
+    sessionData <- getSessionData ctx
+    void $ sessionEstablish
+        (sharedSessionManager $ ctxShared ctx)
+        identity
+        (fromJust sessionData)
     handshakeDone12 ctx
 
 recvNSTandCCSandFinish :: Context -> IO ()
 recvNSTandCCSandFinish ctx = do
-    st <- usingState_ ctx getTLS12SessionTicket
+    st <- isJust <$> usingState_ ctx getTLS12SessionTicket
     if st
         then runRecvState ctx $ RecvStateHandshake expectNewSessionTicket
         else do runRecvState ctx $ RecvStatePacket expectChangeCipher
   where
     expectNewSessionTicket (NewSessionTicket _ ticket) = do
-        sessionData <- getSessionData ctx
-        void $
-            sessionEstablish
-                (sharedSessionManager $ ctxShared ctx)
-                ticket
-                (fromJust sessionData)
+        usingState_ ctx $ setTLS12SessionTicket ticket
         return $ RecvStatePacket expectChangeCipher
     expectNewSessionTicket p = unexpected (show p) (Just "Handshake Finished")
 

@@ -13,8 +13,10 @@ import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Server.Common
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
+import Network.TLS.Imports
 import Network.TLS.IO
 import Network.TLS.Parameters
+import Network.TLS.Session
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Types
@@ -39,6 +41,20 @@ recvClientSecondFlight12 sparams ctx resumeSessionData = do
             _ <- sessionEstablished ctx
             recvChangeCipherAndFinish ctx
     handshakeDone12 ctx
+
+sessionEstablished :: Context -> IO (Maybe Ticket)
+sessionEstablished ctx = do
+    session <- usingState_ ctx getSession
+    -- only callback the session established if we have a session
+    case session of
+        Session (Just sessionId) -> do
+            sessionData <- getSessionData ctx
+            let sessionId' = B.copy sessionId
+            sessionEstablish
+                (sharedSessionManager $ ctxShared ctx)
+                sessionId'
+                (fromJust sessionData)
+        _ -> return Nothing -- never reach
 
 -- | receive Client data in handshake until the Finished handshake.
 --
