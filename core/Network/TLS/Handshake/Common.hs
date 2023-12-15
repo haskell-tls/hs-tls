@@ -31,7 +31,6 @@ module Network.TLS.Handshake.Common (
 import Control.Concurrent.MVar
 import Control.Exception (IOException, fromException, handle, throwIO)
 import Control.Monad.State.Strict
-import qualified Data.ByteString as B
 import Data.IORef (writeIORef)
 
 import Network.TLS.Cipher
@@ -46,7 +45,6 @@ import Network.TLS.IO
 import Network.TLS.Imports
 import Network.TLS.Measurement
 import Network.TLS.Parameters
-import Network.TLS.Session
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13

@@ -6,7 +6,6 @@ module Network.TLS.Util (
     partition3,
     partition6,
     (&&!),
-    bytesEq,
     fmapEither,
     catchException,
     forEitherM,
@@ -17,7 +16,6 @@ module Network.TLS.Util (
     restoreMVar,
 ) where
 
-import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 import Network.TLS.Imports
 
@@ -67,12 +65,6 @@ True &&! True = True
 True &&! False = False
 False &&! True = False
 False &&! False = False
-
--- | verify that 2 bytestrings are equals.
--- it's a non lazy version, that will compare every bytes.
--- arguments with different length will bail out early
-bytesEq :: ByteString -> ByteString -> Bool
-bytesEq = BA.constEq
 
 fmapEither :: (a -> b) -> Either l a -> Either l b
 fmapEither f = fmap f

@@ -30,7 +30,6 @@ import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types
-import Network.TLS.Util (bytesEq)
 import Network.TLS.X509
 
 sendServerHello13
@@ -189,7 +188,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
     checkBinder _ Nothing = return []
     checkBinder earlySecret (Just (binder, n, tlen)) = do
         binder' <- makePSKBinder ctx earlySecret usedHash tlen Nothing
-        unless (binder `bytesEq` binder') $
+        unless (binder == binder') $
             decryptError "PSK binder validation failed"
         let selectedIdentity = extensionEncode $ PreSharedKeyServerHello $ fromIntegral n
         return [ExtensionRaw EID_PreSharedKey selectedIdentity]

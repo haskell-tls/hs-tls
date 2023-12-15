@@ -25,7 +25,6 @@ import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types (MasterSecret (..), Role (..), invertRole)
-import Network.TLS.Util
 
 import Control.Concurrent.MVar
 import Control.Monad.State.Strict (gets)
@@ -61,7 +60,7 @@ processHandshake ctx hs = do
     processClientExtension (ExtensionRaw EID_SecureRenegotiation content) | secureRenegotiation = do
         v <- getVerifiedData ClientRole
         let bs = extensionEncode (SecureRenegotiation v Nothing)
-        unless (bs `bytesEq` content) $
+        unless (bs == content) $
             throwError $
                 Error_Protocol
                     ("client verified data not matching: " ++ show v ++ ":" ++ show content)

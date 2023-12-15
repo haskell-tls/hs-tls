@@ -22,7 +22,6 @@ import Network.TLS.Parameters
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Types
-import Network.TLS.Util (bytesEq)
 
 ----------------------------------------------------------------
 
@@ -149,7 +148,7 @@ processServerExtension (ExtensionRaw extID content)
         cv <- getVerifiedData ClientRole
         sv <- getVerifiedData ServerRole
         let bs = extensionEncode (SecureRenegotiation cv $ Just sv)
-        unless (bs `bytesEq` content) $
+        unless (bs == content) $
             throwError $
                 Error_Protocol "server secure renegotiation data not matching" HandshakeFailure
     | extID == EID_SupportedVersions = case extensionDecode MsgTServerHello content of

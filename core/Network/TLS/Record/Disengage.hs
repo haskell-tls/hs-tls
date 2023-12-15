@@ -74,7 +74,7 @@ getCipherData (Record pt ver _) cdata = do
         Just digest -> do
             let new_hdr = Header pt ver (fromIntegral $ B.length $ cipherDataContent cdata)
             expected_digest <- makeDigest new_hdr $ cipherDataContent cdata
-            return (expected_digest `bytesEq` digest)
+            return (expected_digest == digest)
 
     -- check if the padding is filled with the correct pattern if it exists
     -- (before TLS10 this checks instead that the padding length is minimal)
@@ -82,7 +82,7 @@ getCipherData (Record pt ver _) cdata = do
         Nothing -> return True
         Just (pad, _blksz) -> do
             let b = B.length pad - 1
-            return $ B.replicate (B.length pad) (fromIntegral b) `bytesEq` pad
+            return $ B.replicate (B.length pad) (fromIntegral b) == pad
 
     unless (macValid &&! paddingValid) $
         throwError $
