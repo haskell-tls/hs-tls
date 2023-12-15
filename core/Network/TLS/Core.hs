@@ -33,7 +33,7 @@ module Network.TLS.Core (
 ) where
 
 import qualified Control.Exception as E
-import Control.Monad (unless, when)
+import Control.Monad (unless, void, when)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
@@ -121,20 +121,20 @@ recvData ctx = liftIO $ do
         -- packet, because don't want another thread to receive a new packet
         -- before this one has been fully processed.
         --
-        -- Even when recvData1/recvData13 loops, we only need to call function
+        -- Even when recvData12/recvData13 loops, we only need to call function
         -- checkValid once.  Since we hold the read lock, no concurrent call
         -- will impact the validity of the context.
-        if tls13 then recvData13 ctx else recvData1 ctx
+        if tls13 then recvData13 ctx else recvData12 ctx
 
-recvData1 :: Context -> IO B.ByteString
-recvData1 ctx = do
+recvData12 :: Context -> IO B.ByteString
+recvData12 ctx = do
     pkt <- recvPacket ctx
     either (onError terminate) process pkt
   where
     process (Handshake [ch@ClientHello{}]) =
-        handshakeWith ctx ch >> recvData1 ctx
+        handshakeWith ctx ch >> recvData12 ctx
     process (Handshake [hr@HelloRequest]) =
-        handshakeWith ctx hr >> recvData1 ctx
+        handshakeWith ctx hr >> recvData12 ctx
     process (Alert [(AlertLevel_Warning, CloseNotify)]) = tryBye ctx >> setEOF ctx >> return B.empty
     process (Alert [(AlertLevel_Fatal, desc)]) = do
         setEOF ctx
@@ -146,7 +146,7 @@ recvData1 ctx = do
             )
 
     -- when receiving empty appdata, we just retry to get some data.
-    process (AppData "") = recvData1 ctx
+    process (AppData "") = recvData12 ctx
     process (AppData x) = return x
     process p =
         let reason = "unexpected message " ++ show p
@@ -229,7 +229,7 @@ recvData13 ctx = do
             tinfo <- createTLS13TicketInfo life7d (Right add) Nothing
             sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
             let label' = B.copy label
-            sessionEstablish (sharedSessionManager $ ctxShared ctx) label' sdata
+            void $ sessionEstablish (sharedSessionManager $ ctxShared ctx) label' sdata
         -- putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
         loopHandshake13 hs
     loopHandshake13 (KeyUpdate13 mode : hs) = do

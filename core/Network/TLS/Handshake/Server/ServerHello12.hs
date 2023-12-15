@@ -5,8 +5,6 @@ module Network.TLS.Handshake.Server.ServerHello12 (
     sendServerHello12,
 ) where
 
-import Data.Maybe (fromJust)
-
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Context.Internal
@@ -35,18 +33,12 @@ sendServerHello12
     -> (Cipher, Maybe Credential)
     -> CH
     -> IO (Maybe SessionData)
-sendServerHello12 sparams ctx (usedCipher, mcred) CH{..} = do
-    serverName <- usingState_ ctx getClientSNI
-    ems <- processExtendedMasterSec ctx TLS12 MsgTClientHello chExtensions
-    resumeSessionData <- case chSession of
-        (Session (Just clientSessionId)) -> do
-            let resume = sessionResume (sharedSessionManager $ ctxShared ctx) clientSessionId
-            resume >>= validateSession chCiphers serverName ems
-        (Session Nothing) -> return Nothing
+sendServerHello12 sparams ctx (usedCipher, mcred) ch@CH{..} = do
+    resumeSessionData <- recoverSessionData ctx ch
     case resumeSessionData of
         Nothing -> do
             serverSession <- newSession ctx
-            usingState_ ctx (setSession serverSession False)
+            usingState_ ctx $ setSession serverSession False
             serverhello <-
                 makeServerHello sparams ctx usedCipher mcred chExtensions serverSession
             sendPacket ctx $ Handshake [serverhello]
@@ -54,15 +46,32 @@ sendServerHello12 sparams ctx (usedCipher, mcred) CH{..} = do
             sendPacket ctx (Handshake [ServerHelloDone])
             contextFlush ctx
         Just sessionData -> do
-            usingState_ ctx (setSession chSession True)
+            usingState_ ctx $ setSession chSession True
             serverhello <-
                 makeServerHello sparams ctx usedCipher mcred chExtensions chSession
             sendPacket ctx $ Handshake [serverhello]
             let masterSecret = sessionSecret sessionData
             usingHState ctx $ setMasterSecret TLS12 ServerRole masterSecret
-            logKey ctx (MasterSecret masterSecret)
+            logKey ctx $ MasterSecret masterSecret
             sendChangeCipherAndFinish ctx ServerRole
     return resumeSessionData
+
+recoverSessionData :: Context -> CH -> IO (Maybe SessionData)
+recoverSessionData ctx CH{..} = do
+    serverName <- usingState_ ctx getClientSNI
+    ems <- processExtendedMasterSec ctx TLS12 MsgTClientHello chExtensions
+    let mticket =
+            extensionLookup EID_SessionTicket chExtensions
+                >>= extensionDecode MsgTClientHello
+    case mticket of
+        Just (SessionTicket ticket) | ticket /= "" -> do
+            sd <- sessionResume (sharedSessionManager $ ctxShared ctx) ticket
+            validateSession chCiphers serverName ems sd
+        _ -> case chSession of
+            (Session (Just clientSessionId)) -> do
+                sd <- sessionResume (sharedSessionManager $ ctxShared ctx) clientSessionId
+                validateSession chCiphers serverName ems sd
+            (Session Nothing) -> return Nothing
 
 validateSession
     :: [CipherID]
@@ -94,7 +103,7 @@ sendServerFirstFlight
     -> Maybe Credential
     -> [ExtensionRaw]
     -> IO ()
-sendServerFirstFlight sparams ctx usedCipher mcred exts = do
+sendServerFirstFlight sparams ctx usedCipher mcred chExts = do
     let certMsg = case mcred of
             Just (srvCerts, _) -> Certificates srvCerts
             _ -> Certificates $ CertificateChain []
@@ -130,7 +139,7 @@ sendServerFirstFlight sparams ctx usedCipher mcred exts = do
         sendPacket ctx (Handshake [creq])
   where
     setup_DHE = do
-        let possibleFFGroups = negotiatedGroupsInCommon ctx exts `intersect` availableFFGroups
+        let possibleFFGroups = negotiatedGroupsInCommon ctx chExts `intersect` availableFFGroups
         (dhparams, priv, pub) <-
             case possibleFFGroups of
                 [] ->
@@ -159,7 +168,7 @@ sendServerFirstFlight sparams ctx usedCipher mcred exts = do
     -- If RSA is also used for key exchange, this function is
     -- not called.
     decideHashSig pubKey = do
-        let hashSigs = hashAndSignaturesInCommon ctx exts
+        let hashSigs = hashAndSignaturesInCommon ctx chExts
         case filter (pubKey `signatureCompatible`) hashSigs of
             [] -> error ("no hash signature for " ++ pubkeyType pubKey)
             x : _ -> return x
@@ -186,7 +195,7 @@ sendServerFirstFlight sparams ctx usedCipher mcred exts = do
         return serverParams
 
     generateSKX_ECDHE kxsAlg = do
-        let possibleECGroups = negotiatedGroupsInCommon ctx exts `intersect` availableECGroups
+        let possibleECGroups = negotiatedGroupsInCommon ctx chExts `intersect` availableECGroups
         grp <- case possibleECGroups of
             [] -> throwCore $ Error_Protocol "no common group" HandshakeFailure
             g : _ -> return g
@@ -213,7 +222,8 @@ makeServerHello
     -> [ExtensionRaw]
     -> Session
     -> IO Handshake
-makeServerHello sparams ctx usedCipher mcred exts session = do
+makeServerHello sparams ctx usedCipher mcred chExts session = do
+    resuming <- usingState_ ctx isSessionResuming
     srand <-
         serverRandom ctx TLS12 $ supportedVersions $ serverSupported sparams
     case mcred of
@@ -238,9 +248,8 @@ makeServerHello sparams ctx usedCipher mcred exts session = do
                 let raw = extensionEncode ExtendedMasterSecret
                  in [ExtensionRaw EID_ExtendedMasterSecret raw]
             | otherwise = []
-    protoExt <- applicationProtocol ctx exts sparams
+    protoExt <- applicationProtocol ctx chExts sparams
     sniExt <- do
-        resuming <- usingState_ ctx isSessionResuming
         if resuming
             then return []
             else do
@@ -252,12 +261,19 @@ makeServerHello sparams ctx usedCipher mcred exts session = do
                     -- field of this extension SHALL be empty.
                     Just _ -> return [ExtensionRaw EID_ServerName ""]
                     Nothing -> return []
-    let extensions =
+    let useTicket = sessionUseTicket $ sharedSessionManager $ serverShared sparams
+        ticktExt
+            | not resuming && useTicket =
+                let raw = extensionEncode $ SessionTicket ""
+                 in [ExtensionRaw EID_SessionTicket raw]
+            | otherwise = []
+    let shExts =
             sharedHelloExtensions (serverShared sparams)
                 ++ secRengExt
                 ++ emsExt
                 ++ protoExt
                 ++ sniExt
+                ++ ticktExt
     usingState_ ctx $ setVersion TLS12
     usingHState ctx $
         setServerHelloParameters TLS12 srand usedCipher nullCompression
@@ -268,12 +284,12 @@ makeServerHello sparams ctx usedCipher mcred exts session = do
             session
             (cipherID usedCipher)
             (compressionID nullCompression)
-            extensions
+            shExts
 
 hashAndSignaturesInCommon
     :: Context -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]
-hashAndSignaturesInCommon ctx exts =
-    let cHashSigs = case extensionLookup EID_SignatureAlgorithms exts
+hashAndSignaturesInCommon ctx chExts =
+    let cHashSigs = case extensionLookup EID_SignatureAlgorithms chExts
             >>= extensionDecode MsgTClientHello of
             -- See Section 7.4.1.4.1 of RFC 5246.
             Nothing ->
@@ -290,7 +306,7 @@ hashAndSignaturesInCommon ctx exts =
         sHashSigs `intersect` cHashSigs
 
 negotiatedGroupsInCommon :: Context -> [ExtensionRaw] -> [Group]
-negotiatedGroupsInCommon ctx exts = case extensionLookup EID_SupportedGroups exts
+negotiatedGroupsInCommon ctx chExts = case extensionLookup EID_SupportedGroups chExts
     >>= extensionDecode MsgTClientHello of
     Just (SupportedGroups clientGroups) ->
         let serverGroups = supportedGroups (ctxSupported ctx)

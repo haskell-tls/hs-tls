@@ -1,12 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- |
--- Module      : Network.TLS.Handshake.Common13
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
 module Network.TLS.Handshake.Common13 (
     makeFinished,
     checkFinished,
@@ -46,13 +40,13 @@ module Network.TLS.Handshake.Common13 (
 
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
-import Data.Maybe (fromJust)
 import Data.UnixTime
 import Foreign.C.Types (CTime (..))
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import qualified Network.TLS.Crypto.IES as IES
+
 import Network.TLS.Extension
 import Network.TLS.Handshake.Certificate (extractCAname)
 import Network.TLS.Handshake.Common (unexpected)

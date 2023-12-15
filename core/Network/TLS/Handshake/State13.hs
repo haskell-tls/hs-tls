@@ -1,11 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- |
--- Module      : Network.TLS.Handshake.State13
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
 module Network.TLS.Handshake.State13 (
     CryptLevel (
         CryptEarlySecret,
@@ -31,7 +25,6 @@ import Control.Concurrent.MVar
 import Control.Monad.State
 import qualified Data.ByteString as B
 import Data.IORef
-import Data.Maybe (fromJust)
 
 import Network.TLS.Cipher
 import Network.TLS.Compression

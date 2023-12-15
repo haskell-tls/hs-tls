@@ -1,14 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
 
--- |
--- Module      : Network.TLS.Receiving
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
---
--- the Receiving module contains calls related to unmarshalling packets according
--- to the TLS state
 module Network.TLS.Receiving (
     processPacket,
     processPacket13,
@@ -16,7 +7,6 @@ module Network.TLS.Receiving (
 
 import Control.Concurrent.MVar
 import Control.Monad.State.Strict
-import Data.Maybe (fromJust)
 
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal

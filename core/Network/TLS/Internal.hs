@@ -13,6 +13,7 @@ module Network.TLS.Internal (
     module Network.TLS.Packet13,
     module Network.TLS.Receiving,
     module Network.TLS.Sending,
+    module Network.TLS.Types,
     module Network.TLS.Wire,
     sendPacket,
     recvPacket,
@@ -25,4 +26,5 @@ import Network.TLS.Receiving
 import Network.TLS.Sending
 import Network.TLS.Struct
 import Network.TLS.Struct13
+import Network.TLS.Types
 import Network.TLS.Wire

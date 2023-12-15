@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE PatternSynonyms #-}
 
@@ -12,6 +13,8 @@ module Network.TLS.Types (
     SessionID,
     SessionIDorTicket,
     Ticket,
+    isTicket,
+    toSessionID,
     SessionData (..),
     SessionFlag (..),
     CertReqContext,
@@ -38,16 +41,17 @@ module Network.TLS.Types (
     MasterSecret (..),
 ) where
 
+import qualified Data.ByteString as B
+import GHC.Generics
 import Network.Socket (HostName)
-import Network.TLS.Crypto.Types (Group)
+import Network.TLS.Crypto (Group, Hash (..), hash)
 import Network.TLS.Imports
 
 type Second = Word32
 type Millisecond = Word64
 
 -- | Versions known to TLS
-newtype Version = Version Word16 deriving (Eq, Ord)
-
+newtype Version = Version Word16 deriving (Eq, Ord, Generic)
 {- FOURMOLU_DISABLE -}
 pattern SSL2  :: Version
 pattern SSL2   = Version 0x0200
@@ -75,8 +79,19 @@ instance Show Version where
 -- | A session ID
 type SessionID = ByteString
 
+-- | Identity
 type SessionIDorTicket = ByteString
+
+-- | Encrypted session ticket (encrypt(encode 'SessionData')).
 type Ticket = ByteString
+
+isTicket :: SessionIDorTicket -> Bool
+isTicket x
+    | B.length x > 32 = True
+    | otherwise = False
+
+toSessionID :: Ticket -> SessionID
+toSessionID = hash SHA256
 
 -- | Session data to resume
 data SessionData = SessionData
@@ -91,13 +106,13 @@ data SessionData = SessionData
     , sessionMaxEarlyDataSize :: Int
     , sessionFlags :: [SessionFlag]
     } -- sessionFromTicket :: Bool
-    deriving (Show, Eq)
+    deriving (Show, Eq, Generic)
 
 -- | Some session flags
 data SessionFlag
     = -- | Session created with Extended Master Secret
       SessionEMS
-    deriving (Show, Eq, Enum)
+    deriving (Show, Eq, Enum, Generic)
 
 -- | Certificate request context for TLS 1.3.
 type CertReqContext = ByteString
@@ -108,7 +123,7 @@ data TLS13TicketInfo = TLS13TicketInfo
     , txrxTime :: Millisecond -- serverSendTime or clientReceiveTime
     , estimatedRTT :: Maybe Millisecond
     }
-    deriving (Show, Eq)
+    deriving (Show, Eq, Generic)
 
 -- | Cipher identification
 type CipherID = Word16

@@ -2,12 +2,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- |
--- Module      : Network.TLS.Handshake.State
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
 module Network.TLS.Handshake.State (
     HandshakeState (..),
     HandshakeDigest (..),
@@ -79,8 +73,8 @@ module Network.TLS.Handshake.State (
 
 import Control.Monad.State.Strict
 import Data.ByteArray (ByteArrayAccess)
-import Data.Maybe (fromJust)
 import Data.X509 (CertificateChain)
+
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Crypto

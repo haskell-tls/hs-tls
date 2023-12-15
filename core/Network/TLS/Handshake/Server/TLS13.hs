@@ -7,7 +7,6 @@ module Network.TLS.Handshake.Server.TLS13 (
 ) where
 
 import Control.Monad.State.Strict
-import Data.Maybe (fromJust)
 
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
@@ -119,8 +118,8 @@ sendNewSessionTicket sparams ctx usedCipher exts applicationSecret sfSentTime = 
     resumptionMasterSecret <- calculateResumptionSecret ctx choice applicationSecret
     let life = toSeconds $ serverTicketLifetime sparams
         psk = derivePSK choice resumptionMasterSecret nonce
-    (label, add) <- generateSession life psk rtt0max rtt
-    let nst = createNewSessionTicket life add nonce label rtt0max
+    (identity, add) <- generateSession life psk rtt0max rtt
+    let nst = createNewSessionTicket life add nonce identity rtt0max
     sendPacket13 ctx $ Handshake13 [nst]
   where
     choice = makeCipherChoice TLS13 usedCipher
@@ -137,11 +136,12 @@ sendNewSessionTicket sparams ctx usedCipher exts applicationSecret sfSentTime = 
         tinfo <- createTLS13TicketInfo life (Left ctx) (Just rtt)
         sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
         let mgr = sharedSessionManager $ serverShared sparams
-        sessionEstablish mgr sessionId sdata
-        return (sessionId, ageAdd tinfo)
+        mticket <- sessionEstablish mgr sessionId sdata
+        let identity = fromMaybe sessionId mticket
+        return (identity, ageAdd tinfo)
 
-    createNewSessionTicket life add nonce label maxSize =
-        NewSessionTicket13 life add nonce label extensions
+    createNewSessionTicket life add nonce identity maxSize =
+        NewSessionTicket13 life add nonce identity extensions
       where
         tedi = extensionEncode $ EarlyDataIndication $ Just $ fromIntegral maxSize
         extensions = [ExtensionRaw EID_EarlyData tedi]

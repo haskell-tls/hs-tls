@@ -131,8 +131,8 @@ processServerHello ctx cparams clientSession sentExts (ServerHello rver serverRa
 
     let resumingSession =
             case clientWantSessionResume cparams of
-                Just (sessionId, sessionData) ->
-                    if serverSession == Session (Just sessionId) then Just sessionData else Nothing
+                Just (_, sessionData) ->
+                    if serverSession == clientSession then Just sessionData else Nothing
                 Nothing -> Nothing
     usingState_ ctx $ setSession serverSession (isJust resumingSession)
 
@@ -161,6 +161,7 @@ processServerExtension (ExtensionRaw extID content)
         setTLS13KeyShare $ extensionDecode msgt content
     | extID == EID_PreSharedKey =
         setTLS13PreSharedKey $ extensionDecode MsgTServerHello content
+    | extID == EID_SessionTicket = setTLS12SessionTicket "" -- empty ticket
 processServerExtension _ = return ()
 
 ----------------------------------------------------------------

@@ -58,7 +58,6 @@ import qualified Crypto.PubKey.RSA.PSS as PSS
 import Crypto.Random
 import qualified Data.ByteArray as B (convert)
 import qualified Data.ByteString as B
-import Data.Maybe (fromJust)
 
 import Data.X509 (
     PrivKey (..),

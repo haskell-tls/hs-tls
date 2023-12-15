@@ -1,11 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 
--- |
--- Module      : Network.TLS.Record.State
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
 module Network.TLS.Record.State (
     CryptState (..),
     CryptLevel (..),
@@ -29,7 +23,6 @@ module Network.TLS.Record.State (
 
 import Control.Monad.State.Strict
 import qualified Data.ByteString as B
-import Data.Maybe (fromJust)
 
 import Network.TLS.Cipher
 import Network.TLS.Compression

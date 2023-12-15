@@ -5,7 +5,6 @@ module Network.TLS.Handshake.Client.ClientHello (
 ) where
 
 import qualified Data.ByteString as B
-import Data.Maybe (fromJust)
 
 import Network.TLS.Cipher
 import Network.TLS.Compression
@@ -56,10 +55,11 @@ sendClientHello cparams ctx groups mparams = do
         crand <- clientRandom ctx
         let paramSession = case clientWantSessionResume cparams of
                 Nothing -> Session Nothing
-                Just (sid, sdata)
+                Just (sidOrTkt, sdata)
                     | sessionVersion sdata >= TLS13 -> Session Nothing
                     | ems == RequireEMS && noSessionEMS -> Session Nothing
-                    | otherwise -> Session (Just sid)
+                    | isTicket sidOrTkt -> Session $ Just $ toSessionID sidOrTkt
+                    | otherwise -> Session (Just sidOrTkt)
                   where
                     noSessionEMS = SessionEMS `notElem` sessionFlags sdata
         -- In compatibility mode a client not offering a pre-TLS 1.3
@@ -98,7 +98,8 @@ sendClientHello' cparams ctx groups clientSession crand = do
         Nothing -> return Nothing
         Just info -> Just <$> send0RTT info
     unless hrr $ contextSync ctx $ SendClientHello mEarlySecInfo
-    return (rtt0, map (\(ExtensionRaw i _) -> i) extensions)
+    let sentExtensions = map (\(ExtensionRaw i _) -> i) extensions
+    return (rtt0, sentExtensions)
   where
     ciphers = supportedCiphers $ ctxSupported ctx
     compressions = supportedCompressions $ ctxSupported ctx
@@ -123,8 +124,8 @@ sendClientHello' cparams ctx groups clientSession crand = do
             , emsExtension
             , groupExtension
             , ecPointExtension
-            , -- , sessionTicketExtension
-              signatureAlgExtension
+            , sessionTicketExtension
+            , signatureAlgExtension
             , -- , heartbeatExtension
               versionExtension
             , earlyDataExtension rtt0
@@ -175,7 +176,12 @@ sendClientHello' cparams ctx groups clientSession crand = do
                     EcPointFormatsSupported [EcPointFormat_Uncompressed]
     -- [EcPointFormat_Uncompressed,EcPointFormat_AnsiX962_compressed_prime,EcPointFormat_AnsiX962_compressed_char2]
     -- heartbeatExtension = return $ Just $ toExtensionRaw $ HeartBeat $ HeartBeat_PeerAllowedToSend
-    -- sessionTicketExtension = return $ Just $ toExtensionRaw $ SessionTicket
+
+    sessionTicketExtension = do
+        case clientWantSessionResume cparams of
+            Just (sidOrTkt, _)
+                | isTicket sidOrTkt -> return $ Just $ toExtensionRaw $ SessionTicket sidOrTkt
+            _ -> return $ Just $ toExtensionRaw $ SessionTicket ""
 
     signatureAlgExtension =
         return $
@@ -211,21 +217,23 @@ sendClientHello' cparams ctx groups clientSession crand = do
     getPskInfo =
         case sessionAndCipherToResume13 of
             Nothing -> return Nothing
-            Just (sid, sdata, sCipher) -> do
+            Just (identity, sdata, sCipher) -> do
                 let tinfo = fromJust $ sessionTicketInfo sdata
                 age <- getAge tinfo
                 return $
                     if isAgeValid age tinfo
-                        then Just (sid, sdata, makeCipherChoice TLS13 sCipher, ageToObfuscatedAge age tinfo)
+                        then
+                            Just
+                                (identity, sdata, makeCipherChoice TLS13 sCipher, ageToObfuscatedAge age tinfo)
                         else Nothing
 
     preSharedKeyExtension pskInfo =
         case pskInfo of
             Nothing -> return Nothing
-            Just (sid, _, choice, obfAge) ->
+            Just (identity, _, choice, obfAge) ->
                 let zero = cZero choice
-                    identity = PskIdentity sid obfAge
-                    offeredPsks = PreSharedKeyClientHello [identity] [zero]
+                    pskIdentity = PskIdentity identity obfAge
+                    offeredPsks = PreSharedKeyClientHello [pskIdentity] [zero]
                  in return $ Just $ toExtensionRaw offeredPsks
 
     pskExchangeModeExtension

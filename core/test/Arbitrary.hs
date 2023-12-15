@@ -292,6 +292,9 @@ arbitraryGroupPair = do
 
 ----------------------------------------------------------------
 
+arbitraryPairParams12 :: Gen (ClientParams, ServerParams)
+arbitraryPairParams12 = arbitraryPairParamsAt TLS12
+
 arbitraryPairParams13 :: Gen (ClientParams, ServerParams)
 arbitraryPairParams13 = arbitraryPairParamsAt TLS13
 

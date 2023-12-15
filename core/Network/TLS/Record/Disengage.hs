@@ -1,18 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
 
--- |
--- Module      : Network.TLS.Record.Disengage
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
---
--- Disengage a record from the Record layer.
--- The record is decrypted, checked for integrity and then decompressed.
---
--- Starting with TLS v1.3, only the "null" compression method is negotiated in
--- the handshake, so the decompression step will be a no-op.  Decryption and
--- integrity verification are performed using an AEAD cipher only.
 module Network.TLS.Record.Disengage (
     disengageRecord,
 ) where
@@ -21,7 +8,7 @@ import Control.Monad.State.Strict
 import Crypto.Cipher.Types (AuthTag (..))
 import qualified Data.ByteArray as B (convert, xor)
 import qualified Data.ByteString as B
-import Data.Maybe (fromJust)
+
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Crypto

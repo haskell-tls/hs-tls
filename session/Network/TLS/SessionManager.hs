@@ -109,8 +109,9 @@ newSessionManager conf = do
         SessionManager
             { sessionResume = resume reaper MultipleUse
             , sessionResumeOnlyOnce = resume reaper SingleUse
-            , sessionEstablish = establish reaper lifetime
+            , sessionEstablish = \x y -> establish reaper lifetime x y >> return Nothing
             , sessionInvalidate = invalidate reaper
+            , sessionUseTicket = False
             }
 
 cons :: Int -> Item -> DB -> DB

@@ -5,14 +5,13 @@ module Network.TLS.Handshake.Common (
     handleException,
     unexpected,
     newSession,
-    handshakeDone,
+    handshakeDone12,
     ensureNullCompression,
 
     -- * sending packets
     sendChangeCipherAndFinish,
 
     -- * receiving packets
-    recvChangeCipherAndFinish,
     RecvState (..),
     runRecvState,
     runRecvStateHS,
@@ -34,7 +33,6 @@ import Control.Exception (IOException, fromException, handle, throwIO)
 import Control.Monad.State.Strict
 import qualified Data.ByteString as B
 import Data.IORef (writeIORef)
-import Data.Maybe (fromJust)
 
 import Network.TLS.Cipher
 import Network.TLS.Compression
@@ -48,7 +46,6 @@ import Network.TLS.IO
 import Network.TLS.Imports
 import Network.TLS.Measurement
 import Network.TLS.Parameters
-import Network.TLS.Record.State
 import Network.TLS.Session
 import Network.TLS.State
 import Network.TLS.Struct
@@ -108,19 +105,8 @@ newSession ctx
     | otherwise = return $ Session Nothing
 
 -- | when a new handshake is done, wrap up & clean up.
-handshakeDone :: Context -> IO ()
-handshakeDone ctx = do
-    session <- usingState_ ctx getSession
-    -- only callback the session established if we have a session
-    case session of
-        Session (Just sessionId) -> do
-            sessionData <- getSessionData ctx
-            let sessionId' = B.copy sessionId
-            sessionEstablish
-                (sharedSessionManager $ ctxShared ctx)
-                sessionId'
-                (fromJust sessionData)
-        _ -> return ()
+handshakeDone12 :: Context -> IO ()
+handshakeDone12 ctx = do
     -- forget most handshake data and reset bytes counters.
     modifyMVar_ (ctxHandshake ctx) $ \mhshake ->
         case mhshake of
@@ -151,14 +137,6 @@ sendChangeCipherAndFinish ctx role = do
     sendPacket ctx (Handshake [Finished cf])
     writeIORef (ctxFinished ctx) $ Just cf
     contextFlush ctx
-
-recvChangeCipherAndFinish :: Context -> IO ()
-recvChangeCipherAndFinish ctx = runRecvState ctx (RecvStatePacket expectChangeCipher)
-  where
-    expectChangeCipher ChangeCipherSpec = return $ RecvStateHandshake expectFinish
-    expectChangeCipher p = unexpected (show p) (Just "change cipher")
-    expectFinish (Finished _) = return RecvStateDone
-    expectFinish p = unexpected (show p) (Just "Handshake Finished")
 
 data RecvState m
     = RecvStatePacket (Packet -> m (RecvState m)) -- CCS is not Handshake
@@ -232,12 +210,11 @@ getSessionData :: Context -> IO (Maybe SessionData)
 getSessionData ctx = do
     ver <- usingState_ ctx getVersion
     sni <- usingState_ ctx getClientSNI
-    mms <- usingHState ctx (gets hstMasterSecret)
+    mms <- usingHState ctx $ gets hstMasterSecret
     ems <- usingHState ctx getExtendedMasterSec
-    tx <- readMVar (ctxTxState ctx)
+    cipher <- cipherID <$> usingHState ctx getPendingCipher
     alpn <- usingState_ ctx getNegotiatedProtocol
-    let cipher = cipherID $ fromJust $ stCipher tx
-        compression = compressionID $ stCompression tx
+    let compression = 0
         flags = [SessionEMS | ems]
     case mms of
         Nothing -> return Nothing

@@ -1,11 +1,5 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
--- |
--- Module      : Network.TLS.Imports
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
 module Network.TLS.Imports (
     -- generic exports
     ByteString,
@@ -32,7 +26,7 @@ import Control.Applicative
 import Control.Monad
 import Data.Bits
 import Data.List
-import Data.Maybe hiding (fromJust)
+import Data.Maybe
 import Data.Ord
 import Data.Semigroup
 import Data.Word

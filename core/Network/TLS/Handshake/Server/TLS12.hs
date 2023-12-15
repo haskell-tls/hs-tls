@@ -13,7 +13,10 @@ import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Server.Common
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
+import Network.TLS.Imports
+import Network.TLS.IO
 import Network.TLS.Parameters
+import Network.TLS.Session
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Types
@@ -28,10 +31,30 @@ recvClientSecondFlight12 sparams ctx resumeSessionData = do
     case resumeSessionData of
         Nothing -> do
             recvClientCCC sparams ctx
+            mticket <- sessionEstablished ctx
+            case mticket of
+                Nothing -> return ()
+                Just ticket ->
+                    sendPacket ctx $ Handshake [NewSessionTicket 3600 ticket] -- xxx fixme
             sendChangeCipherAndFinish ctx ServerRole
         Just _ -> do
+            _ <- sessionEstablished ctx
             recvChangeCipherAndFinish ctx
-    handshakeDone ctx
+    handshakeDone12 ctx
+
+sessionEstablished :: Context -> IO (Maybe Ticket)
+sessionEstablished ctx = do
+    session <- usingState_ ctx getSession
+    -- only callback the session established if we have a session
+    case session of
+        Session (Just sessionId) -> do
+            sessionData <- getSessionData ctx
+            let sessionId' = B.copy sessionId
+            sessionEstablish
+                (sharedSessionManager $ ctxShared ctx)
+                sessionId'
+                (fromJust sessionData)
+        _ -> return Nothing -- never reach
 
 -- | receive Client data in handshake until the Finished handshake.
 --
@@ -41,27 +64,27 @@ recvClientSecondFlight12 sparams ctx resumeSessionData = do
 --      <- change cipher
 --      <- finish
 recvClientCCC :: ServerParams -> Context -> IO ()
-recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake processClientCertificate)
+recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake expectClientCertificate)
   where
-    processClientCertificate (Certificates certs) = do
+    expectClientCertificate (Certificates certs) = do
         clientCertificate sparams ctx certs
 
         -- FIXME: We should check whether the certificate
         -- matches our request and that we support
         -- verifying with that certificate.
 
-        return $ RecvStateHandshake processClientKeyExchange
-    processClientCertificate p = processClientKeyExchange p
+        return $ RecvStateHandshake expectClientKeyExchange
+    expectClientCertificate p = expectClientKeyExchange p
 
     -- cannot use RecvStateHandshake, as the next message could be a ChangeCipher,
     -- so we must process any packet, and in case of handshake call processHandshake manually.
-    processClientKeyExchange (ClientKeyXchg _) = return $ RecvStatePacket processCertificateVerify
-    processClientKeyExchange p = unexpected (show p) (Just "client key exchange")
+    expectClientKeyExchange (ClientKeyXchg _) = return $ RecvStatePacket expectCertificateVerify
+    expectClientKeyExchange p = unexpected (show p) (Just "client key exchange")
 
     -- Check whether the client correctly signed the handshake.
     -- If not, ask the application on how to proceed.
     --
-    processCertificateVerify (Handshake [hs@(CertVerify dsig)]) = do
+    expectCertificateVerify (Handshake [hs@(CertVerify dsig)]) = do
         processHandshake ctx hs
 
         certs <- checkValidClientCertChain ctx "change cipher message expected"
@@ -76,7 +99,7 @@ recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake processClientCe
         verif <- checkCertificateVerify ctx usedVersion pubKey msgs dsig
         clientCertVerify sparams ctx certs verif
         return $ RecvStatePacket expectChangeCipher
-    processCertificateVerify p = do
+    expectCertificateVerify p = do
         chain <- usingHState ctx getClientCertChain
         case chain of
             Just cc
@@ -85,13 +108,6 @@ recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake processClientCe
                     throwCore $ Error_Protocol "cert verify message missing" UnexpectedMessage
             Nothing -> return ()
         expectChangeCipher p
-
-    expectChangeCipher ChangeCipherSpec = do
-        return $ RecvStateHandshake expectFinish
-    expectChangeCipher p = unexpected (show p) (Just "change cipher")
-
-    expectFinish (Finished _) = return RecvStateDone
-    expectFinish p = unexpected (show p) (Just "Handshake Finished")
 
 clientCertVerify :: ServerParams -> Context -> CertificateChain -> Bool -> IO ()
 clientCertVerify sparams ctx certs verif = do
@@ -117,3 +133,15 @@ clientCertVerify sparams ctx certs verif = do
                     -- chain to the context.
                     usingState_ ctx $ setClientCertificateChain certs
                 else decryptError "verification failed"
+
+recvChangeCipherAndFinish :: Context -> IO ()
+recvChangeCipherAndFinish ctx = runRecvState ctx $ RecvStatePacket expectChangeCipher
+
+expectChangeCipher :: Packet -> IO (RecvState IO)
+expectChangeCipher ChangeCipherSpec = do
+    return $ RecvStateHandshake expectFinish
+expectChangeCipher p = unexpected (show p) (Just "change cipher")
+
+expectFinish :: Handshake -> IO (RecvState IO)
+expectFinish (Finished _) = return RecvStateDone
+expectFinish p = unexpected (show p) (Just "Handshake Finished")

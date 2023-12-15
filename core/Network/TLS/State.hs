@@ -57,6 +57,8 @@ module Network.TLS.State (
     getTLS13Cookie,
     setClientSupportsPHA,
     getClientSupportsPHA,
+    setTLS12SessionTicket,
+    getTLS12SessionTicket,
 
     -- * random
     genRandom,
@@ -72,7 +74,7 @@ import Network.TLS.Extension
 import Network.TLS.Imports
 import Network.TLS.RNG
 import Network.TLS.Struct
-import Network.TLS.Types (HostName, Role (..))
+import Network.TLS.Types (HostName, Role (..), Ticket)
 import Network.TLS.Wire (GetContinuation)
 
 data TLSState = TLSState
@@ -99,6 +101,7 @@ data TLSState = TLSState
     , stTLS13Cookie :: Maybe Cookie
     , stExporterMasterSecret :: Maybe ByteString -- TLS 1.3
     , stClientSupportsPHA :: Bool -- Post-Handshake Authentication (TLS 1.3)
+    , stTLS12SessionTicket :: Maybe Ticket
     }
 
 newtype TLSSt a = TLSSt {runTLSSt :: ErrT TLSError (State TLSState) a}
@@ -138,6 +141,7 @@ newTLSState rng clientContext =
         , stTLS13Cookie = Nothing
         , stExporterMasterSecret = Nothing
         , stClientSupportsPHA = False
+        , stTLS12SessionTicket = Nothing
         }
 
 updateVerifiedData :: Role -> ByteString -> TLSSt ()
@@ -302,3 +306,9 @@ setClientSupportsPHA b = modify (\st -> st{stClientSupportsPHA = b})
 
 getClientSupportsPHA :: TLSSt Bool
 getClientSupportsPHA = gets stClientSupportsPHA
+
+setTLS12SessionTicket :: Ticket -> TLSSt ()
+setTLS12SessionTicket t = modify (\st -> st{stTLS12SessionTicket = Just t})
+
+getTLS12SessionTicket :: TLSSt (Maybe Ticket)
+getTLS12SessionTicket = gets stTLS12SessionTicket

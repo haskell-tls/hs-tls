@@ -1,3 +1,6 @@
+{-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 module Run (
     checkCtxFinished,
     recvDataAssert,
@@ -15,8 +18,10 @@ module Run (
     twoSessionManagers,
     setPairParamsSessionManagers,
     setPairParamsSessionResuming,
+    oneSessionTicket,
 ) where
 
+import Codec.Serialise
 import Control.Concurrent
 import Control.Concurrent.Async
 import qualified Control.Exception as E
@@ -29,6 +34,7 @@ import Data.Either
 import Data.IORef
 import Data.Maybe
 import Network.TLS
+import Network.TLS.Internal
 import System.Timeout
 import Test.Hspec
 import Test.QuickCheck
@@ -330,8 +336,9 @@ oneSessionManager ref =
     SessionManager
         { sessionResume = \myId -> readIORef ref >>= maybeResume False myId
         , sessionResumeOnlyOnce = \myId -> readIORef ref >>= maybeResume True myId
-        , sessionEstablish = \myId dat -> writeIORef ref $ Just (myId, dat)
+        , sessionEstablish = \myId dat -> writeIORef ref (Just (myId, dat)) >> return Nothing
         , sessionInvalidate = \_ -> return ()
+        , sessionUseTicket = False
         }
   where
     maybeResume onlyOnce myId (Just (sid, sdata))
@@ -347,15 +354,15 @@ setPairParamsSessionManagers
     :: (SessionManager, SessionManager)
     -> (ClientParams, ServerParams)
     -> (ClientParams, ServerParams)
-setPairParamsSessionManagers (clientManager, serverManager) (clientState, serverState) = (nc, ns)
+setPairParamsSessionManagers (clientManager, serverManager) (clientParams, serverParams) = (nc, ns)
   where
     nc =
-        clientState
-            { clientShared = updateSessionManager clientManager $ clientShared clientState
+        clientParams
+            { clientShared = updateSessionManager clientManager $ clientShared clientParams
             }
     ns =
-        serverState
-            { serverShared = updateSessionManager serverManager $ serverShared serverState
+        serverParams
+            { serverShared = updateSessionManager serverManager $ serverShared serverParams
             }
     updateSessionManager manager shared = shared{sharedSessionManager = manager}
 
@@ -363,7 +370,28 @@ setPairParamsSessionResuming
     :: (SessionID, SessionData)
     -> (ClientParams, ServerParams)
     -> (ClientParams, ServerParams)
-setPairParamsSessionResuming sessionStuff (clientState, serverState) =
-    ( clientState{clientWantSessionResume = Just sessionStuff}
-    , serverState
+setPairParamsSessionResuming sessionStuff (clientParams, serverParams) =
+    ( clientParams{clientWantSessionResume = Just sessionStuff}
+    , serverParams
     )
+
+instance Serialise Group
+instance Serialise Version
+instance Serialise TLS13TicketInfo
+instance Serialise SessionFlag
+instance Serialise SessionData
+
+oneSessionTicket :: SessionManager
+oneSessionTicket =
+    SessionManager
+        { sessionResume = resume
+        , sessionResumeOnlyOnce = resume
+        , sessionEstablish = \_ dat -> return $ Just $ L.toStrict $ serialise dat
+        , sessionInvalidate = \_ -> return ()
+        , sessionUseTicket = True
+        }
+
+resume :: Ticket -> IO (Maybe SessionData)
+resume ticket
+    | isTicket ticket = return $ Just $ deserialise $ L.fromStrict ticket
+    | otherwise = return Nothing

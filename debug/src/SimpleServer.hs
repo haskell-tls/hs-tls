@@ -12,7 +12,7 @@ import Data.Default.Class
 import Data.X509.CertificateStore
 import Network.Socket (accept, bind, close, listen, socket)
 import qualified Network.Socket as S
-import Network.TLS.SessionManager
+import Network.TLS.SessionTicket
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
@@ -474,7 +474,7 @@ main = do
         exitSuccess
 
     certStore <- getTrustAnchors opts
-    sStorage <- newSessionManager defaultConfig
+    sStorage <- newSessionTicketManager
     case other of
         [] -> runOn (sStorage, certStore) opts 443
         [port] -> runOn (sStorage, certStore) opts (fromInteger $ read port)
