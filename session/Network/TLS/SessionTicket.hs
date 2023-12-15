@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Network.TLS.SessionTicket (
-    newSesssionTicketManager,
+    newSessionTicketManager,
 ) where
 
 import Codec.Serialise
@@ -9,8 +9,8 @@ import qualified Data.ByteString.Lazy as L
 import Network.TLS
 import Network.TLS.Internal
 
-newSesssionTicketManager :: IO SessionManager
-newSesssionTicketManager = return sessionTicketManager
+newSessionTicketManager :: IO SessionManager
+newSessionTicketManager = return sessionTicketManager
 
 sessionTicketManager :: SessionManager
 sessionTicketManager =
