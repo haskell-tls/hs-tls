@@ -57,6 +57,8 @@ module Network.TLS.State (
     getTLS13Cookie,
     setClientSupportsPHA,
     getClientSupportsPHA,
+    setTLS12SessionTicket,
+    getTLS12SessionTicket,
 
     -- * random
     genRandom,
@@ -99,6 +101,7 @@ data TLSState = TLSState
     , stTLS13Cookie :: Maybe Cookie
     , stExporterMasterSecret :: Maybe ByteString -- TLS 1.3
     , stClientSupportsPHA :: Bool -- Post-Handshake Authentication (TLS 1.3)
+    , stTLS12SessionTicket :: Bool
     }
 
 newtype TLSSt a = TLSSt {runTLSSt :: ErrT TLSError (State TLSState) a}
@@ -138,6 +141,7 @@ newTLSState rng clientContext =
         , stTLS13Cookie = Nothing
         , stExporterMasterSecret = Nothing
         , stClientSupportsPHA = False
+        , stTLS12SessionTicket = False
         }
 
 updateVerifiedData :: Role -> ByteString -> TLSSt ()
@@ -302,3 +306,9 @@ setClientSupportsPHA b = modify (\st -> st{stClientSupportsPHA = b})
 
 getClientSupportsPHA :: TLSSt Bool
 getClientSupportsPHA = gets stClientSupportsPHA
+
+setTLS12SessionTicket :: Bool -> TLSSt ()
+setTLS12SessionTicket b = modify (\st -> st{stTLS12SessionTicket = b})
+
+getTLS12SessionTicket :: TLSSt Bool
+getTLS12SessionTicket = gets stTLS12SessionTicket

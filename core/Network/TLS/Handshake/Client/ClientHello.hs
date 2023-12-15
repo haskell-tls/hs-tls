@@ -99,7 +99,8 @@ sendClientHello' cparams ctx groups clientSession crand = do
         Nothing -> return Nothing
         Just info -> Just <$> send0RTT info
     unless hrr $ contextSync ctx $ SendClientHello mEarlySecInfo
-    return (rtt0, map (\(ExtensionRaw i _) -> i) extensions)
+    let sentExtensions = map (\(ExtensionRaw i _) -> i) extensions
+    return (rtt0, sentExtensions)
   where
     ciphers = supportedCiphers $ ctxSupported ctx
     compressions = supportedCompressions $ ctxSupported ctx
@@ -179,11 +180,9 @@ sendClientHello' cparams ctx groups clientSession crand = do
 
     sessionTicketExtension = do
         case clientWantSessionResume cparams of
-            Nothing -> return $ Just $ toExtensionRaw $ SessionTicket ""
-            Just (sidOrTkt, sdata)
-                | sessionVersion sdata >= TLS13 -> return Nothing
+            Just (sidOrTkt, _)
                 | isTicket sidOrTkt -> return $ Just $ toExtensionRaw $ SessionTicket sidOrTkt
-                | otherwise -> return Nothing
+            _ -> return $ Just $ toExtensionRaw $ SessionTicket ""
 
     signatureAlgExtension =
         return $

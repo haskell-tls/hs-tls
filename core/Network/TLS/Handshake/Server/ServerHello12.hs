@@ -35,14 +35,8 @@ sendServerHello12
     -> (Cipher, Maybe Credential)
     -> CH
     -> IO (Maybe SessionData)
-sendServerHello12 sparams ctx (usedCipher, mcred) CH{..} = do
-    serverName <- usingState_ ctx getClientSNI
-    ems <- processExtendedMasterSec ctx TLS12 MsgTClientHello chExtensions
-    resumeSessionData <- case chSession of
-        (Session (Just clientSessionId)) -> do
-            let resume = sessionResume (sharedSessionManager $ ctxShared ctx) clientSessionId
-            resume >>= validateSession chCiphers serverName ems
-        (Session Nothing) -> return Nothing
+sendServerHello12 sparams ctx (usedCipher, mcred) ch@CH{..} = do
+    resumeSessionData <- recoverSessionData ctx ch
     case resumeSessionData of
         Nothing -> do
             serverSession <- newSession ctx
@@ -63,6 +57,21 @@ sendServerHello12 sparams ctx (usedCipher, mcred) CH{..} = do
             logKey ctx $ MasterSecret masterSecret
             sendChangeCipherAndFinish ctx ServerRole
     return resumeSessionData
+
+recoverSessionData :: Context -> CH -> IO (Maybe SessionData)
+recoverSessionData ctx CH{..} = do
+    serverName <- usingState_ ctx getClientSNI
+    ems <- processExtendedMasterSec ctx TLS12 MsgTClientHello chExtensions
+    let mticket = extensionLookup EID_SessionTicket chExtensions >>= extensionDecode MsgTClientHello
+    case mticket of
+      Just (SessionTicket ticket) | ticket /= "" -> do
+            sd <- sessionResume (sharedSessionManager $ ctxShared ctx) ticket
+            validateSession chCiphers serverName ems sd
+      _ -> case chSession of
+        (Session (Just clientSessionId)) -> do
+            sd <- sessionResume (sharedSessionManager $ ctxShared ctx) clientSessionId
+            validateSession chCiphers serverName ems sd
+        (Session Nothing) -> return Nothing
 
 validateSession
     :: [CipherID]
