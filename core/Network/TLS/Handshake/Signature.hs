@@ -1,11 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- |
--- Module      : Network.TLS.Handshake.Signature
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
 module Network.TLS.Handshake.Signature (
     createCertificateVerify,
     checkCertificateVerify,
@@ -23,7 +17,6 @@ module Network.TLS.Handshake.Signature (
 ) where
 
 import Control.Monad.State.Strict
-import Data.Maybe (fromJust)
 
 import Network.TLS.Context.Internal
 import Network.TLS.Crypto

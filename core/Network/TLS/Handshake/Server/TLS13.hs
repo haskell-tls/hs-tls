@@ -7,7 +7,6 @@ module Network.TLS.Handshake.Server.TLS13 (
 ) where
 
 import Control.Monad.State.Strict
-import Data.Maybe (fromJust)
 
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal

@@ -5,7 +5,6 @@ module Network.TLS.Handshake.Client.ClientHello (
 ) where
 
 import qualified Data.ByteString as B
-import Data.Maybe (fromJust)
 
 import Network.TLS.Cipher
 import Network.TLS.Compression

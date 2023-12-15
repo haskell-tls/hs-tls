@@ -5,8 +5,6 @@ module Network.TLS.Handshake.Server.ServerHello12 (
     sendServerHello12,
 ) where
 
-import Data.Maybe (fromJust)
-
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Context.Internal

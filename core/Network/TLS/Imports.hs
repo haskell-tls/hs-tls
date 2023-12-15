@@ -1,11 +1,5 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
--- |
--- Module      : Network.TLS.Imports
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
 module Network.TLS.Imports (
     -- generic exports
     ByteString,

@@ -34,7 +34,6 @@ import Control.Exception (IOException, fromException, handle, throwIO)
 import Control.Monad.State.Strict
 import qualified Data.ByteString as B
 import Data.IORef (writeIORef)
-import Data.Maybe (fromJust)
 
 import Network.TLS.Cipher
 import Network.TLS.Compression

@@ -7,7 +7,6 @@ module Network.TLS.Handshake.Server.ServerHello13 (
 
 import Control.Monad.State.Strict
 import qualified Data.ByteString as B
-import Data.Maybe (fromJust)
 
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
