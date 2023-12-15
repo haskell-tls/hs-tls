@@ -28,7 +28,6 @@ import qualified Control.Exception as E
 import Control.Monad
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy as L
 import Data.Default.Class
 import Data.Either
@@ -387,12 +386,12 @@ oneSessionTicket =
     SessionManager
         { sessionResume = resume
         , sessionResumeOnlyOnce = resume
-        , sessionEstablish = \_ dat -> return $ Just $ BL.toStrict $ serialise dat
+        , sessionEstablish = \_ dat -> return $ Just $ L.toStrict $ serialise dat
         , sessionInvalidate = \_ -> return ()
         , sessionUseTicket = True
         }
 
 resume :: Ticket -> IO (Maybe SessionData)
 resume ticket
-    | isTicket ticket = return $ Just $ deserialise $ BL.fromStrict ticket
+    | isTicket ticket = return $ Just $ deserialise $ L.fromStrict ticket
     | otherwise = return Nothing
