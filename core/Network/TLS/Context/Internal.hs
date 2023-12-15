@@ -152,6 +152,7 @@ data Context = forall bytes.
     , ctxRecordLayer :: RecordLayer bytes
     , ctxHandshakeSync :: HandshakeSync
     , ctxQUICMode :: Bool
+    -- For Channel Bindings for TLS, RFC5929
     , ctxFinished :: IORef (Maybe FinishedData)
     , ctxPeerFinished :: IORef (Maybe FinishedData)
     }
