@@ -89,15 +89,16 @@ recvNSTandCCSandFinish :: Context -> IO ()
 recvNSTandCCSandFinish ctx = do
     st <- usingState_ ctx getTLS12SessionTicket
     if st
-      then runRecvState ctx $ RecvStateHandshake expectNewSessionTicket
-      else do runRecvState ctx $ RecvStatePacket expectChangeCipher
+        then runRecvState ctx $ RecvStateHandshake expectNewSessionTicket
+        else do runRecvState ctx $ RecvStatePacket expectChangeCipher
   where
     expectNewSessionTicket (NewSessionTicket _ ticket) = do
         sessionData <- getSessionData ctx
-        void $ sessionEstablish
-            (sharedSessionManager $ ctxShared ctx)
-            ticket
-            (fromJust sessionData)
+        void $
+            sessionEstablish
+                (sharedSessionManager $ ctxShared ctx)
+                ticket
+                (fromJust sessionData)
         return $ RecvStatePacket expectChangeCipher
     expectNewSessionTicket p = unexpected (show p) (Just "Handshake Finished")
 
@@ -107,7 +108,6 @@ recvNSTandCCSandFinish ctx = do
 
     expectFinish (Finished _) = return RecvStateDone
     expectFinish p = unexpected (show p) (Just "Handshake Finished")
-
 
 ----------------------------------------------------------------
 

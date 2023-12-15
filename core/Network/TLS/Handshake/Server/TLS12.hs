@@ -31,9 +31,9 @@ recvClientSecondFlight12 sparams ctx resumeSessionData = do
             recvClientCCC sparams ctx
             mticket <- sessionEstablished ctx
             case mticket of
-              Nothing -> return ()
-              Just ticket ->
-                  sendPacket ctx $ Handshake [NewSessionTicket 3600 ticket] -- xxx fixme
+                Nothing -> return ()
+                Just ticket ->
+                    sendPacket ctx $ Handshake [NewSessionTicket 3600 ticket] -- xxx fixme
             sendChangeCipherAndFinish ctx ServerRole
         Just _ -> do
             _ <- sessionEstablished ctx

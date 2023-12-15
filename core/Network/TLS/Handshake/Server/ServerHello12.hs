@@ -60,16 +60,18 @@ recoverSessionData :: Context -> CH -> IO (Maybe SessionData)
 recoverSessionData ctx CH{..} = do
     serverName <- usingState_ ctx getClientSNI
     ems <- processExtendedMasterSec ctx TLS12 MsgTClientHello chExtensions
-    let mticket = extensionLookup EID_SessionTicket chExtensions >>= extensionDecode MsgTClientHello
+    let mticket =
+            extensionLookup EID_SessionTicket chExtensions
+                >>= extensionDecode MsgTClientHello
     case mticket of
-      Just (SessionTicket ticket) | ticket /= "" -> do
+        Just (SessionTicket ticket) | ticket /= "" -> do
             sd <- sessionResume (sharedSessionManager $ ctxShared ctx) ticket
             validateSession chCiphers serverName ems sd
-      _ -> case chSession of
-        (Session (Just clientSessionId)) -> do
-            sd <- sessionResume (sharedSessionManager $ ctxShared ctx) clientSessionId
-            validateSession chCiphers serverName ems sd
-        (Session Nothing) -> return Nothing
+        _ -> case chSession of
+            (Session (Just clientSessionId)) -> do
+                sd <- sessionResume (sharedSessionManager $ ctxShared ctx) clientSessionId
+                validateSession chCiphers serverName ems sd
+            (Session Nothing) -> return Nothing
 
 validateSession
     :: [CipherID]
