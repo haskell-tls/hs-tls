@@ -32,7 +32,7 @@ import Control.Applicative
 import Control.Monad
 import Data.Bits
 import Data.List
-import Data.Maybe hiding (fromJust)
+import Data.Maybe
 import Data.Ord
 import Data.Semigroup
 import Data.Word

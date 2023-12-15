@@ -22,6 +22,7 @@ import Network.TLS.IO
 import Network.TLS.Imports
 import Network.TLS.Packet hiding (getExtensions)
 import Network.TLS.Parameters
+import Network.TLS.Session
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Types
@@ -35,7 +36,7 @@ recvServerFirstFlight12 :: ClientParams -> Context -> [Handshake] -> IO ()
 recvServerFirstFlight12 cparams ctx hs = do
     resuming <- usingState_ ctx isSessionResuming
     if resuming
-        then recvChangeCipherAndFinish ctx
+        then recvNSTandCCSandFinish ctx
         else do
             let st = RecvStateHandshake (expectCertificate cparams ctx)
             runRecvStateHS ctx st hs
@@ -79,10 +80,34 @@ sendClientSecondFlight12 cparams ctx = do
 recvServerSecondFlight12 :: Context -> IO ()
 recvServerSecondFlight12 ctx = do
     sessionResuming <- usingState_ ctx isSessionResuming
-    unless sessionResuming $ recvChangeCipherAndFinish ctx
+    unless sessionResuming $ recvNSTandCCSandFinish ctx
     st <- usingState_ ctx getTLS12SessionTicket
     unless st $ void $ sessionEstablished ctx
     handshakeDone12 ctx
+
+recvNSTandCCSandFinish :: Context -> IO ()
+recvNSTandCCSandFinish ctx = do
+    st <- usingState_ ctx getTLS12SessionTicket
+    if st
+      then runRecvState ctx $ RecvStateHandshake expectNewSessionTicket
+      else do runRecvState ctx $ RecvStatePacket expectChangeCipher
+  where
+    expectNewSessionTicket (NewSessionTicket _ ticket) = do
+        sessionData <- getSessionData ctx
+        void $ sessionEstablish
+            (sharedSessionManager $ ctxShared ctx)
+            ticket
+            (fromJust sessionData)
+        return $ RecvStatePacket expectChangeCipher
+    expectNewSessionTicket p = unexpected (show p) (Just "Handshake Finished")
+
+    expectChangeCipher ChangeCipherSpec = do
+        return $ RecvStateHandshake expectFinish
+    expectChangeCipher p = unexpected (show p) (Just "change cipher")
+
+    expectFinish (Finished _) = return RecvStateDone
+    expectFinish p = unexpected (show p) (Just "Handshake Finished")
+
 
 ----------------------------------------------------------------
 

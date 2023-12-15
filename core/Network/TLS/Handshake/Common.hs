@@ -13,7 +13,6 @@ module Network.TLS.Handshake.Common (
     sendChangeCipherAndFinish,
 
     -- * receiving packets
-    recvChangeCipherAndFinish,
     RecvState (..),
     runRecvState,
     runRecvStateHS,
@@ -154,28 +153,6 @@ sendChangeCipherAndFinish ctx role = do
     sendPacket ctx (Handshake [Finished cf])
     writeIORef (ctxFinished ctx) $ Just cf
     contextFlush ctx
-
-recvChangeCipherAndFinish :: Context -> IO ()
-recvChangeCipherAndFinish ctx = do
-    st <- usingState_ ctx getTLS12SessionTicket
-    if st
-      then runRecvState ctx $ RecvStateHandshake expectNewSessionTicket
-      else do runRecvState ctx $ RecvStatePacket expectChangeCipher
-  where
-    expectNewSessionTicket (NewSessionTicket _ ticket) = do
-        sessionData <- getSessionData ctx
-        void $ sessionEstablish
-            (sharedSessionManager $ ctxShared ctx)
-            ticket
-            (fromJust sessionData)
-        return $ RecvStatePacket expectChangeCipher
-    expectNewSessionTicket p = unexpected (show p) (Just "Handshake Finished")
-
-    expectChangeCipher ChangeCipherSpec = return $ RecvStateHandshake expectFinish
-    expectChangeCipher p = unexpected (show p) (Just "change cipher")
-
-    expectFinish (Finished _) = return RecvStateDone
-    expectFinish p = unexpected (show p) (Just "Handshake Finished")
 
 data RecvState m
     = RecvStatePacket (Packet -> m (RecvState m)) -- CCS is not Handshake
