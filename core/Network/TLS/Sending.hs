@@ -78,7 +78,7 @@ switchTxEncryption ctx = do
 updateHandshake :: Context -> Bool -> Handshake -> IO ByteString
 updateHandshake ctx sending hs = do
     case hs of
-        Finished fdata -> usingState_ ctx $ updateVerifiedData sending fdata
+        Finished verifyData -> usingState_ ctx $ updateVerifyData sending verifyData
         _ -> return ()
     usingHState ctx $ do
         when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage encoded

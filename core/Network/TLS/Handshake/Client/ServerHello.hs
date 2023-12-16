@@ -145,9 +145,9 @@ processServerHello _ _ _ _ p = unexpected (show p) (Just "server hello")
 processServerExtension :: ExtensionRaw -> TLSSt ()
 processServerExtension (ExtensionRaw extID content)
     | extID == EID_SecureRenegotiation = do
-        cv <- getVerifiedData ClientRole
-        sv <- getVerifiedData ServerRole
-        let bs = extensionEncode (SecureRenegotiation cv $ Just sv)
+        cvd <- getVerifyData ClientRole
+        svd <- getVerifyData ServerRole
+        let bs = extensionEncode (SecureRenegotiation cvd $ Just svd)
         unless (bs == content) $
             throwError $
                 Error_Protocol "server secure renegotiation data not matching" HandshakeFailure

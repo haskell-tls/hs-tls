@@ -17,7 +17,7 @@ module Network.TLS.State (
     runTLSState,
     newTLSState,
     withTLSRNG,
-    updateVerifiedData,
+    updateVerifyData,
     finishHandshakeTypeMaterial,
     finishHandshakeMaterial,
     certVerifyHandshakeTypeMaterial,
@@ -40,7 +40,7 @@ module Network.TLS.State (
     setClientCertificateChain,
     setClientSNI,
     getClientSNI,
-    getVerifiedData,
+    getVerifyData,
     setSession,
     getSession,
     isSessionResuming,
@@ -82,8 +82,8 @@ data TLSState = TLSState
     , stSessionResuming :: Bool
     , -- RFC 5746, Renegotiation Indication Extension
       stSecureRenegotiation :: Bool -- RFC 5746
-    , stClientVerifiedData :: ByteString -- RFC 5746
-    , stServerVerifiedData :: ByteString -- RFC 5746
+    , stClientVerifyData :: VerifyData -- RFC 5746
+    , stServerVerifyData :: VerifyData -- RFC 5746
     , stExtensionALPN :: Bool -- RFC 7301
     , stHandshakeRecordCont :: Maybe (GetContinuation (HandshakeType, ByteString))
     , stNegotiatedProtocol :: Maybe B.ByteString -- ALPN protocol
@@ -122,8 +122,8 @@ newTLSState rng clientContext =
         { stSession = Session Nothing
         , stSessionResuming = False
         , stSecureRenegotiation = False
-        , stClientVerifiedData = B.empty
-        , stServerVerifiedData = B.empty
+        , stClientVerifyData = B.empty
+        , stServerVerifyData = B.empty
         , stExtensionALPN = False
         , stHandshakeRecordCont = Nothing
         , stHandshakeRecordCont13 = Nothing
@@ -146,16 +146,16 @@ newTLSState rng clientContext =
         }
 
 {- FOURMOLU_DISABLE -}
-updateVerifiedData :: Bool -> ByteString -> TLSSt ()
-updateVerifiedData sending bs = do
+updateVerifyData :: Bool -> VerifyData -> TLSSt ()
+updateVerifyData sending bs = do
     role <- getRole
     case role of
         ClientRole
-            | sending   -> modify (\st -> st{stClientVerifiedData = bs})
-            | otherwise -> modify (\st -> st{stServerVerifiedData = bs})
+            | sending   -> modify (\st -> st{stClientVerifyData = bs})
+            | otherwise -> modify (\st -> st{stServerVerifyData = bs})
         ServerRole
-            | sending   -> modify (\st -> st{stServerVerifiedData = bs})
-            | otherwise -> modify (\st -> st{stClientVerifiedData = bs})
+            | sending   -> modify (\st -> st{stServerVerifyData = bs})
+            | otherwise -> modify (\st -> st{stClientVerifyData = bs})
 {- FOURMOLU_ENABLE -}
 
 finishHandshakeTypeMaterial :: HandshakeType -> Bool
@@ -259,10 +259,10 @@ setClientSNI hn = modify (\st -> st{stClientSNI = Just hn})
 getClientSNI :: TLSSt (Maybe HostName)
 getClientSNI = gets stClientSNI
 
-getVerifiedData :: Role -> TLSSt ByteString
-getVerifiedData client =
+getVerifyData :: Role -> TLSSt ByteString
+getVerifyData client =
     gets
-        (if client == ClientRole then stClientVerifiedData else stServerVerifiedData)
+        (if client == ClientRole then stClientVerifyData else stServerVerifyData)
 
 getRole :: TLSSt Role
 getRole = gets stClientContext

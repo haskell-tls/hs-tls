@@ -40,7 +40,7 @@ data Handshake13
     | CertRequest13 CertReqContext [ExtensionRaw]
     | Certificate13 CertReqContext CertificateChain [[ExtensionRaw]]
     | CertVerify13 HashAndSignatureAlgorithm Signature
-    | Finished13 FinishedData
+    | Finished13 VerifyData
     | KeyUpdate13 KeyUpdate
     deriving (Show, Eq)
 

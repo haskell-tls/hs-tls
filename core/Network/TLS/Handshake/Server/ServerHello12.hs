@@ -236,11 +236,11 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
     secRengExt <-
         if secReneg
             then do
-                vf <- usingState_ ctx $ do
-                    cvf <- getVerifiedData ClientRole
-                    svf <- getVerifiedData ServerRole
-                    return $ extensionEncode (SecureRenegotiation cvf $ Just svf)
-                return [ExtensionRaw EID_SecureRenegotiation vf]
+                vd <- usingState_ ctx $ do
+                    cvd <- getVerifyData ClientRole
+                    svd <- getVerifyData ServerRole
+                    return $ extensionEncode (SecureRenegotiation cvd $ Just svd)
+                return [ExtensionRaw EID_SecureRenegotiation vd]
             else return []
     ems <- usingHState ctx getExtendedMasterSec
     let emsExt

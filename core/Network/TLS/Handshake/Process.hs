@@ -45,7 +45,7 @@ processHandshake ctx hs = do
             hrr <- usingState_ ctx getTLS13HRR
             unless hrr $ startHandshake ctx cver ran
         Certificates certs -> processCertificates role certs
-        Finished fdata -> processFinished ctx fdata
+        Finished verifyData -> processFinished ctx verifyData
         _ -> return ()
     when (isHRR hs) $ usingHState ctx wrapAsMessageHash13
     void $ updateHandshake ctx False hs
@@ -58,12 +58,12 @@ processHandshake ctx hs = do
     secureRenegotiation = supportedSecureRenegotiation $ ctxSupported ctx
     -- RFC5746: secure renegotiation
     processClientExtension (ExtensionRaw EID_SecureRenegotiation content) | secureRenegotiation = do
-        v <- getVerifiedData ClientRole
-        let bs = extensionEncode (SecureRenegotiation v Nothing)
+        cvd <- getVerifyData ClientRole
+        let bs = extensionEncode (SecureRenegotiation cvd Nothing)
         unless (bs == content) $
             throwError $
                 Error_Protocol
-                    ("client verified data not matching: " ++ show v ++ ":" ++ show content)
+                    ("client verified data not matching: " ++ show cvd ++ ":" ++ show content)
                     HandshakeFailure
 
         setSecureRenegotiation True
@@ -135,7 +135,7 @@ processClientKeyXchg ctx (CKX_ECDH bytes) = do
                     throwCore $
                         Error_Protocol "cannot generate a shared secret on ECDH" IllegalParameter
 
-processFinished :: Context -> FinishedData -> IO ()
+processFinished :: Context -> VerifyData -> IO ()
 processFinished ctx fdata = do
     (cc, ver) <- usingState_ ctx $ (,) <$> getRole <*> getVersion
     expected <- usingHState ctx $ getHandshakeDigest ver $ invertRole cc

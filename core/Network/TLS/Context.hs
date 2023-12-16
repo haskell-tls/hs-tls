@@ -224,9 +224,9 @@ contextHookSetLogging context loggingCallbacks =
     contextModifyHooks context (\hooks -> hooks{hookLogging = loggingCallbacks})
 
 -- | Get TLS Finished sent to peer
-getFinished :: Context -> IO (Maybe FinishedData)
+getFinished :: Context -> IO (Maybe VerifyData)
 getFinished = readIORef . ctxFinished
 
 -- | Get TLS Finished received from peer
-getPeerFinished :: Context -> IO (Maybe FinishedData)
+getPeerFinished :: Context -> IO (Maybe VerifyData)
 getPeerFinished = readIORef . ctxPeerFinished

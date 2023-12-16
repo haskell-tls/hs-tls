@@ -141,8 +141,9 @@ sendClientHello' cparams ctx groups clientSession crand = do
 
     secureReneg =
         if supportedSecureRenegotiation $ ctxSupported ctx
-            then
-                usingState_ ctx (getVerifiedData ClientRole) >>= \vd -> return $ Just $ toExtensionRaw $ SecureRenegotiation vd Nothing
+            then do
+                cvd <- usingState_ ctx (getVerifyData ClientRole)
+                return $ Just $ toExtensionRaw $ SecureRenegotiation cvd Nothing
             else return Nothing
     alpnExtension = do
         mprotos <- onSuggestALPN $ clientHooks cparams

@@ -120,6 +120,7 @@ module Network.TLS.Struct (
     ServerRandom (..),
     ClientRandom (..),
     FinishedData,
+    VerifyData,
     SessionID,
     Session (..),
     SessionData (..),
@@ -467,7 +468,9 @@ newtype ClientRandom = ClientRandom {unClientRandom :: ByteString}
     deriving (Show, Eq)
 newtype Session = Session (Maybe SessionID) deriving (Show, Eq)
 
+{-# DEPRECATED FinishedData "use VerifyData" #-}
 type FinishedData = ByteString
+type VerifyData = ByteString
 
 ----------------------------------------------------------------
 
@@ -885,7 +888,7 @@ data Handshake
         [HashAndSignatureAlgorithm]
         [DistinguishedName]
     | CertVerify DigitallySigned
-    | Finished FinishedData
+    | Finished VerifyData
     | NewSessionTicket Second Ticket
     deriving (Show, Eq)
 
