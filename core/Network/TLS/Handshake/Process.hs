@@ -48,7 +48,7 @@ processHandshake ctx hs = do
         Finished fdata -> processFinished ctx fdata
         _ -> return ()
     when (isHRR hs) $ usingHState ctx wrapAsMessageHash13
-    void $ updateHandshake ctx ServerRole hs
+    void $ updateHandshake ctx False hs
     case hs of
         ClientKeyXchg content ->
             when (role == ServerRole) $

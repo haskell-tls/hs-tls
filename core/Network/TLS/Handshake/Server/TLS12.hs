@@ -13,8 +13,8 @@ import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Server.Common
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
-import Network.TLS.Imports
 import Network.TLS.IO
+import Network.TLS.Imports
 import Network.TLS.Parameters
 import Network.TLS.Session
 import Network.TLS.State

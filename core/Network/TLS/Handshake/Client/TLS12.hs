@@ -83,17 +83,18 @@ recvServerSecondFlight12 ctx = do
     unless sessionResuming $ recvNSTandCCSandFinish ctx
     mticket <- usingState_ ctx getTLS12SessionTicket
     identity <- case mticket of
-      Just ticket -> return ticket
-      Nothing -> do
-          session <- usingState_ ctx getSession
-          case session of
-            Session (Just sessionId) -> return $ B.copy sessionId
-            _ -> return "" -- never reach
+        Just ticket -> return ticket
+        Nothing -> do
+            session <- usingState_ ctx getSession
+            case session of
+                Session (Just sessionId) -> return $ B.copy sessionId
+                _ -> return "" -- never reach
     sessionData <- getSessionData ctx
-    void $ sessionEstablish
-        (sharedSessionManager $ ctxShared ctx)
-        identity
-        (fromJust sessionData)
+    void $
+        sessionEstablish
+            (sharedSessionManager $ ctxShared ctx)
+            identity
+            (fromJust sessionData)
     handshakeDone12 ctx
 
 recvNSTandCCSandFinish :: Context -> IO ()

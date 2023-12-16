@@ -80,8 +80,8 @@ import Network.TLS.Wire (GetContinuation)
 data TLSState = TLSState
     { stSession :: Session
     , stSessionResuming :: Bool
-      -- RFC 5746, Renegotiation Indication Extension
-    , stSecureRenegotiation :: Bool -- RFC 5746
+    , -- RFC 5746, Renegotiation Indication Extension
+      stSecureRenegotiation :: Bool -- RFC 5746
     , stClientVerifiedData :: ByteString -- RFC 5746
     , stServerVerifiedData :: ByteString -- RFC 5746
     , stExtensionALPN :: Bool -- RFC 7301
@@ -145,12 +145,18 @@ newTLSState rng clientContext =
         , stTLS12SessionTicket = Nothing
         }
 
-updateVerifiedData :: Role -> ByteString -> TLSSt ()
+{- FOURMOLU_DISABLE -}
+updateVerifiedData :: Bool -> ByteString -> TLSSt ()
 updateVerifiedData sending bs = do
-    cc <- isClientContext
-    if cc /= sending
-        then modify (\st -> st{stServerVerifiedData = bs})
-        else modify (\st -> st{stClientVerifiedData = bs})
+    role <- isClientContext
+    case role of
+        ClientRole
+            | sending   -> modify (\st -> st{stClientVerifiedData = bs})
+            | otherwise -> modify (\st -> st{stServerVerifiedData = bs})
+        ServerRole
+            | sending   -> modify (\st -> st{stServerVerifiedData = bs})
+            | otherwise -> modify (\st -> st{stClientVerifiedData = bs})
+{- FOURMOLU_ENABLE -}
 
 finishHandshakeTypeMaterial :: HandshakeType -> Bool
 finishHandshakeTypeMaterial HandshakeType_ClientHello = True
