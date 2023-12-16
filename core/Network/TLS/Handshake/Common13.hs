@@ -145,9 +145,9 @@ makeCertVerify
     -> ByteString
     -> m Handshake13
 makeCertVerify ctx pub hs hashValue = do
-    cc <- liftIO $ usingState_ ctx isClientContext
+    role <- liftIO $ usingState_ ctx getRole
     let ctxStr
-            | cc == ClientRole = clientContextString
+            | role == ClientRole = clientContextString
             | otherwise = serverContextString
         target = makeTarget ctxStr hashValue
     CertVerify13 hs <$> sign ctx pub hs target
@@ -162,9 +162,9 @@ checkCertVerify
     -> m Bool
 checkCertVerify ctx pub hs signature hashValue
     | pub `signatureCompatible13` hs = liftIO $ do
-        cc <- usingState_ ctx isClientContext
+        role <- usingState_ ctx getRole
         let ctxStr
-                | cc == ClientRole = serverContextString -- opposite context
+                | role == ClientRole = serverContextString -- opposite context
                 | otherwise = clientContextString
             target = makeTarget ctxStr hashValue
             sigParams = signatureParams pub hs
@@ -188,9 +188,9 @@ sign
     -> ByteString
     -> m Signature
 sign ctx pub hs target = liftIO $ do
-    cc <- usingState_ ctx isClientContext
+    role <- usingState_ ctx getRole
     let sigParams = signatureParams pub hs
-    signPrivate ctx cc sigParams target
+    signPrivate ctx role sigParams target
 
 ----------------------------------------------------------------
 

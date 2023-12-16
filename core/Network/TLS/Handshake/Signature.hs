@@ -203,8 +203,8 @@ signatureCreateWithCertVerifyData
     -> CertVerifyData
     -> IO DigitallySigned
 signatureCreateWithCertVerifyData ctx malg (sigParam, toSign) = do
-    cc <- usingState_ ctx isClientContext
-    DigitallySigned malg <$> signPrivate ctx cc sigParam toSign
+    role <- usingState_ ctx getRole
+    DigitallySigned malg <$> signPrivate ctx role sigParam toSign
 
 signatureVerify :: Context -> DigitallySigned -> PubKey -> ByteString -> IO Bool
 signatureVerify ctx digSig@(DigitallySigned hashSigAlg _) pubKey toVerifyData = do

@@ -58,15 +58,15 @@ packetToFragments _ _ (AppData x) = return [x]
 switchTxEncryption :: Context -> IO ()
 switchTxEncryption ctx = do
     tx <- usingHState ctx (fromJust <$> gets hstPendingTxState)
-    (ver, cc) <- usingState_ ctx $ do
+    (ver, role) <- usingState_ ctx $ do
         v <- getVersion
-        c <- isClientContext
-        return (v, c)
+        r <- getRole
+        return (v, r)
     liftIO $ modifyMVar_ (ctxTxState ctx) (\_ -> return tx)
     -- set empty packet counter measure if condition are met
     when
         ( ver <= TLS10
-            && cc == ClientRole
+            && role == ClientRole
             && isCBC tx
             && supportedEmptyPacket (ctxSupported ctx)
         )

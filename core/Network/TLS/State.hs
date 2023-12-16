@@ -44,7 +44,7 @@ module Network.TLS.State (
     setSession,
     getSession,
     isSessionResuming,
-    isClientContext,
+    getRole,
     setExporterMasterSecret,
     getExporterMasterSecret,
     setTLS13KeyShare,
@@ -148,7 +148,7 @@ newTLSState rng clientContext =
 {- FOURMOLU_DISABLE -}
 updateVerifiedData :: Bool -> ByteString -> TLSSt ()
 updateVerifiedData sending bs = do
-    role <- isClientContext
+    role <- getRole
     case role of
         ClientRole
             | sending   -> modify (\st -> st{stClientVerifiedData = bs})
@@ -264,8 +264,8 @@ getVerifiedData client =
     gets
         (if client == ClientRole then stClientVerifiedData else stServerVerifiedData)
 
-isClientContext :: TLSSt Role
-isClientContext = gets stClientContext
+getRole :: TLSSt Role
+getRole = gets stClientContext
 
 genRandom :: Int -> TLSSt ByteString
 genRandom n = do

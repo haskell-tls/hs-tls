@@ -33,7 +33,7 @@ import Data.X509 (Certificate (..), CertificateChain (..), getCertificate)
 
 processHandshake :: Context -> Handshake -> IO ()
 processHandshake ctx hs = do
-    role <- usingState_ ctx isClientContext
+    role <- usingState_ ctx getRole
     case hs of
         ClientHello cver ran _ CH{..} -> when (role == ServerRole) $ do
             mapM_ (usingState_ ctx . processClientExtension) chExtensions
@@ -91,7 +91,7 @@ processHandshake13 ctx = void . updateHandshake13 ctx
 processClientKeyXchg :: Context -> ClientKeyXchgAlgorithmData -> IO ()
 processClientKeyXchg ctx (CKX_RSA encryptedPremaster) = do
     (rver, role, random) <- usingState_ ctx $ do
-        (,,) <$> getVersion <*> isClientContext <*> genRandom 48
+        (,,) <$> getVersion <*> getRole <*> genRandom 48
     ePremaster <- decryptRSA ctx encryptedPremaster
     masterSecret <- usingHState ctx $ do
         expectedVer <- gets hstClientVersion
@@ -105,7 +105,7 @@ processClientKeyXchg ctx (CKX_RSA encryptedPremaster) = do
     logKey ctx (MasterSecret masterSecret)
 processClientKeyXchg ctx (CKX_DH clientDHValue) = do
     rver <- usingState_ ctx getVersion
-    role <- usingState_ ctx isClientContext
+    role <- usingState_ ctx getRole
 
     serverParams <- usingHState ctx getServerDHParams
     let params = serverDHParamsToParams serverParams
@@ -128,7 +128,7 @@ processClientKeyXchg ctx (CKX_ECDH bytes) = do
             case groupGetShared clipub srvpri of
                 Just premaster -> do
                     rver <- usingState_ ctx getVersion
-                    role <- usingState_ ctx isClientContext
+                    role <- usingState_ ctx getRole
                     masterSecret <- usingHState ctx $ setMasterSecretFromPre rver role premaster
                     logKey ctx (MasterSecret masterSecret)
                 Nothing ->
@@ -137,7 +137,7 @@ processClientKeyXchg ctx (CKX_ECDH bytes) = do
 
 processFinished :: Context -> FinishedData -> IO ()
 processFinished ctx fdata = do
-    (cc, ver) <- usingState_ ctx $ (,) <$> isClientContext <*> getVersion
+    (cc, ver) <- usingState_ ctx $ (,) <$> getRole <*> getVersion
     expected <- usingHState ctx $ getHandshakeDigest ver $ invertRole cc
     when (expected /= fdata) $ decryptError "cannot verify finished"
     writeIORef (ctxPeerFinished ctx) $ Just fdata
