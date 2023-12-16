@@ -45,7 +45,7 @@ processHandshake ctx hs = do
             hrr <- usingState_ ctx getTLS13HRR
             unless hrr $ startHandshake ctx cver ran
         Certificates certs -> processCertificates role certs
-        Finished fdata -> processClientFinished ctx fdata
+        Finished fdata -> processFinished ctx fdata
         _ -> return ()
     when (isHRR hs) $ usingHState ctx wrapAsMessageHash13
     void $ updateHandshake ctx ServerRole hs
@@ -135,8 +135,8 @@ processClientKeyXchg ctx (CKX_ECDH bytes) = do
                     throwCore $
                         Error_Protocol "cannot generate a shared secret on ECDH" IllegalParameter
 
-processClientFinished :: Context -> FinishedData -> IO ()
-processClientFinished ctx fdata = do
+processFinished :: Context -> FinishedData -> IO ()
+processFinished ctx fdata = do
     (cc, ver) <- usingState_ ctx $ (,) <$> isClientContext <*> getVersion
     expected <- usingHState ctx $ getHandshakeDigest ver $ invertRole cc
     when (expected /= fdata) $ decryptError "cannot verify finished"
