@@ -20,7 +20,6 @@ import Network.TLS.Packet
 import Network.TLS.Packet13
 import Network.TLS.Parameters
 import Network.TLS.Record
-import Network.TLS.Record.Layer
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
@@ -41,7 +40,7 @@ encodePacket ctx recordLayer pkt = do
         mkRecord bs = Record pt ver (fragmentPlaintext bs)
         len = ctxFragmentSize ctx
     records <- map mkRecord <$> packetToFragments ctx len pkt
-    bs <- fmap mconcat <$> forEitherM records (recordEncode recordLayer)
+    bs <- fmap mconcat <$> forEitherM records (recordEncode recordLayer ctx)
     when (pkt == ChangeCipherSpec) $ switchTxEncryption ctx
     return bs
 
@@ -101,7 +100,7 @@ encodePacket13 ctx recordLayer pkt = do
         mkRecord bs = Record pt TLS12 (fragmentPlaintext bs)
         len = ctxFragmentSize ctx
     records <- map mkRecord <$> packetToFragments13 ctx len pkt
-    fmap mconcat <$> forEitherM records (recordEncode13 recordLayer)
+    fmap mconcat <$> forEitherM records (recordEncode13 recordLayer ctx)
 
 packetToFragments13 :: Context -> Maybe Int -> Packet13 -> IO [ByteString]
 packetToFragments13 ctx len (Handshake13 hss) =

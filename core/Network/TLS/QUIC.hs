@@ -172,14 +172,13 @@ getRxLevel ctx = do
     return level
 
 newRecordLayer
-    :: Context
-    -> QUICCallbacks
+    :: QUICCallbacks
     -> RecordLayer [(CryptLevel, ByteString)]
-newRecordLayer ctx callbacks = newTransparentRecordLayer get send recv
+newRecordLayer callbacks = newTransparentRecordLayer get send recv
   where
-    get = getTxLevel ctx
+    get = getTxLevel
     send = quicSend callbacks
-    recv = getRxLevel ctx >>= quicRecv callbacks
+    recv ctx = getRxLevel ctx >>= quicRecv callbacks
 
 -- | Start a TLS handshake thread for a QUIC client.  The client will use the
 -- specified TLS parameters and call the provided callback functions to send and
@@ -193,7 +192,7 @@ tlsQUICClient cparams callbacks = do
                 , ctxFragmentSize = Nothing
                 , ctxQUICMode = True
                 }
-        rl = newRecordLayer ctx2 callbacks
+        rl = newRecordLayer callbacks
         ctx2 = updateRecordLayer rl ctx1
     handshake ctx2
     quicDone callbacks ctx2
@@ -223,7 +222,7 @@ tlsQUICServer sparams callbacks = do
                 , ctxFragmentSize = Nothing
                 , ctxQUICMode = True
                 }
-        rl = newRecordLayer ctx2 callbacks
+        rl = newRecordLayer callbacks
         ctx2 = updateRecordLayer rl ctx1
     handshake ctx2
     quicDone callbacks ctx2

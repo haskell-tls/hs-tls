@@ -12,6 +12,7 @@ module Network.TLS.Context (
     Context (..),
     Hooks (..),
     Established (..),
+    RecordLayer (..),
     ctxEOF,
     ctxEstablished,
     withLog,
@@ -74,7 +75,6 @@ import Network.TLS.PostHandshake (
     requestCertificateServer,
  )
 import Network.TLS.RNG
-import Network.TLS.Record.Layer
 import Network.TLS.Record.Reading
 import Network.TLS.Record.State
 import Network.TLS.Record.Writing
@@ -197,11 +197,11 @@ contextNew backend params = liftIO $ do
 
         recordLayer =
             RecordLayer
-                { recordEncode = encodeRecord ctx
-                , recordEncode13 = encodeRecord13 ctx
-                , recordSendBytes = sendBytes ctx
-                , recordRecv = recvRecord ctx
-                , recordRecv13 = recvRecord13 ctx
+                { recordEncode = encodeRecord
+                , recordEncode13 = encodeRecord13
+                , recordSendBytes = sendBytes
+                , recordRecv = recvRecord
+                , recordRecv13 = recvRecord13
                 }
 
     return ctx

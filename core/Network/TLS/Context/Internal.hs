@@ -23,6 +23,7 @@ module Network.TLS.Context.Internal (
     Hooks (..),
     Established (..),
     PendingAction (..),
+    RecordLayer(..),
     ctxEOF,
     ctxEstablished,
     withLog,
@@ -77,7 +78,7 @@ import Network.TLS.Hooks
 import Network.TLS.Imports
 import Network.TLS.Measurement
 import Network.TLS.Parameters
-import Network.TLS.Record.Layer
+import Network.TLS.Record
 import Network.TLS.Record.State
 import Network.TLS.State
 import Network.TLS.Struct
@@ -109,8 +110,8 @@ data Information = Information
     deriving (Show, Eq)
 
 -- | A TLS Context keep tls specific state, parameters and backend information.
-data Context = forall bytes.
-      Monoid bytes =>
+data Context = forall a.
+      Monoid a =>
     Context
     { ctxConnection :: Backend
     -- ^ return the backend object associated with this context
@@ -149,7 +150,7 @@ data Context = forall bytes.
     , ctxCertRequests :: IORef [Handshake13]
     -- ^ pending PHA requests
     , ctxKeyLogger :: String -> IO ()
-    , ctxRecordLayer :: RecordLayer bytes
+    , ctxRecordLayer :: RecordLayer a
     , ctxHandshakeSync :: HandshakeSync
     , ctxQUICMode :: Bool
     , -- For Channel Bindings for TLS, RFC5929
@@ -162,7 +163,19 @@ data HandshakeSync
         (Context -> ClientState -> IO ())
         (Context -> ServerState -> IO ())
 
-updateRecordLayer :: Monoid bytes => RecordLayer bytes -> Context -> Context
+{- FOURMOLU_DISABLE -}
+data RecordLayer a = RecordLayer
+    { -- Writing.hs
+      recordEncode    :: Context -> Record Plaintext -> IO (Either TLSError a)
+    , recordEncode13  :: Context -> Record Plaintext -> IO (Either TLSError a)
+    , recordSendBytes :: Context -> a -> IO ()
+    , -- Reading.hs
+      recordRecv      :: Context -> Int -> IO (Either TLSError (Record Plaintext))
+    , recordRecv13    :: Context -> IO (Either TLSError (Record Plaintext))
+    }
+{- FOURMOLU_ENABLE -}
+
+updateRecordLayer :: Monoid a => RecordLayer a -> Context -> Context
 updateRecordLayer recordLayer Context{..} =
     Context{ctxRecordLayer = recordLayer, ..}
 

@@ -33,7 +33,6 @@ import Network.TLS.Hooks
 import Network.TLS.Imports
 import Network.TLS.Receiving
 import Network.TLS.Record
-import Network.TLS.Record.Layer
 import Network.TLS.Sending
 import Network.TLS.State
 import Network.TLS.Struct
@@ -51,9 +50,9 @@ sendPacket ctx@Context{ctxRecordLayer = recordLayer} pkt = do
         withEmptyPacket <- readIORef $ ctxNeedEmptyPacket ctx
         when withEmptyPacket $
             writePacketBytes ctx recordLayer (AppData B.empty)
-                >>= recordSendBytes recordLayer
+                >>= recordSendBytes recordLayer ctx
 
-    writePacketBytes ctx recordLayer pkt >>= recordSendBytes recordLayer
+    writePacketBytes ctx recordLayer pkt >>= recordSendBytes recordLayer ctx
   where
     isNonNullAppData (AppData b) = not $ B.null b
     isNonNullAppData _ = False
@@ -73,7 +72,7 @@ writePacketBytes ctx recordLayer pkt = do
 
 sendPacket13 :: Context -> Packet13 -> IO ()
 sendPacket13 ctx@Context{ctxRecordLayer = recordLayer} pkt =
-    writePacketBytes13 ctx recordLayer pkt >>= recordSendBytes recordLayer
+    writePacketBytes13 ctx recordLayer pkt >>= recordSendBytes recordLayer ctx
 
 writePacketBytes13
     :: Monoid bytes
@@ -99,7 +98,7 @@ recvPacket ctx@Context{ctxRecordLayer = recordLayer} = do
     -- AppData with maximum size 2^14 + 256.  In all other scenarios and record
     -- types the maximum size is 2^14.
     let appDataOverhead = if hrr then 256 else 0
-    erecord <- recordRecv recordLayer appDataOverhead
+    erecord <- recordRecv recordLayer ctx appDataOverhead
     case erecord of
         Left err -> return $ Left err
         Right record ->
@@ -134,7 +133,7 @@ isEmptyHandshake _ = False
 
 recvPacket13 :: Context -> IO (Either TLSError Packet13)
 recvPacket13 ctx@Context{ctxRecordLayer = recordLayer} = do
-    erecord <- recordRecv13 recordLayer
+    erecord <- recordRecv13 recordLayer ctx
     case erecord of
         Left err@(Error_Protocol _ BadRecordMac) -> do
             -- If the server decides to reject RTT0 data but accepts RTT1
@@ -197,15 +196,15 @@ newtype PacketFlightM b a
     deriving (Functor, Applicative, Monad, MonadFail, MonadIO)
 
 runPacketFlight :: Context -> (forall b. Monoid b => PacketFlightM b a) -> IO a
-runPacketFlight Context{ctxRecordLayer = recordLayer} (PacketFlightM f) = do
+runPacketFlight ctx@Context{ctxRecordLayer = recordLayer} (PacketFlightM f) = do
     ref <- newIORef id
-    runReaderT f (recordLayer, ref) `finally` sendPendingFlight recordLayer ref
+    runReaderT f (recordLayer, ref) `finally` sendPendingFlight ctx recordLayer ref
 
-sendPendingFlight :: Monoid b => RecordLayer b -> IORef (Builder b) -> IO ()
-sendPendingFlight recordLayer ref = do
+sendPendingFlight :: Monoid b => Context -> RecordLayer b -> IORef (Builder b) -> IO ()
+sendPendingFlight ctx recordLayer ref = do
     build <- readIORef ref
     let bss = build []
-    unless (null bss) $ recordSendBytes recordLayer $ mconcat bss
+    unless (null bss) $ recordSendBytes recordLayer ctx $ mconcat bss
 
 loadPacket13 :: Monoid b => Context -> Packet13 -> PacketFlightM b ()
 loadPacket13 ctx pkt = PacketFlightM $ do
