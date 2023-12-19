@@ -54,7 +54,7 @@ checkCtxFinished ctx = do
 recvDataAssert :: Context -> ByteString -> IO ()
 recvDataAssert ctx expected = do
     got <- recvData ctx
-    expected `shouldBe` got
+    got `shouldBe` expected
 
 runTLSPipeN
     :: Int
@@ -76,7 +76,7 @@ runTLSPipeN n params tlsServer tlsClient = do
             timeout 60000000 readResult -- 60 sec
     case m_dsres of
         Nothing -> error "timed out"
-        Just dsres -> ds `shouldBe` dsres
+        Just dsres -> dsres `shouldBe` ds
 
 runTLSPipe
     :: (ClientParams, ServerParams)
@@ -221,12 +221,12 @@ runTLSPipeSimple13 params mode mEarlyData = runTLSPipe params tlsServer tlsClien
             Just ed -> do
                 let ls = chunkLengths (B.length ed)
                 chunks <- replicateM (length ls) $ recvData ctx
-                (ls, ed) `shouldBe` (map B.length chunks, B.concat chunks)
+                (map B.length chunks, B.concat chunks) `shouldBe` (ls, ed)
         d <- recvData ctx
         checkCtxFinished ctx
         writeChan queue [d]
         minfo <- contextGetInformation ctx
-        Just mode `shouldBe` (minfo >>= infoTLS13HandshakeMode)
+        (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
         bye ctx
     tlsClient queue ctx = do
         handshake ctx
@@ -234,7 +234,7 @@ runTLSPipeSimple13 params mode mEarlyData = runTLSPipe params tlsServer tlsClien
         d <- readChan queue
         sendData ctx (L.fromChunks [d])
         minfo <- contextGetInformation ctx
-        Just mode `shouldBe` (minfo >>= infoTLS13HandshakeMode)
+        (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
         byeBye ctx
 
 runTLSPipeCapture13

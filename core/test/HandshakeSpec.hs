@@ -76,10 +76,10 @@ pipe_work = do
     let d2 = B.replicate (bSize * n) 45
 
     d1' <- writePipeA pipe d1 >> readPipeB pipe (B.length d1)
-    d1 `shouldBe` d1'
+    d1' `shouldBe` d1
 
     d2' <- writePipeB pipe d2 >> readPipeA pipe (B.length d2)
-    d2 `shouldBe` d2'
+    d2' `shouldBe` d2
 
 --------------------------------------------------------------
 
@@ -578,7 +578,7 @@ handshake_sni (clientParam, serverParam) = do
         params' = (clientParam', serverParam')
     runTLSPipe params' tlsServer tlsClient
     receivedName <- readIORef ref
-    Just (Just serverName) `shouldBe` receivedName
+    receivedName `shouldBe` Just (Just serverName)
   where
     tlsServer ctx queue = do
         handshake ctx
