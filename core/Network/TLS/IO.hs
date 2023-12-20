@@ -200,7 +200,8 @@ runPacketFlight ctx@Context{ctxRecordLayer = recordLayer} (PacketFlightM f) = do
     ref <- newIORef id
     runReaderT f (recordLayer, ref) `finally` sendPendingFlight ctx recordLayer ref
 
-sendPendingFlight :: Monoid b => Context -> RecordLayer b -> IORef (Builder b) -> IO ()
+sendPendingFlight
+    :: Monoid b => Context -> RecordLayer b -> IORef (Builder b) -> IO ()
 sendPendingFlight ctx recordLayer ref = do
     build <- readIORef ref
     let bss = build []

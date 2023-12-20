@@ -26,7 +26,10 @@ newTransparentRecordLayer get send recv =
         }
 
 transparentEncodeRecord
-    :: (Context -> IO ann) -> Context -> Record Plaintext -> IO (Either TLSError [(ann, ByteString)])
+    :: (Context -> IO ann)
+    -> Context
+    -> Record Plaintext
+    -> IO (Either TLSError [(ann, ByteString)])
 transparentEncodeRecord _ _ (Record ProtocolType_ChangeCipherSpec _ _) =
     return $ Right []
 transparentEncodeRecord _ _ (Record ProtocolType_Alert _ _) =
@@ -37,7 +40,11 @@ transparentEncodeRecord get ctx (Record _ _ frag) =
     get ctx >>= \a -> return $ Right [(a, fragmentGetBytes frag)]
 
 transparentSendBytes
-    :: Eq ann => ([(ann, ByteString)] -> IO ()) -> Context -> [(ann, ByteString)] -> IO ()
+    :: Eq ann
+    => ([(ann, ByteString)] -> IO ())
+    -> Context
+    -> [(ann, ByteString)]
+    -> IO ()
 transparentSendBytes send _ input =
     send
         [ (a, bs) | (a, frgs) <- compress input, let bs = B.concat frgs, not (B.null bs)

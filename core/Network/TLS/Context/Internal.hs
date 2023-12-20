@@ -23,7 +23,7 @@ module Network.TLS.Context.Internal (
     Hooks (..),
     Established (..),
     PendingAction (..),
-    RecordLayer(..),
+    RecordLayer (..),
     ctxEOF,
     ctxEstablished,
     withLog,
