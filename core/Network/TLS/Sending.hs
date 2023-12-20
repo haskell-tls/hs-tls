@@ -49,7 +49,7 @@ encodePacket ctx recordLayer pkt = do
 -- empty-packet countermeasure may be applied to each fragment independently.
 packetToFragments :: Context -> Maybe Int -> Packet -> IO [ByteString]
 packetToFragments ctx len (Handshake hss) =
-    getChunks len . B.concat <$> mapM (updateHandshake ctx True) hss
+    getChunks len . B.concat <$> mapM (updateHandshake ctx) hss
 packetToFragments _ _ (Alert a) = return [encodeAlerts a]
 packetToFragments _ _ ChangeCipherSpec = return [encodeChangeCipherSpec]
 packetToFragments _ _ (AppData x) = return [x]
@@ -74,11 +74,8 @@ switchTxEncryption ctx = do
   where
     isCBC tx = maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stCipher tx)
 
-updateHandshake :: Context -> Bool -> Handshake -> IO ByteString
-updateHandshake ctx sending hs = do
-    case hs of
-        Finished verifyData -> usingState_ ctx $ updateVerifyData sending verifyData
-        _ -> return ()
+updateHandshake :: Context -> Handshake -> IO ByteString
+updateHandshake ctx hs = do
     usingHState ctx $ do
         when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage encoded
         when (finishHandshakeTypeMaterial $ typeOfHandshake hs) $

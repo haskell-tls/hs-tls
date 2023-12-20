@@ -85,7 +85,7 @@ recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake expectClientCer
     -- so we must process any packet, and in case of handshake call processHandshake manually.
     expectClientKeyExchange hs@(ClientKeyXchg ckx) = do
         -- processClientKeyXchg requres updateHandshake, sigh
-        void $ updateHandshake ctx False hs
+        void $ updateHandshake ctx hs
         processClientKeyXchg ctx ckx
         return $ RecvStatePacket expectCertificateVerify
     expectClientKeyExchange p = unexpected (show p) (Just "client key exchange")

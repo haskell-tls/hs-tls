@@ -17,7 +17,8 @@ module Network.TLS.State (
     runTLSState,
     newTLSState,
     withTLSRNG,
-    updateVerifyData,
+    setRenegoVerifyDataForSend,
+    setRenegoVerifyDataForRecv,
     finishHandshakeTypeMaterial,
     finishHandshakeMaterial,
     certVerifyHandshakeTypeMaterial,
@@ -145,18 +146,19 @@ newTLSState rng clientContext =
         , stTLS12SessionTicket = Nothing
         }
 
-{- FOURMOLU_DISABLE -}
-updateVerifyData :: Bool -> VerifyData -> TLSSt ()
-updateVerifyData sending bs = do
+setRenegoVerifyDataForSend :: VerifyData -> TLSSt ()
+setRenegoVerifyDataForSend bs = do
     role <- getRole
     case role of
-        ClientRole
-            | sending   -> modify (\st -> st{stClientVerifyData = bs})
-            | otherwise -> modify (\st -> st{stServerVerifyData = bs})
-        ServerRole
-            | sending   -> modify (\st -> st{stServerVerifyData = bs})
-            | otherwise -> modify (\st -> st{stClientVerifyData = bs})
-{- FOURMOLU_ENABLE -}
+        ClientRole -> modify (\st -> st{stClientVerifyData = bs})
+        ServerRole -> modify (\st -> st{stServerVerifyData = bs})
+
+setRenegoVerifyDataForRecv :: VerifyData -> TLSSt ()
+setRenegoVerifyDataForRecv bs = do
+    role <- getRole
+    case role of
+        ClientRole -> modify (\st -> st{stServerVerifyData = bs})
+        ServerRole -> modify (\st -> st{stClientVerifyData = bs})
 
 finishHandshakeTypeMaterial :: HandshakeType -> Bool
 finishHandshakeTypeMaterial HandshakeType_ClientHello = True

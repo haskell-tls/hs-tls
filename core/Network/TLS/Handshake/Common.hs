@@ -133,10 +133,11 @@ sendChangeCipherAndFinish
 sendChangeCipherAndFinish ctx role = do
     sendPacket ctx ChangeCipherSpec
     contextFlush ctx
-    cf <-
+    verifyData <-
         usingState_ ctx getVersion >>= \ver -> usingHState ctx $ getHandshakeDigest ver role
-    sendPacket ctx (Handshake [Finished cf])
-    writeIORef (ctxFinished ctx) $ Just cf
+    sendPacket ctx (Handshake [Finished verifyData])
+    usingState_ ctx $ setRenegoVerifyDataForSend verifyData
+    writeIORef (ctxFinished ctx) $ Just verifyData
     contextFlush ctx
 
 data RecvState m
@@ -287,11 +288,12 @@ expectFinished ctx (Finished verifyData) = do
 expectFinished _ p = unexpected (show p) (Just "Handshake Finished")
 
 processFinished :: Context -> VerifyData -> IO ()
-processFinished ctx fdata = do
+processFinished ctx verifyData = do
     (cc, ver) <- usingState_ ctx $ (,) <$> getRole <*> getVersion
     expected <- usingHState ctx $ getHandshakeDigest ver $ invertRole cc
-    when (expected /= fdata) $ decryptError "cannot verify finished"
-    writeIORef (ctxPeerFinished ctx) $ Just fdata
+    when (expected /= verifyData) $ decryptError "cannot verify finished"
+    usingState_ ctx $ setRenegoVerifyDataForRecv verifyData
+    writeIORef (ctxPeerFinished ctx) $ Just verifyData
 
 processCertificates :: Context -> Role -> CertificateChain -> IO ()
 processCertificates _ ServerRole (CertificateChain []) = return ()

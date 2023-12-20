@@ -38,8 +38,6 @@ recvServerHello ctx cparams clientSession sentExts = do
         case epkt of
             Left e -> throwCore e
             Right pkt -> case pkt of
-                Alert [(AlertLevel_Warning, UnrecognizedName)]
-                    | clientUseServerNameIndication cparams -> undefined -- return recvState
                 Alert a -> throwAlert a
                 Handshake (h : hs) -> return (h, hs)
                 _ -> unexpected (show pkt) (Just "handshake")

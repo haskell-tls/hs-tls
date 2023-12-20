@@ -28,7 +28,7 @@ processHandshake ctx hs = do
     case hs of
         ClientKeyXchg _
             | role == ServerRole -> return ()
-        _ -> void $ updateHandshake ctx False hs
+        _ -> void $ updateHandshake ctx hs
   where
     isHRR (ServerHello TLS12 srand _ _ _ _) = isHelloRetryRequest srand
     isHRR _ = False
