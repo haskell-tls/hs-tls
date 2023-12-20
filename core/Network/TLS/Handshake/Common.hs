@@ -26,6 +26,7 @@ module Network.TLS.Handshake.Common (
     checkSupportedGroup,
     errorToAlert,
     errorToAlertMessage,
+    expectFinished,
 ) where
 
 import Control.Concurrent.MVar
@@ -40,6 +41,7 @@ import Network.TLS.Crypto
 import Network.TLS.Extension
 import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Process
+import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
 import Network.TLS.IO
 import Network.TLS.Imports
@@ -276,3 +278,16 @@ ensureNullCompression compression =
     when (compression /= compressionID nullCompression) $
         throwCore $
             Error_Protocol "compression is not allowed in TLS 1.3" IllegalParameter
+
+expectFinished :: Context -> Handshake -> IO (RecvState IO)
+expectFinished ctx (Finished verifyData) = do
+    processFinished ctx verifyData
+    return RecvStateDone
+expectFinished _ p = unexpected (show p) (Just "Handshake Finished")
+
+processFinished :: Context -> VerifyData -> IO ()
+processFinished ctx fdata = do
+    (cc, ver) <- usingState_ ctx $ (,) <$> getRole <*> getVersion
+    expected <- usingHState ctx $ getHandshakeDigest ver $ invertRole cc
+    when (expected /= fdata) $ decryptError "cannot verify finished"
+    writeIORef (ctxPeerFinished ctx) $ Just fdata

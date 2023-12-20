@@ -21,7 +21,7 @@ import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import Network.TLS.Extension
 import Network.TLS.Handshake.Client.Common
-import Network.TLS.Handshake.Common
+import Network.TLS.Handshake.Common hiding (expectFinished)
 import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.Control
 import Network.TLS.Handshake.Key

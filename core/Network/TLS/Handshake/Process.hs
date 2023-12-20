@@ -6,7 +6,6 @@ module Network.TLS.Handshake.Process (
     processHandshake,
     processHandshake13,
     startHandshake,
-    processFinished,
 ) where
 
 import Network.TLS.Context.Internal
@@ -15,7 +14,6 @@ import Network.TLS.ErrT
 import Network.TLS.Extension
 import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Random
-import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.Imports
@@ -25,11 +23,10 @@ import Network.TLS.Sending
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
-import Network.TLS.Types (MasterSecret (..), Role (..), invertRole)
+import Network.TLS.Types (MasterSecret (..), Role (..))
 
 import Control.Concurrent.MVar
 import Control.Monad.State.Strict (gets)
-import Data.IORef (writeIORef)
 import Data.X509 (Certificate (..), CertificateChain (..), getCertificate)
 
 processHandshake :: Context -> Handshake -> IO ()
@@ -134,13 +131,6 @@ processClientKeyXchg ctx (CKX_ECDH bytes) = do
                 Nothing ->
                     throwCore $
                         Error_Protocol "cannot generate a shared secret on ECDH" IllegalParameter
-
-processFinished :: Context -> VerifyData -> IO ()
-processFinished ctx fdata = do
-    (cc, ver) <- usingState_ ctx $ (,) <$> getRole <*> getVersion
-    expected <- usingHState ctx $ getHandshakeDigest ver $ invertRole cc
-    when (expected /= fdata) $ decryptError "cannot verify finished"
-    writeIORef (ctxPeerFinished ctx) $ Just fdata
 
 -- initialize a new Handshake context (initial handshake or renegotiations)
 startHandshake :: Context -> Version -> ClientRandom -> IO ()

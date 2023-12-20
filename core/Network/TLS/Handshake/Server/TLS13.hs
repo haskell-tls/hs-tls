@@ -11,7 +11,7 @@ import Control.Monad.State.Strict
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
 import Network.TLS.Extension
-import Network.TLS.Handshake.Common
+import Network.TLS.Handshake.Common hiding (expectFinished)
 import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Process
