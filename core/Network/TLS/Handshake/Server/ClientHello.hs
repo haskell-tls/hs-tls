@@ -17,7 +17,6 @@ import Network.TLS.Struct
 processClientHello
     :: ServerParams -> Context -> Handshake -> IO (Version, CH)
 processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compressions ch@CH{..}) = do
-    mapM_ ensureNullCompression compressions
     established <- ctxEstablished ctx
     -- renego is not allowed in TLS 1.3
     when (established /= NotEstablished) $ do
@@ -94,6 +93,9 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
                 toHostName (ServerNameHostName hostName) = Just hostName
                 toHostName (ServerNameOther _) = Nothing
             _ -> Nothing
+    when (chosenVersion == TLS13) $ do
+        -- If this is done for TLS12, SSL Labs test does not continue, sigh.
+        mapM_ ensureNullCompression compressions
     maybe (return ()) (usingState_ ctx . setClientSNI) serverName
     return (chosenVersion, ch)
 processClientHello _ _ _ =
