@@ -98,7 +98,7 @@ recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake expectClientCer
 
         verif <- checkCertificateVerify ctx usedVersion pubKey msgs dsig
         clientCertVerify sparams ctx certs verif
-        return $ RecvStatePacket expectChangeCipher
+        return $ RecvStatePacket $ expectChangeCipher ctx
     expectCertificateVerify p = do
         chain <- usingHState ctx getClientCertChain
         case chain of
@@ -107,7 +107,7 @@ recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake expectClientCer
                 | otherwise ->
                     throwCore $ Error_Protocol "cert verify message missing" UnexpectedMessage
             Nothing -> return ()
-        expectChangeCipher p
+        expectChangeCipher ctx p
 
 clientCertVerify :: ServerParams -> Context -> CertificateChain -> Bool -> IO ()
 clientCertVerify sparams ctx certs verif = do
@@ -135,13 +135,15 @@ clientCertVerify sparams ctx certs verif = do
                 else decryptError "verification failed"
 
 recvChangeCipherAndFinish :: Context -> IO ()
-recvChangeCipherAndFinish ctx = runRecvState ctx $ RecvStatePacket expectChangeCipher
+recvChangeCipherAndFinish ctx = runRecvState ctx $ RecvStatePacket $ expectChangeCipher ctx
 
-expectChangeCipher :: Packet -> IO (RecvState IO)
-expectChangeCipher ChangeCipherSpec = do
-    return $ RecvStateHandshake expectFinished
-expectChangeCipher p = unexpected (show p) (Just "change cipher")
+expectChangeCipher :: Context -> Packet -> IO (RecvState IO)
+expectChangeCipher ctx ChangeCipherSpec = do
+    return $ RecvStateHandshake $ expectFinished ctx
+expectChangeCipher _ p = unexpected (show p) (Just "change cipher")
 
-expectFinished :: Handshake -> IO (RecvState IO)
-expectFinished (Finished _) = return RecvStateDone
-expectFinished p = unexpected (show p) (Just "Handshake Finished")
+expectFinished :: Context -> Handshake -> IO (RecvState IO)
+expectFinished ctx (Finished verifyData) = do
+    processFinished ctx verifyData
+    return RecvStateDone
+expectFinished _ p = unexpected (show p) (Just "Handshake Finished")

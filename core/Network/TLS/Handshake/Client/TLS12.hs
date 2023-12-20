@@ -16,6 +16,7 @@ import Network.TLS.Crypto
 import Network.TLS.Handshake.Client.Common
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Key
+import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
 import Network.TLS.IO
@@ -113,7 +114,9 @@ recvNSTandCCSandFinish ctx = do
         return $ RecvStateHandshake expectFinished
     expectChangeCipher p = unexpected (show p) (Just "change cipher")
 
-    expectFinished (Finished _) = return RecvStateDone
+    expectFinished (Finished verifyData) = do
+        processFinished ctx verifyData
+        return RecvStateDone
     expectFinished p = unexpected (show p) (Just "Handshake Finished")
 
 ----------------------------------------------------------------

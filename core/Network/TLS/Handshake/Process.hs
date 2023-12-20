@@ -6,6 +6,7 @@ module Network.TLS.Handshake.Process (
     processHandshake,
     processHandshake13,
     startHandshake,
+    processFinished,
 ) where
 
 import Network.TLS.Context.Internal
@@ -45,7 +46,6 @@ processHandshake ctx hs = do
             hrr <- usingState_ ctx getTLS13HRR
             unless hrr $ startHandshake ctx cver ran
         Certificates certs -> processCertificates role certs
-        Finished verifyData -> processFinished ctx verifyData
         _ -> return ()
     when (isHRR hs) $ usingHState ctx wrapAsMessageHash13
     void $ updateHandshake ctx False hs
