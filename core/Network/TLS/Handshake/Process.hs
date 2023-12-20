@@ -28,11 +28,6 @@ import Control.Monad.State.Strict (gets)
 processHandshake :: Context -> Handshake -> IO ()
 processHandshake ctx hs = do
     role <- usingState_ ctx getRole
-    case hs of
-        ClientHello cver ran _ _ -> when (role == ServerRole) $ do
-            hrr <- usingState_ ctx getTLS13HRR
-            unless hrr $ startHandshake ctx cver ran
-        _ -> return ()
     when (isHRR hs) $ usingHState ctx wrapAsMessageHash13
     void $ updateHandshake ctx False hs
     case hs of

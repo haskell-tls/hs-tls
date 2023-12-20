@@ -16,7 +16,7 @@ import Network.TLS.Struct
 
 processClientHello
     :: ServerParams -> Context -> Handshake -> IO (Version, CH)
-processClientHello sparams ctx clientHello@(ClientHello legacyVersion _ compressions ch@CH{..}) = do
+processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compressions ch@CH{..}) = do
     mapM_ ensureNullCompression compressions
     established <- ctxEstablished ctx
     -- renego is not allowed in TLS 1.3
@@ -41,6 +41,8 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion _ compress
     updateMeasure ctx incrementNbHandshakes
 
     -- Handle Client hello
+    hrr <- usingState_ ctx getTLS13HRR
+    unless hrr $ startHandshake ctx legacyVersion cran
     processHandshake ctx clientHello
 
     -- rejecting SSL2. RFC 6176
