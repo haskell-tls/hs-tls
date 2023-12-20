@@ -110,11 +110,11 @@ recvNSTandCCSandFinish ctx = do
     expectNewSessionTicket p = unexpected (show p) (Just "Handshake Finished")
 
     expectChangeCipher ChangeCipherSpec = do
-        return $ RecvStateHandshake expectFinish
+        return $ RecvStateHandshake expectFinished
     expectChangeCipher p = unexpected (show p) (Just "change cipher")
 
-    expectFinish (Finished _) = return RecvStateDone
-    expectFinish p = unexpected (show p) (Just "Handshake Finished")
+    expectFinished (Finished _) = return RecvStateDone
+    expectFinished p = unexpected (show p) (Just "Handshake Finished")
 
 ----------------------------------------------------------------
 

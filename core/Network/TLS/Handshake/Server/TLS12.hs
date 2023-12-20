@@ -139,9 +139,9 @@ recvChangeCipherAndFinish ctx = runRecvState ctx $ RecvStatePacket expectChangeC
 
 expectChangeCipher :: Packet -> IO (RecvState IO)
 expectChangeCipher ChangeCipherSpec = do
-    return $ RecvStateHandshake expectFinish
+    return $ RecvStateHandshake expectFinished
 expectChangeCipher p = unexpected (show p) (Just "change cipher")
 
-expectFinish :: Handshake -> IO (RecvState IO)
-expectFinish (Finished _) = return RecvStateDone
-expectFinish p = unexpected (show p) (Just "Handshake Finished")
+expectFinished :: Handshake -> IO (RecvState IO)
+expectFinished (Finished _) = return RecvStateDone
+expectFinished p = unexpected (show p) (Just "Handshake Finished")
