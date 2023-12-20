@@ -68,6 +68,7 @@ recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake expectClientCer
   where
     expectClientCertificate (Certificates certs) = do
         clientCertificate sparams ctx certs
+        processCertificates ctx ServerRole certs
 
         -- FIXME: We should check whether the certificate
         -- matches our request and that we support

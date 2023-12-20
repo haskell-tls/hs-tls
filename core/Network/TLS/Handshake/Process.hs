@@ -27,7 +27,6 @@ import Network.TLS.Types (MasterSecret (..), Role (..))
 
 import Control.Concurrent.MVar
 import Control.Monad.State.Strict (gets)
-import Data.X509 (Certificate (..), CertificateChain (..), getCertificate)
 
 processHandshake :: Context -> Handshake -> IO ()
 processHandshake ctx hs = do
@@ -42,7 +41,6 @@ processHandshake ctx hs = do
                     setSecureRenegotiation True
             hrr <- usingState_ ctx getTLS13HRR
             unless hrr $ startHandshake ctx cver ran
-        Certificates certs -> processCertificates role certs
         _ -> return ()
     when (isHRR hs) $ usingHState ctx wrapAsMessageHash13
     void $ updateHandshake ctx False hs
@@ -66,15 +64,6 @@ processHandshake ctx hs = do
         setSecureRenegotiation True
     -- unknown extensions
     processClientExtension _ = return ()
-
-    processCertificates :: Role -> CertificateChain -> IO ()
-    processCertificates ServerRole (CertificateChain []) = return ()
-    processCertificates ClientRole (CertificateChain []) =
-        throwCore $ Error_Protocol "server certificate missing" HandshakeFailure
-    processCertificates _ (CertificateChain (c : _)) =
-        usingHState ctx $ setPublicKey pubkey
-      where
-        pubkey = certPubKey $ getCertificate c
 
     isHRR (ServerHello TLS12 srand _ _ _ _) = isHelloRetryRequest srand
     isHRR _ = False

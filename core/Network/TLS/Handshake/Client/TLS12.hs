@@ -44,6 +44,7 @@ recvServerFirstFlight12 cparams ctx hs = do
 expectCertificate :: ClientParams -> Context -> Handshake -> IO (RecvState IO)
 expectCertificate cparams ctx (Certificates certs) = do
     doCertificate cparams ctx certs
+    processCertificates ctx ClientRole certs
     return $ RecvStateHandshake (expectServerKeyExchange ctx)
 expectCertificate _ ctx p = expectServerKeyExchange ctx p
 
