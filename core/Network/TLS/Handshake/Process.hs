@@ -10,15 +10,12 @@ module Network.TLS.Handshake.Process (
 
 import Network.TLS.Context.Internal
 import Network.TLS.Crypto
-import Network.TLS.ErrT
-import Network.TLS.Extension
 import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Random
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.Imports
 import Network.TLS.Packet
-import Network.TLS.Parameters
 import Network.TLS.Sending
 import Network.TLS.State
 import Network.TLS.Struct
@@ -32,13 +29,7 @@ processHandshake :: Context -> Handshake -> IO ()
 processHandshake ctx hs = do
     role <- usingState_ ctx getRole
     case hs of
-        ClientHello cver ran _ CH{..} -> when (role == ServerRole) $ do
-            mapM_ (usingState_ ctx . processClientExtension) chExtensions
-            -- RFC 5746: secure renegotiation
-            -- TLS_EMPTY_RENEGOTIATION_INFO_SCSV: {0x00, 0xFF}
-            when (secureRenegotiation && (0xff `elem` chCiphers)) $
-                usingState_ ctx $
-                    setSecureRenegotiation True
+        ClientHello cver ran _ _ -> when (role == ServerRole) $ do
             hrr <- usingState_ ctx getTLS13HRR
             unless hrr $ startHandshake ctx cver ran
         _ -> return ()
@@ -50,21 +41,6 @@ processHandshake ctx hs = do
                 processClientKeyXchg ctx content
         _ -> return ()
   where
-    secureRenegotiation = supportedSecureRenegotiation $ ctxSupported ctx
-    -- RFC5746: secure renegotiation
-    processClientExtension (ExtensionRaw EID_SecureRenegotiation content) | secureRenegotiation = do
-        cvd <- getVerifyData ClientRole
-        let bs = extensionEncode (SecureRenegotiation cvd Nothing)
-        unless (bs == content) $
-            throwError $
-                Error_Protocol
-                    ("client verified data not matching: " ++ show cvd ++ ":" ++ show content)
-                    HandshakeFailure
-
-        setSecureRenegotiation True
-    -- unknown extensions
-    processClientExtension _ = return ()
-
     isHRR (ServerHello TLS12 srand _ _ _ _) = isHelloRetryRequest srand
     isHRR _ = False
 

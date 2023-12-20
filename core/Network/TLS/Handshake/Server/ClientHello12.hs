@@ -9,6 +9,7 @@ import Network.TLS.Cipher
 import Network.TLS.Context.Internal
 import Network.TLS.Credentials
 import Network.TLS.Crypto
+import Network.TLS.ErrT
 import Network.TLS.Extension
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Server.Common
@@ -17,6 +18,7 @@ import Network.TLS.Imports
 import Network.TLS.Parameters
 import Network.TLS.State
 import Network.TLS.Struct
+import Network.TLS.Types (Role (..))
 
 ----------------------------------------------------------------
 
@@ -27,6 +29,8 @@ processClinetHello12
     -> CH
     -> IO (Cipher, Maybe Credential)
 processClinetHello12 sparams ctx ch = do
+    let secureRenegotiation = supportedSecureRenegotiation $ ctxSupported ctx
+    when secureRenegotiation $ checkSesecureRenegotiation ctx ch
     serverName <- usingState_ ctx getClientSNI
     extraCreds <- onServerNameIndication (serverHooks sparams) serverName
     let (creds, signatureCreds, ciphersFilteredVersion) =
@@ -40,6 +44,26 @@ processClinetHello12 sparams ctx ch = do
     let usedCipher = onCipherChoosing (serverHooks sparams) TLS12 ciphersFilteredVersion
     mcred <- chooseCreds usedCipher creds signatureCreds
     return (usedCipher, mcred)
+
+checkSesecureRenegotiation :: Context -> CH -> IO ()
+checkSesecureRenegotiation ctx CH{..} = do
+    -- RFC 5746: secure renegotiation
+    -- TLS_EMPTY_RENEGOTIATION_INFO_SCSV: {0x00, 0xFF}
+    when (0xff `elem` chCiphers) $
+        usingState_ ctx $
+            setSecureRenegotiation True
+    case extensionLookup EID_SecureRenegotiation chExtensions of
+        Just content -> usingState_ ctx $ do
+            cvd <- getVerifyData ClientRole
+            let bs = extensionEncode (SecureRenegotiation cvd Nothing)
+            unless (bs == content) $
+                throwError $
+                    Error_Protocol
+                        ("client verified data not matching: " ++ show cvd ++ ":" ++ show content)
+                        HandshakeFailure
+
+            setSecureRenegotiation True
+        _ -> return ()
 
 ----------------------------------------------------------------
 

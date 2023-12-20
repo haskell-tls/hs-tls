@@ -301,4 +301,3 @@ processCertificates ctx _ (CertificateChain (c : _)) =
     usingHState ctx $ setPublicKey pubkey
   where
     pubkey = certPubKey $ getCertificate c
-
