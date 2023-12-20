@@ -1,13 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- |
--- Module      : Network.TLS.QUIC
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
---
--- Experimental API to run the TLS handshake establishing a QUIC connection.
+-- API to run the TLS handshake establishing a QUIC connection.
 --
 -- On the northbound API:
 --
@@ -160,16 +154,6 @@ data QUICCallbacks = QUICCallbacks
     -- 'recvData' after calling this hook to wait for new session
     -- tickets.
     }
-
-getTxLevel :: Context -> IO CryptLevel
-getTxLevel ctx = do
-    (_, _, level, _) <- getTxState ctx
-    return level
-
-getRxLevel :: Context -> IO CryptLevel
-getRxLevel ctx = do
-    (_, _, level, _) <- getRxState ctx
-    return level
 
 newRecordLayer
     :: QUICCallbacks

@@ -11,6 +11,8 @@ module Network.TLS.Handshake.State13 (
     getRxState,
     setTxState,
     setRxState,
+    getTxLevel,
+    getRxLevel,
     clearTxState,
     clearRxState,
     setHelloParameters13,
@@ -54,6 +56,22 @@ getXState ctx func = do
         level = stCryptLevel tx
         secret = cstMacSecret $ stCryptState tx
     return (usedHash, usedCipher, level, secret)
+
+-- In the case of QUIC, stCipher is Nothing.
+-- So, fromJust causes an error.
+getTxLevel :: Context -> IO CryptLevel
+getTxLevel ctx = getXLevel ctx ctxTxState
+
+getRxLevel :: Context -> IO CryptLevel
+getRxLevel ctx = getXLevel ctx ctxRxState
+
+getXLevel
+    :: Context
+    -> (Context -> MVar RecordState)
+    -> IO CryptLevel
+getXLevel ctx func = do
+    tx <- readMVar (func ctx)
+    return $ stCryptLevel tx
 
 class TrafficSecret ty where
     fromTrafficSecret :: ty -> (CryptLevel, ByteString)
