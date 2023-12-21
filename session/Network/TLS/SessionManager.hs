@@ -5,7 +5,10 @@
 -- * Energy saving: no dedicate pruning thread is running when the size of session data database is zero.
 -- * (Replay resistance: each session data is used at most once to prevent replay attacks against 0RTT early data of TLS 1.3.)
 module Network.TLS.SessionManager (
-    Config (..),
+    Config,
+    ticketLifetime,
+    pruningDelay,
+    dbMaxSize,
     defaultConfig,
     newSessionManager,
 ) where
@@ -35,12 +38,12 @@ data Config = Config
     -- ^ The limit size of session data entries.
     }
 
--- | Lifetime: 1 day , delay: 10 minutes, max size: 1000 entries.
+-- | Lifetime: 1 day (86400 seconds), delay: 10 minutes (600 seconds), max size: 1000 entries.
 defaultConfig :: Config
 defaultConfig =
     Config
         { ticketLifetime = 86400
-        , pruningDelay = 6000
+        , pruningDelay = 600
         , dbMaxSize = 1000
         }
 
