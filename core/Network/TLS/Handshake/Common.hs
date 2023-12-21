@@ -169,8 +169,8 @@ onRecvStateHandshake
 onRecvStateHandshake _ recvState [] = return recvState
 onRecvStateHandshake _ (RecvStatePacket f) hms = f (Handshake hms)
 onRecvStateHandshake ctx (RecvStateHandshake f) (x : xs) = do
-    nstate <- f x
     processHandshake ctx x
+    nstate <- f x
     onRecvStateHandshake ctx nstate xs
 onRecvStateHandshake _ RecvStateDone _xs = unexpected "spurious handshake" Nothing
 

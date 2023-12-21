@@ -170,7 +170,7 @@ finishHandshakeTypeMaterial HandshakeType_ClientKeyXchg = True
 finishHandshakeTypeMaterial HandshakeType_ServerKeyXchg = True
 finishHandshakeTypeMaterial HandshakeType_CertRequest = True
 finishHandshakeTypeMaterial HandshakeType_CertVerify = True
-finishHandshakeTypeMaterial HandshakeType_Finished = True
+finishHandshakeTypeMaterial HandshakeType_Finished = False
 finishHandshakeTypeMaterial _ = True -- checkme
 
 finishHandshakeMaterial :: Handshake -> Bool

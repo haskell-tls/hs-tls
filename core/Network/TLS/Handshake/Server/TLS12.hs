@@ -19,7 +19,6 @@ import Network.TLS.IO
 import Network.TLS.Imports
 import Network.TLS.Packet hiding (getSession)
 import Network.TLS.Parameters
-import Network.TLS.Sending
 import Network.TLS.Session
 import Network.TLS.State
 import Network.TLS.Struct
@@ -83,10 +82,7 @@ recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake expectClientCer
 
     -- cannot use RecvStateHandshake, as the next message could be a ChangeCipher,
     -- so we must process any packet, and in case of handshake call processHandshake manually.
-    expectClientKeyExchange hs@(ClientKeyXchg ckx) = do
-        -- processClientKeyXchg requres updateHandshake because
-        -- setMasterSecretFromPre uses getSessionHash, sigh.
-        void $ updateHandshake ctx hs
+    expectClientKeyExchange (ClientKeyXchg ckx) = do
         processClientKeyXchg ctx ckx
         return $ RecvStatePacket expectCertificateVerify
     expectClientKeyExchange p = unexpected (show p) (Just "client key exchange")

@@ -16,19 +16,13 @@ import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.Imports
 import Network.TLS.Sending
-import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
-import Network.TLS.Types (Role (..))
 
 processHandshake :: Context -> Handshake -> IO ()
 processHandshake ctx hs = do
-    role <- usingState_ ctx getRole
     when (isHRR hs) $ usingHState ctx wrapAsMessageHash13
-    case hs of
-        ClientKeyXchg _
-            | role == ServerRole -> return ()
-        _ -> void $ updateHandshake ctx hs
+    void $ updateHandshake ctx hs
   where
     isHRR (ServerHello TLS12 srand _ _ _ _) = isHelloRetryRequest srand
     isHRR _ = False
