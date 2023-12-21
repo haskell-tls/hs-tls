@@ -19,8 +19,8 @@ module Network.TLS.State (
     withTLSRNG,
     setRenegoVerifyDataForSend,
     setRenegoVerifyDataForRecv,
-    finishHandshakeTypeMaterial,
-    finishHandshakeMaterial,
+    finishedHandshakeTypeMaterial,
+    finishedHandshakeMaterial,
     certVerifyHandshakeTypeMaterial,
     certVerifyHandshakeMaterial,
     setVersion,
@@ -160,21 +160,21 @@ setRenegoVerifyDataForRecv bs = do
         ClientRole -> modify (\st -> st{stServerVerifyData = bs})
         ServerRole -> modify (\st -> st{stClientVerifyData = bs})
 
-finishHandshakeTypeMaterial :: HandshakeType -> Bool
-finishHandshakeTypeMaterial HandshakeType_ClientHello = True
-finishHandshakeTypeMaterial HandshakeType_ServerHello = True
-finishHandshakeTypeMaterial HandshakeType_Certificate = True
-finishHandshakeTypeMaterial HandshakeType_HelloRequest = False
-finishHandshakeTypeMaterial HandshakeType_ServerHelloDone = True
-finishHandshakeTypeMaterial HandshakeType_ClientKeyXchg = True
-finishHandshakeTypeMaterial HandshakeType_ServerKeyXchg = True
-finishHandshakeTypeMaterial HandshakeType_CertRequest = True
-finishHandshakeTypeMaterial HandshakeType_CertVerify = True
-finishHandshakeTypeMaterial HandshakeType_Finished = False
-finishHandshakeTypeMaterial _ = True -- checkme
+finishedHandshakeTypeMaterial :: HandshakeType -> Bool
+finishedHandshakeTypeMaterial HandshakeType_ClientHello = True
+finishedHandshakeTypeMaterial HandshakeType_ServerHello = True
+finishedHandshakeTypeMaterial HandshakeType_Certificate = True
+finishedHandshakeTypeMaterial HandshakeType_HelloRequest = False
+finishedHandshakeTypeMaterial HandshakeType_ServerHelloDone = True
+finishedHandshakeTypeMaterial HandshakeType_ClientKeyXchg = True
+finishedHandshakeTypeMaterial HandshakeType_ServerKeyXchg = True
+finishedHandshakeTypeMaterial HandshakeType_CertRequest = True
+finishedHandshakeTypeMaterial HandshakeType_CertVerify = True
+finishedHandshakeTypeMaterial HandshakeType_Finished = False
+finishedHandshakeTypeMaterial _ = True -- checkme
 
-finishHandshakeMaterial :: Handshake -> Bool
-finishHandshakeMaterial = finishHandshakeTypeMaterial . typeOfHandshake
+finishedHandshakeMaterial :: Handshake -> Bool
+finishedHandshakeMaterial = finishedHandshakeTypeMaterial . typeOfHandshake
 
 certVerifyHandshakeTypeMaterial :: HandshakeType -> Bool
 certVerifyHandshakeTypeMaterial HandshakeType_ClientHello = True
