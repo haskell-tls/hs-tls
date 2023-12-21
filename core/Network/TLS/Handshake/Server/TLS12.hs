@@ -84,7 +84,8 @@ recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake expectClientCer
     -- cannot use RecvStateHandshake, as the next message could be a ChangeCipher,
     -- so we must process any packet, and in case of handshake call processHandshake manually.
     expectClientKeyExchange hs@(ClientKeyXchg ckx) = do
-        -- processClientKeyXchg requres updateHandshake, sigh
+        -- processClientKeyXchg requres updateHandshake because
+        -- setMasterSecretFromPre uses getSessionHash, sigh.
         void $ updateHandshake ctx hs
         processClientKeyXchg ctx ckx
         return $ RecvStatePacket expectCertificateVerify
