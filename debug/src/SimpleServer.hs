@@ -474,7 +474,7 @@ main = do
         exitSuccess
 
     certStore <- getTrustAnchors opts
-    sStorage <- newSessionTicketManager
+    sStorage <- newSessionTicketManager defaultConfig
     case other of
         [] -> runOn (sStorage, certStore) opts 443
         [port] -> runOn (sStorage, certStore) opts (fromInteger $ read port)
