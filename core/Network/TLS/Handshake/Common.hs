@@ -9,7 +9,7 @@ module Network.TLS.Handshake.Common (
     ensureNullCompression,
 
     -- * sending packets
-    sendChangeCipherAndFinish,
+    sendCCSandFinished,
 
     -- * receiving packets
     RecvState (..),
@@ -126,11 +126,11 @@ handshakeDone12 ctx = do
     setEstablished ctx Established
     return ()
 
-sendChangeCipherAndFinish
+sendCCSandFinished
     :: Context
     -> Role
     -> IO ()
-sendChangeCipherAndFinish ctx role = do
+sendCCSandFinished ctx role = do
     sendPacket ctx ChangeCipherSpec
     contextFlush ctx
     verifyData <-

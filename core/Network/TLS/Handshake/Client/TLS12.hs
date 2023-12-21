@@ -36,7 +36,7 @@ recvServerFirstFlight12 :: ClientParams -> Context -> [Handshake] -> IO ()
 recvServerFirstFlight12 cparams ctx hs = do
     resuming <- usingState_ ctx isSessionResuming
     if resuming
-        then recvNSTandCCSandFinish ctx
+        then recvNSTandCCSandFinished ctx
         else do
             let st = RecvStateHandshake (expectCertificate cparams ctx)
             runRecvStateHS ctx st hs
@@ -73,15 +73,15 @@ sendClientSecondFlight12 :: ClientParams -> Context -> IO ()
 sendClientSecondFlight12 cparams ctx = do
     sessionResuming <- usingState_ ctx isSessionResuming
     if sessionResuming
-        then sendChangeCipherAndFinish ctx ClientRole
+        then sendCCSandFinished ctx ClientRole
         else do
             sendClientCCC cparams ctx
-            sendChangeCipherAndFinish ctx ClientRole
+            sendCCSandFinished ctx ClientRole
 
 recvServerSecondFlight12 :: Context -> IO ()
 recvServerSecondFlight12 ctx = do
     sessionResuming <- usingState_ ctx isSessionResuming
-    unless sessionResuming $ recvNSTandCCSandFinish ctx
+    unless sessionResuming $ recvNSTandCCSandFinished ctx
     mticket <- usingState_ ctx getTLS12SessionTicket
     identity <- case mticket of
         Just ticket -> return ticket
@@ -98,8 +98,8 @@ recvServerSecondFlight12 ctx = do
             (fromJust sessionData)
     handshakeDone12 ctx
 
-recvNSTandCCSandFinish :: Context -> IO ()
-recvNSTandCCSandFinish ctx = do
+recvNSTandCCSandFinished :: Context -> IO ()
+recvNSTandCCSandFinished ctx = do
     st <- isJust <$> usingState_ ctx getTLS12SessionTicket
     if st
         then runRecvState ctx $ RecvStateHandshake expectNewSessionTicket

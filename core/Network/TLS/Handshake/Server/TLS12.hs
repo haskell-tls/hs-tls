@@ -39,10 +39,10 @@ recvClientSecondFlight12 sparams ctx resumeSessionData = do
                 Nothing -> return ()
                 Just ticket ->
                     sendPacket ctx $ Handshake [NewSessionTicket 3600 ticket] -- xxx fixme
-            sendChangeCipherAndFinish ctx ServerRole
+            sendCCSandFinished ctx ServerRole
         Just _ -> do
             _ <- sessionEstablished ctx
-            recvChangeCipherAndFinish ctx
+            recvCCSandFinished ctx
     handshakeDone12 ctx
 
 sessionEstablished :: Context -> IO (Maybe Ticket)
@@ -140,8 +140,8 @@ clientCertVerify sparams ctx certs verif = do
                     usingState_ ctx $ setClientCertificateChain certs
                 else decryptError "verification failed"
 
-recvChangeCipherAndFinish :: Context -> IO ()
-recvChangeCipherAndFinish ctx = runRecvState ctx $ RecvStatePacket $ expectChangeCipher ctx
+recvCCSandFinished :: Context -> IO ()
+recvCCSandFinished ctx = runRecvState ctx $ RecvStatePacket $ expectChangeCipher ctx
 
 expectChangeCipher :: Context -> Packet -> IO (RecvState IO)
 expectChangeCipher ctx ChangeCipherSpec = do

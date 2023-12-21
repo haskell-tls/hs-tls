@@ -53,7 +53,7 @@ sendServerHello12 sparams ctx (usedCipher, mcred) ch@CH{..} = do
             let masterSecret = sessionSecret sessionData
             usingHState ctx $ setMasterSecret TLS12 ServerRole masterSecret
             logKey ctx $ MasterSecret masterSecret
-            sendChangeCipherAndFinish ctx ServerRole
+            sendCCSandFinished ctx ServerRole
     return resumeSessionData
 
 recoverSessionData :: Context -> CH -> IO (Maybe SessionData)

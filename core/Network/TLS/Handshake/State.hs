@@ -426,10 +426,10 @@ getHandshakeDigest ver role = gets gen
         HandshakeDigestContext hashCtx ->
             let msecret = fromJust $ hstMasterSecret hst
                 cipher = fromJust $ hstPendingCipher hst
-             in generateFinish ver cipher msecret hashCtx
+             in generateFinished ver cipher msecret hashCtx
         HandshakeMessages _ ->
             error "un-initialized handshake digest"
-    generateFinish
+    generateFinished
         | role == ClientRole = generateClientFinished
         | otherwise = generateServerFinished
 
