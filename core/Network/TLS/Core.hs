@@ -97,6 +97,7 @@ getClientSNI ctx = liftIO $ usingState_ ctx S.getClientSNI
 -- | sendData sends a bunch of data.
 -- It will automatically chunk data to acceptable packet size
 sendData :: MonadIO m => Context -> L.ByteString -> m ()
+sendData _ "" = return ()
 sendData ctx dataToSend = liftIO $ do
     tls13 <- tls13orLater ctx
     let sendP
