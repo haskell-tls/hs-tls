@@ -50,9 +50,10 @@ module Network.TLS.Context (
     getHState,
     getStateRNG,
     tls13orLater,
+    getTLSUnique,
+    getTLSExporter,
     getFinished,
     getPeerFinished,
-    getTLSExporter,
 ) where
 
 import Control.Concurrent.MVar
@@ -159,8 +160,6 @@ contextNew backend params = liftIO $ do
     lockWrite <- newMVar ()
     lockRead <- newMVar ()
     lockState <- newMVar ()
-    finished <- newIORef Nothing
-    peerFinished <- newIORef Nothing
 
     let ctx =
             Context
@@ -190,8 +189,6 @@ contextNew backend params = liftIO $ do
                 , ctxRecordLayer = recordLayer
                 , ctxHandshakeSync = HandshakeSync syncNoOp syncNoOp
                 , ctxQUICMode = False
-                , ctxFinished = finished
-                , ctxPeerFinished = peerFinished
                 }
 
         syncNoOp _ _ = return ()
@@ -224,17 +221,52 @@ contextHookSetLogging :: Context -> Logging -> IO ()
 contextHookSetLogging context loggingCallbacks =
     contextModifyHooks context (\hooks -> hooks{hookLogging = loggingCallbacks})
 
+{-# DEPRECATED getFinished "Use getTLSUnique instead" #-}
+
 -- | Getting TLS Finished sent to peer.
---   This can be used as the "tls-unique" channel binding for TLS 1.2.
---   But it is susceptible to the "triple handshake vulnerability".
---   So, it is highly recommended to upgrade to TLS 1.3
---   and use the "tls-exporter" channel binding via 'getTLSExporter'.
 getFinished :: Context -> IO (Maybe VerifyData)
-getFinished = readIORef . ctxFinished
+getFinished ctx = do
+    role <- usingState_ ctx getRole
+    verifyData <-
+        if role == ClientRole
+            then usingState_ ctx $ gets stClientVerifyData
+            else usingState_ ctx $ gets stServerVerifyData
+    if verifyData == ""
+        then return Nothing
+        else return $ Just verifyData
+
+{-# DEPRECATED getPeerFinished "Use getTLSUnique instead" #-}
 
 -- | Getting TLS Finished received from peer.
 getPeerFinished :: Context -> IO (Maybe VerifyData)
-getPeerFinished = readIORef . ctxPeerFinished
+getPeerFinished ctx = do
+    role <- usingState_ ctx getRole
+    verifyData <-
+        if role == ClientRole
+            then usingState_ ctx $ gets stServerVerifyData
+            else usingState_ ctx $ gets stClientVerifyData
+    if verifyData == ""
+        then return Nothing
+        else return $ Just verifyData
+
+--   Getting the "tls-unique" channel binding for TLS 1.2.
+--   But it is susceptible to the "triple handshake vulnerability".
+--   So, it is highly recommended to upgrade to TLS 1.3
+--   and use the "tls-exporter" channel binding via 'getTLSExporter'.
+getTLSUnique :: Context -> IO (Maybe ByteString)
+getTLSUnique ctx = do
+    ver <- liftIO $ usingState_ ctx getVersion
+    if ver == TLS12
+        then do
+            resuming <- usingState_ ctx isSessionResuming
+            verifyData <-
+                if resuming
+                    then usingState_ ctx $ gets stServerVerifyData
+                    else usingState_ ctx $ gets stClientVerifyData
+            if verifyData == ""
+                then return Nothing
+                else return $ Just verifyData
+        else return Nothing
 
 -- | Getting the "tls-exporter" channel binding for TLS 1.3.
 getTLSExporter :: Context -> IO (Maybe ByteString)

@@ -33,7 +33,6 @@ module Network.TLS.Handshake.Common (
 import Control.Concurrent.MVar
 import Control.Exception (IOException, fromException, handle, throwIO)
 import Control.Monad.State.Strict
-import Data.IORef (writeIORef)
 
 import Network.TLS.Cipher
 import Network.TLS.Compression
@@ -136,8 +135,7 @@ sendCCSandFinished ctx role = do
     verifyData <-
         usingState_ ctx getVersion >>= \ver -> usingHState ctx $ getHandshakeDigest ver role
     sendPacket ctx (Handshake [Finished verifyData])
-    usingState_ ctx $ setRenegoVerifyDataForSend verifyData
-    writeIORef (ctxFinished ctx) $ Just verifyData
+    usingState_ ctx $ setVerifyDataForSend verifyData
     contextFlush ctx
 
 data RecvState m
@@ -292,8 +290,7 @@ processFinished ctx verifyData = do
     (cc, ver) <- usingState_ ctx $ (,) <$> getRole <*> getVersion
     expected <- usingHState ctx $ getHandshakeDigest ver $ invertRole cc
     when (expected /= verifyData) $ decryptError "cannot verify finished"
-    usingState_ ctx $ setRenegoVerifyDataForRecv verifyData
-    writeIORef (ctxPeerFinished ctx) $ Just verifyData
+    usingState_ ctx $ setVerifyDataForRecv verifyData
 
 processCertificates :: Context -> Role -> CertificateChain -> IO ()
 processCertificates _ ServerRole (CertificateChain []) = return ()

@@ -153,9 +153,6 @@ data Context = forall a.
     , ctxRecordLayer :: RecordLayer a
     , ctxHandshakeSync :: HandshakeSync
     , ctxQUICMode :: Bool
-    , -- For Channel Bindings for TLS, RFC5929
-      ctxFinished :: IORef (Maybe VerifyData)
-    , ctxPeerFinished :: IORef (Maybe VerifyData)
     }
 
 data HandshakeSync

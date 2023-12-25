@@ -135,9 +135,10 @@ module Network.TLS (
     updateKey,
     KeyUpdateRequest (..),
     requestCertificate,
+    getTLSUnique,
+    getTLSExporter,
     getFinished,
     getPeerFinished,
-    getTLSExporter,
 
     -- ** Modifying hooks in context
     Hooks (..),

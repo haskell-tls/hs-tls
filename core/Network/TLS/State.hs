@@ -17,8 +17,8 @@ module Network.TLS.State (
     runTLSState,
     newTLSState,
     withTLSRNG,
-    setRenegoVerifyDataForSend,
-    setRenegoVerifyDataForRecv,
+    setVerifyDataForSend,
+    setVerifyDataForRecv,
     finishedHandshakeTypeMaterial,
     finishedHandshakeMaterial,
     certVerifyHandshakeTypeMaterial,
@@ -82,9 +82,10 @@ data TLSState = TLSState
     { stSession :: Session
     , stSessionResuming :: Bool
     , -- RFC 5746, Renegotiation Indication Extension
-      stSecureRenegotiation :: Bool -- RFC 5746
-    , stClientVerifyData :: VerifyData -- RFC 5746
-    , stServerVerifyData :: VerifyData -- RFC 5746
+      -- RFC 5929, Channel Bindings for TLS
+      stSecureRenegotiation :: Bool
+    , stClientVerifyData :: VerifyData
+    , stServerVerifyData :: VerifyData
     , stExtensionALPN :: Bool -- RFC 7301
     , stHandshakeRecordCont :: Maybe (GetContinuation (HandshakeType, ByteString))
     , stNegotiatedProtocol :: Maybe B.ByteString -- ALPN protocol
@@ -146,15 +147,15 @@ newTLSState rng clientContext =
         , stTLS12SessionTicket = Nothing
         }
 
-setRenegoVerifyDataForSend :: VerifyData -> TLSSt ()
-setRenegoVerifyDataForSend bs = do
+setVerifyDataForSend :: VerifyData -> TLSSt ()
+setVerifyDataForSend bs = do
     role <- getRole
     case role of
         ClientRole -> modify (\st -> st{stClientVerifyData = bs})
         ServerRole -> modify (\st -> st{stServerVerifyData = bs})
 
-setRenegoVerifyDataForRecv :: VerifyData -> TLSSt ()
-setRenegoVerifyDataForRecv bs = do
+setVerifyDataForRecv :: VerifyData -> TLSSt ()
+setVerifyDataForRecv bs = do
     role <- getRole
     case role of
         ClientRole -> modify (\st -> st{stServerVerifyData = bs})

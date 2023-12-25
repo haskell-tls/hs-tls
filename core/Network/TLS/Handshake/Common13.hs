@@ -68,15 +68,14 @@ import Network.TLS.Wire
 
 import Control.Concurrent.MVar
 import Control.Monad.State.Strict
-import Data.IORef (writeIORef)
 
 ----------------------------------------------------------------
 
 makeFinished :: MonadIO m => Context -> Hash -> ByteString -> m Handshake13
 makeFinished ctx usedHash baseKey = do
-    finished <- makeVerifyData usedHash baseKey <$> transcriptHash ctx
-    liftIO $ writeIORef (ctxFinished ctx) (Just finished)
-    pure $ Finished13 finished
+    verifyData <- makeVerifyData usedHash baseKey <$> transcriptHash ctx
+    liftIO $ usingState_ ctx $ setVerifyDataForSend verifyData
+    pure $ Finished13 verifyData
 
 checkFinished
     :: MonadIO m => Context -> Hash -> ByteString -> ByteString -> ByteString -> m ()
@@ -86,7 +85,7 @@ checkFinished ctx usedHash baseKey hashValue verifyData = do
         throwCore $
             Error_Protocol "broken Finished" DecodeError
     unless (verifyData' == verifyData) $ decryptError "cannot verify finished"
-    liftIO $ writeIORef (ctxPeerFinished ctx) (Just verifyData)
+    liftIO $ usingState_ ctx $ setVerifyDataForRecv verifyData
 
 makeVerifyData :: Hash -> ByteString -> ByteString -> ByteString
 makeVerifyData usedHash baseKey = hmac usedHash finishedKey
