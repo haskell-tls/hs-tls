@@ -137,6 +137,7 @@ module Network.TLS (
     requestCertificate,
     getFinished,
     getPeerFinished,
+    getTLSExporter,
 
     -- ** Modifying hooks in context
     Hooks (..),

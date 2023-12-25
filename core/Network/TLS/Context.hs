@@ -1,9 +1,5 @@
--- |
--- Module      : Network.TLS.Context
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
+{-# LANGUAGE OverloadedStrings #-}
+
 module Network.TLS.Context (
     -- * Context configuration
     TLSParams,
@@ -56,10 +52,17 @@ module Network.TLS.Context (
     tls13orLater,
     getFinished,
     getPeerFinished,
+    getTLSExporter,
 ) where
 
+import Control.Concurrent.MVar
+import Control.Monad.State.Strict
+import Data.IORef
+
 import Network.TLS.Backend
+import Network.TLS.Cipher
 import Network.TLS.Context.Internal
+import Network.TLS.Crypto
 import Network.TLS.Handshake (
     handshakeClient,
     handshakeClientWith,
@@ -67,6 +70,8 @@ import Network.TLS.Handshake (
     handshakeServerWith,
  )
 import Network.TLS.Hooks
+import Network.TLS.Imports
+import Network.TLS.KeySchedule
 import Network.TLS.Measurement
 import Network.TLS.Parameters
 import Network.TLS.PostHandshake (
@@ -83,10 +88,6 @@ import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types (Role (..))
 import Network.TLS.X509
-
-import Control.Concurrent.MVar
-import Control.Monad.State.Strict
-import Data.IORef
 
 class TLSParams a where
     getTLSCommonParams :: a -> CommonParams
@@ -223,10 +224,36 @@ contextHookSetLogging :: Context -> Logging -> IO ()
 contextHookSetLogging context loggingCallbacks =
     contextModifyHooks context (\hooks -> hooks{hookLogging = loggingCallbacks})
 
--- | Get TLS Finished sent to peer
+-- | Getting TLS Finished sent to peer.
+--   This can be used as the "tls-unique" channel binding for TLS 1.2.
+--   But it is susceptible to the "triple handshake vulnerability".
+--   So, it is highly recommended to upgrade to TLS 1.3
+--   and use the "tls-exporter" channel binding via 'getTLSExporter'.
 getFinished :: Context -> IO (Maybe VerifyData)
 getFinished = readIORef . ctxFinished
 
--- | Get TLS Finished received from peer
+-- | Getting TLS Finished received from peer.
 getPeerFinished :: Context -> IO (Maybe VerifyData)
 getPeerFinished = readIORef . ctxPeerFinished
+
+-- | Getting the "tls-exporter" channel binding for TLS 1.3.
+getTLSExporter :: Context -> IO (Maybe ByteString)
+getTLSExporter ctx = do
+    ver <- liftIO $ usingState_ ctx getVersion
+    if ver == TLS13
+        then exporter ctx "EXPORTER-Channel-Binding" "" 32
+        else return Nothing
+
+exporter :: Context -> ByteString -> ByteString -> Int -> IO (Maybe ByteString)
+exporter ctx label context outlen = do
+    msecret <- usingState_ ctx getExporterMasterSecret
+    mcipher <- failOnEitherError $ runRxState ctx $ gets stCipher
+    return $ case (msecret, mcipher) of
+        (Just secret, Just cipher) ->
+            let h = cipherHash cipher
+                secret' = deriveSecret h secret label ""
+                label' = "exporter"
+                value' = hash h context
+                key = hkdfExpandLabel h secret' label' value' outlen
+             in Just key
+        _ -> Nothing
