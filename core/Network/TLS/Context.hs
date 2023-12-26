@@ -249,7 +249,7 @@ getPeerFinished ctx = do
         then return Nothing
         else return $ Just verifyData
 
--- | Getting the "tls-unique" channel binding for TLS 1.2.
+-- | Getting the "tls-unique" channel binding for TLS 1.2 (RFC5929).
 --   For TLS 1.3, 'Nothing' is returned.
 --   'supportedExtendedMasterSec' must be 'RequireEMS'
 --   But in general, it is highly recommended to upgrade to TLS 1.3
@@ -269,7 +269,7 @@ getTLSUnique ctx = do
                 else return $ Just verifyData
         else return Nothing
 
--- | Getting the "tls-exporter" channel binding for TLS 1.3.
+-- | Getting the "tls-exporter" channel binding for TLS 1.3 (RFC9266).
 --   For TLS 1.2, 'Nothing' is returned.
 getTLSExporter :: Context -> IO (Maybe ByteString)
 getTLSExporter ctx = do
