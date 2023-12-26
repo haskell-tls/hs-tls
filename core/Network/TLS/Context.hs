@@ -225,29 +225,13 @@ contextHookSetLogging context loggingCallbacks =
 
 -- | Getting TLS Finished sent to peer.
 getFinished :: Context -> IO (Maybe VerifyData)
-getFinished ctx = do
-    role <- usingState_ ctx getRole
-    verifyData <-
-        if role == ClientRole
-            then usingState_ ctx $ gets stClientVerifyData
-            else usingState_ ctx $ gets stServerVerifyData
-    if verifyData == ""
-        then return Nothing
-        else return $ Just verifyData
+getFinished ctx = usingState_ ctx getMyVerifyData
 
 {-# DEPRECATED getPeerFinished "Use getTLSUnique instead" #-}
 
 -- | Getting TLS Finished received from peer.
 getPeerFinished :: Context -> IO (Maybe VerifyData)
-getPeerFinished ctx = do
-    role <- usingState_ ctx getRole
-    verifyData <-
-        if role == ClientRole
-            then usingState_ ctx $ gets stServerVerifyData
-            else usingState_ ctx $ gets stClientVerifyData
-    if verifyData == ""
-        then return Nothing
-        else return $ Just verifyData
+getPeerFinished ctx = usingState_ ctx getPeerVerifyData
 
 -- | Getting the "tls-unique" channel binding for TLS 1.2 (RFC5929).
 --   For TLS 1.3, 'Nothing' is returned.
@@ -258,15 +242,7 @@ getTLSUnique :: Context -> IO (Maybe ByteString)
 getTLSUnique ctx = do
     ver <- liftIO $ usingState_ ctx getVersion
     if ver == TLS12
-        then do
-            resuming <- usingState_ ctx isSessionResuming
-            verifyData <-
-                if resuming
-                    then usingState_ ctx $ gets stServerVerifyData
-                    else usingState_ ctx $ gets stClientVerifyData
-            if verifyData == ""
-                then return Nothing
-                else return $ Just verifyData
+        then usingState_ ctx getFirstVerifyData
         else return Nothing
 
 -- | Getting the "tls-exporter" channel binding for TLS 1.3 (RFC9266).

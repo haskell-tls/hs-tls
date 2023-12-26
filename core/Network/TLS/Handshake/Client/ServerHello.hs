@@ -145,7 +145,7 @@ processServerExtension (ExtensionRaw extID content)
     | extID == EID_SecureRenegotiation = do
         cvd <- getVerifyData ClientRole
         svd <- getVerifyData ServerRole
-        let bs = extensionEncode (SecureRenegotiation cvd $ Just svd)
+        let bs = extensionEncode $ SecureRenegotiation cvd svd
         unless (bs == content) $
             throwError $
                 Error_Protocol "server secure renegotiation data not matching" HandshakeFailure

@@ -55,7 +55,7 @@ checkSesecureRenegotiation ctx CH{..} = do
     case extensionLookup EID_SecureRenegotiation chExtensions of
         Just content -> usingState_ ctx $ do
             cvd <- getVerifyData ClientRole
-            let bs = extensionEncode (SecureRenegotiation cvd Nothing)
+            let bs = extensionEncode (SecureRenegotiation cvd "")
             unless (bs == content) $
                 throwError $
                     Error_Protocol

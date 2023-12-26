@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 
 -- |
@@ -235,20 +236,20 @@ decodeMaxFragmentLength = runGetMaybe $ toMaxFragmentEnum <$> getWord8
 ------------------------------------------------------------
 
 -- | Secure Renegotiation
-data SecureRenegotiation = SecureRenegotiation ByteString (Maybe ByteString)
+data SecureRenegotiation = SecureRenegotiation ByteString ByteString
     deriving (Show, Eq)
 
 instance Extension SecureRenegotiation where
     extensionID _ = EID_SecureRenegotiation
     extensionEncode (SecureRenegotiation cvd svd) =
-        runPut $ putOpaque8 (cvd `B.append` fromMaybe B.empty svd)
+        runPut $ putOpaque8 (cvd `B.append` svd)
     extensionDecode msgtype = runGetMaybe $ do
         opaque <- getOpaque8
         case msgtype of
             MsgTServerHello ->
                 let (cvd, svd) = B.splitAt (B.length opaque `div` 2) opaque
-                 in return $ SecureRenegotiation cvd (Just svd)
-            MsgTClientHello -> return $ SecureRenegotiation opaque Nothing
+                 in return $ SecureRenegotiation cvd svd
+            MsgTClientHello -> return $ SecureRenegotiation opaque ""
             _ -> error "extensionDecode: SecureRenegotiation"
 
 ------------------------------------------------------------

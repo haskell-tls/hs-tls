@@ -20,6 +20,10 @@ module Network.TLS.State (
     withTLSRNG,
     setVerifyDataForSend,
     setVerifyDataForRecv,
+    getVerifyData,
+    getMyVerifyData,
+    getPeerVerifyData,
+    getFirstVerifyData,
     finishedHandshakeTypeMaterial,
     finishedHandshakeMaterial,
     certVerifyHandshakeTypeMaterial,
@@ -42,7 +46,6 @@ module Network.TLS.State (
     setClientCertificateChain,
     setClientSNI,
     getClientSNI,
-    getVerifyData,
     setSession,
     getSession,
     isSessionResuming,
@@ -85,8 +88,8 @@ data TLSState = TLSState
     , -- RFC 5746, Renegotiation Indication Extension
       -- RFC 5929, Channel Bindings for TLS, "tls-unique"
       stSecureRenegotiation :: Bool
-    , stClientVerifyData :: VerifyData
-    , stServerVerifyData :: VerifyData
+    , stClientVerifyData :: Maybe VerifyData
+    , stServerVerifyData :: Maybe VerifyData
     , -- RFC 5929, Channel Bindings for TLS, "tls-server-end-point"
       stServerEndPoint :: ByteString
     , stExtensionALPN :: Bool -- RFC 7301
@@ -127,8 +130,8 @@ newTLSState rng clientContext =
         { stSession = Session Nothing
         , stSessionResuming = False
         , stSecureRenegotiation = False
-        , stClientVerifyData = ""
-        , stServerVerifyData = ""
+        , stClientVerifyData = Nothing
+        , stServerVerifyData = Nothing
         , stServerEndPoint = ""
         , stExtensionALPN = False
         , stHandshakeRecordCont = Nothing
@@ -155,15 +158,15 @@ setVerifyDataForSend :: VerifyData -> TLSSt ()
 setVerifyDataForSend bs = do
     role <- getRole
     case role of
-        ClientRole -> modify (\st -> st{stClientVerifyData = bs})
-        ServerRole -> modify (\st -> st{stServerVerifyData = bs})
+        ClientRole -> modify (\st -> st{stClientVerifyData = Just bs})
+        ServerRole -> modify (\st -> st{stServerVerifyData = Just bs})
 
 setVerifyDataForRecv :: VerifyData -> TLSSt ()
 setVerifyDataForRecv bs = do
     role <- getRole
     case role of
-        ClientRole -> modify (\st -> st{stServerVerifyData = bs})
-        ServerRole -> modify (\st -> st{stClientVerifyData = bs})
+        ClientRole -> modify (\st -> st{stServerVerifyData = Just bs})
+        ServerRole -> modify (\st -> st{stClientVerifyData = Just bs})
 
 finishedHandshakeTypeMaterial :: HandshakeType -> Bool
 finishedHandshakeTypeMaterial HandshakeType_ClientHello = True
@@ -267,9 +270,31 @@ getClientSNI :: TLSSt (Maybe HostName)
 getClientSNI = gets stClientSNI
 
 getVerifyData :: Role -> TLSSt ByteString
-getVerifyData client =
-    gets
-        (if client == ClientRole then stClientVerifyData else stServerVerifyData)
+getVerifyData client = do
+    mVerifyData <-
+        gets (if client == ClientRole then stClientVerifyData else stServerVerifyData)
+    return $ fromMaybe "" mVerifyData
+
+getMyVerifyData :: TLSSt (Maybe ByteString)
+getMyVerifyData = do
+    role <- getRole
+    if role == ClientRole
+        then gets stClientVerifyData
+        else gets stServerVerifyData
+
+getPeerVerifyData :: TLSSt (Maybe ByteString)
+getPeerVerifyData = do
+    role <- getRole
+    if role == ClientRole
+        then gets stServerVerifyData
+        else gets stClientVerifyData
+
+getFirstVerifyData :: TLSSt (Maybe ByteString)
+getFirstVerifyData = do
+    resuming <- isSessionResuming
+    if resuming
+        then gets stServerVerifyData
+        else gets stClientVerifyData
 
 getRole :: TLSSt Role
 getRole = gets stClientContext
