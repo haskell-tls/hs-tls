@@ -27,7 +27,7 @@ module Network.TLS.Handshake.Common (
     errorToAlert,
     errorToAlertMessage,
     expectFinished,
-    processCertificates,
+    processCertificate,
 ) where
 
 import Control.Concurrent.MVar
@@ -292,11 +292,11 @@ processFinished ctx verifyData = do
     when (expected /= verifyData) $ decryptError "cannot verify finished"
     usingState_ ctx $ setVerifyDataForRecv verifyData
 
-processCertificates :: Context -> Role -> CertificateChain -> IO ()
-processCertificates _ ServerRole (CertificateChain []) = return ()
-processCertificates _ ClientRole (CertificateChain []) =
+processCertificate :: Context -> Role -> CertificateChain -> IO ()
+processCertificate _ ServerRole (CertificateChain []) = return ()
+processCertificate _ ClientRole (CertificateChain []) =
     throwCore $ Error_Protocol "server certificate missing" HandshakeFailure
-processCertificates ctx _ (CertificateChain (c : _)) =
+processCertificate ctx _ (CertificateChain (c : _)) =
     usingHState ctx $ setPublicKey pubkey
   where
     pubkey = certPubKey $ getCertificate c

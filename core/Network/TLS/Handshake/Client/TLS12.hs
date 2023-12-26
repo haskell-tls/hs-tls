@@ -28,7 +28,7 @@ import Network.TLS.Struct
 import Network.TLS.Types
 import Network.TLS.Util (catchException)
 import Network.TLS.Wire
-import Network.TLS.X509
+import Network.TLS.X509 hiding (Certificate)
 
 ----------------------------------------------------------------
 
@@ -42,9 +42,9 @@ recvServerFirstFlight12 cparams ctx hs = do
             runRecvStateHS ctx st hs
 
 expectCertificate :: ClientParams -> Context -> Handshake -> IO (RecvState IO)
-expectCertificate cparams ctx (Certificates certs) = do
+expectCertificate cparams ctx (Certificate certs) = do
     doCertificate cparams ctx certs
-    processCertificates ctx ClientRole certs
+    processCertificate ctx ClientRole certs
     return $ RecvStateHandshake (expectServerKeyExchange ctx)
 expectCertificate _ ctx p = expectServerKeyExchange ctx p
 
@@ -143,7 +143,7 @@ sendClientCCC cparams ctx = do
                 unless (null certs) $
                     usingHState ctx $
                         setClientCertSent True
-                sendPacket ctx $ Handshake [Certificates cc]
+                sendPacket ctx $ Handshake [Certificate cc]
 
     sendClientKeyXchg = do
         cipher <- usingHState ctx getPendingCipher

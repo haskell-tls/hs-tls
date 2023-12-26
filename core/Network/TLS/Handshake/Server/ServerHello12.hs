@@ -25,7 +25,7 @@ import Network.TLS.Session
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Types
-import Network.TLS.X509
+import Network.TLS.X509 hiding (Certificate)
 
 sendServerHello12
     :: ServerParams
@@ -105,8 +105,8 @@ sendServerFirstFlight
     -> IO ()
 sendServerFirstFlight sparams ctx usedCipher mcred chExts = do
     let certMsg = case mcred of
-            Just (srvCerts, _) -> Certificates srvCerts
-            _ -> Certificates $ CertificateChain []
+            Just (srvCerts, _) -> Certificate srvCerts
+            _ -> Certificate $ CertificateChain []
     sendPacket ctx $ Handshake [certMsg]
 
     -- send server key exchange if needed

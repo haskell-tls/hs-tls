@@ -23,7 +23,7 @@ import Network.TLS.Session
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Types
-import Network.TLS.X509
+import Network.TLS.X509 hiding (Certificate)
 
 recvClientSecondFlight12
     :: ServerParams
@@ -69,9 +69,9 @@ sessionEstablished ctx = do
 recvClientCCC :: ServerParams -> Context -> IO ()
 recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake expectClientCertificate)
   where
-    expectClientCertificate (Certificates certs) = do
+    expectClientCertificate (Certificate certs) = do
         clientCertificate sparams ctx certs
-        processCertificates ctx ServerRole certs
+        processCertificate ctx ServerRole certs
 
         -- FIXME: We should check whether the certificate
         -- matches our request and that we support

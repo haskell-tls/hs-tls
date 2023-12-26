@@ -878,7 +878,7 @@ data Handshake
         CipherID
         CompressionID
         [ExtensionRaw]
-    | Certificates CertificateChain
+    | Certificate CertificateChain
     | HelloRequest
     | ServerHelloDone
     | ClientKeyXchg ClientKeyXchgAlgorithmData
@@ -902,7 +902,7 @@ packetType (AppData _)      = ProtocolType_AppData
 typeOfHandshake :: Handshake -> HandshakeType
 typeOfHandshake ClientHello{}      = HandshakeType_ClientHello
 typeOfHandshake ServerHello{}      = HandshakeType_ServerHello
-typeOfHandshake Certificates{}     = HandshakeType_Certificate
+typeOfHandshake Certificate{}      = HandshakeType_Certificate
 typeOfHandshake HelloRequest       = HandshakeType_HelloRequest
 typeOfHandshake ServerHelloDone    = HandshakeType_ServerHelloDone
 typeOfHandshake ClientKeyXchg{}    = HandshakeType_ClientKeyXchg
