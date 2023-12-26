@@ -279,15 +279,14 @@ data Supported = Supported
     --   Default: 'False'
     , supportedExtendedMasterSec :: EMSMode
     -- ^ The mode regarding extended master secret.  Enabling this extension
-    -- provides better security for TLS versions 1.0 to 1.2.  TLS 1.3 provides
+    -- provides better security for TLS versions 1.2.  TLS 1.3 provides
     -- the security properties natively and does not need the extension.
     --
-    -- By default the extension is enabled but not required.  If mode is set
-    -- to 'RequireEMS', the handshake will fail when the peer does not support
-    -- the extension.  It is also advised to disable SSLv3 which does not have
-    -- this mechanism.
+    -- By default the extension is 'RequireEMS'.
+    -- So, the handshake will fail when the peer does not support
+    -- the extension.
     --
-    -- Default: 'AllowEMS'
+    -- Default: 'RequireEMS'
     , supportedSession :: Bool
     -- ^ Set if we support session.
     --
@@ -343,7 +342,7 @@ defaultSupported =
         , supportedHashSignatures = Struct.supportedSignatureSchemes
         , supportedSecureRenegotiation = True
         , supportedClientInitiatedRenegotiation = False
-        , supportedExtendedMasterSec = AllowEMS
+        , supportedExtendedMasterSec = RequireEMS
         , supportedSession = True
         , supportedFallbackScsv = True
         , supportedEmptyPacket = True

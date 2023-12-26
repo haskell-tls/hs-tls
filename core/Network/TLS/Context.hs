@@ -249,9 +249,10 @@ getPeerFinished ctx = do
         then return Nothing
         else return $ Just verifyData
 
---   Getting the "tls-unique" channel binding for TLS 1.2.
---   But it is susceptible to the "triple handshake vulnerability".
---   So, it is highly recommended to upgrade to TLS 1.3
+-- | Getting the "tls-unique" channel binding for TLS 1.2.
+--   For TLS 1.3, 'Nothing' is returned.
+--   'supportedExtendedMasterSec' must be 'RequireEMS'
+--   But in general, it is highly recommended to upgrade to TLS 1.3
 --   and use the "tls-exporter" channel binding via 'getTLSExporter'.
 getTLSUnique :: Context -> IO (Maybe ByteString)
 getTLSUnique ctx = do
@@ -269,6 +270,7 @@ getTLSUnique ctx = do
         else return Nothing
 
 -- | Getting the "tls-exporter" channel binding for TLS 1.3.
+--   For TLS 1.2, 'Nothing' is returned.
 getTLSExporter :: Context -> IO (Maybe ByteString)
 getTLSExporter ctx = do
     ver <- liftIO $ usingState_ ctx getVersion
