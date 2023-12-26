@@ -12,10 +12,12 @@ module Network.TLS.Packet13 (
     decodeHandshakeRecord13,
     decodeHandshake13,
     decodeHandshakes13,
+    encodeCertificate13,
 ) where
 
 import qualified Data.ByteString as B
 import Data.X509 (
+    CertificateChain,
     CertificateChainRaw (..),
     decodeCertificateChain,
     encodeCertificateChain,
@@ -25,6 +27,7 @@ import Network.TLS.Imports
 import Network.TLS.Packet
 import Network.TLS.Struct
 import Network.TLS.Struct13
+import Network.TLS.Types
 import Network.TLS.Wire
 
 encodeHandshake13 :: Handshake13 -> ByteString
@@ -52,14 +55,7 @@ encodeHandshake13' (EncryptedExtensions13 exts) = runPut $ putExtensions exts
 encodeHandshake13' (CertRequest13 reqctx exts) = runPut $ do
     putOpaque8 reqctx
     putExtensions exts
-encodeHandshake13' (Certificate13 reqctx cc ess) = runPut $ do
-    putOpaque8 reqctx
-    putOpaque24 (runPut $ mapM_ putCert $ zip certs ess)
-  where
-    CertificateChainRaw certs = encodeCertificateChain cc
-    putCert (certRaw, exts) = do
-        putOpaque24 certRaw
-        putExtensions exts
+encodeHandshake13' (Certificate13 reqctx cc ess) = encodeCertificate13 reqctx cc ess
 encodeHandshake13' (CertVerify13 hs signature) = runPut $ do
     putSignatureHashAlgorithm hs
     putOpaque16 signature
@@ -172,3 +168,14 @@ decodeKeyUpdate13 = do
         0 -> return $ KeyUpdate13 UpdateNotRequested
         1 -> return $ KeyUpdate13 UpdateRequested
         x -> fail $ "Unknown request_update: " ++ show x
+
+encodeCertificate13
+    :: CertReqContext -> CertificateChain -> [[ExtensionRaw]] -> ByteString
+encodeCertificate13 reqctx cc ess = runPut $ do
+    putOpaque8 reqctx
+    putOpaque24 (runPut $ mapM_ putCert $ zip certs ess)
+  where
+    CertificateChainRaw certs = encodeCertificateChain cc
+    putCert (certRaw, exts) = do
+        putOpaque24 certRaw
+        putExtensions exts

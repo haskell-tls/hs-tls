@@ -1,5 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE Rank2Types #-}
 
 -- |
@@ -82,10 +83,12 @@ data TLSState = TLSState
     { stSession :: Session
     , stSessionResuming :: Bool
     , -- RFC 5746, Renegotiation Indication Extension
-      -- RFC 5929, Channel Bindings for TLS
+      -- RFC 5929, Channel Bindings for TLS, "tls-unique"
       stSecureRenegotiation :: Bool
     , stClientVerifyData :: VerifyData
     , stServerVerifyData :: VerifyData
+    , -- RFC 5929, Channel Bindings for TLS, "tls-server-end-point"
+      stServerEndPoint :: ByteString
     , stExtensionALPN :: Bool -- RFC 7301
     , stHandshakeRecordCont :: Maybe (GetContinuation (HandshakeType, ByteString))
     , stNegotiatedProtocol :: Maybe B.ByteString -- ALPN protocol
@@ -124,8 +127,9 @@ newTLSState rng clientContext =
         { stSession = Session Nothing
         , stSessionResuming = False
         , stSecureRenegotiation = False
-        , stClientVerifyData = B.empty
-        , stServerVerifyData = B.empty
+        , stClientVerifyData = ""
+        , stServerVerifyData = ""
+        , stServerEndPoint = ""
         , stExtensionALPN = False
         , stHandshakeRecordCont = Nothing
         , stHandshakeRecordCont13 = Nothing

@@ -1,15 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
--- |
--- Module      : Network.TLS.Packet
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
---
--- the Packet module contains everything necessary to serialize and deserialize things
--- with only explicit parameters, no TLS state is involved here.
+-- | The Packet module contains everything necessary to serialize and
+--  deserialize things with only explicit parameters, no TLS state is
+--  involved here.
 module Network.TLS.Packet (
     -- * params for encoding and decoding
     CurrentParams (..),
@@ -27,8 +21,7 @@ module Network.TLS.Packet (
     decodeHandshakeRecord,
     decodeHandshake,
     encodeHandshake,
-    encodeHandshakeHeader,
-    encodeHandshakeContent,
+    encodeCertificate,
 
     -- * marshall functions for change cipher spec message
     decodeChangeCipherSpec,
@@ -68,6 +61,7 @@ import Data.ByteArray (ByteArrayAccess)
 import qualified Data.ByteArray as B (convert)
 import qualified Data.ByteString as B
 import Data.X509 (
+    CertificateChain,
     CertificateChainRaw (..),
     decodeCertificateChain,
     encodeCertificateChain,
@@ -310,7 +304,7 @@ decodeServerKeyXchg cp =
 
 encodeHandshake :: Handshake -> ByteString
 encodeHandshake o =
-    let content = runPut $ encodeHandshakeContent o
+    let content = encodeHandshake' o
      in let len = B.length content
          in let header = runPut $ encodeHandshakeHeader (typeOfHandshake o) len
              in B.concat [header, content]
@@ -318,8 +312,8 @@ encodeHandshake o =
 encodeHandshakeHeader :: HandshakeType -> Int -> Put
 encodeHandshakeHeader ty len = putWord8 (fromHandshakeType ty) >> putWord24 len
 
-encodeHandshakeContent :: Handshake -> Put
-encodeHandshakeContent (ClientHello version random compressionIDs CH{..}) = do
+encodeHandshake' :: Handshake -> ByteString
+encodeHandshake' (ClientHello version random compressionIDs CH{..}) = runPut $ do
     putBinaryVersion version
     putClientRandom32 random
     putSession chSession
@@ -327,7 +321,7 @@ encodeHandshakeContent (ClientHello version random compressionIDs CH{..}) = do
     putWords8 compressionIDs
     putExtensions chExtensions
     return ()
-encodeHandshakeContent (ServerHello version random session cipherid compressionID exts) = do
+encodeHandshake' (ServerHello version random session cipherid compressionID exts) = runPut $ do
     putBinaryVersion version
     putServerRandom32 random
     putSession session
@@ -335,17 +329,15 @@ encodeHandshakeContent (ServerHello version random session cipherid compressionI
     putWord8 compressionID
     putExtensions exts
     return ()
-encodeHandshakeContent (Certificates cc) = putOpaque24 (runPut $ mapM_ putOpaque24 certs)
-  where
-    (CertificateChainRaw certs) = encodeCertificateChain cc
-encodeHandshakeContent (ClientKeyXchg ckx) = do
+encodeHandshake' (Certificates cc) = encodeCertificate cc
+encodeHandshake' (ClientKeyXchg ckx) = runPut $ do
     case ckx of
         CKX_RSA encryptedPreMaster -> putBytes encryptedPreMaster
         CKX_DH clientDHPublic -> putInteger16 $ dhUnwrapPublic clientDHPublic
         CKX_ECDH bytes -> putOpaque8 bytes
-encodeHandshakeContent (ServerKeyXchg skg) =
+encodeHandshake' (ServerKeyXchg skg) = runPut $
     case skg of
-        SKX_RSA _ -> error "encodeHandshakeContent SKX_RSA not implemented"
+        SKX_RSA _ -> error "encodeHandshake' SKX_RSA not implemented"
         SKX_DH_Anon params -> putServerDHParams params
         SKX_DHE_RSA params sig -> putServerDHParams params >> putDigitallySigned sig
         SKX_DHE_DSA params sig -> putServerDHParams params >> putDigitallySigned sig
@@ -353,10 +345,10 @@ encodeHandshakeContent (ServerKeyXchg skg) =
         SKX_ECDHE_ECDSA params sig -> putServerECDHParams params >> putDigitallySigned sig
         SKX_Unparsed bytes -> putBytes bytes
         _ ->
-            error ("encodeHandshakeContent: cannot handle: " ++ show skg)
-encodeHandshakeContent HelloRequest = return ()
-encodeHandshakeContent ServerHelloDone = return ()
-encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
+            error ("encodeHandshake': cannot handle: " ++ show skg)
+encodeHandshake' HelloRequest = ""
+encodeHandshake' ServerHelloDone = ""
+encodeHandshake' (CertRequest certTypes sigAlgs certAuthorities) = runPut $ do
     putWords8 (map fromCertificateType certTypes)
     putWords16 $
         map
@@ -364,9 +356,9 @@ encodeHandshakeContent (CertRequest certTypes sigAlgs certAuthorities) = do
             )
             sigAlgs
     putDNames certAuthorities
-encodeHandshakeContent (CertVerify digitallySigned) = putDigitallySigned digitallySigned
-encodeHandshakeContent (Finished opaque) = putBytes opaque
-encodeHandshakeContent (NewSessionTicket life ticket) = do
+encodeHandshake' (CertVerify digitallySigned) = runPut $ putDigitallySigned digitallySigned
+encodeHandshake' (Finished opaque) = runPut $ putBytes opaque
+encodeHandshake' (NewSessionTicket life ticket) = runPut $ do
     putWord32 life
     putOpaque16 ticket
 
@@ -613,3 +605,8 @@ encodeSignedECDHParams
 encodeSignedECDHParams dhparams cran sran =
     runPut $
         putClientRandom32 cran >> putServerRandom32 sran >> putServerECDHParams dhparams
+
+encodeCertificate :: CertificateChain -> ByteString
+encodeCertificate cc = runPut $ putOpaque24 (runPut $ mapM_ putOpaque24 certs)
+  where
+    (CertificateChainRaw certs) = encodeCertificateChain cc
