@@ -52,6 +52,7 @@ module Network.TLS.Context (
     tls13orLater,
     getTLSUnique,
     getTLSExporter,
+    getTLSServerEndPoint,
     getFinished,
     getPeerFinished,
 ) where
@@ -70,10 +71,12 @@ import Network.TLS.Handshake (
     handshakeServer,
     handshakeServerWith,
  )
+import Network.TLS.Handshake.State13
 import Network.TLS.Hooks
 import Network.TLS.Imports
 import Network.TLS.KeySchedule
 import Network.TLS.Measurement
+import Network.TLS.Packet
 import Network.TLS.Parameters
 import Network.TLS.PostHandshake (
     postHandshakeAuthClientWith,
@@ -267,3 +270,16 @@ exporter ctx label context outlen = do
                 key = hkdfExpandLabel h secret' label' value' outlen
              in Just key
         _ -> Nothing
+
+-- | Getting the "tls-server-end-point" channel binding for TLS 1.2
+--   (RFC5929).  For 1.3, there is no specifications for how to create
+--   it.  In this implementation, a certificate chain without
+--   extensions is hashed like TLS 1.2.
+getTLSServerEndPoint :: Context -> IO (Maybe ByteString)
+getTLSServerEndPoint ctx = do
+    mcc <- usingState_ ctx getServerCertificateChain
+    case mcc of
+        Nothing -> return Nothing
+        Just cc -> do
+            (usedHash, _, _, _) <- getRxState ctx
+            return $ Just $ hash usedHash $ encodeCertificate cc

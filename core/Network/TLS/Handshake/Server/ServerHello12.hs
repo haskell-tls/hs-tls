@@ -104,10 +104,11 @@ sendServerFirstFlight
     -> [ExtensionRaw]
     -> IO ()
 sendServerFirstFlight sparams ctx usedCipher mcred chExts = do
-    let certMsg = case mcred of
-            Just (srvCerts, _) -> Certificate srvCerts
-            _ -> Certificate $ CertificateChain []
-    sendPacket ctx $ Handshake [certMsg]
+    let cc = case mcred of
+            Just (srvCerts, _) -> srvCerts
+            _ -> CertificateChain []
+    sendPacket ctx $ Handshake [Certificate cc]
+    usingState_ ctx $ setServerCertificateChain cc
 
     -- send server key exchange if needed
     skx <- case cipherKeyExchange usedCipher of

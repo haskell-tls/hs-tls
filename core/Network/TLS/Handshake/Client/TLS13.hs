@@ -162,6 +162,7 @@ recvServerSecondFlight13' cparams ctx groupSent choice = do
         expectCertAndVerify other
 
     expectCertAndVerify (Certificate13 _ cc _) = do
+        liftIO $ usingState_ ctx $ setServerCertificateChain cc
         liftIO $ doCertificate cparams ctx cc
         let pubkey = certPubKey $ getCertificate $ getCertificateChainLeaf cc
         ver <- liftIO $ usingState_ ctx getVersion

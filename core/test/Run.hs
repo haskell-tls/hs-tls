@@ -22,6 +22,7 @@ module Run (
 ) where
 
 import Codec.Serialise
+import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.Async
 import qualified Control.Exception as E
@@ -44,12 +45,10 @@ import PipeChan
 
 checkCtxFinished :: Context -> IO ()
 checkCtxFinished ctx = do
-    ctxFinished <- getFinished ctx
-    unless (isJust ctxFinished) $
-        fail "unexpected ctxFinished"
-    ctxPeerFinished <- getPeerFinished ctx
-    unless (isJust ctxPeerFinished) $
-        fail "unexpected ctxPeerFinished"
+    mUnique <- getTLSUnique ctx
+    mExporter <- getTLSExporter ctx
+    when (isNothing (mUnique <|> mExporter)) $
+        fail "unexpected channel binding"
 
 recvDataAssert :: Context -> ByteString -> IO ()
 recvDataAssert ctx expected = do

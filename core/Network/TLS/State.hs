@@ -42,10 +42,12 @@ module Network.TLS.State (
     getClientALPNSuggest,
     setClientEcPointFormatSuggest,
     getClientEcPointFormatSuggest,
-    getClientCertificateChain,
-    setClientCertificateChain,
     setClientSNI,
     getClientSNI,
+    getClientCertificateChain,
+    setClientCertificateChain,
+    getServerCertificateChain,
+    setServerCertificateChain,
     setSession,
     getSession,
     isSessionResuming,
@@ -91,7 +93,7 @@ data TLSState = TLSState
     , stClientVerifyData :: Maybe VerifyData
     , stServerVerifyData :: Maybe VerifyData
     , -- RFC 5929, Channel Bindings for TLS, "tls-server-end-point"
-      stServerEndPoint :: ByteString
+      stServerCertificateChain :: Maybe CertificateChain
     , stExtensionALPN :: Bool -- RFC 7301
     , stHandshakeRecordCont :: Maybe (GetContinuation (HandshakeType, ByteString))
     , stNegotiatedProtocol :: Maybe B.ByteString -- ALPN protocol
@@ -132,7 +134,7 @@ newTLSState rng clientContext =
         , stSecureRenegotiation = False
         , stClientVerifyData = Nothing
         , stServerVerifyData = Nothing
-        , stServerEndPoint = ""
+        , stServerCertificateChain = Nothing
         , stExtensionALPN = False
         , stHandshakeRecordCont = Nothing
         , stHandshakeRecordCont13 = Nothing
@@ -262,6 +264,12 @@ setClientCertificateChain s = modify (\st -> st{stClientCertificateChain = Just 
 
 getClientCertificateChain :: TLSSt (Maybe CertificateChain)
 getClientCertificateChain = gets stClientCertificateChain
+
+setServerCertificateChain :: CertificateChain -> TLSSt ()
+setServerCertificateChain s = modify (\st -> st{stServerCertificateChain = Just s})
+
+getServerCertificateChain :: TLSSt (Maybe CertificateChain)
+getServerCertificateChain = gets stServerCertificateChain
 
 setClientSNI :: HostName -> TLSSt ()
 setClientSNI hn = modify (\st -> st{stClientSNI = Just hn})

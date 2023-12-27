@@ -137,6 +137,7 @@ module Network.TLS (
     requestCertificate,
     getTLSUnique,
     getTLSExporter,
+    getTLSServerEndPoint,
     getFinished,
     getPeerFinished,
 
