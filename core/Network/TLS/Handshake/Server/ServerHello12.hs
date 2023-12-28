@@ -41,9 +41,9 @@ sendServerHello12 sparams ctx (usedCipher, mcred) ch@CH{..} = do
             usingState_ ctx $ setSession serverSession False
             serverhello <-
                 makeServerHello sparams ctx usedCipher mcred chExtensions serverSession
-            sendPacket ctx $ Handshake [serverhello]
-            sendServerFirstFlight sparams ctx usedCipher mcred chExtensions
-            sendPacket ctx (Handshake [ServerHelloDone])
+            build <- sendServerFirstFlight sparams ctx usedCipher mcred chExtensions
+            let ff = serverhello : build [ServerHelloDone]
+            sendPacket ctx $ Handshake ff
             contextFlush ctx
         Just sessionData -> do
             usingState_ ctx $ setSession chSession True
@@ -102,12 +102,13 @@ sendServerFirstFlight
     -> Cipher
     -> Maybe Credential
     -> [ExtensionRaw]
-    -> IO ()
+    -> IO ([Handshake] -> [Handshake])
 sendServerFirstFlight sparams ctx usedCipher mcred chExts = do
+    let b0 = id
     let cc = case mcred of
             Just (srvCerts, _) -> srvCerts
             _ -> CertificateChain []
-    sendPacket ctx $ Handshake [Certificate cc]
+    let b1 = b0 . (Certificate cc :)
     usingState_ ctx $ setServerCertificateChain cc
 
     -- send server key exchange if needed
@@ -118,7 +119,9 @@ sendServerFirstFlight sparams ctx usedCipher mcred chExts = do
         CipherKeyExchange_ECDHE_RSA -> Just <$> generateSKX_ECDHE KX_RSA
         CipherKeyExchange_ECDHE_ECDSA -> Just <$> generateSKX_ECDHE KX_ECDSA
         _ -> return Nothing
-    maybe (return ()) (sendPacket ctx . Handshake . (: []) . ServerKeyXchg) skx
+    let b2 = case skx of
+            Nothing -> b1
+            Just kx -> b1 . (ServerKeyXchg kx :)
 
     -- FIXME we don't do this on a Anonymous server
 
@@ -127,17 +130,21 @@ sendServerFirstFlight sparams ctx usedCipher mcred chExts = do
     --
     -- Client certificates MUST NOT be accepted if not requested.
     --
-    when (serverWantClientCert sparams) $ do
-        let (certTypes, hashSigs) =
-                let as = supportedHashSignatures $ ctxSupported ctx
-                 in (nub $ mapMaybe hashSigToCertType as, as)
-            creq =
-                CertRequest
-                    certTypes
-                    hashSigs
-                    (map extractCAname $ serverCACertificates sparams)
-        usingHState ctx $ setCertReqSent True
-        sendPacket ctx (Handshake [creq])
+    b3 <-
+        if serverWantClientCert sparams
+            then do
+                let (certTypes, hashSigs) =
+                        let as = supportedHashSignatures $ ctxSupported ctx
+                         in (nub $ mapMaybe hashSigToCertType as, as)
+                    creq =
+                        CertRequest
+                            certTypes
+                            hashSigs
+                            (map extractCAname $ serverCACertificates sparams)
+                usingHState ctx $ setCertReqSent True
+                return $ b2 . (creq :)
+            else return b2
+    return b3
   where
     setup_DHE = do
         let possibleFFGroups = negotiatedGroupsInCommon ctx chExts `intersect` availableFFGroups
