@@ -244,36 +244,38 @@ runTLSPipeFailure
     -> (Context -> IO s)
     -> IO ()
 runTLSPipeFailure params hsClient hsServer = do
-    (cRes, sRes) <- initiateDataPipe params tlsServer tlsClient
+    (cRes, sRes) <- initiateDataPipe params tlsClient tlsServer
     cRes `shouldSatisfy` isLeft
     sRes `shouldSatisfy` isLeft
+    print cRes
+    print sRes
   where
-    tlsServer ctx = do
-        _ <- hsServer ctx
-        checkCtxFinished ctx
-        minfo <- contextGetInformation ctx
-        byeBye ctx
-        return $ "server success: " ++ show minfo
     tlsClient ctx = do
         _ <- hsClient ctx
         checkCtxFinished ctx
         minfo <- contextGetInformation ctx
         byeBye ctx
         return $ "client success: " ++ show minfo
+    tlsServer ctx = do
+        _ <- hsServer ctx
+        checkCtxFinished ctx
+        minfo <- contextGetInformation ctx
+        byeBye ctx
+        return $ "server success: " ++ show minfo
 
 initiateDataPipe
     :: (ClientParams, ServerParams)
-    -> (Context -> IO a)
-    -> (Context -> IO b)
-    -> IO (Either E.SomeException b, Either E.SomeException a)
-initiateDataPipe params tlsServer tlsClient = do
+    -> (Context -> IO c)
+    -> (Context -> IO s)
+    -> IO (Either E.SomeException c, Either E.SomeException s)
+initiateDataPipe params tlsClient tlsServer = do
     -- initial setup
     (cCtx, sCtx) <- newPairContext params
 
     async (tlsServer sCtx) >>= \sAsync ->
         async (tlsClient cCtx) >>= \cAsync -> do
-            sRes <- waitCatch sAsync
             cRes <- waitCatch cAsync
+            sRes <- waitCatch sAsync
             return (cRes, sRes)
 
 ----------------------------------------------------------------
