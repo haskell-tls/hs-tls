@@ -148,8 +148,8 @@ newPairContext pipe (cParams, sParams) = do
     let noFlush = return ()
     let noClose = return ()
 
-    let cBackend = Backend noFlush noClose (writePipeA pipe) (readPipeA pipe)
-    let sBackend = Backend noFlush noClose (writePipeB pipe) (readPipeB pipe)
+    let cBackend = Backend noFlush noClose (writePipeC pipe) (readPipeC pipe)
+    let sBackend = Backend noFlush noClose (writePipeS pipe) (readPipeS pipe)
     cCtx' <- contextNew cBackend cParams
     sCtx' <- contextNew sBackend sParams
 

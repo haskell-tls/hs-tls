@@ -75,10 +75,10 @@ pipe_work = do
     let d1 = B.replicate (bSize * n) 40
     let d2 = B.replicate (bSize * n) 45
 
-    d1' <- writePipeA pipe d1 >> readPipeB pipe (B.length d1)
+    d1' <- writePipeC pipe d1 >> readPipeS pipe (B.length d1)
     d1' `shouldBe` d1
 
-    d2' <- writePipeB pipe d2 >> readPipeA pipe (B.length d2)
+    d2' <- writePipeS pipe d2 >> readPipeC pipe (B.length d2)
     d2' `shouldBe` d2
 
 --------------------------------------------------------------
