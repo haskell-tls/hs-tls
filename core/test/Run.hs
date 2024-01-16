@@ -43,23 +43,25 @@ import Test.QuickCheck
 import Arbitrary
 import PipeChan
 
-checkCtxFinished :: Context -> IO ()
-checkCtxFinished ctx = do
-    mUnique <- getTLSUnique ctx
-    mExporter <- getTLSExporter ctx
-    when (isNothing (mUnique <|> mExporter)) $
-        fail "unexpected channel binding"
+type ClinetWithInput = Chan ByteString -> Context -> IO ()
+type ServerWithOutput = Context -> Chan [ByteString] -> IO ()
+type PutInput = ByteString -> IO ()
+type TakeOutput = IO [ByteString]
 
-recvDataAssert :: Context -> ByteString -> IO ()
-recvDataAssert ctx expected = do
-    got <- recvData ctx
-    got `shouldBe` expected
+----------------------------------------------------------------
+
+runTLSPipe
+    :: (ClientParams, ServerParams)
+    -> ServerWithOutput
+    -> ClinetWithInput
+    -> IO ()
+runTLSPipe = runTLSPipeN 1
 
 runTLSPipeN
     :: Int
     -> (ClientParams, ServerParams)
-    -> (Context -> Chan [ByteString] -> IO ())
-    -> (Chan ByteString -> Context -> IO ())
+    -> ServerWithOutput
+    -> ClinetWithInput
     -> IO ()
 runTLSPipeN n params tlsServer tlsClient = do
     -- generate some data to send
@@ -75,41 +77,39 @@ runTLSPipeN n params tlsServer tlsClient = do
         Nothing -> error "timed out"
         Just dsres -> dsres `shouldBe` ds
 
-runTLSPipe
-    :: (ClientParams, ServerParams)
-    -> (Context -> Chan [ByteString] -> IO ())
-    -> (Chan ByteString -> Context -> IO ())
-    -> IO ()
-runTLSPipe = runTLSPipeN 1
+----------------------------------------------------------------
 
 withDataPipe
     :: (ClientParams, ServerParams)
-    -> (Context -> Chan result -> IO ())
-    -> (Chan start -> Context -> IO ())
-    -> ((start -> IO (), IO result) -> IO a)
+    -> ServerWithOutput
+    -> ClinetWithInput
+    -> ((PutInput, TakeOutput) -> IO a)
     -> IO a
 withDataPipe params tlsServer tlsClient cont = do
     -- initial setup
     pipe <- newPipe
     _ <- runPipe pipe
-    startQueue <- newChan
-    resultQueue <- newChan
+    inputChan <- newChan
+    outputChan <- newChan
 
     (cCtx, sCtx) <- newPairContext pipe params
 
     withAsync
         ( E.catch
-            (tlsServer sCtx resultQueue)
+            (tlsServer sCtx outputChan)
             (printAndRaise "server" (serverSupported $ snd params))
         )
         $ \sAsync -> withAsync
             ( E.catch
-                (tlsClient startQueue cCtx)
+                (tlsClient inputChan cCtx)
                 (printAndRaise "client" (clientSupported $ fst params))
             )
             $ \cAsync -> do
-                let readResult = waitBoth cAsync sAsync >> readChan resultQueue
-                cont (writeChan startQueue, readResult)
+                let putInput = writeChan inputChan
+                    takeOutput = do
+                        _ <- waitBoth cAsync sAsync
+                        readChan outputChan
+                cont (putInput, takeOutput)
   where
     printAndRaise :: String -> Supported -> E.SomeException -> IO ()
     printAndRaise s supported e = do
@@ -123,9 +123,9 @@ withDataPipe params tlsServer tlsClient cont = do
 
 initiateDataPipe
     :: (ClientParams, ServerParams)
-    -> (Context -> IO a1)
     -> (Context -> IO a)
-    -> IO (Either E.SomeException a, Either E.SomeException a1)
+    -> (Context -> IO b)
+    -> IO (Either E.SomeException b, Either E.SomeException a)
 initiateDataPipe params tlsServer tlsClient = do
     -- initial setup
     pipe <- newPipe
@@ -138,6 +138,8 @@ initiateDataPipe params tlsServer tlsClient = do
             sRes <- waitCatch sAsync
             cRes <- waitCatch cAsync
             return (cRes, sRes)
+
+----------------------------------------------------------------
 
 debug :: Bool
 debug = False
@@ -392,3 +394,15 @@ resume :: Ticket -> IO (Maybe SessionData)
 resume ticket
     | isTicket ticket = return $ Just $ deserialise $ L.fromStrict ticket
     | otherwise = return Nothing
+
+checkCtxFinished :: Context -> IO ()
+checkCtxFinished ctx = do
+    mUnique <- getTLSUnique ctx
+    mExporter <- getTLSExporter ctx
+    when (isNothing (mUnique <|> mExporter)) $
+        fail "unexpected channel binding"
+
+recvDataAssert :: Context -> ByteString -> IO ()
+recvDataAssert ctx expected = do
+    got <- recvData ctx
+    got `shouldBe` expected
