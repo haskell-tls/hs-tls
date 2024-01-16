@@ -1,12 +1,14 @@
+{-# LANGUAGE RecordWildCards #-}
+
 -- create a similar concept than a unix pipe.
 module PipeChan (
     PipeChan (..),
     newPipe,
     runPipe,
-    readPipeA,
-    readPipeB,
-    writePipeA,
-    writePipeB,
+    readPipeC,
+    readPipeS,
+    writePipeC,
+    writePipeS,
 ) where
 
 import Control.Concurrent
@@ -15,24 +17,33 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import Data.IORef
 
--- | represent a unidirectional pipe with a buffered read channel and a write channel
-data UniPipeChan = UniPipeChan (Chan ByteString) (Chan ByteString)
+----------------------------------------------------------------
+
+-- | represent a unidirectional pipe with a buffered read channel and
+-- a write channel
+data UniPipeChan = UniPipeChan
+    { getReadUniPipe :: Chan ByteString
+    , getWriteUniPipe :: Chan ByteString
+    }
 
 newUniPipeChan :: IO UniPipeChan
 newUniPipeChan = UniPipeChan <$> newChan <*> newChan
 
 runUniPipe :: UniPipeChan -> IO ThreadId
-runUniPipe (UniPipeChan r w) = forkIO $ forever $ readChan r >>= writeChan w
+runUniPipe UniPipeChan{..} =
+    forkIO $
+        forever $
+            readChan getReadUniPipe >>= writeChan getWriteUniPipe
 
-getReadUniPipe :: UniPipeChan -> Chan ByteString
-getReadUniPipe (UniPipeChan r _) = r
-
-getWriteUniPipe :: UniPipeChan -> Chan ByteString
-getWriteUniPipe (UniPipeChan _ w) = w
+----------------------------------------------------------------
 
 -- | Represent a bidirectional pipe with 2 nodes A and B
-data PipeChan
-    = PipeChan (IORef ByteString) (IORef ByteString) UniPipeChan UniPipeChan
+data PipeChan = PipeChan
+    { fromC :: IORef ByteString
+    , fromS :: IORef ByteString
+    , c2s :: UniPipeChan
+    , s2c :: UniPipeChan
+    }
 
 newPipe :: IO PipeChan
 newPipe =
@@ -43,32 +54,32 @@ newPipe =
         <*> newUniPipeChan
 
 runPipe :: PipeChan -> IO ThreadId
-runPipe (PipeChan _ _ cToS sToC) = runUniPipe cToS >> runUniPipe sToC
+runPipe PipeChan{..} = runUniPipe c2s >> runUniPipe s2c
 
-readPipeA :: PipeChan -> Int -> IO ByteString
-readPipeA (PipeChan _ b _ s) sz = readBuffered b (getWriteUniPipe s) sz
+readPipeC :: PipeChan -> Int -> IO ByteString
+readPipeC PipeChan{..} sz = readBuffered fromS (getWriteUniPipe s2c) sz
 
-writePipeA :: PipeChan -> ByteString -> IO ()
-writePipeA (PipeChan _ _ c _) = writeChan $ getWriteUniPipe c
+writePipeC :: PipeChan -> ByteString -> IO ()
+writePipeC PipeChan{..} = writeChan $ getWriteUniPipe c2s
 
-readPipeB :: PipeChan -> Int -> IO ByteString
-readPipeB (PipeChan b _ c _) sz = readBuffered b (getWriteUniPipe c) sz
+readPipeS :: PipeChan -> Int -> IO ByteString
+readPipeS PipeChan{..} sz = readBuffered fromC (getWriteUniPipe c2s) sz
 
-writePipeB :: PipeChan -> ByteString -> IO ()
-writePipeB (PipeChan _ _ _ s) = writeChan $ getReadUniPipe s
+writePipeS :: PipeChan -> ByteString -> IO ()
+writePipeS PipeChan{..} = writeChan $ getReadUniPipe s2c
 
 -- helper to read buffered data.
 readBuffered :: IORef ByteString -> Chan ByteString -> Int -> IO ByteString
-readBuffered buf chan sz = do
-    left <- readIORef buf
+readBuffered ref chan sz = do
+    left <- readIORef ref
     if B.length left >= sz
         then do
             let (ret, nleft) = B.splitAt sz left
-            writeIORef buf nleft
+            writeIORef ref nleft
             return ret
         else do
-            let newSize = (sz - B.length left)
+            let newSize = sz - B.length left
             newData <- readChan chan
-            writeIORef buf newData
-            remain <- readBuffered buf chan newSize
+            writeIORef ref newData
+            remain <- readBuffered ref chan newSize
             return (left `B.append` remain)

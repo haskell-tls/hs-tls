@@ -4,6 +4,7 @@ module HandshakeSpec where
 
 import Control.Concurrent
 import Control.Monad
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Data.Default.Class
@@ -21,6 +22,7 @@ import Test.QuickCheck
 import Arbitrary
 import PipeChan
 import Run
+import Session
 
 spec :: Spec
 spec = do
@@ -75,10 +77,10 @@ pipe_work = do
     let d1 = B.replicate (bSize * n) 40
     let d2 = B.replicate (bSize * n) 45
 
-    d1' <- writePipeA pipe d1 >> readPipeB pipe (B.length d1)
+    d1' <- writePipeC pipe d1 >> readPipeS pipe (B.length d1)
     d1' `shouldBe` d1
 
-    d2' <- writePipeB pipe d2 >> readPipeA pipe (B.length d2)
+    d2' <- writePipeS pipe d2 >> readPipeC pipe (B.length d2)
     d2' `shouldBe` d2
 
 --------------------------------------------------------------
@@ -113,7 +115,7 @@ handshake13_downgrade (cparam, sparam) = do
             (isVersionEnabled TLS13 params && versionForced < TLS13)
                 || (isVersionEnabled TLS12 params && versionForced < TLS12)
     if downgraded
-        then runTLSInitFailure params
+        then runTLSPipeFailure params handshake handshake
         else runTLSPipeSimple params
 
 handshake_update_key :: (ClientParams, ServerParams) -> IO ()
@@ -155,7 +157,7 @@ handshake_hashsignatures (clientHashSigs, serverHashSigs) = do
             | tls13 = all incompatibleWithDefaultCurve commonHashSigs
             | otherwise = null commonHashSigs
     if shouldFail
-        then runTLSInitFailure (clientParam', serverParam')
+        then runTLSPipeFailure (clientParam', serverParam') handshake handshake
         else runTLSPipeSimple (clientParam', serverParam')
   where
     incompatibleWithDefaultCurve (h, SignatureECDSA) = h /= HashSHA256
@@ -174,7 +176,7 @@ handshake_ciphersuites (clientCiphers, serverCiphers) = do
         shouldSucceed = any adequate (clientCiphers `intersect` serverCiphers)
     if shouldSucceed
         then runTLSPipeSimple (clientParam, serverParam)
-        else runTLSInitFailure (clientParam, serverParam)
+        else runTLSPipeFailure (clientParam, serverParam) handshake handshake
 
 --------------------------------------------------------------
 
@@ -213,9 +215,9 @@ handshake_groups (GGP clientGroups serverGroups) = do
                 }
         commonGroups = clientGroups `intersect` serverGroups
         shouldFail = null commonGroups
-        p minfo = isNothing (minfo >>= infoSupportedGroup) == (null commonGroups)
+        p minfo = isNothing (minfo >>= infoSupportedGroup) == null commonGroups
     if shouldFail
-        then runTLSInitFailure (clientParam', serverParam')
+        then runTLSPipeFailure (clientParam', serverParam') handshake handshake
         else runTLSPipePredicate (clientParam', serverParam') p
 
 --------------------------------------------------------------
@@ -268,7 +270,7 @@ handshake_ec (SG sigGroups) = do
         sigAlgs = map snd (clientHashSignatures `intersect` serverHashSignatures)
         ecdsaDenied = SignatureECDSA `notElem` sigAlgs
     if ecdsaDenied
-        then runTLSInitFailure (clientParam', serverParam')
+        then runTLSPipeFailure (clientParam', serverParam') handshake handshake
         else runTLSPipeSimple (clientParam', serverParam')
 
 -- Tests ability to use or ignore client "signature_algorithms" extension when
@@ -403,7 +405,7 @@ handshake_server_key_usage usageFlags = do
         shouldSucceed = KeyUsage_digitalSignature `elem` usageFlags
     if shouldSucceed
         then runTLSPipeSimple (clientParam, serverParam')
-        else runTLSInitFailure (clientParam, serverParam')
+        else runTLSPipeFailure (clientParam, serverParam') handshake handshake
 
 handshake_client_key_usage :: [ExtKeyUsageFlag] -> IO ()
 handshake_client_key_usage usageFlags = do
@@ -427,7 +429,7 @@ handshake_client_key_usage usageFlags = do
         shouldSucceed = KeyUsage_digitalSignature `elem` usageFlags
     if shouldSucceed
         then runTLSPipeSimple (clientParam', serverParam')
-        else runTLSInitFailure (clientParam', serverParam')
+        else runTLSPipeFailure (clientParam', serverParam') handshake handshake
 
 --------------------------------------------------------------
 
@@ -454,7 +456,7 @@ handshake_client_auth (clientParam, serverParam) = do
                 }
     let shouldFail = version == TLS13 && isCredentialDSA cred
     if shouldFail
-        then runTLSInitFailure (clientParam', serverParam')
+        then runTLSPipeFailure (clientParam', serverParam') handshake handshake
         else runTLSPipeSimple (clientParam', serverParam')
   where
     validateChain cred chain
@@ -473,7 +475,7 @@ handshake_ems (cems, sems) = do
         require = cems == RequireEMS || sems == RequireEMS
         p info = infoExtendedMasterSec info == (emsVersion && use)
     if emsVersion && require && not use
-        then runTLSInitFailure params'
+        then runTLSPipeFailure params' handshake handshake
         else runTLSPipePredicate params' (maybe False p)
 
 newtype CompatEMS = CompatEMS (EMSMode, EMSMode) deriving (Show)
@@ -508,13 +510,13 @@ handshake_resumption_ems (CompatEMS ems, CompatEMS ems2) = do
         emsVersion = version >= TLS10 && version <= TLS12
 
     if emsVersion && use ems && not (use ems2)
-        then runTLSInitFailure params2
+        then runTLSPipeFailure params2 handshake handshake
         else do
             runTLSPipeSimple params2
             sessionParams2 <- readClientSessionRef sessionRefs
             let sameSession = sessionParams == sessionParams2
                 sameUse = use ems == use ems2
-            when emsVersion $ (sameSession `shouldBe` sameUse)
+            when emsVersion (sameSession `shouldBe` sameUse)
   where
     use (NoEMS, _) = False
     use (_, NoEMS) = False
@@ -539,24 +541,14 @@ handshake_alpn (clientParam, serverParam) = do
                         }
                 }
         params' = (clientParam', serverParam')
-    runTLSPipe params' tlsServer tlsClient
+    runTLSPipePredicate2 params' checkClient checkServer
   where
-    tlsServer ctx queue = do
-        handshake ctx
-        checkCtxFinished ctx
+    checkClient ctx = do
         proto <- getNegotiatedProtocol ctx
         proto `shouldBe` Just "h2"
-        d <- recvData ctx
-        writeChan queue [d]
-        bye ctx
-    tlsClient queue ctx = do
-        handshake ctx
-        checkCtxFinished ctx
+    checkServer ctx = do
         proto <- getNegotiatedProtocol ctx
         proto `shouldBe` Just "h2"
-        d <- readChan queue
-        sendData ctx (L.fromChunks [d])
-        byeBye ctx
     alpn xs
         | "h2" `elem` xs = return "h2"
         | otherwise = return "http/1.1"
@@ -576,26 +568,16 @@ handshake_sni (clientParam, serverParam) = do
                         }
                 }
         params' = (clientParam', serverParam')
-    runTLSPipe params' tlsServer tlsClient
+    runTLSPipePredicate2 params' checkClient checkServer
     receivedName <- readIORef ref
     receivedName `shouldBe` Just (Just serverName)
   where
-    tlsServer ctx queue = do
-        handshake ctx
-        checkCtxFinished ctx
+    checkClient ctx = do
         sni <- getClientSNI ctx
         sni `shouldBe` Just serverName
-        d <- recvData ctx
-        writeChan queue [d]
-        bye ctx
-    tlsClient queue ctx = do
-        handshake ctx
-        checkCtxFinished ctx
+    checkServer ctx = do
         sni <- getClientSNI ctx
         sni `shouldBe` Just serverName
-        d <- readChan queue
-        sendData ctx (L.fromChunks [d])
-        byeBye ctx
     onSNI ref name = do
         mx <- readIORef ref
         mx `shouldBe` Nothing
@@ -621,23 +603,11 @@ handshake12_renegotiation (CSP12 (cparams, sparams)) = do
                         }
                 }
     if renegDisabled
-        then runTLSInitFailureGen (cparams, sparams') hsServer hsClient
-        else runTLSPipe (cparams, sparams') tlsServer tlsClient
+        then runTLSPipeFailure (cparams, sparams') hsClient hsServer
+        else runTLSPipeSimple (cparams, sparams')
   where
-    tlsServer ctx queue = do
-        hsServer ctx
-        checkCtxFinished ctx
-        d <- recvData ctx
-        writeChan queue [d]
-        bye ctx
-    tlsClient queue ctx = do
-        hsClient ctx
-        checkCtxFinished ctx
-        d <- readChan queue
-        sendData ctx (L.fromChunks [d])
-        byeBye ctx
-    hsServer = handshake
     hsClient ctx = handshake ctx >> handshake ctx
+    hsServer = handshake
 
 handshake12_session_resumption :: CSP12 -> IO ()
 handshake12_session_resumption (CSP12 plainParams) = do
@@ -833,7 +803,7 @@ handshake13_rtt0 (CSP13 (cli, srv)) = do
                 }
         svrHooks =
             def
-                { onALPNClientSuggest = Just (\protos -> return $ head protos)
+                { onALPNClientSuggest = Just (return . head)
                 }
         params0 =
             ( cli
@@ -1015,22 +985,29 @@ post_handshake_auth (CSP13 (clientParam, serverParam)) = do
                         }
                 }
     if isCredentialDSA cred
-        then runTLSInitFailureGen (clientParam', serverParam') hsServer hsClient
-        else runTLSPipe (clientParam', serverParam') tlsServer tlsClient
+        then runTLSPipeFailure (clientParam', serverParam') hsClient hsServer
+        else runTLSPipe (clientParam', serverParam') tlsClient tlsServer
   where
     validateChain cred chain
         | chain == fst cred = return CertificateUsageAccept
         | otherwise = return (CertificateUsageReject CertificateRejectUnknownCA)
-    tlsServer ctx queue = do
-        hsServer ctx
-        d <- recvData ctx
-        writeChan queue [d]
-        bye ctx
     tlsClient queue ctx = do
         hsClient ctx
         d <- readChan queue
         sendData ctx (L.fromChunks [d])
         byeBye ctx
+    tlsServer ctx queue = do
+        hsServer ctx
+        d <- recvData ctx
+        writeChan queue [d]
+        bye ctx
+    hsClient ctx = do
+        handshake ctx
+        checkCtxFinished ctx
+        sendData ctx "request 1"
+        recvDataAssert ctx "response 1"
+        sendData ctx "request 2"
+        recvDataAssert ctx "response 2"
     hsServer ctx = do
         handshake ctx
         checkCtxFinished ctx
@@ -1041,10 +1018,8 @@ post_handshake_auth (CSP13 (clientParam, serverParam)) = do
         _ <- requestCertificate ctx
         _ <- requestCertificate ctx -- two simultaneously
         sendData ctx "response 2"
-    hsClient ctx = do
-        handshake ctx
-        checkCtxFinished ctx
-        sendData ctx "request 1"
-        recvDataAssert ctx "response 1"
-        sendData ctx "request 2"
-        recvDataAssert ctx "response 2"
+
+recvDataAssert :: Context -> ByteString -> IO ()
+recvDataAssert ctx expected = do
+    got <- recvData ctx
+    got `shouldBe` expected

@@ -60,7 +60,7 @@ rsaParams = (pub, priv)
             }
     pub =
         RSA.PublicKey
-            { RSA.public_size = (1024 `div` 8)
+            { RSA.public_size = 1024 `div` 8
             , RSA.public_n = n
             , RSA.public_e = e
             }
