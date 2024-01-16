@@ -63,9 +63,7 @@ runTLSPipeN
     -> IO ()
 runTLSPipeN n params tlsServer tlsClient = do
     -- generate some data to send
-    ds <- replicateM n $ do
-        d <- B.pack <$> generate (someWords8 256)
-        return d
+    ds <- replicateM n $ B.pack <$> generate (someWords8 256)
     -- send it
     m_dsres <- do
         withDataPipe params tlsServer tlsClient $ \(writeStart, readResult) -> do

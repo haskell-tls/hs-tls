@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -43,7 +42,7 @@ instance Arbitrary TimeOfDay where
         h <- choose (0, 23)
         mi <- choose (0, 59)
         se <- choose (0, 59)
-        nsec <- return 0
+        let nsec = 0
         return $ TimeOfDay (Hours h) (Minutes mi) (Seconds se) nsec
 
 instance Arbitrary DateTime where
@@ -115,7 +114,7 @@ arbitraryX509WithKeyAndUsage usageFlags (pubKey, _) = do
     cert <- arbitraryCertificate usageFlags pubKey
     sig <- resize 40 $ listOf1 arbitrary
     let sigalg = getSignatureALG pubKey
-    let (signedExact, ()) = objectToSignedExact (\(!(_)) -> (B.pack sig, sigalg, ())) cert
+    let (signedExact, ()) = objectToSignedExact (\_ -> (B.pack sig, sigalg, ())) cert
     return signedExact
 
 arbitraryX509 :: Gen SignedCertificate

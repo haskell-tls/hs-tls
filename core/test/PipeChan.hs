@@ -67,7 +67,7 @@ readBuffered buf chan sz = do
             writeIORef buf nleft
             return ret
         else do
-            let newSize = (sz - B.length left)
+            let newSize = sz - B.length left
             newData <- readChan chan
             writeIORef buf newData
             remain <- readBuffered buf chan newSize

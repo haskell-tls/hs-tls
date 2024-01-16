@@ -213,7 +213,7 @@ handshake_groups (GGP clientGroups serverGroups) = do
                 }
         commonGroups = clientGroups `intersect` serverGroups
         shouldFail = null commonGroups
-        p minfo = isNothing (minfo >>= infoSupportedGroup) == (null commonGroups)
+        p minfo = isNothing (minfo >>= infoSupportedGroup) == null commonGroups
     if shouldFail
         then runTLSInitFailure (clientParam', serverParam')
         else runTLSPipePredicate (clientParam', serverParam') p
@@ -514,7 +514,7 @@ handshake_resumption_ems (CompatEMS ems, CompatEMS ems2) = do
             sessionParams2 <- readClientSessionRef sessionRefs
             let sameSession = sessionParams == sessionParams2
                 sameUse = use ems == use ems2
-            when emsVersion $ (sameSession `shouldBe` sameUse)
+            when emsVersion (sameSession `shouldBe` sameUse)
   where
     use (NoEMS, _) = False
     use (_, NoEMS) = False
@@ -833,7 +833,7 @@ handshake13_rtt0 (CSP13 (cli, srv)) = do
                 }
         svrHooks =
             def
-                { onALPNClientSuggest = Just (\protos -> return $ head protos)
+                { onALPNClientSuggest = Just (return . head)
                 }
         params0 =
             ( cli
