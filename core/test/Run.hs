@@ -93,24 +93,20 @@ withDataPipe params tlsServer tlsClient cont = do
     outputChan <- newChan
 
     (cCtx, sCtx) <- newPairContext pipe params
-
-    withAsync
-        ( E.catch
+    let putInput = writeChan inputChan
+        takeOutput = do
+            concurrently_ (server sCtx outputChan) (client inputChan cCtx)
+            readChan outputChan
+    cont (putInput, takeOutput)
+  where
+    server sCtx outputChan =
+        E.catch
             (tlsServer sCtx outputChan)
             (printAndRaise "server" (serverSupported $ snd params))
-        )
-        $ \sAsync -> withAsync
-            ( E.catch
-                (tlsClient inputChan cCtx)
-                (printAndRaise "client" (clientSupported $ fst params))
-            )
-            $ \cAsync -> do
-                let putInput = writeChan inputChan
-                    takeOutput = do
-                        _ <- waitBoth cAsync sAsync
-                        readChan outputChan
-                cont (putInput, takeOutput)
-  where
+    client inputChan cCtx =
+        E.catch
+            (tlsClient inputChan cCtx)
+            (printAndRaise "client" (clientSupported $ fst params))
     printAndRaise :: String -> Supported -> E.SomeException -> IO ()
     printAndRaise s supported e = do
         putStrLn $
