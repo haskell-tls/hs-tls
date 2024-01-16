@@ -2,16 +2,17 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Run (
+    runTLSPipe,
+    runTLSPipeSimple,
+    runTLSPipePredicate,
+    runTLSPipePredicate2,
+    runTLSPipeSimple13,
+    runTLSPipeSimpleKeyUpdate,
+    runTLSPipeCapture13,
+    runTLSPipeFailure,
     checkCtxFinished,
     recvDataAssert,
     byeBye,
-    runTLSPipe,
-    runTLSPipeSimple,
-    runTLSPipeSimple13,
-    runTLSPipeSimpleKeyUpdate,
-    runTLSPipePredicate,
-    runTLSPipeCapture13,
-    runTLSPipeFailure,
     readClientSessionRef,
     twoSessionRefs,
     twoSessionManagers,
@@ -121,6 +122,31 @@ runTLSPipePredicate params p = runTLSPipe params tlsClient tlsServer
         unless (p minfo) $
             fail ("unexpected information: " ++ show minfo)
 
+runTLSPipePredicate2
+    :: (ClientParams, ServerParams)
+    -> (Context -> IO ())
+    -> (Context -> IO ())
+    -> IO ()
+runTLSPipePredicate2 params checkClient checkServer =
+    runTLSPipe params tlsClient tlsServer
+  where
+    tlsClient queue ctx = do
+        handshake ctx
+        checkCtxFinished ctx
+        checkClient ctx
+        d <- readChan queue
+        sendData ctx (L.fromChunks [d])
+        byeBye ctx
+    tlsServer ctx queue = do
+        handshake ctx
+        checkCtxFinished ctx
+        checkServer ctx
+        d <- recvData ctx
+        writeChan queue [d]
+        bye ctx
+
+----------------------------------------------------------------
+
 runTLSPipeSimple13
     :: (ClientParams, ServerParams)
     -> HandshakeMode13
@@ -150,12 +176,11 @@ runTLSPipeSimple13 params mode mEarlyData = runTLSPipe params tlsClient tlsServe
         minfo <- contextGetInformation ctx
         (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
         bye ctx
-
-chunkLengths :: Int -> [Int]
-chunkLengths len
-    | len > 16384 = 16384 : chunkLengths (len - 16384)
-    | len > 0 = [len]
-    | otherwise = []
+    chunkLengths :: Int -> [Int]
+    chunkLengths len
+        | len > 16384 = 16384 : chunkLengths (len - 16384)
+        | len > 0 = [len]
+        | otherwise = []
 
 runTLSPipeCapture13
     :: (ClientParams, ServerParams) -> IO ([Handshake13], [Handshake13])

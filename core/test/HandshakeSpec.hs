@@ -539,24 +539,14 @@ handshake_alpn (clientParam, serverParam) = do
                         }
                 }
         params' = (clientParam', serverParam')
-    runTLSPipe params' tlsClient tlsServer
+    runTLSPipePredicate2 params' checkClient checkServer
   where
-    tlsClient queue ctx = do
-        handshake ctx
-        checkCtxFinished ctx
+    checkClient ctx = do
         proto <- getNegotiatedProtocol ctx
         proto `shouldBe` Just "h2"
-        d <- readChan queue
-        sendData ctx (L.fromChunks [d])
-        byeBye ctx
-    tlsServer ctx queue = do
-        handshake ctx
-        checkCtxFinished ctx
+    checkServer ctx = do
         proto <- getNegotiatedProtocol ctx
         proto `shouldBe` Just "h2"
-        d <- recvData ctx
-        writeChan queue [d]
-        bye ctx
     alpn xs
         | "h2" `elem` xs = return "h2"
         | otherwise = return "http/1.1"
@@ -576,26 +566,16 @@ handshake_sni (clientParam, serverParam) = do
                         }
                 }
         params' = (clientParam', serverParam')
-    runTLSPipe params' tlsClient tlsServer
+    runTLSPipePredicate2 params' checkClient checkServer
     receivedName <- readIORef ref
     receivedName `shouldBe` Just (Just serverName)
   where
-    tlsClient queue ctx = do
-        handshake ctx
-        checkCtxFinished ctx
+    checkClient ctx = do
         sni <- getClientSNI ctx
         sni `shouldBe` Just serverName
-        d <- readChan queue
-        sendData ctx (L.fromChunks [d])
-        byeBye ctx
-    tlsServer ctx queue = do
-        handshake ctx
-        checkCtxFinished ctx
+    checkServer ctx = do
         sni <- getClientSNI ctx
         sni `shouldBe` Just serverName
-        d <- recvData ctx
-        writeChan queue [d]
-        bye ctx
     onSNI ref name = do
         mx <- readIORef ref
         mx `shouldBe` Nothing
@@ -622,20 +602,8 @@ handshake12_renegotiation (CSP12 (cparams, sparams)) = do
                 }
     if renegDisabled
         then runTLSPipeFailure (cparams, sparams') hsClient hsServer
-        else runTLSPipe (cparams, sparams') tlsClient tlsServer
+        else runTLSPipeSimple (cparams, sparams')
   where
-    tlsClient queue ctx = do
-        hsClient ctx
-        checkCtxFinished ctx
-        d <- readChan queue
-        sendData ctx (L.fromChunks [d])
-        byeBye ctx
-    tlsServer ctx queue = do
-        hsServer ctx
-        checkCtxFinished ctx
-        d <- recvData ctx
-        writeChan queue [d]
-        bye ctx
     hsClient ctx = handshake ctx >> handshake ctx
     hsServer = handshake
 
