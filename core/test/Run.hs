@@ -12,7 +12,6 @@ module Run (
     runTLSPipePredicate,
     runTLSPipeCapture13,
     runTLSPipeFailure,
-    runTLSPipeFailureGen,
     readClientSessionRef,
     twoSessionRefs,
     twoSessionManagers,
@@ -214,15 +213,12 @@ runTLSPipeSimpleKeyUpdate params = runTLSPipeN 3 params tlsClient tlsServer
 
 ----------------------------------------------------------------
 
-runTLSPipeFailure :: (ClientParams, ServerParams) -> IO ()
-runTLSPipeFailure params = runTLSPipeFailureGen params handshake handshake
-
-runTLSPipeFailureGen
+runTLSPipeFailure
     :: (ClientParams, ServerParams)
     -> (Context -> IO c)
     -> (Context -> IO s)
     -> IO ()
-runTLSPipeFailureGen params hsClient hsServer = do
+runTLSPipeFailure params hsClient hsServer = do
     (cRes, sRes) <- initiateDataPipe params tlsServer tlsClient
     cRes `shouldSatisfy` isLeft
     sRes `shouldSatisfy` isLeft

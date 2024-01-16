@@ -113,7 +113,7 @@ handshake13_downgrade (cparam, sparam) = do
             (isVersionEnabled TLS13 params && versionForced < TLS13)
                 || (isVersionEnabled TLS12 params && versionForced < TLS12)
     if downgraded
-        then runTLSPipeFailure params
+        then runTLSPipeFailure params handshake handshake
         else runTLSPipeSimple params
 
 handshake_update_key :: (ClientParams, ServerParams) -> IO ()
@@ -155,7 +155,7 @@ handshake_hashsignatures (clientHashSigs, serverHashSigs) = do
             | tls13 = all incompatibleWithDefaultCurve commonHashSigs
             | otherwise = null commonHashSigs
     if shouldFail
-        then runTLSPipeFailure (clientParam', serverParam')
+        then runTLSPipeFailure (clientParam', serverParam') handshake handshake
         else runTLSPipeSimple (clientParam', serverParam')
   where
     incompatibleWithDefaultCurve (h, SignatureECDSA) = h /= HashSHA256
@@ -174,7 +174,7 @@ handshake_ciphersuites (clientCiphers, serverCiphers) = do
         shouldSucceed = any adequate (clientCiphers `intersect` serverCiphers)
     if shouldSucceed
         then runTLSPipeSimple (clientParam, serverParam)
-        else runTLSPipeFailure (clientParam, serverParam)
+        else runTLSPipeFailure (clientParam, serverParam) handshake handshake
 
 --------------------------------------------------------------
 
@@ -215,7 +215,7 @@ handshake_groups (GGP clientGroups serverGroups) = do
         shouldFail = null commonGroups
         p minfo = isNothing (minfo >>= infoSupportedGroup) == null commonGroups
     if shouldFail
-        then runTLSPipeFailure (clientParam', serverParam')
+        then runTLSPipeFailure (clientParam', serverParam') handshake handshake
         else runTLSPipePredicate (clientParam', serverParam') p
 
 --------------------------------------------------------------
@@ -268,7 +268,7 @@ handshake_ec (SG sigGroups) = do
         sigAlgs = map snd (clientHashSignatures `intersect` serverHashSignatures)
         ecdsaDenied = SignatureECDSA `notElem` sigAlgs
     if ecdsaDenied
-        then runTLSPipeFailure (clientParam', serverParam')
+        then runTLSPipeFailure (clientParam', serverParam') handshake handshake
         else runTLSPipeSimple (clientParam', serverParam')
 
 -- Tests ability to use or ignore client "signature_algorithms" extension when
@@ -403,7 +403,7 @@ handshake_server_key_usage usageFlags = do
         shouldSucceed = KeyUsage_digitalSignature `elem` usageFlags
     if shouldSucceed
         then runTLSPipeSimple (clientParam, serverParam')
-        else runTLSPipeFailure (clientParam, serverParam')
+        else runTLSPipeFailure (clientParam, serverParam') handshake handshake
 
 handshake_client_key_usage :: [ExtKeyUsageFlag] -> IO ()
 handshake_client_key_usage usageFlags = do
@@ -427,7 +427,7 @@ handshake_client_key_usage usageFlags = do
         shouldSucceed = KeyUsage_digitalSignature `elem` usageFlags
     if shouldSucceed
         then runTLSPipeSimple (clientParam', serverParam')
-        else runTLSPipeFailure (clientParam', serverParam')
+        else runTLSPipeFailure (clientParam', serverParam') handshake handshake
 
 --------------------------------------------------------------
 
@@ -454,7 +454,7 @@ handshake_client_auth (clientParam, serverParam) = do
                 }
     let shouldFail = version == TLS13 && isCredentialDSA cred
     if shouldFail
-        then runTLSPipeFailure (clientParam', serverParam')
+        then runTLSPipeFailure (clientParam', serverParam') handshake handshake
         else runTLSPipeSimple (clientParam', serverParam')
   where
     validateChain cred chain
@@ -473,7 +473,7 @@ handshake_ems (cems, sems) = do
         require = cems == RequireEMS || sems == RequireEMS
         p info = infoExtendedMasterSec info == (emsVersion && use)
     if emsVersion && require && not use
-        then runTLSPipeFailure params'
+        then runTLSPipeFailure params' handshake handshake
         else runTLSPipePredicate params' (maybe False p)
 
 newtype CompatEMS = CompatEMS (EMSMode, EMSMode) deriving (Show)
@@ -508,7 +508,7 @@ handshake_resumption_ems (CompatEMS ems, CompatEMS ems2) = do
         emsVersion = version >= TLS10 && version <= TLS12
 
     if emsVersion && use ems && not (use ems2)
-        then runTLSPipeFailure params2
+        then runTLSPipeFailure params2 handshake handshake
         else do
             runTLSPipeSimple params2
             sessionParams2 <- readClientSessionRef sessionRefs
@@ -621,7 +621,7 @@ handshake12_renegotiation (CSP12 (cparams, sparams)) = do
                         }
                 }
     if renegDisabled
-        then runTLSPipeFailureGen (cparams, sparams') hsClient hsServer
+        then runTLSPipeFailure (cparams, sparams') hsClient hsServer
         else runTLSPipe (cparams, sparams') tlsClient tlsServer
   where
     tlsClient queue ctx = do
@@ -1015,7 +1015,7 @@ post_handshake_auth (CSP13 (clientParam, serverParam)) = do
                         }
                 }
     if isCredentialDSA cred
-        then runTLSPipeFailureGen (clientParam', serverParam') hsClient hsServer
+        then runTLSPipeFailure (clientParam', serverParam') hsClient hsServer
         else runTLSPipe (clientParam', serverParam') tlsClient tlsServer
   where
     validateChain cred chain
