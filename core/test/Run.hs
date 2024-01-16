@@ -87,12 +87,10 @@ withDataPipe
     -> IO a
 withDataPipe params tlsServer tlsClient cont = do
     -- initial setup
-    pipe <- newPipe
-    _ <- runPipe pipe
     inputChan <- newChan
     outputChan <- newChan
 
-    (cCtx, sCtx) <- newPairContext pipe params
+    (cCtx, sCtx) <- newPairContext params
     let putInput = writeChan inputChan
         takeOutput = do
             concurrently_ (server sCtx outputChan) (client inputChan cCtx)
@@ -124,10 +122,7 @@ initiateDataPipe
     -> IO (Either E.SomeException b, Either E.SomeException a)
 initiateDataPipe params tlsServer tlsClient = do
     -- initial setup
-    pipe <- newPipe
-    _ <- runPipe pipe
-
-    (cCtx, sCtx) <- newPairContext pipe params
+    (cCtx, sCtx) <- newPairContext params
 
     async (tlsServer sCtx) >>= \sAsync ->
         async (tlsClient cCtx) >>= \cAsync -> do
@@ -141,8 +136,10 @@ debug :: Bool
 debug = False
 
 newPairContext
-    :: PipeChan -> (ClientParams, ServerParams) -> IO (Context, Context)
-newPairContext pipe (cParams, sParams) = do
+    :: (ClientParams, ServerParams) -> IO (Context, Context)
+newPairContext (cParams, sParams) = do
+    pipe <- newPipe
+    _ <- runPipe pipe
     let noFlush = return ()
     let noClose = return ()
 
