@@ -68,11 +68,11 @@ runTLSPipeN n params tlsClient tlsServer = do
     ds <- replicateM n $ B.pack <$> generate (someWords8 256)
     -- send it
     m_dsres <- do
-        withDataPipe params tlsServer tlsClient $ \(writeStart, readResult) -> do
-            forM_ ds $ \d -> do
-                writeStart d
-            -- receive it
-            timeout 60000000 readResult -- 60 sec
+        withDataPipe params tlsServer tlsClient $ \(putInput, takeOutput) -> do
+            -- put input N times
+            forM_ ds putInput
+            -- receive them
+            timeout 60000000 takeOutput -- 60 sec
     case m_dsres of
         Nothing -> error "timed out"
         Just dsres -> dsres `shouldBe` ds
