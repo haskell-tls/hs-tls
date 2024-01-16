@@ -31,7 +31,6 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Data.Default.Class
-import Data.Either
 import Data.IORef
 import Data.Maybe
 import Network.TLS
@@ -244,39 +243,19 @@ runTLSPipeFailure
     -> (Context -> IO s)
     -> IO ()
 runTLSPipeFailure params hsClient hsServer = do
-    (cRes, sRes) <- initiateDataPipe params tlsClient tlsServer
-    cRes `shouldSatisfy` isLeft
-    sRes `shouldSatisfy` isLeft
-    print cRes
-    print sRes
-  where
-    tlsClient ctx = do
-        _ <- hsClient ctx
-        checkCtxFinished ctx
-        minfo <- contextGetInformation ctx
-        byeBye ctx
-        return $ "client success: " ++ show minfo
-    tlsServer ctx = do
-        _ <- hsServer ctx
-        checkCtxFinished ctx
-        minfo <- contextGetInformation ctx
-        byeBye ctx
-        return $ "server success: " ++ show minfo
-
-initiateDataPipe
-    :: (ClientParams, ServerParams)
-    -> (Context -> IO c)
-    -> (Context -> IO s)
-    -> IO (Either E.SomeException c, Either E.SomeException s)
-initiateDataPipe params tlsClient tlsServer = do
-    -- initial setup
     (cCtx, sCtx) <- newPairContext params
 
-    async (tlsServer sCtx) >>= \sAsync ->
-        async (tlsClient cCtx) >>= \cAsync -> do
-            cRes <- waitCatch cAsync
-            sRes <- waitCatch sAsync
-            return (cRes, sRes)
+    concurrently_ (tlsServer sCtx) (tlsClient cCtx)
+  where
+    tlsClient ctx =
+        (void (hsClient ctx) >> byeBye ctx)
+            `shouldThrow` anyTLSException
+    tlsServer ctx =
+        (void (hsServer ctx) >> byeBye ctx)
+            `shouldThrow` anyTLSException
+
+anyTLSException :: Selector TLSException
+anyTLSException = const True
 
 ----------------------------------------------------------------
 
