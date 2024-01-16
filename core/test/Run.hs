@@ -45,8 +45,6 @@ import PipeChan
 
 type ClinetWithInput = Chan ByteString -> Context -> IO ()
 type ServerWithOutput = Context -> Chan [ByteString] -> IO ()
-type PutInput = ByteString -> IO ()
-type TakeOutput = IO [ByteString]
 
 ----------------------------------------------------------------
 
@@ -64,38 +62,19 @@ runTLSPipeN
     -> ServerWithOutput
     -> IO ()
 runTLSPipeN n params tlsClient tlsServer = do
+    inputChan <- newChan
+    outputChan <- newChan
     -- generate some data to send
     ds <- replicateM n $ B.pack <$> generate (someWords8 256)
-    -- send it
-    m_dsres <- do
-        withDataPipe params tlsServer tlsClient $ \(putInput, takeOutput) -> do
-            -- put input N times
-            forM_ ds putInput
-            -- receive them
-            timeout 60000000 takeOutput -- 60 sec
+    forM_ ds $ writeChan inputChan
+    -- run client and server
+    (cCtx, sCtx) <- newPairContext params
+    concurrently_ (server sCtx outputChan) (client inputChan cCtx)
+    -- read result
+    m_dsres <- timeout 60000000 $ readChan outputChan -- 60 sec
     case m_dsres of
         Nothing -> error "timed out"
         Just dsres -> dsres `shouldBe` ds
-
-----------------------------------------------------------------
-
-withDataPipe
-    :: (ClientParams, ServerParams)
-    -> ServerWithOutput
-    -> ClinetWithInput
-    -> ((PutInput, TakeOutput) -> IO a)
-    -> IO a
-withDataPipe params tlsServer tlsClient cont = do
-    -- initial setup
-    inputChan <- newChan
-    outputChan <- newChan
-
-    (cCtx, sCtx) <- newPairContext params
-    let putInput = writeChan inputChan
-        takeOutput = do
-            concurrently_ (server sCtx outputChan) (client inputChan cCtx)
-            readChan outputChan
-    cont (putInput, takeOutput)
   where
     server sCtx outputChan =
         E.catch
@@ -115,63 +94,10 @@ withDataPipe params tlsServer tlsClient cont = do
                 ++ show supported
         E.throwIO e
 
-initiateDataPipe
-    :: (ClientParams, ServerParams)
-    -> (Context -> IO a)
-    -> (Context -> IO b)
-    -> IO (Either E.SomeException b, Either E.SomeException a)
-initiateDataPipe params tlsServer tlsClient = do
-    -- initial setup
-    (cCtx, sCtx) <- newPairContext params
-
-    async (tlsServer sCtx) >>= \sAsync ->
-        async (tlsClient cCtx) >>= \cAsync -> do
-            sRes <- waitCatch sAsync
-            cRes <- waitCatch cAsync
-            return (cRes, sRes)
-
 ----------------------------------------------------------------
 
-debug :: Bool
-debug = False
-
-newPairContext
-    :: (ClientParams, ServerParams) -> IO (Context, Context)
-newPairContext (cParams, sParams) = do
-    pipe <- newPipe
-    _ <- runPipe pipe
-    let noFlush = return ()
-    let noClose = return ()
-
-    let cBackend = Backend noFlush noClose (writePipeC pipe) (readPipeC pipe)
-    let sBackend = Backend noFlush noClose (writePipeS pipe) (readPipeS pipe)
-    cCtx' <- contextNew cBackend cParams
-    sCtx' <- contextNew sBackend sParams
-
-    contextHookSetLogging cCtx' (logging "client: ")
-    contextHookSetLogging sCtx' (logging "server: ")
-
-    return (cCtx', sCtx')
-  where
-    logging pre =
-        if debug
-            then
-                def
-                    { loggingPacketSent = putStrLn . ((pre ++ ">> ") ++)
-                    , loggingPacketRecv = putStrLn . ((pre ++ "<< ") ++)
-                    }
-            else def
-
--- Terminate the write direction and wait to receive the peer EOF.  This is
--- necessary in situations where we want to confirm the peer status, or to make
--- sure to receive late messages like session tickets.  In the test suite this
--- is used each time application code ends the connection without prior call to
--- 'recvData'.
-byeBye :: Context -> IO ()
-byeBye ctx = do
-    bye ctx
-    bs <- recvData ctx
-    unless (B.null bs) $ fail "byeBye: unexpected application data"
+runTLSPipeSimple :: (ClientParams, ServerParams) -> IO ()
+runTLSPipeSimple params = runTLSPipePredicate params (const True)
 
 runTLSPipePredicate
     :: (ClientParams, ServerParams) -> (Maybe Information -> Bool) -> IO ()
@@ -195,9 +121,6 @@ runTLSPipePredicate params p = runTLSPipe params tlsClient tlsServer
         minfo <- contextGetInformation ctx
         unless (p minfo) $
             fail ("unexpected information: " ++ show minfo)
-
-runTLSPipeSimple :: (ClientParams, ServerParams) -> IO ()
-runTLSPipeSimple params = runTLSPipePredicate params (const True)
 
 runTLSPipeSimple13
     :: (ClientParams, ServerParams)
@@ -228,6 +151,12 @@ runTLSPipeSimple13 params mode mEarlyData = runTLSPipe params tlsClient tlsServe
         minfo <- contextGetInformation ctx
         (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
         bye ctx
+
+chunkLengths :: Int -> [Int]
+chunkLengths len
+    | len > 16384 = 16384 : chunkLengths (len - 16384)
+    | len > 0 = [len]
+    | otherwise = []
 
 runTLSPipeCapture13
     :: (ClientParams, ServerParams) -> IO ([Handshake13], [Handshake13])
@@ -283,18 +212,17 @@ runTLSPipeSimpleKeyUpdate params = runTLSPipeN 3 params tlsClient tlsServer
         writeChan queue [d0, d1, d2]
         bye ctx
 
-chunkLengths :: Int -> [Int]
-chunkLengths len
-    | len > 16384 = 16384 : chunkLengths (len - 16384)
-    | len > 0 = [len]
-    | otherwise = []
+----------------------------------------------------------------
+
+runTLSInitFailure :: (ClientParams, ServerParams) -> IO ()
+runTLSInitFailure params = runTLSInitFailureGen params handshake handshake
 
 runTLSInitFailureGen
     :: (ClientParams, ServerParams)
-    -> (Context -> IO s)
     -> (Context -> IO c)
+    -> (Context -> IO s)
     -> IO ()
-runTLSInitFailureGen params hsServer hsClient = do
+runTLSInitFailureGen params hsClient hsServer = do
     (cRes, sRes) <- initiateDataPipe params tlsServer tlsClient
     cRes `shouldSatisfy` isLeft
     sRes `shouldSatisfy` isLeft
@@ -312,8 +240,22 @@ runTLSInitFailureGen params hsServer hsClient = do
         byeBye ctx
         return $ "client success: " ++ show minfo
 
-runTLSInitFailure :: (ClientParams, ServerParams) -> IO ()
-runTLSInitFailure params = runTLSInitFailureGen params handshake handshake
+initiateDataPipe
+    :: (ClientParams, ServerParams)
+    -> (Context -> IO a)
+    -> (Context -> IO b)
+    -> IO (Either E.SomeException b, Either E.SomeException a)
+initiateDataPipe params tlsServer tlsClient = do
+    -- initial setup
+    (cCtx, sCtx) <- newPairContext params
+
+    async (tlsServer sCtx) >>= \sAsync ->
+        async (tlsClient cCtx) >>= \cAsync -> do
+            sRes <- waitCatch sAsync
+            cRes <- waitCatch cAsync
+            return (cRes, sRes)
+
+----------------------------------------------------------------
 
 readClientSessionRef :: (IORef mclient, IORef mserver) -> IO mclient
 readClientSessionRef refs = readIORef (fst refs)
@@ -358,6 +300,8 @@ setPairParamsSessionManagers (clientManager, serverManager) (clientParams, serve
             }
     updateSessionManager manager shared = shared{sharedSessionManager = manager}
 
+----------------------------------------------------------------
+
 setPairParamsSessionResuming
     :: (SessionID, SessionData)
     -> (ClientParams, ServerParams)
@@ -399,3 +343,48 @@ recvDataAssert :: Context -> ByteString -> IO ()
 recvDataAssert ctx expected = do
     got <- recvData ctx
     got `shouldBe` expected
+
+----------------------------------------------------------------
+
+debug :: Bool
+debug = False
+
+newPairContext
+    :: (ClientParams, ServerParams) -> IO (Context, Context)
+newPairContext (cParams, sParams) = do
+    pipe <- newPipe
+    _ <- runPipe pipe
+    let noFlush = return ()
+    let noClose = return ()
+
+    let cBackend = Backend noFlush noClose (writePipeC pipe) (readPipeC pipe)
+    let sBackend = Backend noFlush noClose (writePipeS pipe) (readPipeS pipe)
+    cCtx' <- contextNew cBackend cParams
+    sCtx' <- contextNew sBackend sParams
+
+    contextHookSetLogging cCtx' (logging "client: ")
+    contextHookSetLogging sCtx' (logging "server: ")
+
+    return (cCtx', sCtx')
+  where
+    logging pre =
+        if debug
+            then
+                def
+                    { loggingPacketSent = putStrLn . ((pre ++ ">> ") ++)
+                    , loggingPacketRecv = putStrLn . ((pre ++ "<< ") ++)
+                    }
+            else def
+
+----------------------------------------------------------------
+
+-- Terminate the write direction and wait to receive the peer EOF.  This is
+-- necessary in situations where we want to confirm the peer status, or to make
+-- sure to receive late messages like session tickets.  In the test suite this
+-- is used each time application code ends the connection without prior call to
+-- 'recvData'.
+byeBye :: Context -> IO ()
+byeBye ctx = do
+    bye ctx
+    bs <- recvData ctx
+    unless (B.null bs) $ fail "byeBye: unexpected application data"

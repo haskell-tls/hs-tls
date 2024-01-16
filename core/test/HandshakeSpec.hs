@@ -621,7 +621,7 @@ handshake12_renegotiation (CSP12 (cparams, sparams)) = do
                         }
                 }
     if renegDisabled
-        then runTLSInitFailureGen (cparams, sparams') hsServer hsClient
+        then runTLSInitFailureGen (cparams, sparams') hsClient hsServer
         else runTLSPipe (cparams, sparams') tlsClient tlsServer
   where
     tlsClient queue ctx = do
@@ -1015,7 +1015,7 @@ post_handshake_auth (CSP13 (clientParam, serverParam)) = do
                         }
                 }
     if isCredentialDSA cred
-        then runTLSInitFailureGen (clientParam', serverParam') hsServer hsClient
+        then runTLSInitFailureGen (clientParam', serverParam') hsClient hsServer
         else runTLSPipe (clientParam', serverParam') tlsClient tlsServer
   where
     validateChain cred chain
