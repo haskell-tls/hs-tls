@@ -52,18 +52,18 @@ type TakeOutput = IO [ByteString]
 
 runTLSPipe
     :: (ClientParams, ServerParams)
-    -> ServerWithOutput
     -> ClinetWithInput
+    -> ServerWithOutput
     -> IO ()
 runTLSPipe = runTLSPipeN 1
 
 runTLSPipeN
     :: Int
     -> (ClientParams, ServerParams)
-    -> ServerWithOutput
     -> ClinetWithInput
+    -> ServerWithOutput
     -> IO ()
-runTLSPipeN n params tlsServer tlsClient = do
+runTLSPipeN n params tlsClient tlsServer = do
     -- generate some data to send
     ds <- replicateM n $ B.pack <$> generate (someWords8 256)
     -- send it
@@ -182,15 +182,8 @@ byeBye ctx = do
 
 runTLSPipePredicate
     :: (ClientParams, ServerParams) -> (Maybe Information -> Bool) -> IO ()
-runTLSPipePredicate params p = runTLSPipe params tlsServer tlsClient
+runTLSPipePredicate params p = runTLSPipe params tlsClient tlsServer
   where
-    tlsServer ctx queue = do
-        handshake ctx
-        checkCtxFinished ctx
-        checkInfoPredicate ctx
-        d <- recvData ctx
-        writeChan queue [d]
-        bye ctx
     tlsClient queue ctx = do
         handshake ctx
         checkCtxFinished ctx
@@ -198,6 +191,13 @@ runTLSPipePredicate params p = runTLSPipe params tlsServer tlsClient
         d <- readChan queue
         sendData ctx (L.fromChunks [d])
         byeBye ctx
+    tlsServer ctx queue = do
+        handshake ctx
+        checkCtxFinished ctx
+        checkInfoPredicate ctx
+        d <- recvData ctx
+        writeChan queue [d]
+        bye ctx
     checkInfoPredicate ctx = do
         minfo <- contextGetInformation ctx
         unless (p minfo) $
@@ -211,8 +211,16 @@ runTLSPipeSimple13
     -> HandshakeMode13
     -> Maybe ByteString
     -> IO ()
-runTLSPipeSimple13 params mode mEarlyData = runTLSPipe params tlsServer tlsClient
+runTLSPipeSimple13 params mode mEarlyData = runTLSPipe params tlsClient tlsServer
   where
+    tlsClient queue ctx = do
+        handshake ctx
+        checkCtxFinished ctx
+        d <- readChan queue
+        sendData ctx (L.fromChunks [d])
+        minfo <- contextGetInformation ctx
+        (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
+        byeBye ctx
     tlsServer ctx queue = do
         handshake ctx
         case mEarlyData of
@@ -227,32 +235,17 @@ runTLSPipeSimple13 params mode mEarlyData = runTLSPipe params tlsServer tlsClien
         minfo <- contextGetInformation ctx
         (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
         bye ctx
-    tlsClient queue ctx = do
-        handshake ctx
-        checkCtxFinished ctx
-        d <- readChan queue
-        sendData ctx (L.fromChunks [d])
-        minfo <- contextGetInformation ctx
-        (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
-        byeBye ctx
 
 runTLSPipeCapture13
     :: (ClientParams, ServerParams) -> IO ([Handshake13], [Handshake13])
 runTLSPipeCapture13 params = do
     sRef <- newIORef []
     cRef <- newIORef []
-    runTLSPipe params (tlsServer sRef) (tlsClient cRef)
+    runTLSPipe params (tlsClient cRef) (tlsServer sRef)
     sReceived <- readIORef sRef
     cReceived <- readIORef cRef
     return (reverse sReceived, reverse cReceived)
   where
-    tlsServer ref ctx queue = do
-        installHook ctx ref
-        handshake ctx
-        checkCtxFinished ctx
-        d <- recvData ctx
-        writeChan queue [d]
-        bye ctx
     tlsClient ref queue ctx = do
         installHook ctx ref
         handshake ctx
@@ -260,23 +253,20 @@ runTLSPipeCapture13 params = do
         d <- readChan queue
         sendData ctx (L.fromChunks [d])
         byeBye ctx
+    tlsServer ref ctx queue = do
+        installHook ctx ref
+        handshake ctx
+        checkCtxFinished ctx
+        d <- recvData ctx
+        writeChan queue [d]
+        bye ctx
     installHook ctx ref =
         let recv hss = modifyIORef ref (hss :) >> return hss
          in contextHookSetHandshake13Recv ctx recv
 
 runTLSPipeSimpleKeyUpdate :: (ClientParams, ServerParams) -> IO ()
-runTLSPipeSimpleKeyUpdate params = runTLSPipeN 3 params tlsServer tlsClient
+runTLSPipeSimpleKeyUpdate params = runTLSPipeN 3 params tlsClient tlsServer
   where
-    tlsServer ctx queue = do
-        handshake ctx
-        checkCtxFinished ctx
-        d0 <- recvData ctx
-        req <- generate $ elements [OneWay, TwoWay]
-        _ <- updateKey ctx req
-        d1 <- recvData ctx
-        d2 <- recvData ctx
-        writeChan queue [d0, d1, d2]
-        bye ctx
     tlsClient queue ctx = do
         handshake ctx
         checkCtxFinished ctx
@@ -289,6 +279,16 @@ runTLSPipeSimpleKeyUpdate params = runTLSPipeN 3 params tlsServer tlsClient
         d2 <- readChan queue
         sendData ctx (L.fromChunks [d2])
         byeBye ctx
+    tlsServer ctx queue = do
+        handshake ctx
+        checkCtxFinished ctx
+        d0 <- recvData ctx
+        req <- generate $ elements [OneWay, TwoWay]
+        _ <- updateKey ctx req
+        d1 <- recvData ctx
+        d2 <- recvData ctx
+        writeChan queue [d0, d1, d2]
+        bye ctx
 
 chunkLengths :: Int -> [Int]
 chunkLengths len

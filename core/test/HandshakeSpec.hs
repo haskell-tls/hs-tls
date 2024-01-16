@@ -539,16 +539,8 @@ handshake_alpn (clientParam, serverParam) = do
                         }
                 }
         params' = (clientParam', serverParam')
-    runTLSPipe params' tlsServer tlsClient
+    runTLSPipe params' tlsClient tlsServer
   where
-    tlsServer ctx queue = do
-        handshake ctx
-        checkCtxFinished ctx
-        proto <- getNegotiatedProtocol ctx
-        proto `shouldBe` Just "h2"
-        d <- recvData ctx
-        writeChan queue [d]
-        bye ctx
     tlsClient queue ctx = do
         handshake ctx
         checkCtxFinished ctx
@@ -557,6 +549,14 @@ handshake_alpn (clientParam, serverParam) = do
         d <- readChan queue
         sendData ctx (L.fromChunks [d])
         byeBye ctx
+    tlsServer ctx queue = do
+        handshake ctx
+        checkCtxFinished ctx
+        proto <- getNegotiatedProtocol ctx
+        proto `shouldBe` Just "h2"
+        d <- recvData ctx
+        writeChan queue [d]
+        bye ctx
     alpn xs
         | "h2" `elem` xs = return "h2"
         | otherwise = return "http/1.1"
@@ -576,18 +576,10 @@ handshake_sni (clientParam, serverParam) = do
                         }
                 }
         params' = (clientParam', serverParam')
-    runTLSPipe params' tlsServer tlsClient
+    runTLSPipe params' tlsClient tlsServer
     receivedName <- readIORef ref
     receivedName `shouldBe` Just (Just serverName)
   where
-    tlsServer ctx queue = do
-        handshake ctx
-        checkCtxFinished ctx
-        sni <- getClientSNI ctx
-        sni `shouldBe` Just serverName
-        d <- recvData ctx
-        writeChan queue [d]
-        bye ctx
     tlsClient queue ctx = do
         handshake ctx
         checkCtxFinished ctx
@@ -596,6 +588,14 @@ handshake_sni (clientParam, serverParam) = do
         d <- readChan queue
         sendData ctx (L.fromChunks [d])
         byeBye ctx
+    tlsServer ctx queue = do
+        handshake ctx
+        checkCtxFinished ctx
+        sni <- getClientSNI ctx
+        sni `shouldBe` Just serverName
+        d <- recvData ctx
+        writeChan queue [d]
+        bye ctx
     onSNI ref name = do
         mx <- readIORef ref
         mx `shouldBe` Nothing
@@ -622,22 +622,22 @@ handshake12_renegotiation (CSP12 (cparams, sparams)) = do
                 }
     if renegDisabled
         then runTLSInitFailureGen (cparams, sparams') hsServer hsClient
-        else runTLSPipe (cparams, sparams') tlsServer tlsClient
+        else runTLSPipe (cparams, sparams') tlsClient tlsServer
   where
-    tlsServer ctx queue = do
-        hsServer ctx
-        checkCtxFinished ctx
-        d <- recvData ctx
-        writeChan queue [d]
-        bye ctx
     tlsClient queue ctx = do
         hsClient ctx
         checkCtxFinished ctx
         d <- readChan queue
         sendData ctx (L.fromChunks [d])
         byeBye ctx
-    hsServer = handshake
+    tlsServer ctx queue = do
+        hsServer ctx
+        checkCtxFinished ctx
+        d <- recvData ctx
+        writeChan queue [d]
+        bye ctx
     hsClient ctx = handshake ctx >> handshake ctx
+    hsServer = handshake
 
 handshake12_session_resumption :: CSP12 -> IO ()
 handshake12_session_resumption (CSP12 plainParams) = do
@@ -1016,21 +1016,28 @@ post_handshake_auth (CSP13 (clientParam, serverParam)) = do
                 }
     if isCredentialDSA cred
         then runTLSInitFailureGen (clientParam', serverParam') hsServer hsClient
-        else runTLSPipe (clientParam', serverParam') tlsServer tlsClient
+        else runTLSPipe (clientParam', serverParam') tlsClient tlsServer
   where
     validateChain cred chain
         | chain == fst cred = return CertificateUsageAccept
         | otherwise = return (CertificateUsageReject CertificateRejectUnknownCA)
-    tlsServer ctx queue = do
-        hsServer ctx
-        d <- recvData ctx
-        writeChan queue [d]
-        bye ctx
     tlsClient queue ctx = do
         hsClient ctx
         d <- readChan queue
         sendData ctx (L.fromChunks [d])
         byeBye ctx
+    tlsServer ctx queue = do
+        hsServer ctx
+        d <- recvData ctx
+        writeChan queue [d]
+        bye ctx
+    hsClient ctx = do
+        handshake ctx
+        checkCtxFinished ctx
+        sendData ctx "request 1"
+        recvDataAssert ctx "response 1"
+        sendData ctx "request 2"
+        recvDataAssert ctx "response 2"
     hsServer ctx = do
         handshake ctx
         checkCtxFinished ctx
@@ -1041,10 +1048,3 @@ post_handshake_auth (CSP13 (clientParam, serverParam)) = do
         _ <- requestCertificate ctx
         _ <- requestCertificate ctx -- two simultaneously
         sendData ctx "response 2"
-    hsClient ctx = do
-        handshake ctx
-        checkCtxFinished ctx
-        sendData ctx "request 1"
-        recvDataAssert ctx "response 1"
-        sendData ctx "request 2"
-        recvDataAssert ctx "response 2"

@@ -18,16 +18,7 @@ spec :: Spec
 spec = do
     describe "thread safety" $ do
         prop "can read/write concurrently" $ \params ->
-            runTLSPipe params tlsServer tlsClient
-
-tlsServer :: Context -> Chan [ByteString] -> IO ()
-tlsServer ctx queue = do
-    handshake ctx
-    checkCtxFinished ctx
-    runReaderWriters ctx "client-value" "server-value"
-    d <- recvData ctx
-    writeChan queue [d]
-    bye ctx
+            runTLSPipe params tlsClient tlsServer
 
 tlsClient :: Chan ByteString -> Context -> IO ()
 tlsClient queue ctx = do
@@ -37,6 +28,15 @@ tlsClient queue ctx = do
     d <- readChan queue
     sendData ctx (L.fromChunks [d])
     byeBye ctx
+
+tlsServer :: Context -> Chan [ByteString] -> IO ()
+tlsServer ctx queue = do
+    handshake ctx
+    checkCtxFinished ctx
+    runReaderWriters ctx "client-value" "server-value"
+    d <- recvData ctx
+    writeChan queue [d]
+    bye ctx
 
 runReaderWriters :: Context -> ByteString -> L.ByteString -> IO ()
 runReaderWriters ctx r w =
