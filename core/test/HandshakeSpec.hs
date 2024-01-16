@@ -1016,3 +1016,8 @@ post_handshake_auth (CSP13 (clientParam, serverParam)) = do
         _ <- requestCertificate ctx
         _ <- requestCertificate ctx -- two simultaneously
         sendData ctx "response 2"
+
+recvDataAssert :: Context -> ByteString -> IO ()
+recvDataAssert ctx expected = do
+    got <- recvData ctx
+    got `shouldBe` expected

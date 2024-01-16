@@ -11,7 +11,6 @@ module Run (
     runTLSPipeCapture13,
     runTLSPipeFailure,
     checkCtxFinished,
-    recvDataAssert,
     byeBye,
     readClientSessionRef,
     twoSessionRefs,
@@ -340,11 +339,6 @@ checkCtxFinished ctx = do
     mExporter <- getTLSExporter ctx
     when (isNothing (mUnique <|> mExporter)) $
         fail "unexpected channel binding"
-
-recvDataAssert :: Context -> ByteString -> IO ()
-recvDataAssert ctx expected = do
-    got <- recvData ctx
-    got `shouldBe` expected
 
 ----------------------------------------------------------------
 
