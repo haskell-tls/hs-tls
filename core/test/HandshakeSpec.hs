@@ -4,6 +4,7 @@ module HandshakeSpec where
 
 import Control.Concurrent
 import Control.Monad
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Data.Default.Class
@@ -21,6 +22,7 @@ import Test.QuickCheck
 import Arbitrary
 import PipeChan
 import Run
+import Session
 
 spec :: Spec
 spec = do

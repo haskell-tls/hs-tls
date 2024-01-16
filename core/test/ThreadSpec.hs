@@ -43,3 +43,8 @@ runReaderWriters ctx r w =
     -- run concurrently 10 readers and 10 writers on the same context
     let workers = concat $ replicate 10 [recvDataAssert ctx r, sendData ctx w]
      in runConcurrently $ traverse_ Concurrently workers
+
+recvDataAssert :: Context -> ByteString -> IO ()
+recvDataAssert ctx expected = do
+    got <- recvData ctx
+    got `shouldBe` expected

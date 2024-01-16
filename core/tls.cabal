@@ -150,6 +150,7 @@ test-suite spec
         PipeChan
         PubKey
         Run
+        Session
         ThreadSpec
 
     default-extensions: Strict StrictData
