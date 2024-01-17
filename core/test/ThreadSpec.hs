@@ -19,7 +19,7 @@ spec :: Spec
 spec = do
     describe "thread safety" $ do
         prop "can read/write concurrently" $ \params ->
-            runTLSPipe params tlsClient tlsServer
+            runTLS params tlsClient tlsServer
 
 tlsClient :: Chan ByteString -> Context -> IO ()
 tlsClient queue ctx = do

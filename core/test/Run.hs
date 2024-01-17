@@ -2,14 +2,14 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Run (
-    runTLSPipe,
-    runTLSPipeSimple,
-    runTLSPipePredicate,
-    runTLSPipePredicate2,
-    runTLSPipeSimple13,
-    runTLSPipeSimpleKeyUpdate,
-    runTLSPipeCapture13,
-    runTLSPipeFailure,
+    runTLS,
+    runTLSSimple,
+    runTLSPredicate,
+    runTLSPredicate2,
+    runTLSSimple13,
+    runTLSSimpleKeyUpdate,
+    runTLSCapture13,
+    runTLSFailure,
 ) where
 
 import Control.Concurrent
@@ -35,20 +35,20 @@ type ServerWithOutput = Context -> Chan [ByteString] -> IO ()
 
 ----------------------------------------------------------------
 
-runTLSPipe
+runTLS
     :: (ClientParams, ServerParams)
     -> ClinetWithInput
     -> ServerWithOutput
     -> IO ()
-runTLSPipe = runTLSPipeN 1
+runTLS = runTLSN 1
 
-runTLSPipeN
+runTLSN
     :: Int
     -> (ClientParams, ServerParams)
     -> ClinetWithInput
     -> ServerWithOutput
     -> IO ()
-runTLSPipeN n params tlsClient tlsServer = do
+runTLSN n params tlsClient tlsServer = do
     inputChan <- newChan
     outputChan <- newChan
     -- generate some data to send
@@ -83,12 +83,12 @@ runTLSPipeN n params tlsClient tlsServer = do
 
 ----------------------------------------------------------------
 
-runTLSPipeSimple :: (ClientParams, ServerParams) -> IO ()
-runTLSPipeSimple params = runTLSPipePredicate params (const True)
+runTLSSimple :: (ClientParams, ServerParams) -> IO ()
+runTLSSimple params = runTLSPredicate params (const True)
 
-runTLSPipePredicate
+runTLSPredicate
     :: (ClientParams, ServerParams) -> (Maybe Information -> Bool) -> IO ()
-runTLSPipePredicate params p = runTLSPipe params tlsClient tlsServer
+runTLSPredicate params p = runTLS params tlsClient tlsServer
   where
     tlsClient queue ctx = do
         handshake ctx
@@ -109,13 +109,13 @@ runTLSPipePredicate params p = runTLSPipe params tlsClient tlsServer
         unless (p minfo) $
             fail ("unexpected information: " ++ show minfo)
 
-runTLSPipePredicate2
+runTLSPredicate2
     :: (ClientParams, ServerParams)
     -> (Context -> IO ())
     -> (Context -> IO ())
     -> IO ()
-runTLSPipePredicate2 params checkClient checkServer =
-    runTLSPipe params tlsClient tlsServer
+runTLSPredicate2 params checkClient checkServer =
+    runTLS params tlsClient tlsServer
   where
     tlsClient queue ctx = do
         handshake ctx
@@ -134,12 +134,12 @@ runTLSPipePredicate2 params checkClient checkServer =
 
 ----------------------------------------------------------------
 
-runTLSPipeSimple13
+runTLSSimple13
     :: (ClientParams, ServerParams)
     -> HandshakeMode13
     -> Maybe ByteString
     -> IO ()
-runTLSPipeSimple13 params mode mEarlyData = runTLSPipe params tlsClient tlsServer
+runTLSSimple13 params mode mEarlyData = runTLS params tlsClient tlsServer
   where
     tlsClient queue ctx = do
         handshake ctx
@@ -169,12 +169,12 @@ runTLSPipeSimple13 params mode mEarlyData = runTLSPipe params tlsClient tlsServe
         | len > 0 = [len]
         | otherwise = []
 
-runTLSPipeCapture13
+runTLSCapture13
     :: (ClientParams, ServerParams) -> IO ([Handshake13], [Handshake13])
-runTLSPipeCapture13 params = do
+runTLSCapture13 params = do
     sRef <- newIORef []
     cRef <- newIORef []
-    runTLSPipe params (tlsClient cRef) (tlsServer sRef)
+    runTLS params (tlsClient cRef) (tlsServer sRef)
     sReceived <- readIORef sRef
     cReceived <- readIORef cRef
     return (reverse sReceived, reverse cReceived)
@@ -197,8 +197,8 @@ runTLSPipeCapture13 params = do
         let recv hss = modifyIORef ref (hss :) >> return hss
          in contextHookSetHandshake13Recv ctx recv
 
-runTLSPipeSimpleKeyUpdate :: (ClientParams, ServerParams) -> IO ()
-runTLSPipeSimpleKeyUpdate params = runTLSPipeN 3 params tlsClient tlsServer
+runTLSSimpleKeyUpdate :: (ClientParams, ServerParams) -> IO ()
+runTLSSimpleKeyUpdate params = runTLSN 3 params tlsClient tlsServer
   where
     tlsClient queue ctx = do
         handshake ctx
@@ -225,12 +225,12 @@ runTLSPipeSimpleKeyUpdate params = runTLSPipeN 3 params tlsClient tlsServer
 
 ----------------------------------------------------------------
 
-runTLSPipeFailure
+runTLSFailure
     :: (ClientParams, ServerParams)
     -> (Context -> IO c)
     -> (Context -> IO s)
     -> IO ()
-runTLSPipeFailure params hsClient hsServer =
+runTLSFailure params hsClient hsServer =
     withPairContext params $ \(cCtx, sCtx) ->
         concurrently_ (tlsServer sCtx) (tlsClient cCtx)
   where
