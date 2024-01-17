@@ -609,7 +609,8 @@ handshake12_renegotiation (CSP12 (cparams, sparams)) = do
         else runTLSSimple (cparams, sparams')
   where
     hsClient ctx = handshake ctx >> handshake ctx
-    hsServer = handshake
+    -- recvData receives the alert from the second handshake
+    hsServer ctx = handshake ctx >> void (recvData ctx)
 
 handshake12_session_resumption :: CSP12 -> IO ()
 handshake12_session_resumption (CSP12 plainParams) = do

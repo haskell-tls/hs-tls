@@ -208,12 +208,8 @@ runTLSFailure params hsClient hsServer =
     withPairContext params $ \(cCtx, sCtx) ->
         concurrently_ (tlsServer sCtx) (tlsClient cCtx)
   where
-    tlsClient ctx =
-        (void (hsClient ctx) >> byeBye ctx)
-            `shouldThrow` anyTLSException
-    tlsServer ctx =
-        (void (hsServer ctx) >> byeBye ctx)
-            `shouldThrow` anyTLSException
+    tlsClient ctx = hsClient ctx `shouldThrow` anyTLSException
+    tlsServer ctx = hsServer ctx `shouldThrow` anyTLSException
 
 anyTLSException :: Selector TLSException
 anyTLSException = const True
