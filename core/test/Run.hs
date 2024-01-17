@@ -55,8 +55,8 @@ runTLSPipeN n params tlsClient tlsServer = do
     ds <- replicateM n $ B.pack <$> generate (someWords8 256)
     forM_ ds $ writeChan inputChan
     -- run client and server
-    (cCtx, sCtx) <- newPairContext params
-    concurrently_ (server sCtx outputChan) (client inputChan cCtx)
+    withPairContext params $ \(cCtx, sCtx) ->
+        concurrently_ (server sCtx outputChan) (client inputChan cCtx)
     -- read result
     m_dsres <- timeout 60000000 $ readChan outputChan -- 60 sec
     case m_dsres of
@@ -230,10 +230,9 @@ runTLSPipeFailure
     -> (Context -> IO c)
     -> (Context -> IO s)
     -> IO ()
-runTLSPipeFailure params hsClient hsServer = do
-    (cCtx, sCtx) <- newPairContext params
-
-    concurrently_ (tlsServer sCtx) (tlsClient cCtx)
+runTLSPipeFailure params hsClient hsServer =
+    withPairContext params $ \(cCtx, sCtx) ->
+        concurrently_ (tlsServer sCtx) (tlsClient cCtx)
   where
     tlsClient ctx =
         (void (hsClient ctx) >> byeBye ctx)
@@ -250,11 +249,20 @@ anyTLSException = const True
 debug :: Bool
 debug = False
 
+withPairContext
+    :: (ClientParams, ServerParams) -> ((Context, Context) -> IO ()) -> IO ()
+withPairContext params body =
+    E.bracket
+        (newPairContext params)
+        (\((t1, t2), _) -> killThread t1 >> killThread t2)
+        (\(_, ctxs) -> body ctxs)
+
 newPairContext
-    :: (ClientParams, ServerParams) -> IO (Context, Context)
+    :: (ClientParams, ServerParams)
+    -> IO ((ThreadId, ThreadId), (Context, Context))
 newPairContext (cParams, sParams) = do
     pipe <- newPipe
-    _ <- runPipe pipe
+    tids <- runPipe pipe
     let noFlush = return ()
     let noClose = return ()
 
@@ -266,7 +274,7 @@ newPairContext (cParams, sParams) = do
     contextHookSetLogging cCtx' (logging "client: ")
     contextHookSetLogging sCtx' (logging "server: ")
 
-    return (cCtx', sCtx')
+    return (tids, (cCtx', sCtx'))
   where
     logging pre =
         if debug

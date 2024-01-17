@@ -53,8 +53,8 @@ newPipe =
         <*> newUniPipeChan
         <*> newUniPipeChan
 
-runPipe :: PipeChan -> IO ThreadId
-runPipe PipeChan{..} = runUniPipe c2s >> runUniPipe s2c
+runPipe :: PipeChan -> IO (ThreadId, ThreadId)
+runPipe PipeChan{..} = (,) <$> runUniPipe c2s <*> runUniPipe s2c
 
 readPipeC :: PipeChan -> Int -> IO ByteString
 readPipeC PipeChan{..} sz = readBuffered fromS (getWriteUniPipe s2c) sz
