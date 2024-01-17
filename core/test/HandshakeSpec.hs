@@ -2,10 +2,8 @@
 
 module HandshakeSpec where
 
-import Control.Concurrent
 import Control.Monad
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Lazy as L
 import Data.Default.Class
 import Data.IORef
 import Data.List
@@ -990,23 +988,11 @@ post_handshake_auth (CSP13 (clientParam, serverParam)) = do
                 }
     if isCredentialDSA cred
         then runTLSFailure (clientParam', serverParam') hsClient hsServer
-        else runTLS (clientParam', serverParam') tlsClient tlsServer
+        else runTLSSuccess (clientParam', serverParam') hsClient hsServer
   where
     validateChain cred chain
         | chain == fst cred = return CertificateUsageAccept
         | otherwise = return (CertificateUsageReject CertificateRejectUnknownCA)
-    tlsClient queue ctx = do
-        hsClient ctx
-        d <- readChan queue
-        sendData ctx (L.fromChunks [d])
-        checkCtxFinished ctx
-        byeBye ctx
-    tlsServer ctx queue = do
-        hsServer ctx
-        d <- recvData ctx
-        writeChan queue [d]
-        checkCtxFinished ctx
-        bye ctx
     hsClient ctx = do
         handshake ctx
         sendData ctx "request 1"
