@@ -42,6 +42,7 @@ spec = do
         prop "can handle server key usage" handshake_server_key_usage
         prop "can handle client key usage" handshake_client_key_usage
         prop "can authenticate client" handshake_client_auth
+        prop "can receive client authentication failure" handshake_client_auth_fail
         prop "can handle extended master secret" handshake_ems
         prop "can resume with extended master secret" handshake_resumption_ems
         prop "can handle ALPN" handshake_alpn
@@ -457,6 +458,31 @@ handshake_client_auth (clientParam, serverParam) = do
     validateChain cred chain
         | chain == fst cred = return CertificateUsageAccept
         | otherwise = return (CertificateUsageReject CertificateRejectUnknownCA)
+
+handshake_client_auth_fail :: (ClientParams, ServerParams) -> IO ()
+handshake_client_auth_fail (clientParam, serverParam) = do
+    let clientVersions = supportedVersions $ clientSupported clientParam
+        serverVersions = supportedVersions $ serverSupported serverParam
+        version = maximum (clientVersions `intersect` serverVersions)
+    cred <- generate (arbitraryClientCredential version)
+    let clientParam' =
+            clientParam
+                { clientHooks =
+                    (clientHooks clientParam)
+                        { onCertificateRequest = \_ -> return $ Just cred
+                        }
+                }
+        serverParam' =
+            serverParam
+                { serverWantClientCert = True
+                , serverHooks =
+                    (serverHooks serverParam)
+                        { onClientCertificate = validateChain cred
+                        }
+                }
+    runTLSFailure (clientParam', serverParam') handshake handshake
+  where
+    validateChain _ _ = return (CertificateUsageReject CertificateRejectUnknownCA)
 
 --------------------------------------------------------------
 
