@@ -2,19 +2,16 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Run (
-    runTLSPipe,
-    runTLSPipeSimple,
-    runTLSPipePredicate,
-    runTLSPipePredicate2,
-    runTLSPipeSimple13,
-    runTLSPipeSimpleKeyUpdate,
-    runTLSPipeCapture13,
-    runTLSPipeFailure,
-    checkCtxFinished,
-    byeBye,
+    runTLS,
+    runTLSSimple,
+    runTLSPredicate,
+    runTLSSimple13,
+    runTLSSimpleKeyUpdate,
+    runTLSCapture13,
+    runTLSSuccess,
+    runTLSFailure,
 ) where
 
-import Control.Applicative
 import Control.Concurrent
 import Control.Concurrent.Async
 import qualified Control.Exception as E
@@ -24,12 +21,12 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Data.Default.Class
 import Data.IORef
-import Data.Maybe
 import Network.TLS
 import System.Timeout
 import Test.Hspec
 import Test.QuickCheck
 
+import API
 import Arbitrary
 import PipeChan
 
@@ -38,28 +35,28 @@ type ServerWithOutput = Context -> Chan [ByteString] -> IO ()
 
 ----------------------------------------------------------------
 
-runTLSPipe
+runTLS
     :: (ClientParams, ServerParams)
     -> ClinetWithInput
     -> ServerWithOutput
     -> IO ()
-runTLSPipe = runTLSPipeN 1
+runTLS = runTLSN 1
 
-runTLSPipeN
+runTLSN
     :: Int
     -> (ClientParams, ServerParams)
     -> ClinetWithInput
     -> ServerWithOutput
     -> IO ()
-runTLSPipeN n params tlsClient tlsServer = do
+runTLSN n params tlsClient tlsServer = do
     inputChan <- newChan
     outputChan <- newChan
     -- generate some data to send
     ds <- replicateM n $ B.pack <$> generate (someWords8 256)
     forM_ ds $ writeChan inputChan
     -- run client and server
-    (cCtx, sCtx) <- newPairContext params
-    concurrently_ (server sCtx outputChan) (client inputChan cCtx)
+    withPairContext params $ \(cCtx, sCtx) ->
+        concurrently_ (server sCtx outputChan) (client inputChan cCtx)
     -- read result
     m_dsres <- timeout 60000000 $ readChan outputChan -- 60 sec
     case m_dsres of
@@ -86,73 +83,39 @@ runTLSPipeN n params tlsClient tlsServer = do
 
 ----------------------------------------------------------------
 
-runTLSPipeSimple :: (ClientParams, ServerParams) -> IO ()
-runTLSPipeSimple params = runTLSPipePredicate params (const True)
+runTLSSimple :: (ClientParams, ServerParams) -> IO ()
+runTLSSimple params = runTLSPredicate params (const True)
 
-runTLSPipePredicate
+runTLSPredicate
     :: (ClientParams, ServerParams) -> (Maybe Information -> Bool) -> IO ()
-runTLSPipePredicate params p = runTLSPipe params tlsClient tlsServer
+runTLSPredicate params p = runTLSSuccess params hsClient hsServer
   where
-    tlsClient queue ctx = do
+    hsClient ctx = do
         handshake ctx
-        checkCtxFinished ctx
         checkInfoPredicate ctx
-        d <- readChan queue
-        sendData ctx (L.fromChunks [d])
-        byeBye ctx
-    tlsServer ctx queue = do
+    hsServer ctx = do
         handshake ctx
-        checkCtxFinished ctx
         checkInfoPredicate ctx
-        d <- recvData ctx
-        writeChan queue [d]
-        bye ctx
     checkInfoPredicate ctx = do
         minfo <- contextGetInformation ctx
         unless (p minfo) $
             fail ("unexpected information: " ++ show minfo)
 
-runTLSPipePredicate2
-    :: (ClientParams, ServerParams)
-    -> (Context -> IO ())
-    -> (Context -> IO ())
-    -> IO ()
-runTLSPipePredicate2 params checkClient checkServer =
-    runTLSPipe params tlsClient tlsServer
-  where
-    tlsClient queue ctx = do
-        handshake ctx
-        checkCtxFinished ctx
-        checkClient ctx
-        d <- readChan queue
-        sendData ctx (L.fromChunks [d])
-        byeBye ctx
-    tlsServer ctx queue = do
-        handshake ctx
-        checkCtxFinished ctx
-        checkServer ctx
-        d <- recvData ctx
-        writeChan queue [d]
-        bye ctx
-
 ----------------------------------------------------------------
 
-runTLSPipeSimple13
+runTLSSimple13
     :: (ClientParams, ServerParams)
     -> HandshakeMode13
     -> Maybe ByteString
     -> IO ()
-runTLSPipeSimple13 params mode mEarlyData = runTLSPipe params tlsClient tlsServer
+runTLSSimple13 params mode mEarlyData =
+    runTLSSuccess params hsClient hsServer
   where
-    tlsClient queue ctx = do
+    hsClient ctx = do
         handshake ctx
-        checkCtxFinished ctx
-        d <- readChan queue
-        sendData ctx (L.fromChunks [d])
         minfo <- contextGetInformation ctx
         (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
-        byeBye ctx
-    tlsServer ctx queue = do
+    hsServer ctx = do
         handshake ctx
         case mEarlyData of
             Nothing -> return ()
@@ -160,52 +123,39 @@ runTLSPipeSimple13 params mode mEarlyData = runTLSPipe params tlsClient tlsServe
                 let ls = chunkLengths (B.length ed)
                 chunks <- replicateM (length ls) $ recvData ctx
                 (map B.length chunks, B.concat chunks) `shouldBe` (ls, ed)
-        d <- recvData ctx
-        checkCtxFinished ctx
-        writeChan queue [d]
         minfo <- contextGetInformation ctx
         (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
-        bye ctx
     chunkLengths :: Int -> [Int]
     chunkLengths len
         | len > 16384 = 16384 : chunkLengths (len - 16384)
         | len > 0 = [len]
         | otherwise = []
 
-runTLSPipeCapture13
+runTLSCapture13
     :: (ClientParams, ServerParams) -> IO ([Handshake13], [Handshake13])
-runTLSPipeCapture13 params = do
+runTLSCapture13 params = do
     sRef <- newIORef []
     cRef <- newIORef []
-    runTLSPipe params (tlsClient cRef) (tlsServer sRef)
+    runTLSSuccess params (hsClient cRef) (hsServer sRef)
     sReceived <- readIORef sRef
     cReceived <- readIORef cRef
     return (reverse sReceived, reverse cReceived)
   where
-    tlsClient ref queue ctx = do
+    hsClient ref ctx = do
         installHook ctx ref
         handshake ctx
-        checkCtxFinished ctx
-        d <- readChan queue
-        sendData ctx (L.fromChunks [d])
-        byeBye ctx
-    tlsServer ref ctx queue = do
+    hsServer ref ctx = do
         installHook ctx ref
         handshake ctx
-        checkCtxFinished ctx
-        d <- recvData ctx
-        writeChan queue [d]
-        bye ctx
     installHook ctx ref =
         let recv hss = modifyIORef ref (hss :) >> return hss
          in contextHookSetHandshake13Recv ctx recv
 
-runTLSPipeSimpleKeyUpdate :: (ClientParams, ServerParams) -> IO ()
-runTLSPipeSimpleKeyUpdate params = runTLSPipeN 3 params tlsClient tlsServer
+runTLSSimpleKeyUpdate :: (ClientParams, ServerParams) -> IO ()
+runTLSSimpleKeyUpdate params = runTLSN 3 params tlsClient tlsServer
   where
     tlsClient queue ctx = do
         handshake ctx
-        checkCtxFinished ctx
         d0 <- readChan queue
         sendData ctx (L.fromChunks [d0])
         d1 <- readChan queue
@@ -214,29 +164,49 @@ runTLSPipeSimpleKeyUpdate params = runTLSPipeN 3 params tlsClient tlsServer
         _ <- updateKey ctx req
         d2 <- readChan queue
         sendData ctx (L.fromChunks [d2])
+        checkCtxFinished ctx
         byeBye ctx
     tlsServer ctx queue = do
         handshake ctx
-        checkCtxFinished ctx
         d0 <- recvData ctx
         req <- generate $ elements [OneWay, TwoWay]
         _ <- updateKey ctx req
         d1 <- recvData ctx
         d2 <- recvData ctx
         writeChan queue [d0, d1, d2]
+        checkCtxFinished ctx
         bye ctx
 
 ----------------------------------------------------------------
 
-runTLSPipeFailure
+runTLSSuccess
+    :: (ClientParams, ServerParams)
+    -> (Context -> IO ())
+    -> (Context -> IO ())
+    -> IO ()
+runTLSSuccess params hsClient hsServer = runTLS params tlsClient tlsServer
+  where
+    tlsClient queue ctx = do
+        hsClient ctx
+        d <- readChan queue
+        sendData ctx (L.fromChunks [d])
+        checkCtxFinished ctx
+        byeBye ctx
+    tlsServer ctx queue = do
+        hsServer ctx
+        d <- recvData ctx
+        writeChan queue [d]
+        checkCtxFinished ctx
+        bye ctx
+
+runTLSFailure
     :: (ClientParams, ServerParams)
     -> (Context -> IO c)
     -> (Context -> IO s)
     -> IO ()
-runTLSPipeFailure params hsClient hsServer = do
-    (cCtx, sCtx) <- newPairContext params
-
-    concurrently_ (tlsServer sCtx) (tlsClient cCtx)
+runTLSFailure params hsClient hsServer =
+    withPairContext params $ \(cCtx, sCtx) ->
+        concurrently_ (tlsServer sCtx) (tlsClient cCtx)
   where
     tlsClient ctx =
         (void (hsClient ctx) >> byeBye ctx)
@@ -250,34 +220,23 @@ anyTLSException = const True
 
 ----------------------------------------------------------------
 
-checkCtxFinished :: Context -> IO ()
-checkCtxFinished ctx = do
-    mUnique <- getTLSUnique ctx
-    mExporter <- getTLSExporter ctx
-    when (isNothing (mUnique <|> mExporter)) $
-        fail "unexpected channel binding"
-
--- Terminate the write direction and wait to receive the peer EOF.  This is
--- necessary in situations where we want to confirm the peer status, or to make
--- sure to receive late messages like session tickets.  In the test suite this
--- is used each time application code ends the connection without prior call to
--- 'recvData'.
-byeBye :: Context -> IO ()
-byeBye ctx = do
-    bye ctx
-    bs <- recvData ctx
-    unless (B.null bs) $ fail "byeBye: unexpected application data"
-
-----------------------------------------------------------------
-
 debug :: Bool
 debug = False
 
+withPairContext
+    :: (ClientParams, ServerParams) -> ((Context, Context) -> IO ()) -> IO ()
+withPairContext params body =
+    E.bracket
+        (newPairContext params)
+        (\((t1, t2), _) -> killThread t1 >> killThread t2)
+        (\(_, ctxs) -> body ctxs)
+
 newPairContext
-    :: (ClientParams, ServerParams) -> IO (Context, Context)
+    :: (ClientParams, ServerParams)
+    -> IO ((ThreadId, ThreadId), (Context, Context))
 newPairContext (cParams, sParams) = do
     pipe <- newPipe
-    _ <- runPipe pipe
+    tids <- runPipe pipe
     let noFlush = return ()
     let noClose = return ()
 
@@ -289,7 +248,7 @@ newPairContext (cParams, sParams) = do
     contextHookSetLogging cCtx' (logging "client: ")
     contextHookSetLogging sCtx' (logging "server: ")
 
-    return (cCtx', sCtx')
+    return (tids, (cCtx', sCtx'))
   where
     logging pre =
         if debug
