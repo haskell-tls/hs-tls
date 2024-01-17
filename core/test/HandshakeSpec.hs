@@ -4,7 +4,6 @@ module HandshakeSpec where
 
 import Control.Concurrent
 import Control.Monad
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Data.Default.Class
@@ -19,6 +18,7 @@ import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck
 
+import API
 import Arbitrary
 import PipeChan
 import Run
@@ -1018,8 +1018,3 @@ post_handshake_auth (CSP13 (clientParam, serverParam)) = do
         _ <- requestCertificate ctx
         _ <- requestCertificate ctx -- two simultaneously
         sendData ctx "response 2"
-
-recvDataAssert :: Context -> ByteString -> IO ()
-recvDataAssert ctx expected = do
-    got <- recvData ctx
-    got `shouldBe` expected
