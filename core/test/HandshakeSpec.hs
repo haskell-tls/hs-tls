@@ -995,22 +995,22 @@ post_handshake_auth (CSP13 (clientParam, serverParam)) = do
         hsClient ctx
         d <- readChan queue
         sendData ctx (L.fromChunks [d])
+        checkCtxFinished ctx
         byeBye ctx
     tlsServer ctx queue = do
         hsServer ctx
         d <- recvData ctx
         writeChan queue [d]
+        checkCtxFinished ctx
         bye ctx
     hsClient ctx = do
         handshake ctx
-        checkCtxFinished ctx
         sendData ctx "request 1"
         recvDataAssert ctx "response 1"
         sendData ctx "request 2"
         recvDataAssert ctx "response 2"
     hsServer ctx = do
         handshake ctx
-        checkCtxFinished ctx
         recvDataAssert ctx "request 1"
         _ <- requestCertificate ctx -- single request
         sendData ctx "response 1"

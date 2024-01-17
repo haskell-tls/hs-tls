@@ -24,19 +24,19 @@ spec = do
 tlsClient :: Chan ByteString -> Context -> IO ()
 tlsClient queue ctx = do
     handshake ctx
-    checkCtxFinished ctx
     runReaderWriters ctx "server-value" "client-value"
     d <- readChan queue
     sendData ctx (L.fromChunks [d])
+    checkCtxFinished ctx
     byeBye ctx
 
 tlsServer :: Context -> Chan [ByteString] -> IO ()
 tlsServer ctx queue = do
     handshake ctx
-    checkCtxFinished ctx
     runReaderWriters ctx "client-value" "server-value"
     d <- recvData ctx
     writeChan queue [d]
+    checkCtxFinished ctx
     bye ctx
 
 runReaderWriters :: Context -> ByteString -> L.ByteString -> IO ()

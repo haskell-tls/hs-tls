@@ -92,17 +92,17 @@ runTLSPredicate params p = runTLS params tlsClient tlsServer
   where
     tlsClient queue ctx = do
         handshake ctx
-        checkCtxFinished ctx
         checkInfoPredicate ctx
         d <- readChan queue
         sendData ctx (L.fromChunks [d])
+        checkCtxFinished ctx
         byeBye ctx
     tlsServer ctx queue = do
         handshake ctx
-        checkCtxFinished ctx
         checkInfoPredicate ctx
         d <- recvData ctx
         writeChan queue [d]
+        checkCtxFinished ctx
         bye ctx
     checkInfoPredicate ctx = do
         minfo <- contextGetInformation ctx
@@ -119,17 +119,17 @@ runTLSPredicate2 params checkClient checkServer =
   where
     tlsClient queue ctx = do
         handshake ctx
-        checkCtxFinished ctx
         checkClient ctx
         d <- readChan queue
         sendData ctx (L.fromChunks [d])
+        checkCtxFinished ctx
         byeBye ctx
     tlsServer ctx queue = do
         handshake ctx
-        checkCtxFinished ctx
         checkServer ctx
         d <- recvData ctx
         writeChan queue [d]
+        checkCtxFinished ctx
         bye ctx
 
 ----------------------------------------------------------------
@@ -143,11 +143,11 @@ runTLSSimple13 params mode mEarlyData = runTLS params tlsClient tlsServer
   where
     tlsClient queue ctx = do
         handshake ctx
-        checkCtxFinished ctx
         d <- readChan queue
         sendData ctx (L.fromChunks [d])
         minfo <- contextGetInformation ctx
         (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
+        checkCtxFinished ctx
         byeBye ctx
     tlsServer ctx queue = do
         handshake ctx
@@ -158,10 +158,10 @@ runTLSSimple13 params mode mEarlyData = runTLS params tlsClient tlsServer
                 chunks <- replicateM (length ls) $ recvData ctx
                 (map B.length chunks, B.concat chunks) `shouldBe` (ls, ed)
         d <- recvData ctx
-        checkCtxFinished ctx
         writeChan queue [d]
         minfo <- contextGetInformation ctx
         (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
+        checkCtxFinished ctx
         bye ctx
     chunkLengths :: Int -> [Int]
     chunkLengths len
@@ -182,16 +182,16 @@ runTLSCapture13 params = do
     tlsClient ref queue ctx = do
         installHook ctx ref
         handshake ctx
-        checkCtxFinished ctx
         d <- readChan queue
         sendData ctx (L.fromChunks [d])
+        checkCtxFinished ctx
         byeBye ctx
     tlsServer ref ctx queue = do
         installHook ctx ref
         handshake ctx
-        checkCtxFinished ctx
         d <- recvData ctx
         writeChan queue [d]
+        checkCtxFinished ctx
         bye ctx
     installHook ctx ref =
         let recv hss = modifyIORef ref (hss :) >> return hss
@@ -202,7 +202,6 @@ runTLSSimpleKeyUpdate params = runTLSN 3 params tlsClient tlsServer
   where
     tlsClient queue ctx = do
         handshake ctx
-        checkCtxFinished ctx
         d0 <- readChan queue
         sendData ctx (L.fromChunks [d0])
         d1 <- readChan queue
@@ -211,16 +210,17 @@ runTLSSimpleKeyUpdate params = runTLSN 3 params tlsClient tlsServer
         _ <- updateKey ctx req
         d2 <- readChan queue
         sendData ctx (L.fromChunks [d2])
+        checkCtxFinished ctx
         byeBye ctx
     tlsServer ctx queue = do
         handshake ctx
-        checkCtxFinished ctx
         d0 <- recvData ctx
         req <- generate $ elements [OneWay, TwoWay]
         _ <- updateKey ctx req
         d1 <- recvData ctx
         d2 <- recvData ctx
         writeChan queue [d0, d1, d2]
+        checkCtxFinished ctx
         bye ctx
 
 ----------------------------------------------------------------
