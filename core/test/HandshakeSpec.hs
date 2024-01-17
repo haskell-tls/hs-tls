@@ -452,10 +452,7 @@ handshake_client_auth (clientParam, serverParam) = do
                         { onClientCertificate = validateChain cred
                         }
                 }
-    let shouldFail = version == TLS13 && isCredentialDSA cred
-    if shouldFail
-        then runTLSFailure (clientParam', serverParam') handshake handshake
-        else runTLSSimple (clientParam', serverParam')
+    runTLSSimple (clientParam', serverParam')
   where
     validateChain cred chain
         | chain == fst cred = return CertificateUsageAccept
