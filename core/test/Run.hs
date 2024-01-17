@@ -108,17 +108,14 @@ runTLSSimple13
     -> HandshakeMode13
     -> Maybe ByteString
     -> IO ()
-runTLSSimple13 params mode mEarlyData = runTLS params tlsClient tlsServer
+runTLSSimple13 params mode mEarlyData =
+    runTLSSuccess params hsClient hsServer
   where
-    tlsClient queue ctx = do
+    hsClient ctx = do
         handshake ctx
-        d <- readChan queue
-        sendData ctx (L.fromChunks [d])
         minfo <- contextGetInformation ctx
         (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
-        checkCtxFinished ctx
-        byeBye ctx
-    tlsServer ctx queue = do
+    hsServer ctx = do
         handshake ctx
         case mEarlyData of
             Nothing -> return ()
@@ -126,12 +123,8 @@ runTLSSimple13 params mode mEarlyData = runTLS params tlsClient tlsServer
                 let ls = chunkLengths (B.length ed)
                 chunks <- replicateM (length ls) $ recvData ctx
                 (map B.length chunks, B.concat chunks) `shouldBe` (ls, ed)
-        d <- recvData ctx
-        writeChan queue [d]
         minfo <- contextGetInformation ctx
         (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
-        checkCtxFinished ctx
-        bye ctx
     chunkLengths :: Int -> [Int]
     chunkLengths len
         | len > 16384 = 16384 : chunkLengths (len - 16384)
