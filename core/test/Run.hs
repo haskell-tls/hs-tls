@@ -143,25 +143,17 @@ runTLSCapture13
 runTLSCapture13 params = do
     sRef <- newIORef []
     cRef <- newIORef []
-    runTLS params (tlsClient cRef) (tlsServer sRef)
+    runTLSSuccess params (hsClient cRef) (hsServer sRef)
     sReceived <- readIORef sRef
     cReceived <- readIORef cRef
     return (reverse sReceived, reverse cReceived)
   where
-    tlsClient ref queue ctx = do
+    hsClient ref ctx = do
         installHook ctx ref
         handshake ctx
-        d <- readChan queue
-        sendData ctx (L.fromChunks [d])
-        checkCtxFinished ctx
-        byeBye ctx
-    tlsServer ref ctx queue = do
+    hsServer ref ctx = do
         installHook ctx ref
         handshake ctx
-        d <- recvData ctx
-        writeChan queue [d]
-        checkCtxFinished ctx
-        bye ctx
     installHook ctx ref =
         let recv hss = modifyIORef ref (hss :) >> return hss
          in contextHookSetHandshake13Recv ctx recv
