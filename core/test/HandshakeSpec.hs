@@ -541,12 +541,14 @@ handshake_alpn (clientParam, serverParam) = do
                         }
                 }
         params' = (clientParam', serverParam')
-    runTLSPredicate2 params' checkClient checkServer
+    runTLSSuccess params' hsClient hsServer
   where
-    checkClient ctx = do
+    hsClient ctx = do
+        handshake ctx
         proto <- getNegotiatedProtocol ctx
         proto `shouldBe` Just "h2"
-    checkServer ctx = do
+    hsServer ctx = do
+        handshake ctx
         proto <- getNegotiatedProtocol ctx
         proto `shouldBe` Just "h2"
     alpn xs
@@ -568,14 +570,16 @@ handshake_sni (clientParam, serverParam) = do
                         }
                 }
         params' = (clientParam', serverParam')
-    runTLSPredicate2 params' checkClient checkServer
+    runTLSSuccess params' hsClient hsServer
     receivedName <- readIORef ref
     receivedName `shouldBe` Just (Just serverName)
   where
-    checkClient ctx = do
+    hsClient ctx = do
+        handshake ctx
         sni <- getClientSNI ctx
         sni `shouldBe` Just serverName
-    checkServer ctx = do
+    hsServer ctx = do
+        handshake ctx
         sni <- getClientSNI ctx
         sni `shouldBe` Just serverName
     onSNI ref name = do

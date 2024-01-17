@@ -5,10 +5,10 @@ module Run (
     runTLS,
     runTLSSimple,
     runTLSPredicate,
-    runTLSPredicate2,
     runTLSSimple13,
     runTLSSimpleKeyUpdate,
     runTLSCapture13,
+    runTLSSuccess,
     runTLSFailure,
 ) where
 
@@ -88,49 +88,18 @@ runTLSSimple params = runTLSPredicate params (const True)
 
 runTLSPredicate
     :: (ClientParams, ServerParams) -> (Maybe Information -> Bool) -> IO ()
-runTLSPredicate params p = runTLS params tlsClient tlsServer
+runTLSPredicate params p = runTLSSuccess params hsClient hsServer
   where
-    tlsClient queue ctx = do
+    hsClient ctx = do
         handshake ctx
         checkInfoPredicate ctx
-        d <- readChan queue
-        sendData ctx (L.fromChunks [d])
-        checkCtxFinished ctx
-        byeBye ctx
-    tlsServer ctx queue = do
+    hsServer ctx = do
         handshake ctx
         checkInfoPredicate ctx
-        d <- recvData ctx
-        writeChan queue [d]
-        checkCtxFinished ctx
-        bye ctx
     checkInfoPredicate ctx = do
         minfo <- contextGetInformation ctx
         unless (p minfo) $
             fail ("unexpected information: " ++ show minfo)
-
-runTLSPredicate2
-    :: (ClientParams, ServerParams)
-    -> (Context -> IO ())
-    -> (Context -> IO ())
-    -> IO ()
-runTLSPredicate2 params checkClient checkServer =
-    runTLS params tlsClient tlsServer
-  where
-    tlsClient queue ctx = do
-        handshake ctx
-        checkClient ctx
-        d <- readChan queue
-        sendData ctx (L.fromChunks [d])
-        checkCtxFinished ctx
-        byeBye ctx
-    tlsServer ctx queue = do
-        handshake ctx
-        checkServer ctx
-        d <- recvData ctx
-        writeChan queue [d]
-        checkCtxFinished ctx
-        bye ctx
 
 ----------------------------------------------------------------
 
@@ -224,6 +193,26 @@ runTLSSimpleKeyUpdate params = runTLSN 3 params tlsClient tlsServer
         bye ctx
 
 ----------------------------------------------------------------
+
+runTLSSuccess
+    :: (ClientParams, ServerParams)
+    -> (Context -> IO ())
+    -> (Context -> IO ())
+    -> IO ()
+runTLSSuccess params hsClient hsServer = runTLS params tlsClient tlsServer
+  where
+    tlsClient queue ctx = do
+        hsClient ctx
+        d <- readChan queue
+        sendData ctx (L.fromChunks [d])
+        checkCtxFinished ctx
+        byeBye ctx
+    tlsServer ctx queue = do
+        hsServer ctx
+        d <- recvData ctx
+        writeChan queue [d]
+        checkCtxFinished ctx
+        bye ctx
 
 runTLSFailure
     :: (ClientParams, ServerParams)
