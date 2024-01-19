@@ -55,6 +55,9 @@ module Network.TLS.Context (
     getTLSServerEndPoint,
     getFinished,
     getPeerFinished,
+    TLS13State (..),
+    getTLS13State,
+    modifyTLS13State,
 ) where
 
 import Control.Concurrent.MVar
@@ -163,6 +166,7 @@ contextNew backend params = liftIO $ do
     lockWrite <- newMVar ()
     lockRead <- newMVar ()
     lockState <- newMVar ()
+    st13ref <- newIORef defaultTLS13State
 
     let ctx =
             Context
@@ -192,6 +196,7 @@ contextNew backend params = liftIO $ do
                 , ctxRecordLayer = recordLayer
                 , ctxHandshakeSync = HandshakeSync syncNoOp syncNoOp
                 , ctxQUICMode = False
+                , ctxTLS13State = st13ref
                 }
 
         syncNoOp _ _ = return ()

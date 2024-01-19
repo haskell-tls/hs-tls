@@ -2,12 +2,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
--- |
--- Module      : Network.TLS.Context.Internal
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
 module Network.TLS.Context.Internal (
     -- * Context configuration
     ClientParams (..),
@@ -66,7 +60,18 @@ module Network.TLS.Context.Internal (
 
     -- * Misc
     HandshakeSync (..),
+    TLS13State (..),
+    defaultTLS13State,
+    getTLS13State,
+    modifyTLS13State,
 ) where
+
+import Control.Concurrent.MVar
+import Control.Exception (throwIO)
+import Control.Monad.State.Strict
+import qualified Data.ByteString as B
+import Data.IORef
+import Data.Tuple
 
 import Network.TLS.Backend
 import Network.TLS.Cipher
@@ -85,13 +90,6 @@ import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types
 import Network.TLS.Util
-
-import Control.Concurrent.MVar
-import Control.Exception (throwIO)
-import Control.Monad.State.Strict
-import qualified Data.ByteString as B
-import Data.IORef
-import Data.Tuple
 
 -- | Information related to a running context, e.g. current cipher
 data Information = Information
@@ -153,7 +151,24 @@ data Context = forall a.
     , ctxRecordLayer :: RecordLayer a
     , ctxHandshakeSync :: HandshakeSync
     , ctxQUICMode :: Bool
+    , ctxTLS13State :: IORef TLS13State
     }
+
+data TLS13State = TLS13State
+    { tls13stRecvNST :: Bool
+    }
+
+defaultTLS13State :: TLS13State
+defaultTLS13State =
+    TLS13State
+        { tls13stRecvNST = False
+        }
+
+getTLS13State :: Context -> IO TLS13State
+getTLS13State Context{..} = readIORef ctxTLS13State
+
+modifyTLS13State :: Context -> (TLS13State -> TLS13State) -> IO ()
+modifyTLS13State Context{..} f = atomicModifyIORef' ctxTLS13State $ \st -> (f st, ())
 
 data HandshakeSync
     = HandshakeSync

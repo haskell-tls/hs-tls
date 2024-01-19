@@ -269,11 +269,11 @@ sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
     runPacketFlight ctx $ do
         case chain of
             Nothing -> return ()
-            Just cc -> usingHState ctx getCertReqToken >>= sendClientData13 cc
+            Just cc -> usingHState ctx getCertReqToken >>= loadClientData13 cc
         rawFinished <- makeFinished ctx usedHash baseKey
         loadPacket13 ctx $ Handshake13 [rawFinished]
   where
-    sendClientData13 chain (Just token) = do
+    loadClientData13 chain (Just token) = do
         let (CertificateChain certs) = chain
             certExts = replicate (length certs) []
             cHashSigs = filter isHashSignatureValid13 $ supportedHashSignatures $ ctxSupported ctx
@@ -288,7 +288,7 @@ sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
                 vfy <- makeCertVerify ctx pubKey sigAlg hChSc
                 loadPacket13 ctx $ Handshake13 [vfy]
     --
-    sendClientData13 _ _ =
+    loadClientData13 _ _ =
         throwCore $
             Error_Protocol "missing TLS 1.3 certificate request context token" InternalError
 

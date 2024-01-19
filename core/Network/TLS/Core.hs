@@ -2,12 +2,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_HADDOCK hide #-}
 
--- |
--- Module      : Network.TLS.Core
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
 module Network.TLS.Core (
     -- * Internal packet sending and receiving
     sendPacket,
@@ -34,9 +28,12 @@ module Network.TLS.Core (
 
 import qualified Control.Exception as E
 import Control.Monad (unless, void, when)
+import Control.Monad.State.Strict
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
+import System.Timeout
+
 import Network.TLS.Cipher
 import Network.TLS.Context
 import Network.TLS.Crypto
@@ -52,7 +49,7 @@ import Network.TLS.KeySchedule
 import Network.TLS.Parameters
 import Network.TLS.PostHandshake
 import Network.TLS.Session
-import Network.TLS.State (getSession)
+import Network.TLS.State (getRole, getSession)
 import qualified Network.TLS.State as S
 import Network.TLS.Struct
 import Network.TLS.Struct13
@@ -63,8 +60,6 @@ import Network.TLS.Types (
     Role (..),
  )
 import Network.TLS.Util (catchException, mapChunks_)
-
-import Control.Monad.State.Strict
 
 -- | notify the context that this side wants to close connection.
 -- this is important that it is called before closing the handle, otherwise
@@ -83,6 +78,13 @@ bye ctx = liftIO $ do
             if tls13
                 then sendPacket13 ctx $ Alert13 [(AlertLevel_Warning, CloseNotify)]
                 else sendPacket ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
+    role <- usingState_ ctx getRole
+    recvNST <- tls13stRecvNST <$> getTLS13State ctx
+    -- receiving NewSessionTicket
+    when (tls13 && not recvNST && role == ClientRole) $
+        void $
+            timeout 1000 $
+                recvData ctx
 
 -- | If the ALPN extensions have been used, this will
 -- return get the protocol agreed upon.
@@ -231,6 +233,7 @@ recvData13 ctx = do
             sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
             let label' = B.copy label
             void $ sessionEstablish (sharedSessionManager $ ctxShared ctx) label' sdata
+            modifyTLS13State ctx $ \st -> st{tls13stRecvNST = True}
         -- putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
         loopHandshake13 hs
     loopHandshake13 (KeyUpdate13 mode : hs) = do
