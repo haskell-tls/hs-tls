@@ -61,6 +61,21 @@ import Network.TLS.Types (
  )
 import Network.TLS.Util (catchException, mapChunks_)
 
+-- | Handshake for a new TLS connection
+-- This is to be called at the beginning of a connection, and during renegotiation
+handshake :: MonadIO m => Context -> m ()
+handshake ctx = do
+    handshake_ ctx
+    -- Trying to receive an alert of client authentication failure
+    liftIO $ do
+        tls13 <- tls13orLater ctx
+        sentClientCert <- tls13stSentClientCert <$> getTLS13State ctx
+        when (tls13 && sentClientCert) $ do
+            mdat <- timeout 1000 $ recvData ctx
+            case mdat of
+                Nothing -> return ()
+                Just dat -> modifyTLS13State ctx $ \st -> st{tls13stPendingRecvData = Just dat}
+
 -- | notify the context that this side wants to close connection.
 -- this is important that it is called before closing the handle, otherwise
 -- the session might not be resumable (for version < TLS1.2).
@@ -159,8 +174,14 @@ recvData12 ctx = do
 
 recvData13 :: Context -> IO B.ByteString
 recvData13 ctx = do
-    pkt <- recvPacket13 ctx
-    either (onError terminate) process pkt
+    mdat <- tls13stPendingRecvData <$> getTLS13State ctx
+    case mdat of
+        Nothing -> do
+            pkt <- recvPacket13 ctx
+            either (onError terminate) process pkt
+        Just dat -> do
+            modifyTLS13State ctx $ \st -> st{tls13stPendingRecvData = Nothing}
+            return dat
   where
     process (Alert13 [(AlertLevel_Warning, UserCanceled)]) = return B.empty
     process (Alert13 [(AlertLevel_Warning, CloseNotify)]) = tryBye ctx >> setEOF ctx >> return B.empty

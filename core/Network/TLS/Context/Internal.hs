@@ -156,12 +156,16 @@ data Context = forall a.
 
 data TLS13State = TLS13State
     { tls13stRecvNST :: Bool
+    , tls13stSentClientCert :: Bool
+    , tls13stPendingRecvData :: Maybe ByteString
     }
 
 defaultTLS13State :: TLS13State
 defaultTLS13State =
     TLS13State
         { tls13stRecvNST = False
+        , tls13stSentClientCert = False
+        , tls13stPendingRecvData = Nothing
         }
 
 getTLS13State :: Context -> IO TLS13State
