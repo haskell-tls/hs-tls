@@ -1,11 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- |
--- Module      : Network.TLS.Handshake.Client
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
 module Network.TLS.Handshake.Client.TLS13 (
     recvServerSecondFlight13,
     sendClientSecondFlight13,
@@ -265,15 +259,18 @@ uncertsig (SignatureAlgorithmsCert a) = Just a
 sendClientFlight13
     :: ClientParams -> Context -> Hash -> ClientTrafficSecret a -> IO ()
 sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
-    chain <- clientChain cparams ctx
+    mcc <- clientChain cparams ctx
     runPacketFlight ctx $ do
-        case chain of
+        case mcc of
             Nothing -> return ()
-            Just cc -> usingHState ctx getCertReqToken >>= sendClientData13 cc
+            Just cc -> usingHState ctx getCertReqToken >>= loadClientData13 cc
         rawFinished <- makeFinished ctx usedHash baseKey
         loadPacket13 ctx $ Handshake13 [rawFinished]
+    when (isJust mcc) $
+        modifyTLS13State ctx $
+            \st -> st{tls13stSentClientCert = True}
   where
-    sendClientData13 chain (Just token) = do
+    loadClientData13 chain (Just token) = do
         let (CertificateChain certs) = chain
             certExts = replicate (length certs) []
             cHashSigs = filter isHashSignatureValid13 $ supportedHashSignatures $ ctxSupported ctx
@@ -288,7 +285,7 @@ sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
                 vfy <- makeCertVerify ctx pubKey sigAlg hChSc
                 loadPacket13 ctx $ Handshake13 [vfy]
     --
-    sendClientData13 _ _ =
+    loadClientData13 _ _ =
         throwCore $
             Error_Protocol "missing TLS 1.3 certificate request context token" InternalError
 

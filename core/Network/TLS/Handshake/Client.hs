@@ -6,6 +6,9 @@ module Network.TLS.Handshake.Client (
     postHandshakeAuthClientWith,
 ) where
 
+import Data.UnixTime
+import Foreign.C.Types
+
 import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import Network.TLS.Extension
@@ -67,7 +70,12 @@ handshake cparams ctx groups mparams = do
         sendClientHello cparams ctx groups mparams
     --------------------------------
     -- Receiving ServerHello
+    t0 <- getUnixTime
     hss <- recvServerHello ctx cparams clientSession sentExtensions
+    t1 <- getUnixTime
+    let UnixDiffTime (CTime s) u = t1 `diffUnixTime` t0
+        rtt = fromIntegral s * 1000000 + fromIntegral u
+    modifyTLS13State ctx $ \st -> st{tls13stRTT = rtt}
     ver <- usingState_ ctx getVersion
     unless (maybe True (\(_, _, v) -> v == ver) mparams) $
         throwCore $

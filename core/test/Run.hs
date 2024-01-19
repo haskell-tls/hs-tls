@@ -165,7 +165,7 @@ runTLSSimpleKeyUpdate params = runTLSN 3 params tlsClient tlsServer
         d2 <- readChan queue
         sendData ctx (L.fromChunks [d2])
         checkCtxFinished ctx
-        byeBye ctx
+        bye ctx
     tlsServer ctx queue = do
         handshake ctx
         d0 <- recvData ctx
@@ -191,7 +191,7 @@ runTLSSuccess params hsClient hsServer = runTLS params tlsClient tlsServer
         d <- readChan queue
         sendData ctx (L.fromChunks [d])
         checkCtxFinished ctx
-        byeBye ctx
+        bye ctx
     tlsServer ctx queue = do
         hsServer ctx
         d <- recvData ctx

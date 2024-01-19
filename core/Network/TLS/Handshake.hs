@@ -1,11 +1,5 @@
--- |
--- Module      : Network.TLS.Handshake
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
 module Network.TLS.Handshake (
-    handshake,
+    handshake_,
     handshakeWith,
     handshakeClientWith,
     handshakeServerWith,
@@ -22,10 +16,8 @@ import Network.TLS.Handshake.Server
 
 import Control.Monad.State.Strict
 
--- | Handshake for a new TLS connection
--- This is to be called at the beginning of a connection, and during renegotiation
-handshake :: MonadIO m => Context -> m ()
-handshake ctx =
+handshake_ :: MonadIO m => Context -> m ()
+handshake_ ctx =
     liftIO $ withRWLock ctx $ handleException ctx (ctxDoHandshake ctx ctx)
 
 -- Handshake when requested by the remote end

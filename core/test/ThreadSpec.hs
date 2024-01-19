@@ -28,7 +28,7 @@ tlsClient queue ctx = do
     d <- readChan queue
     sendData ctx (L.fromChunks [d])
     checkCtxFinished ctx
-    byeBye ctx
+    bye ctx
 
 tlsServer :: Context -> Chan [ByteString] -> IO ()
 tlsServer ctx queue = do

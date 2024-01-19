@@ -2,12 +2,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_HADDOCK hide #-}
 
--- |
--- Module      : Network.TLS.Core
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
 module Network.TLS.Core (
     -- * Internal packet sending and receiving
     sendPacket,
@@ -34,9 +28,12 @@ module Network.TLS.Core (
 
 import qualified Control.Exception as E
 import Control.Monad (unless, void, when)
+import Control.Monad.State.Strict
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
+import System.Timeout
+
 import Network.TLS.Cipher
 import Network.TLS.Context
 import Network.TLS.Crypto
@@ -52,7 +49,7 @@ import Network.TLS.KeySchedule
 import Network.TLS.Parameters
 import Network.TLS.PostHandshake
 import Network.TLS.Session
-import Network.TLS.State (getSession)
+import Network.TLS.State (getRole, getSession)
 import qualified Network.TLS.State as S
 import Network.TLS.Struct
 import Network.TLS.Struct13
@@ -64,7 +61,29 @@ import Network.TLS.Types (
  )
 import Network.TLS.Util (catchException, mapChunks_)
 
-import Control.Monad.State.Strict
+-- | Handshake for a new TLS connection
+-- This is to be called at the beginning of a connection, and during renegotiation
+handshake :: MonadIO m => Context -> m ()
+handshake ctx = do
+    handshake_ ctx
+    -- Trying to receive an alert of client authentication failure
+    liftIO $ do
+        tls13 <- tls13orLater ctx
+        sentClientCert <- tls13stSentClientCert <$> getTLS13State ctx
+        when (tls13 && sentClientCert) $ do
+            rtt <- getRTT ctx
+            mdat <- timeout rtt $ recvData ctx
+            case mdat of
+                Nothing -> return ()
+                Just dat -> modifyTLS13State ctx $ \st -> st{tls13stPendingRecvData = Just dat}
+
+rttFactor :: Int
+rttFactor = 2
+
+getRTT :: Context -> IO Int
+getRTT ctx = do
+    rtt <- tls13stRTT <$> getTLS13State ctx
+    return (rtt * rttFactor)
 
 -- | notify the context that this side wants to close connection.
 -- this is important that it is called before closing the handle, otherwise
@@ -83,6 +102,12 @@ bye ctx = liftIO $ do
             if tls13
                 then sendPacket13 ctx $ Alert13 [(AlertLevel_Warning, CloseNotify)]
                 else sendPacket ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
+    role <- usingState_ ctx getRole
+    recvNST <- tls13stRecvNST <$> getTLS13State ctx
+    -- receiving NewSessionTicket
+    when (tls13 && not recvNST && role == ClientRole) $ do
+        rtt <- getRTT ctx
+        void $ timeout rtt $ recvData ctx
 
 -- | If the ALPN extensions have been used, this will
 -- return get the protocol agreed upon.
@@ -157,8 +182,14 @@ recvData12 ctx = do
 
 recvData13 :: Context -> IO B.ByteString
 recvData13 ctx = do
-    pkt <- recvPacket13 ctx
-    either (onError terminate) process pkt
+    mdat <- tls13stPendingRecvData <$> getTLS13State ctx
+    case mdat of
+        Nothing -> do
+            pkt <- recvPacket13 ctx
+            either (onError terminate) process pkt
+        Just dat -> do
+            modifyTLS13State ctx $ \st -> st{tls13stPendingRecvData = Nothing}
+            return dat
   where
     process (Alert13 [(AlertLevel_Warning, UserCanceled)]) = return B.empty
     process (Alert13 [(AlertLevel_Warning, CloseNotify)]) = tryBye ctx >> setEOF ctx >> return B.empty
@@ -231,6 +262,7 @@ recvData13 ctx = do
             sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
             let label' = B.copy label
             void $ sessionEstablish (sharedSessionManager $ ctxShared ctx) label' sdata
+            modifyTLS13State ctx $ \st -> st{tls13stRecvNST = True}
         -- putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
         loopHandshake13 hs
     loopHandshake13 (KeyUpdate13 mode : hs) = do
