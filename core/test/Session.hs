@@ -3,6 +3,7 @@
 
 module Session (
     readClientSessionRef,
+    clearClientSessionRef,
     twoSessionRefs,
     twoSessionManagers,
     setPairParamsSessionManagers,
@@ -19,8 +20,11 @@ import Network.TLS.Internal
 
 ----------------------------------------------------------------
 
-readClientSessionRef :: (IORef mclient, IORef mserver) -> IO mclient
+readClientSessionRef :: (IORef (Maybe c), IORef (Maybe s)) -> IO (Maybe c)
 readClientSessionRef refs = readIORef (fst refs)
+
+clearClientSessionRef :: (IORef (Maybe c), IORef (Maybe s)) -> IO ()
+clearClientSessionRef refs = writeIORef (fst refs) Nothing
 
 twoSessionRefs :: IO (IORef (Maybe client), IORef (Maybe server))
 twoSessionRefs = (,) <$> newIORef Nothing <*> newIORef Nothing

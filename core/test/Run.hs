@@ -6,6 +6,7 @@ module Run (
     runTLSSimple,
     runTLSPredicate,
     runTLSSimple13,
+    runTLS0RTT,
     runTLSSimpleKeyUpdate,
     runTLSCapture13,
     runTLSSuccess,
@@ -58,7 +59,7 @@ runTLSN n params tlsClient tlsServer = do
     withPairContext params $ \(cCtx, sCtx) ->
         concurrently_ (server sCtx outputChan) (client inputChan cCtx)
     -- read result
-    m_dsres <- timeout 60000000 $ readChan outputChan -- 60 sec
+    m_dsres <- timeout 1000000 $ readChan outputChan -- 60 sec
     case m_dsres of
         Nothing -> error "timed out"
         Just dsres -> dsres `shouldBe` ds
@@ -106,9 +107,8 @@ runTLSPredicate params p = runTLSSuccess params hsClient hsServer
 runTLSSimple13
     :: (ClientParams, ServerParams)
     -> HandshakeMode13
-    -> Maybe ByteString
     -> IO ()
-runTLSSimple13 params mode mEarlyData =
+runTLSSimple13 params mode =
     runTLSSuccess params hsClient hsServer
   where
     hsClient ctx = do
@@ -116,6 +116,25 @@ runTLSSimple13 params mode mEarlyData =
         minfo <- contextGetInformation ctx
         (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
     hsServer ctx = do
+        handshake ctx
+        minfo <- contextGetInformation ctx
+        (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
+
+runTLS0RTT
+    :: (ClientParams, ServerParams)
+    -> HandshakeMode13
+    -> Maybe ByteString
+    -> IO ()
+runTLS0RTT params mode mEarlyData =
+    withPairContext params $ \(cCtx, sCtx) ->
+        concurrently_ (tlsServer sCtx) (tlsClient cCtx)
+  where
+    tlsClient ctx = do
+        handshake ctx
+        minfo <- contextGetInformation ctx
+        (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
+        bye ctx
+    tlsServer ctx = do
         handshake ctx
         case mEarlyData of
             Nothing -> return ()
@@ -125,6 +144,7 @@ runTLSSimple13 params mode mEarlyData =
                 (map B.length chunks, B.concat chunks) `shouldBe` (ls, ed)
         minfo <- contextGetInformation ctx
         (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
+        bye ctx
     chunkLengths :: Int -> [Int]
     chunkLengths len
         | len > 16384 = 16384 : chunkLengths (len - 16384)
