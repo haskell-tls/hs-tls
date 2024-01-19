@@ -71,10 +71,19 @@ handshake ctx = do
         tls13 <- tls13orLater ctx
         sentClientCert <- tls13stSentClientCert <$> getTLS13State ctx
         when (tls13 && sentClientCert) $ do
-            mdat <- timeout 1000 $ recvData ctx
+            rtt <- getRTT ctx
+            mdat <- timeout rtt $ recvData ctx
             case mdat of
                 Nothing -> return ()
                 Just dat -> modifyTLS13State ctx $ \st -> st{tls13stPendingRecvData = Just dat}
+
+rttFactor :: Int
+rttFactor = 2
+
+getRTT :: Context -> IO Int
+getRTT ctx = do
+    rtt <- tls13stRTT <$> getTLS13State ctx
+    return (rtt * rttFactor)
 
 -- | notify the context that this side wants to close connection.
 -- this is important that it is called before closing the handle, otherwise
@@ -96,10 +105,9 @@ bye ctx = liftIO $ do
     role <- usingState_ ctx getRole
     recvNST <- tls13stRecvNST <$> getTLS13State ctx
     -- receiving NewSessionTicket
-    when (tls13 && not recvNST && role == ClientRole) $
-        void $
-            timeout 1000 $
-                recvData ctx
+    when (tls13 && not recvNST && role == ClientRole) $ do
+        rtt <- getRTT ctx
+        void $ timeout rtt $ recvData ctx
 
 -- | If the ALPN extensions have been used, this will
 -- return get the protocol agreed upon.

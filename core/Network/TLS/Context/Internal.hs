@@ -158,6 +158,7 @@ data TLS13State = TLS13State
     { tls13stRecvNST :: Bool
     , tls13stSentClientCert :: Bool
     , tls13stPendingRecvData :: Maybe ByteString
+    , tls13stRTT :: Int
     }
 
 defaultTLS13State :: TLS13State
@@ -166,6 +167,7 @@ defaultTLS13State =
         { tls13stRecvNST = False
         , tls13stSentClientCert = False
         , tls13stPendingRecvData = Nothing
+        , tls13stRTT = 0
         }
 
 getTLS13State :: Context -> IO TLS13State
