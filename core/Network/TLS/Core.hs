@@ -92,6 +92,26 @@ getRTT ctx = do
 -- this doesn't actually close the handle
 bye :: MonadIO m => Context -> m ()
 bye ctx = liftIO $ do
+    tls13 <- tls13orLater ctx
+    when tls13 $ do
+        role <- usingState_ ctx getRole
+        if role == ClientRole
+            then do
+                -- receiving NewSessionTicket
+                recvNST <- tls13stRecvNST <$> getTLS13State ctx
+                unless recvNST $ do
+                    rtt <- getRTT ctx
+                    void $ timeout rtt $ recvData ctx
+            else do
+                -- receiving Client Finished
+                recvCF <- tls13stRecvCF <$> getTLS13State ctx
+                unless recvCF $
+                    void $
+                        timeout 500000 (recvData ctx)
+    bye_ ctx
+
+bye_ :: MonadIO m => Context -> m ()
+bye_ ctx = liftIO $ do
     -- Although setEOF is always protected by the read lock, here we don't try
     -- to wrap ctxEOF with it, so that function bye can still be called
     -- concurrently to a blocked recvData.
@@ -102,12 +122,6 @@ bye ctx = liftIO $ do
             if tls13
                 then sendPacket13 ctx $ Alert13 [(AlertLevel_Warning, CloseNotify)]
                 else sendPacket ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
-    role <- usingState_ ctx getRole
-    recvNST <- tls13stRecvNST <$> getTLS13State ctx
-    -- receiving NewSessionTicket
-    when (tls13 && not recvNST && role == ClientRole) $ do
-        rtt <- getRTT ctx
-        void $ timeout rtt $ recvData ctx
 
 -- | If the ALPN extensions have been used, this will
 -- return get the protocol agreed upon.
@@ -241,6 +255,7 @@ recvData13 ctx = do
     -- fixme: some implementations send multiple NST at the same time.
     -- Only the first one is used at this moment.
     loopHandshake13 (NewSessionTicket13 life add nonce label exts : hs) = do
+        modifyTLS13State ctx $ \st -> st{tls13stRecvCF = True}
         role <- usingState_ ctx S.getRole
         unless (role == ClientRole) $
             let reason = "Session ticket is allowed for client only"
@@ -325,7 +340,7 @@ recvData13 ctx = do
 -- the other side could have close the connection already, so wrap
 -- this in a try and ignore all exceptions
 tryBye :: Context -> IO ()
-tryBye ctx = catchException (bye ctx) (\_ -> return ())
+tryBye ctx = catchException (bye_ ctx) (\_ -> return ())
 
 onError
     :: Monad m

@@ -55,9 +55,9 @@ spec = do
         prop "can handshake with TLS 1.3 PSK" handshake13_psk
         prop "can handshake with TLS 1.3 PSK ticket" handshake13_psk_ticket
         prop "can handshake with TLS 1.3 PSK -> HRR" handshake13_psk_fallback
-        prop "can handshake with TLS 1.3 RTT0" handshake13_rtt0
-        prop "can handshake with TLS 1.3 RTT0 -> PSK" handshake13_rtt0_fallback
-        prop "can handshake with TLS 1.3 RTT0 length" handshake13_rtt0_length
+        prop "can handshake with TLS 1.3 0RTT" handshake13_0rtt
+        prop "can handshake with TLS 1.3 0RTT -> PSK" handshake13_0rtt_fallback
+        prop "can handshake with TLS 1.3 0RTT length" handshake13_0rtt_length
         prop "can handshake with TLS 1.3 EE" handshake13_ee_groups
         prop "can handshake with TLS 1.3 EC groups" handshake13_ec
         prop "can handshake with TLS 1.3 FFDHE groups" handshake13_ffdhe
@@ -95,7 +95,7 @@ instance Arbitrary CSP13 where
     arbitrary = CSP13 <$> arbitraryPairParams13
 
 handshake13_simple :: CSP13 -> IO ()
-handshake13_simple (CSP13 params) = runTLSSimple13 params hs Nothing
+handshake13_simple (CSP13 params) = runTLSSimple13 params hs
   where
     cgrps = supportedGroups $ clientSupported $ fst params
     sgrps = supportedGroups $ serverSupported $ snd params
@@ -686,7 +686,7 @@ handshake13_full (CSP13 (cli, srv)) = do
             ( cli{clientSupported = cliSupported}
             , srv{serverSupported = svrSupported}
             )
-    runTLSSimple13 params FullHandshake Nothing
+    runTLSSimple13 params FullHandshake
 
 handshake13_hrr :: CSP13 -> IO ()
 handshake13_hrr (CSP13 (cli, srv)) = do
@@ -704,7 +704,7 @@ handshake13_hrr (CSP13 (cli, srv)) = do
             ( cli{clientSupported = cliSupported}
             , srv{serverSupported = svrSupported}
             )
-    runTLSSimple13 params HelloRetryRequest Nothing
+    runTLSSimple13 params HelloRetryRequest
 
 handshake13_psk :: CSP13 -> IO ()
 handshake13_psk (CSP13 (cli, srv)) = do
@@ -728,14 +728,14 @@ handshake13_psk (CSP13 (cli, srv)) = do
 
     let params = setPairParamsSessionManagers sessionManagers params0
 
-    runTLSSimple13 params HelloRetryRequest Nothing
+    runTLSSimple13 params HelloRetryRequest
 
     -- and resume
     sessionParams <- readClientSessionRef sessionRefs
     sessionParams `shouldSatisfy` isJust
     let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 
-    runTLSSimple13 params2 PreSharedKey Nothing
+    runTLSSimple13 params2 PreSharedKey
 
 handshake13_psk_ticket :: CSP13 -> IO ()
 handshake13_psk_ticket (CSP13 (cli, srv)) = do
@@ -760,14 +760,14 @@ handshake13_psk_ticket (CSP13 (cli, srv)) = do
 
     let params = setPairParamsSessionManagers sessionManagers params0
 
-    runTLSSimple13 params HelloRetryRequest Nothing
+    runTLSSimple13 params HelloRetryRequest
 
     -- and resume
     sessionParams <- readClientSessionRef sessionRefs
     sessionParams `shouldSatisfy` isJust
     let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 
-    runTLSSimple13 params2 PreSharedKey Nothing
+    runTLSSimple13 params2 PreSharedKey
 
 handshake13_psk_fallback :: CSP13 -> IO ()
 handshake13_psk_fallback (CSP13 (cli, srv)) = do
@@ -794,7 +794,7 @@ handshake13_psk_fallback (CSP13 (cli, srv)) = do
 
     let params = setPairParamsSessionManagers sessionManagers params0
 
-    runTLSSimple13 params HelloRetryRequest Nothing
+    runTLSSimple13 params HelloRetryRequest
 
     -- resumption fails because GCM cipher is not supported anymore, full
     -- handshake is not possible because X25519 has been removed, so we are
@@ -809,10 +809,10 @@ handshake13_psk_fallback (CSP13 (cli, srv)) = do
                 , supportedGroups = [P256]
                 }
 
-    runTLSSimple13 (cli2, srv2') HelloRetryRequest Nothing
+    runTLSSimple13 (cli2, srv2') HelloRetryRequest
 
-handshake13_rtt0 :: CSP13 -> IO ()
-handshake13_rtt0 (CSP13 (cli, srv)) = do
+handshake13_0rtt :: CSP13 -> IO ()
+handshake13_0rtt (CSP13 (cli, srv)) = do
     let cliSupported =
             def
                 { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
@@ -848,19 +848,23 @@ handshake13_rtt0 (CSP13 (cli, srv)) = do
 
     let params = setPairParamsSessionManagers sessionManagers params0
 
-    runTLSSimple13 params HelloRetryRequest Nothing
+    runTLSSimple13 params HelloRetryRequest
+    runTLS0rtt params sessionRefs
+    runTLS0rtt params sessionRefs
+  where
+    runTLS0rtt params sessionRefs = do
+        -- and resume
+        sessionParams <- readClientSessionRef sessionRefs
+        clearClientSessionRef sessionRefs
+        sessionParams `shouldSatisfy` isJust
+        earlyData <- B.pack <$> generate (someWords8 256)
+        let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
+            params2 = (pc{clientEarlyData = Just earlyData}, ps)
 
-    -- and resume
-    sessionParams <- readClientSessionRef sessionRefs
-    sessionParams `shouldSatisfy` isJust
-    earlyData <- B.pack <$> generate (someWords8 256)
-    let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
-        params2 = (pc{clientEarlyData = Just earlyData}, ps)
+        runTLS0RTT params2 RTT0 $ Just earlyData
 
-    runTLSSimple13 params2 RTT0 (Just earlyData)
-
-handshake13_rtt0_fallback :: IO ()
-handshake13_rtt0_fallback = do
+handshake13_0rtt_fallback :: IO ()
+handshake13_0rtt_fallback = do
     ticketSize <- generate $ choose (0, 512)
     (cli, srv) <- generate arbitraryPairParams13
     group0 <- generate $ elements [P256, X25519]
@@ -888,7 +892,7 @@ handshake13_rtt0_fallback = do
     let params = setPairParamsSessionManagers sessionManagers params0
 
     let mode = if group0 == P256 then FullHandshake else HelloRetryRequest
-    runTLSSimple13 params mode Nothing
+    runTLSSimple13 params mode
 
     -- and resume
     sessionParams <- readClientSessionRef sessionRefs
@@ -910,10 +914,10 @@ handshake13_rtt0_fallback = do
             )
 
     let mode2 = if ticketSize < 256 then PreSharedKey else RTT0
-    runTLSSimple13 params2 mode2 Nothing
+    runTLSSimple13 params2 mode2
 
-handshake13_rtt0_length :: CSP13 -> IO ()
-handshake13_rtt0_length (CSP13 (cli, srv)) = do
+handshake13_0rtt_length :: CSP13 -> IO ()
+handshake13_0rtt_length (CSP13 (cli, srv)) = do
     serverMax <- generate $ choose (0, 33792)
     let cliSupported =
             def
@@ -936,7 +940,7 @@ handshake13_rtt0_length (CSP13 (cli, srv)) = do
     sessionRefs <- twoSessionRefs
     let sessionManagers = twoSessionManagers sessionRefs
     let params = setPairParamsSessionManagers sessionManagers params0
-    runTLSSimple13 params FullHandshake Nothing
+    runTLSSimple13 params FullHandshake
 
     -- and resume
     sessionParams <- readClientSessionRef sessionRefs
@@ -948,7 +952,7 @@ handshake13_rtt0_length (CSP13 (cli, srv)) = do
         (mode, mEarlyData)
             | clientLen > serverMax = (PreSharedKey, Nothing)
             | otherwise = (RTT0, Just earlyData)
-    runTLSSimple13 params2 mode mEarlyData
+    runTLS0RTT params2 mode mEarlyData
 
 handshake13_ee_groups :: CSP13 -> IO ()
 handshake13_ee_groups (CSP13 (cli, srv)) = do
@@ -979,7 +983,7 @@ handshake13_ec (CSP13 (cli, srv)) = do
             ( cli{clientSupported = cliSupported}
             , srv{serverSupported = svrSupported}
             )
-    runTLSSimple13 params FullHandshake Nothing
+    runTLSSimple13 params FullHandshake
 
 handshake13_ffdhe :: CSP13 -> IO ()
 handshake13_ffdhe (CSP13 (cli, srv)) = do
@@ -991,7 +995,7 @@ handshake13_ffdhe (CSP13 (cli, srv)) = do
             ( cli{clientSupported = cliSupported}
             , srv{serverSupported = svrSupported}
             )
-    runTLSSimple13 params FullHandshake Nothing
+    runTLSSimple13 params FullHandshake
 
 post_handshake_auth :: CSP13 -> IO ()
 post_handshake_auth (CSP13 (clientParam, serverParam)) = do
