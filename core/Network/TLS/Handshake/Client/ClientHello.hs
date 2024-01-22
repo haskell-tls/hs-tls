@@ -4,8 +4,6 @@ module Network.TLS.Handshake.Client.ClientHello (
     sendClientHello,
 ) where
 
-import qualified Data.ByteString as B
-
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Context.Internal
@@ -25,9 +23,7 @@ import Network.TLS.Packet hiding (getExtensions)
 import Network.TLS.Parameters
 import Network.TLS.State
 import Network.TLS.Struct
-import Network.TLS.Struct13
 import Network.TLS.Types
-import Network.TLS.Util (mapChunks_)
 
 ----------------------------------------------------------------
 
@@ -96,7 +92,7 @@ sendClientHello' cparams ctx groups clientSession crand = do
     sendPacket ctx $ Handshake [mkClientHello extensions]
     mEarlySecInfo <- case rtt0info of
         Nothing -> return Nothing
-        Just info -> Just <$> send0RTT info
+        Just info -> Just <$> getEarlySecretInfo info
     unless hrr $ contextSync ctx $ SendClientHello mEarlySecInfo
     let sentExtensions = map (\(ExtensionRaw i _) -> i) extensions
     return (rtt0, sentExtensions)
@@ -273,12 +269,11 @@ sendClientHello' cparams ctx groups clientSession crand = do
                         withBinders = replacePSKBinder withoutBinders binder
                 return exts'
 
-    get0RTTinfo (_, sdata, choice, _) = do
-        earlyData <- clientEarlyData cparams
-        guard (B.length earlyData <= sessionMaxEarlyDataSize sdata)
-        return (choice, earlyData)
+    get0RTTinfo (_, _, choice, _)
+        | clientEarlyData cparams = Just choice
+        | otherwise = Nothing
 
-    send0RTT (choice, earlyData) = do
+    getEarlySecretInfo choice = do
         let usedCipher = cCipher choice
             usedHash = cHash choice
         Just earlySecret <- usingHState ctx getTLS13EarlySecret
@@ -289,8 +284,6 @@ sendClientHello' cparams ctx groups clientSession crand = do
         unless (ctxQUICMode ctx) $ do
             runPacketFlight ctx $ sendChangeCipherSpec13 ctx
             setTxState ctx usedHash usedCipher clientEarlySecret
-            let len = ctxFragmentSize ctx
-            mapChunks_ len (sendPacket13 ctx . AppData13) earlyData
         -- We set RTT0Sent even in quicMode
         usingHState ctx $ setTLS13RTT0Status RTT0Sent
         return $ EarlySecretInfo usedCipher clientEarlySecret

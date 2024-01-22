@@ -119,12 +119,13 @@ data ClientParams = ClientParams
     -- See the default value of 'Supported'.
     , clientDebug :: DebugParams
     -- ^ See the default value of 'DebugParams'.
-    , clientEarlyData :: Maybe ByteString
-    -- ^ Client tries to send this early data in TLS 1.3 if possible.
-    -- If not accepted by the server, it is application's responsibility
-    -- to re-sent it.
+    , clientEarlyData :: Bool
+    -- ^ Client tries to send early data in TLS 1.3
+    -- via 'sendData' if possible.
+    -- If not accepted by the server, the early data
+    -- is automatically re-sent.
     --
-    -- Default: 'Nothing'
+    -- Default: 'False'
     }
     deriving (Show)
 
@@ -139,7 +140,7 @@ defaultParamsClient serverName serverId =
         , clientHooks = def
         , clientSupported = def
         , clientDebug = defaultDebugParams
-        , clientEarlyData = Nothing
+        , clientEarlyData = False
         }
 
 data ServerParams = ServerParams
