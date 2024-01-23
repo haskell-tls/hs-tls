@@ -170,6 +170,7 @@ data SecretTriple a = SecretTriple
     , triClient :: ClientTrafficSecret a
     , triServer :: ServerTrafficSecret a
     }
+    deriving (Show)
 
 data SecretPair a = SecretPair
     { pairBase :: BaseSecret a

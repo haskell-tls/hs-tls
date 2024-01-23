@@ -32,6 +32,7 @@ import Control.Monad.State.Strict
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
+import Data.IORef
 import System.Timeout
 
 import Network.TLS.Cipher
@@ -97,6 +98,7 @@ bye ctx = liftIO $ do
         role <- usingState_ ctx getRole
         if role == ClientRole
             then do
+                sendCFifNecessary ctx
                 -- receiving NewSessionTicket
                 recvNST <- tls13stRecvNST <$> getTLS13State ctx
                 unless recvNST $ do
@@ -133,6 +135,19 @@ getNegotiatedProtocol ctx = liftIO $ usingState_ ctx S.getNegotiatedProtocol
 getClientSNI :: MonadIO m => Context -> m (Maybe HostName)
 getClientSNI ctx = liftIO $ usingState_ ctx S.getClientSNI
 
+sendCFifNecessary :: Context -> IO ()
+sendCFifNecessary ctx = do
+    st <- getTLS13State ctx
+    let recvSF = tls13stRecvSF st
+        sentCF = tls13stSentCF st
+    when (recvSF && not sentCF) $ do
+        msend <- readIORef (ctxPendingSendAction ctx)
+        case msend of
+            Nothing -> return ()
+            Just sendAction -> do
+                sendAction ctx
+                writeIORef (ctxPendingSendAction ctx) Nothing
+
 -- | sendData sends a bunch of data.
 -- It will automatically chunk data to acceptable packet size
 sendData :: MonadIO m => Context -> L.ByteString -> m ()
@@ -142,6 +157,7 @@ sendData ctx dataToSend = liftIO $ do
     let sendP
             | tls13 = sendPacket13 ctx . AppData13
             | otherwise = sendPacket ctx . AppData
+    when tls13 $ sendCFifNecessary ctx
     withWriteLock ctx $ do
         checkValid ctx
         -- All chunks are protected with the same write lock because we don't
@@ -308,8 +324,8 @@ recvData13 ctx = do
     loopHandshake13 (h@Certificate13{} : hs) =
         postHandshakeAuthWith ctx h >> loopHandshake13 hs
     loopHandshake13 (h : hs) = do
-        mPendingAction <- popPendingAction ctx
-        case mPendingAction of
+        mPendingRecvAction <- popPendingRecvAction ctx
+        case mPendingRecvAction of
             Nothing ->
                 let reason = "unexpected handshake message " ++ show h
                  in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
@@ -317,16 +333,21 @@ recvData13 ctx = do
                 -- Pending actions are executed with read+write locks, just
                 -- like regular handshake code.
                 withWriteLock ctx $
-                    handleException ctx $
+                    handleException ctx $ do
                         case action of
-                            PendingAction needAligned pa -> do
+                            PendingRecvAction needAligned pa -> do
                                 when needAligned $ checkAlignment hs
                                 processHandshake13 ctx h >> pa h
-                            PendingActionHash needAligned pa -> do
+                            PendingRecvActionHash needAligned pa -> do
                                 when needAligned $ checkAlignment hs
                                 d <- transcriptHash ctx
                                 processHandshake13 ctx h
                                 pa d h
+                        -- Client: after receiving SH, app data is coming.
+                        -- this loop tries to receive it.
+                        -- App key must be installed before receiving
+                        -- the app data.
+                        sendCFifNecessary ctx
                 loopHandshake13 hs
 
     terminate = terminateWithWriteLock ctx (sendPacket13 ctx . Alert13)

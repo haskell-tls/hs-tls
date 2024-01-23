@@ -123,28 +123,27 @@ runTLSSimple13 params mode =
 runTLS0RTT
     :: (ClientParams, ServerParams)
     -> HandshakeMode13
-    -> Maybe ByteString
+    -> ByteString
     -> IO ()
-runTLS0RTT params mode mEarlyData =
+runTLS0RTT params mode earlyData =
     withPairContext params $ \(cCtx, sCtx) ->
         concurrently_ (tlsServer sCtx) (tlsClient cCtx)
   where
     tlsClient ctx = do
         handshake ctx
+        sendData ctx $ L.fromStrict earlyData
+        _ <- recvData ctx
+        bye ctx
         minfo <- contextGetInformation ctx
         (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
-        bye ctx
     tlsServer ctx = do
         handshake ctx
-        case mEarlyData of
-            Nothing -> return ()
-            Just ed -> do
-                let ls = chunkLengths (B.length ed)
-                chunks <- replicateM (length ls) $ recvData ctx
-                (map B.length chunks, B.concat chunks) `shouldBe` (ls, ed)
+        let ls = chunkLengths $ B.length earlyData
+        chunks <- replicateM (length ls) $ recvData ctx
+        (map B.length chunks, B.concat chunks) `shouldBe` (ls, earlyData)
+        bye ctx
         minfo <- contextGetInformation ctx
         (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
-        bye ctx
     chunkLengths :: Int -> [Int]
     chunkLengths len
         | len > 16384 = 16384 : chunkLengths (len - 16384)

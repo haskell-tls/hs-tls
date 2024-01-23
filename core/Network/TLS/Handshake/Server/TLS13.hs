@@ -52,10 +52,10 @@ recvClientSecondFlight13 sparams ctx (appKey, clientHandshakeSecret, authenticat
         else
             if rtt0OK && not (ctxQUICMode ctx)
                 then
-                    setPendingActions
+                    setPendingRecvActions
                         ctx
-                        [ PendingAction True $ expectEndOfEarlyData ctx clientHandshakeSecret
-                        , PendingActionHash True $
+                        [ PendingRecvAction True $ expectEndOfEarlyData ctx clientHandshakeSecret
+                        , PendingRecvActionHash True $
                             expectFinished sparams ctx chExtensions appKey clientHandshakeSecret sfSentTime
                         ]
                 else runRecvHandshake13 $ do
@@ -221,12 +221,12 @@ postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = d
     -- currently has no API to handle resumption and client authentication
     -- together, see discussion in #133
     if isNullCertificateChain certs
-        then setPendingActions ctx [PendingActionHash False expectFinished']
+        then setPendingRecvActions ctx [PendingRecvActionHash False expectFinished']
         else
-            setPendingActions
+            setPendingRecvActions
                 ctx
-                [ PendingActionHash False (expectCertVerify sparams ctx)
-                , PendingActionHash False expectFinished'
+                [ PendingRecvActionHash False (expectCertVerify sparams ctx)
+                , PendingRecvActionHash False expectFinished'
                 ]
 postHandshakeAuthServerWith _ _ _ =
     throwCore $

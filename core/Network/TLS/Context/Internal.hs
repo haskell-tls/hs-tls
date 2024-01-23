@@ -16,7 +16,7 @@ module Network.TLS.Context.Internal (
     Context (..),
     Hooks (..),
     Established (..),
-    PendingAction (..),
+    PendingRecvAction (..),
     RecordLayer (..),
     ctxEOF,
     ctxEstablished,
@@ -64,6 +64,8 @@ module Network.TLS.Context.Internal (
     defaultTLS13State,
     getTLS13State,
     modifyTLS13State,
+    CipherChoice (..),
+    makeCipherChoice,
 ) where
 
 import Control.Concurrent.MVar
@@ -76,6 +78,7 @@ import Data.Tuple
 import Network.TLS.Backend
 import Network.TLS.Cipher
 import Network.TLS.Compression (Compression)
+import Network.TLS.Crypto
 import Network.TLS.Extension
 import Network.TLS.Handshake.Control
 import Network.TLS.Handshake.State
@@ -144,7 +147,8 @@ data Context = forall a.
     , ctxLockState :: MVar ()
     -- ^ lock used during read/write when receiving and sending packet.
     -- it is usually nested in a write or read lock.
-    , ctxPendingActions :: IORef [PendingAction]
+    , ctxPendingRecvActions :: IORef [PendingRecvAction]
+    , ctxPendingSendAction :: IORef (Maybe (Context -> IO ()))
     , ctxCertRequests :: IORef [Handshake13]
     -- ^ pending PHA requests
     , ctxKeyLogger :: String -> IO ()
@@ -154,12 +158,31 @@ data Context = forall a.
     , ctxTLS13State :: IORef TLS13State
     }
 
+data CipherChoice = CipherChoice
+    { cVersion :: Version
+    , cCipher :: Cipher
+    , cHash :: Hash
+    , cZero :: ByteString
+    }
+
+makeCipherChoice :: Version -> Cipher -> CipherChoice
+makeCipherChoice ver cipher = CipherChoice ver cipher h zero
+  where
+    h = cipherHash cipher
+    zero = B.replicate (hashDigestSize h) 0
+
 data TLS13State = TLS13State
-    { tls13stRecvNST :: Bool
-    , tls13stSentClientCert :: Bool
-    , tls13stRecvCF :: Bool
-    , tls13stPendingRecvData :: Maybe ByteString
+    { tls13stRecvNST :: Bool -- client
+    , tls13stSentClientCert :: Bool -- client
+    , tls13stRecvSF :: Bool -- client
+    , tls13stSentCF :: Bool -- client
+    , tls13stRecvCF :: Bool -- server
+    , tls13stPendingRecvData :: Maybe ByteString -- client
     , tls13stRTT :: Int
+    , tls13st0RTTAccepted :: Bool -- client
+    , tls13stClientExtensions :: [ExtensionRaw] -- client
+    , tls13stChoice :: ~CipherChoice -- client
+    , tls13stHsKey :: Maybe (SecretTriple HandshakeSecret) -- client
     }
 
 defaultTLS13State :: TLS13State
@@ -167,9 +190,15 @@ defaultTLS13State =
     TLS13State
         { tls13stRecvNST = False
         , tls13stSentClientCert = False
+        , tls13stRecvSF = False
+        , tls13stSentCF = False
         , tls13stRecvCF = False
         , tls13stPendingRecvData = Nothing
         , tls13stRTT = 0
+        , tls13st0RTTAccepted = False
+        , tls13stClientExtensions = []
+        , tls13stChoice = undefined
+        , tls13stHsKey = Nothing
         }
 
 getTLS13State :: Context -> IO TLS13State
@@ -206,11 +235,12 @@ data Established
     | Established
     deriving (Eq, Show)
 
-data PendingAction
-    = -- | simple pending action
-      PendingAction Bool (Handshake13 -> IO ())
+data PendingRecvAction
+    = -- | simple pending action. The first 'Bool' is necessity of alignment.
+      PendingRecvAction Bool (Handshake13 -> IO ())
     | -- | pending action taking transcript hash up to preceding message
-      PendingActionHash Bool (ByteString -> Handshake13 -> IO ())
+      --   The first 'Bool' is necessity of alignment.
+      PendingRecvActionHash Bool (ByteString -> Handshake13 -> IO ())
 
 updateMeasure :: Context -> (Measurement -> Measurement) -> IO ()
 updateMeasure ctx = modifyIORef' (ctxMeasurement ctx)

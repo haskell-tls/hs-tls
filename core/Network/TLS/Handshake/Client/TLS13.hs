@@ -3,18 +3,21 @@
 module Network.TLS.Handshake.Client.TLS13 (
     recvServerSecondFlight13,
     sendClientSecondFlight13,
+    asyncServerHello13,
     postHandshakeAuthClientWith,
 ) where
 
 import Control.Exception (bracket)
 import Control.Monad.State.Strict
 import qualified Data.ByteString as B
+import Data.IORef
 
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import Network.TLS.Extension
 import Network.TLS.Handshake.Client.Common
+import Network.TLS.Handshake.Client.ServerHello
 import Network.TLS.Handshake.Common hiding (expectFinished)
 import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.Control
@@ -33,45 +36,41 @@ import Network.TLS.Types
 import Network.TLS.X509
 
 ----------------------------------------------------------------
+----------------------------------------------------------------
 
-type Pass =
-    ( CipherChoice
-    , BaseSecret HandshakeSecret
-    , ClientTrafficSecret HandshakeSecret
-    , Bool
-    , [ExtensionRaw]
-    )
-
-recvServerSecondFlight13 :: ClientParams -> Context -> Maybe Group -> IO Pass
+recvServerSecondFlight13 :: ClientParams -> Context -> Maybe Group -> IO ()
 recvServerSecondFlight13 cparams ctx groupSent = do
-    choice <- makeCipherChoice TLS13 <$> usingHState ctx getPendingCipher
-    recvServerSecondFlight13' cparams ctx groupSent choice
+    resuming <- prepareSecondFlight13 ctx groupSent
+    runRecvHandshake13 $ do
+        recvHandshake13 ctx $ expectEncryptedExtensions ctx
+        unless resuming $ recvHandshake13 ctx $ expectCertRequest cparams ctx
+        recvHandshake13hash ctx $ expectFinished ctx
 
-recvServerSecondFlight13'
-    :: ClientParams
-    -> Context
+----------------------------------------------------------------
+
+prepareSecondFlight13
+    :: Context -> Maybe Group -> IO Bool
+prepareSecondFlight13 ctx groupSent = do
+    choice <- makeCipherChoice TLS13 <$> usingHState ctx getPendingCipher
+    prepareSecondFlight13' ctx groupSent choice
+
+prepareSecondFlight13'
+    :: Context
     -> Maybe Group
     -> CipherChoice
-    -> IO
-        ( CipherChoice
-        , BaseSecret HandshakeSecret
-        , ClientTrafficSecret HandshakeSecret
-        , Bool
-        , [ExtensionRaw]
-        )
-recvServerSecondFlight13' cparams ctx groupSent choice = do
+    -> IO Bool
+prepareSecondFlight13' ctx groupSent choice = do
     (_, hkey, resuming) <- switchToHandshakeSecret
-    let handshakeSecret = triBase hkey
-        clientHandshakeSecret = triClient hkey
+    let clientHandshakeSecret = triClient hkey
         serverHandshakeSecret = triServer hkey
         handSecInfo = HandshakeSecretInfo usedCipher (clientHandshakeSecret, serverHandshakeSecret)
     contextSync ctx $ RecvServerHello handSecInfo
-    (rtt0accepted, eexts) <- runRecvHandshake13 $ do
-        accext <- recvHandshake13 ctx expectEncryptedExtensions
-        unless resuming $ recvHandshake13 ctx expectCertRequest
-        recvHandshake13hash ctx $ expectFinished serverHandshakeSecret
-        return accext
-    return (choice, handshakeSecret, clientHandshakeSecret, rtt0accepted, eexts)
+    modifyTLS13State ctx $ \st ->
+        st
+            { tls13stChoice = choice
+            , tls13stHsKey = Just hkey
+            }
+    return resuming
   where
     usedCipher = cCipher choice
     usedHash = cHash choice
@@ -129,87 +128,40 @@ recvServerSecondFlight13' cparams ctx groupSent choice = do
                     Just _ ->
                         throwCore $ Error_Protocol "selected identity out of range" IllegalParameter
 
-    expectEncryptedExtensions (EncryptedExtensions13 eexts) = do
-        liftIO $ setALPN ctx MsgTEncryptedExtensions eexts
-        st <- usingHState ctx getTLS13RTT0Status
-        if st == RTT0Sent
-            then case extensionLookup EID_EarlyData eexts of
-                Just _ -> do
-                    usingHState ctx $ setTLS13HandshakeMode RTT0
-                    usingHState ctx $ setTLS13RTT0Status RTT0Accepted
-                    return (True, eexts)
-                Nothing -> do
-                    usingHState ctx $ setTLS13HandshakeMode RTT0
-                    usingHState ctx $ setTLS13RTT0Status RTT0Rejected
-                    return (False, eexts)
-            else return (False, eexts)
-    expectEncryptedExtensions p = unexpected (show p) (Just "encrypted extensions")
-
-    expectCertRequest (CertRequest13 token exts) = do
-        processCertRequest13 ctx token exts
-        recvHandshake13 ctx expectCertAndVerify
-    expectCertRequest other = do
-        usingHState ctx $ do
-            setCertReqToken Nothing
-            setCertReqCBdata Nothing
-        -- setCertReqSigAlgsCert Nothing
-        expectCertAndVerify other
-
-    expectCertAndVerify (Certificate13 _ cc _) = do
-        liftIO $ usingState_ ctx $ setServerCertificateChain cc
-        liftIO $ doCertificate cparams ctx cc
-        let pubkey = certPubKey $ getCertificate $ getCertificateChainLeaf cc
-        ver <- liftIO $ usingState_ ctx getVersion
-        checkDigitalSignatureKey ver pubkey
-        usingHState ctx $ setPublicKey pubkey
-        recvHandshake13hash ctx $ expectCertVerify pubkey
-    expectCertAndVerify p = unexpected (show p) (Just "server certificate")
-
-    expectCertVerify pubkey hChSc (CertVerify13 sigAlg sig) = do
-        ok <- checkCertVerify ctx pubkey sigAlg sig hChSc
-        unless ok $ decryptError "cannot verify CertificateVerify"
-    expectCertVerify _ _ p = unexpected (show p) (Just "certificate verify")
-
-    expectFinished (ServerTrafficSecret baseKey) hashValue (Finished13 verifyData) =
-        checkFinished ctx usedHash baseKey hashValue verifyData
-    expectFinished _ _ p = unexpected (show p) (Just "server finished")
-
 ----------------------------------------------------------------
 
-sendClientSecondFlight13 :: ClientParams -> Context -> Pass -> IO ()
-sendClientSecondFlight13 cparams ctx (choice, handshakeSecret, clientHandshakeSecret, rtt0accepted, eexts) = do
-    hChSf <- transcriptHash ctx
-    unless (ctxQUICMode ctx) $
-        runPacketFlight ctx $
-            sendChangeCipherSpec13 ctx
-    when (rtt0accepted && not (ctxQUICMode ctx)) $
-        sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
-    setTxState ctx usedHash usedCipher clientHandshakeSecret
-    sendClientFlight13 cparams ctx usedHash clientHandshakeSecret
-    appKey <- switchToApplicationSecret hChSf
-    let applicationSecret = triBase appKey
-    setResumptionSecret applicationSecret
-    let appSecInfo = ApplicationSecretInfo (triClient appKey, triServer appKey)
-    contextSync ctx $ SendClientFinished eexts appSecInfo
-    handshakeDone13 ctx
-  where
-    usedCipher = cCipher choice
-    usedHash = cHash choice
-
-    switchToApplicationSecret hChSf = do
-        ensureRecvComplete ctx
-        appKey <- calculateApplicationSecret ctx choice handshakeSecret hChSf
-        let serverApplicationSecret0 = triServer appKey
-        let clientApplicationSecret0 = triClient appKey
-        setTxState ctx usedHash usedCipher clientApplicationSecret0
-        setRxState ctx usedHash usedCipher serverApplicationSecret0
-        return appKey
-
-    setResumptionSecret applicationSecret = do
-        resumptionSecret <- calculateResumptionSecret ctx choice applicationSecret
-        usingHState ctx $ setTLS13ResumptionSecret resumptionSecret
+expectEncryptedExtensions
+    :: MonadIO m => Context -> Handshake13 -> m ()
+expectEncryptedExtensions ctx (EncryptedExtensions13 eexts) = do
+    liftIO $ do
+        setALPN ctx MsgTEncryptedExtensions eexts
+        modifyTLS13State ctx $ \st -> st{tls13stClientExtensions = eexts}
+    st13 <- usingHState ctx getTLS13RTT0Status
+    if st13 == RTT0Sent
+        then case extensionLookup EID_EarlyData eexts of
+            Just _ -> do
+                usingHState ctx $ setTLS13HandshakeMode RTT0
+                usingHState ctx $ setTLS13RTT0Status RTT0Accepted
+                liftIO $ modifyTLS13State ctx $ \st -> st{tls13st0RTTAccepted = True}
+            Nothing -> do
+                usingHState ctx $ setTLS13HandshakeMode RTT0
+                usingHState ctx $ setTLS13RTT0Status RTT0Rejected
+        else return ()
+expectEncryptedExtensions _ p = unexpected (show p) (Just "encrypted extensions")
 
 ----------------------------------------------------------------
+-- not used in 0-RTT
+expectCertRequest
+    :: MonadIO m => ClientParams -> Context -> Handshake13 -> RecvHandshake13M m ()
+expectCertRequest cparams ctx (CertRequest13 token exts) = do
+    processCertRequest13 ctx token exts
+    recvHandshake13 ctx $ expectCertAndVerify cparams ctx
+expectCertRequest cparams ctx other = do
+    usingHState ctx $ do
+        setCertReqToken Nothing
+        setCertReqCBdata Nothing
+    -- setCertReqSigAlgsCert Nothing
+    expectCertAndVerify cparams ctx other
 
 processCertRequest13
     :: MonadIO m => Context -> CertReqContext -> [ExtensionRaw] -> m ()
@@ -250,6 +202,101 @@ processCertRequest13 ctx token exts = do
         -> Maybe [HashAndSignatureAlgorithm]
     unsighash (SignatureAlgorithms a) = Just a
 
+----------------------------------------------------------------
+-- not used in 0-RTT
+expectCertAndVerify
+    :: MonadIO m => ClientParams -> Context -> Handshake13 -> RecvHandshake13M m ()
+expectCertAndVerify cparams ctx (Certificate13 _ cc _) = do
+    liftIO $ usingState_ ctx $ setServerCertificateChain cc
+    liftIO $ doCertificate cparams ctx cc
+    let pubkey = certPubKey $ getCertificate $ getCertificateChainLeaf cc
+    ver <- liftIO $ usingState_ ctx getVersion
+    checkDigitalSignatureKey ver pubkey
+    usingHState ctx $ setPublicKey pubkey
+    recvHandshake13hash ctx $ expectCertVerify ctx pubkey
+expectCertAndVerify _ _ p = unexpected (show p) (Just "server certificate")
+
+----------------------------------------------------------------
+
+expectCertVerify
+    :: MonadIO m => Context -> PubKey -> ByteString -> Handshake13 -> m ()
+expectCertVerify ctx pubkey hChSc (CertVerify13 sigAlg sig) = do
+    ok <- checkCertVerify ctx pubkey sigAlg sig hChSc
+    unless ok $ decryptError "cannot verify CertificateVerify"
+expectCertVerify _ _ _ p = unexpected (show p) (Just "certificate verify")
+
+----------------------------------------------------------------
+
+expectFinished
+    :: MonadIO m
+    => Context
+    -> ByteString
+    -> Handshake13
+    -> m ()
+expectFinished ctx hashValue (Finished13 verifyData) = do
+    st <- liftIO $ getTLS13State ctx
+    let usedHash = cHash $ tls13stChoice st
+        ServerTrafficSecret baseKey = triServer $ fromJust $ tls13stHsKey st
+    checkFinished ctx usedHash baseKey hashValue verifyData
+    liftIO $ modifyTLS13State ctx $ \s -> s{tls13stRecvSF = True}
+expectFinished _ _ p = unexpected (show p) (Just "server finished")
+
+----------------------------------------------------------------
+----------------------------------------------------------------
+
+sendClientSecondFlight13 :: ClientParams -> Context -> IO ()
+sendClientSecondFlight13 cparams ctx = do
+    st <- getTLS13State ctx
+    let choice = tls13stChoice st
+        hkey = fromJust $ tls13stHsKey st
+        rtt0accepted = tls13st0RTTAccepted st
+        eexts = tls13stClientExtensions st
+    sendClientSecondFlight13' cparams ctx choice hkey rtt0accepted eexts
+    modifyTLS13State ctx $ \s -> s{tls13stSentCF = True}
+
+sendClientSecondFlight13'
+    :: ClientParams
+    -> Context
+    -> CipherChoice
+    -> SecretTriple HandshakeSecret
+    -> Bool
+    -> [ExtensionRaw]
+    -> IO ()
+sendClientSecondFlight13' cparams ctx choice hkey rtt0accepted eexts = do
+    hChSf <- transcriptHash ctx
+    unless (ctxQUICMode ctx) $
+        runPacketFlight ctx $
+            sendChangeCipherSpec13 ctx
+    when (rtt0accepted && not (ctxQUICMode ctx)) $
+        sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
+    let clientHandshakeSecret = triClient hkey
+    setTxState ctx usedHash usedCipher clientHandshakeSecret
+    sendClientFlight13 cparams ctx usedHash clientHandshakeSecret
+    appKey <- switchToApplicationSecret hChSf
+    let applicationSecret = triBase appKey
+    setResumptionSecret applicationSecret
+    let appSecInfo = ApplicationSecretInfo (triClient appKey, triServer appKey)
+    contextSync ctx $ SendClientFinished eexts appSecInfo
+    modifyTLS13State ctx $ \st -> st{tls13stHsKey = Nothing}
+    handshakeDone13 ctx
+  where
+    usedCipher = cCipher choice
+    usedHash = cHash choice
+
+    switchToApplicationSecret hChSf = do
+        ensureRecvComplete ctx
+        let handshakeSecret = triBase hkey
+        appKey <- calculateApplicationSecret ctx choice handshakeSecret hChSf
+        let serverApplicationSecret0 = triServer appKey
+        let clientApplicationSecret0 = triClient appKey
+        setTxState ctx usedHash usedCipher clientApplicationSecret0
+        setRxState ctx usedHash usedCipher serverApplicationSecret0
+        return appKey
+
+    setResumptionSecret applicationSecret = do
+        resumptionSecret <- calculateResumptionSecret ctx choice applicationSecret
+        usingHState ctx $ setTLS13ResumptionSecret resumptionSecret
+
 {- Unused for now
 uncertsig :: SignatureAlgorithmsCert
           -> Maybe [HashAndSignatureAlgorithm]
@@ -289,6 +336,9 @@ sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
         throwCore $
             Error_Protocol "missing TLS 1.3 certificate request context token" InternalError
 
+----------------------------------------------------------------
+----------------------------------------------------------------
+
 postHandshakeAuthClientWith :: ClientParams -> Context -> Handshake13 -> IO ()
 postHandshakeAuthClientWith cparams ctx h@(CertRequest13 certReqCtx exts) =
     bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
@@ -306,3 +356,31 @@ postHandshakeAuthClientWith _ _ _ =
         Error_Protocol
             "unexpected handshake message received in postHandshakeAuthClientWith"
             UnexpectedMessage
+
+----------------------------------------------------------------
+----------------------------------------------------------------
+
+asyncServerHello13
+    :: ClientParams -> Context -> Maybe Group -> Session -> [ExtensionID] -> IO ()
+asyncServerHello13 cparams ctx groupSent clientSession sentExtensions = do
+    -- fixme: measuring RTT
+    setPendingRecvActions
+        ctx
+        [ PendingRecvAction True expectServerHello
+        , PendingRecvAction
+            True
+            (expectEncryptedExtensions ctx)
+        , PendingRecvActionHash
+            True
+            expectFinishedAndSet
+        ]
+  where
+    expectServerHello sh = do
+        processServerHello13 cparams ctx clientSession sentExtensions sh
+        void $ prepareSecondFlight13 ctx groupSent
+    expectFinishedAndSet h sf = do
+        expectFinished ctx h sf
+        liftIO $
+            writeIORef (ctxPendingSendAction ctx) $
+                Just $
+                    sendClientSecondFlight13 cparams

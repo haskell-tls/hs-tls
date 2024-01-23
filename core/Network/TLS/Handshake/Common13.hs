@@ -449,19 +449,6 @@ isHashSignatureValid13 (h, SignatureECDSA) =
     h `elem` [HashSHA256, HashSHA384, HashSHA512]
 isHashSignatureValid13 _ = False
 
-data CipherChoice = CipherChoice
-    { cVersion :: Version
-    , cCipher :: Cipher
-    , cHash :: Hash
-    , cZero :: ByteString
-    }
-
-makeCipherChoice :: Version -> Cipher -> CipherChoice
-makeCipherChoice ver cipher = CipherChoice ver cipher h zero
-  where
-    h = cipherHash cipher
-    zero = B.replicate (hashDigestSize h) 0
-
 ----------------------------------------------------------------
 
 calculateEarlySecret

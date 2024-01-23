@@ -161,7 +161,8 @@ contextNew backend params = liftIO $ do
     tx <- newMVar newRecordState
     rx <- newMVar newRecordState
     hs <- newMVar Nothing
-    as <- newIORef []
+    recvActionsRef <- newIORef []
+    sendActionRef <- newIORef Nothing
     crs <- newIORef []
     lockWrite <- newMVar ()
     lockRead <- newMVar ()
@@ -190,7 +191,8 @@ contextNew backend params = liftIO $ do
                 , ctxLockWrite = lockWrite
                 , ctxLockRead = lockRead
                 , ctxLockState = lockState
-                , ctxPendingActions = as
+                , ctxPendingRecvActions = recvActionsRef
+                , ctxPendingSendAction = sendActionRef
                 , ctxCertRequests = crs
                 , ctxKeyLogger = debugKeyLogger debug
                 , ctxRecordLayer = recordLayer

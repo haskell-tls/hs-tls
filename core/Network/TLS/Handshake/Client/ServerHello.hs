@@ -2,6 +2,7 @@
 
 module Network.TLS.Handshake.Client.ServerHello (
     recvServerHello,
+    processServerHello13,
 ) where
 
 import Network.TLS.Cipher
@@ -21,15 +22,16 @@ import Network.TLS.Imports
 import Network.TLS.Parameters
 import Network.TLS.State
 import Network.TLS.Struct
+import Network.TLS.Struct13
 import Network.TLS.Types
 
 ----------------------------------------------------------------
 
 recvServerHello
-    :: Context -> ClientParams -> Session -> [ExtensionID] -> IO [Handshake]
-recvServerHello ctx cparams clientSession sentExts = do
+    :: ClientParams -> Context -> Session -> [ExtensionID] -> IO [Handshake]
+recvServerHello cparams ctx clientSession sentExts = do
     (sh, hss) <- recvSH
-    processServerHello ctx cparams clientSession sentExts sh
+    processServerHello cparams ctx clientSession sentExts sh
     processHandshake ctx sh
     return hss
   where
@@ -49,6 +51,13 @@ recvServerHello ctx cparams clientSession sentExts = do
 
 ----------------------------------------------------------------
 
+processServerHello13
+    :: ClientParams -> Context -> Session -> [ExtensionID] -> Handshake13 -> IO ()
+processServerHello13 cparams ctx clientSession sentExts (ServerHello13 serverRan serverSession cipher exts) = do
+    let sh = ServerHello TLS12 serverRan serverSession cipher 0 exts
+    processServerHello cparams ctx clientSession sentExts sh
+processServerHello13 _ _ _ _ h = unexpected (show h) (Just "server hello")
+
 -- | processServerHello processes the ServerHello message on the client.
 --
 -- 1) check the version chosen by the server is one allowed by parameters.
@@ -56,8 +65,8 @@ recvServerHello ctx cparams clientSession sentExts = do
 -- 3) check extensions received are part of the one we sent
 -- 4) process the session parameter to see if the server want to start a new session or can resume
 processServerHello
-    :: Context -> ClientParams -> Session -> [ExtensionID] -> Handshake -> IO ()
-processServerHello ctx cparams clientSession sentExts (ServerHello rver serverRan serverSession cipher compression exts) = do
+    :: ClientParams -> Context -> Session -> [ExtensionID] -> Handshake -> IO ()
+processServerHello cparams ctx clientSession sentExts (ServerHello rver serverRan serverSession cipher compression exts) = do
     when (rver < TLS12) $
         throwCore $
             Error_Protocol (show rver ++ " is not supported") ProtocolVersion
