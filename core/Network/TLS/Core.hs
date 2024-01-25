@@ -154,9 +154,14 @@ sendData :: MonadIO m => Context -> L.ByteString -> m ()
 sendData _ "" = return ()
 sendData ctx dataToSend = liftIO $ do
     tls13 <- tls13orLater ctx
-    let sendP
-            | tls13 = sendPacket13 ctx . AppData13
-            | otherwise = sendPacket ctx . AppData
+    sentCF <- tls13stSentCF <$> getTLS13State ctx
+    let sendP bs
+            | tls13 = do
+                sendPacket13 ctx $ AppData13 bs
+                when (not sentCF) $
+                    modifyTLS13State ctx $
+                        \st -> st{tls13stPendingSentData = tls13stPendingSentData st . (bs :)}
+            | otherwise = sendPacket ctx $ AppData bs
     when tls13 $ sendCFifNecessary ctx
     withWriteLock ctx $ do
         checkValid ctx

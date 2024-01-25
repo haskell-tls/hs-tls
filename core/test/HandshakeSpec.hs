@@ -865,7 +865,7 @@ handshake13_0rtt (CSP13 (cli, srv)) = do
 
 handshake13_0rtt_fallback :: IO ()
 handshake13_0rtt_fallback = do
-    ticketSize <- generate $ choose (0, 512)
+    maxEarlyDataSize <- generate $ choose (0, 512)
     (cli, srv) <- generate arbitraryPairParams13
     group0 <- generate $ elements [P256, X25519]
     let cliSupported =
@@ -882,7 +882,7 @@ handshake13_0rtt_fallback = do
             ( cli{clientSupported = cliSupported}
             , srv
                 { serverSupported = svrSupported
-                , serverEarlyDataSize = ticketSize
+                , serverEarlyDataSize = maxEarlyDataSize
                 }
             )
 
@@ -913,13 +913,12 @@ handshake13_0rtt_fallback = do
                 }
             )
 
-    let mode2 = if ticketSize < 256 then PreSharedKey else RTT0
-    runTLSSimple13 params2 mode2
+    runTLS0RTT params2 PreSharedKey earlyData
 
 {-
 handshake13_0rtt_length :: CSP13 -> IO ()
 handshake13_0rtt_length (CSP13 (cli, srv)) = do
-    serverMax <- generate $ choose (0, 33792)
+    maxEarlyDataSize <- generate $ choose (0, 33792)
     let cliSupported =
             def
                 { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
@@ -934,7 +933,7 @@ handshake13_0rtt_length (CSP13 (cli, srv)) = do
             ( cli{clientSupported = cliSupported}
             , srv
                 { serverSupported = svrSupported
-                , serverEarlyDataSize = serverMax
+                , serverEarlyDataSize = maxEarlyDataSize
                 }
             )
 
@@ -951,7 +950,7 @@ handshake13_0rtt_length (CSP13 (cli, srv)) = do
     let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
         params2 = (pc{clientEarlyData = False}, ps)
         (mode, mEarlyData)
-            | clientLen > serverMax = (PreSharedKey, Nothing)
+            | clientLen > maxEarlyDataSize = (PreSharedKey, Nothing)
             | otherwise = (RTT0, Just earlyData)
     runTLS0RTT params2 mode mEarlyData
 -}

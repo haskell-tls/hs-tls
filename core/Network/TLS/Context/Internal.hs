@@ -178,6 +178,7 @@ data TLS13State = TLS13State
     , tls13stSentCF :: Bool -- client
     , tls13stRecvCF :: Bool -- server
     , tls13stPendingRecvData :: Maybe ByteString -- client
+    , tls13stPendingSentData :: [ByteString] -> [ByteString] -- client
     , tls13stRTT :: Int
     , tls13st0RTTAccepted :: Bool -- client
     , tls13stClientExtensions :: [ExtensionRaw] -- client
@@ -194,6 +195,7 @@ defaultTLS13State =
         , tls13stSentCF = False
         , tls13stRecvCF = False
         , tls13stPendingRecvData = Nothing
+        , tls13stPendingSentData = id
         , tls13stRTT = 0
         , tls13st0RTTAccepted = False
         , tls13stClientExtensions = []

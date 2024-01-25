@@ -144,7 +144,7 @@ expectEncryptedExtensions ctx (EncryptedExtensions13 eexts) = do
                 usingHState ctx $ setTLS13RTT0Status RTT0Accepted
                 liftIO $ modifyTLS13State ctx $ \st -> st{tls13st0RTTAccepted = True}
             Nothing -> do
-                usingHState ctx $ setTLS13HandshakeMode RTT0
+                usingHState ctx $ setTLS13HandshakeMode PreSharedKey
                 usingHState ctx $ setTLS13RTT0Status RTT0Rejected
         else return ()
 expectEncryptedExtensions _ p = unexpected (show p) (Just "encrypted extensions")
@@ -279,6 +279,11 @@ sendClientSecondFlight13' cparams ctx choice hkey rtt0accepted eexts = do
     contextSync ctx $ SendClientFinished eexts appSecInfo
     modifyTLS13State ctx $ \st -> st{tls13stHsKey = Nothing}
     handshakeDone13 ctx
+    builder <- tls13stPendingSentData <$> getTLS13State ctx
+    modifyTLS13State ctx $ \st -> st{tls13stPendingSentData = id}
+    when (not rtt0accepted) $
+        mapM_ (sendPacket13 ctx . AppData13) $
+            builder []
   where
     usedCipher = cCipher choice
     usedHash = cHash choice
