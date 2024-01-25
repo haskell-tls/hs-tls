@@ -57,7 +57,6 @@ spec = do
         prop "can handshake with TLS 1.3 PSK -> HRR" handshake13_psk_fallback
         prop "can handshake with TLS 1.3 0RTT" handshake13_0rtt
         prop "can handshake with TLS 1.3 0RTT -> PSK" handshake13_0rtt_fallback
-        --        prop "can handshake with TLS 1.3 0RTT length" handshake13_0rtt_length
         prop "can handshake with TLS 1.3 EE" handshake13_ee_groups
         prop "can handshake with TLS 1.3 EC groups" handshake13_ec
         prop "can handshake with TLS 1.3 FFDHE groups" handshake13_ffdhe
@@ -913,46 +912,6 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
             )
 
     runTLS0RTT params2 PreSharedKey earlyData
-
-{-
-handshake13_0rtt_length :: CSP13 -> IO ()
-handshake13_0rtt_length (CSP13 (cli, srv)) = do
-    maxEarlyDataSize <- generate $ choose (0, 33792)
-    let cliSupported =
-            def
-                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
-                , supportedGroups = [X25519]
-                }
-        svrSupported =
-            def
-                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
-                , supportedGroups = [X25519]
-                }
-        params0 =
-            ( cli{clientSupported = cliSupported}
-            , srv
-                { serverSupported = svrSupported
-                , serverEarlyDataSize = maxEarlyDataSize
-                }
-            )
-
-    sessionRefs <- twoSessionRefs
-    let sessionManagers = twoSessionManagers sessionRefs
-    let params = setPairParamsSessionManagers sessionManagers params0
-    runTLSSimple13 params FullHandshake
-
-    -- and resume
-    sessionParams <- readClientSessionRef sessionRefs
-    sessionParams `shouldSatisfy` isJust
-    clientLen <- generate $ choose (0, 33792)
-    earlyData <- B.pack <$> generate (someWords8 clientLen)
-    let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
-        params2 = (pc{clientEarlyData = False}, ps)
-        (mode, mEarlyData)
-            | clientLen > maxEarlyDataSize = (PreSharedKey, Nothing)
-            | otherwise = (RTT0, Just earlyData)
-    runTLS0RTT params2 mode mEarlyData
--}
 
 handshake13_ee_groups :: CSP13 -> IO ()
 handshake13_ee_groups (CSP13 (cli, srv)) = do
