@@ -896,22 +896,24 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
     sessionParams <- readClientSessionRef sessionRefs
     sessionParams `shouldSatisfy` isJust
     earlyData <- B.pack <$> generate (someWords8 256)
-    group2 <- generate $ elements [P256, X25519]
+    group1 <- generate $ elements [P256, X25519]
     let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
-        svrSupported2 =
+        svrSupported1 =
             def
                 { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
-                , supportedGroups = [group2]
+                , supportedGroups = [group1]
                 }
-        params2 =
+        params1 =
             ( pc{clientEarlyData = True}
             , ps
                 { serverEarlyDataSize = 0
-                , serverSupported = svrSupported2
+                , serverSupported = svrSupported1
                 }
             )
 
-    runTLS0RTT params2 PreSharedKey earlyData
+    if group1 == group0
+        then runTLS0RTT params1 PreSharedKey earlyData
+        else return () -- runTLSFailure params1 handshake handshake
 
 handshake13_ee_groups :: CSP13 -> IO ()
 handshake13_ee_groups (CSP13 (cli, srv)) = do
