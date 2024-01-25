@@ -37,6 +37,7 @@ import Network.TLS.Sending
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
+import Network.TLS.Types (Role (..))
 
 ----------------------------------------------------------------
 
@@ -178,7 +179,9 @@ isRecvComplete ctx = usingState_ ctx $ do
 checkValid :: Context -> IO ()
 checkValid ctx = do
     established <- ctxEstablished ctx
-    when (established == NotEstablished) $ throwIO ConnectionNotEstablished
+    role <- usingState_ ctx getRole
+    when (role == ServerRole && established == NotEstablished) $
+        throwIO ConnectionNotEstablished
     eofed <- ctxEOF ctx
     when eofed $ throwIO $ PostHandshake Error_EOF
 
