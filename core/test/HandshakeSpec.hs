@@ -863,10 +863,9 @@ handshake13_0rtt (CSP13 (cli, srv)) = do
 
         runTLS0RTT params2 RTT0 earlyData
 
-handshake13_0rtt_fallback :: IO ()
-handshake13_0rtt_fallback = do
+handshake13_0rtt_fallback :: CSP13 -> IO ()
+handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
     maxEarlyDataSize <- generate $ choose (0, 512)
-    (cli, srv) <- generate arbitraryPairParams13
     group0 <- generate $ elements [P256, X25519]
     let cliSupported =
             def
