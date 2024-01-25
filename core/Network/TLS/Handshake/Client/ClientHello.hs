@@ -289,7 +289,11 @@ getPreSharedKeyInfo cparams ctx = do
         guard tls13
         (sid, sdata) <- clientWantSessionResume cparams
         guard (sessionVersion sdata >= TLS13)
-        sCipher <- find (\c -> cipherID c == sessionCipher sdata) ciphers
+        guard (not (null ciphers))
+        let sCipher = head ciphers
+        -- A keyshare is sent only for the first cipher.
+        -- This can induce HRR.
+        guard (cipherID sCipher == sessionCipher sdata)
         return (sid, sdata, sCipher)
 
     getPskInfo =
