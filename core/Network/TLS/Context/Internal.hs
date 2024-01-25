@@ -184,6 +184,8 @@ data TLS13State = TLS13State
     , tls13stClientExtensions :: [ExtensionRaw] -- client
     , tls13stChoice :: ~CipherChoice -- client
     , tls13stHsKey :: Maybe (SecretTriple HandshakeSecret) -- client
+    , tls13stSession :: Session
+    , tls13stSentExtensions :: [ExtensionID]
     }
 
 defaultTLS13State :: TLS13State
@@ -201,6 +203,8 @@ defaultTLS13State =
         , tls13stClientExtensions = []
         , tls13stChoice = undefined
         , tls13stHsKey = Nothing
+        , tls13stSession = Session Nothing
+        , tls13stSentExtensions = []
         }
 
 getTLS13State :: Context -> IO TLS13State

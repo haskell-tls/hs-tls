@@ -366,8 +366,8 @@ postHandshakeAuthClientWith _ _ _ =
 ----------------------------------------------------------------
 
 asyncServerHello13
-    :: ClientParams -> Context -> Maybe Group -> Session -> [ExtensionID] -> IO ()
-asyncServerHello13 cparams ctx groupSent clientSession sentExtensions = do
+    :: ClientParams -> Context -> Maybe Group -> IO ()
+asyncServerHello13 cparams ctx groupSent = do
     -- fixme: measuring RTT
     setPendingRecvActions
         ctx
@@ -381,7 +381,7 @@ asyncServerHello13 cparams ctx groupSent clientSession sentExtensions = do
         ]
   where
     expectServerHello sh = do
-        processServerHello13 cparams ctx clientSession sentExtensions sh
+        processServerHello13 cparams ctx sh
         void $ prepareSecondFlight13 ctx groupSent
     expectFinishedAndSet h sf = do
         expectFinished ctx h sf

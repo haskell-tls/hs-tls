@@ -64,35 +64,33 @@ handshake
 handshake cparams ctx groups mparams = do
     --------------------------------
     -- Sending ClientHello
+    pskinfo@(_, _, rtt0) <- getPreSharedKeyInfo cparams ctx
+    when rtt0 $ asyncServerHello13 cparams ctx groupToSend
     updateMeasure ctx incrementNbHandshakes
-    (crand, clientSession, rtt0, sentExtensions) <-
-        sendClientHello cparams ctx groups mparams
+    crand <- sendClientHello cparams ctx groups mparams pskinfo
     --------------------------------
     -- Receiving ServerHello
-    if rtt0
-        then asyncServerHello13 cparams ctx groupToSend clientSession sentExtensions
-        else do
-            (ver, hss, hrr) <-
-                receiveServerHello cparams ctx mparams clientSession sentExtensions
-            --------------------------------
-            -- Switching to HRR, TLS 1.2 or TLS 1.3
-            case ver of
-                TLS13
-                    | hrr ->
-                        helloRetry cparams ctx mparams ver crand clientSession $ drop 1 groups
-                    | otherwise -> do
-                        recvServerSecondFlight13 cparams ctx groupToSend
-                        sendClientSecondFlight13 cparams ctx
-                _
-                    | rtt0 ->
-                        throwCore $
-                            Error_Protocol
-                                "server denied TLS 1.3 when connecting with early data"
-                                HandshakeFailure
-                    | otherwise -> do
-                        recvServerFirstFlight12 cparams ctx hss
-                        sendClientSecondFlight12 cparams ctx
-                        recvServerSecondFlight12 ctx
+    unless rtt0 $ do
+        (ver, hss, hrr) <- receiveServerHello cparams ctx mparams
+        --------------------------------
+        -- Switching to HRR, TLS 1.2 or TLS 1.3
+        case ver of
+            TLS13
+                | hrr ->
+                    helloRetry cparams ctx mparams ver crand $ drop 1 groups
+                | otherwise -> do
+                    recvServerSecondFlight13 cparams ctx groupToSend
+                    sendClientSecondFlight13 cparams ctx
+            _
+                | rtt0 ->
+                    throwCore $
+                        Error_Protocol
+                            "server denied TLS 1.3 when connecting with early data"
+                            HandshakeFailure
+                | otherwise -> do
+                    recvServerFirstFlight12 cparams ctx hss
+                    sendClientSecondFlight12 cparams ctx
+                    recvServerSecondFlight12 ctx
   where
     groupToSend = listToMaybe groups
 
@@ -100,12 +98,10 @@ receiveServerHello
     :: ClientParams
     -> Context
     -> Maybe (ClientRandom, Session, Version)
-    -> Session
-    -> [ExtensionID]
     -> IO (Version, [Handshake], Bool)
-receiveServerHello cparams ctx mparams clientSession sentExtensions = do
+receiveServerHello cparams ctx mparams = do
     t0 <- getUnixTime
-    hss <- recvServerHello cparams ctx clientSession sentExtensions
+    hss <- recvServerHello cparams ctx
     t1 <- getUnixTime
     let UnixDiffTime (CTime s) u = t1 `diffUnixTime` t0
         rtt = fromIntegral s * 1000000 + fromIntegral u
@@ -129,10 +125,9 @@ helloRetry
     -> Maybe a
     -> Version
     -> ClientRandom
-    -> Session
     -> [Group]
     -> IO ()
-helloRetry cparams ctx mparams ver crand clientSession groups = do
+helloRetry cparams ctx mparams ver crand groups = do
     when (null groups) $
         throwCore $
             Error_Protocol "group is exhausted in the client side" IllegalParameter
@@ -147,6 +142,7 @@ helloRetry cparams ctx mparams ver crand clientSession groups = do
                 clearTxState ctx
                 let cparams' = cparams{clientEarlyData = False}
                 runPacketFlight ctx $ sendChangeCipherSpec13 ctx
+                clientSession <- tls13stSession <$> getTLS13State ctx
                 handshake cparams' ctx [selectedGroup] (Just (crand, clientSession, ver))
             | otherwise ->
                 throwCore $
