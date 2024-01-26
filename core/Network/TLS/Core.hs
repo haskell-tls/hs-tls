@@ -300,7 +300,6 @@ recvData13 ctx = do
             let label' = B.copy label
             void $ sessionEstablish (sharedSessionManager $ ctxShared ctx) label' sdata
             modifyTLS13State ctx $ \st -> st{tls13stRecvNST = True}
-        -- putStrLn $ "NewSessionTicket received: lifetime = " ++ show life ++ " sec"
         loopHandshake13 hs
     loopHandshake13 (KeyUpdate13 mode : hs) = do
         when (ctxQUICMode ctx) $ do
