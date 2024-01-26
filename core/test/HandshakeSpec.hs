@@ -597,12 +597,16 @@ handshake_sni (clientParam, serverParam) = do
   where
     hsClient ctx = do
         handshake ctx
-        sni <- getClientSNI ctx
-        sni `shouldBe` Just serverName
+        msni <- getClientSNI ctx
+        case msni of
+            Nothing -> expectationFailure "C: SNI Just is expected"
+            Just sni -> sni `shouldBe` serverName
     hsServer ctx = do
         handshake ctx
-        sni <- getClientSNI ctx
-        sni `shouldBe` Just serverName
+        msni <- getClientSNI ctx
+        case msni of
+            Nothing -> expectationFailure "S: SNI Just is expected"
+            Just sni -> sni `shouldBe` serverName
     onSNI ref name = do
         mx <- readIORef ref
         mx `shouldBe` Nothing
@@ -894,27 +898,29 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
     runTLSSimple13 params mode
 
     -- and resume
-    sessionParams <- readClientSessionRef sessionRefs
-    sessionParams `shouldSatisfy` isJust
-    earlyData <- B.pack <$> generate (someWords8 256)
-    group1 <- generate $ elements [P256, X25519]
-    let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
-        svrSupported1 =
-            def
-                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
-                , supportedGroups = [group1]
-                }
-        params1 =
-            ( pc{clientEarlyData = True}
-            , ps
-                { serverEarlyDataSize = 0
-                , serverSupported = svrSupported1
-                }
-            )
+    mSessionParams <- readClientSessionRef sessionRefs
+    case mSessionParams of
+        Nothing -> expectationFailure "session params: Just is expected"
+        Just sessionParams -> do
+            earlyData <- B.pack <$> generate (someWords8 256)
+            group1 <- generate $ elements [P256, X25519]
+            let (pc, ps) = setPairParamsSessionResuming sessionParams params
+                svrSupported1 =
+                    def
+                        { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                        , supportedGroups = [group1]
+                        }
+                params1 =
+                    ( pc{clientEarlyData = True}
+                    , ps
+                        { serverEarlyDataSize = 0
+                        , serverSupported = svrSupported1
+                        }
+                    )
 
-    if group1 == group0
-        then runTLS0RTT params1 PreSharedKey earlyData
-        else runTLSFailure params1 (tlsClient earlyData) tlsServer
+            if group1 == group0
+                then runTLS0RTT params1 PreSharedKey earlyData
+                else runTLSFailure params1 (tlsClient earlyData) tlsServer
   where
     tlsClient earlyData ctx = do
         handshake ctx

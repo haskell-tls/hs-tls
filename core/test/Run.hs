@@ -61,7 +61,7 @@ runTLSN n params tlsClient tlsServer = do
     -- read result
     m_dsres <- timeout 1000000 $ readChan outputChan -- 60 sec
     case m_dsres of
-        Nothing -> error "timed out"
+        Nothing -> expectationFailure "timed out"
         Just dsres -> dsres `shouldBe` ds
   where
     server sCtx outputChan =
@@ -114,11 +114,15 @@ runTLSSimple13 params mode =
     hsClient ctx = do
         handshake ctx
         minfo <- contextGetInformation ctx
-        (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
+        case minfo >>= infoTLS13HandshakeMode of
+            Nothing -> expectationFailure "C: mode should be Just"
+            Just m -> m `shouldBe` mode
     hsServer ctx = do
         handshake ctx
         minfo <- contextGetInformation ctx
-        (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
+        case minfo >>= infoTLS13HandshakeMode of
+            Nothing -> expectationFailure "S: mode should be Just"
+            Just m -> m `shouldBe` mode
 
 runTLS0RTT
     :: (ClientParams, ServerParams)
@@ -135,7 +139,9 @@ runTLS0RTT params mode earlyData =
         _ <- recvData ctx
         bye ctx
         minfo <- contextGetInformation ctx
-        (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
+        case minfo >>= infoTLS13HandshakeMode of
+            Nothing -> expectationFailure "C: mode should be Just"
+            Just m -> m `shouldBe` mode
     tlsServer ctx = do
         handshake ctx
         let ls = chunkLengths $ B.length earlyData
@@ -144,7 +150,9 @@ runTLS0RTT params mode earlyData =
         sendData ctx $ L.fromStrict earlyData
         bye ctx
         minfo <- contextGetInformation ctx
-        (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
+        case minfo >>= infoTLS13HandshakeMode of
+            Nothing -> expectationFailure "S: mode should be Just"
+            Just m -> m `shouldBe` mode
     chunkLengths :: Int -> [Int]
     chunkLengths len
         | len > 16384 = 16384 : chunkLengths (len - 16384)
