@@ -189,6 +189,8 @@ module Network.TLS.Struct (
 ) where
 
 import Control.Exception (Exception (..))
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.ByteString.Char8 as C8
 import Data.Typeable
 import Data.X509 (CertificateChain, DistinguishedName)
 import Network.TLS.Crypto
@@ -458,7 +460,13 @@ data Packet
     | Alert [(AlertLevel, AlertDescription)]
     | ChangeCipherSpec
     | AppData ByteString
-    deriving (Show, Eq)
+    deriving (Eq)
+
+instance Show Packet where
+    show (Handshake hs) = "Handshake " ++ show hs
+    show (Alert as) = "Alert " ++ show as
+    show ChangeCipherSpec = "ChangeCipherSpec"
+    show (AppData bs) = "AppData " ++ C8.unpack (B16.encode bs)
 
 data Header = Header ProtocolType Version Word16 deriving (Show, Eq)
 
