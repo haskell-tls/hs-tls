@@ -120,7 +120,7 @@ getDefaultParams flags host store sStorage certCredsRequest session earlyData =
                         then (\seed -> putStrLn ("seed: " ++ show (seedToInteger seed)))
                         else (\_ -> return ())
                 }
-        , clientEarlyData = earlyData
+        , clientEarlyData = isJust earlyData
         }
   where
     serverName = foldl f host flags
@@ -412,13 +412,7 @@ runOn (sStorage, certStore) flags port hostname
                 handshake ctx
                 when (Verbose `elem` flags) $ printHandshakeInfo ctx
                 case earlyData of
-                    Just edata -> do
-                        minfo <- contextGetInformation ctx
-                        case minfo of
-                            Nothing -> return () -- what should we do?
-                            Just info -> unless (infoIsEarlyDataAccepted info) $ do
-                                putStrLn "Resending 0RTT data ..."
-                                sendData ctx $ LC.fromStrict edata
+                    Just edata -> sendData ctx $ LC.fromStrict edata
                     _ -> return ()
                 sendData ctx $ query
                 loopRecv out ctx
