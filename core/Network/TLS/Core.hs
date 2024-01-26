@@ -343,7 +343,8 @@ recvData13 ctx = do
                         case action of
                             PendingRecvAction needAligned pa -> do
                                 when needAligned $ checkAlignment hs
-                                processHandshake13 ctx h >> pa h
+                                processHandshake13 ctx h
+                                pa h
                             PendingRecvActionHash needAligned pa -> do
                                 when needAligned $ checkAlignment hs
                                 d <- transcriptHash ctx
