@@ -7,7 +7,6 @@ module Network.TLS.Handshake.Client (
 ) where
 
 import Data.UnixTime
-import Foreign.C.Types
 
 import Network.TLS.Context.Internal
 import Network.TLS.Crypto
@@ -65,7 +64,9 @@ handshake cparams ctx groups mparams = do
     --------------------------------
     -- Sending ClientHello
     pskinfo@(_, _, rtt0) <- getPreSharedKeyInfo cparams ctx
-    when rtt0 $ asyncServerHello13 cparams ctx groupToSend
+    when rtt0 $ do
+        t0 <- getUnixTime
+        asyncServerHello13 cparams ctx groupToSend t0
     updateMeasure ctx incrementNbHandshakes
     crand <- sendClientHello cparams ctx groups mparams pskinfo
     --------------------------------
@@ -102,10 +103,7 @@ receiveServerHello
 receiveServerHello cparams ctx mparams = do
     t0 <- getUnixTime
     hss <- recvServerHello cparams ctx
-    t1 <- getUnixTime
-    let UnixDiffTime (CTime s) u = t1 `diffUnixTime` t0
-        rtt = fromIntegral s * 1000000 + fromIntegral u
-    modifyTLS13State ctx $ \st -> st{tls13stRTT = rtt}
+    setRTT ctx t0
     ver <- usingState_ ctx getVersion
     unless (maybe True (\(_, _, v) -> v == ver) mparams) $
         throwCore $
