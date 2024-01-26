@@ -108,9 +108,10 @@ bye ctx = liftIO $ do
             else do
                 -- receiving Client Finished
                 recvCF <- tls13stRecvCF <$> getTLS13State ctx
-                unless recvCF $
-                    void $
-                        timeout 500000 (recvData ctx)
+                unless recvCF $ do
+                    -- no chance to measure RTT before receiving CF
+                    -- fixme: 1sec is good enough?
+                    void $ timeout 1000000 (recvData ctx)
     bye_ ctx
 
 bye_ :: MonadIO m => Context -> m ()
