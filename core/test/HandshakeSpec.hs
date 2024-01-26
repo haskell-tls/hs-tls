@@ -4,6 +4,7 @@ module HandshakeSpec where
 
 import Control.Monad
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
 import Data.Default.Class
 import Data.IORef
 import Data.List
@@ -913,7 +914,17 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
 
     if group1 == group0
         then runTLS0RTT params1 PreSharedKey earlyData
-        else return () -- runTLSFailure params1 handshake handshake
+        else runTLSFailure params1 (tlsClient earlyData) tlsServer
+  where
+    tlsClient earlyData ctx = do
+        handshake ctx
+        sendData ctx $ L.fromStrict earlyData
+        _ <- recvData ctx
+        bye ctx
+    tlsServer ctx = do
+        handshake ctx
+        _ <- recvData ctx
+        bye ctx
 
 handshake13_ee_groups :: CSP13 -> IO ()
 handshake13_ee_groups (CSP13 (cli, srv)) = do
