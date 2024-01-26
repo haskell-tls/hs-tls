@@ -93,8 +93,9 @@ getRTT ctx = do
 -- this doesn't actually close the handle
 bye :: MonadIO m => Context -> m ()
 bye ctx = liftIO $ do
+    eof <- ctxEOF ctx
     tls13 <- tls13orLater ctx
-    when tls13 $ do
+    when (tls13 && not eof) $ do
         role <- usingState_ ctx getRole
         if role == ClientRole
             then do
