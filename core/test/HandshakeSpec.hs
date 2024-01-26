@@ -522,7 +522,7 @@ handshake_resumption_ems (CompatEMS ems, CompatEMS ems2) = do
 
     -- and resume
     sessionParams <- readClientSessionRef sessionRefs
-    sessionParams `shouldSatisfy` isJust
+    expectJust "session param should be Just" sessionParams
     let params2 =
             setEMSMode ems2 $
                 setPairParamsSessionResuming (fromJust sessionParams) params
@@ -534,8 +534,8 @@ handshake_resumption_ems (CompatEMS ems, CompatEMS ems2) = do
         then runTLSFailure params2 handshake handshake
         else do
             runTLSSimple params2
-            sessionParams2 <- readClientSessionRef sessionRefs
-            let sameSession = sessionParams == sessionParams2
+            mSessionParams2 <- readClientSessionRef sessionRefs
+            let sameSession = sessionParams == mSessionParams2
                 sameUse = use ems == use ems2
             when emsVersion (sameSession `shouldBe` sameUse)
   where
@@ -598,15 +598,11 @@ handshake_sni (clientParam, serverParam) = do
     hsClient ctx = do
         handshake ctx
         msni <- getClientSNI ctx
-        case msni of
-            Nothing -> expectationFailure "C: SNI Just is expected"
-            Just sni -> sni `shouldBe` serverName
+        expectMaybe "C: SNI should be Just" serverName msni
     hsServer ctx = do
         handshake ctx
         msni <- getClientSNI ctx
-        case msni of
-            Nothing -> expectationFailure "S: SNI Just is expected"
-            Just sni -> sni `shouldBe` serverName
+        expectMaybe "S: SNI should be Just" serverName msni
     onSNI ref name = do
         mx <- readIORef ref
         mx `shouldBe` Nothing
@@ -650,7 +646,7 @@ handshake12_session_resumption (CSP12 plainParams) = do
 
     -- and resume
     sessionParams <- readClientSessionRef sessionRefs
-    sessionParams `shouldSatisfy` isJust
+    expectJust "session param should be Just" sessionParams
     let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 
     runTLSPredicate params2 (maybe False infoTLS12Resumption)
@@ -667,7 +663,7 @@ handshake12_session_ticket (CSP12 plainParams) = do
 
     -- and resume
     sessionParams <- readClientSessionRef sessionRefs
-    sessionParams `shouldSatisfy` isJust
+    expectJust "session param should be Just" sessionParams
     let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 
     runTLSPredicate params2 (maybe False infoTLS12Resumption)
@@ -736,7 +732,7 @@ handshake13_psk (CSP13 (cli, srv)) = do
 
     -- and resume
     sessionParams <- readClientSessionRef sessionRefs
-    sessionParams `shouldSatisfy` isJust
+    expectJust "session param should be Just" sessionParams
     let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 
     runTLSSimple13 params2 PreSharedKey
@@ -768,7 +764,7 @@ handshake13_psk_ticket (CSP13 (cli, srv)) = do
 
     -- and resume
     sessionParams <- readClientSessionRef sessionRefs
-    sessionParams `shouldSatisfy` isJust
+    expectJust "session param should be Just" sessionParams
     let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 
     runTLSSimple13 params2 PreSharedKey
@@ -804,7 +800,7 @@ handshake13_psk_fallback (CSP13 (cli, srv)) = do
     -- handshake is not possible because X25519 has been removed, so we are
     -- back with P256 after hello retry
     sessionParams <- readClientSessionRef sessionRefs
-    sessionParams `shouldSatisfy` isJust
+    expectJust "session param should be Just" sessionParams
     let (cli2, srv2) = setPairParamsSessionResuming (fromJust sessionParams) params
         srv2' = srv2{serverSupported = svrSupported'}
         svrSupported' =
@@ -859,8 +855,8 @@ handshake13_0rtt (CSP13 (cli, srv)) = do
     runTLS0rtt params sessionRefs = do
         -- and resume
         sessionParams <- readClientSessionRef sessionRefs
+        expectJust "session param should be Just" sessionParams
         clearClientSessionRef sessionRefs
-        sessionParams `shouldSatisfy` isJust
         earlyData <- B.pack <$> generate (someWords8 256)
         let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
             params2 = (pc{clientEarlyData = True}, ps)
@@ -1014,3 +1010,8 @@ post_handshake_auth (CSP13 (clientParam, serverParam)) = do
         _ <- requestCertificate ctx
         _ <- requestCertificate ctx -- two simultaneously
         sendData ctx "response 2"
+
+expectJust :: String -> Maybe a -> Expectation
+expectJust tag mx = case mx of
+    Nothing -> expectationFailure tag
+    Just _ -> return ()
