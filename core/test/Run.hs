@@ -141,6 +141,7 @@ runTLS0RTT params mode earlyData =
         let ls = chunkLengths $ B.length earlyData
         chunks <- replicateM (length ls) $ recvData ctx
         (map B.length chunks, B.concat chunks) `shouldBe` (ls, earlyData)
+        sendData ctx $ L.fromStrict earlyData
         bye ctx
         minfo <- contextGetInformation ctx
         (minfo >>= infoTLS13HandshakeMode) `shouldBe` Just mode
