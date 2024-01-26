@@ -263,6 +263,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
         unless (ctxQUICMode ctx) $ do
             runPacketFlight ctx $ sendChangeCipherSpec13 ctx
             setTxState ctx usedHash usedCipher clientEarlySecret
+            setEstablished ctx EarlyDataSending
         -- We set RTT0Sent even in quicMode
         usingHState ctx $ setTLS13RTT0Status RTT0Sent
         return $ EarlySecretInfo usedCipher clientEarlySecret

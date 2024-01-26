@@ -43,6 +43,7 @@ import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
+import Network.TLS.Handshake.State13
 import Network.TLS.IO
 import Network.TLS.Imports
 import Network.TLS.Measurement
@@ -65,11 +66,14 @@ handleException ctx f = catchException f $ \exception -> do
     let tlserror = case fromException exception of
             Just e | Uncontextualized e' <- e -> e'
             _ -> Error_Misc (show exception)
+    established <- ctxEstablished ctx
     setEstablished ctx NotEstablished
     handle ignoreIOErr $ do
         tls13 <- tls13orLater ctx
         if tls13
-            then sendPacket13 ctx $ Alert13 [errorToAlert tlserror]
+            then do
+                when (established == EarlyDataSending) $ clearTxState ctx
+                sendPacket13 ctx $ Alert13 [errorToAlert tlserror]
             else sendPacket ctx $ Alert [errorToAlert tlserror]
     handshakeFailed tlserror
   where

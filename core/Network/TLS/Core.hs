@@ -261,7 +261,7 @@ recvData13 ctx = do
                     let reason = "early data deprotect overflow"
                      in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
             Established -> return x
-            NotEstablished -> throwCore $ Error_Protocol "data at not-established" UnexpectedMessage
+            _ -> throwCore $ Error_Protocol "data at not-established" UnexpectedMessage
     process ChangeCipherSpec13 = do
         established <- ctxEstablished ctx
         if established /= Established

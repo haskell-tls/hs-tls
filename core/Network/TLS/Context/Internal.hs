@@ -236,8 +236,9 @@ updateRecordLayer recordLayer Context{..} =
 
 data Established
     = NotEstablished
-    | EarlyDataAllowed Int -- remaining 0-RTT bytes allowed
-    | EarlyDataNotAllowed Int -- remaining 0-RTT packets allowed to skip
+    | EarlyDataAllowed Int -- server: remaining 0-RTT bytes allowed
+    | EarlyDataNotAllowed Int -- sever: remaining 0-RTT packets allowed to skip
+    | EarlyDataSending
     | Established
     deriving (Eq, Show)
 
