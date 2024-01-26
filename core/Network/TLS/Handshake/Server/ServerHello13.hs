@@ -74,7 +74,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
                     usingHState ctx $ setTLS13HandshakeMode RTT0
                     usingHState ctx $ setTLS13RTT0Status RTT0Accepted
                 else do
-                    usingHState ctx $ setTLS13HandshakeMode RTT0
+                    usingHState ctx $ setTLS13HandshakeMode PreSharedKey
                     usingHState ctx $ setTLS13RTT0Status RTT0Rejected
         else when authenticated $ usingHState ctx $ setTLS13HandshakeMode PreSharedKey
     -- else : FullHandshake or HelloRetryRequest

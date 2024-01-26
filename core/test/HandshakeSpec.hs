@@ -4,6 +4,7 @@ module HandshakeSpec where
 
 import Control.Monad
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as L
 import Data.Default.Class
 import Data.IORef
 import Data.List
@@ -57,7 +58,6 @@ spec = do
         prop "can handshake with TLS 1.3 PSK -> HRR" handshake13_psk_fallback
         prop "can handshake with TLS 1.3 0RTT" handshake13_0rtt
         prop "can handshake with TLS 1.3 0RTT -> PSK" handshake13_0rtt_fallback
-        prop "can handshake with TLS 1.3 0RTT length" handshake13_0rtt_length
         prop "can handshake with TLS 1.3 EE" handshake13_ee_groups
         prop "can handshake with TLS 1.3 EC groups" handshake13_ec
         prop "can handshake with TLS 1.3 FFDHE groups" handshake13_ffdhe
@@ -859,14 +859,13 @@ handshake13_0rtt (CSP13 (cli, srv)) = do
         sessionParams `shouldSatisfy` isJust
         earlyData <- B.pack <$> generate (someWords8 256)
         let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
-            params2 = (pc{clientEarlyData = Just earlyData}, ps)
+            params2 = (pc{clientEarlyData = True}, ps)
 
-        runTLS0RTT params2 RTT0 $ Just earlyData
+        runTLS0RTT params2 RTT0 earlyData
 
-handshake13_0rtt_fallback :: IO ()
-handshake13_0rtt_fallback = do
-    ticketSize <- generate $ choose (0, 512)
-    (cli, srv) <- generate arbitraryPairParams13
+handshake13_0rtt_fallback :: CSP13 -> IO ()
+handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
+    maxEarlyDataSize <- generate $ choose (0, 512)
     group0 <- generate $ elements [P256, X25519]
     let cliSupported =
             def
@@ -882,7 +881,7 @@ handshake13_0rtt_fallback = do
             ( cli{clientSupported = cliSupported}
             , srv
                 { serverSupported = svrSupported
-                , serverEarlyDataSize = ticketSize
+                , serverEarlyDataSize = maxEarlyDataSize
                 }
             )
 
@@ -898,61 +897,34 @@ handshake13_0rtt_fallback = do
     sessionParams <- readClientSessionRef sessionRefs
     sessionParams `shouldSatisfy` isJust
     earlyData <- B.pack <$> generate (someWords8 256)
-    group2 <- generate $ elements [P256, X25519]
+    group1 <- generate $ elements [P256, X25519]
     let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
-        svrSupported2 =
+        svrSupported1 =
             def
                 { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
-                , supportedGroups = [group2]
+                , supportedGroups = [group1]
                 }
-        params2 =
-            ( pc{clientEarlyData = Just earlyData}
+        params1 =
+            ( pc{clientEarlyData = True}
             , ps
                 { serverEarlyDataSize = 0
-                , serverSupported = svrSupported2
+                , serverSupported = svrSupported1
                 }
             )
 
-    let mode2 = if ticketSize < 256 then PreSharedKey else RTT0
-    runTLSSimple13 params2 mode2
-
-handshake13_0rtt_length :: CSP13 -> IO ()
-handshake13_0rtt_length (CSP13 (cli, srv)) = do
-    serverMax <- generate $ choose (0, 33792)
-    let cliSupported =
-            def
-                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
-                , supportedGroups = [X25519]
-                }
-        svrSupported =
-            def
-                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
-                , supportedGroups = [X25519]
-                }
-        params0 =
-            ( cli{clientSupported = cliSupported}
-            , srv
-                { serverSupported = svrSupported
-                , serverEarlyDataSize = serverMax
-                }
-            )
-
-    sessionRefs <- twoSessionRefs
-    let sessionManagers = twoSessionManagers sessionRefs
-    let params = setPairParamsSessionManagers sessionManagers params0
-    runTLSSimple13 params FullHandshake
-
-    -- and resume
-    sessionParams <- readClientSessionRef sessionRefs
-    sessionParams `shouldSatisfy` isJust
-    clientLen <- generate $ choose (0, 33792)
-    earlyData <- B.pack <$> generate (someWords8 clientLen)
-    let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
-        params2 = (pc{clientEarlyData = Just earlyData}, ps)
-        (mode, mEarlyData)
-            | clientLen > serverMax = (PreSharedKey, Nothing)
-            | otherwise = (RTT0, Just earlyData)
-    runTLS0RTT params2 mode mEarlyData
+    if group1 == group0
+        then runTLS0RTT params1 PreSharedKey earlyData
+        else runTLSFailure params1 (tlsClient earlyData) tlsServer
+  where
+    tlsClient earlyData ctx = do
+        handshake ctx
+        sendData ctx $ L.fromStrict earlyData
+        _ <- recvData ctx
+        bye ctx
+    tlsServer ctx = do
+        handshake ctx
+        _ <- recvData ctx
+        bye ctx
 
 handshake13_ee_groups :: CSP13 -> IO ()
 handshake13_ee_groups (CSP13 (cli, srv)) = do

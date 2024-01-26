@@ -86,7 +86,7 @@ getCipherData (Record pt ver _) cdata = do
 
     unless (macValid &&! paddingValid) $
         throwError $
-            Error_Protocol "bad record mac" BadRecordMac
+            Error_Protocol "bad record mac Stream/Block" BadRecordMac
 
     return $ cipherDataContent cdata
 
@@ -173,7 +173,7 @@ decryptData ver record econtent tst = decryptOf (cstKey cst)
 
         when (AuthTag (B.convert authTag) /= authTag2) $
             throwError $
-                Error_Protocol "bad record mac" BadRecordMac
+                Error_Protocol "bad record mac on AEAD" BadRecordMac
 
         modify incrRecordState
         return content

@@ -18,9 +18,9 @@ module Network.TLS.Handshake.State13 (
     setHelloParameters13,
     transcriptHash,
     wrapAsMessageHash13,
-    PendingAction (..),
-    setPendingActions,
-    popPendingAction,
+    PendingRecvAction (..),
+    setPendingRecvActions,
+    popPendingRecvAction,
 ) where
 
 import Control.Concurrent.MVar
@@ -191,12 +191,12 @@ transcriptHash ctx = do
         HandshakeDigestContext hashCtx -> return $ hashFinal hashCtx
         HandshakeMessages _ -> error "un-initialized handshake digest"
 
-setPendingActions :: Context -> [PendingAction] -> IO ()
-setPendingActions ctx = writeIORef (ctxPendingActions ctx)
+setPendingRecvActions :: Context -> [PendingRecvAction] -> IO ()
+setPendingRecvActions ctx = writeIORef (ctxPendingRecvActions ctx)
 
-popPendingAction :: Context -> IO (Maybe PendingAction)
-popPendingAction ctx = do
-    let ref = ctxPendingActions ctx
+popPendingRecvAction :: Context -> IO (Maybe PendingRecvAction)
+popPendingRecvAction ctx = do
+    let ref = ctxPendingRecvActions ctx
     actions <- readIORef ref
     case actions of
         bs : bss -> writeIORef ref bss >> return (Just bs)

@@ -36,6 +36,7 @@ module Network.TLS.Handshake.Common13 (
     calculateResumptionSecret,
     derivePSK,
     checkKeyShareKeyLength,
+    setRTT,
 ) where
 
 import qualified Data.ByteArray as BA
@@ -449,19 +450,6 @@ isHashSignatureValid13 (h, SignatureECDSA) =
     h `elem` [HashSHA256, HashSHA384, HashSHA512]
 isHashSignatureValid13 _ = False
 
-data CipherChoice = CipherChoice
-    { cVersion :: Version
-    , cCipher :: Cipher
-    , cHash :: Hash
-    , cZero :: ByteString
-    }
-
-makeCipherChoice :: Version -> Cipher -> CipherChoice
-makeCipherChoice ver cipher = CipherChoice ver cipher h zero
-  where
-    h = cipherHash cipher
-    zero = B.replicate (hashDigestSize h) 0
-
 ----------------------------------------------------------------
 
 calculateEarlySecret
@@ -592,3 +580,10 @@ keyShareKeyLength FFDHE4096 = 512
 keyShareKeyLength FFDHE6144 = 768
 keyShareKeyLength FFDHE8192 = 1024
 keyShareKeyLength _ = error "keyShareKeyLength"
+
+setRTT :: Context -> UnixTime -> IO ()
+setRTT ctx t0 = do
+    t1 <- getUnixTime
+    let UnixDiffTime (CTime s) u = t1 `diffUnixTime` t0
+        rtt = fromIntegral s * 1000000 + fromIntegral u
+    modifyTLS13State ctx $ \st -> st{tls13stRTT = rtt}

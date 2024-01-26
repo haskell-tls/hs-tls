@@ -7,7 +7,6 @@ module Network.TLS.Handshake.Client (
 ) where
 
 import Data.UnixTime
-import Foreign.C.Types
 
 import Network.TLS.Context.Internal
 import Network.TLS.Crypto
@@ -48,7 +47,6 @@ handshakeClient cparams ctx = handshake cparams ctx groups Nothing
             Nothing -> [] -- TLS 1.2 or earlier
             Just grp -> grp : filter (/= grp) groupsSupported
 
-{- FOURMOLU_DISABLE -}
 -- https://tools.ietf.org/html/rfc8446#section-4.1.2 says:
 -- "The client will also send a
 --  ClientHello when the server has responded to its ClientHello with a
@@ -65,17 +63,47 @@ handshake
 handshake cparams ctx groups mparams = do
     --------------------------------
     -- Sending ClientHello
+    pskinfo@(_, _, rtt0) <- getPreSharedKeyInfo cparams ctx
+    when rtt0 $ do
+        t0 <- getUnixTime
+        asyncServerHello13 cparams ctx groupToSend t0
     updateMeasure ctx incrementNbHandshakes
-    (crand, clientSession, rtt0, sentExtensions) <-
-        sendClientHello cparams ctx groups mparams
+    crand <- sendClientHello cparams ctx groups mparams pskinfo
     --------------------------------
     -- Receiving ServerHello
+    unless rtt0 $ do
+        (ver, hss, hrr) <- receiveServerHello cparams ctx mparams
+        --------------------------------
+        -- Switching to HRR, TLS 1.2 or TLS 1.3
+        case ver of
+            TLS13
+                | hrr ->
+                    helloRetry cparams ctx mparams ver crand $ drop 1 groups
+                | otherwise -> do
+                    recvServerSecondFlight13 cparams ctx groupToSend
+                    sendClientSecondFlight13 cparams ctx
+            _
+                | rtt0 ->
+                    throwCore $
+                        Error_Protocol
+                            "server denied TLS 1.3 when connecting with early data"
+                            HandshakeFailure
+                | otherwise -> do
+                    recvServerFirstFlight12 cparams ctx hss
+                    sendClientSecondFlight12 cparams ctx
+                    recvServerSecondFlight12 ctx
+  where
+    groupToSend = listToMaybe groups
+
+receiveServerHello
+    :: ClientParams
+    -> Context
+    -> Maybe (ClientRandom, Session, Version)
+    -> IO (Version, [Handshake], Bool)
+receiveServerHello cparams ctx mparams = do
     t0 <- getUnixTime
-    hss <- recvServerHello ctx cparams clientSession sentExtensions
-    t1 <- getUnixTime
-    let UnixDiffTime (CTime s) u = t1 `diffUnixTime` t0
-        rtt = fromIntegral s * 1000000 + fromIntegral u
-    modifyTLS13State ctx $ \st -> st{tls13stRTT = rtt}
+    hss <- recvServerHello cparams ctx
+    setRTT ctx t0
     ver <- usingState_ ctx getVersion
     unless (maybe True (\(_, _, v) -> v == ver) mparams) $
         throwCore $
@@ -85,27 +113,7 @@ handshake cparams ctx groups mparams = do
     -- False otherwise.  For 2nd server hello, getTLS13HR returns
     -- False since it is NOT HRR.
     hrr <- usingState_ ctx getTLS13HRR
-    --------------------------------
-    -- Switching to HRR, TLS 1.2 or TLS 1.3
-    case ver of
-        TLS13
-            | hrr       -> helloRetry cparams ctx mparams ver crand clientSession $ drop 1 groups
-            | otherwise -> do
-                  r <- recvServerSecondFlight13 cparams ctx groupToSend
-                  sendClientSecondFlight13 cparams ctx r
-        _
-            | rtt0 ->
-                throwCore $
-                    Error_Protocol
-                        "server denied TLS 1.3 when connecting with early data"
-                        HandshakeFailure
-            | otherwise -> do
-                  recvServerFirstFlight12 cparams ctx hss
-                  sendClientSecondFlight12 cparams ctx
-                  recvServerSecondFlight12 ctx
-  where
-    groupToSend = listToMaybe groups
-{- FOURMOLU_ENABLE -}
+    return (ver, hss, hrr)
 
 ----------------------------------------------------------------
 
@@ -115,10 +123,9 @@ helloRetry
     -> Maybe a
     -> Version
     -> ClientRandom
-    -> Session
     -> [Group]
     -> IO ()
-helloRetry cparams ctx mparams ver crand clientSession groups = do
+helloRetry cparams ctx mparams ver crand groups = do
     when (null groups) $
         throwCore $
             Error_Protocol "group is exhausted in the client side" IllegalParameter
@@ -131,8 +138,9 @@ helloRetry cparams ctx mparams ver crand clientSession groups = do
             | selectedGroup `elem` groups -> do
                 usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
                 clearTxState ctx
-                let cparams' = cparams{clientEarlyData = Nothing}
+                let cparams' = cparams{clientEarlyData = False}
                 runPacketFlight ctx $ sendChangeCipherSpec13 ctx
+                clientSession <- tls13stSession <$> getTLS13State ctx
                 handshake cparams' ctx [selectedGroup] (Just (crand, clientSession, ver))
             | otherwise ->
                 throwCore $
