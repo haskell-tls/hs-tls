@@ -277,7 +277,6 @@ recvData13 ctx = do
     -- fixme: some implementations send multiple NST at the same time.
     -- Only the first one is used at this moment.
     loopHandshake13 (NewSessionTicket13 life add nonce label exts : hs) = do
-        modifyTLS13State ctx $ \st -> st{tls13stRecvCF = True}
         role <- usingState_ ctx S.getRole
         unless (role == ClientRole) $
             let reason = "Session ticket is allowed for client only"

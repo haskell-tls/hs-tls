@@ -74,6 +74,7 @@ expectFinished
     -> Handshake13
     -> m ()
 expectFinished sparams ctx exts appKey clientHandshakeSecret sfSentTime hChBeforeCf (Finished13 verifyData) = liftIO $ do
+    modifyTLS13State ctx $ \st -> st{tls13stRecvCF = True}
     (usedHash, usedCipher, _, _) <- getRxState ctx
     let ClientTrafficSecret chs = clientHandshakeSecret
     checkFinished ctx usedHash chs hChBeforeCf verifyData
