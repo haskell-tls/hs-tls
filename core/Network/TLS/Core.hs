@@ -79,7 +79,7 @@ handshake ctx = do
                 Just dat -> modifyTLS13State ctx $ \st -> st{tls13stPendingRecvData = Just dat}
 
 rttFactor :: Int
-rttFactor = 2
+rttFactor = 3
 
 getRTT :: Context -> IO Int
 getRTT ctx = do
