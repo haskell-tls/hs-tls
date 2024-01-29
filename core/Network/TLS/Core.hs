@@ -160,7 +160,7 @@ sendData ctx dataToSend = liftIO $ do
     let sendP bs
             | tls13 = do
                 sendPacket13 ctx $ AppData13 bs
-                when (not sentCF) $
+                unless sentCF $
                     modifyTLS13State ctx $
                         \st -> st{tls13stPendingSentData = tls13stPendingSentData st . (bs :)}
             | otherwise = sendPacket ctx $ AppData bs

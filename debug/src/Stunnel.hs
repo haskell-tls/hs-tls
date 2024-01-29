@@ -8,6 +8,7 @@ import qualified Crypto.PubKey.DH as DH ()
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Data.Default.Class
+import Data.X509.CertificateStore
 import Data.X509.Validation
 import Network.Socket hiding (Debug)
 import Network.TLS.SessionManager
@@ -26,6 +27,7 @@ import Imports
 loopUntil :: Monad m => m Bool -> m ()
 loopUntil f = f >>= \v -> if v then return () else loopUntil f
 
+readOne :: Handle -> IO ByteString
 readOne h = do
     r <- E.try $ hWaitForInput h (-1)
     case r of
@@ -55,6 +57,7 @@ tlsclient srchandle dsthandle = do
                 return False
     return ()
 
+tlsserver :: Context -> Handle -> IO ()
 tlsserver srchandle dsthandle = do
     hSetBuffering dsthandle NoBuffering
 
@@ -67,6 +70,16 @@ tlsserver srchandle dsthandle = do
         return False
     putStrLn "end"
 
+clientProcess
+    :: HasBackend backend
+    => Maybe String
+    -> Credentials
+    -> backend
+    -> Handle
+    -> Bool
+    -> SessionManager
+    -> p
+    -> IO ()
 clientProcess dhParamsFile creds handle dsthandle dbg sessionManager _ = do
     let logging =
             if not dbg
@@ -106,7 +119,7 @@ data StunnelHandle
 
 getAddressDescription :: Address -> IO StunnelAddr
 getAddressDescription (Address "tcp" desc) = do
-    let (s, p) = break ((==) ':') desc
+    let (s, p) = break (':' ==) desc
     when
         (p == "")
         (error $ "missing port: expecting [source]:port got " ++ show desc)
@@ -119,6 +132,7 @@ getAddressDescription (Address "fd" _) =
 getAddressDescription a =
     error ("unrecognized source type (expecting tcp/unix/fd, got " ++ show a ++ ")")
 
+connectAddressDescription :: StunnelAddr -> IO StunnelHandle
 connectAddressDescription (AddrSocket family sockaddr) = do
     sock <- socket family Stream defaultProtocol
     E.catch
@@ -130,6 +144,7 @@ connectAddressDescription (AddrSocket family sockaddr) = do
 connectAddressDescription (AddrFD h1 h2) = do
     return $ StunnelFd h1 h2
 
+listenAddressDescription :: StunnelAddr -> IO StunnelHandle
 listenAddressDescription (AddrSocket family sockaddr) = do
     sock <- socket family Stream defaultProtocol
     E.catch
@@ -147,7 +162,7 @@ doClient source destination@(Address a _) flags = do
     dstaddr <- getAddressDescription destination
 
     let logging =
-            if not (Debug `elem` flags)
+            if Debug `notElem` flags
                 then def
                 else
                     def
@@ -189,6 +204,7 @@ doClient source destination@(Address a _) flags = do
                 return ()
         AddrFD _ _ -> error "bad error fd. not implemented"
 
+loadCred :: (String, String) -> IO (Either String Credential)
 loadCred (cert, priv) = do
     putStrLn ("loading credential " ++ show cert ++ " : key=" ++ show priv)
     res <- credentialLoadX509 cert priv
@@ -233,12 +249,12 @@ doServer source destination flags = do
                                 (Debug `elem` flags)
                                 sessionManager
                                 addr
-                                >> return ()
                             )
-                            (hClose srch >> (when (dsth /= stdout) $ hClose dsth))
+                            (hClose srch >> when (dsth /= stdout) (hClose dsth))
                 return ()
         AddrFD _ _ -> error "bad error fd. not implemented"
 
+printUsage :: IO ()
 printUsage =
     putStrLn $
         usageInfo
@@ -321,21 +337,27 @@ options =
 data Address = Address String String
     deriving (Show, Eq)
 
+defaultSource :: Address
 defaultSource = Address "tcp" "localhost:6060"
+
+defaultDestination :: Address
 defaultDestination = Address "tcp" "localhost:6061"
 
+getSource :: Foldable t => t Flag -> Address
 getSource opts = foldl accf defaultSource opts
   where
     accf (Address t _) (Source s) = Address t s
     accf (Address _ s) (SourceType t) = Address t s
     accf acc _ = acc
 
+getDestination :: Foldable t => t Flag -> Address
 getDestination opts = foldl accf defaultDestination opts
   where
     accf (Address t _) (Destination s) = Address t s
     accf (Address _ s) (DestinationType t) = Address t s
     accf acc _ = acc
 
+onNull :: Foldable t => t a -> t a -> t a
 onNull defVal l
     | null l = defVal
     | otherwise = l
@@ -346,16 +368,19 @@ getCertificate opts = reverse $ onNull ["certificate.pem"] $ foldl accf [] opts
     accf acc (Certificate cert) = cert : acc
     accf acc _ = acc
 
+getKey :: Foldable t => t Flag -> [String]
 getKey opts = reverse $ onNull ["certificate.key"] $ foldl accf [] opts
   where
     accf acc (Key key) = key : acc
     accf acc _ = acc
 
+getTrustAnchors :: Foldable t => t Flag -> IO CertificateStore
 getTrustAnchors flags = getCertificateStore (foldr getPaths [] flags)
   where
     getPaths (TrustAnchor path) acc = path : acc
     getPaths _ acc = acc
 
+getDHParams :: Foldable t => t Flag -> Maybe String
 getDHParams opts = foldl accf Nothing opts
   where
     accf _ (DHParams file) = Just file
@@ -365,8 +390,8 @@ main :: IO ()
 main = do
     args <- getArgs
     let (opts, other, errs) = getOpt Permute options args
-    when (not $ null errs) $ do
-        putStrLn $ show errs
+    unless (null errs) $ do
+        print errs
         exitFailure
 
     when (Help `elem` opts) $ do

@@ -47,7 +47,7 @@ runTLS debug ioDebug params hostname portNumber f =
         contextHookSetLogging ctx getLogging
         f ctx
   where
-    getLogging = ioLogging $ packetLogging $ def
+    getLogging = ioLogging $ packetLogging def
     packetLogging logging
         | debug =
             logging
@@ -170,7 +170,7 @@ getDefaultParams flags host store sStorage certCredsRequest session earlyData =
         | NoVersionDowngrade `elem` flags = [tlsConnectVer]
         | otherwise = filter (<= tlsConnectVer) allVers
     allVers = [TLS13, TLS12, TLS11, TLS10, SSL3]
-    validateCert = not (NoValidateCert `elem` flags)
+    validateCert = NoValidateCert `notElem` flags
 
 getGroups :: [Flag] -> [Group]
 getGroups flags = case getGroup >>= readGroups of
@@ -372,7 +372,7 @@ runOn (sStorage, certStore) flags port hostname
             | otherwise = do
                 sendData ctx $
                     LC.fromChunks
-                        [(if bytes > B.length dataSend then dataSend else BC.take bytes dataSend)]
+                        [if bytes > B.length dataSend then dataSend else BC.take bytes dataSend]
                 loopSendData (bytes - B.length dataSend) ctx
 
         loopRecvData bytes ctx
@@ -386,7 +386,7 @@ runOn (sStorage, certStore) flags port hostname
                 LC.pack
                     ( "GET "
                         ++ findURI flags
-                        ++ ( if Http11 `elem` flags then (" HTTP/1.1\r\nHost: " ++ hostname) else " HTTP/1.0"
+                        ++ ( if Http11 `elem` flags then " HTTP/1.1\r\nHost: " ++ hostname else " HTTP/1.0"
                            )
                         ++ userAgent
                         ++ "\r\n\r\n"
@@ -414,21 +414,21 @@ runOn (sStorage, certStore) flags port hostname
                 case earlyData of
                     Just edata -> sendData ctx $ LC.fromStrict edata
                     _ -> return ()
-                sendData ctx $ query
+                sendData ctx query
                 loopRecv out ctx
                 when (UpdateKey `elem` flags) $ do
                     _tls13 <- updateKey ctx TwoWay
-                    sendData ctx $ query
+                    sendData ctx query
                     loopRecv out ctx
                 bye ctx `E.catch` \(SomeException e) -> putStrLn $ "bye failed: " ++ show e
                 return ()
-    setup = maybe (return stdout) (flip openFile AppendMode) getOutput
+    setup = maybe (return stdout) (\f -> openFile f AppendMode) getOutput
     teardown out = when (isJust getOutput) $ hClose out
     loopRecv out ctx = do
         d <- timeout (timeoutMs * 1000) (recvData ctx) -- 2s per recv
         case d of
             Nothing ->
-                when (Debug `elem` flags) (hPutStrLn stderr "timeout") >> return ()
+                when (Debug `elem` flags) (hPutStrLn stderr "timeout")
             Just b
                 | BC.null b -> return ()
                 | otherwise -> BC.hPutStrLn out b >> loopRecv out ctx
@@ -452,7 +452,7 @@ runOn (sStorage, certStore) flags port hostname
     findURI (Uri u : _) = u
     findURI (_ : xs) = findURI xs
 
-    userAgent = maybe "" (\s -> "\r\nUser-Agent: " ++ s) mUserAgent
+    userAgent = maybe "" ("\r\nUser-Agent: " ++) mUserAgent
     mUserAgent = foldl f Nothing flags
       where
         f _ (UserAgent ua) = Just ua
@@ -497,8 +497,8 @@ main :: IO ()
 main = do
     args <- getArgs
     let (opts, other, errs) = getOpt Permute options args
-    when (not $ null errs) $ do
-        putStrLn $ show errs
+    unless (null errs) $ do
+        print errs
         exitFailure
 
     when (Help `elem` opts) $ do

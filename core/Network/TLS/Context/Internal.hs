@@ -1,4 +1,5 @@
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -340,10 +341,9 @@ usingState_ :: Context -> TLSSt a -> IO a
 usingState_ ctx f = failOnEitherError $ usingState ctx f
 
 usingHState :: MonadIO m => Context -> HandshakeM a -> m a
-usingHState ctx f = liftIO $ modifyMVar (ctxHandshake ctx) $ \mst ->
-    case mst of
-        Nothing -> liftIO $ throwIO MissingHandshake
-        Just st -> return $ swap (Just <$> runHandshake st f)
+usingHState ctx f = liftIO $ modifyMVar (ctxHandshake ctx) $ \case
+    Nothing -> liftIO $ throwIO MissingHandshake
+    Just st -> return $ swap (Just <$> runHandshake st f)
 
 getHState :: MonadIO m => Context -> m (Maybe HandshakeState)
 getHState ctx = liftIO $ readMVar (ctxHandshake ctx)

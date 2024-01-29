@@ -41,7 +41,7 @@ runTLS debug ioDebug params cSock f = do
     contextHookSetLogging ctx getLogging
     f ctx
   where
-    getLogging = ioLogging $ packetLogging $ def
+    getLogging = ioLogging $ packetLogging def
     packetLogging logging
         | debug =
             logging
@@ -149,7 +149,7 @@ getDefaultParams flags store smgr cred rtt0accept = do
         | NoVersionDowngrade `elem` flags = [tlsConnectVer]
         | otherwise = filter (<= tlsConnectVer) allVers
     allVers = [TLS13, TLS12, TLS11, TLS10, SSL3]
-    validateCert = not (NoValidateCert `elem` flags)
+    validateCert = NoValidateCert `notElem` flags
     allowRenegotiation = AllowRenegotiation `elem` flags
 
 getGroups :: [Flag] -> [Group]
@@ -329,7 +329,7 @@ runOn (sStorage, certStore) flags port = do
         | otherwise = do
             -- certCredRequest <- getCredRequest
             E.bracket
-                (maybe (return stdout) (flip openFile AppendMode) getOutput)
+                (maybe (return stdout) (\x -> openFile x AppendMode) getOutput)
                 (\out -> when (isJust getOutput) $ hClose out)
                 (doTLS sock)
     runBench isSend sock = do
@@ -352,7 +352,7 @@ runOn (sStorage, certStore) flags port = do
             | otherwise = do
                 sendData ctx $
                     LC.fromChunks
-                        [(if bytes > B.length dataSend then dataSend else BC.take bytes dataSend)]
+                        [if bytes > B.length dataSend then dataSend else BC.take bytes dataSend]
                 loopSendData (bytes - B.length dataSend) ctx
 
         loopRecvData bytes ctx
@@ -391,7 +391,7 @@ runOn (sStorage, certStore) flags port = do
         d <- timeout (timeoutMs * 1000) (recvData ctx) -- 2s per recv
         case d of
             Nothing ->
-                when (Debug `elem` flags) (hPutStrLn stderr "timeout") >> return ()
+                when (Debug `elem` flags) $ hPutStrLn stderr "timeout"
             Just b
                 | BC.null b -> return ()
                 | otherwise -> BC.hPutStrLn out b >> loopRecv out ctx
@@ -453,8 +453,8 @@ main :: IO ()
 main = do
     args <- getArgs
     let (opts, other, errs) = getOpt Permute options args
-    when (not $ null errs) $ do
-        putStrLn $ show errs
+    unless (null errs) $ do
+        print errs
         exitFailure
 
     when (Help `elem` opts) $ do

@@ -14,7 +14,7 @@ import qualified Data.ByteString.Lazy as L
 import Network.TLS
 import Network.TLS.Internal
 
-data Config = Config
+newtype Config = Config
     { ticketLifetime :: Int
     -- ^ Ticket lifetime in seconds.
     }

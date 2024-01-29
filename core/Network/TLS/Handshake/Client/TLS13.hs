@@ -138,8 +138,8 @@ expectEncryptedExtensions ctx (EncryptedExtensions13 eexts) = do
         setALPN ctx MsgTEncryptedExtensions eexts
         modifyTLS13State ctx $ \st -> st{tls13stClientExtensions = eexts}
     st13 <- usingHState ctx getTLS13RTT0Status
-    if st13 == RTT0Sent
-        then case extensionLookup EID_EarlyData eexts of
+    when (st13 == RTT0Sent) $
+        case extensionLookup EID_EarlyData eexts of
             Just _ -> do
                 usingHState ctx $ setTLS13HandshakeMode RTT0
                 usingHState ctx $ setTLS13RTT0Status RTT0Accepted
@@ -147,7 +147,6 @@ expectEncryptedExtensions ctx (EncryptedExtensions13 eexts) = do
             Nothing -> do
                 usingHState ctx $ setTLS13HandshakeMode PreSharedKey
                 usingHState ctx $ setTLS13RTT0Status RTT0Rejected
-        else return ()
 expectEncryptedExtensions _ p = unexpected (show p) (Just "encrypted extensions")
 
 ----------------------------------------------------------------
@@ -282,7 +281,7 @@ sendClientSecondFlight13' cparams ctx choice hkey rtt0accepted eexts = do
     handshakeDone13 ctx
     builder <- tls13stPendingSentData <$> getTLS13State ctx
     modifyTLS13State ctx $ \st -> st{tls13stPendingSentData = id}
-    when (not rtt0accepted) $
+    unless rtt0accepted $
         mapM_ (sendPacket13 ctx . AppData13) $
             builder []
   where

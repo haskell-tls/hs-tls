@@ -89,7 +89,7 @@ disptable cfg x =
 
     {-# INLINE hexBytes #-}
     hexBytes :: Word8 -> (Char, Char)
-    hexBytes w = (hex h, hex l) where (h, l) = (fromIntegral w) `divMod` 16
+    hexBytes w = (hex h, hex l) where (h, l) = fromIntegral w `divMod` 16
 
     -- \| Dump one byte into a 2 hexadecimal characters.
     hexString :: Word8 -> String

@@ -1,5 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
 
 import Control.Exception
@@ -21,6 +19,7 @@ import Network.TLS.Extra.Cipher
 
 import Imports
 
+openConnection :: String -> String -> IO CertificateChain
 openConnection s p = do
     ref <- newIORef Nothing
     let params =
@@ -90,6 +89,7 @@ options =
     , Option ['h'] ["help"] (NoArg Help) "request help"
     ]
 
+showCert :: String -> SignedExact Certificate -> IO ()
 showCert "pem" cert = B.putStrLn $ pemWriteBS pem
   where
     pem =
@@ -98,31 +98,33 @@ showCert "pem" cert = B.putStrLn $ pemWriteBS pem
             , pemHeader = []
             , pemContent = encodeSignedObject cert
             }
-showCert "full" cert = putStrLn $ show cert
-showCert _ (signedCert) = do
-    putStrLn ("serial:   " ++ (show $ certSerial cert))
-    putStrLn ("issuer:   " ++ (show $ certIssuerDN cert))
-    putStrLn ("subject:  " ++ (show $ certSubjectDN cert))
+showCert "full" cert = print cert
+showCert _ signedCert = do
+    putStrLn ("serial:   " ++ show (certSerial cert))
+    putStrLn ("issuer:   " ++ show (certIssuerDN cert))
+    putStrLn ("subject:  " ++ show (certSubjectDN cert))
     putStrLn
         ( "validity: "
-            ++ (show $ fst $ certValidity cert)
+            ++ show (fst $ certValidity cert)
             ++ " to "
-            ++ (show $ snd $ certValidity cert)
+            ++ show (snd $ certValidity cert)
         )
   where
     cert = getCertificate signedCert
 
+printUsage :: IO ()
 printUsage =
     putStrLn $
         usageInfo
             "usage: retrieve-certificate [opts] <hostname> [port]\n\n\t(port default to: 443)\noptions:\n"
             options
 
+main :: IO ()
 main = do
     args <- getArgs
     let (opts, other, errs) = getOpt Permute options args
     when (not $ null errs) $ do
-        putStrLn $ show errs
+        print errs
         exitFailure
 
     when (Help `elem` opts) $ do
@@ -149,16 +151,14 @@ main = do
         let (CertificateChain certs) = chain
             format = outputFormat opts
             fqdn = getFQDN opts
-        case PrintChain `elem` opts of
-            True ->
-                forM_ (zip [0 ..] certs) $ \(n, cert) -> do
-                    putStrLn ("###### Certificate " ++ show (n + 1 :: Int) ++ " ######")
-                    showCert format cert
-            False ->
-                showCert format $ head certs
+        if PrintChain `elem` opts
+            then forM_ (zip [0 ..] certs) $ \(n, cert) -> do
+                putStrLn ("###### Certificate " ++ show (n + 1 :: Int) ++ " ######")
+                showCert format cert
+            else showCert format $ head certs
 
         let fingerprints = foldl (doFingerprint (head certs)) [] opts
-        unless (null fingerprints) $ putStrLn ("Fingerprints:")
+        unless (null fingerprints) $ putStrLn "Fingerprints:"
         mapM_ (\(alg, fprint) -> putStrLn ("  " ++ alg ++ " = " ++ show fprint)) $
             concat fingerprints
 
@@ -168,13 +168,13 @@ main = do
             let checks =
                     defaultChecks
                         { checkExhaustive = True
-                        , checkFQHN = maybe False (const True) fqdn
+                        , checkFQHN = isJust fqdn
                         }
-                servId = (maybe "" id fqdn, B.empty)
+                servId = (fromMaybe "" fqdn, B.empty)
             reasons <- validate X509.HashSHA256 def checks store def servId chain
-            when (not $ null reasons) $ do
+            unless (null reasons) $ do
                 putStrLn "fail validation:"
-                putStrLn $ show reasons
+                print reasons
 
     doFingerprint cert acc GetFingerprint =
         [ ("SHA1", getFingerprint cert X509.HashSHA1)

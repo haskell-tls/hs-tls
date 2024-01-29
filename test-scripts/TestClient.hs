@@ -1,4 +1,6 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE TupleSections #-}
+
 module Main (main) where
 
 import System.Process
@@ -142,8 +144,8 @@ opensslServer :: String -> Int -> String -> String -> Version -> Bool -> Bool ->
 opensslServer readyFile port cert key ver useClientCert useDhe =
     readProcessWithExitCodeBinary "./test-scripts/openssl-server"
         ([show port, cert, key, verString ]
-         ++ (if useClientCert then ["client-cert"] else [])
-         ++ (if useDhe then ["dhe"] else [])
+         ++ ["client-cert"|useClientCert]
+         ++ ["dhe"|useDhe]
          ++ ["ready-file",readyFile]
         ) B.empty
   where verString =
@@ -245,7 +247,7 @@ runAgainstServices logFile pid l = do
 
 -- no better name ..
 t2 :: b -> [a] -> [(a, b)]
-t2 b = map (\x -> (x, b))
+t2 b = map (, b)
 
 data Cred = Cred
     { credGetType :: String
@@ -262,7 +264,7 @@ runLocal logFile pid = do
                 , serverCert <- [Cred "RSA" "test-certs/server.rsa.crt" "test-certs/server.rsa.key"
                                 ,Cred "DSA" "test-certs/server.dsa.crt" "test-certs/server.dsa.key"]
                 ]
-    haveFailed <- filter (== False) <$> mapM runOne combi
+    haveFailed <- filter not <$> mapM runOne combi
     unless (null haveFailed) exitFailure
   where
     -- running between port 14000 and 16901

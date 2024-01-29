@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Network.TLS.Handshake.Common13 (
@@ -242,21 +243,20 @@ sendChangeCipherSpec13 ctx = do
 handshakeDone13 :: Context -> IO ()
 handshakeDone13 ctx = do
     -- forget most handshake data
-    modifyMVar_ (ctxHandshake ctx) $ \mhshake ->
-        case mhshake of
-            Nothing -> return Nothing
-            Just hshake ->
-                return $
-                    Just
-                        (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
-                            { hstServerRandom = hstServerRandom hshake
-                            , hstMasterSecret = hstMasterSecret hshake
-                            , hstSupportedGroup = hstSupportedGroup hshake
-                            , hstHandshakeDigest = hstHandshakeDigest hshake
-                            , hstTLS13HandshakeMode = hstTLS13HandshakeMode hshake
-                            , hstTLS13RTT0Status = hstTLS13RTT0Status hshake
-                            , hstTLS13ResumptionSecret = hstTLS13ResumptionSecret hshake
-                            }
+    modifyMVar_ (ctxHandshake ctx) $ \case
+        Nothing -> return Nothing
+        Just hshake ->
+            return $
+                Just
+                    (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
+                        { hstServerRandom = hstServerRandom hshake
+                        , hstMasterSecret = hstMasterSecret hshake
+                        , hstSupportedGroup = hstSupportedGroup hshake
+                        , hstHandshakeDigest = hstHandshakeDigest hshake
+                        , hstTLS13HandshakeMode = hstTLS13HandshakeMode hshake
+                        , hstTLS13RTT0Status = hstTLS13RTT0Status hshake
+                        , hstTLS13ResumptionSecret = hstTLS13ResumptionSecret hshake
+                        }
     -- forget handshake data stored in TLS state
     usingState_ ctx $ do
         setTLS13KeyShare Nothing
@@ -482,9 +482,7 @@ initEarlySecret choice mpsk = BaseSecret sec
     sec = hkdfExtract usedHash zero zeroOrPSK
     usedHash = cHash choice
     zero = cZero choice
-    zeroOrPSK = case mpsk of
-        Just psk -> psk
-        Nothing -> zero
+    zeroOrPSK = fromMaybe zero mpsk
 
 calculateHandshakeSecret
     :: Context

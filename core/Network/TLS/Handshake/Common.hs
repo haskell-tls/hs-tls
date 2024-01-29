@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Network.TLS.Handshake.Common (
@@ -112,18 +113,17 @@ newSession ctx
 handshakeDone12 :: Context -> IO ()
 handshakeDone12 ctx = do
     -- forget most handshake data and reset bytes counters.
-    modifyMVar_ (ctxHandshake ctx) $ \mhshake ->
-        case mhshake of
-            Nothing -> return Nothing
-            Just hshake ->
-                return $
-                    Just
-                        (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
-                            { hstServerRandom = hstServerRandom hshake
-                            , hstMasterSecret = hstMasterSecret hshake
-                            , hstExtendedMasterSec = hstExtendedMasterSec hshake
-                            , hstSupportedGroup = hstSupportedGroup hshake
-                            }
+    modifyMVar_ (ctxHandshake ctx) $ \case
+        Nothing -> return Nothing
+        Just hshake ->
+            return $
+                Just
+                    (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
+                        { hstServerRandom = hstServerRandom hshake
+                        , hstMasterSecret = hstMasterSecret hshake
+                        , hstExtendedMasterSec = hstExtendedMasterSec hshake
+                        , hstSupportedGroup = hstSupportedGroup hshake
+                        }
     updateMeasure ctx resetBytesCounters
     -- mark the secure connection up and running.
     setEstablished ctx Established

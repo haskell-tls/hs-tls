@@ -1,5 +1,3 @@
-{-# LANGUAGE DeriveDataTypeable #-}
-
 import Control.Concurrent
 import Control.Exception (SomeException (..))
 import qualified Control.Exception as E
@@ -92,8 +90,8 @@ clienthello ciphers =
 openConnection :: String -> String -> [Word16] -> IO (Maybe Word16)
 openConnection s p ciphers = do
     pn <-
-        if and $ map isDigit $ p
-            then return $ fromIntegral $ (read p :: Int)
+        if all isDigit p
+            then return $ fromIntegral (read p :: Int)
             else do
                 service <- getServiceByName p "tcp"
                 return $ servicePort service
@@ -127,7 +125,7 @@ connectRange d p v r = do
         Nothing -> return (1, [])
         Just ccid -> do
             {-divide and conquer TLS-}
-            let newr = filter ((/=) ccid) r
+            let newr = filter (ccid /=) r
             let (lr, rr) =
                     if length newr > 2
                         then splitAt (length newr `div` 2) newr

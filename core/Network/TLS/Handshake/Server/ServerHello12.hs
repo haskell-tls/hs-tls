@@ -130,21 +130,19 @@ sendServerFirstFlight sparams ctx usedCipher mcred chExts = do
     --
     -- Client certificates MUST NOT be accepted if not requested.
     --
-    b3 <-
-        if serverWantClientCert sparams
-            then do
-                let (certTypes, hashSigs) =
-                        let as = supportedHashSignatures $ ctxSupported ctx
-                         in (nub $ mapMaybe hashSigToCertType as, as)
-                    creq =
-                        CertRequest
-                            certTypes
-                            hashSigs
-                            (map extractCAname $ serverCACertificates sparams)
-                usingHState ctx $ setCertReqSent True
-                return $ b2 . (creq :)
-            else return b2
-    return b3
+    if serverWantClientCert sparams
+        then do
+            let (certTypes, hashSigs) =
+                    let as = supportedHashSignatures $ ctxSupported ctx
+                     in (nub $ mapMaybe hashSigToCertType as, as)
+                creq =
+                    CertRequest
+                        certTypes
+                        hashSigs
+                        (map extractCAname $ serverCACertificates sparams)
+            usingHState ctx $ setCertReqSent True
+            return $ b2 . (creq :)
+        else return b2
   where
     setup_DHE = do
         let possibleFFGroups = negotiatedGroupsInCommon ctx chExts `intersect` availableFFGroups

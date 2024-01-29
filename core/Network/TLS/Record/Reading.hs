@@ -65,9 +65,8 @@ recvRecord
     -> Int
     -- ^ number of AppData bytes to accept above normal maximum size
     -> IO (Either TLSError (Record Plaintext))
-recvRecord ctx appDataOverhead
-    | otherwise =
-        readExactBytes ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
+recvRecord ctx appDataOverhead =
+    readExactBytes ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
   where
     recvLengthE = either (return . Left) recvLength
 
