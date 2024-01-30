@@ -198,6 +198,9 @@ recvData12 ctx = do
         handshakeWith ctx ch >> recvData12 ctx
     process (Handshake [hr@HelloRequest]) =
         handshakeWith ctx hr >> recvData12 ctx
+    -- UserCanceled should be followed by a close_notify.
+    -- fixme: is it safe to call recvData12?
+    process (Alert [(AlertLevel_Warning, UserCanceled)]) = return B.empty
     process (Alert [(AlertLevel_Warning, CloseNotify)]) = tryBye ctx >> setEOF ctx >> return B.empty
     process (Alert [(AlertLevel_Fatal, desc)]) = do
         setEOF ctx
@@ -228,6 +231,7 @@ recvData13 ctx = do
             modifyTLS13State ctx $ \st -> st{tls13stPendingRecvData = Nothing}
             return dat
   where
+    -- UserCanceled MUST be followed by a CloseNotify.
     process (Alert13 [(AlertLevel_Warning, UserCanceled)]) = return B.empty
     process (Alert13 [(AlertLevel_Warning, CloseNotify)]) = tryBye ctx >> setEOF ctx >> return B.empty
     process (Alert13 [(AlertLevel_Fatal, desc)]) = do
