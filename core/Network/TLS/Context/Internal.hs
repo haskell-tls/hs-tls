@@ -273,7 +273,7 @@ contextGetInformation ctx = do
             case hstate of
                 Just st ->
                     ( hstMasterSecret st
-                    , hstExtendedMasterSec st
+                    , hstExtendedMainSecret st
                     , Just (hstClientRandom st)
                     , hstServerRandom st
                     , if ver == Just TLS13 then Just (hstTLS13HandshakeMode st) else Nothing

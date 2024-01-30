@@ -55,8 +55,8 @@ module Network.TLS.Handshake.State (
     -- * misc accessor
     getPendingCipher,
     setServerHelloParameters,
-    setExtendedMasterSec,
-    getExtendedMasterSec,
+    setExtendedMainSecret,
+    getExtendedMainSecret,
     setSupportedGroup,
     getSupportedGroup,
     setTLS13HandshakeMode,
@@ -127,7 +127,7 @@ data HandshakeState = HandshakeState
     , hstPendingRxState :: Maybe RecordState
     , hstPendingCipher :: Maybe Cipher
     , hstPendingCompression :: Compression
-    , hstExtendedMasterSec :: Bool
+    , hstExtendedMainSecret :: Bool
     , hstSupportedGroup :: Maybe Group
     , hstTLS13HandshakeMode :: HandshakeMode13
     , hstTLS13RTT0Status :: RTT0Status
@@ -218,7 +218,7 @@ newEmptyHandshake ver crand =
         , hstPendingRxState = Nothing
         , hstPendingCipher = Nothing
         , hstPendingCompression = nullCompression
-        , hstExtendedMasterSec = False
+        , hstExtendedMainSecret = False
         , hstSupportedGroup = Nothing
         , hstTLS13HandshakeMode = FullHandshake
         , hstTLS13RTT0Status = RTT0None
@@ -271,11 +271,11 @@ getGroupPrivate = fromJust <$> gets hstGroupPrivate
 setGroupPrivate :: GroupPrivate -> HandshakeM ()
 setGroupPrivate shp = modify (\hst -> hst{hstGroupPrivate = Just shp})
 
-setExtendedMasterSec :: Bool -> HandshakeM ()
-setExtendedMasterSec b = modify (\hst -> hst{hstExtendedMasterSec = b})
+setExtendedMainSecret :: Bool -> HandshakeM ()
+setExtendedMainSecret b = modify (\hst -> hst{hstExtendedMainSecret = b})
 
-getExtendedMasterSec :: HandshakeM Bool
-getExtendedMasterSec = gets hstExtendedMasterSec
+getExtendedMainSecret :: HandshakeM Bool
+getExtendedMainSecret = gets hstExtendedMainSecret
 
 setSupportedGroup :: Group -> HandshakeM ()
 setSupportedGroup g = modify (\hst -> hst{hstSupportedGroup = Just g})
@@ -444,7 +444,7 @@ setMasterSecretFromPre
     -- ^ the pre master secret
     -> HandshakeM ByteString
 setMasterSecretFromPre ver role premasterSecret = do
-    ems <- getExtendedMasterSec
+    ems <- getExtendedMainSecret
     secret <- if ems then get >>= genExtendedSecret else genSecret <$> get
     setMasterSecret ver role secret
     return secret
@@ -457,7 +457,7 @@ setMasterSecretFromPre ver role premasterSecret = do
             (hstClientRandom hst)
             (fromJust $ hstServerRandom hst)
     genExtendedSecret hst =
-        generateExtendedMasterSec
+        generateExtendedMainSecret
             ver
             (fromJust $ hstPendingCipher hst)
             premasterSecret

@@ -187,7 +187,7 @@ updateContext13 ctx cipherAlg = do
 
 updateContext12 :: Context -> [ExtensionRaw] -> Maybe SessionData -> IO ()
 updateContext12 ctx exts resumingSession = do
-    ems <- processExtendedMasterSec ctx TLS12 MsgTServerHello exts
+    ems <- processExtendedMainSecret ctx TLS12 MsgTServerHello exts
     case resumingSession of
         Nothing -> return ()
         Just sessionData -> do

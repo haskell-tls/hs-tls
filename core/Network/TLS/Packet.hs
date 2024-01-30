@@ -34,7 +34,7 @@ module Network.TLS.Packet (
 
     -- * generate things for packet content
     generateMasterSecret,
-    generateExtendedMasterSec,
+    generateExtendedMainSecret,
     generateKeyBlock,
     generateClientFinished,
     generateServerFinished,
@@ -539,14 +539,14 @@ generateMasterSecret
     -> ByteString
 generateMasterSecret v c = generateMasterSecret_TLS $ getPRF v c
 
-generateExtendedMasterSec
+generateExtendedMainSecret
     :: ByteArrayAccess preMaster
     => Version
     -> Cipher
     -> preMaster
     -> ByteString
     -> ByteString
-generateExtendedMasterSec v c premasterSecret sessionHash =
+generateExtendedMainSecret v c premasterSecret sessionHash =
     getPRF v c (B.convert premasterSecret) seed 48
   where
     seed = B.append "extended master secret" sessionHash

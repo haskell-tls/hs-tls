@@ -19,7 +19,7 @@ module Network.TLS.Handshake.Common (
     recvPacketHandshake,
     onRecvStateHandshake,
     ensureRecvComplete,
-    processExtendedMasterSec,
+    processExtendedMainSecret,
     extensionLookup,
     getSessionData,
     storePrivInfo,
@@ -121,7 +121,7 @@ handshakeDone12 ctx = do
                     (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
                         { hstServerRandom = hstServerRandom hshake
                         , hstMasterSecret = hstMasterSecret hshake
-                        , hstExtendedMasterSec = hstExtendedMasterSec hshake
+                        , hstExtendedMainSecret = hstExtendedMainSecret hshake
                         , hstSupportedGroup = hstSupportedGroup hshake
                         }
     updateMeasure ctx resetBytesCounters
@@ -194,15 +194,15 @@ ensureRecvComplete ctx = do
         throwCore $
             Error_Protocol "received incomplete message at key change" UnexpectedMessage
 
-processExtendedMasterSec
+processExtendedMainSecret
     :: MonadIO m => Context -> Version -> MessageType -> [ExtensionRaw] -> m Bool
-processExtendedMasterSec ctx ver msgt exts
+processExtendedMainSecret ctx ver msgt exts
     | ver < TLS10 = return False
     | ver > TLS12 = error "EMS processing is not compatible with TLS 1.3"
     | ems == NoEMS = return False
     | otherwise =
         case extensionLookup EID_ExtendedMainSecret exts >>= extensionDecode msgt of
-            Just ExtendedMainSecret -> usingHState ctx (setExtendedMasterSec True) >> return True
+            Just ExtendedMainSecret -> usingHState ctx (setExtendedMainSecret True) >> return True
             Nothing
                 | ems == RequireEMS -> throwCore $ Error_Protocol err HandshakeFailure
                 | otherwise -> return False
@@ -215,7 +215,7 @@ getSessionData ctx = do
     ver <- usingState_ ctx getVersion
     sni <- usingState_ ctx getClientSNI
     mms <- usingHState ctx $ gets hstMasterSecret
-    ems <- usingHState ctx getExtendedMasterSec
+    ems <- usingHState ctx getExtendedMainSecret
     cipher <- cipherID <$> usingHState ctx getPendingCipher
     alpn <- usingState_ ctx getNegotiatedProtocol
     let compression = 0

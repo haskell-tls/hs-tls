@@ -59,7 +59,7 @@ sendServerHello12 sparams ctx (usedCipher, mcred) ch@CH{..} = do
 recoverSessionData :: Context -> CH -> IO (Maybe SessionData)
 recoverSessionData ctx CH{..} = do
     serverName <- usingState_ ctx getClientSNI
-    ems <- processExtendedMasterSec ctx TLS12 MsgTClientHello chExtensions
+    ems <- processExtendedMainSecret ctx TLS12 MsgTClientHello chExtensions
     let mticket =
             extensionLookup EID_SessionTicket chExtensions
                 >>= extensionDecode MsgTClientHello
@@ -248,7 +248,7 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
                     return $ extensionEncode $ SecureRenegotiation cvd svd
                 return [ExtensionRaw EID_SecureRenegotiation vd]
             else return []
-    ems <- usingHState ctx getExtendedMasterSec
+    ems <- usingHState ctx getExtendedMainSecret
     let emsExt
             | ems =
                 let raw = extensionEncode ExtendedMainSecret
