@@ -155,7 +155,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
         return $
             if ems == NoEMS || all (>= TLS13) (supportedVersions $ ctxSupported ctx)
                 then Nothing
-                else Just $ toExtensionRaw ExtendedMasterSecret
+                else Just $ toExtensionRaw ExtendedMainSecret
     sniExtension =
         if clientUseServerNameIndication cparams
             then do

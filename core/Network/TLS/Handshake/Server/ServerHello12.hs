@@ -251,8 +251,8 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
     ems <- usingHState ctx getExtendedMasterSec
     let emsExt
             | ems =
-                let raw = extensionEncode ExtendedMasterSecret
-                 in [ExtensionRaw EID_ExtendedMasterSecret raw]
+                let raw = extensionEncode ExtendedMainSecret
+                 in [ExtensionRaw EID_ExtendedMainSecret raw]
             | otherwise = []
     protoExt <- applicationProtocol ctx chExts sparams
     sniExt <- do

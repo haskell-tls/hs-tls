@@ -38,7 +38,7 @@ module Network.TLS.Struct (
         EID_ServerCertificateType,
         EID_Padding,
         EID_EncryptThenMAC,
-        EID_ExtendedMasterSecret,
+        EID_ExtendedMainSecret,
         EID_SessionTicket,
         EID_PreSharedKey,
         EID_EarlyData,
@@ -533,8 +533,8 @@ pattern EID_Padding                             :: ExtensionID -- RFC5246
 pattern EID_Padding                              = ExtensionID 0x15
 pattern EID_EncryptThenMAC                      :: ExtensionID -- RFC7366
 pattern EID_EncryptThenMAC                       = ExtensionID 0x16
-pattern EID_ExtendedMasterSecret                :: ExtensionID -- REF7627
-pattern EID_ExtendedMasterSecret                 = ExtensionID 0x17
+pattern EID_ExtendedMainSecret                  :: ExtensionID -- REF7627
+pattern EID_ExtendedMainSecret                   = ExtensionID 0x17
 pattern EID_SessionTicket                       :: ExtensionID -- RFC4507
 pattern EID_SessionTicket                        = ExtensionID 0x23
 pattern EID_PreSharedKey                        :: ExtensionID -- RFC8446
@@ -586,7 +586,7 @@ instance Show ExtensionID where
     show EID_ServerCertificateType   = "ServerCertificateType"
     show EID_Padding                 = "Padding"
     show EID_EncryptThenMAC          = "EncryptThenMAC"
-    show EID_ExtendedMasterSecret    = "ExtendedMasterSecret"
+    show EID_ExtendedMainSecret      = "ExtendedMainSecret"
     show EID_SessionTicket           = "SessionTicket"
     show EID_PreSharedKey            = "PreSharedKey"
     show EID_EarlyData               = "EarlyData"

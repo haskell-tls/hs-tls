@@ -201,8 +201,8 @@ processExtendedMasterSec ctx ver msgt exts
     | ver > TLS12 = error "EMS processing is not compatible with TLS 1.3"
     | ems == NoEMS = return False
     | otherwise =
-        case extensionLookup EID_ExtendedMasterSecret exts >>= extensionDecode msgt of
-            Just ExtendedMasterSecret -> usingHState ctx (setExtendedMasterSec True) >> return True
+        case extensionLookup EID_ExtendedMainSecret exts >>= extensionDecode msgt of
+            Just ExtendedMainSecret -> usingHState ctx (setExtendedMasterSec True) >> return True
             Nothing
                 | ems == RequireEMS -> throwCore $ Error_Protocol err HandshakeFailure
                 | otherwise -> return False

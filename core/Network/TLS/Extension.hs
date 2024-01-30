@@ -20,7 +20,7 @@ module Network.TLS.Extension (
     MaxFragmentEnum (..),
     SecureRenegotiation (..),
     ApplicationLayerProtocolNegotiation (..),
-    ExtendedMasterSecret (..),
+    ExtendedMainSecret (..),
     SupportedGroups (..),
     Group (..),
     EcPointFormatsSupported (..),
@@ -98,7 +98,7 @@ definedExtensions =
     , EID_ServerCertificateType
     , EID_Padding
     , EID_EncryptThenMAC
-    , EID_ExtendedMasterSecret
+    , EID_ExtendedMainSecret
     , EID_SessionTicket
     , EID_PreSharedKey
     , EID_EarlyData
@@ -118,7 +118,7 @@ supportedExtensions =
     [ EID_ServerName
     , EID_MaxFragmentLength
     , EID_ApplicationLayerProtocolNegotiation
-    , EID_ExtendedMasterSecret
+    , EID_ExtendedMainSecret
     , EID_SecureRenegotiation
     , EID_SupportedGroups
     , EID_EcPointFormats
@@ -281,15 +281,15 @@ decodeApplicationLayerProtocolNegotiation = runGetMaybe $ do
 
 ------------------------------------------------------------
 
--- | Extended Master Secret
-data ExtendedMasterSecret = ExtendedMasterSecret deriving (Show, Eq)
+-- | Extended Main Secret
+data ExtendedMainSecret = ExtendedMainSecret deriving (Show, Eq)
 
-instance Extension ExtendedMasterSecret where
-    extensionID _ = EID_ExtendedMasterSecret
-    extensionEncode ExtendedMasterSecret = B.empty
-    extensionDecode MsgTClientHello _ = Just ExtendedMasterSecret
-    extensionDecode MsgTServerHello _ = Just ExtendedMasterSecret
-    extensionDecode _ _ = error "extensionDecode: ExtendedMasterSecret"
+instance Extension ExtendedMainSecret where
+    extensionID _ = EID_ExtendedMainSecret
+    extensionEncode ExtendedMainSecret = B.empty
+    extensionDecode MsgTClientHello _ = Just ExtendedMainSecret
+    extensionDecode MsgTServerHello _ = Just ExtendedMainSecret
+    extensionDecode _ _ = error "extensionDecode: ExtendedMainSecret"
 
 ------------------------------------------------------------
 
