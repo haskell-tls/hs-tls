@@ -698,6 +698,8 @@ pattern UnknownPskIdentity           :: AlertDescription
 pattern UnknownPskIdentity            = AlertDescription 115
 pattern CertificateRequired          :: AlertDescription
 pattern CertificateRequired           = AlertDescription 116
+pattern GeneralError                 :: AlertDescription
+pattern GeneralError                  = AlertDescription 117
 pattern NoApplicationProtocol        :: AlertDescription
 pattern NoApplicationProtocol         = AlertDescription 120 -- RFC7301
 
@@ -734,6 +736,7 @@ instance Show AlertDescription where
     show BadCertificateHashValue      = "BadCertificateHashValue"
     show UnknownPskIdentity           = "UnknownPskIdentity"
     show CertificateRequired          = "CertificateRequired"
+    show GeneralError                 = "GeneralError"
     show NoApplicationProtocol        = "NoApplicationProtocol"
     show (AlertDescription x)         = "AlertDescription " ++ show x
 {- FOURMOLU_ENABLE -}
