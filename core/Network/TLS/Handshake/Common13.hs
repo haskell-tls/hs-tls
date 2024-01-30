@@ -523,8 +523,8 @@ calculateApplicationSecret ctx choice (BaseSecret sec) hChSf = do
                 zero
     let clientApplicationSecret0 = deriveSecret usedHash applicationSecret "c ap traffic" hChSf
         serverApplicationSecret0 = deriveSecret usedHash applicationSecret "s ap traffic" hChSf
-        exporterMasterSecret = deriveSecret usedHash applicationSecret "exp master" hChSf
-    usingState_ ctx $ setExporterMasterSecret exporterMasterSecret
+        exporterSecret = deriveSecret usedHash applicationSecret "exp master" hChSf
+    usingState_ ctx $ setExporterSecret exporterSecret
     let sts0 =
             ServerTrafficSecret serverApplicationSecret0
                 :: ServerTrafficSecret ApplicationSecret

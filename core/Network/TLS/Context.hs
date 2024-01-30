@@ -266,7 +266,7 @@ getTLSExporter ctx = do
 
 exporter :: Context -> ByteString -> ByteString -> Int -> IO (Maybe ByteString)
 exporter ctx label context outlen = do
-    msecret <- usingState_ ctx getExporterMasterSecret
+    msecret <- usingState_ ctx getExporterSecret
     mcipher <- failOnEitherError $ runRxState ctx $ gets stCipher
     return $ case (msecret, mcipher) of
         (Just secret, Just cipher) ->
