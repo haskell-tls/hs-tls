@@ -545,8 +545,8 @@ calculateResumptionSecret
     -> IO (BaseSecret ResumptionSecret)
 calculateResumptionSecret ctx choice (BaseSecret sec) = do
     hChCf <- transcriptHash ctx
-    let resumptionMasterSecret = deriveSecret usedHash sec "res master" hChCf
-    return $ BaseSecret resumptionMasterSecret
+    let resumptionSecret = deriveSecret usedHash sec "res master" hChCf
+    return $ BaseSecret resumptionSecret
   where
     usedHash = cHash choice
 

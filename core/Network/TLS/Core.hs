@@ -290,10 +290,10 @@ recvData13 ctx = do
         -- read+write locks (which is also what we use for all calls to the
         -- session manager).
         withWriteLock ctx $ do
-            Just resumptionMasterSecret <- usingHState ctx getTLS13ResumptionSecret
+            Just resumptionSecret <- usingHState ctx getTLS13ResumptionSecret
             (_, usedCipher, _, _) <- getTxState ctx
             let choice = makeCipherChoice TLS13 usedCipher
-                psk = derivePSK choice resumptionMasterSecret nonce
+                psk = derivePSK choice resumptionSecret nonce
                 maxSize = case extensionLookup EID_EarlyData exts
                     >>= extensionDecode MsgTNewSessionTicket of
                     Just (EarlyDataIndication (Just ms)) -> fromIntegral $ safeNonNegative32 ms
