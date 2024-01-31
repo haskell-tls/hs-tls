@@ -1,6 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Network.TLS.Handshake.Common13 (
     makeFinished,
@@ -292,31 +293,37 @@ createTLS13TicketInfo life ecw mrtt = do
     add <- case ecw of
         Left ctx -> B.foldl' (*+) 0 <$> getStateRNG ctx 4
         Right ad -> return ad
-    return $ TLS13TicketInfo life add bTime mrtt
+    return $
+        TLS13TicketInfo
+            { lifetime = life
+            , ageAdd = add
+            , txrxTime = bTime
+            , estimatedRTT = mrtt
+            }
   where
     x *+ y = x * 256 + fromIntegral y
 
 ageToObfuscatedAge :: Second -> TLS13TicketInfo -> Second
-ageToObfuscatedAge age tinfo = obfage
+ageToObfuscatedAge age TLS13TicketInfo{..} = obfage
   where
-    obfage = age + ageAdd tinfo
+    obfage = age + ageAdd
 
 obfuscatedAgeToAge :: Second -> TLS13TicketInfo -> Second
-obfuscatedAgeToAge obfage tinfo = age
+obfuscatedAgeToAge obfage TLS13TicketInfo{..} = age
   where
-    age = obfage - ageAdd tinfo
+    age = obfage - ageAdd
 
 isAgeValid :: Second -> TLS13TicketInfo -> Bool
-isAgeValid age tinfo = age <= lifetime tinfo * 1000
+isAgeValid age TLS13TicketInfo{..} = age <= lifetime * 1000
 
 getAge :: TLS13TicketInfo -> IO Second
-getAge tinfo = do
-    let clientReceiveTime = txrxTime tinfo
+getAge TLS13TicketInfo{..} = do
+    let clientReceiveTime = txrxTime
     clientSendTime <- getCurrentTimeFromBase
     return $ fromIntegral (clientSendTime - clientReceiveTime) -- milliseconds
 
 checkFreshness :: TLS13TicketInfo -> Second -> IO Bool
-checkFreshness tinfo obfAge = do
+checkFreshness tinfo@TLS13TicketInfo{..} obfAge = do
     serverReceiveTime <- getCurrentTimeFromBase
     let freshness =
             if expectedArrivalTime > serverReceiveTime
@@ -328,8 +335,8 @@ checkFreshness tinfo obfAge = do
         isFresh = freshness < tolerance
     return $ isAlive && isFresh
   where
-    serverSendTime = txrxTime tinfo
-    rtt = fromJust $ estimatedRTT tinfo
+    serverSendTime = txrxTime
+    rtt = fromJust estimatedRTT
     age = obfuscatedAgeToAge obfAge tinfo
     expectedArrivalTime = serverSendTime + rtt + fromIntegral age
     isAlive = isAgeValid age tinfo
