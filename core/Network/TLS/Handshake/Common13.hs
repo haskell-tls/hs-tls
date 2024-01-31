@@ -591,4 +591,4 @@ setRTT ctx t0 = do
     t1 <- getUnixTime
     let UnixDiffTime (CTime s) u = t1 `diffUnixTime` t0
         rtt = fromIntegral s * 1000000 + fromIntegral u
-    modifyTLS13State ctx $ \st -> st{tls13stRTT = max rtt 50000}
+    modifyTLS13State ctx $ \st -> st{tls13stRTT = max rtt 2000}
