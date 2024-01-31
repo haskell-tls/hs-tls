@@ -589,5 +589,6 @@ keyShareKeyLength _ = error "keyShareKeyLength"
 setRTT :: Context -> Millisecond -> IO ()
 setRTT ctx chSentTime = do
     shRecvTime <- getCurrentTimeFromBase
-    let rtt = shRecvTime - chSentTime
-    modifyTLS13State ctx $ \st -> st{tls13stRTT = max rtt 2}
+    let rtt' = shRecvTime - chSentTime
+        rtt = if rtt' == 0 then 5 else rtt'
+    modifyTLS13State ctx $ \st -> st{tls13stRTT = rtt}
