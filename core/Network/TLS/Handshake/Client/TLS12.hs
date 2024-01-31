@@ -153,8 +153,8 @@ sendClientCCC cparams ctx = do
                 clientVersion <- usingHState ctx $ gets hstClientVersion
                 (xver, prerand) <- usingState_ ctx $ (,) <$> getVersion <*> genRandom 46
 
-                let premaster = encodePreMasterSecret clientVersion prerand
-                    setMasterSec = setMasterSecretFromPre xver ClientRole premaster
+                let premaster = encodePreMainSecret clientVersion prerand
+                    setMasterSec = setMainSecretFromPre xver ClientRole premaster
                 encryptedPreMaster <- do
                     -- SSL3 implementation generally forget this length field since it's redundant,
                     -- however TLS10 make it clear that the length field need to be present.
@@ -171,7 +171,7 @@ sendClientCCC cparams ctx = do
                     Error_Protocol "client key exchange unsupported type" HandshakeFailure
         sendPacket ctx $ Handshake [ClientKeyXchg ckx]
         masterSecret <- usingHState ctx setMasterSec
-        logKey ctx (MasterSecret masterSecret)
+        logKey ctx (MainSecret masterSecret)
       where
         getCKX_DHE = do
             xver <- usingState_ ctx getVersion
@@ -213,7 +213,7 @@ sendClientCCC cparams ctx = do
                                     Error_Protocol ("invalid server " ++ show grp ++ " public key") IllegalParameter
                             Just pair -> return pair
 
-            let setMasterSec = setMasterSecretFromPre xver ClientRole premaster
+            let setMasterSec = setMainSecretFromPre xver ClientRole premaster
             return (CKX_DH clientDHPub, setMasterSec)
 
         getCKX_ECDHE = do
@@ -227,7 +227,7 @@ sendClientCCC cparams ctx = do
                         Error_Protocol ("invalid server " ++ show grp ++ " public key") IllegalParameter
                 Just (clipub, premaster) -> do
                     xver <- usingState_ ctx getVersion
-                    let setMasterSec = setMasterSecretFromPre xver ClientRole premaster
+                    let setMasterSec = setMainSecretFromPre xver ClientRole premaster
                     return (CKX_ECDH $ encodeGroupPublic clipub, setMasterSec)
 
     -- In order to send a proper certificate verify message,

@@ -250,7 +250,7 @@ handshakeDone13 ctx = do
                 Just
                     (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
                         { hstServerRandom = hstServerRandom hshake
-                        , hstMasterSecret = hstMasterSecret hshake
+                        , hstMainSecret = hstMainSecret hshake
                         , hstSupportedGroup = hstSupportedGroup hshake
                         , hstHandshakeDigest = hstHandshakeDigest hshake
                         , hstTLS13HandshakeMode = hstTLS13HandshakeMode hshake

@@ -159,13 +159,13 @@ processClientKeyXchg ctx (CKX_RSA encryptedPremaster) = do
     masterSecret <- usingHState ctx $ do
         expectedVer <- gets hstClientVersion
         case ePremaster of
-            Left _ -> setMasterSecretFromPre rver role random
-            Right premaster -> case decodePreMasterSecret premaster of
-                Left _ -> setMasterSecretFromPre rver role random
+            Left _ -> setMainSecretFromPre rver role random
+            Right premaster -> case decodePreMainSecret premaster of
+                Left _ -> setMainSecretFromPre rver role random
                 Right (ver, _)
-                    | ver /= expectedVer -> setMasterSecretFromPre rver role random
-                    | otherwise -> setMasterSecretFromPre rver role premaster
-    logKey ctx (MasterSecret masterSecret)
+                    | ver /= expectedVer -> setMainSecretFromPre rver role random
+                    | otherwise -> setMainSecretFromPre rver role premaster
+    logKey ctx (MainSecret masterSecret)
 processClientKeyXchg ctx (CKX_DH clientDHValue) = do
     rver <- usingState_ ctx getVersion
     role <- usingState_ ctx getRole
@@ -178,8 +178,8 @@ processClientKeyXchg ctx (CKX_DH clientDHValue) = do
 
     dhpriv <- usingHState ctx getDHPrivate
     let premaster = dhGetShared params dhpriv clientDHValue
-    masterSecret <- usingHState ctx $ setMasterSecretFromPre rver role premaster
-    logKey ctx (MasterSecret masterSecret)
+    masterSecret <- usingHState ctx $ setMainSecretFromPre rver role premaster
+    logKey ctx (MainSecret masterSecret)
 processClientKeyXchg ctx (CKX_ECDH bytes) = do
     ServerECDHParams grp _ <- usingHState ctx getServerECDHParams
     case decodeGroupPublic grp bytes of
@@ -192,8 +192,8 @@ processClientKeyXchg ctx (CKX_ECDH bytes) = do
                 Just premaster -> do
                     rver <- usingState_ ctx getVersion
                     role <- usingState_ ctx getRole
-                    masterSecret <- usingHState ctx $ setMasterSecretFromPre rver role premaster
-                    logKey ctx (MasterSecret masterSecret)
+                    masterSecret <- usingHState ctx $ setMainSecretFromPre rver role premaster
+                    logKey ctx (MainSecret masterSecret)
                 Nothing ->
                     throwCore $
                         Error_Protocol "cannot generate a shared secret on ECDH" IllegalParameter

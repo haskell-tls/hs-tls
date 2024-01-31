@@ -120,7 +120,7 @@ handshakeDone12 ctx = do
                 Just
                     (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
                         { hstServerRandom = hstServerRandom hshake
-                        , hstMasterSecret = hstMasterSecret hshake
+                        , hstMainSecret = hstMainSecret hshake
                         , hstExtendedMainSecret = hstExtendedMainSecret hshake
                         , hstSupportedGroup = hstSupportedGroup hshake
                         }
@@ -214,7 +214,7 @@ getSessionData :: Context -> IO (Maybe SessionData)
 getSessionData ctx = do
     ver <- usingState_ ctx getVersion
     sni <- usingState_ ctx getClientSNI
-    mms <- usingHState ctx $ gets hstMasterSecret
+    mms <- usingHState ctx $ gets hstMainSecret
     ems <- usingHState ctx getExtendedMainSecret
     cipher <- cipherID <$> usingHState ctx getPendingCipher
     alpn <- usingState_ ctx getNegotiatedProtocol

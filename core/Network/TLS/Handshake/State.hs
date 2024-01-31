@@ -49,8 +49,8 @@ module Network.TLS.Handshake.State (
     foldHandshakeDigest,
 
     -- * master secret
-    setMasterSecret,
-    setMasterSecretFromPre,
+    setMainSecret,
+    setMainSecretFromPre,
 
     -- * misc accessor
     getPendingCipher,
@@ -100,7 +100,7 @@ data HandshakeState = HandshakeState
     { hstClientVersion :: Version
     , hstClientRandom :: ClientRandom
     , hstServerRandom :: Maybe ServerRandom
-    , hstMasterSecret :: Maybe ByteString
+    , hstMainSecret :: Maybe ByteString
     , hstKeyState :: HandshakeKeyState
     , hstServerDHParams :: Maybe ServerDHParams
     , hstDHPrivate :: Maybe DHPrivate
@@ -200,7 +200,7 @@ newEmptyHandshake ver crand =
         { hstClientVersion = ver
         , hstClientRandom = crand
         , hstServerRandom = Nothing
-        , hstMasterSecret = Nothing
+        , hstMainSecret = Nothing
         , hstKeyState = HandshakeKeyState Nothing Nothing
         , hstServerDHParams = Nothing
         , hstDHPrivate = Nothing
@@ -424,7 +424,7 @@ getHandshakeDigest ver role = gets gen
   where
     gen hst = case hstHandshakeDigest hst of
         HandshakeDigestContext hashCtx ->
-            let msecret = fromJust $ hstMasterSecret hst
+            let msecret = fromJust $ hstMainSecret hst
                 cipher = fromJust $ hstPendingCipher hst
              in generateFinished ver cipher msecret hashCtx
         HandshakeMessages _ ->
@@ -434,7 +434,7 @@ getHandshakeDigest ver role = gets gen
         | otherwise = generateServerFinished
 
 -- | Generate the master secret from the pre master secret.
-setMasterSecretFromPre
+setMainSecretFromPre
     :: ByteArrayAccess preMaster
     => Version
     -- ^ chosen transmission version
@@ -443,14 +443,14 @@ setMasterSecretFromPre
     -> preMaster
     -- ^ the pre master secret
     -> HandshakeM ByteString
-setMasterSecretFromPre ver role premasterSecret = do
+setMainSecretFromPre ver role premasterSecret = do
     ems <- getExtendedMainSecret
     secret <- if ems then get >>= genExtendedSecret else genSecret <$> get
-    setMasterSecret ver role secret
+    setMainSecret ver role secret
     return secret
   where
     genSecret hst =
-        generateMasterSecret
+        generateMainSecret
             ver
             (fromJust $ hstPendingCipher hst)
             premasterSecret
@@ -465,11 +465,11 @@ setMasterSecretFromPre ver role premasterSecret = do
 
 -- | Set master secret and as a side effect generate the key block
 -- with all the right parameters, and setup the pending tx/rx state.
-setMasterSecret :: Version -> Role -> ByteString -> HandshakeM ()
-setMasterSecret ver role masterSecret = modify $ \hst ->
+setMainSecret :: Version -> Role -> ByteString -> HandshakeM ()
+setMainSecret ver role masterSecret = modify $ \hst ->
     let (pendingTx, pendingRx) = computeKeyBlock hst masterSecret ver role
      in hst
-            { hstMasterSecret = Just masterSecret
+            { hstMainSecret = Just masterSecret
             , hstPendingTxState = Just pendingTx
             , hstPendingRxState = Just pendingRx
             }
@@ -520,7 +520,7 @@ computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
         RecordState
             { stCryptState = if cc == ClientRole then cstClient else cstServer
             , stMacState = if cc == ClientRole then msClient else msServer
-            , stCryptLevel = CryptMasterSecret
+            , stCryptLevel = CryptMainSecret
             , stCipher = Just cipher
             , stCompression = hstPendingCompression hst
             }
@@ -528,7 +528,7 @@ computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
         RecordState
             { stCryptState = if cc == ClientRole then cstServer else cstClient
             , stMacState = if cc == ClientRole then msServer else msClient
-            , stCryptLevel = CryptMasterSecret
+            , stCryptLevel = CryptMainSecret
             , stCipher = Just cipher
             , stCompression = hstPendingCompression hst
             }

@@ -51,8 +51,8 @@ sendServerHello12 sparams ctx (usedCipher, mcred) ch@CH{..} = do
                 makeServerHello sparams ctx usedCipher mcred chExtensions chSession
             sendPacket ctx $ Handshake [serverhello]
             let masterSecret = sessionSecret sessionData
-            usingHState ctx $ setMasterSecret TLS12 ServerRole masterSecret
-            logKey ctx $ MasterSecret masterSecret
+            usingHState ctx $ setMainSecret TLS12 ServerRole masterSecret
+            logKey ctx $ MainSecret masterSecret
             sendCCSandFinished ctx ServerRole
     return resumeSessionData
 

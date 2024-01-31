@@ -100,7 +100,7 @@ data Information = Information
     { infoVersion :: Version
     , infoCipher :: Cipher
     , infoCompression :: Compression
-    , infoMasterSecret :: Maybe ByteString
+    , infoMainSecret :: Maybe ByteString
     , infoExtendedMasterSec :: Bool
     , infoClientRandom :: Maybe ClientRandom
     , infoServerRandom :: Maybe ServerRandom
@@ -272,7 +272,7 @@ contextGetInformation ctx = do
     let (ms, ems, cr, sr, hm13, grp) =
             case hstate of
                 Just st ->
-                    ( hstMasterSecret st
+                    ( hstMainSecret st
                     , hstExtendedMainSecret st
                     , Just (hstClientRandom st)
                     , hstServerRandom st

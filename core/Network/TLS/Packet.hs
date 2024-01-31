@@ -26,14 +26,14 @@ module Network.TLS.Packet (
     -- * marshall functions for change cipher spec message
     decodeChangeCipherSpec,
     encodeChangeCipherSpec,
-    decodePreMasterSecret,
-    encodePreMasterSecret,
+    decodePreMainSecret,
+    encodePreMainSecret,
     encodeSignedDHParams,
     encodeSignedECDHParams,
     decodeReallyServerKeyXchgAlgorithmData,
 
     -- * generate things for packet content
-    generateMasterSecret,
+    generateMainSecret,
     generateExtendedMainSecret,
     generateKeyBlock,
     generateClientFinished,
@@ -482,13 +482,13 @@ encodeChangeCipherSpec :: ByteString
 encodeChangeCipherSpec = runPut (putWord8 1)
 
 -- rsa pre master secret
-decodePreMasterSecret :: ByteString -> Either TLSError (Version, ByteString)
-decodePreMasterSecret =
+decodePreMainSecret :: ByteString -> Either TLSError (Version, ByteString)
+decodePreMainSecret =
     runGetErr "pre-master-secret" $
         (,) <$> getBinaryVersion <*> getBytes 46
 
-encodePreMasterSecret :: Version -> ByteString -> ByteString
-encodePreMasterSecret version bytes = runPut (putBinaryVersion version >> putBytes bytes)
+encodePreMainSecret :: Version -> ByteString -> ByteString
+encodePreMainSecret version bytes = runPut (putBinaryVersion version >> putBytes bytes)
 
 -- | in certain cases, we haven't manage to decode ServerKeyExchange properly,
 -- because the decoding was too eager and the cipher wasn't been set yet.
@@ -517,19 +517,19 @@ getPRF ver ciph
     | maybe True (< TLS12) (cipherMinVer ciph) = prf_SHA256
     | otherwise = prf_TLS ver $ fromMaybe SHA256 $ cipherPRFHash ciph
 
-generateMasterSecret_TLS
+generateMainSecret_TLS
     :: ByteArrayAccess preMaster
     => PRF
     -> preMaster
     -> ClientRandom
     -> ServerRandom
     -> ByteString
-generateMasterSecret_TLS prf premasterSecret (ClientRandom c) (ServerRandom s) =
+generateMainSecret_TLS prf premasterSecret (ClientRandom c) (ServerRandom s) =
     prf (B.convert premasterSecret) seed 48
   where
     seed = B.concat ["master secret", c, s]
 
-generateMasterSecret
+generateMainSecret
     :: ByteArrayAccess preMaster
     => Version
     -> Cipher
@@ -537,7 +537,7 @@ generateMasterSecret
     -> ClientRandom
     -> ServerRandom
     -> ByteString
-generateMasterSecret v c = generateMasterSecret_TLS $ getPRF v c
+generateMainSecret v c = generateMainSecret_TLS $ getPRF v c
 
 generateExtendedMainSecret
     :: ByteArrayAccess preMaster
