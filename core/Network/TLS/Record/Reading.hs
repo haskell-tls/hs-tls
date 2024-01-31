@@ -37,7 +37,7 @@ getRecord
     -> IO (Either TLSError (Record Plaintext))
 getRecord ctx appDataOverhead header@(Header pt _ _) content = do
     withLog ctx $ \logging -> loggingIORecv logging header content
-    runRxState ctx $ do
+    runRxRecordState ctx $ do
         r <- decodeRecordM header content
         let Record _ _ fragment = r
         when (exceeds ctx overhead $ B.length (fragmentGetBytes fragment)) $

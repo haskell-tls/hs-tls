@@ -47,8 +47,8 @@ module Network.TLS.Context.Internal (
     failOnEitherError,
     usingState,
     usingState_,
-    runTxState,
-    runRxState,
+    runTxRecordState,
+    runRxRecordState,
     usingHState,
     getHState,
     saveHState,
@@ -129,9 +129,9 @@ data Context = forall a.
     -- ^ empty packet workaround for CBC guessability.
     , ctxFragmentSize :: Maybe Int
     -- ^ maximum size of plaintext fragments
-    , ctxTxState :: MVar RecordState
+    , ctxTxRecordState :: MVar RecordState
     -- ^ current tx state
-    , ctxRxState :: MVar RecordState
+    , ctxRxRecordState :: MVar RecordState
     -- ^ current rx state
     , ctxHandshake :: MVar (Maybe HandshakeState)
     -- ^ optional handshake state
@@ -281,7 +281,7 @@ contextGetInformation ctx = do
                     )
                 Nothing -> (Nothing, False, Nothing, Nothing, Nothing, Nothing)
     (cipher, comp) <-
-        readMVar (ctxRxState ctx) <&> \st -> (stCipher st, stCompression st)
+        readMVar (ctxRxRecordState ctx) <&> \st -> (stCipher st, stCompression st)
     let accepted = case hstate of
             Just st -> hstTLS13RTT0Status st == RTT0Accepted
             Nothing -> False
@@ -369,21 +369,21 @@ decideRecordVersion ctx = usingState_ ctx $ do
             | otherwise = ver
     return (ver', ver >= TLS13)
 
-runTxState :: Context -> RecordM a -> IO (Either TLSError a)
-runTxState ctx f = do
+runTxRecordState :: Context -> RecordM a -> IO (Either TLSError a)
+runTxRecordState ctx f = do
     (ver, tls13) <- decideRecordVersion ctx
     let opt =
             RecordOptions
                 { recordVersion = ver
                 , recordTLS13 = tls13
                 }
-    modifyMVar (ctxTxState ctx) $ \st ->
+    modifyMVar (ctxTxRecordState ctx) $ \st ->
         case runRecordM f opt st of
             Left err -> return (st, Left err)
             Right (a, newSt) -> return (newSt, Right a)
 
-runRxState :: Context -> RecordM a -> IO (Either TLSError a)
-runRxState ctx f = do
+runRxRecordState :: Context -> RecordM a -> IO (Either TLSError a)
+runRxRecordState ctx f = do
     ver <-
         usingState_
             ctx
@@ -394,7 +394,7 @@ runRxState ctx f = do
                 { recordVersion = ver
                 , recordTLS13 = ver >= TLS13
                 }
-    modifyMVar (ctxRxState ctx) $ \st ->
+    modifyMVar (ctxRxRecordState ctx) $ \st ->
         case runRecordM f opt st of
             Left err -> return (st, Left err)
             Right (a, newSt) -> return (newSt, Right a)

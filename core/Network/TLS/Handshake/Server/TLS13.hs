@@ -75,11 +75,11 @@ expectFinished
     -> m ()
 expectFinished sparams ctx exts appKey clientHandshakeSecret sfSentTime hChBeforeCf (Finished13 verifyData) = liftIO $ do
     modifyTLS13State ctx $ \st -> st{tls13stRecvCF = True}
-    (usedHash, usedCipher, _, _) <- getRxState ctx
+    (usedHash, usedCipher, _, _) <- getRxRecordState ctx
     let ClientTrafficSecret chs = clientHandshakeSecret
     checkFinished ctx usedHash chs hChBeforeCf verifyData
     handshakeDone13 ctx
-    setRxState ctx usedHash usedCipher clientApplicationSecret0
+    setRxRecordState ctx usedHash usedCipher clientApplicationSecret0
     sendNewSessionTicket sparams ctx usedCipher exts applicationSecret sfSentTime
   where
     applicationSecret = triBase appKey
@@ -89,8 +89,8 @@ expectFinished _ _ _ _ _ _ _ hs = unexpected (show hs) (Just "finished 13")
 expectEndOfEarlyData
     :: Context -> ClientTrafficSecret HandshakeSecret -> Handshake13 -> IO ()
 expectEndOfEarlyData ctx clientHandshakeSecret EndOfEarlyData13 = do
-    (usedHash, usedCipher, _, _) <- getRxState ctx
-    setRxState ctx usedHash usedCipher clientHandshakeSecret
+    (usedHash, usedCipher, _, _) <- getRxRecordState ctx
+    setRxRecordState ctx usedHash usedCipher clientHandshakeSecret
 expectEndOfEarlyData _ _ hs = unexpected (show hs) (Just "end of early data")
 
 expectCertificate
@@ -206,7 +206,7 @@ postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = d
     processHandshake13 ctx certReq
     processHandshake13 ctx h
 
-    (usedHash, _, level, applicationSecretN) <- getRxState ctx
+    (usedHash, _, level, applicationSecretN) <- getRxRecordState ctx
     unless (level == CryptApplicationSecret) $
         throwCore $
             Error_Protocol

@@ -61,7 +61,7 @@ switchTxEncryption ctx = do
         v <- getVersion
         r <- getRole
         return (v, r)
-    liftIO $ modifyMVar_ (ctxTxState ctx) (\_ -> return tx)
+    liftIO $ modifyMVar_ (ctxTxRecordState ctx) (\_ -> return tx)
     -- set empty packet counter measure if condition are met
     when
         ( ver <= TLS10

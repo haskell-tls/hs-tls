@@ -44,8 +44,8 @@ module Network.TLS.Context (
     throwCore,
     usingState,
     usingState_,
-    runTxState,
-    runRxState,
+    runTxRecordState,
+    runRxRecordState,
     usingHState,
     getHState,
     getStateRNG,
@@ -176,8 +176,8 @@ contextNew backend params = liftIO $ do
                 , ctxSupported = supported
                 , ctxTLSState = tlsstate
                 , ctxFragmentSize = Just 16384
-                , ctxTxState = tx
-                , ctxRxState = rx
+                , ctxTxRecordState = tx
+                , ctxRxRecordState = rx
                 , ctxHandshake = hs
                 , ctxDoHandshake = doHandshake params
                 , ctxDoHandshakeWith = doHandshakeWith params
@@ -267,7 +267,7 @@ getTLSExporter ctx = do
 exporter :: Context -> ByteString -> ByteString -> Int -> IO (Maybe ByteString)
 exporter ctx label context outlen = do
     msecret <- usingState_ ctx getExporterSecret
-    mcipher <- failOnEitherError $ runRxState ctx $ gets stCipher
+    mcipher <- failOnEitherError $ runRxRecordState ctx $ gets stCipher
     return $ case (msecret, mcipher) of
         (Just secret, Just cipher) ->
             let h = cipherHash cipher
@@ -288,5 +288,5 @@ getTLSServerEndPoint ctx = do
     case mcc of
         Nothing -> return Nothing
         Just cc -> do
-            (usedHash, _, _, _) <- getRxState ctx
+            (usedHash, _, _, _) <- getRxRecordState ctx
             return $ Just $ hash usedHash $ encodeCertificate cc

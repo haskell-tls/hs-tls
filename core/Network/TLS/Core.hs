@@ -291,7 +291,7 @@ recvData13 ctx = do
         -- session manager).
         withWriteLock ctx $ do
             Just resumptionSecret <- usingHState ctx getTLS13ResumptionSecret
-            (_, usedCipher, _, _) <- getTxState ctx
+            (_, usedCipher, _, _) <- getTxRecordState ctx
             let choice = makeCipherChoice TLS13 usedCipher
                 psk = derivePSK choice resumptionSecret nonce
                 maxSize = case extensionLookup EID_EarlyData exts
@@ -317,13 +317,13 @@ recvData13 ctx = do
         -- to key update (update_requested) which we sent.
         if established == Established
             then do
-                keyUpdate ctx getRxState setRxState
+                keyUpdate ctx getRxRecordState setRxRecordState
                 -- Write lock wraps both actions because we don't want another
                 -- packet to be sent by another thread before the Tx state is
                 -- updated.
                 when (mode == UpdateRequested) $ withWriteLock ctx $ do
                     sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested]
-                    keyUpdate ctx getTxState setTxState
+                    keyUpdate ctx getTxRecordState setTxRecordState
                 loopHandshake13 hs
             else do
                 let reason = "received key update before established"
@@ -450,5 +450,5 @@ updateKey ctx way = liftIO $ do
         -- be sent by another thread before the Tx state is updated.
         withWriteLock ctx $ do
             sendPacket13 ctx $ Handshake13 [KeyUpdate13 req]
-            keyUpdate ctx getTxState setTxState
+            keyUpdate ctx getTxRecordState setTxRecordState
     return tls13

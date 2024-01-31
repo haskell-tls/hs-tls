@@ -83,7 +83,7 @@ prepareSecondFlight13' ctx groupSent choice = do
         (earlySecret, resuming) <- makeEarlySecret
         handKey <- calculateHandshakeSecret ctx choice earlySecret ecdhe
         let serverHandshakeSecret = triServer handKey
-        setRxState ctx usedHash usedCipher serverHandshakeSecret
+        setRxRecordState ctx usedHash usedCipher serverHandshakeSecret
         return (usedCipher, handKey, resuming)
 
     calcSharedKey = do
@@ -269,7 +269,7 @@ sendClientSecondFlight13' cparams ctx choice hkey rtt0accepted eexts = do
     when (rtt0accepted && not (ctxQUICMode ctx)) $
         sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
     let clientHandshakeSecret = triClient hkey
-    setTxState ctx usedHash usedCipher clientHandshakeSecret
+    setTxRecordState ctx usedHash usedCipher clientHandshakeSecret
     sendClientFlight13 cparams ctx usedHash clientHandshakeSecret
     appKey <- switchToApplicationSecret hChSf
     let applicationSecret = triBase appKey
@@ -293,8 +293,8 @@ sendClientSecondFlight13' cparams ctx choice hkey rtt0accepted eexts = do
         appKey <- calculateApplicationSecret ctx choice handshakeSecret hChSf
         let serverApplicationSecret0 = triServer appKey
         let clientApplicationSecret0 = triClient appKey
-        setTxState ctx usedHash usedCipher clientApplicationSecret0
-        setRxState ctx usedHash usedCipher serverApplicationSecret0
+        setTxRecordState ctx usedHash usedCipher clientApplicationSecret0
+        setRxRecordState ctx usedHash usedCipher serverApplicationSecret0
         return appKey
 
     setResumptionSecret applicationSecret = do
@@ -348,7 +348,7 @@ postHandshakeAuthClientWith cparams ctx h@(CertRequest13 certReqCtx exts) =
     bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
         processHandshake13 ctx h
         processCertRequest13 ctx certReqCtx exts
-        (usedHash, _, level, applicationSecretN) <- getTxState ctx
+        (usedHash, _, level, applicationSecretN) <- getTxRecordState ctx
         unless (level == CryptApplicationSecret) $
             throwCore $
                 Error_Protocol

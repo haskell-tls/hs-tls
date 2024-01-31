@@ -62,7 +62,7 @@ processPacket _ _ = return $ Left (Error_Packet_Parsing "unknown protocol type")
 switchRxEncryption :: Context -> IO ()
 switchRxEncryption ctx =
     usingHState ctx (gets hstPendingRxState) >>= \rx ->
-        modifyMVar_ (ctxRxState ctx) (\_ -> return $ fromJust rx)
+        modifyMVar_ (ctxRxRecordState ctx) (\_ -> return $ fromJust rx)
 
 ----------------------------------------------------------------
 

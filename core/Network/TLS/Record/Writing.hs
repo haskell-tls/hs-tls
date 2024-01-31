@@ -31,7 +31,7 @@ encodeRecord ctx = prepareRecord ctx . encodeRecordM
 -- so we use cstIV as is, however in other case we generate an explicit IV
 prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
 prepareRecord ctx f = do
-    txState <- readMVar $ ctxTxState ctx
+    txState <- readMVar $ ctxTxRecordState ctx
     let sz = case stCipher txState of
             Nothing -> 0
             Just cipher ->
@@ -41,8 +41,8 @@ prepareRecord ctx f = do
     if sz > 0
         then do
             newIV <- getStateRNG ctx sz
-            runTxState ctx (modify (setRecordIV newIV) >> f)
-        else runTxState ctx f
+            runTxRecordState ctx (modify (setRecordIV newIV) >> f)
+        else runTxRecordState ctx f
 
 encodeRecordM :: Record Plaintext -> RecordM ByteString
 encodeRecordM record = do
@@ -56,7 +56,7 @@ encodeRecord13 :: Context -> Record Plaintext -> IO (Either TLSError ByteString)
 encodeRecord13 ctx = prepareRecord13 ctx . encodeRecordM
 
 prepareRecord13 :: Context -> RecordM a -> IO (Either TLSError a)
-prepareRecord13 = runTxState
+prepareRecord13 = runTxRecordState
 
 ----------------------------------------------------------------
 

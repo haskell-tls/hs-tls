@@ -7,14 +7,14 @@ module Network.TLS.Handshake.State13 (
         CryptApplicationSecret
     ),
     TrafficSecret,
-    getTxState,
-    getRxState,
-    setTxState,
-    setRxState,
+    getTxRecordState,
+    getRxRecordState,
+    setTxRecordState,
+    setRxRecordState,
     getTxLevel,
     getRxLevel,
-    clearTxState,
-    clearRxState,
+    clearTxRecordState,
+    clearRxRecordState,
     setHelloParameters13,
     transcriptHash,
     wrapAsMessageHash13,
@@ -39,11 +39,11 @@ import Network.TLS.Record.State
 import Network.TLS.Struct
 import Network.TLS.Types
 
-getTxState :: Context -> IO (Hash, Cipher, CryptLevel, ByteString)
-getTxState ctx = getXState ctx ctxTxState
+getTxRecordState :: Context -> IO (Hash, Cipher, CryptLevel, ByteString)
+getTxRecordState ctx = getXState ctx ctxTxRecordState
 
-getRxState :: Context -> IO (Hash, Cipher, CryptLevel, ByteString)
-getRxState ctx = getXState ctx ctxRxState
+getRxRecordState :: Context -> IO (Hash, Cipher, CryptLevel, ByteString)
+getRxRecordState ctx = getXState ctx ctxRxRecordState
 
 getXState
     :: Context
@@ -60,10 +60,10 @@ getXState ctx func = do
 -- In the case of QUIC, stCipher is Nothing.
 -- So, fromJust causes an error.
 getTxLevel :: Context -> IO CryptLevel
-getTxLevel ctx = getXLevel ctx ctxTxState
+getTxLevel ctx = getXLevel ctx ctxTxRecordState
 
 getRxLevel :: Context -> IO CryptLevel
-getRxLevel ctx = getXLevel ctx ctxRxState
+getRxLevel ctx = getXLevel ctx ctxRxRecordState
 
 getXLevel
     :: Context
@@ -85,11 +85,11 @@ instance HasCryptLevel a => TrafficSecret (ClientTrafficSecret a) where
 instance HasCryptLevel a => TrafficSecret (ServerTrafficSecret a) where
     fromTrafficSecret prx@(ServerTrafficSecret s) = (getCryptLevel prx, s)
 
-setTxState :: TrafficSecret ty => Context -> Hash -> Cipher -> ty -> IO ()
-setTxState = setXState ctxTxState BulkEncrypt
+setTxRecordState :: TrafficSecret ty => Context -> Hash -> Cipher -> ty -> IO ()
+setTxRecordState = setXState ctxTxRecordState BulkEncrypt
 
-setRxState :: TrafficSecret ty => Context -> Hash -> Cipher -> ty -> IO ()
-setRxState = setXState ctxRxState BulkDecrypt
+setRxRecordState :: TrafficSecret ty => Context -> Hash -> Cipher -> ty -> IO ()
+setRxRecordState = setXState ctxRxRecordState BulkDecrypt
 
 setXState
     :: TrafficSecret ty
@@ -136,11 +136,11 @@ setXState' func encOrDec ctx h cipher lvl secret =
             , stCompression = nullCompression
             }
 
-clearTxState :: Context -> IO ()
-clearTxState = clearXState ctxTxState
+clearTxRecordState :: Context -> IO ()
+clearTxRecordState = clearXState ctxTxRecordState
 
-clearRxState :: Context -> IO ()
-clearRxState = clearXState ctxRxState
+clearRxRecordState :: Context -> IO ()
+clearRxRecordState = clearXState ctxRxRecordState
 
 clearXState :: (Context -> MVar RecordState) -> Context -> IO ()
 clearXState func ctx =

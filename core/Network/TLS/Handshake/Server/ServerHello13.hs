@@ -92,9 +92,9 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
             handSecret = triBase handKey
         liftIO $ do
             if rtt0OK && not (ctxQUICMode ctx)
-                then setRxState ctx usedHash usedCipher clientEarlySecret
-                else setRxState ctx usedHash usedCipher clientHandshakeSecret
-            setTxState ctx usedHash usedCipher serverHandshakeSecret
+                then setRxRecordState ctx usedHash usedCipher clientEarlySecret
+                else setRxRecordState ctx usedHash usedCipher clientHandshakeSecret
+            setTxRecordState ctx usedHash usedCipher serverHandshakeSecret
             let mEarlySecInfo
                     | rtt0OK = Just $ EarlySecretInfo usedCipher clientEarlySecret
                     | otherwise = Nothing
@@ -114,7 +114,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
     appKey <- calculateApplicationSecret ctx choice handSecret hChSf
     let clientApplicationSecret0 = triClient appKey
         serverApplicationSecret0 = triServer appKey
-    setTxState ctx usedHash usedCipher serverApplicationSecret0
+    setTxRecordState ctx usedHash usedCipher serverApplicationSecret0
     let appSecInfo = ApplicationSecretInfo (clientApplicationSecret0, serverApplicationSecret0)
     contextSync ctx $ SendServerFinished appSecInfo
     ----------------------------------------------------------------
