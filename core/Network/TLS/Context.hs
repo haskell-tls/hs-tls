@@ -171,7 +171,7 @@ contextNew backend params = liftIO $ do
 
     let ctx =
             Context
-                { ctxConnection = getBackend backend
+                { ctxBackend = getBackend backend
                 , ctxShared = shared
                 , ctxSupported = supported
                 , ctxState = stvar

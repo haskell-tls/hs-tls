@@ -115,7 +115,7 @@ data Information = Information
 data Context = forall a.
       Monoid a =>
     Context
-    { ctxConnection :: Backend
+    { ctxBackend :: Backend
     -- ^ return the backend object associated with this context
     , ctxSupported :: Supported
     , ctxShared :: Shared
@@ -256,13 +256,13 @@ updateMeasure ctx = modifyIORef' (ctxMeasurement ctx)
 withMeasure :: Context -> (Measurement -> IO a) -> IO a
 withMeasure ctx f = readIORef (ctxMeasurement ctx) >>= f
 
--- | A shortcut for 'backendFlush . ctxConnection'.
+-- | A shortcut for 'backendFlush . ctxBackend'.
 contextFlush :: Context -> IO ()
-contextFlush = backendFlush . ctxConnection
+contextFlush = backendFlush . ctxBackend
 
--- | A shortcut for 'backendClose . ctxConnection'.
+-- | A shortcut for 'backendClose . ctxBackend'.
 contextClose :: Context -> IO ()
-contextClose = backendClose . ctxConnection
+contextClose = backendClose . ctxBackend
 
 -- | Information about the current context
 contextGetInformation :: Context -> IO (Maybe Information)
@@ -295,10 +295,10 @@ contextGetInformation ctx = do
 
 contextSend :: Context -> ByteString -> IO ()
 contextSend c b =
-    updateMeasure c (addBytesSent $ B.length b) >> (backendSend $ ctxConnection c) b
+    updateMeasure c (addBytesSent $ B.length b) >> (backendSend $ ctxBackend c) b
 
 contextRecv :: Context -> Int -> IO ByteString
-contextRecv c sz = updateMeasure c (addBytesReceived sz) >> (backendRecv $ ctxConnection c) sz
+contextRecv c sz = updateMeasure c (addBytesReceived sz) >> (backendRecv $ ctxBackend c) sz
 
 ctxEOF :: Context -> IO Bool
 ctxEOF ctx = readIORef $ ctxEOF_ ctx

@@ -113,7 +113,7 @@ module Network.TLS (
     -- * Advanced APIs
 
     -- ** Backend
-    ctxConnection,
+    ctxBackend,
     contextFlush,
     contextClose,
 
