@@ -130,7 +130,7 @@ data Context = forall a.
     -- ^ current TX record state
     , ctxRxRecordState :: MVar RecordState
     -- ^ current RX record state
-    , ctxHandshake :: MVar (Maybe HandshakeState)
+    , ctxHandshakeState :: MVar (Maybe HandshakeState)
     -- ^ optional handshake state
     , ctxDoHandshake :: Context -> IO ()
     , ctxDoHandshakeWith :: Context -> Handshake -> IO ()
@@ -349,21 +349,21 @@ usingState_ :: Context -> TLSSt a -> IO a
 usingState_ ctx f = failOnEitherError $ usingState ctx f
 
 usingHState :: MonadIO m => Context -> HandshakeM a -> m a
-usingHState ctx f = liftIO $ modifyMVar (ctxHandshake ctx) $ \case
+usingHState ctx f = liftIO $ modifyMVar (ctxHandshakeState ctx) $ \case
     Nothing -> liftIO $ throwIO MissingHandshake
     Just st -> return $ swap (Just <$> runHandshake st f)
 
 getHState :: MonadIO m => Context -> m (Maybe HandshakeState)
-getHState ctx = liftIO $ readMVar (ctxHandshake ctx)
+getHState ctx = liftIO $ readMVar (ctxHandshakeState ctx)
 
 saveHState :: Context -> IO (Saved (Maybe HandshakeState))
-saveHState ctx = saveMVar (ctxHandshake ctx)
+saveHState ctx = saveMVar (ctxHandshakeState ctx)
 
 restoreHState
     :: Context
     -> Saved (Maybe HandshakeState)
     -> IO (Saved (Maybe HandshakeState))
-restoreHState ctx = restoreMVar (ctxHandshake ctx)
+restoreHState ctx = restoreMVar (ctxHandshakeState ctx)
 
 decideRecordVersion :: Context -> IO (Version, Bool)
 decideRecordVersion ctx = usingState_ ctx $ do

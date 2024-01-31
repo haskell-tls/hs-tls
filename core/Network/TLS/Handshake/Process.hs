@@ -32,4 +32,4 @@ processHandshake13 ctx = void . updateHandshake13 ctx
 startHandshake :: Context -> Version -> ClientRandom -> IO ()
 startHandshake ctx ver crand =
     let hs = Just $ newEmptyHandshake ver crand
-     in void $ swapMVar (ctxHandshake ctx) hs
+     in void $ swapMVar (ctxHandshakeState ctx) hs

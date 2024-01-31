@@ -244,7 +244,7 @@ sendChangeCipherSpec13 ctx = do
 handshakeDone13 :: Context -> IO ()
 handshakeDone13 ctx = do
     -- forget most handshake data
-    modifyMVar_ (ctxHandshake ctx) $ \case
+    modifyMVar_ (ctxHandshakeState ctx) $ \case
         Nothing -> return Nothing
         Just hshake ->
             return $

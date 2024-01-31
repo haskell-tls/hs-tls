@@ -113,7 +113,7 @@ newSession ctx
 handshakeDone12 :: Context -> IO ()
 handshakeDone12 ctx = do
     -- forget most handshake data and reset bytes counters.
-    modifyMVar_ (ctxHandshake ctx) $ \case
+    modifyMVar_ (ctxHandshakeState ctx) $ \case
         Nothing -> return Nothing
         Just hshake ->
             return $
