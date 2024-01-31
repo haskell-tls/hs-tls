@@ -1,22 +1,28 @@
 ## Version 2.0.0
+
 * `tls` now only supports TLS 1.2 and TLS 1.3 with safe cipher suites.
 * Security: BREAKING CHANGE: TLS 1.0 and TLS 1.1 are removed.
 * Security: BREAKING CHANGE: all CBC cipher suite are removed.
 * Security: BREAKING CHANGE: RC4 and 3DES are removed.
 * Security: BREAKING CHANGE: DSS(digital signature standard) is removed.
 * Security: BREAKING CHANGE: TLS 1.2 servers require
-  EMS(extended master secret) by default.
+  EMS(extended main secret) by default.
+  `supportedExtendedMasterSec` is renamed to
+  `supportedExtendedMainSecret`.
 * BREAKING CHANGE: the package is now complied with `Strict` and `StrictData`.
 * BREAKING CHANGE: Many data structures are re-defined with
  `PatternSynonyms` for extensibility.
 * BREAKING CHANGE: the structure of `SessionManager` is changed
   to support session tickets.
 * API: `handshake` can receive an alert of client authentication failure
-  for TLS 1.3
+  for TLS 1.3.
   [#463](https://github.com/haskell-tls/hs-tls/pull/463)
-* API: `bye` can receive NewSessionTicket for TLS 1.3
+* API: `sendData` can send early data (0-RTT).
+  [#466](https://github.com/haskell-tls/hs-tls/issues/466)
+* API: `bye` can receive NewSessionTicket for TLS 1.3.
 * Channel binding: `getFinished` and `getPeerFinished` are deprecated.
   Use `getTLSUnique` instead.
+  [#462](https://github.com/haskell-tls/hs-tls/pull/462)
 * Channel binding: `getTLSExporter` and `getTLSServerEndPoint` are provided.
   [#462](https://github.com/haskell-tls/hs-tls/pull/462)
 * Refactoring: the monolithic `handshake` is divided to follow
@@ -24,6 +30,8 @@
 * Refactoring: test cases are refactored for maintenability
   and readablity. `hspec` is used instead of `tasty`.
 * Code format: `fourmolu` is used as an official formatter.
+* Catching up RFC8446bis-09.
+  [#467](https://github.com/haskell-tls/hs-tls/issues/467)
 
 ## Version 1.9.0
 
