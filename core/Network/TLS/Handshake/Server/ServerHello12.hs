@@ -50,16 +50,16 @@ sendServerHello12 sparams ctx (usedCipher, mcred) ch@CH{..} = do
             serverhello <-
                 makeServerHello sparams ctx usedCipher mcred chExtensions chSession
             sendPacket ctx $ Handshake [serverhello]
-            let masterSecret = sessionSecret sessionData
-            usingHState ctx $ setMasterSecret TLS12 ServerRole masterSecret
-            logKey ctx $ MasterSecret masterSecret
+            let mainSecret = sessionSecret sessionData
+            usingHState ctx $ setMainSecret TLS12 ServerRole mainSecret
+            logKey ctx $ MainSecret mainSecret
             sendCCSandFinished ctx ServerRole
     return resumeSessionData
 
 recoverSessionData :: Context -> CH -> IO (Maybe SessionData)
 recoverSessionData ctx CH{..} = do
     serverName <- usingState_ ctx getClientSNI
-    ems <- processExtendedMasterSec ctx TLS12 MsgTClientHello chExtensions
+    ems <- processExtendedMainSecret ctx TLS12 MsgTClientHello chExtensions
     let mticket =
             extensionLookup EID_SessionTicket chExtensions
                 >>= extensionDecode MsgTClientHello
@@ -248,11 +248,11 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
                     return $ extensionEncode $ SecureRenegotiation cvd svd
                 return [ExtensionRaw EID_SecureRenegotiation vd]
             else return []
-    ems <- usingHState ctx getExtendedMasterSec
+    ems <- usingHState ctx getExtendedMainSecret
     let emsExt
             | ems =
-                let raw = extensionEncode ExtendedMasterSecret
-                 in [ExtensionRaw EID_ExtendedMasterSecret raw]
+                let raw = extensionEncode ExtendedMainSecret
+                 in [ExtensionRaw EID_ExtendedMainSecret raw]
             | otherwise = []
     protoExt <- applicationProtocol ctx chExts sparams
     sniExt <- do

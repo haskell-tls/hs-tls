@@ -44,8 +44,8 @@ spec = do
         prop "can handle client key usage" handshake_client_key_usage
         prop "can authenticate client" handshake_client_auth
         prop "can receive client authentication failure" handshake_client_auth_fail
-        prop "can handle extended master secret" handshake_ems
-        prop "can resume with extended master secret" handshake_resumption_ems
+        prop "can handle extended main secret" handshake_ems
+        prop "can resume with extended main secret" handshake_resumption_ems
         prop "can handle ALPN" handshake_alpn
         prop "can handle SNI" handshake_sni
         prop "can re-negotiate with TLS 1.2" handshake12_renegotiation
@@ -494,7 +494,7 @@ handshake_ems (cems, sems) = do
         emsVersion = version >= TLS10 && version <= TLS12
         use = cems /= NoEMS && sems /= NoEMS
         require = cems == RequireEMS || sems == RequireEMS
-        p info = infoExtendedMasterSec info == (emsVersion && use)
+        p info = infoExtendedMainSecret info == (emsVersion && use)
     if emsVersion && require && not use
         then runTLSFailure params' handshake handshake
         else runTLSPredicate params' (maybe False p)

@@ -38,7 +38,7 @@ module Network.TLS.Types (
     TrafficSecrets,
     SecretTriple (..),
     SecretPair (..),
-    MasterSecret (..),
+    MainSecret (..),
 ) where
 
 import qualified Data.ByteString as B
@@ -110,7 +110,7 @@ data SessionData = SessionData
 
 -- | Some session flags
 data SessionFlag
-    = -- | Session created with Extended Master Secret
+    = -- | Session created with Extended Main Secret
       SessionEMS
     deriving (Show, Eq, Enum, Generic)
 
@@ -180,5 +180,5 @@ data SecretPair a = SecretPair
 -- | Hold both client and server traffic secrets at the same step.
 type TrafficSecrets a = (ClientTrafficSecret a, ServerTrafficSecret a)
 
--- Master secret for TLS 1.2 or earlier.
-newtype MasterSecret = MasterSecret ByteString deriving (Show)
+-- Main secret for TLS 1.2 or earlier.
+newtype MainSecret = MainSecret ByteString deriving (Show)

@@ -52,8 +52,8 @@ module Network.TLS.State (
     getSession,
     isSessionResuming,
     getRole,
-    setExporterMasterSecret,
-    getExporterMasterSecret,
+    setExporterSecret,
+    getExporterSecret,
     setTLS13KeyShare,
     getTLS13KeyShare,
     setTLS13PreSharedKey,
@@ -110,7 +110,7 @@ data TLSState = TLSState
     , stTLS13PreSharedKey :: Maybe PreSharedKey
     , stTLS13HRR :: Bool
     , stTLS13Cookie :: Maybe Cookie
-    , stExporterMasterSecret :: Maybe ByteString -- TLS 1.3
+    , stExporterSecret :: Maybe ByteString -- TLS 1.3
     , stClientSupportsPHA :: Bool -- Post-Handshake Authentication (TLS 1.3)
     , stTLS12SessionTicket :: Maybe Ticket
     }
@@ -151,7 +151,7 @@ newTLSState rng clientContext =
         , stTLS13PreSharedKey = Nothing
         , stTLS13HRR = False
         , stTLS13Cookie = Nothing
-        , stExporterMasterSecret = Nothing
+        , stExporterSecret = Nothing
         , stClientSupportsPHA = False
         , stTLS12SessionTicket = Nothing
         }
@@ -318,11 +318,11 @@ withRNG f = do
     put (st{stRandomGen = rng'})
     return a
 
-setExporterMasterSecret :: ByteString -> TLSSt ()
-setExporterMasterSecret key = modify (\st -> st{stExporterMasterSecret = Just key})
+setExporterSecret :: ByteString -> TLSSt ()
+setExporterSecret key = modify (\st -> st{stExporterSecret = Just key})
 
-getExporterMasterSecret :: TLSSt (Maybe ByteString)
-getExporterMasterSecret = gets stExporterMasterSecret
+getExporterSecret :: TLSSt (Maybe ByteString)
+getExporterSecret = gets stExporterSecret
 
 setTLS13KeyShare :: Maybe KeyShare -> TLSSt ()
 setTLS13KeyShare mks = modify (\st -> st{stTLS13KeyShare = mks})

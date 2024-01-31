@@ -48,15 +48,15 @@ module Network.TLS.Handshake.State (
     getHandshakeDigest,
     foldHandshakeDigest,
 
-    -- * master secret
-    setMasterSecret,
-    setMasterSecretFromPre,
+    -- * main secret
+    setMainSecret,
+    setMainSecretFromPre,
 
     -- * misc accessor
     getPendingCipher,
     setServerHelloParameters,
-    setExtendedMasterSec,
-    getExtendedMasterSec,
+    setExtendedMainSecret,
+    getExtendedMainSecret,
     setSupportedGroup,
     getSupportedGroup,
     setTLS13HandshakeMode,
@@ -100,7 +100,7 @@ data HandshakeState = HandshakeState
     { hstClientVersion :: Version
     , hstClientRandom :: ClientRandom
     , hstServerRandom :: Maybe ServerRandom
-    , hstMasterSecret :: Maybe ByteString
+    , hstMainSecret :: Maybe ByteString
     , hstKeyState :: HandshakeKeyState
     , hstServerDHParams :: Maybe ServerDHParams
     , hstDHPrivate :: Maybe DHPrivate
@@ -127,7 +127,7 @@ data HandshakeState = HandshakeState
     , hstPendingRxState :: Maybe RecordState
     , hstPendingCipher :: Maybe Cipher
     , hstPendingCompression :: Compression
-    , hstExtendedMasterSec :: Bool
+    , hstExtendedMainSecret :: Bool
     , hstSupportedGroup :: Maybe Group
     , hstTLS13HandshakeMode :: HandshakeMode13
     , hstTLS13RTT0Status :: RTT0Status
@@ -200,7 +200,7 @@ newEmptyHandshake ver crand =
         { hstClientVersion = ver
         , hstClientRandom = crand
         , hstServerRandom = Nothing
-        , hstMasterSecret = Nothing
+        , hstMainSecret = Nothing
         , hstKeyState = HandshakeKeyState Nothing Nothing
         , hstServerDHParams = Nothing
         , hstDHPrivate = Nothing
@@ -218,7 +218,7 @@ newEmptyHandshake ver crand =
         , hstPendingRxState = Nothing
         , hstPendingCipher = Nothing
         , hstPendingCompression = nullCompression
-        , hstExtendedMasterSec = False
+        , hstExtendedMainSecret = False
         , hstSupportedGroup = Nothing
         , hstTLS13HandshakeMode = FullHandshake
         , hstTLS13RTT0Status = RTT0None
@@ -271,11 +271,11 @@ getGroupPrivate = fromJust <$> gets hstGroupPrivate
 setGroupPrivate :: GroupPrivate -> HandshakeM ()
 setGroupPrivate shp = modify (\hst -> hst{hstGroupPrivate = Just shp})
 
-setExtendedMasterSec :: Bool -> HandshakeM ()
-setExtendedMasterSec b = modify (\hst -> hst{hstExtendedMasterSec = b})
+setExtendedMainSecret :: Bool -> HandshakeM ()
+setExtendedMainSecret b = modify (\hst -> hst{hstExtendedMainSecret = b})
 
-getExtendedMasterSec :: HandshakeM Bool
-getExtendedMasterSec = gets hstExtendedMasterSec
+getExtendedMainSecret :: HandshakeM Bool
+getExtendedMainSecret = gets hstExtendedMainSecret
 
 setSupportedGroup :: Group -> HandshakeM ()
 setSupportedGroup g = modify (\hst -> hst{hstSupportedGroup = Just g})
@@ -424,7 +424,7 @@ getHandshakeDigest ver role = gets gen
   where
     gen hst = case hstHandshakeDigest hst of
         HandshakeDigestContext hashCtx ->
-            let msecret = fromJust $ hstMasterSecret hst
+            let msecret = fromJust $ hstMainSecret hst
                 cipher = fromJust $ hstPendingCipher hst
              in generateFinished ver cipher msecret hashCtx
         HandshakeMessages _ ->
@@ -433,50 +433,50 @@ getHandshakeDigest ver role = gets gen
         | role == ClientRole = generateClientFinished
         | otherwise = generateServerFinished
 
--- | Generate the master secret from the pre master secret.
-setMasterSecretFromPre
-    :: ByteArrayAccess preMaster
+-- | Generate the main secret from the pre-main secret.
+setMainSecretFromPre
+    :: ByteArrayAccess preMain
     => Version
     -- ^ chosen transmission version
     -> Role
     -- ^ the role (Client or Server) of the generating side
-    -> preMaster
-    -- ^ the pre master secret
+    -> preMain
+    -- ^ the pre-main secret
     -> HandshakeM ByteString
-setMasterSecretFromPre ver role premasterSecret = do
-    ems <- getExtendedMasterSec
+setMainSecretFromPre ver role preMainSecret = do
+    ems <- getExtendedMainSecret
     secret <- if ems then get >>= genExtendedSecret else genSecret <$> get
-    setMasterSecret ver role secret
+    setMainSecret ver role secret
     return secret
   where
     genSecret hst =
-        generateMasterSecret
+        generateMainSecret
             ver
             (fromJust $ hstPendingCipher hst)
-            premasterSecret
+            preMainSecret
             (hstClientRandom hst)
             (fromJust $ hstServerRandom hst)
     genExtendedSecret hst =
-        generateExtendedMasterSec
+        generateExtendedMainSecret
             ver
             (fromJust $ hstPendingCipher hst)
-            premasterSecret
+            preMainSecret
             <$> getSessionHash
 
--- | Set master secret and as a side effect generate the key block
+-- | Set main secret and as a side effect generate the key block
 -- with all the right parameters, and setup the pending tx/rx state.
-setMasterSecret :: Version -> Role -> ByteString -> HandshakeM ()
-setMasterSecret ver role masterSecret = modify $ \hst ->
-    let (pendingTx, pendingRx) = computeKeyBlock hst masterSecret ver role
+setMainSecret :: Version -> Role -> ByteString -> HandshakeM ()
+setMainSecret ver role mainSecret = modify $ \hst ->
+    let (pendingTx, pendingRx) = computeKeyBlock hst mainSecret ver role
      in hst
-            { hstMasterSecret = Just masterSecret
+            { hstMainSecret = Just mainSecret
             , hstPendingTxState = Just pendingTx
             , hstPendingRxState = Just pendingRx
             }
 
 computeKeyBlock
     :: HandshakeState -> ByteString -> Version -> Role -> (RecordState, RecordState)
-computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
+computeKeyBlock hst mainSecret ver cc = (pendingTx, pendingRx)
   where
     cipher = fromJust $ hstPendingCipher hst
     keyblockSize = cipherKeyBlockSize cipher
@@ -494,7 +494,7 @@ computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
             cipher
             (hstClientRandom hst)
             (fromJust $ hstServerRandom hst)
-            masterSecret
+            mainSecret
             keyblockSize
 
     (cMACSecret, sMACSecret, cWriteKey, sWriteKey, cWriteIV, sWriteIV) =
@@ -520,7 +520,7 @@ computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
         RecordState
             { stCryptState = if cc == ClientRole then cstClient else cstServer
             , stMacState = if cc == ClientRole then msClient else msServer
-            , stCryptLevel = CryptMasterSecret
+            , stCryptLevel = CryptMainSecret
             , stCipher = Just cipher
             , stCompression = hstPendingCompression hst
             }
@@ -528,7 +528,7 @@ computeKeyBlock hst masterSecret ver cc = (pendingTx, pendingRx)
         RecordState
             { stCryptState = if cc == ClientRole then cstServer else cstClient
             , stMacState = if cc == ClientRole then msServer else msClient
-            , stCryptLevel = CryptMasterSecret
+            , stCryptLevel = CryptMainSecret
             , stCipher = Just cipher
             , stCompression = hstPendingCompression hst
             }

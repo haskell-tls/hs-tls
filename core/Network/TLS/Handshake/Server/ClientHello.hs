@@ -44,7 +44,7 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
     unless hrr $ startHandshake ctx legacyVersion cran
     processHandshake ctx clientHello
 
-    when (legacyVersion < TLS12) $
+    when (legacyVersion /= TLS12) $
         throwCore $
             Error_Protocol (show legacyVersion ++ " is not supported") ProtocolVersion
 

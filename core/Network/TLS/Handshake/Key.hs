@@ -153,8 +153,8 @@ satisfiesEcPredicate _ _ = True
 class LogLabel a where
     labelAndKey :: a -> (String, ByteString)
 
-instance LogLabel MasterSecret where
-    labelAndKey (MasterSecret key) = ("CLIENT_RANDOM", key)
+instance LogLabel MainSecret where
+    labelAndKey (MainSecret key) = ("CLIENT_RANDOM", key)
 
 instance LogLabel (ClientTrafficSecret EarlySecret) where
     labelAndKey (ClientTrafficSecret key) = ("CLIENT_EARLY_TRAFFIC_SECRET", key)

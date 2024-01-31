@@ -418,14 +418,14 @@ setEMSMode (cems, sems) (clientParam, serverParam) = (clientParam', serverParam'
         clientParam
             { clientSupported =
                 (clientSupported clientParam)
-                    { supportedExtendedMasterSec = cems
+                    { supportedExtendedMainSecret = cems
                     }
             }
     serverParam' =
         serverParam
             { serverSupported =
                 (serverSupported serverParam)
-                    { supportedExtendedMasterSec = sems
+                    { supportedExtendedMainSecret = sems
                     }
             }
 

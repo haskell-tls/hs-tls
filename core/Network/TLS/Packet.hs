@@ -26,15 +26,15 @@ module Network.TLS.Packet (
     -- * marshall functions for change cipher spec message
     decodeChangeCipherSpec,
     encodeChangeCipherSpec,
-    decodePreMasterSecret,
-    encodePreMasterSecret,
+    decodePreMainSecret,
+    encodePreMainSecret,
     encodeSignedDHParams,
     encodeSignedECDHParams,
     decodeReallyServerKeyXchgAlgorithmData,
 
     -- * generate things for packet content
-    generateMasterSecret,
-    generateExtendedMasterSec,
+    generateMainSecret,
+    generateExtendedMainSecret,
     generateKeyBlock,
     generateClientFinished,
     generateServerFinished,
@@ -332,7 +332,7 @@ encodeHandshake' (ServerHello version random session cipherid compressionID exts
 encodeHandshake' (Certificate cc) = encodeCertificate cc
 encodeHandshake' (ClientKeyXchg ckx) = runPut $ do
     case ckx of
-        CKX_RSA encryptedPreMaster -> putBytes encryptedPreMaster
+        CKX_RSA encryptedPreMain -> putBytes encryptedPreMain
         CKX_DH clientDHPublic -> putInteger16 $ dhUnwrapPublic clientDHPublic
         CKX_ECDH bytes -> putOpaque8 bytes
 encodeHandshake' (ServerKeyXchg skg) = runPut $
@@ -481,14 +481,14 @@ decodeChangeCipherSpec = runGetErr "changecipherspec" $ do
 encodeChangeCipherSpec :: ByteString
 encodeChangeCipherSpec = runPut (putWord8 1)
 
--- rsa pre master secret
-decodePreMasterSecret :: ByteString -> Either TLSError (Version, ByteString)
-decodePreMasterSecret =
-    runGetErr "pre-master-secret" $
+-- RSA pre-main secret
+decodePreMainSecret :: ByteString -> Either TLSError (Version, ByteString)
+decodePreMainSecret =
+    runGetErr "pre-main-secret" $
         (,) <$> getBinaryVersion <*> getBytes 46
 
-encodePreMasterSecret :: Version -> ByteString -> ByteString
-encodePreMasterSecret version bytes = runPut (putBinaryVersion version >> putBytes bytes)
+encodePreMainSecret :: Version -> ByteString -> ByteString
+encodePreMainSecret version bytes = runPut (putBinaryVersion version >> putBytes bytes)
 
 -- | in certain cases, we haven't manage to decode ServerKeyExchange properly,
 -- because the decoding was too eager and the cipher wasn't been set yet.
@@ -517,44 +517,44 @@ getPRF ver ciph
     | maybe True (< TLS12) (cipherMinVer ciph) = prf_SHA256
     | otherwise = prf_TLS ver $ fromMaybe SHA256 $ cipherPRFHash ciph
 
-generateMasterSecret_TLS
-    :: ByteArrayAccess preMaster
+generateMainSecret_TLS
+    :: ByteArrayAccess preMain
     => PRF
-    -> preMaster
+    -> preMain
     -> ClientRandom
     -> ServerRandom
     -> ByteString
-generateMasterSecret_TLS prf premasterSecret (ClientRandom c) (ServerRandom s) =
-    prf (B.convert premasterSecret) seed 48
+generateMainSecret_TLS prf preMainSecret (ClientRandom c) (ServerRandom s) =
+    prf (B.convert preMainSecret) seed 48
   where
     seed = B.concat ["master secret", c, s]
 
-generateMasterSecret
-    :: ByteArrayAccess preMaster
+generateMainSecret
+    :: ByteArrayAccess preMain
     => Version
     -> Cipher
-    -> preMaster
+    -> preMain
     -> ClientRandom
     -> ServerRandom
     -> ByteString
-generateMasterSecret v c = generateMasterSecret_TLS $ getPRF v c
+generateMainSecret v c = generateMainSecret_TLS $ getPRF v c
 
-generateExtendedMasterSec
-    :: ByteArrayAccess preMaster
+generateExtendedMainSecret
+    :: ByteArrayAccess preMain
     => Version
     -> Cipher
-    -> preMaster
+    -> preMain
     -> ByteString
     -> ByteString
-generateExtendedMasterSec v c premasterSecret sessionHash =
-    getPRF v c (B.convert premasterSecret) seed 48
+generateExtendedMainSecret v c preMainSecret sessionHash =
+    getPRF v c (B.convert preMainSecret) seed 48
   where
     seed = B.append "extended master secret" sessionHash
 
 generateKeyBlock_TLS
     :: PRF -> ClientRandom -> ServerRandom -> ByteString -> Int -> ByteString
-generateKeyBlock_TLS prf (ClientRandom c) (ServerRandom s) mastersecret kbsize =
-    prf mastersecret seed kbsize
+generateKeyBlock_TLS prf (ClientRandom c) (ServerRandom s) mainSecret kbsize =
+    prf mainSecret seed kbsize
   where
     seed = B.concat ["key expansion", s, c]
 
@@ -569,7 +569,7 @@ generateKeyBlock
 generateKeyBlock v c = generateKeyBlock_TLS $ getPRF v c
 
 generateFinished_TLS :: PRF -> ByteString -> ByteString -> HashCtx -> ByteString
-generateFinished_TLS prf label mastersecret hashctx = prf mastersecret seed 12
+generateFinished_TLS prf label mainSecret hashctx = prf mainSecret seed 12
   where
     seed = B.concat [label, hashFinal hashctx]
 

@@ -42,7 +42,7 @@ sendClientHello cparams ctx groups mparams pskinfo = do
   where
     highestVer = maximum $ supportedVersions $ ctxSupported ctx
     tls13 = highestVer >= TLS13
-    ems = supportedExtendedMasterSec $ ctxSupported ctx
+    ems = supportedExtendedMainSecret $ ctxSupported ctx
 
     -- Client random and session in the second client hello for
     -- retry must be the same as the first one.
@@ -104,7 +104,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
     compressions = supportedCompressions $ ctxSupported ctx
     highestVer = maximum $ supportedVersions $ ctxSupported ctx
     tls13 = highestVer >= TLS13
-    ems = supportedExtendedMasterSec $ ctxSupported ctx
+    ems = supportedExtendedMainSecret $ ctxSupported ctx
     groupToSend = listToMaybe groups
 
     -- List of extensions to send in ClientHello, ordered such that we never
@@ -155,7 +155,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
         return $
             if ems == NoEMS || all (>= TLS13) (supportedVersions $ ctxSupported ctx)
                 then Nothing
-                else Just $ toExtensionRaw ExtendedMasterSecret
+                else Just $ toExtensionRaw ExtendedMainSecret
     sniExtension =
         if clientUseServerNameIndication cparams
             then do

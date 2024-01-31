@@ -57,8 +57,8 @@ data RecordOptions = RecordOptions
 data CryptLevel
     = -- | Unprotected traffic
       CryptInitial
-    | -- | Protected with master secret (TLS < 1.3)
-      CryptMasterSecret
+    | -- | Protected with main secret (TLS < 1.3)
+      CryptMainSecret
     | -- | Protected with early traffic secret (TLS 1.3)
       CryptEarlySecret
     | -- | Protected with handshake traffic secret (TLS 1.3)

@@ -100,8 +100,8 @@ data Information = Information
     { infoVersion :: Version
     , infoCipher :: Cipher
     , infoCompression :: Compression
-    , infoMasterSecret :: Maybe ByteString
-    , infoExtendedMasterSec :: Bool
+    , infoMainSecret :: Maybe ByteString
+    , infoExtendedMainSecret :: Bool
     , infoClientRandom :: Maybe ClientRandom
     , infoServerRandom :: Maybe ServerRandom
     , infoSupportedGroup :: Maybe Group
@@ -272,8 +272,8 @@ contextGetInformation ctx = do
     let (ms, ems, cr, sr, hm13, grp) =
             case hstate of
                 Just st ->
-                    ( hstMasterSecret st
-                    , hstExtendedMasterSec st
+                    ( hstMainSecret st
+                    , hstExtendedMainSecret st
                     , Just (hstClientRandom st)
                     , hstServerRandom st
                     , if ver == Just TLS13 then Just (hstTLS13HandshakeMode st) else Nothing

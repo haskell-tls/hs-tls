@@ -187,7 +187,7 @@ updateContext13 ctx cipherAlg = do
 
 updateContext12 :: Context -> [ExtensionRaw] -> Maybe SessionData -> IO ()
 updateContext12 ctx exts resumingSession = do
-    ems <- processExtendedMasterSec ctx TLS12 MsgTServerHello exts
+    ems <- processExtendedMainSecret ctx TLS12 MsgTServerHello exts
     case resumingSession of
         Nothing -> return ()
         Just sessionData -> do
@@ -195,6 +195,6 @@ updateContext12 ctx exts resumingSession = do
             when (ems /= emsSession) $
                 let err = "server resumes a session which is not EMS consistent"
                  in throwCore $ Error_Protocol err HandshakeFailure
-            let masterSecret = sessionSecret sessionData
-            usingHState ctx $ setMasterSecret TLS12 ClientRole masterSecret
-            logKey ctx (MasterSecret masterSecret)
+            let mainSecret = sessionSecret sessionData
+            usingHState ctx $ setMainSecret TLS12 ClientRole mainSecret
+            logKey ctx (MainSecret mainSecret)

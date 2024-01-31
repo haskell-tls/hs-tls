@@ -245,7 +245,7 @@ getPeerFinished ctx = usingState_ ctx getPeerVerifyData
 
 -- | Getting the "tls-unique" channel binding for TLS 1.2 (RFC5929).
 --   For TLS 1.3, 'Nothing' is returned.
---   'supportedExtendedMasterSec' must be 'RequireEMS'
+--   'supportedExtendedMainSecret' must be 'RequireEMS'
 --   But in general, it is highly recommended to upgrade to TLS 1.3
 --   and use the "tls-exporter" channel binding via 'getTLSExporter'.
 getTLSUnique :: Context -> IO (Maybe ByteString)
@@ -266,7 +266,7 @@ getTLSExporter ctx = do
 
 exporter :: Context -> ByteString -> ByteString -> Int -> IO (Maybe ByteString)
 exporter ctx label context outlen = do
-    msecret <- usingState_ ctx getExporterMasterSecret
+    msecret <- usingState_ ctx getExporterSecret
     mcipher <- failOnEitherError $ runRxState ctx $ gets stCipher
     return $ case (msecret, mcipher) of
         (Just secret, Just cipher) ->

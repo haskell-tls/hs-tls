@@ -253,7 +253,7 @@ valid :: Params -> PublicNumber -> Bool
 valid (Params p _ _) (PublicNumber y) = 1 < y && y < p - 1
 
 -- strips leading zeros from the result of getShared, as required
--- for DH(E) premaster secret in SSL/TLS before version 1.3.
+-- for DH(E) pre-main secret in SSL/TLS before version 1.3.
 stripLeadingZeros :: SharedKey -> B.ScrubbedBytes
 stripLeadingZeros (SharedKey sb) = snd $ B.span (== 0) sb
 
