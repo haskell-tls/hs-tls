@@ -278,7 +278,7 @@ data Supported = Supported
     --   via HelloRequest.
     --
     --   Default: 'False'
-    , supportedExtendedMasterSec :: EMSMode
+    , supportedExtendedMainSecret :: EMSMode
     -- ^ The mode regarding extended main secret.  Enabling this extension
     -- provides better security for TLS versions 1.2.  TLS 1.3 provides
     -- the security properties natively and does not need the extension.
@@ -343,7 +343,7 @@ defaultSupported =
         , supportedHashSignatures = Struct.supportedSignatureSchemes
         , supportedSecureRenegotiation = True
         , supportedClientInitiatedRenegotiation = False
-        , supportedExtendedMasterSec = RequireEMS
+        , supportedExtendedMainSecret = RequireEMS
         , supportedSession = True
         , supportedFallbackScsv = True
         , supportedEmptyPacket = True

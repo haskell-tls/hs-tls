@@ -101,7 +101,7 @@ data Information = Information
     , infoCipher :: Cipher
     , infoCompression :: Compression
     , infoMainSecret :: Maybe ByteString
-    , infoExtendedMasterSec :: Bool
+    , infoExtendedMainSecret :: Bool
     , infoClientRandom :: Maybe ClientRandom
     , infoServerRandom :: Maybe ServerRandom
     , infoSupportedGroup :: Maybe Group

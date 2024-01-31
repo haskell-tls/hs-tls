@@ -110,7 +110,7 @@ data SessionData = SessionData
 
 -- | Some session flags
 data SessionFlag
-    = -- | Session created with Extended Master Secret
+    = -- | Session created with Extended Main Secret
       SessionEMS
     deriving (Show, Eq, Enum, Generic)
 

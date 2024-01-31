@@ -148,20 +148,20 @@ sendClientCCC cparams ctx = do
 
     sendClientKeyXchg = do
         cipher <- usingHState ctx getPendingCipher
-        (ckx, setMasterSec) <- case cipherKeyExchange cipher of
+        (ckx, setMainSec) <- case cipherKeyExchange cipher of
             CipherKeyExchange_RSA -> do
                 clientVersion <- usingHState ctx $ gets hstClientVersion
                 (xver, prerand) <- usingState_ ctx $ (,) <$> getVersion <*> genRandom 46
 
                 let preMain = encodePreMainSecret clientVersion prerand
-                    setMasterSec = setMainSecretFromPre xver ClientRole preMain
-                encryptedPreMaster <- do
+                    setMainSec = setMainSecretFromPre xver ClientRole preMain
+                encryptedPreMain <- do
                     -- SSL3 implementation generally forget this length field since it's redundant,
                     -- however TLS10 make it clear that the length field need to be present.
                     e <- encryptRSA ctx preMain
                     let extra = encodeWord16 $ fromIntegral $ B.length e
                     return $ extra `B.append` e
-                return (CKX_RSA encryptedPreMaster, setMasterSec)
+                return (CKX_RSA encryptedPreMain, setMainSec)
             CipherKeyExchange_DHE_RSA -> getCKX_DHE
             CipherKeyExchange_DHE_DSA -> getCKX_DHE
             CipherKeyExchange_ECDHE_RSA -> getCKX_ECDHE
@@ -170,7 +170,7 @@ sendClientCCC cparams ctx = do
                 throwCore $
                     Error_Protocol "client key exchange unsupported type" HandshakeFailure
         sendPacket ctx $ Handshake [ClientKeyXchg ckx]
-        mainSecret <- usingHState ctx setMasterSec
+        mainSecret <- usingHState ctx setMainSec
         logKey ctx (MainSecret mainSecret)
       where
         getCKX_DHE = do
@@ -213,8 +213,8 @@ sendClientCCC cparams ctx = do
                                     Error_Protocol ("invalid server " ++ show grp ++ " public key") IllegalParameter
                             Just pair -> return pair
 
-            let setMasterSec = setMainSecretFromPre xver ClientRole preMain
-            return (CKX_DH clientDHPub, setMasterSec)
+            let setMainSec = setMainSecretFromPre xver ClientRole preMain
+            return (CKX_DH clientDHPub, setMainSec)
 
         getCKX_ECDHE = do
             ServerECDHParams grp srvpub <- usingHState ctx getServerECDHParams
@@ -227,8 +227,8 @@ sendClientCCC cparams ctx = do
                         Error_Protocol ("invalid server " ++ show grp ++ " public key") IllegalParameter
                 Just (clipub, preMain) -> do
                     xver <- usingState_ ctx getVersion
-                    let setMasterSec = setMainSecretFromPre xver ClientRole preMain
-                    return (CKX_ECDH $ encodeGroupPublic clipub, setMasterSec)
+                    let setMainSec = setMainSecretFromPre xver ClientRole preMain
+                    return (CKX_ECDH $ encodeGroupPublic clipub, setMainSec)
 
     -- In order to send a proper certificate verify message,
     -- we have to do the following:

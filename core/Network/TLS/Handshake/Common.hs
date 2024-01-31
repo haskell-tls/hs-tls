@@ -207,8 +207,8 @@ processExtendedMainSecret ctx ver msgt exts
                 | ems == RequireEMS -> throwCore $ Error_Protocol err HandshakeFailure
                 | otherwise -> return False
   where
-    ems = supportedExtendedMasterSec (ctxSupported ctx)
-    err = "peer does not support Extended Master Secret"
+    ems = supportedExtendedMainSecret (ctxSupported ctx)
+    err = "peer does not support Extended Main Secret"
 
 getSessionData :: Context -> IO (Maybe SessionData)
 getSessionData ctx = do
