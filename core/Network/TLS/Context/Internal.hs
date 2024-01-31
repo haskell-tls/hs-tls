@@ -180,7 +180,7 @@ data TLS13State = TLS13State
     , tls13stRecvCF :: Bool -- server
     , tls13stPendingRecvData :: Maybe ByteString -- client
     , tls13stPendingSentData :: [ByteString] -> [ByteString] -- client
-    , tls13stRTT :: Int
+    , tls13stRTT :: Millisecond
     , tls13st0RTTAccepted :: Bool -- client
     , tls13stClientExtensions :: [ExtensionRaw] -- client
     , tls13stChoice :: ~CipherChoice -- client

@@ -84,7 +84,7 @@ rttFactor = 3
 getRTT :: Context -> IO Int
 getRTT ctx = do
     rtt <- tls13stRTT <$> getTLS13State ctx
-    return (rtt * rttFactor)
+    return (fromIntegral rtt * rttFactor * 1000) -- ms to us
 
 -- | notify the context that this side wants to close connection.
 -- this is important that it is called before closing the handle, otherwise
@@ -111,7 +111,7 @@ bye ctx = liftIO $ do
                 unless recvCF $ do
                     -- no chance to measure RTT before receiving CF
                     -- fixme: 1sec is good enough?
-                    void $ timeout 1000000 (recvData ctx)
+                    void $ timeout 1000000 $ recvData ctx
     bye_ ctx
 
 bye_ :: MonadIO m => Context -> m ()

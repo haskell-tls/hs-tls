@@ -6,8 +6,6 @@ module Network.TLS.Handshake.Client (
     postHandshakeAuthClientWith,
 ) where
 
-import Data.UnixTime
-
 import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import Network.TLS.Extension
@@ -65,8 +63,8 @@ handshake cparams ctx groups mparams = do
     -- Sending ClientHello
     pskinfo@(_, _, rtt0) <- getPreSharedKeyInfo cparams ctx
     when rtt0 $ do
-        t0 <- getUnixTime
-        asyncServerHello13 cparams ctx groupToSend t0
+        chSentTime <- getCurrentTimeFromBase
+        asyncServerHello13 cparams ctx groupToSend chSentTime
     updateMeasure ctx incrementNbHandshakes
     crand <- sendClientHello cparams ctx groups mparams pskinfo
     --------------------------------
@@ -101,9 +99,9 @@ receiveServerHello
     -> Maybe (ClientRandom, Session, Version)
     -> IO (Version, [Handshake], Bool)
 receiveServerHello cparams ctx mparams = do
-    t0 <- getUnixTime
+    chSentTime <- getCurrentTimeFromBase
     hss <- recvServerHello cparams ctx
-    setRTT ctx t0
+    setRTT ctx chSentTime
     ver <- usingState_ ctx getVersion
     unless (maybe True (\(_, _, v) -> v == ver) mparams) $
         throwCore $

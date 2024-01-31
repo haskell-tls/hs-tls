@@ -11,7 +11,6 @@ import Control.Exception (bracket)
 import Control.Monad.State.Strict
 import qualified Data.ByteString as B
 import Data.IORef
-import Data.UnixTime
 
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
@@ -366,8 +365,8 @@ postHandshakeAuthClientWith _ _ _ =
 ----------------------------------------------------------------
 
 asyncServerHello13
-    :: ClientParams -> Context -> Maybe Group -> UnixTime -> IO ()
-asyncServerHello13 cparams ctx groupSent t0 = do
+    :: ClientParams -> Context -> Maybe Group -> Millisecond -> IO ()
+asyncServerHello13 cparams ctx groupSent chSentTime = do
     setPendingRecvActions
         ctx
         [ PendingRecvAction True expectServerHello
@@ -380,7 +379,7 @@ asyncServerHello13 cparams ctx groupSent t0 = do
         ]
   where
     expectServerHello sh = do
-        setRTT ctx t0
+        setRTT ctx chSentTime
         processServerHello13 cparams ctx sh
         void $ prepareSecondFlight13 ctx groupSent
     expectFinishedAndSet h sf = do
