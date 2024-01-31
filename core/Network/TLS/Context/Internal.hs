@@ -126,32 +126,35 @@ data Context = forall a.
     -- ^ has the handle EOFed or not.
     , ctxEstablished_ :: IORef Established
     -- ^ has the handshake been done and been successful.
-    , ctxNeedEmptyPacket :: IORef Bool
-    -- ^ empty packet workaround for CBC guessability.
-    , ctxFragmentSize :: Maybe Int
-    -- ^ maximum size of plaintext fragments
     , ctxTxRecordState :: MVar RecordState
-    -- ^ current tx state
+    -- ^ current TX record state
     , ctxRxRecordState :: MVar RecordState
-    -- ^ current rx state
+    -- ^ current RX record state
     , ctxHandshake :: MVar (Maybe HandshakeState)
     -- ^ optional handshake state
     , ctxDoHandshake :: Context -> IO ()
     , ctxDoHandshakeWith :: Context -> Handshake -> IO ()
     , ctxDoRequestCertificate :: Context -> IO Bool
     , ctxDoPostHandshakeAuthWith :: Context -> Handshake13 -> IO ()
-    , ctxHooks :: IORef Hooks
     -- ^ hooks for this context
     , ctxLocks :: Locks
+    , ctxKeyLogger :: String -> IO ()
+    , ctxHooks :: IORef Hooks
+    , -- TLS 1.3
+      ctxTLS13State :: IORef TLS13State
     , ctxPendingRecvActions :: IORef [PendingRecvAction]
     , ctxPendingSendAction :: IORef (Maybe (Context -> IO ()))
     , ctxCertRequests :: IORef [Handshake13]
-    -- ^ pending PHA requests
-    , ctxKeyLogger :: String -> IO ()
-    , ctxRecordLayer :: RecordLayer a
+    -- ^ pending post handshake authentication requests
+    , -- QUIC
+      ctxRecordLayer :: RecordLayer a
     , ctxHandshakeSync :: HandshakeSync
     , ctxQUICMode :: Bool
-    , ctxTLS13State :: IORef TLS13State
+    , -- Misc
+      ctxNeedEmptyPacket :: IORef Bool
+    -- ^ empty packet workaround for CBC guessability.
+    , ctxFragmentSize :: Maybe Int
+    -- ^ maximum size of plaintext fragments
     }
 
 data Locks = Locks
