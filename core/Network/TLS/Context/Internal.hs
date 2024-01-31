@@ -119,7 +119,7 @@ data Context = forall a.
     -- ^ return the backend object associated with this context
     , ctxSupported :: Supported
     , ctxShared :: Shared
-    , ctxState :: MVar TLSState
+    , ctxTLSState :: MVar TLSState
     , ctxMeasurement :: IORef Measurement
     , ctxEOF_ :: IORef Bool
     -- ^ has the handle EOFed or not.
@@ -333,7 +333,7 @@ failOnEitherError f = do
 
 usingState :: Context -> TLSSt a -> IO (Either TLSError a)
 usingState ctx f =
-    modifyMVar (ctxState ctx) $ \st ->
+    modifyMVar (ctxTLSState ctx) $ \st ->
         let (a, newst) = runTLSState f st
          in newst `seq` return (newst, a)
 

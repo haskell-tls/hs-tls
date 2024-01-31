@@ -152,7 +152,7 @@ contextNew backend params = liftIO $ do
     let role = getTLSRole params
         st = newTLSState rng role
 
-    stvar <- newMVar st
+    tlsstate <- newMVar st
     eof <- newIORef False
     established <- newIORef NotEstablished
     stats <- newIORef newMeasurement
@@ -174,7 +174,7 @@ contextNew backend params = liftIO $ do
                 { ctxBackend = getBackend backend
                 , ctxShared = shared
                 , ctxSupported = supported
-                , ctxState = stvar
+                , ctxTLSState = tlsstate
                 , ctxFragmentSize = Just 16384
                 , ctxTxState = tx
                 , ctxRxState = rx
