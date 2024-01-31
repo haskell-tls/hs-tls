@@ -63,7 +63,7 @@ data DebugParams = DebugParams
     --
     -- Default: 'Nothing'
     , debugKeyLogger :: String -> IO ()
-    -- ^ Printing master keys.
+    -- ^ Printing main keys.
     --
     -- Default: no printing
     }
@@ -279,7 +279,7 @@ data Supported = Supported
     --
     --   Default: 'False'
     , supportedExtendedMasterSec :: EMSMode
-    -- ^ The mode regarding extended master secret.  Enabling this extension
+    -- ^ The mode regarding extended main secret.  Enabling this extension
     -- provides better security for TLS versions 1.2.  TLS 1.3 provides
     -- the security properties natively and does not need the extension.
     --
@@ -324,13 +324,13 @@ data Supported = Supported
     }
     deriving (Show, Eq)
 
--- | Client or server policy regarding Extended Master Secret
+-- | Client or server policy regarding Extended Main Secret
 data EMSMode
-    = -- | Extended Master Secret is not used
+    = -- | Extended Main Secret is not used
       NoEMS
-    | -- | Extended Master Secret is allowed
+    | -- | Extended Main Secret is allowed
       AllowEMS
-    | -- | Extended Master Secret is required
+    | -- | Extended Main Secret is required
       RequireEMS
     deriving (Show, Eq)
 

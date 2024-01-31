@@ -150,22 +150,22 @@ expectChangeCipher _ p = unexpected (show p) (Just "change cipher")
 
 -- process the client key exchange message. the protocol expects the initial
 -- client version received in ClientHello, not the negotiated version.
--- in case the version mismatch, generate a random master secret
+-- in case the version mismatch, generate a random main secret
 processClientKeyXchg :: Context -> ClientKeyXchgAlgorithmData -> IO ()
-processClientKeyXchg ctx (CKX_RSA encryptedPremaster) = do
+processClientKeyXchg ctx (CKX_RSA encryptedPreMain) = do
     (rver, role, random) <- usingState_ ctx $ do
         (,,) <$> getVersion <*> getRole <*> genRandom 48
-    ePremaster <- decryptRSA ctx encryptedPremaster
-    masterSecret <- usingHState ctx $ do
+    ePreMain <- decryptRSA ctx encryptedPreMain
+    mainSecret <- usingHState ctx $ do
         expectedVer <- gets hstClientVersion
-        case ePremaster of
+        case ePreMain of
             Left _ -> setMainSecretFromPre rver role random
-            Right premaster -> case decodePreMainSecret premaster of
+            Right preMain -> case decodePreMainSecret preMain of
                 Left _ -> setMainSecretFromPre rver role random
                 Right (ver, _)
                     | ver /= expectedVer -> setMainSecretFromPre rver role random
-                    | otherwise -> setMainSecretFromPre rver role premaster
-    logKey ctx (MainSecret masterSecret)
+                    | otherwise -> setMainSecretFromPre rver role preMain
+    logKey ctx (MainSecret mainSecret)
 processClientKeyXchg ctx (CKX_DH clientDHValue) = do
     rver <- usingState_ ctx getVersion
     role <- usingState_ ctx getRole
@@ -177,9 +177,9 @@ processClientKeyXchg ctx (CKX_DH clientDHValue) = do
             Error_Protocol "invalid client public key" IllegalParameter
 
     dhpriv <- usingHState ctx getDHPrivate
-    let premaster = dhGetShared params dhpriv clientDHValue
-    masterSecret <- usingHState ctx $ setMainSecretFromPre rver role premaster
-    logKey ctx (MainSecret masterSecret)
+    let preMain = dhGetShared params dhpriv clientDHValue
+    mainSecret <- usingHState ctx $ setMainSecretFromPre rver role preMain
+    logKey ctx (MainSecret mainSecret)
 processClientKeyXchg ctx (CKX_ECDH bytes) = do
     ServerECDHParams grp _ <- usingHState ctx getServerECDHParams
     case decodeGroupPublic grp bytes of
@@ -189,11 +189,11 @@ processClientKeyXchg ctx (CKX_ECDH bytes) = do
         Right clipub -> do
             srvpri <- usingHState ctx getGroupPrivate
             case groupGetShared clipub srvpri of
-                Just premaster -> do
+                Just preMain -> do
                     rver <- usingState_ ctx getVersion
                     role <- usingState_ ctx getRole
-                    masterSecret <- usingHState ctx $ setMainSecretFromPre rver role premaster
-                    logKey ctx (MainSecret masterSecret)
+                    mainSecret <- usingHState ctx $ setMainSecretFromPre rver role preMain
+                    logKey ctx (MainSecret mainSecret)
                 Nothing ->
                     throwCore $
                         Error_Protocol "cannot generate a shared secret on ECDH" IllegalParameter

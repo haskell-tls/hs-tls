@@ -332,7 +332,7 @@ encodeHandshake' (ServerHello version random session cipherid compressionID exts
 encodeHandshake' (Certificate cc) = encodeCertificate cc
 encodeHandshake' (ClientKeyXchg ckx) = runPut $ do
     case ckx of
-        CKX_RSA encryptedPreMaster -> putBytes encryptedPreMaster
+        CKX_RSA encryptedPreMain -> putBytes encryptedPreMain
         CKX_DH clientDHPublic -> putInteger16 $ dhUnwrapPublic clientDHPublic
         CKX_ECDH bytes -> putOpaque8 bytes
 encodeHandshake' (ServerKeyXchg skg) = runPut $
@@ -481,10 +481,10 @@ decodeChangeCipherSpec = runGetErr "changecipherspec" $ do
 encodeChangeCipherSpec :: ByteString
 encodeChangeCipherSpec = runPut (putWord8 1)
 
--- rsa pre master secret
+-- RSA pre-main secret
 decodePreMainSecret :: ByteString -> Either TLSError (Version, ByteString)
 decodePreMainSecret =
-    runGetErr "pre-master-secret" $
+    runGetErr "pre-main-secret" $
         (,) <$> getBinaryVersion <*> getBytes 46
 
 encodePreMainSecret :: Version -> ByteString -> ByteString
@@ -518,43 +518,43 @@ getPRF ver ciph
     | otherwise = prf_TLS ver $ fromMaybe SHA256 $ cipherPRFHash ciph
 
 generateMainSecret_TLS
-    :: ByteArrayAccess preMaster
+    :: ByteArrayAccess preMain
     => PRF
-    -> preMaster
+    -> preMain
     -> ClientRandom
     -> ServerRandom
     -> ByteString
-generateMainSecret_TLS prf premasterSecret (ClientRandom c) (ServerRandom s) =
-    prf (B.convert premasterSecret) seed 48
+generateMainSecret_TLS prf preMainSecret (ClientRandom c) (ServerRandom s) =
+    prf (B.convert preMainSecret) seed 48
   where
     seed = B.concat ["master secret", c, s]
 
 generateMainSecret
-    :: ByteArrayAccess preMaster
+    :: ByteArrayAccess preMain
     => Version
     -> Cipher
-    -> preMaster
+    -> preMain
     -> ClientRandom
     -> ServerRandom
     -> ByteString
 generateMainSecret v c = generateMainSecret_TLS $ getPRF v c
 
 generateExtendedMainSecret
-    :: ByteArrayAccess preMaster
+    :: ByteArrayAccess preMain
     => Version
     -> Cipher
-    -> preMaster
+    -> preMain
     -> ByteString
     -> ByteString
-generateExtendedMainSecret v c premasterSecret sessionHash =
-    getPRF v c (B.convert premasterSecret) seed 48
+generateExtendedMainSecret v c preMainSecret sessionHash =
+    getPRF v c (B.convert preMainSecret) seed 48
   where
     seed = B.append "extended master secret" sessionHash
 
 generateKeyBlock_TLS
     :: PRF -> ClientRandom -> ServerRandom -> ByteString -> Int -> ByteString
-generateKeyBlock_TLS prf (ClientRandom c) (ServerRandom s) mastersecret kbsize =
-    prf mastersecret seed kbsize
+generateKeyBlock_TLS prf (ClientRandom c) (ServerRandom s) mainSecret kbsize =
+    prf mainSecret seed kbsize
   where
     seed = B.concat ["key expansion", s, c]
 
@@ -569,7 +569,7 @@ generateKeyBlock
 generateKeyBlock v c = generateKeyBlock_TLS $ getPRF v c
 
 generateFinished_TLS :: PRF -> ByteString -> ByteString -> HashCtx -> ByteString
-generateFinished_TLS prf label mastersecret hashctx = prf mastersecret seed 12
+generateFinished_TLS prf label mainSecret hashctx = prf mainSecret seed 12
   where
     seed = B.concat [label, hashFinal hashctx]
 

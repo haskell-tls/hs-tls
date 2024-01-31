@@ -49,7 +49,7 @@ dhGetShared params priv pub =
     stripLeadingZeros (DH.getShared params priv pub)
   where
     -- strips leading zeros from the result of DH.getShared, as required
-    -- for DH(E) premaster secret in SSL/TLS before version 1.3.
+    -- for DH(E) pre-main secret in SSL/TLS before version 1.3.
     stripLeadingZeros (DH.SharedKey sb) = DH.SharedKey (snd $ B.span (== 0) sb)
 
 -- Check that group element in not in the 2-element subgroup { 1, p - 1 }.

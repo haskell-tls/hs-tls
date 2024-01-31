@@ -195,6 +195,6 @@ updateContext12 ctx exts resumingSession = do
             when (ems /= emsSession) $
                 let err = "server resumes a session which is not EMS consistent"
                  in throwCore $ Error_Protocol err HandshakeFailure
-            let masterSecret = sessionSecret sessionData
-            usingHState ctx $ setMainSecret TLS12 ClientRole masterSecret
-            logKey ctx (MainSecret masterSecret)
+            let mainSecret = sessionSecret sessionData
+            usingHState ctx $ setMainSecret TLS12 ClientRole mainSecret
+            logKey ctx (MainSecret mainSecret)

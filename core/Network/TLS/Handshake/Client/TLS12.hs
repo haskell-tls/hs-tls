@@ -153,12 +153,12 @@ sendClientCCC cparams ctx = do
                 clientVersion <- usingHState ctx $ gets hstClientVersion
                 (xver, prerand) <- usingState_ ctx $ (,) <$> getVersion <*> genRandom 46
 
-                let premaster = encodePreMainSecret clientVersion prerand
-                    setMasterSec = setMainSecretFromPre xver ClientRole premaster
+                let preMain = encodePreMainSecret clientVersion prerand
+                    setMasterSec = setMainSecretFromPre xver ClientRole preMain
                 encryptedPreMaster <- do
                     -- SSL3 implementation generally forget this length field since it's redundant,
                     -- however TLS10 make it clear that the length field need to be present.
-                    e <- encryptRSA ctx premaster
+                    e <- encryptRSA ctx preMain
                     let extra = encodeWord16 $ fromIntegral $ B.length e
                     return $ extra `B.append` e
                 return (CKX_RSA encryptedPreMaster, setMasterSec)
@@ -170,8 +170,8 @@ sendClientCCC cparams ctx = do
                 throwCore $
                     Error_Protocol "client key exchange unsupported type" HandshakeFailure
         sendPacket ctx $ Handshake [ClientKeyXchg ckx]
-        masterSecret <- usingHState ctx setMasterSec
-        logKey ctx (MainSecret masterSecret)
+        mainSecret <- usingHState ctx setMasterSec
+        logKey ctx (MainSecret mainSecret)
       where
         getCKX_DHE = do
             xver <- usingState_ ctx getVersion
@@ -198,12 +198,12 @@ sendClientCCC cparams ctx = do
             -- When grp is known but not in the supported list we use it
             -- anyway.  This provides additional validation and a more
             -- efficient implementation.
-            (clientDHPub, premaster) <-
+            (clientDHPub, preMain) <-
                 case ffGroup of
                     Nothing -> do
                         (clientDHPriv, clientDHPub) <- generateDHE ctx params
-                        let premaster = dhGetShared params clientDHPriv srvpub
-                        return (clientDHPub, premaster)
+                        let preMain = dhGetShared params clientDHPriv srvpub
+                        return (clientDHPub, preMain)
                     Just grp -> do
                         usingHState ctx $ setSupportedGroup grp
                         dhePair <- generateFFDHEShared ctx grp srvpub
@@ -213,7 +213,7 @@ sendClientCCC cparams ctx = do
                                     Error_Protocol ("invalid server " ++ show grp ++ " public key") IllegalParameter
                             Just pair -> return pair
 
-            let setMasterSec = setMainSecretFromPre xver ClientRole premaster
+            let setMasterSec = setMainSecretFromPre xver ClientRole preMain
             return (CKX_DH clientDHPub, setMasterSec)
 
         getCKX_ECDHE = do
@@ -225,9 +225,9 @@ sendClientCCC cparams ctx = do
                 Nothing ->
                     throwCore $
                         Error_Protocol ("invalid server " ++ show grp ++ " public key") IllegalParameter
-                Just (clipub, premaster) -> do
+                Just (clipub, preMain) -> do
                     xver <- usingState_ ctx getVersion
-                    let setMasterSec = setMainSecretFromPre xver ClientRole premaster
+                    let setMasterSec = setMainSecretFromPre xver ClientRole preMain
                     return (CKX_ECDH $ encodeGroupPublic clipub, setMasterSec)
 
     -- In order to send a proper certificate verify message,
