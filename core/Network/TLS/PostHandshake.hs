@@ -26,7 +26,7 @@ import Network.TLS.Handshake.Server
 requestCertificate :: Context -> IO Bool
 requestCertificate ctx =
     withWriteLock ctx $
-        checkValid ctx >> ctxDoRequestCertificate ctx ctx
+        checkValid ctx >> doRequestCertificate_ (ctxRoleParams ctx) ctx
 
 -- Handle a post-handshake authentication flight with TLS 1.3.  This is called
 -- automatically by 'recvData', in a context where the read lock is already
@@ -35,4 +35,4 @@ postHandshakeAuthWith :: Context -> Handshake13 -> IO ()
 postHandshakeAuthWith ctx hs =
     withWriteLock ctx $
         handleException ctx $
-            ctxDoPostHandshakeAuthWith ctx ctx hs
+            doPostHandshakeAuthWith_ (ctxRoleParams ctx) ctx hs

@@ -20,6 +20,7 @@ module Network.TLS.Context.Internal (
     PendingRecvAction (..),
     RecordLayer (..),
     Locks (..),
+    RoleParams (..),
     ctxEOF,
     ctxEstablished,
     withLog,
@@ -132,10 +133,7 @@ data Context = forall a.
     -- ^ current RX record state
     , ctxHandshakeState :: MVar (Maybe HandshakeState)
     -- ^ optional handshake state
-    , ctxDoHandshake :: Context -> IO ()
-    , ctxDoHandshakeWith :: Context -> Handshake -> IO ()
-    , ctxDoRequestCertificate :: Context -> IO Bool
-    , ctxDoPostHandshakeAuthWith :: Context -> Handshake13 -> IO ()
+    , ctxRoleParams :: RoleParams
     -- ^ hooks for this context
     , ctxLocks :: Locks
     , ctxKeyLogger :: String -> IO ()
@@ -155,6 +153,13 @@ data Context = forall a.
     -- ^ empty packet workaround for CBC guessability.
     , ctxFragmentSize :: Maybe Int
     -- ^ maximum size of plaintext fragments
+    }
+
+data RoleParams = RoleParams
+    { doHandshake_ :: Context -> IO ()
+    , doHandshakeWith_ :: Context -> Handshake -> IO ()
+    , doRequestCertificate_ :: Context -> IO Bool
+    , doPostHandshakeAuthWith_ :: Context -> Handshake13 -> IO ()
     }
 
 data Locks = Locks

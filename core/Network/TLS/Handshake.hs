@@ -18,7 +18,9 @@ import Control.Monad.State.Strict
 
 handshake_ :: MonadIO m => Context -> m ()
 handshake_ ctx =
-    liftIO $ withRWLock ctx $ handleException ctx (ctxDoHandshake ctx ctx)
+    liftIO $
+        withRWLock ctx $
+            handleException ctx (doHandshake_ (ctxRoleParams ctx) ctx)
 
 -- Handshake when requested by the remote end
 -- This is called automatically by 'recvData', in a context where the read lock
@@ -26,4 +28,7 @@ handshake_ ctx =
 -- call withWriteLock.
 handshakeWith :: MonadIO m => Context -> Handshake -> m ()
 handshakeWith ctx hs =
-    liftIO $ withWriteLock ctx $ handleException ctx $ ctxDoHandshakeWith ctx ctx hs
+    liftIO $
+        withWriteLock ctx $
+            handleException ctx $
+                doHandshakeWith_ (ctxRoleParams ctx) ctx hs

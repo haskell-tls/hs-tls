@@ -166,6 +166,13 @@ contextNew backend params = liftIO $ do
     crs <- newIORef []
     locks <- Locks <$> newMVar () <*> newMVar () <*> newMVar ()
     st13ref <- newIORef defaultTLS13State
+    let roleParams =
+            RoleParams
+                { doHandshake_ = doHandshake params
+                , doHandshakeWith_ = doHandshakeWith params
+                , doRequestCertificate_ = doRequestCertificate params
+                , doPostHandshakeAuthWith_ = doPostHandshakeAuthWith params
+                }
 
     let ctx =
             Context
@@ -177,10 +184,7 @@ contextNew backend params = liftIO $ do
                 , ctxTxRecordState = tx
                 , ctxRxRecordState = rx
                 , ctxHandshakeState = hs
-                , ctxDoHandshake = doHandshake params
-                , ctxDoHandshakeWith = doHandshakeWith params
-                , ctxDoRequestCertificate = doRequestCertificate params
-                , ctxDoPostHandshakeAuthWith = doPostHandshakeAuthWith params
+                , ctxRoleParams = roleParams
                 , ctxMeasurement = stats
                 , ctxEOF_ = eof
                 , ctxEstablished_ = established
