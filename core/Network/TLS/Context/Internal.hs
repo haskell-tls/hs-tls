@@ -19,6 +19,7 @@ module Network.TLS.Context.Internal (
     Established (..),
     PendingRecvAction (..),
     RecordLayer (..),
+    Locks (..),
     ctxEOF,
     ctxEstablished,
     withLog,
@@ -141,13 +142,7 @@ data Context = forall a.
     , ctxDoPostHandshakeAuthWith :: Context -> Handshake13 -> IO ()
     , ctxHooks :: IORef Hooks
     -- ^ hooks for this context
-    , ctxLockWrite :: MVar ()
-    -- ^ lock to use for writing data (including updating the state)
-    , ctxLockRead :: MVar ()
-    -- ^ lock to use for reading data (including updating the state)
-    , ctxLockState :: MVar ()
-    -- ^ lock used during read/write when receiving and sending packet.
-    -- it is usually nested in a write or read lock.
+    , ctxLocks :: Locks
     , ctxPendingRecvActions :: IORef [PendingRecvAction]
     , ctxPendingSendAction :: IORef (Maybe (Context -> IO ()))
     , ctxCertRequests :: IORef [Handshake13]
@@ -157,6 +152,16 @@ data Context = forall a.
     , ctxHandshakeSync :: HandshakeSync
     , ctxQUICMode :: Bool
     , ctxTLS13State :: IORef TLS13State
+    }
+
+data Locks = Locks
+    { lockWrite :: MVar ()
+    -- ^ lock to use for writing data (including updating the state)
+    , lockRead :: MVar ()
+    -- ^ lock to use for reading data (including updating the state)
+    , lockState :: MVar ()
+    -- ^ lock used during read/write when receiving and sending packet.
+    -- it is usually nested in a write or read lock.
     }
 
 data CipherChoice = CipherChoice
@@ -403,16 +408,16 @@ getStateRNG :: Context -> Int -> IO ByteString
 getStateRNG ctx n = usingState_ ctx $ genRandom n
 
 withReadLock :: Context -> IO a -> IO a
-withReadLock ctx f = withMVar (ctxLockRead ctx) (const f)
+withReadLock ctx f = withMVar (lockRead $ ctxLocks ctx) (const f)
 
 withWriteLock :: Context -> IO a -> IO a
-withWriteLock ctx f = withMVar (ctxLockWrite ctx) (const f)
+withWriteLock ctx f = withMVar (lockWrite $ ctxLocks ctx) (const f)
 
 withRWLock :: Context -> IO a -> IO a
 withRWLock ctx f = withReadLock ctx $ withWriteLock ctx f
 
 withStateLock :: Context -> IO a -> IO a
-withStateLock ctx f = withMVar (ctxLockState ctx) (const f)
+withStateLock ctx f = withMVar (lockState $ ctxLocks ctx) (const f)
 
 tls13orLater :: MonadIO m => Context -> m Bool
 tls13orLater ctx = do

@@ -164,9 +164,7 @@ contextNew backend params = liftIO $ do
     recvActionsRef <- newIORef []
     sendActionRef <- newIORef Nothing
     crs <- newIORef []
-    lockWrite <- newMVar ()
-    lockRead <- newMVar ()
-    lockState <- newMVar ()
+    locks <- Locks <$> newMVar () <*> newMVar () <*> newMVar ()
     st13ref <- newIORef defaultTLS13State
 
     let ctx =
@@ -188,9 +186,7 @@ contextNew backend params = liftIO $ do
                 , ctxEstablished_ = established
                 , ctxNeedEmptyPacket = needEmptyPacket
                 , ctxHooks = hooks
-                , ctxLockWrite = lockWrite
-                , ctxLockRead = lockRead
-                , ctxLockState = lockState
+                , ctxLocks = locks
                 , ctxPendingRecvActions = recvActionsRef
                 , ctxPendingSendAction = sendActionRef
                 , ctxCertRequests = crs
