@@ -62,14 +62,15 @@ handshake cparams ctx groups mparams = do
     --------------------------------
     -- Sending ClientHello
     pskinfo@(_, _, rtt0) <- getPreSharedKeyInfo cparams ctx
-    when rtt0 $ do
+    let async = rtt0 && not (ctxQUICMode ctx)
+    when async $ do
         chSentTime <- getCurrentTimeFromBase
         asyncServerHello13 cparams ctx groupToSend chSentTime
     updateMeasure ctx incrementNbHandshakes
     crand <- sendClientHello cparams ctx groups mparams pskinfo
     --------------------------------
     -- Receiving ServerHello
-    unless rtt0 $ do
+    unless async $ do
         (ver, hss, hrr) <- receiveServerHello cparams ctx mparams
         --------------------------------
         -- Switching to HRR, TLS 1.2 or TLS 1.3
