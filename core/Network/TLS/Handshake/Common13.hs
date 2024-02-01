@@ -590,5 +590,5 @@ setRTT :: Context -> Millisecond -> IO ()
 setRTT ctx chSentTime = do
     shRecvTime <- getCurrentTimeFromBase
     let rtt' = shRecvTime - chSentTime
-        rtt = if rtt' == 0 then 5 else rtt'
+        rtt = if rtt' == 0 then 10 else rtt'
     modifyTLS13State ctx $ \st -> st{tls13stRTT = rtt}
