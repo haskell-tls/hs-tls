@@ -78,8 +78,7 @@ updateHandshake :: Context -> Handshake -> IO ByteString
 updateHandshake ctx hs = do
     usingHState ctx $ do
         when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage encoded
-        when (finishedHandshakeTypeMaterial $ typeOfHandshake hs) $
-            updateHandshakeDigest encoded
+        when (finishedHandshakeMaterial hs) $ updateHandshakeDigest encoded
     return encoded
   where
     encoded = encodeHandshake hs
