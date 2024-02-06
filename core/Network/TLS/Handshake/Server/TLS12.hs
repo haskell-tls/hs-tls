@@ -11,7 +11,6 @@ import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Key
-import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Server.Common
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
@@ -81,22 +80,19 @@ recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake expectClientCer
         -- matches our request and that we support
         -- verifying with that certificate.
 
-        return $ RecvStateHandshake expectClientKeyExchange
-    expectClientCertificate p = expectClientKeyExchange p
+        return $ RecvStateHandshake $ expectClientKeyExchange True
+    expectClientCertificate p = expectClientKeyExchange False p
 
     -- cannot use RecvStateHandshake, as the next message could be a ChangeCipher,
     -- so we must process any packet, and in case of handshake call processHandshake manually.
-    expectClientKeyExchange (ClientKeyXchg ckx) = do
+    expectClientKeyExchange followedCertVerify (ClientKeyXchg ckx) = do
         processClientKeyXchg ctx ckx
-        return $ RecvStatePacket expectCertificateVerify
-    expectClientKeyExchange p = unexpected (show p) (Just "client key exchange")
+        if followedCertVerify
+            then return $ RecvStateHandshake expectCertificateVerify
+            else return $ RecvStatePacket $ expectChangeCipherSpec ctx
+    expectClientKeyExchange _ p = unexpected (show p) (Just "client key exchange")
 
-    -- Check whether the client correctly signed the handshake.
-    -- If not, ask the application on how to proceed.
-    --
-    expectCertificateVerify (Handshake [hs@(CertVerify dsig)]) = do
-        processHandshake12 ctx hs
-
+    expectCertificateVerify (CertVerify dsig) = do
         certs <- checkValidClientCertChain ctx "change cipher message expected"
 
         usedVersion <- usingState_ ctx getVersion
@@ -109,15 +105,7 @@ recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake expectClientCer
         verif <- checkCertificateVerify ctx usedVersion pubKey msgs dsig
         processClientCertVerify sparams ctx certs verif
         return $ RecvStatePacket $ expectChangeCipherSpec ctx
-    expectCertificateVerify p = do
-        chain <- usingHState ctx getClientCertChain
-        case chain of
-            Just cc
-                | isNullCertificateChain cc -> return ()
-                | otherwise ->
-                    throwCore $ Error_Protocol "cert verify message missing" UnexpectedMessage
-            Nothing -> return ()
-        expectChangeCipherSpec ctx p
+    expectCertificateVerify p = unexpected (show p) (Just "client certificate verify")
 
 ----------------------------------------------------------------
 
