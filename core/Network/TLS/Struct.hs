@@ -777,17 +777,18 @@ pattern HandshakeType_KeyUpdate           :: HandshakeType
 pattern HandshakeType_KeyUpdate            = HandshakeType 24
 
 instance Show HandshakeType where
-    show HandshakeType_HelloRequest    = "HandshakeType_HelloRequest"
-    show HandshakeType_ClientHello     = "HandshakeType_ClientHello"
-    show HandshakeType_ServerHello     = "HandshakeType_ServerHello"
-    show HandshakeType_Certificate     = "HandshakeType_Certificate"
-    show HandshakeType_ServerKeyXchg   = "HandshakeType_ServerKeyXchg"
-    show HandshakeType_CertRequest     = "HandshakeType_CertRequest"
-    show HandshakeType_ServerHelloDone = "HandshakeType_ServerHelloDone"
-    show HandshakeType_CertVerify      = "HandshakeType_CertVerify"
-    show HandshakeType_ClientKeyXchg   = "HandshakeType_ClientKeyXchg"
-    show HandshakeType_Finished        = "HandshakeType_Finished"
-    show (HandshakeType x)             = "HandshakeType " ++ show x
+    show HandshakeType_HelloRequest     = "HandshakeType_HelloRequest"
+    show HandshakeType_ClientHello      = "HandshakeType_ClientHello"
+    show HandshakeType_ServerHello      = "HandshakeType_ServerHello"
+    show HandshakeType_Certificate      = "HandshakeType_Certificate"
+    show HandshakeType_ServerKeyXchg    = "HandshakeType_ServerKeyXchg"
+    show HandshakeType_CertRequest      = "HandshakeType_CertRequest"
+    show HandshakeType_ServerHelloDone  = "HandshakeType_ServerHelloDone"
+    show HandshakeType_CertVerify       = "HandshakeType_CertVerify"
+    show HandshakeType_ClientKeyXchg    = "HandshakeType_ClientKeyXchg"
+    show HandshakeType_Finished         = "HandshakeType_Finished"
+    show HandshakeType_NewSessionTicket = "HandshakeType_NewSessionTicket"
+    show (HandshakeType x)              = "HandshakeType " ++ show x
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
