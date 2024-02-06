@@ -1,7 +1,7 @@
 module Network.TLS.Sending (
-    encodePacket,
+    encodePacket12,
     encodePacket13,
-    updateHandshake,
+    updateHandshake12,
     updateHandshake13,
 ) where
 
@@ -28,18 +28,18 @@ import Network.TLS.Util
 
 -- | encodePacket transform a packet into marshalled data related to current state
 -- and updating state on the go
-encodePacket
+encodePacket12
     :: Monoid bytes
     => Context
     -> RecordLayer bytes
     -> Packet
     -> IO (Either TLSError bytes)
-encodePacket ctx recordLayer pkt = do
+encodePacket12 ctx recordLayer pkt = do
     (ver, _) <- decideRecordVersion ctx
     let pt = packetType pkt
         mkRecord bs = Record pt ver (fragmentPlaintext bs)
         len = ctxFragmentSize ctx
-    records <- map mkRecord <$> packetToFragments ctx len pkt
+    records <- map mkRecord <$> packetToFragments12 ctx len pkt
     bs <- fmap mconcat <$> forEitherM records (recordEncode recordLayer ctx)
     when (pkt == ChangeCipherSpec) $ switchTxEncryption ctx
     return bs
@@ -47,12 +47,12 @@ encodePacket ctx recordLayer pkt = do
 -- Decompose handshake packets into fragments of the specified length.  AppData
 -- packets are not fragmented here but by callers of sendPacket, so that the
 -- empty-packet countermeasure may be applied to each fragment independently.
-packetToFragments :: Context -> Maybe Int -> Packet -> IO [ByteString]
-packetToFragments ctx len (Handshake hss) =
-    getChunks len . B.concat <$> mapM (updateHandshake ctx) hss
-packetToFragments _ _ (Alert a) = return [encodeAlerts a]
-packetToFragments _ _ ChangeCipherSpec = return [encodeChangeCipherSpec]
-packetToFragments _ _ (AppData x) = return [x]
+packetToFragments12 :: Context -> Maybe Int -> Packet -> IO [ByteString]
+packetToFragments12 ctx len (Handshake hss) =
+    getChunks len . B.concat <$> mapM (updateHandshake12 ctx) hss
+packetToFragments12 _ _ (Alert a) = return [encodeAlerts a]
+packetToFragments12 _ _ ChangeCipherSpec = return [encodeChangeCipherSpec]
+packetToFragments12 _ _ (AppData x) = return [x]
 
 switchTxEncryption :: Context -> IO ()
 switchTxEncryption ctx = do
@@ -74,8 +74,8 @@ switchTxEncryption ctx = do
   where
     isCBC tx = maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stCipher tx)
 
-updateHandshake :: Context -> Handshake -> IO ByteString
-updateHandshake ctx hs = do
+updateHandshake12 :: Context -> Handshake -> IO ByteString
+updateHandshake12 ctx hs = do
     usingHState ctx $ do
         when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage encoded
         when (finishedHandshakeMaterial hs) $ updateHandshakeDigest encoded

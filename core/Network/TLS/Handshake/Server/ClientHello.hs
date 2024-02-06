@@ -42,7 +42,7 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
     -- Handle Client hello
     hrr <- usingState_ ctx getTLS13HRR
     unless hrr $ startHandshake ctx legacyVersion cran
-    processHandshake ctx clientHello
+    processHandshake12 ctx clientHello
 
     when (legacyVersion /= TLS12) $
         throwCore $

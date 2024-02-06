@@ -32,11 +32,11 @@ recvServerHello
 recvServerHello cparams ctx = do
     (sh, hss) <- recvSH
     processServerHello cparams ctx sh
-    processHandshake ctx sh
+    processHandshake12 ctx sh
     return hss
   where
     recvSH = do
-        epkt <- recvPacket ctx
+        epkt <- recvPacket12 ctx
         case epkt of
             Left e -> throwCore e
             Right pkt -> case pkt of

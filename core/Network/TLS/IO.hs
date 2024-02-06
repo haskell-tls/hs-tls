@@ -8,9 +8,9 @@
 -- Stability   : experimental
 -- Portability : unknown
 module Network.TLS.IO (
-    sendPacket,
+    sendPacket12,
     sendPacket13,
-    recvPacket,
+    recvPacket12,
     recvPacket13,
     --
     isRecvComplete,
@@ -41,31 +41,31 @@ import Network.TLS.Struct13
 ----------------------------------------------------------------
 
 -- | Send one packet to the context
-sendPacket :: Context -> Packet -> IO ()
-sendPacket ctx@Context{ctxRecordLayer = recordLayer} pkt = do
+sendPacket12 :: Context -> Packet -> IO ()
+sendPacket12 ctx@Context{ctxRecordLayer = recordLayer} pkt = do
     -- in ver <= TLS1.0, block ciphers using CBC are using CBC residue as IV, which can be guessed
     -- by an attacker. Hence, an empty packet is sent before a normal data packet, to
     -- prevent guessability.
     when (isNonNullAppData pkt) $ do
         withEmptyPacket <- readIORef $ ctxNeedEmptyPacket ctx
         when withEmptyPacket $
-            writePacketBytes ctx recordLayer (AppData B.empty)
+            writePacketBytes12 ctx recordLayer (AppData B.empty)
                 >>= recordSendBytes recordLayer ctx
 
-    writePacketBytes ctx recordLayer pkt >>= recordSendBytes recordLayer ctx
+    writePacketBytes12 ctx recordLayer pkt >>= recordSendBytes recordLayer ctx
   where
     isNonNullAppData (AppData b) = not $ B.null b
     isNonNullAppData _ = False
 
-writePacketBytes
+writePacketBytes12
     :: Monoid bytes
     => Context
     -> RecordLayer bytes
     -> Packet
     -> IO bytes
-writePacketBytes ctx recordLayer pkt = do
+writePacketBytes12 ctx recordLayer pkt = do
     withLog ctx $ \logging -> loggingPacketSent logging (show pkt)
-    edataToSend <- encodePacket ctx recordLayer pkt
+    edataToSend <- encodePacket12 ctx recordLayer pkt
     either throwCore return edataToSend
 
 ----------------------------------------------------------------
@@ -90,8 +90,8 @@ writePacketBytes13 ctx recordLayer pkt = do
 -- | receive one packet from the context that contains 1 or
 -- many messages (many only in case of handshake). if will returns a
 -- TLSError if the packet is unexpected or malformed
-recvPacket :: Context -> IO (Either TLSError Packet)
-recvPacket ctx@Context{ctxRecordLayer = recordLayer} = do
+recvPacket12 :: Context -> IO (Either TLSError Packet)
+recvPacket12 ctx@Context{ctxRecordLayer = recordLayer} = do
     hrr <- usingState_ ctx getTLS13HRR
     -- When a client sends 0-RTT data to a server which rejects and sends a HRR,
     -- the server will not decrypt AppData segments.  The server needs to accept
@@ -103,13 +103,13 @@ recvPacket ctx@Context{ctxRecordLayer = recordLayer} = do
         Left err -> return $ Left err
         Right record ->
             if hrr && isCCS record
-                then recvPacket ctx
+                then recvPacket12 ctx
                 else do
                     pktRecv <- processPacket ctx record
                     if isEmptyHandshake pktRecv
                         then -- When a handshake record is fragmented we continue
                         -- receiving in order to feed stHandshakeRecordCont
-                            recvPacket ctx
+                            recvPacket12 ctx
                         else do
                             pkt <- case pktRecv of
                                 Right (Handshake hss) ->

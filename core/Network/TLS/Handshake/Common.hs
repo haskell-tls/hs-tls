@@ -75,7 +75,7 @@ handleException ctx f = catchException f $ \exception -> do
             then do
                 when (established == EarlyDataSending) $ clearTxRecordState ctx
                 sendPacket13 ctx $ Alert13 [errorToAlert tlserror]
-            else sendPacket ctx $ Alert [errorToAlert tlserror]
+            else sendPacket12 ctx $ Alert [errorToAlert tlserror]
     handshakeFailed tlserror
   where
     ignoreIOErr :: IOException -> IO ()
@@ -134,11 +134,11 @@ sendCCSandFinished
     -> Role
     -> IO ()
 sendCCSandFinished ctx role = do
-    sendPacket ctx ChangeCipherSpec
+    sendPacket12 ctx ChangeCipherSpec
     contextFlush ctx
     verifyData <-
         usingState_ ctx getVersion >>= \ver -> usingHState ctx $ getHandshakeDigest ver role
-    sendPacket ctx (Handshake [Finished verifyData])
+    sendPacket12 ctx (Handshake [Finished verifyData])
     usingState_ ctx $ setVerifyDataForSend verifyData
     contextFlush ctx
 
@@ -149,7 +149,7 @@ data RecvState m
 
 recvPacketHandshake :: Context -> IO [Handshake]
 recvPacketHandshake ctx = do
-    pkts <- recvPacket ctx
+    pkts <- recvPacket12 ctx
     case pkts of
         Right (Handshake l) -> return l
         Right x@(AppData _) -> do
@@ -171,14 +171,14 @@ onRecvStateHandshake
 onRecvStateHandshake _ recvState [] = return recvState
 onRecvStateHandshake _ (RecvStatePacket f) hms = f (Handshake hms)
 onRecvStateHandshake ctx (RecvStateHandshake f) (x : xs) = do
-    processHandshake ctx x
+    processHandshake12 ctx x
     nstate <- f x
     onRecvStateHandshake ctx nstate xs
 onRecvStateHandshake _ RecvStateDone _xs = unexpected "spurious handshake" Nothing
 
 runRecvState :: Context -> RecvState IO -> IO ()
 runRecvState _ RecvStateDone = return ()
-runRecvState ctx (RecvStatePacket f) = recvPacket ctx >>= either throwCore f >>= runRecvState ctx
+runRecvState ctx (RecvStatePacket f) = recvPacket12 ctx >>= either throwCore f >>= runRecvState ctx
 runRecvState ctx iniState =
     recvPacketHandshake ctx
         >>= onRecvStateHandshake ctx iniState

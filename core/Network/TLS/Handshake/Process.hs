@@ -1,7 +1,7 @@
 -- |
 -- process handshake message received
 module Network.TLS.Handshake.Process (
-    processHandshake,
+    processHandshake12,
     processHandshake13,
     startHandshake,
 ) where
@@ -17,10 +17,10 @@ import Network.TLS.Sending
 import Network.TLS.Struct
 import Network.TLS.Struct13
 
-processHandshake :: Context -> Handshake -> IO ()
-processHandshake ctx hs = do
+processHandshake12 :: Context -> Handshake -> IO ()
+processHandshake12 ctx hs = do
     when (isHRR hs) $ usingHState ctx wrapAsMessageHash13
-    void $ updateHandshake ctx hs
+    void $ updateHandshake12 ctx hs
   where
     isHRR (ServerHello TLS12 srand _ _ _ _) = isHelloRetryRequest srand
     isHRR _ = False

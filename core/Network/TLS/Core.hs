@@ -4,8 +4,8 @@
 
 module Network.TLS.Core (
     -- * Internal packet sending and receiving
-    sendPacket,
-    recvPacket,
+    sendPacket12,
+    recvPacket12,
 
     -- * Initialisation and Termination of context
     bye,
@@ -125,7 +125,7 @@ bye_ ctx = liftIO $ do
         withWriteLock ctx $
             if tls13
                 then sendPacket13 ctx $ Alert13 [(AlertLevel_Warning, CloseNotify)]
-                else sendPacket ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
+                else sendPacket12 ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
 
 -- | If the ALPN extensions have been used, this will
 -- return get the protocol agreed upon.
@@ -163,7 +163,7 @@ sendData ctx dataToSend = liftIO $ do
                 unless sentCF $
                     modifyTLS13State ctx $
                         \st -> st{tls13stPendingSentData = tls13stPendingSentData st . (bs :)}
-            | otherwise = sendPacket ctx $ AppData bs
+            | otherwise = sendPacket12 ctx $ AppData bs
     when tls13 $ sendCFifNecessary ctx
     withWriteLock ctx $ do
         checkValid ctx
@@ -191,7 +191,7 @@ recvData ctx = liftIO $ do
 
 recvData12 :: Context -> IO B.ByteString
 recvData12 ctx = do
-    pkt <- recvPacket ctx
+    pkt <- recvPacket12 ctx
     either (onError terminate) process pkt
   where
     process (Handshake [ch@ClientHello{}]) =
@@ -218,7 +218,7 @@ recvData12 ctx = do
         let reason = "unexpected message " ++ show p
          in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
 
-    terminate = terminateWithWriteLock ctx (sendPacket ctx . Alert)
+    terminate = terminateWithWriteLock ctx (sendPacket12 ctx . Alert)
 
 recvData13 :: Context -> IO B.ByteString
 recvData13 ctx = do

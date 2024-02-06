@@ -147,7 +147,7 @@ sendCertificate cparams ctx = do
             unless (null certs) $
                 usingHState ctx $
                     setClientCertSent True
-            sendPacket ctx $ Handshake [Certificate cc]
+            sendPacket12 ctx $ Handshake [Certificate cc]
 
 ----------------------------------------------------------------
 
@@ -163,7 +163,7 @@ sendClientKeyXchg cparams ctx = do
         _ ->
             throwCore $
                 Error_Protocol "client key exchange unsupported type" HandshakeFailure
-    sendPacket ctx $ Handshake [ClientKeyXchg ckx]
+    sendPacket12 ctx $ Handshake [ClientKeyXchg ckx]
     mainSecret <- usingHState ctx setMainSec
     logKey ctx (MainSecret mainSecret)
 
@@ -279,4 +279,4 @@ sendCertificateVerify ctx = do
         -- Fetch all handshake messages up to now.
         msgs <- usingHState ctx $ B.concat <$> getHandshakeMessages
         sigDig <- createCertificateVerify ctx ver pubKey mhashSig msgs
-        sendPacket ctx $ Handshake [CertVerify sigDig]
+        sendPacket12 ctx $ Handshake [CertVerify sigDig]

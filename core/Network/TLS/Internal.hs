@@ -15,11 +15,11 @@ module Network.TLS.Internal (
     module Network.TLS.Sending,
     module Network.TLS.Types,
     module Network.TLS.Wire,
-    sendPacket,
-    recvPacket,
+    sendPacket12,
+    recvPacket12,
 ) where
 
-import Network.TLS.Core (recvPacket, sendPacket)
+import Network.TLS.Core (recvPacket12, sendPacket12)
 import Network.TLS.Packet
 import Network.TLS.Packet13
 import Network.TLS.Receiving

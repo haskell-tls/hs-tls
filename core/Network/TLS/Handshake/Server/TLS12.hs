@@ -40,7 +40,7 @@ recvClientSecondFlight12 sparams ctx resumeSessionData = do
             case mticket of
                 Nothing -> return ()
                 Just ticket ->
-                    sendPacket ctx $ Handshake [NewSessionTicket 3600 ticket] -- xxx fixme
+                    sendPacket12 ctx $ Handshake [NewSessionTicket 3600 ticket] -- xxx fixme
             sendCCSandFinished ctx ServerRole
         Just _ -> do
             _ <- sessionEstablished ctx
@@ -95,7 +95,7 @@ recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake expectClientCer
     -- If not, ask the application on how to proceed.
     --
     expectCertificateVerify (Handshake [hs@(CertVerify dsig)]) = do
-        processHandshake ctx hs
+        processHandshake12 ctx hs
 
         certs <- checkValidClientCertChain ctx "change cipher message expected"
 
