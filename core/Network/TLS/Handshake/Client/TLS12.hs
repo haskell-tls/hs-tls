@@ -132,126 +132,151 @@ recvNSTandCCSandFinished ctx = do
 --       -> [cert verify]
 sendClientCCC :: ClientParams -> Context -> IO ()
 sendClientCCC cparams ctx = do
-    sendCertificate
-    sendClientKeyXchg
-    sendCertificateVerify
-  where
-    sendCertificate = do
-        usingHState ctx $ setClientCertSent False
-        clientChain cparams ctx >>= \case
-            Nothing -> return ()
-            Just cc@(CertificateChain certs) -> do
-                unless (null certs) $
-                    usingHState ctx $
-                        setClientCertSent True
-                sendPacket ctx $ Handshake [Certificate cc]
+    sendCertificate cparams ctx
+    sendClientKeyXchg cparams ctx
+    sendCertificateVerify ctx
 
-    sendClientKeyXchg = do
-        cipher <- usingHState ctx getPendingCipher
-        (ckx, setMainSec) <- case cipherKeyExchange cipher of
-            CipherKeyExchange_RSA -> do
-                clientVersion <- usingHState ctx $ gets hstClientVersion
-                (xver, prerand) <- usingState_ ctx $ (,) <$> getVersion <*> genRandom 46
+----------------------------------------------------------------
 
-                let preMain = encodePreMainSecret clientVersion prerand
-                    setMainSec = setMainSecretFromPre xver ClientRole preMain
-                encryptedPreMain <- do
-                    -- SSL3 implementation generally forget this length field since it's redundant,
-                    -- however TLS10 make it clear that the length field need to be present.
-                    e <- encryptRSA ctx preMain
-                    let extra = encodeWord16 $ fromIntegral $ B.length e
-                    return $ extra `B.append` e
-                return (CKX_RSA encryptedPreMain, setMainSec)
-            CipherKeyExchange_DHE_RSA -> getCKX_DHE
-            CipherKeyExchange_DHE_DSA -> getCKX_DHE
-            CipherKeyExchange_ECDHE_RSA -> getCKX_ECDHE
-            CipherKeyExchange_ECDHE_ECDSA -> getCKX_ECDHE
-            _ ->
+sendCertificate :: ClientParams -> Context -> IO ()
+sendCertificate cparams ctx = do
+    usingHState ctx $ setClientCertSent False
+    clientChain cparams ctx >>= \case
+        Nothing -> return ()
+        Just cc@(CertificateChain certs) -> do
+            unless (null certs) $
+                usingHState ctx $
+                    setClientCertSent True
+            sendPacket ctx $ Handshake [Certificate cc]
+
+----------------------------------------------------------------
+
+sendClientKeyXchg :: ClientParams -> Context -> IO ()
+sendClientKeyXchg cparams ctx = do
+    cipher <- usingHState ctx getPendingCipher
+    (ckx, setMainSec) <- case cipherKeyExchange cipher of
+        CipherKeyExchange_RSA -> getCKX_RSA ctx
+        CipherKeyExchange_DHE_RSA -> getCKX_DHE cparams ctx
+        CipherKeyExchange_DHE_DSA -> getCKX_DHE cparams ctx
+        CipherKeyExchange_ECDHE_RSA -> getCKX_ECDHE ctx
+        CipherKeyExchange_ECDHE_ECDSA -> getCKX_ECDHE ctx
+        _ ->
+            throwCore $
+                Error_Protocol "client key exchange unsupported type" HandshakeFailure
+    sendPacket ctx $ Handshake [ClientKeyXchg ckx]
+    mainSecret <- usingHState ctx setMainSec
+    logKey ctx (MainSecret mainSecret)
+
+--------------------------------
+
+getCKX_RSA
+    :: Context -> IO (ClientKeyXchgAlgorithmData, HandshakeM ByteString)
+getCKX_RSA ctx = do
+    clientVersion <- usingHState ctx $ gets hstClientVersion
+    (xver, prerand) <- usingState_ ctx $ (,) <$> getVersion <*> genRandom 46
+
+    let preMain = encodePreMainSecret clientVersion prerand
+        setMainSec = setMainSecretFromPre xver ClientRole preMain
+    encryptedPreMain <- do
+        -- SSL3 implementation generally forget this length field since it's redundant,
+        -- however TLS10 make it clear that the length field need to be present.
+        e <- encryptRSA ctx preMain
+        let extra = encodeWord16 $ fromIntegral $ B.length e
+        return $ extra `B.append` e
+    return (CKX_RSA encryptedPreMain, setMainSec)
+
+--------------------------------
+
+getCKX_DHE
+    :: ClientParams
+    -> Context
+    -> IO (ClientKeyXchgAlgorithmData, HandshakeM ByteString)
+getCKX_DHE cparams ctx = do
+    xver <- usingState_ ctx getVersion
+    serverParams <- usingHState ctx getServerDHParams
+
+    let params = serverDHParamsToParams serverParams
+        ffGroup = findFiniteFieldGroup params
+        srvpub = serverDHParamsToPublic serverParams
+
+    unless (maybe False (isSupportedGroup ctx) ffGroup) $ do
+        groupUsage <-
+            onCustomFFDHEGroup (clientHooks cparams) params srvpub
+                `catchException` throwMiscErrorOnException "custom group callback failed"
+        case groupUsage of
+            GroupUsageInsecure ->
                 throwCore $
-                    Error_Protocol "client key exchange unsupported type" HandshakeFailure
-        sendPacket ctx $ Handshake [ClientKeyXchg ckx]
-        mainSecret <- usingHState ctx setMainSec
-        logKey ctx (MainSecret mainSecret)
-      where
-        getCKX_DHE = do
+                    Error_Protocol "FFDHE group is not secure enough" InsufficientSecurity
+            GroupUsageUnsupported reason ->
+                throwCore $
+                    Error_Protocol ("unsupported FFDHE group: " ++ reason) HandshakeFailure
+            GroupUsageInvalidPublic -> throwCore $ Error_Protocol "invalid server public key" IllegalParameter
+            GroupUsageValid -> return ()
+
+    -- When grp is known but not in the supported list we use it
+    -- anyway.  This provides additional validation and a more
+    -- efficient implementation.
+    (clientDHPub, preMain) <-
+        case ffGroup of
+            Nothing -> do
+                (clientDHPriv, clientDHPub) <- generateDHE ctx params
+                let preMain = dhGetShared params clientDHPriv srvpub
+                return (clientDHPub, preMain)
+            Just grp -> do
+                usingHState ctx $ setSupportedGroup grp
+                dhePair <- generateFFDHEShared ctx grp srvpub
+                case dhePair of
+                    Nothing ->
+                        throwCore $
+                            Error_Protocol ("invalid server " ++ show grp ++ " public key") IllegalParameter
+                    Just pair -> return pair
+
+    let setMainSec = setMainSecretFromPre xver ClientRole preMain
+    return (CKX_DH clientDHPub, setMainSec)
+
+--------------------------------
+
+getCKX_ECDHE
+    :: Context -> IO (ClientKeyXchgAlgorithmData, HandshakeM ByteString)
+getCKX_ECDHE ctx = do
+    ServerECDHParams grp srvpub <- usingHState ctx getServerECDHParams
+    checkSupportedGroup ctx grp
+    usingHState ctx $ setSupportedGroup grp
+    ecdhePair <- generateECDHEShared ctx srvpub
+    case ecdhePair of
+        Nothing ->
+            throwCore $
+                Error_Protocol ("invalid server " ++ show grp ++ " public key") IllegalParameter
+        Just (clipub, preMain) -> do
             xver <- usingState_ ctx getVersion
-            serverParams <- usingHState ctx getServerDHParams
-
-            let params = serverDHParamsToParams serverParams
-                ffGroup = findFiniteFieldGroup params
-                srvpub = serverDHParamsToPublic serverParams
-
-            unless (maybe False (isSupportedGroup ctx) ffGroup) $ do
-                groupUsage <-
-                    onCustomFFDHEGroup (clientHooks cparams) params srvpub
-                        `catchException` throwMiscErrorOnException "custom group callback failed"
-                case groupUsage of
-                    GroupUsageInsecure ->
-                        throwCore $
-                            Error_Protocol "FFDHE group is not secure enough" InsufficientSecurity
-                    GroupUsageUnsupported reason ->
-                        throwCore $
-                            Error_Protocol ("unsupported FFDHE group: " ++ reason) HandshakeFailure
-                    GroupUsageInvalidPublic -> throwCore $ Error_Protocol "invalid server public key" IllegalParameter
-                    GroupUsageValid -> return ()
-
-            -- When grp is known but not in the supported list we use it
-            -- anyway.  This provides additional validation and a more
-            -- efficient implementation.
-            (clientDHPub, preMain) <-
-                case ffGroup of
-                    Nothing -> do
-                        (clientDHPriv, clientDHPub) <- generateDHE ctx params
-                        let preMain = dhGetShared params clientDHPriv srvpub
-                        return (clientDHPub, preMain)
-                    Just grp -> do
-                        usingHState ctx $ setSupportedGroup grp
-                        dhePair <- generateFFDHEShared ctx grp srvpub
-                        case dhePair of
-                            Nothing ->
-                                throwCore $
-                                    Error_Protocol ("invalid server " ++ show grp ++ " public key") IllegalParameter
-                            Just pair -> return pair
-
             let setMainSec = setMainSecretFromPre xver ClientRole preMain
-            return (CKX_DH clientDHPub, setMainSec)
+            return (CKX_ECDH $ encodeGroupPublic clipub, setMainSec)
 
-        getCKX_ECDHE = do
-            ServerECDHParams grp srvpub <- usingHState ctx getServerECDHParams
-            checkSupportedGroup ctx grp
-            usingHState ctx $ setSupportedGroup grp
-            ecdhePair <- generateECDHEShared ctx srvpub
-            case ecdhePair of
-                Nothing ->
-                    throwCore $
-                        Error_Protocol ("invalid server " ++ show grp ++ " public key") IllegalParameter
-                Just (clipub, preMain) -> do
-                    xver <- usingState_ ctx getVersion
-                    let setMainSec = setMainSecretFromPre xver ClientRole preMain
-                    return (CKX_ECDH $ encodeGroupPublic clipub, setMainSec)
+----------------------------------------------------------------
 
-    -- In order to send a proper certificate verify message,
-    -- we have to do the following:
+-- In order to send a proper certificate verify message,
+-- we have to do the following:
+--
+-- 1. Determine which signing algorithm(s) the server supports
+--    (we currently only support RSA).
+-- 2. Get the current handshake hash from the handshake state.
+-- 3. Sign the handshake hash
+-- 4. Send it to the server.
+--
+sendCertificateVerify :: Context -> IO ()
+sendCertificateVerify ctx = do
+    ver <- usingState_ ctx getVersion
+
+    -- Only send a certificate verify message when we
+    -- have sent a non-empty list of certificates.
     --
-    -- 1. Determine which signing algorithm(s) the server supports
-    --    (we currently only support RSA).
-    -- 2. Get the current handshake hash from the handshake state.
-    -- 3. Sign the handshake hash
-    -- 4. Send it to the server.
-    --
-    sendCertificateVerify = do
-        ver <- usingState_ ctx getVersion
-
-        -- Only send a certificate verify message when we
-        -- have sent a non-empty list of certificates.
-        --
-        certSent <- usingHState ctx getClientCertSent
-        when certSent $ do
-            pubKey <- getLocalPublicKey ctx
-            mhashSig <-
-                let cHashSigs = supportedHashSignatures $ ctxSupported ctx
-                 in getLocalHashSigAlg ctx signatureCompatible cHashSigs pubKey
-            -- Fetch all handshake messages up to now.
-            msgs <- usingHState ctx $ B.concat <$> getHandshakeMessages
-            sigDig <- createCertificateVerify ctx ver pubKey mhashSig msgs
-            sendPacket ctx $ Handshake [CertVerify sigDig]
+    certSent <- usingHState ctx getClientCertSent
+    when certSent $ do
+        pubKey <- getLocalPublicKey ctx
+        mhashSig <-
+            let cHashSigs = supportedHashSignatures $ ctxSupported ctx
+             in getLocalHashSigAlg ctx signatureCompatible cHashSigs pubKey
+        -- Fetch all handshake messages up to now.
+        msgs <- usingHState ctx $ B.concat <$> getHandshakeMessages
+        sigDig <- createCertificateVerify ctx ver pubKey mhashSig msgs
+        sendPacket ctx $ Handshake [CertVerify sigDig]
