@@ -174,14 +174,15 @@ finishedHandshakeTypeMaterial :: HandshakeType -> Bool
 finishedHandshakeTypeMaterial HandshakeType_ClientHello = True
 finishedHandshakeTypeMaterial HandshakeType_ServerHello = True
 finishedHandshakeTypeMaterial HandshakeType_Certificate = True
-finishedHandshakeTypeMaterial HandshakeType_HelloRequest = False
+-- finishedHandshakeTypeMaterial HandshakeType_HelloRequest = False
 finishedHandshakeTypeMaterial HandshakeType_ServerHelloDone = True
 finishedHandshakeTypeMaterial HandshakeType_ClientKeyXchg = True
 finishedHandshakeTypeMaterial HandshakeType_ServerKeyXchg = True
 finishedHandshakeTypeMaterial HandshakeType_CertRequest = True
 finishedHandshakeTypeMaterial HandshakeType_CertVerify = True
-finishedHandshakeTypeMaterial HandshakeType_Finished = False
-finishedHandshakeTypeMaterial _ = True -- checkme
+finishedHandshakeTypeMaterial HandshakeType_NewSessionTicket = True
+finishedHandshakeTypeMaterial HandshakeType_Finished = True
+finishedHandshakeTypeMaterial _ = False
 
 finishedHandshakeMaterial :: Handshake -> Bool
 finishedHandshakeMaterial = finishedHandshakeTypeMaterial . typeOfHandshake
@@ -190,14 +191,14 @@ certVerifyHandshakeTypeMaterial :: HandshakeType -> Bool
 certVerifyHandshakeTypeMaterial HandshakeType_ClientHello = True
 certVerifyHandshakeTypeMaterial HandshakeType_ServerHello = True
 certVerifyHandshakeTypeMaterial HandshakeType_Certificate = True
-certVerifyHandshakeTypeMaterial HandshakeType_HelloRequest = False
+-- certVerifyHandshakeTypeMaterial HandshakeType_HelloRequest = False
 certVerifyHandshakeTypeMaterial HandshakeType_ServerHelloDone = True
 certVerifyHandshakeTypeMaterial HandshakeType_ClientKeyXchg = True
 certVerifyHandshakeTypeMaterial HandshakeType_ServerKeyXchg = True
 certVerifyHandshakeTypeMaterial HandshakeType_CertRequest = True
-certVerifyHandshakeTypeMaterial HandshakeType_CertVerify = False
-certVerifyHandshakeTypeMaterial HandshakeType_Finished = False
-certVerifyHandshakeTypeMaterial _ = False -- checkme
+-- certVerifyHandshakeTypeMaterial HandshakeType_CertVerify = False
+-- certVerifyHandshakeTypeMaterial HandshakeType_Finished = False
+certVerifyHandshakeTypeMaterial _ = False
 
 certVerifyHandshakeMaterial :: Handshake -> Bool
 certVerifyHandshakeMaterial = certVerifyHandshakeTypeMaterial . typeOfHandshake

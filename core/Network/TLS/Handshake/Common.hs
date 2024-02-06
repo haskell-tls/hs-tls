@@ -171,10 +171,16 @@ onRecvStateHandshake
 onRecvStateHandshake _ recvState [] = return recvState
 onRecvStateHandshake _ (RecvStatePacket f) hms = f (Handshake hms)
 onRecvStateHandshake ctx (RecvStateHandshake f) (x : xs) = do
-    processHandshake12 ctx x
+    let finished = isFinished x
+    unless finished $ processHandshake12 ctx x
     nstate <- f x
+    when finished $ processHandshake12 ctx x
     onRecvStateHandshake ctx nstate xs
 onRecvStateHandshake _ RecvStateDone _xs = unexpected "spurious handshake" Nothing
+
+isFinished :: Handshake -> Bool
+isFinished Finished{} = True
+isFinished _ = False
 
 runRecvState :: Context -> RecvState IO -> IO ()
 runRecvState _ RecvStateDone = return ()
