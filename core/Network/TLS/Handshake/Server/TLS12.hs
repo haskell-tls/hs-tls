@@ -25,6 +25,8 @@ import Network.TLS.Struct
 import Network.TLS.Types
 import Network.TLS.X509 hiding (Certificate)
 
+----------------------------------------------------------------
+
 recvClientSecondFlight12
     :: ServerParams
     -> Context
@@ -58,6 +60,8 @@ sessionEstablished ctx = do
                 sessionId'
                 (fromJust sessionData)
         _ -> return Nothing -- never reach
+
+----------------------------------------------------------------
 
 -- | receive Client data in handshake until the Finished handshake.
 --
@@ -103,8 +107,8 @@ recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake expectClientCer
         checkDigitalSignatureKey usedVersion pubKey
 
         verif <- checkCertificateVerify ctx usedVersion pubKey msgs dsig
-        clientCertVerify sparams ctx certs verif
-        return $ RecvStatePacket $ expectChangeCipher ctx
+        processClientCertVerify sparams ctx certs verif
+        return $ RecvStatePacket $ expectChangeCipherSpec ctx
     expectCertificateVerify p = do
         chain <- usingHState ctx getClientCertChain
         case chain of
@@ -113,40 +117,16 @@ recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake expectClientCer
                 | otherwise ->
                     throwCore $ Error_Protocol "cert verify message missing" UnexpectedMessage
             Nothing -> return ()
-        expectChangeCipher ctx p
+        expectChangeCipherSpec ctx p
 
-clientCertVerify :: ServerParams -> Context -> CertificateChain -> Bool -> IO ()
-clientCertVerify sparams ctx certs verif = do
-    if verif
-        then do
-            -- When verification succeeds, commit the
-            -- client certificate chain to the context.
-            --
-            usingState_ ctx $ setClientCertificateChain certs
-            return ()
-        else do
-            -- Either verification failed because of an
-            -- invalid format (with an error message), or
-            -- the signature is wrong.  In either case,
-            -- ask the application if it wants to
-            -- proceed, we will do that.
-            res <- onUnverifiedClientCert (serverHooks sparams)
-            if res
-                then do
-                    -- When verification fails, but the
-                    -- application callbacks accepts, we
-                    -- also commit the client certificate
-                    -- chain to the context.
-                    usingState_ ctx $ setClientCertificateChain certs
-                else decryptError "verification failed"
+----------------------------------------------------------------
 
-recvCCSandFinished :: Context -> IO ()
-recvCCSandFinished ctx = runRecvState ctx $ RecvStatePacket $ expectChangeCipher ctx
-
-expectChangeCipher :: Context -> Packet -> IO (RecvState IO)
-expectChangeCipher ctx ChangeCipherSpec = do
+expectChangeCipherSpec :: Context -> Packet -> IO (RecvState IO)
+expectChangeCipherSpec ctx ChangeCipherSpec = do
     return $ RecvStateHandshake $ expectFinished ctx
-expectChangeCipher _ p = unexpected (show p) (Just "change cipher")
+expectChangeCipherSpec _ p = unexpected (show p) (Just "change cipher")
+
+----------------------------------------------------------------
 
 -- process the client key exchange message. the protocol expects the initial
 -- client version received in ClientHello, not the negotiated version.
@@ -197,3 +177,34 @@ processClientKeyXchg ctx (CKX_ECDH bytes) = do
                 Nothing ->
                     throwCore $
                         Error_Protocol "cannot generate a shared secret on ECDH" IllegalParameter
+
+----------------------------------------------------------------
+
+processClientCertVerify
+    :: ServerParams -> Context -> CertificateChain -> Bool -> IO ()
+processClientCertVerify _sparams ctx certs True = do
+    -- When verification succeeds, commit the
+    -- client certificate chain to the context.
+    --
+    usingState_ ctx $ setClientCertificateChain certs
+    return ()
+processClientCertVerify sparams ctx certs False = do
+    -- Either verification failed because of an
+    -- invalid format (with an error message), or
+    -- the signature is wrong.  In either case,
+    -- ask the application if it wants to
+    -- proceed, we will do that.
+    res <- onUnverifiedClientCert (serverHooks sparams)
+    if res
+        then do
+            -- When verification fails, but the
+            -- application callbacks accepts, we
+            -- also commit the client certificate
+            -- chain to the context.
+            usingState_ ctx $ setClientCertificateChain certs
+        else decryptError "verification failed"
+
+----------------------------------------------------------------
+
+recvCCSandFinished :: Context -> IO ()
+recvCCSandFinished ctx = runRecvState ctx $ RecvStatePacket $ expectChangeCipherSpec ctx
