@@ -99,7 +99,7 @@ bye ctx = liftIO $ do
         role <- usingState_ ctx getRole
         if role == ClientRole
             then do
-                sendCFifNecessary ctx
+                withWriteLock ctx $ sendCFifNecessary ctx
                 -- receiving NewSessionTicket
                 recvNST <- tls13stRecvNST <$> getTLS13State ctx
                 unless recvNST $ do
@@ -164,7 +164,7 @@ sendData ctx dataToSend = liftIO $ do
                     modifyTLS13State ctx $
                         \st -> st{tls13stPendingSentData = tls13stPendingSentData st . (bs :)}
             | otherwise = sendPacket12 ctx $ AppData bs
-    when tls13 $ sendCFifNecessary ctx
+    when tls13 $ withWriteLock ctx $ sendCFifNecessary ctx
     withWriteLock ctx $ do
         checkValid ctx
         -- All chunks are protected with the same write lock because we don't
