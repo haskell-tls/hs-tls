@@ -859,7 +859,7 @@ handshake13_0rtt (CSP13 (cli, srv)) = do
         clearClientSessionRef sessionRefs
         earlyData <- B.pack <$> generate (someWords8 256)
         let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
-            params2 = (pc{clientEarlyData = True}, ps)
+            params2 = (pc{clientUseEarlyData = True}, ps)
 
         runTLS0RTT params2 RTT0 earlyData
 
@@ -907,7 +907,7 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
                         , supportedGroups = [group1]
                         }
                 params1 =
-                    ( pc{clientEarlyData = True}
+                    ( pc{clientUseEarlyData = True}
                     , ps
                         { serverEarlyDataSize = 0
                         , serverSupported = svrSupported1

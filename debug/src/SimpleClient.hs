@@ -120,7 +120,7 @@ getDefaultParams flags host store sStorage certCredsRequest session earlyData =
                         then (\seed -> putStrLn ("seed: " ++ show (seedToInteger seed)))
                         else (\_ -> return ())
                 }
-        , clientEarlyData = isJust earlyData
+        , clientUseEarlyData = isJust earlyData
         }
   where
     serverName = foldl f host flags

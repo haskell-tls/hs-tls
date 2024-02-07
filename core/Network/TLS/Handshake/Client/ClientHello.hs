@@ -311,5 +311,5 @@ getPreSharedKeyInfo cparams ctx = do
                         else Nothing
 
     get0RTTinfo (_, _, choice, _)
-        | clientEarlyData cparams = Just choice
+        | clientUseEarlyData cparams = Just choice
         | otherwise = Nothing

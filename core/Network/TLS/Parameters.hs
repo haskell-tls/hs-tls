@@ -119,7 +119,7 @@ data ClientParams = ClientParams
     -- See the default value of 'Supported'.
     , clientDebug :: DebugParams
     -- ^ See the default value of 'DebugParams'.
-    , clientEarlyData :: Bool
+    , clientUseEarlyData :: Bool
     -- ^ Client tries to send early data in TLS 1.3
     -- via 'sendData' if possible.
     -- If not accepted by the server, the early data
@@ -140,7 +140,7 @@ defaultParamsClient serverName serverId =
         , clientHooks = def
         , clientSupported = def
         , clientDebug = defaultDebugParams
-        , clientEarlyData = False
+        , clientUseEarlyData = False
         }
 
 data ServerParams = ServerParams

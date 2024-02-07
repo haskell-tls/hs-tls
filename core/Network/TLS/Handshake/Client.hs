@@ -137,7 +137,7 @@ helloRetry cparams ctx mparams ver crand groups = do
             | selectedGroup `elem` groups -> do
                 usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
                 clearTxRecordState ctx
-                let cparams' = cparams{clientEarlyData = False}
+                let cparams' = cparams{clientUseEarlyData = False}
                 runPacketFlight ctx $ sendChangeCipherSpec13 ctx
                 clientSession <- tls13stSession <$> getTLS13State ctx
                 handshake cparams' ctx [selectedGroup] (Just (crand, clientSession, ver))
