@@ -14,11 +14,13 @@
  `PatternSynonyms` for extensibility.
 * BREAKING CHANGE: the structure of `SessionManager` is changed
   to support session tickets.
+* API: BREAKING CHANGE: `sendData` can send early data (0-RTT).
+  `clientEarlyData` is removed.
+  To send early data via `sendData`, set `clientUseEarlyData` to `True`.
+  [#466](https://github.com/haskell-tls/hs-tls/issues/466)
 * API: `handshake` can receive an alert of client authentication failure
   for TLS 1.3.
   [#463](https://github.com/haskell-tls/hs-tls/pull/463)
-* API: `sendData` can send early data (0-RTT).
-  [#466](https://github.com/haskell-tls/hs-tls/issues/466)
 * API: `bye` can receive NewSessionTicket for TLS 1.3.
 * Channel binding: `getFinished` and `getPeerFinished` are deprecated.
   Use `getTLSUnique` instead.
