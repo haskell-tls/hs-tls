@@ -117,7 +117,7 @@ sendNewSessionTicket sparams ctx usedCipher exts applicationSecret sfSentTime = 
     let rtt = cfRecvTime - sfSentTime
     nonce <- getStateRNG ctx 32
     resumptionSecret <- calculateResumptionSecret ctx choice applicationSecret
-    let life = toSeconds $ serverTicketLifetime sparams
+    let life = adjustLifetime $ serverTicketLifetime sparams
         psk = derivePSK choice resumptionSecret nonce
     (identity, add) <- generateSession life psk rtt0max rtt
     let nst = createNewSessionTicket life add nonce identity rtt0max
@@ -146,7 +146,7 @@ sendNewSessionTicket sparams ctx usedCipher exts applicationSecret sfSentTime = 
       where
         tedi = extensionEncode $ EarlyDataIndication $ Just $ fromIntegral maxSize
         extensions = [ExtensionRaw EID_EarlyData tedi]
-    toSeconds i
+    adjustLifetime i
         | i < 0 = 0
         | i > 604800 = 604800
         | otherwise = fromIntegral i

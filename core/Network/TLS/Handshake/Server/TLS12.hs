@@ -38,13 +38,19 @@ recvClientSecondFlight12 sparams ctx resumeSessionData = do
             mticket <- sessionEstablished ctx
             case mticket of
                 Nothing -> return ()
-                Just ticket ->
-                    sendPacket12 ctx $ Handshake [NewSessionTicket 3600 ticket] -- xxx fixme
+                Just ticket -> do
+                    let life = adjustLifetime $ serverTicketLifetime sparams
+                    sendPacket12 ctx $ Handshake [NewSessionTicket life ticket]
             sendCCSandFinished ctx ServerRole
         Just _ -> do
             _ <- sessionEstablished ctx
             recvCCSandFinished ctx
     handshakeDone12 ctx
+  where
+    adjustLifetime i
+        | i < 0 = 0
+        | i > 604800 = 604800
+        | otherwise = fromIntegral i
 
 sessionEstablished :: Context -> IO (Maybe Ticket)
 sessionEstablished ctx = do
