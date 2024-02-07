@@ -1,11 +1,22 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
+-- | A manager for TLS 1.2/1.3 session ticket.
+--
+--   Tracking client hello is not implemented yet.
+--   So, if this is used for TLS 1.3 0-RTT,
+--   replay attack is possible.
+--   If your application data in 0-RTT changes the status of server side,
+--   use 'Network.TLS.SessionManager' instead.
+--
+--   A dedicated thread is running repeatedly to replece
+--   secret keys. So, energy saving is not achieved.
 module Network.TLS.SessionTicket (
     newSessionTicketManager,
     Config,
     defaultConfig,
     ticketLifetime,
+    secretKeyInterval,
 ) where
 
 import Codec.Serialise
@@ -14,24 +25,31 @@ import qualified Data.ByteString.Lazy as L
 import Network.TLS
 import Network.TLS.Internal
 
-newtype Config = Config
+-- | Configuration for session tickets.
+data Config = Config
     { ticketLifetime :: Int
     -- ^ Ticket lifetime in seconds.
+    , secretKeyInterval :: Int
     }
 
--- | Lifetime: 1 day
+-- | ticketLifetime: 2 hours (7200 seconds), secretKeyInterval: 30 minutes (1800 seconds)
 defaultConfig :: Config
 defaultConfig =
     Config
-        { ticketLifetime = 86400
+        { ticketLifetime = 7200 -- 2 hours
+        , secretKeyInterval = 1800 -- 30 minites
         }
 
+-- | Creating a session ticket manager.
 newSessionTicketManager :: Config -> IO SessionManager
 newSessionTicketManager Config{..} =
     sessionTicketManager <$> CT.spawnTokenManager conf
   where
-    intvl = 30 * 60 -- seconds
-    conf = CT.defaultConfig{CT.interval = intvl, CT.tokenLifetime = ticketLifetime}
+    conf =
+        CT.defaultConfig
+            { CT.interval = secretKeyInterval
+            , CT.tokenLifetime = ticketLifetime
+            }
 
 sessionTicketManager :: CT.TokenManager -> SessionManager
 sessionTicketManager ctmgr =
