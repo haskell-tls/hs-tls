@@ -1,12 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- |
--- Module      : Network.TLS.Packet13
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
 module Network.TLS.Packet13 (
     encodeHandshake13,
     decodeHandshakeRecord13,

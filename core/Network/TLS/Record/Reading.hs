@@ -1,11 +1,4 @@
--- |
--- Module      : Network.TLS.Record.Reading
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
---
--- TLS record layer in Rx direction
+-- | TLS record layer in Rx direction
 module Network.TLS.Record.Reading (
     recvRecord,
     recvRecord13,

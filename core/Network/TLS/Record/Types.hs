@@ -1,17 +1,10 @@
 {-# LANGUAGE EmptyDataDecls #-}
 
--- |
--- Module      : Network.TLS.Record.Types
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
---
--- The Record Protocol takes messages to be transmitted, fragments the
--- data into manageable blocks, optionally compresses the data, applies
--- a MAC, encrypts, and transmits the result.  Received data is
--- decrypted, verified, decompressed, reassembled, and then delivered to
--- higher-level clients.
+-- | The Record Protocol takes messages to be transmitted, fragments
+-- the data into manageable blocks, optionally compresses the data,
+-- applies a MAC, encrypts, and transmits the result.  Received data
+-- is decrypted, verified, decompressed, reassembled, and then
+-- delivered to higher-level clients.
 module Network.TLS.Record.Types (
     Header (..),
     ProtocolType (..),

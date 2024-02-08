@@ -1,11 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- |
--- Module      : Network.TLS.KeySchedule
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
 module Network.TLS.KeySchedule (
     hkdfExtract,
     hkdfExpandLabel,

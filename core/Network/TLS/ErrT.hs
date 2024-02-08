@@ -1,13 +1,6 @@
 {-# LANGUAGE CPP #-}
 
--- |
--- Module      : Network.TLS.ErrT
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
---
--- a simple compat ErrorT and other error stuff
+-- | A simple compat ErrorT and other error stuff
 module Network.TLS.ErrT (
     runErrT,
     ErrT,

@@ -1,12 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes #-}
 
--- |
--- Module      : Network.TLS.IO
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
 module Network.TLS.IO (
     sendPacket12,
     sendPacket13,

@@ -2,12 +2,6 @@
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE PatternSynonyms #-}
 
--- |
--- Module      : Network.TLS.Types
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
 module Network.TLS.Types (
     Version (Version, SSL2, SSL3, TLS10, TLS11, TLS12, TLS13),
     SessionID,

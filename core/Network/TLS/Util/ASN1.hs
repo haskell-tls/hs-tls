@@ -1,11 +1,4 @@
--- |
--- Module      : Network.TLS.Util.ASN1
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
---
--- ASN1 utils for TLS
+-- | ASN1 utils for TLS
 module Network.TLS.Util.ASN1 (
     decodeASN1Object,
     encodeASN1Object,

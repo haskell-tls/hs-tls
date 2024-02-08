@@ -1,14 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 
--- |
--- Module      : Network.TLS.Extension
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
---
--- basic extensions are defined in RFC 6066
+-- | Basic extensions are defined in RFC 6066
 module Network.TLS.Extension (
     Extension (..),
     supportedExtensions,

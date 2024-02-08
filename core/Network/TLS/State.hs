@@ -3,15 +3,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE Rank2Types #-}
 
--- |
--- Module      : Network.TLS.State
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
---
--- the State module contains calls related to state initialization/manipulation
--- which is use by the Receiving module and the Sending module.
+-- | the State module contains calls related to state
+-- initialization/manipulation which is use by the Receiving module
+-- and the Sending module.
 module Network.TLS.State (
     TLSState (..),
     TLSSt,

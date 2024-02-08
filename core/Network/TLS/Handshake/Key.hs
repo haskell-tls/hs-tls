@@ -1,13 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 
--- |
--- Module      : Network.TLS.Handshake.Key
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
---
--- functions for RSA operations
+-- | Functions for RSA operations
 module Network.TLS.Handshake.Key (
     encryptRSA,
     signPrivate,

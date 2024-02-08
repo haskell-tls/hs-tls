@@ -1,11 +1,5 @@
 {-# OPTIONS_HADDOCK hide #-}
 
--- |
--- Module      : Network.TLS.Internal
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
 module Network.TLS.Internal (
     module Network.TLS.Struct,
     module Network.TLS.Struct13,

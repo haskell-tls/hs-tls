@@ -1,11 +1,4 @@
--- |
--- Module      : Network.TLS.Backend
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
---
--- A Backend represents a unified way to do IO on different
+-- | A Backend represents a unified way to do IO on different
 -- types without burdening our calling API with multiple
 -- ways to initialize a new context.
 --

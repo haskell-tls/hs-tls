@@ -1,9 +1,3 @@
--- |
--- Module      : Network.TLS.Parameters
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
 module Network.TLS.Parameters (
     ClientParams (..),
     ServerParams (..),

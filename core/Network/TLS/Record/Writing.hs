@@ -1,11 +1,4 @@
--- |
--- Module      : Network.TLS.Record.Writing
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
---
--- TLS record layer in Tx direction
+-- | TLS record layer in Tx direction
 module Network.TLS.Record.Writing (
     encodeRecord,
     encodeRecord13,

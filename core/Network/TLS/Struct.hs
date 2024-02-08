@@ -2,14 +2,8 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# OPTIONS_HADDOCK hide #-}
 
--- |
--- Module      : Network.TLS.Struct
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
---
--- the Struct module contains all definitions and values of the TLS protocol
+-- | The Struct module contains all definitions and values of the TLS
+-- protocol.
 module Network.TLS.Struct (
     Version (..),
     CipherData (..),

@@ -1,12 +1,6 @@
--- |
--- Module      : Network.TLS.Wire
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
---
--- the Wire module is a specialized marshalling/unmarshalling package related to the TLS protocol.
--- all multibytes values are written as big endian.
+-- | The Wire module is a specialized marshalling/unmarshalling
+-- package related to the TLS protocol.  All multibytes values are
+-- written as big endian.
 module Network.TLS.Wire (
     Get,
     GetResult (..),
