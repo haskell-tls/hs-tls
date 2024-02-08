@@ -18,7 +18,7 @@ data SessionManager = SessionManager
     , sessionResumeOnlyOnce :: SessionIDorTicket -> IO (Maybe SessionData)
     -- ^ Used for 0RTT on TLS 1.3 servers to lookup 'SessionData' with 'SessionID' or to decrypt 'Ticket' to get 'SessionData'.
     , sessionEstablish :: SessionID -> SessionData -> IO (Maybe Ticket)
-    -- ^ Used TLS 1.2\/1.3 servers\/clients to store 'SessionData' with 'SessionID' or to encrypt 'SessionData' to get 'Ticket'. In the client side, 'Nothing' should be returned.
+    -- ^ Used TLS 1.2\/1.3 servers\/clients to store 'SessionData' with 'SessionID' or to encrypt 'SessionData' to get 'Ticket'. In the client side, 'Nothing' should be returned. For clients, only this field should be set with 'noSessionManager'.
     , sessionInvalidate :: SessionID -> IO ()
     -- ^ Used TLS 1.2\/1.3 servers to delete 'SessionData' with 'SessionID' if @sessionUseTicket@ is 'True'.
     , sessionUseTicket :: Bool
