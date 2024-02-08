@@ -131,8 +131,9 @@ printHandshakeInfo ctx = do
             putStrLn ("cipher: " ++ show (infoCipher i))
             putStrLn ("compression: " ++ show (infoCompression i))
             putStrLn ("group: " ++ maybe "(none)" show (infoSupportedGroup i))
-            when (infoVersion i < TLS13) $
+            when (infoVersion i < TLS13) $ do
                 putStrLn ("extended master secret: " ++ show (infoExtendedMainSecret i))
+                putStrLn ("resumption: " ++ show (infoTLS12Resumption i))
             when (infoVersion i == TLS13) $ do
                 putStrLn ("handshake emode: " ++ show (fromJust (infoTLS13HandshakeMode i)))
                 putStrLn ("early data accepted: " ++ show (infoIsEarlyDataAccepted i))
