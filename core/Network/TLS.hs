@@ -1,12 +1,6 @@
 -- |
--- Module      : Network.TLS
--- License     : BSD-style
--- Maintainer  : Vincent Hanquez <vincent@snarc.org>
--- Stability   : experimental
--- Portability : unknown
---
--- Native Haskell TLS and SSL protocol implementation for server and
--- client.
+-- Native Haskell TLS protocol implementation for servers and
+-- clients.
 --
 -- This provides a high-level implementation of a sensitive security
 -- protocol, eliminating a common set of security issues through the
@@ -16,9 +10,6 @@
 -- Currently implement the TLS1.2 and TLS 1.3
 -- protocol, and support RSA and Ephemeral (Elliptic curve and
 -- regular) Diffie Hellman key exchanges, and many extensions.
---
--- Some debug tools linked with tls, are available through the
--- http://hackage.haskell.org/package/tls-debug/.
 module Network.TLS (
     -- * Basic APIs
     Context,
