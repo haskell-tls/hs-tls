@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
 
 import Control.Exception (SomeException (..))
 import qualified Control.Exception as E
@@ -485,7 +484,7 @@ printUsage :: IO ()
 printUsage =
     putStrLn $
         usageInfo
-            "usage: simpleclient [opts] <hostname> [port]\n\n\t(port default to: 443)\noptions:\n"
+            "usage: client [opts] <hostname> [port]\n\n\t(port default to: 443)\noptions:\n"
             options
 
 main :: IO ()

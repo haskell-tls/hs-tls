@@ -445,7 +445,7 @@ printUsage :: IO ()
 printUsage =
     putStrLn $
         usageInfo
-            "usage: simpleserver [opts] [port]\n\n\t(port default to: 443)\noptions:\n"
+            "usage: server [opts] [port]\n\n\t(port default to: 443)\noptions:\n"
             options
 
 main :: IO ()
