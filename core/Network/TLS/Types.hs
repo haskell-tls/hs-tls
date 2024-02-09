@@ -35,6 +35,7 @@ module Network.TLS.Types (
     MainSecret (..),
 ) where
 
+import Codec.Serialise
 import qualified Data.ByteString as B
 import GHC.Generics
 import Network.Socket (HostName)
@@ -176,3 +177,10 @@ type TrafficSecrets a = (ClientTrafficSecret a, ServerTrafficSecret a)
 
 -- Main secret for TLS 1.2 or earlier.
 newtype MainSecret = MainSecret ByteString deriving (Show)
+
+----------------------------------------------------------------
+
+instance Serialise Version
+instance Serialise TLS13TicketInfo
+instance Serialise SessionFlag
+instance Serialise SessionData

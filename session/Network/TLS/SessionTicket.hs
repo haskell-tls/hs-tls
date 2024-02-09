@@ -1,5 +1,4 @@
 {-# LANGUAGE RecordWildCards #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | A manager for TLS 1.2/1.3 session ticket.
 --
@@ -76,9 +75,3 @@ resume ctmgr ticket
                 Left _ -> return Nothing
                 Right sd -> return $ Just sd
     | otherwise = return Nothing
-
-instance Serialise Group
-instance Serialise Version
-instance Serialise TLS13TicketInfo
-instance Serialise SessionFlag
-instance Serialise SessionData

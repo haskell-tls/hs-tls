@@ -27,10 +27,12 @@ module Network.TLS.Crypto.Types (
     KeyExchangeSignatureAlg (..),
 ) where
 
+import Codec.Serialise
 import Data.Word
 import GHC.Generics
 
 newtype Group = Group Word16 deriving (Eq, Generic)
+instance Serialise Group
 
 {- FOURMOLU_DISABLE -}
 pattern P256      :: Group

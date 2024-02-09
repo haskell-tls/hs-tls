@@ -76,12 +76,6 @@ setPairParamsSessionResuming sessionStuff (clientParams, serverParams) =
     , serverParams
     )
 
-instance Serialise Group
-instance Serialise Version
-instance Serialise TLS13TicketInfo
-instance Serialise SessionFlag
-instance Serialise SessionData
-
 oneSessionTicket :: SessionManager
 oneSessionTicket =
     SessionManager
