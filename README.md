@@ -2,7 +2,7 @@
 
 # Haskell TLS
 
-* `tls` :: library for TLS 1.2/1.3 server and client in pure Haskell
+* `tls` :: library for TLS 1.2/1.3 server and client purely in Haskell
 * `tls-session-manager` :: library for in-memory session DB and session ticket.
 
 If the `devel` flag is specified to `tls`, `client` and `server` are also built.
