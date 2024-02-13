@@ -53,4 +53,4 @@ jobs:
       if: ${{ runner.os == 'Linux' }}
       run: |
         cabal install doctest --overwrite-policy=always
-        cabal repl --build-depends=QuickCheck --with-ghc=doctest core
+        cabal repl --build-depends=QuickCheck --with-ghc=doctest tls
