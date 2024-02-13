@@ -7,9 +7,9 @@ copyright:          Vincent Hanquez <vincent@snarc.org>
 maintainer:         Kazu Yamamoto <kazu@iij.ad.jp>
 author:             Vincent Hanquez <vincent@snarc.org>
 homepage:           https://github.com/haskell-tls/hs-tls
-synopsis:           TLS/SSL protocol native implementation (Server and Client)
+synopsis:           TLS protocol native implementation
 description:
-    Native Haskell TLS protocol implementation for servers and clients.
+    Native Haskell TLS 1.2/1.3 protocol implementation for servers and clients.
 
 category:           Network
 build-type:         Simple
