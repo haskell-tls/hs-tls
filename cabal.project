@@ -1,7 +1,7 @@
 packages:
-  core
+  tls
+  tls-session-manager
   debug
-  session
   test-scripts
 
 test-show-details: direct
