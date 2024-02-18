@@ -194,6 +194,7 @@ data TLS13State = TLS13State
     , tls13stPendingRecvData :: Maybe ByteString -- client
     , tls13stPendingSentData :: [ByteString] -> [ByteString] -- client
     , tls13stRTT :: Millisecond
+    , tls13st0RTT :: Bool -- client
     , tls13st0RTTAccepted :: Bool -- client
     , tls13stClientExtensions :: [ExtensionRaw] -- client
     , tls13stChoice :: ~CipherChoice -- client
@@ -213,6 +214,7 @@ defaultTLS13State =
         , tls13stPendingRecvData = Nothing
         , tls13stPendingSentData = id
         , tls13stRTT = 0
+        , tls13st0RTT = False
         , tls13st0RTTAccepted = False
         , tls13stClientExtensions = []
         , tls13stChoice = undefined

@@ -62,6 +62,7 @@ handshake cparams ctx groups mparams = do
     --------------------------------
     -- Sending ClientHello
     pskinfo@(_, _, rtt0) <- getPreSharedKeyInfo cparams ctx
+    when rtt0 $ modifyTLS13State ctx $ \st -> st{tls13st0RTT = True}
     let async = rtt0 && not (ctxQUICMode ctx)
     when async $ do
         chSentTime <- getCurrentTimeFromBase
