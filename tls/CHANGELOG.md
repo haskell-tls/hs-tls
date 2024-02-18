@@ -1,3 +1,7 @@
+## Version 2.0.1
+
+* Fix a leak of pending data to be sent.
+
 ## Version 2.0.0
 
 * `tls` now only supports TLS 1.2 and TLS 1.3 with safe cipher suites.
