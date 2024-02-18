@@ -69,9 +69,10 @@ handshake ctx = do
     handshake_ ctx
     -- Trying to receive an alert of client authentication failure
     liftIO $ do
+        role <- usingState_ ctx getRole
         tls13 <- tls13orLater ctx
         sentClientCert <- tls13stSentClientCert <$> getTLS13State ctx
-        when (tls13 && sentClientCert) $ do
+        when (role == ClientRole && tls13 && sentClientCert) $ do
             rtt <- getRTT ctx
             mdat <- timeout rtt $ recvData ctx
             case mdat of
