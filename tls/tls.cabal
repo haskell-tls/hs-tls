@@ -116,7 +116,7 @@ library
         asn1-types >= 0.3 && < 0.4,
         async >= 2.2 && < 2.3,
         base16-bytestring,
-        bytestring >= 0.10 && < 0.12,
+        bytestring >= 0.10 && < 0.13,
         cereal >= 0.5.3 && < 0.6,
         crypton >= 0.34 && < 0.35,
         crypton-x509 >= 1.7 && < 1.8,
