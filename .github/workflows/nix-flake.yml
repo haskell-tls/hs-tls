@@ -9,12 +9,16 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
+    # permissions:
+    #   contents: read
+    #   id-token: write
     steps:
       - uses: actions/checkout@v3
       - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+      # - uses: DeterminateSystems/magic-nix-cache-action@main
       - run: nix build
+      - run: nix build .#tls
+      - run: nix build .#tls-debug
+      - run: nix build .#tls-session-manager
+      - run: nix build .#tls-test
       - run: nix flake check
