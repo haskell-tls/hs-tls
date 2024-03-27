@@ -178,6 +178,7 @@ data CipherChoice = CipherChoice
     , cHash :: Hash
     , cZero :: ByteString
     }
+    deriving (Show)
 
 makeCipherChoice :: Version -> Cipher -> CipherChoice
 makeCipherChoice ver cipher = CipherChoice ver cipher h zero
