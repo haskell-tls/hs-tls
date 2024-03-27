@@ -67,9 +67,12 @@ processServerHello13 _ _ h = unexpected (show h) (Just "server hello")
 processServerHello
     :: ClientParams -> Context -> Handshake -> IO ()
 processServerHello cparams ctx (ServerHello rver serverRan serverSession cipher compression exts) = do
-    when (rver < TLS12) $
+    -- A server which receives a legacy_version value not equal to
+    -- 0x0303 MUST abort the handshake with an "illegal_parameter"
+    -- alert.
+    when (rver /= TLS12) $
         throwCore $
-            Error_Protocol (show rver ++ " is not supported") ProtocolVersion
+            Error_Protocol (show rver ++ " is not supported") IllegalParameter
     -- find the compression and cipher methods that the server want to use.
     clientSession <- tls13stSession <$> getTLS13State ctx
     sentExts <- tls13stSentExtensions <$> getTLS13State ctx
