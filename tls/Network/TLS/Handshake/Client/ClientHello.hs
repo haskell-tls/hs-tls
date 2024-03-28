@@ -290,11 +290,8 @@ getPreSharedKeyInfo cparams ctx = do
         guard tls13
         (sid, sdata) <- clientWantSessionResume cparams
         guard (sessionVersion sdata >= TLS13)
-        guard (not (null ciphers))
-        let sCipher = head ciphers
-        -- A keyshare is sent only for the first cipher.
-        -- This can induce HRR.
-        guard (cipherID sCipher == sessionCipher sdata)
+        let cid = sessionCipher sdata
+        sCipher <- find (\c -> cipherID c == cid) ciphers
         return (sid, sdata, sCipher)
 
     getPskInfo =
@@ -307,9 +304,13 @@ getPreSharedKeyInfo cparams ctx = do
                     if isAgeValid age tinfo
                         then
                             Just
-                                (identity, sdata, makeCipherChoice TLS13 sCipher, ageToObfuscatedAge age tinfo)
+                                ( identity
+                                , sdata
+                                , makeCipherChoice TLS13 sCipher
+                                , ageToObfuscatedAge age tinfo
+                                )
                         else Nothing
 
-    get0RTTinfo (_, _, choice, _)
-        | clientUseEarlyData cparams = Just choice
+    get0RTTinfo (_, sdata, choice, _)
+        | clientUseEarlyData cparams && sessionMaxEarlyDataSize sdata > 0 = Just choice
         | otherwise = Nothing
