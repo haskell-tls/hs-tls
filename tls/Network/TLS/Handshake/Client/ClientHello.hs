@@ -311,6 +311,6 @@ getPreSharedKeyInfo cparams ctx = do
                                 )
                         else Nothing
 
-    get0RTTinfo (_, _, choice, _)
-        | clientUseEarlyData cparams = Just choice
+    get0RTTinfo (_, sdata, choice, _)
+        | clientUseEarlyData cparams && sessionMaxEarlyDataSize sdata > 0 = Just choice
         | otherwise = Nothing
