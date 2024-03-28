@@ -1,3 +1,8 @@
+## Version 2.0.2
+
+* Client checks sessionMaxEarlyDataSize to decide 0-RTT
+* Client checks the resumption cipher properly.
+
 ## Version 2.0.1
 
 * Fix a leak of pending data to be sent.
