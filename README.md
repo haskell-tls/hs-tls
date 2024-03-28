@@ -1,4 +1,4 @@
-![GitHub Actions status](https://github.com/haskell-tls/hs-tls/workflows/Haskell%20CI/badge.svg)
+![GitHub Actions status](https://github.com/haskell-tls/hs-tls/workflows/Haskell%20CI/badge.svg)[![Nix Flake](https://github.com/haskell-tls/hs-tls/actions/workflows/nix-flake.yml/badge.svg)](https://github.com/haskell-tls/hs-tls/actions/workflows/nix-flake.yml)
 
 # Haskell TLS
 
