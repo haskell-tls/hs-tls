@@ -166,8 +166,8 @@ test-suite spec
         serialise,
         tls
 
-executable server
-    main-is:            server.hs
+executable tls-server
+    main-is:            tls-server.hs
     hs-source-dirs:     util
     other-modules:
         Common
@@ -193,8 +193,8 @@ executable server
     else
         buildable: False
 
-executable client
-    main-is:            client.hs
+executable tls-client
+    main-is:            tls-client.hs
     hs-source-dirs:     util
     other-modules:
         Common
