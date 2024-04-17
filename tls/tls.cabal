@@ -171,7 +171,7 @@ executable tls-server
     hs-source-dirs:     util
     other-modules:
         Common
-        HexDump
+        Server
         Imports
 
     default-language:   Haskell2010
@@ -186,7 +186,9 @@ executable tls-server
         crypton-x509-system,
         data-default-class,
         network,
-        tls
+        network-run,
+        tls,
+        unliftio
 
     if flag(devel)
 
@@ -197,8 +199,8 @@ executable tls-client
     main-is:            tls-client.hs
     hs-source-dirs:     util
     other-modules:
+        Client
         Common
-        HexDump
         Imports
 
     default-language:   Haskell2010
@@ -212,7 +214,9 @@ executable tls-client
         crypton-x509-system,
         data-default-class,
         network,
-        tls
+        network-run,
+        tls,
+        unliftio
 
     if flag(devel)
 

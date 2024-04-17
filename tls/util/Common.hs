@@ -10,23 +10,22 @@ module Common (
     readCiphers,
     readDHParams,
     readGroups,
-    printHandshakeInfo,
-    makeAddrInfo,
-    AddrInfo (..),
     getCertificateStore,
+    getLogger,
+    namedGroups,
+    getInfo,
+    printHandshakeInfo,
 ) where
 
-import Data.Char (isDigit)
-import Network.Socket
-import Numeric (showHex)
-
 import Crypto.System.CPU
+import Data.Char (isDigit)
 import Data.X509.CertificateStore
-import System.X509
-
 import Network.TLS hiding (HostName)
 import Network.TLS.Extra.Cipher
 import Network.TLS.Extra.FFDHE
+import Numeric (showHex)
+import System.Exit
+import System.X509
 
 import Imports
 
@@ -77,8 +76,10 @@ readDHParams s =
         Nothing -> (Just . read) `fmap` readFile s
         mparams -> return mparams
 
-readGroups :: String -> Maybe [Group]
-readGroups s = traverse (`lookup` namedGroups) (split ',' s)
+readGroups :: String -> [Group]
+readGroups s = case traverse (`lookup` namedGroups) (split ',' s) of
+    Nothing -> []
+    Just gs -> gs
 
 printCiphers :: IO ()
 printCiphers = do
@@ -121,37 +122,6 @@ printGroups = do
     putStrLn "====================================="
     forM_ namedGroups $ \(name, _) -> putStrLn name
 
-printHandshakeInfo :: Context -> IO ()
-printHandshakeInfo ctx = do
-    info <- contextGetInformation ctx
-    case info of
-        Nothing -> return ()
-        Just i -> do
-            putStrLn ("version: " ++ show (infoVersion i))
-            putStrLn ("cipher: " ++ show (infoCipher i))
-            putStrLn ("compression: " ++ show (infoCompression i))
-            putStrLn ("group: " ++ maybe "(none)" show (infoSupportedGroup i))
-            when (infoVersion i < TLS13) $ do
-                putStrLn ("extended master secret: " ++ show (infoExtendedMainSecret i))
-                putStrLn ("resumption: " ++ show (infoTLS12Resumption i))
-            when (infoVersion i == TLS13) $ do
-                putStrLn ("handshake emode: " ++ show (fromJust (infoTLS13HandshakeMode i)))
-                putStrLn ("early data accepted: " ++ show (infoIsEarlyDataAccepted i))
-    sni <- getClientSNI ctx
-    case sni of
-        Nothing -> return ()
-        Just n -> putStrLn ("server name indication: " ++ n)
-
-makeAddrInfo :: Maybe HostName -> PortNumber -> IO AddrInfo
-makeAddrInfo maddr port = do
-    let flgs = [AI_ADDRCONFIG, AI_NUMERICSERV, AI_PASSIVE]
-        hints =
-            defaultHints
-                { addrFlags = flgs
-                , addrSocketType = Stream
-                }
-    head <$> getAddrInfo (Just hints) maddr (Just $ show port)
-
 split :: Char -> String -> [String]
 split _ "" = []
 split c s = case break (c ==) s of
@@ -168,3 +138,29 @@ getCertificateStore paths = foldM readPathAppend mempty paths
         case mstore of
             Nothing -> error ("invalid certificate store: " ++ path)
             Just st -> return $! mappend st acc
+
+getLogger :: Maybe FilePath -> (String -> IO ())
+getLogger Nothing = \_ -> return ()
+getLogger (Just file) = \msg -> appendFile file (msg ++ "\n")
+
+getInfo :: Context -> IO Information
+getInfo ctx = do
+    minfo <- contextGetInformation ctx
+    case minfo of
+        Nothing -> do
+            putStrLn "Erro: information cannot be obtained"
+            exitFailure
+        Just info -> return info
+
+printHandshakeInfo :: Information -> IO ()
+printHandshakeInfo i = do
+    putStrLn $ "Version: " ++ show (infoVersion i)
+    putStrLn $ "Cipher: " ++ show (infoCipher i)
+    putStrLn $ "Compression: " ++ show (infoCompression i)
+    putStrLn $ "Groups: " ++ maybe "(none)" show (infoSupportedGroup i)
+    when (infoVersion i < TLS13) $ do
+        putStrLn $ "Extended master secret: " ++ show (infoExtendedMainSecret i)
+        putStrLn $ "Resumption: " ++ show (infoTLS12Resumption i)
+    when (infoVersion i == TLS13) $ do
+        putStrLn $ "Handshake mode: " ++ show (fromJust (infoTLS13HandshakeMode i))
+        putStrLn $ "Early data accepted: " ++ show (infoIsEarlyDataAccepted i)
