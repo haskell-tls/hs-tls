@@ -26,6 +26,7 @@ module Network.TLS.Core (
     requestCertificate,
 ) where
 
+import Control.Concurrent
 import qualified Control.Exception as E
 import Control.Monad (unless, void, when)
 import Control.Monad.State.Strict
@@ -63,7 +64,8 @@ import Network.TLS.Types (
 import Network.TLS.Util (catchException, mapChunks_)
 
 -- | Handshake for a new TLS connection
--- This is to be called at the beginning of a connection, and during renegotiation
+-- This is to be called at the beginning of a connection, and during renegotiation.
+-- Don't use this function as the acquire resource of 'bracket'.
 handshake :: MonadIO m => Context -> m ()
 handshake ctx = do
     handshake_ ctx
@@ -74,6 +76,7 @@ handshake ctx = do
         sentClientCert <- tls13stSentClientCert <$> getTLS13State ctx
         when (role == ClientRole && tls13 && sentClientCert) $ do
             rtt <- getRTT ctx
+            -- This 'timeout' should work.
             mdat <- timeout rtt $ recvData ctx
             case mdat of
                 Nothing -> return ()
@@ -102,17 +105,26 @@ bye ctx = liftIO $ do
             then do
                 withWriteLock ctx $ sendCFifNecessary ctx
                 -- receiving NewSessionTicket
-                recvNST <- tls13stRecvNST <$> getTLS13State ctx
+                let chk = tls13stRecvNST <$> getTLS13State ctx
+                recvNST <- chk
                 unless recvNST $ do
                     rtt <- getRTT ctx
-                    void $ timeout rtt $ recvData ctx
+                    var <- newEmptyMVar
+                    _ <- forkIOWithUnmask $ \umask ->
+                        umask (void $ timeout rtt $ recvData13 ctx chk) `E.finally` putMVar var ()
+                    takeMVar var
             else do
                 -- receiving Client Finished
-                recvCF <- tls13stRecvCF <$> getTLS13State ctx
+                let chk = tls13stRecvCF <$> getTLS13State ctx
+                recvCF <- chk
                 unless recvCF $ do
                     -- no chance to measure RTT before receiving CF
                     -- fixme: 1sec is good enough?
-                    void $ timeout 1000000 $ recvData ctx
+                    let rtt = 1000000
+                    var <- newEmptyMVar
+                    _ <- forkIOWithUnmask $ \umask ->
+                        umask (void $ timeout rtt $ recvData13 ctx chk) `E.finally` putMVar var ()
+                    takeMVar var
     bye_ ctx
 
 bye_ :: MonadIO m => Context -> m ()
@@ -190,7 +202,7 @@ recvData ctx = liftIO $ do
         -- Even when recvData12/recvData13 loops, we only need to call function
         -- checkValid once.  Since we hold the read lock, no concurrent call
         -- will impact the validity of the context.
-        if tls13 then recvData13 ctx else recvData12 ctx
+        if tls13 then recvData13 ctx (return False) else recvData12 ctx
 
 recvData12 :: Context -> IO B.ByteString
 recvData12 ctx = do
@@ -223,8 +235,8 @@ recvData12 ctx = do
 
     terminate = terminateWithWriteLock ctx (sendPacket12 ctx . Alert)
 
-recvData13 :: Context -> IO B.ByteString
-recvData13 ctx = do
+recvData13 :: Context -> IO Bool -> IO B.ByteString
+recvData13 ctx breakLoop = do
     mdat <- tls13stPendingRecvData <$> getTLS13State ctx
     case mdat of
         Nothing -> do
@@ -247,9 +259,14 @@ recvData13 ctx = do
             )
     process (Handshake13 hs) = do
         loopHandshake13 hs
-        recvData13 ctx
+        stop <- breakLoop
+        if stop
+            then
+                return ""
+            else
+                recvData13 ctx breakLoop
     -- when receiving empty appdata, we just retry to get some data.
-    process (AppData13 "") = recvData13 ctx
+    process (AppData13 "") = recvData13 ctx breakLoop
     process (AppData13 x) = do
         let chunkLen = C8.length x
         established <- ctxEstablished ctx
@@ -264,7 +281,7 @@ recvData13 ctx = do
             EarlyDataNotAllowed n
                 | n > 0 -> do
                     setEstablished ctx $ EarlyDataNotAllowed (n - 1)
-                    recvData13 ctx -- ignore "x"
+                    recvData13 ctx breakLoop -- ignore "x"
                 | otherwise ->
                     let reason = "early data deprotect overflow"
                      in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
@@ -273,7 +290,7 @@ recvData13 ctx = do
     process ChangeCipherSpec13 = do
         established <- ctxEstablished ctx
         if established /= Established
-            then recvData13 ctx
+            then recvData13 ctx breakLoop
             else do
                 let reason = "CSS after Finished"
                 terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
