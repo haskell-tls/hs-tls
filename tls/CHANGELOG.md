@@ -1,3 +1,9 @@
+## Version 2.0.3
+
+* Fixing a bug where `timeout` in `bye` does not work.
+* util/client -> util/tls-client
+* util/server -> util/tls-server
+
 ## Version 2.0.2
 
 * Client checks sessionMaxEarlyDataSize to decide 0-RTT
