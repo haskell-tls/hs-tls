@@ -207,7 +207,7 @@ recvData ctx = liftIO $ do
 recvData12 :: Context -> IO B.ByteString
 recvData12 ctx = do
     pkt <- recvPacket12 ctx
-    either (onError terminate) process pkt
+    either (onError terminate12) process pkt
   where
     process (Handshake [ch@ClientHello{}]) =
         handshakeWith ctx ch >> recvData12 ctx
@@ -231,9 +231,9 @@ recvData12 ctx = do
     process (AppData x) = return x
     process p =
         let reason = "unexpected message " ++ show p
-         in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+         in terminate12 (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
 
-    terminate = terminateWithWriteLock ctx (sendPacket12 ctx . Alert)
+    terminate12 = terminateWithWriteLock ctx (sendPacket12 ctx . Alert)
 
 recvData13 :: Context -> IO B.ByteString
 recvData13 ctx = do
@@ -241,7 +241,7 @@ recvData13 ctx = do
     case mdat of
         Nothing -> do
             pkt <- recvPacket13 ctx
-            either (onError terminate) process pkt
+            either (onError (terminate13 ctx)) process pkt
         Just dat -> do
             modifyTLS13State ctx $ \st -> st{tls13stPendingRecvData = Nothing}
             return dat
@@ -272,14 +272,14 @@ recvData13 ctx = do
                     return x
                 | otherwise ->
                     let reason = "early data overflow"
-                     in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+                     in terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
             EarlyDataNotAllowed n
                 | n > 0 -> do
                     setEstablished ctx $ EarlyDataNotAllowed (n - 1)
                     recvData13 ctx -- ignore "x"
                 | otherwise ->
                     let reason = "early data deprotect overflow"
-                     in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+                     in terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
             Established -> return x
             _ -> throwCore $ Error_Protocol "data at not-established" UnexpectedMessage
     process ChangeCipherSpec13 = do
@@ -288,10 +288,10 @@ recvData13 ctx = do
             then recvData13 ctx
             else do
                 let reason = "CSS after Finished"
-                terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+                terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
     process p =
         let reason = "unexpected message " ++ show p
-         in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+         in terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
 
     loopHandshake13 [] = return ()
     -- fixme: some implementations send multiple NST at the same time.
@@ -300,7 +300,7 @@ recvData13 ctx = do
         role <- usingState_ ctx S.getRole
         unless (role == ClientRole) $
             let reason = "Session ticket is allowed for client only"
-             in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+             in terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
         -- This part is similar to handshake code, so protected with
         -- read+write locks (which is also what we use for all calls to the
         -- session manager).
@@ -323,8 +323,8 @@ recvData13 ctx = do
     loopHandshake13 (KeyUpdate13 mode : hs) = do
         when (ctxQUICMode ctx) $ do
             let reason = "KeyUpdate is not allowed for QUIC"
-            terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-        checkAlignment hs
+            terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+        checkAlignment ctx hs
         established <- ctxEstablished ctx
         -- Though RFC 8446 Sec 4.6.3 does not clearly says,
         -- unidirectional key update is legal.
@@ -342,51 +342,19 @@ recvData13 ctx = do
                 loopHandshake13 hs
             else do
                 let reason = "received key update before established"
-                terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+                terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
     loopHandshake13 (h@CertRequest13{} : hs) =
         postHandshakeAuthWith ctx h >> loopHandshake13 hs
     loopHandshake13 (h@Certificate13{} : hs) =
         postHandshakeAuthWith ctx h >> loopHandshake13 hs
     loopHandshake13 (h : hs) = do
-        mPendingRecvAction <- popPendingRecvAction ctx
-        case mPendingRecvAction of
-            Nothing ->
-                let reason = "unexpected handshake message " ++ show h
-                 in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-            Just action -> do
-                -- Pending actions are executed with read+write locks, just
-                -- like regular handshake code.
-                withWriteLock ctx $
-                    handleException ctx $ do
-                        case action of
-                            PendingRecvAction needAligned pa -> do
-                                when needAligned $ checkAlignment hs
-                                processHandshake13 ctx h
-                                pa h
-                            PendingRecvActionHash needAligned pa -> do
-                                when needAligned $ checkAlignment hs
-                                d <- transcriptHash ctx
-                                processHandshake13 ctx h
-                                pa d h
-                        -- Client: after receiving SH, app data is coming.
-                        -- this loop tries to receive it.
-                        -- App key must be installed before receiving
-                        -- the app data.
-                        sendCFifNecessary ctx
-                loopHandshake13 hs
-
-    terminate = terminateWithWriteLock ctx (sendPacket13 ctx . Alert13)
-
-    checkAlignment hs = do
-        complete <- isRecvComplete ctx
-        unless (complete && null hs) $
-            let reason = "received message not aligned with record boundary"
-             in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+        cont <- popAction ctx h hs
+        when cont $ loopHandshake13 hs
 
 recvHS13 :: Context -> IO Bool -> IO ()
 recvHS13 ctx breakLoop = do
     pkt <- recvPacket13 ctx
-    --    either (onError terminate) process pkt
+    -- fixme: Left
     either (\_ -> return ()) process pkt
   where
     -- UserCanceled MUST be followed by a CloseNotify.
@@ -405,7 +373,7 @@ recvHS13 ctx breakLoop = do
         role <- usingState_ ctx S.getRole
         unless (role == ClientRole) $
             let reason = "Session ticket is allowed for client only"
-             in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+             in terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
         -- This part is similar to handshake code, so protected with
         -- read+write locks (which is also what we use for all calls to the
         -- session manager).
@@ -426,38 +394,46 @@ recvHS13 ctx breakLoop = do
             modifyTLS13State ctx $ \st -> st{tls13stRecvNST = True}
         loopHandshake13 hs
     loopHandshake13 (h : hs) = do
-        mPendingRecvAction <- popPendingRecvAction ctx
-        case mPendingRecvAction of
-            Nothing -> return ()
-            Just action -> do
-                -- Pending actions are executed with read+write locks, just
-                -- like regular handshake code.
-                withWriteLock ctx $
-                    handleException ctx $ do
-                        case action of
-                            PendingRecvAction needAligned pa -> do
-                                when needAligned $ checkAlignment hs
-                                processHandshake13 ctx h
-                                pa h
-                            PendingRecvActionHash needAligned pa -> do
-                                when needAligned $ checkAlignment hs
-                                d <- transcriptHash ctx
-                                processHandshake13 ctx h
-                                pa d h
-                        -- Client: after receiving SH, app data is coming.
-                        -- this loop tries to receive it.
-                        -- App key must be installed before receiving
-                        -- the app data.
-                        sendCFifNecessary ctx
-                loopHandshake13 hs
+        cont <- popAction ctx h hs
+        when cont $ loopHandshake13 hs
 
-    terminate = terminateWithWriteLock ctx (sendPacket13 ctx . Alert13)
+terminate13
+    :: Context -> TLSError -> AlertLevel -> AlertDescription -> String -> IO a
+terminate13 ctx = terminateWithWriteLock ctx (sendPacket13 ctx . Alert13)
 
-    checkAlignment hs = do
-        complete <- isRecvComplete ctx
-        unless (complete && null hs) $
-            let reason = "received message not aligned with record boundary"
-             in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+popAction :: Context -> Handshake13 -> [Handshake13] -> IO Bool
+popAction ctx h hs = do
+    mPendingRecvAction <- popPendingRecvAction ctx
+    case mPendingRecvAction of
+        Nothing -> return False
+        Just action -> do
+            -- Pending actions are executed with read+write locks, just
+            -- like regular handshake code.
+            withWriteLock ctx $
+                handleException ctx $ do
+                    case action of
+                        PendingRecvAction needAligned pa -> do
+                            when needAligned $ checkAlignment ctx hs
+                            processHandshake13 ctx h
+                            pa h
+                        PendingRecvActionHash needAligned pa -> do
+                            when needAligned $ checkAlignment ctx hs
+                            d <- transcriptHash ctx
+                            processHandshake13 ctx h
+                            pa d h
+                    -- Client: after receiving SH, app data is coming.
+                    -- this loop tries to receive it.
+                    -- App key must be installed before receiving
+                    -- the app data.
+                    sendCFifNecessary ctx
+            return True
+
+checkAlignment :: Context -> [Handshake13] -> IO ()
+checkAlignment ctx hs = do
+    complete <- isRecvComplete ctx
+    unless (complete && null hs) $
+        let reason = "received message not aligned with record boundary"
+         in terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
 
 -- the other side could have close the connection already, so wrap
 -- this in a try and ignore all exceptions
