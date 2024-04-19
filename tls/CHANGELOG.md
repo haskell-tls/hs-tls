@@ -1,3 +1,8 @@
+## Version 2.0.4
+
+* More fix for 0-RTT when application data is available while receiving CF.
+* New util/tls-client and util/tls-server.
+
 ## Version 2.0.3
 
 * Fixing a bug where `timeout` in `bye` does not work.
