@@ -111,7 +111,7 @@ bye ctx = liftIO $ do
                     rtt <- getRTT ctx
                     var <- newEmptyMVar
                     _ <- forkIOWithUnmask $ \umask ->
-                        umask (void $ timeout rtt $ recvData13 ctx chk) `E.finally` putMVar var ()
+                        umask (void $ timeout rtt $ recvHS13 ctx chk) `E.finally` putMVar var ()
                     takeMVar var
             else do
                 -- receiving Client Finished
@@ -123,7 +123,7 @@ bye ctx = liftIO $ do
                     let rtt = 1000000
                     var <- newEmptyMVar
                     _ <- forkIOWithUnmask $ \umask ->
-                        umask (void $ timeout rtt $ recvData13 ctx chk) `E.finally` putMVar var ()
+                        umask (void $ timeout rtt $ recvHS13 ctx chk) `E.finally` putMVar var ()
                     takeMVar var
     bye_ ctx
 
@@ -202,7 +202,7 @@ recvData ctx = liftIO $ do
         -- Even when recvData12/recvData13 loops, we only need to call function
         -- checkValid once.  Since we hold the read lock, no concurrent call
         -- will impact the validity of the context.
-        if tls13 then recvData13 ctx (return False) else recvData12 ctx
+        if tls13 then recvData13 ctx else recvData12 ctx
 
 recvData12 :: Context -> IO B.ByteString
 recvData12 ctx = do
@@ -235,8 +235,8 @@ recvData12 ctx = do
 
     terminate = terminateWithWriteLock ctx (sendPacket12 ctx . Alert)
 
-recvData13 :: Context -> IO Bool -> IO B.ByteString
-recvData13 ctx breakLoop = do
+recvData13 :: Context -> IO B.ByteString
+recvData13 ctx = do
     mdat <- tls13stPendingRecvData <$> getTLS13State ctx
     case mdat of
         Nothing -> do
@@ -259,14 +259,9 @@ recvData13 ctx breakLoop = do
             )
     process (Handshake13 hs) = do
         loopHandshake13 hs
-        stop <- breakLoop
-        if stop
-            then
-                return ""
-            else
-                recvData13 ctx breakLoop
+        recvData13 ctx
     -- when receiving empty appdata, we just retry to get some data.
-    process (AppData13 "") = recvData13 ctx breakLoop
+    process (AppData13 "") = recvData13 ctx
     process (AppData13 x) = do
         let chunkLen = C8.length x
         established <- ctxEstablished ctx
@@ -281,7 +276,7 @@ recvData13 ctx breakLoop = do
             EarlyDataNotAllowed n
                 | n > 0 -> do
                     setEstablished ctx $ EarlyDataNotAllowed (n - 1)
-                    recvData13 ctx breakLoop -- ignore "x"
+                    recvData13 ctx -- ignore "x"
                 | otherwise ->
                     let reason = "early data deprotect overflow"
                      in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
@@ -290,7 +285,7 @@ recvData13 ctx breakLoop = do
     process ChangeCipherSpec13 = do
         established <- ctxEstablished ctx
         if established /= Established
-            then recvData13 ctx breakLoop
+            then recvData13 ctx
             else do
                 let reason = "CSS after Finished"
                 terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
@@ -358,6 +353,82 @@ recvData13 ctx breakLoop = do
             Nothing ->
                 let reason = "unexpected handshake message " ++ show h
                  in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+            Just action -> do
+                -- Pending actions are executed with read+write locks, just
+                -- like regular handshake code.
+                withWriteLock ctx $
+                    handleException ctx $ do
+                        case action of
+                            PendingRecvAction needAligned pa -> do
+                                when needAligned $ checkAlignment hs
+                                processHandshake13 ctx h
+                                pa h
+                            PendingRecvActionHash needAligned pa -> do
+                                when needAligned $ checkAlignment hs
+                                d <- transcriptHash ctx
+                                processHandshake13 ctx h
+                                pa d h
+                        -- Client: after receiving SH, app data is coming.
+                        -- this loop tries to receive it.
+                        -- App key must be installed before receiving
+                        -- the app data.
+                        sendCFifNecessary ctx
+                loopHandshake13 hs
+
+    terminate = terminateWithWriteLock ctx (sendPacket13 ctx . Alert13)
+
+    checkAlignment hs = do
+        complete <- isRecvComplete ctx
+        unless (complete && null hs) $
+            let reason = "received message not aligned with record boundary"
+             in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+
+recvHS13 :: Context -> IO Bool -> IO ()
+recvHS13 ctx breakLoop = do
+    pkt <- recvPacket13 ctx
+    --    either (onError terminate) process pkt
+    either (\_ -> return ()) process pkt
+  where
+    -- UserCanceled MUST be followed by a CloseNotify.
+    process (Alert13 [(AlertLevel_Warning, CloseNotify)]) = tryBye ctx >> setEOF ctx
+    process (Alert13 [(AlertLevel_Fatal, _desc)]) = setEOF ctx
+    process (Handshake13 hs) = do
+        loopHandshake13 hs
+        stop <- breakLoop
+        unless stop $ recvHS13 ctx breakLoop
+    process _ = recvHS13 ctx breakLoop
+
+    loopHandshake13 [] = return ()
+    -- fixme: some implementations send multiple NST at the same time.
+    -- Only the first one is used at this moment.
+    loopHandshake13 (NewSessionTicket13 life add nonce label exts : hs) = do
+        role <- usingState_ ctx S.getRole
+        unless (role == ClientRole) $
+            let reason = "Session ticket is allowed for client only"
+             in terminate (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+        -- This part is similar to handshake code, so protected with
+        -- read+write locks (which is also what we use for all calls to the
+        -- session manager).
+        withWriteLock ctx $ do
+            Just resumptionSecret <- usingHState ctx getTLS13ResumptionSecret
+            (_, usedCipher, _, _) <- getTxRecordState ctx
+            let choice = makeCipherChoice TLS13 usedCipher
+                psk = derivePSK choice resumptionSecret nonce
+                maxSize = case extensionLookup EID_EarlyData exts
+                    >>= extensionDecode MsgTNewSessionTicket of
+                    Just (EarlyDataIndication (Just ms)) -> fromIntegral $ safeNonNegative32 ms
+                    _ -> 0
+                life7d = min life 604800 -- 7 days max
+            tinfo <- createTLS13TicketInfo life7d (Right add) Nothing
+            sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
+            let label' = B.copy label
+            void $ sessionEstablish (sharedSessionManager $ ctxShared ctx) label' sdata
+            modifyTLS13State ctx $ \st -> st{tls13stRecvNST = True}
+        loopHandshake13 hs
+    loopHandshake13 (h : hs) = do
+        mPendingRecvAction <- popPendingRecvAction ctx
+        case mPendingRecvAction of
+            Nothing -> return ()
             Just action -> do
                 -- Pending actions are executed with read+write locks, just
                 -- like regular handshake code.
