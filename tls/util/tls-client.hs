@@ -234,10 +234,17 @@ runClient2 Options{..} cparams aux@Aux{..} paths = do
     auxDebug "<<<< next connection >>>>"
     auxDebug "------------------------"
     runTLS cparams aux $ \ctx -> do
-        i <- getInfo ctx
-        when optDebugLog $ printHandshakeInfo i
-        void $ client aux paths ctx
-        return i
+        if opt0RTT
+            then do
+                void $ client aux paths ctx
+                i <- getInfo ctx
+                when optDebugLog $ printHandshakeInfo i
+                return i
+            else do
+                i <- getInfo ctx
+                when optDebugLog $ printHandshakeInfo i
+                void $ client aux paths ctx
+                return i
 
 runTLS
     :: ClientParams
