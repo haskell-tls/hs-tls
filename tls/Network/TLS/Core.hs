@@ -89,7 +89,8 @@ rttFactor = 3
 getRTT :: Context -> IO Int
 getRTT ctx = do
     rtt <- tls13stRTT <$> getTLS13State ctx
-    return (fromIntegral rtt * rttFactor * 1000) -- ms to us
+    let rtt' = max (fromIntegral rtt) 10
+    return (rtt' * rttFactor * 1000) -- ms to us
 
 -- | notify the context that this side wants to close connection.
 -- this is important that it is called before closing the handle, otherwise
