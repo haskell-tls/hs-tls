@@ -36,14 +36,17 @@ handshakeClientWith _ _ _ =
 -- client part of handshake. send a bunch of handshake of client
 -- values intertwined with response from the server.
 handshakeClient :: ClientParams -> Context -> IO ()
-handshakeClient cparams ctx = handshake cparams ctx groups Nothing
+handshakeClient cparams ctx = do
+    groups <- case clientWantSessionResume cparams of
+        Nothing -> return groupsSupported
+        Just (_, sdata) -> case sessionGroup sdata of
+            Nothing -> return [] -- TLS 1.2 or earlier
+            Just grp
+                | grp `elem` groupsSupported -> return $ grp : filter (/= grp) groupsSupported
+                | otherwise -> throwCore $ Error_Misc "groupsSupported is incorrect"
+    handshake cparams ctx groups Nothing
   where
     groupsSupported = supportedGroups (ctxSupported ctx)
-    groups = case clientWantSessionResume cparams of
-        Nothing -> groupsSupported
-        Just (_, sdata) -> case sessionGroup sdata of
-            Nothing -> [] -- TLS 1.2 or earlier
-            Just grp -> grp : filter (/= grp) groupsSupported
 
 -- https://tools.ietf.org/html/rfc8446#section-4.1.2 says:
 -- "The client will also send a
