@@ -44,6 +44,7 @@ import Network.TLS.Handshake
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.Process
+import Network.TLS.Handshake.Random
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.IO
@@ -348,6 +349,14 @@ recvData13 ctx = do
     loopHandshake13 (h@Certificate13{} : hs) =
         postHandshakeAuthWith ctx h >> loopHandshake13 hs
     loopHandshake13 (h : hs) = do
+        rtt0 <- tls13st0RTT <$> getTLS13State ctx
+        when rtt0 $ case h of
+            ServerHello13 srand _ _ _ ->
+                when (isHelloRetryRequest srand) $ do
+                    clearTxRecordState ctx
+                    let reason = "HRR is not allowed for 0-RTT"
+                     in terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+            _ -> return ()
         cont <- popAction ctx h hs
         when cont $ loopHandshake13 hs
 
