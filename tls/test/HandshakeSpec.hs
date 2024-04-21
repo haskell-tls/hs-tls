@@ -913,8 +913,11 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
                         , serverSupported = svrSupported1
                         }
                     )
-
-            if group1 == group0
+            -- C: [group0]
+            -- S: [P256, X25519]
+            -- C: [group0]
+            -- S: [group1]
+            if group0 == group1
                 then runTLS0RTT params1 PreSharedKey earlyData
                 else runTLSFailure params1 (tlsClient earlyData) tlsServer
   where
