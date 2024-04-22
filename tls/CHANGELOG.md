@@ -1,3 +1,9 @@
+## Version 2.0.5
+
+* Fixing handshake13_0rtt_fallback
+* Client checks if the group of PSK is contained in Supported_Groups.
+* HRR is not allowed for 0-RTT.
+
 ## Version 2.0.4
 
 * More fix for 0-RTT when application data is available while receiving CF.
