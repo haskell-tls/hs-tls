@@ -865,7 +865,6 @@ handshake13_0rtt (CSP13 (cli, srv)) = do
 
 handshake13_0rtt_fallback :: CSP13 -> IO ()
 handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
-    maxEarlyDataSize <- generate $ choose (0, 512)
     group0 <- generate $ elements [P256, X25519]
     let cliSupported =
             def
@@ -877,21 +876,21 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
                 { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
                 , supportedGroups = [group0]
                 }
-        params0 =
+        params =
             ( cli{clientSupported = cliSupported}
             , srv
                 { serverSupported = svrSupported
-                , serverEarlyDataSize = maxEarlyDataSize
+                , serverEarlyDataSize = 1024
                 }
             )
 
     sessionRefs <- twoSessionRefs
     let sessionManagers = twoSessionManagers sessionRefs
 
-    let params = setPairParamsSessionManagers sessionManagers params0
+    let params0 = setPairParamsSessionManagers sessionManagers params
 
     let mode = if group0 == P256 then FullHandshake else HelloRetryRequest
-    runTLSSimple13 params mode
+    runTLSSimple13 params0 mode
 
     -- and resume
     mSessionParams <- readClientSessionRef sessionRefs
@@ -900,7 +899,7 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
         Just sessionParams -> do
             earlyData <- B.pack <$> generate (someWords8 256)
             group1 <- generate $ elements [P256, X25519]
-            let (pc, ps) = setPairParamsSessionResuming sessionParams params
+            let (pc, ps) = setPairParamsSessionResuming sessionParams params0
                 svrSupported1 =
                     def
                         { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
@@ -913,12 +912,14 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
                         , serverSupported = svrSupported1
                         }
                     )
-            -- C: [group0]
-            -- S: [P256, X25519]
-            -- C: [group0]
+            -- C: [P256, X25519]
+            -- S: [group0]
+            -- C: [P256, X25519]
             -- S: [group1]
             if group0 == group1
+                -- 0-RTT is not allowed, so fallback to PreSharedKey
                 then runTLS0RTT params1 PreSharedKey earlyData
+                -- HRR but not allowed for 0-RTT
                 else runTLSFailure params1 (tlsClient earlyData) tlsServer
   where
     tlsClient earlyData ctx = do
