@@ -21,7 +21,7 @@ library
     ghc-options:      -Wall
     build-depends:
         base >=4.7 && <5,
-        auto-update >= 0.1 && < 0.2,
+        auto-update >= 0.1 && < 0.3,
         basement >= 0.0.16 && < 0.1,
         bytestring >= 0.10 && < 0.13,
         clock >= 0.8 && < 0.9,
