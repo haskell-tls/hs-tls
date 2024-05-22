@@ -36,7 +36,8 @@ defaultOptions =
         { optDebugLog = False
         , optShow = False
         , optKeyLogFile = Nothing
-        , optGroups = []
+        , -- excluding FFDHE8192 for retry
+          optGroups = [X25519, X448, P256, P521]
         , optCertFile = "servercert.pem"
         , optKeyFile = "serverkey.pem"
         }
@@ -98,12 +99,15 @@ main = do
     (host, port) <- case ips of
         [h, p] -> return (h, p)
         _ -> showUsageAndExit "cannot recognize <addr> and <port>\n"
+    when (null optGroups) $ do
+        putStrLn "Error: unsupported groups"
+        exitFailure
     smgr <- newSessionManager
     Right cred@(!_cc, !_priv) <- credentialLoadX509 optCertFile optKeyFile
     let keyLog = getLogger optKeyLogFile
         creds = Credentials [cred]
     runTCPServer (Just host) port $ \sock -> do
-        let sparams = getServerParams creds smgr keyLog
+        let sparams = getServerParams creds optGroups smgr keyLog
         E.bracket (contextNew sock sparams) bye $ \ctx -> do
             handshake ctx
             when (optDebugLog || optShow) $ putStrLn "------------------------"
@@ -113,10 +117,11 @@ main = do
 
 getServerParams
     :: Credentials
+    -> [Group]
     -> SessionManager
     -> (String -> IO ())
     -> ServerParams
-getServerParams creds sm keyLog =
+getServerParams creds groups sm keyLog =
     def
         { serverSupported = supported
         , serverShared = shared
@@ -132,7 +137,7 @@ getServerParams creds sm keyLog =
             }
     supported =
         def
-            { supportedGroups = [X25519, X448, P256, P521]
+            { supportedGroups = groups
             }
     hooks = def{onALPNClientSuggest = Just chooseALPN}
     debug = def{debugKeyLogger = keyLog}
