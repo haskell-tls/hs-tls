@@ -1,3 +1,13 @@
+## Version 2.0.6
+
+* Setting `supportedCiphers` in `defaultSupported` to `ciphersuite_default`.
+  So, users don't have to override this value anymore by exporting
+  `Network.TLS.Extra.Cipher`.
+  [#471](https://github.com/haskell-tls/hs-tls/pull/471)
+* `ciphersuite_default` is the same as `ciphersuite_strong`.
+  So, the duplicated definition is removed.
+* Add missing modules for util/tls-client and util/tls-server.
+
 ## Version 2.0.5
 
 * Fixing handshake13_0rtt_fallback
