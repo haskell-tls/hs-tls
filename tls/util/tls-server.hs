@@ -10,7 +10,6 @@ import Data.IORef
 import qualified Data.Map.Strict as M
 import Network.Run.TCP
 import Network.TLS
-import Network.TLS.Extra.Cipher
 import System.Console.GetOpt
 import System.Environment (getArgs)
 import System.Exit
@@ -133,8 +132,7 @@ getServerParams creds sm keyLog =
             }
     supported =
         def
-            { supportedCiphers = ciphersuite_strong
-            , supportedGroups = [X25519, X448, P256, P521]
+            { supportedGroups = [X25519, X448, P256, P521]
             }
     hooks = def{onALPNClientSuggest = Just chooseALPN}
     debug = def{debugKeyLogger = keyLog}

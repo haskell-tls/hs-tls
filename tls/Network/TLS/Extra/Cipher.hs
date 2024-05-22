@@ -196,30 +196,12 @@ sortDeterministic = concatMap f
 -- hardware-acceleration support.  If this dynamic runtime behavior is not
 -- desired, use 'ciphersuite_default_det' instead.
 ciphersuite_default :: [Cipher]
-ciphersuite_default = sortOptimized sets_default
+ciphersuite_default = ciphersuite_strong
 
 -- | Same as 'ciphersuite_default', but using deterministic preference not
 -- influenced by the CPU.
 ciphersuite_default_det :: [Cipher]
-ciphersuite_default_det = sortDeterministic sets_default
-
-sets_default :: [CipherSet]
-sets_default =
-    [ -- First the PFS + GCM + SHA2 ciphers
-      SetAead
-        [cipher_ECDHE_ECDSA_AES128GCM_SHA256, cipher_ECDHE_ECDSA_AES256GCM_SHA384]
-        [cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256]
-        [cipher_ECDHE_ECDSA_AES128CCM_SHA256, cipher_ECDHE_ECDSA_AES256CCM_SHA256]
-    , SetAead
-        [cipher_ECDHE_RSA_AES128GCM_SHA256, cipher_ECDHE_RSA_AES256GCM_SHA384]
-        [cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256]
-        []
-    , -- TLS13 (listed at the end but version is negotiated first)
-      SetAead
-        [cipher_TLS13_AES128GCM_SHA256, cipher_TLS13_AES256GCM_SHA384]
-        [cipher_TLS13_CHACHA20POLY1305_SHA256]
-        [cipher_TLS13_AES128CCM_SHA256]
-    ]
+ciphersuite_default_det = ciphersuite_strong_det
 
 ----------------------------------------------------------------
 

@@ -28,6 +28,7 @@ import Network.TLS.Compression
 import Network.TLS.Credentials
 import Network.TLS.Crypto
 import Network.TLS.Extension
+import Network.TLS.Extra.Cipher
 import Network.TLS.Imports
 import Network.TLS.Measurement
 import Network.TLS.RNG (Seed)
@@ -331,7 +332,7 @@ defaultSupported :: Supported
 defaultSupported =
     Supported
         { supportedVersions = [TLS13, TLS12]
-        , supportedCiphers = []
+        , supportedCiphers = ciphersuite_default
         , supportedCompressions = [nullCompression]
         , supportedHashSignatures = Struct.supportedSignatureSchemes
         , supportedSecureRenegotiation = True

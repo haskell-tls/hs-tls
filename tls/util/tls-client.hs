@@ -12,7 +12,6 @@ import Data.X509.CertificateStore
 import Network.Run.TCP
 import Network.Socket
 import Network.TLS
-import Network.TLS.Extra.Cipher
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
@@ -293,8 +292,7 @@ getClientParams vers serverName port groups sm mstore keyLog =
             }
     supported =
         def
-            { supportedCiphers = ciphersuite_strong
-            , supportedVersions = vers
+            { supportedVersions = vers
             , supportedGroups = groups
             }
     hooks =
