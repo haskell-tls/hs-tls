@@ -80,7 +80,6 @@ import Data.Tuple
 
 import Network.TLS.Backend
 import Network.TLS.Cipher
-import Network.TLS.Compression (Compression)
 import Network.TLS.Crypto
 import Network.TLS.Extension
 import Network.TLS.Handshake.Control
@@ -97,24 +96,9 @@ import Network.TLS.Struct13
 import Network.TLS.Types
 import Network.TLS.Util
 
--- | Information related to a running context, e.g. current cipher
-data Information = Information
-    { infoVersion :: Version
-    , infoCipher :: Cipher
-    , infoCompression :: Compression
-    , infoMainSecret :: Maybe ByteString
-    , infoExtendedMainSecret :: Bool
-    , infoClientRandom :: Maybe ClientRandom
-    , infoServerRandom :: Maybe ServerRandom
-    , infoSupportedGroup :: Maybe Group
-    , infoTLS12Resumption :: Bool
-    , infoTLS13HandshakeMode :: Maybe HandshakeMode13
-    , infoIsEarlyDataAccepted :: Bool
-    }
-    deriving (Show, Eq)
-
 -- | A TLS Context keep tls specific state, parameters and backend information.
-data Context = forall a.
+data Context
+    = forall a.
       Monoid a =>
     Context
     { ctxBackend :: Backend

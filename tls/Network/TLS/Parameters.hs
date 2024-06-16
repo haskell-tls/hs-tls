@@ -19,6 +19,7 @@ module Network.TLS.Parameters (
     GroupUsage (..),
     CertificateUsage (..),
     CertificateRejectReason (..),
+    Information (..),
 ) where
 
 import qualified Data.ByteString as B
@@ -29,6 +30,7 @@ import Network.TLS.Credentials
 import Network.TLS.Crypto
 import Network.TLS.Extension
 import Network.TLS.Extra.Cipher
+import Network.TLS.Handshake.State
 import Network.TLS.Imports
 import Network.TLS.Measurement
 import Network.TLS.RNG (Seed)
@@ -535,6 +537,8 @@ data ClientHooks = ClientHooks
     --   (4) rejecting if dh_size < 1024 (to prevent Logjam attack)
     --
     --   See RFC 7919 section 3.1 for recommandations.
+    , onServerFinished :: Information -> IO ()
+    -- ^ When a handshake is done, this hook can check `Information`.
     }
 
 defaultClientHooks :: ClientHooks
@@ -544,6 +548,7 @@ defaultClientHooks =
         , onServerCertificate = validateDefault
         , onSuggestALPN = return Nothing
         , onCustomFFDHEGroup = defaultGroupUsage 1024
+        , onServerFinished = \_ -> return ()
         }
 
 instance Show ClientHooks where
@@ -634,3 +639,19 @@ instance Show ServerHooks where
     show _ = "ServerHooks"
 instance Default ServerHooks where
     def = defaultServerHooks
+
+-- | Information related to a running context, e.g. current cipher
+data Information = Information
+    { infoVersion :: Version
+    , infoCipher :: Cipher
+    , infoCompression :: Compression
+    , infoMainSecret :: Maybe ByteString
+    , infoExtendedMainSecret :: Bool
+    , infoClientRandom :: Maybe ClientRandom
+    , infoServerRandom :: Maybe ServerRandom
+    , infoSupportedGroup :: Maybe Group
+    , infoTLS12Resumption :: Bool
+    , infoTLS13HandshakeMode :: Maybe HandshakeMode13
+    , infoIsEarlyDataAccepted :: Bool
+    }
+    deriving (Show, Eq)

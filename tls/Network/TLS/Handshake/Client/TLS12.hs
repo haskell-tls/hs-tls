@@ -79,8 +79,8 @@ sendClientSecondFlight12 cparams ctx = do
             sendClientCCC cparams ctx
             sendCCSandFinished ctx ClientRole
 
-recvServerSecondFlight12 :: Context -> IO ()
-recvServerSecondFlight12 ctx = do
+recvServerSecondFlight12 :: ClientParams -> Context -> IO ()
+recvServerSecondFlight12 cparams ctx = do
     sessionResuming <- usingState_ ctx isSessionResuming
     unless sessionResuming $ recvNSTandCCSandFinished ctx
     mticket <- usingState_ ctx getTLS12SessionTicket
@@ -98,6 +98,11 @@ recvServerSecondFlight12 ctx = do
             identity
             (fromJust sessionData)
     handshakeDone12 ctx
+    liftIO $ do
+        minfo <- contextGetInformation ctx
+        case minfo of
+            Nothing -> return ()
+            Just info -> onServerFinished (clientHooks cparams) info
 
 recvNSTandCCSandFinished :: Context -> IO ()
 recvNSTandCCSandFinished ctx = do

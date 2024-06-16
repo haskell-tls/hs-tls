@@ -44,7 +44,7 @@ recvServerSecondFlight13 cparams ctx groupSent = do
     runRecvHandshake13 $ do
         recvHandshake13 ctx $ expectEncryptedExtensions ctx
         unless resuming $ recvHandshake13 ctx $ expectCertRequest cparams ctx
-        recvHandshake13hash ctx $ expectFinished ctx
+        recvHandshake13hash ctx $ expectFinished cparams ctx
 
 ----------------------------------------------------------------
 
@@ -228,17 +228,23 @@ expectCertVerify _ _ _ p = unexpected (show p) (Just "certificate verify")
 
 expectFinished
     :: MonadIO m
-    => Context
+    => ClientParams
+    -> Context
     -> ByteString
     -> Handshake13
     -> m ()
-expectFinished ctx hashValue (Finished13 verifyData) = do
+expectFinished cparams ctx hashValue (Finished13 verifyData) = do
     st <- liftIO $ getTLS13State ctx
     let usedHash = cHash $ tls13stChoice st
         ServerTrafficSecret baseKey = triServer $ fromJust $ tls13stHsKey st
     checkFinished ctx usedHash baseKey hashValue verifyData
+    liftIO $ do
+        minfo <- contextGetInformation ctx
+        case minfo of
+            Nothing -> return ()
+            Just info -> onServerFinished (clientHooks cparams) info
     liftIO $ modifyTLS13State ctx $ \s -> s{tls13stRecvSF = True}
-expectFinished _ _ p = unexpected (show p) (Just "server finished")
+expectFinished _ _ _ p = unexpected (show p) (Just "server finished")
 
 ----------------------------------------------------------------
 ----------------------------------------------------------------
@@ -385,7 +391,7 @@ asyncServerHello13 cparams ctx groupSent chSentTime = do
         processServerHello13 cparams ctx sh
         void $ prepareSecondFlight13 ctx groupSent
     expectFinishedAndSet h sf = do
-        expectFinished ctx h sf
+        expectFinished cparams ctx h sf
         liftIO $
             writeIORef (ctxPendingSendAction ctx) $
                 Just $
