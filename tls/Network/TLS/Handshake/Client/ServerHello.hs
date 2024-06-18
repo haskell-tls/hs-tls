@@ -141,16 +141,19 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession cipher 
         throwCore $
             Error_Protocol "version downgrade detected" IllegalParameter
 
-    let resumingSession =
-            case clientWantSessionResume cparams of
-                Just (_, sessionData) ->
-                    if serverSession == clientSession then Just sessionData else Nothing
-                Nothing -> Nothing
-    usingState_ ctx $ setSession serverSession (isJust resumingSession)
-
     if ver == TLS13
-        then updateContext13 ctx cipherAlg
-        else updateContext12 ctx exts resumingSession
+        then do
+            -- xxx serverSession must be identity for PSK
+            usingState_ ctx $ setSession serverSession False
+            updateContext13 ctx cipherAlg
+        else do
+            let resumingSession = case clientWantSessionResume cparams of
+                    Just (_, sessionData) ->
+                        if serverSession == clientSession then Just sessionData else Nothing
+                    Nothing -> Nothing
+
+            usingState_ ctx $ setSession serverSession (isJust resumingSession)
+            updateContext12 ctx exts resumingSession
 processServerHello _ _ p = unexpected (show p) (Just "server hello")
 
 ----------------------------------------------------------------

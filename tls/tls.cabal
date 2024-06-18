@@ -180,6 +180,7 @@ executable tls-server
     build-depends:
         base >=4.9 && <5,
         bytestring,
+        base16-bytestring,
         containers,
         crypton,
         crypton-x509-store,
