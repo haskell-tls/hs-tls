@@ -105,6 +105,10 @@ data ClientParams = ClientParams
     -- ^ try to establish a connection using this session.
     --
     -- Default: 'Nothing'
+    , clientWantSessionResume2 :: [(SessionID, SessionData)]
+    -- ^ try to establish a connection using one of this sessions.
+    --
+    -- Default: '[]'
     , clientShared :: Shared
     -- ^ See the default value of 'Shared'.
     , clientHooks :: ClientHooks
@@ -133,6 +137,7 @@ defaultParamsClient serverName serverId =
         , clientServerIdentification = (serverName, serverId)
         , clientUseServerNameIndication = True
         , clientWantSessionResume = Nothing
+        , clientWantSessionResume2 = []
         , clientShared = def
         , clientHooks = def
         , clientSupported = def

@@ -184,6 +184,7 @@ data TLS13State = TLS13State
     , tls13stClientExtensions :: [ExtensionRaw] -- client
     , tls13stChoice :: ~CipherChoice -- client
     , tls13stHsKey :: Maybe (SecretTriple HandshakeSecret) -- client
+    -- Actuall session id for TLS 1.2, random value for TLS 1.3
     , tls13stSession :: Session
     , tls13stSentExtensions :: [ExtensionID]
     }

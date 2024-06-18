@@ -51,6 +51,14 @@ sendClientHello cparams ctx groups mparams pskinfo = do
         return crand
     generateClientHelloParams Nothing = do
         crand <- clientRandom ctx
+        {-
+                let sessions
+                        | not (null (clientWantSessionResume2 cparams)) =
+                            clientWantSessionResume2 cparams
+                        | otherwise = case clientWantSessionResume cparams of
+                            Nothing -> []
+                            Just s -> [s]
+        -}
         let paramSession = case clientWantSessionResume cparams of
                 Nothing -> Session Nothing
                 Just (sidOrTkt, sdata)

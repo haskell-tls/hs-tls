@@ -131,7 +131,7 @@ data HandshakeState = HandshakeState
     , hstSupportedGroup :: Maybe Group
     , hstTLS13HandshakeMode :: HandshakeMode13
     , hstTLS13RTT0Status :: RTT0Status
-    , hstTLS13EarlySecret :: Maybe (BaseSecret EarlySecret)
+    , hstTLS13EarlySecret :: Maybe (BaseSecret EarlySecret) -- xxx
     , hstTLS13ResumptionSecret :: Maybe (BaseSecret ResumptionSecret)
     , hstCCS13Sent :: Bool
     }

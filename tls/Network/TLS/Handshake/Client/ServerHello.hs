@@ -117,6 +117,7 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession cipher 
     let supportedVers = supportedVersions $ clientSupported cparams
 
     when (ver == TLS13) $ do
+        -- TLS 1.3 server MUST echo the session id
         when (clientSession /= serverSession) $
             throwCore $
                 Error_Protocol
