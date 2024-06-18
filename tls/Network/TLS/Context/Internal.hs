@@ -290,7 +290,19 @@ contextGetInformation ctx = do
         (Just v, Just c) ->
             return $
                 Just $
-                    Information v c comp ms ems cr sr grp tls12resumption hm13 accepted
+                    Information
+                        { infoVersion = v
+                        , infoCipher = c
+                        , infoCompression = comp
+                        , infoMainSecret = ms
+                        , infoExtendedMainSecret = ems
+                        , infoClientRandom = cr
+                        , infoServerRandom = sr
+                        , infoSupportedGroup = grp
+                        , infoTLS12Resumption = tls12resumption
+                        , infoTLS13HandshakeMode = hm13
+                        , infoIsEarlyDataAccepted = accepted
+                        }
         _ -> return Nothing
 
 contextSend :: Context -> ByteString -> IO ()
