@@ -38,7 +38,7 @@ sendServerHello12 sparams ctx (usedCipher, mcred) ch@CH{..} = do
     case resumeSessionData of
         Nothing -> do
             serverSession <- newSession ctx
-            usingState_ ctx $ setSession serverSession False
+            usingState_ ctx $ setSession serverSession
             serverhello <-
                 makeServerHello sparams ctx usedCipher mcred chExtensions serverSession
             build <- sendServerFirstFlight sparams ctx usedCipher mcred chExtensions
@@ -46,7 +46,9 @@ sendServerHello12 sparams ctx (usedCipher, mcred) ch@CH{..} = do
             sendPacket12 ctx $ Handshake ff
             contextFlush ctx
         Just sessionData -> do
-            usingState_ ctx $ setSession chSession True
+            usingState_ ctx $ do
+                setSession chSession
+                setTLS12SessionResuming True
             serverhello <-
                 makeServerHello sparams ctx usedCipher mcred chExtensions chSession
             sendPacket12 ctx $ Handshake [serverhello]

@@ -198,8 +198,8 @@ certVerifyHandshakeTypeMaterial _ = False
 certVerifyHandshakeMaterial :: Handshake -> Bool
 certVerifyHandshakeMaterial = certVerifyHandshakeTypeMaterial . typeOfHandshake
 
-setSession :: Session -> Bool -> TLSSt ()
-setSession session resuming = modify (\st -> st{stSession = session, stTLS12SessionResuming = resuming})
+setSession :: Session -> TLSSt ()
+setSession session = modify (\st -> st{stSession = session})
 
 getSession :: TLSSt Session
 getSession = gets stSession

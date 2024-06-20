@@ -46,7 +46,7 @@ sendServerHello13
         )
 sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..} = do
     newSession ctx >>= \ss -> usingState_ ctx $ do
-        setSession ss False
+        setSession ss
         setClientSupportsPHA supportsPHA
     usingHState ctx $ setSupportedGroup $ keyShareEntryGroup clientKeyShare
     srand <- setServerParameter

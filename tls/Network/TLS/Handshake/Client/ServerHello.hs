@@ -144,7 +144,7 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession cipher 
     if ver == TLS13
         then do
             -- xxx serverSession must be identity for PSK
-            usingState_ ctx $ setSession serverSession False
+            usingState_ ctx $ setSession serverSession
             updateContext13 ctx cipherAlg
         else do
             let resumingSession = case clientWantSessionResume cparams of
@@ -152,7 +152,9 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession cipher 
                         if serverSession == clientSession then Just sessionData else Nothing
                     Nothing -> Nothing
 
-            usingState_ ctx $ setSession serverSession (isJust resumingSession)
+            usingState_ ctx $ do
+                setSession serverSession
+                setTLS12SessionResuming $ isJust resumingSession
             updateContext12 ctx exts resumingSession
 processServerHello _ _ p = unexpected (show p) (Just "server hello")
 
