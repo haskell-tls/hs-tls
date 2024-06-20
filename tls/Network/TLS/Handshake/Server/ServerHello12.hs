@@ -229,7 +229,7 @@ makeServerHello
     -> Session
     -> IO Handshake
 makeServerHello sparams ctx usedCipher mcred chExts session = do
-    resuming <- usingState_ ctx isTLS12SessionResuming
+    resuming <- usingState_ ctx getTLS12SessionResuming
     srand <-
         serverRandom ctx TLS12 $ supportedVersions $ serverSupported sparams
     case mcred of

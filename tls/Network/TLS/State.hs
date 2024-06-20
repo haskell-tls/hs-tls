@@ -44,7 +44,8 @@ module Network.TLS.State (
     setServerCertificateChain,
     setSession,
     getSession,
-    isTLS12SessionResuming,
+    setTLS12SessionResuming,
+    getTLS12SessionResuming,
     getRole,
     setExporterSecret,
     getExporterSecret,
@@ -203,8 +204,11 @@ setSession session resuming = modify (\st -> st{stSession = session, stTLS12Sess
 getSession :: TLSSt Session
 getSession = gets stSession
 
-isTLS12SessionResuming :: TLSSt Bool
-isTLS12SessionResuming = gets stTLS12SessionResuming
+setTLS12SessionResuming :: Bool -> TLSSt ()
+setTLS12SessionResuming b = modify (\st -> st{stTLS12SessionResuming = b})
+
+getTLS12SessionResuming :: TLSSt Bool
+getTLS12SessionResuming = gets stTLS12SessionResuming
 
 setVersion :: Version -> TLSSt ()
 setVersion ver = modify (\st -> st{stVersion = Just ver})
@@ -295,7 +299,7 @@ getPeerVerifyData = do
 getFirstVerifyData :: TLSSt (Maybe ByteString)
 getFirstVerifyData = do
     -- xxx TLS 1.2 vs 1.3
-    resuming <- isTLS12SessionResuming
+    resuming <- getTLS12SessionResuming
     if resuming
         then gets stServerVerifyData
         else gets stClientVerifyData
