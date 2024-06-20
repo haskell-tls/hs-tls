@@ -60,6 +60,11 @@ sessionEstablished ctx = do
         Session (Just sessionId) -> do
             sessionData <- getSessionData ctx
             let sessionId' = B.copy sessionId
+            -- SessionID method: SessionID is used as key to store
+            -- SessionData. Nothing is returned.
+            --
+            -- Session ticket method: SessionID is ignored. SessionData
+            -- is encrypted and returned.
             sessionEstablish
                 (sharedSessionManager $ ctxShared ctx)
                 sessionId'

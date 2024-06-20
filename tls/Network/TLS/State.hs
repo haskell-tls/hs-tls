@@ -83,7 +83,6 @@ import Network.TLS.Wire (GetContinuation)
 
 data TLSState = TLSState
     { stSession :: Session
-    , stTLS12SessionTicket :: Maybe Ticket
     , -- RFC 5746, Renegotiation Indication Extension
       -- RFC 5929, Channel Bindings for TLS, "tls-unique"
       stSecureRenegotiation :: Bool
@@ -105,6 +104,7 @@ data TLSState = TLSState
     , stVersion :: Maybe Version
     , --
       stTLS12SessionResuming :: Bool
+    , stTLS12SessionTicket :: Maybe Ticket
     , --
       stTLS13KeyShare :: Maybe KeyShare
     , stTLS13PreSharedKey :: Maybe PreSharedKey
@@ -129,7 +129,6 @@ newTLSState :: StateRNG -> Role -> TLSState
 newTLSState rng clientContext =
     TLSState
         { stSession = Session Nothing
-        , stTLS12SessionTicket = Nothing
         , stSecureRenegotiation = False
         , stClientVerifyData = Nothing
         , stServerVerifyData = Nothing
@@ -147,6 +146,7 @@ newTLSState rng clientContext =
         , stClientContext = clientContext
         , stVersion = Nothing
         , stTLS12SessionResuming = False
+        , stTLS12SessionTicket = Nothing
         , stTLS13KeyShare = Nothing
         , stTLS13PreSharedKey = Nothing
         , stTLS13HRR = False

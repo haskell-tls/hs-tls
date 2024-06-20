@@ -470,15 +470,21 @@ terminateWithWriteLock
     -> AlertDescription
     -> String
     -> IO a
-terminateWithWriteLock ctx send err level desc reason = do
-    session <- usingState_ ctx getSession
-    -- Session manager is always invoked with read+write locks, so we merge this
-    -- with the alert packet being emitted.
-    withWriteLock ctx $ do
-        case session of
-            Session Nothing -> return ()
-            Session (Just sid) -> sessionInvalidate (sharedSessionManager $ ctxShared ctx) sid
-        catchException (send [(level, desc)]) (\_ -> return ())
+terminateWithWriteLock ctx send err level desc reason = withWriteLock ctx $ do
+    tls13 <- tls13orLater ctx
+    unless tls13 $ do
+        -- TLS 1.2 uses the same session ID and session data
+        -- for all resumed sessions.
+        --
+        -- TLS 1.3 changes session data for every resumed session.
+        session <- usingState_ ctx getSession
+        withWriteLock ctx $ do
+            case session of
+                Session Nothing -> return ()
+                Session (Just sid) ->
+                    -- calling even session ticket manager anyway
+                    sessionInvalidate (sharedSessionManager $ ctxShared ctx) sid
+    catchException (send [(level, desc)]) (\_ -> return ())
     setEOF ctx
     E.throwIO (Terminated False reason err)
 

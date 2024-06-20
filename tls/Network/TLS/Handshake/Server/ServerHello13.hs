@@ -141,7 +141,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
 
     choosePSK = case extensionLookup EID_PreSharedKey chExtensions
         >>= extensionDecode MsgTClientHello of
-        Just (PreSharedKeyClientHello (PskIdentity sessionId obfAge : _) bnds@(bnd : _)) -> do
+        Just (PreSharedKeyClientHello (PskIdentity identity obfAge : _) bnds@(bnd : _)) -> do
             when (null dhModes) $
                 throwCore $
                     Error_Protocol "no psk_key_exchange_modes extension" MissingExtension
@@ -149,10 +149,11 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
                 then do
                     let len = sum (map (\x -> B.length x + 1) bnds) + 2
                         mgr = sharedSessionManager $ serverShared sparams
+                    -- xxx -- invalidate session data
                     msdata <-
                         if rtt0
-                            then sessionResumeOnlyOnce mgr sessionId
-                            else sessionResume mgr sessionId
+                            then sessionResumeOnlyOnce mgr identity
+                            else sessionResume mgr identity
                     case msdata of
                         Just sdata -> do
                             let tinfo = fromJust $ sessionTicketInfo sdata
