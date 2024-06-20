@@ -143,7 +143,7 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession cipher 
 
     if ver == TLS13
         then do
-            -- xxx serverSession must be identity for PSK
+            -- Session is dummy in TLS 1.3.
             usingState_ ctx $ setSession serverSession
             updateContext13 ctx cipherAlg
         else do

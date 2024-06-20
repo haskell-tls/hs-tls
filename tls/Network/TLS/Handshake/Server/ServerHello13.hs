@@ -149,7 +149,9 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
                 then do
                     let len = sum (map (\x -> B.length x + 1) bnds) + 2
                         mgr = sharedSessionManager $ serverShared sparams
-                    -- xxx -- invalidate session data
+                    -- sessionInvalidate is not used for TLS 1.3
+                    -- because PSK is always changed.
+                    -- So, identity is not stored in Context.
                     msdata <-
                         if rtt0
                             then sessionResumeOnlyOnce mgr identity
