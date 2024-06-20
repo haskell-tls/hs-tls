@@ -44,7 +44,7 @@ module Network.TLS.State (
     setServerCertificateChain,
     setSession,
     getSession,
-    isSessionResuming,
+    isTLS12SessionResuming,
     getRole,
     setExporterSecret,
     getExporterSecret,
@@ -80,7 +80,7 @@ import Network.TLS.Wire (GetContinuation)
 
 data TLSState = TLSState
     { stSession :: Session
-    , stSessionResuming :: Bool
+    , stTLS12SessionResuming :: Bool
     , -- RFC 5746, Renegotiation Indication Extension
       -- RFC 5929, Channel Bindings for TLS, "tls-unique"
       stSecureRenegotiation :: Bool
@@ -124,7 +124,7 @@ newTLSState :: StateRNG -> Role -> TLSState
 newTLSState rng clientContext =
     TLSState
         { stSession = Session Nothing
-        , stSessionResuming = False
+        , stTLS12SessionResuming = False
         , stSecureRenegotiation = False
         , stClientVerifyData = Nothing
         , stServerVerifyData = Nothing
@@ -198,13 +198,13 @@ certVerifyHandshakeMaterial :: Handshake -> Bool
 certVerifyHandshakeMaterial = certVerifyHandshakeTypeMaterial . typeOfHandshake
 
 setSession :: Session -> Bool -> TLSSt ()
-setSession session resuming = modify (\st -> st{stSession = session, stSessionResuming = resuming})
+setSession session resuming = modify (\st -> st{stSession = session, stTLS12SessionResuming = resuming})
 
 getSession :: TLSSt Session
 getSession = gets stSession
 
-isSessionResuming :: TLSSt Bool
-isSessionResuming = gets stSessionResuming
+isTLS12SessionResuming :: TLSSt Bool
+isTLS12SessionResuming = gets stTLS12SessionResuming
 
 setVersion :: Version -> TLSSt ()
 setVersion ver = modify (\st -> st{stVersion = Just ver})
@@ -294,7 +294,8 @@ getPeerVerifyData = do
 
 getFirstVerifyData :: TLSSt (Maybe ByteString)
 getFirstVerifyData = do
-    resuming <- isSessionResuming
+    -- xxx TLS 1.2 vs 1.3
+    resuming <- isTLS12SessionResuming
     if resuming
         then gets stServerVerifyData
         else gets stClientVerifyData

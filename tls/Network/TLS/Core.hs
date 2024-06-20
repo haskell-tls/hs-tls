@@ -298,7 +298,7 @@ recvData13 ctx = do
     loopHandshake13 [] = return ()
     -- fixme: some implementations send multiple NST at the same time.
     -- Only the first one is used at this moment.
-    loopHandshake13 (NewSessionTicket13 life add nonce label exts : hs) = do
+    loopHandshake13 (NewSessionTicket13 life add nonce ticket exts : hs) = do
         role <- usingState_ ctx S.getRole
         unless (role == ClientRole) $
             let reason = "Session ticket is allowed for client only"
@@ -318,8 +318,8 @@ recvData13 ctx = do
                 life7d = min life 604800 -- 7 days max
             tinfo <- createTLS13TicketInfo life7d (Right add) Nothing
             sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
-            let label' = B.copy label
-            void $ sessionEstablish (sharedSessionManager $ ctxShared ctx) label' sdata
+            let ticket' = B.copy ticket
+            void $ sessionEstablish (sharedSessionManager $ ctxShared ctx) ticket' sdata
             modifyTLS13State ctx $ \st -> st{tls13stRecvNST = True}
         loopHandshake13 hs
     loopHandshake13 (KeyUpdate13 mode : hs) = do
@@ -379,7 +379,7 @@ recvHS13 ctx breakLoop = do
     loopHandshake13 [] = return ()
     -- fixme: some implementations send multiple NST at the same time.
     -- Only the first one is used at this moment.
-    loopHandshake13 (NewSessionTicket13 life add nonce label exts : hs) = do
+    loopHandshake13 (NewSessionTicket13 life add nonce ticket exts : hs) = do
         role <- usingState_ ctx S.getRole
         unless (role == ClientRole) $
             let reason = "Session ticket is allowed for client only"
@@ -399,8 +399,8 @@ recvHS13 ctx breakLoop = do
                 life7d = min life 604800 -- 7 days max
             tinfo <- createTLS13TicketInfo life7d (Right add) Nothing
             sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
-            let label' = B.copy label
-            void $ sessionEstablish (sharedSessionManager $ ctxShared ctx) label' sdata
+            let ticket' = B.copy ticket
+            void $ sessionEstablish (sharedSessionManager $ ctxShared ctx) ticket' sdata
             modifyTLS13State ctx $ \st -> st{tls13stRecvNST = True}
         loopHandshake13 hs
     loopHandshake13 (h : hs) = do

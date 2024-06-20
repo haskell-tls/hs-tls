@@ -286,7 +286,7 @@ contextGetInformation ctx = do
     let accepted = case hstate of
             Just st -> hstTLS13RTT0Status st == RTT0Accepted
             Nothing -> False
-    tls12resumption <- usingState_ ctx isSessionResuming
+    tls12resumption <- usingState_ ctx isTLS12SessionResuming
     case (ver, cipher) of
         (Just v, Just c) ->
             return $

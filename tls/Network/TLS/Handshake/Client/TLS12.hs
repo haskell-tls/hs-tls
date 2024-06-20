@@ -34,7 +34,7 @@ import Network.TLS.X509 hiding (Certificate)
 
 recvServerFirstFlight12 :: ClientParams -> Context -> [Handshake] -> IO ()
 recvServerFirstFlight12 cparams ctx hs = do
-    resuming <- usingState_ ctx isSessionResuming
+    resuming <- usingState_ ctx isTLS12SessionResuming
     if resuming
         then recvNSTandCCSandFinished ctx
         else do
@@ -72,7 +72,7 @@ expectServerHelloDone _ p = unexpected (show p) (Just "server hello data")
 
 sendClientSecondFlight12 :: ClientParams -> Context -> IO ()
 sendClientSecondFlight12 cparams ctx = do
-    sessionResuming <- usingState_ ctx isSessionResuming
+    sessionResuming <- usingState_ ctx isTLS12SessionResuming
     if sessionResuming
         then sendCCSandFinished ctx ClientRole
         else do
@@ -81,7 +81,7 @@ sendClientSecondFlight12 cparams ctx = do
 
 recvServerSecondFlight12 :: ClientParams -> Context -> IO ()
 recvServerSecondFlight12 cparams ctx = do
-    sessionResuming <- usingState_ ctx isSessionResuming
+    sessionResuming <- usingState_ ctx isTLS12SessionResuming
     unless sessionResuming $ recvNSTandCCSandFinished ctx
     mticket <- usingState_ ctx getTLS12SessionTicket
     identity <- case mticket of
