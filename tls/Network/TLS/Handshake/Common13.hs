@@ -531,7 +531,7 @@ calculateApplicationSecret ctx choice (BaseSecret sec) hChSf = do
     let clientApplicationSecret0 = deriveSecret usedHash applicationSecret "c ap traffic" hChSf
         serverApplicationSecret0 = deriveSecret usedHash applicationSecret "s ap traffic" hChSf
         exporterSecret = deriveSecret usedHash applicationSecret "exp master" hChSf
-    usingState_ ctx $ setExporterSecret exporterSecret
+    usingState_ ctx $ setTLS13ExporterSecret exporterSecret
     let sts0 =
             ServerTrafficSecret serverApplicationSecret0
                 :: ServerTrafficSecret ApplicationSecret
