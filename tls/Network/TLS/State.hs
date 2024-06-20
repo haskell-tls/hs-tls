@@ -302,11 +302,14 @@ getPeerVerifyData = do
 
 getFirstVerifyData :: TLSSt (Maybe ByteString)
 getFirstVerifyData = do
-    -- xxx TLS 1.2 vs 1.3
-    resuming <- getTLS12SessionResuming
-    if resuming
-        then gets stServerVerifyData
-        else gets stClientVerifyData
+    ver <- getVersion
+    case ver of
+        TLS13 -> gets stServerVerifyData
+        _ -> do
+            resuming <- getTLS12SessionResuming
+            if resuming
+                then gets stServerVerifyData
+                else gets stClientVerifyData
 
 getRole :: TLSSt Role
 getRole = gets stClientContext
