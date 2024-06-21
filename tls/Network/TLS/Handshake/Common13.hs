@@ -217,12 +217,13 @@ makePSKBinder ctx (BaseSecret sec) usedHash truncLen mch = do
         totalLen = B.length x
         takeLen = totalLen - truncLen
 
-replacePSKBinder :: ByteString -> ByteString -> ByteString
-replacePSKBinder pskz binder = identities `B.append` binders
+replacePSKBinder :: ByteString -> [ByteString] -> ByteString
+replacePSKBinder pskz bds = tLidentities <> binders
   where
-    bindersSize = B.length binder + 3
-    identities = B.take (B.length pskz - bindersSize) pskz
-    binders = runPut $ putOpaque16 $ runPut $ putOpaque8 binder
+    tLidentities = B.take (B.length pskz - B.length binders) pskz
+    -- See instance Extension PreSharedKey
+    binders = runPut $ putOpaque16 $ runPut (mapM_ putBinder bds)
+    putBinder = putOpaque8
 
 ----------------------------------------------------------------
 

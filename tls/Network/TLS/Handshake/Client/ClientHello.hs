@@ -51,14 +51,6 @@ sendClientHello cparams ctx groups mparams pskinfo = do
         return crand
     generateClientHelloParams Nothing = do
         crand <- clientRandom ctx
-        {-
-                let sessions
-                        | not (null (clientWantSessionResume2 cparams)) =
-                            clientWantSessionResume2 cparams
-                        | otherwise = case clientWantSessionResume cparams of
-                            Nothing -> []
-                            Just s -> [s]
-        -}
         let paramSession = case clientWantSessionResume cparams of
                 Nothing -> Session Nothing
                 Just (sidOrTkt, sdata)
@@ -218,10 +210,13 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
     preSharedKeyExtension =
         case pskInfo of
             Nothing -> return Nothing
-            Just (identity, _, choice, obfAge) ->
+            Just (identities, _, choice, obfAge) ->
                 let zero = cZero choice
-                    pskIdentity = PskIdentity identity obfAge
-                    offeredPsks = PreSharedKeyClientHello [pskIdentity] [zero]
+                    pskIdentities = map (\x -> PskIdentity x obfAge) identities
+                    -- [zero] is a place holds.
+                    -- adjustExtentions will replace them.
+                    binders = replicate (length pskIdentities) zero
+                    offeredPsks = PreSharedKeyClientHello pskIdentities binders
                  in return $ Just $ toExtensionRaw offeredPsks
 
     pskExchangeModeExtension
@@ -246,18 +241,21 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
     adjustExtentions exts ch =
         case pskInfo of
             Nothing -> return exts
-            Just (_, sdata, choice, _) -> do
+            Just (identities, sdata, choice, _) -> do
                 let psk = sessionSecret sdata
                     earlySecret = initEarlySecret choice (Just psk)
                 usingHState ctx $ setTLS13EarlySecret earlySecret
                 let ech = encodeHandshake ch
                     h = cHash choice
-                    siz = hashDigestSize h
-                binder <- makePSKBinder ctx earlySecret h (siz + 3) (Just ech)
+                    siz = (hashDigestSize h + 1) * length identities + 2
+                binder <- makePSKBinder ctx earlySecret h siz (Just ech)
+                -- PSK is shared by the previous TLS session.
+                -- So, PSK is unique for identities.
+                let binders = replicate (length identities) binder
                 let exts' = init exts ++ [adjust (last exts)]
                     adjust (ExtensionRaw eid withoutBinders) = ExtensionRaw eid withBinders
                       where
-                        withBinders = replacePSKBinder withoutBinders binder
+                        withBinders = replacePSKBinder withoutBinders binders
                 return exts'
 
     getEarlySecretInfo choice = do
@@ -279,7 +277,10 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
 ----------------------------------------------------------------
 
 type PreSharedKeyInfo =
-    (Maybe (SessionID, SessionData, CipherChoice, Second), Maybe CipherChoice, Bool)
+    ( Maybe ([SessionIDorTicket], SessionData, CipherChoice, Second)
+    , Maybe CipherChoice
+    , Bool
+    )
 
 getPreSharedKeyInfo
     :: ClientParams
@@ -294,16 +295,27 @@ getPreSharedKeyInfo cparams ctx = do
     ciphers = supportedCiphers $ ctxSupported ctx
     highestVer = maximum $ supportedVersions $ ctxSupported ctx
     tls13 = highestVer >= TLS13
-    sessionAndCipherToResume13 = do
+
+    fromClientWantSessionResume = do
         guard tls13
         (sid, sdata) <- clientWantSessionResume cparams
         guard (sessionVersion sdata >= TLS13)
         let cid = sessionCipher sdata
         sCipher <- find (\c -> cipherID c == cid) ciphers
-        return (sid, sdata, sCipher)
+        Just ([sid], sdata, sCipher)
+
+    fromClientWantSessionResume13 = case clientWantSessionResume13 cparams of
+        [] -> Nothing
+        (sid, sdata) : xs -> do
+            guard tls13
+            guard (sessionVersion sdata >= TLS13)
+            let cid = sessionCipher sdata
+                sids = map fst xs
+            sCipher <- find (\c -> cipherID c == cid) ciphers
+            Just (sid : sids, sdata, sCipher)
 
     getPskInfo =
-        case sessionAndCipherToResume13 of
+        case fromClientWantSessionResume <|> fromClientWantSessionResume13 of
             Nothing -> return Nothing
             Just (identity, sdata, sCipher) -> do
                 let tinfo = fromJust $ sessionTicketInfo sdata
