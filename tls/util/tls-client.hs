@@ -33,6 +33,7 @@ data Options = Options
     , opt0RTT :: Bool
     , optRetry :: Bool
     , optVersions :: [Version]
+    , optALPN :: String
     }
     deriving (Show)
 
@@ -49,6 +50,7 @@ defaultOptions =
         , opt0RTT = False
         , optRetry = False
         , optVersions = supportedVersions def
+        , optALPN = "http/1.1"
         }
 
 usage :: String
@@ -106,6 +108,11 @@ options =
         ["tls13"]
         (NoArg (\o -> o{optVersions = [TLS13]}))
         "use TLS 1.3"
+    , Option
+        ['a']
+        ["alpn"]
+        (ReqArg (\a o -> o{optALPN = a}) "<alpn>")
+        "set ALPN"
     ]
 
 showUsageAndExit :: String -> IO a
@@ -150,11 +157,7 @@ main = do
                 }
     mstore <-
         if optValidate then Just <$> getSystemCertificateStore else return Nothing
-    let keyLog = getLogger optKeyLogFile
-        groups
-            | optRetry = FFDHE8192 : optGroups
-            | otherwise = optGroups
-        cparams = getClientParams optVersions host port groups (smIORef ref) mstore keyLog
+    let cparams = getClientParams opts host port (smIORef ref) mstore
     runClient opts cparams aux paths
 
 runClient :: Options -> ClientParams -> Aux -> [ByteString] -> IO ()
@@ -217,7 +220,8 @@ runClient opts@Options{..} cparams aux@Aux{..} paths = do
                     exitFailure
         | otherwise -> do
             putStrLn "Result: (H) handshake ... OK"
-            putStrLn "Result: (1) HTTP/1.1 transaction ... OK"
+            when (optALPN == "http/1.1") $
+                putStrLn "Result: (1) HTTP/1.1 transaction ... OK"
             exitSuccess
 
 runClient2
@@ -266,15 +270,13 @@ modifyClientParams cparams ts@(ticket : _) early
     | otherwise = cparams{clientWantSessionResume = Just ticket}
 
 getClientParams
-    :: [Version]
+    :: Options
     -> HostName
     -> ServiceName
-    -> [Group]
     -> SessionManager
     -> Maybe CertificateStore
-    -> (String -> IO ())
     -> ClientParams
-getClientParams vers serverName port groups sm mstore keyLog =
+getClientParams Options{..} serverName port sm mstore =
     (defaultParamsClient serverName (C8.pack port))
         { clientSupported = supported
         , clientUseServerNameIndication = True
@@ -283,6 +285,9 @@ getClientParams vers serverName port groups sm mstore keyLog =
         , clientDebug = debug
         }
   where
+    groups
+        | optRetry = FFDHE8192 : optGroups
+        | otherwise = optGroups
     shared =
         def
             { sharedSessionManager = sm
@@ -293,12 +298,12 @@ getClientParams vers serverName port groups sm mstore keyLog =
             }
     supported =
         def
-            { supportedVersions = vers
+            { supportedVersions = optVersions
             , supportedGroups = groups
             }
     hooks =
         def
-            { onSuggestALPN = return $ Just ["http/1.1"]
+            { onSuggestALPN = return $ Just [C8.pack optALPN]
             , onServerFinished = print
             }
     validateCache
@@ -309,7 +314,7 @@ getClientParams vers serverName port groups sm mstore keyLog =
                 (\_ _ _ -> return ())
     debug =
         def
-            { debugKeyLogger = keyLog
+            { debugKeyLogger = getLogger optKeyLogFile
             }
 
 smIORef :: IORef [(SessionID, SessionData)] -> SessionManager
