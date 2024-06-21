@@ -269,7 +269,7 @@ modifyClientParams cparams [] _ = cparams
 modifyClientParams cparams ts@(ticket : _) early
     | sessionVersion (snd ticket) == TLS13 =
         cparams
-            { clientWantSessionResume2 = ts
+            { clientWantSessionResume13 = ts
             , clientUseEarlyData = early
             }
     | otherwise = cparams{clientWantSessionResume = Just ticket}

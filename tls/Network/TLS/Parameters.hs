@@ -102,11 +102,13 @@ data ClientParams = ClientParams
     --
     -- Default: 'True'
     , clientWantSessionResume :: Maybe (SessionID, SessionData)
-    -- ^ try to establish a connection using this session.
+    -- ^ try to establish a connection using this session for TLS 1.2/TLS 1.3.
+    -- This can be used for TLS 1.3 but for backward compatibility purpose only.
+    -- Use 'clientWantSessionResume13' instead for TLS 1.3.
     --
     -- Default: 'Nothing'
-    , clientWantSessionResume2 :: [(SessionID, SessionData)]
-    -- ^ try to establish a connection using one of this sessions.
+    , clientWantSessionResume13 :: [(SessionID, SessionData)]
+    -- ^ try to establish a connection using one of this sessions for TLS 1.3.
     --
     -- Default: '[]'
     , clientShared :: Shared
@@ -137,7 +139,7 @@ defaultParamsClient serverName serverId =
         , clientServerIdentification = (serverName, serverId)
         , clientUseServerNameIndication = True
         , clientWantSessionResume = Nothing
-        , clientWantSessionResume2 = []
+        , clientWantSessionResume13 = []
         , clientShared = def
         , clientHooks = def
         , clientSupported = def
