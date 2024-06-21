@@ -147,10 +147,10 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession cipher 
             usingState_ ctx $ setSession serverSession
             updateContext13 ctx cipherAlg
         else do
-            let resumingSession = case clientWantSessionResume cparams of
-                    Just (_, sessionData) ->
+            let resumingSession = case clientSessions cparams of
+                    (_, sessionData) : _ ->
                         if serverSession == clientSession then Just sessionData else Nothing
-                    Nothing -> Nothing
+                    _ -> Nothing
 
             usingState_ ctx $ do
                 setSession serverSession

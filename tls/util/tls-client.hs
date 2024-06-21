@@ -265,14 +265,11 @@ runTLS cparams Aux{..} action =
 
 modifyClientParams
     :: ClientParams -> [(SessionID, SessionData)] -> Bool -> ClientParams
-modifyClientParams cparams [] _ = cparams
-modifyClientParams cparams ts@(ticket : _) early
-    | sessionVersion (snd ticket) == TLS13 =
-        cparams
-            { clientWantSessionResume13 = ts
-            , clientUseEarlyData = early
-            }
-    | otherwise = cparams{clientWantSessionResume = Just ticket}
+modifyClientParams cparams ts early =
+    cparams
+        { clientWantSessionResumeList = ts
+        , clientUseEarlyData = early
+        }
 
 getClientParams
     :: Options

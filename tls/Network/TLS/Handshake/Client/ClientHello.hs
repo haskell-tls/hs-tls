@@ -51,9 +51,9 @@ sendClientHello cparams ctx groups mparams pskinfo = do
         return crand
     generateClientHelloParams Nothing = do
         crand <- clientRandom ctx
-        let paramSession = case clientWantSessionResume cparams of
-                Nothing -> Session Nothing
-                Just (sidOrTkt, sdata)
+        let paramSession = case clientSessions cparams of
+                [] -> Session Nothing
+                (sidOrTkt, sdata) : _
                     | sessionVersion sdata >= TLS13 -> Session Nothing
                     | ems == RequireEMS && noSessionEMS -> Session Nothing
                     | isTicket sidOrTkt -> Session $ Just $ toSessionID sidOrTkt
@@ -178,8 +178,8 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
     -- heartbeatExtension = return $ Just $ toExtensionRaw $ HeartBeat $ HeartBeat_PeerAllowedToSend
 
     sessionTicketExtension = do
-        case clientWantSessionResume cparams of
-            Just (sidOrTkt, _)
+        case clientSessions cparams of
+            (sidOrTkt, _) : _
                 | isTicket sidOrTkt -> return $ Just $ toExtensionRaw $ SessionTicket sidOrTkt
             _ -> return $ Just $ toExtensionRaw $ SessionTicket ""
 
@@ -296,15 +296,7 @@ getPreSharedKeyInfo cparams ctx = do
     highestVer = maximum $ supportedVersions $ ctxSupported ctx
     tls13 = highestVer >= TLS13
 
-    fromClientWantSessionResume = do
-        guard tls13
-        (sid, sdata) <- clientWantSessionResume cparams
-        guard (sessionVersion sdata >= TLS13)
-        let cid = sessionCipher sdata
-        sCipher <- find (\c -> cipherID c == cid) ciphers
-        Just ([sid], sdata, sCipher)
-
-    fromClientWantSessionResume13 = case clientWantSessionResume13 cparams of
+    sessions = case clientSessions cparams of
         [] -> Nothing
         (sid, sdata) : xs -> do
             guard tls13
@@ -314,22 +306,21 @@ getPreSharedKeyInfo cparams ctx = do
             sCipher <- find (\c -> cipherID c == cid) ciphers
             Just (sid : sids, sdata, sCipher)
 
-    getPskInfo =
-        case fromClientWantSessionResume <|> fromClientWantSessionResume13 of
-            Nothing -> return Nothing
-            Just (identity, sdata, sCipher) -> do
-                let tinfo = fromJust $ sessionTicketInfo sdata
-                age <- getAge tinfo
-                return $
-                    if isAgeValid age tinfo
-                        then
-                            Just
-                                ( identity
-                                , sdata
-                                , makeCipherChoice TLS13 sCipher
-                                , ageToObfuscatedAge age tinfo
-                                )
-                        else Nothing
+    getPskInfo = case sessions of
+        Nothing -> return Nothing
+        Just (identity, sdata, sCipher) -> do
+            let tinfo = fromJust $ sessionTicketInfo sdata
+            age <- getAge tinfo
+            return $
+                if isAgeValid age tinfo
+                    then
+                        Just
+                            ( identity
+                            , sdata
+                            , makeCipherChoice TLS13 sCipher
+                            , ageToObfuscatedAge age tinfo
+                            )
+                    else Nothing
 
     get0RTTinfo (_, sdata, choice, _)
         | clientUseEarlyData cparams && sessionMaxEarlyDataSize sdata > 0 = Just choice
