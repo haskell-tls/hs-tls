@@ -209,6 +209,7 @@ executable tls-client
     ghc-options:        -Wall -threaded -rtsopts
     build-depends:
         base >=4.9 && <5,
+        base16-bytestring,
         bytestring,
         crypton,
         crypton-x509-store,

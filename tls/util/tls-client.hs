@@ -5,6 +5,7 @@
 module Main where
 
 import Control.Concurrent
+import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString.Char8 as C8
 import Data.Default.Class (def)
 import Data.IORef
@@ -158,10 +159,13 @@ main = do
     mstore <-
         if optValidate then Just <$> getSystemCertificateStore else return Nothing
     let cparams = getClientParams opts host port (smIORef ref) mstore
-    runClient opts cparams aux paths
+        client
+            | optALPN == "dot" = clientDNS
+            | otherwise = clientHTTP11
+    runClient opts client cparams aux paths
 
-runClient :: Options -> ClientParams -> Aux -> [ByteString] -> IO ()
-runClient opts@Options{..} cparams aux@Aux{..} paths = do
+runClient :: Options -> Cli -> ClientParams -> Aux -> [ByteString] -> IO ()
+runClient opts@Options{..} client cparams aux@Aux{..} paths = do
     auxDebug "------------------------"
     (info1, msd) <- runTLS cparams aux $ \ctx -> do
         i1 <- getInfo ctx
@@ -174,7 +178,7 @@ runClient opts@Options{..} cparams aux@Aux{..} paths = do
             if isResumptionPossible msd
                 then do
                     let cparams2 = modifyClientParams cparams msd False
-                    info2 <- runClient2 opts cparams2 aux paths
+                    info2 <- runClient2 opts client cparams2 aux paths
                     if infoVersion info1 == TLS12
                         then do
                             if infoTLS12Resumption info2
@@ -199,7 +203,7 @@ runClient opts@Options{..} cparams aux@Aux{..} paths = do
             if is0RTTPossible info1 msd
                 then do
                     let cparams2 = modifyClientParams cparams msd True
-                    info2 <- runClient2 opts cparams2 aux paths
+                    info2 <- runClient2 opts client cparams2 aux paths
                     if infoTLS13HandshakeMode info2 == Just RTT0
                         then do
                             putStrLn "Result: (Z) 0-RTT ... OK"
@@ -226,11 +230,12 @@ runClient opts@Options{..} cparams aux@Aux{..} paths = do
 
 runClient2
     :: Options
+    -> Cli
     -> ClientParams
     -> Aux
     -> [ByteString]
     -> IO Information
-runClient2 Options{..} cparams aux@Aux{..} paths = do
+runClient2 Options{..} client cparams aux@Aux{..} paths = do
     threadDelay 100000
     auxDebug "<<<< next connection >>>>"
     auxDebug "------------------------"
@@ -304,7 +309,6 @@ getClientParams Options{..} serverName port sm mstore =
     hooks =
         def
             { onSuggestALPN = return $ Just [C8.pack optALPN]
-            , onServerFinished = print
             }
     validateCache
         | isJust mstore = def
@@ -320,8 +324,16 @@ getClientParams Options{..} serverName port sm mstore =
 smIORef :: IORef [(SessionID, SessionData)] -> SessionManager
 smIORef ref =
     noSessionManager
-        { sessionEstablish = \sid sdata -> modifyIORef' ref (\xs -> (sid, sdata) : xs) >> print sid >> return Nothing
+        { sessionEstablish = \sid sdata ->
+            modifyIORef' ref (\xs -> (sid, sdata) : xs)
+                >> printTicket sid sdata
+                >> return Nothing
         }
+
+printTicket :: SessionID -> SessionData -> IO ()
+printTicket sid sdata = do
+    C8.putStr $ "Ticket: " <> C8.take 16 (BS16.encode sid) <> "..., "
+    putStrLn $ "0-RTT: " <> if sessionMaxEarlyDataSize sdata > 0 then "OK" else "NG"
 
 isResumptionPossible :: [(SessionID, SessionData)] -> Bool
 isResumptionPossible = not . null
