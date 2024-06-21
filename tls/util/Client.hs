@@ -18,7 +18,7 @@ data Aux = Aux
     , auxPort :: ServiceName
     , auxDebug :: String -> IO ()
     , auxShow :: ByteString -> IO ()
-    , auxReadResumptionData :: IO (Maybe (SessionID, SessionData))
+    , auxReadResumptionData :: IO [(SessionID, SessionData)]
     }
 
 type Cli = Aux -> [ByteString] -> Context -> IO ()

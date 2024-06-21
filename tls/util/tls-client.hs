@@ -133,7 +133,7 @@ main = do
     when (null optGroups) $ do
         putStrLn "Error: unsupported groups"
         exitFailure
-    ref <- newIORef Nothing
+    ref <- newIORef []
     let debug
             | optDebugLog = putStrLn
             | otherwise = \_ -> return ()
@@ -217,9 +217,7 @@ runClient opts@Options{..} cparams aux@Aux{..} paths = do
                     exitFailure
         | otherwise -> do
             putStrLn "Result: (H) handshake ... OK"
-            let malpn = (snd <$> msd) >>= sessionALPN
-            when (malpn == Just "http/1.1") $
-                putStrLn "Result: (1) HTTP/1.1 transaction ... OK"
+            putStrLn "Result: (1) HTTP/1.1 transaction ... OK"
             exitSuccess
 
 runClient2
@@ -257,12 +255,15 @@ runTLS cparams Aux{..} action =
             action ctx
 
 modifyClientParams
-    :: ClientParams -> Maybe (SessionID, SessionData) -> Bool -> ClientParams
-modifyClientParams cparams wantResume early =
-    cparams
-        { clientWantSessionResume = wantResume
-        , clientUseEarlyData = early
-        }
+    :: ClientParams -> [(SessionID, SessionData)] -> Bool -> ClientParams
+modifyClientParams cparams [] _ = cparams
+modifyClientParams cparams ts@(ticket : _) early
+    | sessionVersion (snd ticket) == TLS13 =
+        cparams
+            { clientWantSessionResume2 = ts
+            , clientUseEarlyData = early
+            }
+    | otherwise = cparams{clientWantSessionResume = Just ticket}
 
 getClientParams
     :: [Version]
@@ -311,17 +312,17 @@ getClientParams vers serverName port groups sm mstore keyLog =
             { debugKeyLogger = keyLog
             }
 
-smIORef :: IORef (Maybe (SessionID, SessionData)) -> SessionManager
+smIORef :: IORef [(SessionID, SessionData)] -> SessionManager
 smIORef ref =
     noSessionManager
-        { sessionEstablish = \sid sdata -> writeIORef ref (Just (sid, sdata)) >> return Nothing
+        { sessionEstablish = \sid sdata -> modifyIORef' ref (\xs -> (sid, sdata) : xs) >> print sid >> return Nothing
         }
 
-isResumptionPossible :: Maybe (SessionID, SessionData) -> Bool
-isResumptionPossible = isJust
+isResumptionPossible :: [(SessionID, SessionData)] -> Bool
+isResumptionPossible = not . null
 
-is0RTTPossible :: Information -> Maybe (SessionID, SessionData) -> Bool
-is0RTTPossible _ Nothing = False
-is0RTTPossible info (Just (_, sd)) =
+is0RTTPossible :: Information -> [(SessionID, SessionData)] -> Bool
+is0RTTPossible _ [] = False
+is0RTTPossible info xs =
     infoVersion info == TLS13
-        && sessionMaxEarlyDataSize sd > 0
+        && any (\(_, sd) -> sessionMaxEarlyDataSize sd > 0) xs
