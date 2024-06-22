@@ -378,12 +378,8 @@ asyncServerHello13 cparams ctx groupSent chSentTime = do
     setPendingRecvActions
         ctx
         [ PendingRecvAction True expectServerHello
-        , PendingRecvAction
-            True
-            (expectEncryptedExtensions ctx)
-        , PendingRecvActionHash
-            True
-            expectFinishedAndSet
+        , PendingRecvAction True (expectEncryptedExtensions ctx)
+        , PendingRecvActionHash True expectFinishedAndSet
         ]
   where
     expectServerHello sh = do
