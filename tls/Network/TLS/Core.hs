@@ -439,11 +439,11 @@ popAction ctx h hs = do
             return True
 
 checkAlignment :: Context -> [Handshake13] -> IO ()
-checkAlignment ctx hs = do
+checkAlignment ctx _hs = do
     complete <- isRecvComplete ctx
-    unless (complete && null hs) $
+    unless complete $ do
         let reason = "received message not aligned with record boundary"
-         in terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+        terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
 
 -- the other side could have close the connection already, so wrap
 -- this in a try and ignore all exceptions
