@@ -298,6 +298,7 @@ getClientParams vers serverName port groups sm mstore keyLog =
     hooks =
         def
             { onSuggestALPN = return $ Just ["http/1.1"]
+            , onServerFinished = print
             }
     validateCache
         | isJust mstore = def

@@ -94,7 +94,7 @@ handshake cparams ctx groups mparams = do
                 | otherwise -> do
                     recvServerFirstFlight12 cparams ctx hss
                     sendClientSecondFlight12 cparams ctx
-                    recvServerSecondFlight12 ctx
+                    recvServerSecondFlight12 cparams ctx
   where
     groupToSend = listToMaybe groups
 
