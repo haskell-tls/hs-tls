@@ -117,6 +117,7 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession cipher 
     let supportedVers = supportedVersions $ clientSupported cparams
 
     when (ver == TLS13) $ do
+        -- TLS 1.3 server MUST echo the session id
         when (clientSession /= serverSession) $
             throwCore $
                 Error_Protocol
@@ -140,16 +141,21 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession cipher 
         throwCore $
             Error_Protocol "version downgrade detected" IllegalParameter
 
-    let resumingSession =
-            case clientWantSessionResume cparams of
-                Just (_, sessionData) ->
-                    if serverSession == clientSession then Just sessionData else Nothing
-                Nothing -> Nothing
-    usingState_ ctx $ setSession serverSession (isJust resumingSession)
-
     if ver == TLS13
-        then updateContext13 ctx cipherAlg
-        else updateContext12 ctx exts resumingSession
+        then do
+            -- Session is dummy in TLS 1.3.
+            usingState_ ctx $ setSession serverSession
+            updateContext13 ctx cipherAlg
+        else do
+            let resumingSession = case clientSessions cparams of
+                    (_, sessionData) : _ ->
+                        if serverSession == clientSession then Just sessionData else Nothing
+                    _ -> Nothing
+
+            usingState_ ctx $ do
+                setSession serverSession
+                setTLS12SessionResuming $ isJust resumingSession
+            updateContext12 ctx exts resumingSession
 processServerHello _ _ p = unexpected (show p) (Just "server hello")
 
 ----------------------------------------------------------------

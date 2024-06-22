@@ -10,6 +10,7 @@ import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import Network.TLS.Extension
 import Network.TLS.Handshake.Client.ClientHello
+import Network.TLS.Handshake.Client.Common
 import Network.TLS.Handshake.Client.ServerHello
 import Network.TLS.Handshake.Client.TLS12
 import Network.TLS.Handshake.Client.TLS13
@@ -37,9 +38,9 @@ handshakeClientWith _ _ _ =
 -- values intertwined with response from the server.
 handshakeClient :: ClientParams -> Context -> IO ()
 handshakeClient cparams ctx = do
-    groups <- case clientWantSessionResume cparams of
-        Nothing -> return groupsSupported
-        Just (_, sdata) -> case sessionGroup sdata of
+    groups <- case clientSessions cparams of
+        [] -> return groupsSupported
+        (_, sdata) : _ -> case sessionGroup sdata of
             Nothing -> return [] -- TLS 1.2 or earlier
             Just grp
                 | grp `elem` groupsSupported -> return $ grp : filter (/= grp) groupsSupported

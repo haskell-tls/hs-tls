@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Network.TLS.Handshake.Client.Common (
     throwMiscErrorOnException,
@@ -9,6 +10,7 @@ module Network.TLS.Handshake.Client.Common (
     sigAlgsToCertTypes,
     setALPN,
     contextSync,
+    clientSessions,
 ) where
 
 import Control.Exception (SomeException)
@@ -348,3 +350,8 @@ setALPN ctx msgt exts = case extensionLookup EID_ApplicationLayerProtocolNegotia
 contextSync :: Context -> ClientState -> IO ()
 contextSync ctx ctl = case ctxHandshakeSync ctx of
     HandshakeSync sync _ -> sync ctx ctl
+
+clientSessions :: ClientParams -> [(SessionID, SessionData)]
+clientSessions ClientParams{..} = case clientWantSessionResume of
+    Nothing -> clientWantSessionResumeList
+    Just ent -> clientWantSessionResumeList ++ [ent]

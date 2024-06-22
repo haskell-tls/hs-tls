@@ -184,6 +184,7 @@ data TLS13State = TLS13State
     , tls13stClientExtensions :: [ExtensionRaw] -- client
     , tls13stChoice :: ~CipherChoice -- client
     , tls13stHsKey :: Maybe (SecretTriple HandshakeSecret) -- client
+    -- Actuall session id for TLS 1.2, random value for TLS 1.3
     , tls13stSession :: Session
     , tls13stSentExtensions :: [ExtensionID]
     }
@@ -285,12 +286,24 @@ contextGetInformation ctx = do
     let accepted = case hstate of
             Just st -> hstTLS13RTT0Status st == RTT0Accepted
             Nothing -> False
-    tls12resumption <- usingState_ ctx isSessionResuming
+    tls12resumption <- usingState_ ctx getTLS12SessionResuming
     case (ver, cipher) of
         (Just v, Just c) ->
             return $
                 Just $
-                    Information v c comp ms ems cr sr grp tls12resumption hm13 accepted
+                    Information
+                        { infoVersion = v
+                        , infoCipher = c
+                        , infoCompression = comp
+                        , infoMainSecret = ms
+                        , infoExtendedMainSecret = ems
+                        , infoClientRandom = cr
+                        , infoServerRandom = sr
+                        , infoSupportedGroup = grp
+                        , infoTLS12Resumption = tls12resumption
+                        , infoTLS13HandshakeMode = hm13
+                        , infoIsEarlyDataAccepted = accepted
+                        }
         _ -> return Nothing
 
 contextSend :: Context -> ByteString -> IO ()

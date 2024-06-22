@@ -44,10 +44,13 @@ module Network.TLS.State (
     setServerCertificateChain,
     setSession,
     getSession,
-    isSessionResuming,
     getRole,
-    setExporterSecret,
-    getExporterSecret,
+    --
+    setTLS12SessionResuming,
+    getTLS12SessionResuming,
+    --
+    setTLS13ExporterSecret,
+    getTLS13ExporterSecret,
     setTLS13KeyShare,
     getTLS13KeyShare,
     setTLS13PreSharedKey,
@@ -56,8 +59,8 @@ module Network.TLS.State (
     getTLS13HRR,
     setTLS13Cookie,
     getTLS13Cookie,
-    setClientSupportsPHA,
-    getClientSupportsPHA,
+    setTLS13ClientSupportsPHA,
+    getTLS13ClientSupportsPHA,
     setTLS12SessionTicket,
     getTLS12SessionTicket,
 
@@ -80,7 +83,6 @@ import Network.TLS.Wire (GetContinuation)
 
 data TLSState = TLSState
     { stSession :: Session
-    , stSessionResuming :: Bool
     , -- RFC 5746, Renegotiation Indication Extension
       -- RFC 5929, Channel Bindings for TLS, "tls-unique"
       stSecureRenegotiation :: Bool
@@ -98,15 +100,18 @@ data TLSState = TLSState
     , stClientCertificateChain :: Maybe CertificateChain
     , stClientSNI :: Maybe HostName
     , stRandomGen :: StateRNG
-    , stVersion :: Maybe Version
     , stClientContext :: Role
-    , stTLS13KeyShare :: Maybe KeyShare
+    , stVersion :: Maybe Version
+    , --
+      stTLS12SessionResuming :: Bool
+    , stTLS12SessionTicket :: Maybe Ticket
+    , --
+      stTLS13KeyShare :: Maybe KeyShare
     , stTLS13PreSharedKey :: Maybe PreSharedKey
     , stTLS13HRR :: Bool
     , stTLS13Cookie :: Maybe Cookie
-    , stExporterSecret :: Maybe ByteString -- TLS 1.3
-    , stClientSupportsPHA :: Bool -- Post-Handshake Authentication (TLS 1.3)
-    , stTLS12SessionTicket :: Maybe Ticket
+    , stTLS13ExporterSecret :: Maybe ByteString
+    , stTLS13ClientSupportsPHA :: Bool -- Post-Handshake Authentication
     }
 
 newtype TLSSt a = TLSSt {runTLSSt :: ErrT TLSError (State TLSState) a}
@@ -124,7 +129,6 @@ newTLSState :: StateRNG -> Role -> TLSState
 newTLSState rng clientContext =
     TLSState
         { stSession = Session Nothing
-        , stSessionResuming = False
         , stSecureRenegotiation = False
         , stClientVerifyData = Nothing
         , stServerVerifyData = Nothing
@@ -139,15 +143,16 @@ newTLSState rng clientContext =
         , stClientCertificateChain = Nothing
         , stClientSNI = Nothing
         , stRandomGen = rng
-        , stVersion = Nothing
         , stClientContext = clientContext
+        , stVersion = Nothing
+        , stTLS12SessionResuming = False
+        , stTLS12SessionTicket = Nothing
         , stTLS13KeyShare = Nothing
         , stTLS13PreSharedKey = Nothing
         , stTLS13HRR = False
         , stTLS13Cookie = Nothing
-        , stExporterSecret = Nothing
-        , stClientSupportsPHA = False
-        , stTLS12SessionTicket = Nothing
+        , stTLS13ExporterSecret = Nothing
+        , stTLS13ClientSupportsPHA = False
         }
 
 setVerifyDataForSend :: VerifyData -> TLSSt ()
@@ -197,14 +202,17 @@ certVerifyHandshakeTypeMaterial _ = False
 certVerifyHandshakeMaterial :: Handshake -> Bool
 certVerifyHandshakeMaterial = certVerifyHandshakeTypeMaterial . typeOfHandshake
 
-setSession :: Session -> Bool -> TLSSt ()
-setSession session resuming = modify (\st -> st{stSession = session, stSessionResuming = resuming})
+setSession :: Session -> TLSSt ()
+setSession session = modify (\st -> st{stSession = session})
 
 getSession :: TLSSt Session
 getSession = gets stSession
 
-isSessionResuming :: TLSSt Bool
-isSessionResuming = gets stSessionResuming
+setTLS12SessionResuming :: Bool -> TLSSt ()
+setTLS12SessionResuming b = modify (\st -> st{stTLS12SessionResuming = b})
+
+getTLS12SessionResuming :: TLSSt Bool
+getTLS12SessionResuming = gets stTLS12SessionResuming
 
 setVersion :: Version -> TLSSt ()
 setVersion ver = modify (\st -> st{stVersion = Just ver})
@@ -294,10 +302,14 @@ getPeerVerifyData = do
 
 getFirstVerifyData :: TLSSt (Maybe ByteString)
 getFirstVerifyData = do
-    resuming <- isSessionResuming
-    if resuming
-        then gets stServerVerifyData
-        else gets stClientVerifyData
+    ver <- getVersion
+    case ver of
+        TLS13 -> gets stServerVerifyData
+        _ -> do
+            resuming <- getTLS12SessionResuming
+            if resuming
+                then gets stServerVerifyData
+                else gets stClientVerifyData
 
 getRole :: TLSSt Role
 getRole = gets stClientContext
@@ -313,11 +325,17 @@ withRNG f = do
     put (st{stRandomGen = rng'})
     return a
 
-setExporterSecret :: ByteString -> TLSSt ()
-setExporterSecret key = modify (\st -> st{stExporterSecret = Just key})
+setTLS12SessionTicket :: Ticket -> TLSSt ()
+setTLS12SessionTicket t = modify (\st -> st{stTLS12SessionTicket = Just t})
 
-getExporterSecret :: TLSSt (Maybe ByteString)
-getExporterSecret = gets stExporterSecret
+getTLS12SessionTicket :: TLSSt (Maybe Ticket)
+getTLS12SessionTicket = gets stTLS12SessionTicket
+
+setTLS13ExporterSecret :: ByteString -> TLSSt ()
+setTLS13ExporterSecret key = modify (\st -> st{stTLS13ExporterSecret = Just key})
+
+getTLS13ExporterSecret :: TLSSt (Maybe ByteString)
+getTLS13ExporterSecret = gets stTLS13ExporterSecret
 
 setTLS13KeyShare :: Maybe KeyShare -> TLSSt ()
 setTLS13KeyShare mks = modify (\st -> st{stTLS13KeyShare = mks})
@@ -343,14 +361,8 @@ setTLS13Cookie mcookie = modify (\st -> st{stTLS13Cookie = mcookie})
 getTLS13Cookie :: TLSSt (Maybe Cookie)
 getTLS13Cookie = gets stTLS13Cookie
 
-setClientSupportsPHA :: Bool -> TLSSt ()
-setClientSupportsPHA b = modify (\st -> st{stClientSupportsPHA = b})
+setTLS13ClientSupportsPHA :: Bool -> TLSSt ()
+setTLS13ClientSupportsPHA b = modify (\st -> st{stTLS13ClientSupportsPHA = b})
 
-getClientSupportsPHA :: TLSSt Bool
-getClientSupportsPHA = gets stClientSupportsPHA
-
-setTLS12SessionTicket :: Ticket -> TLSSt ()
-setTLS12SessionTicket t = modify (\st -> st{stTLS12SessionTicket = Just t})
-
-getTLS12SessionTicket :: TLSSt (Maybe Ticket)
-getTLS12SessionTicket = gets stTLS12SessionTicket
+getTLS13ClientSupportsPHA :: TLSSt Bool
+getTLS13ClientSupportsPHA = gets stTLS13ClientSupportsPHA

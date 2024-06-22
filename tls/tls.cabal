@@ -1,6 +1,6 @@
 cabal-version:      >=1.10
 name:               tls
-version:            2.0.6
+version:            2.1.0
 license:            BSD3
 license-file:       LICENSE
 copyright:          Vincent Hanquez <vincent@snarc.org>
@@ -180,6 +180,7 @@ executable tls-server
     build-depends:
         base >=4.9 && <5,
         bytestring,
+        base16-bytestring,
         containers,
         crypton,
         crypton-x509-store,
@@ -208,6 +209,7 @@ executable tls-client
     ghc-options:        -Wall -threaded -rtsopts
     build-depends:
         base >=4.9 && <5,
+        base16-bytestring,
         bytestring,
         crypton,
         crypton-x509-store,

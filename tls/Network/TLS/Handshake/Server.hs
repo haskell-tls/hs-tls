@@ -80,7 +80,7 @@ newCertReqContext ctx = getStateRNG ctx 32
 requestCertificateServer :: ServerParams -> Context -> IO Bool
 requestCertificateServer sparams ctx = do
     tls13 <- tls13orLater ctx
-    supportsPHA <- usingState_ ctx getClientSupportsPHA
+    supportsPHA <- usingState_ ctx getTLS13ClientSupportsPHA
     let ok = tls13 && supportsPHA
     when ok $ do
         certReqCtx <- newCertReqContext ctx

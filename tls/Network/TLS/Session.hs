@@ -5,18 +5,20 @@ module Network.TLS.Session (
 
 import Network.TLS.Types
 
--- | A session manager
+-- | A session manager.
+-- In the server side, all fields are used.
+-- In the client side, only 'sessionEstablish' is used.
 data SessionManager = SessionManager
     { sessionResume :: SessionIDorTicket -> IO (Maybe SessionData)
     -- ^ Used on TLS 1.2\/1.3 servers to lookup 'SessionData' with 'SessionID' or to decrypt 'Ticket' to get 'SessionData'.
     , sessionResumeOnlyOnce :: SessionIDorTicket -> IO (Maybe SessionData)
     -- ^ Used for 0RTT on TLS 1.3 servers to lookup 'SessionData' with 'SessionID' or to decrypt 'Ticket' to get 'SessionData'.
-    , sessionEstablish :: SessionID -> SessionData -> IO (Maybe Ticket)
-    -- ^ Used TLS 1.2\/1.3 servers\/clients to store 'SessionData' with 'SessionID' or to encrypt 'SessionData' to get 'Ticket'. In the client side, 'Nothing' should be returned. For clients, only this field should be set with 'noSessionManager'.
-    , sessionInvalidate :: SessionID -> IO ()
-    -- ^ Used TLS 1.2\/1.3 servers to delete 'SessionData' with 'SessionID' if @sessionUseTicket@ is 'True'.
+    , sessionEstablish :: SessionIDorTicket -> SessionData -> IO (Maybe Ticket)
+    -- ^ Used on TLS 1.2\/1.3 servers to store 'SessionData' with 'SessionID' or to encrypt 'SessionData' to get 'Ticket' ignoring 'SessionID'. Used on TLS 1.2\/1.3 clients to store 'SessionData' with 'SessionIDorTicket' and then return 'Nothing'. For clients, only this field should be set with 'noSessionManager'.
+    , sessionInvalidate :: SessionIDorTicket -> IO ()
+    -- ^ Used TLS 1.2 servers to delete 'SessionData' with 'SessionID' on errors.
     , sessionUseTicket :: Bool
-    -- ^ Used on TLS 1.2 servers to decide to use 'SessionID' or 'Ticket'. Note that TLS 1.3 servers always use session tickets.
+    -- ^ Used on TLS 1.2 servers to decide to use 'SessionID' or 'Ticket'. Note that 'SessionID' and 'Ticket' are integrated as identity in TLS 1.3.
     }
 
 -- | The session manager to do nothing.

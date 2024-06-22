@@ -8,6 +8,7 @@ module Network.TLS.Handshake.Common (
     newSession,
     handshakeDone12,
     ensureNullCompression,
+    ticketOrSessionID12,
 
     -- * sending packets
     sendCCSandFinished,
@@ -34,6 +35,7 @@ module Network.TLS.Handshake.Common (
 import Control.Concurrent.MVar
 import Control.Exception (IOException, fromException, handle, throwIO)
 import Control.Monad.State.Strict
+import qualified Data.ByteString as B
 
 import Network.TLS.Cipher
 import Network.TLS.Compression
@@ -310,3 +312,12 @@ processCertificate ctx _ (CertificateChain (c : _)) =
     usingHState ctx $ setPublicKey pubkey
   where
     pubkey = certPubKey $ getCertificate c
+
+-- TLS 1.2 distinguishes session ID and session ticket.  session
+-- ticket. Session ticket is prioritized over session ID.
+ticketOrSessionID12
+    :: Maybe Ticket -> Session -> Maybe SessionIDorTicket
+ticketOrSessionID12 (Just ticket) _
+    | ticket /= "" = Just $ B.copy ticket
+ticketOrSessionID12 _ (Session (Just sessionId)) = Just $ B.copy sessionId
+ticketOrSessionID12 _ _ = Nothing

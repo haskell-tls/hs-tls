@@ -29,7 +29,7 @@ library
         memory >= 0.18.0 && < 0.19,
         psqueues >= 0.2 && < 0.3,
         serialise >= 0.2 && < 0.3,
-        tls >= 2.0 && < 2.1
+        tls >= 2.0 && < 2.2
 
     if impl(ghc >=8)
         default-extensions: Strict StrictData

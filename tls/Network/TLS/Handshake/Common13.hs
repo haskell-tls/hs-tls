@@ -217,12 +217,13 @@ makePSKBinder ctx (BaseSecret sec) usedHash truncLen mch = do
         totalLen = B.length x
         takeLen = totalLen - truncLen
 
-replacePSKBinder :: ByteString -> ByteString -> ByteString
-replacePSKBinder pskz binder = identities `B.append` binders
+replacePSKBinder :: ByteString -> [ByteString] -> ByteString
+replacePSKBinder pskz bds = tLidentities <> binders
   where
-    bindersSize = B.length binder + 3
-    identities = B.take (B.length pskz - bindersSize) pskz
-    binders = runPut $ putOpaque16 $ runPut $ putOpaque8 binder
+    tLidentities = B.take (B.length pskz - B.length binders) pskz
+    -- See instance Extension PreSharedKey
+    binders = runPut $ putOpaque16 $ runPut (mapM_ putBinder bds)
+    putBinder = putOpaque8
 
 ----------------------------------------------------------------
 
@@ -531,7 +532,7 @@ calculateApplicationSecret ctx choice (BaseSecret sec) hChSf = do
     let clientApplicationSecret0 = deriveSecret usedHash applicationSecret "c ap traffic" hChSf
         serverApplicationSecret0 = deriveSecret usedHash applicationSecret "s ap traffic" hChSf
         exporterSecret = deriveSecret usedHash applicationSecret "exp master" hChSf
-    usingState_ ctx $ setExporterSecret exporterSecret
+    usingState_ ctx $ setTLS13ExporterSecret exporterSecret
     let sts0 =
             ServerTrafficSecret serverApplicationSecret0
                 :: ServerTrafficSecret ApplicationSecret

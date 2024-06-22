@@ -5,6 +5,7 @@
 module Main where
 
 import Control.Concurrent
+import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString.Char8 as C8
 import Data.Default.Class (def)
 import Data.IORef
@@ -33,6 +34,7 @@ data Options = Options
     , opt0RTT :: Bool
     , optRetry :: Bool
     , optVersions :: [Version]
+    , optALPN :: String
     }
     deriving (Show)
 
@@ -49,6 +51,7 @@ defaultOptions =
         , opt0RTT = False
         , optRetry = False
         , optVersions = supportedVersions def
+        , optALPN = "http/1.1"
         }
 
 usage :: String
@@ -106,6 +109,11 @@ options =
         ["tls13"]
         (NoArg (\o -> o{optVersions = [TLS13]}))
         "use TLS 1.3"
+    , Option
+        ['a']
+        ["alpn"]
+        (ReqArg (\a o -> o{optALPN = a}) "<alpn>")
+        "set ALPN"
     ]
 
 showUsageAndExit :: String -> IO a
@@ -133,7 +141,7 @@ main = do
     when (null optGroups) $ do
         putStrLn "Error: unsupported groups"
         exitFailure
-    ref <- newIORef Nothing
+    ref <- newIORef []
     let debug
             | optDebugLog = putStrLn
             | otherwise = \_ -> return ()
@@ -150,15 +158,14 @@ main = do
                 }
     mstore <-
         if optValidate then Just <$> getSystemCertificateStore else return Nothing
-    let keyLog = getLogger optKeyLogFile
-        groups
-            | optRetry = FFDHE8192 : optGroups
-            | otherwise = optGroups
-        cparams = getClientParams optVersions host port groups (smIORef ref) mstore keyLog
-    runClient opts cparams aux paths
+    let cparams = getClientParams opts host port (smIORef ref) mstore
+        client
+            | optALPN == "dot" = clientDNS
+            | otherwise = clientHTTP11
+    runClient opts client cparams aux paths
 
-runClient :: Options -> ClientParams -> Aux -> [ByteString] -> IO ()
-runClient opts@Options{..} cparams aux@Aux{..} paths = do
+runClient :: Options -> Cli -> ClientParams -> Aux -> [ByteString] -> IO ()
+runClient opts@Options{..} client cparams aux@Aux{..} paths = do
     auxDebug "------------------------"
     (info1, msd) <- runTLS cparams aux $ \ctx -> do
         i1 <- getInfo ctx
@@ -171,7 +178,7 @@ runClient opts@Options{..} cparams aux@Aux{..} paths = do
             if isResumptionPossible msd
                 then do
                     let cparams2 = modifyClientParams cparams msd False
-                    info2 <- runClient2 opts cparams2 aux paths
+                    info2 <- runClient2 opts client cparams2 aux paths
                     if infoVersion info1 == TLS12
                         then do
                             if infoTLS12Resumption info2
@@ -196,7 +203,7 @@ runClient opts@Options{..} cparams aux@Aux{..} paths = do
             if is0RTTPossible info1 msd
                 then do
                     let cparams2 = modifyClientParams cparams msd True
-                    info2 <- runClient2 opts cparams2 aux paths
+                    info2 <- runClient2 opts client cparams2 aux paths
                     if infoTLS13HandshakeMode info2 == Just RTT0
                         then do
                             putStrLn "Result: (Z) 0-RTT ... OK"
@@ -217,18 +224,18 @@ runClient opts@Options{..} cparams aux@Aux{..} paths = do
                     exitFailure
         | otherwise -> do
             putStrLn "Result: (H) handshake ... OK"
-            let malpn = (snd <$> msd) >>= sessionALPN
-            when (malpn == Just "http/1.1") $
+            when (optALPN == "http/1.1") $
                 putStrLn "Result: (1) HTTP/1.1 transaction ... OK"
             exitSuccess
 
 runClient2
     :: Options
+    -> Cli
     -> ClientParams
     -> Aux
     -> [ByteString]
     -> IO Information
-runClient2 Options{..} cparams aux@Aux{..} paths = do
+runClient2 Options{..} client cparams aux@Aux{..} paths = do
     threadDelay 100000
     auxDebug "<<<< next connection >>>>"
     auxDebug "------------------------"
@@ -257,23 +264,21 @@ runTLS cparams Aux{..} action =
             action ctx
 
 modifyClientParams
-    :: ClientParams -> Maybe (SessionID, SessionData) -> Bool -> ClientParams
-modifyClientParams cparams wantResume early =
+    :: ClientParams -> [(SessionID, SessionData)] -> Bool -> ClientParams
+modifyClientParams cparams ts early =
     cparams
-        { clientWantSessionResume = wantResume
+        { clientWantSessionResumeList = ts
         , clientUseEarlyData = early
         }
 
 getClientParams
-    :: [Version]
+    :: Options
     -> HostName
     -> ServiceName
-    -> [Group]
     -> SessionManager
     -> Maybe CertificateStore
-    -> (String -> IO ())
     -> ClientParams
-getClientParams vers serverName port groups sm mstore keyLog =
+getClientParams Options{..} serverName port sm mstore =
     (defaultParamsClient serverName (C8.pack port))
         { clientSupported = supported
         , clientUseServerNameIndication = True
@@ -282,6 +287,9 @@ getClientParams vers serverName port groups sm mstore keyLog =
         , clientDebug = debug
         }
   where
+    groups
+        | optRetry = FFDHE8192 : optGroups
+        | otherwise = optGroups
     shared =
         def
             { sharedSessionManager = sm
@@ -292,13 +300,12 @@ getClientParams vers serverName port groups sm mstore keyLog =
             }
     supported =
         def
-            { supportedVersions = vers
+            { supportedVersions = optVersions
             , supportedGroups = groups
             }
     hooks =
         def
-            { onSuggestALPN = return $ Just ["http/1.1"]
-            , onServerFinished = print
+            { onSuggestALPN = return $ Just [C8.pack optALPN]
             }
     validateCache
         | isJust mstore = def
@@ -308,20 +315,28 @@ getClientParams vers serverName port groups sm mstore keyLog =
                 (\_ _ _ -> return ())
     debug =
         def
-            { debugKeyLogger = keyLog
+            { debugKeyLogger = getLogger optKeyLogFile
             }
 
-smIORef :: IORef (Maybe (SessionID, SessionData)) -> SessionManager
+smIORef :: IORef [(SessionID, SessionData)] -> SessionManager
 smIORef ref =
     noSessionManager
-        { sessionEstablish = \sid sdata -> writeIORef ref (Just (sid, sdata)) >> return Nothing
+        { sessionEstablish = \sid sdata ->
+            modifyIORef' ref (\xs -> (sid, sdata) : xs)
+                >> printTicket sid sdata
+                >> return Nothing
         }
 
-isResumptionPossible :: Maybe (SessionID, SessionData) -> Bool
-isResumptionPossible = isJust
+printTicket :: SessionID -> SessionData -> IO ()
+printTicket sid sdata = do
+    C8.putStr $ "Ticket: " <> C8.take 16 (BS16.encode sid) <> "..., "
+    putStrLn $ "0-RTT: " <> if sessionMaxEarlyDataSize sdata > 0 then "OK" else "NG"
 
-is0RTTPossible :: Information -> Maybe (SessionID, SessionData) -> Bool
-is0RTTPossible _ Nothing = False
-is0RTTPossible info (Just (_, sd)) =
+isResumptionPossible :: [(SessionID, SessionData)] -> Bool
+isResumptionPossible = not . null
+
+is0RTTPossible :: Information -> [(SessionID, SessionData)] -> Bool
+is0RTTPossible _ [] = False
+is0RTTPossible info xs =
     infoVersion info == TLS13
-        && sessionMaxEarlyDataSize sd > 0
+        && any (\(_, sd) -> sessionMaxEarlyDataSize sd > 0) xs

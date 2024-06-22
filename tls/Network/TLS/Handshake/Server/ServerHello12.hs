@@ -38,7 +38,7 @@ sendServerHello12 sparams ctx (usedCipher, mcred) ch@CH{..} = do
     case resumeSessionData of
         Nothing -> do
             serverSession <- newSession ctx
-            usingState_ ctx $ setSession serverSession False
+            usingState_ ctx $ setSession serverSession
             serverhello <-
                 makeServerHello sparams ctx usedCipher mcred chExtensions serverSession
             build <- sendServerFirstFlight sparams ctx usedCipher mcred chExtensions
@@ -46,7 +46,9 @@ sendServerHello12 sparams ctx (usedCipher, mcred) ch@CH{..} = do
             sendPacket12 ctx $ Handshake ff
             contextFlush ctx
         Just sessionData -> do
-            usingState_ ctx $ setSession chSession True
+            usingState_ ctx $ do
+                setSession chSession
+                setTLS12SessionResuming True
             serverhello <-
                 makeServerHello sparams ctx usedCipher mcred chExtensions chSession
             sendPacket12 ctx $ Handshake [serverhello]
@@ -60,18 +62,18 @@ recoverSessionData :: Context -> CH -> IO (Maybe SessionData)
 recoverSessionData ctx CH{..} = do
     serverName <- usingState_ ctx getClientSNI
     ems <- processExtendedMainSecret ctx TLS12 MsgTClientHello chExtensions
-    let mticket =
+    let mSessionTicket =
             extensionLookup EID_SessionTicket chExtensions
                 >>= extensionDecode MsgTClientHello
-    case mticket of
-        Just (SessionTicket ticket) | ticket /= "" -> do
-            sd <- sessionResume (sharedSessionManager $ ctxShared ctx) ticket
+        mticket = case mSessionTicket of
+            Nothing -> Nothing
+            Just (SessionTicket ticket) -> Just ticket
+        midentity = ticketOrSessionID12 mticket chSession
+    case midentity of
+        Nothing -> return Nothing
+        Just identity -> do
+            sd <- sessionResume (sharedSessionManager $ ctxShared ctx) identity
             validateSession chCiphers serverName ems sd
-        _ -> case chSession of
-            (Session (Just clientSessionId)) -> do
-                sd <- sessionResume (sharedSessionManager $ ctxShared ctx) clientSessionId
-                validateSession chCiphers serverName ems sd
-            (Session Nothing) -> return Nothing
 
 validateSession
     :: [CipherID]
@@ -229,7 +231,7 @@ makeServerHello
     -> Session
     -> IO Handshake
 makeServerHello sparams ctx usedCipher mcred chExts session = do
-    resuming <- usingState_ ctx isSessionResuming
+    resuming <- usingState_ ctx getTLS12SessionResuming
     srand <-
         serverRandom ctx TLS12 $ supportedVersions $ serverSupported sparams
     case mcred of
