@@ -32,7 +32,7 @@ twoSessionRefs = (,) <$> newIORef Nothing <*> newIORef Nothing
 -- a Real concurrent session manager would use an MVar and have multiples items.
 oneSessionManager :: IORef (Maybe (SessionID, SessionData)) -> SessionManager
 oneSessionManager ref =
-    SessionManager
+    noSessionManager
         { sessionResume = \myId -> readIORef ref >>= maybeResume False myId
         , sessionResumeOnlyOnce = \myId -> readIORef ref >>= maybeResume True myId
         , sessionEstablish = \myId dat -> writeIORef ref (Just (myId, dat)) >> return Nothing
@@ -78,7 +78,7 @@ setPairParamsSessionResuming sessionStuff (clientParams, serverParams) =
 
 oneSessionTicket :: SessionManager
 oneSessionTicket =
-    SessionManager
+    noSessionManager
         { sessionResume = resume
         , sessionResumeOnlyOnce = resume
         , sessionEstablish = \_ dat -> return $ Just $ L.toStrict $ serialise dat

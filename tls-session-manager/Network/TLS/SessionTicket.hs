@@ -52,7 +52,7 @@ newSessionTicketManager Config{..} =
 
 sessionTicketManager :: CT.TokenManager -> SessionManager
 sessionTicketManager ctmgr =
-    SessionManager
+    noSessionManager
         { sessionResume = resume ctmgr
         , sessionResumeOnlyOnce = resume ctmgr
         , sessionEstablish = establish ctmgr

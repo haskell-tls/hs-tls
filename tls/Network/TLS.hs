@@ -30,25 +30,85 @@ module Network.TLS (
 
     -- intentionally hide the internal methods even haddock warns.
     TLSParams,
-    ClientParams (..),
+
+    -- ** Client parameters
+    ClientParams,
     defaultParamsClient,
-    ServerParams (..),
+    clientUseMaxFragmentLength,
+    clientServerIdentification,
+    clientUseServerNameIndication,
+    clientWantSessionResume,
+    clientWantSessionResumeList,
+    clientShared,
+    clientHooks,
+    clientSupported,
+    clientDebug,
+    clientUseEarlyData,
+
+    -- ** Server parameters
+    ServerParams,
+    serverWantClientCert,
+    serverCACertificates,
+    serverDHEParams,
+    serverHooks,
+    serverShared,
+    serverSupported,
+    serverDebug,
+    serverEarlyDataSize,
+    serverTicketLifetime,
 
     -- ** Shared
-    Shared (..),
+    Shared,
+    sharedCredentials,
+    sharedSessionManager,
+    sharedCAStore,
+    sharedValidationCache,
+    sharedHelloExtensions,
 
-    -- ** Hooks
-    ClientHooks (..),
+    -- ** Client hooks
+    ClientHooks,
     OnCertificateRequest,
+    onCertificateRequest,
     OnServerCertificate,
-    ServerHooks (..),
-    Measurement (..),
+    onServerCertificate,
+    onSuggestALPN,
+    onCustomFFDHEGroup,
+    onServerFinished,
+
+    -- ** Server hooks
+    ServerHooks,
+    onClientCertificate,
+    onUnverifiedClientCert,
+    onCipherChoosing,
+    onServerNameIndication,
+    onNewHandshake,
+    onALPNClientSuggest,
+    onEncryptedExtensionsCreating,
+    Measurement,
+    nbHandshakes,
+    bytesReceived,
+    bytesSent,
 
     -- ** Supported
-    Supported (..),
+    Supported,
+    supportedVersions,
+    supportedCiphers,
+    supportedCompressions,
+    supportedHashSignatures,
+    supportedSecureRenegotiation,
+    supportedClientInitiatedRenegotiation,
+    supportedExtendedMainSecret,
+    supportedSession,
+    supportedFallbackScsv,
+    supportedEmptyPacket,
+    supportedGroups,
 
     -- ** Debug parameters
-    DebugParams (..),
+    DebugParams,
+    debugSeed,
+    debugPrintSeed,
+    debugVersionForced,
+    debugKeyLogger,
 
     -- * Shared parameters
 
@@ -61,8 +121,13 @@ module Network.TLS (
     credentialLoadX509ChainFromMemory,
 
     -- ** Session manager
-    SessionManager (..),
+    SessionManager,
     noSessionManager,
+    sessionResume,
+    sessionResumeOnlyOnce,
+    sessionEstablish,
+    sessionInvalidate,
+    sessionUseTicket,
     SessionID,
     SessionIDorTicket,
     Ticket,

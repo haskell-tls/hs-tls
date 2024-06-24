@@ -108,8 +108,8 @@ newSessionManager conf = do
                 , reaperNull = Q.null
                 , reaperDelay = pruningDelay conf * 1000000
                 }
-    return
-        SessionManager
+    return $
+        noSessionManager
             { sessionResume = resume reaper MultipleUse
             , sessionResumeOnlyOnce = resume reaper SingleUse
             , sessionEstablish = \x y -> establish reaper lifetime x y >> return Nothing
