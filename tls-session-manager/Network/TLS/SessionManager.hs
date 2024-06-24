@@ -53,34 +53,24 @@ toKey :: ByteString -> Block Word8
 toKey = convert
 
 toValue :: SessionData -> SessionDataCopy
-toValue (SessionData v cid comp msni sec mg mti malpn siz flg) =
-    SessionDataCopy v cid comp msni sec' mg mti malpn' siz flg
-  where
-    sec' = convert sec
-    malpn' = convert <$> malpn
+toValue sd =
+    SessionDataCopy $
+        sd
+            { sessionSecret = convert $ sessionSecret sd
+            , sessionALPN = convert <$> sessionALPN sd
+            }
 
 fromValue :: SessionDataCopy -> SessionData
-fromValue (SessionDataCopy v cid comp msni sec' mg mti malpn' siz flg) =
-    SessionData v cid comp msni sec mg mti malpn siz flg
-  where
-    sec = convert sec'
-    malpn = convert <$> malpn'
+fromValue (SessionDataCopy sd) =
+    sd
+        { sessionSecret = convert $ sessionSecret sd
+        , sessionALPN = convert <$> sessionALPN sd
+        }
 
 ----------------------------------------------------------------
 
 type SessionIDCopy = Block Word8
-data SessionDataCopy
-    = SessionDataCopy
-        {- ssVersion     -} Version
-        {- ssCipher      -} CipherID
-        {- ssCompression -} CompressionID
-        {- ssClientSNI   -} (Maybe HostName)
-        {- ssSecret      -} (Block Word8)
-        {- ssGroup       -} (Maybe Group)
-        {- ssTicketInfo  -} (Maybe TLS13TicketInfo)
-        {- ssALPN        -} (Maybe (Block Word8))
-        {- ssMaxEarlyDataSize -} Int
-        {- ssFlags       -} [SessionFlag]
+newtype SessionDataCopy = SessionDataCopy SessionData
     deriving (Show, Eq)
 
 type Sec = Int64
