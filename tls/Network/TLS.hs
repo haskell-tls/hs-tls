@@ -146,6 +146,7 @@ module Network.TLS (
     sessionFlags,
     SessionFlag (..),
     TLS13TicketInfo,
+    is0RTTPossible,
 
     -- ** Validation Cache
     ValidationCache (..),

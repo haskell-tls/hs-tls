@@ -10,6 +10,7 @@ module Network.TLS.Types (
     isTicket,
     toSessionID,
     SessionData (..),
+    is0RTTPossible,
     SessionFlag (..),
     CertReqContext,
     TLS13TicketInfo (..),
@@ -102,6 +103,9 @@ data SessionData = SessionData
     , sessionFlags :: [SessionFlag]
     } -- sessionFromTicket :: Bool
     deriving (Show, Eq, Generic)
+
+is0RTTPossible :: SessionData -> Bool
+is0RTTPossible sd = sessionMaxEarlyDataSize sd > 0
 
 -- | Some session flags
 data SessionFlag
