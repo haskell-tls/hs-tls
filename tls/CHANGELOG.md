@@ -1,3 +1,11 @@
+## Version 2.1.0
+
+* Breaking change: stop exporting constructors to maintain future
+  compatibilities. Use `def` and `noSessionManager` instead.
+* `onServerFinished` is added to `ClientHooks`.
+* `clientWantSessionResumeList` is added to `ClientParams` to support
+  multiple tickets for TLS 1.3.
+
 ## Version 2.0.6
 
 * Setting `supportedCiphers` in `defaultSupported` to `ciphersuite_default`.
