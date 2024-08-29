@@ -305,11 +305,13 @@ arbitraryPairParamsAt connectVersion = do
     -- versions for which we have compatible ciphers.  Criteria about cipher
     -- ensure we can test version downgrade.
     let allowedVersions =
-            [ v | v <- knownVersions, or
-                                        [ x `elem` serverCiphers
-                                            && cipherAllowedForVersion v x
-                                        | x <- clientCiphers
-                                        ]
+            [ v
+            | v <- knownVersions
+            , or
+                [ x `elem` serverCiphers
+                    && cipherAllowedForVersion v x
+                | x <- clientCiphers
+                ]
             ]
         allowedVersionsFiltered = filter (<= connectVersion) allowedVersions
     -- Server or client is allowed to have versions > connectVersion, but not

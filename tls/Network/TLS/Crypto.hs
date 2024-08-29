@@ -115,7 +115,9 @@ findFiniteFieldGroup params = lookup (pg params) table
     pg (DH.Params p g _) = (p, g)
 
     table =
-        [ (pg prms, grp) | grp <- availableFFGroups, let prms = fromJust $ dhParamsForGroup grp
+        [ (pg prms, grp)
+        | grp <- availableFFGroups
+        , let prms = fromJust $ dhParamsForGroup grp
         ]
 
 findEllipticCurveGroup :: PubKeyEC -> Maybe Group
