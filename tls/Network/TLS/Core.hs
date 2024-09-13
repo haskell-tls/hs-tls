@@ -98,7 +98,7 @@ getRTT ctx = do
 --
 -- this doesn't actually close the handle
 bye :: MonadIO m => Context -> m ()
-bye ctx = liftIO $ do
+bye ctx = liftIO $ E.handle swallowSync $ do
     eof <- ctxEOF ctx
     tls13 <- tls13orLater ctx
     when (tls13 && not eof) $ do
@@ -112,7 +112,7 @@ bye ctx = liftIO $ do
                 unless recvNST $ do
                     rtt <- getRTT ctx
                     var <- newEmptyMVar
-                    _ <- forkIOWithUnmask $ \umask ->
+                    _ <- forkIOWithUnmask $ \umask -> E.handle swallowSync $
                         umask (void $ timeout rtt $ recvHS13 ctx chk) `E.finally` putMVar var ()
                     takeMVar var
             else do
@@ -124,10 +124,18 @@ bye ctx = liftIO $ do
                     -- fixme: 1sec is good enough?
                     let rtt = 1000000
                     var <- newEmptyMVar
-                    _ <- forkIOWithUnmask $ \umask ->
+                    _ <- forkIOWithUnmask $ \umask -> E.handle swallowSync $
                         umask (void $ timeout rtt $ recvHS13 ctx chk) `E.finally` putMVar var ()
                     takeMVar var
     bye_ ctx
+  where
+    -- Swallow synchronous exceptions, rethrow asynchronous exceptions
+    swallowSync :: E.SomeException -> IO ()
+    swallowSync e
+        | Just (E.SomeAsyncException ae) <- E.fromException e
+        = E.throwIO ae
+        | otherwise
+        = return ()
 
 bye_ :: MonadIO m => Context -> m ()
 bye_ ctx = liftIO $ do
