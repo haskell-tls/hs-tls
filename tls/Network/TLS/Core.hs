@@ -109,7 +109,7 @@ getRTT ctx = do
 -- >>> somthing...
 -- >>> bye
 bye :: MonadIO m => Context -> m ()
-bye ctx = liftIO $ E.handle swallowSync $ do
+bye ctx = liftIO $ do
     eof <- ctxEOF ctx
     tls13 <- tls13orLater ctx
     when (tls13 && not eof) $ do
@@ -133,14 +133,6 @@ bye ctx = liftIO $ E.handle swallowSync $ do
                     let rtt = 1000000
                     void $ timeout rtt $ recvHS13 ctx chk
     bye_ ctx
-  where
-    -- Swallow synchronous exceptions, rethrow asynchronous exceptions
-    swallowSync :: E.SomeException -> IO ()
-    swallowSync e
-        | Just (E.SomeAsyncException ae) <- E.fromException e =
-            E.throwIO ae
-        | otherwise =
-            return ()
 
 bye_ :: MonadIO m => Context -> m ()
 bye_ ctx = liftIO $ do
