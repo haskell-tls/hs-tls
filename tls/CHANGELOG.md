@@ -1,3 +1,9 @@
+## Version 2.2.0
+
+* Breaking change: it was unclear whether or not `bye` can be used
+  in `bracket`. This usage has been explicitly prohibited.
+  [#480](https://github.com/haskell-tls/hs-tls/pull/480)
+
 ## Version 2.1.0
 
 * Breaking change: stop exporting constructors to maintain future
