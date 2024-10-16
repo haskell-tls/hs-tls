@@ -98,16 +98,16 @@ getRTT ctx = do
 --
 -- This MUST NOT be used with 'bracket'. The following is a wrong example:
 --
--- >>> bracket (contextNew backend params) bye $ \ctx -> do
--- >>>   handshake ctx
--- >>>   somthing...
+-- > bracket (contextNew backend params) bye $ \ctx -> do
+-- >   handshake ctx
+-- >   somthing...
 --
 -- Instead, use the following pattern:
 --
--- >>> ctx <- contextNew backend params
--- >>> handshake ctx
--- >>> somthing...
--- >>> bye
+-- > ctx <- contextNew backend params
+-- > handshake ctx
+-- > somthing...
+-- > bye
 bye :: MonadIO m => Context -> m ()
 bye ctx = liftIO $ do
     eof <- ctxEOF ctx
