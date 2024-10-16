@@ -26,7 +26,6 @@ module Network.TLS.Core (
     requestCertificate,
 ) where
 
-import Control.Concurrent
 import qualified Control.Exception as E
 import Control.Monad (unless, void, when)
 import Control.Monad.State.Strict
@@ -92,13 +91,25 @@ getRTT ctx = do
     let rtt' = max (fromIntegral rtt) 10
     return (rtt' * rttFactor * 1000) -- ms to us
 
--- | notify the context that this side wants to close connection.
--- this is important that it is called before closing the handle, otherwise
+-- | Notify the context that this side wants to close connection.
+-- This is important that it is called before closing the handle, otherwise
 -- the session might not be resumable (for version < TLS1.2).
+-- This doesn't actually close the handle.
 --
--- this doesn't actually close the handle
+-- This MUST NOT be used with 'bracket'. The following is a wrong example:
+--
+-- >>> bracket (contextNew backend params) bye $ \ctx -> do
+-- >>>   handshake ctx
+-- >>>   somthing...
+--
+-- Instead, use the following pattern:
+--
+-- >>> ctx <- contextNew backend params
+-- >>> handshake ctx
+-- >>> somthing...
+-- >>> bye
 bye :: MonadIO m => Context -> m ()
-bye ctx = liftIO $ E.handle swallowSync $ do
+bye ctx = liftIO $ do
     eof <- ctxEOF ctx
     tls13 <- tls13orLater ctx
     when (tls13 && not eof) $ do
@@ -111,10 +122,7 @@ bye ctx = liftIO $ E.handle swallowSync $ do
                 recvNST <- chk
                 unless recvNST $ do
                     rtt <- getRTT ctx
-                    var <- newEmptyMVar
-                    _ <- forkIOWithUnmask $ \umask -> E.handle swallowSync $
-                        umask (void $ timeout rtt $ recvHS13 ctx chk) `E.finally` putMVar var ()
-                    takeMVar var
+                    void $ timeout rtt $ recvHS13 ctx chk
             else do
                 -- receiving Client Finished
                 let chk = tls13stRecvCF <$> getTLS13State ctx
@@ -123,19 +131,8 @@ bye ctx = liftIO $ E.handle swallowSync $ do
                     -- no chance to measure RTT before receiving CF
                     -- fixme: 1sec is good enough?
                     let rtt = 1000000
-                    var <- newEmptyMVar
-                    _ <- forkIOWithUnmask $ \umask -> E.handle swallowSync $
-                        umask (void $ timeout rtt $ recvHS13 ctx chk) `E.finally` putMVar var ()
-                    takeMVar var
+                    void $ timeout rtt $ recvHS13 ctx chk
     bye_ ctx
-  where
-    -- Swallow synchronous exceptions, rethrow asynchronous exceptions
-    swallowSync :: E.SomeException -> IO ()
-    swallowSync e
-        | Just (E.SomeAsyncException ae) <- E.fromException e
-        = E.throwIO ae
-        | otherwise
-        = return ()
 
 bye_ :: MonadIO m => Context -> m ()
 bye_ ctx = liftIO $ do
