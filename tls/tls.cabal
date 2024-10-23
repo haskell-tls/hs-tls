@@ -188,8 +188,7 @@ executable tls-server
         data-default-class,
         network,
         network-run,
-        tls,
-        unliftio
+        tls
 
     if flag(devel)
 
@@ -217,8 +216,7 @@ executable tls-client
         data-default-class,
         network,
         network-run,
-        tls,
-        unliftio
+        tls
 
     if flag(devel)
 
