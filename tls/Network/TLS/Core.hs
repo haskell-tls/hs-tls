@@ -77,7 +77,7 @@ handshake ctx = do
         when (role == ClientRole && tls13 && sentClientCert) $ do
             rtt <- getRTT ctx
             -- This 'timeout' should work.
-            mdat <- timeout rtt $ recvData ctx
+            mdat <- timeout rtt $ recvData13 ctx
             case mdat of
                 Nothing -> return ()
                 Just dat -> modifyTLS13State ctx $ \st -> st{tls13stPendingRecvData = Just dat}
