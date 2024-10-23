@@ -108,7 +108,6 @@ getRTT ctx = do
 -- > bracket (contextNew <backend> <params>) bye $ \ctx -> do
 -- >   handshake ctx
 -- >   ...
---
 bye :: MonadIO m => Context -> m ()
 bye ctx = liftIO $ do
     eof <- ctxEOF ctx
