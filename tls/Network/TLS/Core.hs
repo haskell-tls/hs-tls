@@ -96,18 +96,19 @@ getRTT ctx = do
 -- the session might not be resumable (for version < TLS1.2).
 -- This doesn't actually close the handle.
 --
--- This MUST NOT be used with 'bracket'. The following is a wrong example:
+-- Proper usage is as follows:
 --
--- > bracket (contextNew backend params) bye $ \ctx -> do
--- >   handshake ctx
--- >   somthing...
---
--- Instead, use the following pattern:
---
--- > ctx <- contextNew backend params
+-- > ctx <- contextNew <backend> <params>
 -- > handshake ctx
--- > somthing...
+-- > ...
 -- > bye
+--
+-- The following code ensures nothing but is no harm.
+--
+-- > bracket (contextNew <backend> <params>) bye $ \ctx -> do
+-- >   handshake ctx
+-- >   ...
+--
 bye :: MonadIO m => Context -> m ()
 bye ctx = liftIO $ do
     eof <- ctxEOF ctx

@@ -10,6 +10,14 @@
 -- Currently implement the TLS1.2 and TLS 1.3
 -- protocol, and support RSA and Ephemeral (Elliptic curve and
 -- regular) Diffie Hellman key exchanges, and many extensions.
+--
+-- The tipical usage is:
+--
+-- > socket <- ...
+-- > ctx <- contextNew socket <params>
+-- > handshake ctx
+-- > ... (using recvData and sendData)
+-- > bye
 module Network.TLS (
     -- * Basic APIs
     Context,
