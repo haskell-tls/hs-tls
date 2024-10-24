@@ -1,8 +1,7 @@
-## Version 2.2.0
+## Version 2.2.1
 
-* Breaking change: it was unclear whether or not `bye` can be used
-  in `bracket`. This usage has been explicitly prohibited.
-  [#480](https://github.com/haskell-tls/hs-tls/pull/480)
+* `bye` directly calls `timeout recvHS13`, not spawning a thread for
+  `timeout recvHS13`. So, `bye` can receive an exception if thrown.
 
 ## Version 2.1.0
 
