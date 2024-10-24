@@ -1,4 +1,4 @@
-## Version 2.2.1
+## Version 2.1.1
 
 * `bye` directly calls `timeout recvHS13`, not spawning a thread for
   `timeout recvHS13`. So, `bye` can receive an exception if thrown.
