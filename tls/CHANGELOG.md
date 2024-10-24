@@ -6,7 +6,9 @@
 ## Version 2.1.0
 
 * Breaking change: stop exporting constructors to maintain future
-  compatibilities. Use `def` and `noSessionManager` instead.
+  compatibilities. Field names are still exported, and values can be updated
+  with them using record syntax. Use `def` and `noSessionManager` as initial
+  values.
 * `onServerFinished` is added to `ClientHooks`.
 * `clientWantSessionResumeList` is added to `ClientParams` to support
   multiple tickets for TLS 1.3.
