@@ -87,7 +87,7 @@ import Network.TLS.Record.State
 import Network.TLS.Struct
 import Network.TLS.Types
 
-import Data.Default.Class
+import Data.Default
 
 nullBackend :: Backend
 nullBackend =

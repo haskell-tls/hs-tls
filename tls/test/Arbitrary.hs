@@ -5,7 +5,7 @@ module Arbitrary where
 
 import Control.Monad
 import qualified Data.ByteString as B
-import Data.Default.Class
+import Data.Default
 import Data.List
 import Data.Word
 import Data.X509 (

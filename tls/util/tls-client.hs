@@ -7,7 +7,7 @@ module Main where
 import Control.Concurrent
 import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString.Char8 as C8
-import Data.Default.Class (def)
+import Data.Default (def)
 import Data.IORef
 import Data.X509.CertificateStore
 import Network.Run.TCP

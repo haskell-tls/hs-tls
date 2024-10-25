@@ -7,7 +7,7 @@ module Main where
 
 import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString.Char8 as C8
-import Data.Default.Class (def)
+import Data.Default (def)
 import Data.IORef
 import qualified Data.Map.Strict as M
 import Network.Run.TCP
