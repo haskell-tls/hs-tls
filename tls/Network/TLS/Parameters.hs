@@ -12,6 +12,7 @@ module Network.TLS.Parameters (
 
     -- * special default
     defaultParamsClient,
+    tlsDefaultSupported,
 
     -- * Parameters
     MaxFragmentEnum (..),
@@ -341,8 +342,11 @@ data EMSMode
       RequireEMS
     deriving (Show, Eq)
 
-defaultSupported :: Supported
-defaultSupported =
+-- | Default values for Supported
+--
+-- This is same value as given by the 'Default' instance
+tlsDefaultSupported :: Supported
+tlsDefaultSupported =
     Supported
         { supportedVersions = [TLS13, TLS12]
         , supportedCiphers = ciphersuite_default
@@ -358,7 +362,7 @@ defaultSupported =
         }
 
 instance Default Supported where
-    def = defaultSupported
+    def = tlsDefaultSupported
 
 -- | Parameters that are common to clients and servers.
 data Shared = Shared

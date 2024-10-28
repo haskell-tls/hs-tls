@@ -99,6 +99,7 @@ module Network.TLS (
 
     -- ** Supported
     Supported,
+    tlsDefaultSupported,
     supportedVersions,
     supportedCiphers,
     supportedCompressions,
