@@ -5,7 +5,7 @@ module HandshakeSpec where
 import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
-import Data.Default.Class
+import Data.Default
 import Data.IORef
 import Data.List
 import Data.Maybe

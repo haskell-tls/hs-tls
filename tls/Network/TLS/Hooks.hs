@@ -5,7 +5,7 @@ module Network.TLS.Hooks (
 ) where
 
 import qualified Data.ByteString as B
-import Data.Default.Class
+import Data.Default
 import Network.TLS.Struct (Handshake, Header)
 import Network.TLS.Struct13 (Handshake13)
 import Network.TLS.X509 (CertificateChain)

@@ -7,7 +7,7 @@ import Crypto.Random
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy.Char8 as LC
-import Data.Default.Class
+import Data.Default
 import Data.IORef
 import Data.X509.CertificateStore
 import Network.Socket (PortNumber, close, connect, socket)

@@ -5,7 +5,7 @@ module Main where
 import Certificate
 import Connection
 import Control.Concurrent.Chan
-import Data.Default.Class
+import Data.Default
 import Data.IORef
 import Data.X509
 import Data.X509.Validation

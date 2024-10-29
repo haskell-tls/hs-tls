@@ -25,7 +25,7 @@ executable TestClient
         network,
         bytestring,
         x509-system >=1.0,
-        data-default-class,
+        data-default >=0.8,
         directory,
         random,
         async,

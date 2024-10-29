@@ -2,7 +2,7 @@
 
 import Control.Exception
 import qualified Data.ByteString.Char8 as B
-import Data.Default.Class
+import Data.Default
 import Data.IORef
 import Data.PEM
 import Data.X509 as X509
