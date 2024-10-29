@@ -1,17 +1,21 @@
 module Network.TLS.Parameters (
     ClientParams (..),
+    defaultParamsClient,
     ServerParams (..),
+    defaultParamsServer,
     CommonParams,
     DebugParams (..),
+    defaultDebugParams,
     ClientHooks (..),
+    defaultClientHooks,
     OnCertificateRequest,
     OnServerCertificate,
     ServerHooks (..),
+    defaultServerHooks,
     Supported (..),
+    defaultSupported,
     Shared (..),
-
-    -- * special default
-    defaultParamsClient,
+    defaultShared,
 
     -- * Parameters
     MaxFragmentEnum (..),
@@ -409,14 +413,17 @@ data Shared = Shared
 instance Show Shared where
     show _ = "Shared"
 instance Default Shared where
-    def =
-        Shared
-            { sharedCredentials = mempty
-            , sharedSessionManager = noSessionManager
-            , sharedCAStore = mempty
-            , sharedValidationCache = def
-            , sharedHelloExtensions = []
-            }
+    def = defaultShared
+
+defaultShared :: Shared
+defaultShared =
+    Shared
+        { sharedCredentials = mempty
+        , sharedSessionManager = noSessionManager
+        , sharedCAStore = mempty
+        , sharedValidationCache = def
+        , sharedHelloExtensions = []
+        }
 
 -- | Group usage callback possible return values.
 data GroupUsage

@@ -55,6 +55,7 @@ module Network.TLS (
 
     -- ** Server parameters
     ServerParams,
+    defaultParamsServer,
     serverWantClientCert,
     serverCACertificates,
     serverDHEParams,
@@ -67,6 +68,7 @@ module Network.TLS (
 
     -- ** Shared
     Shared,
+    defaultShared,
     sharedCredentials,
     sharedSessionManager,
     sharedCAStore,
@@ -75,6 +77,7 @@ module Network.TLS (
 
     -- ** Client hooks
     ClientHooks,
+    defaultClientHooks,
     OnCertificateRequest,
     onCertificateRequest,
     OnServerCertificate,
@@ -85,6 +88,7 @@ module Network.TLS (
 
     -- ** Server hooks
     ServerHooks,
+    defaultServerHooks,
     onClientCertificate,
     onUnverifiedClientCert,
     onCipherChoosing,
@@ -99,6 +103,7 @@ module Network.TLS (
 
     -- ** Supported
     Supported,
+    defaultSupported,
     supportedVersions,
     supportedCiphers,
     supportedCompressions,
@@ -113,6 +118,7 @@ module Network.TLS (
 
     -- ** Debug parameters
     DebugParams,
+    defaultDebugParams,
     debugSeed,
     debugPrintSeed,
     debugVersionForced,
@@ -231,6 +237,7 @@ module Network.TLS (
 
     -- ** Modifying hooks in context
     Hooks,
+    defaultHooks,
     hookRecvHandshake,
     hookRecvHandshake13,
     hookRecvCertificates,
@@ -242,6 +249,7 @@ module Network.TLS (
     contextHookSetHandshake13Recv,
     contextHookSetCertificateRecv,
     Logging,
+    defaultLogging,
     loggingPacketSent,
     loggingPacketRecv,
     loggingIOSent,
@@ -324,7 +332,7 @@ import Network.TLS.X509
 
 import Data.ByteString as B
 import Data.X509 (PrivKey (..), PubKey (..))
-import Data.X509.Validation hiding (HostName)
+import Data.X509.Validation hiding (HostName, defaultHooks)
 
 {-# DEPRECATED Bytes "Use Data.ByteString.Bytestring instead of Bytes." #-}
 type Bytes = B.ByteString
