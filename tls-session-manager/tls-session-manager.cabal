@@ -1,6 +1,6 @@
 cabal-version:      >=1.10
 name:               tls-session-manager
-version:            0.0.6
+version:            0.0.7
 license:            BSD3
 license-file:       LICENSE
 maintainer:         kazu@iij.ad.jp

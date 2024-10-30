@@ -1,5 +1,9 @@
 # ChangeLog for tls-session-manager
 
+## 0.0.7
+
+* Naming threads.
+
 ## 0.0.6
 
 * Preparing for tls v2.1.
