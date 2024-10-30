@@ -97,6 +97,7 @@ newSessionManager conf = do
                 , reaperAction = clean
                 , reaperNull = Q.null
                 , reaperDelay = pruningDelay conf * 1000000
+                , reaperThreadName = "TLS session manager"
                 }
     return $
         noSessionManager

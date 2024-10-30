@@ -48,6 +48,7 @@ newSessionTicketManager Config{..} =
         CT.defaultConfig
             { CT.interval = secretKeyInterval
             , CT.tokenLifetime = ticketLifetime
+            , CT.threadName = "TLS ticket manager"
             }
 
 sessionTicketManager :: CT.TokenManager -> SessionManager
