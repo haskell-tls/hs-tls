@@ -1,3 +1,7 @@
+## Version 2.1.2
+
+* Using data-default instead of data-default-class.
+
 ## Version 2.1.1
 
 * `bye` directly calls `timeout recvHS13`, not spawning a thread for
