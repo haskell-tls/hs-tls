@@ -5,6 +5,7 @@
 
 module Main where
 
+import qualified Control.Exception as E
 import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString.Char8 as C8
 import Data.Default (def)
@@ -16,7 +17,6 @@ import System.Console.GetOpt
 import System.Environment (getArgs)
 import System.Exit
 import System.IO
-import qualified UnliftIO.Exception as E
 
 import Common
 import Imports

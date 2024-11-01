@@ -5,6 +5,7 @@
 module Main where
 
 import Control.Concurrent
+import qualified Control.Exception as E
 import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString.Char8 as C8
 import Data.Default (def)
@@ -12,12 +13,11 @@ import Data.IORef
 import Data.X509.CertificateStore
 import Network.Run.TCP
 import Network.Socket
-import Network.TLS
+import Network.TLS hiding (is0RTTPossible)
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
 import System.X509
-import qualified UnliftIO.Exception as E
 
 import Client
 import Common
