@@ -21,7 +21,7 @@ import Control.Monad
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
-import Data.Default
+import Data.Default (def)
 import Data.IORef
 import Network.TLS
 import System.Timeout

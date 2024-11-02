@@ -36,7 +36,7 @@ executable tls-stunnel
         crypton-x509-store,
         crypton-x509-system >=1.0,
         crypton-x509-validation >=1.5,
-        data-default >= 0.8,
+        data-default,
         crypton,
         tls >=1.5.5,
         tls-session-manager

@@ -7,7 +7,7 @@ import qualified Control.Exception as E
 import qualified Crypto.PubKey.DH as DH ()
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
-import Data.Default
+import Data.Default (def)
 import Data.X509.CertificateStore
 import Data.X509.Validation
 import Network.Socket hiding (Debug)
