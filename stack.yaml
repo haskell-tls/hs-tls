@@ -4,6 +4,5 @@ packages:
   - tls
   - tls-session-manager
 extra-deps:
-  - auto-update-0.2.2
   - crypto-token-0.1.2
 # flags: []
