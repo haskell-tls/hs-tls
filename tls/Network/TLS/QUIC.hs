@@ -81,7 +81,7 @@ import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.Imports
 import Network.TLS.KeySchedule (hkdfExpandLabel, hkdfExtract)
-import Network.TLS.Parameters
+import Network.TLS.Parameters hiding (defaultSupported)
 import Network.TLS.Record.Layer
 import Network.TLS.Record.State
 import Network.TLS.Struct

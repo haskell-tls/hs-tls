@@ -1,5 +1,6 @@
 module Network.TLS.Hooks (
     Logging (..),
+    defaultLogging,
     Hooks (..),
     defaultHooks,
 ) where
