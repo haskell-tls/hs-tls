@@ -23,7 +23,7 @@ module Network.TLS.Parameters (
 ) where
 
 import qualified Data.ByteString as B
-import Data.Default
+import Data.Default (Default (def))
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Credentials
