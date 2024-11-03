@@ -1,3 +1,10 @@
+## Version 2.1.3
+
+* Remove `data-default` version constraint.
+  [#492](https://github.com/haskell-tls/hs-tls/pull/492)
+* Exporting default variables.
+  [#448](https://github.com/haskell-tls/hs-tls/pull/488)
+
 ## Version 2.1.2
 
 * Using data-default instead of data-default-class.
