@@ -164,6 +164,7 @@ module Network.TLS (
 
     -- ** Validation Cache
     ValidationCache (..),
+    defaultValidationCache,
     ValidationCacheQueryCallback,
     ValidationCacheAddCallback,
     ValidationCacheResult (..),

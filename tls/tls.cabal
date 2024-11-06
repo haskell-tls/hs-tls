@@ -121,7 +121,7 @@ library
         crypton >= 0.34,
         crypton-x509 >= 1.7 && < 1.8,
         crypton-x509-store >= 1.6 && < 1.7,
-        crypton-x509-validation >= 1.6.5 && < 1.7,
+        crypton-x509-validation >= 1.6.13 && < 1.7,
         data-default,
         memory >= 0.18 && < 0.19,
         mtl >= 2.2 && < 2.4,

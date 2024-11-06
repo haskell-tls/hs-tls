@@ -10,6 +10,7 @@ module Network.TLS.X509 (
     CertificateUsage (..),
     CertificateStore,
     ValidationCache,
+    defaultValidationCache,
     exceptionValidationCache,
     validateDefault,
     FailedReason,
