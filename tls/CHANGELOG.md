@@ -1,3 +1,7 @@
+## Version 2.1.4
+
+* Exporting defaultValidationCache.
+
 ## Version 2.1.3
 
 * Remove `data-default` version constraint.
