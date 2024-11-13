@@ -6,8 +6,12 @@ module Network.TLS.Extra.Cipher (
     ciphersuite_all_det,
     ciphersuite_strong,
     ciphersuite_strong_det,
+    ciphersuite_dhe_rsa,
 
     -- * individual ciphers
+    cipher_DHE_RSA_AES128GCM_SHA256,
+    cipher_DHE_RSA_AES256GCM_SHA384,
+    cipher_DHE_RSA_CHACHA20POLY1305_SHA256,
     cipher_ECDHE_RSA_AES128GCM_SHA256,
     cipher_ECDHE_RSA_AES256GCM_SHA384,
     cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256,
@@ -270,6 +274,15 @@ sets_strong =
         [cipher_TLS13_AES128CCM_SHA256]
     ]
 
+-- | DHE-RSA cipher suite.  This only includes ciphers bound specifically to
+-- DHE-RSA so TLS 1.3 ciphers must be added separately.
+ciphersuite_dhe_rsa :: [Cipher]
+ciphersuite_dhe_rsa =
+    [ cipher_DHE_RSA_AES256GCM_SHA384
+    , cipher_DHE_RSA_CHACHA20POLY1305_SHA256
+    , cipher_DHE_RSA_AES128GCM_SHA256
+    ]
+
 ----------------------------------------------------------------
 
 bulk_aes128ccm :: Bulk
@@ -373,6 +386,33 @@ bulk_aes128ccm8_13 = bulk_aes128ccm8{bulkIVSize = 12, bulkExplicitIV = 0}
 
 -- A list of cipher suite is found from:
 -- https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-4
+
+----------------------------------------------------------------
+-- RFC 5288
+
+cipher_DHE_RSA_AES128GCM_SHA256 :: Cipher
+cipher_DHE_RSA_AES128GCM_SHA256 =
+    Cipher
+        { cipherID = 0x009E
+        , cipherName = "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256"
+        , cipherBulk = bulk_aes128gcm
+        , cipherHash = SHA256
+        , cipherPRFHash = Just SHA256
+        , cipherKeyExchange = CipherKeyExchange_DHE_RSA
+        , cipherMinVer = Just TLS12 -- RFC 5288 Sec 4
+        }
+
+cipher_DHE_RSA_AES256GCM_SHA384 :: Cipher
+cipher_DHE_RSA_AES256GCM_SHA384 =
+    Cipher
+        { cipherID = 0x009F
+        , cipherName = "TLS_DHE_RSA_WITH_AES_256_GCM_SHA384"
+        , cipherBulk = bulk_aes256gcm
+        , cipherHash = SHA384
+        , cipherPRFHash = Just SHA384
+        , cipherKeyExchange = CipherKeyExchange_DHE_RSA
+        , cipherMinVer = Just TLS12
+        }
 
 ----------------------------------------------------------------
 -- RFC 8446
@@ -563,5 +603,17 @@ cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256 =
         , cipherHash = SHA256
         , cipherPRFHash = Just SHA256
         , cipherKeyExchange = CipherKeyExchange_ECDHE_ECDSA
+        , cipherMinVer = Just TLS12
+        }
+
+cipher_DHE_RSA_CHACHA20POLY1305_SHA256 :: Cipher
+cipher_DHE_RSA_CHACHA20POLY1305_SHA256 =
+    Cipher
+        { cipherID = 0xCCAA
+        , cipherName = "TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
+        , cipherBulk = bulk_chacha20poly1305
+        , cipherHash = SHA256
+        , cipherPRFHash = Just SHA256
+        , cipherKeyExchange = CipherKeyExchange_DHE_RSA
         , cipherMinVer = Just TLS12
         }
