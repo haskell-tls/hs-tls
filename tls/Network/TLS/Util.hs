@@ -19,9 +19,9 @@ module Network.TLS.Util (
 import qualified Data.ByteString as B
 import Network.TLS.Imports
 
-import Control.Concurrent.Async
 import Control.Concurrent.MVar
-import Control.Exception (SomeException)
+import Control.Exception (SomeAsyncException (..))
+import qualified Control.Exception as E
 
 sub :: ByteString -> Int -> Int -> Maybe ByteString
 sub b offset len
@@ -69,8 +69,13 @@ False &&! False = False
 fmapEither :: (a -> b) -> Either l a -> Either l b
 fmapEither f = fmap f
 
-catchException :: IO a -> (SomeException -> IO a) -> IO a
-catchException action handler = withAsync action waitCatch >>= either handler return
+catchException :: IO a -> (E.SomeException -> IO a) -> IO a
+catchException f handler = E.catchJust filterExn f handler
+  where
+    filterExn :: E.SomeException -> Maybe E.SomeException
+    filterExn e = case E.fromException (E.toException e) of
+        Just (SomeAsyncException _) -> Nothing
+        Nothing -> Just e
 
 forEitherM :: Monad m => [a] -> (a -> m (Either l b)) -> m (Either l [b])
 forEitherM [] _ = return (pure [])
