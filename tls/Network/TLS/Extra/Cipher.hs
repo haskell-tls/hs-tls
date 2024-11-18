@@ -276,6 +276,8 @@ sets_strong =
 
 -- | DHE-RSA cipher suite.  This only includes ciphers bound specifically to
 -- DHE-RSA so TLS 1.3 ciphers must be added separately.
+--
+-- @since 2.1.5
 ciphersuite_dhe_rsa :: [Cipher]
 ciphersuite_dhe_rsa =
     [ cipher_DHE_RSA_AES256GCM_SHA384
