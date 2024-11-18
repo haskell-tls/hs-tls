@@ -1,3 +1,9 @@
+## Version 2.1.5
+
+* Removing the dependency on the async package.
+* Restore a few DHE_RSA ciphers.
+  [#493](https://github.com/haskell-tls/hs-tls/pull/493)
+
 ## Version 2.1.4
 
 * Exporting defaultValidationCache.
