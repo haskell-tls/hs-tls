@@ -204,11 +204,12 @@ makePSKBinder
     -> Maybe ByteString
     -> IO ByteString
 makePSKBinder ctx (BaseSecret sec) usedHash truncLen mch = do
-    rmsgs0 <- usingHState ctx getHandshakeMessagesRev -- fixme
-    let rmsgs = case mch of
-            Just ch -> trunc ch : rmsgs0
-            Nothing -> trunc (head rmsgs0) : tail rmsgs0
-        hChTruncated = hash usedHash $ B.concat $ reverse rmsgs
+    rmsgs <- case mch of
+        Just ch -> (trunc ch :) <$> usingHState ctx getHandshakeMessagesRev
+        Nothing -> do
+            ch : rs <- usingHState ctx getHandshakeMessagesRev
+            return $ trunc ch : rs
+    let hChTruncated = hash usedHash $ B.concat $ reverse rmsgs
         binderKey = deriveSecret usedHash sec "res binder" (hash usedHash "")
     return $ makeVerifyData usedHash binderKey hChTruncated
   where

@@ -56,7 +56,7 @@ instance {-# OVERLAPS #-} Arbitrary [HashAndSignatureAlgorithm] where
     arbitrary = shuffle supportedSignatureSchemes
 
 instance Arbitrary DigitallySigned where
-    arbitrary = DigitallySigned <$> (head <$> arbitrary) <*> genByteString 32
+    arbitrary = DigitallySigned <$> (unsafeHead <$> arbitrary) <*> genByteString 32
 
 instance Arbitrary ExtensionRaw where
     arbitrary =
@@ -120,7 +120,7 @@ instance Arbitrary Handshake13 where
                     <$> arbitraryCertReqContext
                     <*> return (CertificateChain certs)
                     <*> replicateM (length certs) arbitrary
-            , CertVerify13 <$> (head <$> arbitrary) <*> genByteString 32
+            , CertVerify13 <$> (unsafeHead <$> arbitrary) <*> genByteString 32
             , Finished13 <$> genByteString 12
             , KeyUpdate13 <$> elements [UpdateNotRequested, UpdateRequested]
             ]
@@ -433,3 +433,8 @@ setEMSMode (cems, sems) (clientParam, serverParam) = (clientParam', serverParam'
 
 genByteString :: Int -> Gen B.ByteString
 genByteString i = B.pack <$> vector i
+
+-- Just for preventing warnings of GHC 9.10
+unsafeHead :: [a] -> a
+unsafeHead [] = error "unsafeHead"
+unsafeHead (x : _) = x

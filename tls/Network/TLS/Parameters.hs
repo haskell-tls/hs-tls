@@ -646,7 +646,9 @@ defaultServerHooks =
                 CertificateUsageReject $
                     CertificateRejectOther "no client certificates expected"
         , onUnverifiedClientCert = return False
-        , onCipherChoosing = \_ -> head
+        , onCipherChoosing = \_ ccs -> case ccs of
+            [] -> error "onCipherChoosing"
+            c : _ -> c
         , onServerNameIndication = \_ -> return mempty
         , onNewHandshake = \_ -> return True
         , onALPNClientSuggest = Nothing

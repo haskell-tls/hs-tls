@@ -176,4 +176,4 @@ logKey ctx logkey = do
                 (label, key) = labelAndKey logkey
             ctxKeyLogger ctx $ label ++ " " ++ dump cr ++ " " ++ dump key
   where
-    dump = init . tail . showBytesHex
+    dump = init . drop 1 . showBytesHex

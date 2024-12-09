@@ -256,13 +256,16 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
                 Nothing -> Nothing
         mgroup <- usingHState ctx getSupportedGroup
         let serverGroups = supportedGroups (ctxSupported ctx)
-            groupExtension
-                | null serverGroups = Nothing
-                | maybe True (== head serverGroups) mgroup = Nothing
-                | otherwise =
-                    Just $
-                        ExtensionRaw EID_SupportedGroups $
-                            extensionEncode (SupportedGroups serverGroups)
+            groupExtension = case serverGroups of
+                [] -> Nothing
+                rg : _ -> case mgroup of
+                    Nothing -> Nothing
+                    Just grp
+                        | grp == rg -> Nothing
+                        | otherwise ->
+                            Just $
+                                ExtensionRaw EID_SupportedGroups $
+                                    extensionEncode (SupportedGroups serverGroups)
         let earlyDataExtension
                 | rtt0OK =
                     Just $

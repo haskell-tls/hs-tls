@@ -99,7 +99,7 @@ handshake13_simple (CSP13 params) = runTLSSimple13 params hs
   where
     cgrps = supportedGroups $ clientSupported $ fst params
     sgrps = supportedGroups $ serverSupported $ snd params
-    hs = if head cgrps `elem` sgrps then FullHandshake else HelloRetryRequest
+    hs = if unsafeHead cgrps `elem` sgrps then FullHandshake else HelloRetryRequest
 
 --------------------------------------------------------------
 
@@ -829,7 +829,7 @@ handshake13_0rtt (CSP13 (cli, srv)) = do
                 }
         svrHooks =
             def
-                { onALPNClientSuggest = Just (return . head)
+                { onALPNClientSuggest = Just (return . unsafeHead)
                 }
         params0 =
             ( cli
