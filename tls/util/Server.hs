@@ -3,6 +3,7 @@
 module Server where
 
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy.Char8 as BL8
 import Data.IORef
 import Network.TLS
@@ -14,13 +15,18 @@ server :: Context -> Bool -> IO ()
 server ctx showRequest = do
     recvRequest ctx showRequest
     sendData ctx $
-        "HTTP/1.1 200 OK\r\n"
-            <> "Context-Type: text/html\r\n"
-            <> "Content-Length: "
-            <> BL8.pack (show (BL8.length body))
-            <> "\r\n"
-            <> "\r\n"
-            <> body
+        -- "<>" creates *chunks* of lazy ByteString, resulting
+        -- many TLS fragments.
+        -- To prevent this, strict ByteString is created first and
+        -- converted into lazy one.
+        BL8.fromStrict $
+            "HTTP/1.1 200 OK\r\n"
+                <> "Context-Type: text/html\r\n"
+                <> "Content-Length: "
+                <> C8.pack (show (BS.length body))
+                <> "\r\n"
+                <> "\r\n"
+                <> body
   where
     body = "<html><<body>Hello world!</body></html>"
 
