@@ -5,7 +5,6 @@
 
 module Main where
 
-import qualified Control.Exception as E
 import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString.Char8 as C8
 import Data.Default (def)
@@ -110,12 +109,13 @@ main = do
         creds = Credentials [cred]
     runTCPServer (Just host) port $ \sock -> do
         let sparams = getServerParams creds optGroups smgr keyLog
-        E.bracket (contextNew sock sparams) bye $ \ctx -> do
-            handshake ctx
-            when (optDebugLog || optShow) $ putStrLn "------------------------"
-            when optDebugLog $
-                getInfo ctx >>= printHandshakeInfo
-            server ctx optShow
+        ctx <- contextNew sock sparams
+        handshake ctx
+        when (optDebugLog || optShow) $ putStrLn "------------------------"
+        when optDebugLog $
+            getInfo ctx >>= printHandshakeInfo
+        server ctx optShow
+        bye ctx
 
 getServerParams
     :: Credentials

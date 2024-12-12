@@ -5,7 +5,6 @@
 module Main where
 
 import Control.Concurrent
-import qualified Control.Exception as E
 import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString.Char8 as C8
 import Data.Default (def)
@@ -259,9 +258,11 @@ runTLS
     -> IO a
 runTLS cparams Aux{..} action =
     runTCPClient auxAuthority auxPort $ \sock -> do
-        E.bracket (contextNew sock cparams) bye $ \ctx -> do
-            handshake ctx
-            action ctx
+        ctx <- contextNew sock cparams
+        handshake ctx
+        r <- action ctx
+        bye ctx
+        return r
 
 modifyClientParams
     :: ClientParams -> [(SessionID, SessionData)] -> Bool -> ClientParams
