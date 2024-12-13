@@ -77,7 +77,18 @@ availableECGroups :: [Group]
 availableECGroups = [P256, P384, P521, X25519, X448]
 
 supportedNamedGroups :: [Group]
-supportedNamedGroups = [X25519, X448, P256, FFDHE3072, FFDHE4096, P384, FFDHE6144, FFDHE8192, P521]
+supportedNamedGroups =
+    [ X25519
+    , X448
+    , P256
+    , FFDHE2048
+    , FFDHE3072
+    , FFDHE4096
+    , P384
+    , FFDHE6144
+    , FFDHE8192
+    , P521
+    ]
 
 -- Key-exchange signature algorithm, in close relation to ciphers
 -- (before TLS 1.3).

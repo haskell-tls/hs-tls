@@ -37,8 +37,7 @@ defaultOptions =
         { optDebugLog = False
         , optShow = False
         , optKeyLogFile = Nothing
-        , -- excluding FFDHE8192 for retry
-          optGroups = [X25519, X448, P256, P521]
+        , optGroups = supportedGroups defaultSupported
         , optCertFile = "servercert.pem"
         , optKeyFile = "serverkey.pem"
         }
