@@ -76,7 +76,9 @@ handleException ctx f = catchException f $ \exception -> do
         if tls13
             then do
                 when (established == EarlyDataSending) $ clearTxRecordState ctx
-                sendPacket13 ctx $ Alert13 [errorToAlert tlserror]
+                when (tlserror /= Error_TCP_Terminate) $
+                    sendPacket13 ctx $
+                        Alert13 [errorToAlert tlserror]
             else sendPacket12 ctx $ Alert [errorToAlert tlserror]
     handshakeFailed tlserror
   where

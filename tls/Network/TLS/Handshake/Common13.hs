@@ -424,6 +424,7 @@ getHandshake13 ctx = RecvHandshake13M $ do
             Right (Handshake13 []) -> error "invalid recvPacket13 result"
             Right (Handshake13 (h : hs)) -> found h hs
             Right ChangeCipherSpec13 -> recvLoop
+            Right (Alert13 _) -> throwCore Error_TCP_Terminate
             Right x -> unexpected (show x) (Just "handshake 13")
             Left err -> throwCore err
 

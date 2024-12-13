@@ -416,6 +416,7 @@ data TLSError
     | Error_Packet String
     | Error_Packet_unexpected String String
     | Error_Packet_Parsing String
+    | Error_TCP_Terminate
     deriving (Eq, Show, Typeable)
 
 ----------------------------------------------------------------
