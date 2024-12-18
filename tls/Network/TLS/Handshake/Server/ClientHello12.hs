@@ -2,7 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module Network.TLS.Handshake.Server.ClientHello12 (
-    processClinetHello12,
+    processClientHello12,
 ) where
 
 import Network.TLS.Cipher
@@ -23,12 +23,12 @@ import Network.TLS.Types (Role (..))
 ----------------------------------------------------------------
 
 -- TLS 1.2 or earlier
-processClinetHello12
+processClientHello12
     :: ServerParams
     -> Context
     -> CH
     -> IO (Cipher, Maybe Credential)
-processClinetHello12 sparams ctx ch = do
+processClientHello12 sparams ctx ch = do
     let secureRenegotiation = supportedSecureRenegotiation $ ctxSupported ctx
     when secureRenegotiation $ checkSesecureRenegotiation ctx ch
     serverName <- usingState_ ctx getClientSNI

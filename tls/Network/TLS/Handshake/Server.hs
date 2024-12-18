@@ -69,7 +69,7 @@ handshake sparams ctx clientHello = do
                     recvClientSecondFlight13 sparams ctx r1 ch
         else do
             r <-
-                processClinetHello12 sparams ctx ch
+                processClientHello12 sparams ctx ch
             resumeSessionData <-
                 sendServerHello12 sparams ctx r ch
             recvClientSecondFlight12 sparams ctx resumeSessionData
