@@ -7,7 +7,6 @@ module Main where
 
 import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString.Char8 as C8
-import Data.Default (def)
 import Data.IORef
 import qualified Data.Map.Strict as M
 import Network.Run.TCP
@@ -123,7 +122,7 @@ getServerParams
     -> (String -> IO ())
     -> ServerParams
 getServerParams creds groups sm keyLog =
-    def
+    defaultParamsServer
         { serverSupported = supported
         , serverShared = shared
         , serverHooks = hooks
@@ -132,16 +131,16 @@ getServerParams creds groups sm keyLog =
         }
   where
     shared =
-        def
+        defaultShared
             { sharedCredentials = creds
             , sharedSessionManager = sm
             }
     supported =
-        def
+        defaultSupported
             { supportedGroups = groups
             }
-    hooks = def{onALPNClientSuggest = Just chooseALPN}
-    debug = def{debugKeyLogger = keyLog}
+    hooks = defaultServerHooks{onALPNClientSuggest = Just chooseALPN}
+    debug = defaultDebugParams{debugKeyLogger = keyLog}
 
 chooseALPN :: [ByteString] -> IO ByteString
 chooseALPN protos

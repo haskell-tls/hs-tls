@@ -5,7 +5,6 @@ module HandshakeSpec where
 import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
-import Data.Default (def)
 import Data.IORef
 import Data.List
 import Data.Maybe
@@ -673,12 +672,12 @@ handshake12_session_ticket (CSP12 plainParams) = do
 handshake13_full :: CSP13 -> IO ()
 handshake13_full (CSP13 (cli, srv)) = do
     let cliSupported =
-            def
+            defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
                 }
         svrSupported =
-            def
+            defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
                 }
@@ -691,12 +690,12 @@ handshake13_full (CSP13 (cli, srv)) = do
 handshake13_hrr :: CSP13 -> IO ()
 handshake13_hrr (CSP13 (cli, srv)) = do
     let cliSupported =
-            def
+            defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [P256, X25519]
                 }
         svrSupported =
-            def
+            defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
                 }
@@ -709,12 +708,12 @@ handshake13_hrr (CSP13 (cli, srv)) = do
 handshake13_psk :: CSP13 -> IO ()
 handshake13_psk (CSP13 (cli, srv)) = do
     let cliSupported =
-            def
+            defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [P256, X25519]
                 }
         svrSupported =
-            def
+            defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
                 }
@@ -740,12 +739,12 @@ handshake13_psk (CSP13 (cli, srv)) = do
 handshake13_psk_ticket :: CSP13 -> IO ()
 handshake13_psk_ticket (CSP13 (cli, srv)) = do
     let cliSupported =
-            def
+            defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [P256, X25519]
                 }
         svrSupported =
-            def
+            defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
                 }
@@ -772,7 +771,7 @@ handshake13_psk_ticket (CSP13 (cli, srv)) = do
 handshake13_psk_fallback :: CSP13 -> IO ()
 handshake13_psk_fallback (CSP13 (cli, srv)) = do
     let cliSupported =
-            def
+            defaultSupported
                 { supportedCiphers =
                     [ cipher13_AES_128_GCM_SHA256
                     , cipher13_AES_128_CCM_SHA256
@@ -780,7 +779,7 @@ handshake13_psk_fallback (CSP13 (cli, srv)) = do
                 , supportedGroups = [P256, X25519]
                 }
         svrSupported =
-            def
+            defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
                 }
@@ -804,7 +803,7 @@ handshake13_psk_fallback (CSP13 (cli, srv)) = do
     let (cli2, srv2) = setPairParamsSessionResuming (fromJust sessionParams) params
         srv2' = srv2{serverSupported = svrSupported'}
         svrSupported' =
-            def
+            defaultSupported
                 { supportedCiphers = [cipher13_AES_128_CCM_SHA256]
                 , supportedGroups = [P256]
                 }
@@ -814,21 +813,21 @@ handshake13_psk_fallback (CSP13 (cli, srv)) = do
 handshake13_0rtt :: CSP13 -> IO ()
 handshake13_0rtt (CSP13 (cli, srv)) = do
     let cliSupported =
-            def
+            defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [P256, X25519]
                 }
         svrSupported =
-            def
+            defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
                 }
         cliHooks =
-            def
+            defaultClientHooks
                 { onSuggestALPN = return $ Just ["h2"]
                 }
         svrHooks =
-            def
+            defaultServerHooks
                 { onALPNClientSuggest = Just (return . unsafeHead)
                 }
         params0 =
@@ -867,12 +866,12 @@ handshake13_0rtt_fallback :: CSP13 -> IO ()
 handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
     group0 <- generate $ elements [P256, X25519]
     let cliSupported =
-            def
+            defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [P256, X25519]
                 }
         svrSupported =
-            def
+            defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [group0]
                 }
@@ -901,7 +900,7 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
             group1 <- generate $ elements [P256, X25519]
             let (pc, ps) = setPairParamsSessionResuming sessionParams params0
                 svrSupported1 =
-                    def
+                    defaultSupported
                         { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                         , supportedGroups = [group1]
                         }

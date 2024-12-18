@@ -159,7 +159,6 @@ test-suite spec
         crypton,
         crypton-x509,
         crypton-x509-validation,
-        data-default,
         hourglass,
         hspec,
         serialise,
@@ -184,7 +183,6 @@ executable tls-server
         crypton,
         crypton-x509-store,
         crypton-x509-system,
-        data-default,
         network,
         network-run,
         tls
@@ -212,7 +210,6 @@ executable tls-client
         crypton,
         crypton-x509-store,
         crypton-x509-system,
-        data-default,
         network,
         network-run,
         tls

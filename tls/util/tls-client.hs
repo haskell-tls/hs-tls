@@ -8,7 +8,6 @@ module Main where
 import Control.Concurrent
 import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString.Char8 as C8
-import Data.Default (def)
 import Data.IORef
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
@@ -46,13 +45,13 @@ defaultOptions =
         { optDebugLog = False
         , optShow = False
         , optKeyLogFile = Nothing
-        , optGroups = supportedGroups def
+        , optGroups = supportedGroups defaultSupported
         , optValidate = False
         , optVerNego = False
         , optResumption = False
         , opt0RTT = False
         , optRetry = False
-        , optVersions = supportedVersions def
+        , optVersions = supportedVersions defaultSupported
         , optALPN = "http/1.1"
         }
 
@@ -296,7 +295,7 @@ getClientParams Options{..} serverName port sm mstore =
         | optRetry = FFDHE8192 : optGroups
         | otherwise = optGroups
     shared =
-        def
+        defaultShared
             { sharedSessionManager = sm
             , sharedCAStore = case mstore of
                 Just store -> store
@@ -304,22 +303,22 @@ getClientParams Options{..} serverName port sm mstore =
             , sharedValidationCache = validateCache
             }
     supported =
-        def
+        defaultSupported
             { supportedVersions = optVersions
             , supportedGroups = groups
             }
     hooks =
-        def
+        defaultClientHooks
             { onSuggestALPN = return $ Just [C8.pack optALPN]
             }
     validateCache
-        | isJust mstore = def
+        | isJust mstore = sharedValidationCache defaultShared
         | otherwise =
             ValidationCache
                 (\_ _ _ -> return ValidationCachePass)
                 (\_ _ _ -> return ())
     debug =
-        def
+        defaultDebugParams
             { debugKeyLogger = getLogger optKeyLogFile
             }
 

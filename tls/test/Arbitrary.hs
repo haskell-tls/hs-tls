@@ -5,7 +5,6 @@ module Arbitrary where
 
 import Control.Monad
 import qualified Data.ByteString as B
-import Data.Default (def)
 import Data.List
 import Data.Word
 import Data.X509 (
@@ -363,21 +362,21 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
     clientHashSignatures <- arbitrary
     serverHashSignatures <- arbitrary
     let serverState =
-            def
+            defaultParamsServer
                 { serverSupported =
-                    def
+                    defaultSupported
                         { supportedCiphers = serverCiphers
                         , supportedVersions = serverVersions
                         , supportedSecureRenegotiation = secNeg
                         , supportedGroups = serverGroups
                         , supportedHashSignatures = serverHashSignatures
                         }
-                , serverShared = def{sharedCredentials = Credentials creds}
+                , serverShared = defaultShared{sharedCredentials = Credentials creds}
                 }
     let clientState =
             (defaultParamsClient "" B.empty)
                 { clientSupported =
-                    def
+                    defaultSupported
                         { supportedCiphers = clientCiphers
                         , supportedVersions = clientVersions
                         , supportedSecureRenegotiation = secNeg
@@ -385,7 +384,7 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
                         , supportedHashSignatures = clientHashSignatures
                         }
                 , clientShared =
-                    def
+                    defaultShared
                         { sharedValidationCache =
                             ValidationCache
                                 { cacheAdd = \_ _ _ -> return ()
