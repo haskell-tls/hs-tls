@@ -1,4 +1,5 @@
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -9,6 +10,8 @@ import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString.Char8 as C8
 import Data.Default (def)
 import Data.IORef
+import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NE
 import Data.X509.CertificateStore
 import Network.Run.TCP
 import Network.Socket
@@ -136,7 +139,7 @@ main = do
         [] -> showUsageAndExit usage
         _ : [] -> showUsageAndExit usage
         h : p : [] -> return (h, p, ["/"])
-        h : p : ps -> return (h, p, C8.pack <$> ps)
+        h : p : ps -> return (h, p, C8.pack <$> NE.fromList ps)
     when (null optGroups) $ do
         putStrLn "Error: unsupported groups"
         exitFailure
@@ -163,7 +166,8 @@ main = do
             | otherwise = clientHTTP11
     runClient opts client cparams aux paths
 
-runClient :: Options -> Cli -> ClientParams -> Aux -> [ByteString] -> IO ()
+runClient
+    :: Options -> Cli -> ClientParams -> Aux -> NonEmpty ByteString -> IO ()
 runClient opts@Options{..} client cparams aux@Aux{..} paths = do
     auxDebug "------------------------"
     (info1, msd) <- runTLS cparams aux $ \ctx -> do
@@ -232,7 +236,7 @@ runClient2
     -> Cli
     -> ClientParams
     -> Aux
-    -> [ByteString]
+    -> NonEmpty ByteString
     -> IO Information
 runClient2 Options{..} client cparams aux@Aux{..} paths = do
     threadDelay 100000

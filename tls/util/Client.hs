@@ -10,6 +10,8 @@ module Client (
 
 import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString.Lazy.Char8 as CL8
+import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NE
 import Network.Socket
 import Network.TLS
 
@@ -23,13 +25,13 @@ data Aux = Aux
     , auxReadResumptionData :: IO [(SessionID, SessionData)]
     }
 
-type Cli = Aux -> [ByteString] -> Context -> IO ()
+type Cli = Aux -> NonEmpty ByteString -> Context -> IO ()
 
 clientHTTP11 :: Cli
 clientHTTP11 aux@Aux{..} paths ctx = do
     sendData ctx $
         "GET "
-            <> CL8.fromStrict (head paths)
+            <> CL8.fromStrict (NE.head paths)
             <> " HTTP/1.1\r\n"
             <> "Host: "
             <> CL8.pack auxAuthority
