@@ -51,11 +51,11 @@ newSource ctx = do
     getline :: IORef ByteString -> IO ByteString
     getline ref = do
         bs0 <- readIORef ref
-        case BS.breakSubstring "\r\n" bs0 of
+        case BS.breakSubstring "\n" bs0 of
             (_, "") -> do
                 bs1 <- recvData ctx
                 writeIORef ref (bs0 <> bs1)
                 getline ref
             (bs1, bs2) -> do
-                writeIORef ref $ BS.drop 2 bs2
-                return bs1
+                writeIORef ref $ BS.drop 1 bs2
+                return $ BS.dropWhileEnd (== 0x0d) bs1
