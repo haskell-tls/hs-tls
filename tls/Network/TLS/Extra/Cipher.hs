@@ -1,5 +1,5 @@
 module Network.TLS.Extra.Cipher (
-    -- * cipher suite
+    -- * Cipher suite
     ciphersuite_default,
     ciphersuite_default_det,
     ciphersuite_all,
@@ -8,26 +8,65 @@ module Network.TLS.Extra.Cipher (
     ciphersuite_strong_det,
     ciphersuite_dhe_rsa,
 
-    -- * individual ciphers
+    -- * Individual ciphers
+
+    -- ** RFC 5288
+    cipher_DHE_RSA_WITH_AES_128_GCM_SHA256,
+    cipher_DHE_RSA_WITH_AES_256_GCM_SHA384,
+
+    -- ** RFC 8446
+    cipher13_AES_128_GCM_SHA256,
+    cipher13_AES_256_GCM_SHA384,
+    cipher13_CHACHA20_POLY1305_SHA256,
+    cipher13_AES_128_CCM_SHA256,
+    cipher13_TLS_AES_128_CCM_8_SHA256,
+
+    -- ** RFC 5289
+    cipher_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+    cipher_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+    cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+    cipher_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+
+    -- ** RFC 7251
+    cipher_ECDHE_ECDSA_WITH_AES_128_CCM,
+    cipher_ECDHE_ECDSA_WITH_AES_256_CCM,
+    cipher_ECDHE_ECDSA_WITH_AES_128_CCM_8,
+    cipher_ECDHE_ECDSA_WITH_AES_256_CCM_8,
+
+    -- ** RFC 7905
+    cipher_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+    cipher_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+    cipher_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+
+    -- * Deprecated names
+
+    -- ** RFC 5288
     cipher_DHE_RSA_AES128GCM_SHA256,
     cipher_DHE_RSA_AES256GCM_SHA384,
-    cipher_DHE_RSA_CHACHA20POLY1305_SHA256,
-    cipher_ECDHE_RSA_AES128GCM_SHA256,
-    cipher_ECDHE_RSA_AES256GCM_SHA384,
-    cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256,
-    cipher_ECDHE_ECDSA_AES128CCM_SHA256,
-    cipher_ECDHE_ECDSA_AES128CCM8_SHA256,
-    cipher_ECDHE_ECDSA_AES128GCM_SHA256,
-    cipher_ECDHE_ECDSA_AES256CCM_SHA256,
-    cipher_ECDHE_ECDSA_AES256CCM8_SHA256,
-    cipher_ECDHE_ECDSA_AES256GCM_SHA384,
-    cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256,
-    -- TLS 1.3
+
+    -- ** RFC 8446
     cipher_TLS13_AES128GCM_SHA256,
     cipher_TLS13_AES256GCM_SHA384,
     cipher_TLS13_CHACHA20POLY1305_SHA256,
     cipher_TLS13_AES128CCM_SHA256,
     cipher_TLS13_AES128CCM8_SHA256,
+
+    -- ** RFC 5289
+    cipher_ECDHE_ECDSA_AES128GCM_SHA256,
+    cipher_ECDHE_ECDSA_AES256GCM_SHA384,
+    cipher_ECDHE_RSA_AES128GCM_SHA256,
+    cipher_ECDHE_RSA_AES256GCM_SHA384,
+
+    -- ** RFC 7251
+    cipher_ECDHE_ECDSA_AES128CCM_SHA256,
+    cipher_ECDHE_ECDSA_AES256CCM_SHA256,
+    cipher_ECDHE_ECDSA_AES128CCM8_SHA256,
+    cipher_ECDHE_ECDSA_AES256CCM8_SHA256,
+
+    -- ** RFC 7905
+    cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256,
+    cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256,
+    cipher_DHE_RSA_CHACHA20POLY1305_SHA256,
 ) where
 
 import qualified Data.ByteString as B
@@ -224,9 +263,9 @@ ciphersuite_all_det = ciphersuite_default_det ++ complement_all
 
 complement_all :: [Cipher]
 complement_all =
-    [ cipher_ECDHE_ECDSA_AES128CCM8_SHA256
-    , cipher_ECDHE_ECDSA_AES256CCM8_SHA256
-    , cipher_TLS13_AES128CCM8_SHA256
+    [ cipher_ECDHE_ECDSA_WITH_AES_128_CCM_8
+    , cipher_ECDHE_ECDSA_WITH_AES_256_CCM_8
+    , cipher13_TLS_AES_128_CCM_8_SHA256
     ]
 
 -- | The strongest ciphers supported.  For ciphers with PFS, AEAD and SHA2, we
@@ -248,30 +287,30 @@ sets_strong :: [CipherSet]
 sets_strong =
     [ -- If we have PFS + AEAD + SHA2, then allow AES128, else just 256
       SetAead
-        [cipher_ECDHE_ECDSA_AES256GCM_SHA384]
-        [cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256]
-        [cipher_ECDHE_ECDSA_AES256CCM_SHA256]
+        [cipher_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384]
+        [cipher_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256]
+        [cipher_ECDHE_ECDSA_WITH_AES_256_CCM]
     , SetAead
-        [cipher_ECDHE_ECDSA_AES128GCM_SHA256]
+        [cipher_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256]
         []
-        [cipher_ECDHE_ECDSA_AES128CCM_SHA256]
+        [cipher_ECDHE_ECDSA_WITH_AES_128_CCM]
     , SetAead
-        [cipher_ECDHE_RSA_AES256GCM_SHA384]
-        [cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256]
+        [cipher_ECDHE_RSA_WITH_AES_256_GCM_SHA384]
+        [cipher_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256]
         []
     , SetAead
-        [cipher_ECDHE_RSA_AES128GCM_SHA256]
+        [cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256]
         []
         []
     , -- TLS13 (listed at the end but version is negotiated first)
       SetAead
-        [cipher_TLS13_AES256GCM_SHA384]
-        [cipher_TLS13_CHACHA20POLY1305_SHA256]
+        [cipher13_AES_256_GCM_SHA384]
+        [cipher13_CHACHA20_POLY1305_SHA256]
         []
     , SetAead
-        [cipher_TLS13_AES128GCM_SHA256]
+        [cipher13_AES_128_GCM_SHA256]
         []
-        [cipher_TLS13_AES128CCM_SHA256]
+        [cipher13_AES_128_CCM_SHA256]
     ]
 
 -- | DHE-RSA cipher suite.  This only includes ciphers bound specifically to
@@ -280,9 +319,9 @@ sets_strong =
 -- @since 2.1.5
 ciphersuite_dhe_rsa :: [Cipher]
 ciphersuite_dhe_rsa =
-    [ cipher_DHE_RSA_AES256GCM_SHA384
-    , cipher_DHE_RSA_CHACHA20POLY1305_SHA256
-    , cipher_DHE_RSA_AES128GCM_SHA256
+    [ cipher_DHE_RSA_WITH_AES_256_GCM_SHA384
+    , cipher_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+    , cipher_DHE_RSA_WITH_AES_128_GCM_SHA256
     ]
 
 ----------------------------------------------------------------
@@ -392,8 +431,9 @@ bulk_aes128ccm8_13 = bulk_aes128ccm8{bulkIVSize = 12, bulkExplicitIV = 0}
 ----------------------------------------------------------------
 -- RFC 5288
 
-cipher_DHE_RSA_AES128GCM_SHA256 :: Cipher
-cipher_DHE_RSA_AES128GCM_SHA256 =
+-- TLS_DHE_RSA_WITH_AES_128_GCM_SHA256
+cipher_DHE_RSA_WITH_AES_128_GCM_SHA256 :: Cipher
+cipher_DHE_RSA_WITH_AES_128_GCM_SHA256 =
     Cipher
         { cipherID = 0x009E
         , cipherName = "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256"
@@ -404,8 +444,16 @@ cipher_DHE_RSA_AES128GCM_SHA256 =
         , cipherMinVer = Just TLS12 -- RFC 5288 Sec 4
         }
 
-cipher_DHE_RSA_AES256GCM_SHA384 :: Cipher
-cipher_DHE_RSA_AES256GCM_SHA384 =
+{-# DEPRECATED
+    cipher_DHE_RSA_AES128GCM_SHA256
+    "Use cipher_DHE_RSA_WITH_AES_128_GCM_SHA256 instead"
+    #-}
+cipher_DHE_RSA_AES128GCM_SHA256 :: Cipher
+cipher_DHE_RSA_AES128GCM_SHA256 = cipher_DHE_RSA_WITH_AES_128_GCM_SHA256
+
+-- TLS_DHE_RSA_WITH_AES_256_GCM_SHA384
+cipher_DHE_RSA_WITH_AES_256_GCM_SHA384 :: Cipher
+cipher_DHE_RSA_WITH_AES_256_GCM_SHA384 =
     Cipher
         { cipherID = 0x009F
         , cipherName = "TLS_DHE_RSA_WITH_AES_256_GCM_SHA384"
@@ -416,11 +464,19 @@ cipher_DHE_RSA_AES256GCM_SHA384 =
         , cipherMinVer = Just TLS12
         }
 
+{-# DEPRECATED
+    cipher_DHE_RSA_AES256GCM_SHA384
+    "Use cipher_DHE_RSA_WITH_AES_256_GCM_SHA384 instead"
+    #-}
+cipher_DHE_RSA_AES256GCM_SHA384 :: Cipher
+cipher_DHE_RSA_AES256GCM_SHA384 = cipher_DHE_RSA_WITH_AES_256_GCM_SHA384
+
 ----------------------------------------------------------------
 -- RFC 8446
 
-cipher_TLS13_AES128GCM_SHA256 :: Cipher
-cipher_TLS13_AES128GCM_SHA256 =
+-- TLS_AES_128_GCM_SHA256
+cipher13_AES_128_GCM_SHA256 :: Cipher
+cipher13_AES_128_GCM_SHA256 =
     Cipher
         { cipherID = 0x1301
         , cipherName = "TLS_AES_128_GCM_SHA256"
@@ -431,8 +487,16 @@ cipher_TLS13_AES128GCM_SHA256 =
         , cipherMinVer = Just TLS13
         }
 
-cipher_TLS13_AES256GCM_SHA384 :: Cipher
-cipher_TLS13_AES256GCM_SHA384 =
+cipher_TLS13_AES128GCM_SHA256 :: Cipher
+cipher_TLS13_AES128GCM_SHA256 = cipher13_AES_128_GCM_SHA256
+{-# DEPRECATED
+    cipher_TLS13_AES128GCM_SHA256
+    "Use cipher13_AES_128_GCM_SHA256 instead"
+    #-}
+
+-- TLS_AES_256_GCM_SHA384
+cipher13_AES_256_GCM_SHA384 :: Cipher
+cipher13_AES_256_GCM_SHA384 =
     Cipher
         { cipherID = 0x1302
         , cipherName = "TLS_AES_256_GCM_SHA384"
@@ -443,8 +507,16 @@ cipher_TLS13_AES256GCM_SHA384 =
         , cipherMinVer = Just TLS13
         }
 
-cipher_TLS13_CHACHA20POLY1305_SHA256 :: Cipher
-cipher_TLS13_CHACHA20POLY1305_SHA256 =
+cipher_TLS13_AES256GCM_SHA384 :: Cipher
+cipher_TLS13_AES256GCM_SHA384 = cipher13_AES_256_GCM_SHA384
+{-# DEPRECATED
+    cipher_TLS13_AES256GCM_SHA384
+    "Use cipher13_AES_256_GCM_SHA384 instead"
+    #-}
+
+-- TLS_CHACHA20_POLY1305_SHA256
+cipher13_CHACHA20_POLY1305_SHA256 :: Cipher
+cipher13_CHACHA20_POLY1305_SHA256 =
     Cipher
         { cipherID = 0x1303
         , cipherName = "TLS_CHACHA20_POLY1305_SHA256"
@@ -455,8 +527,16 @@ cipher_TLS13_CHACHA20POLY1305_SHA256 =
         , cipherMinVer = Just TLS13
         }
 
-cipher_TLS13_AES128CCM_SHA256 :: Cipher
-cipher_TLS13_AES128CCM_SHA256 =
+cipher_TLS13_CHACHA20POLY1305_SHA256 :: Cipher
+cipher_TLS13_CHACHA20POLY1305_SHA256 = cipher13_CHACHA20_POLY1305_SHA256
+{-# DEPRECATED
+    cipher_TLS13_CHACHA20POLY1305_SHA256
+    "Use cipher13_CHACHA20_POLY1305_SHA256 instead"
+    #-}
+
+-- TLS_AES_128_CCM_SHA256
+cipher13_AES_128_CCM_SHA256 :: Cipher
+cipher13_AES_128_CCM_SHA256 =
     Cipher
         { cipherID = 0x1304
         , cipherName = "TLS_AES_128_CCM_SHA256"
@@ -467,8 +547,16 @@ cipher_TLS13_AES128CCM_SHA256 =
         , cipherMinVer = Just TLS13
         }
 
-cipher_TLS13_AES128CCM8_SHA256 :: Cipher
-cipher_TLS13_AES128CCM8_SHA256 =
+cipher_TLS13_AES128CCM_SHA256 :: Cipher
+cipher_TLS13_AES128CCM_SHA256 = cipher13_AES_128_CCM_SHA256
+{-# DEPRECATED
+    cipher_TLS13_AES128CCM_SHA256
+    "Use cipher13_AES_128_CCM_SHA256 instead"
+    #-}
+
+-- TLS_AES_128_CCM_8_SHA256
+cipher13_TLS_AES_128_CCM_8_SHA256 :: Cipher
+cipher13_TLS_AES_128_CCM_8_SHA256 =
     Cipher
         { cipherID = 0x1305
         , cipherName = "TLS_AES_128_CCM_8_SHA256"
@@ -479,11 +567,19 @@ cipher_TLS13_AES128CCM8_SHA256 =
         , cipherMinVer = Just TLS13
         }
 
+cipher_TLS13_AES128CCM8_SHA256 :: Cipher
+cipher_TLS13_AES128CCM8_SHA256 = cipher13_TLS_AES_128_CCM_8_SHA256
+{-# DEPRECATED
+    cipher_TLS13_AES128CCM8_SHA256
+    "Use cipher13_TLS_AES_128_CCM_8_SHA256 instead"
+    #-}
+
 ----------------------------------------------------------------
 -- GCM: RFC 5289
 
-cipher_ECDHE_ECDSA_AES128GCM_SHA256 :: Cipher
-cipher_ECDHE_ECDSA_AES128GCM_SHA256 =
+-- TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+cipher_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 :: Cipher
+cipher_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 =
     Cipher
         { cipherID = 0xC02B
         , cipherName = "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
@@ -494,8 +590,16 @@ cipher_ECDHE_ECDSA_AES128GCM_SHA256 =
         , cipherMinVer = Just TLS12 -- RFC 5289
         }
 
-cipher_ECDHE_ECDSA_AES256GCM_SHA384 :: Cipher
-cipher_ECDHE_ECDSA_AES256GCM_SHA384 =
+cipher_ECDHE_ECDSA_AES128GCM_SHA256 :: Cipher
+cipher_ECDHE_ECDSA_AES128GCM_SHA256 = cipher_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+{-# DEPRECATED
+    cipher_ECDHE_ECDSA_AES128GCM_SHA256
+    "Use cipher_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 instead"
+    #-}
+
+-- TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+cipher_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 :: Cipher
+cipher_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 =
     Cipher
         { cipherID = 0xC02C
         , cipherName = "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
@@ -506,8 +610,16 @@ cipher_ECDHE_ECDSA_AES256GCM_SHA384 =
         , cipherMinVer = Just TLS12 -- RFC 5289
         }
 
-cipher_ECDHE_RSA_AES128GCM_SHA256 :: Cipher
-cipher_ECDHE_RSA_AES128GCM_SHA256 =
+cipher_ECDHE_ECDSA_AES256GCM_SHA384 :: Cipher
+cipher_ECDHE_ECDSA_AES256GCM_SHA384 = cipher_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+{-# DEPRECATED
+    cipher_ECDHE_ECDSA_AES256GCM_SHA384
+    "Use cipher_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 instead"
+    #-}
+
+-- TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256 :: Cipher
+cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256 =
     Cipher
         { cipherID = 0xC02F
         , cipherName = "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
@@ -518,8 +630,16 @@ cipher_ECDHE_RSA_AES128GCM_SHA256 =
         , cipherMinVer = Just TLS12 -- RFC 5288 Sec 4
         }
 
-cipher_ECDHE_RSA_AES256GCM_SHA384 :: Cipher
-cipher_ECDHE_RSA_AES256GCM_SHA384 =
+cipher_ECDHE_RSA_AES128GCM_SHA256 :: Cipher
+cipher_ECDHE_RSA_AES128GCM_SHA256 = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+{-# DEPRECATED
+    cipher_ECDHE_RSA_AES128GCM_SHA256
+    "Use cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256 instead"
+    #-}
+
+-- TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+cipher_ECDHE_RSA_WITH_AES_256_GCM_SHA384 :: Cipher
+cipher_ECDHE_RSA_WITH_AES_256_GCM_SHA384 =
     Cipher
         { cipherID = 0xC030
         , cipherName = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
@@ -530,11 +650,19 @@ cipher_ECDHE_RSA_AES256GCM_SHA384 =
         , cipherMinVer = Just TLS12 -- RFC 5289
         }
 
+cipher_ECDHE_RSA_AES256GCM_SHA384 :: Cipher
+cipher_ECDHE_RSA_AES256GCM_SHA384 = cipher_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+{-# DEPRECATED
+    cipher_ECDHE_RSA_AES256GCM_SHA384
+    "Use cipher_ECDHE_RSA_WITH_AES_256_GCM_SHA384 instead"
+    #-}
+
 ----------------------------------------------------------------
 -- CCM/ECC: RFC 7251
 
-cipher_ECDHE_ECDSA_AES128CCM_SHA256 :: Cipher
-cipher_ECDHE_ECDSA_AES128CCM_SHA256 =
+-- TLS_ECDHE_ECDSA_WITH_AES_128_CCM
+cipher_ECDHE_ECDSA_WITH_AES_128_CCM :: Cipher
+cipher_ECDHE_ECDSA_WITH_AES_128_CCM =
     Cipher
         { cipherID = 0xC0AC
         , cipherName = "TLS_ECDHE_ECDSA_WITH_AES_128_CCM"
@@ -545,8 +673,16 @@ cipher_ECDHE_ECDSA_AES128CCM_SHA256 =
         , cipherMinVer = Just TLS12 -- RFC 7251
         }
 
-cipher_ECDHE_ECDSA_AES256CCM_SHA256 :: Cipher
-cipher_ECDHE_ECDSA_AES256CCM_SHA256 =
+cipher_ECDHE_ECDSA_AES128CCM_SHA256 :: Cipher
+cipher_ECDHE_ECDSA_AES128CCM_SHA256 = cipher_ECDHE_ECDSA_WITH_AES_128_CCM
+{-# DEPRECATED
+    cipher_ECDHE_ECDSA_AES128CCM_SHA256
+    "User cipher_ECDHE_ECDSA_WITH_AES_128_CCM instead"
+    #-}
+
+-- TLS_ECDHE_ECDSA_WITH_AES_256_CCM
+cipher_ECDHE_ECDSA_WITH_AES_256_CCM :: Cipher
+cipher_ECDHE_ECDSA_WITH_AES_256_CCM =
     Cipher
         { cipherID = 0xC0AD
         , cipherName = "TLS_ECDHE_ECDSA_WITH_AES_256_CCM"
@@ -557,8 +693,16 @@ cipher_ECDHE_ECDSA_AES256CCM_SHA256 =
         , cipherMinVer = Just TLS12 -- RFC 7251
         }
 
-cipher_ECDHE_ECDSA_AES128CCM8_SHA256 :: Cipher
-cipher_ECDHE_ECDSA_AES128CCM8_SHA256 =
+cipher_ECDHE_ECDSA_AES256CCM_SHA256 :: Cipher
+cipher_ECDHE_ECDSA_AES256CCM_SHA256 = cipher_ECDHE_ECDSA_WITH_AES_256_CCM
+{-# DEPRECATED
+    cipher_ECDHE_ECDSA_AES256CCM_SHA256
+    "Use cipher_ECDHE_ECDSA_WITH_AES_256_CCM instead"
+    #-}
+
+-- TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8
+cipher_ECDHE_ECDSA_WITH_AES_128_CCM_8 :: Cipher
+cipher_ECDHE_ECDSA_WITH_AES_128_CCM_8 =
     Cipher
         { cipherID = 0xC0AE
         , cipherName = "TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8"
@@ -569,8 +713,16 @@ cipher_ECDHE_ECDSA_AES128CCM8_SHA256 =
         , cipherMinVer = Just TLS12 -- RFC 7251
         }
 
-cipher_ECDHE_ECDSA_AES256CCM8_SHA256 :: Cipher
-cipher_ECDHE_ECDSA_AES256CCM8_SHA256 =
+cipher_ECDHE_ECDSA_AES128CCM8_SHA256 :: Cipher
+cipher_ECDHE_ECDSA_AES128CCM8_SHA256 = cipher_ECDHE_ECDSA_WITH_AES_128_CCM_8
+{-# DEPRECATED
+    cipher_ECDHE_ECDSA_AES128CCM8_SHA256
+    "Use cipher_ECDHE_ECDSA_WITH_AES_128_CCM_8 instead"
+    #-}
+
+-- TLS_ECDHE_ECDSA_WITH_AES_256_CCM_8
+cipher_ECDHE_ECDSA_WITH_AES_256_CCM_8 :: Cipher
+cipher_ECDHE_ECDSA_WITH_AES_256_CCM_8 =
     Cipher
         { cipherID = 0xC0AF
         , cipherName = "TLS_ECDHE_ECDSA_WITH_AES_256_CCM_8"
@@ -581,11 +733,19 @@ cipher_ECDHE_ECDSA_AES256CCM8_SHA256 =
         , cipherMinVer = Just TLS12 -- RFC 7251
         }
 
+cipher_ECDHE_ECDSA_AES256CCM8_SHA256 :: Cipher
+cipher_ECDHE_ECDSA_AES256CCM8_SHA256 = cipher_ECDHE_ECDSA_WITH_AES_256_CCM_8
+{-# DEPRECATED
+    cipher_ECDHE_ECDSA_AES256CCM8_SHA256
+    "Use cipher_ECDHE_ECDSA_WITH_AES_256_CCM_8 instead"
+    #-}
+
 ----------------------------------------------------------------
 -- RFC 7905
 
-cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256 :: Cipher
-cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256 =
+-- TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+cipher_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 :: Cipher
+cipher_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 =
     Cipher
         { cipherID = 0xCCA8
         , cipherName = "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
@@ -596,8 +756,16 @@ cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256 =
         , cipherMinVer = Just TLS12
         }
 
-cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256 :: Cipher
-cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256 =
+cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256 :: Cipher
+cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256 = cipher_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+{-# DEPRECATED
+    cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256
+    "Use cipher_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 instead"
+    #-}
+
+-- TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+cipher_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 :: Cipher
+cipher_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 =
     Cipher
         { cipherID = 0xCCA9
         , cipherName = "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256"
@@ -608,8 +776,16 @@ cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256 =
         , cipherMinVer = Just TLS12
         }
 
-cipher_DHE_RSA_CHACHA20POLY1305_SHA256 :: Cipher
-cipher_DHE_RSA_CHACHA20POLY1305_SHA256 =
+cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256 :: Cipher
+cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256 = cipher_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256
+{-# DEPRECATED
+    cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256
+    "Use cipher_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 instead"
+    #-}
+
+-- TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+cipher_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256 :: Cipher
+cipher_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256 =
     Cipher
         { cipherID = 0xCCAA
         , cipherName = "TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
@@ -619,3 +795,10 @@ cipher_DHE_RSA_CHACHA20POLY1305_SHA256 =
         , cipherKeyExchange = CipherKeyExchange_DHE_RSA
         , cipherMinVer = Just TLS12
         }
+
+cipher_DHE_RSA_CHACHA20POLY1305_SHA256 :: Cipher
+cipher_DHE_RSA_CHACHA20POLY1305_SHA256 = cipher_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+{-# DEPRECATED
+    cipher_DHE_RSA_CHACHA20POLY1305_SHA256
+    "Use cipher_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256 instead"
+    #-}

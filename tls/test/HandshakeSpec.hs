@@ -128,9 +128,9 @@ handshake_hashsignatures (clientHashSigs, serverHashSigs) = do
     tls13 <- generate arbitrary
     let version = if tls13 then TLS13 else TLS12
         ciphers =
-            [ cipher_ECDHE_RSA_AES256GCM_SHA384
-            , cipher_ECDHE_ECDSA_AES256GCM_SHA384
-            , cipher_TLS13_AES128GCM_SHA256
+            [ cipher_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+            , cipher_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+            , cipher13_AES_128_GCM_SHA256
             ]
     (clientParam, serverParam) <-
         generate $
@@ -232,7 +232,7 @@ handshake_ec :: SG -> IO ()
 handshake_ec (SG sigGroups) = do
     let versions = [TLS12]
         ciphers =
-            [ cipher_ECDHE_ECDSA_AES256GCM_SHA384
+            [ cipher_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
             ]
         hashSignatures =
             [ (HashSHA256, SignatureECDSA)
@@ -285,15 +285,15 @@ instance Arbitrary OC where
     arbitrary = OC <$> sublistOf otherCiphers <*> sublistOf otherCiphers
       where
         otherCiphers =
-            [ cipher_ECDHE_RSA_AES256GCM_SHA384
-            , cipher_ECDHE_RSA_AES128GCM_SHA256
+            [ cipher_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+            , cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
             ]
 
 handshake_cert_fallback_cipher :: OC -> IO ()
 handshake_cert_fallback_cipher (OC clientCiphers serverCiphers) = do
     let clientVersions = [TLS12]
         serverVersions = [TLS12]
-        commonCiphers = [cipher_ECDHE_RSA_AES128GCM_SHA256]
+        commonCiphers = [cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256]
         hashSignatures = [(HashSHA256, SignatureRSA), (HashSHA1, SignatureDSA)]
     chainRef <- newIORef Nothing
     (clientParam, serverParam) <-
@@ -341,9 +341,9 @@ handshake_cert_fallback_hs (OHS clientHS serverHS) = do
     tls13 <- generate arbitrary
     let versions = if tls13 then [TLS13] else [TLS12]
         ciphers =
-            [ cipher_ECDHE_RSA_AES128GCM_SHA256
-            , cipher_ECDHE_ECDSA_AES128GCM_SHA256
-            , cipher_TLS13_AES128GCM_SHA256
+            [ cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+            , cipher_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+            , cipher13_AES_128_GCM_SHA256
             ]
         commonHS =
             [ (HashSHA256, SignatureRSA)
@@ -674,12 +674,12 @@ handshake13_full :: CSP13 -> IO ()
 handshake13_full (CSP13 (cli, srv)) = do
     let cliSupported =
             def
-                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
                 }
         svrSupported =
             def
-                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
                 }
         params =
@@ -692,12 +692,12 @@ handshake13_hrr :: CSP13 -> IO ()
 handshake13_hrr (CSP13 (cli, srv)) = do
     let cliSupported =
             def
-                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [P256, X25519]
                 }
         svrSupported =
             def
-                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
                 }
         params =
@@ -710,12 +710,12 @@ handshake13_psk :: CSP13 -> IO ()
 handshake13_psk (CSP13 (cli, srv)) = do
     let cliSupported =
             def
-                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [P256, X25519]
                 }
         svrSupported =
             def
-                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
                 }
         params0 =
@@ -741,12 +741,12 @@ handshake13_psk_ticket :: CSP13 -> IO ()
 handshake13_psk_ticket (CSP13 (cli, srv)) = do
     let cliSupported =
             def
-                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [P256, X25519]
                 }
         svrSupported =
             def
-                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
                 }
         params0 =
@@ -774,14 +774,14 @@ handshake13_psk_fallback (CSP13 (cli, srv)) = do
     let cliSupported =
             def
                 { supportedCiphers =
-                    [ cipher_TLS13_AES128GCM_SHA256
-                    , cipher_TLS13_AES128CCM_SHA256
+                    [ cipher13_AES_128_GCM_SHA256
+                    , cipher13_AES_128_CCM_SHA256
                     ]
                 , supportedGroups = [P256, X25519]
                 }
         svrSupported =
             def
-                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
                 }
         params0 =
@@ -805,7 +805,7 @@ handshake13_psk_fallback (CSP13 (cli, srv)) = do
         srv2' = srv2{serverSupported = svrSupported'}
         svrSupported' =
             def
-                { supportedCiphers = [cipher_TLS13_AES128CCM_SHA256]
+                { supportedCiphers = [cipher13_AES_128_CCM_SHA256]
                 , supportedGroups = [P256]
                 }
 
@@ -815,12 +815,12 @@ handshake13_0rtt :: CSP13 -> IO ()
 handshake13_0rtt (CSP13 (cli, srv)) = do
     let cliSupported =
             def
-                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [P256, X25519]
                 }
         svrSupported =
             def
-                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
                 }
         cliHooks =
@@ -868,12 +868,12 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
     group0 <- generate $ elements [P256, X25519]
     let cliSupported =
             def
-                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [P256, X25519]
                 }
         svrSupported =
             def
-                { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [group0]
                 }
         params =
@@ -902,7 +902,7 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
             let (pc, ps) = setPairParamsSessionResuming sessionParams params0
                 svrSupported1 =
                     def
-                        { supportedCiphers = [cipher_TLS13_AES128GCM_SHA256]
+                        { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                         , supportedGroups = [group1]
                         }
                 params1 =
