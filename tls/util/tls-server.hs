@@ -108,6 +108,13 @@ main = do
     runTCPServer (Just host) port $ \sock -> do
         let sparams = getServerParams creds optGroups smgr keyLog
         ctx <- contextNew sock sparams
+        when optDebugLog $
+            contextHookSetLogging
+                ctx
+                defaultLogging
+                    { loggingPacketSent = putStrLn . ("<< " ++)
+                    , loggingPacketRecv = putStrLn . (">> " ++)
+                    }
         handshake ctx
         when (optDebugLog || optShow) $ putStrLn "------------------------"
         when optDebugLog $
