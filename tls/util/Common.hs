@@ -125,9 +125,9 @@ printGroups = do
 split :: Char -> String -> [String]
 split _ "" = []
 split c s = case break (c ==) s of
-    ("", r) -> split c (tail r)
+    ("", _ : rs) -> split c rs
     (s', "") -> [s']
-    (s', r) -> s' : split c (tail r)
+    (s', _ : rs) -> s' : split c rs
 
 getCertificateStore :: [FilePath] -> IO CertificateStore
 getCertificateStore [] = getSystemCertificateStore
