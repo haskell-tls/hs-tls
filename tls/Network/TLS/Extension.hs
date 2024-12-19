@@ -3,6 +3,7 @@
 
 -- | Basic extensions are defined in RFC 6066
 module Network.TLS.Extension (
+    -- * Extension identifiers
     ExtensionID (
         ..,
         EID_ServerName,
@@ -43,11 +44,16 @@ module Network.TLS.Extension (
         EID_QuicTransportParameters,
         EID_SecureRenegotiation
     ),
-    ExtensionRaw (..),
-    Extension (..),
-    supportedExtensions,
     definedExtensions,
-    -- all implemented extensions
+    supportedExtensions,
+
+    -- * Extension raw
+    ExtensionRaw (..),
+
+    -- * Class
+    Extension (..),
+
+    -- * Extensions
     ServerNameType (..),
     ServerName (..),
     MaxFragmentLength (..),
@@ -107,6 +113,7 @@ import Network.TLS.Packet (
 import Network.TLS.Wire
 
 ----------------------------------------------------------------
+-- Extension identifiers
 
 -- | Identifier of a TLS extension.
 --   <http://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.txt>
@@ -229,15 +236,6 @@ instance Show ExtensionID where
     show (ExtensionID x)         = "ExtensionID " ++ show x
 {- FOURMOLU_ENABLE -}
 
-----------------------------------------------------------------
-
--- | The raw content of a TLS extension.
-data ExtensionRaw = ExtensionRaw ExtensionID ByteString
-    deriving (Eq)
-
-instance Show ExtensionRaw where
-    show (ExtensionRaw eid bs) = "ExtensionRaw " ++ show eid ++ " " ++ showBytesHex bs
-
 ------------------------------------------------------------
 
 definedExtensions :: [ExtensionID]
@@ -290,14 +288,17 @@ supportedExtensions =
     , EID_SupportedGroups                     -- 0x0a
     , EID_EcPointFormats                      -- 0x0b
     , EID_SignatureAlgorithms                 -- 0x0d
+    , EID_Heartbeat                           -- 0x0f
     , EID_ApplicationLayerProtocolNegotiation -- 0x10
     , EID_ExtendedMainSecret                  -- 0x17
+    , EID_SessionTicket                       -- 0x23
     , EID_PreSharedKey                        -- 0x29
     , EID_EarlyData                           -- 0x2a
     , EID_SupportedVersions                   -- 0x2b
     , EID_Cookie                              -- 0x2c
     , EID_PskKeyExchangeModes                 -- 0x2d
     , EID_CertificateAuthorities              -- 0x2f
+    , EID_PostHandshakeAuth                   -- 0x31
     , EID_SignatureAlgorithmsCert             -- 0x32
     , EID_KeyShare                            -- 0x33
     , EID_QuicTransportParameters             -- 0x39
@@ -305,7 +306,22 @@ supportedExtensions =
     ]
 {- FOURMOLU_ENABLE -}
 
+----------------------------------------------------------------
+
+-- | The raw content of a TLS extension.
+data ExtensionRaw = ExtensionRaw ExtensionID ByteString
+    deriving (Eq)
+
+instance Show ExtensionRaw where
+    show (ExtensionRaw eid bs) = "ExtensionRaw " ++ show eid ++ " " ++ showBytesHex bs
+
 ------------------------------------------------------------
+
+-- | Extension class to transform bytes to and from a high level Extension type.
+class Extension a where
+    extensionID :: a -> ExtensionID
+    extensionDecode :: MessageType -> ByteString -> Maybe a
+    extensionEncode :: a -> ByteString
 
 data MessageType
     = MsgTClientHello
@@ -315,12 +331,6 @@ data MessageType
     | MsgTNewSessionTicket
     | MsgTCertificateRequest
     deriving (Eq, Show)
-
--- | Extension class to transform bytes to and from a high level Extension type.
-class Extension a where
-    extensionID :: a -> ExtensionID
-    extensionDecode :: MessageType -> ByteString -> Maybe a
-    extensionEncode :: a -> ByteString
 
 ------------------------------------------------------------
 
@@ -406,64 +416,6 @@ decodeMaxFragmentLength = runGetMaybe $ toMaxFragmentEnum <$> getWord8
 
 ------------------------------------------------------------
 
--- | Secure Renegotiation
-data SecureRenegotiation = SecureRenegotiation ByteString ByteString
-    deriving (Show, Eq)
-
-instance Extension SecureRenegotiation where
-    extensionID _ = EID_SecureRenegotiation
-    extensionEncode (SecureRenegotiation cvd svd) =
-        runPut $ putOpaque8 (cvd `B.append` svd)
-    extensionDecode msgtype = runGetMaybe $ do
-        opaque <- getOpaque8
-        case msgtype of
-            MsgTServerHello ->
-                let (cvd, svd) = B.splitAt (B.length opaque `div` 2) opaque
-                 in return $ SecureRenegotiation cvd svd
-            MsgTClientHello -> return $ SecureRenegotiation opaque ""
-            _ -> error "extensionDecode: SecureRenegotiation"
-
-------------------------------------------------------------
-
--- | Application Layer Protocol Negotiation (ALPN)
-newtype ApplicationLayerProtocolNegotiation
-    = ApplicationLayerProtocolNegotiation [ByteString]
-    deriving (Show, Eq)
-
-instance Extension ApplicationLayerProtocolNegotiation where
-    extensionID _ = EID_ApplicationLayerProtocolNegotiation
-    extensionEncode (ApplicationLayerProtocolNegotiation bytes) =
-        runPut $ putOpaque16 $ runPut $ mapM_ putOpaque8 bytes
-    extensionDecode MsgTClientHello = decodeApplicationLayerProtocolNegotiation
-    extensionDecode MsgTServerHello = decodeApplicationLayerProtocolNegotiation
-    extensionDecode MsgTEncryptedExtensions = decodeApplicationLayerProtocolNegotiation
-    extensionDecode _ = error "extensionDecode: ApplicationLayerProtocolNegotiation"
-
-decodeApplicationLayerProtocolNegotiation
-    :: ByteString -> Maybe ApplicationLayerProtocolNegotiation
-decodeApplicationLayerProtocolNegotiation = runGetMaybe $ do
-    len <- getWord16
-    ApplicationLayerProtocolNegotiation <$> getList (fromIntegral len) getALPN
-  where
-    getALPN = do
-        alpnParsed <- getOpaque8
-        let alpn = B.copy alpnParsed
-        return (B.length alpn + 1, alpn)
-
-------------------------------------------------------------
-
--- | Extended Main Secret
-data ExtendedMainSecret = ExtendedMainSecret deriving (Show, Eq)
-
-instance Extension ExtendedMainSecret where
-    extensionID _ = EID_ExtendedMainSecret
-    extensionEncode ExtendedMainSecret = B.empty
-    extensionDecode MsgTClientHello _ = Just ExtendedMainSecret
-    extensionDecode MsgTServerHello _ = Just ExtendedMainSecret
-    extensionDecode _ _ = error "extensionDecode: ExtendedMainSecret"
-
-------------------------------------------------------------
-
 newtype SupportedGroups = SupportedGroups [Group] deriving (Show, Eq)
 
 -- on decode, filter all unknown curves
@@ -515,16 +467,27 @@ decodeEcPointFormatsSupported =
 
 ------------------------------------------------------------
 
-newtype SessionTicket = SessionTicket Ticket
+newtype SignatureAlgorithms = SignatureAlgorithms [HashAndSignatureAlgorithm]
     deriving (Show, Eq)
 
--- https://datatracker.ietf.org/doc/html/rfc5077#appendix-A
-instance Extension SessionTicket where
-    extensionID _ = EID_SessionTicket
-    extensionEncode (SessionTicket ticket) = runPut $ putBytes ticket
-    extensionDecode MsgTClientHello = runGetMaybe $ SessionTicket <$> (remaining >>= getBytes)
-    extensionDecode MsgTServerHello = runGetMaybe $ SessionTicket <$> (remaining >>= getBytes)
-    extensionDecode _ = error "extensionDecode: SessionTicket"
+instance Extension SignatureAlgorithms where
+    extensionID _ = EID_SignatureAlgorithms
+    extensionEncode (SignatureAlgorithms algs) =
+        runPut $
+            putWord16 (fromIntegral (length algs * 2))
+                >> mapM_ putSignatureHashAlgorithm algs
+    extensionDecode MsgTClientHello = decodeSignatureAlgorithms
+    extensionDecode MsgTCertificateRequest = decodeSignatureAlgorithms
+    extensionDecode _ = error "extensionDecode: SignatureAlgorithms"
+
+decodeSignatureAlgorithms :: ByteString -> Maybe SignatureAlgorithms
+decodeSignatureAlgorithms = runGetMaybe $ do
+    len <- getWord16
+    sas <-
+        getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
+    leftoverLen <- remaining
+    when (leftoverLen /= 0) $ fail "decodeSignatureAlgorithms: broken length"
+    return $ SignatureAlgorithms sas
 
 ------------------------------------------------------------
 
@@ -557,165 +520,55 @@ decodeHeartBeat = runGetMaybe $ HeartBeat . HeartBeatMode <$> getWord8
 
 ------------------------------------------------------------
 
-newtype SignatureAlgorithms = SignatureAlgorithms [HashAndSignatureAlgorithm]
+-- | Application Layer Protocol Negotiation (ALPN)
+newtype ApplicationLayerProtocolNegotiation
+    = ApplicationLayerProtocolNegotiation [ByteString]
     deriving (Show, Eq)
 
-instance Extension SignatureAlgorithms where
-    extensionID _ = EID_SignatureAlgorithms
-    extensionEncode (SignatureAlgorithms algs) =
-        runPut $
-            putWord16 (fromIntegral (length algs * 2))
-                >> mapM_ putSignatureHashAlgorithm algs
-    extensionDecode MsgTClientHello = decodeSignatureAlgorithms
-    extensionDecode MsgTCertificateRequest = decodeSignatureAlgorithms
-    extensionDecode _ = error "extensionDecode: SignatureAlgorithms"
+instance Extension ApplicationLayerProtocolNegotiation where
+    extensionID _ = EID_ApplicationLayerProtocolNegotiation
+    extensionEncode (ApplicationLayerProtocolNegotiation bytes) =
+        runPut $ putOpaque16 $ runPut $ mapM_ putOpaque8 bytes
+    extensionDecode MsgTClientHello = decodeApplicationLayerProtocolNegotiation
+    extensionDecode MsgTServerHello = decodeApplicationLayerProtocolNegotiation
+    extensionDecode MsgTEncryptedExtensions = decodeApplicationLayerProtocolNegotiation
+    extensionDecode _ = error "extensionDecode: ApplicationLayerProtocolNegotiation"
 
-decodeSignatureAlgorithms :: ByteString -> Maybe SignatureAlgorithms
-decodeSignatureAlgorithms = runGetMaybe $ do
+decodeApplicationLayerProtocolNegotiation
+    :: ByteString -> Maybe ApplicationLayerProtocolNegotiation
+decodeApplicationLayerProtocolNegotiation = runGetMaybe $ do
     len <- getWord16
-    sas <-
-        getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
-    leftoverLen <- remaining
-    when (leftoverLen /= 0) $ fail "decodeSignatureAlgorithms: broken length"
-    return $ SignatureAlgorithms sas
+    ApplicationLayerProtocolNegotiation <$> getList (fromIntegral len) getALPN
+  where
+    getALPN = do
+        alpnParsed <- getOpaque8
+        let alpn = B.copy alpnParsed
+        return (B.length alpn + 1, alpn)
 
 ------------------------------------------------------------
 
-data PostHandshakeAuth = PostHandshakeAuth deriving (Show, Eq)
+-- | Extended Main Secret
+data ExtendedMainSecret = ExtendedMainSecret deriving (Show, Eq)
 
-instance Extension PostHandshakeAuth where
-    extensionID _ = EID_PostHandshakeAuth
-    extensionEncode _ = B.empty
-    extensionDecode MsgTClientHello = runGetMaybe $ return PostHandshakeAuth
-    extensionDecode _ = error "extensionDecode: PostHandshakeAuth"
+instance Extension ExtendedMainSecret where
+    extensionID _ = EID_ExtendedMainSecret
+    extensionEncode ExtendedMainSecret = B.empty
+    extensionDecode MsgTClientHello _ = Just ExtendedMainSecret
+    extensionDecode MsgTServerHello _ = Just ExtendedMainSecret
+    extensionDecode _ _ = error "extensionDecode: ExtendedMainSecret"
 
 ------------------------------------------------------------
 
-newtype SignatureAlgorithmsCert = SignatureAlgorithmsCert [HashAndSignatureAlgorithm]
+newtype SessionTicket = SessionTicket Ticket
     deriving (Show, Eq)
 
-instance Extension SignatureAlgorithmsCert where
-    extensionID _ = EID_SignatureAlgorithmsCert
-    extensionEncode (SignatureAlgorithmsCert algs) =
-        runPut $
-            putWord16 (fromIntegral (length algs * 2))
-                >> mapM_ putSignatureHashAlgorithm algs
-    extensionDecode MsgTClientHello = decodeSignatureAlgorithmsCert
-    extensionDecode MsgTCertificateRequest = decodeSignatureAlgorithmsCert
-    extensionDecode _ = error "extensionDecode: SignatureAlgorithmsCert"
-
-decodeSignatureAlgorithmsCert :: ByteString -> Maybe SignatureAlgorithmsCert
-decodeSignatureAlgorithmsCert = runGetMaybe $ do
-    len <- getWord16
-    SignatureAlgorithmsCert
-        <$> getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
-
-------------------------------------------------------------
-
-data SupportedVersions
-    = SupportedVersionsClientHello [Version]
-    | SupportedVersionsServerHello Version
-    deriving (Show, Eq)
-
-instance Extension SupportedVersions where
-    extensionID _ = EID_SupportedVersions
-    extensionEncode (SupportedVersionsClientHello vers) = runPut $ do
-        putWord8 (fromIntegral (length vers * 2))
-        mapM_ putBinaryVersion vers
-    extensionEncode (SupportedVersionsServerHello ver) =
-        runPut $
-            putBinaryVersion ver
-    extensionDecode MsgTClientHello = runGetMaybe $ do
-        len <- fromIntegral <$> getWord8
-        SupportedVersionsClientHello <$> getList len getVer
-      where
-        getVer = do
-            ver <- getBinaryVersion
-            return (2, ver)
-    extensionDecode MsgTServerHello =
-        runGetMaybe (SupportedVersionsServerHello <$> getBinaryVersion)
-    extensionDecode _ = error "extensionDecode: SupportedVersionsServerHello"
-
-------------------------------------------------------------
-
-data KeyShareEntry = KeyShareEntry
-    { keyShareEntryGroup :: Group
-    , keyShareEntryKeyExchange :: ByteString
-    }
-    deriving (Show, Eq)
-
-getKeyShareEntry :: Get (Int, Maybe KeyShareEntry)
-getKeyShareEntry = do
-    grp <- Group <$> getWord16
-    l <- fromIntegral <$> getWord16
-    key <- getBytes l
-    let len = l + 4
-    return (len, Just $ KeyShareEntry grp key)
-
-putKeyShareEntry :: KeyShareEntry -> Put
-putKeyShareEntry (KeyShareEntry (Group grp) key) = do
-    putWord16 grp
-    putWord16 $ fromIntegral $ B.length key
-    putBytes key
-
-data KeyShare
-    = KeyShareClientHello [KeyShareEntry]
-    | KeyShareServerHello KeyShareEntry
-    | KeyShareHRR Group
-    deriving (Show, Eq)
-
-instance Extension KeyShare where
-    extensionID _ = EID_KeyShare
-    extensionEncode (KeyShareClientHello kses) = runPut $ do
-        let len = sum [B.length key + 4 | KeyShareEntry _ key <- kses]
-        putWord16 $ fromIntegral len
-        mapM_ putKeyShareEntry kses
-    extensionEncode (KeyShareServerHello kse) = runPut $ putKeyShareEntry kse
-    extensionEncode (KeyShareHRR (Group grp)) = runPut $ putWord16 grp
-    extensionDecode MsgTServerHello = runGetMaybe $ do
-        (_, ment) <- getKeyShareEntry
-        case ment of
-            Nothing -> fail "decoding KeyShare for ServerHello"
-            Just ent -> return $ KeyShareServerHello ent
-    extensionDecode MsgTClientHello = runGetMaybe $ do
-        len <- fromIntegral <$> getWord16
-        --      len == 0 allows for HRR
-        grps <- getList len getKeyShareEntry
-        return $ KeyShareClientHello $ catMaybes grps
-    extensionDecode MsgTHelloRetryRequest =
-        runGetMaybe $
-            KeyShareHRR . Group <$> getWord16
-    extensionDecode _ = error "extensionDecode: KeyShare"
-
-------------------------------------------------------------
-
-newtype PskKexMode = PskKexMode {fromPskKexMode :: Word8} deriving (Eq)
-
-{- FOURMOLU_DISABLE -}
-pattern PSK_KE     :: PskKexMode
-pattern PSK_KE      = PskKexMode 0
-pattern PSK_DHE_KE :: PskKexMode
-pattern PSK_DHE_KE  = PskKexMode 1
-
-instance Show PskKexMode where
-    show PSK_KE     = "PSK_KE"
-    show PSK_DHE_KE = "PSK_DHE_KE"
-    show (PskKexMode x) = "PskKexMode " ++ show x
-{- FOURMOLU_ENABLE -}
-
-newtype PskKeyExchangeModes = PskKeyExchangeModes [PskKexMode]
-    deriving (Eq, Show)
-
-instance Extension PskKeyExchangeModes where
-    extensionID _ = EID_PskKeyExchangeModes
-    extensionEncode (PskKeyExchangeModes pkms) =
-        runPut $
-            putWords8 $
-                map fromPskKexMode pkms
-    extensionDecode MsgTClientHello =
-        runGetMaybe $
-            PskKeyExchangeModes . map PskKexMode <$> getWords8
-    extensionDecode _ = error "extensionDecode: PskKeyExchangeModes"
+-- https://datatracker.ietf.org/doc/html/rfc5077#appendix-A
+instance Extension SessionTicket where
+    extensionID _ = EID_SessionTicket
+    extensionEncode (SessionTicket ticket) = runPut $ putBytes ticket
+    extensionDecode MsgTClientHello = runGetMaybe $ SessionTicket <$> (remaining >>= getBytes)
+    extensionDecode MsgTServerHello = runGetMaybe $ SessionTicket <$> (remaining >>= getBytes)
+    extensionDecode _ = error "extensionDecode: SessionTicket"
 
 ------------------------------------------------------------
 
@@ -780,6 +633,32 @@ instance Extension EarlyDataIndication where
 
 ------------------------------------------------------------
 
+data SupportedVersions
+    = SupportedVersionsClientHello [Version]
+    | SupportedVersionsServerHello Version
+    deriving (Show, Eq)
+
+instance Extension SupportedVersions where
+    extensionID _ = EID_SupportedVersions
+    extensionEncode (SupportedVersionsClientHello vers) = runPut $ do
+        putWord8 (fromIntegral (length vers * 2))
+        mapM_ putBinaryVersion vers
+    extensionEncode (SupportedVersionsServerHello ver) =
+        runPut $
+            putBinaryVersion ver
+    extensionDecode MsgTClientHello = runGetMaybe $ do
+        len <- fromIntegral <$> getWord8
+        SupportedVersionsClientHello <$> getList len getVer
+      where
+        getVer = do
+            ver <- getBinaryVersion
+            return (2, ver)
+    extensionDecode MsgTServerHello =
+        runGetMaybe (SupportedVersionsServerHello <$> getBinaryVersion)
+    extensionDecode _ = error "extensionDecode: SupportedVersionsServerHello"
+
+------------------------------------------------------------
+
 newtype Cookie = Cookie ByteString deriving (Eq, Show)
 
 instance Extension Cookie where
@@ -787,6 +666,36 @@ instance Extension Cookie where
     extensionEncode (Cookie opaque) = runPut $ putOpaque16 opaque
     extensionDecode MsgTServerHello = runGetMaybe (Cookie <$> getOpaque16)
     extensionDecode _ = error "extensionDecode: Cookie"
+
+------------------------------------------------------------
+
+newtype PskKexMode = PskKexMode {fromPskKexMode :: Word8} deriving (Eq)
+
+{- FOURMOLU_DISABLE -}
+pattern PSK_KE     :: PskKexMode
+pattern PSK_KE      = PskKexMode 0
+pattern PSK_DHE_KE :: PskKexMode
+pattern PSK_DHE_KE  = PskKexMode 1
+
+instance Show PskKexMode where
+    show PSK_KE     = "PSK_KE"
+    show PSK_DHE_KE = "PSK_DHE_KE"
+    show (PskKexMode x) = "PskKexMode " ++ show x
+{- FOURMOLU_ENABLE -}
+
+newtype PskKeyExchangeModes = PskKeyExchangeModes [PskKexMode]
+    deriving (Eq, Show)
+
+instance Extension PskKeyExchangeModes where
+    extensionID _ = EID_PskKeyExchangeModes
+    extensionEncode (PskKeyExchangeModes pkms) =
+        runPut $
+            putWords8 $
+                map fromPskKexMode pkms
+    extensionDecode MsgTClientHello =
+        runGetMaybe $
+            PskKeyExchangeModes . map PskKexMode <$> getWords8
+    extensionDecode _ = error "extensionDecode: PskKeyExchangeModes"
 
 ------------------------------------------------------------
 
@@ -803,3 +712,104 @@ instance Extension CertificateAuthorities where
     extensionDecode MsgTCertificateRequest =
         runGetMaybe (CertificateAuthorities <$> getDNames)
     extensionDecode _ = error "extensionDecode: CertificateAuthorities"
+
+------------------------------------------------------------
+
+data PostHandshakeAuth = PostHandshakeAuth deriving (Show, Eq)
+
+instance Extension PostHandshakeAuth where
+    extensionID _ = EID_PostHandshakeAuth
+    extensionEncode _ = B.empty
+    extensionDecode MsgTClientHello = runGetMaybe $ return PostHandshakeAuth
+    extensionDecode _ = error "extensionDecode: PostHandshakeAuth"
+
+------------------------------------------------------------
+
+newtype SignatureAlgorithmsCert = SignatureAlgorithmsCert [HashAndSignatureAlgorithm]
+    deriving (Show, Eq)
+
+instance Extension SignatureAlgorithmsCert where
+    extensionID _ = EID_SignatureAlgorithmsCert
+    extensionEncode (SignatureAlgorithmsCert algs) =
+        runPut $
+            putWord16 (fromIntegral (length algs * 2))
+                >> mapM_ putSignatureHashAlgorithm algs
+    extensionDecode MsgTClientHello = decodeSignatureAlgorithmsCert
+    extensionDecode MsgTCertificateRequest = decodeSignatureAlgorithmsCert
+    extensionDecode _ = error "extensionDecode: SignatureAlgorithmsCert"
+
+decodeSignatureAlgorithmsCert :: ByteString -> Maybe SignatureAlgorithmsCert
+decodeSignatureAlgorithmsCert = runGetMaybe $ do
+    len <- getWord16
+    SignatureAlgorithmsCert
+        <$> getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
+
+------------------------------------------------------------
+
+data KeyShareEntry = KeyShareEntry
+    { keyShareEntryGroup :: Group
+    , keyShareEntryKeyExchange :: ByteString
+    }
+    deriving (Show, Eq)
+
+getKeyShareEntry :: Get (Int, Maybe KeyShareEntry)
+getKeyShareEntry = do
+    grp <- Group <$> getWord16
+    l <- fromIntegral <$> getWord16
+    key <- getBytes l
+    let len = l + 4
+    return (len, Just $ KeyShareEntry grp key)
+
+putKeyShareEntry :: KeyShareEntry -> Put
+putKeyShareEntry (KeyShareEntry (Group grp) key) = do
+    putWord16 grp
+    putWord16 $ fromIntegral $ B.length key
+    putBytes key
+
+data KeyShare
+    = KeyShareClientHello [KeyShareEntry]
+    | KeyShareServerHello KeyShareEntry
+    | KeyShareHRR Group
+    deriving (Show, Eq)
+
+instance Extension KeyShare where
+    extensionID _ = EID_KeyShare
+    extensionEncode (KeyShareClientHello kses) = runPut $ do
+        let len = sum [B.length key + 4 | KeyShareEntry _ key <- kses]
+        putWord16 $ fromIntegral len
+        mapM_ putKeyShareEntry kses
+    extensionEncode (KeyShareServerHello kse) = runPut $ putKeyShareEntry kse
+    extensionEncode (KeyShareHRR (Group grp)) = runPut $ putWord16 grp
+    extensionDecode MsgTServerHello = runGetMaybe $ do
+        (_, ment) <- getKeyShareEntry
+        case ment of
+            Nothing -> fail "decoding KeyShare for ServerHello"
+            Just ent -> return $ KeyShareServerHello ent
+    extensionDecode MsgTClientHello = runGetMaybe $ do
+        len <- fromIntegral <$> getWord16
+        --      len == 0 allows for HRR
+        grps <- getList len getKeyShareEntry
+        return $ KeyShareClientHello $ catMaybes grps
+    extensionDecode MsgTHelloRetryRequest =
+        runGetMaybe $
+            KeyShareHRR . Group <$> getWord16
+    extensionDecode _ = error "extensionDecode: KeyShare"
+
+------------------------------------------------------------
+
+-- | Secure Renegotiation
+data SecureRenegotiation = SecureRenegotiation ByteString ByteString
+    deriving (Show, Eq)
+
+instance Extension SecureRenegotiation where
+    extensionID _ = EID_SecureRenegotiation
+    extensionEncode (SecureRenegotiation cvd svd) =
+        runPut $ putOpaque8 (cvd `B.append` svd)
+    extensionDecode msgtype = runGetMaybe $ do
+        opaque <- getOpaque8
+        case msgtype of
+            MsgTServerHello ->
+                let (cvd, svd) = B.splitAt (B.length opaque `div` 2) opaque
+                 in return $ SecureRenegotiation cvd svd
+            MsgTClientHello -> return $ SecureRenegotiation opaque ""
+            _ -> error "extensionDecode: SecureRenegotiation"
