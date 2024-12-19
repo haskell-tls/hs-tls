@@ -280,27 +280,27 @@ setClientSNI hn = modify (\st -> st{stClientSNI = Just hn})
 getClientSNI :: TLSSt (Maybe HostName)
 getClientSNI = gets stClientSNI
 
-getVerifyData :: Role -> TLSSt ByteString
+getVerifyData :: Role -> TLSSt VerifyData
 getVerifyData client = do
     mVerifyData <-
         gets (if client == ClientRole then stClientVerifyData else stServerVerifyData)
-    return $ fromMaybe "" mVerifyData
+    return $ fromMaybe (VerifyData "") mVerifyData
 
-getMyVerifyData :: TLSSt (Maybe ByteString)
+getMyVerifyData :: TLSSt (Maybe VerifyData)
 getMyVerifyData = do
     role <- getRole
     if role == ClientRole
         then gets stClientVerifyData
         else gets stServerVerifyData
 
-getPeerVerifyData :: TLSSt (Maybe ByteString)
+getPeerVerifyData :: TLSSt (Maybe VerifyData)
 getPeerVerifyData = do
     role <- getRole
     if role == ClientRole
         then gets stServerVerifyData
         else gets stClientVerifyData
 
-getFirstVerifyData :: TLSSt (Maybe ByteString)
+getFirstVerifyData :: TLSSt (Maybe VerifyData)
 getFirstVerifyData = do
     ver <- getVersion
     case ver of

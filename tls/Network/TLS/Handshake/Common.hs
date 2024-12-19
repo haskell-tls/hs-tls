@@ -141,7 +141,9 @@ sendCCSandFinished ctx role = do
     sendPacket12 ctx ChangeCipherSpec
     contextFlush ctx
     verifyData <-
-        usingState_ ctx getVersion >>= \ver -> usingHState ctx $ getHandshakeDigest ver role
+        VerifyData
+            <$> ( usingState_ ctx getVersion >>= \ver -> usingHState ctx $ getHandshakeDigest ver role
+                )
     sendPacket12 ctx (Handshake [Finished verifyData])
     usingState_ ctx $ setVerifyDataForSend verifyData
     contextFlush ctx
@@ -302,7 +304,8 @@ expectFinished _ p = unexpected (show p) (Just "Handshake Finished")
 processFinished :: Context -> VerifyData -> IO ()
 processFinished ctx verifyData = do
     (cc, ver) <- usingState_ ctx $ (,) <$> getRole <*> getVersion
-    expected <- usingHState ctx $ getHandshakeDigest ver $ invertRole cc
+    expected <-
+        VerifyData <$> (usingHState ctx $ getHandshakeDigest ver $ invertRole cc)
     when (expected /= verifyData) $ decryptError "cannot verify finished"
     usingState_ ctx $ setVerifyDataForRecv verifyData
 

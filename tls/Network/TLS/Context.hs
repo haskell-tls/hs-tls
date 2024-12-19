@@ -252,7 +252,11 @@ getTLSUnique :: Context -> IO (Maybe ByteString)
 getTLSUnique ctx = do
     ver <- liftIO $ usingState_ ctx getVersion
     if ver == TLS12
-        then usingState_ ctx getFirstVerifyData
+        then do
+            mx <- usingState_ ctx getFirstVerifyData
+            case mx of
+                Nothing -> return Nothing
+                Just (VerifyData verifyData) -> return $ Just verifyData
         else return Nothing
 
 -- | Getting the "tls-exporter" channel binding for TLS 1.3 (RFC9266).

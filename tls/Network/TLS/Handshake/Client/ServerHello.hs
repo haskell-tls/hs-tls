@@ -163,8 +163,8 @@ processServerHello _ _ p = unexpected (show p) (Just "server hello")
 processServerExtension :: ExtensionRaw -> TLSSt ()
 processServerExtension (ExtensionRaw extID content)
     | extID == EID_SecureRenegotiation = do
-        cvd <- getVerifyData ClientRole
-        svd <- getVerifyData ServerRole
+        VerifyData cvd <- getVerifyData ClientRole
+        VerifyData svd <- getVerifyData ServerRole
         let bs = extensionEncode $ SecureRenegotiation cvd svd
         unless (bs == content) $
             throwError $

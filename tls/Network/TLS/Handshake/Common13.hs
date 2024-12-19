@@ -76,19 +76,20 @@ import Control.Monad.State.Strict
 
 makeFinished :: MonadIO m => Context -> Hash -> ByteString -> m Handshake13
 makeFinished ctx usedHash baseKey = do
-    verifyData <- makeVerifyData usedHash baseKey <$> transcriptHash ctx
+    verifyData <-
+        VerifyData . makeVerifyData usedHash baseKey <$> transcriptHash ctx
     liftIO $ usingState_ ctx $ setVerifyDataForSend verifyData
     pure $ Finished13 verifyData
 
 checkFinished
-    :: MonadIO m => Context -> Hash -> ByteString -> ByteString -> ByteString -> m ()
-checkFinished ctx usedHash baseKey hashValue verifyData = do
+    :: MonadIO m => Context -> Hash -> ByteString -> ByteString -> VerifyData -> m ()
+checkFinished ctx usedHash baseKey hashValue vd@(VerifyData verifyData) = do
     let verifyData' = makeVerifyData usedHash baseKey hashValue
     when (B.length verifyData /= B.length verifyData') $
         throwCore $
             Error_Protocol "broken Finished" DecodeError
     unless (verifyData' == verifyData) $ decryptError "cannot verify finished"
-    liftIO $ usingState_ ctx $ setVerifyDataForRecv verifyData
+    liftIO $ usingState_ ctx $ setVerifyDataForRecv vd
 
 makeVerifyData :: Hash -> ByteString -> ByteString -> ByteString
 makeVerifyData usedHash baseKey = hmac usedHash finishedKey

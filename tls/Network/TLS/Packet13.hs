@@ -53,7 +53,7 @@ encodeHandshake13' (Certificate13 reqctx cc ess) = encodeCertificate13 reqctx cc
 encodeHandshake13' (CertVerify13 hs signature) = runPut $ do
     putSignatureHashAlgorithm hs
     putOpaque16 signature
-encodeHandshake13' (Finished13 dat) = runPut $ putBytes dat
+encodeHandshake13' (Finished13 (VerifyData dat)) = runPut $ putBytes dat
 encodeHandshake13' (NewSessionTicket13 life ageadd nonce label exts) = runPut $ do
     putWord32 life
     putWord32 ageadd
@@ -111,7 +111,7 @@ decodeServerHello13 = do
     return $ ServerHello13 random session cipherid exts
 
 decodeFinished13 :: Get Handshake13
-decodeFinished13 = Finished13 <$> (remaining >>= getBytes)
+decodeFinished13 = Finished13 . VerifyData <$> (remaining >>= getBytes)
 
 decodeEncryptedExtensions13 :: Get Handshake13
 decodeEncryptedExtensions13 =

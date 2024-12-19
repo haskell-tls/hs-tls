@@ -92,7 +92,7 @@ instance Arbitrary Handshake where
             , ClientKeyXchg . CKX_RSA <$> genByteString 48
             , CertRequest <$> arbitrary <*> arbitrary <*> listOf arbitraryDN
             , CertVerify <$> arbitrary
-            , Finished <$> genByteString 12
+            , Finished . VerifyData <$> genByteString 12
             ]
 
 instance Arbitrary Handshake13 where
@@ -121,7 +121,7 @@ instance Arbitrary Handshake13 where
                     <*> return (CertificateChain certs)
                     <*> replicateM (length certs) arbitrary
             , CertVerify13 <$> (unsafeHead <$> arbitrary) <*> genByteString 32
-            , Finished13 <$> genByteString 12
+            , Finished13 . VerifyData <$> genByteString 12
             , KeyUpdate13 <$> elements [UpdateNotRequested, UpdateRequested]
             ]
 

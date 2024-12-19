@@ -41,7 +41,7 @@ module Network.TLS.Struct (
     ServerRandom (..),
     ClientRandom (..),
     FinishedData,
-    VerifyData,
+    VerifyData (..),
     SessionID,
     Session (..),
     SessionData (..),
@@ -248,7 +248,10 @@ instance Show Session where
 
 {-# DEPRECATED FinishedData "use VerifyData" #-}
 type FinishedData = ByteString
-type VerifyData = ByteString
+
+newtype VerifyData = VerifyData ByteString deriving (Eq)
+instance Show VerifyData where
+    show (VerifyData bs) = showBytesHex bs
 
 ----------------------------------------------------------------
 

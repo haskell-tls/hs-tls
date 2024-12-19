@@ -207,7 +207,7 @@ decodeCertificate = do
     getCertRaw = getOpaque24 >>= \cert -> return (3 + B.length cert, cert)
 
 decodeFinished :: Get Handshake
-decodeFinished = Finished <$> (remaining >>= getBytes)
+decodeFinished = Finished . VerifyData <$> (remaining >>= getBytes)
 
 decodeNewSessionTicket :: Get Handshake
 decodeNewSessionTicket = NewSessionTicket <$> getWord32 <*> getOpaque16
@@ -358,7 +358,7 @@ encodeHandshake' (CertRequest certTypes sigAlgs certAuthorities) = runPut $ do
             sigAlgs
     putDNames certAuthorities
 encodeHandshake' (CertVerify digitallySigned) = runPut $ putDigitallySigned digitallySigned
-encodeHandshake' (Finished opaque) = runPut $ putBytes opaque
+encodeHandshake' (Finished (VerifyData opaque)) = runPut $ putBytes opaque
 encodeHandshake' (NewSessionTicket life ticket) = runPut $ do
     putWord32 life
     putOpaque16 ticket

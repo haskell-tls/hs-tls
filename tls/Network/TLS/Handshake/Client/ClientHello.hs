@@ -141,7 +141,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
     secureReneg =
         if supportedSecureRenegotiation $ ctxSupported ctx
             then do
-                cvd <- usingState_ ctx $ getVerifyData ClientRole
+                VerifyData cvd <- usingState_ ctx $ getVerifyData ClientRole
                 return $ Just $ toExtensionRaw $ SecureRenegotiation cvd ""
             else return Nothing
     alpnExtension = do
