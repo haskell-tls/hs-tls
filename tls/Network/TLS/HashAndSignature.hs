@@ -57,15 +57,15 @@ pattern HashIntrinsic :: HashAlgorithm
 pattern HashIntrinsic  = HashAlgorithm 8
 
 instance Show HashAlgorithm where
-    show HashNone          = "HashNone"
-    show HashMD5           = "HashMD5"
-    show HashSHA1          = "HashSHA1"
-    show HashSHA224        = "HashSHA224"
-    show HashSHA256        = "HashSHA256"
-    show HashSHA384        = "HashSHA384"
-    show HashSHA512        = "HashSHA512"
-    show HashIntrinsic     = "HashIntrinsic"
-    show (HashAlgorithm x) = "HashAlgorithm " ++ show x
+    show HashNone          = "None"
+    show HashMD5           = "MD5"
+    show HashSHA1          = "SHA1"
+    show HashSHA224        = "SHA224"
+    show HashSHA256        = "SHA256"
+    show HashSHA384        = "SHA384"
+    show HashSHA512        = "SHA512"
+    show HashIntrinsic     = "TLS13"
+    show (HashAlgorithm x) = "Hash " ++ show x
 {- FOURMOLU_ENABLE -}
 
 ------------------------------------------------------------
@@ -101,19 +101,19 @@ pattern SignatureRSApsspssSHA512  :: SignatureAlgorithm
 pattern SignatureRSApsspssSHA512   = SignatureAlgorithm 11
 
 instance Show SignatureAlgorithm where
-    show SignatureAnonymous        = "SignatureAnonymous"
-    show SignatureRSA              = "SignatureRSA"
-    show SignatureDSA              = "SignatureDSA"
-    show SignatureECDSA            = "SignatureECDSA"
-    show SignatureRSApssRSAeSHA256 = "SignatureRSApssRSAeSHA256"
-    show SignatureRSApssRSAeSHA384 = "SignatureRSApssRSAeSHA384"
-    show SignatureRSApssRSAeSHA512 = "SignatureRSApssRSAeSHA512"
-    show SignatureEd25519          = "SignatureEd25519"
-    show SignatureEd448            = "SignatureEd448"
-    show SignatureRSApsspssSHA256  = "SignatureRSApsspssSHA256"
-    show SignatureRSApsspssSHA384  = "SignatureRSApsspssSHA384"
-    show SignatureRSApsspssSHA512  = "SignatureRSApsspssSHA512"
-    show (SignatureAlgorithm x)    = "SignatureAlgorithm " ++ show x
+    show SignatureAnonymous        = "Anonymous"
+    show SignatureRSA              = "RSA"
+    show SignatureDSA              = "DSA"
+    show SignatureECDSA            = "ECDSA"
+    show SignatureRSApssRSAeSHA256 = "RSApssRSAeSHA256"
+    show SignatureRSApssRSAeSHA384 = "RSApssRSAeSHA384"
+    show SignatureRSApssRSAeSHA512 = "RSApssRSAeSHA512"
+    show SignatureEd25519          = "Ed25519"
+    show SignatureEd448            = "Ed448"
+    show SignatureRSApsspssSHA256  = "RSApsspssSHA256"
+    show SignatureRSApsspssSHA384  = "RSApsspssSHA384"
+    show SignatureRSApsspssSHA512  = "RSApsspssSHA512"
+    show (SignatureAlgorithm x)    = "Signature " ++ show x
 {- FOURMOLU_ENABLE -}
 
 ------------------------------------------------------------
