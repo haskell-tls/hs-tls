@@ -22,6 +22,8 @@ import Network.TLS.Types (CipherID (..), Role (..))
 
 ----------------------------------------------------------------
 
+-- serverSupported sparams == ctxSupported ctx
+
 -- TLS 1.2 or earlier
 processClientHello12
     :: ServerParams
@@ -29,19 +31,20 @@ processClientHello12
     -> CH
     -> IO (Cipher, Maybe Credential)
 processClientHello12 sparams ctx ch = do
-    let secureRenegotiation = supportedSecureRenegotiation $ ctxSupported ctx
+    let secureRenegotiation = supportedSecureRenegotiation $ serverSupported sparams
     when secureRenegotiation $ checkSecureRenegotiation ctx ch
     serverName <- usingState_ ctx getClientSNI
-    extraCreds <- onServerNameIndication (serverHooks sparams) serverName
+    let hooks = serverHooks sparams
+    extraCreds <- onServerNameIndication hooks serverName
     let (creds, signatureCreds, ciphersFilteredVersion) =
-            credsTriple sparams ctx ch extraCreds
+            credsTriple sparams ch extraCreds
     -- The shared cipherlist can become empty after filtering for compatible
     -- creds, check now before calling onCipherChoosing, which does not handle
     -- empty lists.
     when (null ciphersFilteredVersion) $
         throwCore $
             Error_Protocol "no cipher in common with the TLS 1.2 client" HandshakeFailure
-    let usedCipher = onCipherChoosing (serverHooks sparams) TLS12 ciphersFilteredVersion
+    let usedCipher = onCipherChoosing hooks TLS12 ciphersFilteredVersion
     mcred <- chooseCreds usedCipher creds signatureCreds
     return (usedCipher, mcred)
 
@@ -69,19 +72,19 @@ checkSecureRenegotiation ctx CH{..} = do
 
 credsTriple
     :: ServerParams
-    -> Context
     -> CH
     -> Credentials
     -> (Credentials, Credentials, [Cipher])
-credsTriple sparams ctx CH{..} extraCreds
+credsTriple sparams CH{..} extraCreds
     | cipherListCredentialFallback cltCiphers = (allCreds, sigAllCreds, allCiphers)
     | otherwise = (cltCreds, sigCltCreds, cltCiphers)
   where
-    commonCiphers creds sigCreds = filter ((`elem` chCiphers) . cipherID) (getCiphers sparams creds sigCreds)
+    ciphers = supportedCiphers $ serverSupported sparams
+    commonCiphers creds sigCreds = filter ((`elem` chCiphers) . cipherID) (getCiphers ciphers creds sigCreds)
 
     allCreds =
         filterCredentials (isCredentialAllowed TLS12 chExtensions) $
-            extraCreds `mappend` sharedCredentials (ctxShared ctx)
+            extraCreds `mappend` sharedCredentials (serverShared sparams)
 
     -- When selecting a cipher we must ensure that it is allowed for the
     -- TLS version but also that all its key-exchange requirements
@@ -98,7 +101,9 @@ credsTriple sparams ctx CH{..} extraCreds
     -- negotiated signature parameters.  Then ciphers are evalutated from
     -- the resulting credentials.
 
-    possibleGroups = negotiatedGroupsInCommon ctx chExtensions
+    supported = serverSupported sparams
+    groups = supportedGroups supported
+    possibleGroups = negotiatedGroupsInCommon groups chExtensions
     possibleECGroups = possibleGroups `intersect` availableECGroups
     possibleFFGroups = possibleGroups `intersect` availableFFGroups
     hasCommonGroupForECDHE = not (null possibleECGroups)
@@ -121,7 +126,8 @@ credsTriple sparams ctx CH{..} extraCreds
 
     -- Build a list of all hash/signature algorithms in common between
     -- client and server.
-    possibleHashSigAlgs = hashAndSignaturesInCommon ctx chExtensions
+    hashAndSignatures = supportedHashSignatures supported
+    possibleHashSigAlgs = hashAndSignaturesInCommon hashAndSignatures chExtensions
 
     -- Check that a candidate signature credential will be compatible with
     -- client & server hash/signature algorithms.  This returns Just Int
@@ -163,8 +169,8 @@ chooseCreds usedCipher creds signatureCreds = case cipherKeyExchange usedCipher 
 ----------------------------------------------------------------
 
 hashAndSignaturesInCommon
-    :: Context -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]
-hashAndSignaturesInCommon ctx exts =
+    :: [HashAndSignatureAlgorithm] -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]
+hashAndSignaturesInCommon sHashSigs exts =
     let cHashSigs = case extensionLookup EID_SignatureAlgorithms exts
             >>= extensionDecode MsgTClientHello of
             -- See Section 7.4.1.4.1 of RFC 5246.
@@ -174,19 +180,16 @@ hashAndSignaturesInCommon ctx exts =
                 , (HashSHA1, SignatureDSA)
                 ]
             Just (SignatureAlgorithms sas) -> sas
-        sHashSigs = supportedHashSignatures $ ctxSupported ctx
      in -- The values in the "signature_algorithms" extension
         -- are in descending order of preference.
         -- However here the algorithms are selected according
         -- to server preference in 'supportedHashSignatures'.
         sHashSigs `intersect` cHashSigs
 
-negotiatedGroupsInCommon :: Context -> [ExtensionRaw] -> [Group]
-negotiatedGroupsInCommon ctx exts = case extensionLookup EID_SupportedGroups exts
+negotiatedGroupsInCommon :: [Group] -> [ExtensionRaw] -> [Group]
+negotiatedGroupsInCommon serverGroups exts = case extensionLookup EID_SupportedGroups exts
     >>= extensionDecode MsgTClientHello of
-    Just (SupportedGroups clientGroups) ->
-        let serverGroups = supportedGroups (ctxSupported ctx)
-         in serverGroups `intersect` clientGroups
+    Just (SupportedGroups clientGroups) -> serverGroups `intersect` clientGroups
     _ -> []
 
 ----------------------------------------------------------------
@@ -217,8 +220,8 @@ cipherListCredentialFallback = all nonDH
 -- subset of this list named 'sigCreds'.  This list has been filtered in order
 -- to remove certificates that are not compatible with hash/signature
 -- restrictions (TLS 1.2).
-getCiphers :: ServerParams -> Credentials -> Credentials -> [Cipher]
-getCiphers sparams creds sigCreds = filter authorizedCKE (supportedCiphers $ serverSupported sparams)
+getCiphers :: [Cipher] -> Credentials -> Credentials -> [Cipher]
+getCiphers ciphers creds sigCreds = filter authorizedCKE ciphers
   where
     authorizedCKE cipher =
         case cipherKeyExchange cipher of
