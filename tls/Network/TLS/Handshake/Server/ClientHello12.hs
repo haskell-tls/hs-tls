@@ -30,7 +30,7 @@ processClientHello12
     -> IO (Cipher, Maybe Credential)
 processClientHello12 sparams ctx ch = do
     let secureRenegotiation = supportedSecureRenegotiation $ ctxSupported ctx
-    when secureRenegotiation $ checkSesecureRenegotiation ctx ch
+    when secureRenegotiation $ checkSecureRenegotiation ctx ch
     serverName <- usingState_ ctx getClientSNI
     extraCreds <- onServerNameIndication (serverHooks sparams) serverName
     let (creds, signatureCreds, ciphersFilteredVersion) =
@@ -45,8 +45,8 @@ processClientHello12 sparams ctx ch = do
     mcred <- chooseCreds usedCipher creds signatureCreds
     return (usedCipher, mcred)
 
-checkSesecureRenegotiation :: Context -> CH -> IO ()
-checkSesecureRenegotiation ctx CH{..} = do
+checkSecureRenegotiation :: Context -> CH -> IO ()
+checkSecureRenegotiation ctx CH{..} = do
     -- RFC 5746: secure renegotiation
     -- TLS_EMPTY_RENEGOTIATION_INFO_SCSV: {0x00, 0xFF}
     when (CipherID 0xff `elem` chCiphers) $
