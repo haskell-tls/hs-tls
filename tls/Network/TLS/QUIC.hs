@@ -74,6 +74,7 @@ import Network.TLS.Context.Internal
 import Network.TLS.Core
 import Network.TLS.Crypto (hashDigestSize)
 import Network.TLS.Crypto.Types
+import Network.TLS.Extension
 import Network.TLS.Extra.Cipher
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Control

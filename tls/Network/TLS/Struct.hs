@@ -6,47 +6,6 @@
 module Network.TLS.Struct (
     Version (..),
     CipherData (..),
-    ExtensionID (
-        ..,
-        EID_ServerName,
-        EID_MaxFragmentLength,
-        EID_ClientCertificateUrl,
-        EID_TrustedCAKeys,
-        EID_TruncatedHMAC,
-        EID_StatusRequest,
-        EID_UserMapping,
-        EID_ClientAuthz,
-        EID_ServerAuthz,
-        EID_CertType,
-        EID_SupportedGroups,
-        EID_EcPointFormats,
-        EID_SRP,
-        EID_SignatureAlgorithms,
-        EID_SRTP,
-        EID_Heartbeat,
-        EID_ApplicationLayerProtocolNegotiation,
-        EID_StatusRequestv2,
-        EID_SignedCertificateTimestamp,
-        EID_ClientCertificateType,
-        EID_ServerCertificateType,
-        EID_Padding,
-        EID_EncryptThenMAC,
-        EID_ExtendedMainSecret,
-        EID_SessionTicket,
-        EID_PreSharedKey,
-        EID_EarlyData,
-        EID_SupportedVersions,
-        EID_Cookie,
-        EID_PskKeyExchangeModes,
-        EID_CertificateAuthorities,
-        EID_OidFilters,
-        EID_PostHandshakeAuth,
-        EID_SignatureAlgorithmsCert,
-        EID_KeyShare,
-        EID_QuicTransportParameters,
-        EID_SecureRenegotiation
-    ),
-    ExtensionRaw (..),
     CertificateType (
         CertificateType,
         CertificateType_RSA_Sign,
@@ -149,6 +108,8 @@ module Network.TLS.Struct (
     packetType,
     typeOfHandshake,
     module Network.TLS.HashAndSignature,
+    ExtensionRaw (..),
+    ExtensionID (..),
 ) where
 
 import qualified Data.ByteString.Base16 as B16
@@ -157,6 +118,7 @@ import Data.X509 (CertificateChain, DistinguishedName)
 
 import Network.TLS.Crypto
 import Network.TLS.Error
+import {-# SOURCE #-} Network.TLS.Extension
 import Network.TLS.HashAndSignature
 import Network.TLS.Imports
 import Network.TLS.Types
@@ -282,138 +244,6 @@ newtype Session = Session (Maybe SessionID) deriving (Show, Eq)
 {-# DEPRECATED FinishedData "use VerifyData" #-}
 type FinishedData = ByteString
 type VerifyData = ByteString
-
-----------------------------------------------------------------
-
--- | Identifier of a TLS extension.
---   <http://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.txt>
-newtype ExtensionID = ExtensionID {fromExtensionID :: Word16} deriving (Eq)
-
-{- FOURMOLU_DISABLE -}
-pattern EID_ServerName                          :: ExtensionID -- RFC6066
-pattern EID_ServerName                           = ExtensionID 0x0
-pattern EID_MaxFragmentLength                   :: ExtensionID -- RFC6066
-pattern EID_MaxFragmentLength                    = ExtensionID 0x1
-pattern EID_ClientCertificateUrl                :: ExtensionID -- RFC6066
-pattern EID_ClientCertificateUrl                 = ExtensionID 0x2
-pattern EID_TrustedCAKeys                       :: ExtensionID -- RFC6066
-pattern EID_TrustedCAKeys                        = ExtensionID 0x3
-pattern EID_TruncatedHMAC                       :: ExtensionID -- RFC6066
-pattern EID_TruncatedHMAC                        = ExtensionID 0x4
-pattern EID_StatusRequest                       :: ExtensionID -- RFC6066
-pattern EID_StatusRequest                        = ExtensionID 0x5
-pattern EID_UserMapping                         :: ExtensionID -- RFC4681
-pattern EID_UserMapping                          = ExtensionID 0x6
-pattern EID_ClientAuthz                         :: ExtensionID -- RFC5878
-pattern EID_ClientAuthz                          = ExtensionID 0x7
-pattern EID_ServerAuthz                         :: ExtensionID -- RFC5878
-pattern EID_ServerAuthz                          = ExtensionID 0x8
-pattern EID_CertType                            :: ExtensionID -- RFC6091
-pattern EID_CertType                             = ExtensionID 0x9
-pattern EID_SupportedGroups                     :: ExtensionID -- RFC8422,8446
-pattern EID_SupportedGroups                      = ExtensionID 0xa
-pattern EID_EcPointFormats                      :: ExtensionID -- RFC4492
-pattern EID_EcPointFormats                       = ExtensionID 0xb
-pattern EID_SRP                                 :: ExtensionID -- RFC5054
-pattern EID_SRP                                  = ExtensionID 0xc
-pattern EID_SignatureAlgorithms                 :: ExtensionID -- RFC5246,8446
-pattern EID_SignatureAlgorithms                  = ExtensionID 0xd
-pattern EID_SRTP                                :: ExtensionID -- RFC5764
-pattern EID_SRTP                                 = ExtensionID 0xe
-pattern EID_Heartbeat                           :: ExtensionID -- RFC6520
-pattern EID_Heartbeat                            = ExtensionID 0xf
-pattern EID_ApplicationLayerProtocolNegotiation :: ExtensionID -- RFC7301
-pattern EID_ApplicationLayerProtocolNegotiation  = ExtensionID 0x10
-pattern EID_StatusRequestv2                     :: ExtensionID -- RFC6961
-pattern EID_StatusRequestv2                      = ExtensionID 0x11
-pattern EID_SignedCertificateTimestamp          :: ExtensionID -- RFC6962
-pattern EID_SignedCertificateTimestamp           = ExtensionID 0x12
-pattern EID_ClientCertificateType               :: ExtensionID -- RFC7250
-pattern EID_ClientCertificateType                = ExtensionID 0x13
-pattern EID_ServerCertificateType               :: ExtensionID -- RFC7250
-pattern EID_ServerCertificateType                = ExtensionID 0x14
-pattern EID_Padding                             :: ExtensionID -- RFC5246
-pattern EID_Padding                              = ExtensionID 0x15
-pattern EID_EncryptThenMAC                      :: ExtensionID -- RFC7366
-pattern EID_EncryptThenMAC                       = ExtensionID 0x16
-pattern EID_ExtendedMainSecret                  :: ExtensionID -- REF7627
-pattern EID_ExtendedMainSecret                   = ExtensionID 0x17
-pattern EID_SessionTicket                       :: ExtensionID -- RFC4507
-pattern EID_SessionTicket                        = ExtensionID 0x23
-pattern EID_PreSharedKey                        :: ExtensionID -- RFC8446
-pattern EID_PreSharedKey                         = ExtensionID 0x29
-pattern EID_EarlyData                           :: ExtensionID -- RFC8446
-pattern EID_EarlyData                            = ExtensionID 0x2a
-pattern EID_SupportedVersions                   :: ExtensionID -- RFC8446
-pattern EID_SupportedVersions                    = ExtensionID 0x2b
-pattern EID_Cookie                              :: ExtensionID -- RFC8446
-pattern EID_Cookie                               = ExtensionID 0x2c
-pattern EID_PskKeyExchangeModes                 :: ExtensionID -- RFC8446
-pattern EID_PskKeyExchangeModes                  = ExtensionID 0x2d
-pattern EID_CertificateAuthorities              :: ExtensionID -- RFC8446
-pattern EID_CertificateAuthorities               = ExtensionID 0x2f
-pattern EID_OidFilters                          :: ExtensionID -- RFC8446
-pattern EID_OidFilters                           = ExtensionID 0x30
-pattern EID_PostHandshakeAuth                   :: ExtensionID -- RFC8446
-pattern EID_PostHandshakeAuth                    = ExtensionID 0x31
-pattern EID_SignatureAlgorithmsCert             :: ExtensionID -- RFC8446
-pattern EID_SignatureAlgorithmsCert              = ExtensionID 0x32
-pattern EID_KeyShare                            :: ExtensionID -- RFC8446
-pattern EID_KeyShare                             = ExtensionID 0x33
-pattern EID_QuicTransportParameters             :: ExtensionID -- RFC9001
-pattern EID_QuicTransportParameters              = ExtensionID 0x39
-pattern EID_SecureRenegotiation                 :: ExtensionID -- RFC5746
-pattern EID_SecureRenegotiation                  = ExtensionID 0xff01
-
-instance Show ExtensionID where
-    show EID_ServerName              = "ServerName"
-    show EID_MaxFragmentLength       = "MaxFragmentLength"
-    show EID_ClientCertificateUrl    = "ClientCertificateUrl"
-    show EID_TrustedCAKeys           = "TrustedCAKeys"
-    show EID_TruncatedHMAC           = "TruncatedHMAC"
-    show EID_StatusRequest           = "StatusRequest"
-    show EID_UserMapping             = "UserMapping"
-    show EID_ClientAuthz             = "ClientAuthz"
-    show EID_ServerAuthz             = "ServerAuthz"
-    show EID_CertType                = "CertType"
-    show EID_SupportedGroups         = "SupportedGroups"
-    show EID_EcPointFormats          = "EcPointFormats"
-    show EID_SRP                     = "SRP"
-    show EID_SignatureAlgorithms     = "SignatureAlgorithms"
-    show EID_SRTP                    = "SRTP"
-    show EID_Heartbeat               = "Heartbeat"
-    show EID_ApplicationLayerProtocolNegotiation = "ApplicationLayerProtocolNegotiation"
-    show EID_StatusRequestv2         = "StatusRequestv2"
-    show EID_SignedCertificateTimestamp = "SignedCertificateTimestamp"
-    show EID_ClientCertificateType   = "ClientCertificateType"
-    show EID_ServerCertificateType   = "ServerCertificateType"
-    show EID_Padding                 = "Padding"
-    show EID_EncryptThenMAC          = "EncryptThenMAC"
-    show EID_ExtendedMainSecret      = "ExtendedMainSecret"
-    show EID_SessionTicket           = "SessionTicket"
-    show EID_PreSharedKey            = "PreSharedKey"
-    show EID_EarlyData               = "EarlyData"
-    show EID_SupportedVersions       = "SupportedVersions"
-    show EID_Cookie                  = "Cookie"
-    show EID_PskKeyExchangeModes     = "PskKeyExchangeModes"
-    show EID_CertificateAuthorities  = "CertificateAuthorities"
-    show EID_OidFilters              = "OidFilters"
-    show EID_PostHandshakeAuth       = "PostHandshakeAuth"
-    show EID_SignatureAlgorithmsCert = "SignatureAlgorithmsCert"
-    show EID_KeyShare                = "KeyShare"
-    show EID_QuicTransportParameters = "QuicTransportParameters"
-    show EID_SecureRenegotiation     = "SecureRenegotiation"
-    show (ExtensionID x)         = "ExtensionID " ++ show x
-{- FOURMOLU_ENABLE -}
-
-----------------------------------------------------------------
-
--- | The raw content of a TLS extension.
-data ExtensionRaw = ExtensionRaw ExtensionID ByteString
-    deriving (Eq)
-
-instance Show ExtensionRaw where
-    show (ExtensionRaw eid bs) = "ExtensionRaw " ++ show eid ++ " " ++ showBytesHex bs
 
 ----------------------------------------------------------------
 
