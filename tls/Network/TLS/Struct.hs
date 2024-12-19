@@ -356,7 +356,21 @@ data ServerKeyXchgAlgorithmData
     | SKX_DH_RSA (Maybe ServerRSAParams)
     | SKX_Unparsed ByteString -- if we parse the server key xchg before knowing the actual cipher, we end up with this structure.
     | SKX_Unknown ByteString
-    deriving (Show, Eq)
+    deriving (Eq)
+
+{- FOURMOLU_DISABLE -}
+instance Show ServerKeyXchgAlgorithmData where
+    show (SKX_DH_Anon _)       = "SKX_DH_Anon"
+    show (SKX_DHE_DSA _ _)     = "SKX_DHE_DSA"
+    show (SKX_DHE_RSA _ _)     = "SKX_DHE_RSA"
+    show (SKX_ECDHE_RSA _ _)   = "SKX_ECDHE_RSA"
+    show (SKX_ECDHE_ECDSA _ _) = "SKX_ECDHE_ECDSA"
+    show (SKX_RSA _)           = "SKX_RSA"
+    show (SKX_DH_DSA _)        = "SKX_DH_DSA"
+    show (SKX_DH_RSA _)        = "SKX_DH_RSA"
+    show (SKX_Unparsed _)      = "SKX_Unparsed"
+    show (SKX_Unknown _)       = "SKX_Unknown"
+{- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
 
