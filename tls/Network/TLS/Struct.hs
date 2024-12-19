@@ -239,7 +239,10 @@ newtype ClientRandom = ClientRandom {unClientRandom :: ByteString}
 instance Show ClientRandom where
     show (ClientRandom bs) = "ClientRandom " ++ C8.unpack (B16.encode bs)
 
-newtype Session = Session (Maybe SessionID) deriving (Show, Eq)
+newtype Session = Session (Maybe SessionID) deriving (Eq)
+instance Show Session where
+    show (Session Nothing) = "Session \"\""
+    show (Session (Just bs)) = "Session " ++ showBytesHex bs
 
 {-# DEPRECATED FinishedData "use VerifyData" #-}
 type FinishedData = ByteString
