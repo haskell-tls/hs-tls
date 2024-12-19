@@ -112,8 +112,6 @@ module Network.TLS.Struct (
     ExtensionID (..),
 ) where
 
-import qualified Data.ByteString.Base16 as B16
-import qualified Data.ByteString.Char8 as C8
 import Data.X509 (CertificateChain, DistinguishedName)
 
 import Network.TLS.Crypto
@@ -224,20 +222,20 @@ instance Show Packet where
     show (Handshake hs) = "Handshake " ++ show hs
     show (Alert as) = "Alert " ++ show as
     show ChangeCipherSpec = "ChangeCipherSpec"
-    show (AppData bs) = "AppData " ++ C8.unpack (B16.encode bs)
+    show (AppData bs) = "AppData " ++ showBytesHex bs
 
 data Header = Header ProtocolType Version Word16 deriving (Show, Eq)
 
 newtype ServerRandom = ServerRandom {unServerRandom :: ByteString}
     deriving (Eq)
 instance Show ServerRandom where
-    show (ServerRandom bs) = "ServerRandom " ++ C8.unpack (B16.encode bs)
+    show (ServerRandom bs) = "ServerRandom " ++ showBytesHex bs
 
 newtype ClientRandom = ClientRandom {unClientRandom :: ByteString}
     deriving (Eq)
 
 instance Show ClientRandom where
-    show (ClientRandom bs) = "ClientRandom " ++ C8.unpack (B16.encode bs)
+    show (ClientRandom bs) = "ClientRandom " ++ showBytesHex bs
 
 newtype Session = Session (Maybe SessionID) deriving (Eq)
 instance Show Session where
