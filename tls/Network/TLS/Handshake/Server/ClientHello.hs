@@ -13,6 +13,7 @@ import Network.TLS.Measurement
 import Network.TLS.Parameters
 import Network.TLS.State
 import Network.TLS.Struct
+import Network.TLS.Types
 
 processClientHello
     :: ServerParams -> Context -> Handshake -> IO (Version, CH)
@@ -51,7 +52,7 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
     -- TLS_FALLBACK_SCSV: {0x56, 0x00}
     when
         ( supportedFallbackScsv (ctxSupported ctx)
-            && (0x5600 `elem` chCiphers)
+            && (CipherID 0x5600 `elem` chCiphers)
             && legacyVersion < TLS12
         )
         $ throwCore

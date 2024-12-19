@@ -70,6 +70,9 @@ instance Arbitrary CertificateType where
             , CertificateType_ECDSA_Sign
             ]
 
+instance Arbitrary CipherID where
+    arbitrary = CipherID <$> arbitrary
+
 instance Arbitrary Handshake where
     arbitrary =
         oneof
@@ -127,8 +130,8 @@ instance Arbitrary Handshake13 where
 
 ----------------------------------------------------------------
 
-arbitraryCiphersIDs :: Gen [Word16]
-arbitraryCiphersIDs = choose (0, 200) >>= vector
+arbitraryCiphersIDs :: Gen [CipherID]
+arbitraryCiphersIDs = map CipherID <$> (choose (0, 200) >>= vector)
 
 arbitraryCompressionIDs :: Gen [Word8]
 arbitraryCompressionIDs = choose (0, 200) >>= vector

@@ -73,7 +73,7 @@ import qualified Data.ByteString as B
 
 import Data.Tuple (swap)
 import Network.TLS.Cipher
-import Network.TLS.Types (Version (..))
+import Network.TLS.Types (CipherID (..), Version (..))
 
 import Crypto.Cipher.AES
 import qualified Crypto.Cipher.ChaChaPoly1305 as ChaChaPoly1305
@@ -435,7 +435,7 @@ bulk_aes128ccm8_13 = bulk_aes128ccm8{bulkIVSize = 12, bulkExplicitIV = 0}
 cipher_DHE_RSA_WITH_AES_128_GCM_SHA256 :: Cipher
 cipher_DHE_RSA_WITH_AES_128_GCM_SHA256 =
     Cipher
-        { cipherID = 0x009E
+        { cipherID = CipherID 0x009E
         , cipherName = "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256"
         , cipherBulk = bulk_aes128gcm
         , cipherHash = SHA256
@@ -455,7 +455,7 @@ cipher_DHE_RSA_AES128GCM_SHA256 = cipher_DHE_RSA_WITH_AES_128_GCM_SHA256
 cipher_DHE_RSA_WITH_AES_256_GCM_SHA384 :: Cipher
 cipher_DHE_RSA_WITH_AES_256_GCM_SHA384 =
     Cipher
-        { cipherID = 0x009F
+        { cipherID = CipherID 0x009F
         , cipherName = "TLS_DHE_RSA_WITH_AES_256_GCM_SHA384"
         , cipherBulk = bulk_aes256gcm
         , cipherHash = SHA384
@@ -478,7 +478,7 @@ cipher_DHE_RSA_AES256GCM_SHA384 = cipher_DHE_RSA_WITH_AES_256_GCM_SHA384
 cipher13_AES_128_GCM_SHA256 :: Cipher
 cipher13_AES_128_GCM_SHA256 =
     Cipher
-        { cipherID = 0x1301
+        { cipherID = CipherID 0x1301
         , cipherName = "TLS_AES_128_GCM_SHA256"
         , cipherBulk = bulk_aes128gcm_13
         , cipherHash = SHA256
@@ -498,7 +498,7 @@ cipher_TLS13_AES128GCM_SHA256 = cipher13_AES_128_GCM_SHA256
 cipher13_AES_256_GCM_SHA384 :: Cipher
 cipher13_AES_256_GCM_SHA384 =
     Cipher
-        { cipherID = 0x1302
+        { cipherID = CipherID 0x1302
         , cipherName = "TLS_AES_256_GCM_SHA384"
         , cipherBulk = bulk_aes256gcm_13
         , cipherHash = SHA384
@@ -518,7 +518,7 @@ cipher_TLS13_AES256GCM_SHA384 = cipher13_AES_256_GCM_SHA384
 cipher13_CHACHA20_POLY1305_SHA256 :: Cipher
 cipher13_CHACHA20_POLY1305_SHA256 =
     Cipher
-        { cipherID = 0x1303
+        { cipherID = CipherID 0x1303
         , cipherName = "TLS_CHACHA20_POLY1305_SHA256"
         , cipherBulk = bulk_chacha20poly1305
         , cipherHash = SHA256
@@ -538,7 +538,7 @@ cipher_TLS13_CHACHA20POLY1305_SHA256 = cipher13_CHACHA20_POLY1305_SHA256
 cipher13_AES_128_CCM_SHA256 :: Cipher
 cipher13_AES_128_CCM_SHA256 =
     Cipher
-        { cipherID = 0x1304
+        { cipherID = CipherID 0x1304
         , cipherName = "TLS_AES_128_CCM_SHA256"
         , cipherBulk = bulk_aes128ccm_13
         , cipherHash = SHA256
@@ -558,7 +558,7 @@ cipher_TLS13_AES128CCM_SHA256 = cipher13_AES_128_CCM_SHA256
 cipher13_TLS_AES_128_CCM_8_SHA256 :: Cipher
 cipher13_TLS_AES_128_CCM_8_SHA256 =
     Cipher
-        { cipherID = 0x1305
+        { cipherID = CipherID 0x1305
         , cipherName = "TLS_AES_128_CCM_8_SHA256"
         , cipherBulk = bulk_aes128ccm8_13
         , cipherHash = SHA256
@@ -581,7 +581,7 @@ cipher_TLS13_AES128CCM8_SHA256 = cipher13_TLS_AES_128_CCM_8_SHA256
 cipher_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 :: Cipher
 cipher_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 =
     Cipher
-        { cipherID = 0xC02B
+        { cipherID = CipherID 0xC02B
         , cipherName = "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
         , cipherBulk = bulk_aes128gcm
         , cipherHash = SHA256
@@ -601,7 +601,7 @@ cipher_ECDHE_ECDSA_AES128GCM_SHA256 = cipher_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
 cipher_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 :: Cipher
 cipher_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 =
     Cipher
-        { cipherID = 0xC02C
+        { cipherID = CipherID 0xC02C
         , cipherName = "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
         , cipherBulk = bulk_aes256gcm
         , cipherHash = SHA384
@@ -621,7 +621,7 @@ cipher_ECDHE_ECDSA_AES256GCM_SHA384 = cipher_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
 cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256 :: Cipher
 cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256 =
     Cipher
-        { cipherID = 0xC02F
+        { cipherID = CipherID 0xC02F
         , cipherName = "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
         , cipherBulk = bulk_aes128gcm
         , cipherHash = SHA256
@@ -641,7 +641,7 @@ cipher_ECDHE_RSA_AES128GCM_SHA256 = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
 cipher_ECDHE_RSA_WITH_AES_256_GCM_SHA384 :: Cipher
 cipher_ECDHE_RSA_WITH_AES_256_GCM_SHA384 =
     Cipher
-        { cipherID = 0xC030
+        { cipherID = CipherID 0xC030
         , cipherName = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
         , cipherBulk = bulk_aes256gcm
         , cipherHash = SHA384
@@ -664,7 +664,7 @@ cipher_ECDHE_RSA_AES256GCM_SHA384 = cipher_ECDHE_RSA_WITH_AES_256_GCM_SHA384
 cipher_ECDHE_ECDSA_WITH_AES_128_CCM :: Cipher
 cipher_ECDHE_ECDSA_WITH_AES_128_CCM =
     Cipher
-        { cipherID = 0xC0AC
+        { cipherID = CipherID 0xC0AC
         , cipherName = "TLS_ECDHE_ECDSA_WITH_AES_128_CCM"
         , cipherBulk = bulk_aes128ccm
         , cipherHash = SHA256
@@ -684,7 +684,7 @@ cipher_ECDHE_ECDSA_AES128CCM_SHA256 = cipher_ECDHE_ECDSA_WITH_AES_128_CCM
 cipher_ECDHE_ECDSA_WITH_AES_256_CCM :: Cipher
 cipher_ECDHE_ECDSA_WITH_AES_256_CCM =
     Cipher
-        { cipherID = 0xC0AD
+        { cipherID = CipherID 0xC0AD
         , cipherName = "TLS_ECDHE_ECDSA_WITH_AES_256_CCM"
         , cipherBulk = bulk_aes256ccm
         , cipherHash = SHA256
@@ -704,7 +704,7 @@ cipher_ECDHE_ECDSA_AES256CCM_SHA256 = cipher_ECDHE_ECDSA_WITH_AES_256_CCM
 cipher_ECDHE_ECDSA_WITH_AES_128_CCM_8 :: Cipher
 cipher_ECDHE_ECDSA_WITH_AES_128_CCM_8 =
     Cipher
-        { cipherID = 0xC0AE
+        { cipherID = CipherID 0xC0AE
         , cipherName = "TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8"
         , cipherBulk = bulk_aes128ccm8
         , cipherHash = SHA256
@@ -724,7 +724,7 @@ cipher_ECDHE_ECDSA_AES128CCM8_SHA256 = cipher_ECDHE_ECDSA_WITH_AES_128_CCM_8
 cipher_ECDHE_ECDSA_WITH_AES_256_CCM_8 :: Cipher
 cipher_ECDHE_ECDSA_WITH_AES_256_CCM_8 =
     Cipher
-        { cipherID = 0xC0AF
+        { cipherID = CipherID 0xC0AF
         , cipherName = "TLS_ECDHE_ECDSA_WITH_AES_256_CCM_8"
         , cipherBulk = bulk_aes256ccm8
         , cipherHash = SHA256
@@ -747,7 +747,7 @@ cipher_ECDHE_ECDSA_AES256CCM8_SHA256 = cipher_ECDHE_ECDSA_WITH_AES_256_CCM_8
 cipher_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 :: Cipher
 cipher_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 =
     Cipher
-        { cipherID = 0xCCA8
+        { cipherID = CipherID 0xCCA8
         , cipherName = "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
         , cipherBulk = bulk_chacha20poly1305
         , cipherHash = SHA256
@@ -767,7 +767,7 @@ cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256 = cipher_ECDHE_RSA_WITH_CHACHA20_POLY13
 cipher_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 :: Cipher
 cipher_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 =
     Cipher
-        { cipherID = 0xCCA9
+        { cipherID = CipherID 0xCCA9
         , cipherName = "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256"
         , cipherBulk = bulk_chacha20poly1305
         , cipherHash = SHA256
@@ -787,7 +787,7 @@ cipher_ECDHE_ECDSA_CHACHA20POLY1305_SHA256 = cipher_ECDHE_ECDSA_WITH_CHACHA20_PO
 cipher_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256 :: Cipher
 cipher_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256 =
     Cipher
-        { cipherID = 0xCCAA
+        { cipherID = CipherID 0xCCAA
         , cipherName = "TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
         , cipherBulk = bulk_chacha20poly1305
         , cipherHash = SHA256

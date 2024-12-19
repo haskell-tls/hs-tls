@@ -14,7 +14,7 @@ module Network.TLS.Types (
     SessionFlag (..),
     CertReqContext,
     TLS13TicketInfo (..),
-    CipherID,
+    CipherID (..),
     CompressionID,
     Role (..),
     invertRole,
@@ -46,6 +46,7 @@ import Network.Socket (HostName)
 import Network.TLS.Crypto (Group, Hash (..), hash)
 import Network.TLS.Imports
 import Network.TLS.Util.Serialization
+import Text.Printf
 
 type Second = Word32
 type Millisecond = Word64
@@ -129,7 +130,10 @@ data TLS13TicketInfo = TLS13TicketInfo
     deriving (Show, Eq, Generic)
 
 -- | Cipher identification
-type CipherID = Word16
+newtype CipherID = CipherID {getCipherID :: Word16} deriving (Eq, Generic)
+
+instance Show CipherID where
+    show (CipherID n) = printf "0x%04X" n
 
 -- | Compression identification
 type CompressionID = Word8
@@ -199,6 +203,7 @@ bigNumFromInteger i = BigNum $ i2osp i
 
 ----------------------------------------------------------------
 
+instance Serialise CipherID
 instance Serialise Version
 instance Serialise TLS13TicketInfo
 instance Serialise SessionFlag

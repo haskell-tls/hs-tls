@@ -23,6 +23,7 @@ import Data.X509.CertificateStore
 import Network.TLS hiding (HostName)
 import Network.TLS.Extra.Cipher
 import Network.TLS.Extra.FFDHE
+import Network.TLS.Internal
 import Numeric (showHex)
 import System.Exit
 import System.X509
@@ -67,7 +68,7 @@ readNumber s
 readCiphers :: String -> Maybe [CipherID]
 readCiphers s =
     case lookup s namedCiphersuites of
-        Nothing -> (: []) `fmap` readNumber s
+        Nothing -> (: []) `fmap` (CipherID <$> readNumber s)
         just -> just
 
 readDHParams :: String -> IO (Maybe DHParams)
@@ -91,7 +92,7 @@ printCiphers = do
                 ++ " = "
                 ++ pad 5 (show $ cipherID c)
                 ++ "  0x"
-                ++ showHex (cipherID c) ""
+                ++ showHex (getCipherID (cipherID c)) ""
             )
     putStrLn ""
     putStrLn "Ciphersuites"

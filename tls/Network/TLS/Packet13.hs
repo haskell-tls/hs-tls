@@ -42,7 +42,7 @@ encodeHandshake13' (ServerHello13 random session cipherId exts) = runPut $ do
     putBinaryVersion TLS12
     putServerRandom32 random
     putSession session
-    putWord16 cipherId
+    putWord16 $ getCipherID cipherId
     putWord8 0 -- compressionID nullCompression
     putExtensions exts
 encodeHandshake13' (EncryptedExtensions13 exts) = runPut $ putExtensions exts
@@ -105,7 +105,7 @@ decodeServerHello13 = do
     _ver <- getBinaryVersion
     random <- getServerRandom32
     session <- getSession
-    cipherid <- getWord16
+    cipherid <- CipherID <$> getWord16
     _comp <- getWord8
     exts <- fromIntegral <$> getWord16 >>= getExtensions
     return $ ServerHello13 random session cipherid exts
