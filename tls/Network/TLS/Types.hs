@@ -34,6 +34,9 @@ module Network.TLS.Types (
     SecretTriple (..),
     SecretPair (..),
     MainSecret (..),
+    BigNum (..),
+    bigNumToInteger,
+    bigNumFromInteger,
 ) where
 
 import Codec.Serialise
@@ -42,6 +45,7 @@ import GHC.Generics
 import Network.Socket (HostName)
 import Network.TLS.Crypto (Group, Hash (..), hash)
 import Network.TLS.Imports
+import Network.TLS.Util.Serialization
 
 type Second = Word32
 type Millisecond = Word64
@@ -181,6 +185,17 @@ type TrafficSecrets a = (ClientTrafficSecret a, ServerTrafficSecret a)
 
 -- Main secret for TLS 1.2 or earlier.
 newtype MainSecret = MainSecret ByteString deriving (Show)
+
+----------------------------------------------------------------
+
+newtype BigNum = BigNum ByteString
+    deriving (Show, Eq)
+
+bigNumToInteger :: BigNum -> Integer
+bigNumToInteger (BigNum b) = os2ip b
+
+bigNumFromInteger :: Integer -> BigNum
+bigNumFromInteger i = BigNum $ i2osp i
 
 ----------------------------------------------------------------
 

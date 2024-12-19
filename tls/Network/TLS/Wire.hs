@@ -50,8 +50,10 @@ import qualified Data.ByteString as B
 import Data.Serialize.Get hiding (runGet)
 import qualified Data.Serialize.Get as G
 import Data.Serialize.Put
+
+import Network.TLS.Error
 import Network.TLS.Imports
-import Network.TLS.Struct
+import Network.TLS.Types
 import Network.TLS.Util.Serialization
 
 type GetContinuation a = ByteString -> GetResult a

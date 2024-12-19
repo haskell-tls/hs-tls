@@ -50,6 +50,7 @@ library
         Network.TLS.Crypto.IES
         Network.TLS.Crypto.Types
         Network.TLS.ErrT
+        Network.TLS.Error
         Network.TLS.Extension
         Network.TLS.Handshake
         Network.TLS.Handshake.Certificate
