@@ -272,34 +272,38 @@ definedExtensions =
     , EID_SupportedVersions
     , EID_Cookie
     , EID_PskKeyExchangeModes
-    , EID_KeyShare
-    , EID_SignatureAlgorithmsCert
     , EID_CertificateAuthorities
-    , EID_SecureRenegotiation
+    , EID_OidFilters
+    , EID_PostHandshakeAuth
+    , EID_SignatureAlgorithmsCert
+    , EID_KeyShare
     , EID_QuicTransportParameters
+    , EID_SecureRenegotiation
     ]
 
 -- | all supported extensions by the implementation
+{- FOURMOLU_DISABLE -}
 supportedExtensions :: [ExtensionID]
 supportedExtensions =
-    [ EID_ServerName
-    , EID_MaxFragmentLength
-    , EID_ApplicationLayerProtocolNegotiation
-    , EID_ExtendedMainSecret
-    , EID_SecureRenegotiation
-    , EID_SupportedGroups
-    , EID_EcPointFormats
-    , EID_SignatureAlgorithms
-    , EID_SignatureAlgorithmsCert
-    , EID_KeyShare
-    , EID_PreSharedKey
-    , EID_EarlyData
-    , EID_SupportedVersions
-    , EID_Cookie
-    , EID_PskKeyExchangeModes
-    , EID_CertificateAuthorities
-    , EID_QuicTransportParameters
+    [ EID_ServerName                          -- 0x00
+    , EID_MaxFragmentLength                   -- 0x01
+    , EID_SupportedGroups                     -- 0x0a
+    , EID_EcPointFormats                      -- 0x0b
+    , EID_SignatureAlgorithms                 -- 0x0d
+    , EID_ApplicationLayerProtocolNegotiation -- 0x10
+    , EID_ExtendedMainSecret                  -- 0x17
+    , EID_PreSharedKey                        -- 0x29
+    , EID_EarlyData                           -- 0x2a
+    , EID_SupportedVersions                   -- 0x2b
+    , EID_Cookie                              -- 0x2c
+    , EID_PskKeyExchangeModes                 -- 0x2d
+    , EID_CertificateAuthorities              -- 0x2f
+    , EID_SignatureAlgorithmsCert             -- 0x32
+    , EID_KeyShare                            -- 0x33
+    , EID_QuicTransportParameters             -- 0x39
+    , EID_SecureRenegotiation                 -- 0xff01
     ]
+{- FOURMOLU_ENABLE -}
 
 ------------------------------------------------------------
 
