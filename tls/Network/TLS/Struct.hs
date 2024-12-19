@@ -182,7 +182,10 @@ lastSupportedCertificateType = CertificateType_ECDSA_Sign
 type Signature = ByteString
 
 data DigitallySigned = DigitallySigned HashAndSignatureAlgorithm Signature
-    deriving (Show, Eq)
+    deriving (Eq)
+
+instance Show DigitallySigned where
+    show (DigitallySigned hs sig) = "DigitallySigned " ++ show hs ++ " " ++ showBytesHex sig
 
 ----------------------------------------------------------------
 
@@ -360,7 +363,12 @@ data ClientKeyXchgAlgorithmData
     = CKX_RSA ByteString
     | CKX_DH DHPublic
     | CKX_ECDH ByteString
-    deriving (Show, Eq)
+    deriving (Eq)
+
+instance Show ClientKeyXchgAlgorithmData where
+    show (CKX_RSA bs) = "CKX_RSA " ++ showBytesHex bs
+    show (CKX_DH pub) = "CKX_DH " ++ show pub
+    show (CKX_ECDH bs) = "CKX_ECDH " ++ showBytesHex bs
 
 ----------------------------------------------------------------
 
