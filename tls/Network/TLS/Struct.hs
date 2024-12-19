@@ -466,9 +466,16 @@ instance Show Packet where
 data Header = Header ProtocolType Version Word16 deriving (Show, Eq)
 
 newtype ServerRandom = ServerRandom {unServerRandom :: ByteString}
-    deriving (Show, Eq)
+    deriving (Eq)
+instance Show ServerRandom where
+    show (ServerRandom bs) = "ServerRandom " ++ C8.unpack (B16.encode bs)
+
 newtype ClientRandom = ClientRandom {unClientRandom :: ByteString}
-    deriving (Show, Eq)
+    deriving (Eq)
+
+instance Show ClientRandom where
+    show (ClientRandom bs) = "ClientRandom " ++ C8.unpack (B16.encode bs)
+
 newtype Session = Session (Maybe SessionID) deriving (Show, Eq)
 
 {-# DEPRECATED FinishedData "use VerifyData" #-}
