@@ -313,6 +313,25 @@ data ExtensionRaw = ExtensionRaw ExtensionID ByteString
     deriving (Eq)
 
 instance Show ExtensionRaw where
+    show (ExtensionRaw eid@EID_ServerName bs) = show eid ++ " " ++ show (decodeServerName bs)
+    show (ExtensionRaw eid@EID_MaxFragmentLength bs) = show eid ++ " " ++ show (decodeMaxFragmentLength bs)
+    show (ExtensionRaw eid@EID_SupportedGroups bs) = show eid ++ " " ++ show (decodeSupportedGroups bs)
+    show (ExtensionRaw eid@EID_EcPointFormats bs) = show eid ++ " " ++ show (decodeEcPointFormatsSupported bs)
+    show (ExtensionRaw eid@EID_SignatureAlgorithms bs) = show eid ++ " " ++ show (decodeSignatureAlgorithms bs)
+    show (ExtensionRaw eid@EID_Heartbeat bs) = show eid ++ " " ++ show (decodeHeartBeat bs)
+    show (ExtensionRaw eid@EID_ApplicationLayerProtocolNegotiation bs) = show eid ++ " " ++ show (decodeApplicationLayerProtocolNegotiation bs)
+    show (ExtensionRaw eid@EID_ExtendedMainSecret _) = show eid
+    show (ExtensionRaw eid@EID_SessionTicket bs) = show eid ++ " " ++ show (decodeSessionTicket bs)
+    show (ExtensionRaw eid@EID_PreSharedKey bs) = show eid ++ " " ++ showBytesHex bs
+    show (ExtensionRaw eid@EID_EarlyData _) = show eid
+    show (ExtensionRaw eid@EID_SupportedVersions bs) = show eid ++ " " ++ showBytesHex bs
+    show (ExtensionRaw eid@EID_Cookie bs) = show eid ++ " " ++ showBytesHex bs
+    show (ExtensionRaw eid@EID_PskKeyExchangeModes bs) = show eid ++ " " ++ show (decodePskKeyExchangeModes bs)
+    show (ExtensionRaw eid@EID_CertificateAuthorities bs) = show eid ++ " " ++ show (decodeCertificateAuthorities bs)
+    show (ExtensionRaw eid@EID_PostHandshakeAuth _) = show eid
+    show (ExtensionRaw eid@EID_SignatureAlgorithmsCert bs) = show eid ++ " " ++ show (decodeSignatureAlgorithmsCert bs)
+    show (ExtensionRaw eid@EID_KeyShare bs) = show eid ++ " " ++ showBytesHex bs
+    show (ExtensionRaw eid@EID_SecureRenegotiation bs) = show eid ++ " " ++ showBytesHex bs
     show (ExtensionRaw eid bs) = "ExtensionRaw " ++ show eid ++ " " ++ showBytesHex bs
 
 ------------------------------------------------------------
@@ -566,9 +585,12 @@ newtype SessionTicket = SessionTicket Ticket
 instance Extension SessionTicket where
     extensionID _ = EID_SessionTicket
     extensionEncode (SessionTicket ticket) = runPut $ putBytes ticket
-    extensionDecode MsgTClientHello = runGetMaybe $ SessionTicket <$> (remaining >>= getBytes)
-    extensionDecode MsgTServerHello = runGetMaybe $ SessionTicket <$> (remaining >>= getBytes)
+    extensionDecode MsgTClientHello = decodeSessionTicket
+    extensionDecode MsgTServerHello = decodeSessionTicket
     extensionDecode _ = error "extensionDecode: SessionTicket"
+
+decodeSessionTicket :: ByteString -> Maybe SessionTicket
+decodeSessionTicket = runGetMaybe $ SessionTicket <$> (remaining >>= getBytes)
 
 ------------------------------------------------------------
 
@@ -692,10 +714,13 @@ instance Extension PskKeyExchangeModes where
         runPut $
             putWords8 $
                 map fromPskKexMode pkms
-    extensionDecode MsgTClientHello =
-        runGetMaybe $
-            PskKeyExchangeModes . map PskKexMode <$> getWords8
+    extensionDecode MsgTClientHello = decodePskKeyExchangeModes
     extensionDecode _ = error "extensionDecode: PskKeyExchangeModes"
+
+decodePskKeyExchangeModes :: ByteString -> Maybe PskKeyExchangeModes
+decodePskKeyExchangeModes =
+    runGetMaybe $
+        PskKeyExchangeModes . map PskKexMode <$> getWords8
 
 ------------------------------------------------------------
 
@@ -707,11 +732,13 @@ instance Extension CertificateAuthorities where
     extensionEncode (CertificateAuthorities names) =
         runPut $
             putDNames names
-    extensionDecode MsgTClientHello =
-        runGetMaybe (CertificateAuthorities <$> getDNames)
-    extensionDecode MsgTCertificateRequest =
-        runGetMaybe (CertificateAuthorities <$> getDNames)
+    extensionDecode MsgTClientHello = decodeCertificateAuthorities
+    extensionDecode MsgTCertificateRequest = decodeCertificateAuthorities
     extensionDecode _ = error "extensionDecode: CertificateAuthorities"
+
+decodeCertificateAuthorities :: ByteString -> Maybe CertificateAuthorities
+decodeCertificateAuthorities =
+    runGetMaybe (CertificateAuthorities <$> getDNames)
 
 ------------------------------------------------------------
 
@@ -805,11 +832,11 @@ instance Extension SecureRenegotiation where
     extensionID _ = EID_SecureRenegotiation
     extensionEncode (SecureRenegotiation cvd svd) =
         runPut $ putOpaque8 (cvd `B.append` svd)
-    extensionDecode msgtype = runGetMaybe $ do
+    extensionDecode MsgTClientHello = runGetMaybe $ do
         opaque <- getOpaque8
-        case msgtype of
-            MsgTServerHello ->
-                let (cvd, svd) = B.splitAt (B.length opaque `div` 2) opaque
-                 in return $ SecureRenegotiation cvd svd
-            MsgTClientHello -> return $ SecureRenegotiation opaque ""
-            _ -> error "extensionDecode: SecureRenegotiation"
+        return $ SecureRenegotiation opaque ""
+    extensionDecode MsgTServerHello = runGetMaybe $ do
+        opaque <- getOpaque8
+        let (cvd, svd) = B.splitAt (B.length opaque `div` 2) opaque
+        return $ SecureRenegotiation cvd svd
+    extensionDecode _ = error "extensionDecode: SecureRenegotiation"
