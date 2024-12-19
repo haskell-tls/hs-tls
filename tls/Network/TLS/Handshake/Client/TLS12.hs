@@ -42,7 +42,7 @@ recvServerFirstFlight12 cparams ctx hs = do
             runRecvStateHS ctx st hs
 
 expectCertificate :: ClientParams -> Context -> Handshake -> IO (RecvState IO)
-expectCertificate cparams ctx (Certificate certs) = do
+expectCertificate cparams ctx (Certificate (TLSCertificateChain certs)) = do
     usingState_ ctx $ setServerCertificateChain certs
     doCertificate cparams ctx certs
     processCertificate ctx ClientRole certs
@@ -150,7 +150,7 @@ sendCertificate cparams ctx = do
             unless (null certs) $
                 usingHState ctx $
                     setClientCertSent True
-            sendPacket12 ctx $ Handshake [Certificate cc]
+            sendPacket12 ctx $ Handshake [Certificate (TLSCertificateChain cc)]
 
 ----------------------------------------------------------------
 

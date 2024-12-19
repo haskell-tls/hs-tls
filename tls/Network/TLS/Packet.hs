@@ -202,7 +202,7 @@ decodeCertificate = do
             <$> (getWord24 >>= \len -> getList (fromIntegral len) getCertRaw)
     case decodeCertificateChain certsRaw of
         Left (i, s) -> fail ("error certificate parsing " ++ show i ++ ":" ++ s)
-        Right cc -> return $ Certificate cc
+        Right cc -> return $ Certificate $ TLSCertificateChain cc
   where
     getCertRaw = getOpaque24 >>= \cert -> return (3 + B.length cert, cert)
 
@@ -330,7 +330,7 @@ encodeHandshake' (ServerHello version random session cipherid compressionID exts
     putWord8 compressionID
     putExtensions exts
     return ()
-encodeHandshake' (Certificate cc) = encodeCertificate cc
+encodeHandshake' (Certificate (TLSCertificateChain cc)) = encodeCertificate cc
 encodeHandshake' (ClientKeyXchg ckx) = runPut $ do
     case ckx of
         CKX_RSA encryptedPreMain -> putBytes encryptedPreMain

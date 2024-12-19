@@ -110,7 +110,7 @@ sendServerFirstFlight sparams ctx usedCipher mcred chExts = do
     let cc = case mcred of
             Just (srvCerts, _) -> srvCerts
             _ -> CertificateChain []
-    let b1 = b0 . (Certificate cc :)
+    let b1 = b0 . (Certificate (TLSCertificateChain cc) :)
     usingState_ ctx $ setServerCertificateChain cc
 
     -- send server key exchange if needed

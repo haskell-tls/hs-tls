@@ -103,6 +103,7 @@ module Network.TLS.Struct (
         HandshakeType_Finished,
         HandshakeType_KeyUpdate
     ),
+    TLSCertificateChain (..),
     Handshake (..),
     CH (..),
     packetType,
@@ -379,6 +380,10 @@ data CH = CH
     }
     deriving (Show, Eq)
 
+newtype TLSCertificateChain = TLSCertificateChain CertificateChain deriving (Eq)
+instance Show TLSCertificateChain where
+    show _ = "CertificateChain"
+
 data Handshake
     = ClientHello
         Version
@@ -392,7 +397,7 @@ data Handshake
         CipherID
         CompressionID
         [ExtensionRaw]
-    | Certificate CertificateChain
+    | Certificate TLSCertificateChain
     | HelloRequest
     | ServerHelloDone
     | ClientKeyXchg ClientKeyXchgAlgorithmData

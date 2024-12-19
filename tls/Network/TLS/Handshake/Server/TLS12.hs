@@ -83,7 +83,7 @@ sessionEstablished ctx = do
 recvClientCCC :: ServerParams -> Context -> IO ()
 recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake expectClientCertificate)
   where
-    expectClientCertificate (Certificate certs) = do
+    expectClientCertificate (Certificate (TLSCertificateChain certs)) = do
         clientCertificate sparams ctx certs
         processCertificate ctx ServerRole certs
 

@@ -85,7 +85,8 @@ instance Arbitrary Handshake where
                     <*> arbitrary
                     <*> arbitrary
                     <*> arbitraryHelloExtensions ver
-            , Certificate . CertificateChain <$> resize 2 (listOf arbitraryX509)
+            , Certificate . TLSCertificateChain . CertificateChain
+                <$> resize 2 (listOf arbitraryX509)
             , pure HelloRequest
             , pure ServerHelloDone
             , ClientKeyXchg . CKX_RSA <$> genByteString 48
