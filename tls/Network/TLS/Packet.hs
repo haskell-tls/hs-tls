@@ -172,10 +172,9 @@ decodeClientHello = do
     exts <-
         if r > 0
             then fromIntegral <$> getWord16 >>= getExtensions
-            else do
-                rest <- remaining
-                _ <- getBytes rest
-                return []
+            else return []
+    r1 <- remaining
+    when (r1 /= 0) $ fail "Client hello"
     let ch = CH session ciphers exts
     return $ ClientHello ver random compressions ch
 
