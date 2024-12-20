@@ -6,7 +6,6 @@ module Network.TLS.Struct13 (
     KeyUpdate (..),
 ) where
 
-import Data.X509 (CertificateChain)
 import Network.TLS.Imports
 import Network.TLS.Struct
 import Network.TLS.Types
@@ -32,7 +31,7 @@ data Handshake13
     | EndOfEarlyData13
     | EncryptedExtensions13 [ExtensionRaw]
     | CertRequest13 CertReqContext [ExtensionRaw]
-    | Certificate13 CertReqContext CertificateChain [[ExtensionRaw]]
+    | Certificate13 CertReqContext TLSCertificateChain [[ExtensionRaw]]
     | CertVerify13 HashAndSignatureAlgorithm Signature
     | Finished13 VerifyData
     | KeyUpdate13 KeyUpdate

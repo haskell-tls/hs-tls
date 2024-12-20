@@ -121,7 +121,7 @@ instance Arbitrary Handshake13 where
             , resize 2 (listOf arbitraryX509) >>= \certs ->
                 Certificate13
                     <$> arbitraryCertReqContext
-                    <*> return (CertificateChain certs)
+                    <*> return (TLSCertificateChain (CertificateChain certs))
                     <*> replicateM (length certs) arbitrary
             , CertVerify13 <$> (unsafeHead <$> arbitrary) <*> genByteString 32
             , Finished13 . VerifyData <$> genByteString 12

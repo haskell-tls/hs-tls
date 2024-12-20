@@ -205,7 +205,7 @@ processCertRequest13 ctx token exts = do
 -- not used in 0-RTT
 expectCertAndVerify
     :: MonadIO m => ClientParams -> Context -> Handshake13 -> RecvHandshake13M m ()
-expectCertAndVerify cparams ctx (Certificate13 _ cc _) = do
+expectCertAndVerify cparams ctx (Certificate13 _ (TLSCertificateChain cc) _) = do
     liftIO $ usingState_ ctx $ setServerCertificateChain cc
     liftIO $ doCertificate cparams ctx cc
     let pubkey = certPubKey $ getCertificate $ getCertificateChainLeaf cc
@@ -333,7 +333,8 @@ sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
         let (CertificateChain certs) = chain
             certExts = replicate (length certs) []
             cHashSigs = filter isHashSignatureValid13 $ supportedHashSignatures $ ctxSupported ctx
-        loadPacket13 ctx $ Handshake13 [Certificate13 token chain certExts]
+        loadPacket13 ctx $
+            Handshake13 [Certificate13 token (TLSCertificateChain chain) certExts]
         case certs of
             [] -> return ()
             _ -> do

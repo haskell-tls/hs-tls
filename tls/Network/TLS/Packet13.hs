@@ -49,7 +49,7 @@ encodeHandshake13' (EncryptedExtensions13 exts) = runPut $ putExtensions exts
 encodeHandshake13' (CertRequest13 reqctx exts) = runPut $ do
     putOpaque8 reqctx
     putExtensions exts
-encodeHandshake13' (Certificate13 reqctx cc ess) = encodeCertificate13 reqctx cc ess
+encodeHandshake13' (Certificate13 reqctx (TLSCertificateChain cc) ess) = encodeCertificate13 reqctx cc ess
 encodeHandshake13' (CertVerify13 hs signature) = runPut $ do
     putSignatureHashAlgorithm hs
     putOpaque16 signature
@@ -133,7 +133,7 @@ decodeCertificate13 = do
     (certRaws, ess) <- unzip <$> getList len getCert
     case decodeCertificateChain $ CertificateChainRaw certRaws of
         Left (i, s) -> fail ("error certificate parsing " ++ show i ++ ":" ++ s)
-        Right cc -> return $ Certificate13 reqctx cc ess
+        Right cc -> return $ Certificate13 reqctx (TLSCertificateChain cc) ess
   where
     getCert = do
         l <- fromIntegral <$> getWord24

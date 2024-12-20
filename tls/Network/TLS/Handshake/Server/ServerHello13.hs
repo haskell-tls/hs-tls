@@ -238,7 +238,8 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
 
         let CertificateChain cs = certChain
             ess = replicate (length cs) []
-        loadPacket13 ctx $ Handshake13 [Certificate13 "" certChain ess]
+        loadPacket13 ctx $
+            Handshake13 [Certificate13 "" (TLSCertificateChain certChain) ess]
         liftIO $ usingState_ ctx $ setServerCertificateChain certChain
         hChSc <- transcriptHash ctx
         pubkey <- getLocalPublicKey ctx

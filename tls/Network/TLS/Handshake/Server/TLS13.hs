@@ -95,7 +95,7 @@ expectEndOfEarlyData _ _ hs = unexpected (show hs) (Just "end of early data")
 
 expectCertificate
     :: MonadIO m => ServerParams -> Context -> Handshake13 -> m Bool
-expectCertificate sparams ctx (Certificate13 certCtx certs _ext) = liftIO $ do
+expectCertificate sparams ctx (Certificate13 certCtx (TLSCertificateChain certs) _ext) = liftIO $ do
     when (certCtx /= "") $
         throwCore $
             Error_Protocol "certificate request context MUST be empty" IllegalParameter
@@ -192,7 +192,7 @@ clientCertVerify sparams ctx certs verif = do
                 else decryptError "verification failed"
 
 postHandshakeAuthServerWith :: ServerParams -> Context -> Handshake13 -> IO ()
-postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx certs _ext) = do
+postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx (TLSCertificateChain certs) _ext) = do
     mCertReq <- getCertRequest13 ctx certCtx
     when (isNothing mCertReq) $
         throwCore $
