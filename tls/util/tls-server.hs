@@ -115,8 +115,8 @@ main = do
                     { loggingPacketSent = putStrLn . ("<< " ++)
                     , loggingPacketRecv = putStrLn . (">> " ++)
                     }
-        handshake ctx
         when (optDebugLog || optShow) $ putStrLn "------------------------"
+        handshake ctx
         when optDebugLog $
             getInfo ctx >>= printHandshakeInfo
         server ctx optShow
