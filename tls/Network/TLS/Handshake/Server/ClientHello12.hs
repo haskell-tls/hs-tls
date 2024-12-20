@@ -80,7 +80,11 @@ credsTriple sparams CH{..} extraCreds
     | otherwise = (cltCreds, sigCltCreds, cltCiphers)
   where
     ciphers = supportedCiphers $ serverSupported sparams
-    commonCiphers creds sigCreds = filter ((`elem` chCiphers) . cipherID) (getCiphers ciphers creds sigCreds)
+
+    commonCiphers creds sigCreds = filter elemCipher availableCiphers
+      where
+        elemCipher c = cipherID c `elem` chCiphers
+        availableCiphers = getCiphers ciphers creds sigCreds
 
     allCreds =
         filterCredentials (isCredentialAllowed TLS12 chExtensions) $
