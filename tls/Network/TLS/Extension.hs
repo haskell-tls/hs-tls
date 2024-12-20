@@ -315,9 +315,9 @@ data ExtensionRaw = ExtensionRaw ExtensionID ByteString
 instance Show ExtensionRaw where
     show (ExtensionRaw eid@EID_ServerName bs) = show eid ++ " " ++ show (decodeServerName bs)
     show (ExtensionRaw eid@EID_MaxFragmentLength bs) = show eid ++ " " ++ show (decodeMaxFragmentLength bs)
-    show (ExtensionRaw eid@EID_SupportedGroups bs) = show eid ++ " " ++ show (decodeSupportedGroups bs)
+    show (ExtensionRaw eid@EID_SupportedGroups bs) = maybe (show eid) show $ decodeSupportedGroups bs
     show (ExtensionRaw eid@EID_EcPointFormats bs) = show eid ++ " " ++ show (decodeEcPointFormatsSupported bs)
-    show (ExtensionRaw eid@EID_SignatureAlgorithms bs) = show eid ++ " " ++ show (decodeSignatureAlgorithms bs)
+    show (ExtensionRaw eid@EID_SignatureAlgorithms bs) = maybe (show eid) show $ decodeSignatureAlgorithms bs
     show (ExtensionRaw eid@EID_Heartbeat bs) = show eid ++ " " ++ show (decodeHeartBeat bs)
     show (ExtensionRaw eid@EID_ApplicationLayerProtocolNegotiation bs) = show eid ++ " " ++ show (decodeApplicationLayerProtocolNegotiation bs)
     show (ExtensionRaw eid@EID_ExtendedMainSecret _) = show eid
@@ -329,7 +329,7 @@ instance Show ExtensionRaw where
     show (ExtensionRaw eid@EID_PskKeyExchangeModes bs) = show eid ++ " " ++ show (decodePskKeyExchangeModes bs)
     show (ExtensionRaw eid@EID_CertificateAuthorities bs) = show eid ++ " " ++ show (decodeCertificateAuthorities bs)
     show (ExtensionRaw eid@EID_PostHandshakeAuth _) = show eid
-    show (ExtensionRaw eid@EID_SignatureAlgorithmsCert bs) = show eid ++ " " ++ show (decodeSignatureAlgorithmsCert bs)
+    show (ExtensionRaw eid@EID_SignatureAlgorithmsCert bs) = maybe (show eid) show $ decodeSignatureAlgorithmsCert bs
     show (ExtensionRaw eid@EID_KeyShare bs) = show eid ++ " " ++ showBytesHex bs
     show (ExtensionRaw eid@EID_SecureRenegotiation bs) = show eid ++ " " ++ showBytesHex bs
     show (ExtensionRaw eid bs) = "ExtensionRaw " ++ show eid ++ " " ++ showBytesHex bs
