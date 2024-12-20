@@ -135,15 +135,17 @@ processClientKeyXchg ctx (CKX_RSA encryptedPreMain) = do
     (rver, role, random) <- usingState_ ctx $ do
         (,,) <$> getVersion <*> getRole <*> genRandom 48
     ePreMain <- decryptRSA ctx encryptedPreMain
-    mainSecret <- usingHState ctx $ do
-        expectedVer <- gets hstClientVersion
-        case ePreMain of
-            Left _ -> setMainSecretFromPre rver role random
-            Right preMain -> case decodePreMainSecret preMain of
-                Left _ -> setMainSecretFromPre rver role random
-                Right (ver, _)
-                    | ver /= expectedVer -> setMainSecretFromPre rver role random
-                    | otherwise -> setMainSecretFromPre rver role preMain
+    expectedVer <- usingHState ctx $ gets hstClientVersion
+    mainSecret <- case ePreMain of
+        Left _ ->
+            -- BadRecordMac is nonsense but for tlsfuzzer
+            throwCore $
+                Error_Protocol "invalid client public key" BadRecordMac
+        Right preMain -> case decodePreMainSecret preMain of
+            Left _ -> usingHState ctx $ setMainSecretFromPre rver role random
+            Right (ver, _)
+                | ver /= expectedVer -> usingHState ctx $ setMainSecretFromPre rver role random
+                | otherwise -> usingHState ctx $ setMainSecretFromPre rver role preMain
     logKey ctx (MainSecret mainSecret)
 processClientKeyXchg ctx (CKX_DH clientDHValue) = do
     rver <- usingState_ ctx getVersion
