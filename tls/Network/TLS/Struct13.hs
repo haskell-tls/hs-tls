@@ -32,7 +32,7 @@ data Handshake13
     | EncryptedExtensions13 [ExtensionRaw]
     | CertRequest13 CertReqContext [ExtensionRaw]
     | Certificate13 CertReqContext TLSCertificateChain [[ExtensionRaw]]
-    | CertVerify13 HashAndSignatureAlgorithm Signature
+    | CertVerify13 DigitallySigned
     | Finished13 VerifyData
     | KeyUpdate13 KeyUpdate
     deriving (Show, Eq)

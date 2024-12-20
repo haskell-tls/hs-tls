@@ -123,7 +123,11 @@ instance Arbitrary Handshake13 where
                     <$> arbitraryCertReqContext
                     <*> return (TLSCertificateChain (CertificateChain certs))
                     <*> replicateM (length certs) arbitrary
-            , CertVerify13 <$> (unsafeHead <$> arbitrary) <*> genByteString 32
+            , CertVerify13
+                <$> ( DigitallySigned
+                        <$> (unsafeHead <$> arbitrary)
+                        <*> genByteString 32
+                    )
             , Finished13 . VerifyData <$> genByteString 12
             , KeyUpdate13 <$> elements [UpdateNotRequested, UpdateRequested]
             ]

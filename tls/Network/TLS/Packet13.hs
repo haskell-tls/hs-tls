@@ -50,9 +50,9 @@ encodeHandshake13' (CertRequest13 reqctx exts) = runPut $ do
     putOpaque8 reqctx
     putExtensions exts
 encodeHandshake13' (Certificate13 reqctx (TLSCertificateChain cc) ess) = encodeCertificate13 reqctx cc ess
-encodeHandshake13' (CertVerify13 hs signature) = runPut $ do
+encodeHandshake13' (CertVerify13 (DigitallySigned hs sig)) = runPut $ do
     putSignatureHashAlgorithm hs
-    putOpaque16 signature
+    putOpaque16 sig
 encodeHandshake13' (Finished13 (VerifyData dat)) = runPut $ putBytes dat
 encodeHandshake13' (NewSessionTicket13 life ageadd nonce label exts) = runPut $ do
     putWord32 life
@@ -143,7 +143,8 @@ decodeCertificate13 = do
         return (3 + l + 2 + len, (cert, exts))
 
 decodeCertVerify13 :: Get Handshake13
-decodeCertVerify13 = CertVerify13 <$> getSignatureHashAlgorithm <*> getOpaque16
+decodeCertVerify13 =
+    CertVerify13 <$> (DigitallySigned <$> getSignatureHashAlgorithm <*> getOpaque16)
 
 decodeNewSessionTicket13 :: Get Handshake13
 decodeNewSessionTicket13 = do

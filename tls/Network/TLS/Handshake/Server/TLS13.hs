@@ -153,7 +153,7 @@ sendNewSessionTicket sparams ctx usedCipher exts applicationSecret sfSentTime = 
 
 expectCertVerify
     :: MonadIO m => ServerParams -> Context -> ByteString -> Handshake13 -> m ()
-expectCertVerify sparams ctx hChCc (CertVerify13 sigAlg sig) = liftIO $ do
+expectCertVerify sparams ctx hChCc (CertVerify13 (DigitallySigned sigAlg sig)) = liftIO $ do
     certs@(CertificateChain cc) <-
         checkValidClientCertChain ctx "finished 13 message expected"
     pubkey <- case cc of

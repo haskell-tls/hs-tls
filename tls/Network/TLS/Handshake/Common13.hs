@@ -153,7 +153,7 @@ makeCertVerify ctx pub hs hashValue = do
             | role == ClientRole = clientContextString
             | otherwise = serverContextString
         target = makeTarget ctxStr hashValue
-    CertVerify13 hs <$> sign ctx pub hs target
+    CertVerify13 <$> DigitallySigned hs <$> sign ctx pub hs target
 
 checkCertVerify
     :: MonadIO m

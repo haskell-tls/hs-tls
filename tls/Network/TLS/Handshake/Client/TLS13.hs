@@ -219,7 +219,7 @@ expectCertAndVerify _ _ p = unexpected (show p) (Just "server certificate")
 
 expectCertVerify
     :: MonadIO m => Context -> PubKey -> ByteString -> Handshake13 -> m ()
-expectCertVerify ctx pubkey hChSc (CertVerify13 sigAlg sig) = do
+expectCertVerify ctx pubkey hChSc (CertVerify13 (DigitallySigned sigAlg sig)) = do
     ok <- checkCertVerify ctx pubkey sigAlg sig hChSc
     unless ok $ decryptError "cannot verify CertificateVerify"
 expectCertVerify _ _ _ p = unexpected (show p) (Just "certificate verify")
