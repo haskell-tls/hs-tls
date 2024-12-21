@@ -11,6 +11,7 @@ import Data.IORef
 import qualified Data.Map.Strict as M
 import Network.Run.TCP
 import Network.TLS
+import Network.TLS.Internal
 import System.Console.GetOpt
 import System.Environment (getArgs)
 import System.Exit
@@ -105,6 +106,7 @@ main = do
     Right cred@(!_cc, !_priv) <- credentialLoadX509 optCertFile optKeyFile
     let keyLog = getLogger optKeyLogFile
         creds = Credentials [cred]
+    makeCipherShowPretty
     runTCPServer (Just host) port $ \sock -> do
         let sparams = getServerParams creds optGroups smgr keyLog
         ctx <- contextNew sock sparams

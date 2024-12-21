@@ -5,7 +5,9 @@ module Network.TLS.Types.Cipher where
 
 import Codec.Serialise
 import Crypto.Cipher.Types (AuthTag)
+import Data.IORef
 import GHC.Generics
+import System.IO.Unsafe (unsafePerformIO)
 import Text.Printf
 
 import Network.TLS.Crypto (Hash (..))
@@ -18,7 +20,18 @@ import Network.TLS.Types.Version
 newtype CipherID = CipherID {getCipherID :: Word16} deriving (Eq, Generic)
 
 instance Show CipherID where
-    show (CipherID n) = printf "0x%04X" n
+    show (CipherID n) = case find eqID dict of
+        Just c -> cipherName c
+        Nothing -> printf "0x%04X" n
+      where
+        eqID c = cipherID c == CipherID n
+        dict = unsafePerformIO $ readIORef globalCipherDict
+
+{-# NOINLINE globalCipherDict #-}
+globalCipherDict :: IORef [Cipher]
+globalCipherDict = unsafePerformIO $ newIORef []
+
+----------------------------------------------------------------
 
 -- | Cipher algorithm
 data Cipher = Cipher
@@ -30,8 +43,6 @@ data Cipher = Cipher
     , cipherMinVer :: Maybe Version
     , cipherPRFHash :: Maybe Hash
     }
-
-----------------------------------------------------------------
 
 instance Show Cipher where
     show c = cipherName c
