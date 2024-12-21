@@ -331,7 +331,7 @@ data Supported = Supported
     --   The default value includes all groups with security strength of 128
     --   bits or more.
     --
-    --   Default: @[X25519,X448,P256,FFDHE3072,FFDHE4096,P384,FFDHE6144,FFDHE8192,P521]@
+    --   Default: @[X25519,X448,P256,FFDHE2048,FFDHE3072,FFDHE4096,P384,FFDHE6144,FFDHE8192,P521]@
     }
     deriving (Show, Eq)
 
