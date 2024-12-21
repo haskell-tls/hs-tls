@@ -28,6 +28,10 @@ instance Show CipherID where
         eqID c = cipherID c == CipherID n
         dict = unsafePerformIO $ readIORef globalCipherDict
 
+-- "ciphersuite" is designed extensible.
+-- So, it's not available from internal modules.
+-- This is a compromise to gule "ciphersuite" to Show CipherID.
+
 {-# NOINLINE globalCipherDict #-}
 globalCipherDict :: IORef [Cipher]
 globalCipherDict = unsafePerformIO $ newIORef []
