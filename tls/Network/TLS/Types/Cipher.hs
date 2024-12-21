@@ -20,6 +20,7 @@ import Network.TLS.Types.Version
 newtype CipherID = CipherID {getCipherID :: Word16} deriving (Eq, Generic)
 
 instance Show CipherID where
+    show (CipherID 0x00FF) = "TLS_EMPTY_RENEGOTIATION_INFO_SCSV"
     show (CipherID n) = case find eqID dict of
         Just c -> cipherName c
         Nothing -> printf "0x%04X" n
