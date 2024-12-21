@@ -84,151 +84,6 @@ import Crypto.System.CPU
 
 ----------------------------------------------------------------
 
-aes128ccm :: BulkDirection -> BulkKey -> BulkAEAD
-aes128ccm BulkEncrypt key =
-    let ctx = noFail (cipherInit key) :: AES128
-     in ( \nonce d ad ->
-            let mode = AEAD_CCM (B.length d) CCM_M16 CCM_L3
-                aeadIni = noFail (aeadInit mode ctx nonce)
-             in swap $ aeadSimpleEncrypt aeadIni ad d 16
-        )
-aes128ccm BulkDecrypt key =
-    let ctx = noFail (cipherInit key) :: AES128
-     in ( \nonce d ad ->
-            let mode = AEAD_CCM (B.length d) CCM_M16 CCM_L3
-                aeadIni = noFail (aeadInit mode ctx nonce)
-             in simpleDecrypt aeadIni ad d 16
-        )
-
-aes128ccm8 :: BulkDirection -> BulkKey -> BulkAEAD
-aes128ccm8 BulkEncrypt key =
-    let ctx = noFail (cipherInit key) :: AES128
-     in ( \nonce d ad ->
-            let mode = AEAD_CCM (B.length d) CCM_M8 CCM_L3
-                aeadIni = noFail (aeadInit mode ctx nonce)
-             in swap $ aeadSimpleEncrypt aeadIni ad d 8
-        )
-aes128ccm8 BulkDecrypt key =
-    let ctx = noFail (cipherInit key) :: AES128
-     in ( \nonce d ad ->
-            let mode = AEAD_CCM (B.length d) CCM_M8 CCM_L3
-                aeadIni = noFail (aeadInit mode ctx nonce)
-             in simpleDecrypt aeadIni ad d 8
-        )
-
-aes128gcm :: BulkDirection -> BulkKey -> BulkAEAD
-aes128gcm BulkEncrypt key =
-    let ctx = noFail (cipherInit key) :: AES128
-     in ( \nonce d ad ->
-            let aeadIni = noFail (aeadInit AEAD_GCM ctx nonce)
-             in swap $ aeadSimpleEncrypt aeadIni ad d 16
-        )
-aes128gcm BulkDecrypt key =
-    let ctx = noFail (cipherInit key) :: AES128
-     in ( \nonce d ad ->
-            let aeadIni = noFail (aeadInit AEAD_GCM ctx nonce)
-             in simpleDecrypt aeadIni ad d 16
-        )
-
-aes256ccm :: BulkDirection -> BulkKey -> BulkAEAD
-aes256ccm BulkEncrypt key =
-    let ctx = noFail (cipherInit key) :: AES256
-     in ( \nonce d ad ->
-            let mode = AEAD_CCM (B.length d) CCM_M16 CCM_L3
-                aeadIni = noFail (aeadInit mode ctx nonce)
-             in swap $ aeadSimpleEncrypt aeadIni ad d 16
-        )
-aes256ccm BulkDecrypt key =
-    let ctx = noFail (cipherInit key) :: AES256
-     in ( \nonce d ad ->
-            let mode = AEAD_CCM (B.length d) CCM_M16 CCM_L3
-                aeadIni = noFail (aeadInit mode ctx nonce)
-             in simpleDecrypt aeadIni ad d 16
-        )
-
-aes256ccm8 :: BulkDirection -> BulkKey -> BulkAEAD
-aes256ccm8 BulkEncrypt key =
-    let ctx = noFail (cipherInit key) :: AES256
-     in ( \nonce d ad ->
-            let mode = AEAD_CCM (B.length d) CCM_M8 CCM_L3
-                aeadIni = noFail (aeadInit mode ctx nonce)
-             in swap $ aeadSimpleEncrypt aeadIni ad d 8
-        )
-aes256ccm8 BulkDecrypt key =
-    let ctx = noFail (cipherInit key) :: AES256
-     in ( \nonce d ad ->
-            let mode = AEAD_CCM (B.length d) CCM_M8 CCM_L3
-                aeadIni = noFail (aeadInit mode ctx nonce)
-             in simpleDecrypt aeadIni ad d 8
-        )
-
-aes256gcm :: BulkDirection -> BulkKey -> BulkAEAD
-aes256gcm BulkEncrypt key =
-    let ctx = noFail (cipherInit key) :: AES256
-     in ( \nonce d ad ->
-            let aeadIni = noFail (aeadInit AEAD_GCM ctx nonce)
-             in swap $ aeadSimpleEncrypt aeadIni ad d 16
-        )
-aes256gcm BulkDecrypt key =
-    let ctx = noFail (cipherInit key) :: AES256
-     in ( \nonce d ad ->
-            let aeadIni = noFail (aeadInit AEAD_GCM ctx nonce)
-             in simpleDecrypt aeadIni ad d 16
-        )
-
-simpleDecrypt
-    :: AEAD cipher -> B.ByteString -> B.ByteString -> Int -> (B.ByteString, AuthTag)
-simpleDecrypt aeadIni header input taglen = (output, tag)
-  where
-    aead = aeadAppendHeader aeadIni header
-    (output, aeadFinal) = aeadDecrypt aead input
-    tag = aeadFinalize aeadFinal taglen
-
-noFail :: CryptoFailable a -> a
-noFail = throwCryptoError
-
-chacha20poly1305 :: BulkDirection -> BulkKey -> BulkAEAD
-chacha20poly1305 BulkEncrypt key nonce =
-    let st = noFail (ChaChaPoly1305.nonce12 nonce >>= ChaChaPoly1305.initialize key)
-     in ( \input ad ->
-            let st2 = ChaChaPoly1305.finalizeAAD (ChaChaPoly1305.appendAAD ad st)
-                (output, st3) = ChaChaPoly1305.encrypt input st2
-                Poly1305.Auth tag = ChaChaPoly1305.finalize st3
-             in (output, AuthTag tag)
-        )
-chacha20poly1305 BulkDecrypt key nonce =
-    let st = noFail (ChaChaPoly1305.nonce12 nonce >>= ChaChaPoly1305.initialize key)
-     in ( \input ad ->
-            let st2 = ChaChaPoly1305.finalizeAAD (ChaChaPoly1305.appendAAD ad st)
-                (output, st3) = ChaChaPoly1305.decrypt input st2
-                Poly1305.Auth tag = ChaChaPoly1305.finalize st3
-             in (output, AuthTag tag)
-        )
-
-----------------------------------------------------------------
-
-data CipherSet
-    = SetAead [Cipher] [Cipher] [Cipher] -- gcm, chacha, ccm
-    | SetOther [Cipher]
-
--- Preference between AEAD ciphers having equivalent properties is based on
--- hardware-acceleration support in the crypton implementation.
-sortOptimized :: [CipherSet] -> [Cipher]
-sortOptimized = concatMap f
-  where
-    f (SetAead gcm chacha ccm)
-        | AESNI `notElem` processorOptions = chacha ++ gcm ++ ccm
-        | PCLMUL `notElem` processorOptions = ccm ++ chacha ++ gcm
-        | otherwise = gcm ++ ccm ++ chacha
-    f (SetOther ciphers) = ciphers
-
--- Order which is deterministic but not optimized for the CPU.
-sortDeterministic :: [CipherSet] -> [Cipher]
-sortDeterministic = concatMap f
-  where
-    f (SetAead gcm chacha ccm) = gcm ++ chacha ++ ccm
-    f (SetOther ciphers) = ciphers
-
 -- | All AES and ChaCha20-Poly1305 ciphers supported ordered from strong to
 -- weak.  This choice of ciphersuites should satisfy most normal needs.  For
 -- otherwise strong ciphers we make little distinction between AES128 and
@@ -325,104 +180,6 @@ ciphersuite_dhe_rsa =
     ]
 
 ----------------------------------------------------------------
-
-bulk_aes128ccm :: Bulk
-bulk_aes128ccm =
-    Bulk
-        { bulkName = "AES128CCM"
-        , bulkKeySize = 16 -- RFC 5116 Sec 5.1: K_LEN
-        , bulkIVSize = 4 -- RFC 6655 CCMNonce.salt, fixed_iv_length
-        , bulkExplicitIV = 8
-        , bulkAuthTagLen = 16
-        , bulkBlockSize = 0 -- dummy, not used
-        , bulkF = BulkAeadF aes128ccm
-        }
-
-bulk_aes128ccm8 :: Bulk
-bulk_aes128ccm8 =
-    Bulk
-        { bulkName = "AES128CCM8"
-        , bulkKeySize = 16 -- RFC 5116 Sec 5.1: K_LEN
-        , bulkIVSize = 4 -- RFC 6655 CCMNonce.salt, fixed_iv_length
-        , bulkExplicitIV = 8
-        , bulkAuthTagLen = 8
-        , bulkBlockSize = 0 -- dummy, not used
-        , bulkF = BulkAeadF aes128ccm8
-        }
-
-bulk_aes128gcm :: Bulk
-bulk_aes128gcm =
-    Bulk
-        { bulkName = "AES128GCM"
-        , bulkKeySize = 16 -- RFC 5116 Sec 5.1: K_LEN
-        , bulkIVSize = 4 -- RFC 5288 GCMNonce.salt, fixed_iv_length
-        , bulkExplicitIV = 8
-        , bulkAuthTagLen = 16
-        , bulkBlockSize = 0 -- dummy, not used
-        , bulkF = BulkAeadF aes128gcm
-        }
-
-bulk_aes256ccm :: Bulk
-bulk_aes256ccm =
-    Bulk
-        { bulkName = "AES256CCM"
-        , bulkKeySize = 32 -- RFC 5116 Sec 5.1: K_LEN
-        , bulkIVSize = 4 -- RFC 6655 CCMNonce.salt, fixed_iv_length
-        , bulkExplicitIV = 8
-        , bulkAuthTagLen = 16
-        , bulkBlockSize = 0 -- dummy, not used
-        , bulkF = BulkAeadF aes256ccm
-        }
-
-bulk_aes256ccm8 :: Bulk
-bulk_aes256ccm8 =
-    Bulk
-        { bulkName = "AES256CCM8"
-        , bulkKeySize = 32 -- RFC 5116 Sec 5.1: K_LEN
-        , bulkIVSize = 4 -- RFC 6655 CCMNonce.salt, fixed_iv_length
-        , bulkExplicitIV = 8
-        , bulkAuthTagLen = 8
-        , bulkBlockSize = 0 -- dummy, not used
-        , bulkF = BulkAeadF aes256ccm8
-        }
-
-bulk_aes256gcm :: Bulk
-bulk_aes256gcm =
-    Bulk
-        { bulkName = "AES256GCM"
-        , bulkKeySize = 32 -- RFC 5116 Sec 5.1: K_LEN
-        , bulkIVSize = 4 -- RFC 5288 GCMNonce.salt, fixed_iv_length
-        , bulkExplicitIV = 8
-        , bulkAuthTagLen = 16
-        , bulkBlockSize = 0 -- dummy, not used
-        , bulkF = BulkAeadF aes256gcm
-        }
-
-bulk_chacha20poly1305 :: Bulk
-bulk_chacha20poly1305 =
-    Bulk
-        { bulkName = "CHACHA20POLY1305"
-        , bulkKeySize = 32
-        , bulkIVSize = 12 -- RFC 7905 section 2, fixed_iv_length
-        , bulkExplicitIV = 0
-        , bulkAuthTagLen = 16
-        , bulkBlockSize = 0 -- dummy, not used
-        , bulkF = BulkAeadF chacha20poly1305
-        }
-
--- TLS13 bulks are same as TLS12 except they never have explicit IV
-bulk_aes128gcm_13 :: Bulk
-bulk_aes128gcm_13 = bulk_aes128gcm{bulkIVSize = 12, bulkExplicitIV = 0}
-
-bulk_aes256gcm_13 :: Bulk
-bulk_aes256gcm_13 = bulk_aes256gcm{bulkIVSize = 12, bulkExplicitIV = 0}
-
-bulk_aes128ccm_13 :: Bulk
-bulk_aes128ccm_13 = bulk_aes128ccm{bulkIVSize = 12, bulkExplicitIV = 0}
-
-bulk_aes128ccm8_13 :: Bulk
-bulk_aes128ccm8_13 = bulk_aes128ccm8{bulkIVSize = 12, bulkExplicitIV = 0}
-
 ----------------------------------------------------------------
 
 -- A list of cipher suite is found from:
@@ -802,3 +559,250 @@ cipher_DHE_RSA_CHACHA20POLY1305_SHA256 = cipher_DHE_RSA_WITH_CHACHA20_POLY1305_S
     cipher_DHE_RSA_CHACHA20POLY1305_SHA256
     "Use cipher_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256 instead"
     #-}
+
+----------------------------------------------------------------
+----------------------------------------------------------------
+
+data CipherSet
+    = SetAead [Cipher] [Cipher] [Cipher] -- gcm, chacha, ccm
+    | SetOther [Cipher]
+
+-- Preference between AEAD ciphers having equivalent properties is based on
+-- hardware-acceleration support in the crypton implementation.
+sortOptimized :: [CipherSet] -> [Cipher]
+sortOptimized = concatMap f
+  where
+    f (SetAead gcm chacha ccm)
+        | AESNI `notElem` processorOptions = chacha ++ gcm ++ ccm
+        | PCLMUL `notElem` processorOptions = ccm ++ chacha ++ gcm
+        | otherwise = gcm ++ ccm ++ chacha
+    f (SetOther ciphers) = ciphers
+
+-- Order which is deterministic but not optimized for the CPU.
+sortDeterministic :: [CipherSet] -> [Cipher]
+sortDeterministic = concatMap f
+  where
+    f (SetAead gcm chacha ccm) = gcm ++ chacha ++ ccm
+    f (SetOther ciphers) = ciphers
+
+----------------------------------------------------------------
+
+aes128ccm :: BulkDirection -> BulkKey -> BulkAEAD
+aes128ccm BulkEncrypt key =
+    let ctx = noFail (cipherInit key) :: AES128
+     in ( \nonce d ad ->
+            let mode = AEAD_CCM (B.length d) CCM_M16 CCM_L3
+                aeadIni = noFail (aeadInit mode ctx nonce)
+             in swap $ aeadSimpleEncrypt aeadIni ad d 16
+        )
+aes128ccm BulkDecrypt key =
+    let ctx = noFail (cipherInit key) :: AES128
+     in ( \nonce d ad ->
+            let mode = AEAD_CCM (B.length d) CCM_M16 CCM_L3
+                aeadIni = noFail (aeadInit mode ctx nonce)
+             in simpleDecrypt aeadIni ad d 16
+        )
+
+aes128ccm8 :: BulkDirection -> BulkKey -> BulkAEAD
+aes128ccm8 BulkEncrypt key =
+    let ctx = noFail (cipherInit key) :: AES128
+     in ( \nonce d ad ->
+            let mode = AEAD_CCM (B.length d) CCM_M8 CCM_L3
+                aeadIni = noFail (aeadInit mode ctx nonce)
+             in swap $ aeadSimpleEncrypt aeadIni ad d 8
+        )
+aes128ccm8 BulkDecrypt key =
+    let ctx = noFail (cipherInit key) :: AES128
+     in ( \nonce d ad ->
+            let mode = AEAD_CCM (B.length d) CCM_M8 CCM_L3
+                aeadIni = noFail (aeadInit mode ctx nonce)
+             in simpleDecrypt aeadIni ad d 8
+        )
+
+aes128gcm :: BulkDirection -> BulkKey -> BulkAEAD
+aes128gcm BulkEncrypt key =
+    let ctx = noFail (cipherInit key) :: AES128
+     in ( \nonce d ad ->
+            let aeadIni = noFail (aeadInit AEAD_GCM ctx nonce)
+             in swap $ aeadSimpleEncrypt aeadIni ad d 16
+        )
+aes128gcm BulkDecrypt key =
+    let ctx = noFail (cipherInit key) :: AES128
+     in ( \nonce d ad ->
+            let aeadIni = noFail (aeadInit AEAD_GCM ctx nonce)
+             in simpleDecrypt aeadIni ad d 16
+        )
+
+aes256ccm :: BulkDirection -> BulkKey -> BulkAEAD
+aes256ccm BulkEncrypt key =
+    let ctx = noFail (cipherInit key) :: AES256
+     in ( \nonce d ad ->
+            let mode = AEAD_CCM (B.length d) CCM_M16 CCM_L3
+                aeadIni = noFail (aeadInit mode ctx nonce)
+             in swap $ aeadSimpleEncrypt aeadIni ad d 16
+        )
+aes256ccm BulkDecrypt key =
+    let ctx = noFail (cipherInit key) :: AES256
+     in ( \nonce d ad ->
+            let mode = AEAD_CCM (B.length d) CCM_M16 CCM_L3
+                aeadIni = noFail (aeadInit mode ctx nonce)
+             in simpleDecrypt aeadIni ad d 16
+        )
+
+aes256ccm8 :: BulkDirection -> BulkKey -> BulkAEAD
+aes256ccm8 BulkEncrypt key =
+    let ctx = noFail (cipherInit key) :: AES256
+     in ( \nonce d ad ->
+            let mode = AEAD_CCM (B.length d) CCM_M8 CCM_L3
+                aeadIni = noFail (aeadInit mode ctx nonce)
+             in swap $ aeadSimpleEncrypt aeadIni ad d 8
+        )
+aes256ccm8 BulkDecrypt key =
+    let ctx = noFail (cipherInit key) :: AES256
+     in ( \nonce d ad ->
+            let mode = AEAD_CCM (B.length d) CCM_M8 CCM_L3
+                aeadIni = noFail (aeadInit mode ctx nonce)
+             in simpleDecrypt aeadIni ad d 8
+        )
+
+aes256gcm :: BulkDirection -> BulkKey -> BulkAEAD
+aes256gcm BulkEncrypt key =
+    let ctx = noFail (cipherInit key) :: AES256
+     in ( \nonce d ad ->
+            let aeadIni = noFail (aeadInit AEAD_GCM ctx nonce)
+             in swap $ aeadSimpleEncrypt aeadIni ad d 16
+        )
+aes256gcm BulkDecrypt key =
+    let ctx = noFail (cipherInit key) :: AES256
+     in ( \nonce d ad ->
+            let aeadIni = noFail (aeadInit AEAD_GCM ctx nonce)
+             in simpleDecrypt aeadIni ad d 16
+        )
+
+simpleDecrypt
+    :: AEAD cipher -> B.ByteString -> B.ByteString -> Int -> (B.ByteString, AuthTag)
+simpleDecrypt aeadIni header input taglen = (output, tag)
+  where
+    aead = aeadAppendHeader aeadIni header
+    (output, aeadFinal) = aeadDecrypt aead input
+    tag = aeadFinalize aeadFinal taglen
+
+noFail :: CryptoFailable a -> a
+noFail = throwCryptoError
+
+chacha20poly1305 :: BulkDirection -> BulkKey -> BulkAEAD
+chacha20poly1305 BulkEncrypt key nonce =
+    let st = noFail (ChaChaPoly1305.nonce12 nonce >>= ChaChaPoly1305.initialize key)
+     in ( \input ad ->
+            let st2 = ChaChaPoly1305.finalizeAAD (ChaChaPoly1305.appendAAD ad st)
+                (output, st3) = ChaChaPoly1305.encrypt input st2
+                Poly1305.Auth tag = ChaChaPoly1305.finalize st3
+             in (output, AuthTag tag)
+        )
+chacha20poly1305 BulkDecrypt key nonce =
+    let st = noFail (ChaChaPoly1305.nonce12 nonce >>= ChaChaPoly1305.initialize key)
+     in ( \input ad ->
+            let st2 = ChaChaPoly1305.finalizeAAD (ChaChaPoly1305.appendAAD ad st)
+                (output, st3) = ChaChaPoly1305.decrypt input st2
+                Poly1305.Auth tag = ChaChaPoly1305.finalize st3
+             in (output, AuthTag tag)
+        )
+
+----------------------------------------------------------------
+
+bulk_aes128ccm :: Bulk
+bulk_aes128ccm =
+    Bulk
+        { bulkName = "AES128CCM"
+        , bulkKeySize = 16 -- RFC 5116 Sec 5.1: K_LEN
+        , bulkIVSize = 4 -- RFC 6655 CCMNonce.salt, fixed_iv_length
+        , bulkExplicitIV = 8
+        , bulkAuthTagLen = 16
+        , bulkBlockSize = 0 -- dummy, not used
+        , bulkF = BulkAeadF aes128ccm
+        }
+
+bulk_aes128ccm8 :: Bulk
+bulk_aes128ccm8 =
+    Bulk
+        { bulkName = "AES128CCM8"
+        , bulkKeySize = 16 -- RFC 5116 Sec 5.1: K_LEN
+        , bulkIVSize = 4 -- RFC 6655 CCMNonce.salt, fixed_iv_length
+        , bulkExplicitIV = 8
+        , bulkAuthTagLen = 8
+        , bulkBlockSize = 0 -- dummy, not used
+        , bulkF = BulkAeadF aes128ccm8
+        }
+
+bulk_aes128gcm :: Bulk
+bulk_aes128gcm =
+    Bulk
+        { bulkName = "AES128GCM"
+        , bulkKeySize = 16 -- RFC 5116 Sec 5.1: K_LEN
+        , bulkIVSize = 4 -- RFC 5288 GCMNonce.salt, fixed_iv_length
+        , bulkExplicitIV = 8
+        , bulkAuthTagLen = 16
+        , bulkBlockSize = 0 -- dummy, not used
+        , bulkF = BulkAeadF aes128gcm
+        }
+
+bulk_aes256ccm :: Bulk
+bulk_aes256ccm =
+    Bulk
+        { bulkName = "AES256CCM"
+        , bulkKeySize = 32 -- RFC 5116 Sec 5.1: K_LEN
+        , bulkIVSize = 4 -- RFC 6655 CCMNonce.salt, fixed_iv_length
+        , bulkExplicitIV = 8
+        , bulkAuthTagLen = 16
+        , bulkBlockSize = 0 -- dummy, not used
+        , bulkF = BulkAeadF aes256ccm
+        }
+
+bulk_aes256ccm8 :: Bulk
+bulk_aes256ccm8 =
+    Bulk
+        { bulkName = "AES256CCM8"
+        , bulkKeySize = 32 -- RFC 5116 Sec 5.1: K_LEN
+        , bulkIVSize = 4 -- RFC 6655 CCMNonce.salt, fixed_iv_length
+        , bulkExplicitIV = 8
+        , bulkAuthTagLen = 8
+        , bulkBlockSize = 0 -- dummy, not used
+        , bulkF = BulkAeadF aes256ccm8
+        }
+
+bulk_aes256gcm :: Bulk
+bulk_aes256gcm =
+    Bulk
+        { bulkName = "AES256GCM"
+        , bulkKeySize = 32 -- RFC 5116 Sec 5.1: K_LEN
+        , bulkIVSize = 4 -- RFC 5288 GCMNonce.salt, fixed_iv_length
+        , bulkExplicitIV = 8
+        , bulkAuthTagLen = 16
+        , bulkBlockSize = 0 -- dummy, not used
+        , bulkF = BulkAeadF aes256gcm
+        }
+
+bulk_chacha20poly1305 :: Bulk
+bulk_chacha20poly1305 =
+    Bulk
+        { bulkName = "CHACHA20POLY1305"
+        , bulkKeySize = 32
+        , bulkIVSize = 12 -- RFC 7905 section 2, fixed_iv_length
+        , bulkExplicitIV = 0
+        , bulkAuthTagLen = 16
+        , bulkBlockSize = 0 -- dummy, not used
+        , bulkF = BulkAeadF chacha20poly1305
+        }
+
+-- TLS13 bulks are same as TLS12 except they never have explicit IV
+bulk_aes128gcm_13 :: Bulk
+bulk_aes128gcm_13 = bulk_aes128gcm{bulkIVSize = 12, bulkExplicitIV = 0}
+
+bulk_aes256gcm_13 :: Bulk
+bulk_aes256gcm_13 = bulk_aes256gcm{bulkIVSize = 12, bulkExplicitIV = 0}
+
+bulk_aes128ccm_13 :: Bulk
+bulk_aes128ccm_13 = bulk_aes128ccm{bulkIVSize = 12, bulkExplicitIV = 0}
+
+bulk_aes128ccm8_13 :: Bulk
+bulk_aes128ccm8_13 = bulk_aes128ccm8{bulkIVSize = 12, bulkExplicitIV = 0}
