@@ -67,7 +67,6 @@ import Data.X509 (
     encodeCertificateChain,
  )
 
-import Network.TLS.Cipher (Cipher (..), CipherKeyExchangeType (..))
 import Network.TLS.Crypto
 import Network.TLS.Imports
 import Network.TLS.MAC

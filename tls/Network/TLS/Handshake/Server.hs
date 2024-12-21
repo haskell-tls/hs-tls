@@ -25,7 +25,6 @@ import Network.TLS.Imports
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
-import Network.TLS.Types
 
 -- Put the server context in handshake mode.
 --

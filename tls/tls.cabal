@@ -104,8 +104,12 @@ library
         Network.TLS.Receiving
         Network.TLS.Util
         Network.TLS.Util.ASN1
-        Network.TLS.Util.Serialization
         Network.TLS.Types
+        Network.TLS.Types.Cipher
+        Network.TLS.Types.Secret
+        Network.TLS.Types.Session
+        Network.TLS.Types.Version
+        Network.TLS.Util.Serialization
         Network.TLS.Wire
         Network.TLS.X509
 

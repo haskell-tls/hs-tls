@@ -73,7 +73,7 @@ import qualified Data.ByteString as B
 
 import Data.Tuple (swap)
 import Network.TLS.Cipher
-import Network.TLS.Types (CipherID (..), Version (..))
+import Network.TLS.Types
 
 import Crypto.Cipher.AES
 import qualified Crypto.Cipher.ChaChaPoly1305 as ChaChaPoly1305

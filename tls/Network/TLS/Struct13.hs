@@ -4,6 +4,7 @@ module Network.TLS.Struct13 (
     typeOfHandshake13,
     contentType,
     KeyUpdate (..),
+    CertReqContext,
 ) where
 
 import Network.TLS.Imports
@@ -36,6 +37,9 @@ data Handshake13
     | Finished13 VerifyData
     | KeyUpdate13 KeyUpdate
     deriving (Show, Eq)
+
+-- | Certificate request context for TLS 1.3.
+type CertReqContext = ByteString
 
 {- FOURMOLU_DISABLE -}
 typeOfHandshake13 :: Handshake13 -> HandshakeType
