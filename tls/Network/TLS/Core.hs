@@ -483,12 +483,11 @@ terminateWithWriteLock ctx send err level desc reason = withWriteLock ctx $ do
         --
         -- TLS 1.3 changes session data for every resumed session.
         session <- usingState_ ctx getSession
-        withWriteLock ctx $ do
-            case session of
-                Session Nothing -> return ()
-                Session (Just sid) ->
-                    -- calling even session ticket manager anyway
-                    sessionInvalidate (sharedSessionManager $ ctxShared ctx) sid
+        case session of
+            Session Nothing -> return ()
+            Session (Just sid) ->
+                -- calling even session ticket manager anyway
+                sessionInvalidate (sharedSessionManager $ ctxShared ctx) sid
     catchException (send [(level, desc)]) (\_ -> return ())
     setEOF ctx
     E.throwIO (Terminated False reason err)
