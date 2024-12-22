@@ -399,7 +399,9 @@ getSession = do
     len8 <- getWord8
     case fromIntegral len8 of
         0 -> return $ Session Nothing
-        len -> Session . Just <$> getBytes len
+        len
+            | len > 32 -> fail "the length of session id must be <= 32"
+            | otherwise -> Session . Just <$> getBytes len
 
 putSession :: Session -> Put
 putSession (Session Nothing) = putWord8 0
