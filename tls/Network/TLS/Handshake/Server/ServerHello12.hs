@@ -73,23 +73,26 @@ recoverSessionData ctx CH{..} = do
         Nothing -> return Nothing
         Just identity -> do
             sd <- sessionResume (sharedSessionManager $ ctxShared ctx) identity
-            validateSession chCiphers serverName ems sd
+            validateSession ctx chCiphers serverName ems sd
 
 validateSession
-    :: [CipherID]
+    :: Context
+    -> [CipherID]
     -> Maybe HostName
     -> Bool
     -> Maybe SessionData
     -> IO (Maybe SessionData)
-validateSession _ _ _ Nothing = return Nothing
-validateSession ciphers sni ems m@(Just sd)
+validateSession _ _ _ _ Nothing = return Nothing
+validateSession ctx ciphers sni ems m@(Just sd)
     -- SessionData parameters are assumed to match the local server configuration
     -- so we need to compare only to ClientHello inputs.  Abbreviated handshake
     -- uses the same server_name than full handshake so the same
     -- credentials (and thus ciphers) are available.
     | TLS12 < sessionVersion sd = return Nothing -- fixme
     | sessionCipher sd `notElem` ciphers = return Nothing
-    | isJust sni && sessionClientSNI sd /= sni = return Nothing
+    | isJust sni && sessionClientSNI sd /= sni = do
+        usingState_ ctx clearClientSNI
+        return Nothing
     | ems && not emsSession = return Nothing
     | not ems && emsSession =
         let err = "client resumes an EMS session without EMS"

@@ -37,6 +37,7 @@ module Network.TLS.State (
     setClientEcPointFormatSuggest,
     getClientEcPointFormatSuggest,
     setClientSNI,
+    clearClientSNI,
     getClientSNI,
     getClientCertificateChain,
     setClientCertificateChain,
@@ -276,6 +277,9 @@ getServerCertificateChain = gets stServerCertificateChain
 
 setClientSNI :: HostName -> TLSSt ()
 setClientSNI hn = modify (\st -> st{stClientSNI = Just hn})
+
+clearClientSNI :: TLSSt ()
+clearClientSNI = modify (\st -> st{stClientSNI = Nothing})
 
 getClientSNI :: TLSSt (Maybe HostName)
 getClientSNI = gets stClientSNI
