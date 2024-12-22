@@ -4,6 +4,7 @@ module Network.TLS.Handshake.Server.ClientHello (
     processClientHello,
 ) where
 
+import Network.TLS.Compression
 import Network.TLS.Context.Internal
 import Network.TLS.Extension
 import Network.TLS.Handshake.Common
@@ -93,9 +94,19 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
                 toHostName (ServerNameHostName hostName) = Just hostName
                 toHostName (ServerNameOther _) = Nothing
             _ -> Nothing
-    when (chosenVersion == TLS13) $ do
-        -- If this is done for TLS12, SSL Labs test does not continue, sigh.
-        mapM_ ensureNullCompression compressions
+    let nullComp = compressionID nullCompression
+    case chosenVersion of
+        TLS13 ->
+            when (compressions /= [nullComp]) $
+                throwCore $
+                    Error_Protocol "compression is not allowed in TLS 1.3" IllegalParameter
+        _ -> case find (== nullComp) compressions of
+            Nothing ->
+                throwCore $
+                    Error_Protocol
+                        "compressions must include nullCompression in TLS 1.2"
+                        IllegalParameter
+            _ -> return ()
     maybe (return ()) (usingState_ ctx . setClientSNI) serverName
     return (chosenVersion, ch)
 processClientHello _ _ _ =
