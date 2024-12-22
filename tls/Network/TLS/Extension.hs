@@ -572,8 +572,8 @@ data ExtendedMainSecret = ExtendedMainSecret deriving (Show, Eq)
 instance Extension ExtendedMainSecret where
     extensionID _ = EID_ExtendedMainSecret
     extensionEncode ExtendedMainSecret = B.empty
-    extensionDecode MsgTClientHello _ = Just ExtendedMainSecret
-    extensionDecode MsgTServerHello _ = Just ExtendedMainSecret
+    extensionDecode MsgTClientHello "" = Just ExtendedMainSecret
+    extensionDecode MsgTServerHello "" = Just ExtendedMainSecret
     extensionDecode _ _ = error "extensionDecode: ExtendedMainSecret"
 
 ------------------------------------------------------------
