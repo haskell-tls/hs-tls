@@ -135,9 +135,6 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
             , preSharedKeyExtension -- MUST be last (RFC 8446)
             ]
 
-    toExtensionRaw :: Extension e => e -> ExtensionRaw
-    toExtensionRaw ext = ExtensionRaw (extensionID ext) (extensionEncode ext)
-
     secureReneg =
         if supportedSecureRenegotiation $ ctxSupported ctx
             then do

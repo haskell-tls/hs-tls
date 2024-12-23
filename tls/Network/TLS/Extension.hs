@@ -49,6 +49,7 @@ module Network.TLS.Extension (
 
     -- * Extension raw
     ExtensionRaw (..),
+    toExtensionRaw,
 
     -- * Class
     Extension (..),
@@ -333,6 +334,9 @@ instance Show ExtensionRaw where
     show (ExtensionRaw eid@EID_KeyShare bs) = show eid ++ " " ++ showBytesHex bs
     show (ExtensionRaw eid@EID_SecureRenegotiation bs) = show eid ++ " " ++ showBytesHex bs
     show (ExtensionRaw eid bs) = "ExtensionRaw " ++ show eid ++ " " ++ showBytesHex bs
+
+toExtensionRaw :: Extension e => e -> ExtensionRaw
+toExtensionRaw ext = ExtensionRaw (extensionID ext) (extensionEncode ext)
 
 ------------------------------------------------------------
 
