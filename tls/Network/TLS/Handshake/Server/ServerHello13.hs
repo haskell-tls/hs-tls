@@ -279,8 +279,8 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
                         [ earlyDataExtension
                         , groupExtension
                         , sniExtension
+                        , protoExt
                         ]
-                    ++ protoExt
         extensions' <-
             liftIO $ onEncryptedExtensionsCreating (serverHooks sparams) extensions
         loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 extensions']

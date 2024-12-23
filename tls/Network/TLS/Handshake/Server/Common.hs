@@ -100,12 +100,12 @@ storePrivInfoServer :: MonadIO m => Context -> Credential -> m ()
 storePrivInfoServer ctx (cc, privkey) = void (storePrivInfo ctx cc privkey)
 
 applicationProtocol
-    :: Context -> [ExtensionRaw] -> ServerParams -> IO [ExtensionRaw]
+    :: Context -> [ExtensionRaw] -> ServerParams -> IO (Maybe ExtensionRaw)
 applicationProtocol ctx exts sparams = do
     -- ALPN (Application Layer Protocol Negotiation)
     case extensionLookup EID_ApplicationLayerProtocolNegotiation exts
         >>= extensionDecode MsgTClientHello of
-        Nothing -> return []
+        Nothing -> return Nothing
         Just (ApplicationLayerProtocolNegotiation protos) -> do
             case onALPNClientSuggest $ serverHooks sparams of
                 Just io -> do
@@ -116,12 +116,12 @@ applicationProtocol ctx exts sparams = do
                     usingState_ ctx $ do
                         setExtensionALPN True
                         setNegotiatedProtocol proto
-                    return
-                        [ ExtensionRaw
-                            EID_ApplicationLayerProtocolNegotiation
-                            (extensionEncode $ ApplicationLayerProtocolNegotiation [proto])
-                        ]
-                _ -> return []
+                    return $
+                        Just $
+                            ExtensionRaw
+                                EID_ApplicationLayerProtocolNegotiation
+                                (extensionEncode $ ApplicationLayerProtocolNegotiation [proto])
+                _ -> return Nothing
 
 clientCertificate :: ServerParams -> Context -> CertificateChain -> IO ()
 clientCertificate sparams ctx certs = do

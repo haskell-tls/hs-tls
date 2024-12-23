@@ -251,16 +251,16 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
                     VerifyData cvd <- getVerifyData ClientRole
                     VerifyData svd <- getVerifyData ServerRole
                     return $ SecureRenegotiation cvd svd
-                return [toExtensionRaw vd]
-            else return []
+                return $ Just $ toExtensionRaw vd
+            else return Nothing
     ems <- usingHState ctx getExtendedMainSecret
     let emsExt
-            | ems = [toExtensionRaw ExtendedMainSecret]
-            | otherwise = []
+            | ems = Just $ toExtensionRaw ExtendedMainSecret
+            | otherwise = Nothing
     protoExt <- applicationProtocol ctx chExts sparams
     sniExt <- do
         if resuming
-            then return []
+            then return Nothing
             else do
                 msni <- usingState_ ctx getClientSNI
                 case msni of
@@ -273,20 +273,21 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
                     --        the format of ServerName for servers is
                     --        differnt from that for clients. So, separate
                     --        data constructors should be prepared.
-                    Just _ -> return [ExtensionRaw EID_ServerName ""]
-                    Nothing -> return []
+                    Just _ -> return $ Just $ ExtensionRaw EID_ServerName ""
+                    Nothing -> return Nothing
     let useTicket = sessionUseTicket $ sharedSessionManager $ serverShared sparams
         ticktExt
-            | not resuming && useTicket =
-                [toExtensionRaw (SessionTicket "")]
-            | otherwise = []
+            | not resuming && useTicket = Just $ toExtensionRaw $ SessionTicket ""
+            | otherwise = Nothing
     let shExts =
             sharedHelloExtensions (serverShared sparams)
-                ++ secRengExt
-                ++ emsExt
-                ++ protoExt
-                ++ sniExt
-                ++ ticktExt
+                ++ catMaybes
+                    [ secRengExt
+                    , emsExt
+                    , protoExt
+                    , sniExt
+                    , ticktExt
+                    ]
     usingState_ ctx $ setVersion TLS12
     usingHState ctx $
         setServerHelloParameters TLS12 srand usedCipher nullCompression
