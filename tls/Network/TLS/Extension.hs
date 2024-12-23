@@ -316,7 +316,7 @@ instance Show ExtensionRaw where
     show (ExtensionRaw eid@EID_ServerName bs) = show eid ++ " " ++ show (decodeServerName bs)
     show (ExtensionRaw eid@EID_MaxFragmentLength bs) = show eid ++ " " ++ show (decodeMaxFragmentLength bs)
     show (ExtensionRaw eid@EID_SupportedGroups bs) = maybe (show eid) show $ decodeSupportedGroups bs
-    show (ExtensionRaw eid@EID_EcPointFormats bs) = show eid ++ " " ++ show (decodeEcPointFormatsSupported bs)
+    show (ExtensionRaw eid@EID_EcPointFormats bs) = maybe (show eid) show (decodeEcPointFormatsSupported bs)
     show (ExtensionRaw eid@EID_SignatureAlgorithms bs) = maybe (show eid) show $ decodeSignatureAlgorithms bs
     show (ExtensionRaw eid@EID_Heartbeat bs) = show eid ++ " " ++ show (decodeHeartBeat bs)
     show (ExtensionRaw eid@EID_ApplicationLayerProtocolNegotiation bs) = show eid ++ " " ++ show (decodeApplicationLayerProtocolNegotiation bs)
