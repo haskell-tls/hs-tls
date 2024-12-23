@@ -274,6 +274,9 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
         ticktExt
             | not resuming && useTicket = Just $ toExtensionRaw $ SessionTicket ""
             | otherwise = Nothing
+    let eccExt = case extensionLookup EID_EcPointFormats chExts of
+            Nothing -> Nothing
+            Just _ -> Just $ toExtensionRaw $ EcPointFormatsSupported [EcPointFormat_Uncompressed]
     let shExts =
             sharedHelloExtensions (serverShared sparams)
                 ++ catMaybes
@@ -282,6 +285,7 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
                     , protoExt
                     , sniExt
                     , ticktExt
+                    , eccExt
                     ]
     usingState_ ctx $ setVersion TLS12
     usingHState ctx $
