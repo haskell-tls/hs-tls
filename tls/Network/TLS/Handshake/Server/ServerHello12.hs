@@ -250,14 +250,12 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
                 vd <- usingState_ ctx $ do
                     VerifyData cvd <- getVerifyData ClientRole
                     VerifyData svd <- getVerifyData ServerRole
-                    return $ extensionEncode $ SecureRenegotiation cvd svd
-                return [ExtensionRaw EID_SecureRenegotiation vd]
+                    return $ SecureRenegotiation cvd svd
+                return [toExtensionRaw vd]
             else return []
     ems <- usingHState ctx getExtendedMainSecret
     let emsExt
-            | ems =
-                let raw = extensionEncode ExtendedMainSecret
-                 in [ExtensionRaw EID_ExtendedMainSecret raw]
+            | ems = [toExtensionRaw ExtendedMainSecret]
             | otherwise = []
     protoExt <- applicationProtocol ctx chExts sparams
     sniExt <- do
@@ -270,13 +268,17 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
                     -- an extension of type "server_name" in the
                     -- (extended) server hello. The "extension_data"
                     -- field of this extension SHALL be empty.
+                    --
+                    -- FIXME: toExtensionRaw cannot be used here because
+                    --        the format of ServerName for servers is
+                    --        differnt from that for clients. So, separate
+                    --        data constructors should be prepared.
                     Just _ -> return [ExtensionRaw EID_ServerName ""]
                     Nothing -> return []
     let useTicket = sessionUseTicket $ sharedSessionManager $ serverShared sparams
         ticktExt
             | not resuming && useTicket =
-                let raw = extensionEncode $ SessionTicket ""
-                 in [ExtensionRaw EID_SessionTicket raw]
+                [toExtensionRaw (SessionTicket "")]
             | otherwise = []
     let shExts =
             sharedHelloExtensions (serverShared sparams)
