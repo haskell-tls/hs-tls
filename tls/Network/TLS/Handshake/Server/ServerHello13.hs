@@ -193,8 +193,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
         binder' <- makePSKBinder ctx earlySecret usedHash tlen Nothing
         unless (binder == binder') $
             decryptError "PSK binder validation failed"
-        let selectedIdentity = extensionEncode $ PreSharedKeyServerHello $ fromIntegral n
-        return [ExtensionRaw EID_PreSharedKey selectedIdentity]
+        return [toExtensionRaw $ PreSharedKeyServerHello $ fromIntegral n]
 
     decideCredentialInfo allCreds = do
         cHashSigs <- case extensionLookup EID_SignatureAlgorithms chExtensions of
@@ -219,11 +218,9 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
             mcs -> return mcs
 
     sendServerHello keyShare srand extensions = do
-        let serverKeyShare = extensionEncode $ KeyShareServerHello keyShare
-            selectedVersion = extensionEncode $ SupportedVersionsServerHello TLS13
-            extensions' =
-                ExtensionRaw EID_KeyShare serverKeyShare
-                    : ExtensionRaw EID_SupportedVersions selectedVersion
+        let extensions' =
+                toExtensionRaw (KeyShareServerHello keyShare)
+                    : toExtensionRaw (SupportedVersionsServerHello TLS13)
                     : extensions
             helo = ServerHello13 srand chSession (cipherID usedCipher) extensions'
         loadPacket13 ctx $ Handshake13 [helo]
@@ -253,7 +250,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
                 -- an extension of type "server_name" in the
                 -- (extended) server hello. The "extension_data"
                 -- field of this extension SHALL be empty.
-                Just _ -> Just $ ExtensionRaw EID_ServerName ""
+                Just _ -> Just $ toExtensionRaw $ ServerName []
                 Nothing -> Nothing
         mgroup <- usingHState ctx getSupportedGroup
         let serverGroups = supportedGroups (ctxSupported ctx)
@@ -263,15 +260,9 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
                     Nothing -> Nothing
                     Just grp
                         | grp == rg -> Nothing
-                        | otherwise ->
-                            Just $
-                                ExtensionRaw EID_SupportedGroups $
-                                    extensionEncode (SupportedGroups serverGroups)
+                        | otherwise -> Just $ toExtensionRaw $ SupportedGroups serverGroups
         let earlyDataExtension
-                | rtt0OK =
-                    Just $
-                        ExtensionRaw EID_EarlyData $
-                            extensionEncode (EarlyDataIndication Nothing)
+                | rtt0OK = Just $ toExtensionRaw $ EarlyDataIndication Nothing
                 | otherwise = Nothing
         let extensions =
                 sharedHelloExtensions (serverShared sparams)
