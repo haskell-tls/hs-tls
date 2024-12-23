@@ -268,12 +268,7 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
                     -- an extension of type "server_name" in the
                     -- (extended) server hello. The "extension_data"
                     -- field of this extension SHALL be empty.
-                    --
-                    -- FIXME: toExtensionRaw cannot be used here because
-                    --        the format of ServerName for servers is
-                    --        differnt from that for clients. So, separate
-                    --        data constructors should be prepared.
-                    Just _ -> return $ Just $ ExtensionRaw EID_ServerName ""
+                    Just _ -> return $ Just $ toExtensionRaw $ ServerName []
                     Nothing -> return Nothing
     let useTicket = sessionUseTicket $ sharedSessionManager $ serverShared sparams
         ticktExt

@@ -369,6 +369,10 @@ data ServerNameType
 
 instance Extension ServerName where
     extensionID _ = EID_ServerName
+
+    -- dirty hack for servers
+    extensionEncode (ServerName []) = ""
+    -- for clients
     extensionEncode (ServerName l) = runPut $ putOpaque16 (runPut $ mapM_ encodeNameType l)
       where
         encodeNameType (ServerNameHostName hn) = putWord8 0 >> putOpaque16 (BC.pack hn) -- FIXME: should be puny code conversion
