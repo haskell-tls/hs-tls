@@ -19,7 +19,7 @@ module Network.TLS.Extra.Cipher (
     cipher13_AES_256_GCM_SHA384,
     cipher13_CHACHA20_POLY1305_SHA256,
     cipher13_AES_128_CCM_SHA256,
-    cipher13_TLS_AES_128_CCM_8_SHA256,
+    cipher13_AES_128_CCM_8_SHA256,
 
     -- ** RFC 5289
     cipher_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
@@ -120,7 +120,7 @@ complement_all :: [Cipher]
 complement_all =
     [ cipher_ECDHE_ECDSA_WITH_AES_128_CCM_8
     , cipher_ECDHE_ECDSA_WITH_AES_256_CCM_8
-    , cipher13_TLS_AES_128_CCM_8_SHA256
+    , cipher13_AES_128_CCM_8_SHA256
     ]
 
 -- | The strongest ciphers supported.  For ciphers with PFS, AEAD and SHA2, we
@@ -312,8 +312,8 @@ cipher_TLS13_AES128CCM_SHA256 = cipher13_AES_128_CCM_SHA256
     #-}
 
 -- TLS_AES_128_CCM_8_SHA256
-cipher13_TLS_AES_128_CCM_8_SHA256 :: Cipher
-cipher13_TLS_AES_128_CCM_8_SHA256 =
+cipher13_AES_128_CCM_8_SHA256 :: Cipher
+cipher13_AES_128_CCM_8_SHA256 =
     Cipher
         { cipherID = CipherID 0x1305
         , cipherName = "TLS_AES_128_CCM_8_SHA256"
@@ -325,10 +325,10 @@ cipher13_TLS_AES_128_CCM_8_SHA256 =
         }
 
 cipher_TLS13_AES128CCM8_SHA256 :: Cipher
-cipher_TLS13_AES128CCM8_SHA256 = cipher13_TLS_AES_128_CCM_8_SHA256
+cipher_TLS13_AES128CCM8_SHA256 = cipher13_AES_128_CCM_8_SHA256
 {-# DEPRECATED
     cipher_TLS13_AES128CCM8_SHA256
-    "Use cipher13_TLS_AES_128_CCM_8_SHA256 instead"
+    "Use cipher13_AES_128_CCM_8_SHA256 instead"
     #-}
 
 ----------------------------------------------------------------
