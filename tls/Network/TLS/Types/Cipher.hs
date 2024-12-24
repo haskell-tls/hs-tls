@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternSynonyms #-}
 
 module Network.TLS.Types.Cipher where
@@ -17,7 +18,8 @@ import Network.TLS.Types.Version
 ----------------------------------------------------------------
 
 -- | Cipher identification
-newtype CipherID = CipherID {getCipherID :: Word16} deriving (Eq, Generic)
+newtype CipherID = CipherID {getCipherID :: Word16}
+    deriving (Eq, Ord, Enum, Num, Integral, Real, Read, Generic)
 
 instance Show CipherID where
     show (CipherID 0x00FF) = "TLS_EMPTY_RENEGOTIATION_INFO_SCSV"
