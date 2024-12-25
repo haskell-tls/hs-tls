@@ -93,7 +93,10 @@ getWord16 :: Get Word16
 getWord16 = getWord16be
 
 getWords16 :: Get [Word16]
-getWords16 = getWord16 >>= \lenb -> replicateM (fromIntegral lenb `div` 2) getWord16
+getWords16 = do
+    lenb <- getWord16
+    when (odd lenb) $ fail "length for ciphers must be even"
+    replicateM (fromIntegral lenb `shiftR` 1) getWord16
 
 getWord24 :: Get Int
 getWord24 = do
