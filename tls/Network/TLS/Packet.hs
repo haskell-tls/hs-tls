@@ -141,21 +141,23 @@ decodeHandshakeRecord = runGet "handshake-record" $ do
     content <- getOpaque24
     return (ty, content)
 
+{- FOURMOLU_DISABLE -}
 decodeHandshake
     :: CurrentParams -> HandshakeType -> ByteString -> Either TLSError Handshake
 decodeHandshake cp ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
-    HandshakeType_HelloRequest -> decodeHelloRequest
-    HandshakeType_ClientHello -> decodeClientHello
-    HandshakeType_ServerHello -> decodeServerHello
-    HandshakeType_Certificate -> decodeCertificate
-    HandshakeType_ServerKeyXchg -> decodeServerKeyXchg cp
-    HandshakeType_CertRequest -> decodeCertRequest cp
-    HandshakeType_ServerHelloDone -> decodeServerHelloDone
-    HandshakeType_CertVerify -> decodeCertVerify cp
-    HandshakeType_ClientKeyXchg -> decodeClientKeyXchg cp
-    HandshakeType_Finished -> decodeFinished
+    HandshakeType_HelloRequest     -> decodeHelloRequest
+    HandshakeType_ClientHello      -> decodeClientHello
+    HandshakeType_ServerHello      -> decodeServerHello
+    HandshakeType_Certificate      -> decodeCertificate
+    HandshakeType_ServerKeyXchg    -> decodeServerKeyXchg cp
+    HandshakeType_CertRequest      -> decodeCertRequest cp
+    HandshakeType_ServerHelloDone  -> decodeServerHelloDone
+    HandshakeType_CertVerify       -> decodeCertVerify cp
+    HandshakeType_ClientKeyXchg    -> decodeClientKeyXchg cp
+    HandshakeType_Finished         -> decodeFinished
     HandshakeType_NewSessionTicket -> decodeNewSessionTicket
     x -> fail $ "Unsupported HandshakeType " ++ show x
+{- FOURMOLU_ENABLE -}
 
 decodeHelloRequest :: Get Handshake
 decodeHelloRequest = return HelloRequest
