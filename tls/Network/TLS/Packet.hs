@@ -244,7 +244,7 @@ decodeClientKeyXchg :: CurrentParams -> Get Handshake
 decodeClientKeyXchg cp =
     -- case  ClientKeyXchg <$> (remaining >>= getBytes)
     case cParamsKeyXchgType cp of
-        Nothing -> error "no client key exchange type"
+        Nothing -> fail "no client key exchange type"
         Just cke -> ClientKeyXchg <$> parseCKE cke
   where
     parseCKE CipherKeyExchange_RSA = CKX_RSA <$> (remaining >>= getBytes)
@@ -253,7 +253,7 @@ decodeClientKeyXchg cp =
     parseCKE CipherKeyExchange_DH_Anon = parseClientDHPublic
     parseCKE CipherKeyExchange_ECDHE_RSA = parseClientECDHPublic
     parseCKE CipherKeyExchange_ECDHE_ECDSA = parseClientECDHPublic
-    parseCKE _ = error "unsupported client key exchange type"
+    parseCKE _ = fail "unsupported client key exchange type"
     parseClientDHPublic = CKX_DH . dhPublic <$> getInteger16
     parseClientECDHPublic = CKX_ECDH <$> getOpaque8
 
@@ -346,8 +346,7 @@ encodeHandshake' (ServerKeyXchg skg) = runPut $
         SKX_ECDHE_RSA params sig -> putServerECDHParams params >> putDigitallySigned sig
         SKX_ECDHE_ECDSA params sig -> putServerECDHParams params >> putDigitallySigned sig
         SKX_Unparsed bytes -> putBytes bytes
-        _ ->
-            error ("encodeHandshake': cannot handle: " ++ show skg)
+        _ -> error ("encodeHandshake': cannot handle: " ++ show skg)
 encodeHandshake' HelloRequest = ""
 encodeHandshake' ServerHelloDone = ""
 encodeHandshake' (CertRequest certTypes sigAlgs certAuthorities) = runPut $ do
@@ -451,10 +450,9 @@ getServerECDHParams = do
             grp <- Group <$> getWord16 -- ECParameters NamedCurve
             mxy <- getOpaque8 -- ECPoint
             case decodeGroupPublic grp mxy of
-                Left e -> error $ "getServerECDHParams: " ++ show e
+                Left e -> fail $ "getServerECDHParams: " ++ show e
                 Right grppub -> return $ ServerECDHParams grp grppub
-        _ ->
-            error "getServerECDHParams: unknown type for ECDH Params"
+        _ -> fail "getServerECDHParams: unknown type for ECDH Params"
 
 -- RFC 4492 Section 5.4 Server Key Exchange
 putServerECDHParams :: ServerECDHParams -> Put
