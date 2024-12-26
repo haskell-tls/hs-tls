@@ -37,6 +37,9 @@ recvRequest ctx showRequest = do
   where
     loop getLine = do
         bs <- getLine
+        when ("GET /keyupdate" `BS.isPrefixOf` bs) $ do
+            r <- updateKey ctx TwoWay
+            putStrLn $ "Updating key..." ++ if r then "OK" else "NG"
         when (bs /= "") $ do
             when showRequest $ do
                 BS.putStr bs
