@@ -478,7 +478,9 @@ putDigitallySigned (DigitallySigned h sig) =
 decodeChangeCipherSpec :: ByteString -> Either TLSError ()
 decodeChangeCipherSpec = runGetErr "changecipherspec" $ do
     x <- getWord8
-    when (x /= 1) (fail "unknown change cipher spec content")
+    when (x /= 1) $ fail "unknown change cipher spec content"
+    len <- remaining
+    when (len /= 0) $ fail "the length of CSS must be 1"
 
 encodeChangeCipherSpec :: ByteString
 encodeChangeCipherSpec = runPut (putWord8 1)

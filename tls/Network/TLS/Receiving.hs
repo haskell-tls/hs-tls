@@ -67,7 +67,10 @@ switchRxEncryption ctx =
 ----------------------------------------------------------------
 
 processPacket13 :: Context -> Record Plaintext -> IO (Either TLSError Packet13)
-processPacket13 _ (Record ProtocolType_ChangeCipherSpec _ _) = return $ Right ChangeCipherSpec13
+processPacket13 _ (Record ProtocolType_ChangeCipherSpec _ fragment) =
+    case decodeChangeCipherSpec $ fragmentGetBytes fragment of
+        Left err -> return $ Left err
+        Right _ -> return $ Right ChangeCipherSpec13
 processPacket13 _ (Record ProtocolType_AppData _ fragment) = return $ Right $ AppData13 $ fragmentGetBytes fragment
 processPacket13 _ (Record ProtocolType_Alert _ fragment) = return (Alert13 `fmapEither` decodeAlerts (fragmentGetBytes fragment))
 processPacket13 ctx (Record ProtocolType_Handshake _ fragment) = usingState ctx $ do
