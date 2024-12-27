@@ -45,6 +45,15 @@ decryptRecord record@(Record ct ver fragment) = do
     decryptData13 mver e st = case ct of
         ProtocolType_AppData -> do
             inner <- decryptData mver record e st
+            let len = B.length inner
+            when (len > 16385) $
+                throwError $
+                    Error_Protocol
+                        ( "TLS 1.3 inner plaintext exceeding maximum size: "
+                            ++ show len
+                            ++ " > 16385 (2^14 + 1)"
+                        )
+                        RecordOverflow
             case unInnerPlaintext inner of
                 Left message -> throwError $ Error_Protocol message UnexpectedMessage
                 Right (ct', d) -> return $ Record ct' ver (fragmentCompressed d)
