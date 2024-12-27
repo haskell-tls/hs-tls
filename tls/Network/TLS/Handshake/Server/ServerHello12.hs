@@ -309,15 +309,15 @@ hashAndSignaturesInCommon
     :: Context -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]
 hashAndSignaturesInCommon ctx chExts = sHashSigs `intersect` cHashSigs
   where
-    cHashSigs = case extensionLookup EID_SignatureAlgorithms chExts
-        >>= extensionDecode MsgTClientHello of
-        -- See Section 7.4.1.4.1 of RFC 5246.
-        Nothing ->
+    -- See Section 7.4.1.4.1 of RFC 5246.
+    defval =
+        SignatureAlgorithms
             [ (HashSHA1, SignatureECDSA)
             , (HashSHA1, SignatureRSA)
             , (HashSHA1, SignatureDSA)
             ]
-        Just (SignatureAlgorithms sas) -> sas
+    SignatureAlgorithms cHashSigs =
+        lookupAndDecode EID_SignatureAlgorithms MsgTClientHello chExts defval
     sHashSigs = supportedHashSignatures $ ctxSupported ctx
 
 negotiatedGroupsInCommon :: Context -> [ExtensionRaw] -> [Group]

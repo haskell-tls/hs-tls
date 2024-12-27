@@ -250,11 +250,6 @@ getSessionData ctx = do
                         , sessionFlags = flags
                         }
 
-extensionLookup :: ExtensionID -> [ExtensionRaw] -> Maybe ByteString
-extensionLookup toFind =
-    fmap (\(ExtensionRaw _ content) -> content)
-        . find (\(ExtensionRaw eid _) -> eid == toFind)
-
 -- | Store the specified keypair.  Whether the public key and private key
 -- actually match is left for the peer to discover.  We're not presently
 -- burning  CPU to detect that misconfiguration.  We verify only that the

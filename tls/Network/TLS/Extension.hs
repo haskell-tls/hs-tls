@@ -50,6 +50,8 @@ module Network.TLS.Extension (
     -- * Extension raw
     ExtensionRaw (..),
     toExtensionRaw,
+    extensionLookup,
+    lookupAndDecode,
 
     -- * Class
     Extension (..),
@@ -94,14 +96,14 @@ module Network.TLS.Extension (
     CertificateAuthorities (..),
 ) where
 
+import qualified Control.Exception as E
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import Data.X509 (DistinguishedName)
 
 import Network.TLS.Crypto.Types
+import Network.TLS.Error
 import Network.TLS.HashAndSignature
-import Network.TLS.Types (HostName, Ticket, Version)
-
 import Network.TLS.Imports
 import Network.TLS.Packet (
     getBinaryVersion,
@@ -111,6 +113,7 @@ import Network.TLS.Packet (
     putDNames,
     putSignatureHashAlgorithm,
  )
+import Network.TLS.Types (HostName, Ticket, Version)
 import Network.TLS.Wire
 
 ----------------------------------------------------------------
@@ -337,6 +340,28 @@ instance Show ExtensionRaw where
 
 toExtensionRaw :: Extension e => e -> ExtensionRaw
 toExtensionRaw ext = ExtensionRaw (extensionID ext) (extensionEncode ext)
+
+extensionLookup :: ExtensionID -> [ExtensionRaw] -> Maybe ByteString
+extensionLookup toFind exts = extract <$> find idEq exts
+  where
+    extract (ExtensionRaw _ content) = content
+    idEq (ExtensionRaw eid _) = eid == toFind
+
+lookupAndDecode
+    :: Extension a
+    => ExtensionID
+    -> MessageType
+    -> [ExtensionRaw]
+    -> a
+    -> a
+lookupAndDecode eid msgtyp exts defval = case extensionLookup eid exts of
+    Nothing -> defval
+    Just bs -> case extensionDecode msgtyp bs of
+        Nothing ->
+            E.throw $
+                Uncontextualized $
+                    Error_Protocol ("Illegal " ++ show eid) DecodeError
+        Just val -> val
 
 ------------------------------------------------------------
 

@@ -11,7 +11,6 @@ import Network.TLS.Credentials
 import Network.TLS.Crypto
 import Network.TLS.ErrT
 import Network.TLS.Extension
-import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Server.Common
 import Network.TLS.Handshake.Signature
 import Network.TLS.Imports
