@@ -171,24 +171,6 @@ chooseCreds usedCipher creds signatureCreds = case cipherKeyExchange usedCipher 
 
 ----------------------------------------------------------------
 
-hashAndSignaturesInCommon
-    :: [HashAndSignatureAlgorithm] -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]
-hashAndSignaturesInCommon sHashSigs exts =
-    let cHashSigs = case extensionLookup EID_SignatureAlgorithms exts
-            >>= extensionDecode MsgTClientHello of
-            -- See Section 7.4.1.4.1 of RFC 5246.
-            Nothing ->
-                [ (HashSHA1, SignatureECDSA)
-                , (HashSHA1, SignatureRSA)
-                , (HashSHA1, SignatureDSA)
-                ]
-            Just (SignatureAlgorithms sas) -> sas
-     in -- The values in the "signature_algorithms" extension
-        -- are in descending order of preference.
-        -- However here the algorithms are selected according
-        -- to server preference in 'supportedHashSignatures'.
-        sHashSigs `intersect` cHashSigs
-
 negotiatedGroupsInCommon :: [Group] -> [ExtensionRaw] -> [Group]
 negotiatedGroupsInCommon serverGroups exts = case extensionLookup EID_SupportedGroups exts
     >>= extensionDecode MsgTClientHello of

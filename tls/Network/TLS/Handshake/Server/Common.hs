@@ -9,6 +9,7 @@ module Network.TLS.Handshake.Server.Common (
     filterCredentialsWithHashSignatures,
     isCredentialAllowed,
     storePrivInfoServer,
+    hashAndSignaturesInCommon,
 ) where
 
 import Control.Monad.State.Strict
@@ -59,10 +60,13 @@ isCredentialAllowed ver exts cred =
     -- not after.  With TLS13, the curve is linked to the signature algorithm
     -- and client support is tested with signatureCompatible13.
     p
-        | ver < TLS13 = case extensionLookup EID_SupportedGroups exts
-            >>= extensionDecode MsgTClientHello of
-            Nothing -> const True
-            Just (SupportedGroups sg) -> (`elem` sg)
+        | ver < TLS13 =
+            lookupAndDecode
+                EID_SupportedGroups
+                MsgTClientHello
+                exts
+                (const True)
+                (\(SupportedGroups sg) -> (`elem` sg))
         | otherwise = const True
 
 -- Filters a list of candidate credentials with credentialMatchesHashSignatures.
@@ -99,29 +103,33 @@ filterCredentialsWithHashSignatures exts =
 storePrivInfoServer :: MonadIO m => Context -> Credential -> m ()
 storePrivInfoServer ctx (cc, privkey) = void (storePrivInfo ctx cc privkey)
 
+-- ALPN (Application Layer Protocol Negotiation)
 applicationProtocol
     :: Context -> [ExtensionRaw] -> ServerParams -> IO (Maybe ExtensionRaw)
-applicationProtocol ctx exts sparams = do
-    -- ALPN (Application Layer Protocol Negotiation)
-    case extensionLookup EID_ApplicationLayerProtocolNegotiation exts
-        >>= extensionDecode MsgTClientHello of
-        Nothing -> return Nothing
-        Just (ApplicationLayerProtocolNegotiation protos) -> do
-            case onALPNClientSuggest $ serverHooks sparams of
-                Just io -> do
-                    proto <- io protos
-                    when (proto == "") $
-                        throwCore $
-                            Error_Protocol "no supported application protocols" NoApplicationProtocol
-                    usingState_ ctx $ do
-                        setExtensionALPN True
-                        setNegotiatedProtocol proto
-                    return $
-                        Just $
-                            ExtensionRaw
-                                EID_ApplicationLayerProtocolNegotiation
-                                (extensionEncode $ ApplicationLayerProtocolNegotiation [proto])
-                _ -> return Nothing
+applicationProtocol ctx exts sparams = case onALPN of
+    Nothing -> return Nothing
+    Just io ->
+        lookupAndDecodeAndDo
+            EID_ApplicationLayerProtocolNegotiation
+            MsgTClientHello
+            exts
+            (return Nothing)
+            $ select io
+  where
+    onALPN = onALPNClientSuggest $ serverHooks sparams
+    select io (ApplicationLayerProtocolNegotiation protos) = do
+        proto <- io protos
+        when (proto == "") $
+            throwCore $
+                Error_Protocol "no supported application protocols" NoApplicationProtocol
+        usingState_ ctx $ do
+            setExtensionALPN True
+            setNegotiatedProtocol proto
+        return $
+            Just $
+                ExtensionRaw
+                    EID_ApplicationLayerProtocolNegotiation
+                    (extensionEncode $ ApplicationLayerProtocolNegotiation [proto])
 
 clientCertificate :: ServerParams -> Context -> CertificateChain -> IO ()
 clientCertificate sparams ctx certs = do
@@ -142,3 +150,23 @@ clientCertificate sparams ctx certs = do
     -- Remember cert chain for later use.
     --
     usingHState ctx $ setClientCertChain certs
+
+----------------------------------------------------------------
+
+-- The values in the "signature_algorithms" extension
+-- are in descending order of preference.
+-- However here the algorithms are selected according
+-- to server preference in 'supportedHashSignatures'.
+hashAndSignaturesInCommon
+    :: [HashAndSignatureAlgorithm] -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]
+hashAndSignaturesInCommon sHashSigs exts = sHashSigs `intersect` cHashSigs
+  where
+    cHashSigs = case extensionLookup EID_SignatureAlgorithms exts
+        >>= extensionDecode MsgTClientHello of
+        -- See Section 7.4.1.4.1 of RFC 5246.
+        Nothing ->
+            [ (HashSHA1, SignatureECDSA)
+            , (HashSHA1, SignatureRSA)
+            , (HashSHA1, SignatureDSA)
+            ]
+        Just (SignatureAlgorithms sas) -> sas

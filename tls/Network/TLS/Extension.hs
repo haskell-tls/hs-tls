@@ -52,6 +52,7 @@ module Network.TLS.Extension (
     toExtensionRaw,
     extensionLookup,
     lookupAndDecode,
+    lookupAndDecodeAndDo,
 
     -- * Class
     Extension (..),
@@ -348,20 +349,38 @@ extensionLookup toFind exts = extract <$> find idEq exts
     idEq (ExtensionRaw eid _) = eid == toFind
 
 lookupAndDecode
-    :: Extension a
+    :: Extension e
     => ExtensionID
     -> MessageType
     -> [ExtensionRaw]
     -> a
+    -> (e -> a)
     -> a
-lookupAndDecode eid msgtyp exts defval = case extensionLookup eid exts of
+lookupAndDecode eid msgtyp exts defval conv = case extensionLookup eid exts of
     Nothing -> defval
     Just bs -> case extensionDecode msgtyp bs of
         Nothing ->
             E.throw $
                 Uncontextualized $
                     Error_Protocol ("Illegal " ++ show eid) DecodeError
-        Just val -> val
+        Just val -> conv val
+
+lookupAndDecodeAndDo
+    :: Extension a
+    => ExtensionID
+    -> MessageType
+    -> [ExtensionRaw]
+    -> IO b
+    -> (a -> IO b)
+    -> IO b
+lookupAndDecodeAndDo eid msgtyp exts defAction action = case extensionLookup eid exts of
+    Nothing -> defAction
+    Just bs -> case extensionDecode msgtyp bs of
+        Nothing ->
+            E.throwIO $
+                Uncontextualized $
+                    Error_Protocol ("Illegal " ++ show eid) DecodeError
+        Just val -> action val
 
 ------------------------------------------------------------
 

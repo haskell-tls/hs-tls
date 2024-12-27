@@ -181,7 +181,7 @@ sendServerFirstFlight sparams ctx usedCipher mcred chExts = do
     -- If RSA is also used for key exchange, this function is
     -- not called.
     decideHashSig pubKey = do
-        let hashSigs = hashAndSignaturesInCommon ctx chExts
+        let hashSigs = hashAndSignaturesInCommon (supportedHashSignatures $ ctxSupported ctx) chExts
         case filter (pubKey `signatureCompatible`) hashSigs of
             [] -> error ("no hash signature for " ++ pubkeyType pubKey)
             x : _ -> return x
@@ -300,25 +300,6 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
             (cipherID usedCipher)
             (compressionID nullCompression)
             shExts
-
--- The values in the "signature_algorithms" extension
--- are in descending order of preference.
--- However here the algorithms are selected according
--- to server preference in 'supportedHashSignatures'.
-hashAndSignaturesInCommon
-    :: Context -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]
-hashAndSignaturesInCommon ctx chExts = sHashSigs `intersect` cHashSigs
-  where
-    -- See Section 7.4.1.4.1 of RFC 5246.
-    defval =
-        SignatureAlgorithms
-            [ (HashSHA1, SignatureECDSA)
-            , (HashSHA1, SignatureRSA)
-            , (HashSHA1, SignatureDSA)
-            ]
-    SignatureAlgorithms cHashSigs =
-        lookupAndDecode EID_SignatureAlgorithms MsgTClientHello chExts defval
-    sHashSigs = supportedHashSignatures $ ctxSupported ctx
 
 negotiatedGroupsInCommon :: Context -> [ExtensionRaw] -> [Group]
 negotiatedGroupsInCommon ctx chExts = case extensionLookup EID_SupportedGroups chExts

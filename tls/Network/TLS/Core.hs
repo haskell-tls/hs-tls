@@ -314,12 +314,18 @@ recvData13 ctx = do
         withWriteLock ctx $ do
             Just resumptionSecret <- usingHState ctx getTLS13ResumptionSecret
             (_, usedCipher, _, _) <- getTxRecordState ctx
+            -- mMaxSize is always Just, but anyway
+            let extract (EarlyDataIndication mMaxSize) =
+                    maybe 0 (fromIntegral . safeNonNegative32) mMaxSize
             let choice = makeCipherChoice TLS13 usedCipher
                 psk = derivePSK choice resumptionSecret nonce
-                maxSize = case extensionLookup EID_EarlyData exts
-                    >>= extensionDecode MsgTNewSessionTicket of
-                    Just (EarlyDataIndication (Just ms)) -> fromIntegral $ safeNonNegative32 ms
-                    _ -> 0
+                maxSize =
+                    lookupAndDecode
+                        EID_EarlyData
+                        MsgTNewSessionTicket
+                        exts
+                        0
+                        extract
                 life7d = min life 604800 -- 7 days max
             tinfo <- createTLS13TicketInfo life7d (Right add) Nothing
             sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk

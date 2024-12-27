@@ -134,41 +134,50 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
         failOnEitherError $ usingHState ctx $ setHelloParameters13 usedCipher
         return srand
 
-    supportsPHA = case extensionLookup EID_PostHandshakeAuth chExtensions
-        >>= extensionDecode MsgTClientHello of
-        Just PostHandshakeAuth -> True
-        Nothing -> False
+    supportsPHA =
+        lookupAndDecode
+            EID_PostHandshakeAuth
+            MsgTClientHello
+            chExtensions
+            False
+            (\PostHandshakeAuth -> True)
 
-    choosePSK = case extensionLookup EID_PreSharedKey chExtensions
-        >>= extensionDecode MsgTClientHello of
-        Just (PreSharedKeyClientHello (PskIdentity identity obfAge : _) bnds@(bnd : _)) -> do
-            when (null dhModes) $
-                throwCore $
-                    Error_Protocol "no psk_key_exchange_modes extension" MissingExtension
-            if PSK_DHE_KE `elem` dhModes
-                then do
-                    let len = sum (map (\x -> B.length x + 1) bnds) + 2
-                        mgr = sharedSessionManager $ serverShared sparams
-                    -- sessionInvalidate is not used for TLS 1.3
-                    -- because PSK is always changed.
-                    -- So, identity is not stored in Context.
-                    msdata <-
-                        if rtt0
-                            then sessionResumeOnlyOnce mgr identity
-                            else sessionResume mgr identity
-                    case msdata of
-                        Just sdata -> do
-                            let tinfo = fromJust $ sessionTicketInfo sdata
-                                psk = sessionSecret sdata
-                            isFresh <- checkFreshness tinfo obfAge
-                            (isPSKvalid, is0RTTvalid) <- checkSessionEquality sdata
-                            if isPSKvalid && isFresh
-                                then return (psk, Just (bnd, 0 :: Int, len), is0RTTvalid)
-                                else -- fall back to full handshake
-                                    return (zero, Nothing, False)
-                        _ -> return (zero, Nothing, False)
-                else return (zero, Nothing, False)
-        _ -> return (zero, Nothing, False)
+    selectPSK (PreSharedKeyClientHello (PskIdentity identity obfAge : _) bnds@(bnd : _)) = do
+        when (null dhModes) $
+            throwCore $
+                Error_Protocol "no psk_key_exchange_modes extension" MissingExtension
+        if PSK_DHE_KE `elem` dhModes
+            then do
+                let len = sum (map (\x -> B.length x + 1) bnds) + 2
+                    mgr = sharedSessionManager $ serverShared sparams
+                -- sessionInvalidate is not used for TLS 1.3
+                -- because PSK is always changed.
+                -- So, identity is not stored in Context.
+                msdata <-
+                    if rtt0
+                        then sessionResumeOnlyOnce mgr identity
+                        else sessionResume mgr identity
+                case msdata of
+                    Just sdata -> do
+                        let tinfo = fromJust $ sessionTicketInfo sdata
+                            psk = sessionSecret sdata
+                        isFresh <- checkFreshness tinfo obfAge
+                        (isPSKvalid, is0RTTvalid) <- checkSessionEquality sdata
+                        if isPSKvalid && isFresh
+                            then return (psk, Just (bnd, 0 :: Int, len), is0RTTvalid)
+                            else -- fall back to full handshake
+                                return (zero, Nothing, False)
+                    _ -> return (zero, Nothing, False)
+            else return (zero, Nothing, False)
+    selectPSK _ = return (zero, Nothing, False)
+
+    choosePSK =
+        lookupAndDecodeAndDo
+            EID_PreSharedKey
+            MsgTClientHello
+            chExtensions
+            (return (zero, Nothing, False))
+            selectPSK
 
     checkSessionEquality sdata = do
         msni <- usingState_ ctx getClientSNI
@@ -196,13 +205,15 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
         return [toExtensionRaw $ PreSharedKeyServerHello $ fromIntegral n]
 
     decideCredentialInfo allCreds = do
-        cHashSigs <- case extensionLookup EID_SignatureAlgorithms chExtensions of
-            Nothing ->
-                throwCore $ Error_Protocol "no signature_algorithms extension" MissingExtension
-            Just sa -> case extensionDecode MsgTClientHello sa of
-                Nothing ->
-                    throwCore $ Error_Protocol "broken signature_algorithms extension" DecodeError
-                Just (SignatureAlgorithms sas) -> return sas
+        let err =
+                throwCore $ Error_Protocol "broken signature_algorithms extension" DecodeError
+        cHashSigs <-
+            lookupAndDecodeAndDo
+                EID_SignatureAlgorithms
+                MsgTClientHello
+                chExtensions
+                err
+                (\(SignatureAlgorithms sas) -> return sas)
         -- When deciding signature algorithm and certificate, we try to keep
         -- certificates supported by the client, but fallback to all credentials
         -- if this produces no suitable result (see RFC 5246 section 7.4.2 and
@@ -276,10 +287,13 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
             liftIO $ onEncryptedExtensionsCreating (serverHooks sparams) extensions
         loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 extensions']
 
-    dhModes = case extensionLookup EID_PskKeyExchangeModes chExtensions
-        >>= extensionDecode MsgTClientHello of
-        Just (PskKeyExchangeModes ms) -> ms
-        Nothing -> []
+    dhModes =
+        lookupAndDecode
+            EID_PskKeyExchangeModes
+            MsgTClientHello
+            chExtensions
+            []
+            (\(PskKeyExchangeModes ms) -> ms)
 
     hashSize = hashDigestSize usedHash
     zero = B.replicate hashSize 0

@@ -21,7 +21,6 @@ module Network.TLS.Handshake.Common (
     onRecvStateHandshake,
     ensureRecvComplete,
     processExtendedMainSecret,
-    extensionLookup,
     getSessionData,
     storePrivInfo,
     isSupportedGroup,
@@ -213,14 +212,23 @@ processExtendedMainSecret ctx ver msgt exts
     | ver > TLS12 = error "EMS processing is not compatible with TLS 1.3"
     | ems == NoEMS = return False
     | otherwise =
-        case extensionLookup EID_ExtendedMainSecret exts >>= extensionDecode msgt of
-            Just ExtendedMainSecret -> usingHState ctx (setExtendedMainSecret True) >> return True
-            Nothing
-                | ems == RequireEMS -> throwCore $ Error_Protocol err HandshakeFailure
-                | otherwise -> return False
+        liftIO $
+            lookupAndDecodeAndDo
+                EID_ExtendedMainSecret
+                msgt
+                exts
+                nonExistAction
+                existAction
   where
-    ems = supportedExtendedMainSecret (ctxSupported ctx)
+    ems = supportedExtendedMainSecret $ ctxSupported ctx
     err = "peer does not support Extended Main Secret"
+    nonExistAction =
+        if ems == RequireEMS
+            then throwCore $ Error_Protocol err HandshakeFailure
+            else return False
+    existAction ExtendedMainSecret = do
+        usingHState ctx $ setExtendedMainSecret True
+        return True
 
 getSessionData :: Context -> IO (Maybe SessionData)
 getSessionData ctx = do

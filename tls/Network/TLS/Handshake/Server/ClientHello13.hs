@@ -41,26 +41,27 @@ processClientHello13 sparams ctx CH{..} = do
             Error_Protocol "no cipher in common with the TLS 1.3 client" HandshakeFailure
     let usedCipher = onCipherChoosing (serverHooks sparams) TLS13 ciphersFilteredVersion
         usedHash = cipherHash usedCipher
-        rtt0 = case extensionLookup EID_EarlyData chExtensions >>= extensionDecode MsgTClientHello of
-            Just (EarlyDataIndication _) -> True
-            Nothing -> False
+        rtt0 =
+            lookupAndDecode
+                EID_EarlyData
+                MsgTClientHello
+                chExtensions
+                False
+                (\(EarlyDataIndication _) -> True)
     when rtt0 $
         -- mark a 0-RTT attempt before a possible HRR, and before updating the
         -- status again if 0-RTT successful
         setEstablished ctx (EarlyDataNotAllowed 3) -- hardcoding
         -- Deciding key exchange from key shares
-    keyShares <- case extensionLookup EID_KeyShare chExtensions of
-        Nothing ->
+    let require =
             throwCore $
                 Error_Protocol
                     "key exchange not implemented, expected key_share extension"
                     MissingExtension
-        Just kss -> case extensionDecode MsgTClientHello kss of
-            Just (KeyShareClientHello kses) -> return kses
-            Just _ ->
-                error "processClientHello13: invalid KeyShare value"
-            _ ->
-                throwCore $ Error_Protocol "broken key_share" DecodeError
+        extract (KeyShareClientHello kses) = return kses
+        extract _ = require
+    keyShares <-
+        lookupAndDecodeAndDo EID_KeyShare MsgTClientHello chExtensions require extract
     mshare <- findKeyShare keyShares serverGroups
     return (mshare, (usedCipher, usedHash, rtt0))
   where
@@ -93,10 +94,13 @@ sendHRR ctx (usedCipher, _, _) CH{..} = do
             Error_Protocol "Hello retry not allowed again" HandshakeFailure
     usingState_ ctx $ setTLS13HRR True
     failOnEitherError $ usingHState ctx $ setHelloParameters13 usedCipher
-    let clientGroups = case extensionLookup EID_SupportedGroups chExtensions
-            >>= extensionDecode MsgTClientHello of
-            Just (SupportedGroups gs) -> gs
-            Nothing -> []
+    let clientGroups =
+            lookupAndDecode
+                EID_SupportedGroups
+                MsgTClientHello
+                chExtensions
+                []
+                (\(SupportedGroups gs) -> gs)
         possibleGroups = serverGroups `intersect` clientGroups
     case possibleGroups of
         [] ->
