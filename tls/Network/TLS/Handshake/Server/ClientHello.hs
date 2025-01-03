@@ -58,10 +58,9 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
         $ throwCore
         $ Error_Protocol "fallback is not allowed" InappropriateFallback
     -- choosing TLS version
-    let clientVersions = case extensionLookup EID_SupportedVersions chExtensions
-            >>= extensionDecode MsgTClientHello of
-            Just (SupportedVersionsClientHello vers) -> vers -- fixme: vers == []
-            _ -> []
+    let extract (SupportedVersionsClientHello vers) = vers -- fixme: vers == []
+        extract _ = []
+        clientVersions = lookupAndDecode EID_SupportedVersions MsgTClientHello chExtensions [] extract
         clientVersion = min TLS12 legacyVersion
         serverVersions
             | renegotiation = filter (< TLS13) (supportedVersions $ ctxSupported ctx)
@@ -87,12 +86,16 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
                     Just v -> return v
 
     -- SNI (Server Name Indication)
-    let serverName = case extensionLookup EID_ServerName chExtensions >>= extensionDecode MsgTClientHello of
-            Just (ServerName ns) -> listToMaybe (mapMaybe toHostName ns)
-              where
-                toHostName (ServerNameHostName hostName) = Just hostName
-                toHostName (ServerNameOther _) = Nothing
-            _ -> Nothing
+    let extractServerName (ServerName ns) = listToMaybe (mapMaybe toHostName ns)
+        toHostName (ServerNameHostName hostName) = Just hostName
+        toHostName (ServerNameOther _) = Nothing
+        serverName =
+            lookupAndDecode
+                EID_ServerName
+                MsgTClientHello
+                chExtensions
+                Nothing
+                extractServerName
     let nullComp = compressionID nullCompression
     case chosenVersion of
         TLS13 ->
