@@ -62,12 +62,13 @@ recoverSessionData :: Context -> CH -> IO (Maybe SessionData)
 recoverSessionData ctx CH{..} = do
     serverName <- usingState_ ctx getClientSNI
     ems <- processExtendedMainSecret ctx TLS12 MsgTClientHello chExtensions
-    let mSessionTicket =
-            extensionLookup EID_SessionTicket chExtensions
-                >>= extensionDecode MsgTClientHello
-        mticket = case mSessionTicket of
-            Nothing -> Nothing
-            Just (SessionTicket ticket) -> Just ticket
+    let mticket =
+            lookupAndDecode
+                EID_SessionTicket
+                MsgTClientHello
+                chExtensions
+                Nothing
+                (\(SessionTicket ticket) -> Just ticket)
         midentity = ticketOrSessionID12 mticket chSession
     case midentity of
         Nothing -> return Nothing

@@ -183,9 +183,7 @@ processCertRequest13 ctx token exts = do
   where
     -- setCertReqSigAlgsCert caAlgs
 
-    canames = case extensionLookup
-        EID_CertificateAuthorities
-        exts of
+    canames = case extensionLookup EID_CertificateAuthorities exts of
         Nothing -> return []
         Just ext -> case extensionDecode MsgTCertificateRequest ext of
             Just (CertificateAuthorities names) -> return names

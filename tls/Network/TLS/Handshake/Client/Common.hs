@@ -334,16 +334,22 @@ getLocalHashSigAlg ctx isCompatible cHashSigs pubKey = do
 ----------------------------------------------------------------
 
 setALPN :: Context -> MessageType -> [ExtensionRaw] -> IO ()
-setALPN ctx msgt exts = case extensionLookup EID_ApplicationLayerProtocolNegotiation exts
-    >>= extensionDecode msgt of
-    Just (ApplicationLayerProtocolNegotiation [proto]) -> usingState_ ctx $ do
+setALPN ctx msgt exts =
+    lookupAndDecodeAndDo
+        EID_ApplicationLayerProtocolNegotiation
+        msgt
+        exts
+        (return ())
+        setAlpn
+  where
+    setAlpn (ApplicationLayerProtocolNegotiation [proto]) = usingState_ ctx $ do
         mprotos <- getClientALPNSuggest
         case mprotos of
             Just protos -> when (proto `elem` protos) $ do
                 setExtensionALPN True
                 setNegotiatedProtocol proto
             _ -> return ()
-    _ -> return ()
+    setAlpn _ = return ()
 
 ----------------------------------------------------------------
 

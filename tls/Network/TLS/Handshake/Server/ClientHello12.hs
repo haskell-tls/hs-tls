@@ -172,10 +172,13 @@ chooseCreds usedCipher creds signatureCreds = case cipherKeyExchange usedCipher 
 ----------------------------------------------------------------
 
 negotiatedGroupsInCommon :: [Group] -> [ExtensionRaw] -> [Group]
-negotiatedGroupsInCommon serverGroups exts = case extensionLookup EID_SupportedGroups exts
-    >>= extensionDecode MsgTClientHello of
-    Just (SupportedGroups clientGroups) -> serverGroups `intersect` clientGroups
-    _ -> []
+negotiatedGroupsInCommon serverGroups exts =
+    lookupAndDecode
+        EID_SupportedGroups
+        MsgTClientHello
+        exts
+        []
+        (\(SupportedGroups clientGroups) -> serverGroups `intersect` clientGroups)
 
 ----------------------------------------------------------------
 
