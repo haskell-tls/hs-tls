@@ -302,9 +302,13 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
             shExts
 
 negotiatedGroupsInCommon :: Context -> [ExtensionRaw] -> [Group]
-negotiatedGroupsInCommon ctx chExts = case extensionLookup EID_SupportedGroups chExts
-    >>= extensionDecode MsgTClientHello of
-    Just (SupportedGroups clientGroups) ->
-        let serverGroups = supportedGroups (ctxSupported ctx)
-         in serverGroups `intersect` clientGroups
-    _ -> []
+negotiatedGroupsInCommon ctx chExts =
+    lookupAndDecode
+        EID_SupportedGroups
+        MsgTClientHello
+        chExts
+        []
+        common
+  where
+    serverGroups = supportedGroups (ctxSupported ctx)
+    common (SupportedGroups clientGroups) = serverGroups `intersect` clientGroups

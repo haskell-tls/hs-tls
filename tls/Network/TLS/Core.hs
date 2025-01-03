@@ -27,7 +27,6 @@ module Network.TLS.Core (
 ) where
 
 import qualified Control.Exception as E
-import Control.Monad (unless, void, when)
 import Control.Monad.State.Strict
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
@@ -47,6 +46,7 @@ import Network.TLS.Handshake.Random
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.IO
+import Network.TLS.Imports
 import Network.TLS.KeySchedule
 import Network.TLS.Parameters
 import Network.TLS.PostHandshake
@@ -403,10 +403,13 @@ recvHS13 ctx breakLoop = do
             (_, usedCipher, _, _) <- getTxRecordState ctx
             let choice = makeCipherChoice TLS13 usedCipher
                 psk = derivePSK choice resumptionSecret nonce
-                maxSize = case extensionLookup EID_EarlyData exts
-                    >>= extensionDecode MsgTNewSessionTicket of
-                    Just (EarlyDataIndication (Just ms)) -> fromIntegral $ safeNonNegative32 ms
-                    _ -> 0
+                maxSize =
+                    lookupAndDecode
+                        EID_EarlyData
+                        MsgTNewSessionTicket
+                        exts
+                        0
+                        (\(EarlyDataIndication mms) -> fromIntegral $ safeNonNegative32 $ fromJust mms)
                 life7d = min life 604800 -- 7 days max
             tinfo <- createTLS13TicketInfo life7d (Right add) Nothing
             sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk

@@ -90,14 +90,20 @@ isCredentialAllowed ver exts cred =
 filterCredentialsWithHashSignatures
     :: [ExtensionRaw] -> Credentials -> Credentials
 filterCredentialsWithHashSignatures exts =
-    case withExt EID_SignatureAlgorithmsCert of
-        Just (SignatureAlgorithmsCert sas) -> withAlgs sas
-        Nothing ->
-            case withExt EID_SignatureAlgorithms of
-                Nothing -> id
-                Just (SignatureAlgorithms sas) -> withAlgs sas
+    lookupAndDecode
+        EID_SignatureAlgorithmsCert
+        MsgTClientHello
+        exts
+        lookupSignatureAlgorithms
+        (\(SignatureAlgorithmsCert sas) -> withAlgs sas)
   where
-    withExt extId = extensionLookup extId exts >>= extensionDecode MsgTClientHello
+    lookupSignatureAlgorithms =
+        lookupAndDecode
+            EID_SignatureAlgorithms
+            MsgTClientHello
+            exts
+            id
+            (\(SignatureAlgorithms sas) -> withAlgs sas)
     withAlgs sas = filterCredentials (credentialMatchesHashSignatures sas)
 
 storePrivInfoServer :: MonadIO m => Context -> Credential -> m ()
@@ -161,12 +167,16 @@ hashAndSignaturesInCommon
     :: [HashAndSignatureAlgorithm] -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]
 hashAndSignaturesInCommon sHashSigs exts = sHashSigs `intersect` cHashSigs
   where
-    cHashSigs = case extensionLookup EID_SignatureAlgorithms exts
-        >>= extensionDecode MsgTClientHello of
-        -- See Section 7.4.1.4.1 of RFC 5246.
-        Nothing ->
-            [ (HashSHA1, SignatureECDSA)
-            , (HashSHA1, SignatureRSA)
-            , (HashSHA1, SignatureDSA)
-            ]
-        Just (SignatureAlgorithms sas) -> sas
+    -- See Section 7.4.1.4.1 of RFC 5246.
+    defVal =
+        [ (HashSHA1, SignatureECDSA)
+        , (HashSHA1, SignatureRSA)
+        , (HashSHA1, SignatureDSA)
+        ]
+    cHashSigs =
+        lookupAndDecode
+            EID_SignatureAlgorithms
+            MsgTClientHello
+            exts
+            defVal
+            (\(SignatureAlgorithms sas) -> sas)

@@ -99,11 +99,14 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession cipher 
     let isHRR = isHelloRetryRequest serverRan
     usingState_ ctx $ do
         setTLS13HRR isHRR
-        setTLS13Cookie
-            ( guard isHRR
-                >> extensionLookup EID_Cookie exts
-                >>= extensionDecode MsgTServerHello
-            )
+        when (not isHRR) $
+            setTLS13Cookie $
+                lookupAndDecode
+                    EID_Cookie
+                    MsgTServerHello
+                    exts
+                    Nothing
+                    (\cookie@(Cookie _) -> Just cookie)
         setVersion rver -- must be before processing supportedVersions ext
         mapM_ processServerExtension exts
 
