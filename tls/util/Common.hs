@@ -3,11 +3,9 @@
 {-# OPTIONS_GHC -fno-warn-warnings-deprecations #-}
 
 module Common (
-    printCiphers,
     printDHParams,
     printGroups,
     readNumber,
-    readCiphers,
     readDHParams,
     readGroups,
     getCertificateStore,
@@ -17,14 +15,10 @@ module Common (
     printHandshakeInfo,
 ) where
 
-import Crypto.System.CPU
 import Data.Char (isDigit)
 import Data.X509.CertificateStore
 import Network.TLS hiding (HostName)
-import Network.TLS.Extra.Cipher
 import Network.TLS.Extra.FFDHE
-import Network.TLS.Internal
-import Numeric (showHex)
 import System.Exit
 import System.X509
 
@@ -37,13 +31,6 @@ namedDHParams =
     , ("ffdhe4096", ffdhe4096)
     , ("ffdhe6144", ffdhe6144)
     , ("ffdhe8192", ffdhe8192)
-    ]
-
-namedCiphersuites :: [(String, [CipherID])]
-namedCiphersuites =
-    [ ("all", map cipherID ciphersuite_all)
-    , ("default", map cipherID ciphersuite_default)
-    , ("strong", map cipherID ciphersuite_strong)
     ]
 
 namedGroups :: [(String, Group)]
@@ -65,12 +52,6 @@ readNumber s
     | all isDigit s = Just $ read s
     | otherwise = Nothing
 
-readCiphers :: String -> Maybe [CipherID]
-readCiphers s =
-    case lookup s namedCiphersuites of
-        Nothing -> (: []) `fmap` (CipherID <$> readNumber s)
-        just -> just
-
 readDHParams :: String -> IO (Maybe DHParams)
 readDHParams s =
     case lookup s namedDHParams of
@@ -81,34 +62,6 @@ readGroups :: String -> [Group]
 readGroups s = case traverse (`lookup` namedGroups) (split ',' s) of
     Nothing -> []
     Just gs -> gs
-
-printCiphers :: IO ()
-printCiphers = do
-    putStrLn "Supported ciphers"
-    putStrLn "====================================="
-    forM_ ciphersuite_all_det $ \c ->
-        putStrLn
-            ( pad 50 (cipherName c)
-                ++ " = "
-                ++ pad 5 (show $ cipherID c)
-                ++ "  0x"
-                ++ showHex (getCipherID (cipherID c)) ""
-            )
-    putStrLn ""
-    putStrLn "Ciphersuites"
-    putStrLn "====================================="
-    forM_ namedCiphersuites $ \(name, _) -> putStrLn name
-    putStrLn ""
-    putStrLn
-        ("Using crypton-" ++ VERSION_crypton ++ " with CPU support for: " ++ cpuSupport)
-  where
-    pad n s
-        | length s < n = s ++ replicate (n - length s) ' '
-        | otherwise = s
-
-    cpuSupport
-        | null processorOptions = "(nothing)"
-        | otherwise = intercalate ", " (map show processorOptions)
 
 printDHParams :: IO ()
 printDHParams = do

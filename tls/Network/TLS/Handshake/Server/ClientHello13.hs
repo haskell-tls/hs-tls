@@ -20,6 +20,7 @@ import Network.TLS.Parameters
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
+import Network.TLS.Types
 
 -- TLS 1.3 or later
 processClientHello13
@@ -65,7 +66,8 @@ processClientHello13 sparams ctx CH{..} = do
     mshare <- findKeyShare keyShares serverGroups
     return (mshare, (usedCipher, usedHash, rtt0))
   where
-    ciphersFilteredVersion = filter ((`elem` chCiphers) . cipherID) serverCiphers
+    elemCipher c = CipherId (cipherID c) `elem` chCiphers
+    ciphersFilteredVersion = filter elemCipher serverCiphers
     serverCiphers =
         filter
             (cipherAllowedForVersion TLS13)
@@ -113,7 +115,7 @@ sendHRR ctx (usedCipher, _, _) CH{..} = do
                     [ ExtensionRaw EID_KeyShare serverKeyShare
                     , ExtensionRaw EID_SupportedVersions selectedVersion
                     ]
-                hrr = ServerHello13 hrrRandom chSession (cipherID usedCipher) extensions
+                hrr = ServerHello13 hrrRandom chSession (CipherId $ cipherID usedCipher) extensions
             usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
             runPacketFlight ctx $ do
                 loadPacket13 ctx $ Handshake13 [hrr]

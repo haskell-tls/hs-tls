@@ -78,7 +78,7 @@ recoverSessionData ctx CH{..} = do
 
 validateSession
     :: Context
-    -> [CipherID]
+    -> [CipherId]
     -> Maybe HostName
     -> Bool
     -> Maybe SessionData
@@ -90,7 +90,7 @@ validateSession ctx ciphers sni ems m@(Just sd)
     -- uses the same server_name than full handshake so the same
     -- credentials (and thus ciphers) are available.
     | TLS12 < sessionVersion sd = return Nothing -- fixme
-    | sessionCipher sd `notElem` ciphers =
+    | CipherId (sessionCipher sd) `notElem` ciphers =
         throwCore $
             Error_Protocol "new cipher is diffrent from the old one" IllegalParameter
     | isJust sni && sessionClientSNI sd /= sni = do
@@ -298,7 +298,7 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
             TLS12
             srand
             session
-            (cipherID usedCipher)
+            (CipherId (cipherID usedCipher))
             (compressionID nullCompression)
             shExts
 

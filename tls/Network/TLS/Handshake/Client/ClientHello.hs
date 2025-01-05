@@ -86,7 +86,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
     hrr <- usingState_ ctx getTLS13HRR
     unless hrr $ startHandshake ctx ver crand
     usingState_ ctx $ setVersionIfUnset highestVer
-    let cipherIds = map cipherID ciphers
+    let cipherIds = map (CipherId . cipherID) ciphers
         compIds = map compressionID compressions
         mkClientHello exts = ClientHello ver crand compIds $ CH clientSession cipherIds exts
     extensions0 <- catMaybes <$> getExtensions

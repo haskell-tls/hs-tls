@@ -233,7 +233,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
                 toExtensionRaw (KeyShareServerHello keyShare)
                     : toExtensionRaw (SupportedVersionsServerHello TLS13)
                     : extensions
-            helo = ServerHello13 srand chSession (cipherID usedCipher) extensions'
+            helo = ServerHello13 srand chSession (CipherId (cipherID usedCipher)) extensions'
         loadPacket13 ctx $ Handshake13 [helo]
 
     sendCertAndVerify cred@(certChain, _) hashSig = do

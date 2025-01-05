@@ -76,7 +76,8 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession cipher 
     -- find the compression and cipher methods that the server want to use.
     clientSession <- tls13stSession <$> getTLS13State ctx
     sentExts <- tls13stSentExtensions <$> getTLS13State ctx
-    cipherAlg <- case find ((==) cipher . cipherID) (supportedCiphers $ ctxSupported ctx) of
+    let eqCipher c = CipherId (cipherID c) == cipher
+    cipherAlg <- case find eqCipher (supportedCiphers $ ctxSupported ctx) of
         Nothing -> throwCore $ Error_Protocol "server choose unknown cipher" IllegalParameter
         Just alg -> return alg
     compressAlg <- case find

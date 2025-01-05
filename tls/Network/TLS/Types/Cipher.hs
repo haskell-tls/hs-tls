@@ -4,7 +4,6 @@
 
 module Network.TLS.Types.Cipher where
 
-import Codec.Serialise
 import Crypto.Cipher.Types (AuthTag)
 import Data.IORef
 import GHC.Generics
@@ -18,16 +17,18 @@ import Network.TLS.Types.Version
 ----------------------------------------------------------------
 
 -- | Cipher identification
-newtype CipherID = CipherID {getCipherID :: Word16}
+type CipherID = Word16
+
+newtype CipherId = CipherId {fromCipherId :: Word16}
     deriving (Eq, Ord, Enum, Num, Integral, Real, Read, Generic)
 
-instance Show CipherID where
-    show (CipherID 0x00FF) = "TLS_EMPTY_RENEGOTIATION_INFO_SCSV"
-    show (CipherID n) = case find eqID dict of
+instance Show CipherId where
+    show (CipherId 0x00FF) = "TLS_EMPTY_RENEGOTIATION_INFO_SCSV"
+    show (CipherId n) = case find eqID dict of
         Just c -> cipherName c
         Nothing -> printf "0x%04X" n
       where
-        eqID c = cipherID c == CipherID n
+        eqID c = cipherID c == n
         dict = unsafePerformIO $ readIORef globalCipherDict
 
 -- "ciphersuite" is designed extensible.
@@ -117,5 +118,3 @@ newtype BulkStream = BulkStream (ByteString -> (ByteString, BulkStream))
 
 type BulkAEAD =
     BulkNonce -> ByteString -> BulkAdditionalData -> (ByteString, AuthTag)
-
-instance Serialise CipherID

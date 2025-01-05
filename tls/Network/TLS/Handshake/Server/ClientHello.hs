@@ -52,7 +52,7 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
     -- TLS_FALLBACK_SCSV: {0x56, 0x00}
     when
         ( supportedFallbackScsv (ctxSupported ctx)
-            && (CipherID 0x5600 `elem` chCiphers)
+            && (CipherId 0x5600 `elem` chCiphers)
             && legacyVersion < TLS12
         )
         $ throwCore

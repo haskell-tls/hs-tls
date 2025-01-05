@@ -70,8 +70,8 @@ instance Arbitrary CertificateType where
             , CertificateType_ECDSA_Sign
             ]
 
-instance Arbitrary CipherID where
-    arbitrary = CipherID <$> arbitrary
+instance Arbitrary CipherId where
+    arbitrary = CipherId <$> arbitrary
 
 instance Arbitrary Handshake where
     arbitrary =
@@ -80,7 +80,7 @@ instance Arbitrary Handshake where
                 ClientHello ver
                     <$> arbitrary
                     <*> arbitraryCompressionIDs
-                    <*> (CH <$> arbitrary <*> arbitraryCiphersIDs <*> arbitraryHelloExtensions ver)
+                    <*> (CH <$> arbitrary <*> arbitraryCiphersIds <*> arbitraryHelloExtensions ver)
             , arbitrary >>= \ver ->
                 ServerHello ver
                     <$> arbitrary
@@ -134,8 +134,8 @@ instance Arbitrary Handshake13 where
 
 ----------------------------------------------------------------
 
-arbitraryCiphersIDs :: Gen [CipherID]
-arbitraryCiphersIDs = map CipherID <$> (choose (0, 200) >>= vector)
+arbitraryCiphersIds :: Gen [CipherId]
+arbitraryCiphersIds = map CipherId <$> (choose (0, 200) >>= vector)
 
 arbitraryCompressionIDs :: Gen [Word8]
 arbitraryCompressionIDs = choose (0, 200) >>= vector

@@ -17,7 +17,7 @@ import Network.TLS.Imports
 import Network.TLS.Parameters
 import Network.TLS.State
 import Network.TLS.Struct
-import Network.TLS.Types (CipherID (..), Role (..))
+import Network.TLS.Types (CipherId (..), Role (..))
 
 ----------------------------------------------------------------
 
@@ -51,7 +51,7 @@ checkSecureRenegotiation :: Context -> CH -> IO ()
 checkSecureRenegotiation ctx CH{..} = do
     -- RFC 5746: secure renegotiation
     -- TLS_EMPTY_RENEGOTIATION_INFO_SCSV: {0x00, 0xFF}
-    when (CipherID 0xff `elem` chCiphers) $
+    when (CipherId 0xff `elem` chCiphers) $
         usingState_ ctx $
             setSecureRenegotiation True
     case extensionLookup EID_SecureRenegotiation chExtensions of
@@ -82,7 +82,7 @@ credsTriple sparams CH{..} extraCreds
 
     commonCiphers creds sigCreds = filter elemCipher availableCiphers
       where
-        elemCipher c = cipherID c `elem` chCiphers
+        elemCipher c = CipherId (cipherID c) `elem` chCiphers
         availableCiphers = getCiphers ciphers creds sigCreds
 
     allCreds =

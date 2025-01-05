@@ -392,7 +392,7 @@ instance Show ClientKeyXchgAlgorithmData where
 
 data CH = CH
     { chSession :: Session
-    , chCiphers :: [CipherID]
+    , chCiphers :: [CipherId]
     , chExtensions :: [ExtensionRaw]
     }
     deriving (Show, Eq)
@@ -411,7 +411,7 @@ data Handshake
         Version
         ServerRandom
         Session
-        CipherID
+        CipherId
         CompressionID
         [ExtensionRaw]
     | Certificate TLSCertificateChain

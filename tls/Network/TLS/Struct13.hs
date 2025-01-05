@@ -27,7 +27,7 @@ type TicketNonce = ByteString
 
 -- fixme: convert Word32 to proper data type
 data Handshake13
-    = ServerHello13 ServerRandom Session CipherID [ExtensionRaw]
+    = ServerHello13 ServerRandom Session CipherId [ExtensionRaw]
     | NewSessionTicket13 Second Word32 TicketNonce SessionIDorTicket [ExtensionRaw]
     | EndOfEarlyData13
     | EncryptedExtensions13 [ExtensionRaw]

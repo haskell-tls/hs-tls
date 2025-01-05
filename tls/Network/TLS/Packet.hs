@@ -167,7 +167,7 @@ decodeClientHello = do
     ver <- getBinaryVersion
     random <- getClientRandom32
     session <- getSession
-    ciphers <- map CipherID <$> getWords16
+    ciphers <- map CipherId <$> getWords16
     compressions <- getWords8
     r <- remaining
     exts <-
@@ -184,7 +184,7 @@ decodeServerHello = do
     ver <- getBinaryVersion
     random <- getServerRandom32
     session <- getSession
-    cipherid <- CipherID <$> getWord16
+    cipherid <- CipherId <$> getWord16
     compressionid <- getWord8
     r <- remaining
     exts <-
@@ -319,7 +319,7 @@ encodeHandshake' (ClientHello version random compressionIDs CH{..}) = runPut $ d
     putBinaryVersion version
     putClientRandom32 random
     putSession chSession
-    putWords16 $ map getCipherID chCiphers
+    putWords16 $ map fromCipherId chCiphers
     putWords8 compressionIDs
     putExtensions chExtensions
     return ()
@@ -327,7 +327,7 @@ encodeHandshake' (ServerHello version random session cipherid compressionID exts
     putBinaryVersion version
     putServerRandom32 random
     putSession session
-    putWord16 $ getCipherID cipherid
+    putWord16 $ fromCipherId cipherid
     putWord8 compressionID
     putExtensions exts
     return ()
