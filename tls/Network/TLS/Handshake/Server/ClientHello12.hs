@@ -80,9 +80,8 @@ credsTriple sparams CH{..} extraCreds
   where
     ciphers = supportedCiphers $ serverSupported sparams
 
-    commonCiphers creds sigCreds = filter elemCipher availableCiphers
+    commonCiphers creds sigCreds = intersectCiphers chCiphers availableCiphers
       where
-        elemCipher c = CipherId (cipherID c) `elem` chCiphers
         availableCiphers = getCiphers ciphers creds sigCreds
 
     allCreds =

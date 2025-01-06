@@ -66,8 +66,7 @@ processClientHello13 sparams ctx CH{..} = do
     mshare <- findKeyShare keyShares serverGroups
     return (mshare, (usedCipher, usedHash, rtt0))
   where
-    elemCipher c = CipherId (cipherID c) `elem` chCiphers
-    ciphersFilteredVersion = filter elemCipher serverCiphers
+    ciphersFilteredVersion = intersectCiphers chCiphers serverCiphers
     serverCiphers =
         filter
             (cipherAllowedForVersion TLS13)

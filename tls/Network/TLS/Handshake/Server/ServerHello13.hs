@@ -185,7 +185,8 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
         let isSameSNI = sessionClientSNI sdata == msni
             isSameCipher = sessionCipher sdata == cipherID usedCipher
             ciphers = supportedCiphers $ serverSupported sparams
-            isSameKDF = case find (\c -> cipherID c == sessionCipher sdata) ciphers of
+            scid = sessionCipher sdata
+            isSameKDF = case findCipher scid ciphers of
                 Nothing -> False
                 Just c -> cipherHash c == cipherHash usedCipher
             isSameVersion = TLS13 == sessionVersion sdata

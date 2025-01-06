@@ -300,7 +300,7 @@ getPreSharedKeyInfo cparams ctx = do
             guard (sessionVersion sdata >= TLS13)
             let cid = sessionCipher sdata
                 sids = map fst xs
-            sCipher <- find (\c -> cipherID c == cid) ciphers
+            sCipher <- findCipher cid ciphers
             Just (sid : sids, sdata, sCipher)
 
     getPskInfo = case sessions of

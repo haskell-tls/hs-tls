@@ -22,9 +22,13 @@ module Network.TLS.Cipher (
     cipherAllowedForVersion,
     hasMAC,
     hasRecordIV,
+    elemCipher,
+    intersectCiphers,
+    findCipher,
 ) where
 
 import Network.TLS.Crypto (Hash (..), hashDigestSize)
+import Network.TLS.Imports
 import Network.TLS.Types
 
 data BulkState
@@ -64,3 +68,17 @@ cipherAllowedForVersion ver cipher =
     case cipherMinVer cipher of
         Nothing -> ver < TLS13
         Just cVer -> cVer <= ver && (ver < TLS13 || cVer >= TLS13)
+
+eqCipher :: CipherID -> Cipher -> Bool
+eqCipher cid c = cipherID c == cid
+
+elemCipher :: [CipherId] -> Cipher -> Bool
+elemCipher cids c = cid `elem` cids
+  where
+    cid = CipherId $ cipherID c
+
+intersectCiphers :: [CipherId] -> [Cipher] -> [Cipher]
+intersectCiphers peerCiphers myCiphers = filter (elemCipher peerCiphers) myCiphers
+
+findCipher :: CipherID -> [Cipher] -> Maybe Cipher
+findCipher cid = find $ eqCipher cid

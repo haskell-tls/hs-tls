@@ -66,7 +66,7 @@ processServerHello13 _ _ h = unexpected (show h) (Just "server hello")
 -- 4) process the session parameter to see if the server want to start a new session or can resume
 processServerHello
     :: ClientParams -> Context -> Handshake -> IO ()
-processServerHello cparams ctx (ServerHello rver serverRan serverSession cipher compression exts) = do
+processServerHello cparams ctx (ServerHello rver serverRan serverSession (CipherId cid) compression exts) = do
     -- A server which receives a legacy_version value not equal to
     -- 0x0303 MUST abort the handshake with an "illegal_parameter"
     -- alert.
@@ -76,8 +76,8 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession cipher 
     -- find the compression and cipher methods that the server want to use.
     clientSession <- tls13stSession <$> getTLS13State ctx
     sentExts <- tls13stSentExtensions <$> getTLS13State ctx
-    let eqCipher c = CipherId (cipherID c) == cipher
-    cipherAlg <- case find eqCipher (supportedCiphers $ ctxSupported ctx) of
+    let clientCiphers = supportedCiphers $ ctxSupported ctx
+    cipherAlg <- case findCipher cid clientCiphers of
         Nothing -> throwCore $ Error_Protocol "server choose unknown cipher" IllegalParameter
         Just alg -> return alg
     compressAlg <- case find
