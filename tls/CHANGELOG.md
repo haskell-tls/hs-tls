@@ -1,3 +1,11 @@
+## Version 2.1.6
+
+* Testing with "tlsfuzzer" again. Now don't send an alert agaist to
+  peer's alert. Double locking (aka self dead-lock) is fixed. Sending
+  an alert for known-but-cannot-parse extensions. Other corner cases
+  are also fixed.
+* `tls-client -d` and `tls-server -d` pretty-prints `Handshake`.
+
 ## Version 2.1.5
 
 * Removing the dependency on the async package.
