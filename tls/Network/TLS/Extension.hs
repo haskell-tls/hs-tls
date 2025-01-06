@@ -437,10 +437,12 @@ instance Extension ServerName where
     extensionDecode _ = error "extensionDecode: ServerName"
 
 decodeServerName :: ByteString -> Maybe ServerName
-decodeServerName = runGetMaybe $ do
-    len <- fromIntegral <$> getWord16
-    ServerName <$> getList len getServerName
+decodeServerName "" = Just $ ServerName [] -- dirty hack for servers
+decodeServerName bs = runGetMaybe decode bs
   where
+    decode = do
+        len <- fromIntegral <$> getWord16
+        ServerName <$> getList len getServerName
     getServerName = do
         ty <- getWord8
         snameParsed <- getOpaque16
