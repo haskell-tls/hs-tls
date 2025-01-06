@@ -153,7 +153,7 @@ main = do
             Aux
                 { auxAuthority = host
                 , auxPort = port
-                , auxDebug = debug
+                , auxDebugPrint = debug
                 , auxShow = showContent
                 , auxReadResumptionData = readIORef ref
                 }
@@ -168,8 +168,8 @@ main = do
 runClient
     :: Options -> Cli -> ClientParams -> Aux -> NonEmpty ByteString -> IO ()
 runClient opts@Options{..} client cparams aux@Aux{..} paths = do
-    auxDebug "------------------------"
-    (info1, msd) <- runTLS cparams aux $ \ctx -> do
+    auxDebugPrint "------------------------"
+    (info1, msd) <- runTLS opts cparams aux $ \ctx -> do
         i1 <- getInfo ctx
         when optDebugLog $ printHandshakeInfo i1
         client aux paths ctx
@@ -237,11 +237,11 @@ runClient2
     -> Aux
     -> NonEmpty ByteString
     -> IO Information
-runClient2 Options{..} client cparams aux@Aux{..} paths = do
+runClient2 opts@Options{..} client cparams aux@Aux{..} paths = do
     threadDelay 100000
-    auxDebug "<<<< next connection >>>>"
-    auxDebug "------------------------"
-    runTLS cparams aux $ \ctx -> do
+    auxDebugPrint "<<<< next connection >>>>"
+    auxDebugPrint "------------------------"
+    runTLS opts cparams aux $ \ctx -> do
         if opt0RTT
             then do
                 void $ client aux paths ctx
@@ -255,13 +255,21 @@ runClient2 Options{..} client cparams aux@Aux{..} paths = do
                 return i
 
 runTLS
-    :: ClientParams
+    :: Options
+    -> ClientParams
     -> Aux
     -> (Context -> IO a)
     -> IO a
-runTLS cparams Aux{..} action =
+runTLS Options{..} cparams Aux{..} action =
     runTCPClient auxAuthority auxPort $ \sock -> do
         ctx <- contextNew sock cparams
+        when optDebugLog $
+            contextHookSetLogging
+                ctx
+                defaultLogging
+                    { loggingPacketSent = putStrLn . (">> " ++)
+                    , loggingPacketRecv = putStrLn . ("<< " ++)
+                    }
         handshake ctx
         r <- action ctx
         bye ctx

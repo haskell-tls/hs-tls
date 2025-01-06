@@ -20,7 +20,7 @@ import Imports
 data Aux = Aux
     { auxAuthority :: HostName
     , auxPort :: ServiceName
-    , auxDebug :: String -> IO ()
+    , auxDebugPrint :: String -> IO ()
     , auxShow :: ByteString -> IO ()
     , auxReadResumptionData :: IO [(SessionID, SessionData)]
     }
