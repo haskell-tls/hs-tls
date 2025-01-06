@@ -318,26 +318,32 @@ data ExtensionRaw = ExtensionRaw ExtensionID ByteString
     deriving (Eq)
 
 instance Show ExtensionRaw where
-    show (ExtensionRaw eid@EID_ServerName bs) = show eid ++ " " ++ show (decodeServerName bs)
-    show (ExtensionRaw eid@EID_MaxFragmentLength bs) = show eid ++ " " ++ show (decodeMaxFragmentLength bs)
-    show (ExtensionRaw eid@EID_SupportedGroups bs) = maybe (show eid) show $ decodeSupportedGroups bs
-    show (ExtensionRaw eid@EID_EcPointFormats bs) = maybe (show eid) show (decodeEcPointFormatsSupported bs)
-    show (ExtensionRaw eid@EID_SignatureAlgorithms bs) = maybe (show eid) show $ decodeSignatureAlgorithms bs
-    show (ExtensionRaw eid@EID_Heartbeat bs) = show eid ++ " " ++ show (decodeHeartBeat bs)
-    show (ExtensionRaw eid@EID_ApplicationLayerProtocolNegotiation bs) = show eid ++ " " ++ show (decodeApplicationLayerProtocolNegotiation bs)
+    show (ExtensionRaw eid@EID_ServerName bs) = showExtensionRaw eid bs decodeServerName
+    show (ExtensionRaw eid@EID_MaxFragmentLength bs) = showExtensionRaw eid bs decodeMaxFragmentLength
+    show (ExtensionRaw eid@EID_SupportedGroups bs) = showExtensionRaw eid bs decodeSupportedGroups
+    show (ExtensionRaw eid@EID_EcPointFormats bs) = showExtensionRaw eid bs decodeEcPointFormatsSupported
+    show (ExtensionRaw eid@EID_SignatureAlgorithms bs) = showExtensionRaw eid bs decodeSignatureAlgorithms
+    show (ExtensionRaw eid@EID_Heartbeat bs) = showExtensionRaw eid bs decodeHeartBeat
+    show (ExtensionRaw eid@EID_ApplicationLayerProtocolNegotiation bs) = showExtensionRaw eid bs decodeApplicationLayerProtocolNegotiation
     show (ExtensionRaw eid@EID_ExtendedMainSecret _) = show eid
-    show (ExtensionRaw eid@EID_SessionTicket bs) = show eid ++ " " ++ show (decodeSessionTicket bs)
+    show (ExtensionRaw eid@EID_SessionTicket bs) = showExtensionRaw eid bs decodeSessionTicket
     show (ExtensionRaw eid@EID_PreSharedKey bs) = show eid ++ " " ++ showBytesHex bs
     show (ExtensionRaw eid@EID_EarlyData _) = show eid
     show (ExtensionRaw eid@EID_SupportedVersions bs) = show eid ++ " " ++ showBytesHex bs
     show (ExtensionRaw eid@EID_Cookie bs) = show eid ++ " " ++ showBytesHex bs
-    show (ExtensionRaw eid@EID_PskKeyExchangeModes bs) = show eid ++ " " ++ show (decodePskKeyExchangeModes bs)
-    show (ExtensionRaw eid@EID_CertificateAuthorities bs) = show eid ++ " " ++ show (decodeCertificateAuthorities bs)
+    show (ExtensionRaw eid@EID_PskKeyExchangeModes bs) = showExtensionRaw eid bs decodePskKeyExchangeModes
+    show (ExtensionRaw eid@EID_CertificateAuthorities bs) = showExtensionRaw eid bs decodeCertificateAuthorities
     show (ExtensionRaw eid@EID_PostHandshakeAuth _) = show eid
-    show (ExtensionRaw eid@EID_SignatureAlgorithmsCert bs) = maybe (show eid) show $ decodeSignatureAlgorithmsCert bs
+    show (ExtensionRaw eid@EID_SignatureAlgorithmsCert bs) = showExtensionRaw eid bs decodeSignatureAlgorithmsCert
     show (ExtensionRaw eid@EID_KeyShare bs) = show eid ++ " " ++ showBytesHex bs
     show (ExtensionRaw eid@EID_SecureRenegotiation bs) = show eid ++ " " ++ showBytesHex bs
     show (ExtensionRaw eid bs) = "ExtensionRaw " ++ show eid ++ " " ++ showBytesHex bs
+
+showExtensionRaw
+    :: Show a => ExtensionID -> ByteString -> (ByteString -> Maybe a) -> String
+showExtensionRaw eid bs decode = case decode bs of
+    Nothing -> show eid ++ " broken"
+    Just x -> show x
 
 toExtensionRaw :: Extension e => e -> ExtensionRaw
 toExtensionRaw ext = ExtensionRaw (extensionID ext) (extensionEncode ext)
@@ -409,7 +415,11 @@ newtype ServerName = ServerName [ServerNameType] deriving (Show, Eq)
 data ServerNameType
     = ServerNameHostName HostName
     | ServerNameOther (Word8, ByteString)
-    deriving (Show, Eq)
+    deriving (Eq)
+
+instance Show ServerNameType where
+    show (ServerNameHostName host) = "\"" ++ host ++ "\""
+    show (ServerNameOther (w, _)) = "(" ++ show w ++ ", )"
 
 instance Extension ServerName where
     extensionID _ = EID_ServerName
