@@ -15,6 +15,7 @@ import Data.X509.CertificateStore
 import Network.Run.TCP
 import Network.Socket
 import Network.TLS hiding (is0RTTPossible)
+import Network.TLS.Internal (makeCipherShowPretty)
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
@@ -163,6 +164,7 @@ main = do
         client
             | optALPN == "dot" = clientDNS
             | otherwise = clientHTTP11
+    makeCipherShowPretty
     runClient opts client cparams aux paths
 
 runClient
