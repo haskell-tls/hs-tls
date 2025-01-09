@@ -25,7 +25,10 @@ module Network.TLS.HashAndSignature (
         SignatureEd448,
         SignatureRSApsspssSHA256,
         SignatureRSApsspssSHA384,
-        SignatureRSApsspssSHA512
+        SignatureRSApsspssSHA512,
+        SignatureBrainpoolP256,
+        SignatureBrainpoolP384,
+        SignatureBrainpoolP512
     ),
     HashAndSignatureAlgorithm,
     supportedSignatureSchemes,
@@ -99,6 +102,12 @@ pattern SignatureRSApsspssSHA384  :: SignatureAlgorithm
 pattern SignatureRSApsspssSHA384   = SignatureAlgorithm 10
 pattern SignatureRSApsspssSHA512  :: SignatureAlgorithm
 pattern SignatureRSApsspssSHA512   = SignatureAlgorithm 11
+pattern SignatureBrainpoolP256    :: SignatureAlgorithm -- RFC8734
+pattern SignatureBrainpoolP256     = SignatureAlgorithm 26
+pattern SignatureBrainpoolP384    :: SignatureAlgorithm
+pattern SignatureBrainpoolP384     = SignatureAlgorithm 27
+pattern SignatureBrainpoolP512    :: SignatureAlgorithm
+pattern SignatureBrainpoolP512     = SignatureAlgorithm 28
 
 instance Show SignatureAlgorithm where
     show SignatureAnonymous        = "Anonymous"
@@ -113,6 +122,9 @@ instance Show SignatureAlgorithm where
     show SignatureRSApsspssSHA256  = "RSApsspssSHA256"
     show SignatureRSApsspssSHA384  = "RSApsspssSHA384"
     show SignatureRSApsspssSHA512  = "RSApsspssSHA512"
+    show SignatureBrainpoolP256    = "BrainpoolP256"
+    show SignatureBrainpoolP384    = "BrainpoolP384"
+    show SignatureBrainpoolP512    = "BrainpoolP512"
     show (SignatureAlgorithm x)    = "Signature " ++ show x
 {- FOURMOLU_ENABLE -}
 
