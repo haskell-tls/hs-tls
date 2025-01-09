@@ -335,7 +335,7 @@ instance Show ExtensionRaw where
     show (ExtensionRaw eid@EID_CertificateAuthorities bs) = showExtensionRaw eid bs decodeCertificateAuthorities
     show (ExtensionRaw eid@EID_PostHandshakeAuth _) = show eid
     show (ExtensionRaw eid@EID_SignatureAlgorithmsCert bs) = showExtensionRaw eid bs decodeSignatureAlgorithmsCert
-    show (ExtensionRaw eid@EID_KeyShare bs) = show eid ++ " " ++ showBytesHex bs
+    show (ExtensionRaw eid@EID_KeyShare bs) = showExtensionRaw eid bs decodeKeyShare
     show (ExtensionRaw eid@EID_SecureRenegotiation bs) = show eid ++ " " ++ showBytesHex bs
     show (ExtensionRaw eid bs) = "ExtensionRaw " ++ show eid ++ " " ++ showBytesHex bs
 
@@ -841,7 +841,10 @@ data KeyShareEntry = KeyShareEntry
     { keyShareEntryGroup :: Group
     , keyShareEntryKeyExchange :: ByteString
     }
-    deriving (Show, Eq)
+    deriving (Eq)
+
+instance Show KeyShareEntry where
+    show kse = show $ keyShareEntryGroup kse
 
 getKeyShareEntry :: Get (Int, Maybe KeyShareEntry)
 getKeyShareEntry = do
@@ -861,7 +864,14 @@ data KeyShare
     = KeyShareClientHello [KeyShareEntry]
     | KeyShareServerHello KeyShareEntry
     | KeyShareHRR Group
-    deriving (Show, Eq)
+    deriving (Eq)
+
+{- FOURMOLU_DISABLE -}
+instance Show KeyShare where
+    show (KeyShareClientHello kses) = "KeyShare " ++ show kses
+    show (KeyShareServerHello kse)  = "KeyShare " ++ show kse
+    show (KeyShareHRR g)            = "KeyShare " ++ show g
+{- FOURMOLU_ENABLE -}
 
 instance Extension KeyShare where
     extensionID _ = EID_KeyShare
@@ -871,20 +881,35 @@ instance Extension KeyShare where
         mapM_ putKeyShareEntry kses
     extensionEncode (KeyShareServerHello kse) = runPut $ putKeyShareEntry kse
     extensionEncode (KeyShareHRR (Group grp)) = runPut $ putWord16 grp
-    extensionDecode MsgTServerHello = runGetMaybe $ do
-        (_, ment) <- getKeyShareEntry
-        case ment of
-            Nothing -> fail "decoding KeyShare for ServerHello"
-            Just ent -> return $ KeyShareServerHello ent
-    extensionDecode MsgTClientHello = runGetMaybe $ do
-        len <- fromIntegral <$> getWord16
-        --      len == 0 allows for HRR
-        grps <- getList len getKeyShareEntry
-        return $ KeyShareClientHello $ catMaybes grps
-    extensionDecode MsgTHelloRetryRequest =
-        runGetMaybe $
-            KeyShareHRR . Group <$> getWord16
+    extensionDecode MsgTClientHello = decodeKeyShareClientHello
+    extensionDecode MsgTServerHello = decodeKeyShareServerHello
+    extensionDecode MsgTHelloRetryRequest = decodeKeyShareHRR
     extensionDecode _ = error "extensionDecode: KeyShare"
+
+decodeKeyShareClientHello :: ByteString -> Maybe KeyShare
+decodeKeyShareClientHello = runGetMaybe $ do
+    len <- fromIntegral <$> getWord16
+    --      len == 0 allows for HRR
+    grps <- getList len getKeyShareEntry
+    return $ KeyShareClientHello $ catMaybes grps
+
+decodeKeyShareServerHello :: ByteString -> Maybe KeyShare
+decodeKeyShareServerHello = runGetMaybe $ do
+    (_, ment) <- getKeyShareEntry
+    case ment of
+        Nothing -> fail "decoding KeyShare for ServerHello"
+        Just ent -> return $ KeyShareServerHello ent
+
+decodeKeyShareHRR :: ByteString -> Maybe KeyShare
+decodeKeyShareHRR =
+    runGetMaybe $
+        KeyShareHRR . Group <$> getWord16
+
+decodeKeyShare :: ByteString -> Maybe KeyShare
+decodeKeyShare bs =
+    decodeKeyShareClientHello bs
+        <|> decodeKeyShareServerHello bs
+        <|> decodeKeyShareHRR bs
 
 ------------------------------------------------------------
 
