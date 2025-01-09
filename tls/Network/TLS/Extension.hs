@@ -329,7 +329,7 @@ instance Show ExtensionRaw where
     show (ExtensionRaw eid@EID_SessionTicket bs) = showExtensionRaw eid bs decodeSessionTicket
     show (ExtensionRaw eid@EID_PreSharedKey bs) = show eid ++ " " ++ showBytesHex bs
     show (ExtensionRaw eid@EID_EarlyData _) = show eid
-    show (ExtensionRaw eid@EID_SupportedVersions bs) = show eid ++ " " ++ showBytesHex bs
+    show (ExtensionRaw eid@EID_SupportedVersions bs) = showExtensionRaw eid bs decodeSupportedVersions
     show (ExtensionRaw eid@EID_Cookie bs) = show eid ++ " " ++ showBytesHex bs
     show (ExtensionRaw eid@EID_PskKeyExchangeModes bs) = showExtensionRaw eid bs decodePskKeyExchangeModes
     show (ExtensionRaw eid@EID_CertificateAuthorities bs) = showExtensionRaw eid bs decodeCertificateAuthorities
@@ -722,7 +722,11 @@ instance Extension EarlyDataIndication where
 data SupportedVersions
     = SupportedVersionsClientHello [Version]
     | SupportedVersionsServerHello Version
-    deriving (Show, Eq)
+    deriving (Eq)
+
+instance Show SupportedVersions where
+    show (SupportedVersionsClientHello vers) = "Versions " ++ show vers
+    show (SupportedVersionsServerHello ver) = "Versions " ++ show ver
 
 instance Extension SupportedVersions where
     extensionID _ = EID_SupportedVersions
@@ -732,16 +736,27 @@ instance Extension SupportedVersions where
     extensionEncode (SupportedVersionsServerHello ver) =
         runPut $
             putBinaryVersion ver
-    extensionDecode MsgTClientHello = runGetMaybe $ do
-        len <- fromIntegral <$> getWord8
-        SupportedVersionsClientHello <$> getList len getVer
-      where
-        getVer = do
-            ver <- getBinaryVersion
-            return (2, ver)
-    extensionDecode MsgTServerHello =
-        runGetMaybe (SupportedVersionsServerHello <$> getBinaryVersion)
+    extensionDecode MsgTClientHello = decodeSupportedVersionsClientHello
+    extensionDecode MsgTServerHello = decodeSupportedVersionsServerHello
     extensionDecode _ = error "extensionDecode: SupportedVersionsServerHello"
+
+decodeSupportedVersionsClientHello :: ByteString -> Maybe SupportedVersions
+decodeSupportedVersionsClientHello = runGetMaybe $ do
+    len <- fromIntegral <$> getWord8
+    SupportedVersionsClientHello <$> getList len getVer
+  where
+    getVer = do
+        ver <- getBinaryVersion
+        return (2, ver)
+
+decodeSupportedVersionsServerHello :: ByteString -> Maybe SupportedVersions
+decodeSupportedVersionsServerHello =
+    runGetMaybe (SupportedVersionsServerHello <$> getBinaryVersion)
+
+decodeSupportedVersions :: ByteString -> Maybe SupportedVersions
+decodeSupportedVersions bs =
+    decodeSupportedVersionsClientHello bs
+        <|> decodeSupportedVersionsServerHello bs
 
 ------------------------------------------------------------
 
