@@ -30,15 +30,29 @@ html =
 
 server :: Context -> Bool -> IO ()
 server ctx showRequest = do
-    recvRequest ctx showRequest
-    sendData ctx html
+    bs <- recvData ctx
+    case C8.uncons bs of
+        Nothing -> return ()
+        Just ('A', _) -> do
+            sendData ctx $ BL8.fromStrict bs
+            echo ctx
+        Just _ -> handleHTML ctx showRequest bs
 
-recvRequest :: Context -> Bool -> IO ()
-recvRequest ctx showRequest = do
-    getLine <- newSource ctx
-    loop getLine
+echo :: Context -> IO ()
+echo ctx = loop
   where
-    loop getLine = do
+    loop = do
+        bs <- recvData ctx
+        when (bs /= "") $ do
+            sendData ctx $ BL8.fromStrict bs
+            loop
+
+handleHTML :: Context -> Bool -> ByteString -> IO ()
+handleHTML ctx showRequest ini = do
+    getLine <- newSource ctx ini
+    process getLine
+  where
+    process getLine = do
         bs <- getLine
         when ("GET /keyupdate" `BS.isPrefixOf` bs) $ do
             r <- updateKey ctx TwoWay
@@ -47,11 +61,19 @@ recvRequest ctx showRequest = do
             when showRequest $ do
                 BS.putStr bs
                 BS.putStr "\n"
-            loop getLine
+            consume getLine
+            sendData ctx html
+    consume getLine = do
+        bs <- getLine
+        when (bs /= "") $ do
+            when showRequest $ do
+                BS.putStr bs
+                BS.putStr "\n"
+            consume getLine
 
-newSource :: Context -> IO (IO ByteString)
-newSource ctx = do
-    ref <- newIORef ""
+newSource :: Context -> ByteString -> IO (IO ByteString)
+newSource ctx ini = do
+    ref <- newIORef ini
     return $ getline ref
   where
     getline :: IORef ByteString -> IO ByteString
