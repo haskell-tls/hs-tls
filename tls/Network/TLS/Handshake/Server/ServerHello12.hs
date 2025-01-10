@@ -111,7 +111,7 @@ sendServerFirstFlight
     -> Maybe Credential
     -> [ExtensionRaw]
     -> IO ([Handshake] -> [Handshake])
-sendServerFirstFlight sparams ctx usedCipher mcred chExts = do
+sendServerFirstFlight ServerParams{..} ctx usedCipher mcred chExts = do
     let b0 = id
     let cc = case mcred of
             Just (srvCerts, _) -> srvCerts
@@ -138,26 +138,28 @@ sendServerFirstFlight sparams ctx usedCipher mcred chExts = do
     --
     -- Client certificates MUST NOT be accepted if not requested.
     --
-    if serverWantClientCert sparams
+    if serverWantClientCert
         then do
             let (certTypes, hashSigs) =
-                    let as = supportedHashSignatures $ ctxSupported ctx
+                    let as = supportedHashSignatures serverSupported
                      in (nub $ mapMaybe hashSigToCertType as, as)
                 creq =
                     CertRequest
                         certTypes
                         hashSigs
-                        (map extractCAname $ serverCACertificates sparams)
+                        (map extractCAname serverCACertificates)
             usingHState ctx $ setCertReqSent True
             return $ b2 . (creq :)
         else return b2
   where
     setup_DHE = do
-        let possibleFFGroups = negotiatedGroupsInCommon ctx chExts `intersect` availableFFGroups
+        let possibleFFGroups =
+                negotiatedGroupsInCommon (supportedGroups serverSupported) chExts
+                    `intersect` availableFFGroups
         (dhparams, priv, pub) <-
             case possibleFFGroups of
                 [] ->
-                    let dhparams = fromJust $ serverDHEParams sparams
+                    let dhparams = fromJust serverDHEParams
                      in case findFiniteFieldGroup dhparams of
                             Just g -> do
                                 usingHState ctx $ setSupportedGroup g
@@ -182,7 +184,7 @@ sendServerFirstFlight sparams ctx usedCipher mcred chExts = do
     -- If RSA is also used for key exchange, this function is
     -- not called.
     decideHashSig pubKey = do
-        let hashSigs = hashAndSignaturesInCommon (supportedHashSignatures $ ctxSupported ctx) chExts
+        let hashSigs = hashAndSignaturesInCommon (supportedHashSignatures serverSupported) chExts
         case filter (pubKey `signatureCompatible`) hashSigs of
             [] -> error ("no hash signature for " ++ pubkeyType pubKey)
             x : _ -> return x
@@ -209,7 +211,9 @@ sendServerFirstFlight sparams ctx usedCipher mcred chExts = do
         return serverParams
 
     generateSKX_ECDHE kxsAlg = do
-        let possibleECGroups = negotiatedGroupsInCommon ctx chExts `intersect` availableECGroups
+        let possibleECGroups =
+                negotiatedGroupsInCommon (supportedGroups serverSupported) chExts
+                    `intersect` availableECGroups
         grp <- case possibleECGroups of
             [] -> throwCore $ Error_Protocol "no common group" HandshakeFailure
             g : _ -> return g
@@ -302,8 +306,8 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
             (compressionID nullCompression)
             shExts
 
-negotiatedGroupsInCommon :: Context -> [ExtensionRaw] -> [Group]
-negotiatedGroupsInCommon ctx chExts =
+negotiatedGroupsInCommon :: [Group] -> [ExtensionRaw] -> [Group]
+negotiatedGroupsInCommon serverGroups chExts =
     lookupAndDecode
         EID_SupportedGroups
         MsgTClientHello
@@ -311,5 +315,4 @@ negotiatedGroupsInCommon ctx chExts =
         []
         common
   where
-    serverGroups = supportedGroups (ctxSupported ctx)
     common (SupportedGroups clientGroups) = serverGroups `intersect` clientGroups
