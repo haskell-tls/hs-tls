@@ -152,10 +152,10 @@ sendServerFirstFlight ServerParams{..} ctx usedCipher mcred chExts = do
             return $ b2 . (creq :)
         else return b2
   where
+    commonGroups = negotiatedGroupsInCommon (supportedGroups serverSupported) chExts
+    commonHashSigs = hashAndSignaturesInCommon (supportedHashSignatures serverSupported) chExts
     setup_DHE = do
-        let possibleFFGroups =
-                negotiatedGroupsInCommon (supportedGroups serverSupported) chExts
-                    `intersect` availableFFGroups
+        let possibleFFGroups = commonGroups `intersect` availableFFGroups
         (dhparams, priv, pub) <-
             case possibleFFGroups of
                 [] ->
@@ -184,8 +184,7 @@ sendServerFirstFlight ServerParams{..} ctx usedCipher mcred chExts = do
     -- If RSA is also used for key exchange, this function is
     -- not called.
     decideHashSig pubKey = do
-        let hashSigs = hashAndSignaturesInCommon (supportedHashSignatures serverSupported) chExts
-        case filter (pubKey `signatureCompatible`) hashSigs of
+        case filter (pubKey `signatureCompatible`) commonHashSigs of
             [] -> error ("no hash signature for " ++ pubkeyType pubKey)
             x : _ -> return x
 
@@ -211,9 +210,7 @@ sendServerFirstFlight ServerParams{..} ctx usedCipher mcred chExts = do
         return serverParams
 
     generateSKX_ECDHE kxsAlg = do
-        let possibleECGroups =
-                negotiatedGroupsInCommon (supportedGroups serverSupported) chExts
-                    `intersect` availableECGroups
+        let possibleECGroups = commonGroups `intersect` availableECGroups
         grp <- case possibleECGroups of
             [] -> throwCore $ Error_Protocol "no common group" HandshakeFailure
             g : _ -> return g
