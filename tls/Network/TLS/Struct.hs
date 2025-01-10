@@ -163,11 +163,11 @@ pattern CertificateType_Ed448_Sign   :: CertificateType
 pattern CertificateType_Ed448_Sign    = CertificateType 255 -- fixme:  dummy value
 
 instance Show CertificateType where
-    show CertificateType_RSA_Sign     = "CertificateType_RSA_Sign"
-    show CertificateType_DSA_Sign     = "CertificateType_DSA_Sign"
-    show CertificateType_ECDSA_Sign   = "CertificateType_ECDSA_Sign"
-    show CertificateType_Ed25519_Sign = "CertificateType_Ed25519_Sign"
-    show CertificateType_Ed448_Sign   = "CertificateType_Ed448_Sign"
+    show CertificateType_RSA_Sign     = "rsa_sign"
+    show CertificateType_DSA_Sign     = "dss_sign"
+    show CertificateType_ECDSA_Sign   = "ecdsa_sign"
+    show CertificateType_Ed25519_Sign = "ed25519_sign"
+    show CertificateType_Ed448_Sign   = "ed448_sign"
     show (CertificateType x)          = "CertificateType " ++ show x
 {- FOURMOLU_ENABLE -}
 
@@ -186,7 +186,7 @@ data DigitallySigned = DigitallySigned HashAndSignatureAlgorithm Signature
     deriving (Eq)
 
 instance Show DigitallySigned where
-    show (DigitallySigned hs sig) = "DigitallySigned " ++ show hs ++ " " ++ showBytesHex sig
+    show (DigitallySigned hs _sig) = "DigitallySigned " ++ show hs ++ " \"...\""
 
 ----------------------------------------------------------------
 
@@ -384,9 +384,9 @@ data ClientKeyXchgAlgorithmData
     deriving (Eq)
 
 instance Show ClientKeyXchgAlgorithmData where
-    show (CKX_RSA bs) = "CKX_RSA " ++ showBytesHex bs
+    show (CKX_RSA _bs) = "CKX_RSA \"...\""
     show (CKX_DH pub) = "CKX_DH " ++ show pub
-    show (CKX_ECDH bs) = "CKX_ECDH " ++ showBytesHex bs
+    show (CKX_ECDH _bs) = "CKX_ECDH \"...\""
 
 ----------------------------------------------------------------
 
