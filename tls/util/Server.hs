@@ -11,24 +11,27 @@ import Prelude hiding (getLine)
 
 import Imports
 
+-- "<>" creates *chunks* of lazy ByteString, resulting
+-- many TLS fragments.
+-- To prevent this, strict ByteString is created first and
+-- converted into lazy one.
+html :: BL8.ByteString
+html =
+    BL8.fromStrict $
+        "HTTP/1.1 200 OK\r\n"
+            <> "Context-Type: text/html\r\n"
+            <> "Content-Length: "
+            <> C8.pack (show (BS.length body))
+            <> "\r\n"
+            <> "\r\n"
+            <> body
+  where
+    body = "<html><<body>Hello world!</body></html>"
+
 server :: Context -> Bool -> IO ()
 server ctx showRequest = do
     recvRequest ctx showRequest
-    sendData ctx $
-        -- "<>" creates *chunks* of lazy ByteString, resulting
-        -- many TLS fragments.
-        -- To prevent this, strict ByteString is created first and
-        -- converted into lazy one.
-        BL8.fromStrict $
-            "HTTP/1.1 200 OK\r\n"
-                <> "Context-Type: text/html\r\n"
-                <> "Content-Length: "
-                <> C8.pack (show (BS.length body))
-                <> "\r\n"
-                <> "\r\n"
-                <> body
-  where
-    body = "<html><<body>Hello world!</body></html>"
+    sendData ctx html
 
 recvRequest :: Context -> Bool -> IO ()
 recvRequest ctx showRequest = do
