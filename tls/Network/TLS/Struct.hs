@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# OPTIONS_HADDOCK hide #-}
 
@@ -113,7 +114,15 @@ module Network.TLS.Struct (
     ExtensionID (..),
 ) where
 
-import Data.X509 (CertificateChain, DistinguishedName)
+import Data.X509 (
+    CertificateChain (..),
+    DistinguishedName,
+    certSubjectDN,
+    getCharacterStringRawData,
+    getDistinguishedElements,
+    getSigned,
+    signedObject,
+ )
 
 import Network.TLS.Crypto
 import Network.TLS.Error
@@ -399,7 +408,15 @@ data CH = CH
 
 newtype TLSCertificateChain = TLSCertificateChain CertificateChain deriving (Eq)
 instance Show TLSCertificateChain where
-    show _ = "CertificateChain"
+    show (TLSCertificateChain (CertificateChain xs)) = show $ map getName xs
+      where
+        getName =
+            maybe "" getCharacterStringRawData
+                . lookup [2, 5, 4, 3]
+                . getDistinguishedElements
+                . certSubjectDN
+                . signedObject
+                . getSigned
 
 data Handshake
     = ClientHello
