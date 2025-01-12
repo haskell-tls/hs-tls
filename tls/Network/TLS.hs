@@ -82,6 +82,7 @@ module Network.TLS (
     onCertificateRequest,
     OnServerCertificate,
     onServerCertificate,
+    validateClientCertificate,
     onSuggestALPN,
     onCustomFFDHEGroup,
     onServerFinished,

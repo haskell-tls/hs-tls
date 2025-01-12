@@ -17,6 +17,7 @@ module Network.TLS.X509 (
     ServiceID,
     wrapCertificateChecks,
     pubkeyType,
+    validateClientCertificate,
 ) where
 
 import Data.X509
@@ -59,3 +60,19 @@ wrapCertificateChecks l
 
 pubkeyType :: PubKey -> String
 pubkeyType = show . pubkeyToAlg
+
+validateClientCertificate
+    :: CertificateStore
+    -> ValidationCache
+    -> CertificateChain
+    -> IO CertificateUsage
+validateClientCertificate store cache cc =
+    wrapCertificateChecks
+        <$> validate
+            HashSHA256
+            defaultHooks
+            defaultChecks{checkFQHN = False}
+            store
+            cache
+            ("", mempty)
+            cc
