@@ -9,6 +9,7 @@ import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString.Char8 as C8
 import Data.IORef
 import qualified Data.Map.Strict as M
+import Data.X509.CertificateStore
 import Network.Run.TCP
 import Network.TLS
 import Network.TLS.Internal
@@ -16,6 +17,7 @@ import System.Console.GetOpt
 import System.Environment (getArgs)
 import System.Exit
 import System.IO
+import System.X509
 
 import Common
 import Imports
@@ -23,8 +25,10 @@ import Server
 
 data Options = Options
     { optDebugLog :: Bool
+    , optClientAuth :: Bool
     , optShow :: Bool
     , optKeyLogFile :: Maybe FilePath
+    , optTrustedAnchor :: Maybe FilePath
     , optGroups :: [Group]
     , optCertFile :: FilePath
     , optKeyFile :: FilePath
@@ -35,8 +39,10 @@ defaultOptions :: Options
 defaultOptions =
     Options
         { optDebugLog = False
+        , optClientAuth = False
         , optShow = False
         , optKeyLogFile = Nothing
+        , optTrustedAnchor = Nothing
         , optGroups = supportedGroups defaultSupported
         , optCertFile = "servercert.pem"
         , optKeyFile = "serverkey.pem"
@@ -45,6 +51,11 @@ defaultOptions =
 options :: [OptDescr (Options -> Options)]
 options =
     [ Option
+        ['a']
+        ["client-auth"]
+        (NoArg (\o -> o{optClientAuth = True}))
+        "require client authentication"
+    , Option
         ['d']
         ["debug"]
         (NoArg (\o -> o{optDebugLog = True}))
@@ -74,6 +85,11 @@ options =
         ["key"]
         (ReqArg (\fl o -> o{optKeyFile = fl}) "<file>")
         "key file"
+    , Option
+        ['t']
+        ["trusted-anchor"]
+        (ReqArg (\fl o -> o{optTrustedAnchor = Just fl}) "<file>")
+        "trusted anchor file"
     ]
 
 usage :: String
@@ -104,11 +120,20 @@ main = do
         exitFailure
     smgr <- newSessionManager
     Right cred@(!_cc, !_priv) <- credentialLoadX509 optCertFile optKeyFile
+    mstore <-
+        if optClientAuth
+            then do
+                mstore' <- case optTrustedAnchor of
+                    Nothing -> Just <$> getSystemCertificateStore
+                    Just file -> readCertificateStore file
+                when (isNothing mstore') $ showUsageAndExit "cannot set trusted anchor"
+                return mstore'
+            else return Nothing
     let keyLog = getLogger optKeyLogFile
         creds = Credentials [cred]
     makeCipherShowPretty
     runTCPServer (Just host) port $ \sock -> do
-        let sparams = getServerParams creds optGroups smgr keyLog
+        let sparams = getServerParams creds optGroups smgr keyLog mstore
         ctx <- contextNew sock sparams
         when optDebugLog $
             contextHookSetLogging
@@ -129,26 +154,38 @@ getServerParams
     -> [Group]
     -> SessionManager
     -> (String -> IO ())
+    -> Maybe CertificateStore
     -> ServerParams
-getServerParams creds groups sm keyLog =
+getServerParams creds groups sm keyLog mstore =
     defaultParamsServer
         { serverSupported = supported
         , serverShared = shared
         , serverHooks = hooks
         , serverDebug = debug
         , serverEarlyDataSize = 2048
+        , serverWantClientCert = isJust mstore
         }
   where
     shared =
         defaultShared
             { sharedCredentials = creds
             , sharedSessionManager = sm
+            , sharedCAStore = case mstore of
+                Just store -> store
+                Nothing -> sharedCAStore defaultShared
             }
     supported =
         defaultSupported
             { supportedGroups = groups
             }
-    hooks = defaultServerHooks{onALPNClientSuggest = Just chooseALPN}
+    hooks =
+        defaultServerHooks
+            { onALPNClientSuggest = Just chooseALPN
+            , onClientCertificate = case mstore of
+                Nothing -> onClientCertificate defaultServerHooks
+                Just _ ->
+                    validateClientCertificate (sharedCAStore shared) (sharedValidationCache shared)
+            }
     debug = defaultDebugParams{debugKeyLogger = keyLog}
 
 chooseALPN :: [ByteString] -> IO ByteString
