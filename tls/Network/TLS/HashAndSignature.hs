@@ -144,9 +144,9 @@ supportedSignatureSchemes =
     [ (HashIntrinsic, SignatureEd448)   -- ed448  (0x0808)
     , (HashIntrinsic, SignatureEd25519) -- ed25519(0x0807)
     -- ECDSA algorithms
-    , (HashSHA256,    SignatureECDSA)   -- ecdsa_secp256r1_sha256(0x0403)
+    , (HashSHA512,    SignatureECDSA)   -- ecdsa_secp512r1_sha512(0x0603)
     , (HashSHA384,    SignatureECDSA)   -- ecdsa_secp384r1_sha384(0x0503)
-    , (HashSHA512,    SignatureECDSA)   -- ecdsa_secp256r1_sha256(0x0403)
+    , (HashSHA256,    SignatureECDSA)   -- ecdsa_secp256r1_sha256(0x0403)
     -- RSASSA-PSS algorithms with public key OID RSASSA-PSS
     , (HashIntrinsic, SignatureRSApssRSAeSHA512) -- rsa_pss_pss_sha512(0x080b)
     , (HashIntrinsic, SignatureRSApssRSAeSHA384) -- rsa_pss_pss_sha384(0x080a)
