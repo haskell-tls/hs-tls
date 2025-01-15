@@ -570,6 +570,7 @@ decodeSignatureAlgorithms = runGetMaybe $ do
         getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
     leftoverLen <- remaining
     when (leftoverLen /= 0) $ fail "decodeSignatureAlgorithms: broken length"
+    when (null sas) $ fail "signature algorithms are empty"
     return $ SignatureAlgorithms sas
 
 ------------------------------------------------------------
