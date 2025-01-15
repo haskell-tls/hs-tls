@@ -8,7 +8,6 @@ import qualified Data.ByteString as B
 import Data.List
 import Data.Word
 import Data.X509 (
-    CertificateChain (..),
     ExtKeyUsageFlag,
     certPubKey,
     getCertificate,

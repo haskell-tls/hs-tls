@@ -192,6 +192,7 @@ module Network.TLS (
     CertificateUsage (..),
     CertificateRejectReason (..),
     CertificateType (..),
+    CertificateChain (..),
     HostName,
     MaxFragmentEnum (..),
 
