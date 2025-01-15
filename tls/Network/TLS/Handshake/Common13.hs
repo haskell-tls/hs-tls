@@ -446,6 +446,9 @@ checkHashSignatureValid13 hs =
          in throwCore $ Error_Protocol msg IllegalParameter
 
 isHashSignatureValid13 :: HashAndSignatureAlgorithm -> Bool
+isHashSignatureValid13 hs = hs `elem` signatureSchemesForTLS13
+
+{-
 isHashSignatureValid13 (HashIntrinsic, s) =
     s
         `elem` [ SignatureRSApssRSAeSHA256
@@ -460,6 +463,7 @@ isHashSignatureValid13 (HashIntrinsic, s) =
 isHashSignatureValid13 (h, SignatureECDSA) =
     h `elem` [HashSHA256, HashSHA384, HashSHA512]
 isHashSignatureValid13 _ = False
+-}
 
 ----------------------------------------------------------------
 

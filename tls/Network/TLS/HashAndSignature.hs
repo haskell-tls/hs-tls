@@ -33,6 +33,7 @@ module Network.TLS.HashAndSignature (
     ),
     HashAndSignatureAlgorithm,
     supportedSignatureSchemes,
+    signatureSchemesForTLS13,
 ) where
 
 import Network.TLS.Imports
@@ -158,5 +159,20 @@ supportedSignatureSchemes =
     -- Legacy algorithms
     , (HashSHA1,      SignatureRSA)    -- rsa_pkcs1_sha1  (0x0201)
     , (HashSHA1,      SignatureECDSA)  -- ecdsa_sha1      (0x0203)
+    ]
+
+signatureSchemesForTLS13 :: [(HashAlgorithm, SignatureAlgorithm)]
+signatureSchemesForTLS13 =
+    -- EdDSA algorithms
+    [ (HashIntrinsic, SignatureEd448)   -- ed448  (0x0808)
+    , (HashIntrinsic, SignatureEd25519) -- ed25519(0x0807)
+    -- ECDSA algorithms
+    , (HashSHA512,    SignatureECDSA) -- ecdsa_secp512r1_sha512(0x0603)
+    , (HashSHA384,    SignatureECDSA) -- ecdsa_secp384r1_sha384(0x0503)
+    , (HashSHA256,    SignatureECDSA) -- ecdsa_secp256r1_sha256(0x0403)
+    -- RSASSA-PSS algorithms with public key OID RSASSA-PSS
+    , (HashIntrinsic, SignatureRSApssRSAeSHA512) -- rsa_pss_pss_sha512(0x080b)
+    , (HashIntrinsic, SignatureRSApssRSAeSHA384) -- rsa_pss_pss_sha384(0x080a)
+    , (HashIntrinsic, SignatureRSApssRSAeSHA256) -- rsa_pss_pss_sha256(0x0809)
     ]
 {- FOURMOLU_ENABLE -}
