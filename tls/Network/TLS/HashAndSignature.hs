@@ -148,10 +148,14 @@ supportedSignatureSchemes =
     , (HashSHA512,    SignatureECDSA)   -- ecdsa_secp512r1_sha512(0x0603)
     , (HashSHA384,    SignatureECDSA)   -- ecdsa_secp384r1_sha384(0x0503)
     , (HashSHA256,    SignatureECDSA)   -- ecdsa_secp256r1_sha256(0x0403)
-    -- RSASSA-PSS algorithms with public key OID RSASSA-PSS
-    , (HashIntrinsic, SignatureRSApssRSAeSHA512) -- rsa_pss_pss_sha512(0x080b)
-    , (HashIntrinsic, SignatureRSApssRSAeSHA384) -- rsa_pss_pss_sha384(0x080a)
-    , (HashIntrinsic, SignatureRSApssRSAeSHA256) -- rsa_pss_pss_sha256(0x0809)
+    -- RSASSA-PSS RSAE algorithms
+    , (HashIntrinsic, SignatureRSApssRSAeSHA512) -- rsa_pss_rsae_sha512(0x0806)
+    , (HashIntrinsic, SignatureRSApssRSAeSHA384) -- rsa_pss_rsae_sha384(0x0805)
+    , (HashIntrinsic, SignatureRSApssRSAeSHA256) -- rsa_pss_rsae_sha256(0x0804)
+    -- RSASSA-PSS PSS algorithms with
+    , (HashIntrinsic, SignatureRSApsspssSHA512)  -- rsa_pss_pss_sha512(0x080b)
+    , (HashIntrinsic, SignatureRSApsspssSHA384)  -- rsa_pss_pss_sha384(0x080a)
+    , (HashIntrinsic, SignatureRSApsspssSHA256)  -- rsa_pss_pss_sha256(0x0809)
     -- RSASSA-PKCS1-v1_5 algorithms
     , (HashSHA512,    SignatureRSA)    -- rsa_pkcs1_sha512(0x0601)
     , (HashSHA384,    SignatureRSA)    -- rsa_pkcs1_sha384(0x0501)
@@ -167,12 +171,16 @@ signatureSchemesForTLS13 =
     [ (HashIntrinsic, SignatureEd448)   -- ed448  (0x0808)
     , (HashIntrinsic, SignatureEd25519) -- ed25519(0x0807)
     -- ECDSA algorithms
-    , (HashSHA512,    SignatureECDSA) -- ecdsa_secp512r1_sha512(0x0603)
-    , (HashSHA384,    SignatureECDSA) -- ecdsa_secp384r1_sha384(0x0503)
-    , (HashSHA256,    SignatureECDSA) -- ecdsa_secp256r1_sha256(0x0403)
-    -- RSASSA-PSS algorithms with public key OID RSASSA-PSS
-    , (HashIntrinsic, SignatureRSApssRSAeSHA512) -- rsa_pss_pss_sha512(0x080b)
-    , (HashIntrinsic, SignatureRSApssRSAeSHA384) -- rsa_pss_pss_sha384(0x080a)
-    , (HashIntrinsic, SignatureRSApssRSAeSHA256) -- rsa_pss_pss_sha256(0x0809)
+    , (HashSHA512,    SignatureECDSA)   -- ecdsa_secp512r1_sha512(0x0603)
+    , (HashSHA384,    SignatureECDSA)   -- ecdsa_secp384r1_sha384(0x0503)
+    , (HashSHA256,    SignatureECDSA)   -- ecdsa_secp256r1_sha256(0x0403)
+    -- RSASSA-PSS RSAE algorithms
+    , (HashIntrinsic, SignatureRSApssRSAeSHA512) -- rsa_pss_rsae_sha512(0x0806)
+    , (HashIntrinsic, SignatureRSApssRSAeSHA384) -- rsa_pss_rsae_sha384(0x0805)
+    , (HashIntrinsic, SignatureRSApssRSAeSHA256) -- rsa_pss_rsae_sha256(0x0804)
+    -- RSASSA-PSS PSS algorithms with
+    , (HashIntrinsic, SignatureRSApsspssSHA512)  -- rsa_pss_pss_sha512(0x080b)
+    , (HashIntrinsic, SignatureRSApsspssSHA384)  -- rsa_pss_pss_sha384(0x080a)
+    , (HashIntrinsic, SignatureRSApsspssSHA256)  -- rsa_pss_pss_sha256(0x0809)
     ]
 {- FOURMOLU_ENABLE -}
