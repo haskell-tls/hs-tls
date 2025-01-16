@@ -62,8 +62,9 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
         rtt0OK = authenticated && not hrr && rtt0 && rtt0accept && is0RTTvalid
     extraCreds <-
         usingState_ ctx getClientSNI >>= onServerNameIndication (serverHooks sparams)
-    let allCreds =
-            filterCredentials (isCredentialAllowed TLS13 chExtensions) $
+    let p = makeCredentialPredicate TLS13 chExtensions
+        allCreds =
+            filterCredentials (isCredentialAllowed TLS13 p) $
                 extraCreds `mappend` sharedCredentials (ctxShared ctx)
     ----------------------------------------------------------------
     established <- ctxEstablished ctx

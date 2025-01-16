@@ -84,8 +84,9 @@ credsTriple sparams CH{..} extraCreds
       where
         availableCiphers = getCiphers ciphers creds sigCreds
 
+    p = makeCredentialPredicate TLS12 chExtensions
     allCreds =
-        filterCredentials (isCredentialAllowed TLS12 chExtensions) $
+        filterCredentials (isCredentialAllowed TLS12 p) $
             extraCreds `mappend` sharedCredentials (serverShared sparams)
 
     -- When selecting a cipher we must ensure that it is allowed for the

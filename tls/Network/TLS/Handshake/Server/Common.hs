@@ -7,6 +7,7 @@ module Network.TLS.Handshake.Server.Common (
     credentialDigitalSignatureKey,
     filterCredentials,
     filterCredentialsWithHashSignatures,
+    makeCredentialPredicate,
     isCredentialAllowed,
     storePrivInfoServer,
     hashAndSignaturesInCommon,
@@ -51,23 +52,25 @@ credentialDigitalSignatureKey cred
 filterCredentials :: (Credential -> Bool) -> Credentials -> Credentials
 filterCredentials p (Credentials l) = Credentials (filter p l)
 
-isCredentialAllowed :: Version -> [ExtensionRaw] -> Credential -> Bool
-isCredentialAllowed ver exts cred =
+-- ECDSA keys are tested against supported elliptic curves until TLS12 but
+-- not after.  With TLS13, the curve is linked to the signature algorithm
+-- and client support is tested with signatureCompatible13.
+makeCredentialPredicate :: Version -> [ExtensionRaw] -> (Group -> Bool)
+makeCredentialPredicate ver exts
+    | ver >= TLS13 = const True
+    | otherwise =
+        lookupAndDecode
+            EID_SupportedGroups
+            MsgTClientHello
+            exts
+            (const True)
+            (\(SupportedGroups sg) -> (`elem` sg))
+
+isCredentialAllowed :: Version -> (Group -> Bool) -> Credential -> Bool
+isCredentialAllowed ver p cred =
     pubkey `versionCompatible` ver && satisfiesEcPredicate p pubkey
   where
     (pubkey, _) = credentialPublicPrivateKeys cred
-    -- ECDSA keys are tested against supported elliptic curves until TLS12 but
-    -- not after.  With TLS13, the curve is linked to the signature algorithm
-    -- and client support is tested with signatureCompatible13.
-    p
-        | ver < TLS13 =
-            lookupAndDecode
-                EID_SupportedGroups
-                MsgTClientHello
-                exts
-                (const True)
-                (\(SupportedGroups sg) -> (`elem` sg))
-        | otherwise = const True
 
 -- Filters a list of candidate credentials with credentialMatchesHashSignatures.
 --
