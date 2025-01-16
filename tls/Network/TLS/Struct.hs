@@ -112,6 +112,7 @@ module Network.TLS.Struct (
     module Network.TLS.HashAndSignature,
     ExtensionRaw (..),
     ExtensionID (..),
+    showCertificateChain,
 ) where
 
 import Data.X509 (
@@ -408,15 +409,18 @@ data CH = CH
 
 newtype TLSCertificateChain = TLSCertificateChain CertificateChain deriving (Eq)
 instance Show TLSCertificateChain where
-    show (TLSCertificateChain (CertificateChain xs)) = show $ map getName xs
-      where
-        getName =
-            maybe "" getCharacterStringRawData
-                . lookup [2, 5, 4, 3]
-                . getDistinguishedElements
-                . certSubjectDN
-                . signedObject
-                . getSigned
+    show (TLSCertificateChain cc) = showCertificateChain cc
+
+showCertificateChain :: CertificateChain -> String
+showCertificateChain (CertificateChain xs) = show $ map getName xs
+  where
+    getName =
+        maybe "" getCharacterStringRawData
+            . lookup [2, 5, 4, 3]
+            . getDistinguishedElements
+            . certSubjectDN
+            . signedObject
+            . getSigned
 
 data Handshake
     = ClientHello
