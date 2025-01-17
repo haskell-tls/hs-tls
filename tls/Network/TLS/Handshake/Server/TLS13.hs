@@ -155,7 +155,7 @@ expectCertVerify
     :: MonadIO m => ServerParams -> Context -> ByteString -> Handshake13 -> m ()
 expectCertVerify sparams ctx hChCc (CertVerify13 (DigitallySigned sigAlg sig)) = liftIO $ do
     certs@(CertificateChain cc) <-
-        checkValidClientCertChain ctx "finished 13 message expected"
+        checkValidClientCertChain ctx "invalid client certificate chain"
     pubkey <- case cc of
         [] -> throwCore $ Error_Protocol "client certificate missing" HandshakeFailure
         c : _ -> return $ certPubKey $ getCertificate c
