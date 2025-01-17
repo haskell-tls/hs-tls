@@ -75,6 +75,9 @@ import Network.TLS.Types
 import Network.TLS.Util.ASN1
 import Network.TLS.Wire
 
+----------------------------------------------------------------
+-- Header
+
 data CurrentParams = CurrentParams
     { cParamsVersion :: Version
     -- ^ current protocol version
@@ -83,7 +86,7 @@ data CurrentParams = CurrentParams
     }
     deriving (Show, Eq)
 
-{- marshall helpers -}
+-- marshall helpers
 getBinaryVersion :: Get Version
 getBinaryVersion = Version <$> getWord16
 
@@ -99,9 +102,7 @@ putHeaderType (ProtocolType pt) = putWord8 pt
 getHandshakeType :: Get HandshakeType
 getHandshakeType = HandshakeType <$> getWord8
 
-{-
- - decode and encode headers
- -}
+-- decode and encode headers
 decodeHeader :: ByteString -> Either TLSError Header
 decodeHeader =
     runGetErr "header" $ Header <$> getHeaderType <*> getBinaryVersion <*> getWord16
@@ -109,11 +110,24 @@ decodeHeader =
 encodeHeader :: Header -> ByteString
 encodeHeader (Header pt ver len) = runPut (putHeaderType pt >> putBinaryVersion ver >> putWord16 len)
 
-{- FIXME check len <= 2^14 -}
+-- FIXME check len <= 2^14
 
-{-
- - decode and encode ALERT
- -}
+------------------------------------------------------------
+-- CCS
+
+decodeChangeCipherSpec :: ByteString -> Either TLSError ()
+decodeChangeCipherSpec = runGetErr "changecipherspec" $ do
+    x <- getWord8
+    when (x /= 1) $ fail "unknown change cipher spec content"
+    len <- remaining
+    when (len /= 0) $ fail "the length of CSS must be 1"
+
+encodeChangeCipherSpec :: ByteString
+encodeChangeCipherSpec = runPut (putWord8 1)
+
+----------------------------------------------------------------
+-- Alert
+
 decodeAlert :: Get (AlertLevel, AlertDescription)
 decodeAlert = do
     al <- AlertLevel <$> getWord8
@@ -134,7 +148,9 @@ encodeAlerts l = runPut $ mapM_ encodeAlert l
   where
     encodeAlert (al, ad) = putWord8 (fromAlertLevel al) >> putWord8 (fromAlertDescription ad)
 
-{- decode and encode HANDSHAKE -}
+----------------------------------------------------------------
+-- decode HANDSHAKE
+
 decodeHandshakeRecord :: ByteString -> GetResult (HandshakeType, ByteString)
 decodeHandshakeRecord = runGet "handshake-record" $ do
     ty <- getHandshakeType
@@ -148,6 +164,7 @@ decodeHandshake cp ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
     HandshakeType_HelloRequest     -> decodeHelloRequest
     HandshakeType_ClientHello      -> decodeClientHello
     HandshakeType_ServerHello      -> decodeServerHello
+    HandshakeType_NewSessionTicket -> decodeNewSessionTicket
     HandshakeType_Certificate      -> decodeCertificate
     HandshakeType_ServerKeyXchg    -> decodeServerKeyXchg cp
     HandshakeType_CertRequest      -> decodeCertRequest cp
@@ -155,7 +172,6 @@ decodeHandshake cp ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
     HandshakeType_CertVerify       -> decodeCertVerify cp
     HandshakeType_ClientKeyXchg    -> decodeClientKeyXchg cp
     HandshakeType_Finished         -> decodeFinished
-    HandshakeType_NewSessionTicket -> decodeNewSessionTicket
     x -> fail $ "Unsupported HandshakeType " ++ show x
 {- FOURMOLU_ENABLE -}
 
@@ -193,8 +209,8 @@ decodeServerHello = do
             else return []
     return $ ServerHello ver random session cipherid compressionid exts
 
-decodeServerHelloDone :: Get Handshake
-decodeServerHelloDone = return ServerHelloDone
+decodeNewSessionTicket :: Get Handshake
+decodeNewSessionTicket = NewSessionTicket <$> getWord32 <*> getOpaque16
 
 decodeCertificate :: Get Handshake
 decodeCertificate = do
@@ -207,67 +223,13 @@ decodeCertificate = do
   where
     getCertRaw = getOpaque24 >>= \cert -> return (3 + B.length cert, cert)
 
-decodeFinished :: Get Handshake
-decodeFinished = Finished . VerifyData <$> (remaining >>= getBytes)
+----
 
-decodeNewSessionTicket :: Get Handshake
-decodeNewSessionTicket = NewSessionTicket <$> getWord32 <*> getOpaque16
-
-decodeCertRequest :: CurrentParams -> Get Handshake
-decodeCertRequest _cp = do
-    certTypes <- map CertificateType <$> getWords8
-    sigHashAlgs <- getWord16 >>= getSignatureHashAlgorithms
-    CertRequest certTypes sigHashAlgs <$> getDNames
-  where
-    getSignatureHashAlgorithms len =
-        getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
-
--- | Decode a list CA distinguished names
-getDNames :: Get [DistinguishedName]
-getDNames = do
-    dNameLen <- getWord16
-    -- FIXME: Decide whether to remove this check completely or to make it an option.
-    -- when (cParamsVersion cp < TLS12 && dNameLen < 3) $ fail "certrequest distinguishname not of the correct size"
-    getList (fromIntegral dNameLen) getDName
-  where
-    getDName = do
-        dName <- getOpaque16
-        when (B.length dName == 0) $ fail "certrequest: invalid DN length"
-        dn <-
-            either fail return $ decodeASN1Object "cert request DistinguishedName" dName
-        return (2 + B.length dName, dn)
-
-decodeCertVerify :: CurrentParams -> Get Handshake
-decodeCertVerify cp = CertVerify <$> getDigitallySigned (cParamsVersion cp)
-
-decodeClientKeyXchg :: CurrentParams -> Get Handshake
-decodeClientKeyXchg cp =
-    -- case  ClientKeyXchg <$> (remaining >>= getBytes)
+decodeServerKeyXchg :: CurrentParams -> Get Handshake
+decodeServerKeyXchg cp =
     case cParamsKeyXchgType cp of
-        Nothing -> fail "no client key exchange type"
-        Just cke -> ClientKeyXchg <$> parseCKE cke
-  where
-    parseCKE CipherKeyExchange_RSA = CKX_RSA <$> (remaining >>= getBytes)
-    parseCKE CipherKeyExchange_DHE_RSA = parseClientDHPublic
-    parseCKE CipherKeyExchange_DHE_DSA = parseClientDHPublic
-    parseCKE CipherKeyExchange_DH_Anon = parseClientDHPublic
-    parseCKE CipherKeyExchange_ECDHE_RSA = parseClientECDHPublic
-    parseCKE CipherKeyExchange_ECDHE_ECDSA = parseClientECDHPublic
-    parseCKE _ = fail "unsupported client key exchange type"
-    parseClientDHPublic = CKX_DH . dhPublic <$> getInteger16
-    parseClientECDHPublic = CKX_ECDH <$> getOpaque8
-
-decodeServerKeyXchg_DH :: Get ServerDHParams
-decodeServerKeyXchg_DH = getServerDHParams
-
--- We don't support ECDH_Anon at this moment
--- decodeServerKeyXchg_ECDH :: Get ServerECDHParams
-
-decodeServerKeyXchg_RSA :: Get ServerRSAParams
-decodeServerKeyXchg_RSA =
-    ServerRSAParams
-        <$> getInteger16 -- modulus
-        <*> getInteger16 -- exponent
+        Just cke -> ServerKeyXchg <$> decodeServerKeyXchgAlgorithmData (cParamsVersion cp) cke
+        Nothing -> ServerKeyXchg . SKX_Unparsed <$> (remaining >>= getBytes)
 
 decodeServerKeyXchgAlgorithmData
     :: Version
@@ -298,11 +260,59 @@ decodeServerKeyXchgAlgorithmData ver cke = toCKE
             bs <- remaining >>= getBytes
             return $ SKX_Unknown bs
 
-decodeServerKeyXchg :: CurrentParams -> Get Handshake
-decodeServerKeyXchg cp =
+decodeServerKeyXchg_DH :: Get ServerDHParams
+decodeServerKeyXchg_DH = getServerDHParams
+
+-- We don't support ECDH_Anon at this moment
+-- decodeServerKeyXchg_ECDH :: Get ServerECDHParams
+
+decodeServerKeyXchg_RSA :: Get ServerRSAParams
+decodeServerKeyXchg_RSA =
+    ServerRSAParams
+        <$> getInteger16 -- modulus
+        <*> getInteger16 -- exponent
+
+----
+
+decodeCertRequest :: CurrentParams -> Get Handshake
+decodeCertRequest _cp = do
+    certTypes <- map CertificateType <$> getWords8
+    sigHashAlgs <- getWord16 >>= getSignatureHashAlgorithms
+    CertRequest certTypes sigHashAlgs <$> getDNames
+  where
+    getSignatureHashAlgorithms len =
+        getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
+
+----
+
+decodeServerHelloDone :: Get Handshake
+decodeServerHelloDone = return ServerHelloDone
+
+decodeCertVerify :: CurrentParams -> Get Handshake
+decodeCertVerify cp = CertVerify <$> getDigitallySigned (cParamsVersion cp)
+
+decodeClientKeyXchg :: CurrentParams -> Get Handshake
+decodeClientKeyXchg cp =
+    -- case  ClientKeyXchg <$> (remaining >>= getBytes)
     case cParamsKeyXchgType cp of
-        Just cke -> ServerKeyXchg <$> decodeServerKeyXchgAlgorithmData (cParamsVersion cp) cke
-        Nothing -> ServerKeyXchg . SKX_Unparsed <$> (remaining >>= getBytes)
+        Nothing -> fail "no client key exchange type"
+        Just cke -> ClientKeyXchg <$> parseCKE cke
+  where
+    parseCKE CipherKeyExchange_RSA = CKX_RSA <$> (remaining >>= getBytes)
+    parseCKE CipherKeyExchange_DHE_RSA = parseClientDHPublic
+    parseCKE CipherKeyExchange_DHE_DSA = parseClientDHPublic
+    parseCKE CipherKeyExchange_DH_Anon = parseClientDHPublic
+    parseCKE CipherKeyExchange_ECDHE_RSA = parseClientECDHPublic
+    parseCKE CipherKeyExchange_ECDHE_ECDSA = parseClientECDHPublic
+    parseCKE _ = fail "unsupported client key exchange type"
+    parseClientDHPublic = CKX_DH . dhPublic <$> getInteger16
+    parseClientECDHPublic = CKX_ECDH <$> getOpaque8
+
+decodeFinished :: Get Handshake
+decodeFinished = Finished . VerifyData <$> (remaining >>= getBytes)
+
+----------------------------------------------------------------
+-- encode HANDSHAKE
 
 encodeHandshake :: Handshake -> ByteString
 encodeHandshake o =
@@ -315,6 +325,7 @@ encodeHandshakeHeader :: HandshakeType -> Int -> Put
 encodeHandshakeHeader ty len = putWord8 (fromHandshakeType ty) >> putWord24 len
 
 encodeHandshake' :: Handshake -> ByteString
+encodeHandshake' HelloRequest = ""
 encodeHandshake' (ClientHello version random compressionIDs CH{..}) = runPut $ do
     putBinaryVersion version
     putClientRandom32 random
@@ -331,12 +342,10 @@ encodeHandshake' (ServerHello version random session cipherid compressionID exts
     putWord8 compressionID
     putExtensions exts
     return ()
+encodeHandshake' (NewSessionTicket life ticket) = runPut $ do
+    putWord32 life
+    putOpaque16 ticket
 encodeHandshake' (Certificate (TLSCertificateChain cc)) = encodeCertificate cc
-encodeHandshake' (ClientKeyXchg ckx) = runPut $ do
-    case ckx of
-        CKX_RSA encryptedPreMain -> putBytes encryptedPreMain
-        CKX_DH clientDHPublic -> putInteger16 $ dhUnwrapPublic clientDHPublic
-        CKX_ECDH bytes -> putOpaque8 bytes
 encodeHandshake' (ServerKeyXchg skg) = runPut $
     case skg of
         SKX_RSA _ -> error "encodeHandshake' SKX_RSA not implemented"
@@ -347,8 +356,6 @@ encodeHandshake' (ServerKeyXchg skg) = runPut $
         SKX_ECDHE_ECDSA params sig -> putServerECDHParams params >> putDigitallySigned sig
         SKX_Unparsed bytes -> putBytes bytes
         _ -> error ("encodeHandshake': cannot handle: " ++ show skg)
-encodeHandshake' HelloRequest = ""
-encodeHandshake' ServerHelloDone = ""
 encodeHandshake' (CertRequest certTypes sigAlgs certAuthorities) = runPut $ do
     putWords8 (map fromCertificateType certTypes)
     putWords16 $
@@ -357,13 +364,32 @@ encodeHandshake' (CertRequest certTypes sigAlgs certAuthorities) = runPut $ do
             )
             sigAlgs
     putDNames certAuthorities
+encodeHandshake' ServerHelloDone = ""
 encodeHandshake' (CertVerify digitallySigned) = runPut $ putDigitallySigned digitallySigned
+encodeHandshake' (ClientKeyXchg ckx) = runPut $ do
+    case ckx of
+        CKX_RSA encryptedPreMain -> putBytes encryptedPreMain
+        CKX_DH clientDHPublic -> putInteger16 $ dhUnwrapPublic clientDHPublic
+        CKX_ECDH bytes -> putOpaque8 bytes
 encodeHandshake' (Finished (VerifyData opaque)) = runPut $ putBytes opaque
-encodeHandshake' (NewSessionTicket life ticket) = runPut $ do
-    putWord32 life
-    putOpaque16 ticket
 
 ------------------------------------------------------------
+-- CA distinguished names
+
+-- | Decode a list CA distinguished names
+getDNames :: Get [DistinguishedName]
+getDNames = do
+    dNameLen <- getWord16
+    -- FIXME: Decide whether to remove this check completely or to make it an option.
+    -- when (cParamsVersion cp < TLS12 && dNameLen < 3) $ fail "certrequest distinguishname not of the correct size"
+    getList (fromIntegral dNameLen) getDName
+  where
+    getDName = do
+        dName <- getOpaque16
+        when (B.length dName == 0) $ fail "certrequest: invalid DN length"
+        dn <-
+            either fail return $ decodeASN1Object "cert request DistinguishedName" dName
+        return (2 + B.length dName, dn)
 
 -- | Encode a list of distinguished names.
 putDNames :: [DistinguishedName] -> Put
@@ -375,6 +401,8 @@ putDNames dnames = do
   where
     -- Convert a distinguished name to its DER encoding.
     encodeCA dn = return $ encodeASN1Object dn
+
+------------------------------------------------------------
 
 {- FIXME make sure it return error if not 32 available -}
 getRandom32 :: Get ByteString
@@ -395,6 +423,8 @@ putClientRandom32 (ClientRandom r) = putRandom32 r
 putServerRandom32 :: ServerRandom -> Put
 putServerRandom32 (ServerRandom r) = putRandom32 r
 
+------------------------------------------------------------
+
 getSession :: Get Session
 getSession = do
     len8 <- getWord8
@@ -407,6 +437,8 @@ getSession = do
 putSession :: Session -> Put
 putSession (Session Nothing) = putWord8 0
 putSession (Session (Just s)) = putOpaque8 s
+
+------------------------------------------------------------
 
 getExtensions :: Int -> Get [ExtensionRaw]
 getExtensions 0 = return []
@@ -424,6 +456,8 @@ putExtensions :: [ExtensionRaw] -> Put
 putExtensions [] = return ()
 putExtensions es = putOpaque16 (runPut $ mapM_ putExtension es)
 
+------------------------------------------------------------
+
 getSignatureHashAlgorithm :: Get HashAndSignatureAlgorithm
 getSignatureHashAlgorithm = do
     h <- HashAlgorithm <$> getWord8
@@ -434,11 +468,15 @@ putSignatureHashAlgorithm :: HashAndSignatureAlgorithm -> Put
 putSignatureHashAlgorithm (HashAlgorithm h, SignatureAlgorithm s) =
     putWord8 h >> putWord8 s
 
+------------------------------------------------------------
+
 getServerDHParams :: Get ServerDHParams
 getServerDHParams = ServerDHParams <$> getBigNum16 <*> getBigNum16 <*> getBigNum16
 
 putServerDHParams :: ServerDHParams -> Put
 putServerDHParams (ServerDHParams p g y) = mapM_ putBigNum16 [p, g, y]
+
+------------------------------------------------------------
 
 -- RFC 4492 Section 5.4 Server Key Exchange
 getServerECDHParams :: Get ServerECDHParams
@@ -461,6 +499,8 @@ putServerECDHParams (ServerECDHParams (Group grp) grppub) = do
     putWord16 grp -- ECParameters NamedCurve
     putOpaque8 $ encodeGroupPublic grppub -- ECPoint
 
+------------------------------------------------------------
+
 getDigitallySigned :: Version -> Get DigitallySigned
 getDigitallySigned _ver =
     DigitallySigned
@@ -471,19 +511,7 @@ putDigitallySigned :: DigitallySigned -> Put
 putDigitallySigned (DigitallySigned h sig) =
     putSignatureHashAlgorithm h >> putOpaque16 sig
 
-{-
- - decode and encode ALERT
- -}
-
-decodeChangeCipherSpec :: ByteString -> Either TLSError ()
-decodeChangeCipherSpec = runGetErr "changecipherspec" $ do
-    x <- getWord8
-    when (x /= 1) $ fail "unknown change cipher spec content"
-    len <- remaining
-    when (len /= 0) $ fail "the length of CSS must be 1"
-
-encodeChangeCipherSpec :: ByteString
-encodeChangeCipherSpec = runPut (putWord8 1)
+------------------------------------------------------------
 
 -- RSA pre-main secret
 decodePreMainSecret :: ByteString -> Either TLSError (Version, ByteString)
@@ -494,23 +522,9 @@ decodePreMainSecret =
 encodePreMainSecret :: Version -> ByteString -> ByteString
 encodePreMainSecret version bytes = runPut (putBinaryVersion version >> putBytes bytes)
 
--- | in certain cases, we haven't manage to decode ServerKeyExchange properly,
--- because the decoding was too eager and the cipher wasn't been set yet.
--- we keep the Server Key Exchange in it unparsed format, and this function is
--- able to really decode the server key xchange if it's unparsed.
-decodeReallyServerKeyXchgAlgorithmData
-    :: Version
-    -> CipherKeyExchangeType
-    -> ByteString
-    -> Either TLSError ServerKeyXchgAlgorithmData
-decodeReallyServerKeyXchgAlgorithmData ver cke =
-    runGetErr
-        "server-key-xchg-algorithm-data"
-        (decodeServerKeyXchgAlgorithmData ver cke)
+------------------------------------------------------------
+-- generate things for packet content
 
-{-
- - generate things for packet content
- -}
 type PRF = ByteString -> ByteString -> Int -> ByteString
 
 -- | The TLS12 PRF is cipher specific, and some TLS12 algorithms use SHA384
@@ -595,6 +609,8 @@ generateServerFinished
 generateServerFinished ver ciph =
     generateFinished_TLS (getPRF ver ciph) "server finished"
 
+------------------------------------------------------------
+
 encodeSignedDHParams
     :: ServerDHParams -> ClientRandom -> ServerRandom -> ByteString
 encodeSignedDHParams dhparams cran sran =
@@ -614,3 +630,19 @@ encodeCertificate :: CertificateChain -> ByteString
 encodeCertificate cc = runPut $ putOpaque24 (runPut $ mapM_ putOpaque24 certs)
   where
     (CertificateChainRaw certs) = encodeCertificateChain cc
+
+------------------------------------------------------------
+
+-- | in certain cases, we haven't manage to decode ServerKeyExchange properly,
+-- because the decoding was too eager and the cipher wasn't been set yet.
+-- we keep the Server Key Exchange in it unparsed format, and this function is
+-- able to really decode the server key xchange if it's unparsed.
+decodeReallyServerKeyXchgAlgorithmData
+    :: Version
+    -> CipherKeyExchangeType
+    -> ByteString
+    -> Either TLSError ServerKeyXchgAlgorithmData
+decodeReallyServerKeyXchgAlgorithmData ver cke =
+    runGetErr
+        "server-key-xchg-algorithm-data"
+        (decodeServerKeyXchgAlgorithmData ver cke)
