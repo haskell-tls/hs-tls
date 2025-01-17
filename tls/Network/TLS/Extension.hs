@@ -30,6 +30,7 @@ module Network.TLS.Extension (
         EID_Padding,
         EID_EncryptThenMAC,
         EID_ExtendedMainSecret,
+        EID_CompressCertificate,
         EID_SessionTicket,
         EID_PreSharedKey,
         EID_EarlyData,
@@ -65,6 +66,8 @@ module Network.TLS.Extension (
     SecureRenegotiation (..),
     ApplicationLayerProtocolNegotiation (..),
     ExtendedMainSecret (..),
+    CertificateCompressionAlgorithm (.., CCA_Zlib, CCA_Brotli, CCA_Zstd),
+    CompressCertificate (..),
     SupportedGroups (..),
     Group (..),
     EcPointFormatsSupported (..),
@@ -173,6 +176,8 @@ pattern EID_EncryptThenMAC                      :: ExtensionID -- RFC7366
 pattern EID_EncryptThenMAC                       = ExtensionID 0x16
 pattern EID_ExtendedMainSecret                  :: ExtensionID -- REF7627
 pattern EID_ExtendedMainSecret                   = ExtensionID 0x17
+pattern EID_CompressCertificate                 :: ExtensionID -- RFC8879
+pattern EID_CompressCertificate                  = ExtensionID 0x1b
 pattern EID_SessionTicket                       :: ExtensionID -- RFC4507
 pattern EID_SessionTicket                        = ExtensionID 0x23
 pattern EID_PreSharedKey                        :: ExtensionID -- RFC8446
@@ -225,6 +230,7 @@ instance Show ExtensionID where
     show EID_Padding                 = "Padding"
     show EID_EncryptThenMAC          = "EncryptThenMAC"
     show EID_ExtendedMainSecret      = "ExtendedMainSecret"
+    show EID_CompressCertificate     = "CompressCertificate"
     show EID_SessionTicket           = "SessionTicket"
     show EID_PreSharedKey            = "PreSharedKey"
     show EID_EarlyData               = "EarlyData"
@@ -269,6 +275,7 @@ definedExtensions =
     , EID_Padding
     , EID_EncryptThenMAC
     , EID_ExtendedMainSecret
+    , EID_CompressCertificate
     , EID_SessionTicket
     , EID_PreSharedKey
     , EID_EarlyData
@@ -296,6 +303,7 @@ supportedExtensions =
     , EID_Heartbeat                           -- 0x0f
     , EID_ApplicationLayerProtocolNegotiation -- 0x10
     , EID_ExtendedMainSecret                  -- 0x17
+    , EID_CompressCertificate                 -- 0x1b
     , EID_SessionTicket                       -- 0x23
     , EID_PreSharedKey                        -- 0x29
     , EID_EarlyData                           -- 0x2a
@@ -326,6 +334,7 @@ instance Show ExtensionRaw where
     show (ExtensionRaw eid@EID_Heartbeat bs) = showExtensionRaw eid bs decodeHeartBeat
     show (ExtensionRaw eid@EID_ApplicationLayerProtocolNegotiation bs) = showExtensionRaw eid bs decodeApplicationLayerProtocolNegotiation
     show (ExtensionRaw eid@EID_ExtendedMainSecret _) = show eid
+    show (ExtensionRaw eid@EID_CompressCertificate bs) = showExtensionRaw eid bs decodeCompressCertificate
     show (ExtensionRaw eid@EID_SessionTicket bs) = showExtensionRaw eid bs decodeSessionTicket
     show (ExtensionRaw eid@EID_PreSharedKey bs) = show eid ++ " " ++ showBytesHex bs
     show (ExtensionRaw eid@EID_EarlyData _) = show eid
@@ -640,6 +649,52 @@ instance Extension ExtendedMainSecret where
     extensionDecode MsgTClientHello "" = Just ExtendedMainSecret
     extensionDecode MsgTServerHello "" = Just ExtendedMainSecret
     extensionDecode _ _ = error "extensionDecode: ExtendedMainSecret"
+
+------------------------------------------------------------
+
+newtype CertificateCompressionAlgorithm
+    = CertificateCompressionAlgorithm Word16
+    deriving (Eq)
+
+{- FOURMOLU_DISABLE -}
+pattern CCA_Zlib   :: CertificateCompressionAlgorithm
+pattern CCA_Zlib    = CertificateCompressionAlgorithm 1
+pattern CCA_Brotli :: CertificateCompressionAlgorithm
+pattern CCA_Brotli  = CertificateCompressionAlgorithm 2
+pattern CCA_Zstd   :: CertificateCompressionAlgorithm
+pattern CCA_Zstd    = CertificateCompressionAlgorithm 3
+
+instance Show CertificateCompressionAlgorithm where
+    show CCA_Zlib   = "zlib"
+    show CCA_Brotli = "brotli"
+    show CCA_Zstd   = "zstd"
+    show (CertificateCompressionAlgorithm n) = "CertificateCompressionAlgorithm " ++ show n
+{- FOURMOLU_ENABLE -}
+
+data CompressCertificate = CompressCertificate [CertificateCompressionAlgorithm]
+    deriving (Show, Eq)
+
+instance Extension CompressCertificate where
+    extensionID _ = EID_CompressCertificate
+    extensionEncode (CompressCertificate cs) = runPut $ do
+        putWord8 $ fromIntegral (length cs * 2)
+        mapM_ putCCA cs
+      where
+        putCCA (CertificateCompressionAlgorithm n) = putWord16 n
+    extensionDecode _ = decodeCompressCertificate
+
+decodeCompressCertificate :: ByteString -> Maybe CompressCertificate
+decodeCompressCertificate = runGetMaybe $ do
+    len <- fromIntegral <$> getWord8
+    cs <- getList len getCCA
+    when (null cs) $ fail "empty list of CertificateCompressionAlgorithm"
+    leftoverLen <- remaining
+    when (leftoverLen /= 0) $ fail "decodeCompressCertificate: broken length"
+    return $ CompressCertificate cs
+  where
+    getCCA = do
+        cca <- CertificateCompressionAlgorithm <$> getWord16
+        return (2, cca)
 
 ------------------------------------------------------------
 
