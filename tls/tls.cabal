@@ -133,7 +133,8 @@ library
         network >= 3.1,
         serialise >= 0.2 && < 0.3,
         transformers >= 0.5 && < 0.7,
-        unix-time >= 0.4.11 && < 0.5
+        unix-time >= 0.4.11 && < 0.5,
+        zlib >= 0.7 && < 0.8
 
 test-suite spec
     type:               exitcode-stdio-1.0

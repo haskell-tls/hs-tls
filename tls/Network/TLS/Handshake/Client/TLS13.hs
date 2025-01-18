@@ -203,7 +203,14 @@ processCertRequest13 ctx token exts = do
 -- not used in 0-RTT
 expectCertAndVerify
     :: MonadIO m => ClientParams -> Context -> Handshake13 -> RecvHandshake13M m ()
-expectCertAndVerify cparams ctx (Certificate13 _ (TLSCertificateChain cc) _) = do
+expectCertAndVerify cparams ctx (Certificate13 _ (TLSCertificateChain cc) _) = processCertAndVerify cparams ctx cc
+expectCertAndVerify cparams ctx (CompressedCertificate13 _ (TLSCertificateChain cc) _) = processCertAndVerify cparams ctx cc
+expectCertAndVerify _ _ p = unexpected (show p) (Just "server certificate")
+
+processCertAndVerify
+    :: MonadIO m
+    => ClientParams -> Context -> CertificateChain -> RecvHandshake13M m ()
+processCertAndVerify cparams ctx cc = do
     liftIO $ usingState_ ctx $ setServerCertificateChain cc
     liftIO $ doCertificate cparams ctx cc
     let pubkey = certPubKey $ getCertificate $ getCertificateChainLeaf cc
@@ -211,7 +218,6 @@ expectCertAndVerify cparams ctx (Certificate13 _ (TLSCertificateChain cc) _) = d
     checkDigitalSignatureKey ver pubkey
     usingHState ctx $ setPublicKey pubkey
     recvHandshake13hash ctx $ expectCertVerify ctx pubkey
-expectCertAndVerify _ _ p = unexpected (show p) (Just "server certificate")
 
 ----------------------------------------------------------------
 
@@ -274,7 +280,14 @@ sendClientSecondFlight13' cparams ctx choice hkey rtt0accepted eexts = do
         sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
     let clientHandshakeSecret = triClient hkey
     setTxRecordState ctx usedHash usedCipher clientHandshakeSecret
-    sendClientFlight13 cparams ctx usedHash clientHandshakeSecret
+    let zlib =
+            lookupAndDecode
+                EID_CompressCertificate
+                MsgTClientHello
+                eexts
+                False
+                (\(CompressCertificate ccas) -> CCA_Zlib `elem` ccas)
+    sendClientFlight13 cparams ctx usedHash clientHandshakeSecret zlib
     appKey <- switchToApplicationSecret hChSf
     let applicationSecret = triBase appKey
     setResumptionSecret applicationSecret
@@ -314,8 +327,8 @@ uncertsig (SignatureAlgorithmsCert a) = Just a
 -}
 
 sendClientFlight13
-    :: ClientParams -> Context -> Hash -> ClientTrafficSecret a -> IO ()
-sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
+    :: ClientParams -> Context -> Hash -> ClientTrafficSecret a -> Bool -> IO ()
+sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) zlib = do
     mcc <- clientChain cparams ctx
     runPacketFlight ctx $ do
         case mcc of
@@ -331,8 +344,9 @@ sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
         let (CertificateChain certs) = chain
             certExts = replicate (length certs) []
             cHashSigs = filter isHashSignatureValid13 $ supportedHashSignatures $ ctxSupported ctx
+        let certtag = if zlib then CompressedCertificate13 else Certificate13
         loadPacket13 ctx $
-            Handshake13 [Certificate13 token (TLSCertificateChain chain) certExts]
+            Handshake13 [certtag token (TLSCertificateChain chain) certExts]
         case certs of
             [] -> return ()
             _ -> do
@@ -361,7 +375,12 @@ postHandshakeAuthClientWith cparams ctx h@(CertRequest13 certReqCtx exts) =
                 Error_Protocol
                     "unexpected post-handshake authentication request"
                     UnexpectedMessage
-        sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret applicationSecretN)
+        sendClientFlight13
+            cparams
+            ctx
+            usedHash
+            (ClientTrafficSecret applicationSecretN)
+            False -- fixme
 postHandshakeAuthClientWith _ _ _ =
     throwCore $
         Error_Protocol

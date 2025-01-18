@@ -102,9 +102,11 @@ module Network.TLS.Struct (
         HandshakeType_CertVerify,
         HandshakeType_ClientKeyXchg,
         HandshakeType_Finished,
-        HandshakeType_KeyUpdate
+        HandshakeType_KeyUpdate,
+        HandshakeType_CompressedCertificate
     ),
     TLSCertificateChain (..),
+    emptyTLSCertificateChain,
     Handshake (..),
     CH (..),
     packetType,
@@ -269,48 +271,51 @@ newtype HandshakeType = HandshakeType {fromHandshakeType :: Word8}
     deriving (Eq)
 
 {- FOURMOLU_DISABLE -}
-pattern HandshakeType_HelloRequest        :: HandshakeType
-pattern HandshakeType_HelloRequest         = HandshakeType 0
-pattern HandshakeType_ClientHello         :: HandshakeType
-pattern HandshakeType_ClientHello          = HandshakeType 1
-pattern HandshakeType_ServerHello         :: HandshakeType
-pattern HandshakeType_ServerHello          = HandshakeType 2
-pattern HandshakeType_NewSessionTicket    :: HandshakeType
-pattern HandshakeType_NewSessionTicket     = HandshakeType 4
-pattern HandshakeType_EndOfEarlyData      :: HandshakeType
-pattern HandshakeType_EndOfEarlyData       = HandshakeType 5
-pattern HandshakeType_EncryptedExtensions :: HandshakeType
-pattern HandshakeType_EncryptedExtensions  = HandshakeType 8
-pattern HandshakeType_Certificate         :: HandshakeType
-pattern HandshakeType_Certificate          = HandshakeType 11
-pattern HandshakeType_ServerKeyXchg       :: HandshakeType
-pattern HandshakeType_ServerKeyXchg        = HandshakeType 12
-pattern HandshakeType_CertRequest         :: HandshakeType
-pattern HandshakeType_CertRequest          = HandshakeType 13
-pattern HandshakeType_ServerHelloDone     :: HandshakeType
-pattern HandshakeType_ServerHelloDone      = HandshakeType 14
-pattern HandshakeType_CertVerify          :: HandshakeType
-pattern HandshakeType_CertVerify           = HandshakeType 15
-pattern HandshakeType_ClientKeyXchg       :: HandshakeType
-pattern HandshakeType_ClientKeyXchg        = HandshakeType 16
-pattern HandshakeType_Finished            :: HandshakeType
-pattern HandshakeType_Finished             = HandshakeType 20
-pattern HandshakeType_KeyUpdate           :: HandshakeType
-pattern HandshakeType_KeyUpdate            = HandshakeType 24
+pattern HandshakeType_HelloRequest          :: HandshakeType
+pattern HandshakeType_HelloRequest           = HandshakeType 0
+pattern HandshakeType_ClientHello           :: HandshakeType
+pattern HandshakeType_ClientHello            = HandshakeType 1
+pattern HandshakeType_ServerHello           :: HandshakeType
+pattern HandshakeType_ServerHello            = HandshakeType 2
+pattern HandshakeType_NewSessionTicket      :: HandshakeType
+pattern HandshakeType_NewSessionTicket       = HandshakeType 4
+pattern HandshakeType_EndOfEarlyData        :: HandshakeType
+pattern HandshakeType_EndOfEarlyData         = HandshakeType 5
+pattern HandshakeType_EncryptedExtensions   :: HandshakeType
+pattern HandshakeType_EncryptedExtensions    = HandshakeType 8
+pattern HandshakeType_Certificate           :: HandshakeType
+pattern HandshakeType_Certificate            = HandshakeType 11
+pattern HandshakeType_ServerKeyXchg         :: HandshakeType
+pattern HandshakeType_ServerKeyXchg          = HandshakeType 12
+pattern HandshakeType_CertRequest           :: HandshakeType
+pattern HandshakeType_CertRequest            = HandshakeType 13
+pattern HandshakeType_ServerHelloDone       :: HandshakeType
+pattern HandshakeType_ServerHelloDone        = HandshakeType 14
+pattern HandshakeType_CertVerify            :: HandshakeType
+pattern HandshakeType_CertVerify             = HandshakeType 15
+pattern HandshakeType_ClientKeyXchg         :: HandshakeType
+pattern HandshakeType_ClientKeyXchg          = HandshakeType 16
+pattern HandshakeType_Finished              :: HandshakeType
+pattern HandshakeType_Finished               = HandshakeType 20
+pattern HandshakeType_KeyUpdate             :: HandshakeType
+pattern HandshakeType_KeyUpdate              = HandshakeType 24
+pattern HandshakeType_CompressedCertificate :: HandshakeType
+pattern HandshakeType_CompressedCertificate  = HandshakeType 25
 
 instance Show HandshakeType where
-    show HandshakeType_HelloRequest     = "HandshakeType_HelloRequest"
-    show HandshakeType_ClientHello      = "HandshakeType_ClientHello"
-    show HandshakeType_ServerHello      = "HandshakeType_ServerHello"
-    show HandshakeType_Certificate      = "HandshakeType_Certificate"
-    show HandshakeType_ServerKeyXchg    = "HandshakeType_ServerKeyXchg"
-    show HandshakeType_CertRequest      = "HandshakeType_CertRequest"
-    show HandshakeType_ServerHelloDone  = "HandshakeType_ServerHelloDone"
-    show HandshakeType_CertVerify       = "HandshakeType_CertVerify"
-    show HandshakeType_ClientKeyXchg    = "HandshakeType_ClientKeyXchg"
-    show HandshakeType_Finished         = "HandshakeType_Finished"
-    show HandshakeType_NewSessionTicket = "HandshakeType_NewSessionTicket"
-    show (HandshakeType x)              = "HandshakeType " ++ show x
+    show HandshakeType_HelloRequest          = "HandshakeType_HelloRequest"
+    show HandshakeType_ClientHello           = "HandshakeType_ClientHello"
+    show HandshakeType_ServerHello           = "HandshakeType_ServerHello"
+    show HandshakeType_Certificate           = "HandshakeType_Certificate"
+    show HandshakeType_ServerKeyXchg         = "HandshakeType_ServerKeyXchg"
+    show HandshakeType_CertRequest           = "HandshakeType_CertRequest"
+    show HandshakeType_ServerHelloDone       = "HandshakeType_ServerHelloDone"
+    show HandshakeType_CertVerify            = "HandshakeType_CertVerify"
+    show HandshakeType_ClientKeyXchg         = "HandshakeType_ClientKeyXchg"
+    show HandshakeType_Finished              = "HandshakeType_Finished"
+    show HandshakeType_NewSessionTicket      = "HandshakeType_NewSessionTicket"
+    show HandshakeType_CompressedCertificate = "HandshakeType_CompressedCertificate"
+    show (HandshakeType x)                   = "HandshakeType " ++ show x
 {- FOURMOLU_ENABLE -}
 
 ----------------------------------------------------------------
@@ -410,6 +415,9 @@ data CH = CH
 newtype TLSCertificateChain = TLSCertificateChain CertificateChain deriving (Eq)
 instance Show TLSCertificateChain where
     show (TLSCertificateChain cc) = showCertificateChain cc
+
+emptyTLSCertificateChain :: TLSCertificateChain
+emptyTLSCertificateChain = TLSCertificateChain (CertificateChain [])
 
 showCertificateChain :: CertificateChain -> String
 showCertificateChain (CertificateChain xs) = show $ map getName xs

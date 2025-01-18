@@ -270,19 +270,24 @@ handshakeDone13 ctx = do
 
 ----------------------------------------------------------------
 
-makeCertRequest :: ServerParams -> Context -> CertReqContext -> Handshake13
-makeCertRequest sparams ctx certReqCtx =
+makeCertRequest
+    :: ServerParams -> Context -> CertReqContext -> Bool -> Handshake13
+makeCertRequest sparams ctx certReqCtx zlib =
     let sigAlgs =
             extensionEncode $
                 SignatureAlgorithms $
                     supportedHashSignatures $
                         ctxSupported ctx
+        sigAlgExtension = Just $ ExtensionRaw EID_SignatureAlgorithms sigAlgs
         caDns = map extractCAname $ serverCACertificates sparams
         caDnsEncoded = extensionEncode $ CertificateAuthorities caDns
         caExtension
-            | null caDns = []
-            | otherwise = [ExtensionRaw EID_CertificateAuthorities caDnsEncoded]
-        crexts = ExtensionRaw EID_SignatureAlgorithms sigAlgs : caExtension
+            | null caDns = Nothing
+            | otherwise = Just $ ExtensionRaw EID_CertificateAuthorities caDnsEncoded
+        compCertExt
+            | zlib = Just $ toExtensionRaw $ CompressCertificate [CCA_Zlib]
+            | otherwise = Nothing
+        crexts = catMaybes [sigAlgExtension, caExtension, compCertExt]
      in CertRequest13 certReqCtx crexts
 
 ----------------------------------------------------------------

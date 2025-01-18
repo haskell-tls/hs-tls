@@ -45,6 +45,14 @@ sendServerHello13
         , Bool
         )
 sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..} = do
+    -- parse CompressCertificate to check if it is broken here
+    let zlib =
+            lookupAndDecode
+                EID_CompressCertificate
+                MsgTClientHello
+                chExtensions
+                False
+                (\(CompressCertificate ccas) -> CCA_Zlib `elem` ccas)
     newSession ctx >>= \ss -> usingState_ ctx $ do
         setSession ss
         setTLS13ClientSupportsPHA supportsPHA
@@ -105,7 +113,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
         sendExtensions rtt0OK protoExt
         case mCredInfo of
             Nothing -> return ()
-            Just (cred, hashSig) -> sendCertAndVerify cred hashSig
+            Just (cred, hashSig) -> sendCertAndVerify cred hashSig zlib
         let ServerTrafficSecret shs = serverHandshakeSecret
         rawFinished <- makeFinished ctx usedHash shs
         loadPacket13 ctx $ Handshake13 [rawFinished]
@@ -238,18 +246,19 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
             helo = ServerHello13 srand chSession (CipherId (cipherID usedCipher)) extensions'
         loadPacket13 ctx $ Handshake13 [helo]
 
-    sendCertAndVerify cred@(certChain, _) hashSig = do
+    sendCertAndVerify cred@(certChain, _) hashSig zlib = do
         storePrivInfoServer ctx cred
         when (serverWantClientCert sparams) $ do
             let certReqCtx = "" -- this must be zero length here.
-                certReq = makeCertRequest sparams ctx certReqCtx
+                certReq = makeCertRequest sparams ctx certReqCtx True
             loadPacket13 ctx $ Handshake13 [certReq]
             usingHState ctx $ setCertReqSent True
 
         let CertificateChain cs = certChain
             ess = replicate (length cs) []
+        let certtag = if zlib then CompressedCertificate13 else Certificate13
         loadPacket13 ctx $
-            Handshake13 [Certificate13 "" (TLSCertificateChain certChain) ess]
+            Handshake13 [certtag "" (TLSCertificateChain certChain) ess]
         liftIO $ usingState_ ctx $ setServerCertificateChain certChain
         hChSc <- transcriptHash ctx
         pubkey <- getLocalPublicKey ctx

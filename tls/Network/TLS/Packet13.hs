@@ -9,7 +9,10 @@ module Network.TLS.Packet13 (
     encodeCertificate13,
 ) where
 
+import Codec.Compression.Zlib
+import qualified Control.Exception as E
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
 import Data.X509 (
     CertificateChain,
     CertificateChainRaw (..),
@@ -23,6 +26,7 @@ import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types
 import Network.TLS.Wire
+import System.IO.Unsafe
 
 ----------------------------------------------------------------
 
@@ -65,6 +69,11 @@ encodeHandshake13' (CertVerify13 (DigitallySigned hs sig)) = runPut $ do
 encodeHandshake13' (Finished13 (VerifyData dat)) = runPut $ putBytes dat
 encodeHandshake13' (KeyUpdate13 UpdateNotRequested) = runPut $ putWord8 0
 encodeHandshake13' (KeyUpdate13 UpdateRequested) = runPut $ putWord8 1
+encodeHandshake13' (CompressedCertificate13 reqctx (TLSCertificateChain cc) ess) = runPut $ do
+    putWord16 1 -- zlib: fixme
+    let bs = encodeCertificate13 reqctx cc ess
+    putWord24 $ fromIntegral $ B.length bs
+    putOpaque24 $ BL.toStrict $ compress $ BL.fromStrict bs
 
 encodeHandshakeHeader13 :: HandshakeType -> Int -> ByteString
 encodeHandshakeHeader13 ty len = runPut $ do
@@ -101,19 +110,22 @@ decodeHandshakeRecord13 = runGet "handshake-record" $ do
     content <- getOpaque24
     return (ty, content)
 
+{- FOURMOLU_DISABLE -}
 decodeHandshake13
     :: HandshakeType -> ByteString -> Either TLSError Handshake13
 decodeHandshake13 ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
-    HandshakeType_ServerHello -> decodeServerHello13
-    HandshakeType_NewSessionTicket -> decodeNewSessionTicket13
-    HandshakeType_EndOfEarlyData -> return EndOfEarlyData13
-    HandshakeType_EncryptedExtensions -> decodeEncryptedExtensions13
-    HandshakeType_Certificate -> decodeCertificate13
-    HandshakeType_CertRequest -> decodeCertRequest13
-    HandshakeType_CertVerify -> decodeCertVerify13
-    HandshakeType_Finished -> decodeFinished13
-    HandshakeType_KeyUpdate -> decodeKeyUpdate13
+    HandshakeType_ServerHello           -> decodeServerHello13
+    HandshakeType_NewSessionTicket      -> decodeNewSessionTicket13
+    HandshakeType_EndOfEarlyData        -> return EndOfEarlyData13
+    HandshakeType_EncryptedExtensions   -> decodeEncryptedExtensions13
+    HandshakeType_Certificate           -> decodeCertificate13
+    HandshakeType_CertRequest           -> decodeCertRequest13
+    HandshakeType_CertVerify            -> decodeCertVerify13
+    HandshakeType_Finished              -> decodeFinished13
+    HandshakeType_KeyUpdate             -> decodeKeyUpdate13
+    HandshakeType_CompressedCertificate -> decodeCompressedCertificate13
     (HandshakeType x) -> fail $ "Unsupported HandshakeType " ++ show x
+{- FOURMOLU_ENABLE -}
 
 decodeServerHello13 :: Get Handshake13
 decodeServerHello13 = do
@@ -178,3 +190,26 @@ decodeKeyUpdate13 = do
         0 -> return $ KeyUpdate13 UpdateNotRequested
         1 -> return $ KeyUpdate13 UpdateRequested
         x -> fail $ "Unknown request_update: " ++ show x
+
+decodeCompressedCertificate13 :: Get Handshake13
+decodeCompressedCertificate13 = do
+    algo <- getWord16
+    when (algo /= 1) $ fail "comp algo is not supported" -- fixme
+    len <- getWord24
+    bs <- getOpaque24
+    if bs == ""
+        then fail "empty compressed certificate"
+        else case decompressIt bs of
+            Left e -> fail (show e)
+            Right bs' -> do
+                when (B.length bs' /= len) $ fail "plain length is wrong"
+                case runGetMaybe decodeCertificate13 bs' of
+                    Just (Certificate13 reqctx certs ess) -> return $ CompressedCertificate13 reqctx certs ess
+                    --                    _ -> fail "compressed certificate cannot be parsed"
+                    _ -> fail $ "invalid compressed certificate: len = " ++ show len
+
+decompressIt :: ByteString -> Either DecompressError ByteString
+decompressIt inp = unsafePerformIO $ E.handle handler $ do
+    Right . BL.toStrict <$> E.evaluate (decompress (BL.fromStrict inp))
+  where
+    handler e = return $ Left (e :: DecompressError)

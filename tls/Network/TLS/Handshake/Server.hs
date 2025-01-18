@@ -83,7 +83,7 @@ requestCertificateServer sparams ctx = do
     let ok = tls13 && supportsPHA
     when ok $ do
         certReqCtx <- newCertReqContext ctx
-        let certReq = makeCertRequest sparams ctx certReqCtx
+        let certReq = makeCertRequest sparams ctx certReqCtx False
         bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
             addCertRequest13 ctx certReq
             sendPacket13 ctx $ Handshake13 [certReq]

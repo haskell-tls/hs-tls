@@ -36,6 +36,7 @@ data Handshake13
     | CertVerify13 DigitallySigned
     | Finished13 VerifyData
     | KeyUpdate13 KeyUpdate
+    | CompressedCertificate13 CertReqContext TLSCertificateChain [[ExtensionRaw]]
     deriving (Show, Eq)
 
 -- | Certificate request context for TLS 1.3.
@@ -43,15 +44,16 @@ type CertReqContext = ByteString
 
 {- FOURMOLU_DISABLE -}
 typeOfHandshake13 :: Handshake13 -> HandshakeType
-typeOfHandshake13 ServerHello13{}         = HandshakeType_ServerHello
-typeOfHandshake13 NewSessionTicket13{}    = HandshakeType_NewSessionTicket
-typeOfHandshake13 EndOfEarlyData13{}      = HandshakeType_EndOfEarlyData
-typeOfHandshake13 EncryptedExtensions13{} = HandshakeType_EncryptedExtensions
-typeOfHandshake13 Certificate13{}         = HandshakeType_Certificate
-typeOfHandshake13 CertRequest13{}         = HandshakeType_CertRequest
-typeOfHandshake13 CertVerify13{}          = HandshakeType_CertVerify
-typeOfHandshake13 Finished13{}            = HandshakeType_Finished
-typeOfHandshake13 KeyUpdate13{}           = HandshakeType_KeyUpdate
+typeOfHandshake13 ServerHello13{}           = HandshakeType_ServerHello
+typeOfHandshake13 NewSessionTicket13{}      = HandshakeType_NewSessionTicket
+typeOfHandshake13 EndOfEarlyData13{}        = HandshakeType_EndOfEarlyData
+typeOfHandshake13 EncryptedExtensions13{}   = HandshakeType_EncryptedExtensions
+typeOfHandshake13 Certificate13{}           = HandshakeType_Certificate
+typeOfHandshake13 CertRequest13{}           = HandshakeType_CertRequest
+typeOfHandshake13 CertVerify13{}            = HandshakeType_CertVerify
+typeOfHandshake13 Finished13{}              = HandshakeType_Finished
+typeOfHandshake13 KeyUpdate13{}             = HandshakeType_KeyUpdate
+typeOfHandshake13 CompressedCertificate13{} = HandshakeType_CompressedCertificate
 
 contentType :: Packet13 -> ProtocolType
 contentType ChangeCipherSpec13 = ProtocolType_ChangeCipherSpec

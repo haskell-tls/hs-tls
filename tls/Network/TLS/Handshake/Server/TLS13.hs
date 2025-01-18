@@ -101,6 +101,12 @@ expectCertificate sparams ctx (Certificate13 certCtx (TLSCertificateChain certs)
             Error_Protocol "certificate request context MUST be empty" IllegalParameter
     -- fixme checking _ext
     clientCertificate sparams ctx certs
+expectCertificate sparams ctx (CompressedCertificate13 certCtx (TLSCertificateChain certs) _ext) = liftIO $ do
+    when (certCtx /= "") $
+        throwCore $
+            Error_Protocol "certificate request context MUST be empty" IllegalParameter
+    -- fixme checking _ext
+    clientCertificate sparams ctx certs
 expectCertificate _ _ hs = unexpected (show hs) (Just "certificate 13")
 
 sendNewSessionTicket
@@ -191,7 +197,22 @@ clientCertVerify sparams ctx certs verif = do
                 else decryptError "verification failed"
 
 postHandshakeAuthServerWith :: ServerParams -> Context -> Handshake13 -> IO ()
-postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx (TLSCertificateChain certs) _ext) = do
+postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx (TLSCertificateChain certs) _ext) = processHandshakeAuthServerWith sparams ctx certCtx certs h
+postHandshakeAuthServerWith sparams ctx h@(CompressedCertificate13 certCtx (TLSCertificateChain certs) _ext) = processHandshakeAuthServerWith sparams ctx certCtx certs h
+postHandshakeAuthServerWith _ _ _ =
+    throwCore $
+        Error_Protocol
+            "unexpected handshake message received in postHandshakeAuthServerWith"
+            UnexpectedMessage
+
+processHandshakeAuthServerWith
+    :: ServerParams
+    -> Context
+    -> CertReqContext
+    -> CertificateChain
+    -> Handshake13
+    -> IO ()
+processHandshakeAuthServerWith sparams ctx certCtx certs h = do
     mCertReq <- getCertRequest13 ctx certCtx
     when (isNothing mCertReq) $
         throwCore $
@@ -228,8 +249,3 @@ postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx (TLSCertificate
                 [ PendingRecvActionHash False (expectCertVerify sparams ctx)
                 , PendingRecvActionHash False expectFinished'
                 ]
-postHandshakeAuthServerWith _ _ _ =
-    throwCore $
-        Error_Protocol
-            "unexpected handshake message received in postHandshakeAuthServerWith"
-            UnexpectedMessage
