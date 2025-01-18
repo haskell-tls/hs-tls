@@ -45,8 +45,8 @@ recvClientSecondFlight13 sparams ctx (appKey, clientHandshakeSecret, authenticat
             expectFinished sparams ctx chExtensions appKey clientHandshakeSecret sfSentTime
     if not authenticated && serverWantClientCert sparams
         then runRecvHandshake13 $ do
-            skip <- recvHandshake13 ctx $ expectCertificate sparams ctx
-            unless skip $ recvHandshake13hash ctx (expectCertVerify sparams ctx)
+            recvHandshake13 ctx $ expectCertificate sparams ctx
+            recvHandshake13hash ctx (expectCertVerify sparams ctx)
             recvHandshake13hash ctx expectFinished'
             ensureRecvComplete ctx
         else
@@ -94,14 +94,13 @@ expectEndOfEarlyData ctx clientHandshakeSecret EndOfEarlyData13 = do
 expectEndOfEarlyData _ _ hs = unexpected (show hs) (Just "end of early data")
 
 expectCertificate
-    :: MonadIO m => ServerParams -> Context -> Handshake13 -> m Bool
+    :: MonadIO m => ServerParams -> Context -> Handshake13 -> m ()
 expectCertificate sparams ctx (Certificate13 certCtx (TLSCertificateChain certs) _ext) = liftIO $ do
     when (certCtx /= "") $
         throwCore $
             Error_Protocol "certificate request context MUST be empty" IllegalParameter
     -- fixme checking _ext
     clientCertificate sparams ctx certs
-    return $ isNullCertificateChain certs
 expectCertificate _ _ hs = unexpected (show hs) (Just "certificate 13")
 
 sendNewSessionTicket
