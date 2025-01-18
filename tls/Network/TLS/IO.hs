@@ -81,39 +81,53 @@ writePacketBytes13 ctx recordLayer pkt = do
 
 ----------------------------------------------------------------
 
+-- fixme: this should be customizable
+
+-- A nasty client may send many fragments of client certificate.
+handshakeFragmentLimit :: Int
+handshakeFragmentLimit = 32
+
+----------------------------------------------------------------
+
 -- | receive one packet from the context that contains 1 or
 -- many messages (many only in case of handshake). if will returns a
 -- TLSError if the packet is unexpected or malformed
 recvPacket12 :: Context -> IO (Either TLSError Packet)
-recvPacket12 ctx@Context{ctxRecordLayer = recordLayer} = do
-    hrr <- usingState_ ctx getTLS13HRR
-    -- When a client sends 0-RTT data to a server which rejects and sends a HRR,
-    -- the server will not decrypt AppData segments.  The server needs to accept
-    -- AppData with maximum size 2^14 + 256.  In all other scenarios and record
-    -- types the maximum size is 2^14.
-    let appDataOverhead = if hrr then 256 else 0
-    erecord <- recordRecv recordLayer ctx appDataOverhead
-    case erecord of
-        Left err -> return $ Left err
-        Right record ->
-            if hrr && isCCS record
-                then recvPacket12 ctx
-                else do
-                    pktRecv <- processPacket ctx record
-                    if isEmptyHandshake pktRecv
-                        then -- When a handshake record is fragmented we continue
-                        -- receiving in order to feed stHandshakeRecordCont
-                            recvPacket12 ctx
-                        else do
-                            pkt <- case pktRecv of
-                                Right (Handshake hss) ->
-                                    ctxWithHooks ctx $ \hooks ->
-                                        Right . Handshake <$> mapM (hookRecvHandshake hooks) hss
-                                _ -> return pktRecv
-                            case pkt of
-                                Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p
-                                _ -> return ()
-                            return pkt
+recvPacket12 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
+  where
+    loop count
+        | count > handshakeFragmentLimit =
+            return $ Left $ Error_Packet "too many handshake fragment"
+    loop count = do
+        hrr <- usingState_ ctx getTLS13HRR
+        -- When a client sends 0-RTT data to a server which rejects
+        -- and sends a HRR, the server will not decrypt AppData
+        -- segments.  The server needs to accept AppData with maximum
+        -- size 2^14 + 256.  In all other scenarios and record types
+        -- the maximum size is 2^14.
+        let appDataOverhead = if hrr then 256 else 0
+        erecord <- recordRecv recordLayer ctx appDataOverhead
+        case erecord of
+            Left err -> return $ Left err
+            Right record ->
+                if hrr && isCCS record
+                    then loop (count + 1)
+                    else do
+                        pktRecv <- processPacket ctx record
+                        if isEmptyHandshake pktRecv
+                            then -- When a handshake record is fragmented we continue
+                            -- receiving in order to feed stHandshakeRecordCont
+                                loop (count + 1)
+                            else do
+                                pkt <- case pktRecv of
+                                    Right (Handshake hss) ->
+                                        ctxWithHooks ctx $ \hooks ->
+                                            Right . Handshake <$> mapM (hookRecvHandshake hooks) hss
+                                    _ -> return pktRecv
+                                case pkt of
+                                    Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p
+                                    _ -> return ()
+                                return pkt
 
 isCCS :: Record a -> Bool
 isCCS (Record ProtocolType_ChangeCipherSpec _ _) = True
@@ -126,36 +140,41 @@ isEmptyHandshake _ = False
 ----------------------------------------------------------------
 
 recvPacket13 :: Context -> IO (Either TLSError Packet13)
-recvPacket13 ctx@Context{ctxRecordLayer = recordLayer} = do
-    erecord <- recordRecv13 recordLayer ctx
-    case erecord of
-        Left err@(Error_Protocol _ BadRecordMac) -> do
-            -- If the server decides to reject RTT0 data but accepts RTT1
-            -- data, the server should skip all records for RTT0 data.
-            established <- ctxEstablished ctx
-            case established of
-                EarlyDataNotAllowed n
-                    | n > 0 -> do
-                        setEstablished ctx $ EarlyDataNotAllowed (n - 1)
-                        recvPacket13 ctx
-                _ -> return $ Left err
-        Left err -> return $ Left err
-        Right record -> do
-            pktRecv <- processPacket13 ctx record
-            if isEmptyHandshake13 pktRecv
-                then -- When a handshake record is fragmented we continue receiving
-                -- in order to feed stHandshakeRecordCont13
-                    recvPacket13 ctx
-                else do
-                    pkt <- case pktRecv of
-                        Right (Handshake13 hss) ->
-                            ctxWithHooks ctx $ \hooks ->
-                                Right . Handshake13 <$> mapM (hookRecvHandshake13 hooks) hss
-                        _ -> return pktRecv
-                    case pkt of
-                        Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p
-                        _ -> return ()
-                    return pkt
+recvPacket13 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
+  where
+    loop count
+        | count > handshakeFragmentLimit =
+            return $ Left $ Error_Packet "too many handshake fragment"
+    loop count = do
+        erecord <- recordRecv13 recordLayer ctx
+        case erecord of
+            Left err@(Error_Protocol _ BadRecordMac) -> do
+                -- If the server decides to reject RTT0 data but accepts RTT1
+                -- data, the server should skip all records for RTT0 data.
+                established <- ctxEstablished ctx
+                case established of
+                    EarlyDataNotAllowed n
+                        | n > 0 -> do
+                            setEstablished ctx $ EarlyDataNotAllowed (n - 1)
+                            loop (count + 1)
+                    _ -> return $ Left err
+            Left err -> return $ Left err
+            Right record -> do
+                pktRecv <- processPacket13 ctx record
+                if isEmptyHandshake13 pktRecv
+                    then -- When a handshake record is fragmented we continue receiving
+                    -- in order to feed stHandshakeRecordCont13
+                        loop (count + 1)
+                    else do
+                        pkt <- case pktRecv of
+                            Right (Handshake13 hss) ->
+                                ctxWithHooks ctx $ \hooks ->
+                                    Right . Handshake13 <$> mapM (hookRecvHandshake13 hooks) hss
+                            _ -> return pktRecv
+                        case pkt of
+                            Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p
+                            _ -> return ()
+                        return pkt
 
 isEmptyHandshake13 :: Either TLSError Packet13 -> Bool
 isEmptyHandshake13 (Right (Handshake13 [])) = True
