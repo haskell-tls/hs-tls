@@ -132,6 +132,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
             , cookieExtension
             , postHandshakeAuthExtension
             , pskExchangeModeExtension
+            , compCertExtension
             , preSharedKeyExtension -- MUST be last (RFC 8446)
             ]
 
@@ -234,6 +235,8 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
         | ctxQUICMode ctx = return Nothing
         | tls13 = return $ Just $ toExtensionRaw PostHandshakeAuth
         | otherwise = return Nothing
+
+    compCertExtension = return $ Just $ toExtensionRaw (CompressCertificate [CCA_Zlib])
 
     adjustExtentions exts ch =
         case pskInfo of
