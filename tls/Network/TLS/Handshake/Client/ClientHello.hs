@@ -117,43 +117,26 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
     -- (not always present) have length > 0.
     getExtensions =
         sequence
-            [ sniExtension
-            , secureReneg
-            , alpnExtension
-            , emsExtension
-            , groupExtension
-            , ecPointExtension
-            , sessionTicketExtension
-            , signatureAlgExtension
-            , -- , heartbeatExtension
-              versionExtension
-            , earlyDataExtension
-            , keyshareExtension
-            , cookieExtension
-            , postHandshakeAuthExtension
-            , pskExchangeModeExtension
-            , compCertExtension
-            , preSharedKeyExtension -- MUST be last (RFC 8446)
+            [ {- 0x00 -} sniExtension
+            , {- 0x0a -} groupExtension
+            , {- 0x0b -} ecPointExtension
+            , {- 0x0d -} signatureAlgExtension
+            , {- 0x10 -} alpnExtension
+            , {- 0x17 -} emsExtension
+            , {- 0x1b -} compCertExtension
+            , {- 0x23 -} sessionTicketExtension
+            , {- 0x2a -} earlyDataExtension
+            , {- 0x2b -} versionExtension
+            , {- 0x2c -} cookieExtension
+            , {- 0x2d -} pskExchangeModeExtension
+            , {- 0x31 -} postHandshakeAuthExtension
+            , {- 0x33 -} keyshareExtension
+            , {- 0xff01 -} secureReneg
+            , {- 0x29 -} preSharedKeyExtension -- MUST be last (RFC 8446)
             ]
 
-    secureReneg =
-        if supportedSecureRenegotiation $ ctxSupported ctx
-            then do
-                VerifyData cvd <- usingState_ ctx $ getVerifyData ClientRole
-                return $ Just $ toExtensionRaw $ SecureRenegotiation cvd ""
-            else return Nothing
-    alpnExtension = do
-        mprotos <- onSuggestALPN $ clientHooks cparams
-        case mprotos of
-            Nothing -> return Nothing
-            Just protos -> do
-                usingState_ ctx $ setClientALPNSuggest protos
-                return $ Just $ toExtensionRaw $ ApplicationLayerProtocolNegotiation protos
-    emsExtension =
-        return $
-            if ems == NoEMS || all (>= TLS13) (supportedVersions $ ctxSupported ctx)
-                then Nothing
-                else Just $ toExtensionRaw ExtendedMainSecret
+    --------------------
+
     sniExtension =
         if clientUseServerNameIndication cparams
             then do
@@ -167,6 +150,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
             Just $
                 toExtensionRaw $
                     SupportedGroups (supportedGroups $ ctxSupported ctx)
+
     ecPointExtension =
         return $
             Just $
@@ -174,12 +158,6 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
                     EcPointFormatsSupported [EcPointFormat_Uncompressed]
     -- [EcPointFormat_Uncompressed,EcPointFormat_AnsiX962_compressed_prime,EcPointFormat_AnsiX962_compressed_char2]
     -- heartbeatExtension = return $ Just $ toExtensionRaw $ HeartBeat $ HeartBeat_PeerAllowedToSend
-
-    sessionTicketExtension = do
-        case clientSessions cparams of
-            (sidOrTkt, _) : _
-                | isTicket sidOrTkt -> return $ Just $ toExtensionRaw $ SessionTicket sidOrTkt
-            _ -> return $ Just $ toExtensionRaw $ SessionTicket ""
 
     signatureAlgExtension =
         return $
@@ -189,10 +167,51 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
                         supportedHashSignatures $
                             clientSupported cparams
 
+    alpnExtension = do
+        mprotos <- onSuggestALPN $ clientHooks cparams
+        case mprotos of
+            Nothing -> return Nothing
+            Just protos -> do
+                usingState_ ctx $ setClientALPNSuggest protos
+                return $ Just $ toExtensionRaw $ ApplicationLayerProtocolNegotiation protos
+
+    emsExtension =
+        return $
+            if ems == NoEMS || all (>= TLS13) (supportedVersions $ ctxSupported ctx)
+                then Nothing
+                else Just $ toExtensionRaw ExtendedMainSecret
+
+    compCertExtension = return $ Just $ toExtensionRaw (CompressCertificate [CCA_Zlib])
+
+    sessionTicketExtension = do
+        case clientSessions cparams of
+            (sidOrTkt, _) : _
+                | isTicket sidOrTkt -> return $ Just $ toExtensionRaw $ SessionTicket sidOrTkt
+            _ -> return $ Just $ toExtensionRaw $ SessionTicket ""
+
+    earlyDataExtension
+        | rtt0 = return $ Just $ toExtensionRaw (EarlyDataIndication Nothing)
+        | otherwise = return Nothing
+
     versionExtension
         | tls13 = do
             let vers = filter (>= TLS12) $ supportedVersions $ ctxSupported ctx
             return $ Just $ toExtensionRaw $ SupportedVersionsClientHello vers
+        | otherwise = return Nothing
+
+    cookieExtension = do
+        mcookie <- usingState_ ctx getTLS13Cookie
+        case mcookie of
+            Nothing -> return Nothing
+            Just cookie -> return $ Just $ toExtensionRaw cookie
+
+    pskExchangeModeExtension
+        | tls13 = return $ Just $ toExtensionRaw $ PskKeyExchangeModes [PSK_DHE_KE]
+        | otherwise = return Nothing
+
+    postHandshakeAuthExtension
+        | ctxQUICMode ctx = return Nothing
+        | tls13 = return $ Just $ toExtensionRaw PostHandshakeAuth
         | otherwise = return Nothing
 
     -- FIXME
@@ -204,6 +223,13 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
                 usingHState ctx $ setGroupPrivate cpri
                 return $ Just $ toExtensionRaw $ KeyShareClientHello [ent]
         | otherwise = return Nothing
+
+    secureReneg =
+        if supportedSecureRenegotiation $ ctxSupported ctx
+            then do
+                VerifyData cvd <- usingState_ ctx $ getVerifyData ClientRole
+                return $ Just $ toExtensionRaw $ SecureRenegotiation cvd ""
+            else return Nothing
 
     preSharedKeyExtension =
         case pskInfo of
@@ -217,26 +243,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
                     offeredPsks = PreSharedKeyClientHello pskIdentities binders
                  in return $ Just $ toExtensionRaw offeredPsks
 
-    pskExchangeModeExtension
-        | tls13 = return $ Just $ toExtensionRaw $ PskKeyExchangeModes [PSK_DHE_KE]
-        | otherwise = return Nothing
-
-    earlyDataExtension
-        | rtt0 = return $ Just $ toExtensionRaw (EarlyDataIndication Nothing)
-        | otherwise = return Nothing
-
-    cookieExtension = do
-        mcookie <- usingState_ ctx getTLS13Cookie
-        case mcookie of
-            Nothing -> return Nothing
-            Just cookie -> return $ Just $ toExtensionRaw cookie
-
-    postHandshakeAuthExtension
-        | ctxQUICMode ctx = return Nothing
-        | tls13 = return $ Just $ toExtensionRaw PostHandshakeAuth
-        | otherwise = return Nothing
-
-    compCertExtension = return $ Just $ toExtensionRaw (CompressCertificate [CCA_Zlib])
+    ----------------------------------------
 
     adjustExtentions exts ch =
         case pskInfo of
