@@ -59,7 +59,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
     usingHState ctx $ setSupportedGroup $ keyShareEntryGroup clientKeyShare
     srand <- setServerParameter
     -- ALPN is used in choosePSK
-    protoExt <- applicationProtocol ctx chExtensions sparams
+    alpnExt <- applicationProtocol ctx chExtensions sparams
     (psk, binderInfo, is0RTTvalid) <- choosePSK
     earlyKey <- calculateEarlySecret ctx choice (Left psk) True
     let earlySecret = pairBase earlyKey
@@ -110,7 +110,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
                 handSecInfo = HandshakeSecretInfo usedCipher (clientHandshakeSecret, serverHandshakeSecret)
             contextSync ctx $ SendServerHello chExtensions mEarlySecInfo handSecInfo
         ----------------------------------------------------------------
-        sendExtensions rtt0OK protoExt
+        sendExtensions rtt0OK alpnExt
         case mCredInfo of
             Nothing -> return ()
             Just (cred, hashSig) -> sendCertAndVerify cred hashSig zlib
@@ -265,34 +265,36 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
         vrfy <- makeCertVerify ctx pubkey hashSig hChSc
         loadPacket13 ctx $ Handshake13 [vrfy]
 
-    sendExtensions rtt0OK protoExt = do
+    sendExtensions rtt0OK alpnExt = do
         msni <- liftIO $ usingState_ ctx getClientSNI
-        let sniExtension = case msni of
+        let sniExt = case msni of
                 -- RFC6066: In this event, the server SHALL include
                 -- an extension of type "server_name" in the
                 -- (extended) server hello. The "extension_data"
                 -- field of this extension SHALL be empty.
                 Just _ -> Just $ toExtensionRaw $ ServerName []
                 Nothing -> Nothing
+
         mgroup <- usingHState ctx getSupportedGroup
         let serverGroups = supportedGroups (ctxSupported ctx)
-            groupExtension = case serverGroups of
+            groupExt = case serverGroups of
                 [] -> Nothing
                 rg : _ -> case mgroup of
                     Nothing -> Nothing
                     Just grp
                         | grp == rg -> Nothing
                         | otherwise -> Just $ toExtensionRaw $ SupportedGroups serverGroups
-        let earlyDataExtension
+        let earlyDataExt
                 | rtt0OK = Just $ toExtensionRaw $ EarlyDataIndication Nothing
                 | otherwise = Nothing
+
         let extensions =
                 sharedHelloExtensions (serverShared sparams)
                     ++ catMaybes
-                        [ earlyDataExtension
-                        , groupExtension
-                        , sniExtension
-                        , protoExt
+                        [ {- 0x00 -} sniExt
+                        , {- 0x0a -} groupExt
+                        , {- 0x10 -} alpnExt
+                        , {- 0x2a -} earlyDataExt
                         ]
         extensions' <-
             liftIO $ onEncryptedExtensionsCreating (serverHooks sparams) extensions
