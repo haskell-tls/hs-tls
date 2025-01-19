@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -37,6 +38,8 @@ data Options = Options
     , optRetry :: Bool
     , optVersions :: [Version]
     , optALPN :: String
+    , optCertFile :: Maybe FilePath
+    , optKeyFile :: Maybe FilePath
     }
     deriving (Show)
 
@@ -54,6 +57,8 @@ defaultOptions =
         , optRetry = False
         , optVersions = supportedVersions defaultSupported
         , optALPN = "http/1.1"
+        , optCertFile = Nothing
+        , optKeyFile = Nothing
         }
 
 usage :: String
@@ -116,6 +121,16 @@ options =
         ["alpn"]
         (ReqArg (\a o -> o{optALPN = a}) "<alpn>")
         "set ALPN"
+    , Option
+        ['c']
+        ["cert"]
+        (ReqArg (\fl o -> o{optCertFile = Just fl}) "<file>")
+        "certificate file"
+    , Option
+        ['k']
+        ["key"]
+        (ReqArg (\fl o -> o{optKeyFile = Just fl}) "<file>")
+        "key file"
     ]
 
 showUsageAndExit :: String -> IO a
@@ -143,6 +158,13 @@ main = do
     when (null optGroups) $ do
         putStrLn "Error: unsupported groups"
         exitFailure
+    let onCertReq = \_ -> case optCertFile of
+            Just certFile -> case optKeyFile of
+                Just keyFile -> do
+                    Right (!cc, !priv) <- credentialLoadX509 certFile keyFile
+                    return $ Just (cc, priv)
+                _ -> return Nothing
+            _ -> return Nothing
     ref <- newIORef []
     let debug
             | optDebugLog = putStrLn
@@ -160,7 +182,7 @@ main = do
                 }
     mstore <-
         if optValidate then Just <$> getSystemCertificateStore else return Nothing
-    let cparams = getClientParams opts host port (smIORef ref) mstore
+    let cparams = getClientParams opts host port (smIORef ref) mstore onCertReq
         client
             | optALPN == "dot" = clientDNS
             | otherwise = clientHTTP11
@@ -291,8 +313,9 @@ getClientParams
     -> ServiceName
     -> SessionManager
     -> Maybe CertificateStore
+    -> OnCertificateRequest
     -> ClientParams
-getClientParams Options{..} serverName port sm mstore =
+getClientParams Options{..} serverName port sm mstore onCertReq =
     (defaultParamsClient serverName (C8.pack port))
         { clientSupported = supported
         , clientUseServerNameIndication = True
@@ -320,6 +343,7 @@ getClientParams Options{..} serverName port sm mstore =
     hooks =
         defaultClientHooks
             { onSuggestALPN = return $ Just [C8.pack optALPN]
+            , onCertificateRequest = onCertReq
             }
     validateCache
         | isJust mstore = sharedValidationCache defaultShared
