@@ -296,7 +296,6 @@ definedExtensions =
 supportedExtensions :: [ExtensionID]
 supportedExtensions =
     [ EID_ServerName                          -- 0x00
-    , EID_MaxFragmentLength                   -- 0x01
     , EID_SupportedGroups                     -- 0x0a
     , EID_EcPointFormats                      -- 0x0b
     , EID_SignatureAlgorithms                 -- 0x0d

@@ -83,6 +83,8 @@ instance Show DebugParams where
 instance Default DebugParams where
     def = defaultDebugParams
 
+{-# DEPRECATED clientUseMaxFragmentLength "UseMaxFragmentLength is deprecated" #-}
+
 data ClientParams = ClientParams
     { clientUseMaxFragmentLength :: Maybe MaxFragmentEnum
     -- ^

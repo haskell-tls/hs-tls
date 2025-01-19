@@ -42,7 +42,6 @@ module Network.TLS (
     -- ** Client parameters
     ClientParams,
     defaultParamsClient,
-    clientUseMaxFragmentLength,
     clientServerIdentification,
     clientUseServerNameIndication,
     clientWantSessionResume,
@@ -289,6 +288,7 @@ module Network.TLS (
     Bytes,
     ValidationChecks (..),
     ValidationHooks (..),
+    clientUseMaxFragmentLength,
 ) where
 
 import Network.TLS.Backend (Backend (..), HasBackend (..))
