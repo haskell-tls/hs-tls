@@ -15,7 +15,7 @@ newtype Version = Version Word16 deriving (Eq, Ord, Generic)
 
 {- FOURMOLU_DISABLE -}
 pattern SSL2  :: Version
-pattern SSL2   = Version 0x0200
+pattern SSL2   = Version 0x0002
 pattern SSL3  :: Version
 pattern SSL3   = Version 0x0300
 pattern TLS10 :: Version
