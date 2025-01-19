@@ -177,9 +177,17 @@ processCertRequest13 ctx token exts = do
         Nothing -> throwCore $ Error_Protocol "invalid certificate request" HandshakeFailure
     -- Unused:
     -- caAlgs <- extalgs caextID uncertsig
+    let zlib =
+            lookupAndDecode
+                EID_CompressCertificate
+                MsgTClientHello
+                exts
+                False
+                (\(CompressCertificate ccas) -> CCA_Zlib `elem` ccas)
     usingHState ctx $ do
         setCertReqToken $ Just token
         setCertReqCBdata $ Just (cTypes, hsAlgs, dNames)
+        setTLS13CertComp zlib
   where
     -- setCertReqSigAlgsCert caAlgs
 
@@ -280,14 +288,7 @@ sendClientSecondFlight13' cparams ctx choice hkey rtt0accepted eexts = do
         sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
     let clientHandshakeSecret = triClient hkey
     setTxRecordState ctx usedHash usedCipher clientHandshakeSecret
-    let zlib =
-            lookupAndDecode
-                EID_CompressCertificate
-                MsgTClientHello
-                eexts
-                False
-                (\(CompressCertificate ccas) -> CCA_Zlib `elem` ccas)
-    sendClientFlight13 cparams ctx usedHash clientHandshakeSecret zlib
+    sendClientFlight13 cparams ctx usedHash clientHandshakeSecret
     appKey <- switchToApplicationSecret hChSf
     let applicationSecret = triBase appKey
     setResumptionSecret applicationSecret
@@ -327,24 +328,27 @@ uncertsig (SignatureAlgorithmsCert a) = Just a
 -}
 
 sendClientFlight13
-    :: ClientParams -> Context -> Hash -> ClientTrafficSecret a -> Bool -> IO ()
-sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) zlib = do
+    :: ClientParams -> Context -> Hash -> ClientTrafficSecret a -> IO ()
+sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
     mcc <- clientChain cparams ctx
     runPacketFlight ctx $ do
         case mcc of
             Nothing -> return ()
-            Just cc -> usingHState ctx getCertReqToken >>= loadClientData13 cc
+            Just cc -> do
+                reqtoken <- usingHState ctx getCertReqToken
+                certComp <- usingHState ctx getTLS13CertComp
+                loadClientData13 cc reqtoken certComp
         rawFinished <- makeFinished ctx usedHash baseKey
         loadPacket13 ctx $ Handshake13 [rawFinished]
     when (isJust mcc) $
         modifyTLS13State ctx $
             \st -> st{tls13stSentClientCert = True}
   where
-    loadClientData13 chain (Just token) = do
+    loadClientData13 chain (Just token) certComp = do
         let (CertificateChain certs) = chain
             certExts = replicate (length certs) []
             cHashSigs = filter isHashSignatureValid13 $ supportedHashSignatures $ ctxSupported ctx
-        let certtag = if zlib then CompressedCertificate13 else Certificate13
+        let certtag = if certComp then CompressedCertificate13 else Certificate13
         loadPacket13 ctx $
             Handshake13 [certtag token (TLSCertificateChain chain) certExts]
         case certs of
@@ -357,7 +361,7 @@ sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) zlib = do
                 vfy <- makeCertVerify ctx pubKey sigAlg hChSc
                 loadPacket13 ctx $ Handshake13 [vfy]
     --
-    loadClientData13 _ _ =
+    loadClientData13 _ _ _ =
         throwCore $
             Error_Protocol "missing TLS 1.3 certificate request context token" InternalError
 
@@ -380,7 +384,6 @@ postHandshakeAuthClientWith cparams ctx h@(CertRequest13 certReqCtx exts) =
             ctx
             usedHash
             (ClientTrafficSecret applicationSecretN)
-            False -- fixme
 postHandshakeAuthClientWith _ _ _ =
     throwCore $
         Error_Protocol

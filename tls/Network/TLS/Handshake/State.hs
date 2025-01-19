@@ -67,6 +67,8 @@ module Network.TLS.Handshake.State (
     getTLS13EarlySecret,
     setTLS13ResumptionSecret,
     getTLS13ResumptionSecret,
+    setTLS13CertComp,
+    getTLS13CertComp,
     setCCS13Sent,
     getCCS13Sent,
 ) where
@@ -133,6 +135,7 @@ data HandshakeState = HandshakeState
     , hstTLS13RTT0Status :: RTT0Status
     , hstTLS13EarlySecret :: Maybe (BaseSecret EarlySecret) -- xxx
     , hstTLS13ResumptionSecret :: Maybe (BaseSecret ResumptionSecret)
+    , hstTLS13CertComp :: Bool
     , hstCCS13Sent :: Bool
     }
     deriving (Show)
@@ -224,6 +227,7 @@ newEmptyHandshake ver crand =
         , hstTLS13RTT0Status = RTT0None
         , hstTLS13EarlySecret = Nothing
         , hstTLS13ResumptionSecret = Nothing
+        , hstTLS13CertComp = False
         , hstCCS13Sent = False
         }
 
@@ -325,6 +329,12 @@ setTLS13ResumptionSecret secret = modify (\hst -> hst{hstTLS13ResumptionSecret =
 
 getTLS13ResumptionSecret :: HandshakeM (Maybe (BaseSecret ResumptionSecret))
 getTLS13ResumptionSecret = gets hstTLS13ResumptionSecret
+
+setTLS13CertComp :: Bool -> HandshakeM ()
+setTLS13CertComp comp = modify (\hst -> hst{hstTLS13CertComp = comp})
+
+getTLS13CertComp :: HandshakeM Bool
+getTLS13CertComp = gets hstTLS13CertComp
 
 setCCS13Sent :: Bool -> HandshakeM ()
 setCCS13Sent sent = modify (\hst -> hst{hstCCS13Sent = sent})
