@@ -244,7 +244,7 @@ instance Show ExtensionID where
     show EID_KeyShare                = "KeyShare"
     show EID_QuicTransportParameters = "QuicTransportParameters"
     show EID_SecureRenegotiation     = "SecureRenegotiation"
-    show (ExtensionID x)         = "ExtensionID " ++ show x
+    show (ExtensionID x)             = "ExtensionID " ++ show x
 {- FOURMOLU_ENABLE -}
 
 ------------------------------------------------------------
