@@ -244,24 +244,6 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
     case mcred of
         Just cred -> storePrivInfoServer ctx cred
         _ -> return () -- return a sensible error
-
-    -- in TLS12, we need to check as well the certificates we are sending if they have in the extension
-    -- the necessary bits set.
-    secReneg <- usingState_ ctx getSecureRenegotiation
-    secRengExt <-
-        if secReneg
-            then do
-                vd <- usingState_ ctx $ do
-                    VerifyData cvd <- getVerifyData ClientRole
-                    VerifyData svd <- getVerifyData ServerRole
-                    return $ SecureRenegotiation cvd svd
-                return $ Just $ toExtensionRaw vd
-            else return Nothing
-    ems <- usingHState ctx getExtendedMainSecret
-    let emsExt
-            | ems = Just $ toExtensionRaw ExtendedMainSecret
-            | otherwise = Nothing
-    protoExt <- applicationProtocol ctx chExts sparams
     sniExt <- do
         if resuming
             then return Nothing
@@ -274,22 +256,45 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
                     -- field of this extension SHALL be empty.
                     Just _ -> return $ Just $ toExtensionRaw $ ServerName []
                     Nothing -> return Nothing
-    let useTicket = sessionUseTicket $ sharedSessionManager $ serverShared sparams
-        ticktExt
-            | not resuming && useTicket = Just $ toExtensionRaw $ SessionTicket ""
-            | otherwise = Nothing
-    let eccExt = case extensionLookup EID_EcPointFormats chExts of
+
+    let ecPointExt = case extensionLookup EID_EcPointFormats chExts of
             Nothing -> Nothing
             Just _ -> Just $ toExtensionRaw $ EcPointFormatsSupported [EcPointFormat_Uncompressed]
+
+    alpnExt <- applicationProtocol ctx chExts sparams
+
+    ems <- usingHState ctx getExtendedMainSecret
+    let emsExt
+            | ems = Just $ toExtensionRaw ExtendedMainSecret
+            | otherwise = Nothing
+
+    let useTicket = sessionUseTicket $ sharedSessionManager $ serverShared sparams
+        sessionTicketExt
+            | not resuming && useTicket = Just $ toExtensionRaw $ SessionTicket ""
+            | otherwise = Nothing
+
+    -- in TLS12, we need to check as well the certificates we are sending if they have in the extension
+    -- the necessary bits set.
+    secReneg <- usingState_ ctx getSecureRenegotiation
+    secureRenegExt <-
+        if secReneg
+            then do
+                vd <- usingState_ ctx $ do
+                    VerifyData cvd <- getVerifyData ClientRole
+                    VerifyData svd <- getVerifyData ServerRole
+                    return $ SecureRenegotiation cvd svd
+                return $ Just $ toExtensionRaw vd
+            else return Nothing
+
     let shExts =
             sharedHelloExtensions (serverShared sparams)
                 ++ catMaybes
-                    [ secRengExt
-                    , emsExt
-                    , protoExt
-                    , sniExt
-                    , ticktExt
-                    , eccExt
+                    [ {- 0x00 -} sniExt
+                    , {- 0x0b -} ecPointExt
+                    , {- 0x10 -} alpnExt
+                    , {- 0x17 -} emsExt
+                    , {- 0x23 -} sessionTicketExt
+                    , {- 0xff01 -} secureRenegExt
                     ]
     usingState_ ctx $ setVersion TLS12
     usingHState ctx $
