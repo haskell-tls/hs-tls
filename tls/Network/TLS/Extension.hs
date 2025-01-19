@@ -300,7 +300,6 @@ supportedExtensions =
     , EID_SupportedGroups                     -- 0x0a
     , EID_EcPointFormats                      -- 0x0b
     , EID_SignatureAlgorithms                 -- 0x0d
-    , EID_Heartbeat                           -- 0x0f
     , EID_ApplicationLayerProtocolNegotiation -- 0x10
     , EID_ExtendedMainSecret                  -- 0x17
     , EID_CompressCertificate                 -- 0x1b
