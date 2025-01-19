@@ -278,16 +278,23 @@ makeCertRequest sparams ctx certReqCtx zlib =
                 SignatureAlgorithms $
                     supportedHashSignatures $
                         ctxSupported ctx
-        sigAlgExtension = Just $ ExtensionRaw EID_SignatureAlgorithms sigAlgs
-        caDns = map extractCAname $ serverCACertificates sparams
-        caDnsEncoded = extensionEncode $ CertificateAuthorities caDns
-        caExtension
-            | null caDns = Nothing
-            | otherwise = Just $ ExtensionRaw EID_CertificateAuthorities caDnsEncoded
+        signatureAlgExt = Just $ ExtensionRaw EID_SignatureAlgorithms sigAlgs
+
         compCertExt
             | zlib = Just $ toExtensionRaw $ CompressCertificate [CCA_Zlib]
             | otherwise = Nothing
-        crexts = catMaybes [sigAlgExtension, caExtension, compCertExt]
+
+        caDns = map extractCAname $ serverCACertificates sparams
+        caDnsEncoded = extensionEncode $ CertificateAuthorities caDns
+        caExt
+            | null caDns = Nothing
+            | otherwise = Just $ ExtensionRaw EID_CertificateAuthorities caDnsEncoded
+        crexts =
+            catMaybes
+                [ {- 0x0d -} signatureAlgExt
+                , {- 0x1b -} compCertExt
+                , {- 0x2f -} caExt
+                ]
      in CertRequest13 certReqCtx crexts
 
 ----------------------------------------------------------------
