@@ -9,7 +9,6 @@ module Network.TLS.Handshake.Process (
 import Control.Concurrent.MVar
 
 import Network.TLS.Context.Internal
-import Network.TLS.Handshake.Random
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.Imports

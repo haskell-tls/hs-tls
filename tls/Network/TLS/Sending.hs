@@ -12,7 +12,6 @@ import Data.IORef
 
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
-import Network.TLS.Handshake.Random
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.Imports

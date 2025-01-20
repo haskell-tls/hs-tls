@@ -115,6 +115,8 @@ module Network.TLS.Struct (
     ExtensionRaw (..),
     ExtensionID (..),
     showCertificateChain,
+    isHelloRetryRequest,
+    hrrRandom,
 ) where
 
 import Data.X509 (
@@ -245,7 +247,17 @@ data Header = Header ProtocolType Version Word16 deriving (Show, Eq)
 newtype ServerRandom = ServerRandom {unServerRandom :: ByteString}
     deriving (Eq)
 instance Show ServerRandom where
-    show (ServerRandom bs) = "ServerRandom " ++ showBytesHex bs
+    show sr@(ServerRandom bs)
+        | isHelloRetryRequest sr = "HelloRetryReqest"
+        | otherwise = "ServerRandom " ++ showBytesHex bs
+
+hrrRandom :: ServerRandom
+hrrRandom =
+    ServerRandom
+        "\xCF\x21\xAD\x74\xE5\x9A\x61\x11\xBE\x1D\x8C\x02\x1E\x65\xB8\x91\xC2\xA2\x11\x16\x7A\xBB\x8C\x5E\x07\x9E\x09\xE2\xC8\xA8\x33\x9C"
+
+isHelloRetryRequest :: ServerRandom -> Bool
+isHelloRetryRequest = (== hrrRandom)
 
 newtype ClientRandom = ClientRandom {unClientRandom :: ByteString}
     deriving (Eq)
