@@ -130,7 +130,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
             , {- 0x2c -} cookieExt
             , {- 0x2d -} pskExchangeModeExt
             , {- 0x31 -} postHandshakeAuthExt
-            , {- 0x33 -} keyshareExt
+            , {- 0x33 -} keyShareExt
             , {- 0xff01 -} secureRenegExt
             , {- 0x29 -} preSharedKeyExt -- MUST be last (RFC 8446)
             ]
@@ -213,7 +213,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
         | otherwise = return Nothing
 
     -- FIXME
-    keyshareExt
+    keyShareExt
         | tls13 = case groupToSend of
             Nothing -> return Nothing
             Just grp -> do

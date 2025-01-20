@@ -107,12 +107,9 @@ sendHRR ctx (usedCipher, _, _) CH{..} = do
             throwCore $
                 Error_Protocol "no group in common with the client for HRR" HandshakeFailure
         g : _ -> do
-            let serverKeyShare = extensionEncode $ KeyShareHRR g
-                selectedVersion = extensionEncode $ SupportedVersionsServerHello TLS13
-                extensions =
-                    [ ExtensionRaw EID_KeyShare serverKeyShare
-                    , ExtensionRaw EID_SupportedVersions selectedVersion
-                    ]
+            let keyShareExt = toExtensionRaw $ KeyShareHRR g
+                versionExt = toExtensionRaw $ SupportedVersionsServerHello TLS13
+                extensions = [keyShareExt, versionExt]
                 hrr = ServerHello13 hrrRandom chSession (CipherId $ cipherID usedCipher) extensions
             usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
             runPacketFlight ctx $ do

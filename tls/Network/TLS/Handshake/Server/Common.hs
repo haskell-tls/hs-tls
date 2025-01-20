@@ -134,11 +134,8 @@ applicationProtocol ctx exts sparams = case onALPN of
         usingState_ ctx $ do
             setExtensionALPN True
             setNegotiatedProtocol proto
-        return $
-            Just $
-                ExtensionRaw
-                    EID_ApplicationLayerProtocolNegotiation
-                    (extensionEncode $ ApplicationLayerProtocolNegotiation [proto])
+        let alpn = ApplicationLayerProtocolNegotiation [proto]
+        return $ Just $ toExtensionRaw alpn
 
 clientCertificate :: ServerParams -> Context -> CertificateChain -> IO ()
 clientCertificate sparams ctx certs = do
