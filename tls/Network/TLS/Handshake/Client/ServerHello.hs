@@ -100,7 +100,7 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession (Cipher
     let isHRR = isHelloRetryRequest serverRan
     usingState_ ctx $ do
         setTLS13HRR isHRR
-        when (not isHRR) $
+        when isHRR $
             setTLS13Cookie $
                 lookupAndDecode
                     EID_Cookie
