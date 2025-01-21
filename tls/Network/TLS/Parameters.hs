@@ -16,6 +16,8 @@ module Network.TLS.Parameters (
     defaultSupported,
     Shared (..),
     defaultShared,
+    Limit (..),
+    defaultLimit,
 
     -- * Parameters
     MaxFragmentEnum (..),
@@ -44,7 +46,7 @@ import qualified Network.TLS.Struct as Struct
 import Network.TLS.Types (HostName)
 import Network.TLS.X509
 
-type CommonParams = (Supported, Shared, DebugParams)
+type CommonParams = (Supported, Shared, DebugParams, Limit)
 
 -- | All settings should not be used in production
 data DebugParams = DebugParams
@@ -139,6 +141,7 @@ data ClientParams = ClientParams
     -- is automatically re-sent.
     --
     -- Default: 'False'
+    , clientLimit :: Limit
     }
     deriving (Show)
 
@@ -155,6 +158,7 @@ defaultParamsClient serverName serverId =
         , clientSupported = def
         , clientDebug = defaultDebugParams
         , clientUseEarlyData = False
+        , clientLimit = defaultLimit
         }
 
 data ServerParams = ServerParams
@@ -196,6 +200,7 @@ data ServerParams = ServerParams
     -- Acceptable value range is 0 to 604800 (7 days).
     --
     -- Default: 7200 (2 hours)
+    , serverLimit :: Limit
     }
     deriving (Show)
 
@@ -211,6 +216,7 @@ defaultParamsServer =
         , serverDebug = defaultDebugParams
         , serverEarlyDataSize = 0
         , serverTicketLifetime = 7200
+        , serverLimit = defaultLimit
         }
 
 instance Default ServerParams where
@@ -677,3 +683,17 @@ data Information = Information
     , infoIsEarlyDataAccepted :: Bool
     }
     deriving (Show, Eq)
+
+data Limit = Limit
+    { limitRecordSize :: Maybe Int
+    , limitHandshakeFragment :: Int
+    -- ^ A nasty client may send many fragments of client certificate.
+    }
+    deriving (Eq, Show)
+
+defaultLimit :: Limit
+defaultLimit =
+    Limit
+        { limitRecordSize = Nothing
+        , limitHandshakeFragment = 32
+        }

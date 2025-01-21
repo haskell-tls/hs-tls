@@ -81,22 +81,15 @@ writePacketBytes13 ctx recordLayer pkt = do
 
 ----------------------------------------------------------------
 
--- fixme: this should be customizable
-
--- A nasty client may send many fragments of client certificate.
-handshakeFragmentLimit :: Int
-handshakeFragmentLimit = 32
-
-----------------------------------------------------------------
-
 -- | receive one packet from the context that contains 1 or
 -- many messages (many only in case of handshake). if will returns a
 -- TLSError if the packet is unexpected or malformed
 recvPacket12 :: Context -> IO (Either TLSError Packet)
 recvPacket12 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
   where
+    lim = limitHandshakeFragment $ ctxLimit ctx
     loop count
-        | count > handshakeFragmentLimit =
+        | count > lim =
             return $ Left $ Error_Packet "too many handshake fragment"
     loop count = do
         hrr <- usingState_ ctx getTLS13HRR
@@ -142,8 +135,9 @@ isEmptyHandshake _ = False
 recvPacket13 :: Context -> IO (Either TLSError Packet13)
 recvPacket13 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
   where
+    lim = limitHandshakeFragment $ ctxLimit ctx
     loop count
-        | count > handshakeFragmentLimit =
+        | count > lim =
             return $ Left $ Error_Packet "too many handshake fragment"
     loop count = do
         erecord <- recordRecv13 recordLayer ctx
