@@ -1,6 +1,6 @@
 -- | TLS record layer in Rx direction
 module Network.TLS.Record.Reading (
-    recvRecord,
+    recvRecord12,
     recvRecord13,
 ) where
 
@@ -52,13 +52,13 @@ contentSizeExceeded = Error_Protocol "record content exceeding maximum size" Rec
 -- | recvRecord receive a full TLS record (header + data), from the other side.
 --
 -- The record is disengaged from the record layer
-recvRecord
+recvRecord12
     :: Context
     -- ^ TLS context
     -> Int
     -- ^ number of AppData bytes to accept above normal maximum size
     -> IO (Either TLSError (Record Plaintext))
-recvRecord ctx appDataOverhead =
+recvRecord12 ctx appDataOverhead =
     readExactBytes ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
   where
     recvLengthE = either (return . Left) recvLength

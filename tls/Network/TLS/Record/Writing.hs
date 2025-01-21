@@ -1,6 +1,6 @@
 -- | TLS record layer in Tx direction
 module Network.TLS.Record.Writing (
-    encodeRecord,
+    encodeRecord12,
     encodeRecord13,
     sendBytes,
 ) where
@@ -17,13 +17,21 @@ import Control.Concurrent.MVar
 import Control.Monad.State.Strict
 import qualified Data.ByteString as B
 
-encodeRecord :: Context -> Record Plaintext -> IO (Either TLSError ByteString)
-encodeRecord ctx = prepareRecord ctx . encodeRecordM
+encodeRecordM :: Record Plaintext -> RecordM ByteString
+encodeRecordM record = do
+    erecord <- engageRecord record
+    let (hdr, content) = recordToRaw erecord
+    return $ B.concat [encodeHeader hdr, content]
+
+----------------------------------------------------------------
+
+encodeRecord12 :: Context -> Record Plaintext -> IO (Either TLSError ByteString)
+encodeRecord12 ctx = prepareRecord12 ctx . encodeRecordM
 
 -- before TLS 1.1, the block cipher IV is made of the residual of the previous block,
 -- so we use cstIV as is, however in other case we generate an explicit IV
-prepareRecord :: Context -> RecordM a -> IO (Either TLSError a)
-prepareRecord ctx f = do
+prepareRecord12 :: Context -> RecordM a -> IO (Either TLSError a)
+prepareRecord12 ctx f = do
     txState <- readMVar $ ctxTxRecordState ctx
     let sz = case stCipher txState of
             Nothing -> 0
@@ -36,12 +44,6 @@ prepareRecord ctx f = do
             newIV <- getStateRNG ctx sz
             runTxRecordState ctx (modify (setRecordIV newIV) >> f)
         else runTxRecordState ctx f
-
-encodeRecordM :: Record Plaintext -> RecordM ByteString
-encodeRecordM record = do
-    erecord <- engageRecord record
-    let (hdr, content) = recordToRaw erecord
-    return $ B.concat [encodeHeader hdr, content]
 
 ----------------------------------------------------------------
 

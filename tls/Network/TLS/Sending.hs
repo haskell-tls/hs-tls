@@ -39,7 +39,7 @@ encodePacket12 ctx recordLayer pkt = do
         mkRecord bs = Record pt ver (fragmentPlaintext bs)
         len = ctxFragmentSize ctx
     records <- map mkRecord <$> packetToFragments12 ctx len pkt
-    bs <- fmap mconcat <$> forEitherM records (recordEncode recordLayer ctx)
+    bs <- fmap mconcat <$> forEitherM records (recordEncode12 recordLayer ctx)
     when (pkt == ChangeCipherSpec) $ switchTxEncryption ctx
     return bs
 

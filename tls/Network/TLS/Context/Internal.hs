@@ -223,11 +223,11 @@ data HandshakeSync
 {- FOURMOLU_DISABLE -}
 data RecordLayer a = RecordLayer
     { -- Writing.hs
-      recordEncode    :: Context -> Record Plaintext -> IO (Either TLSError a)
+      recordEncode12  :: Context -> Record Plaintext -> IO (Either TLSError a)
     , recordEncode13  :: Context -> Record Plaintext -> IO (Either TLSError a)
     , recordSendBytes :: Context -> a -> IO ()
     , -- Reading.hs
-      recordRecv      :: Context -> Int -> IO (Either TLSError (Record Plaintext))
+      recordRecv12    :: Context -> Int -> IO (Either TLSError (Record Plaintext))
     , recordRecv13    :: Context -> IO (Either TLSError (Record Plaintext))
     }
 {- FOURMOLU_ENABLE -}

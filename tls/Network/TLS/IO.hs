@@ -106,7 +106,7 @@ recvPacket12 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
         -- size 2^14 + 256.  In all other scenarios and record types
         -- the maximum size is 2^14.
         let appDataOverhead = if hrr then 256 else 0
-        erecord <- recordRecv recordLayer ctx appDataOverhead
+        erecord <- recordRecv12 recordLayer ctx appDataOverhead
         case erecord of
             Left err -> return $ Left err
             Right record ->

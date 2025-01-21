@@ -18,10 +18,10 @@ newTransparentRecordLayer
     -> RecordLayer [(ann, ByteString)]
 newTransparentRecordLayer get send recv =
     RecordLayer
-        { recordEncode = transparentEncodeRecord get
+        { recordEncode12 = transparentEncodeRecord get
         , recordEncode13 = transparentEncodeRecord get
         , recordSendBytes = transparentSendBytes send
-        , recordRecv = \ctx _ -> transparentRecvRecord recv ctx
+        , recordRecv12 = \ctx _ -> transparentRecvRecord recv ctx
         , recordRecv13 = transparentRecvRecord recv
         }
 

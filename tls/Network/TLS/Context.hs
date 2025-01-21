@@ -205,10 +205,10 @@ contextNew backend params = liftIO $ do
 
         recordLayer =
             RecordLayer
-                { recordEncode = encodeRecord
+                { recordEncode12 = encodeRecord12
                 , recordEncode13 = encodeRecord13
                 , recordSendBytes = sendBytes
-                , recordRecv = recvRecord
+                , recordRecv12 = recvRecord12
                 , recordRecv13 = recvRecord13
                 }
 
