@@ -89,6 +89,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
     let cipherIds = map (CipherId . cipherID) ciphers
         compIds = map compressionID compressions
         mkClientHello exts = ClientHello ver crand compIds $ CH clientSession cipherIds exts
+    setMyRecordLimit ctx $ limitRecordSize $ clientLimit cparams
     extensions0 <- catMaybes <$> getExtensions
     let extensions1 = sharedHelloExtensions (clientShared cparams) ++ extensions0
     extensions <- adjustExtentions extensions1 $ mkClientHello extensions1
@@ -124,6 +125,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
             , {- 0x10 -} alpnExt
             , {- 0x17 -} emsExt
             , {- 0x1b -} compCertExt
+            , {- 0x1c -} recordSizeLimitExt
             , {- 0x23 -} sessionTicketExt
             , {- 0x2a -} earlyDataExt
             , {- 0x2b -} versionExt
@@ -180,6 +182,10 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
                 else Just $ toExtensionRaw ExtendedMainSecret
 
     compCertExt = return $ Just $ toExtensionRaw (CompressCertificate [CCA_Zlib])
+
+    recordSizeLimitExt = case limitRecordSize $ clientLimit cparams of
+        Nothing -> return $ Nothing
+        Just siz -> return $ Just $ toExtensionRaw $ RecordSizeLimit $ fromIntegral siz
 
     sessionTicketExt = do
         case clientSessions cparams of

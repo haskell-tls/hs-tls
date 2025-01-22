@@ -286,6 +286,8 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
                 return $ Just $ toExtensionRaw vd
             else return Nothing
 
+    recodeSizeLimitExt <- processRecordSizeLimit ctx chExts False
+
     let shExts =
             sharedHelloExtensions (serverShared sparams)
                 ++ catMaybes
@@ -293,6 +295,7 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
                     , {- 0x0b -} ecPointExt
                     , {- 0x10 -} alpnExt
                     , {- 0x17 -} emsExt
+                    , {- 0x1c -} recodeSizeLimitExt
                     , {- 0x23 -} sessionTicketExt
                     , {- 0xff01 -} secureRenegExt
                     ]

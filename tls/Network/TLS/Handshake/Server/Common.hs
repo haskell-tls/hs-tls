@@ -11,6 +11,7 @@ module Network.TLS.Handshake.Server.Common (
     isCredentialAllowed,
     storePrivInfoServer,
     hashAndSignaturesInCommon,
+    processRecordSizeLimit,
 ) where
 
 import Control.Monad.State.Strict
@@ -180,3 +181,25 @@ hashAndSignaturesInCommon sHashSigs exts = sHashSigs `intersect` cHashSigs
             exts
             defVal
             (\(SignatureAlgorithms sas) -> sas)
+
+processRecordSizeLimit
+    :: Context -> [ExtensionRaw] -> Bool -> IO (Maybe ExtensionRaw)
+processRecordSizeLimit ctx chExts tls13 = do
+    let mmylim = limitRecordSize $ ctxLimit ctx
+    setMyRecordLimit ctx mmylim
+    case mmylim of
+        Nothing -> return Nothing
+        Just mylim -> do
+            lookupAndDecodeAndDo
+                EID_RecordSizeLimit
+                MsgTClientHello
+                chExts
+                (return ())
+                (setPeerRecordSizeLimit ctx tls13)
+            peerSentRSL <- checkPeerRecordLimit ctx
+            if peerSentRSL
+                then do
+                    let mysiz = fromIntegral mylim + if tls13 then 1 else 0
+                        rsl = RecordSizeLimit $ mysiz
+                    return $ Just $ toExtensionRaw rsl
+                else return Nothing

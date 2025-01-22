@@ -171,10 +171,13 @@ newRecordLayer callbacks = newTransparentRecordLayer get send recv
 tlsQUICClient :: ClientParams -> QUICCallbacks -> IO ()
 tlsQUICClient cparams callbacks = do
     ctx0 <- contextNew nullBackend cparams
+    mylimref <- newRecordLimitRef Nothing
+    peerlimref <- newRecordLimitRef Nothing
     let ctx1 =
             ctx0
                 { ctxHandshakeSync = HandshakeSync sync (\_ _ -> return ())
-                , ctxFragmentSize = Nothing
+                , ctxMyRecordLimit = mylimref
+                , ctxPeerRecordLimit = peerlimref
                 , ctxQUICMode = True
                 }
         rl = newRecordLayer callbacks
@@ -201,10 +204,13 @@ tlsQUICClient cparams callbacks = do
 tlsQUICServer :: ServerParams -> QUICCallbacks -> IO ()
 tlsQUICServer sparams callbacks = do
     ctx0 <- contextNew nullBackend sparams
+    mylimref <- newRecordLimitRef Nothing
+    peerlimref <- newRecordLimitRef Nothing
     let ctx1 =
             ctx0
                 { ctxHandshakeSync = HandshakeSync (\_ _ -> return ()) sync
-                , ctxFragmentSize = Nothing
+                , ctxMyRecordLimit = mylimref
+                , ctxPeerRecordLimit = peerlimref
                 , ctxQUICMode = True
                 }
         rl = newRecordLayer callbacks

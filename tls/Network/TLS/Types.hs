@@ -14,6 +14,7 @@ module Network.TLS.Types (
     BigNum (..),
     bigNumToInteger,
     bigNumFromInteger,
+    defaultRecordSizeLimit,
 ) where
 
 import Network.Socket (HostName)
@@ -53,3 +54,9 @@ bigNumFromInteger :: Integer -> BigNum
 bigNumFromInteger i = BigNum $ i2osp i
 
 ----------------------------------------------------------------
+
+-- For plaintext
+-- 2^14 for TLS 1.2
+-- 2^14 + 1 for TLS 1.3
+defaultRecordSizeLimit :: Int
+defaultRecordSizeLimit = 16384

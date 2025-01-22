@@ -37,8 +37,8 @@ encodePacket12 ctx recordLayer pkt = do
     (ver, _) <- decideRecordVersion ctx
     let pt = packetType pkt
         mkRecord bs = Record pt ver (fragmentPlaintext bs)
-        len = ctxFragmentSize ctx
-    records <- map mkRecord <$> packetToFragments12 ctx len pkt
+    mlen <- getPeerRecordLimit ctx
+    records <- map mkRecord <$> packetToFragments12 ctx mlen pkt
     bs <- fmap mconcat <$> forEitherM records (recordEncode12 recordLayer ctx)
     when (pkt == ChangeCipherSpec) $ switchTxEncryption ctx
     return bs
@@ -47,8 +47,8 @@ encodePacket12 ctx recordLayer pkt = do
 -- packets are not fragmented here but by callers of sendPacket, so that the
 -- empty-packet countermeasure may be applied to each fragment independently.
 packetToFragments12 :: Context -> Maybe Int -> Packet -> IO [ByteString]
-packetToFragments12 ctx len (Handshake hss) =
-    getChunks len . B.concat <$> mapM (updateHandshake12 ctx) hss
+packetToFragments12 ctx mlen (Handshake hss) =
+    getChunks mlen . B.concat <$> mapM (updateHandshake12 ctx) hss
 packetToFragments12 _ _ (Alert a) = return [encodeAlerts a]
 packetToFragments12 _ _ ChangeCipherSpec = return [encodeChangeCipherSpec]
 packetToFragments12 _ _ (AppData x) = return [x]
@@ -93,13 +93,13 @@ encodePacket13
 encodePacket13 ctx recordLayer pkt = do
     let pt = contentType pkt
         mkRecord bs = Record pt TLS12 (fragmentPlaintext bs)
-        len = ctxFragmentSize ctx
-    records <- map mkRecord <$> packetToFragments13 ctx len pkt
+    mlen <- getPeerRecordLimit ctx
+    records <- map mkRecord <$> packetToFragments13 ctx mlen pkt
     fmap mconcat <$> forEitherM records (recordEncode13 recordLayer ctx)
 
 packetToFragments13 :: Context -> Maybe Int -> Packet13 -> IO [ByteString]
-packetToFragments13 ctx len (Handshake13 hss) =
-    getChunks len . B.concat <$> mapM (updateHandshake13 ctx) hss
+packetToFragments13 ctx mlen (Handshake13 hss) =
+    getChunks mlen . B.concat <$> mapM (updateHandshake13 ctx) hss
 packetToFragments13 _ _ (Alert13 a) = return [encodeAlerts a]
 packetToFragments13 _ _ (AppData13 x) = return [x]
 packetToFragments13 _ _ ChangeCipherSpec13 = return [encodeChangeCipherSpec]

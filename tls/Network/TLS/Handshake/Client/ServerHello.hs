@@ -149,6 +149,9 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession (Cipher
         then do
             -- Session is dummy in TLS 1.3.
             usingState_ ctx $ setSession serverSession
+            processRecordSizeLimit ctx exts True
+            enableMyRecordLimit ctx
+            enablePeerRecordLimit ctx
             updateContext13 ctx cipherAlg
         else do
             let resumingSession = case clientSessions cparams of
@@ -159,6 +162,7 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession (Cipher
             usingState_ ctx $ do
                 setSession serverSession
                 setTLS12SessionResuming $ isJust resumingSession
+            processRecordSizeLimit ctx exts False
             updateContext12 ctx exts resumingSession
 processServerHello _ _ p = unexpected (show p) (Just "server hello")
 
@@ -211,3 +215,27 @@ updateContext12 ctx exts resumingSession = do
             let mainSecret = sessionSecret sessionData
             usingHState ctx $ setMainSecret TLS12 ClientRole mainSecret
             logKey ctx (MainSecret mainSecret)
+
+----------------------------------------------------------------
+
+processRecordSizeLimit
+    :: Context -> [ExtensionRaw] -> Bool -> IO ()
+processRecordSizeLimit ctx shExts tls13 = do
+    let mmylim = limitRecordSize $ ctxLimit ctx
+    case mmylim of
+        Nothing -> return ()
+        Just mylim -> do
+            lookupAndDecodeAndDo
+                EID_RecordSizeLimit
+                MsgTClientHello
+                shExts
+                (return ())
+                (setPeerRecordSizeLimit ctx tls13)
+            ack <- checkPeerRecordLimit ctx
+            -- When a client sends RecordSizeLimit, it does not know
+            -- which TLS version the server selects.  RecordLimit is
+            -- the length of plaintext.  But RecordSizeLimit also
+            -- includes CT: and padding for TLS 1.3.  To convert
+            -- RecordSizeLimit to RecordLimit, we should reduce the
+            -- value by 1, which is the length of CT:.
+            when (ack && tls13) $ setMyRecordLimit ctx $ Just (mylim - 1)

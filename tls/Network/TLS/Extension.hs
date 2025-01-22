@@ -31,6 +31,7 @@ module Network.TLS.Extension (
         EID_EncryptThenMAC,
         EID_ExtendedMainSecret,
         EID_CompressCertificate,
+        EID_RecordSizeLimit,
         EID_SessionTicket,
         EID_PreSharedKey,
         EID_EarlyData,
@@ -77,6 +78,7 @@ module Network.TLS.Extension (
         EcPointFormat_AnsiX962_compressed_prime,
         EcPointFormat_AnsiX962_compressed_char2
     ),
+    RecordSizeLimit (..),
     SessionTicket (..),
     HeartBeat (..),
     HeartBeatMode (
@@ -178,6 +180,8 @@ pattern EID_ExtendedMainSecret                  :: ExtensionID -- REF7627
 pattern EID_ExtendedMainSecret                   = ExtensionID 0x17
 pattern EID_CompressCertificate                 :: ExtensionID -- RFC8879
 pattern EID_CompressCertificate                  = ExtensionID 0x1b
+pattern EID_RecordSizeLimit                     :: ExtensionID -- RFC8449
+pattern EID_RecordSizeLimit                      = ExtensionID 0x1c
 pattern EID_SessionTicket                       :: ExtensionID -- RFC4507
 pattern EID_SessionTicket                        = ExtensionID 0x23
 pattern EID_PreSharedKey                        :: ExtensionID -- RFC8446
@@ -231,6 +235,7 @@ instance Show ExtensionID where
     show EID_EncryptThenMAC          = "EncryptThenMAC"
     show EID_ExtendedMainSecret      = "ExtendedMainSecret"
     show EID_CompressCertificate     = "CompressCertificate"
+    show EID_RecordSizeLimit         = "RecordSizeLimit"
     show EID_SessionTicket           = "SessionTicket"
     show EID_PreSharedKey            = "PreSharedKey"
     show EID_EarlyData               = "EarlyData"
@@ -276,6 +281,7 @@ definedExtensions =
     , EID_EncryptThenMAC
     , EID_ExtendedMainSecret
     , EID_CompressCertificate
+    , EID_RecordSizeLimit
     , EID_SessionTicket
     , EID_PreSharedKey
     , EID_EarlyData
@@ -302,6 +308,7 @@ supportedExtensions =
     , EID_ApplicationLayerProtocolNegotiation -- 0x10
     , EID_ExtendedMainSecret                  -- 0x17
     , EID_CompressCertificate                 -- 0x1b
+    , EID_RecordSizeLimit                     -- 0x1c
     , EID_SessionTicket                       -- 0x23
     , EID_PreSharedKey                        -- 0x29
     , EID_EarlyData                           -- 0x2a
@@ -333,6 +340,7 @@ instance Show ExtensionRaw where
     show (ExtensionRaw eid@EID_ApplicationLayerProtocolNegotiation bs) = showExtensionRaw eid bs decodeApplicationLayerProtocolNegotiation
     show (ExtensionRaw eid@EID_ExtendedMainSecret _) = show eid
     show (ExtensionRaw eid@EID_CompressCertificate bs) = showExtensionRaw eid bs decodeCompressCertificate
+    show (ExtensionRaw eid@EID_RecordSizeLimit bs) = showExtensionRaw eid bs decodeRecordSizeLimit
     show (ExtensionRaw eid@EID_SessionTicket bs) = showExtensionRaw eid bs decodeSessionTicket
     show (ExtensionRaw eid@EID_PreSharedKey bs) = show eid ++ " " ++ showBytesHex bs
     show (ExtensionRaw eid@EID_EarlyData _) = show eid
@@ -693,6 +701,22 @@ decodeCompressCertificate = runGetMaybe $ do
     getCCA = do
         cca <- CertificateCompressionAlgorithm <$> getWord16
         return (2, cca)
+
+------------------------------------------------------------
+
+newtype RecordSizeLimit = RecordSizeLimit Word16 deriving (Eq, Show)
+
+instance Extension RecordSizeLimit where
+    extensionID _ = EID_RecordSizeLimit
+    extensionEncode (RecordSizeLimit n) = runPut $ putWord16 n
+    extensionDecode _ = decodeRecordSizeLimit
+
+decodeRecordSizeLimit :: ByteString -> Maybe RecordSizeLimit
+decodeRecordSizeLimit = runGetMaybe $ do
+    r <- RecordSizeLimit <$> getWord16
+    leftoverLen <- remaining
+    when (leftoverLen /= 0) $ fail "decodeRecordSizeLimit: broken length"
+    return r
 
 ------------------------------------------------------------
 
