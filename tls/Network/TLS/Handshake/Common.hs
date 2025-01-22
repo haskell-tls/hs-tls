@@ -29,6 +29,8 @@ module Network.TLS.Handshake.Common (
     errorToAlertMessage,
     expectFinished,
     processCertificate,
+    --
+    setPeerRecordSizeLimit,
 ) where
 
 import Control.Concurrent.MVar
@@ -139,6 +141,7 @@ sendCCSandFinished
 sendCCSandFinished ctx role = do
     sendPacket12 ctx ChangeCipherSpec
     contextFlush ctx
+    enablePeerRecordLimit ctx
     verifyData <-
         VerifyData
             <$> ( usingState_ ctx getVersion >>= \ver -> usingHState ctx $ getHandshakeDigest ver role
@@ -329,3 +332,29 @@ ticketOrSessionID12 (Just ticket) _
     | ticket /= "" = Just $ B.copy ticket
 ticketOrSessionID12 _ (Session (Just sessionId)) = Just $ B.copy sessionId
 ticketOrSessionID12 _ _ = Nothing
+
+setPeerRecordSizeLimit :: Context -> Bool -> RecordSizeLimit -> IO ()
+setPeerRecordSizeLimit ctx tls13 (RecordSizeLimit n0) = do
+    when (n0 < 64) $
+        throwCore $
+            Error_Protocol ("too small recode size limit: " ++ show n0) IllegalParameter
+
+    -- RFC 8449 Section 4:
+    -- Even if a larger record size limit is provided by a peer, an
+    -- endpoint MUST NOT send records larger than the protocol-defined
+    -- limit, unless explicitly allowed by a future TLS version or
+    -- extension.
+    let n1 = fromIntegral n0
+        n2
+            | n1 > protolim = protolim
+            | otherwise = n1
+    -- Even if peer's value is larger than the protocol-defined
+    -- limitation, call "setPeerRecordLimit" to send
+    -- "record_size_limit" as ACK.  In this case, the protocol-defined
+    -- limitation is used.
+    let lim = if tls13 then n2 - 1 else n2
+    setPeerRecordLimit ctx $ Just lim
+  where
+    protolim
+        | tls13 = defaultRecordSizeLimit + 1
+        | otherwise = defaultRecordSizeLimit

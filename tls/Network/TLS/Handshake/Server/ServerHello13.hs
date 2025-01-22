@@ -53,6 +53,10 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
                 chExtensions
                 False
                 (\(CompressCertificate ccas) -> CCA_Zlib `elem` ccas)
+
+    recodeSizeLimitExt <- processRecordSizeLimit ctx chExtensions True
+    enableMyRecordLimit ctx
+
     newSession ctx >>= \ss -> usingState_ ctx $ do
         setSession ss
         setTLS13ClientSupportsPHA supportsPHA
@@ -110,7 +114,8 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
                 handSecInfo = HandshakeSecretInfo usedCipher (clientHandshakeSecret, serverHandshakeSecret)
             contextSync ctx $ SendServerHello chExtensions mEarlySecInfo handSecInfo
         ----------------------------------------------------------------
-        sendExtensions rtt0OK alpnExt
+        liftIO $ enablePeerRecordLimit ctx
+        sendExtensions rtt0OK alpnExt recodeSizeLimitExt
         case mCredInfo of
             Nothing -> return ()
             Just (cred, hashSig) -> sendCertAndVerify cred hashSig zlib
@@ -264,7 +269,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
         vrfy <- makeCertVerify ctx pubkey hashSig hChSc
         loadPacket13 ctx $ Handshake13 [vrfy]
 
-    sendExtensions rtt0OK alpnExt = do
+    sendExtensions rtt0OK alpnExt recodeSizeLimitExt = do
         msni <- liftIO $ usingState_ ctx getClientSNI
         let sniExt = case msni of
                 -- RFC6066: In this event, the server SHALL include
@@ -293,6 +298,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
                         [ {- 0x00 -} sniExt
                         , {- 0x0a -} groupExt
                         , {- 0x10 -} alpnExt
+                        , {- 0x1c -} recodeSizeLimitExt
                         , {- 0x2a -} earlyDataExt
                         ]
         extensions' <-

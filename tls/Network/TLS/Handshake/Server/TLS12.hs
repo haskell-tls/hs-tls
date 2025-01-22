@@ -122,6 +122,7 @@ recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake expectClientCer
 
 expectChangeCipherSpec :: Context -> Packet -> IO (RecvState IO)
 expectChangeCipherSpec ctx ChangeCipherSpec = do
+    enableMyRecordLimit ctx
     return $ RecvStateHandshake $ expectFinished ctx
 expectChangeCipherSpec _ p = unexpected (show p) (Just "change cipher")
 
