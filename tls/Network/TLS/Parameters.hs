@@ -71,6 +71,7 @@ data DebugParams = DebugParams
     -- Default: no printing
     }
 
+-- | Default value for 'DebugParams'
 defaultDebugParams :: DebugParams
 defaultDebugParams =
     DebugParams
@@ -145,6 +146,7 @@ data ClientParams = ClientParams
     }
     deriving (Show)
 
+-- | Default value for 'ClientParams'
 defaultParamsClient :: HostName -> ByteString -> ClientParams
 defaultParamsClient serverName serverId =
     ClientParams
@@ -646,6 +648,7 @@ data ServerHooks = ServerHooks
     -- Default: 'return'
     }
 
+-- | Default value for 'ServerHooks'
 defaultServerHooks :: ServerHooks
 defaultServerHooks =
     ServerHooks
@@ -684,13 +687,32 @@ data Information = Information
     }
     deriving (Show, Eq)
 
+-- | Limitations for security.
+--
+-- @since 2.1.7
 data Limit = Limit
     { limitRecordSize :: Maybe Int
+    -- ^ Record size limit defined in RFC 8449.
+    --
+    -- If 'Nothing', the "record_size_limit" extension is not used.
+    --
+    -- In the case of 'Just': A client sends the "record_size_limit"
+    -- extension with this value to the server. A server sends back
+    -- this extension with its own value if a client sends the
+    -- extension. When negotiated, both my limit and peer's limit
+    -- are enabled for protected communication.
+    --
+    -- Default: Nothing
     , limitHandshakeFragment :: Int
-    -- ^ A nasty client may send many fragments of client certificate.
+    -- ^ The limit to accept the number of each handshake message.
+    -- For instance, a nasty client may send many fragments of client
+    -- certificate.
+    --
+    -- Default: 32
     }
     deriving (Eq, Show)
 
+-- | Default value for 'Limit'.
 defaultLimit :: Limit
 defaultLimit =
     Limit
