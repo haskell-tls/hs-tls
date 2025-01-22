@@ -53,8 +53,8 @@ recvServerHello cparams ctx = do
 
 processServerHello13
     :: ClientParams -> Context -> Handshake13 -> IO ()
-processServerHello13 cparams ctx (ServerHello13 serverRan serverSession cipher exts) = do
-    let sh = ServerHello TLS12 serverRan serverSession cipher 0 exts
+processServerHello13 cparams ctx (ServerHello13 serverRan serverSession cipher shExts) = do
+    let sh = ServerHello TLS12 serverRan serverSession cipher 0 shExts
     processServerHello cparams ctx sh
 processServerHello13 _ _ h = unexpected (show h) (Just "server hello")
 
@@ -66,7 +66,7 @@ processServerHello13 _ _ h = unexpected (show h) (Just "server hello")
 -- 4) process the session parameter to see if the server want to start a new session or can resume
 processServerHello
     :: ClientParams -> Context -> Handshake -> IO ()
-processServerHello cparams ctx (ServerHello rver serverRan serverSession (CipherId cid) compression exts) = do
+processServerHello cparams ctx (ServerHello rver serverRan serverSession (CipherId cid) compression shExts) = do
     -- A server which receives a legacy_version value not equal to
     -- 0x0303 MUST abort the handshake with an "illegal_parameter"
     -- alert.
@@ -75,7 +75,7 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession (Cipher
             Error_Protocol (show rver ++ " is not supported") IllegalParameter
     -- find the compression and cipher methods that the server want to use.
     clientSession <- tls13stSession <$> getTLS13State ctx
-    sentExts <- tls13stSentExtensions <$> getTLS13State ctx
+    chExts <- tls13stSentExtensions <$> getTLS13State ctx
     let clientCiphers = supportedCiphers $ ctxSupported ctx
     cipherAlg <- case findCipher cid clientCiphers of
         Nothing -> throwCore $ Error_Protocol "server choose unknown cipher" IllegalParameter
@@ -92,8 +92,8 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession (Cipher
     -- if server returns extensions that we didn't request, fail.
     let checkExt (ExtensionRaw i _)
             | i == EID_Cookie = False -- for HRR
-            | otherwise = i `notElem` sentExts
-    when (any checkExt exts) $
+            | otherwise = i `notElem` chExts
+    when (any checkExt shExts) $
         throwCore $
             Error_Protocol "spurious extensions received" UnsupportedExtension
 
@@ -105,13 +105,13 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession (Cipher
                 lookupAndDecode
                     EID_Cookie
                     MsgTServerHello
-                    exts
+                    shExts
                     Nothing
                     (\cookie@(Cookie _) -> Just cookie)
         setVersion rver -- must be before processing supportedVersions ext
-        mapM_ processServerExtension exts
+        mapM_ processServerExtension shExts
 
-    setALPN ctx MsgTServerHello exts
+    setALPN ctx MsgTServerHello shExts
 
     ver <- usingState_ ctx getVersion
 
@@ -149,7 +149,7 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession (Cipher
         then do
             -- Session is dummy in TLS 1.3.
             usingState_ ctx $ setSession serverSession
-            processRecordSizeLimit ctx exts True
+            processRecordSizeLimit ctx shExts True
             enableMyRecordLimit ctx
             enablePeerRecordLimit ctx
             updateContext13 ctx cipherAlg
@@ -162,8 +162,8 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession (Cipher
             usingState_ ctx $ do
                 setSession serverSession
                 setTLS12SessionResuming $ isJust resumingSession
-            processRecordSizeLimit ctx exts False
-            updateContext12 ctx exts resumingSession
+            processRecordSizeLimit ctx shExts False
+            updateContext12 ctx shExts resumingSession
 processServerHello _ _ p = unexpected (show p) (Just "server hello")
 
 ----------------------------------------------------------------
@@ -203,8 +203,8 @@ updateContext13 ctx cipherAlg = do
     failOnEitherError $ usingHState ctx $ setHelloParameters13 cipherAlg
 
 updateContext12 :: Context -> [ExtensionRaw] -> Maybe SessionData -> IO ()
-updateContext12 ctx exts resumingSession = do
-    ems <- processExtendedMainSecret ctx TLS12 MsgTServerHello exts
+updateContext12 ctx shExts resumingSession = do
+    ems <- processExtendedMainSecret ctx TLS12 MsgTServerHello shExts
     case resumingSession of
         Nothing -> return ()
         Just sessionData -> do
