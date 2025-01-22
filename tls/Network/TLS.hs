@@ -50,6 +50,7 @@ module Network.TLS (
     clientHooks,
     clientSupported,
     clientDebug,
+    clientLimit,
     clientUseEarlyData,
 
     -- ** Server parameters
@@ -62,6 +63,7 @@ module Network.TLS (
     serverShared,
     serverSupported,
     serverDebug,
+    serverLimit,
     serverEarlyDataSize,
     serverTicketLifetime,
 
@@ -123,6 +125,12 @@ module Network.TLS (
     debugPrintSeed,
     debugVersionForced,
     debugKeyLogger,
+
+    -- ** Limit parameters
+    Limit,
+    defaultLimit,
+    limitHandshakeFragment,
+    limitRecordSize,
 
     -- * Shared parameters
 
