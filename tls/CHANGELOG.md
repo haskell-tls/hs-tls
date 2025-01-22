@@ -1,3 +1,18 @@
+# Change log for "tls"
+
+## Version 2.1.7
+
+* Introducing `Limit` parameter.
+* Implementing "Record Size Limit Extension for TLS" (RFC8449).
+  Set `limitRecordSize` use it.
+* Implementing "TLS Certificate Compression" (RFC 8879).
+  This feature is automatically used if the peer supports it.
+* More tests with `tlsfuzzer` especially for client authentication.
+* Implementing a utility funcation, `validateClientCertificate`, for
+  client authentication.
+* Bug fix for echo back logic for Cookie extension.
+* More pretty show for the internal `Handshake` structure for debugging.
+
 ## Version 2.1.6
 
 * Testing with "tlsfuzzer" again. Now don't send an alert agaist to
