@@ -7,47 +7,46 @@ module Network.TLS.Record.Reading (
 import qualified Data.ByteString as B
 
 import Network.TLS.Context.Internal
-import Network.TLS.ErrT
 import Network.TLS.Hooks
 import Network.TLS.Imports
 import Network.TLS.Packet
 import Network.TLS.Record
 import Network.TLS.Struct
+import Network.TLS.Types
 
 ----------------------------------------------------------------
 
-exceeds :: Integral ty => Context -> Int -> ty -> Bool
-exceeds ctx overhead actual =
-    case ctxFragmentSize ctx of
-        Nothing -> False
-        Just sz -> fromIntegral actual > sz + overhead
+getMyPlainLimit :: Context -> IO Int
+getMyPlainLimit ctx = do
+    msiz <- getMyRecordLimit ctx
+    return $ case msiz of
+        Nothing -> defaultRecordSizeLimit
+        Just siz -> siz
 
 getRecord
     :: Context
-    -> Int
     -> Header
     -> ByteString
     -> IO (Either TLSError (Record Plaintext))
-getRecord ctx appDataOverhead header@(Header pt _ _) content = do
+getRecord ctx header content = do
     withLog ctx $ \logging -> loggingIORecv logging header content
-    runRxRecordState ctx $ do
-        r <- decodeRecordM header content
-        let Record _ _ fragment = r
-        when (exceeds ctx overhead $ B.length (fragmentGetBytes fragment)) $
-            throwError contentSizeExceeded
-        return r
-  where
-    overhead = if pt == ProtocolType_AppData then appDataOverhead else 0
+    lim <- getMyPlainLimit ctx
+    er <- runRxRecordState ctx $ decodeRecordM header content lim
+    case er of
+        Left e -> return $ Left e
+        Right r -> return $ Right r
 
-decodeRecordM :: Header -> ByteString -> RecordM (Record Plaintext)
-decodeRecordM header content = disengageRecord erecord
+decodeRecordM :: Header -> ByteString -> Int -> RecordM (Record Plaintext)
+decodeRecordM header content lim = disengageRecord erecord lim
   where
     erecord = rawToRecord header (fragmentCiphertext content)
 
-contentSizeExceeded :: TLSError
-contentSizeExceeded = Error_Protocol "record content exceeding maximum size" RecordOverflow
-
 ----------------------------------------------------------------
+
+exceedsTLSCiphertext :: Int -> Word16 -> Bool
+exceedsTLSCiphertext overhead actual =
+    -- In TLS 1.3, overhead is included one more byte for content type.
+    fromIntegral actual > defaultRecordSizeLimit + overhead
 
 -- | recvRecord receive a full TLS record (header + data), from the other side.
 --
@@ -55,29 +54,45 @@ contentSizeExceeded = Error_Protocol "record content exceeding maximum size" Rec
 recvRecord12
     :: Context
     -- ^ TLS context
-    -> Int
-    -- ^ number of AppData bytes to accept above normal maximum size
     -> IO (Either TLSError (Record Plaintext))
-recvRecord12 ctx appDataOverhead =
+recvRecord12 ctx =
     readExactBytes ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
   where
     recvLengthE = either (return . Left) recvLength
 
-    recvLength header@(Header _ _ readlen)
-        | exceeds ctx 2048 readlen = return $ Left maximumSizeExceeded
-        | otherwise =
-            readExactBytes ctx (fromIntegral readlen)
-                >>= either (return . Left) (getRecord ctx appDataOverhead header)
+    recvLength header@(Header _ _ readlen) = do
+        -- RFC 5246 Section 7.2.2
+        -- A TLSCiphertext record was received that had a length more
+        -- than 2^14+2048 bytes, or a record decrypted to a
+        -- TLSCompressed record with more than 2^14+1024 bytes.  This
+        -- message is always fatal and should never be observed in
+        -- communication between proper implementations (except when
+        -- messages were corrupted in the network).
+        if exceedsTLSCiphertext 2048 readlen
+            then return $ Left maximumSizeExceeded
+            else
+                readExactBytes ctx (fromIntegral readlen)
+                    >>= either (return . Left) (getRecord ctx header)
 
 recvRecord13 :: Context -> IO (Either TLSError (Record Plaintext))
 recvRecord13 ctx = readExactBytes ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
   where
     recvLengthE = either (return . Left) recvLength
-    recvLength header@(Header _ _ readlen)
-        | exceeds ctx 256 readlen = return $ Left maximumSizeExceeded
-        | otherwise =
-            readExactBytes ctx (fromIntegral readlen)
-                >>= either (return . Left) (getRecord ctx 0 header)
+    recvLength header@(Header _ _ readlen) = do
+        -- RFC 8446 Section 5.2:
+        -- An AEAD algorithm used in TLS 1.3 MUST NOT produce an
+        -- expansion greater than 255 octets.  An endpoint that
+        -- receives a record from its peer with TLSCiphertext.length
+        -- larger than 2^14 + 256 octets MUST terminate the connection
+        -- with a "record_overflow" alert.  This limit is derived from
+        -- the maximum TLSInnerPlaintext length of 2^14 octets + 1
+        -- octet for ContentType + the maximum AEAD expansion of 255
+        -- octets.
+        if exceedsTLSCiphertext 256 readlen
+            then return $ Left maximumSizeExceeded
+            else
+                readExactBytes ctx (fromIntegral readlen)
+                    >>= either (return . Left) (getRecord ctx header)
 
 maximumSizeExceeded :: TLSError
 maximumSizeExceeded = Error_Protocol "record exceeding maximum size" RecordOverflow

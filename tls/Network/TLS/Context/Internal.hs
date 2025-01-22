@@ -70,6 +70,17 @@ module Network.TLS.Context.Internal (
     modifyTLS13State,
     CipherChoice (..),
     makeCipherChoice,
+
+    -- * RecordLimit
+    setMyRecordLimit,
+    enableMyRecordLimit,
+    getMyRecordLimit,
+    checkMyRecordLimit,
+    setPeerRecordLimit,
+    enablePeerRecordLimit,
+    getPeerRecordLimit,
+    checkPeerRecordLimit,
+    newRecordLimitRef,
 ) where
 
 import Control.Concurrent.MVar
@@ -137,9 +148,18 @@ data Context
     , -- Misc
       ctxNeedEmptyPacket :: IORef Bool
     -- ^ empty packet workaround for CBC guessability.
-    , ctxFragmentSize :: Maybe Int
-    -- ^ maximum size of plaintext fragments
+    , ctxMyRecordLimit :: IORef RecordLimit
+    -- ^ maximum size of plaintext fragments, val + 1 is used for TLS 1.3
+    , ctxPeerRecordLimit :: IORef RecordLimit
+    -- ^ maximum size of plaintext fragments, val + 1 is used for TLS 1.3
     }
+
+data RecordLimit
+    = NoRecordLimit -- for QUIC
+    | RecordLimit
+        Int -- effective
+        (Maybe Int) -- pending
+    deriving (Eq, Show)
 
 data RoleParams = RoleParams
     { doHandshake_ :: Context -> IO ()
@@ -229,7 +249,7 @@ data RecordLayer a = RecordLayer
     , recordEncode13  :: Context -> Record Plaintext -> IO (Either TLSError a)
     , recordSendBytes :: Context -> a -> IO ()
     , -- Reading.hs
-      recordRecv12    :: Context -> Int -> IO (Either TLSError (Record Plaintext))
+      recordRecv12    :: Context -> IO (Either TLSError (Record Plaintext))
     , recordRecv13    :: Context -> IO (Either TLSError (Record Plaintext))
     }
 {- FOURMOLU_ENABLE -}
@@ -450,3 +470,59 @@ getCertRequest13 ctx context = do
   where
     fromCertRequest13 (CertRequest13 c _) = c
     fromCertRequest13 _ = error "fromCertRequest13"
+
+--------------------------------
+
+setMyRecordLimit :: Context -> Maybe Int -> IO ()
+setMyRecordLimit ctx msiz = modifyIORef (ctxMyRecordLimit ctx) change
+  where
+    change (RecordLimit n _) = RecordLimit n msiz
+    change x = x
+
+enableMyRecordLimit :: Context -> IO ()
+enableMyRecordLimit ctx = modifyIORef (ctxMyRecordLimit ctx) change
+  where
+    change (RecordLimit _ (Just n)) = RecordLimit n Nothing
+    change x = x
+
+getMyRecordLimit :: Context -> IO (Maybe Int)
+getMyRecordLimit ctx = change <$> readIORef (ctxMyRecordLimit ctx)
+  where
+    change NoRecordLimit = Nothing
+    change (RecordLimit n _) = Just n
+
+checkMyRecordLimit :: Context -> IO Bool
+checkMyRecordLimit ctx = chk <$> readIORef (ctxMyRecordLimit ctx)
+  where
+    chk NoRecordLimit = False
+    chk (RecordLimit _ mx) = isJust mx
+
+--------------------------------
+
+setPeerRecordLimit :: Context -> Maybe Int -> IO ()
+setPeerRecordLimit ctx msiz = modifyIORef (ctxPeerRecordLimit ctx) change
+  where
+    change (RecordLimit n _) = RecordLimit n msiz
+    change x = x
+
+enablePeerRecordLimit :: Context -> IO ()
+enablePeerRecordLimit ctx = modifyIORef (ctxPeerRecordLimit ctx) change
+  where
+    change (RecordLimit _ (Just n)) = RecordLimit n Nothing
+    change x = x
+
+getPeerRecordLimit :: Context -> IO (Maybe Int)
+getPeerRecordLimit ctx = change <$> readIORef (ctxPeerRecordLimit ctx)
+  where
+    change NoRecordLimit = Nothing
+    change (RecordLimit n _) = Just n
+
+checkPeerRecordLimit :: Context -> IO Bool
+checkPeerRecordLimit ctx = chk <$> readIORef (ctxPeerRecordLimit ctx)
+  where
+    chk NoRecordLimit = False
+    chk (RecordLimit _ mx) = isJust mx
+
+newRecordLimitRef :: Maybe Int -> IO (IORef RecordLimit)
+newRecordLimitRef Nothing = newIORef NoRecordLimit
+newRecordLimitRef (Just n) = newIORef $ RecordLimit n Nothing

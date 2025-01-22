@@ -58,6 +58,15 @@ module Network.TLS.Context (
     TLS13State (..),
     getTLS13State,
     modifyTLS13State,
+    setMyRecordLimit,
+    enableMyRecordLimit,
+    getMyRecordLimit,
+    checkMyRecordLimit,
+    setPeerRecordLimit,
+    enablePeerRecordLimit,
+    getPeerRecordLimit,
+    checkPeerRecordLimit,
+    newRecordLimitRef,
 ) where
 
 import Control.Concurrent.MVar
@@ -93,7 +102,7 @@ import Network.TLS.Record.Writing
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
-import Network.TLS.Types (Role (..))
+import Network.TLS.Types (Role (..), defaultRecordSizeLimit)
 import Network.TLS.X509
 
 class TLSParams a where
@@ -168,6 +177,8 @@ contextNew backend params = liftIO $ do
     crs <- newIORef []
     locks <- Locks <$> newMVar () <*> newMVar () <*> newMVar ()
     st13ref <- newIORef defaultTLS13State
+    mylimref <- newRecordLimitRef $ Just defaultRecordSizeLimit
+    peerlimref <- newRecordLimitRef $ Just defaultRecordSizeLimit
     let roleParams =
             RoleParams
                 { doHandshake_ = doHandshake params
@@ -183,7 +194,8 @@ contextNew backend params = liftIO $ do
                 , ctxSupported = supported
                 , ctxLimit = limit
                 , ctxTLSState = tlsstate
-                , ctxFragmentSize = Just 16384
+                , ctxMyRecordLimit = mylimref
+                , ctxPeerRecordLimit = peerlimref
                 , ctxTxRecordState = tx
                 , ctxRxRecordState = rx
                 , ctxHandshakeState = hs

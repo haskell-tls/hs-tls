@@ -21,15 +21,15 @@ import Network.TLS.Struct
 import Network.TLS.Util
 import Network.TLS.Wire
 
-disengageRecord :: Record Ciphertext -> RecordM (Record Plaintext)
-disengageRecord = decryptRecord >=> uncompressRecord
+disengageRecord :: Record Ciphertext -> Int -> RecordM (Record Plaintext)
+disengageRecord record lim = decryptRecord record lim >>= uncompressRecord
 
 uncompressRecord :: Record Compressed -> RecordM (Record Plaintext)
 uncompressRecord record = onRecordFragment record $ fragmentUncompress $ \bytes ->
     withCompression $ compressionInflate bytes
 
-decryptRecord :: Record Ciphertext -> RecordM (Record Compressed)
-decryptRecord record@(Record ct ver fragment) = do
+decryptRecord :: Record Ciphertext -> Int -> RecordM (Record Compressed)
+decryptRecord record@(Record ct ver fragment) lim = do
     st <- get
     case stCipher st of
         Nothing -> noDecryption
@@ -39,21 +39,12 @@ decryptRecord record@(Record ct ver fragment) = do
             if recordTLS13 recOpts
                 then decryptData13 mver (fragmentGetBytes fragment) st
                 else onRecordFragment record $ fragmentUncipher $ \e ->
-                    decryptData mver record e st
+                    decryptData mver record e st lim
   where
-    noDecryption = onRecordFragment record $ fragmentUncipher return
+    noDecryption = onRecordFragment record $ fragmentUncipher $ checkPlainLimit lim
     decryptData13 mver e st = case ct of
         ProtocolType_AppData -> do
-            inner <- decryptData mver record e st
-            let len = B.length inner
-            when (len > 16385) $
-                throwError $
-                    Error_Protocol
-                        ( "TLS 1.3 inner plaintext exceeding maximum size: "
-                            ++ show len
-                            ++ " > 16385 (2^14 + 1)"
-                        )
-                        RecordOverflow
+            inner <- decryptData mver record e st (lim + 1)
             case unInnerPlaintext inner of
                 Left message -> throwError $ Error_Protocol message UnexpectedMessage
                 Right (ct', d) -> return $ Record ct' ver (fragmentCompressed d)
@@ -99,9 +90,30 @@ getCipherData (Record pt ver _) cdata = do
 
     return $ cipherDataContent cdata
 
+checkPlainLimit :: Int -> ByteString -> RecordM ByteString
+checkPlainLimit lim plain
+    | len > lim =
+        throwError $
+            Error_Protocol
+                ( "plaintext exceeding record size limit: "
+                    ++ show len
+                    ++ " > "
+                    ++ show lim
+                )
+                RecordOverflow
+    | otherwise = return plain
+  where
+    len = B.length plain
+
 decryptData
-    :: Version -> Record Ciphertext -> ByteString -> RecordState -> RecordM ByteString
-decryptData ver record econtent tst = decryptOf (cstKey cst)
+    :: Version
+    -> Record Ciphertext
+    -> ByteString
+    -> RecordState
+    -> Int
+    -> RecordM ByteString
+decryptData ver record econtent tst lim =
+    decryptOf (cstKey cst) >>= checkPlainLimit lim
   where
     cipher = fromJust $ stCipher tst
     bulk = cipherBulk cipher

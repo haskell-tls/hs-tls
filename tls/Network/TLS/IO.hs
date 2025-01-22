@@ -93,13 +93,7 @@ recvPacket12 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
             return $ Left $ Error_Packet "too many handshake fragment"
     loop count = do
         hrr <- usingState_ ctx getTLS13HRR
-        -- When a client sends 0-RTT data to a server which rejects
-        -- and sends a HRR, the server will not decrypt AppData
-        -- segments.  The server needs to accept AppData with maximum
-        -- size 2^14 + 256.  In all other scenarios and record types
-        -- the maximum size is 2^14.
-        let appDataOverhead = if hrr then 256 else 0
-        erecord <- recordRecv12 recordLayer ctx appDataOverhead
+        erecord <- recordRecv12 recordLayer ctx
         case erecord of
             Left err -> return $ Left err
             Right record ->
