@@ -61,6 +61,10 @@ wrapCertificateChecks l
 pubkeyType :: PubKey -> String
 pubkeyType = show . pubkeyToAlg
 
+-- | A utility function for client authentication which can be used
+-- `onClientCertificate`.
+--
+-- Since: 2.1.7
 validateClientCertificate
     :: CertificateStore
     -> ValidationCache
