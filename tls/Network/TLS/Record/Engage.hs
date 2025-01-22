@@ -17,7 +17,6 @@ import Crypto.Cipher.Types (AuthTag (..))
 import qualified Data.ByteArray as B (convert, xor)
 import qualified Data.ByteString as B
 import Network.TLS.Cipher
-import Network.TLS.Compression
 import Network.TLS.Imports
 import Network.TLS.Packet
 import Network.TLS.Record.State
@@ -25,17 +24,12 @@ import Network.TLS.Record.Types
 import Network.TLS.Wire
 
 engageRecord :: Record Plaintext -> RecordM (Record Ciphertext)
-engageRecord = compressRecord >=> encryptRecord
-
-compressRecord :: Record Plaintext -> RecordM (Record Compressed)
-compressRecord record =
-    onRecordFragment record $ fragmentCompress $ \bytes -> do
-        withCompression $ compressionDeflate bytes
+engageRecord = encryptRecord
 
 -- when Tx Encrypted is set, we pass the data through encryptContent, otherwise
 -- we just return the compress payload directly as the ciphered one
 --
-encryptRecord :: Record Compressed -> RecordM (Record Ciphertext)
+encryptRecord :: Record Plaintext -> RecordM (Record Ciphertext)
 encryptRecord record@(Record ct ver fragment) = do
     st <- get
     case stCipher st of
@@ -51,7 +45,7 @@ encryptRecord record@(Record ct ver fragment) = do
         | ct == ProtocolType_ChangeCipherSpec = noEncryption
         | otherwise = do
             let bytes = fragmentGetBytes fragment
-                fragment' = fragmentCompressed $ innerPlaintext ct bytes
+                fragment' = fragmentPlaintext $ innerPlaintext ct bytes
                 record' = Record ProtocolType_AppData ver fragment'
             onRecordFragment record' $ fragmentCipher (encryptContent True record')
 
@@ -61,7 +55,7 @@ innerPlaintext (ProtocolType c) bytes = runPut $ do
     putWord8 c -- non zero!
     -- fixme: zeros padding
 
-encryptContent :: Bool -> Record Compressed -> ByteString -> RecordM ByteString
+encryptContent :: Bool -> Record Plaintext -> ByteString -> RecordM ByteString
 encryptContent tls13 record content = do
     cst <- getCryptState
     bulk <- getBulk
@@ -108,7 +102,7 @@ encryptAead
     -> Bulk
     -> BulkAEAD
     -> ByteString
-    -> Record Compressed
+    -> Record Plaintext
     -> RecordM ByteString
 encryptAead tls13 bulk encryptF content record = do
     let authTagLen = bulkAuthTagLen bulk

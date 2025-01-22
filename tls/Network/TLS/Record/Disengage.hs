@@ -10,7 +10,6 @@ import qualified Data.ByteArray as B (convert, xor)
 import qualified Data.ByteString as B
 
 import Network.TLS.Cipher
-import Network.TLS.Compression
 import Network.TLS.Crypto
 import Network.TLS.ErrT
 import Network.TLS.Imports
@@ -22,13 +21,9 @@ import Network.TLS.Util
 import Network.TLS.Wire
 
 disengageRecord :: Record Ciphertext -> Int -> RecordM (Record Plaintext)
-disengageRecord record lim = decryptRecord record lim >>= uncompressRecord
+disengageRecord record lim = decryptRecord record lim
 
-uncompressRecord :: Record Compressed -> RecordM (Record Plaintext)
-uncompressRecord record = onRecordFragment record $ fragmentUncompress $ \bytes ->
-    withCompression $ compressionInflate bytes
-
-decryptRecord :: Record Ciphertext -> Int -> RecordM (Record Compressed)
+decryptRecord :: Record Ciphertext -> Int -> RecordM (Record Plaintext)
 decryptRecord record@(Record ct ver fragment) lim = do
     st <- get
     case stCipher st of
@@ -47,7 +42,7 @@ decryptRecord record@(Record ct ver fragment) lim = do
             inner <- decryptData mver record e st (lim + 1)
             case unInnerPlaintext inner of
                 Left message -> throwError $ Error_Protocol message UnexpectedMessage
-                Right (ct', d) -> return $ Record ct' ver (fragmentCompressed d)
+                Right (ct', d) -> return $ Record ct' ver $ fragmentPlaintext d
         ProtocolType_ChangeCipherSpec -> noDecryption
         ProtocolType_Alert -> noDecryption
         _ ->

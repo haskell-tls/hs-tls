@@ -15,7 +15,6 @@ module Network.TLS.Record (
     rawToRecord,
     recordToHeader,
     Plaintext,
-    Compressed,
     Ciphertext,
 
     -- * Engage and disengage from the record layer
