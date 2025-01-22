@@ -115,6 +115,7 @@ recvNSTandCCSandFinished ctx = do
     expectNewSessionTicket p = unexpected (show p) (Just "Handshake Finished")
 
     expectChangeCipher ChangeCipherSpec = do
+        enableMyRecordLimit ctx
         return $ RecvStateHandshake $ expectFinished ctx
     expectChangeCipher p = unexpected (show p) (Just "change cipher")
 
