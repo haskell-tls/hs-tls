@@ -48,11 +48,16 @@ processClientHello13 sparams ctx CH{..} = do
                 chExtensions
                 False
                 (\(EarlyDataIndication _) -> True)
-    when rtt0 $
-        -- mark a 0-RTT attempt before a possible HRR, and before updating the
-        -- status again if 0-RTT successful
-        setEstablished ctx (EarlyDataNotAllowed 3) -- hardcoding
-        -- Deciding key exchange from key shares
+    if rtt0
+        then
+            -- mark a 0-RTT attempt before a possible HRR, and before updating the
+            -- status again if 0-RTT successful
+            setEstablished ctx (EarlyDataNotAllowed 3) -- hardcoding
+        else
+            -- In the case of HRR, EarlyDataNotAllowed is already set.
+            -- It should be cleared here.
+            setEstablished ctx NotEstablished
+    -- Deciding key exchange from key shares
     let require =
             throwCore $
                 Error_Protocol
