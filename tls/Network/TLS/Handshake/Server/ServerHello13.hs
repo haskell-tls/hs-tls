@@ -132,11 +132,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
     let appSecInfo = ApplicationSecretInfo (clientApplicationSecret0, serverApplicationSecret0)
     contextSync ctx $ SendServerFinished appSecInfo
     ----------------------------------------------------------------
-    if rtt0OK
-        then setEstablished ctx (EarlyDataAllowed rtt0max)
-        else
-            when (established == NotEstablished) $
-                setEstablished ctx (EarlyDataNotAllowed 3) -- hardcoding
+    when rtt0OK $ setEstablished ctx (EarlyDataAllowed rtt0max)
     return (appKey, clientHandshakeSecret, authenticated, rtt0OK)
   where
     choice = makeCipherChoice TLS13 usedCipher
