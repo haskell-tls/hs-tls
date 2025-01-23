@@ -333,6 +333,10 @@ recvData13 ctx = do
             modifyTLS13State ctx $ \st -> st{tls13stRecvNST = True}
         loopHandshake13 hs
     loopHandshake13 (KeyUpdate13 mode : hs) = do
+        let multipleKeyUpdate = any isKeyUpdate13 hs
+        when multipleKeyUpdate $ do
+            let reason = "Multiple KeyUpdate is not allowed in one record"
+            terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
         when (ctxQUICMode ctx) $ do
             let reason = "KeyUpdate is not allowed for QUIC"
             terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason

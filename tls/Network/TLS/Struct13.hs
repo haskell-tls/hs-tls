@@ -5,6 +5,7 @@ module Network.TLS.Struct13 (
     contentType,
     KeyUpdate (..),
     CertReqContext,
+    isKeyUpdate13,
 ) where
 
 import Network.TLS.Imports
@@ -61,3 +62,7 @@ contentType Handshake13{}      = ProtocolType_Handshake
 contentType Alert13{}          = ProtocolType_Alert
 contentType AppData13{}        = ProtocolType_AppData
 {- FOURMOLU_ENABLE -}
+
+isKeyUpdate13 :: Handshake13 -> Bool
+isKeyUpdate13 (KeyUpdate13 _) = True
+isKeyUpdate13 _ = False
