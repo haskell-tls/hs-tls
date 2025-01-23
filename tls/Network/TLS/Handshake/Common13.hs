@@ -432,7 +432,14 @@ getHandshake13 ctx = RecvHandshake13M $ do
         case epkt of
             Right (Handshake13 []) -> error "invalid recvPacket13 result"
             Right (Handshake13 (h : hs)) -> found h hs
-            Right ChangeCipherSpec13 -> recvLoop
+            Right ChangeCipherSpec13 -> do
+                alreadyReceived <- liftIO $ usingHState ctx getCCS13Recv
+                if alreadyReceived
+                    then
+                        liftIO $ throwCore $ Error_Protocol "multiple CSS in TLS 1.3" UnexpectedMessage
+                    else do
+                        liftIO $ usingHState ctx $ setCCS13Recv True
+                        recvLoop
             Right (Alert13 _) -> throwCore Error_TCP_Terminate
             Right x -> unexpected (show x) (Just "handshake 13")
             Left err -> throwCore err

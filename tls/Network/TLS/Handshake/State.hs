@@ -71,6 +71,8 @@ module Network.TLS.Handshake.State (
     getTLS13CertComp,
     setCCS13Sent,
     getCCS13Sent,
+    setCCS13Recv,
+    getCCS13Recv,
 ) where
 
 import Control.Monad.State.Strict
@@ -137,6 +139,7 @@ data HandshakeState = HandshakeState
     , hstTLS13ResumptionSecret :: Maybe (BaseSecret ResumptionSecret)
     , hstTLS13CertComp :: Bool
     , hstCCS13Sent :: Bool
+    , hstCCS13Recv :: Bool
     }
     deriving (Show)
 
@@ -229,6 +232,7 @@ newEmptyHandshake ver crand =
         , hstTLS13ResumptionSecret = Nothing
         , hstTLS13CertComp = False
         , hstCCS13Sent = False
+        , hstCCS13Recv = False
         }
 
 runHandshake :: HandshakeState -> HandshakeM a -> (a, HandshakeState)
@@ -341,6 +345,12 @@ setCCS13Sent sent = modify (\hst -> hst{hstCCS13Sent = sent})
 
 getCCS13Sent :: HandshakeM Bool
 getCCS13Sent = gets hstCCS13Sent
+
+setCCS13Recv :: Bool -> HandshakeM ()
+setCCS13Recv sent = modify (\hst -> hst{hstCCS13Recv = sent})
+
+getCCS13Recv :: HandshakeM Bool
+getCCS13Recv = gets hstCCS13Recv
 
 setCertReqSent :: Bool -> HandshakeM ()
 setCertReqSent b = modify (\hst -> hst{hstCertReqSent = b})
