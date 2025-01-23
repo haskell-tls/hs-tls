@@ -96,25 +96,28 @@ recvPacket12 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
         erecord <- recordRecv12 recordLayer ctx
         case erecord of
             Left err -> return $ Left err
-            Right record ->
-                if hrr && isCCS record
-                    then loop (count + 1)
-                    else do
-                        pktRecv <- processPacket ctx record
-                        if isEmptyHandshake pktRecv
-                            then -- When a handshake record is fragmented we continue
-                            -- receiving in order to feed stHandshakeRecordCont
-                                loop (count + 1)
-                            else do
-                                pkt <- case pktRecv of
-                                    Right (Handshake hss) ->
-                                        ctxWithHooks ctx $ \hooks ->
-                                            Right . Handshake <$> mapM (hookRecvHandshake hooks) hss
-                                    _ -> return pktRecv
-                                case pkt of
-                                    Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p
-                                    _ -> return ()
-                                return pkt
+            Right record
+                | hrr && isCCS record -> loop (count + 1)
+                | otherwise -> do
+                    pktRecv <- processPacket ctx record
+                    if isEmptyHandshake pktRecv
+                        then
+                            -- When a handshake record is fragmented
+                            -- we continue receiving in order to feed
+                            -- stHandshakeRecordCont
+                            loop (count + 1)
+                        else case pktRecv of
+                            Right (Handshake hss) -> do
+                                pktRecv'@(Right pkt) <- ctxWithHooks ctx $ \hooks ->
+                                    Right . Handshake <$> mapM (hookRecvHandshake hooks) hss
+                                logPacket ctx $ show pkt
+                                return pktRecv'
+                            Right pkt -> do
+                                logPacket ctx $ show pkt
+                                return pktRecv
+                            Left er -> do
+                                logPacket ctx $ show er
+                                return pktRecv
 
 isCCS :: Record a -> Bool
 isCCS (Record ProtocolType_ChangeCipherSpec _ _) = True
@@ -123,6 +126,9 @@ isCCS _ = False
 isEmptyHandshake :: Either TLSError Packet -> Bool
 isEmptyHandshake (Right (Handshake [])) = True
 isEmptyHandshake _ = False
+
+logPacket :: Context -> String -> IO ()
+logPacket ctx msg = withLog ctx $ \logging -> loggingPacketRecv logging msg
 
 ----------------------------------------------------------------
 
@@ -150,19 +156,24 @@ recvPacket13 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
             Right record -> do
                 pktRecv <- processPacket13 ctx record
                 if isEmptyHandshake13 pktRecv
-                    then -- When a handshake record is fragmented we continue receiving
-                    -- in order to feed stHandshakeRecordCont13
+                    then
+                        -- When a handshake record is fragmented we
+                        -- continue receiving in order to feed
+                        -- stHandshakeRecordCont13
                         loop (count + 1)
                     else do
-                        pkt <- case pktRecv of
-                            Right (Handshake13 hss) ->
-                                ctxWithHooks ctx $ \hooks ->
+                        case pktRecv of
+                            Right (Handshake13 hss) -> do
+                                pktRecv'@(Right pkt) <- ctxWithHooks ctx $ \hooks ->
                                     Right . Handshake13 <$> mapM (hookRecvHandshake13 hooks) hss
-                            _ -> return pktRecv
-                        case pkt of
-                            Right p -> withLog ctx $ \logging -> loggingPacketRecv logging $ show p
-                            _ -> return ()
-                        return pkt
+                                logPacket ctx $ show pkt
+                                return pktRecv'
+                            Right pkt -> do
+                                logPacket ctx $ show pkt
+                                return pktRecv
+                            Left er -> do
+                                logPacket ctx $ show er
+                                return pktRecv
 
 isEmptyHandshake13 :: Either TLSError Packet13 -> Bool
 isEmptyHandshake13 (Right (Handshake13 [])) = True
