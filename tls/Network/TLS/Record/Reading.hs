@@ -33,7 +33,7 @@ getRecord ctx header content = do
     lim <- getMyPlainLimit ctx
     runRxRecordState ctx $ do
         let erecord = rawToRecord header $ fragmentCiphertext content
-        disengageRecord erecord lim
+        decryptRecord erecord lim
 
 ----------------------------------------------------------------
 

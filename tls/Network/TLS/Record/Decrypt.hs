@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module Network.TLS.Record.Disengage (
-    disengageRecord,
+module Network.TLS.Record.Decrypt (
+    decryptRecord,
 ) where
 
 import Control.Monad.State.Strict
@@ -19,9 +19,6 @@ import Network.TLS.Record.Types
 import Network.TLS.Struct
 import Network.TLS.Util
 import Network.TLS.Wire
-
-disengageRecord :: Record Ciphertext -> Int -> RecordM (Record Plaintext)
-disengageRecord record lim = decryptRecord record lim
 
 decryptRecord :: Record Ciphertext -> Int -> RecordM (Record Plaintext)
 decryptRecord record@(Record ct ver fragment) lim = do

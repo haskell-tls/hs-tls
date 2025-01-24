@@ -90,8 +90,8 @@ library
         Network.TLS.Parameters
         Network.TLS.PostHandshake
         Network.TLS.Record
-        Network.TLS.Record.Disengage
-        Network.TLS.Record.Engage
+        Network.TLS.Record.Decrypt
+        Network.TLS.Record.Encrypt
         Network.TLS.Record.Layer
         Network.TLS.Record.Reading
         Network.TLS.Record.Writing

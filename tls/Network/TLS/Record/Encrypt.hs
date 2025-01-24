@@ -7,8 +7,8 @@
 -- Starting with TLS v1.3, only the "null" compression method is negotiated in
 -- the handshake, so the compression step will be a no-op.  Integrity and
 -- encryption are performed using an AEAD cipher only.
-module Network.TLS.Record.Engage (
-    engageRecord,
+module Network.TLS.Record.Encrypt (
+    encryptRecord,
 ) where
 
 import Control.Monad.State.Strict
@@ -22,9 +22,6 @@ import Network.TLS.Packet
 import Network.TLS.Record.State
 import Network.TLS.Record.Types
 import Network.TLS.Wire
-
-engageRecord :: Record Plaintext -> RecordM (Record Ciphertext)
-engageRecord = encryptRecord
 
 -- when Tx Encrypted is set, we pass the data through encryptContent, otherwise
 -- we just return the compress payload directly as the ciphered one

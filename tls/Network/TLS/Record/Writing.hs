@@ -19,7 +19,7 @@ import qualified Data.ByteString as B
 
 encodeRecordM :: Record Plaintext -> RecordM ByteString
 encodeRecordM record = do
-    erecord <- engageRecord record
+    erecord <- encryptRecord record
     let (hdr, content) = recordToRaw erecord
     return $ B.concat [encodeHeader hdr, content]
 

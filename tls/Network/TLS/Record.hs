@@ -17,9 +17,9 @@ module Network.TLS.Record (
     Plaintext,
     Ciphertext,
 
-    -- * Engage and disengage from the record layer
-    engageRecord,
-    disengageRecord,
+    -- * Encrypt and decrypt from the record layer
+    encryptRecord,
+    decryptRecord,
 
     -- * State tracking
     RecordM,
@@ -30,7 +30,7 @@ module Network.TLS.Record (
     setRecordIV,
 ) where
 
-import Network.TLS.Record.Disengage
-import Network.TLS.Record.Engage
+import Network.TLS.Record.Decrypt
+import Network.TLS.Record.Encrypt
 import Network.TLS.Record.State
 import Network.TLS.Record.Types
