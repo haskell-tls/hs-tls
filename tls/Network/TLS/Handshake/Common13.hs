@@ -153,7 +153,7 @@ makeCertVerify ctx pub hs hashValue = do
             | role == ClientRole = clientContextString
             | otherwise = serverContextString
         target = makeTarget ctxStr hashValue
-    CertVerify13 <$> DigitallySigned hs <$> sign ctx pub hs target
+    CertVerify13 . DigitallySigned hs <$> sign ctx pub hs target
 
 checkCertVerify
     :: MonadIO m
@@ -274,7 +274,7 @@ makeCertRequest
     :: ServerParams -> Context -> CertReqContext -> Bool -> Handshake13
 makeCertRequest sparams ctx certReqCtx zlib =
     let sigAlgs = SignatureAlgorithms $ supportedHashSignatures $ ctxSupported ctx
-        signatureAlgExt = Just $ toExtensionRaw $ sigAlgs
+        signatureAlgExt = Just $ toExtensionRaw sigAlgs
 
         compCertExt
             | zlib = Just $ toExtensionRaw $ CompressCertificate [CCA_Zlib]

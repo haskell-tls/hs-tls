@@ -200,6 +200,6 @@ processRecordSizeLimit ctx chExts tls13 = do
             if peerSentRSL
                 then do
                     let mysiz = fromIntegral mylim + if tls13 then 1 else 0
-                        rsl = RecordSizeLimit $ mysiz
+                        rsl = RecordSizeLimit mysiz
                     return $ Just $ toExtensionRaw rsl
                 else return Nothing

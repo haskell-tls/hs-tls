@@ -184,7 +184,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
     compCertExt = return $ Just $ toExtensionRaw (CompressCertificate [CCA_Zlib])
 
     recordSizeLimitExt = case limitRecordSize $ clientLimit cparams of
-        Nothing -> return $ Nothing
+        Nothing -> return Nothing
         Just siz -> return $ Just $ toExtensionRaw $ RecordSizeLimit $ fromIntegral siz
 
     sessionTicketExt = do

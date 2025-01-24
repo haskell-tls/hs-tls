@@ -54,12 +54,12 @@ instance {-# OVERLAPS #-} Arbitrary [HashAndSignatureAlgorithm] where
     arbitrary = shuffle supportedSignatureSchemes
 
 instance Arbitrary DigitallySigned where
-    arbitrary = DigitallySigned <$> (unsafeHead <$> arbitrary) <*> genByteString 32
+    arbitrary = DigitallySigned . unsafeHead <$> arbitrary <*> genByteString 32
 
 instance Arbitrary ExtensionRaw where
     arbitrary =
         let arbitraryContent = choose (0, 40) >>= genByteString
-         in ExtensionRaw <$> (ExtensionID <$> arbitrary) <*> arbitraryContent
+         in ExtensionRaw . ExtensionID <$> arbitrary <*> arbitraryContent
 
 instance Arbitrary CertificateType where
     arbitrary =
@@ -123,8 +123,8 @@ instance Arbitrary Handshake13 where
                     <*> return (TLSCertificateChain (CertificateChain certs))
                     <*> replicateM (length certs) arbitrary
             , CertVerify13
-                <$> ( DigitallySigned
-                        <$> (unsafeHead <$> arbitrary)
+                <$> ( DigitallySigned . unsafeHead
+                        <$> arbitrary
                         <*> genByteString 32
                     )
             , Finished13 . VerifyData <$> genByteString 12

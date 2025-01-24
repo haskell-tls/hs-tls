@@ -134,7 +134,7 @@ decodeServerHello13 = do
     session <- getSession
     cipherid <- CipherId <$> getWord16
     _comp <- getWord8
-    exts <- fromIntegral <$> getWord16 >>= getExtensions
+    exts <- getWord16 >>= getExtensions . fromIntegral
     return $ ServerHello13 random session cipherid exts
 
 decodeNewSessionTicket13 :: Get Handshake13

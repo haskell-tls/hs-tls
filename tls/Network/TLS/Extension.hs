@@ -677,7 +677,7 @@ instance Show CertificateCompressionAlgorithm where
     show (CertificateCompressionAlgorithm n) = "CertificateCompressionAlgorithm " ++ show n
 {- FOURMOLU_ENABLE -}
 
-data CompressCertificate = CompressCertificate [CertificateCompressionAlgorithm]
+newtype CompressCertificate = CompressCertificate [CertificateCompressionAlgorithm]
     deriving (Show, Eq)
 
 instance Extension CompressCertificate where

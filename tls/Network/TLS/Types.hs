@@ -1,7 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE PatternSynonyms #-}
-
 module Network.TLS.Types (
     module Network.TLS.Types.Cipher,
     module Network.TLS.Types.Secret,

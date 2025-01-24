@@ -137,7 +137,7 @@ showUsageAndExit :: String -> IO a
 showUsageAndExit msg = do
     putStrLn msg
     putStrLn $ usageInfo usage options
-    putStrLn $ "  <groups> = " ++ (intercalate "," (map fst namedGroups))
+    putStrLn $ "  <groups> = " ++ intercalate "," (map fst namedGroups)
     exitFailure
 
 clientOpts :: [String] -> IO (Options, [String])

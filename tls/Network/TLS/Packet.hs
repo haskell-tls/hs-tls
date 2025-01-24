@@ -188,7 +188,7 @@ decodeClientHello = do
     r <- remaining
     exts <-
         if r > 0
-            then fromIntegral <$> getWord16 >>= getExtensions
+            then getWord16 >>= getExtensions . fromIntegral
             else return []
     r1 <- remaining
     when (r1 /= 0) $ fail "Client hello"
@@ -205,7 +205,7 @@ decodeServerHello = do
     r <- remaining
     exts <-
         if r > 0
-            then fromIntegral <$> getWord16 >>= getExtensions
+            then getWord16 >>= getExtensions . fromIntegral
             else return []
     return $ ServerHello ver random session cipherid compressionid exts
 
