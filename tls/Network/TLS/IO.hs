@@ -89,19 +89,24 @@ recvPacket12 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
   where
     lim = limitHandshakeFragment $ ctxLimit ctx
     loop count
-        | count > lim =
-            return $ Left $ Error_Packet "too many handshake fragment"
+        | count > lim = do
+            let err = Error_Packet "too many handshake fragment"
+            logPacket ctx $ show err
+            return $ Left err
     loop count = do
         hrr <- usingState_ ctx getTLS13HRR
         erecord <- recordRecv12 recordLayer ctx
         case erecord of
-            Left err -> return $ Left err
+            Left err -> do
+                logPacket ctx $ show err
+                return $ Left err
             Right record
                 | hrr && isCCS record -> loop (count + 1)
                 | otherwise -> do
                     pktRecv <- decodePacket12 ctx record
                     if isEmptyHandshake pktRecv
-                        then
+                        then do
+                            logPacket ctx "Handshake fragment"
                             -- When a handshake record is fragmented
                             -- we continue receiving in order to feed
                             -- stHandshakeRecordCont
@@ -115,8 +120,8 @@ recvPacket12 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
                             Right pkt -> do
                                 logPacket ctx $ show pkt
                                 return pktRecv
-                            Left er -> do
-                                logPacket ctx $ show er
+                            Left err -> do
+                                logPacket ctx $ show err
                                 return pktRecv
 
 isCCS :: Record a -> Bool
@@ -145,6 +150,7 @@ recvPacket13 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
             Left err@(Error_Protocol _ BadRecordMac) -> do
                 -- If the server decides to reject RTT0 data but accepts RTT1
                 -- data, the server should skip all records for RTT0 data.
+                logPacket ctx $ show err
                 established <- ctxEstablished ctx
                 case established of
                     EarlyDataNotAllowed n
@@ -152,11 +158,14 @@ recvPacket13 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
                             setEstablished ctx $ EarlyDataNotAllowed (n - 1)
                             loop (count + 1)
                     _ -> return $ Left err
-            Left err -> return $ Left err
+            Left err -> do
+                logPacket ctx $ show err
+                return $ Left err
             Right record -> do
                 pktRecv <- decodePacket13 ctx record
                 if isEmptyHandshake13 pktRecv
-                    then
+                    then do
+                        logPacket ctx "Handshake fragment"
                         -- When a handshake record is fragmented we
                         -- continue receiving in order to feed
                         -- stHandshakeRecordCont13
@@ -171,8 +180,8 @@ recvPacket13 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
                             Right pkt -> do
                                 logPacket ctx $ show pkt
                                 return pktRecv
-                            Left er -> do
-                                logPacket ctx $ show er
+                            Left err -> do
+                                logPacket ctx $ show err
                                 return pktRecv
 
 isEmptyHandshake13 :: Either TLSError Packet13 -> Bool
