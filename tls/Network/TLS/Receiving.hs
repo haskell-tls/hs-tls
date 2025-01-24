@@ -1,8 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Network.TLS.Receiving (
-    processPacket12,
-    processPacket13,
+    decodePacket12,
+    decodePacket13,
 ) where
 
 import Control.Concurrent.MVar
@@ -22,16 +22,16 @@ import Network.TLS.Struct13
 import Network.TLS.Util
 import Network.TLS.Wire
 
-processPacket12 :: Context -> Record Plaintext -> IO (Either TLSError Packet)
-processPacket12 _ (Record ProtocolType_AppData _ fragment) = return $ Right $ AppData $ fragmentGetBytes fragment
-processPacket12 _ (Record ProtocolType_Alert _ fragment) = return (Alert `fmapEither` decodeAlerts (fragmentGetBytes fragment))
-processPacket12 ctx (Record ProtocolType_ChangeCipherSpec _ fragment) =
+decodePacket12 :: Context -> Record Plaintext -> IO (Either TLSError Packet)
+decodePacket12 _ (Record ProtocolType_AppData _ fragment) = return $ Right $ AppData $ fragmentGetBytes fragment
+decodePacket12 _ (Record ProtocolType_Alert _ fragment) = return (Alert `fmapEither` decodeAlerts (fragmentGetBytes fragment))
+decodePacket12 ctx (Record ProtocolType_ChangeCipherSpec _ fragment) =
     case decodeChangeCipherSpec $ fragmentGetBytes fragment of
         Left err -> return $ Left err
         Right _ -> do
             switchRxEncryption ctx
             return $ Right ChangeCipherSpec
-processPacket12 ctx (Record ProtocolType_Handshake ver fragment) = do
+decodePacket12 ctx (Record ProtocolType_Handshake ver fragment) = do
     keyxchg <-
         getHState ctx >>= \hs -> return (hs >>= hstPendingCipher >>= Just . cipherKeyExchange)
     usingState ctx $ do
@@ -57,7 +57,7 @@ processPacket12 ctx (Record ProtocolType_Handshake ver fragment) = do
                 case decodeHandshake currentParams ty content of
                     Left err -> throwError err
                     Right hh -> (hh :) <$> parseMany currentParams Nothing left
-processPacket12 _ _ = return $ Left (Error_Packet_Parsing "unknown protocol type")
+decodePacket12 _ _ = return $ Left (Error_Packet_Parsing "unknown protocol type")
 
 switchRxEncryption :: Context -> IO ()
 switchRxEncryption ctx =
@@ -66,14 +66,14 @@ switchRxEncryption ctx =
 
 ----------------------------------------------------------------
 
-processPacket13 :: Context -> Record Plaintext -> IO (Either TLSError Packet13)
-processPacket13 _ (Record ProtocolType_ChangeCipherSpec _ fragment) =
+decodePacket13 :: Context -> Record Plaintext -> IO (Either TLSError Packet13)
+decodePacket13 _ (Record ProtocolType_ChangeCipherSpec _ fragment) =
     case decodeChangeCipherSpec $ fragmentGetBytes fragment of
         Left err -> return $ Left err
         Right _ -> return $ Right ChangeCipherSpec13
-processPacket13 _ (Record ProtocolType_AppData _ fragment) = return $ Right $ AppData13 $ fragmentGetBytes fragment
-processPacket13 _ (Record ProtocolType_Alert _ fragment) = return (Alert13 `fmapEither` decodeAlerts (fragmentGetBytes fragment))
-processPacket13 ctx (Record ProtocolType_Handshake _ fragment) = usingState ctx $ do
+decodePacket13 _ (Record ProtocolType_AppData _ fragment) = return $ Right $ AppData13 $ fragmentGetBytes fragment
+decodePacket13 _ (Record ProtocolType_Alert _ fragment) = return (Alert13 `fmapEither` decodeAlerts (fragmentGetBytes fragment))
+decodePacket13 ctx (Record ProtocolType_Handshake _ fragment) = usingState ctx $ do
     mCont <- gets stHandshakeRecordCont13
     modify (\st -> st{stHandshakeRecordCont13 = Nothing})
     hss <- parseMany mCont (fragmentGetBytes fragment)
@@ -90,4 +90,4 @@ processPacket13 ctx (Record ProtocolType_Handshake _ fragment) = usingState ctx 
                 case decodeHandshake13 ty content of
                     Left err -> throwError err
                     Right hh -> (hh :) <$> parseMany Nothing left
-processPacket13 _ _ = return $ Left (Error_Packet_Parsing "unknown protocol type")
+decodePacket13 _ _ = return $ Left (Error_Packet_Parsing "unknown protocol type")
