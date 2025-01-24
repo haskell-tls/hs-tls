@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module Network.TLS.Receiving (
+module Network.TLS.IO.Decode (
     decodePacket12,
     decodePacket13,
 ) where

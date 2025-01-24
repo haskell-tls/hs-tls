@@ -1,4 +1,4 @@
-module Network.TLS.Sending (
+module Network.TLS.IO.Encode (
     encodePacket12,
     encodePacket13,
     updateHandshake12,

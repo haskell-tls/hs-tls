@@ -11,8 +11,8 @@ import Control.Concurrent.MVar
 import Network.TLS.Context.Internal
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
+import Network.TLS.IO.Encode
 import Network.TLS.Imports
-import Network.TLS.Sending
 import Network.TLS.Struct
 import Network.TLS.Struct13
 

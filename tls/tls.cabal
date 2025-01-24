@@ -81,6 +81,8 @@ library
         Network.TLS.HashAndSignature
         Network.TLS.Hooks
         Network.TLS.IO
+        Network.TLS.IO.Decode
+        Network.TLS.IO.Encode
         Network.TLS.Imports
         Network.TLS.KeySchedule
         Network.TLS.MAC
@@ -89,6 +91,7 @@ library
         Network.TLS.Packet13
         Network.TLS.Parameters
         Network.TLS.PostHandshake
+        Network.TLS.RNG
         Network.TLS.Record
         Network.TLS.Record.Decrypt
         Network.TLS.Record.Encrypt
@@ -97,18 +100,15 @@ library
         Network.TLS.Record.Send
         Network.TLS.Record.State
         Network.TLS.Record.Types
-        Network.TLS.RNG
-        Network.TLS.State
         Network.TLS.Session
-        Network.TLS.Sending
-        Network.TLS.Receiving
-        Network.TLS.Util
-        Network.TLS.Util.ASN1
+        Network.TLS.State
         Network.TLS.Types
         Network.TLS.Types.Cipher
         Network.TLS.Types.Secret
         Network.TLS.Types.Session
         Network.TLS.Types.Version
+        Network.TLS.Util
+        Network.TLS.Util.ASN1
         Network.TLS.Util.Serialization
         Network.TLS.Wire
         Network.TLS.X509

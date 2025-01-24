@@ -24,10 +24,10 @@ import Data.IORef
 
 import Network.TLS.Context.Internal
 import Network.TLS.Hooks
+import Network.TLS.IO.Decode
+import Network.TLS.IO.Encode
 import Network.TLS.Imports
-import Network.TLS.Receiving
 import Network.TLS.Record
-import Network.TLS.Sending
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
