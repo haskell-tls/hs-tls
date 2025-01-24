@@ -41,8 +41,8 @@ decodePacket12 ctx (Record ProtocolType_Handshake ver fragment) = do
                     , cParamsKeyXchgType = keyxchg
                     }
         -- get back the optional continuation, and parse as many handshake record as possible.
-        mCont <- gets stHandshakeRecordCont
-        modify (\st -> st{stHandshakeRecordCont = Nothing})
+        mCont <- gets stHandshakeRecordCont12
+        modify (\st -> st{stHandshakeRecordCont12 = Nothing})
         hss <- parseMany currentParams mCont (fragmentGetBytes fragment)
         return $ Handshake hss
   where
@@ -50,7 +50,7 @@ decodePacket12 ctx (Record ProtocolType_Handshake ver fragment) = do
         case fromMaybe decodeHandshakeRecord mCont bs of
             GotError err -> throwError err
             GotPartial cont ->
-                modify (\st -> st{stHandshakeRecordCont = Just cont}) >> return []
+                modify (\st -> st{stHandshakeRecordCont12 = Just cont}) >> return []
             GotSuccess (ty, content) ->
                 either throwError (return . (: [])) $ decodeHandshake currentParams ty content
             GotSuccessRemaining (ty, content) left ->

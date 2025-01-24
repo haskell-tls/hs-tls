@@ -92,8 +92,8 @@ data TLSState = TLSState
     , -- RFC 5929, Channel Bindings for TLS, "tls-server-end-point"
       stServerCertificateChain :: Maybe CertificateChain
     , stExtensionALPN :: Bool -- RFC 7301
-    , stHandshakeRecordCont :: Maybe (GetContinuation (HandshakeType, ByteString))
     , stNegotiatedProtocol :: Maybe B.ByteString -- ALPN protocol
+    , stHandshakeRecordCont12 :: Maybe (GetContinuation (HandshakeType, ByteString))
     , stHandshakeRecordCont13 :: Maybe (GetContinuation (HandshakeType, ByteString))
     , stClientALPNSuggest :: Maybe [B.ByteString]
     , stClientGroupSuggest :: Maybe [Group]
@@ -135,9 +135,9 @@ newTLSState rng clientContext =
         , stServerVerifyData = Nothing
         , stServerCertificateChain = Nothing
         , stExtensionALPN = False
-        , stHandshakeRecordCont = Nothing
-        , stHandshakeRecordCont13 = Nothing
         , stNegotiatedProtocol = Nothing
+        , stHandshakeRecordCont12 = Nothing
+        , stHandshakeRecordCont13 = Nothing
         , stClientALPNSuggest = Nothing
         , stClientGroupSuggest = Nothing
         , stClientEcPointFormatSuggest = Nothing
