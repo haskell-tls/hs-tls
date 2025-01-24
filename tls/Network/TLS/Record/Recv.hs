@@ -1,5 +1,5 @@
 -- | TLS record layer in Rx direction
-module Network.TLS.Record.Reading (
+module Network.TLS.Record.Recv (
     recvRecord12,
     recvRecord13,
 ) where

@@ -93,8 +93,8 @@ library
         Network.TLS.Record.Decrypt
         Network.TLS.Record.Encrypt
         Network.TLS.Record.Layer
-        Network.TLS.Record.Reading
-        Network.TLS.Record.Writing
+        Network.TLS.Record.Recv
+        Network.TLS.Record.Send
         Network.TLS.Record.State
         Network.TLS.Record.Types
         Network.TLS.RNG

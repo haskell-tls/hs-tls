@@ -1,5 +1,5 @@
 -- | TLS record layer in Tx direction
-module Network.TLS.Record.Writing (
+module Network.TLS.Record.Send (
     encodeRecord12,
     encodeRecord13,
     sendBytes,

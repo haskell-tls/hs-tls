@@ -96,9 +96,9 @@ import Network.TLS.PostHandshake (
     requestCertificateServer,
  )
 import Network.TLS.RNG
-import Network.TLS.Record.Reading
+import Network.TLS.Record.Recv
+import Network.TLS.Record.Send
 import Network.TLS.Record.State
-import Network.TLS.Record.Writing
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
