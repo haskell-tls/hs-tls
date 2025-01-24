@@ -99,7 +99,7 @@ recvPacket12 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
             Right record
                 | hrr && isCCS record -> loop (count + 1)
                 | otherwise -> do
-                    pktRecv <- processPacket ctx record
+                    pktRecv <- processPacket12 ctx record
                     if isEmptyHandshake pktRecv
                         then
                             -- When a handshake record is fragmented

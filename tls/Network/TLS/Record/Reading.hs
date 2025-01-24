@@ -31,15 +31,9 @@ getRecord
 getRecord ctx header content = do
     withLog ctx $ \logging -> loggingIORecv logging header content
     lim <- getMyPlainLimit ctx
-    er <- runRxRecordState ctx $ decodeRecordM header content lim
-    case er of
-        Left e -> return $ Left e
-        Right r -> return $ Right r
-
-decodeRecordM :: Header -> ByteString -> Int -> RecordM (Record Plaintext)
-decodeRecordM header content lim = disengageRecord erecord lim
-  where
-    erecord = rawToRecord header (fragmentCiphertext content)
+    runRxRecordState ctx $ do
+        let erecord = rawToRecord header $ fragmentCiphertext content
+        disengageRecord erecord lim
 
 ----------------------------------------------------------------
 
