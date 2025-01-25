@@ -120,20 +120,17 @@ main = do
         exitFailure
     smgr <- newSessionManager
     Right cred@(!_cc, !_priv) <- credentialLoadX509 optCertFile optKeyFile
-    mstore <-
-        if optClientAuth
-            then do
-                mstore' <- case optTrustedAnchor of
-                    Nothing -> Just <$> getSystemCertificateStore
-                    Just file -> readCertificateStore file
-                when (isNothing mstore') $ showUsageAndExit "cannot set trusted anchor"
-                return mstore'
-            else return Nothing
+    mstore <- do
+        mstore' <- case optTrustedAnchor of
+            Nothing -> Just <$> getSystemCertificateStore
+            Just file -> readCertificateStore file
+        when (isNothing mstore') $ showUsageAndExit "cannot set trusted anchor"
+        return mstore'
     let keyLog = getLogger optKeyLogFile
         creds = Credentials [cred]
     makeCipherShowPretty
     runTCPServer (Just host) port $ \sock -> do
-        let sparams = getServerParams creds optGroups smgr keyLog mstore
+        let sparams = getServerParams creds optGroups smgr keyLog optClientAuth mstore
         ctx <- contextNew sock sparams
         when optDebugLog $
             contextHookSetLogging
@@ -154,16 +151,17 @@ getServerParams
     -> [Group]
     -> SessionManager
     -> (String -> IO ())
+    -> Bool
     -> Maybe CertificateStore
     -> ServerParams
-getServerParams creds groups sm keyLog mstore =
+getServerParams creds groups sm keyLog clientAuth mstore =
     defaultParamsServer
         { serverSupported = supported
         , serverShared = shared
         , serverHooks = hooks
         , serverDebug = debug
         , serverEarlyDataSize = 2048
-        , serverWantClientCert = isJust mstore
+        , serverWantClientCert = clientAuth
         }
   where
     shared =

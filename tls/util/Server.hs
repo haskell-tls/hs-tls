@@ -57,6 +57,9 @@ handleHTML ctx showRequest ini = do
         when ("GET /keyupdate" `BS.isPrefixOf` bs) $ do
             r <- updateKey ctx TwoWay
             putStrLn $ "Updating key..." ++ if r then "OK" else "NG"
+        when ("GET /secret" `BS.isPrefixOf` bs) $ do
+            r <- requestCertificate ctx
+            putStrLn $ "Post handshake authentication..." ++ if r then "OK" else "NG"
         when (bs /= "") $ do
             when showRequest $ do
                 BS.putStr bs
