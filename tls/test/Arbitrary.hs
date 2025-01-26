@@ -7,11 +7,7 @@ import Control.Monad
 import qualified Data.ByteString as B
 import Data.List
 import Data.Word
-import Data.X509 (
-    ExtKeyUsageFlag,
-    certPubKey,
-    getCertificate,
- )
+import Data.X509 (ExtKeyUsageFlag)
 import Network.TLS
 import Network.TLS.Extra.Cipher
 import Network.TLS.Internal

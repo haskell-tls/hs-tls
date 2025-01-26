@@ -2,14 +2,15 @@
 
 module Network.TLS.Internal (
     module Network.TLS.Extension,
+    module Network.TLS.IO.Decode,
+    module Network.TLS.IO.Encode,
     module Network.TLS.Packet,
     module Network.TLS.Packet13,
-    module Network.TLS.IO.Encode,
-    module Network.TLS.IO.Decode,
     module Network.TLS.Struct,
     module Network.TLS.Struct13,
     module Network.TLS.Types,
     module Network.TLS.Wire,
+    module Network.TLS.X509,
     sendPacket12,
     recvPacket12,
     makeCipherShowPretty,
@@ -28,6 +29,7 @@ import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types
 import Network.TLS.Wire
+import Network.TLS.X509 hiding (Certificate)
 
 ----------------------------------------------------------------
 
