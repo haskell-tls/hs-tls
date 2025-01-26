@@ -7,10 +7,11 @@
   Set `limitRecordSize` use it.
 * Implementing "TLS Certificate Compression" (RFC 8879).
   This feature is automatically used if the peer supports it.
-* More tests with `tlsfuzzer` especially for client authentication.
+* More tests with `tlsfuzzer` especially for client authentication
+  and 0-RTT.
 * Implementing a utility funcation, `validateClientCertificate`, for
   client authentication.
-* Bug fix for echo back logic for Cookie extension.
+* Bug fix for echo back logic of Cookie extension.
 * More pretty show for the internal `Handshake` structure for debugging.
 
 ## Version 2.1.6
