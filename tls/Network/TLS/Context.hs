@@ -92,7 +92,6 @@ import Network.TLS.Packet
 import Network.TLS.Parameters
 import Network.TLS.PostHandshake (
     postHandshakeAuthClientWith,
-    postHandshakeAuthServerWith,
     requestCertificateServer,
  )
 import Network.TLS.RNG
@@ -137,7 +136,7 @@ instance TLSParams ServerParams where
     doHandshake = handshakeServer
     doHandshakeWith = handshakeServerWith
     doRequestCertificate = requestCertificateServer
-    doPostHandshakeAuthWith = postHandshakeAuthServerWith
+    doPostHandshakeAuthWith = \_ _ _ -> return ()
 
 -- | create a new context using the backend and parameters specified.
 contextNew

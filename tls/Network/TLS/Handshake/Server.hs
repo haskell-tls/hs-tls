@@ -4,7 +4,6 @@ module Network.TLS.Handshake.Server (
     handshakeServer,
     handshakeServerWith,
     requestCertificateServer,
-    postHandshakeAuthServerWith,
 ) where
 
 import Control.Exception (bracket)

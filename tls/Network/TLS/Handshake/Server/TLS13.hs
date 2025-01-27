@@ -3,7 +3,6 @@
 
 module Network.TLS.Handshake.Server.TLS13 (
     recvClientSecondFlight13,
-    postHandshakeAuthServerWith,
 ) where
 
 import Control.Monad.State.Strict
@@ -14,7 +13,6 @@ import Network.TLS.Extension
 import Network.TLS.Handshake.Common hiding (expectFinished)
 import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.Key
-import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Server.Common
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
@@ -195,57 +193,3 @@ clientCertVerify sparams ctx certs verif = do
                     -- chain to the context.
                     usingState_ ctx $ setClientCertificateChain certs
                 else decryptError "verification failed"
-
-postHandshakeAuthServerWith :: ServerParams -> Context -> Handshake13 -> IO ()
-postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx (TLSCertificateChain certs) _ext) = processHandshakeAuthServerWith sparams ctx certCtx certs h
-postHandshakeAuthServerWith sparams ctx h@(CompressedCertificate13 certCtx (TLSCertificateChain certs) _ext) = processHandshakeAuthServerWith sparams ctx certCtx certs h
-postHandshakeAuthServerWith _ _ _ =
-    throwCore $
-        Error_Protocol
-            "unexpected handshake message received in postHandshakeAuthServerWith"
-            UnexpectedMessage
-
-processHandshakeAuthServerWith
-    :: ServerParams
-    -> Context
-    -> CertReqContext
-    -> CertificateChain
-    -> Handshake13
-    -> IO ()
-processHandshakeAuthServerWith sparams ctx certCtx certs h = do
-    mCertReq <- getCertRequest13 ctx certCtx
-    when (isNothing mCertReq) $
-        throwCore $
-            Error_Protocol "unknown certificate request context" DecodeError
-    let certReq = fromJust mCertReq
-
-    -- fixme checking _ext
-    clientCertificate sparams ctx certs
-
-    baseHState <- saveHState ctx
-    processHandshake13 ctx certReq
-    processHandshake13 ctx h
-
-    (usedHash, _, level, applicationSecretN) <- getRxRecordState ctx
-    unless (level == CryptApplicationSecret) $
-        throwCore $
-            Error_Protocol
-                "tried post-handshake authentication without application traffic secret"
-                InternalError
-
-    let expectFinished' hChBeforeCf (Finished13 verifyData) = do
-            checkFinished ctx usedHash applicationSecretN hChBeforeCf verifyData
-            void $ restoreHState ctx baseHState
-        expectFinished' _ hs = unexpected (show hs) (Just "finished 13")
-
-    -- Note: here the server could send updated NST too, however the library
-    -- currently has no API to handle resumption and client authentication
-    -- together, see discussion in #133
-    if isNullCertificateChain certs
-        then setPendingRecvActions ctx [PendingRecvActionHash False expectFinished']
-        else
-            setPendingRecvActions
-                ctx
-                [ PendingRecvActionHash False (expectCertVerify sparams ctx)
-                , PendingRecvActionHash False expectFinished'
-                ]

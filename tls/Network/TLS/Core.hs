@@ -359,9 +359,8 @@ recvData13 ctx = do
             else do
                 let reason = "received key update before established"
                 terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+    -- Client only
     loopHandshake13 (h@CertRequest13{} : hs) =
-        postHandshakeAuthWith ctx h >> loopHandshake13 hs
-    loopHandshake13 (h@Certificate13{} : hs) =
         postHandshakeAuthWith ctx h >> loopHandshake13 hs
     loopHandshake13 (h : hs) = do
         rtt0 <- tls13st0RTT <$> getTLS13State ctx
