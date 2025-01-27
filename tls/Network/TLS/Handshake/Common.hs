@@ -312,7 +312,7 @@ processFinished ctx verifyData = do
     (cc, ver) <- usingState_ ctx $ (,) <$> getRole <*> getVersion
     expected <-
         VerifyData <$> usingHState ctx (getHandshakeDigest ver $ invertRole cc)
-    when (expected /= verifyData) $ decryptError "cannot verify finished"
+    when (expected /= verifyData) $ decryptError "finished verification failed"
     usingState_ ctx $ setVerifyDataForRecv verifyData
 
 processCertificate :: Context -> Role -> CertificateChain -> IO ()

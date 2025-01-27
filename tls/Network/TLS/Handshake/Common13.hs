@@ -88,7 +88,7 @@ checkFinished ctx usedHash baseKey hashValue vd@(VerifyData verifyData) = do
     when (B.length verifyData /= B.length verifyData') $
         throwCore $
             Error_Protocol "broken Finished" DecodeError
-    unless (verifyData' == verifyData) $ decryptError "cannot verify finished"
+    unless (verifyData' == verifyData) $ decryptError "finished verification failed"
     liftIO $ usingState_ ctx $ setVerifyDataForRecv vd
 
 makeVerifyData :: Hash -> ByteString -> ByteString -> ByteString
