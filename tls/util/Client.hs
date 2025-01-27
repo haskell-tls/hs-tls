@@ -9,6 +9,7 @@ module Client (
 ) where
 
 import qualified Data.ByteString.Base16 as BS16
+import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy.Char8 as CL8
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
@@ -30,14 +31,15 @@ type Cli = Aux -> NonEmpty ByteString -> Context -> IO ()
 clientHTTP11 :: Cli
 clientHTTP11 aux@Aux{..} paths ctx = do
     sendData ctx $
-        "GET "
-            <> CL8.fromStrict (NE.head paths)
-            <> " HTTP/1.1\r\n"
-            <> "Host: "
-            <> CL8.pack auxAuthority
-            <> "\r\n"
-            <> "Connection: close\r\n"
-            <> "\r\n"
+        CL8.fromStrict $
+            "GET "
+                <> NE.head paths
+                <> " HTTP/1.1\r\n"
+                <> "Host: "
+                <> C8.pack auxAuthority
+                <> "\r\n"
+                <> "Connection: close\r\n"
+                <> "\r\n"
     consume ctx aux
 
 clientDNS :: Cli
