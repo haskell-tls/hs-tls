@@ -20,8 +20,7 @@ import Network.TLS.Handshake.Server
 -- post-handshake authentication.
 requestCertificate :: Context -> IO Bool
 requestCertificate ctx =
-    withWriteLock ctx $
-        checkValid ctx >> doRequestCertificate_ (ctxRoleParams ctx) ctx
+    checkValid ctx >> doRequestCertificate_ (ctxRoleParams ctx) ctx
 
 -- Client only
 

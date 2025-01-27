@@ -3,9 +3,12 @@
 
 module Network.TLS.Handshake.Server.TLS13 (
     recvClientSecondFlight13,
+    requestCertificateServer,
 ) where
 
+import Control.Exception
 import Control.Monad.State.Strict
+import Data.IORef
 
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
@@ -18,6 +21,7 @@ import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.IO
+import Network.TLS.IO.Encode
 import Network.TLS.Imports
 import Network.TLS.Parameters
 import Network.TLS.Session
@@ -193,3 +197,88 @@ clientCertVerify sparams ctx certs verif = do
                     -- chain to the context.
                     usingState_ ctx $ setClientCertificateChain certs
                 else decryptError "verification failed"
+
+newCertReqContext :: Context -> IO CertReqContext
+newCertReqContext ctx = getStateRNG ctx 32
+
+requestCertificateServer :: ServerParams -> Context -> IO Bool
+requestCertificateServer sparams ctx = do
+    tls13 <- tls13orLater ctx
+    supportsPHA <- usingState_ ctx getTLS13ClientSupportsPHA
+    let ok = tls13 && supportsPHA
+    if ok
+        then newIORef [] >>= sendCertReqAndRecv
+        else return ok
+  where
+    sendCertReqAndRecv ref = do
+        origCertReqCtx <- newCertReqContext ctx
+        let certReq13 = makeCertRequest sparams ctx origCertReqCtx False
+        _ <- withWriteLock ctx $ do
+            bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
+                sendPacket13 ctx $ Handshake13 [certReq13]
+        withReadLock ctx $ do
+            clientCert13 <- getHandshake ctx ref
+            emptyCert <- expectClientCertificate sparams ctx origCertReqCtx clientCert13
+            baseHState <- saveHState ctx
+            void $ updateHandshake13 ctx certReq13
+            void $ updateHandshake13 ctx clientCert13
+            th <- transcriptHash ctx
+            unless emptyCert $ do
+                certVerify13 <- getHandshake ctx ref
+                expectCertVerify sparams ctx th certVerify13
+                void $ updateHandshake13 ctx certVerify13
+            finished13 <- getHandshake ctx ref
+            expectClientFinished ctx finished13
+            void $ restoreHState ctx baseHState -- fixme
+        return True
+
+-- saving appdata and key update?
+-- error handling
+getHandshake :: Context -> IORef [Handshake13] -> IO Handshake13
+getHandshake ctx ref = do
+    hhs <- readIORef ref
+    if null hhs
+        then do
+            Right (Handshake13 iis) <- recvPacket13 ctx
+            chk iis
+        else chk hhs
+  where
+    chk [] = getHandshake ctx ref
+    chk (h : hs) = do
+        writeIORef ref hs
+        return h
+
+expectClientCertificate
+    :: ServerParams -> Context -> CertReqContext -> Handshake13 -> IO Bool
+expectClientCertificate sparams ctx origCertReqCtx (Certificate13 certReqCtx (TLSCertificateChain certs) _ext) = do
+    expectClientCertificate' sparams ctx origCertReqCtx certReqCtx certs
+    return $ isNullCertificateChain certs
+expectClientCertificate sparams ctx origCertReqCtx (CompressedCertificate13 certReqCtx (TLSCertificateChain certs) _ext) = do
+    expectClientCertificate' sparams ctx origCertReqCtx certReqCtx certs
+    return $ isNullCertificateChain certs
+expectClientCertificate _ _ _ _ = error "expectClientCertificate" -- fixme
+
+expectClientCertificate'
+    :: ServerParams
+    -> Context
+    -> CertReqContext
+    -> CertReqContext
+    -> CertificateChain
+    -> IO ()
+expectClientCertificate' sparams ctx origCertReqCtx certReqCtx certs = do
+    when (origCertReqCtx /= certReqCtx) $
+        throwCore $
+            Error_Protocol "certificate context is wrong" IllegalParameter
+    void $ clientCertificate sparams ctx certs
+
+expectClientFinished :: Context -> Handshake13 -> IO ()
+expectClientFinished ctx (Finished13 verifyData) = do
+    (usedHash, _, level, applicationSecretN) <- getRxRecordState ctx
+    unless (level == CryptApplicationSecret) $
+        throwCore $
+            Error_Protocol
+                "tried post-handshake authentication without application traffic secret"
+                InternalError
+    hChBeforeCf <- transcriptHash ctx
+    checkFinished ctx usedHash applicationSecretN hChBeforeCf verifyData `catch` \e -> print (e :: TLSException)
+expectClientFinished _ _ = error "expectClientFinished" -- fixme

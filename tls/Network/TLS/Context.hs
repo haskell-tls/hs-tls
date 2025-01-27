@@ -173,7 +173,6 @@ contextNew backend params = liftIO $ do
     hs <- newMVar Nothing
     recvActionsRef <- newIORef []
     sendActionRef <- newIORef Nothing
-    crs <- newIORef []
     locks <- Locks <$> newMVar () <*> newMVar () <*> newMVar ()
     st13ref <- newIORef defaultTLS13State
     mylimref <- newRecordLimitRef $ Just defaultRecordSizeLimit
@@ -207,7 +206,6 @@ contextNew backend params = liftIO $ do
                 , ctxLocks = locks
                 , ctxPendingRecvActions = recvActionsRef
                 , ctxPendingSendAction = sendActionRef
-                , ctxCertRequests = crs
                 , ctxKeyLogger = debugKeyLogger debug
                 , ctxRecordLayer = recordLayer
                 , ctxHandshakeSync = HandshakeSync syncNoOp syncNoOp
