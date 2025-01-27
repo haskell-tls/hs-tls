@@ -4,7 +4,7 @@ module Server where
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
-import qualified Data.ByteString.Lazy.Char8 as BL8
+import qualified Data.ByteString.Lazy.Char8 as CL8
 import Data.IORef
 import Network.TLS
 import Prelude hiding (getLine)
@@ -15,9 +15,9 @@ import Imports
 -- many TLS fragments.
 -- To prevent this, strict ByteString is created first and
 -- converted into lazy one.
-html :: BL8.ByteString
+html :: CL8.ByteString
 html =
-    BL8.fromStrict $
+    CL8.fromStrict $
         "HTTP/1.1 200 OK\r\n"
             <> "Context-Type: text/html\r\n"
             <> "Content-Length: "
@@ -34,7 +34,7 @@ server ctx showRequest = do
     case C8.uncons bs of
         Nothing -> return ()
         Just ('A', _) -> do
-            sendData ctx $ BL8.fromStrict bs
+            sendData ctx $ CL8.fromStrict bs
             echo ctx
         Just _ -> handleHTML ctx showRequest bs
 
@@ -44,7 +44,7 @@ echo ctx = loop
     loop = do
         bs <- recvData ctx
         when (bs /= "") $ do
-            sendData ctx $ BL8.fromStrict bs
+            sendData ctx $ CL8.fromStrict bs
             loop
 
 handleHTML :: Context -> Bool -> ByteString -> IO ()
