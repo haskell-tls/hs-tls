@@ -4,6 +4,9 @@ module Network.TLS.Handshake.Server (
     handshakeServer,
     handshakeServerWith,
     requestCertificateServer,
+    keyUpdate,
+    updateKey,
+    KeyUpdateRequest (..),
 ) where
 
 import Control.Monad.State.Strict

@@ -34,19 +34,17 @@ import qualified Data.ByteString.Lazy as L
 import Data.IORef
 import System.Timeout
 
-import Network.TLS.Cipher
 import Network.TLS.Context
-import Network.TLS.Crypto
 import Network.TLS.Extension
 import Network.TLS.Handshake
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.Process
+import Network.TLS.Handshake.Server
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.IO
 import Network.TLS.Imports
-import Network.TLS.KeySchedule
 import Network.TLS.Parameters
 import Network.TLS.PostHandshake
 import Network.TLS.Session
@@ -55,8 +53,6 @@ import qualified Network.TLS.State as S
 import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types (
-    AnyTrafficSecret (..),
-    ApplicationSecret,
     HostName,
     Role (..),
  )
@@ -508,45 +504,3 @@ terminateWithWriteLock ctx send err level desc reason = withWriteLock ctx $ do
 -- | same as recvData but returns a lazy bytestring.
 recvData' :: MonadIO m => Context -> m L.ByteString
 recvData' ctx = L.fromChunks . (: []) <$> recvData ctx
-
-keyUpdate
-    :: Context
-    -> (Context -> IO (Hash, Cipher, CryptLevel, C8.ByteString))
-    -> (Context -> Hash -> Cipher -> AnyTrafficSecret ApplicationSecret -> IO ())
-    -> IO ()
-keyUpdate ctx getState setState = do
-    (usedHash, usedCipher, level, applicationSecretN) <- getState ctx
-    unless (level == CryptApplicationSecret) $
-        throwCore $
-            Error_Protocol
-                "tried key update without application traffic secret"
-                InternalError
-    let applicationSecretN1 =
-            hkdfExpandLabel usedHash applicationSecretN "traffic upd" "" $
-                hashDigestSize usedHash
-    setState ctx usedHash usedCipher (AnyTrafficSecret applicationSecretN1)
-
--- | How to update keys in TLS 1.3
-data KeyUpdateRequest
-    = -- | Unidirectional key update
-      OneWay
-    | -- | Bidirectional key update (normal case)
-      TwoWay
-    deriving (Eq, Show)
-
--- | Updating appication traffic secrets for TLS 1.3.
---   If this API is called for TLS 1.3, 'True' is returned.
---   Otherwise, 'False' is returned.
-updateKey :: MonadIO m => Context -> KeyUpdateRequest -> m Bool
-updateKey ctx way = liftIO $ do
-    tls13 <- tls13orLater ctx
-    when tls13 $ do
-        let req = case way of
-                OneWay -> UpdateNotRequested
-                TwoWay -> UpdateRequested
-        -- Write lock wraps both actions because we don't want another packet to
-        -- be sent by another thread before the Tx state is updated.
-        withWriteLock ctx $ do
-            sendPacket13 ctx $ Handshake13 [KeyUpdate13 req]
-            keyUpdate ctx getTxRecordState setTxRecordState
-    return tls13

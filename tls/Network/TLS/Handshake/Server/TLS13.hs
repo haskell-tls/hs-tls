@@ -4,14 +4,19 @@
 module Network.TLS.Handshake.Server.TLS13 (
     recvClientSecondFlight13,
     requestCertificateServer,
+    keyUpdate,
+    updateKey,
+    KeyUpdateRequest (..),
 ) where
 
 import Control.Exception
 import Control.Monad.State.Strict
+import qualified Data.ByteString.Char8 as C8
 import Data.IORef
 
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
+import Network.TLS.Crypto
 import Network.TLS.Extension
 import Network.TLS.Handshake.Common hiding (expectFinished)
 import Network.TLS.Handshake.Common13
@@ -23,6 +28,7 @@ import Network.TLS.Handshake.State13
 import Network.TLS.IO
 import Network.TLS.IO.Encode
 import Network.TLS.Imports
+import Network.TLS.KeySchedule
 import Network.TLS.Parameters
 import Network.TLS.Session
 import Network.TLS.State
@@ -244,6 +250,15 @@ getHandshake ctx ref = do
         else chk hhs
   where
     chk [] = getHandshake ctx ref
+    chk (KeyUpdate13 mode : hs) = do
+        keyUpdate ctx getRxRecordState setRxRecordState
+        -- Write lock wraps both actions because we don't want another
+        -- packet to be sent by another thread before the Tx state is
+        -- updated.
+        when (mode == UpdateRequested) $ withWriteLock ctx $ do
+            sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested]
+            keyUpdate ctx getTxRecordState setTxRecordState
+        chk hs
     chk (h : hs) = do
         writeIORef ref hs
         return h
@@ -282,3 +297,47 @@ expectClientFinished ctx (Finished13 verifyData) = do
     hChBeforeCf <- transcriptHash ctx
     checkFinished ctx usedHash applicationSecretN hChBeforeCf verifyData `catch` \e -> print (e :: TLSException)
 expectClientFinished _ _ = error "expectClientFinished" -- fixme
+
+----------------------------------------------------------------
+
+keyUpdate
+    :: Context
+    -> (Context -> IO (Hash, Cipher, CryptLevel, C8.ByteString))
+    -> (Context -> Hash -> Cipher -> AnyTrafficSecret ApplicationSecret -> IO ())
+    -> IO ()
+keyUpdate ctx getState setState = do
+    (usedHash, usedCipher, level, applicationSecretN) <- getState ctx
+    unless (level == CryptApplicationSecret) $
+        throwCore $
+            Error_Protocol
+                "tried key update without application traffic secret"
+                InternalError
+    let applicationSecretN1 =
+            hkdfExpandLabel usedHash applicationSecretN "traffic upd" "" $
+                hashDigestSize usedHash
+    setState ctx usedHash usedCipher (AnyTrafficSecret applicationSecretN1)
+
+-- | How to update keys in TLS 1.3
+data KeyUpdateRequest
+    = -- | Unidirectional key update
+      OneWay
+    | -- | Bidirectional key update (normal case)
+      TwoWay
+    deriving (Eq, Show)
+
+-- | Updating appication traffic secrets for TLS 1.3.
+--   If this API is called for TLS 1.3, 'True' is returned.
+--   Otherwise, 'False' is returned.
+updateKey :: MonadIO m => Context -> KeyUpdateRequest -> m Bool
+updateKey ctx way = liftIO $ do
+    tls13 <- tls13orLater ctx
+    when tls13 $ do
+        let req = case way of
+                OneWay -> UpdateNotRequested
+                TwoWay -> UpdateRequested
+        -- Write lock wraps both actions because we don't want another packet to
+        -- be sent by another thread before the Tx state is updated.
+        withWriteLock ctx $ do
+            sendPacket13 ctx $ Handshake13 [KeyUpdate13 req]
+            keyUpdate ctx getTxRecordState setTxRecordState
+    return tls13

@@ -6,12 +6,13 @@ module Network.TLS.PostHandshake (
 ) where
 
 import Network.TLS.Context.Internal
-import Network.TLS.IO
-import Network.TLS.Struct13
-
 import Network.TLS.Handshake.Client
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Server
+import Network.TLS.IO
+import Network.TLS.Struct13
+
+----------------------------------------------------------------
 
 -- Server only
 
