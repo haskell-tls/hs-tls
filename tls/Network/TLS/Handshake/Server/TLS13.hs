@@ -213,7 +213,7 @@ newCertReqContext :: Context -> IO CertReqContext
 newCertReqContext ctx = getStateRNG ctx 32
 
 requestCertificateServer :: ServerParams -> Context -> IO Bool
-requestCertificateServer sparams ctx = do
+requestCertificateServer sparams ctx = handleEx ctx $ do
     tls13 <- tls13orLater ctx
     supportsPHA <- usingState_ ctx getTLS13ClientSupportsPHA
     let ok = tls13 && supportsPHA
@@ -280,7 +280,7 @@ expectClientCertificate sparams ctx origCertReqCtx (Certificate13 certReqCtx (TL
 expectClientCertificate sparams ctx origCertReqCtx (CompressedCertificate13 certReqCtx (TLSCertificateChain certs) _ext) = do
     expectClientCertificate' sparams ctx origCertReqCtx certReqCtx certs
     return $ isNullCertificateChain certs
-expectClientCertificate _ _ _ _ = error "expectClientCertificate" -- fixme
+expectClientCertificate _ _ _ h = unexpected "Certificate" $ Just $ show h
 
 expectClientCertificate'
     :: ServerParams
@@ -304,8 +304,8 @@ expectClientFinished ctx (Finished13 verifyData) = do
                 "tried post-handshake authentication without application traffic secret"
                 InternalError
     hChBeforeCf <- transcriptHash ctx
-    checkFinished ctx usedHash applicationSecretN hChBeforeCf verifyData `catch` \e -> print (e :: TLSException)
-expectClientFinished _ _ = error "expectClientFinished" -- fixme
+    checkFinished ctx usedHash applicationSecretN hChBeforeCf verifyData
+expectClientFinished _ h = unexpected "Finished" $ Just $ show h
 
 terminate :: Context -> TLSError -> IO a
 terminate ctx err = do
@@ -315,6 +315,18 @@ terminate ctx err = do
     catchException (send [(level, desc)]) (\_ -> return ())
     setEOF ctx
     throwIO $ Terminated False reason err
+
+handleEx :: Context -> IO Bool -> IO Bool
+handleEx ctx f = catchException f $ \exception -> do
+    -- If the error was an Uncontextualized TLSException, we replace the
+    -- context with HandshakeFailed. If it's anything else, we convert
+    -- it to a string and wrap it with Error_Misc and HandshakeFailed.
+    let tlserror = case fromException exception of
+            Just e | Uncontextualized e' <- e -> e'
+            _ -> Error_Misc (show exception)
+    sendPacket13 ctx $ Alert13 [errorToAlert tlserror]
+    void $ throwIO $ PostHandshake tlserror
+    return False
 
 ----------------------------------------------------------------
 
