@@ -235,9 +235,9 @@ recvData12 ctx = do
     -- when receiving empty appdata, we just retry to get some data.
     process (AppData "") = recvData12 ctx
     process (AppData x) = return x
-    process p =
+    process p = do
         let reason = "unexpected message " ++ show p
-         in terminate12 (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+        terminate12 (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
 
     terminate12 = terminateWithWriteLock ctx (sendPacket12 ctx . Alert)
 
@@ -283,9 +283,9 @@ recvData13 ctx = do
                 | n > 0 -> do
                     setEstablished ctx $ EarlyDataNotAllowed (n - 1)
                     recvData13 ctx -- ignore "x"
-                | otherwise ->
+                | otherwise -> do
                     let reason = "early data deprotect overflow"
-                     in terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+                    terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
             Established -> return x
             _ -> throwCore $ Error_Protocol "data at not-established" UnexpectedMessage
     process ChangeCipherSpec13 = do
@@ -295,18 +295,18 @@ recvData13 ctx = do
             else do
                 let reason = "CSS after Finished"
                 terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-    process p =
+    process p = do
         let reason = "unexpected message " ++ show p
-         in terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+        terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
 
     loopHandshake13 [] = return ()
     -- fixme: some implementations send multiple NST at the same time.
     -- Only the first one is used at this moment.
     loopHandshake13 (NewSessionTicket13 life add nonce ticket exts : hs) = do
         role <- usingState_ ctx S.getRole
-        unless (role == ClientRole) $
+        unless (role == ClientRole) $ do
             let reason = "Session ticket is allowed for client only"
-             in terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+            terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
         -- This part is similar to handshake code, so protected with
         -- read+write locks (which is also what we use for all calls to the
         -- session manager).
@@ -370,7 +370,7 @@ recvData13 ctx = do
                 when (isHelloRetryRequest srand) $ do
                     clearTxRecordState ctx
                     let reason = "HRR is not allowed for 0-RTT"
-                     in terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+                    terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
             _ -> return ()
         cont <- popAction ctx h hs
         when cont $ loopHandshake13 hs
@@ -395,9 +395,9 @@ recvHS13 ctx breakLoop = do
     -- Only the first one is used at this moment.
     loopHandshake13 (NewSessionTicket13 life add nonce ticket exts : hs) = do
         role <- usingState_ ctx S.getRole
-        unless (role == ClientRole) $
+        unless (role == ClientRole) $ do
             let reason = "Session ticket is allowed for client only"
-             in terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+            terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
         -- This part is similar to handshake code, so protected with
         -- read+write locks (which is also what we use for all calls to the
         -- session manager).
@@ -475,9 +475,9 @@ onError
 onError _ Error_EOF =
     -- Not really an error.
     return B.empty
-onError terminate err =
-    let (lvl, ad) = errorToAlert err
-     in terminate err lvl ad (errorToAlertMessage err)
+onError terminate err = terminate err lvl ad (errorToAlertMessage err)
+  where
+    (lvl, ad) = errorToAlert err
 
 terminateWithWriteLock
     :: Context
