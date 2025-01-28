@@ -470,9 +470,10 @@ onError
 onError _ Error_EOF =
     -- Not really an error.
     return B.empty
-onError terminate err = terminate err lvl ad (errorToAlertMessage err)
+onError terminate err = terminate err lvl ad reason
   where
     (lvl, ad) = errorToAlert err
+    reason = errorToAlertMessage err
 
 terminateWithWriteLock
     :: Context

@@ -35,7 +35,10 @@ import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types
+import Network.TLS.Util
 import Network.TLS.X509
+
+----------------------------------------------------------------
 
 recvClientSecondFlight13
     :: ServerParams
@@ -204,6 +207,8 @@ clientCertVerify sparams ctx certs verif = do
                     usingState_ ctx $ setClientCertificateChain certs
                 else decryptError "verification failed"
 
+----------------------------------------------------------------
+
 newCertReqContext :: Context -> IO CertReqContext
 newCertReqContext ctx = getStateRNG ctx 32
 
@@ -245,10 +250,14 @@ getHandshake ctx ref = do
     hhs <- readIORef ref
     if null hhs
         then do
-            Right (Handshake13 iis) <- recvPacket13 ctx
-            chk iis
+            ex <- recvPacket13 ctx
+            either (terminate ctx) process ex
         else chk hhs
   where
+    process (Handshake13 iss) = chk iss
+    process _ =
+        terminate ctx $
+            Error_Protocol "post handshake authenticated" UnexpectedMessage
     chk [] = getHandshake ctx ref
     chk (KeyUpdate13 mode : hs) = do
         keyUpdate ctx getRxRecordState setRxRecordState
@@ -297,6 +306,15 @@ expectClientFinished ctx (Finished13 verifyData) = do
     hChBeforeCf <- transcriptHash ctx
     checkFinished ctx usedHash applicationSecretN hChBeforeCf verifyData `catch` \e -> print (e :: TLSException)
 expectClientFinished _ _ = error "expectClientFinished" -- fixme
+
+terminate :: Context -> TLSError -> IO a
+terminate ctx err = do
+    let (level, desc) = errorToAlert err
+        reason = errorToAlertMessage err
+        send = sendPacket13 ctx . Alert13
+    catchException (send [(level, desc)]) (\_ -> return ())
+    setEOF ctx
+    throwIO $ Terminated False reason err
 
 ----------------------------------------------------------------
 
