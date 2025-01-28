@@ -3,31 +3,42 @@
 
 module Network.TLS.Handshake.Server.TLS13 (
     recvClientSecondFlight13,
-    postHandshakeAuthServerWith,
+    requestCertificateServer,
+    keyUpdate,
+    updateKey,
+    KeyUpdateRequest (..),
 ) where
 
+import Control.Exception
 import Control.Monad.State.Strict
+import qualified Data.ByteString.Char8 as C8
+import Data.IORef
 
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
+import Network.TLS.Crypto
 import Network.TLS.Extension
 import Network.TLS.Handshake.Common hiding (expectFinished)
 import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.Key
-import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Server.Common
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.IO
+import Network.TLS.IO.Encode
 import Network.TLS.Imports
+import Network.TLS.KeySchedule
 import Network.TLS.Parameters
 import Network.TLS.Session
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types
+import Network.TLS.Util
 import Network.TLS.X509
+
+----------------------------------------------------------------
 
 recvClientSecondFlight13
     :: ServerParams
@@ -196,56 +207,167 @@ clientCertVerify sparams ctx certs verif = do
                     usingState_ ctx $ setClientCertificateChain certs
                 else decryptError "verification failed"
 
-postHandshakeAuthServerWith :: ServerParams -> Context -> Handshake13 -> IO ()
-postHandshakeAuthServerWith sparams ctx h@(Certificate13 certCtx (TLSCertificateChain certs) _ext) = processHandshakeAuthServerWith sparams ctx certCtx certs h
-postHandshakeAuthServerWith sparams ctx h@(CompressedCertificate13 certCtx (TLSCertificateChain certs) _ext) = processHandshakeAuthServerWith sparams ctx certCtx certs h
-postHandshakeAuthServerWith _ _ _ =
-    throwCore $
-        Error_Protocol
-            "unexpected handshake message received in postHandshakeAuthServerWith"
-            UnexpectedMessage
+----------------------------------------------------------------
 
-processHandshakeAuthServerWith
+newCertReqContext :: Context -> IO CertReqContext
+newCertReqContext ctx = getStateRNG ctx 32
+
+requestCertificateServer :: ServerParams -> Context -> IO Bool
+requestCertificateServer sparams ctx = handleEx ctx $ do
+    tls13 <- tls13orLater ctx
+    supportsPHA <- usingState_ ctx getTLS13ClientSupportsPHA
+    let ok = tls13 && supportsPHA
+    if ok
+        then newIORef [] >>= sendCertReqAndRecv
+        else return ok
+  where
+    sendCertReqAndRecv ref = do
+        origCertReqCtx <- newCertReqContext ctx
+        let certReq13 = makeCertRequest sparams ctx origCertReqCtx False
+        _ <- withWriteLock ctx $ do
+            bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
+                sendPacket13 ctx $ Handshake13 [certReq13]
+        withReadLock ctx $ do
+            clientCert13 <- getHandshake ctx ref
+            emptyCert <- expectClientCertificate sparams ctx origCertReqCtx clientCert13
+            baseHState <- saveHState ctx
+            void $ updateHandshake13 ctx certReq13
+            void $ updateHandshake13 ctx clientCert13
+            th <- transcriptHash ctx
+            unless emptyCert $ do
+                certVerify13 <- getHandshake ctx ref
+                expectCertVerify sparams ctx th certVerify13
+                void $ updateHandshake13 ctx certVerify13
+            finished13 <- getHandshake ctx ref
+            expectClientFinished ctx finished13
+            void $ restoreHState ctx baseHState -- fixme
+        return True
+
+-- saving appdata and key update?
+-- error handling
+getHandshake :: Context -> IORef [Handshake13] -> IO Handshake13
+getHandshake ctx ref = do
+    hhs <- readIORef ref
+    if null hhs
+        then do
+            ex <- recvPacket13 ctx
+            either (terminate ctx) process ex
+        else chk hhs
+  where
+    process (Handshake13 iss) = chk iss
+    process _ =
+        terminate ctx $
+            Error_Protocol "post handshake authenticated" UnexpectedMessage
+    chk [] = getHandshake ctx ref
+    chk (KeyUpdate13 mode : hs) = do
+        keyUpdate ctx getRxRecordState setRxRecordState
+        -- Write lock wraps both actions because we don't want another
+        -- packet to be sent by another thread before the Tx state is
+        -- updated.
+        when (mode == UpdateRequested) $ withWriteLock ctx $ do
+            sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested]
+            keyUpdate ctx getTxRecordState setTxRecordState
+        chk hs
+    chk (h : hs) = do
+        writeIORef ref hs
+        return h
+
+expectClientCertificate
+    :: ServerParams -> Context -> CertReqContext -> Handshake13 -> IO Bool
+expectClientCertificate sparams ctx origCertReqCtx (Certificate13 certReqCtx (TLSCertificateChain certs) _ext) = do
+    expectClientCertificate' sparams ctx origCertReqCtx certReqCtx certs
+    return $ isNullCertificateChain certs
+expectClientCertificate sparams ctx origCertReqCtx (CompressedCertificate13 certReqCtx (TLSCertificateChain certs) _ext) = do
+    expectClientCertificate' sparams ctx origCertReqCtx certReqCtx certs
+    return $ isNullCertificateChain certs
+expectClientCertificate _ _ _ h = unexpected "Certificate" $ Just $ show h
+
+expectClientCertificate'
     :: ServerParams
     -> Context
     -> CertReqContext
+    -> CertReqContext
     -> CertificateChain
-    -> Handshake13
     -> IO ()
-processHandshakeAuthServerWith sparams ctx certCtx certs h = do
-    mCertReq <- getCertRequest13 ctx certCtx
-    when (isNothing mCertReq) $
+expectClientCertificate' sparams ctx origCertReqCtx certReqCtx certs = do
+    when (origCertReqCtx /= certReqCtx) $
         throwCore $
-            Error_Protocol "unknown certificate request context" DecodeError
-    let certReq = fromJust mCertReq
+            Error_Protocol "certificate context is wrong" IllegalParameter
+    void $ clientCertificate sparams ctx certs
 
-    -- fixme checking _ext
-    clientCertificate sparams ctx certs
-
-    baseHState <- saveHState ctx
-    processHandshake13 ctx certReq
-    processHandshake13 ctx h
-
+expectClientFinished :: Context -> Handshake13 -> IO ()
+expectClientFinished ctx (Finished13 verifyData) = do
     (usedHash, _, level, applicationSecretN) <- getRxRecordState ctx
     unless (level == CryptApplicationSecret) $
         throwCore $
             Error_Protocol
                 "tried post-handshake authentication without application traffic secret"
                 InternalError
+    hChBeforeCf <- transcriptHash ctx
+    checkFinished ctx usedHash applicationSecretN hChBeforeCf verifyData
+expectClientFinished _ h = unexpected "Finished" $ Just $ show h
 
-    let expectFinished' hChBeforeCf (Finished13 verifyData) = do
-            checkFinished ctx usedHash applicationSecretN hChBeforeCf verifyData
-            void $ restoreHState ctx baseHState
-        expectFinished' _ hs = unexpected (show hs) (Just "finished 13")
+terminate :: Context -> TLSError -> IO a
+terminate ctx err = do
+    let (level, desc) = errorToAlert err
+        reason = errorToAlertMessage err
+        send = sendPacket13 ctx . Alert13
+    catchException (send [(level, desc)]) (\_ -> return ())
+    setEOF ctx
+    throwIO $ Terminated False reason err
 
-    -- Note: here the server could send updated NST too, however the library
-    -- currently has no API to handle resumption and client authentication
-    -- together, see discussion in #133
-    if isNullCertificateChain certs
-        then setPendingRecvActions ctx [PendingRecvActionHash False expectFinished']
-        else
-            setPendingRecvActions
-                ctx
-                [ PendingRecvActionHash False (expectCertVerify sparams ctx)
-                , PendingRecvActionHash False expectFinished'
-                ]
+handleEx :: Context -> IO Bool -> IO Bool
+handleEx ctx f = catchException f $ \exception -> do
+    -- If the error was an Uncontextualized TLSException, we replace the
+    -- context with HandshakeFailed. If it's anything else, we convert
+    -- it to a string and wrap it with Error_Misc and HandshakeFailed.
+    let tlserror = case fromException exception of
+            Just e | Uncontextualized e' <- e -> e'
+            _ -> Error_Misc (show exception)
+    sendPacket13 ctx $ Alert13 [errorToAlert tlserror]
+    void $ throwIO $ PostHandshake tlserror
+    return False
+
+----------------------------------------------------------------
+
+keyUpdate
+    :: Context
+    -> (Context -> IO (Hash, Cipher, CryptLevel, C8.ByteString))
+    -> (Context -> Hash -> Cipher -> AnyTrafficSecret ApplicationSecret -> IO ())
+    -> IO ()
+keyUpdate ctx getState setState = do
+    (usedHash, usedCipher, level, applicationSecretN) <- getState ctx
+    unless (level == CryptApplicationSecret) $
+        throwCore $
+            Error_Protocol
+                "tried key update without application traffic secret"
+                InternalError
+    let applicationSecretN1 =
+            hkdfExpandLabel usedHash applicationSecretN "traffic upd" "" $
+                hashDigestSize usedHash
+    setState ctx usedHash usedCipher (AnyTrafficSecret applicationSecretN1)
+
+-- | How to update keys in TLS 1.3
+data KeyUpdateRequest
+    = -- | Unidirectional key update
+      OneWay
+    | -- | Bidirectional key update (normal case)
+      TwoWay
+    deriving (Eq, Show)
+
+-- | Updating appication traffic secrets for TLS 1.3.
+--   If this API is called for TLS 1.3, 'True' is returned.
+--   Otherwise, 'False' is returned.
+updateKey :: MonadIO m => Context -> KeyUpdateRequest -> m Bool
+updateKey ctx way = liftIO $ do
+    tls13 <- tls13orLater ctx
+    when tls13 $ do
+        let req = case way of
+                OneWay -> UpdateNotRequested
+                TwoWay -> UpdateRequested
+        -- Write lock wraps both actions because we don't want another packet to
+        -- be sent by another thread before the Tx state is updated.
+        withWriteLock ctx $ do
+            sendPacket13 ctx $ Handshake13 [KeyUpdate13 req]
+            keyUpdate ctx getTxRecordState setTxRecordState
+    return tls13

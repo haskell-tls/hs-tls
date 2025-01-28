@@ -4,15 +4,15 @@ module Network.TLS.Handshake.Server (
     handshakeServer,
     handshakeServerWith,
     requestCertificateServer,
-    postHandshakeAuthServerWith,
+    keyUpdate,
+    updateKey,
+    KeyUpdateRequest (..),
 ) where
 
-import Control.Exception (bracket)
 import Control.Monad.State.Strict
 
 import Network.TLS.Context.Internal
 import Network.TLS.Handshake.Common
-import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.Server.ClientHello
 import Network.TLS.Handshake.Server.ClientHello12
 import Network.TLS.Handshake.Server.ClientHello13
@@ -20,11 +20,7 @@ import Network.TLS.Handshake.Server.ServerHello12
 import Network.TLS.Handshake.Server.ServerHello13
 import Network.TLS.Handshake.Server.TLS12
 import Network.TLS.Handshake.Server.TLS13
-import Network.TLS.IO
-import Network.TLS.Imports
-import Network.TLS.State
 import Network.TLS.Struct
-import Network.TLS.Struct13
 
 -- Put the server context in handshake mode.
 --
@@ -74,19 +70,3 @@ handshake sparams ctx clientHello = do
             resumeSessionData <-
                 sendServerHello12 sparams ctx r ch
             recvClientSecondFlight12 sparams ctx resumeSessionData
-
-newCertReqContext :: Context -> IO CertReqContext
-newCertReqContext ctx = getStateRNG ctx 32
-
-requestCertificateServer :: ServerParams -> Context -> IO Bool
-requestCertificateServer sparams ctx = do
-    tls13 <- tls13orLater ctx
-    supportsPHA <- usingState_ ctx getTLS13ClientSupportsPHA
-    let ok = tls13 && supportsPHA
-    when ok $ do
-        certReqCtx <- newCertReqContext ctx
-        let certReq = makeCertRequest sparams ctx certReqCtx False
-        bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
-            addCertRequest13 ctx certReq
-            sendPacket13 ctx $ Handshake13 [certReq]
-    return ok

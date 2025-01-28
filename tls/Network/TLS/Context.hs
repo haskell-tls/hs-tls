@@ -92,7 +92,6 @@ import Network.TLS.Packet
 import Network.TLS.Parameters
 import Network.TLS.PostHandshake (
     postHandshakeAuthClientWith,
-    postHandshakeAuthServerWith,
     requestCertificateServer,
  )
 import Network.TLS.RNG
@@ -137,7 +136,7 @@ instance TLSParams ServerParams where
     doHandshake = handshakeServer
     doHandshakeWith = handshakeServerWith
     doRequestCertificate = requestCertificateServer
-    doPostHandshakeAuthWith = postHandshakeAuthServerWith
+    doPostHandshakeAuthWith = \_ _ _ -> return ()
 
 -- | create a new context using the backend and parameters specified.
 contextNew
@@ -174,7 +173,6 @@ contextNew backend params = liftIO $ do
     hs <- newMVar Nothing
     recvActionsRef <- newIORef []
     sendActionRef <- newIORef Nothing
-    crs <- newIORef []
     locks <- Locks <$> newMVar () <*> newMVar () <*> newMVar ()
     st13ref <- newIORef defaultTLS13State
     mylimref <- newRecordLimitRef $ Just defaultRecordSizeLimit
@@ -208,7 +206,6 @@ contextNew backend params = liftIO $ do
                 , ctxLocks = locks
                 , ctxPendingRecvActions = recvActionsRef
                 , ctxPendingSendAction = sendActionRef
-                , ctxCertRequests = crs
                 , ctxKeyLogger = debugKeyLogger debug
                 , ctxRecordLayer = recordLayer
                 , ctxHandshakeSync = HandshakeSync syncNoOp syncNoOp

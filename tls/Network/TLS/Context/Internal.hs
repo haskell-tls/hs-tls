@@ -58,8 +58,6 @@ module Network.TLS.Context.Internal (
     restoreHState,
     getStateRNG,
     tls13orLater,
-    addCertRequest13,
-    getCertRequest13,
     decideRecordVersion,
 
     -- * Misc
@@ -139,7 +137,6 @@ data Context
       ctxTLS13State :: IORef TLS13State
     , ctxPendingRecvActions :: IORef [PendingRecvAction]
     , ctxPendingSendAction :: IORef (Maybe (Context -> IO ()))
-    , ctxCertRequests :: IORef [Handshake13]
     -- ^ pending post handshake authentication requests
     , -- QUIC
       ctxRecordLayer :: RecordLayer a
@@ -455,21 +452,6 @@ tls13orLater ctx = do
     return $ case ev of
         Left _ -> False
         Right v -> v >= TLS13
-
-addCertRequest13 :: Context -> Handshake13 -> IO ()
-addCertRequest13 ctx certReq = modifyIORef (ctxCertRequests ctx) (certReq :)
-
-getCertRequest13 :: Context -> CertReqContext -> IO (Maybe Handshake13)
-getCertRequest13 ctx context = do
-    let ref = ctxCertRequests ctx
-    l <- readIORef ref
-    let (matched, others) = partition (\cr -> context == fromCertRequest13 cr) l
-    case matched of
-        [] -> return Nothing
-        (certReq : _) -> writeIORef ref others >> return (Just certReq)
-  where
-    fromCertRequest13 (CertRequest13 c _) = c
-    fromCertRequest13 _ = error "fromCertRequest13"
 
 --------------------------------
 
