@@ -63,6 +63,11 @@ getHpkeSymmetricCipherSuite :: ReadBuffer -> IO HpkeSymmetricCipherSuite
 getHpkeSymmetricCipherSuite rbuf =
     HpkeSymmetricCipherSuite <$> read16 rbuf <*> read16 rbuf
 
+putHpkeSymmetricCipherSuite :: WriteBuffer -> HpkeSymmetricCipherSuite -> IO ()
+putHpkeSymmetricCipherSuite wbuf HpkeSymmetricCipherSuite{..} = do
+    write16 wbuf kdf_id
+    write16 wbuf aead_id
+
 ----------------------------------------------------------------
 
 newtype EncodedPublicKey = EncodedPublicKey ByteString deriving (Eq, Ord)
@@ -101,11 +106,17 @@ getHpkeKeyConfig :: ReadBuffer -> IO HpkeKeyConfig
 getHpkeKeyConfig rbuf = do
     cfid <- read8 rbuf
     kid <- read16 rbuf
-    len0 <- fromIntegral <$> read16 rbuf
-    pk <- EncodedPublicKey <$> extractByteString rbuf len0
-    len1 <- fromIntegral <$> read16 rbuf
-    cs <- parseList len1 ((4,) <$> getHpkeSymmetricCipherSuite rbuf)
+    pk <- EncodedPublicKey <$> getOpaque16 rbuf
+    cs <- getList16 rbuf getHpkeSymmetricCipherSuite
     return $ HpkeKeyConfig cfid kid pk cs
+
+putHpkeKeyConfig :: WriteBuffer -> HpkeKeyConfig -> IO ()
+putHpkeKeyConfig wbuf HpkeKeyConfig{..} = do
+    write8 wbuf config_id
+    write16 wbuf kem_id
+    let EncodedPublicKey pk = public_key
+    putOpaque16 wbuf pk
+    putList16 wbuf putHpkeSymmetricCipherSuite cipher_suites
 
 ----------------------------------------------------------------
 
@@ -120,9 +131,13 @@ data ECHConfigExtension = ECHConfigExtension
 getECHConfigExtension :: ReadBuffer -> IO ECHConfigExtension
 getECHConfigExtension rbuf = do
     typ <- read16 rbuf
-    len <- fromIntegral <$> read16 rbuf
-    ext <- extractByteString rbuf len
+    ext <- getOpaque16 rbuf
     return $ ECHConfigExtension typ ext
+
+putECHConfigExtension :: WriteBuffer -> ECHConfigExtension -> IO ()
+putECHConfigExtension wbuf ECHConfigExtension{..} = do
+    write16 wbuf ece_type
+    putOpaque16 wbuf ece_data
 
 ----------------------------------------------------------------
 
@@ -138,13 +153,16 @@ getECHConfigContents :: ReadBuffer -> IO ECHConfigContents
 getECHConfigContents rbuf = do
     kcf <- getHpkeKeyConfig rbuf
     mnl <- read8 rbuf
-    len1 <- fromIntegral <$> read8 rbuf
-    pn <- extractByteString rbuf len1
-    len2 <- fromIntegral <$> read16 rbuf
-    exts <- parseList len2 $ do
-        ext <- getECHConfigExtension rbuf
-        return (4 + BS.length (ece_data ext), ext)
+    pn <- getOpaque8 rbuf
+    exts <- getList16 rbuf getECHConfigExtension
     return $ ECHConfigContents kcf mnl pn exts
+
+putECHConfigContents :: WriteBuffer -> ECHConfigContents -> IO ()
+putECHConfigContents wbuf ECHConfigContents{..} = do
+    putHpkeKeyConfig wbuf key_config
+    write8 wbuf maximum_name_length
+    putOpaque8 wbuf public_name
+    putList16 wbuf putECHConfigExtension extensions
 
 ----------------------------------------------------------------
 
@@ -162,13 +180,65 @@ getECHConfig rbuf = do
     _len <- read16 rbuf
     ECHConfig <$> getECHConfigContents rbuf
 
+putECHConfig :: WriteBuffer -> ECHConfig -> IO ()
+putECHConfig wbuf ECHConfig{..} = do
+    write16 wbuf 0xfe0d
+    withLength16 wbuf $ putECHConfigContents wbuf contents
+
 ----------------------------------------------------------------
 
-parseList :: Int -> IO (Int, a) -> IO [a]
-parseList lim parer = loop 0 id
+getOpaque8 :: ReadBuffer -> IO ByteString
+getOpaque8 rbuf = do
+    len <- fromIntegral <$> read8 rbuf
+    extractByteString rbuf len
+
+putOpaque8 :: WriteBuffer -> ByteString -> IO ()
+putOpaque8 wbuf x = do
+    write8 wbuf $ fromIntegral $ BS.length x
+    copyByteString wbuf x
+
+getOpaque16 :: ReadBuffer -> IO ByteString
+getOpaque16 rbuf = do
+    len <- fromIntegral <$> read16 rbuf
+    extractByteString rbuf len
+
+putOpaque16 :: WriteBuffer -> ByteString -> IO ()
+putOpaque16 wbuf x = do
+    write16 wbuf $ fromIntegral $ BS.length x
+    copyByteString wbuf x
+
+getList16 :: ReadBuffer -> (ReadBuffer -> IO a) -> IO [a]
+getList16 rbuf parer = do
+    len <- fromIntegral <$> read16 rbuf
+    cur <- position rbuf
+    let lim = cur + len
+    loop lim id
   where
-    loop len build
-        | len >= lim = return $ build []
-        | otherwise = do
-            (len', x) <- parer
-            loop (len + len') ((x :) . build)
+    loop lim build = do
+        cur <- position rbuf
+        if cur < lim
+            then do
+                x <- parer rbuf
+                loop lim ((x :) . build)
+            else return $ build []
+
+withLength16 :: WriteBuffer -> IO () -> IO ()
+withLength16 wbuf builder = do
+    lenpos <- position wbuf
+    write16 wbuf 0
+    old <- position wbuf
+    builder
+    new <- position wbuf
+    let len = new - old
+    ff wbuf (lenpos - new)
+    write16 wbuf $ fromIntegral len
+    ff wbuf len
+
+putList16 :: WriteBuffer -> (WriteBuffer -> a -> IO ()) -> [a] -> IO ()
+putList16 wbuf builder xxs =
+    withLength16 wbuf $ loop xxs
+  where
+    loop [] = return ()
+    loop (x : xs) = do
+        builder wbuf x
+        loop xs
