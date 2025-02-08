@@ -20,6 +20,7 @@ library
     build-depends:
         base >=4.7 && <5,
         base16-bytestring,
-        bytestring
+        bytestring,
+        network-byte-order
 
     default-extensions: Strict StrictData

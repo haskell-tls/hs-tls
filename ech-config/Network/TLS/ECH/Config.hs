@@ -1,12 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 module Network.TLS.ECH.Config where
 
 import Data.ByteString
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as C8
 import Data.Word
+import Network.ByteOrder
 import Text.Printf (printf)
 
 {-
@@ -56,11 +59,15 @@ instance Show HpkeSymmetricCipherSuite where
         showAEAD_ID 0xFFF = "Export-only"
         showAEAD_ID x = "AEAD_ID " ++ printf "0x04" x
 
+getHpkeSymmetricCipherSuite :: ReadBuffer -> IO HpkeSymmetricCipherSuite
+getHpkeSymmetricCipherSuite rbuf =
+    HpkeSymmetricCipherSuite <$> read16 rbuf <*> read16 rbuf
+
 ----------------------------------------------------------------
 
-newtype EncodedPublicKey = PublicKey ByteString deriving (Eq, Ord)
+newtype EncodedPublicKey = EncodedPublicKey ByteString deriving (Eq, Ord)
 instance Show EncodedPublicKey where
-    show (PublicKey bs) = "\"" ++ C8.unpack (B16.encode bs) ++ "\""
+    show (EncodedPublicKey bs) = "\"" ++ C8.unpack (B16.encode bs) ++ "\""
 
 data HpkeKeyConfig = HpkeKeyConfig
     { config_id :: Word8
@@ -90,6 +97,16 @@ instance Show HpkeKeyConfig where
         showKEM_ID 0x0021 = "DHKEM(X448, HKDF-SHA512)"
         showKEM_ID x = "KEM_ID " ++ printf "0x04" x
 
+getHpkeKeyConfig :: ReadBuffer -> IO HpkeKeyConfig
+getHpkeKeyConfig rbuf = do
+    cfid <- read8 rbuf
+    kid <- read16 rbuf
+    len0 <- fromIntegral <$> read16 rbuf
+    pk <- EncodedPublicKey <$> extractByteString rbuf len0
+    len1 <- fromIntegral <$> read16 rbuf
+    cs <- parseList len1 ((4,) <$> getHpkeSymmetricCipherSuite rbuf)
+    return $ HpkeKeyConfig cfid kid pk cs
+
 ----------------------------------------------------------------
 
 type ECHConfigExtensionType = Word16
@@ -99,6 +116,13 @@ data ECHConfigExtension = ECHConfigExtension
     , ece_data :: ByteString
     }
     deriving (Eq, Ord, Show)
+
+getECHConfigExtension :: ReadBuffer -> IO ECHConfigExtension
+getECHConfigExtension rbuf = do
+    typ <- read16 rbuf
+    len <- fromIntegral <$> read16 rbuf
+    ext <- extractByteString rbuf len
+    return $ ECHConfigExtension typ ext
 
 ----------------------------------------------------------------
 
@@ -110,6 +134,18 @@ data ECHConfigContents = ECHConfigContents
     }
     deriving (Eq, Ord, Show)
 
+getECHConfigContents :: ReadBuffer -> IO ECHConfigContents
+getECHConfigContents rbuf = do
+    kcf <- getHpkeKeyConfig rbuf
+    mnl <- read8 rbuf
+    len1 <- fromIntegral <$> read8 rbuf
+    pn <- extractByteString rbuf len1
+    len2 <- fromIntegral <$> read16 rbuf
+    exts <- parseList len2 $ do
+        ext <- getECHConfigExtension rbuf
+        return (4 + BS.length (ece_data ext), ext)
+    return $ ECHConfigContents kcf mnl pn exts
+
 ----------------------------------------------------------------
 
 data ECHConfig = ECHConfig
@@ -119,3 +155,20 @@ data ECHConfig = ECHConfig
 
 instance Show ECHConfig where
     show ECHConfig{..} = show contents
+
+getECHConfig :: ReadBuffer -> IO ECHConfig
+getECHConfig rbuf = do
+    _ver <- read16 rbuf
+    _len <- read16 rbuf
+    ECHConfig <$> getECHConfigContents rbuf
+
+----------------------------------------------------------------
+
+parseList :: Int -> IO (Int, a) -> IO [a]
+parseList lim parer = loop 0 id
+  where
+    loop len build
+        | len >= lim = return $ build []
+        | otherwise = do
+            (len', x) <- parer
+            loop (len + len') ((x :) . build)
