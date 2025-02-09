@@ -4,7 +4,6 @@
 
 module Network.TLS.ECH.Config where
 
-import Data.ByteString
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as C8
@@ -38,11 +37,19 @@ example1 =
 
 ----------------------------------------------------------------
 
+class SizeOf a where
+    sizeof :: a -> Int
+
+----------------------------------------------------------------
+
 data HpkeSymmetricCipherSuite = HpkeSymmetricCipherSuite
     { kdf_id :: Word16
     , aead_id :: Word16
     }
     deriving (Eq, Ord)
+
+instance SizeOf HpkeSymmetricCipherSuite where
+    sizeof _ = 4
 
 instance Show HpkeSymmetricCipherSuite where
     show HpkeSymmetricCipherSuite{..} = "(" ++ showKDF_ID kdf_id ++ "," ++ showAEAD_ID aead_id ++ ")"
@@ -74,6 +81,9 @@ newtype EncodedPublicKey = EncodedPublicKey ByteString deriving (Eq, Ord)
 instance Show EncodedPublicKey where
     show (EncodedPublicKey bs) = "\"" ++ C8.unpack (B16.encode bs) ++ "\""
 
+instance SizeOf EncodedPublicKey where
+    sizeof (EncodedPublicKey bs) = 2 + BS.length bs
+
 data HpkeKeyConfig = HpkeKeyConfig
     { config_id :: Word8
     , kem_id :: Word16
@@ -81,6 +91,9 @@ data HpkeKeyConfig = HpkeKeyConfig
     , cipher_suites :: [HpkeSymmetricCipherSuite]
     }
     deriving (Eq, Ord)
+
+instance SizeOf HpkeKeyConfig where
+    sizeof HpkeKeyConfig{..} = 5 + sizeof public_key + sum (map sizeof cipher_suites)
 
 instance Show HpkeKeyConfig where
     show HpkeKeyConfig{..} =
@@ -128,6 +141,9 @@ data ECHConfigExtension = ECHConfigExtension
     }
     deriving (Eq, Ord, Show)
 
+instance SizeOf ECHConfigExtension where
+    sizeof ECHConfigExtension{..} = 4 + BS.length ece_data
+
 getECHConfigExtension :: ReadBuffer -> IO ECHConfigExtension
 getECHConfigExtension rbuf = do
     typ <- read16 rbuf
@@ -148,6 +164,9 @@ data ECHConfigContents = ECHConfigContents
     , extensions :: [ECHConfigExtension]
     }
     deriving (Eq, Ord, Show)
+
+instance SizeOf ECHConfigContents where
+    sizeof ECHConfigContents{..} = sizeof key_config + 4 + BS.length public_name + sum (map sizeof extensions)
 
 getECHConfigContents :: ReadBuffer -> IO ECHConfigContents
 getECHConfigContents rbuf = do
@@ -170,6 +189,9 @@ data ECHConfig = ECHConfig
     { contents :: ECHConfigContents
     }
     deriving (Eq, Ord)
+
+instance SizeOf ECHConfig where
+    sizeof ECHConfig{..} = 4 + sizeof contents
 
 instance Show ECHConfig where
     show ECHConfig{..} = show contents
