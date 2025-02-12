@@ -45,11 +45,11 @@ instance Show HpkeSymmetricCipherSuite where
         showKDF_ID 0x0002 = "HKDF-SHA384"
         showKDF_ID 0x0003 = "HKDF-SHA512"
         showKDF_ID x = "KDF_ID " ++ printf "0x04" x
-        showAEAD_ID 0x000 = "AEAD_Reserved"
-        showAEAD_ID 0x001 = "AES-128-GCM"
-        showAEAD_ID 0x002 = "AES-256-GCM"
-        showAEAD_ID 0x003 = "ChaCha20Poly1305"
-        showAEAD_ID 0xFFF = "Export-only"
+        showAEAD_ID 0x0000 = "AEAD_Reserved"
+        showAEAD_ID 0x0001 = "AES-128-GCM"
+        showAEAD_ID 0x0002 = "AES-256-GCM"
+        showAEAD_ID 0x0003 = "ChaCha20Poly1305"
+        showAEAD_ID 0xFFFF = "Export-only"
         showAEAD_ID x = "AEAD_ID " ++ printf "0x04" x
 
 getHpkeSymmetricCipherSuite :: ReadBuffer -> IO HpkeSymmetricCipherSuite
