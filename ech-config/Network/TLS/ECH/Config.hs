@@ -3,6 +3,8 @@
 -- | Types for Encrypted Client Configuration.
 module Network.TLS.ECH.Config (
     ECHConfigList,
+    decodeECHConfigList,
+    encodeECHConfigList,
     getECHConfigList,
     putECHConfigList,
     sizeOfECHConfigList,
@@ -213,6 +215,15 @@ putECHConfigList wbuf configs =
 
 sizeOfECHConfigList :: [ECHConfig] -> Int
 sizeOfECHConfigList configs = sum (map sizeOfECHConfig configs) + 2
+
+decodeECHConfigList :: ByteString -> IO [ECHConfig]
+decodeECHConfigList bs = withReadBuffer bs $ getECHConfigList
+
+encodeECHConfigList :: [ECHConfig] -> IO ByteString
+encodeECHConfigList configs = withWriteBuffer siz $ \wbuf ->
+    putECHConfigList wbuf configs
+  where
+    siz = sizeOfECHConfigList configs
 
 ----------------------------------------------------------------
 

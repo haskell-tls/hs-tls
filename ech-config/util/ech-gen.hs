@@ -52,9 +52,7 @@ main = do
                 HPKE.genKeyPair HPKE.defaultHPKEMap kemid
             let config = mkConfig (C8.pack hostname) kemid kdfid aeadid (EncodedPublicKey pkm)
                 configs = [config]
-                siz = sizeOfECHConfigList configs
-            encodedConfig <- withWriteBuffer siz $ \wbuf ->
-                putECHConfigList wbuf configs
+            encodedConfig <- encodeECHConfigList configs
             print configs
             BS.writeFile pubfile encodedConfig
             BS.writeFile secfile skm
