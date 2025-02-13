@@ -66,6 +66,7 @@ module Network.TLS (
     serverLimit,
     serverEarlyDataSize,
     serverTicketLifetime,
+    serverECHKey,
 
     -- ** Shared
     Shared,
@@ -75,6 +76,7 @@ module Network.TLS (
     sharedCAStore,
     sharedValidationCache,
     sharedHelloExtensions,
+    sharedECHConfig,
 
     -- ** Client hooks
     ClientHooks,

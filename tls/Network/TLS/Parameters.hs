@@ -34,6 +34,7 @@ import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Credentials
 import Network.TLS.Crypto
+import Network.TLS.ECH.Config
 import Network.TLS.Extension
 import Network.TLS.Extra.Cipher
 import Network.TLS.Handshake.State
@@ -203,6 +204,7 @@ data ServerParams = ServerParams
     --
     -- Default: 7200 (2 hours)
     , serverLimit :: Limit
+    , serverECHKey :: [(ConfigId, ByteString)]
     }
     deriving (Show)
 
@@ -219,6 +221,7 @@ defaultParamsServer =
         , serverEarlyDataSize = 0
         , serverTicketLifetime = 7200
         , serverLimit = defaultLimit
+        , serverECHKey = []
         }
 
 instance Default ServerParams where
@@ -418,6 +421,7 @@ data Shared = Shared
     -- based on the TLS version.
     --
     -- Default: @[]@
+    , sharedECHConfig :: ECHConfigList
     }
 
 instance Show Shared where
@@ -433,6 +437,7 @@ defaultShared =
         , sharedCAStore = mempty
         , sharedValidationCache = def
         , sharedHelloExtensions = []
+        , sharedECHConfig = []
         }
 
 -- | Group usage callback possible return values.
