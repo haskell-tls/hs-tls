@@ -2,9 +2,13 @@
 
 -- | Types for Encrypted Client Configuration.
 module Network.TLS.ECH.Config (
+    ECHConfigList,
+    getECHConfigList,
+    putECHConfigList,
+    sizeOfECHConfigList,
     ECHConfig (..),
-    putECHConfig,
     getECHConfig,
+    putECHConfig,
     sizeOfECHConfig,
     HpkeSymmetricCipherSuite (..),
     EncodedPublicKey (..),
@@ -195,6 +199,20 @@ putECHConfig wbuf ECHConfig{..} = do
 
 sizeOfECHConfig :: ECHConfig -> Int
 sizeOfECHConfig cnf = sizeof cnf
+
+----------------------------------------------------------------
+
+type ECHConfigList = [ECHConfig]
+
+getECHConfigList :: ReadBuffer -> IO [ECHConfig]
+getECHConfigList rbuf = getList16 rbuf getECHConfig
+
+putECHConfigList :: WriteBuffer -> [ECHConfig] -> IO ()
+putECHConfigList wbuf configs =
+    putList16 wbuf putECHConfig configs
+
+sizeOfECHConfigList :: [ECHConfig] -> Int
+sizeOfECHConfigList configs = sum (map sizeOfECHConfig configs) + 2
 
 ----------------------------------------------------------------
 
