@@ -1,4 +1,5 @@
--- |
+-- | (Elliptic Curve) Integrated Encryption Scheme
+--
 -- Module      : Network.TLS.Crypto.IES
 -- License     : BSD-style
 -- Maintainer  : Kazu Yamamoto <kazu@iij.ad.jp>
