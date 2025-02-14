@@ -2,16 +2,24 @@
 
 -- | Types for Encrypted Client Configuration.
 module Network.TLS.ECH.Config (
+    -- * ECH configuration list
     ECHConfigList,
     decodeECHConfigList,
     encodeECHConfigList,
+    loadECHConfigList,
+    loadECHSecretKeys,
+    ConfigId,
     getECHConfigList,
     putECHConfigList,
     sizeOfECHConfigList,
+
+    -- * ECH configuration
     ECHConfig (..),
     getECHConfig,
     putECHConfig,
     sizeOfECHConfig,
+
+    -- * Types
     HpkeSymmetricCipherSuite (..),
     EncodedPublicKey (..),
     HpkeKeyConfig (..),
@@ -23,6 +31,7 @@ module Network.TLS.ECH.Config (
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as C8
+import Data.Char (isDigit)
 import Data.Word
 import Network.ByteOrder
 import Text.Printf (printf)
@@ -76,8 +85,10 @@ instance Show EncodedPublicKey where
 instance SizeOf EncodedPublicKey where
     sizeof (EncodedPublicKey bs) = 2 + BS.length bs
 
+type ConfigId = Word8
+
 data HpkeKeyConfig = HpkeKeyConfig
-    { config_id :: Word8
+    { config_id :: ConfigId
     , kem_id :: Word16
     , public_key :: EncodedPublicKey
     , cipher_suites :: [HpkeSymmetricCipherSuite]
@@ -224,6 +235,23 @@ encodeECHConfigList configs = withWriteBuffer siz $ \wbuf ->
     putECHConfigList wbuf configs
   where
     siz = sizeOfECHConfigList configs
+
+-- | Loading the wire format of 'ECHConfigList' and
+--   decode it into 'ECHConfigList'.
+loadECHConfigList :: FilePath -> IO [ECHConfig]
+loadECHConfigList file = C8.readFile file >>= decodeECHConfigList
+
+-- | Loading secret keys stored in files whose names
+-- are "\<num\>.key".
+--
+-- > loadECHSecretKeys ["0.key", "1.key"]
+loadECHSecretKeys :: [FilePath] -> IO [(ConfigId, ByteString)]
+loadECHSecretKeys files = mapM loadECHSecretKey files
+  where
+    loadECHSecretKey file = do
+        let key = read (takeWhile isDigit file) :: ConfigId
+        val <- C8.readFile file
+        return (key, val)
 
 ----------------------------------------------------------------
 
