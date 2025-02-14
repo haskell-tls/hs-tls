@@ -34,6 +34,7 @@ import qualified Data.ByteString.Char8 as C8
 import Data.Char (isDigit)
 import Data.Word
 import Network.ByteOrder
+import System.FilePath (takeFileName)
 import Text.Printf (printf)
 
 ----------------------------------------------------------------
@@ -249,7 +250,8 @@ loadECHSecretKeys :: [FilePath] -> IO [(ConfigId, ByteString)]
 loadECHSecretKeys files = mapM loadECHSecretKey files
   where
     loadECHSecretKey file = do
-        let key = read (takeWhile isDigit file) :: ConfigId
+        let numstr = takeWhile isDigit $ takeFileName file
+            key = read numstr :: ConfigId
         val <- C8.readFile file
         return (key, val)
 
