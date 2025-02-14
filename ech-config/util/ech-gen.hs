@@ -11,6 +11,9 @@ import Network.ByteOrder
 import Network.TLS.ECH.Config
 import System.Environment
 
+configid :: Word8
+configid = 1
+
 mkConfig
     :: ByteString
     -> KEM_ID
@@ -24,7 +27,7 @@ mkConfig hostname kemid kdfid aeadid pkm =
             ECHConfigContents
                 { key_config =
                     HpkeKeyConfig
-                        { config_id = 1
+                        { config_id = configid
                         , kem_id = fromKEM_ID kemid
                         , public_key = pkm
                         , cipher_suites =
@@ -44,7 +47,7 @@ main :: IO ()
 main = do
     args <- getArgs
     case args of
-        [hostname, pubfile, secfile] -> do
+        [hostname] -> do
             let kemid = DHKEM_X25519_HKDF_SHA256
                 kdfid = HKDF_SHA256
                 aeadid = AES_128_GCM
@@ -54,6 +57,10 @@ main = do
                 configs = [config]
             encodedConfig <- encodeECHConfigList configs
             print configs
-            BS.writeFile pubfile encodedConfig
+            let configfile = hostname ++ ".conf"
+            BS.writeFile configfile encodedConfig
+            putStrLn $ "\"" ++ configfile ++ "\" is created"
+            let secfile = show configid ++ ".key"
             BS.writeFile secfile skm
-        _ -> putStrLn "ech-gen <host> <pub_file> <sec_file>"
+            putStrLn $ "\"" ++ secfile ++ "\" is created"
+        _ -> putStrLn "ech-gen <host>"
