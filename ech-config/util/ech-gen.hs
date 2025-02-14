@@ -2,9 +2,14 @@
 
 module Main where
 
-import Crypto.HPKE (AEAD_ID (..), KDF_ID (..), KEM_ID (..))
-import qualified Crypto.HPKE as HPKE
-import qualified Crypto.HPKE.Internal as HPKE
+import Crypto.HPKE (
+    AEAD_ID (..),
+    EncodedPublicKey (..),
+    EncodedSecretKey (..),
+    KDF_ID (..),
+    KEM_ID (..),
+ )
+import Crypto.HPKE.Internal (defaultHPKEMap, genKeyPair)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
 import Network.ByteOrder
@@ -19,7 +24,7 @@ mkConfig
     -> KEM_ID
     -> KDF_ID
     -> AEAD_ID
-    -> EncodedPublicKey
+    -> EncodedServerPublicKey
     -> ECHConfig
 mkConfig hostname kemid kdfid aeadid pkm =
     ECHConfig
@@ -51,9 +56,9 @@ main = do
             let kemid = DHKEM_X25519_HKDF_SHA256
                 kdfid = HKDF_SHA256
                 aeadid = AES_128_GCM
-            (HPKE.EncodedPublicKey pkm, HPKE.EncodedSecretKey skm) <-
-                HPKE.genKeyPair HPKE.defaultHPKEMap kemid
-            let config = mkConfig (C8.pack hostname) kemid kdfid aeadid (EncodedPublicKey pkm)
+            (EncodedPublicKey pkm, EncodedSecretKey skm) <-
+                genKeyPair defaultHPKEMap kemid
+            let config = mkConfig (C8.pack hostname) kemid kdfid aeadid (EncodedServerPublicKey pkm)
                 configs = [config]
             encodedConfig <- encodeECHConfigList configs
             print configs

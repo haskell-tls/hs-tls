@@ -22,7 +22,7 @@ module Network.TLS.ECH.Config (
 
     -- * Types
     HpkeSymmetricCipherSuite (..),
-    EncodedPublicKey (..),
+    EncodedServerPublicKey (..),
     HpkeKeyConfig (..),
     ECHConfigExtensionType,
     ECHConfigExtension (..),
@@ -80,19 +80,19 @@ putHpkeSymmetricCipherSuite wbuf HpkeSymmetricCipherSuite{..} = do
 
 ----------------------------------------------------------------
 
-newtype EncodedPublicKey = EncodedPublicKey ByteString deriving (Eq, Ord)
-instance Show EncodedPublicKey where
-    show (EncodedPublicKey bs) = "\"" ++ C8.unpack (B16.encode bs) ++ "\""
+newtype EncodedServerPublicKey = EncodedServerPublicKey ByteString deriving (Eq, Ord)
+instance Show EncodedServerPublicKey where
+    show (EncodedServerPublicKey bs) = "\"" ++ C8.unpack (B16.encode bs) ++ "\""
 
-instance SizeOf EncodedPublicKey where
-    sizeof (EncodedPublicKey bs) = 2 + BS.length bs
+instance SizeOf EncodedServerPublicKey where
+    sizeof (EncodedServerPublicKey bs) = 2 + BS.length bs
 
 type ConfigId = Word8
 
 data HpkeKeyConfig = HpkeKeyConfig
     { config_id :: ConfigId
     , kem_id :: Word16
-    , public_key :: EncodedPublicKey
+    , public_key :: EncodedServerPublicKey
     , cipher_suites :: [HpkeSymmetricCipherSuite]
     }
     deriving (Eq, Ord)
@@ -124,7 +124,7 @@ getHpkeKeyConfig :: ReadBuffer -> IO HpkeKeyConfig
 getHpkeKeyConfig rbuf = do
     cfid <- read8 rbuf
     kid <- read16 rbuf
-    pk <- EncodedPublicKey <$> getOpaque16 rbuf
+    pk <- EncodedServerPublicKey <$> getOpaque16 rbuf
     cs <- getList16 rbuf getHpkeSymmetricCipherSuite
     return $ HpkeKeyConfig cfid kid pk cs
 
@@ -132,7 +132,7 @@ putHpkeKeyConfig :: WriteBuffer -> HpkeKeyConfig -> IO ()
 putHpkeKeyConfig wbuf HpkeKeyConfig{..} = do
     write8 wbuf config_id
     write16 wbuf kem_id
-    let EncodedPublicKey pk = public_key
+    let EncodedServerPublicKey pk = public_key
     putOpaque16 wbuf pk
     putList16 wbuf putHpkeSymmetricCipherSuite cipher_suites
 
