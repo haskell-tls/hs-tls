@@ -15,6 +15,7 @@ module Network.TLS.ECH.Config (
 
     -- * ECH configuration
     ECHConfig (..),
+    encodeECHConfig,
     getECHConfig,
     putECHConfig,
     sizeOfECHConfig,
@@ -213,6 +214,11 @@ putECHConfig wbuf ECHConfig{..} = do
 
 sizeOfECHConfig :: ECHConfig -> Int
 sizeOfECHConfig cnf = sizeof cnf
+
+encodeECHConfig :: ECHConfig -> IO ByteString
+encodeECHConfig cnf = withWriteBuffer siz $ \wbuf -> putECHConfig wbuf cnf
+  where
+    siz = sizeOfECHConfig cnf
 
 ----------------------------------------------------------------
 
