@@ -41,8 +41,7 @@ executable ech-gen
         base >=4.9 && <5,
         bytestring,
         ech-config,
-        hpke,
-        network-byte-order
+        hpke
 
     if flag(devel)
 

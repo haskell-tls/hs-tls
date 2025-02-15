@@ -10,9 +10,10 @@ import Crypto.HPKE (
     KEM_ID (..),
  )
 import Crypto.HPKE.Internal (defaultHPKEMap, genKeyPair)
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
-import Network.ByteOrder
+import Data.Word (Word8)
 import Network.TLS.ECH.Config
 import System.Environment
 
