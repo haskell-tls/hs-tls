@@ -69,18 +69,18 @@ module Network.TLS.Extra.Cipher (
     cipher_DHE_RSA_CHACHA20POLY1305_SHA256,
 ) where
 
-import qualified Data.ByteString as B
-
-import Data.Tuple (swap)
-import Network.TLS.Cipher
-import Network.TLS.Types
-
 import Crypto.Cipher.AES
 import qualified Crypto.Cipher.ChaChaPoly1305 as ChaChaPoly1305
 import Crypto.Cipher.Types hiding (Cipher, cipherName)
 import Crypto.Error
 import qualified Crypto.MAC.Poly1305 as Poly1305
 import Crypto.System.CPU
+import qualified Data.ByteString as B
+import Data.Tuple (swap)
+
+import Network.TLS.Cipher
+import Network.TLS.Imports
+import Network.TLS.Types
 
 ----------------------------------------------------------------
 
@@ -680,7 +680,7 @@ aes256gcm BulkDecrypt key =
         )
 
 simpleDecrypt
-    :: AEAD cipher -> B.ByteString -> B.ByteString -> Int -> (B.ByteString, AuthTag)
+    :: AEAD cipher -> ByteString -> ByteString -> Int -> (ByteString, AuthTag)
 simpleDecrypt aeadIni header input taglen = (output, tag)
   where
     aead = aeadAppendHeader aeadIni header

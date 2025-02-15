@@ -320,6 +320,7 @@ import Network.TLS.Crypto (
  )
 import Network.TLS.Handshake.State (HandshakeMode13 (..))
 import Network.TLS.Hooks
+import Network.TLS.Imports
 import Network.TLS.Measurement
 import Network.TLS.Parameters
 import Network.TLS.Session
@@ -343,12 +344,11 @@ import Network.TLS.Struct13 (Handshake13)
 import Network.TLS.Types
 import Network.TLS.X509
 
-import Data.ByteString as B
 import Data.X509 (PrivKey (..), PubKey (..))
 import Data.X509.Validation hiding (HostName, defaultHooks)
 
 {-# DEPRECATED Bytes "Use Data.ByteString.Bytestring instead of Bytes." #-}
-type Bytes = B.ByteString
+type Bytes = ByteString
 
 -- | Getting certificates from a client, if any.
 --   Note that the certificates are not sent by a client

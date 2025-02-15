@@ -10,7 +10,9 @@ module Network.TLS.Handshake.Random (
 ) where
 
 import qualified Data.ByteString as B
+
 import Network.TLS.Context.Internal
+import Network.TLS.Imports
 import Network.TLS.Struct
 
 -- | Generate a server random suitable for the version selected by the server
@@ -61,10 +63,10 @@ isDowngraded ver suppVers (ServerRandom sr)
         suffix11 `B.isSuffixOf` sr
     | otherwise = False
 
-suffix12 :: B.ByteString
+suffix12 :: ByteString
 suffix12 = "\x44\x4F\x57\x4E\x47\x52\x44\x01"
 
-suffix11 :: B.ByteString
+suffix11 :: ByteString
 suffix11 = "\x44\x4F\x57\x4E\x47\x52\x44\x00"
 
 clientRandom :: Context -> IO ClientRandom

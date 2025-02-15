@@ -5,8 +5,9 @@ module Network.TLS.Hooks (
     defaultHooks,
 ) where
 
-import qualified Data.ByteString as B
 import Data.Default (Default (def))
+
+import Network.TLS.Imports
 import Network.TLS.Struct (Handshake, Header)
 import Network.TLS.Struct13 (Handshake13)
 import Network.TLS.X509 (CertificateChain)
@@ -17,8 +18,8 @@ import Network.TLS.X509 (CertificateChain)
 data Logging = Logging
     { loggingPacketSent :: String -> IO ()
     , loggingPacketRecv :: String -> IO ()
-    , loggingIOSent :: B.ByteString -> IO ()
-    , loggingIORecv :: Header -> B.ByteString -> IO ()
+    , loggingIOSent :: ByteString -> IO ()
+    , loggingIORecv :: Header -> ByteString -> IO ()
     }
 
 defaultLogging :: Logging

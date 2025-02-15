@@ -87,12 +87,12 @@ forEitherM (x : xs) f = f x >>= doTail
 mapChunks_
     :: Monad m
     => Maybe Int
-    -> (B.ByteString -> m a)
-    -> B.ByteString
+    -> (ByteString -> m a)
+    -> ByteString
     -> m ()
 mapChunks_ len f = mapM_ f . getChunks len
 
-getChunks :: Maybe Int -> B.ByteString -> [B.ByteString]
+getChunks :: Maybe Int -> ByteString -> [ByteString]
 getChunks Nothing = (: [])
 getChunks (Just len) = go
   where

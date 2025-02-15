@@ -72,7 +72,6 @@ module Network.TLS.State (
 
 import Control.Monad.State.Strict
 import Crypto.Random
-import qualified Data.ByteString as B
 import Data.X509 (CertificateChain)
 import Network.TLS.ErrT
 import Network.TLS.Extension
@@ -92,10 +91,10 @@ data TLSState = TLSState
     , -- RFC 5929, Channel Bindings for TLS, "tls-server-end-point"
       stServerCertificateChain :: Maybe CertificateChain
     , stExtensionALPN :: Bool -- RFC 7301
-    , stNegotiatedProtocol :: Maybe B.ByteString -- ALPN protocol
+    , stNegotiatedProtocol :: Maybe ByteString -- ALPN protocol
     , stHandshakeRecordCont12 :: Maybe (GetContinuation (HandshakeType, ByteString))
     , stHandshakeRecordCont13 :: Maybe (GetContinuation (HandshakeType, ByteString))
-    , stClientALPNSuggest :: Maybe [B.ByteString]
+    , stClientALPNSuggest :: Maybe [ByteString]
     , stClientGroupSuggest :: Maybe [Group]
     , stClientEcPointFormatSuggest :: Maybe [EcPointFormat]
     , stClientCertificateChain :: Maybe CertificateChain
@@ -245,16 +244,16 @@ setExtensionALPN b = modify (\st -> st{stExtensionALPN = b})
 getExtensionALPN :: TLSSt Bool
 getExtensionALPN = gets stExtensionALPN
 
-setNegotiatedProtocol :: B.ByteString -> TLSSt ()
+setNegotiatedProtocol :: ByteString -> TLSSt ()
 setNegotiatedProtocol s = modify (\st -> st{stNegotiatedProtocol = Just s})
 
-getNegotiatedProtocol :: TLSSt (Maybe B.ByteString)
+getNegotiatedProtocol :: TLSSt (Maybe ByteString)
 getNegotiatedProtocol = gets stNegotiatedProtocol
 
-setClientALPNSuggest :: [B.ByteString] -> TLSSt ()
+setClientALPNSuggest :: [ByteString] -> TLSSt ()
 setClientALPNSuggest ps = modify (\st -> st{stClientALPNSuggest = Just ps})
 
-getClientALPNSuggest :: TLSSt (Maybe [B.ByteString])
+getClientALPNSuggest :: TLSSt (Maybe [ByteString])
 getClientALPNSuggest = gets stClientALPNSuggest
 
 setClientEcPointFormatSuggest :: [EcPointFormat] -> TLSSt ()

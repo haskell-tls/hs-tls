@@ -139,12 +139,12 @@ hashInit SHA384 = HashContext $ ContextSimple (H.hashInit :: H.Context H.SHA384)
 hashInit SHA512 = HashContext $ ContextSimple (H.hashInit :: H.Context H.SHA512)
 hashInit SHA1_MD5 = HashContextSSL H.hashInit H.hashInit
 
-hashUpdate :: HashContext -> B.ByteString -> HashCtx
+hashUpdate :: HashContext -> ByteString -> HashCtx
 hashUpdate (HashContext (ContextSimple h)) b = HashContext $ ContextSimple (H.hashUpdate h b)
 hashUpdate (HashContextSSL sha1Ctx md5Ctx) b =
     HashContextSSL (H.hashUpdate sha1Ctx b) (H.hashUpdate md5Ctx b)
 
-hashUpdates :: HashContext -> [B.ByteString] -> HashCtx
+hashUpdates :: HashContext -> [ByteString] -> HashCtx
 hashUpdates (HashContext (ContextSimple h)) xs = HashContext $ ContextSimple (H.hashUpdates h xs)
 hashUpdates (HashContextSSL sha1Ctx md5Ctx) xs =
     HashContextSSL (H.hashUpdates sha1Ctx xs) (H.hashUpdates md5Ctx xs)
@@ -154,14 +154,14 @@ hashChunks h xs = hashFinal $ hashUpdates (hashInit h) xs
 
 hashUpdateSSL
     :: HashCtx
-    -> (B.ByteString, B.ByteString)
+    -> (ByteString, ByteString)
     -- ^ (for the md5 context, for the sha1 context)
     -> HashCtx
 hashUpdateSSL (HashContext _) _ = error "internal error: update SSL without a SSL Context"
 hashUpdateSSL (HashContextSSL sha1Ctx md5Ctx) (b1, b2) =
     HashContextSSL (H.hashUpdate sha1Ctx b2) (H.hashUpdate md5Ctx b1)
 
-hashFinal :: HashCtx -> B.ByteString
+hashFinal :: HashCtx -> ByteString
 hashFinal (HashContext (ContextSimple h)) = B.convert $ H.hashFinalize h
 hashFinal (HashContextSSL sha1Ctx md5Ctx) =
     B.concat [B.convert (H.hashFinalize md5Ctx), B.convert (H.hashFinalize sha1Ctx)]
@@ -181,19 +181,19 @@ data ContextSimple
 
 type HashCtx = HashContext
 
-hash :: Hash -> B.ByteString -> B.ByteString
-hash MD5 b = B.convert . (H.hash :: B.ByteString -> H.Digest H.MD5) $ b
-hash SHA1 b = B.convert . (H.hash :: B.ByteString -> H.Digest H.SHA1) $ b
-hash SHA224 b = B.convert . (H.hash :: B.ByteString -> H.Digest H.SHA224) $ b
-hash SHA256 b = B.convert . (H.hash :: B.ByteString -> H.Digest H.SHA256) $ b
-hash SHA384 b = B.convert . (H.hash :: B.ByteString -> H.Digest H.SHA384) $ b
-hash SHA512 b = B.convert . (H.hash :: B.ByteString -> H.Digest H.SHA512) $ b
+hash :: Hash -> ByteString -> ByteString
+hash MD5 b = B.convert . (H.hash :: ByteString -> H.Digest H.MD5) $ b
+hash SHA1 b = B.convert . (H.hash :: ByteString -> H.Digest H.SHA1) $ b
+hash SHA224 b = B.convert . (H.hash :: ByteString -> H.Digest H.SHA224) $ b
+hash SHA256 b = B.convert . (H.hash :: ByteString -> H.Digest H.SHA256) $ b
+hash SHA384 b = B.convert . (H.hash :: ByteString -> H.Digest H.SHA384) $ b
+hash SHA512 b = B.convert . (H.hash :: ByteString -> H.Digest H.SHA512) $ b
 hash SHA1_MD5 b =
     B.concat [B.convert (md5Hash b), B.convert (sha1Hash b)]
   where
-    sha1Hash :: B.ByteString -> H.Digest H.SHA1
+    sha1Hash :: ByteString -> H.Digest H.SHA1
     sha1Hash = H.hash
-    md5Hash :: B.ByteString -> H.Digest H.MD5
+    md5Hash :: ByteString -> H.Digest H.MD5
     md5Hash = H.hash
 
 hashName :: Hash -> String

@@ -144,7 +144,7 @@ bye_ ctx = liftIO $ do
 
 -- | If the ALPN extensions have been used, this will
 -- return get the protocol agreed upon.
-getNegotiatedProtocol :: MonadIO m => Context -> m (Maybe B.ByteString)
+getNegotiatedProtocol :: MonadIO m => Context -> m (Maybe ByteString)
 getNegotiatedProtocol ctx = liftIO $ usingState_ ctx S.getNegotiatedProtocol
 
 -- | If the Server Name Indication extension has been used, return the
@@ -192,7 +192,7 @@ sendData ctx dataToSend = liftIO $ do
 
 -- | Get data out of Data packet, and automatically renegotiate if a Handshake
 -- ClientHello is received.  An empty result means EOF.
-recvData :: MonadIO m => Context -> m B.ByteString
+recvData :: MonadIO m => Context -> m ByteString
 recvData ctx = liftIO $ do
     tls13 <- tls13orLater ctx
     withReadLock ctx $ do
@@ -206,7 +206,7 @@ recvData ctx = liftIO $ do
         -- will impact the validity of the context.
         if tls13 then recvData13 ctx else recvData12 ctx
 
-recvData12 :: Context -> IO B.ByteString
+recvData12 :: Context -> IO ByteString
 recvData12 ctx = do
     pkt <- recvPacket12 ctx
     either (onError terminate12) process pkt
@@ -237,7 +237,7 @@ recvData12 ctx = do
 
     terminate12 = terminateWithWriteLock ctx (sendPacket12 ctx . Alert)
 
-recvData13 :: Context -> IO B.ByteString
+recvData13 :: Context -> IO ByteString
 recvData13 ctx = do
     mdat <- tls13stPendingRecvData <$> getTLS13State ctx
     case mdat of
@@ -464,9 +464,9 @@ tryBye ctx = catchException (bye_ ctx) (\_ -> return ())
 
 onError
     :: Monad m
-    => (TLSError -> AlertLevel -> AlertDescription -> String -> m B.ByteString)
+    => (TLSError -> AlertLevel -> AlertDescription -> String -> m ByteString)
     -> TLSError
-    -> m B.ByteString
+    -> m ByteString
 onError _ Error_EOF =
     -- Not really an error.
     return B.empty

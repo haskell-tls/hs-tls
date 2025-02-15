@@ -28,7 +28,6 @@ module Network.TLS.Parameters (
     Information (..),
 ) where
 
-import qualified Data.ByteString as B
 import Data.Default (Default (def))
 import Network.TLS.Cipher
 import Network.TLS.Compression
@@ -548,7 +547,7 @@ data ClientHooks = ClientHooks
     -- is performed by the library internally.
     --
     -- Default: 'validateDefault'
-    , onSuggestALPN :: IO (Maybe [B.ByteString])
+    , onSuggestALPN :: IO (Maybe [ByteString])
     -- ^ This action is called when the client sends ClientHello
     --   to determine ALPN values such as '["h2", "http/1.1"]'.
     --
@@ -638,7 +637,7 @@ data ServerHooks = ServerHooks
     -- ^ At each new handshake, we call this hook to see if we allow handshake to happens.
     --
     -- Default: returns 'True'
-    , onALPNClientSuggest :: Maybe ([B.ByteString] -> IO B.ByteString)
+    , onALPNClientSuggest :: Maybe ([ByteString] -> IO ByteString)
     -- ^ Allow the server to choose an application layer protocol
     --   suggested from the client through the ALPN
     --   (Application Layer Protocol Negotiation) extensions.
