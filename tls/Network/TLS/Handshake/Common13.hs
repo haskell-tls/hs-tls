@@ -43,6 +43,7 @@ module Network.TLS.Handshake.Common13 (
 
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
+import Data.ByteString.Lazy (fromChunks)
 import Data.UnixTime
 import Foreign.C.Types (CTime (..))
 import Network.TLS.Cipher
@@ -210,7 +211,7 @@ makePSKBinder ctx (BaseSecret sec) usedHash truncLen mch = do
         Nothing -> do
             ch : rs <- usingHState ctx getHandshakeMessagesRev
             return $ trunc ch : rs
-    let hChTruncated = hash usedHash $ B.concat $ reverse rmsgs
+    let hChTruncated = hashChunks usedHash $ reverse rmsgs
         binderKey = deriveSecret usedHash sec "res binder" (hash usedHash "")
     return $ makeVerifyData usedHash binderKey hChTruncated
   where

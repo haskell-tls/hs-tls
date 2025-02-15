@@ -15,6 +15,7 @@ module Network.TLS.Crypto (
 
     -- * Hash
     hash,
+    hashChunks,
     Hash (..),
     hashName,
     hashDigestSize,
@@ -142,6 +143,14 @@ hashUpdate :: HashContext -> B.ByteString -> HashCtx
 hashUpdate (HashContext (ContextSimple h)) b = HashContext $ ContextSimple (H.hashUpdate h b)
 hashUpdate (HashContextSSL sha1Ctx md5Ctx) b =
     HashContextSSL (H.hashUpdate sha1Ctx b) (H.hashUpdate md5Ctx b)
+
+hashUpdates :: HashContext -> [B.ByteString] -> HashCtx
+hashUpdates (HashContext (ContextSimple h)) xs = HashContext $ ContextSimple (H.hashUpdates h xs)
+hashUpdates (HashContextSSL sha1Ctx md5Ctx) xs =
+    HashContextSSL (H.hashUpdates sha1Ctx xs) (H.hashUpdates md5Ctx xs)
+
+hashChunks :: Hash -> [ByteString] -> ByteString
+hashChunks h xs = hashFinal $ hashUpdates (hashInit h) xs
 
 hashUpdateSSL
     :: HashCtx
