@@ -154,6 +154,8 @@ pattern GeneralError                 :: AlertDescription
 pattern GeneralError                  = AlertDescription 117
 pattern NoApplicationProtocol        :: AlertDescription
 pattern NoApplicationProtocol         = AlertDescription 120 -- RFC7301
+pattern EchRequired                  :: AlertDescription
+pattern EchRequired                   = AlertDescription 121 -- draft
 
 instance Show AlertDescription where
     show CloseNotify                  = "CloseNotify"
@@ -190,5 +192,6 @@ instance Show AlertDescription where
     show CertificateRequired          = "CertificateRequired"
     show GeneralError                 = "GeneralError"
     show NoApplicationProtocol        = "NoApplicationProtocol"
+    show EchRequired                  = "EchRequired"
     show (AlertDescription x)         = "AlertDescription " ++ show x
 {- FOURMOLU_ENABLE -}
