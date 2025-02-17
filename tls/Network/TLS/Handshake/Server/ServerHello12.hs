@@ -239,8 +239,6 @@ makeServerHello
     -> IO Handshake
 makeServerHello sparams ctx usedCipher mcred chExts session = do
     resuming <- usingState_ ctx getTLS12SessionResuming
-    srand <-
-        serverRandom ctx TLS12 $ supportedVersions $ serverSupported sparams
     case mcred of
         Just cred -> storePrivInfoServer ctx cred
         _ -> return () -- return a sensible error
@@ -287,6 +285,9 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
             else return Nothing
 
     recodeSizeLimitExt <- processRecordSizeLimit ctx chExts False
+
+    srand <-
+        serverRandom ctx TLS12 $ supportedVersions $ serverSupported sparams
 
     let shExts =
             sharedHelloExtensions (serverShared sparams)

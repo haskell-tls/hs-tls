@@ -61,7 +61,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
         setSession ss
         setTLS13ClientSupportsPHA supportsPHA
     usingHState ctx $ setSupportedGroup $ keyShareEntryGroup clientKeyShare
-    srand <- setServerParameter
+    setServerParameter
     -- ALPN is used in choosePSK
     alpnExt <- applicationProtocol ctx chExtensions sparams
     (psk, binderInfo, is0RTTvalid) <- choosePSK
@@ -96,7 +96,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
     (ecdhe, keyShare) <- makeServerKeyShare ctx clientKeyShare
     ensureRecvComplete ctx
     (clientHandshakeSecret, handSecret) <- runPacketFlight ctx $ do
-        sendServerHello keyShare srand extensions
+        sendServerHello keyShare extensions
         sendChangeCipherSpec13 ctx
         ----------------------------------------------------------------
         handKey <- liftIO $ calculateHandshakeSecret ctx choice earlySecret ecdhe
@@ -138,11 +138,8 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
     choice = makeCipherChoice TLS13 usedCipher
 
     setServerParameter = do
-        srand <-
-            serverRandom ctx TLS13 $ supportedVersions $ serverSupported sparams
         usingState_ ctx $ setVersion TLS13
         failOnEitherError $ usingHState ctx $ setHelloParameters13 usedCipher
-        return srand
 
     supportsPHA =
         lookupAndDecode
@@ -239,7 +236,12 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
                     mcs -> return mcs
             mcs -> return mcs
 
-    sendServerHello keyShare srand extensions = do
+    sendServerHello keyShare extensions = do
+        srand <-
+            liftIO $
+                serverRandom ctx TLS13 $
+                    supportedVersions $
+                        serverSupported sparams
         let keyShareExt = toExtensionRaw $ KeyShareServerHello keyShare
             versionExt = toExtensionRaw $ SupportedVersionsServerHello TLS13
             extensions' = keyShareExt : versionExt : extensions
