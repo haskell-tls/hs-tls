@@ -62,10 +62,10 @@ isDowngraded ver suppVers (ServerRandom sr)
     | otherwise = False
 
 suffix12 :: B.ByteString
-suffix12 = B.pack [0x44, 0x4F, 0x57, 0x4E, 0x47, 0x52, 0x44, 0x01]
+suffix12 = "\x44\x4F\x57\x4E\x47\x52\x44\x01"
 
 suffix11 :: B.ByteString
-suffix11 = B.pack [0x44, 0x4F, 0x57, 0x4E, 0x47, 0x52, 0x44, 0x00]
+suffix11 = "\x44\x4F\x57\x4E\x47\x52\x44\x00"
 
 clientRandom :: Context -> IO ClientRandom
 clientRandom ctx = ClientRandom <$> getStateRNG ctx 32
