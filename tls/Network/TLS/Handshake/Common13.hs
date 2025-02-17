@@ -43,7 +43,6 @@ module Network.TLS.Handshake.Common13 (
 
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
-import Data.ByteString.Lazy (fromChunks)
 import Data.UnixTime
 import Foreign.C.Types (CTime (..))
 import Network.TLS.Cipher
