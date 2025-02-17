@@ -91,8 +91,8 @@ findKeyShare ks ggs = go ggs
         _ -> throwCore $ Error_Protocol "duplicated key_share" IllegalParameter
     grpEq g ent = g == keyShareEntryGroup ent
 
-sendHRR :: Context -> (Cipher, a, b) -> CH -> IO ()
-sendHRR ctx (usedCipher, _, _) CH{..} = do
+sendHRR :: Context -> (Cipher, Hash, c) -> CH -> Bool -> IO ()
+sendHRR ctx (usedCipher, usedHash, _) CH{..} isEch = do
     twice <- usingState_ ctx getTLS13HRR
     when twice $
         throwCore $
@@ -112,13 +112,33 @@ sendHRR ctx (usedCipher, _, _) CH{..} = do
             throwCore $
                 Error_Protocol "no group in common with the client for HRR" HandshakeFailure
         g : _ -> do
-            let keyShareExt = toExtensionRaw $ KeyShareHRR g
-                versionExt = toExtensionRaw $ SupportedVersionsServerHello TLS13
-                extensions = [keyShareExt, versionExt]
-                hrr = ServerHello13 hrrRandom chSession (CipherId $ cipherID usedCipher) extensions
+            hrr <- makeHRR ctx usedCipher usedHash chSession g isEch
             usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
             runPacketFlight ctx $ do
                 loadPacket13 ctx $ Handshake13 [hrr]
                 sendChangeCipherSpec13 ctx
   where
     serverGroups = supportedGroups (ctxSupported ctx)
+
+makeHRR
+    :: Context -> Cipher -> Hash -> Session -> Group -> Bool -> IO Handshake13
+makeHRR _ usedCipher _ chSession g False = return hrr
+  where
+    keyShareExt = toExtensionRaw $ KeyShareHRR g
+    versionExt = toExtensionRaw $ SupportedVersionsServerHello TLS13
+    extensions = [keyShareExt, versionExt]
+    cipherId = CipherId $ cipherID usedCipher
+    hrr = ServerHello13 hrrRandom chSession cipherId extensions
+makeHRR ctx usedCipher usedHash chSession g True = do
+    suffix <- compulteComfirm ctx usedHash hrr "hrr ech accept confirmation"
+    let echExt' = toExtensionRaw $ ECHHelloRetryRequest suffix
+        extensions' = [keyShareExt, versionExt, echExt']
+        hrr' = ServerHello13 hrrRandom chSession cipherId extensions'
+    return hrr'
+  where
+    keyShareExt = toExtensionRaw $ KeyShareHRR g
+    versionExt = toExtensionRaw $ SupportedVersionsServerHello TLS13
+    echExt = toExtensionRaw $ ECHHelloRetryRequest "\x00\x00\x00\x00\x00\x00\x00\x00"
+    extensions = [keyShareExt, versionExt, echExt]
+    cipherId = CipherId $ cipherID usedCipher
+    hrr = ServerHello13 hrrRandom chSession cipherId extensions

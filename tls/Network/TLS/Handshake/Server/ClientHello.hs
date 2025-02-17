@@ -111,7 +111,7 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
                     MsgTClientHello
                     chExtensions
                     (return Nothing)
-                    (decryptECH sparams clientHello)
+                    (decryptECH sparams ctx clientHello)
             else return Nothing
     case mClientHello' of
         Just clientHello'@(ClientHello _ cran' _ ch') -> do
@@ -163,31 +163,24 @@ findHighestVersionFrom13 clientVersions serverVersions = case svs `intersect` cv
     cvs = sortOn Down $ filter (>= TLS12) clientVersions
 
 decryptECH
-    :: ServerParams -> Handshake -> ECHClientHello -> IO (Maybe Handshake)
-decryptECH _ _ ECHInner = return Nothing
-decryptECH ServerParams{..} clientHello@(ClientHello _ _ _ outerCH) ECHOuter{..} = case (mconfig, mskR) of
-    (Just config, Just skR') -> do
-        let kemid = KEM_ID $ kem_id $ key_config $ contents config
-            skR = EncodedSecretKey skR'
-        encodedConfig <- encodeECHConfig config
-        let info = "tls ech\x00" <> encodedConfig
-        ctxR <- setupBaseR kemid kdfid aeadid skR Nothing echEnc info
-        let nenc = nEnc kemid
-        let aad = encodeHandshake' $ fill0ClientHello nenc clientHello
-        plaintext <- open ctxR aad echPayload
-        case decodeClientHello' plaintext of
-            Right (ClientHello v r c innerCH) -> do
-                case expandClientHello innerCH outerCH of
-                    Nothing -> return Nothing
-                    Just innerCH' -> return $ Just $ ClientHello v r c innerCH'
-            _ -> return Nothing
-    _ -> return Nothing
-  where
-    eqCfgId cnf = config_id (key_config (contents cnf)) == echConfigId
-    mconfig = find eqCfgId $ sharedECHConfig serverShared
-    mskR = lookup echConfigId serverECHKey
-    (kdfid, aeadid) = echCipherSuite
-decryptECH _ _ _ = return Nothing
+    :: ServerParams -> Context -> Handshake -> ECHClientHello -> IO (Maybe Handshake)
+decryptECH _ _ _ ECHInner = return Nothing
+decryptECH sparams ctx clientHello@(ClientHello _ _ _ outerCH) ech@ECHOuter{..} = do
+    mfunc <- getHPKE sparams ctx ech
+    case mfunc of
+        Nothing -> return Nothing
+        Just (func, nenc) -> do
+            let aad = encodeHandshake' $ fill0ClientHello nenc clientHello
+            plaintext <- func aad echPayload
+            case decodeClientHello' plaintext of
+                Right (ClientHello v r c innerCH) -> do
+                    case expandClientHello innerCH outerCH of
+                        Nothing -> return Nothing
+                        Just innerCH' -> do
+                            setTLS13HPKE ctx func nenc
+                            return $ Just $ ClientHello v r c innerCH'
+                _ -> return Nothing
+decryptECH _ _ _ _ = return Nothing
 
 fill0ClientHello :: Int -> Handshake -> Handshake
 fill0ClientHello nenc (ClientHello ver rnd cs ch) =
@@ -246,3 +239,30 @@ expandClientHello inner outer =
     chk [] = Just []
     chk (ExtensionRaw EID_EchOuterExtensions _ : _) = Nothing
     chk (i : is) = (i :) <$> chk is
+
+getHPKE
+    :: ServerParams
+    -> Context
+    -> ECHClientHello
+    -> IO (Maybe (HPKEF, Int))
+getHPKE ServerParams{..} ctx ECHOuter{..} = do
+    mfunc <- getTLS13HPKE ctx
+    case mfunc of
+        Nothing -> do
+            let mconfig = find eqCfgId $ sharedECHConfig serverShared
+                mskR = lookup echConfigId serverECHKey
+            case (mconfig, mskR) of
+                (Just config, Just skR') -> do
+                    let kemid = KEM_ID $ kem_id $ key_config $ contents config
+                        skR = EncodedSecretKey skR'
+                    encodedConfig <- encodeECHConfig config
+                    let info = "tls ech\x00" <> encodedConfig
+                        (kdfid, aeadid) = echCipherSuite
+                    ctxR <- setupBaseR kemid kdfid aeadid skR Nothing echEnc info
+                    let nenc = nEnc kemid
+                    return $ Just (open ctxR, nenc)
+                _ -> return Nothing
+        _ -> return mfunc
+  where
+    eqCfgId cnf = config_id (key_config (contents cnf)) == echConfigId
+getHPKE _ _ _ = return Nothing

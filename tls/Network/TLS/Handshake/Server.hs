@@ -56,7 +56,7 @@ handshake sparams ctx clientHello = do
                 processClientHello13 sparams ctx ch
             case mClientKeyShare of
                 Nothing -> do
-                    sendHRR ctx r0 ch
+                    sendHRR ctx r0 ch isEch
                     -- Don't reset ctxEstablished since 0-RTT data
                     -- would be comming, which should be ignored.
                     handshakeServer sparams ctx

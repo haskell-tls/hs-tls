@@ -24,8 +24,6 @@ import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.IO
 import Network.TLS.Imports
-import Network.TLS.KeySchedule
-import Network.TLS.Packet13
 import Network.TLS.Parameters
 import Network.TLS.Session
 import Network.TLS.State
@@ -245,20 +243,13 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
             extensions' = keyShareExt : versionExt : extensions
         if isEch
             then do
-                srand' <- liftIO $ serverRandomECH ctx
-                let sh' = ServerHello13 srand' chSession (CipherId (cipherID usedCipher)) extensions'
-                echConf <- transcriptHashWith ctx $ encodeHandshake13 sh'
-                ClientRandom cr <- liftIO $ usingHState ctx getClientRandom
-                let bs =
-                        hkdfExpandLabel
-                            usedHash
-                            (hkdfExtract usedHash "" cr)
-                            "ech accept confirmation"
-                            echConf
-                            8
-                    srand = replaceServerRandomECH srand' bs
-                    sh = ServerHello13 srand chSession (CipherId (cipherID usedCipher)) extensions'
-                loadPacket13 ctx $ Handshake13 [sh]
+                srand <- liftIO $ serverRandomECH ctx
+                let cipherId = CipherId (cipherID usedCipher)
+                    sh = ServerHello13 srand chSession cipherId extensions'
+                suffix <- compulteComfirm ctx usedHash sh "ech accept confirmation"
+                let srand' = replaceServerRandomECH srand suffix
+                    sh' = ServerHello13 srand' chSession cipherId extensions'
+                loadPacket13 ctx $ Handshake13 [sh']
             else do
                 srand <-
                     liftIO $

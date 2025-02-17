@@ -369,7 +369,7 @@ instance Show ExtensionRaw where
     show (ExtensionRaw eid@EID_SignatureAlgorithmsCert bs) = showExtensionRaw eid bs decodeSignatureAlgorithmsCert
     show (ExtensionRaw eid@EID_KeyShare bs) = showExtensionRaw eid bs decodeKeyShare
     show (ExtensionRaw eid@EID_EchOuterExtensions bs) = showExtensionRaw eid bs decodeEchOuterExtensions
-    show (ExtensionRaw eid@EID_EncryptedClientHello bs) = showExtensionRaw eid bs decodeECHClientHello
+    show (ExtensionRaw eid@EID_EncryptedClientHello bs) = showExtensionRaw eid bs decodeECH
     show (ExtensionRaw eid@EID_SecureRenegotiation bs) = show eid ++ " " ++ showBytesHex bs
     show (ExtensionRaw eid bs) = "ExtensionRaw " ++ show eid ++ " " ++ showBytesHex bs
 
@@ -1055,6 +1055,7 @@ data ECHClientHello
         , echEnc :: EncodedPublicKey
         , echPayload :: ByteString
         }
+    | ECHHelloRetryRequest ByteString
     deriving (Eq)
 
 instance Show ECHClientHello where
@@ -1073,6 +1074,7 @@ instance Show ECHClientHello where
             ++ "}"
       where
         EncodedPublicKey enc = echEnc
+    show (ECHHelloRetryRequest cnfm) = "ECHHelloRetryRequest " ++ showBytesHex cnfm
 
 instance Extension ECHClientHello where
     extensionID _ = EID_EncryptedClientHello
@@ -1086,8 +1088,13 @@ instance Extension ECHClientHello where
         let EncodedPublicKey enc = echEnc
         putOpaque16 enc
         putOpaque16 echPayload
+    extensionEncode (ECHHelloRetryRequest cnfm) = runPut $ putBytes cnfm
     extensionDecode MsgTClientHello = decodeECHClientHello
+    extensionDecode MsgTHelloRetryRequest = decodeECHHelloRetryRequest
     extensionDecode _ = error "extensionDecode: ECHClientHello"
+
+decodeECH :: ByteString -> Maybe ECHClientHello
+decodeECH bs = decodeECHClientHello bs <|> decodeECHHelloRetryRequest bs
 
 decodeECHClientHello :: ByteString -> Maybe ECHClientHello
 decodeECHClientHello = runGetMaybe $ do
@@ -1107,6 +1114,10 @@ decodeECHClientHello = runGetMaybe $ do
                     , echEnc = enc
                     , echPayload = payload
                     }
+
+decodeECHHelloRetryRequest :: ByteString -> Maybe ECHClientHello
+decodeECHHelloRetryRequest = runGetMaybe $ do
+    ECHHelloRetryRequest <$> getBytes 8
 
 ------------------------------------------------------------
 

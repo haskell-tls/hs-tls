@@ -39,6 +39,7 @@ module Network.TLS.Handshake.Common13 (
     derivePSK,
     checkKeyShareKeyLength,
     setRTT,
+    compulteComfirm,
 ) where
 
 import qualified Data.ByteArray as BA
@@ -62,6 +63,7 @@ import Network.TLS.IO
 import Network.TLS.Imports
 import Network.TLS.KeySchedule
 import Network.TLS.MAC
+import Network.TLS.Packet13
 import Network.TLS.Parameters
 import Network.TLS.State
 import Network.TLS.Struct
@@ -615,3 +617,11 @@ setRTT ctx chSentTime = do
     let rtt' = shRecvTime - chSentTime
         rtt = if rtt' == 0 then 10 else rtt'
     modifyTLS13State ctx $ \st -> st{tls13stRTT = rtt}
+
+compulteComfirm
+    :: MonadIO m => Context -> Hash -> Handshake13 -> ByteString -> m ByteString
+compulteComfirm ctx usedHash hs label = do
+    echConf <- transcriptHashWith ctx $ encodeHandshake13 hs
+    ClientRandom cr <- liftIO $ usingHState ctx getClientRandom
+    let prk = hkdfExtract usedHash "" cr
+    return $ hkdfExpandLabel usedHash prk label echConf 8

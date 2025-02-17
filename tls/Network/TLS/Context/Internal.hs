@@ -79,6 +79,11 @@ module Network.TLS.Context.Internal (
     getPeerRecordLimit,
     checkPeerRecordLimit,
     newRecordLimitRef,
+
+    -- * ECH
+    HPKEF,
+    getTLS13HPKE,
+    setTLS13HPKE,
 ) where
 
 import Control.Concurrent.MVar
@@ -149,7 +154,10 @@ data Context
     -- ^ maximum size of plaintext fragments, val + 1 is used for TLS 1.3
     , ctxPeerRecordLimit :: IORef RecordLimit
     -- ^ maximum size of plaintext fragments, val + 1 is used for TLS 1.3
+    , ctxHPKE :: IORef (Maybe (HPKEF, Int))
     }
+
+type HPKEF = ByteString -> ByteString -> IO ByteString
 
 data RecordLimit
     = NoRecordLimit -- for QUIC
@@ -508,3 +516,11 @@ checkPeerRecordLimit ctx = chk <$> readIORef (ctxPeerRecordLimit ctx)
 newRecordLimitRef :: Maybe Int -> IO (IORef RecordLimit)
 newRecordLimitRef Nothing = newIORef NoRecordLimit
 newRecordLimitRef (Just n) = newIORef $ RecordLimit n Nothing
+
+--------------------------------
+
+setTLS13HPKE :: Context -> HPKEF -> Int -> IO ()
+setTLS13HPKE ctx func nenc = writeIORef (ctxHPKE ctx) $ Just (func, nenc)
+
+getTLS13HPKE :: Context -> IO (Maybe (HPKEF, Int))
+getTLS13HPKE ctx = readIORef $ ctxHPKE ctx
