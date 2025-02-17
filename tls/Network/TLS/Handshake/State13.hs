@@ -17,6 +17,7 @@ module Network.TLS.Handshake.State13 (
     clearRxRecordState,
     setHelloParameters13,
     transcriptHash,
+    transcriptHashWith,
     wrapAsMessageHash13,
     PendingRecvAction (..),
     setPendingRecvActions,
@@ -189,6 +190,13 @@ transcriptHash ctx = do
     hst <- fromJust <$> getHState ctx
     case hstHandshakeDigest hst of
         HandshakeDigestContext hashCtx -> return $ hashFinal hashCtx
+        HandshakeMessages _ -> error "un-initialized handshake digest"
+
+transcriptHashWith :: MonadIO m => Context -> ByteString -> m ByteString
+transcriptHashWith ctx bs = do
+    hst <- fromJust <$> getHState ctx
+    case hstHandshakeDigest hst of
+        HandshakeDigestContext hashCtx -> return $ hashFinal $ hashUpdate hashCtx bs
         HandshakeMessages _ -> error "un-initialized handshake digest"
 
 setPendingRecvActions :: Context -> [PendingRecvAction] -> IO ()

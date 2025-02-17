@@ -47,7 +47,7 @@ handshakeServerWith = handshake
 -- On any error, a HandshakeFailed exception is raised.
 handshake :: ServerParams -> Context -> Handshake -> IO ()
 handshake sparams ctx clientHello = do
-    (chosenVersion, ch) <- processClientHello sparams ctx clientHello
+    (chosenVersion, ch, isEch) <- processClientHello sparams ctx clientHello
     if chosenVersion == TLS13
         then do
             -- fixme: we should check if the client random is the same as
@@ -62,7 +62,7 @@ handshake sparams ctx clientHello = do
                     handshakeServer sparams ctx
                 Just cliKeyShare -> do
                     r1 <-
-                        sendServerHello13 sparams ctx cliKeyShare r0 ch
+                        sendServerHello13 sparams ctx cliKeyShare r0 ch isEch
                     recvClientSecondFlight13 sparams ctx r1 ch
         else do
             r <-

@@ -24,6 +24,8 @@ import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.IO
 import Network.TLS.Imports
+import Network.TLS.KeySchedule
+import Network.TLS.Packet13
 import Network.TLS.Parameters
 import Network.TLS.Session
 import Network.TLS.State
@@ -38,13 +40,14 @@ sendServerHello13
     -> KeyShareEntry
     -> (Cipher, Hash, Bool)
     -> CH
+    -> Bool
     -> IO
         ( SecretTriple ApplicationSecret
         , ClientTrafficSecret HandshakeSecret
         , Bool
         , Bool
         )
-sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..} = do
+sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..} isEch = do
     -- parse CompressCertificate to check if it is broken here
     let zlib =
             lookupAndDecode
@@ -237,16 +240,33 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
             mcs -> return mcs
 
     sendServerHello keyShare extensions = do
-        srand <-
-            liftIO $
-                serverRandom ctx TLS13 $
-                    supportedVersions $
-                        serverSupported sparams
         let keyShareExt = toExtensionRaw $ KeyShareServerHello keyShare
             versionExt = toExtensionRaw $ SupportedVersionsServerHello TLS13
             extensions' = keyShareExt : versionExt : extensions
-            helo = ServerHello13 srand chSession (CipherId (cipherID usedCipher)) extensions'
-        loadPacket13 ctx $ Handshake13 [helo]
+        if isEch
+            then do
+                srand' <- liftIO $ serverRandomECH ctx
+                let sh' = ServerHello13 srand' chSession (CipherId (cipherID usedCipher)) extensions'
+                echConf <- transcriptHashWith ctx $ encodeHandshake13 sh'
+                ClientRandom cr <- liftIO $ usingHState ctx getClientRandom
+                let bs =
+                        hkdfExpandLabel
+                            usedHash
+                            (hkdfExtract usedHash "" cr)
+                            "ech accept confirmation"
+                            echConf
+                            8
+                    srand = replaceServerRandomECH srand' bs
+                    sh = ServerHello13 srand chSession (CipherId (cipherID usedCipher)) extensions'
+                loadPacket13 ctx $ Handshake13 [sh]
+            else do
+                srand <-
+                    liftIO $
+                        serverRandom ctx TLS13 $
+                            supportedVersions $
+                                serverSupported sparams
+                let sh = ServerHello13 srand chSession (CipherId (cipherID usedCipher)) extensions'
+                loadPacket13 ctx $ Handshake13 [sh]
 
     sendCertAndVerify cred@(certChain, _) hashSig zlib = do
         storePrivInfoServer ctx cred

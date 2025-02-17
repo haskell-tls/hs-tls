@@ -1,7 +1,10 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternGuards #-}
 
 module Network.TLS.Handshake.Random (
     serverRandom,
+    serverRandomECH,
+    replaceServerRandomECH,
     clientRandom,
     isDowngraded,
 ) where
@@ -33,6 +36,17 @@ serverRandom ctx chosenVer suppVers
     genServRand suff = do
         pref <- getStateRNG ctx 24
         return (pref `B.append` suff)
+
+serverRandomECH :: Context -> IO ServerRandom
+serverRandomECH ctx = do
+    rnd <- getStateRNG ctx 24
+    let zeros = "\x00\x00\x00\x00\x00\x00\x00\x00"
+    return $ ServerRandom (rnd <> zeros)
+
+replaceServerRandomECH :: ServerRandom -> B.ByteString -> ServerRandom
+replaceServerRandomECH (ServerRandom rnd) bs = ServerRandom (rnd' <> bs)
+  where
+    rnd' = B.take 24 rnd
 
 -- | Test if the negotiated version was artificially downgraded (that is, for
 -- other reason than the versions supported by the client).

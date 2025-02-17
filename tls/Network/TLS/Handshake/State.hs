@@ -27,6 +27,7 @@ module Network.TLS.Handshake.State (
     getGroupPrivate,
 
     -- * cert accessors
+    getClientRandom,
     setClientCertSent,
     getClientCertSent,
     setCertReqSent,
@@ -360,6 +361,9 @@ getCertReqSent = gets hstCertReqSent
 
 setClientCertSent :: Bool -> HandshakeM ()
 setClientCertSent b = modify (\hst -> hst{hstClientCertSent = b})
+
+getClientRandom :: HandshakeM ClientRandom
+getClientRandom = gets hstClientRandom
 
 getClientCertSent :: HandshakeM Bool
 getClientCertSent = gets hstClientCertSent
