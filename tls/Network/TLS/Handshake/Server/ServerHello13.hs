@@ -38,13 +38,14 @@ sendServerHello13
     -> KeyShareEntry
     -> (Cipher, Hash, Bool)
     -> CH
+    -> Bool
     -> IO
         ( SecretTriple ApplicationSecret
         , ClientTrafficSecret HandshakeSecret
         , Bool
         , Bool
         )
-sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..} = do
+sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..} isEch = do
     -- parse CompressCertificate to check if it is broken here
     let zlib =
             lookupAndDecode
@@ -237,16 +238,26 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
             mcs -> return mcs
 
     sendServerHello keyShare extensions = do
-        srand <-
-            liftIO $
-                serverRandom ctx TLS13 $
-                    supportedVersions $
-                        serverSupported sparams
         let keyShareExt = toExtensionRaw $ KeyShareServerHello keyShare
             versionExt = toExtensionRaw $ SupportedVersionsServerHello TLS13
             extensions' = keyShareExt : versionExt : extensions
-            helo = ServerHello13 srand chSession (CipherId (cipherID usedCipher)) extensions'
-        loadPacket13 ctx $ Handshake13 [helo]
+        if isEch
+            then do
+                srand <- liftIO $ serverRandomECH ctx
+                let cipherId = CipherId (cipherID usedCipher)
+                    sh = ServerHello13 srand chSession cipherId extensions'
+                suffix <- compulteComfirm ctx usedHash sh "ech accept confirmation"
+                let srand' = replaceServerRandomECH srand suffix
+                    sh' = ServerHello13 srand' chSession cipherId extensions'
+                loadPacket13 ctx $ Handshake13 [sh']
+            else do
+                srand <-
+                    liftIO $
+                        serverRandom ctx TLS13 $
+                            supportedVersions $
+                                serverSupported sparams
+                let sh = ServerHello13 srand chSession (CipherId (cipherID usedCipher)) extensions'
+                loadPacket13 ctx $ Handshake13 [sh]
 
     sendCertAndVerify cred@(certChain, _) hashSig zlib = do
         storePrivInfoServer ctx cred

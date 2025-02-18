@@ -11,6 +11,7 @@ import qualified Data.Map.Strict as M
 import Data.X509.CertificateStore
 import Network.Run.TCP
 import Network.TLS
+import Network.TLS.ECH.Config
 import Network.TLS.Internal
 import System.Console.GetOpt
 import System.Environment (getArgs)
@@ -31,6 +32,8 @@ data Options = Options
     , optGroups :: [Group]
     , optCertFile :: FilePath
     , optKeyFile :: FilePath
+    , optECHConfigFile :: Maybe FilePath
+    , optECHKeyFile :: Maybe FilePath
     }
     deriving (Show)
 
@@ -46,6 +49,8 @@ defaultOptions =
           optGroups = FFDHE8192 `delete` supportedGroups defaultSupported
         , optCertFile = "servercert.pem"
         , optKeyFile = "serverkey.pem"
+        , optECHConfigFile = Nothing
+        , optECHKeyFile = Nothing
         }
 
 options :: [OptDescr (Options -> Options)]
@@ -90,6 +95,16 @@ options =
         ["trusted-anchor"]
         (ReqArg (\fl o -> o{optTrustedAnchor = Just fl}) "<file>")
         "trusted anchor file"
+    , Option
+        []
+        ["ech-config"]
+        (ReqArg (\fl o -> o{optECHConfigFile = Just fl}) "<file>")
+        "ECH config file"
+    , Option
+        []
+        ["ech-key"]
+        (ReqArg (\fl o -> o{optECHKeyFile = Just fl}) "<file>")
+        "ECH key file"
     ]
 
 usage :: String
@@ -126,11 +141,21 @@ main = do
             Just file -> readCertificateStore file
         when (isNothing mstore') $ showUsageAndExit "cannot set trusted anchor"
         return mstore'
+    ech <- case optECHKeyFile of
+        Nothing -> case optECHConfigFile of
+            Nothing -> return ([], [])
+            Just _ -> showUsageAndExit "must specify ECH key file, too"
+        Just ekeyf -> case optECHConfigFile of
+            Nothing -> showUsageAndExit "must specify ECH config file, too"
+            Just ecnff -> do
+                ekey <- loadECHSecretKeys [ekeyf]
+                ecnf <- loadECHConfigList ecnff
+                return (ekey, ecnf)
     let keyLog = getLogger optKeyLogFile
         creds = Credentials [cred]
     makeCipherShowPretty
     runTCPServer (Just host) port $ \sock -> do
-        let sparams = getServerParams creds optGroups smgr keyLog optClientAuth mstore
+        let sparams = getServerParams creds optGroups smgr keyLog optClientAuth mstore ech
         ctx <- contextNew sock sparams
         when optDebugLog $
             contextHookSetLogging
@@ -153,8 +178,9 @@ getServerParams
     -> (String -> IO ())
     -> Bool
     -> Maybe CertificateStore
+    -> ([(Word8, ByteString)], ECHConfigList)
     -> ServerParams
-getServerParams creds groups sm keyLog clientAuth mstore =
+getServerParams creds groups sm keyLog clientAuth mstore (ekey, ecnf) =
     defaultParamsServer
         { serverSupported = supported
         , serverShared = shared
@@ -162,6 +188,7 @@ getServerParams creds groups sm keyLog clientAuth mstore =
         , serverDebug = debug
         , serverEarlyDataSize = 2048
         , serverWantClientCert = clientAuth
+        , serverECHKey = ekey
         }
   where
     shared =
@@ -171,6 +198,7 @@ getServerParams creds groups sm keyLog clientAuth mstore =
             , sharedCAStore = case mstore of
                 Just store -> store
                 Nothing -> sharedCAStore defaultShared
+            , sharedECHConfig = ecnf
             }
     supported =
         defaultSupported

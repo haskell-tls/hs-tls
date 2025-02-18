@@ -21,7 +21,9 @@ module Network.TLS.Packet (
     decodeHandshakeRecord,
     decodeHandshake,
     encodeHandshake,
+    encodeHandshake',
     encodeCertificate,
+    decodeClientHello',
 
     -- * marshall functions for change cipher spec message
     decodeChangeCipherSpec,
@@ -162,7 +164,7 @@ decodeHandshake
     :: CurrentParams -> HandshakeType -> ByteString -> Either TLSError Handshake
 decodeHandshake cp ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
     HandshakeType_HelloRequest     -> decodeHelloRequest
-    HandshakeType_ClientHello      -> decodeClientHello
+    HandshakeType_ClientHello      -> decodeClientHello False
     HandshakeType_ServerHello      -> decodeServerHello
     HandshakeType_NewSessionTicket -> decodeNewSessionTicket
     HandshakeType_Certificate      -> decodeCertificate
@@ -178,8 +180,11 @@ decodeHandshake cp ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
 decodeHelloRequest :: Get Handshake
 decodeHelloRequest = return HelloRequest
 
-decodeClientHello :: Get Handshake
-decodeClientHello = do
+decodeClientHello' :: ByteString -> Either TLSError Handshake
+decodeClientHello' = runGetErr "decodeClientHello'" $ decodeClientHello True
+
+decodeClientHello :: Bool -> Get Handshake
+decodeClientHello inner = do
     ver <- getBinaryVersion
     random <- getClientRandom32
     session <- getSession
@@ -191,9 +196,18 @@ decodeClientHello = do
             then getWord16 >>= getExtensions . fromIntegral
             else return []
     r1 <- remaining
-    when (r1 /= 0) $ fail "Client hello"
+    if inner
+        then
+            checkAndSkip r1
+        else when (r1 /= 0) $ fail "Client hello has garbage"
     let ch = CH session ciphers exts
     return $ ClientHello ver random compressions ch
+  where
+    checkAndSkip 0 = return ()
+    checkAndSkip r = do
+        zero <- getWord8
+        when (zero /= 0) $ fail "Inner client hello has garbage"
+        checkAndSkip (r - 1)
 
 decodeServerHello :: Get Handshake
 decodeServerHello = do

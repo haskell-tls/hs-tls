@@ -177,6 +177,7 @@ contextNew backend params = liftIO $ do
     st13ref <- newIORef defaultTLS13State
     mylimref <- newRecordLimitRef $ Just defaultRecordSizeLimit
     peerlimref <- newRecordLimitRef $ Just defaultRecordSizeLimit
+    hpkeref <- newIORef Nothing
     let roleParams =
             RoleParams
                 { doHandshake_ = doHandshake params
@@ -211,6 +212,7 @@ contextNew backend params = liftIO $ do
                 , ctxHandshakeSync = HandshakeSync syncNoOp syncNoOp
                 , ctxQUICMode = False
                 , ctxTLS13State = st13ref
+                , ctxHPKE = hpkeref
                 }
 
         syncNoOp _ _ = return ()

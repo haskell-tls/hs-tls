@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards #-}
 
 -- | Basic extensions are defined in RFC 6066
 module Network.TLS.Extension (
@@ -44,6 +45,8 @@ module Network.TLS.Extension (
         EID_SignatureAlgorithmsCert,
         EID_KeyShare,
         EID_QuicTransportParameters,
+        EID_EchOuterExtensions,
+        EID_EncryptedClientHello,
         EID_SecureRenegotiation
     ),
     definedExtensions,
@@ -100,13 +103,17 @@ module Network.TLS.Extension (
     EarlyDataIndication (..),
     Cookie (..),
     CertificateAuthorities (..),
+    EchOuterExtensions (..),
+    ECHClientHello (..),
 ) where
 
 import qualified Control.Exception as E
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import Data.X509 (DistinguishedName)
+import Network.TLS.ECH.Config
 
+import Crypto.HPKE
 import Network.TLS.Crypto.Types
 import Network.TLS.Error
 import Network.TLS.HashAndSignature
@@ -206,6 +213,10 @@ pattern EID_KeyShare                            :: ExtensionID -- RFC8446
 pattern EID_KeyShare                             = ExtensionID 0x33
 pattern EID_QuicTransportParameters             :: ExtensionID -- RFC9001
 pattern EID_QuicTransportParameters              = ExtensionID 0x39
+pattern EID_EchOuterExtensions                  :: ExtensionID -- draft
+pattern EID_EchOuterExtensions                   = ExtensionID 0xfd00
+pattern EID_EncryptedClientHello                :: ExtensionID -- draft
+pattern EID_EncryptedClientHello                 = ExtensionID 0xfe0d
 pattern EID_SecureRenegotiation                 :: ExtensionID -- RFC5746
 pattern EID_SecureRenegotiation                  = ExtensionID 0xff01
 
@@ -248,6 +259,8 @@ instance Show ExtensionID where
     show EID_SignatureAlgorithmsCert = "SignatureAlgorithmsCert"
     show EID_KeyShare                = "KeyShare"
     show EID_QuicTransportParameters = "QuicTransportParameters"
+    show EID_EchOuterExtensions      = "EchOuterExtensions"
+    show EID_EncryptedClientHello    = "EncryptedClientHello"
     show EID_SecureRenegotiation     = "SecureRenegotiation"
     show (ExtensionID x)             = "ExtensionID " ++ show x
 {- FOURMOLU_ENABLE -}
@@ -294,6 +307,8 @@ definedExtensions =
     , EID_SignatureAlgorithmsCert
     , EID_KeyShare
     , EID_QuicTransportParameters
+    , EID_EchOuterExtensions
+    , EID_EncryptedClientHello
     , EID_SecureRenegotiation
     ]
 
@@ -320,6 +335,8 @@ supportedExtensions =
     , EID_SignatureAlgorithmsCert             -- 0x32
     , EID_KeyShare                            -- 0x33
     , EID_QuicTransportParameters             -- 0x39
+    , EID_EchOuterExtensions                  -- 0xfd00
+    , EID_EncryptedClientHello                -- 0xfe0d
     , EID_SecureRenegotiation                 -- 0xff01
     ]
 {- FOURMOLU_ENABLE -}
@@ -351,6 +368,8 @@ instance Show ExtensionRaw where
     show (ExtensionRaw eid@EID_PostHandshakeAuth _) = show eid
     show (ExtensionRaw eid@EID_SignatureAlgorithmsCert bs) = showExtensionRaw eid bs decodeSignatureAlgorithmsCert
     show (ExtensionRaw eid@EID_KeyShare bs) = showExtensionRaw eid bs decodeKeyShare
+    show (ExtensionRaw eid@EID_EchOuterExtensions bs) = showExtensionRaw eid bs decodeEchOuterExtensions
+    show (ExtensionRaw eid@EID_EncryptedClientHello bs) = showExtensionRaw eid bs decodeECH
     show (ExtensionRaw eid@EID_SecureRenegotiation bs) = show eid ++ " " ++ showBytesHex bs
     show (ExtensionRaw eid bs) = "ExtensionRaw " ++ show eid ++ " " ++ showBytesHex bs
 
@@ -1003,6 +1022,102 @@ decodeKeyShare bs =
     decodeKeyShareClientHello bs
         <|> decodeKeyShareServerHello bs
         <|> decodeKeyShareHRR bs
+
+------------------------------------------------------------
+
+newtype EchOuterExtensions = EchOuterExtensions [ExtensionID]
+    deriving (Eq, Show)
+
+instance Extension EchOuterExtensions where
+    extensionID _ = EID_EchOuterExtensions
+    extensionEncode (EchOuterExtensions ids) = runPut $ do
+        putWord8 $ fromIntegral (length ids * 2)
+        mapM_ (putWord16 . fromExtensionID) ids
+    extensionDecode MsgTClientHello = decodeEchOuterExtensions
+    extensionDecode _ = error "extensionDecode: EchOuterExtensions"
+
+decodeEchOuterExtensions :: ByteString -> Maybe EchOuterExtensions
+decodeEchOuterExtensions = runGetMaybe $ do
+    len <- fromIntegral <$> getWord8
+    eids <- getList len $ do
+        eid <- ExtensionID <$> getWord16
+        return (2, eid)
+    return $ EchOuterExtensions eids
+
+------------------------------------------------------------
+
+-- | Encrypted Client Hello
+data ECHClientHello
+    = ECHInner
+    | ECHOuter
+        { echCipherSuite :: (KDF_ID, AEAD_ID)
+        , echConfigId :: ConfigId
+        , echEnc :: EncodedPublicKey
+        , echPayload :: ByteString
+        }
+    | ECHHelloRetryRequest ByteString
+    deriving (Eq)
+
+instance Show ECHClientHello where
+    show ECHInner = "ECHInner"
+    show ECHOuter{..} =
+        "ECHOuter {"
+            ++ show (fst echCipherSuite)
+            ++ " "
+            ++ show (snd echCipherSuite)
+            ++ " "
+            ++ show echConfigId
+            ++ " "
+            ++ showBytesHex enc
+            ++ " "
+            ++ showBytesHex echPayload
+            ++ "}"
+      where
+        EncodedPublicKey enc = echEnc
+    show (ECHHelloRetryRequest cnfm) = "ECHHelloRetryRequest " ++ showBytesHex cnfm
+
+instance Extension ECHClientHello where
+    extensionID _ = EID_EncryptedClientHello
+    extensionEncode ECHInner = runPut $ putWord8 1
+    extensionEncode ECHOuter{..} = runPut $ do
+        putWord8 0
+        let (kdfid, aeadid) = echCipherSuite
+        putWord16 $ fromKDF_ID kdfid
+        putWord16 $ fromAEAD_ID aeadid
+        putWord8 echConfigId
+        let EncodedPublicKey enc = echEnc
+        putOpaque16 enc
+        putOpaque16 echPayload
+    extensionEncode (ECHHelloRetryRequest cnfm) = runPut $ putBytes cnfm
+    extensionDecode MsgTClientHello = decodeECHClientHello
+    extensionDecode MsgTHelloRetryRequest = decodeECHHelloRetryRequest
+    extensionDecode _ = error "extensionDecode: ECHClientHello"
+
+decodeECH :: ByteString -> Maybe ECHClientHello
+decodeECH bs = decodeECHClientHello bs <|> decodeECHHelloRetryRequest bs
+
+decodeECHClientHello :: ByteString -> Maybe ECHClientHello
+decodeECHClientHello = runGetMaybe $ do
+    typ <- getWord8
+    if typ == 1
+        then return ECHInner
+        else do
+            kdfid <- KDF_ID <$> getWord16
+            aeadid <- AEAD_ID <$> getWord16
+            cnfid <- getWord8
+            enc <- EncodedPublicKey <$> getOpaque16
+            payload <- getOpaque16
+            return $
+                ECHOuter
+                    { echCipherSuite = (kdfid, aeadid)
+                    , echConfigId = cnfid
+                    , echEnc = enc
+                    , echPayload = payload
+                    }
+
+decodeECHHelloRetryRequest :: ByteString -> Maybe ECHClientHello
+decodeECHHelloRetryRequest = runGetMaybe $ do
+    ECHHelloRetryRequest <$> getBytes 8
 
 ------------------------------------------------------------
 
