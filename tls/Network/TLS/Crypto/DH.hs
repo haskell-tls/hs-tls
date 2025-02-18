@@ -22,6 +22,7 @@ module Network.TLS.Crypto.DH (
 import Crypto.Number.Basic (numBits)
 import qualified Crypto.PubKey.DH as DH
 import qualified Data.ByteArray as B
+
 import Network.TLS.RNG
 
 type DHPublic = DH.PublicNumber

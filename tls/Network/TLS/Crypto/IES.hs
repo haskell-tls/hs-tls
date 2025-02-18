@@ -31,6 +31,7 @@ import Crypto.PubKey.DH hiding (generateParams)
 import Crypto.PubKey.ECIES
 import qualified Data.ByteArray as B
 import Data.Proxy
+
 import Network.TLS.Crypto.Types
 import Network.TLS.Extra.FFDHE
 import Network.TLS.Imports

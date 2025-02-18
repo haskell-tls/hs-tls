@@ -301,6 +301,9 @@ module Network.TLS (
     clientUseMaxFragmentLength,
 ) where
 
+import Data.X509 (PrivKey (..), PubKey (..))
+import Data.X509.Validation hiding (HostName, defaultHooks)
+
 import Network.TLS.Backend (Backend (..), HasBackend (..))
 import Network.TLS.Cipher
 import Network.TLS.Compression (
@@ -343,9 +346,6 @@ import Network.TLS.Struct (
 import Network.TLS.Struct13 (Handshake13)
 import Network.TLS.Types
 import Network.TLS.X509
-
-import Data.X509 (PrivKey (..), PubKey (..))
-import Data.X509.Validation hiding (HostName, defaultHooks)
 
 {-# DEPRECATED Bytes "Use Data.ByteString.Bytestring instead of Bytes." #-}
 type Bytes = ByteString

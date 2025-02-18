@@ -18,6 +18,7 @@ module Network.TLS.Compression (
 ) where
 
 import Control.Arrow (first)
+
 import Network.TLS.Imports
 import Network.TLS.Types (CompressionID)
 

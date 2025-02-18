@@ -20,7 +20,6 @@ module Network.TLS.Handshake.Key (
 ) where
 
 import Control.Monad.State.Strict
-
 import qualified Data.ByteString as B
 
 import Network.TLS.Context.Internal

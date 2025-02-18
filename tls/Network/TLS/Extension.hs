@@ -108,12 +108,13 @@ module Network.TLS.Extension (
 ) where
 
 import qualified Control.Exception as E
+import Crypto.HPKE
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import Data.X509 (DistinguishedName)
+
 import Network.TLS.ECH.Config
 
-import Crypto.HPKE
 import Network.TLS.Crypto.Types
 import Network.TLS.Error
 import Network.TLS.HashAndSignature

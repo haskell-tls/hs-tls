@@ -10,6 +10,7 @@ import Control.Exception (SomeException)
 import Control.Monad (unless)
 import Control.Monad.State.Strict
 import Data.X509 (ExtKeyUsage (..), ExtKeyUsageFlag, extensionGet)
+
 import Network.TLS.Context.Internal
 import Network.TLS.Struct
 import Network.TLS.X509

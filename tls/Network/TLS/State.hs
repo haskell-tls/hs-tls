@@ -73,6 +73,7 @@ module Network.TLS.State (
 import Control.Monad.State.Strict
 import Crypto.Random
 import Data.X509 (CertificateChain)
+
 import Network.TLS.ErrT
 import Network.TLS.Extension
 import Network.TLS.Imports

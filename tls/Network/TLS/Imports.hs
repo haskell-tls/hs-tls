@@ -16,22 +16,18 @@ module Network.TLS.Imports (
     showBytesHex,
 ) where
 
-import Data.ByteString (ByteString)
-import Data.ByteString.Char8 ()
-
--- instance
-import Data.Functor
-
 import Control.Applicative
 import Control.Monad
 import Data.Bits
+import Data.ByteArray.Encoding as B
+import Data.ByteString (ByteString)
+import Data.ByteString.Char8 ()
+import Data.Functor
 import Data.List
 import Data.Maybe
 import Data.Ord
 import Data.Semigroup
 import Data.Word
-
-import Data.ByteArray.Encoding as B
 import qualified Prelude as P
 
 showBytesHex :: ByteString -> P.String

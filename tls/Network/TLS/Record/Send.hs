@@ -5,6 +5,10 @@ module Network.TLS.Record.Send (
     sendBytes,
 ) where
 
+import Control.Concurrent.MVar
+import Control.Monad.State.Strict
+import qualified Data.ByteString as B
+
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
 import Network.TLS.Hooks
@@ -12,10 +16,6 @@ import Network.TLS.Imports
 import Network.TLS.Packet
 import Network.TLS.Record
 import Network.TLS.Struct
-
-import Control.Concurrent.MVar
-import Control.Monad.State.Strict
-import qualified Data.ByteString as B
 
 encodeRecordM :: Record Plaintext -> RecordM ByteString
 encodeRecordM record = do

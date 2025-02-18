@@ -16,12 +16,12 @@ module Network.TLS.Util (
     restoreMVar,
 ) where
 
-import qualified Data.ByteString as B
-import Network.TLS.Imports
-
 import Control.Concurrent.MVar
 import Control.Exception (SomeAsyncException (..))
 import qualified Control.Exception as E
+import qualified Data.ByteString as B
+
+import Network.TLS.Imports
 
 sub :: ByteString -> Int -> Int -> Maybe ByteString
 sub b offset len

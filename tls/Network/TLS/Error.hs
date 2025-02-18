@@ -5,6 +5,7 @@ module Network.TLS.Error where
 
 import Control.Exception (Exception (..))
 import Data.Typeable
+
 import Network.TLS.Imports
 
 ----------------------------------------------------------------

@@ -32,6 +32,7 @@ module Network.TLS.Record.Types (
 ) where
 
 import qualified Data.ByteString as B
+
 import Network.TLS.Imports
 import Network.TLS.Record.State
 import Network.TLS.Struct

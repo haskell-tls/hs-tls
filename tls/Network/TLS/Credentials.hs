@@ -17,14 +17,14 @@ module Network.TLS.Credentials (
 ) where
 
 import Data.X509
+import qualified Data.X509 as X509
 import Data.X509.File
 import Data.X509.Memory
+
 import Network.TLS.Crypto
 import Network.TLS.Imports
-import Network.TLS.X509
-
-import qualified Data.X509 as X509
 import qualified Network.TLS.Struct as TLS
+import Network.TLS.X509
 
 type Credential = (CertificateChain, PrivKey)
 

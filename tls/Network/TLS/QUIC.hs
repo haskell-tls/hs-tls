@@ -68,6 +68,8 @@ module Network.TLS.QUIC (
     defaultSupported,
 ) where
 
+import Data.Default (def)
+
 import Network.TLS.Backend
 import Network.TLS.Context
 import Network.TLS.Context.Internal
@@ -87,8 +89,6 @@ import Network.TLS.Record.Layer
 import Network.TLS.Record.State
 import Network.TLS.Struct
 import Network.TLS.Types
-
-import Data.Default (def)
 
 nullBackend :: Backend
 nullBackend =

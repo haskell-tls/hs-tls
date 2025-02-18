@@ -57,9 +57,12 @@ import qualified Crypto.PubKey.RSA as RSA
 import qualified Crypto.PubKey.RSA.PKCS15 as RSA
 import qualified Crypto.PubKey.RSA.PSS as PSS
 import Crypto.Random
+import Data.ASN1.BinaryEncoding (BER (..), DER (..))
+import Data.ASN1.Encoding
+import Data.ASN1.Types
 import qualified Data.ByteArray as B (convert)
 import qualified Data.ByteString as B
-
+import Data.Proxy
 import Data.X509 (
     PrivKey (..),
     PrivKeyEC (..),
@@ -68,16 +71,11 @@ import Data.X509 (
     SerializedPoint (..),
  )
 import Data.X509.EC (ecPrivKeyCurveName, ecPubKeyCurveName, unserializePoint)
+
 import Network.TLS.Crypto.DH
 import Network.TLS.Crypto.IES
 import Network.TLS.Crypto.Types
 import Network.TLS.Imports
-
-import Data.ASN1.BinaryEncoding (BER (..), DER (..))
-import Data.ASN1.Encoding
-import Data.ASN1.Types
-
-import Data.Proxy
 
 {-# DEPRECATED PublicKey "use PubKey" #-}
 type PublicKey = PubKey

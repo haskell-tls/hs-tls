@@ -42,6 +42,8 @@ module Network.TLS.Handshake.Common13 (
     compulteComfirm,
 ) where
 
+import Control.Concurrent.MVar
+import Control.Monad.State.Strict
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 import Data.UnixTime
@@ -70,9 +72,6 @@ import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types
 import Network.TLS.Wire
-
-import Control.Concurrent.MVar
-import Control.Monad.State.Strict
 
 ----------------------------------------------------------------
 

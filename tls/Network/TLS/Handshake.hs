@@ -8,11 +8,10 @@ module Network.TLS.Handshake (
 ) where
 
 import Network.TLS.Context.Internal
-import Network.TLS.Struct
-
 import Network.TLS.Handshake.Client
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Server
+import Network.TLS.Struct
 
 import Control.Monad.State.Strict
 

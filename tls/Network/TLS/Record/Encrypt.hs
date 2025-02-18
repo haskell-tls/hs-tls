@@ -13,9 +13,9 @@ module Network.TLS.Record.Encrypt (
 
 import Control.Monad.State.Strict
 import Crypto.Cipher.Types (AuthTag (..))
-
 import qualified Data.ByteArray as B (convert, xor)
 import qualified Data.ByteString as B
+
 import Network.TLS.Cipher
 import Network.TLS.Imports
 import Network.TLS.Packet

@@ -10,6 +10,7 @@ module Network.TLS.MAC (
 
 import qualified Data.ByteArray as B (xor)
 import qualified Data.ByteString as B
+
 import Network.TLS.Crypto
 import Network.TLS.Imports
 import Network.TLS.Types

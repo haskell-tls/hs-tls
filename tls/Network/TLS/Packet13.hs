@@ -19,6 +19,8 @@ import Data.X509 (
     decodeCertificateChain,
     encodeCertificateChain,
  )
+import System.IO.Unsafe
+
 import Network.TLS.ErrT
 import Network.TLS.Imports
 import Network.TLS.Packet
@@ -26,7 +28,6 @@ import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types
 import Network.TLS.Wire
-import System.IO.Unsafe
 
 ----------------------------------------------------------------
 

@@ -7,6 +7,7 @@ module Network.TLS.Util.ASN1 (
 import Data.ASN1.BinaryEncoding (DER (..))
 import Data.ASN1.Encoding (decodeASN1', encodeASN1')
 import Data.ASN1.Types (ASN1Object, fromASN1, toASN1)
+
 import Network.TLS.Imports
 
 -- | Attempt to decode a bytestring representing

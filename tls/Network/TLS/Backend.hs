@@ -15,8 +15,9 @@ module Network.TLS.Backend (
 import qualified Data.ByteString as B
 import qualified Network.Socket as Network
 import qualified Network.Socket.ByteString as Network
-import Network.TLS.Imports
 import System.IO (BufferMode (..), Handle, hClose, hFlush, hSetBuffering)
+
+import Network.TLS.Imports
 
 -- | Connection IO backend
 data Backend = Backend

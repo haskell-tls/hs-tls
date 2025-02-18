@@ -29,6 +29,7 @@ module Network.TLS.Parameters (
 ) where
 
 import Data.Default (Default (def))
+
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Credentials

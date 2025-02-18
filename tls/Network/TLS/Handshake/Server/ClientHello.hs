@@ -7,6 +7,7 @@ module Network.TLS.Handshake.Server.ClientHello (
 
 import Crypto.HPKE
 import qualified Data.ByteString as BS
+
 import Network.TLS.ECH.Config
 
 import Network.TLS.Compression
