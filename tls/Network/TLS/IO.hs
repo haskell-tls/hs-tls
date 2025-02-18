@@ -37,9 +37,10 @@ import Network.TLS.Struct13
 -- | Send one packet to the context
 sendPacket12 :: Context -> Packet -> IO ()
 sendPacket12 ctx@Context{ctxRecordLayer = recordLayer} pkt = do
-    -- in ver <= TLS1.0, block ciphers using CBC are using CBC residue as IV, which can be guessed
-    -- by an attacker. Hence, an empty packet is sent before a normal data packet, to
-    -- prevent guessability.
+    -- in ver <= TLS1.0, block ciphers using CBC are using CBC residue
+    -- as IV, which can be guessed by an attacker. Hence, an empty
+    -- packet is sent before a normal data packet, to prevent
+    -- guessability.
     when (isNonNullAppData pkt) $ do
         withEmptyPacket <- readIORef $ ctxNeedEmptyPacket ctx
         when withEmptyPacket $
