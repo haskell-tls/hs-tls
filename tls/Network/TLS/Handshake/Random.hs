@@ -45,7 +45,7 @@ serverRandomECH ctx = do
     let zeros = "\x00\x00\x00\x00\x00\x00\x00\x00"
     return $ ServerRandom (rnd <> zeros)
 
-replaceServerRandomECH :: ServerRandom -> B.ByteString -> ServerRandom
+replaceServerRandomECH :: ServerRandom -> ByteString -> ServerRandom
 replaceServerRandomECH (ServerRandom rnd) bs = ServerRandom (rnd' <> bs)
   where
     rnd' = B.take 24 rnd
