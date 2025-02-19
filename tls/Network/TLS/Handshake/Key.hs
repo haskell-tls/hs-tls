@@ -171,7 +171,8 @@ logKey ctx logkey = do
     case mhst of
         Nothing -> return ()
         Just hst -> do
-            let cr = unClientRandom $ hstClientRandom hst
+            let crm = fromMaybe (hstClientRandom hst) (hstTLS13OuterClientRandom hst)
+                cr = unClientRandom crm
                 (label, key) = labelAndKey logkey
             ctxKeyLogger ctx $ label ++ " " ++ dump cr ++ " " ++ dump key
   where
