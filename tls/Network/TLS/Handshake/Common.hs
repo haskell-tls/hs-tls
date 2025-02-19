@@ -31,6 +31,8 @@ module Network.TLS.Handshake.Common (
     processCertificate,
     --
     setPeerRecordSizeLimit,
+    startHandshake,
+    updateHandshake12HRR,
 ) where
 
 import Control.Concurrent.MVar
@@ -44,11 +46,11 @@ import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import Network.TLS.Extension
 import Network.TLS.Handshake.Key
-import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.IO
+import Network.TLS.IO.Encode
 import Network.TLS.Imports
 import Network.TLS.Measurement
 import Network.TLS.Parameters
@@ -180,9 +182,9 @@ onRecvStateHandshake _ recvState [] = return recvState
 onRecvStateHandshake _ (RecvStatePacket f) hms = f (Handshake hms)
 onRecvStateHandshake ctx (RecvStateHandshake f) (x : xs) = do
     let finished = isFinished x
-    unless finished $ processHandshake12 ctx x
+    unless finished $ updateHandshake12HRR ctx x
     nstate <- f x
-    when finished $ processHandshake12 ctx x
+    when finished $ updateHandshake12HRR ctx x
     onRecvStateHandshake ctx nstate xs
 onRecvStateHandshake _ RecvStateDone _xs = unexpected "spurious handshake" Nothing
 
@@ -358,3 +360,17 @@ setPeerRecordSizeLimit ctx tls13 (RecordSizeLimit n0) = do
     protolim
         | tls13 = defaultRecordSizeLimit + 1
         | otherwise = defaultRecordSizeLimit
+
+-- initialize a new Handshake context (initial handshake or renegotiations)
+startHandshake :: Context -> Version -> ClientRandom -> IO ()
+startHandshake ctx ver crand =
+    let hs = Just $ newEmptyHandshake ver crand
+     in void $ swapMVar (ctxHandshakeState ctx) hs
+
+updateHandshake12HRR :: Context -> Handshake -> IO ()
+updateHandshake12HRR ctx hs = do
+    when (isHRR hs) $ usingHState ctx wrapAsMessageHash13
+    void $ updateHandshake12 ctx hs
+  where
+    isHRR (ServerHello TLS12 srand _ _ _ _) = isHelloRetryRequest srand
+    isHRR _ = False

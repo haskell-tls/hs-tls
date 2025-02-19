@@ -13,7 +13,7 @@ import Network.TLS.ECH.Config
 import Network.TLS.Compression
 import Network.TLS.Context.Internal
 import Network.TLS.Extension
-import Network.TLS.Handshake.Process
+import Network.TLS.Handshake.Common
 import Network.TLS.Imports
 import Network.TLS.Measurement
 import Network.TLS.Packet
@@ -120,14 +120,14 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
             unless hrr $ startHandshake ctx legacyVersion cran'
             let serverName = getServerName ch'
             maybe (return ()) (usingState_ ctx . setClientSNI) serverName
-            processHandshake12 ctx clientHello'
+            updateHandshake12HRR ctx clientHello'
             return (chosenVersion, ch', True)
         _ -> do
             hrr <- usingState_ ctx getTLS13HRR
             unless hrr $ startHandshake ctx legacyVersion cran
             let serverName = getServerName ch
             maybe (return ()) (usingState_ ctx . setClientSNI) serverName
-            processHandshake12 ctx clientHello
+            updateHandshake12HRR ctx clientHello
             return (chosenVersion, ch, False)
 processClientHello _ _ _ =
     throwCore $

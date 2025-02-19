@@ -13,7 +13,6 @@ import Network.TLS.Extension
 import Network.TLS.Handshake.Client.Common
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Key
-import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Random
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
@@ -32,7 +31,7 @@ recvServerHello
 recvServerHello cparams ctx = do
     (sh, hss) <- recvSH
     processServerHello cparams ctx sh
-    processHandshake12 ctx sh
+    updateHandshake12HRR ctx sh
     return hss
   where
     recvSH = do

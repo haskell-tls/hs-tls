@@ -39,7 +39,6 @@ import Network.TLS.Extension
 import Network.TLS.Handshake
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Common13
-import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Server
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
@@ -436,12 +435,12 @@ popAction ctx h hs = do
                     case action of
                         PendingRecvAction needAligned pa -> do
                             when needAligned $ checkAlignment ctx hs
-                            processHandshake13 ctx h
+                            void $ updateHandshake13 ctx h
                             pa h
                         PendingRecvActionHash needAligned pa -> do
                             when needAligned $ checkAlignment ctx hs
                             d <- transcriptHash ctx
-                            processHandshake13 ctx h
+                            void $ updateHandshake13 ctx h
                             pa d h
                     -- Client: after receiving SH, app data is coming.
                     -- this loop tries to receive it.

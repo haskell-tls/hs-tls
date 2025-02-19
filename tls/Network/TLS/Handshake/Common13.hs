@@ -40,6 +40,7 @@ module Network.TLS.Handshake.Common13 (
     checkKeyShareKeyLength,
     setRTT,
     compulteComfirm,
+    updateHandshake13,
 ) where
 
 import Control.Concurrent.MVar
@@ -57,11 +58,11 @@ import Network.TLS.Extension
 import Network.TLS.Handshake.Certificate (extractCAname)
 import Network.TLS.Handshake.Common (unexpected)
 import Network.TLS.Handshake.Key
-import Network.TLS.Handshake.Process (processHandshake13)
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.IO
+import Network.TLS.IO.Encode
 import Network.TLS.Imports
 import Network.TLS.KeySchedule
 import Network.TLS.MAC
@@ -427,7 +428,7 @@ getHandshake13 ctx = RecvHandshake13M $ do
         (h : hs) -> found h hs
         [] -> recvLoop
   where
-    found h hs = liftIO (processHandshake13 ctx h) >> put hs >> return h
+    found h hs = liftIO (void $ updateHandshake13 ctx h) >> put hs >> return h
     recvLoop = do
         epkt <- liftIO (recvPacket13 ctx)
         case epkt of
