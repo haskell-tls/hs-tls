@@ -3,13 +3,9 @@
 module Network.TLS.Handshake.Process (
     processHandshake12,
     processHandshake13,
-    startHandshake,
 ) where
 
-import Control.Concurrent.MVar
-
 import Network.TLS.Context.Internal
-import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
 import Network.TLS.IO.Encode
 import Network.TLS.Imports
@@ -26,9 +22,3 @@ processHandshake12 ctx hs = do
 
 processHandshake13 :: Context -> Handshake13 -> IO ()
 processHandshake13 ctx = void . updateHandshake13 ctx
-
--- initialize a new Handshake context (initial handshake or renegotiations)
-startHandshake :: Context -> Version -> ClientRandom -> IO ()
-startHandshake ctx ver crand =
-    let hs = Just $ newEmptyHandshake ver crand
-     in void $ swapMVar (ctxHandshakeState ctx) hs

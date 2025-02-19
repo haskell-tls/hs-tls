@@ -13,6 +13,7 @@ import Network.TLS.ECH.Config
 import Network.TLS.Compression
 import Network.TLS.Context.Internal
 import Network.TLS.Extension
+import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Process
 import Network.TLS.Imports
 import Network.TLS.Measurement

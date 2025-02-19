@@ -31,6 +31,7 @@ module Network.TLS.Handshake.Common (
     processCertificate,
     --
     setPeerRecordSizeLimit,
+    startHandshake,
 ) where
 
 import Control.Concurrent.MVar
@@ -358,3 +359,9 @@ setPeerRecordSizeLimit ctx tls13 (RecordSizeLimit n0) = do
     protolim
         | tls13 = defaultRecordSizeLimit + 1
         | otherwise = defaultRecordSizeLimit
+
+-- initialize a new Handshake context (initial handshake or renegotiations)
+startHandshake :: Context -> Version -> ClientRandom -> IO ()
+startHandshake ctx ver crand =
+    let hs = Just $ newEmptyHandshake ver crand
+     in void $ swapMVar (ctxHandshakeState ctx) hs

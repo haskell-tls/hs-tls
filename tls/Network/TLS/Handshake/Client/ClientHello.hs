@@ -14,7 +14,6 @@ import Network.TLS.Handshake.Client.Common
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.Control
-import Network.TLS.Handshake.Process
 import Network.TLS.Handshake.Random
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
