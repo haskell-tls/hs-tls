@@ -18,7 +18,7 @@ module Network.TLS.Handshake.State13 (
     setHelloParameters13,
     transcriptHash,
     transcriptHashWith,
-    wrapAsMessageHash13,
+    updateTranscriptHash13HRR,
     PendingRecvAction (..),
     setPendingRecvActions,
     popPendingRecvAction,
@@ -173,8 +173,8 @@ setHelloParameters13 cipher = do
 -- When a HelloRetryRequest is sent or received, the existing transcript must be
 -- wrapped in a "message_hash" construct.  See RFC 8446 section 4.4.1.  This
 -- applies to key-schedule computations as well as the ones for PSK binders.
-wrapAsMessageHash13 :: HandshakeM ()
-wrapAsMessageHash13 = do
+updateTranscriptHash13HRR :: HandshakeM ()
+updateTranscriptHash13HRR = do
     cipher <- getPendingCipher
     foldHandshakeDigest (cipherHash cipher) foldFunc
   where

@@ -108,7 +108,7 @@ updateTranscriptHash13 :: Context -> Handshake13 -> IO ByteString
 updateTranscriptHash13 ctx hs
     | isIgnored hs = return encoded
     | otherwise = usingHState ctx $ do
-        when (isHRR hs) wrapAsMessageHash13
+        when (isHRR hs) updateTranscriptHash13HRR
         updateTranscriptHashDigest encoded
         addHandshakeMessage encoded
         return encoded
