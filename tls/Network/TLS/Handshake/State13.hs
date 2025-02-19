@@ -179,6 +179,9 @@ wrapAsMessageHash13 = do
     foldHandshakeDigest (cipherHash cipher) foldFunc
   where
     foldFunc dig =
+        -- Handshake message:
+        -- typ <-len-> body
+        -- 254 0 0 len hash(CH1)
         B.concat
             [ "\254\0\0"
             , B.singleton (fromIntegral $ B.length dig)
