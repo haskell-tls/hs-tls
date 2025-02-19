@@ -64,7 +64,6 @@ library
         Network.TLS.Handshake.Common13
         Network.TLS.Handshake.Control
         Network.TLS.Handshake.Key
-        Network.TLS.Handshake.Process
         Network.TLS.Handshake.Random
         Network.TLS.Handshake.Server
         Network.TLS.Handshake.Server.ClientHello
