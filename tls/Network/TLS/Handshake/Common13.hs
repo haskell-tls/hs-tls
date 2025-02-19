@@ -40,7 +40,7 @@ module Network.TLS.Handshake.Common13 (
     checkKeyShareKeyLength,
     setRTT,
     compulteComfirm,
-    updateHandshake13,
+    updateTranscriptHash13,
 ) where
 
 import Control.Concurrent.MVar
@@ -428,7 +428,7 @@ getHandshake13 ctx = RecvHandshake13M $ do
         (h : hs) -> found h hs
         [] -> recvLoop
   where
-    found h hs = liftIO (void $ updateHandshake13 ctx h) >> put hs >> return h
+    found h hs = liftIO (void $ updateTranscriptHash13 ctx h) >> put hs >> return h
     recvLoop = do
         epkt <- liftIO (recvPacket13 ctx)
         case epkt of

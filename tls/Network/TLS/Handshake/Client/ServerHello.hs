@@ -31,9 +31,12 @@ recvServerHello
 recvServerHello cparams ctx = do
     (sh, hss) <- recvSH
     processServerHello cparams ctx sh
-    updateHandshake12HRR ctx sh
+    when (isHRR sh) $ usingHState ctx updateTranscriptHash13HRR
+    void $ updateTranscriptHash12 ctx sh
     return hss
   where
+    isHRR (ServerHello TLS12 srand _ _ _ _) = isHelloRetryRequest srand
+    isHRR _ = False
     recvSH = do
         epkt <- recvPacket12 ctx
         case epkt of

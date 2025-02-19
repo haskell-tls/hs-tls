@@ -370,7 +370,7 @@ sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
 postHandshakeAuthClientWith :: ClientParams -> Context -> Handshake13 -> IO ()
 postHandshakeAuthClientWith cparams ctx h@(CertRequest13 certReqCtx exts) =
     bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
-        void $ updateHandshake13 ctx h
+        void $ updateTranscriptHash13 ctx h
         processCertRequest13 ctx certReqCtx exts
         (usedHash, _, level, applicationSecretN) <- getTxRecordState ctx
         unless (level == CryptApplicationSecret) $

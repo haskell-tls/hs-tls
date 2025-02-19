@@ -1,8 +1,8 @@
 module Network.TLS.IO.Encode (
     encodePacket12,
     encodePacket13,
-    updateHandshake12,
-    updateHandshake13,
+    updateTranscriptHash12,
+    updateTranscriptHash13,
 ) where
 
 import Control.Concurrent.MVar
@@ -48,7 +48,7 @@ encodePacket12 ctx recordLayer pkt = do
 -- empty-packet countermeasure may be applied to each fragment independently.
 packetToFragments12 :: Context -> Maybe Int -> Packet -> IO [ByteString]
 packetToFragments12 ctx mlen (Handshake hss) =
-    getChunks mlen . B.concat <$> mapM (updateHandshake12 ctx) hss
+    getChunks mlen . B.concat <$> mapM (updateTranscriptHash12 ctx) hss
 packetToFragments12 _ _ (Alert a) = return [encodeAlerts a]
 packetToFragments12 _ _ ChangeCipherSpec = return [encodeChangeCipherSpec]
 packetToFragments12 _ _ (AppData x) = return [x]
@@ -73,11 +73,11 @@ switchTxEncryption ctx = do
   where
     isCBC tx = maybe False (\c -> bulkBlockSize (cipherBulk c) > 0) (stCipher tx)
 
-updateHandshake12 :: Context -> Handshake -> IO ByteString
-updateHandshake12 ctx hs = do
+updateTranscriptHash12 :: Context -> Handshake -> IO ByteString
+updateTranscriptHash12 ctx hs = do
     usingHState ctx $ do
         when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage encoded
-        when (finishedHandshakeMaterial hs) $ updateHandshakeDigest encoded
+        when (finishedHandshakeMaterial hs) $ updateTranscriptHashDigest encoded
     return encoded
   where
     encoded = encodeHandshake hs
@@ -99,17 +99,17 @@ encodePacket13 ctx recordLayer pkt = do
 
 packetToFragments13 :: Context -> Maybe Int -> Packet13 -> IO [ByteString]
 packetToFragments13 ctx mlen (Handshake13 hss) =
-    getChunks mlen . B.concat <$> mapM (updateHandshake13 ctx) hss
+    getChunks mlen . B.concat <$> mapM (updateTranscriptHash13 ctx) hss
 packetToFragments13 _ _ (Alert13 a) = return [encodeAlerts a]
 packetToFragments13 _ _ (AppData13 x) = return [x]
 packetToFragments13 _ _ ChangeCipherSpec13 = return [encodeChangeCipherSpec]
 
-updateHandshake13 :: Context -> Handshake13 -> IO ByteString
-updateHandshake13 ctx hs
+updateTranscriptHash13 :: Context -> Handshake13 -> IO ByteString
+updateTranscriptHash13 ctx hs
     | isIgnored hs = return encoded
     | otherwise = usingHState ctx $ do
-        when (isHRR hs) wrapAsMessageHash13
-        updateHandshakeDigest encoded
+        when (isHRR hs) updateTranscriptHash13HRR
+        updateTranscriptHashDigest encoded
         addHandshakeMessage encoded
         return encoded
   where
