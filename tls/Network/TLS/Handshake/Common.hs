@@ -32,7 +32,7 @@ module Network.TLS.Handshake.Common (
     --
     setPeerRecordSizeLimit,
     startHandshake,
-    updateHandshake12HRR,
+    updateHandshake12,
 ) where
 
 import Control.Concurrent.MVar
@@ -182,9 +182,9 @@ onRecvStateHandshake _ recvState [] = return recvState
 onRecvStateHandshake _ (RecvStatePacket f) hms = f (Handshake hms)
 onRecvStateHandshake ctx (RecvStateHandshake f) (x : xs) = do
     let finished = isFinished x
-    unless finished $ updateHandshake12HRR ctx x
+    unless finished $ void $ updateHandshake12 ctx x
     nstate <- f x
-    when finished $ updateHandshake12HRR ctx x
+    when finished $ void $ updateHandshake12 ctx x
     onRecvStateHandshake ctx nstate xs
 onRecvStateHandshake _ RecvStateDone _xs = unexpected "spurious handshake" Nothing
 
@@ -366,11 +366,3 @@ startHandshake :: Context -> Version -> ClientRandom -> IO ()
 startHandshake ctx ver crand =
     let hs = Just $ newEmptyHandshake ver crand
      in void $ swapMVar (ctxHandshakeState ctx) hs
-
-updateHandshake12HRR :: Context -> Handshake -> IO ()
-updateHandshake12HRR ctx hs = do
-    when (isHRR hs) $ usingHState ctx wrapAsMessageHash13
-    void $ updateHandshake12 ctx hs
-  where
-    isHRR (ServerHello TLS12 srand _ _ _ _) = isHelloRetryRequest srand
-    isHRR _ = False
