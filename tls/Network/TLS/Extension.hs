@@ -983,7 +983,7 @@ data KeyShare
 instance Show KeyShare where
     show (KeyShareClientHello kses) = "KeyShare " ++ show kses
     show (KeyShareServerHello kse)  = "KeyShare " ++ show kse
-    show (KeyShareHRR g)            = "KeyShare " ++ show g
+    show (KeyShareHRR g)            = "KeyShareHRR " ++ show g
 {- FOURMOLU_ENABLE -}
 
 instance Extension KeyShare where
