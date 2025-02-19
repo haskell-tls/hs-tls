@@ -171,7 +171,9 @@ decryptECH sparams ctx clientHello@(ClientHello _ _ _ outerCH) ech@ECHOuter{..} 
     case mfunc of
         Nothing -> return Nothing
         Just (func, nenc) -> do
-            let aad = encodeHandshake' $ fill0ClientHello nenc clientHello
+            hrr <- usingState_ ctx getTLS13HRR
+            let nenc' = if hrr then 0 else nenc
+            let aad = encodeHandshake' $ fill0ClientHello nenc' clientHello
             plaintext <- func aad echPayload
             case decodeClientHello' plaintext of
                 Right (ClientHello v r c innerCH) -> do
