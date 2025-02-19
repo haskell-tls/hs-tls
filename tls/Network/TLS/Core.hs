@@ -435,12 +435,12 @@ popAction ctx h hs = do
                     case action of
                         PendingRecvAction needAligned pa -> do
                             when needAligned $ checkAlignment ctx hs
-                            void $ updateHandshake13 ctx h
+                            void $ updateTranscriptHash13 ctx h
                             pa h
                         PendingRecvActionHash needAligned pa -> do
                             when needAligned $ checkAlignment ctx hs
                             d <- transcriptHash ctx
-                            void $ updateHandshake13 ctx h
+                            void $ updateTranscriptHash13 ctx h
                             pa d h
                     -- Client: after receiving SH, app data is coming.
                     -- this loop tries to receive it.

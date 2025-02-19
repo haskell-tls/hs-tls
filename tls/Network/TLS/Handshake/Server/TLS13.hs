@@ -230,13 +230,13 @@ requestCertificateServer sparams ctx = handleEx ctx $ do
             clientCert13 <- getHandshake ctx ref
             emptyCert <- expectClientCertificate sparams ctx origCertReqCtx clientCert13
             baseHState <- saveHState ctx
-            void $ updateHandshake13 ctx certReq13
-            void $ updateHandshake13 ctx clientCert13
+            void $ updateTranscriptHash13 ctx certReq13
+            void $ updateTranscriptHash13 ctx clientCert13
             th <- transcriptHash ctx
             unless emptyCert $ do
                 certVerify13 <- getHandshake ctx ref
                 expectCertVerify sparams ctx th certVerify13
-                void $ updateHandshake13 ctx certVerify13
+                void $ updateTranscriptHash13 ctx certVerify13
             finished13 <- getHandshake ctx ref
             expectClientFinished ctx finished13
             void $ restoreHState ctx baseHState -- fixme

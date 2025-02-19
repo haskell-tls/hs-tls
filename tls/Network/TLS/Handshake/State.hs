@@ -45,7 +45,7 @@ module Network.TLS.Handshake.State (
 
     -- * digest accessors
     addHandshakeMessage,
-    updateHandshakeDigest,
+    updateTranscriptHashDigest,
     getHandshakeMessages,
     getHandshakeMessagesRev,
     getHandshakeDigest,
@@ -418,8 +418,8 @@ getHandshakeMessages = gets (reverse . hstHandshakeMessages)
 getHandshakeMessagesRev :: HandshakeM [ByteString]
 getHandshakeMessagesRev = gets hstHandshakeMessages
 
-updateHandshakeDigest :: ByteString -> HandshakeM ()
-updateHandshakeDigest content = modify $ \hs ->
+updateTranscriptHashDigest :: ByteString -> HandshakeM ()
+updateTranscriptHashDigest content = modify $ \hs ->
     hs
         { hstHandshakeDigest = case hstHandshakeDigest hs of
             HandshakeMessages bytes -> HandshakeMessages (content : bytes)

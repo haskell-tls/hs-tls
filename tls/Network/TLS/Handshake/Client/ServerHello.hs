@@ -32,7 +32,7 @@ recvServerHello cparams ctx = do
     (sh, hss) <- recvSH
     processServerHello cparams ctx sh
     when (isHRR sh) $ usingHState ctx wrapAsMessageHash13
-    void $ updateHandshake12 ctx sh
+    void $ updateTranscriptHash12 ctx sh
     return hss
   where
     isHRR (ServerHello TLS12 srand _ _ _ _) = isHelloRetryRequest srand

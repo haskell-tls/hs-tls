@@ -127,14 +127,14 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
             unless hrr $ startHandshake ctx legacyVersion cran'
             let serverName = getServerName ch'
             maybe (return ()) (usingState_ ctx . setClientSNI) serverName
-            void $ updateHandshake12 ctx clientHello'
+            void $ updateTranscriptHash12 ctx clientHello'
             return (chosenVersion, ch', Just cran)
         _ -> do
             hrr <- usingState_ ctx getTLS13HRR
             unless hrr $ startHandshake ctx legacyVersion cran
             let serverName = getServerName ch
             maybe (return ()) (usingState_ ctx . setClientSNI) serverName
-            void $ updateHandshake12 ctx clientHello
+            void $ updateTranscriptHash12 ctx clientHello
             return (chosenVersion, ch, Nothing)
 processClientHello _ _ _ =
     throwCore $
