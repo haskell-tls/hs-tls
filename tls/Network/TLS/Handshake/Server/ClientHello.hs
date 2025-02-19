@@ -23,7 +23,14 @@ import Network.TLS.Struct
 import Network.TLS.Types
 
 processClientHello
-    :: ServerParams -> Context -> Handshake -> IO (Version, CH, Bool)
+    :: ServerParams
+    -> Context
+    -> Handshake
+    -> IO
+        ( Version
+        , CH
+        , Maybe ClientRandom -- Just for ECH to keep the outer one for key log
+        )
 processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compressions ch@CH{..}) = do
     established <- ctxEstablished ctx
     -- renego is not allowed in TLS 1.3
@@ -121,14 +128,14 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
             let serverName = getServerName ch'
             maybe (return ()) (usingState_ ctx . setClientSNI) serverName
             updateHandshake12HRR ctx clientHello'
-            return (chosenVersion, ch', True)
+            return (chosenVersion, ch', Just cran)
         _ -> do
             hrr <- usingState_ ctx getTLS13HRR
             unless hrr $ startHandshake ctx legacyVersion cran
             let serverName = getServerName ch
             maybe (return ()) (usingState_ ctx . setClientSNI) serverName
             updateHandshake12HRR ctx clientHello
-            return (chosenVersion, ch, False)
+            return (chosenVersion, ch, Nothing)
 processClientHello _ _ _ =
     throwCore $
         Error_Protocol
@@ -171,7 +178,9 @@ decryptECH sparams ctx clientHello@(ClientHello _ _ _ outerCH) ech@ECHOuter{..} 
     case mfunc of
         Nothing -> return Nothing
         Just (func, nenc) -> do
-            let aad = encodeHandshake' $ fill0ClientHello nenc clientHello
+            hrr <- usingState_ ctx getTLS13HRR
+            let nenc' = if hrr then 0 else nenc
+            let aad = encodeHandshake' $ fill0ClientHello nenc' clientHello
             plaintext <- func aad echPayload
             case decodeClientHello' plaintext of
                 Right (ClientHello v r c innerCH) -> do

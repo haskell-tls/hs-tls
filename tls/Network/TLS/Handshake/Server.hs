@@ -10,6 +10,7 @@ module Network.TLS.Handshake.Server (
 ) where
 
 import Control.Monad.State.Strict
+import Data.Maybe
 
 import Network.TLS.Context.Internal
 import Network.TLS.Handshake.Common
@@ -47,7 +48,7 @@ handshakeServerWith = handshake
 -- On any error, a HandshakeFailed exception is raised.
 handshake :: ServerParams -> Context -> Handshake -> IO ()
 handshake sparams ctx clientHello = do
-    (chosenVersion, ch, isEch) <- processClientHello sparams ctx clientHello
+    (chosenVersion, ch, mcrnd) <- processClientHello sparams ctx clientHello
     if chosenVersion == TLS13
         then do
             -- fixme: we should check if the client random is the same as
@@ -56,13 +57,13 @@ handshake sparams ctx clientHello = do
                 processClientHello13 sparams ctx ch
             case mClientKeyShare of
                 Nothing -> do
-                    sendHRR ctx r0 ch isEch
+                    sendHRR ctx r0 ch $ isJust mcrnd
                     -- Don't reset ctxEstablished since 0-RTT data
                     -- would be comming, which should be ignored.
                     handshakeServer sparams ctx
                 Just cliKeyShare -> do
                     r1 <-
-                        sendServerHello13 sparams ctx cliKeyShare r0 ch isEch
+                        sendServerHello13 sparams ctx cliKeyShare r0 ch mcrnd
                     recvClientSecondFlight13 sparams ctx r1 ch
         else do
             r <-

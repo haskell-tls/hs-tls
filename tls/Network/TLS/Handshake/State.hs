@@ -28,6 +28,8 @@ module Network.TLS.Handshake.State (
 
     -- * cert accessors
     getClientRandom,
+    getOuterClientRandom,
+    setOuterClientRandom,
     setClientCertSent,
     getClientCertSent,
     setCertReqSent,
@@ -141,6 +143,7 @@ data HandshakeState = HandshakeState
     , hstTLS13CertComp :: Bool
     , hstCCS13Sent :: Bool
     , hstCCS13Recv :: Bool
+    , hstTLS13OuterClientRandom :: Maybe ClientRandom
     }
     deriving (Show)
 
@@ -234,6 +237,7 @@ newEmptyHandshake ver crand =
         , hstTLS13CertComp = False
         , hstCCS13Sent = False
         , hstCCS13Recv = False
+        , hstTLS13OuterClientRandom = Nothing
         }
 
 runHandshake :: HandshakeState -> HandshakeM a -> (a, HandshakeState)
@@ -364,6 +368,12 @@ setClientCertSent b = modify (\hst -> hst{hstClientCertSent = b})
 
 getClientRandom :: HandshakeM ClientRandom
 getClientRandom = gets hstClientRandom
+
+getOuterClientRandom :: HandshakeM (Maybe ClientRandom)
+getOuterClientRandom = gets hstTLS13OuterClientRandom
+
+setOuterClientRandom :: Maybe ClientRandom -> HandshakeM ()
+setOuterClientRandom mcr = modify (\hst -> hst{hstTLS13OuterClientRandom = mcr})
 
 getClientCertSent :: HandshakeM Bool
 getClientCertSent = gets hstClientCertSent

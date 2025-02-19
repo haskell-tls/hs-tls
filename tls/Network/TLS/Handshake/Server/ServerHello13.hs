@@ -38,14 +38,14 @@ sendServerHello13
     -> KeyShareEntry
     -> (Cipher, Hash, Bool)
     -> CH
-    -> Bool
+    -> Maybe ClientRandom
     -> IO
         ( SecretTriple ApplicationSecret
         , ClientTrafficSecret HandshakeSecret
         , Bool
         , Bool
         )
-sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..} isEch = do
+sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..} mOuterClientRandom = do
     -- parse CompressCertificate to check if it is broken here
     let zlib =
             lookupAndDecode
@@ -61,7 +61,9 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
     newSession ctx >>= \ss -> usingState_ ctx $ do
         setSession ss
         setTLS13ClientSupportsPHA supportsPHA
-    usingHState ctx $ setSupportedGroup $ keyShareEntryGroup clientKeyShare
+    usingHState ctx $ do
+        setSupportedGroup $ keyShareEntryGroup clientKeyShare
+        setOuterClientRandom mOuterClientRandom
     setServerParameter
     -- ALPN is used in choosePSK
     alpnExt <- applicationProtocol ctx chExtensions sparams
@@ -241,7 +243,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
         let keyShareExt = toExtensionRaw $ KeyShareServerHello keyShare
             versionExt = toExtensionRaw $ SupportedVersionsServerHello TLS13
             extensions' = keyShareExt : versionExt : extensions
-        if isEch
+        if isJust $ mOuterClientRandom
             then do
                 srand <- liftIO $ serverRandomECH ctx
                 let cipherId = CipherId (cipherID usedCipher)
