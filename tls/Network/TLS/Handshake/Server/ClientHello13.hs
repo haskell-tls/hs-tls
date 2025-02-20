@@ -112,6 +112,7 @@ sendHRR ctx (usedCipher, usedHash, _) CH{..} isEch = do
             throwCore $
                 Error_Protocol "no group in common with the client for HRR" HandshakeFailure
         g : _ -> do
+            usingHState ctx $ updateTranscriptHash13HRR
             hrr <- makeHRR ctx usedCipher usedHash chSession g isEch
             usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
             runPacketFlight ctx $ do

@@ -13,7 +13,6 @@ import Data.IORef
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
 import Network.TLS.Handshake.State
-import Network.TLS.Handshake.State13
 import Network.TLS.Imports
 import Network.TLS.Packet
 import Network.TLS.Packet13
@@ -109,15 +108,11 @@ updateTranscriptHash13 ctx hs
     | isIgnored hs = return encoded
     | otherwise = do
         usingHState ctx $ do
-            when (isHRR hs) updateTranscriptHash13HRR
             updateTranscriptHashDigest encoded
             addHandshakeMessage encoded
         return encoded
   where
     encoded = encodeHandshake13 hs
-
-    isHRR (ServerHello13 srand _ _ _) = isHelloRetryRequest srand
-    isHRR _ = False
 
     isIgnored NewSessionTicket13{} = True
     isIgnored KeyUpdate13{} = True
