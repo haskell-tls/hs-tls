@@ -4,7 +4,7 @@
 
 module Network.TLS.Handshake.State (
     HandshakeState (..),
-    HandshakeDigest (..),
+    TranscriptHash (..),
     HandshakeMode13 (..),
     RTT0Status (..),
     CertReqCBdata,
@@ -48,8 +48,8 @@ module Network.TLS.Handshake.State (
     updateTranscriptHashDigest,
     getHandshakeMessages,
     getHandshakeMessagesRev,
-    getHandshakeDigest,
-    foldHandshakeDigest,
+    getTranscriptHash,
+    foldTranscriptHash,
 
     -- * main secret
     setMainSecret,
@@ -98,9 +98,9 @@ data HandshakeKeyState = HandshakeKeyState
     }
     deriving (Show)
 
-data HandshakeDigest
+data TranscriptHash
     = HandshakeMessages [ByteString]
-    | HandshakeDigestContext HashCtx
+    | TranscriptHashContext HashCtx
     deriving (Show)
 
 data HandshakeState = HandshakeState
@@ -113,7 +113,7 @@ data HandshakeState = HandshakeState
     , hstDHPrivate :: Maybe DHPrivate
     , hstServerECDHParams :: Maybe ServerECDHParams
     , hstGroupPrivate :: Maybe GroupPrivate
-    , hstHandshakeDigest :: HandshakeDigest
+    , hstTranscriptHash :: TranscriptHash
     , hstHandshakeMessages :: [ByteString]
     , hstCertReqToken :: Maybe ByteString
     -- ^ Set to Just-value when a TLS13 certificate request is received
@@ -216,7 +216,7 @@ newEmptyHandshake ver crand =
         , hstDHPrivate = Nothing
         , hstServerECDHParams = Nothing
         , hstGroupPrivate = Nothing
-        , hstHandshakeDigest = HandshakeMessages []
+        , hstTranscriptHash = HandshakeMessages []
         , hstHandshakeMessages = []
         , hstCertReqToken = Nothing
         , hstCertReqCBdata = Nothing
@@ -421,43 +421,43 @@ getHandshakeMessagesRev = gets hstHandshakeMessages
 updateTranscriptHashDigest :: ByteString -> HandshakeM ()
 updateTranscriptHashDigest content = modify $ \hs ->
     hs
-        { hstHandshakeDigest = case hstHandshakeDigest hs of
+        { hstTranscriptHash = case hstTranscriptHash hs of
             HandshakeMessages bytes -> HandshakeMessages (content : bytes)
-            HandshakeDigestContext hashCtx -> HandshakeDigestContext $ hashUpdate hashCtx content
+            TranscriptHashContext hashCtx -> TranscriptHashContext $ hashUpdate hashCtx content
         }
 
 -- | Compress the whole transcript with the specified function.  Function @f@
 -- takes the handshake digest as input and returns an encoded handshake message
 -- to replace the transcript with.
-foldHandshakeDigest :: Hash -> (ByteString -> ByteString) -> HandshakeM ()
-foldHandshakeDigest hashAlg f = modify $ \hs ->
-    case hstHandshakeDigest hs of
+foldTranscriptHash :: Hash -> (ByteString -> ByteString) -> HandshakeM ()
+foldTranscriptHash hashAlg f = modify $ \hs ->
+    case hstTranscriptHash hs of
         HandshakeMessages bytes ->
             let hashCtx = foldl hashUpdate (hashInit hashAlg) $ reverse bytes
                 folded = f (hashFinal hashCtx)
              in hs
-                    { hstHandshakeDigest = HandshakeMessages [folded]
+                    { hstTranscriptHash = HandshakeMessages [folded]
                     , hstHandshakeMessages = [folded]
                     }
-        HandshakeDigestContext hashCtx ->
+        TranscriptHashContext hashCtx ->
             let folded = f (hashFinal hashCtx)
                 hashCtx' = hashUpdate (hashInit hashAlg) folded
              in hs
-                    { hstHandshakeDigest = HandshakeDigestContext hashCtx'
+                    { hstTranscriptHash = TranscriptHashContext hashCtx'
                     , hstHandshakeMessages = [folded]
                     }
 
 getSessionHash :: HandshakeM ByteString
 getSessionHash = gets $ \hst ->
-    case hstHandshakeDigest hst of
-        HandshakeDigestContext hashCtx -> hashFinal hashCtx
+    case hstTranscriptHash hst of
+        TranscriptHashContext hashCtx -> hashFinal hashCtx
         HandshakeMessages _ -> error "un-initialized session hash"
 
-getHandshakeDigest :: Version -> Role -> HandshakeM ByteString
-getHandshakeDigest ver role = gets gen
+getTranscriptHash :: Version -> Role -> HandshakeM ByteString
+getTranscriptHash ver role = gets gen
   where
-    gen hst = case hstHandshakeDigest hst of
-        HandshakeDigestContext hashCtx ->
+    gen hst = case hstTranscriptHash hst of
+        TranscriptHashContext hashCtx ->
             let msecret = fromJust $ hstMainSecret hst
                 cipher = fromJust $ hstPendingCipher hst
              in generateFinished ver cipher msecret hashCtx
@@ -582,12 +582,12 @@ setServerHelloParameters ver sran cipher compression = do
             { hstServerRandom = Just sran
             , hstPendingCipher = Just cipher
             , hstPendingCompression = compression
-            , hstHandshakeDigest = updateDigest $ hstHandshakeDigest hst
+            , hstTranscriptHash = updateDigest $ hstTranscriptHash hst
             }
   where
     hashAlg = getHash ver cipher
-    updateDigest (HandshakeMessages bytes) = HandshakeDigestContext $ foldl hashUpdate (hashInit hashAlg) $ reverse bytes
-    updateDigest (HandshakeDigestContext _) = error "cannot initialize digest with another digest"
+    updateDigest (HandshakeMessages bytes) = TranscriptHashContext $ foldl hashUpdate (hashInit hashAlg) $ reverse bytes
+    updateDigest (TranscriptHashContext _) = error "cannot initialize digest with another digest"
 
 -- The TLS12 Hash is cipher specific, and some TLS12 algorithms use SHA384
 -- instead of the default SHA256.

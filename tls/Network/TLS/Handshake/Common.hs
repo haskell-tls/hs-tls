@@ -146,7 +146,7 @@ sendCCSandFinished ctx role = do
     enablePeerRecordLimit ctx
     verifyData <-
         VerifyData
-            <$> ( usingState_ ctx getVersion >>= \ver -> usingHState ctx $ getHandshakeDigest ver role
+            <$> ( usingState_ ctx getVersion >>= \ver -> usingHState ctx $ getTranscriptHash ver role
                 )
     sendPacket12 ctx (Handshake [Finished verifyData])
     usingState_ ctx $ setVerifyDataForSend verifyData
@@ -313,7 +313,7 @@ processFinished :: Context -> VerifyData -> IO ()
 processFinished ctx verifyData = do
     (cc, ver) <- usingState_ ctx $ (,) <$> getRole <*> getVersion
     expected <-
-        VerifyData <$> usingHState ctx (getHandshakeDigest ver $ invertRole cc)
+        VerifyData <$> usingHState ctx (getTranscriptHash ver $ invertRole cc)
     when (expected /= verifyData) $ decryptError "finished verification failed"
     usingState_ ctx $ setVerifyDataForRecv verifyData
 
