@@ -15,7 +15,7 @@ module Network.TLS.Handshake.State13 (
     getRxLevel,
     clearTxRecordState,
     clearRxRecordState,
-    setHelloParameters13,
+    setServerHelloParameters13,
     transcriptHash,
     transcriptHashWith,
     updateTranscriptHash13HRR,
@@ -147,8 +147,8 @@ clearXState :: (Context -> MVar RecordState) -> Context -> IO ()
 clearXState func ctx =
     modifyMVar_ (func ctx) (\rt -> return rt{stCipher = Nothing})
 
-setHelloParameters13 :: Cipher -> HandshakeM (Either TLSError ())
-setHelloParameters13 cipher = do
+setServerHelloParameters13 :: Cipher -> HandshakeM (Either TLSError ())
+setServerHelloParameters13 cipher = do
     hst <- get
     case hstPendingCipher hst of
         Nothing -> do

@@ -202,7 +202,7 @@ updateContext13 ctx cipherAlg = do
             Error_Protocol
                 "renegotiation to TLS 1.3 or later is not allowed"
                 ProtocolVersion
-    failOnEitherError $ usingHState ctx $ setHelloParameters13 cipherAlg
+    failOnEitherError $ usingHState ctx $ setServerHelloParameters13 cipherAlg
 
 updateContext12 :: Context -> [ExtensionRaw] -> Maybe SessionData -> IO ()
 updateContext12 ctx shExts resumingSession = do
