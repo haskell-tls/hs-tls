@@ -3,6 +3,7 @@
 
 module Network.TLS.Handshake.Server.ServerHello13 (
     sendServerHello13,
+    sendHRR,
 ) where
 
 import Control.Monad.State.Strict
@@ -350,3 +351,58 @@ credentialsFindForSigning13' sigAlg (Credentials l) = find forSigning l
 contextSync :: Context -> ServerState -> IO ()
 contextSync ctx ctl = case ctxHandshakeSync ctx of
     HandshakeSync _ sync -> sync ctx ctl
+
+----------------------------------------------------------------
+
+sendHRR :: Context -> (Cipher, Hash, c) -> CH -> Bool -> IO ()
+sendHRR ctx (usedCipher, usedHash, _) CH{..} isEch = do
+    twice <- usingState_ ctx getTLS13HRR
+    when twice $
+        throwCore $
+            Error_Protocol "Hello retry not allowed again" HandshakeFailure
+    usingState_ ctx $ setTLS13HRR True
+    failOnEitherError $ usingHState ctx $ setHelloParameters13 usedCipher
+    let clientGroups =
+            lookupAndDecode
+                EID_SupportedGroups
+                MsgTClientHello
+                chExtensions
+                []
+                (\(SupportedGroups gs) -> gs)
+        possibleGroups = serverGroups `intersect` clientGroups
+    case possibleGroups of
+        [] ->
+            throwCore $
+                Error_Protocol "no group in common with the client for HRR" HandshakeFailure
+        g : _ -> do
+            usingHState ctx $ updateTranscriptHash13HRR
+            hrr <- makeHRR ctx usedCipher usedHash chSession g isEch
+            usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
+            runPacketFlight ctx $ do
+                loadPacket13 ctx $ Handshake13 [hrr]
+                sendChangeCipherSpec13 ctx
+  where
+    serverGroups = supportedGroups (ctxSupported ctx)
+
+makeHRR
+    :: Context -> Cipher -> Hash -> Session -> Group -> Bool -> IO Handshake13
+makeHRR _ usedCipher _ chSession g False = return hrr
+  where
+    keyShareExt = toExtensionRaw $ KeyShareHRR g
+    versionExt = toExtensionRaw $ SupportedVersionsServerHello TLS13
+    extensions = [keyShareExt, versionExt]
+    cipherId = CipherId $ cipherID usedCipher
+    hrr = ServerHello13 hrrRandom chSession cipherId extensions
+makeHRR ctx usedCipher usedHash chSession g True = do
+    suffix <- compulteComfirm ctx usedHash hrr "hrr ech accept confirmation"
+    let echExt' = toExtensionRaw $ ECHHelloRetryRequest suffix
+        extensions' = [keyShareExt, versionExt, echExt']
+        hrr' = ServerHello13 hrrRandom chSession cipherId extensions'
+    return hrr'
+  where
+    keyShareExt = toExtensionRaw $ KeyShareHRR g
+    versionExt = toExtensionRaw $ SupportedVersionsServerHello TLS13
+    echExt = toExtensionRaw $ ECHHelloRetryRequest "\x00\x00\x00\x00\x00\x00\x00\x00"
+    extensions = [keyShareExt, versionExt, echExt]
+    cipherId = CipherId $ cipherID usedCipher
+    hrr = ServerHello13 hrrRandom chSession cipherId extensions
