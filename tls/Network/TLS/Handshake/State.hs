@@ -95,8 +95,9 @@ data HandshakeKeyState = HandshakeKeyState
     deriving (Show)
 
 data TranscriptHash
-    = HandshakeMessages [ByteString]
-    | TranscriptHashContext HashCtx
+    = TranscriptHash0
+    | TranscriptHash1 ByteString -- ClientHeloo
+    | TranscriptHash2 HashCtx
     deriving (Show)
 
 data HandshakeState = HandshakeState
@@ -212,7 +213,7 @@ newEmptyHandshake ver crand =
         , hstDHPrivate = Nothing
         , hstServerECDHParams = Nothing
         , hstGroupPrivate = Nothing
-        , hstTranscriptHash = HandshakeMessages []
+        , hstTranscriptHash = TranscriptHash0
         , hstHandshakeMessages = []
         , hstCertReqToken = Nothing
         , hstCertReqCBdata = Nothing
@@ -447,8 +448,8 @@ setMainSecretFromPre ver role preMainSecret = do
 getSessionHash :: HandshakeM ByteString
 getSessionHash = gets $ \hst ->
     case hstTranscriptHash hst of
-        TranscriptHashContext hashCtx -> hashFinal hashCtx
-        HandshakeMessages _ -> error "un-initialized session hash"
+        TranscriptHash2 hashCtx -> hashFinal hashCtx
+        _ -> error "un-initialized session hash"
 
 -- | Set main secret and as a side effect generate the key block
 -- with all the right parameters, and setup the pending tx/rx state.

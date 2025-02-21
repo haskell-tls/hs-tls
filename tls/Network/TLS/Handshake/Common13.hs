@@ -81,7 +81,8 @@ import Network.TLS.Wire
 makeFinished :: MonadIO m => Context -> Hash -> ByteString -> m Handshake13
 makeFinished ctx usedHash baseKey = do
     verifyData <-
-        VerifyData . makeVerifyData usedHash baseKey <$> transcriptHash ctx
+        VerifyData . makeVerifyData usedHash baseKey
+            <$> transcriptHash ctx
     liftIO $ usingState_ ctx $ setVerifyDataForSend verifyData
     pure $ Finished13 verifyData
 
@@ -601,6 +602,7 @@ compulteComfirm ctx usedHash hs label = do
 
 setServerHelloParameters13 :: Context -> Cipher -> IO (Either TLSError ())
 setServerHelloParameters13 ctx cipher = usingHState ctx $ do
+    transitTranscriptHash $ cipherHash cipher
     hst <- get
     case hstPendingCipher hst of
         Nothing -> do
@@ -608,7 +610,6 @@ setServerHelloParameters13 ctx cipher = usingHState ctx $ do
                 hst
                     { hstPendingCipher = Just cipher
                     , hstPendingCompression = nullCompression
-                    , hstTranscriptHash = updateDigest $ hstTranscriptHash hst
                     }
             return $ Right ()
         Just oldcipher
@@ -617,10 +618,6 @@ setServerHelloParameters13 ctx cipher = usingHState ctx $ do
                 return $
                     Left $
                         Error_Protocol "TLS 1.3 cipher changed after hello retry" IllegalParameter
-  where
-    hashAlg = cipherHash cipher
-    updateDigest (HandshakeMessages bytes) = TranscriptHashContext $ foldl hashUpdate (hashInit hashAlg) $ reverse bytes
-    updateDigest (TranscriptHashContext _) = error "cannot initialize digest with another digest"
 
 -- | TLS13 handshake wrap up & clean up.  Contrary to
 -- @finishHandshake12@, this does not handle session, which is managed

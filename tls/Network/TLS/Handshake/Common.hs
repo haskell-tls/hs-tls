@@ -385,8 +385,9 @@ generateServerFinished ver ciph =
 -- initialize a new Handshake context (initial handshake or renegotiations)
 startHandshake :: Context -> Version -> ClientRandom -> IO ()
 startHandshake ctx ver crand =
-    let hs = Just $ newEmptyHandshake ver crand
-     in void $ swapMVar (ctxHandshakeState ctx) hs
+    void $ swapMVar (ctxHandshakeState ctx) $ Just hs
+  where
+    hs = newEmptyHandshake ver crand
 
 setServerHelloParameters12
     :: Context
@@ -396,18 +397,15 @@ setServerHelloParameters12
     -> Cipher
     -> Compression
     -> IO ()
-setServerHelloParameters12 ctx ver sran cipher compression = usingHState ctx $ do
-    modify $ \hst ->
-        hst
-            { hstServerRandom = Just sran
-            , hstPendingCipher = Just cipher
-            , hstPendingCompression = compression
-            , hstTranscriptHash = updateDigest $ hstTranscriptHash hst
-            }
-  where
-    hashAlg = getHash ver cipher
-    updateDigest (HandshakeMessages bytes) = TranscriptHashContext $ foldl hashUpdate (hashInit hashAlg) $ reverse bytes
-    updateDigest (TranscriptHashContext _) = error "cannot initialize digest with another digest"
+setServerHelloParameters12 ctx ver sran cipher compression =
+    usingHState ctx $ do
+        modify $ \hst ->
+            hst
+                { hstServerRandom = Just sran
+                , hstPendingCipher = Just cipher
+                , hstPendingCompression = compression
+                }
+        transitTranscriptHash $ getHash ver cipher
 
 -- The TLS12 Hash is cipher specific, and some TLS12 algorithms use SHA384
 -- instead of the default SHA256.
