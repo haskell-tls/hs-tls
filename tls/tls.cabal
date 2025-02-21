@@ -77,6 +77,7 @@ library
         Network.TLS.Handshake.Signature
         Network.TLS.Handshake.State
         Network.TLS.Handshake.State13
+        Network.TLS.Handshake.TranscriptHash
         Network.TLS.HashAndSignature
         Network.TLS.Hooks
         Network.TLS.IO

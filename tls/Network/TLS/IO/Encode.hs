@@ -13,6 +13,7 @@ import Data.IORef
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
 import Network.TLS.Handshake.State
+import Network.TLS.Handshake.TranscriptHash
 import Network.TLS.Imports
 import Network.TLS.Packet
 import Network.TLS.Packet13

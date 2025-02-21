@@ -15,28 +15,20 @@ module Network.TLS.Handshake.State13 (
     getRxLevel,
     clearTxRecordState,
     clearRxRecordState,
-    transcriptHash,
-    transcriptHashWith,
-    updateTranscriptHash13HRR,
     PendingRecvAction (..),
     setPendingRecvActions,
     popPendingRecvAction,
 ) where
 
 import Control.Concurrent.MVar
-import Control.Monad.State
-import qualified Data.ByteString as B
 import Data.IORef
 
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Context.Internal
-import Network.TLS.Crypto
-import Network.TLS.Handshake.State
 import Network.TLS.Imports
 import Network.TLS.KeySchedule (hkdfExpandLabel)
 import Network.TLS.Record.State
-import Network.TLS.Struct
 import Network.TLS.Types
 
 getTxRecordState :: Context -> IO (Hash, Cipher, CryptLevel, ByteString)
@@ -145,38 +137,6 @@ clearRxRecordState = clearXState ctxRxRecordState
 clearXState :: (Context -> MVar RecordState) -> Context -> IO ()
 clearXState func ctx =
     modifyMVar_ (func ctx) (\rt -> return rt{stCipher = Nothing})
-
--- When a HelloRetryRequest is sent or received, the existing transcript must be
--- wrapped in a "message_hash" construct.  See RFC 8446 section 4.4.1.  This
--- applies to key-schedule computations as well as the ones for PSK binders.
-updateTranscriptHash13HRR :: HandshakeM ()
-updateTranscriptHash13HRR = do
-    cipher <- getPendingCipher
-    foldTranscriptHash (cipherHash cipher) foldFunc
-  where
-    foldFunc dig =
-        -- Handshake message:
-        -- typ <-len-> body
-        -- 254 0 0 len hash(CH1)
-        B.concat
-            [ "\254\0\0"
-            , B.singleton (fromIntegral $ B.length dig)
-            , dig
-            ]
-
-transcriptHash :: MonadIO m => Context -> m ByteString
-transcriptHash ctx = do
-    hst <- fromJust <$> getHState ctx
-    case hstTranscriptHash hst of
-        TranscriptHashContext hashCtx -> return $ hashFinal hashCtx
-        HandshakeMessages _ -> error "un-initialized handshake digest"
-
-transcriptHashWith :: MonadIO m => Context -> ByteString -> m ByteString
-transcriptHashWith ctx bs = do
-    hst <- fromJust <$> getHState ctx
-    case hstTranscriptHash hst of
-        TranscriptHashContext hashCtx -> return $ hashFinal $ hashUpdate hashCtx bs
-        HandshakeMessages _ -> error "un-initialized handshake digest"
 
 setPendingRecvActions :: Context -> [PendingRecvAction] -> IO ()
 setPendingRecvActions ctx = writeIORef (ctxPendingRecvActions ctx)

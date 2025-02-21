@@ -51,6 +51,7 @@ import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
+import Network.TLS.Handshake.TranscriptHash
 import Network.TLS.IO
 import Network.TLS.IO.Encode
 import Network.TLS.Imports

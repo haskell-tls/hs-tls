@@ -45,11 +45,8 @@ module Network.TLS.Handshake.State (
 
     -- * digest accessors
     addHandshakeMessage,
-    updateTranscriptHashDigest,
     getHandshakeMessages,
     getHandshakeMessagesRev,
-    getTranscriptHash,
-    foldTranscriptHash,
 
     -- * main secret
     setMainSecret,
@@ -417,55 +414,6 @@ getHandshakeMessages = gets (reverse . hstHandshakeMessages)
 getHandshakeMessagesRev :: HandshakeM [ByteString]
 getHandshakeMessagesRev = gets hstHandshakeMessages
 
-updateTranscriptHashDigest :: ByteString -> HandshakeM ()
-updateTranscriptHashDigest content = modify $ \hs ->
-    hs
-        { hstTranscriptHash = case hstTranscriptHash hs of
-            HandshakeMessages bytes -> HandshakeMessages (content : bytes)
-            TranscriptHashContext hashCtx -> TranscriptHashContext $ hashUpdate hashCtx content
-        }
-
--- | Compress the whole transcript with the specified function.  Function @f@
--- takes the handshake digest as input and returns an encoded handshake message
--- to replace the transcript with.
-foldTranscriptHash :: Hash -> (ByteString -> ByteString) -> HandshakeM ()
-foldTranscriptHash hashAlg f = modify $ \hs ->
-    case hstTranscriptHash hs of
-        HandshakeMessages bytes ->
-            let hashCtx = foldl hashUpdate (hashInit hashAlg) $ reverse bytes
-                folded = f (hashFinal hashCtx)
-             in hs
-                    { hstTranscriptHash = HandshakeMessages [folded]
-                    , hstHandshakeMessages = [folded]
-                    }
-        TranscriptHashContext hashCtx ->
-            let folded = f (hashFinal hashCtx)
-                hashCtx' = hashUpdate (hashInit hashAlg) folded
-             in hs
-                    { hstTranscriptHash = TranscriptHashContext hashCtx'
-                    , hstHandshakeMessages = [folded]
-                    }
-
-getSessionHash :: HandshakeM ByteString
-getSessionHash = gets $ \hst ->
-    case hstTranscriptHash hst of
-        TranscriptHashContext hashCtx -> hashFinal hashCtx
-        HandshakeMessages _ -> error "un-initialized session hash"
-
-getTranscriptHash :: Version -> Role -> HandshakeM ByteString
-getTranscriptHash ver role = gets gen
-  where
-    gen hst = case hstTranscriptHash hst of
-        TranscriptHashContext hashCtx ->
-            let msecret = fromJust $ hstMainSecret hst
-                cipher = fromJust $ hstPendingCipher hst
-             in generateFinished ver cipher msecret hashCtx
-        HandshakeMessages _ ->
-            error "un-initialized handshake digest"
-    generateFinished
-        | role == ClientRole = generateClientFinished
-        | otherwise = generateServerFinished
-
 -- | Generate the main secret from the pre-main secret.
 setMainSecretFromPre
     :: ByteArrayAccess preMain
@@ -495,6 +443,12 @@ setMainSecretFromPre ver role preMainSecret = do
             (fromJust $ hstPendingCipher hst)
             preMainSecret
             <$> getSessionHash
+
+getSessionHash :: HandshakeM ByteString
+getSessionHash = gets $ \hst ->
+    case hstTranscriptHash hst of
+        TranscriptHashContext hashCtx -> hashFinal hashCtx
+        HandshakeMessages _ -> error "un-initialized session hash"
 
 -- | Set main secret and as a side effect generate the key block
 -- with all the right parameters, and setup the pending tx/rx state.
