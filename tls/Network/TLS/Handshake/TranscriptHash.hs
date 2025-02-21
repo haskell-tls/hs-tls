@@ -3,8 +3,8 @@
 module Network.TLS.Handshake.TranscriptHash (
     transcriptHash,
     transcriptHashWith,
+    updateTranscriptHash,
     updateTranscriptHash13HRR,
-    updateTranscriptHashDigest,
     getTranscriptHash,
     foldTranscriptHash,
 ) where
@@ -53,8 +53,8 @@ transcriptHashWith ctx bs = do
         TranscriptHashContext hashCtx -> return $ hashFinal $ hashUpdate hashCtx bs
         HandshakeMessages _ -> error "un-initialized handshake digest"
 
-updateTranscriptHashDigest :: ByteString -> HandshakeM ()
-updateTranscriptHashDigest content = modify $ \hs ->
+updateTranscriptHash :: ByteString -> HandshakeM ()
+updateTranscriptHash content = modify $ \hs ->
     hs
         { hstTranscriptHash = case hstTranscriptHash hs of
             HandshakeMessages bytes -> HandshakeMessages (content : bytes)
