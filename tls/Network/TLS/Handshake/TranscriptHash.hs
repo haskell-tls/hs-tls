@@ -5,8 +5,8 @@ module Network.TLS.Handshake.TranscriptHash (
     transcriptHashWith,
     updateTranscriptHash,
     updateTranscriptHash13HRR,
-    getTranscriptHash,
     foldTranscriptHash,
+    generateFinished,
 ) where
 
 import Control.Monad.State
@@ -82,16 +82,39 @@ foldTranscriptHash hashAlg f = modify $ \hs ->
                     , hstHandshakeMessages = [folded]
                     }
 
-getTranscriptHash :: Version -> Role -> HandshakeM ByteString
-getTranscriptHash ver role = gets gen
+generateFinished :: Context -> Version -> Role -> IO ByteString
+generateFinished ctx ver role = usingHState ctx $ gets gen
   where
     gen hst = case hstTranscriptHash hst of
         TranscriptHashContext hashCtx ->
             let msecret = fromJust $ hstMainSecret hst
                 cipher = fromJust $ hstPendingCipher hst
-             in generateFinished ver cipher msecret hashCtx
+             in switch ver cipher msecret hashCtx
         HandshakeMessages _ ->
             error "un-initialized handshake digest"
-    generateFinished
+    switch
         | role == ClientRole = generateClientFinished
         | otherwise = generateServerFinished
+
+generateFinished' :: PRF -> ByteString -> ByteString -> HashCtx -> ByteString
+generateFinished' prf label mainSecret hashctx = prf mainSecret seed 12
+  where
+    seed = B.concat [label, hashFinal hashctx]
+
+generateClientFinished
+    :: Version
+    -> Cipher
+    -> ByteString
+    -> HashCtx
+    -> ByteString
+generateClientFinished ver ciph =
+    generateFinished' (getPRF ver ciph) "client finished"
+
+generateServerFinished
+    :: Version
+    -> Cipher
+    -> ByteString
+    -> HashCtx
+    -> ByteString
+generateServerFinished ver ciph =
+    generateFinished' (getPRF ver ciph) "server finished"

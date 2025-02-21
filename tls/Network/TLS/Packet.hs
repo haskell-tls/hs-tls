@@ -38,8 +38,6 @@ module Network.TLS.Packet (
     generateMainSecret,
     generateExtendedMainSecret,
     generateKeyBlock,
-    generateClientFinished,
-    generateServerFinished,
 
     -- * for extensions parsing
     getSignatureHashAlgorithm,
@@ -57,6 +55,10 @@ module Network.TLS.Packet (
     putDNames,
     getDNames,
     getHandshakeType,
+
+    -- * PRF
+    PRF,
+    getPRF,
 ) where
 
 import Data.ByteArray (ByteArrayAccess)
@@ -599,29 +601,6 @@ generateKeyBlock
     -> Int
     -> ByteString
 generateKeyBlock v c = generateKeyBlock_TLS $ getPRF v c
-
-generateFinished_TLS :: PRF -> ByteString -> ByteString -> HashCtx -> ByteString
-generateFinished_TLS prf label mainSecret hashctx = prf mainSecret seed 12
-  where
-    seed = B.concat [label, hashFinal hashctx]
-
-generateClientFinished
-    :: Version
-    -> Cipher
-    -> ByteString
-    -> HashCtx
-    -> ByteString
-generateClientFinished ver ciph =
-    generateFinished_TLS (getPRF ver ciph) "client finished"
-
-generateServerFinished
-    :: Version
-    -> Cipher
-    -> ByteString
-    -> HashCtx
-    -> ByteString
-generateServerFinished ver ciph =
-    generateFinished_TLS (getPRF ver ciph) "server finished"
 
 ------------------------------------------------------------
 
