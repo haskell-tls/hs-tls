@@ -25,6 +25,7 @@ import Network.TLS.Handshake.Server.Common
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
+import Network.TLS.Handshake.TranscriptHash
 import Network.TLS.IO
 import Network.TLS.Imports
 import Network.TLS.KeySchedule
@@ -88,7 +89,7 @@ expectFinished sparams ctx exts appKey clientHandshakeSecret sfSentTime hChBefor
     (usedHash, usedCipher, _, _) <- getRxRecordState ctx
     let ClientTrafficSecret chs = clientHandshakeSecret
     checkFinished ctx usedHash chs hChBeforeCf verifyData
-    handshakeDone13 ctx
+    finishHandshake13 ctx
     setRxRecordState ctx usedHash usedCipher clientApplicationSecret0
     sendNewSessionTicket sparams ctx usedCipher exts applicationSecret sfSentTime
   where

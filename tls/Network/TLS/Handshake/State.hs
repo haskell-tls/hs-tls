@@ -4,7 +4,7 @@
 
 module Network.TLS.Handshake.State (
     HandshakeState (..),
-    HandshakeDigest (..),
+    TranscriptHash (..),
     HandshakeMode13 (..),
     RTT0Status (..),
     CertReqCBdata,
@@ -45,11 +45,8 @@ module Network.TLS.Handshake.State (
 
     -- * digest accessors
     addHandshakeMessage,
-    updateTranscriptHashDigest,
     getHandshakeMessages,
     getHandshakeMessagesRev,
-    getHandshakeDigest,
-    foldHandshakeDigest,
 
     -- * main secret
     setMainSecret,
@@ -57,7 +54,6 @@ module Network.TLS.Handshake.State (
 
     -- * misc accessor
     getPendingCipher,
-    setServerHelloParameters,
     setExtendedMainSecret,
     getExtendedMainSecret,
     setSupportedGroup,
@@ -98,9 +94,10 @@ data HandshakeKeyState = HandshakeKeyState
     }
     deriving (Show)
 
-data HandshakeDigest
-    = HandshakeMessages [ByteString]
-    | HandshakeDigestContext HashCtx
+data TranscriptHash
+    = TranscriptHash0
+    | TranscriptHash1 ByteString -- ClientHeloo
+    | TranscriptHash2 HashCtx
     deriving (Show)
 
 data HandshakeState = HandshakeState
@@ -113,7 +110,7 @@ data HandshakeState = HandshakeState
     , hstDHPrivate :: Maybe DHPrivate
     , hstServerECDHParams :: Maybe ServerECDHParams
     , hstGroupPrivate :: Maybe GroupPrivate
-    , hstHandshakeDigest :: HandshakeDigest
+    , hstTranscriptHash :: TranscriptHash
     , hstHandshakeMessages :: [ByteString]
     , hstCertReqToken :: Maybe ByteString
     -- ^ Set to Just-value when a TLS13 certificate request is received
@@ -216,7 +213,7 @@ newEmptyHandshake ver crand =
         , hstDHPrivate = Nothing
         , hstServerECDHParams = Nothing
         , hstGroupPrivate = Nothing
-        , hstHandshakeDigest = HandshakeMessages []
+        , hstTranscriptHash = TranscriptHash0
         , hstHandshakeMessages = []
         , hstCertReqToken = Nothing
         , hstCertReqCBdata = Nothing
@@ -418,55 +415,6 @@ getHandshakeMessages = gets (reverse . hstHandshakeMessages)
 getHandshakeMessagesRev :: HandshakeM [ByteString]
 getHandshakeMessagesRev = gets hstHandshakeMessages
 
-updateTranscriptHashDigest :: ByteString -> HandshakeM ()
-updateTranscriptHashDigest content = modify $ \hs ->
-    hs
-        { hstHandshakeDigest = case hstHandshakeDigest hs of
-            HandshakeMessages bytes -> HandshakeMessages (content : bytes)
-            HandshakeDigestContext hashCtx -> HandshakeDigestContext $ hashUpdate hashCtx content
-        }
-
--- | Compress the whole transcript with the specified function.  Function @f@
--- takes the handshake digest as input and returns an encoded handshake message
--- to replace the transcript with.
-foldHandshakeDigest :: Hash -> (ByteString -> ByteString) -> HandshakeM ()
-foldHandshakeDigest hashAlg f = modify $ \hs ->
-    case hstHandshakeDigest hs of
-        HandshakeMessages bytes ->
-            let hashCtx = foldl hashUpdate (hashInit hashAlg) $ reverse bytes
-                folded = f (hashFinal hashCtx)
-             in hs
-                    { hstHandshakeDigest = HandshakeMessages [folded]
-                    , hstHandshakeMessages = [folded]
-                    }
-        HandshakeDigestContext hashCtx ->
-            let folded = f (hashFinal hashCtx)
-                hashCtx' = hashUpdate (hashInit hashAlg) folded
-             in hs
-                    { hstHandshakeDigest = HandshakeDigestContext hashCtx'
-                    , hstHandshakeMessages = [folded]
-                    }
-
-getSessionHash :: HandshakeM ByteString
-getSessionHash = gets $ \hst ->
-    case hstHandshakeDigest hst of
-        HandshakeDigestContext hashCtx -> hashFinal hashCtx
-        HandshakeMessages _ -> error "un-initialized session hash"
-
-getHandshakeDigest :: Version -> Role -> HandshakeM ByteString
-getHandshakeDigest ver role = gets gen
-  where
-    gen hst = case hstHandshakeDigest hst of
-        HandshakeDigestContext hashCtx ->
-            let msecret = fromJust $ hstMainSecret hst
-                cipher = fromJust $ hstPendingCipher hst
-             in generateFinished ver cipher msecret hashCtx
-        HandshakeMessages _ ->
-            error "un-initialized handshake digest"
-    generateFinished
-        | role == ClientRole = generateClientFinished
-        | otherwise = generateServerFinished
-
 -- | Generate the main secret from the pre-main secret.
 setMainSecretFromPre
     :: ByteArrayAccess preMain
@@ -496,6 +444,12 @@ setMainSecretFromPre ver role preMainSecret = do
             (fromJust $ hstPendingCipher hst)
             preMainSecret
             <$> getSessionHash
+
+getSessionHash :: HandshakeM ByteString
+getSessionHash = gets $ \hst ->
+    case hstTranscriptHash hst of
+        TranscriptHash2 hashCtx -> hashFinal hashCtx
+        _ -> error "un-initialized session hash"
 
 -- | Set main secret and as a side effect generate the key block
 -- with all the right parameters, and setup the pending tx/rx state.
@@ -568,31 +522,3 @@ computeKeyBlock hst mainSecret ver cc = (pendingTx, pendingRx)
             }
 
     orOnServer f g = if cc == ClientRole then f else g
-
-setServerHelloParameters
-    :: Version
-    -- ^ chosen version
-    -> ServerRandom
-    -> Cipher
-    -> Compression
-    -> HandshakeM ()
-setServerHelloParameters ver sran cipher compression = do
-    modify $ \hst ->
-        hst
-            { hstServerRandom = Just sran
-            , hstPendingCipher = Just cipher
-            , hstPendingCompression = compression
-            , hstHandshakeDigest = updateDigest $ hstHandshakeDigest hst
-            }
-  where
-    hashAlg = getHash ver cipher
-    updateDigest (HandshakeMessages bytes) = HandshakeDigestContext $ foldl hashUpdate (hashInit hashAlg) $ reverse bytes
-    updateDigest (HandshakeDigestContext _) = error "cannot initialize digest with another digest"
-
--- The TLS12 Hash is cipher specific, and some TLS12 algorithms use SHA384
--- instead of the default SHA256.
-getHash :: Version -> Cipher -> Hash
-getHash ver ciph
-    | ver < TLS12 = SHA1_MD5
-    | maybe True (< TLS12) (cipherMinVer ciph) = SHA256
-    | otherwise = cipherHash ciph

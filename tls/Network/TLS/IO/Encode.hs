@@ -13,6 +13,7 @@ import Data.IORef
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
 import Network.TLS.Handshake.State
+import Network.TLS.Handshake.TranscriptHash
 import Network.TLS.Imports
 import Network.TLS.Packet
 import Network.TLS.Packet13
@@ -76,7 +77,7 @@ updateTranscriptHash12 :: Context -> Handshake -> IO ByteString
 updateTranscriptHash12 ctx hs = do
     usingHState ctx $ do
         when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage encoded
-        when (finishedHandshakeMaterial hs) $ updateTranscriptHashDigest encoded
+        when (finishedHandshakeMaterial hs) $ updateTranscriptHash encoded
     return encoded
   where
     encoded = encodeHandshake hs
@@ -108,7 +109,7 @@ updateTranscriptHash13 ctx hs
     | isIgnored hs = return encoded
     | otherwise = do
         usingHState ctx $ do
-            updateTranscriptHashDigest encoded
+            updateTranscriptHash encoded
             addHandshakeMessage encoded
         return encoded
   where

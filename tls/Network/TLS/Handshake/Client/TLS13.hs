@@ -25,6 +25,7 @@ import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
+import Network.TLS.Handshake.TranscriptHash
 import Network.TLS.IO
 import Network.TLS.Imports
 import Network.TLS.Parameters
@@ -294,7 +295,7 @@ sendClientSecondFlight13' cparams ctx choice hkey rtt0accepted eexts = do
     let appSecInfo = ApplicationSecretInfo (triClient appKey, triServer appKey)
     contextSync ctx $ SendClientFinished eexts appSecInfo
     modifyTLS13State ctx $ \st -> st{tls13stHsKey = Nothing}
-    handshakeDone13 ctx
+    finishHandshake13 ctx
     rtt0 <- tls13st0RTT <$> getTLS13State ctx
     when rtt0 $ do
         builder <- tls13stPendingSentData <$> getTLS13State ctx

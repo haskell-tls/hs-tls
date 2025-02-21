@@ -45,7 +45,7 @@ recvClientSecondFlight12 sparams ctx resumeSessionData = do
         Just _ -> do
             _ <- sessionEstablished ctx
             recvCCSandFinished ctx
-    handshakeDone12 ctx
+    finishHandshake12 ctx
   where
     adjustLifetime i
         | i < 0 = 0

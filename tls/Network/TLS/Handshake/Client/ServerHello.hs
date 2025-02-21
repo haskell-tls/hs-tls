@@ -12,10 +12,11 @@ import Network.TLS.ErrT
 import Network.TLS.Extension
 import Network.TLS.Handshake.Client.Common
 import Network.TLS.Handshake.Common
+import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Random
 import Network.TLS.Handshake.State
-import Network.TLS.Handshake.State13
+import Network.TLS.Handshake.TranscriptHash
 import Network.TLS.IO
 import Network.TLS.Imports
 import Network.TLS.Parameters
@@ -117,8 +118,8 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession (Cipher
 
     ver <- usingState_ ctx getVersion
 
-    when (ver == TLS12) $ do
-        usingHState ctx $ setServerHelloParameters rver serverRan cipherAlg compressAlg
+    when (ver == TLS12) $
+        setServerHelloParameters12 ctx rver serverRan cipherAlg compressAlg
 
     let supportedVers = supportedVersions $ clientSupported cparams
 
@@ -202,7 +203,7 @@ updateContext13 ctx cipherAlg = do
             Error_Protocol
                 "renegotiation to TLS 1.3 or later is not allowed"
                 ProtocolVersion
-    failOnEitherError $ usingHState ctx $ setHelloParameters13 cipherAlg
+    failOnEitherError $ setServerHelloParameters13 ctx cipherAlg
 
 updateContext12 :: Context -> [ExtensionRaw] -> Maybe SessionData -> IO ()
 updateContext12 ctx shExts resumingSession = do

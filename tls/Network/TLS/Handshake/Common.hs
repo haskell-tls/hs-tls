@@ -6,7 +6,6 @@ module Network.TLS.Handshake.Common (
     handleException,
     unexpected,
     newSession,
-    handshakeDone12,
     ensureNullCompression,
     ticketOrSessionID12,
 
@@ -31,8 +30,12 @@ module Network.TLS.Handshake.Common (
     processCertificate,
     --
     setPeerRecordSizeLimit,
-    startHandshake,
+    generateFinished,
     updateTranscriptHash12,
+    --
+    startHandshake,
+    finishHandshake12,
+    setServerHelloParameters12,
 ) where
 
 import Control.Concurrent.MVar
@@ -49,10 +52,12 @@ import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
+import Network.TLS.Handshake.TranscriptHash
 import Network.TLS.IO
 import Network.TLS.IO.Encode
 import Network.TLS.Imports
 import Network.TLS.Measurement
+import Network.TLS.Packet
 import Network.TLS.Parameters
 import Network.TLS.State
 import Network.TLS.Struct
@@ -116,26 +121,6 @@ newSession ctx
     | supportedSession $ ctxSupported ctx = Session . Just <$> getStateRNG ctx 32
     | otherwise = return $ Session Nothing
 
--- | when a new handshake is done, wrap up & clean up.
-handshakeDone12 :: Context -> IO ()
-handshakeDone12 ctx = do
-    -- forget most handshake data and reset bytes counters.
-    modifyMVar_ (ctxHandshakeState ctx) $ \case
-        Nothing -> return Nothing
-        Just hshake ->
-            return $
-                Just
-                    (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
-                        { hstServerRandom = hstServerRandom hshake
-                        , hstMainSecret = hstMainSecret hshake
-                        , hstExtendedMainSecret = hstExtendedMainSecret hshake
-                        , hstSupportedGroup = hstSupportedGroup hshake
-                        }
-    updateMeasure ctx resetBytesCounters
-    -- mark the secure connection up and running.
-    setEstablished ctx Established
-    return ()
-
 sendCCSandFinished
     :: Context
     -> Role
@@ -144,10 +129,8 @@ sendCCSandFinished ctx role = do
     sendPacket12 ctx ChangeCipherSpec
     contextFlush ctx
     enablePeerRecordLimit ctx
-    verifyData <-
-        VerifyData
-            <$> ( usingState_ ctx getVersion >>= \ver -> usingHState ctx $ getHandshakeDigest ver role
-                )
+    ver <- usingState_ ctx getVersion
+    verifyData <- VerifyData <$> (generateFinished ctx ver role)
     sendPacket12 ctx (Handshake [Finished verifyData])
     usingState_ ctx $ setVerifyDataForSend verifyData
     contextFlush ctx
@@ -312,8 +295,7 @@ expectFinished _ p = unexpected (show p) (Just "Handshake Finished")
 processFinished :: Context -> VerifyData -> IO ()
 processFinished ctx verifyData = do
     (cc, ver) <- usingState_ ctx $ (,) <$> getRole <*> getVersion
-    expected <-
-        VerifyData <$> usingHState ctx (getHandshakeDigest ver $ invertRole cc)
+    expected <- VerifyData <$> generateFinished ctx ver (invertRole cc)
     when (expected /= verifyData) $ decryptError "finished verification failed"
     usingState_ ctx $ setVerifyDataForRecv verifyData
 
@@ -361,8 +343,93 @@ setPeerRecordSizeLimit ctx tls13 (RecordSizeLimit n0) = do
         | tls13 = defaultRecordSizeLimit + 1
         | otherwise = defaultRecordSizeLimit
 
+----------------------------------------------------------------
+
+generateFinished :: Context -> Version -> Role -> IO ByteString
+generateFinished ctx ver role = do
+    thash <- transcriptHash ctx
+    (mainSecret, cipher) <- usingHState ctx $ gets $ \hst ->
+        (fromJust $ hstMainSecret hst, fromJust $ hstPendingCipher hst)
+    return $
+        if role == ClientRole
+            then
+                generateClientFinished ver cipher mainSecret thash
+            else
+                generateServerFinished ver cipher mainSecret thash
+
+generateFinished' :: PRF -> ByteString -> ByteString -> ByteString -> ByteString
+generateFinished' prf label mainSecret thash = prf mainSecret seed 12
+  where
+    seed = label <> thash
+
+generateClientFinished
+    :: Version
+    -> Cipher
+    -> ByteString
+    -> ByteString
+    -> ByteString
+generateClientFinished ver ciph =
+    generateFinished' (getPRF ver ciph) "client finished"
+
+generateServerFinished
+    :: Version
+    -> Cipher
+    -> ByteString
+    -> ByteString
+    -> ByteString
+generateServerFinished ver ciph =
+    generateFinished' (getPRF ver ciph) "server finished"
+
+----------------------------------------------------------------
+
 -- initialize a new Handshake context (initial handshake or renegotiations)
 startHandshake :: Context -> Version -> ClientRandom -> IO ()
 startHandshake ctx ver crand =
-    let hs = Just $ newEmptyHandshake ver crand
-     in void $ swapMVar (ctxHandshakeState ctx) hs
+    void $ swapMVar (ctxHandshakeState ctx) $ Just hs
+  where
+    hs = newEmptyHandshake ver crand
+
+setServerHelloParameters12
+    :: Context
+    -> Version
+    -- ^ chosen version
+    -> ServerRandom
+    -> Cipher
+    -> Compression
+    -> IO ()
+setServerHelloParameters12 ctx ver sran cipher compression =
+    usingHState ctx $ do
+        modify $ \hst ->
+            hst
+                { hstServerRandom = Just sran
+                , hstPendingCipher = Just cipher
+                , hstPendingCompression = compression
+                }
+        transitTranscriptHash $ getHash ver cipher
+
+-- The TLS12 Hash is cipher specific, and some TLS12 algorithms use SHA384
+-- instead of the default SHA256.
+getHash :: Version -> Cipher -> Hash
+getHash ver ciph
+    | ver < TLS12 = SHA1_MD5
+    | maybe True (< TLS12) (cipherMinVer ciph) = SHA256
+    | otherwise = cipherHash ciph
+
+-- | when a new handshake is done, wrap up & clean up.
+finishHandshake12 :: Context -> IO ()
+finishHandshake12 ctx = do
+    -- forget most handshake data and reset bytes counters.
+    modifyMVar_ (ctxHandshakeState ctx) $ \case
+        Nothing -> return Nothing
+        Just hshake ->
+            return $
+                Just
+                    (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
+                        { hstServerRandom = hstServerRandom hshake
+                        , hstMainSecret = hstMainSecret hshake
+                        , hstExtendedMainSecret = hstExtendedMainSecret hshake
+                        , hstSupportedGroup = hstSupportedGroup hshake
+                        }
+    updateMeasure ctx resetBytesCounters
+    -- mark the secure connection up and running.
+    setEstablished ctx Established

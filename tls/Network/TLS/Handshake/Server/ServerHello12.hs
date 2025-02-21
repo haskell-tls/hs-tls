@@ -301,8 +301,7 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
                     , {- 0xff01 -} secureRenegExt
                     ]
     usingState_ ctx $ setVersion TLS12
-    usingHState ctx $
-        setServerHelloParameters TLS12 srand usedCipher nullCompression
+    setServerHelloParameters12 ctx TLS12 srand usedCipher nullCompression
     return $
         ServerHello
             TLS12
