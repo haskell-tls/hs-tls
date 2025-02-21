@@ -95,7 +95,7 @@ recvServerSecondFlight12 cparams ctx = do
                     (sharedSessionManager $ ctxShared ctx)
                     identity
                     (fromJust sessionData)
-    handshakeDone12 ctx
+    finishHandshake12 ctx
     liftIO $ do
         minfo <- contextGetInformation ctx
         case minfo of

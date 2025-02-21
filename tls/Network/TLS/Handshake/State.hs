@@ -57,7 +57,6 @@ module Network.TLS.Handshake.State (
 
     -- * misc accessor
     getPendingCipher,
-    setServerHelloParameters,
     setExtendedMainSecret,
     getExtendedMainSecret,
     setSupportedGroup,
@@ -568,31 +567,3 @@ computeKeyBlock hst mainSecret ver cc = (pendingTx, pendingRx)
             }
 
     orOnServer f g = if cc == ClientRole then f else g
-
-setServerHelloParameters
-    :: Version
-    -- ^ chosen version
-    -> ServerRandom
-    -> Cipher
-    -> Compression
-    -> HandshakeM ()
-setServerHelloParameters ver sran cipher compression = do
-    modify $ \hst ->
-        hst
-            { hstServerRandom = Just sran
-            , hstPendingCipher = Just cipher
-            , hstPendingCompression = compression
-            , hstTranscriptHash = updateDigest $ hstTranscriptHash hst
-            }
-  where
-    hashAlg = getHash ver cipher
-    updateDigest (HandshakeMessages bytes) = TranscriptHashContext $ foldl hashUpdate (hashInit hashAlg) $ reverse bytes
-    updateDigest (TranscriptHashContext _) = error "cannot initialize digest with another digest"
-
--- The TLS12 Hash is cipher specific, and some TLS12 algorithms use SHA384
--- instead of the default SHA256.
-getHash :: Version -> Cipher -> Hash
-getHash ver ciph
-    | ver < TLS12 = SHA1_MD5
-    | maybe True (< TLS12) (cipherMinVer ciph) = SHA256
-    | otherwise = cipherHash ciph

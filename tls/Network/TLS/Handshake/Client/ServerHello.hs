@@ -117,8 +117,8 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession (Cipher
 
     ver <- usingState_ ctx getVersion
 
-    when (ver == TLS12) $ do
-        usingHState ctx $ setServerHelloParameters rver serverRan cipherAlg compressAlg
+    when (ver == TLS12) $
+        setServerHelloParameters12 ctx rver serverRan cipherAlg compressAlg
 
     let supportedVers = supportedVersions $ clientSupported cparams
 

@@ -6,7 +6,6 @@ module Network.TLS.Handshake.Common (
     handleException,
     unexpected,
     newSession,
-    handshakeDone12,
     ensureNullCompression,
     ticketOrSessionID12,
 
@@ -31,8 +30,11 @@ module Network.TLS.Handshake.Common (
     processCertificate,
     --
     setPeerRecordSizeLimit,
-    startHandshake,
     updateTranscriptHash12,
+    --
+    startHandshake,
+    finishHandshake12,
+    setServerHelloParameters12,
 ) where
 
 import Control.Concurrent.MVar
@@ -115,26 +117,6 @@ newSession :: Context -> IO Session
 newSession ctx
     | supportedSession $ ctxSupported ctx = Session . Just <$> getStateRNG ctx 32
     | otherwise = return $ Session Nothing
-
--- | when a new handshake is done, wrap up & clean up.
-handshakeDone12 :: Context -> IO ()
-handshakeDone12 ctx = do
-    -- forget most handshake data and reset bytes counters.
-    modifyMVar_ (ctxHandshakeState ctx) $ \case
-        Nothing -> return Nothing
-        Just hshake ->
-            return $
-                Just
-                    (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
-                        { hstServerRandom = hstServerRandom hshake
-                        , hstMainSecret = hstMainSecret hshake
-                        , hstExtendedMainSecret = hstExtendedMainSecret hshake
-                        , hstSupportedGroup = hstSupportedGroup hshake
-                        }
-    updateMeasure ctx resetBytesCounters
-    -- mark the secure connection up and running.
-    setEstablished ctx Established
-    return ()
 
 sendCCSandFinished
     :: Context
@@ -361,8 +343,58 @@ setPeerRecordSizeLimit ctx tls13 (RecordSizeLimit n0) = do
         | tls13 = defaultRecordSizeLimit + 1
         | otherwise = defaultRecordSizeLimit
 
+----------------------------------------------------------------
+
 -- initialize a new Handshake context (initial handshake or renegotiations)
 startHandshake :: Context -> Version -> ClientRandom -> IO ()
 startHandshake ctx ver crand =
     let hs = Just $ newEmptyHandshake ver crand
      in void $ swapMVar (ctxHandshakeState ctx) hs
+
+setServerHelloParameters12
+    :: Context
+    -> Version
+    -- ^ chosen version
+    -> ServerRandom
+    -> Cipher
+    -> Compression
+    -> IO ()
+setServerHelloParameters12 ctx ver sran cipher compression = usingHState ctx $ do
+    modify $ \hst ->
+        hst
+            { hstServerRandom = Just sran
+            , hstPendingCipher = Just cipher
+            , hstPendingCompression = compression
+            , hstTranscriptHash = updateDigest $ hstTranscriptHash hst
+            }
+  where
+    hashAlg = getHash ver cipher
+    updateDigest (HandshakeMessages bytes) = TranscriptHashContext $ foldl hashUpdate (hashInit hashAlg) $ reverse bytes
+    updateDigest (TranscriptHashContext _) = error "cannot initialize digest with another digest"
+
+-- The TLS12 Hash is cipher specific, and some TLS12 algorithms use SHA384
+-- instead of the default SHA256.
+getHash :: Version -> Cipher -> Hash
+getHash ver ciph
+    | ver < TLS12 = SHA1_MD5
+    | maybe True (< TLS12) (cipherMinVer ciph) = SHA256
+    | otherwise = cipherHash ciph
+
+-- | when a new handshake is done, wrap up & clean up.
+finishHandshake12 :: Context -> IO ()
+finishHandshake12 ctx = do
+    -- forget most handshake data and reset bytes counters.
+    modifyMVar_ (ctxHandshakeState ctx) $ \case
+        Nothing -> return Nothing
+        Just hshake ->
+            return $
+                Just
+                    (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
+                        { hstServerRandom = hstServerRandom hshake
+                        , hstMainSecret = hstMainSecret hshake
+                        , hstExtendedMainSecret = hstExtendedMainSecret hshake
+                        , hstSupportedGroup = hstSupportedGroup hshake
+                        }
+    updateMeasure ctx resetBytesCounters
+    -- mark the secure connection up and running.
+    setEstablished ctx Established
