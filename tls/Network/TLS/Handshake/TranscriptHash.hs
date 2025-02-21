@@ -6,7 +6,6 @@ module Network.TLS.Handshake.TranscriptHash (
     updateTranscriptHash,
     updateTranscriptHash13HRR,
     foldTranscriptHash,
-    generateFinished,
 ) where
 
 import Control.Monad.State
@@ -17,9 +16,6 @@ import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import Network.TLS.Handshake.State
 import Network.TLS.Imports
-import Network.TLS.Packet
-import Network.TLS.Struct
-import Network.TLS.Types
 
 -- When a HelloRetryRequest is sent or received, the existing transcript must be
 -- wrapped in a "message_hash" construct.  See RFC 8446 section 4.4.1.  This
@@ -81,38 +77,3 @@ foldTranscriptHash hashAlg f = modify $ \hs ->
                     { hstTranscriptHash = TranscriptHashContext hashCtx'
                     , hstHandshakeMessages = [folded]
                     }
-
-generateFinished :: Context -> Version -> Role -> IO ByteString
-generateFinished ctx ver role = do
-    thash <- transcriptHash ctx
-    (mainSecret, cipher) <- usingHState ctx $ gets $ \hst ->
-        (fromJust $ hstMainSecret hst, fromJust $ hstPendingCipher hst)
-    return $
-        if role == ClientRole
-            then
-                generateClientFinished ver cipher mainSecret thash
-            else
-                generateServerFinished ver cipher mainSecret thash
-
-generateFinished' :: PRF -> ByteString -> ByteString -> ByteString -> ByteString
-generateFinished' prf label mainSecret thash = prf mainSecret seed 12
-  where
-    seed = label <> thash
-
-generateClientFinished
-    :: Version
-    -> Cipher
-    -> ByteString
-    -> ByteString
-    -> ByteString
-generateClientFinished ver ciph =
-    generateFinished' (getPRF ver ciph) "client finished"
-
-generateServerFinished
-    :: Version
-    -> Cipher
-    -> ByteString
-    -> ByteString
-    -> ByteString
-generateServerFinished ver ciph =
-    generateFinished' (getPRF ver ciph) "server finished"

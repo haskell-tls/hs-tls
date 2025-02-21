@@ -30,6 +30,7 @@ module Network.TLS.Handshake.Common (
     processCertificate,
     --
     setPeerRecordSizeLimit,
+    generateFinished,
     updateTranscriptHash12,
     --
     startHandshake,
@@ -56,6 +57,7 @@ import Network.TLS.IO
 import Network.TLS.IO.Encode
 import Network.TLS.Imports
 import Network.TLS.Measurement
+import Network.TLS.Packet
 import Network.TLS.Parameters
 import Network.TLS.State
 import Network.TLS.Struct
@@ -340,6 +342,43 @@ setPeerRecordSizeLimit ctx tls13 (RecordSizeLimit n0) = do
     protolim
         | tls13 = defaultRecordSizeLimit + 1
         | otherwise = defaultRecordSizeLimit
+
+----------------------------------------------------------------
+
+generateFinished :: Context -> Version -> Role -> IO ByteString
+generateFinished ctx ver role = do
+    thash <- transcriptHash ctx
+    (mainSecret, cipher) <- usingHState ctx $ gets $ \hst ->
+        (fromJust $ hstMainSecret hst, fromJust $ hstPendingCipher hst)
+    return $
+        if role == ClientRole
+            then
+                generateClientFinished ver cipher mainSecret thash
+            else
+                generateServerFinished ver cipher mainSecret thash
+
+generateFinished' :: PRF -> ByteString -> ByteString -> ByteString -> ByteString
+generateFinished' prf label mainSecret thash = prf mainSecret seed 12
+  where
+    seed = label <> thash
+
+generateClientFinished
+    :: Version
+    -> Cipher
+    -> ByteString
+    -> ByteString
+    -> ByteString
+generateClientFinished ver ciph =
+    generateFinished' (getPRF ver ciph) "client finished"
+
+generateServerFinished
+    :: Version
+    -> Cipher
+    -> ByteString
+    -> ByteString
+    -> ByteString
+generateServerFinished ver ciph =
+    generateFinished' (getPRF ver ciph) "server finished"
 
 ----------------------------------------------------------------
 
