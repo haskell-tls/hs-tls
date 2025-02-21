@@ -15,7 +15,6 @@ module Network.TLS.Handshake.State13 (
     getRxLevel,
     clearTxRecordState,
     clearRxRecordState,
-    setServerHelloParameters13,
     transcriptHash,
     transcriptHashWith,
     updateTranscriptHash13HRR,
@@ -146,29 +145,6 @@ clearRxRecordState = clearXState ctxRxRecordState
 clearXState :: (Context -> MVar RecordState) -> Context -> IO ()
 clearXState func ctx =
     modifyMVar_ (func ctx) (\rt -> return rt{stCipher = Nothing})
-
-setServerHelloParameters13 :: Cipher -> HandshakeM (Either TLSError ())
-setServerHelloParameters13 cipher = do
-    hst <- get
-    case hstPendingCipher hst of
-        Nothing -> do
-            put
-                hst
-                    { hstPendingCipher = Just cipher
-                    , hstPendingCompression = nullCompression
-                    , hstTranscriptHash = updateDigest $ hstTranscriptHash hst
-                    }
-            return $ Right ()
-        Just oldcipher
-            | cipher == oldcipher -> return $ Right ()
-            | otherwise ->
-                return $
-                    Left $
-                        Error_Protocol "TLS 1.3 cipher changed after hello retry" IllegalParameter
-  where
-    hashAlg = cipherHash cipher
-    updateDigest (HandshakeMessages bytes) = TranscriptHashContext $ foldl hashUpdate (hashInit hashAlg) $ reverse bytes
-    updateDigest (TranscriptHashContext _) = error "cannot initialize digest with another digest"
 
 -- When a HelloRetryRequest is sent or received, the existing transcript must be
 -- wrapped in a "message_hash" construct.  See RFC 8446 section 4.4.1.  This

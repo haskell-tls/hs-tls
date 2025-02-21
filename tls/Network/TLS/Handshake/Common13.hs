@@ -14,7 +14,6 @@ module Network.TLS.Handshake.Common13 (
     makePSKBinder,
     replacePSKBinder,
     sendChangeCipherSpec13,
-    handshakeDone13,
     makeCertRequest,
     createTLS13TicketInfo,
     ageToObfuscatedAge,
@@ -41,6 +40,8 @@ module Network.TLS.Handshake.Common13 (
     setRTT,
     compulteComfirm,
     updateTranscriptHash13,
+    setServerHelloParameters13,
+    finishHandshake13,
 ) where
 
 import Control.Concurrent.MVar
@@ -54,6 +55,7 @@ import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import qualified Network.TLS.Crypto.IES as IES
 
+import Network.TLS.Compression
 import Network.TLS.Extension
 import Network.TLS.Handshake.Certificate (extractCAname)
 import Network.TLS.Handshake.Common (unexpected)
@@ -238,37 +240,6 @@ sendChangeCipherSpec13 ctx = do
         unless b $ setCCS13Sent True
         return b
     unless sent $ loadPacket13 ctx ChangeCipherSpec13
-
-----------------------------------------------------------------
-
--- | TLS13 handshake wrap up & clean up.  Contrary to @handshakeDone@, this
--- does not handle session, which is managed separately for TLS 1.3.  This does
--- not reset byte counters because renegotiation is not allowed.  And a few more
--- state attributes are preserved, necessary for TLS13 handshake modes, session
--- tickets and post-handshake authentication.
-handshakeDone13 :: Context -> IO ()
-handshakeDone13 ctx = do
-    -- forget most handshake data
-    modifyMVar_ (ctxHandshakeState ctx) $ \case
-        Nothing -> return Nothing
-        Just hshake ->
-            return $
-                Just
-                    (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
-                        { hstServerRandom = hstServerRandom hshake
-                        , hstMainSecret = hstMainSecret hshake
-                        , hstSupportedGroup = hstSupportedGroup hshake
-                        , hstTranscriptHash = hstTranscriptHash hshake
-                        , hstTLS13HandshakeMode = hstTLS13HandshakeMode hshake
-                        , hstTLS13RTT0Status = hstTLS13RTT0Status hshake
-                        , hstTLS13ResumptionSecret = hstTLS13ResumptionSecret hshake
-                        }
-    -- forget handshake data stored in TLS state
-    usingState_ ctx $ do
-        setTLS13KeyShare Nothing
-        setTLS13PreSharedKey Nothing
-    -- mark the secure connection up and running.
-    setEstablished ctx Established
 
 ----------------------------------------------------------------
 
@@ -625,3 +596,58 @@ compulteComfirm ctx usedHash hs label = do
     ClientRandom cr <- liftIO $ usingHState ctx getClientRandom
     let prk = hkdfExtract usedHash "" cr
     return $ hkdfExpandLabel usedHash prk label echConf 8
+
+----------------------------------------------------------------
+
+setServerHelloParameters13 :: Context -> Cipher -> IO (Either TLSError ())
+setServerHelloParameters13 ctx cipher = usingHState ctx $ do
+    hst <- get
+    case hstPendingCipher hst of
+        Nothing -> do
+            put
+                hst
+                    { hstPendingCipher = Just cipher
+                    , hstPendingCompression = nullCompression
+                    , hstTranscriptHash = updateDigest $ hstTranscriptHash hst
+                    }
+            return $ Right ()
+        Just oldcipher
+            | cipher == oldcipher -> return $ Right ()
+            | otherwise ->
+                return $
+                    Left $
+                        Error_Protocol "TLS 1.3 cipher changed after hello retry" IllegalParameter
+  where
+    hashAlg = cipherHash cipher
+    updateDigest (HandshakeMessages bytes) = TranscriptHashContext $ foldl hashUpdate (hashInit hashAlg) $ reverse bytes
+    updateDigest (TranscriptHashContext _) = error "cannot initialize digest with another digest"
+
+-- | TLS13 handshake wrap up & clean up.  Contrary to
+-- @finishHandshake12@, this does not handle session, which is managed
+-- separately for TLS 1.3.  This does not reset byte counters because
+-- renegotiation is not allowed.  And a few more state attributes are
+-- preserved, necessary for TLS13 handshake modes, session tickets and
+-- post-handshake authentication.
+finishHandshake13 :: Context -> IO ()
+finishHandshake13 ctx = do
+    -- forget most handshake data
+    modifyMVar_ (ctxHandshakeState ctx) $ \case
+        Nothing -> return Nothing
+        Just hshake ->
+            return $
+                Just
+                    (newEmptyHandshake (hstClientVersion hshake) (hstClientRandom hshake))
+                        { hstServerRandom = hstServerRandom hshake
+                        , hstMainSecret = hstMainSecret hshake
+                        , hstSupportedGroup = hstSupportedGroup hshake
+                        , hstTranscriptHash = hstTranscriptHash hshake
+                        , hstTLS13HandshakeMode = hstTLS13HandshakeMode hshake
+                        , hstTLS13RTT0Status = hstTLS13RTT0Status hshake
+                        , hstTLS13ResumptionSecret = hstTLS13ResumptionSecret hshake
+                        }
+    -- forget handshake data stored in TLS state
+    usingState_ ctx $ do
+        setTLS13KeyShare Nothing
+        setTLS13PreSharedKey Nothing
+    -- mark the secure connection up and running.
+    setEstablished ctx Established

@@ -294,7 +294,7 @@ sendClientSecondFlight13' cparams ctx choice hkey rtt0accepted eexts = do
     let appSecInfo = ApplicationSecretInfo (triClient appKey, triServer appKey)
     contextSync ctx $ SendClientFinished eexts appSecInfo
     modifyTLS13State ctx $ \st -> st{tls13stHsKey = Nothing}
-    handshakeDone13 ctx
+    finishHandshake13 ctx
     rtt0 <- tls13st0RTT <$> getTLS13State ctx
     when rtt0 $ do
         builder <- tls13stPendingSentData <$> getTLS13State ctx

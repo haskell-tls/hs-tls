@@ -143,7 +143,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..}
 
     setServerParameter = do
         usingState_ ctx $ setVersion TLS13
-        failOnEitherError $ usingHState ctx $ setServerHelloParameters13 usedCipher
+        failOnEitherError $ setServerHelloParameters13 ctx usedCipher
 
     supportsPHA =
         lookupAndDecode
@@ -361,7 +361,7 @@ sendHRR ctx (usedCipher, usedHash, _) CH{..} isEch = do
         throwCore $
             Error_Protocol "Hello retry not allowed again" HandshakeFailure
     usingState_ ctx $ setTLS13HRR True
-    failOnEitherError $ usingHState ctx $ setServerHelloParameters13 usedCipher
+    failOnEitherError $ setServerHelloParameters13 ctx usedCipher
     let clientGroups =
             lookupAndDecode
                 EID_SupportedGroups
