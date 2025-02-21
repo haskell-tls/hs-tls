@@ -103,6 +103,7 @@ data TranscriptHash
 data HandshakeState = HandshakeState
     { hstClientVersion :: Version
     , hstClientRandom :: ClientRandom
+    -- ^ For ECH, inner client random.
     , hstServerRandom :: Maybe ServerRandom
     , hstMainSecret :: Maybe ByteString
     , hstKeyState :: HandshakeKeyState
@@ -112,6 +113,8 @@ data HandshakeState = HandshakeState
     , hstGroupPrivate :: Maybe GroupPrivate
     , hstTranscriptHash :: TranscriptHash
     , hstHandshakeMessages :: [ByteString]
+    -- ^ To create certificate verify for TLS 1.2.
+    --   This should be removed when TLS 1.2 is dropped.
     , hstCertReqToken :: Maybe ByteString
     -- ^ Set to Just-value when a TLS13 certificate request is received
     , hstCertReqCBdata :: Maybe CertReqCBdata
@@ -141,6 +144,7 @@ data HandshakeState = HandshakeState
     , hstCCS13Sent :: Bool
     , hstCCS13Recv :: Bool
     , hstTLS13OuterClientRandom :: Maybe ClientRandom
+    -- ^ Used for key logging in the case of ECH.
     }
     deriving (Show)
 
