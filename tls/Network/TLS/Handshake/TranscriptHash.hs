@@ -83,29 +83,27 @@ foldTranscriptHash hashAlg f = modify $ \hs ->
                     }
 
 generateFinished :: Context -> Version -> Role -> IO ByteString
-generateFinished ctx ver role = usingHState ctx $ gets gen
-  where
-    gen hst = case hstTranscriptHash hst of
-        TranscriptHashContext hashCtx ->
-            let msecret = fromJust $ hstMainSecret hst
-                cipher = fromJust $ hstPendingCipher hst
-             in switch ver cipher msecret hashCtx
-        HandshakeMessages _ ->
-            error "un-initialized handshake digest"
-    switch
-        | role == ClientRole = generateClientFinished
-        | otherwise = generateServerFinished
+generateFinished ctx ver role = do
+    thash <- transcriptHash ctx
+    (mainSecret, cipher) <- usingHState ctx $ gets $ \hst ->
+        (fromJust $ hstMainSecret hst, fromJust $ hstPendingCipher hst)
+    return $
+        if role == ClientRole
+            then
+                generateClientFinished ver cipher mainSecret thash
+            else
+                generateServerFinished ver cipher mainSecret thash
 
-generateFinished' :: PRF -> ByteString -> ByteString -> HashCtx -> ByteString
-generateFinished' prf label mainSecret hashctx = prf mainSecret seed 12
+generateFinished' :: PRF -> ByteString -> ByteString -> ByteString -> ByteString
+generateFinished' prf label mainSecret thash = prf mainSecret seed 12
   where
-    seed = B.concat [label, hashFinal hashctx]
+    seed = label <> thash
 
 generateClientFinished
     :: Version
     -> Cipher
     -> ByteString
-    -> HashCtx
+    -> ByteString
     -> ByteString
 generateClientFinished ver ciph =
     generateFinished' (getPRF ver ciph) "client finished"
@@ -114,7 +112,7 @@ generateServerFinished
     :: Version
     -> Cipher
     -> ByteString
-    -> HashCtx
+    -> ByteString
     -> ByteString
 generateServerFinished ver ciph =
     generateFinished' (getPRF ver ciph) "server finished"
