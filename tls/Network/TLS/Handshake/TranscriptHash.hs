@@ -18,7 +18,7 @@ import Network.TLS.Handshake.State
 import Network.TLS.Imports
 
 transitTranscriptHash :: Hash -> HandshakeM ()
-transitTranscriptHash hashAlg = modify $ \hst ->
+transitTranscriptHash hashAlg = modify' $ \hst ->
     hst
         { hstTranscriptHash = case hstTranscriptHash hst of
             TranscriptHash0 -> error "transitTranscriptHash: TranscriptHash0"
@@ -27,7 +27,7 @@ transitTranscriptHash hashAlg = modify $ \hst ->
         }
 
 updateTranscriptHash :: ByteString -> HandshakeM ()
-updateTranscriptHash eh = modify $ \hst ->
+updateTranscriptHash eh = modify' $ \hst ->
     hst
         { hstTranscriptHash = case hstTranscriptHash hst of
             TranscriptHash0 -> TranscriptHash1 eh
@@ -43,7 +43,7 @@ updateTranscriptHash13HRR :: HandshakeM ()
 updateTranscriptHash13HRR = do
     cipher <- getPendingCipher
     let hashAlg = cipherHash cipher
-    modify $ \hs ->
+    modify' $ \hs ->
         hs
             { hstTranscriptHash = case hstTranscriptHash hs of
                 TranscriptHash2 hctx ->

@@ -131,7 +131,7 @@ decryptData ver record econtent tst lim =
         (iv, econtent') <-
             get2o econtent (bulkIVSize bulk, econtentLen - bulkIVSize bulk)
         let (content', iv') = decryptF iv econtent'
-        modify $ \txs -> txs{stCryptState = cst{cstIV = iv'}}
+        modify' $ \txs -> txs{stCryptState = cst{cstIV = iv'}}
 
         let paddinglength = fromIntegral (B.last content') + 1
         let contentlen = B.length content' - paddinglength - macSize
@@ -151,7 +151,7 @@ decryptData ver record econtent tst lim =
         {- update Ctx -}
         let contentlen = B.length content' - macSize
         (content, mac) <- get2i content' (contentlen, macSize)
-        modify $ \txs -> txs{stCryptState = cst{cstKey = BulkStateStream bulkStream'}}
+        modify' $ \txs -> txs{stCryptState = cst{cstKey = BulkStateStream bulkStream'}}
         getCipherData
             record
             CipherData
@@ -188,7 +188,7 @@ decryptData ver record econtent tst lim =
             throwError $
                 Error_Protocol "bad record mac on AEAD" BadRecordMac
 
-        modify incrRecordState
+        modify' incrRecordState
         return content
     decryptOf BulkStateUninitialized =
         throwError $ Error_Protocol "decrypt state uninitialized" InternalError

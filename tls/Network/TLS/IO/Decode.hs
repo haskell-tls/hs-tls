@@ -42,7 +42,7 @@ decodePacket12 ctx (Record ProtocolType_Handshake ver fragment) = do
                     }
         -- get back the optional continuation, and parse as many handshake record as possible.
         mCont <- gets stHandshakeRecordCont12
-        modify (\st -> st{stHandshakeRecordCont12 = Nothing})
+        modify' (\st -> st{stHandshakeRecordCont12 = Nothing})
         hss <- parseMany currentParams mCont (fragmentGetBytes fragment)
         return $ Handshake hss
   where
@@ -50,7 +50,7 @@ decodePacket12 ctx (Record ProtocolType_Handshake ver fragment) = do
         case fromMaybe decodeHandshakeRecord mCont bs of
             GotError err -> throwError err
             GotPartial cont ->
-                modify (\st -> st{stHandshakeRecordCont12 = Just cont}) >> return []
+                modify' (\st -> st{stHandshakeRecordCont12 = Just cont}) >> return []
             GotSuccess (ty, content) ->
                 either throwError (return . (: [])) $ decodeHandshake currentParams ty content
             GotSuccessRemaining (ty, content) left ->
@@ -75,7 +75,7 @@ decodePacket13 _ (Record ProtocolType_AppData _ fragment) = return $ Right $ App
 decodePacket13 _ (Record ProtocolType_Alert _ fragment) = return (Alert13 `fmapEither` decodeAlerts (fragmentGetBytes fragment))
 decodePacket13 ctx (Record ProtocolType_Handshake _ fragment) = usingState ctx $ do
     mCont <- gets stHandshakeRecordCont13
-    modify (\st -> st{stHandshakeRecordCont13 = Nothing})
+    modify' (\st -> st{stHandshakeRecordCont13 = Nothing})
     hss <- parseMany mCont (fragmentGetBytes fragment)
     return $ Handshake13 hss
   where
@@ -83,7 +83,7 @@ decodePacket13 ctx (Record ProtocolType_Handshake _ fragment) = usingState ctx $
         case fromMaybe decodeHandshakeRecord13 mCont bs of
             GotError err -> throwError err
             GotPartial cont ->
-                modify (\st -> st{stHandshakeRecordCont13 = Just cont}) >> return []
+                modify' (\st -> st{stHandshakeRecordCont13 = Just cont}) >> return []
             GotSuccess (ty, content) ->
                 either throwError (return . (: [])) $ decodeHandshake13 ty content
             GotSuccessRemaining (ty, content) left ->

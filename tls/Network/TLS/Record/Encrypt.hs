@@ -91,7 +91,7 @@ encryptStream :: BulkStream -> ByteString -> RecordM ByteString
 encryptStream (BulkStream encryptF) content = do
     cst <- getCryptState
     let (!e, !newBulkStream) = encryptF content
-    modify $ \tstate -> tstate{stCryptState = cst{cstKey = BulkStateStream newBulkStream}}
+    modify' $ \tstate -> tstate{stCryptState = cst{cstKey = BulkStateStream newBulkStream}}
     return e
 
 encryptAead
@@ -123,7 +123,7 @@ encryptAead tls13 bulk encryptF content record = do
         econtent
             | nonceExpLen == 0 = e `B.append` B.convert authtag
             | otherwise = B.concat [encodedSeq, e, B.convert authtag]
-    modify incrRecordState
+    modify' incrRecordState
     return econtent
 
 getCryptState :: RecordM CryptState

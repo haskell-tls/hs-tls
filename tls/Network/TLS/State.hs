@@ -160,15 +160,15 @@ setVerifyDataForSend :: VerifyData -> TLSSt ()
 setVerifyDataForSend bs = do
     role <- getRole
     case role of
-        ClientRole -> modify (\st -> st{stClientVerifyData = Just bs})
-        ServerRole -> modify (\st -> st{stServerVerifyData = Just bs})
+        ClientRole -> modify' (\st -> st{stClientVerifyData = Just bs})
+        ServerRole -> modify' (\st -> st{stServerVerifyData = Just bs})
 
 setVerifyDataForRecv :: VerifyData -> TLSSt ()
 setVerifyDataForRecv bs = do
     role <- getRole
     case role of
-        ClientRole -> modify (\st -> st{stServerVerifyData = Just bs})
-        ServerRole -> modify (\st -> st{stClientVerifyData = Just bs})
+        ClientRole -> modify' (\st -> st{stServerVerifyData = Just bs})
+        ServerRole -> modify' (\st -> st{stClientVerifyData = Just bs})
 
 finishedHandshakeTypeMaterial :: HandshakeType -> Bool
 finishedHandshakeTypeMaterial HandshakeType_ClientHello = True
@@ -204,22 +204,22 @@ certVerifyHandshakeMaterial :: Handshake -> Bool
 certVerifyHandshakeMaterial = certVerifyHandshakeTypeMaterial . typeOfHandshake
 
 setSession :: Session -> TLSSt ()
-setSession session = modify (\st -> st{stSession = session})
+setSession session = modify' (\st -> st{stSession = session})
 
 getSession :: TLSSt Session
 getSession = gets stSession
 
 setTLS12SessionResuming :: Bool -> TLSSt ()
-setTLS12SessionResuming b = modify (\st -> st{stTLS12SessionResuming = b})
+setTLS12SessionResuming b = modify' (\st -> st{stTLS12SessionResuming = b})
 
 getTLS12SessionResuming :: TLSSt Bool
 getTLS12SessionResuming = gets stTLS12SessionResuming
 
 setVersion :: Version -> TLSSt ()
-setVersion ver = modify (\st -> st{stVersion = Just ver})
+setVersion ver = modify' (\st -> st{stVersion = Just ver})
 
 setVersionIfUnset :: Version -> TLSSt ()
-setVersionIfUnset ver = modify maybeSet
+setVersionIfUnset ver = modify' maybeSet
   where
     maybeSet st = case stVersion st of
         Nothing -> st{stVersion = Just ver}
@@ -234,52 +234,52 @@ getVersionWithDefault :: Version -> TLSSt Version
 getVersionWithDefault defaultVer = fromMaybe defaultVer <$> gets stVersion
 
 setSecureRenegotiation :: Bool -> TLSSt ()
-setSecureRenegotiation b = modify (\st -> st{stSecureRenegotiation = b})
+setSecureRenegotiation b = modify' (\st -> st{stSecureRenegotiation = b})
 
 getSecureRenegotiation :: TLSSt Bool
 getSecureRenegotiation = gets stSecureRenegotiation
 
 setExtensionALPN :: Bool -> TLSSt ()
-setExtensionALPN b = modify (\st -> st{stExtensionALPN = b})
+setExtensionALPN b = modify' (\st -> st{stExtensionALPN = b})
 
 getExtensionALPN :: TLSSt Bool
 getExtensionALPN = gets stExtensionALPN
 
 setNegotiatedProtocol :: ByteString -> TLSSt ()
-setNegotiatedProtocol s = modify (\st -> st{stNegotiatedProtocol = Just s})
+setNegotiatedProtocol s = modify' (\st -> st{stNegotiatedProtocol = Just s})
 
 getNegotiatedProtocol :: TLSSt (Maybe ByteString)
 getNegotiatedProtocol = gets stNegotiatedProtocol
 
 setClientALPNSuggest :: [ByteString] -> TLSSt ()
-setClientALPNSuggest ps = modify (\st -> st{stClientALPNSuggest = Just ps})
+setClientALPNSuggest ps = modify' (\st -> st{stClientALPNSuggest = Just ps})
 
 getClientALPNSuggest :: TLSSt (Maybe [ByteString])
 getClientALPNSuggest = gets stClientALPNSuggest
 
 setClientEcPointFormatSuggest :: [EcPointFormat] -> TLSSt ()
-setClientEcPointFormatSuggest epf = modify (\st -> st{stClientEcPointFormatSuggest = Just epf})
+setClientEcPointFormatSuggest epf = modify' (\st -> st{stClientEcPointFormatSuggest = Just epf})
 
 getClientEcPointFormatSuggest :: TLSSt (Maybe [EcPointFormat])
 getClientEcPointFormatSuggest = gets stClientEcPointFormatSuggest
 
 setClientCertificateChain :: CertificateChain -> TLSSt ()
-setClientCertificateChain s = modify (\st -> st{stClientCertificateChain = Just s})
+setClientCertificateChain s = modify' (\st -> st{stClientCertificateChain = Just s})
 
 getClientCertificateChain :: TLSSt (Maybe CertificateChain)
 getClientCertificateChain = gets stClientCertificateChain
 
 setServerCertificateChain :: CertificateChain -> TLSSt ()
-setServerCertificateChain s = modify (\st -> st{stServerCertificateChain = Just s})
+setServerCertificateChain s = modify' (\st -> st{stServerCertificateChain = Just s})
 
 getServerCertificateChain :: TLSSt (Maybe CertificateChain)
 getServerCertificateChain = gets stServerCertificateChain
 
 setClientSNI :: HostName -> TLSSt ()
-setClientSNI hn = modify (\st -> st{stClientSNI = Just hn})
+setClientSNI hn = modify' (\st -> st{stClientSNI = Just hn})
 
 clearClientSNI :: TLSSt ()
-clearClientSNI = modify (\st -> st{stClientSNI = Nothing})
+clearClientSNI = modify' (\st -> st{stClientSNI = Nothing})
 
 getClientSNI :: TLSSt (Maybe HostName)
 getClientSNI = gets stClientSNI
@@ -330,43 +330,43 @@ withRNG f = do
     return a
 
 setTLS12SessionTicket :: Ticket -> TLSSt ()
-setTLS12SessionTicket t = modify (\st -> st{stTLS12SessionTicket = Just t})
+setTLS12SessionTicket t = modify' (\st -> st{stTLS12SessionTicket = Just t})
 
 getTLS12SessionTicket :: TLSSt (Maybe Ticket)
 getTLS12SessionTicket = gets stTLS12SessionTicket
 
 setTLS13ExporterSecret :: ByteString -> TLSSt ()
-setTLS13ExporterSecret key = modify (\st -> st{stTLS13ExporterSecret = Just key})
+setTLS13ExporterSecret key = modify' (\st -> st{stTLS13ExporterSecret = Just key})
 
 getTLS13ExporterSecret :: TLSSt (Maybe ByteString)
 getTLS13ExporterSecret = gets stTLS13ExporterSecret
 
 setTLS13KeyShare :: Maybe KeyShare -> TLSSt ()
-setTLS13KeyShare mks = modify (\st -> st{stTLS13KeyShare = mks})
+setTLS13KeyShare mks = modify' (\st -> st{stTLS13KeyShare = mks})
 
 getTLS13KeyShare :: TLSSt (Maybe KeyShare)
 getTLS13KeyShare = gets stTLS13KeyShare
 
 setTLS13PreSharedKey :: Maybe PreSharedKey -> TLSSt ()
-setTLS13PreSharedKey mpsk = modify (\st -> st{stTLS13PreSharedKey = mpsk})
+setTLS13PreSharedKey mpsk = modify' (\st -> st{stTLS13PreSharedKey = mpsk})
 
 getTLS13PreSharedKey :: TLSSt (Maybe PreSharedKey)
 getTLS13PreSharedKey = gets stTLS13PreSharedKey
 
 setTLS13HRR :: Bool -> TLSSt ()
-setTLS13HRR b = modify (\st -> st{stTLS13HRR = b})
+setTLS13HRR b = modify' (\st -> st{stTLS13HRR = b})
 
 getTLS13HRR :: TLSSt Bool
 getTLS13HRR = gets stTLS13HRR
 
 setTLS13Cookie :: Maybe Cookie -> TLSSt ()
-setTLS13Cookie mcookie = modify (\st -> st{stTLS13Cookie = mcookie})
+setTLS13Cookie mcookie = modify' (\st -> st{stTLS13Cookie = mcookie})
 
 getTLS13Cookie :: TLSSt (Maybe Cookie)
 getTLS13Cookie = gets stTLS13Cookie
 
 setTLS13ClientSupportsPHA :: Bool -> TLSSt ()
-setTLS13ClientSupportsPHA b = modify (\st -> st{stTLS13ClientSupportsPHA = b})
+setTLS13ClientSupportsPHA b = modify' (\st -> st{stTLS13ClientSupportsPHA = b})
 
 getTLS13ClientSupportsPHA :: TLSSt Bool
 getTLS13ClientSupportsPHA = gets stTLS13ClientSupportsPHA

@@ -241,12 +241,12 @@ runHandshake :: HandshakeState -> HandshakeM a -> (a, HandshakeState)
 runHandshake hst f = runState (runHandshakeM f) hst
 
 setPublicKey :: PubKey -> HandshakeM ()
-setPublicKey pk = modify (\hst -> hst{hstKeyState = setPK (hstKeyState hst)})
+setPublicKey pk = modify' (\hst -> hst{hstKeyState = setPK (hstKeyState hst)})
   where
     setPK hks = hks{hksRemotePublicKey = Just pk}
 
 setPublicPrivateKeys :: (PubKey, PrivKey) -> HandshakeM ()
-setPublicPrivateKeys keys = modify (\hst -> hst{hstKeyState = setKeys (hstKeyState hst)})
+setPublicPrivateKeys keys = modify' (\hst -> hst{hstKeyState = setKeys (hstKeyState hst)})
   where
     setKeys hks = hks{hksLocalPublicPrivateKeys = Just keys}
 
@@ -258,19 +258,19 @@ getLocalPublicPrivateKeys =
     fromJust <$> gets (hksLocalPublicPrivateKeys . hstKeyState)
 
 setServerDHParams :: ServerDHParams -> HandshakeM ()
-setServerDHParams shp = modify (\hst -> hst{hstServerDHParams = Just shp})
+setServerDHParams shp = modify' (\hst -> hst{hstServerDHParams = Just shp})
 
 getServerDHParams :: HandshakeM ServerDHParams
 getServerDHParams = fromJust <$> gets hstServerDHParams
 
 setServerECDHParams :: ServerECDHParams -> HandshakeM ()
-setServerECDHParams shp = modify (\hst -> hst{hstServerECDHParams = Just shp})
+setServerECDHParams shp = modify' (\hst -> hst{hstServerECDHParams = Just shp})
 
 getServerECDHParams :: HandshakeM ServerECDHParams
 getServerECDHParams = fromJust <$> gets hstServerECDHParams
 
 setDHPrivate :: DHPrivate -> HandshakeM ()
-setDHPrivate shp = modify (\hst -> hst{hstDHPrivate = Just shp})
+setDHPrivate shp = modify' (\hst -> hst{hstDHPrivate = Just shp})
 
 getDHPrivate :: HandshakeM DHPrivate
 getDHPrivate = fromJust <$> gets hstDHPrivate
@@ -279,16 +279,16 @@ getGroupPrivate :: HandshakeM GroupPrivate
 getGroupPrivate = fromJust <$> gets hstGroupPrivate
 
 setGroupPrivate :: GroupPrivate -> HandshakeM ()
-setGroupPrivate shp = modify (\hst -> hst{hstGroupPrivate = Just shp})
+setGroupPrivate shp = modify' (\hst -> hst{hstGroupPrivate = Just shp})
 
 setExtendedMainSecret :: Bool -> HandshakeM ()
-setExtendedMainSecret b = modify (\hst -> hst{hstExtendedMainSecret = b})
+setExtendedMainSecret b = modify' (\hst -> hst{hstExtendedMainSecret = b})
 
 getExtendedMainSecret :: HandshakeM Bool
 getExtendedMainSecret = gets hstExtendedMainSecret
 
 setSupportedGroup :: Group -> HandshakeM ()
-setSupportedGroup g = modify (\hst -> hst{hstSupportedGroup = Just g})
+setSupportedGroup g = modify' (\hst -> hst{hstSupportedGroup = Just g})
 
 getSupportedGroup :: HandshakeM (Maybe Group)
 getSupportedGroup = gets hstSupportedGroup
@@ -306,7 +306,7 @@ data HandshakeMode13
     deriving (Show, Eq)
 
 setTLS13HandshakeMode :: HandshakeMode13 -> HandshakeM ()
-setTLS13HandshakeMode s = modify (\hst -> hst{hstTLS13HandshakeMode = s})
+setTLS13HandshakeMode s = modify' (\hst -> hst{hstTLS13HandshakeMode = s})
 
 getTLS13HandshakeMode :: HandshakeM HandshakeMode13
 getTLS13HandshakeMode = gets hstTLS13HandshakeMode
@@ -319,49 +319,49 @@ data RTT0Status
     deriving (Show, Eq)
 
 setTLS13RTT0Status :: RTT0Status -> HandshakeM ()
-setTLS13RTT0Status s = modify (\hst -> hst{hstTLS13RTT0Status = s})
+setTLS13RTT0Status s = modify' (\hst -> hst{hstTLS13RTT0Status = s})
 
 getTLS13RTT0Status :: HandshakeM RTT0Status
 getTLS13RTT0Status = gets hstTLS13RTT0Status
 
 setTLS13EarlySecret :: BaseSecret EarlySecret -> HandshakeM ()
-setTLS13EarlySecret secret = modify (\hst -> hst{hstTLS13EarlySecret = Just secret})
+setTLS13EarlySecret secret = modify' (\hst -> hst{hstTLS13EarlySecret = Just secret})
 
 getTLS13EarlySecret :: HandshakeM (Maybe (BaseSecret EarlySecret))
 getTLS13EarlySecret = gets hstTLS13EarlySecret
 
 setTLS13ResumptionSecret :: BaseSecret ResumptionSecret -> HandshakeM ()
-setTLS13ResumptionSecret secret = modify (\hst -> hst{hstTLS13ResumptionSecret = Just secret})
+setTLS13ResumptionSecret secret = modify' (\hst -> hst{hstTLS13ResumptionSecret = Just secret})
 
 getTLS13ResumptionSecret :: HandshakeM (Maybe (BaseSecret ResumptionSecret))
 getTLS13ResumptionSecret = gets hstTLS13ResumptionSecret
 
 setTLS13CertComp :: Bool -> HandshakeM ()
-setTLS13CertComp comp = modify (\hst -> hst{hstTLS13CertComp = comp})
+setTLS13CertComp comp = modify' (\hst -> hst{hstTLS13CertComp = comp})
 
 getTLS13CertComp :: HandshakeM Bool
 getTLS13CertComp = gets hstTLS13CertComp
 
 setCCS13Sent :: Bool -> HandshakeM ()
-setCCS13Sent sent = modify (\hst -> hst{hstCCS13Sent = sent})
+setCCS13Sent sent = modify' (\hst -> hst{hstCCS13Sent = sent})
 
 getCCS13Sent :: HandshakeM Bool
 getCCS13Sent = gets hstCCS13Sent
 
 setCCS13Recv :: Bool -> HandshakeM ()
-setCCS13Recv sent = modify (\hst -> hst{hstCCS13Recv = sent})
+setCCS13Recv sent = modify' (\hst -> hst{hstCCS13Recv = sent})
 
 getCCS13Recv :: HandshakeM Bool
 getCCS13Recv = gets hstCCS13Recv
 
 setCertReqSent :: Bool -> HandshakeM ()
-setCertReqSent b = modify (\hst -> hst{hstCertReqSent = b})
+setCertReqSent b = modify' (\hst -> hst{hstCertReqSent = b})
 
 getCertReqSent :: HandshakeM Bool
 getCertReqSent = gets hstCertReqSent
 
 setClientCertSent :: Bool -> HandshakeM ()
-setClientCertSent b = modify (\hst -> hst{hstClientCertSent = b})
+setClientCertSent b = modify' (\hst -> hst{hstClientCertSent = b})
 
 getClientRandom :: HandshakeM ClientRandom
 getClientRandom = gets hstClientRandom
@@ -370,34 +370,34 @@ getOuterClientRandom :: HandshakeM (Maybe ClientRandom)
 getOuterClientRandom = gets hstTLS13OuterClientRandom
 
 setOuterClientRandom :: Maybe ClientRandom -> HandshakeM ()
-setOuterClientRandom mcr = modify (\hst -> hst{hstTLS13OuterClientRandom = mcr})
+setOuterClientRandom mcr = modify' (\hst -> hst{hstTLS13OuterClientRandom = mcr})
 
 getClientCertSent :: HandshakeM Bool
 getClientCertSent = gets hstClientCertSent
 
 setClientCertChain :: CertificateChain -> HandshakeM ()
-setClientCertChain b = modify (\hst -> hst{hstClientCertChain = Just b})
+setClientCertChain b = modify' (\hst -> hst{hstClientCertChain = Just b})
 
 getClientCertChain :: HandshakeM (Maybe CertificateChain)
 getClientCertChain = gets hstClientCertChain
 
 --
 setCertReqToken :: Maybe ByteString -> HandshakeM ()
-setCertReqToken token = modify $ \hst -> hst{hstCertReqToken = token}
+setCertReqToken token = modify' $ \hst -> hst{hstCertReqToken = token}
 
 getCertReqToken :: HandshakeM (Maybe ByteString)
 getCertReqToken = gets hstCertReqToken
 
 --
 setCertReqCBdata :: Maybe CertReqCBdata -> HandshakeM ()
-setCertReqCBdata d = modify (\hst -> hst{hstCertReqCBdata = d})
+setCertReqCBdata d = modify' (\hst -> hst{hstCertReqCBdata = d})
 
 getCertReqCBdata :: HandshakeM (Maybe CertReqCBdata)
 getCertReqCBdata = gets hstCertReqCBdata
 
 -- Dead code, until we find some use for the extension
 setCertReqSigAlgsCert :: Maybe [HashAndSignatureAlgorithm] -> HandshakeM ()
-setCertReqSigAlgsCert as = modify $ \hst -> hst{hstCertReqSigAlgsCert = as}
+setCertReqSigAlgsCert as = modify' $ \hst -> hst{hstCertReqSigAlgsCert = as}
 
 getCertReqSigAlgsCert :: HandshakeM (Maybe [HashAndSignatureAlgorithm])
 getCertReqSigAlgsCert = gets hstCertReqSigAlgsCert
@@ -407,7 +407,7 @@ getPendingCipher :: HandshakeM Cipher
 getPendingCipher = fromJust <$> gets hstPendingCipher
 
 addHandshakeMessage :: ByteString -> HandshakeM ()
-addHandshakeMessage content = modify $ \hs -> hs{hstHandshakeMessages = content : hstHandshakeMessages hs}
+addHandshakeMessage content = modify' $ \hs -> hs{hstHandshakeMessages = content : hstHandshakeMessages hs}
 
 getHandshakeMessages :: HandshakeM [ByteString]
 getHandshakeMessages = gets (reverse . hstHandshakeMessages)
@@ -454,7 +454,7 @@ getSessionHash = gets $ \hst ->
 -- | Set main secret and as a side effect generate the key block
 -- with all the right parameters, and setup the pending tx/rx state.
 setMainSecret :: Version -> Role -> ByteString -> HandshakeM ()
-setMainSecret ver role mainSecret = modify $ \hst ->
+setMainSecret ver role mainSecret = modify' $ \hst ->
     let (pendingTx, pendingRx) = computeKeyBlock hst mainSecret ver role
      in hst
             { hstMainSecret = Just mainSecret

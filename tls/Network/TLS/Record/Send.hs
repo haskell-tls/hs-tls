@@ -42,7 +42,7 @@ prepareRecord12 ctx f = do
     if sz > 0
         then do
             newIV <- getStateRNG ctx sz
-            runTxRecordState ctx (modify (setRecordIV newIV) >> f)
+            runTxRecordState ctx (modify' (setRecordIV newIV) >> f)
         else runTxRecordState ctx f
 
 ----------------------------------------------------------------

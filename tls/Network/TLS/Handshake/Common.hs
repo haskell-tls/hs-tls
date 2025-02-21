@@ -399,7 +399,7 @@ setServerHelloParameters12
     -> IO ()
 setServerHelloParameters12 ctx ver sran cipher compression =
     usingHState ctx $ do
-        modify $ \hst ->
+        modify' $ \hst ->
             hst
                 { hstServerRandom = Just sran
                 , hstPendingCipher = Just cipher
