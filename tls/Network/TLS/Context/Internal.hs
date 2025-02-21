@@ -353,7 +353,7 @@ ctxWithHooks :: Context -> (Hooks -> IO a) -> IO a
 ctxWithHooks ctx f = readIORef (ctxHooks ctx) >>= f
 
 contextModifyHooks :: Context -> (Hooks -> Hooks) -> IO ()
-contextModifyHooks ctx = modifyIORef (ctxHooks ctx)
+contextModifyHooks ctx = modifyIORef' (ctxHooks ctx)
 
 setEstablished :: Context -> Established -> IO ()
 setEstablished ctx = writeIORef (ctxEstablished_ ctx)
@@ -464,13 +464,13 @@ tls13orLater ctx = do
 --------------------------------
 
 setMyRecordLimit :: Context -> Maybe Int -> IO ()
-setMyRecordLimit ctx msiz = modifyIORef (ctxMyRecordLimit ctx) change
+setMyRecordLimit ctx msiz = modifyIORef' (ctxMyRecordLimit ctx) change
   where
     change (RecordLimit n _) = RecordLimit n msiz
     change x = x
 
 enableMyRecordLimit :: Context -> IO ()
-enableMyRecordLimit ctx = modifyIORef (ctxMyRecordLimit ctx) change
+enableMyRecordLimit ctx = modifyIORef' (ctxMyRecordLimit ctx) change
   where
     change (RecordLimit _ (Just n)) = RecordLimit n Nothing
     change x = x
@@ -490,13 +490,13 @@ checkMyRecordLimit ctx = chk <$> readIORef (ctxMyRecordLimit ctx)
 --------------------------------
 
 setPeerRecordLimit :: Context -> Maybe Int -> IO ()
-setPeerRecordLimit ctx msiz = modifyIORef (ctxPeerRecordLimit ctx) change
+setPeerRecordLimit ctx msiz = modifyIORef' (ctxPeerRecordLimit ctx) change
   where
     change (RecordLimit n _) = RecordLimit n msiz
     change x = x
 
 enablePeerRecordLimit :: Context -> IO ()
-enablePeerRecordLimit ctx = modifyIORef (ctxPeerRecordLimit ctx) change
+enablePeerRecordLimit ctx = modifyIORef' (ctxPeerRecordLimit ctx) change
   where
     change (RecordLimit _ (Just n)) = RecordLimit n Nothing
     change x = x

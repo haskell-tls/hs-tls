@@ -234,4 +234,4 @@ loadPacket13 ctx pkt = PacketFlightM $ do
     (recordLayer, ref) <- ask
     liftIO $ do
         bs <- writePacketBytes13 ctx recordLayer pkt
-        modifyIORef ref (. (bs :))
+        modifyIORef' ref (. (bs :))
