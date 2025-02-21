@@ -434,9 +434,9 @@ popAction ctx h hs = do
             withWriteLock ctx $
                 handleException ctx $ do
                     case action of
-                        PendingRecvAction needAligned pa -> do
+                        PendingRecvAction needAligned update pa -> do
                             when needAligned $ checkAlignment ctx hs
-                            void $ updateTranscriptHash13 ctx h
+                            when update $ void $ updateTranscriptHash13 ctx h
                             pa h
                         PendingRecvActionHash needAligned pa -> do
                             when needAligned $ checkAlignment ctx hs

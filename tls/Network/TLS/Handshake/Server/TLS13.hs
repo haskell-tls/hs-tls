@@ -65,7 +65,7 @@ recvClientSecondFlight13 sparams ctx (appKey, clientHandshakeSecret, authenticat
                 then
                     setPendingRecvActions
                         ctx
-                        [ PendingRecvAction True $ expectEndOfEarlyData ctx clientHandshakeSecret
+                        [ PendingRecvAction True True $ expectEndOfEarlyData ctx clientHandshakeSecret
                         , PendingRecvActionHash True $
                             expectFinished sparams ctx chExtensions appKey clientHandshakeSecret sfSentTime
                         ]

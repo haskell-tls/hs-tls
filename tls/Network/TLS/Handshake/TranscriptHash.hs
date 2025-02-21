@@ -31,7 +31,7 @@ updateTranscriptHash eh = modify' $ \hst ->
     hst
         { hstTranscriptHash = case hstTranscriptHash hst of
             TranscriptHash0 -> TranscriptHash1 eh
-            TranscriptHash1 ch -> TranscriptHash1 (ch <> eh) -- EndOfEarlyData
+            TranscriptHash1 _ch -> error "updateTranscriptHash"
             TranscriptHash2 hctx -> TranscriptHash2 $ hashUpdate hctx eh
         }
 

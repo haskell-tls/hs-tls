@@ -273,7 +273,8 @@ data Established
 
 data PendingRecvAction
     = -- | simple pending action. The first 'Bool' is necessity of alignment.
-      PendingRecvAction Bool (Handshake13 -> IO ())
+      -- The second bool is update transcript hash.
+      PendingRecvAction Bool Bool (Handshake13 -> IO ())
     | -- | pending action taking transcript hash up to preceding message
       --   The first 'Bool' is necessity of alignment.
       PendingRecvActionHash Bool (ByteString -> Handshake13 -> IO ())

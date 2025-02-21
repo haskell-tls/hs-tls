@@ -398,14 +398,15 @@ asyncServerHello13
 asyncServerHello13 cparams ctx groupSent chSentTime = do
     setPendingRecvActions
         ctx
-        [ PendingRecvAction True expectServerHello
-        , PendingRecvAction True (expectEncryptedExtensions ctx)
+        [ PendingRecvAction True False expectServerHello
+        , PendingRecvAction True True (expectEncryptedExtensions ctx)
         , PendingRecvActionHash True expectFinishedAndSet
         ]
   where
     expectServerHello sh = do
         setRTT ctx chSentTime
         processServerHello13 cparams ctx sh
+        void $ updateTranscriptHash13 ctx sh -- update by myself
         void $ prepareSecondFlight13 ctx groupSent
     expectFinishedAndSet h sf = do
         expectFinished cparams ctx h sf
