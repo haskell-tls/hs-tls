@@ -158,10 +158,10 @@ sendNewSessionTicket sparams ctx usedCipher exts applicationSecret sfSentTime = 
         return (identity, ageAdd tinfo)
 
     createNewSessionTicket life add nonce identity maxSize =
-        NewSessionTicket13 life add nonce identity extensions
+        NewSessionTicket13 life add nonce identity nstExtensions
       where
         earlyDataExt = toExtensionRaw $ EarlyDataIndication $ Just $ fromIntegral maxSize
-        extensions = [earlyDataExt]
+        nstExtensions = [earlyDataExt]
     adjustLifetime i
         | i < 0 = 0
         | i > 604800 = 604800

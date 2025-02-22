@@ -56,8 +56,8 @@ recvServerHello cparams ctx = do
 
 processServerHello13
     :: ClientParams -> Context -> Handshake13 -> IO ()
-processServerHello13 cparams ctx (ServerHello13 serverRan serverSession cipher shExts) = do
-    let sh = ServerHello TLS12 serverRan serverSession cipher 0 shExts
+processServerHello13 cparams ctx (ServerHello13 serverRan serverSession cipher shExtensions) = do
+    let sh = ServerHello TLS12 serverRan serverSession cipher 0 shExtensions
     processServerHello cparams ctx sh
 processServerHello13 _ _ h = unexpected (show h) (Just "server hello")
 
@@ -69,7 +69,7 @@ processServerHello13 _ _ h = unexpected (show h) (Just "server hello")
 -- 4) process the session parameter to see if the server want to start a new session or can resume
 processServerHello
     :: ClientParams -> Context -> Handshake -> IO ()
-processServerHello cparams ctx (ServerHello rver serverRan serverSession (CipherId cid) compression shExts) = do
+processServerHello cparams ctx (ServerHello rver serverRan serverSession (CipherId cid) compression shExtensions) = do
     -- A server which receives a legacy_version value not equal to
     -- 0x0303 MUST abort the handshake with an "illegal_parameter"
     -- alert.
@@ -96,7 +96,7 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession (Cipher
     let checkExt (ExtensionRaw i _)
             | i == EID_Cookie = False -- for HRR
             | otherwise = i `notElem` chExts
-    when (any checkExt shExts) $
+    when (any checkExt shExtensions) $
         throwCore $
             Error_Protocol "spurious extensions received" UnsupportedExtension
 
@@ -108,13 +108,13 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession (Cipher
                 lookupAndDecode
                     EID_Cookie
                     MsgTServerHello
-                    shExts
+                    shExtensions
                     Nothing
                     (\cookie@(Cookie _) -> Just cookie)
         setVersion rver -- must be before processing supportedVersions ext
-        mapM_ processServerExtension shExts
+        mapM_ processServerExtension shExtensions
 
-    setALPN ctx MsgTServerHello shExts
+    setALPN ctx MsgTServerHello shExtensions
 
     ver <- usingState_ ctx getVersion
 
@@ -152,7 +152,7 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession (Cipher
         then do
             -- Session is dummy in TLS 1.3.
             usingState_ ctx $ setSession serverSession
-            processRecordSizeLimit ctx shExts True
+            processRecordSizeLimit ctx shExtensions True
             enableMyRecordLimit ctx
             enablePeerRecordLimit ctx
             updateContext13 ctx cipherAlg
@@ -165,8 +165,8 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession (Cipher
             usingState_ ctx $ do
                 setSession serverSession
                 setTLS12SessionResuming $ isJust resumingSession
-            processRecordSizeLimit ctx shExts False
-            updateContext12 ctx shExts resumingSession
+            processRecordSizeLimit ctx shExtensions False
+            updateContext12 ctx shExtensions resumingSession
 processServerHello _ _ p = unexpected (show p) (Just "server hello")
 
 ----------------------------------------------------------------
@@ -206,8 +206,8 @@ updateContext13 ctx cipherAlg = do
     failOnEitherError $ setServerHelloParameters13 ctx cipherAlg
 
 updateContext12 :: Context -> [ExtensionRaw] -> Maybe SessionData -> IO ()
-updateContext12 ctx shExts resumingSession = do
-    ems <- processExtendedMainSecret ctx TLS12 MsgTServerHello shExts
+updateContext12 ctx shExtensions resumingSession = do
+    ems <- processExtendedMainSecret ctx TLS12 MsgTServerHello shExtensions
     case resumingSession of
         Nothing -> return ()
         Just sessionData -> do
@@ -223,7 +223,7 @@ updateContext12 ctx shExts resumingSession = do
 
 processRecordSizeLimit
     :: Context -> [ExtensionRaw] -> Bool -> IO ()
-processRecordSizeLimit ctx shExts tls13 = do
+processRecordSizeLimit ctx shExtensions tls13 = do
     let mmylim = limitRecordSize $ ctxLimit ctx
     case mmylim of
         Nothing -> return ()
@@ -231,7 +231,7 @@ processRecordSizeLimit ctx shExts tls13 = do
             lookupAndDecodeAndDo
                 EID_RecordSizeLimit
                 MsgTClientHello
-                shExts
+                shExtensions
                 (return ())
                 (setPeerRecordSizeLimit ctx tls13)
             ack <- checkPeerRecordLimit ctx

@@ -73,7 +73,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CHP{..
     earlyKey <- calculateEarlySecret ctx choice (Left psk) True
     let earlySecret = pairBase earlyKey
         clientEarlySecret = pairClient earlyKey
-    extensions <- checkBinder earlySecret binderInfo
+    preSharedKeyExt <- checkBinder earlySecret binderInfo
     hrr <- usingState_ ctx getTLS13HRR
     let authenticated = isJust binderInfo
         rtt0OK = authenticated && not hrr && rtt0 && rtt0accept && is0RTTvalid
@@ -101,7 +101,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CHP{..
     (ecdhe, keyShare) <- makeServerKeyShare ctx clientKeyShare
     ensureRecvComplete ctx
     (clientHandshakeSecret, handSecret) <- runPacketFlight ctx $ do
-        sendServerHello keyShare extensions
+        sendServerHello keyShare preSharedKeyExt
         sendChangeCipherSpec13 ctx
         ----------------------------------------------------------------
         handKey <- liftIO $ calculateHandshakeSecret ctx choice earlySecret ecdhe
@@ -241,18 +241,18 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CHP{..
                     mcs -> return mcs
             mcs -> return mcs
 
-    sendServerHello keyShare extensions = do
+    sendServerHello keyShare preSharedKeyExt = do
         let keyShareExt = toExtensionRaw $ KeyShareServerHello keyShare
             versionExt = toExtensionRaw $ SupportedVersionsServerHello TLS13
-            extensions' = keyShareExt : versionExt : extensions
+            shExtensions = keyShareExt : versionExt : preSharedKeyExt
         if isJust $ mOuterClientRandom
             then do
                 srand <- liftIO $ serverRandomECH ctx
                 let cipherId = CipherId (cipherID usedCipher)
-                    sh = ServerHello13 srand chSession cipherId extensions'
+                    sh = ServerHello13 srand chSession cipherId shExtensions
                 suffix <- compulteComfirm ctx usedHash sh "ech accept confirmation"
                 let srand' = replaceServerRandomECH srand suffix
-                    sh' = ServerHello13 srand' chSession cipherId extensions'
+                    sh' = ServerHello13 srand' chSession cipherId shExtensions
                 loadPacket13 ctx $ Handshake13 [sh']
             else do
                 srand <-
@@ -260,7 +260,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CHP{..
                         serverRandom ctx TLS13 $
                             supportedVersions $
                                 serverSupported sparams
-                let sh = ServerHello13 srand chSession (CipherId (cipherID usedCipher)) extensions'
+                let sh = ServerHello13 srand chSession (CipherId (cipherID usedCipher)) shExtensions
                 loadPacket13 ctx $ Handshake13 [sh]
 
     sendCertAndVerify cred@(certChain, _) hashSig zlib = do
@@ -305,7 +305,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CHP{..
                 | rtt0OK = Just $ toExtensionRaw $ EarlyDataIndication Nothing
                 | otherwise = Nothing
 
-        let extensions =
+        let eeExtensions =
                 sharedHelloExtensions (serverShared sparams)
                     ++ catMaybes
                         [ {- 0x00 -} sniExt
@@ -314,9 +314,9 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CHP{..
                         , {- 0x1c -} recodeSizeLimitExt
                         , {- 0x2a -} earlyDataExt
                         ]
-        extensions' <-
-            liftIO $ onEncryptedExtensionsCreating (serverHooks sparams) extensions
-        loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 extensions']
+        eeExtensions' <-
+            liftIO $ onEncryptedExtensionsCreating (serverHooks sparams) eeExtensions
+        loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 eeExtensions']
 
     dhModes =
         lookupAndDecode

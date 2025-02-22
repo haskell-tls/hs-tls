@@ -289,7 +289,7 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
     srand <-
         serverRandom ctx TLS12 $ supportedVersions $ serverSupported sparams
 
-    let shExts =
+    let shExtensions =
             sharedHelloExtensions (serverShared sparams)
                 ++ catMaybes
                     [ {- 0x00 -} sniExt
@@ -309,7 +309,7 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
             session
             (CipherId (cipherID usedCipher))
             (compressionID nullCompression)
-            shExts
+            shExtensions
 
 negotiatedGroupsInCommon :: [Group] -> [ExtensionRaw] -> [Group]
 negotiatedGroupsInCommon serverGroups chExts =
