@@ -69,11 +69,14 @@ transcriptHash ctx = do
     hst <- fromJust <$> getHState ctx
     case hstTranscriptHash hst of
         TranscriptHash2 hashCtx -> return $ hashFinal hashCtx
-        _ -> error "un-initialized handshake digest"
+        _ -> error "transcriptHash"
 
-transcriptHashWith :: MonadIO m => Context -> ByteString -> m ByteString
-transcriptHashWith ctx bs = do
+transcriptHashWith :: MonadIO m => Context -> Hash -> ByteString -> m ByteString
+transcriptHashWith ctx hashAlg bs = do
     hst <- fromJust <$> getHState ctx
     case hstTranscriptHash hst of
+        -- When server checks PSK binding in non HRR case, the state
+        -- if TranscriptHash1.
+        TranscriptHash0 -> return $ hash hashAlg bs
         TranscriptHash2 hashCtx -> return $ hashFinal $ hashUpdate hashCtx bs
-        _ -> error "un-initialized handshake digest"
+        _ -> error "transcriptHashWith"

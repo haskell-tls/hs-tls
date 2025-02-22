@@ -28,8 +28,10 @@ module Network.TLS.Handshake.State (
 
     -- * cert accessors
     getClientRandom,
-    getOuterClientRandom,
     setOuterClientRandom,
+    getOuterClientRandom,
+    setClientHello,
+    getClientHello,
     setClientCertSent,
     getClientCertSent,
     setCertReqSent,
@@ -46,7 +48,6 @@ module Network.TLS.Handshake.State (
     -- * digest accessors
     addHandshakeMessage,
     getHandshakeMessages,
-    getHandshakeMessagesRev,
 
     -- * main secret
     setMainSecret,
@@ -145,6 +146,8 @@ data HandshakeState = HandshakeState
     , hstCCS13Recv :: Bool
     , hstTLS13OuterClientRandom :: Maybe ClientRandom
     -- ^ Used for key logging in the case of ECH.
+    , hstTLS13ClientHello :: Maybe Handshake
+    -- ^ Inner client hello in the case of ECH.
     }
     deriving (Show)
 
@@ -239,6 +242,7 @@ newEmptyHandshake ver crand =
         , hstCCS13Sent = False
         , hstCCS13Recv = False
         , hstTLS13OuterClientRandom = Nothing
+        , hstTLS13ClientHello = Nothing
         }
 
 runHandshake :: HandshakeState -> HandshakeM a -> (a, HandshakeState)
@@ -375,6 +379,11 @@ getOuterClientRandom = gets hstTLS13OuterClientRandom
 
 setOuterClientRandom :: Maybe ClientRandom -> HandshakeM ()
 setOuterClientRandom mcr = modify' (\hst -> hst{hstTLS13OuterClientRandom = mcr})
+getClientHello :: HandshakeM (Maybe Handshake)
+getClientHello = gets hstTLS13ClientHello
+
+setClientHello :: Handshake -> HandshakeM ()
+setClientHello hs = modify' $ \hst -> hst{hstTLS13ClientHello = Just hs}
 
 getClientCertSent :: HandshakeM Bool
 getClientCertSent = gets hstClientCertSent
@@ -415,9 +424,6 @@ addHandshakeMessage content = modify' $ \hs -> hs{hstHandshakeMessages = content
 
 getHandshakeMessages :: HandshakeM [ByteString]
 getHandshakeMessages = gets (reverse . hstHandshakeMessages)
-
-getHandshakeMessagesRev :: HandshakeM [ByteString]
-getHandshakeMessagesRev = gets hstHandshakeMessages
 
 -- | Generate the main secret from the pre-main secret.
 setMainSecretFromPre

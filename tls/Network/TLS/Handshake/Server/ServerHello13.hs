@@ -7,7 +7,6 @@ module Network.TLS.Handshake.Server.ServerHello13 (
 ) where
 
 import Control.Monad.State.Strict
-import qualified Data.ByteString as B
 
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
@@ -27,7 +26,6 @@ import Network.TLS.Handshake.TranscriptHash
 import Network.TLS.IO
 import Network.TLS.Imports
 import Network.TLS.Parameters
-import Network.TLS.Session
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
@@ -39,6 +37,7 @@ sendServerHello13
     -> Context
     -> KeyShareEntry
     -> (Cipher, Hash, Bool)
+    -> (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool)
     -> CHP
     -> Maybe ClientRandom
     -> IO
@@ -47,7 +46,9 @@ sendServerHello13
         , Bool
         , Bool
         )
-sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CHP{..} mOuterClientRandom = do
+sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (earlyKey, preSharedKeyExt, authenticated, is0RTTvalid) CHP{..} mOuterClientRandom = do
+    let clientEarlySecret = pairClient earlyKey
+        earlySecret = pairBase earlyKey
     -- parse CompressCertificate to check if it is broken here
     let zlib =
             lookupAndDecode
@@ -67,16 +68,9 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CHP{..
         setSupportedGroup $ keyShareEntryGroup clientKeyShare
         setOuterClientRandom mOuterClientRandom
     setServerParameter
-    -- ALPN is used in choosePSK
     alpnExt <- applicationProtocol ctx chExtensions sparams
-    (psk, binderInfo, is0RTTvalid) <- choosePSK
-    earlyKey <- calculateEarlySecret ctx choice (Left psk) True
-    let earlySecret = pairBase earlyKey
-        clientEarlySecret = pairClient earlyKey
-    preSharedKeyExt <- checkBinder earlySecret binderInfo
     hrr <- usingState_ ctx getTLS13HRR
-    let authenticated = isJust binderInfo
-        rtt0OK = authenticated && not hrr && rtt0 && rtt0accept && is0RTTvalid
+    let rtt0OK = authenticated && not hrr && rtt0 && rtt0accept && is0RTTvalid
     extraCreds <-
         usingState_ ctx getClientSNI >>= onServerNameIndication (serverHooks sparams)
     let p = makeCredentialPredicate TLS13 chExtensions
@@ -101,7 +95,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CHP{..
     (ecdhe, keyShare) <- makeServerKeyShare ctx clientKeyShare
     ensureRecvComplete ctx
     (clientHandshakeSecret, handSecret) <- runPacketFlight ctx $ do
-        sendServerHello keyShare preSharedKeyExt
+        sendServerHello keyShare
         sendChangeCipherSpec13 ctx
         ----------------------------------------------------------------
         handKey <- liftIO $ calculateHandshakeSecret ctx choice earlySecret ecdhe
@@ -154,68 +148,8 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CHP{..
             False
             (\PostHandshakeAuth -> True)
 
-    selectPSK (PreSharedKeyClientHello (PskIdentity identity obfAge : _) bnds@(bnd : _)) = do
-        when (null dhModes) $
-            throwCore $
-                Error_Protocol "no psk_key_exchange_modes extension" MissingExtension
-        if PSK_DHE_KE `elem` dhModes
-            then do
-                let len = sum (map (\x -> B.length x + 1) bnds) + 2
-                    mgr = sharedSessionManager $ serverShared sparams
-                -- sessionInvalidate is not used for TLS 1.3
-                -- because PSK is always changed.
-                -- So, identity is not stored in Context.
-                msdata <-
-                    if rtt0
-                        then sessionResumeOnlyOnce mgr identity
-                        else sessionResume mgr identity
-                case msdata of
-                    Just sdata -> do
-                        let tinfo = fromJust $ sessionTicketInfo sdata
-                            psk = sessionSecret sdata
-                        isFresh <- checkFreshness tinfo obfAge
-                        (isPSKvalid, is0RTTvalid) <- checkSessionEquality sdata
-                        if isPSKvalid && isFresh
-                            then return (psk, Just (bnd, 0 :: Int, len), is0RTTvalid)
-                            else -- fall back to full handshake
-                                return (zero, Nothing, False)
-                    _ -> return (zero, Nothing, False)
-            else return (zero, Nothing, False)
-    selectPSK _ = return (zero, Nothing, False)
-
-    choosePSK =
-        lookupAndDecodeAndDo
-            EID_PreSharedKey
-            MsgTClientHello
-            chExtensions
-            (return (zero, Nothing, False))
-            selectPSK
-
-    checkSessionEquality sdata = do
-        msni <- usingState_ ctx getClientSNI
-        malpn <- usingState_ ctx getNegotiatedProtocol
-        let isSameSNI = sessionClientSNI sdata == msni
-            isSameCipher = sessionCipher sdata == cipherID usedCipher
-            ciphers = supportedCiphers $ serverSupported sparams
-            scid = sessionCipher sdata
-            isSameKDF = case findCipher scid ciphers of
-                Nothing -> False
-                Just c -> cipherHash c == cipherHash usedCipher
-            isSameVersion = TLS13 == sessionVersion sdata
-            isSameALPN = sessionALPN sdata == malpn
-            isPSKvalid = isSameKDF && isSameSNI -- fixme: SNI is not required
-            is0RTTvalid = isSameVersion && isSameCipher && isSameALPN
-        return (isPSKvalid, is0RTTvalid)
-
     rtt0max = safeNonNegative32 $ serverEarlyDataSize sparams
     rtt0accept = serverEarlyDataSize sparams > 0
-
-    checkBinder _ Nothing = return []
-    checkBinder earlySecret (Just (binder, n, tlen)) = do
-        binder' <- makePSKBinder ctx earlySecret usedHash tlen Nothing
-        unless (binder == binder') $
-            decryptError "PSK binder validation failed"
-        return [toExtensionRaw $ PreSharedKeyServerHello $ fromIntegral n]
 
     decideCredentialInfo allCreds = do
         let err =
@@ -241,7 +175,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CHP{..
                     mcs -> return mcs
             mcs -> return mcs
 
-    sendServerHello keyShare preSharedKeyExt = do
+    sendServerHello keyShare = do
         let keyShareExt = toExtensionRaw $ KeyShareServerHello keyShare
             versionExt = toExtensionRaw $ SupportedVersionsServerHello TLS13
             shExtensions = keyShareExt : versionExt : preSharedKeyExt
@@ -317,17 +251,6 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CHP{..
         eeExtensions' <-
             liftIO $ onEncryptedExtensionsCreating (serverHooks sparams) eeExtensions
         loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 eeExtensions']
-
-    dhModes =
-        lookupAndDecode
-            EID_PskKeyExchangeModes
-            MsgTClientHello
-            chExtensions
-            []
-            (\(PskKeyExchangeModes ms) -> ms)
-
-    hashSize = hashDigestSize usedHash
-    zero = B.replicate hashSize 0
 
 credentialsFindForSigning13
     :: [HashAndSignatureAlgorithm]

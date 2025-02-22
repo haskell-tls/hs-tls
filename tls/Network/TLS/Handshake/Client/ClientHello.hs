@@ -94,6 +94,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
     extensions <- adjustExtentions extensions1 $ mkClientHello extensions1
     let ch = mkClientHello extensions
     sendPacket12 ctx $ Handshake [ch]
+    usingHState ctx $ setClientHello ch
     mEarlySecInfo <- case rtt0info of
         Nothing -> return Nothing
         Just info -> Just <$> getEarlySecretInfo info
@@ -259,7 +260,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
                 let ech = encodeHandshake ch
                     h = cHash choice
                     siz = (hashDigestSize h + 1) * length identities + 2
-                binder <- makePSKBinder ctx earlySecret h siz (Just ech)
+                binder <- makePSKBinder ctx earlySecret h siz ech
                 -- PSK is shared by the previous TLS session.
                 -- So, PSK is unique for identities.
                 let binders = replicate (length identities) binder
@@ -273,9 +274,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
         let usedCipher = cCipher choice
             usedHash = cHash choice
         Just earlySecret <- usingHState ctx getTLS13EarlySecret
-        -- Client hello is stored in hstHandshakeDigest
-        -- But HandshakeDigestContext is not created yet.
-        earlyKey <- calculateEarlySecret ctx choice (Right earlySecret) False
+        earlyKey <- calculateEarlySecret ctx choice (Right earlySecret)
         let clientEarlySecret = pairClient earlyKey
         unless (ctxQUICMode ctx) $ do
             runPacketFlight ctx $ sendChangeCipherSpec13 ctx

@@ -68,6 +68,7 @@ import Network.TLS.IO.Encode
 import Network.TLS.Imports
 import Network.TLS.KeySchedule
 import Network.TLS.MAC
+import Network.TLS.Packet
 import Network.TLS.Packet13
 import Network.TLS.Parameters
 import Network.TLS.State
@@ -207,16 +208,12 @@ makePSKBinder
     -> BaseSecret EarlySecret
     -> Hash
     -> Int
-    -> Maybe ByteString
+    -> ByteString
+    -- ^ Encoded client hello
     -> IO ByteString
-makePSKBinder ctx (BaseSecret sec) usedHash truncLen mch = do
-    rmsgs <- case mch of
-        Just ch -> (trunc ch :) <$> usingHState ctx getHandshakeMessagesRev
-        Nothing -> do
-            ch : rs <- usingHState ctx getHandshakeMessagesRev
-            return $ trunc ch : rs
-    let hChTruncated = hashChunks usedHash $ reverse rmsgs
-        binderKey = deriveSecret usedHash sec "res binder" (hash usedHash "")
+makePSKBinder ctx (BaseSecret sec) usedHash truncLen ech = do
+    hChTruncated <- transcriptHashWith ctx usedHash $ trunc ech
+    let binderKey = deriveSecret usedHash sec "res binder" (hash usedHash "")
     return $ makeVerifyData usedHash binderKey hChTruncated
   where
     trunc x = B.take takeLen x
@@ -460,15 +457,10 @@ calculateEarlySecret
     :: Context
     -> CipherChoice
     -> Either ByteString (BaseSecret EarlySecret)
-    -> Bool
     -> IO (SecretPair EarlySecret)
-calculateEarlySecret ctx choice maux initialized = do
-    hCh <-
-        if initialized
-            then transcriptHash ctx
-            else do
-                hmsgs <- usingHState ctx getHandshakeMessages
-                return $ hash usedHash $ B.concat hmsgs
+calculateEarlySecret ctx choice maux = do
+    ch <- fromJust <$> usingHState ctx getClientHello
+    let hCh = hash usedHash $ encodeHandshake ch
     let earlySecret = case maux of
             Right (BaseSecret sec) -> sec
             Left psk -> hkdfExtract usedHash zero psk
@@ -593,7 +585,7 @@ setRTT ctx chSentTime = do
 compulteComfirm
     :: MonadIO m => Context -> Hash -> Handshake13 -> ByteString -> m ByteString
 compulteComfirm ctx usedHash hs label = do
-    echConf <- transcriptHashWith ctx $ encodeHandshake13 hs
+    echConf <- transcriptHashWith ctx usedHash $ encodeHandshake13 hs
     ClientRandom cr <- liftIO $ usingHState ctx getClientRandom
     let prk = hkdfExtract usedHash "" cr
     return $ hkdfExpandLabel usedHash prk label echConf 8

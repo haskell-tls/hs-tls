@@ -53,7 +53,7 @@ handshake sparams ctx clientHello = do
         then do
             -- fixme: we should check if the client random is the same as
             -- that in the first client hello in the case of hello retry.
-            (mClientKeyShare, r0) <-
+            (mClientKeyShare, r0, r1) <-
                 processClientHello13 sparams ctx ch
             case mClientKeyShare of
                 Nothing -> do
@@ -62,9 +62,9 @@ handshake sparams ctx clientHello = do
                     -- would be comming, which should be ignored.
                     handshakeServer sparams ctx
                 Just cliKeyShare -> do
-                    r1 <-
-                        sendServerHello13 sparams ctx cliKeyShare r0 ch mcrnd
-                    recvClientSecondFlight13 sparams ctx r1 ch
+                    r2 <-
+                        sendServerHello13 sparams ctx cliKeyShare r0 r1 ch mcrnd
+                    recvClientSecondFlight13 sparams ctx r2 ch
         else do
             r <-
                 processClientHello12 sparams ctx ch
