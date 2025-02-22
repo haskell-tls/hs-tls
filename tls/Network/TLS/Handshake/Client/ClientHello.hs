@@ -87,7 +87,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
     usingState_ ctx $ setVersionIfUnset highestVer
     let cipherIds = map (CipherId . cipherID) ciphers
         compIds = map compressionID compressions
-        mkClientHello exts = ClientHello ver crand compIds $ CH clientSession cipherIds exts
+        mkClientHello exts = ClientHello ver crand compIds $ CHP clientSession cipherIds exts
     setMyRecordLimit ctx $ limitRecordSize $ clientLimit cparams
     extensions0 <- catMaybes <$> getExtensions
     let extensions1 = sharedHelloExtensions (clientShared cparams) ++ extensions0

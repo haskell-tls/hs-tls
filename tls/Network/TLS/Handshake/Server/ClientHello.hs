@@ -28,10 +28,10 @@ processClientHello
     -> Handshake
     -> IO
         ( Version
-        , CH
+        , CHP
         , Maybe ClientRandom -- Just for ECH to keep the outer one for key log
         )
-processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compressions ch@CH{..}) = do
+processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compressions chp@CHP{..}) = do
     established <- ctxEstablished ctx
     -- renego is not allowed in TLS 1.3
     when (established /= NotEstablished) $ do
@@ -122,20 +122,20 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
                     (decryptECH sparams ctx clientHello)
             else return Nothing
     case mClientHello' of
-        Just clientHello'@(ClientHello _ cran' _ ch') -> do
+        Just clientHello'@(ClientHello _ cran' _ chp') -> do
             hrr <- usingState_ ctx getTLS13HRR
             unless hrr $ startHandshake ctx legacyVersion cran'
-            let serverName = getServerName ch'
+            let serverName = getServerName chp'
             maybe (return ()) (usingState_ ctx . setClientSNI) serverName
             void $ updateTranscriptHash12 ctx clientHello'
-            return (chosenVersion, ch', Just cran)
+            return (chosenVersion, chp', Just cran)
         _ -> do
             hrr <- usingState_ ctx getTLS13HRR
             unless hrr $ startHandshake ctx legacyVersion cran
-            let serverName = getServerName ch
+            let serverName = getServerName chp
             maybe (return ()) (usingState_ ctx . setClientSNI) serverName
             void $ updateTranscriptHash12 ctx clientHello
-            return (chosenVersion, ch, Nothing)
+            return (chosenVersion, chp, Nothing)
 processClientHello _ _ _ =
     throwCore $
         Error_Protocol
@@ -143,8 +143,8 @@ processClientHello _ _ _ =
             HandshakeFailure
 
 -- SNI (Server Name Indication)
-getServerName :: CH -> Maybe HostName
-getServerName CH{..} =
+getServerName :: CHP -> Maybe HostName
+getServerName CHP{..} =
     lookupAndDecode
         EID_ServerName
         MsgTClientHello
@@ -208,7 +208,7 @@ fill0Exts nenc xs0 = loop xs0
         x' = ExtensionRaw EID_EncryptedClientHello bs'
     loop (x : xs) = x : loop xs
 
-expandClientHello :: CH -> CH -> Maybe CH
+expandClientHello :: CHP -> CHP -> Maybe CHP
 expandClientHello inner outer =
     case expand (chExtensions inner) (chExtensions outer) of
         Nothing -> Nothing

@@ -202,8 +202,8 @@ decodeClientHello inner = do
         then
             checkAndSkip r1
         else when (r1 /= 0) $ fail "Client hello has garbage"
-    let ch = CH session ciphers exts
-    return $ ClientHello ver random compressions ch
+    let chp = CHP session ciphers exts
+    return $ ClientHello ver random compressions chp
   where
     checkAndSkip 0 = return ()
     checkAndSkip r = do
@@ -342,7 +342,7 @@ encodeHandshakeHeader ty len = putWord8 (fromHandshakeType ty) >> putWord24 len
 
 encodeHandshake' :: Handshake -> ByteString
 encodeHandshake' HelloRequest = ""
-encodeHandshake' (ClientHello version random compressionIDs CH{..}) = runPut $ do
+encodeHandshake' (ClientHello version random compressionIDs CHP{..}) = runPut $ do
     putBinaryVersion version
     putClientRandom32 random
     putSession chSession

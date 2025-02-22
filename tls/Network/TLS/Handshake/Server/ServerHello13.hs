@@ -39,7 +39,7 @@ sendServerHello13
     -> Context
     -> KeyShareEntry
     -> (Cipher, Hash, Bool)
-    -> CH
+    -> CHP
     -> Maybe ClientRandom
     -> IO
         ( SecretTriple ApplicationSecret
@@ -47,7 +47,7 @@ sendServerHello13
         , Bool
         , Bool
         )
-sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CH{..} mOuterClientRandom = do
+sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) CHP{..} mOuterClientRandom = do
     -- parse CompressCertificate to check if it is broken here
     let zlib =
             lookupAndDecode
@@ -355,8 +355,8 @@ contextSync ctx ctl = case ctxHandshakeSync ctx of
 
 ----------------------------------------------------------------
 
-sendHRR :: Context -> (Cipher, Hash, c) -> CH -> Bool -> IO ()
-sendHRR ctx (usedCipher, usedHash, _) CH{..} isEch = do
+sendHRR :: Context -> (Cipher, Hash, c) -> CHP -> Bool -> IO ()
+sendHRR ctx (usedCipher, usedHash, _) CHP{..} isEch = do
     twice <- usingState_ ctx getTLS13HRR
     when twice $
         throwCore $

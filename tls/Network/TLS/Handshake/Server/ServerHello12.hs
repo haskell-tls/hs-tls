@@ -31,10 +31,10 @@ sendServerHello12
     :: ServerParams
     -> Context
     -> (Cipher, Maybe Credential)
-    -> CH
+    -> CHP
     -> IO (Maybe SessionData)
-sendServerHello12 sparams ctx (usedCipher, mcred) ch@CH{..} = do
-    resumeSessionData <- recoverSessionData ctx ch
+sendServerHello12 sparams ctx (usedCipher, mcred) chp@CHP{..} = do
+    resumeSessionData <- recoverSessionData ctx chp
     case resumeSessionData of
         Nothing -> do
             serverSession <- newSession ctx
@@ -58,8 +58,8 @@ sendServerHello12 sparams ctx (usedCipher, mcred) ch@CH{..} = do
             sendCCSandFinished ctx ServerRole
     return resumeSessionData
 
-recoverSessionData :: Context -> CH -> IO (Maybe SessionData)
-recoverSessionData ctx CH{..} = do
+recoverSessionData :: Context -> CHP -> IO (Maybe SessionData)
+recoverSessionData ctx CHP{..} = do
     serverName <- usingState_ ctx getClientSNI
     ems <- processExtendedMainSecret ctx TLS12 MsgTClientHello chExtensions
     let mticket =

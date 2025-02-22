@@ -75,7 +75,7 @@ instance Arbitrary Handshake where
                 ClientHello ver
                     <$> arbitrary
                     <*> arbitraryCompressionIDs
-                    <*> (CH <$> arbitrary <*> arbitraryCiphersIds <*> arbitraryHelloExtensions ver)
+                    <*> (CHP <$> arbitrary <*> arbitraryCiphersIds <*> arbitraryHelloExtensions ver)
             , arbitrary >>= \ver ->
                 ServerHello ver
                     <$> arbitrary

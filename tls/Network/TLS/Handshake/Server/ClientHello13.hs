@@ -18,9 +18,9 @@ import Network.TLS.Struct
 processClientHello13
     :: ServerParams
     -> Context
-    -> CH
+    -> CHP
     -> IO (Maybe KeyShareEntry, (Cipher, Hash, Bool))
-processClientHello13 sparams ctx CH{..} = do
+processClientHello13 sparams ctx CHP{..} = do
     when
         (any (\(ExtensionRaw eid _) -> eid == EID_PreSharedKey) $ init chExtensions)
         $ throwCore

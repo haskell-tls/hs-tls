@@ -108,7 +108,7 @@ module Network.TLS.Struct (
     TLSCertificateChain (..),
     emptyTLSCertificateChain,
     Handshake (..),
-    CH (..),
+    CHP (..),
     packetType,
     typeOfHandshake,
     module Network.TLS.HashAndSignature,
@@ -417,7 +417,8 @@ instance Show ClientKeyXchgAlgorithmData where
 
 ----------------------------------------------------------------
 
-data CH = CH
+-- Client Hello Parameters
+data CHP = CHP
     { chSession :: Session
     , chCiphers :: [CipherId]
     , chExtensions :: [ExtensionRaw]
@@ -447,7 +448,7 @@ data Handshake
         Version
         ClientRandom
         [CompressionID]
-        CH
+        CHP
     | ServerHello
         Version
         ServerRandom

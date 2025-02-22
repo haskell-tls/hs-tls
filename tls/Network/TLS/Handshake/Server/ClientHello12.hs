@@ -27,16 +27,16 @@ import Network.TLS.Types (CipherId (..), Role (..))
 processClientHello12
     :: ServerParams
     -> Context
-    -> CH
+    -> CHP
     -> IO (Cipher, Maybe Credential)
-processClientHello12 sparams ctx ch = do
+processClientHello12 sparams ctx chp = do
     let secureRenegotiation = supportedSecureRenegotiation $ serverSupported sparams
-    when secureRenegotiation $ checkSecureRenegotiation ctx ch
+    when secureRenegotiation $ checkSecureRenegotiation ctx chp
     serverName <- usingState_ ctx getClientSNI
     let hooks = serverHooks sparams
     extraCreds <- onServerNameIndication hooks serverName
     let (creds, signatureCreds, ciphersFilteredVersion) =
-            credsTriple sparams ch extraCreds
+            credsTriple sparams chp extraCreds
     -- The shared cipherlist can become empty after filtering for compatible
     -- creds, check now before calling onCipherChoosing, which does not handle
     -- empty lists.
@@ -47,8 +47,8 @@ processClientHello12 sparams ctx ch = do
     mcred <- chooseCreds usedCipher creds signatureCreds
     return (usedCipher, mcred)
 
-checkSecureRenegotiation :: Context -> CH -> IO ()
-checkSecureRenegotiation ctx CH{..} = do
+checkSecureRenegotiation :: Context -> CHP -> IO ()
+checkSecureRenegotiation ctx CHP{..} = do
     -- RFC 5746: secure renegotiation
     -- TLS_EMPTY_RENEGOTIATION_INFO_SCSV: {0x00, 0xFF}
     when (CipherId 0xff `elem` chCiphers) $
@@ -71,10 +71,10 @@ checkSecureRenegotiation ctx CH{..} = do
 
 credsTriple
     :: ServerParams
-    -> CH
+    -> CHP
     -> Credentials
     -> (Credentials, Credentials, [Cipher])
-credsTriple sparams CH{..} extraCreds
+credsTriple sparams CHP{..} extraCreds
     | cipherListCredentialFallback cltCiphers = (allCreds, sigAllCreds, allCiphers)
     | otherwise = (cltCreds, sigCltCreds, cltCiphers)
   where

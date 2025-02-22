@@ -48,9 +48,9 @@ recvClientSecondFlight13
        , Bool
        , Bool
        )
-    -> CH
+    -> CHP
     -> IO ()
-recvClientSecondFlight13 sparams ctx (appKey, clientHandshakeSecret, authenticated, rtt0OK) CH{..} = do
+recvClientSecondFlight13 sparams ctx (appKey, clientHandshakeSecret, authenticated, rtt0OK) CHP{..} = do
     sfSentTime <- getCurrentTimeFromBase
     let expectFinished' =
             expectFinished sparams ctx chExtensions appKey clientHandshakeSecret sfSentTime
