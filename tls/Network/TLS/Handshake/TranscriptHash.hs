@@ -19,8 +19,8 @@ import Network.TLS.Handshake.State
 import Network.TLS.Imports
 import Network.TLS.Types
 
-transitTranscriptHash :: Hash -> HandshakeM ()
-transitTranscriptHash hashAlg = modify' $ \hst ->
+transitTranscriptHash :: Context -> Hash -> IO ()
+transitTranscriptHash ctx hashAlg = usingHState ctx $ modify' $ \hst ->
     hst
         { hstTransHashState = case hstTransHashState hst of
             TransHashState0 -> error "transitTranscriptHash"
@@ -28,8 +28,8 @@ transitTranscriptHash hashAlg = modify' $ \hst ->
             TransHashState2 hctx -> TransHashState2 hctx -- 2nd SH
         }
 
-updateTranscriptHash :: ByteString -> HandshakeM ()
-updateTranscriptHash eh = modify' $ \hst ->
+updateTranscriptHash :: Context -> ByteString -> IO ()
+updateTranscriptHash ctx eh = usingHState ctx $ modify' $ \hst ->
     hst
         { hstTransHashState = case hstTransHashState hst of
             TransHashState0 -> TransHashState1 eh
@@ -41,8 +41,8 @@ updateTranscriptHash eh = modify' $ \hst ->
 -- transcript must be wrapped in a "message_hash" construct.  See RFC
 -- 8446 section 4.4.1.  This applies to key-schedule computations as
 -- well as the ones for PSK binders.
-updateTranscriptHash13HRR :: HandshakeM ()
-updateTranscriptHash13HRR = do
+updateTranscriptHash13HRR :: Context -> IO ()
+updateTranscriptHash13HRR ctx = usingHState ctx $ do
     cipher <- getPendingCipher
     let hashAlg = cipherHash cipher
     modify' $ \hs ->

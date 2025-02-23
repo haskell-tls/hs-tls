@@ -75,9 +75,10 @@ switchTxEncryption ctx = do
 
 updateTranscriptHash12 :: Context -> Handshake -> IO ByteString
 updateTranscriptHash12 ctx hs = do
-    usingHState ctx $ do
-        when (certVerifyHandshakeMaterial hs) $ addHandshakeMessage encoded
-        when (finishedHandshakeMaterial hs) $ updateTranscriptHash encoded
+    usingHState ctx $
+        when (certVerifyHandshakeMaterial hs) $
+            addHandshakeMessage encoded
+    when (finishedHandshakeMaterial hs) $ updateTranscriptHash ctx encoded
     return encoded
   where
     encoded = encodeHandshake hs
@@ -108,9 +109,8 @@ updateTranscriptHash13 :: Context -> Handshake13 -> IO ByteString
 updateTranscriptHash13 ctx hs
     | isIgnored hs = return encoded
     | otherwise = do
-        usingHState ctx $ do
-            updateTranscriptHash encoded
-            addHandshakeMessage encoded
+        updateTranscriptHash ctx encoded
+        usingHState ctx $ addHandshakeMessage encoded
         return encoded
   where
     encoded = encodeHandshake13 hs

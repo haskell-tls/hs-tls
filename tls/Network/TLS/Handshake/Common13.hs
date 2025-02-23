@@ -598,23 +598,24 @@ compulteComfirm ctx usedHash hs label = do
 ----------------------------------------------------------------
 
 setServerHelloParameters13 :: Context -> Cipher -> IO (Either TLSError ())
-setServerHelloParameters13 ctx cipher = usingHState ctx $ do
-    transitTranscriptHash $ cipherHash cipher
-    hst <- get
-    case hstPendingCipher hst of
-        Nothing -> do
-            put
-                hst
-                    { hstPendingCipher = Just cipher
-                    , hstPendingCompression = nullCompression
-                    }
-            return $ Right ()
-        Just oldcipher
-            | cipher == oldcipher -> return $ Right ()
-            | otherwise ->
-                return $
-                    Left $
-                        Error_Protocol "TLS 1.3 cipher changed after hello retry" IllegalParameter
+setServerHelloParameters13 ctx cipher = do
+    transitTranscriptHash ctx $ cipherHash cipher
+    usingHState ctx $ do
+        hst <- get
+        case hstPendingCipher hst of
+            Nothing -> do
+                put
+                    hst
+                        { hstPendingCipher = Just cipher
+                        , hstPendingCompression = nullCompression
+                        }
+                return $ Right ()
+            Just oldcipher
+                | cipher == oldcipher -> return $ Right ()
+                | otherwise ->
+                    return $
+                        Left $
+                            Error_Protocol "TLS 1.3 cipher changed after hello retry" IllegalParameter
 
 -- | TLS13 handshake wrap up & clean up.  Contrary to
 -- @finishHandshake12@, this does not handle session, which is managed

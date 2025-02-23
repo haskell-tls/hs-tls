@@ -398,15 +398,15 @@ setServerHelloParameters12
     -> Cipher
     -> Compression
     -> IO ()
-setServerHelloParameters12 ctx ver sran cipher compression =
-    usingHState ctx $ do
+setServerHelloParameters12 ctx ver sran cipher compression = do
+    usingHState ctx $
         modify' $ \hst ->
             hst
                 { hstServerRandom = Just sran
                 , hstPendingCipher = Just cipher
                 , hstPendingCompression = compression
                 }
-        transitTranscriptHash $ getHash ver cipher
+    transitTranscriptHash ctx $ getHash ver cipher
 
 -- The TLS12 Hash is cipher specific, and some TLS12 algorithms use SHA384
 -- instead of the default SHA256.
