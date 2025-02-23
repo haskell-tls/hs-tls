@@ -4,7 +4,7 @@
 
 module Network.TLS.Handshake.State (
     HandshakeState (..),
-    TranscriptHash (..),
+    TransHashState (..),
     HandshakeMode13 (..),
     RTT0Status (..),
     CertReqCBdata,
@@ -95,10 +95,10 @@ data HandshakeKeyState = HandshakeKeyState
     }
     deriving (Show)
 
-data TranscriptHash
-    = TranscriptHash0
-    | TranscriptHash1 ByteString -- ClientHeloo
-    | TranscriptHash2 HashCtx
+data TransHashState
+    = TransHashState0
+    | TransHashState1 ByteString -- ClientHeloo
+    | TransHashState2 HashCtx
     deriving (Show)
 
 data HandshakeState = HandshakeState
@@ -112,7 +112,7 @@ data HandshakeState = HandshakeState
     , hstDHPrivate :: Maybe DHPrivate
     , hstServerECDHParams :: Maybe ServerECDHParams
     , hstGroupPrivate :: Maybe GroupPrivate
-    , hstTranscriptHash :: TranscriptHash
+    , hstTransHashState :: TransHashState
     , hstHandshakeMessages :: [ByteString]
     -- ^ To create certificate verify for TLS 1.2.
     --   This should be removed when TLS 1.2 is dropped.
@@ -220,7 +220,7 @@ newEmptyHandshake ver crand =
         , hstDHPrivate = Nothing
         , hstServerECDHParams = Nothing
         , hstGroupPrivate = Nothing
-        , hstTranscriptHash = TranscriptHash0
+        , hstTransHashState = TransHashState0
         , hstHandshakeMessages = []
         , hstCertReqToken = Nothing
         , hstCertReqCBdata = Nothing
@@ -457,8 +457,8 @@ setMainSecretFromPre ver role preMainSecret = do
 
 getSessionHash :: HandshakeM ByteString
 getSessionHash = gets $ \hst ->
-    case hstTranscriptHash hst of
-        TranscriptHash2 hashCtx -> hashFinal hashCtx
+    case hstTransHashState hst of
+        TransHashState2 hashCtx -> hashFinal hashCtx
         _ -> error "un-initialized session hash"
 
 -- | Set main secret and as a side effect generate the key block

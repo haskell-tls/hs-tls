@@ -20,19 +20,19 @@ import Network.TLS.Imports
 transitTranscriptHash :: Hash -> HandshakeM ()
 transitTranscriptHash hashAlg = modify' $ \hst ->
     hst
-        { hstTranscriptHash = case hstTranscriptHash hst of
-            TranscriptHash0 -> error "transitTranscriptHash: TranscriptHash0"
-            TranscriptHash1 ch -> TranscriptHash2 $ hashUpdate (hashInit hashAlg) ch
-            TranscriptHash2 hctx -> TranscriptHash2 hctx -- 2nd SH
+        { hstTransHashState = case hstTransHashState hst of
+            TransHashState0 -> error "transitTranscriptHash"
+            TransHashState1 ch -> TransHashState2 $ hashUpdate (hashInit hashAlg) ch
+            TransHashState2 hctx -> TransHashState2 hctx -- 2nd SH
         }
 
 updateTranscriptHash :: ByteString -> HandshakeM ()
 updateTranscriptHash eh = modify' $ \hst ->
     hst
-        { hstTranscriptHash = case hstTranscriptHash hst of
-            TranscriptHash0 -> TranscriptHash1 eh
-            TranscriptHash1 _ch -> error "updateTranscriptHash"
-            TranscriptHash2 hctx -> TranscriptHash2 $ hashUpdate hctx eh
+        { hstTransHashState = case hstTransHashState hst of
+            TransHashState0 -> TransHashState1 eh
+            TransHashState1 _ch -> error "updateTranscriptHash"
+            TransHashState2 hctx -> TransHashState2 $ hashUpdate hctx eh
         }
 
 -- When a HelloRetryRequest is sent or received, the existing
@@ -45,12 +45,12 @@ updateTranscriptHash13HRR = do
     let hashAlg = cipherHash cipher
     modify' $ \hs ->
         hs
-            { hstTranscriptHash = case hstTranscriptHash hs of
-                TranscriptHash2 hctx ->
+            { hstTransHashState = case hstTransHashState hs of
+                TransHashState2 hctx ->
                     let hashCH = hashFinal hctx
                         len = B.length hashCH
                         ch' = wrap len hashCH
-                     in TranscriptHash2 $ hashUpdate (hashInit hashAlg) ch'
+                     in TransHashState2 $ hashUpdate (hashInit hashAlg) ch'
                 _ -> error "updateTranscriptHash13HRR"
             }
   where
@@ -67,16 +67,16 @@ updateTranscriptHash13HRR = do
 transcriptHash :: MonadIO m => Context -> m ByteString
 transcriptHash ctx = do
     hst <- fromJust <$> getHState ctx
-    case hstTranscriptHash hst of
-        TranscriptHash2 hashCtx -> return $ hashFinal hashCtx
+    case hstTransHashState hst of
+        TransHashState2 hashCtx -> return $ hashFinal hashCtx
         _ -> error "transcriptHash"
 
 transcriptHashWith :: MonadIO m => Context -> Hash -> ByteString -> m ByteString
 transcriptHashWith ctx hashAlg bs = do
     hst <- fromJust <$> getHState ctx
-    case hstTranscriptHash hst of
+    case hstTransHashState hst of
         -- When server checks PSK binding in non HRR case, the state
-        -- if TranscriptHash1.
-        TranscriptHash0 -> return $ hash hashAlg bs
-        TranscriptHash2 hashCtx -> return $ hashFinal $ hashUpdate hashCtx bs
+        -- if TransHashState1.
+        TransHashState0 -> return $ hash hashAlg bs
+        TransHashState2 hashCtx -> return $ hashFinal $ hashUpdate hashCtx bs
         _ -> error "transcriptHashWith"
