@@ -48,6 +48,7 @@ data SecretPair a = SecretPair
     { pairBase :: BaseSecret a
     , pairClient :: ClientTrafficSecret a
     }
+    deriving (Show)
 
 -- | Hold both client and server traffic secrets at the same step.
 type TrafficSecrets a = (ClientTrafficSecret a, ServerTrafficSecret a)
