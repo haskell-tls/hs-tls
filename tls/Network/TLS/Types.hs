@@ -11,6 +11,7 @@ module Network.TLS.Types (
     bigNumToInteger,
     bigNumFromInteger,
     defaultRecordSizeLimit,
+    TranscriptHash (..),
 ) where
 
 import Network.Socket (HostName)
@@ -56,3 +57,10 @@ bigNumFromInteger i = BigNum $ i2osp i
 -- 2^14 + 1 for TLS 1.3
 defaultRecordSizeLimit :: Int
 defaultRecordSizeLimit = 16384
+
+----------------------------------------------------------------
+
+newtype TranscriptHash = TranscriptHash ByteString
+
+instance Show TranscriptHash where
+    show (TranscriptHash bs) = showBytesHex bs

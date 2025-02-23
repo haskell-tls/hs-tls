@@ -88,17 +88,19 @@ makeFinished ctx usedHash baseKey = do
     pure $ Finished13 verifyData
 
 checkFinished
-    :: MonadIO m => Context -> Hash -> ByteString -> ByteString -> VerifyData -> m ()
-checkFinished ctx usedHash baseKey hashValue vd@(VerifyData verifyData) = do
-    let verifyData' = makeVerifyData usedHash baseKey hashValue
+    :: MonadIO m
+    => Context -> Hash -> ByteString -> TranscriptHash -> VerifyData -> m ()
+checkFinished ctx usedHash baseKey (TranscriptHash hashValue) vd@(VerifyData verifyData) = do
+    let verifyData' = makeVerifyData usedHash baseKey $ TranscriptHash hashValue
     when (B.length verifyData /= B.length verifyData') $
         throwCore $
             Error_Protocol "broken Finished" DecodeError
     unless (verifyData' == verifyData) $ decryptError "finished verification failed"
     liftIO $ usingState_ ctx $ setVerifyDataForRecv vd
 
-makeVerifyData :: Hash -> ByteString -> ByteString -> ByteString
-makeVerifyData usedHash baseKey = hmac usedHash finishedKey
+makeVerifyData :: Hash -> ByteString -> TranscriptHash -> ByteString
+makeVerifyData usedHash baseKey (TranscriptHash th) =
+    hmac usedHash finishedKey th
   where
     hashSize = hashDigestSize usedHash
     finishedKey = hkdfExpandLabel usedHash baseKey "finished" "" hashSize
@@ -151,9 +153,9 @@ makeCertVerify
     => Context
     -> PubKey
     -> HashAndSignatureAlgorithm
-    -> ByteString
+    -> TranscriptHash
     -> m Handshake13
-makeCertVerify ctx pub hs hashValue = do
+makeCertVerify ctx pub hs (TranscriptHash hashValue) = do
     role <- liftIO $ usingState_ ctx getRole
     let ctxStr
             | role == ClientRole = clientContextString
@@ -213,7 +215,8 @@ makePSKBinder
     -> IO ByteString
 makePSKBinder ctx (BaseSecret sec) usedHash truncLen ech = do
     hChTruncated <- transcriptHashWith ctx usedHash $ trunc ech
-    let binderKey = deriveSecret usedHash sec "res binder" (hash usedHash "")
+    let th = TranscriptHash $ hash usedHash ""
+    let binderKey = deriveSecret usedHash sec "res binder" th
     return $ makeVerifyData usedHash binderKey hChTruncated
   where
     trunc x = B.take takeLen x
@@ -384,7 +387,7 @@ recvHandshake13 ctx f = getHandshake13 ctx >>= f
 recvHandshake13hash
     :: MonadIO m
     => Context
-    -> (ByteString -> Handshake13 -> RecvHandshake13M m a)
+    -> (TranscriptHash -> Handshake13 -> RecvHandshake13M m a)
     -> RecvHandshake13M m a
 recvHandshake13hash ctx f = do
     d <- transcriptHash ctx
@@ -460,7 +463,7 @@ calculateEarlySecret
     -> IO (SecretPair EarlySecret)
 calculateEarlySecret ctx choice maux = do
     ch <- fromJust <$> usingHState ctx getClientHello
-    let hCh = hash usedHash $ encodeHandshake ch
+    let hCh = TranscriptHash $ hash usedHash $ encodeHandshake ch
     let earlySecret = case maux of
             Right (BaseSecret sec) -> sec
             Left psk -> hkdfExtract usedHash zero psk
@@ -488,10 +491,11 @@ calculateHandshakeSecret
     -> IO (SecretTriple HandshakeSecret)
 calculateHandshakeSecret ctx choice (BaseSecret sec) ecdhe = do
     hChSh <- transcriptHash ctx
-    let handshakeSecret =
+    let th = TranscriptHash $ hash usedHash ""
+        handshakeSecret =
             hkdfExtract
                 usedHash
-                (deriveSecret usedHash sec "derived" (hash usedHash ""))
+                (deriveSecret usedHash sec "derived" th)
                 ecdhe
     let clientHandshakeSecret = deriveSecret usedHash handshakeSecret "c hs traffic" hChSh
         serverHandshakeSecret = deriveSecret usedHash handshakeSecret "s hs traffic" hChSh
@@ -509,13 +513,14 @@ calculateApplicationSecret
     :: Context
     -> CipherChoice
     -> BaseSecret HandshakeSecret
-    -> ByteString
+    -> TranscriptHash
     -> IO (SecretTriple ApplicationSecret)
 calculateApplicationSecret ctx choice (BaseSecret sec) hChSf = do
-    let applicationSecret =
+    let th = TranscriptHash $ hash usedHash ""
+        applicationSecret =
             hkdfExtract
                 usedHash
-                (deriveSecret usedHash sec "derived" (hash usedHash ""))
+                (deriveSecret usedHash sec "derived" th)
                 zero
     let clientApplicationSecret0 = deriveSecret usedHash applicationSecret "c ap traffic" hChSf
         serverApplicationSecret0 = deriveSecret usedHash applicationSecret "s ap traffic" hChSf
@@ -585,7 +590,7 @@ setRTT ctx chSentTime = do
 compulteComfirm
     :: MonadIO m => Context -> Hash -> Handshake13 -> ByteString -> m ByteString
 compulteComfirm ctx usedHash hs label = do
-    echConf <- transcriptHashWith ctx usedHash $ encodeHandshake13 hs
+    TranscriptHash echConf <- transcriptHashWith ctx usedHash $ encodeHandshake13 hs
     ClientRandom cr <- liftIO $ usingHState ctx getClientRandom
     let prk = hkdfExtract usedHash "" cr
     return $ hkdfExpandLabel usedHash prk label echConf 8

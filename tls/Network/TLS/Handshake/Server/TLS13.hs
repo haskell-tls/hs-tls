@@ -81,7 +81,7 @@ expectFinished
     -> SecretTriple ApplicationSecret
     -> ClientTrafficSecret HandshakeSecret
     -> Word64
-    -> ByteString
+    -> TranscriptHash
     -> Handshake13
     -> m ()
 expectFinished sparams ctx exts appKey clientHandshakeSecret sfSentTime hChBeforeCf (Finished13 verifyData) = liftIO $ do
@@ -168,8 +168,8 @@ sendNewSessionTicket sparams ctx usedCipher exts applicationSecret sfSentTime = 
         | otherwise = fromIntegral i
 
 expectCertVerify
-    :: MonadIO m => ServerParams -> Context -> ByteString -> Handshake13 -> m ()
-expectCertVerify sparams ctx hChCc (CertVerify13 (DigitallySigned sigAlg sig)) = liftIO $ do
+    :: MonadIO m => ServerParams -> Context -> TranscriptHash -> Handshake13 -> m ()
+expectCertVerify sparams ctx (TranscriptHash hChCc) (CertVerify13 (DigitallySigned sigAlg sig)) = liftIO $ do
     certs@(CertificateChain cc) <-
         checkValidClientCertChain ctx "invalid client certificate chain"
     pubkey <- case cc of

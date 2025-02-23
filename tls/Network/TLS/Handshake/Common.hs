@@ -357,8 +357,9 @@ generateFinished ctx ver role = do
             else
                 generateServerFinished ver cipher mainSecret thash
 
-generateFinished' :: PRF -> ByteString -> ByteString -> ByteString -> ByteString
-generateFinished' prf label mainSecret thash = prf mainSecret seed 12
+generateFinished'
+    :: PRF -> ByteString -> ByteString -> TranscriptHash -> ByteString
+generateFinished' prf label mainSecret (TranscriptHash thash) = prf mainSecret seed 12
   where
     seed = label <> thash
 
@@ -366,7 +367,7 @@ generateClientFinished
     :: Version
     -> Cipher
     -> ByteString
-    -> ByteString
+    -> TranscriptHash
     -> ByteString
 generateClientFinished ver ciph =
     generateFinished' (getPRF ver ciph) "client finished"
@@ -375,7 +376,7 @@ generateServerFinished
     :: Version
     -> Cipher
     -> ByteString
-    -> ByteString
+    -> TranscriptHash
     -> ByteString
 generateServerFinished ver ciph =
     generateFinished' (getPRF ver ciph) "server finished"

@@ -230,8 +230,8 @@ processCertAndVerify cparams ctx cc = do
 ----------------------------------------------------------------
 
 expectCertVerify
-    :: MonadIO m => Context -> PubKey -> ByteString -> Handshake13 -> m ()
-expectCertVerify ctx pubkey hChSc (CertVerify13 (DigitallySigned sigAlg sig)) = do
+    :: MonadIO m => Context -> PubKey -> TranscriptHash -> Handshake13 -> m ()
+expectCertVerify ctx pubkey (TranscriptHash hChSc) (CertVerify13 (DigitallySigned sigAlg sig)) = do
     ok <- checkCertVerify ctx pubkey sigAlg sig hChSc
     unless ok $ decryptError "cannot verify CertificateVerify"
 expectCertVerify _ _ _ p = unexpected (show p) (Just "certificate verify")
@@ -242,7 +242,7 @@ expectFinished
     :: MonadIO m
     => ClientParams
     -> Context
-    -> ByteString
+    -> TranscriptHash
     -> Handshake13
     -> m ()
 expectFinished cparams ctx hashValue (Finished13 verifyData) = do

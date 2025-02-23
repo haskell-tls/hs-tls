@@ -6,6 +6,7 @@ module Network.TLS.Handshake.TranscriptHash (
     updateTranscriptHash,
     updateTranscriptHash13HRR,
     transitTranscriptHash,
+    TranscriptHash (..),
 ) where
 
 import Control.Monad.State
@@ -16,6 +17,7 @@ import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import Network.TLS.Handshake.State
 import Network.TLS.Imports
+import Network.TLS.Types
 
 transitTranscriptHash :: Hash -> HandshakeM ()
 transitTranscriptHash hashAlg = modify' $ \hst ->
@@ -64,19 +66,20 @@ updateTranscriptHash13HRR = do
             , hashCH
             ]
 
-transcriptHash :: MonadIO m => Context -> m ByteString
+transcriptHash :: MonadIO m => Context -> m TranscriptHash
 transcriptHash ctx = do
     hst <- fromJust <$> getHState ctx
     case hstTransHashState hst of
-        TransHashState2 hashCtx -> return $ hashFinal hashCtx
+        TransHashState2 hashCtx -> return $ TranscriptHash $ hashFinal hashCtx
         _ -> error "transcriptHash"
 
-transcriptHashWith :: MonadIO m => Context -> Hash -> ByteString -> m ByteString
+transcriptHashWith
+    :: MonadIO m => Context -> Hash -> ByteString -> m TranscriptHash
 transcriptHashWith ctx hashAlg bs = do
     hst <- fromJust <$> getHState ctx
     case hstTransHashState hst of
         -- When server checks PSK binding in non HRR case, the state
         -- if TransHashState1.
-        TransHashState0 -> return $ hash hashAlg bs
-        TransHashState2 hashCtx -> return $ hashFinal $ hashUpdate hashCtx bs
+        TransHashState0 -> return $ TranscriptHash $ hash hashAlg bs
+        TransHashState2 hashCtx -> return $ TranscriptHash $ hashFinal $ hashUpdate hashCtx bs
         _ -> error "transcriptHashWith"

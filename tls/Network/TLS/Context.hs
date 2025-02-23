@@ -101,7 +101,7 @@ import Network.TLS.Record.State
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
-import Network.TLS.Types (Role (..), defaultRecordSizeLimit)
+import Network.TLS.Types (Role (..), TranscriptHash (..), defaultRecordSizeLimit)
 import Network.TLS.X509
 
 class TLSParams a where
@@ -289,7 +289,7 @@ exporter ctx label context outlen = do
     return $ case (msecret, mcipher) of
         (Just secret, Just cipher) ->
             let h = cipherHash cipher
-                secret' = deriveSecret h secret label ""
+                secret' = deriveSecret h secret label $ TranscriptHash ""
                 label' = "exporter"
                 value' = hash h context
                 key = hkdfExpandLabel h secret' label' value' outlen

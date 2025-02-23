@@ -13,6 +13,7 @@ import qualified Data.ByteString as BS
 
 import Network.TLS.Crypto
 import Network.TLS.Imports
+import Network.TLS.Types
 import Network.TLS.Wire
 
 ----------------------------------------------------------------
@@ -28,8 +29,8 @@ hkdfExtract _ _ _ = error "hkdfExtract: unsupported hash"
 
 ----------------------------------------------------------------
 
-deriveSecret :: Hash -> ByteString -> ByteString -> ByteString -> ByteString
-deriveSecret h secret label hashedMsgs =
+deriveSecret :: Hash -> ByteString -> ByteString -> TranscriptHash -> ByteString
+deriveSecret h secret label (TranscriptHash hashedMsgs) =
     hkdfExpandLabel h secret label hashedMsgs outlen
   where
     outlen = hashDigestSize h
