@@ -47,7 +47,7 @@ import qualified Network.TLS.Struct as Struct
 import Network.TLS.Types (HostName)
 import Network.TLS.X509
 
-type CommonParams = (Supported, Shared, DebugParams, Limit)
+type CommonParams = (Supported, Shared, DebugParams)
 
 -- | All settings should not be used in production
 data DebugParams = DebugParams
@@ -143,7 +143,6 @@ data ClientParams = ClientParams
     -- is automatically re-sent.
     --
     -- Default: 'False'
-    , clientLimit :: Limit
     }
     deriving (Show)
 
@@ -161,7 +160,6 @@ defaultParamsClient serverName serverId =
         , clientSupported = def
         , clientDebug = defaultDebugParams
         , clientUseEarlyData = False
-        , clientLimit = defaultLimit
         }
 
 data ServerParams = ServerParams
@@ -203,10 +201,6 @@ data ServerParams = ServerParams
     -- Acceptable value range is 0 to 604800 (7 days).
     --
     -- Default: 7200 (2 hours)
-    , serverLimit :: Limit
-    -- ^ Limitation parameters.
-    --
-    -- @since 2.1.7
     , serverECHKey :: [(ConfigId, ByteString)]
     -- ^ ECH secret keys.
     --
@@ -226,7 +220,6 @@ defaultParamsServer =
         , serverDebug = defaultDebugParams
         , serverEarlyDataSize = 0
         , serverTicketLifetime = 7200
-        , serverLimit = defaultLimit
         , serverECHKey = []
         }
 
@@ -431,6 +424,10 @@ data Shared = Shared
     -- ^ ECH configuration.
     --
     -- @since 2.1.8
+    , sharedLimit :: Limit
+    -- ^ Limitation parameters.
+    --
+    -- @since 2.1.8
     }
 
 instance Show Shared where
@@ -447,6 +444,7 @@ defaultShared =
         , sharedValidationCache = def
         , sharedHelloExtensions = []
         , sharedECHConfig = []
+        , sharedLimit = defaultLimit
         }
 
 -- | Group usage callback possible return values.

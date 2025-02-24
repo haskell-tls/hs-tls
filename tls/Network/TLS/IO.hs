@@ -27,6 +27,7 @@ import Network.TLS.Hooks
 import Network.TLS.IO.Decode
 import Network.TLS.IO.Encode
 import Network.TLS.Imports
+import Network.TLS.Parameters
 import Network.TLS.Record
 import Network.TLS.State
 import Network.TLS.Struct
@@ -88,7 +89,7 @@ writePacketBytes13 ctx recordLayer pkt = do
 recvPacket12 :: Context -> IO (Either TLSError Packet)
 recvPacket12 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
   where
-    lim = limitHandshakeFragment $ ctxLimit ctx
+    lim = limitHandshakeFragment $ sharedLimit $ ctxShared ctx
     loop count
         | count > lim = do
             let err = Error_Packet "too many handshake fragment"
@@ -141,7 +142,7 @@ logPacket ctx msg = withLog ctx $ \logging -> loggingPacketRecv logging msg
 recvPacket13 :: Context -> IO (Either TLSError Packet13)
 recvPacket13 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
   where
-    lim = limitHandshakeFragment $ ctxLimit ctx
+    lim = limitHandshakeFragment $ sharedLimit $ ctxShared ctx
     loop count
         | count > lim =
             return $ Left $ Error_Packet "too many handshake fragment"

@@ -224,7 +224,7 @@ updateContext12 ctx shExtensions resumingSession = do
 processRecordSizeLimit
     :: Context -> [ExtensionRaw] -> Bool -> IO ()
 processRecordSizeLimit ctx shExtensions tls13 = do
-    let mmylim = limitRecordSize $ ctxLimit ctx
+    let mmylim = limitRecordSize $ sharedLimit $ ctxShared ctx
     case mmylim of
         Nothing -> return ()
         Just mylim -> do

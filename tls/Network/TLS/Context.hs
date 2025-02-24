@@ -101,7 +101,11 @@ import Network.TLS.Record.State
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
-import Network.TLS.Types (Role (..), TranscriptHash (..), defaultRecordSizeLimit)
+import Network.TLS.Types (
+    Role (..),
+    TranscriptHash (..),
+    defaultRecordSizeLimit,
+ )
 import Network.TLS.X509
 
 class TLSParams a where
@@ -117,7 +121,6 @@ instance TLSParams ClientParams where
         ( clientSupported cparams
         , clientShared cparams
         , clientDebug cparams
-        , clientLimit cparams
         )
     getTLSRole _ = ClientRole
     doHandshake = handshakeClient
@@ -130,7 +133,6 @@ instance TLSParams ServerParams where
         ( serverSupported sparams
         , serverShared sparams
         , serverDebug sparams
-        , serverLimit sparams
         )
     getTLSRole _ = ServerRole
     doHandshake = handshakeServer
@@ -149,7 +151,7 @@ contextNew
 contextNew backend params = liftIO $ do
     initializeBackend backend
 
-    let (supported, shared, debug, limit) = getTLSCommonParams params
+    let (supported, shared, debug) = getTLSCommonParams params
 
     seed <- case debugSeed debug of
         Nothing -> do
@@ -191,7 +193,6 @@ contextNew backend params = liftIO $ do
                 { ctxBackend = getBackend backend
                 , ctxShared = shared
                 , ctxSupported = supported
-                , ctxLimit = limit
                 , ctxTLSState = tlsstate
                 , ctxMyRecordLimit = mylimref
                 , ctxPeerRecordLimit = peerlimref
