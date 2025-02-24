@@ -28,6 +28,7 @@ module Network.TLS.Parameters (
     Information (..),
 ) where
 
+import Crypto.HPKE
 import Data.Default (Default (def))
 
 import Network.TLS.Cipher
@@ -344,6 +345,10 @@ data Supported = Supported
     --   bits or more.
     --
     --   Default: @[X25519,X448,P256,FFDHE2048,FFDHE3072,FFDHE4096,P384,FFDHE6144,FFDHE8192,P521]@
+    , supportedHPKE :: [(KEM_ID, KDF_ID, AEAD_ID)]
+    -- ^ Client only.
+    --
+    -- @since 2.1.8
     }
     deriving (Show, Eq)
 
@@ -356,6 +361,16 @@ data EMSMode
     | -- | Extended Main Secret is required
       RequireEMS
     deriving (Show, Eq)
+
+defaultHPKE :: [(KEM_ID, KDF_ID, AEAD_ID)]
+defaultHPKE =
+    [ (DHKEM_X25519_HKDF_SHA256, HKDF_SHA256, AES_128_GCM)
+    , (DHKEM_X25519_HKDF_SHA256, HKDF_SHA256, ChaCha20Poly1305)
+    , (DHKEM_P256_HKDF_SHA256, HKDF_SHA256, AES_128_GCM)
+    , (DHKEM_P256_HKDF_SHA256, HKDF_SHA512, AES_128_GCM)
+    , (DHKEM_P256_HKDF_SHA256, HKDF_SHA256, ChaCha20Poly1305)
+    , (DHKEM_P521_HKDF_SHA512, HKDF_SHA512, AES_256_GCM)
+    ]
 
 defaultSupported :: Supported
 defaultSupported =
@@ -371,6 +386,7 @@ defaultSupported =
         , supportedFallbackScsv = True
         , supportedEmptyPacket = True
         , supportedGroups = supportedNamedGroups
+        , supportedHPKE = defaultHPKE
         }
 
 instance Default Supported where
