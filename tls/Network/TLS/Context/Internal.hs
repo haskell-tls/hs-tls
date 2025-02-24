@@ -297,7 +297,7 @@ contextGetInformation :: Context -> IO (Maybe Information)
 contextGetInformation ctx = do
     ver <- usingState_ ctx $ gets stVersion
     hstate <- getHState ctx
-    let (ms, ems, cr, sr, hm13, grp) =
+    let (ms, ems, cr, sr, hm13, grp, ech) =
             case hstate of
                 Just st ->
                     ( hstMainSecret st
@@ -306,8 +306,9 @@ contextGetInformation ctx = do
                     , hstServerRandom st
                     , if ver == Just TLS13 then Just (hstTLS13HandshakeMode st) else Nothing
                     , hstSupportedGroup st
+                    , hstTLS13ECHAccepted st
                     )
-                Nothing -> (Nothing, False, Nothing, Nothing, Nothing, Nothing)
+                Nothing -> (Nothing, False, Nothing, Nothing, Nothing, Nothing, False)
     (cipher, comp) <-
         readMVar (ctxRxRecordState ctx) <&> \st -> (stCipher st, stCompression st)
     let accepted = case hstate of
@@ -330,6 +331,7 @@ contextGetInformation ctx = do
                         , infoTLS12Resumption = tls12resumption
                         , infoTLS13HandshakeMode = hm13
                         , infoIsEarlyDataAccepted = accepted
+                        , infoIsECHAccepted = ech
                         }
         _ -> return Nothing
 

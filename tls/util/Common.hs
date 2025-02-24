@@ -118,3 +118,4 @@ printHandshakeInfo i = do
     when (infoVersion i == TLS13) $ do
         putStrLn $ "Handshake mode: " ++ show (fromJust (infoTLS13HandshakeMode i))
         putStrLn $ "Early data accepted: " ++ show (infoIsEarlyDataAccepted i)
+        putStrLn $ "Encrypted client hello accepted: " ++ show (infoIsECHAccepted i)

@@ -712,6 +712,7 @@ data Information = Information
     , infoTLS12Resumption :: Bool
     , infoTLS13HandshakeMode :: Maybe HandshakeMode13
     , infoIsEarlyDataAccepted :: Bool
+    , infoIsECHAccepted :: Bool
     }
     deriving (Show, Eq)
 

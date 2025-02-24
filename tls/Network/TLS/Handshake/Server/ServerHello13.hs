@@ -187,6 +187,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
                 suffix <- compulteComfirm ctx usedHash sh "ech accept confirmation"
                 let srand' = replaceServerRandomECH srand suffix
                     sh' = ServerHello13 srand' chSession cipherId shExtensions
+                usingHState ctx $ setECHAccepted True
                 loadPacket13 ctx $ Handshake13 [sh']
             else do
                 srand <-

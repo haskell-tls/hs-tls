@@ -32,6 +32,7 @@ module Network.TLS.Handshake.State (
     getOuterClientRandom,
     setClientHello,
     getClientHello,
+    setECHAccepted,
     setClientCertSent,
     getClientCertSent,
     setCertReqSent,
@@ -148,6 +149,7 @@ data HandshakeState = HandshakeState
     -- ^ Used for key logging in the case of ECH.
     , hstTLS13ClientHello :: Maybe Handshake
     -- ^ Inner client hello in the case of ECH.
+    , hstTLS13ECHAccepted :: Bool
     }
     deriving (Show)
 
@@ -243,6 +245,7 @@ newEmptyHandshake ver crand =
         , hstCCS13Recv = False
         , hstTLS13OuterClientRandom = Nothing
         , hstTLS13ClientHello = Nothing
+        , hstTLS13ECHAccepted = False
         }
 
 runHandshake :: HandshakeState -> HandshakeM a -> (a, HandshakeState)
@@ -384,6 +387,9 @@ getClientHello = gets hstTLS13ClientHello
 
 setClientHello :: Handshake -> HandshakeM ()
 setClientHello hs = modify' $ \hst -> hst{hstTLS13ClientHello = Just hs}
+
+setECHAccepted :: Bool -> HandshakeM ()
+setECHAccepted b = modify' $ \hst -> hst{hstTLS13ECHAccepted = b}
 
 getClientCertSent :: HandshakeM Bool
 getClientCertSent = gets hstClientCertSent

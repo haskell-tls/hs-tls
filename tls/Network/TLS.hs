@@ -225,6 +225,7 @@ module Network.TLS (
     infoTLS12Resumption,
     infoTLS13HandshakeMode,
     infoIsEarlyDataAccepted,
+    infoIsECHAccepted,
     ClientRandom,
     ServerRandom,
     unClientRandom,
