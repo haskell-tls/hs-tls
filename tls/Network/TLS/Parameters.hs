@@ -204,7 +204,13 @@ data ServerParams = ServerParams
     --
     -- Default: 7200 (2 hours)
     , serverLimit :: Limit
+    -- ^ Limitation parameters.
+    --
+    -- @since 2.1.7
     , serverECHKey :: [(ConfigId, ByteString)]
+    -- ^ ECH secret keys.
+    --
+    -- @since 2.1.8
     }
     deriving (Show)
 
@@ -422,6 +428,9 @@ data Shared = Shared
     --
     -- Default: @[]@
     , sharedECHConfig :: ECHConfigList
+    -- ^ ECH configuration.
+    --
+    -- @since 2.1.8
     }
 
 instance Show Shared where
