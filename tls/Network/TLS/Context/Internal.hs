@@ -117,7 +117,6 @@ data Context
     -- ^ return the backend object associated with this context
     , ctxSupported :: Supported
     , ctxShared :: Shared
-    , ctxLimit :: Limit
     , ctxTLSState :: MVar TLSState
     , ctxMeasurement :: IORef Measurement
     , ctxEOF_ :: IORef Bool

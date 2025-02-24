@@ -50,7 +50,6 @@ module Network.TLS (
     clientHooks,
     clientSupported,
     clientDebug,
-    clientLimit,
     clientUseEarlyData,
 
     -- ** Server parameters
@@ -63,7 +62,6 @@ module Network.TLS (
     serverShared,
     serverSupported,
     serverDebug,
-    serverLimit,
     serverEarlyDataSize,
     serverTicketLifetime,
 
@@ -75,6 +73,7 @@ module Network.TLS (
     sharedCAStore,
     sharedValidationCache,
     sharedHelloExtensions,
+    sharedLimit,
 
     -- ** Client hooks
     ClientHooks,

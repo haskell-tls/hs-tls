@@ -46,7 +46,7 @@ import qualified Network.TLS.Struct as Struct
 import Network.TLS.Types (HostName)
 import Network.TLS.X509
 
-type CommonParams = (Supported, Shared, DebugParams, Limit)
+type CommonParams = (Supported, Shared, DebugParams)
 
 -- | All settings should not be used in production
 data DebugParams = DebugParams
@@ -142,7 +142,6 @@ data ClientParams = ClientParams
     -- is automatically re-sent.
     --
     -- Default: 'False'
-    , clientLimit :: Limit
     }
     deriving (Show)
 
@@ -160,7 +159,6 @@ defaultParamsClient serverName serverId =
         , clientSupported = def
         , clientDebug = defaultDebugParams
         , clientUseEarlyData = False
-        , clientLimit = defaultLimit
         }
 
 data ServerParams = ServerParams
@@ -418,6 +416,10 @@ data Shared = Shared
     -- based on the TLS version.
     --
     -- Default: @[]@
+    , sharedLimit :: Limit
+    -- ^ Limitation parameters.
+    --
+    -- @since 2.1.8
     }
 
 instance Show Shared where
@@ -433,6 +435,7 @@ defaultShared =
         , sharedCAStore = mempty
         , sharedValidationCache = def
         , sharedHelloExtensions = []
+        , sharedLimit = defaultLimit
         }
 
 -- | Group usage callback possible return values.

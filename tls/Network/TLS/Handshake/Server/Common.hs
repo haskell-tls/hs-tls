@@ -185,7 +185,7 @@ hashAndSignaturesInCommon sHashSigs exts = sHashSigs `intersect` cHashSigs
 processRecordSizeLimit
     :: Context -> [ExtensionRaw] -> Bool -> IO (Maybe ExtensionRaw)
 processRecordSizeLimit ctx chExts tls13 = do
-    let mmylim = limitRecordSize $ ctxLimit ctx
+    let mmylim = limitRecordSize $ sharedLimit $ ctxShared ctx
     setMyRecordLimit ctx mmylim
     case mmylim of
         Nothing -> return Nothing

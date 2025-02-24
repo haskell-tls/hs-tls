@@ -149,7 +149,7 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession (Cipher
         then do
             -- Session is dummy in TLS 1.3.
             usingState_ ctx $ setSession serverSession
-            processRecordSizeLimit ctx shExts True
+            processRecordSizeLimit cparams ctx shExts True
             enableMyRecordLimit ctx
             enablePeerRecordLimit ctx
             updateContext13 ctx cipherAlg
@@ -162,7 +162,7 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession (Cipher
             usingState_ ctx $ do
                 setSession serverSession
                 setTLS12SessionResuming $ isJust resumingSession
-            processRecordSizeLimit ctx shExts False
+            processRecordSizeLimit cparams ctx shExts False
             updateContext12 ctx shExts resumingSession
 processServerHello _ _ p = unexpected (show p) (Just "server hello")
 
@@ -219,9 +219,9 @@ updateContext12 ctx shExts resumingSession = do
 ----------------------------------------------------------------
 
 processRecordSizeLimit
-    :: Context -> [ExtensionRaw] -> Bool -> IO ()
-processRecordSizeLimit ctx shExts tls13 = do
-    let mmylim = limitRecordSize $ ctxLimit ctx
+    :: ClientParams -> Context -> [ExtensionRaw] -> Bool -> IO ()
+processRecordSizeLimit cparams ctx shExts tls13 = do
+    let mmylim = limitRecordSize $ sharedLimit $ clientShared cparams
     case mmylim of
         Nothing -> return ()
         Just mylim -> do
