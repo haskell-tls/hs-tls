@@ -91,7 +91,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
     setMyRecordLimit ctx $ limitRecordSize $ sharedLimit $ ctxShared ctx
     extensions0 <- catMaybes <$> getExtensions
     let extensions1 = sharedHelloExtensions (clientShared cparams) ++ extensions0
-    extensions <- adjustExtentions extensions1 $ mkClientHello extensions1
+    extensions <- adjustPreSharedKeyExt extensions1 $ mkClientHello extensions1
     let ch = mkClientHello extensions
     sendPacket12 ctx $ Handshake [ch]
     usingHState ctx $ setClientHello ch
@@ -243,14 +243,14 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
                 let zero = cZero choice
                     pskIdentities = map (\x -> PskIdentity x obfAge) identities
                     -- [zero] is a place holds.
-                    -- adjustExtentions will replace them.
+                    -- adjustPreSharedKeyExt will replace them.
                     binders = replicate (length pskIdentities) zero
                     offeredPsks = PreSharedKeyClientHello pskIdentities binders
                  in return $ Just $ toExtensionRaw offeredPsks
 
     ----------------------------------------
 
-    adjustExtentions exts ch =
+    adjustPreSharedKeyExt exts ch =
         case pskInfo of
             Nothing -> return exts
             Just (identities, sdata, choice, _) -> do
