@@ -199,6 +199,10 @@ getServerParams creds groups sm keyLog clientAuth mstore (ekey, ecnf) =
                 Just store -> store
                 Nothing -> sharedCAStore defaultShared
             , sharedECHConfig = ecnf
+            , sharedLimit =
+                defaultLimit
+                    { limitRecordSize = Just 16384
+                    }
             }
     supported =
         defaultSupported

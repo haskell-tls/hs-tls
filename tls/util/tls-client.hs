@@ -334,6 +334,10 @@ getClientParams Options{..} serverName port sm mstore onCertReq =
                 Just store -> store
                 Nothing -> mempty
             , sharedValidationCache = validateCache
+            , sharedLimit =
+                defaultLimit
+                    { limitRecordSize = Just 8192
+                    }
             }
     supported =
         defaultSupported
