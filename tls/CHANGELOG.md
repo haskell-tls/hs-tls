@@ -1,5 +1,11 @@
 # Change log for "tls"
 
+## Version 2.1.8
+
+* Moving `Limit` to `Shared` to maintain backward compatibility
+  of `TLSParams` class.
+* Deprecating 2.1.7.
+
 ## Version 2.1.7
 
 * Introducing `Limit` parameter.
