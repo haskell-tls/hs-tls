@@ -80,7 +80,8 @@ putHpkeSymmetricCipherSuite wbuf HpkeSymmetricCipherSuite{..} = do
 
 ----------------------------------------------------------------
 
-newtype EncodedServerPublicKey = EncodedServerPublicKey ByteString deriving (Eq, Ord)
+newtype EncodedServerPublicKey = EncodedServerPublicKey ByteString
+    deriving (Eq, Ord)
 instance Show EncodedServerPublicKey where
     show (EncodedServerPublicKey bs) = "\"" ++ C8.unpack (B16.encode bs) ++ "\""
 
@@ -165,19 +166,23 @@ putECHConfigExtension wbuf ECHConfigExtension{..} = do
 data ECHConfigContents = ECHConfigContents
     { key_config :: HpkeKeyConfig
     , maximum_name_length :: Word8
-    , public_name :: ByteString
+    , public_name :: String
     , extensions :: [ECHConfigExtension]
     }
     deriving (Eq, Ord, Show)
 
 instance SizeOf ECHConfigContents where
-    sizeof ECHConfigContents{..} = sizeof key_config + 4 + BS.length public_name + sum (map sizeof extensions)
+    sizeof ECHConfigContents{..} =
+        sizeof key_config
+            + 4
+            + BS.length (C8.pack public_name)
+            + sum (map sizeof extensions)
 
 getECHConfigContents :: ReadBuffer -> IO ECHConfigContents
 getECHConfigContents rbuf = do
     kcf <- getHpkeKeyConfig rbuf
     mnl <- read8 rbuf
-    pn <- getOpaque8 rbuf
+    pn <- C8.unpack <$> getOpaque8 rbuf
     exts <- getList16 rbuf getECHConfigExtension
     return $ ECHConfigContents kcf mnl pn exts
 
@@ -185,7 +190,7 @@ putECHConfigContents :: WriteBuffer -> ECHConfigContents -> IO ()
 putECHConfigContents wbuf ECHConfigContents{..} = do
     putHpkeKeyConfig wbuf key_config
     write8 wbuf maximum_name_length
-    putOpaque8 wbuf public_name
+    putOpaque8 wbuf $ C8.pack public_name
     putList16 wbuf putECHConfigExtension extensions
 
 ----------------------------------------------------------------
