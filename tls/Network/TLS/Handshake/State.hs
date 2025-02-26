@@ -27,6 +27,7 @@ module Network.TLS.Handshake.State (
     getGroupPrivate,
 
     -- * cert accessors
+    setClientRandom,
     getClientRandom,
     setOuterClientRandom,
     getOuterClientRandom,
@@ -97,10 +98,19 @@ data HandshakeKeyState = HandshakeKeyState
     deriving (Show)
 
 data TransHashState
-    = TransHashState0
-    | TransHashState1 ByteString -- ClientHeloo
-    | TransHashState2 HashCtx
-    deriving (Show)
+    = -- | Initial state
+      TransHashState0
+    | -- | A raw CH is stored since hash algo is not chosen yet.
+      TransHashState1 ByteString
+    | -- | Hashed
+      TransHashState2 HashCtx
+
+{- FOURMOLU_DISABLE -}
+instance Show TransHashState where
+    show  TransHashState0       = "State0 "
+    show (TransHashState1 _)    = "State1 CH"
+    show (TransHashState2 hctx) = showBytesHex $ hashFinal hctx
+{- FOURMOLU_ENABLE -}
 
 data HandshakeState = HandshakeState
     { hstClientVersion :: Version
@@ -114,6 +124,7 @@ data HandshakeState = HandshakeState
     , hstServerECDHParams :: Maybe ServerECDHParams
     , hstGroupPrivate :: Maybe GroupPrivate
     , hstTransHashState :: TransHashState
+    , hstTransHashStateI :: TransHashState -- Inner CH for client ECH
     , hstHandshakeMessages :: [ByteString]
     -- ^ To create certificate verify for TLS 1.2.
     --   This should be removed when TLS 1.2 is dropped.
@@ -223,6 +234,7 @@ newEmptyHandshake ver crand =
         , hstServerECDHParams = Nothing
         , hstGroupPrivate = Nothing
         , hstTransHashState = TransHashState0
+        , hstTransHashStateI = TransHashState0
         , hstHandshakeMessages = []
         , hstCertReqToken = Nothing
         , hstCertReqCBdata = Nothing
@@ -376,6 +388,9 @@ setClientCertSent b = modify' (\hst -> hst{hstClientCertSent = b})
 
 getClientRandom :: HandshakeM ClientRandom
 getClientRandom = gets hstClientRandom
+
+setClientRandom :: ClientRandom -> HandshakeM ()
+setClientRandom cr = modify' $ \hst -> hst{hstClientRandom = cr}
 
 getOuterClientRandom :: HandshakeM (Maybe ClientRandom)
 getOuterClientRandom = gets hstTLS13OuterClientRandom

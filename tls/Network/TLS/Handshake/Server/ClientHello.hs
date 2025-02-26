@@ -188,7 +188,6 @@ decryptECH sparams ctx clientHello@(ClientHello _ _ _ outerCH) ech@ECHOuter{..} 
                     case expandClientHello innerCH outerCH of
                         Nothing -> return Nothing
                         Just innerCH' -> do
-                            setTLS13HPKE ctx func nenc
                             return $ Just $ ClientHello v r c innerCH'
                 _ -> return Nothing
 decryptECH _ _ _ _ = return Nothing
@@ -260,7 +259,7 @@ getHPKE ServerParams{..} ctx ECHOuter{..} = do
     mfunc <- getTLS13HPKE ctx
     case mfunc of
         Nothing -> do
-            let mconfig = find eqCfgId $ sharedECHConfig serverShared
+            let mconfig = findECHConfigById echConfigId $ sharedECHConfig serverShared
                 mskR = lookup echConfigId serverECHKey
             case (mconfig, mskR) of
                 (Just config, Just skR') -> do
@@ -271,9 +270,14 @@ getHPKE ServerParams{..} ctx ECHOuter{..} = do
                         (kdfid, aeadid) = echCipherSuite
                     ctxR <- setupBaseR kemid kdfid aeadid skR Nothing echEnc info
                     let nenc = nEnc kemid
-                    return $ Just (open ctxR, nenc)
+                        func = open ctxR
+                    setTLS13HPKE ctx func nenc
+                    return $ Just (func, nenc)
                 _ -> return Nothing
         _ -> return mfunc
-  where
-    eqCfgId cnf = config_id (key_config (contents cnf)) == echConfigId
 getHPKE _ _ _ = return Nothing
+
+findECHConfigById :: ConfigId -> ECHConfigList -> Maybe ECHConfig
+findECHConfigById cnfId echConfigList = find eqCfgId echConfigList
+  where
+    eqCfgId cnf = config_id (key_config (contents cnf)) == cnfId

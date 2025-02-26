@@ -407,7 +407,7 @@ setServerHelloParameters12 ctx ver sran cipher compression = do
                 , hstPendingCipher = Just cipher
                 , hstPendingCompression = compression
                 }
-    transitTranscriptHash ctx "transit" $ getHash ver cipher
+    transitTranscriptHash ctx "transit" (getHash ver cipher) False
 
 -- The TLS12 Hash is cipher specific, and some TLS12 algorithms use SHA384
 -- instead of the default SHA256.

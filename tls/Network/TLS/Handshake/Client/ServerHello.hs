@@ -5,6 +5,8 @@ module Network.TLS.Handshake.Client.ServerHello (
     processServerHello13,
 ) where
 
+import qualified Data.ByteString as B
+
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Context.Internal
@@ -19,6 +21,7 @@ import Network.TLS.Handshake.State
 import Network.TLS.Handshake.TranscriptHash
 import Network.TLS.IO
 import Network.TLS.Imports
+import Network.TLS.Packet
 import Network.TLS.Parameters
 import Network.TLS.State
 import Network.TLS.Struct
@@ -54,12 +57,9 @@ recvServerHello
 recvServerHello cparams ctx = do
     (sh, hss) <- recvSH
     processServerHello cparams ctx sh
-    when (isHRR sh) $ updateTranscriptHash13HRR ctx "hash of hash"
     void $ updateTranscriptHash12 ctx sh
     return hss
   where
-    isHRR (ServerHello TLS12 srand _ _ _ _) = isHelloRetryRequest srand
-    isHRR _ = False
     recvSH = do
         epkt <- recvPacket12 ctx
         case epkt of
@@ -91,7 +91,7 @@ processServerHello13 _ _ h = unexpected (show h) (Just "server hello")
 -- 4) process the session parameter to see if the server want to start a new session or can resume
 processServerHello
     :: ClientParams -> Context -> Handshake -> IO ()
-processServerHello cparams ctx (ServerHello rver serverRan serverSession (CipherId cid) compression shExtensions) = do
+processServerHello cparams ctx sh@(ServerHello rver serverRan serverSession (CipherId cid) compression shExtensions) = do
     -- A server which receives a legacy_version value not equal to
     -- 0x0303 MUST abort the handshake with an "illegal_parameter"
     -- alert.
@@ -177,7 +177,13 @@ processServerHello cparams ctx (ServerHello rver serverRan serverSession (Cipher
             processRecordSizeLimit ctx shExtensions True
             enableMyRecordLimit ctx
             enablePeerRecordLimit ctx
-            updateContext13 ctx cipherAlg
+            transitTranscriptHashI ctx "transitI" (cipherHash cipherAlg) isHRR
+            accepted <- checkECHacceptance ctx isHRR (cipherHash cipherAlg) sh
+            when (accepted && not isHRR) $ do
+                copyTranscriptHash ctx "copy"
+                usingHState ctx $ setECHAccepted True
+            updateContext13 ctx cipherAlg isHRR
+            updateTranscriptHashI ctx "ServerHelloI" $ encodeHandshake sh
         else do
             let resumingSession = case clientSessions cparams of
                     (_, sessionData) : _ ->
@@ -216,8 +222,8 @@ processServerExtension _ = return ()
 
 ----------------------------------------------------------------
 
-updateContext13 :: Context -> Cipher -> IO ()
-updateContext13 ctx cipherAlg = do
+updateContext13 :: Context -> Cipher -> Bool -> IO ()
+updateContext13 ctx cipherAlg isHRR = do
     established <- ctxEstablished ctx
     eof <- ctxEOF ctx
     when (established == Established && not eof) $
@@ -225,7 +231,7 @@ updateContext13 ctx cipherAlg = do
             Error_Protocol
                 "renegotiation to TLS 1.3 or later is not allowed"
                 ProtocolVersion
-    failOnEitherError $ setServerHelloParameters13 ctx cipherAlg
+    failOnEitherError $ setServerHelloParameters13 ctx cipherAlg isHRR
 
 updateContext12 :: Context -> [ExtensionRaw] -> Maybe SessionData -> IO ()
 updateContext12 ctx shExtensions resumingSession = do
@@ -264,3 +270,32 @@ processRecordSizeLimit ctx shExtensions tls13 = do
             -- RecordSizeLimit to RecordLimit, we should reduce the
             -- value by 1, which is the length of CT:.
             when (ack && tls13) $ setMyRecordLimit ctx $ Just (mylim - 1)
+
+----------------------------------------------------------------
+
+checkECHacceptance :: Context -> Bool -> Hash -> Handshake -> IO Bool
+checkECHacceptance ctx False usedHash (ServerHello _ sr serverSession (CipherId cid) _ shExtensions) = do
+    let ServerRandom rnd = sr
+        (prefix, confirm) = B.splitAt 24 rnd
+        sr' = ServerRandom (prefix <> "\x00\x00\x00\x00\x00\x00\x00\x00")
+        sh' = ServerHello13 sr' serverSession (CipherId cid) shExtensions
+    verified <- computeComfirm ctx usedHash sh' "ech accept confirmation"
+    return (confirm == verified)
+checkECHacceptance ctx True usedHash (ServerHello _ sr serverSession (CipherId cid) _ shExtensions) = do
+    case replace shExtensions of
+        Nothing -> return False
+        Just (confirm, shExtensions') -> do
+            let sh' = ServerHello13 sr serverSession (CipherId cid) shExtensions'
+            verified <- computeComfirm ctx usedHash sh' "hrr ech accept confirmation"
+            return (confirm == verified)
+  where
+    replace [] = Nothing
+    replace (ExtensionRaw EID_EncryptedClientHello confirm : es) =
+        Just
+            ( confirm
+            , ExtensionRaw EID_EncryptedClientHello "\x00\x00\x00\x00\x00\x00\x00\x00" : es
+            )
+    replace (e : es) = case replace es of
+        Nothing -> Nothing
+        Just (confirm, es') -> Just (confirm, e : es')
+checkECHacceptance _ _ _ _ = error "checkECHacceptance"

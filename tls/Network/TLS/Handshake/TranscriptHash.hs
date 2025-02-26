@@ -3,9 +3,11 @@
 module Network.TLS.Handshake.TranscriptHash (
     transcriptHash,
     transcriptHashWith,
+    transitTranscriptHashI,
     updateTranscriptHash,
-    updateTranscriptHash13HRR,
+    updateTranscriptHashI,
     transitTranscriptHash,
+    copyTranscriptHash,
     TranscriptHash (..),
 ) where
 
@@ -18,102 +20,112 @@ import Network.TLS.Crypto
 import Network.TLS.Handshake.State
 import Network.TLS.Imports
 import Network.TLS.Parameters
+import Network.TLS.State
 import Network.TLS.Types
 
-transitTranscriptHash :: Context -> String -> Hash -> IO ()
-transitTranscriptHash ctx label hashAlg = do
-    usingHState ctx $ modify' $ \hst ->
-        hst
-            { hstTransHashState = case hstTransHashState hst of
-                TransHashState0 -> error "transitTranscriptHash"
-                TransHashState1 ch -> TransHashState2 $ hashUpdate (hashInit hashAlg) ch
-                TransHashState2 hctx -> TransHashState2 hctx -- 2nd SH
-            }
-    traceTranscriptHash ctx label
+----------------------------------------------------------------
 
-updateTranscriptHash :: Context -> String -> ByteString -> IO ()
-updateTranscriptHash ctx label eh = do
+transitTranscriptHash :: Context -> String -> Hash -> Bool -> IO ()
+transitTranscriptHash ctx label hashAlg isHRR = do
     usingHState ctx $ modify' $ \hst ->
-        hst
-            { hstTransHashState = case hstTransHashState hst of
-                TransHashState0 -> TransHashState1 eh
-                TransHashState1 _ch -> error "updateTranscriptHash"
-                TransHashState2 hctx -> TransHashState2 $ hashUpdate hctx eh
-            }
-    traceTranscriptHash ctx label
+        hst{hstTransHashState = transit label hashAlg isHRR $ hstTransHashState hst}
+    traceTranscriptHash ctx label hstTransHashState
 
--- When a HelloRetryRequest is sent or received, the existing
--- transcript must be wrapped in a "message_hash" construct.  See RFC
--- 8446 section 4.4.1.  This applies to key-schedule computations as
--- well as the ones for PSK binders.
-updateTranscriptHash13HRR :: Context -> String -> IO ()
-updateTranscriptHash13HRR ctx label = do
-    usingHState ctx $ do
-        cipher <- getPendingCipher
-        let hashAlg = cipherHash cipher
-        modify' $ \hs ->
-            hs
-                { hstTransHashState = case hstTransHashState hs of
-                    TransHashState2 hctx ->
-                        let hashCH = hashFinal hctx
-                            len = B.length hashCH
-                            ch' = wrap len hashCH
-                         in TransHashState2 $ hashUpdate (hashInit hashAlg) ch'
-                    _ -> error "updateTranscriptHash13HRR"
-                }
-    traceTranscriptHash ctx label
+transitTranscriptHashI :: Context -> String -> Hash -> Bool -> IO ()
+transitTranscriptHashI ctx label hashAlg isHRR = do
+    usingHState ctx $ modify' $ \hst ->
+        hst{hstTransHashStateI = transit label hashAlg isHRR $ hstTransHashStateI hst}
+    traceTranscriptHash ctx label hstTransHashStateI
+
+transit :: String -> Hash -> Bool -> TransHashState -> TransHashState
+transit label _ _ st0@TransHashState0 = error $ "transitTranscriptHash " ++ label ++ " " ++ show st0
+transit _ _ _ st2@(TransHashState2 _) = st2
+transit _ hashAlg isHRR (TransHashState1 ch)
+    | isHRR = TransHashState2 $ newWith hsMsg
+    | otherwise = TransHashState2 $ newWith ch
   where
-    wrap len hashCH =
+    newWith = hashUpdate $ hashInit hashAlg
+    hsMsg =
         -- Handshake message:
         -- typ <-len-> body
         -- 254 0 0 len hash(CH1)
         B.concat
             [ "\254\0\0"
-            , B.singleton (fromIntegral len)
-            , hashCH
+            , B.singleton len
+            , hashedCH
             ]
+      where
+        hashedCH = hash hashAlg ch
+        len = fromIntegral $ B.length hashedCH
+
+----------------------------------------------------------------
+
+updateTranscriptHash :: Context -> String -> ByteString -> IO ()
+updateTranscriptHash ctx label eh = do
+    usingHState ctx $ modify' $ \hst ->
+        hst{hstTransHashState = update eh label $ hstTransHashState hst}
+    traceTranscriptHash ctx label hstTransHashState
+
+updateTranscriptHashI :: Context -> String -> ByteString -> IO ()
+updateTranscriptHashI ctx label eh = do
+    usingHState ctx $ modify' $ \hst ->
+        hst{hstTransHashStateI = update eh label $ hstTransHashStateI hst}
+    traceTranscriptHash ctx label hstTransHashStateI
+
+update :: ByteString -> String -> TransHashState -> TransHashState
+update eh _ TransHashState0 = TransHashState1 eh
+update eh _ (TransHashState2 hctx) = TransHashState2 $ hashUpdate hctx eh
+update _ label st = error $ "updateTranscriptHash " ++ label ++ " " ++ show st
+
+----------------------------------------------------------------
 
 transcriptHash :: MonadIO m => Context -> String -> m TranscriptHash
 transcriptHash ctx label = do
     hst <- fromJust <$> getHState ctx
-    case hstTransHashState hst of
-        TransHashState2 hashCtx -> do
-            let th = hashFinal hashCtx
-            liftIO $
-                debugTraceKey (ctxDebug ctx) $
-                    adjustLabel label ++ showBytesHex th
-            return $ TranscriptHash th
-        _ -> error "transcriptHash"
+    let th = calc label $ hstTransHashState hst
+    liftIO $ debugTraceKey (ctxDebug ctx) $ adjustLabel label ++ showBytesHex th
+    return $ TranscriptHash th
+
+calc :: String -> TransHashState -> ByteString
+calc _ (TransHashState2 hashCtx) = hashFinal hashCtx
+calc label st = error $ "transcriptHash " ++ label ++ " " ++ show st
+
+----------------------------------------------------------------
 
 transcriptHashWith
-    :: MonadIO m => Context -> String -> Hash -> ByteString -> m TranscriptHash
-transcriptHashWith ctx label hashAlg bs = do
+    :: MonadIO m => Context -> String -> ByteString -> m TranscriptHash
+transcriptHashWith ctx label bs = do
+    role <- liftIO $ usingState_ ctx getRole
+    let isClient = role == ClientRole
     hst <- fromJust <$> getHState ctx
-    case hstTransHashState hst of
-        -- When server checks PSK binding in non HRR case, the state
-        -- if TransHashState1.
-        TransHashState0 -> do
-            let th = hash hashAlg bs
-            liftIO $
-                debugTraceKey (ctxDebug ctx) $
-                    adjustLabel label ++ showBytesHex th
-            return $ TranscriptHash th
-        TransHashState2 hashCtx -> do
-            let th = hashFinal $ hashUpdate hashCtx bs
-            liftIO $
-                debugTraceKey (ctxDebug ctx) $
-                    adjustLabel label ++ showBytesHex th
-            return $ TranscriptHash th
-        _ -> error "transcriptHashWith"
+    let st
+            | isClient = hstTransHashStateI hst
+            | otherwise = hstTransHashState hst
+    let th = calcWith bs label st
+    liftIO $ debugTraceKey (ctxDebug ctx) $ adjustLabel label ++ showBytesHex th
+    return $ TranscriptHash th
 
-traceTranscriptHash :: Context -> String -> IO ()
-traceTranscriptHash ctx label = do
+calcWith :: ByteString -> String -> TransHashState -> ByteString
+calcWith bs _ (TransHashState2 hashCtx) = hashFinal $ hashUpdate hashCtx bs
+calcWith _ label st = error $ "transcriptHashWith " ++ label ++ " " ++ show st
+
+----------------------------------------------------------------
+
+copyTranscriptHash :: Context -> String -> IO ()
+copyTranscriptHash ctx label = do
+    usingHState ctx $ modify' $ \hst ->
+        hst
+            { hstTransHashState = hstTransHashStateI hst
+            }
+    traceTranscriptHash ctx label hstTransHashState
+
+----------------------------------------------------------------
+
+traceTranscriptHash
+    :: Context -> String -> (HandshakeState -> TransHashState) -> IO ()
+traceTranscriptHash ctx label getField = do
     hst <- fromJust <$> getHState ctx
-    case hstTransHashState hst of
-        TransHashState2 hashCtx -> do
-            let th = hashFinal hashCtx
-            debugTraceKey (ctxDebug ctx) $ adjustLabel label ++ showBytesHex th
-        _ -> return ()
+    debugTraceKey (ctxDebug ctx) $ adjustLabel label ++ show (getField hst)
 
 adjustLabel :: String -> String
 adjustLabel label = take 24 (label ++ "                      ")

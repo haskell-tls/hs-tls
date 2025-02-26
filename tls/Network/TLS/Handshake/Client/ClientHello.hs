@@ -1,9 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Network.TLS.Handshake.Client.ClientHello (
     sendClientHello,
     getPreSharedKeyInfo,
 ) where
+
+import Crypto.HPKE
+import qualified Data.ByteString as B
+import Network.TLS.ECH.Config
 
 import Network.TLS.Cipher
 import Network.TLS.Compression
@@ -17,6 +22,7 @@ import Network.TLS.Handshake.Control
 import Network.TLS.Handshake.Random
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.State13
+import Network.TLS.Handshake.TranscriptHash
 import Network.TLS.IO
 import Network.TLS.Imports
 import Network.TLS.Packet hiding (getExtensions)
@@ -36,7 +42,10 @@ sendClientHello
     -> IO ClientRandom
 sendClientHello cparams ctx groups mparams pskinfo = do
     crand <- generateClientHelloParams mparams
-    sendClientHello' cparams ctx groups crand pskinfo
+    let nhpks = supportedHPKE $ ctxSupported ctx
+        echcnfs = sharedECHConfig $ ctxShared ctx
+        mEchParams = lookupECHConfigList nhpks echcnfs
+    sendClientHello' cparams ctx groups crand pskinfo mEchParams
     return crand
   where
     highestVer = maximum $ supportedVersions $ ctxSupported ctx
@@ -77,9 +86,13 @@ sendClientHello'
     -> Context
     -> [Group]
     -> ClientRandom
-    -> PreSharedKeyInfo
+    -> ( Maybe ([ByteString], SessionData, CipherChoice, Word32)
+       , Maybe CipherChoice
+       , Bool
+       )
+    -> Maybe (KDF_ID, AEAD_ID, ECHConfig)
     -> IO ()
-sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
+sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) mEchParams = do
     let ver = if tls13 then TLS12 else highestVer
     clientSession <- tls13stSession <$> getTLS13State ctx
     hrr <- usingState_ ctx getTLS13HRR
@@ -92,9 +105,16 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
     extensions0 <- catMaybes <$> getExtensions
     let extensions1 = sharedHelloExtensions (clientShared cparams) ++ extensions0
     extensions <- adjustPreSharedKeyExt extensions1 $ mkClientHello extensions1
-    let ch = mkClientHello extensions
+    let ch0 = mkClientHello extensions
+    usingHState ctx $ setClientHello ch0
+    updateTranscriptHashI ctx "ClientHelloI" $ encodeHandshake ch0
+    ch <- case mEchParams of
+        Nothing -> return ch0
+        Just echParams -> do
+            crandO <- clientRandom ctx
+            usingHState ctx $ setClientRandom crandO
+            createEncryptedClientHello ctx ch0 echParams crandO
     sendPacket12 ctx $ Handshake [ch]
-    usingHState ctx $ setClientHello ch
     mEarlySecInfo <- case rtt0info of
         Nothing -> return Nothing
         Just info -> Just <$> getEarlySecretInfo info
@@ -119,7 +139,8 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
     -- (not always present) have length > 0.
     getExtensions =
         sequence
-            [ {- 0x00 -} sniExt
+            [ {- 0xfe0d -} echExt
+            , {- 0x00 -} sniExt
             , {- 0x0a -} groupExt
             , {- 0x0b -} ecPointExt
             , {- 0x0d -} signatureAlgExt
@@ -199,6 +220,13 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
         | otherwise = return Nothing
 
     versionExt
+        | isJust mEchParams = do
+            let vers = supportedVersions $ ctxSupported ctx
+            if TLS13 `elem` vers
+                then
+                    return $ Just $ toExtensionRaw $ SupportedVersionsClientHello [TLS13]
+                else
+                    throwCore $ Error_Misc "TLS 1.3 must be specified for Encrypted Client Hello"
         | tls13 = do
             let vers = filter (>= TLS12) $ supportedVersions $ ctxSupported ctx
             return $ Just $ toExtensionRaw $ SupportedVersionsClientHello vers
@@ -236,6 +264,10 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
                 return $ Just $ toExtensionRaw $ SecureRenegotiation cvd ""
             else return Nothing
 
+    echExt = case mEchParams of
+        Nothing -> return Nothing
+        Just _ -> return $ Just $ toExtensionRaw ECHInner
+
     preSharedKeyExt =
         case pskInfo of
             Nothing -> return Nothing
@@ -260,7 +292,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
                 let ech = encodeHandshake ch
                     h = cHash choice
                     siz = (hashDigestSize h + 1) * length identities + 2
-                binder <- makePSKBinder ctx earlySecret h siz ech
+                    binder = makePSKBinder earlySecret h siz ech
                 -- PSK is shared by the previous TLS session.
                 -- So, PSK is unique for identities.
                 let binders = replicate (length identities) binder
@@ -335,3 +367,135 @@ getPreSharedKeyInfo cparams ctx = do
     get0RTTinfo (_, sdata, choice, _)
         | clientUseEarlyData cparams && sessionMaxEarlyDataSize sdata > 0 = Just choice
         | otherwise = Nothing
+
+----------------------------------------------------------------
+
+createEncryptedClientHello
+    :: Context
+    -> Handshake
+    -> (KDF_ID, AEAD_ID, ECHConfig)
+    -> ClientRandom
+    -> IO Handshake
+createEncryptedClientHello ctx (ClientHello ver crI comp chp) echParams@(kdfid, aeadid, conf) crO = do
+    let (chpO, chpI) = dupCompCHP (cnfPublicName conf) chp
+        chI = ClientHello ver crI comp chpI
+    Just (func, _nenc, enc) <- getHPKE ctx echParams -- fixme
+    let bsI = encodeHandshake' chI
+    let outer =
+            ECHOuter
+                { echCipherSuite = (kdfid, aeadid)
+                , echConfigId = cnfConfigId conf
+                , echEnc = enc
+                , -- fixme: 16 should be decided from "aeadid"
+                  echPayload = B.replicate (B.length bsI + 16) 0
+                }
+        echOZ = extensionEncode outer
+        chpOZ =
+            chpO
+                { chExtensions =
+                    ExtensionRaw EID_EncryptedClientHello echOZ : drop 1 (chExtensions chpO)
+                }
+        chO = ClientHello ver crO comp chpOZ
+        aad = encodeHandshake' chO
+    bsO <- func aad bsI
+    let outer' =
+            ECHOuter
+                { echCipherSuite = (kdfid, aeadid)
+                , echConfigId = cnfConfigId conf
+                , echEnc = enc
+                , -- fixme: 16 should be decided from "aeadid"
+                  echPayload = bsO
+                }
+        echO = extensionEncode outer'
+    let chpO' =
+            chpO
+                { chExtensions =
+                    ExtensionRaw EID_EncryptedClientHello echO : drop 1 (chExtensions chpO)
+                }
+    return $ ClientHello ver crO comp chpO'
+createEncryptedClientHello _ _ _ _ = error "createEncryptedClientHello"
+
+dupCompCHP :: HostName -> CHP -> (CHP, CHP) -- Outer, inner
+dupCompCHP host CHP{..} =
+    ( CHP chSession chCiphers chExtsO
+    , CHP (Session Nothing) chCiphers chExtsI
+    )
+  where
+    (chExtsO, chExtsI) = step1 chExtensions
+    step1 (echExtI@(ExtensionRaw EID_EncryptedClientHello _) : exts) =
+        (echExtO : os, echExtI : is)
+      where
+        echExtO = ExtensionRaw EID_EncryptedClientHello ""
+        (os, is) = step2 exts
+    step1 _ = error "step1"
+    step2 (sniExtI@(ExtensionRaw EID_ServerName _) : exts) =
+        (sniExtO : os, sniExtI : is)
+      where
+        sniExtO = toExtensionRaw $ ServerName [ServerNameHostName host]
+        (os, is) = step3 exts id
+    step2 _ = error "step2"
+    step3 [] build = ([], [echOuterExt])
+      where
+        echOuterExt = toExtensionRaw $ EchOuterExtensions $ build []
+    step3 [pskExtI@(ExtensionRaw EID_PreSharedKey bs)] build =
+        ([pskExtO], [echOuterExt, pskExtI])
+      where
+        echOuterExt = toExtensionRaw $ EchOuterExtensions $ build []
+        pskExtO = ExtensionRaw EID_PreSharedKey $ B.replicate (B.length bs) 120 -- fixme: 120 should be random
+    step3 (i@(ExtensionRaw eid _) : is) build = (i : os', is')
+      where
+        (os', is') = step3 is (build . (eid :))
+
+getHPKE
+    :: Context
+    -> (KDF_ID, AEAD_ID, ECHConfig)
+    -> IO (Maybe (AAD -> PlainText -> IO CipherText, Int, EncodedPublicKey))
+getHPKE ctx (kdfid, aeadid, conf) = do
+    mfunc <- getTLS13HPKE ctx
+    case mfunc of
+        Nothing -> do
+            encodedConfig <- encodeECHConfig conf
+            let info = "tls ech\x00" <> encodedConfig
+            (pkSm, ctxS) <- setupBaseS kemid kdfid aeadid Nothing Nothing mpkR info
+            let func = seal ctxS
+            setTLS13HPKE ctx func nenc
+            return $ Just (func, nenc, pkSm)
+        Just (a, b) -> return $ Just (a, b, EncodedPublicKey "")
+  where
+    mpkR = cnfEncodedPublicKey conf
+    kemid = cnfKemId conf
+    nenc = nEnc kemid
+
+----------------------------------------------------------------
+
+lookupECHConfigList
+    :: [(KEM_ID, KDF_ID, AEAD_ID)]
+    -> ECHConfigList
+    -> Maybe (KDF_ID, AEAD_ID, ECHConfig)
+lookupECHConfigList [] _ = Nothing
+lookupECHConfigList ((kemid, kdfid, aeadid) : xs) cnfs =
+    case find (\cnf -> cnfKemId cnf == kemid) cnfs of
+        Nothing -> lookupECHConfigList xs cnfs
+        Just cnf
+            | (kdfid, aeadid) `elem` cnfCipherSuite cnf ->
+                Just (kdfid, aeadid, cnf)
+            | otherwise -> lookupECHConfigList xs cnfs
+
+cnfKemId :: ECHConfig -> KEM_ID
+cnfKemId ECHConfig{..} = KEM_ID $ kem_id $ key_config $ contents
+
+cnfCipherSuite :: ECHConfig -> [(KDF_ID, AEAD_ID)]
+cnfCipherSuite ECHConfig{..} = map conv $ cipher_suites $ key_config $ contents
+  where
+    conv HpkeSymmetricCipherSuite{..} = (KDF_ID kdf_id, AEAD_ID aead_id)
+
+cnfEncodedPublicKey :: ECHConfig -> EncodedPublicKey
+cnfEncodedPublicKey ECHConfig{..} = EncodedPublicKey pk
+  where
+    EncodedServerPublicKey pk = public_key $ key_config contents
+
+cnfPublicName :: ECHConfig -> HostName
+cnfPublicName ECHConfig{..} = public_name contents
+
+cnfConfigId :: ECHConfig -> ConfigId
+cnfConfigId ECHConfig{..} = config_id $ key_config contents

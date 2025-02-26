@@ -158,7 +158,7 @@ pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CHP{..} = do
     checkBinder earlySecret (Just (binder, n, tlen)) = do
         ch <- fromJust <$> usingHState ctx getClientHello
         let ech = encodeHandshake ch
-        binder' <- makePSKBinder ctx earlySecret usedHash tlen ech
+            binder' = makePSKBinder earlySecret usedHash tlen ech
         unless (binder == binder') $
             decryptError "PSK binder validation failed"
         return [toExtensionRaw $ PreSharedKeyServerHello $ fromIntegral n]

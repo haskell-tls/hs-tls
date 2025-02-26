@@ -67,9 +67,9 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
     usingHState ctx $ do
         setSupportedGroup $ keyShareEntryGroup clientKeyShare
         setOuterClientRandom mOuterClientRandom
-    setServerParameter
-    alpnExt <- applicationProtocol ctx chExtensions sparams
     hrr <- usingState_ ctx getTLS13HRR
+    alpnExt <- applicationProtocol ctx chExtensions sparams
+    setServerParameter
     let rtt0OK = authenticated && not hrr && rtt0 && rtt0accept && is0RTTvalid
     extraCreds <-
         usingState_ ctx getClientSNI >>= onServerNameIndication (serverHooks sparams)
@@ -138,7 +138,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
 
     setServerParameter = do
         usingState_ ctx $ setVersion TLS13
-        failOnEitherError $ setServerHelloParameters13 ctx usedCipher
+        failOnEitherError $ setServerHelloParameters13 ctx usedCipher False
 
     supportsPHA =
         lookupAndDecode
@@ -184,7 +184,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
                 srand <- liftIO $ serverRandomECH ctx
                 let cipherId = CipherId (cipherID usedCipher)
                     sh = ServerHello13 srand chSession cipherId shExtensions
-                suffix <- compulteComfirm ctx usedHash sh "ech accept confirmation"
+                suffix <- computeComfirm ctx usedHash sh "ech accept confirmation"
                 let srand' = replaceServerRandomECH srand suffix
                     sh' = ServerHello13 srand' chSession cipherId shExtensions
                 usingHState ctx $ setECHAccepted True
@@ -286,7 +286,7 @@ sendHRR ctx (usedCipher, usedHash, _) CHP{..} isEch = do
         throwCore $
             Error_Protocol "Hello retry not allowed again" HandshakeFailure
     usingState_ ctx $ setTLS13HRR True
-    failOnEitherError $ setServerHelloParameters13 ctx usedCipher
+    failOnEitherError $ setServerHelloParameters13 ctx usedCipher True
     let clientGroups =
             lookupAndDecode
                 EID_SupportedGroups
@@ -300,7 +300,6 @@ sendHRR ctx (usedCipher, usedHash, _) CHP{..} isEch = do
             throwCore $
                 Error_Protocol "no group in common with the client for HRR" HandshakeFailure
         g : _ -> do
-            updateTranscriptHash13HRR ctx "hash of hash"
             hrr <- makeHRR ctx usedCipher usedHash chSession g isEch
             usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
             runPacketFlight ctx $ do
@@ -319,7 +318,7 @@ makeHRR _ usedCipher _ chSession g False = return hrr
     cipherId = CipherId $ cipherID usedCipher
     hrr = ServerHello13 hrrRandom chSession cipherId extensions
 makeHRR ctx usedCipher usedHash chSession g True = do
-    suffix <- compulteComfirm ctx usedHash hrr "hrr ech accept confirmation"
+    suffix <- computeComfirm ctx usedHash hrr "hrr ech accept confirmation"
     let echExt' = toExtensionRaw $ ECHHelloRetryRequest suffix
         extensions' = [keyShareExt, versionExt, echExt']
         hrr' = ServerHello13 hrrRandom chSession cipherId extensions'
