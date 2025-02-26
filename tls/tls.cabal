@@ -220,6 +220,7 @@ executable tls-client
         crypton,
         crypton-x509-store,
         crypton-x509-system,
+        ech-config,
         network,
         network-run,
         tls

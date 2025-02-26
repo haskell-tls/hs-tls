@@ -16,6 +16,7 @@ import Data.X509.CertificateStore
 import Network.Run.TCP
 import Network.Socket
 import Network.TLS hiding (is0RTTPossible)
+import Network.TLS.ECH.Config
 import Network.TLS.Internal (makeCipherShowPretty)
 import System.Console.GetOpt
 import System.Environment
@@ -40,6 +41,7 @@ data Options = Options
     , optALPN :: String
     , optCertFile :: Maybe FilePath
     , optKeyFile :: Maybe FilePath
+    , optECHConfigFile :: Maybe FilePath
     }
     deriving (Show)
 
@@ -59,6 +61,7 @@ defaultOptions =
         , optALPN = "http/1.1"
         , optCertFile = Nothing
         , optKeyFile = Nothing
+        , optECHConfigFile = Nothing
         }
 
 usage :: String
@@ -131,6 +134,11 @@ options =
         ["key"]
         (ReqArg (\fl o -> o{optKeyFile = Just fl}) "<file>")
         "key file"
+    , Option
+        []
+        ["ech-config"]
+        (ReqArg (\fl o -> o{optECHConfigFile = Just fl}) "<file>")
+        "ECH config file"
     ]
 
 showUsageAndExit :: String -> IO a
@@ -182,7 +190,10 @@ main = do
                 }
     mstore <-
         if optValidate then Just <$> getSystemCertificateStore else return Nothing
-    let cparams = getClientParams opts host port (smIORef ref) mstore onCertReq
+    echConfList <- case optECHConfigFile of
+        Nothing -> return []
+        Just ecnff -> loadECHConfigList ecnff
+    let cparams = getClientParams opts host port (smIORef ref) mstore onCertReq echConfList
         client
             | optALPN == "dot" = clientDNS
             | otherwise = clientHTTP11
@@ -314,8 +325,9 @@ getClientParams
     -> SessionManager
     -> Maybe CertificateStore
     -> OnCertificateRequest
+    -> ECHConfigList
     -> ClientParams
-getClientParams Options{..} serverName port sm mstore onCertReq =
+getClientParams Options{..} serverName port sm mstore onCertReq echConfList =
     (defaultParamsClient serverName (C8.pack port))
         { clientSupported = supported
         , clientUseServerNameIndication = True
@@ -338,6 +350,7 @@ getClientParams Options{..} serverName port sm mstore onCertReq =
                 defaultLimit
                     { limitRecordSize = Just 8192
                     }
+            , sharedECHConfig = echConfList
             }
     supported =
         defaultSupported
