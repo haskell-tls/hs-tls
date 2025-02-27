@@ -1,3 +1,5 @@
+{-# LANGUAGE Strict #-}
+
 module Network.TLS.Parameters (
     ClientParams (..),
     defaultParamsClient,
@@ -82,9 +84,9 @@ defaultDebugParams =
         { debugSeed = Nothing
         , debugPrintSeed = const (return ())
         , debugVersionForced = Nothing
-        , debugKeyLogger = \_ -> return ()
-        , debugError = \_ -> return ()
-        , debugTraceKey = \_ -> return ()
+        , debugKeyLogger = \ ~_ -> return ()
+        , debugError = \ ~_ -> return ()
+        , debugTraceKey = \ ~_ -> return ()
         }
 
 instance Show DebugParams where
