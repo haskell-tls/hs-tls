@@ -127,6 +127,7 @@ module Network.TLS (
     debugVersionForced,
     debugKeyLogger,
     debugError,
+    debugTraceKey,
 
     -- ** Limit parameters
     Limit,

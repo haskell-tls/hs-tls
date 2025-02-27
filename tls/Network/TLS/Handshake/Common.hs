@@ -348,7 +348,7 @@ setPeerRecordSizeLimit ctx tls13 (RecordSizeLimit n0) = do
 
 generateFinished :: Context -> Version -> Role -> IO ByteString
 generateFinished ctx ver role = do
-    thash <- transcriptHash ctx
+    thash <- transcriptHash ctx "generateFinished"
     (mainSecret, cipher) <- usingHState ctx $ gets $ \hst ->
         (fromJust $ hstMainSecret hst, fromJust $ hstPendingCipher hst)
     return $
@@ -407,7 +407,7 @@ setServerHelloParameters12 ctx ver sran cipher compression = do
                 , hstPendingCipher = Just cipher
                 , hstPendingCompression = compression
                 }
-    transitTranscriptHash ctx $ getHash ver cipher
+    transitTranscriptHash ctx "transit" $ getHash ver cipher
 
 -- The TLS12 Hash is cipher specific, and some TLS12 algorithms use SHA384
 -- instead of the default SHA256.

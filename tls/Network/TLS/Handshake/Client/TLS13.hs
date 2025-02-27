@@ -280,7 +280,7 @@ sendClientSecondFlight13'
     -> [ExtensionRaw]
     -> IO ()
 sendClientSecondFlight13' cparams ctx choice hkey rtt0accepted eexts = do
-    hChSf <- transcriptHash ctx
+    hChSf <- transcriptHash ctx "CH..SF"
     unless (ctxQUICMode ctx) $
         runPacketFlight ctx $
             sendChangeCipherSpec13 ctx
@@ -354,7 +354,7 @@ sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
         case certs of
             [] -> return ()
             _ -> do
-                hChSc <- transcriptHash ctx
+                hChSc <- transcriptHash ctx "CH..SC"
                 pubKey <- getLocalPublicKey ctx
                 sigAlg <-
                     liftIO $ getLocalHashSigAlg ctx signatureCompatible13 cHashSigs pubKey

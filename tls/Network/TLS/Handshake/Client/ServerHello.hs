@@ -32,7 +32,7 @@ recvServerHello
 recvServerHello cparams ctx = do
     (sh, hss) <- recvSH
     processServerHello cparams ctx sh
-    when (isHRR sh) $ updateTranscriptHash13HRR ctx
+    when (isHRR sh) $ updateTranscriptHash13HRR ctx "hash of hash"
     void $ updateTranscriptHash12 ctx sh
     return hss
   where

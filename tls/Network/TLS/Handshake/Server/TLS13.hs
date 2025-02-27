@@ -233,7 +233,7 @@ requestCertificateServer sparams ctx = handleEx ctx $ do
             baseHState <- saveHState ctx
             void $ updateTranscriptHash13 ctx certReq13
             void $ updateTranscriptHash13 ctx clientCert13
-            th <- transcriptHash ctx
+            th <- transcriptHash ctx "CH..Cert"
             unless emptyCert $ do
                 certVerify13 <- getHandshake ctx ref
                 expectCertVerify sparams ctx th certVerify13
@@ -303,7 +303,7 @@ expectClientFinished ctx (Finished13 verifyData) = do
             Error_Protocol
                 "tried post-handshake authentication without application traffic secret"
                 InternalError
-    hChBeforeCf <- transcriptHash ctx
+    hChBeforeCf <- transcriptHash ctx "CH..<CF"
     checkFinished ctx usedHash applicationSecretN hChBeforeCf verifyData
 expectClientFinished _ h = unexpected "Finished" $ Just $ show h
 
