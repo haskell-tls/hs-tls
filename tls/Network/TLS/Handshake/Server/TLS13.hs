@@ -57,8 +57,8 @@ recvClientSecondFlight13 sparams ctx (appKey, clientHandshakeSecret, authenticat
     if not authenticated && serverWantClientCert sparams
         then runRecvHandshake13 $ do
             recvHandshake13 ctx $ expectCertificate sparams ctx
-            recvHandshake13hash ctx (expectCertVerify sparams ctx)
-            recvHandshake13hash ctx expectFinished'
+            recvHandshake13hash ctx "CertVerify" (expectCertVerify sparams ctx)
+            recvHandshake13hash ctx "Finished" expectFinished'
             ensureRecvComplete ctx
         else
             if rtt0OK && not (ctxQUICMode ctx)
@@ -70,7 +70,7 @@ recvClientSecondFlight13 sparams ctx (appKey, clientHandshakeSecret, authenticat
                             expectFinished sparams ctx chExtensions appKey clientHandshakeSecret sfSentTime
                         ]
                 else runRecvHandshake13 $ do
-                    recvHandshake13hash ctx expectFinished'
+                    recvHandshake13hash ctx "Finished" expectFinished'
                     ensureRecvComplete ctx
 
 expectFinished

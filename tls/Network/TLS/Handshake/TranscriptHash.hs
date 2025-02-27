@@ -79,7 +79,9 @@ transcriptHash ctx label = do
     case hstTransHashState hst of
         TransHashState2 hashCtx -> do
             let th = hashFinal hashCtx
-            liftIO $ debugTraceKey (ctxDebug ctx) $ label ++ ": " ++ showBytesHex th
+            liftIO $
+                debugTraceKey (ctxDebug ctx) $
+                    adjustLabel label ++ showBytesHex th
             return $ TranscriptHash th
         _ -> error "transcriptHash"
 
@@ -92,11 +94,15 @@ transcriptHashWith ctx label hashAlg bs = do
         -- if TransHashState1.
         TransHashState0 -> do
             let th = hash hashAlg bs
-            liftIO $ debugTraceKey (ctxDebug ctx) $ label ++ ": " ++ showBytesHex th
+            liftIO $
+                debugTraceKey (ctxDebug ctx) $
+                    adjustLabel label ++ showBytesHex th
             return $ TranscriptHash th
         TransHashState2 hashCtx -> do
             let th = hashFinal $ hashUpdate hashCtx bs
-            liftIO $ debugTraceKey (ctxDebug ctx) $ label ++ ": " ++ showBytesHex th
+            liftIO $
+                debugTraceKey (ctxDebug ctx) $
+                    adjustLabel label ++ showBytesHex th
             return $ TranscriptHash th
         _ -> error "transcriptHashWith"
 
@@ -106,5 +112,8 @@ traceTranscriptHash ctx label = do
     case hstTransHashState hst of
         TransHashState2 hashCtx -> do
             let th = hashFinal hashCtx
-            debugTraceKey (ctxDebug ctx) $ label ++ ": " ++ showBytesHex th
+            debugTraceKey (ctxDebug ctx) $ adjustLabel label ++ showBytesHex th
         _ -> return ()
+
+adjustLabel :: String -> String
+adjustLabel label = take 24 (label ++ "                      ")

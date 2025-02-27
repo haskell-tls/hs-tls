@@ -44,7 +44,7 @@ recvServerSecondFlight13 cparams ctx groupSent = do
     runRecvHandshake13 $ do
         recvHandshake13 ctx $ expectEncryptedExtensions ctx
         unless resuming $ recvHandshake13 ctx $ expectCertRequest cparams ctx
-        recvHandshake13hash ctx $ expectFinished cparams ctx
+        recvHandshake13hash ctx "Finished" $ expectFinished cparams ctx
 
 ----------------------------------------------------------------
 
@@ -225,7 +225,7 @@ processCertAndVerify cparams ctx cc = do
     ver <- liftIO $ usingState_ ctx getVersion
     checkDigitalSignatureKey ver pubkey
     usingHState ctx $ setPublicKey pubkey
-    recvHandshake13hash ctx $ expectCertVerify ctx pubkey
+    recvHandshake13hash ctx "CertVerify" $ expectCertVerify ctx pubkey
 
 ----------------------------------------------------------------
 

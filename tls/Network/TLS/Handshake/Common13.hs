@@ -387,10 +387,11 @@ recvHandshake13 ctx f = getHandshake13 ctx >>= f
 recvHandshake13hash
     :: MonadIO m
     => Context
+    -> String
     -> (TranscriptHash -> Handshake13 -> RecvHandshake13M m a)
     -> RecvHandshake13M m a
-recvHandshake13hash ctx f = do
-    d <- transcriptHash ctx "recvHandshake13hash"
+recvHandshake13hash ctx label f = do
+    d <- transcriptHash ctx label
     getHandshake13 ctx >>= f d
 
 getHandshake13 :: MonadIO m => Context -> RecvHandshake13M m Handshake13
