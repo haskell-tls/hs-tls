@@ -152,10 +152,14 @@ main = do
                 ecnf <- loadECHConfigList ecnff
                 return (ekey, ecnf)
     let keyLog = getLogger optKeyLogFile
+        printError
+            | optDebugLog = putStrLn
+            | otherwise = \_ -> return ()
         creds = Credentials [cred]
     makeCipherShowPretty
     runTCPServer (Just host) port $ \sock -> do
-        let sparams = getServerParams creds optGroups smgr keyLog optClientAuth mstore ech
+        let sparams =
+                getServerParams creds optGroups smgr keyLog optClientAuth mstore ech printError
         ctx <- contextNew sock sparams
         when optDebugLog $
             contextHookSetLogging
@@ -181,8 +185,9 @@ getServerParams
     -> Bool
     -> Maybe CertificateStore
     -> ([(Word8, ByteString)], ECHConfigList)
+    -> (String -> IO ())
     -> ServerParams
-getServerParams creds groups sm keyLog clientAuth mstore (ekey, ecnf) =
+getServerParams creds groups sm keyLog clientAuth mstore (ekey, ecnf) printError =
     defaultParamsServer
         { serverSupported = supported
         , serverShared = shared
@@ -218,7 +223,11 @@ getServerParams creds groups sm keyLog clientAuth mstore (ekey, ecnf) =
                 Just _ ->
                     validateClientCertificate (sharedCAStore shared) (sharedValidationCache shared)
             }
-    debug = defaultDebugParams{debugKeyLogger = keyLog}
+    debug =
+        defaultDebugParams
+            { debugKeyLogger = keyLog
+            , debugError = printError
+            }
 
 chooseALPN :: [ByteString] -> IO ByteString
 chooseALPN protos

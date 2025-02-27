@@ -193,7 +193,8 @@ main = do
     echConfList <- case optECHConfigFile of
         Nothing -> return []
         Just ecnff -> loadECHConfigList ecnff
-    let cparams = getClientParams opts host port (smIORef ref) mstore onCertReq echConfList
+    let cparams =
+            getClientParams opts host port (smIORef ref) mstore onCertReq echConfList debug
         client
             | optALPN == "dot" = clientDNS
             | otherwise = clientHTTP11
@@ -328,8 +329,9 @@ getClientParams
     -> Maybe CertificateStore
     -> OnCertificateRequest
     -> ECHConfigList
+    -> (String -> IO ())
     -> ClientParams
-getClientParams Options{..} serverName port sm mstore onCertReq echConfList =
+getClientParams Options{..} serverName port sm mstore onCertReq echConfList printError =
     (defaultParamsClient serverName (C8.pack port))
         { clientSupported = supported
         , clientUseServerNameIndication = True
@@ -373,6 +375,7 @@ getClientParams Options{..} serverName port sm mstore onCertReq echConfList =
     debug =
         defaultDebugParams
             { debugKeyLogger = getLogger optKeyLogFile
+            , debugError = printError
             }
 
 smIORef :: IORef [(SessionID, SessionData)] -> SessionManager
