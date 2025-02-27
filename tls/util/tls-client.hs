@@ -42,6 +42,7 @@ data Options = Options
     , optCertFile :: Maybe FilePath
     , optKeyFile :: Maybe FilePath
     , optECHConfigFile :: Maybe FilePath
+    , optTraceKey :: Bool
     }
     deriving (Show)
 
@@ -62,6 +63,7 @@ defaultOptions =
         , optCertFile = Nothing
         , optKeyFile = Nothing
         , optECHConfigFile = Nothing
+        , optTraceKey = False
         }
 
 usage :: String
@@ -139,6 +141,11 @@ options =
         ["ech-config"]
         (ReqArg (\fl o -> o{optECHConfigFile = Just fl}) "<file>")
         "ECH config file"
+    , Option
+        []
+        ["trace-key"]
+        (NoArg (\o -> o{optTraceKey = True}))
+        "Trace transcript hash"
     ]
 
 showUsageAndExit :: String -> IO a
@@ -177,6 +184,9 @@ main = do
     let debug
             | optDebugLog = putStrLn
             | otherwise = \_ -> return ()
+        traceKey
+            | optTraceKey = putStrLn
+            | otherwise = \_ -> return ()
         showContent
             | optShow = C8.putStr
             | otherwise = \_ -> return ()
@@ -194,7 +204,16 @@ main = do
         Nothing -> return []
         Just ecnff -> loadECHConfigList ecnff
     let cparams =
-            getClientParams opts host port (smIORef ref) mstore onCertReq echConfList debug
+            getClientParams
+                opts
+                host
+                port
+                (smIORef ref)
+                mstore
+                onCertReq
+                echConfList
+                debug
+                traceKey
         client
             | optALPN == "dot" = clientDNS
             | otherwise = clientHTTP11
@@ -330,8 +349,9 @@ getClientParams
     -> OnCertificateRequest
     -> ECHConfigList
     -> (String -> IO ())
+    -> (String -> IO ())
     -> ClientParams
-getClientParams Options{..} serverName port sm mstore onCertReq echConfList printError =
+getClientParams Options{..} serverName port sm mstore onCertReq echConfList printError traceKey =
     (defaultParamsClient serverName (C8.pack port))
         { clientSupported = supported
         , clientUseServerNameIndication = True
@@ -376,6 +396,7 @@ getClientParams Options{..} serverName port sm mstore onCertReq echConfList prin
         defaultDebugParams
             { debugKeyLogger = getLogger optKeyLogFile
             , debugError = printError
+            , debugTraceKey = traceKey
             }
 
 smIORef :: IORef [(SessionID, SessionData)] -> SessionManager

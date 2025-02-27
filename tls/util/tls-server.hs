@@ -34,6 +34,7 @@ data Options = Options
     , optKeyFile :: FilePath
     , optECHConfigFile :: Maybe FilePath
     , optECHKeyFile :: Maybe FilePath
+    , optTraceKey :: Bool
     }
     deriving (Show)
 
@@ -51,6 +52,7 @@ defaultOptions =
         , optKeyFile = "serverkey.pem"
         , optECHConfigFile = Nothing
         , optECHKeyFile = Nothing
+        , optTraceKey = False
         }
 
 options :: [OptDescr (Options -> Options)]
@@ -105,6 +107,11 @@ options =
         ["ech-key"]
         (ReqArg (\fl o -> o{optECHKeyFile = Just fl}) "<file>")
         "ECH key file"
+    , Option
+        []
+        ["trace-key"]
+        (NoArg (\o -> o{optTraceKey = True}))
+        "Trace transcript hash"
     ]
 
 usage :: String
@@ -155,11 +162,23 @@ main = do
         printError
             | optDebugLog = putStrLn
             | otherwise = \_ -> return ()
+        traceKey
+            | optTraceKey = putStrLn
+            | otherwise = \_ -> return ()
         creds = Credentials [cred]
     makeCipherShowPretty
     runTCPServer (Just host) port $ \sock -> do
         let sparams =
-                getServerParams creds optGroups smgr keyLog optClientAuth mstore ech printError
+                getServerParams
+                    creds
+                    optGroups
+                    smgr
+                    keyLog
+                    optClientAuth
+                    mstore
+                    ech
+                    printError
+                    traceKey
         ctx <- contextNew sock sparams
         when optDebugLog $
             contextHookSetLogging
@@ -186,8 +205,9 @@ getServerParams
     -> Maybe CertificateStore
     -> ([(Word8, ByteString)], ECHConfigList)
     -> (String -> IO ())
+    -> (String -> IO ())
     -> ServerParams
-getServerParams creds groups sm keyLog clientAuth mstore (ekey, ecnf) printError =
+getServerParams creds groups sm keyLog clientAuth mstore (ekey, ecnf) printError traceKey =
     defaultParamsServer
         { serverSupported = supported
         , serverShared = shared
@@ -227,6 +247,7 @@ getServerParams creds groups sm keyLog clientAuth mstore (ekey, ecnf) printError
         defaultDebugParams
             { debugKeyLogger = keyLog
             , debugError = printError
+            , debugTraceKey = traceKey
             }
 
 chooseALPN :: [ByteString] -> IO ByteString
