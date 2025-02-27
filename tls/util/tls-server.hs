@@ -4,8 +4,6 @@
 
 module Main where
 
-import qualified Data.ByteString.Base16 as BS16
-import qualified Data.ByteString.Char8 as C8
 import Data.IORef
 import qualified Data.Map.Strict as M
 import Data.X509.CertificateStore
@@ -261,16 +259,12 @@ newSessionManager = do
     return $
         noSessionManager
             { sessionResume = \key -> do
-                C8.putStrLn $ "sessionResume: " <> BS16.encode key
                 M.lookup key <$> readIORef ref
             , sessionResumeOnlyOnce = \key -> do
-                C8.putStrLn $ "sessionResumeOnlyOnce: " <> BS16.encode key
                 M.lookup key <$> readIORef ref
             , sessionEstablish = \key val -> do
-                C8.putStrLn $ "sessionEstablish: " <> BS16.encode key
                 atomicModifyIORef' ref $ \m -> (M.insert key val m, Nothing)
             , sessionInvalidate = \key -> do
-                C8.putStrLn $ "sessionEstablish: " <> BS16.encode key
                 atomicModifyIORef' ref $ \m -> (M.delete key m, ())
             , sessionUseTicket = False
             }
