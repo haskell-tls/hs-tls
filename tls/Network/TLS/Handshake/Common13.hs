@@ -83,7 +83,7 @@ makeFinished :: MonadIO m => Context -> Hash -> ByteString -> m Handshake13
 makeFinished ctx usedHash baseKey = do
     verifyData <-
         VerifyData . makeVerifyData usedHash baseKey
-            <$> transcriptHash ctx
+            <$> transcriptHash ctx "makeFinished"
     liftIO $ usingState_ ctx $ setVerifyDataForSend verifyData
     pure $ Finished13 verifyData
 
@@ -214,7 +214,7 @@ makePSKBinder
     -- ^ Encoded client hello
     -> IO ByteString
 makePSKBinder ctx (BaseSecret sec) usedHash truncLen ech = do
-    hChTruncated <- transcriptHashWith ctx usedHash $ trunc ech
+    hChTruncated <- transcriptHashWith ctx "CH truncated" usedHash $ trunc ech
     let th = TranscriptHash $ hash usedHash ""
     let binderKey = deriveSecret usedHash sec "res binder" th
     return $ makeVerifyData usedHash binderKey hChTruncated
@@ -387,10 +387,11 @@ recvHandshake13 ctx f = getHandshake13 ctx >>= f
 recvHandshake13hash
     :: MonadIO m
     => Context
+    -> String
     -> (TranscriptHash -> Handshake13 -> RecvHandshake13M m a)
     -> RecvHandshake13M m a
-recvHandshake13hash ctx f = do
-    d <- transcriptHash ctx
+recvHandshake13hash ctx label f = do
+    d <- transcriptHash ctx label
     getHandshake13 ctx >>= f d
 
 getHandshake13 :: MonadIO m => Context -> RecvHandshake13M m Handshake13
@@ -490,7 +491,7 @@ calculateHandshakeSecret
     -> ByteString
     -> IO (SecretTriple HandshakeSecret)
 calculateHandshakeSecret ctx choice (BaseSecret sec) ecdhe = do
-    hChSh <- transcriptHash ctx
+    hChSh <- transcriptHash ctx "CH..SH"
     let th = TranscriptHash $ hash usedHash ""
         handshakeSecret =
             hkdfExtract
@@ -545,7 +546,7 @@ calculateResumptionSecret
     -> BaseSecret ApplicationSecret
     -> IO (BaseSecret ResumptionSecret)
 calculateResumptionSecret ctx choice (BaseSecret sec) = do
-    hChCf <- transcriptHash ctx
+    hChCf <- transcriptHash ctx "CH..CF"
     let resumptionSecret = deriveSecret usedHash sec "res master" hChCf
     return $ BaseSecret resumptionSecret
   where
@@ -590,7 +591,8 @@ setRTT ctx chSentTime = do
 compulteComfirm
     :: MonadIO m => Context -> Hash -> Handshake13 -> ByteString -> m ByteString
 compulteComfirm ctx usedHash hs label = do
-    TranscriptHash echConf <- transcriptHashWith ctx usedHash $ encodeHandshake13 hs
+    TranscriptHash echConf <-
+        transcriptHashWith ctx "ECH confirm" usedHash $ encodeHandshake13 hs
     ClientRandom cr <- liftIO $ usingHState ctx getClientRandom
     let prk = hkdfExtract usedHash "" cr
     return $ hkdfExpandLabel usedHash prk label echConf 8
@@ -599,7 +601,7 @@ compulteComfirm ctx usedHash hs label = do
 
 setServerHelloParameters13 :: Context -> Cipher -> IO (Either TLSError ())
 setServerHelloParameters13 ctx cipher = do
-    transitTranscriptHash ctx $ cipherHash cipher
+    transitTranscriptHash ctx "transit" $ cipherHash cipher
     usingHState ctx $ do
         hst <- get
         case hstPendingCipher hst of

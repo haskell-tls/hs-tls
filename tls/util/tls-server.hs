@@ -4,8 +4,6 @@
 
 module Main where
 
-import qualified Data.ByteString.Base16 as BS16
-import qualified Data.ByteString.Char8 as C8
 import Data.IORef
 import qualified Data.Map.Strict as M
 import Data.X509.CertificateStore
@@ -34,6 +32,7 @@ data Options = Options
     , optKeyFile :: FilePath
     , optECHConfigFile :: Maybe FilePath
     , optECHKeyFile :: Maybe FilePath
+    , optTraceKey :: Bool
     }
     deriving (Show)
 
@@ -51,6 +50,7 @@ defaultOptions =
         , optKeyFile = "serverkey.pem"
         , optECHConfigFile = Nothing
         , optECHKeyFile = Nothing
+        , optTraceKey = False
         }
 
 options :: [OptDescr (Options -> Options)]
@@ -105,6 +105,11 @@ options =
         ["ech-key"]
         (ReqArg (\fl o -> o{optECHKeyFile = Just fl}) "<file>")
         "ECH key file"
+    , Option
+        []
+        ["trace-key"]
+        (NoArg (\o -> o{optTraceKey = True}))
+        "Trace transcript hash"
     ]
 
 usage :: String
@@ -152,10 +157,26 @@ main = do
                 ecnf <- loadECHConfigList ecnff
                 return (ekey, ecnf)
     let keyLog = getLogger optKeyLogFile
+        printError
+            | optDebugLog = putStrLn
+            | otherwise = \_ -> return ()
+        traceKey
+            | optTraceKey = putStrLn
+            | otherwise = \_ -> return ()
         creds = Credentials [cred]
     makeCipherShowPretty
     runTCPServer (Just host) port $ \sock -> do
-        let sparams = getServerParams creds optGroups smgr keyLog optClientAuth mstore ech
+        let sparams =
+                getServerParams
+                    creds
+                    optGroups
+                    smgr
+                    keyLog
+                    optClientAuth
+                    mstore
+                    ech
+                    printError
+                    traceKey
         ctx <- contextNew sock sparams
         when optDebugLog $
             contextHookSetLogging
@@ -181,8 +202,10 @@ getServerParams
     -> Bool
     -> Maybe CertificateStore
     -> ([(Word8, ByteString)], ECHConfigList)
+    -> (String -> IO ())
+    -> (String -> IO ())
     -> ServerParams
-getServerParams creds groups sm keyLog clientAuth mstore (ekey, ecnf) =
+getServerParams creds groups sm keyLog clientAuth mstore (ekey, ecnf) printError traceKey =
     defaultParamsServer
         { serverSupported = supported
         , serverShared = shared
@@ -218,7 +241,12 @@ getServerParams creds groups sm keyLog clientAuth mstore (ekey, ecnf) =
                 Just _ ->
                     validateClientCertificate (sharedCAStore shared) (sharedValidationCache shared)
             }
-    debug = defaultDebugParams{debugKeyLogger = keyLog}
+    debug =
+        defaultDebugParams
+            { debugKeyLogger = keyLog
+            , debugError = printError
+            , debugTraceKey = traceKey
+            }
 
 chooseALPN :: [ByteString] -> IO ByteString
 chooseALPN protos
@@ -231,16 +259,12 @@ newSessionManager = do
     return $
         noSessionManager
             { sessionResume = \key -> do
-                C8.putStrLn $ "sessionResume: " <> BS16.encode key
                 M.lookup key <$> readIORef ref
             , sessionResumeOnlyOnce = \key -> do
-                C8.putStrLn $ "sessionResumeOnlyOnce: " <> BS16.encode key
                 M.lookup key <$> readIORef ref
             , sessionEstablish = \key val -> do
-                C8.putStrLn $ "sessionEstablish: " <> BS16.encode key
                 atomicModifyIORef' ref $ \m -> (M.insert key val m, Nothing)
             , sessionInvalidate = \key -> do
-                C8.putStrLn $ "sessionEstablish: " <> BS16.encode key
                 atomicModifyIORef' ref $ \m -> (M.delete key m, ())
             , sessionUseTicket = False
             }

@@ -78,7 +78,8 @@ updateTranscriptHash12 ctx hs = do
     when (certVerifyHandshakeMaterial hs) $
         usingHState ctx $
             addHandshakeMessage encoded
-    when (finishedHandshakeMaterial hs) $ updateTranscriptHash ctx encoded
+    let label = show $ typeOfHandshake hs
+    when (finishedHandshakeMaterial hs) $ updateTranscriptHash ctx label encoded
     return encoded
   where
     encoded = encodeHandshake hs
@@ -109,7 +110,8 @@ updateTranscriptHash13 :: Context -> Handshake13 -> IO ByteString
 updateTranscriptHash13 ctx hs
     | isIgnored hs = return encoded
     | otherwise = do
-        updateTranscriptHash ctx encoded
+        let label = show $ typeOfHandshake13 hs
+        updateTranscriptHash ctx label encoded
         usingHState ctx $ addHandshakeMessage encoded
         return encoded
   where

@@ -26,6 +26,7 @@ import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import Network.TLS.Handshake.State
 import Network.TLS.Imports
+import Network.TLS.Parameters
 import Network.TLS.State (withRNG)
 import Network.TLS.Struct
 import Network.TLS.Types
@@ -174,6 +175,6 @@ logKey ctx logkey = do
             let crm = fromMaybe (hstClientRandom hst) (hstTLS13OuterClientRandom hst)
                 cr = unClientRandom crm
                 (label, key) = labelAndKey logkey
-            ctxKeyLogger ctx $ label ++ " " ++ dump cr ++ " " ++ dump key
+            debugKeyLogger (ctxDebug ctx) $ label ++ " " ++ dump cr ++ " " ++ dump key
   where
     dump = init . drop 1 . showBytesHex

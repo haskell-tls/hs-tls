@@ -123,7 +123,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
         loadPacket13 ctx $ Handshake13 [rawFinished]
         return (clientHandshakeSecret, handSecret)
     ----------------------------------------------------------------
-    hChSf <- transcriptHash ctx
+    hChSf <- transcriptHash ctx "CH..SF"
     appKey <- calculateApplicationSecret ctx choice handSecret hChSf
     let clientApplicationSecret0 = triClient appKey
         serverApplicationSecret0 = triServer appKey
@@ -212,7 +212,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
         loadPacket13 ctx $
             Handshake13 [certtag "" (TLSCertificateChain certChain) ess]
         liftIO $ usingState_ ctx $ setServerCertificateChain certChain
-        hChSc <- transcriptHash ctx
+        hChSc <- transcriptHash ctx "CH..SC"
         pubkey <- getLocalPublicKey ctx
         vrfy <- makeCertVerify ctx pubkey hashSig hChSc
         loadPacket13 ctx $ Handshake13 [vrfy]
@@ -300,7 +300,7 @@ sendHRR ctx (usedCipher, usedHash, _) CHP{..} isEch = do
             throwCore $
                 Error_Protocol "no group in common with the client for HRR" HandshakeFailure
         g : _ -> do
-            updateTranscriptHash13HRR ctx
+            updateTranscriptHash13HRR ctx "hash of hash"
             hrr <- makeHRR ctx usedCipher usedHash chSession g isEch
             usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
             runPacketFlight ctx $ do

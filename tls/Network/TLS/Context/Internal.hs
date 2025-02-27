@@ -120,6 +120,7 @@ data Context
     -- ^ return the backend object associated with this context
     , ctxSupported :: Supported
     , ctxShared :: Shared
+    , ctxDebug :: DebugParams
     , ctxTLSState :: MVar TLSState
     , ctxMeasurement :: IORef Measurement
     , ctxEOF_ :: IORef Bool
@@ -135,7 +136,6 @@ data Context
     , ctxRoleParams :: RoleParams
     -- ^ hooks for this context
     , ctxLocks :: Locks
-    , ctxKeyLogger :: String -> IO ()
     , ctxHooks :: IORef Hooks
     , -- TLS 1.3
       ctxTLS13State :: IORef TLS13State

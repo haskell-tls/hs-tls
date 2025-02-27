@@ -71,6 +71,7 @@ handshakeFailed err = throwIO $ HandshakeFailed err
 
 handleException :: Context -> IO () -> IO ()
 handleException ctx f = catchException f $ \exception -> do
+    debugError (ctxDebug ctx) $ show exception
     -- If the error was an Uncontextualized TLSException, we replace the
     -- context with HandshakeFailed. If it's anything else, we convert
     -- it to a string and wrap it with Error_Misc and HandshakeFailed.
@@ -347,7 +348,7 @@ setPeerRecordSizeLimit ctx tls13 (RecordSizeLimit n0) = do
 
 generateFinished :: Context -> Version -> Role -> IO ByteString
 generateFinished ctx ver role = do
-    thash <- transcriptHash ctx
+    thash <- transcriptHash ctx "generateFinished"
     (mainSecret, cipher) <- usingHState ctx $ gets $ \hst ->
         (fromJust $ hstMainSecret hst, fromJust $ hstPendingCipher hst)
     return $
@@ -406,7 +407,7 @@ setServerHelloParameters12 ctx ver sran cipher compression = do
                 , hstPendingCipher = Just cipher
                 , hstPendingCompression = compression
                 }
-    transitTranscriptHash ctx $ getHash ver cipher
+    transitTranscriptHash ctx "transit" $ getHash ver cipher
 
 -- The TLS12 Hash is cipher specific, and some TLS12 algorithms use SHA384
 -- instead of the default SHA256.

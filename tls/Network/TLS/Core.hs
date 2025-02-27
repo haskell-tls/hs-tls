@@ -440,7 +440,7 @@ popAction ctx h hs = do
                             pa h
                         PendingRecvActionHash needAligned pa -> do
                             when needAligned $ checkAlignment ctx hs
-                            d <- transcriptHash ctx
+                            d <- transcriptHash ctx "Pending action"
                             void $ updateTranscriptHash13 ctx h
                             pa d h
                     -- Client: after receiving SH, app data is coming.
@@ -498,6 +498,7 @@ terminateWithWriteLock ctx send err level desc reason = withWriteLock ctx $ do
                 sessionInvalidate (sharedSessionManager $ ctxShared ctx) sid
     catchException (send [(level, desc)]) (\_ -> return ())
     setEOF ctx
+    debugError (ctxDebug ctx) $ reason
     E.throwIO (Terminated False reason err)
 
 {-# DEPRECATED recvData' "use recvData that returns strict bytestring" #-}

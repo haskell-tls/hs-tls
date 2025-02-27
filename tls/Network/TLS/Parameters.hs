@@ -1,3 +1,5 @@
+{-# LANGUAGE Strict #-}
+
 module Network.TLS.Parameters (
     ClientParams (..),
     defaultParamsClient,
@@ -71,6 +73,8 @@ data DebugParams = DebugParams
     -- ^ Printing main keys.
     --
     -- Default: no printing
+    , debugError :: String -> IO ()
+    , debugTraceKey :: String -> IO ()
     }
 
 -- | Default value for 'DebugParams'
@@ -80,7 +84,9 @@ defaultDebugParams =
         { debugSeed = Nothing
         , debugPrintSeed = const (return ())
         , debugVersionForced = Nothing
-        , debugKeyLogger = \_ -> return ()
+        , debugKeyLogger = \ ~_ -> return ()
+        , debugError = \ ~_ -> return ()
+        , debugTraceKey = \ ~_ -> return ()
         }
 
 instance Show DebugParams where
