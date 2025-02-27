@@ -13,8 +13,11 @@ module Common (
     namedGroups,
     getInfo,
     printHandshakeInfo,
+    showBytesHex,
 ) where
 
+import qualified Data.ByteString.Base16 as B16
+import qualified Data.ByteString.Char8 as C8
 import Data.Char (isDigit)
 import Data.X509.CertificateStore
 import Network.TLS hiding (HostName)
@@ -119,3 +122,6 @@ printHandshakeInfo i = do
         putStrLn $ "Handshake mode: " ++ show (fromJust (infoTLS13HandshakeMode i))
         putStrLn $ "Early data accepted: " ++ show (infoIsEarlyDataAccepted i)
         putStrLn $ "Encrypted client hello accepted: " ++ show (infoIsECHAccepted i)
+
+showBytesHex :: ByteString -> String
+showBytesHex bs = C8.unpack $ B16.encode bs

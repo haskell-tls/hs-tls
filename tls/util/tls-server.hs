@@ -163,6 +163,8 @@ main = do
                 defaultLogging
                     { loggingPacketSent = putStrLn . ("<< " ++)
                     , loggingPacketRecv = putStrLn . (">> " ++)
+                    --                    , loggingIOSent = \bs -> putStrLn $ "{{ " ++ showBytesHex bs
+                    --                    , loggingIORecv = \hd bs -> putStrLn $ "}} " ++ show hd ++ " " ++ showBytesHex bs
                     }
         when (optDebugLog || optShow) $ putStrLn "------------------------"
         handshake ctx

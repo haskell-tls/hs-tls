@@ -304,6 +304,8 @@ runTLS Options{..} cparams Aux{..} action =
                 defaultLogging
                     { loggingPacketSent = putStrLn . (">> " ++)
                     , loggingPacketRecv = putStrLn . ("<< " ++)
+                    --                    , loggingIOSent = \bs -> putStrLn $ "}} " ++ showBytesHex bs
+                    --                    , loggingIORecv = \hd bs -> putStrLn $ "{{ " ++ show hd ++ " " ++ showBytesHex bs
                     }
         handshake ctx
         r <- action ctx
