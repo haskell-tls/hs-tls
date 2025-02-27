@@ -315,18 +315,21 @@ pattern HandshakeType_CompressedCertificate :: HandshakeType
 pattern HandshakeType_CompressedCertificate  = HandshakeType 25
 
 instance Show HandshakeType where
-    show HandshakeType_HelloRequest          = "HandshakeType_HelloRequest"
-    show HandshakeType_ClientHello           = "HandshakeType_ClientHello"
-    show HandshakeType_ServerHello           = "HandshakeType_ServerHello"
-    show HandshakeType_Certificate           = "HandshakeType_Certificate"
-    show HandshakeType_ServerKeyXchg         = "HandshakeType_ServerKeyXchg"
-    show HandshakeType_CertRequest           = "HandshakeType_CertRequest"
-    show HandshakeType_ServerHelloDone       = "HandshakeType_ServerHelloDone"
-    show HandshakeType_CertVerify            = "HandshakeType_CertVerify"
-    show HandshakeType_ClientKeyXchg         = "HandshakeType_ClientKeyXchg"
-    show HandshakeType_Finished              = "HandshakeType_Finished"
-    show HandshakeType_NewSessionTicket      = "HandshakeType_NewSessionTicket"
-    show HandshakeType_CompressedCertificate = "HandshakeType_CompressedCertificate"
+    show HandshakeType_HelloRequest          = "HelloRequest"
+    show HandshakeType_ClientHello           = "ClientHello"
+    show HandshakeType_ServerHello           = "ServerHello"
+    show HandshakeType_NewSessionTicket      = "NewSessionTicket"
+    show HandshakeType_EndOfEarlyData        = "EndOfEarlyData"
+    show HandshakeType_EncryptedExtensions   = "EncryptedExtensions"
+    show HandshakeType_Certificate           = "Certificate"
+    show HandshakeType_ServerKeyXchg         = "ServerKeyXchg"
+    show HandshakeType_CertRequest           = "CertRequest"
+    show HandshakeType_ServerHelloDone       = "ServerHelloDone"
+    show HandshakeType_CertVerify            = "CertVerify"
+    show HandshakeType_ClientKeyXchg         = "ClientKeyXchg"
+    show HandshakeType_Finished              = "Finished"
+    show HandshakeType_KeyUpdate             = "KeyUpdate"
+    show HandshakeType_CompressedCertificate = "CompressedCertificate"
     show (HandshakeType x)                   = "HandshakeType " ++ show x
 {- FOURMOLU_ENABLE -}
 
