@@ -71,6 +71,7 @@ data DebugParams = DebugParams
     -- ^ Printing main keys.
     --
     -- Default: no printing
+    , debugError :: String -> IO ()
     }
 
 -- | Default value for 'DebugParams'
@@ -81,6 +82,7 @@ defaultDebugParams =
         , debugPrintSeed = const (return ())
         , debugVersionForced = Nothing
         , debugKeyLogger = \_ -> return ()
+        , debugError = \_ -> return ()
         }
 
 instance Show DebugParams where

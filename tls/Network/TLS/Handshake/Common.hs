@@ -71,6 +71,7 @@ handshakeFailed err = throwIO $ HandshakeFailed err
 
 handleException :: Context -> IO () -> IO ()
 handleException ctx f = catchException f $ \exception -> do
+    debugError (ctxDebug ctx) $ show exception
     -- If the error was an Uncontextualized TLSException, we replace the
     -- context with HandshakeFailed. If it's anything else, we convert
     -- it to a string and wrap it with Error_Misc and HandshakeFailed.
