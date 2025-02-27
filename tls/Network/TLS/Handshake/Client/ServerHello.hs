@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Network.TLS.Handshake.Client.ServerHello (
-    recvServerHello,
+    receiveServerHello,
     processServerHello13,
 ) where
 
@@ -24,6 +24,28 @@ import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types
+
+----------------------------------------------------------------
+
+receiveServerHello
+    :: ClientParams
+    -> Context
+    -> Maybe (ClientRandom, Session, Version)
+    -> IO (Version, [Handshake], Bool)
+receiveServerHello cparams ctx mparams = do
+    chSentTime <- getCurrentTimeFromBase
+    hss <- recvServerHello cparams ctx
+    setRTT ctx chSentTime
+    ver <- usingState_ ctx getVersion
+    unless (maybe True (\(_, _, v) -> v == ver) mparams) $
+        throwCore $
+            Error_Protocol "version changed after hello retry" IllegalParameter
+    -- recvServerHello sets TLS13HRR according to the server random.
+    -- For 1st server hello, getTLS13HR returns True if it is HRR and
+    -- False otherwise.  For 2nd server hello, getTLS13HR returns
+    -- False since it is NOT HRR.
+    hrr <- usingState_ ctx getTLS13HRR
+    return (ver, hss, hrr)
 
 ----------------------------------------------------------------
 
