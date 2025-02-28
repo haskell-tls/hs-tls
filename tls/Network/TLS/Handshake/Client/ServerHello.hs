@@ -37,7 +37,9 @@ receiveServerHello
     -> IO (Version, [Handshake], Bool)
 receiveServerHello cparams ctx mparams = do
     chSentTime <- getCurrentTimeFromBase
-    hss <- recvServerHello cparams ctx
+    (sh, hss) <- recvSH
+    processServerHello cparams ctx sh
+    void $ updateTranscriptHash12 ctx sh
     setRTT ctx chSentTime
     ver <- usingState_ ctx getVersion
     unless (maybe True (\(_, _, v) -> v == ver) mparams) $
@@ -49,16 +51,6 @@ receiveServerHello cparams ctx mparams = do
     -- False since it is NOT HRR.
     hrr <- usingState_ ctx getTLS13HRR
     return (ver, hss, hrr)
-
-----------------------------------------------------------------
-
-recvServerHello
-    :: ClientParams -> Context -> IO [Handshake]
-recvServerHello cparams ctx = do
-    (sh, hss) <- recvSH
-    processServerHello cparams ctx sh
-    void $ updateTranscriptHash12 ctx sh
-    return hss
   where
     recvSH = do
         epkt <- recvPacket12 ctx
