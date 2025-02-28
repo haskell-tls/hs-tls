@@ -77,10 +77,13 @@ processServerHello13 _ _ h = unexpected (show h) (Just "server hello")
 
 -- | processServerHello processes the ServerHello message on the client.
 --
--- 1) check the version chosen by the server is one allowed by parameters.
--- 2) check that our compression and cipher algorithms are part of the list we sent
+-- 1) check the version chosen by the server is one allowed by
+--    parameters.
+-- 2) check that our compression and cipher algorithms are part of the
+--    list we sent
 -- 3) check extensions received are part of the one we sent
--- 4) process the session parameter to see if the server want to start a new session or can resume
+-- 4) process the session parameter to see if the server want to start
+--    a new session or can resume
 processServerHello
     :: ClientParams -> Context -> Handshake -> IO ()
 processServerHello cparams ctx sh@(ServerHello rver sr serverSession (CipherId cid) compression shExtensions) = do
@@ -105,8 +108,9 @@ processServerHello cparams ctx sh@(ServerHello rver sr serverSession (CipherId c
         Just alg -> return alg
     ensureNullCompression compression
 
-    -- intersect sent extensions in client and the received extensions from server.
-    -- if server returns extensions that we didn't request, fail.
+    -- intersect sent extensions in client and the received extensions
+    -- from server.  if server returns extensions that we didn't
+    -- request, fail.
     let checkExt (ExtensionRaw i _)
             | i == EID_Cookie = False -- for HRR
             | otherwise = i `notElem` chExts
@@ -150,13 +154,14 @@ processServerHello cparams ctx sh@(ServerHello rver sr serverSession (CipherId c
                     ("server version " ++ show ver ++ " is not supported")
                     ProtocolVersion
 
-    -- Some servers set TLS 1.2 as the legacy server hello version, and TLS 1.3
-    -- in the supported_versions extension, *AND ALSO* set the TLS 1.2
-    -- downgrade signal in the server random.  If we support TLS 1.3 and
-    -- actually negotiate TLS 1.3, we must ignore the server random downgrade
-    -- signal.  Therefore, 'isDowngraded' needs to take into account the
-    -- negotiated version and the server random, as well as the list of
-    -- client-side enabled protocol versions.
+    -- Some servers set TLS 1.2 as the legacy server hello version,
+    -- and TLS 1.3 in the supported_versions extension, *AND ALSO* set
+    -- the TLS 1.2 downgrade signal in the server random.  If we
+    -- support TLS 1.3 and actually negotiate TLS 1.3, we must ignore
+    -- the server random downgrade signal.  Therefore, 'isDowngraded'
+    -- needs to take into account the negotiated version and the
+    -- server random, as well as the list of client-side enabled
+    -- protocol versions.
     --
     when (isDowngraded ver supportedVers sr) $
         throwCore $
