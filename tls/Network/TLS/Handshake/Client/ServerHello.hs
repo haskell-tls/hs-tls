@@ -78,8 +78,8 @@ recvServerHello cparams ctx = do
 
 processServerHello13
     :: ClientParams -> Context -> Handshake13 -> IO ()
-processServerHello13 cparams ctx (ServerHello13 serverRan serverSession cipher shExtensions) = do
-    let sh = ServerHello TLS12 serverRan serverSession cipher 0 shExtensions
+processServerHello13 cparams ctx (ServerHello13 sr serverSession cipher shExtensions) = do
+    let sh = ServerHello TLS12 sr serverSession cipher 0 shExtensions
     processServerHello cparams ctx sh
 processServerHello13 _ _ h = unexpected (show h) (Just "server hello")
 
@@ -91,7 +91,7 @@ processServerHello13 _ _ h = unexpected (show h) (Just "server hello")
 -- 4) process the session parameter to see if the server want to start a new session or can resume
 processServerHello
     :: ClientParams -> Context -> Handshake -> IO ()
-processServerHello cparams ctx sh@(ServerHello rver serverRan serverSession (CipherId cid) compression shExtensions) = do
+processServerHello cparams ctx sh@(ServerHello rver sr serverSession (CipherId cid) compression shExtensions) = do
     -- A server which receives a legacy_version value not equal to
     -- 0x0303 MUST abort the handshake with an "illegal_parameter"
     -- alert.
@@ -102,7 +102,7 @@ processServerHello cparams ctx sh@(ServerHello rver serverRan serverSession (Cip
     clientSession <- tls13stSession <$> getTLS13State ctx
     chExts <- tls13stSentExtensions <$> getTLS13State ctx
     let clientCiphers = supportedCiphers $ ctxSupported ctx
-    cipherAlg <- case findCipher cid clientCiphers of
+    usedCipher <- case findCipher cid clientCiphers of
         Nothing -> throwCore $ Error_Protocol "server choose unknown cipher" IllegalParameter
         Just alg -> return alg
     compressAlg <- case find
@@ -122,7 +122,7 @@ processServerHello cparams ctx sh@(ServerHello rver serverRan serverSession (Cip
         throwCore $
             Error_Protocol "spurious extensions received" UnsupportedExtension
 
-    let isHRR = isHelloRetryRequest serverRan
+    let isHRR = isHelloRetryRequest sr
     usingState_ ctx $ do
         setTLS13HRR isHRR
         when isHRR $
@@ -141,7 +141,7 @@ processServerHello cparams ctx sh@(ServerHello rver serverRan serverSession (Cip
     ver <- usingState_ ctx getVersion
 
     when (ver == TLS12) $
-        setServerHelloParameters12 ctx rver serverRan cipherAlg compressAlg
+        setServerHelloParameters12 ctx rver sr usedCipher compressAlg
 
     let supportedVers = supportedVersions $ clientSupported cparams
 
@@ -166,7 +166,7 @@ processServerHello cparams ctx sh@(ServerHello rver serverRan serverSession (Cip
     -- negotiated version and the server random, as well as the list of
     -- client-side enabled protocol versions.
     --
-    when (isDowngraded ver supportedVers serverRan) $
+    when (isDowngraded ver supportedVers sr) $
         throwCore $
             Error_Protocol "version downgrade detected" IllegalParameter
 
@@ -177,12 +177,13 @@ processServerHello cparams ctx sh@(ServerHello rver serverRan serverSession (Cip
             processRecordSizeLimit ctx shExtensions True
             enableMyRecordLimit ctx
             enablePeerRecordLimit ctx
-            transitTranscriptHashI ctx "transitI" (cipherHash cipherAlg) isHRR
-            accepted <- checkECHacceptance ctx isHRR (cipherHash cipherAlg) sh
+            let usedHash = cipherHash usedCipher
+            transitTranscriptHashI ctx "transitI" usedHash isHRR
+            accepted <- checkECHacceptance ctx isHRR usedHash sh
             when (accepted && not isHRR) $ do
                 copyTranscriptHash ctx "copy"
                 usingHState ctx $ setECHAccepted True
-            updateContext13 ctx cipherAlg isHRR
+            updateContext13 ctx usedCipher isHRR
             updateTranscriptHashI ctx "ServerHelloI" $ encodeHandshake sh
         else do
             let resumingSession = case clientSessions cparams of
@@ -223,7 +224,7 @@ processServerExtension _ = return ()
 ----------------------------------------------------------------
 
 updateContext13 :: Context -> Cipher -> Bool -> IO ()
-updateContext13 ctx cipherAlg isHRR = do
+updateContext13 ctx usedCipher isHRR = do
     established <- ctxEstablished ctx
     eof <- ctxEOF ctx
     when (established == Established && not eof) $
@@ -231,7 +232,7 @@ updateContext13 ctx cipherAlg isHRR = do
             Error_Protocol
                 "renegotiation to TLS 1.3 or later is not allowed"
                 ProtocolVersion
-    failOnEitherError $ setServerHelloParameters13 ctx cipherAlg isHRR
+    failOnEitherError $ setServerHelloParameters13 ctx usedCipher isHRR
 
 updateContext12 :: Context -> [ExtensionRaw] -> Maybe SessionData -> IO ()
 updateContext12 ctx shExtensions resumingSession = do
