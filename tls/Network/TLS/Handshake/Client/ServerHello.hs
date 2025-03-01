@@ -177,6 +177,9 @@ processServerHello cparams ctx sh@(ServerHello rver sr serverSession (CipherId c
             let usedHash = cipherHash usedCipher
             transitTranscriptHashI ctx "transitI" usedHash isHRR
             accepted <- checkECHacceptance ctx isHRR usedHash sh
+            when accepted $ do
+                (ClientHello _ crI _ _) <- fromJust <$> usingHState ctx getClientHello
+                usingHState ctx $ setClientRandom crI
             when (accepted && not isHRR) $ do
                 copyTranscriptHash ctx "copy"
                 usingHState ctx $ setECHAccepted True

@@ -41,7 +41,7 @@ sendClientHello
     -> PreSharedKeyInfo
     -> IO ClientRandom
 sendClientHello cparams ctx groups mparams pskinfo = do
-    crand <- generateClientHelloParams mparams
+    crand <- generateClientHelloParams mparams -- Inner for ECH
     let nhpks = supportedHPKE $ ctxSupported ctx
         echcnfs = sharedECHConfig $ ctxShared ctx
         mEchParams = lookupECHConfigList nhpks echcnfs
@@ -111,8 +111,13 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) mEchParams =
     ch <- case mEchParams of
         Nothing -> return ch0
         Just echParams -> do
-            crandO <- clientRandom ctx
-            usingHState ctx $ setClientRandom crandO
+            mcrandO <- usingHState ctx getOuterClientRandom
+            crandO <- case mcrandO of
+                Nothing -> clientRandom ctx
+                Just x -> return x
+            usingHState ctx $ do
+                setClientRandom crandO
+                setOuterClientRandom $ Just crandO
             createEncryptedClientHello ctx ch0 echParams crandO
     sendPacket12 ctx $ Handshake [ch]
     mEarlySecInfo <- case rtt0info of
