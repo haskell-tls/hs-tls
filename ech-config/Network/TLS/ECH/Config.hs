@@ -304,7 +304,7 @@ getList16 rbuf parer = do
         if cur < lim
             then do
                 x <- parer rbuf
-                loop lim ((x :) . build)
+                loop lim (build . (x :))
             else return $ build []
 
 withLength16 :: WriteBuffer -> IO () -> IO ()
