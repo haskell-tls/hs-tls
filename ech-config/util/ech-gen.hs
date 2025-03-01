@@ -10,9 +10,7 @@ import Crypto.HPKE (
     KEM_ID (..),
  )
 import Crypto.HPKE.Internal (defaultHPKEMap, genKeyPair)
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as C8
 import Data.Word (Word8)
 import Network.TLS.ECH.Config
 import System.Environment
@@ -21,7 +19,7 @@ configid :: Word8
 configid = 1
 
 mkConfig
-    :: ByteString
+    :: String
     -> KEM_ID
     -> KDF_ID
     -> AEAD_ID
@@ -59,7 +57,7 @@ main = do
                 aeadid = AES_128_GCM
             (EncodedPublicKey pkm, EncodedSecretKey skm) <-
                 genKeyPair defaultHPKEMap kemid
-            let config = mkConfig (C8.pack hostname) kemid kdfid aeadid (EncodedServerPublicKey pkm)
+            let config = mkConfig hostname kemid kdfid aeadid (EncodedServerPublicKey pkm)
                 configs = [config]
             encodedConfig <- encodeECHConfigList configs
             print configs

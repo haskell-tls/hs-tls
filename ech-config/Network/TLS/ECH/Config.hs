@@ -15,6 +15,7 @@ module Network.TLS.ECH.Config (
 
     -- * ECH configuration
     ECHConfig (..),
+    decodeECHConfig,
     encodeECHConfig,
     getECHConfig,
     putECHConfig,
@@ -225,6 +226,9 @@ encodeECHConfig cnf = withWriteBuffer siz $ \wbuf -> putECHConfig wbuf cnf
   where
     siz = sizeOfECHConfig cnf
 
+decodeECHConfig :: ByteString -> IO ECHConfig
+decodeECHConfig bs = withReadBuffer bs $ getECHConfig
+
 ----------------------------------------------------------------
 
 type ECHConfigList = [ECHConfig]
@@ -300,7 +304,7 @@ getList16 rbuf parer = do
         if cur < lim
             then do
                 x <- parer rbuf
-                loop lim ((x :) . build)
+                loop lim (build . (x :))
             else return $ build []
 
 withLength16 :: WriteBuffer -> IO () -> IO ()
