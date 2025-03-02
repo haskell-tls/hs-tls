@@ -387,12 +387,14 @@ createEncryptedClientHello ctx ch0@(ClientHello ver crI comp chp) echParams@(kdf
         chI = ClientHello ver crI comp chpI
     Just (func, enc, taglen) <- getHPKE ctx echParams
     let bsI = encodeHandshake' chI
+        padLen = 32 - (B.length bsI .>>. 3)
+        bsI' = bsI <> B.replicate padLen 0
     let outer =
             ECHOuter
                 { echCipherSuite = (kdfid, aeadid)
                 , echConfigId = cnfConfigId conf
                 , echEnc = enc
-                , echPayload = B.replicate (B.length bsI + taglen) 0
+                , echPayload = B.replicate (B.length bsI' + taglen) 0
                 }
         echOZ = extensionEncode outer
         chpOZ =
@@ -402,7 +404,7 @@ createEncryptedClientHello ctx ch0@(ClientHello ver crI comp chp) echParams@(kdf
                 }
         chO = ClientHello ver crO comp chpOZ
         aad = encodeHandshake' chO
-    bsO <- func aad bsI
+    bsO <- func aad bsI'
     let outer' =
             ECHOuter
                 { echCipherSuite = (kdfid, aeadid)
