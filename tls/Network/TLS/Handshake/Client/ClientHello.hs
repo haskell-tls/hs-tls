@@ -385,15 +385,14 @@ createEncryptedClientHello
 createEncryptedClientHello ctx ch0@(ClientHello ver crI comp chp) echParams@(kdfid, aeadid, conf) crO = E.handle hpkeHandler $ do
     let (chpO, chpI) = dupCompCHP (cnfPublicName conf) chp
         chI = ClientHello ver crI comp chpI
-    Just (func, _nenc, enc) <- getHPKE ctx echParams -- fixme
+    Just (func, enc, taglen) <- getHPKE ctx echParams
     let bsI = encodeHandshake' chI
     let outer =
             ECHOuter
                 { echCipherSuite = (kdfid, aeadid)
                 , echConfigId = cnfConfigId conf
                 , echEnc = enc
-                , -- fixme: 16 should be decided from "aeadid"
-                  echPayload = B.replicate (B.length bsI + 16) 0
+                , echPayload = B.replicate (B.length bsI + taglen) 0
                 }
         echOZ = extensionEncode outer
         chpOZ =
@@ -458,7 +457,7 @@ dupCompCHP host CHP{..} =
 getHPKE
     :: Context
     -> (KDF_ID, AEAD_ID, ECHConfig)
-    -> IO (Maybe (AAD -> PlainText -> IO CipherText, Int, EncodedPublicKey))
+    -> IO (Maybe (AAD -> PlainText -> IO CipherText, EncodedPublicKey, Int))
 getHPKE ctx (kdfid, aeadid, conf) = do
     mfunc <- getTLS13HPKE ctx
     case mfunc of
@@ -467,13 +466,13 @@ getHPKE ctx (kdfid, aeadid, conf) = do
             let info = "tls ech\x00" <> encodedConfig
             (pkSm, ctxS) <- setupBaseS kemid kdfid aeadid Nothing Nothing mpkR info
             let func = seal ctxS
-            setTLS13HPKE ctx func nenc
-            return $ Just (func, nenc, pkSm)
-        Just (a, b) -> return $ Just (a, b, EncodedPublicKey "")
+            setTLS13HPKE ctx func 0
+            return $ Just (func, pkSm, nT)
+        Just (func, _) -> return $ Just (func, EncodedPublicKey "", nT)
   where
     mpkR = cnfEncodedPublicKey conf
     kemid = cnfKemId conf
-    nenc = nEnc kemid
+    nT = nTag aeadid
 
 ----------------------------------------------------------------
 
