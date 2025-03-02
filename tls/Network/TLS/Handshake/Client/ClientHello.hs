@@ -6,6 +6,7 @@ module Network.TLS.Handshake.Client.ClientHello (
     getPreSharedKeyInfo,
 ) where
 
+import qualified Control.Exception as E
 import Crypto.HPKE
 import qualified Data.ByteString as B
 import Network.TLS.ECH.Config
@@ -381,7 +382,7 @@ createEncryptedClientHello
     -> (KDF_ID, AEAD_ID, ECHConfig)
     -> ClientRandom
     -> IO Handshake
-createEncryptedClientHello ctx (ClientHello ver crI comp chp) echParams@(kdfid, aeadid, conf) crO = do
+createEncryptedClientHello ctx ch0@(ClientHello ver crI comp chp) echParams@(kdfid, aeadid, conf) crO = E.handle hpkeHandler $ do
     let (chpO, chpI) = dupCompCHP (cnfPublicName conf) chp
         chI = ClientHello ver crI comp chpI
     Just (func, _nenc, enc) <- getHPKE ctx echParams -- fixme
@@ -418,6 +419,9 @@ createEncryptedClientHello ctx (ClientHello ver crI comp chp) echParams@(kdfid, 
                     ExtensionRaw EID_EncryptedClientHello echO : drop 1 (chExtensions chpO)
                 }
     return $ ClientHello ver crO comp chpO'
+  where
+    hpkeHandler :: HPKEError -> IO Handshake
+    hpkeHandler _ = return ch0
 createEncryptedClientHello _ _ _ _ = error "createEncryptedClientHello"
 
 dupCompCHP :: HostName -> CHP -> (CHP, CHP) -- Outer, inner

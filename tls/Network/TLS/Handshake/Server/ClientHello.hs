@@ -5,6 +5,7 @@ module Network.TLS.Handshake.Server.ClientHello (
     processClientHello,
 ) where
 
+import qualified Control.Exception as E
 import Crypto.HPKE
 import qualified Data.ByteString as BS
 
@@ -174,7 +175,7 @@ findHighestVersionFrom13 clientVersions serverVersions = case svs `intersect` cv
 decryptECH
     :: ServerParams -> Context -> Handshake -> ECHClientHello -> IO (Maybe Handshake)
 decryptECH _ _ _ ECHInner = return Nothing
-decryptECH sparams ctx clientHello@(ClientHello _ _ _ outerCH) ech@ECHOuter{..} = do
+decryptECH sparams ctx clientHello@(ClientHello _ _ _ outerCH) ech@ECHOuter{..} = E.handle hpkeHandler $ do
     mfunc <- getHPKE sparams ctx ech
     case mfunc of
         Nothing -> return Nothing
@@ -190,6 +191,9 @@ decryptECH sparams ctx clientHello@(ClientHello _ _ _ outerCH) ech@ECHOuter{..} 
                         Just innerCH' -> do
                             return $ Just $ ClientHello v r c innerCH'
                 _ -> return Nothing
+  where
+    hpkeHandler :: HPKEError -> IO (Maybe Handshake)
+    hpkeHandler _ = return Nothing
 decryptECH _ _ _ _ = return Nothing
 
 fill0ClientHello :: Int -> Handshake -> Handshake
