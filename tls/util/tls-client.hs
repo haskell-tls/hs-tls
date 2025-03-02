@@ -43,6 +43,8 @@ data Options = Options
     , optKeyFile :: Maybe FilePath
     , optECHConfigFile :: Maybe FilePath
     , optTraceKey :: Bool
+    , optIPv4Only :: Bool
+    , optIPv6Only :: Bool
     }
     deriving (Show)
 
@@ -64,6 +66,8 @@ defaultOptions =
         , optKeyFile = Nothing
         , optECHConfigFile = Nothing
         , optTraceKey = False
+        , optIPv4Only = False
+        , optIPv6Only = False
         }
 
 usage :: String
@@ -146,6 +150,16 @@ options =
         ["trace-key"]
         (NoArg (\o -> o{optTraceKey = True}))
         "Trace transcript hash"
+    , Option
+        ['4']
+        []
+        (NoArg (\o -> o{optIPv4Only = True, optIPv6Only = False}))
+        "IPv4 only"
+    , Option
+        ['6']
+        []
+        (NoArg (\o -> o{optIPv6Only = True, optIPv4Only = False}))
+        "IPv6 only"
     ]
 
 showUsageAndExit :: String -> IO a
@@ -316,7 +330,7 @@ runTLS
     -> (Context -> IO a)
     -> IO a
 runTLS Options{..} cparams Aux{..} action =
-    runTCPClient auxAuthority auxPort $ \sock -> do
+    runTCPClientWithSettings settings auxAuthority auxPort $ \sock -> do
         ctx <- contextNew sock cparams
         when optDebugLog $
             contextHookSetLogging
@@ -331,6 +345,19 @@ runTLS Options{..} cparams Aux{..} action =
         r <- action ctx
         bye ctx
         return r
+  where
+    select addrs
+        | optIPv4Only = case NE.filter (\ai -> addrFamily ai == AF_INET) addrs of
+            [] -> error "IPv4 address is not available"
+            ai : _ -> ai
+        | optIPv6Only = case NE.filter (\ai -> addrFamily ai == AF_INET6) addrs of
+            [] -> error "IPv6 address is not available"
+            ai : _ -> ai
+        | otherwise = NE.head addrs
+    settings =
+        defaultSettings
+            { settingsSelectAddrInfo = select
+            }
 
 modifyClientParams
     :: ClientParams -> [(SessionID, SessionData)] -> Bool -> ClientParams

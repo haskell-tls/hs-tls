@@ -1,6 +1,6 @@
 cabal-version:      >=1.10
 name:               tls
-version:            2.1.7
+version:            2.1.9
 license:            BSD3
 license-file:       LICENSE
 copyright:          Vincent Hanquez <vincent@snarc.org>
@@ -222,7 +222,7 @@ executable tls-client
         crypton-x509-system,
         ech-config,
         network,
-        network-run,
+        network-run >= 0.4.4,
         tls
 
     if flag(devel)
