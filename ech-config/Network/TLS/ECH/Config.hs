@@ -30,6 +30,7 @@ module Network.TLS.ECH.Config (
     ECHConfigContents (..),
 ) where
 
+import qualified Control.Exception as E
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as C8
@@ -37,6 +38,7 @@ import Data.Char (isDigit)
 import Data.Word
 import Network.ByteOrder
 import System.FilePath (takeFileName)
+import System.IO.Unsafe (unsafePerformIO)
 import Text.Printf (printf)
 
 ----------------------------------------------------------------
@@ -221,13 +223,19 @@ putECHConfig wbuf ECHConfig{..} = do
 sizeOfECHConfig :: ECHConfig -> Int
 sizeOfECHConfig cnf = sizeof cnf
 
-encodeECHConfig :: ECHConfig -> IO ByteString
-encodeECHConfig cnf = withWriteBuffer siz $ \wbuf -> putECHConfig wbuf cnf
+encodeECHConfig :: ECHConfig -> ByteString
+encodeECHConfig cnf = unsafePerformIO $ withWriteBuffer siz $ \wbuf -> putECHConfig wbuf cnf
   where
     siz = sizeOfECHConfig cnf
 
-decodeECHConfig :: ByteString -> IO ECHConfig
-decodeECHConfig bs = withReadBuffer bs $ getECHConfig
+decodeECHConfig :: ByteString -> Maybe ECHConfig
+decodeECHConfig bs =
+    unsafePerformIO $
+        E.handle handler $
+            withReadBuffer bs $
+                \rbuf -> Just <$> getECHConfig rbuf
+  where
+    handler (E.SomeException _) = return Nothing
 
 ----------------------------------------------------------------
 
@@ -243,19 +251,27 @@ putECHConfigList wbuf configs =
 sizeOfECHConfigList :: [ECHConfig] -> Int
 sizeOfECHConfigList configs = sum (map sizeOfECHConfig configs) + 2
 
-decodeECHConfigList :: ByteString -> IO [ECHConfig]
-decodeECHConfigList bs = withReadBuffer bs $ getECHConfigList
-
-encodeECHConfigList :: [ECHConfig] -> IO ByteString
-encodeECHConfigList configs = withWriteBuffer siz $ \wbuf ->
+encodeECHConfigList :: [ECHConfig] -> ByteString
+encodeECHConfigList configs = unsafePerformIO $ withWriteBuffer siz $ \wbuf ->
     putECHConfigList wbuf configs
   where
     siz = sizeOfECHConfigList configs
 
+decodeECHConfigList :: ByteString -> Maybe [ECHConfig]
+decodeECHConfigList bs =
+    unsafePerformIO $
+        E.handle handler $
+            withReadBuffer bs $
+                \rbuf -> Just <$> getECHConfigList rbuf
+  where
+    handler (E.SomeException _) = return Nothing
+
 -- | Loading the wire format of 'ECHConfigList' and
 --   decode it into 'ECHConfigList'.
 loadECHConfigList :: FilePath -> IO [ECHConfig]
-loadECHConfigList file = C8.readFile file >>= decodeECHConfigList
+loadECHConfigList file = do
+    bs <- C8.readFile file
+    withReadBuffer bs $ getECHConfigList
 
 -- | Loading secret keys stored in files whose names
 -- are "\<num\>.key".

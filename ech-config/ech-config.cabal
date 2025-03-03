@@ -40,6 +40,7 @@ executable ech-gen
     build-depends:
         base >=4.9 && <5,
         bytestring,
+        base64-bytestring,
         ech-config,
         hpke
 
