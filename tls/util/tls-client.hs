@@ -7,6 +7,7 @@
 module Main where
 
 import Control.Concurrent
+import qualified Control.Exception as E
 import qualified Data.ByteString.Base16 as BS16
 import qualified Data.ByteString.Char8 as C8
 import Data.IORef
@@ -216,7 +217,10 @@ main = do
         if optValidate then Just <$> getSystemCertificateStore else return Nothing
     echConfList <- case optECHConfigFile of
         Nothing -> return []
-        Just ecnff -> loadECHConfigList ecnff
+        Just ecnff ->
+            loadECHConfigList ecnff `E.catch` \(E.SomeException _) -> do
+                putStrLn $ ecnff ++ " is broken"
+                exitFailure
     let cparams =
             getClientParams
                 opts
