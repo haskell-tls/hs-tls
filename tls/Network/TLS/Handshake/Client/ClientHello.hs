@@ -272,7 +272,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) mEchParams =
 
     echExt = case mEchParams of
         Nothing -> return Nothing
-        Just _ -> return $ Just $ toExtensionRaw ECHInner
+        Just _ -> return $ Just $ toExtensionRaw ECHClientHelloInner
 
     preSharedKeyExt =
         case pskInfo of
@@ -390,7 +390,7 @@ createEncryptedClientHello ctx ch0@(ClientHello ver crI comp chp) echParams@(kdf
         padLen = 32 - (B.length bsI .>>. 3)
         bsI' = bsI <> B.replicate padLen 0
     let outer =
-            ECHOuter
+            ECHClientHelloOuter
                 { echCipherSuite = (kdfid, aeadid)
                 , echConfigId = cnfConfigId conf
                 , echEnc = enc
@@ -406,7 +406,7 @@ createEncryptedClientHello ctx ch0@(ClientHello ver crI comp chp) echParams@(kdf
         aad = encodeHandshake' chO
     bsO <- func aad bsI'
     let outer' =
-            ECHOuter
+            ECHClientHelloOuter
                 { echCipherSuite = (kdfid, aeadid)
                 , echConfigId = cnfConfigId conf
                 , echEnc = enc

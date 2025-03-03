@@ -104,7 +104,7 @@ module Network.TLS.Extension (
     Cookie (..),
     CertificateAuthorities (..),
     EchOuterExtensions (..),
-    ECHClientHello (..),
+    EncryptedClientHello (..),
 ) where
 
 import qualified Control.Exception as E
@@ -112,6 +112,7 @@ import Crypto.HPKE
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import Data.X509 (DistinguishedName)
+import System.IO.Unsafe (unsafePerformIO)
 
 import Network.TLS.ECH.Config
 
@@ -1048,21 +1049,22 @@ decodeEchOuterExtensions = runGetMaybe $ do
 ------------------------------------------------------------
 
 -- | Encrypted Client Hello
-data ECHClientHello
-    = ECHInner
-    | ECHOuter
+data EncryptedClientHello
+    = ECHClientHelloInner
+    | ECHClientHelloOuter
         { echCipherSuite :: (KDF_ID, AEAD_ID)
         , echConfigId :: ConfigId
         , echEnc :: EncodedPublicKey
         , echPayload :: ByteString
         }
+    | ECHEncryptedExtensions ECHConfigList
     | ECHHelloRetryRequest ByteString
     deriving (Eq)
 
-instance Show ECHClientHello where
-    show ECHInner = "ECHInner"
-    show ECHOuter{..} =
-        "ECHOuter {"
+instance Show EncryptedClientHello where
+    show ECHClientHelloInner = "ECHClientHelloInner"
+    show ECHClientHelloOuter{..} =
+        "ECHClientHelloOuter {"
             ++ show (fst echCipherSuite)
             ++ " "
             ++ show (snd echCipherSuite)
@@ -1075,12 +1077,13 @@ instance Show ECHClientHello where
             ++ "}"
       where
         EncodedPublicKey enc = echEnc
+    show (ECHEncryptedExtensions cnflst) = "ECHEncryptedExtensions " ++ show cnflst
     show (ECHHelloRetryRequest cnfm) = "ECHHelloRetryRequest " ++ showBytesHex cnfm
 
-instance Extension ECHClientHello where
+instance Extension EncryptedClientHello where
     extensionID _ = EID_EncryptedClientHello
-    extensionEncode ECHInner = runPut $ putWord8 1
-    extensionEncode ECHOuter{..} = runPut $ do
+    extensionEncode ECHClientHelloInner = runPut $ putWord8 1
+    extensionEncode ECHClientHelloOuter{..} = runPut $ do
         putWord8 0
         let (kdfid, aeadid) = echCipherSuite
         putWord16 $ fromKDF_ID kdfid
@@ -1089,19 +1092,25 @@ instance Extension ECHClientHello where
         let EncodedPublicKey enc = echEnc
         putOpaque16 enc
         putOpaque16 echPayload
+    extensionEncode (ECHEncryptedExtensions cnflist) =
+        unsafePerformIO $ encodeECHConfigList cnflist
     extensionEncode (ECHHelloRetryRequest cnfm) = runPut $ putBytes cnfm
     extensionDecode MsgTClientHello = decodeECHClientHello
+    extensionDecode MsgTEncryptedExtensions = decodeECHEncryptedExtensions
     extensionDecode MsgTHelloRetryRequest = decodeECHHelloRetryRequest
-    extensionDecode _ = error "extensionDecode: ECHClientHello"
+    extensionDecode _ = error "extensionDecode: EncryptedClientHello"
 
-decodeECH :: ByteString -> Maybe ECHClientHello
-decodeECH bs = decodeECHClientHello bs <|> decodeECHHelloRetryRequest bs
+decodeECH :: ByteString -> Maybe EncryptedClientHello
+decodeECH bs =
+    decodeECHClientHello bs
+        <|> decodeECHEncryptedExtensions bs
+        <|> decodeECHHelloRetryRequest bs
 
-decodeECHClientHello :: ByteString -> Maybe ECHClientHello
+decodeECHClientHello :: ByteString -> Maybe EncryptedClientHello
 decodeECHClientHello = runGetMaybe $ do
     typ <- getWord8
     if typ == 1
-        then return ECHInner
+        then return ECHClientHelloInner
         else do
             kdfid <- KDF_ID <$> getWord16
             aeadid <- AEAD_ID <$> getWord16
@@ -1109,14 +1118,21 @@ decodeECHClientHello = runGetMaybe $ do
             enc <- EncodedPublicKey <$> getOpaque16
             payload <- getOpaque16
             return $
-                ECHOuter
+                ECHClientHelloOuter
                     { echCipherSuite = (kdfid, aeadid)
                     , echConfigId = cnfid
                     , echEnc = enc
                     , echPayload = payload
                     }
 
-decodeECHHelloRetryRequest :: ByteString -> Maybe ECHClientHello
+decodeECHEncryptedExtensions :: ByteString -> Maybe EncryptedClientHello
+decodeECHEncryptedExtensions bs = unsafePerformIO $ E.handle handler $ do
+    cnflst <- decodeECHConfigList bs
+    return $ Just $ ECHEncryptedExtensions cnflst
+  where
+    handler (E.SomeException _) = return Nothing
+
+decodeECHHelloRetryRequest :: ByteString -> Maybe EncryptedClientHello
 decodeECHHelloRetryRequest = runGetMaybe $ do
     ECHHelloRetryRequest <$> getBytes 8
 

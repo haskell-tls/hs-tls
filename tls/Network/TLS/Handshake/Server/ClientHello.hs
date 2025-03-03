@@ -173,9 +173,13 @@ findHighestVersionFrom13 clientVersions serverVersions = case svs `intersect` cv
     cvs = sortOn Down $ filter (>= TLS12) clientVersions
 
 decryptECH
-    :: ServerParams -> Context -> Handshake -> ECHClientHello -> IO (Maybe Handshake)
-decryptECH _ _ _ ECHInner = return Nothing
-decryptECH sparams ctx clientHello@(ClientHello _ _ _ outerCH) ech@ECHOuter{..} = E.handle hpkeHandler $ do
+    :: ServerParams
+    -> Context
+    -> Handshake
+    -> EncryptedClientHello
+    -> IO (Maybe Handshake)
+decryptECH _ _ _ ECHClientHelloInner = return Nothing
+decryptECH sparams ctx clientHello@(ClientHello _ _ _ outerCH) ech@ECHClientHelloOuter{..} = E.handle hpkeHandler $ do
     mfunc <- getHPKE sparams ctx ech
     case mfunc of
         Nothing -> return Nothing
@@ -257,9 +261,9 @@ expandClientHello inner outer =
 getHPKE
     :: ServerParams
     -> Context
-    -> ECHClientHello
+    -> EncryptedClientHello
     -> IO (Maybe (HPKEF, Int))
-getHPKE ServerParams{..} ctx ECHOuter{..} = do
+getHPKE ServerParams{..} ctx ECHClientHelloOuter{..} = do
     mfunc <- getTLS13HPKE ctx
     case mfunc of
         Nothing -> do
