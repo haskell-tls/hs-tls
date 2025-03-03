@@ -140,7 +140,7 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
             maybe (return ()) (usingState_ ctx . setClientSNI) serverName
             when (chosenVersion == TLS13) $ do
                 let hasECHConf = not (null (sharedECHConfig (serverShared sparams)))
-                when (hasECHConf || not receivedECH) $
+                when (hasECHConf && not receivedECH) $
                     usingHState ctx $
                         setECHEE True
                 when receivedECH $
