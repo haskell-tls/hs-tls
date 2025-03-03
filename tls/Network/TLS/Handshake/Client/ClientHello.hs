@@ -464,8 +464,8 @@ getHPKE ctx (kdfid, aeadid, conf) = do
     mfunc <- getTLS13HPKE ctx
     case mfunc of
         Nothing -> do
-            encodedConfig <- encodeECHConfig conf
-            let info = "tls ech\x00" <> encodedConfig
+            let encodedConfig = encodeECHConfig conf
+                info = "tls ech\x00" <> encodedConfig
             (pkSm, ctxS) <- setupBaseS kemid kdfid aeadid Nothing Nothing mpkR info
             let func = seal ctxS
             setTLS13HPKE ctx func 0

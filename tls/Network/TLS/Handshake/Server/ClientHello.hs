@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 module Network.TLS.Handshake.Server.ClientHello (
     processClientHello,
@@ -113,16 +114,16 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
             _ -> return ()
 
     -- Processing encrypted client hello
-    mClientHello' <-
+    (mClientHello', receivedECH) <-
         if chosenVersion == TLS13
             then do
                 lookupAndDecodeAndDo
                     EID_EncryptedClientHello
                     MsgTClientHello
                     chExtensions
-                    (return Nothing)
-                    (decryptECH sparams ctx clientHello)
-            else return Nothing
+                    (return (Nothing, False))
+                    (\bs -> (,True) <$> decryptECH sparams ctx clientHello bs)
+            else return (Nothing, False)
     case mClientHello' of
         Just clientHello'@(ClientHello _ cran' _ chp') -> do
             hrr <- usingState_ ctx getTLS13HRR
@@ -137,6 +138,14 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
             usingHState ctx $ setClientHello clientHello
             let serverName = getServerName chp
             maybe (return ()) (usingState_ ctx . setClientSNI) serverName
+            when (chosenVersion == TLS13) $ do
+                let hasECHConf = not (null (sharedECHConfig (serverShared sparams)))
+                when (hasECHConf || not receivedECH) $
+                    usingHState ctx $
+                        setECHEE True
+                when receivedECH $
+                    usingHState ctx $
+                        setECHEE True
             return (chosenVersion, chp, Nothing)
 processClientHello _ _ _ =
     throwCore $
@@ -273,7 +282,7 @@ getHPKE ServerParams{..} ctx ECHClientHelloOuter{..} = do
                 (Just config, Just skR') -> do
                     let kemid = KEM_ID $ kem_id $ key_config $ contents config
                         skR = EncodedSecretKey skR'
-                    encodedConfig <- encodeECHConfig config
+                        encodedConfig = encodeECHConfig config
                     let info = "tls ech\x00" <> encodedConfig
                         (kdfid, aeadid) = echCipherSuite
                     ctxR <- setupBaseR kemid kdfid aeadid skR Nothing echEnc info

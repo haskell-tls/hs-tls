@@ -33,6 +33,8 @@ module Network.TLS.Handshake.State (
     getOuterClientRandom,
     setClientHello,
     getClientHello,
+    setECHEE,
+    getECHEE,
     setECHAccepted,
     setClientCertSent,
     getClientCertSent,
@@ -161,6 +163,7 @@ data HandshakeState = HandshakeState
     , hstTLS13ClientHello :: Maybe Handshake
     -- ^ Inner client hello in the case of ECH.
     , hstTLS13ECHAccepted :: Bool
+    , hstTLS13ECHEE :: Bool
     }
     deriving (Show)
 
@@ -258,6 +261,7 @@ newEmptyHandshake ver crand =
         , hstTLS13OuterClientRandom = Nothing
         , hstTLS13ClientHello = Nothing
         , hstTLS13ECHAccepted = False
+        , hstTLS13ECHEE = False
         }
 
 runHandshake :: HandshakeState -> HandshakeM a -> (a, HandshakeState)
@@ -405,6 +409,12 @@ setClientHello hs = modify' $ \hst -> hst{hstTLS13ClientHello = Just hs}
 
 setECHAccepted :: Bool -> HandshakeM ()
 setECHAccepted b = modify' $ \hst -> hst{hstTLS13ECHAccepted = b}
+
+getECHEE :: HandshakeM Bool
+getECHEE = gets hstTLS13ECHEE
+
+setECHEE :: Bool -> HandshakeM ()
+setECHEE b = modify' $ \hst -> hst{hstTLS13ECHEE = b}
 
 getClientCertSent :: HandshakeM Bool
 getClientCertSent = gets hstClientCertSent

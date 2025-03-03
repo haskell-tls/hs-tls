@@ -112,7 +112,6 @@ import Crypto.HPKE
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import Data.X509 (DistinguishedName)
-import System.IO.Unsafe (unsafePerformIO)
 
 import Network.TLS.ECH.Config
 
@@ -1092,8 +1091,7 @@ instance Extension EncryptedClientHello where
         let EncodedPublicKey enc = echEnc
         putOpaque16 enc
         putOpaque16 echPayload
-    extensionEncode (ECHEncryptedExtensions cnflist) =
-        unsafePerformIO $ encodeECHConfigList cnflist
+    extensionEncode (ECHEncryptedExtensions cnflist) = encodeECHConfigList cnflist
     extensionEncode (ECHHelloRetryRequest cnfm) = runPut $ putBytes cnfm
     extensionDecode MsgTClientHello = decodeECHClientHello
     extensionDecode MsgTEncryptedExtensions = decodeECHEncryptedExtensions
@@ -1126,11 +1124,8 @@ decodeECHClientHello = runGetMaybe $ do
                     }
 
 decodeECHEncryptedExtensions :: ByteString -> Maybe EncryptedClientHello
-decodeECHEncryptedExtensions bs = unsafePerformIO $ E.handle handler $ do
-    cnflst <- decodeECHConfigList bs
-    return $ Just $ ECHEncryptedExtensions cnflst
-  where
-    handler (E.SomeException _) = return Nothing
+decodeECHEncryptedExtensions bs =
+    ECHEncryptedExtensions <$> decodeECHConfigList bs
 
 decodeECHHelloRetryRequest :: ByteString -> Maybe EncryptedClientHello
 decodeECHHelloRetryRequest = runGetMaybe $ do

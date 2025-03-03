@@ -240,6 +240,15 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
                 | rtt0OK = Just $ toExtensionRaw $ EarlyDataIndication Nothing
                 | otherwise = Nothing
 
+        sendECH <- usingHState ctx getECHEE
+        let echExt
+                | sendECH =
+                    Just $
+                        toExtensionRaw $
+                            ECHEncryptedExtensions $
+                                sharedECHConfig $
+                                    serverShared sparams
+                | otherwise = Nothing
         let eeExtensions =
                 sharedHelloExtensions (serverShared sparams)
                     ++ catMaybes
@@ -248,6 +257,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
                         , {- 0x10 -} alpnExt
                         , {- 0x1c -} recodeSizeLimitExt
                         , {- 0x2a -} earlyDataExt
+                        , {- 0xfe0d -} echExt
                         ]
         eeExtensions' <-
             liftIO $ onEncryptedExtensionsCreating (serverHooks sparams) eeExtensions
