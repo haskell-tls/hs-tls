@@ -224,7 +224,9 @@ data ServerParams = ServerParams
     , serverECHKey :: [(ConfigId, ByteString)]
     -- ^ ECH secret keys.
     --
-    -- @since 2.1.8
+    -- Default: '[]'
+    --
+    -- @since 2.1.9
     }
     deriving (Show)
 
@@ -370,7 +372,7 @@ data Supported = Supported
     , supportedHPKE :: [(KEM_ID, KDF_ID, AEAD_ID)]
     -- ^ Client only.
     --
-    -- @since 2.1.8
+    -- @since 2.1.9
     }
     deriving (Show, Eq)
 
@@ -462,7 +464,7 @@ data Shared = Shared
     , sharedECHConfig :: ECHConfigList
     -- ^ ECH configuration.
     --
-    -- @since 2.1.8
+    -- @since 2.1.9
     , sharedLimit :: Limit
     -- ^ Limitation parameters.
     --
