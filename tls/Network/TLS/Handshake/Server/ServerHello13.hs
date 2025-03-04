@@ -210,7 +210,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
             ess = replicate (length cs) []
         let certtag = if zlib then CompressedCertificate13 else Certificate13
         loadPacket13 ctx $
-            Handshake13 [certtag "" (TLSCertificateChain certChain) ess]
+            Handshake13 [certtag "" (CertificateChain_ certChain) ess]
         liftIO $ usingState_ ctx $ setServerCertificateChain certChain
         hChSc <- transcriptHash ctx "CH..SC"
         pubkey <- getLocalPublicKey ctx

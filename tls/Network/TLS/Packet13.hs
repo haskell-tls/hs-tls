@@ -52,15 +52,22 @@ encodeHandshake13' (ServerHello13 random session cipherId exts) = runPut $ do
     putWord16 $ fromCipherId cipherId
     putWord8 0 -- compressionID nullCompression
     putExtensions exts
-encodeHandshake13' (NewSessionTicket13 life ageadd (TicketNonce nonce) label exts) = runPut $ do
-    putWord32 life
-    putWord32 ageadd
-    putOpaque8 nonce
-    putOpaque16 label
-    putExtensions exts
+encodeHandshake13'
+    ( NewSessionTicket13
+            life
+            ageadd
+            (TicketNonce nonce)
+            (SessionIDorTicket_ label)
+            exts
+        ) = runPut $ do
+        putWord32 life
+        putWord32 ageadd
+        putOpaque8 nonce
+        putOpaque16 label
+        putExtensions exts
 encodeHandshake13' EndOfEarlyData13 = ""
 encodeHandshake13' (EncryptedExtensions13 exts) = runPut $ putExtensions exts
-encodeHandshake13' (Certificate13 reqctx (TLSCertificateChain cc) ess) = encodeCertificate13 reqctx cc ess
+encodeHandshake13' (Certificate13 reqctx (CertificateChain_ cc) ess) = encodeCertificate13 reqctx cc ess
 encodeHandshake13' (CertRequest13 reqctx exts) = runPut $ do
     putOpaque8 reqctx
     putExtensions exts
@@ -70,7 +77,7 @@ encodeHandshake13' (CertVerify13 (DigitallySigned hs sig)) = runPut $ do
 encodeHandshake13' (Finished13 (VerifyData dat)) = runPut $ putBytes dat
 encodeHandshake13' (KeyUpdate13 UpdateNotRequested) = runPut $ putWord8 0
 encodeHandshake13' (KeyUpdate13 UpdateRequested) = runPut $ putWord8 1
-encodeHandshake13' (CompressedCertificate13 reqctx (TLSCertificateChain cc) ess) = runPut $ do
+encodeHandshake13' (CompressedCertificate13 reqctx (CertificateChain_ cc) ess) = runPut $ do
     putWord16 1 -- zlib: fixme
     let bs = encodeCertificate13 reqctx cc ess
     putWord24 $ fromIntegral $ B.length bs
@@ -143,7 +150,7 @@ decodeNewSessionTicket13 = do
     life <- getWord32
     ageadd <- getWord32
     nonce <- TicketNonce <$> getOpaque8
-    label <- getOpaque16
+    label <- SessionIDorTicket_ <$> getOpaque16
     len <- fromIntegral <$> getWord16
     exts <- getExtensions len
     return $ NewSessionTicket13 life ageadd nonce label exts
@@ -161,7 +168,7 @@ decodeCertificate13 = do
     (certRaws, ess) <- unzip <$> getList len getCert
     case decodeCertificateChain $ CertificateChainRaw certRaws of
         Left (i, s) -> fail ("error certificate parsing " ++ show i ++ ":" ++ s)
-        Right cc -> return $ Certificate13 reqctx (TLSCertificateChain cc) ess
+        Right cc -> return $ Certificate13 reqctx (CertificateChain_ cc) ess
   where
     getCert = do
         l <- fromIntegral <$> getWord24

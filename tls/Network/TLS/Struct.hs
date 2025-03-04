@@ -105,8 +105,8 @@ module Network.TLS.Struct (
         HandshakeType_KeyUpdate,
         HandshakeType_CompressedCertificate
     ),
-    TLSCertificateChain (..),
-    emptyTLSCertificateChain,
+    CertificateChain_ (..),
+    emptyCertificateChain_,
     Handshake (..),
     CHP (..),
     packetType,
@@ -428,12 +428,12 @@ data CHP = CHP
     }
     deriving (Show, Eq)
 
-newtype TLSCertificateChain = TLSCertificateChain CertificateChain deriving (Eq)
-instance Show TLSCertificateChain where
-    show (TLSCertificateChain cc) = showCertificateChain cc
+newtype CertificateChain_ = CertificateChain_ CertificateChain deriving (Eq)
+instance Show CertificateChain_ where
+    show (CertificateChain_ cc) = showCertificateChain cc
 
-emptyTLSCertificateChain :: TLSCertificateChain
-emptyTLSCertificateChain = TLSCertificateChain (CertificateChain [])
+emptyCertificateChain_ :: CertificateChain_
+emptyCertificateChain_ = CertificateChain_ (CertificateChain [])
 
 showCertificateChain :: CertificateChain -> String
 showCertificateChain (CertificateChain xs) = show $ map getName xs
@@ -459,7 +459,7 @@ data Handshake
         CipherId
         CompressionID
         [ExtensionRaw]
-    | Certificate TLSCertificateChain
+    | Certificate CertificateChain_
     | HelloRequest
     | ServerHelloDone
     | ClientKeyXchg ClientKeyXchgAlgorithmData

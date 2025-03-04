@@ -106,13 +106,13 @@ expectEndOfEarlyData _ _ hs = unexpected (show hs) (Just "end of early data")
 
 expectCertificate
     :: MonadIO m => ServerParams -> Context -> Handshake13 -> m ()
-expectCertificate sparams ctx (Certificate13 certCtx (TLSCertificateChain certs) _ext) = liftIO $ do
+expectCertificate sparams ctx (Certificate13 certCtx (CertificateChain_ certs) _ext) = liftIO $ do
     when (certCtx /= "") $
         throwCore $
             Error_Protocol "certificate request context MUST be empty" IllegalParameter
     -- fixme checking _ext
     clientCertificate sparams ctx certs
-expectCertificate sparams ctx (CompressedCertificate13 certCtx (TLSCertificateChain certs) _ext) = liftIO $ do
+expectCertificate sparams ctx (CompressedCertificate13 certCtx (CertificateChain_ certs) _ext) = liftIO $ do
     when (certCtx /= "") $
         throwCore $
             Error_Protocol "certificate request context MUST be empty" IllegalParameter
@@ -154,7 +154,7 @@ sendNewSessionTicket sparams ctx usedCipher exts applicationSecret sfSentTime = 
         sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
         let mgr = sharedSessionManager $ serverShared sparams
         mticket <- sessionEstablish mgr sessionId sdata
-        let identity = fromMaybe sessionId mticket
+        let identity = SessionIDorTicket_ $ fromMaybe sessionId mticket
         return (identity, ageAdd tinfo)
 
     createNewSessionTicket life add nonce identity maxSize =
@@ -274,10 +274,10 @@ getHandshake ctx ref = do
 
 expectClientCertificate
     :: ServerParams -> Context -> CertReqContext -> Handshake13 -> IO Bool
-expectClientCertificate sparams ctx origCertReqCtx (Certificate13 certReqCtx (TLSCertificateChain certs) _ext) = do
+expectClientCertificate sparams ctx origCertReqCtx (Certificate13 certReqCtx (CertificateChain_ certs) _ext) = do
     expectClientCertificate' sparams ctx origCertReqCtx certReqCtx certs
     return $ isNullCertificateChain certs
-expectClientCertificate sparams ctx origCertReqCtx (CompressedCertificate13 certReqCtx (TLSCertificateChain certs) _ext) = do
+expectClientCertificate sparams ctx origCertReqCtx (CompressedCertificate13 certReqCtx (CertificateChain_ certs) _ext) = do
     expectClientCertificate' sparams ctx origCertReqCtx certReqCtx certs
     return $ isNullCertificateChain certs
 expectClientCertificate _ _ _ h = unexpected "Certificate" $ Just $ show h

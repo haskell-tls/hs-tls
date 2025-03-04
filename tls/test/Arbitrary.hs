@@ -83,7 +83,7 @@ instance Arbitrary Handshake where
                     <*> arbitrary
                     <*> arbitrary
                     <*> arbitraryHelloExtensions ver
-            , Certificate . TLSCertificateChain . CertificateChain
+            , Certificate . CertificateChain_ . CertificateChain
                 <$> resize 2 (listOf arbitraryX509)
             , pure HelloRequest
             , pure ServerHelloDone
@@ -106,7 +106,7 @@ instance Arbitrary Handshake13 where
                 <$> arbitrary
                 <*> arbitrary
                 <*> (TicketNonce <$> genByteString 32) -- nonce
-                <*> genByteString 32 -- session ID
+                <*> (SessionIDorTicket_ <$> genByteString 32) -- session ID
                 <*> arbitrary
             , pure EndOfEarlyData13
             , EncryptedExtensions13 <$> arbitrary
@@ -116,7 +116,7 @@ instance Arbitrary Handshake13 where
             , resize 2 (listOf arbitraryX509) >>= \certs ->
                 Certificate13
                     <$> arbitraryCertReqContext
-                    <*> return (TLSCertificateChain (CertificateChain certs))
+                    <*> return (CertificateChain_ (CertificateChain certs))
                     <*> replicateM (length certs) arbitrary
             , CertVerify13
                 <$> ( DigitallySigned . unsafeHead

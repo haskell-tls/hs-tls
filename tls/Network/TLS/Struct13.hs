@@ -7,6 +7,7 @@ module Network.TLS.Struct13 (
     CertReqContext,
     isKeyUpdate13,
     TicketNonce (..),
+    SessionIDorTicket_ (..),
 ) where
 
 import Network.TLS.Imports
@@ -30,18 +31,23 @@ newtype TicketNonce = TicketNonce ByteString deriving (Eq)
 instance Show TicketNonce where
     show (TicketNonce bs) = showBytesHex bs
 
+newtype SessionIDorTicket_ = SessionIDorTicket_ ByteString deriving (Eq)
+
+instance Show SessionIDorTicket_ where
+    show (SessionIDorTicket_ bs) = showBytesHex bs
+
 -- fixme: convert Word32 to proper data type
 data Handshake13
     = ServerHello13 ServerRandom Session CipherId [ExtensionRaw]
-    | NewSessionTicket13 Second Word32 TicketNonce SessionIDorTicket [ExtensionRaw]
+    | NewSessionTicket13 Second Word32 TicketNonce SessionIDorTicket_ [ExtensionRaw]
     | EndOfEarlyData13
     | EncryptedExtensions13 [ExtensionRaw]
-    | Certificate13 CertReqContext TLSCertificateChain [[ExtensionRaw]]
+    | Certificate13 CertReqContext CertificateChain_ [[ExtensionRaw]]
     | CertRequest13 CertReqContext [ExtensionRaw]
     | CertVerify13 DigitallySigned
     | Finished13 VerifyData
     | KeyUpdate13 KeyUpdate
-    | CompressedCertificate13 CertReqContext TLSCertificateChain [[ExtensionRaw]]
+    | CompressedCertificate13 CertReqContext CertificateChain_ [[ExtensionRaw]]
     deriving (Show, Eq)
 
 -- | Certificate request context for TLS 1.3.

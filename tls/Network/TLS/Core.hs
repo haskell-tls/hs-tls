@@ -298,7 +298,7 @@ recvData13 ctx = do
     loopHandshake13 [] = return ()
     -- fixme: some implementations send multiple NST at the same time.
     -- Only the first one is used at this moment.
-    loopHandshake13 (NewSessionTicket13 life add nonce ticket exts : hs) = do
+    loopHandshake13 (NewSessionTicket13 life add nonce (SessionIDorTicket_ ticket) exts : hs) = do
         role <- usingState_ ctx S.getRole
         unless (role == ClientRole) $ do
             let reason = "Session ticket is allowed for client only"
@@ -388,7 +388,7 @@ recvHS13 ctx breakLoop = do
     loopHandshake13 [] = return ()
     -- fixme: some implementations send multiple NST at the same time.
     -- Only the first one is used at this moment.
-    loopHandshake13 (NewSessionTicket13 life add nonce ticket exts : hs) = do
+    loopHandshake13 (NewSessionTicket13 life add nonce (SessionIDorTicket_ ticket) exts : hs) = do
         role <- usingState_ ctx S.getRole
         unless (role == ClientRole) $ do
             let reason = "Session ticket is allowed for client only"

@@ -235,7 +235,7 @@ decodeCertificate = do
             <$> (getWord24 >>= \len -> getList (fromIntegral len) getCertRaw)
     case decodeCertificateChain certsRaw of
         Left (i, s) -> fail ("error certificate parsing " ++ show i ++ ":" ++ s)
-        Right cc -> return $ Certificate $ TLSCertificateChain cc
+        Right cc -> return $ Certificate $ CertificateChain_ cc
   where
     getCertRaw = getOpaque24 >>= \cert -> return (3 + B.length cert, cert)
 
@@ -361,7 +361,7 @@ encodeHandshake' (ServerHello version random session cipherid compressionID exts
 encodeHandshake' (NewSessionTicket life ticket) = runPut $ do
     putWord32 life
     putOpaque16 ticket
-encodeHandshake' (Certificate (TLSCertificateChain cc)) = encodeCertificate cc
+encodeHandshake' (Certificate (CertificateChain_ cc)) = encodeCertificate cc
 encodeHandshake' (ServerKeyXchg skg) = runPut $
     case skg of
         SKX_RSA _ -> error "encodeHandshake' SKX_RSA not implemented"

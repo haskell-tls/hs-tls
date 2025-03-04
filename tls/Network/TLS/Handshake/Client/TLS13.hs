@@ -211,8 +211,8 @@ processCertRequest13 ctx token exts = do
 -- not used in 0-RTT
 expectCertAndVerify
     :: MonadIO m => ClientParams -> Context -> Handshake13 -> RecvHandshake13M m ()
-expectCertAndVerify cparams ctx (Certificate13 _ (TLSCertificateChain cc) _) = processCertAndVerify cparams ctx cc
-expectCertAndVerify cparams ctx (CompressedCertificate13 _ (TLSCertificateChain cc) _) = processCertAndVerify cparams ctx cc
+expectCertAndVerify cparams ctx (Certificate13 _ (CertificateChain_ cc) _) = processCertAndVerify cparams ctx cc
+expectCertAndVerify cparams ctx (CompressedCertificate13 _ (CertificateChain_ cc) _) = processCertAndVerify cparams ctx cc
 expectCertAndVerify _ _ p = unexpected (show p) (Just "server certificate")
 
 processCertAndVerify
@@ -350,7 +350,7 @@ sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
             cHashSigs = filter isHashSignatureValid13 $ supportedHashSignatures $ ctxSupported ctx
         let certtag = if certComp then CompressedCertificate13 else Certificate13
         loadPacket13 ctx $
-            Handshake13 [certtag token (TLSCertificateChain chain) certExts]
+            Handshake13 [certtag token (CertificateChain_ chain) certExts]
         case certs of
             [] -> return ()
             _ -> do
