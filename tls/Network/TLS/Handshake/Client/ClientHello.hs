@@ -429,8 +429,7 @@ createEncryptedClientHello ctx ch0@(ClientHello ver crI comp chp) echParams@(kdf
                 { echCipherSuite = (kdfid, aeadid)
                 , echConfigId = cnfConfigId conf
                 , echEnc = enc
-                , -- fixme: 16 should be decided from "aeadid"
-                  echPayload = bsO
+                , echPayload = bsO
                 }
         echO = extensionEncode outer'
     let chpO' =
