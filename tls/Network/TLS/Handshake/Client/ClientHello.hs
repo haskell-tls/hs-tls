@@ -10,6 +10,7 @@ import qualified Control.Exception as E
 import Crypto.HPKE
 import qualified Data.ByteString as B
 import Network.TLS.ECH.Config
+import System.Random
 
 import Network.TLS.Cipher
 import Network.TLS.Compression
@@ -119,7 +120,8 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) mEchParams =
             usingHState ctx $ do
                 setClientRandom crandO
                 setOuterClientRandom $ Just crandO
-            createEncryptedClientHello ctx ch0 echParams crandO
+            mpskExt <- randomPreSharedKeyExt
+            createEncryptedClientHello ctx ch0 echParams crandO mpskExt
     sendPacket12 ctx $ Handshake [ch]
     mEarlySecInfo <- case rtt0info of
         Nothing -> return Nothing
@@ -277,14 +279,30 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) mEchParams =
     preSharedKeyExt =
         case pskInfo of
             Nothing -> return Nothing
-            Just (identities, _, choice, obfAge) ->
+            Just (identities, _, choice, obfAge) -> do
                 let zero = cZero choice
                     pskIdentities = map (\x -> PskIdentity x obfAge) identities
                     -- [zero] is a place holds.
                     -- adjustPreSharedKeyExt will replace them.
                     binders = replicate (length pskIdentities) zero
                     offeredPsks = PreSharedKeyClientHello pskIdentities binders
-                 in return $ Just $ toExtensionRaw offeredPsks
+                return $ Just $ toExtensionRaw offeredPsks
+
+    randomPreSharedKeyExt :: IO (Maybe ExtensionRaw)
+    randomPreSharedKeyExt =
+        case pskInfo of
+            Nothing -> return Nothing
+            Just (identities, _, choice, _) -> do
+                let zero = cZero choice
+                zeroR <- getStdRandom $ uniformByteString $ B.length zero
+                obfAgeR <- getStdRandom $ genWord32
+                let genPskId x = do
+                        xR <- getStdRandom $ uniformByteString $ B.length x
+                        return $ PskIdentity xR obfAgeR
+                pskIdentitiesR <- mapM genPskId identities
+                let bindersR = replicate (length pskIdentitiesR) zeroR
+                    offeredPsksR = PreSharedKeyClientHello pskIdentitiesR bindersR
+                return $ Just $ toExtensionRaw offeredPsksR
 
     ----------------------------------------
 
@@ -381,9 +399,10 @@ createEncryptedClientHello
     -> Handshake
     -> (KDF_ID, AEAD_ID, ECHConfig)
     -> ClientRandom
+    -> Maybe ExtensionRaw
     -> IO Handshake
-createEncryptedClientHello ctx ch0@(ClientHello ver crI comp chp) echParams@(kdfid, aeadid, conf) crO = E.handle hpkeHandler $ do
-    let (chpO, chpI) = dupCompCHP (cnfPublicName conf) chp
+createEncryptedClientHello ctx ch0@(ClientHello ver crI comp chp) echParams@(kdfid, aeadid, conf) crO mpskExt = E.handle hpkeHandler $ do
+    let (chpO, chpI) = dupCompCHP (cnfPublicName conf) mpskExt chp
         chI = ClientHello ver crI comp chpI
     Just (func, enc, taglen) <- getHPKE ctx echParams
     let bsI = encodeHandshake' chI
@@ -423,10 +442,10 @@ createEncryptedClientHello ctx ch0@(ClientHello ver crI comp chp) echParams@(kdf
   where
     hpkeHandler :: HPKEError -> IO Handshake
     hpkeHandler _ = return ch0
-createEncryptedClientHello _ _ _ _ = error "createEncryptedClientHello"
+createEncryptedClientHello _ _ _ _ _ = error "createEncryptedClientHello"
 
-dupCompCHP :: HostName -> CHP -> (CHP, CHP) -- Outer, inner
-dupCompCHP host CHP{..} =
+dupCompCHP :: HostName -> Maybe ExtensionRaw -> CHP -> (CHP, CHP) -- Outer, inner
+dupCompCHP host mpskExt CHP{..} =
     ( CHP chSession chCiphers chExtsO
     , CHP (Session Nothing) chCiphers chExtsI
     )
@@ -447,11 +466,11 @@ dupCompCHP host CHP{..} =
     step3 [] build = ([], [echOuterExt])
       where
         echOuterExt = toExtensionRaw $ EchOuterExtensions $ build []
-    step3 [pskExtI@(ExtensionRaw EID_PreSharedKey bs)] build =
+    step3 [pskExtI@(ExtensionRaw EID_PreSharedKey _)] build =
         ([pskExtO], [echOuterExt, pskExtI])
       where
         echOuterExt = toExtensionRaw $ EchOuterExtensions $ build []
-        pskExtO = ExtensionRaw EID_PreSharedKey $ B.replicate (B.length bs) 120 -- fixme: 120 should be random
+        pskExtO = fromJust mpskExt
     step3 (i@(ExtensionRaw eid _) : is) build = (i : os', is')
       where
         (os', is') = step3 is (build . (eid :))
