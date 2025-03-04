@@ -152,6 +152,16 @@ data ClientParams = ClientParams
     -- automatically re-sent.
     --
     -- Default: 'False'
+    , clientUseECH :: Bool
+    -- ^ Enabling Encrypted Client Hello.
+    -- If 'sharedECHConfig' is null, a greasing ECH extension is sent.
+    -- Otherwise, a valid ECH is sent.
+    -- If the server rejects ECH in Server Hello,
+    -- the client sends an alert after negotiation.
+    --
+    -- Default: 'False'
+    --
+    -- @since 2.1.9
     }
     deriving (Show)
 
@@ -169,6 +179,7 @@ defaultParamsClient serverName serverId =
         , clientSupported = def
         , clientDebug = defaultDebugParams
         , clientUseEarlyData = False
+        , clientUseECH = False
         }
 
 data ServerParams = ServerParams

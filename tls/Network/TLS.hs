@@ -51,6 +51,7 @@ module Network.TLS (
     clientSupported,
     clientDebug,
     clientUseEarlyData,
+    clientUseECH,
 
     -- ** Server parameters
     ServerParams,
