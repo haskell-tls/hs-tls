@@ -360,7 +360,7 @@ instance Show ExtensionRaw where
     show (ExtensionRaw eid@EID_CompressCertificate bs) = showExtensionRaw eid bs decodeCompressCertificate
     show (ExtensionRaw eid@EID_RecordSizeLimit bs) = showExtensionRaw eid bs decodeRecordSizeLimit
     show (ExtensionRaw eid@EID_SessionTicket bs) = showExtensionRaw eid bs decodeSessionTicket
-    show (ExtensionRaw eid@EID_PreSharedKey bs) = show eid ++ " " ++ showBytesHex bs
+    show (ExtensionRaw eid@EID_PreSharedKey bs) = showExtensionRaw eid bs decodePreSharedKey
     show (ExtensionRaw eid@EID_EarlyData _) = show eid
     show (ExtensionRaw eid@EID_SupportedVersions bs) = showExtensionRaw eid bs decodeSupportedVersions
     show (ExtensionRaw eid@EID_Cookie bs) = show eid ++ " " ++ showBytesHex bs
@@ -756,12 +756,25 @@ decodeSessionTicket = runGetMaybe $ SessionTicket <$> (remaining >>= getBytes)
 
 ------------------------------------------------------------
 
-data PskIdentity = PskIdentity ByteString Word32 deriving (Eq, Show)
+data PskIdentity = PskIdentity ByteString Word32 deriving (Eq)
+
+instance Show PskIdentity where
+    show (PskIdentity bs n) = "PskId " ++ showBytesHex bs ++ " " ++ show n
 
 data PreSharedKey
     = PreSharedKeyClientHello [PskIdentity] [ByteString]
     | PreSharedKeyServerHello Int
-    deriving (Eq, Show)
+    deriving (Eq)
+
+instance Show PreSharedKey where
+    show (PreSharedKeyClientHello ids bndrs) =
+        "PreSharedKey "
+            ++ show ids
+            ++ " "
+            ++ "["
+            ++ intercalate ", " (map showBytesHex bndrs)
+            ++ "]"
+    show (PreSharedKeyServerHello n) = "PreSharedKey " ++ show n
 
 instance Extension PreSharedKey where
     extensionID _ = EID_PreSharedKey
@@ -777,27 +790,38 @@ instance Extension PreSharedKey where
         runPut $
             putWord16 $
                 fromIntegral w16
-    extensionDecode MsgTServerHello =
-        runGetMaybe $
-            PreSharedKeyServerHello . fromIntegral <$> getWord16
-    extensionDecode MsgTClientHello = runGetMaybe $ do
-        len1 <- fromIntegral <$> getWord16
-        identities <- getList len1 getIdentity
-        len2 <- fromIntegral <$> getWord16
-        binders <- getList len2 getBinder
-        return $ PreSharedKeyClientHello identities binders
-      where
-        getIdentity = do
-            identity <- getOpaque16
-            age <- getWord32
-            let len = 2 + B.length identity + 4
-            return (len, PskIdentity identity age)
-        getBinder = do
-            l <- fromIntegral <$> getWord8
-            binder <- getBytes l
-            let len = l + 1
-            return (len, binder)
+    extensionDecode MsgTClientHello = decodePreSharedKeyClientHello
+    extensionDecode MsgTServerHello = decodePreSharedKeyServerHello
     extensionDecode _ = error "extensionDecode: PreShareKey"
+
+decodePreSharedKeyClientHello :: ByteString -> Maybe PreSharedKey
+decodePreSharedKeyClientHello = runGetMaybe $ do
+    len1 <- fromIntegral <$> getWord16
+    identities <- getList len1 getIdentity
+    len2 <- fromIntegral <$> getWord16
+    binders <- getList len2 getBinder
+    return $ PreSharedKeyClientHello identities binders
+  where
+    getIdentity = do
+        identity <- getOpaque16
+        age <- getWord32
+        let len = 2 + B.length identity + 4
+        return (len, PskIdentity identity age)
+    getBinder = do
+        l <- fromIntegral <$> getWord8
+        binder <- getBytes l
+        let len = l + 1
+        return (len, binder)
+
+decodePreSharedKeyServerHello :: ByteString -> Maybe PreSharedKey
+decodePreSharedKeyServerHello =
+    runGetMaybe $
+        PreSharedKeyServerHello . fromIntegral <$> getWord16
+
+decodePreSharedKey :: ByteString -> Maybe PreSharedKey
+decodePreSharedKey bs =
+    decodePreSharedKeyClientHello bs
+        <|> decodePreSharedKeyServerHello bs
 
 ------------------------------------------------------------
 
