@@ -52,7 +52,7 @@ encodeHandshake13' (ServerHello13 random session cipherId exts) = runPut $ do
     putWord16 $ fromCipherId cipherId
     putWord8 0 -- compressionID nullCompression
     putExtensions exts
-encodeHandshake13' (NewSessionTicket13 life ageadd nonce label exts) = runPut $ do
+encodeHandshake13' (NewSessionTicket13 life ageadd (TicketNonce nonce) label exts) = runPut $ do
     putWord32 life
     putWord32 ageadd
     putOpaque8 nonce
@@ -142,7 +142,7 @@ decodeNewSessionTicket13 :: Get Handshake13
 decodeNewSessionTicket13 = do
     life <- getWord32
     ageadd <- getWord32
-    nonce <- getOpaque8
+    nonce <- TicketNonce <$> getOpaque8
     label <- getOpaque16
     len <- fromIntegral <$> getWord16
     exts <- getExtensions len

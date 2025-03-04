@@ -131,7 +131,7 @@ sendNewSessionTicket
 sendNewSessionTicket sparams ctx usedCipher exts applicationSecret sfSentTime = when sendNST $ do
     cfRecvTime <- getCurrentTimeFromBase
     let rtt = cfRecvTime - sfSentTime
-    nonce <- getStateRNG ctx 32
+    nonce <- TicketNonce <$> getStateRNG ctx 32
     resumptionSecret <- calculateResumptionSecret ctx choice applicationSecret
     let life = adjustLifetime $ serverTicketLifetime sparams
         psk = derivePSK choice resumptionSecret nonce

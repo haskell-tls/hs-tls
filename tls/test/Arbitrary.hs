@@ -105,7 +105,7 @@ instance Arbitrary Handshake13 where
             , NewSessionTicket13
                 <$> arbitrary
                 <*> arbitrary
-                <*> genByteString 32 -- nonce
+                <*> (TicketNonce <$> genByteString 32) -- nonce
                 <*> genByteString 32 -- session ID
                 <*> arbitrary
             , pure EndOfEarlyData13

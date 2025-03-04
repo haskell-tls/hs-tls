@@ -6,6 +6,7 @@ module Network.TLS.Struct13 (
     KeyUpdate (..),
     CertReqContext,
     isKeyUpdate13,
+    TicketNonce (..),
 ) where
 
 import Network.TLS.Imports
@@ -24,7 +25,10 @@ data KeyUpdate
     | UpdateRequested
     deriving (Show, Eq)
 
-type TicketNonce = ByteString
+newtype TicketNonce = TicketNonce ByteString deriving (Eq)
+
+instance Show TicketNonce where
+    show (TicketNonce bs) = showBytesHex bs
 
 -- fixme: convert Word32 to proper data type
 data Handshake13

@@ -552,8 +552,8 @@ calculateResumptionSecret ctx choice (BaseSecret sec) = do
     usedHash = cHash choice
 
 derivePSK
-    :: CipherChoice -> BaseSecret ResumptionSecret -> ByteString -> ByteString
-derivePSK choice (BaseSecret sec) nonce =
+    :: CipherChoice -> BaseSecret ResumptionSecret -> TicketNonce -> ByteString
+derivePSK choice (BaseSecret sec) (TicketNonce nonce) =
     hkdfExpandLabel usedHash sec "resumption" nonce hashSize
   where
     usedHash = cHash choice
