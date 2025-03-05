@@ -28,13 +28,13 @@ import Network.TLS.Types
 processClientHello
     :: ServerParams
     -> Context
-    -> Handshake
+    -> ClientHello
     -> IO
         ( Version
-        , CHP
+        , ClientHello
         , Maybe ClientRandom -- Just for ECH to keep the outer one for key log
         )
-processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compressions chp@CHP{..}) = do
+processClientHello sparams ctx ch@CH{..} = do
     established <- ctxEstablished ctx
     -- renego is not allowed in TLS 1.3
     when (established /= NotEstablished) $ do
@@ -56,16 +56,16 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
         (throwCore $ Error_HandshakePolicy "server: handshake denied")
     updateMeasure ctx incrementNbHandshakes
 
-    when (legacyVersion /= TLS12) $
+    when (chVersion /= TLS12) $
         throwCore $
-            Error_Protocol (show legacyVersion ++ " is not supported") ProtocolVersion
+            Error_Protocol (show chVersion ++ " is not supported") ProtocolVersion
 
     -- Fallback SCSV: RFC7507
     -- TLS_FALLBACK_SCSV: {0x56, 0x00}
     when
         ( supportedFallbackScsv (ctxSupported ctx)
             && (CipherId 0x5600 `elem` chCiphers)
-            && legacyVersion < TLS12
+            && chVersion < TLS12
         )
         $ throwCore
         $ Error_Protocol "fallback is not allowed" InappropriateFallback
@@ -73,8 +73,9 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
     -- choosing TLS version
     let extract (SupportedVersionsClientHello vers) = vers -- fixme: vers == []
         extract _ = []
-        clientVersions = lookupAndDecode EID_SupportedVersions MsgTClientHello chExtensions [] extract
-        clientVersion = min TLS12 legacyVersion
+        clientVersions =
+            lookupAndDecode EID_SupportedVersions MsgTClientHello chExtensions [] extract
+        clientVersion = min TLS12 chVersion
         serverVersions
             | renegotiation = filter (< TLS13) (supportedVersions $ ctxSupported ctx)
             | otherwise = supportedVersions $ ctxSupported ctx
@@ -102,10 +103,10 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
     let nullComp = compressionID nullCompression
     case chosenVersion of
         TLS13 ->
-            when (compressions /= [nullComp]) $
+            when (chComps /= [nullComp]) $
                 throwCore $
                     Error_Protocol "compression is not allowed in TLS 1.3" IllegalParameter
-        _ -> case find (== nullComp) compressions of
+        _ -> case find (== nullComp) chComps of
             Nothing ->
                 throwCore $
                     Error_Protocol
@@ -122,22 +123,14 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
                     MsgTClientHello
                     chExtensions
                     (return (Nothing, False))
-                    (\bs -> (,True) <$> decryptECH sparams ctx clientHello bs)
+                    (\bs -> (,True) <$> decryptECH sparams ctx ch bs)
             else return (Nothing, False)
     case mClientHello' of
-        Just clientHello'@(ClientHello _ cran' _ chp') -> do
-            hrr <- usingState_ ctx getTLS13HRR
-            unless hrr $ startHandshake ctx legacyVersion cran'
-            usingHState ctx $ setClientHello clientHello'
-            let serverName = getServerName chp'
-            maybe (return ()) (usingState_ ctx . setClientSNI) serverName
-            return (chosenVersion, chp', Just cran)
+        Just chI -> do
+            setupI ctx chI
+            return (chosenVersion, chI, Just chRandom)
         _ -> do
-            hrr <- usingState_ ctx getTLS13HRR
-            unless hrr $ startHandshake ctx legacyVersion cran
-            usingHState ctx $ setClientHello clientHello
-            let serverName = getServerName chp
-            maybe (return ()) (usingState_ ctx . setClientSNI) serverName
+            setupO ctx ch
             when (chosenVersion == TLS13) $ do
                 let hasECHConf = not (null (sharedECHConfig (serverShared sparams)))
                 when (hasECHConf && not receivedECH) $
@@ -146,20 +139,31 @@ processClientHello sparams ctx clientHello@(ClientHello legacyVersion cran compr
                 when receivedECH $
                     usingHState ctx $
                         setECHEE True
-            return (chosenVersion, chp, Nothing)
-processClientHello _ _ _ =
-    throwCore $
-        Error_Protocol
-            "unexpected handshake message received in handshakeServerWith"
-            HandshakeFailure
+            return (chosenVersion, ch, Nothing)
+
+setupI :: Context -> ClientHello -> IO ()
+setupI ctx chI@CH{..} = do
+    hrr <- usingState_ ctx getTLS13HRR
+    unless hrr $ startHandshake ctx TLS13 chRandom
+    usingHState ctx $ setClientHello chI
+    let serverName = getServerName chExtensions
+    maybe (return ()) (usingState_ ctx . setClientSNI) serverName
+
+setupO :: Context -> ClientHello -> IO ()
+setupO ctx ch@CH{..} = do
+    hrr <- usingState_ ctx getTLS13HRR
+    unless hrr $ startHandshake ctx chVersion chRandom
+    usingHState ctx $ setClientHello ch
+    let serverName = getServerName chExtensions
+    maybe (return ()) (usingState_ ctx . setClientSNI) serverName
 
 -- SNI (Server Name Indication)
-getServerName :: CHP -> Maybe HostName
-getServerName CHP{..} =
+getServerName :: [ExtensionRaw] -> Maybe HostName
+getServerName chExts =
     lookupAndDecode
         EID_ServerName
         MsgTClientHello
-        chExtensions
+        chExts
         Nothing
         extractServerName
   where
@@ -184,35 +188,33 @@ findHighestVersionFrom13 clientVersions serverVersions = case svs `intersect` cv
 decryptECH
     :: ServerParams
     -> Context
-    -> Handshake
+    -> ClientHello
     -> EncryptedClientHello
-    -> IO (Maybe Handshake)
+    -> IO (Maybe ClientHello)
 decryptECH _ _ _ ECHClientHelloInner = return Nothing
-decryptECH sparams ctx clientHello@(ClientHello _ _ _ outerCH) ech@ECHClientHelloOuter{..} = E.handle hpkeHandler $ do
+decryptECH sparams ctx chO ech@ECHClientHelloOuter{..} = E.handle hpkeHandler $ do
     mfunc <- getHPKE sparams ctx ech
     case mfunc of
         Nothing -> return Nothing
         Just (func, nenc) -> do
             hrr <- usingState_ ctx getTLS13HRR
             let nenc' = if hrr then 0 else nenc
-            let aad = encodeHandshake' $ fill0ClientHello nenc' clientHello
+            let aad = encodeHandshake' $ ClientHello $ fill0ClientHello nenc' chO
             plaintext <- func aad echPayload
             case decodeClientHello' plaintext of
-                Right (ClientHello v r c innerCH) -> do
-                    case expandClientHello innerCH outerCH of
+                Right (ClientHello chI) -> do
+                    case expandClientHello chI chO of
                         Nothing -> return Nothing
-                        Just innerCH' -> do
-                            return $ Just $ ClientHello v r c innerCH'
+                        Just chI' -> return $ Just chI'
                 _ -> return Nothing
   where
-    hpkeHandler :: HPKEError -> IO (Maybe Handshake)
+    hpkeHandler :: HPKEError -> IO (Maybe ClientHello)
     hpkeHandler _ = return Nothing
 decryptECH _ _ _ _ = return Nothing
 
-fill0ClientHello :: Int -> Handshake -> Handshake
-fill0ClientHello nenc (ClientHello ver rnd cs ch) =
-    ClientHello ver rnd cs $ ch{chExtensions = fill0Exts nenc (chExtensions ch)}
-fill0ClientHello _ _ = error "fill0ClientHello"
+fill0ClientHello :: Int -> ClientHello -> ClientHello
+fill0ClientHello nenc ch@CH{..} =
+    ch{chExtensions = fill0Exts nenc chExtensions}
 
 fill0Exts :: Int -> [ExtensionRaw] -> [ExtensionRaw]
 fill0Exts nenc xs0 = loop xs0
@@ -225,7 +227,7 @@ fill0Exts nenc xs0 = loop xs0
         x' = ExtensionRaw EID_EncryptedClientHello bs'
     loop (x : xs) = x : loop xs
 
-expandClientHello :: CHP -> CHP -> Maybe CHP
+expandClientHello :: ClientHello -> ClientHello -> Maybe ClientHello
 expandClientHello inner outer =
     case expand (chExtensions inner) (chExtensions outer) of
         Nothing -> Nothing

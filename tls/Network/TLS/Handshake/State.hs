@@ -160,7 +160,7 @@ data HandshakeState = HandshakeState
     , hstCCS13Recv :: Bool
     , hstTLS13OuterClientRandom :: Maybe ClientRandom
     -- ^ Used for key logging in the case of ECH.
-    , hstTLS13ClientHello :: Maybe Handshake
+    , hstTLS13ClientHello :: Maybe ClientHello
     -- ^ Inner client hello in the case of ECH.
     , hstTLS13ECHAccepted :: Bool
     , hstTLS13ECHEE :: Bool
@@ -401,11 +401,11 @@ getOuterClientRandom = gets hstTLS13OuterClientRandom
 
 setOuterClientRandom :: Maybe ClientRandom -> HandshakeM ()
 setOuterClientRandom mcr = modify' (\hst -> hst{hstTLS13OuterClientRandom = mcr})
-getClientHello :: HandshakeM (Maybe Handshake)
+getClientHello :: HandshakeM (Maybe ClientHello)
 getClientHello = gets hstTLS13ClientHello
 
-setClientHello :: Handshake -> HandshakeM ()
-setClientHello hs = modify' $ \hst -> hst{hstTLS13ClientHello = Just hs}
+setClientHello :: ClientHello -> HandshakeM ()
+setClientHello ch = modify' $ \hst -> hst{hstTLS13ClientHello = Just ch}
 
 setECHAccepted :: Bool -> HandshakeM ()
 setECHAccepted b = modify' $ \hst -> hst{hstTLS13ECHAccepted = b}

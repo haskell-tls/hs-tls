@@ -47,27 +47,28 @@ handshakeServerWith = handshake
 -- When the function returns, a new handshake has been succesfully negociated.
 -- On any error, a HandshakeFailed exception is raised.
 handshake :: ServerParams -> Context -> Handshake -> IO ()
-handshake sparams ctx clientHello = do
-    (chosenVersion, ch, mcrnd) <- processClientHello sparams ctx clientHello
+handshake sparams ctx (ClientHello ch) = do
+    (chosenVersion, chI, mcrnd) <- processClientHello sparams ctx ch
     if chosenVersion == TLS13
         then do
             -- fixme: we should check if the client random is the same as
             -- that in the first client hello in the case of hello retry.
             (mClientKeyShare, r0, r1) <-
-                processClientHello13 sparams ctx ch
+                processClientHello13 sparams ctx chI
             case mClientKeyShare of
                 Nothing -> do
-                    sendHRR ctx r0 ch $ isJust mcrnd
+                    sendHRR ctx r0 chI $ isJust mcrnd
                     -- Don't reset ctxEstablished since 0-RTT data
                     -- would be comming, which should be ignored.
                     handshakeServer sparams ctx
                 Just cliKeyShare -> do
                     r2 <-
-                        sendServerHello13 sparams ctx cliKeyShare r0 r1 ch mcrnd
-                    recvClientSecondFlight13 sparams ctx r2 ch
+                        sendServerHello13 sparams ctx cliKeyShare r0 r1 chI mcrnd
+                    recvClientSecondFlight13 sparams ctx r2 chI
         else do
             r <-
-                processClientHello12 sparams ctx ch
+                processClientHello12 sparams ctx chI
             resumeSessionData <-
-                sendServerHello12 sparams ctx r ch
+                sendServerHello12 sparams ctx r chI
             recvClientSecondFlight12 sparams ctx resumeSessionData
+handshake _ _ _ = throwCore $ Error_Protocol "client Hello is expected" HandshakeFailure

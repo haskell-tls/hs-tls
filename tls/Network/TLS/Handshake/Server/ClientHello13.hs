@@ -27,13 +27,13 @@ import Network.TLS.Types
 processClientHello13
     :: ServerParams
     -> Context
-    -> CHP
+    -> ClientHello
     -> IO
         ( Maybe KeyShareEntry
         , (Cipher, Hash, Bool)
         , (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool)
         )
-processClientHello13 sparams ctx chp@CHP{..} = do
+processClientHello13 sparams ctx ch@CH{..} = do
     when
         (any (\(ExtensionRaw eid _) -> eid == EID_PreSharedKey) $ init chExtensions)
         $ throwCore
@@ -75,9 +75,9 @@ processClientHello13 sparams ctx chp@CHP{..} = do
         lookupAndDecodeAndDo EID_KeyShare MsgTClientHello chExtensions require extract
     mshare <- findKeyShare keyShares serverGroups
     let triple = (usedCipher, usedHash, rtt0)
-    pskEarlySecret <- pskAndEarlySecret sparams ctx triple chp
+    pskEarlySecret <- pskAndEarlySecret sparams ctx triple ch
     clientHello <- fromJust <$> usingHState ctx getClientHello
-    void $ updateTranscriptHash12 ctx clientHello
+    void $ updateTranscriptHash12 ctx $ ClientHello clientHello
     return (mshare, triple, pskEarlySecret)
   where
     ciphersFilteredVersion = intersectCiphers chCiphers serverCiphers
@@ -105,9 +105,9 @@ pskAndEarlySecret
     :: ServerParams
     -> Context
     -> (Cipher, Hash, Bool)
-    -> CHP
+    -> ClientHello
     -> IO (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool)
-pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CHP{..} = do
+pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CH{..} = do
     (psk, binderInfo, is0RTTvalid) <- choosePSK
     earlyKey <- calculateEarlySecret ctx choice (Left psk)
     let earlySecret = pairBase earlyKey
@@ -157,7 +157,7 @@ pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CHP{..} = do
     checkBinder _ Nothing = return []
     checkBinder earlySecret (Just (binder, n, tlen)) = do
         ch <- fromJust <$> usingHState ctx getClientHello
-        let ech = encodeHandshake ch
+        let ech = encodeHandshake $ ClientHello ch
             binder' = makePSKBinder earlySecret usedHash tlen ech
         unless (binder == binder') $
             decryptError "PSK binder validation failed"

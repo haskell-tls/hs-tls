@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_HADDOCK hide #-}
 
 -- | The Struct module contains all definitions and values of the TLS
@@ -108,7 +109,6 @@ module Network.TLS.Struct (
     CertificateChain_ (..),
     emptyCertificateChain_,
     Handshake (..),
-    CHP (..),
     packetType,
     typeOfHandshake,
     module Network.TLS.HashAndSignature,
@@ -117,6 +117,7 @@ module Network.TLS.Struct (
     showCertificateChain,
     isHelloRetryRequest,
     hrrRandom,
+    ClientHello (..),
 ) where
 
 import Data.X509 (
@@ -420,14 +421,6 @@ instance Show ClientKeyXchgAlgorithmData where
 
 ----------------------------------------------------------------
 
--- Client Hello Parameters
-data CHP = CHP
-    { chSession :: Session
-    , chCiphers :: [CipherId]
-    , chExtensions :: [ExtensionRaw]
-    }
-    deriving (Show, Eq)
-
 newtype CertificateChain_ = CertificateChain_ CertificateChain deriving (Eq)
 instance Show CertificateChain_ where
     show (CertificateChain_ cc) = showCertificateChain cc
@@ -446,12 +439,18 @@ showCertificateChain (CertificateChain xs) = show $ map getName xs
             . signedObject
             . getSigned
 
+data ClientHello = CH
+    { chVersion :: Version
+    , chRandom :: ClientRandom
+    , chSession :: Session
+    , chCiphers :: [CipherId]
+    , chComps :: [CompressionID]
+    , chExtensions :: [ExtensionRaw]
+    }
+    deriving (Eq, Show)
+
 data Handshake
-    = ClientHello
-        Version
-        ClientRandom
-        [CompressionID]
-        CHP
+    = ClientHello ClientHello
     | ServerHello
         Version
         ServerRandom

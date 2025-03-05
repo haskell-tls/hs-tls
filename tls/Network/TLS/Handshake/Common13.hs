@@ -463,7 +463,7 @@ calculateEarlySecret
     -> IO (SecretPair EarlySecret)
 calculateEarlySecret ctx choice maux = do
     ch <- fromJust <$> usingHState ctx getClientHello
-    let hCh = TranscriptHash $ hash usedHash $ encodeHandshake ch
+    let hCh = TranscriptHash $ hash usedHash $ encodeHandshake $ ClientHello ch
     let earlySecret = case maux of
             Right (BaseSecret sec) -> sec
             Left psk -> hkdfExtract usedHash zero psk
@@ -591,11 +591,10 @@ computeComfirm
     :: (MonadFail m, MonadIO m)
     => Context -> Hash -> Handshake13 -> ByteString -> m ByteString
 computeComfirm ctx usedHash sh label = do
-    (ClientHello _ (ClientRandom cr) _ _) <-
-        fromJust <$> liftIO (usingHState ctx getClientHello)
+    CH{..} <- fromJust <$> liftIO (usingHState ctx getClientHello)
     TranscriptHash echConf <-
         transcriptHashWith ctx "ECH acceptance" $ encodeHandshake13 sh
-    let prk = hkdfExtract usedHash "" cr
+    let prk = hkdfExtract usedHash "" $ unClientRandom chRandom
     return $ hkdfExpandLabel usedHash prk label echConf 8
 
 ----------------------------------------------------------------

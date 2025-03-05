@@ -38,7 +38,7 @@ sendServerHello13
     -> KeyShareEntry
     -> (Cipher, Hash, Bool)
     -> (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool)
-    -> CHP
+    -> ClientHello
     -> Maybe ClientRandom
     -> IO
         ( SecretTriple ApplicationSecret
@@ -46,7 +46,7 @@ sendServerHello13
         , Bool
         , Bool
         )
-sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (earlyKey, preSharedKeyExt, authenticated, is0RTTvalid) CHP{..} mOuterClientRandom = do
+sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (earlyKey, preSharedKeyExt, authenticated, is0RTTvalid) CH{..} mOuterClientRandom = do
     let clientEarlySecret = pairClient earlyKey
         earlySecret = pairBase earlyKey
     -- parse CompressCertificate to check if it is broken here
@@ -289,8 +289,8 @@ contextSync ctx ctl = case ctxHandshakeSync ctx of
 
 ----------------------------------------------------------------
 
-sendHRR :: Context -> (Cipher, Hash, c) -> CHP -> Bool -> IO ()
-sendHRR ctx (usedCipher, usedHash, _) CHP{..} isEch = do
+sendHRR :: Context -> (Cipher, Hash, c) -> ClientHello -> Bool -> IO ()
+sendHRR ctx (usedCipher, usedHash, _) CH{..} isEch = do
     twice <- usingState_ ctx getTLS13HRR
     when twice $
         throwCore $
@@ -320,18 +320,18 @@ sendHRR ctx (usedCipher, usedHash, _) CHP{..} isEch = do
 
 makeHRR
     :: Context -> Cipher -> Hash -> Session -> Group -> Bool -> IO Handshake13
-makeHRR _ usedCipher _ chSession g False = return hrr
+makeHRR _ usedCipher _ session g False = return hrr
   where
     keyShareExt = toExtensionRaw $ KeyShareHRR g
     versionExt = toExtensionRaw $ SupportedVersionsServerHello TLS13
     extensions = [keyShareExt, versionExt]
     cipherId = CipherId $ cipherID usedCipher
-    hrr = ServerHello13 hrrRandom chSession cipherId extensions
-makeHRR ctx usedCipher usedHash chSession g True = do
+    hrr = ServerHello13 hrrRandom session cipherId extensions
+makeHRR ctx usedCipher usedHash session g True = do
     suffix <- computeComfirm ctx usedHash hrr "hrr ech accept confirmation"
     let echExt' = toExtensionRaw $ ECHHelloRetryRequest suffix
         extensions' = [keyShareExt, versionExt, echExt']
-        hrr' = ServerHello13 hrrRandom chSession cipherId extensions'
+        hrr' = ServerHello13 hrrRandom session cipherId extensions'
     return hrr'
   where
     keyShareExt = toExtensionRaw $ KeyShareHRR g
@@ -339,4 +339,4 @@ makeHRR ctx usedCipher usedHash chSession g True = do
     echExt = toExtensionRaw $ ECHHelloRetryRequest "\x00\x00\x00\x00\x00\x00\x00\x00"
     extensions = [keyShareExt, versionExt, echExt]
     cipherId = CipherId $ cipherID usedCipher
-    hrr = ServerHello13 hrrRandom chSession cipherId extensions
+    hrr = ServerHello13 hrrRandom session cipherId extensions

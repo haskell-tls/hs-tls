@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Network.TLS.Handshake.Client.ServerHello (
     receiveServerHello,
@@ -178,8 +179,8 @@ processServerHello cparams ctx sh@(ServerHello rver sr serverSession (CipherId c
             transitTranscriptHashI ctx "transitI" usedHash isHRR
             accepted <- checkECHacceptance ctx isHRR usedHash sh
             when accepted $ do
-                (ClientHello _ crI _ _) <- fromJust <$> usingHState ctx getClientHello
-                usingHState ctx $ setClientRandom crI
+                CH{..} <- fromJust <$> usingHState ctx getClientHello
+                usingHState ctx $ setClientRandom chRandom -- inner random
             when (accepted && not isHRR) $ do
                 copyTranscriptHash ctx "copy"
                 usingHState ctx $ setECHAccepted True

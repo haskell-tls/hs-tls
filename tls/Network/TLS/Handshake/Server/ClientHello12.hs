@@ -13,7 +13,6 @@ import Network.TLS.ErrT
 import Network.TLS.Extension
 import Network.TLS.Handshake.Server.Common
 import Network.TLS.Handshake.Signature
-import Network.TLS.Handshake.State
 import Network.TLS.IO.Encode
 import Network.TLS.Imports
 import Network.TLS.Parameters
@@ -29,16 +28,16 @@ import Network.TLS.Types (CipherId (..), Role (..))
 processClientHello12
     :: ServerParams
     -> Context
-    -> CHP
+    -> ClientHello
     -> IO (Cipher, Maybe Credential)
-processClientHello12 sparams ctx chp = do
+processClientHello12 sparams ctx ch = do
     let secureRenegotiation = supportedSecureRenegotiation $ serverSupported sparams
-    when secureRenegotiation $ checkSecureRenegotiation ctx chp
+    when secureRenegotiation $ checkSecureRenegotiation ctx ch
     serverName <- usingState_ ctx getClientSNI
     let hooks = serverHooks sparams
     extraCreds <- onServerNameIndication hooks serverName
     let (creds, signatureCreds, ciphersFilteredVersion) =
-            credsTriple sparams chp extraCreds
+            credsTriple sparams ch extraCreds
     -- The shared cipherlist can become empty after filtering for compatible
     -- creds, check now before calling onCipherChoosing, which does not handle
     -- empty lists.
@@ -47,12 +46,11 @@ processClientHello12 sparams ctx chp = do
             Error_Protocol "no cipher in common with the TLS 1.2 client" HandshakeFailure
     let usedCipher = onCipherChoosing hooks TLS12 ciphersFilteredVersion
     mcred <- chooseCreds usedCipher creds signatureCreds
-    clientHello <- fromJust <$> usingHState ctx getClientHello
-    void $ updateTranscriptHash12 ctx clientHello
+    void $ updateTranscriptHash12 ctx $ ClientHello ch
     return (usedCipher, mcred)
 
-checkSecureRenegotiation :: Context -> CHP -> IO ()
-checkSecureRenegotiation ctx CHP{..} = do
+checkSecureRenegotiation :: Context -> ClientHello -> IO ()
+checkSecureRenegotiation ctx CH{..} = do
     -- RFC 5746: secure renegotiation
     -- TLS_EMPTY_RENEGOTIATION_INFO_SCSV: {0x00, 0xFF}
     when (CipherId 0xff `elem` chCiphers) $
@@ -75,10 +73,10 @@ checkSecureRenegotiation ctx CHP{..} = do
 
 credsTriple
     :: ServerParams
-    -> CHP
+    -> ClientHello
     -> Credentials
     -> (Credentials, Credentials, [Cipher])
-credsTriple sparams CHP{..} extraCreds
+credsTriple sparams CH{..} extraCreds
     | cipherListCredentialFallback cltCiphers = (allCreds, sigAllCreds, allCiphers)
     | otherwise = (cltCreds, sigCltCreds, cltCiphers)
   where

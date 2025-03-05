@@ -72,10 +72,14 @@ instance Arbitrary Handshake where
     arbitrary =
         oneof
             [ arbitrary >>= \ver -> do
-                ClientHello ver
-                    <$> arbitrary
-                    <*> arbitraryCompressionIDs
-                    <*> (CHP <$> arbitrary <*> arbitraryCiphersIds <*> arbitraryHelloExtensions ver)
+                ClientHello
+                    <$> ( CH ver
+                            <$> arbitrary
+                            <*> arbitrary
+                            <*> arbitraryCiphersIds
+                            <*> arbitraryCompressionIDs
+                            <*> arbitraryHelloExtensions ver
+                        )
             , arbitrary >>= \ver ->
                 ServerHello ver
                     <$> arbitrary
