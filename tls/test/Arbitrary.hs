@@ -81,12 +81,14 @@ instance Arbitrary Handshake where
                             <*> arbitraryHelloExtensions ver
                         )
             , arbitrary >>= \ver ->
-                ServerHello ver
-                    <$> arbitrary
-                    <*> arbitrary
-                    <*> arbitrary
-                    <*> arbitrary
-                    <*> arbitraryHelloExtensions ver
+                ServerHello
+                    <$> ( SH ver
+                            <$> arbitrary
+                            <*> arbitrary
+                            <*> arbitrary
+                            <*> arbitrary
+                            <*> arbitraryHelloExtensions ver
+                        )
             , Certificate . CertificateChain_ . CertificateChain
                 <$> resize 2 (listOf arbitraryX509)
             , pure HelloRequest
@@ -102,10 +104,13 @@ instance Arbitrary Handshake13 where
         oneof
             [ arbitrary >>= \ver ->
                 ServerHello13
-                    <$> arbitrary
-                    <*> arbitrary
-                    <*> arbitrary
-                    <*> arbitraryHelloExtensions ver
+                    <$> ( SH TLS12
+                            <$> arbitrary
+                            <*> arbitrary
+                            <*> arbitrary
+                            <*> pure 0
+                            <*> arbitraryHelloExtensions ver
+                        )
             , NewSessionTicket13
                 <$> arbitrary
                 <*> arbitrary

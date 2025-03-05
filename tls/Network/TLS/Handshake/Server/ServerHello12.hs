@@ -39,19 +39,18 @@ sendServerHello12 sparams ctx (usedCipher, mcred) ch@CH{..} = do
         Nothing -> do
             serverSession <- newSession ctx
             usingState_ ctx $ setSession serverSession
-            serverhello <-
-                makeServerHello sparams ctx usedCipher mcred chExtensions serverSession
+            sh <- makeServerHello sparams ctx usedCipher mcred chExtensions serverSession
             build <- sendServerFirstFlight sparams ctx usedCipher mcred chExtensions
-            let ff = serverhello : build [ServerHelloDone]
+            let ff = ServerHello sh : build [ServerHelloDone]
             sendPacket12 ctx $ Handshake ff
             contextFlush ctx
         Just sessionData -> do
             usingState_ ctx $ do
                 setSession chSession
                 setTLS12SessionResuming True
-            serverhello <-
+            sh <-
                 makeServerHello sparams ctx usedCipher mcred chExtensions chSession
-            sendPacket12 ctx $ Handshake [serverhello]
+            sendPacket12 ctx $ Handshake [ServerHello sh]
             let mainSecret = sessionSecret sessionData
             usingHState ctx $ setMainSecret TLS12 ServerRole mainSecret
             logKey ctx $ MainSecret mainSecret
@@ -236,7 +235,7 @@ makeServerHello
     -> Maybe Credential
     -> [ExtensionRaw]
     -> Session
-    -> IO Handshake
+    -> IO ServerHello
 makeServerHello sparams ctx usedCipher mcred chExts session = do
     resuming <- usingState_ ctx getTLS12SessionResuming
     case mcred of
@@ -289,7 +288,7 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
     srand <-
         serverRandom ctx TLS12 $ supportedVersions $ serverSupported sparams
 
-    let shExtensions =
+    let shExts =
             sharedHelloExtensions (serverShared sparams)
                 ++ catMaybes
                     [ {- 0x00 -} sniExt
@@ -303,13 +302,14 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
     usingState_ ctx $ setVersion TLS12
     setServerHelloParameters12 ctx TLS12 srand usedCipher nullCompression
     return $
-        ServerHello
-            TLS12
-            srand
-            session
-            (CipherId (cipherID usedCipher))
-            (compressionID nullCompression)
-            shExtensions
+        SH
+            { shVersion = TLS12
+            , shRandom = srand
+            , shSession = session
+            , shCipher = CipherId (cipherID usedCipher)
+            , shComp = 0
+            , shExtensions = shExts
+            }
 
 negotiatedGroupsInCommon :: [Group] -> [ExtensionRaw] -> [Group]
 negotiatedGroupsInCommon serverGroups chExts =

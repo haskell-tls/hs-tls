@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Network.TLS.Packet13 (
     encodeHandshake13,
@@ -45,13 +46,13 @@ putExtensions :: [ExtensionRaw] -> Put
 putExtensions es = putOpaque16 (runPut $ mapM_ putExtension es)
 
 encodeHandshake13' :: Handshake13 -> ByteString
-encodeHandshake13' (ServerHello13 random session cipherId exts) = runPut $ do
-    putBinaryVersion TLS12
-    putServerRandom32 random
-    putSession session
-    putWord16 $ fromCipherId cipherId
-    putWord8 0 -- compressionID nullCompression
-    putExtensions exts
+encodeHandshake13' (ServerHello13 SH{..}) = runPut $ do
+    putBinaryVersion shVersion
+    putServerRandom32 shRandom
+    putSession shSession
+    putWord16 $ fromCipherId shCipher
+    putWord8 shComp
+    putExtensions shExtensions
 encodeHandshake13'
     ( NewSessionTicket13
             life
@@ -137,13 +138,22 @@ decodeHandshake13 ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
 
 decodeServerHello13 :: Get Handshake13
 decodeServerHello13 = do
-    _ver <- getBinaryVersion
+    ver <- getBinaryVersion
     random <- getServerRandom32
     session <- getSession
     cipherid <- CipherId <$> getWord16
-    _comp <- getWord8
+    comp <- getWord8
     exts <- getWord16 >>= getExtensions . fromIntegral
-    return $ ServerHello13 random session cipherid exts
+    return $
+        ServerHello13 $
+            SH
+                { shVersion = ver
+                , shRandom = random
+                , shSession = session
+                , shCipher = cipherid
+                , shComp = comp
+                , shExtensions = exts
+                }
 
 decodeNewSessionTicket13 :: Get Handshake13
 decodeNewSessionTicket13 = do

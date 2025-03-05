@@ -231,7 +231,16 @@ decodeServerHello = do
         if r > 0
             then getWord16 >>= getExtensions . fromIntegral
             else return []
-    return $ ServerHello ver random session cipherid compressionid exts
+    return $
+        ServerHello $
+            SH
+                { shVersion = ver
+                , shRandom = random
+                , shSession = session
+                , shCipher = cipherid
+                , shComp = compressionid
+                , shExtensions = exts
+                }
 
 decodeNewSessionTicket :: Get Handshake
 decodeNewSessionTicket = NewSessionTicket <$> getWord32 <*> getOpaque16
@@ -357,13 +366,13 @@ encodeHandshake' (ClientHello CH{..}) = runPut $ do
     putWords16 $ map fromCipherId chCiphers
     putWords8 chComps
     putExtensions chExtensions
-encodeHandshake' (ServerHello version random session cipherid compressionID exts) = runPut $ do
-    putBinaryVersion version
-    putServerRandom32 random
-    putSession session
-    putWord16 $ fromCipherId cipherid
-    putWord8 compressionID
-    putExtensions exts
+encodeHandshake' (ServerHello SH{..}) = runPut $ do
+    putBinaryVersion shVersion
+    putServerRandom32 shRandom
+    putSession shSession
+    putWord16 $ fromCipherId shCipher
+    putWord8 shComp
+    putExtensions shExtensions
 encodeHandshake' (NewSessionTicket life ticket) = runPut $ do
     putWord32 life
     putOpaque16 ticket

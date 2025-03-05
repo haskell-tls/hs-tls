@@ -38,7 +38,7 @@ instance Show SessionIDorTicket_ where
 
 -- fixme: convert Word32 to proper data type
 data Handshake13
-    = ServerHello13 ServerRandom Session CipherId [ExtensionRaw]
+    = ServerHello13 ServerHello
     | NewSessionTicket13 Second Word32 TicketNonce SessionIDorTicket_ [ExtensionRaw]
     | EndOfEarlyData13
     | EncryptedExtensions13 [ExtensionRaw]

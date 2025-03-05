@@ -589,11 +589,11 @@ setRTT ctx chSentTime = do
 
 computeComfirm
     :: (MonadFail m, MonadIO m)
-    => Context -> Hash -> Handshake13 -> ByteString -> m ByteString
+    => Context -> Hash -> ServerHello -> ByteString -> m ByteString
 computeComfirm ctx usedHash sh label = do
     CH{..} <- fromJust <$> liftIO (usingHState ctx getClientHello)
     TranscriptHash echConf <-
-        transcriptHashWith ctx "ECH acceptance" $ encodeHandshake13 sh
+        transcriptHashWith ctx "ECH acceptance" $ encodeHandshake13 $ ServerHello13 sh
     let prk = hkdfExtract usedHash "" $ unClientRandom chRandom
     return $ hkdfExpandLabel usedHash prk label echConf 8
 

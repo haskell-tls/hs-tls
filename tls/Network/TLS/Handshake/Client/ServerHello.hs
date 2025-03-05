@@ -71,9 +71,9 @@ receiveServerHello cparams ctx mparams = do
 
 processServerHello13
     :: ClientParams -> Context -> Handshake13 -> IO ()
-processServerHello13 cparams ctx (ServerHello13 sr serverSession cipher shExtensions) = do
-    let sh = ServerHello TLS12 sr serverSession cipher 0 shExtensions
-    processServerHello cparams ctx sh
+processServerHello13 cparams ctx (ServerHello13 sh13) = do
+    let sh12 = ServerHello sh13
+    processServerHello cparams ctx sh12
 processServerHello13 _ _ h = unexpected (show h) (Just "server hello")
 
 -- | processServerHello processes the ServerHello message on the client.
@@ -87,27 +87,27 @@ processServerHello13 _ _ h = unexpected (show h) (Just "server hello")
 --    a new session or can resume
 processServerHello
     :: ClientParams -> Context -> Handshake -> IO ()
-processServerHello cparams ctx sh@(ServerHello rver sr serverSession (CipherId cid) compression shExtensions) = do
+processServerHello cparams ctx (ServerHello sh@SH{..}) = do
     -- A server which receives a legacy_version value not equal to
     -- 0x0303 MUST abort the handshake with an "illegal_parameter"
     -- alert.
-    when (rver /= TLS12) $
+    when (shVersion /= TLS12) $
         throwCore $
-            Error_Protocol (show rver ++ " is not supported") IllegalParameter
+            Error_Protocol (show shVersion ++ " is not supported") IllegalParameter
     -- find the compression and cipher methods that the server want to use.
     clientSession <- tls13stSession <$> getTLS13State ctx
     chExts <- tls13stSentExtensions <$> getTLS13State ctx
     let clientCiphers = supportedCiphers $ ctxSupported ctx
-    usedCipher <- case findCipher cid clientCiphers of
+    usedCipher <- case findCipher (fromCipherId shCipher) clientCiphers of
         Nothing -> throwCore $ Error_Protocol "server choose unknown cipher" IllegalParameter
         Just alg -> return alg
     compressAlg <- case find
-        ((==) compression . compressionID)
+        ((==) shComp . compressionID)
         (supportedCompressions $ ctxSupported ctx) of
         Nothing ->
             throwCore $ Error_Protocol "server choose unknown compression" IllegalParameter
         Just alg -> return alg
-    ensureNullCompression compression
+    ensureNullCompression shComp
 
     -- intersect sent extensions in client and the received extensions
     -- from server.  if server returns extensions that we didn't
@@ -119,7 +119,7 @@ processServerHello cparams ctx sh@(ServerHello rver sr serverSession (CipherId c
         throwCore $
             Error_Protocol "spurious extensions received" UnsupportedExtension
 
-    let isHRR = isHelloRetryRequest sr
+    let isHRR = isHelloRetryRequest shRandom
     usingState_ ctx $ do
         setTLS13HRR isHRR
         when isHRR $
@@ -130,7 +130,7 @@ processServerHello cparams ctx sh@(ServerHello rver sr serverSession (CipherId c
                     shExtensions
                     Nothing
                     (\cookie@(Cookie _) -> Just cookie)
-        setVersion rver -- must be before processing supportedVersions ext
+        setVersion shVersion -- must be before processing supportedVersions ext
         mapM_ processServerExtension shExtensions
 
     setALPN ctx MsgTServerHello shExtensions
@@ -138,13 +138,13 @@ processServerHello cparams ctx sh@(ServerHello rver sr serverSession (CipherId c
     ver <- usingState_ ctx getVersion
 
     when (ver == TLS12) $
-        setServerHelloParameters12 ctx rver sr usedCipher compressAlg
+        setServerHelloParameters12 ctx shVersion shRandom usedCipher compressAlg
 
     let supportedVers = supportedVersions $ clientSupported cparams
 
     when (ver == TLS13) $ do
         -- TLS 1.3 server MUST echo the session id
-        when (clientSession /= serverSession) $
+        when (clientSession /= shSession) $
             throwCore $
                 Error_Protocol
                     "session is not matched in compatibility mode"
@@ -164,14 +164,14 @@ processServerHello cparams ctx sh@(ServerHello rver sr serverSession (CipherId c
     -- server random, as well as the list of client-side enabled
     -- protocol versions.
     --
-    when (isDowngraded ver supportedVers sr) $
+    when (isDowngraded ver supportedVers shRandom) $
         throwCore $
             Error_Protocol "version downgrade detected" IllegalParameter
 
     if ver == TLS13
         then do
             -- Session is dummy in TLS 1.3.
-            usingState_ ctx $ setSession serverSession
+            usingState_ ctx $ setSession shSession
             processRecordSizeLimit ctx shExtensions True
             enableMyRecordLimit ctx
             enablePeerRecordLimit ctx
@@ -185,15 +185,15 @@ processServerHello cparams ctx sh@(ServerHello rver sr serverSession (CipherId c
                 copyTranscriptHash ctx "copy"
                 usingHState ctx $ setECHAccepted True
             updateContext13 ctx usedCipher isHRR
-            updateTranscriptHashI ctx "ServerHelloI" $ encodeHandshake sh
+            updateTranscriptHashI ctx "ServerHelloI" $ encodeHandshake $ ServerHello sh
         else do
             let resumingSession = case clientSessions cparams of
                     (_, sessionData) : _ ->
-                        if serverSession == clientSession then Just sessionData else Nothing
+                        if shSession == clientSession then Just sessionData else Nothing
                     _ -> Nothing
 
             usingState_ ctx $ do
-                setSession serverSession
+                setSession shSession
                 setTLS12SessionResuming $ isJust resumingSession
             processRecordSizeLimit ctx shExtensions False
             updateContext12 ctx shExtensions resumingSession
@@ -275,20 +275,23 @@ processRecordSizeLimit ctx shExtensions tls13 = do
 
 ----------------------------------------------------------------
 
-checkECHacceptance :: Context -> Bool -> Hash -> Handshake -> IO Bool
-checkECHacceptance ctx False usedHash (ServerHello _ sr serverSession (CipherId cid) _ shExtensions) = do
-    let ServerRandom rnd = sr
-        (prefix, confirm) = B.splitAt 24 rnd
+checkECHacceptance :: Context -> Bool -> Hash -> ServerHello -> IO Bool
+checkECHacceptance ctx False usedHash sh@SH{..} = do
+    let (prefix, confirm) = B.splitAt 24 $ unServerRandom shRandom
         sr' = ServerRandom (prefix <> "\x00\x00\x00\x00\x00\x00\x00\x00")
-        sh' = ServerHello13 sr' serverSession (CipherId cid) shExtensions
-    verified <- computeComfirm ctx usedHash sh' "ech accept confirmation"
+    verified <-
+        computeComfirm ctx usedHash sh{shRandom = sr'} "ech accept confirmation"
     return (confirm == verified)
-checkECHacceptance ctx True usedHash (ServerHello _ sr serverSession (CipherId cid) _ shExtensions) = do
+checkECHacceptance ctx True usedHash sh@SH{..} = do
     case replace shExtensions of
         Nothing -> return False
-        Just (confirm, shExtensions') -> do
-            let sh' = ServerHello13 sr serverSession (CipherId cid) shExtensions'
-            verified <- computeComfirm ctx usedHash sh' "hrr ech accept confirmation"
+        Just (confirm, shExts') -> do
+            verified <-
+                computeComfirm
+                    ctx
+                    usedHash
+                    sh{shExtensions = shExts'}
+                    "hrr ech accept confirmation"
             return (confirm == verified)
   where
     replace [] = Nothing
@@ -300,4 +303,3 @@ checkECHacceptance ctx True usedHash (ServerHello _ sr serverSession (CipherId c
     replace (e : es) = case replace es of
         Nothing -> Nothing
         Just (confirm, es') -> Just (confirm, e : es')
-checkECHacceptance _ _ _ _ = error "checkECHacceptance"

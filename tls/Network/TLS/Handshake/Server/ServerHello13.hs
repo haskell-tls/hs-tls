@@ -178,25 +178,49 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
     sendServerHello keyShare = do
         let keyShareExt = toExtensionRaw $ KeyShareServerHello keyShare
             versionExt = toExtensionRaw $ SupportedVersionsServerHello TLS13
-            shExtensions = keyShareExt : versionExt : preSharedKeyExt
+            shExts = keyShareExt : versionExt : preSharedKeyExt
         if isJust $ mOuterClientRandom
             then do
                 srand <- liftIO $ serverRandomECH ctx
                 let cipherId = CipherId (cipherID usedCipher)
-                    sh = ServerHello13 srand chSession cipherId shExtensions
+                    sh =
+                        SH
+                            { shVersion = TLS12
+                            , shRandom = srand
+                            , shSession = chSession
+                            , shCipher = cipherId
+                            , shComp = 0
+                            , shExtensions = shExts
+                            }
                 suffix <- computeComfirm ctx usedHash sh "ech accept confirmation"
                 let srand' = replaceServerRandomECH srand suffix
-                    sh' = ServerHello13 srand' chSession cipherId shExtensions
+                    sh' =
+                        SH
+                            { shVersion = TLS12
+                            , shRandom = srand'
+                            , shSession = chSession
+                            , shCipher = cipherId
+                            , shComp = 0
+                            , shExtensions = shExts
+                            }
                 usingHState ctx $ setECHAccepted True
-                loadPacket13 ctx $ Handshake13 [sh']
+                loadPacket13 ctx $ Handshake13 [ServerHello13 sh']
             else do
                 srand <-
                     liftIO $
                         serverRandom ctx TLS13 $
                             supportedVersions $
                                 serverSupported sparams
-                let sh = ServerHello13 srand chSession (CipherId (cipherID usedCipher)) shExtensions
-                loadPacket13 ctx $ Handshake13 [sh]
+                let sh =
+                        SH
+                            { shVersion = TLS12
+                            , shRandom = srand
+                            , shSession = chSession
+                            , shCipher = CipherId (cipherID usedCipher)
+                            , shComp = 0
+                            , shExtensions = shExts
+                            }
+                loadPacket13 ctx $ Handshake13 [ServerHello13 sh]
 
     sendCertAndVerify cred@(certChain, _) hashSig zlib = do
         storePrivInfoServer ctx cred
@@ -313,25 +337,33 @@ sendHRR ctx (usedCipher, usedHash, _) CH{..} isEch = do
             hrr <- makeHRR ctx usedCipher usedHash chSession g isEch
             usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
             runPacketFlight ctx $ do
-                loadPacket13 ctx $ Handshake13 [hrr]
+                loadPacket13 ctx $ Handshake13 [ServerHello13 hrr]
                 sendChangeCipherSpec13 ctx
   where
     serverGroups = supportedGroups (ctxSupported ctx)
 
 makeHRR
-    :: Context -> Cipher -> Hash -> Session -> Group -> Bool -> IO Handshake13
+    :: Context -> Cipher -> Hash -> Session -> Group -> Bool -> IO ServerHello
 makeHRR _ usedCipher _ session g False = return hrr
   where
     keyShareExt = toExtensionRaw $ KeyShareHRR g
     versionExt = toExtensionRaw $ SupportedVersionsServerHello TLS13
     extensions = [keyShareExt, versionExt]
     cipherId = CipherId $ cipherID usedCipher
-    hrr = ServerHello13 hrrRandom session cipherId extensions
+    hrr =
+        SH
+            { shVersion = TLS12
+            , shRandom = hrrRandom
+            , shSession = session
+            , shCipher = cipherId
+            , shComp = 0
+            , shExtensions = extensions
+            }
 makeHRR ctx usedCipher usedHash session g True = do
     suffix <- computeComfirm ctx usedHash hrr "hrr ech accept confirmation"
     let echExt' = toExtensionRaw $ ECHHelloRetryRequest suffix
         extensions' = [keyShareExt, versionExt, echExt']
-        hrr' = ServerHello13 hrrRandom session cipherId extensions'
+        hrr' = hrr{shExtensions = extensions'}
     return hrr'
   where
     keyShareExt = toExtensionRaw $ KeyShareHRR g
@@ -339,4 +371,12 @@ makeHRR ctx usedCipher usedHash session g True = do
     echExt = toExtensionRaw $ ECHHelloRetryRequest "\x00\x00\x00\x00\x00\x00\x00\x00"
     extensions = [keyShareExt, versionExt, echExt]
     cipherId = CipherId $ cipherID usedCipher
-    hrr = ServerHello13 hrrRandom session cipherId extensions
+    hrr =
+        SH
+            { shVersion = TLS12
+            , shRandom = hrrRandom
+            , shSession = session
+            , shCipher = cipherId
+            , shComp = 0
+            , shExtensions = extensions
+            }

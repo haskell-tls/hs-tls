@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_HADDOCK hide #-}
 
@@ -361,8 +362,8 @@ recvData13 ctx = do
     loopHandshake13 (h : hs) = do
         rtt0 <- tls13st0RTT <$> getTLS13State ctx
         when rtt0 $ case h of
-            ServerHello13 srand _ _ _ ->
-                when (isHelloRetryRequest srand) $ do
+            ServerHello13 SH{..} ->
+                when (isHelloRetryRequest shRandom) $ do
                     clearTxRecordState ctx
                     let reason = "HRR is not allowed for 0-RTT"
                     terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason

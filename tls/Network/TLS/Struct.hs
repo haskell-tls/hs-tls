@@ -118,6 +118,7 @@ module Network.TLS.Struct (
     isHelloRetryRequest,
     hrrRandom,
     ClientHello (..),
+    ServerHello (..),
 ) where
 
 import Data.X509 (
@@ -449,15 +450,19 @@ data ClientHello = CH
     }
     deriving (Eq, Show)
 
+data ServerHello = SH
+    { shVersion :: Version
+    , shRandom :: ServerRandom
+    , shSession :: Session
+    , shCipher :: CipherId
+    , shComp :: CompressionID
+    , shExtensions :: [ExtensionRaw]
+    }
+    deriving (Eq, Show)
+
 data Handshake
     = ClientHello ClientHello
-    | ServerHello
-        Version
-        ServerRandom
-        Session
-        CipherId
-        CompressionID
-        [ExtensionRaw]
+    | ServerHello ServerHello
     | Certificate CertificateChain_
     | HelloRequest
     | ServerHelloDone
