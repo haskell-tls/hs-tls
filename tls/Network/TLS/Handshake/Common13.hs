@@ -38,7 +38,7 @@ module Network.TLS.Handshake.Common13 (
     derivePSK,
     checkKeyShareKeyLength,
     setRTT,
-    computeComfirm,
+    computeConfirm,
     updateTranscriptHash13,
     setServerHelloParameters13,
     finishHandshake13,
@@ -587,10 +587,10 @@ setRTT ctx chSentTime = do
         rtt = if rtt' == 0 then 10 else rtt'
     modifyTLS13State ctx $ \st -> st{tls13stRTT = rtt}
 
-computeComfirm
+computeConfirm
     :: (MonadFail m, MonadIO m)
     => Context -> Hash -> ServerHello -> ByteString -> m ByteString
-computeComfirm ctx usedHash sh label = do
+computeConfirm ctx usedHash sh label = do
     CH{..} <- fromJust <$> liftIO (usingHState ctx getClientHello)
     TranscriptHash echConf <-
         transcriptHashWith ctx "ECH acceptance" $ encodeHandshake13 $ ServerHello13 sh

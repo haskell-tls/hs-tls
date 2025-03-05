@@ -280,14 +280,14 @@ checkECHacceptance ctx False usedHash sh@SH{..} = do
     let (prefix, confirm) = B.splitAt 24 $ unServerRandom shRandom
         sr' = ServerRandom (prefix <> "\x00\x00\x00\x00\x00\x00\x00\x00")
     verified <-
-        computeComfirm ctx usedHash sh{shRandom = sr'} "ech accept confirmation"
+        computeConfirm ctx usedHash sh{shRandom = sr'} "ech accept confirmation"
     return (confirm == verified)
 checkECHacceptance ctx True usedHash sh@SH{..} = do
     case replace shExtensions of
         Nothing -> return False
         Just (confirm, shExts') -> do
             verified <-
-                computeComfirm
+                computeConfirm
                     ctx
                     usedHash
                     sh{shExtensions = shExts'}

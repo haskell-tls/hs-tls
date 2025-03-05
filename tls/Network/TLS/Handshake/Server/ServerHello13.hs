@@ -192,7 +192,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
                             , shComp = 0
                             , shExtensions = shExts
                             }
-                suffix <- computeComfirm ctx usedHash sh "ech accept confirmation"
+                suffix <- computeConfirm ctx usedHash sh "ech accept confirmation"
                 let srand' = replaceServerRandomECH srand suffix
                     sh' =
                         SH
@@ -360,7 +360,7 @@ makeHRR _ usedCipher _ session g False = return hrr
             , shExtensions = extensions
             }
 makeHRR ctx usedCipher usedHash session g True = do
-    suffix <- computeComfirm ctx usedHash hrr "hrr ech accept confirmation"
+    suffix <- computeConfirm ctx usedHash hrr "hrr ech accept confirmation"
     let echExt' = toExtensionRaw $ ECHHelloRetryRequest suffix
         extensions' = [keyShareExt, versionExt, echExt']
         hrr' = hrr{shExtensions = extensions'}
