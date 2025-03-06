@@ -415,7 +415,7 @@ createEncryptedClientHello ctx ch0@CH{..} echParams@(kdfid, aeadid, conf) crO mp
                 }
     Just (func, enc, taglen) <- getHPKE ctx echParams
     let bsI = encodeHandshake' $ ClientHello chI
-        padLen = 32 - (B.length bsI .>>. 3)
+        padLen = 32 - (B.length bsI .&. 31)
         bsI' = bsI <> B.replicate padLen 0
     let outerZ =
             ECHClientHelloOuter
