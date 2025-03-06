@@ -36,6 +36,7 @@ module Network.TLS.Handshake.State (
     setECHEE,
     getECHEE,
     setECHAccepted,
+    getECHAccepted,
     setClientCertSent,
     getClientCertSent,
     setCertReqSent,
@@ -401,11 +402,15 @@ getOuterClientRandom = gets hstTLS13OuterClientRandom
 
 setOuterClientRandom :: Maybe ClientRandom -> HandshakeM ()
 setOuterClientRandom mcr = modify' (\hst -> hst{hstTLS13OuterClientRandom = mcr})
+
 getClientHello :: HandshakeM (Maybe ClientHello)
 getClientHello = gets hstTLS13ClientHello
 
 setClientHello :: ClientHello -> HandshakeM ()
 setClientHello ch = modify' $ \hst -> hst{hstTLS13ClientHello = Just ch}
+
+getECHAccepted :: HandshakeM Bool
+getECHAccepted = gets hstTLS13ECHAccepted
 
 setECHAccepted :: Bool -> HandshakeM ()
 setECHAccepted b = modify' $ \hst -> hst{hstTLS13ECHAccepted = b}

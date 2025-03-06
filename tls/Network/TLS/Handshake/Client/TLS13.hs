@@ -15,6 +15,7 @@ import Data.IORef
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
 import Network.TLS.Crypto
+import Network.TLS.Error
 import Network.TLS.Extension
 import Network.TLS.Handshake.Client.Common
 import Network.TLS.Handshake.Client.ServerHello
@@ -270,6 +271,10 @@ sendClientSecondFlight13 cparams ctx = do
         eexts = tls13stClientExtensions st
     sendClientSecondFlight13' cparams ctx choice hkey rtt0accepted eexts
     modifyTLS13State ctx $ \s -> s{tls13stSentCF = True}
+    echAccepted <- usingHState ctx getECHAccepted
+    when (clientUseECH cparams && not echAccepted) $
+        throwCore $
+            Error_Protocol "ECH is not accepted" EchRequired
 
 sendClientSecondFlight13'
     :: ClientParams
