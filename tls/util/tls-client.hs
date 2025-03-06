@@ -389,7 +389,7 @@ getClientParams Options{..} serverName port sm mstore onCertReq echConfList prin
         , clientShared = shared
         , clientHooks = hooks
         , clientDebug = debug
-        , clientUseECH = True
+        , clientUseECH = not (null echConfList)
         }
   where
     groups
