@@ -43,10 +43,7 @@ sendClientHello
     -> IO ClientRandom
 sendClientHello cparams ctx groups mparams pskinfo = do
     crand <- generateClientHelloParams mparams -- Inner for ECH
-    let nhpks = supportedHPKE $ ctxSupported ctx
-        echcnfs = sharedECHConfig $ ctxShared ctx
-        mEchParams = lookupECHConfigList nhpks echcnfs
-    sendClientHello' cparams ctx groups crand pskinfo mEchParams
+    sendClientHello' cparams ctx groups crand pskinfo
     return crand
   where
     highestVer = maximum $ supportedVersions $ ctxSupported ctx
@@ -91,9 +88,8 @@ sendClientHello'
        , Maybe CipherChoice
        , Bool
        )
-    -> Maybe (KDF_ID, AEAD_ID, ECHConfig)
     -> IO ()
-sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) mEchParams = do
+sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
     let ver = if tls13 then TLS12 else highestVer
     clientSession <- tls13stSession <$> getTLS13State ctx
     hrr <- usingState_ ctx getTLS13HRR
@@ -114,20 +110,39 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) mEchParams =
     let extensions1 = sharedHelloExtensions (clientShared cparams) ++ extensions0
     extensions <- adjustPreSharedKeyExt extensions1 $ mkClientHello extensions1
     let ch0 = mkClientHello extensions
-    usingHState ctx $ setClientHello ch0
     updateTranscriptHashI ctx "ClientHelloI" $ encodeHandshake $ ClientHello ch0
-    ch <- case mEchParams of
-        Nothing -> return ch0
-        Just echParams -> do
-            mcrandO <- usingHState ctx getOuterClientRandom
-            crandO <- case mcrandO of
-                Nothing -> clientRandom ctx
-                Just x -> return x
-            usingHState ctx $ do
-                setClientRandom crandO
-                setOuterClientRandom $ Just crandO
-            mpskExt <- randomPreSharedKeyExt
-            createEncryptedClientHello ctx ch0 echParams crandO mpskExt
+    let nhpks = supportedHPKE $ clientSupported cparams
+        echcnfs = sharedECHConfig $ clientShared cparams
+        mEchParams = lookupECHConfigList nhpks echcnfs
+    ch <-
+        if clientUseECH cparams
+            then case mEchParams of
+                Nothing -> do
+                    if hrr
+                        then do
+                            chI <- fromJust <$> usingHState ctx getClientHello
+                            let ch0' = ch0{chExtensions = take 1 (chExtensions chI) ++ drop 1 (chExtensions ch0)}
+                            usingHState ctx $ setClientHello ch0'
+                            return ch0'
+                        else do
+                            gEchExt <- greasingEchExt
+                            let ch0' = ch0{chExtensions = gEchExt : drop 1 (chExtensions ch0)}
+                            usingHState ctx $ setClientHello ch0'
+                            return ch0'
+                Just echParams -> do
+                    usingHState ctx $ setClientHello ch0
+                    mcrandO <- usingHState ctx getOuterClientRandom
+                    crandO <- case mcrandO of
+                        Nothing -> clientRandom ctx
+                        Just x -> return x
+                    usingHState ctx $ do
+                        setClientRandom crandO
+                        setOuterClientRandom $ Just crandO
+                    mpskExt <- randomPreSharedKeyExt
+                    createEncryptedClientHello ctx ch0 echParams crandO mpskExt
+            else do
+                usingHState ctx $ setClientHello ch0
+                return ch0
     sendPacket12 ctx $ Handshake [ClientHello ch]
     mEarlySecInfo <- case rtt0info of
         Nothing -> return Nothing
@@ -233,7 +248,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) mEchParams =
         | otherwise = return Nothing
 
     versionExt
-        | isJust mEchParams = do
+        | clientUseECH cparams = do
             let vers = supportedVersions $ ctxSupported ctx
             if TLS13 `elem` vers
                 then
@@ -277,9 +292,10 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) mEchParams =
                 return $ Just $ toExtensionRaw $ SecureRenegotiation cvd ""
             else return Nothing
 
-    echExt = case mEchParams of
-        Nothing -> return Nothing
-        Just _ -> return $ Just $ toExtensionRaw ECHClientHelloInner
+    -- ECHClientHelloInner should be replaced if ECHConfigList is not available.
+    echExt
+        | clientUseECH cparams = return $ Just $ toExtensionRaw ECHClientHelloInner
+        | otherwise = return Nothing
 
     preSharedKeyExt =
         case pskInfo of
@@ -536,3 +552,22 @@ cnfPublicName ECHConfig{..} = public_name contents
 
 cnfConfigId :: ECHConfig -> ConfigId
 cnfConfigId ECHConfig{..} = config_id $ key_config contents
+
+----------------------------------------------------------------
+
+-- Pretending X25519 is used because it is the de-facto and
+-- its public key is easily created.
+greasingEchExt :: IO ExtensionRaw
+greasingEchExt = do
+    cid <- getStdRandom genWord8
+    enc <- getStdRandom $ uniformByteString 32
+    n <- getStdRandom $ randomR (4, 6)
+    payload <- getStdRandom $ uniformByteString (n * 32 + 16)
+    let outer =
+            ECHClientHelloOuter
+                { echCipherSuite = (HKDF_SHA256, AES_128_GCM)
+                , echConfigId = cid
+                , echEnc = EncodedPublicKey enc
+                , echPayload = payload
+                }
+    return $ toExtensionRaw outer
