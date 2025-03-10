@@ -34,6 +34,7 @@ spec = do
         prop "can handshake with TLS 1.3 FFDHE groups" handshake13_ffdhe
     describe "ECH greasing" $ do
         prop "sends greasing ECH" handshake13_greasing
+        prop "sends greasing ECH HRR" handshake13_greasing_hrr
 
 --------------------------------------------------------------
 
@@ -366,6 +367,34 @@ handshake13_greasing (CSP13 (cli, srv)) = do
             | ClientHello CH{..} <- clientMessages
             ]
     eeMessagesHaveExt `shouldBe` [True]
+
+handshake13_greasing_hrr :: CSP13 -> IO ()
+handshake13_greasing_hrr (CSP13 (cli, srv)) = do
+    let cliSupported =
+            defaultSupported
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [P256, X25519]
+                }
+        svrSupported =
+            defaultSupported
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [X25519]
+                }
+        params =
+            ( cli
+                { clientSupported = cliSupported
+                , clientUseECH = True
+                , clientShared = (clientShared cli){sharedECHConfig = echConfList}
+                }
+            , srv{serverSupported = svrSupported}
+            )
+    (clientMessages, _) <- runTLSCaptureFail params
+    let isGreasing (ExtensionRaw eid _) = eid == EID_EncryptedClientHello
+        eeMessagesHaveExt =
+            [ any isGreasing chExtensions
+            | ClientHello CH{..} <- clientMessages
+            ]
+    eeMessagesHaveExt `shouldBe` [True, True]
 
 expectJust :: String -> Maybe a -> Expectation
 expectJust tag mx = case mx of
