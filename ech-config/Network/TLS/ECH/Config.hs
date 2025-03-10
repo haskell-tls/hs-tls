@@ -1,33 +1,35 @@
 {-# LANGUAGE RecordWildCards #-}
 
--- | Types for Encrypted Client Configuration.
+-- | Types for Configuration of Encrypted Client Hello.
 module Network.TLS.ECH.Config (
-    -- * ECH configuration list
+    -- * Types
     ECHConfigList,
+    ECHConfig (..),
+    ECHConfigContents (..),
+    HpkeKeyConfig (..),
+    ConfigId,
+    EncodedServerPublicKey (..),
+    HpkeSymmetricCipherSuite (..),
+    ECHConfigExtensionType,
+    ECHConfigExtension (..),
+
+    -- * ECH configuration list
     decodeECHConfigList,
     encodeECHConfigList,
     loadECHConfigList,
     loadECHSecretKeys,
-    ConfigId,
+
+    -- * ECH configuration
+    decodeECHConfig,
+    encodeECHConfig,
+
+    -- * Low level
     getECHConfigList,
     putECHConfigList,
     sizeOfECHConfigList,
-
-    -- * ECH configuration
-    ECHConfig (..),
-    decodeECHConfig,
-    encodeECHConfig,
     getECHConfig,
     putECHConfig,
     sizeOfECHConfig,
-
-    -- * Types
-    HpkeSymmetricCipherSuite (..),
-    EncodedServerPublicKey (..),
-    HpkeKeyConfig (..),
-    ECHConfigExtensionType,
-    ECHConfigExtension (..),
-    ECHConfigContents (..),
 ) where
 
 import qualified Control.Exception as E
@@ -48,6 +50,7 @@ class SizeOf a where
 
 ----------------------------------------------------------------
 
+-- | Type for cipher suite.
 data HpkeSymmetricCipherSuite = HpkeSymmetricCipherSuite
     { kdf_id :: Word16
     , aead_id :: Word16
@@ -83,16 +86,20 @@ putHpkeSymmetricCipherSuite wbuf HpkeSymmetricCipherSuite{..} = do
 
 ----------------------------------------------------------------
 
+-- | Encoded public key.
 newtype EncodedServerPublicKey = EncodedServerPublicKey ByteString
     deriving (Eq, Ord)
+
 instance Show EncodedServerPublicKey where
     show (EncodedServerPublicKey bs) = "\"" ++ C8.unpack (B16.encode bs) ++ "\""
 
 instance SizeOf EncodedServerPublicKey where
     sizeof (EncodedServerPublicKey bs) = 2 + BS.length bs
 
+-- | Configuration identifier.
 type ConfigId = Word8
 
+-- | Key configuration.
 data HpkeKeyConfig = HpkeKeyConfig
     { config_id :: ConfigId
     , kem_id :: Word16
@@ -142,8 +149,10 @@ putHpkeKeyConfig wbuf HpkeKeyConfig{..} = do
 
 ----------------------------------------------------------------
 
+-- | Extension type.
 type ECHConfigExtensionType = Word16
 
+-- | Raw extension.
 data ECHConfigExtension = ECHConfigExtension
     { ece_type :: ECHConfigExtensionType
     , ece_data :: ByteString
@@ -198,6 +207,7 @@ putECHConfigContents wbuf ECHConfigContents{..} = do
 
 ----------------------------------------------------------------
 
+-- | Type for configuration of encrypted client hello.
 data ECHConfig = ECHConfig
     { contents :: ECHConfigContents
     }
@@ -223,11 +233,13 @@ putECHConfig wbuf ECHConfig{..} = do
 sizeOfECHConfig :: ECHConfig -> Int
 sizeOfECHConfig cnf = sizeof cnf
 
+-- | Encoder for 'ECHConfig'.
 encodeECHConfig :: ECHConfig -> ByteString
 encodeECHConfig cnf = unsafePerformIO $ withWriteBuffer siz $ \wbuf -> putECHConfig wbuf cnf
   where
     siz = sizeOfECHConfig cnf
 
+-- | Decoder for 'ECHConfig'.
 decodeECHConfig :: ByteString -> Maybe ECHConfig
 decodeECHConfig bs =
     unsafePerformIO $
@@ -239,6 +251,7 @@ decodeECHConfig bs =
 
 ----------------------------------------------------------------
 
+-- | A list of 'ECHConfig'.
 type ECHConfigList = [ECHConfig]
 
 getECHConfigList :: ReadBuffer -> IO [ECHConfig]
@@ -251,12 +264,14 @@ putECHConfigList wbuf configs =
 sizeOfECHConfigList :: [ECHConfig] -> Int
 sizeOfECHConfigList configs = sum (map sizeOfECHConfig configs) + 2
 
+-- | Encoder for 'ECHConfigList'.
 encodeECHConfigList :: [ECHConfig] -> ByteString
 encodeECHConfigList configs = unsafePerformIO $ withWriteBuffer siz $ \wbuf ->
     putECHConfigList wbuf configs
   where
     siz = sizeOfECHConfigList configs
 
+-- | Decoder for 'ECHConfigList'.
 decodeECHConfigList :: ByteString -> Maybe [ECHConfig]
 decodeECHConfigList bs =
     unsafePerformIO $
