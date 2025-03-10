@@ -10,6 +10,7 @@ module Run (
     runTLS0RTT,
     runTLS0RTTech,
     runTLSSimpleKeyUpdate,
+    runTLSCaptureFail,
     runTLSCapture13,
     runTLSSuccess,
     runTLSFailure,
@@ -208,6 +209,29 @@ expectMaybe :: (Show a, Eq a) => String -> a -> Maybe a -> Expectation
 expectMaybe tag e mx = case mx of
     Nothing -> expectationFailure tag
     Just x -> x `shouldBe` e
+
+runTLSCaptureFail
+    :: (ClientParams, ServerParams) -> IO ([Handshake], [Handshake])
+runTLSCaptureFail params = do
+    sRef <- newIORef []
+    cRef <- newIORef []
+    runTLSFailure params (hsClient cRef) (hsServer sRef)
+    sReceived <- readIORef sRef
+    cReceived <- readIORef cRef
+    return (reverse sReceived, reverse cReceived)
+  where
+    hsClient ref ctx = do
+        installHook ctx ref
+        handshake ctx
+        sendData ctx "Foo"
+    hsServer ref ctx = do
+        installHook ctx ref
+        handshake ctx
+        _ <- recvData ctx
+        return ()
+    installHook ctx ref =
+        let recv hss = modifyIORef ref (hss :) >> return hss
+         in contextHookSetHandshakeRecv ctx recv
 
 runTLSCapture13
     :: (ClientParams, ServerParams) -> IO ([Handshake13], [Handshake13])

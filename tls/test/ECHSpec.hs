@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module ECHSpec (spec) where
 
@@ -10,6 +11,7 @@ import Data.Maybe
 import Network.TLS
 import Network.TLS.ECH.Config
 import Network.TLS.Extra.Cipher
+import Network.TLS.Internal
 import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck
@@ -30,6 +32,8 @@ spec = do
         prop "can handshake with TLS 1.3 0RTT -> PSK" handshake13_0rtt_fallback
         prop "can handshake with TLS 1.3 EC groups" handshake13_ec
         prop "can handshake with TLS 1.3 FFDHE groups" handshake13_ffdhe
+    describe "ECH greasing" $ do
+        prop "sends greasing ECH" handshake13_greasing
 
 --------------------------------------------------------------
 
@@ -334,6 +338,34 @@ handshake13_ffdhe (CSP13 (cli, srv)) = do
                 , srv{serverSupported = svrSupported}
                 )
     runTLSSimple13ECH params FullHandshake
+
+handshake13_greasing :: CSP13 -> IO ()
+handshake13_greasing (CSP13 (cli, srv)) = do
+    let cliSupported =
+            defaultSupported
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [X25519]
+                }
+        svrSupported =
+            defaultSupported
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [X25519]
+                }
+        params =
+            ( cli
+                { clientSupported = cliSupported
+                , clientUseECH = True
+                , clientShared = (clientShared cli){sharedECHConfig = echConfList}
+                }
+            , srv{serverSupported = svrSupported}
+            )
+    (clientMessages, _) <- runTLSCaptureFail params
+    let isGreasing (ExtensionRaw eid _) = eid == EID_EncryptedClientHello
+        eeMessagesHaveExt =
+            [ any isGreasing chExtensions
+            | ClientHello CH{..} <- clientMessages
+            ]
+    eeMessagesHaveExt `shouldBe` [True]
 
 expectJust :: String -> Maybe a -> Expectation
 expectJust tag mx = case mx of
