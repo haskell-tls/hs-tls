@@ -149,6 +149,7 @@ test-suite spec
         Arbitrary
         Certificate
         CiphersSpec
+        ECHSpec
         EncodeSpec
         HandshakeSpec
         PipeChan
@@ -165,10 +166,12 @@ test-suite spec
         QuickCheck,
         asn1-types,
         async,
+        base64-bytestring,
         bytestring,
         crypton,
         crypton-x509,
         crypton-x509-validation,
+        ech-config,
         hourglass,
         hspec,
         serialise,

@@ -6,8 +6,11 @@ module Run (
     runTLSSimple,
     runTLSPredicate,
     runTLSSimple13,
+    runTLSSimple13ECH,
     runTLS0RTT,
+    runTLS0RTTech,
     runTLSSimpleKeyUpdate,
+    runTLSCaptureFail,
     runTLSCapture13,
     runTLSSuccess,
     runTLSFailure,
@@ -118,6 +121,25 @@ runTLSSimple13 params mode =
         mmode <- (>>= infoTLS13HandshakeMode) <$> contextGetInformation ctx
         expectMaybe "S: mode should be Just" mode mmode
 
+runTLSSimple13ECH
+    :: (ClientParams, ServerParams)
+    -> HandshakeMode13
+    -> IO ()
+runTLSSimple13ECH params mode =
+    runTLSSuccess params hsClient hsServer
+  where
+    hsClient ctx = do
+        handshake ctx
+        minfo <- contextGetInformation ctx
+        let mmode = minfo >>= infoTLS13HandshakeMode
+            maccepted = infoIsECHAccepted <$> minfo
+        expectMaybe "C: mode should be Just" mode mmode
+        expectMaybe "C: TLS accepted should be Just" True maccepted
+    hsServer ctx = do
+        handshake ctx
+        mmode <- (>>= infoTLS13HandshakeMode) <$> contextGetInformation ctx
+        expectMaybe "S: mode should be Just" mode mmode
+
 runTLS0RTT
     :: (ClientParams, ServerParams)
     -> HandshakeMode13
@@ -149,10 +171,67 @@ runTLS0RTT params mode earlyData =
         | len > 0 = [len]
         | otherwise = []
 
+runTLS0RTTech
+    :: (ClientParams, ServerParams)
+    -> HandshakeMode13
+    -> ByteString
+    -> IO ()
+runTLS0RTTech params mode earlyData =
+    withPairContext params $ \(cCtx, sCtx) ->
+        concurrently_ (tlsServer sCtx) (tlsClient cCtx)
+  where
+    tlsClient ctx = do
+        handshake ctx
+        sendData ctx $ L.fromStrict earlyData
+        _ <- recvData ctx
+        bye ctx
+        minfo <- contextGetInformation ctx
+        let mmode = minfo >>= infoTLS13HandshakeMode
+            maccepted = infoIsECHAccepted <$> minfo
+        expectMaybe "C: mode should be Just" mode mmode
+        expectMaybe "C: TLS accepted should be Just" True maccepted
+    tlsServer ctx = do
+        handshake ctx
+        let ls = chunkLengths $ B.length earlyData
+        chunks <- replicateM (length ls) $ recvData ctx
+        (map B.length chunks, B.concat chunks) `shouldBe` (ls, earlyData)
+        sendData ctx $ L.fromStrict earlyData
+        bye ctx
+        mmode <- (>>= infoTLS13HandshakeMode) <$> contextGetInformation ctx
+        expectMaybe "S: mode should be Just" mode mmode
+    chunkLengths :: Int -> [Int]
+    chunkLengths len
+        | len > 16384 = 16384 : chunkLengths (len - 16384)
+        | len > 0 = [len]
+        | otherwise = []
+
 expectMaybe :: (Show a, Eq a) => String -> a -> Maybe a -> Expectation
 expectMaybe tag e mx = case mx of
     Nothing -> expectationFailure tag
     Just x -> x `shouldBe` e
+
+runTLSCaptureFail
+    :: (ClientParams, ServerParams) -> IO ([Handshake], [Handshake])
+runTLSCaptureFail params = do
+    sRef <- newIORef []
+    cRef <- newIORef []
+    runTLSFailure params (hsClient cRef) (hsServer sRef)
+    sReceived <- readIORef sRef
+    cReceived <- readIORef cRef
+    return (reverse sReceived, reverse cReceived)
+  where
+    hsClient ref ctx = do
+        installHook ctx ref
+        handshake ctx
+        sendData ctx "Foo"
+    hsServer ref ctx = do
+        installHook ctx ref
+        handshake ctx
+        _ <- recvData ctx
+        return ()
+    installHook ctx ref =
+        let recv hss = modifyIORef ref (hss :) >> return hss
+         in contextHookSetHandshakeRecv ctx recv
 
 runTLSCapture13
     :: (ClientParams, ServerParams) -> IO ([Handshake13], [Handshake13])
