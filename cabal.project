@@ -1,6 +1,7 @@
 packages:
   tls
   tls-session-manager
+  ech-config
   debug
   test-scripts
 
