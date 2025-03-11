@@ -7,9 +7,9 @@ maintainer:         kazu@iij.ad.jp
 author:             Kazu Yamamoto
 synopsis:           Config for TLS Encrypted Client Hello
 description:
-    Config yypes for TLS Encrypted Client Hello to glue DNS and TLS
+    Config types for TLS Encrypted Client Hello to glue DNS and TLS
 
-category:           Web
+category:           Network
 build-type:         Simple
 extra-source-files: ChangeLog.md
 
@@ -18,9 +18,10 @@ flag devel
     default:     False
 
 library
-    exposed-modules:  Network.TLS.ECH.Config
-    default-language: Haskell2010
-    ghc-options:      -Wall
+    exposed-modules:    Network.TLS.ECH.Config
+    default-language:   Haskell2010
+    default-extensions: Strict StrictData
+    ghc-options:        -Wall
     build-depends:
         base >=4.7 && <5,
         base16-bytestring,
@@ -28,12 +29,9 @@ library
         filepath,
         network-byte-order
 
-    default-extensions: Strict StrictData
-
 executable ech-gen
     main-is:            ech-gen.hs
     hs-source-dirs:     util
-
     default-language:   Haskell2010
     default-extensions: Strict StrictData
     ghc-options:        -Wall -threaded -rtsopts
@@ -48,3 +46,8 @@ executable ech-gen
 
     else
         buildable: False
+
+source-repository head
+    type:     git
+    location: https://github.com/haskell-tls/hs-tls
+    subdir:   tls
