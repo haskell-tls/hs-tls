@@ -1,5 +1,12 @@
 # Change log for "tls"
 
+## Version 2.1.9
+
+* Providing ECH(Encrypted Client Hello). See `sharedECHConfigList`,
+  `clientUseECH` and `serverECHKey`. Note that the `ech-gen` command,
+  `loadECHConfigList` and `loadECHSecretKeys` are provided by the
+  `ech-config` package.
+
 ## Version 2.1.8
 
 * Moving `Limit` to `Shared` to maintain backward compatibility
