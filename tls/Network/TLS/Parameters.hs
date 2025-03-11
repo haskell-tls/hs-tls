@@ -154,7 +154,7 @@ data ClientParams = ClientParams
     -- Default: 'False'
     , clientUseECH :: Bool
     -- ^ Enabling Encrypted Client Hello.
-    -- If 'sharedECHConfig' is null, a greasing ECH extension is sent.
+    -- If 'sharedECHConfigList' is null, a greasing ECH extension is sent.
     -- Otherwise, a valid ECH is sent.
     -- If the server rejects ECH in Server Hello,
     -- the client sends an alert after negotiation.
@@ -461,7 +461,7 @@ data Shared = Shared
     -- EncryptedExtensions based on the TLS version.
     --
     -- Default: @[]@
-    , sharedECHConfig :: ECHConfigList
+    , sharedECHConfigList :: ECHConfigList
     -- ^ ECH configuration.
     --
     -- @since 2.1.9
@@ -484,7 +484,7 @@ defaultShared =
         , sharedCAStore = mempty
         , sharedValidationCache = def
         , sharedHelloExtensions = []
-        , sharedECHConfig = []
+        , sharedECHConfigList = []
         , sharedLimit = defaultLimit
         }
 

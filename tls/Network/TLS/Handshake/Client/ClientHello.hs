@@ -112,7 +112,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
     let ch0 = mkClientHello extensions
     updateTranscriptHashI ctx "ClientHelloI" $ encodeHandshake $ ClientHello ch0
     let nhpks = supportedHPKE $ clientSupported cparams
-        echcnfs = sharedECHConfig $ clientShared cparams
+        echcnfs = sharedECHConfigList $ clientShared cparams
         mEchParams = lookupECHConfigList nhpks echcnfs
     ch <-
         if clientUseECH cparams

@@ -356,7 +356,7 @@ handshake13_greasing (CSP13 (cli, srv)) = do
             ( cli
                 { clientSupported = cliSupported
                 , clientUseECH = True
-                , clientShared = (clientShared cli){sharedECHConfig = echConfList}
+                , clientShared = (clientShared cli){sharedECHConfigList = echConfList}
                 }
             , srv{serverSupported = svrSupported}
             )
@@ -384,7 +384,7 @@ handshake13_greasing_hrr (CSP13 (cli, srv)) = do
             ( cli
                 { clientSupported = cliSupported
                 , clientUseECH = True
-                , clientShared = (clientShared cli){sharedECHConfig = echConfList}
+                , clientShared = (clientShared cli){sharedECHConfigList = echConfList}
                 }
             , srv{serverSupported = svrSupported}
             )
@@ -407,12 +407,12 @@ setParams (cli, srv) = (cli', srv')
     cli' =
         cli
             { clientUseECH = True
-            , clientShared = (clientShared cli){sharedECHConfig = echConfList}
+            , clientShared = (clientShared cli){sharedECHConfigList = echConfList}
             }
     srv' =
         srv
             { serverECHKey = echKey
-            , serverShared = (serverShared srv){sharedECHConfig = echConfList}
+            , serverShared = (serverShared srv){sharedECHConfigList = echConfList}
             }
 
 echKey :: [(ConfigId, ByteString)]

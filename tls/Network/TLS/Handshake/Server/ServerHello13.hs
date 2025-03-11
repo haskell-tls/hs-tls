@@ -270,7 +270,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
                     Just $
                         toExtensionRaw $
                             ECHEncryptedExtensions $
-                                sharedECHConfig $
+                                sharedECHConfigList $
                                     serverShared sparams
                 | otherwise = Nothing
         let eeExtensions =

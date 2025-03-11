@@ -132,7 +132,7 @@ processClientHello sparams ctx ch@CH{..} = do
         _ -> do
             setupO ctx ch
             when (chosenVersion == TLS13) $ do
-                let hasECHConf = not (null (sharedECHConfig (serverShared sparams)))
+                let hasECHConf = not (null (sharedECHConfigList (serverShared sparams)))
                 when (hasECHConf && not receivedECH) $
                     usingHState ctx $
                         setECHEE True
@@ -278,7 +278,7 @@ getHPKE ServerParams{..} ctx ECHClientHelloOuter{..} = do
     mfunc <- getTLS13HPKE ctx
     case mfunc of
         Nothing -> do
-            let mconfig = findECHConfigById echConfigId $ sharedECHConfig serverShared
+            let mconfig = findECHConfigById echConfigId $ sharedECHConfigList serverShared
                 mskR = lookup echConfigId serverECHKey
             case (mconfig, mskR) of
                 (Just config, Just skR') -> do

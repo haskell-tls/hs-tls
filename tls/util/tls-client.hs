@@ -406,7 +406,7 @@ getClientParams Options{..} serverName port sm mstore onCertReq echConfList prin
                 defaultLimit
                     { limitRecordSize = Just 8192
                     }
-            , sharedECHConfig = echConfList
+            , sharedECHConfigList = echConfList
             }
     supported =
         defaultSupported

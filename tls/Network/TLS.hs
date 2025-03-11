@@ -75,7 +75,7 @@ module Network.TLS (
     sharedCAStore,
     sharedValidationCache,
     sharedHelloExtensions,
-    sharedECHConfig,
+    sharedECHConfigList,
     sharedLimit,
 
     -- ** Client hooks

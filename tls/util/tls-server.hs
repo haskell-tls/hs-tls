@@ -223,7 +223,7 @@ getServerParams creds groups sm keyLog clientAuth mstore (ekey, ecnf) printError
             , sharedCAStore = case mstore of
                 Just store -> store
                 Nothing -> sharedCAStore defaultShared
-            , sharedECHConfig = ecnf
+            , sharedECHConfigList = ecnf
             , sharedLimit =
                 defaultLimit
                     { limitRecordSize = Just 16384
