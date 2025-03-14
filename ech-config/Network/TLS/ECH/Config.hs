@@ -113,7 +113,7 @@ instance SizeOf HpkeKeyConfig where
 
 instance Show HpkeKeyConfig where
     show HpkeKeyConfig{..} =
-        "{"
+        "("
             ++ show config_id
             ++ ", "
             ++ showKEM_ID kem_id
@@ -121,7 +121,7 @@ instance Show HpkeKeyConfig where
             ++ show public_key
             ++ ", "
             ++ show cipher_suites
-            ++ "}"
+            ++ ")"
       where
         showKEM_ID 0x0000 = "KEM_Reserved"
         showKEM_ID 0x0010 = "DHKEM(P-256, HKDF-SHA256)"
@@ -181,7 +181,20 @@ data ECHConfigContents = ECHConfigContents
     , public_name :: String
     , extensions :: [ECHConfigExtension]
     }
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord)
+
+instance Show ECHConfigContents where
+    show ECHConfigContents{..} =
+        init (show key_config)
+            ++ ", "
+            ++ show maximum_name_length
+            ++ ", "
+            ++ "\""
+            ++ public_name
+            ++ "\""
+            ++ ", "
+            ++ show extensions
+            ++ ")"
 
 instance SizeOf ECHConfigContents where
     sizeof ECHConfigContents{..} =
