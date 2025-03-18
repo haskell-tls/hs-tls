@@ -398,9 +398,7 @@ getClientParams Options{..} serverName port sm mstore onCertReq echConfList prin
     shared =
         defaultShared
             { sharedSessionManager = sm
-            , sharedCAStore = case mstore of
-                Just store -> store
-                Nothing -> mempty
+            , sharedCAStore = fromMaybe mempty mstore
             , sharedValidationCache = validateCache
             , sharedLimit =
                 defaultLimit

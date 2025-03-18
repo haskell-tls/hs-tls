@@ -179,7 +179,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
         let keyShareExt = toExtensionRaw $ KeyShareServerHello keyShare
             versionExt = toExtensionRaw $ SupportedVersionsServerHello TLS13
             shExts = keyShareExt : versionExt : preSharedKeyExt
-        if isJust $ mOuterClientRandom
+        if isJust mOuterClientRandom
             then do
                 srand <- liftIO $ serverRandomECH ctx
                 let cipherId = CipherId (cipherID usedCipher)

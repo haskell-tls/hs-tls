@@ -62,9 +62,7 @@ readDHParams s =
         mparams -> return mparams
 
 readGroups :: String -> [Group]
-readGroups s = case traverse (`lookup` namedGroups) (split ',' s) of
-    Nothing -> []
-    Just gs -> gs
+readGroups s = fromMaybe [] $ traverse (`lookup` namedGroups) (split ',' s)
 
 printDHParams :: IO ()
 printDHParams = do

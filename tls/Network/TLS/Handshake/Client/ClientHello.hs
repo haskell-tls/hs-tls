@@ -316,7 +316,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
             Just (identities, _, choice, _) -> do
                 let zero = cZero choice
                 zeroR <- getStdRandom $ uniformByteString $ B.length zero
-                obfAgeR <- getStdRandom $ genWord32
+                obfAgeR <- getStdRandom genWord32
                 let genPskId x = do
                         xR <- getStdRandom $ uniformByteString $ B.length x
                         return $ PskIdentity xR obfAgeR
@@ -535,10 +535,10 @@ lookupECHConfigList ((kemid, kdfid, aeadid) : xs) cnfs =
             | otherwise -> lookupECHConfigList xs cnfs
 
 cnfKemId :: ECHConfig -> KEM_ID
-cnfKemId ECHConfig{..} = KEM_ID $ kem_id $ key_config $ contents
+cnfKemId ECHConfig{..} = KEM_ID $ kem_id $ key_config contents
 
 cnfCipherSuite :: ECHConfig -> [(KDF_ID, AEAD_ID)]
-cnfCipherSuite ECHConfig{..} = map conv $ cipher_suites $ key_config $ contents
+cnfCipherSuite ECHConfig{..} = map conv $ cipher_suites $ key_config contents
   where
     conv HpkeSymmetricCipherSuite{..} = (KDF_ID kdf_id, AEAD_ID aead_id)
 

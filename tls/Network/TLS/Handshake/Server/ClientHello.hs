@@ -116,7 +116,7 @@ processClientHello sparams ctx ch@CH{..} = do
 
     -- Processing encrypted client hello
     (mClientHello', receivedECH) <-
-        if chosenVersion == TLS13 && (not (null (serverECHKey sparams)))
+        if chosenVersion == TLS13 && not (null (serverECHKey sparams))
             then do
                 lookupAndDecodeAndDo
                     EID_EncryptedClientHello

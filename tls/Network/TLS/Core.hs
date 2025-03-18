@@ -499,7 +499,7 @@ terminateWithWriteLock ctx send err level desc reason = withWriteLock ctx $ do
                 sessionInvalidate (sharedSessionManager $ ctxShared ctx) sid
     catchException (send [(level, desc)]) (\_ -> return ())
     setEOF ctx
-    debugError (ctxDebug ctx) $ reason
+    debugError (ctxDebug ctx) reason
     E.throwIO (Terminated False reason err)
 
 {-# DEPRECATED recvData' "use recvData that returns strict bytestring" #-}

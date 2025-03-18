@@ -131,7 +131,7 @@ sendCCSandFinished ctx role = do
     contextFlush ctx
     enablePeerRecordLimit ctx
     ver <- usingState_ ctx getVersion
-    verifyData <- VerifyData <$> (generateFinished ctx ver role)
+    verifyData <- VerifyData <$> generateFinished ctx ver role
     sendPacket12 ctx (Handshake [Finished verifyData])
     usingState_ ctx $ setVerifyDataForSend verifyData
     contextFlush ctx
