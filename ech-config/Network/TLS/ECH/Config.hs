@@ -221,7 +221,7 @@ putECHConfigContents wbuf ECHConfigContents{..} = do
 ----------------------------------------------------------------
 
 -- | Type for configuration of encrypted client hello.
-data ECHConfig = ECHConfig
+newtype ECHConfig = ECHConfig
     { contents :: ECHConfigContents
     }
     deriving (Eq, Ord)
@@ -244,7 +244,7 @@ putECHConfig wbuf ECHConfig{..} = do
     withLength16 wbuf $ putECHConfigContents wbuf contents
 
 sizeOfECHConfig :: ECHConfig -> Int
-sizeOfECHConfig cnf = sizeof cnf
+sizeOfECHConfig = sizeof
 
 -- | Encoder for 'ECHConfig'.
 encodeECHConfig :: ECHConfig -> ByteString
@@ -299,7 +299,7 @@ decodeECHConfigList bs =
 loadECHConfigList :: FilePath -> IO [ECHConfig]
 loadECHConfigList file = do
     bs <- C8.readFile file
-    withReadBuffer bs $ getECHConfigList
+    withReadBuffer bs getECHConfigList
 
 -- | Loading secret keys stored in files whose names
 -- are "\<num\>.key".

@@ -12,7 +12,7 @@ import System.Environment (getArgs)
 main :: IO ()
 main = do
     [publicName] <- getArgs
-    runInitIO $ addResourceDataForSVCB
+    runInitIO addResourceDataForSVCB
     let dom = fromRepresentation publicName
     ex <- withLookupConf defaultLookupConf $ \env -> DNS.lookup env dom HTTPS
     case ex of
