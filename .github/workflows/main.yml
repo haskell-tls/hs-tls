@@ -14,43 +14,78 @@ jobs:
       fail-fast: false
       matrix:
         os:  [ 'ubuntu-latest', 'macOS-latest', 'windows-latest' ]
-        ghc: [ '9.2', '9.4', '9.6' ]
+        ghc: [ '9.2', '9.4', '9.6', '9.8', '9.10', '9.12' ]
+
+    env:
+      cache-name: cabal-ghc
+      target-config: --test-show-details=streaming --enable-tests --disable-benchmarks
 
     steps:
     - run: git config --global core.autocrlf false
 
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
-    - uses: haskell/actions/setup@v2
+    - uses: haskell-actions/setup@v2
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: latest
 
-    - name: Cache
-      uses: actions/cache@v3
-      env:
-        cache-name: cache-cabal
+    - name: Hackage index, Cache Key
+      id: params
+      shell: bash
+      run: |
+        ghc_version=$(ghc --numeric-version)
+        cabal update
+        echo "cache=${{ runner.os }}-build-${{ env.cache-name }}-${ghc_version}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}" > "$GITHUB_OUTPUT"
+        echo "ghc_version=$ghc_version" >> "$GITHUB_OUTPUT"
+
+    - name: Restore Cache
+      uses: actions/cache/restore@v4
+      if: ${{ github.ref_name != 'ci-uc' }}
       with:
         path: ~/.cabal
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
-        restore-keys: |
-          ${{ runner.os }}-build-${{ env.cache-name }}-
-          ${{ runner.os }}-build-
-          ${{ runner.os }}-
+        key: ${{ steps.params.outputs.cache }}
+
+    - name: Install doctest
+      id: doctest-dep
+      if: ${{ runner.os == 'Linux' }}
+      shell: bash
+      run: |
+        if cabal install --offline --overwrite-policy=always doctest
+        then
+          echo "installed=false" >> "$GITHUB_OUTPUT"
+        else
+          cabal install doctest --overwrite-policy=always
+          echo "installed=true" >> "$GITHUB_OUTPUT"
+        fi
 
     - name: Install dependencies
+      id: inst-dep
+      shell: bash
       run: |
-        cabal update
-        cabal build --only-dependencies --enable-tests --disable-benchmarks all
+        if cabal build --offline --only-dependencies ${{ env.target-config }} all
+        then
+          echo "installed=false" >> "$GITHUB_OUTPUT"
+        else
+          cabal build --only-dependencies ${{ env.target-config }} all
+          echo "installed=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Save Cache
+      uses: actions/cache/save@v4
+      if: ${{ steps.inst-dep.outputs.installed == 'true' || steps.doctest-dep.outputs.installed == 'true' }}
+      with:
+        path: ~/.cabal
+        key: ${{ steps.params.outputs.cache }}
 
     - name: Build
-      run: cabal build --enable-tests --disable-benchmarks all
+      run: cabal build ${{ env.target-config }} all
 
     - name: Run tests
-      run: cabal test --test-show-details=streaming all
+      run: cabal test ${{ env.target-config }} all
 
     - name: Run doctest
       if: ${{ runner.os == 'Linux' }}
+      shell: bash
       run: |
-        cabal install doctest --overwrite-policy=always
-        cabal repl --build-depends=QuickCheck --with-ghc=doctest tls
+        cabal repl --build-depends=QuickCheck --with-ghc=doctest ${{ env.target-config }} tls
