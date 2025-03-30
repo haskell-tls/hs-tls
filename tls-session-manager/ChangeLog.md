@@ -1,5 +1,9 @@
 # ChangeLog for tls-session-manager
 
+## 0.0.8
+
+* Removing "basement".
+
 ## 0.0.7
 
 * Naming threads.
