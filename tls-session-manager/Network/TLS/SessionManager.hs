@@ -13,11 +13,12 @@ module Network.TLS.SessionManager (
     dbMaxSize,
 ) where
 
-import Basement.Block (Block)
 import Control.Exception (assert)
 import Control.Reaper
 import Data.ByteArray (convert)
 import Data.ByteString (ByteString)
+import Data.ByteString.Short (ShortByteString)
+import qualified Data.ByteString.Short as SBS
 import Data.IORef
 import Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as Q
@@ -49,8 +50,8 @@ defaultConfig =
 
 ----------------------------------------------------------------
 
-toKey :: ByteString -> Block Word8
-toKey = convert
+toKey :: ByteString -> SessionIDCopy
+toKey = SBS.toShort
 
 toValue :: SessionData -> SessionDataCopy
 toValue sd =
@@ -69,7 +70,7 @@ fromValue (SessionDataCopy sd) =
 
 ----------------------------------------------------------------
 
-type SessionIDCopy = Block Word8
+type SessionIDCopy = ShortByteString
 newtype SessionDataCopy = SessionDataCopy SessionData
     deriving (Show, Eq)
 
