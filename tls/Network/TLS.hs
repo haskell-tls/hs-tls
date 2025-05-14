@@ -127,6 +127,7 @@ module Network.TLS (
     debugPrintSeed,
     debugVersionForced,
     debugKeyLogger,
+    defaultKeyLogger,
     debugError,
     debugTraceKey,
 

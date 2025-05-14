@@ -8,6 +8,7 @@ module Network.TLS.Parameters (
     CommonParams,
     DebugParams (..),
     defaultDebugParams,
+    defaultKeyLogger,
     ClientHooks (..),
     defaultClientHooks,
     OnCertificateRequest,
@@ -30,8 +31,11 @@ module Network.TLS.Parameters (
     Information (..),
 ) where
 
+import Control.Concurrent (MVar, newMVar, withMVar)
 import Crypto.HPKE
 import Data.Default (Default (def))
+import System.Environment (lookupEnv)
+import System.IO.Unsafe (unsafePerformIO)
 
 import Network.TLS.Cipher
 import Network.TLS.Compression
@@ -77,6 +81,20 @@ data DebugParams = DebugParams
     , debugTraceKey :: String -> IO ()
     }
 
+{-# NOINLINE keyLogLock #-}
+keyLogLock :: MVar ()
+keyLogLock = unsafePerformIO $ newMVar ()
+
+{-# NOINLINE keyLogFile #-}
+keyLogFile :: Maybe FilePath
+keyLogFile = unsafePerformIO $ lookupEnv "SSLKEYLOGFILE"
+
+-- | Key logger with the SSLKEYLOGFILE environment variable.
+defaultKeyLogger :: String -> IO ()
+defaultKeyLogger ~msg = case keyLogFile of
+    Nothing -> return ()
+    Just file -> withMVar keyLogLock $ \_ -> appendFile file (msg ++ "\n")
+
 -- | Default value for 'DebugParams'
 defaultDebugParams :: DebugParams
 defaultDebugParams =
@@ -84,7 +102,7 @@ defaultDebugParams =
         { debugSeed = Nothing
         , debugPrintSeed = const (return ())
         , debugVersionForced = Nothing
-        , debugKeyLogger = \ ~_ -> return ()
+        , debugKeyLogger = defaultKeyLogger
         , debugError = \ ~_ -> return ()
         , debugTraceKey = \ ~_ -> return ()
         }
