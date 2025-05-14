@@ -1,5 +1,10 @@
 # Change log for "tls"
 
+## Version 2.1.10
+
+* Supporting the SSLKEYLOGFILE environment variable.
+  [#499](https://github.com/haskell-tls/hs-tls/pull/499)
+
 ## Version 2.1.9
 
 * Providing ECH(Encrypted Client Hello). See `sharedECHConfigList`,
