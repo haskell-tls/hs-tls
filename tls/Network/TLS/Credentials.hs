@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Network.TLS.Credentials (
@@ -27,9 +26,6 @@ import qualified Network.TLS.Struct as TLS
 import Network.TLS.X509
 
 type Credential = (CertificateChain, PrivKey)
-
-instance {-# OVERLAPS #-} Show Credential where
-    show (cc, _) = TLS.showCertificateChain cc
 
 newtype Credentials = Credentials [Credential] deriving (Show)
 

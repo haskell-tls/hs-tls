@@ -1,4 +1,3 @@
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternSynonyms #-}
 
 module Network.TLS.HashAndSignature (
@@ -133,10 +132,6 @@ instance Show SignatureAlgorithm where
 ------------------------------------------------------------
 
 type HashAndSignatureAlgorithm = (HashAlgorithm, SignatureAlgorithm)
-
-instance {-# OVERLAPS #-} Show (HashAlgorithm, SignatureAlgorithm) where
-    show (HashIntrinsic, s) = show s
-    show (h, s) = show h ++ "-" ++ show s
 
 {- FOURMOLU_DISABLE -}
 supportedSignatureSchemes :: [HashAndSignatureAlgorithm]
