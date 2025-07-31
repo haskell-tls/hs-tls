@@ -44,7 +44,13 @@ safeRecv = Network.recv
 
 instance HasBackend Network.Socket where
     initializeBackend _ = return ()
-    getBackend sock = Backend (return ()) (Network.close sock) (Network.sendAll sock) recvAll
+    getBackend sock =
+        Backend
+            { backendFlush = return ()
+            , backendClose = Network.close sock
+            , backendSend = Network.sendAll sock
+            , backendRecv = recvAll
+            }
       where
         recvAll n = B.concat <$> loop n
           where
@@ -57,4 +63,10 @@ instance HasBackend Network.Socket where
 
 instance HasBackend Handle where
     initializeBackend handle = hSetBuffering handle NoBuffering
-    getBackend handle = Backend (hFlush handle) (hClose handle) (B.hPut handle) (B.hGet handle)
+    getBackend handle =
+        Backend
+            { backendFlush = hFlush handle
+            , backendClose = hClose handle
+            , backendSend = B.hPut handle
+            , backendRecv = B.hGet handle
+            }
