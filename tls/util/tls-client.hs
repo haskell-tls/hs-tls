@@ -46,6 +46,7 @@ data Options = Options
     , optTraceKey :: Bool
     , optIPv4Only :: Bool
     , optIPv6Only :: Bool
+    , optTrustedAnchor :: Maybe FilePath
     }
     deriving (Show)
 
@@ -69,6 +70,7 @@ defaultOptions =
         , optTraceKey = False
         , optIPv4Only = False
         , optIPv6Only = False
+        , optTrustedAnchor = Nothing
         }
 
 usage :: String
@@ -161,6 +163,11 @@ options =
         []
         (NoArg (\o -> o{optIPv6Only = True, optIPv4Only = False}))
         "IPv6 only"
+    , Option
+        ['t']
+        ["trusted-anchor"]
+        (ReqArg (\fl o -> o{optTrustedAnchor = Just fl}) "<file>")
+        "trusted anchor file"
     ]
 
 showUsageAndExit :: String -> IO a
@@ -213,8 +220,13 @@ main = do
                 , auxShow = showContent
                 , auxReadResumptionData = readIORef ref
                 }
-    mstore <-
-        if optValidate then Just <$> getSystemCertificateStore else return Nothing
+    mstore <- do
+      mstore' <- case optTrustedAnchor of
+        Nothing -> 
+          if optValidate then Just <$> getSystemCertificateStore else return Nothing
+        Just file -> readCertificateStore file
+      when (isNothing mstore') $ showUsageAndExit "cannot set trusted anchor"
+      return mstore'
     echConfList <- case optECHConfigFile of
         Nothing -> return []
         Just ecnff ->
