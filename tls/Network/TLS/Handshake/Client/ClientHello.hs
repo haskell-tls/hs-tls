@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -11,6 +12,12 @@ import Crypto.HPKE
 import qualified Data.ByteString as B
 import Network.TLS.ECH.Config
 import System.Random
+
+#if !MIN_VERSION_random(1,3,0)
+import Data.ByteString.Internal (unsafeCreate)
+import Foreign.Ptr
+import Foreign.Storable
+#endif
 
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
@@ -571,3 +578,17 @@ greasingEchExt = do
                 , echPayload = payload
                 }
     return $ toExtensionRaw outer
+
+#if !MIN_VERSION_random(1,3,0)
+uniformByteString :: RandomGen g => Int -> g -> (ByteString, g)
+uniformByteString l g0 = (bs, g2)
+  where
+    (g1, g2) = split g0
+    bs = unsafeCreate l $ go 0 g1
+    go n g ptr
+        | n == l = return ()
+        | otherwise = do
+            let (w, g') = genWord8 g
+            poke ptr w
+            go (n + 1) g' (plusPtr ptr 1)
+#endif
