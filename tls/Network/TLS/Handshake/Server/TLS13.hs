@@ -56,6 +56,11 @@ recvClientSecondFlight13 sparams ctx (appKey, clientHandshakeSecret, authenticat
             expectFinished sparams ctx chExtensions appKey clientHandshakeSecret sfSentTime
     if not authenticated && serverWantClientCert sparams
         then runRecvHandshake13 $ do
+            -- RFC 8446 Sec 4.4.3: Clients MUST send this message
+            -- whenever authenticating via a certificate (i.e., when the
+            -- Certificate message is non-empty).  When sent, this message MUST
+            -- appear immediately after the Certificate message and immediately
+            -- prior to the Finished message.
             skip <- recvHandshake13 ctx $ expectCertificate sparams ctx
             unless skip $
                 recvHandshake13hash ctx "CertVerify" (expectCertVerify sparams ctx)
