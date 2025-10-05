@@ -7,6 +7,7 @@ module Certificate (
     arbitraryX509WithKey,
     arbitraryX509WithKeyAndUsage,
     arbitraryDN,
+    getSignatureALG,
     toPubKeyEC,
     toPrivKeyEC,
 ) where

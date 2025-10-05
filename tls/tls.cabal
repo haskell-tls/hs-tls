@@ -233,3 +233,43 @@ executable tls-client
 
     else
         buildable: False
+
+benchmark tls-bench
+    main-is: Benchmarks.hs
+    type: exitcode-stdio-1.0
+    other-modules:
+        PipeChan
+        Certificate
+        Session
+        PubKey
+        Run
+    hs-source-dirs:
+        Benchmarks
+        test
+    default-language:   Haskell2010
+    build-depends:
+        base >=4.9 && <5,
+        bytestring,
+        containers,
+        async,
+        data-default,
+        hourglass,
+        crypton,
+        crypton-x509,
+        crypton-x509-store,
+        crypton-x509-validation,
+        ech-config,
+        network,
+        network-run,
+        tls,
+        asn1-types,
+        tasty-bench,
+        QuickCheck,
+        serialise,
+        hspec
+
+
+    if flag(devel)
+
+    else
+        buildable: False

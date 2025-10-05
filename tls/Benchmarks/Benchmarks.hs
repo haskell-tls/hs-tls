@@ -19,6 +19,11 @@ import Test.Tasty.Bench
 import Network.TLS hiding (HashSHA1, HashSHA256)
 import Network.TLS.Extra.Cipher
 import System.IO.Unsafe
+import PipeChan
+import Certificate
+import Session
+import Run
+import PubKey
 
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
@@ -197,7 +202,7 @@ withDataPipe params tlsServer tlsClient cont = do
     startQueue  <- newChan
     resultQueue <- newChan
 
-    (cCtx, sCtx) <- newPairContext params
+    (cCtx, sCtx) <- snd <$> newPairContext params
 
     withAsync (E.catch (tlsServer sCtx resultQueue)
                        (printAndRaise "server" (serverSupported $ snd params))) $ \sAsync -> withAsync (E.catch (tlsClient startQueue cCtx)
@@ -252,187 +257,3 @@ byeBye ctx = do
     bye ctx
     bs <- recvData ctx
     unless (B.null bs) $ fail "byeBye: unexpected application data"
-
-
-
----------------------------------------------------------------------------------
-{-
-  Copy-paste from tls tests
--}
-
----------------------------------------------------------------------------------
-
-getSignatureALG :: PubKey -> SignatureALG
-getSignatureALG (PubKeyRSA _) = SignatureALG HashSHA1 PubKeyALG_RSA
-getSignatureALG (PubKeyDSA _) = SignatureALG HashSHA1 PubKeyALG_DSA
-getSignatureALG (PubKeyEC _) = SignatureALG HashSHA256 PubKeyALG_EC
-getSignatureALG (PubKeyEd25519 _) = SignatureALG_IntrinsicHash PubKeyALG_Ed25519
-getSignatureALG (PubKeyEd448 _) = SignatureALG_IntrinsicHash PubKeyALG_Ed448
-getSignatureALG pubKey = error $ "getSignatureALG: unsupported public key: " ++ show pubKey
-
-readClientSessionRef :: (IORef (Maybe c), IORef (Maybe s)) -> IO (Maybe c)
-readClientSessionRef refs = readIORef (fst refs)
-
-clearClientSessionRef :: (IORef (Maybe c), IORef (Maybe s)) -> IO ()
-clearClientSessionRef refs = writeIORef (fst refs) Nothing
-
-twoSessionRefs :: IO (IORef (Maybe client), IORef (Maybe server))
-twoSessionRefs = (,) <$> newIORef Nothing <*> newIORef Nothing
-
-
-setPairParamsSessionResuming
-    :: (SessionID, SessionData)
-    -> (ClientParams, ServerParams)
-    -> (ClientParams, ServerParams)
-setPairParamsSessionResuming sessionStuff (clientParams, serverParams) =
-    ( clientParams{clientWantSessionResume = Just sessionStuff}
-    , serverParams
-    )
-
-setPairParamsSessionManagers
-    :: (SessionManager, SessionManager)
-    -> (ClientParams, ServerParams)
-    -> (ClientParams, ServerParams)
-setPairParamsSessionManagers (clientManager, serverManager) (clientParams, serverParams) = (nc, ns)
-  where
-    nc =
-        clientParams
-            { clientShared = updateSessionManager clientManager $ clientShared clientParams
-            }
-    ns =
-        serverParams
-            { serverShared = updateSessionManager serverManager $ serverShared serverParams
-            }
-    updateSessionManager manager shared = shared{sharedSessionManager = manager}
-
-
-twoSessionManagers
-    :: (IORef (Maybe (SessionID, SessionData)), IORef (Maybe (SessionID, SessionData)))
-    -> (SessionManager, SessionManager)
-twoSessionManagers (cRef, sRef) = (oneSessionManager cRef, oneSessionManager sRef)
-
--- | simple session manager to store one session id and session data for a single thread.
--- a Real concurrent session manager would use an MVar and have multiples items.
-oneSessionManager :: IORef (Maybe (SessionID, SessionData)) -> SessionManager
-oneSessionManager ref =
-    noSessionManager
-        { sessionResume = \myId -> readIORef ref >>= maybeResume False myId
-        , sessionResumeOnlyOnce = \myId -> readIORef ref >>= maybeResume True myId
-        , sessionEstablish = \myId dat -> writeIORef ref (Just (myId, dat)) >> return Nothing
-        , sessionInvalidate = \_ -> return ()
-        , sessionUseTicket = False
-        }
-  where
-    maybeResume onlyOnce myId (Just (sid, sdata))
-        | sid == myId = when onlyOnce (writeIORef ref Nothing) >> return (Just sdata)
-    maybeResume _ _ _ = return Nothing
-
-
-{-# NOINLINE getGlobalRSAPair #-}
-getGlobalRSAPair :: (RSA.PublicKey, RSA.PrivateKey)
-getGlobalRSAPair = unsafePerformIO (readMVar globalRSAPair)
-
-{-# NOINLINE globalRSAPair #-}
-globalRSAPair :: MVar (RSA.PublicKey, RSA.PrivateKey)
-globalRSAPair = unsafePerformIO $ do
-    drg <- drgNew
-    newMVar (fst $ withDRG drg arbitraryRSAPairWithRNG)
-
-arbitraryRSAPairWithRNG :: MonadRandom m => m (RSA.PublicKey, RSA.PrivateKey)
-arbitraryRSAPairWithRNG = RSA.generate 256 0x10001
-
--- | represent a unidirectional pipe with a buffered read channel and
--- a write channel
-data UniPipeChan = UniPipeChan
-    { getReadUniPipe :: Chan B.ByteString
-    , getWriteUniPipe :: Chan B.ByteString
-    }
-
-newUniPipeChan :: IO UniPipeChan
-newUniPipeChan = UniPipeChan <$> newChan <*> newChan
-
-runUniPipe :: UniPipeChan -> IO ThreadId
-runUniPipe UniPipeChan{..} =
-    forkIO $
-        forever $
-            readChan getReadUniPipe >>= writeChan getWriteUniPipe
-
-----------------------------------------------------------------
-
--- | Represent a bidirectional pipe with 2 nodes A and B
-data PipeChan = PipeChan
-    { fromC :: IORef B.ByteString
-    , fromS :: IORef B.ByteString
-    , c2s :: UniPipeChan
-    , s2c :: UniPipeChan
-    }
-
-newPipe :: IO PipeChan
-newPipe =
-    PipeChan
-        <$> newIORef B.empty
-        <*> newIORef B.empty
-        <*> newUniPipeChan
-        <*> newUniPipeChan
-
-runPipe :: PipeChan -> IO (ThreadId, ThreadId)
-runPipe PipeChan{..} = (,) <$> runUniPipe c2s <*> runUniPipe s2c
-
-readPipeC :: PipeChan -> Int -> IO B.ByteString
-readPipeC PipeChan{..} sz = readBuffered fromS (getWriteUniPipe s2c) sz
-
-writePipeC :: PipeChan -> B.ByteString -> IO ()
-writePipeC PipeChan{..} = writeChan $ getWriteUniPipe c2s
-
-readPipeS :: PipeChan -> Int -> IO B.ByteString
-readPipeS PipeChan{..} sz = readBuffered fromC (getWriteUniPipe c2s) sz
-
-writePipeS :: PipeChan -> B.ByteString -> IO ()
-writePipeS PipeChan{..} = writeChan $ getReadUniPipe s2c
-
--- helper to read buffered data.
-readBuffered :: IORef B.ByteString -> Chan B.ByteString -> Int -> IO B.ByteString
-readBuffered ref chan sz = do
-    left <- readIORef ref
-    if B.length left >= sz
-        then do
-            let (ret, nleft) = B.splitAt sz left
-            writeIORef ref nleft
-            return ret
-        else do
-            let newSize = sz - B.length left
-            newData <- readChan chan
-            writeIORef ref newData
-            remain <- readBuffered ref chan newSize
-            return (left `B.append` remain)
-
-
-newPairContext
-    :: (ClientParams, ServerParams)
-    -> IO (Context, Context)
-newPairContext (cParams, sParams) = do
-    pipe <- newPipe
-    _tids <- runPipe pipe
-    let noFlush = return ()
-    let noClose = return ()
-
-    let cBackend = Backend noFlush noClose (writePipeC pipe) (readPipeC pipe)
-    let sBackend = Backend noFlush noClose (writePipeS pipe) (readPipeS pipe)
-    cCtx' <- contextNew cBackend cParams
-    sCtx' <- contextNew sBackend sParams
-
-    contextHookSetLogging cCtx' (logging "client: ")
-    contextHookSetLogging sCtx' (logging "server: ")
-
-    return ((cCtx', sCtx'))
-  where
-    debug :: Bool
-    debug = False
-    logging pre =
-        if debug
-            then
-                defaultLogging
-                    { loggingPacketSent = putStrLn . ((pre ++ ">> ") ++)
-                    , loggingPacketRecv = putStrLn . ((pre ++ "<< ") ++)
-                    }
-            else defaultLogging

@@ -15,6 +15,7 @@ module Run (
     runTLSSuccess,
     runTLSFailure,
     expectMaybe,
+    newPairContext,
 ) where
 
 import Control.Concurrent
