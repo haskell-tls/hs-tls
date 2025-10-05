@@ -195,36 +195,3 @@ main =
   where
     small = B.replicate 256 0
     large = B.replicate 102400 0
-
-withDataPipe :: (ClientParams, ServerParams) -> (Context -> Chan result -> IO ()) -> (Chan start -> Context -> IO ()) -> ((start -> IO (), IO result) -> IO a) -> IO a
-withDataPipe params tlsServer tlsClient cont = do
-    -- initial setup
-    startQueue  <- newChan
-    resultQueue <- newChan
-
-    (cCtx, sCtx) <- snd <$> newPairContext params
-
-    withAsync (E.catch (tlsServer sCtx resultQueue)
-                       (printAndRaise "server" (serverSupported $ snd params))) $ \sAsync -> withAsync (E.catch (tlsClient startQueue cCtx)
-                                (printAndRaise "client" (clientSupported $ fst params))) $ \cAsync -> do
-      let readResult = waitBoth cAsync sAsync >> readChan resultQueue
-      cont (writeChan startQueue, readResult)
-
-  where
-        printAndRaise :: String -> Supported -> E.SomeException -> IO ()
-        printAndRaise s supported e = do
-            putStrLn $ s ++ " exception: " ++ show e ++
-                            ", supported: " ++ show supported
-            E.throwIO e
-
-
--- Terminate the write direction and wait to receive the peer EOF.  This is
--- necessary in situations where we want to confirm the peer status, or to make
--- sure to receive late messages like session tickets.  In the test suite this
--- is used each time application code ends the connection without prior call to
--- 'recvData'.
-byeBye :: Context -> IO ()
-byeBye ctx = do
-    bye ctx
-    bs <- recvData ctx
-    unless (B.null bs) $ fail "byeBye: unexpected application data"
