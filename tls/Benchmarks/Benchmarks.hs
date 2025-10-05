@@ -217,35 +217,6 @@ withDataPipe params tlsServer tlsClient cont = do
                             ", supported: " ++ show supported
             E.throwIO e
 
-simpleX509 :: PubKey -> SignedCertificate
-simpleX509 pubKey =
-    let cert = simpleCertificate pubKey
-        sig = replicate 40 1
-        sigalg = getSignatureALG pubKey
-        (signedExact, ()) = objectToSignedExact (\_ -> (B.pack sig, sigalg, ())) cert
-     in signedExact
-
-simpleCertificate :: PubKey -> Certificate
-simpleCertificate pubKey =
-    Certificate
-        { certVersion = 3
-        , certSerial = 0
-        , certSignatureAlg = getSignatureALG pubKey
-        , certIssuerDN = simpleDN
-        , certSubjectDN = simpleDN
-        , certValidity = (time1, time2)
-        , certPubKey = pubKey
-        , certExtensions =
-            Extensions $
-                Just
-                    [ extensionEncode True $
-                        ExtKeyUsage [KeyUsage_digitalSignature, KeyUsage_keyEncipherment]
-                    ]
-        }
-  where
-    time1 = DateTime (Date 1999 January 1) (TimeOfDay 0 0 0 0)
-    time2 = DateTime (Date 2049 January 1) (TimeOfDay 0 0 0 0)
-    simpleDN = DistinguishedName []
 
 -- Terminate the write direction and wait to receive the peer EOF.  This is
 -- necessary in situations where we want to confirm the peer status, or to make
