@@ -156,19 +156,17 @@ main =
         [ bgroup
             "connection"
             -- not sure the number actually make sense for anything. improve ..
-            [
-            --   benchConnection (getParams SSL3 blockCipher) small "SSL3-256 bytes",
-            --   benchConnection (getParams TLS10 blockCipher) small "TLS10-256 bytes",
-            --   benchConnection (getParams TLS11 blockCipher) small "TLS11-256 bytes",
-              benchConnection (getParams TLS12 blockCipher) small "TLS12-256 bytes"
+            [ benchConnection (getParams SSL3 blockCipher) small "SSL3-256 bytes"
+            , benchConnection (getParams TLS10 blockCipher) small "TLS10-256 bytes"
+            , benchConnection (getParams TLS11 blockCipher) small "TLS11-256 bytes"
+            , benchConnection (getParams TLS12 blockCipher) small "TLS12-256 bytes"
             ]
         , bgroup
             "resumption"
-            [
-                -- benchResumption (getParams SSL3 blockCipher) small "SSL3-256 bytes",
-                -- benchResumption (getParams TLS10 blockCipher) small "TLS10-256 bytes",
-                -- benchResumption (getParams TLS11 blockCipher) small "TLS11-256 bytes",
-                benchResumption (getParams TLS12 blockCipher) small "TLS12-256 bytes"
+            [ benchResumption (getParams SSL3 blockCipher) small "SSL3-256 bytes"
+            , benchResumption (getParams TLS10 blockCipher) small "TLS10-256 bytes"
+            , benchResumption (getParams TLS11 blockCipher) small "TLS11-256 bytes"
+            , benchResumption (getParams TLS12 blockCipher) small "TLS12-256 bytes"
             ]
         , -- Here we try to measure TLS12 and TLS13 performance with AEAD ciphers.
           -- Resumption and a larger message can be a demonstration of the symmetric
