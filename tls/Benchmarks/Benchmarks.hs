@@ -4,26 +4,13 @@ module Main where
 
 import Certificate
 import Control.Concurrent.Chan
-import Control.Concurrent
-import Control.Concurrent.Async
-import qualified Control.Exception as E
-import Control.Monad (unless, forever)
-import qualified Crypto.PubKey.RSA as RSA
-import Crypto.Random
 import Data.Default (def)
-import Data.Hourglass
 import Data.IORef
 import Data.X509
 import Data.X509.Validation
 import Test.Tasty.Bench
 import Network.TLS
-import GHC.Base (when)
-import Test.Tasty.Bench
-import Network.TLS hiding (HashSHA1, HashSHA256)
 import Network.TLS.Extra.Cipher
-import System.IO.Unsafe
-import PipeChan
-import Certificate
 import Session
 import Run
 import PubKey

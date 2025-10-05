@@ -144,19 +144,6 @@ test-suite spec
     main-is:            Spec.hs
     build-tool-depends: hspec-discover:hspec-discover
     hs-source-dirs:     test
-    other-modules:
-        API
-        Arbitrary
-        Certificate
-        CiphersSpec
-        ECHSpec
-        EncodeSpec
-        HandshakeSpec
-        PipeChan
-        PubKey
-        Run
-        Session
-        ThreadSpec
 
     default-extensions: Strict StrictData
     default-language:   Haskell2010
@@ -238,18 +225,27 @@ benchmark tls-bench
     main-is: Benchmarks.hs
     type: exitcode-stdio-1.0
     other-modules:
-        PipeChan
+        API
+        Arbitrary
         Certificate
-        Session
+        CiphersSpec
+        ECHSpec
+        EncodeSpec
+        HandshakeSpec
+        PipeChan
         PubKey
         Run
+        Session
+        ThreadSpec
     hs-source-dirs:
         Benchmarks
         test
     default-language:   Haskell2010
+    ghc-options: -Wall
     build-depends:
         base >=4.9 && <5,
         bytestring,
+        base64-bytestring,
         containers,
         async,
         data-default,
@@ -267,9 +263,3 @@ benchmark tls-bench
         QuickCheck,
         serialise,
         hspec
-
-
-    if flag(devel)
-
-    else
-        buildable: False
