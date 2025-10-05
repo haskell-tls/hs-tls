@@ -1,8 +1,9 @@
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE RecordWildCards #-}
 
 module Main where
 
+import Certificate
+import Control.Concurrent.Chan
 import Control.Concurrent
 import Control.Concurrent.Async
 import qualified Control.Exception as E
@@ -14,6 +15,8 @@ import Data.Hourglass
 import Data.IORef
 import Data.X509
 import Data.X509.Validation
+import Test.Tasty.Bench
+import Network.TLS
 import GHC.Base (when)
 import Test.Tasty.Bench
 import Network.TLS hiding (HashSHA1, HashSHA256)
