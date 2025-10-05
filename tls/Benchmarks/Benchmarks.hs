@@ -15,7 +15,7 @@ import Data.IORef
 import Data.X509
 import Data.X509.Validation
 import GHC.Base (when)
-import Gauge.Main
+import Test.Tasty.Bench
 import Network.TLS hiding (HashSHA1, HashSHA256)
 import Network.TLS.Extra.Cipher
 import System.IO.Unsafe

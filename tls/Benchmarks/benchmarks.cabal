@@ -39,4 +39,4 @@ executable benchmarks
         network,
         network-run,
         tls,
-        gauge
+        tasty-bench
