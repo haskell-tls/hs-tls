@@ -1,0 +1,42 @@
+cabal-version:      >=1.10
+name:               benchmarks
+version:            2.1.10
+license:            BSD3
+license-file:       LICENSE
+copyright:          Vincent Hanquez <vincent@snarc.org>
+maintainer:         Kazu Yamamoto <kazu@iij.ad.jp>
+author:             Vincent Hanquez <vincent@snarc.org>
+homepage:           https://github.com/haskell-tls/hs-tls
+synopsis:           tls package benchmarks
+description:        Benchmarks suite for tls package development
+category:           Network
+build-type: Simple
+
+source-repository head
+    type:     git
+    location: https://github.com/haskell-tls/hs-tls
+    subdir:   benchmarks
+
+executable benchmarks
+    main-is:            Benchmarks.hs
+    hs-source-dirs:     .
+    default-language:   Haskell2010
+    ghc-options:        -Wall -threaded -rtsopts
+    build-depends:
+        base >=4.9 && <5,
+        bytestring,
+        base16-bytestring,
+        containers,
+        async,
+        crypton,
+        crypton-x509,
+        crypton-x509-validation,
+        data-default,
+        hourglass,
+        crypton-x509-store,
+        crypton-x509-system,
+        ech-config,
+        network,
+        network-run,
+        tls,
+        gauge

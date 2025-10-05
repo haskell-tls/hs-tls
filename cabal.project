@@ -1,5 +1,6 @@
 packages:
   tls
+  tls/Benchmarks
   tls-session-manager
   ech-config
   debug
