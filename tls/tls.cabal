@@ -144,6 +144,19 @@ test-suite spec
     main-is:            Spec.hs
     build-tool-depends: hspec-discover:hspec-discover
     hs-source-dirs:     test
+    other-modules:
+        API
+        Arbitrary
+        Certificate
+        CiphersSpec
+        ECHSpec
+        EncodeSpec
+        HandshakeSpec
+        PipeChan
+        PubKey
+        Run
+        Session
+        ThreadSpec
 
     default-extensions: Strict StrictData
     default-language:   Haskell2010
