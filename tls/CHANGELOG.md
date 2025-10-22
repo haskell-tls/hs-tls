@@ -1,5 +1,18 @@
 # Change log for "tls"
 
+## Version 2.1.12
+
+* Restore benchmarks.
+  [#509](https://github.com/haskell-tls/hs-tls/pull/509)
+* Supporting random 1.2.
+  [#508](https://github.com/haskell-tls/hs-tls/pull/508)
+* Add --trusted-anchor cli option to tls-client.
+  [#505](https://github.com/haskell-tls/hs-tls/pull/505)
+
+## Version 2.1.11
+
+* Removing OVERLAPS instances.
+
 ## Version 2.1.10
 
 * Supporting the SSLKEYLOGFILE environment variable.
