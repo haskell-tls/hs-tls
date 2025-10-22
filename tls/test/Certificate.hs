@@ -9,6 +9,7 @@ module Certificate (
     arbitraryDN,
     simpleCertificate,
     simpleX509,
+    getSignatureALG,
     toPubKeyEC,
     toPrivKeyEC,
 ) where

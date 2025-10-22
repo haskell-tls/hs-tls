@@ -3,15 +3,16 @@
 module Main where
 
 import Certificate
-import Connection
 import Control.Concurrent.Chan
 import Data.Default (def)
 import Data.IORef
 import Data.X509
 import Data.X509.Validation
-import Gauge.Main
+import Test.Tasty.Bench
 import Network.TLS
 import Network.TLS.Extra.Cipher
+import Session
+import Run
 import PubKey
 
 import qualified Data.ByteString as B
@@ -150,17 +151,11 @@ main =
         [ bgroup
             "connection"
             -- not sure the number actually make sense for anything. improve ..
-            [ benchConnection (getParams SSL3 blockCipher) small "SSL3-256 bytes"
-            , benchConnection (getParams TLS10 blockCipher) small "TLS10-256 bytes"
-            , benchConnection (getParams TLS11 blockCipher) small "TLS11-256 bytes"
-            , benchConnection (getParams TLS12 blockCipher) small "TLS12-256 bytes"
+            [ benchConnection (getParams TLS12 blockCipher) small "TLS12-256 bytes"
             ]
         , bgroup
             "resumption"
-            [ benchResumption (getParams SSL3 blockCipher) small "SSL3-256 bytes"
-            , benchResumption (getParams TLS10 blockCipher) small "TLS10-256 bytes"
-            , benchResumption (getParams TLS11 blockCipher) small "TLS11-256 bytes"
-            , benchResumption (getParams TLS12 blockCipher) small "TLS12-256 bytes"
+            [ benchResumption (getParams TLS12 blockCipher) small "TLS12-256 bytes"
             ]
         , -- Here we try to measure TLS12 and TLS13 performance with AEAD ciphers.
           -- Resumption and a larger message can be a demonstration of the symmetric
@@ -169,24 +164,22 @@ main =
             "TLS12"
             TLS12
             large
-            [ cipher_DHE_RSA_AES128GCM_SHA256
-            , cipher_DHE_RSA_AES256GCM_SHA384
-            , cipher_DHE_RSA_CHACHA20POLY1305_SHA256
-            , cipher_DHE_RSA_AES128CCM_SHA256
-            , cipher_DHE_RSA_AES128CCM8_SHA256
-            , cipher_ECDHE_RSA_AES128GCM_SHA256
-            , cipher_ECDHE_RSA_AES256GCM_SHA384
-            , cipher_ECDHE_RSA_CHACHA20POLY1305_SHA256
+            [ cipher_DHE_RSA_WITH_AES_128_GCM_SHA256
+            , cipher_DHE_RSA_WITH_AES_256_GCM_SHA384
+            , cipher_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+            , cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+            , cipher_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+            , cipher_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
             ]
         , benchCiphers
             "TLS13"
             TLS13
             large
-            [ cipher_TLS13_AES128GCM_SHA256
-            , cipher_TLS13_AES256GCM_SHA384
-            , cipher_TLS13_CHACHA20POLY1305_SHA256
-            , cipher_TLS13_AES128CCM_SHA256
-            , cipher_TLS13_AES128CCM8_SHA256
+            [ cipher13_AES_128_GCM_SHA256
+            , cipher13_AES_256_GCM_SHA384
+            , cipher13_CHACHA20_POLY1305_SHA256
+            , cipher13_AES_128_CCM_SHA256
+            , cipher13_AES_128_CCM_8_SHA256
             ]
         ]
   where
