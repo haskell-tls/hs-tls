@@ -1,5 +1,10 @@
 # Change log for "tls"
 
+## Version 2.1.13
+
+* Don't contain early_data if serverEarlyDataSize is 0.
+  [#510](https://github.com/haskell-tls/hs-tls/pull/510)
+
 ## Version 2.1.12
 
 * Restore benchmarks.
