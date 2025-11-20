@@ -226,7 +226,7 @@ executable tls-client
         crypton-x509-system,
         ech-config,
         network,
-        network-run >= 0.4.4,
+        network-run >= 0.5,
         tls
 
     if flag(devel)
