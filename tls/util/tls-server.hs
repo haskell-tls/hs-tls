@@ -113,7 +113,7 @@ options =
     ]
 
 usage :: String
-usage = "Usage: server [OPTION] addr port"
+usage = "Usage: tls-server [OPTION] addr port"
 
 showUsageAndExit :: String -> IO a
 showUsageAndExit msg = do

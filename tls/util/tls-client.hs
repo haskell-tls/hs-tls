@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns #-}
+<{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -74,7 +74,7 @@ defaultOptions =
         }
 
 usage :: String
-usage = "Usage: quic-client [OPTION] addr port [path]"
+usage = "Usage: tls-client [OPTION] addr port [path]"
 
 options :: [OptDescr (Options -> Options)]
 options =
