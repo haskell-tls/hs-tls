@@ -220,13 +220,13 @@ main = do
                 , auxShow = showContent
                 , auxReadResumptionData = readIORef ref
                 }
-    mstore <- do
-        mstore' <- case optTrustedAnchor of
-            Nothing ->
-                if optValidate then Just <$> getSystemCertificateStore else return Nothing
-            Just file -> readCertificateStore file
-        when (isNothing mstore') $ showUsageAndExit "cannot set trusted anchor"
-        return mstore'
+    mstore <- case optTrustedAnchor of
+        Nothing ->
+            if optValidate then Just <$> getSystemCertificateStore else return Nothing
+        Just file -> do
+            mstore' <- readCertificateStore file
+            when (isNothing mstore') $ showUsageAndExit "cannot set trusted anchor"
+            return mstore'
     echConfList <- case optECHConfigFile of
         Nothing -> return []
         Just ecnff ->
