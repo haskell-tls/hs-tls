@@ -91,6 +91,7 @@ knownECCurves :: [ECC.CurveName]
 knownECCurves =
     [ ECC.SEC_p256r1
     , ECC.SEC_p384r1
+    , ECC.SEC_p521r1
     ]
 
 defaultECCurve :: ECC.CurveName

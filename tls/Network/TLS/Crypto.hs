@@ -433,6 +433,8 @@ kxSupportedPrivKeyEC :: PrivKeyEC -> Bool
 kxSupportedPrivKeyEC privkey =
     case ecPrivKeyCurveName privkey of
         Just ECC.SEC_p256r1 -> True
+        Just ECC.SEC_p384r1 -> True
+        Just ECC.SEC_p521r1 -> True
         _ -> False
 
 -- Perform a public-key operation with a parameterized ECC implementation when
@@ -453,6 +455,10 @@ withPubKeyEC pubkey withProxy withClassic whenUnknown =
         Nothing -> Just whenUnknown
         Just ECC.SEC_p256r1 ->
             maybeCryptoError $ withProxy p256 <$> ECDSA.decodePublic p256 bs
+        Just ECC.SEC_p384r1 ->
+            maybeCryptoError $ withProxy p384 <$> ECDSA.decodePublic p384 bs
+        Just ECC.SEC_p521r1 ->
+            maybeCryptoError $ withProxy p521 <$> ECDSA.decodePublic p521 bs
         Just curveName ->
             let curve = ECC.getCurveByName curveName
                 pub = unserializePoint curve pt
@@ -482,9 +488,17 @@ withPrivKeyEC privkey withProxy withUnsupported whenUnknown =
             -- using ECDSA.decodePrivate, unfortunately the data type chosen in
             -- x509 was Integer.
             maybeCryptoError $ withProxy p256 <$> ECDSA.scalarFromInteger p256 d
+        Just ECC.SEC_p384r1 ->
+            maybeCryptoError $ withProxy p384 <$> ECDSA.scalarFromInteger p384 d
+        Just ECC.SEC_p521r1 ->
+            maybeCryptoError $ withProxy p521 <$> ECDSA.scalarFromInteger p521 d
         Just curveName -> Just $ withUnsupported curveName
   where
     d = privkeyEC_priv privkey
 
 p256 :: Proxy ECDSA.Curve_P256R1
 p256 = Proxy
+p384 :: Proxy ECDSA.Curve_P384R1
+p384 = Proxy
+p521 :: Proxy ECDSA.Curve_P521R1
+p521 = Proxy
