@@ -407,7 +407,7 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
     return (clientState, serverState)
 
 arbitraryClientCredential :: Version -> Gen Credential
-arbitraryClientCredential _ = arbitraryCredentialsOfEachType' >>= elements
+arbitraryClientCredential _ = arbitraryCredentialsOfEachCurve' >>= elements
 
 arbitraryRSACredentialWithUsage
     :: [ExtKeyUsageFlag] -> Gen (CertificateChain, PrivKey)
