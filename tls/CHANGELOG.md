@@ -1,5 +1,11 @@
 # Change log for "tls"
 
+## Version 2.1.14
+
+* Supporting P384 and P521 curves.
+  [#511](https://github.com/haskell-tls/hs-tls/pull/511)
+* Fixing some bugs of `tls-client`.
+
 ## Version 2.1.13
 
 * Don't contain early_data if serverEarlyDataSize is 0.
