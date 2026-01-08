@@ -118,12 +118,12 @@ library
     ghc-options:        -Wall
     build-depends:
         base >=4.9 && <5,
-        crypton-asn1-encoding >=0.9 && <0.10,
-        crypton-asn1-types >=0.3 && <0.4,
         base16-bytestring,
         bytestring >=0.10 && <0.13,
         cereal >=0.5.3 && <0.6,
         crypton >=0.34,
+        crypton-asn1-encoding >=0.9 && <0.10,
+        crypton-asn1-types >=0.3 && <0.4,
         crypton-x509 >=1.7 && <1.8,
         crypton-x509-store >=1.6 && <1.7,
         crypton-x509-validation >=1.6.13 && <1.7,
@@ -152,8 +152,8 @@ executable tls-server
     ghc-options:        -Wall -threaded -rtsopts
     build-depends:
         base >=4.9 && <5,
-        bytestring,
         base16-bytestring,
+        bytestring,
         containers,
         crypton,
         crypton-x509-store,
@@ -221,17 +221,17 @@ test-suite spec
     build-depends:
         base >=4.9 && <5,
         QuickCheck,
-        crypton-asn1-types,
         async,
         base64-bytestring,
         bytestring,
         crypton,
+        crypton-asn1-types,
         crypton-x509,
         crypton-x509-validation,
         ech-config,
-        time-hourglass,
         hspec,
         serialise,
+        time-hourglass,
         tls
 
 benchmark tls-bench
@@ -256,22 +256,22 @@ benchmark tls-bench
     ghc-options:      -Wall
     build-depends:
         base >=4.9 && <5,
-        bytestring,
-        base64-bytestring,
-        containers,
+        QuickCheck,
         async,
-        data-default,
-        time-hourglass,
+        base64-bytestring,
+        bytestring,
+        containers,
         crypton,
+        crypton-asn1-types,
         crypton-x509,
         crypton-x509-store,
         crypton-x509-validation,
+        data-default,
         ech-config,
+        hspec,
         network,
         network-run,
-        tls,
-        crypton-asn1-types,
-        tasty-bench,
-        QuickCheck,
         serialise,
-        hspec
+        tasty-bench,
+        time-hourglass,
+        tls
