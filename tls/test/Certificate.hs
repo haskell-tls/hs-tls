@@ -19,9 +19,9 @@ import qualified Crypto.PubKey.ECC.ECDSA as ECDSA
 import qualified Crypto.PubKey.ECC.Types as ECC
 import Data.ASN1.OID
 import qualified Data.ByteString as B
+import Data.Hourglass
 import Data.X509
 import Test.QuickCheck
-import Time.System
 
 import PubKey
 
