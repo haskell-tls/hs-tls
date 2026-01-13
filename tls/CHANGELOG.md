@@ -1,5 +1,11 @@
 # Change log for "tls"
 
+## Version 2.2
+
+* Using crypton-asn1-* and time-hourglass.
+  [#512](https://github.com/haskell-tls/hs-tls/pull/512)
+* Major version up due to re-exports.
+
 ## Version 2.1.14
 
 * Supporting P384 and P521 curves.
