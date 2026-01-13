@@ -1,6 +1,6 @@
 # Change log for "tls"
 
-## Version 2.2
+## Version 2.2.0
 
 * Using crypton-asn1-* and time-hourglass.
   [#512](https://github.com/haskell-tls/hs-tls/pull/512)
