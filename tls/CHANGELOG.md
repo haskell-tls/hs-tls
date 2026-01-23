@@ -1,5 +1,10 @@
 # Change log for "tls"
 
+## Version 2.2.1
+
+* Disabling compressed certificate on the client side.
+  [#514](https://github.com/haskell-tls/hs-tls/issues/514)
+
 ## Version 2.2.0
 
 * Using crypton-asn1-* and time-hourglass.
