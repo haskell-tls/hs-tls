@@ -26,8 +26,9 @@ import Network.TLS.Struct
 
 ----------------------------------------------------------------
 
-handshakeClientWith :: ClientParams -> Context -> Handshake -> IO ()
-handshakeClientWith cparams ctx HelloRequest = handshakeClient cparams ctx
+handshakeClientWith
+    :: ClientParams -> Context -> HandshakeR -> IO ()
+handshakeClientWith cparams ctx (HelloRequest, _b) = handshakeClient cparams ctx -- xxx
 handshakeClientWith _ _ _ =
     throwCore $
         Error_Protocol
@@ -76,7 +77,7 @@ handshake cparams ctx groups mparams = do
     --------------------------------
     -- Receiving ServerHello
     unless async $ do
-        (ver, hss, hrr) <- receiveServerHello cparams ctx mparams
+        (ver, hbs, hrr) <- receiveServerHello cparams ctx mparams
         --------------------------------
         -- Switching to HRR, TLS 1.2 or TLS 1.3
         case ver of
@@ -93,7 +94,7 @@ handshake cparams ctx groups mparams = do
                             "server denied TLS 1.3 when connecting with early data"
                             HandshakeFailure
                 | otherwise -> do
-                    recvServerFirstFlight12 cparams ctx hss
+                    recvServerFirstFlight12 cparams ctx hbs
                     sendClientSecondFlight12 cparams ctx
                     recvServerSecondFlight12 cparams ctx
   where

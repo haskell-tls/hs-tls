@@ -12,6 +12,7 @@ module Network.TLS.Types (
     bigNumFromInteger,
     defaultRecordSizeLimit,
     TranscriptHash (..),
+    WireBytes,
 ) where
 
 import Network.Socket (HostName)
@@ -64,3 +65,7 @@ newtype TranscriptHash = TranscriptHash ByteString
 
 instance Show TranscriptHash where
     show (TranscriptHash bs) = showBytesHex bs
+
+----------------------------------------------------------------
+
+type WireBytes = [ByteString]

@@ -7,6 +7,7 @@ module Network.TLS.IO.Decode (
 
 import Control.Concurrent.MVar
 import Control.Monad.State.Strict
+import qualified Data.ByteString as BS
 
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
@@ -41,22 +42,30 @@ decodePacket12 ctx (Record ProtocolType_Handshake ver fragment) = do
                     , cParamsKeyXchgType = keyxchg
                     }
         -- get back the optional continuation, and parse as many handshake record as possible.
-        mCont <- gets stHandshakeRecordCont12
-        modify' (\st -> st{stHandshakeRecordCont12 = Nothing})
-        hss <- parseMany currentParams mCont (fragmentGetBytes fragment)
-        return $ Handshake hss
+        (mCont, wirebytes) <- gets stHandshakeRecordCont12
+        modify' (\st -> st{stHandshakeRecordCont12 = (Nothing, [])})
+        (hss, bss) <-
+            unzip <$> parseMany currentParams mCont wirebytes (fragmentGetBytes fragment)
+        return $ Handshake hss bss
   where
-    parseMany currentParams mCont bs =
+    parseMany currentParams mCont wirebytes bs =
         case fromMaybe decodeHandshakeRecord mCont bs of
             GotError err -> throwError err
-            GotPartial cont ->
-                modify' (\st -> st{stHandshakeRecordCont12 = Just cont}) >> return []
+            GotPartial cont -> do
+                modify' (\st -> st{stHandshakeRecordCont12 = (Just cont, bs : wirebytes)})
+                return []
             GotSuccess (ty, content) ->
-                either throwError (return . (: [])) $ decodeHandshake currentParams ty content
+                case decodeHandshake currentParams ty content of
+                    Left err -> throwError err
+                    Right h -> return [(h, reverse (bs : wirebytes))]
             GotSuccessRemaining (ty, content) left ->
                 case decodeHandshake currentParams ty content of
                     Left err -> throwError err
-                    Right hh -> (hh :) <$> parseMany currentParams Nothing left
+                    Right h -> do
+                        hbs <- parseMany currentParams Nothing [] left
+                        let len = BS.length bs - BS.length left
+                            bs' = BS.take len bs
+                        return ((h, reverse (bs' : wirebytes)) : hbs)
 decodePacket12 _ _ = return $ Left (Error_Packet_Parsing "unknown protocol type")
 
 switchRxEncryption :: Context -> IO ()
@@ -74,20 +83,27 @@ decodePacket13 _ (Record ProtocolType_ChangeCipherSpec _ fragment) =
 decodePacket13 _ (Record ProtocolType_AppData _ fragment) = return $ Right $ AppData13 $ fragmentGetBytes fragment
 decodePacket13 _ (Record ProtocolType_Alert _ fragment) = return (Alert13 `fmapEither` decodeAlerts (fragmentGetBytes fragment))
 decodePacket13 ctx (Record ProtocolType_Handshake _ fragment) = usingState ctx $ do
-    mCont <- gets stHandshakeRecordCont13
-    modify' (\st -> st{stHandshakeRecordCont13 = Nothing})
-    hss <- parseMany mCont (fragmentGetBytes fragment)
-    return $ Handshake13 hss
+    (mCont, wirebytes) <- gets stHandshakeRecordCont13
+    modify' (\st -> st{stHandshakeRecordCont13 = (Nothing, [])})
+    (hss, bss) <- unzip <$> parseMany mCont wirebytes (fragmentGetBytes fragment)
+    return $ Handshake13 hss bss
   where
-    parseMany mCont bs =
+    parseMany mCont wirebytes bs =
         case fromMaybe decodeHandshakeRecord13 mCont bs of
             GotError err -> throwError err
-            GotPartial cont ->
-                modify' (\st -> st{stHandshakeRecordCont13 = Just cont}) >> return []
+            GotPartial cont -> do
+                modify' (\st -> st{stHandshakeRecordCont13 = (Just cont, bs : wirebytes)})
+                return []
             GotSuccess (ty, content) ->
-                either throwError (return . (: [])) $ decodeHandshake13 ty content
+                case decodeHandshake13 ty content of
+                    Left err -> throwError err
+                    Right h -> return [(h, reverse (bs : wirebytes))]
             GotSuccessRemaining (ty, content) left ->
                 case decodeHandshake13 ty content of
                     Left err -> throwError err
-                    Right hh -> (hh :) <$> parseMany Nothing left
+                    Right h -> do
+                        hbs <- parseMany Nothing [] left
+                        let len = BS.length bs - BS.length left
+                            bs' = BS.take len bs
+                        return ((h, reverse (bs' : wirebytes)) : hbs)
 decodePacket13 _ _ = return $ Left (Error_Packet_Parsing "unknown protocol type")

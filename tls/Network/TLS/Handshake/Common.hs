@@ -31,6 +31,7 @@ module Network.TLS.Handshake.Common (
     --
     setPeerRecordSizeLimit,
     generateFinished,
+    encodeUpdateTranscriptHash12,
     updateTranscriptHash12,
     --
     startHandshake,
@@ -132,7 +133,7 @@ sendCCSandFinished ctx role = do
     enablePeerRecordLimit ctx
     ver <- usingState_ ctx getVersion
     verifyData <- VerifyData <$> generateFinished ctx ver role
-    sendPacket12 ctx (Handshake [Finished verifyData])
+    sendPacket12 ctx (Handshake [Finished verifyData] [])
     usingState_ ctx $ setVerifyDataForSend verifyData
     contextFlush ctx
 
@@ -141,11 +142,11 @@ data RecvState m
     | RecvStateHandshake (Handshake -> m (RecvState m))
     | RecvStateDone
 
-recvPacketHandshake :: Context -> IO [Handshake]
+recvPacketHandshake :: Context -> IO [HandshakeR]
 recvPacketHandshake ctx = do
     pkts <- recvPacket12 ctx
     case pkts of
-        Right (Handshake l) -> return l
+        Right (Handshake hss bss) -> return $ zip hss bss
         Right x@(AppData _) -> do
             -- If a TLS13 server decides to reject RTT0 data, the server should
             -- skip records for RTT0 data up to the maximum limit.
@@ -161,16 +162,18 @@ recvPacketHandshake ctx = do
 
 -- | process a list of handshakes message in the recv state machine.
 onRecvStateHandshake
-    :: Context -> RecvState IO -> [Handshake] -> IO (RecvState IO)
+    :: Context -> RecvState IO -> [HandshakeR] -> IO (RecvState IO)
 onRecvStateHandshake _ recvState [] = return recvState
-onRecvStateHandshake _ (RecvStatePacket f) hms = f (Handshake hms)
-onRecvStateHandshake ctx (RecvStateHandshake f) (x : xs) = do
-    let finished = isFinished x
-    unless finished $ void $ updateTranscriptHash12 ctx x
-    nstate <- f x
-    when finished $ void $ updateTranscriptHash12 ctx x
-    onRecvStateHandshake ctx nstate xs
-onRecvStateHandshake _ RecvStateDone _xs = unexpected "spurious handshake" Nothing
+onRecvStateHandshake _ (RecvStatePacket f) hbs = do
+    let (hss, bss) = unzip hbs
+    f (Handshake hss bss)
+onRecvStateHandshake ctx (RecvStateHandshake f) (hb@(h, _) : hbs) = do
+    let finished = isFinished h
+    unless finished $ void $ updateTranscriptHash12 ctx hb
+    nstate <- f h
+    when finished $ void $ updateTranscriptHash12 ctx hb
+    onRecvStateHandshake ctx nstate hbs
+onRecvStateHandshake _ _ _ = unexpected "spurious handshake" Nothing
 
 isFinished :: Handshake -> Bool
 isFinished Finished{} = True
@@ -184,8 +187,9 @@ runRecvState ctx iniState =
         >>= onRecvStateHandshake ctx iniState
         >>= runRecvState ctx
 
-runRecvStateHS :: Context -> RecvState IO -> [Handshake] -> IO ()
-runRecvStateHS ctx iniState hs = onRecvStateHandshake ctx iniState hs >>= runRecvState ctx
+runRecvStateHS
+    :: Context -> RecvState IO -> [HandshakeR] -> IO ()
+runRecvStateHS ctx iniState hbs = onRecvStateHandshake ctx iniState hbs >>= runRecvState ctx
 
 ensureRecvComplete :: MonadIO m => Context -> m ()
 ensureRecvComplete ctx = do

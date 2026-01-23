@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -68,7 +69,6 @@ import Network.TLS.IO.Encode
 import Network.TLS.Imports
 import Network.TLS.KeySchedule
 import Network.TLS.MAC
-import Network.TLS.Packet
 import Network.TLS.Packet13
 import Network.TLS.Parameters
 import Network.TLS.State
@@ -373,7 +373,8 @@ safeNonNegative32 x
 
 ----------------------------------------------------------------
 
-newtype RecvHandshake13M m a = RecvHandshake13M (StateT [Handshake13] m a)
+newtype RecvHandshake13M m a
+    = RecvHandshake13M (StateT [Handshake13R] m a)
     deriving (Functor, Applicative, Monad, MonadIO)
 
 recvHandshake13
@@ -381,7 +382,7 @@ recvHandshake13
     => Context
     -> (Handshake13 -> RecvHandshake13M m a)
     -> RecvHandshake13M m a
-recvHandshake13 ctx f = getHandshake13 ctx >>= f
+recvHandshake13 ctx f = getHandshake13 ctx >>= \(h, _b) -> f h
 
 recvHandshake13hash
     :: MonadIO m
@@ -391,21 +392,22 @@ recvHandshake13hash
     -> RecvHandshake13M m a
 recvHandshake13hash ctx label f = do
     d <- transcriptHash ctx label
-    getHandshake13 ctx >>= f d
+    getHandshake13 ctx >>= \(h, _b) -> f d h
 
-getHandshake13 :: MonadIO m => Context -> RecvHandshake13M m Handshake13
+getHandshake13
+    :: MonadIO m => Context -> RecvHandshake13M m Handshake13R
 getHandshake13 ctx = RecvHandshake13M $ do
     currentState <- get
     case currentState of
-        (h : hs) -> found h hs
-        [] -> recvLoop
+        hb : hbs -> found hb hbs
+        _ -> recvLoop
   where
-    found h hs = liftIO (void $ updateTranscriptHash13 ctx h) >> put hs >> return h
+    found hb hbs = liftIO (updateTranscriptHash13 ctx hb) >> put hbs >> return hb
     recvLoop = do
         epkt <- liftIO (recvPacket13 ctx)
         case epkt of
-            Right (Handshake13 []) -> error "invalid recvPacket13 result"
-            Right (Handshake13 (h : hs)) -> found h hs
+            Right (Handshake13 [] _) -> error "invalid recvPacket13 result"
+            Right (Handshake13 (h : hs) (b : bs)) -> found (h, b) $ zip hs bs
             Right ChangeCipherSpec13 -> do
                 alreadyReceived <- liftIO $ usingHState ctx getCCS13Recv
                 if alreadyReceived
@@ -462,8 +464,8 @@ calculateEarlySecret
     -> Either ByteString (BaseSecret EarlySecret)
     -> IO (SecretPair EarlySecret)
 calculateEarlySecret ctx choice maux = do
-    ch <- fromJust <$> usingHState ctx getClientHello
-    let hCh = TranscriptHash $ hash usedHash $ encodeHandshake $ ClientHello ch
+    (_ch, b) <- fromJust <$> usingHState ctx getClientHello
+    let hCh = TranscriptHash $ hashChunks usedHash b
     let earlySecret = case maux of
             Right (BaseSecret sec) -> sec
             Left psk -> hkdfExtract usedHash zero psk
@@ -591,7 +593,7 @@ computeConfirm
     :: (MonadFail m, MonadIO m)
     => Context -> Hash -> ServerHello -> ByteString -> m ByteString
 computeConfirm ctx usedHash sh label = do
-    CH{..} <- fromJust <$> liftIO (usingHState ctx getClientHello)
+    (CH{..}, _b) <- fromJust <$> liftIO (usingHState ctx getClientHello)
     TranscriptHash echConf <-
         transcriptHashWith ctx "ECH acceptance" $ encodeHandshake13 $ ServerHello13 sh
     let prk = hkdfExtract usedHash "" $ unClientRandom chRandom

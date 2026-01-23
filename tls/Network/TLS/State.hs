@@ -79,7 +79,7 @@ import Network.TLS.Extension
 import Network.TLS.Imports
 import Network.TLS.RNG
 import Network.TLS.Struct
-import Network.TLS.Types (HostName, Role (..), Ticket)
+import Network.TLS.Types (HostName, Role (..), Ticket, WireBytes)
 import Network.TLS.Wire (GetContinuation)
 
 data TLSState = TLSState
@@ -93,8 +93,10 @@ data TLSState = TLSState
       stServerCertificateChain :: Maybe CertificateChain
     , stExtensionALPN :: Bool -- RFC 7301
     , stNegotiatedProtocol :: Maybe ByteString -- ALPN protocol
-    , stHandshakeRecordCont12 :: Maybe (GetContinuation (HandshakeType, ByteString))
-    , stHandshakeRecordCont13 :: Maybe (GetContinuation (HandshakeType, ByteString))
+    , stHandshakeRecordCont12
+        :: (Maybe (GetContinuation (HandshakeType, ByteString)), WireBytes)
+    , stHandshakeRecordCont13
+        :: (Maybe (GetContinuation (HandshakeType, ByteString)), WireBytes)
     , stClientALPNSuggest :: Maybe [ByteString]
     , stClientGroupSuggest :: Maybe [Group]
     , stClientEcPointFormatSuggest :: Maybe [EcPointFormat]
@@ -136,8 +138,8 @@ newTLSState rng clientContext =
         , stServerCertificateChain = Nothing
         , stExtensionALPN = False
         , stNegotiatedProtocol = Nothing
-        , stHandshakeRecordCont12 = Nothing
-        , stHandshakeRecordCont13 = Nothing
+        , stHandshakeRecordCont12 = (Nothing, [])
+        , stHandshakeRecordCont13 = (Nothing, [])
         , stClientALPNSuggest = Nothing
         , stClientGroupSuggest = Nothing
         , stClientEcPointFormatSuggest = Nothing

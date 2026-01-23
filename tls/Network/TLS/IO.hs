@@ -114,9 +114,10 @@ recvPacket12 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
                             -- stHandshakeRecordCont
                             loop (count + 1)
                         else case pktRecv of
-                            Right (Handshake hss) -> do
-                                pktRecv'@(Right pkt) <- ctxWithHooks ctx $ \hooks ->
-                                    Right . Handshake <$> mapM (hookRecvHandshake hooks) hss
+                            Right (Handshake hss bss) -> do
+                                pktRecv'@(Right pkt) <- ctxWithHooks ctx $ \hooks -> do
+                                    hss' <- mapM (hookRecvHandshake hooks) hss
+                                    return $ Right $ Handshake hss' bss
                                 logPacket ctx $ show pkt
                                 return pktRecv'
                             Right pkt -> do
@@ -131,7 +132,7 @@ isCCS (Record ProtocolType_ChangeCipherSpec _ _) = True
 isCCS _ = False
 
 isEmptyHandshake :: Either TLSError Packet -> Bool
-isEmptyHandshake (Right (Handshake [])) = True
+isEmptyHandshake (Right (Handshake [] _)) = True
 isEmptyHandshake _ = False
 
 logPacket :: Context -> String -> IO ()
@@ -174,9 +175,10 @@ recvPacket13 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
                         loop (count + 1)
                     else do
                         case pktRecv of
-                            Right (Handshake13 hss) -> do
-                                pktRecv'@(Right pkt) <- ctxWithHooks ctx $ \hooks ->
-                                    Right . Handshake13 <$> mapM (hookRecvHandshake13 hooks) hss
+                            Right (Handshake13 hss bss) -> do
+                                pktRecv'@(Right pkt) <- ctxWithHooks ctx $ \hooks -> do
+                                    hss' <- mapM (hookRecvHandshake13 hooks) hss
+                                    return $ Right $ Handshake13 hss' bss
                                 logPacket ctx $ show pkt
                                 return pktRecv'
                             Right pkt -> do
@@ -187,7 +189,7 @@ recvPacket13 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
                                 return pktRecv
 
 isEmptyHandshake13 :: Either TLSError Packet13 -> Bool
-isEmptyHandshake13 (Right (Handshake13 [])) = True
+isEmptyHandshake13 (Right (Handshake13 [] _)) = True
 isEmptyHandshake13 _ = False
 
 ----------------------------------------------------------------
@@ -196,7 +198,7 @@ isRecvComplete :: Context -> IO Bool
 isRecvComplete ctx = usingState_ ctx $ do
     cont12 <- gets stHandshakeRecordCont12
     cont13 <- gets stHandshakeRecordCont13
-    return $ isNothing cont12 && isNothing cont13
+    return $ isNothing (fst cont12) && isNothing (fst cont13)
 
 checkValid :: Context -> IO ()
 checkValid ctx = do

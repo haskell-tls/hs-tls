@@ -35,12 +35,12 @@ receiveServerHello
     :: ClientParams
     -> Context
     -> Maybe (ClientRandom, Session, Version)
-    -> IO (Version, [Handshake], Bool)
+    -> IO (Version, [HandshakeR], Bool)
 receiveServerHello cparams ctx mparams = do
     chSentTime <- getCurrentTimeFromBase
-    (sh, hss) <- recvSH
+    (shb@(sh, _), hbs) <- recvSH
     processServerHello cparams ctx sh
-    void $ updateTranscriptHash12 ctx sh
+    updateTranscriptHash12 ctx shb
     setRTT ctx chSentTime
     ver <- usingState_ ctx getVersion
     unless (maybe True (\(_, _, v) -> v == ver) mparams) $
@@ -51,7 +51,7 @@ receiveServerHello cparams ctx mparams = do
     -- False otherwise.  For 2nd server hello, getTLS13HR returns
     -- False since it is NOT HRR.
     hrr <- usingState_ ctx getTLS13HRR
-    return (ver, hss, hrr)
+    return (ver, hbs, hrr)
   where
     recvSH = do
         epkt <- recvPacket12 ctx
@@ -59,7 +59,7 @@ receiveServerHello cparams ctx mparams = do
             Left e -> throwCore e
             Right pkt -> case pkt of
                 Alert a -> throwAlert a
-                Handshake (h : hs) -> return (h, hs)
+                Handshake (h : hs) (b : bs) -> return ((h, b), zip hs bs)
                 _ -> unexpected (show pkt) (Just "handshake")
     throwAlert a =
         throwCore $
@@ -179,7 +179,7 @@ processServerHello cparams ctx (ServerHello sh@SH{..}) = do
             transitTranscriptHashI ctx "transitI" usedHash isHRR
             accepted <- checkECHacceptance ctx isHRR usedHash sh
             when accepted $ do
-                CH{..} <- fromJust <$> usingHState ctx getClientHello
+                (CH{..}, _b) <- fromJust <$> usingHState ctx getClientHello
                 usingHState ctx $ setClientRandom chRandom -- inner random
             when (accepted && not isHRR) $ do
                 copyTranscriptHash ctx "copy"

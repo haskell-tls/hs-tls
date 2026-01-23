@@ -104,7 +104,7 @@ data TransHashState
     = -- | Initial state
       TransHashState0
     | -- | A raw CH is stored since hash algo is not chosen yet.
-      TransHashState1 ByteString
+      TransHashState1 ([ByteString] -> [ByteString])
     | -- | Hashed
       TransHashState2 HashCtx
 
@@ -161,7 +161,7 @@ data HandshakeState = HandshakeState
     , hstCCS13Recv :: Bool
     , hstTLS13OuterClientRandom :: Maybe ClientRandom
     -- ^ Used for key logging in the case of ECH.
-    , hstTLS13ClientHello :: Maybe ClientHello
+    , hstTLS13ClientHello :: Maybe (ClientHello, [ByteString])
     -- ^ Inner client hello in the case of ECH.
     , hstTLS13ECHAccepted :: Bool
     , hstTLS13ECHEE :: Bool
@@ -403,11 +403,11 @@ getOuterClientRandom = gets hstTLS13OuterClientRandom
 setOuterClientRandom :: Maybe ClientRandom -> HandshakeM ()
 setOuterClientRandom mcr = modify' (\hst -> hst{hstTLS13OuterClientRandom = mcr})
 
-getClientHello :: HandshakeM (Maybe ClientHello)
+getClientHello :: HandshakeM (Maybe (ClientHello, [ByteString]))
 getClientHello = gets hstTLS13ClientHello
 
-setClientHello :: ClientHello -> HandshakeM ()
-setClientHello ch = modify' $ \hst -> hst{hstTLS13ClientHello = Just ch}
+setClientHello :: ClientHello -> [ByteString] -> HandshakeM ()
+setClientHello ch b = modify' $ \hst -> hst{hstTLS13ClientHello = Just (ch, b)}
 
 getECHAccepted :: HandshakeM Bool
 getECHAccepted = gets hstTLS13ECHAccepted

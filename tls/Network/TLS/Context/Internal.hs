@@ -166,7 +166,7 @@ data RecordLimit
 
 data RoleParams = RoleParams
     { doHandshake_ :: Context -> IO ()
-    , doHandshakeWith_ :: Context -> Handshake -> IO ()
+    , doHandshakeWith_ :: Context -> HandshakeR -> IO ()
     , doRequestCertificate_ :: Context -> IO Bool
     , doPostHandshakeAuthWith_ :: Context -> Handshake13 -> IO ()
     }
@@ -271,11 +271,13 @@ data Established
 
 data PendingRecvAction
     = -- | simple pending action. The first 'Bool' is necessity of alignment.
-      -- The second bool is update transcript hash.
-      PendingRecvAction Bool Bool (Handshake13 -> IO ())
+      PendingRecvAction Bool (Handshake13 -> IO ())
+    | PendingRecvActionSelfUpdate Bool (Handshake13R -> IO ())
     | -- | pending action taking transcript hash up to preceding message
       --   The first 'Bool' is necessity of alignment.
-      PendingRecvActionHash Bool (TranscriptHash -> Handshake13 -> IO ())
+      PendingRecvActionHash
+        Bool
+        (TranscriptHash -> Handshake13 -> IO ())
 
 updateMeasure :: Context -> (Measurement -> Measurement) -> IO ()
 updateMeasure ctx = modifyIORef' (ctxMeasurement ctx)

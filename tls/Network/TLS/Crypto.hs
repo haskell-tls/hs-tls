@@ -7,6 +7,7 @@ module Network.TLS.Crypto (
     HashCtx,
     hashInit,
     hashUpdate,
+    hashUpdates,
     hashUpdateSSL,
     hashFinal,
     module Network.TLS.Crypto.DH,

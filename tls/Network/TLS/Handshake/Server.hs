@@ -31,12 +31,13 @@ import Network.TLS.Struct
 -- and call handshakeServerWith.
 handshakeServer :: ServerParams -> Context -> IO ()
 handshakeServer sparams ctx = liftIO $ do
-    hss <- recvPacketHandshake ctx
-    case hss of
-        [ch] -> handshake sparams ctx ch
-        _ -> unexpected (show hss) (Just "client hello")
+    hbs <- recvPacketHandshake ctx
+    case hbs of
+        chb : _ -> handshake sparams ctx chb
+        _ -> unexpected (show $ fst $ unzip hbs) (Just "client hello")
 
-handshakeServerWith :: ServerParams -> Context -> Handshake -> IO ()
+handshakeServerWith
+    :: ServerParams -> Context -> HandshakeR -> IO ()
 handshakeServerWith = handshake
 
 -- | Put the server context in handshake mode.
@@ -46,13 +47,14 @@ handshakeServerWith = handshake
 --
 -- When the function returns, a new handshake has been succesfully negociated.
 -- On any error, a HandshakeFailed exception is raised.
-handshake :: ServerParams -> Context -> Handshake -> IO ()
-handshake sparams ctx (ClientHello ch) = do
-    (chosenVersion, chI, mcrnd) <- processClientHello sparams ctx ch
+handshake :: ServerParams -> Context -> HandshakeR -> IO ()
+handshake sparams ctx chb@(ClientHello ch, bs) = do
+    (chosenVersion, chI, mcrnd) <- processClientHello sparams ctx ch bs
     if chosenVersion == TLS13
         then do
             -- fixme: we should check if the client random is the same as
             -- that in the first client hello in the case of hello retry.
+            -- r0 :: Cipher, Hash, Bool
             (mClientKeyShare, r0, r1) <-
                 processClientHello13 sparams ctx chI
             case mClientKeyShare of
@@ -62,12 +64,17 @@ handshake sparams ctx (ClientHello ch) = do
                     -- would be comming, which should be ignored.
                     handshakeServer sparams ctx
                 Just cliKeyShare -> do
+                    -- r2 :: ( SecretTriple ApplicationSecret
+                    --       , ClientTrafficSecret HandshakeSecret
+                    --       , Bool  -- authenticated
+                    --       , Bool) -- rtt0OK
                     r2 <-
                         sendServerHello13 sparams ctx cliKeyShare r0 r1 chI mcrnd
                     recvClientSecondFlight13 sparams ctx r2 chI
         else do
             r <-
                 processClientHello12 sparams ctx chI
+            updateTranscriptHash12 ctx chb
             resumeSessionData <-
                 sendServerHello12 sparams ctx r chI
             recvClientSecondFlight12 sparams ctx resumeSessionData

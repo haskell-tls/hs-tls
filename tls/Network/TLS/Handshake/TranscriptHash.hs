@@ -40,11 +40,11 @@ transitTranscriptHashI ctx label hashAlg isHRR = do
 transit :: String -> Hash -> Bool -> TransHashState -> TransHashState
 transit label _ _ st0@TransHashState0 = error $ "transitTranscriptHash " ++ label ++ " " ++ show st0
 transit _ _ _ st2@(TransHashState2 _) = st2
-transit _ hashAlg isHRR (TransHashState1 ch)
-    | isHRR = TransHashState2 $ newWith hsMsg
-    | otherwise = TransHashState2 $ newWith ch
+transit _ hashAlg isHRR (TransHashState1 chs)
+    | isHRR = TransHashState2 $ hashUpdate (hashInit hashAlg) hsMsg
+    | otherwise = TransHashState2 $ hashUpdates (hashInit hashAlg) ch
   where
-    newWith = hashUpdate $ hashInit hashAlg
+    ch = chs []
     hsMsg =
         -- Handshake message:
         -- typ <-len-> body
@@ -55,7 +55,7 @@ transit _ hashAlg isHRR (TransHashState1 ch)
             , hashedCH
             ]
       where
-        hashedCH = hash hashAlg ch
+        hashedCH = hashChunks hashAlg ch
         len = fromIntegral $ B.length hashedCH
 
 ----------------------------------------------------------------
@@ -73,9 +73,9 @@ updateTranscriptHashI ctx label eh = do
     traceTranscriptHash ctx label hstTransHashStateI
 
 update :: ByteString -> String -> TransHashState -> TransHashState
-update eh _ TransHashState0 = TransHashState1 eh
+update eh _ TransHashState0 = TransHashState1 (eh :)
+update eh _ (TransHashState1 b) = TransHashState1 (b . (eh :))
 update eh _ (TransHashState2 hctx) = TransHashState2 $ hashUpdate hctx eh
-update _ label st = error $ "updateTranscriptHash " ++ label ++ " " ++ show st
 
 ----------------------------------------------------------------
 
