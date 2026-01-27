@@ -25,9 +25,9 @@ handshake_ ctx =
 -- This is called automatically by 'recvData', in a context where the read lock
 -- is already taken.  So contrary to 'handshake' above, here we only need to
 -- call withWriteLock.
-handshakeWith :: MonadIO m => Context -> Handshake -> m ()
-handshakeWith ctx hs =
+handshakeWith :: MonadIO m => Context -> HandshakeR -> m ()
+handshakeWith ctx hsr =
     liftIO $
         withWriteLock ctx $
             handleException ctx $
-                doHandshakeWith_ (ctxRoleParams ctx) ctx hs
+                doHandshakeWith_ (ctxRoleParams ctx) ctx hsr

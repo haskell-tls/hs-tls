@@ -212,10 +212,10 @@ recvData12 ctx = do
     pkt <- recvPacket12 ctx
     either (onError terminate12) process pkt
   where
-    process (Handshake [ch@ClientHello{}]) =
-        handshakeWith ctx ch >> recvData12 ctx
-    process (Handshake [hr@HelloRequest]) =
-        handshakeWith ctx hr >> recvData12 ctx
+    process (Handshake [ch@ClientHello{}] [b]) =
+        handshakeWith ctx (ch, b) >> recvData12 ctx
+    process (Handshake [hr@HelloRequest] [b]) =
+        handshakeWith ctx (hr, b) >> recvData12 ctx
     -- UserCanceled should be followed by a close_notify.
     -- fixme: is it safe to call recvData12?
     process (Alert [(AlertLevel_Warning, UserCanceled)]) = return B.empty
@@ -260,8 +260,8 @@ recvData13 ctx = do
                 ("received fatal error: " ++ show desc)
                 (Error_Protocol "remote side fatal error" desc)
             )
-    process (Handshake13 hs) = do
-        loopHandshake13 hs
+    process (Handshake13 hs bs) = do
+        loopHandshake13 $ zip hs bs
         recvData13 ctx
     -- when receiving empty appdata, we just retry to get some data.
     process (AppData13 "") = recvData13 ctx
@@ -299,7 +299,7 @@ recvData13 ctx = do
     loopHandshake13 [] = return ()
     -- fixme: some implementations send multiple NST at the same time.
     -- Only the first one is used at this moment.
-    loopHandshake13 (NewSessionTicket13 life add nonce (SessionIDorTicket_ ticket) exts : hs) = do
+    loopHandshake13 ((NewSessionTicket13 life add nonce (SessionIDorTicket_ ticket) exts, _b) : hbs) = do
         role <- usingState_ ctx S.getRole
         unless (role == ClientRole) $ do
             let reason = "Session ticket is allowed for client only"
@@ -328,16 +328,16 @@ recvData13 ctx = do
             let ticket' = B.copy ticket
             void $ sessionEstablish (sharedSessionManager $ ctxShared ctx) ticket' sdata
             modifyTLS13State ctx $ \st -> st{tls13stRecvNST = True}
-        loopHandshake13 hs
-    loopHandshake13 (KeyUpdate13 mode : hs) = do
-        let multipleKeyUpdate = any isKeyUpdate13 hs
+        loopHandshake13 hbs
+    loopHandshake13 ((KeyUpdate13 mode, _b) : hbs) = do
+        let multipleKeyUpdate = any (\(h, _) -> isKeyUpdate13 h) hbs
         when multipleKeyUpdate $ do
             let reason = "Multiple KeyUpdate is not allowed in one record"
             terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
         when (ctxQUICMode ctx) $ do
             let reason = "KeyUpdate is not allowed for QUIC"
             terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-        checkAlignment ctx hs
+        checkAlignment ctx
         established <- ctxEstablished ctx
         -- Though RFC 8446 Sec 4.6.3 does not clearly says,
         -- unidirectional key update is legal.
@@ -350,16 +350,16 @@ recvData13 ctx = do
                 -- packet to be sent by another thread before the Tx state is
                 -- updated.
                 when (mode == UpdateRequested) $ withWriteLock ctx $ do
-                    sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested]
+                    sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested] []
                     keyUpdate ctx getTxRecordState setTxRecordState
-                loopHandshake13 hs
+                loopHandshake13 hbs
             else do
                 let reason = "received key update before established"
                 terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
     -- Client only
-    loopHandshake13 (h@CertRequest13{} : hs) =
-        postHandshakeAuthWith ctx h >> loopHandshake13 hs
-    loopHandshake13 (h : hs) = do
+    loopHandshake13 ((h@CertRequest13{}, _b) : hbs) =
+        postHandshakeAuthWith ctx h >> loopHandshake13 hbs
+    loopHandshake13 (hb@(h, _) : hbs) = do
         rtt0 <- tls13st0RTT <$> getTLS13State ctx
         when rtt0 $ case h of
             ServerHello13 SH{..} ->
@@ -368,8 +368,8 @@ recvData13 ctx = do
                     let reason = "HRR is not allowed for 0-RTT"
                     terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
             _ -> return ()
-        cont <- popAction ctx h hs
-        when cont $ loopHandshake13 hs
+        cont <- popAction ctx hb
+        when cont $ loopHandshake13 hbs
 
 recvHS13 :: Context -> IO Bool -> IO ()
 recvHS13 ctx breakLoop = do
@@ -380,8 +380,8 @@ recvHS13 ctx breakLoop = do
     -- UserCanceled MUST be followed by a CloseNotify.
     process (Alert13 [(AlertLevel_Warning, CloseNotify)]) = tryBye ctx >> setEOF ctx
     process (Alert13 [(AlertLevel_Fatal, _desc)]) = setEOF ctx
-    process (Handshake13 hs) = do
-        loopHandshake13 hs
+    process (Handshake13 hs bs) = do
+        loopHandshake13 $ zip hs bs
         stop <- breakLoop
         unless stop $ recvHS13 ctx breakLoop
     process _ = recvHS13 ctx breakLoop
@@ -389,7 +389,7 @@ recvHS13 ctx breakLoop = do
     loopHandshake13 [] = return ()
     -- fixme: some implementations send multiple NST at the same time.
     -- Only the first one is used at this moment.
-    loopHandshake13 (NewSessionTicket13 life add nonce (SessionIDorTicket_ ticket) exts : hs) = do
+    loopHandshake13 ((NewSessionTicket13 life add nonce (SessionIDorTicket_ ticket) exts, _b) : hbs) = do
         role <- usingState_ ctx S.getRole
         unless (role == ClientRole) $ do
             let reason = "Session ticket is allowed for client only"
@@ -415,17 +415,17 @@ recvHS13 ctx breakLoop = do
             let ticket' = B.copy ticket
             void $ sessionEstablish (sharedSessionManager $ ctxShared ctx) ticket' sdata
             modifyTLS13State ctx $ \st -> st{tls13stRecvNST = True}
-        loopHandshake13 hs
-    loopHandshake13 (h : hs) = do
-        cont <- popAction ctx h hs
-        when cont $ loopHandshake13 hs
+        loopHandshake13 hbs
+    loopHandshake13 (hb : hbs) = do
+        cont <- popAction ctx hb
+        when cont $ loopHandshake13 hbs
 
 terminate13
     :: Context -> TLSError -> AlertLevel -> AlertDescription -> String -> IO a
 terminate13 ctx = terminateWithWriteLock ctx (sendPacket13 ctx . Alert13)
 
-popAction :: Context -> Handshake13 -> [Handshake13] -> IO Bool
-popAction ctx h hs = do
+popAction :: Context -> Handshake13R -> IO Bool
+popAction ctx hb@(h, _b) = do
     mPendingRecvAction <- popPendingRecvAction ctx
     case mPendingRecvAction of
         Nothing -> return False
@@ -435,14 +435,17 @@ popAction ctx h hs = do
             withWriteLock ctx $
                 handleException ctx $ do
                     case action of
-                        PendingRecvAction needAligned update pa -> do
-                            when needAligned $ checkAlignment ctx hs
-                            when update $ void $ updateTranscriptHash13 ctx h
+                        PendingRecvAction needAligned pa -> do
+                            when needAligned $ checkAlignment ctx
+                            updateTranscriptHash13 ctx hb
                             pa h
+                        PendingRecvActionSelfUpdate needAligned pa -> do
+                            when needAligned $ checkAlignment ctx
+                            pa hb
                         PendingRecvActionHash needAligned pa -> do
-                            when needAligned $ checkAlignment ctx hs
+                            when needAligned $ checkAlignment ctx
                             d <- transcriptHash ctx "Pending action"
-                            void $ updateTranscriptHash13 ctx h
+                            updateTranscriptHash13 ctx hb
                             pa d h
                     -- Client: after receiving SH, app data is coming.
                     -- this loop tries to receive it.
@@ -451,8 +454,8 @@ popAction ctx h hs = do
                     sendCFifNecessary ctx
             return True
 
-checkAlignment :: Context -> [Handshake13] -> IO ()
-checkAlignment ctx _hs = do
+checkAlignment :: Context -> IO ()
+checkAlignment ctx = do
     complete <- isRecvComplete ctx
     unless complete $ do
         let reason = "received message not aligned with record boundary"

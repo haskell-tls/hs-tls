@@ -42,7 +42,7 @@ sendServerHello12 sparams ctx (usedCipher, mcred) ch@CH{..} = do
             sh <- makeServerHello sparams ctx usedCipher mcred chExtensions serverSession
             build <- sendServerFirstFlight sparams ctx usedCipher mcred chExtensions
             let ff = ServerHello sh : build [ServerHelloDone]
-            sendPacket12 ctx $ Handshake ff
+            sendPacket12 ctx $ Handshake ff []
             contextFlush ctx
         Just sessionData -> do
             usingState_ ctx $ do
@@ -50,7 +50,7 @@ sendServerHello12 sparams ctx (usedCipher, mcred) ch@CH{..} = do
                 setTLS12SessionResuming True
             sh <-
                 makeServerHello sparams ctx usedCipher mcred chExtensions chSession
-            sendPacket12 ctx $ Handshake [ServerHello sh]
+            sendPacket12 ctx $ Handshake [ServerHello sh] []
             let mainSecret = sessionSecret sessionData
             usingHState ctx $ setMainSecret TLS12 ServerRole mainSecret
             logKey ctx $ MainSecret mainSecret

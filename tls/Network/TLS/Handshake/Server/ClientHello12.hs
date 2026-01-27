@@ -13,7 +13,6 @@ import Network.TLS.ErrT
 import Network.TLS.Extension
 import Network.TLS.Handshake.Server.Common
 import Network.TLS.Handshake.Signature
-import Network.TLS.IO.Encode
 import Network.TLS.Imports
 import Network.TLS.Parameters
 import Network.TLS.State
@@ -46,7 +45,6 @@ processClientHello12 sparams ctx ch = do
             Error_Protocol "no cipher in common with the TLS 1.2 client" HandshakeFailure
     let usedCipher = onCipherChoosing hooks TLS12 ciphersFilteredVersion
     mcred <- chooseCreds usedCipher creds signatureCreds
-    void $ updateTranscriptHash12 ctx $ ClientHello ch
     return (usedCipher, mcred)
 
 checkSecureRenegotiation :: Context -> ClientHello -> IO ()

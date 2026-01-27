@@ -112,7 +112,7 @@ class TLSParams a where
     getTLSCommonParams :: a -> CommonParams
     getTLSRole :: a -> Role
     doHandshake :: a -> Context -> IO ()
-    doHandshakeWith :: a -> Context -> Handshake -> IO ()
+    doHandshakeWith :: a -> Context -> HandshakeR -> IO ()
     doRequestCertificate :: a -> Context -> IO Bool
     doPostHandshakeAuthWith :: a -> Context -> Handshake13 -> IO ()
 

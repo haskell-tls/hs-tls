@@ -16,7 +16,6 @@ import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
 import Network.TLS.IO.Encode
 import Network.TLS.Imports
-import Network.TLS.Packet
 import Network.TLS.Parameters
 import Network.TLS.Session
 import Network.TLS.State
@@ -30,8 +29,8 @@ processClientHello13
     -> ClientHello
     -> IO
         ( Maybe KeyShareEntry
-        , (Cipher, Hash, Bool)
-        , (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool)
+        , (Cipher, Hash, Bool) -- rtt0
+        , (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool) -- authenticated, is0RTTvalid
         )
 processClientHello13 sparams ctx ch@CH{..} = do
     when
@@ -76,8 +75,8 @@ processClientHello13 sparams ctx ch@CH{..} = do
     mshare <- findKeyShare keyShares serverGroups
     let triple = (usedCipher, usedHash, rtt0)
     pskEarlySecret <- pskAndEarlySecret sparams ctx triple ch
-    clientHello <- fromJust <$> usingHState ctx getClientHello
-    void $ updateTranscriptHash12 ctx $ ClientHello clientHello
+    (ich, b) <- fromJust <$> usingHState ctx getClientHello
+    updateTranscriptHash12 ctx (ClientHello ich, b)
     return (mshare, triple, pskEarlySecret)
   where
     ciphersFilteredVersion = intersectCiphers chCiphers serverCiphers
@@ -104,9 +103,9 @@ findKeyShare ks ggs = go ggs
 pskAndEarlySecret
     :: ServerParams
     -> Context
-    -> (Cipher, Hash, Bool)
+    -> (Cipher, Hash, Bool) -- rtt0
     -> ClientHello
-    -> IO (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool)
+    -> IO (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool) -- authenticated, is0RTTvalid
 pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CH{..} = do
     (psk, binderInfo, is0RTTvalid) <- choosePSK
     earlyKey <- calculateEarlySecret ctx choice (Left psk)
@@ -156,9 +155,8 @@ pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CH{..} = do
 
     checkBinder _ Nothing = return []
     checkBinder earlySecret (Just (binder, n, tlen)) = do
-        ch <- fromJust <$> usingHState ctx getClientHello
-        let ech = encodeHandshake $ ClientHello ch
-            binder' = makePSKBinder earlySecret usedHash tlen ech
+        (_, b) <- fromJust <$> usingHState ctx getClientHello
+        let binder' = makePSKBinder earlySecret usedHash tlen $ B.concat b --- xxx
         unless (binder == binder') $
             decryptError "PSK binder validation failed"
         return [toExtensionRaw $ PreSharedKeyServerHello $ fromIntegral n]

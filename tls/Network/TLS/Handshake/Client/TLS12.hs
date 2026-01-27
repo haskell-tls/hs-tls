@@ -32,14 +32,15 @@ import Network.TLS.X509 hiding (Certificate)
 
 ----------------------------------------------------------------
 
-recvServerFirstFlight12 :: ClientParams -> Context -> [Handshake] -> IO ()
-recvServerFirstFlight12 cparams ctx hs = do
+recvServerFirstFlight12
+    :: ClientParams -> Context -> [HandshakeR] -> IO ()
+recvServerFirstFlight12 cparams ctx hbs = do
     resuming <- usingState_ ctx getTLS12SessionResuming
     if resuming
         then recvNSTandCCSandFinished ctx
         else do
             let st = RecvStateHandshake (expectCertificate cparams ctx)
-            runRecvStateHS ctx st hs
+            runRecvStateHS ctx st hbs
 
 expectCertificate :: ClientParams -> Context -> Handshake -> IO (RecvState IO)
 expectCertificate cparams ctx (Certificate (CertificateChain_ certs)) = do
@@ -151,7 +152,7 @@ sendCertificate cparams ctx = do
             unless (null certs) $
                 usingHState ctx $
                     setClientCertSent True
-            sendPacket12 ctx $ Handshake [Certificate (CertificateChain_ cc)]
+            sendPacket12 ctx $ Handshake [Certificate (CertificateChain_ cc)] []
 
 ----------------------------------------------------------------
 
@@ -167,7 +168,7 @@ sendClientKeyXchg cparams ctx = do
         _ ->
             throwCore $
                 Error_Protocol "client key exchange unsupported type" HandshakeFailure
-    sendPacket12 ctx $ Handshake [ClientKeyXchg ckx]
+    sendPacket12 ctx $ Handshake [ClientKeyXchg ckx] []
     mainSecret <- usingHState ctx setMainSec
     logKey ctx (MainSecret mainSecret)
 
@@ -283,4 +284,4 @@ sendCertificateVerify ctx = do
         -- Fetch all handshake messages up to now.
         msgs <- usingHState ctx $ B.concat <$> getHandshakeMessages
         sigDig <- createCertificateVerify ctx ver pubKey mhashSig msgs
-        sendPacket12 ctx $ Handshake [CertVerify sigDig]
+        sendPacket12 ctx $ Handshake [CertVerify sigDig] []

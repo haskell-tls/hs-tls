@@ -29,12 +29,13 @@ processClientHello
     :: ServerParams
     -> Context
     -> ClientHello
+    -> [ByteString]
     -> IO
         ( Version
         , ClientHello
         , Maybe ClientRandom -- Just for ECH to keep the outer one for key log
         )
-processClientHello sparams ctx ch@CH{..} = do
+processClientHello sparams ctx ch@CH{..} b = do
     established <- ctxEstablished ctx
     -- renego is not allowed in TLS 1.3
     when (established /= NotEstablished) $ do
@@ -127,10 +128,12 @@ processClientHello sparams ctx ch@CH{..} = do
             else return (Nothing, False)
     case mClientHello' of
         Just chI -> do
-            setupI ctx chI
+            -- chI is created from diff.
+            -- encodeHandshake is a MUST.
+            setupI ctx chI $ [encodeHandshake $ ClientHello chI]
             return (chosenVersion, chI, Just chRandom)
         _ -> do
-            setupO ctx ch
+            setupO ctx ch b
             when (chosenVersion == TLS13) $ do
                 let hasECHConf = not (null (sharedECHConfigList (serverShared sparams)))
                 when (hasECHConf && not receivedECH) $
@@ -141,19 +144,19 @@ processClientHello sparams ctx ch@CH{..} = do
                         setECHEE True
             return (chosenVersion, ch, Nothing)
 
-setupI :: Context -> ClientHello -> IO ()
-setupI ctx chI@CH{..} = do
+setupI :: Context -> ClientHello -> [ByteString] -> IO ()
+setupI ctx chI@CH{..} b = do
     hrr <- usingState_ ctx getTLS13HRR
     unless hrr $ startHandshake ctx TLS13 chRandom
-    usingHState ctx $ setClientHello chI
+    usingHState ctx $ setClientHello chI b
     let serverName = getServerName chExtensions
     maybe (return ()) (usingState_ ctx . setClientSNI) serverName
 
-setupO :: Context -> ClientHello -> IO ()
-setupO ctx ch@CH{..} = do
+setupO :: Context -> ClientHello -> [ByteString] -> IO ()
+setupO ctx ch@CH{..} b = do
     hrr <- usingState_ ctx getTLS13HRR
     unless hrr $ startHandshake ctx chVersion chRandom
-    usingHState ctx $ setClientHello ch
+    usingHState ctx $ setClientHello ch b
     let serverName = getServerName chExtensions
     maybe (return ()) (usingState_ ctx . setClientSNI) serverName
 

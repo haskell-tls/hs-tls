@@ -71,7 +71,7 @@ recvClientSecondFlight13 sparams ctx (appKey, clientHandshakeSecret, authenticat
                 then
                     setPendingRecvActions
                         ctx
-                        [ PendingRecvAction True True $ expectEndOfEarlyData ctx clientHandshakeSecret
+                        [ PendingRecvAction True $ expectEndOfEarlyData ctx clientHandshakeSecret
                         , PendingRecvActionHash True $
                             expectFinished sparams ctx chExtensions appKey clientHandshakeSecret sfSentTime
                         ]
@@ -104,7 +104,10 @@ expectFinished sparams ctx exts appKey clientHandshakeSecret sfSentTime hChBefor
 expectFinished _ _ _ _ _ _ _ hs = unexpected (show hs) (Just "finished 13")
 
 expectEndOfEarlyData
-    :: Context -> ClientTrafficSecret HandshakeSecret -> Handshake13 -> IO ()
+    :: Context
+    -> ClientTrafficSecret HandshakeSecret
+    -> Handshake13
+    -> IO ()
 expectEndOfEarlyData ctx clientHandshakeSecret EndOfEarlyData13 = do
     (usedHash, usedCipher, _, _) <- getRxRecordState ctx
     setRxRecordState ctx usedHash usedCipher clientHandshakeSecret
@@ -145,7 +148,7 @@ sendNewSessionTicket sparams ctx usedCipher exts applicationSecret sfSentTime = 
         psk = derivePSK choice resumptionSecret nonce
     (identity, add) <- generateSession life psk rtt0max rtt
     let nst = createNewSessionTicket life add nonce identity rtt0max
-    sendPacket13 ctx $ Handshake13 [nst]
+    sendPacket13 ctx $ Handshake13 [nst] []
   where
     choice = makeCipherChoice TLS13 usedCipher
     rtt0max = safeNonNegative32 $ serverEarlyDataSize sparams
@@ -179,7 +182,8 @@ sendNewSessionTicket sparams ctx usedCipher exts applicationSecret sfSentTime = 
         | otherwise = fromIntegral i
 
 expectCertVerify
-    :: MonadIO m => ServerParams -> Context -> TranscriptHash -> Handshake13 -> m ()
+    :: MonadIO m
+    => ServerParams -> Context -> TranscriptHash -> Handshake13 -> m ()
 expectCertVerify sparams ctx (TranscriptHash hChCc) (CertVerify13 (DigitallySigned sigAlg sig)) = liftIO $ do
     certs@(CertificateChain cc) <-
         checkValidClientCertChain ctx "invalid client certificate chain"
@@ -237,26 +241,26 @@ requestCertificateServer sparams ctx = handleEx ctx $ do
         let certReq13 = makeCertRequest sparams ctx origCertReqCtx False
         _ <- withWriteLock ctx $ do
             bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
-                sendPacket13 ctx $ Handshake13 [certReq13]
+                sendPacket13 ctx $ Handshake13 [certReq13] []
         withReadLock ctx $ do
-            clientCert13 <- getHandshake ctx ref
+            (clientCert13, bClientCert13) <- getHandshake ctx ref
             emptyCert <- expectClientCertificate sparams ctx origCertReqCtx clientCert13
             baseHState <- saveHState ctx
-            void $ updateTranscriptHash13 ctx certReq13
-            void $ updateTranscriptHash13 ctx clientCert13
+            updateTranscriptHash13 ctx (clientCert13, bClientCert13)
             th <- transcriptHash ctx "CH..Cert"
             unless emptyCert $ do
-                certVerify13 <- getHandshake ctx ref
+                (certVerify13, bCertVerify13) <- getHandshake ctx ref
                 expectCertVerify sparams ctx th certVerify13
-                void $ updateTranscriptHash13 ctx certVerify13
-            finished13 <- getHandshake ctx ref
+                updateTranscriptHash13 ctx (certVerify13, bCertVerify13)
+            (finished13, _bFinished13) <- getHandshake ctx ref
             expectClientFinished ctx finished13
             void $ restoreHState ctx baseHState -- fixme
         return True
 
 -- saving appdata and key update?
 -- error handling
-getHandshake :: Context -> IORef [Handshake13] -> IO Handshake13
+getHandshake
+    :: Context -> IORef [Handshake13R] -> IO Handshake13R
 getHandshake ctx ref = do
     hhs <- readIORef ref
     if null hhs
@@ -265,23 +269,23 @@ getHandshake ctx ref = do
             either (terminate ctx) process ex
         else chk hhs
   where
-    process (Handshake13 iss) = chk iss
+    process (Handshake13 hss bss) = chk $ zip hss bss
     process _ =
         terminate ctx $
             Error_Protocol "post handshake authenticated" UnexpectedMessage
     chk [] = getHandshake ctx ref
-    chk (KeyUpdate13 mode : hs) = do
+    chk ((KeyUpdate13 mode, _) : hbs) = do
         keyUpdate ctx getRxRecordState setRxRecordState
         -- Write lock wraps both actions because we don't want another
         -- packet to be sent by another thread before the Tx state is
         -- updated.
         when (mode == UpdateRequested) $ withWriteLock ctx $ do
-            sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested]
+            sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested] []
             keyUpdate ctx getTxRecordState setTxRecordState
-        chk hs
-    chk (h : hs) = do
-        writeIORef ref hs
-        return h
+        chk hbs
+    chk (hb : hbs) = do
+        writeIORef ref hbs
+        return hb
 
 expectClientCertificate
     :: ServerParams -> Context -> CertReqContext -> Handshake13 -> IO Bool
@@ -379,6 +383,6 @@ updateKey ctx way = liftIO $ do
         -- Write lock wraps both actions because we don't want another packet to
         -- be sent by another thread before the Tx state is updated.
         withWriteLock ctx $ do
-            sendPacket13 ctx $ Handshake13 [KeyUpdate13 req]
+            sendPacket13 ctx $ Handshake13 [KeyUpdate13 req] []
             keyUpdate ctx getTxRecordState setTxRecordState
     return tls13

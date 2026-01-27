@@ -147,12 +147,13 @@ expectEncryptedExtensions ctx (EncryptedExtensions13 eexts) = do
             Nothing -> do
                 usingHState ctx $ setTLS13HandshakeMode PreSharedKey
                 usingHState ctx $ setTLS13RTT0Status RTT0Rejected
-expectEncryptedExtensions _ p = unexpected (show p) (Just "encrypted extensions")
+expectEncryptedExtensions _ h = unexpected (show h) (Just "encrypted extensions")
 
 ----------------------------------------------------------------
 -- not used in 0-RTT
 expectCertRequest
-    :: MonadIO m => ClientParams -> Context -> Handshake13 -> RecvHandshake13M m ()
+    :: MonadIO m
+    => ClientParams -> Context -> Handshake13 -> RecvHandshake13M m ()
 expectCertRequest cparams ctx (CertRequest13 token exts) = do
     processCertRequest13 ctx token exts
     recvHandshake13 ctx $ expectCertAndVerify cparams ctx
@@ -211,10 +212,11 @@ processCertRequest13 ctx token exts = do
 ----------------------------------------------------------------
 -- not used in 0-RTT
 expectCertAndVerify
-    :: MonadIO m => ClientParams -> Context -> Handshake13 -> RecvHandshake13M m ()
+    :: MonadIO m
+    => ClientParams -> Context -> Handshake13 -> RecvHandshake13M m ()
 expectCertAndVerify cparams ctx (Certificate13 _ (CertificateChain_ cc) _) = processCertAndVerify cparams ctx cc
 expectCertAndVerify cparams ctx (CompressedCertificate13 _ (CertificateChain_ cc) _) = processCertAndVerify cparams ctx cc
-expectCertAndVerify _ _ p = unexpected (show p) (Just "server certificate")
+expectCertAndVerify _ _ h = unexpected (show h) (Just "server certificate")
 
 processCertAndVerify
     :: MonadIO m
@@ -231,11 +233,12 @@ processCertAndVerify cparams ctx cc = do
 ----------------------------------------------------------------
 
 expectCertVerify
-    :: MonadIO m => Context -> PubKey -> TranscriptHash -> Handshake13 -> m ()
+    :: MonadIO m
+    => Context -> PubKey -> TranscriptHash -> Handshake13 -> m ()
 expectCertVerify ctx pubkey (TranscriptHash hChSc) (CertVerify13 (DigitallySigned sigAlg sig)) = do
     ok <- checkCertVerify ctx pubkey sigAlg sig hChSc
     unless ok $ decryptError "cannot verify CertificateVerify"
-expectCertVerify _ _ _ p = unexpected (show p) (Just "certificate verify")
+expectCertVerify _ _ _ h = unexpected (show h) (Just "certificate verify")
 
 ----------------------------------------------------------------
 
@@ -290,7 +293,7 @@ sendClientSecondFlight13' cparams ctx choice hkey rtt0accepted eexts = do
         runPacketFlight ctx $
             sendChangeCipherSpec13 ctx
     when (rtt0accepted && not (ctxQUICMode ctx)) $
-        sendPacket13 ctx (Handshake13 [EndOfEarlyData13])
+        sendPacket13 ctx (Handshake13 [EndOfEarlyData13] [])
     let clientHandshakeSecret = triClient hkey
     setTxRecordState ctx usedHash usedCipher clientHandshakeSecret
     sendClientFlight13 cparams ctx usedHash clientHandshakeSecret
@@ -344,7 +347,7 @@ sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
                 certComp <- usingHState ctx getTLS13CertComp
                 loadClientData13 cc reqtoken certComp
         rawFinished <- makeFinished ctx usedHash baseKey
-        loadPacket13 ctx $ Handshake13 [rawFinished]
+        loadPacket13 ctx $ Handshake13 [rawFinished] []
     when (isJust mcc) $
         modifyTLS13State ctx $
             \st -> st{tls13stSentClientCert = True}
@@ -355,7 +358,7 @@ sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
             cHashSigs = filter isHashSignatureValid13 $ supportedHashSignatures $ ctxSupported ctx
         let certtag = if certComp then CompressedCertificate13 else Certificate13
         loadPacket13 ctx $
-            Handshake13 [certtag token (CertificateChain_ chain) certExts]
+            Handshake13 [certtag token (CertificateChain_ chain) certExts] []
         case certs of
             [] -> return ()
             _ -> do
@@ -364,7 +367,7 @@ sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
                 sigAlg <-
                     liftIO $ getLocalHashSigAlg ctx signatureCompatible13 cHashSigs pubKey
                 vfy <- makeCertVerify ctx pubKey sigAlg hChSc
-                loadPacket13 ctx $ Handshake13 [vfy]
+                loadPacket13 ctx $ Handshake13 [vfy] []
     --
     loadClientData13 _ _ _ =
         throwCore $
@@ -373,10 +376,11 @@ sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
 ----------------------------------------------------------------
 ----------------------------------------------------------------
 
-postHandshakeAuthClientWith :: ClientParams -> Context -> Handshake13 -> IO ()
-postHandshakeAuthClientWith cparams ctx h@(CertRequest13 certReqCtx exts) =
+postHandshakeAuthClientWith
+    :: ClientParams -> Context -> Handshake13 -> IO ()
+postHandshakeAuthClientWith cparams ctx (CertRequest13 certReqCtx exts) =
     bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
-        void $ updateTranscriptHash13 ctx h
+        --        updateTranscriptHash13 ctx h b
         processCertRequest13 ctx certReqCtx exts
         (usedHash, _, level, applicationSecretN) <- getTxRecordState ctx
         unless (level == CryptApplicationSecret) $
@@ -403,15 +407,15 @@ asyncServerHello13
 asyncServerHello13 cparams ctx groupSent chSentTime = do
     setPendingRecvActions
         ctx
-        [ PendingRecvAction True False expectServerHello
-        , PendingRecvAction True True (expectEncryptedExtensions ctx)
+        [ PendingRecvActionSelfUpdate True expectServerHello
+        , PendingRecvAction True (expectEncryptedExtensions ctx)
         , PendingRecvActionHash True expectFinishedAndSet
         ]
   where
-    expectServerHello sh = do
+    expectServerHello shb@(sh, _) = do
         setRTT ctx chSentTime
         processServerHello13 cparams ctx sh
-        void $ updateTranscriptHash13 ctx sh -- update by myself
+        updateTranscriptHash13 ctx shb -- update by myself
         void $ prepareSecondFlight13 ctx groupSent
     expectFinishedAndSet h sf = do
         expectFinished cparams ctx h sf

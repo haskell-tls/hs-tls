@@ -118,6 +118,7 @@ module Network.TLS.Struct (
     hrrRandom,
     ClientHello (..),
     ServerHello (..),
+    HandshakeR,
 ) where
 
 import Data.X509 (
@@ -231,14 +232,14 @@ instance Show ProtocolType where
 ----------------------------------------------------------------
 
 data Packet
-    = Handshake [Handshake]
+    = Handshake [Handshake] [WireBytes]
     | Alert [(AlertLevel, AlertDescription)]
     | ChangeCipherSpec
     | AppData ByteString
     deriving (Eq)
 
 instance Show Packet where
-    show (Handshake hs) = "Handshake " ++ show hs
+    show (Handshake hs _) = "Handshake " ++ show hs
     show (Alert as) = "Alert " ++ show as
     show ChangeCipherSpec = "ChangeCipherSpec"
     show (AppData bs) = "AppData " ++ showBytesHex bs
@@ -478,7 +479,7 @@ data Handshake
 
 {- FOURMOLU_DISABLE -}
 packetType :: Packet -> ProtocolType
-packetType (Handshake _)    = ProtocolType_Handshake
+packetType (Handshake _ _)  = ProtocolType_Handshake
 packetType (Alert _)        = ProtocolType_Alert
 packetType ChangeCipherSpec = ProtocolType_ChangeCipherSpec
 packetType (AppData _)      = ProtocolType_AppData
@@ -496,3 +497,5 @@ typeOfHandshake CertVerify{}       = HandshakeType_CertVerify
 typeOfHandshake Finished{}         = HandshakeType_Finished
 typeOfHandshake NewSessionTicket{} = HandshakeType_NewSessionTicket
 {- FOURMOLU_ENABLE -}
+
+type HandshakeR = (Handshake, WireBytes)

@@ -8,6 +8,7 @@ module Network.TLS.Struct13 (
     isKeyUpdate13,
     TicketNonce (..),
     SessionIDorTicket_ (..),
+    Handshake13R,
 ) where
 
 import Network.TLS.Imports
@@ -15,7 +16,7 @@ import Network.TLS.Struct
 import Network.TLS.Types
 
 data Packet13
-    = Handshake13 [Handshake13]
+    = Handshake13 [Handshake13] [WireBytes]
     | Alert13 [(AlertLevel, AlertDescription)]
     | ChangeCipherSpec13
     | AppData13 ByteString
@@ -76,3 +77,5 @@ contentType AppData13{}        = ProtocolType_AppData
 isKeyUpdate13 :: Handshake13 -> Bool
 isKeyUpdate13 (KeyUpdate13 _) = True
 isKeyUpdate13 _ = False
+
+type Handshake13R = (Handshake13, WireBytes)

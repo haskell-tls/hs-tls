@@ -127,17 +127,22 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
                 Nothing -> do
                     if hrr
                         then do
-                            chI <- fromJust <$> usingHState ctx getClientHello
+                            (chI, _) <- fromJust <$> usingHState ctx getClientHello
                             let ch0' = ch0{chExtensions = take 1 (chExtensions chI) ++ drop 1 (chExtensions ch0)}
-                            usingHState ctx $ setClientHello ch0'
+                            -- [] will be overridden via
+                            -- encodeUpdateTranscriptHash12
+                            usingHState ctx $ setClientHello ch0' []
                             return ch0'
                         else do
                             gEchExt <- greasingEchExt
                             let ch0' = ch0{chExtensions = gEchExt : drop 1 (chExtensions ch0)}
-                            usingHState ctx $ setClientHello ch0'
+                            -- [] will be overridden via
+                            -- encodeUpdateTranscriptHash12
+                            usingHState ctx $ setClientHello ch0' []
                             return ch0'
                 Just echParams -> do
-                    usingHState ctx $ setClientHello ch0
+                    let encoded = encodeHandshake $ ClientHello ch0
+                    usingHState ctx $ setClientHello ch0 [encoded]
                     mcrandO <- usingHState ctx getOuterClientRandom
                     crandO <- case mcrandO of
                         Nothing -> clientRandom ctx
@@ -148,9 +153,11 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
                     mpskExt <- randomPreSharedKeyExt
                     createEncryptedClientHello ctx ch0 echParams crandO mpskExt
             else do
-                usingHState ctx $ setClientHello ch0
+                -- [] will be overridden via
+                -- encodeUpdateTranscriptHash12
+                usingHState ctx $ setClientHello ch0 []
                 return ch0
-    sendPacket12 ctx $ Handshake [ClientHello ch]
+    sendPacket12 ctx $ Handshake [ClientHello ch] []
     mEarlySecInfo <- case rtt0info of
         Nothing -> return Nothing
         Just info -> Just <$> getEarlySecretInfo info

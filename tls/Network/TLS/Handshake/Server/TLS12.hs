@@ -40,7 +40,7 @@ recvClientSecondFlight12 sparams ctx resumeSessionData = do
                 Nothing -> return ()
                 Just ticket -> do
                     let life = adjustLifetime $ serverTicketLifetime sparams
-                    sendPacket12 ctx $ Handshake [NewSessionTicket life ticket]
+                    sendPacket12 ctx $ Handshake [NewSessionTicket life ticket] []
             sendCCSandFinished ctx ServerRole
         Just _ -> do
             _ <- sessionEstablished ctx

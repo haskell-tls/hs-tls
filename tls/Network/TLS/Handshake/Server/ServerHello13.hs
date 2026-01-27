@@ -36,15 +36,15 @@ sendServerHello13
     :: ServerParams
     -> Context
     -> KeyShareEntry
-    -> (Cipher, Hash, Bool)
-    -> (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool)
+    -> (Cipher, Hash, Bool) -- rtt0
+    -> (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool) -- authenticated, is0RTTvalid
     -> ClientHello
     -> Maybe ClientRandom
     -> IO
         ( SecretTriple ApplicationSecret
         , ClientTrafficSecret HandshakeSecret
-        , Bool
-        , Bool
+        , Bool -- authenticated
+        , Bool -- rtt0OK
         )
 sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (earlyKey, preSharedKeyExt, authenticated, is0RTTvalid) CH{..} mOuterClientRandom = do
     let clientEarlySecret = pairClient earlyKey
@@ -120,7 +120,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
             Just (cred, hashSig) -> sendCertAndVerify cred hashSig zlib
         let ServerTrafficSecret shs = serverHandshakeSecret
         rawFinished <- makeFinished ctx usedHash shs
-        loadPacket13 ctx $ Handshake13 [rawFinished]
+        loadPacket13 ctx $ Handshake13 [rawFinished] []
         return (clientHandshakeSecret, handSecret)
     ----------------------------------------------------------------
     hChSf <- transcriptHash ctx "CH..SF"
@@ -204,7 +204,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
                             , shExtensions = shExts
                             }
                 usingHState ctx $ setECHAccepted True
-                loadPacket13 ctx $ Handshake13 [ServerHello13 sh']
+                loadPacket13 ctx $ Handshake13 [ServerHello13 sh'] []
             else do
                 srand <-
                     liftIO $
@@ -220,26 +220,26 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
                             , shComp = 0
                             , shExtensions = shExts
                             }
-                loadPacket13 ctx $ Handshake13 [ServerHello13 sh]
+                loadPacket13 ctx $ Handshake13 [ServerHello13 sh] []
 
     sendCertAndVerify cred@(certChain, _) hashSig zlib = do
         storePrivInfoServer ctx cred
         when (serverWantClientCert sparams) $ do
             let certReqCtx = "" -- this must be zero length here.
                 certReq = makeCertRequest sparams ctx certReqCtx True
-            loadPacket13 ctx $ Handshake13 [certReq]
+            loadPacket13 ctx $ Handshake13 [certReq] []
             usingHState ctx $ setCertReqSent True
 
         let CertificateChain cs = certChain
             ess = replicate (length cs) []
         let certtag = if zlib then CompressedCertificate13 else Certificate13
         loadPacket13 ctx $
-            Handshake13 [certtag "" (CertificateChain_ certChain) ess]
+            Handshake13 [certtag "" (CertificateChain_ certChain) ess] []
         liftIO $ usingState_ ctx $ setServerCertificateChain certChain
         hChSc <- transcriptHash ctx "CH..SC"
         pubkey <- getLocalPublicKey ctx
         vrfy <- makeCertVerify ctx pubkey hashSig hChSc
-        loadPacket13 ctx $ Handshake13 [vrfy]
+        loadPacket13 ctx $ Handshake13 [vrfy] []
 
     sendExtensions rtt0OK alpnExt recodeSizeLimitExt = do
         msni <- liftIO $ usingState_ ctx getClientSNI
@@ -285,7 +285,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
                         ]
         eeExtensions' <-
             liftIO $ onEncryptedExtensionsCreating (serverHooks sparams) eeExtensions
-        loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 eeExtensions']
+        loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 eeExtensions'] []
 
 credentialsFindForSigning13
     :: [HashAndSignatureAlgorithm]
@@ -337,7 +337,7 @@ sendHRR ctx (usedCipher, usedHash, _) CH{..} isEch = do
             hrr <- makeHRR ctx usedCipher usedHash chSession g isEch
             usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
             runPacketFlight ctx $ do
-                loadPacket13 ctx $ Handshake13 [ServerHello13 hrr]
+                loadPacket13 ctx $ Handshake13 [ServerHello13 hrr] []
                 sendChangeCipherSpec13 ctx
   where
     serverGroups = supportedGroups (ctxSupported ctx)
