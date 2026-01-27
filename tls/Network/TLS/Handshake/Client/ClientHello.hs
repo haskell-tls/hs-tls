@@ -188,8 +188,8 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
             , {- 0x0d -} signatureAlgExt
             , {- 0x10 -} alpnExt
             , {- 0x17 -} emsExt
-            , --          , {- 0x1b -} compCertExt
-              {- 0x1c -} recordSizeLimitExt
+            , {- 0x1b -} compCertExt
+            , {- 0x1c -} recordSizeLimitExt
             , {- 0x23 -} sessionTicketExt
             , {- 0x2a -} earlyDataExt
             , {- 0x2b -} versionExt
@@ -245,7 +245,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
                 then Nothing
                 else Just $ toExtensionRaw ExtendedMainSecret
 
-    --    compCertExt = return $ Just $ toExtensionRaw (CompressCertificate [CCA_Zlib])
+    compCertExt = return $ Just $ toExtensionRaw (CompressCertificate [CCA_Zlib])
 
     recordSizeLimitExt = case limitRecordSize $ sharedLimit $ ctxShared ctx of
         Nothing -> return Nothing
