@@ -104,7 +104,7 @@ data TransHashState
     = -- | Initial state
       TransHashState0
     | -- | A raw CH is stored since hash algo is not chosen yet.
-      TransHashState1 ([ByteString] -> [ByteString])
+      TransHashState1 [ByteString]
     | -- | Hashed
       TransHashState2 HashCtx
 

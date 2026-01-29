@@ -44,7 +44,7 @@ transit _ hashAlg isHRR (TransHashState1 chs)
     | isHRR = TransHashState2 $ hashUpdate (hashInit hashAlg) hsMsg
     | otherwise = TransHashState2 $ hashUpdates (hashInit hashAlg) ch
   where
-    ch = chs []
+    ch = reverse chs
     hsMsg =
         -- Handshake message:
         -- typ <-len-> body
@@ -73,8 +73,8 @@ updateTranscriptHashI ctx label eh = do
     traceTranscriptHash ctx label hstTransHashStateI
 
 update :: ByteString -> String -> TransHashState -> TransHashState
-update eh _ TransHashState0 = TransHashState1 (eh :)
-update eh _ (TransHashState1 b) = TransHashState1 (b . (eh :))
+update eh _ TransHashState0 = TransHashState1 [eh]
+update eh _ (TransHashState1 bss) = TransHashState1 (eh : bss)
 update eh _ (TransHashState2 hctx) = TransHashState2 $ hashUpdate hctx eh
 
 ----------------------------------------------------------------
