@@ -1,5 +1,12 @@
 # Change log for "tls"
 
+## Version 2.2.2
+
+* A new architecture to calculate receiver's transcript hash with wire
+  format.
+  [#515](https://github.com/haskell-tls/hs-tls/pull/515)
+* Enabling compressed certificate on the client side again.
+
 ## Version 2.2.1
 
 * Disabling compressed certificate on the client side.
