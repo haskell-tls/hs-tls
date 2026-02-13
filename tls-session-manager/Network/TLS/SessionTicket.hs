@@ -12,6 +12,7 @@
 --   secret keys. So, energy saving is not achieved.
 module Network.TLS.SessionTicket (
     newSessionTicketManager,
+    newSessionTicketManager',
     Config,
     defaultConfig,
     ticketLifetime,
@@ -43,6 +44,18 @@ defaultConfig =
 newSessionTicketManager :: Config -> IO SessionManager
 newSessionTicketManager Config{..} =
     sessionTicketManager <$> CT.spawnTokenManager conf
+  where
+    conf =
+        CT.defaultConfig
+            { CT.interval = secretKeyInterval
+            , CT.tokenLifetime = ticketLifetime
+            , CT.threadName = "TLS ticket manager"
+            }
+
+newSessionTicketManager' :: Config -> IO (SessionManager, IO ())
+newSessionTicketManager' Config{..} = do
+    tokenmgr <- CT.spawnTokenManager conf
+    return (sessionTicketManager tokenmgr, CT.killTokenManager tokenmgr)
   where
     conf =
         CT.defaultConfig
