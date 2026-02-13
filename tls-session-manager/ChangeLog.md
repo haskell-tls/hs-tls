@@ -1,5 +1,9 @@
 # ChangeLog for tls-session-manager
 
+## 0.0.9
+
+* Providing newSessionTicketManager' to kill the manager.
+
 ## 0.0.8
 
 * Removing "basement".
