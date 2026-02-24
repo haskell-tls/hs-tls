@@ -27,7 +27,8 @@ import Control.Arrow
 import Crypto.ECC
 import Crypto.Error
 import Crypto.Number.Generate
-import Crypto.PubKey.DH hiding (generateParams)
+import Crypto.PubKey.DH (PrivateNumber (..), PublicNumber (..))
+import qualified Crypto.PubKey.DH as DH
 import Crypto.PubKey.ECIES
 import qualified Data.ByteArray as B
 import Data.Proxy
@@ -81,7 +82,7 @@ x25519 = Proxy
 x448 :: Proxy Curve_X448
 x448 = Proxy
 
-dhParamsForGroup :: Group -> Maybe Params
+dhParamsForGroup :: Group -> Maybe DH.Params
 dhParamsForGroup FFDHE2048 = Just ffdhe2048
 dhParamsForGroup FFDHE3072 = Just ffdhe3072
 dhParamsForGroup FFDHE4096 = Just ffdhe4096
@@ -108,7 +109,7 @@ groupGenerateKeyPair FFDHE8192 = gen ffdhe8192 exp8192 GroupPri_FFDHE8192 GroupP
 groupGenerateKeyPair _ = error "groupGenerateKeyPair"
 
 dhGroupGenerateKeyPair
-    :: MonadRandom r => Group -> r (Params, PrivateNumber, PublicNumber)
+    :: MonadRandom r => Group -> r (DH.Params, PrivateNumber, PublicNumber)
 dhGroupGenerateKeyPair FFDHE2048 = addParams ffdhe2048 (gen' ffdhe2048 exp2048)
 dhGroupGenerateKeyPair FFDHE3072 = addParams ffdhe3072 (gen' ffdhe3072 exp3072)
 dhGroupGenerateKeyPair FFDHE4096 = addParams ffdhe4096 (gen' ffdhe4096 exp4096)
@@ -116,7 +117,7 @@ dhGroupGenerateKeyPair FFDHE6144 = addParams ffdhe6144 (gen' ffdhe6144 exp6144)
 dhGroupGenerateKeyPair FFDHE8192 = addParams ffdhe8192 (gen' ffdhe8192 exp8192)
 dhGroupGenerateKeyPair grp = error ("invalid FFDHE group: " ++ show grp)
 
-addParams :: Functor f => Params -> f (a, b) -> f (Params, a, b)
+addParams :: Functor f => DH.Params -> f (a, b) -> f (DH.Params, a, b)
 addParams params = fmap $ \(a, b) -> (params, a, b)
 
 fs
@@ -132,7 +133,7 @@ fs
 
 gen
     :: MonadRandom r
-    => Params
+    => DH.Params
     -> Int
     -> (PrivateNumber -> GroupPrivate)
     -> (PublicNumber -> GroupPublic)
@@ -141,10 +142,10 @@ gen params expBits priTag pubTag = (priTag *** pubTag) <$> gen' params expBits
 
 gen'
     :: MonadRandom r
-    => Params
+    => DH.Params
     -> Int
     -> r (PrivateNumber, PublicNumber)
-gen' params expBits = (id &&& calculatePublic params) <$> generatePriv expBits
+gen' params expBits = (id &&& DH.calculatePublic params) <$> generatePriv expBits
 
 groupGetPubShared
     :: MonadRandom r => GroupPublic -> r (Maybe (GroupPublic, GroupKey))
@@ -158,48 +159,48 @@ groupGetPubShared (GroupPub_X255 pub) =
     fmap (first GroupPub_X255) . maybeCryptoError <$> deriveEncrypt x25519 pub
 groupGetPubShared (GroupPub_X448 pub) =
     fmap (first GroupPub_X448) . maybeCryptoError <$> deriveEncrypt x448 pub
-groupGetPubShared (GroupPub_FFDHE2048 pub) = getPubShared ffdhe2048 exp2048 pub GroupPub_FFDHE2048
-groupGetPubShared (GroupPub_FFDHE3072 pub) = getPubShared ffdhe3072 exp3072 pub GroupPub_FFDHE3072
-groupGetPubShared (GroupPub_FFDHE4096 pub) = getPubShared ffdhe4096 exp4096 pub GroupPub_FFDHE4096
-groupGetPubShared (GroupPub_FFDHE6144 pub) = getPubShared ffdhe6144 exp6144 pub GroupPub_FFDHE6144
-groupGetPubShared (GroupPub_FFDHE8192 pub) = getPubShared ffdhe8192 exp8192 pub GroupPub_FFDHE8192
+groupGetPubShared (GroupPub_FFDHE2048 pub) = getDHPubShared ffdhe2048 exp2048 pub GroupPub_FFDHE2048
+groupGetPubShared (GroupPub_FFDHE3072 pub) = getDHPubShared ffdhe3072 exp3072 pub GroupPub_FFDHE3072
+groupGetPubShared (GroupPub_FFDHE4096 pub) = getDHPubShared ffdhe4096 exp4096 pub GroupPub_FFDHE4096
+groupGetPubShared (GroupPub_FFDHE6144 pub) = getDHPubShared ffdhe6144 exp6144 pub GroupPub_FFDHE6144
+groupGetPubShared (GroupPub_FFDHE8192 pub) = getDHPubShared ffdhe8192 exp8192 pub GroupPub_FFDHE8192
 
 dhGroupGetPubShared
-    :: MonadRandom r => Group -> PublicNumber -> r (Maybe (PublicNumber, SharedKey))
-dhGroupGetPubShared FFDHE2048 pub = getPubShared' ffdhe2048 exp2048 pub
-dhGroupGetPubShared FFDHE3072 pub = getPubShared' ffdhe3072 exp3072 pub
-dhGroupGetPubShared FFDHE4096 pub = getPubShared' ffdhe4096 exp4096 pub
-dhGroupGetPubShared FFDHE6144 pub = getPubShared' ffdhe6144 exp6144 pub
-dhGroupGetPubShared FFDHE8192 pub = getPubShared' ffdhe8192 exp8192 pub
+    :: MonadRandom r => Group -> PublicNumber -> r (Maybe (PublicNumber, DH.SharedKey))
+dhGroupGetPubShared FFDHE2048 pub = getDHPubShared' ffdhe2048 exp2048 pub
+dhGroupGetPubShared FFDHE3072 pub = getDHPubShared' ffdhe3072 exp3072 pub
+dhGroupGetPubShared FFDHE4096 pub = getDHPubShared' ffdhe4096 exp4096 pub
+dhGroupGetPubShared FFDHE6144 pub = getDHPubShared' ffdhe6144 exp6144 pub
+dhGroupGetPubShared FFDHE8192 pub = getDHPubShared' ffdhe8192 exp8192 pub
 dhGroupGetPubShared _ _ = return Nothing
 
-getPubShared
+getDHPubShared
     :: MonadRandom r
-    => Params
+    => DH.Params
     -> Int
     -> PublicNumber
     -> (PublicNumber -> GroupPublic)
     -> r (Maybe (GroupPublic, GroupKey))
-getPubShared params expBits pub pubTag
+getDHPubShared params expBits pub pubTag
     | not (valid params pub) = return Nothing
     | otherwise = do
         mypri <- generatePriv expBits
-        let mypub = calculatePublic params mypri
-        let SharedKey share = getShared params mypri pub
+        let mypub = DH.calculatePublic params mypri
+        let DH.SharedKey share = DH.getShared params mypri pub
         return $ Just (pubTag mypub, SharedSecret share)
 
-getPubShared'
+getDHPubShared'
     :: MonadRandom r
-    => Params
+    => DH.Params
     -> Int
     -> PublicNumber
-    -> r (Maybe (PublicNumber, SharedKey))
-getPubShared' params expBits pub
+    -> r (Maybe (PublicNumber, DH.SharedKey))
+getDHPubShared' params expBits pub
     | not (valid params pub) = return Nothing
     | otherwise = do
         mypri <- generatePriv expBits
-        let share = stripLeadingZeros (getShared params mypri pub)
-        return $ Just (calculatePublic params mypri, SharedKey share)
+        let share = stripLeadingZeros (DH.getShared params mypri pub)
+        return $ Just (DH.calculatePublic params mypri, DH.SharedKey share)
 
 groupGetShared :: GroupPublic -> GroupPrivate -> Maybe GroupKey
 groupGetShared (GroupPub_P256 pub) (GroupPri_P256 pri) = maybeCryptoError $ deriveDecrypt p256 pub pri
@@ -207,19 +208,19 @@ groupGetShared (GroupPub_P384 pub) (GroupPri_P384 pri) = maybeCryptoError $ deri
 groupGetShared (GroupPub_P521 pub) (GroupPri_P521 pri) = maybeCryptoError $ deriveDecrypt p521 pub pri
 groupGetShared (GroupPub_X255 pub) (GroupPri_X255 pri) = maybeCryptoError $ deriveDecrypt x25519 pub pri
 groupGetShared (GroupPub_X448 pub) (GroupPri_X448 pri) = maybeCryptoError $ deriveDecrypt x448 pub pri
-groupGetShared (GroupPub_FFDHE2048 pub) (GroupPri_FFDHE2048 pri) = calcShared ffdhe2048 pub pri
-groupGetShared (GroupPub_FFDHE3072 pub) (GroupPri_FFDHE3072 pri) = calcShared ffdhe3072 pub pri
-groupGetShared (GroupPub_FFDHE4096 pub) (GroupPri_FFDHE4096 pri) = calcShared ffdhe4096 pub pri
-groupGetShared (GroupPub_FFDHE6144 pub) (GroupPri_FFDHE6144 pri) = calcShared ffdhe6144 pub pri
-groupGetShared (GroupPub_FFDHE8192 pub) (GroupPri_FFDHE8192 pri) = calcShared ffdhe8192 pub pri
+groupGetShared (GroupPub_FFDHE2048 pub) (GroupPri_FFDHE2048 pri) = calcDHShared ffdhe2048 pub pri
+groupGetShared (GroupPub_FFDHE3072 pub) (GroupPri_FFDHE3072 pri) = calcDHShared ffdhe3072 pub pri
+groupGetShared (GroupPub_FFDHE4096 pub) (GroupPri_FFDHE4096 pri) = calcDHShared ffdhe4096 pub pri
+groupGetShared (GroupPub_FFDHE6144 pub) (GroupPri_FFDHE6144 pri) = calcDHShared ffdhe6144 pub pri
+groupGetShared (GroupPub_FFDHE8192 pub) (GroupPri_FFDHE8192 pri) = calcDHShared ffdhe8192 pub pri
 groupGetShared _ _ = Nothing
 
-calcShared :: Params -> PublicNumber -> PrivateNumber -> Maybe SharedSecret
-calcShared params pub pri
+calcDHShared :: DH.Params -> PublicNumber -> PrivateNumber -> Maybe SharedSecret
+calcDHShared params pub pri
     | valid params pub = Just $ SharedSecret share
     | otherwise = Nothing
   where
-    SharedKey share = getShared params pri pub
+    DH.SharedKey share = DH.getShared params pri pub
 
 encodeGroupPublic :: GroupPublic -> ByteString
 encodeGroupPublic (GroupPub_P256 p) = encodePoint p256 p
@@ -233,8 +234,8 @@ encodeGroupPublic (GroupPub_FFDHE4096 p) = enc ffdhe4096 p
 encodeGroupPublic (GroupPub_FFDHE6144 p) = enc ffdhe6144 p
 encodeGroupPublic (GroupPub_FFDHE8192 p) = enc ffdhe8192 p
 
-enc :: Params -> PublicNumber -> ByteString
-enc params (PublicNumber p) = i2ospOf_ ((params_bits params + 7) `div` 8) p
+enc :: DH.Params -> PublicNumber -> ByteString
+enc params (PublicNumber p) = i2ospOf_ ((DH.params_bits params + 7) `div` 8) p
 
 decodeGroupPublic :: Group -> ByteString -> Either CryptoError GroupPublic
 decodeGroupPublic P256 bs = eitherCryptoError $ GroupPub_P256 <$> decodePoint p256 bs
@@ -251,13 +252,13 @@ decodeGroupPublic _ _ = error "decodeGroupPublic"
 
 -- Check that group element in not in the 2-element subgroup { 1, p - 1 }.
 -- See RFC 7919 section 3 and NIST SP 56A rev 2 section 5.6.2.3.1.
-valid :: Params -> PublicNumber -> Bool
-valid (Params p _ _) (PublicNumber y) = 1 < y && y < p - 1
+valid :: DH.Params -> PublicNumber -> Bool
+valid (DH.Params p _ _) (PublicNumber y) = 1 < y && y < p - 1
 
 -- strips leading zeros from the result of getShared, as required
 -- for DH(E) pre-main secret in SSL/TLS before version 1.3.
-stripLeadingZeros :: SharedKey -> B.ScrubbedBytes
-stripLeadingZeros (SharedKey sb) = snd $ B.span (== 0) sb
+stripLeadingZeros :: DH.SharedKey -> B.ScrubbedBytes
+stripLeadingZeros (DH.SharedKey sb) = snd $ B.span (== 0) sb
 
 -- Use short exponents as optimization, see RFC 7919 section 5.2.
 generatePriv :: MonadRandom r => Int -> r PrivateNumber
