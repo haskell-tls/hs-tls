@@ -7,8 +7,8 @@ module Network.TLS.Handshake.Key (
     decryptRSA,
     verifyPublic,
     generateDHE,
-    generateECDHE,
-    generateECDHEShared,
+    generateGroup,
+    generateGroupShared,
     generateFFDHE,
     generateFFDHEShared,
     versionCompatible,
@@ -69,12 +69,12 @@ verifyPublic ctx params econtent sign = do
 generateDHE :: Context -> DHParams -> IO (DHPrivate, DHPublic)
 generateDHE ctx dhp = usingState_ ctx $ withRNG $ dhGenerateKeyPair dhp
 
-generateECDHE :: Context -> Group -> IO (GroupPrivate, GroupPublic)
-generateECDHE ctx grp = usingState_ ctx $ withRNG $ groupGenerateKeyPair grp
+generateGroup :: Context -> Group -> IO (GroupPrivate, GroupPublic)
+generateGroup ctx grp = usingState_ ctx $ withRNG $ groupGenerateKeyPair grp
 
-generateECDHEShared
+generateGroupShared
     :: Context -> GroupPublic -> IO (Maybe (GroupPublic, GroupKey))
-generateECDHEShared ctx pub = usingState_ ctx $ withRNG $ groupGetPubShared pub
+generateGroupShared ctx pub = usingState_ ctx $ withRNG $ groupGetPubShared pub
 
 generateFFDHE :: Context -> Group -> IO (DHParams, DHPrivate, DHPublic)
 generateFFDHE ctx grp = usingState_ ctx $ withRNG $ dhGroupGenerateKeyPair grp

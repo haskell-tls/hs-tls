@@ -247,7 +247,7 @@ getCKX_ECDHE ctx = do
     ServerECDHParams grp srvpub <- usingHState ctx getServerECDHParams
     checkSupportedGroup ctx grp
     usingHState ctx $ setSupportedGroup grp
-    ecdhePair <- generateECDHEShared ctx srvpub
+    ecdhePair <- generateGroupShared ctx srvpub
     case ecdhePair of
         Nothing ->
             throwCore $

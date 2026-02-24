@@ -111,7 +111,7 @@ makeServerKeyShare :: Context -> KeyShareEntry -> IO (ByteString, KeyShareEntry)
 makeServerKeyShare ctx (KeyShareEntry grp wcpub) = case ecpub of
     Left e -> throwCore $ Error_Protocol (show e) IllegalParameter
     Right cpub -> do
-        ecdhePair <- generateECDHEShared ctx cpub
+        ecdhePair <- generateGroupShared ctx cpub
         case ecdhePair of
             Nothing -> throwCore $ Error_Protocol msgInvalidPublic IllegalParameter
             Just (spub, share) ->
@@ -124,7 +124,7 @@ makeServerKeyShare ctx (KeyShareEntry grp wcpub) = case ecpub of
 
 makeClientKeyShare :: Context -> Group -> IO (IES.GroupPrivate, KeyShareEntry)
 makeClientKeyShare ctx grp = do
-    (cpri, cpub) <- generateECDHE ctx grp
+    (cpri, cpub) <- generateGroup ctx grp
     let wcpub = IES.encodeGroupPublic cpub
         clientKeyShare = KeyShareEntry grp wcpub
     return (cpri, clientKeyShare)
