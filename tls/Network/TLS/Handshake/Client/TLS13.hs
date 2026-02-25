@@ -100,7 +100,7 @@ prepareSecondFlight13' ctx groupSent choice = do
                             "key exchange not implemented, expected key_share extension"
                             HandshakeFailure
         let grp = keyShareEntryGroup serverKeyShare
-        unless (checkKeyShareKeyLength serverKeyShare) $
+        unless (checkServerKeyShareKeyLength serverKeyShare) $
             throwCore $
                 Error_Protocol "broken key_share" IllegalParameter
         unless (groupSent == Just grp) $

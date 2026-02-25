@@ -37,7 +37,8 @@ module Network.TLS.Handshake.Common13 (
     calculateApplicationSecret,
     calculateResumptionSecret,
     derivePSK,
-    checkKeyShareKeyLength,
+    checkClientKeyShareKeyLength,
+    checkServerKeyShareKeyLength,
     setRTT,
     computeConfirm,
     updateTranscriptHash13,
@@ -562,24 +563,59 @@ derivePSK choice (BaseSecret sec) (TicketNonce nonce) =
 
 ----------------------------------------------------------------
 
-checkKeyShareKeyLength :: KeyShareEntry -> Bool
-checkKeyShareKeyLength ks = keyShareKeyLength grp == B.length key
+checkClientKeyShareKeyLength :: KeyShareEntry -> Bool
+checkClientKeyShareKeyLength ks = clientKeyShareKeyLength grp == B.length key
   where
     grp = keyShareEntryGroup ks
     key = keyShareEntryKeyExchange ks
 
-keyShareKeyLength :: Group -> Int
-keyShareKeyLength P256 = 65 -- 32 * 2 + 1
-keyShareKeyLength P384 = 97 -- 48 * 2 + 1
-keyShareKeyLength P521 = 133 -- 66 * 2 + 1
-keyShareKeyLength X25519 = 32
-keyShareKeyLength X448 = 56
-keyShareKeyLength FFDHE2048 = 256
-keyShareKeyLength FFDHE3072 = 384
-keyShareKeyLength FFDHE4096 = 512
-keyShareKeyLength FFDHE6144 = 768
-keyShareKeyLength FFDHE8192 = 1024
-keyShareKeyLength _ = error "keyShareKeyLength"
+{- FOURMOLU_DISABLE -}
+clientKeyShareKeyLength :: Group -> Int
+clientKeyShareKeyLength P256   = 65  -- 32 * 2 + 1
+clientKeyShareKeyLength P384   = 97  -- 48 * 2 + 1
+clientKeyShareKeyLength P521   = 133 -- 66 * 2 + 1
+clientKeyShareKeyLength X25519 = 32
+clientKeyShareKeyLength X448   = 56
+clientKeyShareKeyLength FFDHE2048 = 256
+clientKeyShareKeyLength FFDHE3072 = 384
+clientKeyShareKeyLength FFDHE4096 = 512
+clientKeyShareKeyLength FFDHE6144 = 768
+clientKeyShareKeyLength FFDHE8192 = 1024
+clientKeyShareKeyLength MLKEM512  = 800
+clientKeyShareKeyLength MLKEM768  = 1184
+clientKeyShareKeyLength MLKEM1024 = 1568
+clientKeyShareKeyLength X25519MLKEM768 = 1216
+clientKeyShareKeyLength P256MLKEM768   = 1249
+clientKeyShareKeyLength P384MLKEM1024  = 1665
+clientKeyShareKeyLength _ = error "clientKeyShareKeyLength"
+{- FOURMOLU_ENABLE -}
+
+checkServerKeyShareKeyLength :: KeyShareEntry -> Bool
+checkServerKeyShareKeyLength ks = serverKeyShareKeyLength grp == B.length key
+  where
+    grp = keyShareEntryGroup ks
+    key = keyShareEntryKeyExchange ks
+
+{- FOURMOLU_DISABLE -}
+serverKeyShareKeyLength :: Group -> Int
+serverKeyShareKeyLength P256   = 65  -- 32 * 2 + 1
+serverKeyShareKeyLength P384   = 97  -- 48 * 2 + 1
+serverKeyShareKeyLength P521   = 133 -- 66 * 2 + 1
+serverKeyShareKeyLength X25519 = 32
+serverKeyShareKeyLength X448   = 56
+serverKeyShareKeyLength FFDHE2048 = 256
+serverKeyShareKeyLength FFDHE3072 = 384
+serverKeyShareKeyLength FFDHE4096 = 512
+serverKeyShareKeyLength FFDHE6144 = 768
+serverKeyShareKeyLength FFDHE8192 = 1024
+serverKeyShareKeyLength MLKEM512  = 768
+serverKeyShareKeyLength MLKEM768  = 1088
+serverKeyShareKeyLength MLKEM1024 = 1568
+serverKeyShareKeyLength X25519MLKEM768 = 1120
+serverKeyShareKeyLength P256MLKEM768   = 1153
+serverKeyShareKeyLength P384MLKEM1024  = 1665
+serverKeyShareKeyLength _ = error "clientKeyShareKeyLength"
+{- FOURMOLU_ENABLE -}
 
 setRTT :: Context -> Millisecond -> IO ()
 setRTT ctx chSentTime = do

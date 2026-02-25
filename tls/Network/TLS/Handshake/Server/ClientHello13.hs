@@ -93,7 +93,7 @@ findKeyShare ks ggs = go ggs
     go (g : gs) = case filter (grpEq g) ks of
         [] -> go gs
         [k] -> do
-            unless (checkKeyShareKeyLength k) $
+            unless (checkClientKeyShareKeyLength k) $
                 throwCore $
                     Error_Protocol "broken key_share" IllegalParameter
             return $ Just k
