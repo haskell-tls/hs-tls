@@ -8,7 +8,7 @@ module Network.TLS.Handshake.Key (
     verifyPublic,
     generateDHE,
     generateGroup,
-    generateGroupShared,
+    encapsulateGroup,
     generateFFDHE,
     generateFFDHEShared,
     versionCompatible,
@@ -72,9 +72,9 @@ generateDHE ctx dhp = usingState_ ctx $ withRNG $ dhGenerateKeyPair dhp
 generateGroup :: Context -> Group -> IO (GroupPrivate, GroupPublic)
 generateGroup ctx grp = usingState_ ctx $ withRNG $ groupGenerateKeyPair grp
 
-generateGroupShared
+encapsulateGroup
     :: Context -> GroupPublic -> IO (Maybe (GroupPublic, GroupKey))
-generateGroupShared ctx pub = usingState_ ctx $ withRNG $ groupGetPubShared pub
+encapsulateGroup ctx pub = usingState_ ctx $ withRNG $ groupEncapsulate pub
 
 generateFFDHE :: Context -> Group -> IO (DHParams, DHPrivate, DHPublic)
 generateFFDHE ctx grp = usingState_ ctx $ withRNG $ dhGroupGenerateKeyPair grp

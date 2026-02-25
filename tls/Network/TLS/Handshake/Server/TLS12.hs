@@ -164,13 +164,13 @@ processClientKeyXchg ctx (CKX_DH clientDHValue) = do
     logKey ctx (MainSecret mainSecret)
 processClientKeyXchg ctx (CKX_ECDH bytes) = do
     ServerECDHParams grp _ <- usingHState ctx getServerECDHParams
-    case decodeGroupPublic grp bytes of
+    case groupDecodePublic grp bytes of
         Left _ ->
             throwCore $
                 Error_Protocol "client public key cannot be decoded" IllegalParameter
         Right clipub -> do
             srvpri <- usingHState ctx getGroupPrivate
-            case groupGetShared clipub srvpri of
+            case groupDecapsulate clipub srvpri of
                 Just preMain -> do
                     rver <- usingState_ ctx getVersion
                     role <- usingState_ ctx getRole

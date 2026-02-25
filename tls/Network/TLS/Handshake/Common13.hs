@@ -107,38 +107,38 @@ makeVerifyData usedHash baseKey (TranscriptHash th) =
 
 ----------------------------------------------------------------
 
+makeClientKeyShare :: Context -> Group -> IO (IES.GroupPrivate, KeyShareEntry)
+makeClientKeyShare ctx grp = do
+    (cpri, cpub) <- generateGroup ctx grp
+    let wcpub = IES.groupEncodePublic cpub
+        clientKeyShare = KeyShareEntry grp wcpub
+    return (cpri, clientKeyShare)
+
 makeServerKeyShare :: Context -> KeyShareEntry -> IO (ByteString, KeyShareEntry)
 makeServerKeyShare ctx (KeyShareEntry grp wcpub) = case ecpub of
     Left e -> throwCore $ Error_Protocol (show e) IllegalParameter
     Right cpub -> do
-        ecdhePair <- generateGroupShared ctx cpub
+        ecdhePair <- encapsulateGroup ctx cpub
         case ecdhePair of
             Nothing -> throwCore $ Error_Protocol msgInvalidPublic IllegalParameter
             Just (spub, share) ->
-                let wspub = IES.encodeGroupPublic spub
+                let wspub = IES.groupEncodePublic spub
                     serverKeyShare = KeyShareEntry grp wspub
                  in return (BA.convert share, serverKeyShare)
   where
-    ecpub = IES.decodeGroupPublic grp wcpub
+    ecpub = IES.groupDecodePublic grp wcpub
     msgInvalidPublic = "invalid client " ++ show grp ++ " public key"
-
-makeClientKeyShare :: Context -> Group -> IO (IES.GroupPrivate, KeyShareEntry)
-makeClientKeyShare ctx grp = do
-    (cpri, cpub) <- generateGroup ctx grp
-    let wcpub = IES.encodeGroupPublic cpub
-        clientKeyShare = KeyShareEntry grp wcpub
-    return (cpri, clientKeyShare)
 
 fromServerKeyShare :: KeyShareEntry -> IES.GroupPrivate -> IO ByteString
 fromServerKeyShare (KeyShareEntry grp wspub) cpri = case espub of
     Left e -> throwCore $ Error_Protocol (show e) IllegalParameter
-    Right spub -> case IES.groupGetShared spub cpri of
+    Right spub -> case IES.groupDecapsulate spub cpri of
         Just shared -> return $ BA.convert shared
         Nothing ->
             throwCore $
                 Error_Protocol "cannot generate a shared secret on (EC)DH" IllegalParameter
   where
-    espub = IES.decodeGroupPublic grp wspub
+    espub = IES.groupDecodePublic grp wspub
 
 ----------------------------------------------------------------
 

@@ -247,7 +247,7 @@ getCKX_ECDHE ctx = do
     ServerECDHParams grp srvpub <- usingHState ctx getServerECDHParams
     checkSupportedGroup ctx grp
     usingHState ctx $ setSupportedGroup grp
-    ecdhePair <- generateGroupShared ctx srvpub
+    ecdhePair <- encapsulateGroup ctx srvpub
     case ecdhePair of
         Nothing ->
             throwCore $
@@ -255,7 +255,7 @@ getCKX_ECDHE ctx = do
         Just (clipub, preMain) -> do
             xver <- usingState_ ctx getVersion
             let setMainSec = setMainSecretFromPre xver ClientRole preMain
-            return (CKX_ECDH $ encodeGroupPublic clipub, setMainSec)
+            return (CKX_ECDH $ groupEncodePublic clipub, setMainSec)
 
 ----------------------------------------------------------------
 
