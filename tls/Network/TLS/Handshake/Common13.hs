@@ -109,7 +109,7 @@ makeVerifyData usedHash baseKey (TranscriptHash th) =
 makeClientKeyShare :: Context -> Group -> IO (IES.GroupPrivate, KeyShareEntry)
 makeClientKeyShare ctx grp = do
     (cpri, cpub) <- generateGroup ctx grp
-    let wcpub = IES.groupEncodePublic cpub
+    let wcpub = IES.groupEncodePublicA cpub
         clientKeyShare = KeyShareEntry grp wcpub
     return (cpri, clientKeyShare)
 
@@ -121,11 +121,11 @@ makeServerKeyShare ctx (KeyShareEntry grp wcpub) = case ecpub of
         case ecdhePair of
             Nothing -> throwCore $ Error_Protocol msgInvalidPublic IllegalParameter
             Just (spub, share) ->
-                let wspub = IES.groupEncodePublic spub
+                let wspub = IES.groupEncodePublicB spub
                     serverKeyShare = KeyShareEntry grp wspub
                  in return (share, serverKeyShare)
   where
-    ecpub = IES.groupDecodePublic grp wcpub
+    ecpub = IES.groupDecodePublicA grp wcpub
     msgInvalidPublic = "invalid client " ++ show grp ++ " public key"
 
 fromServerKeyShare :: KeyShareEntry -> IES.GroupPrivate -> IO ByteString
@@ -137,7 +137,7 @@ fromServerKeyShare (KeyShareEntry grp wspub) cpri = case espub of
             throwCore $
                 Error_Protocol "cannot generate a shared secret on (EC)DH" IllegalParameter
   where
-    espub = IES.groupDecodePublic grp wspub
+    espub = IES.groupDecodePublicB grp wspub
 
 ----------------------------------------------------------------
 

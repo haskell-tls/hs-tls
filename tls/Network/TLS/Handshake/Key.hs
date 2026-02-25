@@ -69,11 +69,11 @@ verifyPublic ctx params econtent sign = do
 generateDHE :: Context -> DHParams -> IO (DHPrivate, DHPublic)
 generateDHE ctx dhp = usingState_ ctx $ withRNG $ dhGenerateKeyPair dhp
 
-generateGroup :: Context -> Group -> IO (GroupPrivate, GroupPublic)
+generateGroup :: Context -> Group -> IO (GroupPrivate, GroupPublicA)
 generateGroup ctx grp = usingState_ ctx $ withRNG $ groupGenerateKeyPair grp
 
 encapsulateGroup
-    :: Context -> GroupPublic -> IO (Maybe (GroupPublic, GroupKey))
+    :: Context -> GroupPublicA -> IO (Maybe (GroupPublicB, GroupKey))
 encapsulateGroup ctx pub = usingState_ ctx $ withRNG $ groupEncapsulate pub
 
 generateFFDHE :: Context -> Group -> IO (DHParams, DHPrivate, DHPublic)

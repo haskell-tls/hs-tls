@@ -255,7 +255,7 @@ getCKX_ECDHE ctx = do
         Just (clipub, preMain) -> do
             xver <- usingState_ ctx getVersion
             let setMainSec = setMainSecretFromPre xver ClientRole preMain
-            return (CKX_ECDH $ groupEncodePublic clipub, setMainSec)
+            return (CKX_ECDH $ groupEncodePublicB clipub, setMainSec)
 
 ----------------------------------------------------------------
 

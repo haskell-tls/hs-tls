@@ -7,7 +7,8 @@
 -- Stability   : experimental
 -- Portability : unknown
 module Network.TLS.Crypto.IES (
-    GroupPublic,
+    GroupPublicA,
+    GroupPublicB,
     GroupPrivate,
     GroupKey,
 
@@ -15,8 +16,10 @@ module Network.TLS.Crypto.IES (
     groupGenerateKeyPair,
     groupEncapsulate,
     groupDecapsulate,
-    groupEncodePublic,
-    groupDecodePublic,
+    groupEncodePublicA,
+    groupDecodePublicA,
+    groupEncodePublicB,
+    groupDecodePublicB,
 
     -- * Compatibility with 'Network.TLS.Crypto.DH'
     dhParamsForGroup,
@@ -31,6 +34,8 @@ import Crypto.Number.Generate
 import Crypto.PubKey.DH (PrivateNumber (..), PublicNumber (..))
 import qualified Crypto.PubKey.DH as DH
 import Crypto.PubKey.ECIES
+import Crypto.PubKey.ML_KEM (ML_KEM_1024, ML_KEM_768)
+import qualified Crypto.PubKey.ML_KEM as ML
 import qualified Data.ByteArray as B
 import Data.Proxy
 
@@ -51,19 +56,38 @@ data GroupPrivate
     | GroupPri_FFDHE4096 PrivateNumber
     | GroupPri_FFDHE6144 PrivateNumber
     | GroupPri_FFDHE8192 PrivateNumber
+    | GroupPri_MLKEM768 (ML.DecapsulationKey ML_KEM_768)
+    | GroupPri_MLKEM1024 (ML.DecapsulationKey ML_KEM_1024)
     deriving (Eq, Show)
 
-data GroupPublic
-    = GroupPub_P256 (Point Curve_P256R1)
-    | GroupPub_P384 (Point Curve_P384R1)
-    | GroupPub_P521 (Point Curve_P521R1)
-    | GroupPub_X255 (Point Curve_X25519)
-    | GroupPub_X448 (Point Curve_X448)
-    | GroupPub_FFDHE2048 PublicNumber
-    | GroupPub_FFDHE3072 PublicNumber
-    | GroupPub_FFDHE4096 PublicNumber
-    | GroupPub_FFDHE6144 PublicNumber
-    | GroupPub_FFDHE8192 PublicNumber
+data GroupPublicA
+    = GroupPubA_P256 (Point Curve_P256R1)
+    | GroupPubA_P384 (Point Curve_P384R1)
+    | GroupPubA_P521 (Point Curve_P521R1)
+    | GroupPubA_X255 (Point Curve_X25519)
+    | GroupPubA_X448 (Point Curve_X448)
+    | GroupPubA_FFDHE2048 PublicNumber
+    | GroupPubA_FFDHE3072 PublicNumber
+    | GroupPubA_FFDHE4096 PublicNumber
+    | GroupPubA_FFDHE6144 PublicNumber
+    | GroupPubA_FFDHE8192 PublicNumber
+    | GroupPubA_MLKEM768 (ML.EncapsulationKey ML_KEM_768)
+    | GroupPubA_MLKEM1024 (ML.EncapsulationKey ML_KEM_1024)
+    deriving (Eq, Show)
+
+data GroupPublicB
+    = GroupPubB_P256 (Point Curve_P256R1)
+    | GroupPubB_P384 (Point Curve_P384R1)
+    | GroupPubB_P521 (Point Curve_P521R1)
+    | GroupPubB_X255 (Point Curve_X25519)
+    | GroupPubB_X448 (Point Curve_X448)
+    | GroupPubB_FFDHE2048 PublicNumber
+    | GroupPubB_FFDHE3072 PublicNumber
+    | GroupPubB_FFDHE4096 PublicNumber
+    | GroupPubB_FFDHE6144 PublicNumber
+    | GroupPubB_FFDHE8192 PublicNumber
+    | GroupPubB_MLKEM768 (ML.Ciphertext ML_KEM_768)
+    | GroupPubB_MLKEM1024 (ML.Ciphertext ML_KEM_1024)
     deriving (Eq, Show)
 
 type GroupKey = ByteString
@@ -83,6 +107,12 @@ x25519 = Proxy
 x448 :: Proxy Curve_X448
 x448 = Proxy
 
+mlkem768 :: Proxy ML_KEM_768
+mlkem768 = Proxy
+
+mlkem1024 :: Proxy ML_KEM_1024
+mlkem1024 = Proxy
+
 dhParamsForGroup :: Group -> Maybe DH.Params
 dhParamsForGroup FFDHE2048 = Just ffdhe2048
 dhParamsForGroup FFDHE3072 = Just ffdhe3072
@@ -91,22 +121,28 @@ dhParamsForGroup FFDHE6144 = Just ffdhe6144
 dhParamsForGroup FFDHE8192 = Just ffdhe8192
 dhParamsForGroup _ = Nothing
 
-groupGenerateKeyPair :: MonadRandom r => Group -> r (GroupPrivate, GroupPublic)
+groupGenerateKeyPair :: MonadRandom r => Group -> r (GroupPrivate, GroupPublicA)
 groupGenerateKeyPair P256 =
-    (GroupPri_P256, GroupPub_P256) `fs` curveGenerateKeyPair p256
+    (GroupPri_P256, GroupPubA_P256) `fs` curveGenerateKeyPair p256
 groupGenerateKeyPair P384 =
-    (GroupPri_P384, GroupPub_P384) `fs` curveGenerateKeyPair p384
+    (GroupPri_P384, GroupPubA_P384) `fs` curveGenerateKeyPair p384
 groupGenerateKeyPair P521 =
-    (GroupPri_P521, GroupPub_P521) `fs` curveGenerateKeyPair p521
+    (GroupPri_P521, GroupPubA_P521) `fs` curveGenerateKeyPair p521
 groupGenerateKeyPair X25519 =
-    (GroupPri_X255, GroupPub_X255) `fs` curveGenerateKeyPair x25519
+    (GroupPri_X255, GroupPubA_X255) `fs` curveGenerateKeyPair x25519
 groupGenerateKeyPair X448 =
-    (GroupPri_X448, GroupPub_X448) `fs` curveGenerateKeyPair x448
-groupGenerateKeyPair FFDHE2048 = gen ffdhe2048 exp2048 GroupPri_FFDHE2048 GroupPub_FFDHE2048
-groupGenerateKeyPair FFDHE3072 = gen ffdhe3072 exp3072 GroupPri_FFDHE3072 GroupPub_FFDHE3072
-groupGenerateKeyPair FFDHE4096 = gen ffdhe4096 exp4096 GroupPri_FFDHE4096 GroupPub_FFDHE4096
-groupGenerateKeyPair FFDHE6144 = gen ffdhe6144 exp6144 GroupPri_FFDHE6144 GroupPub_FFDHE6144
-groupGenerateKeyPair FFDHE8192 = gen ffdhe8192 exp8192 GroupPri_FFDHE8192 GroupPub_FFDHE8192
+    (GroupPri_X448, GroupPubA_X448) `fs` curveGenerateKeyPair x448
+groupGenerateKeyPair FFDHE2048 = gen ffdhe2048 exp2048 GroupPri_FFDHE2048 GroupPubA_FFDHE2048
+groupGenerateKeyPair FFDHE3072 = gen ffdhe3072 exp3072 GroupPri_FFDHE3072 GroupPubA_FFDHE3072
+groupGenerateKeyPair FFDHE4096 = gen ffdhe4096 exp4096 GroupPri_FFDHE4096 GroupPubA_FFDHE4096
+groupGenerateKeyPair FFDHE6144 = gen ffdhe6144 exp6144 GroupPri_FFDHE6144 GroupPubA_FFDHE6144
+groupGenerateKeyPair FFDHE8192 = gen ffdhe8192 exp8192 GroupPri_FFDHE8192 GroupPubA_FFDHE8192
+groupGenerateKeyPair MLKEM768 = do
+    (enckey, deckey) <- ML.generate mlkem768
+    return (GroupPri_MLKEM768 deckey, GroupPubA_MLKEM768 enckey)
+groupGenerateKeyPair MLKEM1024 = do
+    (enckey, deckey) <- ML.generate mlkem1024
+    return (GroupPri_MLKEM1024 deckey, GroupPubA_MLKEM1024 enckey)
 groupGenerateKeyPair _ = error "groupGenerateKeyPair"
 
 dhGroupGenerateKeyPair
@@ -123,9 +159,9 @@ addParams params = fmap $ \(a, b) -> (params, a, b)
 
 fs
     :: MonadRandom r
-    => (Scalar a -> GroupPrivate, Point a -> GroupPublic)
+    => (Scalar a -> GroupPrivate, Point a -> GroupPublicA)
     -> r (KeyPair a)
-    -> r (GroupPrivate, GroupPublic)
+    -> r (GroupPrivate, GroupPublicA)
 (t1, t2) `fs` action = do
     keypair <- action
     let pub = keypairGetPublic keypair
@@ -137,8 +173,8 @@ gen
     => DH.Params
     -> Int
     -> (PrivateNumber -> GroupPrivate)
-    -> (PublicNumber -> GroupPublic)
-    -> r (GroupPrivate, GroupPublic)
+    -> (PublicNumber -> GroupPublicA)
+    -> r (GroupPrivate, GroupPublicA)
 gen params expBits priTag pubTag = (priTag *** pubTag) <$> gen' params expBits
 
 gen'
@@ -149,17 +185,23 @@ gen'
 gen' params expBits = (id &&& DH.calculatePublic params) <$> generatePriv expBits
 
 groupEncapsulate
-    :: MonadRandom r => GroupPublic -> r (Maybe (GroupPublic, GroupKey))
-groupEncapsulate (GroupPub_P256 pub) = getECDHPubShared GroupPub_P256 p256 pub
-groupEncapsulate (GroupPub_P384 pub) = getECDHPubShared GroupPub_P384 p384 pub
-groupEncapsulate (GroupPub_P521 pub) = getECDHPubShared GroupPub_P521 p521 pub
-groupEncapsulate (GroupPub_X255 pub) = getECDHPubShared GroupPub_X255 x25519 pub
-groupEncapsulate (GroupPub_X448 pub) = getECDHPubShared GroupPub_X448 x448 pub
-groupEncapsulate (GroupPub_FFDHE2048 pub) = getDHPubShared ffdhe2048 exp2048 pub GroupPub_FFDHE2048
-groupEncapsulate (GroupPub_FFDHE3072 pub) = getDHPubShared ffdhe3072 exp3072 pub GroupPub_FFDHE3072
-groupEncapsulate (GroupPub_FFDHE4096 pub) = getDHPubShared ffdhe4096 exp4096 pub GroupPub_FFDHE4096
-groupEncapsulate (GroupPub_FFDHE6144 pub) = getDHPubShared ffdhe6144 exp6144 pub GroupPub_FFDHE6144
-groupEncapsulate (GroupPub_FFDHE8192 pub) = getDHPubShared ffdhe8192 exp8192 pub GroupPub_FFDHE8192
+    :: MonadRandom r => GroupPublicA -> r (Maybe (GroupPublicB, GroupKey))
+groupEncapsulate (GroupPubA_P256 pub) = getECDHPubShared GroupPubB_P256 p256 pub
+groupEncapsulate (GroupPubA_P384 pub) = getECDHPubShared GroupPubB_P384 p384 pub
+groupEncapsulate (GroupPubA_P521 pub) = getECDHPubShared GroupPubB_P521 p521 pub
+groupEncapsulate (GroupPubA_X255 pub) = getECDHPubShared GroupPubB_X255 x25519 pub
+groupEncapsulate (GroupPubA_X448 pub) = getECDHPubShared GroupPubB_X448 x448 pub
+groupEncapsulate (GroupPubA_FFDHE2048 pub) = getDHPubShared ffdhe2048 exp2048 pub GroupPubB_FFDHE2048
+groupEncapsulate (GroupPubA_FFDHE3072 pub) = getDHPubShared ffdhe3072 exp3072 pub GroupPubB_FFDHE3072
+groupEncapsulate (GroupPubA_FFDHE4096 pub) = getDHPubShared ffdhe4096 exp4096 pub GroupPubB_FFDHE4096
+groupEncapsulate (GroupPubA_FFDHE6144 pub) = getDHPubShared ffdhe6144 exp6144 pub GroupPubB_FFDHE6144
+groupEncapsulate (GroupPubA_FFDHE8192 pub) = getDHPubShared ffdhe8192 exp8192 pub GroupPubB_FFDHE8192
+groupEncapsulate (GroupPubA_MLKEM768 pub) = do
+    (sec, ct) <- ML.encapsulate pub
+    return $ Just (GroupPubB_MLKEM768 ct, B.convert sec)
+groupEncapsulate (GroupPubA_MLKEM1024 pub) = do
+    (sec, ct) <- ML.encapsulate pub
+    return $ Just (GroupPubB_MLKEM1024 ct, B.convert sec)
 
 dhGroupGetPubShared
     :: MonadRandom r => Group -> PublicNumber -> r (Maybe (PublicNumber, GroupKey))
@@ -172,10 +214,10 @@ dhGroupGetPubShared _ _ = return Nothing
 
 getECDHPubShared
     :: (MonadRandom m, EllipticCurveDH curve)
-    => (Point curve -> GroupPublic)
+    => (Point curve -> GroupPublicB)
     -> proxy curve
     -> Point curve
-    -> m (Maybe (GroupPublic, GroupKey))
+    -> m (Maybe (GroupPublicB, GroupKey))
 getECDHPubShared tag proxy pub = do
     mx <- maybeCryptoError <$> deriveEncrypt proxy pub
     case mx of
@@ -187,8 +229,8 @@ getDHPubShared
     => DH.Params
     -> Int
     -> PublicNumber
-    -> (PublicNumber -> GroupPublic)
-    -> r (Maybe (GroupPublic, GroupKey))
+    -> (PublicNumber -> GroupPublicB)
+    -> r (Maybe (GroupPublicB, GroupKey))
 getDHPubShared params expBits pub pubTag
     | not (valid params pub) = return Nothing
     | otherwise = do
@@ -210,17 +252,17 @@ getDHPubShared' params expBits pub
         let share = stripLeadingZeros (DH.getShared params mypri pub)
         return $ Just (DH.calculatePublic params mypri, B.convert share)
 
-groupDecapsulate :: GroupPublic -> GroupPrivate -> Maybe GroupKey
-groupDecapsulate (GroupPub_P256 pub) (GroupPri_P256 pri) = (B.convert <$>) . maybeCryptoError $ deriveDecrypt p256 pub pri
-groupDecapsulate (GroupPub_P384 pub) (GroupPri_P384 pri) = (B.convert <$>) . maybeCryptoError $ deriveDecrypt p384 pub pri
-groupDecapsulate (GroupPub_P521 pub) (GroupPri_P521 pri) = (B.convert <$>) . maybeCryptoError $ deriveDecrypt p521 pub pri
-groupDecapsulate (GroupPub_X255 pub) (GroupPri_X255 pri) = (B.convert <$>) . maybeCryptoError $ deriveDecrypt x25519 pub pri
-groupDecapsulate (GroupPub_X448 pub) (GroupPri_X448 pri) = (B.convert <$>) . maybeCryptoError $ deriveDecrypt x448 pub pri
-groupDecapsulate (GroupPub_FFDHE2048 pub) (GroupPri_FFDHE2048 pri) = calcDHShared ffdhe2048 pub pri
-groupDecapsulate (GroupPub_FFDHE3072 pub) (GroupPri_FFDHE3072 pri) = calcDHShared ffdhe3072 pub pri
-groupDecapsulate (GroupPub_FFDHE4096 pub) (GroupPri_FFDHE4096 pri) = calcDHShared ffdhe4096 pub pri
-groupDecapsulate (GroupPub_FFDHE6144 pub) (GroupPri_FFDHE6144 pri) = calcDHShared ffdhe6144 pub pri
-groupDecapsulate (GroupPub_FFDHE8192 pub) (GroupPri_FFDHE8192 pri) = calcDHShared ffdhe8192 pub pri
+groupDecapsulate :: GroupPublicB -> GroupPrivate -> Maybe GroupKey
+groupDecapsulate (GroupPubB_P256 pub) (GroupPri_P256 pri) = (B.convert <$>) . maybeCryptoError $ deriveDecrypt p256 pub pri
+groupDecapsulate (GroupPubB_P384 pub) (GroupPri_P384 pri) = (B.convert <$>) . maybeCryptoError $ deriveDecrypt p384 pub pri
+groupDecapsulate (GroupPubB_P521 pub) (GroupPri_P521 pri) = (B.convert <$>) . maybeCryptoError $ deriveDecrypt p521 pub pri
+groupDecapsulate (GroupPubB_X255 pub) (GroupPri_X255 pri) = (B.convert <$>) . maybeCryptoError $ deriveDecrypt x25519 pub pri
+groupDecapsulate (GroupPubB_X448 pub) (GroupPri_X448 pri) = (B.convert <$>) . maybeCryptoError $ deriveDecrypt x448 pub pri
+groupDecapsulate (GroupPubB_FFDHE2048 pub) (GroupPri_FFDHE2048 pri) = calcDHShared ffdhe2048 pub pri
+groupDecapsulate (GroupPubB_FFDHE3072 pub) (GroupPri_FFDHE3072 pri) = calcDHShared ffdhe3072 pub pri
+groupDecapsulate (GroupPubB_FFDHE4096 pub) (GroupPri_FFDHE4096 pri) = calcDHShared ffdhe4096 pub pri
+groupDecapsulate (GroupPubB_FFDHE6144 pub) (GroupPri_FFDHE6144 pri) = calcDHShared ffdhe6144 pub pri
+groupDecapsulate (GroupPubB_FFDHE8192 pub) (GroupPri_FFDHE8192 pri) = calcDHShared ffdhe8192 pub pri
 groupDecapsulate _ _ = Nothing
 
 calcDHShared :: DH.Params -> PublicNumber -> PrivateNumber -> Maybe GroupKey
@@ -230,33 +272,66 @@ calcDHShared params pub pri
   where
     share = DH.getShared params pri pub
 
-groupEncodePublic :: GroupPublic -> ByteString
-groupEncodePublic (GroupPub_P256 p) = encodePoint p256 p
-groupEncodePublic (GroupPub_P384 p) = encodePoint p384 p
-groupEncodePublic (GroupPub_P521 p) = encodePoint p521 p
-groupEncodePublic (GroupPub_X255 p) = encodePoint x25519 p
-groupEncodePublic (GroupPub_X448 p) = encodePoint x448 p
-groupEncodePublic (GroupPub_FFDHE2048 p) = enc ffdhe2048 p
-groupEncodePublic (GroupPub_FFDHE3072 p) = enc ffdhe3072 p
-groupEncodePublic (GroupPub_FFDHE4096 p) = enc ffdhe4096 p
-groupEncodePublic (GroupPub_FFDHE6144 p) = enc ffdhe6144 p
-groupEncodePublic (GroupPub_FFDHE8192 p) = enc ffdhe8192 p
+groupEncodePublicA :: GroupPublicA -> ByteString
+groupEncodePublicA (GroupPubA_P256 p) = encodePoint p256 p
+groupEncodePublicA (GroupPubA_P384 p) = encodePoint p384 p
+groupEncodePublicA (GroupPubA_P521 p) = encodePoint p521 p
+groupEncodePublicA (GroupPubA_X255 p) = encodePoint x25519 p
+groupEncodePublicA (GroupPubA_X448 p) = encodePoint x448 p
+groupEncodePublicA (GroupPubA_FFDHE2048 p) = enc ffdhe2048 p
+groupEncodePublicA (GroupPubA_FFDHE3072 p) = enc ffdhe3072 p
+groupEncodePublicA (GroupPubA_FFDHE4096 p) = enc ffdhe4096 p
+groupEncodePublicA (GroupPubA_FFDHE6144 p) = enc ffdhe6144 p
+groupEncodePublicA (GroupPubA_FFDHE8192 p) = enc ffdhe8192 p
+groupEncodePublicA (GroupPubA_MLKEM768 p) = ML.encode p
+groupEncodePublicA (GroupPubA_MLKEM1024 p) = ML.encode p
+
+groupEncodePublicB :: GroupPublicB -> ByteString
+groupEncodePublicB (GroupPubB_P256 p) = encodePoint p256 p
+groupEncodePublicB (GroupPubB_P384 p) = encodePoint p384 p
+groupEncodePublicB (GroupPubB_P521 p) = encodePoint p521 p
+groupEncodePublicB (GroupPubB_X255 p) = encodePoint x25519 p
+groupEncodePublicB (GroupPubB_X448 p) = encodePoint x448 p
+groupEncodePublicB (GroupPubB_FFDHE2048 p) = enc ffdhe2048 p
+groupEncodePublicB (GroupPubB_FFDHE3072 p) = enc ffdhe3072 p
+groupEncodePublicB (GroupPubB_FFDHE4096 p) = enc ffdhe4096 p
+groupEncodePublicB (GroupPubB_FFDHE6144 p) = enc ffdhe6144 p
+groupEncodePublicB (GroupPubB_FFDHE8192 p) = enc ffdhe8192 p
+groupEncodePublicB (GroupPubB_MLKEM768 p) = ML.encode p
+groupEncodePublicB (GroupPubB_MLKEM1024 p) = ML.encode p
 
 enc :: DH.Params -> PublicNumber -> ByteString
 enc params (PublicNumber p) = i2ospOf_ ((DH.params_bits params + 7) `div` 8) p
 
-groupDecodePublic :: Group -> ByteString -> Either CryptoError GroupPublic
-groupDecodePublic P256 bs = eitherCryptoError $ GroupPub_P256 <$> decodePoint p256 bs
-groupDecodePublic P384 bs = eitherCryptoError $ GroupPub_P384 <$> decodePoint p384 bs
-groupDecodePublic P521 bs = eitherCryptoError $ GroupPub_P521 <$> decodePoint p521 bs
-groupDecodePublic X25519 bs = eitherCryptoError $ GroupPub_X255 <$> decodePoint x25519 bs
-groupDecodePublic X448 bs = eitherCryptoError $ GroupPub_X448 <$> decodePoint x448 bs
-groupDecodePublic FFDHE2048 bs = Right . GroupPub_FFDHE2048 . PublicNumber $ os2ip bs
-groupDecodePublic FFDHE3072 bs = Right . GroupPub_FFDHE3072 . PublicNumber $ os2ip bs
-groupDecodePublic FFDHE4096 bs = Right . GroupPub_FFDHE4096 . PublicNumber $ os2ip bs
-groupDecodePublic FFDHE6144 bs = Right . GroupPub_FFDHE6144 . PublicNumber $ os2ip bs
-groupDecodePublic FFDHE8192 bs = Right . GroupPub_FFDHE8192 . PublicNumber $ os2ip bs
-groupDecodePublic _ _ = error "groupDecodePublic"
+groupDecodePublicA :: Group -> ByteString -> Either CryptoError GroupPublicA
+groupDecodePublicA P256 bs = eitherCryptoError $ GroupPubA_P256 <$> decodePoint p256 bs
+groupDecodePublicA P384 bs = eitherCryptoError $ GroupPubA_P384 <$> decodePoint p384 bs
+groupDecodePublicA P521 bs = eitherCryptoError $ GroupPubA_P521 <$> decodePoint p521 bs
+groupDecodePublicA X25519 bs = eitherCryptoError $ GroupPubA_X255 <$> decodePoint x25519 bs
+groupDecodePublicA X448 bs = eitherCryptoError $ GroupPubA_X448 <$> decodePoint x448 bs
+groupDecodePublicA FFDHE2048 bs = Right . GroupPubA_FFDHE2048 . PublicNumber $ os2ip bs
+groupDecodePublicA FFDHE3072 bs = Right . GroupPubA_FFDHE3072 . PublicNumber $ os2ip bs
+groupDecodePublicA FFDHE4096 bs = Right . GroupPubA_FFDHE4096 . PublicNumber $ os2ip bs
+groupDecodePublicA FFDHE6144 bs = Right . GroupPubA_FFDHE6144 . PublicNumber $ os2ip bs
+groupDecodePublicA FFDHE8192 bs = Right . GroupPubA_FFDHE8192 . PublicNumber $ os2ip bs
+groupDecodePublicA MLKEM768 bs = Right . GroupPubA_MLKEM768 . fromJust $ ML.decode mlkem768 bs
+groupDecodePublicA MLKEM1024 bs = Right . GroupPubA_MLKEM1024 . fromJust $ ML.decode mlkem1024 bs
+groupDecodePublicA _ _ = error "groupDecodePublicA"
+
+groupDecodePublicB :: Group -> ByteString -> Either CryptoError GroupPublicB
+groupDecodePublicB P256 bs = eitherCryptoError $ GroupPubB_P256 <$> decodePoint p256 bs
+groupDecodePublicB P384 bs = eitherCryptoError $ GroupPubB_P384 <$> decodePoint p384 bs
+groupDecodePublicB P521 bs = eitherCryptoError $ GroupPubB_P521 <$> decodePoint p521 bs
+groupDecodePublicB X25519 bs = eitherCryptoError $ GroupPubB_X255 <$> decodePoint x25519 bs
+groupDecodePublicB X448 bs = eitherCryptoError $ GroupPubB_X448 <$> decodePoint x448 bs
+groupDecodePublicB FFDHE2048 bs = Right . GroupPubB_FFDHE2048 . PublicNumber $ os2ip bs
+groupDecodePublicB FFDHE3072 bs = Right . GroupPubB_FFDHE3072 . PublicNumber $ os2ip bs
+groupDecodePublicB FFDHE4096 bs = Right . GroupPubB_FFDHE4096 . PublicNumber $ os2ip bs
+groupDecodePublicB FFDHE6144 bs = Right . GroupPubB_FFDHE6144 . PublicNumber $ os2ip bs
+groupDecodePublicB FFDHE8192 bs = Right . GroupPubB_FFDHE8192 . PublicNumber $ os2ip bs
+groupDecodePublicB MLKEM768 bs = Right . GroupPubB_MLKEM768 . fromJust $ ML.decode mlkem768 bs
+groupDecodePublicB MLKEM1024 bs = Right . GroupPubB_MLKEM1024 . fromJust $ ML.decode mlkem1024 bs
+groupDecodePublicB _ _ = error "groupDecodePublicB"
 
 -- Check that group element in not in the 2-element subgroup { 1, p - 1 }.
 -- See RFC 7919 section 3 and NIST SP 56A rev 2 section 5.6.2.3.1.

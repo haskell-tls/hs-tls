@@ -518,7 +518,7 @@ getServerECDHParams = do
             -- ECParameters ECCurveType: curve name type
             grp <- Group <$> getWord16 -- ECParameters NamedCurve
             mxy <- getOpaque8 -- ECPoint
-            case groupDecodePublic grp mxy of
+            case groupDecodePublicA grp mxy of
                 Left e -> fail $ "getServerECDHParams: " ++ show e
                 Right grppub -> return $ ServerECDHParams grp grppub
         _ -> fail "getServerECDHParams: unknown type for ECDH Params"
@@ -528,7 +528,7 @@ putServerECDHParams :: ServerECDHParams -> Put
 putServerECDHParams (ServerECDHParams (Group grp) grppub) = do
     putWord8 3 -- ECParameters ECCurveType
     putWord16 grp -- ECParameters NamedCurve
-    putOpaque8 $ groupEncodePublic grppub -- ECPoint
+    putOpaque8 $ groupEncodePublicA grppub -- ECPoint
 
 ------------------------------------------------------------
 

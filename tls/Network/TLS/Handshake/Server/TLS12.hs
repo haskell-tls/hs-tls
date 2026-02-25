@@ -164,7 +164,7 @@ processClientKeyXchg ctx (CKX_DH clientDHValue) = do
     logKey ctx (MainSecret mainSecret)
 processClientKeyXchg ctx (CKX_ECDH bytes) = do
     ServerECDHParams grp _ <- usingHState ctx getServerECDHParams
-    case groupDecodePublic grp bytes of
+    case groupDecodePublicB grp bytes of
         Left _ ->
             throwCore $
                 Error_Protocol "client public key cannot be decoded" IllegalParameter
