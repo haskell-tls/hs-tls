@@ -47,7 +47,6 @@ module Network.TLS.Handshake.Common13 (
 
 import Control.Concurrent.MVar
 import Control.Monad.State.Strict
-import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 import Data.UnixTime
 import Foreign.C.Types (CTime (..))
@@ -124,7 +123,7 @@ makeServerKeyShare ctx (KeyShareEntry grp wcpub) = case ecpub of
             Just (spub, share) ->
                 let wspub = IES.groupEncodePublic spub
                     serverKeyShare = KeyShareEntry grp wspub
-                 in return (BA.convert share, serverKeyShare)
+                 in return (share, serverKeyShare)
   where
     ecpub = IES.groupDecodePublic grp wcpub
     msgInvalidPublic = "invalid client " ++ show grp ++ " public key"
@@ -133,7 +132,7 @@ fromServerKeyShare :: KeyShareEntry -> IES.GroupPrivate -> IO ByteString
 fromServerKeyShare (KeyShareEntry grp wspub) cpri = case espub of
     Left e -> throwCore $ Error_Protocol (show e) IllegalParameter
     Right spub -> case IES.groupDecapsulate spub cpri of
-        Just shared -> return $ BA.convert shared
+        Just shared -> return shared
         Nothing ->
             throwCore $
                 Error_Protocol "cannot generate a shared secret on (EC)DH" IllegalParameter

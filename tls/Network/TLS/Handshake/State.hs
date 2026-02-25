@@ -81,7 +81,6 @@ module Network.TLS.Handshake.State (
 ) where
 
 import Control.Monad.State.Strict
-import Data.ByteArray (ByteArrayAccess)
 import Data.X509 (CertificateChain)
 
 import Network.TLS.Cipher
@@ -463,12 +462,11 @@ getHandshakeMessages = gets (reverse . hstHandshakeMessages)
 
 -- | Generate the main secret from the pre-main secret.
 setMainSecretFromPre
-    :: ByteArrayAccess preMain
-    => Version
+    :: Version
     -- ^ chosen transmission version
     -> Role
     -- ^ the role (Client or Server) of the generating side
-    -> preMain
+    -> ByteString
     -- ^ the pre-main secret
     -> HandshakeM ByteString
 setMainSecretFromPre ver role preMainSecret = do

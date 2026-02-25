@@ -567,22 +567,20 @@ getPRF ver ciph
     | otherwise = prf_TLS ver $ fromMaybe SHA256 $ cipherPRFHash ciph
 
 generateMainSecret_TLS
-    :: ByteArrayAccess preMain
-    => PRF
-    -> preMain
+    :: PRF
+    -> ByteString
     -> ClientRandom
     -> ServerRandom
     -> ByteString
 generateMainSecret_TLS prf preMainSecret (ClientRandom c) (ServerRandom s) =
-    prf (B.convert preMainSecret) seed 48
+    prf preMainSecret seed 48
   where
     seed = B.concat ["master secret", c, s]
 
 generateMainSecret
-    :: ByteArrayAccess preMain
-    => Version
+    :: Version
     -> Cipher
-    -> preMain
+    -> ByteString
     -> ClientRandom
     -> ServerRandom
     -> ByteString
