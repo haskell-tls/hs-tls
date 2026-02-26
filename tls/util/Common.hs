@@ -36,19 +36,27 @@ namedDHParams =
     , ("ffdhe8192", ffdhe8192)
     ]
 
+{- FOURMOLU_DISABLE -}
 namedGroups :: [(String, Group)]
 namedGroups =
-    [ ("ffdhe2048", FFDHE2048)
-    , ("ffdhe3072", FFDHE3072)
-    , ("ffdhe4096", FFDHE4096)
-    , ("ffdhe6144", FFDHE6144)
-    , ("ffdhe8192", FFDHE8192)
-    , ("p256", P256)
-    , ("p384", P384)
-    , ("p521", P521)
-    , ("x25519", X25519)
-    , ("x448", X448)
+    [ ("ffdhe2048",      FFDHE2048)
+    , ("ffdhe3072",      FFDHE3072)
+    , ("ffdhe4096",      FFDHE4096)
+    , ("ffdhe6144",      FFDHE6144)
+    , ("ffdhe8192",      FFDHE8192)
+    , ("p256",           P256)
+    , ("p384",           P384)
+    , ("p521",           P521)
+    , ("x25519",         X25519)
+    , ("x448",           X448)
+    , ("mlkem512",       MLKEM512)
+    , ("mlkem768",       MLKEM768)
+    , ("mlkem1024",      MLKEM1024)
+    , ("x25519mlkem768", X25519MLKEM768)
+    , ("p256mlkem768",   P256MLKEM768)
+    , ("p384mlkem1024",  P384MLKEM1024)
     ]
+{- FOURMOLU_ENABLE -}
 
 readNumber :: (Num a, Read a) => String -> Maybe a
 readNumber s
