@@ -169,7 +169,6 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
     highestVer = maximum $ supportedVersions $ ctxSupported ctx
     tls13 = highestVer >= TLS13
     ems = supportedExtendedMainSecret $ ctxSupported ctx
-    groupToSend = listToMaybe groups
 
     -- List of extensions to send in ClientHello, ordered such that we never
     -- terminate with a zero-length extension.  Some buggy implementations
@@ -289,13 +288,12 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
         | tls13 = return $ Just $ toExtensionRaw PostHandshakeAuth
         | otherwise = return Nothing
 
-    -- FIXME
     keyShareExt
-        | tls13 = case groupToSend of
-            Nothing -> return Nothing
-            Just grp -> do
-                (cpri, ent) <- makeClientKeyShare ctx grp
-                usingHState ctx $ setGroupPrivate cpri
+        | tls13 = case groups of
+            [] -> return Nothing
+            grp : _ -> do
+                (grpCpri, ent) <- makeClientKeyShare ctx grp
+                usingHState ctx $ setGroupPrivate [grpCpri]
                 return $ Just $ toExtensionRaw $ KeyShareClientHello [ent]
         | otherwise = return Nothing
 

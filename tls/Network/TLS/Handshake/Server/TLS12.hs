@@ -169,16 +169,18 @@ processClientKeyXchg ctx (CKX_ECDH bytes) = do
             throwCore $
                 Error_Protocol "client public key cannot be decoded" IllegalParameter
         Right clipub -> do
-            srvpri <- usingHState ctx getGroupPrivate
-            case groupDecapsulate clipub srvpri of
-                Just preMain -> do
-                    rver <- usingState_ ctx getVersion
-                    role <- usingState_ ctx getRole
-                    mainSecret <- usingHState ctx $ setMainSecretFromPre rver role preMain
-                    logKey ctx (MainSecret mainSecret)
-                Nothing ->
-                    throwCore $
-                        Error_Protocol "cannot generate a shared secret on ECDH" IllegalParameter
+            grpSpris <- usingHState ctx getGroupPrivate
+            case lookup grp grpSpris of
+                Nothing -> throwCore err
+                Just srvpri -> case groupDecapsulate clipub srvpri of
+                    Just preMain -> do
+                        rver <- usingState_ ctx getVersion
+                        role <- usingState_ ctx getRole
+                        mainSecret <- usingHState ctx $ setMainSecretFromPre rver role preMain
+                        logKey ctx (MainSecret mainSecret)
+                    Nothing -> throwCore err
+  where
+    err = Error_Protocol "cannot generate a shared secret on ECDH" IllegalParameter
 
 ----------------------------------------------------------------
 

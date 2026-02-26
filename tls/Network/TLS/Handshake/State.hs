@@ -124,7 +124,7 @@ data HandshakeState = HandshakeState
     , hstServerDHParams :: Maybe ServerDHParams
     , hstDHPrivate :: Maybe DHPrivate
     , hstServerECDHParams :: Maybe ServerECDHParams
-    , hstGroupPrivate :: Maybe GroupPrivate
+    , hstGroupPrivate :: [(Group, GroupPrivate)]
     , hstTransHashState :: TransHashState
     , hstTransHashStateI :: TransHashState -- Inner CH for client ECH
     , hstHandshakeMessages :: [ByteString]
@@ -235,7 +235,7 @@ newEmptyHandshake ver crand =
         , hstServerDHParams = Nothing
         , hstDHPrivate = Nothing
         , hstServerECDHParams = Nothing
-        , hstGroupPrivate = Nothing
+        , hstGroupPrivate = []
         , hstTransHashState = TransHashState0
         , hstTransHashStateI = TransHashState0
         , hstHandshakeMessages = []
@@ -302,11 +302,11 @@ setDHPrivate shp = modify' (\hst -> hst{hstDHPrivate = Just shp})
 getDHPrivate :: HandshakeM DHPrivate
 getDHPrivate = fromJust <$> gets hstDHPrivate
 
-getGroupPrivate :: HandshakeM GroupPrivate
-getGroupPrivate = fromJust <$> gets hstGroupPrivate
+getGroupPrivate :: HandshakeM [(Group, GroupPrivate)]
+getGroupPrivate = gets hstGroupPrivate
 
-setGroupPrivate :: GroupPrivate -> HandshakeM ()
-setGroupPrivate shp = modify' (\hst -> hst{hstGroupPrivate = Just shp})
+setGroupPrivate :: [(Group, GroupPrivate)] -> HandshakeM ()
+setGroupPrivate shp = modify' (\hst -> hst{hstGroupPrivate = shp})
 
 setExtendedMainSecret :: Bool -> HandshakeM ()
 setExtendedMainSecret b = modify' (\hst -> hst{hstExtendedMainSecret = b})
