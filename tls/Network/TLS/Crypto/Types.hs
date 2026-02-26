@@ -107,10 +107,7 @@ availableHybridGroups = [X25519MLKEM768, P256MLKEM768, P384MLKEM1024]
 -- Don't include sole MLKEM intentionally.
 supportedNamedGroups :: [Group]
 supportedNamedGroups =
-    [ X25519MLKEM768
-    , P256MLKEM768
-    , P384MLKEM1024
-    , X25519
+    [ X25519
     , X448
     , P256
     , FFDHE2048
@@ -120,6 +117,9 @@ supportedNamedGroups =
     , FFDHE6144
     , FFDHE8192
     , P521
+    , X25519MLKEM768
+    , P256MLKEM768
+    , P384MLKEM1024
     ]
 
 -- Key-exchange signature algorithm, in close relation to ciphers

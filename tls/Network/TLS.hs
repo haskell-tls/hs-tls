@@ -52,6 +52,8 @@ module Network.TLS (
     clientDebug,
     clientUseEarlyData,
     clientUseECH,
+    clientSelectGroup,
+    SelectGroup (..),
 
     -- ** Server parameters
     ServerParams,

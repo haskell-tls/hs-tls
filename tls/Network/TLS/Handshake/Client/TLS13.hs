@@ -39,7 +39,7 @@ import Network.TLS.X509
 ----------------------------------------------------------------
 ----------------------------------------------------------------
 
-recvServerSecondFlight13 :: ClientParams -> Context -> Maybe Group -> IO ()
+recvServerSecondFlight13 :: ClientParams -> Context -> [Group] -> IO ()
 recvServerSecondFlight13 cparams ctx groupSent = do
     resuming <- prepareSecondFlight13 ctx groupSent
     runRecvHandshake13 $ do
@@ -50,14 +50,14 @@ recvServerSecondFlight13 cparams ctx groupSent = do
 ----------------------------------------------------------------
 
 prepareSecondFlight13
-    :: Context -> Maybe Group -> IO Bool
+    :: Context -> [Group] -> IO Bool
 prepareSecondFlight13 ctx groupSent = do
     choice <- makeCipherChoice TLS13 <$> usingHState ctx getPendingCipher
     prepareSecondFlight13' ctx groupSent choice
 
 prepareSecondFlight13'
     :: Context
-    -> Maybe Group
+    -> [Group]
     -> CipherChoice
     -> IO Bool
 prepareSecondFlight13' ctx groupSent choice = do
@@ -103,7 +103,7 @@ prepareSecondFlight13' ctx groupSent choice = do
         unless (checkServerKeyShareKeyLength serverKeyShare) $
             throwCore $
                 Error_Protocol "broken key_share" IllegalParameter
-        unless (groupSent == Just grp) $
+        unless (grp `elem` groupSent) $
             throwCore $
                 Error_Protocol "received incompatible group for (EC)DHE" IllegalParameter
         usingHState ctx $ setSupportedGroup grp
@@ -403,7 +403,7 @@ postHandshakeAuthClientWith _ _ _ =
 ----------------------------------------------------------------
 
 asyncServerHello13
-    :: ClientParams -> Context -> Maybe Group -> Millisecond -> IO ()
+    :: ClientParams -> Context -> [Group] -> Millisecond -> IO ()
 asyncServerHello13 cparams ctx groupSent chSentTime = do
     setPendingRecvActions
         ctx

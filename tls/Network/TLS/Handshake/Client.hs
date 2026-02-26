@@ -83,7 +83,7 @@ handshake cparams ctx groups mparams = do
         case ver of
             TLS13
                 | hrr ->
-                    helloRetry cparams ctx mparams ver crand $ drop 1 groups
+                    helloRetry cparams ctx mparams ver crand (groups \\ groupToSend)
                 | otherwise -> do
                     recvServerSecondFlight13 cparams ctx groupToSend
                     sendClientSecondFlight13 cparams ctx
@@ -98,7 +98,7 @@ handshake cparams ctx groups mparams = do
                     sendClientSecondFlight12 cparams ctx
                     recvServerSecondFlight12 cparams ctx
   where
-    groupToSend = listToMaybe groups
+    groupToSend = selectGroupFunction (clientSelectGroup cparams) groups
 
 ----------------------------------------------------------------
 

@@ -3,6 +3,7 @@
 module Network.TLS.Parameters (
     ClientParams (..),
     defaultParamsClient,
+    SelectGroup (..),
     ServerParams (..),
     defaultParamsServer,
     CommonParams,
@@ -180,8 +181,19 @@ data ClientParams = ClientParams
     -- Default: 'False'
     --
     -- @since 2.1.9
+    , clientSelectGroup :: SelectGroup
     }
     deriving (Show)
+
+data SelectGroup
+    = FirstGroup
+    | TransitionWithHybrid
+    | CustomSelectGroupFunction ([Group] -> [Group])
+
+instance Show SelectGroup where
+    show FirstGroup = "FirstGroup"
+    show TransitionWithHybrid = "TransitionWithHybrid"
+    show (CustomSelectGroupFunction _) = "CustomSelectGroupFunction"
 
 -- | Default value for 'ClientParams'
 defaultParamsClient :: HostName -> ByteString -> ClientParams
@@ -198,6 +210,7 @@ defaultParamsClient serverName serverId =
         , clientDebug = defaultDebugParams
         , clientUseEarlyData = False
         , clientUseECH = False
+        , clientSelectGroup = FirstGroup
         }
 
 data ServerParams = ServerParams

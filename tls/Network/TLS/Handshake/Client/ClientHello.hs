@@ -5,6 +5,7 @@
 module Network.TLS.Handshake.Client.ClientHello (
     sendClientHello,
     getPreSharedKeyInfo,
+    selectGroupFunction,
 ) where
 
 import qualified Control.Exception as E
@@ -289,12 +290,12 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
         | otherwise = return Nothing
 
     keyShareExt
-        | tls13 = case groups of
-            [] -> return Nothing
-            grp : _ -> do
-                (grpCpri, ent) <- makeClientKeyShare ctx grp
-                usingHState ctx $ setGroupPrivate [grpCpri]
-                return $ Just $ toExtensionRaw $ KeyShareClientHello [ent]
+        | tls13 = do
+            let selectGroup = selectGroupFunction $ clientSelectGroup cparams
+                groups' = selectGroup groups
+            (grpCpris, ents) <- unzip <$> mapM (makeClientKeyShare ctx) groups'
+            usingHState ctx $ setGroupPrivate grpCpris
+            return $ Just $ toExtensionRaw $ KeyShareClientHello ents
         | otherwise = return Nothing
 
     secureRenegExt =
@@ -597,3 +598,21 @@ uniformByteString l g0 = (bs, g2)
             poke ptr w
             go (n + 1) g' (plusPtr ptr 1)
 #endif
+
+----------------------------------------------------------------
+
+selectGroupFunction :: SelectGroup -> ([Group] -> [Group])
+selectGroupFunction FirstGroup = take 1
+selectGroupFunction TransitionWithHybrid = transitWithHybrid
+selectGroupFunction (CustomSelectGroupFunction f) = f
+
+transitWithHybrid :: [Group] -> [Group]
+transitWithHybrid groups = take 1 hs ++ take 1 es
+  where
+    (hs, es) = partition isHybrid groups
+
+isHybrid :: Group -> Bool
+isHybrid X25519MLKEM768 = True
+isHybrid P256MLKEM768 = True
+isHybrid P384MLKEM1024 = True
+isHybrid _ = False
