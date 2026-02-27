@@ -104,22 +104,25 @@ availableECGroups = [P256, P384, P521, X25519, X448]
 availableHybridGroups :: [Group]
 availableHybridGroups = [X25519MLKEM768, P256MLKEM768, P384MLKEM1024]
 
--- Don't include sole MLKEM intentionally.
+-- | A list for named groups.  The ordering is for client preference
+--   because server preference is not used in our server
+--   implementation.
 supportedNamedGroups :: [Group]
 supportedNamedGroups =
-    [ X25519
-    , X448
-    , P256
-    , FFDHE2048
-    , FFDHE3072
-    , FFDHE4096
-    , P384
-    , FFDHE6144
-    , FFDHE8192
-    , P521
+    [ X25519 -- 128 bits security
+    , P256 -- 128 bits security
+    , P384 -- 192 bits security
+    , X448 -- 224 bits security
+    , P521 -- 256 bits security
+    --    , FFDHE2048 -- 103 bits security
+    , FFDHE3072 -- 125 bits security
+    , FFDHE4096 -- 150 bits security
+    , FFDHE6144 -- 175 bits security
+    , FFDHE8192 -- 192 bits security
     , X25519MLKEM768
     , P256MLKEM768
     , P384MLKEM1024
+    -- Don't include sole MLKEM intentionally.
     ]
 
 -- Key-exchange signature algorithm, in close relation to ciphers
