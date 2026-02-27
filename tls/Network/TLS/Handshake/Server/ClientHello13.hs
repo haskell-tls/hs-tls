@@ -86,6 +86,8 @@ processClientHello13 sparams ctx ch@CH{..} = do
             (supportedCiphers $ serverSupported sparams)
     serverGroups = supportedGroups (ctxSupported ctx)
 
+-- | Finding a key share according to client's preference.
+--   This code cannot check duplication of groups.
 findKeyShare :: [KeyShareEntry] -> [Group] -> IO (Maybe KeyShareEntry)
 findKeyShare ks0 gs = go ks0
   where
