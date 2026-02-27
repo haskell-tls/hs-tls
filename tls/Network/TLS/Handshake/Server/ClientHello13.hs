@@ -87,18 +87,16 @@ processClientHello13 sparams ctx ch@CH{..} = do
     serverGroups = supportedGroups (ctxSupported ctx)
 
 findKeyShare :: [KeyShareEntry] -> [Group] -> IO (Maybe KeyShareEntry)
-findKeyShare ks ggs = go ggs
+findKeyShare ks0 gs = go ks0
   where
     go [] = return Nothing
-    go (g : gs) = case filter (grpEq g) ks of
-        [] -> go gs
-        [k] -> do
+    go (k : ks)
+        | keyShareEntryGroup k `elem` gs = do
             unless (checkClientKeyShareKeyLength k) $
                 throwCore $
                     Error_Protocol "broken key_share" IllegalParameter
             return $ Just k
-        _ -> throwCore $ Error_Protocol "duplicated key_share" IllegalParameter
-    grpEq g ent = g == keyShareEntryGroup ent
+        | otherwise = go ks
 
 pskAndEarlySecret
     :: ServerParams
