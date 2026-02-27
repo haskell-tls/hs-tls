@@ -5,7 +5,7 @@
 module Network.TLS.Handshake.Client.ClientHello (
     sendClientHello,
     getPreSharedKeyInfo,
-    selectGroupFunction,
+    Groups (..),
 ) where
 
 import qualified Control.Exception as E
@@ -42,16 +42,26 @@ import Network.TLS.Types
 
 ----------------------------------------------------------------
 
+data Groups = Groups
+    { grpsSupported :: [Group]
+    -- ^ For supported_group, head is identical to key_share
+    , grpsSelected :: [Group]
+    -- ^ For key_share
+    }
+    deriving (Eq, Show)
+
+----------------------------------------------------------------
+
 sendClientHello
     :: ClientParams
     -> Context
-    -> [Group]
+    -> Groups
     -> Maybe (ClientRandom, Session, Version)
     -> PreSharedKeyInfo
     -> IO ClientRandom
-sendClientHello cparams ctx groups mparams pskinfo = do
+sendClientHello cparams ctx grps mparams pskinfo = do
     crand <- generateClientHelloParams mparams -- Inner for ECH
-    sendClientHello' cparams ctx groups crand pskinfo
+    sendClientHello' cparams ctx grps crand pskinfo
     return crand
   where
     highestVer = maximum $ supportedVersions $ ctxSupported ctx
@@ -90,14 +100,14 @@ sendClientHello cparams ctx groups mparams pskinfo = do
 sendClientHello'
     :: ClientParams
     -> Context
-    -> [Group]
+    -> Groups
     -> ClientRandom
     -> ( Maybe ([ByteString], SessionData, CipherChoice, Word32)
        , Maybe CipherChoice
        , Bool
        )
     -> IO ()
-sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
+sendClientHello' cparams ctx Groups{..} crand (pskInfo, rtt0info, rtt0) = do
     let ver = if tls13 then TLS12 else highestVer
     clientSession <- tls13stSession <$> getTLS13State ctx
     hrr <- usingState_ ctx getTLS13HRR
@@ -211,11 +221,10 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
                 return $ Just $ toExtensionRaw $ ServerName [ServerNameHostName sni]
             else return Nothing
 
-    groupExt =
-        return $
-            Just $
-                toExtensionRaw $
-                    SupportedGroups (supportedGroups $ ctxSupported ctx)
+    -- RFC 8446 Sec 4.2.8 says: Each KeyShareEntry value MUST correspond
+    -- to a group offered in the "supported_groups" extension and MUST
+    -- appear in the same order.
+    groupExt = return $ Just $ toExtensionRaw $ SupportedGroups grpsSupported
 
     ecPointExt =
         return $
@@ -291,9 +300,7 @@ sendClientHello' cparams ctx groups crand (pskInfo, rtt0info, rtt0) = do
 
     keyShareExt
         | tls13 = do
-            let selectGroup = selectGroupFunction $ clientSelectGroup cparams
-                groups' = selectGroup groups
-            (grpCpris, ents) <- unzip <$> mapM (makeClientKeyShare ctx) groups'
+            (grpCpris, ents) <- unzip <$> mapM (makeClientKeyShare ctx) grpsSelected
             usingHState ctx $ setGroupPrivate grpCpris
             return $ Just $ toExtensionRaw $ KeyShareClientHello ents
         | otherwise = return Nothing
@@ -598,21 +605,3 @@ uniformByteString l g0 = (bs, g2)
             poke ptr w
             go (n + 1) g' (plusPtr ptr 1)
 #endif
-
-----------------------------------------------------------------
-
-selectGroupFunction :: SelectGroup -> ([Group] -> [Group])
-selectGroupFunction FirstGroup = take 1
-selectGroupFunction TransitionWithHybrid = transitWithHybrid
-selectGroupFunction (CustomSelectGroupFunction f) = f
-
-transitWithHybrid :: [Group] -> [Group]
-transitWithHybrid groups = take 1 hs ++ take 1 es
-  where
-    (hs, es) = partition isHybrid groups
-
-isHybrid :: Group -> Bool
-isHybrid X25519MLKEM768 = True
-isHybrid P256MLKEM768 = True
-isHybrid P384MLKEM1024 = True
-isHybrid _ = False
