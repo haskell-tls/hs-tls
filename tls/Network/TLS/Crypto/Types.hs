@@ -122,7 +122,9 @@ supportedNamedGroups =
     , X25519MLKEM768
     , P256MLKEM768
     , P384MLKEM1024
-    -- Don't include sole MLKEM intentionally.
+    , -- , MLKEM512
+      MLKEM768
+    , MLKEM1024
     ]
 
 -- Key-exchange signature algorithm, in close relation to ciphers
