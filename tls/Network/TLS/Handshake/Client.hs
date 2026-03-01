@@ -67,7 +67,7 @@ handshakeClient cparams ctx = do
     handshake cparams ctx grps Nothing
   where
     groupsSupported = supportedGroups (ctxSupported ctx)
-    groupsSelected = selectGroupFunction (clientSelectGroup cparams) groupsSupported
+    groupsSelected = selectKeyShareFunction (clientSelectKeyShare cparams) groupsSupported
 
 -- https://tools.ietf.org/html/rfc8446#section-4.1.2 says:
 -- "The client will also send a
@@ -168,10 +168,10 @@ helloRetry cparams ctx mparams ver crand groupsSupported = do
 
 ----------------------------------------------------------------
 
-selectGroupFunction :: SelectGroup -> ([Group] -> [Group])
-selectGroupFunction FirstGroup = take 1
-selectGroupFunction TransitionWithHybrid = transitWithHybrid
-selectGroupFunction (CustomSelectGroupFunction f) = f
+selectKeyShareFunction :: ClientSelectKeyShare -> ([Group] -> [Group])
+selectKeyShareFunction FirstGroup = take 1
+selectKeyShareFunction TransitionWithHybrid = transitWithHybrid
+selectKeyShareFunction (ClientSelectKeyShareFunction f) = f
 
 transitWithHybrid :: [Group] -> [Group]
 transitWithHybrid groups = take 1 hs ++ take 1 es

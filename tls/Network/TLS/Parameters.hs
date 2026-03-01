@@ -3,7 +3,7 @@
 module Network.TLS.Parameters (
     ClientParams (..),
     defaultParamsClient,
-    SelectGroup (..),
+    ClientSelectKeyShare (..),
     ServerParams (..),
     defaultParamsServer,
     CommonParams,
@@ -181,19 +181,22 @@ data ClientParams = ClientParams
     -- Default: 'False'
     --
     -- @since 2.1.9
-    , clientSelectGroup :: SelectGroup
+    , clientSelectKeyShare :: ClientSelectKeyShare
+    -- ^ How to select key shares from supported groups.
+    -- @since 2.2.3
     }
     deriving (Show)
 
-data SelectGroup
+-- | How to select key shares from supported groups on the client side.
+data ClientSelectKeyShare
     = FirstGroup
     | TransitionWithHybrid
-    | CustomSelectGroupFunction ([Group] -> [Group])
+    | ClientSelectKeyShareFunction ([Group] -> [Group])
 
-instance Show SelectGroup where
+instance Show ClientSelectKeyShare where
     show FirstGroup = "FirstGroup"
     show TransitionWithHybrid = "TransitionWithHybrid"
-    show (CustomSelectGroupFunction _) = "CustomSelectGroupFunction"
+    show (ClientSelectKeyShareFunction _) = "ClientSelectKeyShareFunction"
 
 -- | Default value for 'ClientParams'
 defaultParamsClient :: HostName -> ByteString -> ClientParams
@@ -210,7 +213,7 @@ defaultParamsClient serverName serverId =
         , clientDebug = defaultDebugParams
         , clientUseEarlyData = False
         , clientUseECH = False
-        , clientSelectGroup = FirstGroup
+        , clientSelectKeyShare = FirstGroup
         }
 
 data ServerParams = ServerParams
