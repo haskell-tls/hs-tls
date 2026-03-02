@@ -14,6 +14,7 @@ import Data.Maybe
 
 import Network.TLS.Context.Internal
 import Network.TLS.Handshake.Common
+import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.Server.ClientHello
 import Network.TLS.Handshake.Server.ClientHello12
 import Network.TLS.Handshake.Server.ClientHello13
@@ -21,6 +22,8 @@ import Network.TLS.Handshake.Server.ServerHello12
 import Network.TLS.Handshake.Server.ServerHello13
 import Network.TLS.Handshake.Server.TLS12
 import Network.TLS.Handshake.Server.TLS13
+import Network.TLS.Imports
+import Network.TLS.Parameters
 import Network.TLS.Struct
 
 -- Put the server context in handshake mode.
@@ -55,15 +58,21 @@ handshake sparams ctx chb@(ClientHello ch, bs) = do
             -- fixme: we should check if the client random is the same as
             -- that in the first client hello in the case of hello retry.
             -- r0 :: Cipher, Hash, Bool
-            (mClientKeyShare, r0, r1) <-
+            (keyShareResult, r0, r1) <-
                 processClientHello13 sparams ctx chI
-            case mClientKeyShare of
-                Nothing -> do
-                    sendHRR ctx r0 chI $ isJust mcrnd
+            case keyShareResult of
+                ServerSelectKeyShareNotFound ->
+                    throwCore $
+                        Error_Protocol "no group in common with the client for HRR" HandshakeFailure
+                ServerSelectKeyShareHRR g -> do
+                    sendHRR ctx g r0 chI $ isJust mcrnd
                     -- Don't reset ctxEstablished since 0-RTT data
                     -- would be comming, which should be ignored.
                     handshakeServer sparams ctx
-                Just cliKeyShare -> do
+                ServerSelectKeyShareFound cliKeyShare -> do
+                    unless (checkClientKeyShareKeyLength cliKeyShare) $
+                        throwCore $
+                            Error_Protocol "broken key_share" IllegalParameter
                     -- r2 :: ( SecretTriple ApplicationSecret
                     --       , ClientTrafficSecret HandshakeSecret
                     --       , Bool  -- authenticated

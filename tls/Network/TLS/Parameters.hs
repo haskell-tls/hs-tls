@@ -6,6 +6,9 @@ module Network.TLS.Parameters (
     ClientSelectKeyShare (..),
     ServerParams (..),
     defaultParamsServer,
+    ServerSelectKeyShareResult (..),
+    ServerSelectKeyShare (..),
+    defaultServerSelectKeyShare,
     CommonParams,
     DebugParams (..),
     defaultDebugParams,
@@ -266,19 +269,19 @@ data ServerParams = ServerParams
     deriving (Show)
 
 data ServerSelectKeyShareResult
-    = ServerSelectKeyShareFailure
-    | ServerSelectKeyShareHRR Group
-    | ServerSelectKeyShareChoice Group
+    = -- | Negotiation failure
+      ServerSelectKeyShareNotFound
+    | -- | Hello retry request with this group
+      ServerSelectKeyShareHRR Group
+    | -- | Use this key share
+      ServerSelectKeyShareFound KeyShareEntry
     deriving (Eq, Show)
 
-data ServerSelectKeyShare
+newtype ServerSelectKeyShare
     = ServerSelectKeyShare
         ( [Group]
-          -- \^ Server preference
           -> [Group]
-          -- \^ Client's "key_share"
-          -> [Group]
-          -- \^ Client's "supported_groups"
+          -> [KeyShareEntry]
           -> IO ServerSelectKeyShareResult
         )
 
@@ -298,33 +301,25 @@ defaultParamsServer =
         , serverEarlyDataSize = 0
         , serverTicketLifetime = 7200
         , serverECHKey = []
-        , serverSelectKeyShare = ServerSelectKeyShare serverSelectKeyShareFunction
+        , serverSelectKeyShare = ServerSelectKeyShare defaultServerSelectKeyShare
         }
 
-serverSelectKeyShareFunction
-    :: [Group] -> [Group] -> [Group] -> IO ServerSelectKeyShareResult
-serverSelectKeyShareFunction serverSupportedGroups clientSupportedGroups clinetKeyShareGroups = go clinetKeyShareGroups
+defaultServerSelectKeyShare
+    :: [Group]
+    -- ^ Server's supported groups
+    -> [Group]
+    -- ^ Client's groups in "supported_groups"
+    -> [KeyShareEntry]
+    -- ^ Client's key shares in "key_share"
+    -> IO ServerSelectKeyShareResult
+defaultServerSelectKeyShare serverSupportedGroups clientSupportedGroups clientKeyShares = go clientKeyShares
   where
     go [] = case serverSupportedGroups `intersect` clientSupportedGroups of
-        [] -> return ServerSelectKeyShareFailure
+        [] -> return ServerSelectKeyShareNotFound
         g : _ -> return $ ServerSelectKeyShareHRR g
-    go (g : gs)
-        | g `elem` serverSupportedGroups =
-            return $ ServerSelectKeyShareChoice g
-        | otherwise = go gs
-
--- | Finding a key share according to client's preference.
---   This code cannot check duplication of groups.
-findKeyShare :: [KeyShareEntry] -> [Group] -> IO (Maybe KeyShareEntry)
-findKeyShare ks0 gs = go ks0
-  where
-    go [] = return Nothing
     go (k : ks)
-        | keyShareEntryGroup k `elem` gs = do
-            unless (checkClientKeyShareKeyLength k) $
-                throwCore $
-                    Error_Protocol "broken key_share" IllegalParameter
-            return $ Just k
+        | keyShareEntryGroup k `elem` serverSupportedGroups =
+            return $ ServerSelectKeyShareFound k
         | otherwise = go ks
 
 instance Default ServerParams where

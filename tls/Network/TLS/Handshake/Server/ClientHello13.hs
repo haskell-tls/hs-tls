@@ -72,13 +72,22 @@ processClientHello13 sparams ctx ch@CH{..} = do
         extract _ = require
     keyShares <-
         lookupAndDecodeAndDo EID_KeyShare MsgTClientHello chExtensions require extract
-    mshare <- findKeyShare keyShares serverGroups
+    let clientGroups =
+            lookupAndDecode
+                EID_SupportedGroups
+                MsgTClientHello
+                chExtensions
+                []
+                (\(SupportedGroups gs) -> gs)
+    keyshareResult <-
+        serverSelectKeyShareFunction serverGroups clientGroups keyShares
     let triple = (usedCipher, usedHash, rtt0)
     pskEarlySecret <- pskAndEarlySecret sparams ctx triple ch
     (ich, b) <- fromJust <$> usingHState ctx getClientHello
     updateTranscriptHash12 ctx (ClientHello ich, b)
-    return (mshare, triple, pskEarlySecret)
+    return (keyshareResult, triple, pskEarlySecret)
   where
+    ServerSelectKeyShare serverSelectKeyShareFunction = serverSelectKeyShare sparams
     ciphersFilteredVersion = intersectCiphers chCiphers serverCiphers
     serverCiphers =
         filter

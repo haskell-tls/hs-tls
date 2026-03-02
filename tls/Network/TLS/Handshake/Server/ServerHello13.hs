@@ -313,34 +313,19 @@ contextSync ctx ctl = case ctxHandshakeSync ctx of
 
 ----------------------------------------------------------------
 
-sendHRR :: Context -> (Cipher, Hash, c) -> ClientHello -> Bool -> IO ()
-sendHRR ctx (usedCipher, usedHash, _) CH{..} isEch = do
+sendHRR :: Context -> Group -> (Cipher, Hash, c) -> ClientHello -> Bool -> IO ()
+sendHRR ctx g (usedCipher, usedHash, _) CH{..} isEch = do
     twice <- usingState_ ctx getTLS13HRR
     when twice $
         throwCore $
             Error_Protocol "Hello retry not allowed again" HandshakeFailure
     usingState_ ctx $ setTLS13HRR True
     failOnEitherError $ setServerHelloParameters13 ctx usedCipher True
-    let clientGroups =
-            lookupAndDecode
-                EID_SupportedGroups
-                MsgTClientHello
-                chExtensions
-                []
-                (\(SupportedGroups gs) -> gs)
-        possibleGroups = serverGroups `intersect` clientGroups
-    case possibleGroups of
-        [] ->
-            throwCore $
-                Error_Protocol "no group in common with the client for HRR" HandshakeFailure
-        g : _ -> do
-            hrr <- makeHRR ctx usedCipher usedHash chSession g isEch
-            usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
-            runPacketFlight ctx $ do
-                loadPacket13 ctx $ Handshake13 [ServerHello13 hrr] []
-                sendChangeCipherSpec13 ctx
-  where
-    serverGroups = supportedGroups (ctxSupported ctx)
+    hrr <- makeHRR ctx usedCipher usedHash chSession g isEch
+    usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
+    runPacketFlight ctx $ do
+        loadPacket13 ctx $ Handshake13 [ServerHello13 hrr] []
+        sendChangeCipherSpec13 ctx
 
 makeHRR
     :: Context -> Cipher -> Hash -> Session -> Group -> Bool -> IO ServerHello
