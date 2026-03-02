@@ -384,6 +384,7 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
                         , supportedHashSignatures = serverHashSignatures
                         }
                 , serverShared = defaultShared{sharedCredentials = Credentials creds}
+                , serverGroupsTLS13 = [serverGroups]
                 }
     let clientState =
             (defaultParamsClient "" B.empty)

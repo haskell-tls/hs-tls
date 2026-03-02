@@ -110,7 +110,7 @@ processClientHello13 sparams ctx ch@CH{..} = do
         filter
             (cipherAllowedForVersion TLS13)
             (supportedCiphers $ serverSupported sparams)
-    serverGroups = supportedGroups (ctxSupported ctx)
+    serverGroups = serverGroupsTLS13 sparams
 
 data SelectKeyShareResult
     = -- | Negotiation failure

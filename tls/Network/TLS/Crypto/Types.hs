@@ -31,6 +31,7 @@ module Network.TLS.Crypto.Types (
     availableECGroups,
     availableHybridGroups,
     supportedNamedGroups,
+    supportedNamedGroupsTLS13,
     KeyExchangeSignatureAlg (..),
 ) where
 
@@ -125,6 +126,15 @@ supportedNamedGroups =
     , -- , MLKEM512
       MLKEM768
     , MLKEM1024
+    ]
+
+supportedNamedGroupsTLS13 :: [[Group]]
+supportedNamedGroupsTLS13 =
+    [ [X25519MLKEM768, P256MLKEM768, P384MLKEM1024]
+    , [X25519, P256]
+    , [P384, X448, P521]
+    , [FFDHE2048, FFDHE3072, FFDHE4096, FFDHE6144, FFDHE8192]
+    , [MLKEM768, MLKEM1024]
     ]
 
 -- Key-exchange signature algorithm, in close relation to ciphers

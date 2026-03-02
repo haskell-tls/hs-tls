@@ -66,6 +66,7 @@ module Network.TLS (
     serverEarlyDataSize,
     serverTicketLifetime,
     serverECHKey,
+    serverGroupsTLS13,
 
     -- ** Shared
     Shared,

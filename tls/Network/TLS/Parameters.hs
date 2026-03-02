@@ -245,6 +245,7 @@ data ServerParams = ServerParams
     -- Default: '[]'
     --
     -- @since 2.1.9
+    , serverGroupsTLS13 :: [[Group]]
     }
     deriving (Show)
 
@@ -261,6 +262,7 @@ defaultParamsServer =
         , serverEarlyDataSize = 0
         , serverTicketLifetime = 7200
         , serverECHKey = []
+        , serverGroupsTLS13 = supportedNamedGroupsTLS13
         }
 
 instance Default ServerParams where
@@ -740,7 +742,7 @@ data ServerHooks = ServerHooks
     --
     -- Default: 'return'
     , onSelectKeyShare
-        :: [Group]
+        :: [[Group]]
         -> [Group]
         -> [Group]
         -> IO (Maybe Group, Bool)
@@ -772,7 +774,7 @@ defaultServerHooks =
         , onNewHandshake = \_ -> return True
         , onALPNClientSuggest = Nothing
         , onEncryptedExtensionsCreating = return
-        , onSelectKeyShare = defaultSelectKeyShare
+        , onSelectKeyShare = defaultOnSelectKeyShare
         }
 
 instance Show ServerHooks where
@@ -780,20 +782,19 @@ instance Show ServerHooks where
 instance Default ServerHooks where
     def = defaultServerHooks
 
-defaultSelectKeyShare
-    :: [Group]
-    -> [Group]
-    -> [Group]
+defaultOnSelectKeyShare
+    :: [[Group]] -- Server groups
+    -> [Group] -- Client's groups in "supported_groups"
+    -> [Group] -- Client's groups in "key_share"
     -> IO (Maybe Group, Bool)
-defaultSelectKeyShare serverSupportedGroups clientSupportedGroups clientKeyShareGroups = go clientKeyShareGroups
+defaultOnSelectKeyShare serverSupportedLoL clientSupportedGroups clientKeyShareGroups = go serverSupportedLoL
   where
-    go [] = case serverSupportedGroups `intersect` clientSupportedGroups of
-        [] -> return (Nothing, False)
-        g : _ -> return $ (Just g, True)
-    go (g : gs)
-        | g `elem` serverSupportedGroups =
-            return $ (Just g, False)
-        | otherwise = go gs
+    go [] = return (Nothing, False)
+    go (gs : gss) = case gs `intersect` clientKeyShareGroups of
+        [] -> case gs `intersect` clientSupportedGroups of
+            [] -> go gss
+            h : _ -> return (Just h, True)
+        g : _ -> return (Just g, False)
 
 -- | Information related to a running context, e.g. current cipher
 data Information = Information
