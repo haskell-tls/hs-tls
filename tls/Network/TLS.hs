@@ -52,8 +52,6 @@ module Network.TLS (
     clientDebug,
     clientUseEarlyData,
     clientUseECH,
-    clientSelectKeyShare,
-    ClientSelectKeyShare (..),
 
     -- ** Server parameters
     ServerParams,
@@ -95,6 +93,7 @@ module Network.TLS (
     onSuggestALPN,
     onCustomFFDHEGroup,
     onServerFinished,
+    onSelectKeyShareGroups,
 
     -- ** Server hooks
     ServerHooks,

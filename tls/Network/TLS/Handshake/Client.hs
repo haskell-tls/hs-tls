@@ -67,7 +67,7 @@ handshakeClient cparams ctx = do
     handshake cparams ctx grps Nothing
   where
     groupsSupported = supportedGroups (ctxSupported ctx)
-    groupsSelected = selectKeyShareFunction (clientSelectKeyShare cparams) groupsSupported
+    groupsSelected = onSelectKeyShareGroups (clientHooks cparams) groupsSupported
 
 -- https://tools.ietf.org/html/rfc8446#section-4.1.2 says:
 -- "The client will also send a
@@ -165,21 +165,3 @@ helloRetry cparams ctx mparams ver crand groupsSupported = do
                 Error_Protocol
                     "key exchange not implemented in HRR, expected key_share extension"
                     HandshakeFailure
-
-----------------------------------------------------------------
-
-selectKeyShareFunction :: ClientSelectKeyShare -> ([Group] -> [Group])
-selectKeyShareFunction FirstGroup = take 1
-selectKeyShareFunction TransitionWithHybrid = transitWithHybrid
-selectKeyShareFunction (ClientSelectKeyShareFunction f) = f
-
-transitWithHybrid :: [Group] -> [Group]
-transitWithHybrid groups = take 1 hs ++ take 1 es
-  where
-    (hs, es) = partition isHybrid groups
-
-isHybrid :: Group -> Bool
-isHybrid X25519MLKEM768 = True
-isHybrid P256MLKEM768 = True
-isHybrid P384MLKEM1024 = True
-isHybrid _ = False

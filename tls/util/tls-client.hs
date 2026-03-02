@@ -402,7 +402,6 @@ getClientParams Options{..} serverName port sm mstore onCertReq echConfList prin
         , clientHooks = hooks
         , clientDebug = debug
         , clientUseECH = not (null echConfList)
-        , clientSelectKeyShare = TransitionWithHybrid
         }
   where
     groups

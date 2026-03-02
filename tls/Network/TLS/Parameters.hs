@@ -3,7 +3,6 @@
 module Network.TLS.Parameters (
     ClientParams (..),
     defaultParamsClient,
-    ClientSelectKeyShare (..),
     ServerParams (..),
     defaultParamsServer,
     ServerSelectKeyShareResult (..),
@@ -184,22 +183,8 @@ data ClientParams = ClientParams
     -- Default: 'False'
     --
     -- @since 2.1.9
-    , clientSelectKeyShare :: ClientSelectKeyShare
-    -- ^ How to select key shares from supported groups.
-    -- @since 2.2.3
     }
     deriving (Show)
-
--- | How to select key shares from supported groups on the client side.
-data ClientSelectKeyShare
-    = FirstGroup
-    | TransitionWithHybrid
-    | ClientSelectKeyShareFunction ([Group] -> [Group])
-
-instance Show ClientSelectKeyShare where
-    show FirstGroup = "FirstGroup"
-    show TransitionWithHybrid = "TransitionWithHybrid"
-    show (ClientSelectKeyShareFunction _) = "ClientSelectKeyShareFunction"
 
 -- | Default value for 'ClientParams'
 defaultParamsClient :: HostName -> ByteString -> ClientParams
@@ -216,7 +201,6 @@ defaultParamsClient serverName serverId =
         , clientDebug = defaultDebugParams
         , clientUseEarlyData = False
         , clientUseECH = False
-        , clientSelectKeyShare = FirstGroup
         }
 
 data ServerParams = ServerParams
@@ -699,7 +683,26 @@ data ClientHooks = ClientHooks
     --   See RFC 7919 section 3.1 for recommandations.
     , onServerFinished :: Information -> IO ()
     -- ^ When a handshake is done, this hook can check `Information`.
+    , onSelectKeyShareGroups :: [Group] -> [Group]
+    -- ^ How to select key share groups from supported groups.
+    --
+    --   The default function specifies a key-exchange pair of hybrid
+    --   and classical for transition purpose.  @take 1@ is maybe a
+    --   good candidate.
+    --
+    -- @since 2.2.3
     }
+
+defaultOnSelectKeyShareGroups :: [Group] -> [Group]
+defaultOnSelectKeyShareGroups groups = take 1 hs ++ take 1 es
+  where
+    (hs, es) = partition isHybrid groups
+
+isHybrid :: Group -> Bool
+isHybrid X25519MLKEM768 = True
+isHybrid P256MLKEM768 = True
+isHybrid P384MLKEM1024 = True
+isHybrid _ = False
 
 defaultClientHooks :: ClientHooks
 defaultClientHooks =
@@ -709,6 +712,7 @@ defaultClientHooks =
         , onSuggestALPN = return Nothing
         , onCustomFFDHEGroup = defaultGroupUsage 1024
         , onServerFinished = \_ -> return ()
+        , onSelectKeyShareGroups = defaultOnSelectKeyShareGroups
         }
 
 instance Show ClientHooks where
