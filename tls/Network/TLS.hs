@@ -102,8 +102,6 @@ module Network.TLS (
     onALPNClientSuggest,
     onEncryptedExtensionsCreating,
     onSelectKeyShare,
-    KeyShareEntry (..),
-    SelectKeyShareResult (..),
     Measurement,
     nbHandshakes,
     bytesReceived,

@@ -3,6 +3,7 @@
 
 module Network.TLS.Handshake.Server.ClientHello13 (
     processClientHello13,
+    SelectKeyShareResult (..),
 ) where
 
 import qualified Data.ByteString as B
@@ -79,12 +80,21 @@ processClientHello13 sparams ctx ch@CH{..} = do
                 chExtensions
                 []
                 (\(SupportedGroups gs) -> gs)
-    keyshareResult <-
+    (mgroup, isHRR) <-
         onSelectKeyShare
             (serverHooks sparams)
             serverGroups
             clientGroups
-            keyShares
+            $ map keyShareEntryGroup keyShares
+    keyshareResult <- case mgroup of
+        Nothing -> return SelectKeyShareNotFound
+        Just g
+            | isHRR -> return $ SelectKeyShareHRR g
+            | otherwise -> case filter (\e -> keyShareEntryGroup e == g) keyShares of
+                [] -> return SelectKeyShareNotFound
+                [x] -> return $ SelectKeyShareFound x
+                _ -> throwCore $ Error_Protocol "duplicated key_share" IllegalParameter
+
     let triple = (usedCipher, usedHash, rtt0)
     pskEarlySecret <- pskAndEarlySecret sparams ctx triple ch
     (ich, b) <- fromJust <$> usingHState ctx getClientHello
@@ -97,6 +107,15 @@ processClientHello13 sparams ctx ch@CH{..} = do
             (cipherAllowedForVersion TLS13)
             (supportedCiphers $ serverSupported sparams)
     serverGroups = supportedGroups (ctxSupported ctx)
+
+data SelectKeyShareResult
+    = -- | Negotiation failure
+      SelectKeyShareNotFound
+    | -- | Send a hello retry request with this group
+      SelectKeyShareHRR Group
+    | -- | Use this key share
+      SelectKeyShareFound KeyShareEntry
+    deriving (Eq, Show)
 
 pskAndEarlySecret
     :: ServerParams

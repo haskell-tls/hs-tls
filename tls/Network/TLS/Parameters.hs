@@ -15,7 +15,6 @@ module Network.TLS.Parameters (
     OnServerCertificate,
     ServerHooks (..),
     defaultServerHooks,
-    SelectKeyShareResult (..),
     Supported (..),
     defaultSupported,
     Shared (..),
@@ -743,13 +742,16 @@ data ServerHooks = ServerHooks
     , onSelectKeyShare
         :: [Group]
         -> [Group]
-        -> [KeyShareEntry]
-        -> IO SelectKeyShareResult
+        -> [Group]
+        -> IO (Maybe Group, Bool)
     -- ^ Select one key share.
     --
     -- 1st argument is server's supported groups. 2nd arguments is
     -- client's groups in "supported_groups". 3rd arguments is
-    -- client's key shares in "key_share".
+    -- client's groups in "key_share".
+    --
+    -- 'True' in the result is to send a hello retry request with this
+    -- group.
     --
     -- @since 2.2.3
     }
@@ -778,29 +780,20 @@ instance Show ServerHooks where
 instance Default ServerHooks where
     def = defaultServerHooks
 
-data SelectKeyShareResult
-    = -- | Negotiation failure
-      SelectKeyShareNotFound
-    | -- | Send a hello retry request with this group
-      SelectKeyShareHRR Group
-    | -- | Use this key share
-      SelectKeyShareFound KeyShareEntry
-    deriving (Eq, Show)
-
 defaultSelectKeyShare
     :: [Group]
     -> [Group]
-    -> [KeyShareEntry]
-    -> IO SelectKeyShareResult
-defaultSelectKeyShare serverSupportedGroups clientSupportedGroups clientKeyShares = go clientKeyShares
+    -> [Group]
+    -> IO (Maybe Group, Bool)
+defaultSelectKeyShare serverSupportedGroups clientSupportedGroups clientKeyShareGroups = go clientKeyShareGroups
   where
     go [] = case serverSupportedGroups `intersect` clientSupportedGroups of
-        [] -> return SelectKeyShareNotFound
-        g : _ -> return $ SelectKeyShareHRR g
-    go (k : ks)
-        | keyShareEntryGroup k `elem` serverSupportedGroups =
-            return $ SelectKeyShareFound k
-        | otherwise = go ks
+        [] -> return (Nothing, False)
+        g : _ -> return $ (Just g, True)
+    go (g : gs)
+        | g `elem` serverSupportedGroups =
+            return $ (Just g, False)
+        | otherwise = go gs
 
 -- | Information related to a running context, e.g. current cipher
 data Information = Information

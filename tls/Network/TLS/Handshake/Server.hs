@@ -23,7 +23,6 @@ import Network.TLS.Handshake.Server.ServerHello13
 import Network.TLS.Handshake.Server.TLS12
 import Network.TLS.Handshake.Server.TLS13
 import Network.TLS.Imports
-import Network.TLS.Parameters
 import Network.TLS.Struct
 
 -- Put the server context in handshake mode.
