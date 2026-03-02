@@ -61,15 +61,15 @@ handshake sparams ctx chb@(ClientHello ch, bs) = do
             (keyShareResult, r0, r1) <-
                 processClientHello13 sparams ctx chI
             case keyShareResult of
-                ServerSelectKeyShareNotFound ->
+                SelectKeyShareNotFound ->
                     throwCore $
                         Error_Protocol "no group in common with the client for HRR" HandshakeFailure
-                ServerSelectKeyShareHRR g -> do
+                SelectKeyShareHRR g -> do
                     sendHRR ctx g r0 chI $ isJust mcrnd
                     -- Don't reset ctxEstablished since 0-RTT data
                     -- would be comming, which should be ignored.
                     handshakeServer sparams ctx
-                ServerSelectKeyShareFound cliKeyShare -> do
+                SelectKeyShareFound cliKeyShare -> do
                     unless (checkClientKeyShareKeyLength cliKeyShare) $
                         throwCore $
                             Error_Protocol "broken key_share" IllegalParameter

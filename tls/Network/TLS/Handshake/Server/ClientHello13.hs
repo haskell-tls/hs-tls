@@ -28,7 +28,7 @@ processClientHello13
     -> Context
     -> ClientHello
     -> IO
-        ( ServerSelectKeyShareResult
+        ( SelectKeyShareResult
         , (Cipher, Hash, Bool) -- rtt0
         , (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool) -- authenticated, is0RTTvalid
         )
@@ -80,14 +80,17 @@ processClientHello13 sparams ctx ch@CH{..} = do
                 []
                 (\(SupportedGroups gs) -> gs)
     keyshareResult <-
-        serverSelectKeyShareFunction serverGroups clientGroups keyShares
+        onSelectKeyShare
+            (serverHooks sparams)
+            serverGroups
+            clientGroups
+            keyShares
     let triple = (usedCipher, usedHash, rtt0)
     pskEarlySecret <- pskAndEarlySecret sparams ctx triple ch
     (ich, b) <- fromJust <$> usingHState ctx getClientHello
     updateTranscriptHash12 ctx (ClientHello ich, b)
     return (keyshareResult, triple, pskEarlySecret)
   where
-    ServerSelectKeyShare serverSelectKeyShareFunction = serverSelectKeyShare sparams
     ciphersFilteredVersion = intersectCiphers chCiphers serverCiphers
     serverCiphers =
         filter

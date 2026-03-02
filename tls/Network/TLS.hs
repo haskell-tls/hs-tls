@@ -66,11 +66,6 @@ module Network.TLS (
     serverEarlyDataSize,
     serverTicketLifetime,
     serverECHKey,
-    serverSelectKeyShare,
-    ServerSelectKeyShareResult (..),
-    ServerSelectKeyShare (..),
-    defaultServerSelectKeyShare,
-    KeyShareEntry (..),
 
     -- ** Shared
     Shared,
@@ -106,6 +101,9 @@ module Network.TLS (
     onNewHandshake,
     onALPNClientSuggest,
     onEncryptedExtensionsCreating,
+    onSelectKeyShare,
+    KeyShareEntry (..),
+    SelectKeyShareResult (..),
     Measurement,
     nbHandshakes,
     bytesReceived,

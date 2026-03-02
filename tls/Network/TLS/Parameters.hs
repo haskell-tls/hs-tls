@@ -5,9 +5,6 @@ module Network.TLS.Parameters (
     defaultParamsClient,
     ServerParams (..),
     defaultParamsServer,
-    ServerSelectKeyShareResult (..),
-    ServerSelectKeyShare (..),
-    defaultServerSelectKeyShare,
     CommonParams,
     DebugParams (..),
     defaultDebugParams,
@@ -18,6 +15,7 @@ module Network.TLS.Parameters (
     OnServerCertificate,
     ServerHooks (..),
     defaultServerHooks,
+    SelectKeyShareResult (..),
     Supported (..),
     defaultSupported,
     Shared (..),
@@ -248,29 +246,8 @@ data ServerParams = ServerParams
     -- Default: '[]'
     --
     -- @since 2.1.9
-    , serverSelectKeyShare :: ServerSelectKeyShare
     }
     deriving (Show)
-
-data ServerSelectKeyShareResult
-    = -- | Negotiation failure
-      ServerSelectKeyShareNotFound
-    | -- | Hello retry request with this group
-      ServerSelectKeyShareHRR Group
-    | -- | Use this key share
-      ServerSelectKeyShareFound KeyShareEntry
-    deriving (Eq, Show)
-
-newtype ServerSelectKeyShare
-    = ServerSelectKeyShare
-        ( [Group]
-          -> [Group]
-          -> [KeyShareEntry]
-          -> IO ServerSelectKeyShareResult
-        )
-
-instance Show ServerSelectKeyShare where
-    show (ServerSelectKeyShare _) = "ServerSelectKeyShare"
 
 defaultParamsServer :: ServerParams
 defaultParamsServer =
@@ -285,26 +262,7 @@ defaultParamsServer =
         , serverEarlyDataSize = 0
         , serverTicketLifetime = 7200
         , serverECHKey = []
-        , serverSelectKeyShare = ServerSelectKeyShare defaultServerSelectKeyShare
         }
-
-defaultServerSelectKeyShare
-    :: [Group]
-    -- ^ Server's supported groups
-    -> [Group]
-    -- ^ Client's groups in "supported_groups"
-    -> [KeyShareEntry]
-    -- ^ Client's key shares in "key_share"
-    -> IO ServerSelectKeyShareResult
-defaultServerSelectKeyShare serverSupportedGroups clientSupportedGroups clientKeyShares = go clientKeyShares
-  where
-    go [] = case serverSupportedGroups `intersect` clientSupportedGroups of
-        [] -> return ServerSelectKeyShareNotFound
-        g : _ -> return $ ServerSelectKeyShareHRR g
-    go (k : ks)
-        | keyShareEntryGroup k `elem` serverSupportedGroups =
-            return $ ServerSelectKeyShareFound k
-        | otherwise = go ks
 
 instance Default ServerParams where
     def = defaultParamsServer
@@ -782,6 +740,18 @@ data ServerHooks = ServerHooks
     --  of TLS 1.3.
     --
     -- Default: 'return'
+    , onSelectKeyShare
+        :: [Group]
+        -> [Group]
+        -> [KeyShareEntry]
+        -> IO SelectKeyShareResult
+    -- ^ Select one key share.
+    --
+    -- 1st argument is server's supported groups. 2nd arguments is
+    -- client's groups in "supported_groups". 3rd arguments is
+    -- client's key shares in "key_share".
+    --
+    -- @since 2.2.3
     }
 
 -- | Default value for 'ServerHooks'
@@ -800,12 +770,37 @@ defaultServerHooks =
         , onNewHandshake = \_ -> return True
         , onALPNClientSuggest = Nothing
         , onEncryptedExtensionsCreating = return
+        , onSelectKeyShare = defaultSelectKeyShare
         }
 
 instance Show ServerHooks where
     show _ = "ServerHooks"
 instance Default ServerHooks where
     def = defaultServerHooks
+
+data SelectKeyShareResult
+    = -- | Negotiation failure
+      SelectKeyShareNotFound
+    | -- | Send a hello retry request with this group
+      SelectKeyShareHRR Group
+    | -- | Use this key share
+      SelectKeyShareFound KeyShareEntry
+    deriving (Eq, Show)
+
+defaultSelectKeyShare
+    :: [Group]
+    -> [Group]
+    -> [KeyShareEntry]
+    -> IO SelectKeyShareResult
+defaultSelectKeyShare serverSupportedGroups clientSupportedGroups clientKeyShares = go clientKeyShares
+  where
+    go [] = case serverSupportedGroups `intersect` clientSupportedGroups of
+        [] -> return SelectKeyShareNotFound
+        g : _ -> return $ SelectKeyShareHRR g
+    go (k : ks)
+        | keyShareEntryGroup k `elem` serverSupportedGroups =
+            return $ SelectKeyShareFound k
+        | otherwise = go ks
 
 -- | Information related to a running context, e.g. current cipher
 data Information = Information
