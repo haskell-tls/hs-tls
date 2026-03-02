@@ -23,6 +23,9 @@ import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Types
 
+limitSupportedGroups :: Int
+limitSupportedGroups = 20
+
 -- TLS 1.3 or later
 processClientHello13
     :: ServerParams
@@ -74,12 +77,13 @@ processClientHello13 sparams ctx ch@CH{..} = do
     keyShares <-
         lookupAndDecodeAndDo EID_KeyShare MsgTClientHello chExtensions require extract
     let clientGroups =
-            lookupAndDecode
-                EID_SupportedGroups
-                MsgTClientHello
-                chExtensions
-                []
-                (\(SupportedGroups gs) -> gs)
+            take limitSupportedGroups $
+                lookupAndDecode
+                    EID_SupportedGroups
+                    MsgTClientHello
+                    chExtensions
+                    []
+                    (\(SupportedGroups gs) -> gs)
     (mgroup, doHRR) <-
         onSelectKeyShare
             (serverHooks sparams)
