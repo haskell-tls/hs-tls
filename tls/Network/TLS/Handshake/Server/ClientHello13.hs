@@ -24,7 +24,7 @@ import Network.TLS.Struct
 import Network.TLS.Types
 
 limitSupportedGroups :: Int
-limitSupportedGroups = 20
+limitSupportedGroups = 64
 
 -- TLS 1.3 or later
 processClientHello13
