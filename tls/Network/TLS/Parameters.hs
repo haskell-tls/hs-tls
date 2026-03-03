@@ -245,13 +245,6 @@ data ServerParams = ServerParams
     -- Default: '[]'
     --
     -- @since 2.1.9
-    , serverGroupsTLS13 :: [[Group]]
-    -- ^ @[Group]@ contains @Group@s of the same level in preferred order.
-    -- @[Group]@ is also listed in preferred order.
-    --
-    -- Used as the 1st argument to 'onSelectKeyShare'.
-    --
-    -- @since 2.2.3
     }
     deriving (Show)
 
@@ -268,7 +261,6 @@ defaultParamsServer =
         , serverEarlyDataSize = 0
         , serverTicketLifetime = 7200
         , serverECHKey = []
-        , serverGroupsTLS13 = supportedNamedGroupsTLS13
         }
 
 instance Default ServerParams where
@@ -381,6 +373,10 @@ data Supported = Supported
     -- secure, but might help in rare cases.
     --
     --   Default: 'True'
+    , supportedHPKE :: [(KEM_ID, KDF_ID, AEAD_ID)]
+    -- ^ Client only.
+    --
+    -- @since 2.1.9
     , supportedGroups :: [Group]
     -- ^ A list of supported elliptic curves and finite-field groups
     --   in preferred order.
@@ -403,10 +399,16 @@ data Supported = Supported
     --   of 128 bits or more.
     --
     --   Default: @[X25519,P256,P384,X448,P521,FFDHE3072,FFDHE4096,FFDHE6144,FFDHE8192,X25519MLKEM768,P256MLKEM768,P384MLKEM1024,MLKEM768,MLKEM1024]@
-    , supportedHPKE :: [(KEM_ID, KDF_ID, AEAD_ID)]
-    -- ^ Client only.
+    , supportedGroupsTLS13 :: [[Group]]
+    -- ^ @[Group]@ contains @Group@s of the same level in preferred order.
+    -- @[Group]@ is also listed in preferred order.
     --
-    -- @since 2.1.9
+    -- TLS 1.3 server: this is used as the 1st argument to
+    -- 'onSelectKeyShare'.
+    --
+    -- Default: @[[X25519MLKEM768,P256MLKEM768,P384MLKEM1024],[X25519,P256],[P384,X448,P521],[FFDHE2048,FFDHE3072,FFDHE4096,FFDHE6144,FFDHE8192],[MLKEM768,MLKEM1024]]@
+    --
+    -- @since 2.2.3
     }
     deriving (Show, Eq)
 
@@ -443,8 +445,9 @@ defaultSupported =
         , supportedSession = True
         , supportedFallbackScsv = True
         , supportedEmptyPacket = True
-        , supportedGroups = supportedNamedGroups
         , supportedHPKE = defaultHPKE
+        , supportedGroups = supportedNamedGroups
+        , supportedGroupsTLS13 = supportedNamedGroupsTLS13
         }
 
 instance Default Supported where

@@ -66,7 +66,6 @@ module Network.TLS (
     serverEarlyDataSize,
     serverTicketLifetime,
     serverECHKey,
-    serverGroupsTLS13,
 
     -- ** Shared
     Shared,
@@ -122,6 +121,7 @@ module Network.TLS (
     supportedFallbackScsv,
     supportedEmptyPacket,
     supportedGroups,
+    supportedGroupsTLS13,
 
     -- ** Debug parameters
     DebugParams,

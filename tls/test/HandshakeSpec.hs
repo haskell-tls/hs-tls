@@ -209,8 +209,8 @@ handshake_groups (GGP clientGroups serverGroups) = do
                 { serverSupported =
                     (serverSupported serverParam)
                         { supportedGroups = serverGroups
+                        , supportedGroupsTLS13 = [serverGroups]
                         }
-                , serverGroupsTLS13 = [serverGroups]
                 }
         commonGroups = clientGroups `intersect` serverGroups
         shouldFail = null commonGroups
@@ -259,9 +259,9 @@ handshake_ec (SG sigGroups) = do
                 { serverSupported =
                     (serverSupported serverParam)
                         { supportedGroups = sigGroups
+                        , supportedGroupsTLS13 = [sigGroups]
                         , supportedHashSignatures = serverHashSignatures
                         }
-                , serverGroupsTLS13 = [sigGroups]
                 , serverShared =
                     (serverShared serverParam)
                         { sharedCredentials = Credentials credentials
@@ -682,13 +682,11 @@ handshake13_full (CSP13 (cli, srv)) = do
             defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
                 }
         params =
             ( cli{clientSupported = cliSupported}
-            , srv
-                { serverSupported = svrSupported
-                , serverGroupsTLS13 = [[X25519]]
-                }
+            , srv{serverSupported = svrSupported}
             )
     runTLSSimple13 params FullHandshake
 
@@ -703,13 +701,11 @@ handshake13_hrr (CSP13 (cli, srv)) = do
             defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
                 }
         params =
             ( cli{clientSupported = cliSupported}
-            , srv
-                { serverSupported = svrSupported
-                , serverGroupsTLS13 = [[X25519]]
-                }
+            , srv{serverSupported = svrSupported}
             )
     runTLSSimple13 params HelloRetryRequest
 
@@ -724,13 +720,11 @@ handshake13_psk (CSP13 (cli, srv)) = do
             defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
                 }
         params0 =
             ( cli{clientSupported = cliSupported}
-            , srv
-                { serverSupported = svrSupported
-                , serverGroupsTLS13 = [[X25519]]
-                }
+            , srv{serverSupported = svrSupported}
             )
 
     sessionRefs <- twoSessionRefs
@@ -758,13 +752,11 @@ handshake13_psk_ticket (CSP13 (cli, srv)) = do
             defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
                 }
         params0 =
             ( cli{clientSupported = cliSupported}
-            , srv
-                { serverSupported = svrSupported
-                , serverGroupsTLS13 = [[X25519]]
-                }
+            , srv{serverSupported = svrSupported}
             )
 
     sessionRefs <- twoSessionRefs
@@ -796,13 +788,11 @@ handshake13_psk_fallback (CSP13 (cli, srv)) = do
             defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
                 }
         params0 =
             ( cli{clientSupported = cliSupported}
-            , srv
-                { serverSupported = svrSupported
-                , serverGroupsTLS13 = [[X25519]]
-                }
+            , srv{serverSupported = svrSupported}
             )
 
     sessionRefs <- twoSessionRefs
@@ -819,14 +809,12 @@ handshake13_psk_fallback (CSP13 (cli, srv)) = do
     expectJust "session param should be Just" sessionParams
     let (cli2, srv2) = setPairParamsSessionResuming (fromJust sessionParams) params
         srv2' =
-            srv2
-                { serverSupported = svrSupported'
-                , serverGroupsTLS13 = [[P256]]
-                }
+            srv2{serverSupported = svrSupported'}
         svrSupported' =
             defaultSupported
                 { supportedCiphers = [cipher13_AES_128_CCM_SHA256]
                 , supportedGroups = [P256]
+                , supportedGroupsTLS13 = [[P256]]
                 }
 
     runTLSSimple13 (cli2, srv2') HelloRetryRequest
@@ -842,6 +830,7 @@ handshake13_0rtt (CSP13 (cli, srv)) = do
             defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
                 }
         cliHooks =
             defaultClientHooks
@@ -860,7 +849,6 @@ handshake13_0rtt (CSP13 (cli, srv)) = do
                 { serverSupported = svrSupported
                 , serverHooks = svrHooks
                 , serverEarlyDataSize = 2048
-                , serverGroupsTLS13 = [[X25519]]
                 }
             )
 
@@ -896,13 +884,13 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
             defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [group0]
+                , supportedGroupsTLS13 = [[group0]]
                 }
         params =
             ( cli{clientSupported = cliSupported}
             , srv
                 { serverSupported = svrSupported
                 , serverEarlyDataSize = 1024
-                , serverGroupsTLS13 = [[group0]]
                 }
             )
 
@@ -926,13 +914,13 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
                     defaultSupported
                         { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                         , supportedGroups = [group1]
+                        , supportedGroupsTLS13 = [[group1]]
                         }
                 params1 =
                     ( pc{clientUseEarlyData = True}
                     , ps
                         { serverEarlyDataSize = 0
                         , serverSupported = svrSupported1
-                        , serverGroupsTLS13 = [[group1]]
                         }
                     )
             -- C: [P256, X25519]
@@ -960,13 +948,14 @@ handshake13_ee_groups (CSP13 (cli, srv)) = do
     let -- The client prefers P256
         cliSupported = (clientSupported cli){supportedGroups = [P256, X25519]}
         -- The server prefers X25519
-        svrSupported = (serverSupported srv){supportedGroups = [X25519, P256]}
+        svrSupported =
+            (serverSupported srv)
+                { supportedGroups = [X25519, P256]
+                , supportedGroupsTLS13 = [[X25519, P256]]
+                }
         params =
             ( cli{clientSupported = cliSupported}
-            , srv
-                { serverSupported = svrSupported
-                , serverGroupsTLS13 = [[X25519, P256]]
-                }
+            , srv{serverSupported = svrSupported}
             )
     (_, serverMessages) <- runTLSCapture13 params
     -- The server should tell X25519 in supported_groups in EE to clinet
@@ -982,13 +971,14 @@ handshake13_ec (CSP13 (cli, srv)) = do
     EC cgrps <- generate arbitrary
     EC sgrps <- generate arbitrary
     let cliSupported = (clientSupported cli){supportedGroups = cgrps}
-        svrSupported = (serverSupported srv){supportedGroups = sgrps}
+        svrSupported =
+            (serverSupported srv)
+                { supportedGroups = sgrps
+                , supportedGroupsTLS13 = [sgrps]
+                }
         params =
             ( cli{clientSupported = cliSupported}
-            , srv
-                { serverSupported = svrSupported
-                , serverGroupsTLS13 = [sgrps]
-                }
+            , srv{serverSupported = svrSupported}
             )
     runTLSSimple13 params FullHandshake
 
@@ -997,13 +987,14 @@ handshake13_ffdhe (CSP13 (cli, srv)) = do
     FFDHE cgrps <- generate arbitrary
     FFDHE sgrps <- generate arbitrary
     let cliSupported = (clientSupported cli){supportedGroups = cgrps}
-        svrSupported = (serverSupported srv){supportedGroups = sgrps}
+        svrSupported =
+            (serverSupported srv)
+                { supportedGroups = sgrps
+                , supportedGroupsTLS13 = [sgrps]
+                }
         params =
             ( cli{clientSupported = cliSupported}
-            , srv
-                { serverSupported = svrSupported
-                , serverGroupsTLS13 = [sgrps]
-                }
+            , srv{serverSupported = svrSupported}
             )
     runTLSSimple13 params FullHandshake
 
