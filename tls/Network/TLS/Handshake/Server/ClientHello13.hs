@@ -80,7 +80,7 @@ processClientHello13 sparams ctx ch@CH{..} = do
                 chExtensions
                 []
                 (\(SupportedGroups gs) -> gs)
-    (mgroup, isHRR) <-
+    (mgroup, doHRR) <-
         onSelectKeyShare
             (serverHooks sparams)
             serverGroups
@@ -89,7 +89,7 @@ processClientHello13 sparams ctx ch@CH{..} = do
     keyshareResult <- case mgroup of
         Nothing -> return SelectKeyShareNotFound
         Just g
-            | isHRR -> return $ SelectKeyShareHRR g
+            | doHRR -> return $ SelectKeyShareHRR g
             | otherwise -> case filter (\e -> keyShareEntryGroup e == g) keyShares of
                 [] -> return SelectKeyShareNotFound
                 [x] -> return $ SelectKeyShareFound x
