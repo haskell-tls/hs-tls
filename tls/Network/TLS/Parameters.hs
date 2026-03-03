@@ -387,7 +387,8 @@ data Supported = Supported
     --   * TLS 1.3 server: this list is not used.
     --   * TLS 1.2 client: this list is also used as values of
     --     "supported_groups".
-    --   * TLS 1.2 server: XXX
+    --   * TLS 1.2 server: this list is used to select a key exchange
+    --     mechanism.
     --
     --   The list is sent to the server as part of the
     --   "supported_groups" extension.  It is used in both clients and
@@ -660,7 +661,7 @@ data ClientHooks = ClientHooks
     , onServerFinished :: Information -> IO ()
     -- ^ When a handshake is done, this hook can check `Information`.
     , onSelectKeyShareGroups :: [Group] -> [Group]
-    -- ^ How to select groups in "key_share" for TLS 1.3.
+    -- ^ A function to select groups in "key_share" by TLS 1.3 client.
     --
     --   Client's 'supportedGroups' is passed as the 1st argument.
     --
@@ -777,9 +778,9 @@ data ServerHooks = ServerHooks
         -> [Group]
         -> [Group]
         -> IO (Maybe Group, Bool)
-    -- ^ Select one key share.
+    -- ^ A function to select one key share by TLS 1.3 server.
     --
-    -- The 1st argument is server's 'serverGroupsTLS13'.
+    -- The 1st argument is server's 'supportedGroupsTLS13'.
     -- The 2nd arguments is client's groups in "supported_groups"
     -- The 3rd arguments is client's groups in "key_share".
     --
