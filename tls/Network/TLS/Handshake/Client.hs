@@ -130,7 +130,7 @@ helloRetry
 helloRetry cparams ctx mparams ver crand groupsSupported = do
     when (null groupsSupported) $
         throwCore $
-            Error_Protocol "group is exhausted in the client side" IllegalParameter
+            Error_Protocol "no supported groups on the client side" IllegalParameter
     when (isJust mparams) $
         throwCore $
             Error_Protocol "server sent too many hello retries" UnexpectedMessage
