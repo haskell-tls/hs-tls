@@ -246,6 +246,12 @@ data ServerParams = ServerParams
     --
     -- @since 2.1.9
     , serverGroupsTLS13 :: [[Group]]
+    -- ^ @[Group]@ contains @Group@s of the same level in preferred order.
+    -- @[Group]@ is also listed in preferred order.
+    --
+    -- Used as the 1st argument to 'onSelectKeyShare'.
+    --
+    -- @since 2.2.3
     }
     deriving (Show)
 
@@ -276,7 +282,7 @@ data Supported = Supported
     -- the server side, the highest version that is less or equal than
     -- the client version will be chosen.
     --
-    -- Versions should be listed in preference order, i.e. higher
+    -- Versions should be listed in preferred order, i.e. higher
     -- versions first.
     --
     -- Default: @[TLS13,TLS12]@
@@ -377,7 +383,15 @@ data Supported = Supported
     --   Default: 'True'
     , supportedGroups :: [Group]
     -- ^ A list of supported elliptic curves and finite-field groups
-    --   in the preferred order.
+    --   in preferred order.
+    --
+    --   * TLS 1.3 client: this list is used as the 1st argument to
+    --     'onSelectKeyShareGroups' to select groups in "key_share".
+    --     This list is also used as values of "supported_groups".
+    --   * TLS 1.3 server: this list is not used.
+    --   * TLS 1.2 client: this list is also used as values of
+    --     "supported_groups".
+    --   * TLS 1.2 server: XXX
     --
     --   The list is sent to the server as part of the
     --   "supported_groups" extension.  It is used in both clients and
@@ -388,7 +402,7 @@ data Supported = Supported
     --   The default value includes all groups with security strength
     --   of 128 bits or more.
     --
-    --   Default: @[X25519,X448,P256,FFDHE2048,FFDHE3072,FFDHE4096,P384,FFDHE6144,FFDHE8192,P521]@
+    --   Default: @[X25519,P256,P384,X448,P521,FFDHE3072,FFDHE4096,FFDHE6144,FFDHE8192,X25519MLKEM768,P256MLKEM768,P384MLKEM1024,MLKEM768,MLKEM1024]@
     , supportedHPKE :: [(KEM_ID, KDF_ID, AEAD_ID)]
     -- ^ Client only.
     --
@@ -643,13 +657,27 @@ data ClientHooks = ClientHooks
     , onServerFinished :: Information -> IO ()
     -- ^ When a handshake is done, this hook can check `Information`.
     , onSelectKeyShareGroups :: [Group] -> [Group]
-    -- ^ How to select key share groups from supported groups.
+    -- ^ How to select groups in "key_share" for TLS 1.3.
     --
-    --   The default function specifies a key-exchange pair of hybrid
-    --   and classical for transition purpose.  @take 1@ is maybe a
-    --   good candidate.
+    --   Client's 'supportedGroups' is passed as the 1st argument.
     --
-    -- @since 2.2.3
+    --   The default function specifies a pair of hybrid (classical +
+    --   post quantum) group and classical group to transit from
+    --   classical key exchange to hybrid key exchange. With the
+    --   default value of 'supportedGroups', X25519MLKEM and X25519
+    --   are chosen.
+    --
+    --   Middleboxes may drop a ClientHello that contains large
+    --   X2219MLKEM. In such environment, @take 1@, which selects
+    --   X22519 only with the default value, is maybe a good
+    --   candidate.
+    --
+    --   In the case where X22519 is only contained in "key_share", a
+    --   wise-server without nasty middleboxes may ask the client to
+    --   send X2219MLKEM via HelloRetryRequest as X2219MLKEM is
+    --   specified in "supported_groups".
+    --
+    --   @since 2.2.3
     }
 
 defaultOnSelectKeyShareGroups :: [Group] -> [Group]
@@ -748,12 +776,20 @@ data ServerHooks = ServerHooks
         -> IO (Maybe Group, Bool)
     -- ^ Select one key share.
     --
-    -- 1st argument is server's supported groups. 2nd arguments is
-    -- client's groups in "supported_groups". 3rd arguments is
-    -- client's groups in "key_share".
+    -- The 1st argument is server's 'serverGroupsTLS13'.
+    -- The 2nd arguments is client's groups in "supported_groups"
+    -- The 3rd arguments is client's groups in "key_share".
     --
-    -- 'True' in the result is to send a hello retry request with this
-    -- group.
+    -- 'True' in the result indicates sending a hello retry request
+    -- with this group.
+    --
+    -- The default function targets @[Group]@ in the first argument in
+    -- order.  If there is a common group among the "key_share"
+    -- groups, it will use that group for key exchange.
+    -- Alternatively, if there is a common group among the
+    -- "supported_groups" groups, it will instruct to send the
+    -- HelloRetryRequest using that group.  Otherwise, it will check
+    -- the next @[Group]@.
     --
     -- @since 2.2.3
     }
