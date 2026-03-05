@@ -28,7 +28,7 @@ processClientHello13
     -> Context
     -> ClientHello
     -> IO
-        ( Maybe KeyShareEntry
+        ( ServerSelectKeyShareResult
         , (Cipher, Hash, Bool) -- rtt0
         , (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool) -- authenticated, is0RTTvalid
         )
@@ -85,20 +85,6 @@ processClientHello13 sparams ctx ch@CH{..} = do
             (cipherAllowedForVersion TLS13)
             (supportedCiphers $ serverSupported sparams)
     serverGroups = supportedGroups (ctxSupported ctx)
-
--- | Finding a key share according to client's preference.
---   This code cannot check duplication of groups.
-findKeyShare :: [KeyShareEntry] -> [Group] -> IO (Maybe KeyShareEntry)
-findKeyShare ks0 gs = go ks0
-  where
-    go [] = return Nothing
-    go (k : ks)
-        | keyShareEntryGroup k `elem` gs = do
-            unless (checkClientKeyShareKeyLength k) $
-                throwCore $
-                    Error_Protocol "broken key_share" IllegalParameter
-            return $ Just k
-        | otherwise = go ks
 
 pskAndEarlySecret
     :: ServerParams

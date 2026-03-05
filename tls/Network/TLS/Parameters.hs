@@ -261,8 +261,29 @@ data ServerParams = ServerParams
     -- Default: '[]'
     --
     -- @since 2.1.9
+    , serverSelectKeyShare :: ServerSelectKeyShare
     }
     deriving (Show)
+
+data ServerSelectKeyShareResult
+    = ServerSelectKeyShareFailure
+    | ServerSelectKeyShareHRR Group
+    | ServerSelectKeyShareChoice Group
+    deriving (Eq, Show)
+
+data ServerSelectKeyShare
+    = ServerSelectKeyShare
+        ( [Group]
+          -- \^ Server preference
+          -> [Group]
+          -- \^ Client's "key_share"
+          -> [Group]
+          -- \^ Client's "supported_groups"
+          -> IO ServerSelectKeyShareResult
+        )
+
+instance Show ServerSelectKeyShare where
+    show (ServerSelectKeyShare _) = "ServerSelectKeyShare"
 
 defaultParamsServer :: ServerParams
 defaultParamsServer =
@@ -277,7 +298,34 @@ defaultParamsServer =
         , serverEarlyDataSize = 0
         , serverTicketLifetime = 7200
         , serverECHKey = []
+        , serverSelectKeyShare = ServerSelectKeyShare serverSelectKeyShareFunction
         }
+
+serverSelectKeyShareFunction
+    :: [Group] -> [Group] -> [Group] -> IO ServerSelectKeyShareResult
+serverSelectKeyShareFunction serverSupportedGroups clientSupportedGroups clinetKeyShareGroups = go clinetKeyShareGroups
+  where
+    go [] = case serverSupportedGroups `intersect` clientSupportedGroups of
+        [] -> return ServerSelectKeyShareFailure
+        g : _ -> return $ ServerSelectKeyShareHRR g
+    go (g : gs)
+        | g `elem` serverSupportedGroups =
+            return $ ServerSelectKeyShareChoice g
+        | otherwise = go gs
+
+-- | Finding a key share according to client's preference.
+--   This code cannot check duplication of groups.
+findKeyShare :: [KeyShareEntry] -> [Group] -> IO (Maybe KeyShareEntry)
+findKeyShare ks0 gs = go ks0
+  where
+    go [] = return Nothing
+    go (k : ks)
+        | keyShareEntryGroup k `elem` gs = do
+            unless (checkClientKeyShareKeyLength k) $
+                throwCore $
+                    Error_Protocol "broken key_share" IllegalParameter
+            return $ Just k
+        | otherwise = go ks
 
 instance Default ServerParams where
     def = defaultParamsServer
