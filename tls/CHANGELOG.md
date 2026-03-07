@@ -1,5 +1,9 @@
 # Change log for "tls"
 
+## Version 2.3.0
+
+* Using "ram" instead of "memory".
+
 ## Version 2.2.2
 
 * A new architecture to calculate receiver's transcript hash with wire

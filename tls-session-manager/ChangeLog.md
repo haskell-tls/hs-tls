@@ -1,5 +1,9 @@
 # ChangeLog for tls-session-manager
 
+## 0.1.0
+
+* Using "ram" instead of "memory"
+
 ## 0.0.9
 
 * Providing newSessionTicketManager' to kill the manager.
