@@ -33,13 +33,13 @@ executable tls-stunnel
         base >=4 && <5,
         network,
         bytestring,
-        crypton-x509-store >=1.8.0,
-        crypton-x509-system >=1.8.0,
-        crypton-x509-validation >=1.8.0,
+        crypton-x509-store >=1.9.0,
+        crypton-x509-system >=1.9.0,
+        crypton-x509-validation >=1.9.0,
         data-default,
-        crypton,
-        tls >=1.5.5,
-        tls-session-manager
+        crypton >=1.1.0,
+        tls >=2.3.0,
+        tls-session-manager >= 0.1.0
 
     if os(windows)
         buildable: False
@@ -57,11 +57,11 @@ executable tls-retrievecertificate
         network,
         bytestring,
         crypton-pem,
-        crypton-x509,
-        crypton-x509-system >=1.4,
-        crypton-x509-validation >=1.5,
+        crypton-x509 >=1.9.0,
+        crypton-x509-system >=1.9.0,
+        crypton-x509-validation >=1.9.0,
         data-default,
-        tls >=1.3
+        tls >=2.3.0
 
 executable tls-simpleclient
     main-is:          SimpleClient.hs
@@ -78,10 +78,10 @@ executable tls-simpleclient
         network,
         bytestring,
         data-default,
-        crypton,
-        crypton-x509-store,
-        crypton-x509-system >=1.0,
-        tls >=1.5.5
+        crypton >=1.1.0,
+        crypton-x509-store >=1.9.0,
+        crypton-x509-system >=1.9.0,
+        tls >=2.3.0
 
 executable tls-simpleserver
     main-is:          SimpleServer.hs
@@ -98,8 +98,8 @@ executable tls-simpleserver
         network,
         bytestring,
         data-default,
-        crypton,
-        crypton-x509-store,
-        crypton-x509-system >=1.0,
-        tls >=1.5.5,
-        tls-session-manager
+        crypton >=1.1.0,
+        crypton-x509-store >=1.9.0,
+        crypton-x509-system >=1.9.0,
+        tls >=2.3.0,
+        tls-session-manager >=0.1.0

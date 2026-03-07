@@ -24,7 +24,7 @@ executable TestClient
         base >=4 && <5,
         network,
         bytestring,
-        x509-system >=1.0,
+        crypton-x509-system >=1.9.0,
         data-default >=0.8,
         directory,
         random,
