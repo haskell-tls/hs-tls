@@ -27,7 +27,7 @@ library
         base16-bytestring,
         bytestring,
         filepath,
-        network-byte-order
+        network-byte-order >=0.1.7
 
 executable ech-gen
     main-is:            ech-gen.hs
