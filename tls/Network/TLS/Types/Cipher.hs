@@ -116,12 +116,12 @@ data BulkFunctions
 data BulkDirection = BulkEncrypt | BulkDecrypt
     deriving (Show, Eq)
 
-type BulkBlock = BulkIV -> ByteString -> (ByteString, BulkIV)
-
-type BulkKey = ByteString
-type BulkIV = ByteString
-type BulkNonce = ByteString
+type BulkKey = Secret
+type BulkIV = Nonce
+type BulkNonce = Nonce
 type BulkAdditionalData = ByteString
+
+type BulkBlock = BulkIV -> ByteString -> (ByteString, BulkIV)
 
 newtype BulkStream = BulkStream (ByteString -> (ByteString, BulkStream))
 
