@@ -40,8 +40,7 @@ encryptRSA :: Context -> Secret -> IO ByteString
 encryptRSA ctx content = do
     publicKey <- usingHState ctx getRemotePublicKey
     usingState_ ctx $ do
-        -- fixme: convert :: Secret -> ByteString
-        v <- withRNG $ kxEncrypt publicKey $ convert content
+        v <- withRNG $ kxEncrypt publicKey content
         case v of
             Left err -> error ("rsa encrypt failed: " ++ show err)
             Right econtent -> return econtent
@@ -58,10 +57,9 @@ signPrivate ctx _ params content = do
 decryptRSA :: Context -> ByteString -> IO (Either KxError Secret)
 decryptRSA ctx econtent = do
     (_, privateKey) <- usingHState ctx getLocalPublicPrivateKeys
-    ex <- usingState_ ctx $ do
+    usingState_ ctx $ do
         let cipher = B.drop 2 econtent
         withRNG $ kxDecrypt privateKey cipher
-    return (convert <$> ex)
 
 verifyPublic
     :: Context -> SignatureParams -> ByteString -> ByteString -> IO Bool

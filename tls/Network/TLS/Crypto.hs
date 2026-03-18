@@ -61,7 +61,7 @@ import Crypto.Random
 import Data.ASN1.BinaryEncoding (BER (..), DER (..))
 import Data.ASN1.Encoding
 import Data.ASN1.Types
-import Data.ByteArray (ByteArray, ByteArrayAccess, convert)
+import Data.ByteArray (ByteArray, ByteArrayAccess, ScrubbedBytes, convert)
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 import Data.Proxy
@@ -78,6 +78,8 @@ import Network.TLS.Crypto.DH
 import Network.TLS.Crypto.IES
 import Network.TLS.Crypto.Types
 import Network.TLS.Imports
+
+----------------------------------------------------------------
 
 {-# DEPRECATED PublicKey "use PubKey" #-}
 type PublicKey = PubKey
@@ -219,12 +221,12 @@ generalizeRSAError (Left e) = Left (RSAError e)
 generalizeRSAError (Right x) = Right x
 
 kxEncrypt
-    :: MonadRandom r => PublicKey -> ByteString -> r (Either KxError ByteString)
+    :: MonadRandom r => PublicKey -> ScrubbedBytes -> r (Either KxError ByteString)
 kxEncrypt (PubKeyRSA pk) b = generalizeRSAError <$> RSA.encrypt pk b
 kxEncrypt _ _ = return (Left KxUnsupported)
 
 kxDecrypt
-    :: MonadRandom r => PrivateKey -> ByteString -> r (Either KxError ByteString)
+    :: MonadRandom r => PrivateKey -> ByteString -> r (Either KxError ScrubbedBytes)
 kxDecrypt (PrivKeyRSA pk) b = generalizeRSAError <$> RSA.decryptSafer pk b
 kxDecrypt _ _ = return (Left KxUnsupported)
 
