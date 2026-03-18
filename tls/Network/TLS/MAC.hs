@@ -11,6 +11,8 @@ module Network.TLS.MAC (
 
 import Data.ByteArray (ByteArray, ByteArrayAccess)
 import qualified Data.ByteArray as BA
+import Foreign.Ptr
+import Foreign.Storable
 
 import Network.TLS.Crypto
 import Network.TLS.Imports
@@ -36,9 +38,8 @@ macSSL alg secret msg =
 hmac :: (ByteArray ba, ByteArrayAccess ba) => Hash -> ba -> ByteString -> ba
 hmac alg secret msg = f $ BA.append opad (f $ BA.append ipad $ BA.convert msg)
   where
-    opad = (BA.replicate len 0x5c :: BA.ScrubbedBytes) `BA.xor` k'
-    ipad = (BA.replicate len 0x36 :: BA.ScrubbedBytes) `BA.xor` k'
-    len = BA.length k'
+    opad = mapBA (0x5c `xor`) k'
+    ipad = mapBA (0x36 `xor`) k'
 
     f = hash alg
     bl = hashBlockSize alg
@@ -82,3 +83,15 @@ prf_SHA256 secret seed len = BA.concat $ hmacIter (hmac SHA256) secret seed seed
 prf_TLS :: Version -> Hash -> PRF
 prf_TLS _ halg secret seed len =
     BA.concat $ hmacIter (hmac halg) secret seed seed len
+
+mapBA :: (ByteArrayAccess ba, ByteArray ba) => (Word8 -> Word8) -> ba -> ba
+mapBA f ba = BA.copyAndFreeze ba $ loop 0
+  where
+    len = BA.length ba
+    loop i ptr
+        | i == len = return ()
+        | otherwise = do
+            let ptr' = ptr `plusPtr` i
+            x <- peek ptr'
+            poke ptr' $ f x
+            loop (i + 1) ptr
