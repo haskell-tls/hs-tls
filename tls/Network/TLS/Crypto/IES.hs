@@ -37,7 +37,6 @@ import Crypto.PubKey.ECIES
 import Crypto.PubKey.ML_KEM (ML_KEM_1024, ML_KEM_512, ML_KEM_768)
 import qualified Crypto.PubKey.ML_KEM as ML
 import qualified Data.ByteArray as B
-import qualified Data.ByteArray as BS
 import Data.Proxy
 
 import Network.TLS.Crypto.Types
@@ -428,21 +427,21 @@ groupDecodePublicA MLKEM1024 bs = case ML.decode mlkem1024 bs of
     Nothing -> Left CryptoError_PointFormatInvalid
     Just p -> Right $ GroupPubA_MLKEM1024 p
 groupDecodePublicA X25519MLKEM768 bs =
-    let (bs1, bs2) = BS.splitAt 1184 bs
+    let (bs1, bs2) = B.splitAt 1184 bs
      in case ML.decode mlkem768 bs1 of
             Nothing -> Left CryptoError_PointFormatInvalid
             Just p1 -> case maybeCryptoError $ decodePoint x25519 bs2 of
                 Nothing -> Left CryptoError_PointFormatInvalid
                 Just p2 -> Right $ GroupPubA_X25519MLKEM768 (p2, p1)
 groupDecodePublicA P256MLKEM768 bs =
-    let (bs1, bs2) = BS.splitAt 65 bs
+    let (bs1, bs2) = B.splitAt 65 bs
      in case ML.decode mlkem768 bs2 of
             Nothing -> Left CryptoError_PointFormatInvalid
             Just p1 -> case maybeCryptoError $ decodePoint p256 bs1 of
                 Nothing -> Left CryptoError_PointFormatInvalid
                 Just p2 -> Right $ GroupPubA_P256MLKEM768 (p2, p1)
 groupDecodePublicA P384MLKEM1024 bs =
-    let (bs1, bs2) = BS.splitAt 97 bs
+    let (bs1, bs2) = B.splitAt 97 bs
      in case ML.decode mlkem1024 bs2 of
             Nothing -> Left CryptoError_PointFormatInvalid
             Just p1 -> case maybeCryptoError $ decodePoint p384 bs1 of
@@ -471,21 +470,21 @@ groupDecodePublicB MLKEM1024 bs = case ML.decode mlkem1024 bs of
     Nothing -> Left CryptoError_PointFormatInvalid
     Just p -> Right $ GroupPubB_MLKEM1024 p
 groupDecodePublicB X25519MLKEM768 bs =
-    let (bs1, bs2) = BS.splitAt 1088 bs
+    let (bs1, bs2) = B.splitAt 1088 bs
      in case ML.decode mlkem768 bs1 of
             Nothing -> Left CryptoError_PointFormatInvalid
             Just p1 -> case maybeCryptoError $ decodePoint x25519 bs2 of
                 Nothing -> Left CryptoError_PointFormatInvalid
                 Just p2 -> Right $ GroupPubB_X25519MLKEM768 (p2, p1)
 groupDecodePublicB P256MLKEM768 bs =
-    let (bs1, bs2) = BS.splitAt 65 bs
+    let (bs1, bs2) = B.splitAt 65 bs
      in case ML.decode mlkem768 bs2 of
             Nothing -> Left CryptoError_PointFormatInvalid
             Just p1 -> case maybeCryptoError $ decodePoint p256 bs1 of
                 Nothing -> Left CryptoError_PointFormatInvalid
                 Just p2 -> Right $ GroupPubB_P256MLKEM768 (p2, p1)
 groupDecodePublicB P384MLKEM1024 bs =
-    let (bs1, bs2) = BS.splitAt 97 bs
+    let (bs1, bs2) = B.splitAt 97 bs
      in case ML.decode mlkem1024 bs2 of
             Nothing -> Left CryptoError_PointFormatInvalid
             Just p1 -> case maybeCryptoError $ decodePoint p384 bs1 of
