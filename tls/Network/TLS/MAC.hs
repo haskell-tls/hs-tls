@@ -8,7 +8,7 @@ module Network.TLS.MAC (
     prf_MD5SHA1,
 ) where
 
-import qualified Data.ByteArray as B (xor)
+import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 
 import Network.TLS.Crypto
@@ -64,7 +64,7 @@ prf_MD5 secret seed len = B.concat $ hmacIter (hmac MD5) secret seed seed len
 
 prf_MD5SHA1 :: ByteString -> ByteString -> Int -> ByteString
 prf_MD5SHA1 secret seed len =
-    B.xor (prf_MD5 s1 seed len) (prf_SHA1 s2 seed len)
+    BA.xor (prf_MD5 s1 seed len) (prf_SHA1 s2 seed len)
   where
     slen = B.length secret
     s1 = B.take (slen `div` 2 + slen `mod` 2) secret

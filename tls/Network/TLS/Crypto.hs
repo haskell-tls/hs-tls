@@ -61,7 +61,7 @@ import Crypto.Random
 import Data.ASN1.BinaryEncoding (BER (..), DER (..))
 import Data.ASN1.Encoding
 import Data.ASN1.Types
-import qualified Data.ByteArray as B (convert)
+import Data.ByteArray (convert)
 import qualified Data.ByteString as B
 import Data.Proxy
 import Data.X509 (
@@ -161,9 +161,9 @@ hashUpdateSSL (HashContextSSL sha1Ctx md5Ctx) (b1, b2) =
     HashContextSSL (H.hashUpdate sha1Ctx b2) (H.hashUpdate md5Ctx b1)
 
 hashFinal :: HashCtx -> ByteString
-hashFinal (HashContext (ContextSimple h)) = B.convert $ H.hashFinalize h
+hashFinal (HashContext (ContextSimple h)) = convert $ H.hashFinalize h
 hashFinal (HashContextSSL sha1Ctx md5Ctx) =
-    B.concat [B.convert (H.hashFinalize md5Ctx), B.convert (H.hashFinalize sha1Ctx)]
+    B.concat [convert (H.hashFinalize md5Ctx), convert (H.hashFinalize sha1Ctx)]
 
 data Hash = MD5 | SHA1 | SHA224 | SHA256 | SHA384 | SHA512 | SHA1_MD5
     deriving (Show, Eq)
@@ -181,14 +181,14 @@ data ContextSimple
 type HashCtx = HashContext
 
 hash :: Hash -> ByteString -> ByteString
-hash MD5 b = B.convert . (H.hash :: ByteString -> H.Digest H.MD5) $ b
-hash SHA1 b = B.convert . (H.hash :: ByteString -> H.Digest H.SHA1) $ b
-hash SHA224 b = B.convert . (H.hash :: ByteString -> H.Digest H.SHA224) $ b
-hash SHA256 b = B.convert . (H.hash :: ByteString -> H.Digest H.SHA256) $ b
-hash SHA384 b = B.convert . (H.hash :: ByteString -> H.Digest H.SHA384) $ b
-hash SHA512 b = B.convert . (H.hash :: ByteString -> H.Digest H.SHA512) $ b
+hash MD5 b = convert . (H.hash :: ByteString -> H.Digest H.MD5) $ b
+hash SHA1 b = convert . (H.hash :: ByteString -> H.Digest H.SHA1) $ b
+hash SHA224 b = convert . (H.hash :: ByteString -> H.Digest H.SHA224) $ b
+hash SHA256 b = convert . (H.hash :: ByteString -> H.Digest H.SHA256) $ b
+hash SHA384 b = convert . (H.hash :: ByteString -> H.Digest H.SHA384) $ b
+hash SHA512 b = convert . (H.hash :: ByteString -> H.Digest H.SHA512) $ b
 hash SHA1_MD5 b =
-    B.concat [B.convert (md5Hash b), B.convert (sha1Hash b)]
+    B.concat [convert (md5Hash b), convert (sha1Hash b)]
   where
     sha1Hash :: ByteString -> H.Digest H.SHA1
     sha1Hash = H.hash
@@ -366,9 +366,9 @@ kxSign (PrivKeyEC pk) (PubKeyEC _) (ECDSAParams hashAlg) msg =
             Just sign -> Right (ECDSA.signatureToIntegers prx sign)
     unsupported = return $ Left KxUnsupported
 kxSign (PrivKeyEd25519 pk) (PubKeyEd25519 pub) Ed25519Params msg =
-    return $ Right $ B.convert $ Ed25519.sign pk pub msg
+    return $ Right $ convert $ Ed25519.sign pk pub msg
 kxSign (PrivKeyEd448 pk) (PubKeyEd448 pub) Ed448Params msg =
-    return $ Right $ B.convert $ Ed448.sign pk pub msg
+    return $ Right $ convert $ Ed448.sign pk pub msg
 kxSign _ _ _ _ =
     return (Left KxUnsupported)
 

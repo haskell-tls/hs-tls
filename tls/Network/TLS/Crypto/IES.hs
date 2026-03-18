@@ -36,7 +36,8 @@ import qualified Crypto.PubKey.DH as DH
 import Crypto.PubKey.ECIES
 import Crypto.PubKey.ML_KEM (ML_KEM_1024, ML_KEM_512, ML_KEM_768)
 import qualified Crypto.PubKey.ML_KEM as ML
-import qualified Data.ByteArray as B
+import Data.ByteArray (ScrubbedBytes, convert)
+import qualified Data.ByteArray as BA
 import Data.Proxy
 
 import Network.TLS.Crypto.Types
@@ -241,27 +242,27 @@ groupEncapsulate (GroupPubA_FFDHE6144 pub) = getDHPubShared ffdhe6144 exp6144 pu
 groupEncapsulate (GroupPubA_FFDHE8192 pub) = getDHPubShared ffdhe8192 exp8192 pub GroupPubB_FFDHE8192
 groupEncapsulate (GroupPubA_MLKEM512 pub) = do
     (sec, ct) <- ML.encapsulate pub
-    return $ Just (GroupPubB_MLKEM512 ct, B.convert sec)
+    return $ Just (GroupPubB_MLKEM512 ct, convert sec)
 groupEncapsulate (GroupPubA_MLKEM768 pub) = do
     (sec, ct) <- ML.encapsulate pub
-    return $ Just (GroupPubB_MLKEM768 ct, B.convert sec)
+    return $ Just (GroupPubB_MLKEM768 ct, convert sec)
 groupEncapsulate (GroupPubA_MLKEM1024 pub) = do
     (sec, ct) <- ML.encapsulate pub
-    return $ Just (GroupPubB_MLKEM1024 ct, B.convert sec)
+    return $ Just (GroupPubB_MLKEM1024 ct, convert sec)
 groupEncapsulate (GroupPubA_X25519MLKEM768 (e1, e2)) = do
     (c1, k1) <- fromJust <$> getECDHPubShared' x25519 e1
     (k2, c2) <- ML.encapsulate e2
     -- Sec 4.1: Specifically, the order of shares in the concatenation
     -- has been reversed.
-    return $ Just (GroupPubB_X25519MLKEM768 (c1, c2), B.convert k2 <> k1)
+    return $ Just (GroupPubB_X25519MLKEM768 (c1, c2), convert k2 <> k1)
 groupEncapsulate (GroupPubA_P256MLKEM768 (e1, e2)) = do
     (c1, k1) <- fromJust <$> getECDHPubShared' p256 e1
     (k2, c2) <- ML.encapsulate e2
-    return $ Just (GroupPubB_P256MLKEM768 (c1, c2), k1 <> B.convert k2)
+    return $ Just (GroupPubB_P256MLKEM768 (c1, c2), k1 <> convert k2)
 groupEncapsulate (GroupPubA_P384MLKEM1024 (e1, e2)) = do
     (c1, k1) <- fromJust <$> getECDHPubShared' p384 e1
     (k2, c2) <- ML.encapsulate e2
-    return $ Just (GroupPubB_P384MLKEM1024 (c1, c2), k1 <> B.convert k2)
+    return $ Just (GroupPubB_P384MLKEM1024 (c1, c2), k1 <> convert k2)
 
 dhGroupGetPubShared
     :: MonadRandom r => Group -> PublicNumber -> r (Maybe (PublicNumber, GroupKey))
@@ -282,7 +283,7 @@ getECDHPubShared tag proxy pub = do
     mx <- maybeCryptoError <$> deriveEncrypt proxy pub
     case mx of
         Nothing -> return Nothing
-        Just (p, s) -> return $ Just (tag p, B.convert s)
+        Just (p, s) -> return $ Just (tag p, convert s)
 
 getECDHPubShared'
     :: (MonadRandom m, EllipticCurveDH curve)
@@ -293,7 +294,7 @@ getECDHPubShared' proxy pub = do
     mx <- maybeCryptoError <$> deriveEncrypt proxy pub
     case mx of
         Nothing -> return Nothing
-        Just (p, s) -> return $ Just (p, B.convert s)
+        Just (p, s) -> return $ Just (p, convert s)
 
 getDHPubShared
     :: MonadRandom r
@@ -308,7 +309,7 @@ getDHPubShared params expBits pub pubTag
         mypri <- generatePriv expBits
         let mypub = DH.calculatePublic params mypri
             share = DH.getShared params mypri pub
-        return $ Just (pubTag mypub, B.convert share)
+        return $ Just (pubTag mypub, convert share)
 
 getDHPubShared'
     :: MonadRandom r
@@ -321,42 +322,42 @@ getDHPubShared' params expBits pub
     | otherwise = do
         mypri <- generatePriv expBits
         let share = stripLeadingZeros (DH.getShared params mypri pub)
-        return $ Just (DH.calculatePublic params mypri, B.convert share)
+        return $ Just (DH.calculatePublic params mypri, convert share)
 
 groupDecapsulate :: GroupPublicB -> GroupPrivate -> Maybe GroupKey
-groupDecapsulate (GroupPubB_P256 pub) (GroupPri_P256 pri) = (B.convert <$>) . maybeCryptoError $ deriveDecrypt p256 pub pri
-groupDecapsulate (GroupPubB_P384 pub) (GroupPri_P384 pri) = (B.convert <$>) . maybeCryptoError $ deriveDecrypt p384 pub pri
-groupDecapsulate (GroupPubB_P521 pub) (GroupPri_P521 pri) = (B.convert <$>) . maybeCryptoError $ deriveDecrypt p521 pub pri
-groupDecapsulate (GroupPubB_X255 pub) (GroupPri_X255 pri) = (B.convert <$>) . maybeCryptoError $ deriveDecrypt x25519 pub pri
-groupDecapsulate (GroupPubB_X448 pub) (GroupPri_X448 pri) = (B.convert <$>) . maybeCryptoError $ deriveDecrypt x448 pub pri
+groupDecapsulate (GroupPubB_P256 pub) (GroupPri_P256 pri) = (convert <$>) . maybeCryptoError $ deriveDecrypt p256 pub pri
+groupDecapsulate (GroupPubB_P384 pub) (GroupPri_P384 pri) = (convert <$>) . maybeCryptoError $ deriveDecrypt p384 pub pri
+groupDecapsulate (GroupPubB_P521 pub) (GroupPri_P521 pri) = (convert <$>) . maybeCryptoError $ deriveDecrypt p521 pub pri
+groupDecapsulate (GroupPubB_X255 pub) (GroupPri_X255 pri) = (convert <$>) . maybeCryptoError $ deriveDecrypt x25519 pub pri
+groupDecapsulate (GroupPubB_X448 pub) (GroupPri_X448 pri) = (convert <$>) . maybeCryptoError $ deriveDecrypt x448 pub pri
 groupDecapsulate (GroupPubB_FFDHE2048 pub) (GroupPri_FFDHE2048 pri) = calcDHShared ffdhe2048 pub pri
 groupDecapsulate (GroupPubB_FFDHE3072 pub) (GroupPri_FFDHE3072 pri) = calcDHShared ffdhe3072 pub pri
 groupDecapsulate (GroupPubB_FFDHE4096 pub) (GroupPri_FFDHE4096 pri) = calcDHShared ffdhe4096 pub pri
 groupDecapsulate (GroupPubB_FFDHE6144 pub) (GroupPri_FFDHE6144 pri) = calcDHShared ffdhe6144 pub pri
 groupDecapsulate (GroupPubB_FFDHE8192 pub) (GroupPri_FFDHE8192 pri) = calcDHShared ffdhe8192 pub pri
 groupDecapsulate (GroupPubB_MLKEM512 p) (GroupPri_MLKEM512 s) =
-    Just $ B.convert $ ML.decapsulate s p
+    Just $ convert $ ML.decapsulate s p
 groupDecapsulate (GroupPubB_MLKEM768 p) (GroupPri_MLKEM768 s) =
-    Just $ B.convert $ ML.decapsulate s p
+    Just $ convert $ ML.decapsulate s p
 groupDecapsulate (GroupPubB_MLKEM1024 p) (GroupPri_MLKEM1024 s) =
-    Just $ B.convert $ ML.decapsulate s p
+    Just $ convert $ ML.decapsulate s p
 groupDecapsulate (GroupPubB_X25519MLKEM768 (p1, p2)) (GroupPri_X25519MLKEM768 (s1, s2)) = do
-    bs1 <- (B.convert <$>) . maybeCryptoError $ deriveDecrypt x25519 p1 s1
-    let bs2 = B.convert $ ML.decapsulate s2 p2
+    bs1 <- (convert <$>) . maybeCryptoError $ deriveDecrypt x25519 p1 s1
+    let bs2 = convert $ ML.decapsulate s2 p2
     return (bs2 <> bs1)
 groupDecapsulate (GroupPubB_P256MLKEM768 (p1, p2)) (GroupPri_P256MLKEM768 (s1, s2)) = do
-    bs1 <- (B.convert <$>) . maybeCryptoError $ deriveDecrypt p256 p1 s1
-    let bs2 = B.convert $ ML.decapsulate s2 p2
+    bs1 <- (convert <$>) . maybeCryptoError $ deriveDecrypt p256 p1 s1
+    let bs2 = convert $ ML.decapsulate s2 p2
     return (bs1 <> bs2)
 groupDecapsulate (GroupPubB_P384MLKEM1024 (p1, p2)) (GroupPri_P384MLKEM1024 (s1, s2)) = do
-    bs1 <- (B.convert <$>) . maybeCryptoError $ deriveDecrypt p384 p1 s1
-    let bs2 = B.convert $ ML.decapsulate s2 p2
+    bs1 <- (convert <$>) . maybeCryptoError $ deriveDecrypt p384 p1 s1
+    let bs2 = convert $ ML.decapsulate s2 p2
     return (bs1 <> bs2)
 groupDecapsulate _ _ = Nothing
 
 calcDHShared :: DH.Params -> PublicNumber -> PrivateNumber -> Maybe GroupKey
 calcDHShared params pub pri
-    | valid params pub = Just $ B.convert share
+    | valid params pub = Just $ convert share
     | otherwise = Nothing
   where
     share = DH.getShared params pri pub
@@ -393,15 +394,15 @@ groupEncodePublicB (GroupPubB_FFDHE3072 p) = enc ffdhe3072 p
 groupEncodePublicB (GroupPubB_FFDHE4096 p) = enc ffdhe4096 p
 groupEncodePublicB (GroupPubB_FFDHE6144 p) = enc ffdhe6144 p
 groupEncodePublicB (GroupPubB_FFDHE8192 p) = enc ffdhe8192 p
-groupEncodePublicB (GroupPubB_MLKEM512 p) = B.convert p
-groupEncodePublicB (GroupPubB_MLKEM768 p) = B.convert p
-groupEncodePublicB (GroupPubB_MLKEM1024 p) = B.convert p
+groupEncodePublicB (GroupPubB_MLKEM512 p) = convert p
+groupEncodePublicB (GroupPubB_MLKEM768 p) = convert p
+groupEncodePublicB (GroupPubB_MLKEM1024 p) = convert p
 groupEncodePublicB (GroupPubB_X25519MLKEM768 (p1, p2)) =
-    B.convert p2 <> encodePoint x25519 p1
+    convert p2 <> encodePoint x25519 p1
 groupEncodePublicB (GroupPubB_P256MLKEM768 (p1, p2)) =
-    encodePoint p256 p1 <> B.convert p2
+    encodePoint p256 p1 <> convert p2
 groupEncodePublicB (GroupPubB_P384MLKEM1024 (p1, p2)) =
-    encodePoint p384 p1 <> B.convert p2
+    encodePoint p384 p1 <> convert p2
 
 enc :: DH.Params -> PublicNumber -> ByteString
 enc params (PublicNumber p) = i2ospOf_ ((DH.params_bits params + 7) `div` 8) p
@@ -427,21 +428,21 @@ groupDecodePublicA MLKEM1024 bs = case ML.decode mlkem1024 bs of
     Nothing -> Left CryptoError_PointFormatInvalid
     Just p -> Right $ GroupPubA_MLKEM1024 p
 groupDecodePublicA X25519MLKEM768 bs =
-    let (bs1, bs2) = B.splitAt 1184 bs
+    let (bs1, bs2) = BA.splitAt 1184 bs
      in case ML.decode mlkem768 bs1 of
             Nothing -> Left CryptoError_PointFormatInvalid
             Just p1 -> case maybeCryptoError $ decodePoint x25519 bs2 of
                 Nothing -> Left CryptoError_PointFormatInvalid
                 Just p2 -> Right $ GroupPubA_X25519MLKEM768 (p2, p1)
 groupDecodePublicA P256MLKEM768 bs =
-    let (bs1, bs2) = B.splitAt 65 bs
+    let (bs1, bs2) = BA.splitAt 65 bs
      in case ML.decode mlkem768 bs2 of
             Nothing -> Left CryptoError_PointFormatInvalid
             Just p1 -> case maybeCryptoError $ decodePoint p256 bs1 of
                 Nothing -> Left CryptoError_PointFormatInvalid
                 Just p2 -> Right $ GroupPubA_P256MLKEM768 (p2, p1)
 groupDecodePublicA P384MLKEM1024 bs =
-    let (bs1, bs2) = B.splitAt 97 bs
+    let (bs1, bs2) = BA.splitAt 97 bs
      in case ML.decode mlkem1024 bs2 of
             Nothing -> Left CryptoError_PointFormatInvalid
             Just p1 -> case maybeCryptoError $ decodePoint p384 bs1 of
@@ -470,21 +471,21 @@ groupDecodePublicB MLKEM1024 bs = case ML.decode mlkem1024 bs of
     Nothing -> Left CryptoError_PointFormatInvalid
     Just p -> Right $ GroupPubB_MLKEM1024 p
 groupDecodePublicB X25519MLKEM768 bs =
-    let (bs1, bs2) = B.splitAt 1088 bs
+    let (bs1, bs2) = BA.splitAt 1088 bs
      in case ML.decode mlkem768 bs1 of
             Nothing -> Left CryptoError_PointFormatInvalid
             Just p1 -> case maybeCryptoError $ decodePoint x25519 bs2 of
                 Nothing -> Left CryptoError_PointFormatInvalid
                 Just p2 -> Right $ GroupPubB_X25519MLKEM768 (p2, p1)
 groupDecodePublicB P256MLKEM768 bs =
-    let (bs1, bs2) = B.splitAt 65 bs
+    let (bs1, bs2) = BA.splitAt 65 bs
      in case ML.decode mlkem768 bs2 of
             Nothing -> Left CryptoError_PointFormatInvalid
             Just p1 -> case maybeCryptoError $ decodePoint p256 bs1 of
                 Nothing -> Left CryptoError_PointFormatInvalid
                 Just p2 -> Right $ GroupPubB_P256MLKEM768 (p2, p1)
 groupDecodePublicB P384MLKEM1024 bs =
-    let (bs1, bs2) = B.splitAt 97 bs
+    let (bs1, bs2) = BA.splitAt 97 bs
      in case ML.decode mlkem1024 bs2 of
             Nothing -> Left CryptoError_PointFormatInvalid
             Just p1 -> case maybeCryptoError $ decodePoint p384 bs1 of
@@ -499,8 +500,8 @@ valid (DH.Params p _ _) (PublicNumber y) = 1 < y && y < p - 1
 
 -- strips leading zeros from the result of getShared, as required
 -- for DH(E) pre-main secret in SSL/TLS before version 1.3.
-stripLeadingZeros :: DH.SharedKey -> B.ScrubbedBytes
-stripLeadingZeros (DH.SharedKey sb) = snd $ B.span (== 0) sb
+stripLeadingZeros :: DH.SharedKey -> ScrubbedBytes
+stripLeadingZeros (DH.SharedKey sb) = snd $ BA.span (== 0) sb
 
 -- Use short exponents as optimization, see RFC 7919 section 5.2.
 generatePriv :: MonadRandom r => Int -> r PrivateNumber

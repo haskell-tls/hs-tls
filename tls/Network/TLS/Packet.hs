@@ -61,8 +61,7 @@ module Network.TLS.Packet (
     getPRF,
 ) where
 
-import Data.ByteArray (ByteArrayAccess)
-import qualified Data.ByteArray as B (convert)
+import Data.ByteArray (ByteArrayAccess, convert)
 import qualified Data.ByteString as B
 import Data.X509 (
     CertificateChain,
@@ -594,7 +593,7 @@ generateExtendedMainSecret
     -> ByteString
     -> ByteString
 generateExtendedMainSecret v c preMainSecret sessionHash =
-    getPRF v c (B.convert preMainSecret) seed 48
+    getPRF v c (convert preMainSecret) seed 48
   where
     seed = B.append "extended master secret" sessionHash
 
