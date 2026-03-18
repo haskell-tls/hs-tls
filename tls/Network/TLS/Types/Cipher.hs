@@ -4,6 +4,7 @@
 module Network.TLS.Types.Cipher where
 
 import Crypto.Cipher.Types (AuthTag)
+import Data.ByteArray (ScrubbedBytes)
 import Data.IORef
 import GHC.Generics
 import System.IO.Unsafe (unsafePerformIO)
@@ -12,6 +13,15 @@ import Text.Printf
 import Network.TLS.Crypto (Hash (..))
 import Network.TLS.Imports
 import Network.TLS.Types.Version
+
+----------------------------------------------------------------
+
+type PlainText = ByteString
+type CipherText = ByteString
+type Secret = ScrubbedBytes
+type Key = ScrubbedBytes
+type Nonce = ByteString -- aka IV
+type AddDat = ByteString
 
 ----------------------------------------------------------------
 

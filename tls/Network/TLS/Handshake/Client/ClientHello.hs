@@ -9,7 +9,7 @@ module Network.TLS.Handshake.Client.ClientHello (
 ) where
 
 import qualified Control.Exception as E
-import Crypto.HPKE
+import Crypto.HPKE hiding (CipherText, PlainText)
 import qualified Data.ByteString as B
 import Network.TLS.ECH.Config
 import System.Random
