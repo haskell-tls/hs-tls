@@ -20,6 +20,7 @@ type PlainText = ByteString
 type CipherText = ByteString
 type Secret = ScrubbedBytes
 type Key = ScrubbedBytes
+type IV = ByteString
 type Nonce = ByteString -- aka IV
 type AddDat = ByteString
 

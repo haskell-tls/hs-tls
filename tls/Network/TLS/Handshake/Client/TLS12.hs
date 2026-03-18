@@ -8,6 +8,7 @@ module Network.TLS.Handshake.Client.TLS12 (
 ) where
 
 import Control.Monad.State.Strict
+import Data.ByteArray (convert)
 import qualified Data.ByteString as B
 
 import Network.TLS.Cipher
@@ -175,12 +176,12 @@ sendClientKeyXchg cparams ctx = do
 --------------------------------
 
 getCKX_RSA
-    :: Context -> IO (ClientKeyXchgAlgorithmData, HandshakeM ByteString)
+    :: Context -> IO (ClientKeyXchgAlgorithmData, HandshakeM Secret)
 getCKX_RSA ctx = do
     clientVersion <- usingHState ctx $ gets hstClientVersion
     (xver, prerand) <- usingState_ ctx $ (,) <$> getVersion <*> genRandom 46
 
-    let preMain = encodePreMainSecret clientVersion prerand
+    let preMain = convert $ encodePreMainSecret clientVersion prerand
         setMainSec = setMainSecretFromPre xver ClientRole preMain
     encryptedPreMain <- do
         -- SSL3 implementation generally forget this length field since it's redundant,
@@ -195,7 +196,7 @@ getCKX_RSA ctx = do
 getCKX_DHE
     :: ClientParams
     -> Context
-    -> IO (ClientKeyXchgAlgorithmData, HandshakeM ByteString)
+    -> IO (ClientKeyXchgAlgorithmData, HandshakeM Secret)
 getCKX_DHE cparams ctx = do
     xver <- usingState_ ctx getVersion
     serverParams <- usingHState ctx getServerDHParams
@@ -242,7 +243,7 @@ getCKX_DHE cparams ctx = do
 --------------------------------
 
 getCKX_ECDHE
-    :: Context -> IO (ClientKeyXchgAlgorithmData, HandshakeM ByteString)
+    :: Context -> IO (ClientKeyXchgAlgorithmData, HandshakeM Secret)
 getCKX_ECDHE ctx = do
     ServerECDHParams grp srvpub <- usingHState ctx getServerECDHParams
     checkSupportedGroup ctx grp

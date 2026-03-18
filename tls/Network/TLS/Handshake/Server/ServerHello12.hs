@@ -5,6 +5,8 @@ module Network.TLS.Handshake.Server.ServerHello12 (
     sendServerHello12,
 ) where
 
+import Data.ByteArray (convert)
+
 import Network.TLS.Cipher
 import Network.TLS.Compression
 import Network.TLS.Context.Internal
@@ -51,7 +53,7 @@ sendServerHello12 sparams ctx (usedCipher, mcred) ch@CH{..} = do
             sh <-
                 makeServerHello sparams ctx usedCipher mcred chExtensions chSession
             sendPacket12 ctx $ Handshake [ServerHello sh] []
-            let mainSecret = sessionSecret sessionData
+            let mainSecret = convert $ sessionSecret sessionData
             usingHState ctx $ setMainSecret TLS12 ServerRole mainSecret
             logKey ctx $ MainSecret mainSecret
             sendCCSandFinished ctx ServerRole

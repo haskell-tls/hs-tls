@@ -6,24 +6,25 @@ module Network.TLS.MAC (
     prf_SHA256,
     prf_TLS,
     prf_MD5SHA1,
+    PRF,
 ) where
 
+import Data.ByteArray (ByteArray, ByteArrayAccess)
 import qualified Data.ByteArray as BA
-import qualified Data.ByteString as B
 
 import Network.TLS.Crypto
 import Network.TLS.Imports
 import Network.TLS.Types
 
-type HMAC = ByteString -> ByteString -> ByteString
+type HMAC = Secret -> ByteString -> Secret
 
 macSSL :: Hash -> HMAC
 macSSL alg secret msg =
     f $
-        B.concat
+        BA.concat
             [ secret
-            , B.replicate padLen 0x5c
-            , f $ B.concat [secret, B.replicate padLen 0x36, msg]
+            , BA.replicate padLen 0x5c
+            , f $ BA.concat [secret, BA.replicate padLen 0x36, BA.convert msg]
             ]
   where
     padLen = case alg of
@@ -32,49 +33,52 @@ macSSL alg secret msg =
         _ -> error ("internal error: macSSL called with " ++ show alg)
     f = hash alg
 
-hmac :: Hash -> HMAC
-hmac alg secret msg = f $ B.append opad (f $ B.append ipad msg)
+hmac :: (ByteArray ba, ByteArrayAccess ba) => Hash -> ba -> ByteString -> ba
+hmac alg secret msg = f $ BA.append opad (f $ BA.append ipad $ BA.convert msg)
   where
-    opad = B.map (xor 0x5c) k'
-    ipad = B.map (xor 0x36) k'
+    opad = (BA.replicate len 0x5c :: BA.ScrubbedBytes) `BA.xor` k'
+    ipad = (BA.replicate len 0x36 :: BA.ScrubbedBytes) `BA.xor` k'
+    len = BA.length k'
 
     f = hash alg
     bl = hashBlockSize alg
 
-    k' = B.append kt pad
+    k' = BA.append kt pad
       where
-        kt = if B.length secret > fromIntegral bl then f secret else secret
-        pad = B.replicate (fromIntegral bl - B.length kt) 0
+        kt = if BA.length secret > fromIntegral bl then f secret else secret
+        pad = BA.replicate (fromIntegral bl - BA.length kt) 0
 
 hmacIter
-    :: HMAC -> ByteString -> ByteString -> ByteString -> Int -> [ByteString]
+    :: HMAC -> Secret -> ByteString -> ByteString -> Int -> [Secret]
 hmacIter f secret seed aprev len =
     let an = f secret aprev
-     in let out = f secret (B.concat [an, seed])
-         in let digestsize = B.length out
+     in let out = f secret (BA.concat [an, BA.convert seed])
+         in let digestsize = BA.length out
              in if digestsize >= len
-                    then [B.take (fromIntegral len) out]
-                    else out : hmacIter f secret seed an (len - digestsize)
+                    then [BA.take (fromIntegral len) out]
+                    else out : hmacIter f secret seed (BA.convert an) (len - digestsize)
 
-prf_SHA1 :: ByteString -> ByteString -> Int -> ByteString
-prf_SHA1 secret seed len = B.concat $ hmacIter (hmac SHA1) secret seed seed len
+type PRF = Secret -> ByteString -> Int -> Secret
 
-prf_MD5 :: ByteString -> ByteString -> Int -> ByteString
-prf_MD5 secret seed len = B.concat $ hmacIter (hmac MD5) secret seed seed len
+prf_SHA1 :: PRF
+prf_SHA1 secret seed len = BA.concat $ hmacIter (hmac SHA1) secret seed seed len
 
-prf_MD5SHA1 :: ByteString -> ByteString -> Int -> ByteString
+prf_MD5 :: PRF
+prf_MD5 secret seed len = BA.concat $ hmacIter (hmac MD5) secret seed seed len
+
+prf_MD5SHA1 :: PRF
 prf_MD5SHA1 secret seed len =
     BA.xor (prf_MD5 s1 seed len) (prf_SHA1 s2 seed len)
   where
-    slen = B.length secret
-    s1 = B.take (slen `div` 2 + slen `mod` 2) secret
-    s2 = B.drop (slen `div` 2) secret
+    slen = BA.length secret
+    s1 = BA.take (slen `div` 2 + slen `mod` 2) secret
+    s2 = BA.drop (slen `div` 2) secret
 
-prf_SHA256 :: ByteString -> ByteString -> Int -> ByteString
-prf_SHA256 secret seed len = B.concat $ hmacIter (hmac SHA256) secret seed seed len
+prf_SHA256 :: PRF
+prf_SHA256 secret seed len = BA.concat $ hmacIter (hmac SHA256) secret seed seed len
 
 -- | For now we ignore the version, but perhaps some day the PRF will depend
 -- not only on the cipher PRF algorithm, but also on the protocol version.
-prf_TLS :: Version -> Hash -> ByteString -> ByteString -> Int -> ByteString
+prf_TLS :: Version -> Hash -> PRF
 prf_TLS _ halg secret seed len =
-    B.concat $ hmacIter (hmac halg) secret seed seed len
+    BA.concat $ hmacIter (hmac halg) secret seed seed len

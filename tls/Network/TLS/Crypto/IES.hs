@@ -109,7 +109,7 @@ data GroupPublicB
     deriving (Eq, Show)
 {- FOURMOLU_ENABLE -}
 
-type GroupKey = ByteString
+type GroupKey = ScrubbedBytes
 
 p256 :: Proxy Curve_P256R1
 p256 = Proxy

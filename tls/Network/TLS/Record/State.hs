@@ -22,6 +22,7 @@ module Network.TLS.Record.State (
 ) where
 
 import Control.Monad.State.Strict
+import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 
 import Network.TLS.Cipher
@@ -36,10 +37,10 @@ import Network.TLS.Wire
 
 data CryptState = CryptState
     { cstKey :: BulkState
-    , cstIV :: ByteString
+    , cstIV :: IV
     , -- In TLS 1.2 or earlier, this holds mac secret.
       -- In TLS 1.3, this holds application traffic secret N.
-      cstMacSecret :: ByteString
+      cstMacSecret :: Secret
     }
     deriving (Show)
 
@@ -130,7 +131,7 @@ newRecordState =
         { stCipher = Nothing
         , stCompression = nullCompression
         , stCryptLevel = CryptInitial
-        , stCryptState = CryptState BulkStateUninitialized B.empty B.empty
+        , stCryptState = CryptState BulkStateUninitialized B.empty BA.empty
         , stMacState = MacState 0
         }
 
@@ -153,7 +154,7 @@ computeDigest
     :: Version -> RecordState -> Header -> ByteString -> (ByteString, RecordState)
 computeDigest _ver tstate hdr content = (digest, incrRecordState tstate)
   where
-    digest = macF (cstMacSecret cst) msg
+    digest = BA.convert $ macF (cstMacSecret cst) msg
     cst = stCryptState tstate
     cipher = fromJust $ stCipher tstate
     hashA = cipherHash cipher

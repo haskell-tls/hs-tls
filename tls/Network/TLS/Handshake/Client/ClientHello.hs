@@ -10,6 +10,8 @@ module Network.TLS.Handshake.Client.ClientHello (
 
 import qualified Control.Exception as E
 import Crypto.HPKE hiding (CipherText, PlainText)
+import Data.ByteArray (convert)
+import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 import Network.TLS.ECH.Config
 import System.Random
@@ -325,7 +327,7 @@ sendClientHello' cparams ctx Groups{..} crand (pskInfo, rtt0info, rtt0) = do
                     pskIdentities = map (\x -> PskIdentity x obfAge) identities
                     -- [zero] is a place holds.
                     -- adjustPreSharedKeyExt will replace them.
-                    binders = replicate (length pskIdentities) zero
+                    binders = replicate (length pskIdentities) $ convert zero
                     offeredPsks = PreSharedKeyClientHello pskIdentities binders
                 return $ Just $ toExtensionRaw offeredPsks
 
@@ -335,7 +337,7 @@ sendClientHello' cparams ctx Groups{..} crand (pskInfo, rtt0info, rtt0) = do
             Nothing -> return Nothing
             Just (identities, _, choice, _) -> do
                 let zero = cZero choice
-                zeroR <- getStdRandom $ uniformByteString $ B.length zero
+                zeroR <- getStdRandom $ uniformByteString $ BA.length zero
                 obfAgeR <- getStdRandom genWord32
                 let genPskId x = do
                         xR <- getStdRandom $ uniformByteString $ B.length x

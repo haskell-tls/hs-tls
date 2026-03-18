@@ -81,6 +81,7 @@ module Network.TLS.Handshake.State (
 ) where
 
 import Control.Monad.State.Strict
+import Data.ByteArray (convert)
 import Data.X509 (CertificateChain)
 
 import Network.TLS.Cipher
@@ -119,7 +120,7 @@ data HandshakeState = HandshakeState
     , hstClientRandom :: ClientRandom
     -- ^ For ECH, inner client random.
     , hstServerRandom :: Maybe ServerRandom
-    , hstMainSecret :: Maybe ByteString
+    , hstMainSecret :: Maybe Secret
     , hstKeyState :: HandshakeKeyState
     , hstServerDHParams :: Maybe ServerDHParams
     , hstDHPrivate :: Maybe DHPrivate
@@ -466,9 +467,9 @@ setMainSecretFromPre
     -- ^ chosen transmission version
     -> Role
     -- ^ the role (Client or Server) of the generating side
-    -> ByteString
+    -> Secret
     -- ^ the pre-main secret
-    -> HandshakeM ByteString
+    -> HandshakeM Secret
 setMainSecretFromPre ver role preMainSecret = do
     ems <- getExtendedMainSecret
     secret <- if ems then get >>= genExtendedSecret else genSecret <$> get
@@ -497,7 +498,7 @@ getSessionHash = gets $ \hst ->
 
 -- | Set main secret and as a side effect generate the key block
 -- with all the right parameters, and setup the pending tx/rx state.
-setMainSecret :: Version -> Role -> ByteString -> HandshakeM ()
+setMainSecret :: Version -> Role -> Secret -> HandshakeM ()
 setMainSecret ver role mainSecret = modify' $ \hst ->
     let (pendingTx, pendingRx) = computeKeyBlock hst mainSecret ver role
      in hst
@@ -507,7 +508,7 @@ setMainSecret ver role mainSecret = modify' $ \hst ->
             }
 
 computeKeyBlock
-    :: HandshakeState -> ByteString -> Version -> Role -> (RecordState, RecordState)
+    :: HandshakeState -> Secret -> Version -> Role -> (RecordState, RecordState)
 computeKeyBlock hst mainSecret ver cc = (pendingTx, pendingRx)
   where
     cipher = fromJust $ hstPendingCipher hst
@@ -536,13 +537,13 @@ computeKeyBlock hst mainSecret ver cc = (pendingTx, pendingRx)
     cstClient =
         CryptState
             { cstKey = bulkInit bulk (BulkEncrypt `orOnServer` BulkDecrypt) cWriteKey
-            , cstIV = cWriteIV
+            , cstIV = convert $ cWriteIV
             , cstMacSecret = cMACSecret
             }
     cstServer =
         CryptState
             { cstKey = bulkInit bulk (BulkDecrypt `orOnServer` BulkEncrypt) sWriteKey
-            , cstIV = sWriteIV
+            , cstIV = convert $ sWriteIV
             , cstMacSecret = sMACSecret
             }
     msClient = MacState{msSequence = 0}

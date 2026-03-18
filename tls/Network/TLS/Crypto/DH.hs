@@ -21,16 +21,15 @@ module Network.TLS.Crypto.DH (
 
 import Crypto.Number.Basic (numBits)
 import qualified Crypto.PubKey.DH as DH
-import Data.ByteArray (convert)
+import Data.ByteArray (ScrubbedBytes)
 import qualified Data.ByteArray as BA
 
-import Network.TLS.Imports
 import Network.TLS.RNG
 
 type DHPublic = DH.PublicNumber
 type DHPrivate = DH.PrivateNumber
 type DHParams = DH.Params
-type DHKey = ByteString
+type DHKey = ScrubbedBytes
 
 dhPublic :: Integer -> DHPublic
 dhPublic = DH.PublicNumber
@@ -48,12 +47,12 @@ dhGenerateKeyPair params = do
     return (priv, pub)
 
 dhGetShared :: DHParams -> DHPrivate -> DHPublic -> DHKey
-dhGetShared params priv pub =
-    convert $ stripLeadingZeros (DH.getShared params priv pub)
+dhGetShared params priv pub = stripLeadingZeros sec
   where
+    DH.SharedKey sec = DH.getShared params priv pub
     -- strips leading zeros from the result of DH.getShared, as required
     -- for DH(E) pre-main secret in SSL/TLS before version 1.3.
-    stripLeadingZeros (DH.SharedKey sb) = DH.SharedKey (snd $ BA.span (== 0) sb)
+    stripLeadingZeros sb = snd $ BA.span (== 0) sb
 
 -- Check that group element in not in the 2-element subgroup { 1, p - 1 }.
 -- See RFC 7919 section 3 and NIST SP 56A rev 2 section 5.6.2.3.1.

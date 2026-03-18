@@ -9,7 +9,7 @@ module Network.TLS.Handshake.Client.TLS13 (
 
 import Control.Exception (bracket)
 import Control.Monad.State.Strict
-import qualified Data.ByteString as B
+import qualified Data.ByteArray as BA
 import Data.IORef
 
 import Network.TLS.Cipher
@@ -119,7 +119,7 @@ prepareSecondFlight13' ctx groupSent choice = do
                     Nothing ->
                         return (initEarlySecret choice Nothing, False)
                     Just (PreSharedKeyServerHello 0) -> do
-                        unless (B.length sec == hashSize) $
+                        unless (BA.length sec == hashSize) $
                             throwCore $
                                 Error_Protocol
                                     "selected cipher is incompatible with selected PSK"

@@ -555,8 +555,6 @@ encodePreMainSecret version bytes = runPut (putBinaryVersion version >> putBytes
 ------------------------------------------------------------
 -- generate things for packet content
 
-type PRF = ByteString -> ByteString -> Int -> ByteString
-
 -- | The TLS12 PRF is cipher specific, and some TLS12 algorithms use SHA384
 -- instead of the default SHA256.
 getPRF :: Version -> Cipher -> PRF
@@ -567,10 +565,10 @@ getPRF ver ciph
 
 generateMainSecret_TLS
     :: PRF
-    -> ByteString
+    -> Secret
     -> ClientRandom
     -> ServerRandom
-    -> ByteString
+    -> Secret
 generateMainSecret_TLS prf preMainSecret (ClientRandom c) (ServerRandom s) =
     prf preMainSecret seed 48
   where
@@ -579,10 +577,10 @@ generateMainSecret_TLS prf preMainSecret (ClientRandom c) (ServerRandom s) =
 generateMainSecret
     :: Version
     -> Cipher
-    -> ByteString
+    -> Secret
     -> ClientRandom
     -> ServerRandom
-    -> ByteString
+    -> Secret
 generateMainSecret v c = generateMainSecret_TLS $ getPRF v c
 
 generateExtendedMainSecret
@@ -591,14 +589,14 @@ generateExtendedMainSecret
     -> Cipher
     -> preMain
     -> ByteString
-    -> ByteString
+    -> Secret
 generateExtendedMainSecret v c preMainSecret sessionHash =
     getPRF v c (convert preMainSecret) seed 48
   where
     seed = B.append "extended master secret" sessionHash
 
 generateKeyBlock_TLS
-    :: PRF -> ClientRandom -> ServerRandom -> ByteString -> Int -> ByteString
+    :: PRF -> ClientRandom -> ServerRandom -> Secret -> Int -> Secret
 generateKeyBlock_TLS prf (ClientRandom c) (ServerRandom s) mainSecret kbsize =
     prf mainSecret seed kbsize
   where
@@ -609,9 +607,9 @@ generateKeyBlock
     -> Cipher
     -> ClientRandom
     -> ServerRandom
-    -> ByteString
+    -> Secret
     -> Int
-    -> ByteString
+    -> Secret
 generateKeyBlock v c = generateKeyBlock_TLS $ getPRF v c
 
 ------------------------------------------------------------

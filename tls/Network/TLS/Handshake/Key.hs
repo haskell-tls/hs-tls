@@ -20,6 +20,7 @@ module Network.TLS.Handshake.Key (
 ) where
 
 import Control.Monad.State.Strict
+import Data.ByteArray (convert)
 import qualified Data.ByteString as B
 
 import Network.TLS.Context.Internal
@@ -35,11 +36,12 @@ import Network.TLS.X509
 {- if the RSA encryption fails we just return an empty bytestring, and let the protocol
  - fail by itself; however it would be probably better to just report it since it's an internal problem.
  -}
-encryptRSA :: Context -> ByteString -> IO ByteString
+encryptRSA :: Context -> Secret -> IO ByteString
 encryptRSA ctx content = do
     publicKey <- usingHState ctx getRemotePublicKey
     usingState_ ctx $ do
-        v <- withRNG $ kxEncrypt publicKey content
+        -- fixme: convert :: Secret -> ByteString
+        v <- withRNG $ kxEncrypt publicKey $ convert content
         case v of
             Left err -> error ("rsa encrypt failed: " ++ show err)
             Right econtent -> return econtent
@@ -53,12 +55,13 @@ signPrivate ctx _ params content = do
             Left err -> error ("sign failed: " ++ show err)
             Right econtent -> return econtent
 
-decryptRSA :: Context -> ByteString -> IO (Either KxError ByteString)
+decryptRSA :: Context -> ByteString -> IO (Either KxError Secret)
 decryptRSA ctx econtent = do
     (_, privateKey) <- usingHState ctx getLocalPublicPrivateKeys
-    usingState_ ctx $ do
+    ex <- usingState_ ctx $ do
         let cipher = B.drop 2 econtent
         withRNG $ kxDecrypt privateKey cipher
+    return (convert <$> ex)
 
 verifyPublic
     :: Context -> SignatureParams -> ByteString -> ByteString -> IO Bool
@@ -144,7 +147,7 @@ satisfiesEcPredicate _ _ = True
 ----------------------------------------------------------------
 
 class LogLabel a where
-    labelAndKey :: a -> (String, ByteString)
+    labelAndKey :: a -> (String, Secret)
 
 instance LogLabel MainSecret where
     labelAndKey (MainSecret key) = ("CLIENT_RANDOM", key)
@@ -175,6 +178,7 @@ logKey ctx logkey = do
             let crm = fromMaybe (hstClientRandom hst) (hstTLS13OuterClientRandom hst)
                 cr = unClientRandom crm
                 (label, key) = labelAndKey logkey
-            debugKeyLogger (ctxDebug ctx) $ label ++ " " ++ dump cr ++ " " ++ dump key
+            debugKeyLogger (ctxDebug ctx) $
+                label ++ " " ++ dump cr ++ " " ++ dump (convert key)
   where
     dump = init . drop 1 . showBytesHex

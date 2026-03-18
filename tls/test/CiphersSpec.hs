@@ -1,5 +1,6 @@
 module CiphersSpec where
 
+import qualified Data.ByteArray as BA
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import Network.TLS.Cipher
@@ -52,8 +53,8 @@ aead e d iv t additional = do
     decrypted `shouldBe` t
     at `shouldBe` at2
 
-arbitraryKey :: Bulk -> Gen B.ByteString
-arbitraryKey bulk = B.pack `fmap` vector (bulkKeySize bulk)
+arbitraryKey :: Bulk -> Gen BA.ScrubbedBytes
+arbitraryKey bulk = BA.pack `fmap` vector (bulkKeySize bulk)
 
 arbitraryIV :: Bulk -> Gen B.ByteString
 arbitraryIV bulk = B.pack `fmap` vector (bulkIVSize bulk + bulkExplicitIV bulk)
@@ -61,7 +62,8 @@ arbitraryIV bulk = B.pack `fmap` vector (bulkIVSize bulk + bulkExplicitIV bulk)
 arbitraryText :: Bulk -> Gen B.ByteString
 arbitraryText bulk = B.pack `fmap` vector (bulkBlockSize bulk)
 
-data BulkTest = BulkTest Bulk B.ByteString B.ByteString B.ByteString B.ByteString
+data BulkTest
+    = BulkTest Bulk BA.ScrubbedBytes B.ByteString B.ByteString B.ByteString
     deriving (Show, Eq)
 
 instance Arbitrary BulkTest where

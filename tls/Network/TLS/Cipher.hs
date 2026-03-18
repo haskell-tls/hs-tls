@@ -17,6 +17,7 @@ module Network.TLS.Cipher (
     cipherKeyBlockSize,
     BulkKey,
     BulkIV,
+    BulkNonce,
     BulkAdditionalData,
     cipherAllowedForVersion,
     hasMAC,

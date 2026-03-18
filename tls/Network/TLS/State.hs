@@ -79,7 +79,7 @@ import Network.TLS.Extension
 import Network.TLS.Imports
 import Network.TLS.RNG
 import Network.TLS.Struct
-import Network.TLS.Types (HostName, Role (..), Ticket, WireBytes)
+import Network.TLS.Types (HostName, Role (..), Secret, Ticket, WireBytes)
 import Network.TLS.Wire (GetContinuation)
 
 data TLSState = TLSState
@@ -113,7 +113,7 @@ data TLSState = TLSState
     , stTLS13PreSharedKey :: Maybe PreSharedKey
     , stTLS13HRR :: Bool
     , stTLS13Cookie :: Maybe Cookie
-    , stTLS13ExporterSecret :: Maybe ByteString
+    , stTLS13ExporterSecret :: Maybe Secret
     , stTLS13ClientSupportsPHA :: Bool -- Post-Handshake Authentication
     }
 
@@ -337,10 +337,10 @@ setTLS12SessionTicket t = modify' (\st -> st{stTLS12SessionTicket = Just t})
 getTLS12SessionTicket :: TLSSt (Maybe Ticket)
 getTLS12SessionTicket = gets stTLS12SessionTicket
 
-setTLS13ExporterSecret :: ByteString -> TLSSt ()
+setTLS13ExporterSecret :: Secret -> TLSSt ()
 setTLS13ExporterSecret key = modify' (\st -> st{stTLS13ExporterSecret = Just key})
 
-getTLS13ExporterSecret :: TLSSt (Maybe ByteString)
+getTLS13ExporterSecret :: TLSSt (Maybe Secret)
 getTLS13ExporterSecret = gets stTLS13ExporterSecret
 
 setTLS13KeyShare :: Maybe KeyShare -> TLSSt ()
