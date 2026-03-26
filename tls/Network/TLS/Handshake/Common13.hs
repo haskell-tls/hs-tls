@@ -37,7 +37,8 @@ module Network.TLS.Handshake.Common13 (
     calculateApplicationSecret,
     calculateResumptionSecret,
     derivePSK,
-    checkKeyShareKeyLength,
+    checkClientKeyShareKeyLength,
+    checkServerKeyShareKeyLength,
     setRTT,
     computeConfirm,
     updateTranscriptHash13,
@@ -47,7 +48,6 @@ module Network.TLS.Handshake.Common13 (
 
 import Control.Concurrent.MVar
 import Control.Monad.State.Strict
-import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 import Data.UnixTime
 import Foreign.C.Types (CTime (..))
@@ -107,38 +107,41 @@ makeVerifyData usedHash baseKey (TranscriptHash th) =
 
 ----------------------------------------------------------------
 
+makeClientKeyShare
+    :: Context -> Group -> IO ((Group, IES.GroupPrivate), KeyShareEntry)
+makeClientKeyShare ctx grp = do
+    (cpri, cpub) <- generateGroup ctx grp
+    let wcpub = IES.groupEncodePublicA cpub
+        clientKeyShare = KeyShareEntry grp wcpub
+    return ((grp, cpri), clientKeyShare)
+
 makeServerKeyShare :: Context -> KeyShareEntry -> IO (ByteString, KeyShareEntry)
 makeServerKeyShare ctx (KeyShareEntry grp wcpub) = case ecpub of
     Left e -> throwCore $ Error_Protocol (show e) IllegalParameter
     Right cpub -> do
-        ecdhePair <- generateECDHEShared ctx cpub
+        ecdhePair <- encapsulateGroup ctx cpub
         case ecdhePair of
             Nothing -> throwCore $ Error_Protocol msgInvalidPublic IllegalParameter
             Just (spub, share) ->
-                let wspub = IES.encodeGroupPublic spub
+                let wspub = IES.groupEncodePublicB spub
                     serverKeyShare = KeyShareEntry grp wspub
-                 in return (BA.convert share, serverKeyShare)
+                 in return (share, serverKeyShare)
   where
-    ecpub = IES.decodeGroupPublic grp wcpub
+    ecpub = IES.groupDecodePublicA grp wcpub
     msgInvalidPublic = "invalid client " ++ show grp ++ " public key"
 
-makeClientKeyShare :: Context -> Group -> IO (IES.GroupPrivate, KeyShareEntry)
-makeClientKeyShare ctx grp = do
-    (cpri, cpub) <- generateECDHE ctx grp
-    let wcpub = IES.encodeGroupPublic cpub
-        clientKeyShare = KeyShareEntry grp wcpub
-    return (cpri, clientKeyShare)
-
-fromServerKeyShare :: KeyShareEntry -> IES.GroupPrivate -> IO ByteString
-fromServerKeyShare (KeyShareEntry grp wspub) cpri = case espub of
+fromServerKeyShare
+    :: KeyShareEntry -> [(Group, IES.GroupPrivate)] -> IO ByteString
+fromServerKeyShare (KeyShareEntry grp wspub) grpCpris = case espub of
     Left e -> throwCore $ Error_Protocol (show e) IllegalParameter
-    Right spub -> case IES.groupGetShared spub cpri of
-        Just shared -> return $ BA.convert shared
-        Nothing ->
-            throwCore $
-                Error_Protocol "cannot generate a shared secret on (EC)DH" IllegalParameter
+    Right spub -> case lookup grp grpCpris of
+        Nothing -> throwCore err
+        Just cpri -> case IES.groupDecapsulate spub cpri of
+            Just shared -> return shared
+            Nothing -> throwCore err
   where
-    espub = IES.decodeGroupPublic grp wspub
+    err = Error_Protocol "cannot generate a shared secret on (EC)DH" IllegalParameter
+    espub = IES.groupDecodePublicB grp wspub
 
 ----------------------------------------------------------------
 
@@ -563,24 +566,59 @@ derivePSK choice (BaseSecret sec) (TicketNonce nonce) =
 
 ----------------------------------------------------------------
 
-checkKeyShareKeyLength :: KeyShareEntry -> Bool
-checkKeyShareKeyLength ks = keyShareKeyLength grp == B.length key
+checkClientKeyShareKeyLength :: KeyShareEntry -> Bool
+checkClientKeyShareKeyLength ks = clientKeyShareKeyLength grp == B.length key
   where
     grp = keyShareEntryGroup ks
     key = keyShareEntryKeyExchange ks
 
-keyShareKeyLength :: Group -> Int
-keyShareKeyLength P256 = 65 -- 32 * 2 + 1
-keyShareKeyLength P384 = 97 -- 48 * 2 + 1
-keyShareKeyLength P521 = 133 -- 66 * 2 + 1
-keyShareKeyLength X25519 = 32
-keyShareKeyLength X448 = 56
-keyShareKeyLength FFDHE2048 = 256
-keyShareKeyLength FFDHE3072 = 384
-keyShareKeyLength FFDHE4096 = 512
-keyShareKeyLength FFDHE6144 = 768
-keyShareKeyLength FFDHE8192 = 1024
-keyShareKeyLength _ = error "keyShareKeyLength"
+{- FOURMOLU_DISABLE -}
+clientKeyShareKeyLength :: Group -> Int
+clientKeyShareKeyLength P256   = 65  -- 32 * 2 + 1
+clientKeyShareKeyLength P384   = 97  -- 48 * 2 + 1
+clientKeyShareKeyLength P521   = 133 -- 66 * 2 + 1
+clientKeyShareKeyLength X25519 = 32
+clientKeyShareKeyLength X448   = 56
+clientKeyShareKeyLength FFDHE2048 = 256
+clientKeyShareKeyLength FFDHE3072 = 384
+clientKeyShareKeyLength FFDHE4096 = 512
+clientKeyShareKeyLength FFDHE6144 = 768
+clientKeyShareKeyLength FFDHE8192 = 1024
+clientKeyShareKeyLength MLKEM512  = 800
+clientKeyShareKeyLength MLKEM768  = 1184
+clientKeyShareKeyLength MLKEM1024 = 1568
+clientKeyShareKeyLength X25519MLKEM768 = 1216
+clientKeyShareKeyLength P256MLKEM768   = 1249
+clientKeyShareKeyLength P384MLKEM1024  = 1665
+clientKeyShareKeyLength _ = error "clientKeyShareKeyLength"
+{- FOURMOLU_ENABLE -}
+
+checkServerKeyShareKeyLength :: KeyShareEntry -> Bool
+checkServerKeyShareKeyLength ks = serverKeyShareKeyLength grp == B.length key
+  where
+    grp = keyShareEntryGroup ks
+    key = keyShareEntryKeyExchange ks
+
+{- FOURMOLU_DISABLE -}
+serverKeyShareKeyLength :: Group -> Int
+serverKeyShareKeyLength P256   = 65  -- 32 * 2 + 1
+serverKeyShareKeyLength P384   = 97  -- 48 * 2 + 1
+serverKeyShareKeyLength P521   = 133 -- 66 * 2 + 1
+serverKeyShareKeyLength X25519 = 32
+serverKeyShareKeyLength X448   = 56
+serverKeyShareKeyLength FFDHE2048 = 256
+serverKeyShareKeyLength FFDHE3072 = 384
+serverKeyShareKeyLength FFDHE4096 = 512
+serverKeyShareKeyLength FFDHE6144 = 768
+serverKeyShareKeyLength FFDHE8192 = 1024
+serverKeyShareKeyLength MLKEM512  = 768
+serverKeyShareKeyLength MLKEM768  = 1088
+serverKeyShareKeyLength MLKEM1024 = 1568
+serverKeyShareKeyLength X25519MLKEM768 = 1120
+serverKeyShareKeyLength P256MLKEM768   = 1153
+serverKeyShareKeyLength P384MLKEM1024  = 1665
+serverKeyShareKeyLength _ = error "clientKeyShareKeyLength"
+{- FOURMOLU_ENABLE -}
 
 setRTT :: Context -> Millisecond -> IO ()
 setRTT ctx chSentTime = do

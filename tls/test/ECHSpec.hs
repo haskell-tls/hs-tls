@@ -56,6 +56,7 @@ handshake13_full (CSP13 (cli, srv)) = do
             defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
                 }
         params =
             setParams
@@ -75,6 +76,7 @@ handshake13_hrr (CSP13 (cli, srv)) = do
             defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
                 }
         params =
             setParams
@@ -94,6 +96,7 @@ handshake13_psk (CSP13 (cli, srv)) = do
             defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
                 }
         params0 =
             setParams
@@ -126,6 +129,7 @@ handshake13_psk_ticket (CSP13 (cli, srv)) = do
             defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
                 }
         params0 =
             setParams
@@ -162,6 +166,7 @@ handshake13_psk_fallback (CSP13 (cli, srv)) = do
             defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
                 }
         params0 =
             setParams
@@ -187,6 +192,7 @@ handshake13_psk_fallback (CSP13 (cli, srv)) = do
             defaultSupported
                 { supportedCiphers = [cipher13_AES_128_CCM_SHA256]
                 , supportedGroups = [P256]
+                , supportedGroupsTLS13 = [[P256]]
                 }
 
     runTLSSimple13ECH (cli2, srv2') HelloRetryRequest
@@ -202,6 +208,7 @@ handshake13_0rtt (CSP13 (cli, srv)) = do
             defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
                 }
         cliHooks =
             defaultClientHooks
@@ -256,6 +263,7 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
             defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [group0]
+                , supportedGroupsTLS13 = [[group0]]
                 }
         params =
             setParams
@@ -286,6 +294,7 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
                     defaultSupported
                         { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                         , supportedGroups = [group1]
+                        , supportedGroupsTLS13 = [[group1]]
                         }
                 params1 =
                     ( pc{clientUseEarlyData = True}
@@ -319,7 +328,11 @@ handshake13_ec (CSP13 (cli, srv)) = do
     EC cgrps <- generate arbitrary
     EC sgrps <- generate arbitrary
     let cliSupported = (clientSupported cli){supportedGroups = cgrps}
-        svrSupported = (serverSupported srv){supportedGroups = sgrps}
+        svrSupported =
+            (serverSupported srv)
+                { supportedGroups = sgrps
+                , supportedGroupsTLS13 = [sgrps]
+                }
         params =
             setParams
                 ( cli{clientSupported = cliSupported}
@@ -332,7 +345,12 @@ handshake13_ffdhe (CSP13 (cli, srv)) = do
     FFDHE cgrps <- generate arbitrary
     FFDHE sgrps <- generate arbitrary
     let cliSupported = (clientSupported cli){supportedGroups = cgrps}
-        svrSupported = (serverSupported srv){supportedGroups = sgrps}
+        svrSupported =
+            (serverSupported srv)
+                { supportedGroups = sgrps
+                , supportedGroupsTLS13 = [sgrps]
+                }
+
         params =
             setParams
                 ( cli{clientSupported = cliSupported}
@@ -351,6 +369,7 @@ handshake13_greasing (CSP13 (cli, srv)) = do
             defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
                 }
         params =
             ( cli
@@ -379,6 +398,7 @@ handshake13_greasing_hrr (CSP13 (cli, srv)) = do
             defaultSupported
                 { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
                 , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
                 }
         params =
             ( cli

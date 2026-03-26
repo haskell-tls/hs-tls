@@ -3,6 +3,7 @@
 
 module Network.TLS.Handshake.Server.ClientHello13 (
     processClientHello13,
+    SelectKeyShareResult (..),
 ) where
 
 import qualified Data.ByteString as B
@@ -22,13 +23,16 @@ import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Types
 
+limitSupportedGroups :: Int
+limitSupportedGroups = 64
+
 -- TLS 1.3 or later
 processClientHello13
     :: ServerParams
     -> Context
     -> ClientHello
     -> IO
-        ( Maybe KeyShareEntry
+        ( SelectKeyShareResult
         , (Cipher, Hash, Bool) -- rtt0
         , (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool) -- authenticated, is0RTTvalid
         )
@@ -72,33 +76,50 @@ processClientHello13 sparams ctx ch@CH{..} = do
         extract _ = require
     keyShares <-
         lookupAndDecodeAndDo EID_KeyShare MsgTClientHello chExtensions require extract
-    mshare <- findKeyShare keyShares serverGroups
+    let clientGroups =
+            take limitSupportedGroups $
+                lookupAndDecode
+                    EID_SupportedGroups
+                    MsgTClientHello
+                    chExtensions
+                    []
+                    (\(SupportedGroups gs) -> gs)
+    (mgroup, doHRR) <-
+        onSelectKeyShare
+            (serverHooks sparams)
+            serverGroups
+            clientGroups
+            $ map keyShareEntryGroup keyShares
+    keyshareResult <- case mgroup of
+        Nothing -> return SelectKeyShareNotFound
+        Just g
+            | doHRR -> return $ SelectKeyShareHRR g
+            | otherwise -> case filter (\e -> keyShareEntryGroup e == g) keyShares of
+                [] -> return SelectKeyShareNotFound
+                [x] -> return $ SelectKeyShareFound x
+                _ -> throwCore $ Error_Protocol "duplicated key_share" IllegalParameter
+
     let triple = (usedCipher, usedHash, rtt0)
     pskEarlySecret <- pskAndEarlySecret sparams ctx triple ch
     (ich, b) <- fromJust <$> usingHState ctx getClientHello
     updateTranscriptHash12 ctx (ClientHello ich, b)
-    return (mshare, triple, pskEarlySecret)
+    return (keyshareResult, triple, pskEarlySecret)
   where
     ciphersFilteredVersion = intersectCiphers chCiphers serverCiphers
     serverCiphers =
         filter
             (cipherAllowedForVersion TLS13)
             (supportedCiphers $ serverSupported sparams)
-    serverGroups = supportedGroups (ctxSupported ctx)
+    serverGroups = supportedGroupsTLS13 $ serverSupported sparams
 
-findKeyShare :: [KeyShareEntry] -> [Group] -> IO (Maybe KeyShareEntry)
-findKeyShare ks ggs = go ggs
-  where
-    go [] = return Nothing
-    go (g : gs) = case filter (grpEq g) ks of
-        [] -> go gs
-        [k] -> do
-            unless (checkKeyShareKeyLength k) $
-                throwCore $
-                    Error_Protocol "broken key_share" IllegalParameter
-            return $ Just k
-        _ -> throwCore $ Error_Protocol "duplicated key_share" IllegalParameter
-    grpEq g ent = g == keyShareEntryGroup ent
+data SelectKeyShareResult
+    = -- | Negotiation failure
+      SelectKeyShareNotFound
+    | -- | Send a hello retry request with this group
+      SelectKeyShareHRR Group
+    | -- | Use this key share
+      SelectKeyShareFound KeyShareEntry
+    deriving (Eq, Show)
 
 pskAndEarlySecret
     :: ServerParams

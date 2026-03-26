@@ -88,6 +88,7 @@ module Network.TLS (
     onSuggestALPN,
     onCustomFFDHEGroup,
     onServerFinished,
+    onSelectKeyShareGroups,
 
     -- ** Server hooks
     ServerHooks,
@@ -100,6 +101,7 @@ module Network.TLS (
     onNewHandshake,
     onALPNClientSuggest,
     onEncryptedExtensionsCreating,
+    onSelectKeyShare,
     Measurement,
     nbHandshakes,
     bytesReceived,
@@ -119,6 +121,7 @@ module Network.TLS (
     supportedFallbackScsv,
     supportedEmptyPacket,
     supportedGroups,
+    supportedGroupsTLS13,
 
     -- ** Debug parameters
     DebugParams,
@@ -322,10 +325,10 @@ import Network.TLS.Credentials
 import Network.TLS.Crypto (
     DHParams,
     DHPublic,
-    Group (..),
     KxError (..),
     supportedNamedGroups,
  )
+import Network.TLS.Extension
 import Network.TLS.Handshake.State (HandshakeMode13 (..))
 import Network.TLS.Hooks
 import Network.TLS.Imports

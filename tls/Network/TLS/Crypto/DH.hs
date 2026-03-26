@@ -23,12 +23,13 @@ import Crypto.Number.Basic (numBits)
 import qualified Crypto.PubKey.DH as DH
 import qualified Data.ByteArray as B
 
+import Network.TLS.Imports
 import Network.TLS.RNG
 
 type DHPublic = DH.PublicNumber
 type DHPrivate = DH.PrivateNumber
 type DHParams = DH.Params
-type DHKey = DH.SharedKey
+type DHKey = ByteString
 
 dhPublic :: Integer -> DHPublic
 dhPublic = DH.PublicNumber
@@ -47,7 +48,7 @@ dhGenerateKeyPair params = do
 
 dhGetShared :: DHParams -> DHPrivate -> DHPublic -> DHKey
 dhGetShared params priv pub =
-    stripLeadingZeros (DH.getShared params priv pub)
+    B.convert $ stripLeadingZeros (DH.getShared params priv pub)
   where
     -- strips leading zeros from the result of DH.getShared, as required
     -- for DH(E) pre-main secret in SSL/TLS before version 1.3.

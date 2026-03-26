@@ -202,10 +202,10 @@ sendServerFirstFlight ServerParams{..} ctx usedCipher mcred chExts = do
 
     setup_ECDHE grp = do
         usingHState ctx $ setSupportedGroup grp
-        (srvpri, srvpub) <- generateECDHE ctx grp
+        (srvpri, srvpub) <- generateGroup ctx grp
         let serverParams = ServerECDHParams grp srvpub
         usingHState ctx $ setServerECDHParams serverParams
-        usingHState ctx $ setGroupPrivate srvpri
+        usingHState ctx $ setGroupPrivate [(grp, srvpri)]
         return serverParams
 
     generateSKX_ECDHE kxsAlg = do

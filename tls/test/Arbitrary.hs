@@ -380,8 +380,9 @@ arbitraryPairParamsWithVersionsAndCiphers (clientVersions, serverVersions) (clie
                         { supportedCiphers = serverCiphers
                         , supportedVersions = serverVersions
                         , supportedSecureRenegotiation = secNeg
-                        , supportedGroups = serverGroups
                         , supportedHashSignatures = serverHashSignatures
+                        , supportedGroups = serverGroups
+                        , supportedGroupsTLS13 = [serverGroups]
                         }
                 , serverShared = defaultShared{sharedCredentials = Credentials creds}
                 }

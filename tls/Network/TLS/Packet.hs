@@ -518,7 +518,7 @@ getServerECDHParams = do
             -- ECParameters ECCurveType: curve name type
             grp <- Group <$> getWord16 -- ECParameters NamedCurve
             mxy <- getOpaque8 -- ECPoint
-            case decodeGroupPublic grp mxy of
+            case groupDecodePublicA grp mxy of
                 Left e -> fail $ "getServerECDHParams: " ++ show e
                 Right grppub -> return $ ServerECDHParams grp grppub
         _ -> fail "getServerECDHParams: unknown type for ECDH Params"
@@ -528,7 +528,7 @@ putServerECDHParams :: ServerECDHParams -> Put
 putServerECDHParams (ServerECDHParams (Group grp) grppub) = do
     putWord8 3 -- ECParameters ECCurveType
     putWord16 grp -- ECParameters NamedCurve
-    putOpaque8 $ encodeGroupPublic grppub -- ECPoint
+    putOpaque8 $ groupEncodePublicA grppub -- ECPoint
 
 ------------------------------------------------------------
 
@@ -567,22 +567,20 @@ getPRF ver ciph
     | otherwise = prf_TLS ver $ fromMaybe SHA256 $ cipherPRFHash ciph
 
 generateMainSecret_TLS
-    :: ByteArrayAccess preMain
-    => PRF
-    -> preMain
+    :: PRF
+    -> ByteString
     -> ClientRandom
     -> ServerRandom
     -> ByteString
 generateMainSecret_TLS prf preMainSecret (ClientRandom c) (ServerRandom s) =
-    prf (B.convert preMainSecret) seed 48
+    prf preMainSecret seed 48
   where
     seed = B.concat ["master secret", c, s]
 
 generateMainSecret
-    :: ByteArrayAccess preMain
-    => Version
+    :: Version
     -> Cipher
-    -> preMain
+    -> ByteString
     -> ClientRandom
     -> ServerRandom
     -> ByteString

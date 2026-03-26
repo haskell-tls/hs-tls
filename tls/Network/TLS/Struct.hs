@@ -363,7 +363,7 @@ serverDHParamsToPublic serverParams =
 
 ----------------------------------------------------------------
 
-data ServerECDHParams = ServerECDHParams Group GroupPublic
+data ServerECDHParams = ServerECDHParams Group GroupPublicA
     deriving (Show, Eq)
 
 ----------------------------------------------------------------

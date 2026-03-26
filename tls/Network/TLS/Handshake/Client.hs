@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Network.TLS.Handshake.Client (
     handshakeClient,
@@ -39,16 +40,34 @@ handshakeClientWith _ _ _ =
 -- values intertwined with response from the server.
 handshakeClient :: ClientParams -> Context -> IO ()
 handshakeClient cparams ctx = do
-    groups <- case clientSessions cparams of
-        [] -> return groupsSupported
+    grps <- case clientSessions cparams of
+        [] ->
+            return $
+                Groups
+                    { grpsSupported = groupsSupported
+                    , grpsSelected = groupsSelected
+                    }
         (_, sdata) : _ -> case sessionGroup sdata of
-            Nothing -> return [] -- TLS 1.2 or earlier
+            Nothing ->
+                -- TLS 1.2 or earlier
+                return $
+                    Groups
+                        { grpsSupported = groupsSupported -- for ciphers
+                        , grpsSelected = []
+                        }
             Just grp
-                | grp `elem` groupsSupported -> return $ grp : filter (/= grp) groupsSupported
+                | grp `elem` groupsSupported -> do
+                    let supported = grp : filter (/= grp) groupsSupported
+                    return $
+                        Groups
+                            { grpsSupported = supported
+                            , grpsSelected = [grp]
+                            }
                 | otherwise -> throwCore $ Error_Misc "groupsSupported is incorrect"
-    handshake cparams ctx groups Nothing
+    handshake cparams ctx grps Nothing
   where
     groupsSupported = supportedGroups (ctxSupported ctx)
+    groupsSelected = onSelectKeyShareGroups (clientHooks cparams) groupsSupported
 
 -- https://tools.ietf.org/html/rfc8446#section-4.1.2 says:
 -- "The client will also send a
@@ -60,10 +79,10 @@ handshakeClient cparams ctx = do
 handshake
     :: ClientParams
     -> Context
-    -> [Group]
+    -> Groups
     -> Maybe (ClientRandom, Session, Version)
     -> IO ()
-handshake cparams ctx groups mparams = do
+handshake cparams ctx grps@Groups{..} mparams = do
     --------------------------------
     -- Sending ClientHello
     pskinfo@(_, _, rtt0) <- getPreSharedKeyInfo cparams ctx
@@ -71,21 +90,21 @@ handshake cparams ctx groups mparams = do
     let async = rtt0 && not (ctxQUICMode ctx)
     when async $ do
         chSentTime <- getCurrentTimeFromBase
-        asyncServerHello13 cparams ctx groupToSend chSentTime
+        asyncServerHello13 cparams ctx grpsSelected chSentTime
     updateMeasure ctx incrementNbHandshakes
-    crand <- sendClientHello cparams ctx groups mparams pskinfo
+    crand <-
+        sendClientHello cparams ctx grps mparams pskinfo
     --------------------------------
     -- Receiving ServerHello
     unless async $ do
         (ver, hbs, hrr) <- receiveServerHello cparams ctx mparams
-        --------------------------------
         -- Switching to HRR, TLS 1.2 or TLS 1.3
         case ver of
             TLS13
                 | hrr ->
-                    helloRetry cparams ctx mparams ver crand $ drop 1 groups
+                    helloRetry cparams ctx mparams ver crand (grpsSupported \\ grpsSelected)
                 | otherwise -> do
-                    recvServerSecondFlight13 cparams ctx groupToSend
+                    recvServerSecondFlight13 cparams ctx grpsSelected
                     sendClientSecondFlight13 cparams ctx
             _
                 | rtt0 ->
@@ -97,8 +116,6 @@ handshake cparams ctx groups mparams = do
                     recvServerFirstFlight12 cparams ctx hbs
                     sendClientSecondFlight12 cparams ctx
                     recvServerSecondFlight12 cparams ctx
-  where
-    groupToSend = listToMaybe groups
 
 ----------------------------------------------------------------
 
@@ -110,23 +127,35 @@ helloRetry
     -> ClientRandom
     -> [Group]
     -> IO ()
-helloRetry cparams ctx mparams ver crand groups = do
-    when (null groups) $
+helloRetry cparams ctx mparams ver crand groupsSupported = do
+    when (null groupsSupported) $
         throwCore $
-            Error_Protocol "group is exhausted in the client side" IllegalParameter
+            Error_Protocol "no supported groups on the client side" IllegalParameter
     when (isJust mparams) $
         throwCore $
             Error_Protocol "server sent too many hello retries" UnexpectedMessage
     mks <- usingState_ ctx getTLS13KeyShare
     case mks of
         Just (KeyShareHRR selectedGroup)
-            | selectedGroup `elem` groups -> do
+            | selectedGroup `elem` groupsSupported -> do
                 usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
                 clearTxRecordState ctx
                 let cparams' = cparams{clientUseEarlyData = False}
                 runPacketFlight ctx $ sendChangeCipherSpec13 ctx
                 clientSession <- tls13stSession <$> getTLS13State ctx
-                handshake cparams' ctx [selectedGroup] (Just (crand, clientSession, ver))
+                let groupsSupported' = selectedGroup : filter (/= selectedGroup) groupsSupported
+                    groupsSelected' = [selectedGroup]
+                    grps =
+                        Groups
+                            { grpsSupported = groupsSupported'
+                            , grpsSelected = groupsSelected'
+                            }
+
+                handshake
+                    cparams'
+                    ctx
+                    grps
+                    (Just (crand, clientSession, ver))
             | otherwise ->
                 throwCore $
                     Error_Protocol "server-selected group is not supported" IllegalParameter
