@@ -6,7 +6,8 @@ module Network.TLS.Record.Decrypt (
 
 import Control.Monad.State.Strict
 import Crypto.Cipher.Types (AuthTag (..))
-import qualified Data.ByteArray as B (convert, xor)
+import Data.ByteArray (convert)
+import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 
 import Network.TLS.Cipher
@@ -180,11 +181,11 @@ decryptData ver record econtent tst lim =
                 | otherwise = B.concat [encodedSeq, encodeHeader hdr]
             sqnc = B.replicate (ivlen - 8) 0 `B.append` encodedSeq
             nonce
-                | nonceExpLen == 0 = B.xor iv sqnc
+                | nonceExpLen == 0 = BA.xor iv sqnc
                 | otherwise = iv `B.append` enonce
             (content, authTag2) = decryptF nonce econtent' ad
 
-        when (AuthTag (B.convert authTag) /= authTag2) $
+        when (AuthTag (convert authTag) /= authTag2) $
             throwError $
                 Error_Protocol "bad record mac on AEAD" BadRecordMac
 
