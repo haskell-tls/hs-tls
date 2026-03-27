@@ -38,7 +38,8 @@ data SessionData = SessionData
     , sessionCipher :: CipherID
     , sessionCompression :: CompressionID
     , sessionClientSNI :: Maybe HostName
-    , sessionSecret :: ByteString
+    , -- ScrubbedBytes is not an instance of Generic, sigh.
+      sessionSecret :: ByteString
     , sessionGroup :: Maybe Group
     , sessionTicketInfo :: Maybe TLS13TicketInfo
     , sessionALPN :: Maybe ByteString
