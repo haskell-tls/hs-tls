@@ -6,6 +6,7 @@ module Network.TLS.Handshake.Client.ServerHello (
     processServerHello13,
 ) where
 
+import Data.ByteArray (convert)
 import qualified Data.ByteString as B
 
 import Network.TLS.Cipher
@@ -245,7 +246,7 @@ updateContext12 ctx shExtensions resumingSession = do
             when (ems /= emsSession) $
                 let err = "server resumes a session which is not EMS consistent"
                  in throwCore $ Error_Protocol err HandshakeFailure
-            let mainSecret = sessionSecret sessionData
+            let mainSecret = convert $ sessionSecret sessionData
             usingHState ctx $ setMainSecret TLS12 ClientRole mainSecret
             logKey ctx (MainSecret mainSecret)
 

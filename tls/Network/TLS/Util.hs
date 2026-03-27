@@ -19,6 +19,8 @@ module Network.TLS.Util (
 import Control.Concurrent.MVar
 import Control.Exception (SomeAsyncException (..))
 import qualified Control.Exception as E
+import Data.ByteArray (ScrubbedBytes)
+import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 
 import Network.TLS.Imports
@@ -46,18 +48,25 @@ partition3 bytes (d1, d2, d3)
     (p3, _) = B.splitAt d3 r2
 
 partition6
-    :: ByteString
+    :: ScrubbedBytes
     -> (Int, Int, Int, Int, Int, Int)
-    -> Maybe (ByteString, ByteString, ByteString, ByteString, ByteString, ByteString)
-partition6 bytes (d1, d2, d3, d4, d5, d6) = if B.length bytes < s then Nothing else Just (p1, p2, p3, p4, p5, p6)
+    -> Maybe
+        ( ScrubbedBytes
+        , ScrubbedBytes
+        , ScrubbedBytes
+        , ScrubbedBytes
+        , ScrubbedBytes
+        , ScrubbedBytes
+        )
+partition6 bytes (d1, d2, d3, d4, d5, d6) = if BA.length bytes < s then Nothing else Just (p1, p2, p3, p4, p5, p6)
   where
     s = sum [d1, d2, d3, d4, d5, d6]
-    (p1, r1) = B.splitAt d1 bytes
-    (p2, r2) = B.splitAt d2 r1
-    (p3, r3) = B.splitAt d3 r2
-    (p4, r4) = B.splitAt d4 r3
-    (p5, r5) = B.splitAt d5 r4
-    (p6, _) = B.splitAt d6 r5
+    (p1, r1) = BA.splitAt d1 bytes
+    (p2, r2) = BA.splitAt d2 r1
+    (p3, r3) = BA.splitAt d3 r2
+    (p4, r4) = BA.splitAt d4 r3
+    (p5, r5) = BA.splitAt d5 r4
+    (p6, _) = BA.splitAt d6 r5
 
 -- | This is a strict version of &&.
 (&&!) :: Bool -> Bool -> Bool

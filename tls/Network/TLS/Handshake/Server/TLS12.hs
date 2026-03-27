@@ -5,6 +5,7 @@ module Network.TLS.Handshake.Server.TLS12 (
 ) where
 
 import Control.Monad.State.Strict (gets)
+import Data.ByteArray (convert)
 import qualified Data.ByteString as B
 
 import Network.TLS.Context.Internal
@@ -142,10 +143,11 @@ processClientKeyXchg ctx (CKX_RSA encryptedPreMain) = do
             -- BadRecordMac is nonsense but for tlsfuzzer
             throwCore $
                 Error_Protocol "invalid client public key" BadRecordMac
-        Right preMain -> case decodePreMainSecret preMain of
-            Left _ -> usingHState ctx $ setMainSecretFromPre rver role random
+        Right preMain -> case decodePreMainSecret $ convert preMain of
+            Left _ -> usingHState ctx $ setMainSecretFromPre rver role $ convert random
             Right (ver, _)
-                | ver /= expectedVer -> usingHState ctx $ setMainSecretFromPre rver role random
+                | ver /= expectedVer ->
+                    usingHState ctx $ setMainSecretFromPre rver role $ convert random
                 | otherwise -> usingHState ctx $ setMainSecretFromPre rver role preMain
     logKey ctx (MainSecret mainSecret)
 processClientKeyXchg ctx (CKX_DH clientDHValue) = do

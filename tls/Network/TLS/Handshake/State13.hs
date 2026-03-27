@@ -31,16 +31,16 @@ import Network.TLS.KeySchedule (hkdfExpandLabel)
 import Network.TLS.Record.State
 import Network.TLS.Types
 
-getTxRecordState :: Context -> IO (Hash, Cipher, CryptLevel, ByteString)
+getTxRecordState :: Context -> IO (Hash, Cipher, CryptLevel, Secret)
 getTxRecordState ctx = getXState ctx ctxTxRecordState
 
-getRxRecordState :: Context -> IO (Hash, Cipher, CryptLevel, ByteString)
+getRxRecordState :: Context -> IO (Hash, Cipher, CryptLevel, Secret)
 getRxRecordState ctx = getXState ctx ctxRxRecordState
 
 getXState
     :: Context
     -> (Context -> MVar RecordState)
-    -> IO (Hash, Cipher, CryptLevel, ByteString)
+    -> IO (Hash, Cipher, CryptLevel, Secret)
 getXState ctx func = do
     tx <- readMVar (func ctx)
     let usedCipher = fromJust $ stCipher tx
@@ -66,7 +66,7 @@ getXLevel ctx func = do
     return $ stCryptLevel tx
 
 class TrafficSecret ty where
-    fromTrafficSecret :: ty -> (CryptLevel, ByteString)
+    fromTrafficSecret :: ty -> (CryptLevel, Secret)
 
 instance HasCryptLevel a => TrafficSecret (AnyTrafficSecret a) where
     fromTrafficSecret prx@(AnyTrafficSecret s) = (getCryptLevel prx, s)
@@ -103,7 +103,7 @@ setXState'
     -> Hash
     -> Cipher
     -> CryptLevel
-    -> ByteString
+    -> Secret
     -> IO ()
 setXState' func encOrDec ctx h cipher lvl secret =
     modifyMVar_ (func ctx) (\_ -> return rt)

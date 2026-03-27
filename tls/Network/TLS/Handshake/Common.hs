@@ -42,6 +42,7 @@ module Network.TLS.Handshake.Common (
 import Control.Concurrent.MVar
 import Control.Exception (IOException, fromException, handle, throwIO)
 import Control.Monad.State.Strict
+import Data.ByteArray (convert)
 import qualified Data.ByteString as B
 
 import Network.TLS.Cipher
@@ -243,7 +244,7 @@ getSessionData ctx = do
                         , sessionCipher = cipher
                         , sessionCompression = compression
                         , sessionClientSNI = sni
-                        , sessionSecret = ms
+                        , sessionSecret = convert ms
                         , sessionGroup = Nothing
                         , sessionTicketInfo = Nothing
                         , sessionALPN = alpn
@@ -363,15 +364,15 @@ generateFinished ctx ver role = do
                 generateServerFinished ver cipher mainSecret thash
 
 generateFinished'
-    :: PRF -> ByteString -> ByteString -> TranscriptHash -> ByteString
-generateFinished' prf label mainSecret (TranscriptHash thash) = prf mainSecret seed 12
+    :: PRF -> ByteString -> Secret -> TranscriptHash -> ByteString
+generateFinished' prf label mainSecret (TranscriptHash thash) = convert $ prf mainSecret seed 12
   where
     seed = label <> thash
 
 generateClientFinished
     :: Version
     -> Cipher
-    -> ByteString
+    -> Secret
     -> TranscriptHash
     -> ByteString
 generateClientFinished ver ciph =
@@ -380,7 +381,7 @@ generateClientFinished ver ciph =
 generateServerFinished
     :: Version
     -> Cipher
-    -> ByteString
+    -> Secret
     -> TranscriptHash
     -> ByteString
 generateServerFinished ver ciph =

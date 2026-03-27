@@ -48,6 +48,7 @@ module Network.TLS.Handshake.Common13 (
 
 import Control.Concurrent.MVar
 import Control.Monad.State.Strict
+import Data.ByteArray (convert)
 import qualified Data.ByteString as B
 import Data.UnixTime
 import Foreign.C.Types (CTime (..))
@@ -79,7 +80,7 @@ import Network.TLS.Wire
 
 ----------------------------------------------------------------
 
-makeFinished :: MonadIO m => Context -> Hash -> ByteString -> m Handshake13
+makeFinished :: MonadIO m => Context -> Hash -> Secret -> m Handshake13
 makeFinished ctx usedHash baseKey = do
     verifyData <-
         VerifyData . makeVerifyData usedHash baseKey
@@ -89,7 +90,7 @@ makeFinished ctx usedHash baseKey = do
 
 checkFinished
     :: MonadIO m
-    => Context -> Hash -> ByteString -> TranscriptHash -> VerifyData -> m ()
+    => Context -> Hash -> Secret -> TranscriptHash -> VerifyData -> m ()
 checkFinished ctx usedHash baseKey (TranscriptHash hashValue) vd@(VerifyData verifyData) = do
     let verifyData' = makeVerifyData usedHash baseKey $ TranscriptHash hashValue
     when (B.length verifyData /= B.length verifyData') $
@@ -98,7 +99,7 @@ checkFinished ctx usedHash baseKey (TranscriptHash hashValue) vd@(VerifyData ver
     unless (verifyData' == verifyData) $ decryptError "finished verification failed"
     liftIO $ usingState_ ctx $ setVerifyDataForRecv vd
 
-makeVerifyData :: Hash -> ByteString -> TranscriptHash -> ByteString
+makeVerifyData :: Hash -> Secret -> TranscriptHash -> ByteString
 makeVerifyData usedHash baseKey (TranscriptHash th) =
     hmac usedHash finishedKey th
   where
@@ -115,7 +116,7 @@ makeClientKeyShare ctx grp = do
         clientKeyShare = KeyShareEntry grp wcpub
     return ((grp, cpri), clientKeyShare)
 
-makeServerKeyShare :: Context -> KeyShareEntry -> IO (ByteString, KeyShareEntry)
+makeServerKeyShare :: Context -> KeyShareEntry -> IO (Secret, KeyShareEntry)
 makeServerKeyShare ctx (KeyShareEntry grp wcpub) = case ecpub of
     Left e -> throwCore $ Error_Protocol (show e) IllegalParameter
     Right cpub -> do
@@ -131,7 +132,7 @@ makeServerKeyShare ctx (KeyShareEntry grp wcpub) = case ecpub of
     msgInvalidPublic = "invalid client " ++ show grp ++ " public key"
 
 fromServerKeyShare
-    :: KeyShareEntry -> [(Group, IES.GroupPrivate)] -> IO ByteString
+    :: KeyShareEntry -> [(Group, IES.GroupPrivate)] -> IO Secret
 fromServerKeyShare (KeyShareEntry grp wspub) grpCpris = case espub of
     Left e -> throwCore $ Error_Protocol (show e) IllegalParameter
     Right spub -> case lookup grp grpCpris of
@@ -471,7 +472,7 @@ calculateEarlySecret ctx choice maux = do
     let hCh = TranscriptHash $ hashChunks usedHash b
     let earlySecret = case maux of
             Right (BaseSecret sec) -> sec
-            Left psk -> hkdfExtract usedHash zero psk
+            Left psk -> hkdfExtract usedHash zero (convert psk)
         clientEarlySecret = deriveSecret usedHash earlySecret "c e traffic" hCh
         cets = ClientTrafficSecret clientEarlySecret :: ClientTrafficSecret EarlySecret
     logKey ctx cets
@@ -486,13 +487,13 @@ initEarlySecret choice mpsk = BaseSecret sec
     sec = hkdfExtract usedHash zero zeroOrPSK
     usedHash = cHash choice
     zero = cZero choice
-    zeroOrPSK = fromMaybe zero mpsk
+    zeroOrPSK = fromMaybe zero (convert <$> mpsk)
 
 calculateHandshakeSecret
     :: Context
     -> CipherChoice
     -> BaseSecret EarlySecret
-    -> ByteString
+    -> Secret
     -> IO (SecretTriple HandshakeSecret)
 calculateHandshakeSecret ctx choice (BaseSecret sec) ecdhe = do
     hChSh <- transcriptHash ctx "CH..SH"
@@ -635,7 +636,7 @@ computeConfirm ctx usedHash sh label = do
     TranscriptHash echConf <-
         transcriptHashWith ctx "ECH acceptance" $ encodeHandshake13 $ ServerHello13 sh
     let prk = hkdfExtract usedHash "" $ unClientRandom chRandom
-    return $ hkdfExpandLabel usedHash prk label echConf 8
+    return $ hkdfExpandLabel usedHash (convert prk) label echConf 8
 
 ----------------------------------------------------------------
 

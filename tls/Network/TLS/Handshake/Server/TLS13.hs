@@ -11,7 +11,6 @@ module Network.TLS.Handshake.Server.TLS13 (
 
 import Control.Exception
 import Control.Monad.State.Strict
-import qualified Data.ByteString.Char8 as C8
 import Data.IORef
 
 import Network.TLS.Cipher
@@ -347,7 +346,7 @@ handleEx ctx f = catchException f $ \exception -> do
 
 keyUpdate
     :: Context
-    -> (Context -> IO (Hash, Cipher, CryptLevel, C8.ByteString))
+    -> (Context -> IO (Hash, Cipher, CryptLevel, Secret))
     -> (Context -> Hash -> Cipher -> AnyTrafficSecret ApplicationSecret -> IO ())
     -> IO ()
 keyUpdate ctx getState setState = do

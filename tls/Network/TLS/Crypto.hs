@@ -61,7 +61,8 @@ import Crypto.Random
 import Data.ASN1.BinaryEncoding (BER (..), DER (..))
 import Data.ASN1.Encoding
 import Data.ASN1.Types
-import Data.ByteArray (convert)
+import Data.ByteArray (ByteArray, ByteArrayAccess, ScrubbedBytes, convert)
+import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 import Data.Proxy
 import Data.X509 (
@@ -77,6 +78,8 @@ import Network.TLS.Crypto.DH
 import Network.TLS.Crypto.IES
 import Network.TLS.Crypto.Types
 import Network.TLS.Imports
+
+----------------------------------------------------------------
 
 {-# DEPRECATED PublicKey "use PubKey" #-}
 type PublicKey = PubKey
@@ -180,20 +183,14 @@ data ContextSimple
 
 type HashCtx = HashContext
 
-hash :: Hash -> ByteString -> ByteString
-hash MD5 b = convert . (H.hash :: ByteString -> H.Digest H.MD5) $ b
-hash SHA1 b = convert . (H.hash :: ByteString -> H.Digest H.SHA1) $ b
-hash SHA224 b = convert . (H.hash :: ByteString -> H.Digest H.SHA224) $ b
-hash SHA256 b = convert . (H.hash :: ByteString -> H.Digest H.SHA256) $ b
-hash SHA384 b = convert . (H.hash :: ByteString -> H.Digest H.SHA384) $ b
-hash SHA512 b = convert . (H.hash :: ByteString -> H.Digest H.SHA512) $ b
-hash SHA1_MD5 b =
-    B.concat [convert (md5Hash b), convert (sha1Hash b)]
-  where
-    sha1Hash :: ByteString -> H.Digest H.SHA1
-    sha1Hash = H.hash
-    md5Hash :: ByteString -> H.Digest H.MD5
-    md5Hash = H.hash
+hash :: (ByteArray ba, ByteArrayAccess ba) => Hash -> ba -> ba
+hash MD5 b = convert (H.hash b :: H.Digest H.MD5)
+hash SHA1 b = convert (H.hash b :: H.Digest H.SHA1)
+hash SHA224 b = convert (H.hash b :: H.Digest H.SHA224)
+hash SHA256 b = convert (H.hash b :: H.Digest H.SHA256)
+hash SHA384 b = convert (H.hash b :: H.Digest H.SHA384)
+hash SHA512 b = convert (H.hash b :: H.Digest H.SHA512)
+hash SHA1_MD5 b = BA.concat [hash MD5 b, hash SHA1 b]
 
 hashName :: Hash -> String
 hashName = show
@@ -224,12 +221,12 @@ generalizeRSAError (Left e) = Left (RSAError e)
 generalizeRSAError (Right x) = Right x
 
 kxEncrypt
-    :: MonadRandom r => PublicKey -> ByteString -> r (Either KxError ByteString)
+    :: MonadRandom r => PublicKey -> ScrubbedBytes -> r (Either KxError ByteString)
 kxEncrypt (PubKeyRSA pk) b = generalizeRSAError <$> RSA.encrypt pk b
 kxEncrypt _ _ = return (Left KxUnsupported)
 
 kxDecrypt
-    :: MonadRandom r => PrivateKey -> ByteString -> r (Either KxError ByteString)
+    :: MonadRandom r => PrivateKey -> ByteString -> r (Either KxError ScrubbedBytes)
 kxDecrypt (PrivKeyRSA pk) b = generalizeRSAError <$> RSA.decryptSafer pk b
 kxDecrypt _ _ = return (Left KxUnsupported)
 

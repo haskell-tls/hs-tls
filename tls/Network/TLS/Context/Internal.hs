@@ -88,6 +88,8 @@ module Network.TLS.Context.Internal (
 import Control.Concurrent.MVar
 import Control.Exception (throwIO)
 import Control.Monad.State.Strict
+import Data.ByteArray (convert)
+import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 import Data.IORef
 import Data.Tuple
@@ -185,7 +187,7 @@ data CipherChoice = CipherChoice
     { cVersion :: Version
     , cCipher :: Cipher
     , cHash :: Hash
-    , cZero :: ByteString
+    , cZero :: Secret
     }
     deriving (Show)
 
@@ -193,7 +195,7 @@ makeCipherChoice :: Version -> Cipher -> CipherChoice
 makeCipherChoice ver cipher = CipherChoice ver cipher h zero
   where
     h = cipherHash cipher
-    zero = B.replicate (hashDigestSize h) 0
+    zero = BA.replicate (hashDigestSize h) 0
 
 data TLS13State = TLS13State
     { tls13stRecvNST :: Bool -- client
@@ -324,7 +326,7 @@ contextGetInformation ctx = do
                         { infoVersion = v
                         , infoCipher = c
                         , infoCompression = comp
-                        , infoMainSecret = ms
+                        , infoMainSecret = convert <$> ms
                         , infoExtendedMainSecret = ems
                         , infoClientRandom = cr
                         , infoServerRandom = sr

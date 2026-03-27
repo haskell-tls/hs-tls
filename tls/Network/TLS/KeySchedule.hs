@@ -8,7 +8,7 @@ module Network.TLS.KeySchedule (
 
 import qualified Crypto.Hash as H
 import Crypto.KDF.HKDF
-import Data.ByteArray (convert)
+import Data.ByteArray (ByteArray, ByteArrayAccess, convert)
 import qualified Data.ByteString as BS
 
 import Network.TLS.Crypto
@@ -20,7 +20,8 @@ import Network.TLS.Wire
 
 -- | @HKDF-Extract@ function.  Returns the pseudorandom key (PRK) from salt and
 -- input keying material (IKM).
-hkdfExtract :: Hash -> ByteString -> ByteString -> ByteString
+hkdfExtract
+    :: (ByteArray ba, ByteArrayAccess ba) => Hash -> ba -> ba -> ba
 hkdfExtract SHA1 salt ikm = convert (extract salt ikm :: PRK H.SHA1)
 hkdfExtract SHA256 salt ikm = convert (extract salt ikm :: PRK H.SHA256)
 hkdfExtract SHA384 salt ikm = convert (extract salt ikm :: PRK H.SHA384)
@@ -29,7 +30,7 @@ hkdfExtract _ _ _ = error "hkdfExtract: unsupported hash"
 
 ----------------------------------------------------------------
 
-deriveSecret :: Hash -> ByteString -> ByteString -> TranscriptHash -> ByteString
+deriveSecret :: Hash -> Secret -> ByteString -> TranscriptHash -> Secret
 deriveSecret h secret label (TranscriptHash hashedMsgs) =
     hkdfExpandLabel h secret label hashedMsgs outlen
   where
@@ -40,12 +41,13 @@ deriveSecret h secret label (TranscriptHash hashedMsgs) =
 -- | @HKDF-Expand-Label@ function.  Returns output keying material of the
 -- specified length from the PRK, customized for a TLS label and context.
 hkdfExpandLabel
-    :: Hash
-    -> ByteString
+    :: (ByteArray ba, ByteArrayAccess ba)
+    => Hash
+    -> Secret
     -> ByteString
     -> ByteString
     -> Int
-    -> ByteString
+    -> ba
 hkdfExpandLabel h secret label ctx outlen = expand' h secret hkdfLabel outlen
   where
     hkdfLabel = runPut $ do
@@ -53,7 +55,8 @@ hkdfExpandLabel h secret label ctx outlen = expand' h secret hkdfLabel outlen
         putOpaque8 ("tls13 " `BS.append` label)
         putOpaque8 ctx
 
-expand' :: Hash -> ByteString -> ByteString -> Int -> ByteString
+expand'
+    :: (ByteArray ba, ByteArrayAccess ba) => Hash -> Secret -> ByteString -> Int -> ba
 expand' SHA1 secret label len = expand (extractSkip secret :: PRK H.SHA1) label len
 expand' SHA256 secret label len = expand (extractSkip secret :: PRK H.SHA256) label len
 expand' SHA384 secret label len = expand (extractSkip secret :: PRK H.SHA384) label len
