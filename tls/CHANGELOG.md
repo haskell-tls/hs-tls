@@ -1,5 +1,13 @@
 # Change log for "tls"
 
+## Version 2.3.1
+
+* Using ScrubbedBytes for secrets.
+* Key echange with ML-KEM.
+  [#517](https://github.com/haskell-tls/hs-tls/pull/517)
+* Expose get certificate chain function
+  [#520](https://github.com/haskell-tls/hs-tls/pull/520)
+
 ## Version 2.3.0
 
 * Using "ram" instead of "memory".
