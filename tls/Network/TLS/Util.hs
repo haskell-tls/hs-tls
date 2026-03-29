@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
 module Network.TLS.Util (
     sub,
@@ -60,13 +61,12 @@ partition6
         )
 partition6 bytes (d1, d2, d3, d4, d5, d6) = if BA.length bytes < s then Nothing else Just (p1, p2, p3, p4, p5, p6)
   where
-    s = sum [d1, d2, d3, d4, d5, d6]
-    (p1, r1) = BA.splitAt d1 bytes
-    (p2, r2) = BA.splitAt d2 r1
-    (p3, r3) = BA.splitAt d3 r2
-    (p4, r4) = BA.splitAt d4 r3
-    (p5, r5) = BA.splitAt d5 r4
-    (p6, _) = BA.splitAt d6 r5
+    slice' (beg, len) = BA.unsafeSlice bytes beg len
+    lens = [d1, d2, d3, d4, d5, d6]
+    s = sum lens
+    begs = scanl (+) 0 lens
+    ys = zip begs lens
+    [p1, p2, p3, p4, p5, p6] = map slice' ys
 
 -- | This is a strict version of &&.
 (&&!) :: Bool -> Bool -> Bool
