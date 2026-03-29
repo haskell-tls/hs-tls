@@ -133,7 +133,7 @@ library
         mlkem >= 0.2.0 && <0.3,
         mtl >=2.2 && <2.4,
         network >=3.1,
-        ram >=0.21.2 && <0.23,
+        ram >=0.22.0 && <0.23,
         random >=1.2 && <1.4,
         serialise >=0.2 && <0.3,
         transformers >=0.5 && <0.7,
