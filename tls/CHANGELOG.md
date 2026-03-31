@@ -1,6 +1,10 @@
 # Change log for "tls"
 
-## Version 2.3.1
+## Version 2.4.0
+
+* Idential to v2.3.1 but major version up as v2.3.1 breaks "quic".
+
+## Version 2.3.1 (deprecated)
 
 * Using ScrubbedBytes for secrets.
 * Key echange with ML-KEM.
