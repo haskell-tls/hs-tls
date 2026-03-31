@@ -262,11 +262,12 @@ sendClientHello' cparams ctx Groups{..} crand (pskInfo, rtt0info, rtt0) = do
         Nothing -> return Nothing
         Just siz -> return $ Just $ toExtensionRaw $ RecordSizeLimit $ fromIntegral siz
 
-    sessionTicketExt = do
+    sessionTicketExt =
         case clientSessions cparams of
             (sidOrTkt, _) : _
                 | isTicket sidOrTkt -> return $ Just $ toExtensionRaw $ SessionTicket sidOrTkt
-            _ -> return $ Just $ toExtensionRaw $ SessionTicket ""
+            _   | clientWantTicket cparams -> return $ Just $ toExtensionRaw $ SessionTicket ""
+                | otherwise -> return $ Nothing
 
     earlyDataExt
         | rtt0 = return $ Just $ toExtensionRaw (EarlyDataIndication Nothing)

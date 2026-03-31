@@ -1,5 +1,10 @@
 # Change log for "tls"
 
+## Version 2.4.1
+
+* New `clientWantTicket` parameter makes it possible to opt-out of soliciting
+  session tickets from servers.
+
 ## Version 2.3.1
 
 * Using ScrubbedBytes for secrets.

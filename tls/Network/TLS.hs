@@ -46,6 +46,7 @@ module Network.TLS (
     clientUseServerNameIndication,
     clientWantSessionResume,
     clientWantSessionResumeList,
+    clientWantTicket,
     clientShared,
     clientHooks,
     clientSupported,
