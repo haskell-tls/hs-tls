@@ -1,5 +1,10 @@
 # Change log for "tls"
 
+## Version 2.4.1
+
+* New `clientWantTicket` parameter makes it possible to opt-out of soliciting
+  session tickets from servers.
+
 ## Version 2.4.0
 
 * Idential to v2.3.1 but major version up as v2.3.1 breaks "quic".

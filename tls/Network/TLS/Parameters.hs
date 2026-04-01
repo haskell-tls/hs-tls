@@ -153,6 +153,16 @@ data ClientParams = ClientParams
     -- specified for TLS 1.2 but only the first entry is used.
     --
     -- Default: '[]'
+    , clientWantTicket :: Bool
+    -- ^ Whether to solicit TLS 1.2 session tickets (or TLS 1.3
+    -- resumption PSKs) from servers.  With a 'False' setting,
+    -- stateless clients that never do resumption can avoid
+    -- wasting server and client resources used to generate,
+    -- transmit and process tickets that will never be used.
+    --
+    -- Default: 'True'
+    --
+    -- @since 2.4.1
     , clientShared :: Shared
     -- ^ See the default value of 'Shared'.
     , clientHooks :: ClientHooks
@@ -192,6 +202,7 @@ defaultParamsClient serverName serverId =
         , clientUseServerNameIndication = True
         , clientWantSessionResume = Nothing
         , clientWantSessionResumeList = []
+        , clientWantTicket = True
         , clientShared = def
         , clientHooks = def
         , clientSupported = def
