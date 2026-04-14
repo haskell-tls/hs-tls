@@ -1,5 +1,9 @@
 # Change log for "tls"
 
+## Version 2.4.1
+
+* Ensure same `supported_groups` before/after HRR.
+
 ## Version 2.3.1
 
 * Using ScrubbedBytes for secrets.
