@@ -102,7 +102,7 @@ handshake cparams ctx grps@Groups{..} mparams = do
         case ver of
             TLS13
                 | hrr ->
-                    helloRetry cparams ctx mparams ver crand (grpsSupported \\ grpsSelected)
+                    helloRetry cparams ctx mparams ver crand grpsSupported grpsSelected
                 | otherwise -> do
                     recvServerSecondFlight13 cparams ctx grpsSelected
                     sendClientSecondFlight13 cparams ctx
@@ -126,8 +126,9 @@ helloRetry
     -> Version
     -> ClientRandom
     -> [Group]
+    -> [Group]
     -> IO ()
-helloRetry cparams ctx mparams ver crand groupsSupported = do
+helloRetry cparams ctx mparams ver crand groupsSupported groupsSelected = do
     when (null groupsSupported) $
         throwCore $
             Error_Protocol "no supported groups on the client side" IllegalParameter
@@ -137,18 +138,22 @@ helloRetry cparams ctx mparams ver crand groupsSupported = do
     mks <- usingState_ ctx getTLS13KeyShare
     case mks of
         Just (KeyShareHRR selectedGroup)
-            | selectedGroup `elem` groupsSupported -> do
+            -- RFC 8446 Sec 4.1.4: the selected_group MUST be in supported_groups
+            -- and MUST NOT already have been offered in the initial key_share.
+            | selectedGroup `elem` groupsSupported
+                && selectedGroup `notElem` groupsSelected -> do
                 usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
                 clearTxRecordState ctx
                 let cparams' = cparams{clientUseEarlyData = False}
                 runPacketFlight ctx $ sendChangeCipherSpec13 ctx
                 clientSession <- tls13stSession <$> getTLS13State ctx
-                let groupsSupported' = selectedGroup : filter (/= selectedGroup) groupsSupported
-                    groupsSelected' = [selectedGroup]
-                    grps =
+                -- RFC 8446 Sec 4.1.2: the second ClientHello MUST be identical
+                -- to the first except for the specific listed changes.
+                -- supported_groups is NOT on that list, so it must be unchanged.
+                let grps =
                         Groups
-                            { grpsSupported = groupsSupported'
-                            , grpsSelected = groupsSelected'
+                            { grpsSupported = groupsSupported
+                            , grpsSelected = [selectedGroup]
                             }
 
                 handshake
@@ -156,6 +161,11 @@ helloRetry cparams ctx mparams ver crand groupsSupported = do
                     ctx
                     grps
                     (Just (crand, clientSession, ver))
+            | selectedGroup `elem` groupsSelected ->
+                throwCore $
+                    Error_Protocol
+                        "server selected a group already offered in key_share"
+                        IllegalParameter
             | otherwise ->
                 throwCore $
                     Error_Protocol "server-selected group is not supported" IllegalParameter

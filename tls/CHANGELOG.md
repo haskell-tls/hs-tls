@@ -2,6 +2,7 @@
 
 ## Version 2.4.1
 
+* Ensure same `supported_groups` before/after HRR.
 * New `clientWantTicket` parameter makes it possible to opt-out of soliciting
   session tickets from servers.
 
