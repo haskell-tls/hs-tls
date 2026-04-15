@@ -141,7 +141,7 @@ helloRetry cparams ctx mparams ver crand groupsSupported groupsSelected = do
             -- RFC 8446 Sec 4.1.4: the selected_group MUST be in supported_groups
             -- and MUST NOT already have been offered in the initial key_share.
             | selectedGroup `elem` groupsSupported
-            , selectedGroup `notElem` groupsSelected -> do
+                && selectedGroup `notElem` groupsSelected -> do
                 usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
                 clearTxRecordState ctx
                 let cparams' = cparams{clientUseEarlyData = False}
