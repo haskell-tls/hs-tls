@@ -412,8 +412,9 @@ data Supported = Supported
     --
     --   Default: @[X25519,P256,P384,X448,P521,FFDHE3072,FFDHE4096,FFDHE6144,FFDHE8192,X25519MLKEM768,P256MLKEM768,P384MLKEM1024,MLKEM768,MLKEM1024]@
     , supportedGroupsTLS13 :: [[Group]]
-    -- ^ @[Group]@ contains @Group@s of the same level in preferred order.
-    -- @[Group]@ is also listed in preferred order.
+    -- ^ The inside @[Group]@ is the list of @Group@ at the same level
+    -- in preferred order.  The inside @[Group]@s are also listed in
+    -- preferred order.
     --
     -- TLS 1.3 server: this is used as the 1st argument to
     -- 'onSelectKeyShare'.
