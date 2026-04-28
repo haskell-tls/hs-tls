@@ -11,6 +11,7 @@ import Data.Maybe
 import Data.X509 (ExtKeyUsageFlag (..))
 import Network.TLS
 import Network.TLS.Extra.Cipher
+import Network.TLS.Extra.CipherCBC
 import Network.TLS.Internal
 import Test.Hspec
 import Test.Hspec.QuickCheck
@@ -47,6 +48,7 @@ spec = do
         prop "can resume with extended main secret" handshake_resumption_ems
         prop "can handle ALPN" handshake_alpn
         prop "can handle SNI" handshake_sni
+        prop "can handshake with TLS 1.2 CBC" handshake_cbc
         prop "can re-negotiate with TLS 1.2" handshake12_renegotiation
         prop "can resume session with TLS 1.2" handshake12_session_resumption
         prop "can resume session ticket with TLS 1.2" handshake12_session_ticket
@@ -99,6 +101,48 @@ handshake13_simple (CSP13 params) = runTLSSimple13 params hs
     cgrps = supportedGroups $ clientSupported $ fst params
     sgrps = supportedGroups $ serverSupported $ snd params
     hs = if unsafeHead cgrps `elem` sgrps then FullHandshake else HelloRetryRequest
+
+--------------------------------------------------------------
+
+handshake_cbc :: IO ()
+handshake_cbc = do
+    clientCiphers <- generate $ cipherGen >>= shuffle
+    serverCiphers <- generate $ cipherGen >>= shuffle
+    clientGroups <- generate $ groupGen >>= shuffle
+    serverGroups <- generate $ groupGen >>= shuffle
+    (clientParam, serverParam) <- generate $
+        arbitraryPairParamsWithVersionsAndCiphers
+            ([TLS12], [TLS12])
+            (clientCiphers, serverCiphers)
+    let clientParam' = clientParam {
+            clientSupported = (clientSupported clientParam)
+                { supportedGroups = clientGroups } }
+        serverParam' = serverParam {
+            serverSupported = (serverSupported serverParam)
+                { supportedGroups = serverGroups } }
+    let ciphers = clientCiphers `intersect` serverCiphers
+        groups = clientGroups `intersect` serverGroups
+     in if compat ciphers groups
+        then runTLSSimple (clientParam', serverParam')
+        else runTLSFailure (clientParam', serverParam') handshake handshake
+  where
+    groupGen :: Gen [Group]
+    groupGen = sublistOf grps `suchThat` (not . null)
+      where
+        grps = [X25519, P256, P384, FFDHE2048, FFDHE3072, FFDHE4096]
+
+    cipherGen :: Gen [Cipher]
+    cipherGen = sublistOf ciphersuite_pfs_sha2_cbc `suchThat` (not . null)
+
+    compat :: [Cipher] -> [Group] -> Bool
+    compat [] _ = False
+    compat _ [] = False
+    compat ciphers groups =
+        let mustdh = all (== CipherKeyExchange_DHE_RSA) $ map cipherKeyExchange ciphers
+            mustec = all (/= CipherKeyExchange_DHE_RSA) $ map cipherKeyExchange ciphers
+            havedh = any (`elem` [FFDHE2048, FFDHE3072, FFDHE4096]) groups
+            haveec = any (`elem` [X25519, P256, P384]) groups
+         in ((not mustdh || havedh) && (not mustec || haveec))
 
 --------------------------------------------------------------
 

@@ -34,6 +34,7 @@ library
         Network.TLS.Internal
         Network.TLS.Extra
         Network.TLS.Extra.Cipher
+        Network.TLS.Extra.CipherCBC
         Network.TLS.Extra.FFDHE
         Network.TLS.QUIC
 
