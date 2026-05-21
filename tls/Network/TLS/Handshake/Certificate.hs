@@ -3,13 +3,20 @@ module Network.TLS.Handshake.Certificate (
     badCertificate,
     rejectOnException,
     verifyLeafKeyUsage,
+    verifyLeafKeyUsagePurpose,
     extractCAname,
 ) where
 
 import Control.Exception (SomeException)
 import Control.Monad (unless)
 import Control.Monad.State.Strict
-import Data.X509 (ExtKeyUsage (..), ExtKeyUsageFlag, extensionGet)
+import Data.X509 (
+    ExtExtendedKeyUsage (..),
+    ExtKeyUsage (..),
+    ExtKeyUsageFlag,
+    ExtKeyUsagePurpose (..),
+    extensionGet,
+ )
 
 import Network.TLS.Context.Internal
 import Network.TLS.Struct
@@ -46,6 +53,19 @@ verifyLeafKeyUsage validFlags (CertificateChain (signed : _)) =
         case extensionGet (certExtensions cert) of
             Nothing -> True -- unrestricted cert
             Just (ExtKeyUsage flags) -> any (`elem` validFlags) flags
+
+verifyLeafKeyUsagePurpose
+    :: MonadIO m => ExtKeyUsagePurpose -> CertificateChain -> m ()
+verifyLeafKeyUsagePurpose _ (CertificateChain []) = return ()
+verifyLeafKeyUsagePurpose validPurpose (CertificateChain (signed : _)) =
+    unless verified $
+        badCertificate $
+            "certificate is not allowed for " ++ show validPurpose
+  where
+    cert = getCertificate signed
+    verified = case extensionGet (certExtensions cert) of
+        Nothing -> True
+        Just (ExtExtendedKeyUsage purposes) -> validPurpose `elem` purposes
 
 extractCAname :: SignedCertificate -> DistinguishedName
 extractCAname cert = certSubjectDN $ getCertificate cert
