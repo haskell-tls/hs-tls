@@ -1,5 +1,10 @@
 # Change log for "tls"
 
+## Version 2.4.3
+
+* A server checks clientAuth of ExtendedKeyUsage in a client
+  certificate on client authentication.
+
 ## Version 2.4.2
 
 * The `Network.TLS.Extra.CipherCBC` module is added.
