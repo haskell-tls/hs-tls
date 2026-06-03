@@ -15,7 +15,7 @@ module Network.TLS.Handshake.Server.Common (
 ) where
 
 import Control.Monad.State.Strict
-import Data.X509 (ExtKeyUsageFlag (..))
+import Data.X509 (ExtKeyUsageFlag (..), ExtKeyUsagePurpose (..))
 
 import Network.TLS.Context.Internal
 import Network.TLS.Credentials
@@ -151,7 +151,9 @@ clientCertificate sparams ctx certs = do
                 (onClientCertificate (serverHooks sparams) certs)
                 rejectOnException
     case usage of
-        CertificateUsageAccept -> verifyLeafKeyUsage [KeyUsage_digitalSignature] certs
+        CertificateUsageAccept -> do
+            verifyLeafKeyUsage [KeyUsage_digitalSignature] certs
+            verifyLeafKeyUsagePurpose KeyUsagePurpose_ClientAuth certs
         CertificateUsageReject reason -> certificateRejected reason
 
     -- Remember cert chain for later use.
