@@ -274,6 +274,7 @@ benchmark tls-bench
         hspec,
         network,
         network-run,
+        ram,
         serialise,
         tasty-bench,
         time-hourglass,
