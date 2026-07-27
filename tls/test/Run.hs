@@ -16,6 +16,8 @@ module Run (
     runTLSFailure,
     expectMaybe,
     newPairContext,
+    newPairContextWith,
+    withPairContextWith,
     withDataPipe,
     byeBye,
 ) where
@@ -326,16 +328,32 @@ debug = False
 
 withPairContext
     :: (ClientParams, ServerParams) -> ((Context, Context) -> IO ()) -> IO ()
-withPairContext params body =
+withPairContext = withPairContextWith (id, id)
+
+withPairContextWith
+    :: (Backend -> Backend, Backend -> Backend)
+    -> (ClientParams, ServerParams)
+    -> ((Context, Context) -> IO ())
+    -> IO ()
+withPairContextWith wrapBackends params body =
     E.bracket
-        (newPairContext params)
+        (newPairContextWith wrapBackends params)
         (\((t1, t2), _) -> killThread t1 >> killThread t2)
         (\(_, ctxs) -> body ctxs)
 
 newPairContext
     :: (ClientParams, ServerParams)
     -> IO ((ThreadId, ThreadId), (Context, Context))
-newPairContext (cParams, sParams) = do
+newPairContext = newPairContextWith (id, id)
+
+-- | 'newPairContext' with a hook on each side's 'Backend' -- client first, as
+-- with the parameters -- so that a test can control how bytes arrive (delay
+-- them, split them).  Pass 'id' for a side to leave it alone.
+newPairContextWith
+    :: (Backend -> Backend, Backend -> Backend)
+    -> (ClientParams, ServerParams)
+    -> IO ((ThreadId, ThreadId), (Context, Context))
+newPairContextWith (wrapCBackend, wrapSBackend) (cParams, sParams) = do
     pipe <- newPipe
     tids <- runPipe pipe
     let noFlush = return ()
@@ -343,8 +361,8 @@ newPairContext (cParams, sParams) = do
 
     let cBackend = Backend noFlush noClose (writePipeC pipe) (readPipeC pipe)
     let sBackend = Backend noFlush noClose (writePipeS pipe) (readPipeS pipe)
-    cCtx' <- contextNew cBackend cParams
-    sCtx' <- contextNew sBackend sParams
+    cCtx' <- contextNew (wrapCBackend cBackend) cParams
+    sCtx' <- contextNew (wrapSBackend sBackend) sParams
 
     contextHookSetLogging cCtx' (logging "client: ")
     contextHookSetLogging sCtx' (logging "server: ")
