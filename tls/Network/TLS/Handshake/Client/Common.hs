@@ -13,7 +13,7 @@ module Network.TLS.Handshake.Client.Common (
     clientSessions,
 ) where
 
-import Control.Exception (SomeException)
+import qualified Control.Exception as E
 import Control.Monad.State.Strict
 import Data.X509 (ExtKeyUsageFlag (..))
 
@@ -38,7 +38,7 @@ import Network.TLS.X509
 
 ----------------------------------------------------------------
 
-throwMiscErrorOnException :: String -> SomeException -> IO a
+throwMiscErrorOnException :: String -> E.SomeException -> IO a
 throwMiscErrorOnException msg e =
     throwCore $ Error_Misc $ msg ++ ": " ++ show e
 

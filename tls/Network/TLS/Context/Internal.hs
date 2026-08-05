@@ -86,7 +86,7 @@ module Network.TLS.Context.Internal (
 ) where
 
 import Control.Concurrent.MVar
-import Control.Exception (throwIO)
+import qualified Control.Exception as E
 import Control.Monad.State.Strict
 import Data.ByteArray (convert)
 import qualified Data.ByteArray as BA
@@ -367,7 +367,7 @@ withLog :: Context -> (Logging -> IO ()) -> IO ()
 withLog ctx f = ctxWithHooks ctx (f . hookLogging)
 
 throwCore :: MonadIO m => TLSError -> m a
-throwCore = liftIO . throwIO . Uncontextualized
+throwCore = liftIO . E.throwIO . Uncontextualized
 
 failOnEitherError :: MonadIO m => m (Either TLSError a) -> m a
 failOnEitherError f = do
@@ -387,7 +387,7 @@ usingState_ ctx f = failOnEitherError $ usingState ctx f
 
 usingHState :: MonadIO m => Context -> HandshakeM a -> m a
 usingHState ctx f = liftIO $ modifyMVar (ctxHandshakeState ctx) $ \case
-    Nothing -> liftIO $ throwIO MissingHandshake
+    Nothing -> liftIO $ E.throwIO MissingHandshake
     Just st -> return $ swap (Just <$> runHandshake st f)
 
 getHState :: MonadIO m => Context -> m (Maybe HandshakeState)

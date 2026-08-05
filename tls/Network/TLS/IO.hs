@@ -16,7 +16,7 @@ module Network.TLS.IO (
     loadPacket13,
 ) where
 
-import Control.Exception (finally, throwIO)
+import qualified Control.Exception as E
 import Control.Monad.Reader
 import Control.Monad.State.Strict
 import qualified Data.ByteString as B
@@ -203,9 +203,9 @@ isRecvComplete ctx = usingState_ ctx $ do
 checkValid :: Context -> IO ()
 checkValid ctx = do
     established <- ctxEstablished ctx
-    when (established == NotEstablished) $ throwIO ConnectionNotEstablished
+    when (established == NotEstablished) $ E.throwIO ConnectionNotEstablished
     eofed <- ctxEOF ctx
-    when eofed $ throwIO $ PostHandshake Error_EOF
+    when eofed $ E.throwIO $ PostHandshake Error_EOF
 
 ----------------------------------------------------------------
 
@@ -223,7 +223,8 @@ newtype PacketFlightM b a
 runPacketFlight :: Context -> (forall b. Monoid b => PacketFlightM b a) -> IO a
 runPacketFlight ctx@Context{ctxRecordLayer = recordLayer} (PacketFlightM f) = do
     ref <- newIORef id
-    runReaderT f (recordLayer, ref) `finally` sendPendingFlight ctx recordLayer ref
+    runReaderT f (recordLayer, ref)
+        `E.finally` sendPendingFlight ctx recordLayer ref
 
 sendPendingFlight
     :: Monoid b => Context -> RecordLayer b -> IORef (Builder b) -> IO ()

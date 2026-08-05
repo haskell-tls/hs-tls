@@ -9,7 +9,7 @@ module Network.TLS.Handshake.Server.TLS13 (
     KeyUpdateRequest (..),
 ) where
 
-import Control.Exception
+import qualified Control.Exception as E
 import Control.Monad.State.Strict
 import Data.IORef
 
@@ -239,7 +239,7 @@ requestCertificateServer sparams ctx = handleEx ctx $ do
         origCertReqCtx <- newCertReqContext ctx
         let certReq13 = makeCertRequest sparams ctx origCertReqCtx False
         _ <- withWriteLock ctx $ do
-            bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
+            E.bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
                 sendPacket13 ctx $ Handshake13 [certReq13] []
         withReadLock ctx $ do
             (clientCert13, bClientCert13) <- getHandshake ctx ref
@@ -328,18 +328,18 @@ terminate ctx err = do
         send = sendPacket13 ctx . Alert13
     catchException (send [(level, desc)]) (\_ -> return ())
     setEOF ctx
-    throwIO $ Terminated False reason err
+    E.throwIO $ Terminated False reason err
 
 handleEx :: Context -> IO Bool -> IO Bool
 handleEx ctx f = catchException f $ \exception -> do
     -- If the error was an Uncontextualized TLSException, we replace the
     -- context with HandshakeFailed. If it's anything else, we convert
     -- it to a string and wrap it with Error_Misc and HandshakeFailed.
-    let tlserror = case fromException exception of
+    let tlserror = case E.fromException exception of
             Just e | Uncontextualized e' <- e -> e'
             _ -> Error_Misc (show exception)
     sendPacket13 ctx $ Alert13 [errorToAlert tlserror]
-    void $ throwIO $ PostHandshake tlserror
+    void $ E.throwIO $ PostHandshake tlserror
     return False
 
 ----------------------------------------------------------------

@@ -40,7 +40,7 @@ module Network.TLS.Handshake.Common (
 ) where
 
 import Control.Concurrent.MVar
-import Control.Exception (IOException, fromException, handle, throwIO)
+import qualified Control.Exception as E
 import Control.Monad.State.Strict
 import Data.ByteArray (convert)
 import qualified Data.ByteString as B
@@ -69,7 +69,7 @@ import Network.TLS.Util
 import Network.TLS.X509
 
 handshakeFailed :: TLSError -> IO ()
-handshakeFailed err = throwIO $ HandshakeFailed err
+handshakeFailed err = E.throwIO $ HandshakeFailed err
 
 handleException :: Context -> IO () -> IO ()
 handleException ctx f = catchException f $ \exception -> do
@@ -77,12 +77,12 @@ handleException ctx f = catchException f $ \exception -> do
     -- If the error was an Uncontextualized TLSException, we replace the
     -- context with HandshakeFailed. If it's anything else, we convert
     -- it to a string and wrap it with Error_Misc and HandshakeFailed.
-    let tlserror = case fromException exception of
+    let tlserror = case E.fromException exception of
             Just e | Uncontextualized e' <- e -> e'
             _ -> Error_Misc (show exception)
     established <- ctxEstablished ctx
     setEstablished ctx NotEstablished
-    handle ignoreIOErr $ do
+    E.handle ignoreIOErr $ do
         tls13 <- tls13orLater ctx
         if tls13
             then do
@@ -93,7 +93,7 @@ handleException ctx f = catchException f $ \exception -> do
             else sendPacket12 ctx $ Alert [errorToAlert tlserror]
     handshakeFailed tlserror
   where
-    ignoreIOErr :: IOException -> IO ()
+    ignoreIOErr :: E.IOException -> IO ()
     ignoreIOErr _ = return ()
 
 errorToAlert :: TLSError -> (AlertLevel, AlertDescription)

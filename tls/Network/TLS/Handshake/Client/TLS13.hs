@@ -7,7 +7,7 @@ module Network.TLS.Handshake.Client.TLS13 (
     postHandshakeAuthClientWith,
 ) where
 
-import Control.Exception (bracket)
+import qualified Control.Exception as E
 import Control.Monad.State.Strict
 import qualified Data.ByteArray as BA
 import Data.IORef
@@ -379,7 +379,7 @@ sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
 postHandshakeAuthClientWith
     :: ClientParams -> Context -> Handshake13 -> IO ()
 postHandshakeAuthClientWith cparams ctx (CertRequest13 certReqCtx exts) =
-    bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
+    E.bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
         --        updateTranscriptHash13 ctx h b
         processCertRequest13 ctx certReqCtx exts
         (usedHash, _, level, applicationSecretN) <- getTxRecordState ctx

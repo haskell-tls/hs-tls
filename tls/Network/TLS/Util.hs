@@ -18,7 +18,6 @@ module Network.TLS.Util (
 ) where
 
 import Control.Concurrent.MVar
-import Control.Exception (SomeAsyncException (..))
 import qualified Control.Exception as E
 import Data.ByteArray (ScrubbedBytes)
 import qualified Data.ByteArray as BA
@@ -83,7 +82,7 @@ catchException f handler = E.catchJust filterExn f handler
   where
     filterExn :: E.SomeException -> Maybe E.SomeException
     filterExn e = case E.fromException (E.toException e) of
-        Just (SomeAsyncException _) -> Nothing
+        Just (E.SomeAsyncException _) -> Nothing
         Nothing -> Just e
 
 forEitherM :: Monad m => [a] -> (a -> m (Either l b)) -> m (Either l [b])

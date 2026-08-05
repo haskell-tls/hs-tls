@@ -7,7 +7,7 @@ module Network.TLS.Handshake.Certificate (
     extractCAname,
 ) where
 
-import Control.Exception (SomeException)
+import qualified Control.Exception as E
 import Control.Monad (unless)
 import Control.Monad.State.Strict
 import Data.X509 (
@@ -38,7 +38,7 @@ certificateRejected (CertificateRejectOther s) =
 badCertificate :: MonadIO m => String -> m a
 badCertificate msg = throwCore $ Error_Protocol msg BadCertificate
 
-rejectOnException :: SomeException -> IO CertificateUsage
+rejectOnException :: E.SomeException -> IO CertificateUsage
 rejectOnException e = return $ CertificateUsageReject $ CertificateRejectOther $ show e
 
 verifyLeafKeyUsage :: MonadIO m => [ExtKeyUsageFlag] -> CertificateChain -> m ()

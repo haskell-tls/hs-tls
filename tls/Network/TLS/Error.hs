@@ -3,7 +3,7 @@
 
 module Network.TLS.Error where
 
-import Control.Exception (Exception (..))
+import qualified Control.Exception as E
 import Data.Typeable
 
 import Network.TLS.Imports
@@ -63,7 +63,7 @@ data TLSException
       MissingHandshake
     deriving (Show, Eq, Typeable)
 
-instance Exception TLSException
+instance E.Exception TLSException
 
 ----------------------------------------------------------------
 
