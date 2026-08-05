@@ -230,4 +230,5 @@ decompressIt :: ByteString -> Either DecompressError ByteString
 decompressIt inp = unsafePerformIO $ E.handle handler $ do
     Right . BL.toStrict <$> E.evaluate (decompress (BL.fromStrict inp))
   where
-    handler e = return $ Left (e :: DecompressError)
+    handler :: DecompressError -> IO (Either DecompressError ByteString)
+    handler e = return $ Left e
