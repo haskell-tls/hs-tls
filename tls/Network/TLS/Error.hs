@@ -4,7 +4,6 @@
 module Network.TLS.Error where
 
 import qualified Control.Exception as E
-import Data.Typeable
 
 import Network.TLS.Imports
 
@@ -34,7 +33,7 @@ data TLSError
     | Error_Packet_unexpected String String
     | Error_Packet_Parsing String
     | Error_TCP_Terminate
-    deriving (Eq, Show, Typeable)
+    deriving (Eq, Show)
 
 ----------------------------------------------------------------
 
@@ -61,7 +60,7 @@ data TLSException
       --   handshake had occurred.
       --   Indicates that this library has been used incorrectly.
       MissingHandshake
-    deriving (Show, Eq, Typeable)
+    deriving (Show, Eq)
 
 instance E.Exception TLSException
 
