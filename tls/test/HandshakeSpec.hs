@@ -2,6 +2,8 @@
 
 module HandshakeSpec where
 
+import Control.Concurrent (threadDelay)
+import Control.Concurrent.Async (concurrently_)
 import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
@@ -63,6 +65,9 @@ spec = do
         prop "can handshake with TLS 1.3 EC groups" handshake13_ec
         prop "can handshake with TLS 1.3 FFDHE groups" handshake13_ffdhe
         prop "can handshake with TLS 1.3 Post-handshake auth" post_handshake_auth
+        it
+            "keeps record alignment when a slow record follows client auth"
+            handshake13_client_auth_slow_record
 
 --------------------------------------------------------------
 
@@ -1081,6 +1086,57 @@ post_handshake_auth (CSP13 (clientParam, serverParam)) = do
         _ <- requestCertificate ctx
         _ <- requestCertificate ctx -- two simultaneously
         sendData ctx "response 2"
+
+-- | After sending a Certificate message, a TLS 1.3 client peeks for a
+-- client-authentication alert with a deadline of a few RTTs.  That peek must
+-- not abandon a record it has already started reading: the record layer has no
+-- receive buffer, so the bytes consumed for the record header would be lost and
+-- the caller's next 'recvData' would decode part of a record body as a header.
+--
+-- Here the server's first write is one full-size record whose body is made to
+-- arrive late, so the peek does hit its deadline with the header already
+-- consumed.  Before the fix this failed with
+-- @Error_Protocol "record exceeding maximum size" RecordOverflow@.
+handshake13_client_auth_slow_record :: IO ()
+handshake13_client_auth_slow_record = do
+    (clientParam, serverParam) <- generate arbitraryPairParams13
+    cred <- generate (arbitraryClientCredential TLS13)
+    let clientParam' =
+            clientParam
+                { clientHooks =
+                    (clientHooks clientParam)
+                        { onCertificateRequest = \_ -> return $ Just cred
+                        }
+                }
+        serverParam' =
+            serverParam
+                { serverWantClientCert = True
+                , serverHooks =
+                    (serverHooks serverParam)
+                        { onClientCertificate = \_ -> return CertificateUsageAccept
+                        }
+                }
+        payload = B.replicate 16384 65
+    withPairContextWith (delayBigReads, id) (clientParam', serverParam') $
+        \(cCtx, sCtx) ->
+            concurrently_
+                ( do
+                    handshake sCtx
+                    sendData sCtx $ L.fromStrict payload
+                )
+                ( do
+                    handshake cCtx
+                    recvData cCtx `shouldReturn` payload
+                )
+  where
+    -- Only the body of the big record is held back; every handshake record is
+    -- far smaller than this threshold and so arrives immediately.
+    delayBigReads be =
+        be
+            { backendRecv = \n -> do
+                when (n > 4096) $ threadDelay 300000
+                backendRecv be n
+            }
 
 expectJust :: String -> Maybe a -> Expectation
 expectJust tag mx = case mx of

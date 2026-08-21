@@ -27,6 +27,8 @@ module Network.TLS.Core (
     requestCertificate,
 ) where
 
+import Control.Concurrent (forkIO)
+import Control.Concurrent.MVar
 import qualified Control.Exception as E
 import Control.Monad.State.Strict
 import qualified Data.ByteString as B
@@ -72,11 +74,39 @@ handshake ctx = do
         sentClientCert <- tls13stSentClientCert <$> getTLS13State ctx
         when (role == ClientRole && tls13 && sentClientCert) $ do
             rtt <- getRTT ctx
-            -- This 'timeout' should work.
-            mdat <- timeout rtt $ recvData13 ctx
-            case mdat of
-                Nothing -> return ()
-                Just dat -> modifyTLS13State ctx $ \st -> st{tls13stPendingRecvData = Just dat}
+            -- We are only willing to wait 'rtt' for the alert, but a receive
+            -- must not be abandoned once it has started.  Records are read
+            -- length-prefixed and the record layer keeps no receive buffer, so
+            -- an aborted receive loses the bytes it has already taken off the
+            -- transport and leaves the stream positioned inside a record.
+            -- Every later read is then misframed, and the connection is dead
+            -- with a spurious protocol error.
+            --
+            -- So the receive runs in its own thread and we stop waiting for it
+            -- rather than interrupting it.  It holds the read lock, which keeps
+            -- it the only reader and makes the next receive wait for it to
+            -- finish; its outcome is left in 'tls13stPendingRecv' for that
+            -- receive to pick up.
+            done <- newEmptyMVar
+            void $ forkIO $ withReadLock ctx $ do
+                r <- E.try $ recvData13 ctx
+                modifyTLS13State ctx $ \st ->
+                    st
+                        { tls13stPendingRecv = case r of
+                            Right dat -> PendingRecvData dat
+                            Left err -> PendingRecvError err
+                        }
+                putMVar done ()
+            arrived <- timeout rtt $ takeMVar done
+            -- Still report the authentication failure from 'handshake' itself
+            -- whenever it did arrive in time.
+            when (isJust arrived) $ do
+                pending <- tls13stPendingRecv <$> getTLS13State ctx
+                case pending of
+                    PendingRecvError err -> do
+                        modifyTLS13State ctx $ \st -> st{tls13stPendingRecv = NoPendingRecv}
+                        E.throwIO err
+                    _ -> return ()
 
 rttFactor :: Int
 rttFactor = 3
@@ -118,7 +148,7 @@ bye ctx = liftIO $ do
                 recvNST <- chk
                 unless recvNST $ do
                     rtt <- getRTT ctx
-                    void $ timeout rtt $ recvHS13 ctx chk
+                    tryRecvHS13 rtt chk
             else do
                 -- receiving Client Finished
                 let chk = tls13stRecvCF <$> getTLS13State ctx
@@ -127,8 +157,28 @@ bye ctx = liftIO $ do
                     -- no chance to measure RTT before receiving CF
                     -- fixme: 1sec is good enough?
                     let rtt = 1000000
-                    void $ timeout rtt $ recvHS13 ctx chk
+                    tryRecvHS13 rtt chk
     bye_ ctx
+  where
+    -- Receiving these messages only improves the chances of a later session
+    -- resumption, so giving up on them costs nothing important.  We give up in
+    -- two different situations, for two different reasons.
+    --
+    -- First, we need the read lock, because only one thread at a time may read
+    -- the connection, but we take it only if it happens to be free.  Another
+    -- thread can be sitting in 'recvData' waiting for data that never arrives,
+    -- or the receive that 'handshake' starts can still be running, and either
+    -- holds the read lock for as long as it lasts.  Waiting for the lock would
+    -- therefore hang 'bye', and closing a connection that a reader is stuck on
+    -- is exactly what 'bye' is for, so we skip the receive in that case.
+    --
+    -- Second, if we do get the lock, we wait 'rtt' for the message and then
+    -- abandon the receive.  Abandoning it can stop the connection part way
+    -- through a record, after which nothing can be read from it again -- which
+    -- is acceptable only because we are closing the connection here anyway.
+    tryRecvHS13 :: Int -> IO Bool -> IO ()
+    tryRecvHS13 rtt chk =
+        void $ tryWithReadLock ctx $ timeout rtt $ recvHS13 ctx chk
 
 bye_ :: MonadIO m => Context -> m ()
 bye_ ctx = liftIO $ do
@@ -240,15 +290,20 @@ recvData12 ctx = do
 
 recvData13 :: Context -> IO ByteString
 recvData13 ctx = do
-    mdat <- tls13stPendingRecvData <$> getTLS13State ctx
-    case mdat of
-        Nothing -> do
+    pending <- tls13stPendingRecv <$> getTLS13State ctx
+    case pending of
+        NoPendingRecv -> do
             pkt <- recvPacket13 ctx
             either (onError (terminate13 ctx)) process pkt
-        Just dat -> do
-            modifyTLS13State ctx $ \st -> st{tls13stPendingRecvData = Nothing}
+        PendingRecvData dat -> do
+            clearPending
             return dat
+        PendingRecvError err -> do
+            clearPending
+            E.throwIO err
   where
+    clearPending = modifyTLS13State ctx $ \st -> st{tls13stPendingRecv = NoPendingRecv}
+
     -- UserCanceled MUST be followed by a CloseNotify.
     process (Alert13 [(AlertLevel_Warning, UserCanceled)]) = return B.empty
     process (Alert13 [(AlertLevel_Warning, CloseNotify)]) = tryBye ctx >> setEOF ctx >> return B.empty
