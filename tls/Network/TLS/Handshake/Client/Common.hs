@@ -15,7 +15,7 @@ module Network.TLS.Handshake.Client.Common (
 
 import qualified Control.Exception as E
 import Control.Monad.State.Strict
-import Data.X509 (ExtKeyUsageFlag (..))
+import Data.X509 (ExtKeyUsageFlag (..), ExtKeyUsagePurpose (..))
 
 import Network.TLS.Cipher
 import Network.TLS.Context.Internal
@@ -124,7 +124,9 @@ doCertificate cparams ctx certs = do
     -- then run certificate validation
     usage <- catchException (wrapCertificateChecks <$> checkCert) rejectOnException
     case usage of
-        CertificateUsageAccept -> checkLeafCertificateKeyUsage
+        CertificateUsageAccept -> do
+            verifyLeafKeyUsagePurpose KeyUsagePurpose_ServerAuth certs
+            checkLeafCertificateKeyUsage
         CertificateUsageReject reason -> certificateRejected reason
   where
     shared = clientShared cparams
