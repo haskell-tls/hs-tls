@@ -6,6 +6,7 @@ module Certificate (
     arbitraryX509,
     arbitraryX509WithKey,
     arbitraryX509WithKeyAndUsage,
+    arbitraryRSACredentialWithPurpose,
     arbitraryDN,
     simpleCertificate,
     simpleX509,
@@ -117,6 +118,25 @@ arbitraryX509WithKeyAndUsage usageFlags (pubKey, _) = do
     let sigalg = getSignatureALG pubKey
     let (signedExact, ()) = objectToSignedExact (\_ -> (B.pack sig, sigalg, ())) cert
     return signedExact
+
+arbitraryRSACredentialWithPurpose
+    :: ExtKeyUsagePurpose -> Gen (CertificateChain, PrivKey)
+arbitraryRSACredentialWithPurpose purpose = do
+    let (pubKey, privKey) = getGlobalRSAPair
+    cert <- arbitraryCertificate knownKeyUsage $ PubKeyRSA pubKey
+    sig <- resize 40 $ listOf1 arbitrary
+    let cert' =
+            cert
+                { certExtensions =
+                    Extensions $
+                        Just
+                            [ extensionEncode True $ ExtKeyUsage knownKeyUsage
+                            , extensionEncode False $ ExtExtendedKeyUsage [purpose]
+                            ]
+                }
+        sigalg = getSignatureALG $ PubKeyRSA pubKey
+        (signedExact, ()) = objectToSignedExact (\_ -> (B.pack sig, sigalg, ())) cert'
+    return (CertificateChain [signedExact], PrivKeyRSA privKey)
 
 arbitraryX509 :: Gen SignedCertificate
 arbitraryX509 = do

@@ -10,7 +10,7 @@ import qualified Data.ByteString.Lazy as L
 import Data.IORef
 import Data.List
 import Data.Maybe
-import Data.X509 (ExtKeyUsageFlag (..))
+import Data.X509 (ExtKeyUsageFlag (..), ExtKeyUsagePurpose (..))
 import Network.TLS
 import Network.TLS.Extra.Cipher
 import Network.TLS.Extra.CipherCBC
@@ -21,6 +21,7 @@ import Test.QuickCheck
 
 import API
 import Arbitrary
+import Certificate (arbitraryRSACredentialWithPurpose)
 import PipeChan
 import Run
 import Session
@@ -43,6 +44,14 @@ spec = do
             "can fallback for certificate with hash and signature"
             handshake_cert_fallback_hs
         prop "can handle server key usage" handshake_server_key_usage
+        it "accepts a TLS 1.2 server certificate permitting server auth" $
+            handshake_server_key_purpose TLS12 KeyUsagePurpose_ServerAuth True
+        it "accepts a TLS 1.3 server certificate permitting server auth" $
+            handshake_server_key_purpose TLS13 KeyUsagePurpose_ServerAuth True
+        it "rejects a TLS 1.2 server certificate restricted to client auth" $
+            handshake_server_key_purpose TLS12 KeyUsagePurpose_ClientAuth False
+        it "rejects a TLS 1.3 server certificate restricted to client auth" $
+            handshake_server_key_purpose TLS13 KeyUsagePurpose_ClientAuth False
         prop "can handle client key usage" handshake_client_key_usage
         prop "can authenticate client" handshake_client_auth
         prop "can receive client authentication failure" handshake_client_auth_fail
@@ -455,6 +464,35 @@ handshake_server_key_usage usageFlags = do
     if shouldSucceed
         then runTLSSimple (clientParam, serverParam')
         else runTLSFailure (clientParam, serverParam') handshake handshake
+
+handshake_server_key_purpose :: Version -> ExtKeyUsagePurpose -> Bool -> IO ()
+handshake_server_key_purpose version purpose shouldSucceed = do
+    let cipher
+            | version == TLS13 = cipher13_AES_128_GCM_SHA256
+            | otherwise = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([version], [version])
+                ([cipher], [cipher])
+    cred <- generate $ arbitraryRSACredentialWithPurpose purpose
+    let clientParam' =
+            clientParam
+                { clientHooks =
+                    (clientHooks clientParam)
+                        { onServerCertificate = \_ _ _ _ -> return []
+                        }
+                }
+        serverParam' =
+            serverParam
+                { serverShared =
+                    (serverShared serverParam)
+                        { sharedCredentials = Credentials [cred]
+                        }
+                }
+    if shouldSucceed
+        then runTLSSimple (clientParam', serverParam')
+        else runTLSFailure (clientParam', serverParam') handshake handshake
 
 handshake_client_key_usage :: [ExtKeyUsageFlag] -> IO ()
 handshake_client_key_usage usageFlags = do
