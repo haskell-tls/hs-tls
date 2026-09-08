@@ -34,7 +34,8 @@ processClientHello13
     -> IO
         ( SelectKeyShareResult
         , (Cipher, Hash, Bool) -- rtt0
-        , (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool) -- authenticated, is0RTTvalid
+        , (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool, Maybe ByteString)
+          -- authenticated, is0RTTvalid, ticket ALPN
         )
 processClientHello13 sparams ctx ch@CH{..} = do
     when
@@ -126,14 +127,15 @@ pskAndEarlySecret
     -> Context
     -> (Cipher, Hash, Bool) -- rtt0
     -> ClientHello
-    -> IO (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool) -- authenticated, is0RTTvalid
+    -> IO (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool, Maybe ByteString)
+    -- authenticated, is0RTTvalid, ticket ALPN
 pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CH{..} = do
-    (psk, binderInfo, is0RTTvalid) <- choosePSK
+    (psk, binderInfo, is0RTTvalid, ticketALPN) <- choosePSK
     earlyKey <- calculateEarlySecret ctx choice (Left psk)
     let earlySecret = pairBase earlyKey
         authenticated = isJust binderInfo
     preSharedKeyExt <- checkBinder earlySecret binderInfo
-    return (earlyKey, preSharedKeyExt, authenticated, is0RTTvalid)
+    return (earlyKey, preSharedKeyExt, authenticated, is0RTTvalid, ticketALPN)
   where
     choice = makeCipherChoice TLS13 usedCipher
 
@@ -142,7 +144,7 @@ pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CH{..} = do
             EID_PreSharedKey
             MsgTClientHello
             chExtensions
-            (return (zero, Nothing, False))
+            (return (zero, Nothing, False, Nothing))
             selectPSK
 
     selectPSK (PreSharedKeyClientHello (PskIdentity identity obfAge : _) bnds@(bnd : _)) = do
@@ -167,12 +169,18 @@ pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CH{..} = do
                         isFresh <- checkFreshness tinfo obfAge
                         (isPSKvalid, is0RTTvalid) <- checkSessionEquality sdata
                         if isPSKvalid && isFresh
-                            then return (psk, Just (bnd, 0 :: Int, len), is0RTTvalid)
+                            then
+                                return
+                                    ( psk
+                                    , Just (bnd, 0 :: Int, len)
+                                    , is0RTTvalid
+                                    , sessionALPN sdata
+                                    )
                             else -- fall back to full handshake
-                                return (zero, Nothing, False)
-                    _ -> return (zero, Nothing, False)
-            else return (zero, Nothing, False)
-    selectPSK _ = return (zero, Nothing, False)
+                                return (zero, Nothing, False, Nothing)
+                    _ -> return (zero, Nothing, False, Nothing)
+            else return (zero, Nothing, False, Nothing)
+    selectPSK _ = return (zero, Nothing, False, Nothing)
 
     checkBinder _ Nothing = return []
     checkBinder earlySecret (Just (binder, n, tlen)) = do
@@ -184,9 +192,6 @@ pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CH{..} = do
 
     checkSessionEquality sdata = do
         msni <- usingState_ ctx getClientSNI
-        -- ALPN should be checked.
-        -- But it's an extension in EE, sigh.
-        --        malpn <- usingState_ ctx getNegotiatedProtocol
         let isSameSNI = sessionClientSNI sdata == msni
             isSameCipher = sessionCipher sdata == cipherID usedCipher
             ciphers = supportedCiphers $ serverSupported sparams
@@ -195,9 +200,8 @@ pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CH{..} = do
                 Nothing -> False
                 Just c -> cipherHash c == cipherHash usedCipher
             isSameVersion = TLS13 == sessionVersion sdata
-            --            isSameALPN = sessionALPN sdata == malpn
             isPSKvalid = isSameKDF && isSameSNI -- fixme: SNI is not required
-            is0RTTvalid = isSameVersion && isSameCipher -- && isSameALPN
+            is0RTTvalid = isSameVersion && isSameCipher
         return (isPSKvalid, is0RTTvalid)
 
     dhModes =

@@ -37,7 +37,8 @@ sendServerHello13
     -> Context
     -> KeyShareEntry
     -> (Cipher, Hash, Bool) -- rtt0
-    -> (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool) -- authenticated, is0RTTvalid
+    -> (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool, Maybe ByteString)
+    -- authenticated, is0RTTvalid, ticket ALPN
     -> ClientHello
     -> Maybe ClientRandom
     -> IO
@@ -46,7 +47,7 @@ sendServerHello13
         , Bool -- authenticated
         , Bool -- rtt0OK
         )
-sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (earlyKey, preSharedKeyExt, authenticated, is0RTTvalid) CH{..} mOuterClientRandom = do
+sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (earlyKey, preSharedKeyExt, authenticated, is0RTTvalid, ticketALPN) CH{..} mOuterClientRandom = do
     let clientEarlySecret = pairClient earlyKey
         earlySecret = pairBase earlyKey
     -- parse CompressCertificate to check if it is broken here
@@ -69,8 +70,15 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
         setOuterClientRandom mOuterClientRandom
     hrr <- usingState_ ctx getTLS13HRR
     alpnExt <- applicationProtocol ctx chExtensions sparams
+    negotiatedALPN <- usingState_ ctx getNegotiatedProtocol
     setServerParameter
-    let rtt0OK = authenticated && not hrr && rtt0 && rtt0accept && is0RTTvalid
+    let rtt0OK =
+            authenticated
+                && not hrr
+                && rtt0
+                && rtt0accept
+                && is0RTTvalid
+                && ticketALPN == negotiatedALPN
     extraCreds <-
         usingState_ ctx getClientSNI >>= onServerNameIndication (serverHooks sparams)
     let p = makeCredentialPredicate TLS13 chExtensions

@@ -60,6 +60,8 @@ spec = do
         prop "can handshake with TLS 1.3 PSK ticket" handshake13_psk_ticket
         prop "can handshake with TLS 1.3 PSK -> HRR" handshake13_psk_fallback
         prop "can handshake with TLS 1.3 0RTT" handshake13_0rtt
+        it "rejects TLS 1.3 early data when ALPN changes" $
+            handshake13_0rtt_alpn
         prop "can handshake with TLS 1.3 0RTT -> PSK" handshake13_0rtt_fallback
         prop "can handshake with TLS 1.3 EE" handshake13_ee_groups
         prop "can handshake with TLS 1.3 EC groups" handshake13_ec
@@ -920,6 +922,67 @@ handshake13_0rtt (CSP13 (cli, srv)) = do
             params2 = (pc{clientUseEarlyData = True}, ps)
 
         runTLS0RTT params2 RTT0 earlyData
+
+handshake13_0rtt_alpn :: IO ()
+handshake13_0rtt_alpn = do
+    (cli, srv) <- generate arbitraryPairParams13
+    let cliSupported =
+            defaultSupported
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [X25519]
+                }
+        svrSupported =
+            defaultSupported
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
+                }
+        cliHooks =
+            defaultClientHooks
+                { onSuggestALPN = return $ Just ["h2"]
+                }
+        svrHooks =
+            defaultServerHooks
+                { onALPNClientSuggest = Just (return . unsafeHead)
+                }
+        params0 =
+            ( cli
+                { clientSupported = cliSupported
+                , clientHooks = cliHooks
+                }
+            , srv
+                { serverSupported = svrSupported
+                , serverHooks = svrHooks
+                , serverEarlyDataSize = 2048
+                }
+            )
+    sessionRefs <- twoSessionRefs
+    let params =
+            setPairParamsSessionManagers
+                (twoSessionManagers sessionRefs)
+                params0
+    runTLSSimple13 params FullHandshake
+
+    sessionParams <- readClientSessionRef sessionRefs
+    expectJust "session param should be Just" sessionParams
+    sessionALPN (snd $ fromJust sessionParams) `shouldBe` Just "h2"
+    let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
+        pc' =
+            pc
+                { clientUseEarlyData = True
+                , clientHooks =
+                    (clientHooks pc)
+                        { onSuggestALPN = return $ Just ["http/1.1"]
+                        }
+                }
+        ps' =
+            ps
+                { serverHooks =
+                    (serverHooks ps)
+                        { onALPNClientSuggest = Just (return . unsafeHead)
+                        }
+                }
+    runTLS0RTT (pc', ps') PreSharedKey "GET /admin HTTP/1.1\r\n\r\n"
 
 handshake13_0rtt_fallback :: CSP13 -> IO ()
 handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
