@@ -217,7 +217,7 @@ decodeCompressedCertificate13 = do
     bs <- getOpaque24
     if bs == ""
         then fail "empty compressed certificate"
-        else case decompressIt bs of
+        else case decompressIt len bs of
             Left e -> fail (show e)
             Right bs' -> do
                 when (B.length bs' /= len) $ fail "plain length is wrong"
@@ -226,9 +226,10 @@ decodeCompressedCertificate13 = do
                     --                    _ -> fail "compressed certificate cannot be parsed"
                     _ -> fail $ "invalid compressed certificate: len = " ++ show len
 
-decompressIt :: ByteString -> Either DecompressError ByteString
-decompressIt inp = unsafePerformIO $ E.handle handler $ do
-    Right . BL.toStrict <$> E.evaluate (decompress (BL.fromStrict inp))
+decompressIt :: Int -> ByteString -> Either DecompressError ByteString
+decompressIt limit inp = unsafePerformIO $ E.handle handler $ do
+    let output = BL.take (fromIntegral limit + 1) $ decompress $ BL.fromStrict inp
+    Right <$> E.evaluate (BL.toStrict output)
   where
     handler :: DecompressError -> IO (Either DecompressError ByteString)
     handler e = return $ Left e

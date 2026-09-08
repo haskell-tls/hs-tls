@@ -235,7 +235,8 @@ test-suite spec
         ram,
         serialise,
         time-hourglass,
-        tls
+        tls,
+        zlib
 
 benchmark tls-bench
     type:             exitcode-stdio-1.0
