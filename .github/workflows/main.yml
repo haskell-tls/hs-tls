@@ -88,4 +88,4 @@ jobs:
       if: ${{ runner.os == 'Linux' }}
       shell: bash
       run: |
-        cabal repl --build-depends=QuickCheck --with-ghc=doctest ${{ env.target-config }} tls
+        cabal repl --build-depends=QuickCheck --with-repl=doctest ${{ env.target-config }} tls
