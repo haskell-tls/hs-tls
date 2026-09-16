@@ -1,5 +1,18 @@
 # Change log for "tls"
 
+## Version 2.4.4
+
+* Enforce server certificate purpose
+  [#534](https://github.com/haskell-tls/hs-tls/pull/534)
+* Use dedicated doctest REPL
+  [#533](https://github.com/haskell-tls/hs-tls/pull/533)
+* Bind early data to ALPN
+  [#532](https://github.com/haskell-tls/hs-tls/pull/532)
+* Bound certificate decompression
+  [#531](https://github.com/haskell-tls/hs-tls/pull/531)
+* Fix RecordOverflow race after TLS 1.3 client authentication
+  [#530](https://github.com/haskell-tls/hs-tls/pull/530)
+
 ## Version 2.4.3
 
 * A server checks clientAuth of ExtendedKeyUsage in a client
