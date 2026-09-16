@@ -640,10 +640,11 @@ data ClientHooks = ClientHooks
     -- "Data.X509.Validation".  This can be replaced with a custom
     -- validation function using different settings.
     --
-    -- The function is not expected to verify the key-usage extension
-    -- of the end-entity certificate, as this depends on the
-    -- dynamically-selected cipher and this part should not be cached.
-    -- Key-usage verification is performed by the library internally.
+    -- The function is not expected to verify the key-usage or
+    -- extended-key-usage extensions of the end-entity certificate.
+    -- Key usage depends on the dynamically-selected cipher and this
+    -- part should not be cached.  Both checks are performed by the
+    -- library internally after this function accepts the chain.
     --
     -- Default: 'validateDefault'
     , onSuggestALPN :: IO (Maybe [ByteString])
