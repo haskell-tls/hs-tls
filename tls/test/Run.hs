@@ -298,11 +298,15 @@ runTLSSuccess params hsClient hsServer = runTLS params tlsClient tlsServer
         hsClient ctx
         d <- readChan queue
         sendData ctx (L.fromChunks [d])
+        -- The server writes after any TLS 1.3 NewSessionTicket, so waiting for
+        -- this byte ensures the client session manager received the ticket.
+        recvDataAssert ctx "x"
         checkCtxFinished ctx
         bye ctx
     tlsServer ctx queue = do
         hsServer ctx
         d <- recvData ctx
+        sendData ctx "x"
         writeChan queue [d]
         checkCtxFinished ctx
         bye ctx
