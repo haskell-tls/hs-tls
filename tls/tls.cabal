@@ -208,6 +208,7 @@ test-suite spec
         API
         Arbitrary
         Certificate
+        ChannelBindingSpec
         CiphersSpec
         ECHSpec
         EncodeSpec
