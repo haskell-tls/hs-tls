@@ -139,6 +139,7 @@ module Network.TLS (
     Limit,
     defaultLimit,
     limitHandshakeFragment,
+    limitKeyUpdate,
     limitRecordSize,
 
     -- * Shared parameters

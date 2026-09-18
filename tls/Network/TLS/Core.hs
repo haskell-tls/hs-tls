@@ -38,6 +38,10 @@ import Data.IORef
 import System.Timeout
 
 import Network.TLS.Context
+import Network.TLS.Context.Internal (
+    incrementTLS13KeyUpdateCount,
+    resetTLS13KeyUpdateCount,
+ )
 import Network.TLS.Extension
 import Network.TLS.Handshake
 import Network.TLS.Handshake.Common
@@ -338,7 +342,7 @@ recvData13 ctx = do
                 | otherwise -> do
                     let reason = "early data deprotect overflow"
                     terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-            Established -> return x
+            Established -> resetTLS13KeyUpdateCount ctx >> return x
             _ -> throwCore $ Error_Protocol "data at not-established" UnexpectedMessage
     process ChangeCipherSpec13 = do
         established <- ctxEstablished ctx
@@ -400,6 +404,13 @@ recvData13 ctx = do
         -- to key update (update_requested) which we sent.
         if established == Established
             then do
+                case limitKeyUpdate $ sharedLimit $ ctxShared ctx of
+                    Just limit | limit > 0 -> do
+                        count <- incrementTLS13KeyUpdateCount ctx
+                        when (count > limit) $ do
+                            let reason = "too many consecutive KeyUpdate messages"
+                            terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+                    _ -> return ()
                 keyUpdate ctx getRxRecordState setRxRecordState
                 -- Write lock wraps both actions because we don't want another
                 -- packet to be sent by another thread before the Tx state is

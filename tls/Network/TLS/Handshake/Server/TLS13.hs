@@ -274,6 +274,13 @@ getHandshake ctx ref = do
             Error_Protocol "post handshake authenticated" UnexpectedMessage
     chk [] = getHandshake ctx ref
     chk ((KeyUpdate13 mode, _) : hbs) = do
+        case limitKeyUpdate $ sharedLimit $ ctxShared ctx of
+            Just limit | limit > 0 -> do
+                count <- incrementTLS13KeyUpdateCount ctx
+                when (count > limit) $
+                    terminate ctx $
+                        Error_Protocol "too many consecutive KeyUpdate messages" UnexpectedMessage
+            _ -> return ()
         keyUpdate ctx getRxRecordState setRxRecordState
         -- Write lock wraps both actions because we don't want another
         -- packet to be sent by another thread before the Tx state is

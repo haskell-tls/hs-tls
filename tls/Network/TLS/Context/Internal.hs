@@ -67,6 +67,8 @@ module Network.TLS.Context.Internal (
     defaultTLS13State,
     getTLS13State,
     modifyTLS13State,
+    incrementTLS13KeyUpdateCount,
+    resetTLS13KeyUpdateCount,
     CipherChoice (..),
     makeCipherChoice,
 
@@ -201,6 +203,7 @@ makeCipherChoice ver cipher = CipherChoice ver cipher h zero
 
 data TLS13State = TLS13State
     { tls13stRecvNST :: Bool -- client
+    , tls13stKeyUpdateCount :: Int
     , tls13stSentClientCert :: Bool -- client
     , tls13stRecvSF :: Bool -- client
     , tls13stSentCF :: Bool -- client
@@ -222,6 +225,7 @@ defaultTLS13State :: TLS13State
 defaultTLS13State =
     TLS13State
         { tls13stRecvNST = False
+        , tls13stKeyUpdateCount = 0
         , tls13stSentClientCert = False
         , tls13stRecvSF = False
         , tls13stSentCF = False
@@ -243,6 +247,16 @@ getTLS13State Context{..} = readIORef ctxTLS13State
 
 modifyTLS13State :: Context -> (TLS13State -> TLS13State) -> IO ()
 modifyTLS13State Context{..} f = atomicModifyIORef' ctxTLS13State $ \st -> (f st, ())
+
+incrementTLS13KeyUpdateCount :: Context -> IO Int
+incrementTLS13KeyUpdateCount Context{..} =
+    atomicModifyIORef' ctxTLS13State $ \st ->
+        let count = tls13stKeyUpdateCount st + 1
+         in (st{tls13stKeyUpdateCount = count}, count)
+
+resetTLS13KeyUpdateCount :: Context -> IO ()
+resetTLS13KeyUpdateCount ctx =
+    modifyTLS13State ctx $ \st -> st{tls13stKeyUpdateCount = 0}
 
 data HandshakeSync
     = HandshakeSync
