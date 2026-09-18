@@ -43,7 +43,7 @@ processClientHello12 sparams ctx ch = do
     when (null ciphersFilteredVersion) $
         throwCore $
             Error_Protocol "no cipher in common with the TLS 1.2 client" HandshakeFailure
-    let usedCipher = onCipherChoosing hooks TLS12 ciphersFilteredVersion
+    usedCipher <- chooseCipher hooks TLS12 ciphersFilteredVersion
     mcred <- chooseCreds usedCipher creds signatureCreds
     return (usedCipher, mcred)
 
