@@ -34,6 +34,9 @@ spec = do
         prop "can run TLS 1.2" handshake_simple
         prop "can run TLS 1.3" handshake13_simple
         prop "can update key for TLS 1.3" handshake_update_key
+        it
+            "rejects more than 32 consecutive TLS 1.3 KeyUpdates"
+            handshake_key_update_flood
         prop "can prevent downgrade attack" handshake13_downgrade
         prop "can negotiate hash and signature" handshake_hashsignatures
         prop "can negotiate cipher suite" handshake_ciphersuites
@@ -117,6 +120,28 @@ handshake13_simple (CSP13 params) = runTLSSimple13 params hs
     cgrps = supportedGroups $ clientSupported $ fst params
     sgrps = supportedGroups $ serverSupported $ snd params
     hs = if unsafeHead cgrps `elem` sgrps then FullHandshake else HelloRetryRequest
+
+handshake_key_update_flood :: IO ()
+handshake_key_update_flood = do
+    params <- generate arbitraryPairParams13
+    withPairContextWith (id, id) params $ \(cctx, sctx) ->
+        concurrently_
+            ( do
+                handshake sctx
+                recvData sctx `shouldReturn` "after 32 key updates"
+                recvData sctx `shouldThrow` excessiveKeyUpdate
+            )
+            ( do
+                handshake cctx
+                replicateM_ 32 $ void $ updateKey cctx OneWay
+                sendData cctx "after 32 key updates"
+                replicateM_ 33 $ void $ updateKey cctx OneWay
+                sendData cctx "after 33 key updates"
+            )
+  where
+    excessiveKeyUpdate
+        (Terminated _ _ (Error_Misc "too many consecutive KeyUpdate messages")) = True
+    excessiveKeyUpdate _ = False
 
 --------------------------------------------------------------
 
