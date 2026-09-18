@@ -39,6 +39,10 @@ spec = do
         prop "can prevent downgrade attack" handshake13_downgrade
         prop "can negotiate hash and signature" handshake_hashsignatures
         prop "can negotiate cipher suite" handshake_ciphersuites
+        it "rejects a cipher outside the server callback candidates" $
+            handshake_rejects_server_cipher_callback_escape
+        it "rejects a TLS 1.2-only cipher selected for TLS 1.3" $
+            handshake_rejects_legacy_cipher_in_tls13
         prop "can negotiate group" handshake_groups
         prop "can negotiate elliptic curve" handshake_ec
         prop "can fallback for certificate with cipher" handshake_cert_fallback_cipher
@@ -128,6 +132,77 @@ handshake13_simple (CSP13 params) = runTLSSimple13 params hs
     cgrps = supportedGroups $ clientSupported $ fst params
     sgrps = supportedGroups $ serverSupported $ snd params
     hs = if unsafeHead cgrps `elem` sgrps then FullHandshake else HelloRetryRequest
+
+handshake_rejects_server_cipher_callback_escape :: IO ()
+handshake_rejects_server_cipher_callback_escape = do
+    (clientParam, serverParam) <- generate arbitraryPairParams13
+    let params = cipherSelectionParams clientParam serverParam selectLegacy
+    withPairContextWith (id, id) params $ \(cctx, sctx) ->
+        concurrently_
+            (handshake sctx `shouldThrow` serverRejectedCipherEscape)
+            (handshake cctx `shouldThrow` anyTLSException)
+  where
+    selectLegacy _ _ = cipher_ECDHE_RSA_AES128CBC_SHA256
+
+handshake_rejects_legacy_cipher_in_tls13 :: IO ()
+handshake_rejects_legacy_cipher_in_tls13 = do
+    (clientParam, serverParam) <- generate arbitraryPairParams13
+    let params = cipherSelectionParams clientParam serverParam defaultSelection
+    withPairContextWith (id, id) params $ \(cctx, sctx) -> do
+        contextHookSetHandshakeRecv cctx tamperCipher
+        concurrently_
+            (handshake sctx `shouldThrow` anyTLSException)
+            (handshake cctx `shouldThrow` clientRejectedLegacyCipher)
+  where
+    defaultSelection _ = unsafeHead
+    tamperCipher (ServerHello sh) =
+        pure $
+            ServerHello
+                sh
+                    { shCipher =
+                        CipherId $ cipherID cipher_ECDHE_RSA_AES128CBC_SHA256
+                    }
+    tamperCipher hs = pure hs
+
+cipherSelectionParams
+    :: ClientParams
+    -> ServerParams
+    -> (Version -> [Cipher] -> Cipher)
+    -> (ClientParams, ServerParams)
+cipherSelectionParams clientParam serverParam select =
+    ( clientParam{clientSupported = supported}
+    , serverParam
+        { serverSupported = supported
+        , serverHooks =
+            (serverHooks serverParam)
+                { onCipherChoosing = select
+                }
+        }
+    )
+  where
+    supported =
+        defaultSupported
+            { supportedVersions = [TLS13]
+            , supportedCiphers =
+                [ cipher13_AES_128_GCM_SHA256
+                , cipher_ECDHE_RSA_AES128CBC_SHA256
+                ]
+            }
+
+serverRejectedCipherEscape :: TLSException -> Bool
+serverRejectedCipherEscape (HandshakeFailed (Error_Protocol msg alert)) =
+    msg == "onCipherChoosing selected a cipher outside the candidate list"
+        && alert == InternalError
+serverRejectedCipherEscape _ = False
+
+clientRejectedLegacyCipher :: TLSException -> Bool
+clientRejectedLegacyCipher (HandshakeFailed (Error_Protocol msg alert)) =
+    msg == "server selected a cipher invalid for the negotiated version"
+        && alert == IllegalParameter
+clientRejectedLegacyCipher _ = False
+
+anyTLSException :: TLSException -> Bool
+anyTLSException = const True
 
 --------------------------------------------------------------
 
