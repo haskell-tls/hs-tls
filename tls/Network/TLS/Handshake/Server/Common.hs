@@ -2,6 +2,7 @@
 
 module Network.TLS.Handshake.Server.Common (
     applicationProtocol,
+    chooseCipher,
     checkValidClientCertChain,
     clientCertificate,
     credentialDigitalSignatureKey,
@@ -17,6 +18,7 @@ module Network.TLS.Handshake.Server.Common (
 import Control.Monad.State.Strict
 import Data.X509 (ExtKeyUsageFlag (..), ExtKeyUsagePurpose (..))
 
+import Network.TLS.Cipher
 import Network.TLS.Context.Internal
 import Network.TLS.Credentials
 import Network.TLS.Crypto
@@ -31,6 +33,18 @@ import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Util (catchException)
 import Network.TLS.X509
+
+chooseCipher :: ServerHooks -> Version -> [Cipher] -> IO Cipher
+chooseCipher hooks ver candidates =
+    case find ((== cipherID selected) . cipherID) candidates of
+        Just cipher -> return cipher
+        Nothing ->
+            throwCore $
+                Error_Protocol
+                    "onCipherChoosing selected a cipher outside the candidate list"
+                    InternalError
+  where
+    selected = onCipherChoosing hooks ver candidates
 
 checkValidClientCertChain
     :: MonadIO m => Context -> String -> m CertificateChain
