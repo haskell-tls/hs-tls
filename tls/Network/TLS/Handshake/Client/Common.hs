@@ -15,6 +15,7 @@ module Network.TLS.Handshake.Client.Common (
 
 import qualified Control.Exception as E
 import Control.Monad.State.Strict
+import qualified Data.ByteString as B
 import Data.X509 (ExtKeyUsageFlag (..), ExtKeyUsagePurpose (..))
 
 import Network.TLS.Cipher
@@ -344,14 +345,28 @@ setALPN ctx msgt exts =
         (return ())
         setAlpn
   where
-    setAlpn (ApplicationLayerProtocolNegotiation [proto]) = usingState_ ctx $ do
-        mprotos <- getClientALPNSuggest
+    setAlpn (ApplicationLayerProtocolNegotiation [proto]) = do
+        mprotos <- usingState_ ctx getClientALPNSuggest
         case mprotos of
-            Just protos -> when (proto `elem` protos) $ do
-                setExtensionALPN True
-                setNegotiatedProtocol proto
-            _ -> return ()
-    setAlpn _ = return ()
+            Nothing ->
+                throwCore $
+                    Error_Protocol
+                        "server sent ALPN without a client offer"
+                        UnsupportedExtension
+            Just protos
+                | not (B.null proto) && proto `elem` protos -> usingState_ ctx $ do
+                    setExtensionALPN True
+                    setNegotiatedProtocol proto
+                | otherwise ->
+                    throwCore $
+                        Error_Protocol
+                            "server selected an ALPN protocol not offered by the client"
+                            IllegalParameter
+    setAlpn _ =
+        throwCore $
+            Error_Protocol
+                "server ALPN response did not contain exactly one protocol"
+                IllegalParameter
 
 ----------------------------------------------------------------
 
