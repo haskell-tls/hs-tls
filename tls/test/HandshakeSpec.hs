@@ -58,6 +58,10 @@ spec = do
         prop "can handle extended main secret" handshake_ems
         prop "can resume with extended main secret" handshake_resumption_ems
         prop "can handle ALPN" handshake_alpn
+        it "rejects an unoffered ALPN selection from the server hook" $
+            handshake_alpn_rejects_unoffered_server_selection
+        it "rejects an unoffered ALPN selection received by the client" $
+            handshake_alpn_rejects_unoffered_client_selection
         prop "can handle SNI" handshake_sni
         prop "can handshake with TLS 1.2 CBC" handshake_cbc
         prop "can re-negotiate with TLS 1.2" handshake12_renegotiation
@@ -665,6 +669,68 @@ handshake_alpn (clientParam, serverParam) = do
     alpn xs
         | "h2" `elem` xs = return "h2"
         | otherwise = return "http/1.1"
+
+handshake_alpn_rejects_unoffered_server_selection :: IO ()
+handshake_alpn_rejects_unoffered_server_selection = do
+    (clientParam, serverParam) <- generate arbitraryPairParams13
+    let params = alpnParams clientParam serverParam (const $ pure "h2")
+    withPairContextWith (id, id) params $ \(cctx, sctx) ->
+        concurrently_
+            (handshake sctx `shouldThrow` serverRejectedUnofferedALPN)
+            (handshake cctx `shouldThrow` anyTLSException)
+
+handshake_alpn_rejects_unoffered_client_selection :: IO ()
+handshake_alpn_rejects_unoffered_client_selection = do
+    (clientParam, serverParam) <- generate arbitraryPairParams13
+    let params = alpnParams clientParam serverParam (pure . unsafeHead)
+    withPairContextWith (id, id) params $ \(cctx, sctx) -> do
+        contextHookSetHandshake13Recv cctx tamperALPN
+        concurrently_
+            (handshake sctx `shouldThrow` anyTLSException)
+            (handshake cctx `shouldThrow` clientRejectedUnofferedALPN)
+  where
+    tamperALPN (EncryptedExtensions13 exts) =
+        pure $ EncryptedExtensions13 $ map replaceALPN exts
+    tamperALPN hs = pure hs
+    replaceALPN ext@(ExtensionRaw eid _)
+        | eid == EID_ApplicationLayerProtocolNegotiation =
+            toExtensionRaw $ ApplicationLayerProtocolNegotiation ["h2"]
+        | otherwise = ext
+
+alpnParams
+    :: ClientParams
+    -> ServerParams
+    -> ([B.ByteString] -> IO B.ByteString)
+    -> (ClientParams, ServerParams)
+alpnParams clientParam serverParam select =
+    ( clientParam
+        { clientHooks =
+            (clientHooks clientParam)
+                { onSuggestALPN = pure $ Just ["http/1.1"]
+                }
+        }
+    , serverParam
+        { serverHooks =
+            (serverHooks serverParam)
+                { onALPNClientSuggest = Just select
+                }
+        }
+    )
+
+serverRejectedUnofferedALPN :: TLSException -> Bool
+serverRejectedUnofferedALPN (HandshakeFailed (Error_Protocol msg alert)) =
+    msg == "ALPN callback selected a protocol not offered by the client"
+        && alert == NoApplicationProtocol
+serverRejectedUnofferedALPN _ = False
+
+clientRejectedUnofferedALPN :: TLSException -> Bool
+clientRejectedUnofferedALPN (HandshakeFailed (Error_Protocol msg alert)) =
+    msg == "server selected an ALPN protocol not offered by the client"
+        && alert == IllegalParameter
+clientRejectedUnofferedALPN _ = False
+
+anyTLSException :: TLSException -> Bool
+anyTLSException = const True
 
 handshake_sni :: (ClientParams, ServerParams) -> IO ()
 handshake_sni (clientParam, serverParam) = do

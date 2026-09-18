@@ -132,6 +132,11 @@ applicationProtocol ctx exts sparams = case onALPN of
         when (proto == "") $
             throwCore $
                 Error_Protocol "no supported application protocols" NoApplicationProtocol
+        unless (proto `elem` protos) $
+            throwCore $
+                Error_Protocol
+                    "ALPN callback selected a protocol not offered by the client"
+                    NoApplicationProtocol
         usingState_ ctx $ do
             setExtensionALPN True
             setNegotiatedProtocol proto
