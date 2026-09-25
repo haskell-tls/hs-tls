@@ -1,5 +1,17 @@
 # Change log for "tls"
 
+## Version 2.4.6
+
+* Accept crypton 2.1, which made `ChaChaPoly1305.initialize` total by
+  taking a checked key rather than any `ByteArrayAccess`.  The ChaCha20
+  bulk cipher now goes through `aeadChacha20poly1305Init` and the AEAD
+  interface, as the AES ciphers beside it already did.  That function has
+  one type across every crypton this package accepts, so the bound stays
+  `>=1.1.2 && <2.2` and nobody is forced to move.  The two are the same
+  computation: crypton's AEAD model for this cipher is `finalizeAAD .
+  appendAAD`, then encrypt or decrypt, then the whole sixteen-byte
+  Poly1305 tag whatever length is asked of it.
+
 ## Version 2.4.5
 
 * Fix the TLS 1.3 0-RTT session tests racing the NewSessionTicket.

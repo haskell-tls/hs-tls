@@ -73,7 +73,6 @@ import Crypto.Cipher.AES
 import qualified Crypto.Cipher.ChaChaPoly1305 as ChaChaPoly1305
 import Crypto.Cipher.Types hiding (Cipher, cipherName)
 import Crypto.Error
-import qualified Crypto.MAC.Poly1305 as Poly1305
 import Crypto.System.CPU
 import qualified Data.ByteString as B
 import Data.Tuple (swap)
@@ -690,23 +689,20 @@ simpleDecrypt aeadIni header input taglen = (output, tag)
 noFail :: CryptoFailable a -> a
 noFail = throwCryptoError
 
+-- Through the AEAD interface rather than the state directly, as the AES
+-- ciphers above do.  The two are the same computation -- crypton's AEAD model
+-- for this cipher is finalizeAAD . appendAAD, then encrypt or decrypt, then
+-- the whole sixteen-byte Poly1305 tag whatever length is asked of it -- but
+-- aeadChacha20poly1305Init has one type across every crypton this package
+-- accepts, where the lower-level initialize does not: crypton 2.1 made it
+-- total, taking a checked Key rather than any ByteArrayAccess.
 chacha20poly1305 :: BulkDirection -> BulkKey -> BulkAEAD
 chacha20poly1305 BulkEncrypt key nonce =
-    let st = noFail (ChaChaPoly1305.nonce12 nonce >>= ChaChaPoly1305.initialize key)
-     in ( \input ad ->
-            let st2 = ChaChaPoly1305.finalizeAAD (ChaChaPoly1305.appendAAD ad st)
-                (output, st3) = ChaChaPoly1305.encrypt input st2
-                Poly1305.Auth tag = ChaChaPoly1305.finalize st3
-             in (output, AuthTag tag)
-        )
+    let aeadIni = noFail (ChaChaPoly1305.aeadChacha20poly1305Init key nonce)
+     in (\input ad -> swap $ aeadSimpleEncrypt aeadIni ad input 16)
 chacha20poly1305 BulkDecrypt key nonce =
-    let st = noFail (ChaChaPoly1305.nonce12 nonce >>= ChaChaPoly1305.initialize key)
-     in ( \input ad ->
-            let st2 = ChaChaPoly1305.finalizeAAD (ChaChaPoly1305.appendAAD ad st)
-                (output, st3) = ChaChaPoly1305.decrypt input st2
-                Poly1305.Auth tag = ChaChaPoly1305.finalize st3
-             in (output, AuthTag tag)
-        )
+    let aeadIni = noFail (ChaChaPoly1305.aeadChacha20poly1305Init key nonce)
+     in (\input ad -> simpleDecrypt aeadIni ad input 16)
 
 ----------------------------------------------------------------
 
