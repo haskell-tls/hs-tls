@@ -6,6 +6,14 @@ on:
   pull_request:
     branches: [ 'main' ]
 
+# Pushing again to a branch that is still building leaves the earlier run
+# occupying runner slots to produce a result nobody will read, so supersede it.
+# Not on main, though: that is the only place the cache is written, and a run
+# cancelled partway never reaches the save step.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
@@ -15,6 +23,26 @@ jobs:
       matrix:
         os:  [ 'ubuntu-latest', 'macOS-latest', 'windows-latest' ]
         ghc: [ '9.2', '9.4', '9.6', '9.8', '9.10', '9.12' ]
+        # Linux carries the compiler range; the other two keep the oldest and
+        # the newest.  They were what the wall clock was made of.  A Windows
+        # job takes eight to twelve minutes against Linux's three, and there
+        # were six of them.  GitHub runs at most five macOS jobs at once, so
+        # the sixth waited for a slot -- in one run measured here it started
+        # fourteen hours after the others and decided by itself when the
+        # workflow ended.
+        #
+        # What is platform-specific here is the socket handling, which does
+        # not vary by compiler.  Windows stays in the matrix because
+        # tls-debug and tls-test have os(windows) branches to keep building.
+        exclude:
+          - { os: macOS-latest,   ghc: '9.4'  }
+          - { os: macOS-latest,   ghc: '9.6'  }
+          - { os: macOS-latest,   ghc: '9.8'  }
+          - { os: macOS-latest,   ghc: '9.10' }
+          - { os: windows-latest, ghc: '9.4'  }
+          - { os: windows-latest, ghc: '9.6'  }
+          - { os: windows-latest, ghc: '9.8'  }
+          - { os: windows-latest, ghc: '9.10' }
 
     env:
       cache-name: cabal-ghc
@@ -23,60 +51,76 @@ jobs:
     steps:
     - run: git config --global core.autocrlf false
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - uses: haskell-actions/setup@v2
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: latest
 
-    - name: Hackage index, Cache Key
+    - name: Cache Key
       id: params
       shell: bash
       run: |
         ghc_version=$(ghc --numeric-version)
-        cabal update
-        echo "cache=${{ runner.os }}-build-${{ env.cache-name }}-${ghc_version}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}" > "$GITHUB_OUTPUT"
+        # The prefix is everything a cache may be shared across.  It
+        # deliberately leaves out the .cabal hash: that changes on every
+        # version bump and whenever a module is added or a bound is touched,
+        # and keying on it threw the whole cache away each time.  restore-keys
+        # picks up the most recent entry with this prefix instead, and cabal
+        # works out what is stale.
+        prefix="${{ runner.os }}-${{ runner.arch }}-${{ env.cache-name }}-${ghc_version}-"
+        echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+        echo "cache=${prefix}${{ github.sha }}" >> "$GITHUB_OUTPUT"
         echo "ghc_version=$ghc_version" >> "$GITHUB_OUTPUT"
+        # Ask cabal where it keeps things rather than assuming ~/.cabal.
+        # That is only the right answer when the legacy layout is in use --
+        # cabal 3.12 and later move to XDG directories when ~/.cabal does not
+        # already exist.  installdir is here for the doctest binary below.
+        # `cabal path` prints without a trailing newline, hence the echo
+        # after each one.
+        {
+          echo "paths<<PATHS_EOF"
+          cabal path --remote-repo-cache; echo
+          cabal path --store-dir; echo
+          cabal path --installdir; echo
+          echo "dist-newstyle"
+          echo "PATHS_EOF"
+        } >> "$GITHUB_OUTPUT"
 
     - name: Restore Cache
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@v5
       if: ${{ github.ref_name != 'ci-uc' }}
       with:
-        path: ~/.cabal
+        # dist-newstyle rides along with the dependencies rather than living
+        # in a second entry: one restore, one save, and the build products
+        # are what make a warm run short.  Only the dependencies were kept
+        # before, so every run rebuilt all five packages from scratch.
+        path: ${{ steps.params.outputs.paths }}
         key: ${{ steps.params.outputs.cache }}
+        restore-keys: ${{ steps.params.outputs.prefix }}
 
+    # After the restore, not before it.  The cache holds the package index, so
+    # restoring it puts back whatever index was current when the cache was
+    # written, and an update run first is simply overwritten -- leaving the
+    # job unable to see anything published since.
+    - name: Update the Hackage index
+      run: cabal update
+
+    # Try the restored store first so a warm run does not talk to Hackage at
+    # all, and fall back to fetching when it is cold or incomplete.
     - name: Install doctest
-      id: doctest-dep
       if: ${{ runner.os == 'Linux' }}
       shell: bash
       run: |
-        if cabal install --offline --overwrite-policy=always doctest
-        then
-          echo "installed=false" >> "$GITHUB_OUTPUT"
-        else
-          cabal install doctest --overwrite-policy=always
-          echo "installed=true" >> "$GITHUB_OUTPUT"
-        fi
+        cabal install --offline --overwrite-policy=always doctest ||
+          cabal install --overwrite-policy=always doctest
 
     - name: Install dependencies
-      id: inst-dep
       shell: bash
       run: |
-        if cabal build --offline --only-dependencies ${{ env.target-config }} all
-        then
-          echo "installed=false" >> "$GITHUB_OUTPUT"
-        else
+        cabal build --offline --only-dependencies ${{ env.target-config }} all ||
           cabal build --only-dependencies ${{ env.target-config }} all
-          echo "installed=true" >> "$GITHUB_OUTPUT"
-        fi
-
-    - name: Save Cache
-      uses: actions/cache/save@v4
-      if: ${{ steps.inst-dep.outputs.installed == 'true' || steps.doctest-dep.outputs.installed == 'true' }}
-      with:
-        path: ~/.cabal
-        key: ${{ steps.params.outputs.cache }}
 
     - name: Build
       run: cabal build ${{ env.target-config }} all
@@ -89,3 +133,15 @@ jobs:
       shell: bash
       run: |
         cabal repl --build-depends=QuickCheck --with-repl=doctest ${{ env.target-config }} tls
+
+    # Saved after the build, so the entry holds the build products too, and
+    # only from the default branch: a cache written on a branch is visible
+    # only to that branch, while one written on the default branch is visible
+    # to every branch and pull request.  Writing from pull requests as well
+    # would multiply the jobs by every open branch against a 10 GB cap.
+    - name: Save Cache
+      uses: actions/cache/save@v5
+      if: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+      with:
+        path: ${{ steps.params.outputs.paths }}
+        key: ${{ steps.params.outputs.cache }}
