@@ -104,32 +104,64 @@ jobs:
     # restoring it puts back whatever index was current when the cache was
     # written, and an update run first is simply overwritten -- leaving the
     # job unable to see anything published since.
+    #
+    # Retried because hackage.haskell.org serves these through a mirror that
+    # intermittently answers 403, and a single 403 on timestamp.json is
+    # enough to end the job.  Two runs on main were lost to exactly that.
     - name: Update the Hackage index
-      run: cabal update
-
-    # Try the restored store first so a warm run does not talk to Hackage at
-    # all, and fall back to fetching when it is cold or incomplete.
-    - name: Install doctest
-      if: ${{ runner.os == 'Linux' }}
       shell: bash
       run: |
-        cabal install --offline --overwrite-policy=always doctest ||
-          cabal install --overwrite-policy=always doctest
+        for delay in 15 30 60 0; do
+          cabal update && exit 0
+          [ "$delay" = 0 ] && break
+          echo "cabal update failed; retrying in ${delay}s"
+          sleep "$delay"
+        done
+        exit 1
+
+    # Try the restored store first so a warm run does not talk to Hackage at
+    # all, and fall back to fetching when it is cold or incomplete -- with the
+    # same retry as the index update, for the same reason.
+    #
+    # One job rather than every Linux job.  doctest is not a dependency of
+    # this package: installing it builds ghc-paths, syb and their chain, on
+    # six compilers, to run a check whose result does not vary by compiler.
+    # It was also the first step on Linux that touches the network, so it was
+    # where the 403s showed up.
+    - name: Install doctest
+      if: ${{ runner.os == 'Linux' && matrix.ghc == '9.12' }}
+      shell: bash
+      run: |
+        cabal install --offline --overwrite-policy=always doctest && exit 0
+        for delay in 15 30 60 0; do
+          cabal install --overwrite-policy=always doctest && exit 0
+          [ "$delay" = 0 ] && break
+          echo "cabal install doctest failed; retrying in ${delay}s"
+          sleep "$delay"
+        done
+        exit 1
 
     - name: Install dependencies
       shell: bash
       run: |
-        cabal build --offline --only-dependencies ${{ env.target-config }} all ||
-          cabal build --only-dependencies ${{ env.target-config }} all
+        cabal build --offline --only-dependencies ${{ env.target-config }} all && exit 0
+        for delay in 15 30 60 0; do
+          cabal build --only-dependencies ${{ env.target-config }} all && exit 0
+          [ "$delay" = 0 ] && break
+          echo "dependency install failed; retrying in ${delay}s"
+          sleep "$delay"
+        done
+        exit 1
 
     - name: Build
+      id: build
       run: cabal build ${{ env.target-config }} all
 
     - name: Run tests
       run: cabal test ${{ env.target-config }} all
 
     - name: Run doctest
-      if: ${{ runner.os == 'Linux' }}
+      if: ${{ runner.os == 'Linux' && matrix.ghc == '9.12' }}
       shell: bash
       run: |
         cabal repl --build-depends=QuickCheck --with-repl=doctest ${{ env.target-config }} tls
@@ -139,9 +171,16 @@ jobs:
     # only to that branch, while one written on the default branch is visible
     # to every branch and pull request.  Writing from pull requests as well
     # would multiply the jobs by every open branch against a 10 GB cap.
+    #
+    # Keyed on the build rather than on the job, so that a failing test or
+    # doctest still leaves the dependencies and build products behind.  Only
+    # main writes the cache, so a red main used to mean the next run started
+    # cold and downloaded more -- which is how a transient Hackage failure
+    # made the next transient Hackage failure likelier.  A failed build is
+    # still not saved: there is nothing complete to save.
     - name: Save Cache
       uses: actions/cache/save@v5
-      if: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+      if: ${{ !cancelled() && steps.build.outcome == 'success' && github.event_name == 'push' && github.ref_name == 'main' }}
       with:
         path: ${{ steps.params.outputs.paths }}
         key: ${{ steps.params.outputs.cache }}
