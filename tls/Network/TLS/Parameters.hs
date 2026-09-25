@@ -888,6 +888,14 @@ data Limit = Limit
     -- certificate.
     --
     -- Default: 32
+    , limitKeyUpdate :: Maybe Int
+    -- ^ Maximum number of consecutive TLS 1.3 KeyUpdate messages accepted
+    -- without intervening non-empty application data.  This bounds the CPU
+    -- work and response amplification a peer can trigger while application
+    -- code is blocked inside 'recvData'.  'Nothing' and non-positive values
+    -- disable the limit; they do not disable KeyUpdate processing.
+    --
+    -- Default: @Just 32@
     }
     deriving (Eq, Show)
 
@@ -897,4 +905,5 @@ defaultLimit =
     Limit
         { limitRecordSize = Nothing
         , limitHandshakeFragment = 32
+        , limitKeyUpdate = Just 32
         }

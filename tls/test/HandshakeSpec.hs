@@ -36,6 +36,15 @@ spec = do
         prop "can run TLS 1.2" handshake_simple
         prop "can run TLS 1.3" handshake13_simple
         prop "can update key for TLS 1.3" handshake_update_key
+        it
+            "rejects more than 32 consecutive TLS 1.3 KeyUpdates"
+            handshake_key_update_flood
+        it
+            "can disable the consecutive TLS 1.3 KeyUpdate limit"
+            handshake_key_update_unlimited
+        it
+            "does not disable TLS 1.3 KeyUpdates with non-positive limits"
+            handshake_key_update_non_positive
         prop "can prevent downgrade attack" handshake13_downgrade
         prop "can negotiate hash and signature" handshake_hashsignatures
         prop "can negotiate cipher suite" handshake_ciphersuites
@@ -207,6 +216,65 @@ clientRejectedLegacyCipher _ = False
 
 anyTLSException :: TLSException -> Bool
 anyTLSException = const True
+
+handshake_key_update_flood :: IO ()
+handshake_key_update_flood = do
+    params <- generate arbitraryPairParams13
+    withPairContextWith (id, id) params $ \(cctx, sctx) ->
+        concurrently_
+            ( do
+                handshake sctx
+                recvData sctx `shouldReturn` "after 32 key updates"
+                recvData sctx `shouldThrow` excessiveKeyUpdate
+            )
+            ( do
+                handshake cctx
+                replicateM_ 32 $ void $ updateKey cctx OneWay
+                sendData cctx "after 32 key updates"
+                replicateM_ 33 $ void $ updateKey cctx OneWay
+                sendData cctx "after 33 key updates"
+            )
+  where
+    excessiveKeyUpdate
+        (Terminated _ _ (Error_Misc "too many consecutive KeyUpdate messages")) = True
+    excessiveKeyUpdate _ = False
+
+handshake_key_update_unlimited :: IO ()
+handshake_key_update_unlimited = do
+    (cparams, sparams0) <- generate arbitraryPairParams13
+    let shared0 = serverShared sparams0
+        limits = (sharedLimit shared0){limitKeyUpdate = Nothing}
+        sparams = sparams0{serverShared = shared0{sharedLimit = limits}}
+    withPairContextWith (id, id) (cparams, sparams) $ \(cctx, sctx) ->
+        concurrently_
+            ( do
+                handshake sctx
+                recvData sctx `shouldReturn` "after 33 key updates"
+            )
+            ( do
+                handshake cctx
+                replicateM_ 33 $ void $ updateKey cctx OneWay
+                sendData cctx "after 33 key updates"
+            )
+
+handshake_key_update_non_positive :: IO ()
+handshake_key_update_non_positive =
+    forM_ [0, -1] $ \limit -> do
+        (cparams, sparams0) <- generate arbitraryPairParams13
+        let shared0 = serverShared sparams0
+            limits = (sharedLimit shared0){limitKeyUpdate = Just limit}
+            sparams = sparams0{serverShared = shared0{sharedLimit = limits}}
+        withPairContextWith (id, id) (cparams, sparams) $ \(cctx, sctx) ->
+            concurrently_
+                ( do
+                    handshake sctx
+                    recvData sctx `shouldReturn` "after key update"
+                )
+                ( do
+                    handshake cctx
+                    void $ updateKey cctx OneWay
+                    sendData cctx "after key update"
+                )
 
 --------------------------------------------------------------
 
