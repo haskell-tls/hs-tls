@@ -1,5 +1,42 @@
 # Change log for "tls"
 
+## Version 2.4.5
+
+* Fix the TLS 1.3 0-RTT session tests racing the NewSessionTicket.
+  [#547](https://github.com/haskell-tls/hs-tls/pull/547)
+* CI: drop macOS with GHC 9.12, whose compiler install dominated the
+  wall clock.
+  [#546](https://github.com/haskell-tls/hs-tls/pull/546)
+* CI: retry Hackage downloads, keep the cache when a test fails, and run
+  doctest on one job.
+  [#545](https://github.com/haskell-tls/hs-tls/pull/545)
+* `extensionDecode` returns `Nothing`, instead of calling `error`, for a
+  message type in which the extension is not defined.
+  [#544](https://github.com/haskell-tls/hs-tls/pull/544)
+* `getTLSUnique` and `getTLSExporter` return `Nothing` before a handshake,
+  instead of calling `error`.
+  [#543](https://github.com/haskell-tls/hs-tls/pull/543)
+* Take two timing signals out of the CBC record path.
+  [#542](https://github.com/haskell-tls/hs-tls/pull/542)
+* Bound the size of a handshake message reassembled from records.
+  [#541](https://github.com/haskell-tls/hs-tls/pull/541)
+* CI: speed up.
+  [#540](https://github.com/haskell-tls/hs-tls/pull/540)
+* Limit consecutive TLS 1.3 KeyUpdate messages.  The new `limitKeyUpdate`
+  parameter controls this and is `Just 32` by default, so the limit is on
+  unless it is turned off.
+  [#539](https://github.com/haskell-tls/hs-tls/pull/539)
+* Validate the negotiated ALPN protocol.  A client now rejects an
+  unsolicited, empty, repeated or unoffered selection instead of ignoring
+  it, and a server rejects a callback result the client did not offer.
+  [#538](https://github.com/haskell-tls/hs-tls/pull/538)
+* Validate the negotiated cipher suite against the negotiated version on
+  the client, and constrain `onCipherChoosing` to the candidate list on
+  the server.
+  [#537](https://github.com/haskell-tls/hs-tls/pull/537)
+* Make the session ticket tests deterministic.
+  [#536](https://github.com/haskell-tls/hs-tls/pull/536)
+
 ## Version 2.4.4
 
 * Enforce server certificate purpose
