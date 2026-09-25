@@ -17,6 +17,31 @@ import Arbitrary ()
 
 spec :: Spec
 spec = do
+    describe "handshake record length" $ do
+        -- A handshake message carries a 24-bit length, and the fragments are
+        -- held until the message is whole.  Refusing at the header means
+        -- refusing to hold anything: the length arrives in the first four
+        -- octets, before any of the body.
+        it "refuses a length past the limit, on its header alone" $ do
+            let tooBig = maxHandshakeSize + 1
+            isGotError (decodeHandshakeRecord (handshakeHeader tooBig)) `shouldBe` True
+            isGotError (decodeHandshakeRecord13 (handshakeHeader tooBig)) `shouldBe` True
+        it "refuses the largest a 24-bit length can say" $ do
+            let header = handshakeHeader 0xffffff
+            isGotError (decodeHandshakeRecord header) `shouldBe` True
+            isGotError (decodeHandshakeRecord13 header) `shouldBe` True
+        -- Still waiting for the body rather than refusing it: at the limit
+        -- the header alone is not enough to decide anything is wrong.
+        it "asks for more at the limit itself" $ do
+            let header = handshakeHeader maxHandshakeSize
+            isGotPartial (decodeHandshakeRecord header) `shouldBe` True
+            isGotPartial (decodeHandshakeRecord13 header) `shouldBe` True
+        it "still decodes a message of an ordinary size" $ do
+            let body = B.replicate 1000 0
+                record = handshakeHeader (B.length body) `B.append` body
+            gotThisMuch (B.length body) (decodeHandshakeRecord record) `shouldBe` True
+            gotThisMuch (B.length body) (decodeHandshakeRecord13 record) `shouldBe` True
+
     describe "encoder/decoder" $ do
         prop "can encode/decode Header" $ \x -> do
             decodeHeader (encodeHeader x) `shouldBe` Right x
@@ -64,6 +89,28 @@ decodeHs b = verifyResult (decodeHandshake cp) $ decodeHandshakeRecord b
 
 decodeHs13 :: ByteString -> Either TLSError Handshake13
 decodeHs13 b = verifyResult decodeHandshake13 $ decodeHandshakeRecord13 b
+
+-- | A handshake record header: a type octet then a 24-bit length.
+handshakeHeader :: Int -> ByteString
+handshakeHeader len =
+    B.pack
+        [ 1 -- ClientHello
+        , fromIntegral (len `div` 65536)
+        , fromIntegral ((len `div` 256) `mod` 256)
+        , fromIntegral (len `mod` 256)
+        ]
+
+isGotError :: GetResult a -> Bool
+isGotError (GotError _) = True
+isGotError _ = False
+
+isGotPartial :: GetResult a -> Bool
+isGotPartial (GotPartial _) = True
+isGotPartial _ = False
+
+gotThisMuch :: Int -> GetResult (a, ByteString) -> Bool
+gotThisMuch n (GotSuccess (_, content)) = B.length content == n
+gotThisMuch _ _ = False
 
 verifyResult :: (f -> r -> a) -> GetResult (f, r) -> a
 verifyResult fn result =
