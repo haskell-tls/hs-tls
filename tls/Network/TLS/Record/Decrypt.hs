@@ -59,25 +59,40 @@ unInnerPlaintext inner =
     nonEmptyContentTypes = [ProtocolType_Handshake, ProtocolType_Alert]
     unknownContentType13 c = "unknown TLS 1.3 content type: " ++ show c
 
-getCipherData :: Record a -> CipherData -> RecordM ByteString
-getCipherData (Record pt ver _) cdata = do
+-- | Check a decrypted record.
+--
+-- The first 'Bool' is what the lengths already said: 'False' when the padding
+-- length the record claims cannot be one.  It is carried in rather than
+-- answered where it was found, so that the MAC is computed either way -- see
+-- 'decryptData'.
+--
+-- Everything is computed before anything is decided, and the verdicts are
+-- combined with '&&!', which does not short-circuit.
+getCipherData :: Record a -> Bool -> CipherData -> RecordM ByteString
+getCipherData (Record pt ver _) lengthValid cdata = do
     -- check if the MAC is valid.
     macValid <- case cipherDataMAC cdata of
         Nothing -> return True
         Just digest -> do
             let new_hdr = Header pt ver (fromIntegral $ B.length $ cipherDataContent cdata)
             expected_digest <- makeDigest new_hdr $ cipherDataContent cdata
-            return (expected_digest == digest)
+            -- constEq rather than (==): (==) on ByteString is memcmp, which
+            -- returns as soon as two octets differ, and how soon is a
+            -- measurement of how much of the MAC was guessed correctly.
+            return (expected_digest `BA.constEq` digest)
 
     -- check if the padding is filled with the correct pattern if it exists
     -- (before TLS10 this checks instead that the padding length is minimal)
     paddingValid <- case cipherDataPadding cdata of
         Nothing -> return True
         Just (pad, _blksz) -> do
-            let b = B.length pad - 1
-            return $ B.replicate (B.length pad) (fromIntegral b) == pad
+            let b = fromIntegral (B.length pad - 1)
+            -- Every octet, and no allocation of a pattern to compare against:
+            -- B.all stops at the first wrong octet, and replicating the
+            -- pattern costs time in proportion to a length the peer chose.
+            return $ B.foldl' (\acc w -> acc .|. (w `xor` b)) 0 pad == 0
 
-    unless (macValid &&! paddingValid) $
+    unless (lengthValid &&! macValid &&! paddingValid) $
         throwError $
             Error_Protocol "bad record mac Stream/Block" BadRecordMac
 
@@ -134,11 +149,25 @@ decryptData ver record econtent tst lim =
         let (content', iv') = decryptF iv econtent'
         modify' $ \txs -> txs{stCryptState = cst{cstIV = iv'}}
 
-        let paddinglength = fromIntegral (B.last content') + 1
-        let contentlen = B.length content' - paddinglength - macSize
+        -- The last octet of the plaintext says how much padding there is.
+        -- It may say more than the record can hold, and that already settles
+        -- the record -- but answering it here, by splitting the record and
+        -- failing, would answer it *without computing the MAC*.  How long a
+        -- record takes to reject would then say whether the padding length
+        -- was plausible, which is the question the attacker is asking.
+        --
+        -- So carry the verdict instead and go on with a length that fits.
+        -- getCipherData folds it in with the MAC, and the answer is the same
+        -- BadRecordMac either way.
+        let plainlen = B.length content'
+            claimed = fromIntegral (B.last content') + 1
+            lengthValid = claimed + macSize <= plainlen
+            paddinglength = if lengthValid then claimed else 1
+            contentlen = plainlen - paddinglength - macSize
         (content, mac, padding) <- get3i content' (contentlen, macSize, paddinglength)
         getCipherData
             record
+            lengthValid
             CipherData
                 { cipherDataContent = content
                 , cipherDataMAC = Just mac
@@ -155,6 +184,7 @@ decryptData ver record econtent tst lim =
         modify' $ \txs -> txs{stCryptState = cst{cstKey = BulkStateStream bulkStream'}}
         getCipherData
             record
+            True
             CipherData
                 { cipherDataContent = content
                 , cipherDataMAC = Just mac
