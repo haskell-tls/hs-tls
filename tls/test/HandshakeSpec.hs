@@ -30,6 +30,8 @@ spec :: Spec
 spec = do
     describe "pipe" $ do
         it "can setup a channel" pipe_work
+    describe "channel binding" $ do
+        prop "is unavailable before the handshake" binding_before_handshake
     describe "handshake" $ do
         prop "can run TLS 1.2" handshake_simple
         prop "can run TLS 1.3" handshake13_simple
@@ -81,6 +83,15 @@ spec = do
             handshake13_client_auth_slow_record
 
 --------------------------------------------------------------
+
+-- | Both channel bindings already answer with 'Maybe', and a caller may
+-- reasonably ask for one on a context whose handshake has not run -- or has
+-- failed.  The answer is that there is no binding, not a crash.
+binding_before_handshake :: (ClientParams, ServerParams) -> IO ()
+binding_before_handshake params = withPairContext params $ \(cCtx, sCtx) ->
+    forM_ [cCtx, sCtx] $ \ctx -> do
+        getTLSUnique ctx `shouldReturn` Nothing
+        getTLSExporter ctx `shouldReturn` Nothing
 
 pipe_work :: IO ()
 pipe_work = do
