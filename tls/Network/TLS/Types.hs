@@ -11,6 +11,7 @@ module Network.TLS.Types (
     bigNumToInteger,
     bigNumFromInteger,
     defaultRecordSizeLimit,
+    maxHandshakeSize,
     TranscriptHash (..),
     WireBytes,
 ) where
@@ -58,6 +59,22 @@ bigNumFromInteger i = BigNum $ i2osp i
 -- 2^14 + 1 for TLS 1.3
 defaultRecordSizeLimit :: Int
 defaultRecordSizeLimit = 16384
+
+----------------------------------------------------------------
+
+-- | The largest handshake message we will reassemble.
+--
+-- A handshake message carries a 24-bit length, so a peer may announce close
+-- to 16MB and then feed it a record at a time.  Records are bounded, but the
+-- message they are reassembled into was not, and the fragments are held until
+-- it is complete -- before anything has authenticated the peer.
+--
+-- The largest legitimate one is a Certificate message.  A long chain of
+-- post-quantum certificates runs to tens of kilobytes, so this leaves an
+-- order of magnitude over anything real while taking two orders of magnitude
+-- off what a peer can ask us to hold.
+maxHandshakeSize :: Int
+maxHandshakeSize = 262144
 
 ----------------------------------------------------------------
 

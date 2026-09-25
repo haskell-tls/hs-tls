@@ -157,7 +157,18 @@ encodeAlerts l = runPut $ mapM_ encodeAlert l
 decodeHandshakeRecord :: ByteString -> GetResult (HandshakeType, ByteString)
 decodeHandshakeRecord = runGet "handshake-record" $ do
     ty <- getHandshakeType
-    content <- getOpaque24
+    len <- getWord24
+    -- Before the bytes, not after: the length is in the first four octets, so
+    -- refusing here is refusing to hold anything.  Reassembly keeps every
+    -- fragment until the message is whole, and the peer picks the number it
+    -- announces.
+    when (len > maxHandshakeSize) $
+        fail $
+            "handshake message of "
+                ++ show len
+                ++ " octets exceeds the limit of "
+                ++ show maxHandshakeSize
+    content <- getBytes len
     return (ty, content)
 
 {- FOURMOLU_DISABLE -}
