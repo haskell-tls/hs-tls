@@ -17,6 +17,7 @@ module Run (
     expectMaybe,
     newPairContext,
     newPairContextWith,
+    withPairContext,
     withPairContextWith,
     withDataPipe,
     byeBye,

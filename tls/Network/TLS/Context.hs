@@ -267,8 +267,11 @@ getPeerFinished ctx = usingState_ ctx getPeerVerifyData
 --   and use the "tls-exporter" channel binding via 'getTLSExporter'.
 getTLSUnique :: Context -> IO (Maybe ByteString)
 getTLSUnique ctx = do
-    ver <- liftIO $ usingState_ ctx getVersion
-    if ver == TLS12
+    -- Nothing rather than error before a version has been negotiated: this
+    -- can be called on a context whose handshake has not run, and it already
+    -- answers with Maybe.
+    mver <- liftIO $ usingState_ ctx getVersionMaybe
+    if mver == Just TLS12
         then do
             mx <- usingState_ ctx getFirstVerifyData
             case mx of
@@ -280,8 +283,9 @@ getTLSUnique ctx = do
 --   For TLS 1.2, 'Nothing' is returned.
 getTLSExporter :: Context -> IO (Maybe ByteString)
 getTLSExporter ctx = do
-    ver <- liftIO $ usingState_ ctx getVersion
-    if ver == TLS13
+    -- As in 'getTLSUnique'.
+    mver <- liftIO $ usingState_ ctx getVersionMaybe
+    if mver == Just TLS13
         then exporter ctx "EXPORTER-Channel-Binding" "" 32
         else return Nothing
 

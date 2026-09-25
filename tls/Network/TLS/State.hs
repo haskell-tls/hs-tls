@@ -25,6 +25,7 @@ module Network.TLS.State (
     setVersion,
     setVersionIfUnset,
     getVersion,
+    getVersionMaybe,
     getVersionWithDefault,
     setSecureRenegotiation,
     getSecureRenegotiation,
@@ -231,6 +232,14 @@ getVersion :: TLSSt Version
 getVersion =
     fromMaybe (error "internal error: version hasn't been set yet")
         <$> gets stVersion
+
+-- | The negotiated version, or 'Nothing' before there is one.
+--
+-- 'getVersion' calls 'error' in that case, which is the right answer inside
+-- the handshake -- reaching it there would be a bug -- and the wrong one for
+-- anything a user of the library can call before the handshake has run.
+getVersionMaybe :: TLSSt (Maybe Version)
+getVersionMaybe = gets stVersion
 
 getVersionWithDefault :: Version -> TLSSt Version
 getVersionWithDefault defaultVer = fromMaybe defaultVer <$> gets stVersion
