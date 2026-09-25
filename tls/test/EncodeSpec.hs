@@ -2,6 +2,7 @@ module EncodeSpec where
 
 import Codec.Compression.Zlib (compress)
 import Control.Exception (bracket_, evaluate)
+import Control.Monad (forM_, void)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
@@ -17,6 +18,11 @@ import Arbitrary ()
 
 spec :: Spec
 spec = do
+    describe "extension decoding" $ do
+        prop "yields Nothing rather than throwing, for any message type" $
+            \ws -> forM_ extensionDecoders $ \(name, decode) ->
+                forM_ [minBound .. maxBound] $ \mt ->
+                    decode mt (B.pack ws) `shouldReturn` name
     describe "handshake record length" $ do
         -- A handshake message carries a 24-bit length, and the fragments are
         -- held until the message is whole.  Refusing at the header means
@@ -125,3 +131,42 @@ withinAllocationLimit limit =
     bracket_
         (setAllocationCounter limit >> enableAllocationLimit)
         disableAllocationLimit
+
+-- | Every 'Extension' instance, each wrapped so that the decoded value is
+-- forced inside IO.  A partial 'extensionDecode' therefore surfaces as a
+-- thrown exception the test can see, rather than as a thunk nobody looks at.
+--
+-- The name is threaded through as the return value only so that a failure
+-- report says which instance it was.
+type Decoder a = MessageType -> ByteString -> Maybe a
+
+extensionDecoders :: [(String, MessageType -> ByteString -> IO String)]
+extensionDecoders =
+    [
+      entry "ServerName" (extensionDecode :: Decoder ServerName),
+      entry "MaxFragmentLength" (extensionDecode :: Decoder MaxFragmentLength),
+      entry "SecureRenegotiation" (extensionDecode :: Decoder SecureRenegotiation),
+      entry "ApplicationLayerProtocolNegotiation" (extensionDecode :: Decoder ApplicationLayerProtocolNegotiation),
+      entry "ExtendedMainSecret" (extensionDecode :: Decoder ExtendedMainSecret),
+      entry "CompressCertificate" (extensionDecode :: Decoder CompressCertificate),
+      entry "SupportedGroups" (extensionDecode :: Decoder SupportedGroups),
+      entry "EcPointFormatsSupported" (extensionDecode :: Decoder EcPointFormatsSupported),
+      entry "RecordSizeLimit" (extensionDecode :: Decoder RecordSizeLimit),
+      entry "SessionTicket" (extensionDecode :: Decoder SessionTicket),
+      entry "HeartBeat" (extensionDecode :: Decoder HeartBeat),
+      entry "SignatureAlgorithms" (extensionDecode :: Decoder SignatureAlgorithms),
+      entry "SignatureAlgorithmsCert" (extensionDecode :: Decoder SignatureAlgorithmsCert),
+      entry "SupportedVersions" (extensionDecode :: Decoder SupportedVersions),
+      entry "KeyShare" (extensionDecode :: Decoder KeyShare),
+      entry "PostHandshakeAuth" (extensionDecode :: Decoder PostHandshakeAuth),
+      entry "PskKeyExchangeModes" (extensionDecode :: Decoder PskKeyExchangeModes),
+      entry "PreSharedKey" (extensionDecode :: Decoder PreSharedKey),
+      entry "EarlyDataIndication" (extensionDecode :: Decoder EarlyDataIndication),
+      entry "Cookie" (extensionDecode :: Decoder Cookie),
+      entry "CertificateAuthorities" (extensionDecode :: Decoder CertificateAuthorities),
+      entry "EchOuterExtensions" (extensionDecode :: Decoder EchOuterExtensions),
+      entry "EncryptedClientHello" (extensionDecode :: Decoder EncryptedClientHello)
+    ]
+  where
+    entry name decode = (name, \mt bs -> name <$ evaluate (length (show (decode mt bs))))
+
