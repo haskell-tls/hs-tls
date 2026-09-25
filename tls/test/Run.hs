@@ -159,6 +159,16 @@ runTLS0RTT params mode earlyData =
         handshake ctx
         sendData ctx $ L.fromStrict earlyData
         _ <- recvData ctx
+        -- One more exchange, and this one the client starts.  Our Finished is
+        -- not sent by 'handshake' here: 0-RTT defers it, and the receive loop
+        -- above is what puts it on the wire.  The server emits the
+        -- NewSessionTicket when it reads that Finished, which is after it sent
+        -- the echo -- so reading the echo is not enough to have seen the
+        -- ticket, and neither is a byte the server sends straight after it.
+        -- The server cannot answer this without having read past the Finished
+        -- first, and records arrive in order.
+        sendData ctx "x"
+        recvDataAssert ctx "x"
         bye ctx
         mmode <- (>>= infoTLS13HandshakeMode) <$> contextGetInformation ctx
         expectMaybe "C: mode should be Just" mode mmode
@@ -168,6 +178,8 @@ runTLS0RTT params mode earlyData =
         chunks <- replicateM (length ls) $ recvData ctx
         (map B.length chunks, B.concat chunks) `shouldBe` (ls, earlyData)
         sendData ctx $ L.fromStrict earlyData
+        recvDataAssert ctx "x"
+        sendData ctx "x"
         bye ctx
         mmode <- (>>= infoTLS13HandshakeMode) <$> contextGetInformation ctx
         expectMaybe "S: mode should be Just" mode mmode
@@ -190,6 +202,16 @@ runTLS0RTTech params mode earlyData =
         handshake ctx
         sendData ctx $ L.fromStrict earlyData
         _ <- recvData ctx
+        -- One more exchange, and this one the client starts.  Our Finished is
+        -- not sent by 'handshake' here: 0-RTT defers it, and the receive loop
+        -- above is what puts it on the wire.  The server emits the
+        -- NewSessionTicket when it reads that Finished, which is after it sent
+        -- the echo -- so reading the echo is not enough to have seen the
+        -- ticket, and neither is a byte the server sends straight after it.
+        -- The server cannot answer this without having read past the Finished
+        -- first, and records arrive in order.
+        sendData ctx "x"
+        recvDataAssert ctx "x"
         bye ctx
         minfo <- contextGetInformation ctx
         let mmode = minfo >>= infoTLS13HandshakeMode
@@ -202,6 +224,8 @@ runTLS0RTTech params mode earlyData =
         chunks <- replicateM (length ls) $ recvData ctx
         (map B.length chunks, B.concat chunks) `shouldBe` (ls, earlyData)
         sendData ctx $ L.fromStrict earlyData
+        recvDataAssert ctx "x"
+        sendData ctx "x"
         bye ctx
         mmode <- (>>= infoTLS13HandshakeMode) <$> contextGetInformation ctx
         expectMaybe "S: mode should be Just" mode mmode
