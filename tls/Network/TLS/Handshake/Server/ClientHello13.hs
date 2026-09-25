@@ -13,6 +13,7 @@ import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import Network.TLS.Extension
 import Network.TLS.Handshake.Common13
+import Network.TLS.Handshake.Server.Common
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
 import Network.TLS.IO.Encode
@@ -49,8 +50,8 @@ processClientHello13 sparams ctx ch@CH{..} = do
     when (null ciphersFilteredVersion) $
         throwCore $
             Error_Protocol "no cipher in common with the TLS 1.3 client" HandshakeFailure
-    let usedCipher = onCipherChoosing (serverHooks sparams) TLS13 ciphersFilteredVersion
-        usedHash = cipherHash usedCipher
+    usedCipher <- chooseCipher (serverHooks sparams) TLS13 ciphersFilteredVersion
+    let usedHash = cipherHash usedCipher
         rtt0 =
             lookupAndDecode
                 EID_EarlyData

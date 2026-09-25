@@ -138,6 +138,12 @@ processServerHello cparams ctx (ServerHello sh@SH{..}) = do
 
     ver <- usingState_ ctx getVersion
 
+    unless (cipherAllowedForVersion ver usedCipher) $
+        throwCore $
+            Error_Protocol
+                "server selected a cipher invalid for the negotiated version"
+                IllegalParameter
+
     when (ver == TLS12) $
         setServerHelloParameters12 ctx shVersion shRandom usedCipher compressAlg
 
