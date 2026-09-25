@@ -23,22 +23,33 @@ jobs:
       matrix:
         os:  [ 'ubuntu-latest', 'macOS-latest', 'windows-latest' ]
         ghc: [ '9.2', '9.4', '9.6', '9.8', '9.10', '9.12' ]
-        # Linux carries the compiler range; the other two keep the oldest and
-        # the newest.  They were what the wall clock was made of.  A Windows
-        # job takes eight to twelve minutes against Linux's three, and there
-        # were six of them.  GitHub runs at most five macOS jobs at once, so
-        # the sixth waited for a slot -- in one run measured here it started
-        # fourteen hours after the others and decided by itself when the
-        # workflow ended.
+        # Linux carries the compiler range; Windows keeps the oldest and the
+        # newest, macOS only the oldest.  They were what the wall clock was
+        # made of.  A Windows job takes eight to twelve minutes against
+        # Linux's three, and there were six of them.  GitHub runs at most
+        # five macOS jobs at once, so the sixth waited for a slot -- in one
+        # run measured here it started fourteen hours after the others and
+        # decided by itself when the workflow ended.
         #
         # What is platform-specific here is the socket handling, which does
         # not vary by compiler.  Windows stays in the matrix because
         # tls-debug and tls-test have os(windows) branches to keep building.
+        #
+        # macOS 9.12 is excluded on top of that because of what it costs to
+        # install, not to run.  Measured over three runs, ghcup takes 301s,
+        # 321s and 385s to install GHC 9.12 on aarch64-darwin, against 48s
+        # to 75s for 9.2 on the same runner -- the download is 2s and the
+        # unpack 27s, the rest is install_name_tool and ad-hoc signing over
+        # every library, and 9.12 ships many more of them.  Building and
+        # testing this package takes about 30s there, as everywhere else.
+        # That one job set the wall clock at 6m51s while the next longest
+        # was 4m59s.  GHC 9.12 is still covered, on Linux and on Windows.
         exclude:
           - { os: macOS-latest,   ghc: '9.4'  }
           - { os: macOS-latest,   ghc: '9.6'  }
           - { os: macOS-latest,   ghc: '9.8'  }
           - { os: macOS-latest,   ghc: '9.10' }
+          - { os: macOS-latest,   ghc: '9.12' }
           - { os: windows-latest, ghc: '9.4'  }
           - { os: windows-latest, ghc: '9.6'  }
           - { os: windows-latest, ghc: '9.8'  }
