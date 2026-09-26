@@ -74,6 +74,7 @@ module Network.TLS.Context (
 import Control.Concurrent.MVar
 import Control.Monad.State.Strict
 import Data.IORef
+import qualified Data.X509 as X509
 
 import Network.TLS.Backend
 import Network.TLS.Cipher
@@ -85,12 +86,10 @@ import Network.TLS.Handshake (
     handshakeServer,
     handshakeServerWith,
  )
-import Network.TLS.Handshake.State13
 import Network.TLS.Hooks
 import Network.TLS.Imports
 import Network.TLS.KeySchedule
 import Network.TLS.Measurement
-import Network.TLS.Packet
 import Network.TLS.Parameters
 import Network.TLS.PostHandshake (
     postHandshakeAuthClientWith,
@@ -296,22 +295,37 @@ exporter ctx label context outlen = do
     return $ case (msecret, mcipher) of
         (Just secret, Just cipher) ->
             let h = cipherHash cipher
-                secret' = deriveSecret h secret label $ TranscriptHash ""
+                secret' = deriveSecret h secret label $ TranscriptHash $ hash h ""
                 label' = "exporter"
                 value' = hash h context
                 key = hkdfExpandLabel h secret' label' value' outlen
              in Just key
         _ -> Nothing
 
--- | Getting the "tls-server-end-point" channel binding for TLS 1.2
---   (RFC5929).  For 1.3, there is no specifications for how to create
---   it.  In this implementation, a certificate chain without
---   extensions is hashed like TLS 1.2.
+-- | Getting the "tls-server-end-point" channel binding for TLS 1.2 and
+--   certificate-authenticated TLS 1.3 (RFC5929).  This hashes the exact DER
+--   encoding of the server's leaf certificate with the certificate signature
+--   hash, using SHA-256 in place of MD5 or SHA-1.  'Nothing' is returned when
+--   there is no server certificate or its signature uses an intrinsic,
+--   unknown, or unsupported hash algorithm.
 getTLSServerEndPoint :: Context -> IO (Maybe ByteString)
 getTLSServerEndPoint ctx = do
     mcc <- usingState_ ctx getServerCertificateChain
-    case mcc of
-        Nothing -> return Nothing
-        Just cc -> do
-            (usedHash, _, _, _) <- getRxRecordState ctx
-            return $ Just $ hash usedHash $ encodeCertificate cc
+    return $ mcc >>= serverEndPoint
+  where
+    serverEndPoint cc@(CertificateChain (leaf : _)) = do
+        h <- certificateSignatureHash leaf
+        case X509.encodeCertificateChain cc of
+            X509.CertificateChainRaw (encodedLeaf : _) -> Just $ hash h encodedLeaf
+            X509.CertificateChainRaw [] -> Nothing
+    serverEndPoint (CertificateChain []) = Nothing
+
+    certificateSignatureHash leaf =
+        case X509.signedAlg $ X509.getSigned leaf of
+            X509.SignatureALG X509.HashMD5 _ -> Just SHA256
+            X509.SignatureALG X509.HashSHA1 _ -> Just SHA256
+            X509.SignatureALG X509.HashSHA224 _ -> Just SHA224
+            X509.SignatureALG X509.HashSHA256 _ -> Just SHA256
+            X509.SignatureALG X509.HashSHA384 _ -> Just SHA384
+            X509.SignatureALG X509.HashSHA512 _ -> Just SHA512
+            _ -> Nothing
