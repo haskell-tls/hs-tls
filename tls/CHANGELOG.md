@@ -1,5 +1,19 @@
 # Change log for "tls"
 
+## Version 2.4.7
+
+* The AES-GCM and ChaCha20-Poly1305 bulk ciphers go through the one-call
+  interfaces of crypton 2.1.1 -- `Crypto.Cipher.AES.GCM` and
+  `Crypto.Cipher.ChaCha.Poly1305` -- rather than the general AEAD one.  Two
+  fixed costs go with every record: the state the key alone determines, which
+  `aeadInit` rebuilt for each record and `newContext` now builds once; and a
+  dictionary, which `AEADModeImpl`'s `forall ba. ByteArray ba =>` fields pass
+  at every call and no pragma can remove.  Measured through `BulkAEAD` on an
+  Apple M4, a 64-byte record is about 73% faster to encrypt and to decrypt, a
+  1400-byte one about 30%, and a 16 KiB one 2 to 4%.  This needs
+  `crypton >= 2.1.1`; anyone who cannot move stays on 2.4.6, which is
+  unaffected
+
 ## Version 2.4.6
 
 * Accept crypton 2.1, which made `ChaChaPoly1305.initialize` total by
