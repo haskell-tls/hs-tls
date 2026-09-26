@@ -3,6 +3,7 @@
 module Network.TLS.Types.Session where
 
 import Codec.Serialise
+import Crypto.Debug (DebugShow (..))
 import qualified Data.ByteString as B
 import GHC.Generics
 import Network.Socket (HostName)
@@ -46,7 +47,42 @@ data SessionData = SessionData
     , sessionMaxEarlyDataSize :: Int
     , sessionFlags :: [SessionFlag]
     } -- sessionFromTicket :: Bool
-    deriving (Show, Eq, Generic)
+    deriving (Eq, Generic)
+
+-- | Everything but @sessionSecret@, which renders as @\<secret\>@: whoever
+-- has it can resume the session.  'Crypto.Debug.debugShow' renders it.
+instance Show SessionData where
+    showsPrec = showsSessionData (showString "<secret>")
+
+instance DebugShow SessionData where
+    debugShow sd = showsSessionData (shows $ sessionSecret sd) 0 sd ""
+
+-- | What the two instances above share, so that a field added to
+-- 'SessionData' cannot reach one of them and not the other.
+showsSessionData :: ShowS -> Int -> SessionData -> ShowS
+showsSessionData secret d sd =
+    showParen (d > 10) $
+        showString "SessionData {sessionVersion = "
+            . shows (sessionVersion sd)
+            . showString ", sessionCipher = "
+            . shows (sessionCipher sd)
+            . showString ", sessionCompression = "
+            . shows (sessionCompression sd)
+            . showString ", sessionClientSNI = "
+            . shows (sessionClientSNI sd)
+            . showString ", sessionSecret = "
+            . secret
+            . showString ", sessionGroup = "
+            . shows (sessionGroup sd)
+            . showString ", sessionTicketInfo = "
+            . shows (sessionTicketInfo sd)
+            . showString ", sessionALPN = "
+            . shows (sessionALPN sd)
+            . showString ", sessionMaxEarlyDataSize = "
+            . shows (sessionMaxEarlyDataSize sd)
+            . showString ", sessionFlags = "
+            . shows (sessionFlags sd)
+            . showChar '}'
 
 is0RTTPossible :: SessionData -> Bool
 is0RTTPossible sd = sessionMaxEarlyDataSize sd > 0
