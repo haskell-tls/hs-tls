@@ -214,6 +214,7 @@ test-suite spec
         PipeChan
         PubKey
         Run
+        SecretSpec
         Session
         ThreadSpec
 
