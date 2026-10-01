@@ -94,6 +94,8 @@ spec = do
         prop "can handshake with TLS 1.3 EE" handshake13_ee_groups
         prop "can handshake with TLS 1.3 EC groups" handshake13_ec
         prop "can handshake with TLS 1.3 FFDHE groups" handshake13_ffdhe
+        it "rejects an X25519MLKEM768 key share with a zero X25519 part" $
+            handshake13_x25519mlkem768_zero_x25519
         prop "can handshake with TLS 1.3 Post-handshake auth" post_handshake_auth
         it
             "keeps record alignment when a slow record follows client auth"
@@ -1364,6 +1366,50 @@ handshake13_ffdhe (CSP13 (cli, srv)) = do
             , srv{serverSupported = svrSupported}
             )
     runTLSSimple13 params FullHandshake
+
+-- An all-zero X25519 public key decodes, but the shared secret computed
+-- from it is all zero and is rejected.  The server must answer with
+-- illegal_parameter, as it does for X25519 alone, rather than crash.
+handshake13_x25519mlkem768_zero_x25519 :: IO ()
+handshake13_x25519mlkem768_zero_x25519 = do
+    CSP13 (cli, srv) <- generate arbitrary
+    let cliSupported =
+            (clientSupported cli){supportedGroups = [X25519MLKEM768]}
+        svrSupported =
+            (serverSupported srv)
+                { supportedGroups = [X25519MLKEM768]
+                , supportedGroupsTLS13 = [[X25519MLKEM768]]
+                }
+        params =
+            ( cli{clientSupported = cliSupported}
+            , srv{serverSupported = svrSupported}
+            )
+    withPairContextWith (id, id) params $ \(cctx, sctx) -> do
+        contextHookSetHandshakeRecv sctx zeroX25519
+        concurrently_
+            (handshake sctx `shouldThrow` serverRejectedZeroX25519)
+            (handshake cctx `shouldThrow` anyTLSException)
+  where
+    zeroX25519 (ClientHello ch) =
+        pure $ ClientHello ch{chExtensions = map zeroKeyShare $ chExtensions ch}
+    zeroX25519 hs = pure hs
+    zeroKeyShare ext@(ExtensionRaw eid bs)
+        | eid == EID_KeyShare
+        , Just (KeyShareClientHello kses) <- extensionDecode MsgTClientHello bs =
+            toExtensionRaw $ KeyShareClientHello $ map zeroEntry kses
+        | otherwise = ext
+    -- The ML-KEM-768 encapsulation key (1184 bytes) is followed by the
+    -- X25519 public key (32 bytes).
+    zeroEntry (KeyShareEntry grp key)
+        | grp == X25519MLKEM768 =
+            KeyShareEntry grp $ B.take 1184 key <> B.replicate 32 0
+    zeroEntry kse = kse
+
+serverRejectedZeroX25519 :: TLSException -> Bool
+serverRejectedZeroX25519 (HandshakeFailed (Error_Protocol msg alert)) =
+    msg == "invalid client X25519MLKEM768 public key"
+        && alert == IllegalParameter
+serverRejectedZeroX25519 _ = False
 
 post_handshake_auth :: CSP13 -> IO ()
 post_handshake_auth (CSP13 (clientParam, serverParam)) = do

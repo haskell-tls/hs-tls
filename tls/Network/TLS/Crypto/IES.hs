@@ -249,20 +249,32 @@ groupEncapsulate (GroupPubA_MLKEM768 pub) = do
 groupEncapsulate (GroupPubA_MLKEM1024 pub) = do
     (sec, ct) <- ML.encapsulate pub
     return $ Just (GroupPubB_MLKEM1024 ct, convert sec)
+-- The classical part of a hybrid can fail as the group alone does: an
+-- all-zero X25519 public key decodes, but the shared secret derived from
+-- it is rejected.  Nothing is turned into illegal_parameter by the caller.
 groupEncapsulate (GroupPubA_X25519MLKEM768 (e1, e2)) = do
-    (c1, k1) <- fromJust <$> getECDHPubShared' x25519 e1
-    (k2, c2) <- ML.encapsulate e2
-    -- Sec 4.1: Specifically, the order of shares in the concatenation
-    -- has been reversed.
-    return $ Just (GroupPubB_X25519MLKEM768 (c1, c2), convert k2 <> k1)
+    mx <- getECDHPubShared' x25519 e1
+    case mx of
+        Nothing -> return Nothing
+        Just (c1, k1) -> do
+            (k2, c2) <- ML.encapsulate e2
+            -- Sec 4.1: Specifically, the order of shares in the concatenation
+            -- has been reversed.
+            return $ Just (GroupPubB_X25519MLKEM768 (c1, c2), convert k2 <> k1)
 groupEncapsulate (GroupPubA_P256MLKEM768 (e1, e2)) = do
-    (c1, k1) <- fromJust <$> getECDHPubShared' p256 e1
-    (k2, c2) <- ML.encapsulate e2
-    return $ Just (GroupPubB_P256MLKEM768 (c1, c2), k1 <> convert k2)
+    mx <- getECDHPubShared' p256 e1
+    case mx of
+        Nothing -> return Nothing
+        Just (c1, k1) -> do
+            (k2, c2) <- ML.encapsulate e2
+            return $ Just (GroupPubB_P256MLKEM768 (c1, c2), k1 <> convert k2)
 groupEncapsulate (GroupPubA_P384MLKEM1024 (e1, e2)) = do
-    (c1, k1) <- fromJust <$> getECDHPubShared' p384 e1
-    (k2, c2) <- ML.encapsulate e2
-    return $ Just (GroupPubB_P384MLKEM1024 (c1, c2), k1 <> convert k2)
+    mx <- getECDHPubShared' p384 e1
+    case mx of
+        Nothing -> return Nothing
+        Just (c1, k1) -> do
+            (k2, c2) <- ML.encapsulate e2
+            return $ Just (GroupPubB_P384MLKEM1024 (c1, c2), k1 <> convert k2)
 
 dhGroupGetPubShared
     :: MonadRandom r => Group -> PublicNumber -> r (Maybe (PublicNumber, GroupKey))
