@@ -70,6 +70,10 @@ spec = do
         prop "can handle client key usage" handshake_client_key_usage
         prop "can authenticate client" handshake_client_auth
         prop "can receive client authentication failure" handshake_client_auth_fail
+        it "accepts an empty TLS 1.2 client certificate when the hook does" $
+            handshake_client_auth_empty TLS12
+        it "accepts an empty TLS 1.3 client certificate when the hook does" $
+            handshake_client_auth_empty TLS13
         prop "can handle extended main secret" handshake_ems
         prop "can resume with extended main secret" handshake_resumption_ems
         prop "can handle ALPN" handshake_alpn
@@ -707,6 +711,41 @@ handshake_client_auth (clientParam, serverParam) = do
   where
     validateChain cred chain
         | chain == fst cred = return CertificateUsageAccept
+        | otherwise = return (CertificateUsageReject CertificateRejectUnknownCA)
+
+-- A client without a certificate answers CertificateRequest with an empty
+-- Certificate and, in TLS 1.2, sends no CertificateVerify.  A server whose
+-- hook accepts that must go on to ChangeCipherSpec rather than wait for a
+-- CertificateVerify.
+handshake_client_auth_empty :: Version -> IO ()
+handshake_client_auth_empty version = do
+    let cipher
+            | version == TLS13 = cipher13_AES_128_GCM_SHA256
+            | otherwise = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([version], [version])
+                ([cipher], [cipher])
+    let clientParam' =
+            clientParam
+                { clientHooks =
+                    (clientHooks clientParam)
+                        { onCertificateRequest = \_ -> return Nothing
+                        }
+                }
+        serverParam' =
+            serverParam
+                { serverWantClientCert = True
+                , serverHooks =
+                    (serverHooks serverParam)
+                        { onClientCertificate = acceptEmpty
+                        }
+                }
+    runTLSSimple (clientParam', serverParam')
+  where
+    acceptEmpty chain
+        | isNullCertificateChain chain = return CertificateUsageAccept
         | otherwise = return (CertificateUsageReject CertificateRejectUnknownCA)
 
 handshake_client_auth_fail :: (ClientParams, ServerParams) -> IO ()

@@ -92,7 +92,11 @@ recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake expectClientCer
         -- matches our request and that we support
         -- verifying with that certificate.
 
-        return $ RecvStateHandshake $ expectClientKeyExchange True
+        -- RFC 5246 Section 7.4.8: CertificateVerify follows only a
+        -- certificate with signing capability, so not an empty one,
+        -- which the hook may have accepted.
+        let followedCertVerify = not $ isNullCertificateChain certs
+        return $ RecvStateHandshake $ expectClientKeyExchange followedCertVerify
     expectClientCertificate p = expectClientKeyExchange False p
 
     -- cannot use RecvStateHandshake, as the next message could be a ChangeCipher,
