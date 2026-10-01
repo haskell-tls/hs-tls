@@ -130,9 +130,13 @@ decryptData ver record econtent tst lim =
     blockSize = bulkBlockSize bulk
     econtentLen = B.length econtent
 
+    -- A record too short for the cipher cannot be deprotected: RFC 5246
+    -- Section 7.2.2 and RFC 8446 Section 5.2 answer it with bad_record_mac.
     sanityCheckError =
-        throwError
-            (Error_Packet "encrypted content too small for encryption parameters")
+        throwError $
+            Error_Protocol
+                "encrypted content too small for encryption parameters"
+                BadRecordMac
 
     decryptOf :: BulkState -> RecordM ByteString
     decryptOf (BulkStateBlock decryptF) = do
@@ -224,9 +228,11 @@ decryptData ver record econtent tst lim =
     decryptOf BulkStateUninitialized =
         throwError $ Error_Protocol "decrypt state uninitialized" InternalError
 
-    -- handling of outer format can report errors with Error_Packet
+    -- the outer format of a record that cannot be deprotected is reported
+    -- as an integrity failure too, i.e. BadRecordMac
     get3o s ls =
-        maybe (throwError $ Error_Packet "record bad format") return $ partition3 s ls
+        maybe (throwError $ Error_Protocol "record bad format" BadRecordMac) return $
+            partition3 s ls
     get2o s (d1, d2) = get3o s (d1, d2, 0) >>= \(r1, r2, _) -> return (r1, r2)
 
     -- all format errors related to decrypted content are reported

@@ -4,6 +4,7 @@ module HandshakeSpec where
 
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (concurrently_)
+import qualified Control.Exception as E
 import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
@@ -106,6 +107,12 @@ spec = do
         it
             "keeps record alignment when a slow record follows client auth"
             handshake13_client_auth_slow_record
+        it "rejects a too short TLS 1.2 AEAD record with bad_record_mac" $
+            short_record_bad_record_mac TLS12 cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        it "rejects a too short TLS 1.2 CBC record with bad_record_mac" $
+            short_record_bad_record_mac TLS12 cipher_ECDHE_RSA_AES128CBC_SHA256
+        it "rejects a too short TLS 1.3 record with bad_record_mac" $
+            short_record_bad_record_mac TLS13 cipher13_AES_128_GCM_SHA256
 
 --------------------------------------------------------------
 
@@ -1593,6 +1600,46 @@ handshake13_client_auth_slow_record = do
                 when (n > 4096) $ threadDelay 300000
                 backendRecv be n
             }
+
+-- A protected record too short for the cipher cannot be deprotected, which
+-- RFC 5246 Section 7.2.2 and RFC 8446 Section 5.2 answer with
+-- bad_record_mac.  The client's first application data record is cut down
+-- to a single byte of ciphertext on its way to the server.
+short_record_bad_record_mac :: Version -> Cipher -> IO ()
+short_record_bad_record_mac version cipher = do
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([version], [version])
+                ([cipher], [cipher])
+    armed <- newIORef False
+    let truncateRecord be =
+            be
+                { backendSend = \bs -> do
+                    cut <- readIORef armed
+                    if cut && B.length bs > 6 && B.head bs == 23
+                        then do
+                            writeIORef armed False
+                            backendSend be $ B.take 3 bs <> B.pack [0, 1] <> B.take 1 (B.drop 5 bs)
+                        else backendSend be bs
+                }
+    withPairContextWith (truncateRecord, id) (clientParam, serverParam) $
+        \(cctx, sctx) ->
+            concurrently_
+                ( do
+                    handshake sctx
+                    recvData sctx `shouldThrow` serverRejectedShortRecord
+                )
+                ( do
+                    handshake cctx
+                    writeIORef armed True
+                    sendData cctx "hello"
+                    void (E.try (recvData cctx) :: IO (Either E.SomeException B.ByteString))
+                )
+
+serverRejectedShortRecord :: TLSException -> Bool
+serverRejectedShortRecord (Terminated _ _ (Error_Protocol _ BadRecordMac)) = True
+serverRejectedShortRecord _ = False
 
 expectJust :: String -> Maybe a -> Expectation
 expectJust tag mx = case mx of
