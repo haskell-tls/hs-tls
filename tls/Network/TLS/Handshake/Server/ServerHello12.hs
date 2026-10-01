@@ -143,7 +143,7 @@ sendServerFirstFlight ServerParams{..} ctx usedCipher mcred chExts = do
         then do
             let (certTypes, hashSigs) =
                     let as = supportedHashSignatures serverSupported
-                     in (nub $ mapMaybe hashSigToCertType as, as)
+                     in (nub $ mapMaybe (fmap certTypeOnWire . hashSigToCertType) as, as)
                 creq =
                     CertRequest
                         certTypes
@@ -153,6 +153,12 @@ sendServerFirstFlight ServerParams{..} ctx usedCipher mcred chExts = do
             return $ b2 . (creq :)
         else return b2
   where
+    -- RFC 8422 Section 3.1: in TLS 1.2, ecdsa_sign asks for a certificate
+    -- with an ECDSA- or EdDSA-capable public key.  The Ed25519 and Ed448
+    -- certificate types are synthetic values with no code point.
+    certTypeOnWire CertificateType_Ed25519_Sign = CertificateType_ECDSA_Sign
+    certTypeOnWire CertificateType_Ed448_Sign = CertificateType_ECDSA_Sign
+    certTypeOnWire t = t
     commonGroups = negotiatedGroupsInCommon (supportedGroups serverSupported) chExts
     commonHashSigs = hashAndSignaturesInCommon (supportedHashSignatures serverSupported) chExts
     setup_DHE = do
