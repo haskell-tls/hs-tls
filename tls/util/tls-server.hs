@@ -10,6 +10,9 @@ import Data.X509.CertificateStore
 import Network.Run.TCP
 import Network.TLS
 import Network.TLS.ECH.Config
+import Network.TLS.Extra.Cipher
+import Network.TLS.Extra.CipherCBC
+import Network.TLS.Extra.FFDHE
 import Network.TLS.Internal
 import System.Console.GetOpt
 import System.Environment (getArgs)
@@ -27,12 +30,13 @@ data Options = Options
     , optShow :: Bool
     , optKeyLogFile :: Maybe FilePath
     , optTrustedAnchor :: Maybe FilePath
-    , optGroups :: [Group]
+    , optGroups :: Maybe [Group]
     , optCertFile :: FilePath
     , optKeyFile :: FilePath
     , optECHConfigFile :: Maybe FilePath
     , optECHKeyFile :: Maybe FilePath
     , optTraceKey :: Bool
+    , optUseWeakCiphers :: Bool
     }
     deriving (Show)
 
@@ -44,13 +48,13 @@ defaultOptions =
         , optShow = False
         , optKeyLogFile = Nothing
         , optTrustedAnchor = Nothing
-        , -- excluding FFDHE8192 for retry
-          optGroups = FFDHE8192 `delete` supportedGroups defaultSupported
+        , optGroups = Nothing
         , optCertFile = "servercert.pem"
         , optKeyFile = "serverkey.pem"
         , optECHConfigFile = Nothing
         , optECHKeyFile = Nothing
         , optTraceKey = False
+        , optUseWeakCiphers = False
         }
 
 options :: [OptDescr (Options -> Options)]
@@ -78,7 +82,7 @@ options =
     , Option
         ['g']
         ["groups"]
-        (ReqArg (\gs o -> o{optGroups = readGroups gs}) "<groups>")
+        (ReqArg (\gs o -> o{optGroups = Just $ readGroups gs}) "<groups>")
         "groups for key exchange"
     , Option
         ['c']
@@ -110,6 +114,11 @@ options =
         ["trace-key"]
         (NoArg (\o -> o{optTraceKey = True}))
         "Trace transcript hash"
+    , Option
+        []
+        ["use-weak-ciphers"]
+        (NoArg (\o -> o{optUseWeakCiphers = True}))
+        "accept deprecated ciphers and relax checks (for tlsfuzzer)"
     ]
 
 usage :: String
@@ -135,7 +144,12 @@ main = do
     (host, port) <- case ips of
         [h, p] -> return (h, p)
         _ -> showUsageAndExit "cannot recognize <addr> and <port>\n"
-    when (null optGroups) $ do
+    let groups = fromMaybe defaultGroups optGroups
+        defaultGroups
+            | optUseWeakCiphers = supportedGroups defaultSupported
+            -- excluding FFDHE8192 for retry
+            | otherwise = FFDHE8192 `delete` supportedGroups defaultSupported
+    when (null groups) $ do
         putStrLn "Error: unsupported groups"
         exitFailure
     smgr <- newSessionManager
@@ -169,7 +183,8 @@ main = do
         let sparams =
                 getServerParams
                     creds
-                    optGroups
+                    optUseWeakCiphers
+                    groups
                     smgr
                     keyLog
                     optClientAuth
@@ -196,6 +211,7 @@ main = do
 
 getServerParams
     :: Credentials
+    -> Bool
     -> [Group]
     -> SessionManager
     -> (String -> IO ())
@@ -205,7 +221,7 @@ getServerParams
     -> (String -> IO ())
     -> (String -> IO ())
     -> ServerParams
-getServerParams creds groups sm keyLog clientAuth mstore (ekey, ecnf) printError traceKey =
+getServerParams creds weak groups sm keyLog clientAuth mstore (ekey, ecnf) printError traceKey =
     defaultParamsServer
         { serverSupported = supported
         , serverShared = shared
@@ -214,6 +230,7 @@ getServerParams creds groups sm keyLog clientAuth mstore (ekey, ecnf) printError
         , serverEarlyDataSize = 2048
         , serverWantClientCert = clientAuth
         , serverECHKey = ekey
+        , serverDHEParams = if weak then Just ffdhe2048 else Nothing
         }
   where
     shared =
@@ -231,15 +248,25 @@ getServerParams creds groups sm keyLog clientAuth mstore (ekey, ecnf) printError
             }
     supported =
         defaultSupported
-            { supportedGroups = groups
+            { supportedCiphers = ciphers
+            , supportedGroups = groups
+            , supportedExtendedMainSecret =
+                if weak then AllowEMS else supportedExtendedMainSecret defaultSupported
+            , supportedClientInitiatedRenegotiation =
+                weak || supportedClientInitiatedRenegotiation defaultSupported
             }
+    ciphers
+        | weak = ciphersuite_default ++ ciphersForFuzzer
+        | otherwise = ciphersuite_default
     hooks =
         defaultServerHooks
             { onALPNClientSuggest = Just chooseALPN
             , onClientCertificate = case mstore of
                 Nothing -> onClientCertificate defaultServerHooks
-                Just _ ->
-                    validateClientCertificate (sharedCAStore shared) (sharedValidationCache shared)
+                Just _
+                    | weak -> acceptEmptyCertificate
+                    | otherwise ->
+                        validateClientCertificate (sharedCAStore shared) (sharedValidationCache shared)
             }
     debug =
         defaultDebugParams
@@ -247,6 +274,89 @@ getServerParams creds groups sm keyLog clientAuth mstore (ekey, ecnf) printError
             , debugError = printError
             , debugTraceKey = traceKey
             }
+    acceptEmptyCertificate cc
+        | isNullCertificateChain cc = return CertificateUsageAccept
+        | otherwise =
+            validateClientCertificate
+                (sharedCAStore shared)
+                (sharedValidationCache shared)
+                cc
+
+----------------------------------------------------------------
+-- Deprecated ciphers, accepted only with --use-weak-ciphers.
+-- tlsfuzzer uses them in its TLS 1.2 tests.
+
+ciphersForFuzzer :: [Cipher]
+ciphersForFuzzer =
+    [ cipher_ECDHE_RSA_WITH_AES_128_CBC_SHA
+    , cipher_DHE_RSA_WITH_AES_128_CBC_SHA
+    , cipher_RSA_WITH_AES_256_CBC_SHA
+    , cipher_RSA_WITH_AES_128_CBC_SHA
+    , cipher_DHE_RSA_WITH_AES_128_GCM_SHA256
+    , cipher_RSA_WITH_AES_128_GCM_SHA256
+    , cipher_RSA_WITH_AES_256_GCM_SHA384
+    , cipher_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+    , cipher13_AES_128_CCM_8_SHA256
+    ]
+        ++ ciphersuite_pfs_sha2_cbc
+
+-- CBC with HMAC-SHA1, derived from the SHA-2 ones in CipherCBC.
+cipher_RSA_WITH_AES_128_CBC_SHA :: Cipher
+cipher_RSA_WITH_AES_128_CBC_SHA =
+    cipher_DHE_RSA_AES128_SHA256
+        { cipherID = 0x002F
+        , cipherName = "TLS_RSA_WITH_AES_128_CBC_SHA"
+        , cipherHash = SHA1
+        , cipherPRFHash = Nothing
+        , cipherKeyExchange = CipherKeyExchange_RSA
+        , cipherMinVer = Just SSL3
+        }
+
+cipher_RSA_WITH_AES_256_CBC_SHA :: Cipher
+cipher_RSA_WITH_AES_256_CBC_SHA =
+    cipher_DHE_RSA_AES256_SHA256
+        { cipherID = 0x0035
+        , cipherName = "TLS_RSA_WITH_AES_256_CBC_SHA"
+        , cipherHash = SHA1
+        , cipherPRFHash = Nothing
+        , cipherKeyExchange = CipherKeyExchange_RSA
+        , cipherMinVer = Just SSL3
+        }
+
+cipher_DHE_RSA_WITH_AES_128_CBC_SHA :: Cipher
+cipher_DHE_RSA_WITH_AES_128_CBC_SHA =
+    cipher_RSA_WITH_AES_128_CBC_SHA
+        { cipherID = 0x0033
+        , cipherName = "TLS_DHE_RSA_WITH_AES_128_CBC_SHA"
+        , cipherKeyExchange = CipherKeyExchange_DHE_RSA
+        , cipherMinVer = Nothing
+        }
+
+cipher_ECDHE_RSA_WITH_AES_128_CBC_SHA :: Cipher
+cipher_ECDHE_RSA_WITH_AES_128_CBC_SHA =
+    cipher_RSA_WITH_AES_128_CBC_SHA
+        { cipherID = 0xC013
+        , cipherName = "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA"
+        , cipherKeyExchange = CipherKeyExchange_ECDHE_RSA
+        , cipherMinVer = Just TLS10
+        }
+
+-- AES-GCM with RSA key exchange, derived from the DHE ones.
+cipher_RSA_WITH_AES_128_GCM_SHA256 :: Cipher
+cipher_RSA_WITH_AES_128_GCM_SHA256 =
+    cipher_DHE_RSA_WITH_AES_128_GCM_SHA256
+        { cipherID = 0x009C
+        , cipherName = "TLS_RSA_WITH_AES_128_GCM_SHA256"
+        , cipherKeyExchange = CipherKeyExchange_RSA
+        }
+
+cipher_RSA_WITH_AES_256_GCM_SHA384 :: Cipher
+cipher_RSA_WITH_AES_256_GCM_SHA384 =
+    cipher_DHE_RSA_WITH_AES_256_GCM_SHA384
+        { cipherID = 0x009D
+        , cipherName = "TLS_RSA_WITH_AES_256_GCM_SHA384"
+        , cipherKeyExchange = CipherKeyExchange_RSA
+        }
 
 chooseALPN :: [ByteString] -> IO ByteString
 chooseALPN protos
