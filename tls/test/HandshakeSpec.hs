@@ -74,6 +74,8 @@ spec = do
             handshake_client_auth_empty TLS12
         it "accepts an empty TLS 1.3 client certificate when the hook does" $
             handshake_client_auth_empty TLS13
+        it "requests only defined certificate types in TLS 1.2" $
+            handshake12_cert_request_types
         prop "can handle extended main secret" handshake_ems
         prop "can resume with extended main secret" handshake_resumption_ems
         prop "can handle ALPN" handshake_alpn
@@ -747,6 +749,57 @@ handshake_client_auth_empty version = do
     acceptEmpty chain
         | isNullCertificateChain chain = return CertificateUsageAccept
         | otherwise = return (CertificateUsageReject CertificateRejectUnknownCA)
+
+-- In TLS 1.2 a client certificate with an Ed25519 or Ed448 key is asked
+-- for with ecdsa_sign (RFC 8422 Section 3.1).  The Ed25519 and Ed448
+-- certificate types of this library are synthetic and have no code point,
+-- so they must not reach the wire.
+handshake12_cert_request_types :: IO ()
+handshake12_cert_request_types = do
+    let cipher = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS12], [TLS12])
+                ([cipher], [cipher])
+    ref <- newIORef Nothing
+    let clientParam' =
+            clientParam
+                { clientHooks =
+                    (clientHooks clientParam)
+                        { onCertificateRequest = \_ -> return Nothing
+                        }
+                }
+        serverParam' =
+            serverParam
+                { serverWantClientCert = True
+                , serverSupported =
+                    (serverSupported serverParam)
+                        { supportedHashSignatures =
+                            supportedHashSignatures defaultSupported
+                        }
+                , serverHooks =
+                    (serverHooks serverParam)
+                        { onClientCertificate = \_ -> return CertificateUsageAccept
+                        }
+                }
+        record hs@(CertRequest certTypes _ _) = writeIORef ref (Just certTypes) >> return hs
+        record hs = return hs
+    withPairContextWith (id, id) (clientParam', serverParam') $ \(cctx, sctx) -> do
+        contextHookSetHandshakeRecv cctx record
+        concurrently_ (handshake sctx) (handshake cctx)
+    mtypes <- readIORef ref
+    case mtypes of
+        Nothing -> expectationFailure "no CertificateRequest received"
+        Just certTypes -> do
+            certTypes `shouldSatisfy` all (`elem` defined)
+            certTypes `shouldContain` [CertificateType_ECDSA_Sign]
+  where
+    defined =
+        [ CertificateType_RSA_Sign
+        , CertificateType_DSA_Sign
+        , CertificateType_ECDSA_Sign
+        ]
 
 handshake_client_auth_fail :: (ClientParams, ServerParams) -> IO ()
 handshake_client_auth_fail (clientParam, serverParam) = do
