@@ -1,0 +1,177 @@
+name: tlsfuzzer
+
+# tlsfuzzer runs its test scripts against tls-server.  It is not part of
+# Haskell CI: what it checks is the protocol behaviour, which does not vary
+# by OS or compiler, and a change on the tlsfuzzer side alone can make it
+# fail, so it should not decide whether a pull request is green.  It runs
+# once a week and by hand, never on a push.
+on:
+  workflow_dispatch:
+  schedule:
+    # Sunday 18:00 UTC, Monday 03:00 JST.
+    - cron: '0 18 * * 0'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The scripts, lists and the few modifications for hs-tls live on the
+  # haskell branch of this fork.  Pinned to a commit so that rewriting that
+  # branch, which happens whenever it is rebased onto upstream, changes
+  # nothing here until the commit below is moved forward.
+  TLSFUZZER_REPO: kazu-yamamoto/tlsfuzzer
+  TLSFUZZER_REF: c150ff3b00b686d642ae16da0c93c594e5567abd
+  GHC_VERSION: '9.12'
+  # Same name as in main.yml, so that the cache main.yml saves on main is
+  # restored here.  Nothing is saved from this workflow.
+  cache-name: cabal-ghc
+
+jobs:
+  tlsfuzzer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+    - uses: actions/checkout@v5
+
+    - uses: haskell-actions/setup@v2
+      with:
+        ghc-version: ${{ env.GHC_VERSION }}
+        cabal-version: latest
+
+    - name: Cache Key
+      id: params
+      shell: bash
+      run: |
+        ghc_version=$(ghc --numeric-version)
+        prefix="${{ runner.os }}-${{ runner.arch }}-${{ env.cache-name }}-${ghc_version}-"
+        echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+        {
+          echo "paths<<PATHS_EOF"
+          cabal path --remote-repo-cache; echo
+          cabal path --store-dir; echo
+          cabal path --installdir; echo
+          echo "dist-newstyle"
+          echo "PATHS_EOF"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Restore Cache
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ steps.params.outputs.paths }}
+        key: ${{ steps.params.outputs.prefix }}${{ github.sha }}
+        restore-keys: ${{ steps.params.outputs.prefix }}
+
+    # Retried for the same reason as in main.yml: the Hackage mirror
+    # intermittently answers 403.
+    - name: Update the Hackage index
+      shell: bash
+      run: |
+        for delay in 15 30 60 0; do
+          cabal update && exit 0
+          [ "$delay" = 0 ] && break
+          echo "cabal update failed; retrying in ${delay}s"
+          sleep "$delay"
+        done
+        exit 1
+
+    - name: Build tls-server
+      id: build
+      shell: bash
+      run: |
+        built=
+        for delay in 15 30 60 0; do
+          cabal build -f devel exe:tls-server && built=1 && break
+          [ "$delay" = 0 ] && break
+          echo "build failed; retrying in ${delay}s"
+          sleep "$delay"
+        done
+        [ -n "$built" ] || exit 1
+        echo "TLS_SERVER=$(cabal list-bin -f devel exe:tls-server)" >> "$GITHUB_ENV"
+
+    - uses: actions/checkout@v5
+      with:
+        repository: ${{ env.TLSFUZZER_REPO }}
+        ref: ${{ env.TLSFUZZER_REF }}
+        path: tlsfuzzer
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    # requirements.txt pins tlslite-ng.  kyber-py is what upstream's CI
+    # installs for the ML-KEM tests.
+    - name: Install tlsfuzzer dependencies
+      run: |
+        python -m venv "$RUNNER_TEMP/venv"
+        "$RUNNER_TEMP/venv/bin/pip" install -r tlsfuzzer/requirements.txt kyber-py==1.2.0
+        echo "PYTHON=$RUNNER_TEMP/venv/bin/python" >> "$GITHUB_ENV"
+
+    # A CA, a server certificate and a client certificate, RSA 2048 like
+    # the ones the scripts have been run with by hand.
+    - name: Generate certificates
+      run: |
+        certs="$RUNNER_TEMP/certs"
+        mkdir -p "$certs"
+        cd "$certs"
+        openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
+          -keyout cakey.pem -out cacert.pem -subj "/CN=tlsfuzzer CA"
+        openssl req -newkey rsa:2048 -nodes \
+          -keyout serverkey.pem -out server.csr -subj "/CN=localhost"
+        printf 'subjectAltName=DNS:localhost,IP:127.0.0.1\n' > server.ext
+        openssl x509 -req -in server.csr -CA cacert.pem -CAkey cakey.pem \
+          -CAcreateserial -days 2 -extfile server.ext -out servercert.pem
+        openssl req -newkey rsa:2048 -nodes \
+          -keyout clientkey.pem -out client.csr -subj "/CN=tlsfuzzer client"
+        # Without an extension, openssl on Ubuntu issues a v1 certificate,
+        # which tls-server rejects as LeafNotV3.
+        printf 'basicConstraints=CA:FALSE\nextendedKeyUsage=clientAuth\n' > client.ext
+        openssl x509 -req -in client.csr -CA cacert.pem -CAkey cakey.pem \
+          -CAcreateserial -days 2 -extfile client.ext -out clientcert.pem
+        echo "CERT_DIR=$certs" >> "$GITHUB_ENV"
+
+    # TLS_HOST, TLS_PORT, PYTHON and CERT_DIR are read by test.sh and
+    # test-auth.sh.  The server is stopped by its PID: a bare wait would
+    # wait for the server too.
+    - name: Run test.sh
+      working-directory: tlsfuzzer
+      env:
+        TLS_HOST: 127.0.0.1
+        TLS_PORT: 4433
+      run: |
+        "$TLS_SERVER" -d --use-weak-ciphers \
+          --key="$CERT_DIR/serverkey.pem" --cert="$CERT_DIR/servercert.pem" \
+          "$TLS_HOST" "$TLS_PORT" > "$RUNNER_TEMP/server.log" 2>&1 &
+        server=$!
+        trap 'kill $server' EXIT
+        for _ in $(seq 30); do
+          (exec 3<>"/dev/tcp/$TLS_HOST/$TLS_PORT") 2>/dev/null && break
+          sleep 1
+        done
+        bash test.sh
+
+    - name: Run test-auth.sh
+      if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+      working-directory: tlsfuzzer
+      env:
+        TLS_HOST: 127.0.0.1
+        TLS_PORT: 4434
+      run: |
+        "$TLS_SERVER" -d --use-weak-ciphers -a -t "$CERT_DIR/cacert.pem" \
+          --key="$CERT_DIR/serverkey.pem" --cert="$CERT_DIR/servercert.pem" \
+          "$TLS_HOST" "$TLS_PORT" > "$RUNNER_TEMP/server-auth.log" 2>&1 &
+        server=$!
+        trap 'kill $server' EXIT
+        for _ in $(seq 30); do
+          (exec 3<>"/dev/tcp/$TLS_HOST/$TLS_PORT") 2>/dev/null && break
+          sleep 1
+        done
+        bash test-auth.sh
+
+    - name: Upload server logs
+      if: ${{ failure() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: tls-server-logs
+        path: ${{ runner.temp }}/server*.log
