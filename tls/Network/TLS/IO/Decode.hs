@@ -20,6 +20,7 @@ import Network.TLS.Record
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Struct13
+import Network.TLS.Types (Role (..))
 import Network.TLS.Util
 import Network.TLS.Wire
 
@@ -33,36 +34,47 @@ decodePacket12 ctx (Record ProtocolType_ChangeCipherSpec _ fragment) =
             switchRxEncryption ctx
             return $ Right ChangeCipherSpec
 decodePacket12 ctx (Record ProtocolType_Handshake ver fragment) = do
-    keyxchg <-
-        getHState ctx >>= \hs -> return (hs >>= hstPendingCipher >>= Just . cipherKeyExchange)
+    mhs <- getHState ctx
+    let keyxchg = mhs >>= hstPendingCipher >>= Just . cipherKeyExchange
     usingState ctx $ do
+        role <- getRole
         let currentParams =
                 CurrentParams
                     { cParamsVersion = ver
                     , cParamsKeyXchgType = keyxchg
                     }
+            -- A server has no handshake state until its first ClientHello,
+            -- and that is the only message it may receive then (RFC 8446
+            -- Section 4).  Any other is answered with unexpected_message
+            -- before its body is decoded, rather than with whatever decoding
+            -- the body as that type gives.
+            expectClientHello = role == ServerRole && isNothing mhs
+            decode ty content
+                | expectClientHello && ty /= HandshakeType_ClientHello =
+                    Left $ Error_Packet_unexpected (show ty) " expected: client hello"
+                | otherwise = decodeHandshake currentParams ty content
         -- get back the optional continuation, and parse as many handshake record as possible.
         (mCont, wirebytes) <- gets stHandshakeRecordCont12
         modify' (\st -> st{stHandshakeRecordCont12 = (Nothing, [])})
         (hss, bss) <-
-            unzip <$> parseMany currentParams mCont wirebytes (fragmentGetBytes fragment)
+            unzip <$> parseMany decode mCont wirebytes (fragmentGetBytes fragment)
         return $ Handshake hss bss
   where
-    parseMany currentParams mCont wirebytes bs =
+    parseMany decode mCont wirebytes bs =
         case fromMaybe decodeHandshakeRecord mCont bs of
             GotError err -> throwError err
             GotPartial cont -> do
                 modify' (\st -> st{stHandshakeRecordCont12 = (Just cont, bs : wirebytes)})
                 return []
             GotSuccess (ty, content) ->
-                case decodeHandshake currentParams ty content of
+                case decode ty content of
                     Left err -> throwError err
                     Right h -> return [(h, reverse (bs : wirebytes))]
             GotSuccessRemaining (ty, content) left ->
-                case decodeHandshake currentParams ty content of
+                case decode ty content of
                     Left err -> throwError err
                     Right h -> do
-                        hbs <- parseMany currentParams Nothing [] left
+                        hbs <- parseMany decode Nothing [] left
                         let len = BS.length bs - BS.length left
                             bs' = BS.take len bs
                         return ((h, reverse (bs' : wirebytes)) : hbs)
