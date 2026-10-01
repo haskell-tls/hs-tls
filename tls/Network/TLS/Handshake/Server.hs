@@ -86,4 +86,4 @@ handshake sparams ctx chb@(ClientHello ch, bs) = do
             resumeSessionData <-
                 sendServerHello12 sparams ctx r chI
             recvClientSecondFlight12 sparams ctx resumeSessionData
-handshake _ _ _ = throwCore $ Error_Protocol "client Hello is expected" HandshakeFailure
+handshake _ _ (hs, _) = unexpected (show hs) (Just "client hello")

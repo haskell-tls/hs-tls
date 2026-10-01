@@ -11,6 +11,7 @@ import qualified Data.ByteString.Lazy as L
 import Data.IORef
 import Data.List
 import Data.Maybe
+import Data.Word (Word8)
 import Data.X509 (ExtKeyUsageFlag (..), ExtKeyUsagePurpose (..))
 import Network.TLS
 import Network.TLS.Extra.Cipher
@@ -113,6 +114,12 @@ spec = do
             short_record_bad_record_mac TLS12 cipher_ECDHE_RSA_AES128CBC_SHA256
         it "rejects a too short TLS 1.3 record with bad_record_mac" $
             short_record_bad_record_mac TLS13 cipher13_AES_128_GCM_SHA256
+        it "rejects a ServerHello as the first client message" $
+            server_first_message_unexpected 2
+        it "rejects a Finished as the first client message" $
+            server_first_message_unexpected 20
+        it "rejects an unknown handshake type as the first client message" $
+            server_first_message_unexpected 254
 
 --------------------------------------------------------------
 
@@ -1640,6 +1647,31 @@ short_record_bad_record_mac version cipher = do
 serverRejectedShortRecord :: TLSException -> Bool
 serverRejectedShortRecord (Terminated _ _ (Error_Protocol _ BadRecordMac)) = True
 serverRejectedShortRecord _ = False
+
+-- The first handshake message a server receives must be a ClientHello; any
+-- other is out of order and answered with unexpected_message (RFC 8446
+-- Section 4), whatever its body would decode to.  The handshake type of the
+-- client's first record is replaced on its way to the server.
+server_first_message_unexpected :: Word8 -> IO ()
+server_first_message_unexpected ty = do
+    (clientParam, serverParam) <- generate arbitrary
+    armed <- newIORef True
+    let retype be =
+            be
+                { backendSend = \bs -> do
+                    first <- atomicModifyIORef' armed (\a -> (False, a))
+                    if first && B.length bs > 5 && B.head bs == 22
+                        then backendSend be $ B.take 5 bs <> B.singleton ty <> B.drop 6 bs
+                        else backendSend be bs
+                }
+    withPairContextWith (retype, id) (clientParam, serverParam) $ \(cctx, sctx) ->
+        concurrently_
+            (handshake sctx `shouldThrow` serverRejectedUnexpectedFirst)
+            (handshake cctx `shouldThrow` anyTLSException)
+
+serverRejectedUnexpectedFirst :: TLSException -> Bool
+serverRejectedUnexpectedFirst (HandshakeFailed (Error_Packet_unexpected _ _)) = True
+serverRejectedUnexpectedFirst _ = False
 
 expectJust :: String -> Maybe a -> Expectation
 expectJust tag mx = case mx of
