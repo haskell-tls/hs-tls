@@ -154,6 +154,10 @@ spec = do
             server_first_message_unexpected 20
         it "rejects an unknown handshake type as the first client message" $
             server_first_message_unexpected 254
+        it "rejects a ChangeCipherSpec before the first ClientHello" $
+            server_ccs_interleaved 0
+        it "rejects a ChangeCipherSpec inside a fragmented ClientHello" $
+            server_ccs_interleaved 2
         it "rejects an SSLv2-style record header at once" $
             server_first_record_type_unexpected 0x80 0x3fff
         it "rejects an unknown record type" $
@@ -1906,6 +1910,35 @@ server_first_message_unexpected ty = do
                         else backendSend be bs
                 }
     withPairContextWith (retype, id) (clientParam, serverParam) $ \(cctx, sctx) ->
+        concurrently_
+            (handshake sctx `shouldThrow` serverRejectedUnexpectedFirst)
+            (handshake cctx `shouldThrow` anyTLSException)
+
+-- ChangeCipherSpec comes between complete handshake messages (RFC 5246
+-- Section 7.1), and a server has no handshake state before its first
+-- ClientHello (CVE-2004-0079).  The client's first record is split after
+-- the given number of bytes of its body, and a ChangeCipherSpec record is
+-- sent in between; with 0 it is sent before the whole ClientHello.
+server_ccs_interleaved :: Int -> IO ()
+server_ccs_interleaved n = do
+    (clientParam, serverParam) <- generate arbitrary
+    armed <- newIORef True
+    let interleave be =
+            be
+                { backendSend = \bs -> do
+                    first <- atomicModifyIORef' armed (\a -> (False, a))
+                    if first && B.length bs > 5 + n && B.head bs == 22
+                        then do
+                            let (hdr, body) = B.splitAt 5 bs
+                                (body1, body2) = B.splitAt n body
+                                record b = B.take 3 hdr <> encodeWord16 (fromIntegral $ B.length b) <> b
+                                ccs = B.pack [20, 3, 3, 0, 1, 1]
+                            if n == 0
+                                then backendSend be $ ccs <> bs
+                                else backendSend be $ record body1 <> ccs <> record body2
+                        else backendSend be bs
+                }
+    withPairContextWith (interleave, id) (clientParam, serverParam) $ \(cctx, sctx) ->
         concurrently_
             (handshake sctx `shouldThrow` serverRejectedUnexpectedFirst)
             (handshake cctx `shouldThrow` anyTLSException)
