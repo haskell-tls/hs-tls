@@ -181,6 +181,9 @@ recvPacket13 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
                                     return $ Right $ Handshake13 hss' bss
                                 logPacket ctx $ show pkt
                                 return pktRecv'
+                            Right pkt@(AppData13 _) -> do
+                                logPacket ctx $ show pkt
+                                checkNotInterleaved ctx pktRecv
                             Right pkt -> do
                                 logPacket ctx $ show pkt
                                 return pktRecv
@@ -193,6 +196,24 @@ isEmptyHandshake13 (Right (Handshake13 [] _)) = True
 isEmptyHandshake13 _ = False
 
 ----------------------------------------------------------------
+
+-- RFC 8446 Section 5.1: handshake messages MUST NOT be interleaved with
+-- other record types.  Application data that arrives while a handshake
+-- message is still incomplete is refused with unexpected_message rather
+-- than delivered.  TLS 1.3 only: RFC 5246 Section 6.2.1 lets TLS 1.2
+-- interleave data of different content types.
+checkNotInterleaved :: Context -> Either TLSError a -> IO (Either TLSError a)
+checkNotInterleaved ctx pktRecv = do
+    complete <- isRecvComplete ctx
+    if complete
+        then return pktRecv
+        else do
+            let err =
+                    Error_Packet_unexpected
+                        "application data"
+                        " expected: the rest of a handshake message"
+            logPacket ctx $ show err
+            return $ Left err
 
 isRecvComplete :: Context -> IO Bool
 isRecvComplete ctx = usingState_ ctx $ do
