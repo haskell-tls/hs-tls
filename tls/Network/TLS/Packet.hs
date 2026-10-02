@@ -76,6 +76,7 @@ import Network.TLS.MAC
 import Network.TLS.Struct
 import Network.TLS.Types
 import Network.TLS.Util.ASN1
+import Network.TLS.Util.Serialization (os2ip)
 import Network.TLS.Wire
 
 ----------------------------------------------------------------
@@ -358,7 +359,13 @@ decodeClientKeyXchg cp =
     parseCKE CipherKeyExchange_ECDHE_RSA = parseClientECDHPublic
     parseCKE CipherKeyExchange_ECDHE_ECDSA = parseClientECDHPublic
     parseCKE _ = fail "unsupported client key exchange type"
-    parseClientDHPublic = CKX_DH . dhPublic <$> getInteger16
+    -- RFC 5246 Section 7.4.7.2: dh_Yc is <1..2^16-1>, so an empty one is
+    -- malformed, a decode_error, before it is a public value that is not
+    -- valid.
+    parseClientDHPublic = do
+        bs <- getOpaque16
+        when (B.null bs) $ fail "empty DH public key"
+        return $ CKX_DH $ dhPublic $ os2ip bs
     -- RFC 8422 Section 5.7: ecdh_Yc is <1..2^8-1>, so an empty one is
     -- malformed, a decode_error, before it is a point that does not decode.
     parseClientECDHPublic = do

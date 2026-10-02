@@ -132,6 +132,20 @@ spec = do
                     (B.singleton 0)
                 )
                 `shouldBe` Just DecodeError
+        -- RFC 5246 Section 7.4.7.2: dh_Yc is <1..2^16-1>, so an empty one is
+        -- malformed -- a decode_error -- rather than a public value that is
+        -- not valid, which is an illegal_parameter.
+        it "answers an empty DH public key with decode_error" $
+            either (Just . errorToAlertDescription) (const Nothing)
+                ( decodeHandshake
+                    CurrentParams
+                        { cParamsVersion = TLS12
+                        , cParamsKeyXchgType = Just CipherKeyExchange_DHE_RSA
+                        }
+                    HandshakeType_ClientKeyXchg
+                    (B.pack [0, 0])
+                )
+                `shouldBe` Just DecodeError
         it "bounds TLS 1.3 certificate decompression by the declared size" $ do
             let compressed = BL.toStrict $ compress $ BL.replicate (32 * 1024 * 1024) 0
                 encoded = runPut $ do
