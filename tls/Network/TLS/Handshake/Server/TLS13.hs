@@ -28,6 +28,7 @@ import Network.TLS.Handshake.TranscriptHash
 import Network.TLS.IO
 import Network.TLS.Imports
 import Network.TLS.KeySchedule
+import Network.TLS.Packet13 (encodeHandshake13)
 import Network.TLS.Parameters
 import Network.TLS.Session
 import Network.TLS.State
@@ -242,9 +243,13 @@ requestCertificateServer sparams ctx = handleEx ctx $ do
             E.bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
                 sendPacket13 ctx $ Handshake13 [certReq13] []
         withReadLock ctx $ do
+            baseHState <- saveHState ctx
+            -- RFC 8446 Section 4.4: the handshake context of
+            -- post-handshake authentication is ClientHello ... client
+            -- Finished + CertificateRequest.
+            updateTranscriptHash13 ctx (certReq13, [encodeHandshake13 certReq13])
             (clientCert13, bClientCert13) <- getHandshake ctx ref
             emptyCert <- expectClientCertificate sparams ctx origCertReqCtx clientCert13
-            baseHState <- saveHState ctx
             updateTranscriptHash13 ctx (clientCert13, bClientCert13)
             th <- transcriptHash ctx "CH..Cert"
             unless emptyCert $ do

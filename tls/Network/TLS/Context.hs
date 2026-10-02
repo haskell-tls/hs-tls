@@ -116,7 +116,7 @@ class TLSParams a where
     doHandshake :: a -> Context -> IO ()
     doHandshakeWith :: a -> Context -> HandshakeR -> IO ()
     doRequestCertificate :: a -> Context -> IO Bool
-    doPostHandshakeAuthWith :: a -> Context -> Handshake13 -> IO ()
+    doPostHandshakeAuthWith :: a -> Context -> Handshake13R -> IO ()
 
 instance TLSParams ClientParams where
     getTLSCommonParams cparams =

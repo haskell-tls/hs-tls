@@ -174,7 +174,7 @@ data RoleParams = RoleParams
     { doHandshake_ :: Context -> IO ()
     , doHandshakeWith_ :: Context -> HandshakeR -> IO ()
     , doRequestCertificate_ :: Context -> IO Bool
-    , doPostHandshakeAuthWith_ :: Context -> Handshake13 -> IO ()
+    , doPostHandshakeAuthWith_ :: Context -> Handshake13R -> IO ()
     }
 
 data Locks = Locks

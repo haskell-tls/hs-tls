@@ -26,8 +26,8 @@ requestCertificate ctx =
 -- | Handle a post-handshake authentication flight with TLS 1.3.  This
 -- is called automatically by 'recvData', in a context where the read
 -- lock is already taken. Client only.
-postHandshakeAuthWith :: Context -> Handshake13 -> IO ()
-postHandshakeAuthWith ctx hs =
+postHandshakeAuthWith :: Context -> Handshake13R -> IO ()
+postHandshakeAuthWith ctx hb =
     withWriteLock ctx $
         handleException ctx $
-            doPostHandshakeAuthWith_ (ctxRoleParams ctx) ctx hs
+            doPostHandshakeAuthWith_ (ctxRoleParams ctx) ctx hb
