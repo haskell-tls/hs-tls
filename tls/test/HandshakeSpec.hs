@@ -59,6 +59,12 @@ spec = do
             handshake_high_legacy_version TLS12 (Version 0x0309)
         it "ignores legacy_version when supported_versions is present" $
             handshake_high_legacy_version TLS13 TLS13
+        it "rejects ec_point_formats without uncompressed" $
+            handshake12_ec_point_formats
+                (B.pack [1, 1])
+                rejectedAsIllegalParameter
+        it "rejects an empty ec_point_formats" $
+            handshake12_ec_point_formats (B.pack [0]) rejectedAsDecodeError
         prop "can negotiate hash and signature" handshake_hashsignatures
         prop "can negotiate cipher suite" handshake_ciphersuites
         it "rejects a cipher outside the server callback candidates" $
@@ -944,6 +950,47 @@ handshake_high_legacy_version version legacy = do
         concurrently_ (handshake sctx) (handshake cctx)
         info <- contextGetInformation sctx
         (infoVersion <$> info) `shouldBe` Just version
+
+-- RFC 8422 Section 5.1.2: ec_point_format_list is <1..2^8-1>, and a
+-- client naming one of its curves in supported_groups must offer the
+-- uncompressed format.  The ClientHello's ec_point_formats is replaced
+-- on its way to the server, which must refuse it.
+handshake12_ec_point_formats
+    :: B.ByteString -> Selector TLSException -> IO ()
+handshake12_ec_point_formats formats rejected = do
+    CSP12 (cparams, sparams) <- generate arbitrary
+    let cparams' =
+            cparams
+                { clientSupported =
+                    (clientSupported cparams){supportedGroups = [X25519]}
+                }
+        sparams' =
+            sparams
+                { serverSupported =
+                    (serverSupported sparams){supportedGroups = [X25519]}
+                }
+        replace (ClientHello ch) =
+            pure $
+                ClientHello
+                    ch
+                        { chExtensions =
+                            filter
+                                (\(ExtensionRaw eid _) -> eid /= EID_EcPointFormats)
+                                (chExtensions ch)
+                                ++ [ExtensionRaw EID_EcPointFormats formats]
+                        }
+        replace hs = pure hs
+    r <- timeout 10000000 $
+        withPairContextWith (id, id) (cparams', sparams') $ \(cctx, sctx) -> do
+            contextHookSetHandshakeRecv sctx replace
+            concurrently_
+                (handshake sctx `shouldThrow` rejected)
+                (void (E.try (handshake cctx) :: IO (Either TLSException ())))
+    r `shouldSatisfy` isJust
+
+rejectedAsDecodeError :: TLSException -> Bool
+rejectedAsDecodeError (HandshakeFailed (Error_Protocol _ DecodeError)) = True
+rejectedAsDecodeError _ = False
 
 handshake_client_auth_fail :: (ClientParams, ServerParams) -> IO ()
 handshake_client_auth_fail (clientParam, serverParam) = do

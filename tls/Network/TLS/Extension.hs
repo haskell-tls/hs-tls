@@ -606,8 +606,11 @@ instance Extension EcPointFormatsSupported where
     extensionDecode _ = const Nothing
 
 decodeEcPointFormatsSupported :: ByteString -> Maybe EcPointFormatsSupported
-decodeEcPointFormatsSupported =
-    runGetMaybe (EcPointFormatsSupported . map EcPointFormat <$> getWords8)
+decodeEcPointFormatsSupported = runGetMaybe $ do
+    formats <- getWords8
+    -- RFC 8422 Section 5.1.2: ec_point_format_list<1..2^8-1>
+    when (null formats) $ fail "empty ec_point_format_list"
+    return $ EcPointFormatsSupported $ map EcPointFormat formats
 
 ------------------------------------------------------------
 
