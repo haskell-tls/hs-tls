@@ -410,9 +410,11 @@ newSessionManager = do
                 M.lookup key <$> readIORef ref
             , sessionResumeOnlyOnce = \key -> do
                 M.lookup key <$> readIORef ref
-            , sessionEstablish = \key val -> do
-                atomicModifyIORef' ref $ \m -> (M.insert key val m, Nothing)
+            , -- The session ID doubles as the ticket, so the table
+              -- serves resumption by either.
+              sessionEstablish = \key val -> do
+                atomicModifyIORef' ref $ \m -> (M.insert key val m, Just key)
             , sessionInvalidate = \key -> do
                 atomicModifyIORef' ref $ \m -> (M.delete key m, ())
-            , sessionUseTicket = False
+            , sessionUseTicket = True
             }
