@@ -377,10 +377,13 @@ sendClientFlight13 cparams ctx usedHash (ClientTrafficSecret baseKey) = do
 ----------------------------------------------------------------
 
 postHandshakeAuthClientWith
-    :: ClientParams -> Context -> Handshake13 -> IO ()
-postHandshakeAuthClientWith cparams ctx (CertRequest13 certReqCtx exts) =
+    :: ClientParams -> Context -> Handshake13R -> IO ()
+postHandshakeAuthClientWith cparams ctx hb@(CertRequest13 certReqCtx exts, _) =
     E.bracket (saveHState ctx) (restoreHState ctx) $ \_ -> do
-        --        updateTranscriptHash13 ctx h b
+        -- RFC 8446 Section 4.4: the handshake context of
+        -- post-handshake authentication is ClientHello ... client
+        -- Finished + CertificateRequest.
+        updateTranscriptHash13 ctx hb
         processCertRequest13 ctx certReqCtx exts
         (usedHash, _, level, applicationSecretN) <- getTxRecordState ctx
         unless (level == CryptApplicationSecret) $
