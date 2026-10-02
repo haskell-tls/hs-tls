@@ -90,6 +90,14 @@ spec = do
         prop "can authenticate client" handshake_client_auth
         it "rejects a TLS 1.3 CertificateVerify algorithm unfit for the key" $
             handshake13_client_cert_verify_unfit_sigalg
+        it "rejects a TLS 1.2 CertificateVerify algorithm for another key type" $
+            handshake12_client_cert_verify_sigalg
+                (HashSHA256, SignatureECDSA)
+                rejectedAsIllegalParameter
+        it "rejects a TLS 1.2 CertificateVerify that does not fit the RSA key" $
+            handshake12_client_cert_verify_sigalg
+                (HashIntrinsic, SignatureRSApsspssSHA256)
+                rejectedAsDecryptError
         prop "can receive client authentication failure" handshake_client_auth_fail
         it "accepts an empty TLS 1.2 client certificate when the hook does" $
             handshake_client_auth_empty TLS12
@@ -882,6 +890,55 @@ handshake12_cert_request_types = do
         , CertificateType_DSA_Sign
         , CertificateType_ECDSA_Sign
         ]
+
+-- RFC 5246 Section 7.4.8: a TLS 1.2 CertificateVerify algorithm for
+-- another type of key than the certificate's has a field that is
+-- incorrect, an illegal_parameter, even when onUnverifiedClientCert would
+-- accept a signature that does not verify.  One for an RSA key that still
+-- does not fit it, RSASSA-PSS for an rsaEncryption key, is a signature
+-- that does not verify, a decrypt_error.  The client signs with an
+-- rsaEncryption key and the server reads the given algorithm.
+handshake12_client_cert_verify_sigalg
+    :: HashAndSignatureAlgorithm -> Selector TLSException -> IO ()
+handshake12_client_cert_verify_sigalg alg rejected = do
+    let cipher = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS12], [TLS12])
+                ([cipher], [cipher])
+    cred <- generate $ arbitraryRSACredentialWithPurpose KeyUsagePurpose_ClientAuth
+    let clientParam' =
+            clientParam
+                { clientHooks =
+                    (clientHooks clientParam)
+                        { onCertificateRequest = \_ -> return $ Just cred
+                        }
+                }
+        acceptUnverified = alg == (HashSHA256, SignatureECDSA)
+        serverParam' =
+            serverParam
+                { serverWantClientCert = True
+                , serverHooks =
+                    (serverHooks serverParam)
+                        { onClientCertificate = \_ -> return CertificateUsageAccept
+                        , onUnverifiedClientCert = return acceptUnverified
+                        }
+                }
+        unfit (CertVerify (DigitallySigned _ sig)) =
+            pure $ CertVerify (DigitallySigned alg sig)
+        unfit hs = pure hs
+    r <- timeout 10000000 $
+        withPairContextWith (id, id) (clientParam', serverParam') $ \(cctx, sctx) -> do
+            contextHookSetHandshakeRecv sctx unfit
+            concurrently_
+                (handshake sctx `shouldThrow` rejected)
+                (void (E.try (handshake cctx) :: IO (Either TLSException ())))
+    r `shouldSatisfy` isJust
+
+rejectedAsDecryptError :: TLSException -> Bool
+rejectedAsDecryptError (HandshakeFailed (Error_Protocol _ DecryptError)) = True
+rejectedAsDecryptError _ = False
 
 -- RFC 8446 Section 6.2: a CertificateVerify whose algorithm may not be used
 -- with the certificate's key has a field that is incorrect, which is an

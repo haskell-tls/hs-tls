@@ -60,6 +60,25 @@ signatureCompatible (PubKeyEd25519 _) (_, SignatureEd25519) = True
 signatureCompatible (PubKeyEd448 _) (_, SignatureEd448) = True
 signatureCompatible _ (_, _) = False
 
+-- Whether the signature algorithm is for the type of the key, whatever
+-- its other parameters.
+keyTypeFits :: PubKey -> SignatureAlgorithm -> Bool
+keyTypeFits (PubKeyRSA _) s =
+    s
+        `elem` [ SignatureRSA
+               , SignatureRSApssRSAeSHA256
+               , SignatureRSApssRSAeSHA384
+               , SignatureRSApssRSAeSHA512
+               , SignatureRSApsspssSHA256
+               , SignatureRSApsspssSHA384
+               , SignatureRSApsspssSHA512
+               ]
+keyTypeFits (PubKeyDSA _) s = s == SignatureDSA
+keyTypeFits (PubKeyEC _) s = s == SignatureECDSA
+keyTypeFits (PubKeyEd25519 _) s = s == SignatureEd25519
+keyTypeFits (PubKeyEd448 _) s = s == SignatureEd448
+keyTypeFits _ _ = False
+
 -- Same as 'signatureCompatible' but for TLS13: for ECDSA this also checks the
 -- relation between hash in the HashAndSignatureAlgorithm and elliptic curve
 signatureCompatible13 :: PubKey -> HashAndSignatureAlgorithm -> Bool
@@ -118,9 +137,21 @@ checkCertificateVerify
     -> ByteString
     -> DigitallySigned
     -> IO Bool
-checkCertificateVerify ctx usedVersion pubKey msgs digSig@(DigitallySigned hashSigAlg _)
-    | pubKey `signatureCompatible` hashSigAlg = doVerify
-    | otherwise = return False
+-- An algorithm not offered in CertificateRequest (RFC 5246 Section
+-- 7.4.8), or one for another type of key, is a field that is incorrect,
+-- an illegal_parameter.  One for the right type of key that still does
+-- not fit it, an RSASSA-PSS one for an rsaEncryption key say, is a
+-- signature that does not verify, a decrypt_error, which False leads to.
+checkCertificateVerify ctx usedVersion pubKey msgs digSig@(DigitallySigned hashSigAlg@(_, sigAlg) _) = do
+    checkSupportedHashSignature ctx hashSigAlg
+    unless (pubKey `keyTypeFits` sigAlg) $
+        throwCore $
+            Error_Protocol
+                ("signature algorithm " ++ show hashSigAlg ++ " is for another type of key")
+                IllegalParameter
+    if pubKey `signatureCompatible` hashSigAlg
+        then doVerify
+        else return False
   where
     doVerify =
         prepareCertificateVerifySignatureData ctx usedVersion pubKey hashSigAlg msgs
