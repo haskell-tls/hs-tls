@@ -107,6 +107,17 @@ spec = do
                 compressed = BL.toStrict $ compress $ BL.fromStrict plain
             compressedCertificateAlert 2 (B.length plain) compressed
                 `shouldBe` Just IllegalParameter
+        -- A ClientKeyExchange is only expected once a cipher, and with it a
+        -- key exchange, has been negotiated -- not, say, after Finished.
+        -- One that comes without is out of order: unexpected_message.
+        it "answers a ClientKeyExchange before a key exchange with unexpected_message" $
+            either (Just . errorToAlertDescription) (const Nothing)
+                ( decodeHandshake
+                    CurrentParams{cParamsVersion = TLS12, cParamsKeyXchgType = Nothing}
+                    HandshakeType_ClientKeyXchg
+                    (B.replicate 130 1)
+                )
+                `shouldBe` Just UnexpectedMessage
         it "bounds TLS 1.3 certificate decompression by the declared size" $ do
             let compressed = BL.toStrict $ compress $ BL.replicate (32 * 1024 * 1024) 0
                 encoded = runPut $ do

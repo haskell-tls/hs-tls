@@ -174,6 +174,16 @@ decodeHandshakeRecord = runGet "handshake-record" $ do
 {- FOURMOLU_DISABLE -}
 decodeHandshake
     :: CurrentParams -> HandshakeType -> ByteString -> Either TLSError Handshake
+-- A ClientKeyExchange is only expected once a cipher, and with it a key
+-- exchange, has been negotiated; one that comes without -- after Finished,
+-- say -- is out of order rather than malformed.
+decodeHandshake cp HandshakeType_ClientKeyXchg
+    | isNothing (cParamsKeyXchgType cp) =
+        const $
+            Left $
+                Error_Packet_unexpected
+                    (show HandshakeType_ClientKeyXchg)
+                    " expected: no ClientKeyExchange before a key exchange is negotiated"
 decodeHandshake cp ty = runGetErr ("handshake[" ++ show ty ++ "]") $ case ty of
     HandshakeType_HelloRequest     -> decodeHelloRequest
     HandshakeType_ClientHello      -> decodeClientHello False
