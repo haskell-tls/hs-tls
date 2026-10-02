@@ -55,6 +55,10 @@ spec = do
             "does not disable TLS 1.3 KeyUpdates with non-positive limits"
             handshake_key_update_non_positive
         prop "can prevent downgrade attack" handshake13_downgrade
+        it "negotiates TLS 1.2 with a ClientHello naming a higher version" $
+            handshake_high_legacy_version TLS12 (Version 0x0309)
+        it "ignores legacy_version when supported_versions is present" $
+            handshake_high_legacy_version TLS13 TLS13
         prop "can negotiate hash and signature" handshake_hashsignatures
         prop "can negotiate cipher suite" handshake_ciphersuites
         it "rejects a cipher outside the server callback candidates" $
@@ -894,6 +898,30 @@ rejectedAsIllegalParameter :: TLSException -> Bool
 rejectedAsIllegalParameter (HandshakeFailed (Error_Protocol _ IllegalParameter)) = True
 rejectedAsIllegalParameter (Terminated _ _ (Error_Protocol _ IllegalParameter)) = True
 rejectedAsIllegalParameter _ = False
+
+-- A server that receives a ClientHello whose legacy_version is higher than
+-- its own negotiates the highest version it supports (RFC 5246 Appendix
+-- E.1); with supported_versions present it does not use legacy_version at
+-- all (RFC 8446 Section 4.2.1).  The ClientHello's legacy_version is raised
+-- on its way to the server, and the handshake must still reach the version
+-- both sides support.
+handshake_high_legacy_version :: Version -> Version -> IO ()
+handshake_high_legacy_version version legacy = do
+    let cipher
+            | version == TLS13 = cipher13_AES_128_GCM_SHA256
+            | otherwise = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([version], [version])
+                ([cipher], [cipher])
+    let raise (ClientHello ch) = pure $ ClientHello ch{chVersion = legacy}
+        raise hs = pure hs
+    withPairContextWith (id, id) (clientParam, serverParam) $ \(cctx, sctx) -> do
+        contextHookSetHandshakeRecv sctx raise
+        concurrently_ (handshake sctx) (handshake cctx)
+        info <- contextGetInformation sctx
+        (infoVersion <$> info) `shouldBe` Just version
 
 handshake_client_auth_fail :: (ClientParams, ServerParams) -> IO ()
 handshake_client_auth_fail (clientParam, serverParam) = do
