@@ -1,5 +1,72 @@
 # Change log for "tls"
 
+## Version 2.4.9
+
+Fixes found by running tlsfuzzer against tls-server, which CI now does
+once a week [#551](https://github.com/haskell-tls/hs-tls/pull/551).
+
+* Post-handshake authentication includes CertificateRequest in its
+  transcript, as RFC 8446 asks, on both sides.  hs-tls 2.4.8 and earlier
+  left it out on both, so they interoperated only with each other: this
+  version and an older one no longer can, while this one does with
+  OpenSSL and others.
+ [#565](https://github.com/haskell-tls/hs-tls/pull/565)
+* A server sends the TLS 1.2 session_ticket extension and
+  NewSessionTicket only to a client that sent session_ticket.  With a
+  session manager using tickets, a client without them got an extension
+  it had not advertised.
+ [#575](https://github.com/haskell-tls/hs-tls/pull/575)
+* A TLS 1.3 server falls back to a full handshake when a PSK identity
+  finds a TLS 1.2 session, rather than failing with internal_error, and
+  no longer resumes one as a TLS 1.3 session.
+ [#576](https://github.com/haskell-tls/hs-tls/pull/576)
+* A server refuses, in a secure renegotiation, a ClientHello with the
+  renegotiation SCSV or without renegotiation_info (RFC 5746).
+ [#566](https://github.com/haskell-tls/hs-tls/pull/566)
+* A key share of a hybrid group whose classical part fails to derive is
+  rejected rather than crashing.
+ [#550](https://github.com/haskell-tls/hs-tls/pull/550)
+* A client sends no server_name for an empty server name.  A server
+  refuses a malformed server_name with decode_error, and several
+  host_names or a host_name with a non-printable or non-ASCII byte with
+  illegal_parameter.
+ [#568](https://github.com/haskell-tls/hs-tls/pull/568)
+* A CertificateVerify algorithm that is not offered, or that is for
+  another type of key, is refused with illegal_parameter whatever
+  onUnverifiedClientCert says, in TLS 1.3 and in TLS 1.2.
+ [#562](https://github.com/haskell-tls/hs-tls/pull/562) [#578](https://github.com/haskell-tls/hs-tls/pull/578)
+* A TLS 1.2 server accepts an empty client certificate when
+  onClientCertificate does, and requests EdDSA client certificates with
+  ecdsa_sign.
+ [#552](https://github.com/haskell-tls/hs-tls/pull/552) [#553](https://github.com/haskell-tls/hs-tls/pull/553)
+* A ClientHello whose legacy_version is above TLS 1.2 is accepted, and
+  the version negotiated as RFC 5246 and RFC 8446 ask.
+ [#564](https://github.com/haskell-tls/hs-tls/pull/564)
+* Malformed messages and extensions are refused with the alert the RFCs
+  ask for:
+  * decode_error for an empty ECDH or DH public key, a malformed
+    application_layer_protocol_negotiation and an empty ec_point_formats
+    [#561](https://github.com/haskell-tls/hs-tls/pull/561) [#567](https://github.com/haskell-tls/hs-tls/pull/567) [#570](https://github.com/haskell-tls/hs-tls/pull/570) [#571](https://github.com/haskell-tls/hs-tls/pull/571)
+  * illegal_parameter for ec_point_formats without the uncompressed format
+    [#571](https://github.com/haskell-tls/hs-tls/pull/571)
+  * bad_record_mac for a record too short to deprotect
+    [#554](https://github.com/haskell-tls/hs-tls/pull/554)
+  * unexpected_message for a first message other than ClientHello, an
+    unknown record type, TLS 1.3 application data inside a handshake
+    message, a malformed or misplaced ChangeCipherSpec (CVE-2004-0079)
+    and a ClientKeyExchange out of order
+    [#555](https://github.com/haskell-tls/hs-tls/pull/555) [#556](https://github.com/haskell-tls/hs-tls/pull/556) [#557](https://github.com/haskell-tls/hs-tls/pull/557) [#558](https://github.com/haskell-tls/hs-tls/pull/558) [#569](https://github.com/haskell-tls/hs-tls/pull/569) [#560](https://github.com/haskell-tls/hs-tls/pull/560)
+  * certificate compression errors as RFC 8879 asks
+    [#559](https://github.com/haskell-tls/hs-tls/pull/559)
+  * illegal_parameter for a resumed session whose cipher is not offered,
+    before the lack of a common cipher
+    [#563](https://github.com/haskell-tls/hs-tls/pull/563)
+* tls-server: --use-weak-ciphers also accepts h2 and http/2 in ALPN and
+  offers TLS_RSA_WITH_AES_128_CBC_SHA256; data other than an HTTP request
+  is echoed; --server-name refuses other names in SNI; TLS 1.2 session
+  tickets are issued.
+ [#572](https://github.com/haskell-tls/hs-tls/pull/572) [#573](https://github.com/haskell-tls/hs-tls/pull/573) [#574](https://github.com/haskell-tls/hs-tls/pull/574) [#577](https://github.com/haskell-tls/hs-tls/pull/577)
+
 ## Version 2.4.8
 
 * Stop printing traffic secrets and the session secret
