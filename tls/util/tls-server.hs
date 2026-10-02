@@ -4,6 +4,7 @@
 
 module Main where
 
+import qualified Control.Exception as E
 import Data.IORef
 import qualified Data.Map.Strict as M
 import Data.X509.CertificateStore
@@ -37,6 +38,7 @@ data Options = Options
     , optECHKeyFile :: Maybe FilePath
     , optTraceKey :: Bool
     , optUseWeakCiphers :: Bool
+    , optServerName :: Maybe HostName
     }
     deriving (Show)
 
@@ -55,6 +57,7 @@ defaultOptions =
         , optECHKeyFile = Nothing
         , optTraceKey = False
         , optUseWeakCiphers = False
+        , optServerName = Nothing
         }
 
 options :: [OptDescr (Options -> Options)]
@@ -119,6 +122,11 @@ options =
         ["use-weak-ciphers"]
         (NoArg (\o -> o{optUseWeakCiphers = True}))
         "accept deprecated ciphers and relax checks (for tlsfuzzer)"
+    , Option
+        []
+        ["server-name"]
+        (ReqArg (\n o -> o{optServerName = Just n}) "<name>")
+        "refuse other names in SNI with unrecognized_name"
     ]
 
 usage :: String
@@ -192,6 +200,7 @@ main = do
                     ech
                     printError
                     traceKey
+                    optServerName
         ctx <- contextNew sock sparams
         when optDebugLog $
             contextHookSetLogging
@@ -220,8 +229,9 @@ getServerParams
     -> ([(Word8, ByteString)], ECHConfigList)
     -> (String -> IO ())
     -> (String -> IO ())
+    -> Maybe HostName
     -> ServerParams
-getServerParams creds weak groups sm keyLog clientAuth mstore (ekey, ecnf) printError traceKey =
+getServerParams creds weak groups sm keyLog clientAuth mstore (ekey, ecnf) printError traceKey mname =
     defaultParamsServer
         { serverSupported = supported
         , serverShared = shared
@@ -267,6 +277,7 @@ getServerParams creds weak groups sm keyLog clientAuth mstore (ekey, ecnf) print
                     | weak -> acceptEmptyCertificate
                     | otherwise ->
                         validateClientCertificate (sharedCAStore shared) (sharedValidationCache shared)
+            , onServerNameIndication = checkServerName mname
             }
     debug =
         defaultDebugParams
@@ -378,6 +389,17 @@ chooseALPN weak protos = return $ fromMaybe "" $ find (`elem` known) protos
     known
         | weak = ["http/1.1", "h2", "http/2"]
         | otherwise = ["http/1.1"]
+
+-- RFC 6066 Section 3: a server that does not recognize the name may
+-- abort with a fatal unrecognized_name, a warning one being NOT
+-- RECOMMENDED.
+checkServerName :: Maybe HostName -> Maybe HostName -> IO Credentials
+checkServerName (Just name) (Just sni)
+    | sni /= name =
+        E.throwIO $
+            Uncontextualized $
+                Error_Protocol ("unrecognized name: " ++ sni) UnrecognizedName
+checkServerName _ _ = return mempty
 
 newSessionManager :: IO SessionManager
 newSessionManager = do
