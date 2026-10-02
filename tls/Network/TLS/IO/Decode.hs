@@ -3,6 +3,7 @@
 module Network.TLS.IO.Decode (
     decodePacket12,
     decodePacket13,
+    checkChangeCipherSpec,
 ) where
 
 import Control.Concurrent.MVar
@@ -28,7 +29,7 @@ decodePacket12 :: Context -> Record Plaintext -> IO (Either TLSError Packet)
 decodePacket12 _ (Record ProtocolType_AppData _ fragment) = return $ Right $ AppData $ fragmentGetBytes fragment
 decodePacket12 _ (Record ProtocolType_Alert _ fragment) = return (Alert `fmapEither` decodeAlerts (fragmentGetBytes fragment))
 decodePacket12 ctx (Record ProtocolType_ChangeCipherSpec _ fragment) =
-    case decodeChangeCipherSpec $ fragmentGetBytes fragment of
+    case checkChangeCipherSpec fragment of
         Left err -> return $ Left err
         Right _ -> do
             switchRxEncryption ctx
@@ -89,7 +90,7 @@ switchRxEncryption ctx =
 
 decodePacket13 :: Context -> Record Plaintext -> IO (Either TLSError Packet13)
 decodePacket13 _ (Record ProtocolType_ChangeCipherSpec _ fragment) =
-    case decodeChangeCipherSpec $ fragmentGetBytes fragment of
+    case checkChangeCipherSpec fragment of
         Left err -> return $ Left err
         Right _ -> return $ Right ChangeCipherSpec13
 decodePacket13 _ (Record ProtocolType_AppData _ fragment) = return $ Right $ AppData13 $ fragmentGetBytes fragment
@@ -124,3 +125,14 @@ decodePacket13 _ (Record ty _ _) = return $ Left $ unknownProtocolType ty
 -- type of a TLS 1.3 record, is answered with unexpected_message.
 unknownProtocolType :: ProtocolType -> TLSError
 unknownProtocolType ty = Error_Packet_unexpected (show ty) " expected: TLS record type"
+
+-- | A ChangeCipherSpec is the single byte 1.  RFC 8446 Section 5 answers any
+-- other value with unexpected_message, and TLS 1.2, which does not say,
+-- is answered the same way: a record of two of them included.
+checkChangeCipherSpec :: Fragment a -> Either TLSError ()
+checkChangeCipherSpec fragment =
+    case decodeChangeCipherSpec $ fragmentGetBytes fragment of
+        Left _ ->
+            Left $
+                Error_Packet_unexpected "ChangeCipherSpec" " expected: the single byte 1"
+        Right _ -> Right ()

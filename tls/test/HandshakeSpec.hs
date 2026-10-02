@@ -133,6 +133,20 @@ spec = do
             server_first_record_type_unexpected 24 0
         it "rejects application data inside a TLS 1.3 handshake message" $
             handshake13_interleaved_app_data
+        it "rejects a two-byte TLS 1.2 ChangeCipherSpec" $
+            malformed_ccs_unexpected
+                TLS12
+                cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+                [P256]
+                [P256]
+        it "rejects a two-byte TLS 1.3 ChangeCipherSpec" $
+            malformed_ccs_unexpected TLS13 cipher13_AES_128_GCM_SHA256 [X25519] [X25519]
+        it "rejects a two-byte TLS 1.3 ChangeCipherSpec after HelloRetryRequest" $
+            malformed_ccs_unexpected
+                TLS13
+                cipher13_AES_128_GCM_SHA256
+                [P256, X25519]
+                [X25519]
 
 --------------------------------------------------------------
 
@@ -1768,6 +1782,60 @@ handshake13_interleaved_app_data = do
     unhex [] = B.empty
     unhex (a : b : rest) = B.cons (read ['0', 'x', a, b]) (unhex rest)
     unhex _ = error "unhex"
+
+-- A ChangeCipherSpec is the single byte 1; any other value is answered with
+-- unexpected_message (RFC 8446 Section 5), and so is one carrying two of
+-- them.  The client's ChangeCipherSpec record is made two bytes long.  The
+-- groups are fixed so that a TLS 1.3 handshake goes through a
+-- HelloRetryRequest -- after which the client sends its ChangeCipherSpec
+-- before the second ClientHello -- or not, as the test asks.
+malformed_ccs_unexpected :: Version -> Cipher -> [Group] -> [Group] -> IO ()
+malformed_ccs_unexpected version cipher cgroups sgroups = do
+    (clientParam0, serverParam0) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([version], [version])
+                ([cipher], [cipher])
+    let clientParam =
+            clientParam0
+                { clientSupported = (clientSupported clientParam0){supportedGroups = cgroups}
+                }
+        serverParam =
+            serverParam0
+                { serverSupported =
+                    (serverSupported serverParam0)
+                        { supportedGroups = sgroups
+                        , supportedGroupsTLS13 = [sgroups]
+                        }
+                }
+    seen <- newIORef False
+    let ccs = B.pack [20, 3, 3, 0, 1, 1]
+        doubled = B.pack [20, 3, 3, 0, 2, 1, 1]
+        double be =
+            be
+                { backendSend = \bs ->
+                    if ccs `B.isPrefixOf` bs
+                        then do
+                            writeIORef seen True
+                            backendSend be $ doubled <> B.drop 6 bs
+                        else backendSend be bs
+                }
+    -- a TLS 1.3 server takes the client's ChangeCipherSpec and Finished in
+    -- its first recvData, a TLS 1.2 one in handshake
+    r <- timeout 10000000 $
+        withPairContextWith (double, id) (clientParam, serverParam) $ \(cctx, sctx) ->
+            concurrently_
+                ((handshake sctx >> recvData sctx) `shouldThrow` rejectedAsUnexpected)
+                ( void
+                    (E.try (handshake cctx >> recvData cctx) :: IO (Either TLSException B.ByteString))
+                )
+    r `shouldSatisfy` isJust
+    readIORef seen `shouldReturn` True
+
+rejectedAsUnexpected :: TLSException -> Bool
+rejectedAsUnexpected (HandshakeFailed (Error_Packet_unexpected _ _)) = True
+rejectedAsUnexpected (Terminated _ _ (Error_Packet_unexpected _ _)) = True
+rejectedAsUnexpected _ = False
 
 -- An AES-128-GCM TLS 1.3 record: content and inner type, protected with the
 -- record header as additional data and the sequence number in the nonce.
