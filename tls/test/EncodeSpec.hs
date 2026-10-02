@@ -135,6 +135,21 @@ spec = do
         -- RFC 5246 Section 7.4.7.2: dh_Yc is <1..2^16-1>, so an empty one is
         -- malformed -- a decode_error -- rather than a public value that is
         -- not valid, which is an illegal_parameter.
+        -- RFC 6066 Section 3: server_name_list<1..2^16-1> of
+        -- HostName<1..2^16-1>.
+        it "refuses a malformed server_name in ClientHello" $
+            forM_
+                [ B.empty -- empty extension
+                , B.pack [0, 0] -- empty list
+                , B.pack [0, 3, 0, 0, 0] -- empty host_name
+                , B.pack [0, 4, 0, 0, 1, 101, 120] -- trailing data
+                ]
+                $ \bs ->
+                    (extensionDecode MsgTClientHello bs :: Maybe ServerName)
+                        `shouldBe` Nothing
+        it "decodes a server_name in ClientHello" $
+            (extensionDecode MsgTClientHello (B.pack [0, 4, 0, 0, 1, 101]) :: Maybe ServerName)
+                `shouldBe` Just (ServerName [ServerNameHostName "e"])
         it "answers an empty DH public key with decode_error" $
             either (Just . errorToAlertDescription) (const Nothing)
                 ( decodeHandshake

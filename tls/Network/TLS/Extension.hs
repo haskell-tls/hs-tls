@@ -481,21 +481,32 @@ instance Extension ServerName where
       where
         encodeNameType (ServerNameHostName hn) = putWord8 0 >> putOpaque16 (BC.pack hn) -- FIXME: should be puny code conversion
         encodeNameType (ServerNameOther (nt, opaque)) = putWord8 nt >> putBytes opaque
-    extensionDecode MsgTClientHello = decodeServerName
+    extensionDecode MsgTClientHello = decodeServerNameList
     extensionDecode MsgTServerHello = decodeServerName
     extensionDecode MsgTEncryptedExtensions = decodeServerName
     extensionDecode _ = const Nothing
 
 decodeServerName :: ByteString -> Maybe ServerName
 decodeServerName "" = Just $ ServerName [] -- dirty hack for servers
-decodeServerName bs = runGetMaybe decode bs
+decodeServerName bs = decodeServerNameList bs
+
+-- RFC 6066 Section 3: server_name_list<1..2^16-1> of
+-- HostName<1..2^16-1>, which leaves no room for an empty extension, an
+-- empty list, an empty host name nor trailing data.
+decodeServerNameList :: ByteString -> Maybe ServerName
+decodeServerNameList = runGetMaybe decode
   where
     decode = do
         len <- fromIntegral <$> getWord16
-        ServerName <$> getList len getServerName
+        names <- getList len getServerName
+        when (null names) $ fail "empty server_name_list"
+        r <- remaining
+        when (r /= 0) $ fail "trailing data in server_name"
+        return $ ServerName names
     getServerName = do
         ty <- getWord8
         snameParsed <- getOpaque16
+        when (ty == 0 && B.null snameParsed) $ fail "empty host_name"
         let sname = B.copy snameParsed
             name = case ty of
                 0 -> ServerNameHostName $ BC.unpack sname -- FIXME: should be puny code conversion

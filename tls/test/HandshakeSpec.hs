@@ -99,6 +99,13 @@ spec = do
         it "rejects an unoffered ALPN selection received by the client" $
             handshake_alpn_rejects_unoffered_client_selection
         prop "can handle SNI" handshake_sni
+        it "sends no SNI for an empty server name" handshake_sni_empty
+        it "rejects multiple host_names in SNI" $
+            handshake_sni_illegal ["example.com", "example.org"]
+        it "rejects a host_name with a control character in SNI" $
+            handshake_sni_illegal ["example\0.com"]
+        it "rejects a non-ASCII host_name in SNI" $
+            handshake_sni_illegal ["ex\xc4\x85mple.com"]
         prop "can handshake with TLS 1.2 CBC" handshake_cbc
         prop "can re-negotiate with TLS 1.2" handshake12_renegotiation
         it "rejects SCSV in a secure renegotiation" $
@@ -1109,6 +1116,52 @@ clientRejectedUnofferedALPN (HandshakeFailed (Error_Protocol msg alert)) =
     msg == "server selected an ALPN protocol not offered by the client"
         && alert == IllegalParameter
 clientRejectedUnofferedALPN _ = False
+
+-- RFC 6066 Section 3: HostName is <1..2^16-1>, so a client with an
+-- empty server name sends no server_name, and the server sees none.
+handshake_sni_empty :: IO ()
+handshake_sni_empty = do
+    CSP12 (clientParam, serverParam) <- generate arbitrary
+    let clientParam' = clientParam{clientServerIdentification = ("", "")}
+    runTLSSuccess (clientParam', serverParam) hs hs
+  where
+    hs ctx = do
+        handshake ctx
+        msni <- getClientSNI ctx
+        msni `shouldBe` Nothing
+
+-- RFC 6066 Section 3: the server_name_list MUST NOT contain more than one
+-- name of the same name_type, and HostName is an ASCII DNS host name.  The
+-- ClientHello's server_name is replaced on its way to the server, which
+-- must refuse it with illegal_parameter.
+handshake_sni_illegal :: [B.ByteString] -> IO ()
+handshake_sni_illegal names = do
+    CSP12 (clientParam, serverParam) <- generate arbitrary
+    let entry name =
+            B.concat [B.pack [0, len `shiftR` 8, len], name]
+          where
+            len = fromIntegral $ B.length name
+        list = B.concat $ map entry names
+        listLen = fromIntegral $ B.length list
+        sni = B.concat [B.pack [listLen `shiftR` 8, listLen], list]
+        replace (ClientHello ch) =
+            pure $
+                ClientHello
+                    ch
+                        { chExtensions =
+                            ExtensionRaw EID_ServerName sni
+                                : filter
+                                    (\(ExtensionRaw eid _) -> eid /= EID_ServerName)
+                                    (chExtensions ch)
+                        }
+        replace hs = pure hs
+    r <- timeout 10000000 $
+        withPairContextWith (id, id) (clientParam, serverParam) $ \(cctx, sctx) -> do
+            contextHookSetHandshakeRecv sctx replace
+            concurrently_
+                (handshake sctx `shouldThrow` rejectedAsIllegalParameter)
+                (void (E.try (handshake cctx) :: IO (Either TLSException ())))
+    r `shouldSatisfy` isJust
 
 handshake_sni :: (ClientParams, ServerParams) -> IO ()
 handshake_sni (clientParam, serverParam) = do

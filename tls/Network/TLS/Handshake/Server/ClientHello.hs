@@ -174,9 +174,20 @@ getServerName chExts =
         Nothing
         extractServerName
   where
-    extractServerName (ServerName ns) = listToMaybe (mapMaybe toHostName ns)
+    extractServerName (ServerName ns) = case mapMaybe toHostName ns of
+        [] -> Nothing
+        [hostName]
+            | all validChar hostName -> Just hostName
+            | otherwise -> illegal "invalid host_name in SNI"
+        _ -> illegal "multiple host_names in SNI"
     toHostName (ServerNameHostName hostName) = Just hostName
     toHostName (ServerNameOther _) = Nothing
+    -- RFC 6066 Section 3: the server_name_list MUST NOT contain more
+    -- than one name of the same name_type, and HostName is an ASCII
+    -- DNS host name, so it has no control characters, spaces nor
+    -- non-ASCII bytes.
+    validChar c = c > ' ' && c < '\DEL'
+    illegal msg = E.throw $ Uncontextualized $ Error_Protocol msg IllegalParameter
 
 findHighestVersionFrom :: Version -> [Version] -> Maybe Version
 findHighestVersionFrom clientVersion allowedVersions =
