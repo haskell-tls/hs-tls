@@ -2,117 +2,78 @@
 
 ## Version 2.4.9
 
-Fixes found by running tlsfuzzer against tls-server, which CI now does
-once a week [#551](https://github.com/haskell-tls/hs-tls/pull/551).
-
-* Post-handshake authentication includes CertificateRequest in its
-  transcript, as RFC 8446 asks, on both sides.  hs-tls 2.4.8 and earlier
-  left it out on both, so they interoperated only with each other: this
-  version and an older one no longer can, while this one does with
-  OpenSSL and others.
- [#565](https://github.com/haskell-tls/hs-tls/pull/565)
-* A server sends the TLS 1.2 session_ticket extension and
-  NewSessionTicket only to a client that sent session_ticket.  With a
-  session manager using tickets, a client without them got an extension
-  it had not advertised.
- [#575](https://github.com/haskell-tls/hs-tls/pull/575)
-* A TLS 1.3 server falls back to a full handshake when a PSK identity
-  finds a TLS 1.2 session, rather than failing with internal_error, and
-  no longer resumes one as a TLS 1.3 session.
- [#576](https://github.com/haskell-tls/hs-tls/pull/576)
-* A server refuses, in a secure renegotiation, a ClientHello with the
-  renegotiation SCSV or without renegotiation_info (RFC 5746).
- [#566](https://github.com/haskell-tls/hs-tls/pull/566)
-* A key share of a hybrid group whose classical part fails to derive is
-  rejected rather than crashing.
- [#550](https://github.com/haskell-tls/hs-tls/pull/550)
-* A client sends no server_name for an empty server name.  A server
-  refuses a malformed server_name with decode_error, and several
-  host_names or a host_name with a non-printable or non-ASCII byte with
-  illegal_parameter.
- [#568](https://github.com/haskell-tls/hs-tls/pull/568)
-* A CertificateVerify algorithm that is not offered, or that is for
-  another type of key, is refused with illegal_parameter whatever
-  onUnverifiedClientCert says, in TLS 1.3 and in TLS 1.2.
- [#562](https://github.com/haskell-tls/hs-tls/pull/562) [#578](https://github.com/haskell-tls/hs-tls/pull/578)
-* A TLS 1.2 server accepts an empty client certificate when
-  onClientCertificate does, and requests EdDSA client certificates with
-  ecdsa_sign.
- [#552](https://github.com/haskell-tls/hs-tls/pull/552) [#553](https://github.com/haskell-tls/hs-tls/pull/553)
-* A ClientHello whose legacy_version is above TLS 1.2 is accepted, and
-  the version negotiated as RFC 5246 and RFC 8446 ask.
- [#564](https://github.com/haskell-tls/hs-tls/pull/564)
-* Malformed messages and extensions are refused with the alert the RFCs
-  ask for:
-  * decode_error for an empty ECDH or DH public key, a malformed
-    application_layer_protocol_negotiation and an empty ec_point_formats
-    [#561](https://github.com/haskell-tls/hs-tls/pull/561) [#567](https://github.com/haskell-tls/hs-tls/pull/567) [#570](https://github.com/haskell-tls/hs-tls/pull/570) [#571](https://github.com/haskell-tls/hs-tls/pull/571)
-  * illegal_parameter for ec_point_formats without the uncompressed format
-    [#571](https://github.com/haskell-tls/hs-tls/pull/571)
-  * bad_record_mac for a record too short to deprotect
-    [#554](https://github.com/haskell-tls/hs-tls/pull/554)
-  * unexpected_message for a first message other than ClientHello, an
-    unknown record type, TLS 1.3 application data inside a handshake
-    message, a malformed or misplaced ChangeCipherSpec (CVE-2004-0079)
-    and a ClientKeyExchange out of order
-    [#555](https://github.com/haskell-tls/hs-tls/pull/555) [#556](https://github.com/haskell-tls/hs-tls/pull/556) [#557](https://github.com/haskell-tls/hs-tls/pull/557) [#558](https://github.com/haskell-tls/hs-tls/pull/558) [#569](https://github.com/haskell-tls/hs-tls/pull/569) [#560](https://github.com/haskell-tls/hs-tls/pull/560)
-  * certificate compression errors as RFC 8879 asks
-    [#559](https://github.com/haskell-tls/hs-tls/pull/559)
-  * illegal_parameter for a resumed session whose cipher is not offered,
-    before the lack of a common cipher
-    [#563](https://github.com/haskell-tls/hs-tls/pull/563)
-* tls-server: --use-weak-ciphers also accepts h2 and http/2 in ALPN and
-  offers TLS_RSA_WITH_AES_128_CBC_SHA256; data other than an HTTP request
-  is echoed; --server-name refuses other names in SNI; TLS 1.2 session
-  tickets are issued.
- [#572](https://github.com/haskell-tls/hs-tls/pull/572) [#573](https://github.com/haskell-tls/hs-tls/pull/573) [#574](https://github.com/haskell-tls/hs-tls/pull/574) [#577](https://github.com/haskell-tls/hs-tls/pull/577)
+* Include CertificateRequest in the post-handshake auth transcript.
+  This breaks PHA with hs-tls 2.4.8 or earlier.
+  [#565](https://github.com/haskell-tls/hs-tls/pull/565)
+* Send a TLS 1.2 session ticket only to a client that asked for one.
+  [#575](https://github.com/haskell-tls/hs-tls/pull/575)
+* Fall back to a full handshake when a PSK finds a TLS 1.2 session.
+  [#576](https://github.com/haskell-tls/hs-tls/pull/576)
+* Refuse SCSV or a missing renegotiation_info in secure renegotiation.
+  [#566](https://github.com/haskell-tls/hs-tls/pull/566)
+* Reject a hybrid key share whose classical part fails to derive.
+  [#550](https://github.com/haskell-tls/hs-tls/pull/550)
+* Send no SNI for an empty server name, and refuse a malformed or
+  invalid server_name.
+  [#568](https://github.com/haskell-tls/hs-tls/pull/568)
+* Refuse a CertificateVerify algorithm that is not offered or does not
+  fit the key with illegal_parameter.
+  [#562](https://github.com/haskell-tls/hs-tls/pull/562)
+  [#578](https://github.com/haskell-tls/hs-tls/pull/578)
+* Accept an empty TLS 1.2 client certificate when the hook does.
+  [#552](https://github.com/haskell-tls/hs-tls/pull/552)
+* Request EdDSA client certificates with ecdsa_sign in TLS 1.2.
+  [#553](https://github.com/haskell-tls/hs-tls/pull/553)
+* Accept a ClientHello whose legacy_version is above TLS 1.2.
+  [#564](https://github.com/haskell-tls/hs-tls/pull/564)
+* Answer malformed or misplaced messages with the alerts the RFCs ask for.
+  [#554](https://github.com/haskell-tls/hs-tls/pull/554)
+  [#555](https://github.com/haskell-tls/hs-tls/pull/555)
+  [#556](https://github.com/haskell-tls/hs-tls/pull/556)
+  [#557](https://github.com/haskell-tls/hs-tls/pull/557)
+  [#558](https://github.com/haskell-tls/hs-tls/pull/558)
+  [#559](https://github.com/haskell-tls/hs-tls/pull/559)
+  [#560](https://github.com/haskell-tls/hs-tls/pull/560)
+  [#561](https://github.com/haskell-tls/hs-tls/pull/561)
+  [#563](https://github.com/haskell-tls/hs-tls/pull/563)
+  [#567](https://github.com/haskell-tls/hs-tls/pull/567)
+  [#569](https://github.com/haskell-tls/hs-tls/pull/569)
+  [#570](https://github.com/haskell-tls/hs-tls/pull/570)
+  [#571](https://github.com/haskell-tls/hs-tls/pull/571)
+* tls-server: new options for tlsfuzzer, which CI runs weekly.
+  [#551](https://github.com/haskell-tls/hs-tls/pull/551)
+  [#572](https://github.com/haskell-tls/hs-tls/pull/572)
+  [#573](https://github.com/haskell-tls/hs-tls/pull/573)
+  [#574](https://github.com/haskell-tls/hs-tls/pull/574)
+  [#577](https://github.com/haskell-tls/hs-tls/pull/577)
 
 ## Version 2.4.8
 
-* Stop printing traffic secrets and the session secret
- [#549](https://github.com/haskell-tls/hs-tls/pull/549)
+* Stop printing traffic secrets and the session secret.
+  [#549](https://github.com/haskell-tls/hs-tls/pull/549)
 
 ## Version 2.4.7
 
-* The AES-GCM and ChaCha20-Poly1305 bulk ciphers go through the one-call
-  interfaces of crypton 2.1.1 -- `Crypto.Cipher.AES.GCM` and
-  `Crypto.Cipher.ChaCha.Poly1305` -- rather than the general AEAD one.  Two
-  fixed costs go with every record: the state the key alone determines, which
-  `aeadInit` rebuilt for each record and `newContext` now builds once; and a
-  dictionary, which `AEADModeImpl`'s `forall ba. ByteArray ba =>` fields pass
-  at every call and no pragma can remove.  Measured through `BulkAEAD` on an
-  Apple M4, a 64-byte record is about 73% faster to encrypt and to decrypt, a
-  1400-byte one about 30%, and a 16 KiB one 2 to 4%.  This needs
-  `crypton >= 2.1.1`; anyone who cannot move stays on 2.4.6, which is
-  unaffected
+* Use the one-call AES-GCM and ChaCha20-Poly1305 interfaces of crypton.
+  This needs crypton 2.1.1 or later.
+  [#548](https://github.com/haskell-tls/hs-tls/pull/548)
 
 ## Version 2.4.6
 
-* Accept crypton 2.1, which made `ChaChaPoly1305.initialize` total by
-  taking a checked key rather than any `ByteArrayAccess`.  The ChaCha20
-  bulk cipher now goes through `aeadChacha20poly1305Init` and the AEAD
-  interface, as the AES ciphers beside it already did.  That function has
-  one type across every crypton this package accepts, so the bound stays
-  `>=1.1.2 && <2.2` and nobody is forced to move.  The two are the same
-  computation: crypton's AEAD model for this cipher is `finalizeAAD .
-  appendAAD`, then encrypt or decrypt, then the whole sixteen-byte
-  Poly1305 tag whatever length is asked of it.
+* Accept crypton 2.1.
 
 ## Version 2.4.5
 
 * Fix the TLS 1.3 0-RTT session tests racing the NewSessionTicket.
   [#547](https://github.com/haskell-tls/hs-tls/pull/547)
-* CI: drop macOS with GHC 9.12, whose compiler install dominated the
-  wall clock.
+* CI: drop macOS with GHC 9.12.
   [#546](https://github.com/haskell-tls/hs-tls/pull/546)
 * CI: retry Hackage downloads, keep the cache when a test fails, and run
   doctest on one job.
   [#545](https://github.com/haskell-tls/hs-tls/pull/545)
-* `extensionDecode` returns `Nothing`, instead of calling `error`, for a
-  message type in which the extension is not defined.
+* `extensionDecode` returns `Nothing` instead of calling `error`.
   [#544](https://github.com/haskell-tls/hs-tls/pull/544)
-* `getTLSUnique` and `getTLSExporter` return `Nothing` before a handshake,
-  instead of calling `error`.
+* `getTLSUnique` and `getTLSExporter` return `Nothing` before a handshake.
   [#543](https://github.com/haskell-tls/hs-tls/pull/543)
 * Take two timing signals out of the CBC record path.
   [#542](https://github.com/haskell-tls/hs-tls/pull/542)
@@ -120,17 +81,12 @@ once a week [#551](https://github.com/haskell-tls/hs-tls/pull/551).
   [#541](https://github.com/haskell-tls/hs-tls/pull/541)
 * CI: speed up.
   [#540](https://github.com/haskell-tls/hs-tls/pull/540)
-* Limit consecutive TLS 1.3 KeyUpdate messages.  The new `limitKeyUpdate`
-  parameter controls this and is `Just 32` by default, so the limit is on
-  unless it is turned off.
+* Limit consecutive TLS 1.3 KeyUpdate messages with the new
+  `limitKeyUpdate` parameter.
   [#539](https://github.com/haskell-tls/hs-tls/pull/539)
-* Validate the negotiated ALPN protocol.  A client now rejects an
-  unsolicited, empty, repeated or unoffered selection instead of ignoring
-  it, and a server rejects a callback result the client did not offer.
+* Validate the negotiated ALPN protocol.
   [#538](https://github.com/haskell-tls/hs-tls/pull/538)
-* Validate the negotiated cipher suite against the negotiated version on
-  the client, and constrain `onCipherChoosing` to the candidate list on
-  the server.
+* Validate the negotiated cipher suite.
   [#537](https://github.com/haskell-tls/hs-tls/pull/537)
 * Make the session ticket tests deterministic.
   [#536](https://github.com/haskell-tls/hs-tls/pull/536)
