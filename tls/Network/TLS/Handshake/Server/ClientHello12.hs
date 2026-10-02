@@ -11,10 +11,12 @@ import Network.TLS.Credentials
 import Network.TLS.Crypto
 import Network.TLS.ErrT
 import Network.TLS.Extension
+import Network.TLS.Handshake.Common (ticketOrSessionID12)
 import Network.TLS.Handshake.Server.Common
 import Network.TLS.Handshake.Signature
 import Network.TLS.Imports
 import Network.TLS.Parameters
+import Network.TLS.Session (SessionManager (..))
 import Network.TLS.State
 import Network.TLS.Struct
 import Network.TLS.Types (CipherId (..), Role (..))
@@ -40,12 +42,38 @@ processClientHello12 sparams ctx ch = do
     -- The shared cipherlist can become empty after filtering for compatible
     -- creds, check now before calling onCipherChoosing, which does not handle
     -- empty lists.
-    when (null ciphersFilteredVersion) $
+    when (null ciphersFilteredVersion) $ do
+        checkResumedCipherOffered ctx ch
         throwCore $
             Error_Protocol "no cipher in common with the TLS 1.2 client" HandshakeFailure
     usedCipher <- chooseCipher hooks TLS12 ciphersFilteredVersion
     mcred <- chooseCreds usedCipher creds signatureCreds
     return (usedCipher, mcred)
+
+-- RFC 5246 Section 7.4.1.2: a client resuming a session MUST offer the
+-- cipher suite of that session.  validateSession reports its absence with
+-- illegal_parameter once a cipher has been chosen; when none can be chosen,
+-- the same is reported here before the missing common cipher is.
+checkResumedCipherOffered :: Context -> ClientHello -> IO ()
+checkResumedCipherOffered ctx CH{..} = do
+    let mticket =
+            lookupAndDecode
+                EID_SessionTicket
+                MsgTClientHello
+                chExtensions
+                Nothing
+                (\(SessionTicket ticket) -> Just ticket)
+    case ticketOrSessionID12 mticket chSession of
+        Nothing -> return ()
+        Just identity -> do
+            msd <- sessionResume (sharedSessionManager $ ctxShared ctx) identity
+            case msd of
+                Just sd
+                    | sessionVersion sd <= TLS12
+                    , CipherId (sessionCipher sd) `notElem` chCiphers ->
+                        throwCore $
+                            Error_Protocol "new cipher is different from the old one" IllegalParameter
+                _ -> return ()
 
 checkSecureRenegotiation :: Context -> ClientHello -> IO ()
 checkSecureRenegotiation ctx CH{..} = do

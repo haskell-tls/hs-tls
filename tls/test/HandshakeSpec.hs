@@ -98,6 +98,9 @@ spec = do
         prop "can handshake with TLS 1.2 CBC" handshake_cbc
         prop "can re-negotiate with TLS 1.2" handshake12_renegotiation
         prop "can resume session with TLS 1.2" handshake12_session_resumption
+        prop
+            "rejects resuming a TLS 1.2 session without its cipher"
+            handshake12_session_resumption_cipher_missing
         prop "can resume session ticket with TLS 1.2" handshake12_session_ticket
         prop "can handshake with TLS 1.3 Full" handshake13_full
         prop "can handshake with TLS 1.3 HRR" handshake13_hrr
@@ -1142,6 +1145,32 @@ handshake12_session_resumption (CSP12 plainParams) = do
     let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 
     runTLSPredicate params2 (maybe False infoTLS12Resumption)
+
+-- RFC 5246 Section 7.4.1.2: a client resuming a session MUST offer its
+-- cipher suite.  When it asks to resume one and offers none the server can
+-- use, that is what is reported -- illegal_parameter, as when a cipher could
+-- be chosen -- rather than the missing common cipher.
+handshake12_session_resumption_cipher_missing :: CSP12 -> IO ()
+handshake12_session_resumption_cipher_missing (CSP12 plainParams) = do
+    sessionRefs <- twoSessionRefs
+    let sessionManagers = twoSessionManagers sessionRefs
+        params = setPairParamsSessionManagers sessionManagers plainParams
+    runTLSSimple params
+    sessionParams <- readClientSessionRef sessionRefs
+    expectJust "session param should be Just" sessionParams
+    let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
+        -- TLS_RSA_WITH_NULL_MD5, which the server does not support
+        nullCiphers (ClientHello ch) = pure $ ClientHello ch{chCiphers = [CipherId 0x0001]}
+        nullCiphers hs = pure hs
+    withPairContextWith (id, id) params2 $ \(cctx, sctx) -> do
+        contextHookSetHandshakeRecv sctx nullCiphers
+        concurrently_
+            (handshake sctx `shouldThrow` serverRejectedMissingCipher)
+            (handshake cctx `shouldThrow` anyTLSException)
+
+serverRejectedMissingCipher :: TLSException -> Bool
+serverRejectedMissingCipher (HandshakeFailed (Error_Protocol _ IllegalParameter)) = True
+serverRejectedMissingCipher _ = False
 
 handshake12_session_ticket :: CSP12 -> IO ()
 handshake12_session_ticket (CSP12 plainParams) = do
