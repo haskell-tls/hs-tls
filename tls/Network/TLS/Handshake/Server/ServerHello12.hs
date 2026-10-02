@@ -273,9 +273,13 @@ makeServerHello sparams ctx usedCipher mcred chExts session = do
             | ems = Just $ toExtensionRaw ExtendedMainSecret
             | otherwise = Nothing
 
+    -- RFC 5077 Section 3.2: the extension is sent only to a client that
+    -- sent it.
     let useTicket = sessionUseTicket $ sharedSessionManager $ serverShared sparams
+        clientTicket = isJust $ extensionLookup EID_SessionTicket chExts
         sessionTicketExt
-            | not resuming && useTicket = Just $ toExtensionRaw $ SessionTicket ""
+            | not resuming && useTicket && clientTicket =
+                Just $ toExtensionRaw $ SessionTicket ""
             | otherwise = Nothing
 
     -- in TLS12, we need to check as well the certificates we are sending if they have in the extension

@@ -10,6 +10,7 @@ import qualified Data.ByteString as B
 
 import Network.TLS.Context.Internal
 import Network.TLS.Crypto
+import Network.TLS.Extension
 import Network.TLS.Handshake.Common
 import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Server.Common
@@ -37,11 +38,17 @@ recvClientSecondFlight12 sparams ctx resumeSessionData = do
         Nothing -> do
             recvClientCCC sparams ctx
             mticket <- sessionEstablished ctx
+            -- RFC 5077 Section 3.3: NewSessionTicket is sent only after
+            -- the session_ticket extension in ServerHello, which only a
+            -- client that sent it gets.
+            clientTicket <-
+                maybe False (isJust . extensionLookup EID_SessionTicket . chExtensions . fst)
+                    <$> usingHState ctx getClientHello
             case mticket of
-                Nothing -> return ()
-                Just ticket -> do
+                Just ticket | clientTicket -> do
                     let life = adjustLifetime $ serverTicketLifetime sparams
                     sendPacket12 ctx $ Handshake [NewSessionTicket life ticket] []
+                _ -> return ()
             sendCCSandFinished ctx ServerRole
         Just _ -> do
             _ <- sessionEstablished ctx
