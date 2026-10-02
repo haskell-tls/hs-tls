@@ -220,18 +220,29 @@ decodeKeyUpdate13 = do
         1 -> return $ KeyUpdate13 UpdateRequested
         x -> fail $ "Unknown request_update: " ++ show x
 
+-- RFC 8879 Section 4: a certificate that cannot be decompressed, or whose
+-- decompressed length is not the declared one, is answered with
+-- bad_certificate, and an algorithm that was not offered with
+-- illegal_parameter.  errorToAlert tells them apart by the messages below.
+-- A message that is malformed as a whole -- an empty
+-- compressed_certificate_message, which its <1..2^24-1> bound forbids, or
+-- bytes beyond the declared length -- is a decode_error, and is found
+-- before anything is decompressed.
 decodeCompressedCertificate13 :: Get Handshake13
 decodeCompressedCertificate13 = do
     algo <- getWord16
-    when (algo /= 1) $ fail "comp algo is not supported" -- fixme
+    when (algo /= 1) $ fail "unsupported certificate compression algorithm" -- fixme
     len <- getWord24
     bs <- getOpaque24
+    left <- remaining
+    when (left /= 0) $ fail "bytes after compressed certificate"
     if bs == ""
         then fail "empty compressed certificate"
         else case decompressIt len bs of
-            Left e -> fail (show e)
+            Left e -> fail $ "certificate cannot be decompressed: " ++ show e
             Right bs' -> do
-                when (B.length bs' /= len) $ fail "plain length is wrong"
+                when (B.length bs' /= len) $
+                    fail "certificate cannot be decompressed: wrong uncompressed_length"
                 case runGetMaybe decodeCertificate13 bs' of
                     Just (Certificate13 reqctx certs ess) -> return $ CompressedCertificate13 reqctx certs ess
                     --                    _ -> fail "compressed certificate cannot be parsed"

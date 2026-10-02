@@ -8,9 +8,11 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Data.Either (isLeft)
 import Data.Int (Int64)
+import Data.Word (Word16)
 import GHC.Conc (disableAllocationLimit, enableAllocationLimit, setAllocationCounter)
 import Network.TLS
 import Network.TLS.Internal
+import Network.TLS.QUIC (errorToAlertDescription)
 import Test.Hspec
 import Test.Hspec.QuickCheck
 
@@ -71,6 +73,40 @@ spec = do
                     putOpaque24 compressed
             decodeHandshake13 HandshakeType_CompressedCertificate encoded
                 `shouldSatisfy` isLeft
+        -- RFC 8879 Section 4: a CompressedCertificate that cannot be
+        -- decompressed, or whose decompressed length is not the one
+        -- declared, is answered with bad_certificate; one with an algorithm
+        -- that was not offered breaks no decoding rule but a field value,
+        -- and is answered with illegal_parameter.  One malformed as a whole
+        -- stays a decode_error.
+        it "answers a decompressed length mismatch with bad_certificate" $ do
+            let plain = encodeCertificate13 B.empty (CertificateChain []) []
+                compressed = BL.toStrict $ compress $ BL.fromStrict plain
+            compressedCertificateAlert 1 (B.length plain + 1) compressed
+                `shouldBe` Just BadCertificate
+        it "answers data that is not zlib with bad_certificate" $
+            compressedCertificateAlert 1 16 (B.replicate 16 0xff)
+                `shouldBe` Just BadCertificate
+        it "answers an empty compressed certificate with decode_error" $
+            compressedCertificateAlert 1 16 B.empty
+                `shouldBe` Just DecodeError
+        it "answers bytes after a compressed certificate with decode_error" $ do
+            let plain = encodeCertificate13 B.empty (CertificateChain []) []
+                compressed = BL.toStrict $ compress $ BL.fromStrict plain
+            either (Just . errorToAlertDescription) (const Nothing)
+                ( decodeHandshake13 HandshakeType_CompressedCertificate $
+                    runPut $ do
+                        putWord16 1
+                        putWord24 (B.length plain)
+                        putOpaque24 (B.drop 2 compressed)
+                        putBytes (B.take 2 compressed)
+                )
+                `shouldBe` Just DecodeError
+        it "answers an unsupported compression algorithm with illegal_parameter" $ do
+            let plain = encodeCertificate13 B.empty (CertificateChain []) []
+                compressed = BL.toStrict $ compress $ BL.fromStrict plain
+            compressedCertificateAlert 2 (B.length plain) compressed
+                `shouldBe` Just IllegalParameter
         it "bounds TLS 1.3 certificate decompression by the declared size" $ do
             let compressed = BL.toStrict $ compress $ BL.replicate (32 * 1024 * 1024) 0
                 encoded = runPut $ do
@@ -83,6 +119,15 @@ spec = do
                     evaluate $
                         decodeHandshake13 HandshakeType_CompressedCertificate encoded
             decoded `shouldSatisfy` isLeft
+
+compressedCertificateAlert :: Word16 -> Int -> ByteString -> Maybe AlertDescription
+compressedCertificateAlert algo len compressed =
+    either (Just . errorToAlertDescription) (const Nothing) $
+        decodeHandshake13 HandshakeType_CompressedCertificate $
+            runPut $ do
+                putWord16 algo
+                putWord24 len
+                putOpaque24 compressed
 
 decodeHs :: ByteString -> Either TLSError Handshake
 decodeHs b = verifyResult (decodeHandshake cp) $ decodeHandshakeRecord b
