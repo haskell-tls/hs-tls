@@ -118,6 +118,25 @@ spec = do
                     (B.replicate 130 1)
                 )
                 `shouldBe` Just UnexpectedMessage
+        -- RFC 7301 Section 3.1: protocol_name_list<2..2^16-1> of
+        -- ProtocolName<1..2^8-1>.
+        it "refuses a malformed application_layer_protocol_negotiation" $
+            forM_
+                [ B.empty -- empty extension
+                , B.pack [0, 0] -- empty list
+                , B.pack [0, 1, 0] -- empty ProtocolName
+                , B.pack [0, 2, 1, 104, 2, 104, 50] -- trailing data
+                ]
+                $ \bs ->
+                    ( extensionDecode MsgTClientHello bs
+                        :: Maybe ApplicationLayerProtocolNegotiation
+                    )
+                        `shouldBe` Nothing
+        it "decodes an application_layer_protocol_negotiation" $
+            ( extensionDecode MsgTClientHello (B.pack [0, 3, 2, 104, 50])
+                :: Maybe ApplicationLayerProtocolNegotiation
+            )
+                `shouldBe` Just (ApplicationLayerProtocolNegotiation [B.pack [104, 50]])
         -- RFC 8422 Section 5.7: ecdh_Yc is <1..2^8-1>, so an empty one is
         -- malformed -- a decode_error -- rather than a point that does not
         -- decode, which is an illegal_parameter.
