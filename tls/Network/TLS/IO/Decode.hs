@@ -78,7 +78,7 @@ decodePacket12 ctx (Record ProtocolType_Handshake ver fragment) = do
                         let len = BS.length bs - BS.length left
                             bs' = BS.take len bs
                         return ((h, reverse (bs' : wirebytes)) : hbs)
-decodePacket12 _ _ = return $ Left (Error_Packet_Parsing "unknown protocol type")
+decodePacket12 _ (Record ty _ _) = return $ Left $ unknownProtocolType ty
 
 switchRxEncryption :: Context -> IO ()
 switchRxEncryption ctx =
@@ -118,4 +118,9 @@ decodePacket13 ctx (Record ProtocolType_Handshake _ fragment) = usingState ctx $
                         let len = BS.length bs - BS.length left
                             bs' = BS.take len bs
                         return ((h, reverse (bs' : wirebytes)) : hbs)
-decodePacket13 _ _ = return $ Left (Error_Packet_Parsing "unknown protocol type")
+decodePacket13 _ (Record ty _ _) = return $ Left $ unknownProtocolType ty
+
+-- RFC 8446 Section 5: a record of an unexpected type, including the inner
+-- type of a TLS 1.3 record, is answered with unexpected_message.
+unknownProtocolType :: ProtocolType -> TLSError
+unknownProtocolType ty = Error_Packet_unexpected (show ty) " expected: TLS record type"

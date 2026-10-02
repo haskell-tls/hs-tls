@@ -11,7 +11,7 @@ import qualified Data.ByteString.Lazy as L
 import Data.IORef
 import Data.List
 import Data.Maybe
-import Data.Word (Word8)
+import Data.Word (Word16, Word8)
 import Data.X509 (ExtKeyUsageFlag (..), ExtKeyUsagePurpose (..))
 import Network.TLS
 import Network.TLS.Extra.Cipher
@@ -19,6 +19,7 @@ import Network.TLS.Extra.CipherCBC
 import Network.TLS.Internal
 import Test.Hspec
 import Test.Hspec.QuickCheck
+import System.Timeout (timeout)
 import Test.QuickCheck
 
 import API
@@ -120,6 +121,10 @@ spec = do
             server_first_message_unexpected 20
         it "rejects an unknown handshake type as the first client message" $
             server_first_message_unexpected 254
+        it "rejects an SSLv2-style record header at once" $
+            server_first_record_type_unexpected 0x80 0x3fff
+        it "rejects an unknown record type" $
+            server_first_record_type_unexpected 24 0
 
 --------------------------------------------------------------
 
@@ -1668,6 +1673,37 @@ server_first_message_unexpected ty = do
         concurrently_
             (handshake sctx `shouldThrow` serverRejectedUnexpectedFirst)
             (handshake cctx `shouldThrow` anyTLSException)
+
+-- An unknown record type is answered with unexpected_message (RFC 8446
+-- Section 5).  The type of the client's first record is replaced; with a
+-- length larger than what follows, as an SSLv2 ClientHello reads when taken
+-- for a TLS record header, the server must answer from the header alone
+-- rather than wait for a body that never comes.  A length of 0 keeps the
+-- original one.
+server_first_record_type_unexpected :: Word8 -> Word16 -> IO ()
+server_first_record_type_unexpected ty len = do
+    (clientParam, serverParam) <- generate arbitrary
+    armed <- newIORef True
+    let retype be =
+            be
+                { backendSend = \bs -> do
+                    first <- atomicModifyIORef' armed (\a -> (False, a))
+                    if first && B.length bs > 5 && B.head bs == 22
+                        then do
+                            let lenBytes
+                                    | len == 0 = B.take 2 (B.drop 3 bs)
+                                    | otherwise =
+                                        B.pack [fromIntegral (len `div` 256), fromIntegral (len `mod` 256)]
+                            backendSend be $
+                                B.singleton ty <> B.take 2 (B.drop 1 bs) <> lenBytes <> B.drop 5 bs
+                        else backendSend be bs
+                }
+    r <- timeout 5000000 $
+        withPairContextWith (retype, id) (clientParam, serverParam) $ \(cctx, sctx) ->
+            concurrently_
+                (handshake sctx `shouldThrow` serverRejectedUnexpectedFirst)
+                (handshake cctx `shouldThrow` anyTLSException)
+    r `shouldSatisfy` isJust
 
 serverRejectedUnexpectedFirst :: TLSException -> Bool
 serverRejectedUnexpectedFirst (HandshakeFailed (Error_Packet_unexpected _ _)) = True

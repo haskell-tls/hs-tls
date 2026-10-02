@@ -50,7 +50,8 @@ recvRecord12
     -- ^ TLS context
     -> IO (Either TLSError (Record Plaintext))
 recvRecord12 ctx =
-    readExactBytes ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
+    readExactBytes ctx 5
+        >>= either (return . Left) (recvLengthE . (decodeHeader >=> checkType))
   where
     recvLengthE = either (return . Left) recvLength
 
@@ -69,7 +70,9 @@ recvRecord12 ctx =
                     >>= either (return . Left) (getRecord ctx header)
 
 recvRecord13 :: Context -> IO (Either TLSError (Record Plaintext))
-recvRecord13 ctx = readExactBytes ctx 5 >>= either (return . Left) (recvLengthE . decodeHeader)
+recvRecord13 ctx =
+    readExactBytes ctx 5
+        >>= either (return . Left) (recvLengthE . (decodeHeader >=> checkType))
   where
     recvLengthE = either (return . Left) recvLength
     recvLength header@(Header _ _ readlen) = do
@@ -90,6 +93,24 @@ recvRecord13 ctx = readExactBytes ctx 5 >>= either (return . Left) (recvLengthE 
 
 maximumSizeExceeded :: TLSError
 maximumSizeExceeded = Error_Protocol "record exceeding maximum size" RecordOverflow
+
+-- RFC 8446 Section 5: a record of an unexpected type is answered with
+-- unexpected_message.  Checked on the header, before the body is read, so
+-- that what is no TLS record at all -- an SSLv2 ClientHello, say, whose first
+-- byte reads as type 0x80 and whose length can ask for bytes that never
+-- come -- is answered at once rather than when the peer gives up.
+checkType :: Header -> Either TLSError Header
+checkType header@(Header ty _ _)
+    | ty `elem` known = Right header
+    | otherwise =
+        Left $ Error_Packet_unexpected (show ty) " expected: TLS record type"
+  where
+    known =
+        [ ProtocolType_ChangeCipherSpec
+        , ProtocolType_Alert
+        , ProtocolType_Handshake
+        , ProtocolType_AppData
+        ]
 
 ----------------------------------------------------------------
 
