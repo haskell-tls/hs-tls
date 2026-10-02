@@ -359,7 +359,12 @@ decodeClientKeyXchg cp =
     parseCKE CipherKeyExchange_ECDHE_ECDSA = parseClientECDHPublic
     parseCKE _ = fail "unsupported client key exchange type"
     parseClientDHPublic = CKX_DH . dhPublic <$> getInteger16
-    parseClientECDHPublic = CKX_ECDH <$> getOpaque8
+    -- RFC 8422 Section 5.7: ecdh_Yc is <1..2^8-1>, so an empty one is
+    -- malformed, a decode_error, before it is a point that does not decode.
+    parseClientECDHPublic = do
+        bs <- getOpaque8
+        when (B.null bs) $ fail "empty ECDH public key"
+        return $ CKX_ECDH bs
 
 decodeFinished :: Get Handshake
 decodeFinished = Finished . VerifyData <$> (remaining >>= getBytes)

@@ -118,6 +118,20 @@ spec = do
                     (B.replicate 130 1)
                 )
                 `shouldBe` Just UnexpectedMessage
+        -- RFC 8422 Section 5.7: ecdh_Yc is <1..2^8-1>, so an empty one is
+        -- malformed -- a decode_error -- rather than a point that does not
+        -- decode, which is an illegal_parameter.
+        it "answers an empty ECDH public key with decode_error" $
+            either (Just . errorToAlertDescription) (const Nothing)
+                ( decodeHandshake
+                    CurrentParams
+                        { cParamsVersion = TLS12
+                        , cParamsKeyXchgType = Just CipherKeyExchange_ECDHE_RSA
+                        }
+                    HandshakeType_ClientKeyXchg
+                    (B.singleton 0)
+                )
+                `shouldBe` Just DecodeError
         it "bounds TLS 1.3 certificate decompression by the declared size" $ do
             let compressed = BL.toStrict $ compress $ BL.replicate (32 * 1024 * 1024) 0
                 encoded = runPut $ do
