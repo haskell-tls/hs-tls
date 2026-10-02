@@ -135,6 +135,8 @@ spec = do
         prop "can handshake with TLS 1.3 Full" handshake13_full
         prop "can handshake with TLS 1.3 HRR" handshake13_hrr
         prop "can handshake with TLS 1.3 PSK" handshake13_psk
+        it "does not resume a TLS 1.2 session with a TLS 1.3 PSK" $
+            handshake13_psk_tls12_session
         prop "can handshake with TLS 1.3 PSK ticket" handshake13_psk_ticket
         prop "can handshake with TLS 1.3 PSK -> HRR" handshake13_psk_fallback
         prop "can handshake with TLS 1.3 0RTT" handshake13_0rtt
@@ -1485,6 +1487,51 @@ handshake13_psk (CSP13 (cli, srv)) = do
     let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
 
     runTLSSimple13 params2 PreSharedKey
+
+-- RFC 8446 Section 4.6.1: a TLS 1.3 PSK resumes only a TLS 1.3 session.
+-- The server's session manager answers the client's PSK identity with a
+-- TLS 1.2 session, which has no ticket information; the server must
+-- fall back to a full handshake rather than fail.
+handshake13_psk_tls12_session :: IO ()
+handshake13_psk_tls12_session = do
+    CSP12 params12 <- generate arbitrary
+    refs12 <- twoSessionRefs
+    runTLSSimple $ setPairParamsSessionManagers (twoSessionManagers refs12) params12
+    Just (_, sdata12) <- readIORef (snd refs12)
+    sessionVersion sdata12 `shouldBe` TLS12
+
+    CSP13 (cli, srv) <- generate arbitrary
+    let cliSupported =
+            defaultSupported
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [P256, X25519]
+                }
+        svrSupported =
+            defaultSupported
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
+                }
+        params0 =
+            ( cli{clientSupported = cliSupported}
+            , srv{serverSupported = svrSupported}
+            )
+    refs13 <- twoSessionRefs
+    let params = setPairParamsSessionManagers (twoSessionManagers refs13) params0
+    runTLSSimple13 params HelloRetryRequest
+    Just sessionParams <- readClientSessionRef refs13
+
+    let tls12Manager =
+            noSessionManager
+                { sessionResume = \_ -> return $ Just sdata12
+                , sessionResumeOnlyOnce = \_ -> return $ Just sdata12
+                }
+        params2 =
+            setPairParamsSessionResuming sessionParams $
+                setPairParamsSessionManagers (fst (twoSessionManagers refs13), tls12Manager) params0
+    -- The key share is for the group of the earlier session, so no
+    -- HelloRetryRequest, and the PSK is not used.
+    runTLSSimple13 params2 FullHandshake
 
 handshake13_psk_ticket :: CSP13 -> IO ()
 handshake13_psk_ticket (CSP13 (cli, srv)) = do

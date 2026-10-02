@@ -164,21 +164,26 @@ pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CH{..} = do
                         then sessionResumeOnlyOnce mgr identity
                         else sessionResume mgr identity
                 case msdata of
-                    Just sdata -> do
-                        let tinfo = fromJust $ sessionTicketInfo sdata
-                            psk = sessionSecret sdata
-                        isFresh <- checkFreshness tinfo obfAge
-                        (isPSKvalid, is0RTTvalid) <- checkSessionEquality sdata
-                        if isPSKvalid && isFresh
-                            then
-                                return
-                                    ( psk
-                                    , Just (bnd, 0 :: Int, len)
-                                    , is0RTTvalid
-                                    , sessionALPN sdata
-                                    )
-                            else -- fall back to full handshake
-                                return (zero, Nothing, False, Nothing)
+                    -- RFC 8446 Section 4.6.1: only a TLS 1.3 session, which
+                    -- has its ticket information, is resumed with a PSK.  A
+                    -- TLS 1.2 one found under the same identity falls back
+                    -- to a full handshake.
+                    Just sdata
+                        | sessionVersion sdata == TLS13
+                        , Just tinfo <- sessionTicketInfo sdata -> do
+                            let psk = sessionSecret sdata
+                            isFresh <- checkFreshness tinfo obfAge
+                            (isPSKvalid, is0RTTvalid) <- checkSessionEquality sdata
+                            if isPSKvalid && isFresh
+                                then
+                                    return
+                                        ( psk
+                                        , Just (bnd, 0 :: Int, len)
+                                        , is0RTTvalid
+                                        , sessionALPN sdata
+                                        )
+                                else -- fall back to full handshake
+                                    return (zero, Nothing, False, Nothing)
                     _ -> return (zero, Nothing, False, Nothing)
             else return (zero, Nothing, False, Nothing)
     selectPSK _ = return (zero, Nothing, False, Nothing)
