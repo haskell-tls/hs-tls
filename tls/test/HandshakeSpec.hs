@@ -130,6 +130,8 @@ spec = do
             "rejects resuming a TLS 1.2 session without its cipher"
             handshake12_session_resumption_cipher_missing
         prop "can resume session ticket with TLS 1.2" handshake12_session_ticket
+        it "sends no session ticket to a TLS 1.2 client that did not ask" $
+            handshake12_session_ticket_unoffered
         prop "can handshake with TLS 1.3 Full" handshake13_full
         prop "can handshake with TLS 1.3 HRR" handshake13_hrr
         prop "can handshake with TLS 1.3 PSK" handshake13_psk
@@ -1357,6 +1359,43 @@ handshake12_session_resumption_cipher_missing (CSP12 plainParams) = do
 serverRejectedMissingCipher :: TLSException -> Bool
 serverRejectedMissingCipher (HandshakeFailed (Error_Protocol _ IllegalParameter)) = True
 serverRejectedMissingCipher _ = False
+
+-- RFC 5077 Sections 3.2 and 3.3: a server sends the session_ticket
+-- extension and NewSessionTicket only to a client that sent the
+-- extension.  The client's session_ticket is removed on its way to a
+-- server whose session manager uses tickets, and the client must then
+-- receive neither.
+handshake12_session_ticket_unoffered :: IO ()
+handshake12_session_ticket_unoffered = do
+    CSP12 (cparams, sparams) <- generate arbitrary
+    let sparams' =
+            sparams
+                { serverShared =
+                    (serverShared sparams){sharedSessionManager = oneSessionTicket}
+                }
+        unoffer (ClientHello ch) =
+            pure $
+                ClientHello
+                    ch
+                        { chExtensions =
+                            filter
+                                (\(ExtensionRaw eid _) -> eid /= EID_SessionTicket)
+                                (chExtensions ch)
+                        }
+        unoffer hs = pure hs
+    received <- newIORef []
+    let record hs = modifyIORef received (hs :) >> pure hs
+    withPairContextWith (id, id) (cparams, sparams') $ \(cctx, sctx) -> do
+        contextHookSetHandshakeRecv sctx unoffer
+        contextHookSetHandshakeRecv cctx record
+        concurrently_ (handshake sctx) (handshake cctx)
+    hss <- readIORef received
+    let ticketExt (ServerHello sh) =
+            any (\(ExtensionRaw eid _) -> eid == EID_SessionTicket) (shExtensions sh)
+        ticketExt _ = False
+        newTicket NewSessionTicket{} = True
+        newTicket _ = False
+    filter (\h -> ticketExt h || newTicket h) hss `shouldBe` []
 
 handshake12_session_ticket :: CSP12 -> IO ()
 handshake12_session_ticket (CSP12 plainParams) = do
