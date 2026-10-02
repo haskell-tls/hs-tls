@@ -101,6 +101,17 @@ spec = do
         prop "can handle SNI" handshake_sni
         prop "can handshake with TLS 1.2 CBC" handshake_cbc
         prop "can re-negotiate with TLS 1.2" handshake12_renegotiation
+        it "rejects SCSV in a secure renegotiation" $
+            handshake12_renegotiation_tampered $ \ch ->
+                ch{chCiphers = chCiphers ch ++ [CipherId 0xff]}
+        it "rejects a secure renegotiation without renegotiation_info" $
+            handshake12_renegotiation_tampered $ \ch ->
+                ch
+                    { chExtensions =
+                        filter
+                            (\(ExtensionRaw eid _) -> eid /= EID_SecureRenegotiation)
+                            (chExtensions ch)
+                    }
         prop "can resume session with TLS 1.2" handshake12_session_resumption
         prop
             "rejects resuming a TLS 1.2 session without its cipher"
@@ -1157,6 +1168,49 @@ handshake12_renegotiation (CSP12 (cparams, sparams)) = do
     hsClient ctx = handshake ctx >> handshake ctx
     -- recvData receives the alert from the second handshake
     hsServer ctx = handshake ctx >> void (recvData ctx)
+
+-- RFC 5746 Section 3.7: when a connection with secure renegotiation is
+-- renegotiated, ClientHello must not contain the SCSV and must contain
+-- the renegotiation_info extension.  The second ClientHello is tampered
+-- with on its way to the server, which must abort with handshake_failure.
+handshake12_renegotiation_tampered :: (ClientHello -> ClientHello) -> IO ()
+handshake12_renegotiation_tampered tamper = do
+    CSP12 (cparams, sparams) <- generate arbitrary
+    let cparams' =
+            cparams
+                { clientSupported =
+                    (clientSupported cparams)
+                        { supportedSecureRenegotiation = True
+                        }
+                }
+        sparams' =
+            sparams
+                { serverSupported =
+                    (serverSupported sparams)
+                        { supportedSecureRenegotiation = True
+                        , supportedClientInitiatedRenegotiation = True
+                        }
+                }
+    count <- newIORef (0 :: Int)
+    let tamperSecond (ClientHello ch) = do
+            n <- atomicModifyIORef' count $ \i -> (i + 1, i)
+            pure $ ClientHello $ if n == 0 then ch else tamper ch
+        tamperSecond hs = pure hs
+    r <- timeout 10000000 $
+        withPairContextWith (id, id) (cparams', sparams') $ \(cctx, sctx) -> do
+            contextHookSetHandshakeRecv sctx tamperSecond
+            concurrently_ (handshake sctx) (handshake cctx)
+            concurrently_
+                (recvData sctx `shouldThrow` rejectedAsHandshakeFailure)
+                ( void
+                    (E.try (handshake cctx >> recvData cctx) :: IO (Either TLSException B.ByteString))
+                )
+    r `shouldSatisfy` isJust
+
+rejectedAsHandshakeFailure :: TLSException -> Bool
+rejectedAsHandshakeFailure (HandshakeFailed (Error_Protocol _ HandshakeFailure)) = True
+rejectedAsHandshakeFailure (Terminated _ _ (Error_Protocol _ HandshakeFailure)) = True
+rejectedAsHandshakeFailure _ = False
 
 handshake12_session_resumption :: CSP12 -> IO ()
 handshake12_session_resumption (CSP12 plainParams) = do

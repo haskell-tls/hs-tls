@@ -79,7 +79,21 @@ checkSecureRenegotiation :: Context -> ClientHello -> IO ()
 checkSecureRenegotiation ctx CH{..} = do
     -- RFC 5746: secure renegotiation
     -- TLS_EMPTY_RENEGOTIATION_INFO_SCSV: {0x00, 0xFF}
-    when (CipherId 0xff `elem` chCiphers) $
+    let hasSCSV = CipherId 0xff `elem` chCiphers
+        hasExt = isJust $ extensionLookup EID_SecureRenegotiation chExtensions
+    established <- ctxEstablished ctx
+    secure <- usingState_ ctx getSecureRenegotiation
+    -- RFC 5746 Section 3.7: when renegotiating a connection whose
+    -- secure_renegotiation flag is set, ClientHello MUST NOT contain
+    -- the SCSV and MUST contain the renegotiation_info extension.
+    when (established == Established && secure) $ do
+        when hasSCSV $
+            throwCore $
+                Error_Protocol "SCSV in renegotiation" HandshakeFailure
+        unless hasExt $
+            throwCore $
+                Error_Protocol "no renegotiation_info in renegotiation" HandshakeFailure
+    when hasSCSV $
         usingState_ ctx $
             setSecureRenegotiation True
     case extensionLookup EID_SecureRenegotiation chExtensions of
