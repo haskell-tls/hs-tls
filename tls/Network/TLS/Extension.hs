@@ -683,10 +683,17 @@ decodeApplicationLayerProtocolNegotiation
     :: ByteString -> Maybe ApplicationLayerProtocolNegotiation
 decodeApplicationLayerProtocolNegotiation = runGetMaybe $ do
     len <- getWord16
-    ApplicationLayerProtocolNegotiation <$> getList (fromIntegral len) getALPN
+    protos <- getList (fromIntegral len) getALPN
+    -- RFC 7301 Section 3.1: protocol_name_list<2..2^16-1> of
+    -- ProtocolName<1..2^8-1>, with nothing after it.
+    when (null protos) $ fail "empty protocol_name_list"
+    r <- remaining
+    when (r /= 0) $ fail "trailing data in application_layer_protocol_negotiation"
+    return $ ApplicationLayerProtocolNegotiation protos
   where
     getALPN = do
         alpnParsed <- getOpaque8
+        when (B.null alpnParsed) $ fail "empty ProtocolName"
         let alpn = B.copy alpnParsed
         return (B.length alpn + 1, alpn)
 
