@@ -175,18 +175,25 @@ checkCertVerify
     -> Signature
     -> ByteString
     -> m Bool
-checkCertVerify ctx pub hs signature hashValue
-    | pub `signatureCompatible13` hs = liftIO $ do
-        role <- usingState_ ctx getRole
-        let ctxStr
-                | role == ClientRole = serverContextString -- opposite context
-                | otherwise = clientContextString
-            target = makeTarget ctxStr hashValue
-            sigParams = signatureParams pub hs
-        checkHashSignatureValid13 hs
-        checkSupportedHashSignature ctx hs
-        verifyPublic ctx sigParams target signature
-    | otherwise = return False
+-- RFC 8446 Section 6.2: an algorithm that may not be used -- one TLS 1.3
+-- does not allow, one not offered, or one that does not fit the key -- is a
+-- field that is incorrect, an illegal_parameter.  Only a signature that does
+-- not verify is a decrypt_error, which False leads to.
+checkCertVerify ctx pub hs signature hashValue = liftIO $ do
+    checkHashSignatureValid13 hs
+    checkSupportedHashSignature ctx hs
+    unless (pub `signatureCompatible13` hs) $
+        throwCore $
+            Error_Protocol
+                ("signature algorithm " ++ show hs ++ " does not fit the public key")
+                IllegalParameter
+    role <- usingState_ ctx getRole
+    let ctxStr
+            | role == ClientRole = serverContextString -- opposite context
+            | otherwise = clientContextString
+        target = makeTarget ctxStr hashValue
+        sigParams = signatureParams pub hs
+    verifyPublic ctx sigParams target signature
 
 makeTarget :: ByteString -> ByteString -> ByteString
 makeTarget contextString hashValue = runPut $ do
