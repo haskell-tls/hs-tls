@@ -21,7 +21,7 @@ env:
   # branch, which happens whenever it is rebased onto upstream, changes
   # nothing here until the commit below is moved forward.
   TLSFUZZER_REPO: kazu-yamamoto/tlsfuzzer
-  TLSFUZZER_REF: fef8db393498c463665e7b1e43a161aa4ae44572
+  TLSFUZZER_REF: 969d70e85b7dfcd6fd9ba34b493cee5bf05c1085
   GHC_VERSION: '9.12'
   # Same name as in main.yml, so that the cache main.yml saves on main is
   # restored here.  Nothing is saved from this workflow.
@@ -108,8 +108,9 @@ jobs:
         "$RUNNER_TEMP/venv/bin/pip" install -r tlsfuzzer/requirements.txt kyber-py==1.2.0
         echo "PYTHON=$RUNNER_TEMP/venv/bin/python" >> "$GITHUB_ENV"
 
-    # A CA, a server certificate and a client certificate, RSA 2048 like
-    # the ones the scripts have been run with by hand.
+    # A CA, and a server and a client certificate of each type the lists
+    # need: RSA 2048, like the ones the scripts have been run with by hand,
+    # ECDSA P-256 and Ed25519.
     - name: Generate certificates
       run: |
         certs="$RUNNER_TEMP/certs"
@@ -117,40 +118,90 @@ jobs:
         cd "$certs"
         openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
           -keyout cakey.pem -out cacert.pem -subj "/CN=tlsfuzzer CA"
-        openssl req -newkey rsa:2048 -nodes \
-          -keyout serverkey.pem -out server.csr -subj "/CN=localhost"
         printf 'subjectAltName=DNS:localhost,IP:127.0.0.1\n' > server.ext
-        openssl x509 -req -in server.csr -CA cacert.pem -CAkey cakey.pem \
-          -CAcreateserial -days 2 -extfile server.ext -out servercert.pem
-        openssl req -newkey rsa:2048 -nodes \
-          -keyout clientkey.pem -out client.csr -subj "/CN=tlsfuzzer client"
         # Without an extension, openssl on Ubuntu issues a v1 certificate,
         # which tls-server rejects as LeafNotV3.
         printf 'basicConstraints=CA:FALSE\nextendedKeyUsage=clientAuth\n' > client.ext
-        openssl x509 -req -in client.csr -CA cacert.pem -CAkey cakey.pem \
-          -CAcreateserial -days 2 -extfile client.ext -out clientcert.pem
+        issue() { # issue <name> <subject> <ext> <genpkey options>...
+          name=$1 subject=$2 ext=$3
+          shift 3
+          openssl genpkey "$@" -out "${name}key.pem"
+          openssl req -new -key "${name}key.pem" -out "$name.csr" -subj "$subject"
+          openssl x509 -req -in "$name.csr" -CA cacert.pem -CAkey cakey.pem \
+            -CAcreateserial -days 2 -extfile "$ext" -out "${name}cert.pem"
+        }
+        rsa="-algorithm RSA -pkeyopt rsa_keygen_bits:2048"
+        ecdsa="-algorithm EC -pkeyopt ec_paramgen_curve:P-256"
+        ed25519="-algorithm ED25519"
+        issue server "/CN=localhost" server.ext $rsa
+        issue server-ecdsa "/CN=localhost" server.ext $ecdsa
+        issue server-ed25519 "/CN=localhost" server.ext $ed25519
+        issue client "/CN=tlsfuzzer client" client.ext $rsa
+        issue client-ecdsa "/CN=tlsfuzzer client" client.ext $ecdsa
+        issue client-ed25519 "/CN=tlsfuzzer client" client.ext $ed25519
         echo "CERT_DIR=$certs" >> "$GITHUB_ENV"
 
-    # TLS_HOST, TLS_PORT, PYTHON and CERT_DIR are read by test.sh and
-    # test-auth.sh.  The server is stopped by its PID: a bare wait would
-    # wait for the server too.
+    # Each step starts tls-server with what its lists need and stops it by
+    # its PID: a bare wait would wait for the server too.  TLS_HOST,
+    # TLS_PORT, PYTHON, CERT_DIR, LIST, CLIENT_KEY and CLIENT_CERT are read
+    # by test.sh and test-auth.sh.  --server-name lets
+    # test-invalid-server-name-extension.py check unrecognized_name.
+    - name: Write the server starter
+      run: |
+        cat > "$RUNNER_TEMP/start-server.sh" <<'EOF'
+        # start_server <log> <tls-server options>...
+        start_server() {
+          log=$1
+          shift
+          "$TLS_SERVER" -d --use-weak-ciphers --server-name localhost "$@" \
+            "$TLS_HOST" "$TLS_PORT" > "$RUNNER_TEMP/$log" 2>&1 &
+          server=$!
+          trap 'kill $server' EXIT
+          for _ in $(seq 30); do
+            (exec 3<>"/dev/tcp/$TLS_HOST/$TLS_PORT") 2>/dev/null && break
+            sleep 1
+          done
+        }
+        EOF
+
     - name: Run test.sh
       working-directory: tlsfuzzer
       env:
         TLS_HOST: 127.0.0.1
         TLS_PORT: 4433
       run: |
-        "$TLS_SERVER" -d --use-weak-ciphers \
-          --key="$CERT_DIR/serverkey.pem" --cert="$CERT_DIR/servercert.pem" \
-          "$TLS_HOST" "$TLS_PORT" > "$RUNNER_TEMP/server.log" 2>&1 &
-        server=$!
-        trap 'kill $server' EXIT
-        for _ in $(seq 30); do
-          (exec 3<>"/dev/tcp/$TLS_HOST/$TLS_PORT") 2>/dev/null && break
-          sleep 1
-        done
+        . "$RUNNER_TEMP/start-server.sh"
+        start_server server.log \
+          --key="$CERT_DIR/serverkey.pem" --cert="$CERT_DIR/servercert.pem"
         bash test.sh
 
+    - name: Run test.sh with an ECDSA certificate
+      if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+      working-directory: tlsfuzzer
+      env:
+        TLS_HOST: 127.0.0.1
+        TLS_PORT: 4435
+        LIST: list-ecdsa.txt
+      run: |
+        . "$RUNNER_TEMP/start-server.sh"
+        start_server server-ecdsa.log \
+          --key="$CERT_DIR/server-ecdsakey.pem" --cert="$CERT_DIR/server-ecdsacert.pem"
+        bash test.sh
+
+    - name: Run test.sh with an Ed25519 certificate
+      if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+      working-directory: tlsfuzzer
+      env:
+        TLS_HOST: 127.0.0.1
+        TLS_PORT: 4436
+        LIST: list-eddsa.txt
+      run: |
+        . "$RUNNER_TEMP/start-server.sh"
+        start_server server-ed25519.log \
+          --key="$CERT_DIR/server-ed25519key.pem" --cert="$CERT_DIR/server-ed25519cert.pem"
+        bash test.sh
+
+    # The same server for RSA, ECDSA and Ed25519 client certificates.
     - name: Run test-auth.sh
       if: ${{ !cancelled() && steps.build.outcome == 'success' }}
       working-directory: tlsfuzzer
@@ -158,15 +209,30 @@ jobs:
         TLS_HOST: 127.0.0.1
         TLS_PORT: 4434
       run: |
-        "$TLS_SERVER" -d --use-weak-ciphers -a -t "$CERT_DIR/cacert.pem" \
-          --key="$CERT_DIR/serverkey.pem" --cert="$CERT_DIR/servercert.pem" \
-          "$TLS_HOST" "$TLS_PORT" > "$RUNNER_TEMP/server-auth.log" 2>&1 &
-        server=$!
-        trap 'kill $server' EXIT
-        for _ in $(seq 30); do
-          (exec 3<>"/dev/tcp/$TLS_HOST/$TLS_PORT") 2>/dev/null && break
-          sleep 1
-        done
+        . "$RUNNER_TEMP/start-server.sh"
+        start_server server-auth.log -a -t "$CERT_DIR/cacert.pem" \
+          --key="$CERT_DIR/serverkey.pem" --cert="$CERT_DIR/servercert.pem"
+        bash test-auth.sh
+        CLIENT_KEY="$CERT_DIR/client-ecdsakey.pem" \
+          CLIENT_CERT="$CERT_DIR/client-ecdsacert.pem" \
+          LIST=list-auth-ecdsa.txt bash test-auth.sh
+        CLIENT_KEY="$CERT_DIR/client-ed25519key.pem" \
+          CLIENT_CERT="$CERT_DIR/client-ed25519cert.pem" \
+          LIST=list-auth-eddsa.txt bash test-auth.sh
+
+    # Post-handshake authentication: tls-server asks for a certificate
+    # after the handshake, so it is given -t but not -a.
+    - name: Run test-auth.sh for post-handshake authentication
+      if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+      working-directory: tlsfuzzer
+      env:
+        TLS_HOST: 127.0.0.1
+        TLS_PORT: 4437
+        LIST: list-auth2.txt
+      run: |
+        . "$RUNNER_TEMP/start-server.sh"
+        start_server server-pha.log -t "$CERT_DIR/cacert.pem" \
+          --key="$CERT_DIR/serverkey.pem" --cert="$CERT_DIR/servercert.pem"
         bash test-auth.sh
 
     - name: Upload server logs
