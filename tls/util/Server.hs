@@ -28,15 +28,18 @@ html =
   where
     body = "<html><<body>Hello world!</body></html>"
 
+-- An HTTP request is answered with HTML, anything else is echoed.
+-- tlsfuzzer's test-lengths.py sends "A..A\n", or just "\n", and expects
+-- it back.
 server :: Context -> Bool -> IO ()
 server ctx showRequest = do
     bs <- recvData ctx
     case C8.uncons bs of
         Nothing -> return ()
-        Just ('A', _) -> do
+        Just ('G', _) -> handleHTML ctx showRequest bs
+        Just _ -> do
             sendData ctx $ CL8.fromStrict bs
             echo ctx
-        Just _ -> handleHTML ctx showRequest bs
 
 echo :: Context -> IO ()
 echo ctx = loop
