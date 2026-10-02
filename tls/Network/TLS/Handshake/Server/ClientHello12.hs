@@ -34,6 +34,7 @@ processClientHello12
 processClientHello12 sparams ctx ch = do
     let secureRenegotiation = supportedSecureRenegotiation $ serverSupported sparams
     when secureRenegotiation $ checkSecureRenegotiation ctx ch
+    checkEcPointFormats ch
     serverName <- usingState_ ctx getClientSNI
     let hooks = serverHooks sparams
     extraCreds <- onServerNameIndication hooks serverName
@@ -212,6 +213,34 @@ chooseCreds usedCipher creds signatureCreds = case cipherKeyExchange usedCipher 
             Error_Protocol "key exchange algorithm not implemented" HandshakeFailure
 
 ----------------------------------------------------------------
+
+-- RFC 8422 Section 5.1.2: a client that names a curve of RFC 8422 in
+-- supported_groups and sends ec_point_formats without the uncompressed
+-- format is refused with illegal_parameter.  An empty list is refused
+-- with decode_error when decoding it.
+checkEcPointFormats :: ClientHello -> IO ()
+checkEcPointFormats CH{..} =
+    lookupAndDecodeAndDo
+        EID_EcPointFormats
+        MsgTClientHello
+        chExtensions
+        (return ())
+        $ \(EcPointFormatsSupported formats) ->
+            when
+                ( EcPointFormat_Uncompressed `notElem` formats
+                    && any (`elem` rfc8422Groups) groups
+                )
+                $ throwCore
+                $ Error_Protocol "uncompressed point format missing" IllegalParameter
+  where
+    groups =
+        lookupAndDecode
+            EID_SupportedGroups
+            MsgTClientHello
+            chExtensions
+            []
+            (\(SupportedGroups gs) -> gs)
+    rfc8422Groups = [P256, P384, P521, X25519, X448]
 
 negotiatedGroupsInCommon :: [Group] -> [ExtensionRaw] -> [Group]
 negotiatedGroupsInCommon serverGroups exts =
