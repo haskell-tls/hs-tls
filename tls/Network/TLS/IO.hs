@@ -102,8 +102,15 @@ recvPacket12 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
             Left err -> do
                 logPacket ctx $ show err
                 return $ Left err
-            Right record
-                | hrr && isCCS record -> loop (count + 1)
+            Right record@(Record _ _ fragment)
+                -- the ChangeCipherSpec after a HelloRetryRequest is skipped,
+                -- but checked like any other
+                | hrr && isCCS record ->
+                    case checkChangeCipherSpec fragment of
+                        Left err -> do
+                            logPacket ctx $ show err
+                            return $ Left err
+                        Right _ -> loop (count + 1)
                 | otherwise -> do
                     pktRecv <- decodePacket12 ctx record
                     if isEmptyHandshake pktRecv
