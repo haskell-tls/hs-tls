@@ -292,6 +292,7 @@ ciphersForFuzzer =
     , cipher_DHE_RSA_WITH_AES_128_CBC_SHA
     , cipher_RSA_WITH_AES_256_CBC_SHA
     , cipher_RSA_WITH_AES_128_CBC_SHA
+    , cipher_RSA_WITH_AES_128_CBC_SHA256
     , cipher_DHE_RSA_WITH_AES_128_GCM_SHA256
     , cipher_RSA_WITH_AES_128_GCM_SHA256
     , cipher_RSA_WITH_AES_256_GCM_SHA384
@@ -321,6 +322,16 @@ cipher_RSA_WITH_AES_256_CBC_SHA =
         , cipherPRFHash = Nothing
         , cipherKeyExchange = CipherKeyExchange_RSA
         , cipherMinVer = Just SSL3
+        }
+
+-- tlsfuzzer's test-atypical-padding.py and test-lengths.py use this one
+-- for an HMAC-SHA256 record.
+cipher_RSA_WITH_AES_128_CBC_SHA256 :: Cipher
+cipher_RSA_WITH_AES_128_CBC_SHA256 =
+    cipher_DHE_RSA_AES128_SHA256
+        { cipherID = 0x003C
+        , cipherName = "TLS_RSA_WITH_AES_128_CBC_SHA256"
+        , cipherKeyExchange = CipherKeyExchange_RSA
         }
 
 cipher_DHE_RSA_WITH_AES_128_CBC_SHA :: Cipher
