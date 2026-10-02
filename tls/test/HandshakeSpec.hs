@@ -78,6 +78,8 @@ spec = do
             handshake_server_key_purpose TLS13 KeyUsagePurpose_ClientAuth False
         prop "can handle client key usage" handshake_client_key_usage
         prop "can authenticate client" handshake_client_auth
+        it "rejects a TLS 1.3 CertificateVerify algorithm unfit for the key" $
+            handshake13_client_cert_verify_unfit_sigalg
         prop "can receive client authentication failure" handshake_client_auth_fail
         it "accepts an empty TLS 1.2 client certificate when the hook does" $
             handshake_client_auth_empty TLS12
@@ -841,6 +843,54 @@ handshake12_cert_request_types = do
         , CertificateType_DSA_Sign
         , CertificateType_ECDSA_Sign
         ]
+
+-- RFC 8446 Section 6.2: a CertificateVerify whose algorithm may not be used
+-- with the certificate's key has a field that is incorrect, which is an
+-- illegal_parameter; decrypt_error is for a signature that does not verify.
+-- The client signs with RSA-PSS for an rsaEncryption key and the server
+-- reads the algorithm as rsa_pss_pss_sha256, which needs an RSASSA-PSS key.
+handshake13_client_cert_verify_unfit_sigalg :: IO ()
+handshake13_client_cert_verify_unfit_sigalg = do
+    let cipher = cipher13_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS13], [TLS13])
+                ([cipher], [cipher])
+    cred <- generate $ arbitraryRSACredentialWithPurpose KeyUsagePurpose_ClientAuth
+    let clientParam' =
+            clientParam
+                { clientHooks =
+                    (clientHooks clientParam)
+                        { onCertificateRequest = \_ -> return $ Just cred
+                        }
+                }
+        serverParam' =
+            serverParam
+                { serverWantClientCert = True
+                , serverHooks =
+                    (serverHooks serverParam)
+                        { onClientCertificate = \_ -> return CertificateUsageAccept
+                        }
+                }
+        unfit (CertVerify13 (DigitallySigned _ sig)) =
+            pure $
+                CertVerify13 (DigitallySigned (HashIntrinsic, SignatureRSApsspssSHA256) sig)
+        unfit hs = pure hs
+    r <- timeout 10000000 $
+        withPairContextWith (id, id) (clientParam', serverParam') $ \(cctx, sctx) -> do
+            contextHookSetHandshake13Recv sctx unfit
+            concurrently_
+                ((handshake sctx >> recvData sctx) `shouldThrow` rejectedAsIllegalParameter)
+                ( void
+                    (E.try (handshake cctx >> recvData cctx) :: IO (Either TLSException B.ByteString))
+                )
+    r `shouldSatisfy` isJust
+
+rejectedAsIllegalParameter :: TLSException -> Bool
+rejectedAsIllegalParameter (HandshakeFailed (Error_Protocol _ IllegalParameter)) = True
+rejectedAsIllegalParameter (Terminated _ _ (Error_Protocol _ IllegalParameter)) = True
+rejectedAsIllegalParameter _ = False
 
 handshake_client_auth_fail :: (ClientParams, ServerParams) -> IO ()
 handshake_client_auth_fail (clientParam, serverParam) = do
