@@ -6,17 +6,23 @@ import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (concurrently_)
 import qualified Control.Exception as E
 import Control.Monad
+import Crypto.Cipher.AES (AES128)
+import Crypto.Cipher.Types (AEADMode (..), AuthTag (..), aeadInit, aeadSimpleEncrypt, cipherInit)
+import Crypto.Error (throwCryptoError)
+import Data.Bits (shiftR, xor)
+import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Data.IORef
 import Data.List
 import Data.Maybe
-import Data.Word (Word16, Word8)
+import Data.Word (Word16, Word64, Word8)
 import Data.X509 (ExtKeyUsageFlag (..), ExtKeyUsagePurpose (..))
 import Network.TLS
 import Network.TLS.Extra.Cipher
 import Network.TLS.Extra.CipherCBC
 import Network.TLS.Internal
+import Network.TLS.QUIC (hkdfExpandLabel)
 import Test.Hspec
 import Test.Hspec.QuickCheck
 import System.Timeout (timeout)
@@ -125,6 +131,8 @@ spec = do
             server_first_record_type_unexpected 0x80 0x3fff
         it "rejects an unknown record type" $
             server_first_record_type_unexpected 24 0
+        it "rejects application data inside a TLS 1.3 handshake message" $
+            handshake13_interleaved_app_data
 
 --------------------------------------------------------------
 
@@ -1704,6 +1712,79 @@ server_first_record_type_unexpected ty len = do
                 (handshake sctx `shouldThrow` serverRejectedUnexpectedFirst)
                 (handshake cctx `shouldThrow` anyTLSException)
     r `shouldSatisfy` isJust
+
+-- RFC 8446 Section 5.1: handshake messages MUST NOT be interleaved with
+-- other record types.  After the handshake the client sends, protected under
+-- its application traffic secret, a record holding only the first two bytes
+-- of a KeyUpdate and then a record of application data.  The server must not
+-- deliver the data and must answer with unexpected_message.
+handshake13_interleaved_app_data :: IO ()
+handshake13_interleaved_app_data = do
+    let cipher = cipher13_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS13], [TLS13])
+                ([cipher], [cipher])
+    secretRef <- newIORef Nothing
+    sendRef <- newIORef (\_ -> return ())
+    let logKey line = case words line of
+            ["CLIENT_TRAFFIC_SECRET_0", _, h] -> writeIORef secretRef (Just h)
+            _ -> return ()
+        clientParam' =
+            clientParam
+                { clientDebug = (clientDebug clientParam){debugKeyLogger = logKey}
+                }
+        -- remember the raw sender so that records can be written by hand
+        capture be =
+            be
+                { backendSend = \bs -> do
+                    writeIORef sendRef (backendSend be)
+                    backendSend be bs
+                }
+    withPairContextWith (capture, id) (clientParam', serverParam) $ \(cctx, sctx) ->
+        concurrently_
+            ( do
+                handshake sctx
+                r <- E.try (recvData sctx) :: IO (Either TLSException B.ByteString)
+                case r of
+                    Right d -> expectationFailure $ "server delivered " ++ show d
+                    Left _ -> return ()
+            )
+            ( do
+                handshake cctx
+                Just h <- readIORef secretRef
+                send <- readIORef sendRef
+                let secret = BA.convert (unhex h) :: BA.ScrubbedBytes
+                    key = hkdfExpandLabel SHA256 secret "key" "" 16 :: B.ByteString
+                    iv = hkdfExpandLabel SHA256 secret "iv" "" 12 :: B.ByteString
+                    -- the first two bytes of KeyUpdate(update_not_requested)
+                    partialKeyUpdate = B.pack [24, 0]
+                send $ protect13 key iv 0 22 partialKeyUpdate
+                send $ protect13 key iv 1 23 "hello"
+                recvData cctx `shouldThrow` peerSentUnexpected
+            )
+  where
+    unhex [] = B.empty
+    unhex (a : b : rest) = B.cons (read ['0', 'x', a, b]) (unhex rest)
+    unhex _ = error "unhex"
+
+-- An AES-128-GCM TLS 1.3 record: content and inner type, protected with the
+-- record header as additional data and the sequence number in the nonce.
+protect13 :: B.ByteString -> B.ByteString -> Word64 -> Word8 -> B.ByteString -> B.ByteString
+protect13 key iv sqn innerType content = hdr <> ct <> BA.convert tag
+  where
+    len = B.length content + 1 + 16
+    hdr = B.pack [23, 3, 3, fromIntegral (len `div` 256), fromIntegral (len `mod` 256)]
+    sqnBytes = B.pack [fromIntegral (sqn `shiftR` (8 * i)) | i <- [7, 6 .. 0]]
+    nonce = B.pack $ B.zipWith xor iv (B.replicate 4 0 <> sqnBytes)
+    aes = throwCryptoError (cipherInit key) :: AES128
+    aead = throwCryptoError (aeadInit AEAD_GCM aes nonce)
+    (AuthTag tag, ct) = aeadSimpleEncrypt aead hdr (content <> B.singleton innerType) 16
+
+peerSentUnexpected :: TLSException -> Bool
+peerSentUnexpected (Terminated True _ (Error_Protocol _ UnexpectedMessage)) = True
+peerSentUnexpected _ = False
 
 serverRejectedUnexpectedFirst :: TLSException -> Bool
 serverRejectedUnexpectedFirst (HandshakeFailed (Error_Packet_unexpected _ _)) = True
