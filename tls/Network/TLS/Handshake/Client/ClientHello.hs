@@ -215,13 +215,16 @@ sendClientHello' cparams ctx Groups{..} crand (pskInfo, rtt0info, rtt0) = do
 
     --------------------
 
+    -- RFC 6066 Section 3: HostName is <1..2^16-1>, so no server_name
+    -- is sent for an empty name.
     sniExt =
-        if clientUseServerNameIndication cparams
+        if clientUseServerNameIndication cparams && not (null sni)
             then do
-                let sni = fst $ clientServerIdentification cparams
                 usingState_ ctx $ setClientSNI sni
                 return $ Just $ toExtensionRaw $ ServerName [ServerNameHostName sni]
             else return Nothing
+      where
+        sni = fst $ clientServerIdentification cparams
 
     -- RFC 8446 Sec 4.2.8 says: Each KeyShareEntry value MUST correspond
     -- to a group offered in the "supported_groups" extension and MUST
@@ -266,7 +269,8 @@ sendClientHello' cparams ctx Groups{..} crand (pskInfo, rtt0info, rtt0) = do
         case clientSessions cparams of
             (sidOrTkt, _) : _
                 | isTicket sidOrTkt -> return $ Just $ toExtensionRaw $ SessionTicket sidOrTkt
-            _   | clientWantTicket cparams -> return $ Just $ toExtensionRaw $ SessionTicket ""
+            _
+                | clientWantTicket cparams -> return $ Just $ toExtensionRaw $ SessionTicket ""
                 | otherwise -> return $ Nothing
 
     earlyDataExt
@@ -507,9 +511,13 @@ dupCompExts host mpskExt chExts = step1 chExts
     step2 (sniExtI@(ExtensionRaw EID_ServerName _) : exts) =
         (sniExtO : os, sniExtI : is)
       where
-        sniExtO = toExtensionRaw $ ServerName [ServerNameHostName host]
         (os, is) = step3 exts id
-    step2 _ = error "step2"
+    -- No server_name for an empty name: only the outer one names the
+    -- public name.
+    step2 exts = (sniExtO : os, is)
+      where
+        (os, is) = step3 exts id
+    sniExtO = toExtensionRaw $ ServerName [ServerNameHostName host]
     step3 [] build = ([], [echOuterExt])
       where
         echOuterExt = toExtensionRaw $ EchOuterExtensions $ build []
