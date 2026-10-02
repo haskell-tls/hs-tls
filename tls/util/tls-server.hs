@@ -260,7 +260,7 @@ getServerParams creds weak groups sm keyLog clientAuth mstore (ekey, ecnf) print
         | otherwise = ciphersuite_default
     hooks =
         defaultServerHooks
-            { onALPNClientSuggest = Just chooseALPN
+            { onALPNClientSuggest = Just $ chooseALPN weak
             , onClientCertificate = case mstore of
                 Nothing -> onClientCertificate defaultServerHooks
                 Just _
@@ -358,10 +358,15 @@ cipher_RSA_WITH_AES_256_GCM_SHA384 =
         , cipherKeyExchange = CipherKeyExchange_RSA
         }
 
-chooseALPN :: [ByteString] -> IO ByteString
-chooseALPN protos
-    | "http/1.1" `elem` protos = return "http/1.1"
-    | otherwise = return ""
+-- Only HTTP/1.1 is spoken.  With --use-weak-ciphers, the names
+-- tlsfuzzer's test-alpn-negotiation.py switches to on renegotiation and
+-- resumption are accepted too, in the client's order.
+chooseALPN :: Bool -> [ByteString] -> IO ByteString
+chooseALPN weak protos = return $ fromMaybe "" $ find (`elem` known) protos
+  where
+    known
+        | weak = ["http/1.1", "h2", "http/2"]
+        | otherwise = ["http/1.1"]
 
 newSessionManager :: IO SessionManager
 newSessionManager = do
