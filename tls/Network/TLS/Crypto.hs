@@ -58,7 +58,7 @@ import qualified Crypto.PubKey.RSA as RSA
 import qualified Crypto.PubKey.RSA.PKCS15 as RSA
 import qualified Crypto.PubKey.RSA.PSS as PSS
 import Crypto.Random
-import Data.ASN1.BinaryEncoding (BER (..), DER (..))
+import Data.ASN1.BinaryEncoding (DER (..))
 import Data.ASN1.Encoding
 import Data.ASN1.Types
 import Data.ByteArray (ByteArray, ByteArrayAccess, ScrubbedBytes, convert)
@@ -271,38 +271,21 @@ kxVerify :: PublicKey -> SignatureParams -> ByteString -> ByteString -> Bool
 kxVerify (PubKeyRSA pk) (RSAParams alg RSApkcs1) msg sign = rsaVerifyHash alg pk msg sign
 kxVerify (PubKeyRSA pk) (RSAParams alg RSApss) msg sign = rsapssVerifyHash alg pk msg sign
 kxVerify (PubKeyDSA pk) DSAParams msg signBS =
-    case dsaToSignature signBS of
-        Just sig -> DSA.verify H.SHA1 pk sig msg
+    case decodeSignatureRS signBS of
+        Just (r, s) -> DSA.verify H.SHA1 pk DSA.Signature{DSA.sign_r = r, DSA.sign_s = s} msg
         _ -> False
-  where
-    dsaToSignature :: ByteString -> Maybe DSA.Signature
-    dsaToSignature b =
-        case decodeASN1' BER b of
-            Left _ -> Nothing
-            Right asn1 ->
-                case asn1 of
-                    Start Sequence : IntVal r : IntVal s : End Sequence : _ ->
-                        Just DSA.Signature{DSA.sign_r = r, DSA.sign_s = s}
-                    _ ->
-                        Nothing
 kxVerify (PubKeyEC key) (ECDSAParams alg) msg sigBS =
     fromMaybe False $
         join $
             withPubKeyEC key verifyProxy verifyClassic Nothing
   where
-    decodeSignatureASN1 buildRS =
-        case decodeASN1' BER sigBS of
-            Left _ -> Nothing
-            Right [Start Sequence, IntVal r, IntVal s, End Sequence] ->
-                Just (buildRS r s)
-            Right _ -> Nothing
     verifyProxy prx pubkey = do
-        rs <- decodeSignatureASN1 (,)
+        rs <- decodeSignatureRS sigBS
         signature <- maybeCryptoError $ ECDSA.signatureFromIntegers prx rs
         verifyF <- withAlg (ECDSA.verify prx)
         return $ verifyF pubkey signature msg
     verifyClassic pubkey = do
-        signature <- decodeSignatureASN1 ECDSA_ECC.Signature
+        signature <- uncurry ECDSA_ECC.Signature <$> decodeSignatureRS sigBS
         verifyF <- withAlg ECDSA_ECC.verify
         return $ verifyF pubkey signature msg
     withAlg :: (forall hash. H.HashAlgorithm hash => hash -> a) -> Maybe a
@@ -323,6 +306,50 @@ kxVerify (PubKeyEd448 key) Ed448Params msg sigBS =
         CryptoPassed sig -> Ed448.verify key msg sig
         _ -> False
 kxVerify _ _ _ _ = False
+
+-- | Decode a DSA or ECDSA signature: a DER SEQUENCE of two INTEGERs, r
+-- and s (RFC 3279 Sections 2.2.2 and 2.2.3).  This is done here rather
+-- than with crypton-asn1-encoding, whose 'decodeASN1'' throws on some
+-- malformed input rather than returning 'Left'.  Only DER is accepted:
+-- definite lengths in their shortest form, non-negative INTEGERs in
+-- theirs, and nothing after the SEQUENCE.
+decodeSignatureRS :: ByteString -> Maybe (Integer, Integer)
+decodeSignatureRS bs = do
+    (0x30, body) <- whole bs
+    (0x02, rbs, rest) <- tlv body
+    (0x02, sbs) <- whole rest
+    (,) <$> derInteger rbs <*> derInteger sbs
+  where
+    whole b = do
+        (t, v, rest) <- tlv b
+        guard $ B.null rest
+        return (t, v)
+    tlv b = do
+        (t, b1) <- B.uncons b
+        (l0, b2) <- B.uncons b1
+        (len, b3) <- case l0 of
+            _ | l0 < 0x80 -> Just (fromIntegral l0, b2)
+            0x81 -> do
+                (l1, b3) <- B.uncons b2
+                guard $ l1 >= 0x80
+                Just (fromIntegral l1, b3)
+            0x82 -> do
+                (l1, b3) <- B.uncons b2
+                (l2, b4) <- B.uncons b3
+                let n = fromIntegral l1 * 256 + fromIntegral l2 :: Int
+                guard $ n >= 0x100
+                Just (n, b4)
+            _ -> Nothing
+        guard $ B.length b3 >= len
+        let (v, rest) = B.splitAt len b3
+        return (t, v, rest)
+    derInteger v = do
+        (h, t) <- B.uncons v
+        guard $ h < 0x80
+        case B.uncons t of
+            Just (h2, _) | h == 0 -> guard $ h2 >= 0x80
+            _ -> return ()
+        return $ B.foldl' (\acc w -> acc * 256 + fromIntegral w) 0 v
 
 -- Sign the given message using the private key.
 --
