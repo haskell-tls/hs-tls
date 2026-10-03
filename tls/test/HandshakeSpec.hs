@@ -90,6 +90,12 @@ spec = do
         prop "can authenticate client" handshake_client_auth
         it "rejects a TLS 1.3 CertificateVerify algorithm unfit for the key" $
             handshake13_client_cert_verify_unfit_sigalg
+        it "rejects a primitive SEQUENCE as an ECDSA signature" $
+            handshake13_client_cert_verify_malformed_ecdsa $ \sig ->
+                B.cons (B.head sig `xor` 0x20) (B.tail sig)
+        it "rejects a BIT STRING in an ECDSA signature" $
+            handshake13_client_cert_verify_malformed_ecdsa $ \_ ->
+                B.pack [0x30, 0x06, 0x02, 0x01, 0x01, 0x03, 0x01, 0x09]
         it "rejects a TLS 1.2 CertificateVerify algorithm for another key type" $
             handshake12_client_cert_verify_sigalg
                 (HashSHA256, SignatureECDSA)
@@ -934,6 +940,49 @@ handshake12_client_cert_verify_sigalg alg rejected = do
             concurrently_
                 (handshake sctx `shouldThrow` rejected)
                 (void (E.try (handshake cctx) :: IO (Either TLSException ())))
+    r `shouldSatisfy` isJust
+
+-- A DER ECDSA signature that does not decode is a signature that does not
+-- verify, a decrypt_error.  The client's TLS 1.3 CertificateVerify
+-- signature is replaced on its way to the server with one that the ASN.1
+-- library used to throw on, which ended the handshake with internal_error.
+handshake13_client_cert_verify_malformed_ecdsa
+    :: (B.ByteString -> B.ByteString) -> IO ()
+handshake13_client_cert_verify_malformed_ecdsa corrupt = do
+    let cipher = cipher13_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS13], [TLS13])
+                ([cipher], [cipher])
+    creds <- generate arbitraryCredentialsOfEachType
+    let cred = head [c | c@(_, PrivKeyEC _) <- creds]
+        clientParam' =
+            clientParam
+                { clientHooks =
+                    (clientHooks clientParam)
+                        { onCertificateRequest = \_ -> return $ Just cred
+                        }
+                }
+        serverParam' =
+            serverParam
+                { serverWantClientCert = True
+                , serverHooks =
+                    (serverHooks serverParam)
+                        { onClientCertificate = \_ -> return CertificateUsageAccept
+                        }
+                }
+        malform (CertVerify13 (DigitallySigned alg sig)) =
+            pure $ CertVerify13 (DigitallySigned alg (corrupt sig))
+        malform hs = pure hs
+    r <- timeout 10000000 $
+        withPairContextWith (id, id) (clientParam', serverParam') $ \(cctx, sctx) -> do
+            contextHookSetHandshake13Recv sctx malform
+            concurrently_
+                ((handshake sctx >> recvData sctx) `shouldThrow` rejectedAsDecryptError)
+                ( void
+                    (E.try (handshake cctx >> recvData cctx) :: IO (Either TLSException B.ByteString))
+                )
     r `shouldSatisfy` isJust
 
 rejectedAsDecryptError :: TLSException -> Bool
