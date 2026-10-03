@@ -59,6 +59,22 @@ spec = do
             handshake_high_legacy_version TLS12 (Version 0x0309)
         it "ignores legacy_version when supported_versions is present" $
             handshake_high_legacy_version TLS13 TLS13
+        it "keeps to the TLS 1.3 server's record size limit" $
+            record_size_limit_negotiated TLS13 False
+        it "keeps to the TLS 1.3 client's record size limit" $
+            record_size_limit_negotiated TLS13 True
+        it "keeps to the TLS 1.2 server's record size limit" $
+            record_size_limit_negotiated TLS12 False
+        it "keeps to the TLS 1.2 client's record size limit" $
+            record_size_limit_negotiated TLS12 True
+        it "ignores the client's record size limit the TLS 1.3 server does not take" $
+            record_size_limit_unnegotiated TLS13 True
+        it "ignores the server's record size limit the TLS 1.3 client did not offer" $
+            record_size_limit_unnegotiated TLS13 False
+        it "ignores the client's record size limit the TLS 1.2 server does not take" $
+            record_size_limit_unnegotiated TLS12 True
+        it "ignores the server's record size limit the TLS 1.2 client did not offer" $
+            record_size_limit_unnegotiated TLS12 False
         it "rejects ec_point_formats without uncompressed" $
             handshake12_ec_point_formats
                 (B.pack [1, 1])
@@ -1101,6 +1117,78 @@ handshake12_ec_point_formats formats rejected = do
 rejectedAsDecodeError :: TLSException -> Bool
 rejectedAsDecodeError (HandshakeFailed (Error_Protocol _ DecodeError)) = True
 rejectedAsDecodeError _ = False
+
+-- RFC 8449 Section 4: a record size limit binds the peer only when the
+-- extension is negotiated.  Only one side sets limitRecordSize, so the
+-- extension is not negotiated, and a record of 2^14 octets from the other
+-- side must be received rather than refused with record_overflow.
+record_size_limit_unnegotiated :: Version -> Bool -> IO ()
+record_size_limit_unnegotiated version clientLimited = do
+    let cipher
+            | version == TLS13 = cipher13_AES_128_GCM_SHA256
+            | otherwise = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([version], [version])
+                ([cipher], [cipher])
+    let limited shared = shared{sharedLimit = (sharedLimit shared){limitRecordSize = Just 1024}}
+        clientParam'
+            | clientLimited = clientParam{clientShared = limited $ clientShared clientParam}
+            | otherwise = clientParam
+        serverParam'
+            | clientLimited = serverParam
+            | otherwise = serverParam{serverShared = limited $ serverShared serverParam}
+        payload = B.replicate 16384 0x61
+        send ctx = handshake ctx >> sendData ctx (L.fromStrict payload)
+    received <- newIORef B.empty
+    let recv ctx = do
+            handshake ctx
+            let loop acc
+                    | B.length acc >= B.length payload = writeIORef received acc
+                    | otherwise = recvData ctx >>= \bs -> loop (acc <> bs)
+            loop B.empty
+    r <- timeout 10000000 $
+        withPairContextWith (id, id) (clientParam', serverParam') $ \(cctx, sctx) ->
+            if clientLimited
+                then concurrently_ (send sctx) (recv cctx)
+                else concurrently_ (recv sctx) (send cctx)
+    r `shouldSatisfy` isJust
+    readIORef received `shouldReturn` payload
+
+-- RFC 8449 Section 4: with record_size_limit negotiated, each side keeps
+-- to the other's limit.  Both sides set limitRecordSize, which a TLS 1.3
+-- server returns in EncryptedExtensions, and 2^14 octets sent by one side
+-- must reach the other in records within its limit.
+record_size_limit_negotiated :: Version -> Bool -> IO ()
+record_size_limit_negotiated version serverSends = do
+    let cipher
+            | version == TLS13 = cipher13_AES_128_GCM_SHA256
+            | otherwise = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([version], [version])
+                ([cipher], [cipher])
+    let limited shared = shared{sharedLimit = (sharedLimit shared){limitRecordSize = Just 1024}}
+        clientParam' = clientParam{clientShared = limited $ clientShared clientParam}
+        serverParam' = serverParam{serverShared = limited $ serverShared serverParam}
+        payload = B.replicate 16384 0x61
+        send ctx = handshake ctx >> sendData ctx (L.fromStrict payload)
+    received <- newIORef B.empty
+    let recv ctx = do
+            handshake ctx
+            let loop acc
+                    | B.length acc >= B.length payload = writeIORef received acc
+                    | otherwise = recvData ctx >>= \bs -> loop (acc <> bs)
+            loop B.empty
+    r <- timeout 10000000 $
+        withPairContextWith (id, id) (clientParam', serverParam') $ \(cctx, sctx) ->
+            if serverSends
+                then concurrently_ (send sctx) (recv cctx)
+                else concurrently_ (recv sctx) (send cctx)
+    r `shouldSatisfy` isJust
+    readIORef received `shouldReturn` payload
 
 handshake_client_auth_fail :: (ClientParams, ServerParams) -> IO ()
 handshake_client_auth_fail (clientParam, serverParam) = do

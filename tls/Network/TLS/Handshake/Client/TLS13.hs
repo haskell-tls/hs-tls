@@ -135,6 +135,12 @@ expectEncryptedExtensions
     :: MonadIO m => Context -> Handshake13 -> m ()
 expectEncryptedExtensions ctx (EncryptedExtensions13 eexts) = do
     liftIO $ do
+        -- RFC 8449 Section 4: the server's RecordSizeLimit is in
+        -- EncryptedExtensions.  Until it is known, our own limit is not
+        -- enforced, as the server may not have agreed to it.
+        processRecordSizeLimit ctx eexts True
+        enableMyRecordLimit ctx
+        enablePeerRecordLimit ctx
         setALPN ctx MsgTEncryptedExtensions eexts
         modifyTLS13State ctx $ \st -> st{tls13stClientExtensions = eexts}
     st13 <- usingHState ctx getTLS13RTT0Status

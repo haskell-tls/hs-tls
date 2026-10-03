@@ -223,4 +223,10 @@ processRecordSizeLimit ctx chExts tls13 = do
                     let mysiz = fromIntegral mylim + if tls13 then 1 else 0
                         rsl = RecordSizeLimit mysiz
                     return $ Just $ toExtensionRaw rsl
-                else return Nothing
+                else do
+                    -- RFC 8449 Section 4: a limit that is not negotiated
+                    -- does not bind the peer, so a client that did not send
+                    -- RecordSizeLimit may send records of any size the
+                    -- protocol permits.
+                    setMyRecordLimit ctx Nothing
+                    return Nothing
