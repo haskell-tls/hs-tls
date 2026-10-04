@@ -4,6 +4,7 @@
 module Network.TLS.Handshake.Client.ServerHello (
     receiveServerHello,
     processServerHello13,
+    processRecordSizeLimit,
 ) where
 
 import Data.ByteArray (convert)
@@ -179,9 +180,8 @@ processServerHello cparams ctx (ServerHello sh@SH{..}) = do
         then do
             -- Session is dummy in TLS 1.3.
             usingState_ ctx $ setSession shSession
-            processRecordSizeLimit ctx shExtensions True
-            enableMyRecordLimit ctx
-            enablePeerRecordLimit ctx
+            -- RecordSizeLimit comes in EncryptedExtensions in TLS 1.3
+            -- (RFC 8449 Section 4), and is processed there.
             let usedHash = cipherHash usedCipher
             transitTranscriptHashI ctx "transitI" usedHash isHRR
             accepted <- checkECHacceptance ctx isHRR usedHash sh
@@ -272,6 +272,10 @@ processRecordSizeLimit ctx shExtensions tls13 = do
                 (return ())
                 (setPeerRecordSizeLimit ctx tls13)
             ack <- checkPeerRecordLimit ctx
+            -- RFC 8449 Section 4: a limit that is not negotiated does not
+            -- bind the peer, so a server that did not send RecordSizeLimit
+            -- back may send records of any size the protocol permits.
+            unless ack $ setMyRecordLimit ctx Nothing
             -- When a client sends RecordSizeLimit, it does not know
             -- which TLS version the server selects.  RecordLimit is
             -- the length of plaintext.  But RecordSizeLimit also
