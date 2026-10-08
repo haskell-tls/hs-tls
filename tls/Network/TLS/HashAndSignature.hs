@@ -10,7 +10,8 @@ module Network.TLS.HashAndSignature (
         HashSHA256,
         HashSHA384,
         HashSHA512,
-        HashIntrinsic
+        HashIntrinsic,
+        HashMLDSA
     ),
     SignatureAlgorithm (
         ..,
@@ -31,8 +32,13 @@ module Network.TLS.HashAndSignature (
         SignatureBrainpoolP512
     ),
     HashAndSignatureAlgorithm,
+    pattern MLDSA44,
+    pattern MLDSA65,
+    pattern MLDSA87,
     supportedSignatureSchemes,
     signatureSchemesForTLS13,
+    isMLDSA,
+    showSignatureScheme,
 ) where
 
 import Network.TLS.Imports
@@ -59,6 +65,8 @@ pattern HashSHA512    :: HashAlgorithm
 pattern HashSHA512     = HashAlgorithm 6
 pattern HashIntrinsic :: HashAlgorithm
 pattern HashIntrinsic  = HashAlgorithm 8
+pattern HashMLDSA     :: HashAlgorithm -- not a hash; see MLDSA44 below
+pattern HashMLDSA      = HashAlgorithm 9
 
 instance Show HashAlgorithm where
     show HashNone          = "None"
@@ -69,6 +77,7 @@ instance Show HashAlgorithm where
     show HashSHA384        = "SHA384"
     show HashSHA512        = "SHA512"
     show HashIntrinsic     = "TLS13"
+    show HashMLDSA         = "MLDSA"
     show (HashAlgorithm x) = "Hash " ++ show x
 {- FOURMOLU_ENABLE -}
 
@@ -133,11 +142,55 @@ instance Show SignatureAlgorithm where
 
 type HashAndSignatureAlgorithm = (HashAlgorithm, SignatureAlgorithm)
 
+-- ML-DSA, from draft-ietf-tls-mldsa: mldsa44(0x0904), mldsa65(0x0905) and
+-- mldsa87(0x0906).
+--
+-- These are named as whole pairs rather than as a new 'SignatureAlgorithm',
+-- because neither byte is what it is elsewhere: 0x09 is not a hash, and the
+-- second byte repeats numbers RSASSA-PSS already uses.  Only the pair
+-- identifies the scheme, so only the pair is given a name, and code that
+-- decides anything about ML-DSA has to match on both bytes.
+
+-- | Name a signature scheme.
+--
+-- 'show' on the pair cannot do this for ML-DSA.  A scheme is a 16-bit
+-- number that hs-tls carries as the two bytes it is made of, and for ML-DSA
+-- the size is in the second byte, whose values RSASSA-PSS also uses -- so
+-- the components alone render mldsa65 as @(MLDSA,RSApssRSAeSHA384)@, which
+-- names the wrong algorithm.  Use this wherever a scheme is put in front of
+-- a person.
+showSignatureScheme :: HashAndSignatureAlgorithm -> String
+showSignatureScheme MLDSA44 = "mldsa44"
+showSignatureScheme MLDSA65 = "mldsa65"
+showSignatureScheme MLDSA87 = "mldsa87"
+showSignatureScheme hs = show hs
+
+-- | Is this one of the ML-DSA schemes?  They are TLS 1.3 only, so the
+-- TLS 1.2 paths filter them out and refuse one that arrives anyway.
+isMLDSA :: HashAndSignatureAlgorithm -> Bool
+isMLDSA MLDSA44 = True
+isMLDSA MLDSA65 = True
+isMLDSA MLDSA87 = True
+isMLDSA _ = False
+
+{- FOURMOLU_DISABLE -}
+pattern MLDSA44 :: HashAndSignatureAlgorithm
+pattern MLDSA44  = (HashMLDSA, SignatureAlgorithm 4)
+pattern MLDSA65 :: HashAndSignatureAlgorithm
+pattern MLDSA65  = (HashMLDSA, SignatureAlgorithm 5)
+pattern MLDSA87 :: HashAndSignatureAlgorithm
+pattern MLDSA87  = (HashMLDSA, SignatureAlgorithm 6)
+{- FOURMOLU_ENABLE -}
+
 {- FOURMOLU_DISABLE -}
 supportedSignatureSchemes :: [HashAndSignatureAlgorithm]
 supportedSignatureSchemes =
+    -- ML-DSA algorithms, TLS 1.3 only
+    [ MLDSA87                           -- mldsa87(0x0906)
+    , MLDSA65                           -- mldsa65(0x0905)
+    , MLDSA44                           -- mldsa44(0x0904)
     -- EdDSA algorithms
-    [ (HashIntrinsic, SignatureEd448)   -- ed448  (0x0808)
+    , (HashIntrinsic, SignatureEd448)   -- ed448  (0x0808)
     , (HashIntrinsic, SignatureEd25519) -- ed25519(0x0807)
     -- ECDSA algorithms
     , (HashSHA512,    SignatureECDSA)   -- ecdsa_secp512r1_sha512(0x0603)
@@ -162,8 +215,12 @@ supportedSignatureSchemes =
 
 signatureSchemesForTLS13 :: [(HashAlgorithm, SignatureAlgorithm)]
 signatureSchemesForTLS13 =
+    -- ML-DSA algorithms
+    [ MLDSA87                           -- mldsa87(0x0906)
+    , MLDSA65                           -- mldsa65(0x0905)
+    , MLDSA44                           -- mldsa44(0x0904)
     -- EdDSA algorithms
-    [ (HashIntrinsic, SignatureEd448)   -- ed448  (0x0808)
+    , (HashIntrinsic, SignatureEd448)   -- ed448  (0x0808)
     , (HashIntrinsic, SignatureEd25519) -- ed25519(0x0807)
     -- ECDSA algorithms
     , (HashSHA512,    SignatureECDSA)   -- ecdsa_secp512r1_sha512(0x0603)

@@ -1,5 +1,15 @@
 # Change log for "tls"
 
+## Version 2.4.10
+
+* Support ML-DSA certificates and CertificateVerify, TLS 1.3 only
+  (draft-ietf-tls-mldsa).
+  [#583](https://github.com/haskell-tls/hs-tls/pull/583)
+* Take ML-KEM from `crypton` instead of the `mlkem` package.
+  [#583](https://github.com/haskell-tls/hs-tls/pull/583)
+* `tls-server`: let `-g` choose the TLS 1.3 groups too.
+  [#583](https://github.com/haskell-tls/hs-tls/pull/583)
+
 ## Version 2.4.9
 
 * Include CertificateRequest in the post-handshake auth transcript.

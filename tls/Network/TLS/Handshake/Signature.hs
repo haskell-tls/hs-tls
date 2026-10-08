@@ -44,9 +44,24 @@ certificateCompatible (PubKeyDSA _) cTypes = CertificateType_DSA_Sign `elem` cTy
 certificateCompatible (PubKeyEC _) cTypes = CertificateType_ECDSA_Sign `elem` cTypes
 certificateCompatible (PubKeyEd25519 _) _ = True
 certificateCompatible (PubKeyEd448 _) _ = True
+-- ML-DSA has no CertificateType of its own, as EdDSA does not either; what
+-- a client may send is decided by signature_algorithms.
+certificateCompatible (PubKeyMLDSA44 _) _ = True
+certificateCompatible (PubKeyMLDSA65 _) _ = True
+certificateCompatible (PubKeyMLDSA87 _) _ = True
 certificateCompatible _ _ = False
 
 signatureCompatible :: PubKey -> HashAndSignatureAlgorithm -> Bool
+-- ML-DSA first, and with a refusal for every other kind of key.  The RSA
+-- equations below ignore the first byte, and ML-DSA's second byte is one
+-- RSASSA-PSS also uses, so an ML-DSA scheme reaching them would be answered
+-- for as though it were RSASSA-PSS.
+signatureCompatible (PubKeyMLDSA44 _) MLDSA44 = True
+signatureCompatible (PubKeyMLDSA65 _) MLDSA65 = True
+signatureCompatible (PubKeyMLDSA87 _) MLDSA87 = True
+signatureCompatible _ MLDSA44 = False
+signatureCompatible _ MLDSA65 = False
+signatureCompatible _ MLDSA87 = False
 signatureCompatible (PubKeyRSA pk) (HashSHA1, SignatureRSA) = kxCanUseRSApkcs1 pk SHA1
 signatureCompatible (PubKeyRSA pk) (HashSHA256, SignatureRSA) = kxCanUseRSApkcs1 pk SHA256
 signatureCompatible (PubKeyRSA pk) (HashSHA384, SignatureRSA) = kxCanUseRSApkcs1 pk SHA384
@@ -62,8 +77,20 @@ signatureCompatible _ (_, _) = False
 
 -- Whether the signature algorithm is for the type of the key, whatever
 -- its other parameters.
-keyTypeFits :: PubKey -> SignatureAlgorithm -> Bool
-keyTypeFits (PubKeyRSA _) s =
+--
+-- This takes the whole scheme and not its second byte alone, because
+-- ML-DSA's second byte is one RSASSA-PSS also uses: only the pair says
+-- which of the two a scheme is.  The ML-DSA equations come first for the
+-- same reason -- an ML-DSA scheme fits no other kind of key, and one
+-- ML-DSA size does not fit another's key.
+keyTypeFits :: PubKey -> HashAndSignatureAlgorithm -> Bool
+keyTypeFits (PubKeyMLDSA44 _) hs = hs == MLDSA44
+keyTypeFits (PubKeyMLDSA65 _) hs = hs == MLDSA65
+keyTypeFits (PubKeyMLDSA87 _) hs = hs == MLDSA87
+keyTypeFits _ MLDSA44 = False
+keyTypeFits _ MLDSA65 = False
+keyTypeFits _ MLDSA87 = False
+keyTypeFits (PubKeyRSA _) (_, s) =
     s
         `elem` [ SignatureRSA
                , SignatureRSApssRSAeSHA256
@@ -73,10 +100,10 @@ keyTypeFits (PubKeyRSA _) s =
                , SignatureRSApsspssSHA384
                , SignatureRSApsspssSHA512
                ]
-keyTypeFits (PubKeyDSA _) s = s == SignatureDSA
-keyTypeFits (PubKeyEC _) s = s == SignatureECDSA
-keyTypeFits (PubKeyEd25519 _) s = s == SignatureEd25519
-keyTypeFits (PubKeyEd448 _) s = s == SignatureEd448
+keyTypeFits (PubKeyDSA _) (_, s) = s == SignatureDSA
+keyTypeFits (PubKeyEC _) (_, s) = s == SignatureECDSA
+keyTypeFits (PubKeyEd25519 _) (_, s) = s == SignatureEd25519
+keyTypeFits (PubKeyEd448 _) (_, s) = s == SignatureEd448
 keyTypeFits _ _ = False
 
 -- Same as 'signatureCompatible' but for TLS13: for ECDSA this also checks the
@@ -142,12 +169,19 @@ checkCertificateVerify
 -- an illegal_parameter.  One for the right type of key that still does
 -- not fit it, an RSASSA-PSS one for an rsaEncryption key say, is a
 -- signature that does not verify, a decrypt_error, which False leads to.
-checkCertificateVerify ctx usedVersion pubKey msgs digSig@(DigitallySigned hashSigAlg@(_, sigAlg) _) = do
-    checkSupportedHashSignature ctx hashSigAlg
-    unless (pubKey `keyTypeFits` sigAlg) $
+checkCertificateVerify ctx usedVersion pubKey msgs digSig@(DigitallySigned hashSigAlg _) = do
+    -- ML-DSA is defined for TLS 1.3 only, so naming one here is a field
+    -- that is incorrect whatever key the peer holds.
+    when (usedVersion < TLS13 && isMLDSA hashSigAlg) $
         throwCore $
             Error_Protocol
-                ("signature algorithm " ++ show hashSigAlg ++ " is for another type of key")
+                ("signature algorithm " ++ showSignatureScheme hashSigAlg ++ " is not for " ++ show usedVersion)
+                IllegalParameter
+    checkSupportedHashSignature ctx hashSigAlg
+    unless (pubKey `keyTypeFits` hashSigAlg) $
+        throwCore $
+            Error_Protocol
+                ("signature algorithm " ++ showSignatureScheme hashSigAlg ++ " is for another type of key")
                 IllegalParameter
     if pubKey `signatureCompatible` hashSigAlg
         then doVerify
@@ -187,6 +221,9 @@ prepareCertificateVerifySignatureData _ctx _usedVersion pubKey hashSigAlg msgs =
     return (signatureParams pubKey hashSigAlg, msgs)
 
 signatureParams :: PubKey -> HashAndSignatureAlgorithm -> SignatureParams
+-- Which of these is used is decided by the key, and signatureCompatible has
+-- already refused a scheme that does not fit the key, so an ML-DSA scheme
+-- cannot arrive at a clause for another kind of key.
 signatureParams (PubKeyRSA _) hashSigAlg =
     case hashSigAlg of
         (HashSHA512, SignatureRSA) -> RSAParams SHA512 RSApkcs1
@@ -226,6 +263,9 @@ signatureParams (PubKeyEd448 _) hashSigAlg =
         (hsh, SignatureEd448) -> error ("unimplemented Ed448 signature hash type: " ++ show hsh)
         (_, sigAlg) ->
             error ("signature algorithm is incompatible with Ed448: " ++ show sigAlg)
+signatureParams (PubKeyMLDSA44 _) MLDSA44 = MLDSA44Params
+signatureParams (PubKeyMLDSA65 _) MLDSA65 = MLDSA65Params
+signatureParams (PubKeyMLDSA87 _) MLDSA87 = MLDSA87Params
 signatureParams pk _ = error ("signatureParams: " ++ pubkeyType pk ++ " is not supported")
 
 signatureCreateWithCertVerifyData
@@ -332,5 +372,5 @@ checkSupportedHashSignature
     :: Context -> HashAndSignatureAlgorithm -> IO ()
 checkSupportedHashSignature ctx hs =
     unless (hs `elem` supportedHashSignatures (ctxSupported ctx)) $
-        let msg = "unsupported hash and signature algorithm: " ++ show hs
+        let msg = "unsupported hash and signature algorithm: " ++ showSignatureScheme hs
          in throwCore $ Error_Protocol msg IllegalParameter

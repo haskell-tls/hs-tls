@@ -142,7 +142,7 @@ sendServerFirstFlight ServerParams{..} ctx usedCipher mcred chExts = do
     if serverWantClientCert
         then do
             let (certTypes, hashSigs) =
-                    let as = supportedHashSignatures serverSupported
+                    let as = filter (not . isMLDSA) $ supportedHashSignatures serverSupported
                      in (nub $ mapMaybe (fmap certTypeOnWire . hashSigToCertType) as, as)
                 creq =
                     CertRequest
@@ -160,7 +160,11 @@ sendServerFirstFlight ServerParams{..} ctx usedCipher mcred chExts = do
     certTypeOnWire CertificateType_Ed448_Sign = CertificateType_ECDSA_Sign
     certTypeOnWire t = t
     commonGroups = negotiatedGroupsInCommon (supportedGroups serverSupported) chExts
-    commonHashSigs = hashAndSignaturesInCommon (supportedHashSignatures serverSupported) chExts
+    -- ML-DSA is TLS 1.3 only (draft-ietf-tls-mldsa).
+    commonHashSigs =
+        hashAndSignaturesInCommon
+            (filter (not . isMLDSA) $ supportedHashSignatures serverSupported)
+            chExts
     setup_DHE = do
         let possibleFFGroups = commonGroups `intersect` availableFFGroups
         (dhparams, priv, pub) <-

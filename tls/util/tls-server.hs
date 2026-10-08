@@ -157,6 +157,10 @@ main = do
             | optUseWeakCiphers = supportedGroups defaultSupported
             -- excluding FFDHE8192 for retry
             | otherwise = FFDHE8192 `delete` supportedGroups defaultSupported
+        -- A TLS 1.3 server picks a group from supportedGroupsTLS13, so the
+        -- groups given with -g go there too.  Without -g, the default
+        -- preference stands.
+        groupsTLS13 = maybe (supportedGroupsTLS13 defaultSupported) (: []) optGroups
     when (null groups) $ do
         putStrLn "Error: unsupported groups"
         exitFailure
@@ -193,6 +197,7 @@ main = do
                     creds
                     optUseWeakCiphers
                     groups
+                    groupsTLS13
                     smgr
                     keyLog
                     optClientAuth
@@ -222,6 +227,7 @@ getServerParams
     :: Credentials
     -> Bool
     -> [Group]
+    -> [[Group]]
     -> SessionManager
     -> (String -> IO ())
     -> Bool
@@ -231,7 +237,7 @@ getServerParams
     -> (String -> IO ())
     -> Maybe HostName
     -> ServerParams
-getServerParams creds weak groups sm keyLog clientAuth mstore (ekey, ecnf) printError traceKey mname =
+getServerParams creds weak groups groupsTLS13 sm keyLog clientAuth mstore (ekey, ecnf) printError traceKey mname =
     defaultParamsServer
         { serverSupported = supported
         , serverShared = shared
@@ -260,6 +266,7 @@ getServerParams creds weak groups sm keyLog clientAuth mstore (ekey, ecnf) print
         defaultSupported
             { supportedCiphers = ciphers
             , supportedGroups = groups
+            , supportedGroupsTLS13 = groupsTLS13
             , supportedExtendedMainSecret =
                 if weak then AllowEMS else supportedExtendedMainSecret defaultSupported
             , supportedClientInitiatedRenegotiation =

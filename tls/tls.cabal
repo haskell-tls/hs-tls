@@ -1,6 +1,6 @@
 cabal-version:      2.0
 name:               tls
-version:            2.4.9
+version:            2.4.10
 license:            BSD3
 license-file:       LICENSE
 copyright:          Vincent Hanquez <vincent@snarc.org>
@@ -122,16 +122,15 @@ library
         base16-bytestring,
         bytestring >=0.10 && <0.13,
         cereal >=0.5.3 && <0.6,
-        crypton >=2.1.1 && <2.2,
+        crypton >=2.1.8 && <2.3,
         crypton-asn1-encoding >= 0.10.0 && < 0.11,
         crypton-asn1-types >= 0.4.1 && < 0.5,
-        crypton-x509 >=1.9 && <1.10,
-        crypton-x509-store >=1.9 && <1.10,
-        crypton-x509-validation >=1.9 && <1.10,
+        crypton-x509 >=1.10 && <1.11,
+        crypton-x509-store >=1.10 && <1.11,
+        crypton-x509-validation >=1.10 && <1.11,
         data-default,
         ech-config,
-        hpke >=0.1.0 && <0.3,
-        mlkem >= 0.2.0 && <0.3,
+        hpke >=0.3.0 && <0.4,
         mtl >=2.2 && <2.4,
         network >=3.1,
         ram >=0.22.0 && <0.23,

@@ -172,7 +172,8 @@ credsTriple sparams CH{..} extraCreds
 
     -- Build a list of all hash/signature algorithms in common between
     -- client and server.
-    hashAndSignatures = supportedHashSignatures supported
+    -- ML-DSA is TLS 1.3 only (draft-ietf-tls-mldsa).
+    hashAndSignatures = filter (not . isMLDSA) $ supportedHashSignatures supported
     possibleHashSigAlgs = hashAndSignaturesInCommon hashAndSignatures chExtensions
 
     -- Check that a candidate signature credential will be compatible with

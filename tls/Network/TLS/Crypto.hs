@@ -54,6 +54,7 @@ import qualified Crypto.PubKey.ECC.Types as ECC
 import qualified Crypto.PubKey.ECDSA as ECDSA
 import qualified Crypto.PubKey.Ed25519 as Ed25519
 import qualified Crypto.PubKey.Ed448 as Ed448
+import qualified Crypto.PubKey.MLDSA as MLDSA
 import qualified Crypto.PubKey.RSA as RSA
 import qualified Crypto.PubKey.RSA.PKCS15 as RSA
 import qualified Crypto.PubKey.RSA.PSS as PSS
@@ -71,6 +72,7 @@ import Data.X509 (
     PubKey (..),
     PubKeyEC (..),
     SerializedPoint (..),
+    privkeyMLDSA_key,
  )
 import Data.X509.EC (ecPrivKeyCurveName, ecPubKeyCurveName, unserializePoint)
 
@@ -261,6 +263,13 @@ data SignatureParams
     | ECDSAParams Hash
     | Ed25519Params
     | Ed448Params
+    | -- | Pure ML-DSA with an empty context, which is what
+      -- draft-ietf-tls-mldsa uses.  One constructor per parameter set,
+      -- since the key fixes it and a signature made under one does not
+      -- verify under another.
+      MLDSA44Params
+    | MLDSA65Params
+    | MLDSA87Params
     deriving (Show, Eq)
 
 -- Verify that the signature matches the given message, using the
@@ -305,7 +314,21 @@ kxVerify (PubKeyEd448 key) Ed448Params msg sigBS =
     case Ed448.signature sigBS of
         CryptoPassed sig -> Ed448.verify key msg sig
         _ -> False
+-- A signature of the wrong length is refused by the smart constructor, and
+-- one of the right length that does not verify returns False.  Neither
+-- throws, which is what a peer sending a damaged CertificateVerify has to
+-- meet with decrypt_error rather than with a crash.
+kxVerify (PubKeyMLDSA44 key) MLDSA44Params msg sigBS = mldsaVerify key msg sigBS
+kxVerify (PubKeyMLDSA65 key) MLDSA65Params msg sigBS = mldsaVerify key msg sigBS
+kxVerify (PubKeyMLDSA87 key) MLDSA87Params msg sigBS = mldsaVerify key msg sigBS
 kxVerify _ _ _ _ = False
+
+mldsaVerify
+    :: MLDSA.MLDSA p
+    => MLDSA.VerificationKey p -> ByteString -> ByteString -> Bool
+mldsaVerify key msg sigBS = case MLDSA.signature sigBS of
+    CryptoPassed sig -> MLDSA.verify key MLDSA.emptyContext msg sig
+    _ -> False
 
 -- | Decode a DSA or ECDSA signature: a DER SEQUENCE of two INTEGERs, r
 -- and s (RFC 3279 Sections 2.2.2 and 2.2.3).  This is done here rather
@@ -393,6 +416,12 @@ kxSign (PrivKeyEd25519 pk) (PubKeyEd25519 pub) Ed25519Params msg =
     return $ Right $ convert $ Ed25519.sign pk pub msg
 kxSign (PrivKeyEd448 pk) (PubKeyEd448 pub) Ed448Params msg =
     return $ Right $ convert $ Ed448.sign pk pub msg
+kxSign (PrivKeyMLDSA44 pk) (PubKeyMLDSA44 _) MLDSA44Params msg =
+    Right . convert <$> MLDSA.sign (privkeyMLDSA_key pk) MLDSA.emptyContext msg
+kxSign (PrivKeyMLDSA65 pk) (PubKeyMLDSA65 _) MLDSA65Params msg =
+    Right . convert <$> MLDSA.sign (privkeyMLDSA_key pk) MLDSA.emptyContext msg
+kxSign (PrivKeyMLDSA87 pk) (PubKeyMLDSA87 _) MLDSA87Params msg =
+    Right . convert <$> MLDSA.sign (privkeyMLDSA_key pk) MLDSA.emptyContext msg
 kxSign _ _ _ _ =
     return (Left KxUnsupported)
 

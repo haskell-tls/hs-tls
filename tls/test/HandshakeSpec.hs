@@ -176,6 +176,28 @@ spec = do
         prop "can handshake with TLS 1.3 EE" handshake13_ee_groups
         prop "can handshake with TLS 1.3 EC groups" handshake13_ec
         prop "can handshake with TLS 1.3 FFDHE groups" handshake13_ffdhe
+        mapM_
+            ( \grp ->
+                prop ("can handshake with " ++ show grp) $
+                    handshake13_kem grp
+            )
+            [ MLKEM512
+            , MLKEM768
+            , MLKEM1024
+            , X25519MLKEM768
+            , P256MLKEM768
+            , P384MLKEM1024
+            ]
+        mapM_
+            ( \(n, nm) -> do
+                prop ("can handshake with an " ++ nm ++ " server certificate") $
+                    handshake13_mldsa n
+                prop ("can handshake with an " ++ nm ++ " client certificate") $
+                    handshake13_mldsa_client n
+            )
+            [(0, "ML-DSA-44"), (1, "ML-DSA-65"), (2, "ML-DSA-87")]
+        it "rejects a CertificateVerify whose scheme is not the key's" $
+            handshake13_mldsa_wrong_scheme
         it "rejects an X25519MLKEM768 key share with a zero X25519 part" $
             handshake13_x25519mlkem768_zero_x25519
         prop "can handshake with TLS 1.3 Post-handshake auth" post_handshake_auth
@@ -1630,6 +1652,150 @@ handshake13_full (CSP13 (cli, srv)) = do
             , srv{serverSupported = svrSupported}
             )
     runTLSSimple13 params FullHandshake
+
+-- A handshake that succeeds, for each group whose key exchange is a KEM.
+--
+-- Until this was added the suite had one ML-KEM test and it was a negative
+-- one: a zero X25519 part, rejected before any shared secret was computed.
+-- Nothing ran encapsulation and decapsulation to the end and checked the two
+-- sides reached the same key, which is the one thing a key exchange has to
+-- do.  An implementation that returned the ciphertext where the secret
+-- belongs would have passed everything else here.
+handshake13_kem :: Group -> CSP13 -> IO ()
+handshake13_kem grp (CSP13 (cli, srv)) = do
+    let cliSupported =
+            defaultSupported
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [grp]
+                }
+        svrSupported =
+            defaultSupported
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [grp]
+                , supportedGroupsTLS13 = [[grp]]
+                }
+        params =
+            ( cli{clientSupported = cliSupported}
+            , srv{serverSupported = svrSupported}
+            )
+    runTLSSimple13 params FullHandshake
+
+-- A handshake with an ML-DSA server certificate, and one with an ML-DSA
+-- client certificate, for each parameter set.
+handshake13_mldsa :: Int -> CSP13 -> IO ()
+handshake13_mldsa n (CSP13 (cli, srv)) = do
+    creds <- generate arbitraryCredentialsOfEachMLDSA
+    let cred = creds !! n
+        -- one group on both sides, so the mode is a full handshake and not
+        -- a retry, which is what this is asserting about
+        cliSupported =
+            (clientSupported cli)
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [X25519]
+                }
+        svrSupported =
+            (serverSupported srv)
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
+                }
+        params =
+            ( cli{clientSupported = cliSupported}
+            , srv
+                { serverSupported = svrSupported
+                , serverShared =
+                    (serverShared srv){sharedCredentials = Credentials [cred]}
+                }
+            )
+    runTLSSimple13 params FullHandshake
+
+handshake13_mldsa_client :: Int -> CSP13 -> IO ()
+handshake13_mldsa_client n (CSP13 (clientParam, serverParam)) = do
+    creds <- generate arbitraryCredentialsOfEachMLDSA
+    let cred = creds !! n
+        clientParam' =
+            clientParam
+                { clientHooks =
+                    (clientHooks clientParam)
+                        { onCertificateRequest = \_ -> return $ Just cred
+                        }
+                }
+        serverParam' =
+            serverParam
+                { serverWantClientCert = True
+                , serverHooks =
+                    (serverHooks serverParam)
+                        { onClientCertificate = \chain ->
+                            if chain == fst cred
+                                then return CertificateUsageAccept
+                                else return (CertificateUsageReject CertificateRejectUnknownCA)
+                        }
+                , serverSupported =
+                    (serverSupported serverParam)
+                        { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                        , supportedGroups = [X25519]
+                        , supportedGroupsTLS13 = [[X25519]]
+                        }
+                }
+        clientParam'' =
+            clientParam'
+                { clientSupported =
+                    (clientSupported clientParam)
+                        { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                        , supportedGroups = [X25519]
+                        }
+                }
+    runTLSSimple13 (clientParam'', serverParam') FullHandshake
+
+-- A CertificateVerify naming a scheme the key cannot have made.
+--
+-- The second byte of an ML-DSA scheme is one RSASSA-PSS also uses, so code
+-- that looks at it alone answers for the wrong algorithm; this is here to
+-- catch that, and to pin the alert, which has to be illegal_parameter and
+-- not decrypt_error -- the field is wrong, rather than the signature.
+handshake13_mldsa_wrong_scheme :: IO ()
+handshake13_mldsa_wrong_scheme = do
+    CSP13 (cli, srv) <- generate arbitrary
+    creds <- generate arbitraryCredentialsOfEachMLDSA
+    let cred = head creds -- ML-DSA-44
+        cliSupported =
+            (clientSupported cli)
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [X25519]
+                }
+        svrSupported =
+            (serverSupported srv)
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
+                }
+        params =
+            ( cli{clientSupported = cliSupported}
+            , srv
+                { serverSupported = svrSupported
+                , serverShared =
+                    (serverShared srv){sharedCredentials = Credentials [cred]}
+                }
+            )
+    withPairContextWith (id, id) params $ \(cctx, sctx) -> do
+        contextHookSetHandshake13Recv cctx relabel
+        concurrently_
+            (handshake cctx `shouldThrow` clientRejectedTheScheme)
+            (handshake sctx `shouldThrow` anyTLSException)
+  where
+    -- The signature is the one ML-DSA-44 made; only the scheme is changed,
+    -- to another ML-DSA size, which the key cannot have signed under.
+    relabel (CertVerify13 (DigitallySigned _ sig)) =
+        pure $ CertVerify13 $ DigitallySigned MLDSA65 sig
+    relabel hs = pure hs
+
+-- The reason as well as the alert.  Matching the alert alone would also be
+-- satisfied by an illegal_parameter raised for some other reason, which is
+-- not what this is asking about.
+clientRejectedTheScheme :: TLSException -> Bool
+clientRejectedTheScheme (HandshakeFailed (Error_Protocol msg alert)) =
+    alert == IllegalParameter && "does not fit the public key" `isInfixOf` msg
+clientRejectedTheScheme _ = False
 
 handshake13_hrr :: CSP13 -> IO ()
 handshake13_hrr (CSP13 (cli, srv)) = do
