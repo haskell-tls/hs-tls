@@ -34,8 +34,8 @@ import Crypto.Number.Generate
 import Crypto.PubKey.DH (PrivateNumber (..), PublicNumber (..))
 import qualified Crypto.PubKey.DH as DH
 import Crypto.PubKey.ECIES
-import Crypto.PubKey.ML_KEM (ML_KEM_1024, ML_KEM_512, ML_KEM_768)
-import qualified Crypto.PubKey.ML_KEM as ML
+import Crypto.PubKey.MLKEM (MLKEM1024, MLKEM512, MLKEM768)
+import qualified Crypto.PubKey.MLKEM as ML
 import Data.ByteArray (ScrubbedBytes, convert)
 import qualified Data.ByteArray as BA
 import Data.Proxy
@@ -58,12 +58,12 @@ data GroupPrivate
     | GroupPri_FFDHE4096 PrivateNumber
     | GroupPri_FFDHE6144 PrivateNumber
     | GroupPri_FFDHE8192 PrivateNumber
-    | GroupPri_MLKEM512       (ML.DecapsulationKey ML_KEM_512)
-    | GroupPri_MLKEM768       (ML.DecapsulationKey ML_KEM_768)
-    | GroupPri_MLKEM1024      (ML.DecapsulationKey ML_KEM_1024)
-    | GroupPri_X25519MLKEM768 (Scalar Curve_X25519, ML.DecapsulationKey ML_KEM_768)
-    | GroupPri_P256MLKEM768   (Scalar Curve_P256R1, ML.DecapsulationKey ML_KEM_768)
-    | GroupPri_P384MLKEM1024  (Scalar Curve_P384R1, ML.DecapsulationKey ML_KEM_1024)
+    | GroupPri_MLKEM512       (ML.DecapsulationKey MLKEM512)
+    | GroupPri_MLKEM768       (ML.DecapsulationKey MLKEM768)
+    | GroupPri_MLKEM1024      (ML.DecapsulationKey MLKEM1024)
+    | GroupPri_X25519MLKEM768 (Scalar Curve_X25519, ML.DecapsulationKey MLKEM768)
+    | GroupPri_P256MLKEM768   (Scalar Curve_P256R1, ML.DecapsulationKey MLKEM768)
+    | GroupPri_P384MLKEM1024  (Scalar Curve_P384R1, ML.DecapsulationKey MLKEM1024)
     deriving (Eq, Show)
 {- FOURMOLU_ENABLE -}
 
@@ -79,12 +79,12 @@ data GroupPublicA
     | GroupPubA_FFDHE4096 PublicNumber
     | GroupPubA_FFDHE6144 PublicNumber
     | GroupPubA_FFDHE8192 PublicNumber
-    | GroupPubA_MLKEM512       (ML.EncapsulationKey ML_KEM_512)
-    | GroupPubA_MLKEM768       (ML.EncapsulationKey ML_KEM_768)
-    | GroupPubA_MLKEM1024      (ML.EncapsulationKey ML_KEM_1024)
-    | GroupPubA_X25519MLKEM768 (Point Curve_X25519, ML.EncapsulationKey ML_KEM_768)
-    | GroupPubA_P256MLKEM768   (Point Curve_P256R1, ML.EncapsulationKey ML_KEM_768)
-    | GroupPubA_P384MLKEM1024  (Point Curve_P384R1, ML.EncapsulationKey ML_KEM_1024)
+    | GroupPubA_MLKEM512       (ML.EncapsulationKey MLKEM512)
+    | GroupPubA_MLKEM768       (ML.EncapsulationKey MLKEM768)
+    | GroupPubA_MLKEM1024      (ML.EncapsulationKey MLKEM1024)
+    | GroupPubA_X25519MLKEM768 (Point Curve_X25519, ML.EncapsulationKey MLKEM768)
+    | GroupPubA_P256MLKEM768   (Point Curve_P256R1, ML.EncapsulationKey MLKEM768)
+    | GroupPubA_P384MLKEM1024  (Point Curve_P384R1, ML.EncapsulationKey MLKEM1024)
     deriving (Eq, Show)
 {- FOURMOLU_ENABLE -}
 
@@ -100,12 +100,12 @@ data GroupPublicB
     | GroupPubB_FFDHE4096 PublicNumber
     | GroupPubB_FFDHE6144 PublicNumber
     | GroupPubB_FFDHE8192 PublicNumber
-    | GroupPubB_MLKEM512       (ML.Ciphertext ML_KEM_512)
-    | GroupPubB_MLKEM768       (ML.Ciphertext ML_KEM_768)
-    | GroupPubB_MLKEM1024      (ML.Ciphertext ML_KEM_1024)
-    | GroupPubB_X25519MLKEM768 (Point Curve_X25519, ML.Ciphertext ML_KEM_768)
-    | GroupPubB_P256MLKEM768   (Point Curve_P256R1, ML.Ciphertext ML_KEM_768)
-    | GroupPubB_P384MLKEM1024  (Point Curve_P384R1, ML.Ciphertext ML_KEM_1024)
+    | GroupPubB_MLKEM512       (ML.Ciphertext MLKEM512)
+    | GroupPubB_MLKEM768       (ML.Ciphertext MLKEM768)
+    | GroupPubB_MLKEM1024      (ML.Ciphertext MLKEM1024)
+    | GroupPubB_X25519MLKEM768 (Point Curve_X25519, ML.Ciphertext MLKEM768)
+    | GroupPubB_P256MLKEM768   (Point Curve_P256R1, ML.Ciphertext MLKEM768)
+    | GroupPubB_P384MLKEM1024  (Point Curve_P384R1, ML.Ciphertext MLKEM1024)
     deriving (Eq, Show)
 {- FOURMOLU_ENABLE -}
 
@@ -126,13 +126,27 @@ x25519 = Proxy
 x448 :: Proxy Curve_X448
 x448 = Proxy
 
-mlkem512 :: Proxy ML_KEM_512
+mlkem512 :: Proxy MLKEM512
 mlkem512 = Proxy
 
-mlkem768 :: Proxy ML_KEM_768
+-- crypton reports a value it will not accept as a 'CryptoFailable' and has a
+-- constructor per type rather than one overloaded 'decode'.  These two keep
+-- the call sites below in the shape they were.
+--
+-- 'ML.encapsulationKey' is the stricter of the two: besides the length it
+-- runs the check of FIPS 203 section 7.2, so an encapsulation key whose
+-- coefficients are out of range is refused here rather than used.
+decodeEK
+    :: ML.MLKEM p => proxy p -> ByteString -> Maybe (ML.EncapsulationKey p)
+decodeEK _ = maybeCryptoError . ML.encapsulationKey
+
+decodeCT :: ML.MLKEM p => proxy p -> ByteString -> Maybe (ML.Ciphertext p)
+decodeCT _ = maybeCryptoError . ML.ciphertext
+
+mlkem768 :: Proxy MLKEM768
 mlkem768 = Proxy
 
-mlkem1024 :: Proxy ML_KEM_1024
+mlkem1024 :: Proxy MLKEM1024
 mlkem1024 = Proxy
 
 dhParamsForGroup :: Group -> Maybe DH.Params
@@ -160,25 +174,25 @@ groupGenerateKeyPair FFDHE4096 = gen ffdhe4096 exp4096 GroupPri_FFDHE4096 GroupP
 groupGenerateKeyPair FFDHE6144 = gen ffdhe6144 exp6144 GroupPri_FFDHE6144 GroupPubA_FFDHE6144
 groupGenerateKeyPair FFDHE8192 = gen ffdhe8192 exp8192 GroupPri_FFDHE8192 GroupPubA_FFDHE8192
 groupGenerateKeyPair MLKEM512 = do
-    (e, d) <- ML.generate mlkem512
+    (e, d) <- ML.generateKeyPair mlkem512
     return (GroupPri_MLKEM512 d, GroupPubA_MLKEM512 e)
 groupGenerateKeyPair MLKEM768 = do
-    (e, d) <- ML.generate mlkem768
+    (e, d) <- ML.generateKeyPair mlkem768
     return (GroupPri_MLKEM768 d, GroupPubA_MLKEM768 e)
 groupGenerateKeyPair MLKEM1024 = do
-    (e, d) <- ML.generate mlkem1024
+    (e, d) <- ML.generateKeyPair mlkem1024
     return (GroupPri_MLKEM1024 d, GroupPubA_MLKEM1024 e)
 groupGenerateKeyPair X25519MLKEM768 = do
     (d1, e1) <- fs' $ curveGenerateKeyPair x25519
-    (e2, d2) <- ML.generate mlkem768
+    (e2, d2) <- ML.generateKeyPair mlkem768
     return (GroupPri_X25519MLKEM768 (d1, d2), GroupPubA_X25519MLKEM768 (e1, e2))
 groupGenerateKeyPair P256MLKEM768 = do
     (d1, e1) <- fs' $ curveGenerateKeyPair p256
-    (e2, d2) <- ML.generate mlkem768
+    (e2, d2) <- ML.generateKeyPair mlkem768
     return (GroupPri_P256MLKEM768 (d1, d2), GroupPubA_P256MLKEM768 (e1, e2))
 groupGenerateKeyPair P384MLKEM1024 = do
     (d1, e1) <- fs' $ curveGenerateKeyPair p384
-    (e2, d2) <- ML.generate mlkem1024
+    (e2, d2) <- ML.generateKeyPair mlkem1024
     return (GroupPri_P384MLKEM1024 (d1, d2), GroupPubA_P384MLKEM1024 (e1, e2))
 groupGenerateKeyPair _ = error "groupGenerateKeyPair"
 
@@ -228,6 +242,17 @@ gen'
     -> r (PrivateNumber, PublicNumber)
 gen' params expBits = (id &&& DH.calculatePublic params) <$> generatePriv expBits
 
+-- 'ML.encapsulate' takes the parameter set as a proxy and reports a
+-- failure, as every KEM in Crypto.KEM does; ML-KEM has none to report.
+mlkemEncap
+    :: (MonadRandom r, ML.MLKEM p)
+    => proxy p
+    -> ML.EncapsulationKey p
+    -> r (Maybe (ML.Ciphertext p, GroupKey))
+mlkemEncap p ek = fmap f <$> fmap maybeCryptoError (ML.encapsulate p ek)
+  where
+    f (ct, sec) = (ct, convert sec)
+
 groupEncapsulate
     :: MonadRandom r => GroupPublicA -> r (Maybe (GroupPublicB, GroupKey))
 groupEncapsulate (GroupPubA_P256 pub) = getECDHPubShared GroupPubB_P256 p256 pub
@@ -240,41 +265,44 @@ groupEncapsulate (GroupPubA_FFDHE3072 pub) = getDHPubShared ffdhe3072 exp3072 pu
 groupEncapsulate (GroupPubA_FFDHE4096 pub) = getDHPubShared ffdhe4096 exp4096 pub GroupPubB_FFDHE4096
 groupEncapsulate (GroupPubA_FFDHE6144 pub) = getDHPubShared ffdhe6144 exp6144 pub GroupPubB_FFDHE6144
 groupEncapsulate (GroupPubA_FFDHE8192 pub) = getDHPubShared ffdhe8192 exp8192 pub GroupPubB_FFDHE8192
-groupEncapsulate (GroupPubA_MLKEM512 pub) = do
-    (sec, ct) <- ML.encapsulate pub
-    return $ Just (GroupPubB_MLKEM512 ct, convert sec)
-groupEncapsulate (GroupPubA_MLKEM768 pub) = do
-    (sec, ct) <- ML.encapsulate pub
-    return $ Just (GroupPubB_MLKEM768 ct, convert sec)
-groupEncapsulate (GroupPubA_MLKEM1024 pub) = do
-    (sec, ct) <- ML.encapsulate pub
-    return $ Just (GroupPubB_MLKEM1024 ct, convert sec)
+groupEncapsulate (GroupPubA_MLKEM512 pub) =
+    fmap (\(ct, k) -> (GroupPubB_MLKEM512 ct, k)) <$> mlkemEncap mlkem512 pub
+groupEncapsulate (GroupPubA_MLKEM768 pub) =
+    fmap (\(ct, k) -> (GroupPubB_MLKEM768 ct, k)) <$> mlkemEncap mlkem768 pub
+groupEncapsulate (GroupPubA_MLKEM1024 pub) =
+    fmap (\(ct, k) -> (GroupPubB_MLKEM1024 ct, k)) <$> mlkemEncap mlkem1024 pub
 -- The classical part of a hybrid can fail as the group alone does: an
 -- all-zero X25519 public key decodes, but the shared secret derived from
 -- it is rejected.  Nothing is turned into illegal_parameter by the caller.
-groupEncapsulate (GroupPubA_X25519MLKEM768 (e1, e2)) = do
-    mx <- getECDHPubShared' x25519 e1
+groupEncapsulate (GroupPubA_X25519MLKEM768 (e1, e2)) =
+    hybrid x25519 mlkem768 e1 e2 $ \c1 k1 c2 k2 ->
+        -- Sec 4.1: Specifically, the order of shares in the concatenation
+        -- has been reversed.
+        (GroupPubB_X25519MLKEM768 (c1, c2), k2 <> k1)
+groupEncapsulate (GroupPubA_P256MLKEM768 (e1, e2)) =
+    hybrid p256 mlkem768 e1 e2 $ \c1 k1 c2 k2 ->
+        (GroupPubB_P256MLKEM768 (c1, c2), k1 <> k2)
+groupEncapsulate (GroupPubA_P384MLKEM1024 (e1, e2)) =
+    hybrid p384 mlkem1024 e1 e2 $ \c1 k1 c2 k2 ->
+        (GroupPubB_P384MLKEM1024 (c1, c2), k1 <> k2)
+
+-- Either half can refuse: the classical one rejects a peer value that would
+-- make its secret degenerate, which the caller turns into
+-- illegal_parameter.  ML-KEM has nothing to refuse, but says so the same
+-- way, so both are read alike here.
+hybrid
+    :: (MonadRandom r, EllipticCurveDH curve, ML.MLKEM p)
+    => Proxy curve
+    -> Proxy p
+    -> Point curve
+    -> ML.EncapsulationKey p
+    -> (Point curve -> GroupKey -> ML.Ciphertext p -> GroupKey -> (GroupPublicB, GroupKey))
+    -> r (Maybe (GroupPublicB, GroupKey))
+hybrid pc pk e1 e2 k = do
+    mx <- getECDHPubShared' pc e1
     case mx of
         Nothing -> return Nothing
-        Just (c1, k1) -> do
-            (k2, c2) <- ML.encapsulate e2
-            -- Sec 4.1: Specifically, the order of shares in the concatenation
-            -- has been reversed.
-            return $ Just (GroupPubB_X25519MLKEM768 (c1, c2), convert k2 <> k1)
-groupEncapsulate (GroupPubA_P256MLKEM768 (e1, e2)) = do
-    mx <- getECDHPubShared' p256 e1
-    case mx of
-        Nothing -> return Nothing
-        Just (c1, k1) -> do
-            (k2, c2) <- ML.encapsulate e2
-            return $ Just (GroupPubB_P256MLKEM768 (c1, c2), k1 <> convert k2)
-groupEncapsulate (GroupPubA_P384MLKEM1024 (e1, e2)) = do
-    mx <- getECDHPubShared' p384 e1
-    case mx of
-        Nothing -> return Nothing
-        Just (c1, k1) -> do
-            (k2, c2) <- ML.encapsulate e2
-            return $ Just (GroupPubB_P384MLKEM1024 (c1, c2), k1 <> convert k2)
+        Just (c1, k1) -> fmap (\(c2, k2) -> k c1 k1 c2 k2) <$> mlkemEncap pk e2
 
 dhGroupGetPubShared
     :: MonadRandom r => Group -> PublicNumber -> r (Maybe (PublicNumber, GroupKey))
@@ -351,22 +379,22 @@ groupDecapsulate (GroupPubB_FFDHE4096 pub) (GroupPri_FFDHE4096 pri) = calcDHShar
 groupDecapsulate (GroupPubB_FFDHE6144 pub) (GroupPri_FFDHE6144 pri) = calcDHShared ffdhe6144 pub pri
 groupDecapsulate (GroupPubB_FFDHE8192 pub) (GroupPri_FFDHE8192 pri) = calcDHShared ffdhe8192 pub pri
 groupDecapsulate (GroupPubB_MLKEM512 p) (GroupPri_MLKEM512 s) =
-    Just $ convert $ ML.decapsulate s p
+    convert <$> maybeCryptoError (ML.decapsulate mlkem512 s p)
 groupDecapsulate (GroupPubB_MLKEM768 p) (GroupPri_MLKEM768 s) =
-    Just $ convert $ ML.decapsulate s p
+    convert <$> maybeCryptoError (ML.decapsulate mlkem768 s p)
 groupDecapsulate (GroupPubB_MLKEM1024 p) (GroupPri_MLKEM1024 s) =
-    Just $ convert $ ML.decapsulate s p
+    convert <$> maybeCryptoError (ML.decapsulate mlkem1024 s p)
 groupDecapsulate (GroupPubB_X25519MLKEM768 (p1, p2)) (GroupPri_X25519MLKEM768 (s1, s2)) = do
     bs1 <- (unwrap <$>) . maybeCryptoError $ deriveDecrypt x25519 p1 s1
-    let bs2 = convert $ ML.decapsulate s2 p2
+    bs2 <- convert <$> maybeCryptoError (ML.decapsulate mlkem768 s2 p2)
     return (bs2 <> bs1)
 groupDecapsulate (GroupPubB_P256MLKEM768 (p1, p2)) (GroupPri_P256MLKEM768 (s1, s2)) = do
     bs1 <- (unwrap <$>) . maybeCryptoError $ deriveDecrypt p256 p1 s1
-    let bs2 = convert $ ML.decapsulate s2 p2
+    bs2 <- convert <$> maybeCryptoError (ML.decapsulate mlkem768 s2 p2)
     return (bs1 <> bs2)
 groupDecapsulate (GroupPubB_P384MLKEM1024 (p1, p2)) (GroupPri_P384MLKEM1024 (s1, s2)) = do
     bs1 <- (unwrap <$>) . maybeCryptoError $ deriveDecrypt p384 p1 s1
-    let bs2 = convert $ ML.decapsulate s2 p2
+    bs2 <- convert <$> maybeCryptoError (ML.decapsulate mlkem1024 s2 p2)
     return (bs1 <> bs2)
 groupDecapsulate _ _ = Nothing
 
@@ -388,15 +416,15 @@ groupEncodePublicA (GroupPubA_FFDHE3072 p) = enc ffdhe3072 p
 groupEncodePublicA (GroupPubA_FFDHE4096 p) = enc ffdhe4096 p
 groupEncodePublicA (GroupPubA_FFDHE6144 p) = enc ffdhe6144 p
 groupEncodePublicA (GroupPubA_FFDHE8192 p) = enc ffdhe8192 p
-groupEncodePublicA (GroupPubA_MLKEM512 p) = ML.encode p
-groupEncodePublicA (GroupPubA_MLKEM768 p) = ML.encode p
-groupEncodePublicA (GroupPubA_MLKEM1024 p) = ML.encode p
+groupEncodePublicA (GroupPubA_MLKEM512 p) = BA.convert p
+groupEncodePublicA (GroupPubA_MLKEM768 p) = BA.convert p
+groupEncodePublicA (GroupPubA_MLKEM1024 p) = BA.convert p
 groupEncodePublicA (GroupPubA_X25519MLKEM768 (p1, p2)) =
-    ML.encode p2 <> encodePoint x25519 p1
+    BA.convert p2 <> encodePoint x25519 p1
 groupEncodePublicA (GroupPubA_P256MLKEM768 (p1, p2)) =
-    encodePoint p256 p1 <> ML.encode p2
+    encodePoint p256 p1 <> BA.convert p2
 groupEncodePublicA (GroupPubA_P384MLKEM1024 (p1, p2)) =
-    encodePoint p384 p1 <> ML.encode p2
+    encodePoint p384 p1 <> BA.convert p2
 
 groupEncodePublicB :: GroupPublicB -> ByteString
 groupEncodePublicB (GroupPubB_P256 p) = encodePoint p256 p
@@ -433,32 +461,32 @@ groupDecodePublicA FFDHE3072 bs = Right . GroupPubA_FFDHE3072 . PublicNumber $ o
 groupDecodePublicA FFDHE4096 bs = Right . GroupPubA_FFDHE4096 . PublicNumber $ os2ip bs
 groupDecodePublicA FFDHE6144 bs = Right . GroupPubA_FFDHE6144 . PublicNumber $ os2ip bs
 groupDecodePublicA FFDHE8192 bs = Right . GroupPubA_FFDHE8192 . PublicNumber $ os2ip bs
-groupDecodePublicA MLKEM512 bs = case ML.decode mlkem512 bs of
+groupDecodePublicA MLKEM512 bs = case decodeEK mlkem512 bs of
     Nothing -> Left CryptoError_PointFormatInvalid
     Just p -> Right $ GroupPubA_MLKEM512 p
-groupDecodePublicA MLKEM768 bs = case ML.decode mlkem768 bs of
+groupDecodePublicA MLKEM768 bs = case decodeEK mlkem768 bs of
     Nothing -> Left CryptoError_PointFormatInvalid
     Just p -> Right $ GroupPubA_MLKEM768 p
-groupDecodePublicA MLKEM1024 bs = case ML.decode mlkem1024 bs of
+groupDecodePublicA MLKEM1024 bs = case decodeEK mlkem1024 bs of
     Nothing -> Left CryptoError_PointFormatInvalid
     Just p -> Right $ GroupPubA_MLKEM1024 p
 groupDecodePublicA X25519MLKEM768 bs =
     let (bs1, bs2) = BA.splitAt 1184 bs
-     in case ML.decode mlkem768 bs1 of
+     in case decodeEK mlkem768 bs1 of
             Nothing -> Left CryptoError_PointFormatInvalid
             Just p1 -> case maybeCryptoError $ decodePoint x25519 bs2 of
                 Nothing -> Left CryptoError_PointFormatInvalid
                 Just p2 -> Right $ GroupPubA_X25519MLKEM768 (p2, p1)
 groupDecodePublicA P256MLKEM768 bs =
     let (bs1, bs2) = BA.splitAt 65 bs
-     in case ML.decode mlkem768 bs2 of
+     in case decodeEK mlkem768 bs2 of
             Nothing -> Left CryptoError_PointFormatInvalid
             Just p1 -> case maybeCryptoError $ decodePoint p256 bs1 of
                 Nothing -> Left CryptoError_PointFormatInvalid
                 Just p2 -> Right $ GroupPubA_P256MLKEM768 (p2, p1)
 groupDecodePublicA P384MLKEM1024 bs =
     let (bs1, bs2) = BA.splitAt 97 bs
-     in case ML.decode mlkem1024 bs2 of
+     in case decodeEK mlkem1024 bs2 of
             Nothing -> Left CryptoError_PointFormatInvalid
             Just p1 -> case maybeCryptoError $ decodePoint p384 bs1 of
                 Nothing -> Left CryptoError_PointFormatInvalid
@@ -476,32 +504,32 @@ groupDecodePublicB FFDHE3072 bs = Right . GroupPubB_FFDHE3072 . PublicNumber $ o
 groupDecodePublicB FFDHE4096 bs = Right . GroupPubB_FFDHE4096 . PublicNumber $ os2ip bs
 groupDecodePublicB FFDHE6144 bs = Right . GroupPubB_FFDHE6144 . PublicNumber $ os2ip bs
 groupDecodePublicB FFDHE8192 bs = Right . GroupPubB_FFDHE8192 . PublicNumber $ os2ip bs
-groupDecodePublicB MLKEM512 bs = case ML.decode mlkem512 bs of
+groupDecodePublicB MLKEM512 bs = case decodeCT mlkem512 bs of
     Nothing -> Left CryptoError_PointFormatInvalid
     Just p -> Right $ GroupPubB_MLKEM512 p
-groupDecodePublicB MLKEM768 bs = case ML.decode mlkem768 bs of
+groupDecodePublicB MLKEM768 bs = case decodeCT mlkem768 bs of
     Nothing -> Left CryptoError_PointFormatInvalid
     Just p -> Right $ GroupPubB_MLKEM768 p
-groupDecodePublicB MLKEM1024 bs = case ML.decode mlkem1024 bs of
+groupDecodePublicB MLKEM1024 bs = case decodeCT mlkem1024 bs of
     Nothing -> Left CryptoError_PointFormatInvalid
     Just p -> Right $ GroupPubB_MLKEM1024 p
 groupDecodePublicB X25519MLKEM768 bs =
     let (bs1, bs2) = BA.splitAt 1088 bs
-     in case ML.decode mlkem768 bs1 of
+     in case decodeCT mlkem768 bs1 of
             Nothing -> Left CryptoError_PointFormatInvalid
             Just p1 -> case maybeCryptoError $ decodePoint x25519 bs2 of
                 Nothing -> Left CryptoError_PointFormatInvalid
                 Just p2 -> Right $ GroupPubB_X25519MLKEM768 (p2, p1)
 groupDecodePublicB P256MLKEM768 bs =
     let (bs1, bs2) = BA.splitAt 65 bs
-     in case ML.decode mlkem768 bs2 of
+     in case decodeCT mlkem768 bs2 of
             Nothing -> Left CryptoError_PointFormatInvalid
             Just p1 -> case maybeCryptoError $ decodePoint p256 bs1 of
                 Nothing -> Left CryptoError_PointFormatInvalid
                 Just p2 -> Right $ GroupPubB_P256MLKEM768 (p2, p1)
 groupDecodePublicB P384MLKEM1024 bs =
     let (bs1, bs2) = BA.splitAt 97 bs
-     in case ML.decode mlkem1024 bs2 of
+     in case decodeCT mlkem1024 bs2 of
             Nothing -> Left CryptoError_PointFormatInvalid
             Just p1 -> case maybeCryptoError $ decodePoint p384 bs1 of
                 Nothing -> Left CryptoError_PointFormatInvalid

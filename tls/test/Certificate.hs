@@ -159,6 +159,9 @@ getSignatureALG (PubKeyDSA _) = SignatureALG HashSHA1 PubKeyALG_DSA
 getSignatureALG (PubKeyEC _) = SignatureALG HashSHA256 PubKeyALG_EC
 getSignatureALG (PubKeyEd25519 _) = SignatureALG_IntrinsicHash PubKeyALG_Ed25519
 getSignatureALG (PubKeyEd448 _) = SignatureALG_IntrinsicHash PubKeyALG_Ed448
+getSignatureALG (PubKeyMLDSA44 _) = SignatureALG_IntrinsicHash PubKeyALG_MLDSA44
+getSignatureALG (PubKeyMLDSA65 _) = SignatureALG_IntrinsicHash PubKeyALG_MLDSA65
+getSignatureALG (PubKeyMLDSA87 _) = SignatureALG_IntrinsicHash PubKeyALG_MLDSA87
 getSignatureALG pubKey =
     error $ "getSignatureALG: unsupported public key: " ++ show pubKey
 

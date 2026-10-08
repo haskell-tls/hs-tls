@@ -4,6 +4,9 @@ module PubKey (
     arbitraryECDSAPair,
     arbitraryEd25519Pair,
     arbitraryEd448Pair,
+    arbitraryMLDSA44Pair,
+    arbitraryMLDSA65Pair,
+    arbitraryMLDSA87Pair,
     globalRSAPair,
     getGlobalRSAPair,
     knownECCurves,
@@ -20,8 +23,10 @@ import qualified Crypto.PubKey.ECC.Prim as ECC
 import qualified Crypto.PubKey.ECC.Types as ECC
 import qualified Crypto.PubKey.Ed25519 as Ed25519
 import qualified Crypto.PubKey.Ed448 as Ed448
+import qualified Crypto.PubKey.MLDSA as MLDSA
 import qualified Crypto.PubKey.RSA as RSA
 import Crypto.Random
+import Data.Proxy (Proxy (..))
 import qualified Data.ByteString as B
 import System.IO.Unsafe
 import Test.QuickCheck
@@ -111,6 +116,27 @@ arbitraryEd25519Pair = do
     bytes <- vectorOf 32 arbitrary
     let priv = fromCryptoPassed $ Ed25519.secretKey (B.pack bytes)
     return (Ed25519.toPublic priv, priv)
+
+-- ML-DSA, from a seed drawn here, so a run is reproducible from its seed
+-- the way the other pairs are.
+arbitraryMLDSAPair
+    :: MLDSA.MLDSA p
+    => proxy p -> Gen (MLDSA.VerificationKey p, MLDSA.SigningKey p)
+arbitraryMLDSAPair p = do
+    bytes <- vectorOf MLDSA.seedSize arbitrary
+    return $ fromCryptoPassed $ MLDSA.keyPairFromSeed p (B.pack bytes)
+
+arbitraryMLDSA44Pair
+    :: Gen (MLDSA.VerificationKey MLDSA.MLDSA44, MLDSA.SigningKey MLDSA.MLDSA44)
+arbitraryMLDSA44Pair = arbitraryMLDSAPair (Proxy :: Proxy MLDSA.MLDSA44)
+
+arbitraryMLDSA65Pair
+    :: Gen (MLDSA.VerificationKey MLDSA.MLDSA65, MLDSA.SigningKey MLDSA.MLDSA65)
+arbitraryMLDSA65Pair = arbitraryMLDSAPair (Proxy :: Proxy MLDSA.MLDSA65)
+
+arbitraryMLDSA87Pair
+    :: Gen (MLDSA.VerificationKey MLDSA.MLDSA87, MLDSA.SigningKey MLDSA.MLDSA87)
+arbitraryMLDSA87Pair = arbitraryMLDSAPair (Proxy :: Proxy MLDSA.MLDSA87)
 
 arbitraryEd448Pair :: Gen (Ed448.PublicKey, Ed448.SecretKey)
 arbitraryEd448Pair = do

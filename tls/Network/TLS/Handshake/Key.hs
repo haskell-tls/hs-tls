@@ -91,6 +91,9 @@ isDigitalSignatureKey (PubKeyDSA _)     = True
 isDigitalSignatureKey (PubKeyEC _)      = True
 isDigitalSignatureKey (PubKeyEd25519 _) = True
 isDigitalSignatureKey (PubKeyEd448 _)   = True
+isDigitalSignatureKey (PubKeyMLDSA44 _) = True
+isDigitalSignatureKey (PubKeyMLDSA65 _) = True
+isDigitalSignatureKey (PubKeyMLDSA87 _) = True
 isDigitalSignatureKey _                 = False
 
 versionCompatible :: PubKey -> Version -> Bool
@@ -99,6 +102,9 @@ versionCompatible (PubKeyDSA _) v     = v <= TLS12
 versionCompatible (PubKeyEC _) v      = v >= TLS10
 versionCompatible (PubKeyEd25519 _) v = v >= TLS12
 versionCompatible (PubKeyEd448 _) v   = v >= TLS12
+versionCompatible (PubKeyMLDSA44 _) v = v >= TLS13
+versionCompatible (PubKeyMLDSA65 _) v = v >= TLS13
+versionCompatible (PubKeyMLDSA87 _) v = v >= TLS13
 versionCompatible _ _                 = False
 {- FOURMOLU_ENABLE -}
 
@@ -128,6 +134,9 @@ isDigitalSignaturePair keyPair =
         (PubKeyEC _, PrivKeyEC k) -> kxSupportedPrivKeyEC k
         (PubKeyEd25519 _, PrivKeyEd25519 _) -> True
         (PubKeyEd448 _, PrivKeyEd448 _) -> True
+        (PubKeyMLDSA44 _, PrivKeyMLDSA44 _) -> True
+        (PubKeyMLDSA65 _, PrivKeyMLDSA65 _) -> True
+        (PubKeyMLDSA87 _, PrivKeyMLDSA87 _) -> True
         _ -> False
 
 getLocalPublicKey :: MonadIO m => Context -> m PubKey

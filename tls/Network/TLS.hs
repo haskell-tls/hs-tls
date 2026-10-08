@@ -1,3 +1,4 @@
+{-# LANGUAGE PatternSynonyms #-}
 -- |
 -- Native Haskell TLS protocol implementation for servers and
 -- clients.
@@ -198,6 +199,9 @@ module Network.TLS (
     supportedSignatureSchemes,
     HashAlgorithm (..),
     SignatureAlgorithm (..),
+    pattern MLDSA44,
+    pattern MLDSA65,
+    pattern MLDSA87,
     Group (..),
     supportedNamedGroups,
     EMSMode (..),
@@ -352,6 +356,9 @@ import Network.TLS.Struct (
     TLSError (..),
     TLSException (..),
     supportedSignatureSchemes,
+    pattern MLDSA44,
+    pattern MLDSA65,
+    pattern MLDSA87,
  )
 import Network.TLS.Struct13 (Handshake13)
 import Network.TLS.Types

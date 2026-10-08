@@ -21,7 +21,7 @@ env:
   # branch, which happens whenever it is rebased onto upstream, changes
   # nothing here until the commit below is moved forward.
   TLSFUZZER_REPO: kazu-yamamoto/tlsfuzzer
-  TLSFUZZER_REF: 3096af3c7b57184ee047baf7b0b86a2c0e297d88
+  TLSFUZZER_REF: cc614b9e860de35f692f444883ff8a37038b05d4
   GHC_VERSION: '9.12'
   # Same name as in main.yml, so that the cache main.yml saves on main is
   # restored here.  Nothing is saved from this workflow.

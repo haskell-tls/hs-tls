@@ -185,7 +185,7 @@ checkCertVerify ctx pub hs signature hashValue = liftIO $ do
     unless (pub `signatureCompatible13` hs) $
         throwCore $
             Error_Protocol
-                ("signature algorithm " ++ show hs ++ " does not fit the public key")
+                ("signature algorithm " ++ showSignatureScheme hs ++ " does not fit the public key")
                 IllegalParameter
     role <- usingState_ ctx getRole
     let ctxStr
@@ -444,7 +444,7 @@ runRecvHandshake13 (RecvHandshake13M f) = do
 checkHashSignatureValid13 :: HashAndSignatureAlgorithm -> IO ()
 checkHashSignatureValid13 hs =
     unless (isHashSignatureValid13 hs) $
-        let msg = "invalid TLS13 hash and signature algorithm: " ++ show hs
+        let msg = "invalid TLS13 hash and signature algorithm: " ++ showSignatureScheme hs
          in throwCore $ Error_Protocol msg IllegalParameter
 
 isHashSignatureValid13 :: HashAndSignatureAlgorithm -> Bool

@@ -7,7 +7,7 @@ import Control.Monad
 import qualified Data.ByteString as B
 import Data.List
 import Data.Word
-import Data.X509 (ExtKeyUsageFlag)
+import Data.X509 (ExtKeyUsageFlag, privkeyMLDSAFromKey)
 import Network.TLS
 import Network.TLS.Extra.Cipher
 import Network.TLS.Internal
@@ -220,6 +220,22 @@ arbitraryCredentialsOfEachType' = do
         , (toPubKeyEC curveName ecdsaPub, toPrivKeyEC curveName ecdsaPriv)
         , (PubKeyEd25519 ed25519Pub, PrivKeyEd25519 ed25519Priv)
         , (PubKeyEd448 ed448Pub, PrivKeyEd448 ed448Priv)
+        ]
+
+-- | One credential per ML-DSA parameter set.
+arbitraryCredentialsOfEachMLDSA :: Gen [(CertificateChain, PrivKey)]
+arbitraryCredentialsOfEachMLDSA = do
+    (pub44, priv44) <- arbitraryMLDSA44Pair
+    (pub65, priv65) <- arbitraryMLDSA65Pair
+    (pub87, priv87) <- arbitraryMLDSA87Pair
+    mapM
+        ( \(pub, priv) -> do
+            cert <- arbitraryX509WithKey (pub, priv)
+            return (CertificateChain [cert], priv)
+        )
+        [ (PubKeyMLDSA44 pub44, PrivKeyMLDSA44 (privkeyMLDSAFromKey priv44))
+        , (PubKeyMLDSA65 pub65, PrivKeyMLDSA65 (privkeyMLDSAFromKey priv65))
+        , (PubKeyMLDSA87 pub87, PrivKeyMLDSA87 (privkeyMLDSAFromKey priv87))
         ]
 
 arbitraryCredentialsOfEachCurve :: Gen [(CertificateChain, PrivKey)]
