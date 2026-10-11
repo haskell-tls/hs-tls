@@ -180,7 +180,7 @@ requiredCertKeyUsage cipher =
 -- | Return the supported 'CertificateType' values that are
 -- compatible with at least one supported signature algorithm.
 supportedCtypes
-    :: [HashAndSignatureAlgorithm]
+    :: [SignatureScheme]
     -> [CertificateType]
 supportedCtypes hashAlgs =
     nub $ foldr ctfilter [] hashAlgs
@@ -199,7 +199,7 @@ clientSupportedCtypes ctx =
 
 sigAlgsToCertTypes
     :: Context
-    -> [HashAndSignatureAlgorithm]
+    -> [SignatureScheme]
     -> [CertificateType]
 sigAlgsToCertTypes ctx hashSigs =
     filter (`elem` supportedCtypes hashSigs) $ clientSupportedCtypes ctx
@@ -317,10 +317,10 @@ storePrivInfoClient ctx cTypes (cc, privkey) = do
 -- are selected by client preference in @cHashSigs@.
 getLocalHashSigAlg
     :: Context
-    -> (PubKey -> HashAndSignatureAlgorithm -> Bool)
-    -> [HashAndSignatureAlgorithm]
+    -> (PubKey -> SignatureScheme -> Bool)
+    -> [SignatureScheme]
     -> PubKey
-    -> IO HashAndSignatureAlgorithm
+    -> IO SignatureScheme
 getLocalHashSigAlg ctx isCompatible cHashSigs pubKey = do
     -- Must be present with TLS 1.2 and up.
     (Just (_, Just hashSigs, _)) <- usingHState ctx getCertReqCBdata

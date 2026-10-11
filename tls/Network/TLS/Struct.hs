@@ -110,7 +110,7 @@ module Network.TLS.Struct (
     Handshake (..),
     packetType,
     typeOfHandshake,
-    module Network.TLS.HashAndSignature,
+    module Network.TLS.SignatureScheme,
     ExtensionRaw (..),
     ExtensionID (..),
     showCertificateChain,
@@ -134,7 +134,7 @@ import Data.X509 (
 import Network.TLS.Crypto
 import Network.TLS.Error
 import {-# SOURCE #-} Network.TLS.Extension
-import Network.TLS.HashAndSignature
+import Network.TLS.SignatureScheme
 import Network.TLS.Imports
 import Network.TLS.Types
 
@@ -198,7 +198,7 @@ lastSupportedCertificateType = CertificateType_ECDSA_Sign
 
 type Signature = ByteString
 
-data DigitallySigned = DigitallySigned HashAndSignatureAlgorithm Signature
+data DigitallySigned = DigitallySigned SignatureScheme Signature
     deriving (Eq)
 
 instance Show DigitallySigned where
@@ -470,7 +470,7 @@ data Handshake
     | ServerKeyXchg ServerKeyXchgAlgorithmData
     | CertRequest
         [CertificateType]
-        [HashAndSignatureAlgorithm]
+        [SignatureScheme]
         [DistinguishedName]
     | CertVerify DigitallySigned
     | Finished VerifyData

@@ -73,7 +73,7 @@ encodeHandshake13' (CertRequest13 reqctx exts) = runPut $ do
     putOpaque8 reqctx
     putExtensions exts
 encodeHandshake13' (CertVerify13 (DigitallySigned hs sig)) = runPut $ do
-    putSignatureHashAlgorithm hs
+    putSignatureScheme hs
     putOpaque16 sig
 encodeHandshake13' (Finished13 (VerifyData dat)) = runPut $ putBytes dat
 encodeHandshake13' (KeyUpdate13 UpdateNotRequested) = runPut $ putWord8 0
@@ -207,7 +207,7 @@ decodeCertRequest13 = do
 
 decodeCertVerify13 :: Get Handshake13
 decodeCertVerify13 =
-    CertVerify13 <$> (DigitallySigned <$> getSignatureHashAlgorithm <*> getOpaque16)
+    CertVerify13 <$> (DigitallySigned <$> getSignatureScheme <*> getOpaque16)
 
 decodeFinished13 :: Get Handshake13
 decodeFinished13 = Finished13 . VerifyData <$> (remaining >>= getBytes)

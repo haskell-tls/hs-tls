@@ -39,8 +39,8 @@ spec = do
                 params =
                     tls12Params
                         cipher_ECDHE_RSA_WITH_AES_256_GCM_SHA384
-                        [ (HashSHA256, SignatureRSA)
-                        , (HashSHA1, SignatureRSA)
+                        [ RSA_PKCS1_SHA256
+                        , RSA_PKCS1_SHA1
                         ]
                         credential
             bindings <- runBindings params
@@ -50,8 +50,8 @@ spec = do
                 params =
                     tls12Params
                         cipher_ECDHE_RSA_WITH_AES_256_GCM_SHA384
-                        [ (HashSHA256, SignatureRSA)
-                        , (HashMD5, SignatureRSA)
+                        [ RSA_PKCS1_SHA256
+                        , RSA_PKCS1_MD5
                         ]
                         credential
             bindings <- runBindings params
@@ -61,8 +61,8 @@ spec = do
                 params =
                     tls12Params
                         cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
-                        [ (HashSHA384, SignatureRSA)
-                        , (HashSHA256, SignatureRSA)
+                        [ RSA_PKCS1_SHA384
+                        , RSA_PKCS1_SHA256
                         ]
                         credential
             bindings <- runBindings params
@@ -191,7 +191,7 @@ both value = (value, value)
 
 tls12Params
     :: Cipher
-    -> [HashAndSignatureAlgorithm]
+    -> [SignatureScheme]
     -> Credential
     -> (ClientParams, ServerParams)
 tls12Params cipher hashSignatures =
@@ -202,16 +202,16 @@ tls13Params cipher =
     bindingParams
         TLS13
         cipher
-        [ (HashIntrinsic, SignatureEd448)
-        , (HashIntrinsic, SignatureEd25519)
-        , (HashIntrinsic, SignatureRSApssRSAeSHA256)
-        , (HashSHA256, SignatureRSA)
+        [ ED448
+        , ED25519
+        , RSA_PSS_RSAE_SHA256
+        , RSA_PKCS1_SHA256
         ]
 
 bindingParams
     :: Version
     -> Cipher
-    -> [HashAndSignatureAlgorithm]
+    -> [SignatureScheme]
     -> Credential
     -> (ClientParams, ServerParams)
 bindingParams version cipher hashSignatures credential =

@@ -303,7 +303,7 @@ data Supported = Supported
     -- it causes a connection failure when TLS 1.3 is negotiated.
     --
     -- Default: @[nullCompression]@
-    , supportedHashSignatures :: [HashAndSignatureAlgorithm]
+    , supportedHashSignatures :: [SignatureScheme]
     -- ^ All supported hash/signature algorithms pair for client
     -- certificate verification and server signature in (EC)DHE,
     -- ordered by decreasing priority.
@@ -325,14 +325,14 @@ data Supported = Supported
     -- Default:
     --
     -- @
-    --   [ (HashIntrinsic,     SignatureEd448)
-    --   , (HashIntrinsic,     SignatureEd25519)
+    --   [ ED448
+    --   , ED25519
     --   , (Struct.HashSHA256, SignatureECDSA)
     --   , (Struct.HashSHA384, SignatureECDSA)
     --   , (Struct.HashSHA512, SignatureECDSA)
-    --   , (HashIntrinsic,     SignatureRSApssRSAeSHA512)
-    --   , (HashIntrinsic,     SignatureRSApssRSAeSHA384)
-    --   , (HashIntrinsic,     SignatureRSApssRSAeSHA256)
+    --   , RSA_PSS_RSAE_SHA512
+    --   , RSA_PSS_RSAE_SHA384
+    --   , RSA_PSS_RSAE_SHA256
     --   , (Struct.HashSHA512, SignatureRSA)
     --   , (Struct.HashSHA384, SignatureRSA)
     --   , (Struct.HashSHA256, SignatureRSA)
@@ -566,7 +566,7 @@ defaultGroupUsage minBits params public
 --   document readable.
 type OnCertificateRequest =
     ( [CertificateType]
-    , Maybe [HashAndSignatureAlgorithm]
+    , Maybe [SignatureScheme]
     , [DistinguishedName]
     )
     -> IO (Maybe (CertificateChain, PrivKey))
@@ -611,7 +611,7 @@ data ClientHooks = ClientHooks
     --
     -- The public key in the first certificate, and the matching
     -- returned private key must be compatible with one of the list of
-    -- 'HashAndSignatureAlgorithm' value when provided.  TLS 1.3
+    -- 'SignatureScheme' value when provided.  TLS 1.3
     -- changes the meaning of the list elements, adding explicit code
     -- points for each supported pair of hash and signature (public
     -- key) algorithms, rather than combining separate codes for the

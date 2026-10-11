@@ -20,6 +20,37 @@ value computed under the negotiated cipher's hash.
 * `tls-simpleserver` reports the channel bindings with `--verbose`.
   [#535](https://github.com/haskell-tls/hs-tls/pull/535)
 
+**`HashAndSignatureAlgorithm` is gone, and with it `HashAlgorithm` and
+`SignatureAlgorithm`.**  A signature scheme is one 16-bit number:
+
+```haskell
+newtype SignatureScheme = SignatureScheme Word16
+```
+
+with a pattern synonym for each scheme, named as the IANA TLS
+SignatureScheme registry names it.  Code that built pairs builds schemes:
+
+```diff
+-  supportedHashSignatures = [(HashIntrinsic, SignatureEd25519)]
++  supportedHashSignatures = [ED25519]
+```
+
+TLS 1.2 called the two bytes a hash and a signature algorithm, and some
+values still line up that way, but from TLS 1.3 the number is indivisible --
+and for ML-DSA neither byte means what it does elsewhere, so `mldsa87` read
+byte by byte looks like `rsa_pss_rsae_sha512`.  Code that read one byte
+answered for the wrong algorithm.  That is why the halves are gone rather
+than deprecated: there is no spelling of the old type that cannot be taken
+apart.
+
+`show` gives a scheme its registry name now -- `ed25519`,
+`ecdsa_secp256r1_sha256`, `mldsa44` -- and the number for one this release
+does not know.  `showSignatureScheme`, which existed because a pair could
+not be shown correctly, is gone; use `show`.
+
+* Carry a signature scheme as one number, named as IANA names it.
+  [#581](https://github.com/haskell-tls/hs-tls/issues/581)
+
 ## Version 2.4.11
 
 * Keep preferring AES-GCM on AArch64 with crypton 2.2, which names the
