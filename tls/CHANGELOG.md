@@ -4,9 +4,12 @@
 
 * Keep preferring AES-GCM on AArch64 with crypton 2.2, which names the
   ARMv8 instructions rather than x86's.
+  [#584](https://github.com/haskell-tls/hs-tls/pull/584)
 * Sign and verify RSA PKCS#1 v1.5 through crypton's digest-taking
   operations, which deprecate the ones used before.  crypton >= 2.1.9 is
   now required.
+  [#585](https://github.com/haskell-tls/hs-tls/pull/585)
+* Remove the `tls-bench` benchmark.
 
 ## Version 2.4.10
 
