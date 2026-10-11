@@ -1,5 +1,10 @@
 # Change log for "tls"
 
+## Version 2.4.11
+
+* Keep preferring AES-GCM on AArch64 with crypton 2.2, which names the
+  ARMv8 instructions rather than x86's.
+
 ## Version 2.4.10
 
 * Support ML-DSA certificates and CertificateVerify, TLS 1.3 only

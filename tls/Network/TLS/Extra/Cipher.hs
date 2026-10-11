@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Network.TLS.Extra.Cipher (
     -- * Cipher suite
     ciphersuite_default,
@@ -573,9 +574,22 @@ data CipherSet
 sortOptimized :: [CipherSet] -> [Cipher]
 sortOptimized = concatMap f
   where
+    -- crypton 2.2 gives the AArch64 instructions their own names.  Before
+    -- it, the ARMv8 path set the slots Haskell read as AESNI and PCLMUL, so
+    -- asking for those names answered "is AES fast here" on both
+    -- architectures; from 2.2 they are x86's names, which an AArch64 machine
+    -- does not have.  hasAESAcceleration and hasGHASHAcceleration ask the
+    -- question without naming an instruction set.  Either spelling compiles
+    -- against either version -- the names are pattern synonyms now -- so
+    -- nothing but this guard says which one is right for which.
     f (SetAead gcm chacha ccm)
+#if MIN_VERSION_crypton(2,2,0)
+        | not hasAESAcceleration = chacha ++ gcm ++ ccm
+        | not hasGHASHAcceleration = ccm ++ chacha ++ gcm
+#else
         | AESNI `notElem` processorOptions = chacha ++ gcm ++ ccm
         | PCLMUL `notElem` processorOptions = ccm ++ chacha ++ gcm
+#endif
         | otherwise = gcm ++ ccm ++ chacha
     f (SetOther ciphers) = ciphers
 

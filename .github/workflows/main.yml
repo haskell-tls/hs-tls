@@ -168,6 +168,19 @@ jobs:
       id: build
       run: cabal build ${{ env.target-config }} all
 
+    # The guard in Network.TLS.Extra.Cipher has a branch for crypton before
+    # 2.2 and one for 2.2 and later, and the solver takes the newest the
+    # bounds allow -- so once 2.2 is on Hackage nothing would compile the
+    # older branch, and it would rot unread.  One job builds the library
+    # against the oldest crypton the bounds admit, which is the only thing
+    # that keeps that branch honest.  A step rather than a matrix entry: the
+    # runners are shared with the other projects here.
+    - name: The oldest crypton the bounds allow
+      if: ${{ runner.os == 'Linux' && matrix.ghc == '9.12' }}
+      run: >
+        cabal build --builddir=dist-oldcrypton --constraint 'crypton < 2.2'
+        ${{ env.target-config }} tls
+
     - name: Run tests
       run: cabal test ${{ env.target-config }} all
 
