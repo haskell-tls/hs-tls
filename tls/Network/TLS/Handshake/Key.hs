@@ -174,6 +174,9 @@ instance LogLabel (ServerTrafficSecret ApplicationSecret) where
 instance LogLabel (ClientTrafficSecret ApplicationSecret) where
     labelAndKey (ClientTrafficSecret key) = ("CLIENT_TRAFFIC_SECRET_0", key)
 
+instance LogLabel ExporterSecret where
+    labelAndKey (ExporterSecret key) = ("EXPORTER_SECRET", key)
+
 -- NSS Key Log Format
 -- See https://developer.mozilla.org/en-US/docs/Mozilla/Projects/NSS/Key_Log_Format
 logKey :: LogLabel a => Context -> a -> IO ()

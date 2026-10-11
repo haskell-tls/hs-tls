@@ -76,6 +76,17 @@ data SecretPair a = SecretPair
 -- | Hold both client and server traffic secrets at the same step.
 type TrafficSecrets a = (ClientTrafficSecret a, ServerTrafficSecret a)
 
+-- | The exporter main secret, which RFC 8446 section 7.5 derives exported
+-- keying material from, and which RFC 9266's @tls-exporter@ channel binding
+-- is one use of.
+newtype ExporterSecret = ExporterSecret Secret
+
+instance Show ExporterSecret where
+    show _ = "<secret>"
+
+instance DebugShow ExporterSecret where
+    debugShow (ExporterSecret bs) = showBytesHex $ convert bs
+
 -- Main secret for TLS 1.2 or earlier.
 newtype MainSecret = MainSecret Secret
 
