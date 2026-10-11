@@ -5,11 +5,15 @@ module ChannelBindingSpec where
 import Control.Concurrent.Async (concurrently)
 import Crypto.Error (CryptoFailable (..))
 import qualified Crypto.Hash as H
+import qualified Crypto.KDF.HKDF as HKDF
 import qualified Crypto.PubKey.Ed25519 as Ed25519
 import qualified Crypto.PubKey.Ed448 as Ed448
 import Crypto.Random (seedFromInteger)
 import Data.ByteArray (convert)
+import Data.ByteArray.Encoding (Base (Base16), convertFromBase)
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as C8
+import Data.IORef
 import Data.Word (Word8)
 import Data.X509 hiding (HashMD5, HashSHA1, HashSHA256, HashSHA384)
 import qualified Data.X509 as X509
@@ -24,14 +28,10 @@ import Run
 spec :: Spec
 spec = do
     describe "tls-exporter" $ do
-        it "matches the deterministic SHA-256 exporter fixture" $ do
-            bindings <- runBindings $ tls13Params cipher13_AES_128_GCM_SHA256 ed25519Credential
-            byteLists (exporterValues bindings)
-                `shouldBe` byteLists (Just exporter256, Just exporter256)
-        it "matches the deterministic SHA-384 exporter fixture" $ do
-            bindings <- runBindings $ tls13Params cipher13_AES_256_GCM_SHA384 ed25519Credential
-            byteLists (exporterValues bindings)
-                `shouldBe` byteLists (Just exporter384, Just exporter384)
+        it "derives what RFC 8446 says, under SHA-256" $
+            exporterFollowsRFC H.SHA256 cipher13_AES_128_GCM_SHA256
+        it "derives what RFC 8446 says, under SHA-384" $
+            exporterFollowsRFC H.SHA384 cipher13_AES_256_GCM_SHA384
 
     describe "tls-server-end-point" $ do
         it "hashes only a SHA-1-signed leaf with SHA-256 for TLS 1.2" $ do
@@ -103,18 +103,84 @@ byteLists :: (Maybe B.ByteString, Maybe B.ByteString) -> (Maybe [Word8], Maybe [
 byteLists (clientValue, serverValue) =
     (B.unpack <$> clientValue, B.unpack <$> serverValue)
 
-printExporterFixtures :: IO ()
-printExporterFixtures =
-    mapM_ printFixture
-        [ ("exporter256", cipher13_AES_128_GCM_SHA256)
-        , ("exporter384", cipher13_AES_256_GCM_SHA384)
-        ]
+-- | Run a TLS 1.3 handshake, take the exporter main secret out of the key
+-- log, and work out the binding from RFC 8446 here, with no help from the
+-- code under test.
+--
+-- A fixture of the library's own output cannot do this job: break the
+-- derivation, regenerate the fixture, and the test passes again.  What is
+-- written out below is the specification -- HKDF-Expand-Label and
+-- Derive-Secret as RFC 8446 section 7.1 defines them, assembled as section
+-- 7.5 and RFC 9266 section 2 say -- so the two have to agree for a reason.
+exporterFollowsRFC :: H.HashAlgorithm a => a -> Cipher -> Expectation
+exporterFollowsRFC alg cipher = do
+    logged <- newIORef []
+    let params = withKeyLogger (\line -> modifyIORef' logged (line :)) $
+            tls13Params cipher ed25519Credential
+    bindings <- runBindings params
+    secret <- exporterSecretOf <$> readIORef logged
+    let expected = tlsExporter alg secret
+    byteLists (exporterValues bindings)
+        `shouldBe` byteLists (Just expected, Just expected)
+
+-- | RFC 9266 section 2: @TLS-Exporter("EXPORTER-Channel-Binding", "", 32)@,
+-- which RFC 8446 section 7.5 expands to
+-- @HKDF-Expand-Label(Derive-Secret(Secret, label, ""), "exporter",
+-- Hash(context_value), key_length)@.  Both the @""@ that Derive-Secret is
+-- given and the empty context value reach HKDF-Expand-Label as @Hash("")@,
+-- which is the step that was wrong.
+tlsExporter :: H.HashAlgorithm a => a -> B.ByteString -> B.ByteString
+tlsExporter alg secret =
+    expandLabel alg inner "exporter" (emptyHash alg) 32
   where
-    printFixture (name, cipher) = do
-        bindings <- runBindings $ tls13Params cipher ed25519Credential
-        case fst (exporterValues bindings) of
-            Just value -> putStrLn $ name ++ " = B.pack " ++ show (B.unpack value)
-            Nothing -> error $ name ++ ": exporter unavailable"
+    inner = deriveSecret alg secret "EXPORTER-Channel-Binding"
+
+-- | RFC 8446 section 7.1, for the empty transcript:
+-- @Derive-Secret(Secret, Label, "") =
+-- HKDF-Expand-Label(Secret, Label, Transcript-Hash(""), Hash.length)@.
+deriveSecret
+    :: H.HashAlgorithm a => a -> B.ByteString -> B.ByteString -> B.ByteString
+deriveSecret alg secret label =
+    expandLabel alg secret label (emptyHash alg) (H.hashDigestSize alg)
+
+-- | RFC 8446 section 7.1, written out: the HkdfLabel structure is a 16-bit
+-- length, then @"tls13 " ++ Label@ and then the context, each with a
+-- one-octet length of its own.
+expandLabel
+    :: H.HashAlgorithm a
+    => a -> B.ByteString -> B.ByteString -> B.ByteString -> Int -> B.ByteString
+expandLabel alg secret label context len = HKDF.expand (prk alg) hkdfLabel len
+  where
+    prk :: H.HashAlgorithm h => h -> HKDF.PRK h
+    prk _ = HKDF.extractSkip secret
+    hkdfLabel =
+        B.concat
+            [ B.pack [fromIntegral (len `div` 256), fromIntegral (len `mod` 256)]
+            , opaque ("tls13 " <> label)
+            , opaque context
+            ]
+    opaque bs = B.cons (fromIntegral (B.length bs)) bs
+
+emptyHash :: H.HashAlgorithm a => a -> B.ByteString
+emptyHash alg = convert (H.hashWith alg B.empty)
+
+-- | The exporter main secret, as the NSS key log format writes it:
+-- @EXPORTER_SECRET \<client random\> \<secret\>@, in hexadecimal.
+exporterSecretOf :: [String] -> B.ByteString
+exporterSecretOf ls = case [w | l <- ls, "EXPORTER_SECRET" : _ : w : _ <- [words l]] of
+    hexed : _ -> case convertFromBase Base16 (C8.pack hexed) of
+        Right bs -> bs
+        Left err -> error ("exporterSecretOf: " ++ err)
+    [] -> error "exporterSecretOf: the key log has no EXPORTER_SECRET line"
+
+withKeyLogger
+    :: (String -> IO ())
+    -> (ClientParams, ServerParams)
+    -> (ClientParams, ServerParams)
+withKeyLogger logger (cparams, sparams) =
+    ( cparams
+    , sparams{serverDebug = (serverDebug sparams){debugKeyLogger = logger}}
+    )
 
 endpointValues :: Bindings -> (Maybe B.ByteString, Maybe B.ByteString)
 endpointValues bindings =
@@ -227,88 +293,3 @@ leafDigest algorithm (CertificateChain (leaf : _)) =
         DigestSHA256 -> convert (H.hash (encodeSignedObject leaf) :: H.Digest H.SHA256)
         DigestSHA384 -> convert (H.hash (encodeSignedObject leaf) :: H.Digest H.SHA384)
 leafDigest _ (CertificateChain []) = error "leafDigest: empty certificate chain"
-
--- These fixture-specific expected values are not published RFC test vectors.
--- Both are 32-byte bindings; 256/384 identifies the cipher suite's hash, not
--- the output size. They come from deterministic hs-tls handshakes using
--- tls13Params with AES-128-GCM-SHA256 / AES-256-GCM-SHA384, X25519,
--- ed25519Credential, and client/server RNG seeds 1/2 respectively.
---
--- Regenerate the byte strings with:
---
---   cabal repl tls:test:spec \
---     --repl-options='-e ChannelBindingSpec.printExporterFixtures'
---
--- Separate live handshakes confirm that the corrected derivation matches
--- OpenSSL for both cipher suite hashes.
-exporter256, exporter384 :: B.ByteString
-exporter256 =
-    B.pack
-        [ 18
-        , 194
-        , 173
-        , 12
-        , 29
-        , 236
-        , 223
-        , 35
-        , 48
-        , 254
-        , 244
-        , 73
-        , 135
-        , 187
-        , 232
-        , 26
-        , 198
-        , 146
-        , 169
-        , 128
-        , 211
-        , 169
-        , 53
-        , 73
-        , 121
-        , 118
-        , 239
-        , 143
-        , 21
-        , 85
-        , 153
-        , 66
-        ]
-exporter384 =
-    B.pack
-        [ 185
-        , 67
-        , 147
-        , 111
-        , 18
-        , 64
-        , 200
-        , 156
-        , 17
-        , 88
-        , 210
-        , 80
-        , 54
-        , 147
-        , 183
-        , 65
-        , 7
-        , 69
-        , 57
-        , 155
-        , 48
-        , 74
-        , 172
-        , 126
-        , 78
-        , 243
-        , 122
-        , 172
-        , 223
-        , 170
-        , 239
-        , 94
-        ]
