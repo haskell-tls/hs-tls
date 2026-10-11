@@ -4,6 +4,9 @@
 
 * Keep preferring AES-GCM on AArch64 with crypton 2.2, which names the
   ARMv8 instructions rather than x86's.
+* Sign and verify RSA PKCS#1 v1.5 through crypton's digest-taking
+  operations, which deprecate the ones used before.  crypton >= 2.1.9 is
+  now required.
 
 ## Version 2.4.10
 

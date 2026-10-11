@@ -431,13 +431,17 @@ rsaSignHash
     -> RSA.PrivateKey
     -> ByteString
     -> m (Either RSA.Error ByteString)
-rsaSignHash SHA1_MD5 pk msg = RSA.signSafer noHash pk msg
-rsaSignHash MD5 pk msg = RSA.signSafer (Just H.MD5) pk msg
-rsaSignHash SHA1 pk msg = RSA.signSafer (Just H.SHA1) pk msg
-rsaSignHash SHA224 pk msg = RSA.signSafer (Just H.SHA224) pk msg
-rsaSignHash SHA256 pk msg = RSA.signSafer (Just H.SHA256) pk msg
-rsaSignHash SHA384 pk msg = RSA.signSafer (Just H.SHA384) pk msg
-rsaSignHash SHA512 pk msg = RSA.signSafer (Just H.SHA512) pk msg
+-- SHA1_MD5 arrives already digested -- see buildVerifyData -- and what it
+-- carries is MD5 ++ SHA1 with no ASN.1 around it, which is what TLS before
+-- 1.2 signs.  That is the DigestInfo case: nothing here hashes or encodes.
+-- The rest are handed the message and hash it on the way, as signSafer did.
+rsaSignHash SHA1_MD5 pk msg = RSA.signSaferDigestInfo pk msg
+rsaSignHash MD5 pk msg = RSA.signSaferDigest pk (H.hashWith H.MD5 msg)
+rsaSignHash SHA1 pk msg = RSA.signSaferDigest pk (H.hashWith H.SHA1 msg)
+rsaSignHash SHA224 pk msg = RSA.signSaferDigest pk (H.hashWith H.SHA224 msg)
+rsaSignHash SHA256 pk msg = RSA.signSaferDigest pk (H.hashWith H.SHA256 msg)
+rsaSignHash SHA384 pk msg = RSA.signSaferDigest pk (H.hashWith H.SHA384 msg)
+rsaSignHash SHA512 pk msg = RSA.signSaferDigest pk (H.hashWith H.SHA512 msg)
 
 rsapssSignHash
     :: MonadRandom m
@@ -451,22 +455,19 @@ rsapssSignHash SHA512 pk msg = PSS.signSafer (PSS.defaultPSSParams H.SHA512) pk 
 rsapssSignHash _ _ _ = error "rsapssSignHash: unsupported hash"
 
 rsaVerifyHash :: Hash -> RSA.PublicKey -> ByteString -> ByteString -> Bool
-rsaVerifyHash SHA1_MD5 = RSA.verify noHash
-rsaVerifyHash MD5 = RSA.verify (Just H.MD5)
-rsaVerifyHash SHA1 = RSA.verify (Just H.SHA1)
-rsaVerifyHash SHA224 = RSA.verify (Just H.SHA224)
-rsaVerifyHash SHA256 = RSA.verify (Just H.SHA256)
-rsaVerifyHash SHA384 = RSA.verify (Just H.SHA384)
-rsaVerifyHash SHA512 = RSA.verify (Just H.SHA512)
+rsaVerifyHash SHA1_MD5 pk msg = RSA.verifyDigestInfo pk msg
+rsaVerifyHash MD5 pk msg = RSA.verifyDigest pk (H.hashWith H.MD5 msg)
+rsaVerifyHash SHA1 pk msg = RSA.verifyDigest pk (H.hashWith H.SHA1 msg)
+rsaVerifyHash SHA224 pk msg = RSA.verifyDigest pk (H.hashWith H.SHA224 msg)
+rsaVerifyHash SHA256 pk msg = RSA.verifyDigest pk (H.hashWith H.SHA256 msg)
+rsaVerifyHash SHA384 pk msg = RSA.verifyDigest pk (H.hashWith H.SHA384 msg)
+rsaVerifyHash SHA512 pk msg = RSA.verifyDigest pk (H.hashWith H.SHA512 msg)
 
 rsapssVerifyHash :: Hash -> RSA.PublicKey -> ByteString -> ByteString -> Bool
 rsapssVerifyHash SHA256 = PSS.verify (PSS.defaultPSSParams H.SHA256)
 rsapssVerifyHash SHA384 = PSS.verify (PSS.defaultPSSParams H.SHA384)
 rsapssVerifyHash SHA512 = PSS.verify (PSS.defaultPSSParams H.SHA512)
 rsapssVerifyHash _ = error "rsapssVerifyHash: unsupported hash"
-
-noHash :: Maybe H.MD5
-noHash = Nothing
 
 ecdsaSignHash
     :: (MonadRandom m, ECDSA.EllipticCurveECDSA curve)
