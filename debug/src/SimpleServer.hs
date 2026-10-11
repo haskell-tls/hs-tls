@@ -451,6 +451,10 @@ printUsage =
 
 main :: IO ()
 main = do
+    -- A server's output is watched while it runs, and is a pipe or a file
+    -- as often as it is a terminal.  Block buffering holds every line back
+    -- until the process ends, which for a server is never.
+    hSetBuffering stdout LineBuffering
     args <- getArgs
     let (opts, other, errs) = getOpt Permute options args
     unless (null errs) $ do

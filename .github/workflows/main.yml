@@ -184,6 +184,23 @@ jobs:
     - name: Run tests
       run: cabal test ${{ env.target-config }} all
 
+    # The tls-exporter channel binding, against another implementation.
+    #
+    # RFC 9266's binding is RFC 8446's exporter under a fixed label, and the
+    # exporter has a step -- Derive-Secret over the empty transcript -- that
+    # can be wrong without anything local noticing: both ends of an hs-tls
+    # connection then compute the same wrong value and agree with each
+    # other.  That is how it was wrong until #535, and it took OpenSSL to
+    # see it.  The test suite now derives the expected value from RFC 8446
+    # itself, which catches the same mistake made twice; this catches the
+    # one nobody thought of, by asking a second implementation.
+    #
+    # Linux and one compiler: what it exercises is the key schedule, which
+    # does not vary by either, and it wants an OpenSSL with -keymatexport.
+    - name: The channel binding another implementation computes
+      if: ${{ runner.os == 'Linux' && matrix.ghc == '9.12' }}
+      run: debug/interop/channel-binding.sh
+
     - name: Run doctest
       if: ${{ runner.os == 'Linux' && matrix.ghc == '9.12' }}
       shell: bash

@@ -16,9 +16,11 @@ module Common (
     getCertificateStore,
 ) where
 
+import qualified Data.ByteString as B
 import Data.Char (isDigit)
 import Network.Socket
 import Numeric (showHex)
+import Text.Printf (printf)
 
 import Crypto.System.CPU
 import Data.X509.CertificateStore
@@ -141,6 +143,17 @@ printHandshakeInfo ctx = do
     case sni of
         Nothing -> return ()
         Just n -> putStrLn ("server name indication: " ++ n)
+    -- The channel bindings, so that this agrees with another implementation
+    -- or is seen not to.  Each is "(none)" where it is undefined: tls-unique
+    -- for TLS 1.3, tls-exporter for TLS 1.2, and tls-server-end-point when
+    -- the certificate's signature names no hash.
+    putBinding "tls-unique" =<< getTLSUnique ctx
+    putBinding "tls-exporter" =<< getTLSExporter ctx
+    putBinding "tls-server-end-point" =<< getTLSServerEndPoint ctx
+  where
+    putBinding name =
+        putStrLn . ((name ++ ": ") ++) . maybe "(none)" hexOf
+    hexOf = concatMap (printf "%02x") . B.unpack
 
 makeAddrInfo :: Maybe HostName -> PortNumber -> IO AddrInfo
 makeAddrInfo maddr port = do
