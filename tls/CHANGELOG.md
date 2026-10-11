@@ -43,6 +43,13 @@ answered for the wrong algorithm.  That is why the halves are gone rather
 than deprecated: there is no spelling of the old type that cannot be taken
 apart.
 
+`HashAndSignatureAlgorithm` survives as a deprecated synonym for
+`SignatureScheme`, so code that only *names* the type goes on compiling with
+a warning.  That covers the libraries which carry the type in their own
+interfaces -- warp-tls, kubernetes-client, network-simple-tls -- and so keeps
+their users from being blocked.  Code that takes a pair apart cannot be
+helped by a synonym and has to name the scheme it meant.
+
 `show` gives a scheme its registry name now -- `ed25519`,
 `ecdsa_secp256r1_sha256`, `mldsa44` -- and the number for one this release
 does not know.  `showSignatureScheme`, which existed because a pair could

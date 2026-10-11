@@ -41,6 +41,7 @@ module Network.TLS.SignatureScheme (
         DSA_SHA384,
         DSA_SHA512
     ),
+    HashAndSignatureAlgorithm,
     supportedSignatureSchemes,
     signatureSchemesForTLS13,
     isMLDSA,
@@ -196,6 +197,14 @@ isMLDSA MLDSA87 = True
 isMLDSA _ = False
 
 {- FOURMOLU_DISABLE -}
+-- | What a signature scheme used to be called, when it was a pair.
+--
+-- Kept so that code which only names the type goes on compiling.  Code that
+-- took the pair apart cannot be helped by a synonym and has to say which
+-- scheme it meant.
+type HashAndSignatureAlgorithm = SignatureScheme
+{-# DEPRECATED HashAndSignatureAlgorithm "Use SignatureScheme" #-}
+
 -- | The schemes an RSA key signs under with PKCS#1 v1.5.
 rsaPkcs1Schemes :: [SignatureScheme]
 rsaPkcs1Schemes =
