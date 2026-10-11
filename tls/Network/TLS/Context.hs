@@ -302,23 +302,27 @@ exporter ctx label context outlen = do
              in Just key
         _ -> Nothing
 
--- | Getting the "tls-server-end-point" channel binding for TLS 1.2 and
---   certificate-authenticated TLS 1.3 (RFC5929).  This hashes the exact DER
---   encoding of the server's leaf certificate with the certificate signature
---   hash, using SHA-256 in place of MD5 or SHA-1.  'Nothing' is returned when
---   there is no server certificate or its signature uses an intrinsic,
---   unknown, or unsupported hash algorithm.
+-- | Getting the "tls-server-end-point" channel binding (RFC5929).
+--
+--   This hashes the server's leaf certificate, exactly as it appears in the
+--   Certificate message, with the hash its own signature names, and with
+--   SHA-256 standing in for MD5 and SHA-1.  Since it depends on nothing but
+--   the certificate, it is computed for TLS 1.2 and for
+--   certificate-authenticated TLS 1.3 alike -- though RFC 5929 predates TLS
+--   1.3 and no RFC defines it there.
+--
+--   'Nothing' is returned when there is no server certificate, as on a
+--   resumption or with a pre-shared key, and when the certificate's
+--   signature names no hash to use: an Ed25519 or Ed448 signature names the
+--   whole scheme and the binding is undefined for it.
 getTLSServerEndPoint :: Context -> IO (Maybe ByteString)
 getTLSServerEndPoint ctx = do
     mcc <- usingState_ ctx getServerCertificateChain
     return $ mcc >>= serverEndPoint
   where
-    serverEndPoint cc@(CertificateChain (leaf : _)) = do
-        h <- certificateSignatureHash leaf
-        case X509.encodeCertificateChain cc of
-            X509.CertificateChainRaw (encodedLeaf : _) -> Just $ hash h encodedLeaf
-            X509.CertificateChainRaw [] -> Nothing
-    serverEndPoint (CertificateChain []) = Nothing
+    serverEndPoint (CertificateChain (leaf : _)) =
+        (\h -> hash h (X509.encodeSignedObject leaf)) <$> certificateSignatureHash leaf
+    serverEndPoint _ = Nothing
 
     certificateSignatureHash leaf =
         case X509.signedAlg $ X509.getSigned leaf of
