@@ -280,7 +280,10 @@ supportedSignatureSchemes =
     , ECDSA_SHA1
     ]
 
--- | The subset of the above that TLS 1.3 allows.
+-- | The subset of 'supportedSignatureSchemes' that TLS 1.3 allows in
+-- CertificateVerify.  RFC 8446 section 4.2.3 defines the
+-- RSASSA-PKCS1-v1_5 schemes, and the two SHA-1 ones, for signatures in
+-- certificates only.
 signatureSchemesForTLS13 :: [SignatureScheme]
 signatureSchemesForTLS13 =
     [ MLDSA87

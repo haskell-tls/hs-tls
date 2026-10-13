@@ -198,6 +198,7 @@ module Network.TLS (
     SignatureScheme (..),
     HashAndSignatureAlgorithm,
     supportedSignatureSchemes,
+    signatureSchemesForTLS13,
     Group (..),
     supportedNamedGroups,
     EMSMode (..),
@@ -350,6 +351,7 @@ import Network.TLS.Struct (
     ServerRandom (..),
     TLSError (..),
     TLSException (..),
+    signatureSchemesForTLS13,
     supportedSignatureSchemes,
  )
 import Network.TLS.Struct13 (Handshake13)

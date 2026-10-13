@@ -57,6 +57,9 @@ not be shown correctly, is gone; use `show`.
 
 * Carry a signature scheme as one number, named as IANA names it.
   [#581](https://github.com/haskell-tls/hs-tls/issues/581)
+* Export `signatureSchemesForTLS13`, the subset of
+  `supportedSignatureSchemes` that TLS 1.3 allows in CertificateVerify.
+  [#586](https://github.com/haskell-tls/hs-tls/issues/586)
 
 ## Version 2.4.11
 
