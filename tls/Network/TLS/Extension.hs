@@ -117,15 +117,15 @@ import Network.TLS.ECH.Config
 
 import Network.TLS.Crypto.Types
 import Network.TLS.Error
-import Network.TLS.HashAndSignature
+import Network.TLS.SignatureScheme
 import Network.TLS.Imports
 import Network.TLS.Packet (
     getBinaryVersion,
     getDNames,
-    getSignatureHashAlgorithm,
+    getSignatureScheme,
     putBinaryVersion,
     putDNames,
-    putSignatureHashAlgorithm,
+    putSignatureScheme,
  )
 import Network.TLS.Types (HostName, Ticket, Version)
 import Network.TLS.Wire
@@ -614,7 +614,7 @@ decodeEcPointFormatsSupported = runGetMaybe $ do
 
 ------------------------------------------------------------
 
-newtype SignatureAlgorithms = SignatureAlgorithms [HashAndSignatureAlgorithm]
+newtype SignatureAlgorithms = SignatureAlgorithms [SignatureScheme]
     deriving (Show, Eq)
 
 instance Extension SignatureAlgorithms where
@@ -622,7 +622,7 @@ instance Extension SignatureAlgorithms where
     extensionEncode (SignatureAlgorithms algs) =
         runPut $
             putWord16 (fromIntegral (length algs * 2))
-                >> mapM_ putSignatureHashAlgorithm algs
+                >> mapM_ putSignatureScheme algs
     extensionDecode MsgTClientHello = decodeSignatureAlgorithms
     extensionDecode MsgTCertificateRequest = decodeSignatureAlgorithms
     extensionDecode _ = const Nothing
@@ -631,7 +631,7 @@ decodeSignatureAlgorithms :: ByteString -> Maybe SignatureAlgorithms
 decodeSignatureAlgorithms = runGetMaybe $ do
     len <- getWord16
     sas <-
-        getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
+        getList (fromIntegral len) (getSignatureScheme >>= \sh -> return (2, sh))
     leftoverLen <- remaining
     when (leftoverLen /= 0) $ fail "decodeSignatureAlgorithms: broken length"
     when (null sas) $ fail "signature algorithms are empty"
@@ -989,7 +989,7 @@ instance Extension PostHandshakeAuth where
 
 ------------------------------------------------------------
 
-newtype SignatureAlgorithmsCert = SignatureAlgorithmsCert [HashAndSignatureAlgorithm]
+newtype SignatureAlgorithmsCert = SignatureAlgorithmsCert [SignatureScheme]
     deriving (Show, Eq)
 
 instance Extension SignatureAlgorithmsCert where
@@ -997,7 +997,7 @@ instance Extension SignatureAlgorithmsCert where
     extensionEncode (SignatureAlgorithmsCert algs) =
         runPut $
             putWord16 (fromIntegral (length algs * 2))
-                >> mapM_ putSignatureHashAlgorithm algs
+                >> mapM_ putSignatureScheme algs
     extensionDecode MsgTClientHello = decodeSignatureAlgorithmsCert
     extensionDecode MsgTCertificateRequest = decodeSignatureAlgorithmsCert
     extensionDecode _ = const Nothing
@@ -1006,7 +1006,7 @@ decodeSignatureAlgorithmsCert :: ByteString -> Maybe SignatureAlgorithmsCert
 decodeSignatureAlgorithmsCert = runGetMaybe $ do
     len <- getWord16
     SignatureAlgorithmsCert
-        <$> getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
+        <$> getList (fromIntegral len) (getSignatureScheme >>= \sh -> return (2, sh))
 
 ------------------------------------------------------------
 

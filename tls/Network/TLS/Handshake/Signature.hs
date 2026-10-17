@@ -51,7 +51,7 @@ certificateCompatible (PubKeyMLDSA65 _) _ = True
 certificateCompatible (PubKeyMLDSA87 _) _ = True
 certificateCompatible _ _ = False
 
-signatureCompatible :: PubKey -> HashAndSignatureAlgorithm -> Bool
+signatureCompatible :: PubKey -> SignatureScheme -> Bool
 -- ML-DSA first, and with a refusal for every other kind of key.  The RSA
 -- equations below ignore the first byte, and ML-DSA's second byte is one
 -- RSASSA-PSS also uses, so an ML-DSA scheme reaching them would be answered
@@ -62,18 +62,18 @@ signatureCompatible (PubKeyMLDSA87 _) MLDSA87 = True
 signatureCompatible _ MLDSA44 = False
 signatureCompatible _ MLDSA65 = False
 signatureCompatible _ MLDSA87 = False
-signatureCompatible (PubKeyRSA pk) (HashSHA1, SignatureRSA) = kxCanUseRSApkcs1 pk SHA1
-signatureCompatible (PubKeyRSA pk) (HashSHA256, SignatureRSA) = kxCanUseRSApkcs1 pk SHA256
-signatureCompatible (PubKeyRSA pk) (HashSHA384, SignatureRSA) = kxCanUseRSApkcs1 pk SHA384
-signatureCompatible (PubKeyRSA pk) (HashSHA512, SignatureRSA) = kxCanUseRSApkcs1 pk SHA512
-signatureCompatible (PubKeyRSA pk) (_, SignatureRSApssRSAeSHA256) = kxCanUseRSApss pk SHA256
-signatureCompatible (PubKeyRSA pk) (_, SignatureRSApssRSAeSHA384) = kxCanUseRSApss pk SHA384
-signatureCompatible (PubKeyRSA pk) (_, SignatureRSApssRSAeSHA512) = kxCanUseRSApss pk SHA512
-signatureCompatible (PubKeyDSA _) (_, SignatureDSA) = True
-signatureCompatible (PubKeyEC _) (_, SignatureECDSA) = True
-signatureCompatible (PubKeyEd25519 _) (_, SignatureEd25519) = True
-signatureCompatible (PubKeyEd448 _) (_, SignatureEd448) = True
-signatureCompatible _ (_, _) = False
+signatureCompatible (PubKeyRSA pk) RSA_PKCS1_SHA1 = kxCanUseRSApkcs1 pk SHA1
+signatureCompatible (PubKeyRSA pk) RSA_PKCS1_SHA256 = kxCanUseRSApkcs1 pk SHA256
+signatureCompatible (PubKeyRSA pk) RSA_PKCS1_SHA384 = kxCanUseRSApkcs1 pk SHA384
+signatureCompatible (PubKeyRSA pk) RSA_PKCS1_SHA512 = kxCanUseRSApkcs1 pk SHA512
+signatureCompatible (PubKeyRSA pk) RSA_PSS_RSAE_SHA256 = kxCanUseRSApss pk SHA256
+signatureCompatible (PubKeyRSA pk) RSA_PSS_RSAE_SHA384 = kxCanUseRSApss pk SHA384
+signatureCompatible (PubKeyRSA pk) RSA_PSS_RSAE_SHA512 = kxCanUseRSApss pk SHA512
+signatureCompatible (PubKeyDSA _) sc = sc `elem` dsaSchemes
+signatureCompatible (PubKeyEC _) sc = sc `elem` ecdsaSchemes
+signatureCompatible (PubKeyEd25519 _) ED25519 = True
+signatureCompatible (PubKeyEd448 _) ED448 = True
+signatureCompatible _ _ = False
 
 -- Whether the signature algorithm is for the type of the key, whatever
 -- its other parameters.
@@ -83,42 +83,36 @@ signatureCompatible _ (_, _) = False
 -- which of the two a scheme is.  The ML-DSA equations come first for the
 -- same reason -- an ML-DSA scheme fits no other kind of key, and one
 -- ML-DSA size does not fit another's key.
-keyTypeFits :: PubKey -> HashAndSignatureAlgorithm -> Bool
+keyTypeFits :: PubKey -> SignatureScheme -> Bool
 keyTypeFits (PubKeyMLDSA44 _) hs = hs == MLDSA44
 keyTypeFits (PubKeyMLDSA65 _) hs = hs == MLDSA65
 keyTypeFits (PubKeyMLDSA87 _) hs = hs == MLDSA87
 keyTypeFits _ MLDSA44 = False
 keyTypeFits _ MLDSA65 = False
 keyTypeFits _ MLDSA87 = False
-keyTypeFits (PubKeyRSA _) (_, s) =
-    s
-        `elem` [ SignatureRSA
-               , SignatureRSApssRSAeSHA256
-               , SignatureRSApssRSAeSHA384
-               , SignatureRSApssRSAeSHA512
-               , SignatureRSApsspssSHA256
-               , SignatureRSApsspssSHA384
-               , SignatureRSApsspssSHA512
-               ]
-keyTypeFits (PubKeyDSA _) (_, s) = s == SignatureDSA
-keyTypeFits (PubKeyEC _) (_, s) = s == SignatureECDSA
-keyTypeFits (PubKeyEd25519 _) (_, s) = s == SignatureEd25519
-keyTypeFits (PubKeyEd448 _) (_, s) = s == SignatureEd448
+keyTypeFits (PubKeyRSA _) sc = sc `elem` (rsaPkcs1Schemes ++ rsaPssSchemes)
+keyTypeFits (PubKeyDSA _) sc = sc `elem` dsaSchemes
+keyTypeFits (PubKeyEC _) sc = sc `elem` ecdsaSchemes
+keyTypeFits (PubKeyEd25519 _) sc = sc == ED25519
+keyTypeFits (PubKeyEd448 _) sc = sc == ED448
 keyTypeFits _ _ = False
 
 -- Same as 'signatureCompatible' but for TLS13: for ECDSA this also checks the
--- relation between hash in the HashAndSignatureAlgorithm and elliptic curve
-signatureCompatible13 :: PubKey -> HashAndSignatureAlgorithm -> Bool
-signatureCompatible13 (PubKeyEC ecPub) (h, SignatureECDSA) =
-    maybe False (\g -> findEllipticCurveGroup ecPub == Just g) (hashCurve h)
+-- relation between hash in the SignatureScheme and elliptic curve
+signatureCompatible13 :: PubKey -> SignatureScheme -> Bool
+signatureCompatible13 (PubKeyEC ecPub) sc
+    | sc `elem` ecdsaSchemes =
+        maybe False (\g -> findEllipticCurveGroup ecPub == Just g) (schemeCurve sc)
   where
-    hashCurve HashSHA256 = Just P256
-    hashCurve HashSHA384 = Just P384
-    hashCurve HashSHA512 = Just P521
-    hashCurve _ = Nothing
+    -- TLS 1.3 names the curve in the scheme; TLS 1.2 did not, and the three
+    -- schemes that do not name one cannot be used there.
+    schemeCurve ECDSA_SECP256R1_SHA256 = Just P256
+    schemeCurve ECDSA_SECP384R1_SHA384 = Just P384
+    schemeCurve ECDSA_SECP521R1_SHA512 = Just P521
+    schemeCurve _ = Nothing
 signatureCompatible13 pub hs = signatureCompatible pub hs
 
--- | Translate a 'HashAndSignatureAlgorithm' to an acceptable 'CertificateType'.
+-- | Translate a 'SignatureScheme' to an acceptable 'CertificateType'.
 -- Perhaps this needs to take supported groups into account, so that, for
 -- example, if we don't support any shared ECDSA groups with the server, we
 -- return 'Nothing' rather than 'CertificateType_ECDSA_Sign'.
@@ -136,23 +130,22 @@ signatureCompatible13 pub hs = signatureCompatible pub hs
 -- @RSA@ as the only supported client certificate algorithm for TLS 1.3.
 --
 -- FIXME: Add RSA_PSS_PSS signatures when supported.
-hashSigToCertType :: HashAndSignatureAlgorithm -> Maybe CertificateType
+hashSigToCertType :: SignatureScheme -> Maybe CertificateType
 --
-hashSigToCertType (_, SignatureRSA) = Just CertificateType_RSA_Sign
+hashSigToCertType sc
+    | sc `elem` rsaPkcs1Schemes = Just CertificateType_RSA_Sign
+    | sc `elem` dsaSchemes = Just CertificateType_DSA_Sign
+    | sc `elem` ecdsaSchemes = Just CertificateType_ECDSA_Sign
 --
-hashSigToCertType (_, SignatureDSA) = Just CertificateType_DSA_Sign
---
-hashSigToCertType (_, SignatureECDSA) = Just CertificateType_ECDSA_Sign
---
-hashSigToCertType (HashIntrinsic, SignatureRSApssRSAeSHA256) =
+hashSigToCertType RSA_PSS_RSAE_SHA256 =
     Just CertificateType_RSA_Sign
-hashSigToCertType (HashIntrinsic, SignatureRSApssRSAeSHA384) =
+hashSigToCertType RSA_PSS_RSAE_SHA384 =
     Just CertificateType_RSA_Sign
-hashSigToCertType (HashIntrinsic, SignatureRSApssRSAeSHA512) =
+hashSigToCertType RSA_PSS_RSAE_SHA512 =
     Just CertificateType_RSA_Sign
-hashSigToCertType (HashIntrinsic, SignatureEd25519) =
+hashSigToCertType ED25519 =
     Just CertificateType_Ed25519_Sign
-hashSigToCertType (HashIntrinsic, SignatureEd448) =
+hashSigToCertType ED448 =
     Just CertificateType_Ed448_Sign
 --
 hashSigToCertType _ = Nothing
@@ -175,13 +168,13 @@ checkCertificateVerify ctx usedVersion pubKey msgs digSig@(DigitallySigned hashS
     when (usedVersion < TLS13 && isMLDSA hashSigAlg) $
         throwCore $
             Error_Protocol
-                ("signature algorithm " ++ showSignatureScheme hashSigAlg ++ " is not for " ++ show usedVersion)
+                ("signature algorithm " ++ show hashSigAlg ++ " is not for " ++ show usedVersion)
                 IllegalParameter
     checkSupportedHashSignature ctx hashSigAlg
     unless (pubKey `keyTypeFits` hashSigAlg) $
         throwCore $
             Error_Protocol
-                ("signature algorithm " ++ showSignatureScheme hashSigAlg ++ " is for another type of key")
+                ("signature algorithm " ++ show hashSigAlg ++ " is for another type of key")
                 IllegalParameter
     if pubKey `signatureCompatible` hashSigAlg
         then doVerify
@@ -195,7 +188,7 @@ createCertificateVerify
     :: Context
     -> Version
     -> PubKey
-    -> HashAndSignatureAlgorithm -- TLS12 only
+    -> SignatureScheme -- TLS12 only
     -> ByteString
     -> IO DigitallySigned
 createCertificateVerify ctx usedVersion pubKey hashSigAlg msgs =
@@ -214,55 +207,56 @@ prepareCertificateVerifySignatureData
     :: Context
     -> Version
     -> PubKey
-    -> HashAndSignatureAlgorithm -- TLS12 only
+    -> SignatureScheme -- TLS12 only
     -> ByteString
     -> IO CertVerifyData
 prepareCertificateVerifySignatureData _ctx _usedVersion pubKey hashSigAlg msgs =
     return (signatureParams pubKey hashSigAlg, msgs)
 
-signatureParams :: PubKey -> HashAndSignatureAlgorithm -> SignatureParams
+signatureParams :: PubKey -> SignatureScheme -> SignatureParams
 -- Which of these is used is decided by the key, and signatureCompatible has
 -- already refused a scheme that does not fit the key, so an ML-DSA scheme
 -- cannot arrive at a clause for another kind of key.
 signatureParams (PubKeyRSA _) hashSigAlg =
     case hashSigAlg of
-        (HashSHA512, SignatureRSA) -> RSAParams SHA512 RSApkcs1
-        (HashSHA384, SignatureRSA) -> RSAParams SHA384 RSApkcs1
-        (HashSHA256, SignatureRSA) -> RSAParams SHA256 RSApkcs1
-        (HashSHA1, SignatureRSA) -> RSAParams SHA1 RSApkcs1
-        (HashIntrinsic, SignatureRSApssRSAeSHA512) -> RSAParams SHA512 RSApss
-        (HashIntrinsic, SignatureRSApssRSAeSHA384) -> RSAParams SHA384 RSApss
-        (HashIntrinsic, SignatureRSApssRSAeSHA256) -> RSAParams SHA256 RSApss
-        (hsh, SignatureRSA) -> error ("unimplemented RSA signature hash type: " ++ show hsh)
-        (_, sigAlg) ->
-            error ("signature algorithm is incompatible with RSA: " ++ show sigAlg)
+        RSA_PKCS1_SHA512 -> RSAParams SHA512 RSApkcs1
+        RSA_PKCS1_SHA384 -> RSAParams SHA384 RSApkcs1
+        RSA_PKCS1_SHA256 -> RSAParams SHA256 RSApkcs1
+        RSA_PKCS1_SHA1 -> RSAParams SHA1 RSApkcs1
+        RSA_PSS_RSAE_SHA512 -> RSAParams SHA512 RSApss
+        RSA_PSS_RSAE_SHA384 -> RSAParams SHA384 RSApss
+        RSA_PSS_RSAE_SHA256 -> RSAParams SHA256 RSApss
+        sc
+            | sc `elem` rsaPkcs1Schemes || sc `elem` rsaPssSchemes ->
+                error ("unimplemented RSA signature scheme: " ++ show sc)
+            | otherwise ->
+                error ("signature scheme is incompatible with RSA: " ++ show sc)
 signatureParams (PubKeyDSA _) hashSigAlg =
     case hashSigAlg of
-        (HashSHA1, SignatureDSA) -> DSAParams
-        (_, SignatureDSA) -> error "invalid DSA hash choice, only SHA1 allowed"
-        (_, sigAlg) ->
-            error ("signature algorithm is incompatible with DSA: " ++ show sigAlg)
+        DSA_SHA1 -> DSAParams
+        sc
+            | sc `elem` dsaSchemes -> error "invalid DSA hash choice, only SHA1 allowed"
+            | otherwise ->
+                error ("signature scheme is incompatible with DSA: " ++ show sc)
 signatureParams (PubKeyEC _) hashSigAlg =
     case hashSigAlg of
-        (HashSHA512, SignatureECDSA) -> ECDSAParams SHA512
-        (HashSHA384, SignatureECDSA) -> ECDSAParams SHA384
-        (HashSHA256, SignatureECDSA) -> ECDSAParams SHA256
-        (HashSHA1, SignatureECDSA) -> ECDSAParams SHA1
-        (hsh, SignatureECDSA) -> error ("unimplemented ECDSA signature hash type: " ++ show hsh)
-        (_, sigAlg) ->
-            error ("signature algorithm is incompatible with ECDSA: " ++ show sigAlg)
+        ECDSA_SECP521R1_SHA512 -> ECDSAParams SHA512
+        ECDSA_SECP384R1_SHA384 -> ECDSAParams SHA384
+        ECDSA_SECP256R1_SHA256 -> ECDSAParams SHA256
+        ECDSA_SHA1 -> ECDSAParams SHA1
+        sc
+            | sc `elem` ecdsaSchemes ->
+                error ("unimplemented ECDSA signature scheme: " ++ show sc)
+            | otherwise ->
+                error ("signature scheme is incompatible with ECDSA: " ++ show sc)
 signatureParams (PubKeyEd25519 _) hashSigAlg =
     case hashSigAlg of
-        (HashIntrinsic, SignatureEd25519) -> Ed25519Params
-        (hsh, SignatureEd25519) -> error ("unimplemented Ed25519 signature hash type: " ++ show hsh)
-        (_, sigAlg) ->
-            error ("signature algorithm is incompatible with Ed25519: " ++ show sigAlg)
+        ED25519 -> Ed25519Params
+        sc -> error ("signature scheme is incompatible with Ed25519: " ++ show sc)
 signatureParams (PubKeyEd448 _) hashSigAlg =
     case hashSigAlg of
-        (HashIntrinsic, SignatureEd448) -> Ed448Params
-        (hsh, SignatureEd448) -> error ("unimplemented Ed448 signature hash type: " ++ show hsh)
-        (_, sigAlg) ->
-            error ("signature algorithm is incompatible with Ed448: " ++ show sigAlg)
+        ED448 -> Ed448Params
+        sc -> error ("signature scheme is incompatible with Ed448: " ++ show sc)
 signatureParams (PubKeyMLDSA44 _) MLDSA44 = MLDSA44Params
 signatureParams (PubKeyMLDSA65 _) MLDSA65 = MLDSA65Params
 signatureParams (PubKeyMLDSA87 _) MLDSA87 = MLDSA87Params
@@ -270,7 +264,7 @@ signatureParams pk _ = error ("signatureParams: " ++ pubkeyType pk ++ " is not s
 
 signatureCreateWithCertVerifyData
     :: Context
-    -> HashAndSignatureAlgorithm
+    -> SignatureScheme
     -> CertVerifyData
     -> IO DigitallySigned
 signatureCreateWithCertVerifyData ctx malg (sigParam, toSign) = do
@@ -305,7 +299,7 @@ digitallySignParams
     :: Context
     -> ByteString
     -> PubKey
-    -> HashAndSignatureAlgorithm
+    -> SignatureScheme
     -> IO DigitallySigned
 digitallySignParams ctx signatureData pubKey hashSigAlg =
     let sigParam = signatureParams pubKey hashSigAlg
@@ -318,7 +312,7 @@ digitallySignDHParams
     :: Context
     -> ServerDHParams
     -> PubKey
-    -> HashAndSignatureAlgorithm -- TLS12 only
+    -> SignatureScheme -- TLS12 only
     -> IO DigitallySigned
 digitallySignDHParams ctx serverParams pubKey mhash = do
     dhParamsData <-
@@ -329,7 +323,7 @@ digitallySignECDHParams
     :: Context
     -> ServerECDHParams
     -> PubKey
-    -> HashAndSignatureAlgorithm -- TLS12 only
+    -> SignatureScheme -- TLS12 only
     -> IO DigitallySigned
 digitallySignECDHParams ctx serverParams pubKey mhash = do
     ecdhParamsData <-
@@ -369,8 +363,8 @@ withClientAndServerRandom ctx f = do
 -- verify that the hash and signature selected by the peer is supported in
 -- the local configuration
 checkSupportedHashSignature
-    :: Context -> HashAndSignatureAlgorithm -> IO ()
+    :: Context -> SignatureScheme -> IO ()
 checkSupportedHashSignature ctx hs =
     unless (hs `elem` supportedHashSignatures (ctxSupported ctx)) $
-        let msg = "unsupported hash and signature algorithm: " ++ showSignatureScheme hs
+        let msg = "unsupported hash and signature algorithm: " ++ show hs
          in throwCore $ Error_Protocol msg IllegalParameter
