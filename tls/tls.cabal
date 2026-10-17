@@ -1,6 +1,6 @@
 cabal-version:      2.0
 name:               tls
-version:            2.4.11
+version:            2.5.0
 license:            BSD3
 license-file:       LICENSE
 copyright:          Vincent Hanquez <vincent@snarc.org>
@@ -208,6 +208,7 @@ test-suite spec
         API
         Arbitrary
         Certificate
+        ChannelBindingSpec
         CiphersSpec
         ECHSpec
         EncodeSpec

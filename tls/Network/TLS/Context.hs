@@ -74,6 +74,7 @@ module Network.TLS.Context (
 import Control.Concurrent.MVar
 import Control.Monad.State.Strict
 import Data.IORef
+import qualified Data.X509 as X509
 
 import Network.TLS.Backend
 import Network.TLS.Cipher
@@ -85,12 +86,10 @@ import Network.TLS.Handshake (
     handshakeServer,
     handshakeServerWith,
  )
-import Network.TLS.Handshake.State13
 import Network.TLS.Hooks
 import Network.TLS.Imports
 import Network.TLS.KeySchedule
 import Network.TLS.Measurement
-import Network.TLS.Packet
 import Network.TLS.Parameters
 import Network.TLS.PostHandshake (
     postHandshakeAuthClientWith,
@@ -296,22 +295,41 @@ exporter ctx label context outlen = do
     return $ case (msecret, mcipher) of
         (Just secret, Just cipher) ->
             let h = cipherHash cipher
-                secret' = deriveSecret h secret label $ TranscriptHash ""
+                secret' = deriveSecret h secret label $ TranscriptHash $ hash h ""
                 label' = "exporter"
                 value' = hash h context
                 key = hkdfExpandLabel h secret' label' value' outlen
              in Just key
         _ -> Nothing
 
--- | Getting the "tls-server-end-point" channel binding for TLS 1.2
---   (RFC5929).  For 1.3, there is no specifications for how to create
---   it.  In this implementation, a certificate chain without
---   extensions is hashed like TLS 1.2.
+-- | Getting the "tls-server-end-point" channel binding (RFC5929).
+--
+--   This hashes the server's leaf certificate, exactly as it appears in the
+--   Certificate message, with the hash its own signature names, and with
+--   SHA-256 standing in for MD5 and SHA-1.  Since it depends on nothing but
+--   the certificate, it is computed for TLS 1.2 and for
+--   certificate-authenticated TLS 1.3 alike -- though RFC 5929 predates TLS
+--   1.3 and no RFC defines it there.
+--
+--   'Nothing' is returned when there is no server certificate, as on a
+--   resumption or with a pre-shared key, and when the certificate's
+--   signature names no hash to use: an Ed25519 or Ed448 signature names the
+--   whole scheme and the binding is undefined for it.
 getTLSServerEndPoint :: Context -> IO (Maybe ByteString)
 getTLSServerEndPoint ctx = do
     mcc <- usingState_ ctx getServerCertificateChain
-    case mcc of
-        Nothing -> return Nothing
-        Just cc -> do
-            (usedHash, _, _, _) <- getRxRecordState ctx
-            return $ Just $ hash usedHash $ encodeCertificate cc
+    return $ mcc >>= serverEndPoint
+  where
+    serverEndPoint (CertificateChain (leaf : _)) =
+        (\h -> hash h (X509.encodeSignedObject leaf)) <$> certificateSignatureHash leaf
+    serverEndPoint _ = Nothing
+
+    certificateSignatureHash leaf =
+        case X509.signedAlg $ X509.getSigned leaf of
+            X509.SignatureALG X509.HashMD5 _ -> Just SHA256
+            X509.SignatureALG X509.HashSHA1 _ -> Just SHA256
+            X509.SignatureALG X509.HashSHA224 _ -> Just SHA224
+            X509.SignatureALG X509.HashSHA256 _ -> Just SHA256
+            X509.SignatureALG X509.HashSHA384 _ -> Just SHA384
+            X509.SignatureALG X509.HashSHA512 _ -> Just SHA512
+            _ -> Nothing

@@ -362,8 +362,8 @@ withPairContext = withPairContextWith (id, id)
 withPairContextWith
     :: (Backend -> Backend, Backend -> Backend)
     -> (ClientParams, ServerParams)
-    -> ((Context, Context) -> IO ())
-    -> IO ()
+    -> ((Context, Context) -> IO a)
+    -> IO a
 withPairContextWith wrapBackends params body =
     E.bracket
         (newPairContextWith wrapBackends params)

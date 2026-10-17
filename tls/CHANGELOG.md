@@ -1,5 +1,25 @@
 # Change log for "tls"
 
+## Version 2.5.0
+
+**The `tls-exporter` and `tls-server-end-point` channel bindings were
+computed wrongly and now follow RFC 9266 and RFC 5929.**  No type changes, so
+a downstream build stays green, but `getTLSExporter` and
+`getTLSServerEndPoint` return different bytes than they did: two peers that
+compare channel bindings have to be upgraded together.  `getTLSServerEndPoint`
+also returns `Nothing` for an Ed25519 or Ed448 certificate now, whose
+signature names no hash for the binding to use, where before it returned a
+value computed under the negotiated cipher's hash.
+
+* Derive `tls-exporter` over the hash of the empty transcript, and
+  `tls-server-end-point` from the leaf certificate's own DER under its own
+  signature hash.
+  [#535](https://github.com/haskell-tls/hs-tls/pull/535)
+* Write the exporter secret to the key log as `EXPORTER_SECRET`.
+  [#535](https://github.com/haskell-tls/hs-tls/pull/535)
+* `tls-simpleserver` reports the channel bindings with `--verbose`.
+  [#535](https://github.com/haskell-tls/hs-tls/pull/535)
+
 ## Version 2.4.11
 
 * Keep preferring AES-GCM on AArch64 with crypton 2.2, which names the
