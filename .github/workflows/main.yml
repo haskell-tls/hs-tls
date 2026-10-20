@@ -69,6 +69,13 @@ jobs:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: latest
 
+    # The macOS image selects Xcode 26.6, whose ld cannot read the SDK 27
+    # stubs that clang picks up from the Command Line Tools.  The Command
+    # Line Tools' own ld can, so link with them.
+    - name: Link with the Command Line Tools
+      if: ${{ runner.os == 'macOS' }}
+      run: sudo xcode-select -s /Library/Developer/CommandLineTools
+
     - name: Cache Key
       id: params
       shell: bash
