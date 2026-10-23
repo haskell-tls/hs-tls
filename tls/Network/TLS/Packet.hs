@@ -40,8 +40,8 @@ module Network.TLS.Packet (
     generateKeyBlock,
 
     -- * for extensions parsing
-    getSignatureHashAlgorithm,
-    putSignatureHashAlgorithm,
+    getSignatureScheme,
+    putSignatureScheme,
     getBinaryVersion,
     putBinaryVersion,
     getClientRandom32,
@@ -331,11 +331,11 @@ decodeServerKeyXchg_RSA =
 decodeCertRequest :: CurrentParams -> Get Handshake
 decodeCertRequest _cp = do
     certTypes <- map CertificateType <$> getWords8
-    sigHashAlgs <- getWord16 >>= getSignatureHashAlgorithms
+    sigHashAlgs <- getWord16 >>= getSignatureSchemes
     CertRequest certTypes sigHashAlgs <$> getDNames
   where
-    getSignatureHashAlgorithms len =
-        getList (fromIntegral len) (getSignatureHashAlgorithm >>= \sh -> return (2, sh))
+    getSignatureSchemes len =
+        getList (fromIntegral len) (getSignatureScheme >>= \sh -> return (2, sh))
 
 ----
 
@@ -421,11 +421,7 @@ encodeHandshake' (ServerKeyXchg skg) = runPut $
         _ -> error ("encodeHandshake': cannot handle: " ++ show skg)
 encodeHandshake' (CertRequest certTypes sigAlgs certAuthorities) = runPut $ do
     putWords8 (map fromCertificateType certTypes)
-    putWords16 $
-        map
-            ( \(HashAlgorithm x, SignatureAlgorithm y) -> fromIntegral x * 256 + fromIntegral y
-            )
-            sigAlgs
+    putWords16 $ map fromSignatureScheme sigAlgs
     putDNames certAuthorities
 encodeHandshake' ServerHelloDone = ""
 encodeHandshake' (CertVerify digitallySigned) = runPut $ putDigitallySigned digitallySigned
@@ -521,15 +517,14 @@ putExtensions es = putOpaque16 (runPut $ mapM_ putExtension es)
 
 ------------------------------------------------------------
 
-getSignatureHashAlgorithm :: Get HashAndSignatureAlgorithm
-getSignatureHashAlgorithm = do
-    h <- HashAlgorithm <$> getWord8
-    s <- SignatureAlgorithm <$> getWord8
-    return (h, s)
+-- | A scheme is one 16-bit number.  It used to be read as two bytes,
+-- because TLS 1.2 called them a hash and a signature algorithm, and that is
+-- the reading that made @mldsa87@ arrive as @rsa_pss_rsae_sha512@.
+getSignatureScheme :: Get SignatureScheme
+getSignatureScheme = SignatureScheme <$> getWord16
 
-putSignatureHashAlgorithm :: HashAndSignatureAlgorithm -> Put
-putSignatureHashAlgorithm (HashAlgorithm h, SignatureAlgorithm s) =
-    putWord8 h >> putWord8 s
+putSignatureScheme :: SignatureScheme -> Put
+putSignatureScheme = putWord16 . fromSignatureScheme
 
 ------------------------------------------------------------
 
@@ -567,12 +562,12 @@ putServerECDHParams (ServerECDHParams (Group grp) grppub) = do
 getDigitallySigned :: Version -> Get DigitallySigned
 getDigitallySigned _ver =
     DigitallySigned
-        <$> getSignatureHashAlgorithm
+        <$> getSignatureScheme
         <*> getOpaque16
 
 putDigitallySigned :: DigitallySigned -> Put
 putDigitallySigned (DigitallySigned h sig) =
-    putSignatureHashAlgorithm h >> putOpaque16 sig
+    putSignatureScheme h >> putOpaque16 sig
 
 ------------------------------------------------------------
 

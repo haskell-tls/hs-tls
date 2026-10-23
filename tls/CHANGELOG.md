@@ -26,6 +26,13 @@ value computed under the negotiated cipher's hash.
   [#598](https://github.com/haskell-tls/hs-tls/pull/598)
 * Offer only the signature algorithms that can be signed with.
   [#599](https://github.com/haskell-tls/hs-tls/pull/599)
+* Carry a signature scheme as one number, `SignatureScheme`, with a pattern
+  synonym for each IANA name.  `HashAlgorithm`, `SignatureAlgorithm` and
+  `showSignatureScheme` are removed; `HashAndSignatureAlgorithm` remains as a
+  deprecated synonym.
+  [#588](https://github.com/haskell-tls/hs-tls/pull/588)
+* Export `signatureSchemesForTLS13`.
+  [#588](https://github.com/haskell-tls/hs-tls/pull/588)
 
 ## Version 2.4.12
 

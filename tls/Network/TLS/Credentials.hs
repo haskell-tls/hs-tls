@@ -145,36 +145,55 @@ credentialPublicPrivateKeys (chain, priv) = pub `seq` (pub, priv)
     pub = certPubKey cert
     signed = getCertificateChainLeaf chain
 
-getHashSignature :: SignedCertificate -> Maybe TLS.HashAndSignatureAlgorithm
+getHashSignature :: SignedCertificate -> Maybe TLS.SignatureScheme
 getHashSignature signed =
     case signedAlg $ getSigned signed of
-        SignatureALG hashAlg PubKeyALG_RSA -> convertHash TLS.SignatureRSA hashAlg
-        SignatureALG hashAlg PubKeyALG_DSA -> convertHash TLS.SignatureDSA hashAlg
-        SignatureALG hashAlg PubKeyALG_EC -> convertHash TLS.SignatureECDSA hashAlg
-        SignatureALG X509.HashSHA256 PubKeyALG_RSAPSS -> Just (TLS.HashIntrinsic, TLS.SignatureRSApssRSAeSHA256)
-        SignatureALG X509.HashSHA384 PubKeyALG_RSAPSS -> Just (TLS.HashIntrinsic, TLS.SignatureRSApssRSAeSHA384)
-        SignatureALG X509.HashSHA512 PubKeyALG_RSAPSS -> Just (TLS.HashIntrinsic, TLS.SignatureRSApssRSAeSHA512)
-        SignatureALG_IntrinsicHash PubKeyALG_Ed25519 -> Just (TLS.HashIntrinsic, TLS.SignatureEd25519)
-        SignatureALG_IntrinsicHash PubKeyALG_Ed448 -> Just (TLS.HashIntrinsic, TLS.SignatureEd448)
+        SignatureALG hashAlg PubKeyALG_RSA -> rsa hashAlg
+        SignatureALG hashAlg PubKeyALG_DSA -> dsa hashAlg
+        SignatureALG hashAlg PubKeyALG_EC -> ecdsa hashAlg
+        SignatureALG X509.HashSHA256 PubKeyALG_RSAPSS -> Just TLS.RSA_PSS_RSAE_SHA256
+        SignatureALG X509.HashSHA384 PubKeyALG_RSAPSS -> Just TLS.RSA_PSS_RSAE_SHA384
+        SignatureALG X509.HashSHA512 PubKeyALG_RSAPSS -> Just TLS.RSA_PSS_RSAE_SHA512
+        SignatureALG_IntrinsicHash PubKeyALG_Ed25519 -> Just TLS.ED25519
+        SignatureALG_IntrinsicHash PubKeyALG_Ed448 -> Just TLS.ED448
         SignatureALG_IntrinsicHash PubKeyALG_MLDSA44 -> Just TLS.MLDSA44
         SignatureALG_IntrinsicHash PubKeyALG_MLDSA65 -> Just TLS.MLDSA65
         SignatureALG_IntrinsicHash PubKeyALG_MLDSA87 -> Just TLS.MLDSA87
         _ -> Nothing
   where
-    convertHash sig X509.HashMD5 = Just (TLS.HashMD5, sig)
-    convertHash sig X509.HashSHA1 = Just (TLS.HashSHA1, sig)
-    convertHash sig X509.HashSHA224 = Just (TLS.HashSHA224, sig)
-    convertHash sig X509.HashSHA256 = Just (TLS.HashSHA256, sig)
-    convertHash sig X509.HashSHA384 = Just (TLS.HashSHA384, sig)
-    convertHash sig X509.HashSHA512 = Just (TLS.HashSHA512, sig)
-    convertHash _ _ = Nothing
+    -- A certificate can be signed with a combination TLS 1.2 allowed and
+    -- the registry never named as a scheme, MD5 and SHA-224 among them, so
+    -- those have names here too.
+    rsa X509.HashMD5 = Just TLS.RSA_PKCS1_MD5
+    rsa X509.HashSHA1 = Just TLS.RSA_PKCS1_SHA1
+    rsa X509.HashSHA224 = Just TLS.RSA_PKCS1_SHA224
+    rsa X509.HashSHA256 = Just TLS.RSA_PKCS1_SHA256
+    rsa X509.HashSHA384 = Just TLS.RSA_PKCS1_SHA384
+    rsa X509.HashSHA512 = Just TLS.RSA_PKCS1_SHA512
+    rsa _ = Nothing
+
+    dsa X509.HashMD5 = Just TLS.DSA_MD5
+    dsa X509.HashSHA1 = Just TLS.DSA_SHA1
+    dsa X509.HashSHA224 = Just TLS.DSA_SHA224
+    dsa X509.HashSHA256 = Just TLS.DSA_SHA256
+    dsa X509.HashSHA384 = Just TLS.DSA_SHA384
+    dsa X509.HashSHA512 = Just TLS.DSA_SHA512
+    dsa _ = Nothing
+
+    ecdsa X509.HashMD5 = Just TLS.ECDSA_MD5
+    ecdsa X509.HashSHA1 = Just TLS.ECDSA_SHA1
+    ecdsa X509.HashSHA224 = Just TLS.ECDSA_SHA224
+    ecdsa X509.HashSHA256 = Just TLS.ECDSA_SECP256R1_SHA256
+    ecdsa X509.HashSHA384 = Just TLS.ECDSA_SECP384R1_SHA384
+    ecdsa X509.HashSHA512 = Just TLS.ECDSA_SECP521R1_SHA512
+    ecdsa _ = Nothing
 
 -- | Checks whether certificate signatures in the chain comply with a list of
 -- hash/signature algorithm pairs.  Currently the verification applies only to
 -- the signature of the leaf certificate, and when not self-signed.  This may
 -- be extended to additional chain elements in the future.
 credentialMatchesHashSignatures
-    :: [TLS.HashAndSignatureAlgorithm] -> Credential -> Bool
+    :: [TLS.SignatureScheme] -> Credential -> Bool
 credentialMatchesHashSignatures hashSigs (chain, _) =
     case chain of
         CertificateChain [] -> True

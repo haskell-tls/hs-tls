@@ -135,7 +135,7 @@ data HandshakeState = HandshakeState
     -- ^ Set to Just-value when a TLS13 certificate request is received
     , hstCertReqCBdata :: Maybe CertReqCBdata
     -- ^ Set to Just-value when a certificate request is received
-    , hstCertReqSigAlgsCert :: Maybe [HashAndSignatureAlgorithm]
+    , hstCertReqSigAlgsCert :: Maybe [SignatureScheme]
     -- ^ In TLS 1.3, these are separate from the certificate
     -- issuer signature algorithm hints in the callback data.
     -- In TLS 1.2 the same list is overloaded for both purposes.
@@ -212,7 +212,7 @@ data HandshakeState = HandshakeState
 --    present Ed25519 and Ed448 certificates when these become supported.
 type CertReqCBdata =
     ( [CertificateType]
-    , Maybe [HashAndSignatureAlgorithm]
+    , Maybe [SignatureScheme]
     , [DistinguishedName]
     )
 
@@ -445,10 +445,10 @@ getCertReqCBdata :: HandshakeM (Maybe CertReqCBdata)
 getCertReqCBdata = gets hstCertReqCBdata
 
 -- Dead code, until we find some use for the extension
-setCertReqSigAlgsCert :: Maybe [HashAndSignatureAlgorithm] -> HandshakeM ()
+setCertReqSigAlgsCert :: Maybe [SignatureScheme] -> HandshakeM ()
 setCertReqSigAlgsCert as = modify' $ \hst -> hst{hstCertReqSigAlgsCert = as}
 
-getCertReqSigAlgsCert :: HandshakeM (Maybe [HashAndSignatureAlgorithm])
+getCertReqSigAlgsCert :: HandshakeM (Maybe [SignatureScheme])
 getCertReqSigAlgsCert = gets hstCertReqSigAlgsCert
 
 --

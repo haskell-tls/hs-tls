@@ -303,7 +303,7 @@ data Supported = Supported
     -- it causes a connection failure when TLS 1.3 is negotiated.
     --
     -- Default: @[nullCompression]@
-    , supportedHashSignatures :: [HashAndSignatureAlgorithm]
+    , supportedHashSignatures :: [SignatureScheme]
     -- ^ All supported hash/signature algorithms pair for client
     -- certificate verification and server signature in (EC)DHE,
     -- ordered by decreasing priority.
@@ -322,24 +322,7 @@ data Supported = Supported
     -- will not be used even when listed in the parameter: MD5, SHA-1,
     -- SHA-224, RSA PKCS#1, DSA.
     --
-    -- Default:
-    --
-    -- @
-    --   [ (HashIntrinsic,     SignatureEd448)
-    --   , (HashIntrinsic,     SignatureEd25519)
-    --   , (Struct.HashSHA256, SignatureECDSA)
-    --   , (Struct.HashSHA384, SignatureECDSA)
-    --   , (Struct.HashSHA512, SignatureECDSA)
-    --   , (HashIntrinsic,     SignatureRSApssRSAeSHA512)
-    --   , (HashIntrinsic,     SignatureRSApssRSAeSHA384)
-    --   , (HashIntrinsic,     SignatureRSApssRSAeSHA256)
-    --   , (Struct.HashSHA512, SignatureRSA)
-    --   , (Struct.HashSHA384, SignatureRSA)
-    --   , (Struct.HashSHA256, SignatureRSA)
-    --   , (Struct.HashSHA1,   SignatureRSA)
-    --   , (Struct.HashSHA1,   SignatureDSA)
-    --   ]
-    -- @
+    -- Default: 'supportedSignatureSchemes'
     , supportedSecureRenegotiation :: Bool
     -- ^ Secure renegotiation defined in RFC5746.  If 'True', clients
     --   send the renegotiation_info extension.  If 'True', servers
@@ -566,7 +549,7 @@ defaultGroupUsage minBits params public
 --   document readable.
 type OnCertificateRequest =
     ( [CertificateType]
-    , Maybe [HashAndSignatureAlgorithm]
+    , Maybe [SignatureScheme]
     , [DistinguishedName]
     )
     -> IO (Maybe (CertificateChain, PrivKey))
@@ -611,7 +594,7 @@ data ClientHooks = ClientHooks
     --
     -- The public key in the first certificate, and the matching
     -- returned private key must be compatible with one of the list of
-    -- 'HashAndSignatureAlgorithm' value when provided.  TLS 1.3
+    -- 'SignatureScheme' value when provided.  TLS 1.3
     -- changes the meaning of the list elements, adding explicit code
     -- points for each supported pair of hash and signature (public
     -- key) algorithms, rather than combining separate codes for the
