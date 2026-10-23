@@ -49,13 +49,20 @@ expectCertificate cparams ctx (Certificate (CertificateChain_ certs)) = do
     doCertificate cparams ctx certs
     processCertificate ctx ClientRole certs
     return $ RecvStateHandshake (expectServerKeyExchange ctx)
-expectCertificate _ ctx p = expectServerKeyExchange ctx p
+-- Every key exchange the client implements authenticates the server with a
+-- certificate; see sendClientKeyXchg.
+expectCertificate _ _ p = unexpected (show p) (Just "server certificate")
 
 expectServerKeyExchange :: Context -> Handshake -> IO (RecvState IO)
 expectServerKeyExchange ctx (ServerKeyXchg origSkx) = do
     doServerKeyExchange ctx origSkx
     return $ RecvStateHandshake (expectCertificateRequest ctx)
-expectServerKeyExchange ctx p = expectCertificateRequest ctx p
+expectServerKeyExchange ctx p = do
+    -- (EC)DHE takes its parameters from ServerKeyExchange.
+    kx <- cipherKeyExchange <$> usingHState ctx getPendingCipher
+    unless (kx == CipherKeyExchange_RSA) $
+        unexpected (show p) (Just "server key exchange")
+    expectCertificateRequest ctx p
 
 expectCertificateRequest :: Context -> Handshake -> IO (RecvState IO)
 expectCertificateRequest ctx (CertRequest cTypesSent sigAlgs dNames) = do
