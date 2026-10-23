@@ -106,6 +106,17 @@ keyTypeFits (PubKeyEd25519 _) (_, s) = s == SignatureEd25519
 keyTypeFits (PubKeyEd448 _) (_, s) = s == SignatureEd448
 keyTypeFits _ _ = False
 
+checkKeyTypeFits :: PubKey -> HashAndSignatureAlgorithm -> IO ()
+checkKeyTypeFits pubKey hs =
+    unless (pubKey `keyTypeFits` hs) $
+        throwCore $
+            Error_Protocol
+                ( "signature algorithm "
+                    ++ showSignatureScheme hs
+                    ++ " is for another type of key"
+                )
+                IllegalParameter
+
 -- Same as 'signatureCompatible' but for TLS13: for ECDSA this also checks the
 -- relation between hash in the HashAndSignatureAlgorithm and elliptic curve
 signatureCompatible13 :: PubKey -> HashAndSignatureAlgorithm -> Bool
@@ -178,11 +189,7 @@ checkCertificateVerify ctx usedVersion pubKey msgs digSig@(DigitallySigned hashS
                 ("signature algorithm " ++ showSignatureScheme hashSigAlg ++ " is not for " ++ show usedVersion)
                 IllegalParameter
     checkSupportedHashSignature ctx hashSigAlg
-    unless (pubKey `keyTypeFits` hashSigAlg) $
-        throwCore $
-            Error_Protocol
-                ("signature algorithm " ++ showSignatureScheme hashSigAlg ++ " is for another type of key")
-                IllegalParameter
+    checkKeyTypeFits pubKey hashSigAlg
     if pubKey `signatureCompatible` hashSigAlg
         then doVerify
         else return False
@@ -278,19 +285,24 @@ signatureCreateWithCertVerifyData ctx malg (sigParam, toSign) = do
     DigitallySigned malg <$> signPrivate ctx role sigParam toSign
 
 signatureVerify :: Context -> DigitallySigned -> PubKey -> ByteString -> IO Bool
+-- Checked as checkCertificateVerify does: the peer chose the algorithm, so
+-- one that does not fit the key is its error, not ours.
 signatureVerify ctx digSig@(DigitallySigned hashSigAlg _) pubKey toVerifyData = do
     usedVersion <- usingState_ ctx getVersion
-    let (sigParam, toVerify) =
-            case (usedVersion, hashSigAlg) of
-                (TLS12, hs)
-                    | pubKey `signatureCompatible` hs ->
-                        (signatureParams pubKey hashSigAlg, toVerifyData)
-                    | otherwise ->
-                        error "expecting different signature algorithm"
-                _ ->
-                    error
-                        "not expecting hash and signature algorithm in a < TLS12 digitially signed structure"
-    signatureVerifyWithCertVerifyData ctx digSig (sigParam, toVerify)
+    unless (usedVersion == TLS12) $
+        throwCore $
+            Error_Protocol
+                ("no signature algorithm in a " ++ show usedVersion ++ " digitally-signed")
+                InternalError
+    checkSupportedHashSignature ctx hashSigAlg
+    checkKeyTypeFits pubKey hashSigAlg
+    if pubKey `signatureCompatible` hashSigAlg
+        then
+            signatureVerifyWithCertVerifyData
+                ctx
+                digSig
+                (signatureParams pubKey hashSigAlg, toVerifyData)
+        else return False
 
 signatureVerifyWithCertVerifyData
     :: Context
