@@ -125,6 +125,8 @@ spec = do
             handshake_client_auth_empty TLS12
         it "accepts an empty TLS 1.3 client certificate when the hook does" $
             handshake_client_auth_empty TLS13
+        it "rejects a TLS 1.2 client omitting the requested certificate" $
+            handshake12_client_cert_omitted
         it "requests only defined certificate types in TLS 1.2" $
             handshake12_cert_request_types
         prop "can handle extended main secret" handshake_ems
@@ -887,6 +889,68 @@ handshake_client_auth_empty version = do
     acceptEmpty chain
         | isNullCertificateChain chain = return CertificateUsageAccept
         | otherwise = return (CertificateUsageReject CertificateRejectUnknownCA)
+
+-- RFC 5246 Section 7.4.6: a client asked for a certificate sends the
+-- message even when it has none.  Here it is cut out on the wire; the
+-- Finished no longer matches, but the server must stop before that.
+handshake12_client_cert_omitted :: IO ()
+handshake12_client_cert_omitted = do
+    let cipher = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS12], [TLS12])
+                ([cipher], [cipher])
+    let clientParam' =
+            clientParam
+                { clientHooks =
+                    (clientHooks clientParam)
+                        { onCertificateRequest = \_ -> return Nothing
+                        }
+                }
+        serverParam' =
+            serverParam
+                { serverWantClientCert = True
+                , serverHooks =
+                    (serverHooks serverParam)
+                        { onClientCertificate = \_ -> return CertificateUsageAccept
+                        }
+                }
+    ccsSent <- newIORef False
+    let dropCertificate be =
+            be
+                { backendSend = \bs -> do
+                    done <- readIORef ccsSent
+                    when (B.take 1 bs == B.singleton 20) $ writeIORef ccsSent True
+                    backendSend be $ if done then bs else stripRecords bs
+                }
+    withPairContextWith (dropCertificate, id) (clientParam', serverParam') $
+        \(cctx, sctx) ->
+            concurrently_
+                (handshake sctx `shouldThrow` rejectedAsUnexpected)
+                (void (E.try (handshake cctx) :: IO (Either E.SomeException ())))
+  where
+    -- Plaintext records: drop each Certificate (type 11) from handshake ones.
+    stripRecords bs
+        | B.length bs < 5 = bs
+        | otherwise =
+            let len = fromIntegral (B.index bs 3) * 256 + fromIntegral (B.index bs 4)
+                (body, rest) = B.splitAt len $ B.drop 5 bs
+                body'
+                    | B.head bs == 22 = stripMessages body
+                    | otherwise = body
+                len' = B.length body'
+                hdr = B.take 3 bs <> B.pack [fromIntegral (len' `div` 256), fromIntegral len']
+             in (if B.null body' then "" else hdr <> body') <> stripRecords rest
+    stripMessages m
+        | B.length m < 4 = m
+        | otherwise =
+            let len =
+                    fromIntegral (B.index m 1) * 65536
+                        + fromIntegral (B.index m 2) * 256
+                        + fromIntegral (B.index m 3)
+                (msg, rest) = B.splitAt (4 + len) m
+             in (if B.head m == 11 then "" else msg) <> stripMessages rest
 
 -- In TLS 1.2 a client certificate with an Ed25519 or Ed448 key is asked
 -- for with ecdsa_sign (RFC 8422 Section 3.1).  The Ed25519 and Ed448
