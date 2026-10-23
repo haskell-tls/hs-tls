@@ -120,11 +120,25 @@ spec = do
             handshake12_client_cert_verify_sigalg
                 (HashIntrinsic, SignatureRSApsspssSHA256)
                 rejectedAsDecryptError
+        it "rejects a TLS 1.2 ServerKeyExchange algorithm for another key type" $
+            handshake12_server_key_xchg_sigalg
+                (HashSHA256, SignatureECDSA)
+                rejectedAsIllegalParameter
+        it "rejects a TLS 1.2 ServerKeyExchange that does not fit the RSA key" $
+            handshake12_server_key_xchg_sigalg
+                (HashIntrinsic, SignatureRSApsspssSHA256)
+                rejectedAsDecryptError
         prop "can receive client authentication failure" handshake_client_auth_fail
         it "accepts an empty TLS 1.2 client certificate when the hook does" $
             handshake_client_auth_empty TLS12
         it "accepts an empty TLS 1.3 client certificate when the hook does" $
             handshake_client_auth_empty TLS13
+        it "rejects a TLS 1.2 client omitting the requested certificate" $
+            handshake12_client_cert_omitted
+        it "rejects a TLS 1.2 server omitting Certificate" $
+            handshake12_server_message_omitted 11
+        it "rejects a TLS 1.2 server omitting ServerKeyExchange for ECDHE" $
+            handshake12_server_message_omitted 12
         it "requests only defined certificate types in TLS 1.2" $
             handshake12_cert_request_types
         prop "can handle extended main secret" handshake_ems
@@ -173,6 +187,10 @@ spec = do
         it "rejects TLS 1.3 early data when ALPN changes" $
             handshake13_0rtt_alpn
         prop "can handshake with TLS 1.3 0RTT -> PSK" handshake13_0rtt_fallback
+        it "authenticates a server rejecting the PSK of 0RTT" $
+            handshake13_0rtt_psk_rejected False
+        it "authenticates a server rejecting the PSK of 0RTT, asking a cert" $
+            handshake13_0rtt_psk_rejected True
         prop "can handshake with TLS 1.3 EE" handshake13_ee_groups
         prop "can handshake with TLS 1.3 EC groups" handshake13_ec
         prop "can handshake with TLS 1.3 FFDHE groups" handshake13_ffdhe
@@ -210,6 +228,10 @@ spec = do
             short_record_bad_record_mac TLS12 cipher_ECDHE_RSA_AES128CBC_SHA256
         it "rejects a too short TLS 1.3 record with bad_record_mac" $
             short_record_bad_record_mac TLS13 cipher13_AES_128_GCM_SHA256
+        it "rejects a TLS 1.3 alert in clear after the handshake" $
+            plaintext_alert13_rejected
+        it "rejects a TLS 1.2 ChangeCipherSpec before the keys" $
+            early_ccs12_rejected
         it "rejects a ServerHello as the first client message" $
             server_first_message_unexpected 2
         it "rejects a Finished as the first client message" $
@@ -884,6 +906,90 @@ handshake_client_auth_empty version = do
         | isNullCertificateChain chain = return CertificateUsageAccept
         | otherwise = return (CertificateUsageReject CertificateRejectUnknownCA)
 
+-- RFC 5246 Section 7.4.6: a client asked for a certificate sends the
+-- message even when it has none.  Here it is cut out on the wire; the
+-- Finished no longer matches, but the server must stop before that.
+handshake12_client_cert_omitted :: IO ()
+handshake12_client_cert_omitted = do
+    let cipher = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS12], [TLS12])
+                ([cipher], [cipher])
+    let clientParam' =
+            clientParam
+                { clientHooks =
+                    (clientHooks clientParam)
+                        { onCertificateRequest = \_ -> return Nothing
+                        }
+                }
+        serverParam' =
+            serverParam
+                { serverWantClientCert = True
+                , serverHooks =
+                    (serverHooks serverParam)
+                        { onClientCertificate = \_ -> return CertificateUsageAccept
+                        }
+                }
+    ccsSent <- newIORef False
+    let params = (clientParam', serverParam')
+    withPairContextWith (dropHandshake12 11 ccsSent, id) params $
+        \(cctx, sctx) ->
+            concurrently_
+                (handshake sctx `shouldThrow` rejectedAsUnexpected)
+                (void (E.try (handshake cctx) :: IO (Either E.SomeException ())))
+
+-- A TLS 1.2 client needs the server's Certificate for every key exchange
+-- it implements, and ServerKeyExchange for (EC)DHE.  One of them is cut
+-- out on the wire, and the client must say so rather than fail later.
+handshake12_server_message_omitted :: Word8 -> IO ()
+handshake12_server_message_omitted typ = do
+    let cipher = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS12], [TLS12])
+                ([cipher], [cipher])
+    ccsSent <- newIORef False
+    withPairContextWith (id, dropHandshake12 typ ccsSent) (clientParam, serverParam) $
+        \(cctx, sctx) ->
+            concurrently_
+                (void (E.try (handshake sctx) :: IO (Either E.SomeException ())))
+                (handshake cctx `shouldThrow` rejectedAsUnexpected)
+
+-- | Cut the handshake messages of a type out of what a TLS 1.2 peer sends
+-- in clear, that is, before its ChangeCipherSpec.
+dropHandshake12 :: Word8 -> IORef Bool -> Backend -> Backend
+dropHandshake12 typ ccsSent be =
+    be
+        { backendSend = \bs -> do
+            done <- readIORef ccsSent
+            when (B.take 1 bs == B.singleton 20) $ writeIORef ccsSent True
+            backendSend be $ if done then bs else stripRecords bs
+        }
+  where
+    stripRecords bs
+        | B.length bs < 5 = bs
+        | otherwise =
+            let len = fromIntegral (B.index bs 3) * 256 + fromIntegral (B.index bs 4)
+                (body, rest) = B.splitAt len $ B.drop 5 bs
+                body'
+                    | B.head bs == 22 = stripMessages body
+                    | otherwise = body
+                len' = B.length body'
+                hdr = B.take 3 bs <> B.pack [fromIntegral (len' `div` 256), fromIntegral len']
+             in (if B.null body' then "" else hdr <> body') <> stripRecords rest
+    stripMessages m
+        | B.length m < 4 = m
+        | otherwise =
+            let len =
+                    fromIntegral (B.index m 1) * 65536
+                        + fromIntegral (B.index m 2) * 256
+                        + fromIntegral (B.index m 3)
+                (msg, rest) = B.splitAt (4 + len) m
+             in (if B.head m == typ then "" else msg) <> stripMessages rest
+
 -- In TLS 1.2 a client certificate with an Ed25519 or Ed448 key is asked
 -- for with ecdsa_sign (RFC 8422 Section 3.1).  The Ed25519 and Ed448
 -- certificate types of this library are synthetic and have no code point,
@@ -978,6 +1084,37 @@ handshake12_client_cert_verify_sigalg alg rejected = do
             concurrently_
                 (handshake sctx `shouldThrow` rejected)
                 (void (E.try (handshake cctx) :: IO (Either TLSException ())))
+    r `shouldSatisfy` isJust
+
+-- The same for the signature of ServerKeyExchange, which the client used to
+-- answer with an ErrorCall and internal_error.
+handshake12_server_key_xchg_sigalg
+    :: HashAndSignatureAlgorithm -> Selector TLSException -> IO ()
+handshake12_server_key_xchg_sigalg alg rejected = do
+    let cipher = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS12], [TLS12])
+                ([cipher], [cipher])
+    let (HashAlgorithm h, SignatureAlgorithm sa) = alg
+        unfit (ServerKeyXchg (SKX_ECDHE_RSA params (DigitallySigned _ sig))) =
+            pure $ ServerKeyXchg (SKX_ECDHE_RSA params (DigitallySigned alg sig))
+        -- Arriving with ServerHello, it is decoded before the cipher is
+        -- known: curve type and group, the point, then the algorithm.
+        unfit (ServerKeyXchg (SKX_Unparsed bs)) =
+            let off = 4 + fromIntegral (B.index bs 3)
+             in pure $
+                    ServerKeyXchg $
+                        SKX_Unparsed $
+                            B.take off bs <> B.pack [h, sa] <> B.drop (off + 2) bs
+        unfit hs = pure hs
+    r <- timeout 10000000 $
+        withPairContextWith (id, id) (clientParam, serverParam) $ \(cctx, sctx) -> do
+            contextHookSetHandshakeRecv cctx unfit
+            concurrently_
+                (void (E.try (handshake sctx) :: IO (Either TLSException ())))
+                (handshake cctx `shouldThrow` rejected)
     r `shouldSatisfy` isJust
 
 -- A DER ECDSA signature that does not decode is a signature that does not
@@ -2156,6 +2293,40 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
         _ <- recvData ctx
         bye ctx
 
+-- The server has forgotten the session, so it answers 0-RTT with a full
+-- handshake, and the client must check its certificate.
+handshake13_0rtt_psk_rejected :: Bool -> IO ()
+handshake13_0rtt_psk_rejected wantCert = do
+    (cli, srv) <- generate arbitraryPairParams13
+    let supported =
+            defaultSupported
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
+                }
+        params0 =
+            ( cli{clientSupported = supported}
+            , srv{serverSupported = supported, serverEarlyDataSize = 2048}
+            )
+    sessionRefs <- twoSessionRefs
+    let params = setPairParamsSessionManagers (twoSessionManagers sessionRefs) params0
+    runTLSSimple13 params FullHandshake
+
+    sessionParams <- readClientSessionRef sessionRefs
+    expectJust "session param should be Just" sessionParams
+    writeIORef (snd sessionRefs) Nothing
+    earlyData <- B.pack <$> generate (someWords8 256)
+    let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
+        ps' =
+            ps
+                { serverWantClientCert = wantCert
+                , serverHooks =
+                    (serverHooks ps)
+                        { onClientCertificate = \_ -> return CertificateUsageAccept
+                        }
+                }
+    runTLS0RTT (pc{clientUseEarlyData = True}, ps') FullHandshake earlyData
+
 handshake13_ee_groups :: CSP13 -> IO ()
 handshake13_ee_groups (CSP13 (cli, srv)) = do
     let -- The client prefers P256
@@ -2381,6 +2552,71 @@ short_record_bad_record_mac version cipher = do
                     sendData cctx "hello"
                     void (E.try (recvData cctx) :: IO (Either E.SomeException B.ByteString))
                 )
+
+-- RFC 8446 Section 5: once keys are in use, only ChangeCipherSpec may come
+-- in clear.  An injected close_notify must not read as an orderly close.
+plaintext_alert13_rejected :: IO ()
+plaintext_alert13_rejected = do
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS13], [TLS13])
+                ([cipher13_AES_128_GCM_SHA256], [cipher13_AES_128_GCM_SHA256])
+    armed <- newIORef False
+    let injectAlert be =
+            be
+                { backendSend = \bs -> do
+                    inject <- readIORef armed
+                    if inject && B.take 1 bs == B.singleton 23
+                        then do
+                            writeIORef armed False
+                            backendSend be $ B.pack [21, 3, 3, 0, 2, 1, 0]
+                        else backendSend be bs
+                }
+    withPairContextWith (injectAlert, id) (clientParam, serverParam) $
+        \(cctx, sctx) ->
+            concurrently_
+                ( do
+                    handshake sctx
+                    recvData sctx `shouldThrow` rejectedPlaintextAlert
+                )
+                ( do
+                    handshake cctx
+                    writeIORef armed True
+                    sendData cctx "hello"
+                    void (E.try (recvData cctx) :: IO (Either E.SomeException B.ByteString))
+                )
+
+rejectedPlaintextAlert :: TLSException -> Bool
+rejectedPlaintextAlert (Terminated _ _ (Error_Protocol _ UnexpectedMessage)) = True
+rejectedPlaintextAlert _ = False
+
+-- A ChangeCipherSpec ahead of the client's second flight, before the server
+-- has the keys to switch to.  The handshake would refuse it anyway; this
+-- keeps the record layer from switching to keys that do not exist.
+early_ccs12_rejected :: IO ()
+early_ccs12_rejected = do
+    let cipher = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS12], [TLS12])
+                ([cipher], [cipher])
+    sent <- newIORef (0 :: Int)
+    let injectCCS be =
+            be
+                { backendSend = \bs -> do
+                    n <- readIORef sent
+                    writeIORef sent (n + 1)
+                    -- The first send is ClientHello.
+                    when (n == 1) $ backendSend be $ B.pack [20, 3, 3, 0, 1, 1]
+                    backendSend be bs
+                }
+    withPairContextWith (injectCCS, id) (clientParam, serverParam) $
+        \(cctx, sctx) ->
+            concurrently_
+                (handshake sctx `shouldThrow` rejectedAsUnexpected)
+                (void (E.try (handshake cctx) :: IO (Either E.SomeException ())))
 
 serverRejectedShortRecord :: TLSException -> Bool
 serverRejectedShortRecord (Terminated _ _ (Error_Protocol _ BadRecordMac)) = True
