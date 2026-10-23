@@ -2,7 +2,7 @@
 
 module HandshakeSpec where
 
-import Control.Concurrent (threadDelay)
+import Control.Concurrent (newEmptyMVar, putMVar, takeMVar, threadDelay)
 import Control.Concurrent.Async (concurrently_)
 import qualified Control.Exception as E
 import Control.Monad
@@ -162,6 +162,10 @@ spec = do
             handshake_sni_illegal ["ex\xc4\x85mple.com"]
         prop "can handshake with TLS 1.2 CBC" handshake_cbc
         prop "can re-negotiate with TLS 1.2" handshake12_renegotiation
+        it "keeps application data that arrives during a TLS 1.2 renegotiation" $
+            handshake12_renegotiation_interleaved
+        it "ignores HelloRequest during a TLS 1.2 handshake" $
+            handshake12_hello_request_ignored
         it "rejects SCSV in a secure renegotiation" $
             handshake12_renegotiation_tampered $ \ch ->
                 ch{chCiphers = chCiphers ch ++ [CipherId 0xff]}
@@ -1671,6 +1675,55 @@ handshake12_renegotiation (CSP12 (cparams, sparams)) = do
     hsClient ctx = handshake ctx >> handshake ctx
     -- recvData receives the alert from the second handshake
     hsServer ctx = handshake ctx >> void (recvData ctx)
+
+-- RFC 5246 Section 6.2.1: application data may come between the handshake
+-- messages of a renegotiation.  The server sends some before it reads the
+-- client's ClientHello, so it reaches the client ahead of ServerHello.
+handshake12_renegotiation_interleaved :: IO ()
+handshake12_renegotiation_interleaved = do
+    CSP12 (cparams, sparams) <- generate arbitrary
+    let sparams' =
+            sparams
+                { serverSupported =
+                    (serverSupported sparams)
+                        { supportedClientInitiatedRenegotiation = True
+                        }
+                }
+    sent <- newEmptyMVar
+    r <- timeout 10000000 $
+        withPairContextWith (id, id) (cparams, sparams') $ \(cctx, sctx) -> do
+            concurrently_ (handshake sctx) (handshake cctx)
+            concurrently_
+                ( do
+                    sendData sctx "during"
+                    putMVar sent ()
+                    recvData sctx `shouldReturn` "after"
+                )
+                ( do
+                    takeMVar sent
+                    handshake cctx
+                    recvData cctx `shouldReturn` "during"
+                    sendData cctx "after"
+                )
+    r `shouldSatisfy` isJust
+
+-- RFC 5246 Section 7.4.1.1: a client ignores HelloRequest while it is
+-- negotiating.  One is put ahead of the server's ChangeCipherSpec.
+handshake12_hello_request_ignored :: IO ()
+handshake12_hello_request_ignored = do
+    CSP12 params <- generate arbitrary
+    sends <- newIORef (0 :: Int)
+    let injectHelloRequest be =
+            be
+                { backendSend = \bs -> do
+                    n <- atomicModifyIORef' sends $ \i -> (i + 1, i)
+                    when (n == 1) $ backendSend be $ B.pack [22, 3, 3, 0, 4, 0, 0, 0, 0]
+                    backendSend be bs
+                }
+    r <- timeout 10000000 $
+        withPairContextWith (id, injectHelloRequest) params $ \(cctx, sctx) ->
+            concurrently_ (handshake sctx) (handshake cctx)
+    r `shouldSatisfy` isJust
 
 -- RFC 5746 Section 3.7: when a connection with secure renegotiation is
 -- renegotiated, ClientHello must not contain the SCSV and must contain

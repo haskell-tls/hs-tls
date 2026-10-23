@@ -263,8 +263,10 @@ recvData ctx = liftIO $ do
 
 recvData12 :: Context -> IO ByteString
 recvData12 ctx = do
-    pkt <- recvPacket12 ctx
-    either (onError terminate12) process pkt
+    pending <- atomicModifyIORef' (ctxPendingAppData ctx) $ \xs -> ([], reverse xs)
+    if null pending
+        then recvPacket12 ctx >>= either (onError terminate12) process
+        else return $ B.concat pending
   where
     process (Handshake [ch@ClientHello{}] [b]) =
         handshakeWith ctx (ch, b) >> recvData12 ctx
