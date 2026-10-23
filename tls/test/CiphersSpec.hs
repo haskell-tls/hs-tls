@@ -5,6 +5,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import Network.TLS.Cipher
 import Network.TLS.Extra.Cipher
+import Network.TLS.Internal (paddingIsValid)
 import Test.Hspec
 import Test.Hspec.QuickCheck
 import Test.QuickCheck
@@ -20,6 +21,17 @@ spec = do
                 (BulkStateAEAD encF, BulkStateAEAD decF) -> aead encF decF iv t additional
                 (BulkStateStream (BulkStream encF), BulkStateStream (BulkStream decF)) -> stream encF decF t
                 _ -> return ()
+    describe "CBC padding" $ do
+        -- Read in constant time; the answer is still the plain one.
+        prop "is valid when the last octets equal the last" $ \(NonEmpty ws) (Positive n) -> do
+            let plain = B.pack ws
+                padLen = 1 + (n - 1) `mod` min 256 (B.length plain)
+                expected = B.all (== B.last plain) $ B.drop (B.length plain - padLen) plain
+            paddingIsValid plain padLen `shouldBe` expected
+        prop "accepts a padding filled with its length" $ \ws (Positive n) -> do
+            let len = (n - 1) `mod` 256
+                plain = B.pack ws <> B.replicate (len + 1) (fromIntegral len)
+            paddingIsValid plain (len + 1) `shouldBe` True
 
 block
     :: BulkBlock
