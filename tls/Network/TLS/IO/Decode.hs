@@ -35,17 +35,18 @@ decodePacket12 ctx (Record ProtocolType_ChangeCipherSpec _ fragment) =
             -- ChangeCipherSpec comes between complete handshake messages
             -- (RFC 5246 Section 7.1), so not before the first ClientHello
             -- of a server, which has no handshake state yet, nor in the
-            -- middle of a fragmented handshake message (CVE-2004-0079).
+            -- middle of a fragmented handshake message (CVE-2004-0079),
+            -- nor before the keys it switches to are computed.
             mhs <- getHState ctx
             (mCont, _) <- usingState_ ctx $ gets stHandshakeRecordCont12
-            if isNothing mhs || isJust mCont
-                then
+            case mhs >>= hstPendingRxState of
+                Just rx | isNothing mCont -> do
+                    modifyMVar_ (ctxRxRecordState ctx) (\_ -> return rx)
+                    return $ Right ChangeCipherSpec
+                _ ->
                     return $
                         Left $
                             Error_Packet_unexpected "ChangeCipherSpec" " expected: handshake"
-                else do
-                    switchRxEncryption ctx
-                    return $ Right ChangeCipherSpec
 decodePacket12 ctx (Record ProtocolType_Handshake ver fragment) = do
     mhs <- getHState ctx
     let keyxchg = mhs >>= hstPendingCipher >>= Just . cipherKeyExchange
@@ -92,11 +93,6 @@ decodePacket12 ctx (Record ProtocolType_Handshake ver fragment) = do
                             bs' = BS.take len bs
                         return ((h, reverse (bs' : wirebytes)) : hbs)
 decodePacket12 _ (Record ty _ _) = return $ Left $ unknownProtocolType ty
-
-switchRxEncryption :: Context -> IO ()
-switchRxEncryption ctx =
-    usingHState ctx (gets hstPendingRxState) >>= \rx ->
-        modifyMVar_ (ctxRxRecordState ctx) (\_ -> return $ fromJust rx)
 
 ----------------------------------------------------------------
 
