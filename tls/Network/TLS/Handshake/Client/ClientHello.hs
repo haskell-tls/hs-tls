@@ -364,7 +364,7 @@ sendClientHello' cparams ctx Groups{..} crand (pskInfo, rtt0info, rtt0) = do
                 let ech = encodeHandshake $ ClientHello ch
                     h = cHash choice
                     siz = (hashDigestSize h + 1) * length identities + 2
-                    binder = makePSKBinder earlySecret h siz ech
+                binder <- makePSKBinder ctx earlySecret h siz ech
                 -- PSK is shared by the previous TLS session.
                 -- So, PSK is unique for identities.
                 let binders = replicate (length identities) binder
