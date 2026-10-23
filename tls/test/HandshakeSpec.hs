@@ -127,6 +127,10 @@ spec = do
             handshake_client_auth_empty TLS13
         it "rejects a TLS 1.2 client omitting the requested certificate" $
             handshake12_client_cert_omitted
+        it "rejects a TLS 1.2 server omitting Certificate" $
+            handshake12_server_message_omitted 11
+        it "rejects a TLS 1.2 server omitting ServerKeyExchange for ECDHE" $
+            handshake12_server_message_omitted 12
         it "requests only defined certificate types in TLS 1.2" $
             handshake12_cert_request_types
         prop "can handle extended main secret" handshake_ems
@@ -919,20 +923,42 @@ handshake12_client_cert_omitted = do
                         }
                 }
     ccsSent <- newIORef False
-    let dropCertificate be =
-            be
-                { backendSend = \bs -> do
-                    done <- readIORef ccsSent
-                    when (B.take 1 bs == B.singleton 20) $ writeIORef ccsSent True
-                    backendSend be $ if done then bs else stripRecords bs
-                }
-    withPairContextWith (dropCertificate, id) (clientParam', serverParam') $
+    let params = (clientParam', serverParam')
+    withPairContextWith (dropHandshake12 11 ccsSent, id) params $
         \(cctx, sctx) ->
             concurrently_
                 (handshake sctx `shouldThrow` rejectedAsUnexpected)
                 (void (E.try (handshake cctx) :: IO (Either E.SomeException ())))
+
+-- A TLS 1.2 client needs the server's Certificate for every key exchange
+-- it implements, and ServerKeyExchange for (EC)DHE.  One of them is cut
+-- out on the wire, and the client must say so rather than fail later.
+handshake12_server_message_omitted :: Word8 -> IO ()
+handshake12_server_message_omitted typ = do
+    let cipher = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS12], [TLS12])
+                ([cipher], [cipher])
+    ccsSent <- newIORef False
+    withPairContextWith (id, dropHandshake12 typ ccsSent) (clientParam, serverParam) $
+        \(cctx, sctx) ->
+            concurrently_
+                (void (E.try (handshake sctx) :: IO (Either E.SomeException ())))
+                (handshake cctx `shouldThrow` rejectedAsUnexpected)
+
+-- | Cut the handshake messages of a type out of what a TLS 1.2 peer sends
+-- in clear, that is, before its ChangeCipherSpec.
+dropHandshake12 :: Word8 -> IORef Bool -> Backend -> Backend
+dropHandshake12 typ ccsSent be =
+    be
+        { backendSend = \bs -> do
+            done <- readIORef ccsSent
+            when (B.take 1 bs == B.singleton 20) $ writeIORef ccsSent True
+            backendSend be $ if done then bs else stripRecords bs
+        }
   where
-    -- Plaintext records: drop each Certificate (type 11) from handshake ones.
     stripRecords bs
         | B.length bs < 5 = bs
         | otherwise =
@@ -952,7 +978,7 @@ handshake12_client_cert_omitted = do
                         + fromIntegral (B.index m 2) * 256
                         + fromIntegral (B.index m 3)
                 (msg, rest) = B.splitAt (4 + len) m
-             in (if B.head m == 11 then "" else msg) <> stripMessages rest
+             in (if B.head m == typ then "" else msg) <> stripMessages rest
 
 -- In TLS 1.2 a client certificate with an Ed25519 or Ed448 key is asked
 -- for with ecdsa_sign (RFC 8422 Section 3.1).  The Ed25519 and Ed448
