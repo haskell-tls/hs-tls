@@ -2,6 +2,7 @@
 
 module Network.TLS.Record.Decrypt (
     decryptRecord,
+    paddingIsValid,
 ) where
 
 import Control.Monad.State.Strict
@@ -67,10 +68,10 @@ unInnerPlaintext inner =
 
 -- | Check a decrypted record.
 --
--- The first 'Bool' is what the lengths already said: 'False' when the padding
--- length the record claims cannot be one.  It is carried in rather than
--- answered where it was found, so that the MAC is computed either way -- see
--- 'decryptData'.
+-- The first 'Bool' is what the lengths and the padding already said: 'False'
+-- when the padding the record claims cannot be one or is not filled with its
+-- length.  It is carried in rather than answered where it was found, so that
+-- the MAC is computed either way -- see 'decryptData'.
 --
 -- Everything is computed before anything is decided, and the verdicts are
 -- combined with '&&!', which does not short-circuit.
@@ -87,18 +88,7 @@ getCipherData (Record pt ver _) lengthValid cdata = do
             -- measurement of how much of the MAC was guessed correctly.
             return (expected_digest `BA.constEq` digest)
 
-    -- check if the padding is filled with the correct pattern if it exists
-    -- (before TLS10 this checks instead that the padding length is minimal)
-    paddingValid <- case cipherDataPadding cdata of
-        Nothing -> return True
-        Just (pad, _blksz) -> do
-            let b = fromIntegral (B.length pad - 1)
-            -- Every octet, and no allocation of a pattern to compare against:
-            -- B.all stops at the first wrong octet, and replicating the
-            -- pattern costs time in proportion to a length the peer chose.
-            return $ B.foldl' (\acc w -> acc .|. (w `xor` b)) 0 pad == 0
-
-    unless (lengthValid &&! macValid &&! paddingValid) $
+    unless (lengthValid &&! macValid) $
         throwError $
             Error_Protocol "bad record mac Stream/Block" BadRecordMac
 
@@ -174,15 +164,19 @@ decryptData ver record econtent tst lim =
             lengthValid = claimed + macSize <= plainlen
             paddinglength = if lengthValid then claimed else 1
             contentlen = plainlen - paddinglength - macSize
-        (content, mac, padding) <- get3i content' (contentlen, macSize, paddinglength)
-        getCipherData
-            record
-            lengthValid
-            CipherData
-                { cipherDataContent = content
-                , cipherDataMAC = Just mac
-                , cipherDataPadding = Just (padding, blockSize)
-                }
+            paddingValid = paddingIsValid content' paddinglength
+            -- Lucky Thirteen: the rounds a longer padding saves on the MAC.
+            dummy = hmacDummyRounds (cipherHash cipher) contentlen (plainlen - 1 - macSize)
+        (content, mac, _) <- get3i content' (contentlen, macSize, paddinglength)
+        dummy `seq`
+            getCipherData
+                record
+                (lengthValid &&! paddingValid)
+                CipherData
+                    { cipherDataContent = content
+                    , cipherDataMAC = Just mac
+                    , cipherDataPadding = Nothing
+                    }
     decryptOf (BulkStateStream (BulkStream decryptF)) = do
         -- check if we have enough bytes to cover the minimum for this cipher
         when (econtentLen < macSize) sanityCheckError
@@ -247,3 +241,35 @@ decryptData ver record econtent tst lim =
         maybe (throwError $ Error_Protocol "record bad format" BadRecordMac) return $
             partition3 s ls
     get2i s (d1, d2) = get3i s (d1, d2, 0) >>= \(r1, r2, _) -> return (r1, r2)
+
+-- | Whether the last @padLen@ octets of the plaintext all equal its last
+-- octet.  All 256 octets a padding can span are read, whatever @padLen@.
+paddingIsValid :: ByteString -> Int -> Bool
+paddingIsValid plain padLen = go 0 0 == 0
+  where
+    window = B.drop (B.length plain - 256) plain
+    wlen = B.length window
+    b = B.last plain
+    go :: Int -> Word8 -> Word8
+    go i acc
+        | i == wlen = acc
+        | otherwise =
+            go (i + 1) $ acc .|. (inPadding i .&. (B.index window (wlen - 1 - i) `xor` b))
+    -- 0xff for an octet less than padLen from the end, without a branch
+    inPadding i = fromIntegral ((i - padLen) `shiftR` (finiteBitSize i - 1))
+
+-- | HMAC over a shorter content takes fewer compression rounds of the hash.
+-- Spend the difference from the longest content on dummy blocks, so that a
+-- record takes as long whatever its padding says.
+hmacDummyRounds :: Hash -> Int -> Int -> ByteString
+hmacDummyRounds h contentLen maxContentLen =
+    hash h $ B.take ((rounds maxContentLen - rounds contentLen) * bs) dummyBlocks
+  where
+    bs = hashBlockSize h
+    -- the ipad block, the sequence number and header, the content, and the
+    -- 0x80 octet and length field of the hash padding
+    rounds n = (bs + 13 + n + 1 + lengthField + bs - 1) `div` bs
+    lengthField = if bs == 128 then 16 else 8
+
+dummyBlocks :: ByteString
+dummyBlocks = B.replicate (8 * 128) 0
