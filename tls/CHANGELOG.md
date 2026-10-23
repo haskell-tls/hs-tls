@@ -1,5 +1,20 @@
 # Change log for "tls"
 
+## Version 2.4.12
+
+* Authenticate a server that rejects the PSK of 0-RTT.
+  [#590](https://github.com/haskell-tls/hs-tls/pull/590)
+* Require the client Certificate a TLS 1.2 server asked for.
+  [#591](https://github.com/haskell-tls/hs-tls/pull/591)
+* Refuse a TLS 1.3 alert in clear after the handshake.
+  [#592](https://github.com/haskell-tls/hs-tls/pull/592)
+* Require Certificate and ServerKeyExchange from a TLS 1.2 server.
+  [#593](https://github.com/haskell-tls/hs-tls/pull/593)
+* Refuse a TLS 1.2 ChangeCipherSpec before its keys exist.
+  [#594](https://github.com/haskell-tls/hs-tls/pull/594)
+* Answer an unfit ServerKeyExchange algorithm with an alert.
+  [#595](https://github.com/haskell-tls/hs-tls/pull/595)
+
 ## Version 2.4.11
 
 * Keep preferring AES-GCM on AArch64 with crypton 2.2, which names the
