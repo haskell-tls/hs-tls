@@ -104,7 +104,12 @@ recvClientCCC sparams ctx = runRecvState ctx (RecvStateHandshake expectClientCer
         -- which the hook may have accepted.
         let followedCertVerify = not $ isNullCertificateChain certs
         return $ RecvStateHandshake $ expectClientKeyExchange followedCertVerify
-    expectClientCertificate p = expectClientKeyExchange False p
+    -- RFC 5246 Section 7.4.6: a client asked for a certificate sends the
+    -- message, empty if it has none.
+    expectClientCertificate p = do
+        certReqSent <- usingHState ctx getCertReqSent
+        when certReqSent $ unexpected (show p) (Just "client certificate")
+        expectClientKeyExchange False p
 
     -- cannot use RecvStateHandshake, as the next message could be a ChangeCipher,
     -- so we must process any packet, and in case of handshake call processHandshake manually.
