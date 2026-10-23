@@ -147,12 +147,16 @@ expectEncryptedExtensions ctx (EncryptedExtensions13 eexts) = do
     when (st13 == RTT0Sent) $
         case extensionLookup EID_EarlyData eexts of
             Just _ -> do
+                -- RFC 8446 Section 4.2.10: early data is accepted only
+                -- with the first PSK.
+                mode <- usingHState ctx getTLS13HandshakeMode
+                unless (mode == PreSharedKey) $
+                    throwCore $
+                        Error_Protocol "early data accepted without PSK" IllegalParameter
                 usingHState ctx $ setTLS13HandshakeMode RTT0
                 usingHState ctx $ setTLS13RTT0Status RTT0Accepted
                 liftIO $ modifyTLS13State ctx $ \st -> st{tls13st0RTTAccepted = True}
-            Nothing -> do
-                usingHState ctx $ setTLS13HandshakeMode PreSharedKey
-                usingHState ctx $ setTLS13RTT0Status RTT0Rejected
+            Nothing -> usingHState ctx $ setTLS13RTT0Status RTT0Rejected
 expectEncryptedExtensions _ h = unexpected (show h) (Just "encrypted extensions")
 
 ----------------------------------------------------------------
@@ -228,13 +232,19 @@ processCertAndVerify
     :: MonadIO m
     => ClientParams -> Context -> CertificateChain -> RecvHandshake13M m ()
 processCertAndVerify cparams ctx cc = do
+    pubkey <- processServerCertificate cparams ctx cc
+    recvHandshake13hash ctx "CertVerify" $ expectCertVerify ctx pubkey
+
+processServerCertificate
+    :: MonadIO m => ClientParams -> Context -> CertificateChain -> m PubKey
+processServerCertificate cparams ctx cc = do
     liftIO $ usingState_ ctx $ setServerCertificateChain cc
     liftIO $ doCertificate cparams ctx cc
     let pubkey = certPubKey $ getCertificate $ getCertificateChainLeaf cc
     ver <- liftIO $ usingState_ ctx getVersion
     checkDigitalSignatureKey ver pubkey
     usingHState ctx $ setPublicKey pubkey
-    recvHandshake13hash ctx "CertVerify" $ expectCertVerify ctx pubkey
+    return pubkey
 
 ----------------------------------------------------------------
 
@@ -416,16 +426,42 @@ asyncServerHello13
 asyncServerHello13 cparams ctx groupSent chSentTime = do
     setPendingRecvActions
         ctx
-        [ PendingRecvActionSelfUpdate True expectServerHello
-        , PendingRecvAction True (expectEncryptedExtensions ctx)
-        , PendingRecvActionHash True expectFinishedAndSet
-        ]
+        [PendingRecvActionSelfUpdate True expectServerHello]
   where
     expectServerHello shb@(sh, _) = do
         setRTT ctx chSentTime
         processServerHello13 cparams ctx sh
         updateTranscriptHash13 ctx shb -- update by myself
-        void $ prepareSecondFlight13 ctx groupSent
+        resuming <- prepareSecondFlight13 ctx groupSent
+        -- Without the PSK, the server authenticates with its certificate,
+        -- as in recvServerSecondFlight13.
+        setPendingRecvActions ctx $
+            if resuming
+                then
+                    [ PendingRecvAction True (expectEncryptedExtensions ctx)
+                    , PendingRecvActionHash True expectFinishedAndSet
+                    ]
+                else
+                    [ PendingRecvAction False (expectEncryptedExtensions ctx)
+                    , PendingRecvAction False expectCertRequestAsync
+                    , PendingRecvActionHash True expectFinishedAndSet
+                    ]
+    -- The actions below put the next one in front of Finished.
+    expectCertRequestAsync (CertRequest13 token exts) = do
+        processCertRequest13 ctx token exts
+        pushPendingRecvAction ctx $ PendingRecvAction False expectCertAsync
+    expectCertRequestAsync h = do
+        usingHState ctx $ do
+            setCertReqToken Nothing
+            setCertReqCBdata Nothing
+        expectCertAsync h
+    expectCertAsync (Certificate13 _ (CertificateChain_ cc) _) = certAsync cc
+    expectCertAsync (CompressedCertificate13 _ (CertificateChain_ cc) _) = certAsync cc
+    expectCertAsync h = unexpected (show h) (Just "server certificate")
+    certAsync cc = do
+        pubkey <- processServerCertificate cparams ctx cc
+        pushPendingRecvAction ctx $
+            PendingRecvActionHash False (expectCertVerify ctx pubkey)
     expectFinishedAndSet h sf = do
         expectFinished cparams ctx h sf
         liftIO $
