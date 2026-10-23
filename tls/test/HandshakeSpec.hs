@@ -116,19 +116,19 @@ spec = do
                 B.pack [0x30, 0x06, 0x02, 0x01, 0x01, 0x03, 0x01, 0x09]
         it "rejects a TLS 1.2 CertificateVerify algorithm for another key type" $
             handshake12_client_cert_verify_sigalg
-                (HashSHA256, SignatureECDSA)
+                ECDSA_SECP256R1_SHA256
                 rejectedAsIllegalParameter
         it "rejects a TLS 1.2 CertificateVerify that does not fit the RSA key" $
             handshake12_client_cert_verify_sigalg
-                (HashIntrinsic, SignatureRSApsspssSHA256)
+                RSA_PSS_PSS_SHA256
                 rejectedAsDecryptError
         it "rejects a TLS 1.2 ServerKeyExchange algorithm for another key type" $
             handshake12_server_key_xchg_sigalg
-                (HashSHA256, SignatureECDSA)
+                ECDSA_SECP256R1_SHA256
                 rejectedAsIllegalParameter
         it "rejects a TLS 1.2 ServerKeyExchange that does not fit the RSA key" $
             handshake12_server_key_xchg_sigalg
-                (HashIntrinsic, SignatureRSApsspssSHA256)
+                RSA_PSS_PSS_SHA256
                 rejectedAsDecryptError
         it "refuses a TLS 1.2 signature algorithm it cannot sign with" $
             handshake12_unimplemented_sigalg
@@ -509,7 +509,7 @@ handshake_update_key = runTLSSimpleKeyUpdate
 --------------------------------------------------------------
 
 handshake_hashsignatures
-    :: ([HashAndSignatureAlgorithm], [HashAndSignatureAlgorithm]) -> IO ()
+    :: ([SignatureScheme], [SignatureScheme]) -> IO ()
 handshake_hashsignatures (clientHashSigs, serverHashSigs) = do
     tls13 <- generate arbitrary
     let version = if tls13 then TLS13 else TLS12
@@ -545,8 +545,10 @@ handshake_hashsignatures (clientHashSigs, serverHashSigs) = do
         then runTLSFailure (clientParam', serverParam') handshake handshake
         else runTLSSimple (clientParam', serverParam')
   where
-    incompatibleWithDefaultCurve (h, SignatureECDSA) = h /= HashSHA256
-    incompatibleWithDefaultCurve _ = False
+    -- The test credential's EC key is on P-256, so any ECDSA scheme but
+    -- the one that names P-256 cannot be used with it.
+    incompatibleWithDefaultCurve sc =
+        sc `elem` ecdsaSchemes && sc /= ECDSA_SECP256R1_SHA256
 
 handshake_ciphersuites :: ([Cipher], [Cipher]) -> IO ()
 handshake_ciphersuites (clientCiphers, serverCiphers) = do
@@ -622,7 +624,7 @@ handshake_ec (SG sigGroups) = do
             [ cipher_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
             ]
         hashSignatures =
-            [ (HashSHA256, SignatureECDSA)
+            [ ECDSA_SECP256R1_SHA256
             ]
     (clientParam, serverParam) <-
         generate $
@@ -654,8 +656,8 @@ handshake_ec (SG sigGroups) = do
                         { sharedCredentials = Credentials credentials
                         }
                 }
-        sigAlgs = map snd (clientHashSignatures `intersect` serverHashSignatures)
-        ecdsaDenied = SignatureECDSA `notElem` sigAlgs
+        sigAlgs = clientHashSignatures `intersect` serverHashSignatures
+        ecdsaDenied = not (any (`elem` ecdsaSchemes) sigAlgs)
     if ecdsaDenied
         then runTLSFailure (clientParam', serverParam') handshake handshake
         else runTLSSimple (clientParam', serverParam')
@@ -682,7 +684,7 @@ handshake_cert_fallback_cipher (OC clientCiphers serverCiphers) = do
     let clientVersions = [TLS12]
         serverVersions = [TLS12]
         commonCiphers = [cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256]
-        hashSignatures = [(HashSHA256, SignatureRSA), (HashSHA1, SignatureDSA)]
+        hashSignatures = [RSA_PKCS1_SHA256, DSA_SHA1]
     chainRef <- newIORef Nothing
     (clientParam, serverParam) <-
         generate $
@@ -716,13 +718,13 @@ handshake_cert_fallback_cipher (OC clientCiphers serverCiphers) = do
 -- the library, which is useful to test this scenario.  SHA-1 could be replaced
 -- by another algorithm.
 
-data OHS = OHS [HashAndSignatureAlgorithm] [HashAndSignatureAlgorithm]
+data OHS = OHS [SignatureScheme] [SignatureScheme]
     deriving (Show)
 
 instance Arbitrary OHS where
     arbitrary = OHS <$> sublistOf otherHS <*> sublistOf otherHS
       where
-        otherHS = [(HashIntrinsic, SignatureEd25519)]
+        otherHS = [ED25519]
 
 handshake_cert_fallback_hs :: OHS -> IO ()
 handshake_cert_fallback_hs (OHS clientHS serverHS) = do
@@ -734,8 +736,8 @@ handshake_cert_fallback_hs (OHS clientHS serverHS) = do
             , cipher13_AES_128_GCM_SHA256
             ]
         commonHS =
-            [ (HashSHA256, SignatureRSA)
-            , (HashIntrinsic, SignatureRSApssRSAeSHA256)
+            [ RSA_PKCS1_SHA256
+            , RSA_PSS_RSAE_SHA256
             ]
     chainRef <- newIORef Nothing
     (clientParam, serverParam) <-
@@ -763,8 +765,8 @@ handshake_cert_fallback_hs (OHS clientHS serverHS) = do
                         }
                 }
         eddsaDisallowed =
-            (HashIntrinsic, SignatureEd25519) `notElem` clientHS
-                || (HashIntrinsic, SignatureEd25519) `notElem` serverHS
+            ED25519 `notElem` clientHS
+                || ED25519 `notElem` serverHS
     runTLSSimple (clientParam', serverParam')
     serverChain <- readIORef chainRef
     isLeafRSA serverChain `shouldBe` eddsaDisallowed
@@ -1054,7 +1056,7 @@ handshake12_cert_request_types = do
 -- that does not verify, a decrypt_error.  The client signs with an
 -- rsaEncryption key and the server reads the given algorithm.
 handshake12_client_cert_verify_sigalg
-    :: HashAndSignatureAlgorithm -> Selector TLSException -> IO ()
+    :: SignatureScheme -> Selector TLSException -> IO ()
 handshake12_client_cert_verify_sigalg alg rejected = do
     let cipher = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
     (clientParam, serverParam) <-
@@ -1070,7 +1072,7 @@ handshake12_client_cert_verify_sigalg alg rejected = do
                         { onCertificateRequest = \_ -> return $ Just cred
                         }
                 }
-        acceptUnverified = alg == (HashSHA256, SignatureECDSA)
+        acceptUnverified = alg == ECDSA_SECP256R1_SHA256
         serverParam' =
             serverParam
                 { serverWantClientCert = True
@@ -1094,7 +1096,7 @@ handshake12_client_cert_verify_sigalg alg rejected = do
 -- The same for the signature of ServerKeyExchange, which the client used to
 -- answer with an ErrorCall and internal_error.
 handshake12_server_key_xchg_sigalg
-    :: HashAndSignatureAlgorithm -> Selector TLSException -> IO ()
+    :: SignatureScheme -> Selector TLSException -> IO ()
 handshake12_server_key_xchg_sigalg alg rejected = do
     let cipher = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
     (clientParam, serverParam) <-
@@ -1102,7 +1104,7 @@ handshake12_server_key_xchg_sigalg alg rejected = do
             arbitraryPairParamsWithVersionsAndCiphers
                 ([TLS12], [TLS12])
                 ([cipher], [cipher])
-    let (HashAlgorithm h, SignatureAlgorithm sa) = alg
+    let code = fromSignatureScheme alg
         unfit (ServerKeyXchg (SKX_ECDHE_RSA params (DigitallySigned _ sig))) =
             pure $ ServerKeyXchg (SKX_ECDHE_RSA params (DigitallySigned alg sig))
         -- Arriving with ServerHello, it is decoded before the cipher is
@@ -1112,7 +1114,9 @@ handshake12_server_key_xchg_sigalg alg rejected = do
              in pure $
                     ServerKeyXchg $
                         SKX_Unparsed $
-                            B.take off bs <> B.pack [h, sa] <> B.drop (off + 2) bs
+                            B.take off bs
+                                <> B.pack [fromIntegral (code `shiftR` 8), fromIntegral code]
+                                <> B.drop (off + 2) bs
         unfit hs = pure hs
     r <- timeout 10000000 $
         withPairContextWith (id, id) (clientParam, serverParam) $ \(cctx, sctx) -> do
@@ -1128,7 +1132,7 @@ handshake12_server_key_xchg_sigalg alg rejected = do
 handshake12_unimplemented_sigalg :: IO ()
 handshake12_unimplemented_sigalg = do
     let cipher = cipher_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
-        sha224 = defaultSupported{supportedHashSignatures = [(HashSHA224, SignatureECDSA)]}
+        sha224 = defaultSupported{supportedHashSignatures = [ECDSA_SHA224]}
     (clientParam, serverParam) <-
         generate $
             arbitraryPairParamsWithVersionsAndCiphers
@@ -1233,7 +1237,7 @@ handshake13_client_cert_verify_unfit_sigalg = do
                 }
         unfit (CertVerify13 (DigitallySigned _ sig)) =
             pure $
-                CertVerify13 (DigitallySigned (HashIntrinsic, SignatureRSApsspssSHA256) sig)
+                CertVerify13 (DigitallySigned RSA_PSS_PSS_SHA256 sig)
         unfit hs = pure hs
     r <- timeout 10000000 $
         withPairContextWith (id, id) (clientParam', serverParam') $ \(cctx, sctx) -> do

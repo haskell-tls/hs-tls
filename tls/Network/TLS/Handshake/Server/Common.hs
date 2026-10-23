@@ -186,14 +186,14 @@ clientCertificate sparams ctx certs = do
 -- However here the algorithms are selected according
 -- to server preference in 'supportedHashSignatures'.
 hashAndSignaturesInCommon
-    :: [HashAndSignatureAlgorithm] -> [ExtensionRaw] -> [HashAndSignatureAlgorithm]
+    :: [SignatureScheme] -> [ExtensionRaw] -> [SignatureScheme]
 hashAndSignaturesInCommon sHashSigs exts = sHashSigs `intersect` cHashSigs
   where
     -- See Section 7.4.1.4.1 of RFC 5246.
     defVal =
-        [ (HashSHA1, SignatureECDSA)
-        , (HashSHA1, SignatureRSA)
-        , (HashSHA1, SignatureDSA)
+        [ ECDSA_SHA1
+        , RSA_PKCS1_SHA1
+        , DSA_SHA1
         ]
     cHashSigs =
         lookupAndDecode

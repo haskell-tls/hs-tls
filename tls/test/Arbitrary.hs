@@ -46,7 +46,7 @@ instance Arbitrary Session where
             2 -> Session . Just <$> genByteString 32
             _ -> return $ Session Nothing
 
-instance {-# OVERLAPS #-} Arbitrary [HashAndSignatureAlgorithm] where
+instance {-# OVERLAPS #-} Arbitrary [SignatureScheme] where
     arbitrary = shuffle supportedSignatureSchemes
 
 instance Arbitrary DigitallySigned where

@@ -156,7 +156,7 @@ makeCertVerify
     :: MonadIO m
     => Context
     -> PubKey
-    -> HashAndSignatureAlgorithm
+    -> SignatureScheme
     -> TranscriptHash
     -> m Handshake13
 makeCertVerify ctx pub hs (TranscriptHash hashValue) = do
@@ -171,7 +171,7 @@ checkCertVerify
     :: MonadIO m
     => Context
     -> PubKey
-    -> HashAndSignatureAlgorithm
+    -> SignatureScheme
     -> Signature
     -> ByteString
     -> m Bool
@@ -185,7 +185,7 @@ checkCertVerify ctx pub hs signature hashValue = liftIO $ do
     unless (pub `signatureCompatible13` hs) $
         throwCore $
             Error_Protocol
-                ("signature algorithm " ++ showSignatureScheme hs ++ " does not fit the public key")
+                ("signature algorithm " ++ show hs ++ " does not fit the public key")
                 IllegalParameter
     role <- usingState_ ctx getRole
     let ctxStr
@@ -206,7 +206,7 @@ sign
     :: MonadIO m
     => Context
     -> PubKey
-    -> HashAndSignatureAlgorithm
+    -> SignatureScheme
     -> ByteString
     -> m Signature
 sign ctx pub hs target = liftIO $ do
@@ -449,31 +449,14 @@ runRecvHandshake13 (RecvHandshake13M f) = do
 
 -- some hash/signature combinations have been deprecated in TLS13 and should
 -- not be used
-checkHashSignatureValid13 :: HashAndSignatureAlgorithm -> IO ()
+checkHashSignatureValid13 :: SignatureScheme -> IO ()
 checkHashSignatureValid13 hs =
     unless (isHashSignatureValid13 hs) $
-        let msg = "invalid TLS13 hash and signature algorithm: " ++ showSignatureScheme hs
+        let msg = "invalid TLS13 hash and signature algorithm: " ++ show hs
          in throwCore $ Error_Protocol msg IllegalParameter
 
-isHashSignatureValid13 :: HashAndSignatureAlgorithm -> Bool
+isHashSignatureValid13 :: SignatureScheme -> Bool
 isHashSignatureValid13 hs = hs `elem` signatureSchemesForTLS13
-
-{-
-isHashSignatureValid13 (HashIntrinsic, s) =
-    s
-        `elem` [ SignatureRSApssRSAeSHA256
-               , SignatureRSApssRSAeSHA384
-               , SignatureRSApssRSAeSHA512
-               , SignatureEd25519
-               , SignatureEd448
-               , SignatureRSApsspssSHA256
-               , SignatureRSApsspssSHA384
-               , SignatureRSApsspssSHA512
-               ]
-isHashSignatureValid13 (h, SignatureECDSA) =
-    h `elem` [HashSHA256, HashSHA384, HashSHA512]
-isHashSignatureValid13 _ = False
--}
 
 ----------------------------------------------------------------
 

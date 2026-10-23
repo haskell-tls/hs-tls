@@ -216,7 +216,7 @@ processCertRequest13 ctx token exts = do
             _ -> throwCore $ Error_Protocol "invalid certificate request" HandshakeFailure
     unsighash
         :: SignatureAlgorithms
-        -> Maybe [HashAndSignatureAlgorithm]
+        -> Maybe [SignatureScheme]
     unsighash (SignatureAlgorithms a) = Just a
 
 ----------------------------------------------------------------
@@ -347,7 +347,7 @@ sendClientSecondFlight13' cparams ctx choice hkey rtt0accepted eexts = do
 
 {- Unused for now
 uncertsig :: SignatureAlgorithmsCert
-          -> Maybe [HashAndSignatureAlgorithm]
+          -> Maybe [SignatureScheme]
 uncertsig (SignatureAlgorithmsCert a) = Just a
 -}
 

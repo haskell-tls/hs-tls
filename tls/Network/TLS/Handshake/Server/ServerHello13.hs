@@ -296,9 +296,9 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
         loadPacket13 ctx $ Handshake13 [EncryptedExtensions13 eeExtensions'] []
 
 credentialsFindForSigning13
-    :: [HashAndSignatureAlgorithm]
+    :: [SignatureScheme]
     -> Credentials
-    -> Maybe (Credential, HashAndSignatureAlgorithm)
+    -> Maybe (Credential, SignatureScheme)
 credentialsFindForSigning13 hss0 creds = loop hss0
   where
     loop [] = Nothing
@@ -308,7 +308,7 @@ credentialsFindForSigning13 hss0 creds = loop hss0
 
 -- See credentialsFindForSigning.
 credentialsFindForSigning13'
-    :: HashAndSignatureAlgorithm -> Credentials -> Maybe Credential
+    :: SignatureScheme -> Credentials -> Maybe Credential
 credentialsFindForSigning13' sigAlg (Credentials l) = find forSigning l
   where
     forSigning cred = case credentialDigitalSignatureKey cred of
