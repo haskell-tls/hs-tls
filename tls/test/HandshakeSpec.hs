@@ -9,6 +9,8 @@ import Control.Monad
 import Crypto.Cipher.AES (AES128)
 import Crypto.Cipher.Types (AEADMode (..), AuthTag (..), aeadInit, aeadSimpleEncrypt, cipherInit)
 import Crypto.Error (throwCryptoError)
+import qualified Crypto.Hash as H
+import qualified Crypto.MAC.HMAC as HMAC
 import Data.Bits (shiftR, xor)
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
@@ -22,7 +24,7 @@ import Network.TLS
 import Network.TLS.Extra.Cipher
 import Network.TLS.Extra.CipherCBC
 import Network.TLS.Internal
-import Network.TLS.QUIC (hkdfExpandLabel)
+import Network.TLS.QUIC (hkdfExpandLabel, hkdfExtract)
 import Test.Hspec
 import Test.Hspec.QuickCheck
 import System.Timeout (timeout)
@@ -183,6 +185,7 @@ spec = do
             handshake13_psk_tls12_session
         prop "can handshake with TLS 1.3 PSK ticket" handshake13_psk_ticket
         prop "can handshake with TLS 1.3 PSK -> HRR" handshake13_psk_fallback
+        it "binds the PSK to the transcript after HRR" handshake13_psk_hrr_binder
         prop "can handshake with TLS 1.3 0RTT" handshake13_0rtt
         it "rejects TLS 1.3 early data when ALPN changes" $
             handshake13_0rtt_alpn
@@ -2107,6 +2110,75 @@ handshake13_psk_fallback (CSP13 (cli, srv)) = do
                 }
 
     runTLSSimple13 (cli2, srv2') HelloRetryRequest
+
+-- RFC 8446 Section 4.2.11.2: after HelloRetryRequest the binder covers
+-- message_hash(ClientHello1), the HelloRetryRequest and the truncated
+-- ClientHello2.  It is computed here from the bytes on the wire, so that
+-- the client and the server cannot agree on another definition.
+handshake13_psk_hrr_binder :: IO ()
+handshake13_psk_hrr_binder = do
+    (cli, srv) <- generate arbitraryPairParams13
+    let supported grp =
+            defaultSupported
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [grp]
+                , supportedGroupsTLS13 = [[grp]]
+                }
+        params0 =
+            ( cli{clientSupported = (supported X25519){supportedGroups = [X25519, P256]}}
+            , srv{serverSupported = supported X25519}
+            )
+    sessionRefs <- twoSessionRefs
+    let params = setPairParamsSessionManagers (twoSessionManagers sessionRefs) params0
+    runTLSSimple13 params FullHandshake
+
+    -- The key share is for X25519, the group of the session, and the server
+    -- now asks for P-256.
+    sessionParams <- readClientSessionRef sessionRefs
+    expectJust "session param should be Just" sessionParams
+    let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
+        psk = sessionSecret $ snd $ fromJust sessionParams
+    cSent <- newIORef []
+    sSent <- newIORef []
+    let record ref be = be{backendSend = \bs -> modifyIORef ref (bs :) >> backendSend be bs}
+        params2 = (pc, ps{serverSupported = supported P256})
+    withPairContextWith (record cSent, record sSent) params2 $ \(cctx, sctx) ->
+        concurrently_ (handshake sctx) (handshake cctx)
+    ch1 : ch2 : _ <- plainHandshakes . B.concat . reverse <$> readIORef cSent
+    hrr : _ <- plainHandshakes . B.concat . reverse <$> readIORef sSent
+    let binderLen = 32
+        binder = B.drop (B.length ch2 - binderLen) ch2
+        truncated = B.take (B.length ch2 - (2 + 1 + binderLen)) ch2
+        sha256 :: B.ByteString -> B.ByteString
+        sha256 = BA.convert . H.hashWith H.SHA256
+        messageHash = B.pack [254, 0, 0, fromIntegral binderLen] <> sha256 ch1
+        early = hkdfExtract SHA256 (BA.zero 32) (BA.convert psk) :: BA.ScrubbedBytes
+        binderKey = hkdfExpandLabel SHA256 early "res binder" (sha256 "") 32 :: BA.ScrubbedBytes
+        finishedKey = hkdfExpandLabel SHA256 binderKey "finished" "" 32 :: B.ByteString
+        expected =
+            BA.convert
+                ( HMAC.hmac finishedKey (sha256 $ messageHash <> hrr <> truncated)
+                    :: HMAC.HMAC H.SHA256
+                )
+    binder `shouldBe` expected
+  where
+    -- The handshake messages of the plaintext records, in order.
+    plainHandshakes = messages . B.concat . handshakeRecords
+    handshakeRecords bs
+        | B.length bs < 5 = []
+        | otherwise =
+            let len = fromIntegral (B.index bs 3) * 256 + fromIntegral (B.index bs 4)
+                (body, rest) = B.splitAt len $ B.drop 5 bs
+             in [body | B.head bs == 22] ++ handshakeRecords rest
+    messages m
+        | B.length m < 4 = []
+        | otherwise =
+            let len =
+                    fromIntegral (B.index m 1) * 65536
+                        + fromIntegral (B.index m 2) * 256
+                        + fromIntegral (B.index m 3)
+                (msg, rest) = B.splitAt (4 + len) m
+             in msg : messages rest
 
 handshake13_0rtt :: CSP13 -> IO ()
 handshake13_0rtt (CSP13 (cli, srv)) = do
