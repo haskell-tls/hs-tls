@@ -2,9 +2,9 @@ name: Haskell CI
 
 on:
   push:
-    branches: [ 'main', 'ci' ]
+    branches: [ 'main', 'ci', 'stable-*' ]
   pull_request:
-    branches: [ 'main' ]
+    branches: [ 'main', 'stable-*' ]
 
 # Pushing again to a branch that is still building leaves the earlier run
 # occupying runner slots to produce a result nobody will read, so supersede it.
