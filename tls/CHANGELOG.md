@@ -19,6 +19,11 @@ value computed under the negotiated cipher's hash.
   [#535](https://github.com/haskell-tls/hs-tls/pull/535)
 * `tls-simpleserver` reports the channel bindings with `--verbose`.
   [#535](https://github.com/haskell-tls/hs-tls/pull/535)
+* Bind the PSK to the transcript after HelloRetryRequest.
+  This breaks a PSK after HRR with hs-tls 2.4 or earlier.
+  [#597](https://github.com/haskell-tls/hs-tls/pull/597)
+* Keep the CBC MAC check from timing the padding (Lucky Thirteen).
+  [#598](https://github.com/haskell-tls/hs-tls/pull/598)
 
 ## Version 2.4.12
 
