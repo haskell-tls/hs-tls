@@ -17,6 +17,7 @@ module Network.TLS.Handshake.State13 (
     clearRxRecordState,
     PendingRecvAction (..),
     setPendingRecvActions,
+    pushPendingRecvAction,
     popPendingRecvAction,
 ) where
 
@@ -140,6 +141,9 @@ clearXState func ctx =
 
 setPendingRecvActions :: Context -> [PendingRecvAction] -> IO ()
 setPendingRecvActions ctx = writeIORef (ctxPendingRecvActions ctx)
+
+pushPendingRecvAction :: Context -> PendingRecvAction -> IO ()
+pushPendingRecvAction ctx a = modifyIORef' (ctxPendingRecvActions ctx) (a :)
 
 popPendingRecvAction :: Context -> IO (Maybe PendingRecvAction)
 popPendingRecvAction ctx = do

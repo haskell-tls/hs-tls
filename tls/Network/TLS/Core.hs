@@ -422,10 +422,16 @@ recvData13 ctx = do
             else do
                 let reason = "received key update before established"
                 terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-    -- Client only
-    loopHandshake13 (hb@(CertRequest13{}, _) : hbs) =
-        postHandshakeAuthWith ctx hb >> loopHandshake13 hbs
-    loopHandshake13 (hb@(h, _) : hbs) = do
+    -- Client only.  Before Established, it belongs to the handshake that
+    -- 0-RTT left to the pending actions.
+    loopHandshake13 (hb@(CertRequest13{}, _) : hbs) = do
+        established <- ctxEstablished ctx
+        if established == Established
+            then postHandshakeAuthWith ctx hb >> loopHandshake13 hbs
+            else loopPending hb hbs
+    loopHandshake13 (hb : hbs) = loopPending hb hbs
+
+    loopPending hb@(h, _) hbs = do
         rtt0 <- tls13st0RTT <$> getTLS13State ctx
         when rtt0 $ case h of
             ServerHello13 SH{..} ->

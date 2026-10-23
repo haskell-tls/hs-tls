@@ -173,6 +173,10 @@ spec = do
         it "rejects TLS 1.3 early data when ALPN changes" $
             handshake13_0rtt_alpn
         prop "can handshake with TLS 1.3 0RTT -> PSK" handshake13_0rtt_fallback
+        it "authenticates a server rejecting the PSK of 0RTT" $
+            handshake13_0rtt_psk_rejected False
+        it "authenticates a server rejecting the PSK of 0RTT, asking a cert" $
+            handshake13_0rtt_psk_rejected True
         prop "can handshake with TLS 1.3 EE" handshake13_ee_groups
         prop "can handshake with TLS 1.3 EC groups" handshake13_ec
         prop "can handshake with TLS 1.3 FFDHE groups" handshake13_ffdhe
@@ -2155,6 +2159,40 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
         handshake ctx
         _ <- recvData ctx
         bye ctx
+
+-- The server has forgotten the session, so it answers 0-RTT with a full
+-- handshake, and the client must check its certificate.
+handshake13_0rtt_psk_rejected :: Bool -> IO ()
+handshake13_0rtt_psk_rejected wantCert = do
+    (cli, srv) <- generate arbitraryPairParams13
+    let supported =
+            defaultSupported
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
+                }
+        params0 =
+            ( cli{clientSupported = supported}
+            , srv{serverSupported = supported, serverEarlyDataSize = 2048}
+            )
+    sessionRefs <- twoSessionRefs
+    let params = setPairParamsSessionManagers (twoSessionManagers sessionRefs) params0
+    runTLSSimple13 params FullHandshake
+
+    sessionParams <- readClientSessionRef sessionRefs
+    expectJust "session param should be Just" sessionParams
+    writeIORef (snd sessionRefs) Nothing
+    earlyData <- B.pack <$> generate (someWords8 256)
+    let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
+        ps' =
+            ps
+                { serverWantClientCert = wantCert
+                , serverHooks =
+                    (serverHooks ps)
+                        { onClientCertificate = \_ -> return CertificateUsageAccept
+                        }
+                }
+    runTLS0RTT (pc{clientUseEarlyData = True}, ps') FullHandshake earlyData
 
 handshake13_ee_groups :: CSP13 -> IO ()
 handshake13_ee_groups (CSP13 (cli, srv)) = do
