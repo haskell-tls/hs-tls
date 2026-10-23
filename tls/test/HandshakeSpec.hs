@@ -130,6 +130,8 @@ spec = do
             handshake12_server_key_xchg_sigalg
                 (HashIntrinsic, SignatureRSApsspssSHA256)
                 rejectedAsDecryptError
+        it "refuses a TLS 1.2 signature algorithm it cannot sign with" $
+            handshake12_unimplemented_sigalg
         prop "can receive client authentication failure" handshake_client_auth_fail
         it "accepts an empty TLS 1.2 client certificate when the hook does" $
             handshake_client_auth_empty TLS12
@@ -1118,6 +1120,39 @@ handshake12_server_key_xchg_sigalg alg rejected = do
             concurrently_
                 (void (E.try (handshake sctx) :: IO (Either TLSException ())))
                 (handshake cctx `shouldThrow` rejected)
+    r `shouldSatisfy` isJust
+
+-- ecdsa_sha224 is a combination TLS 1.2 allows and this library does not
+-- implement.  Configured on both sides, it must not be chosen and then fail
+-- to sign with an ErrorCall; the handshake fails with an alert instead.
+handshake12_unimplemented_sigalg :: IO ()
+handshake12_unimplemented_sigalg = do
+    let cipher = cipher_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        sha224 = defaultSupported{supportedHashSignatures = [(HashSHA224, SignatureECDSA)]}
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS12], [TLS12])
+                ([cipher], [cipher])
+    creds <- generate arbitraryCredentialsOfEachType
+    let cred = head [c | c@(_, PrivKeyEC _) <- creds]
+        clientParam' =
+            clientParam
+                { clientSupported =
+                    sha224{supportedCiphers = [cipher], supportedVersions = [TLS12]}
+                }
+        serverParam' =
+            serverParam
+                { serverSupported =
+                    sha224{supportedCiphers = [cipher], supportedVersions = [TLS12]}
+                , serverShared =
+                    (serverShared serverParam){sharedCredentials = Credentials [cred]}
+                }
+    r <- timeout 10000000 $
+        withPairContextWith (id, id) (clientParam', serverParam') $ \(cctx, sctx) ->
+            concurrently_
+                (handshake sctx `shouldThrow` rejectedAsHandshakeFailure)
+                (void (E.try (handshake cctx) :: IO (Either TLSException ())))
     r `shouldSatisfy` isJust
 
 -- A DER ECDSA signature that does not decode is a signature that does not

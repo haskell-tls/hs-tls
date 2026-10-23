@@ -24,6 +24,8 @@ value computed under the negotiated cipher's hash.
   [#597](https://github.com/haskell-tls/hs-tls/pull/597)
 * Keep the CBC MAC check from timing the padding (Lucky Thirteen).
   [#598](https://github.com/haskell-tls/hs-tls/pull/598)
+* Offer only the signature algorithms that can be signed with.
+  [#599](https://github.com/haskell-tls/hs-tls/pull/599)
 
 ## Version 2.4.12
 
