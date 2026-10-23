@@ -120,6 +120,14 @@ spec = do
             handshake12_client_cert_verify_sigalg
                 (HashIntrinsic, SignatureRSApsspssSHA256)
                 rejectedAsDecryptError
+        it "rejects a TLS 1.2 ServerKeyExchange algorithm for another key type" $
+            handshake12_server_key_xchg_sigalg
+                (HashSHA256, SignatureECDSA)
+                rejectedAsIllegalParameter
+        it "rejects a TLS 1.2 ServerKeyExchange that does not fit the RSA key" $
+            handshake12_server_key_xchg_sigalg
+                (HashIntrinsic, SignatureRSApsspssSHA256)
+                rejectedAsDecryptError
         prop "can receive client authentication failure" handshake_client_auth_fail
         it "accepts an empty TLS 1.2 client certificate when the hook does" $
             handshake_client_auth_empty TLS12
@@ -1076,6 +1084,37 @@ handshake12_client_cert_verify_sigalg alg rejected = do
             concurrently_
                 (handshake sctx `shouldThrow` rejected)
                 (void (E.try (handshake cctx) :: IO (Either TLSException ())))
+    r `shouldSatisfy` isJust
+
+-- The same for the signature of ServerKeyExchange, which the client used to
+-- answer with an ErrorCall and internal_error.
+handshake12_server_key_xchg_sigalg
+    :: HashAndSignatureAlgorithm -> Selector TLSException -> IO ()
+handshake12_server_key_xchg_sigalg alg rejected = do
+    let cipher = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS12], [TLS12])
+                ([cipher], [cipher])
+    let (HashAlgorithm h, SignatureAlgorithm sa) = alg
+        unfit (ServerKeyXchg (SKX_ECDHE_RSA params (DigitallySigned _ sig))) =
+            pure $ ServerKeyXchg (SKX_ECDHE_RSA params (DigitallySigned alg sig))
+        -- Arriving with ServerHello, it is decoded before the cipher is
+        -- known: curve type and group, the point, then the algorithm.
+        unfit (ServerKeyXchg (SKX_Unparsed bs)) =
+            let off = 4 + fromIntegral (B.index bs 3)
+             in pure $
+                    ServerKeyXchg $
+                        SKX_Unparsed $
+                            B.take off bs <> B.pack [h, sa] <> B.drop (off + 2) bs
+        unfit hs = pure hs
+    r <- timeout 10000000 $
+        withPairContextWith (id, id) (clientParam, serverParam) $ \(cctx, sctx) -> do
+            contextHookSetHandshakeRecv cctx unfit
+            concurrently_
+                (void (E.try (handshake sctx) :: IO (Either TLSException ())))
+                (handshake cctx `shouldThrow` rejected)
     r `shouldSatisfy` isJust
 
 -- A DER ECDSA signature that does not decode is a signature that does not
