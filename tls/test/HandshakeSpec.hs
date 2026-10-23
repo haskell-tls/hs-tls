@@ -216,6 +216,8 @@ spec = do
             short_record_bad_record_mac TLS12 cipher_ECDHE_RSA_AES128CBC_SHA256
         it "rejects a too short TLS 1.3 record with bad_record_mac" $
             short_record_bad_record_mac TLS13 cipher13_AES_128_GCM_SHA256
+        it "rejects a TLS 1.3 alert in clear after the handshake" $
+            plaintext_alert13_rejected
         it "rejects a ServerHello as the first client message" $
             server_first_message_unexpected 2
         it "rejects a Finished as the first client message" $
@@ -2483,6 +2485,44 @@ short_record_bad_record_mac version cipher = do
                     sendData cctx "hello"
                     void (E.try (recvData cctx) :: IO (Either E.SomeException B.ByteString))
                 )
+
+-- RFC 8446 Section 5: once keys are in use, only ChangeCipherSpec may come
+-- in clear.  An injected close_notify must not read as an orderly close.
+plaintext_alert13_rejected :: IO ()
+plaintext_alert13_rejected = do
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS13], [TLS13])
+                ([cipher13_AES_128_GCM_SHA256], [cipher13_AES_128_GCM_SHA256])
+    armed <- newIORef False
+    let injectAlert be =
+            be
+                { backendSend = \bs -> do
+                    inject <- readIORef armed
+                    if inject && B.take 1 bs == B.singleton 23
+                        then do
+                            writeIORef armed False
+                            backendSend be $ B.pack [21, 3, 3, 0, 2, 1, 0]
+                        else backendSend be bs
+                }
+    withPairContextWith (injectAlert, id) (clientParam, serverParam) $
+        \(cctx, sctx) ->
+            concurrently_
+                ( do
+                    handshake sctx
+                    recvData sctx `shouldThrow` rejectedPlaintextAlert
+                )
+                ( do
+                    handshake cctx
+                    writeIORef armed True
+                    sendData cctx "hello"
+                    void (E.try (recvData cctx) :: IO (Either E.SomeException B.ByteString))
+                )
+
+rejectedPlaintextAlert :: TLSException -> Bool
+rejectedPlaintextAlert (Terminated _ _ (Error_Protocol _ UnexpectedMessage)) = True
+rejectedPlaintextAlert _ = False
 
 serverRejectedShortRecord :: TLSException -> Bool
 serverRejectedShortRecord (Terminated _ _ (Error_Protocol _ BadRecordMac)) = True

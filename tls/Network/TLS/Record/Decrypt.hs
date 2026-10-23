@@ -42,7 +42,13 @@ decryptRecord record@(Record ct ver fragment) lim = do
                 Left message -> throwError $ Error_Protocol message UnexpectedMessage
                 Right (ct', d) -> return $ Record ct' ver $ fragmentPlaintext d
         ProtocolType_ChangeCipherSpec -> noDecryption
-        ProtocolType_Alert -> noDecryption
+        -- A peer that fails before it has keys answers in clear, but after
+        -- the handshake an alert in clear can only be forged (RFC 8446
+        -- Section 5).
+        ProtocolType_Alert
+            | stCryptLevel st == CryptApplicationSecret ->
+                throwError $ Error_Protocol "alert in clear" UnexpectedMessage
+            | otherwise -> noDecryption
         _ ->
             throwError $ Error_Protocol "illegal plain text" UnexpectedMessage
 
