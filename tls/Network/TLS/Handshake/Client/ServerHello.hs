@@ -22,7 +22,6 @@ import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Random
 import Network.TLS.Handshake.State
 import Network.TLS.Handshake.TranscriptHash
-import Network.TLS.IO
 import Network.TLS.Imports
 import Network.TLS.Packet
 import Network.TLS.Parameters
@@ -59,7 +58,7 @@ receiveServerHello cparams ctx mparams = do
     return (ver, hbs, hrr)
   where
     recvSH = do
-        epkt <- recvPacket12 ctx
+        epkt <- recvPacket12HS ctx
         case epkt of
             Left e -> throwCore e
             Right pkt -> case pkt of

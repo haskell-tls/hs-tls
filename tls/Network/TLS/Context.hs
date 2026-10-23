@@ -176,6 +176,7 @@ contextNew backend params = liftIO $ do
     rx <- newMVar newRecordState
     hs <- newMVar Nothing
     recvActionsRef <- newIORef []
+    appDataRef <- newIORef []
     sendActionRef <- newIORef Nothing
     locks <- Locks <$> newMVar () <*> newMVar () <*> newMVar ()
     st13ref <- newIORef defaultTLS13State
@@ -210,6 +211,7 @@ contextNew backend params = liftIO $ do
                 , ctxHooks = hooks
                 , ctxLocks = locks
                 , ctxPendingRecvActions = recvActionsRef
+                , ctxPendingAppData = appDataRef
                 , ctxPendingSendAction = sendActionRef
                 , ctxRecordLayer = recordLayer
                 , ctxHandshakeSync = HandshakeSync syncNoOp syncNoOp

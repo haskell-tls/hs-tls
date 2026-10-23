@@ -146,6 +146,8 @@ data Context
     , -- TLS 1.3
       ctxTLS13State :: IORef TLS13State
     , ctxPendingRecvActions :: IORef [PendingRecvAction]
+    , ctxPendingAppData :: IORef [ByteString]
+    -- ^ TLS 1.2 application data received during renegotiation, newest first
     , ctxPendingSendAction :: IORef (Maybe (Context -> IO ()))
     -- ^ pending post handshake authentication requests
     , -- QUIC

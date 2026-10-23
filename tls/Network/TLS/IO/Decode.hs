@@ -42,6 +42,7 @@ decodePacket12 ctx (Record ProtocolType_ChangeCipherSpec _ fragment) =
             case mhs >>= hstPendingRxState of
                 Just rx | isNothing mCont -> do
                     modifyMVar_ (ctxRxRecordState ctx) (\_ -> return rx)
+                    usingHState ctx $ modify' $ \hst -> hst{hstRxSwitched = True}
                     return $ Right ChangeCipherSpec
                 _ ->
                     return $

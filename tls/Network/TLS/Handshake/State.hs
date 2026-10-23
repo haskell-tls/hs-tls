@@ -148,6 +148,8 @@ data HandshakeState = HandshakeState
     , hstClientCertChain :: Maybe CertificateChain
     , hstPendingTxState :: Maybe RecordState
     , hstPendingRxState :: Maybe RecordState
+    , hstRxSwitched :: Bool
+    -- ^ Set when the peer's ChangeCipherSpec switched the Rx state
     , hstPendingCipher :: Maybe Cipher
     , hstPendingCompression :: Compression
     , hstExtendedMainSecret :: Bool
@@ -248,6 +250,7 @@ newEmptyHandshake ver crand =
         , hstClientCertChain = Nothing
         , hstPendingTxState = Nothing
         , hstPendingRxState = Nothing
+        , hstRxSwitched = False
         , hstPendingCipher = Nothing
         , hstPendingCompression = nullCompression
         , hstExtendedMainSecret = False
