@@ -222,6 +222,8 @@ spec = do
             short_record_bad_record_mac TLS13 cipher13_AES_128_GCM_SHA256
         it "rejects a TLS 1.3 alert in clear after the handshake" $
             plaintext_alert13_rejected
+        it "rejects a TLS 1.2 ChangeCipherSpec before the keys" $
+            early_ccs12_rejected
         it "rejects a ServerHello as the first client message" $
             server_first_message_unexpected 2
         it "rejects a Finished as the first client message" $
@@ -2549,6 +2551,33 @@ plaintext_alert13_rejected = do
 rejectedPlaintextAlert :: TLSException -> Bool
 rejectedPlaintextAlert (Terminated _ _ (Error_Protocol _ UnexpectedMessage)) = True
 rejectedPlaintextAlert _ = False
+
+-- A ChangeCipherSpec ahead of the client's second flight, before the server
+-- has the keys to switch to.  The handshake would refuse it anyway; this
+-- keeps the record layer from switching to keys that do not exist.
+early_ccs12_rejected :: IO ()
+early_ccs12_rejected = do
+    let cipher = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS12], [TLS12])
+                ([cipher], [cipher])
+    sent <- newIORef (0 :: Int)
+    let injectCCS be =
+            be
+                { backendSend = \bs -> do
+                    n <- readIORef sent
+                    writeIORef sent (n + 1)
+                    -- The first send is ClientHello.
+                    when (n == 1) $ backendSend be $ B.pack [20, 3, 3, 0, 1, 1]
+                    backendSend be bs
+                }
+    withPairContextWith (injectCCS, id) (clientParam, serverParam) $
+        \(cctx, sctx) ->
+            concurrently_
+                (handshake sctx `shouldThrow` rejectedAsUnexpected)
+                (void (E.try (handshake cctx) :: IO (Either E.SomeException ())))
 
 serverRejectedShortRecord :: TLSException -> Bool
 serverRejectedShortRecord (Terminated _ _ (Error_Protocol _ BadRecordMac)) = True
