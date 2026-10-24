@@ -141,26 +141,8 @@ helloRetry cparams ctx mparams ver crand groupsSupported groupsSelected = do
             -- RFC 8446 Sec 4.1.4: the selected_group MUST be in supported_groups
             -- and MUST NOT already have been offered in the initial key_share.
             | selectedGroup `elem` groupsSupported
-                && selectedGroup `notElem` groupsSelected -> do
-                usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
-                clearTxRecordState ctx
-                let cparams' = cparams{clientUseEarlyData = False}
-                runPacketFlight ctx $ sendChangeCipherSpec13 ctx
-                clientSession <- tls13stSession <$> getTLS13State ctx
-                -- RFC 8446 Sec 4.1.2: the second ClientHello MUST be identical
-                -- to the first except for the specific listed changes.
-                -- supported_groups is NOT on that list, so it must be unchanged.
-                let grps =
-                        Groups
-                            { grpsSupported = groupsSupported
-                            , grpsSelected = [selectedGroup]
-                            }
-
-                handshake
-                    cparams'
-                    ctx
-                    grps
-                    (Just (crand, clientSession, ver))
+                && selectedGroup `notElem` groupsSelected ->
+                retry [selectedGroup]
             | selectedGroup `elem` groupsSelected ->
                 throwCore $
                     Error_Protocol
@@ -170,8 +152,33 @@ helloRetry cparams ctx mparams ver crand groupsSupported groupsSelected = do
                 throwCore $
                     Error_Protocol "server-selected group is not supported" IllegalParameter
         Just _ -> error "handshake: invalid KeyShare value"
-        Nothing ->
-            throwCore $
-                Error_Protocol
-                    "key exchange not implemented in HRR, expected key_share extension"
-                    HandshakeFailure
+        -- RFC 9846 Section 4.1.4: without key_share, the key shares are
+        -- sent again, but the HelloRetryRequest must change something.
+        Nothing -> do
+            mcookie <- usingState_ ctx getTLS13Cookie
+            when (isNothing mcookie) $
+                throwCore $
+                    Error_Protocol
+                        "HelloRetryRequest would not change ClientHello"
+                        IllegalParameter
+            retry groupsSelected
+  where
+    retry selected = do
+        usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
+        clearTxRecordState ctx
+        let cparams' = cparams{clientUseEarlyData = False}
+        runPacketFlight ctx $ sendChangeCipherSpec13 ctx
+        clientSession <- tls13stSession <$> getTLS13State ctx
+        -- RFC 8446 Sec 4.1.2: the second ClientHello MUST be identical
+        -- to the first except for the specific listed changes.
+        -- supported_groups is NOT on that list, so it must be unchanged.
+        let grps =
+                Groups
+                    { grpsSupported = groupsSupported
+                    , grpsSelected = selected
+                    }
+        handshake
+            cparams'
+            ctx
+            grps
+            (Just (crand, clientSession, ver))
