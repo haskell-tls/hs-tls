@@ -106,6 +106,8 @@ errorToAlert (Error_Packet_Parsing msg)
     | "invalid version" `isInfixOf` msg = (AlertLevel_Fatal, ProtocolVersion)
     | "request_update" `isInfixOf` msg = (AlertLevel_Fatal, IllegalParameter)
     | "cannot be decompressed" `isInfixOf` msg = (AlertLevel_Fatal, BadCertificate)
+    | "error certificate parsing" `isInfixOf` msg =
+        (AlertLevel_Fatal, BadCertificate)
     | "unsupported certificate compression algorithm" `isInfixOf` msg =
         (AlertLevel_Fatal, IllegalParameter)
     | otherwise = (AlertLevel_Fatal, DecodeError)

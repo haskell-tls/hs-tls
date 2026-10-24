@@ -25,7 +25,7 @@ import Network.TLS
 import Network.TLS.Extra.Cipher
 import Network.TLS.Extra.CipherCBC
 import Network.TLS.Internal
-import Network.TLS.QUIC (hkdfExpandLabel, hkdfExtract)
+import Network.TLS.QUIC (errorToAlertDescription, hkdfExpandLabel, hkdfExtract)
 import Test.Hspec
 import Test.Hspec.QuickCheck
 import System.Timeout (timeout)
@@ -142,6 +142,8 @@ spec = do
             handshake12_client_cert_omitted
         it "rejects a TLS 1.2 server omitting Certificate" $
             handshake12_server_message_omitted 11
+        it "answers a corrupt certificate with bad_certificate" $
+            handshake12_corrupt_certificate
         it "rejects a TLS 1.2 server omitting ServerKeyExchange for ECDHE" $
             handshake12_server_message_omitted 12
         it "requests only defined certificate types in TLS 1.2" $
@@ -1075,7 +1077,13 @@ handshake12_server_message_omitted typ = do
 -- | Cut the handshake messages of a type out of what a TLS 1.2 peer sends
 -- in clear, that is, before its ChangeCipherSpec.
 dropHandshake12 :: Word8 -> IORef Bool -> Backend -> Backend
-dropHandshake12 typ ccsSent be =
+dropHandshake12 typ = mapHandshake12 $ \m -> if B.head m == typ then "" else m
+
+-- | Change each handshake message, header included, that a TLS 1.2 peer
+-- sends in clear.
+mapHandshake12
+    :: (B.ByteString -> B.ByteString) -> IORef Bool -> Backend -> Backend
+mapHandshake12 f ccsSent be =
     be
         { backendSend = \bs -> do
             done <- readIORef ccsSent
@@ -1102,7 +1110,39 @@ dropHandshake12 typ ccsSent be =
                         + fromIntegral (B.index m 2) * 256
                         + fromIntegral (B.index m 3)
                 (msg, rest) = B.splitAt (4 + len) m
-             in (if B.head m == typ then "" else msg) <> stripMessages rest
+             in f msg <> stripMessages rest
+
+-- A Certificate message whose lengths are right but whose certificate is
+-- not DER is answered with bad_certificate, not decode_error.  The server's
+-- certificate is zeroed on the wire.
+handshake12_corrupt_certificate :: IO ()
+handshake12_corrupt_certificate = do
+    let cipher = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS12], [TLS12])
+                ([cipher], [cipher])
+    ccsSent <- newIORef False
+    let corrupt m
+            | B.head m == 11 =
+                let certLen =
+                        fromIntegral (B.index m 7) * 65536
+                            + fromIntegral (B.index m 8) * 256
+                            + fromIntegral (B.index m 9)
+                    (hdr, rest) = B.splitAt 10 m
+                 in hdr <> B.replicate certLen 0 <> B.drop certLen rest
+            | otherwise = m
+    withPairContextWith
+        (id, mapHandshake12 corrupt ccsSent)
+        (clientParam, serverParam) $
+        \(cctx, sctx) ->
+            concurrently_
+                (void (E.try (handshake sctx) :: IO (Either E.SomeException ())))
+                (handshake cctx `shouldThrow` badCertificate)
+  where
+    badCertificate (HandshakeFailed err) = errorToAlertDescription err == BadCertificate
+    badCertificate _ = False
 
 -- In TLS 1.2 a client certificate with an Ed25519 or Ed448 key is asked
 -- for with ecdsa_sign (RFC 8422 Section 3.1).  The Ed25519 and Ed448
