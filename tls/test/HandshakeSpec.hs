@@ -61,8 +61,6 @@ spec = do
         prop "can prevent downgrade attack" handshake13_downgrade
         it "negotiates TLS 1.2 with a ClientHello naming a higher version" $
             handshake_high_legacy_version TLS12 (Version 0x0309)
-        it "ignores legacy_version when supported_versions is present" $
-            handshake_high_legacy_version TLS13 TLS13
         it "keeps to the TLS 1.3 server's record size limit" $
             record_size_limit_negotiated TLS13 False
         it "keeps to the TLS 1.3 client's record size limit" $
@@ -297,6 +295,79 @@ spec = do
             handshake13_hrr_without_key_share True
         it "rejects a HelloRetryRequest that changes nothing" $
             handshake13_hrr_without_key_share False
+        it "rejects a legacy_version above TLS 1.2 with supported_versions" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            serverRefusesHello
+                params
+                (\ch -> ch{chVersion = TLS13})
+                (refusedWith ProtocolVersion)
+        it "rejects supported_versions without TLS 1.2 in a TLS 1.2 server" $ do
+            (cli, srv) <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let cli' = cli{clientSupported = (clientSupported cli){supportedVersions = [TLS13]}}
+                srv' = srv{serverSupported = (serverSupported srv){supportedVersions = [TLS12]}}
+            serverRefusesHello (cli', srv') id (refusedWith ProtocolVersion)
+        it "rejects a ServerHello legacy_version other than TLS 1.2" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            clientRefusesHello
+                params
+                (\sh -> sh{shVersion = TLS13})
+                (refusedWith ProtocolVersion)
+        it "rejects supported_versions in a ServerHello choosing TLS 1.2" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let tls12 (ExtensionRaw EID_SupportedVersions _) =
+                    toExtensionRaw $ SupportedVersionsServerHello TLS12
+                tls12 e = e
+            clientRefusesHello
+                params
+                (\sh -> sh{shExtensions = map tls12 $ shExtensions sh})
+                (refusedFor IllegalParameter "supported_versions")
+        it "rejects a TLS 1.2 ServerHello in a TLS 1.3 client" $ do
+            (cli, srv) <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let cli' = cli{clientSupported = (clientSupported cli){supportedVersions = [TLS13]}}
+                noVersions (ExtensionRaw eid _) = eid /= EID_SupportedVersions
+            clientRefusesHello
+                (cli', srv)
+                (\sh -> sh{shExtensions = filter noVersions $ shExtensions sh})
+                (refusedWith ProtocolVersion)
+        it "rejects ALPN in a TLS 1.3 ServerHello" $ do
+            (cli, srv) <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let cli' = cli{clientHooks = (clientHooks cli){onSuggestALPN = return $ Just ["h2"]}}
+                alpn = toExtensionRaw $ ApplicationLayerProtocolNegotiation ["h2"]
+            clientRefusesHello
+                (cli', srv)
+                (\sh -> sh{shExtensions = shExtensions sh ++ [alpn]})
+                (refusedWith IllegalParameter)
+        it "rejects supported_versions in EncryptedExtensions" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let versions = toExtensionRaw $ SupportedVersionsServerHello TLS13
+                tamper (EncryptedExtensions13 exts) =
+                    pure $ EncryptedExtensions13 $ exts ++ [versions]
+                tamper h = pure h
+            withPairContext params $ \(cctx, sctx) -> do
+                contextHookSetHandshake13Recv cctx tamper
+                concurrently_
+                    (handshake sctx `shouldThrow` anyTLSException)
+                    (handshake cctx `shouldThrow` refusedWith IllegalParameter)
+        it "rejects a TLS 1.3 ClientHello without signature_algorithms" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            serverRefusesHello
+                params
+                (withoutExt EID_SignatureAlgorithms)
+                (refusedWith MissingExtension)
+        it "rejects a TLS 1.3 ClientHello with key_share but no supported_groups" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            serverRefusesHello
+                params
+                (withoutExt EID_SupportedGroups)
+                (refusedWith MissingExtension)
+        it "rejects a key_share for a group not in supported_groups" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let p256 (ExtensionRaw EID_SupportedGroups _) = toExtensionRaw $ SupportedGroups [P256]
+                p256 e = e
+            serverRefusesHello
+                params
+                (\ch -> ch{chExtensions = map p256 $ chExtensions ch})
+                (refusedWith IllegalParameter)
         it "updates the keys before the record limit" $
             handshake13_key_usage_limit
         it "stops early data at the record limit" $
@@ -1514,11 +1585,10 @@ rejectedAsIllegalParameter (Terminated _ _ (Error_Protocol _ IllegalParameter)) 
 rejectedAsIllegalParameter _ = False
 
 -- A server that receives a ClientHello whose legacy_version is higher than
--- its own negotiates the highest version it supports (RFC 5246 Appendix
--- E.1); with supported_versions present it does not use legacy_version at
--- all (RFC 8446 Section 4.2.1).  The ClientHello's legacy_version is raised
--- on its way to the server, and the handshake must still reach the version
--- both sides support.
+-- its own, without supported_versions, negotiates the highest version it
+-- supports (RFC 5246 Appendix E.1, RFC 9846 Section 4.3.1).  The
+-- ClientHello's legacy_version is raised on its way to the server, and the
+-- handshake must still reach the version both sides support.
 handshake_high_legacy_version :: Version -> Version -> IO ()
 handshake_high_legacy_version version legacy = do
     let cipher
@@ -3433,6 +3503,53 @@ handshake13_hrr_without_key_share withCookie = do
     findExt i ch = find (\(ExtensionRaw eid _) -> eid == i) (chExtensions ch)
     illegalParameter (HandshakeFailed (Error_Protocol _ IllegalParameter)) = True
     illegalParameter _ = False
+
+-- The server refuses the ClientHello the function changes, as the
+-- selector expects.
+serverRefusesHello
+    :: (ClientParams, ServerParams)
+    -> (ClientHello -> ClientHello)
+    -> Selector TLSException
+    -> IO ()
+serverRefusesHello params f refused =
+    withPairContext params $ \(cctx, sctx) -> do
+        contextHookSetHandshakeRecv sctx tamper
+        concurrently_
+            (handshake sctx `shouldThrow` refused)
+            (handshake cctx `shouldThrow` anyTLSException)
+  where
+    tamper (ClientHello ch) = pure $ ClientHello $ f ch
+    tamper h = pure h
+
+-- The client refuses the ServerHello the function changes, as the
+-- selector expects.
+clientRefusesHello
+    :: (ClientParams, ServerParams)
+    -> (ServerHello -> ServerHello)
+    -> Selector TLSException
+    -> IO ()
+clientRefusesHello params f refused =
+    withPairContext params $ \(cctx, sctx) -> do
+        contextHookSetHandshakeRecv cctx tamper
+        concurrently_
+            (handshake sctx `shouldThrow` anyTLSException)
+            (handshake cctx `shouldThrow` refused)
+  where
+    tamper (ServerHello sh) = pure $ ServerHello $ f sh
+    tamper h = pure h
+
+withoutExt :: ExtensionID -> ClientHello -> ClientHello
+withoutExt i ch =
+    ch{chExtensions = filter (\(ExtensionRaw eid _) -> eid /= i) $ chExtensions ch}
+
+refusedWith :: AlertDescription -> TLSException -> Bool
+refusedWith ad = refusedFor ad ""
+
+-- Refused with the alert, for a reason containing the string.
+refusedFor :: AlertDescription -> String -> TLSException -> Bool
+refusedFor ad needle (HandshakeFailed (Error_Protocol reason ad')) =
+    ad == ad' && needle `isInfixOf` reason
+refusedFor _ _ _ = False
 
 unhexBytes :: String -> B.ByteString
 unhexBytes [] = B.empty

@@ -44,6 +44,16 @@ processClientHello13 sparams ctx ch@CH{..} = do
         (any (\(ExtensionRaw eid _) -> eid == EID_PreSharedKey) $ init chExtensions)
         $ throwCore
         $ Error_Protocol "extension pre_shared_key must be last" IllegalParameter
+    -- RFC 9846 Section 9.2: the extensions a TLS 1.3 ClientHello must have.
+    let has eid = isJust $ extensionLookup eid chExtensions
+        missing reason = throwCore $ Error_Protocol reason MissingExtension
+    unless (has EID_PreSharedKey) $ do
+        unless (has EID_SignatureAlgorithms) $
+            missing "no signature_algorithms extension without pre_shared_key"
+        unless (has EID_SupportedGroups) $
+            missing "no supported_groups extension without pre_shared_key"
+    when (has EID_SupportedGroups /= has EID_KeyShare) $
+        missing "supported_groups and key_share must come together"
     -- Deciding cipher.
     -- The shared cipherlist can become empty after filtering for compatible
     -- creds, check now before calling onCipherChoosing, which does not handle
@@ -79,14 +89,18 @@ processClientHello13 sparams ctx ch@CH{..} = do
         extract _ = require
     keyShares <-
         lookupAndDecodeAndDo EID_KeyShare MsgTClientHello chExtensions require extract
-    let clientGroups =
-            take limitSupportedGroups $
-                lookupAndDecode
-                    EID_SupportedGroups
-                    MsgTClientHello
-                    chExtensions
-                    []
-                    (\(SupportedGroups gs) -> gs)
+    let allClientGroups =
+            lookupAndDecode
+                EID_SupportedGroups
+                MsgTClientHello
+                chExtensions
+                []
+                (\(SupportedGroups gs) -> gs)
+        clientGroups = take limitSupportedGroups allClientGroups
+    -- RFC 9846 Section 4.2.8: servers MAY check this.
+    unless (all ((`elem` allClientGroups) . keyShareEntryGroup) keyShares) $
+        throwCore $
+            Error_Protocol "key_share for a group not in supported_groups" IllegalParameter
     (mgroup, doHRR) <-
         onSelectKeyShare
             (serverHooks sparams)

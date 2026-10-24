@@ -56,6 +56,8 @@ value computed under the negotiated cipher's hash.
 * Refuse an RSA key shorter than `supportedMinRSAKeySize` in the peer's certificate.
   This refuses 1024-bit RSA certificates by default.
   [#608](https://github.com/haskell-tls/hs-tls/pull/608)
+* Check the versions and extensions of the hello messages as RFC 9846 does.
+  [#614](https://github.com/haskell-tls/hs-tls/pull/614)
 
 ## Version 2.4.12
 

@@ -92,12 +92,13 @@ processServerHello13 _ _ h = unexpected (show h) (Just "server hello")
 processServerHello
     :: ClientParams -> Context -> Handshake -> IO ()
 processServerHello cparams ctx (ServerHello sh@SH{..}) = do
-    -- A server which receives a legacy_version value not equal to
-    -- 0x0303 MUST abort the handshake with an "illegal_parameter"
-    -- alert.
+    -- A client which receives a TLS 1.3 ServerHello with a legacy_version
+    -- value not equal to 0x0303 MUST abort the handshake with a
+    -- "protocol_version" alert (RFC 9846 Section 4.1.3).  Nothing below
+    -- TLS 1.2 is supported either.
     when (shVersion /= TLS12) $
         throwCore $
-            Error_Protocol (show shVersion ++ " is not supported") IllegalParameter
+            Error_Protocol (show shVersion ++ " is not supported") ProtocolVersion
     -- find the compression and cipher methods that the server want to use.
     clientSession <- tls13stSession <$> getTLS13State ctx
     chExts <- tls13stSentExtensions <$> getTLS13State ctx
@@ -123,6 +124,25 @@ processServerHello cparams ctx (ServerHello sh@SH{..}) = do
         throwCore $
             Error_Protocol "spurious extensions received" UnsupportedExtension
 
+    -- RFC 9846 Section 4.3.1: the version selected must be TLS 1.3 or
+    -- later, and offered.
+    let supportedVers = supportedVersions $ clientSupported cparams
+        selected (SupportedVersionsServerHello v) = Just v
+        selected _ = Nothing
+    case lookupAndDecode
+        EID_SupportedVersions
+        MsgTServerHello
+        shExtensions
+        Nothing
+        selected of
+        Just v
+            | v < TLS13 || v `notElem` supportedVers ->
+                throwCore $
+                    Error_Protocol
+                        ("supported_versions selecting " ++ show v)
+                        IllegalParameter
+        _ -> return ()
+
     let isHRR = isHelloRetryRequest shRandom
     usingState_ ctx $ do
         setTLS13HRR isHRR
@@ -141,6 +161,28 @@ processServerHello cparams ctx (ServerHello sh@SH{..}) = do
 
     ver <- usingState_ ctx getVersion
 
+    -- TLS 1.2 without supported_versions, too, must be one we support.
+    when (ver `notElem` supportedVers) $
+        throwCore $
+            Error_Protocol
+                ("server version " ++ show ver ++ " is not supported")
+                ProtocolVersion
+
+    -- RFC 9846 Section 4.2: an extension recognized but not specified for
+    -- the message is refused with illegal_parameter.
+    when (ver == TLS13) $ do
+        let allowed
+                | isHRR =
+                    [EID_KeyShare, EID_SupportedVersions, EID_Cookie, EID_EncryptedClientHello]
+                | otherwise = [EID_KeyShare, EID_PreSharedKey, EID_SupportedVersions]
+            forbidden (ExtensionRaw eid _) =
+                eid `elem` supportedExtensions && eid `notElem` allowed
+        case filter forbidden shExtensions of
+            [] -> return ()
+            ExtensionRaw eid _ : _ ->
+                throwCore $
+                    Error_Protocol (show eid ++ " is not allowed in ServerHello") IllegalParameter
+
     unless (cipherAllowedForVersion ver usedCipher) $
         throwCore $
             Error_Protocol
@@ -150,8 +192,6 @@ processServerHello cparams ctx (ServerHello sh@SH{..}) = do
     when (ver == TLS12) $
         setServerHelloParameters12 ctx shVersion shRandom usedCipher compressAlg
 
-    let supportedVers = supportedVersions $ clientSupported cparams
-
     when (ver == TLS13) $ do
         -- TLS 1.3 server MUST echo the session id
         when (clientSession /= shSession) $
@@ -159,11 +199,6 @@ processServerHello cparams ctx (ServerHello sh@SH{..}) = do
                 Error_Protocol
                     "session is not matched in compatibility mode"
                     IllegalParameter
-        when (ver `notElem` supportedVers) $
-            throwCore $
-                Error_Protocol
-                    ("server version " ++ show ver ++ " is not supported")
-                    ProtocolVersion
 
     -- Some servers set TLS 1.2 as the legacy server hello version,
     -- and TLS 1.3 in the supported_versions extension, *AND ALSO* set

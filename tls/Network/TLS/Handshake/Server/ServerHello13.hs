@@ -160,8 +160,11 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
     rtt0accept = serverEarlyDataSize sparams > 0
 
     decideCredentialInfo allCreds = do
+        -- RFC 9846 Section 4.2.3: also with pre_shared_key, which falls
+        -- back to a certificate here.
         let err =
-                throwCore $ Error_Protocol "broken signature_algorithms extension" DecodeError
+                throwCore $
+                    Error_Protocol "no signature_algorithms extension" MissingExtension
         cHashSigs <-
             lookupAndDecodeAndDo
                 EID_SignatureAlgorithms
