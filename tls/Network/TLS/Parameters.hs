@@ -296,6 +296,13 @@ data Supported = Supported
     -- choice.
     --
     -- Default: @[]@
+    , supportedClientCipherOrder :: Bool
+    -- ^ Whether a server chooses among the ciphers in common in the
+    -- client's order of preference, rather than in the order of
+    -- 'supportedCiphers'.  A client without AES acceleration can then get
+    -- ChaCha20-Poly1305 from a server that has it.
+    --
+    -- Default: 'False'
     , supportedCompressions :: [Compression]
     -- ^ Supported compressions methods.  By default only the "null"
     -- compression is supported, which means no compression will be
@@ -433,6 +440,7 @@ defaultSupported =
     Supported
         { supportedVersions = [TLS13, TLS12]
         , supportedCiphers = ciphersuite_default
+        , supportedClientCipherOrder = False
         , supportedCompressions = [nullCompression]
         , supportedHashSignatures = Struct.supportedSignatureSchemes
         , supportedSecureRenegotiation = True

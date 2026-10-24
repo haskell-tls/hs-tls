@@ -31,11 +31,15 @@ import Network.TLS.Imports
 import Network.TLS.Parameters
 import Network.TLS.State
 import Network.TLS.Struct
+import Network.TLS.Types (CipherId (..))
 import Network.TLS.Util (catchException)
 import Network.TLS.X509
 
-chooseCipher :: ServerHooks -> Version -> [Cipher] -> IO Cipher
-chooseCipher hooks ver candidates =
+-- | The candidates come in the order of 'supportedCiphers'; with
+-- 'supportedClientCipherOrder' they are put in the order of the client's
+-- list before 'onCipherChoosing' sees them.
+chooseCipher :: ServerParams -> Version -> [CipherId] -> [Cipher] -> IO Cipher
+chooseCipher sparams ver clientCiphers candidates0 =
     case find ((== cipherID selected) . cipherID) candidates of
         Just cipher -> return cipher
         Nothing ->
@@ -44,7 +48,11 @@ chooseCipher hooks ver candidates =
                     "onCipherChoosing selected a cipher outside the candidate list"
                     InternalError
   where
-    selected = onCipherChoosing hooks ver candidates
+    candidates
+        | supportedClientCipherOrder (serverSupported sparams) =
+            mapMaybe (\(CipherId cid) -> findCipher cid candidates0) $ nub clientCiphers
+        | otherwise = candidates0
+    selected = onCipherChoosing (serverHooks sparams) ver candidates
 
 checkValidClientCertChain
     :: MonadIO m => Context -> String -> m CertificateChain

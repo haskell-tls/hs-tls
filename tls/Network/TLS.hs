@@ -114,6 +114,7 @@ module Network.TLS (
     defaultSupported,
     supportedVersions,
     supportedCiphers,
+    supportedClientCipherOrder,
     supportedCompressions,
     supportedHashSignatures,
     supportedSecureRenegotiation,
