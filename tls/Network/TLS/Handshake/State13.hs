@@ -13,6 +13,7 @@ module Network.TLS.Handshake.State13 (
     setRxRecordState,
     getTxLevel,
     getRxLevel,
+    getTxSequence,
     clearTxRecordState,
     clearRxRecordState,
     PendingRecvAction (..),
@@ -54,6 +55,12 @@ getXState ctx func = do
 -- So, fromJust causes an error.
 getTxLevel :: Context -> IO CryptLevel
 getTxLevel ctx = getXLevel ctx ctxTxRecordState
+
+-- | The cipher, the level and the sequence number of the next record sent.
+getTxSequence :: Context -> IO (Maybe Cipher, CryptLevel, Word64)
+getTxSequence ctx = do
+    tx <- readMVar $ ctxTxRecordState ctx
+    return (stCipher tx, stCryptLevel tx, msSequence $ stMacState tx)
 
 getRxLevel :: Context -> IO CryptLevel
 getRxLevel ctx = getXLevel ctx ctxRxRecordState

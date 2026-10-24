@@ -5,6 +5,7 @@ module Network.TLS.Handshake.Server (
     handshakeServerWith,
     requestCertificateServer,
     keyUpdate,
+    sendKeyUpdate,
     updateKey,
     KeyUpdateRequest (..),
 ) where
