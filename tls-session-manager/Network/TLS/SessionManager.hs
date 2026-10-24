@@ -160,15 +160,17 @@ resume
     -> IO (Maybe SessionData)
 resume reaper use k = do
     db <- reaperRead reaper
+    now <- C.sec <$> C.getTime C.Monotonic
     case Q.lookup k' db of
-        Nothing -> return Nothing
-        Just (p, v@(sd, ref)) ->
-            case use of
+        -- An expired session stays until the next pruning; it is not used.
+        Just (p, v@(sd, ref))
+            | p > now -> case use of
                 SingleUse -> do
                     available <- atomicModifyIORef' ref check
                     reaperAdd reaper (k', p, v, Del)
                     return $ if available then Just (fromValue sd) else Nothing
                 MultipleUse -> return $ Just (fromValue sd)
+        _ -> return Nothing
   where
     check Fresh = (Used, True)
     check Used = (Used, False)
