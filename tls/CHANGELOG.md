@@ -46,6 +46,8 @@ value computed under the negotiated cipher's hash.
   [#607](https://github.com/haskell-tls/hs-tls/pull/607)
 * Add `defaultSessionData`.
   [#607](https://github.com/haskell-tls/hs-tls/pull/607)
+* Refuse a message after one that changes the keys in its record.
+  [#610](https://github.com/haskell-tls/hs-tls/pull/610)
 
 ## Version 2.4.12
 
