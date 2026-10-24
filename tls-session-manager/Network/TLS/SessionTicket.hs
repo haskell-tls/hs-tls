@@ -28,8 +28,12 @@ import Network.TLS.Internal
 -- | Configuration for session tickets.
 data Config = Config
     { ticketLifetime :: Int
-    -- ^ Ticket lifetime in seconds.
+    -- ^ Ticket lifetime in seconds.  It should match the lifetime the
+    -- server announces, 'serverTicketLifetime'.  As the secret keys are
+    -- replaced every 'secretKeyInterval', a ticket is accepted for up to
+    -- one interval less.
     , secretKeyInterval :: Int
+    -- ^ The interval to replace the secret key in seconds.
     }
 
 -- | ticketLifetime: 2 hours (7200 seconds), secretKeyInterval: 30 minutes (1800 seconds)

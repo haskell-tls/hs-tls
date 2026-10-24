@@ -33,7 +33,9 @@ import Network.TLS.Imports
 -- | Configuration for session managers.
 data Config = Config
     { ticketLifetime :: Int
-    -- ^ Ticket lifetime in seconds.
+    -- ^ Ticket lifetime in seconds.  It should match 'serverTicketLifetime'
+    -- on a server.  A TLS 1.3 session is kept no longer than the lifetime of
+    -- its ticket.
     , pruningDelay :: Int
     -- ^ Pruning delay in seconds. This is set to 'reaperDelay'.
     , dbMaxSize :: Int
