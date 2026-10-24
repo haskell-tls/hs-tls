@@ -853,6 +853,12 @@ data Information = Information
     , infoTLS13HandshakeMode :: Maybe HandshakeMode13
     , infoIsEarlyDataAccepted :: Bool
     , infoIsECHAccepted :: Bool
+    , infoServerSignatureScheme :: Maybe SignatureScheme
+    -- ^ The scheme of the server's signature: ServerKeyExchange in TLS 1.2,
+    -- CertificateVerify in TLS 1.3.  'Nothing' on resumption.
+    , infoClientSignatureScheme :: Maybe SignatureScheme
+    -- ^ The scheme of the client's CertificateVerify.  'Nothing' without a
+    -- client certificate or on resumption.
     }
     deriving (Show, Eq)
 

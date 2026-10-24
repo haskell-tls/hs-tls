@@ -48,6 +48,7 @@ module Network.TLS.Handshake.State (
     setCertReqCBdata,
     getCertReqCBdata,
     setCertReqSigAlgsCert,
+    setSignatureScheme,
     getCertReqSigAlgsCert,
 
     -- * digest accessors
@@ -148,6 +149,9 @@ data HandshakeState = HandshakeState
     , hstClientCertChain :: Maybe CertificateChain
     , hstPendingTxState :: Maybe RecordState
     , hstPendingRxState :: Maybe RecordState
+    , hstServerSignatureScheme :: Maybe SignatureScheme
+    , hstClientSignatureScheme :: Maybe SignatureScheme
+    -- ^ The schemes of the handshake signatures each side made
     , hstRxSwitched :: Bool
     -- ^ Set when the peer's ChangeCipherSpec switched the Rx state
     , hstPendingCipher :: Maybe Cipher
@@ -250,6 +254,8 @@ newEmptyHandshake ver crand =
         , hstClientCertChain = Nothing
         , hstPendingTxState = Nothing
         , hstPendingRxState = Nothing
+        , hstServerSignatureScheme = Nothing
+        , hstClientSignatureScheme = Nothing
         , hstRxSwitched = False
         , hstPendingCipher = Nothing
         , hstPendingCompression = nullCompression
@@ -446,6 +452,11 @@ setCertReqCBdata d = modify' (\hst -> hst{hstCertReqCBdata = d})
 
 getCertReqCBdata :: HandshakeM (Maybe CertReqCBdata)
 getCertReqCBdata = gets hstCertReqCBdata
+
+-- | Record the scheme of a handshake signature that the given side made.
+setSignatureScheme :: Role -> SignatureScheme -> HandshakeM ()
+setSignatureScheme ServerRole sc = modify' $ \hst -> hst{hstServerSignatureScheme = Just sc}
+setSignatureScheme ClientRole sc = modify' $ \hst -> hst{hstClientSignatureScheme = Just sc}
 
 -- Dead code, until we find some use for the extension
 setCertReqSigAlgsCert :: Maybe [SignatureScheme] -> HandshakeM ()

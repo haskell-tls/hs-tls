@@ -468,6 +468,8 @@ finishHandshake12 ctx = do
                         , hstMainSecret = hstMainSecret hshake
                         , hstExtendedMainSecret = hstExtendedMainSecret hshake
                         , hstSupportedGroup = hstSupportedGroup hshake
+                        , hstServerSignatureScheme = hstServerSignatureScheme hshake
+                        , hstClientSignatureScheme = hstClientSignatureScheme hshake
                         }
     updateMeasure ctx resetBytesCounters
     -- mark the secure connection up and running.
