@@ -60,6 +60,8 @@ import qualified Network.TLS.State as S
 import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types (
+    Bulk (..),
+    Cipher (..),
     HostName,
     Role (..),
  )
@@ -228,6 +230,7 @@ sendData ctx dataToSend = liftIO $ do
     tls13 <- tls13orLater ctx
     let sendP bs
             | tls13 = do
+                updateKeyBeforeLimit ctx
                 sendPacket13 ctx $ AppData13 bs
                 role <- usingState_ ctx getRole
                 sentCF <- tls13stSentCF <$> getTLS13State ctx
@@ -244,6 +247,31 @@ sendData ctx dataToSend = liftIO $ do
         -- possibly large write.
         mlen <- getPeerRecordLimit ctx -- plaintext, don't adjust for TLS 1.3
         mapM_ (mapChunks_ mlen sendP) (L.toChunks dataToSend)
+
+-- RFC 9846 Section 5.5: the keys are updated before the records sent
+-- under them reach the limit.  Early data cannot do so and stops there.
+updateKeyBeforeLimit :: Context -> IO ()
+updateKeyBeforeLimit ctx = do
+    (mcipher, level, sqn) <- getTxSequence ctx
+    case mcipher of
+        Just cipher | sqn >= recordLimit cipher -> do
+            updated <-
+                if level == CryptApplicationSecret
+                    then sendKeyUpdate ctx UpdateNotRequested
+                    else return False
+            unless updated $
+                E.throwIO $
+                    PostHandshake $
+                        Error_Misc "the key usage limit is reached"
+        _ -> return ()
+  where
+    -- AES-GCM allows 2^24.5 full-size records.  The sequence number of
+    -- ChaCha20-Poly1305 would wrap before its limit.
+    recordLimit cipher = fromMaybe forCipher $ limitRecordsPerKey $ sharedLimit $ ctxShared ctx
+      where
+        forCipher
+            | bulkName (cipherBulk cipher) == "CHACHA20POLY1305" = 2 ^ (62 :: Int)
+            | otherwise = 2 ^ (24 :: Int)
 
 -- | Get data out of Data packet, and automatically renegotiate if a Handshake
 -- ClientHello is received.  An empty result means EOF.
@@ -420,9 +448,11 @@ recvData13 ctx = do
                 -- Write lock wraps both actions because we don't want another
                 -- packet to be sent by another thread before the Tx state is
                 -- updated.
-                when (mode == UpdateRequested) $ withWriteLock ctx $ do
-                    sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested] []
-                    keyUpdate ctx getTxRecordState setTxRecordState
+                -- The request is ignored after 2^48-1 updates.
+                when (mode == UpdateRequested) $
+                    withWriteLock ctx $
+                        void $
+                            sendKeyUpdate ctx UpdateNotRequested
                 loopHandshake13 hbs
             else do
                 let reason = "received key update before established"

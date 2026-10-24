@@ -5,6 +5,7 @@ module Network.TLS.Handshake.Server.TLS13 (
     recvClientSecondFlight13,
     requestCertificateServer,
     keyUpdate,
+    sendKeyUpdate,
     updateKey,
     KeyUpdateRequest (..),
 ) where
@@ -296,9 +297,11 @@ getHandshake ctx ref = do
         -- Write lock wraps both actions because we don't want another
         -- packet to be sent by another thread before the Tx state is
         -- updated.
-        when (mode == UpdateRequested) $ withWriteLock ctx $ do
-            sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested] []
-            keyUpdate ctx getTxRecordState setTxRecordState
+        -- The request is ignored after 2^48-1 updates.
+        when (mode == UpdateRequested) $
+            withWriteLock ctx $
+                void $
+                    sendKeyUpdate ctx UpdateNotRequested
         chk hbs
     chk (hb : hbs) = do
         writeIORef ref hbs
@@ -379,6 +382,20 @@ keyUpdate ctx getState setState = do
                 hashDigestSize usedHash
     setState ctx usedHash usedCipher (AnyTrafficSecret applicationSecretN1)
 
+-- | Sending a KeyUpdate and switching to the next Tx keys, with the write
+--   lock held.  Nothing is sent and 'False' is returned if the epoch would
+--   exceed 2^48-1 (RFC 9846 Section 4.7.3).
+sendKeyUpdate :: Context -> KeyUpdate -> IO Bool
+sendKeyUpdate ctx req = do
+    sent <- tls13stSentKeyUpdates <$> getTLS13State ctx
+    if sent >= 2 ^ (48 :: Int) - 1
+        then return False
+        else do
+            sendPacket13 ctx $ Handshake13 [KeyUpdate13 req] []
+            keyUpdate ctx getTxRecordState setTxRecordState
+            modifyTLS13State ctx $ \st -> st{tls13stSentKeyUpdates = sent + 1}
+            return True
+
 -- | How to update keys in TLS 1.3
 data KeyUpdateRequest
     = -- | Unidirectional key update
@@ -388,18 +405,18 @@ data KeyUpdateRequest
     deriving (Eq, Show)
 
 -- | Updating application traffic secrets for TLS 1.3.
---   If this API is called for TLS 1.3, 'True' is returned.
---   Otherwise, 'False' is returned.
+--   If the keys are updated, 'True' is returned.
+--   Otherwise, that is, for TLS 1.2 or after 2^48-1 updates, 'False' is
+--   returned.
 updateKey :: MonadIO m => Context -> KeyUpdateRequest -> m Bool
 updateKey ctx way = liftIO $ do
     tls13 <- tls13orLater ctx
-    when tls13 $ do
-        let req = case way of
-                OneWay -> UpdateNotRequested
-                TwoWay -> UpdateRequested
-        -- Write lock wraps both actions because we don't want another packet to
-        -- be sent by another thread before the Tx state is updated.
-        withWriteLock ctx $ do
-            sendPacket13 ctx $ Handshake13 [KeyUpdate13 req] []
-            keyUpdate ctx getTxRecordState setTxRecordState
-    return tls13
+    if tls13
+        then do
+            let req = case way of
+                    OneWay -> UpdateNotRequested
+                    TwoWay -> UpdateRequested
+            -- Write lock wraps both actions because we don't want another packet to
+            -- be sent by another thread before the Tx state is updated.
+            withWriteLock ctx $ sendKeyUpdate ctx req
+        else return False
