@@ -607,13 +607,20 @@ data ClientHooks = ClientHooks
     --
     -- While the TLS version is not provided to the callback, the
     -- content of the @signature_algorithms@ list provides a strong
-    -- hint, since TLS 1.3 servers will generally list RSA pairs with
-    -- a hash component of 'Intrinsic' (@0x08@).
+    -- hint, since TLS 1.3 servers will generally list the RSASSA-PSS
+    -- schemes, whose first octet is @0x08@.
     --
     -- Note that is is the responsibility of this action to select a
     -- certificate matching one of the requested certificate types
     -- (public key algorithms).  Returning a non-matching one will
     -- lead to handshake failure later.
+    --
+    -- 'sharedCredentials' is for servers: a client sends the certificate
+    -- this action returns, for example one loaded from files.  The CA of
+    -- the server belongs in 'sharedCAStore'.
+    --
+    -- > cred <- either error id <$> credentialLoadX509 "client.crt" "client.key"
+    -- > let hooks = defaultClientHooks{onCertificateRequest = \_ -> return (Just cred)}
     --
     -- Default: returns 'Nothing' anyway.
     , onServerCertificate :: OnServerCertificate
