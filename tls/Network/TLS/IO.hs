@@ -92,7 +92,7 @@ recvPacket12 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
     lim = limitHandshakeFragment $ sharedLimit $ ctxShared ctx
     loop count
         | count > lim = do
-            let err = Error_Packet "too many handshake fragment"
+            let err = tooManyFragments
             logPacket ctx $ show err
             return $ Left err
     loop count = do
@@ -134,6 +134,9 @@ recvPacket12 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
                                 logPacket ctx $ show err
                                 return pktRecv
 
+tooManyFragments :: TLSError
+tooManyFragments = Error_Protocol "too many handshake fragments" UnexpectedMessage
+
 isCCS :: Record a -> Bool
 isCCS (Record ProtocolType_ChangeCipherSpec _ _) = True
 isCCS _ = False
@@ -153,7 +156,7 @@ recvPacket13 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
     lim = limitHandshakeFragment $ sharedLimit $ ctxShared ctx
     loop count
         | count > lim =
-            return $ Left $ Error_Packet "too many handshake fragment"
+            return $ Left tooManyFragments
     loop count = do
         erecord <- recordRecv13 recordLayer ctx
         case erecord of
