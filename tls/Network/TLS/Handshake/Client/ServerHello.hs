@@ -52,6 +52,9 @@ receiveServerHello cparams ctx mparams = do
     -- False otherwise.  For 2nd server hello, getTLS13HR returns
     -- False since it is NOT HRR.
     hrr <- usingState_ ctx getTLS13HRR
+    -- In TLS 1.3, ServerHello must end its record (RFC 9846 Section 5.1).
+    when (ver == TLS13 && not (null hbs)) $
+        unexpected (show $ map fst hbs) Nothing
     return (ver, hbs, hrr)
   where
     recvSH = do

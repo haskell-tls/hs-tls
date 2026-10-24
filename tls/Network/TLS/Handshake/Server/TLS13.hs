@@ -279,6 +279,12 @@ getHandshake ctx ref = do
             Error_Protocol "post handshake authenticated" UnexpectedMessage
     chk [] = getHandshake ctx ref
     chk ((KeyUpdate13 mode, _) : hbs) = do
+        complete <- isRecvComplete ctx
+        unless (complete && null hbs) $
+            terminate ctx $
+                Error_Protocol
+                    "received message not aligned with record boundary"
+                    UnexpectedMessage
         case limitKeyUpdate $ sharedLimit $ ctxShared ctx of
             Just limit | limit > 0 -> do
                 count <- incrementTLS13KeyUpdateCount ctx

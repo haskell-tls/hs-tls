@@ -391,14 +391,17 @@ recvData13 ctx = do
             modifyTLS13State ctx $ \st -> st{tls13stRecvNST = True}
         loopHandshake13 hbs
     loopHandshake13 ((KeyUpdate13 mode, _b) : hbs) = do
-        let multipleKeyUpdate = any (\(h, _) -> isKeyUpdate13 h) hbs
-        when multipleKeyUpdate $ do
-            let reason = "Multiple KeyUpdate is not allowed in one record"
-            terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
         when (ctxQUICMode ctx) $ do
             let reason = "KeyUpdate is not allowed for QUIC"
             terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-        checkAlignment ctx
+        aligned <- isAligned ctx hbs
+        unless aligned $
+            terminate13
+                ctx
+                (Error_Misc notAligned)
+                AlertLevel_Fatal
+                UnexpectedMessage
+                notAligned
         established <- ctxEstablished ctx
         -- Though RFC 8446 Sec 4.6.3 does not clearly says,
         -- unidirectional key update is legal.
@@ -442,7 +445,7 @@ recvData13 ctx = do
                     let reason = "HRR is not allowed for 0-RTT"
                     terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
             _ -> return ()
-        cont <- popAction ctx hb
+        cont <- popAction ctx hb hbs
         when cont $ loopHandshake13 hbs
 
 recvHS13 :: Context -> IO Bool -> IO ()
@@ -491,15 +494,15 @@ recvHS13 ctx breakLoop = do
             modifyTLS13State ctx $ \st -> st{tls13stRecvNST = True}
         loopHandshake13 hbs
     loopHandshake13 (hb : hbs) = do
-        cont <- popAction ctx hb
+        cont <- popAction ctx hb hbs
         when cont $ loopHandshake13 hbs
 
 terminate13
     :: Context -> TLSError -> AlertLevel -> AlertDescription -> String -> IO a
 terminate13 ctx = terminateWithWriteLock ctx (sendPacket13 ctx . Alert13)
 
-popAction :: Context -> Handshake13R -> IO Bool
-popAction ctx hb@(h, _b) = do
+popAction :: Context -> Handshake13R -> [Handshake13R] -> IO Bool
+popAction ctx hb@(h, _b) hbs = do
     mPendingRecvAction <- popPendingRecvAction ctx
     case mPendingRecvAction of
         Nothing -> return False
@@ -510,14 +513,14 @@ popAction ctx hb@(h, _b) = do
                 handleException ctx $ do
                     case action of
                         PendingRecvAction needAligned pa -> do
-                            when needAligned $ checkAlignment ctx
+                            checkAligned needAligned
                             updateTranscriptHash13 ctx hb
                             pa h
                         PendingRecvActionSelfUpdate needAligned pa -> do
-                            when needAligned $ checkAlignment ctx
+                            checkAligned needAligned
                             pa hb
                         PendingRecvActionHash needAligned pa -> do
-                            when needAligned $ checkAlignment ctx
+                            checkAligned needAligned
                             d <- transcriptHash ctx "Pending action"
                             updateTranscriptHash13 ctx hb
                             pa d h
@@ -527,13 +530,21 @@ popAction ctx hb@(h, _b) = do
                     -- the app data.
                     sendCFifNecessary ctx
             return True
+  where
+    -- The write lock is held here, so 'handleException' sends the alert.
+    checkAligned needAligned = when needAligned $ do
+        aligned <- isAligned ctx hbs
+        unless aligned $ throwCore $ Error_Protocol notAligned UnexpectedMessage
 
-checkAlignment :: Context -> IO ()
-checkAlignment ctx = do
+-- RFC 9846 Section 5.1: a message before a key change must end its
+-- record, so neither a message nor a fragment may follow it.
+isAligned :: Context -> [Handshake13R] -> IO Bool
+isAligned ctx hbs = do
     complete <- isRecvComplete ctx
-    unless complete $ do
-        let reason = "received message not aligned with record boundary"
-        terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
+    return $ complete && null hbs
+
+notAligned :: String
+notAligned = "received message not aligned with record boundary"
 
 -- the other side could have close the connection already, so wrap
 -- this in a try and ignore all exceptions
