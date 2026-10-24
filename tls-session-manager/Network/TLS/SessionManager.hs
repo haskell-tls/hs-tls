@@ -23,6 +23,7 @@ import Data.IORef
 import Data.OrdPSQ (OrdPSQ)
 import qualified Data.OrdPSQ as Q
 import Network.TLS
+import qualified Network.TLS.Internal as I
 import qualified System.Clock as C
 
 import Network.TLS.Imports
@@ -141,12 +142,16 @@ establish
     -> IO ()
 establish reaper lifetime k sd = do
     ref <- newIORef Fresh
-    p <- (+ lifetime) . C.sec <$> C.getTime C.Monotonic
+    p <- (+ lifetime') . C.sec <$> C.getTime C.Monotonic
     let v = (sd', ref)
     reaperAdd reaper (k', p, v, Add)
   where
     k' = toKey k
     sd' = toValue sd
+    -- A TLS 1.3 ticket is not kept past the lifetime the server gave it.
+    lifetime' = case sessionTicketInfo sd of
+        Just tinfo -> min lifetime (fromIntegral (I.lifetime tinfo))
+        Nothing -> lifetime
 
 resume
     :: Reaper DB Item
