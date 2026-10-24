@@ -118,7 +118,8 @@ newSessionManager conf = do
 cons :: Int -> Item -> DB -> DB
 cons lim (Add k t v) (DB q ds)
     | lim <= 0 = DB Q.empty ds
-    | Q.size q == lim = case Q.minView q of
+    -- Replacing a session makes no room for it.
+    | Q.size q == lim && not (Q.member k q) = case Q.minView q of
         Nothing -> assert False $ DB (Q.insert k t v Q.empty) ds
         Just (_, _, _, q') -> DB (Q.insert k t v q') ds
     | otherwise = DB (Q.insert k t v q) ds
