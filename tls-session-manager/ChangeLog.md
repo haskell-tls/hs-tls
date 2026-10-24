@@ -1,5 +1,13 @@
 # ChangeLog for tls-session-manager
 
+## 0.1.1
+
+* Keep a TLS 1.3 session no longer than the lifetime of its ticket.
+* Do not resume an expired session before it is pruned.
+* Keep deletions and the size limit across pruning.
+* Do not drop another session when a key is added again at the limit.
+* Expose `Network.TLS.SessionManager.Internal` for testing.
+
 ## 0.1.0
 
 * Using "ram" instead of "memory"
