@@ -124,6 +124,25 @@ processServerHello cparams ctx (ServerHello sh@SH{..}) = do
         throwCore $
             Error_Protocol "spurious extensions received" UnsupportedExtension
 
+    -- RFC 9846 Section 4.3.1: the version selected must be TLS 1.3 or
+    -- later, and offered.
+    let supportedVers = supportedVersions $ clientSupported cparams
+        selected (SupportedVersionsServerHello v) = Just v
+        selected _ = Nothing
+    case lookupAndDecode
+        EID_SupportedVersions
+        MsgTServerHello
+        shExtensions
+        Nothing
+        selected of
+        Just v
+            | v < TLS13 || v `notElem` supportedVers ->
+                throwCore $
+                    Error_Protocol
+                        ("supported_versions selecting " ++ show v)
+                        IllegalParameter
+        _ -> return ()
+
     let isHRR = isHelloRetryRequest shRandom
     usingState_ ctx $ do
         setTLS13HRR isHRR
@@ -150,8 +169,6 @@ processServerHello cparams ctx (ServerHello sh@SH{..}) = do
 
     when (ver == TLS12) $
         setServerHelloParameters12 ctx shVersion shRandom usedCipher compressAlg
-
-    let supportedVers = supportedVersions $ clientSupported cparams
 
     when (ver == TLS13) $ do
         -- TLS 1.3 server MUST echo the session id
