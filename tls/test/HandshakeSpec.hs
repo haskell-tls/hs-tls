@@ -291,6 +291,11 @@ spec = do
         it "rejects a legacy_version above TLS 1.2 with supported_versions" $ do
             params <- fixGroupsX25519 <$> generate arbitraryPairParams13
             serverRefusesHello params (\ch -> ch{chVersion = TLS13}) ProtocolVersion
+        it "rejects supported_versions without TLS 1.2 in a TLS 1.2 server" $ do
+            (cli, srv) <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let cli' = cli{clientSupported = (clientSupported cli){supportedVersions = [TLS13]}}
+                srv' = srv{serverSupported = (serverSupported srv){supportedVersions = [TLS12]}}
+            serverRefusesHello (cli', srv') id ProtocolVersion
         it "rejects a two-byte TLS 1.2 ChangeCipherSpec" $
             malformed_ccs_unexpected
                 TLS12

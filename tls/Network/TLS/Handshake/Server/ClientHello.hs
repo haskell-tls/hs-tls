@@ -92,7 +92,9 @@ processClientHello sparams ctx ch@CH{..} b = do
     chosenVersion <- case mVersion of
         Just cver -> return cver
         Nothing ->
-            if (TLS13 `elem` serverVersions) && clientVersions /= []
+            -- With supported_versions, only it is used, whether or not the
+            -- server supports TLS 1.3 (RFC 9846 Section 4.3.1).
+            if clientVersions /= []
                 then case findHighestVersionFrom13 clientVersions serverVersions of
                     Nothing ->
                         throwCore $
