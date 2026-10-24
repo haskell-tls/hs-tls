@@ -47,7 +47,7 @@ processClientHello12 sparams ctx ch = do
         checkResumedCipherOffered ctx ch
         throwCore $
             Error_Protocol "no cipher in common with the TLS 1.2 client" HandshakeFailure
-    usedCipher <- chooseCipher hooks TLS12 ciphersFilteredVersion
+    usedCipher <- chooseCipher sparams TLS12 (chCiphers ch) ciphersFilteredVersion
     mcred <- chooseCreds usedCipher creds signatureCreds
     return (usedCipher, mcred)
 

@@ -37,6 +37,8 @@ value computed under the negotiated cipher's hash.
   [#601](https://github.com/haskell-tls/hs-tls/pull/601)
 * Report the signature schemes of the handshake in `Information`.
   [#603](https://github.com/haskell-tls/hs-tls/pull/603)
+* Let a server choose ciphers in the client's order (`supportedClientCipherOrder`).
+  [#605](https://github.com/haskell-tls/hs-tls/pull/605)
 
 ## Version 2.4.12
 

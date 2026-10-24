@@ -50,7 +50,7 @@ processClientHello13 sparams ctx ch@CH{..} = do
     when (null ciphersFilteredVersion) $
         throwCore $
             Error_Protocol "no cipher in common with the TLS 1.3 client" HandshakeFailure
-    usedCipher <- chooseCipher (serverHooks sparams) TLS13 ciphersFilteredVersion
+    usedCipher <- chooseCipher sparams TLS13 chCiphers ciphersFilteredVersion
     let usedHash = cipherHash usedCipher
         rtt0 =
             lookupAndDecode

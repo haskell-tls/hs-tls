@@ -136,6 +136,16 @@ spec = do
             handshake_info_signature_schemes TLS12
         it "reports the signature schemes of a TLS 1.3 handshake" $
             handshake_info_signature_schemes TLS13
+        it "chooses a TLS 1.2 cipher in the client's order when asked" $
+            handshake_client_cipher_order
+                TLS12
+                cipher_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+                cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        it "chooses a TLS 1.3 cipher in the client's order when asked" $
+            handshake_client_cipher_order
+                TLS13
+                cipher13_CHACHA20_POLY1305_SHA256
+                cipher13_AES_128_GCM_SHA256
         prop "can receive client authentication failure" handshake_client_auth_fail
         it "accepts an empty TLS 1.2 client certificate when the hook does" $
             handshake_client_auth_empty TLS12
@@ -1166,6 +1176,31 @@ handshake12_unimplemented_sigalg = do
                 (handshake sctx `shouldThrow` rejectedAsHandshakeFailure)
                 (void (E.try (handshake cctx) :: IO (Either TLSException ())))
     r `shouldSatisfy` isJust
+
+-- The client prefers the first cipher and the server the second.  The
+-- server's order wins unless supportedClientCipherOrder is set.
+handshake_client_cipher_order :: Version -> Cipher -> Cipher -> IO ()
+handshake_client_cipher_order version first second = do
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([version], [version])
+                ([first, second], [second, first])
+    let run clientOrder = do
+            ref <- newIORef Nothing
+            let serverParam' =
+                    serverParam
+                        { serverSupported =
+                            (serverSupported serverParam)
+                                { supportedClientCipherOrder = clientOrder
+                                }
+                        }
+            withPairContextWith (id, id) (clientParam, serverParam') $ \(cctx, sctx) -> do
+                concurrently_ (handshake sctx) (handshake cctx)
+                contextGetInformation sctx >>= writeIORef ref
+            fmap (cipherID . infoCipher) <$> readIORef ref
+    run False `shouldReturn` Just (cipherID second)
+    run True `shouldReturn` Just (cipherID first)
 
 -- Both sides report the same schemes: the server's signature always, and the
 -- client's CertificateVerify only when it sends a certificate.
