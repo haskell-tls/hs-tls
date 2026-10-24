@@ -41,6 +41,11 @@ value computed under the negotiated cipher's hash.
   [#605](https://github.com/haskell-tls/hs-tls/pull/605)
 * Tell why a certificate is rejected, and give the chain to `debugError` in PEM.
   [#606](https://github.com/haskell-tls/hs-tls/pull/606)
+* Tell the client certificate on resumption, kept in `SessionData`.
+  Sessions saved by an earlier version cannot be resumed.
+  [#607](https://github.com/haskell-tls/hs-tls/pull/607)
+* Add `defaultSessionData`.
+  [#607](https://github.com/haskell-tls/hs-tls/pull/607)
 
 ## Version 2.4.12
 
