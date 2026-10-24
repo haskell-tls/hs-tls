@@ -161,6 +161,13 @@ processServerHello cparams ctx (ServerHello sh@SH{..}) = do
 
     ver <- usingState_ ctx getVersion
 
+    -- TLS 1.2 without supported_versions, too, must be one we support.
+    when (ver `notElem` supportedVers) $
+        throwCore $
+            Error_Protocol
+                ("server version " ++ show ver ++ " is not supported")
+                ProtocolVersion
+
     unless (cipherAllowedForVersion ver usedCipher) $
         throwCore $
             Error_Protocol
@@ -177,11 +184,6 @@ processServerHello cparams ctx (ServerHello sh@SH{..}) = do
                 Error_Protocol
                     "session is not matched in compatibility mode"
                     IllegalParameter
-        when (ver `notElem` supportedVers) $
-            throwCore $
-                Error_Protocol
-                    ("server version " ++ show ver ++ " is not supported")
-                    ProtocolVersion
 
     -- Some servers set TLS 1.2 as the legacy server hello version,
     -- and TLS 1.3 in the supported_versions extension, *AND ALSO* set

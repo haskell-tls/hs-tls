@@ -315,6 +315,14 @@ spec = do
                 params
                 (\sh -> sh{shExtensions = map tls12 $ shExtensions sh})
                 (refusedFor IllegalParameter "supported_versions")
+        it "rejects a TLS 1.2 ServerHello in a TLS 1.3 client" $ do
+            (cli, srv) <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let cli' = cli{clientSupported = (clientSupported cli){supportedVersions = [TLS13]}}
+                noVersions (ExtensionRaw eid _) = eid /= EID_SupportedVersions
+            clientRefusesHello
+                (cli', srv)
+                (\sh -> sh{shExtensions = filter noVersions $ shExtensions sh})
+                (refusedWith ProtocolVersion)
         it "rejects a two-byte TLS 1.2 ChangeCipherSpec" $
             malformed_ccs_unexpected
                 TLS12
