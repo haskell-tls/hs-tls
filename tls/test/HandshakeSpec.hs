@@ -60,8 +60,6 @@ spec = do
         prop "can prevent downgrade attack" handshake13_downgrade
         it "negotiates TLS 1.2 with a ClientHello naming a higher version" $
             handshake_high_legacy_version TLS12 (Version 0x0309)
-        it "ignores legacy_version when supported_versions is present" $
-            handshake_high_legacy_version TLS13 TLS13
         it "keeps to the TLS 1.3 server's record size limit" $
             record_size_limit_negotiated TLS13 False
         it "keeps to the TLS 1.3 client's record size limit" $
@@ -290,6 +288,9 @@ spec = do
             handshake13_hrr_without_key_share True
         it "rejects a HelloRetryRequest that changes nothing" $
             handshake13_hrr_without_key_share False
+        it "rejects a legacy_version above TLS 1.2 with supported_versions" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            serverRefusesHello params (\ch -> ch{chVersion = TLS13}) ProtocolVersion
         it "rejects a two-byte TLS 1.2 ChangeCipherSpec" $
             malformed_ccs_unexpected
                 TLS12
@@ -1321,11 +1322,10 @@ rejectedAsIllegalParameter (Terminated _ _ (Error_Protocol _ IllegalParameter)) 
 rejectedAsIllegalParameter _ = False
 
 -- A server that receives a ClientHello whose legacy_version is higher than
--- its own negotiates the highest version it supports (RFC 5246 Appendix
--- E.1); with supported_versions present it does not use legacy_version at
--- all (RFC 8446 Section 4.2.1).  The ClientHello's legacy_version is raised
--- on its way to the server, and the handshake must still reach the version
--- both sides support.
+-- its own, without supported_versions, negotiates the highest version it
+-- supports (RFC 5246 Appendix E.1, RFC 9846 Section 4.3.1).  The
+-- ClientHello's legacy_version is raised on its way to the server, and the
+-- handshake must still reach the version both sides support.
 handshake_high_legacy_version :: Version -> Version -> IO ()
 handshake_high_legacy_version version legacy = do
     let cipher
@@ -3230,6 +3230,42 @@ handshake13_hrr_without_key_share withCookie = do
     findExt i ch = find (\(ExtensionRaw eid _) -> eid == i) (chExtensions ch)
     illegalParameter (HandshakeFailed (Error_Protocol _ IllegalParameter)) = True
     illegalParameter _ = False
+
+-- The server refuses with the alert the ClientHello the function changes.
+serverRefusesHello
+    :: (ClientParams, ServerParams)
+    -> (ClientHello -> ClientHello)
+    -> AlertDescription
+    -> IO ()
+serverRefusesHello params f ad =
+    withPairContext params $ \(cctx, sctx) -> do
+        contextHookSetHandshakeRecv sctx tamper
+        concurrently_
+            (handshake sctx `shouldThrow` refusedWith ad)
+            (handshake cctx `shouldThrow` anyTLSException)
+  where
+    tamper (ClientHello ch) = pure $ ClientHello $ f ch
+    tamper h = pure h
+
+-- The client refuses with the alert the ServerHello the function changes.
+clientRefusesHello
+    :: (ClientParams, ServerParams)
+    -> (ServerHello -> ServerHello)
+    -> AlertDescription
+    -> IO ()
+clientRefusesHello params f ad =
+    withPairContext params $ \(cctx, sctx) -> do
+        contextHookSetHandshakeRecv cctx tamper
+        concurrently_
+            (handshake sctx `shouldThrow` anyTLSException)
+            (handshake cctx `shouldThrow` refusedWith ad)
+  where
+    tamper (ServerHello sh) = pure $ ServerHello $ f sh
+    tamper h = pure h
+
+refusedWith :: AlertDescription -> TLSException -> Bool
+refusedWith ad (HandshakeFailed (Error_Protocol _ ad')) = ad == ad'
+refusedWith _ _ = False
 
 unhexBytes :: String -> B.ByteString
 unhexBytes [] = B.empty

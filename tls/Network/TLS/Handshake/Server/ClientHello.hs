@@ -57,10 +57,9 @@ processClientHello sparams ctx ch@CH{..} b = do
         (throwCore $ Error_HandshakePolicy "server: handshake denied")
     updateMeasure ctx incrementNbHandshakes
 
-    -- A legacy_version below TLS 1.2 is refused.  One above it is not: a
-    -- server negotiates the highest version it supports (RFC 5246 Appendix
-    -- E.1), and with supported_versions present does not use legacy_version
-    -- at all (RFC 8446 Section 4.2.1).  Both are decided below.
+    -- A legacy_version below TLS 1.2 is refused.  One above it is refused
+    -- only with supported_versions (RFC 9846 Section 4.1.2); without it, a
+    -- server negotiates TLS 1.2 (Section 4.3.1 and RFC 5246 Appendix E.1).
     when (chVersion < TLS12) $
         throwCore $
             Error_Protocol (show chVersion ++ " is not supported") ProtocolVersion
@@ -85,6 +84,11 @@ processClientHello sparams ctx ch@CH{..} b = do
             | renegotiation = filter (< TLS13) (supportedVersions $ ctxSupported ctx)
             | otherwise = supportedVersions $ ctxSupported ctx
         mVersion = debugVersionForced $ serverDebug sparams
+    when (clientVersions /= [] && chVersion /= TLS12) $
+        throwCore $
+            Error_Protocol
+                ("legacy_version " ++ show chVersion ++ " with supported_versions")
+                ProtocolVersion
     chosenVersion <- case mVersion of
         Just cver -> return cver
         Nothing ->
