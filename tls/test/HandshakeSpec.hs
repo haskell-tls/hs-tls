@@ -303,6 +303,9 @@ spec = do
             let cli' = cli{clientSupported = (clientSupported cli){supportedVersions = [TLS13]}}
                 srv' = srv{serverSupported = (serverSupported srv){supportedVersions = [TLS12]}}
             serverRefusesHello (cli', srv') id ProtocolVersion
+        it "rejects a ServerHello legacy_version other than TLS 1.2" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            clientRefusesHello params (\sh -> sh{shVersion = TLS13}) ProtocolVersion
         it "updates the keys before the record limit" $
             handshake13_key_usage_limit
         it "stops early data at the record limit" $

@@ -92,12 +92,13 @@ processServerHello13 _ _ h = unexpected (show h) (Just "server hello")
 processServerHello
     :: ClientParams -> Context -> Handshake -> IO ()
 processServerHello cparams ctx (ServerHello sh@SH{..}) = do
-    -- A server which receives a legacy_version value not equal to
-    -- 0x0303 MUST abort the handshake with an "illegal_parameter"
-    -- alert.
+    -- A client which receives a TLS 1.3 ServerHello with a legacy_version
+    -- value not equal to 0x0303 MUST abort the handshake with a
+    -- "protocol_version" alert (RFC 9846 Section 4.1.3).  Nothing below
+    -- TLS 1.2 is supported either.
     when (shVersion /= TLS12) $
         throwCore $
-            Error_Protocol (show shVersion ++ " is not supported") IllegalParameter
+            Error_Protocol (show shVersion ++ " is not supported") ProtocolVersion
     -- find the compression and cipher methods that the server want to use.
     clientSession <- tls13stSession <$> getTLS13State ctx
     chExts <- tls13stSentExtensions <$> getTLS13State ctx
