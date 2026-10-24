@@ -48,6 +48,10 @@ decodePacket12 ctx (Record ProtocolType_ChangeCipherSpec _ fragment) =
                     return $
                         Left $
                             Error_Packet_unexpected "ChangeCipherSpec" " expected: handshake"
+-- RFC 9846 Section 5.1: handshake records are never empty.  The check
+-- also keeps an empty one from ending the input of a partial message.
+decodePacket12 _ (Record ProtocolType_Handshake _ fragment)
+    | BS.null (fragmentGetBytes fragment) = return $ Left emptyHandshake
 decodePacket12 ctx (Record ProtocolType_Handshake ver fragment) = do
     mhs <- getHState ctx
     let keyxchg = mhs >>= hstPendingCipher >>= Just . cipherKeyExchange
@@ -95,6 +99,9 @@ decodePacket12 ctx (Record ProtocolType_Handshake ver fragment) = do
                         return ((h, reverse (bs' : wirebytes)) : hbs)
 decodePacket12 _ (Record ty _ _) = return $ Left $ unknownProtocolType ty
 
+emptyHandshake :: TLSError
+emptyHandshake = Error_Protocol "empty handshake record" UnexpectedMessage
+
 ----------------------------------------------------------------
 
 decodePacket13 :: Context -> Record Plaintext -> IO (Either TLSError Packet13)
@@ -104,6 +111,8 @@ decodePacket13 _ (Record ProtocolType_ChangeCipherSpec _ fragment) =
         Right _ -> return $ Right ChangeCipherSpec13
 decodePacket13 _ (Record ProtocolType_AppData _ fragment) = return $ Right $ AppData13 $ fragmentGetBytes fragment
 decodePacket13 _ (Record ProtocolType_Alert _ fragment) = return (Alert13 `fmapEither` decodeAlerts (fragmentGetBytes fragment))
+decodePacket13 _ (Record ProtocolType_Handshake _ fragment)
+    | BS.null (fragmentGetBytes fragment) = return $ Left emptyHandshake
 decodePacket13 ctx (Record ProtocolType_Handshake _ fragment) = usingState ctx $ do
     (mCont, wirebytes) <- gets stHandshakeRecordCont13
     modify' (\st -> st{stHandshakeRecordCont13 = (Nothing, [])})

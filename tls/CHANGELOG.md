@@ -58,6 +58,8 @@ value computed under the negotiated cipher's hash.
   [#608](https://github.com/haskell-tls/hs-tls/pull/608)
 * Check the versions and extensions of the hello messages as RFC 9846 does.
   [#614](https://github.com/haskell-tls/hs-tls/pull/614)
+* Refuse empty handshake records, and raise the default of `limitHandshakeFragment` to 2048.
+  [#615](https://github.com/haskell-tls/hs-tls/pull/615)
 
 ## Version 2.4.12
 

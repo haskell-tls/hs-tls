@@ -281,6 +281,16 @@ spec = do
             server_first_record_type_unexpected 24 0
         it "rejects application data inside a TLS 1.3 handshake message" $
             handshake13_interleaved_app_data
+        it "rejects an empty handshake record before a ClientHello" $
+            handshake_empty_handshake_record True
+        it "rejects an empty handshake record inside a ClientHello" $
+            handshake_empty_handshake_record False
+        it "accepts a TLS 1.2 ClientHello in one-byte records" $
+            handshake_one_byte_records TLS12 Nothing
+        it "accepts a TLS 1.3 ClientHello in one-byte records" $
+            handshake_one_byte_records TLS13 Nothing
+        it "rejects a ClientHello in more records than the limit" $
+            handshake_one_byte_records TLS13 (Just 8)
         it "rejects a message after ClientHello in its record" $
             handshake13_trailing_after_hello True
         it "rejects a message after ServerHello in its record" $
@@ -3572,6 +3582,76 @@ fixGroupsX25519 (cli, srv) =
                 }
         }
     )
+
+-- RFC 9846 Section 5.1: handshake records are never empty.  The client's
+-- ClientHello record gets an empty one before it or in the middle of it.
+handshake_empty_handshake_record :: Bool -> IO ()
+handshake_empty_handshake_record before = do
+    (clientParam, serverParam) <- generate arbitrary
+    ref <- newIORef False
+    let split body
+            | before = ["", body]
+            | otherwise = [B.take 10 body, "", B.drop 10 body]
+    r <- timeout 10000000 $
+        withPairContextWith (splitFirstRecord ref split, id) (clientParam, serverParam) $
+            \(cctx, sctx) ->
+                concurrently_
+                    (handshake sctx `shouldThrow` refusedFor UnexpectedMessage "empty")
+                    (handshake cctx `shouldThrow` anyTLSException)
+    r `shouldSatisfy` isJust
+    readIORef ref `shouldReturn` True
+
+-- RFC 9846 Section 5.1 lets a handshake message be split into records of
+-- any non-zero size.  The ClientHello is sent a byte a record, which the
+-- default limit of 2048 records accepts and the given limit refuses.
+handshake_one_byte_records :: Version -> Maybe Int -> IO ()
+handshake_one_byte_records ver mlim = do
+    (clientParam, serverParam) <-
+        fixGroupsX25519
+            <$> generate
+                (arbitraryPairParamsWithVersionsAndCiphers ([ver], [ver]) (ciphers, ciphers))
+    let serverParam' = case mlim of
+            Nothing -> serverParam
+            Just lim ->
+                let shared = serverShared serverParam
+                 in serverParam
+                        { serverShared =
+                            shared{sharedLimit = (sharedLimit shared){limitHandshakeFragment = lim}}
+                        }
+    ref <- newIORef False
+    let split = map B.singleton . B.unpack
+    r <- timeout 10000000 $
+        withPairContextWith (splitFirstRecord ref split, id) (clientParam, serverParam') $
+            \(cctx, sctx) -> case mlim of
+                Nothing -> concurrently_ (handshake sctx) (handshake cctx)
+                Just _ ->
+                    concurrently_
+                        (handshake sctx `shouldThrow` refusedFor UnexpectedMessage "too many")
+                        (handshake cctx `shouldThrow` anyTLSException)
+    r `shouldSatisfy` isJust
+    readIORef ref `shouldReturn` True
+  where
+    ciphers
+        | ver == TLS13 = [cipher13_AES_128_GCM_SHA256]
+        | otherwise = [cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256]
+
+-- Sends the body of the first record, which is expected to be a plaintext
+-- handshake record, in the records the function splits it into.
+splitFirstRecord
+    :: IORef Bool -> (B.ByteString -> [B.ByteString]) -> Backend -> Backend
+splitFirstRecord ref split be =
+    be
+        { backendSend = \bs -> do
+            done <- readIORef ref
+            if done || B.take 1 bs /= B.singleton 22
+                then backendSend be bs
+                else do
+                    writeIORef ref True
+                    let len = fromIntegral (B.index bs 3) * 256 + fromIntegral (B.index bs 4)
+                        (body, rest) = B.splitAt len $ B.drop 5 bs
+                        record b = B.take 3 bs <> encodeWord16 (fromIntegral $ B.length b) <> b
+                    backendSend be $ B.concat (map record (split body)) <> rest
+        }
 
 -- Puts bytes made from its body at the end of the first record sent, which
 -- is expected to be a plaintext handshake record.
