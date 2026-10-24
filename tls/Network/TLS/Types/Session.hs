@@ -46,7 +46,11 @@ data SessionData = SessionData
     , sessionALPN :: Maybe ByteString
     , sessionMaxEarlyDataSize :: Int
     , sessionFlags :: [SessionFlag]
-    } -- sessionFromTicket :: Bool
+    , sessionClientCertificate :: Maybe ByteString
+    -- ^ On a server, the DER of the leaf certificate the client was
+    -- authenticated with, so that a resumed connection can tell the client.
+    }
+    -- sessionFromTicket :: Bool
     deriving (Eq, Generic)
 
 -- | Everything but @sessionSecret@, which renders as @\<secret\>@: whoever
@@ -82,7 +86,29 @@ showsSessionData secret d sd =
             . shows (sessionMaxEarlyDataSize sd)
             . showString ", sessionFlags = "
             . shows (sessionFlags sd)
+            . showString ", sessionClientCertificate = "
+            . showString (maybe "Nothing" derLength (sessionClientCertificate sd))
             . showChar '}'
+  where
+    derLength der = "Just <" ++ show (B.length der) ++ " bytes>"
+
+-- | A 'SessionData' to build one from with record update syntax, so that a
+-- field added later does not break the code that builds it.
+defaultSessionData :: SessionData
+defaultSessionData =
+    SessionData
+        { sessionVersion = TLS13
+        , sessionCipher = 0
+        , sessionCompression = 0
+        , sessionClientSNI = Nothing
+        , sessionSecret = B.empty
+        , sessionGroup = Nothing
+        , sessionTicketInfo = Nothing
+        , sessionALPN = Nothing
+        , sessionMaxEarlyDataSize = 0
+        , sessionFlags = []
+        , sessionClientCertificate = Nothing
+        }
 
 is0RTTPossible :: SessionData -> Bool
 is0RTTPossible sd = sessionMaxEarlyDataSize sd > 0

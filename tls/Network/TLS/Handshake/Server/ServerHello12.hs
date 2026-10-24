@@ -50,6 +50,7 @@ sendServerHello12 sparams ctx (usedCipher, mcred) ch@CH{..} = do
             usingState_ ctx $ do
                 setSession chSession
                 setTLS12SessionResuming True
+            restoreClientCertificate ctx sessionData
             sh <-
                 makeServerHello sparams ctx usedCipher mcred chExtensions chSession
             sendPacket12 ctx $ Handshake [ServerHello sh] []

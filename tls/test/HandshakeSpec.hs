@@ -149,6 +149,10 @@ spec = do
                 cipher13_AES_128_GCM_SHA256
         it "tells why a server certificate is rejected, with the chain in PEM" $
             handshake_certificate_rejection_details
+        it "tells the client certificate on a TLS 1.2 resumption" $
+            handshake_client_cert_on_resumption TLS12
+        it "tells the client certificate on a TLS 1.3 resumption" $
+            handshake_client_cert_on_resumption TLS13
         prop "can receive client authentication failure" handshake_client_auth_fail
         it "accepts an empty TLS 1.2 client certificate when the hook does" $
             handshake_client_auth_empty TLS12
@@ -1179,6 +1183,61 @@ handshake12_unimplemented_sigalg = do
                 (handshake sctx `shouldThrow` rejectedAsHandshakeFailure)
                 (void (E.try (handshake cctx) :: IO (Either TLSException ())))
     r `shouldSatisfy` isJust
+
+-- No certificate is exchanged on resumption; the server tells the leaf the
+-- session kept from the full handshake.
+handshake_client_cert_on_resumption :: Version -> IO ()
+handshake_client_cert_on_resumption version = do
+    let cipher
+            | version == TLS13 = cipher13_AES_128_GCM_SHA256
+            | otherwise = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([version], [version])
+                ([cipher], [cipher])
+    cred@(CertificateChain (leaf : _), _) <-
+        generate $ arbitraryRSACredentialWithPurpose KeyUsagePurpose_ClientAuth
+    -- one group, so that no HelloRetryRequest comes in the way
+    let x25519 sup = sup{supportedGroups = [X25519], supportedGroupsTLS13 = [[X25519]]}
+        params0 =
+            ( clientParam
+                { clientSupported = x25519 (clientSupported clientParam)
+                , clientHooks =
+                    (clientHooks clientParam)
+                        { onCertificateRequest = \_ -> return $ Just cred
+                        }
+                }
+            , serverParam
+                { serverWantClientCert = True
+                , serverSupported = x25519 (serverSupported serverParam)
+                , serverHooks =
+                    (serverHooks serverParam)
+                        { onClientCertificate = \_ -> return CertificateUsageAccept
+                        }
+                }
+            )
+    sessionRefs <- twoSessionRefs
+    let params = setPairParamsSessionManagers (twoSessionManagers sessionRefs) params0
+    if version == TLS13
+        then runTLSSimple13 params FullHandshake
+        else runTLSSimple params
+    sessionParams <- readClientSessionRef sessionRefs
+    expectJust "session param should be Just" sessionParams
+    ref <- newIORef Nothing
+    let params2 = setPairParamsSessionResuming (fromJust sessionParams) params
+    withPairContextWith (id, id) params2 $ \(cctx, sctx) -> do
+        concurrently_ (handshake sctx) (handshake cctx)
+        info <- contextGetInformation sctx
+        chain <- getClientCertificateChain sctx
+        writeIORef ref $ Just (info, chain)
+    Just (info, chain) <- readIORef ref
+    -- it was a resumption indeed
+    let resumed i
+            | version == TLS13 = infoTLS13HandshakeMode i == Just PreSharedKey
+            | otherwise = infoTLS12Resumption i
+    info `shouldSatisfy` maybe False resumed
+    chain `shouldBe` Just (CertificateChain [leaf])
 
 -- The exception names the validation failures and the leaf, and debugError
 -- gets every certificate of the chain in PEM.

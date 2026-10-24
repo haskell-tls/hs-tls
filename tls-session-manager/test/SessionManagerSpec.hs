@@ -7,7 +7,7 @@ import Data.IORef
 import Data.Maybe (isJust, isNothing)
 import qualified Data.OrdPSQ as Q
 import Network.TLS
-import Network.TLS.Internal (Second, SessionData (..), TLS13TicketInfo (..))
+import Network.TLS.Internal (Second, TLS13TicketInfo (..))
 import Network.TLS.SessionManager
 import Network.TLS.SessionManager.Internal (
     Availability (..),
@@ -72,20 +72,15 @@ spec = do
         ref <- newIORef Fresh
         return (toValue (sessionData Nothing), ref)
 
--- | Session data with a TLS 1.3 ticket of the given lifetime, if any.
+-- | Session data with a TLS 1.3 ticket of the given lifetime, if any.  Only
+-- fields that tls 2.4 has too are set.
 sessionData :: Maybe Second -> SessionData
 sessionData life =
-    SessionData
+    defaultSessionData
         { sessionVersion = TLS13
         , sessionCipher = 0x1301
-        , sessionCompression = 0
-        , sessionClientSNI = Nothing
         , sessionSecret = "secret"
-        , sessionGroup = Nothing
         , sessionTicketInfo = ticketInfo <$> life
-        , sessionALPN = Nothing
-        , sessionMaxEarlyDataSize = 0
-        , sessionFlags = []
         }
   where
     ticketInfo l =
