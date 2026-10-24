@@ -224,6 +224,12 @@ spec = do
             handshake13_0rtt_psk_rejected False
         it "authenticates a server rejecting the PSK of 0RTT, asking a cert" $
             handshake13_0rtt_psk_rejected True
+        it "skips rejected early data in many records" $
+            handshake13_0rtt_skip (replicate 5 100) True
+        it "skips rejected early data beyond serverEarlyDataSize" $
+            handshake13_0rtt_skip [10000] True
+        it "refuses rejected early data over a record's worth" $
+            handshake13_0rtt_skip [16384, 4000] False
         prop "can handshake with TLS 1.3 EE" handshake13_ee_groups
         prop "can handshake with TLS 1.3 EC groups" handshake13_ec
         prop "can handshake with TLS 1.3 FFDHE groups" handshake13_ffdhe
@@ -2825,6 +2831,58 @@ handshake13_0rtt_psk_rejected wantCert = do
                         }
                 }
     runTLS0RTT (pc{clientUseEarlyData = True}, ps') FullHandshake earlyData
+
+-- RFC 9846 Section 4.2.10: a server that has forgotten the session skips
+-- the early data, sent in records of the given lengths, up to a record's
+-- worth since it accepts no early data itself.
+handshake13_0rtt_skip :: [Int] -> Bool -> IO ()
+handshake13_0rtt_skip lens ok = do
+    (cli, srv) <- generate arbitraryPairParams13
+    let params0 = fixGroupsX25519 (cli, srv{serverEarlyDataSize = 65536})
+    sessionRefs <- twoSessionRefs
+    let params = setPairParamsSessionManagers (twoSessionManagers sessionRefs) params0
+    runTLSSimple13 params FullHandshake
+    Just sessionParams <- readClientSessionRef sessionRefs
+    writeIORef (snd sessionRefs) Nothing
+    let (pc, ps) = setPairParamsSessionResuming sessionParams params
+        chunks = [B.replicate n 0x61 | n <- lens]
+        len = sum lens
+    r <- timeout 10000000 $
+        withPairContext (pc{clientUseEarlyData = True}, ps{serverEarlyDataSize = 0}) $
+            \(cctx, sctx) ->
+                if ok
+                    then
+                        concurrently_
+                            ( do
+                                handshake sctx
+                                recvAll sctx len `shouldReturn` B.concat chunks
+                                sendData sctx "ok"
+                            )
+                            ( do
+                                handshake cctx
+                                mapM_ (sendData cctx . L.fromStrict) chunks
+                                recvData cctx `shouldReturn` "ok"
+                            )
+                    else
+                        concurrently_
+                            ((handshake sctx >> recvData sctx) `shouldThrow` tooMuch)
+                            ( void
+                                ( E.try
+                                    (handshake cctx >> mapM_ (sendData cctx . L.fromStrict) chunks >> recvData cctx)
+                                    :: IO (Either TLSException B.ByteString)
+                                )
+                            )
+    r `shouldSatisfy` isJust
+  where
+    recvAll ctx n
+        | n <= 0 = return ""
+        | otherwise = do
+            bs <- recvData ctx
+            when (B.null bs) $ fail "EOF"
+            (bs <>) <$> recvAll ctx (n - B.length bs)
+    tooMuch (HandshakeFailed (Error_Protocol msg UnexpectedMessage)) = "too much" `isInfixOf` msg
+    tooMuch (Terminated _ _ (Error_Protocol msg UnexpectedMessage)) = "too much" `isInfixOf` msg
+    tooMuch _ = False
 
 handshake13_ee_groups :: CSP13 -> IO ()
 handshake13_ee_groups (CSP13 (cli, srv)) = do

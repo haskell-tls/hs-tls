@@ -89,7 +89,22 @@ recvRecord13 ctx =
             then return $ Left maximumSizeExceeded
             else
                 readExactBytes ctx (fromIntegral readlen)
-                    >>= either (return . Left) (getRecord ctx header)
+                    >>= either (return . Left) (getRecord13 header)
+    -- RFC 9846 Section 4.2.10: a server that rejected early data skips the
+    -- records it cannot deprotect, until the first one it can.
+    getRecord13 header@(Header ty _ readlen) content = do
+        erecord <- getRecord ctx header content
+        case erecord of
+            Left (Error_Protocol _ BadRecordMac) -> do
+                skipped <- skipEarlyData ctx (fromIntegral readlen)
+                if skipped then recvRecord13 ctx else return erecord
+            Right _ | ty == ProtocolType_AppData -> do
+                established <- ctxEstablished ctx
+                case established of
+                    EarlyDataNotAllowed _ -> setEstablished ctx NotEstablished
+                    _ -> return ()
+                return erecord
+            _ -> return erecord
 
 maximumSizeExceeded :: TLSError
 maximumSizeExceeded = Error_Protocol "record exceeding maximum size" RecordOverflow
