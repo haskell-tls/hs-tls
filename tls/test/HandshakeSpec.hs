@@ -286,6 +286,12 @@ spec = do
             handshake13_0rtt_trailing_after_server_hello
         it "rejects a message after KeyUpdate in its record" $
             handshake13_trailing_after_key_update
+        it "resumes with the second PSK when the first is unknown" $
+            handshake13_second_psk
+        it "keeps the key shares for a HelloRetryRequest with only a cookie" $
+            handshake13_hrr_without_key_share True
+        it "rejects a HelloRetryRequest that changes nothing" $
+            handshake13_hrr_without_key_share False
         it "updates the keys before the record limit" $
             handshake13_key_usage_limit
         it "stops early data at the record limit" $
@@ -3279,6 +3285,95 @@ handshake13_0rtt_key_usage_limit = do
   where
     limitReached (PostHandshake (Error_Misc msg)) = "limit" `isInfixOf` msg
     limitReached _ = False
+
+-- The client offers an unknown ticket, with a PSK of its own, before the
+-- one the server issued.  Each PSK has its own binder, and the server
+-- resumes with the second.
+handshake13_second_psk :: IO ()
+handshake13_second_psk = do
+    (cli, srv) <- generate arbitraryPairParams13
+    sessionRefs <- twoSessionRefs
+    let params =
+            setPairParamsSessionManagers (twoSessionManagers sessionRefs) $
+                fixGroupsX25519 (cli, srv)
+    runTLSSimple13 params FullHandshake
+    Just (sid, sdata) <- readClientSessionRef sessionRefs
+    let unknown =
+            ( B.map (xor 0xff) sid
+            , sdata{sessionSecret = B.map (xor 0xff) (sessionSecret sdata)}
+            )
+        (pc, ps) = params
+    runTLSSimple13
+        (pc{clientWantSessionResumeList = [unknown, (sid, sdata)]}, ps)
+        PreSharedKey
+
+-- RFC 9846 Section 4.1.4: a HelloRetryRequest may carry only a cookie,
+-- after which the client sends the same key shares again with the cookie.
+-- One with neither changes nothing and is refused with illegal_parameter.
+-- The server side is played by hand.
+handshake13_hrr_without_key_share :: Bool -> IO ()
+handshake13_hrr_without_key_share withCookie = do
+    let cipher = cipher13_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS13], [TLS13])
+                ([cipher], [cipher])
+    let cookie = Cookie "a cookie"
+    r <- timeout 10000000 $
+        withPairContext (clientParam, serverParam) $ \(cctx, sctx) -> do
+            let be = ctxBackend sctx
+                recvRecord = do
+                    hdr <- backendRecv be 5
+                    let len = fromIntegral (B.index hdr 3) * 256 + fromIntegral (B.index hdr 4)
+                    body <- backendRecv be len
+                    return (B.head hdr, body)
+                recvClientHello = do
+                    (ty, body) <- recvRecord
+                    if ty /= 22
+                        then recvClientHello
+                        else do
+                            let cp = CurrentParams TLS12 Nothing
+                            case decodeHandshake cp HandshakeType_ClientHello (B.drop 4 body) of
+                                Right (ClientHello ch) -> return ch
+                                x -> error $ show x
+                sendHandshake h =
+                    let bs = encodeHandshake h
+                        len = B.length bs
+                     in backendSend be $
+                            B.pack [22, 3, 3, fromIntegral (len `div` 256), fromIntegral (len `mod` 256)]
+                                <> bs
+            concurrently_
+                ( do
+                    ch1 <- recvClientHello
+                    sendHandshake $
+                        ServerHello
+                            SH
+                                { shVersion = TLS12
+                                , shRandom = hrrRandom
+                                , shSession = chSession ch1
+                                , shCipher = CipherId 0x1301
+                                , shComp = 0
+                                , shExtensions =
+                                    toExtensionRaw (SupportedVersionsServerHello TLS13)
+                                        : [toExtensionRaw cookie | withCookie]
+                                }
+                    when withCookie $ do
+                        ch2 <- recvClientHello
+                        findExt EID_KeyShare ch2 `shouldBe` findExt EID_KeyShare ch1
+                        findExt EID_Cookie ch2 `shouldBe` Just (toExtensionRaw cookie)
+                        -- handshake_failure, to end the client
+                        backendSend be $ B.pack [21, 3, 3, 0, 2, 2, 40]
+                )
+                ( if withCookie
+                    then void (E.try (handshake cctx) :: IO (Either TLSException ()))
+                    else handshake cctx `shouldThrow` illegalParameter
+                )
+    r `shouldSatisfy` isJust
+  where
+    findExt i ch = find (\(ExtensionRaw eid _) -> eid == i) (chExtensions ch)
+    illegalParameter (HandshakeFailed (Error_Protocol _ IllegalParameter)) = True
+    illegalParameter _ = False
 
 unhexBytes :: String -> B.ByteString
 unhexBytes [] = B.empty
