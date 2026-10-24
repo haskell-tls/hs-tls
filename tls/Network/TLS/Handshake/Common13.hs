@@ -165,6 +165,7 @@ makeCertVerify ctx pub hs (TranscriptHash hashValue) = do
             | role == ClientRole = clientContextString
             | otherwise = serverContextString
         target = makeTarget ctxStr hashValue
+    usingHState ctx $ setSignatureScheme role hs
     CertVerify13 . DigitallySigned hs <$> sign ctx pub hs target
 
 checkCertVerify
@@ -193,7 +194,9 @@ checkCertVerify ctx pub hs signature hashValue = liftIO $ do
             | otherwise = clientContextString
         target = makeTarget ctxStr hashValue
         sigParams = signatureParams pub hs
-    verifyPublic ctx sigParams target signature
+    ok <- verifyPublic ctx sigParams target signature
+    when ok $ usingHState ctx $ setSignatureScheme (invertRole role) hs
+    return ok
 
 makeTarget :: ByteString -> ByteString -> ByteString
 makeTarget contextString hashValue = runPut $ do
@@ -683,6 +686,8 @@ finishHandshake13 ctx = do
                         , hstTLS13RTT0Status = hstTLS13RTT0Status hshake
                         , hstTLS13ResumptionSecret = hstTLS13ResumptionSecret hshake
                         , hstTLS13ECHAccepted = hstTLS13ECHAccepted hshake
+                        , hstServerSignatureScheme = hstServerSignatureScheme hshake
+                        , hstClientSignatureScheme = hstClientSignatureScheme hshake
                         }
     -- forget handshake data stored in TLS state
     usingState_ ctx $ do

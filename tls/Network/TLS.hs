@@ -236,6 +236,8 @@ module Network.TLS (
     infoTLS13HandshakeMode,
     infoIsEarlyDataAccepted,
     infoIsECHAccepted,
+    infoServerSignatureScheme,
+    infoClientSignatureScheme,
     ClientRandom,
     ServerRandom,
     unClientRandom,

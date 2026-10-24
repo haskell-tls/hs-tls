@@ -35,6 +35,8 @@ value computed under the negotiated cipher's hash.
   [#588](https://github.com/haskell-tls/hs-tls/pull/588)
 * Let application data and HelloRequest come during a TLS 1.2 handshake.
   [#601](https://github.com/haskell-tls/hs-tls/pull/601)
+* Report the signature schemes of the handshake in `Information`.
+  [#603](https://github.com/haskell-tls/hs-tls/pull/603)
 
 ## Version 2.4.12
 

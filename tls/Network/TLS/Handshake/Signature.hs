@@ -30,6 +30,7 @@ import Network.TLS.Packet (
 import Network.TLS.Parameters
 import Network.TLS.State
 import Network.TLS.Struct
+import Network.TLS.Types (invertRole)
 import Network.TLS.X509
 
 decryptError :: MonadIO m => String -> m a
@@ -281,6 +282,7 @@ signatureCreateWithCertVerifyData
     -> IO DigitallySigned
 signatureCreateWithCertVerifyData ctx malg (sigParam, toSign) = do
     role <- usingState_ ctx getRole
+    usingHState ctx $ setSignatureScheme role malg
     DigitallySigned malg <$> signPrivate ctx role sigParam toSign
 
 signatureVerify :: Context -> DigitallySigned -> PubKey -> ByteString -> IO Bool
@@ -310,7 +312,11 @@ signatureVerifyWithCertVerifyData
     -> IO Bool
 signatureVerifyWithCertVerifyData ctx (DigitallySigned hs bs) (sigParam, toVerify) = do
     checkSupportedHashSignature ctx hs
-    verifyPublic ctx sigParam toVerify bs
+    ok <- verifyPublic ctx sigParam toVerify bs
+    when ok $ do
+        role <- usingState_ ctx getRole
+        usingHState ctx $ setSignatureScheme (invertRole role) hs
+    return ok
 
 digitallySignParams
     :: Context

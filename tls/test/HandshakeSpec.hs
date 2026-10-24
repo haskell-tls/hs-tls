@@ -132,6 +132,10 @@ spec = do
                 rejectedAsDecryptError
         it "refuses a TLS 1.2 signature algorithm it cannot sign with" $
             handshake12_unimplemented_sigalg
+        it "reports the signature schemes of a TLS 1.2 handshake" $
+            handshake_info_signature_schemes TLS12
+        it "reports the signature schemes of a TLS 1.3 handshake" $
+            handshake_info_signature_schemes TLS13
         prop "can receive client authentication failure" handshake_client_auth_fail
         it "accepts an empty TLS 1.2 client certificate when the hook does" $
             handshake_client_auth_empty TLS12
@@ -1162,6 +1166,50 @@ handshake12_unimplemented_sigalg = do
                 (handshake sctx `shouldThrow` rejectedAsHandshakeFailure)
                 (void (E.try (handshake cctx) :: IO (Either TLSException ())))
     r `shouldSatisfy` isJust
+
+-- Both sides report the same schemes: the server's signature always, and the
+-- client's CertificateVerify only when it sends a certificate.
+handshake_info_signature_schemes :: Version -> IO ()
+handshake_info_signature_schemes version = do
+    let cipher
+            | version == TLS13 = cipher13_AES_128_GCM_SHA256
+            | otherwise = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([version], [version])
+                ([cipher], [cipher])
+    cred <- generate $ arbitraryRSACredentialWithPurpose KeyUsagePurpose_ClientAuth
+    let withCert send =
+            ( clientParam
+                { clientHooks =
+                    (clientHooks clientParam)
+                        { onCertificateRequest = \_ -> return $ if send then Just cred else Nothing
+                        }
+                }
+            , serverParam
+                { serverWantClientCert = True
+                , serverHooks =
+                    (serverHooks serverParam)
+                        { onClientCertificate = \_ -> return CertificateUsageAccept
+                        }
+                }
+            )
+        run params = do
+            ref <- newIORef Nothing
+            withPairContextWith (id, id) params $ \(cctx, sctx) -> do
+                concurrently_ (handshake sctx) (handshake cctx)
+                ci <- contextGetInformation cctx
+                si <- contextGetInformation sctx
+                writeIORef ref $ Just (ci, si)
+            fromJust <$> readIORef ref
+        schemes i = (infoServerSignatureScheme =<< i, infoClientSignatureScheme =<< i)
+    (ci, si) <- run (withCert True)
+    schemes ci `shouldBe` schemes si
+    schemes ci `shouldSatisfy` \(sv, cl) -> isJust sv && isJust cl
+    (ci', si') <- run (withCert False)
+    schemes ci' `shouldBe` schemes si'
+    schemes ci' `shouldSatisfy` \(sv, cl) -> isJust sv && isNothing cl
 
 -- A DER ECDSA signature that does not decode is a signature that does not
 -- verify, a decrypt_error.  The client's TLS 1.3 CertificateVerify
