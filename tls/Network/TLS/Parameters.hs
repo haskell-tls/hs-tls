@@ -905,6 +905,15 @@ data Limit = Limit
     -- disable the limit; they do not disable KeyUpdate processing.
     --
     -- Default: @Just 32@
+    , limitRecordsPerKey :: Maybe Word64
+    -- ^ The number of TLS 1.3 records sent under a set of keys, after which
+    -- they are updated with KeyUpdate (RFC 9846 Section 5.5).  Early data,
+    -- which cannot update its keys, is refused there.  'Nothing' means the
+    -- limit for the cipher: 2^24 for AES and 2^62 for ChaCha20-Poly1305.
+    --
+    -- Default: 'Nothing'
+    --
+    -- @since 2.5.0
     }
     deriving (Eq, Show)
 
@@ -915,4 +924,5 @@ defaultLimit =
         { limitRecordSize = Nothing
         , limitHandshakeFragment = 32
         , limitKeyUpdate = Just 32
+        , limitRecordsPerKey = Nothing
         }

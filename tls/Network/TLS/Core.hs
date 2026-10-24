@@ -267,9 +267,11 @@ updateKeyBeforeLimit ctx = do
   where
     -- AES-GCM allows 2^24.5 full-size records.  The sequence number of
     -- ChaCha20-Poly1305 would wrap before its limit.
-    recordLimit cipher
-        | bulkName (cipherBulk cipher) == "CHACHA20POLY1305" = 2 ^ (62 :: Int)
-        | otherwise = 2 ^ (24 :: Int)
+    recordLimit cipher = fromMaybe forCipher $ limitRecordsPerKey $ sharedLimit $ ctxShared ctx
+      where
+        forCipher
+            | bulkName (cipherBulk cipher) == "CHACHA20POLY1305" = 2 ^ (62 :: Int)
+            | otherwise = 2 ^ (24 :: Int)
 
 -- | Get data out of Data packet, and automatically renegotiate if a Handshake
 -- ClientHello is received.  An empty result means EOF.

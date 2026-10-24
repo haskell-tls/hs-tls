@@ -286,10 +286,8 @@ spec = do
             handshake13_0rtt_trailing_after_server_hello
         it "rejects a message after KeyUpdate in its record" $
             handshake13_trailing_after_key_update
-        it "updates the AES-GCM keys before the record limit" $
-            handshake13_key_usage_limit cipher13_AES_128_GCM_SHA256 1
-        it "keeps the ChaCha20-Poly1305 keys at the AES-GCM limit" $
-            handshake13_key_usage_limit cipher13_CHACHA20_POLY1305_SHA256 0
+        it "updates the keys before the record limit" $
+            handshake13_key_usage_limit
         it "stops early data at the record limit" $
             handshake13_0rtt_key_usage_limit
         it "rejects a two-byte TLS 1.2 ChangeCipherSpec" $
@@ -3220,41 +3218,35 @@ handshake13_trailing_after_key_update = do
                 )
     r `shouldSatisfy` isJust
 
--- RFC 9846 Section 5.5: 2^24 records are sent under the client's keys, as
--- far as the sequence numbers of both sides tell, before the next one.  The
--- server counts the KeyUpdates it receives.
-handshake13_key_usage_limit :: Cipher -> Int -> IO ()
-handshake13_key_usage_limit cipher expected = do
-    (clientParam, serverParam) <-
-        generate $
-            arbitraryPairParamsWithVersionsAndCiphers
-                ([TLS13], [TLS13])
-                ([cipher], [cipher])
+-- RFC 9846 Section 5.5: with two records allowed under a set of keys, the
+-- client updates its keys before the third and the fifth of five records.
+-- The server counts the KeyUpdates it receives.
+handshake13_key_usage_limit :: IO ()
+handshake13_key_usage_limit = do
+    (clientParam, serverParam) <- generate arbitraryPairParams13
+    let clientParam' =
+            clientParam
+                { clientShared =
+                    (clientShared clientParam)
+                        { sharedLimit = defaultLimit{limitRecordsPerKey = Just 2}
+                        }
+                }
+        msgs = ["a", "b", "c", "d", "e"]
     updates <- newIORef (0 :: Int)
-    ready <- newEmptyMVar
     let count h = do
             case h of
                 KeyUpdate13 _ -> modifyIORef' updates (+ 1)
                 _ -> return ()
             return h
-    withPairContext (clientParam, serverParam) $ \(cctx, sctx) ->
+    withPairContext (clientParam', serverParam) $ \(cctx, sctx) ->
         concurrently_
             ( do
                 handshake sctx
                 contextHookSetHandshake13Recv sctx count
-                setRxSequence sctx (2 ^ (24 :: Int))
-                putMVar ready ()
-                recvData sctx `shouldReturn` "a"
-                recvData sctx `shouldReturn` "b"
+                mapM_ (\m -> recvData sctx `shouldReturn` m) msgs
             )
-            ( do
-                handshake cctx
-                setTxSequence cctx (2 ^ (24 :: Int))
-                takeMVar ready
-                sendData cctx "a"
-                sendData cctx "b"
-            )
-    readIORef updates `shouldReturn` expected
+            (handshake cctx >> mapM_ (sendData cctx . L.fromStrict) msgs)
+    readIORef updates `shouldReturn` 2
 
 -- Early data cannot update the keys, so it is refused at the limit.
 handshake13_0rtt_key_usage_limit :: IO ()
@@ -3266,15 +3258,20 @@ handshake13_0rtt_key_usage_limit = do
     runTLSSimple13 params FullHandshake
     Just sessionParams <- readClientSessionRef sessionRefs
     let (pc, ps) = setPairParamsSessionResuming sessionParams params
+        pc' =
+            pc
+                { clientUseEarlyData = True
+                , clientShared =
+                    (clientShared pc){sharedLimit = defaultLimit{limitRecordsPerKey = Just 0}}
+                }
     r <- timeout 10000000 $
-        withPairContext (pc{clientUseEarlyData = True}, ps) $ \(cctx, sctx) ->
+        withPairContext (pc', ps) $ \(cctx, sctx) ->
             concurrently_
                 ( void
                     (E.try (handshake sctx >> recvData sctx) :: IO (Either TLSException B.ByteString))
                 )
                 ( do
                     handshake cctx
-                    setTxSequence cctx (2 ^ (24 :: Int))
                     sendData cctx "early" `shouldThrow` limitReached
                     bye cctx
                 )
