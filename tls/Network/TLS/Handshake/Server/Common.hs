@@ -181,6 +181,7 @@ clientCertificate sparams ctx certs = do
         CertificateUsageAccept -> do
             verifyLeafKeyUsage [KeyUsage_digitalSignature] certs
             verifyLeafKeyUsagePurpose KeyUsagePurpose_ClientAuth certs
+            verifyLeafKeySize (serverSupported sparams) certs
         CertificateUsageReject reason -> certificateRejected ctx [] certs reason
 
     -- Remember cert chain for later use.

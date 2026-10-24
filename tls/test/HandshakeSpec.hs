@@ -33,8 +33,9 @@ import Test.QuickCheck
 
 import API
 import Arbitrary
-import Certificate (arbitraryRSACredentialWithPurpose)
+import Certificate (arbitraryRSACredentialWithPurpose, arbitraryX509WithKey)
 import PipeChan
+import PubKey (rsaParams)
 import Run
 import Session
 
@@ -153,6 +154,10 @@ spec = do
             handshake_client_cert_on_resumption TLS12
         it "tells the client certificate on a TLS 1.3 resumption" $
             handshake_client_cert_on_resumption TLS13
+        it "refuses a server certificate with a 1024-bit RSA key" $
+            handshake_short_rsa_key False
+        it "refuses a client certificate with a 1024-bit RSA key" $
+            handshake_short_rsa_key True
         prop "can receive client authentication failure" handshake_client_auth_fail
         it "accepts an empty TLS 1.2 client certificate when the hook does" $
             handshake_client_auth_empty TLS12
@@ -1201,6 +1206,60 @@ handshake12_unimplemented_sigalg = do
                 (handshake sctx `shouldThrow` rejectedAsHandshakeFailure)
                 (void (E.try (handshake cctx) :: IO (Either TLSException ())))
     r `shouldSatisfy` isJust
+
+-- A 1024-bit RSA key is shorter than the default supportedMinRSAKeySize.  It
+-- is refused in the server's certificate or, with True, in the client's; a
+-- lower bound lets it through.
+handshake_short_rsa_key :: Bool -> IO ()
+handshake_short_rsa_key clientSide = do
+    let cipher = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        (pub, priv) = rsaParams
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS12], [TLS12])
+                ([cipher], [cipher])
+    cert <- generate $ arbitraryX509WithKey (PubKeyRSA pub, ())
+    let short = (CertificateChain [cert], PrivKeyRSA priv)
+        withMin n sup = sup{supportedMinRSAKeySize = n}
+        params n
+            | clientSide =
+                ( clientParam
+                    { clientHooks =
+                        (clientHooks clientParam)
+                            { onCertificateRequest = \_ -> return $ Just short
+                            }
+                    }
+                , serverParam
+                    { serverSupported = withMin n (serverSupported serverParam)
+                    , serverWantClientCert = True
+                    , serverHooks =
+                        (serverHooks serverParam)
+                            { onClientCertificate = \_ -> return CertificateUsageAccept
+                            }
+                    }
+                )
+            | otherwise =
+                ( clientParam{clientSupported = withMin n (clientSupported clientParam)}
+                , serverParam
+                    { serverShared =
+                        (serverShared serverParam){sharedCredentials = Credentials [short]}
+                    }
+                )
+    withPairContextWith (id, id) (params 2048) $ \(cctx, sctx) ->
+        if clientSide
+            then
+                concurrently_
+                    (handshake sctx `shouldThrow` rejectedAsBadCertificate)
+                    (void (E.try (handshake cctx) :: IO (Either TLSException ())))
+            else
+                concurrently_
+                    (void (E.try (handshake sctx) :: IO (Either TLSException ())))
+                    (handshake cctx `shouldThrow` rejectedAsBadCertificate)
+    runTLSSimple (params 1024)
+  where
+    rejectedAsBadCertificate (HandshakeFailed (Error_Protocol _ BadCertificate)) = True
+    rejectedAsBadCertificate _ = False
 
 -- No certificate is exchanged on resumption; the server tells the leaf the
 -- session kept from the full handshake.

@@ -128,6 +128,7 @@ doCertificate cparams ctx certs = do
     case usage of
         CertificateUsageAccept -> do
             verifyLeafKeyUsagePurpose KeyUsagePurpose_ServerAuth certs
+            verifyLeafKeySize (ctxSupported ctx) certs
             checkLeafCertificateKeyUsage
         CertificateUsageReject reason ->
             certificateRejected ctx (either (const []) id result) certs reason

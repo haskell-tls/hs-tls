@@ -4,12 +4,14 @@ module Network.TLS.Handshake.Certificate (
     rejectOnException,
     verifyLeafKeyUsage,
     verifyLeafKeyUsagePurpose,
+    verifyLeafKeySize,
     extractCAname,
 ) where
 
 import qualified Control.Exception as E
 import Control.Monad (unless)
 import Control.Monad.State.Strict
+import qualified Crypto.PubKey.RSA as RSA
 import Data.ASN1.Types (asn1CharacterToString)
 import Data.ByteArray.Encoding (Base (Base64), convertToBase)
 import qualified Data.ByteString as B
@@ -20,6 +22,7 @@ import Data.X509 (
     ExtKeyUsage (..),
     ExtKeyUsageFlag,
     ExtKeyUsagePurpose (..),
+    PubKey (PubKeyRSA),
     encodeSignedObject,
     extensionGet,
     getDistinguishedElements,
@@ -125,6 +128,23 @@ verifyLeafKeyUsagePurpose validPurpose (CertificateChain (signed : _)) =
     verified = case extensionGet (certExtensions cert) of
         Nothing -> True
         Just (ExtExtendedKeyUsage purposes) -> validPurpose `elem` purposes
+
+-- | The RSA key of the peer's leaf certificate is to be at least
+-- 'supportedMinRSAKeySize' bits.  The keys of the rest of the chain are left
+-- to the validation of the chain.
+verifyLeafKeySize :: MonadIO m => Supported -> CertificateChain -> m ()
+verifyLeafKeySize _ (CertificateChain []) = return ()
+verifyLeafKeySize supported (CertificateChain (signed : _)) =
+    case certPubKey $ getCertificate signed of
+        PubKeyRSA pk
+            | bits < minBits ->
+                badCertificate $
+                    "RSA key of " ++ show bits ++ " bits is shorter than " ++ show minBits
+          where
+            bits = RSA.public_size pk * 8
+        _ -> return ()
+  where
+    minBits = supportedMinRSAKeySize supported
 
 extractCAname :: SignedCertificate -> DistinguishedName
 extractCAname cert = certSubjectDN $ getCertificate cert
