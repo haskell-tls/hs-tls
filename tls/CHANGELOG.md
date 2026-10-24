@@ -53,6 +53,9 @@ value computed under the negotiated cipher's hash.
   [#611](https://github.com/haskell-tls/hs-tls/pull/611)
 * Give each PSK identity its own binder, and accept HelloRetryRequest with only a cookie.
   [#612](https://github.com/haskell-tls/hs-tls/pull/612)
+* Refuse an RSA key shorter than `supportedMinRSAKeySize` in the peer's certificate.
+  This refuses 1024-bit RSA certificates by default.
+  [#608](https://github.com/haskell-tls/hs-tls/pull/608)
 
 ## Version 2.4.12
 
