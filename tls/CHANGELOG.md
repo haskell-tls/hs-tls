@@ -60,6 +60,8 @@ value computed under the negotiated cipher's hash.
   [#614](https://github.com/haskell-tls/hs-tls/pull/614)
 * Refuse empty handshake records, and raise the default of `limitHandshakeFragment` to 2048.
   [#615](https://github.com/haskell-tls/hs-tls/pull/615)
+* Skip rejected early data by bytes, up to `max 16384 serverEarlyDataSize`, and only until a record decrypts.
+  [#616](https://github.com/haskell-tls/hs-tls/pull/616)
 
 ## Version 2.4.12
 
