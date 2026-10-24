@@ -290,15 +290,31 @@ spec = do
             handshake13_hrr_without_key_share False
         it "rejects a legacy_version above TLS 1.2 with supported_versions" $ do
             params <- fixGroupsX25519 <$> generate arbitraryPairParams13
-            serverRefusesHello params (\ch -> ch{chVersion = TLS13}) ProtocolVersion
+            serverRefusesHello
+                params
+                (\ch -> ch{chVersion = TLS13})
+                (refusedWith ProtocolVersion)
         it "rejects supported_versions without TLS 1.2 in a TLS 1.2 server" $ do
             (cli, srv) <- fixGroupsX25519 <$> generate arbitraryPairParams13
             let cli' = cli{clientSupported = (clientSupported cli){supportedVersions = [TLS13]}}
                 srv' = srv{serverSupported = (serverSupported srv){supportedVersions = [TLS12]}}
-            serverRefusesHello (cli', srv') id ProtocolVersion
+            serverRefusesHello (cli', srv') id (refusedWith ProtocolVersion)
         it "rejects a ServerHello legacy_version other than TLS 1.2" $ do
             params <- fixGroupsX25519 <$> generate arbitraryPairParams13
             clientRefusesHello params (\sh -> sh{shVersion = TLS13}) ProtocolVersion
+            clientRefusesHello
+                params
+                (\sh -> sh{shVersion = TLS13})
+                (refusedWith ProtocolVersion)
+        it "rejects supported_versions in a ServerHello choosing TLS 1.2" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let tls12 (ExtensionRaw EID_SupportedVersions _) =
+                    toExtensionRaw $ SupportedVersionsServerHello TLS12
+                tls12 e = e
+            clientRefusesHello
+                params
+                (\sh -> sh{shExtensions = map tls12 $ shExtensions sh})
+                (refusedFor IllegalParameter "supported_versions")
         it "rejects a two-byte TLS 1.2 ChangeCipherSpec" $
             malformed_ccs_unexpected
                 TLS12
@@ -3239,41 +3255,48 @@ handshake13_hrr_without_key_share withCookie = do
     illegalParameter (HandshakeFailed (Error_Protocol _ IllegalParameter)) = True
     illegalParameter _ = False
 
--- The server refuses with the alert the ClientHello the function changes.
+-- The server refuses the ClientHello the function changes, as the
+-- selector expects.
 serverRefusesHello
     :: (ClientParams, ServerParams)
     -> (ClientHello -> ClientHello)
-    -> AlertDescription
+    -> Selector TLSException
     -> IO ()
-serverRefusesHello params f ad =
+serverRefusesHello params f refused =
     withPairContext params $ \(cctx, sctx) -> do
         contextHookSetHandshakeRecv sctx tamper
         concurrently_
-            (handshake sctx `shouldThrow` refusedWith ad)
+            (handshake sctx `shouldThrow` refused)
             (handshake cctx `shouldThrow` anyTLSException)
   where
     tamper (ClientHello ch) = pure $ ClientHello $ f ch
     tamper h = pure h
 
--- The client refuses with the alert the ServerHello the function changes.
+-- The client refuses the ServerHello the function changes, as the
+-- selector expects.
 clientRefusesHello
     :: (ClientParams, ServerParams)
     -> (ServerHello -> ServerHello)
-    -> AlertDescription
+    -> Selector TLSException
     -> IO ()
-clientRefusesHello params f ad =
+clientRefusesHello params f refused =
     withPairContext params $ \(cctx, sctx) -> do
         contextHookSetHandshakeRecv cctx tamper
         concurrently_
             (handshake sctx `shouldThrow` anyTLSException)
-            (handshake cctx `shouldThrow` refusedWith ad)
+            (handshake cctx `shouldThrow` refused)
   where
     tamper (ServerHello sh) = pure $ ServerHello $ f sh
     tamper h = pure h
 
 refusedWith :: AlertDescription -> TLSException -> Bool
-refusedWith ad (HandshakeFailed (Error_Protocol _ ad')) = ad == ad'
-refusedWith _ _ = False
+refusedWith ad = refusedFor ad ""
+
+-- Refused with the alert, for a reason containing the string.
+refusedFor :: AlertDescription -> String -> TLSException -> Bool
+refusedFor ad needle (HandshakeFailed (Error_Protocol reason ad')) =
+    ad == ad' && needle `isInfixOf` reason
+refusedFor _ _ _ = False
 
 unhexBytes :: String -> B.ByteString
 unhexBytes [] = B.empty
