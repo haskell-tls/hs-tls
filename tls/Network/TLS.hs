@@ -365,10 +365,9 @@ import Network.TLS.X509
 type Bytes = ByteString
 
 -- | Getting certificates from a client, if any.
---   Note that the certificates are not sent by a client
---   on resumption even if client authentication is required.
---   So, this API would be replaced by the one which can treat
---   both cases of full-negotiation and resumption.
+--   A client sends no certificate on resumption; then this returns the
+--   leaf certificate it was authenticated with in the original connection.
+--   That chain was validated then and is not checked again.
 getClientCertificateChain :: Context -> IO (Maybe CertificateChain)
 getClientCertificateChain ctx = usingState_ ctx S.getClientCertificateChain
 

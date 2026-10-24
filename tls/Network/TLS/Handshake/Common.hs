@@ -22,6 +22,8 @@ module Network.TLS.Handshake.Common (
     ensureRecvComplete,
     processExtendedMainSecret,
     getSessionData,
+    clientLeafCertificate,
+    restoreClientCertificate,
     storePrivInfo,
     isSupportedGroup,
     checkSupportedGroup,
@@ -46,6 +48,7 @@ import Control.Monad.State.Strict
 import Data.ByteArray (convert)
 import qualified Data.ByteString as B
 import Data.IORef (modifyIORef')
+import Data.X509 (decodeSignedCertificate, encodeSignedObject)
 
 import Network.TLS.Cipher
 import Network.TLS.Compression
@@ -256,6 +259,24 @@ processExtendedMainSecret ctx ver msgt exts
         usingHState ctx $ setExtendedMainSecret True
         return True
 
+-- | The DER of the client's leaf certificate, kept in the session.  The
+-- chain was validated in this handshake; the leaf tells who the client is.
+clientLeafCertificate :: Context -> IO (Maybe ByteString)
+clientLeafCertificate ctx = do
+    mcc <- usingState_ ctx getClientCertificateChain
+    return $ case mcc of
+        Just (CertificateChain (leaf : _)) -> Just $ encodeSignedObject leaf
+        _ -> Nothing
+
+-- | On resumption no certificate is exchanged; the client is the one whose
+-- leaf certificate the session kept.
+restoreClientCertificate :: Context -> SessionData -> IO ()
+restoreClientCertificate ctx sd =
+    case sessionClientCertificate sd
+        >>= either (const Nothing) Just . decodeSignedCertificate of
+        Just leaf -> usingState_ ctx $ setClientCertificateChain $ CertificateChain [leaf]
+        Nothing -> return ()
+
 getSessionData :: Context -> IO (Maybe SessionData)
 getSessionData ctx = do
     ver <- usingState_ ctx getVersion
@@ -264,6 +285,7 @@ getSessionData ctx = do
     ems <- usingHState ctx getExtendedMainSecret
     cipher <- cipherID <$> usingHState ctx getPendingCipher
     alpn <- usingState_ ctx getNegotiatedProtocol
+    clientCert <- clientLeafCertificate ctx
     let compression = 0
         flags = [SessionEMS | ems]
     case mms of
@@ -282,6 +304,7 @@ getSessionData ctx = do
                         , sessionALPN = alpn
                         , sessionMaxEarlyDataSize = 0
                         , sessionFlags = flags
+                        , sessionClientCertificate = clientCert
                         }
 
 -- | Store the specified keypair.  Whether the public key and private key

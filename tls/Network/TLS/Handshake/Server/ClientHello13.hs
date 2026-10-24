@@ -12,6 +12,7 @@ import Network.TLS.Cipher
 import Network.TLS.Context.Internal
 import Network.TLS.Crypto
 import Network.TLS.Extension
+import Network.TLS.Handshake.Common (restoreClientCertificate)
 import Network.TLS.Handshake.Common13
 import Network.TLS.Handshake.Server.Common
 import Network.TLS.Handshake.Signature
@@ -175,7 +176,8 @@ pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CH{..} = do
                             isFresh <- checkFreshness tinfo obfAge
                             (isPSKvalid, is0RTTvalid) <- checkSessionEquality sdata
                             if isPSKvalid && isFresh
-                                then
+                                then do
+                                    restoreClientCertificate ctx sdata
                                     return
                                         ( psk
                                         , Just (bnd, 0 :: Int, len)

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module SessionManagerSpec where
@@ -75,18 +76,27 @@ spec = do
 -- | Session data with a TLS 1.3 ticket of the given lifetime, if any.
 sessionData :: Maybe Second -> SessionData
 sessionData life =
-    SessionData
-        { sessionVersion = TLS13
-        , sessionCipher = 0x1301
-        , sessionCompression = 0
-        , sessionClientSNI = Nothing
-        , sessionSecret = "secret"
-        , sessionGroup = Nothing
-        , sessionTicketInfo = ticketInfo <$> life
-        , sessionALPN = Nothing
-        , sessionMaxEarlyDataSize = 0
-        , sessionFlags = []
-        }
+    withoutClientCertificate $
+        SessionData
+            TLS13 -- version
+            0x1301 -- cipher
+            0 -- compression
+            Nothing -- SNI
+            "secret"
+            Nothing -- group
+            (ticketInfo <$> life)
+            Nothing -- ALPN
+            0 -- max early data size
+            [] -- flags
   where
     ticketInfo l =
         TLS13TicketInfo{lifetime = l, ageAdd = 0, txrxTime = 0, estimatedRTT = Nothing}
+
+-- tls 2.5 added the client certificate to SessionData.
+#if MIN_VERSION_tls(2,5,0)
+withoutClientCertificate :: (Maybe a -> SessionData) -> SessionData
+withoutClientCertificate f = f Nothing
+#else
+withoutClientCertificate :: SessionData -> SessionData
+withoutClientCertificate = id
+#endif

@@ -48,6 +48,7 @@ spec = do
             , sessionALPN = Nothing
             , sessionMaxEarlyDataSize = 0
             , sessionFlags = []
+            , sessionClientCertificate = Nothing
             }
     cipher = case ciphersuite_default of
         c : _ -> c

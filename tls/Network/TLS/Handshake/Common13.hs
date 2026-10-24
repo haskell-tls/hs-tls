@@ -60,7 +60,7 @@ import qualified Network.TLS.Crypto.IES as IES
 import Network.TLS.Compression
 import Network.TLS.Extension
 import Network.TLS.Handshake.Certificate (extractCAname)
-import Network.TLS.Handshake.Common (unexpected)
+import Network.TLS.Handshake.Common (clientLeafCertificate, unexpected)
 import Network.TLS.Handshake.Key
 import Network.TLS.Handshake.Signature
 import Network.TLS.Handshake.State
@@ -367,6 +367,7 @@ getSessionData13 ctx usedCipher tinfo maxSize psk = do
     malpn <- usingState_ ctx getNegotiatedProtocol
     sni <- usingState_ ctx getClientSNI
     mgrp <- usingHState ctx getSupportedGroup
+    clientCert <- clientLeafCertificate ctx
     return
         SessionData
             { sessionVersion = ver
@@ -379,6 +380,7 @@ getSessionData13 ctx usedCipher tinfo maxSize psk = do
             , sessionALPN = malpn
             , sessionMaxEarlyDataSize = maxSize
             , sessionFlags = []
+            , sessionClientCertificate = clientCert
             }
 
 ----------------------------------------------------------------
