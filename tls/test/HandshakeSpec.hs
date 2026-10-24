@@ -342,6 +342,26 @@ spec = do
                 concurrently_
                     (handshake sctx `shouldThrow` anyTLSException)
                     (handshake cctx `shouldThrow` refusedWith IllegalParameter)
+        it "rejects a TLS 1.3 ClientHello without signature_algorithms" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            serverRefusesHello
+                params
+                (withoutExt EID_SignatureAlgorithms)
+                (refusedWith MissingExtension)
+        it "rejects a TLS 1.3 ClientHello with key_share but no supported_groups" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            serverRefusesHello
+                params
+                (withoutExt EID_SupportedGroups)
+                (refusedWith MissingExtension)
+        it "rejects a key_share for a group not in supported_groups" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let p256 (ExtensionRaw EID_SupportedGroups _) = toExtensionRaw $ SupportedGroups [P256]
+                p256 e = e
+            serverRefusesHello
+                params
+                (\ch -> ch{chExtensions = map p256 $ chExtensions ch})
+                (refusedWith IllegalParameter)
         it "rejects a two-byte TLS 1.2 ChangeCipherSpec" $
             malformed_ccs_unexpected
                 TLS12
@@ -3315,6 +3335,10 @@ clientRefusesHello params f refused =
   where
     tamper (ServerHello sh) = pure $ ServerHello $ f sh
     tamper h = pure h
+
+withoutExt :: ExtensionID -> ClientHello -> ClientHello
+withoutExt i ch =
+    ch{chExtensions = filter (\(ExtensionRaw eid _) -> eid /= i) $ chExtensions ch}
 
 refusedWith :: AlertDescription -> TLSException -> Bool
 refusedWith ad = refusedFor ad ""
