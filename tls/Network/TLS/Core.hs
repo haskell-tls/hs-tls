@@ -365,13 +365,6 @@ recvData13 ctx = do
                 | otherwise ->
                     let reason = "early data overflow"
                      in terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
-            EarlyDataNotAllowed n
-                | n > 0 -> do
-                    setEstablished ctx $ EarlyDataNotAllowed (n - 1)
-                    recvData13 ctx -- ignore "x"
-                | otherwise -> do
-                    let reason = "early data deprotect overflow"
-                    terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
             Established -> resetTLS13KeyUpdateCount ctx >> return x
             _ -> throwCore $ Error_Protocol "data at not-established" UnexpectedMessage
     process ChangeCipherSpec13 = do

@@ -183,16 +183,13 @@ recvPacketHandshake ctx = do
     pkts <- recvPacket12HS ctx
     case pkts of
         Right (Handshake hss bss) -> return $ zip hss bss
-        Right x@(AppData _) -> do
-            -- If a TLS13 server decides to reject RTT0 data, the server should
-            -- skip records for RTT0 data up to the maximum limit.
-            established <- ctxEstablished ctx
-            case established of
-                EarlyDataNotAllowed n
-                    | n > 0 -> do
-                        setEstablished ctx $ EarlyDataNotAllowed (n - 1)
-                        recvPacketHandshake ctx
-                _ -> unexpected (show x) (Just "handshake")
+        Right x@(AppData bs) -> do
+            -- A TLS 1.3 server that sent HelloRetryRequest skips early data
+            -- until the second ClientHello (RFC 9846 Section 4.2.10).
+            skipped <- skipEarlyData ctx (B.length bs)
+            if skipped
+                then recvPacketHandshake ctx
+                else unexpected (show x) (Just "handshake")
         Right x -> unexpected (show x) (Just "handshake")
         Left err -> throwCore err
 

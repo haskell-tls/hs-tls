@@ -29,6 +29,7 @@ module Network.TLS.Context.Internal (
     contextModifyHooks,
     setEOF,
     setEstablished,
+    skipEarlyData,
     contextFlush,
     contextClose,
     contextSend,
@@ -286,7 +287,7 @@ updateRecordLayer recordLayer Context{..} =
 data Established
     = NotEstablished
     | EarlyDataAllowed Int -- server: remaining 0-RTT bytes allowed
-    | EarlyDataNotAllowed Int -- sever: remaining 0-RTT packets allowed to skip
+    | EarlyDataNotAllowed Int -- server: remaining 0-RTT bytes allowed to skip
     | EarlyDataSending
     | Established
     deriving (Eq, Show)
@@ -396,6 +397,24 @@ contextModifyHooks ctx = modifyIORef' (ctxHooks ctx)
 
 setEstablished :: Context -> Established -> IO ()
 setEstablished ctx = writeIORef (ctxEstablished_ ctx)
+
+-- | Skips a record of rejected early data, given its length on the wire, if
+-- the server is skipping them.  Going over what may be skipped is refused
+-- with unexpected_message (RFC 9846 Section 4.2.10).
+skipEarlyData :: Context -> Int -> IO Bool
+skipEarlyData ctx len = do
+    established <- ctxEstablished ctx
+    case established of
+        EarlyDataNotAllowed n
+            | cost <= n -> do
+                setEstablished ctx $ EarlyDataNotAllowed (n - cost)
+                return True
+            | otherwise ->
+                throwCore $ Error_Protocol "too much early data to skip" UnexpectedMessage
+        _ -> return False
+  where
+    -- The AEAD tag and the inner content type are not early data.
+    cost = max 1 (len - 17)
 
 withLog :: Context -> (Logging -> IO ()) -> IO ()
 withLog ctx f = ctxWithHooks ctx (f . hookLogging)

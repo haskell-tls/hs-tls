@@ -160,17 +160,6 @@ recvPacket13 ctx@Context{ctxRecordLayer = recordLayer} = loop 0
     loop count = do
         erecord <- recordRecv13 recordLayer ctx
         case erecord of
-            Left err@(Error_Protocol _ BadRecordMac) -> do
-                -- If the server decides to reject RTT0 data but accepts RTT1
-                -- data, the server should skip all records for RTT0 data.
-                logPacket ctx $ show err
-                established <- ctxEstablished ctx
-                case established of
-                    EarlyDataNotAllowed n
-                        | n > 0 -> do
-                            setEstablished ctx $ EarlyDataNotAllowed (n - 1)
-                            loop (count + 1)
-                    _ -> return $ Left err
             Left err -> do
                 logPacket ctx $ show err
                 return $ Left err
