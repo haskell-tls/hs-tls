@@ -51,6 +51,8 @@ value computed under the negotiated cipher's hash.
 * Update the keys before the key usage limit (`limitRecordsPerKey`), and keep
   the number of updates under 2^48-1.
   [#611](https://github.com/haskell-tls/hs-tls/pull/611)
+* Give each PSK identity its own binder, and accept HelloRetryRequest with only a cookie.
+  [#612](https://github.com/haskell-tls/hs-tls/pull/612)
 
 ## Version 2.4.12
 
