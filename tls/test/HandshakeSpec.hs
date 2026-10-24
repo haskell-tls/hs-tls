@@ -248,6 +248,14 @@ spec = do
             server_first_record_type_unexpected 24 0
         it "rejects application data inside a TLS 1.3 handshake message" $
             handshake13_interleaved_app_data
+        it "rejects a message after ClientHello in its record" $
+            handshake13_trailing_after_hello True
+        it "rejects a message after ServerHello in its record" $
+            handshake13_trailing_after_hello False
+        it "rejects a message after ServerHello in its record with 0-RTT" $
+            handshake13_0rtt_trailing_after_server_hello
+        it "rejects a message after KeyUpdate in its record" $
+            handshake13_trailing_after_key_update
         it "rejects a two-byte TLS 1.2 ChangeCipherSpec" $
             malformed_ccs_unexpected
                 TLS12
@@ -2758,6 +2766,155 @@ handshake13_interleaved_app_data = do
     unhex [] = B.empty
     unhex (a : b : rest) = B.cons (read ['0', 'x', a, b]) (unhex rest)
     unhex _ = error "unhex"
+
+-- RFC 9846 Section 5.1: the messages before a key change must end their
+-- record.  The record holding the ClientHello (the client's first) gets a
+-- copy of it, or that holding the ServerHello (the server's first) gets a
+-- Finished-shaped message.
+handshake13_trailing_after_hello :: Bool -> IO ()
+handshake13_trailing_after_hello afterCH = do
+    (clientParam, serverParam) <- generate arbitraryPairParams13
+    let params = fixGroupsX25519 (clientParam, serverParam)
+    ref <- newIORef False
+    let wraps
+            | afterCH = (appendToFirstRecord ref id, id)
+            | otherwise = (id, appendToFirstRecord ref (const trailingFinished))
+    r <- timeout 10000000 $
+        withPairContextWith wraps params $ \(cctx, sctx) ->
+            if afterCH
+                then
+                    concurrently_
+                        (handshake sctx `shouldThrow` rejectedAsUnexpected)
+                        (void (E.try (handshake cctx) :: IO (Either TLSException ())))
+                else
+                    concurrently_
+                        ( void
+                            (E.try (handshake sctx >> recvData sctx) :: IO (Either TLSException B.ByteString))
+                        )
+                        (handshake cctx `shouldThrow` rejectedAsUnexpected)
+    r `shouldSatisfy` isJust
+    readIORef ref `shouldReturn` True
+
+-- As above, for the plaintext ServerHello that the client takes in its
+-- receive loop after sending early data.
+handshake13_0rtt_trailing_after_server_hello :: IO ()
+handshake13_0rtt_trailing_after_server_hello = do
+    (cli, srv) <- generate arbitraryPairParams13
+    let params0 = fixGroupsX25519 (cli, srv{serverEarlyDataSize = 2048})
+    sessionRefs <- twoSessionRefs
+    let params = setPairParamsSessionManagers (twoSessionManagers sessionRefs) params0
+    runTLSSimple13 params FullHandshake
+    Just sessionParams <- readClientSessionRef sessionRefs
+    let (pc, ps) = setPairParamsSessionResuming sessionParams params
+    ref <- newIORef False
+    r <- timeout 10000000
+        $ withPairContextWith
+            (id, appendToFirstRecord ref (const trailingFinished))
+            (pc{clientUseEarlyData = True}, ps)
+        $ \(cctx, sctx) ->
+            concurrently_
+                ( void
+                    (E.try (handshake sctx >> recvData sctx) :: IO (Either TLSException B.ByteString))
+                )
+                ( do
+                    handshake cctx
+                    sendData cctx "early"
+                    recvData cctx `shouldThrow` notAligned
+                )
+    r `shouldSatisfy` isJust
+    readIORef ref `shouldReturn` True
+  where
+    notAligned (HandshakeFailed (Error_Protocol msg UnexpectedMessage)) =
+        "not aligned" `isInfixOf` msg
+    notAligned _ = False
+
+-- After the handshake the client sends, protected under its application
+-- traffic secret, a record holding a KeyUpdate and a Finished-shaped message,
+-- and then application data under the same secret.
+handshake13_trailing_after_key_update :: IO ()
+handshake13_trailing_after_key_update = do
+    let cipher = cipher13_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS13], [TLS13])
+                ([cipher], [cipher])
+    secretRef <- newIORef Nothing
+    sendRef <- newIORef (\_ -> return ())
+    let logKey line = case words line of
+            ["CLIENT_TRAFFIC_SECRET_0", _, h] -> writeIORef secretRef (Just h)
+            _ -> return ()
+        clientParam' =
+            clientParam
+                { clientDebug = (clientDebug clientParam){debugKeyLogger = logKey}
+                }
+        capture be =
+            be
+                { backendSend = \bs -> do
+                    writeIORef sendRef (backendSend be)
+                    backendSend be bs
+                }
+    r <- timeout 10000000 $
+        withPairContextWith (capture, id) (clientParam', serverParam) $ \(cctx, sctx) ->
+            concurrently_
+                (handshake sctx >> (recvData sctx `shouldThrow` anyTLSException))
+                ( do
+                    handshake cctx
+                    Just h <- readIORef secretRef
+                    send <- readIORef sendRef
+                    let secret = BA.convert (unhexBytes h) :: BA.ScrubbedBytes
+                        key = hkdfExpandLabel SHA256 secret "key" "" 16 :: B.ByteString
+                        iv = hkdfExpandLabel SHA256 secret "iv" "" 12 :: B.ByteString
+                        keyUpdate = B.pack [24, 0, 0, 1, 0]
+                    send $ protect13 key iv 0 22 (keyUpdate <> trailingFinished)
+                    send $ protect13 key iv 1 23 "hello"
+                    recvData cctx `shouldThrow` peerSentUnexpected
+                )
+    r `shouldSatisfy` isJust
+
+unhexBytes :: String -> B.ByteString
+unhexBytes [] = B.empty
+unhexBytes (a : b : rest) = B.cons (read ['0', 'x', a, b]) (unhexBytes rest)
+unhexBytes _ = error "unhexBytes"
+
+-- A Finished message with a zero verify_data of SHA-256 size.
+trailingFinished :: B.ByteString
+trailingFinished = B.pack (20 : 0 : 0 : 32 : replicate 32 0)
+
+-- Groups fixed so that no HelloRetryRequest happens.
+fixGroupsX25519 :: (ClientParams, ServerParams) -> (ClientParams, ServerParams)
+fixGroupsX25519 (cli, srv) =
+    ( cli{clientSupported = (clientSupported cli){supportedGroups = [X25519]}}
+    , srv
+        { serverSupported =
+            (serverSupported srv)
+                { supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
+                }
+        }
+    )
+
+-- Puts bytes made from its body at the end of the first record sent, which
+-- is expected to be a plaintext handshake record.
+appendToFirstRecord
+    :: IORef Bool -> (B.ByteString -> B.ByteString) -> Backend -> Backend
+appendToFirstRecord ref mkExtra be =
+    be
+        { backendSend = \bs -> do
+            done <- readIORef ref
+            if done || B.take 1 bs /= B.singleton 22
+                then backendSend be bs
+                else do
+                    writeIORef ref True
+                    let len = fromIntegral (B.index bs 3) * 256 + fromIntegral (B.index bs 4)
+                        (body, rest) = B.splitAt len $ B.drop 5 bs
+                        extra = mkExtra body
+                        len' = len + B.length extra
+                        hdr =
+                            B.take 3 bs
+                                <> B.pack [fromIntegral (len' `div` 256), fromIntegral (len' `mod` 256)]
+                    backendSend be $ hdr <> body <> extra <> rest
+        }
 
 -- A ChangeCipherSpec is the single byte 1; any other value is answered with
 -- unexpected_message (RFC 8446 Section 5), and so is one carrying two of
