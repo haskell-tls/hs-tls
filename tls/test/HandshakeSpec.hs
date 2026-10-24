@@ -329,6 +329,14 @@ spec = do
                 (cli', srv)
                 (\sh -> sh{shExtensions = filter noVersions $ shExtensions sh})
                 (refusedWith ProtocolVersion)
+        it "rejects ALPN in a TLS 1.3 ServerHello" $ do
+            (cli, srv) <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let cli' = cli{clientHooks = (clientHooks cli){onSuggestALPN = return $ Just ["h2"]}}
+                alpn = toExtensionRaw $ ApplicationLayerProtocolNegotiation ["h2"]
+            clientRefusesHello
+                (cli', srv)
+                (\sh -> sh{shExtensions = shExtensions sh ++ [alpn]})
+                (refusedWith IllegalParameter)
         it "updates the keys before the record limit" $
             handshake13_key_usage_limit
         it "stops early data at the record limit" $

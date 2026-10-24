@@ -168,6 +168,21 @@ processServerHello cparams ctx (ServerHello sh@SH{..}) = do
                 ("server version " ++ show ver ++ " is not supported")
                 ProtocolVersion
 
+    -- RFC 9846 Section 4.2: an extension recognized but not specified for
+    -- the message is refused with illegal_parameter.
+    when (ver == TLS13) $ do
+        let allowed
+                | isHRR =
+                    [EID_KeyShare, EID_SupportedVersions, EID_Cookie, EID_EncryptedClientHello]
+                | otherwise = [EID_KeyShare, EID_PreSharedKey, EID_SupportedVersions]
+            forbidden (ExtensionRaw eid _) =
+                eid `elem` supportedExtensions && eid `notElem` allowed
+        case filter forbidden shExtensions of
+            [] -> return ()
+            ExtensionRaw eid _ : _ ->
+                throwCore $
+                    Error_Protocol (show eid ++ " is not allowed in ServerHello") IllegalParameter
+
     unless (cipherAllowedForVersion ver usedCipher) $
         throwCore $
             Error_Protocol
