@@ -10,30 +10,89 @@ module Network.TLS.Handshake.Certificate (
 import qualified Control.Exception as E
 import Control.Monad (unless)
 import Control.Monad.State.Strict
+import Data.ASN1.Types (asn1CharacterToString)
+import Data.ByteArray.Encoding (Base (Base64), convertToBase)
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as C8
+import Data.List (intercalate, isInfixOf)
 import Data.X509 (
     ExtExtendedKeyUsage (..),
     ExtKeyUsage (..),
     ExtKeyUsageFlag,
     ExtKeyUsagePurpose (..),
+    encodeSignedObject,
     extensionGet,
+    getDistinguishedElements,
  )
 
 import Network.TLS.Context.Internal
+import Network.TLS.Parameters
 import Network.TLS.Struct
 import Network.TLS.X509
 
--- on certificate reject, throw an exception with the proper protocol alert error.
-certificateRejected :: MonadIO m => CertificateRejectReason -> m a
-certificateRejected CertificateRejectRevoked =
-    throwCore $ Error_Protocol "certificate is revoked" CertificateRevoked
-certificateRejected CertificateRejectExpired =
-    throwCore $ Error_Protocol "certificate has expired" CertificateExpired
-certificateRejected CertificateRejectUnknownCA =
-    throwCore $ Error_Protocol "certificate has unknown CA" UnknownCa
-certificateRejected CertificateRejectAbsent =
-    throwCore $ Error_Protocol "certificate is missing" CertificateRequired
-certificateRejected (CertificateRejectOther s) =
-    throwCore $ Error_Protocol ("certificate rejected: " ++ s) CertificateUnknown
+-- | On certificate reject, throw an exception with the proper protocol alert
+-- error.  The message carries the reasons of the validation and the subject
+-- and issuer of the leaf; the whole chain goes to 'debugError' in PEM.
+certificateRejected
+    :: MonadIO m
+    => Context -> [FailedReason] -> CertificateChain -> CertificateRejectReason -> m a
+certificateRejected ctx reasons cc reason = do
+    let ~pem = chainPEM cc
+    liftIO $ debugError (ctxDebug ctx) $ msg ++ details ++ "\n" ++ pem
+    throwCore $ Error_Protocol (msg ++ details) alert
+  where
+    (msg, alert) = case reason of
+        CertificateRejectRevoked -> ("certificate is revoked", CertificateRevoked)
+        CertificateRejectExpired -> ("certificate has expired", CertificateExpired)
+        CertificateRejectUnknownCA -> ("certificate has unknown CA", UnknownCa)
+        CertificateRejectAbsent -> ("certificate is missing", CertificateRequired)
+        CertificateRejectOther s -> ("certificate rejected: " ++ s, CertificateUnknown)
+    -- wrapCertificateChecks may have put the reasons in the message already
+    details =
+        concatMap ("; " ++) $
+            [rs | not (null reasons), not (rs `isInfixOf` msg)] ++ leafSummary cc
+    rs = show reasons
+
+-- | The subject and issuer of the leaf certificate.
+leafSummary :: CertificateChain -> [String]
+leafSummary (CertificateChain []) = []
+leafSummary (CertificateChain (signed : _)) =
+    [ "subject: " ++ showDN (certSubjectDN cert)
+    , "issuer: " ++ showDN (certIssuerDN cert)
+    ]
+  where
+    cert = getCertificate signed
+
+showDN :: DistinguishedName -> String
+showDN dn =
+    intercalate
+        ", "
+        [name oid ++ "=" ++ value cs | (oid, cs) <- getDistinguishedElements dn]
+  where
+    name oid = maybe (intercalate "." $ map show oid) id $ lookup oid names
+    value = maybe "?" id . asn1CharacterToString
+    names =
+        [ ([2, 5, 4, 3], "CN")
+        , ([2, 5, 4, 6], "C")
+        , ([2, 5, 4, 7], "L")
+        , ([2, 5, 4, 8], "ST")
+        , ([2, 5, 4, 10], "O")
+        , ([2, 5, 4, 11], "OU")
+        ]
+
+-- | The certificates of the chain in PEM, leaf first.
+chainPEM :: CertificateChain -> String
+chainPEM (CertificateChain certs) = concatMap pem certs
+  where
+    pem signed =
+        "-----BEGIN CERTIFICATE-----\n"
+            ++ concatMap
+                ((++ "\n") . C8.unpack)
+                (lines64 $ convertToBase Base64 $ encodeSignedObject signed)
+            ++ "-----END CERTIFICATE-----\n"
+    lines64 bs
+        | B.null bs = []
+        | otherwise = let (l, r) = B.splitAt 64 bs in l : lines64 r
 
 badCertificate :: MonadIO m => String -> m a
 badCertificate msg = throwCore $ Error_Protocol msg BadCertificate
