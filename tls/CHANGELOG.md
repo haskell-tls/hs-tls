@@ -39,6 +39,8 @@ value computed under the negotiated cipher's hash.
   [#603](https://github.com/haskell-tls/hs-tls/pull/603)
 * Let a server choose ciphers in the client's order (`supportedClientCipherOrder`).
   [#605](https://github.com/haskell-tls/hs-tls/pull/605)
+* Tell why a certificate is rejected, and give the chain to `debugError` in PEM.
+  [#606](https://github.com/haskell-tls/hs-tls/pull/606)
 
 ## Version 2.4.12
 

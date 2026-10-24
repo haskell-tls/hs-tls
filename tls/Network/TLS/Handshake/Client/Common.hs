@@ -123,12 +123,14 @@ doCertificate cparams ctx certs = do
     -- run certificate recv hook
     ctxWithHooks ctx (`hookRecvCertificates` certs)
     -- then run certificate validation
-    usage <- catchException (wrapCertificateChecks <$> checkCert) rejectOnException
+    result <- catchException (Right <$> checkCert) (return . Left)
+    usage <- either rejectOnException (return . wrapCertificateChecks) result
     case usage of
         CertificateUsageAccept -> do
             verifyLeafKeyUsagePurpose KeyUsagePurpose_ServerAuth certs
             checkLeafCertificateKeyUsage
-        CertificateUsageReject reason -> certificateRejected reason
+        CertificateUsageReject reason ->
+            certificateRejected ctx (either (const []) id result) certs reason
   where
     shared = clientShared cparams
     checkCert =
