@@ -77,10 +77,15 @@ newtype SessionDataCopy = SessionDataCopy SessionData
 
 type Sec = Int64
 type Value = (SessionDataCopy, IORef Availability)
-type DB = OrdPSQ SessionIDCopy Sec Value
-type Item = (SessionIDCopy, Sec, Value, Operation)
+type Sessions = OrdPSQ SessionIDCopy Sec Value
 
-data Operation = Add | Del
+-- | The sessions, and the keys deleted since the reaper last took them away
+-- to prune.  While it prunes, the workload left in their place is empty, so
+-- a deletion there is kept to be applied to the pruned sessions too.
+data DB = DB Sessions [SessionIDCopy]
+
+data Item = Add SessionIDCopy Sec Value | Del SessionIDCopy
+
 data Use = SingleUse | MultipleUse
 data Availability = Fresh | Used
 
@@ -94,10 +99,10 @@ newSessionManager conf = do
     reaper <-
         mkReaper
             defaultReaperSettings
-                { reaperEmpty = Q.empty
+                { reaperEmpty = DB Q.empty []
                 , reaperCons = cons maxsiz
-                , reaperAction = clean
-                , reaperNull = Q.null
+                , reaperAction = clean maxsiz
+                , reaperNull = \(DB q _) -> Q.null q
                 , reaperDelay = pruningDelay conf * 1000000
                 , reaperThreadName = "TLS session manager"
                 }
@@ -111,26 +116,32 @@ newSessionManager conf = do
             }
 
 cons :: Int -> Item -> DB -> DB
-cons lim (k, t, v, Add) db
-    | lim <= 0 = Q.empty
-    | Q.size db == lim = case Q.minView db of
-        Nothing -> assert False $ Q.insert k t v Q.empty
-        Just (_, _, _, db') -> Q.insert k t v db'
-    | otherwise = Q.insert k t v db
-cons _ (k, _, _, Del) db = Q.delete k db
+cons lim (Add k t v) (DB q ds)
+    | lim <= 0 = DB Q.empty ds
+    | Q.size q == lim = case Q.minView q of
+        Nothing -> assert False $ DB (Q.insert k t v Q.empty) ds
+        Just (_, _, _, q') -> DB (Q.insert k t v q') ds
+    | otherwise = DB (Q.insert k t v q) ds
+-- At most as many keys as there can be sessions are kept.
+cons lim (Del k) (DB q ds) = DB (Q.delete k q) (take lim (k : ds))
 
-clean :: DB -> IO (DB -> DB)
-clean olddb = do
+clean :: Int -> DB -> IO (DB -> DB)
+clean lim (DB oldq _) = do
     currentTime <- C.sec <$> C.getTime C.Monotonic
-    let pruned = snd $ Q.atMostView currentTime olddb
+    let pruned = snd $ Q.atMostView currentTime oldq
     return $ merge pruned
   where
-    ins db (k, p, v) = Q.insert k p v db
+    ins q (k, p, v) = Q.insert k p v q
     -- There is not 'merge' API.
-    -- We hope that newdb is smaller than pruned.
-    merge pruned newdb = foldl' ins pruned entries
+    -- We hope that the new sessions are fewer than the pruned ones.
+    merge pruned (DB newq ds) = DB (limit $ foldl' ins (foldr Q.delete pruned ds) entries) []
       where
-        entries = Q.toList newdb
+        entries = Q.toList newq
+    -- The size was checked against the new sessions alone.
+    limit q
+        | lim <= 0 = Q.empty
+        | Q.size q > lim = maybe q (\(_, _, _, q') -> limit q') $ Q.minView q
+        | otherwise = q
 
 ----------------------------------------------------------------
 
@@ -144,7 +155,7 @@ establish reaper lifetime k sd = do
     ref <- newIORef Fresh
     p <- (+ lifetime') . C.sec <$> C.getTime C.Monotonic
     let v = (sd', ref)
-    reaperAdd reaper (k', p, v, Add)
+    reaperAdd reaper (Add k' p v)
   where
     k' = toKey k
     sd' = toValue sd
@@ -159,15 +170,15 @@ resume
     -> SessionID
     -> IO (Maybe SessionData)
 resume reaper use k = do
-    db <- reaperRead reaper
+    DB q _ <- reaperRead reaper
     now <- C.sec <$> C.getTime C.Monotonic
-    case Q.lookup k' db of
+    case Q.lookup k' q of
         -- An expired session stays until the next pruning; it is not used.
-        Just (p, v@(sd, ref))
+        Just (p, (sd, ref))
             | p > now -> case use of
                 SingleUse -> do
                     available <- atomicModifyIORef' ref check
-                    reaperAdd reaper (k', p, v, Del)
+                    reaperAdd reaper (Del k')
                     return $ if available then Just (fromValue sd) else Nothing
                 MultipleUse -> return $ Just (fromValue sd)
         _ -> return Nothing
@@ -180,10 +191,5 @@ invalidate
     :: Reaper DB Item
     -> SessionID
     -> IO ()
-invalidate reaper k = do
-    db <- reaperRead reaper
-    case Q.lookup k' db of
-        Nothing -> return ()
-        Just (p, v) -> reaperAdd reaper (k', p, v, Del)
-  where
-    k' = toKey k
+-- Not looked up first: while the reaper prunes, the session is not seen.
+invalidate reaper k = reaperAdd reaper (Del (toKey k))
