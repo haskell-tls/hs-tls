@@ -323,6 +323,14 @@ spec = do
                 (cli', srv)
                 (\sh -> sh{shExtensions = filter noVersions $ shExtensions sh})
                 (refusedWith ProtocolVersion)
+        it "rejects ALPN in a TLS 1.3 ServerHello" $ do
+            (cli, srv) <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let cli' = cli{clientHooks = (clientHooks cli){onSuggestALPN = return $ Just ["h2"]}}
+                alpn = toExtensionRaw $ ApplicationLayerProtocolNegotiation ["h2"]
+            clientRefusesHello
+                (cli', srv)
+                (\sh -> sh{shExtensions = shExtensions sh ++ [alpn]})
+                (refusedWith IllegalParameter)
         it "rejects a two-byte TLS 1.2 ChangeCipherSpec" $
             malformed_ccs_unexpected
                 TLS12
