@@ -20,6 +20,7 @@ import Data.List
 import Data.Maybe
 import Data.Word (Word16, Word64, Word8)
 import Data.X509 (ExtKeyUsageFlag (..), ExtKeyUsagePurpose (..))
+import Data.X509.Validation (FailedReason (..))
 import Network.TLS
 import Network.TLS.Extra.Cipher
 import Network.TLS.Extra.CipherCBC
@@ -132,6 +133,8 @@ spec = do
                 rejectedAsDecryptError
         it "refuses a TLS 1.2 signature algorithm it cannot sign with" $
             handshake12_unimplemented_sigalg
+        it "tells why a server certificate is rejected, with the chain in PEM" $
+            handshake_certificate_rejection_details
         prop "can receive client authentication failure" handshake_client_auth_fail
         it "accepts an empty TLS 1.2 client certificate when the hook does" $
             handshake_client_auth_empty TLS12
@@ -1182,6 +1185,39 @@ handshake12_unimplemented_sigalg = do
                 (handshake sctx `shouldThrow` rejectedAsHandshakeFailure)
                 (void (E.try (handshake cctx) :: IO (Either TLSException ())))
     r `shouldSatisfy` isJust
+
+-- The exception names the validation failures and the leaf, and debugError
+-- gets every certificate of the chain in PEM.
+handshake_certificate_rejection_details :: IO ()
+handshake_certificate_rejection_details = do
+    (clientParam, serverParam) <- generate arbitraryPairParams13
+    logRef <- newIORef []
+    chainRef <- newIORef Nothing
+    let clientParam' =
+            clientParam
+                { clientHooks =
+                    (clientHooks clientParam)
+                        { onServerCertificate = \_ _ _ chain ->
+                            writeIORef chainRef (Just chain) >> return [UnknownCA]
+                        }
+                , clientDebug =
+                    (clientDebug clientParam)
+                        { debugError = \msg -> modifyIORef logRef (msg :)
+                        }
+                }
+    withPairContextWith (id, id) (clientParam', serverParam) $ \(cctx, sctx) ->
+        concurrently_
+            (void (E.try (handshake sctx) :: IO (Either TLSException ())))
+            (handshake cctx `shouldThrow` rejectedWithDetails)
+    Just (CertificateChain certs) <- readIORef chainRef
+    logs <- readIORef logRef
+    let begin = "-----BEGIN CERTIFICATE-----"
+        pems = sum [length (filter (== begin) (lines l)) | l <- logs]
+    pems `shouldBe` length certs
+  where
+    rejectedWithDetails (HandshakeFailed (Error_Protocol msg UnknownCa)) =
+        "[UnknownCA]" `isInfixOf` msg && "subject: " `isInfixOf` msg
+    rejectedWithDetails _ = False
 
 -- A DER ECDSA signature that does not decode is a signature that does not
 -- verify, a decrypt_error.  The client's TLS 1.3 CertificateVerify
