@@ -3,10 +3,15 @@
 ## 0.1.1
 
 * Keep a TLS 1.3 session no longer than the lifetime of its ticket.
+  [#604](https://github.com/haskell-tls/hs-tls/pull/604)
 * Do not resume an expired session before it is pruned.
+  [#604](https://github.com/haskell-tls/hs-tls/pull/604)
 * Keep deletions and the size limit across pruning.
+  [#604](https://github.com/haskell-tls/hs-tls/pull/604)
 * Do not drop another session when a key is added again at the limit.
+  [#604](https://github.com/haskell-tls/hs-tls/pull/604)
 * Expose `Network.TLS.SessionManager.Internal` for testing.
+  [#604](https://github.com/haskell-tls/hs-tls/pull/604)
 
 ## 0.1.0
 
