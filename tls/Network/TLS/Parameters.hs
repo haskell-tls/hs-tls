@@ -899,11 +899,11 @@ data Limit = Limit
     --
     -- Default: Nothing
     , limitHandshakeFragment :: Int
-    -- ^ The limit to accept the number of each handshake message.
-    -- For instance, a nasty client may send many fragments of client
-    -- certificate.
+    -- ^ The number of records that may carry a handshake message before
+    -- the one that completes it.  A peer may split a message into records
+    -- as small as one byte, and each is held until the message is complete.
     --
-    -- Default: 32
+    -- Default: 2048
     , limitKeyUpdate :: Maybe Int
     -- ^ Maximum number of consecutive TLS 1.3 KeyUpdate messages accepted
     -- without intervening non-empty application data.  This bounds the CPU
@@ -929,7 +929,7 @@ defaultLimit :: Limit
 defaultLimit =
     Limit
         { limitRecordSize = Nothing
-        , limitHandshakeFragment = 32
+        , limitHandshakeFragment = 2048
         , limitKeyUpdate = Just 32
         , limitRecordsPerKey = Nothing
         }
