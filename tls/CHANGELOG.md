@@ -48,6 +48,8 @@ value computed under the negotiated cipher's hash.
   [#607](https://github.com/haskell-tls/hs-tls/pull/607)
 * Refuse a message after one that changes the keys in its record.
   [#610](https://github.com/haskell-tls/hs-tls/pull/610)
+* Update the keys before the key usage limit, and keep the number of updates under 2^48-1.
+  [#611](https://github.com/haskell-tls/hs-tls/pull/611)
 
 ## Version 2.4.12
 
