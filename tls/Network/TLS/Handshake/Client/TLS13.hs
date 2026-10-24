@@ -132,6 +132,26 @@ prepareSecondFlight13' ctx groupSent choice = do
 expectEncryptedExtensions
     :: MonadIO m => Context -> Handshake13 -> m ()
 expectEncryptedExtensions ctx (EncryptedExtensions13 eexts) = do
+    -- RFC 9846 Section 4.2: an extension recognized but not specified for
+    -- EncryptedExtensions is refused with illegal_parameter.
+    let allowed =
+            [ EID_ServerName
+            , EID_SupportedGroups
+            , EID_ApplicationLayerProtocolNegotiation
+            , EID_RecordSizeLimit
+            , EID_EarlyData
+            , EID_QuicTransportParameters
+            , EID_EncryptedClientHello
+            ]
+        forbidden (ExtensionRaw eid _) =
+            eid `elem` supportedExtensions && eid `notElem` allowed
+    case filter forbidden eexts of
+        [] -> return ()
+        ExtensionRaw eid _ : _ ->
+            throwCore $
+                Error_Protocol
+                    (show eid ++ " is not allowed in EncryptedExtensions")
+                    IllegalParameter
     liftIO $ do
         -- RFC 8449 Section 4: the server's RecordSizeLimit is in
         -- EncryptedExtensions.  Until it is known, our own limit is not

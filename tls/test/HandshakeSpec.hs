@@ -331,6 +331,17 @@ spec = do
                 (cli', srv)
                 (\sh -> sh{shExtensions = shExtensions sh ++ [alpn]})
                 (refusedWith IllegalParameter)
+        it "rejects supported_versions in EncryptedExtensions" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let versions = toExtensionRaw $ SupportedVersionsServerHello TLS13
+                tamper (EncryptedExtensions13 exts) =
+                    pure $ EncryptedExtensions13 $ exts ++ [versions]
+                tamper h = pure h
+            withPairContext params $ \(cctx, sctx) -> do
+                contextHookSetHandshake13Recv cctx tamper
+                concurrently_
+                    (handshake sctx `shouldThrow` anyTLSException)
+                    (handshake cctx `shouldThrow` refusedWith IllegalParameter)
         it "rejects a two-byte TLS 1.2 ChangeCipherSpec" $
             malformed_ccs_unexpected
                 TLS12
