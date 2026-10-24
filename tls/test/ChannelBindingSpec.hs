@@ -224,6 +224,8 @@ bindingParams version cipher hashSignatures credential =
             , supportedGroups = [X25519]
             , supportedGroupsTLS13 = [[X25519]]
             , supportedHashSignatures = hashSignatures
+            , -- the fixed RSA key of the expected values is 1024 bits
+              supportedMinRSAKeySize = 1024
             }
     clientParams =
         (defaultParamsClient "" B.empty)

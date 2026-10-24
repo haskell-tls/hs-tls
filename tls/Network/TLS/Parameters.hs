@@ -301,6 +301,12 @@ data Supported = Supported
     -- choice.
     --
     -- Default: @[]@
+    , supportedMinRSAKeySize :: Int
+    -- ^ The least size in bits of the RSA key in the peer's leaf
+    -- certificate.  A shorter one is refused with bad_certificate; 0 lets
+    -- any size through.
+    --
+    -- Default: 2048
     , supportedClientCipherOrder :: Bool
     -- ^ Whether a server chooses among the ciphers in common in the
     -- client's order of preference, rather than in the order of
@@ -445,6 +451,7 @@ defaultSupported =
     Supported
         { supportedVersions = [TLS13, TLS12]
         , supportedCiphers = ciphersuite_default
+        , supportedMinRSAKeySize = 2048
         , supportedClientCipherOrder = False
         , supportedCompressions = [nullCompression]
         , supportedHashSignatures = Struct.supportedSignatureSchemes
