@@ -168,6 +168,7 @@ module Network.TLS (
 
     -- ** Session data
     SessionData,
+    defaultSessionData,
     sessionVersion,
     sessionCipher,
     sessionCompression,
@@ -178,6 +179,7 @@ module Network.TLS (
     sessionALPN,
     sessionMaxEarlyDataSize,
     sessionFlags,
+    sessionClientCertificate,
     SessionFlag (..),
     TLS13TicketInfo,
     is0RTTPossible,

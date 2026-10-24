@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module SessionManagerSpec where
@@ -8,7 +7,7 @@ import Data.IORef
 import Data.Maybe (isJust, isNothing)
 import qualified Data.OrdPSQ as Q
 import Network.TLS
-import Network.TLS.Internal (Second, SessionData (..), TLS13TicketInfo (..))
+import Network.TLS.Internal (Second, TLS13TicketInfo (..))
 import Network.TLS.SessionManager
 import Network.TLS.SessionManager.Internal (
     Availability (..),
@@ -73,30 +72,16 @@ spec = do
         ref <- newIORef Fresh
         return (toValue (sessionData Nothing), ref)
 
--- | Session data with a TLS 1.3 ticket of the given lifetime, if any.
+-- | Session data with a TLS 1.3 ticket of the given lifetime, if any.  Only
+-- fields that tls 2.4 has too are set.
 sessionData :: Maybe Second -> SessionData
 sessionData life =
-    withoutClientCertificate $
-        SessionData
-            TLS13 -- version
-            0x1301 -- cipher
-            0 -- compression
-            Nothing -- SNI
-            "secret"
-            Nothing -- group
-            (ticketInfo <$> life)
-            Nothing -- ALPN
-            0 -- max early data size
-            [] -- flags
+    defaultSessionData
+        { sessionVersion = TLS13
+        , sessionCipher = 0x1301
+        , sessionSecret = "secret"
+        , sessionTicketInfo = ticketInfo <$> life
+        }
   where
     ticketInfo l =
         TLS13TicketInfo{lifetime = l, ageAdd = 0, txrxTime = 0, estimatedRTT = Nothing}
-
--- tls 2.5 added the client certificate to SessionData.
-#if MIN_VERSION_tls(2,5,0)
-withoutClientCertificate :: (Maybe a -> SessionData) -> SessionData
-withoutClientCertificate f = f Nothing
-#else
-withoutClientCertificate :: SessionData -> SessionData
-withoutClientCertificate = id
-#endif

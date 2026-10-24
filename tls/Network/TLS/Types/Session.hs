@@ -92,6 +92,24 @@ showsSessionData secret d sd =
   where
     derLength der = "Just <" ++ show (B.length der) ++ " bytes>"
 
+-- | A 'SessionData' to build one from with record update syntax, so that a
+-- field added later does not break the code that builds it.
+defaultSessionData :: SessionData
+defaultSessionData =
+    SessionData
+        { sessionVersion = TLS13
+        , sessionCipher = 0
+        , sessionCompression = 0
+        , sessionClientSNI = Nothing
+        , sessionSecret = B.empty
+        , sessionGroup = Nothing
+        , sessionTicketInfo = Nothing
+        , sessionALPN = Nothing
+        , sessionMaxEarlyDataSize = 0
+        , sessionFlags = []
+        , sessionClientCertificate = Nothing
+        }
+
 is0RTTPossible :: SessionData -> Bool
 is0RTTPossible sd = sessionMaxEarlyDataSize sd > 0
 
