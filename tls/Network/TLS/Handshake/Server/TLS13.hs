@@ -6,6 +6,7 @@ module Network.TLS.Handshake.Server.TLS13 (
     requestCertificateServer,
     keyUpdate,
     sendKeyUpdate,
+    respondToKeyUpdate,
     updateKey,
     KeyUpdateRequest (..),
 ) where
@@ -297,11 +298,9 @@ getHandshake ctx ref = do
         -- Write lock wraps both actions because we don't want another
         -- packet to be sent by another thread before the Tx state is
         -- updated.
-        -- The request is ignored after 2^48-1 updates.
         when (mode == UpdateRequested) $
             withWriteLock ctx $
-                void $
-                    sendKeyUpdate ctx UpdateNotRequested
+                respondToKeyUpdate ctx
         chk hbs
     chk (hb : hbs) = do
         writeIORef ref hbs
@@ -395,6 +394,18 @@ sendKeyUpdate ctx req = do
             keyUpdate ctx getTxRecordState setTxRecordState
             modifyTLS13State ctx $ \st -> st{tls13stSentKeyUpdates = sent + 1}
             return True
+
+-- | Answers a KeyUpdate with update_requested.  RFC 9846 Section 4.6.3:
+-- several received while we send no application data get one answer.  The
+-- request is ignored after 2^48-1 updates.
+respondToKeyUpdate :: Context -> IO ()
+respondToKeyUpdate ctx = do
+    responded <- tls13stKeyUpdateResponded <$> getTLS13State ctx
+    unless responded $ do
+        sent <- sendKeyUpdate ctx UpdateNotRequested
+        when sent $
+            modifyTLS13State ctx $
+                \st -> st{tls13stKeyUpdateResponded = True}
 
 -- | How to update keys in TLS 1.3
 data KeyUpdateRequest

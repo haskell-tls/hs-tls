@@ -78,6 +78,8 @@ value computed under the negotiated cipher's hash.
   [#623](https://github.com/haskell-tls/hs-tls/pull/623)
 * Ignore the alert level in TLS 1.3: a warning-level error alert is an error, and a fatal-level close_notify is a closure.
   [#624](https://github.com/haskell-tls/hs-tls/pull/624)
+* Answer several KeyUpdates with update_requested with a single KeyUpdate.
+  [#631](https://github.com/haskell-tls/hs-tls/pull/631)
 
 ## Version 2.4.12
 

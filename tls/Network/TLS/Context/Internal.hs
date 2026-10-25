@@ -208,6 +208,7 @@ data TLS13State = TLS13State
     { tls13stRecvNST :: Bool -- client
     , tls13stKeyUpdateCount :: Int
     , tls13stSentKeyUpdates :: Word64
+    , tls13stKeyUpdateResponded :: Bool
     , tls13stSentClientCert :: Bool -- client
     , tls13stRecvSF :: Bool -- client
     , tls13stSentCF :: Bool -- client
@@ -231,6 +232,7 @@ defaultTLS13State =
         { tls13stRecvNST = False
         , tls13stKeyUpdateCount = 0
         , tls13stSentKeyUpdates = 0
+        , tls13stKeyUpdateResponded = False
         , tls13stSentClientCert = False
         , tls13stRecvSF = False
         , tls13stSentCF = False
