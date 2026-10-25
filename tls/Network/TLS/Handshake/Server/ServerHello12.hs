@@ -196,7 +196,11 @@ sendServerFirstFlight ServerParams{..} ctx usedCipher mcred chExts = do
     -- not called.
     decideHashSig pubKey = do
         case filter (pubKey `signatureCompatible`) commonHashSigs of
-            [] -> error ("no hash signature for " ++ pubkeyType pubKey)
+            [] ->
+                throwCore $
+                    Error_Protocol
+                        ("no hash signature for " ++ pubkeyType pubKey)
+                        HandshakeFailure
             x : _ -> return x
 
     generateSKX_DHE kxsAlg = do

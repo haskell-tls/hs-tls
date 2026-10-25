@@ -167,6 +167,7 @@ module Network.TLS (
 
     -- ** Session data
     SessionData,
+    defaultSessionData,
     sessionVersion,
     sessionCipher,
     sessionCompression,

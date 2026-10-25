@@ -35,7 +35,9 @@ handshakeServer :: ServerParams -> Context -> IO ()
 handshakeServer sparams ctx = liftIO $ do
     hbs <- recvPacketHandshake ctx
     case hbs of
-        chb : _ -> handshake sparams ctx chb
+        -- The keys may change after ClientHello (RFC 9846 Section 5.1)
+        -- and nothing else is expected anyway.
+        [chb] -> handshake sparams ctx chb
         _ -> unexpected (show $ fst $ unzip hbs) (Just "client hello")
 
 handshakeServerWith

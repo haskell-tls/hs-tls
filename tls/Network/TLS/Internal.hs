@@ -14,6 +14,7 @@ module Network.TLS.Internal (
     sendPacket12,
     recvPacket12,
     makeCipherShowPretty,
+    paddingIsValid,
 ) where
 
 import Data.IORef
@@ -25,6 +26,7 @@ import Network.TLS.IO.Decode
 import Network.TLS.IO.Encode
 import Network.TLS.Packet
 import Network.TLS.Packet13
+import Network.TLS.Record.Decrypt (paddingIsValid)
 import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types

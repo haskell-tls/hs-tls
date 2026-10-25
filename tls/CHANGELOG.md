@@ -1,5 +1,20 @@
 # Change log for "tls"
 
+## Version 2.4.13
+
+* Keep the CBC MAC check from timing the padding (Lucky Thirteen).
+  [#598](https://github.com/haskell-tls/hs-tls/pull/598)
+* Refuse a message after one that changes the keys in its record.
+  [#610](https://github.com/haskell-tls/hs-tls/pull/610)
+* Skip rejected early data by bytes, up to `max 16384 serverEarlyDataSize`, and only until a record decrypts.
+  [#616](https://github.com/haskell-tls/hs-tls/pull/616)
+* Offer only the signature algorithms that can be signed with.
+  [#599](https://github.com/haskell-tls/hs-tls/pull/599)
+* Refuse empty handshake records, and raise the default of `limitHandshakeFragment` to 2048.
+  [#615](https://github.com/haskell-tls/hs-tls/pull/615)
+* Add `defaultSessionData`.
+  [#630](https://github.com/haskell-tls/hs-tls/pull/630)
+
 ## Version 2.4.12
 
 * Authenticate a server that rejects the PSK of 0-RTT.

@@ -438,7 +438,7 @@ asyncServerHello13 cparams ctx groupSent chSentTime = do
         setPendingRecvActions ctx $
             if resuming
                 then
-                    [ PendingRecvAction True (expectEncryptedExtensions ctx)
+                    [ PendingRecvAction False (expectEncryptedExtensions ctx)
                     , PendingRecvActionHash True expectFinishedAndSet
                     ]
                 else

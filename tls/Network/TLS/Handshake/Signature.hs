@@ -66,13 +66,16 @@ signatureCompatible (PubKeyRSA pk) (HashSHA1, SignatureRSA) = kxCanUseRSApkcs1 p
 signatureCompatible (PubKeyRSA pk) (HashSHA256, SignatureRSA) = kxCanUseRSApkcs1 pk SHA256
 signatureCompatible (PubKeyRSA pk) (HashSHA384, SignatureRSA) = kxCanUseRSApkcs1 pk SHA384
 signatureCompatible (PubKeyRSA pk) (HashSHA512, SignatureRSA) = kxCanUseRSApkcs1 pk SHA512
-signatureCompatible (PubKeyRSA pk) (_, SignatureRSApssRSAeSHA256) = kxCanUseRSApss pk SHA256
-signatureCompatible (PubKeyRSA pk) (_, SignatureRSApssRSAeSHA384) = kxCanUseRSApss pk SHA384
-signatureCompatible (PubKeyRSA pk) (_, SignatureRSApssRSAeSHA512) = kxCanUseRSApss pk SHA512
-signatureCompatible (PubKeyDSA _) (_, SignatureDSA) = True
-signatureCompatible (PubKeyEC _) (_, SignatureECDSA) = True
-signatureCompatible (PubKeyEd25519 _) (_, SignatureEd25519) = True
-signatureCompatible (PubKeyEd448 _) (_, SignatureEd448) = True
+-- Only what signatureParams implements: a combination it does not, such as
+-- ecdsa_sha224, must not be chosen and then fail to sign.
+signatureCompatible (PubKeyRSA pk) (HashIntrinsic, SignatureRSApssRSAeSHA256) = kxCanUseRSApss pk SHA256
+signatureCompatible (PubKeyRSA pk) (HashIntrinsic, SignatureRSApssRSAeSHA384) = kxCanUseRSApss pk SHA384
+signatureCompatible (PubKeyRSA pk) (HashIntrinsic, SignatureRSApssRSAeSHA512) = kxCanUseRSApss pk SHA512
+signatureCompatible (PubKeyDSA _) (HashSHA1, SignatureDSA) = True
+signatureCompatible (PubKeyEC _) (h, SignatureECDSA) =
+    h `elem` [HashSHA1, HashSHA256, HashSHA384, HashSHA512]
+signatureCompatible (PubKeyEd25519 _) (HashIntrinsic, SignatureEd25519) = True
+signatureCompatible (PubKeyEd448 _) (HashIntrinsic, SignatureEd448) = True
 signatureCompatible _ (_, _) = False
 
 -- Whether the signature algorithm is for the type of the key, whatever

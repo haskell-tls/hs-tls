@@ -61,9 +61,12 @@ processClientHello13 sparams ctx ch@CH{..} = do
                 (\(EarlyDataIndication _) -> True)
     if rtt0
         then
-            -- mark a 0-RTT attempt before a possible HRR, and before updating the
-            -- status again if 0-RTT successful
-            setEstablished ctx (EarlyDataNotAllowed 3) -- hardcoding
+            -- Skip up to this many bytes of rejected early data: a record's worth
+            -- at least, even if early data is not accepted (0 by default), and
+            -- more only if the server accepts more.  Updated if 0-RTT succeeds.
+            setEstablished
+                ctx
+                (EarlyDataNotAllowed (max 16384 (serverEarlyDataSize sparams)))
         else
             -- In the case of HRR, EarlyDataNotAllowed is already set.
             -- It should be cleared here.
