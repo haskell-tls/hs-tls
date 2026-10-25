@@ -5,6 +5,8 @@ module Network.TLS.Handshake.Server.TLS13 (
     recvClientSecondFlight13,
     requestCertificateServer,
     keyUpdate,
+    sendKeyUpdate,
+    respondToKeyUpdate,
     updateKey,
     KeyUpdateRequest (..),
 ) where
@@ -296,9 +298,9 @@ getHandshake ctx ref = do
         -- Write lock wraps both actions because we don't want another
         -- packet to be sent by another thread before the Tx state is
         -- updated.
-        when (mode == UpdateRequested) $ withWriteLock ctx $ do
-            sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested] []
-            keyUpdate ctx getTxRecordState setTxRecordState
+        when (mode == UpdateRequested) $
+            withWriteLock ctx $
+                respondToKeyUpdate ctx
         chk hbs
     chk (hb : hbs) = do
         writeIORef ref hbs
@@ -378,6 +380,32 @@ keyUpdate ctx getState setState = do
             hkdfExpandLabel usedHash applicationSecretN "traffic upd" "" $
                 hashDigestSize usedHash
     setState ctx usedHash usedCipher (AnyTrafficSecret applicationSecretN1)
+
+-- | Sending a KeyUpdate and switching to the next Tx keys, with the write
+--   lock held.  Nothing is sent and 'False' is returned if the epoch would
+--   exceed 2^48-1 (RFC 9846 Section 4.7.3).
+sendKeyUpdate :: Context -> KeyUpdate -> IO Bool
+sendKeyUpdate ctx req = do
+    sent <- tls13stSentKeyUpdates <$> getTLS13State ctx
+    if sent >= 2 ^ (48 :: Int) - 1
+        then return False
+        else do
+            sendPacket13 ctx $ Handshake13 [KeyUpdate13 req] []
+            keyUpdate ctx getTxRecordState setTxRecordState
+            modifyTLS13State ctx $ \st -> st{tls13stSentKeyUpdates = sent + 1}
+            return True
+
+-- | Answers a KeyUpdate with update_requested.  RFC 9846 Section 4.6.3:
+-- several received while we send no application data get one answer.  The
+-- request is ignored after 2^48-1 updates.
+respondToKeyUpdate :: Context -> IO ()
+respondToKeyUpdate ctx = do
+    responded <- tls13stKeyUpdateResponded <$> getTLS13State ctx
+    unless responded $ do
+        sent <- sendKeyUpdate ctx UpdateNotRequested
+        when sent $
+            modifyTLS13State ctx $
+                \st -> st{tls13stKeyUpdateResponded = True}
 
 -- | How to update keys in TLS 1.3
 data KeyUpdateRequest

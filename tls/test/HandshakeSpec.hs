@@ -391,6 +391,8 @@ spec = do
                 params
                 (\ch -> ch{chExtensions = map trailing $ chExtensions ch})
                 (refusedWith DecodeError)
+        it "answers several update_requested with a single KeyUpdate" $
+            handshake13_single_key_update_response
         it "rejects a two-byte TLS 1.2 ChangeCipherSpec" $
             malformed_ccs_unexpected
                 TLS12
@@ -3382,6 +3384,42 @@ handshake13_trailing_after_key_update = do
                     recvData cctx `shouldThrow` peerSentUnexpected
                 )
     r `shouldSatisfy` isJust
+
+-- RFC 9846 Section 4.6.3: a peer that gets several KeyUpdates with
+-- update_requested while it sends nothing answers them once.  The server
+-- asks twice, and after the client's data once more.  It counts the
+-- KeyUpdates it receives.
+handshake13_single_key_update_response :: IO ()
+handshake13_single_key_update_response = do
+    (clientParam, serverParam) <- generate arbitraryPairParams13
+    updates <- newIORef (0 :: Int)
+    let count h = do
+            case h of
+                KeyUpdate13 _ -> modifyIORef' updates (+ 1)
+                _ -> return ()
+            return h
+    withPairContext (clientParam, serverParam) $ \(cctx, sctx) ->
+        concurrently_
+            ( do
+                handshake sctx
+                contextHookSetHandshake13Recv sctx count
+                updateKey sctx TwoWay `shouldReturn` True
+                updateKey sctx TwoWay `shouldReturn` True
+                sendData sctx "hello"
+                recvData sctx `shouldReturn` "x"
+                readIORef updates `shouldReturn` 1
+                updateKey sctx TwoWay `shouldReturn` True
+                sendData sctx "again"
+                recvData sctx `shouldReturn` "y"
+            )
+            ( do
+                handshake cctx
+                recvData cctx `shouldReturn` "hello"
+                sendData cctx "x"
+                recvData cctx `shouldReturn` "again"
+                sendData cctx "y"
+            )
+    readIORef updates `shouldReturn` 2
 
 -- The client offers an unknown ticket, with a PSK of its own, before the
 -- one the server issued.  Each PSK has its own binder, and the server
