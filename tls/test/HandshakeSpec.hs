@@ -270,6 +270,10 @@ spec = do
             handshake13_interleaved_app_data
         it "rejects an unexpected handshake message after the handshake" $
             handshake13_unexpected_post_handshake
+        it "treats a warning-level error alert as an error" $
+            handshake13_warning_error_alert
+        it "treats a fatal-level close_notify as a closure" $
+            handshake13_fatal_close_notify
         it "rejects a protected change_cipher_spec in the handshake" $
             handshake13_protected_ccs
         it "rejects an empty handshake record before a ClientHello" $
@@ -3126,22 +3130,56 @@ server_first_record_type_unexpected ty len = do
 -- data.
 handshake13_interleaved_app_data :: IO ()
 handshake13_interleaved_app_data =
-    clientSendsProtected13 [(22, B.pack [24, 0]), (23, "hello")]
+    serverRefusesProtected13 [(22, B.pack [24, 0]), (23, "hello")]
 
 -- RFC 9846 Section 6.2: a handshake message that nothing expects after the
 -- handshake is unexpected_message.  The client sends a Finished and then a
 -- record of application data.
 handshake13_unexpected_post_handshake :: IO ()
 handshake13_unexpected_post_handshake =
-    clientSendsProtected13 [(22, finished), (23, "hello")]
+    serverRefusesProtected13 [(22, finished), (23, "hello")]
   where
     finished = B.pack [20, 0, 0, 32] <> B.replicate 32 0
 
+-- RFC 9846 Section 6: the level of an alert is ignored.  A handshake_failure
+-- at the warning level is an error alert, which the server reports without
+-- answering.  A close_notify at the fatal level closes the connection.
+handshake13_warning_error_alert :: IO ()
+handshake13_warning_error_alert =
+    clientSendsProtected13
+        [(21, B.pack [1, 40])]
+        (\sctx -> recvData sctx `shouldThrow` receivedAlert HandshakeFailure)
+        (\_ -> return ())
+  where
+    receivedAlert ad (Terminated True _ (Error_Protocol _ ad')) = ad == ad'
+    receivedAlert _ _ = False
+
+handshake13_fatal_close_notify :: IO ()
+handshake13_fatal_close_notify =
+    clientSendsProtected13
+        [(21, B.pack [2, 0])]
+        (\sctx -> recvData sctx `shouldReturn` "")
+        (\_ -> return ())
+
+-- The server must not deliver the data and must answer with
+-- unexpected_message.
+serverRefusesProtected13 :: [(Word8, B.ByteString)] -> IO ()
+serverRefusesProtected13 records =
+    clientSendsProtected13 records serverSide clientSide
+  where
+    serverSide sctx = do
+        r <- E.try (recvData sctx) :: IO (Either TLSException B.ByteString)
+        case r of
+            Right d -> expectationFailure $ "server delivered " ++ show d
+            Left _ -> return ()
+    clientSide cctx = recvData cctx `shouldThrow` peerSentUnexpected
+
 -- After the handshake the client sends records of these inner types and
--- contents, protected under its application traffic secret.  The server must
--- not deliver the data and must answer with unexpected_message.
-clientSendsProtected13 :: [(Word8, B.ByteString)] -> IO ()
-clientSendsProtected13 records = do
+-- contents, protected under its application traffic secret.  Then each side
+-- checks what it receives.
+clientSendsProtected13
+    :: [(Word8, B.ByteString)] -> (Context -> IO ()) -> (Context -> IO ()) -> IO ()
+clientSendsProtected13 records serverSide clientSide = do
     let cipher = cipher13_AES_128_GCM_SHA256
     (clientParam, serverParam) <-
         generate $
@@ -3166,13 +3204,7 @@ clientSendsProtected13 records = do
                 }
     withPairContextWith (capture, id) (clientParam', serverParam) $ \(cctx, sctx) ->
         concurrently_
-            ( do
-                handshake sctx
-                r <- E.try (recvData sctx) :: IO (Either TLSException B.ByteString)
-                case r of
-                    Right d -> expectationFailure $ "server delivered " ++ show d
-                    Left _ -> return ()
-            )
+            (handshake sctx >> serverSide sctx)
             ( do
                 handshake cctx
                 Just h <- readIORef secretRef
@@ -3184,7 +3216,7 @@ clientSendsProtected13 records = do
                     [ send $ protect13 key iv sqn ty content
                     | (sqn, (ty, content)) <- zip [0 ..] records
                     ]
-                recvData cctx `shouldThrow` peerSentUnexpected
+                clientSide cctx
             )
   where
     unhex [] = B.empty
