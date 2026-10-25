@@ -56,8 +56,6 @@ handshake sparams ctx chb@(ClientHello ch, bs) = do
     (chosenVersion, chI, mcrnd) <- processClientHello sparams ctx ch bs
     if chosenVersion == TLS13
         then do
-            -- fixme: we should check if the client random is the same as
-            -- that in the first client hello in the case of hello retry.
             -- r0 :: Cipher, Hash, Bool
             (keyShareResult, r0, r1) <-
                 processClientHello13 sparams ctx chI

@@ -99,6 +99,14 @@ processClientHello13 sparams ctx ch@CH{..} = do
                 []
                 (\(SupportedGroups gs) -> gs)
         clientGroups = take limitSupportedGroups allClientGroups
+    -- RFC 9846 Section 4.2.8: after HelloRetryRequest, only the selected
+    -- group is offered.
+    hrr <- usingState_ ctx getTLS13HRR
+    when hrr $ do
+        mg <- usingHState ctx getSupportedGroup
+        unless (map (Just . keyShareEntryGroup) keyShares == [mg]) $
+            throwCore $
+                Error_Protocol "key_share not for the group of hello retry" IllegalParameter
     -- RFC 9846 Section 4.2.8: servers MAY check this.
     unless (all ((`elem` allClientGroups) . keyShareEntryGroup) keyShares) $
         throwCore $

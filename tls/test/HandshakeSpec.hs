@@ -292,6 +292,14 @@ spec = do
             handshake13_hrr_without_key_share True
         it "rejects a HelloRetryRequest that changes nothing" $
             handshake13_hrr_without_key_share False
+        it "rejects a second ClientHello with another random" $
+            handshake13_hrr_second_hello otherRandom (Just "changed")
+        it "rejects a second ClientHello with an extension added" $
+            handshake13_hrr_second_hello extensionAdded (Just "changed")
+        it "rejects a second ClientHello with the first key_share" $
+            handshake13_hrr_second_hello firstKeyShare (Just "key_share")
+        it "accepts a second ClientHello with extensions reordered" $
+            handshake13_hrr_second_hello reordered Nothing
         it "rejects a legacy_version above TLS 1.2 with supported_versions" $ do
             params <- fixGroupsX25519 <$> generate arbitraryPairParams13
             serverRefusesHello
@@ -3351,6 +3359,55 @@ handshake13_hrr_without_key_share withCookie = do
 
 -- The server refuses the ClientHello the function changes, as the
 -- selector expects.
+-- RFC 9846 Section 4.1.2: the server changes the second ClientHello after
+-- HelloRetryRequest with the function, given the first one, and refuses
+-- it for the reason or accepts it.
+handshake13_hrr_second_hello
+    :: (ClientHello -> ClientHello -> ClientHello) -> Maybe String -> IO ()
+handshake13_hrr_second_hello f mreason = do
+    (cli, srv) <- generate arbitraryPairParams13
+    let supported grps =
+            defaultSupported
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = grps
+                , supportedGroupsTLS13 = [grps]
+                }
+        params =
+            ( cli{clientSupported = (supported [X25519]){supportedGroups = [X25519, P256]}}
+            , srv{serverSupported = supported [P256]}
+            )
+    ref <- newIORef Nothing
+    let tamper (ClientHello ch) = do
+            mch1 <- readIORef ref
+            case mch1 of
+                Nothing -> writeIORef ref (Just ch) >> pure (ClientHello ch)
+                Just ch1 -> pure $ ClientHello $ f ch1 ch
+        tamper h = pure h
+    withPairContext params $ \(cctx, sctx) -> do
+        contextHookSetHandshakeRecv sctx tamper
+        case mreason of
+            Nothing -> concurrently_ (handshake sctx) (handshake cctx)
+            Just why ->
+                concurrently_
+                    (handshake sctx `shouldThrow` refusedFor IllegalParameter why)
+                    (handshake cctx `shouldThrow` anyTLSException)
+    readIORef ref >>= (`shouldSatisfy` isJust)
+
+otherRandom
+    , extensionAdded
+    , firstKeyShare
+    , reordered
+        :: ClientHello -> ClientHello -> ClientHello
+otherRandom _ ch = ch{chRandom = ClientRandom $ B.replicate 32 0}
+extensionAdded _ ch =
+    ch{chExtensions = ExtensionRaw (ExtensionID 0xfafa) "" : chExtensions ch}
+firstKeyShare ch1 ch = ch{chExtensions = map replace $ chExtensions ch}
+  where
+    replace (ExtensionRaw EID_KeyShare _) =
+        fromJust $ find (\(ExtensionRaw eid _) -> eid == EID_KeyShare) $ chExtensions ch1
+    replace e = e
+reordered _ ch = ch{chExtensions = reverse $ chExtensions ch}
+
 serverRefusesHello
     :: (ClientParams, ServerParams)
     -> (ClientHello -> ClientHello)

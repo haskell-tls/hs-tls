@@ -157,7 +157,9 @@ processClientHello sparams ctx ch@CH{..} b = do
 setupI :: Context -> ClientHello -> [ByteString] -> IO ()
 setupI ctx chI@CH{..} b = do
     hrr <- usingState_ ctx getTLS13HRR
-    unless hrr $ startHandshake ctx TLS13 chRandom
+    if hrr
+        then checkSecondClientHello ctx chI
+        else startHandshake ctx TLS13 chRandom
     usingHState ctx $ setClientHello chI b
     let serverName = getServerName chExtensions
     maybe (return ()) (usingState_ ctx . setClientSNI) serverName
@@ -165,10 +167,36 @@ setupI ctx chI@CH{..} b = do
 setupO :: Context -> ClientHello -> [ByteString] -> IO ()
 setupO ctx ch@CH{..} b = do
     hrr <- usingState_ ctx getTLS13HRR
-    unless hrr $ startHandshake ctx chVersion chRandom
+    if hrr
+        then checkSecondClientHello ctx ch
+        else startHandshake ctx chVersion chRandom
     usingHState ctx $ setClientHello ch b
     let serverName = getServerName chExtensions
     maybe (return ()) (usingState_ ctx . setClientSNI) serverName
+
+-- RFC 9846 Section 4.1.2: the ClientHello after HelloRetryRequest is the
+-- same except for these extensions.  Their order is not compared.
+checkSecondClientHello :: Context -> ClientHello -> IO ()
+checkSecondClientHello ctx ch2 = do
+    mch1 <- usingHState ctx getClientHello
+    case mch1 of
+        Just (ch1, _)
+            | strip ch1 /= strip ch2 ->
+                throwCore $
+                    Error_Protocol "second client hello is changed" IllegalParameter
+        _ -> return ()
+  where
+    strip ch = ch{chExtensions = sortOn eid $ filter keep $ chExtensions ch}
+    eid (ExtensionRaw i _) = fromExtensionID i
+    keep (ExtensionRaw i _) = i `notElem` mutable
+    mutable =
+        [ EID_KeyShare
+        , EID_EarlyData
+        , EID_Cookie
+        , EID_PreSharedKey
+        , EID_Padding
+        , EID_EncryptedClientHello
+        ]
 
 -- SNI (Server Name Indication)
 getServerName :: [ExtensionRaw] -> Maybe HostName
