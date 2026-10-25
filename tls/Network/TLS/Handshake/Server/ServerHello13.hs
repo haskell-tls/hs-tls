@@ -333,7 +333,10 @@ sendHRR ctx g (usedCipher, usedHash, _) CH{..} isEch = do
     usingState_ ctx $ setTLS13HRR True
     failOnEitherError $ setServerHelloParameters13 ctx usedCipher True
     hrr <- makeHRR ctx usedCipher usedHash chSession g isEch
-    usingHState ctx $ setTLS13HandshakeMode HelloRetryRequest
+    usingHState ctx $ do
+        setTLS13HandshakeMode HelloRetryRequest
+        -- Checked against the key_share of the second ClientHello.
+        setSupportedGroup g
     runPacketFlight ctx $ do
         loadPacket13 ctx $ Handshake13 [ServerHello13 hrr] []
         sendChangeCipherSpec13 ctx
