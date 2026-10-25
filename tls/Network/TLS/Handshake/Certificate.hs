@@ -130,8 +130,8 @@ verifyLeafKeyUsagePurpose validPurpose (CertificateChain (signed : _)) =
         Just (ExtExtendedKeyUsage purposes) -> validPurpose `elem` purposes
 
 -- | The RSA key of the peer's leaf certificate is to be at least
--- 'supportedMinRSAKeySize' bits.  The keys of the rest of the chain are left
--- to the validation of the chain.
+-- 'supportedMinRSAKeySize' and at most 'supportedMaxRSAKeySize' bits.  The
+-- keys of the rest of the chain are left to the validation of the chain.
 verifyLeafKeySize :: MonadIO m => Supported -> CertificateChain -> m ()
 verifyLeafKeySize _ (CertificateChain []) = return ()
 verifyLeafKeySize supported (CertificateChain (signed : _)) =
@@ -140,11 +140,15 @@ verifyLeafKeySize supported (CertificateChain (signed : _)) =
             | bits < minBits ->
                 badCertificate $
                     "RSA key of " ++ show bits ++ " bits is shorter than " ++ show minBits
+            | maxBits > 0 && bits > maxBits ->
+                badCertificate $
+                    "RSA key of " ++ show bits ++ " bits is longer than " ++ show maxBits
           where
             bits = RSA.public_size pk * 8
         _ -> return ()
   where
     minBits = supportedMinRSAKeySize supported
+    maxBits = supportedMaxRSAKeySize supported
 
 extractCAname :: SignedCertificate -> DistinguishedName
 extractCAname cert = certSubjectDN $ getCertificate cert

@@ -11,6 +11,7 @@ import Crypto.Cipher.Types (AEADMode (..), AuthTag (..), aeadInit, aeadSimpleEnc
 import Crypto.Error (throwCryptoError)
 import qualified Crypto.Hash as H
 import qualified Crypto.MAC.HMAC as HMAC
+import qualified Crypto.PubKey.DH as DH
 import Data.Bits (shiftR, xor)
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
@@ -24,6 +25,7 @@ import Data.X509.Validation (FailedReason (..))
 import Network.TLS
 import Network.TLS.Extra.Cipher
 import Network.TLS.Extra.CipherCBC
+import Network.TLS.Extra.FFDHE (ffdhe8192)
 import Network.TLS.Internal
 import Network.TLS.QUIC (errorToAlertDescription, hkdfExpandLabel, hkdfExtract)
 import Test.Hspec
@@ -156,6 +158,12 @@ spec = do
             handshake_short_rsa_key False
         it "refuses a client certificate with a 1024-bit RSA key" $
             handshake_short_rsa_key True
+        it "refuses a server certificate with an RSA key over the upper bound" $
+            handshake_long_rsa_key False
+        it "refuses a client certificate with an RSA key over the upper bound" $
+            handshake_long_rsa_key True
+        it "refuses a custom DH prime larger than 8192 bits" $
+            handshake_large_dh_prime
         prop "can receive client authentication failure" handshake_client_auth_fail
         it "accepts an empty TLS 1.2 client certificate when the hook does" $
             handshake_client_auth_empty TLS12
@@ -1372,7 +1380,24 @@ handshake12_unimplemented_sigalg = do
 -- is refused in the server's certificate or, with True, in the client's; a
 -- lower bound lets it through.
 handshake_short_rsa_key :: Bool -> IO ()
-handshake_short_rsa_key clientSide = do
+handshake_short_rsa_key clientSide = handshake_rsa_key_size clientSide id lower
+  where
+    lower sup = sup{supportedMinRSAKeySize = 1024}
+
+-- The same key is longer than an upper bound of 512 bits; no upper bound lets
+-- it through.
+handshake_long_rsa_key :: Bool -> IO ()
+handshake_long_rsa_key clientSide =
+    handshake_rsa_key_size clientSide (bounds 512) (bounds 0)
+  where
+    bounds n sup = sup{supportedMinRSAKeySize = 0, supportedMaxRSAKeySize = n}
+
+-- A 1024-bit RSA key in the server's certificate or, with True, in the
+-- client's is refused with the first change of the verifier's 'Supported',
+-- and accepted with the second.
+handshake_rsa_key_size
+    :: Bool -> (Supported -> Supported) -> (Supported -> Supported) -> IO ()
+handshake_rsa_key_size clientSide refusing accepting = do
     let cipher = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
         (pub, priv) = rsaParams
     (clientParam, serverParam) <-
@@ -1381,18 +1406,17 @@ handshake_short_rsa_key clientSide = do
                 ([TLS12], [TLS12])
                 ([cipher], [cipher])
     cert <- generate $ arbitraryX509WithKey (PubKeyRSA pub, ())
-    let short = (CertificateChain [cert], PrivKeyRSA priv)
-        withMin n sup = sup{supportedMinRSAKeySize = n}
-        params n
+    let key = (CertificateChain [cert], PrivKeyRSA priv)
+        params change
             | clientSide =
                 ( clientParam
                     { clientHooks =
                         (clientHooks clientParam)
-                            { onCertificateRequest = \_ -> return $ Just short
+                            { onCertificateRequest = \_ -> return $ Just key
                             }
                     }
                 , serverParam
-                    { serverSupported = withMin n (serverSupported serverParam)
+                    { serverSupported = change (serverSupported serverParam)
                     , serverWantClientCert = True
                     , serverHooks =
                         (serverHooks serverParam)
@@ -1401,13 +1425,13 @@ handshake_short_rsa_key clientSide = do
                     }
                 )
             | otherwise =
-                ( clientParam{clientSupported = withMin n (clientSupported clientParam)}
+                ( clientParam{clientSupported = change (clientSupported clientParam)}
                 , serverParam
                     { serverShared =
-                        (serverShared serverParam){sharedCredentials = Credentials [short]}
+                        (serverShared serverParam){sharedCredentials = Credentials [key]}
                     }
                 )
-    withPairContextWith (id, id) (params 2048) $ \(cctx, sctx) ->
+    withPairContextWith (id, id) (params refusing) $ \(cctx, sctx) ->
         if clientSide
             then
                 concurrently_
@@ -1417,10 +1441,34 @@ handshake_short_rsa_key clientSide = do
                 concurrently_
                     (void (E.try (handshake sctx) :: IO (Either TLSException ())))
                     (handshake cctx `shouldThrow` rejectedAsBadCertificate)
-    runTLSSimple (params 1024)
+    runTLSSimple (params accepting)
   where
     rejectedAsBadCertificate (HandshakeFailed (Error_Protocol _ BadCertificate)) = True
     rejectedAsBadCertificate _ = False
+
+-- A TLS 1.2 server sends DH parameters of its own, outside the client's
+-- supportedGroups.  The default onCustomFFDHEGroup refuses a prime over 8192
+-- bits, whether or not it is one, and accepts ffdhe8192.
+handshake_large_dh_prime :: IO ()
+handshake_large_dh_prime = do
+    let cipher = cipher_DHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS12], [TLS12])
+                ([cipher], [cipher])
+    let large = DH.Params (2 ^ (8193 :: Int) + 1) 2 8194
+        params dh =
+            ( clientParam
+                { clientSupported = (clientSupported clientParam){supportedGroups = [X25519]}
+                }
+            , serverParam{serverDHEParams = Just dh}
+            )
+    withPairContextWith (id, id) (params large) $ \(cctx, sctx) ->
+        concurrently_
+            (void (E.try (handshake sctx) :: IO (Either TLSException ())))
+            (handshake cctx `shouldThrow` refusedFor HandshakeFailure "8192")
+    runTLSSimple (params ffdhe8192)
 
 -- No certificate is exchanged on resumption; the server tells the leaf the
 -- session kept from the full handshake.

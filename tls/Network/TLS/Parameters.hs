@@ -307,6 +307,13 @@ data Supported = Supported
     -- any size through.
     --
     -- Default: 2048
+    , supportedMaxRSAKeySize :: Int
+    -- ^ The largest size in bits of the RSA key in the peer's leaf
+    -- certificate.  Verifying with a larger key costs more CPU, which the
+    -- peer chooses.  A longer one is refused with bad_certificate; 0 lets
+    -- any size through.
+    --
+    -- Default: 8192
     , supportedClientCipherOrder :: Bool
     -- ^ Whether a server chooses among the ciphers in common in the
     -- client's order of preference, rather than in the order of
@@ -452,6 +459,7 @@ defaultSupported =
         { supportedVersions = [TLS13, TLS12]
         , supportedCiphers = ciphersuite_default
         , supportedMinRSAKeySize = 2048
+        , supportedMaxRSAKeySize = 8192
         , supportedClientCipherOrder = False
         , supportedCompressions = [nullCompression]
         , supportedHashSignatures = Struct.supportedSignatureSchemes
@@ -555,6 +563,10 @@ data GroupUsage
 
 defaultGroupUsage :: Int -> DHParams -> DHPublic -> IO GroupUsage
 defaultGroupUsage minBits params public
+    -- A larger prime costs more CPU, which the server chooses.  8192 bits
+    -- is the size of the largest group of RFC 7919.
+    | dhParamsGetBits params > 8192 =
+        return $ GroupUsageUnsupported "prime larger than 8192 bits"
     | even $ dhParamsGetP params =
         return $ GroupUsageUnsupported "invalid odd prime"
     | not $ dhValid params (dhParamsGetG params) =
@@ -679,6 +691,7 @@ data ClientHooks = ClientHooks
     --   (2) rejecting unless 1 < dh_g && dh_g < dh_p - 1
     --   (3) rejecting unless 1 < dh_p && pub < dh_p - 1
     --   (4) rejecting if dh_size < 1024 (to prevent Logjam attack)
+    --   (5) rejecting if dh_size > 8192 (to bound the CPU cost)
     --
     --   See RFC 7919 section 3.1 for recommendations.
     , onServerFinished :: Information -> IO ()

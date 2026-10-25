@@ -115,6 +115,7 @@ module Network.TLS (
     supportedVersions,
     supportedCiphers,
     supportedMinRSAKeySize,
+    supportedMaxRSAKeySize,
     supportedClientCipherOrder,
     supportedCompressions,
     supportedHashSignatures,
