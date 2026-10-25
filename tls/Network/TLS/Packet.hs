@@ -275,7 +275,12 @@ decodeCertificate = do
         Left (i, s) -> fail ("error certificate parsing " ++ show i ++ ":" ++ s)
         Right cc -> return $ Certificate $ CertificateChain_ cc
   where
-    getCertRaw = getOpaque24 >>= \cert -> return (3 + B.length cert, cert)
+    getCertRaw = do
+        cert <- getOpaque24
+        -- ASN.1Cert<1..2^24-1>: an empty one is decode_error, not
+        -- bad_certificate.
+        when (B.null cert) $ fail "empty certificate"
+        return (3 + B.length cert, cert)
 
 ----
 
