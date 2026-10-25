@@ -35,6 +35,19 @@ spec = do
     describe "ECH greasing" $ do
         prop "sends greasing ECH" handshake13_greasing
         prop "sends greasing ECH HRR" handshake13_greasing_hrr
+    describe "ECHConfigList decoding" $ do
+        it "decodes a list" $
+            length <$> decodeECHConfigList echConfListRaw `shouldBe` Just 1
+        it "refuses data after the list" $
+            decodeECHConfigList (B.snoc echConfListRaw 0) `shouldBe` Nothing
+        it "refuses a config longer than its contents" $
+            decodeECHConfigList (list [version13 <> opaque16 (B.snoc echConfBody 0)])
+                `shouldBe` Nothing
+        it "refuses a config that runs past the list" $
+            decodeECHConfigList (B.pack [0, 0x42] <> echConf) `shouldBe` Nothing
+        it "ignores a config of an unknown version" $
+            decodeECHConfigList (list [B.pack [0xfe, 0x0e] <> opaque16 "x", echConf])
+                `shouldBe` decodeECHConfigList echConfListRaw
 
 --------------------------------------------------------------
 
@@ -439,8 +452,20 @@ echKey :: [(ConfigId, ByteString)]
 echKey = [(0, B64.decodeLenient "GAl/YqzDDnssODe5t+2xlQsbSv26kNlfJ0D+nZbK62I=")]
 
 echConfList :: ECHConfigList
-echConfList =
-    fromJust $
-        decodeECHConfigList $
-            B64.decodeLenient
-                "AEP+DQA/AAAgACDGNVZWrmqQfzAuYGJNa8+OEc6zaUfzd0ltyJQ2y1U2AwAEAAEAAQAQcHVibGljLWxvY2FsaG9zdAAA"
+echConfList = fromJust $ decodeECHConfigList echConfListRaw
+
+-- An ECHConfigList of one ECHConfig, its version and its contents.
+echConfListRaw, echConf, version13, echConfBody :: ByteString
+echConfListRaw =
+    B64.decodeLenient
+        "AEP+DQA/AAAgACDGNVZWrmqQfzAuYGJNa8+OEc6zaUfzd0ltyJQ2y1U2AwAEAAEAAQAQcHVibGljLWxvY2FsaG9zdAAA"
+echConf = B.drop 2 echConfListRaw
+version13 = B.take 2 echConf
+echConfBody = B.drop 4 echConf
+
+opaque16 :: ByteString -> ByteString
+opaque16 bs =
+    B.pack [fromIntegral (B.length bs `div` 256), fromIntegral (B.length bs)] <> bs
+
+list :: [ByteString] -> ByteString
+list = opaque16 . B.concat
