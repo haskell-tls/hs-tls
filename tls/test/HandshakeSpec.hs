@@ -268,6 +268,8 @@ spec = do
             server_first_record_type_unexpected 24 0
         it "rejects application data inside a TLS 1.3 handshake message" $
             handshake13_interleaved_app_data
+        it "rejects an unexpected handshake message after the handshake" $
+            handshake13_unexpected_post_handshake
         it "rejects a protected change_cipher_spec in the handshake" $
             handshake13_protected_ccs
         it "rejects an empty handshake record before a ClientHello" $
@@ -3119,12 +3121,27 @@ server_first_record_type_unexpected ty len = do
     r `shouldSatisfy` isJust
 
 -- RFC 8446 Section 5.1: handshake messages MUST NOT be interleaved with
--- other record types.  After the handshake the client sends, protected under
--- its application traffic secret, a record holding only the first two bytes
--- of a KeyUpdate and then a record of application data.  The server must not
--- deliver the data and must answer with unexpected_message.
+-- other record types.  After the handshake the client sends a record holding
+-- only the first two bytes of a KeyUpdate and then a record of application
+-- data.
 handshake13_interleaved_app_data :: IO ()
-handshake13_interleaved_app_data = do
+handshake13_interleaved_app_data =
+    clientSendsProtected13 [(22, B.pack [24, 0]), (23, "hello")]
+
+-- RFC 9846 Section 6.2: a handshake message that nothing expects after the
+-- handshake is unexpected_message.  The client sends a Finished and then a
+-- record of application data.
+handshake13_unexpected_post_handshake :: IO ()
+handshake13_unexpected_post_handshake =
+    clientSendsProtected13 [(22, finished), (23, "hello")]
+  where
+    finished = B.pack [20, 0, 0, 32] <> B.replicate 32 0
+
+-- After the handshake the client sends records of these inner types and
+-- contents, protected under its application traffic secret.  The server must
+-- not deliver the data and must answer with unexpected_message.
+clientSendsProtected13 :: [(Word8, B.ByteString)] -> IO ()
+clientSendsProtected13 records = do
     let cipher = cipher13_AES_128_GCM_SHA256
     (clientParam, serverParam) <-
         generate $
@@ -3163,10 +3180,10 @@ handshake13_interleaved_app_data = do
                 let secret = BA.convert (unhex h) :: BA.ScrubbedBytes
                     key = hkdfExpandLabel SHA256 secret "key" "" 16 :: B.ByteString
                     iv = hkdfExpandLabel SHA256 secret "iv" "" 12 :: B.ByteString
-                    -- the first two bytes of KeyUpdate(update_not_requested)
-                    partialKeyUpdate = B.pack [24, 0]
-                send $ protect13 key iv 0 22 partialKeyUpdate
-                send $ protect13 key iv 1 23 "hello"
+                sequence_
+                    [ send $ protect13 key iv sqn ty content
+                    | (sqn, (ty, content)) <- zip [0 ..] records
+                    ]
                 recvData cctx `shouldThrow` peerSentUnexpected
             )
   where
