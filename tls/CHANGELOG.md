@@ -80,6 +80,8 @@ value computed under the negotiated cipher's hash.
   [#624](https://github.com/haskell-tls/hs-tls/pull/624)
 * Answer several KeyUpdates with update_requested with a single KeyUpdate.
   [#631](https://github.com/haskell-tls/hs-tls/pull/631)
+* Refuse an RSA key longer than `supportedMaxRSAKeySize` (8192 by default) in the peer's certificate, and a custom DH prime over 8192 bits.
+  [#632](https://github.com/haskell-tls/hs-tls/pull/632)
 
 ## Version 2.4.12
 
