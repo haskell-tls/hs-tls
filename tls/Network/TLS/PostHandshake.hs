@@ -15,10 +15,13 @@ import Network.TLS.Struct13
 ----------------------------------------------------------------
 
 -- | Post-handshake certificate request with TLS 1.3.  Returns 'False'
--- if the request was impossible, i.e. the remote client supports
+-- if the request was impossible, i.e. the remote client does not support
 -- post-handshake authentication or the connection is established in
 -- TLS 1.2. Returns 'True' if the client authentication succeeds. An
 -- exception is thrown if the authentication fails. Server only.
+--
+-- This reads the client's response by itself, so it must not be called
+-- while another thread is in 'recvData'.
 requestCertificate :: Context -> IO Bool
 requestCertificate ctx =
     checkValid ctx >> doRequestCertificate_ (ctxRoleParams ctx) ctx
