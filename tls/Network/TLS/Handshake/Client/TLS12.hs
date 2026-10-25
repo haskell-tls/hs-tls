@@ -213,7 +213,13 @@ getCKX_DHE cparams ctx = do
         srvpub = serverDHParamsToPublic serverParams
 
     let bits = dhParamsGetBits params
+        minBits = supportedMinDHKeySize $ ctxSupported ctx
         maxBits = supportedMaxDHKeySize $ ctxSupported ctx
+    when (bits < minBits) $
+        throwCore $
+            Error_Protocol
+                ("DH prime of " ++ show bits ++ " bits is smaller than " ++ show minBits)
+                InsufficientSecurity
     when (maxBits > 0 && bits > maxBits) $
         throwCore $
             Error_Protocol

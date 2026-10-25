@@ -25,7 +25,7 @@ import Data.X509.Validation (FailedReason (..))
 import Network.TLS
 import Network.TLS.Extra.Cipher
 import Network.TLS.Extra.CipherCBC
-import Network.TLS.Extra.FFDHE (ffdhe8192)
+import Network.TLS.Extra.FFDHE (ffdhe2048, ffdhe8192)
 import Network.TLS.Internal
 import Network.TLS.QUIC (errorToAlertDescription, hkdfExpandLabel, hkdfExtract)
 import Test.Hspec
@@ -162,8 +162,8 @@ spec = do
             handshake_long_rsa_key False
         it "refuses a client certificate with an RSA key over the upper bound" $
             handshake_long_rsa_key True
-        it "refuses a custom DH prime larger than supportedMaxDHKeySize" $
-            handshake_large_dh_prime
+        it "refuses a custom DH prime outside the bounds of its size" $
+            handshake_dh_prime_size
         prop "can receive client authentication failure" handshake_client_auth_fail
         it "accepts an empty TLS 1.2 client certificate when the hook does" $
             handshake_client_auth_empty TLS12
@@ -1447,37 +1447,45 @@ handshake_rsa_key_size clientSide refusing accepting = do
     rejectedAsBadCertificate _ = False
 
 -- A TLS 1.2 server sends DH parameters of its own, outside the client's
--- supportedGroups.  The client refuses a prime larger than
--- supportedMaxDHKeySize, whether or not it is one: by default one of 8194
--- bits but not ffdhe8192, with 4096 ffdhe8192 too, and with 0 neither.
-handshake_large_dh_prime :: IO ()
-handshake_large_dh_prime = do
+-- supportedGroups.  The client refuses a prime outside supportedMinDHKeySize
+-- and supportedMaxDHKeySize, whether or not it is one.  By default one of
+-- 1024 or 8194 bits is refused, but ffdhe2048 and ffdhe8192 are not; with an
+-- upper bound of 4096 ffdhe8192 is refused too, and with 0 for either bound
+-- nothing on that side is.
+handshake_dh_prime_size :: IO ()
+handshake_dh_prime_size = do
     let cipher = cipher_DHE_RSA_WITH_AES_128_GCM_SHA256
     (clientParam, serverParam) <-
         generate $
             arbitraryPairParamsWithVersionsAndCiphers
                 ([TLS12], [TLS12])
                 ([cipher], [cipher])
-    let large = DH.Params (2 ^ (8193 :: Int) + 1) 2 8194
-        params maxBits dh =
+    let small = DH.Params (2 ^ (1023 :: Int) + 1) 2 1024
+        large = DH.Params (2 ^ (8193 :: Int) + 1) 2 8194
+        params (minBits, maxBits) dh =
             ( clientParam
                 { clientSupported =
                     (clientSupported clientParam)
                         { supportedGroups = [X25519]
+                        , supportedMinDHKeySize = minBits
                         , supportedMaxDHKeySize = maxBits
                         }
                 }
             , serverParam{serverDHEParams = Just dh}
             )
-        refused maxBits dh =
-            withPairContextWith (id, id) (params maxBits dh) $ \(cctx, sctx) ->
+        refused ad bounds dh =
+            withPairContextWith (id, id) (params bounds dh) $ \(cctx, sctx) ->
                 concurrently_
                     (void (E.try (handshake sctx) :: IO (Either TLSException ())))
-                    (handshake cctx `shouldThrow` refusedFor HandshakeFailure "DH prime")
-    refused 8192 large
-    runTLSSimple (params 8192 ffdhe8192)
-    refused 4096 ffdhe8192
-    runTLSSimple (params 0 large)
+                    (handshake cctx `shouldThrow` refusedFor ad "DH prime")
+        defaults = (2048, 8192)
+    refused InsufficientSecurity defaults small
+    refused HandshakeFailure defaults large
+    runTLSSimple (params defaults ffdhe2048)
+    runTLSSimple (params defaults ffdhe8192)
+    refused HandshakeFailure (2048, 4096) ffdhe8192
+    runTLSSimple (params (0, 8192) small)
+    runTLSSimple (params (2048, 0) large)
 
 -- No certificate is exchanged on resumption; the server tells the leaf the
 -- session kept from the full handshake.

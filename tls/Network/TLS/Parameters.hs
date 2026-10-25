@@ -314,6 +314,12 @@ data Supported = Supported
     -- any size through.
     --
     -- Default: 8192
+    , supportedMinDHKeySize :: Int
+    -- ^ The least size in bits of the prime of the DH parameters a TLS 1.2
+    -- server sends.  A smaller one is refused with insufficient_security
+    -- before 'onCustomFFDHEGroup' is called; 0 lets any size through.
+    --
+    -- Default: 2048, the size of the smallest group of RFC 7919
     , supportedMaxDHKeySize :: Int
     -- ^ The largest size in bits of the prime of the DH parameters a TLS
     -- 1.2 server sends.  Computing with a larger prime costs more CPU,
@@ -468,6 +474,7 @@ defaultSupported =
         , supportedCiphers = ciphersuite_default
         , supportedMinRSAKeySize = 2048
         , supportedMaxRSAKeySize = 8192
+        , supportedMinDHKeySize = 2048
         , supportedMaxDHKeySize = 8192
         , supportedClientCipherOrder = False
         , supportedCompressions = [nullCompression]
