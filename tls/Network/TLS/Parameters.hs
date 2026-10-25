@@ -307,6 +307,27 @@ data Supported = Supported
     -- any size through.
     --
     -- Default: 2048
+    , supportedMaxRSAKeySize :: Int
+    -- ^ The largest size in bits of the RSA key in the peer's leaf
+    -- certificate.  Verifying with a larger key costs more CPU, which the
+    -- peer chooses.  A longer one is refused with bad_certificate; 0 lets
+    -- any size through.
+    --
+    -- Default: 8192
+    , supportedMinDHKeySize :: Int
+    -- ^ The least size in bits of the prime of the DH parameters a TLS 1.2
+    -- server sends.  A smaller one is refused with insufficient_security
+    -- before 'onCustomFFDHEGroup' is called; 0 lets any size through.
+    --
+    -- Default: 2048, the size of the smallest group of RFC 7919
+    , supportedMaxDHKeySize :: Int
+    -- ^ The largest size in bits of the prime of the DH parameters a TLS
+    -- 1.2 server sends.  Computing with a larger prime costs more CPU,
+    -- which the server chooses.  A larger one is refused with
+    -- handshake_failure before 'onCustomFFDHEGroup' is called; 0 lets any
+    -- size through.
+    --
+    -- Default: 8192, the size of the largest group of RFC 7919
     , supportedClientCipherOrder :: Bool
     -- ^ Whether a server chooses among the ciphers in common in the
     -- client's order of preference, rather than in the order of
@@ -452,6 +473,9 @@ defaultSupported =
         { supportedVersions = [TLS13, TLS12]
         , supportedCiphers = ciphersuite_default
         , supportedMinRSAKeySize = 2048
+        , supportedMaxRSAKeySize = 8192
+        , supportedMinDHKeySize = 2048
+        , supportedMaxDHKeySize = 8192
         , supportedClientCipherOrder = False
         , supportedCompressions = [nullCompression]
         , supportedHashSignatures = Struct.supportedSignatureSchemes
