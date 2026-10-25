@@ -131,7 +131,7 @@ library
         crypton-x509-store >=1.10 && <1.11,
         crypton-x509-validation >=1.10 && <1.11,
         data-default,
-        ech-config,
+        ech-config >=0.0.2,
         hpke >=0.3.0 && <0.4,
         mtl >=2.2 && <2.4,
         network >=3.1,
