@@ -232,6 +232,8 @@ sendData ctx dataToSend = liftIO $ do
             | tls13 = do
                 updateKeyBeforeLimit ctx
                 sendPacket13 ctx $ AppData13 bs
+                -- a KeyUpdate requested from now on is answered again
+                modifyTLS13State ctx $ \st -> st{tls13stKeyUpdateResponded = False}
                 role <- usingState_ ctx getRole
                 sentCF <- tls13stSentCF <$> getTLS13State ctx
                 rtt0 <- tls13st0RTT <$> getTLS13State ctx
@@ -443,11 +445,9 @@ recvData13 ctx = do
                 -- Write lock wraps both actions because we don't want another
                 -- packet to be sent by another thread before the Tx state is
                 -- updated.
-                -- The request is ignored after 2^48-1 updates.
                 when (mode == UpdateRequested) $
                     withWriteLock ctx $
-                        void $
-                            sendKeyUpdate ctx UpdateNotRequested
+                        respondToKeyUpdate ctx
                 loopHandshake13 hbs
             else do
                 let reason = "received key update before established"
