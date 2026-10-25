@@ -868,12 +868,11 @@ instance Extension EarlyDataIndication where
     extensionID _ = EID_EarlyData
     extensionEncode (EarlyDataIndication Nothing) = runPut $ putBytes B.empty
     extensionEncode (EarlyDataIndication (Just w32)) = runPut $ putWord32 w32
-    extensionDecode MsgTClientHello = return $ Just (EarlyDataIndication Nothing)
-    extensionDecode MsgTEncryptedExtensions = return $ Just (EarlyDataIndication Nothing)
-    extensionDecode MsgTNewSessionTicket =
-        runGetMaybe $
-            EarlyDataIndication . Just <$> getWord32
-    extensionDecode _ = const Nothing
+    extensionDecode MsgTClientHello "" = Just (EarlyDataIndication Nothing)
+    extensionDecode MsgTEncryptedExtensions "" = Just (EarlyDataIndication Nothing)
+    extensionDecode MsgTNewSessionTicket bs =
+        runGetMaybe (EarlyDataIndication . Just <$> getWord32) bs
+    extensionDecode _ _ = Nothing
 
 ------------------------------------------------------------
 

@@ -374,6 +374,15 @@ spec = do
                 params
                 (\ch -> ch{chExtensions = map p256 $ chExtensions ch})
                 (refusedWith IllegalParameter)
+        it "rejects data after the content of supported_groups" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let trailing (ExtensionRaw EID_SupportedGroups bs) =
+                    ExtensionRaw EID_SupportedGroups $ B.snoc bs 0
+                trailing e = e
+            serverRefusesHello
+                params
+                (\ch -> ch{chExtensions = map trailing $ chExtensions ch})
+                (refusedWith DecodeError)
         it "rejects a two-byte TLS 1.2 ChangeCipherSpec" $
             malformed_ccs_unexpected
                 TLS12
