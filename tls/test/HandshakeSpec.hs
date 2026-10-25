@@ -162,7 +162,7 @@ spec = do
             handshake_long_rsa_key False
         it "refuses a client certificate with an RSA key over the upper bound" $
             handshake_long_rsa_key True
-        it "refuses a custom DH prime larger than 8192 bits" $
+        it "refuses a custom DH prime larger than supportedMaxDHKeySize" $
             handshake_large_dh_prime
         prop "can receive client authentication failure" handshake_client_auth_fail
         it "accepts an empty TLS 1.2 client certificate when the hook does" $
@@ -1447,8 +1447,9 @@ handshake_rsa_key_size clientSide refusing accepting = do
     rejectedAsBadCertificate _ = False
 
 -- A TLS 1.2 server sends DH parameters of its own, outside the client's
--- supportedGroups.  The default onCustomFFDHEGroup refuses a prime over 8192
--- bits, whether or not it is one, and accepts ffdhe8192.
+-- supportedGroups.  The client refuses a prime larger than
+-- supportedMaxDHKeySize, whether or not it is one: by default one of 8194
+-- bits but not ffdhe8192, with 4096 ffdhe8192 too, and with 0 neither.
 handshake_large_dh_prime :: IO ()
 handshake_large_dh_prime = do
     let cipher = cipher_DHE_RSA_WITH_AES_128_GCM_SHA256
@@ -1458,17 +1459,25 @@ handshake_large_dh_prime = do
                 ([TLS12], [TLS12])
                 ([cipher], [cipher])
     let large = DH.Params (2 ^ (8193 :: Int) + 1) 2 8194
-        params dh =
+        params maxBits dh =
             ( clientParam
-                { clientSupported = (clientSupported clientParam){supportedGroups = [X25519]}
+                { clientSupported =
+                    (clientSupported clientParam)
+                        { supportedGroups = [X25519]
+                        , supportedMaxDHKeySize = maxBits
+                        }
                 }
             , serverParam{serverDHEParams = Just dh}
             )
-    withPairContextWith (id, id) (params large) $ \(cctx, sctx) ->
-        concurrently_
-            (void (E.try (handshake sctx) :: IO (Either TLSException ())))
-            (handshake cctx `shouldThrow` refusedFor HandshakeFailure "8192")
-    runTLSSimple (params ffdhe8192)
+        refused maxBits dh =
+            withPairContextWith (id, id) (params maxBits dh) $ \(cctx, sctx) ->
+                concurrently_
+                    (void (E.try (handshake sctx) :: IO (Either TLSException ())))
+                    (handshake cctx `shouldThrow` refusedFor HandshakeFailure "DH prime")
+    refused 8192 large
+    runTLSSimple (params 8192 ffdhe8192)
+    refused 4096 ffdhe8192
+    runTLSSimple (params 0 large)
 
 -- No certificate is exchanged on resumption; the server tells the leaf the
 -- session kept from the full handshake.

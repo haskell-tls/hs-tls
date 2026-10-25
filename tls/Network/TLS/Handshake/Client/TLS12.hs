@@ -212,6 +212,13 @@ getCKX_DHE cparams ctx = do
         ffGroup = findFiniteFieldGroup params
         srvpub = serverDHParamsToPublic serverParams
 
+    let bits = dhParamsGetBits params
+        maxBits = supportedMaxDHKeySize $ ctxSupported ctx
+    when (maxBits > 0 && bits > maxBits) $
+        throwCore $
+            Error_Protocol
+                ("DH prime of " ++ show bits ++ " bits is larger than " ++ show maxBits)
+                HandshakeFailure
     unless (maybe False (isSupportedGroup ctx) ffGroup) $ do
         groupUsage <-
             onCustomFFDHEGroup (clientHooks cparams) params srvpub
