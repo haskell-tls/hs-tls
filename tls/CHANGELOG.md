@@ -68,6 +68,8 @@ value computed under the negotiated cipher's hash.
   [#618](https://github.com/haskell-tls/hs-tls/pull/618)
 * Check the second ClientHello after HelloRetryRequest.
   [#619](https://github.com/haskell-tls/hs-tls/pull/619)
+* Answer an empty cipher_suites or compression_methods with decode_error.
+  [#620](https://github.com/haskell-tls/hs-tls/pull/620)
 
 ## Version 2.4.12
 
