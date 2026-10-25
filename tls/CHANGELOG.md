@@ -62,6 +62,8 @@ value computed under the negotiated cipher's hash.
   [#615](https://github.com/haskell-tls/hs-tls/pull/615)
 * Skip rejected early data by bytes, up to `max 16384 serverEarlyDataSize`, and only until a record decrypts.
   [#616](https://github.com/haskell-tls/hs-tls/pull/616)
+* Answer a certificate that is not DER with bad_certificate instead of decode_error.
+  [#617](https://github.com/haskell-tls/hs-tls/pull/617)
 
 ## Version 2.4.12
 
