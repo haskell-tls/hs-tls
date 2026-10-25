@@ -468,8 +468,8 @@ recvData13 ctx = do
                     let reason = "HRR is not allowed for 0-RTT"
                     terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
             _ -> return ()
-        cont <- popAction ctx hb hbs
-        when cont $ loopHandshake13 hbs
+        popAction ctx hb hbs
+        loopHandshake13 hbs
 
 recvHS13 :: Context -> IO Bool -> IO ()
 recvHS13 ctx breakLoop = do
@@ -517,18 +517,22 @@ recvHS13 ctx breakLoop = do
             modifyTLS13State ctx $ \st -> st{tls13stRecvNST = True}
         loopHandshake13 hbs
     loopHandshake13 (hb : hbs) = do
-        cont <- popAction ctx hb hbs
-        when cont $ loopHandshake13 hbs
+        popAction ctx hb hbs
+        loopHandshake13 hbs
 
 terminate13
     :: Context -> TLSError -> AlertLevel -> AlertDescription -> String -> IO a
 terminate13 ctx = terminateWithWriteLock ctx (sendPacket13 ctx . Alert13)
 
-popAction :: Context -> Handshake13R -> [Handshake13R] -> IO Bool
+popAction :: Context -> Handshake13R -> [Handshake13R] -> IO ()
 popAction ctx hb@(h, _b) hbs = do
     mPendingRecvAction <- popPendingRecvAction ctx
     case mPendingRecvAction of
-        Nothing -> return False
+        -- RFC 9846 Section 6.2: a message no pending action expects is
+        -- unexpected_message, not dropped.
+        Nothing -> do
+            let reason = "unexpected handshake message " ++ show h
+            terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
         Just action -> do
             -- Pending actions are executed with read+write locks, just
             -- like regular handshake code.
@@ -552,7 +556,6 @@ popAction ctx hb@(h, _b) hbs = do
                     -- App key must be installed before receiving
                     -- the app data.
                     sendCFifNecessary ctx
-            return True
   where
     -- The write lock is held here, so 'handleException' sends the alert.
     checkAligned needAligned = when needAligned $ do
