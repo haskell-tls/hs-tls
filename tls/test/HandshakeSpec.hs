@@ -268,6 +268,8 @@ spec = do
             server_first_record_type_unexpected 24 0
         it "rejects application data inside a TLS 1.3 handshake message" $
             handshake13_interleaved_app_data
+        it "rejects a protected change_cipher_spec in the handshake" $
+            handshake13_protected_ccs
         it "rejects an empty handshake record before a ClientHello" $
             handshake_empty_handshake_record True
         it "rejects an empty handshake record inside a ClientHello" $
@@ -3171,6 +3173,61 @@ handshake13_interleaved_app_data = do
     unhex [] = B.empty
     unhex (a : b : rest) = B.cons (read ['0', 'x', a, b]) (unhex rest)
     unhex _ = error "unhex"
+
+-- RFC 9846 Section 5: a protected change_cipher_spec is unexpected_message,
+-- not dropped like one in clear.  The client puts one, under its handshake
+-- traffic secret, before its Finished, and never sends a CCS in clear.  The
+-- Finished then has the wrong sequence number: a server dropping the CCS
+-- would fail with bad_record_mac.
+handshake13_protected_ccs :: IO ()
+handshake13_protected_ccs = do
+    let cipher = cipher13_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS13], [TLS13])
+                ([cipher], [cipher])
+    secretRef <- newIORef Nothing
+    injected <- newIORef False
+    let logKey line = case words line of
+            ["CLIENT_HANDSHAKE_TRAFFIC_SECRET", _, h] -> writeIORef secretRef (Just h)
+            _ -> return ()
+        clientParam' =
+            clientParam
+                { clientDebug = (clientDebug clientParam){debugKeyLogger = logKey}
+                }
+        inject be =
+            be
+                { backendSend = \bs -> do
+                    done <- readIORef injected
+                    msecret <- readIORef secretRef
+                    -- the CCS in clear is never sent
+                    let rs = filter ((/= 20) . B.head) $ records bs
+                    case (done, msecret, break ((== 23) . B.head) rs) of
+                        (False, Just h, (clear, protected@(_ : _))) -> do
+                            writeIORef injected True
+                            let secret = BA.convert (unhex h) :: BA.ScrubbedBytes
+                                key = hkdfExpandLabel SHA256 secret "key" "" 16 :: B.ByteString
+                                iv = hkdfExpandLabel SHA256 secret "iv" "" 12 :: B.ByteString
+                                ccs = protect13 key iv 0 20 (B.singleton 1)
+                            backendSend be $ B.concat (clear ++ ccs : protected)
+                        _ -> backendSend be $ B.concat rs
+                }
+    withPairContextWith (inject, id) (clientParam', serverParam) $ \(cctx, sctx) ->
+        concurrently_
+            (handshake sctx `shouldThrow` refusedFor UnexpectedMessage "change_cipher_spec")
+            (void (E.try (handshake cctx >> recvData cctx) :: IO (Either TLSException B.ByteString)))
+    readIORef injected `shouldReturn` True
+  where
+    unhex [] = B.empty
+    unhex (a : b : rest) = B.cons (read ['0', 'x', a, b]) (unhex rest)
+    unhex _ = error "unhex"
+    records bs
+        | B.length bs < 5 = []
+        | otherwise =
+            let len = fromIntegral (B.index bs 3) * 256 + fromIntegral (B.index bs 4)
+                (r, rest) = B.splitAt (5 + len) bs
+             in r : records rest
 
 -- RFC 9846 Section 5.1: the messages before a key change must end their
 -- record.  The record holding the ClientHello (the client's first) gets a
