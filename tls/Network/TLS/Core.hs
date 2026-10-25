@@ -338,10 +338,12 @@ recvData13 ctx = do
   where
     clearPending = modifyTLS13State ctx $ \st -> st{tls13stPendingRecv = NoPendingRecv}
 
+    -- RFC 9846 Section 6: the level is ignored.  Alerts other than the
+    -- closure ones are error alerts, even at the warning level.
     -- UserCanceled MUST be followed by a CloseNotify.
-    process (Alert13 [(AlertLevel_Warning, UserCanceled)]) = return B.empty
-    process (Alert13 [(AlertLevel_Warning, CloseNotify)]) = tryBye ctx >> setEOF ctx >> return B.empty
-    process (Alert13 [(AlertLevel_Fatal, desc)]) = do
+    process (Alert13 [(_, UserCanceled)]) = return B.empty
+    process (Alert13 [(_, CloseNotify)]) = tryBye ctx >> setEOF ctx >> return B.empty
+    process (Alert13 [(_, desc)]) = do
         setEOF ctx
         E.throwIO
             ( Terminated
@@ -478,8 +480,9 @@ recvHS13 ctx breakLoop = do
     either (\_ -> return ()) process pkt
   where
     -- UserCanceled MUST be followed by a CloseNotify.
-    process (Alert13 [(AlertLevel_Warning, CloseNotify)]) = tryBye ctx >> setEOF ctx
-    process (Alert13 [(AlertLevel_Fatal, _desc)]) = setEOF ctx
+    process (Alert13 [(_, UserCanceled)]) = recvHS13 ctx breakLoop
+    process (Alert13 [(_, CloseNotify)]) = tryBye ctx >> setEOF ctx
+    process (Alert13 [(_, _desc)]) = setEOF ctx
     process (Handshake13 hs bs) = do
         loopHandshake13 $ zip hs bs
         stop <- breakLoop
