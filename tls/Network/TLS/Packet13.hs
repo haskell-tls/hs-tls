@@ -193,6 +193,8 @@ decodeCertificate13 = do
   where
     getCert = do
         l <- fromIntegral <$> getWord24
+        -- ASN.1Cert<1..2^24-1>: see decodeCertificate.
+        when (l == 0) $ fail "empty certificate"
         cert <- getBytes l
         len <- fromIntegral <$> getWord16
         exts <- getExtensions len

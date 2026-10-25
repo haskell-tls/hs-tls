@@ -143,7 +143,9 @@ spec = do
         it "rejects a TLS 1.2 server omitting Certificate" $
             handshake12_server_message_omitted 11
         it "answers a corrupt certificate with bad_certificate" $
-            handshake12_corrupt_certificate
+            handshake12_corrupt_certificate False
+        it "answers an empty certificate with decode_error" $
+            handshake12_corrupt_certificate True
         it "rejects a TLS 1.2 server omitting ServerKeyExchange for ECDHE" $
             handshake12_server_message_omitted 12
         it "requests only defined certificate types in TLS 1.2" $
@@ -1114,9 +1116,9 @@ mapHandshake12 f ccsSent be =
 
 -- A Certificate message whose lengths are right but whose certificate is
 -- not DER is answered with bad_certificate, not decode_error.  The server's
--- certificate is zeroed on the wire.
-handshake12_corrupt_certificate :: IO ()
-handshake12_corrupt_certificate = do
+-- certificate is zeroed on the wire, or replaced with an empty one.
+handshake12_corrupt_certificate :: Bool -> IO ()
+handshake12_corrupt_certificate empty = do
     let cipher = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
     (clientParam, serverParam) <-
         generate $
@@ -1131,7 +1133,11 @@ handshake12_corrupt_certificate = do
                             + fromIntegral (B.index m 8) * 256
                             + fromIntegral (B.index m 9)
                     (hdr, rest) = B.splitAt 10 m
-                 in hdr <> B.replicate certLen 0 <> B.drop certLen rest
+                    -- The ASN.1Cert vector has at least one byte.
+                    emptyCert = B.pack [11, 0, 0, 6, 0, 0, 3, 0, 0, 0]
+                 in if empty
+                        then emptyCert
+                        else hdr <> B.replicate certLen 0 <> B.drop certLen rest
             | otherwise = m
     withPairContextWith
         (id, mapHandshake12 corrupt ccsSent)
@@ -1139,10 +1145,11 @@ handshake12_corrupt_certificate = do
         \(cctx, sctx) ->
             concurrently_
                 (void (E.try (handshake sctx) :: IO (Either E.SomeException ())))
-                (handshake cctx `shouldThrow` badCertificate)
+                (handshake cctx `shouldThrow` alertOf expected)
   where
-    badCertificate (HandshakeFailed err) = errorToAlertDescription err == BadCertificate
-    badCertificate _ = False
+    expected = if empty then DecodeError else BadCertificate
+    alertOf ad (HandshakeFailed err) = errorToAlertDescription err == ad
+    alertOf _ _ = False
 
 -- In TLS 1.2 a client certificate with an Ed25519 or Ed448 key is asked
 -- for with ecdsa_sign (RFC 8422 Section 3.1).  The Ed25519 and Ed448
