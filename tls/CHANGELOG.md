@@ -74,6 +74,8 @@ value computed under the negotiated cipher's hash.
   [#621](https://github.com/haskell-tls/hs-tls/pull/621)
 * Answer a protected change_cipher_spec with unexpected_message.
   [#622](https://github.com/haskell-tls/hs-tls/pull/622)
+* Answer an unexpected post-handshake message with unexpected_message instead of dropping it.
+  [#623](https://github.com/haskell-tls/hs-tls/pull/623)
 
 ## Version 2.4.12
 
