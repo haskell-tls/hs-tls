@@ -50,6 +50,10 @@ spec = do
             gotThisMuch (B.length body) (decodeHandshakeRecord record) `shouldBe` True
             gotThisMuch (B.length body) (decodeHandshakeRecord13 record) `shouldBe` True
 
+    describe "extension trailing data" $ do
+        it "refuses data after the content of an extension" $
+            filter (not . snd) trailingCases `shouldBe` []
+
     describe "ClientHello decoding" $ do
         it "refuses empty cipher_suites" $
             clientHelloAlert [] [0] `shouldBe` Just DecodeError
@@ -209,6 +213,34 @@ compressedCertificateAlert algo len compressed =
                 putWord16 algo
                 putWord24 len
                 putOpaque24 compressed
+
+-- | Each extension decodes as encoded, and not with a byte appended.
+trailingCases :: [(String, Bool)]
+trailingCases =
+    [ ch "supported_groups" $ SupportedGroups [X25519]
+    , ch "signature_algorithms" $ SignatureAlgorithms [RSA_PSS_RSAE_SHA256]
+    , ch "application_layer_protocol_negotiation" $
+        ApplicationLayerProtocolNegotiation [B.pack [0x68, 0x32]]
+    , ch "record_size_limit" $ RecordSizeLimit 16385
+    , ch "supported_versions" $ SupportedVersionsClientHello [TLS13]
+    , ch "psk_key_exchange_modes" $ PskKeyExchangeModes [PSK_DHE_KE]
+    , ch "key_share" $ KeyShareClientHello [KeyShareEntry X25519 (B.replicate 32 1)]
+    , ch "early_data" $ EarlyDataIndication Nothing
+    , ch "post_handshake_auth" PostHandshakeAuth
+    , ch "renegotiation_info" $ SecureRenegotiation B.empty B.empty
+    ,
+        ( "early_data in NewSessionTicket"
+        , refused MsgTNewSessionTicket $ EarlyDataIndication (Just 1)
+        )
+    , ("cookie in ServerHello", refused MsgTServerHello $ Cookie (B.pack [1, 2, 3]))
+    ]
+  where
+    ch name e = (name, refused MsgTClientHello e)
+    refused :: (Extension e, Eq e) => MessageType -> e -> Bool
+    refused mt e = decode bs == Just e && decode (B.snoc bs 0) == Nothing
+      where
+        bs = extensionEncode e
+        decode b = extensionDecode mt b `asTypeOf` Just e
 
 -- | Decodes a ClientHello without extensions and returns its alert, if any.
 clientHelloAlert :: [Word16] -> [Word8] -> Maybe AlertDescription
