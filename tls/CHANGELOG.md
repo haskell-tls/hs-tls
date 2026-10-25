@@ -66,6 +66,8 @@ value computed under the negotiated cipher's hash.
   [#617](https://github.com/haskell-tls/hs-tls/pull/617)
 * Answer an empty certificate with decode_error.
   [#618](https://github.com/haskell-tls/hs-tls/pull/618)
+* Check the second ClientHello after HelloRetryRequest.
+  [#619](https://github.com/haskell-tls/hs-tls/pull/619)
 
 ## Version 2.4.12
 
