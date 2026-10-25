@@ -213,6 +213,10 @@ decodeClientHello inner = do
     session <- getSession
     ciphers <- map CipherId <$> getWords16
     compressions <- getWords8
+    -- cipher_suites<2..2^16-2> and compression_methods<1..2^8-1>: an empty
+    -- one is decode_error, not handshake_failure or illegal_parameter.
+    when (null ciphers) $ fail "no cipher suites"
+    when (null compressions) $ fail "no compression methods"
     r <- remaining
     exts <-
         if r > 0

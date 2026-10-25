@@ -139,10 +139,12 @@ instance Arbitrary Handshake13 where
 ----------------------------------------------------------------
 
 arbitraryCiphersIds :: Gen [CipherId]
-arbitraryCiphersIds = map CipherId <$> (choose (0, 200) >>= vector)
+-- A ClientHello has at least one of each (cipher_suites<2..2^16-2>,
+-- compression_methods<1..2^8-1>).
+arbitraryCiphersIds = map CipherId <$> (choose (1, 200) >>= vector)
 
 arbitraryCompressionIDs :: Gen [Word8]
-arbitraryCompressionIDs = choose (0, 200) >>= vector
+arbitraryCompressionIDs = choose (1, 200) >>= vector
 
 someWords8 :: Int -> Gen [Word8]
 someWords8 = vector
