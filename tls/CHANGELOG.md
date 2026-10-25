@@ -72,6 +72,8 @@ value computed under the negotiated cipher's hash.
   [#620](https://github.com/haskell-tls/hs-tls/pull/620)
 * Refuse data after the content of an extension.
   [#621](https://github.com/haskell-tls/hs-tls/pull/621)
+* Answer a protected change_cipher_spec with unexpected_message.
+  [#622](https://github.com/haskell-tls/hs-tls/pull/622)
 
 ## Version 2.4.12
 
