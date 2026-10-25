@@ -1,5 +1,10 @@
 # ChangeLog for tls-session-manager
 
+## 0.1.2
+
+* Require tls >= 2.4.13 and build the tests with `defaultSessionData`.
+  [#607](https://github.com/haskell-tls/hs-tls/pull/607)
+
 ## 0.1.1
 
 * Keep a TLS 1.3 session no longer than the lifetime of its ticket.
