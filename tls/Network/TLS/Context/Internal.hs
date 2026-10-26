@@ -66,6 +66,7 @@ module Network.TLS.Context.Internal (
 
     -- * Misc
     HandshakeSync (..),
+    PHAResult (..),
     TLS13State (..),
     defaultTLS13State,
     getTLS13State,
@@ -118,6 +119,7 @@ import Network.TLS.Struct
 import Network.TLS.Struct13
 import Network.TLS.Types
 import Network.TLS.Util
+import Network.TLS.X509 (CertificateChain)
 
 -- | A TLS Context keep tls specific state, parameters and backend information.
 data Context
@@ -181,6 +183,7 @@ data RoleParams = RoleParams
     { doHandshake_ :: Context -> IO ()
     , doHandshakeWith_ :: Context -> HandshakeR -> IO ()
     , doRequestCertificate_ :: Context -> IO Bool
+    , doRequestCertificateAsync_ :: Context -> IO (Bool -> IO PHAResult)
     , doPostHandshakeAuthWith_ :: Context -> Handshake13R -> IO ()
     }
 
@@ -228,7 +231,26 @@ data TLS13State = TLS13State
     -- Actual session id for TLS 1.2, random value for TLS 1.3
     , tls13stSession :: Session
     , tls13stSentExtensions :: [ExtensionID]
+    , tls13stPHA :: Maybe (MVar PHAResult, TLSError)
+    -- ^ server: the result of the pending post-handshake authentication,
+    -- and the error given to the waiters when the connection is closed
     }
+
+-- | The result of 'Network.TLS.requestCertificateAsync'.
+data PHAResult
+    = -- | The request could not be sent: TLS 1.2, no post_handshake_auth
+      -- from the client, or another request pending.
+      PHAUnavailable
+    | -- | No response yet.  Only when not waiting.
+      PHAPending
+    | -- | The client was authenticated with this chain.
+      PHAAccepted CertificateChain
+    | -- | The client sent an empty certificate, accepted by
+      -- @onClientCertificate@.
+      PHADeclined
+    | -- | The verification failed or the connection was closed.
+      PHAFailed TLSError
+    deriving (Eq, Show)
 
 defaultTLS13State :: TLS13State
 defaultTLS13State =
@@ -251,6 +273,7 @@ defaultTLS13State =
         , tls13stHsKey = Nothing
         , tls13stSession = Session Nothing
         , tls13stSentExtensions = []
+        , tls13stPHA = Nothing
         }
 
 getTLS13State :: Context -> IO TLS13State
@@ -390,7 +413,11 @@ ctxEOF :: Context -> IO Bool
 ctxEOF ctx = readIORef $ ctxEOF_ ctx
 
 setEOF :: Context -> IO ()
-setEOF ctx = writeIORef (ctxEOF_ ctx) True
+setEOF ctx = do
+    writeIORef (ctxEOF_ ctx) True
+    -- Wake up those waiting for a pending post-handshake authentication.
+    mpha <- tls13stPHA <$> readIORef (ctxTLS13State ctx)
+    forM_ mpha $ \(mv, err) -> void $ tryPutMVar mv $ PHAFailed err
 
 ctxCloseNotify :: Context -> IO Bool
 ctxCloseNotify ctx = readIORef $ ctxCloseNotify_ ctx

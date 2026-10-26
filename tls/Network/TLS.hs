@@ -264,6 +264,8 @@ module Network.TLS (
     updateKey,
     KeyUpdateRequest (..),
     requestCertificate,
+    requestCertificateAsync,
+    PHAResult (..),
     getTLSUnique,
     getTLSExporter,
     getTLSServerEndPoint,

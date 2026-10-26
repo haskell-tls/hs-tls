@@ -26,6 +26,8 @@ module Network.TLS.Core (
     updateKey,
     KeyUpdateRequest (..),
     requestCertificate,
+    requestCertificateAsync,
+    PHAResult (..),
 ) where
 
 import Control.Concurrent (forkIO)
@@ -40,6 +42,7 @@ import System.Timeout
 
 import Network.TLS.Context
 import Network.TLS.Context.Internal (
+    PHAResult (..),
     incrementTLS13KeyUpdateCount,
     resetTLS13KeyUpdateCount,
  )
@@ -540,27 +543,29 @@ popAction ctx hb@(h, _b) hbs = do
             terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
         Just action -> do
             -- Pending actions are executed with read+write locks, just
-            -- like regular handshake code.
-            withWriteLock ctx $
-                handleException ctx $ do
-                    case action of
-                        PendingRecvAction needAligned pa -> do
-                            checkAligned needAligned
-                            updateTranscriptHash13 ctx hb
-                            pa h
-                        PendingRecvActionSelfUpdate needAligned pa -> do
-                            checkAligned needAligned
-                            pa hb
-                        PendingRecvActionHash needAligned pa -> do
-                            checkAligned needAligned
-                            d <- transcriptHash ctx "Pending action"
-                            updateTranscriptHash13 ctx hb
-                            pa d h
-                    -- Client: after receiving SH, app data is coming.
-                    -- this loop tries to receive it.
-                    -- App key must be installed before receiving
-                    -- the app data.
-                    sendCFifNecessary ctx
+            -- like regular handshake code.  A failure has sent an alert,
+            -- so the connection is closed.
+            (`E.onException` setEOF ctx) $
+                withWriteLock ctx $
+                    handleException ctx $ do
+                        case action of
+                            PendingRecvAction needAligned pa -> do
+                                checkAligned needAligned
+                                updateTranscriptHash13 ctx hb
+                                pa h
+                            PendingRecvActionSelfUpdate needAligned pa -> do
+                                checkAligned needAligned
+                                pa hb
+                            PendingRecvActionHash needAligned pa -> do
+                                checkAligned needAligned
+                                d <- transcriptHash ctx "Pending action"
+                                updateTranscriptHash13 ctx hb
+                                pa d h
+                        -- Client: after receiving SH, app data is coming.
+                        -- this loop tries to receive it.
+                        -- App key must be installed before receiving
+                        -- the app data.
+                        sendCFifNecessary ctx
   where
     -- The write lock is held here, so 'handleException' sends the alert.
     checkAligned needAligned = when needAligned $ do
