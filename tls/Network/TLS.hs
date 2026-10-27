@@ -26,6 +26,7 @@ module Network.TLS (
     handshake,
     sendData,
     recvData,
+    closeNotifyReceived,
     bye,
 
     -- * Exceptions
