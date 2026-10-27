@@ -597,7 +597,7 @@ terminateWithWriteLock ctx send err level desc reason = withWriteLock ctx $ do
 -- empty result and this is 'False', the transport was closed without
 -- close_notify, so the data received may be truncated.
 --
--- @since 2.5.0
+-- @since 2.4.14
 closeNotifyReceived :: MonadIO m => Context -> m Bool
 closeNotifyReceived = liftIO . ctxCloseNotify
 
