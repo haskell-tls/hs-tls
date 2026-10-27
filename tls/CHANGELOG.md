@@ -1,5 +1,42 @@
 # Change log for "tls"
 
+## Version 2.4.14
+
+* Require hpke 0.4.
+* Bind the PSK to the transcript after HelloRetryRequest.
+  This breaks a PSK after HRR with hs-tls 2.4.13 or earlier.
+  [#597](https://github.com/haskell-tls/hs-tls/pull/597)
+* Let application data and HelloRequest come during a TLS 1.2 handshake.
+  [#601](https://github.com/haskell-tls/hs-tls/pull/601)
+* Tell why a certificate is rejected, and give the chain to `debugError` in PEM.
+  [#606](https://github.com/haskell-tls/hs-tls/pull/606)
+* Give each PSK identity its own binder, and accept HelloRetryRequest with only a cookie.
+  [#612](https://github.com/haskell-tls/hs-tls/pull/612)
+* Check the versions and extensions of the hello messages as RFC 9846 does.
+  [#614](https://github.com/haskell-tls/hs-tls/pull/614)
+* Answer a certificate that is not DER with bad_certificate instead of decode_error.
+  [#617](https://github.com/haskell-tls/hs-tls/pull/617)
+* Answer an empty certificate with decode_error.
+  [#618](https://github.com/haskell-tls/hs-tls/pull/618)
+* Check the second ClientHello after HelloRetryRequest.
+  [#619](https://github.com/haskell-tls/hs-tls/pull/619)
+* Answer an empty cipher_suites or compression_methods with decode_error.
+  [#620](https://github.com/haskell-tls/hs-tls/pull/620)
+* Refuse data after the content of an extension.
+  [#621](https://github.com/haskell-tls/hs-tls/pull/621)
+* Answer a protected change_cipher_spec with unexpected_message.
+  [#622](https://github.com/haskell-tls/hs-tls/pull/622)
+* Answer an unexpected post-handshake message with unexpected_message instead of dropping it.
+  [#623](https://github.com/haskell-tls/hs-tls/pull/623)
+* Ignore the alert level in TLS 1.3: a warning-level error alert is an error, and a fatal-level close_notify is a closure.
+  [#624](https://github.com/haskell-tls/hs-tls/pull/624)
+* Answer several KeyUpdates with update_requested with a single KeyUpdate.
+  [#631](https://github.com/haskell-tls/hs-tls/pull/631)
+* Add `closeNotifyReceived` to tell close_notify from an EOF without it.
+  [#635](https://github.com/haskell-tls/hs-tls/pull/635)
+* Resume a session only with its SNI on the client.
+  [#636](https://github.com/haskell-tls/hs-tls/pull/636)
+
 ## Version 2.4.13
 
 * Keep the CBC MAC check from timing the padding (Lucky Thirteen).
