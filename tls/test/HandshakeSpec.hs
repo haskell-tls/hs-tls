@@ -321,7 +321,6 @@ spec = do
             serverRefusesHello (cli', srv') id (refusedWith ProtocolVersion)
         it "rejects a ServerHello legacy_version other than TLS 1.2" $ do
             params <- fixGroupsX25519 <$> generate arbitraryPairParams13
-            clientRefusesHello params (\sh -> sh{shVersion = TLS13}) ProtocolVersion
             clientRefusesHello
                 params
                 (\sh -> sh{shVersion = TLS13})
@@ -3768,12 +3767,6 @@ malformed_ccs_unexpected version cipher cgroups sgroups = do
                 )
     r `shouldSatisfy` isJust
     readIORef seen `shouldReturn` True
-
--- Refused with the alert, for a reason containing the string.
-refusedFor :: AlertDescription -> String -> TLSException -> Bool
-refusedFor ad needle (HandshakeFailed (Error_Protocol reason ad')) =
-    ad == ad' && needle `isInfixOf` reason
-refusedFor _ _ _ = False
 
 rejectedAsUnexpected :: TLSException -> Bool
 rejectedAsUnexpected (HandshakeFailed (Error_Packet_unexpected _ _)) = True

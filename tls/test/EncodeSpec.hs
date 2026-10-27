@@ -218,7 +218,7 @@ compressedCertificateAlert algo len compressed =
 trailingCases :: [(String, Bool)]
 trailingCases =
     [ ch "supported_groups" $ SupportedGroups [X25519]
-    , ch "signature_algorithms" $ SignatureAlgorithms [RSA_PSS_RSAE_SHA256]
+    , ch "signature_algorithms" $ SignatureAlgorithms [(HashIntrinsic, SignatureRSApssRSAeSHA256)]
     , ch "application_layer_protocol_negotiation" $
         ApplicationLayerProtocolNegotiation [B.pack [0x68, 0x32]]
     , ch "record_size_limit" $ RecordSizeLimit 16385
