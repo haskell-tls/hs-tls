@@ -22,6 +22,7 @@ module Network.TLS.Core (
     sendData,
     recvData,
     recvData',
+    closeNotifyReceived,
     updateKey,
     KeyUpdateRequest (..),
     requestCertificate,
@@ -229,6 +230,8 @@ sendData ctx dataToSend = liftIO $ do
     let sendP bs
             | tls13 = do
                 sendPacket13 ctx $ AppData13 bs
+                -- a KeyUpdate requested from now on is answered again
+                modifyTLS13State ctx $ \st -> st{tls13stKeyUpdateResponded = False}
                 role <- usingState_ ctx getRole
                 sentCF <- tls13stSentCF <$> getTLS13State ctx
                 rtt0 <- tls13st0RTT <$> getTLS13State ctx
@@ -246,7 +249,8 @@ sendData ctx dataToSend = liftIO $ do
         mapM_ (mapChunks_ mlen sendP) (L.toChunks dataToSend)
 
 -- | Get data out of Data packet, and automatically renegotiate if a Handshake
--- ClientHello is received.  An empty result means EOF.
+-- ClientHello is received.  An empty result means EOF.  Use
+-- 'closeNotifyReceived' to tell an orderly closure from a truncation.
 recvData :: MonadIO m => Context -> m ByteString
 recvData ctx = liftIO $ do
     tls13 <- tls13orLater ctx
@@ -263,8 +267,10 @@ recvData ctx = liftIO $ do
 
 recvData12 :: Context -> IO ByteString
 recvData12 ctx = do
-    pkt <- recvPacket12 ctx
-    either (onError terminate12) process pkt
+    pending <- atomicModifyIORef' (ctxPendingAppData ctx) $ \xs -> ([], reverse xs)
+    if null pending
+        then recvPacket12 ctx >>= either (onError terminate12) process
+        else return $ B.concat pending
   where
     process (Handshake [ch@ClientHello{}] [b]) =
         handshakeWith ctx (ch, b) >> recvData12 ctx
@@ -273,7 +279,7 @@ recvData12 ctx = do
     -- UserCanceled should be followed by a close_notify.
     -- fixme: is it safe to call recvData12?
     process (Alert [(AlertLevel_Warning, UserCanceled)]) = return B.empty
-    process (Alert [(AlertLevel_Warning, CloseNotify)]) = tryBye ctx >> setEOF ctx >> return B.empty
+    process (Alert [(AlertLevel_Warning, CloseNotify)]) = setCloseNotify ctx >> tryBye ctx >> setEOF ctx >> return B.empty
     process (Alert [(AlertLevel_Fatal, desc)]) = do
         setEOF ctx
         E.throwIO
@@ -308,10 +314,12 @@ recvData13 ctx = do
   where
     clearPending = modifyTLS13State ctx $ \st -> st{tls13stPendingRecv = NoPendingRecv}
 
+    -- RFC 9846 Section 6: the level is ignored.  Alerts other than the
+    -- closure ones are error alerts, even at the warning level.
     -- UserCanceled MUST be followed by a CloseNotify.
-    process (Alert13 [(AlertLevel_Warning, UserCanceled)]) = return B.empty
-    process (Alert13 [(AlertLevel_Warning, CloseNotify)]) = tryBye ctx >> setEOF ctx >> return B.empty
-    process (Alert13 [(AlertLevel_Fatal, desc)]) = do
+    process (Alert13 [(_, UserCanceled)]) = return B.empty
+    process (Alert13 [(_, CloseNotify)]) = setCloseNotify ctx >> tryBye ctx >> setEOF ctx >> return B.empty
+    process (Alert13 [(_, desc)]) = do
         setEOF ctx
         E.throwIO
             ( Terminated
@@ -411,9 +419,9 @@ recvData13 ctx = do
                 -- Write lock wraps both actions because we don't want another
                 -- packet to be sent by another thread before the Tx state is
                 -- updated.
-                when (mode == UpdateRequested) $ withWriteLock ctx $ do
-                    sendPacket13 ctx $ Handshake13 [KeyUpdate13 UpdateNotRequested] []
-                    keyUpdate ctx getTxRecordState setTxRecordState
+                when (mode == UpdateRequested) $
+                    withWriteLock ctx $
+                        respondToKeyUpdate ctx
                 loopHandshake13 hbs
             else do
                 let reason = "received key update before established"
@@ -436,8 +444,8 @@ recvData13 ctx = do
                     let reason = "HRR is not allowed for 0-RTT"
                     terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
             _ -> return ()
-        cont <- popAction ctx hb hbs
-        when cont $ loopHandshake13 hbs
+        popAction ctx hb hbs
+        loopHandshake13 hbs
 
 recvHS13 :: Context -> IO Bool -> IO ()
 recvHS13 ctx breakLoop = do
@@ -446,8 +454,9 @@ recvHS13 ctx breakLoop = do
     either (\_ -> return ()) process pkt
   where
     -- UserCanceled MUST be followed by a CloseNotify.
-    process (Alert13 [(AlertLevel_Warning, CloseNotify)]) = tryBye ctx >> setEOF ctx
-    process (Alert13 [(AlertLevel_Fatal, _desc)]) = setEOF ctx
+    process (Alert13 [(_, UserCanceled)]) = recvHS13 ctx breakLoop
+    process (Alert13 [(_, CloseNotify)]) = setCloseNotify ctx >> tryBye ctx >> setEOF ctx
+    process (Alert13 [(_, _desc)]) = setEOF ctx
     process (Handshake13 hs bs) = do
         loopHandshake13 $ zip hs bs
         stop <- breakLoop
@@ -485,18 +494,22 @@ recvHS13 ctx breakLoop = do
             modifyTLS13State ctx $ \st -> st{tls13stRecvNST = True}
         loopHandshake13 hbs
     loopHandshake13 (hb : hbs) = do
-        cont <- popAction ctx hb hbs
-        when cont $ loopHandshake13 hbs
+        popAction ctx hb hbs
+        loopHandshake13 hbs
 
 terminate13
     :: Context -> TLSError -> AlertLevel -> AlertDescription -> String -> IO a
 terminate13 ctx = terminateWithWriteLock ctx (sendPacket13 ctx . Alert13)
 
-popAction :: Context -> Handshake13R -> [Handshake13R] -> IO Bool
+popAction :: Context -> Handshake13R -> [Handshake13R] -> IO ()
 popAction ctx hb@(h, _b) hbs = do
     mPendingRecvAction <- popPendingRecvAction ctx
     case mPendingRecvAction of
-        Nothing -> return False
+        -- RFC 9846 Section 6.2: a message no pending action expects is
+        -- unexpected_message, not dropped.
+        Nothing -> do
+            let reason = "unexpected handshake message " ++ show h
+            terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
         Just action -> do
             -- Pending actions are executed with read+write locks, just
             -- like regular handshake code.
@@ -520,7 +533,6 @@ popAction ctx hb@(h, _b) hbs = do
                     -- App key must be installed before receiving
                     -- the app data.
                     sendCFifNecessary ctx
-            return True
   where
     -- The write lock is held here, so 'handleException' sends the alert.
     checkAligned needAligned = when needAligned $ do
@@ -580,6 +592,14 @@ terminateWithWriteLock ctx send err level desc reason = withWriteLock ctx $ do
     setEOF ctx
     debugError (ctxDebug ctx) reason
     E.throwIO (Terminated False reason err)
+
+-- | Whether the peer has sent close_notify.  If 'recvData' returns an
+-- empty result and this is 'False', the transport was closed without
+-- close_notify, so the data received may be truncated.
+--
+-- @since 2.4.14
+closeNotifyReceived :: MonadIO m => Context -> m Bool
+closeNotifyReceived = liftIO . ctxCloseNotify
 
 {-# DEPRECATED recvData' "use recvData that returns strict bytestring" #-}
 

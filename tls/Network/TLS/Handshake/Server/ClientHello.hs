@@ -57,10 +57,9 @@ processClientHello sparams ctx ch@CH{..} b = do
         (throwCore $ Error_HandshakePolicy "server: handshake denied")
     updateMeasure ctx incrementNbHandshakes
 
-    -- A legacy_version below TLS 1.2 is refused.  One above it is not: a
-    -- server negotiates the highest version it supports (RFC 5246 Appendix
-    -- E.1), and with supported_versions present does not use legacy_version
-    -- at all (RFC 8446 Section 4.2.1).  Both are decided below.
+    -- A legacy_version below TLS 1.2 is refused.  One above it is refused
+    -- only with supported_versions (RFC 9846 Section 4.1.2); without it, a
+    -- server negotiates TLS 1.2 (Section 4.3.1 and RFC 5246 Appendix E.1).
     when (chVersion < TLS12) $
         throwCore $
             Error_Protocol (show chVersion ++ " is not supported") ProtocolVersion
@@ -85,10 +84,17 @@ processClientHello sparams ctx ch@CH{..} b = do
             | renegotiation = filter (< TLS13) (supportedVersions $ ctxSupported ctx)
             | otherwise = supportedVersions $ ctxSupported ctx
         mVersion = debugVersionForced $ serverDebug sparams
+    when (clientVersions /= [] && chVersion /= TLS12) $
+        throwCore $
+            Error_Protocol
+                ("legacy_version " ++ show chVersion ++ " with supported_versions")
+                ProtocolVersion
     chosenVersion <- case mVersion of
         Just cver -> return cver
         Nothing ->
-            if (TLS13 `elem` serverVersions) && clientVersions /= []
+            -- With supported_versions, only it is used, whether or not the
+            -- server supports TLS 1.3 (RFC 9846 Section 4.3.1).
+            if clientVersions /= []
                 then case findHighestVersionFrom13 clientVersions serverVersions of
                     Nothing ->
                         throwCore $
@@ -151,7 +157,9 @@ processClientHello sparams ctx ch@CH{..} b = do
 setupI :: Context -> ClientHello -> [ByteString] -> IO ()
 setupI ctx chI@CH{..} b = do
     hrr <- usingState_ ctx getTLS13HRR
-    unless hrr $ startHandshake ctx TLS13 chRandom
+    if hrr
+        then checkSecondClientHello ctx chI
+        else startHandshake ctx TLS13 chRandom
     usingHState ctx $ setClientHello chI b
     let serverName = getServerName chExtensions
     maybe (return ()) (usingState_ ctx . setClientSNI) serverName
@@ -159,10 +167,36 @@ setupI ctx chI@CH{..} b = do
 setupO :: Context -> ClientHello -> [ByteString] -> IO ()
 setupO ctx ch@CH{..} b = do
     hrr <- usingState_ ctx getTLS13HRR
-    unless hrr $ startHandshake ctx chVersion chRandom
+    if hrr
+        then checkSecondClientHello ctx ch
+        else startHandshake ctx chVersion chRandom
     usingHState ctx $ setClientHello ch b
     let serverName = getServerName chExtensions
     maybe (return ()) (usingState_ ctx . setClientSNI) serverName
+
+-- RFC 9846 Section 4.1.2: the ClientHello after HelloRetryRequest is the
+-- same except for these extensions.  Their order is not compared.
+checkSecondClientHello :: Context -> ClientHello -> IO ()
+checkSecondClientHello ctx ch2 = do
+    mch1 <- usingHState ctx getClientHello
+    case mch1 of
+        Just (ch1, _)
+            | strip ch1 /= strip ch2 ->
+                throwCore $
+                    Error_Protocol "second client hello is changed" IllegalParameter
+        _ -> return ()
+  where
+    strip ch = ch{chExtensions = sortOn eid $ filter keep $ chExtensions ch}
+    eid (ExtensionRaw i _) = fromExtensionID i
+    keep (ExtensionRaw i _) = i `notElem` mutable
+    mutable =
+        [ EID_KeyShare
+        , EID_EarlyData
+        , EID_Cookie
+        , EID_PreSharedKey
+        , EID_Padding
+        , EID_EncryptedClientHello
+        ]
 
 -- SNI (Server Name Indication)
 getServerName :: [ExtensionRaw] -> Maybe HostName
@@ -306,8 +340,9 @@ getHPKE ServerParams{..} ctx ECHClientHelloOuter{..} = do
                     let info = "tls ech\x00" <> encodedConfig
                         (kdfid, aeadid) = echCipherSuite
                     ctxR <- setupBaseR kemid kdfid aeadid skR Nothing echEnc info
-                    let nenc = nEnc kemid
-                        func = open ctxR
+                    -- unreachable: setupBaseR has refused an unknown KEM
+                    nenc <- maybe (E.throwIO $ Unsupported "KEM") return $ nEnc kemid
+                    let func = open ctxR
                     setTLS13HPKE ctx func nenc
                     return $ Just (func, nenc)
                 _ -> return Nothing

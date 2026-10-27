@@ -68,8 +68,8 @@ module Network.TLS.Handshake.State (
     getTLS13HandshakeMode,
     setTLS13RTT0Status,
     getTLS13RTT0Status,
-    setTLS13EarlySecret,
-    getTLS13EarlySecret,
+    setTLS13EarlySecrets,
+    getTLS13EarlySecrets,
     setTLS13ResumptionSecret,
     getTLS13ResumptionSecret,
     setTLS13CertComp,
@@ -148,13 +148,16 @@ data HandshakeState = HandshakeState
     , hstClientCertChain :: Maybe CertificateChain
     , hstPendingTxState :: Maybe RecordState
     , hstPendingRxState :: Maybe RecordState
+    , hstRxSwitched :: Bool
+    -- ^ Set when the peer's ChangeCipherSpec switched the Rx state
     , hstPendingCipher :: Maybe Cipher
     , hstPendingCompression :: Compression
     , hstExtendedMainSecret :: Bool
     , hstSupportedGroup :: Maybe Group
     , hstTLS13HandshakeMode :: HandshakeMode13
     , hstTLS13RTT0Status :: RTT0Status
-    , hstTLS13EarlySecret :: Maybe (BaseSecret EarlySecret) -- xxx
+    , hstTLS13EarlySecrets :: [BaseSecret EarlySecret]
+    -- ^ Client: one for each PSK offered
     , hstTLS13ResumptionSecret :: Maybe (BaseSecret ResumptionSecret)
     , hstTLS13CertComp :: Bool
     , hstCCS13Sent :: Bool
@@ -248,13 +251,14 @@ newEmptyHandshake ver crand =
         , hstClientCertChain = Nothing
         , hstPendingTxState = Nothing
         , hstPendingRxState = Nothing
+        , hstRxSwitched = False
         , hstPendingCipher = Nothing
         , hstPendingCompression = nullCompression
         , hstExtendedMainSecret = False
         , hstSupportedGroup = Nothing
         , hstTLS13HandshakeMode = FullHandshake
         , hstTLS13RTT0Status = RTT0None
-        , hstTLS13EarlySecret = Nothing
+        , hstTLS13EarlySecrets = []
         , hstTLS13ResumptionSecret = Nothing
         , hstTLS13CertComp = False
         , hstCCS13Sent = False
@@ -352,11 +356,11 @@ setTLS13RTT0Status s = modify' (\hst -> hst{hstTLS13RTT0Status = s})
 getTLS13RTT0Status :: HandshakeM RTT0Status
 getTLS13RTT0Status = gets hstTLS13RTT0Status
 
-setTLS13EarlySecret :: BaseSecret EarlySecret -> HandshakeM ()
-setTLS13EarlySecret secret = modify' (\hst -> hst{hstTLS13EarlySecret = Just secret})
+setTLS13EarlySecrets :: [BaseSecret EarlySecret] -> HandshakeM ()
+setTLS13EarlySecrets secrets = modify' (\hst -> hst{hstTLS13EarlySecrets = secrets})
 
-getTLS13EarlySecret :: HandshakeM (Maybe (BaseSecret EarlySecret))
-getTLS13EarlySecret = gets hstTLS13EarlySecret
+getTLS13EarlySecrets :: HandshakeM [BaseSecret EarlySecret]
+getTLS13EarlySecrets = gets hstTLS13EarlySecrets
 
 setTLS13ResumptionSecret :: BaseSecret ResumptionSecret -> HandshakeM ()
 setTLS13ResumptionSecret secret = modify' (\hst -> hst{hstTLS13ResumptionSecret = Just secret})

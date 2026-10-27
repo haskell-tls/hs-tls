@@ -8,7 +8,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Data.Either (isLeft)
 import Data.Int (Int64)
-import Data.Word (Word16)
+import Data.Word (Word16, Word8)
 import GHC.Conc (disableAllocationLimit, enableAllocationLimit, setAllocationCounter)
 import Network.TLS
 import Network.TLS.Internal
@@ -49,6 +49,18 @@ spec = do
                 record = handshakeHeader (B.length body) `B.append` body
             gotThisMuch (B.length body) (decodeHandshakeRecord record) `shouldBe` True
             gotThisMuch (B.length body) (decodeHandshakeRecord13 record) `shouldBe` True
+
+    describe "extension trailing data" $ do
+        it "refuses data after the content of an extension" $
+            filter (not . snd) trailingCases `shouldBe` []
+
+    describe "ClientHello decoding" $ do
+        it "refuses empty cipher_suites" $
+            clientHelloAlert [] [0] `shouldBe` Just DecodeError
+        it "refuses empty compression_methods" $
+            clientHelloAlert [0x1301] [] `shouldBe` Just DecodeError
+        it "decodes one of each" $
+            clientHelloAlert [0x1301] [0] `shouldBe` Nothing
 
     describe "encoder/decoder" $ do
         prop "can encode/decode Header" $ \x -> do
@@ -201,6 +213,50 @@ compressedCertificateAlert algo len compressed =
                 putWord16 algo
                 putWord24 len
                 putOpaque24 compressed
+
+-- | Each extension decodes as encoded, and not with a byte appended.
+trailingCases :: [(String, Bool)]
+trailingCases =
+    [ ch "supported_groups" $ SupportedGroups [X25519]
+    , ch "signature_algorithms" $ SignatureAlgorithms [(HashIntrinsic, SignatureRSApssRSAeSHA256)]
+    , ch "application_layer_protocol_negotiation" $
+        ApplicationLayerProtocolNegotiation [B.pack [0x68, 0x32]]
+    , ch "record_size_limit" $ RecordSizeLimit 16385
+    , ch "supported_versions" $ SupportedVersionsClientHello [TLS13]
+    , ch "psk_key_exchange_modes" $ PskKeyExchangeModes [PSK_DHE_KE]
+    , ch "key_share" $ KeyShareClientHello [KeyShareEntry X25519 (B.replicate 32 1)]
+    , ch "early_data" $ EarlyDataIndication Nothing
+    , ch "post_handshake_auth" PostHandshakeAuth
+    , ch "renegotiation_info" $ SecureRenegotiation B.empty B.empty
+    ,
+        ( "early_data in NewSessionTicket"
+        , refused MsgTNewSessionTicket $ EarlyDataIndication (Just 1)
+        )
+    , ("cookie in ServerHello", refused MsgTServerHello $ Cookie (B.pack [1, 2, 3]))
+    ]
+  where
+    ch name e = (name, refused MsgTClientHello e)
+    refused :: (Extension e, Eq e) => MessageType -> e -> Bool
+    refused mt e = decode bs == Just e && decode (B.snoc bs 0) == Nothing
+      where
+        bs = extensionEncode e
+        decode b = extensionDecode mt b `asTypeOf` Just e
+
+-- | Decodes a ClientHello without extensions and returns its alert, if any.
+clientHelloAlert :: [Word16] -> [Word8] -> Maybe AlertDescription
+clientHelloAlert ciphers comps =
+    either (Just . errorToAlertDescription) (const Nothing) $
+        decodeHandshake cp HandshakeType_ClientHello $
+            runPut $ do
+                putWord16 0x0303
+                putBytes $ B.replicate 32 0
+                putWord8 0
+                putWord16 $ fromIntegral $ 2 * length ciphers
+                mapM_ putWord16 ciphers
+                putWord8 $ fromIntegral $ length comps
+                mapM_ putWord8 comps
+  where
+    cp = CurrentParams{cParamsVersion = TLS12, cParamsKeyXchgType = Nothing}
 
 decodeHs :: ByteString -> Either TLSError Handshake
 decodeHs b = verifyResult (decodeHandshake cp) $ decodeHandshakeRecord b

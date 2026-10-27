@@ -33,10 +33,12 @@ module Network.TLS.ECH.Config (
 ) where
 
 import qualified Control.Exception as E
+import Control.Monad (unless, when)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Char8 as C8
 import Data.Char (isDigit)
+import Data.Maybe (catMaybes)
 import Data.Word
 import Network.ByteOrder
 import System.FilePath (takeFileName)
@@ -233,10 +235,18 @@ instance Show ECHConfig where
     show ECHConfig{..} = show contents
 
 getECHConfig :: ReadBuffer -> IO ECHConfig
-getECHConfig rbuf = do
-    _ver <- read16 rbuf
-    _len <- read16 rbuf
-    ECHConfig <$> getECHConfigContents rbuf
+getECHConfig rbuf =
+    getECHConfig' rbuf >>= maybe (fail "unknown ECHConfig version") return
+
+-- The contents fill the length exactly.  One of an unknown version is
+-- skipped by its length and gives Nothing.
+getECHConfig' :: ReadBuffer -> IO (Maybe ECHConfig)
+getECHConfig' rbuf = do
+    ver <- read16 rbuf
+    body <- getOpaque16 rbuf
+    if ver /= 0xfe0d
+        then return Nothing
+        else Just . ECHConfig <$> withReadBuffer body (whole getECHConfigContents)
 
 putECHConfig :: WriteBuffer -> ECHConfig -> IO ()
 putECHConfig wbuf ECHConfig{..} = do
@@ -258,7 +268,7 @@ decodeECHConfig bs =
     unsafePerformIO $
         E.handle handler $
             withReadBuffer bs $
-                \rbuf -> Just <$> getECHConfig rbuf
+                \rbuf -> Just <$> whole getECHConfig rbuf
   where
     handler (E.SomeException _) = return Nothing
 
@@ -267,8 +277,9 @@ decodeECHConfig bs =
 -- | A list of 'ECHConfig'.
 type ECHConfigList = [ECHConfig]
 
+-- | ECHConfigs of unknown versions are ignored (RFC 9849 Section 4).
 getECHConfigList :: ReadBuffer -> IO [ECHConfig]
-getECHConfigList rbuf = getList16 rbuf getECHConfig
+getECHConfigList rbuf = catMaybes <$> getList16 rbuf getECHConfig'
 
 putECHConfigList :: WriteBuffer -> [ECHConfig] -> IO ()
 putECHConfigList wbuf configs =
@@ -290,7 +301,7 @@ decodeECHConfigList bs =
     unsafePerformIO $
         E.handle handler $
             withReadBuffer bs $
-                \rbuf -> Just <$> getECHConfigList rbuf
+                \rbuf -> Just <$> whole getECHConfigList rbuf
   where
     handler (E.SomeException _) = return Nothing
 
@@ -349,7 +360,18 @@ getList16 rbuf parer = do
             then do
                 x <- parer rbuf
                 loop lim (build . (x :))
-            else return $ build []
+            else do
+                -- The last element must not run past the list.
+                when (cur > lim) $ fail "list overrun"
+                return $ build []
+
+-- Fails unless the parser consumes the whole buffer.
+whole :: (ReadBuffer -> IO a) -> ReadBuffer -> IO a
+whole parser rbuf = do
+    x <- parser rbuf
+    r <- remainingSize rbuf
+    unless (r == 0) $ fail "trailing data"
+    return x
 
 withLength16 :: WriteBuffer -> IO () -> IO ()
 withLength16 wbuf builder = do

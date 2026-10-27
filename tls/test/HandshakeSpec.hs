@@ -2,13 +2,15 @@
 
 module HandshakeSpec where
 
-import Control.Concurrent (threadDelay)
+import Control.Concurrent (newEmptyMVar, putMVar, takeMVar, threadDelay)
 import Control.Concurrent.Async (concurrently_)
 import qualified Control.Exception as E
 import Control.Monad
 import Crypto.Cipher.AES (AES128)
 import Crypto.Cipher.Types (AEADMode (..), AuthTag (..), aeadInit, aeadSimpleEncrypt, cipherInit)
 import Crypto.Error (throwCryptoError)
+import qualified Crypto.Hash as H
+import qualified Crypto.MAC.HMAC as HMAC
 import Data.Bits (shiftR, xor)
 import qualified Data.ByteArray as BA
 import qualified Data.ByteString as B
@@ -18,11 +20,12 @@ import Data.List
 import Data.Maybe
 import Data.Word (Word16, Word64, Word8)
 import Data.X509 (ExtKeyUsageFlag (..), ExtKeyUsagePurpose (..))
+import Data.X509.Validation (FailedReason (..))
 import Network.TLS
 import Network.TLS.Extra.Cipher
 import Network.TLS.Extra.CipherCBC
 import Network.TLS.Internal
-import Network.TLS.QUIC (hkdfExpandLabel)
+import Network.TLS.QUIC (errorToAlertDescription, hkdfExpandLabel, hkdfExtract)
 import Test.Hspec
 import Test.Hspec.QuickCheck
 import System.Timeout (timeout)
@@ -45,6 +48,8 @@ spec = do
         prop "can run TLS 1.2" handshake_simple
         prop "can run TLS 1.3" handshake13_simple
         prop "can update key for TLS 1.3" handshake_update_key
+        prop "tells close_notify from an EOF" $ handshake_close_notify True
+        prop "tells an EOF without close_notify" $ handshake_close_notify False
         it
             "rejects more than 32 consecutive TLS 1.3 KeyUpdates"
             handshake_key_update_flood
@@ -57,8 +62,6 @@ spec = do
         prop "can prevent downgrade attack" handshake13_downgrade
         it "negotiates TLS 1.2 with a ClientHello naming a higher version" $
             handshake_high_legacy_version TLS12 (Version 0x0309)
-        it "ignores legacy_version when supported_versions is present" $
-            handshake_high_legacy_version TLS13 TLS13
         it "keeps to the TLS 1.3 server's record size limit" $
             record_size_limit_negotiated TLS13 False
         it "keeps to the TLS 1.3 client's record size limit" $
@@ -130,6 +133,8 @@ spec = do
                 rejectedAsDecryptError
         it "refuses a TLS 1.2 signature algorithm it cannot sign with" $
             handshake12_unimplemented_sigalg
+        it "tells why a server certificate is rejected, with the chain in PEM" $
+            handshake_certificate_rejection_details
         prop "can receive client authentication failure" handshake_client_auth_fail
         it "accepts an empty TLS 1.2 client certificate when the hook does" $
             handshake_client_auth_empty TLS12
@@ -139,6 +144,10 @@ spec = do
             handshake12_client_cert_omitted
         it "rejects a TLS 1.2 server omitting Certificate" $
             handshake12_server_message_omitted 11
+        it "answers a corrupt certificate with bad_certificate" $
+            handshake12_corrupt_certificate False
+        it "answers an empty certificate with decode_error" $
+            handshake12_corrupt_certificate True
         it "rejects a TLS 1.2 server omitting ServerKeyExchange for ECDHE" $
             handshake12_server_message_omitted 12
         it "requests only defined certificate types in TLS 1.2" $
@@ -160,6 +169,10 @@ spec = do
             handshake_sni_illegal ["ex\xc4\x85mple.com"]
         prop "can handshake with TLS 1.2 CBC" handshake_cbc
         prop "can re-negotiate with TLS 1.2" handshake12_renegotiation
+        it "keeps application data that arrives during a TLS 1.2 renegotiation" $
+            handshake12_renegotiation_interleaved
+        it "ignores HelloRequest during a TLS 1.2 handshake" $
+            handshake12_hello_request_ignored
         it "rejects SCSV in a secure renegotiation" $
             handshake12_renegotiation_tampered $ \ch ->
                 ch{chCiphers = chCiphers ch ++ [CipherId 0xff]}
@@ -185,6 +198,7 @@ spec = do
             handshake13_psk_tls12_session
         prop "can handshake with TLS 1.3 PSK ticket" handshake13_psk_ticket
         prop "can handshake with TLS 1.3 PSK -> HRR" handshake13_psk_fallback
+        it "binds the PSK to the transcript after HRR" handshake13_psk_hrr_binder
         prop "can handshake with TLS 1.3 0RTT" handshake13_0rtt
         it "rejects TLS 1.3 early data when ALPN changes" $
             handshake13_0rtt_alpn
@@ -256,6 +270,14 @@ spec = do
             server_first_record_type_unexpected 24 0
         it "rejects application data inside a TLS 1.3 handshake message" $
             handshake13_interleaved_app_data
+        it "rejects an unexpected handshake message after the handshake" $
+            handshake13_unexpected_post_handshake
+        it "treats a warning-level error alert as an error" $
+            handshake13_warning_error_alert
+        it "treats a fatal-level close_notify as a closure" $
+            handshake13_fatal_close_notify
+        it "rejects a protected change_cipher_spec in the handshake" $
+            handshake13_protected_ccs
         it "rejects an empty handshake record before a ClientHello" $
             handshake_empty_handshake_record True
         it "rejects an empty handshake record inside a ClientHello" $
@@ -274,6 +296,106 @@ spec = do
             handshake13_0rtt_trailing_after_server_hello
         it "rejects a message after KeyUpdate in its record" $
             handshake13_trailing_after_key_update
+        prop "offers a PSK for the same SNI" $ handshake13_psk_sni True
+        prop "does not offer a PSK for another SNI" $ handshake13_psk_sni False
+        it "resumes with the second PSK when the first is unknown" $
+            handshake13_second_psk
+        it "keeps the key shares for a HelloRetryRequest with only a cookie" $
+            handshake13_hrr_without_key_share True
+        it "rejects a HelloRetryRequest that changes nothing" $
+            handshake13_hrr_without_key_share False
+        it "rejects a second ClientHello with another random" $
+            handshake13_hrr_second_hello otherRandom (Just "changed")
+        it "rejects a second ClientHello with an extension added" $
+            handshake13_hrr_second_hello extensionAdded (Just "changed")
+        it "rejects a second ClientHello with the first key_share" $
+            handshake13_hrr_second_hello firstKeyShare (Just "key_share")
+        it "accepts a second ClientHello with extensions reordered" $
+            handshake13_hrr_second_hello reordered Nothing
+        it "rejects a legacy_version above TLS 1.2 with supported_versions" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            serverRefusesHello
+                params
+                (\ch -> ch{chVersion = TLS13})
+                (refusedWith ProtocolVersion)
+        it "rejects supported_versions without TLS 1.2 in a TLS 1.2 server" $ do
+            (cli, srv) <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let cli' = cli{clientSupported = (clientSupported cli){supportedVersions = [TLS13]}}
+                srv' = srv{serverSupported = (serverSupported srv){supportedVersions = [TLS12]}}
+            serverRefusesHello (cli', srv') id (refusedWith ProtocolVersion)
+        it "rejects a ServerHello legacy_version other than TLS 1.2" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            clientRefusesHello
+                params
+                (\sh -> sh{shVersion = TLS13})
+                (refusedWith ProtocolVersion)
+        it "rejects supported_versions in a ServerHello choosing TLS 1.2" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let tls12 (ExtensionRaw EID_SupportedVersions _) =
+                    toExtensionRaw $ SupportedVersionsServerHello TLS12
+                tls12 e = e
+            clientRefusesHello
+                params
+                (\sh -> sh{shExtensions = map tls12 $ shExtensions sh})
+                (refusedFor IllegalParameter "supported_versions")
+        it "rejects a TLS 1.2 ServerHello in a TLS 1.3 client" $ do
+            (cli, srv) <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let cli' = cli{clientSupported = (clientSupported cli){supportedVersions = [TLS13]}}
+                noVersions (ExtensionRaw eid _) = eid /= EID_SupportedVersions
+            clientRefusesHello
+                (cli', srv)
+                (\sh -> sh{shExtensions = filter noVersions $ shExtensions sh})
+                (refusedWith ProtocolVersion)
+        it "rejects ALPN in a TLS 1.3 ServerHello" $ do
+            (cli, srv) <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let cli' = cli{clientHooks = (clientHooks cli){onSuggestALPN = return $ Just ["h2"]}}
+                alpn = toExtensionRaw $ ApplicationLayerProtocolNegotiation ["h2"]
+            clientRefusesHello
+                (cli', srv)
+                (\sh -> sh{shExtensions = shExtensions sh ++ [alpn]})
+                (refusedWith IllegalParameter)
+        it "rejects supported_versions in EncryptedExtensions" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let versions = toExtensionRaw $ SupportedVersionsServerHello TLS13
+                tamper (EncryptedExtensions13 exts) =
+                    pure $ EncryptedExtensions13 $ exts ++ [versions]
+                tamper h = pure h
+            withPairContext params $ \(cctx, sctx) -> do
+                contextHookSetHandshake13Recv cctx tamper
+                concurrently_
+                    (handshake sctx `shouldThrow` anyTLSException)
+                    (handshake cctx `shouldThrow` refusedWith IllegalParameter)
+        it "rejects a TLS 1.3 ClientHello without signature_algorithms" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            serverRefusesHello
+                params
+                (withoutExt EID_SignatureAlgorithms)
+                (refusedWith MissingExtension)
+        it "rejects a TLS 1.3 ClientHello with key_share but no supported_groups" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            serverRefusesHello
+                params
+                (withoutExt EID_SupportedGroups)
+                (refusedWith MissingExtension)
+        it "rejects a key_share for a group not in supported_groups" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let p256 (ExtensionRaw EID_SupportedGroups _) = toExtensionRaw $ SupportedGroups [P256]
+                p256 e = e
+            serverRefusesHello
+                params
+                (\ch -> ch{chExtensions = map p256 $ chExtensions ch})
+                (refusedWith IllegalParameter)
+        it "rejects data after the content of supported_groups" $ do
+            params <- fixGroupsX25519 <$> generate arbitraryPairParams13
+            let trailing (ExtensionRaw EID_SupportedGroups bs) =
+                    ExtensionRaw EID_SupportedGroups $ B.snoc bs 0
+                trailing e = e
+            serverRefusesHello
+                params
+                (\ch -> ch{chExtensions = map trailing $ chExtensions ch})
+                (refusedWith DecodeError)
+        it "answers several update_requested with a single KeyUpdate" $
+            handshake13_single_key_update_response
         it "rejects a two-byte TLS 1.2 ChangeCipherSpec" $
             malformed_ccs_unexpected
                 TLS12
@@ -523,6 +645,26 @@ handshake13_downgrade (cparam, sparam) = do
     if downgraded
         then runTLSFailure params handshake handshake
         else runTLSSimple params
+
+-- RFC 9846 Section 6.1: an EOF without close_notify may be a truncation.
+handshake_close_notify :: Bool -> (ClientParams, ServerParams) -> IO ()
+handshake_close_notify sendBye params = do
+    closed <- newIORef False
+    let close be =
+            be
+                { backendRecv = \n -> do
+                    c <- readIORef closed
+                    if c then return "" else backendRecv be n
+                }
+    withPairContextWith (id, close) params $ \(cctx, sctx) -> do
+        concurrently_ (handshake sctx) (handshake cctx)
+        -- The transport is closed before 'recvData' starts to read.
+        if sendBye
+            then concurrently_ (bye cctx) $ recvData sctx `shouldReturn` ""
+            else do
+                writeIORef closed True
+                recvData sctx `shouldReturn` ""
+        closeNotifyReceived sctx `shouldReturn` sendBye
 
 handshake_update_key :: (ClientParams, ServerParams) -> IO ()
 handshake_update_key = runTLSSimpleKeyUpdate
@@ -987,7 +1129,13 @@ handshake12_server_message_omitted typ = do
 -- | Cut the handshake messages of a type out of what a TLS 1.2 peer sends
 -- in clear, that is, before its ChangeCipherSpec.
 dropHandshake12 :: Word8 -> IORef Bool -> Backend -> Backend
-dropHandshake12 typ ccsSent be =
+dropHandshake12 typ = mapHandshake12 $ \m -> if B.head m == typ then "" else m
+
+-- | Change each handshake message, header included, that a TLS 1.2 peer
+-- sends in clear.
+mapHandshake12
+    :: (B.ByteString -> B.ByteString) -> IORef Bool -> Backend -> Backend
+mapHandshake12 f ccsSent be =
     be
         { backendSend = \bs -> do
             done <- readIORef ccsSent
@@ -1014,7 +1162,44 @@ dropHandshake12 typ ccsSent be =
                         + fromIntegral (B.index m 2) * 256
                         + fromIntegral (B.index m 3)
                 (msg, rest) = B.splitAt (4 + len) m
-             in (if B.head m == typ then "" else msg) <> stripMessages rest
+             in f msg <> stripMessages rest
+
+-- A Certificate message whose lengths are right but whose certificate is
+-- not DER is answered with bad_certificate, not decode_error.  The server's
+-- certificate is zeroed on the wire, or replaced with an empty one.
+handshake12_corrupt_certificate :: Bool -> IO ()
+handshake12_corrupt_certificate empty = do
+    let cipher = cipher_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS12], [TLS12])
+                ([cipher], [cipher])
+    ccsSent <- newIORef False
+    let corrupt m
+            | B.head m == 11 =
+                let certLen =
+                        fromIntegral (B.index m 7) * 65536
+                            + fromIntegral (B.index m 8) * 256
+                            + fromIntegral (B.index m 9)
+                    (hdr, rest) = B.splitAt 10 m
+                    -- The ASN.1Cert vector has at least one byte.
+                    emptyCert = B.pack [11, 0, 0, 6, 0, 0, 3, 0, 0, 0]
+                 in if empty
+                        then emptyCert
+                        else hdr <> B.replicate certLen 0 <> B.drop certLen rest
+            | otherwise = m
+    withPairContextWith
+        (id, mapHandshake12 corrupt ccsSent)
+        (clientParam, serverParam) $
+        \(cctx, sctx) ->
+            concurrently_
+                (void (E.try (handshake sctx) :: IO (Either E.SomeException ())))
+                (handshake cctx `shouldThrow` alertOf expected)
+  where
+    expected = if empty then DecodeError else BadCertificate
+    alertOf ad (HandshakeFailed err) = errorToAlertDescription err == ad
+    alertOf _ _ = False
 
 -- In TLS 1.2 a client certificate with an Ed25519 or Ed448 key is asked
 -- for with ecdsa_sign (RFC 8422 Section 3.1).  The Ed25519 and Ed448
@@ -1176,6 +1361,39 @@ handshake12_unimplemented_sigalg = do
                 (void (E.try (handshake cctx) :: IO (Either TLSException ())))
     r `shouldSatisfy` isJust
 
+-- The exception names the validation failures and the leaf, and debugError
+-- gets every certificate of the chain in PEM.
+handshake_certificate_rejection_details :: IO ()
+handshake_certificate_rejection_details = do
+    (clientParam, serverParam) <- generate arbitraryPairParams13
+    logRef <- newIORef []
+    chainRef <- newIORef Nothing
+    let clientParam' =
+            clientParam
+                { clientHooks =
+                    (clientHooks clientParam)
+                        { onServerCertificate = \_ _ _ chain ->
+                            writeIORef chainRef (Just chain) >> return [UnknownCA]
+                        }
+                , clientDebug =
+                    (clientDebug clientParam)
+                        { debugError = \msg -> modifyIORef logRef (msg :)
+                        }
+                }
+    withPairContextWith (id, id) (clientParam', serverParam) $ \(cctx, sctx) ->
+        concurrently_
+            (void (E.try (handshake sctx) :: IO (Either TLSException ())))
+            (handshake cctx `shouldThrow` rejectedWithDetails)
+    Just (CertificateChain certs) <- readIORef chainRef
+    logs <- readIORef logRef
+    let begin = "-----BEGIN CERTIFICATE-----"
+        pems = sum [length (filter (== begin) (lines l)) | l <- logs]
+    pems `shouldBe` length certs
+  where
+    rejectedWithDetails (HandshakeFailed (Error_Protocol msg UnknownCa)) =
+        "[UnknownCA]" `isInfixOf` msg && "subject: " `isInfixOf` msg
+    rejectedWithDetails _ = False
+
 -- A DER ECDSA signature that does not decode is a signature that does not
 -- verify, a decrypt_error.  The client's TLS 1.3 CertificateVerify
 -- signature is replaced on its way to the server with one that the ASN.1
@@ -1272,11 +1490,10 @@ rejectedAsIllegalParameter (Terminated _ _ (Error_Protocol _ IllegalParameter)) 
 rejectedAsIllegalParameter _ = False
 
 -- A server that receives a ClientHello whose legacy_version is higher than
--- its own negotiates the highest version it supports (RFC 5246 Appendix
--- E.1); with supported_versions present it does not use legacy_version at
--- all (RFC 8446 Section 4.2.1).  The ClientHello's legacy_version is raised
--- on its way to the server, and the handshake must still reach the version
--- both sides support.
+-- its own, without supported_versions, negotiates the highest version it
+-- supports (RFC 5246 Appendix E.1, RFC 9846 Section 4.3.1).  The
+-- ClientHello's legacy_version is raised on its way to the server, and the
+-- handshake must still reach the version both sides support.
 handshake_high_legacy_version :: Version -> Version -> IO ()
 handshake_high_legacy_version version legacy = do
     let cipher
@@ -1688,6 +1905,55 @@ handshake12_renegotiation (CSP12 (cparams, sparams)) = do
     hsClient ctx = handshake ctx >> handshake ctx
     -- recvData receives the alert from the second handshake
     hsServer ctx = handshake ctx >> void (recvData ctx)
+
+-- RFC 5246 Section 6.2.1: application data may come between the handshake
+-- messages of a renegotiation.  The server sends some before it reads the
+-- client's ClientHello, so it reaches the client ahead of ServerHello.
+handshake12_renegotiation_interleaved :: IO ()
+handshake12_renegotiation_interleaved = do
+    CSP12 (cparams, sparams) <- generate arbitrary
+    let sparams' =
+            sparams
+                { serverSupported =
+                    (serverSupported sparams)
+                        { supportedClientInitiatedRenegotiation = True
+                        }
+                }
+    sent <- newEmptyMVar
+    r <- timeout 10000000 $
+        withPairContextWith (id, id) (cparams, sparams') $ \(cctx, sctx) -> do
+            concurrently_ (handshake sctx) (handshake cctx)
+            concurrently_
+                ( do
+                    sendData sctx "during"
+                    putMVar sent ()
+                    recvData sctx `shouldReturn` "after"
+                )
+                ( do
+                    takeMVar sent
+                    handshake cctx
+                    recvData cctx `shouldReturn` "during"
+                    sendData cctx "after"
+                )
+    r `shouldSatisfy` isJust
+
+-- RFC 5246 Section 7.4.1.1: a client ignores HelloRequest while it is
+-- negotiating.  One is put ahead of the server's ChangeCipherSpec.
+handshake12_hello_request_ignored :: IO ()
+handshake12_hello_request_ignored = do
+    CSP12 params <- generate arbitrary
+    sends <- newIORef (0 :: Int)
+    let injectHelloRequest be =
+            be
+                { backendSend = \bs -> do
+                    n <- atomicModifyIORef' sends $ \i -> (i + 1, i)
+                    when (n == 1) $ backendSend be $ B.pack [22, 3, 3, 0, 4, 0, 0, 0, 0]
+                    backendSend be bs
+                }
+    r <- timeout 10000000 $
+        withPairContextWith (id, injectHelloRequest) params $ \(cctx, sctx) ->
+            concurrently_ (handshake sctx) (handshake cctx)
+    r `shouldSatisfy` isJust
 
 -- RFC 5746 Section 3.7: when a connection with secure renegotiation is
 -- renegotiated, ClientHello must not contain the SCSV and must contain
@@ -2166,6 +2432,75 @@ handshake13_psk_fallback (CSP13 (cli, srv)) = do
                 }
 
     runTLSSimple13 (cli2, srv2') HelloRetryRequest
+
+-- RFC 8446 Section 4.2.11.2: after HelloRetryRequest the binder covers
+-- message_hash(ClientHello1), the HelloRetryRequest and the truncated
+-- ClientHello2.  It is computed here from the bytes on the wire, so that
+-- the client and the server cannot agree on another definition.
+handshake13_psk_hrr_binder :: IO ()
+handshake13_psk_hrr_binder = do
+    (cli, srv) <- generate arbitraryPairParams13
+    let supported grp =
+            defaultSupported
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [grp]
+                , supportedGroupsTLS13 = [[grp]]
+                }
+        params0 =
+            ( cli{clientSupported = (supported X25519){supportedGroups = [X25519, P256]}}
+            , srv{serverSupported = supported X25519}
+            )
+    sessionRefs <- twoSessionRefs
+    let params = setPairParamsSessionManagers (twoSessionManagers sessionRefs) params0
+    runTLSSimple13 params FullHandshake
+
+    -- The key share is for X25519, the group of the session, and the server
+    -- now asks for P-256.
+    sessionParams <- readClientSessionRef sessionRefs
+    expectJust "session param should be Just" sessionParams
+    let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
+        psk = sessionSecret $ snd $ fromJust sessionParams
+    cSent <- newIORef []
+    sSent <- newIORef []
+    let record ref be = be{backendSend = \bs -> modifyIORef ref (bs :) >> backendSend be bs}
+        params2 = (pc, ps{serverSupported = supported P256})
+    withPairContextWith (record cSent, record sSent) params2 $ \(cctx, sctx) ->
+        concurrently_ (handshake sctx) (handshake cctx)
+    ch1 : ch2 : _ <- plainHandshakes . B.concat . reverse <$> readIORef cSent
+    hrr : _ <- plainHandshakes . B.concat . reverse <$> readIORef sSent
+    let binderLen = 32
+        binder = B.drop (B.length ch2 - binderLen) ch2
+        truncated = B.take (B.length ch2 - (2 + 1 + binderLen)) ch2
+        sha256 :: B.ByteString -> B.ByteString
+        sha256 = BA.convert . H.hashWith H.SHA256
+        messageHash = B.pack [254, 0, 0, fromIntegral binderLen] <> sha256 ch1
+        early = hkdfExtract SHA256 (BA.zero 32) (BA.convert psk) :: BA.ScrubbedBytes
+        binderKey = hkdfExpandLabel SHA256 early "res binder" (sha256 "") 32 :: BA.ScrubbedBytes
+        finishedKey = hkdfExpandLabel SHA256 binderKey "finished" "" 32 :: B.ByteString
+        expected =
+            BA.convert
+                ( HMAC.hmac finishedKey (sha256 $ messageHash <> hrr <> truncated)
+                    :: HMAC.HMAC H.SHA256
+                )
+    binder `shouldBe` expected
+  where
+    -- The handshake messages of the plaintext records, in order.
+    plainHandshakes = messages . B.concat . handshakeRecords
+    handshakeRecords bs
+        | B.length bs < 5 = []
+        | otherwise =
+            let len = fromIntegral (B.index bs 3) * 256 + fromIntegral (B.index bs 4)
+                (body, rest) = B.splitAt len $ B.drop 5 bs
+             in [body | B.head bs == 22] ++ handshakeRecords rest
+    messages m
+        | B.length m < 4 = []
+        | otherwise =
+            let len =
+                    fromIntegral (B.index m 1) * 65536
+                        + fromIntegral (B.index m 2) * 256
+                        + fromIntegral (B.index m 3)
+                (msg, rest) = B.splitAt (4 + len) m
+             in msg : messages rest
 
 handshake13_0rtt :: CSP13 -> IO ()
 handshake13_0rtt (CSP13 (cli, srv)) = do
@@ -2815,12 +3150,61 @@ server_first_record_type_unexpected ty len = do
     r `shouldSatisfy` isJust
 
 -- RFC 8446 Section 5.1: handshake messages MUST NOT be interleaved with
--- other record types.  After the handshake the client sends, protected under
--- its application traffic secret, a record holding only the first two bytes
--- of a KeyUpdate and then a record of application data.  The server must not
--- deliver the data and must answer with unexpected_message.
+-- other record types.  After the handshake the client sends a record holding
+-- only the first two bytes of a KeyUpdate and then a record of application
+-- data.
 handshake13_interleaved_app_data :: IO ()
-handshake13_interleaved_app_data = do
+handshake13_interleaved_app_data =
+    serverRefusesProtected13 [(22, B.pack [24, 0]), (23, "hello")]
+
+-- RFC 9846 Section 6.2: a handshake message that nothing expects after the
+-- handshake is unexpected_message.  The client sends a Finished and then a
+-- record of application data.
+handshake13_unexpected_post_handshake :: IO ()
+handshake13_unexpected_post_handshake =
+    serverRefusesProtected13 [(22, finished), (23, "hello")]
+  where
+    finished = B.pack [20, 0, 0, 32] <> B.replicate 32 0
+
+-- RFC 9846 Section 6: the level of an alert is ignored.  A handshake_failure
+-- at the warning level is an error alert, which the server reports without
+-- answering.  A close_notify at the fatal level closes the connection.
+handshake13_warning_error_alert :: IO ()
+handshake13_warning_error_alert =
+    clientSendsProtected13
+        [(21, B.pack [1, 40])]
+        (\sctx -> recvData sctx `shouldThrow` receivedAlert HandshakeFailure)
+        (\_ -> return ())
+  where
+    receivedAlert ad (Terminated True _ (Error_Protocol _ ad')) = ad == ad'
+    receivedAlert _ _ = False
+
+handshake13_fatal_close_notify :: IO ()
+handshake13_fatal_close_notify =
+    clientSendsProtected13
+        [(21, B.pack [2, 0])]
+        (\sctx -> recvData sctx `shouldReturn` "")
+        (\_ -> return ())
+
+-- The server must not deliver the data and must answer with
+-- unexpected_message.
+serverRefusesProtected13 :: [(Word8, B.ByteString)] -> IO ()
+serverRefusesProtected13 records =
+    clientSendsProtected13 records serverSide clientSide
+  where
+    serverSide sctx = do
+        r <- E.try (recvData sctx) :: IO (Either TLSException B.ByteString)
+        case r of
+            Right d -> expectationFailure $ "server delivered " ++ show d
+            Left _ -> return ()
+    clientSide cctx = recvData cctx `shouldThrow` peerSentUnexpected
+
+-- After the handshake the client sends records of these inner types and
+-- contents, protected under its application traffic secret.  Then each side
+-- checks what it receives.
+clientSendsProtected13
+    :: [(Word8, B.ByteString)] -> (Context -> IO ()) -> (Context -> IO ()) -> IO ()
+clientSendsProtected13 records serverSide clientSide = do
     let cipher = cipher13_AES_128_GCM_SHA256
     (clientParam, serverParam) <-
         generate $
@@ -2845,13 +3229,7 @@ handshake13_interleaved_app_data = do
                 }
     withPairContextWith (capture, id) (clientParam', serverParam) $ \(cctx, sctx) ->
         concurrently_
-            ( do
-                handshake sctx
-                r <- E.try (recvData sctx) :: IO (Either TLSException B.ByteString)
-                case r of
-                    Right d -> expectationFailure $ "server delivered " ++ show d
-                    Left _ -> return ()
-            )
+            (handshake sctx >> serverSide sctx)
             ( do
                 handshake cctx
                 Just h <- readIORef secretRef
@@ -2859,16 +3237,71 @@ handshake13_interleaved_app_data = do
                 let secret = BA.convert (unhex h) :: BA.ScrubbedBytes
                     key = hkdfExpandLabel SHA256 secret "key" "" 16 :: B.ByteString
                     iv = hkdfExpandLabel SHA256 secret "iv" "" 12 :: B.ByteString
-                    -- the first two bytes of KeyUpdate(update_not_requested)
-                    partialKeyUpdate = B.pack [24, 0]
-                send $ protect13 key iv 0 22 partialKeyUpdate
-                send $ protect13 key iv 1 23 "hello"
-                recvData cctx `shouldThrow` peerSentUnexpected
+                sequence_
+                    [ send $ protect13 key iv sqn ty content
+                    | (sqn, (ty, content)) <- zip [0 ..] records
+                    ]
+                clientSide cctx
             )
   where
     unhex [] = B.empty
     unhex (a : b : rest) = B.cons (read ['0', 'x', a, b]) (unhex rest)
     unhex _ = error "unhex"
+
+-- RFC 9846 Section 5: a protected change_cipher_spec is unexpected_message,
+-- not dropped like one in clear.  The client puts one, under its handshake
+-- traffic secret, before its Finished, and never sends a CCS in clear.  The
+-- Finished then has the wrong sequence number: a server dropping the CCS
+-- would fail with bad_record_mac.
+handshake13_protected_ccs :: IO ()
+handshake13_protected_ccs = do
+    let cipher = cipher13_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS13], [TLS13])
+                ([cipher], [cipher])
+    secretRef <- newIORef Nothing
+    injected <- newIORef False
+    let logKey line = case words line of
+            ["CLIENT_HANDSHAKE_TRAFFIC_SECRET", _, h] -> writeIORef secretRef (Just h)
+            _ -> return ()
+        clientParam' =
+            clientParam
+                { clientDebug = (clientDebug clientParam){debugKeyLogger = logKey}
+                }
+        inject be =
+            be
+                { backendSend = \bs -> do
+                    done <- readIORef injected
+                    msecret <- readIORef secretRef
+                    -- the CCS in clear is never sent
+                    let rs = filter ((/= 20) . B.head) $ records bs
+                    case (done, msecret, break ((== 23) . B.head) rs) of
+                        (False, Just h, (clear, protected@(_ : _))) -> do
+                            writeIORef injected True
+                            let secret = BA.convert (unhex h) :: BA.ScrubbedBytes
+                                key = hkdfExpandLabel SHA256 secret "key" "" 16 :: B.ByteString
+                                iv = hkdfExpandLabel SHA256 secret "iv" "" 12 :: B.ByteString
+                                ccs = protect13 key iv 0 20 (B.singleton 1)
+                            backendSend be $ B.concat (clear ++ ccs : protected)
+                        _ -> backendSend be $ B.concat rs
+                }
+    withPairContextWith (inject, id) (clientParam', serverParam) $ \(cctx, sctx) ->
+        concurrently_
+            (handshake sctx `shouldThrow` refusedFor UnexpectedMessage "change_cipher_spec")
+            (void (E.try (handshake cctx >> recvData cctx) :: IO (Either TLSException B.ByteString)))
+    readIORef injected `shouldReturn` True
+  where
+    unhex [] = B.empty
+    unhex (a : b : rest) = B.cons (read ['0', 'x', a, b]) (unhex rest)
+    unhex _ = error "unhex"
+    records bs
+        | B.length bs < 5 = []
+        | otherwise =
+            let len = fromIntegral (B.index bs 3) * 256 + fromIntegral (B.index bs 4)
+                (r, rest) = B.splitAt (5 + len) bs
+             in r : records rest
 
 -- RFC 9846 Section 5.1: the messages before a key change must end their
 -- record.  The record holding the ClientHello (the client's first) gets a
@@ -2974,6 +3407,256 @@ handshake13_trailing_after_key_update = do
                     recvData cctx `shouldThrow` peerSentUnexpected
                 )
     r `shouldSatisfy` isJust
+
+-- RFC 9846 Section 4.6.3: a peer that gets several KeyUpdates with
+-- update_requested while it sends nothing answers them once.  The server
+-- asks twice, and after the client's data once more.  It counts the
+-- KeyUpdates it receives.
+handshake13_single_key_update_response :: IO ()
+handshake13_single_key_update_response = do
+    (clientParam, serverParam) <- generate arbitraryPairParams13
+    updates <- newIORef (0 :: Int)
+    let count h = do
+            case h of
+                KeyUpdate13 _ -> modifyIORef' updates (+ 1)
+                _ -> return ()
+            return h
+    withPairContext (clientParam, serverParam) $ \(cctx, sctx) ->
+        concurrently_
+            ( do
+                handshake sctx
+                contextHookSetHandshake13Recv sctx count
+                updateKey sctx TwoWay `shouldReturn` True
+                updateKey sctx TwoWay `shouldReturn` True
+                sendData sctx "hello"
+                recvData sctx `shouldReturn` "x"
+                readIORef updates `shouldReturn` 1
+                updateKey sctx TwoWay `shouldReturn` True
+                sendData sctx "again"
+                recvData sctx `shouldReturn` "y"
+            )
+            ( do
+                handshake cctx
+                recvData cctx `shouldReturn` "hello"
+                sendData cctx "x"
+                recvData cctx `shouldReturn` "again"
+                sendData cctx "y"
+            )
+    readIORef updates `shouldReturn` 2
+
+-- The client offers an unknown ticket, with a PSK of its own, before the
+-- one the server issued.  Each PSK has its own binder, and the server
+-- resumes with the second.
+-- RFC 9846 Section 4.6.1: a client resumes only with the SNI of the session.
+handshake13_psk_sni :: Bool -> CSP13 -> IO ()
+handshake13_psk_sni same (CSP13 (cli, srv)) = do
+    let withName name c =
+            c
+                { clientServerIdentification = (name, snd $ clientServerIdentification c)
+                , clientUseServerNameIndication = True
+                }
+    sessionRefs <- twoSessionRefs
+    let params =
+            setPairParamsSessionManagers
+                (twoSessionManagers sessionRefs)
+                (withName "a.example" cli, srv)
+    runTLSSimple params
+    sessionParams <- readClientSessionRef sessionRefs
+    expectJust "session param should be Just" sessionParams
+    let name = if same then "a.example" else "b.example"
+        (cli2, srv2) = setPairParamsSessionResuming (fromJust sessionParams) params
+    offered <- newIORef False
+    let check hs@(ClientHello ch) = do
+            let psk (ExtensionRaw eid _) = eid == EID_PreSharedKey
+            writeIORef offered $ any psk $ chExtensions ch
+            return hs
+        check hs = return hs
+    withPairContextWith (id, id) (withName name cli2, srv2) $ \(cctx, sctx) -> do
+        contextHookSetHandshakeRecv sctx check
+        concurrently_ (handshake sctx) (handshake cctx)
+    readIORef offered `shouldReturn` same
+
+handshake13_second_psk :: IO ()
+handshake13_second_psk = do
+    (cli, srv) <- generate arbitraryPairParams13
+    sessionRefs <- twoSessionRefs
+    let params =
+            setPairParamsSessionManagers (twoSessionManagers sessionRefs) $
+                fixGroupsX25519 (cli, srv)
+    runTLSSimple13 params FullHandshake
+    Just (sid, sdata) <- readClientSessionRef sessionRefs
+    let unknown =
+            ( B.map (xor 0xff) sid
+            , sdata{sessionSecret = B.map (xor 0xff) (sessionSecret sdata)}
+            )
+        (pc, ps) = params
+    runTLSSimple13
+        (pc{clientWantSessionResumeList = [unknown, (sid, sdata)]}, ps)
+        PreSharedKey
+
+-- RFC 9846 Section 4.1.4: a HelloRetryRequest may carry only a cookie,
+-- after which the client sends the same key shares again with the cookie.
+-- One with neither changes nothing and is refused with illegal_parameter.
+-- The server side is played by hand.
+handshake13_hrr_without_key_share :: Bool -> IO ()
+handshake13_hrr_without_key_share withCookie = do
+    let cipher = cipher13_AES_128_GCM_SHA256
+    (clientParam, serverParam) <-
+        generate $
+            arbitraryPairParamsWithVersionsAndCiphers
+                ([TLS13], [TLS13])
+                ([cipher], [cipher])
+    let cookie = Cookie "a cookie"
+    r <- timeout 10000000 $
+        withPairContext (clientParam, serverParam) $ \(cctx, sctx) -> do
+            let be = ctxBackend sctx
+                recvRecord = do
+                    hdr <- backendRecv be 5
+                    let len = fromIntegral (B.index hdr 3) * 256 + fromIntegral (B.index hdr 4)
+                    body <- backendRecv be len
+                    return (B.head hdr, body)
+                recvClientHello = do
+                    (ty, body) <- recvRecord
+                    if ty /= 22
+                        then recvClientHello
+                        else do
+                            let cp = CurrentParams TLS12 Nothing
+                            case decodeHandshake cp HandshakeType_ClientHello (B.drop 4 body) of
+                                Right (ClientHello ch) -> return ch
+                                x -> error $ show x
+                sendHandshake h =
+                    let bs = encodeHandshake h
+                        len = B.length bs
+                     in backendSend be $
+                            B.pack [22, 3, 3, fromIntegral (len `div` 256), fromIntegral (len `mod` 256)]
+                                <> bs
+            concurrently_
+                ( do
+                    ch1 <- recvClientHello
+                    sendHandshake $
+                        ServerHello
+                            SH
+                                { shVersion = TLS12
+                                , shRandom = hrrRandom
+                                , shSession = chSession ch1
+                                , shCipher = CipherId 0x1301
+                                , shComp = 0
+                                , shExtensions =
+                                    toExtensionRaw (SupportedVersionsServerHello TLS13)
+                                        : [toExtensionRaw cookie | withCookie]
+                                }
+                    when withCookie $ do
+                        ch2 <- recvClientHello
+                        findExt EID_KeyShare ch2 `shouldBe` findExt EID_KeyShare ch1
+                        findExt EID_Cookie ch2 `shouldBe` Just (toExtensionRaw cookie)
+                        -- handshake_failure, to end the client
+                        backendSend be $ B.pack [21, 3, 3, 0, 2, 2, 40]
+                )
+                ( if withCookie
+                    then void (E.try (handshake cctx) :: IO (Either TLSException ()))
+                    else handshake cctx `shouldThrow` illegalParameter
+                )
+    r `shouldSatisfy` isJust
+  where
+    findExt i ch = find (\(ExtensionRaw eid _) -> eid == i) (chExtensions ch)
+    illegalParameter (HandshakeFailed (Error_Protocol _ IllegalParameter)) = True
+    illegalParameter _ = False
+
+-- The server refuses the ClientHello the function changes, as the
+-- selector expects.
+-- RFC 9846 Section 4.1.2: the server changes the second ClientHello after
+-- HelloRetryRequest with the function, given the first one, and refuses
+-- it for the reason or accepts it.
+handshake13_hrr_second_hello
+    :: (ClientHello -> ClientHello -> ClientHello) -> Maybe String -> IO ()
+handshake13_hrr_second_hello f mreason = do
+    (cli, srv) <- generate arbitraryPairParams13
+    let supported grps =
+            defaultSupported
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = grps
+                , supportedGroupsTLS13 = [grps]
+                }
+        params =
+            ( cli{clientSupported = (supported [X25519]){supportedGroups = [X25519, P256]}}
+            , srv{serverSupported = supported [P256]}
+            )
+    ref <- newIORef Nothing
+    let tamper (ClientHello ch) = do
+            mch1 <- readIORef ref
+            case mch1 of
+                Nothing -> writeIORef ref (Just ch) >> pure (ClientHello ch)
+                Just ch1 -> pure $ ClientHello $ f ch1 ch
+        tamper h = pure h
+    withPairContext params $ \(cctx, sctx) -> do
+        contextHookSetHandshakeRecv sctx tamper
+        case mreason of
+            Nothing -> concurrently_ (handshake sctx) (handshake cctx)
+            Just why ->
+                concurrently_
+                    (handshake sctx `shouldThrow` refusedFor IllegalParameter why)
+                    (handshake cctx `shouldThrow` anyTLSException)
+    readIORef ref >>= (`shouldSatisfy` isJust)
+
+otherRandom
+    , extensionAdded
+    , firstKeyShare
+    , reordered
+        :: ClientHello -> ClientHello -> ClientHello
+otherRandom _ ch = ch{chRandom = ClientRandom $ B.replicate 32 0}
+extensionAdded _ ch =
+    ch{chExtensions = ExtensionRaw (ExtensionID 0xfafa) "" : chExtensions ch}
+firstKeyShare ch1 ch = ch{chExtensions = map replace $ chExtensions ch}
+  where
+    replace (ExtensionRaw EID_KeyShare _) =
+        fromJust $ find (\(ExtensionRaw eid _) -> eid == EID_KeyShare) $ chExtensions ch1
+    replace e = e
+reordered _ ch = ch{chExtensions = reverse $ chExtensions ch}
+
+serverRefusesHello
+    :: (ClientParams, ServerParams)
+    -> (ClientHello -> ClientHello)
+    -> Selector TLSException
+    -> IO ()
+serverRefusesHello params f refused =
+    withPairContext params $ \(cctx, sctx) -> do
+        contextHookSetHandshakeRecv sctx tamper
+        concurrently_
+            (handshake sctx `shouldThrow` refused)
+            (handshake cctx `shouldThrow` anyTLSException)
+  where
+    tamper (ClientHello ch) = pure $ ClientHello $ f ch
+    tamper h = pure h
+
+-- The client refuses the ServerHello the function changes, as the
+-- selector expects.
+clientRefusesHello
+    :: (ClientParams, ServerParams)
+    -> (ServerHello -> ServerHello)
+    -> Selector TLSException
+    -> IO ()
+clientRefusesHello params f refused =
+    withPairContext params $ \(cctx, sctx) -> do
+        contextHookSetHandshakeRecv cctx tamper
+        concurrently_
+            (handshake sctx `shouldThrow` anyTLSException)
+            (handshake cctx `shouldThrow` refused)
+  where
+    tamper (ServerHello sh) = pure $ ServerHello $ f sh
+    tamper h = pure h
+
+withoutExt :: ExtensionID -> ClientHello -> ClientHello
+withoutExt i ch =
+    ch{chExtensions = filter (\(ExtensionRaw eid _) -> eid /= i) $ chExtensions ch}
+
+refusedWith :: AlertDescription -> TLSException -> Bool
+refusedWith ad = refusedFor ad ""
+
+-- Refused with the alert, for a reason containing the string.
+refusedFor :: AlertDescription -> String -> TLSException -> Bool
+refusedFor ad needle (HandshakeFailed (Error_Protocol reason ad')) =
+    ad == ad' && needle `isInfixOf` reason
+refusedFor _ _ _ = False
 
 unhexBytes :: String -> B.ByteString
 unhexBytes [] = B.empty
@@ -3137,12 +3820,6 @@ malformed_ccs_unexpected version cipher cgroups sgroups = do
                 )
     r `shouldSatisfy` isJust
     readIORef seen `shouldReturn` True
-
--- Refused with the alert, for a reason containing the string.
-refusedFor :: AlertDescription -> String -> TLSException -> Bool
-refusedFor ad needle (HandshakeFailed (Error_Protocol reason ad')) =
-    ad == ad' && needle `isInfixOf` reason
-refusedFor _ _ _ = False
 
 rejectedAsUnexpected :: TLSException -> Bool
 rejectedAsUnexpected (HandshakeFailed (Error_Packet_unexpected _ _)) = True

@@ -216,17 +216,25 @@ sign ctx pub hs target = liftIO $ do
 
 ----------------------------------------------------------------
 
+-- | RFC 8446 Section 4.2.11.2: the binder covers the transcript up to the
+-- truncated ClientHello, which after HelloRetryRequest begins with
+-- message_hash(ClientHello1) and the HelloRetryRequest.
 makePSKBinder
-    :: BaseSecret EarlySecret
+    :: Context
+    -> BaseSecret EarlySecret
     -> Hash
     -> Int
     -> ByteString
     -- ^ Encoded client hello
-    -> ByteString
-makePSKBinder (BaseSecret sec) usedHash truncLen ech =
-    makeVerifyData usedHash binderKey hChTruncated
+    -> IO ByteString
+makePSKBinder ctx (BaseSecret sec) usedHash truncLen ech = do
+    hrr <- usingState_ ctx getTLS13HRR
+    hChTruncated <-
+        if hrr
+            then transcriptHashWith ctx "binder" $ trunc ech
+            else return $ TranscriptHash $ hash usedHash $ trunc ech
+    return $ makeVerifyData usedHash binderKey hChTruncated
   where
-    hChTruncated = TranscriptHash $ hash usedHash $ trunc ech
     th = TranscriptHash $ hash usedHash ""
     binderKey = deriveSecret usedHash sec "res binder" th
     trunc x = B.take takeLen x

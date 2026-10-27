@@ -123,12 +123,14 @@ doCertificate cparams ctx certs = do
     -- run certificate recv hook
     ctxWithHooks ctx (`hookRecvCertificates` certs)
     -- then run certificate validation
-    usage <- catchException (wrapCertificateChecks <$> checkCert) rejectOnException
+    result <- catchException (Right <$> checkCert) (return . Left)
+    usage <- either rejectOnException (return . wrapCertificateChecks) result
     case usage of
         CertificateUsageAccept -> do
             verifyLeafKeyUsagePurpose KeyUsagePurpose_ServerAuth certs
             checkLeafCertificateKeyUsage
-        CertificateUsageReject reason -> certificateRejected reason
+        CertificateUsageReject reason ->
+            certificateRejected ctx (either (const []) id result) certs reason
   where
     shared = clientShared cparams
     checkCert =
@@ -374,7 +376,16 @@ contextSync :: Context -> ClientState -> IO ()
 contextSync ctx ctl = case ctxHandshakeSync ctx of
     HandshakeSync sync _ -> sync ctx ctl
 
+-- RFC 9846 Section 4.6.1: a session is resumed only with the SNI it was
+-- established with, which its server certificate is valid for.
 clientSessions :: ClientParams -> [(SessionID, SessionData)]
-clientSessions ClientParams{..} = case clientWantSessionResume of
-    Nothing -> clientWantSessionResumeList
-    Just ent -> clientWantSessionResumeList ++ [ent]
+clientSessions ClientParams{..} = filter sameSNI sessions
+  where
+    sessions = case clientWantSessionResume of
+        Nothing -> clientWantSessionResumeList
+        Just ent -> clientWantSessionResumeList ++ [ent]
+    host = fst clientServerIdentification
+    sni
+        | clientUseServerNameIndication && not (null host) = Just host
+        | otherwise = Nothing
+    sameSNI (_, sd) = sessionClientSNI sd == sni

@@ -80,8 +80,14 @@ runGetErr lbl getter b = toSimple $ runGet lbl getter b
     toSimple (GotSuccessRemaining _ _) = Left (Error_Packet_Parsing (lbl ++ ": parsing error: remaining bytes"))
     toSimple (GotSuccess r) = Right r
 
+-- | Nothing unless the whole input is consumed: data after an extension's
+-- content, or any other structure decoded so, is a decode error.
 runGetMaybe :: Get a -> ByteString -> Maybe a
-runGetMaybe f = either (const Nothing) Just . G.runGet f
+runGetMaybe f = either (const Nothing) Just . G.runGet (f <* end)
+  where
+    end = do
+        r <- remaining
+        when (r /= 0) $ fail "trailing data"
 
 tryGet :: Get a -> ByteString -> Maybe a
 tryGet f = either (const Nothing) Just . G.runGet f

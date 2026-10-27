@@ -104,10 +104,7 @@ sendClientHello'
     -> Context
     -> Groups
     -> ClientRandom
-    -> ( Maybe ([ByteString], SessionData, CipherChoice, Word32)
-       , Maybe CipherChoice
-       , Bool
-       )
+    -> PreSharedKeyInfo
     -> IO ()
 sendClientHello' cparams ctx Groups{..} crand (pskInfo, rtt0info, rtt0) = do
     let ver = if tls13 then TLS12 else highestVer
@@ -307,9 +304,18 @@ sendClientHello' cparams ctx Groups{..} crand (pskInfo, rtt0info, rtt0) = do
 
     keyShareExt
         | tls13 = do
-            (grpCpris, ents) <- unzip <$> mapM (makeClientKeyShare ctx) grpsSelected
-            usingHState ctx $ setGroupPrivate grpCpris
-            return $ Just $ toExtensionRaw $ KeyShareClientHello ents
+            retried <- usingState_ ctx getTLS13HRR
+            mks <- usingState_ ctx getTLS13KeyShare
+            mch <- usingHState ctx getClientHello
+            case (retried, mks, mch) of
+                -- A HelloRetryRequest without key_share keeps the key shares.
+                (True, Nothing, Just (CH{chExtensions = exts}, _))
+                    | Just ext <- find (\(ExtensionRaw eid _) -> eid == EID_KeyShare) exts ->
+                        return $ Just ext
+                _ -> do
+                    (grpCpris, ents) <- unzip <$> mapM (makeClientKeyShare ctx) grpsSelected
+                    usingHState ctx $ setGroupPrivate grpCpris
+                    return $ Just $ toExtensionRaw $ KeyShareClientHello ents
         | otherwise = return Nothing
 
     secureRenegExt =
@@ -324,60 +330,59 @@ sendClientHello' cparams ctx Groups{..} crand (pskInfo, rtt0info, rtt0) = do
         | clientUseECH cparams = return $ Just $ toExtensionRaw ECHClientHelloInner
         | otherwise = return Nothing
 
-    preSharedKeyExt =
-        case pskInfo of
-            Nothing -> return Nothing
-            Just (identities, _, choice, obfAge) -> do
-                let zero = cZero choice
-                    pskIdentities = map (\x -> PskIdentity x obfAge) identities
-                    -- [zero] is a place holds.
-                    -- adjustPreSharedKeyExt will replace them.
-                    binders = replicate (length pskIdentities) $ convert zero
-                    offeredPsks = PreSharedKeyClientHello pskIdentities binders
-                return $ Just $ toExtensionRaw offeredPsks
+    preSharedKeyExt
+        | null pskInfo = return Nothing
+        | otherwise = do
+            let pskIdentities = [PskIdentity x obfAge | (x, _, _, obfAge) <- pskInfo]
+                -- Zeros are place holders.
+                -- adjustPreSharedKeyExt will replace them.
+                binders = [convert $ cZero choice | (_, _, choice, _) <- pskInfo]
+                offeredPsks = PreSharedKeyClientHello pskIdentities binders
+            return $ Just $ toExtensionRaw offeredPsks
 
     randomPreSharedKeyExt :: IO (Maybe ExtensionRaw)
-    randomPreSharedKeyExt =
-        case pskInfo of
-            Nothing -> return Nothing
-            Just (identities, _, choice, _) -> do
-                let zero = cZero choice
-                zeroR <- getStdRandom $ uniformByteString $ BA.length zero
-                obfAgeR <- getStdRandom genWord32
-                let genPskId x = do
-                        xR <- getStdRandom $ uniformByteString $ B.length x
-                        return $ PskIdentity xR obfAgeR
-                pskIdentitiesR <- mapM genPskId identities
-                let bindersR = replicate (length pskIdentitiesR) zeroR
-                    offeredPsksR = PreSharedKeyClientHello pskIdentitiesR bindersR
-                return $ Just $ toExtensionRaw offeredPsksR
+    randomPreSharedKeyExt
+        | null pskInfo = return Nothing
+        | otherwise = do
+            let genPsk (x, _, choice, _) = do
+                    xR <- getStdRandom $ uniformByteString $ B.length x
+                    obfAgeR <- getStdRandom genWord32
+                    zeroR <- getStdRandom $ uniformByteString $ BA.length $ cZero choice
+                    return (PskIdentity xR obfAgeR, zeroR)
+            (pskIdentitiesR, bindersR) <- unzip <$> mapM genPsk pskInfo
+            let offeredPsksR = PreSharedKeyClientHello pskIdentitiesR bindersR
+            return $ Just $ toExtensionRaw offeredPsksR
 
     ----------------------------------------
 
-    adjustPreSharedKeyExt exts ch =
-        case pskInfo of
-            Nothing -> return exts
-            Just (identities, sdata, choice, _) -> do
-                let psk = sessionSecret sdata
-                    earlySecret = initEarlySecret choice (Just psk)
-                usingHState ctx $ setTLS13EarlySecret earlySecret
-                let ech = encodeHandshake $ ClientHello ch
-                    h = cHash choice
-                    siz = (hashDigestSize h + 1) * length identities + 2
-                    binder = makePSKBinder earlySecret h siz ech
-                -- PSK is shared by the previous TLS session.
-                -- So, PSK is unique for identities.
-                let binders = replicate (length identities) binder
-                let exts' = init exts ++ [adjust (last exts)]
-                    adjust (ExtensionRaw eid withoutBinders) = ExtensionRaw eid withBinders
-                      where
-                        withBinders = replacePSKBinder withoutBinders binders
-                return exts'
+    adjustPreSharedKeyExt exts ch
+        | null pskInfo = return exts
+        | otherwise = do
+            -- Each ticket has its own PSK, and so its own binder.
+            let earlySecrets =
+                    [ initEarlySecret choice (Just $ sessionSecret sdata)
+                    | (_, sdata, choice, _) <- pskInfo
+                    ]
+            usingHState ctx $ setTLS13EarlySecrets earlySecrets
+            let ech = encodeHandshake $ ClientHello ch
+                siz = sum [hashDigestSize (cHash choice) + 1 | (_, _, choice, _) <- pskInfo] + 2
+            binders <-
+                zipWithM
+                    ( \earlySecret (_, _, choice, _) -> makePSKBinder ctx earlySecret (cHash choice) siz ech
+                    )
+                    earlySecrets
+                    pskInfo
+            let exts' = init exts ++ [adjust (last exts)]
+                adjust (ExtensionRaw eid withoutBinders) = ExtensionRaw eid withBinders
+                  where
+                    withBinders = replacePSKBinder withoutBinders binders
+            return exts'
 
     getEarlySecretInfo choice = do
         let usedCipher = cCipher choice
             usedHash = cHash choice
-        Just earlySecret <- usingHState ctx getTLS13EarlySecret
+        -- Early data is protected with the first PSK.
+        earlySecret : _ <- usingHState ctx getTLS13EarlySecrets
         earlyKey <- calculateEarlySecret ctx choice (Right earlySecret)
         let clientEarlySecret = pairClient earlyKey
         unless (ctxQUICMode ctx) $ do
@@ -390,8 +395,10 @@ sendClientHello' cparams ctx Groups{..} crand (pskInfo, rtt0info, rtt0) = do
 
 ----------------------------------------------------------------
 
+-- | The PSKs offered, each with its identity, session, cipher and
+--   obfuscated ticket age; the cipher of early data; and whether to send it.
 type PreSharedKeyInfo =
-    ( Maybe ([SessionIDorTicket], SessionData, CipherChoice, Second)
+    ( [(SessionIDorTicket, SessionData, CipherChoice, Second)]
     , Maybe CipherChoice
     , Bool
     )
@@ -401,8 +408,19 @@ getPreSharedKeyInfo
     -> Context
     -> IO PreSharedKeyInfo
 getPreSharedKeyInfo cparams ctx = do
-    pskInfo <- getPskInfo
-    let rtt0info = pskInfo >>= get0RTTinfo
+    -- After HelloRetryRequest, the binders are computed with the hash of
+    -- the cipher it chose, so only the PSKs for that hash are offered.
+    hrr <- usingState_ ctx getTLS13HRR
+    mHrrCipher <-
+        if hrr then (>>= hstPendingCipher) <$> getHState ctx else return Nothing
+    pskInfo <-
+        if tls13
+            then catMaybes <$> mapM (getPskEntry mHrrCipher) (clientSessions cparams)
+            else return []
+    let rtt0info = case pskInfo of
+            (_, sdata, choice, _) : _
+                | clientUseEarlyData cparams && sessionMaxEarlyDataSize sdata > 0 -> Just choice
+            _ -> Nothing
         rtt0 = isJust rtt0info
     return (pskInfo, rtt0info, rtt0)
   where
@@ -410,35 +428,24 @@ getPreSharedKeyInfo cparams ctx = do
     highestVer = maximum $ supportedVersions $ ctxSupported ctx
     tls13 = highestVer >= TLS13
 
-    sessions = case clientSessions cparams of
-        [] -> Nothing
-        (sid, sdata) : xs -> do
-            guard tls13
-            guard (sessionVersion sdata >= TLS13)
-            let cid = sessionCipher sdata
-                sids = map fst xs
-            sCipher <- findCipher cid ciphers
-            Just (sid : sids, sdata, sCipher)
-
-    getPskInfo = case sessions of
-        Nothing -> return Nothing
-        Just (identity, sdata, sCipher) -> do
-            let tinfo = fromJust $ sessionTicketInfo sdata
-            age <- getAge tinfo
-            return $
-                if isAgeValid age tinfo
-                    then
-                        Just
-                            ( identity
-                            , sdata
-                            , makeCipherChoice TLS13 sCipher
-                            , ageToObfuscatedAge age tinfo
-                            )
-                    else Nothing
-
-    get0RTTinfo (_, sdata, choice, _)
-        | clientUseEarlyData cparams && sessionMaxEarlyDataSize sdata > 0 = Just choice
-        | otherwise = Nothing
+    getPskEntry mHrrCipher (identity, sdata) = case (sCipher, sessionTicketInfo sdata) of
+        (Just c, Just tinfo)
+            | sessionVersion sdata >= TLS13
+            , maybe True (\hc -> cipherHash hc == cipherHash c) mHrrCipher -> do
+                age <- getAge tinfo
+                return $
+                    if isAgeValid age tinfo
+                        then
+                            Just
+                                ( identity
+                                , sdata
+                                , makeCipherChoice TLS13 c
+                                , ageToObfuscatedAge age tinfo
+                                )
+                        else Nothing
+        _ -> return Nothing
+      where
+        sCipher = findCipher (sessionCipher sdata) ciphers
 
 ----------------------------------------------------------------
 
@@ -535,6 +542,7 @@ getHPKE
     -> (KDF_ID, AEAD_ID, ECHConfig)
     -> IO (Maybe (AAD -> PlainText -> IO CipherText, EncodedPublicKey, Int))
 getHPKE ctx (kdfid, aeadid, conf) = do
+    nT <- maybe (E.throwIO $ Unsupported "AEAD") return $ nTag aeadid
     mfunc <- getTLS13HPKE ctx
     case mfunc of
         Nothing -> do
@@ -548,7 +556,6 @@ getHPKE ctx (kdfid, aeadid, conf) = do
   where
     mpkR = cnfEncodedPublicKey conf
     kemid = cnfKemId conf
-    nT = nTag aeadid
 
 ----------------------------------------------------------------
 

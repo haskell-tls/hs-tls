@@ -17,6 +17,7 @@ module Network.TLS.Handshake.Common (
     runRecvState,
     runRecvStateHS,
     recvPacketHandshake,
+    recvPacket12HS,
     onRecvStateHandshake,
     ensureRecvComplete,
     processExtendedMainSecret,
@@ -44,6 +45,7 @@ import qualified Control.Exception as E
 import Control.Monad.State.Strict
 import Data.ByteArray (convert)
 import qualified Data.ByteString as B
+import Data.IORef (modifyIORef')
 
 import Network.TLS.Cipher
 import Network.TLS.Compression
@@ -104,6 +106,8 @@ errorToAlert (Error_Packet_Parsing msg)
     | "invalid version" `isInfixOf` msg = (AlertLevel_Fatal, ProtocolVersion)
     | "request_update" `isInfixOf` msg = (AlertLevel_Fatal, IllegalParameter)
     | "cannot be decompressed" `isInfixOf` msg = (AlertLevel_Fatal, BadCertificate)
+    | "error certificate parsing" `isInfixOf` msg =
+        (AlertLevel_Fatal, BadCertificate)
     | "unsupported certificate compression algorithm" `isInfixOf` msg =
         (AlertLevel_Fatal, IllegalParameter)
     | otherwise = (AlertLevel_Fatal, DecodeError)
@@ -146,9 +150,36 @@ data RecvState m
     | RecvStateHandshake (Handshake -> m (RecvState m))
     | RecvStateDone
 
+-- | 'recvPacket12' during a TLS 1.2 handshake.  A client ignores
+-- HelloRequest while negotiating (RFC 5246 Section 7.4.1.1), and
+-- application data under the current keys may come during renegotiation
+-- (Section 6.2.1); it is kept for 'recvData'.
+recvPacket12HS :: Context -> IO (Either TLSError Packet)
+recvPacket12HS ctx = do
+    pkt <- recvPacket12 ctx
+    role <- usingState_ ctx getRole
+    case pkt of
+        Right (Handshake hss bss)
+            | role == ClientRole && any isHelloRequest hss ->
+                case unzip $ filter (not . isHelloRequest . fst) $ zip hss bss of
+                    ([], _) -> recvPacket12HS ctx
+                    (hss', bss') -> return $ Right $ Handshake hss' bss'
+        Right (AppData x) -> do
+            established <- ctxEstablished ctx
+            switched <- maybe False hstRxSwitched <$> getHState ctx
+            if established == Established && not switched
+                then do
+                    modifyIORef' (ctxPendingAppData ctx) (x :)
+                    recvPacket12HS ctx
+                else return pkt
+        _ -> return pkt
+  where
+    isHelloRequest HelloRequest = True
+    isHelloRequest _ = False
+
 recvPacketHandshake :: Context -> IO [HandshakeR]
 recvPacketHandshake ctx = do
-    pkts <- recvPacket12 ctx
+    pkts <- recvPacket12HS ctx
     case pkts of
         Right (Handshake hss bss) -> return $ zip hss bss
         Right x@(AppData bs) -> do
@@ -182,7 +213,7 @@ isFinished _ = False
 
 runRecvState :: Context -> RecvState IO -> IO ()
 runRecvState _ RecvStateDone = return ()
-runRecvState ctx (RecvStatePacket f) = recvPacket12 ctx >>= either throwCore f >>= runRecvState ctx
+runRecvState ctx (RecvStatePacket f) = recvPacket12HS ctx >>= either throwCore f >>= runRecvState ctx
 runRecvState ctx iniState =
     recvPacketHandshake ctx
         >>= onRecvStateHandshake ctx iniState

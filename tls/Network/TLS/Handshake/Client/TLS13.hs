@@ -110,30 +110,48 @@ prepareSecondFlight13' ctx groupSent choice = do
         usingHState ctx getGroupPrivate >>= fromServerKeyShare serverKeyShare
 
     makeEarlySecret = do
-        mEarlySecretPSK <- usingHState ctx getTLS13EarlySecret
-        case mEarlySecretPSK of
+        earlySecrets <- usingHState ctx getTLS13EarlySecrets
+        mSelectedIdentity <- usingState_ ctx getTLS13PreSharedKey
+        case mSelectedIdentity of
             Nothing -> return (initEarlySecret choice Nothing, False)
-            Just earlySecretPSK@(BaseSecret sec) -> do
-                mSelectedIdentity <- usingState_ ctx getTLS13PreSharedKey
-                case mSelectedIdentity of
-                    Nothing ->
-                        return (initEarlySecret choice Nothing, False)
-                    Just (PreSharedKeyServerHello 0) -> do
-                        unless (BA.length sec == hashSize) $
-                            throwCore $
-                                Error_Protocol
-                                    "selected cipher is incompatible with selected PSK"
-                                    IllegalParameter
-                        usingHState ctx $ setTLS13HandshakeMode PreSharedKey
-                        return (earlySecretPSK, True)
-                    Just _ ->
-                        throwCore $ Error_Protocol "selected identity out of range" IllegalParameter
+            Just (PreSharedKeyServerHello n)
+                | n >= 0
+                , earlySecretPSK@(BaseSecret sec) : _ <- drop n earlySecrets -> do
+                    unless (BA.length sec == hashSize) $
+                        throwCore $
+                            Error_Protocol
+                                "selected cipher is incompatible with selected PSK"
+                                IllegalParameter
+                    usingHState ctx $ setTLS13HandshakeMode PreSharedKey
+                    return (earlySecretPSK, True)
+            Just _ ->
+                throwCore $ Error_Protocol "selected identity out of range" IllegalParameter
 
 ----------------------------------------------------------------
 
 expectEncryptedExtensions
     :: MonadIO m => Context -> Handshake13 -> m ()
 expectEncryptedExtensions ctx (EncryptedExtensions13 eexts) = do
+    -- RFC 9846 Section 4.2: an extension recognized but not specified for
+    -- EncryptedExtensions is refused with illegal_parameter.
+    let allowed =
+            [ EID_ServerName
+            , EID_SupportedGroups
+            , EID_ApplicationLayerProtocolNegotiation
+            , EID_RecordSizeLimit
+            , EID_EarlyData
+            , EID_QuicTransportParameters
+            , EID_EncryptedClientHello
+            ]
+        forbidden (ExtensionRaw eid _) =
+            eid `elem` supportedExtensions && eid `notElem` allowed
+    case filter forbidden eexts of
+        [] -> return ()
+        ExtensionRaw eid _ : _ ->
+            throwCore $
+                Error_Protocol
+                    (show eid ++ " is not allowed in EncryptedExtensions")
+                    IllegalParameter
     liftIO $ do
         -- RFC 8449 Section 4: the server's RecordSizeLimit is in
         -- EncryptedExtensions.  Until it is known, our own limit is not
@@ -153,6 +171,10 @@ expectEncryptedExtensions ctx (EncryptedExtensions13 eexts) = do
                 unless (mode == PreSharedKey) $
                     throwCore $
                         Error_Protocol "early data accepted without PSK" IllegalParameter
+                selected <- liftIO $ usingState_ ctx getTLS13PreSharedKey
+                unless (selected == Just (PreSharedKeyServerHello 0)) $
+                    throwCore $
+                        Error_Protocol "early data accepted without the first PSK" IllegalParameter
                 usingHState ctx $ setTLS13HandshakeMode RTT0
                 usingHState ctx $ setTLS13RTT0Status RTT0Accepted
                 liftIO $ modifyTLS13State ctx $ \st -> st{tls13st0RTTAccepted = True}

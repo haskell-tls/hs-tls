@@ -213,6 +213,10 @@ decodeClientHello inner = do
     session <- getSession
     ciphers <- map CipherId <$> getWords16
     compressions <- getWords8
+    -- cipher_suites<2..2^16-2> and compression_methods<1..2^8-1>: an empty
+    -- one is decode_error, not handshake_failure or illegal_parameter.
+    when (null ciphers) $ fail "no cipher suites"
+    when (null compressions) $ fail "no compression methods"
     r <- remaining
     exts <-
         if r > 0
@@ -275,7 +279,12 @@ decodeCertificate = do
         Left (i, s) -> fail ("error certificate parsing " ++ show i ++ ":" ++ s)
         Right cc -> return $ Certificate $ CertificateChain_ cc
   where
-    getCertRaw = getOpaque24 >>= \cert -> return (3 + B.length cert, cert)
+    getCertRaw = do
+        cert <- getOpaque24
+        -- ASN.1Cert<1..2^24-1>: an empty one is decode_error, not
+        -- bad_certificate.
+        when (B.null cert) $ fail "empty certificate"
+        return (3 + B.length cert, cert)
 
 ----
 

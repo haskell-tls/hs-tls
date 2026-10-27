@@ -23,11 +23,13 @@ module Network.TLS.Context.Internal (
     Locks (..),
     RoleParams (..),
     ctxEOF,
+    ctxCloseNotify,
     ctxEstablished,
     withLog,
     ctxWithHooks,
     contextModifyHooks,
     setEOF,
+    setCloseNotify,
     setEstablished,
     skipEarlyData,
     contextFlush,
@@ -131,6 +133,8 @@ data Context
     , ctxMeasurement :: IORef Measurement
     , ctxEOF_ :: IORef Bool
     -- ^ has the handle EOFed or not.
+    , ctxCloseNotify_ :: IORef Bool
+    -- ^ has close_notify been received or not.
     , ctxEstablished_ :: IORef Established
     -- ^ has the handshake been done and been successful.
     , ctxTxRecordState :: MVar RecordState
@@ -146,6 +150,8 @@ data Context
     , -- TLS 1.3
       ctxTLS13State :: IORef TLS13State
     , ctxPendingRecvActions :: IORef [PendingRecvAction]
+    , ctxPendingAppData :: IORef [ByteString]
+    -- ^ TLS 1.2 application data received during renegotiation, newest first
     , ctxPendingSendAction :: IORef (Maybe (Context -> IO ()))
     -- ^ pending post handshake authentication requests
     , -- QUIC
@@ -205,6 +211,8 @@ makeCipherChoice ver cipher = CipherChoice ver cipher h zero
 data TLS13State = TLS13State
     { tls13stRecvNST :: Bool -- client
     , tls13stKeyUpdateCount :: Int
+    , tls13stSentKeyUpdates :: Word64
+    , tls13stKeyUpdateResponded :: Bool
     , tls13stSentClientCert :: Bool -- client
     , tls13stRecvSF :: Bool -- client
     , tls13stSentCF :: Bool -- client
@@ -227,6 +235,8 @@ defaultTLS13State =
     TLS13State
         { tls13stRecvNST = False
         , tls13stKeyUpdateCount = 0
+        , tls13stSentKeyUpdates = 0
+        , tls13stKeyUpdateResponded = False
         , tls13stSentClientCert = False
         , tls13stRecvSF = False
         , tls13stSentCF = False
@@ -376,6 +386,12 @@ ctxEOF ctx = readIORef $ ctxEOF_ ctx
 
 setEOF :: Context -> IO ()
 setEOF ctx = writeIORef (ctxEOF_ ctx) True
+
+ctxCloseNotify :: Context -> IO Bool
+ctxCloseNotify ctx = readIORef $ ctxCloseNotify_ ctx
+
+setCloseNotify :: Context -> IO ()
+setCloseNotify ctx = writeIORef (ctxCloseNotify_ ctx) True
 
 ctxEstablished :: Context -> IO Established
 ctxEstablished ctx = readIORef $ ctxEstablished_ ctx

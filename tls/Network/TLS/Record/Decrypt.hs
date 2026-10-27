@@ -60,6 +60,9 @@ unInnerPlaintext inner =
         Just (bytes, c)
             | B.null bytes && ProtocolType c `elem` nonEmptyContentTypes ->
                 Left ("empty " ++ show (ProtocolType c) ++ " record disallowed")
+            -- RFC 9846 Section 5: change_cipher_spec is only sent in clear.
+            | ProtocolType c == ProtocolType_ChangeCipherSpec ->
+                Left "protected change_cipher_spec"
             | otherwise -> Right (ProtocolType c, bytes)
   where
     (dc, _pad) = B.spanEnd (== 0) inner

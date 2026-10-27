@@ -43,6 +43,16 @@ processClientHello13 sparams ctx ch@CH{..} = do
         (any (\(ExtensionRaw eid _) -> eid == EID_PreSharedKey) $ init chExtensions)
         $ throwCore
         $ Error_Protocol "extension pre_shared_key must be last" IllegalParameter
+    -- RFC 9846 Section 9.2: the extensions a TLS 1.3 ClientHello must have.
+    let has eid = isJust $ extensionLookup eid chExtensions
+        missing reason = throwCore $ Error_Protocol reason MissingExtension
+    unless (has EID_PreSharedKey) $ do
+        unless (has EID_SignatureAlgorithms) $
+            missing "no signature_algorithms extension without pre_shared_key"
+        unless (has EID_SupportedGroups) $
+            missing "no supported_groups extension without pre_shared_key"
+    when (has EID_SupportedGroups /= has EID_KeyShare) $
+        missing "supported_groups and key_share must come together"
     -- Deciding cipher.
     -- The shared cipherlist can become empty after filtering for compatible
     -- creds, check now before calling onCipherChoosing, which does not handle
@@ -81,14 +91,26 @@ processClientHello13 sparams ctx ch@CH{..} = do
         extract _ = require
     keyShares <-
         lookupAndDecodeAndDo EID_KeyShare MsgTClientHello chExtensions require extract
-    let clientGroups =
-            take limitSupportedGroups $
-                lookupAndDecode
-                    EID_SupportedGroups
-                    MsgTClientHello
-                    chExtensions
-                    []
-                    (\(SupportedGroups gs) -> gs)
+    let allClientGroups =
+            lookupAndDecode
+                EID_SupportedGroups
+                MsgTClientHello
+                chExtensions
+                []
+                (\(SupportedGroups gs) -> gs)
+        clientGroups = take limitSupportedGroups allClientGroups
+    -- RFC 9846 Section 4.2.8: after HelloRetryRequest, only the selected
+    -- group is offered.
+    hrr <- usingState_ ctx getTLS13HRR
+    when hrr $ do
+        mg <- usingHState ctx getSupportedGroup
+        unless (map (Just . keyShareEntryGroup) keyShares == [mg]) $
+            throwCore $
+                Error_Protocol "key_share not for the group of hello retry" IllegalParameter
+    -- RFC 9846 Section 4.2.8: servers MAY check this.
+    unless (all ((`elem` allClientGroups) . keyShareEntryGroup) keyShares) $
+        throwCore $
+            Error_Protocol "key_share for a group not in supported_groups" IllegalParameter
     (mgroup, doHRR) <-
         onSelectKeyShare
             (serverHooks sparams)
@@ -151,50 +173,56 @@ pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CH{..} = do
             (return (zero, Nothing, False, Nothing))
             selectPSK
 
-    selectPSK (PreSharedKeyClientHello (PskIdentity identity obfAge : _) bnds@(bnd : _)) = do
+    selectPSK (PreSharedKeyClientHello ids bnds) = do
         when (null dhModes) $
             throwCore $
                 Error_Protocol "no psk_key_exchange_modes extension" MissingExtension
         if PSK_DHE_KE `elem` dhModes
             then do
                 let len = sum (map (\x -> B.length x + 1) bnds) + 2
-                    mgr = sharedSessionManager $ serverShared sparams
-                -- sessionInvalidate is not used for TLS 1.3
-                -- because PSK is always changed.
-                -- So, identity is not stored in Context.
-                msdata <-
-                    if rtt0
-                        then sessionResumeOnlyOnce mgr identity
-                        else sessionResume mgr identity
-                case msdata of
-                    -- RFC 8446 Section 4.6.1: only a TLS 1.3 session, which
-                    -- has its ticket information, is resumed with a PSK.  A
-                    -- TLS 1.2 one found under the same identity falls back
-                    -- to a full handshake.
-                    Just sdata
-                        | sessionVersion sdata == TLS13
-                        , Just tinfo <- sessionTicketInfo sdata -> do
-                            let psk = sessionSecret sdata
-                            isFresh <- checkFreshness tinfo obfAge
-                            (isPSKvalid, is0RTTvalid) <- checkSessionEquality sdata
-                            if isPSKvalid && isFresh
-                                then
-                                    return
-                                        ( psk
-                                        , Just (bnd, 0 :: Int, len)
-                                        , is0RTTvalid
-                                        , sessionALPN sdata
-                                        )
-                                else -- fall back to full handshake
-                                    return (zero, Nothing, False, Nothing)
-                    _ -> return (zero, Nothing, False, Nothing)
+                -- The first identity that can be resumed is chosen, each
+                -- with its own age and binder.
+                tryPSK len $ zip3 [0 ..] ids bnds
             else return (zero, Nothing, False, Nothing)
     selectPSK _ = return (zero, Nothing, False, Nothing)
+
+    tryPSK _ [] = return (zero, Nothing, False, Nothing)
+    tryPSK len ((n, PskIdentity identity obfAge, bnd) : rest) = do
+        let mgr = sharedSessionManager $ serverShared sparams
+        -- sessionInvalidate is not used for TLS 1.3
+        -- because PSK is always changed.
+        -- So, identity is not stored in Context.
+        -- Early data is only with the first identity.
+        msdata <-
+            if rtt0 && n == 0
+                then sessionResumeOnlyOnce mgr identity
+                else sessionResume mgr identity
+        case msdata of
+            -- RFC 8446 Section 4.6.1: only a TLS 1.3 session, which
+            -- has its ticket information, is resumed with a PSK.  A
+            -- TLS 1.2 one found under the same identity falls back
+            -- to a full handshake.
+            Just sdata
+                | sessionVersion sdata == TLS13
+                , Just tinfo <- sessionTicketInfo sdata -> do
+                    let psk = sessionSecret sdata
+                    isFresh <- checkFreshness tinfo obfAge
+                    (isPSKvalid, is0RTTvalid) <- checkSessionEquality sdata
+                    if isPSKvalid && isFresh
+                        then
+                            return
+                                ( psk
+                                , Just (bnd, n :: Int, len)
+                                , is0RTTvalid && n == 0
+                                , sessionALPN sdata
+                                )
+                        else tryPSK len rest
+            _ -> tryPSK len rest
 
     checkBinder _ Nothing = return []
     checkBinder earlySecret (Just (binder, n, tlen)) = do
         (_, b) <- fromJust <$> usingHState ctx getClientHello
-        let binder' = makePSKBinder earlySecret usedHash tlen $ B.concat b --- xxx
+        binder' <- makePSKBinder ctx earlySecret usedHash tlen $ B.concat b
         unless (binder == binder') $
             decryptError "PSK binder validation failed"
         return [toExtensionRaw $ PreSharedKeyServerHello $ fromIntegral n]
@@ -209,7 +237,9 @@ pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CH{..} = do
                 Nothing -> False
                 Just c -> cipherHash c == cipherHash usedCipher
             isSameVersion = TLS13 == sessionVersion sdata
-            isPSKvalid = isSameKDF && isSameSNI -- fixme: SNI is not required
+            -- RFC 9846 does not require the same SNI, but a session of
+            -- another name may have other credentials and settings.
+            isPSKvalid = isSameKDF && isSameSNI
             is0RTTvalid = isSameVersion && isSameCipher
         return (isPSKvalid, is0RTTvalid)
 
