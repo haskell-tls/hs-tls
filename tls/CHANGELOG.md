@@ -83,6 +83,8 @@ value computed under the negotiated cipher's hash.
 * Refuse an RSA key in the peer's certificate longer than `supportedMaxRSAKeySize` (8192 by default), and a DH prime from a TLS 1.2 server outside `supportedMinDHKeySize` and `supportedMaxDHKeySize` (2048 and 8192 by default).
   This refuses 1024-bit custom DH parameters by default.
   [#632](https://github.com/haskell-tls/hs-tls/pull/632)
+* Add `closeNotifyReceived` to tell close_notify from an EOF without it.
+  [#635](https://github.com/haskell-tls/hs-tls/pull/635)
 
 ## Version 2.4.12
 
