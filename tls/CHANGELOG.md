@@ -87,6 +87,7 @@ value computed under the negotiated cipher's hash.
   [#635](https://github.com/haskell-tls/hs-tls/pull/635)
 * Resume a session only with its SNI on the client.
   [#636](https://github.com/haskell-tls/hs-tls/pull/636)
+* Require hpke 0.4.
 
 ## Version 2.4.12
 

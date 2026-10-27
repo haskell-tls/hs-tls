@@ -340,8 +340,9 @@ getHPKE ServerParams{..} ctx ECHClientHelloOuter{..} = do
                     let info = "tls ech\x00" <> encodedConfig
                         (kdfid, aeadid) = echCipherSuite
                     ctxR <- setupBaseR kemid kdfid aeadid skR Nothing echEnc info
-                    let nenc = nEnc kemid
-                        func = open ctxR
+                    -- unreachable: setupBaseR has refused an unknown KEM
+                    nenc <- maybe (E.throwIO $ Unsupported "KEM") return $ nEnc kemid
+                    let func = open ctxR
                     setTLS13HPKE ctx func nenc
                     return $ Just (func, nenc)
                 _ -> return Nothing

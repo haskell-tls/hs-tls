@@ -542,6 +542,7 @@ getHPKE
     -> (KDF_ID, AEAD_ID, ECHConfig)
     -> IO (Maybe (AAD -> PlainText -> IO CipherText, EncodedPublicKey, Int))
 getHPKE ctx (kdfid, aeadid, conf) = do
+    nT <- maybe (E.throwIO $ Unsupported "AEAD") return $ nTag aeadid
     mfunc <- getTLS13HPKE ctx
     case mfunc of
         Nothing -> do
@@ -555,7 +556,6 @@ getHPKE ctx (kdfid, aeadid, conf) = do
   where
     mpkR = cnfEncodedPublicKey conf
     kemid = cnfKemId conf
-    nT = nTag aeadid
 
 ----------------------------------------------------------------
 
