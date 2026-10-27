@@ -85,6 +85,8 @@ value computed under the negotiated cipher's hash.
   [#632](https://github.com/haskell-tls/hs-tls/pull/632)
 * Add `closeNotifyReceived` to tell close_notify from an EOF without it.
   [#635](https://github.com/haskell-tls/hs-tls/pull/635)
+* Resume a session only with its SNI on the client.
+  [#636](https://github.com/haskell-tls/hs-tls/pull/636)
 
 ## Version 2.4.12
 

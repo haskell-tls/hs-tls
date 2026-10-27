@@ -239,7 +239,9 @@ pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CH{..} = do
                 Nothing -> False
                 Just c -> cipherHash c == cipherHash usedCipher
             isSameVersion = TLS13 == sessionVersion sdata
-            isPSKvalid = isSameKDF && isSameSNI -- fixme: SNI is not required
+            -- RFC 9846 does not require the same SNI, but a session of
+            -- another name may have other credentials and settings.
+            isPSKvalid = isSameKDF && isSameSNI
             is0RTTvalid = isSameVersion && isSameCipher
         return (isPSKvalid, is0RTTvalid)
 

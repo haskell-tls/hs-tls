@@ -327,6 +327,8 @@ spec = do
             handshake13_0rtt_trailing_after_server_hello
         it "rejects a message after KeyUpdate in its record" $
             handshake13_trailing_after_key_update
+        prop "offers a PSK for the same SNI" $ handshake13_psk_sni True
+        prop "does not offer a PSK for another SNI" $ handshake13_psk_sni False
         it "resumes with the second PSK when the first is unknown" $
             handshake13_second_psk
         it "keeps the key shares for a HelloRetryRequest with only a cookie" $
@@ -3781,6 +3783,35 @@ handshake13_0rtt_key_usage_limit = do
 -- The client offers an unknown ticket, with a PSK of its own, before the
 -- one the server issued.  Each PSK has its own binder, and the server
 -- resumes with the second.
+-- RFC 9846 Section 4.6.1: a client resumes only with the SNI of the session.
+handshake13_psk_sni :: Bool -> CSP13 -> IO ()
+handshake13_psk_sni same (CSP13 (cli, srv)) = do
+    let withName name c =
+            c
+                { clientServerIdentification = (name, snd $ clientServerIdentification c)
+                , clientUseServerNameIndication = True
+                }
+    sessionRefs <- twoSessionRefs
+    let params =
+            setPairParamsSessionManagers
+                (twoSessionManagers sessionRefs)
+                (withName "a.example" cli, srv)
+    runTLSSimple params
+    sessionParams <- readClientSessionRef sessionRefs
+    expectJust "session param should be Just" sessionParams
+    let name = if same then "a.example" else "b.example"
+        (cli2, srv2) = setPairParamsSessionResuming (fromJust sessionParams) params
+    offered <- newIORef False
+    let check hs@(ClientHello ch) = do
+            let psk (ExtensionRaw eid _) = eid == EID_PreSharedKey
+            writeIORef offered $ any psk $ chExtensions ch
+            return hs
+        check hs = return hs
+    withPairContextWith (id, id) (withName name cli2, srv2) $ \(cctx, sctx) -> do
+        contextHookSetHandshakeRecv sctx check
+        concurrently_ (handshake sctx) (handshake cctx)
+    readIORef offered `shouldReturn` same
+
 handshake13_second_psk :: IO ()
 handshake13_second_psk = do
     (cli, srv) <- generate arbitraryPairParams13
