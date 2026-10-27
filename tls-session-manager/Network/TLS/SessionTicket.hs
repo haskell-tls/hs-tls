@@ -3,9 +3,7 @@
 -- | A manager for TLS 1.2/1.3 session ticket.
 --
 --   For TLS 1.3 0-RTT, a ticket is accepted at most once while a replay
---   of its ClientHello could still be fresh.  This covers one process
---   only: servers sharing the secret keys across processes can still
---   accept a replay in another process.
+--   of its ClientHello could still be fresh.
 --
 --   A dedicated thread is running repeatedly to replece
 --   secret keys. So, energy saving is not achieved.
@@ -122,7 +120,9 @@ resumeOnlyOnce ctmgr used ticket = do
                         Nothing -> (Q.insert ticket forget () q', True)
             return $ if first then Just sd else Nothing
 
+-- The wall clock, as the server checks freshness with it.  If it goes
+-- back, the ticket is remembered longer, just as a replay stays fresh.
 milliseconds :: IO Int64
 milliseconds = do
-    TimeSpec s ns <- getTime Monotonic
+    TimeSpec s ns <- getTime Realtime
     return $ s * 1000 + ns `div` 1000000
