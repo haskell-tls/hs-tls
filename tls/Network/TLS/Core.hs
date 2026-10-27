@@ -22,6 +22,7 @@ module Network.TLS.Core (
     sendData,
     recvData,
     recvData',
+    closeNotifyReceived,
     updateKey,
     KeyUpdateRequest (..),
     requestCertificate,
@@ -248,7 +249,8 @@ sendData ctx dataToSend = liftIO $ do
         mapM_ (mapChunks_ mlen sendP) (L.toChunks dataToSend)
 
 -- | Get data out of Data packet, and automatically renegotiate if a Handshake
--- ClientHello is received.  An empty result means EOF.
+-- ClientHello is received.  An empty result means EOF.  Use
+-- 'closeNotifyReceived' to tell an orderly closure from a truncation.
 recvData :: MonadIO m => Context -> m ByteString
 recvData ctx = liftIO $ do
     tls13 <- tls13orLater ctx
@@ -277,7 +279,7 @@ recvData12 ctx = do
     -- UserCanceled should be followed by a close_notify.
     -- fixme: is it safe to call recvData12?
     process (Alert [(AlertLevel_Warning, UserCanceled)]) = return B.empty
-    process (Alert [(AlertLevel_Warning, CloseNotify)]) = tryBye ctx >> setEOF ctx >> return B.empty
+    process (Alert [(AlertLevel_Warning, CloseNotify)]) = setCloseNotify ctx >> tryBye ctx >> setEOF ctx >> return B.empty
     process (Alert [(AlertLevel_Fatal, desc)]) = do
         setEOF ctx
         E.throwIO
@@ -316,7 +318,7 @@ recvData13 ctx = do
     -- closure ones are error alerts, even at the warning level.
     -- UserCanceled MUST be followed by a CloseNotify.
     process (Alert13 [(_, UserCanceled)]) = return B.empty
-    process (Alert13 [(_, CloseNotify)]) = tryBye ctx >> setEOF ctx >> return B.empty
+    process (Alert13 [(_, CloseNotify)]) = setCloseNotify ctx >> tryBye ctx >> setEOF ctx >> return B.empty
     process (Alert13 [(_, desc)]) = do
         setEOF ctx
         E.throwIO
@@ -453,7 +455,7 @@ recvHS13 ctx breakLoop = do
   where
     -- UserCanceled MUST be followed by a CloseNotify.
     process (Alert13 [(_, UserCanceled)]) = recvHS13 ctx breakLoop
-    process (Alert13 [(_, CloseNotify)]) = tryBye ctx >> setEOF ctx
+    process (Alert13 [(_, CloseNotify)]) = setCloseNotify ctx >> tryBye ctx >> setEOF ctx
     process (Alert13 [(_, _desc)]) = setEOF ctx
     process (Handshake13 hs bs) = do
         loopHandshake13 $ zip hs bs
@@ -590,6 +592,14 @@ terminateWithWriteLock ctx send err level desc reason = withWriteLock ctx $ do
     setEOF ctx
     debugError (ctxDebug ctx) reason
     E.throwIO (Terminated False reason err)
+
+-- | Whether the peer has sent close_notify.  If 'recvData' returns an
+-- empty result and this is 'False', the transport was closed without
+-- close_notify, so the data received may be truncated.
+--
+-- @since 2.5.0
+closeNotifyReceived :: MonadIO m => Context -> m Bool
+closeNotifyReceived = liftIO . ctxCloseNotify
 
 {-# DEPRECATED recvData' "use recvData that returns strict bytestring" #-}
 

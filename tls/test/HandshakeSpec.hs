@@ -48,6 +48,8 @@ spec = do
         prop "can run TLS 1.2" handshake_simple
         prop "can run TLS 1.3" handshake13_simple
         prop "can update key for TLS 1.3" handshake_update_key
+        prop "tells close_notify from an EOF" $ handshake_close_notify True
+        prop "tells an EOF without close_notify" $ handshake_close_notify False
         it
             "rejects more than 32 consecutive TLS 1.3 KeyUpdates"
             handshake_key_update_flood
@@ -641,6 +643,26 @@ handshake13_downgrade (cparam, sparam) = do
     if downgraded
         then runTLSFailure params handshake handshake
         else runTLSSimple params
+
+-- RFC 9846 Section 6.1: an EOF without close_notify may be a truncation.
+handshake_close_notify :: Bool -> (ClientParams, ServerParams) -> IO ()
+handshake_close_notify sendBye params = do
+    closed <- newIORef False
+    let close be =
+            be
+                { backendRecv = \n -> do
+                    c <- readIORef closed
+                    if c then return "" else backendRecv be n
+                }
+    withPairContextWith (id, close) params $ \(cctx, sctx) -> do
+        concurrently_ (handshake sctx) (handshake cctx)
+        -- The transport is closed before 'recvData' starts to read.
+        if sendBye
+            then concurrently_ (bye cctx) $ recvData sctx `shouldReturn` ""
+            else do
+                writeIORef closed True
+                recvData sctx `shouldReturn` ""
+        closeNotifyReceived sctx `shouldReturn` sendBye
 
 handshake_update_key :: (ClientParams, ServerParams) -> IO ()
 handshake_update_key = runTLSSimpleKeyUpdate
