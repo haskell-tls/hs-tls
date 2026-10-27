@@ -11,11 +11,13 @@ module Network.TLS.Context (
     PendingRecv (..),
     RecordLayer (..),
     ctxEOF,
+    ctxCloseNotify,
     ctxEstablished,
     withLog,
     ctxWithHooks,
     contextModifyHooks,
     setEOF,
+    setCloseNotify,
     setEstablished,
     contextFlush,
     contextClose,
@@ -167,6 +169,7 @@ contextNew backend params = liftIO $ do
 
     tlsstate <- newMVar st
     eof <- newIORef False
+    closeNotify <- newIORef False
     established <- newIORef NotEstablished
     stats <- newIORef newMeasurement
     needEmptyPacket <- newIORef False
@@ -205,6 +208,7 @@ contextNew backend params = liftIO $ do
                 , ctxRoleParams = roleParams
                 , ctxMeasurement = stats
                 , ctxEOF_ = eof
+                , ctxCloseNotify_ = closeNotify
                 , ctxEstablished_ = established
                 , ctxNeedEmptyPacket = needEmptyPacket
                 , ctxHooks = hooks

@@ -23,11 +23,13 @@ module Network.TLS.Context.Internal (
     Locks (..),
     RoleParams (..),
     ctxEOF,
+    ctxCloseNotify,
     ctxEstablished,
     withLog,
     ctxWithHooks,
     contextModifyHooks,
     setEOF,
+    setCloseNotify,
     setEstablished,
     skipEarlyData,
     contextFlush,
@@ -131,6 +133,8 @@ data Context
     , ctxMeasurement :: IORef Measurement
     , ctxEOF_ :: IORef Bool
     -- ^ has the handle EOFed or not.
+    , ctxCloseNotify_ :: IORef Bool
+    -- ^ has close_notify been received or not.
     , ctxEstablished_ :: IORef Established
     -- ^ has the handshake been done and been successful.
     , ctxTxRecordState :: MVar RecordState
@@ -387,6 +391,12 @@ ctxEOF ctx = readIORef $ ctxEOF_ ctx
 
 setEOF :: Context -> IO ()
 setEOF ctx = writeIORef (ctxEOF_ ctx) True
+
+ctxCloseNotify :: Context -> IO Bool
+ctxCloseNotify ctx = readIORef $ ctxCloseNotify_ ctx
+
+setCloseNotify :: Context -> IO ()
+setCloseNotify ctx = writeIORef (ctxCloseNotify_ ctx) True
 
 ctxEstablished :: Context -> IO Established
 ctxEstablished ctx = readIORef $ ctxEstablished_ ctx
