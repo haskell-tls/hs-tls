@@ -127,7 +127,7 @@ doCertificate cparams ctx certs = do
     usage <- either rejectOnException (return . wrapCertificateChecks) result
     case usage of
         CertificateUsageAccept -> do
-            verifyLeafKeyUsagePurpose KeyUsagePurpose_ServerAuth certs
+            verifyLeafKeyUsagePurpose [KeyUsagePurpose_ServerAuth] certs
             verifyLeafKeySize (ctxSupported ctx) certs
             checkLeafCertificateKeyUsage
         CertificateUsageReject reason ->

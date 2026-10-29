@@ -117,6 +117,7 @@ module Network.TLS (
     supportedCiphers,
     supportedMinRSAKeySize,
     supportedMaxRSAKeySize,
+    supportedClientCertificatePurposes,
     supportedMinDHKeySize,
     supportedMaxDHKeySize,
     supportedClientCipherOrder,
@@ -311,6 +312,7 @@ module Network.TLS (
     -- ** Crypto Key
     PubKey (..),
     PrivKey (..),
+    ExtKeyUsagePurpose (..),
 
     -- ** Ciphers & Predefined ciphers
     module Network.TLS.Cipher,
@@ -323,7 +325,7 @@ module Network.TLS (
     clientUseMaxFragmentLength,
 ) where
 
-import Data.X509 (PrivKey (..), PubKey (..))
+import Data.X509 (ExtKeyUsagePurpose (..), PrivKey (..), PubKey (..))
 import Data.X509.Validation hiding (HostName, defaultHooks)
 
 import Network.TLS.Backend (Backend (..), HasBackend (..))
