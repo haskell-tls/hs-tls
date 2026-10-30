@@ -34,6 +34,7 @@ module Network.TLS.Parameters (
 import Control.Concurrent (MVar, newMVar, withMVar)
 import Crypto.HPKE
 import Data.Default (Default (def))
+import Data.X509 (ExtKeyUsagePurpose (..))
 import System.Environment (lookupEnv)
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -314,6 +315,14 @@ data Supported = Supported
     -- any size through.
     --
     -- Default: 8192
+    , supportedClientCertificatePurposes :: [ExtKeyUsagePurpose]
+    -- ^ Server only.  A client's leaf certificate with Extended Key Usage
+    -- is refused with bad_certificate unless it allows one of these.
+    -- Adding 'KeyUsagePurpose_ServerAuth' accepts a server certificate.
+    --
+    -- Default: @[KeyUsagePurpose_ClientAuth]@
+    --
+    -- @since 2.5.0
     , supportedMinDHKeySize :: Int
     -- ^ The least size in bits of the prime of the DH parameters a TLS 1.2
     -- server sends.  A smaller one is refused with insufficient_security
@@ -474,6 +483,7 @@ defaultSupported =
         , supportedCiphers = ciphersuite_default
         , supportedMinRSAKeySize = 2048
         , supportedMaxRSAKeySize = 8192
+        , supportedClientCertificatePurposes = [KeyUsagePurpose_ClientAuth]
         , supportedMinDHKeySize = 2048
         , supportedMaxDHKeySize = 8192
         , supportedClientCipherOrder = False

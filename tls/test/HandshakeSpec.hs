@@ -109,6 +109,12 @@ spec = do
         it "rejects a TLS 1.3 server certificate restricted to client auth" $
             handshake_server_key_purpose TLS13 KeyUsagePurpose_ClientAuth False
         prop "can handle client key usage" handshake_client_key_usage
+        it "rejects a client certificate restricted to server auth" $
+            handshake_client_key_purpose [KeyUsagePurpose_ClientAuth] False
+        it "accepts a client certificate for server auth if allowed" $
+            handshake_client_key_purpose
+                [KeyUsagePurpose_ClientAuth, KeyUsagePurpose_ServerAuth]
+                True
         prop "can authenticate client" handshake_client_auth
         it "rejects a TLS 1.3 CertificateVerify algorithm unfit for the key" $
             handshake13_client_cert_verify_unfit_sigalg
@@ -1043,6 +1049,34 @@ handshake_client_key_usage usageFlags = do
                         }
                 }
         shouldSucceed = KeyUsage_digitalSignature `elem` usageFlags
+    if shouldSucceed
+        then runTLSSimple (clientParam', serverParam')
+        else runTLSFailure (clientParam', serverParam') handshake handshake
+
+-- The client offers a certificate restricted to server auth.
+handshake_client_key_purpose :: [ExtKeyUsagePurpose] -> Bool -> IO ()
+handshake_client_key_purpose purposes shouldSucceed = do
+    (clientParam, serverParam) <- generate arbitrary
+    cred <- generate $ arbitraryRSACredentialWithPurpose KeyUsagePurpose_ServerAuth
+    let clientParam' =
+            clientParam
+                { clientHooks =
+                    (clientHooks clientParam)
+                        { onCertificateRequest = \_ -> return $ Just cred
+                        }
+                }
+        serverParam' =
+            serverParam
+                { serverWantClientCert = True
+                , serverHooks =
+                    (serverHooks serverParam)
+                        { onClientCertificate = \_ -> return CertificateUsageAccept
+                        }
+                , serverSupported =
+                    (serverSupported serverParam)
+                        { supportedClientCertificatePurposes = purposes
+                        }
+                }
     if shouldSucceed
         then runTLSSimple (clientParam', serverParam')
         else runTLSFailure (clientParam', serverParam') handshake handshake

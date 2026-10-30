@@ -117,17 +117,17 @@ verifyLeafKeyUsage validFlags (CertificateChain (signed : _)) =
             Just (ExtKeyUsage flags) -> any (`elem` validFlags) flags
 
 verifyLeafKeyUsagePurpose
-    :: MonadIO m => ExtKeyUsagePurpose -> CertificateChain -> m ()
+    :: MonadIO m => [ExtKeyUsagePurpose] -> CertificateChain -> m ()
 verifyLeafKeyUsagePurpose _ (CertificateChain []) = return ()
-verifyLeafKeyUsagePurpose validPurpose (CertificateChain (signed : _)) =
+verifyLeafKeyUsagePurpose validPurposes (CertificateChain (signed : _)) =
     unless verified $
         badCertificate $
-            "certificate is not allowed for " ++ show validPurpose
+            "certificate is not allowed for any of " ++ show validPurposes
   where
     cert = getCertificate signed
     verified = case extensionGet (certExtensions cert) of
         Nothing -> True
-        Just (ExtExtendedKeyUsage purposes) -> validPurpose `elem` purposes
+        Just (ExtExtendedKeyUsage purposes) -> any (`elem` validPurposes) purposes
 
 -- | The RSA key of the peer's leaf certificate is to be at least
 -- 'supportedMinRSAKeySize' and at most 'supportedMaxRSAKeySize' bits.  The
