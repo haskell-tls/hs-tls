@@ -17,6 +17,8 @@ import Network.TLS.SessionManager.Internal (
     cons,
     toValue,
  )
+import Network.TLS.SessionTicket (newSessionTicketManager')
+import qualified Network.TLS.SessionTicket as SessionTicket
 import Test.Hspec
 
 spec :: Spec
@@ -52,6 +54,17 @@ spec = do
             _ <- sessionEstablish mgr "a" $ sessionData Nothing
             sessionResumeOnlyOnce mgr "a" >>= (`shouldSatisfy` isJust)
             sessionResumeOnlyOnce mgr "a" >>= (`shouldSatisfy` isNothing)
+    describe "newSessionTicketManager" $ do
+        it "resumes a ticket only once for 0-RTT while a replay is fresh" $ do
+            (mgr, kill) <- newSessionTicketManager' SessionTicket.defaultConfig
+            Just ticket <- sessionEstablish mgr "" $ sessionData (Just 3600)
+            sessionResumeOnlyOnce mgr ticket >>= (`shouldSatisfy` isJust)
+            sessionResumeOnlyOnce mgr ticket >>= (`shouldSatisfy` isNothing)
+            sessionResume mgr ticket >>= (`shouldSatisfy` isJust)
+            -- twice the tolerance of 2 seconds and a second of margin
+            threadDelay 5100000
+            sessionResumeOnlyOnce mgr ticket >>= (`shouldSatisfy` isJust)
+            kill
     -- While the reaper prunes, the sessions are taken away and an empty
     -- workload is left in their place; the pruned ones are merged back.
     describe "pruning" $ do
