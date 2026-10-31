@@ -2,7 +2,14 @@
 
 module HandshakeSpec where
 
-import Control.Concurrent (forkIO, newEmptyMVar, putMVar, takeMVar, threadDelay)
+import Control.Concurrent (
+    MVar,
+    forkIO,
+    newEmptyMVar,
+    putMVar,
+    takeMVar,
+    threadDelay,
+ )
 import Control.Concurrent.Async (concurrently_)
 import qualified Control.Exception as E
 import Control.Monad
@@ -285,6 +292,8 @@ spec = do
             post_handshake_auth_async_wait True
         it "fails an asynchronous post-handshake auth with a rejected certificate" $
             post_handshake_auth_async_wait False
+        it "commits the client certificate of a post-handshake auth at Finished" $
+            post_handshake_auth_async_finished
         it
             "keeps record alignment when a slow record follows client auth"
             handshake13_client_auth_slow_record
@@ -3323,6 +3332,72 @@ post_handshake_auth_async_wait accept = do
                 takeMVar result >>= (`shouldSatisfy` isFailed)
     isFailed (PHAFailed _) = True
     isFailed _ = False
+
+-- | The client's Finished is held back after its CertificateVerify has been
+-- verified.  Until Finished arrives, the result is pending and the chain is
+-- not committed.
+post_handshake_auth_async_finished :: IO ()
+post_handshake_auth_async_finished = do
+    params <- generate arbitraryPairParams13
+    cred <- generate arbitraryPHACredential
+    let (clientParam, serverParam) = phaParams True cred params
+        params' = (clientParam, serverParam{serverWantClientCert = False})
+    armed <- newIORef False
+    held <- newEmptyMVar
+    cvSeen <- newEmptyMVar
+    withPairContextWith (holdLastRecord armed held, id) params' $ \(cCtx, sCtx) -> do
+        contextHookSetHandshake13Recv sCtx $ \h -> do
+            case h of
+                CertVerify13{} -> putMVar cvSeen ()
+                _ -> return ()
+            return h
+        concurrently_ (hsServer cred held cvSeen sCtx) (hsClient armed cCtx)
+  where
+    hsClient armed ctx = do
+        handshake ctx
+        writeIORef armed True
+        sendData ctx "request 1"
+        recvDataAssert ctx "response 1"
+        recvDataAssert ctx "response 2"
+        sendData ctx "request 2"
+    hsServer cred held cvSeen ctx = do
+        handshake ctx
+        recvDataAssert ctx "request 1"
+        check <- requestCertificateAsync ctx
+        sendData ctx "response 1"
+        received <- newEmptyMVar
+        _ <- forkIO $ recvData ctx >>= putMVar received
+        takeMVar cvSeen
+        threadDelay 100000 -- for CertificateVerify to be processed
+        check False `shouldReturn` PHAPending
+        getClientCertificateChain ctx `shouldReturn` Nothing
+        join $ takeMVar held
+        check True `shouldReturn` PHAAccepted (fst cred)
+        getClientCertificateChain ctx `shouldReturn` Just (fst cred)
+        sendData ctx "response 2"
+        takeMVar received `shouldReturn` "request 2"
+
+-- | Once armed, hold back the last record of the next write of several
+-- records, and leave the action that sends it.
+holdLastRecord :: IORef Bool -> MVar (IO ()) -> Backend -> Backend
+holdLastRecord armed held be =
+    be
+        { backendSend = \bs -> do
+            arm <- readIORef armed
+            case records bs of
+                rs@(_ : _ : _) | arm -> do
+                    writeIORef armed False
+                    backendSend be $ B.concat $ init rs
+                    putMVar held $ backendSend be $ last rs
+                _ -> backendSend be bs
+        }
+  where
+    records bs
+        | B.length bs < 5 = [bs | not (B.null bs)]
+        | otherwise =
+            let len = fromIntegral (B.index bs 3) * 256 + fromIntegral (B.index bs 4)
+                (r, rest) = B.splitAt (5 + len) bs
+             in r : records rest
 
 -- | After sending a Certificate message, a TLS 1.3 client peeks for a
 -- client-authentication alert with a deadline of a few RTTs.  That peek must

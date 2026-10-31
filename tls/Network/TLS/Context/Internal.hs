@@ -234,6 +234,9 @@ data TLS13State = TLS13State
     , tls13stPHA :: Maybe (MVar PHAResult, TLSError)
     -- ^ server: the result of the pending post-handshake authentication,
     -- and the error given to the waiters when the connection is closed
+    , tls13stPHAResponding :: Bool
+    -- ^ server: the client's response has begun, so nothing else may come
+    -- until its Finished
     }
 
 -- | The result of 'Network.TLS.requestCertificateAsync'.
@@ -274,6 +277,7 @@ defaultTLS13State =
         , tls13stSession = Session Nothing
         , tls13stSentExtensions = []
         , tls13stPHA = Nothing
+        , tls13stPHAResponding = False
         }
 
 getTLS13State :: Context -> IO TLS13State

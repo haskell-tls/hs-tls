@@ -189,7 +189,16 @@ sendNewSessionTicket sparams ctx usedCipher exts applicationSecret sfSentTime = 
 expectCertVerify
     :: MonadIO m
     => ServerParams -> Context -> TranscriptHash -> Handshake13 -> m ()
-expectCertVerify sparams ctx (TranscriptHash hChCc) (CertVerify13 (DigitallySigned sigAlg sig)) = liftIO $ do
+expectCertVerify sparams ctx th h = liftIO $ do
+    -- Commit the client certificate chain to the context.
+    certs <- verifyCertVerify sparams ctx th h
+    usingState_ ctx $ setClientCertificateChain certs
+
+-- | Like 'expectCertVerify' but returns the chain instead of committing
+-- it, which post-handshake authentication does only after Finished.
+verifyCertVerify
+    :: ServerParams -> Context -> TranscriptHash -> Handshake13 -> IO CertificateChain
+verifyCertVerify sparams ctx (TranscriptHash hChCc) (CertVerify13 (DigitallySigned sigAlg sig)) = do
     certs@(CertificateChain cc) <-
         checkValidClientCertChain ctx "invalid client certificate chain"
     pubkey <- case cc of
@@ -199,33 +208,20 @@ expectCertVerify sparams ctx (TranscriptHash hChCc) (CertVerify13 (DigitallySign
     checkDigitalSignatureKey ver pubkey
     usingHState ctx $ setPublicKey pubkey
     verif <- checkCertVerify ctx pubkey sigAlg sig hChCc
-    clientCertVerify sparams ctx certs verif
-expectCertVerify _ _ _ hs = unexpected (show hs) (Just "certificate verify 13")
+    clientCertVerify sparams verif
+    return certs
+verifyCertVerify _ _ _ hs = unexpected (show hs) (Just "certificate verify 13")
 
-clientCertVerify :: ServerParams -> Context -> CertificateChain -> Bool -> IO ()
-clientCertVerify sparams ctx certs verif = do
-    if verif
-        then do
-            -- When verification succeeds, commit the
-            -- client certificate chain to the context.
-            --
-            usingState_ ctx $ setClientCertificateChain certs
-            return ()
-        else do
-            -- Either verification failed because of an
-            -- invalid format (with an error message), or
-            -- the signature is wrong.  In either case,
-            -- ask the application if it wants to
-            -- proceed, we will do that.
-            res <- liftIO $ onUnverifiedClientCert (serverHooks sparams)
-            if res
-                then do
-                    -- When verification fails, but the
-                    -- application callbacks accepts, we
-                    -- also commit the client certificate
-                    -- chain to the context.
-                    usingState_ ctx $ setClientCertificateChain certs
-                else decryptError "verification failed"
+clientCertVerify :: ServerParams -> Bool -> IO ()
+clientCertVerify sparams verif =
+    unless verif $ do
+        -- Either verification failed because of an
+        -- invalid format (with an error message), or
+        -- the signature is wrong.  In either case,
+        -- ask the application if it wants to
+        -- proceed, we will do that.
+        res <- onUnverifiedClientCert (serverHooks sparams)
+        unless res $ decryptError "verification failed"
 
 ----------------------------------------------------------------
 
@@ -258,13 +254,18 @@ requestCertificateServer sparams ctx = handleEx ctx $ do
             emptyCert <- expectClientCertificate sparams ctx origCertReqCtx clientCert13
             updateTranscriptHash13 ctx (clientCert13, bClientCert13)
             th <- transcriptHash ctx "CH..Cert"
-            unless emptyCert $ do
-                (certVerify13, bCertVerify13) <- getHandshake ctx ref
-                expectCertVerify sparams ctx th certVerify13
-                updateTranscriptHash13 ctx (certVerify13, bCertVerify13)
+            mcerts <-
+                if emptyCert
+                    then return Nothing
+                    else do
+                        (certVerify13, bCertVerify13) <- getHandshake ctx ref
+                        certs <- verifyCertVerify sparams ctx th certVerify13
+                        updateTranscriptHash13 ctx (certVerify13, bCertVerify13)
+                        return $ Just certs
             (finished13, _bFinished13) <- getHandshake ctx ref
             thCf <- transcriptHash ctx "CH..<CF"
             expectClientFinished ctx thCf finished13
+            forM_ mcerts $ usingState_ ctx . setClientCertificateChain
             void $ restoreHState ctx baseHState -- fixme
         return True
 
@@ -294,25 +295,29 @@ requestCertificateAsyncServer sparams ctx = withWriteLock ctx $ do
         certReqCtx <- newCertReqContext ctx
         let certReq13 = makeCertRequest sparams ctx certReqCtx False
         baseHState <- saveHState ctx
+        ref <- newIORef Nothing
         let certificate = PendingRecvAction False $ \h -> reportTo mv $ do
+                modifyTLS13State ctx $ \st -> st{tls13stPHAResponding = True}
                 emptyCert <- expectClientCertificate sparams ctx certReqCtx h
-                pushPendingRecvAction ctx $ finished mv baseHState emptyCert
+                pushPendingRecvAction ctx $ finished mv baseHState ref
                 unless emptyCert $
                     pushPendingRecvAction ctx $
-                        PendingRecvActionHash False $
-                            \th -> reportTo mv . expectCertVerify sparams ctx th
+                        PendingRecvActionHash False $ \th h' -> reportTo mv $ do
+                            certs <- verifyCertVerify sparams ctx th h'
+                            writeIORef ref $ Just certs
         setPendingRecvActions ctx [certificate]
         modifyTLS13State ctx $ \st -> st{tls13stPHA = Just (mv, Error_EOF)}
         -- This also adds CertificateRequest to the transcript.
         sendPacket13 ctx $ Handshake13 [certReq13] []
-    finished mv baseHState emptyCert = PendingRecvActionHash False $ \th h -> reportTo mv $ do
+    -- The chain verified by CertificateVerify is committed only now.
+    finished mv baseHState ref = PendingRecvActionHash False $ \th h -> reportTo mv $ do
         expectClientFinished ctx th h
         void $ restoreHState ctx baseHState
-        mcc <- usingState_ ctx getClientCertificateChain
-        modifyTLS13State ctx $ \st -> st{tls13stPHA = Nothing}
-        putMVar mv $ case mcc of
-            Just cc | not emptyCert -> PHAAccepted cc
-            _ -> PHADeclined
+        mcerts <- readIORef ref
+        forM_ mcerts $ usingState_ ctx . setClientCertificateChain
+        modifyTLS13State ctx $ \st ->
+            st{tls13stPHA = Nothing, tls13stPHAResponding = False}
+        putMVar mv $ maybe PHADeclined PHAAccepted mcerts
     -- The waiters get the error when 'recvData' has sent the alert and
     -- closed the connection, so that they do not send close_notify.
     reportTo mv f =
