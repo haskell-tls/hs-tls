@@ -1,9 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Network.TLS.Handshake.Server.TLS13 (
     recvClientSecondFlight13,
     requestCertificateServer,
+    requestCertificateAsyncServer,
     keyUpdate,
     sendKeyUpdate,
     respondToKeyUpdate,
@@ -11,6 +13,7 @@ module Network.TLS.Handshake.Server.TLS13 (
     KeyUpdateRequest (..),
 ) where
 
+import Control.Concurrent.MVar
 import qualified Control.Exception as E
 import Control.Monad.State.Strict
 import Data.IORef
@@ -186,7 +189,16 @@ sendNewSessionTicket sparams ctx usedCipher exts applicationSecret sfSentTime = 
 expectCertVerify
     :: MonadIO m
     => ServerParams -> Context -> TranscriptHash -> Handshake13 -> m ()
-expectCertVerify sparams ctx (TranscriptHash hChCc) (CertVerify13 (DigitallySigned sigAlg sig)) = liftIO $ do
+expectCertVerify sparams ctx th h = liftIO $ do
+    -- Commit the client certificate chain to the context.
+    certs <- verifyCertVerify sparams ctx th h
+    usingState_ ctx $ setClientCertificateChain certs
+
+-- | Like 'expectCertVerify' but returns the chain instead of committing
+-- it, which post-handshake authentication does only after Finished.
+verifyCertVerify
+    :: ServerParams -> Context -> TranscriptHash -> Handshake13 -> IO CertificateChain
+verifyCertVerify sparams ctx (TranscriptHash hChCc) (CertVerify13 (DigitallySigned sigAlg sig)) = do
     certs@(CertificateChain cc) <-
         checkValidClientCertChain ctx "invalid client certificate chain"
     pubkey <- case cc of
@@ -196,33 +208,20 @@ expectCertVerify sparams ctx (TranscriptHash hChCc) (CertVerify13 (DigitallySign
     checkDigitalSignatureKey ver pubkey
     usingHState ctx $ setPublicKey pubkey
     verif <- checkCertVerify ctx pubkey sigAlg sig hChCc
-    clientCertVerify sparams ctx certs verif
-expectCertVerify _ _ _ hs = unexpected (show hs) (Just "certificate verify 13")
+    clientCertVerify sparams verif
+    return certs
+verifyCertVerify _ _ _ hs = unexpected (show hs) (Just "certificate verify 13")
 
-clientCertVerify :: ServerParams -> Context -> CertificateChain -> Bool -> IO ()
-clientCertVerify sparams ctx certs verif = do
-    if verif
-        then do
-            -- When verification succeeds, commit the
-            -- client certificate chain to the context.
-            --
-            usingState_ ctx $ setClientCertificateChain certs
-            return ()
-        else do
-            -- Either verification failed because of an
-            -- invalid format (with an error message), or
-            -- the signature is wrong.  In either case,
-            -- ask the application if it wants to
-            -- proceed, we will do that.
-            res <- liftIO $ onUnverifiedClientCert (serverHooks sparams)
-            if res
-                then do
-                    -- When verification fails, but the
-                    -- application callbacks accepts, we
-                    -- also commit the client certificate
-                    -- chain to the context.
-                    usingState_ ctx $ setClientCertificateChain certs
-                else decryptError "verification failed"
+clientCertVerify :: ServerParams -> Bool -> IO ()
+clientCertVerify sparams verif =
+    unless verif $ do
+        -- Either verification failed because of an
+        -- invalid format (with an error message), or
+        -- the signature is wrong.  In either case,
+        -- ask the application if it wants to
+        -- proceed, we will do that.
+        res <- onUnverifiedClientCert (serverHooks sparams)
+        unless res $ decryptError "verification failed"
 
 ----------------------------------------------------------------
 
@@ -233,7 +232,8 @@ requestCertificateServer :: ServerParams -> Context -> IO Bool
 requestCertificateServer sparams ctx = handleEx ctx $ do
     tls13 <- tls13orLater ctx
     supportsPHA <- usingState_ ctx getTLS13ClientSupportsPHA
-    let ok = tls13 && supportsPHA
+    pending <- isJust . tls13stPHA <$> getTLS13State ctx
+    let ok = tls13 && supportsPHA && not pending
     if ok
         then newIORef [] >>= sendCertReqAndRecv
         else return ok
@@ -254,14 +254,79 @@ requestCertificateServer sparams ctx = handleEx ctx $ do
             emptyCert <- expectClientCertificate sparams ctx origCertReqCtx clientCert13
             updateTranscriptHash13 ctx (clientCert13, bClientCert13)
             th <- transcriptHash ctx "CH..Cert"
-            unless emptyCert $ do
-                (certVerify13, bCertVerify13) <- getHandshake ctx ref
-                expectCertVerify sparams ctx th certVerify13
-                updateTranscriptHash13 ctx (certVerify13, bCertVerify13)
+            mcerts <-
+                if emptyCert
+                    then return Nothing
+                    else do
+                        (certVerify13, bCertVerify13) <- getHandshake ctx ref
+                        certs <- verifyCertVerify sparams ctx th certVerify13
+                        updateTranscriptHash13 ctx (certVerify13, bCertVerify13)
+                        return $ Just certs
             (finished13, _bFinished13) <- getHandshake ctx ref
-            expectClientFinished ctx finished13
+            thCf <- transcriptHash ctx "CH..<CF"
+            expectClientFinished ctx thCf finished13
+            forM_ mcerts $ usingState_ ctx . setClientCertificateChain
             void $ restoreHState ctx baseHState -- fixme
         return True
+
+-- | The response is processed by 'recvData' as pending actions, so the
+-- application keeps receiving data meanwhile.
+requestCertificateAsyncServer
+    :: ServerParams -> Context -> IO (Bool -> IO PHAResult)
+requestCertificateAsyncServer sparams ctx = withWriteLock ctx $ do
+    tls13 <- tls13orLater ctx
+    supportsPHA <- usingState_ ctx getTLS13ClientSupportsPHA
+    established <- ctxEstablished ctx
+    pending <- isJust . tls13stPHA <$> getTLS13State ctx
+    noActions <- null <$> readIORef (ctxPendingRecvActions ctx)
+    if tls13 && supportsPHA && established == Established && not pending && noActions
+        then do
+            mv <- newEmptyMVar
+            request mv
+            return $ \block ->
+                if block
+                    then readMVar mv
+                    else fromMaybe PHAPending <$> tryReadMVar mv
+        else return $ \_ -> return PHAUnavailable
+  where
+    -- The actions are registered before CertificateRequest is sent, so
+    -- that the response cannot reach 'recvData' first.
+    request mv = do
+        certReqCtx <- newCertReqContext ctx
+        let certReq13 = makeCertRequest sparams ctx certReqCtx False
+        baseHState <- saveHState ctx
+        ref <- newIORef Nothing
+        let certificate = PendingRecvAction False $ \h -> reportTo mv $ do
+                modifyTLS13State ctx $ \st -> st{tls13stPHAResponding = True}
+                emptyCert <- expectClientCertificate sparams ctx certReqCtx h
+                pushPendingRecvAction ctx $ finished mv baseHState ref
+                unless emptyCert $
+                    pushPendingRecvAction ctx $
+                        PendingRecvActionHash False $ \th h' -> reportTo mv $ do
+                            certs <- verifyCertVerify sparams ctx th h'
+                            writeIORef ref $ Just certs
+        setPendingRecvActions ctx [certificate]
+        modifyTLS13State ctx $ \st -> st{tls13stPHA = Just (mv, Error_EOF)}
+        -- This also adds CertificateRequest to the transcript.
+        sendPacket13 ctx $ Handshake13 [certReq13] []
+    -- The chain verified by CertificateVerify is committed only now.
+    finished mv baseHState ref = PendingRecvActionHash False $ \th h -> reportTo mv $ do
+        expectClientFinished ctx th h
+        void $ restoreHState ctx baseHState
+        mcerts <- readIORef ref
+        forM_ mcerts $ usingState_ ctx . setClientCertificateChain
+        modifyTLS13State ctx $ \st ->
+            st{tls13stPHA = Nothing, tls13stPHAResponding = False}
+        putMVar mv $ maybe PHADeclined PHAAccepted mcerts
+    -- The waiters get the error when 'recvData' has sent the alert and
+    -- closed the connection, so that they do not send close_notify.
+    reportTo mv f =
+        f `E.catch` \(e :: E.SomeException) -> do
+            let err = case E.fromException e of
+                    Just (Uncontextualized e') -> e'
+                    _ -> Error_Misc $ show e
+            modifyTLS13State ctx $ \st -> st{tls13stPHA = Just (mv, err)}
+            E.throwIO e
 
 -- saving appdata and key update?
 -- error handling
@@ -329,17 +394,16 @@ expectClientCertificate' sparams ctx origCertReqCtx certReqCtx certs = do
             Error_Protocol "certificate context is wrong" IllegalParameter
     void $ clientCertificate sparams ctx certs
 
-expectClientFinished :: Context -> Handshake13 -> IO ()
-expectClientFinished ctx (Finished13 verifyData) = do
+expectClientFinished :: Context -> TranscriptHash -> Handshake13 -> IO ()
+expectClientFinished ctx hChBeforeCf (Finished13 verifyData) = do
     (usedHash, _, level, applicationSecretN) <- getRxRecordState ctx
     unless (level == CryptApplicationSecret) $
         throwCore $
             Error_Protocol
                 "tried post-handshake authentication without application traffic secret"
                 InternalError
-    hChBeforeCf <- transcriptHash ctx "CH..<CF"
     checkFinished ctx usedHash applicationSecretN hChBeforeCf verifyData
-expectClientFinished _ h = unexpected "Finished" $ Just $ show h
+expectClientFinished _ _ h = unexpected "Finished" $ Just $ show h
 
 terminate :: Context -> TLSError -> IO a
 terminate ctx err = do
