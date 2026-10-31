@@ -23,8 +23,12 @@ import Network.TLS.Struct13
 -- exception is thrown if the authentication fails. Server only.
 --
 -- This reads the client's response by itself, so it must not be called
--- while another thread is in 'recvData'.
-{-# DEPRECATED requestCertificate "Use requestCertificateAsync" #-}
+-- while another thread is in 'recvData', and application data received
+-- before the response closes the connection, against RFC 9846 Section 4.7.2.
+{-# DEPRECATED
+    requestCertificate
+    "Application data before the response closes the connection; use requestCertificateAsync"
+    #-}
 requestCertificate :: Context -> IO Bool
 requestCertificate ctx =
     checkValid ctx >> doRequestCertificate_ (ctxRoleParams ctx) ctx
