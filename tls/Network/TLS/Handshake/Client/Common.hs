@@ -310,7 +310,7 @@ storePrivInfoClient ctx cTypes (cc, privkey) = do
 
 ----------------------------------------------------------------
 
--- | Return a most preferred 'HandAndSignatureAlgorithm' that is compatible with
+-- | Return a most preferred 'SignatureScheme' that is compatible with
 -- the local key and server's signature algorithms (both already saved).  Must
 -- only be called for TLS versions 1.2 and up, with compatibility function
 -- 'signatureCompatible' or 'signatureCompatible13' based on version.
