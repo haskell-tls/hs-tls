@@ -87,6 +87,8 @@ value computed under the negotiated cipher's hash.
   [#635](https://github.com/haskell-tls/hs-tls/pull/635)
 * Resume a session only with its SNI on the client.
   [#636](https://github.com/haskell-tls/hs-tls/pull/636)
+* Let a server choose the purposes accepted in a client certificate (`supportedClientCertificatePurposes`).
+  [#638](https://github.com/haskell-tls/hs-tls/pull/638)
 * Add `requestCertificateAsync`, whose response `recvData` processes, and deprecate `requestCertificate`.
   [#633](https://github.com/haskell-tls/hs-tls/pull/633)
 * Require hpke 0.4.
