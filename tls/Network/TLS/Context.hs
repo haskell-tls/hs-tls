@@ -95,6 +95,7 @@ import Network.TLS.Measurement
 import Network.TLS.Parameters
 import Network.TLS.PostHandshake (
     postHandshakeAuthClientWith,
+    requestCertificateAsyncServer,
     requestCertificateServer,
  )
 import Network.TLS.RNG
@@ -117,6 +118,7 @@ class TLSParams a where
     doHandshake :: a -> Context -> IO ()
     doHandshakeWith :: a -> Context -> HandshakeR -> IO ()
     doRequestCertificate :: a -> Context -> IO Bool
+    doRequestCertificateAsync :: a -> Context -> IO (Bool -> IO PHAResult)
     doPostHandshakeAuthWith :: a -> Context -> Handshake13R -> IO ()
 
 instance TLSParams ClientParams where
@@ -129,6 +131,7 @@ instance TLSParams ClientParams where
     doHandshake = handshakeClient
     doHandshakeWith = handshakeClientWith
     doRequestCertificate _ _ = return False
+    doRequestCertificateAsync _ _ = return $ \_ -> return PHAUnavailable
     doPostHandshakeAuthWith = postHandshakeAuthClientWith
 
 instance TLSParams ServerParams where
@@ -141,6 +144,7 @@ instance TLSParams ServerParams where
     doHandshake = handshakeServer
     doHandshakeWith = handshakeServerWith
     doRequestCertificate = requestCertificateServer
+    doRequestCertificateAsync = requestCertificateAsyncServer
     doPostHandshakeAuthWith = \_ _ _ -> return ()
 
 -- | create a new context using the backend and parameters specified.
@@ -190,6 +194,7 @@ contextNew backend params = liftIO $ do
                 { doHandshake_ = doHandshake params
                 , doHandshakeWith_ = doHandshakeWith params
                 , doRequestCertificate_ = doRequestCertificate params
+                , doRequestCertificateAsync_ = doRequestCertificateAsync params
                 , doPostHandshakeAuthWith_ = doPostHandshakeAuthWith params
                 }
 

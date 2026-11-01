@@ -26,6 +26,8 @@ module Network.TLS.Core (
     updateKey,
     KeyUpdateRequest (..),
     requestCertificate,
+    requestCertificateAsync,
+    PHAResult (..),
 ) where
 
 import Control.Concurrent (forkIO)
@@ -40,6 +42,7 @@ import System.Timeout
 
 import Network.TLS.Context
 import Network.TLS.Context.Internal (
+    PHAResult (..),
     incrementTLS13KeyUpdateCount,
     resetTLS13KeyUpdateCount,
  )
@@ -342,6 +345,16 @@ recvData13 ctx = do
   where
     clearPending = modifyTLS13State ctx $ \st -> st{tls13stPendingRecv = NoPendingRecv}
 
+    -- RFC 9846 Section 4.7.2: the client's Certificate, CertificateVerify
+    -- and Finished appear consecutively.  The waiters get this error.
+    checkPHAResponse = do
+        responding <- tls13stPHAResponding <$> getTLS13State ctx
+        when responding $ do
+            let reason = "message inside a post-handshake authentication response"
+                err = Error_Protocol reason UnexpectedMessage
+            modifyTLS13State ctx $ \st -> st{tls13stPHA = fmap (\(mv, _) -> (mv, err)) (tls13stPHA st)}
+            terminate13 ctx err AlertLevel_Fatal UnexpectedMessage reason
+
     -- RFC 9846 Section 6: the level is ignored.  Alerts other than the
     -- closure ones are error alerts, even at the warning level.
     -- UserCanceled MUST be followed by a CloseNotify.
@@ -359,8 +372,9 @@ recvData13 ctx = do
         loopHandshake13 $ zip hs bs
         recvData13 ctx
     -- when receiving empty appdata, we just retry to get some data.
-    process (AppData13 "") = recvData13 ctx
+    process (AppData13 "") = checkPHAResponse >> recvData13 ctx
     process (AppData13 x) = do
+        checkPHAResponse
         let chunkLen = C8.length x
         established <- ctxEstablished ctx
         case established of
@@ -418,6 +432,7 @@ recvData13 ctx = do
             modifyTLS13State ctx $ \st -> st{tls13stRecvNST = True}
         loopHandshake13 hbs
     loopHandshake13 ((KeyUpdate13 mode, _b) : hbs) = do
+        checkPHAResponse
         when (ctxQUICMode ctx) $ do
             let reason = "KeyUpdate is not allowed for QUIC"
             terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
@@ -540,27 +555,29 @@ popAction ctx hb@(h, _b) hbs = do
             terminate13 ctx (Error_Misc reason) AlertLevel_Fatal UnexpectedMessage reason
         Just action -> do
             -- Pending actions are executed with read+write locks, just
-            -- like regular handshake code.
-            withWriteLock ctx $
-                handleException ctx $ do
-                    case action of
-                        PendingRecvAction needAligned pa -> do
-                            checkAligned needAligned
-                            updateTranscriptHash13 ctx hb
-                            pa h
-                        PendingRecvActionSelfUpdate needAligned pa -> do
-                            checkAligned needAligned
-                            pa hb
-                        PendingRecvActionHash needAligned pa -> do
-                            checkAligned needAligned
-                            d <- transcriptHash ctx "Pending action"
-                            updateTranscriptHash13 ctx hb
-                            pa d h
-                    -- Client: after receiving SH, app data is coming.
-                    -- this loop tries to receive it.
-                    -- App key must be installed before receiving
-                    -- the app data.
-                    sendCFifNecessary ctx
+            -- like regular handshake code.  A failure has sent an alert,
+            -- so the connection is closed.
+            (`E.onException` setEOF ctx) $
+                withWriteLock ctx $
+                    handleException ctx $ do
+                        case action of
+                            PendingRecvAction needAligned pa -> do
+                                checkAligned needAligned
+                                updateTranscriptHash13 ctx hb
+                                pa h
+                            PendingRecvActionSelfUpdate needAligned pa -> do
+                                checkAligned needAligned
+                                pa hb
+                            PendingRecvActionHash needAligned pa -> do
+                                checkAligned needAligned
+                                d <- transcriptHash ctx "Pending action"
+                                updateTranscriptHash13 ctx hb
+                                pa d h
+                        -- Client: after receiving SH, app data is coming.
+                        -- this loop tries to receive it.
+                        -- App key must be installed before receiving
+                        -- the app data.
+                        sendCFifNecessary ctx
   where
     -- The write lock is held here, so 'handleException' sends the alert.
     checkAligned needAligned = when needAligned $ do
