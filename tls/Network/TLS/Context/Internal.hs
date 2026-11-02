@@ -355,6 +355,12 @@ contextFlush :: Context -> IO ()
 contextFlush = backendFlush . ctxBackend
 
 -- | A shortcut for 'backendClose . ctxBackend'.
+--
+--   For a 'Network.Socket.Socket', this is 'Network.Socket.close', which
+--   also wakes up threads blocked on the socket.  If no thread is left on
+--   it, call 'Network.TLS.bye' and then @unsafeClose@ (network 3.2.11 or
+--   later) on the socket instead, or give 'Network.TLS.contextNew' a
+--   'Backend' whose 'backendClose' does so.
 contextClose :: Context -> IO ()
 contextClose = backendClose . ctxBackend
 
