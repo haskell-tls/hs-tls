@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/hs-tls.svg" alt="hs-tls" height="160">
+</p>
+
 ![GitHub Actions status](https://github.com/haskell-tls/hs-tls/workflows/Haskell%20CI/badge.svg)
 
 # Haskell TLS
