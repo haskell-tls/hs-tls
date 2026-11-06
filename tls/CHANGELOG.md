@@ -1,6 +1,6 @@
 # Change log for "tls"
 
-## Unreleased
+## Version 2.5.1
 
 Sessions saved by 2.5.0 cannot be resumed: `SessionData` has a new field.
 

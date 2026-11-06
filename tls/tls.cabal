@@ -1,6 +1,6 @@
 cabal-version:      2.0
 name:               tls
-version:            2.5.0
+version:            2.5.1
 license:            BSD3
 license-file:       LICENSE
 copyright:          Vincent Hanquez <vincent@snarc.org>
