@@ -49,6 +49,12 @@ data SessionData = SessionData
     , sessionClientCertificate :: Maybe ByteString
     -- ^ On a server, the DER of the leaf certificate the client was
     -- authenticated with, so that a resumed connection can tell the client.
+    , sessionAppData :: Maybe ByteString
+    -- ^ Data of the application's own, kept with the session and given
+    -- back on resumption; never set by this library.  A server can put
+    -- what 0-RTT depends on here and check it in 'onAccept0RTT'.
+    --
+    -- @since 2.5.1
     }
     -- sessionFromTicket :: Bool
     deriving (Eq, Generic)
@@ -88,6 +94,8 @@ showsSessionData secret d sd =
             . shows (sessionFlags sd)
             . showString ", sessionClientCertificate = "
             . showString (maybe "Nothing" derLength (sessionClientCertificate sd))
+            . showString ", sessionAppData = "
+            . shows (sessionAppData sd)
             . showChar '}'
   where
     derLength der = "Just <" ++ show (B.length der) ++ " bytes>"
@@ -108,6 +116,7 @@ defaultSessionData =
         , sessionMaxEarlyDataSize = 0
         , sessionFlags = []
         , sessionClientCertificate = Nothing
+        , sessionAppData = Nothing
         }
 
 is0RTTPossible :: SessionData -> Bool

@@ -304,6 +304,7 @@ getSessionData ctx = do
                         , sessionMaxEarlyDataSize = 0
                         , sessionFlags = flags
                         , sessionClientCertificate = clientCert
+                        , sessionAppData = Nothing
                         }
 
 -- | Store the specified keypair.  Whether the public key and private key

@@ -247,6 +247,10 @@ spec = do
         it "rejects TLS 1.3 early data when ALPN changes" $
             handshake13_0rtt_alpn
         prop "can handshake with TLS 1.3 0RTT -> PSK" handshake13_0rtt_fallback
+        it "keeps the application's data and asks it about 0RTT" $
+            handshake13_0rtt_app_data True
+        it "refuses 0RTT, not the resumption, when the application says so" $
+            handshake13_0rtt_app_data False
         it "authenticates a server rejecting the PSK of 0RTT" $
             handshake13_0rtt_psk_rejected False
         it "authenticates a server rejecting the PSK of 0RTT, asking a cert" $
@@ -2939,6 +2943,48 @@ handshake13_0rtt_alpn = do
                         }
                 }
     runTLS0RTT (pc', ps') PreSharedKey "GET /admin HTTP/1.1\r\n\r\n"
+
+-- | 'sessionAppData' set when the server saves the session is what
+-- 'onAccept0RTT' is given on resumption, and its answer decides 0RTT alone.
+handshake13_0rtt_app_data :: Bool -> IO ()
+handshake13_0rtt_app_data accept = do
+    (cli, srv) <- generate arbitraryPairParams13
+    let supported =
+            defaultSupported
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
+                }
+        params0 =
+            ( cli{clientSupported = supported}
+            , srv{serverSupported = supported, serverEarlyDataSize = 2048}
+            )
+    sessionRefs <- twoSessionRefs
+    let (cmgr, smgr) = twoSessionManagers sessionRefs
+        smgr' =
+            smgr
+                { sessionEstablish = \sid sdata ->
+                    sessionEstablish smgr sid sdata{sessionAppData = Just "limits"}
+                }
+        params = setPairParamsSessionManagers (cmgr, smgr') params0
+    runTLSSimple13 params FullHandshake
+
+    sessionParams <- readClientSessionRef sessionRefs
+    expectJust "session param should be Just" sessionParams
+    seen <- newIORef Nothing
+    let (pc, ps) = setPairParamsSessionResuming (fromJust sessionParams) params
+        ps' =
+            ps
+                { serverHooks =
+                    (serverHooks ps)
+                        { onAccept0RTT = \sdata -> do
+                            writeIORef seen $ sessionAppData sdata
+                            return accept
+                        }
+                }
+        mode = if accept then RTT0 else PreSharedKey
+    runTLS0RTT (pc{clientUseEarlyData = True}, ps') mode "early data"
+    readIORef seen `shouldReturn` Just "limits"
 
 handshake13_0rtt_fallback :: CSP13 -> IO ()
 handshake13_0rtt_fallback (CSP13 (cli, srv)) = do

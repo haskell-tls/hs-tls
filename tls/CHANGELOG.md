@@ -1,5 +1,12 @@
 # Change log for "tls"
 
+## Unreleased
+
+Sessions saved by 2.5.0 cannot be resumed: `SessionData` has a new field.
+
+* Keep application data in SessionData and let the server decide 0-RTT.
+  [#640](https://github.com/haskell-tls/hs-tls/pull/640)
+
 ## Version 2.5.0
 
 **The `tls-exporter` and `tls-server-end-point` channel bindings were

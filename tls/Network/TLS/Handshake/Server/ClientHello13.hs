@@ -212,10 +212,16 @@ pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CH{..} = do
                     if isPSKvalid && isFresh
                         then do
                             restoreClientCertificate ctx sdata
+                            -- The application is asked only when 0-RTT is
+                            -- otherwise possible.
+                            accepted <-
+                                if rtt0 && is0RTTvalid && n == 0
+                                    then onAccept0RTT (serverHooks sparams) sdata
+                                    else return False
                             return
                                 ( psk
                                 , Just (bnd, n :: Int, len)
-                                , is0RTTvalid && n == 0
+                                , accepted
                                 , sessionALPN sdata
                                 )
                         else tryPSK len rest

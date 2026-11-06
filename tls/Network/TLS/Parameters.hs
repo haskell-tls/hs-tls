@@ -853,6 +853,16 @@ data ServerHooks = ServerHooks
     -- the next @[Group]@.
     --
     -- @since 2.2.3
+    , onAccept0RTT :: SessionData -> IO Bool
+    -- ^ Whether to accept 0-RTT with the session being resumed, once
+    -- everything else allows it.  'False' refuses the early data but not
+    -- the resumption.  QUIC refuses 0-RTT when the transport parameters
+    -- it remembered do not hold any more (RFC 9000 Sec 7.4.1), and can
+    -- keep them in 'sessionAppData'.
+    --
+    -- Default: @\_ -> return True@
+    --
+    -- @since 2.5.1
     }
 
 -- | Default value for 'ServerHooks'
@@ -872,6 +882,7 @@ defaultServerHooks =
         , onALPNClientSuggest = Nothing
         , onEncryptedExtensionsCreating = return
         , onSelectKeyShare = defaultOnSelectKeyShare
+        , onAccept0RTT = \_ -> return True
         }
 
 instance Show ServerHooks where
