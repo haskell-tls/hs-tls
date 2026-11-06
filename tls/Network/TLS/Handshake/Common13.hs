@@ -381,6 +381,7 @@ getSessionData13 ctx usedCipher tinfo maxSize psk = do
             , sessionMaxEarlyDataSize = maxSize
             , sessionFlags = []
             , sessionClientCertificate = clientCert
+            , sessionAppData = Nothing
             }
 
 ----------------------------------------------------------------
