@@ -288,6 +288,10 @@ spec = do
             handshake13_mldsa_wrong_scheme
         it "rejects an X25519MLKEM768 key share with a zero X25519 part" $
             handshake13_x25519mlkem768_zero_x25519
+        it "orders key_share as supported_groups by default" $
+            handshake13_key_share_order id
+        it "orders key_share as supported_groups whatever the hook returns" $
+            handshake13_key_share_order (const [FFDHE2048, X25519, X25519MLKEM768])
         prop "can handshake with TLS 1.3 Post-handshake auth" post_handshake_auth
         prop
             "delivers data while an asynchronous post-handshake auth is pending"
@@ -3235,6 +3239,49 @@ handshake13_x25519mlkem768_zero_x25519 = do
         | grp == X25519MLKEM768 =
             KeyShareEntry grp $ B.take 1184 key <> B.replicate 32 0
     zeroEntry kse = kse
+
+-- RFC 9846 Section 4.3.8: the key shares appear in the order of
+-- supported_groups.  FFDHE2048 is not in the default supported_groups.
+handshake13_key_share_order :: ([Group] -> [Group]) -> IO ()
+handshake13_key_share_order hook = do
+    CSP13 (cli, srv) <- generate arbitrary
+    let select = hook . onSelectKeyShareGroups defaultClientHooks
+        params =
+            ( cli
+                { clientSupported =
+                    (clientSupported cli){supportedGroups = supportedNamedGroups}
+                , clientHooks = (clientHooks cli){onSelectKeyShareGroups = select}
+                }
+            , srv
+                { serverSupported =
+                    (serverSupported srv)
+                        { supportedGroups = supportedNamedGroups
+                        , supportedGroupsTLS13 = supportedGroupsTLS13 defaultSupported
+                        }
+                }
+            )
+    hellos <- newIORef []
+    withPairContextWith (id, id) params $ \(cctx, sctx) -> do
+        contextHookSetHandshakeRecv sctx $ \hs -> do
+            case hs of
+                ClientHello ch -> modifyIORef hellos (ch :)
+                _ -> return ()
+            return hs
+        concurrently_ (handshake sctx) (handshake cctx)
+    chs <- readIORef hellos
+    chs `shouldNotBe` []
+    forM_ chs $ \ch -> do
+        let exts = chExtensions ch
+            groups = case extensionLookup EID_SupportedGroups exts
+                >>= extensionDecode MsgTClientHello of
+                Just (SupportedGroups gs) -> gs
+                Nothing -> []
+            shares = case extensionLookup EID_KeyShare exts
+                >>= extensionDecode MsgTClientHello of
+                Just (KeyShareClientHello kses) -> map keyShareEntryGroup kses
+                _ -> []
+        shares `shouldNotBe` []
+        shares `shouldSatisfy` (`isSubsequenceOf` groups)
 
 serverRejectedZeroX25519 :: TLSException -> Bool
 serverRejectedZeroX25519 (HandshakeFailed (Error_Protocol msg alert)) =
