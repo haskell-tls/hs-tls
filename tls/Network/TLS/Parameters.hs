@@ -677,6 +677,8 @@ data ClientHooks = ClientHooks
     -- ^ A function to select groups in "key_share" by TLS 1.3 client.
     --
     --   Client's 'supportedGroups' is passed as the 1st argument.
+    --   The result is put in the order of 'supportedGroups', and
+    --   groups not in it are dropped (RFC 9846 Section 4.3.8).
     --
     --   The default function specifies a pair of hybrid (classical +
     --   post quantum) group and classical group to transit from
