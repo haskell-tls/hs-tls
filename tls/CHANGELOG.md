@@ -1,5 +1,10 @@
 # Change log for "tls"
 
+## Version 2.5.2
+
+* Order key_share as supported_groups.
+  [#642](https://github.com/haskell-tls/hs-tls/pull/642)
+
 ## Version 2.5.1
 
 Sessions saved by 2.5.0 cannot be resumed: `SessionData` has a new field.
