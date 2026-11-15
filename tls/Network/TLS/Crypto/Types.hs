@@ -110,7 +110,10 @@ availableHybridGroups = [X25519MLKEM768, P256MLKEM768, P384MLKEM1024]
 --   implementation.
 supportedNamedGroups :: [Group]
 supportedNamedGroups =
-    [ X25519 -- 128 bits security
+    [ X25519MLKEM768
+    , P256MLKEM768
+    , P384MLKEM1024
+    , X25519 -- 128 bits security
     , P256 -- 128 bits security
     , P384 -- 192 bits security
     , X448 -- 224 bits security
@@ -120,9 +123,6 @@ supportedNamedGroups =
     , FFDHE4096 -- 150 bits security
     , FFDHE6144 -- 175 bits security
     , FFDHE8192 -- 192 bits security
-    , X25519MLKEM768
-    , P256MLKEM768
-    , P384MLKEM1024
     , -- , MLKEM512
       MLKEM768
     , MLKEM1024
