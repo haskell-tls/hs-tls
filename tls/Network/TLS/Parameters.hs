@@ -410,7 +410,7 @@ data Supported = Supported
     --   The default value includes all groups with security strength
     --   of 128 bits or more.
     --
-    --   Default: @[X25519,P256,P384,X448,P521,FFDHE3072,FFDHE4096,FFDHE6144,FFDHE8192,X25519MLKEM768,P256MLKEM768,P384MLKEM1024,MLKEM768,MLKEM1024]@
+    --   Default: @[X25519MLKEM768,P256MLKEM768,P384MLKEM1024,X25519,P256,P384,X448,P521,FFDHE3072,FFDHE4096,FFDHE6144,FFDHE8192,MLKEM768,MLKEM1024]@
     , supportedGroupsTLS13 :: [[Group]]
     -- ^ The inside @[Group]@ is the list of @Group@ at the same level
     -- in preferred order.  The inside @[Group]@s are also listed in
