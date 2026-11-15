@@ -67,7 +67,11 @@ handshakeClient cparams ctx = do
     handshake cparams ctx grps Nothing
   where
     groupsSupported = supportedGroups (ctxSupported ctx)
-    groupsSelected = onSelectKeyShareGroups (clientHooks cparams) groupsSupported
+    -- RFC 9846 Section 4.3.8: key shares follow "supported_groups" in its
+    -- order, whatever the hook returns.
+    groupsSelected =
+        let selected = onSelectKeyShareGroups (clientHooks cparams) groupsSupported
+         in filter (`elem` selected) groupsSupported
 
 -- https://tools.ietf.org/html/rfc8446#section-4.1.2 says:
 -- "The client will also send a
