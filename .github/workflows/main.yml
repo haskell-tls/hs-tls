@@ -69,6 +69,10 @@ jobs:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: latest
 
+    - name: Install gold, which GHC 9.2 and 9.4 link with
+      if: ${{ runner.os == 'Linux' }}
+      run: command -v ld.gold || (sudo apt-get update && sudo apt-get install -y binutils-gold)
+
     # The macOS image selects Xcode 26.6, whose ld cannot read the SDK 27
     # stubs that clang picks up from the Command Line Tools.  The Command
     # Line Tools' own ld can, so link with them.
