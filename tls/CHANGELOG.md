@@ -1,5 +1,10 @@
 # Change log for "tls"
 
+## Version 2.4.15
+
+* Order key_share as supported_groups.
+  [#642](https://github.com/haskell-tls/hs-tls/pull/642)
+
 ## Version 2.4.14
 
 * Require hpke 0.4.
