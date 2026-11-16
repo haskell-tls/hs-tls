@@ -349,7 +349,9 @@ getCurrentTimeFromBase = millisecondsFromBase <$> getUnixTime
 
 millisecondsFromBase :: UnixTime -> Millisecond
 millisecondsFromBase (UnixTime (CTime s) us) =
-    fromIntegral ((s - base) * 1000) + fromIntegral (us `div` 1000)
+    -- Multiplied as a Millisecond: time_t has 32 bits on i386, and the
+    -- milliseconds since the base overflow it.
+    fromIntegral (s - base) * 1000 + fromIntegral (us `div` 1000)
   where
     base = 1483228800
 
