@@ -375,7 +375,7 @@ recvData13 ctx = do
     process (AppData13 "") = checkPHAResponse >> recvData13 ctx
     process (AppData13 x) = do
         checkPHAResponse
-        let chunkLen = C8.length x
+        let chunkLen = fromIntegral $ C8.length x
         established <- ctxEstablished ctx
         case established of
             EarlyDataAllowed maxSize
@@ -414,7 +414,7 @@ recvData13 ctx = do
             (_, usedCipher, _, _) <- getTxRecordState ctx
             -- mMaxSize is always Just, but anyway
             let extract (EarlyDataIndication mMaxSize) =
-                    maybe 0 (fromIntegral . safeNonNegative32) mMaxSize
+                    fromMaybe 0 mMaxSize
             let choice = makeCipherChoice TLS13 usedCipher
                 psk = derivePSK choice resumptionSecret nonce
                 maxSize =
@@ -528,7 +528,7 @@ recvHS13 ctx breakLoop = do
                         MsgTNewSessionTicket
                         exts
                         0
-                        (\(EarlyDataIndication mms) -> fromIntegral $ safeNonNegative32 $ fromJust mms)
+                        (\(EarlyDataIndication mms) -> fromJust mms)
                 life7d = min life 604800 -- 7 days max
             tinfo <- createTLS13TicketInfo life7d (Right add) Nothing
             sdata <- getSessionData13 ctx usedCipher tinfo maxSize psk
