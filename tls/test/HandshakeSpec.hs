@@ -1542,8 +1542,10 @@ handshake_dh_prime_size = do
             arbitraryPairParamsWithVersionsAndCiphers
                 ([TLS12], [TLS12])
                 ([cipher], [cipher])
-    let small = DH.Params (2 ^ (1023 :: Int) + 1) 2 1024
-        large = DH.Params (2 ^ (8193 :: Int) + 1) 2 8194
+    -- 2 has the order 2n modulo 2^n + 1, so its public key was 1 or p - 1
+    -- once in about n handshakes.  5 has no such small order.
+    let small = DH.Params (2 ^ (1023 :: Int) + 1) 5 1024
+        large = DH.Params (2 ^ (8193 :: Int) + 1) 5 8194
         params (minBits, maxBits) dh =
             ( clientParam
                 { clientSupported =
