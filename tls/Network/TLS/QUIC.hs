@@ -261,5 +261,5 @@ defaultSupported =
         }
 
 -- | Max early data size for QUIC.
-quicMaxEarlyDataSize :: Int
+quicMaxEarlyDataSize :: Word32
 quicMaxEarlyDataSize = 0xffffffff

@@ -319,8 +319,8 @@ updateRecordLayer recordLayer Context{..} =
 
 data Established
     = NotEstablished
-    | EarlyDataAllowed Int -- server: remaining 0-RTT bytes allowed
-    | EarlyDataNotAllowed Int -- server: remaining 0-RTT bytes allowed to skip
+    | EarlyDataAllowed Word32 -- server: remaining 0-RTT bytes allowed
+    | EarlyDataNotAllowed Word32 -- server: remaining 0-RTT bytes allowed to skip
     | EarlyDataSending
     | Established
     deriving (Eq, Show)
@@ -463,7 +463,7 @@ skipEarlyData ctx len = do
         _ -> return False
   where
     -- The AEAD tag and the inner content type are not early data.
-    cost = max 1 (len - 17)
+    cost = fromIntegral $ max 1 (len - 17)
 
 withLog :: Context -> (Logging -> IO ()) -> IO ()
 withLog ctx f = ctxWithHooks ctx (f . hookLogging)

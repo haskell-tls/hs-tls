@@ -156,7 +156,7 @@ sendServerHello13 sparams ctx clientKeyShare (usedCipher, usedHash, rtt0) (early
             False
             (\PostHandshakeAuth -> True)
 
-    rtt0max = safeNonNegative32 $ serverEarlyDataSize sparams
+    rtt0max = serverEarlyDataSize sparams
     rtt0accept = serverEarlyDataSize sparams > 0
 
     decideCredentialInfo allCreds = do

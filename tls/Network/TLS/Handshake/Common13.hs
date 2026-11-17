@@ -24,7 +24,6 @@ module Network.TLS.Handshake.Common13 (
     getCurrentTimeFromBase,
     getSessionData13,
     isHashSignatureValid13,
-    safeNonNegative32,
     RecvHandshake13M,
     runRecvHandshake13,
     recvHandshake13,
@@ -363,7 +362,7 @@ millisecondsFromBase (UnixTime (CTime s) us) =
 ----------------------------------------------------------------
 
 getSessionData13
-    :: Context -> Cipher -> TLS13TicketInfo -> Int -> ByteString -> IO SessionData
+    :: Context -> Cipher -> TLS13TicketInfo -> Word32 -> ByteString -> IO SessionData
 getSessionData13 ctx usedCipher tinfo maxSize psk = do
     ver <- usingState_ ctx getVersion
     malpn <- usingState_ ctx getNegotiatedProtocol
@@ -385,18 +384,6 @@ getSessionData13 ctx usedCipher tinfo maxSize psk = do
             , sessionClientCertificate = clientCert
             , sessionAppData = Nothing
             }
-
-----------------------------------------------------------------
-
--- Word32 is used in TLS 1.3 protocol.
--- Int is used for API for Haskell TLS because it is natural.
--- If Int is 64 bits, users can specify bigger number than Word32.
--- If Int is 32 bits, 2^31 or larger may be converted into minus numbers.
-safeNonNegative32 :: (Num a, Ord a, FiniteBits a) => a -> a
-safeNonNegative32 x
-    | x <= 0 = 0
-    | finiteBitSize x <= 32 = x
-    | otherwise = x `min` fromIntegral (maxBound :: Word32)
 
 ----------------------------------------------------------------
 

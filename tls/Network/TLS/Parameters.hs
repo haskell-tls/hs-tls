@@ -241,9 +241,9 @@ data ServerParams = ServerParams
     -- ^ See the default value of 'Supported'.
     , serverDebug :: DebugParams
     -- ^ See the default value of 'DebugParams'.
-    , serverEarlyDataSize :: Int
-    -- ^ Server accepts this size of early data in TLS 1.3.  0 (or
-    -- lower) means that the server does not accept early data.
+    , serverEarlyDataSize :: Word32
+    -- ^ Server accepts this size of early data in TLS 1.3.  0 means
+    -- that the server does not accept early data.
     --
     -- Early data can be replayed.  The server is to accept 0-RTT for the
     -- same handshake at most once (RFC 9846 Section 8), which is left to

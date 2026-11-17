@@ -44,7 +44,7 @@ data SessionData = SessionData
     , sessionGroup :: Maybe Group
     , sessionTicketInfo :: Maybe TLS13TicketInfo
     , sessionALPN :: Maybe ByteString
-    , sessionMaxEarlyDataSize :: Int
+    , sessionMaxEarlyDataSize :: Word32
     , sessionFlags :: [SessionFlag]
     , sessionClientCertificate :: Maybe ByteString
     -- ^ On a server, the DER of the leaf certificate the client was

@@ -156,7 +156,7 @@ sendNewSessionTicket sparams ctx usedCipher exts applicationSecret sfSentTime = 
     sendPacket13 ctx $ Handshake13 [nst] []
   where
     choice = makeCipherChoice TLS13 usedCipher
-    rtt0max = safeNonNegative32 $ serverEarlyDataSize sparams
+    rtt0max = serverEarlyDataSize sparams
     sendNST = PSK_DHE_KE `elem` dhModes
 
     dhModes = case extensionLookup EID_PskKeyExchangeModes exts
@@ -180,7 +180,7 @@ sendNewSessionTicket sparams ctx usedCipher exts applicationSecret sfSentTime = 
             | maxSize == 0 = []
             | otherwise = [earlyDataExt]
           where
-            earlyDataExt = toExtensionRaw $ EarlyDataIndication $ Just $ fromIntegral maxSize
+            earlyDataExt = toExtensionRaw $ EarlyDataIndication $ Just maxSize
     adjustLifetime i
         | i < 0 = 0
         | i > 604800 = 604800
