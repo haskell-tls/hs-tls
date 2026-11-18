@@ -41,7 +41,7 @@ import qualified Data.ByteString.Lazy as L
 import Data.IORef
 import System.Timeout
 
-import Network.TLS.Backend (Backend (..))
+import Network.TLS.Backend (Backend (..), RecvWith (..))
 import Network.TLS.Context
 import Network.TLS.Context.Internal (
     PHAResult (..),
@@ -197,10 +197,10 @@ bye ctx = liftIO $ do
     tryRecvHS13 :: Int -> IO Bool -> IO ()
     tryRecvHS13 rtt chk = case ctxBackendRecvWith ctx of
         Nothing -> void $ tryWithReadLock ctx $ timeout rtt $ recvHS13 ctx chk
-        Just recvWith -> do
+        Just (RecvWith recvWith) -> do
             late <- registerDelay rtt
             let giveUp = readTVar late >>= check
-                recv n = recvWith giveUp n >>= either (\_ -> E.throwIO GaveUpRecv) return
+                recv n = recvWith n giveUp >>= either (\() -> E.throwIO GaveUpRecv) return
                 ctx' = ctx{ctxBackend = (ctxBackend ctx){backendRecv = recv}}
             void $ tryWithReadLock ctx $ E.try @GaveUpRecv $ recvHS13 ctx' chk
 

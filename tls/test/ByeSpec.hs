@@ -3,8 +3,8 @@ module ByeSpec where
 import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Concurrent.STM
-import Data.IORef
 import Data.ByteString (ByteString)
+import Data.IORef
 import Network.TLS
 import System.Timeout
 import Test.Hspec
@@ -23,7 +23,8 @@ spec = describe "bye" $
         let noop = return ()
             cBackend = Backend noop noop (writePipeC pipe) (readPipeC pipe)
             sBackend = Backend noop noop (writePipeS pipe) (readPipeS pipe)
-        cCtx <- contextNew (GivingUp cBackend $ recvWithVia (readPipeC pipe) used) cParams
+        cCtx <-
+            contextNew (GivingUp cBackend $ recvWithVia (readPipeC pipe) used) cParams
         sCtx <- contextNew sBackend sParams
         concurrently_ (handshake cCtx) (handshake sCtx)
         -- close_notify still goes out after the receive in 'bye'.
@@ -32,7 +33,7 @@ spec = describe "bye" $
         readIORef used `shouldReturn` True
 
 -- | A backend which can give up on a receive.
-data GivingUp = GivingUp Backend (STM () -> Int -> IO (Either () ByteString))
+data GivingUp = GivingUp Backend RecvWith
 
 instance HasBackend GivingUp where
     initializeBackend _ = return ()
@@ -41,9 +42,8 @@ instance HasBackend GivingUp where
 
 -- | A receive given up on in STM, over a pipe which cannot be: the bytes
 --   read after giving up are lost, which closing the connection allows.
-recvWithVia
-    :: (Int -> IO ByteString) -> IORef Bool -> STM () -> Int -> IO (Either () ByteString)
-recvWithVia rd used giveUp n = do
+recvWithVia :: (Int -> IO ByteString) -> IORef Bool -> RecvWith
+recvWithVia rd used = RecvWith $ \n giveUp -> do
     writeIORef used True
     v <- newEmptyTMVarIO
     _ <- forkIO $ rd n >>= atomically . putTMVar v
