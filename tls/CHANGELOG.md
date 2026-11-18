@@ -1,5 +1,14 @@
 # Change log for "tls"
 
+## Version 2.5.3
+
+* Count milliseconds from the base without overflowing a 32-bit time_t.
+  [#644](https://github.com/haskell-tls/hs-tls/pull/644)
+* Use a generator of no small order in the custom DH prime test.
+  [#646](https://github.com/haskell-tls/hs-tls/pull/646)
+* Encode the test certificates as v3.
+  [#648](https://github.com/haskell-tls/hs-tls/pull/648)
+
 ## Version 2.5.2
 
 * Order key_share as supported_groups.
