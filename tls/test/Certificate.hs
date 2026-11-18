@@ -61,7 +61,7 @@ arbitraryCertificate usageFlags pubKey = do
     let sigalg = getSignatureALG pubKey
     return $
         Certificate
-            { certVersion = 3
+            { certVersion = 2
             , certSerial = serial
             , certSignatureAlg = sigalg
             , certIssuerDN = issuerdn
@@ -80,7 +80,7 @@ arbitraryCertificate usageFlags pubKey = do
 simpleCertificate :: PubKey -> Certificate
 simpleCertificate pubKey =
     Certificate
-        { certVersion = 3
+        { certVersion = 2
         , certSerial = 0
         , certSignatureAlg = getSignatureALG pubKey
         , certIssuerDN = simpleDN
