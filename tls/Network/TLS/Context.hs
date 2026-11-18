@@ -201,6 +201,7 @@ contextNew backend params = liftIO $ do
     let ctx =
             Context
                 { ctxBackend = getBackend backend
+                , ctxBackendRecvWith = getBackendRecvWith backend
                 , ctxShared = shared
                 , ctxSupported = supported
                 , ctxDebug = debug
