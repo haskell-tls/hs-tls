@@ -94,7 +94,6 @@ module Network.TLS.Context.Internal (
 ) where
 
 import Control.Concurrent.MVar
-import Control.Concurrent.STM (STM)
 import qualified Control.Exception as E
 import Control.Monad.State.Strict
 import Data.ByteArray (convert)
@@ -129,7 +128,7 @@ data Context
     Context
     { ctxBackend :: Backend
     -- ^ return the backend object associated with this context
-    , ctxBackendRecvWith :: Maybe (STM () -> Int -> IO (Either () ByteString))
+    , ctxBackendRecvWith :: Maybe RecvWith
     -- ^ 'getBackendRecvWith' of the backend
     , ctxSupported :: Supported
     , ctxShared :: Shared

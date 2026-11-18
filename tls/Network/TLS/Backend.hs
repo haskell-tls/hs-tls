@@ -1,3 +1,5 @@
+{-# LANGUAGE RankNTypes #-}
+
 -- | A Backend represents a unified way to do IO on different
 -- types without burdening our calling API with multiple
 -- ways to initialize a new context.
@@ -10,6 +12,7 @@
 module Network.TLS.Backend (
     HasBackend (..),
     Backend (..),
+    RecvWith (..),
 ) where
 
 import Control.Concurrent.STM (STM)
@@ -36,14 +39,19 @@ class HasBackend a where
     initializeBackend :: a -> IO ()
     getBackend :: a -> Backend
 
-    -- | A receive of the specified number of bytes which gives up once
-    --   the 'STM' action succeeds, answering 'Left'.  With it, 'bye'
-    --   waits for the peer's last handshake messages without interrupting
-    --   a receive.
+    -- | A receive which can give up.  With it, 'bye' waits for the
+    --   peer's last handshake messages without interrupting a receive.
     --
     -- @since 2.6.0
-    getBackendRecvWith :: a -> Maybe (STM () -> Int -> IO (Either () ByteString))
+    getBackendRecvWith :: a -> Maybe RecvWith
     getBackendRecvWith _ = Nothing
+
+-- | A receive of the specified number of bytes which gives up once the
+--   'STM' action succeeds, answering what it gave as 'Left'.  Bytes
+--   already received by then are answered instead.
+--
+-- @since 2.6.0
+newtype RecvWith = RecvWith (forall g. Int -> STM g -> IO (Either g ByteString))
 
 instance HasBackend Backend where
     initializeBackend _ = return ()
