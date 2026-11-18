@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_HADDOCK hide #-}
 
 module Network.TLS.Core (
@@ -31,7 +32,7 @@ module Network.TLS.Core (
 ) where
 
 import Control.Concurrent (forkIO)
-import Control.Concurrent.MVar
+import Control.Concurrent.STM
 import qualified Control.Exception as E
 import Control.Monad.State.Strict
 import qualified Data.ByteString as B
@@ -40,6 +41,7 @@ import qualified Data.ByteString.Lazy as L
 import Data.IORef
 import System.Timeout
 
+import Network.TLS.Backend (Backend (..))
 import Network.TLS.Context
 import Network.TLS.Context.Internal (
     PHAResult (..),
@@ -97,7 +99,7 @@ handshake ctx = do
             -- it the only reader and makes the next receive wait for it to
             -- finish; its outcome is left in 'tls13stPendingRecv' for that
             -- receive to pick up.
-            done <- newEmptyMVar
+            done <- newEmptyTMVarIO
             void $ forkIO $ withReadLock ctx $ do
                 r <- E.try $ recvData13 ctx
                 modifyTLS13State ctx $ \st ->
@@ -106,8 +108,11 @@ handshake ctx = do
                             Right dat -> PendingRecvData dat
                             Left err -> PendingRecvError err
                         }
-                putMVar done ()
-            arrived <- timeout rtt $ takeMVar done
+                atomically $ putTMVar done ()
+            late <- registerDelay rtt
+            arrived <-
+                atomically $
+                    (Just <$> takeTMVar done) `orElse` (Nothing <$ (readTVar late >>= check))
             -- Still report the authentication failure from 'handshake' itself
             -- whenever it did arrive in time.
             when (isJust arrived) $ do
@@ -186,9 +191,23 @@ bye ctx = liftIO $ do
     -- abandon the receive.  Abandoning it can stop the connection part way
     -- through a record, after which nothing can be read from it again -- which
     -- is acceptable only because we are closing the connection here anyway.
+    --
+    -- A backend which can give up on a receive does so after 'rtt';
+    -- otherwise the receive is interrupted with 'timeout'.
     tryRecvHS13 :: Int -> IO Bool -> IO ()
-    tryRecvHS13 rtt chk =
-        void $ tryWithReadLock ctx $ timeout rtt $ recvHS13 ctx chk
+    tryRecvHS13 rtt chk = case ctxBackendRecvWith ctx of
+        Nothing -> void $ tryWithReadLock ctx $ timeout rtt $ recvHS13 ctx chk
+        Just recvWith -> do
+            late <- registerDelay rtt
+            let giveUp = readTVar late >>= check
+                recv n = recvWith giveUp n >>= either (\_ -> E.throwIO GaveUpRecv) return
+                ctx' = ctx{ctxBackend = (ctxBackend ctx){backendRecv = recv}}
+            void $ tryWithReadLock ctx $ E.try @GaveUpRecv $ recvHS13 ctx' chk
+
+-- | Thrown by a receive in 'bye' which has given up, and caught there.
+data GaveUpRecv = GaveUpRecv deriving (Show)
+
+instance E.Exception GaveUpRecv
 
 bye_ :: MonadIO m => Context -> m ()
 bye_ ctx = liftIO $ do

@@ -12,6 +12,7 @@ module Network.TLS.Backend (
     Backend (..),
 ) where
 
+import Control.Concurrent.STM (STM)
 import qualified Data.ByteString as B
 import qualified Network.Socket as Network
 import qualified Network.Socket.ByteString as Network
@@ -34,6 +35,15 @@ data Backend = Backend
 class HasBackend a where
     initializeBackend :: a -> IO ()
     getBackend :: a -> Backend
+
+    -- | A receive of the specified number of bytes which gives up once
+    --   the 'STM' action succeeds, answering 'Left'.  With it, 'bye'
+    --   waits for the peer's last handshake messages without interrupting
+    --   a receive.
+    --
+    -- @since 2.6.0
+    getBackendRecvWith :: a -> Maybe (STM () -> Int -> IO (Either () ByteString))
+    getBackendRecvWith _ = Nothing
 
 instance HasBackend Backend where
     initializeBackend _ = return ()
