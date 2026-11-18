@@ -1,5 +1,12 @@
 # Change log for "tls"
 
+## Version 2.4.16
+
+* Count milliseconds from the base without overflowing a 32-bit time_t.
+  [#644](https://github.com/haskell-tls/hs-tls/pull/644)
+* Encode the test certificates as v3.
+  [#648](https://github.com/haskell-tls/hs-tls/pull/648)
+
 ## Version 2.4.15
 
 * Order key_share as supported_groups.
