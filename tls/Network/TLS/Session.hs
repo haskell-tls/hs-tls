@@ -11,6 +11,7 @@ import Network.TLS.Types
 data SessionManager = SessionManager
     { sessionResume :: SessionIDorTicket -> IO (Maybe SessionData)
     -- ^ Used on TLS 1.2\/1.3 servers to lookup 'SessionData' with 'SessionID' or to decrypt 'Ticket' to get 'SessionData'.
+    -- It must not use up the session: it is also called first for 0RTT, before 'sessionResumeOnlyOnce'.
     , sessionResumeOnlyOnce :: SessionIDorTicket -> IO (Maybe SessionData)
     -- ^ Used for 0RTT on TLS 1.3 servers to lookup 'SessionData' with 'SessionID' or to decrypt 'Ticket' to get 'SessionData'.
     -- It is called after 'sessionResume' has found the session and the ClientHello has passed the freshness and binder checks.
