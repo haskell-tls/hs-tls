@@ -3,6 +3,7 @@
 ## Version 2.6.0
 
 The early data sizes are `Word32`, and `HasBackend` has a new method with a default.
+`bye` waits for the last handshake messages only with a backend which has it.
 
 * Count milliseconds from the base without overflowing a 32-bit time_t.
   [#644](https://github.com/haskell-tls/hs-tls/pull/644)
@@ -14,6 +15,10 @@ The early data sizes are `Word32`, and `HasBackend` has a new method with a defa
   [#647](https://github.com/haskell-tls/hs-tls/pull/647)
 * Encode the test certificates as v3.
   [#648](https://github.com/haskell-tls/hs-tls/pull/648)
+* Take the STM action last in getBackendRecvWith, whatever its result.
+  [#650](https://github.com/haskell-tls/hs-tls/pull/650)
+* Give up in bye only through getBackendRecvWith, and give Socket one.
+  [#651](https://github.com/haskell-tls/hs-tls/pull/651)
 
 ## Version 2.5.2
 
