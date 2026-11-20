@@ -244,3 +244,6 @@ test-suite spec
         time-hourglass,
         tls,
         zlib
+
+    if os(windows)
+        ghc-options: -with-rtsopts=--io-manager=native
