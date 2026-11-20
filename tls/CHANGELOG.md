@@ -1,5 +1,10 @@
 # Change log for "tls"
 
+## Version 2.6.1
+
+* Use up a session for 0-RTT only after checking the ClientHello.
+  [#655](https://github.com/haskell-tls/hs-tls/pull/655)
+
 ## Version 2.6.0
 
 The early data sizes are `Word32`, and `HasBackend` has a new method with a default.
