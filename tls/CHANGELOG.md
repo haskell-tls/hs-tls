@@ -19,6 +19,8 @@ The early data sizes are `Word32`, and `HasBackend` has a new method with a defa
   [#650](https://github.com/haskell-tls/hs-tls/pull/650)
 * Give up in bye only through getBackendRecvWith, and give Socket one.
   [#651](https://github.com/haskell-tls/hs-tls/pull/651)
+* Use the native I/O manager for the tests on Windows.
+  [#652](https://github.com/haskell-tls/hs-tls/pull/652)
 
 ## Version 2.5.2
 
