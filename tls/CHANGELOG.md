@@ -21,6 +21,8 @@ The early data sizes are `Word32`, and `HasBackend` has a new method with a defa
   [#651](https://github.com/haskell-tls/hs-tls/pull/651)
 * Use the native I/O manager for the tests on Windows.
   [#652](https://github.com/haskell-tls/hs-tls/pull/652)
+* Bound network-run and hpke for the utilities.
+  [#653](https://github.com/haskell-tls/hs-tls/pull/653)
 
 ## Version 2.5.2
 
