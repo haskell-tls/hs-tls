@@ -11,8 +11,12 @@ import Network.TLS.Types
 data SessionManager = SessionManager
     { sessionResume :: SessionIDorTicket -> IO (Maybe SessionData)
     -- ^ Used on TLS 1.2\/1.3 servers to lookup 'SessionData' with 'SessionID' or to decrypt 'Ticket' to get 'SessionData'.
+    -- It must not use up the session: it is also called first for 0RTT, before 'sessionResumeOnlyOnce'.
     , sessionResumeOnlyOnce :: SessionIDorTicket -> IO (Maybe SessionData)
     -- ^ Used for 0RTT on TLS 1.3 servers to lookup 'SessionData' with 'SessionID' or to decrypt 'Ticket' to get 'SessionData'.
+    -- It is called after 'sessionResume' has found the session and the ClientHello has passed the freshness and binder checks.
+    -- It is to return the 'SessionData' at most once for an identity, or early data can be replayed (RFC 9846 Section 8).
+    -- With 'Nothing', the early data is refused but the session is resumed.
     , sessionEstablish :: SessionIDorTicket -> SessionData -> IO (Maybe Ticket)
     -- ^ Used on TLS 1.2\/1.3 servers to store 'SessionData' with 'SessionID' or to encrypt 'SessionData' to get 'Ticket' ignoring 'SessionID'. Used on TLS 1.2\/1.3 clients to store 'SessionData' with 'SessionIDorTicket' and then return 'Nothing'. For clients, only this field should be set with 'noSessionManager'.
     , sessionInvalidate :: SessionIDorTicket -> IO ()

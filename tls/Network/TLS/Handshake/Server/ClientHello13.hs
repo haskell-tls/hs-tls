@@ -156,21 +156,28 @@ pskAndEarlySecret
     -> IO (SecretPair EarlySecret, [ExtensionRaw], Bool, Bool, Maybe ByteString)
     -- authenticated, is0RTTvalid, ticket ALPN
 pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CH{..} = do
-    (psk, binderInfo, is0RTTvalid, ticketALPN) <- choosePSK
+    (psk, binderInfo, m0RTT, ticketALPN) <- choosePSK
     earlyKey <- calculateEarlySecret ctx choice (Left psk)
     let earlySecret = pairBase earlyKey
         authenticated = isJust binderInfo
     preSharedKeyExt <- checkBinder earlySecret binderInfo
+    -- The session is used up for 0-RTT only now that the ClientHello is
+    -- fresh and its binder is verified.  If it was used up already, only
+    -- the early data is refused (RFC 9846 Section 8.3).
+    is0RTTvalid <- case m0RTT of
+        Nothing -> return False
+        Just identity -> isJust <$> sessionResumeOnlyOnce mgr identity
     return (earlyKey, preSharedKeyExt, authenticated, is0RTTvalid, ticketALPN)
   where
     choice = makeCipherChoice TLS13 usedCipher
+    mgr = sharedSessionManager $ serverShared sparams
 
     choosePSK =
         lookupAndDecodeAndDo
             EID_PreSharedKey
             MsgTClientHello
             chExtensions
-            (return (zero, Nothing, False, Nothing))
+            (return (zero, Nothing, Nothing, Nothing))
             selectPSK
 
     selectPSK (PreSharedKeyClientHello ids bnds) = do
@@ -183,20 +190,15 @@ pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CH{..} = do
                 -- The first identity that can be resumed is chosen, each
                 -- with its own age and binder.
                 tryPSK len $ zip3 [0 ..] ids bnds
-            else return (zero, Nothing, False, Nothing)
-    selectPSK _ = return (zero, Nothing, False, Nothing)
+            else return (zero, Nothing, Nothing, Nothing)
+    selectPSK _ = return (zero, Nothing, Nothing, Nothing)
 
-    tryPSK _ [] = return (zero, Nothing, False, Nothing)
+    tryPSK _ [] = return (zero, Nothing, Nothing, Nothing)
     tryPSK len ((n, PskIdentity identity obfAge, bnd) : rest) = do
-        let mgr = sharedSessionManager $ serverShared sparams
         -- sessionInvalidate is not used for TLS 1.3
         -- because PSK is always changed.
         -- So, identity is not stored in Context.
-        -- Early data is only with the first identity.
-        msdata <-
-            if rtt0 && n == 0
-                then sessionResumeOnlyOnce mgr identity
-                else sessionResume mgr identity
+        msdata <- sessionResume mgr identity
         case msdata of
             -- RFC 8446 Section 4.6.1: only a TLS 1.3 session, which
             -- has its ticket information, is resumed with a PSK.  A
@@ -208,12 +210,16 @@ pskAndEarlySecret sparams ctx (usedCipher, usedHash, rtt0) CH{..} = do
                     let psk = sessionSecret sdata
                     isFresh <- checkFreshness tinfo obfAge
                     (isPSKvalid, is0RTTvalid) <- checkSessionEquality sdata
+                    -- Early data is only with the first identity.
+                    let m0RTT
+                            | rtt0 && is0RTTvalid && n == 0 = Just identity
+                            | otherwise = Nothing
                     if isPSKvalid && isFresh
                         then
                             return
                                 ( psk
                                 , Just (bnd, n :: Int, len)
-                                , is0RTTvalid && n == 0
+                                , m0RTT
                                 , sessionALPN sdata
                                 )
                         else tryPSK len rest

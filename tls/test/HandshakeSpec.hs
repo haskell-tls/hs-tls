@@ -203,6 +203,10 @@ spec = do
         it "rejects TLS 1.3 early data when ALPN changes" $
             handshake13_0rtt_alpn
         prop "can handshake with TLS 1.3 0RTT -> PSK" handshake13_0rtt_fallback
+        it "does not use up the session for a stale 0RTT ClientHello" $
+            handshake13_0rtt_only_once True
+        it "refuses 0RTT, not the resumption, when the session is used up" $
+            handshake13_0rtt_only_once False
         it "authenticates a server rejecting the PSK of 0RTT" $
             handshake13_0rtt_psk_rejected False
         it "authenticates a server rejecting the PSK of 0RTT, asking a cert" $
@@ -2690,6 +2694,55 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
         handshake ctx
         _ <- recvData ctx
         bye ctx
+
+-- | 'sessionResumeOnlyOnce' is called only for a fresh 0RTT ClientHello
+-- with a verified binder.  A stale one falls back to a full handshake
+-- without it; a session it has used up already is resumed without 0RTT.
+handshake13_0rtt_only_once :: Bool -> IO ()
+handshake13_0rtt_only_once stale = do
+    (cli, srv) <- generate arbitraryPairParams13
+    let supported =
+            defaultSupported
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
+                }
+        params0 =
+            ( cli{clientSupported = supported}
+            , srv{serverSupported = supported, serverEarlyDataSize = 2048}
+            )
+    sessionRefs <- twoSessionRefs
+    let (cmgr, smgr) = twoSessionManagers sessionRefs
+        params = setPairParamsSessionManagers (cmgr, smgr) params0
+    runTLSSimple13 params FullHandshake
+
+    sessionParams <- readClientSessionRef sessionRefs
+    expectJust "session param should be Just" sessionParams
+    calls <- newIORef (0 :: Int)
+    let -- an hour ago, far beyond the tolerance of the freshness check
+        age sdata =
+            sdata
+                { sessionTicketInfo =
+                    (\t -> t{txrxTime = txrxTime t - 3600000}) <$> sessionTicketInfo sdata
+                }
+        resume' f sid
+            | stale = fmap age <$> f sid
+            | otherwise = f sid
+        smgr' =
+            smgr
+                { sessionResume = resume' (sessionResume smgr)
+                , sessionResumeOnlyOnce = \sid -> do
+                    modifyIORef' calls (+ 1)
+                    if stale
+                        then resume' (sessionResumeOnlyOnce smgr) sid
+                        else return Nothing
+                }
+        (pc, ps) =
+            setPairParamsSessionResuming (fromJust sessionParams) $
+                setPairParamsSessionManagers (cmgr, smgr') params0
+        mode = if stale then FullHandshake else PreSharedKey
+    runTLS0RTT (pc{clientUseEarlyData = True}, ps) mode "early data"
+    readIORef calls `shouldReturn` (if stale then 0 else 1)
 
 -- The server has forgotten the session, so it answers 0-RTT with a full
 -- handshake, and the client must check its certificate.
