@@ -1,5 +1,10 @@
 # ChangeLog for tls-session-manager
 
+## Unreleased
+
+* Refuse a replayed 0-RTT ticket in the session ticket manager.
+  [#634](https://github.com/haskell-tls/hs-tls/pull/634)
+
 ## 0.1.2
 
 * Require tls >= 2.4.13 and build the tests with `defaultSessionData`.
