@@ -71,7 +71,7 @@ newSessionTicketManager' Config{..} = do
             }
 
 -- | Tickets used for 0-RTT, with when they may be forgotten in
--- milliseconds of the monotonic clock.
+-- milliseconds of the wall clock.
 type Used = IORef (Q.OrdPSQ Ticket Int64 ())
 
 sessionTicketManager :: CT.TokenManager -> Used -> SessionManager
