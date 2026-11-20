@@ -60,14 +60,14 @@ type CommonParams = (Supported, Shared, DebugParams)
 -- | All settings should not be used in production
 data DebugParams = DebugParams
     { debugSeed :: Maybe Seed
-    -- ^ Disable the true randomness in favor of deterministic seed that will produce
-    -- a deterministic random from. This is useful for tests and debugging purpose.
-    -- Do not use in production
+    -- ^ Disable the true randomness in favor of a deterministic seed,
+    -- from which deterministic random values are produced.  This is
+    -- useful for tests and debugging.  Do not use in production.
     --
     -- Default: 'Nothing'
     , debugPrintSeed :: Seed -> IO ()
-    -- ^ Add a way to print the seed that was randomly generated. reusing the same seed
-    -- will reproduce the same randomness with 'debugSeed'
+    -- ^ Add a way to print the seed that was randomly generated.  Reusing
+    -- the same seed with 'debugSeed' will reproduce the same randomness.
     --
     -- Default: no printing
     , debugVersionForced :: Maybe Version
@@ -79,7 +79,14 @@ data DebugParams = DebugParams
     --
     -- Default: no printing
     , debugError :: String -> IO ()
+    -- ^ Printing errors which terminate the connection.  A rejected
+    -- certificate chain is printed in PEM.
+    --
+    -- Default: no printing
     , debugTraceKey :: String -> IO ()
+    -- ^ Printing transcript hashes for tracing the key schedule.
+    --
+    -- Default: no printing
     }
 
 {-# NOINLINE keyLogLock #-}
@@ -117,13 +124,13 @@ instance Default DebugParams where
 
 data ClientParams = ClientParams
     { clientUseMaxFragmentLength :: Maybe MaxFragmentEnum
-    -- ^
+    -- ^ Not used any more.  Use 'limitRecordSize' instead.
     --
     -- Default: 'Nothing'
     , clientServerIdentification :: (HostName, ByteString)
     -- ^ Define the name of the server, along with an extra service
-    -- identification blob.  this is important that the hostname part
-    -- is properly filled for security reason, as it allow to properly
+    -- identification blob.  It is important that the hostname part
+    -- is properly filled for security reasons, as it allows to properly
     -- associate the remote side with the given certificate during a
     -- handshake.
     --
@@ -135,25 +142,25 @@ data ClientParams = ClientParams
     -- This value is typically set by 'defaultParamsClient'.
     , clientUseServerNameIndication :: Bool
     -- ^ Allow the use of the Server Name Indication TLS extension
-    -- during handshake, which allow the client to specify which host
-    -- name, it's trying to access. This is useful to distinguish
+    -- during handshake, which allows the client to specify which host
+    -- name it's trying to access. This is useful to distinguish
     -- CNAME aliasing (e.g. web virtual host).
     --
     -- Default: 'True'
     , clientWantSessionResume :: Maybe (SessionID, SessionData)
-    -- ^ try to establish a connection using this session for TLS
+    -- ^ Try to establish a connection using this session for TLS
     -- 1.2/TLS 1.3.  This can be used for TLS 1.3 but for backward
-    -- compatibility purpose only.  Use 'clientWantSessionResume13'
+    -- compatibility purpose only.  Use 'clientWantSessionResumeList'
     -- instead for TLS 1.3.
     --
     -- Default: 'Nothing'
     , clientWantSessionResumeList :: [(SessionID, SessionData)]
-    -- ^ try to establish a connection using one of this sessions
-    -- especially for TLS 1.3.  This take precedence over
+    -- ^ Try to establish a connection using one of these sessions
+    -- especially for TLS 1.3.  This takes precedence over
     -- 'clientWantSessionResume'.  For convenience, this can be
     -- specified for TLS 1.2 but only the first entry is used.
     --
-    -- Default: '[]'
+    -- Default: @[]@
     , clientWantTicket :: Bool
     -- ^ Whether to solicit TLS 1.2 session tickets (or TLS 1.3
     -- resumption PSKs) from servers.  With a 'False' setting,
@@ -169,14 +176,11 @@ data ClientParams = ClientParams
     , clientHooks :: ClientHooks
     -- ^ See the default value of 'ClientHooks'.
     , clientSupported :: Supported
-    -- ^ In this element, you'll need to override the default empty
-    -- value of of 'supportedCiphers' with a suitable cipherlist.
-    --
-    -- See the default value of 'Supported'.
+    -- ^ See the default value of 'Supported'.
     , clientDebug :: DebugParams
     -- ^ See the default value of 'DebugParams'.
     , clientUseEarlyData :: Bool
-    -- ^ Client tries to send early data in TLS 1.3 via 'sendData' if
+    -- ^ Client tries to send early data in TLS 1.3 via 'Network.TLS.sendData' if
     -- possible.  If not accepted by the server, the early data is
     -- automatically re-sent.
     --
@@ -218,13 +222,12 @@ data ServerParams = ServerParams
     --
     -- Default: 'False'
     , serverCACertificates :: [SignedCertificate]
-    -- ^ This is a list of certificates from which the disinguished
-    -- names are sent in certificate request messages.  For TLS1.0, it
-    -- should not be empty.
+    -- ^ This is a list of certificates from which the distinguished
+    -- names are sent in certificate request messages.
     --
-    -- Default: '[]'
+    -- Default: @[]@
     , serverDHEParams :: Maybe DHParams
-    -- ^ Server Optional Diffie Hellman parameters.  Setting
+    -- ^ Server optional Diffie-Hellman parameters.  Setting
     -- parameters is necessary for FFDHE key exchange when clients are
     -- not compatible with RFC 7919.
     --
@@ -259,7 +262,7 @@ data ServerParams = ServerParams
     , serverECHKey :: [(ConfigId, ByteString)]
     -- ^ ECH secret keys.
     --
-    -- Default: '[]'
+    -- Default: @[]@
     --
     -- @since 2.1.9
     }
@@ -296,12 +299,9 @@ data Supported = Supported
     --
     -- Default: @[TLS13,TLS12]@
     , supportedCiphers :: [Cipher]
-    -- ^ Supported cipher methods.  The default is empty, specify a
-    -- suitable cipher list.
-    -- 'Network.TLS.Extra.Cipher.ciphersuite_default' is often a good
-    -- choice.
+    -- ^ Supported cipher methods.
     --
-    -- Default: @[]@
+    -- Default: 'Network.TLS.Extra.Cipher.ciphersuite_default'
     , supportedMinRSAKeySize :: Int
     -- ^ The least size in bits of the RSA key in the peer's leaf
     -- certificate.  A shorter one is refused with bad_certificate; 0 lets
@@ -352,16 +352,14 @@ data Supported = Supported
     --
     -- Default: @[nullCompression]@
     , supportedHashSignatures :: [SignatureScheme]
-    -- ^ All supported hash/signature algorithms pair for client
+    -- ^ All supported signature schemes for client
     -- certificate verification and server signature in (EC)DHE,
     -- ordered by decreasing priority.
     --
     -- This list is sent to the peer as part of the
     -- "signature_algorithms" extension.  It is used to restrict
     -- accepted signatures received from the peer at TLS level (not in
-    -- X.509 certificates), but only when the TLS version is 1.2 or
-    -- above.  In order to disable SHA-1 one must then also disable
-    -- earlier protocol versions in 'supportedVersions'.
+    -- X.509 certificates).
     --
     -- The list also impacts the selection of possible algorithms when
     -- generating signatures.
@@ -386,7 +384,7 @@ data Supported = Supported
     --   Default: 'False'
     , supportedExtendedMainSecret :: EMSMode
     -- ^ The mode regarding extended main secret.  Enabling this
-    -- extension provides better security for TLS versions 1.2.  TLS
+    -- extension provides better security for TLS 1.2.  TLS
     -- 1.3 provides the security properties natively and does not need
     -- the extension.
     --
@@ -405,18 +403,15 @@ data Supported = Supported
     --
     --   Default: 'True'
     , supportedEmptyPacket :: Bool
-    -- ^ In ver <= TLS1.0, block ciphers using CBC are using CBC
-    -- residue as IV, which can be guessed by an attacker. Hence, an
-    -- empty packet is normally sent before a normal data packet, to
-    -- prevent guessability. Some Microsoft TLS-based protocol
-    -- implementations, however, consider these empty packets as a
-    -- protocol violation and disconnect. If this parameter is
-    -- 'False', empty packets will never be added, which is less
-    -- secure, but might help in rare cases.
+    -- ^ A workaround for CBC in TLS 1.0.  Not used any more since TLS
+    -- 1.0 is not supported.
     --
     --   Default: 'True'
     , supportedHPKE :: [(KEM_ID, KDF_ID, AEAD_ID)]
-    -- ^ Client only.
+    -- ^ Client only.  HPKE cipher suites for ECH in preferred order.
+    --
+    -- Default: X25519 and P-256 with AES-128-GCM or ChaCha20-Poly1305,
+    -- and P-521 with AES-256-GCM
     --
     -- @since 2.1.9
     , supportedGroups :: [Group]
@@ -551,9 +546,13 @@ data Shared = Shared
     , sharedECHConfigList :: ECHConfigList
     -- ^ ECH configuration.
     --
+    -- Default: @[]@
+    --
     -- @since 2.1.9
     , sharedLimit :: Limit
     -- ^ Limitation parameters.
+    --
+    -- See the default value of 'Limit'.
     --
     -- @since 2.1.8
     }
@@ -620,7 +619,7 @@ type OnServerCertificate =
 -- | A set of callbacks run by the clients for various corners of TLS establishment
 data ClientHooks = ClientHooks
     { onCertificateRequest :: OnCertificateRequest
-    -- ^ This action is called when the a certificate request is
+    -- ^ This action is called when a certificate request is
     -- received from the server. The callback argument is the
     -- information from the request.  The server, at its discretion,
     -- may be willing to continue the handshake without a client
@@ -643,7 +642,7 @@ data ClientHooks = ClientHooks
     --
     -- Each certificate except the last should be signed by the
     -- following one.  The returned private key must be for the first
-    -- certificates in the chain.  This key will be used to signing
+    -- certificate in the chain.  This key will be used for signing
     -- the certificate verify message.
     --
     -- The public key in the first certificate, and the matching
@@ -664,7 +663,7 @@ data ClientHooks = ClientHooks
     -- hint, since TLS 1.3 servers will generally list the RSASSA-PSS
     -- schemes, whose first octet is @0x08@.
     --
-    -- Note that is is the responsibility of this action to select a
+    -- Note that it is the responsibility of this action to select a
     -- certificate matching one of the requested certificate types
     -- (public key algorithms).  Returning a non-matching one will
     -- lead to handshake failure later.
@@ -693,7 +692,7 @@ data ClientHooks = ClientHooks
     -- Default: 'validateDefault'
     , onSuggestALPN :: IO (Maybe [ByteString])
     -- ^ This action is called when the client sends ClientHello
-    --   to determine ALPN values such as '["h2", "http/1.1"]'.
+    --   to determine ALPN values such as @["h2", "http/1.1"]@.
     --
     -- Default: returns 'Nothing'
     , onCustomFFDHEGroup :: DHParams -> DHPublic -> IO GroupUsage
@@ -704,19 +703,21 @@ data ClientHooks = ClientHooks
     --
     --   With TLS 1.3 custom groups have been removed from the
     --   protocol, so this callback is only used when the version
-    --   negotiated is 1.2 or below.
+    --   negotiated is 1.2.
     --
-    --   The default behavior with (dh_p, dh_g, dh_size) and pub as
+    --   The default behavior with (dh_p, dh_g, dh_size) and pub is as
     --   follows:
     --
     --   (1) rejecting if dh_p is even
     --   (2) rejecting unless 1 < dh_g && dh_g < dh_p - 1
-    --   (3) rejecting unless 1 < dh_p && pub < dh_p - 1
+    --   (3) rejecting unless 1 < pub && pub < dh_p - 1
     --   (4) rejecting if dh_size < 1024 (to prevent Logjam attack)
     --
     --   See RFC 7919 section 3.1 for recommendations.
     , onServerFinished :: Information -> IO ()
-    -- ^ When a handshake is done, this hook can check `Information`.
+    -- ^ When a handshake is done, this hook can check 'Information'.
+    --
+    -- Default: does nothing
     , onSelectKeyShareGroups :: [Group] -> [Group]
     -- ^ A function to select groups in "key_share" by TLS 1.3 client.
     --
@@ -727,18 +728,19 @@ data ClientHooks = ClientHooks
     --   The default function specifies a pair of hybrid (classical +
     --   post quantum) group and classical group to transit from
     --   classical key exchange to hybrid key exchange. With the
-    --   default value of 'supportedGroups', X25519MLKEM and X25519
+    --   default value of 'supportedGroups', X25519MLKEM768 and X25519
     --   are chosen.
     --
     --   Middleboxes may drop a ClientHello that contains large
-    --   X2219MLKEM. In such environment, @take 1@, which selects
-    --   X22519 only with the default value, is maybe a good
-    --   candidate.
+    --   X25519MLKEM768. In such environment, @filter (== X25519)@,
+    --   which selects X25519 only, is maybe a good candidate.
     --
-    --   In the case where X22519 is only contained in "key_share", a
-    --   wise-server without nasty middleboxes may ask the client to
-    --   send X2219MLKEM via HelloRetryRequest as X2219MLKEM is
+    --   In the case where X25519 is only contained in "key_share", a
+    --   wise server without nasty middleboxes may ask the client to
+    --   send X25519MLKEM768 via HelloRetryRequest as X25519MLKEM768 is
     --   specified in "supported_groups".
+    --
+    --   Default: the first hybrid group and the first other group
     --
     --   @since 2.2.3
     }
@@ -775,7 +777,7 @@ data ServerHooks = ServerHooks
     { onClientCertificate :: CertificateChain -> IO CertificateUsage
     -- ^ This action is called when a client certificate chain is
     -- received from the client.  When it returns a
-    -- CertificateUsageReject value, the handshake is aborted.
+    -- 'CertificateUsageReject' value, the handshake is aborted.
     --
     -- The function is not expected to verify the key-usage extension
     -- of the certificate.  This verification is performed by the
@@ -793,13 +795,12 @@ data ServerHooks = ServerHooks
     --
     -- Default: returns 'False'
     , onCipherChoosing :: Version -> [Cipher] -> Cipher
-    -- ^ Allow the server to choose the cipher relative to the the
-    -- client version and the client list of ciphers.
+    -- ^ Allow the server to choose the cipher relative to the
+    -- negotiated version and the ciphers in common with the client.
+    -- They are in the order of 'supportedCiphers', or in the client's
+    -- order with 'supportedClientCipherOrder'.
     --
-    -- This could be useful with old clients and as a workaround to
-    -- the BEAST (where RC4 is sometimes preferred with TLS < 1.1)
-    --
-    -- The client cipher list cannot be empty.
+    -- The list is never empty, and the result must be one of it.
     --
     -- Default: taking the head of ciphers.
     , onServerNameIndication :: Maybe HostName -> IO Credentials
@@ -816,14 +817,14 @@ data ServerHooks = ServerHooks
     -- Default: returns 'mempty'
     , onNewHandshake :: Measurement -> IO Bool
     -- ^ At each new handshake, we call this hook to see if we allow
-    -- handshake to happens.
+    -- the handshake to happen.
     --
     -- Default: returns 'True'
     , onALPNClientSuggest :: Maybe ([ByteString] -> IO ByteString)
     -- ^ Allow the server to choose an application layer protocol
     --   suggested from the client through the ALPN (Application Layer
-    --   Protocol Negotiation) extensions.  If the server supports no
-    --   protocols that the client advertises an empty 'ByteString'
+    --   Protocol Negotiation) extension.  If the server supports no
+    --   protocols that the client advertises, an empty 'ByteString'
     --   should be returned.
     --
     -- Default: 'Nothing'
@@ -840,8 +841,8 @@ data ServerHooks = ServerHooks
     -- ^ A function to select one key share by TLS 1.3 server.
     --
     -- The 1st argument is server's 'supportedGroupsTLS13'.
-    -- The 2nd arguments is client's groups in "supported_groups"
-    -- The 3rd arguments is client's groups in "key_share".
+    -- The 2nd argument is client's groups in "supported_groups".
+    -- The 3rd argument is client's groups in "key_share".
     --
     -- 'True' in the result indicates sending a hello retry request
     -- with this group.
@@ -909,17 +910,29 @@ defaultOnSelectKeyShare serverSupportedLoL clientSupportedGroups clientKeyShareG
 -- | Information related to a running context, e.g. current cipher
 data Information = Information
     { infoVersion :: Version
+    -- ^ The negotiated version.
     , infoCipher :: Cipher
+    -- ^ The negotiated cipher.
     , infoCompression :: Compression
+    -- ^ The negotiated compression.
     , infoMainSecret :: Maybe ByteString
+    -- ^ The main secret of TLS 1.2.
     , infoExtendedMainSecret :: Bool
+    -- ^ Whether the extended main secret is used in TLS 1.2.
     , infoClientRandom :: Maybe ClientRandom
+    -- ^ The random of ClientHello.
     , infoServerRandom :: Maybe ServerRandom
+    -- ^ The random of ServerHello.
     , infoSupportedGroup :: Maybe Group
+    -- ^ The group used for the key exchange.
     , infoTLS12Resumption :: Bool
+    -- ^ Whether the TLS 1.2 session was resumed.
     , infoTLS13HandshakeMode :: Maybe HandshakeMode13
+    -- ^ The handshake mode of TLS 1.3.
     , infoIsEarlyDataAccepted :: Bool
+    -- ^ Whether the early data of TLS 1.3 was accepted.
     , infoIsECHAccepted :: Bool
+    -- ^ Whether Encrypted Client Hello was accepted.
     , infoServerSignatureScheme :: Maybe SignatureScheme
     -- ^ The scheme of the server's signature: ServerKeyExchange in TLS 1.2,
     -- CertificateVerify in TLS 1.3.  'Nothing' on resumption.
@@ -944,7 +957,7 @@ data Limit = Limit
     -- extension. When negotiated, both my limit and peer's limit are
     -- enabled for protected communication.
     --
-    -- Default: Nothing
+    -- Default: 'Nothing'
     , limitHandshakeFragment :: Int
     -- ^ The number of records that may carry a handshake message before
     -- the one that completes it.  A peer may split a message into records
@@ -955,7 +968,7 @@ data Limit = Limit
     -- ^ Maximum number of consecutive TLS 1.3 KeyUpdate messages accepted
     -- without intervening non-empty application data.  This bounds the CPU
     -- work and response amplification a peer can trigger while application
-    -- code is blocked inside 'recvData'.  'Nothing' and non-positive values
+    -- code is blocked inside 'Network.TLS.recvData'.  'Nothing' and non-positive values
     -- disable the limit; they do not disable KeyUpdate processing.
     --
     -- Default: @Just 32@

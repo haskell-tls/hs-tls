@@ -40,7 +40,7 @@ data CertificateRejectReason
     | CertificateRejectOther String
     deriving (Show, Eq)
 
--- | Certificate Usage callback possible returns values.
+-- | Certificate usage callback possible return values.
 data CertificateUsage
     = -- | usage of certificate accepted
       CertificateUsageAccept
@@ -62,9 +62,9 @@ pubkeyType :: PubKey -> String
 pubkeyType = show . pubkeyToAlg
 
 -- | A utility function for client authentication which can be used
--- `onClientCertificate`.
+-- as 'Network.TLS.onClientCertificate' with a store and a cache given.
 --
--- Since: 2.1.7
+-- @since 2.1.7
 validateClientCertificate
     :: CertificateStore
     -> ValidationCache

@@ -147,7 +147,7 @@ instance TLSParams ServerParams where
     doRequestCertificateAsync = requestCertificateAsyncServer
     doPostHandshakeAuthWith = \_ _ _ -> return ()
 
--- | create a new context using the backend and parameters specified.
+-- | Create a new context using the backend and parameters specified.
 contextNew
     :: (MonadIO m, HasBackend backend, TLSParams params)
     => backend
@@ -273,7 +273,7 @@ getPeerFinished ctx = usingState_ ctx getPeerVerifyData
 
 -- | Getting the "tls-unique" channel binding for TLS 1.2 (RFC5929).
 --   For TLS 1.3, 'Nothing' is returned.
---   'supportedExtendedMainSecret' must be 'RequireEMS'
+--   'supportedExtendedMainSecret' must be 'RequireEMS'.
 --   But in general, it is highly recommended to upgrade to TLS 1.3
 --   and use the "tls-exporter" channel binding via 'getTLSExporter'.
 getTLSUnique :: Context -> IO (Maybe ByteString)

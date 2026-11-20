@@ -6,6 +6,7 @@
 -- ways to initialize a new context.
 --
 -- Typically, a backend provides:
+--
 -- * a way to read data
 -- * a way to write data
 -- * a way to close the stream
@@ -33,14 +34,19 @@ data Backend = Backend
     , backendSend :: ByteString -> IO ()
     -- ^ Send a bytestring through the connection.
     , backendRecv :: Int -> IO ByteString
-    -- ^ Receive specified number of bytes from the connection.
+    -- ^ Receive the specified number of bytes from the connection.
+    -- Fewer bytes are returned only at the end of the stream.
     }
 
+-- | Types which a 'Network.TLS.Context' can be created on.
 class HasBackend a where
+    -- | Prepare the connection before use.
     initializeBackend :: a -> IO ()
+
+    -- | The IO functions of the connection.
     getBackend :: a -> Backend
 
-    -- | A receive which can give up.  With it, 'bye' waits for the
+    -- | A receive which can give up.  With it, 'Network.TLS.bye' waits for the
     --   peer's last handshake messages without interrupting a receive.
     --
     -- @since 2.6.0

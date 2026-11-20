@@ -17,7 +17,7 @@ data SessionManager = SessionManager
     , sessionEstablish :: SessionIDorTicket -> SessionData -> IO (Maybe Ticket)
     -- ^ Used on TLS 1.2\/1.3 servers to store 'SessionData' with 'SessionID' or to encrypt 'SessionData' to get 'Ticket' ignoring 'SessionID'. Used on TLS 1.2\/1.3 clients to store 'SessionData' with 'SessionIDorTicket' and then return 'Nothing'. For clients, only this field should be set with 'noSessionManager'.
     , sessionInvalidate :: SessionIDorTicket -> IO ()
-    -- ^ Used TLS 1.2 servers to delete 'SessionData' with 'SessionID' on errors.
+    -- ^ Used on TLS 1.2 servers to delete 'SessionData' with 'SessionID' on errors.
     , sessionUseTicket :: Bool
     -- ^ Used on TLS 1.2 servers to decide to use 'SessionID' or 'Ticket'. Note that 'SessionID' and 'Ticket' are integrated as identity in TLS 1.3.
     }

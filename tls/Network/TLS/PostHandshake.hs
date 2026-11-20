@@ -23,7 +23,7 @@ import Network.TLS.Struct13
 -- exception is thrown if the authentication fails. Server only.
 --
 -- This reads the client's response by itself, so it must not be called
--- while another thread is in 'recvData', and application data received
+-- while another thread is in 'Network.TLS.recvData', and application data received
 -- before the response closes the connection, against RFC 9846 Section 4.7.2.
 {-# DEPRECATED
     requestCertificate
@@ -34,11 +34,11 @@ requestCertificate ctx =
     checkValid ctx >> doRequestCertificate_ (ctxRoleParams ctx) ctx
 
 -- | Post-handshake certificate request with TLS 1.3, without waiting for
--- the response.  The response is processed by 'recvData', so another
+-- the response.  The response is processed by 'Network.TLS.recvData', so another
 -- thread or the caller itself must keep calling it.  The returned action
 -- gives the result; with 'True' it blocks until the result is known, with
 -- 'False' it returns 'PHAPending' meanwhile.  Only one request may be
--- pending.  'getClientCertificateChain' gives the authenticated chain.
+-- pending.  'Network.TLS.getClientCertificateChain' gives the authenticated chain.
 -- Server only.
 requestCertificateAsync :: Context -> IO (Bool -> IO PHAResult)
 requestCertificateAsync ctx =

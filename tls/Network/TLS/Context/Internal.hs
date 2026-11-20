@@ -121,7 +121,7 @@ import Network.TLS.Types
 import Network.TLS.Util
 import Network.TLS.X509 (CertificateChain)
 
--- | A TLS Context keep tls specific state, parameters and backend information.
+-- | A TLS Context keeps TLS specific state, parameters and backend information.
 data Context
     = forall a.
       Monoid a =>

@@ -52,7 +52,7 @@ data SessionData = SessionData
     , sessionAppData :: Maybe ByteString
     -- ^ Data of the application's own, kept with the session and given
     -- back on resumption; never set by this library.  A server can put
-    -- what 0-RTT depends on here and check it in 'onAccept0RTT'.
+    -- what 0-RTT depends on here and check it in 'Network.TLS.onAccept0RTT'.
     --
     -- @since 2.5.1
     }

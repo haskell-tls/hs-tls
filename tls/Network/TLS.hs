@@ -8,9 +8,9 @@
 -- use of the advanced type system, high level constructions and
 -- common Haskell features.
 --
--- Currently implement the TLS1.2 and TLS 1.3
--- protocol, and support RSA and Ephemeral (Elliptic curve and
--- regular) Diffie Hellman key exchanges, and many extensions.
+-- It currently implements TLS 1.2 and TLS 1.3, supports RSA and
+-- ephemeral (elliptic curve and finite field) Diffie-Hellman key
+-- exchanges, and many extensions.
 --
 -- The typical usage is:
 --
@@ -18,7 +18,7 @@
 -- > ctx <- contextNew socket <params>
 -- > handshake ctx
 -- > ... (using recvData and sendData)
--- > bye
+-- > bye ctx
 module Network.TLS (
     -- * Basic APIs
     Context,
@@ -376,7 +376,7 @@ import Network.TLS.Struct13 (Handshake13)
 import Network.TLS.Types
 import Network.TLS.X509
 
-{-# DEPRECATED Bytes "Use Data.ByteString.Bytestring instead of Bytes." #-}
+{-# DEPRECATED Bytes "Use Data.ByteString.ByteString instead of Bytes." #-}
 type Bytes = ByteString
 
 -- | Getting certificates from a client, if any.
@@ -386,11 +386,13 @@ type Bytes = ByteString
 getClientCertificateChain :: Context -> IO (Maybe CertificateChain)
 getClientCertificateChain ctx = usingState_ ctx S.getClientCertificateChain
 
+-- | Getting certificates from a server, if any.
+--   A server sends no certificate on resumption; then this returns 'Nothing'.
 getServerCertificateChain :: Context -> IO (Maybe CertificateChain)
 getServerCertificateChain ctx = usingState_ ctx S.getServerCertificateChain
 
 -- $exceptions
 --     Since 1.8.0, this library only throws exceptions of type 'TLSException'.
---     In the common case where the chosen backend is socket, 'IOException'
+--     In the common case where the chosen backend is socket, 'Control.Exception.IOException'
 --     may be thrown as well. This happens because the backend for sockets,
 --     opaque to most modules in the @tls@ library, throws those exceptions.

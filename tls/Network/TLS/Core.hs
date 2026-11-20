@@ -72,9 +72,9 @@ import Network.TLS.Types (
  )
 import Network.TLS.Util (catchException, mapChunks_)
 
--- | Handshake for a new TLS connection
+-- | Handshake for a new TLS connection.
 -- This is to be called at the beginning of a connection, and during renegotiation.
--- Don't use this function as the acquire resource of 'bracket'.
+-- Don't use this function as the acquire resource of 'Control.Exception.bracket'.
 handshake :: MonadIO m => Context -> m ()
 handshake ctx = do
     handshake_ ctx
@@ -131,19 +131,18 @@ getRTT ctx = do
     let rtt' = max (fromIntegral rtt) 10
     return (rtt' * rttFactor * 1000) -- ms to us
 
--- | Notify the context that this side wants to close connection.
--- This is important that it is called before closing the handle, otherwise
--- the session might not be resumable (for version < TLS1.2).
--- This doesn't actually close the handle.
+-- | Notify the peer that this side wants to close the connection, by
+-- sending close_notify.  It should be called before closing the backend.
+-- This doesn't actually close the backend.
 --
 -- Proper usage is as follows:
 --
 -- > ctx <- contextNew <backend> <params>
 -- > handshake ctx
 -- > ...
--- > bye
+-- > bye ctx
 --
--- The following code ensures nothing but is no harm.
+-- The following code guarantees nothing more, but does no harm.
 --
 -- > bracket (contextNew <backend> <params>) bye $ \ctx -> do
 -- >   handshake ctx
@@ -221,8 +220,8 @@ bye_ ctx = liftIO $ do
                 then sendPacket13 ctx $ Alert13 [(AlertLevel_Warning, CloseNotify)]
                 else sendPacket12 ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
 
--- | If the ALPN extensions have been used, this will
--- return get the protocol agreed upon.
+-- | If the ALPN extension has been used, this will
+-- return the protocol agreed upon.
 getNegotiatedProtocol :: MonadIO m => Context -> m (Maybe ByteString)
 getNegotiatedProtocol ctx = liftIO $ usingState_ ctx S.getNegotiatedProtocol
 
@@ -244,8 +243,8 @@ sendCFifNecessary ctx = do
                 sendAction ctx
                 writeIORef (ctxPendingSendAction ctx) Nothing
 
--- | sendData sends a bunch of data.
--- It will automatically chunk data to acceptable packet size
+-- | Sending a bunch of data.
+-- It will automatically chunk data to acceptable record sizes.
 sendData :: MonadIO m => Context -> L.ByteString -> m ()
 sendData _ "" = return ()
 sendData ctx dataToSend = liftIO $ do
@@ -666,6 +665,6 @@ closeNotifyReceived = liftIO . ctxCloseNotify
 
 {-# DEPRECATED recvData' "use recvData that returns strict bytestring" #-}
 
--- | same as recvData but returns a lazy bytestring.
+-- | Same as 'recvData' but returns a lazy bytestring.
 recvData' :: MonadIO m => Context -> m L.ByteString
 recvData' ctx = L.fromChunks . (: []) <$> recvData ctx

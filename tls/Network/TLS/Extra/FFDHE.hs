@@ -1,5 +1,5 @@
 -- |
--- Module      : Network.TLS.Extra
+-- Module      : Network.TLS.Extra.FFDHE
 -- License     : BSD-style
 -- Maintainer  : Kazu Yamamoto <kazu@iij.ad.jp>
 -- Stability   : experimental

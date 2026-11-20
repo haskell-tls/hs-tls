@@ -152,7 +152,7 @@ data QUICCallbacks = QUICCallbacks
     , quicDone :: Context -> IO ()
     -- ^ Called when 'handshake' is done. 'tlsQUICServer' is
     -- finished after calling this hook. 'tlsQUICClient' calls
-    -- 'recvData' after calling this hook to wait for new session
+    -- 'Network.TLS.recvData' after calling this hook to wait for new session
     -- tickets.
     }
 
