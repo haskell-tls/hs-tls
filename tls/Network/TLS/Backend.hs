@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- | A Backend represents a unified way to do IO on different
@@ -78,6 +79,20 @@ instance HasBackend Network.Socket where
                 if B.null r
                     then return []
                     else (r :) <$> loop (left - B.length r)
+#if MIN_VERSION_network(3,2,12)
+    getBackendRecvWith sock = Just $ RecvWith recvAllWith
+      where
+        recvAllWith n giveUp = fmap B.concat . sequence <$> loop n
+          where
+            loop 0 = return []
+            loop left = do
+                r <- Network.recvWith sock left giveUp
+                case r of
+                    Left g -> return [Left g]
+                    Right bs
+                        | B.null bs -> return []
+                        | otherwise -> (Right bs :) <$> loop (left - B.length bs)
+#endif
 
 instance HasBackend Handle where
     initializeBackend handle = hSetBuffering handle NoBuffering

@@ -39,7 +39,6 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
 import Data.IORef
-import System.Timeout
 
 import Network.TLS.Backend (Backend (..), RecvWith (..))
 import Network.TLS.Context
@@ -192,11 +191,11 @@ bye ctx = liftIO $ do
     -- through a record, after which nothing can be read from it again -- which
     -- is acceptable only because we are closing the connection here anyway.
     --
-    -- A backend which can give up on a receive does so after 'rtt';
-    -- otherwise the receive is interrupted with 'timeout'.
+    -- A backend which can give up on a receive does so after 'rtt'; with
+    -- one which cannot, the messages are not waited for at all.
     tryRecvHS13 :: Int -> IO Bool -> IO ()
     tryRecvHS13 rtt chk = case ctxBackendRecvWith ctx of
-        Nothing -> void $ tryWithReadLock ctx $ timeout rtt $ recvHS13 ctx chk
+        Nothing -> return ()
         Just (RecvWith recvWith) -> do
             late <- registerDelay rtt
             let giveUp = readTVar late >>= check
