@@ -250,8 +250,9 @@ data ServerParams = ServerParams
     --
     -- Early data can be replayed.  The server is to accept 0-RTT for the
     -- same handshake at most once (RFC 9846 Section 8), which is left to
-    -- 'sessionResumeOnlyOnce' of the session manager: the in-memory one of
-    -- tls-session-manager does so, its session ticket one does not.
+    -- 'sessionResumeOnlyOnce' of the session manager.  Both managers of
+    -- tls-session-manager do so, the session ticket one since 0.1.3 and
+    -- only within a process.
     --
     -- Default: 0
     , serverTicketLifetime :: Int
