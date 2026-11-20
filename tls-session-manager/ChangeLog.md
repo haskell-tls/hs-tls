@@ -1,6 +1,6 @@
 # ChangeLog for tls-session-manager
 
-## Unreleased
+## 0.1.3
 
 * Refuse a replayed 0-RTT ticket in the session ticket manager.
   [#634](https://github.com/haskell-tls/hs-tls/pull/634)
