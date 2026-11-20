@@ -237,6 +237,7 @@ test-suite spec
         crypton-x509-validation,
         ech-config,
         hspec,
+        network,
         ram,
         serialise,
         stm,
