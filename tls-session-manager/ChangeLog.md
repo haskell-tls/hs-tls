@@ -1,5 +1,10 @@
 # ChangeLog for tls-session-manager
 
+## 0.1.4
+
+* Never wrap around the RTT of a ticket, and cap it at 10 seconds.
+  [#661](https://github.com/haskell-tls/hs-tls/pull/661)
+
 ## 0.1.3
 
 * Refuse a replayed 0-RTT ticket in the session ticket manager.
