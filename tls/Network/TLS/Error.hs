@@ -13,7 +13,9 @@ import Network.TLS.Imports
 --
 -- Prior to version 1.8.0, this type had an @Exception@ instance.
 -- In version 1.8.0, this instance was removed, and functions in
--- this library now only throw 'TLSException'.
+-- this library now throw 'TLSException' for TLS errors.  Exceptions
+-- of the backend, such as an 'E.IOException' for a reset connection,
+-- pass through 'Network.TLS.recvData' and 'Network.TLS.sendData' as they are.
 data TLSError
     = -- | mainly for instance of Error
       Error_Misc String

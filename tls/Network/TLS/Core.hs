@@ -313,8 +313,9 @@ updateKeyBeforeLimit ctx = do
             | otherwise = 2 ^ (24 :: Int)
 
 -- | Get data out of Data packet, and automatically renegotiate if a Handshake
--- ClientHello is received.  An empty result means EOF.  Use
--- 'closeNotifyReceived' to tell an orderly closure from a truncation.
+-- ClientHello is received.  An empty result means EOF, after which it
+-- throws 'PostHandshake' 'Error_EOF'.  Use 'closeNotifyReceived' to tell
+-- an orderly closure from a truncation.
 recvData :: MonadIO m => Context -> m ByteString
 recvData ctx = liftIO $ do
     tls13 <- tls13orLater ctx
