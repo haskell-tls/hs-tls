@@ -65,6 +65,17 @@ spec = do
             threadDelay 5100000
             sessionResumeOnlyOnce mgr ticket >>= (`shouldSatisfy` isJust)
             kill
+        it "remembers a ticket with a wrapped RTT as long as with a capped one" $ do
+            (mgr, kill) <- newSessionTicketManager' SessionTicket.defaultConfig
+            let wrapped t = t{estimatedRTT = Just (maxBound - 4)}
+                sd = sessionData (Just 3600)
+            Just ticket <-
+                sessionEstablish mgr "" sd{sessionTicketInfo = wrapped <$> sessionTicketInfo sd}
+            sessionResumeOnlyOnce mgr ticket >>= (`shouldSatisfy` isJust)
+            -- beyond the 5 seconds for an RTT within 2 seconds
+            threadDelay 5100000
+            sessionResumeOnlyOnce mgr ticket >>= (`shouldSatisfy` isNothing)
+            kill
     -- While the reaper prunes, the sessions are taken away and an empty
     -- workload is left in their place; the pruned ones are merged back.
     describe "pruning" $ do

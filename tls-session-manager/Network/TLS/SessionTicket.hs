@@ -110,7 +110,9 @@ resumeOnlyOnce ctmgr used ticket = do
         Nothing -> return Nothing
         Just sd -> do
             now <- milliseconds
-            let rtt = maybe 0 fromIntegral $ sessionTicketInfo sd >>= estimatedRTT
+            -- Capped at 10 seconds as in the server, before it can wrap
+            -- around as an Int64.
+            let rtt = maybe 0 (fromIntegral . min 10000) $ sessionTicketInfo sd >>= estimatedRTT
                 -- 'max 2000 rtt' as in the server, and a second of margin
                 forget = now + 2 * max 2000 rtt + 1000
             first <- atomicModifyIORef' used $ \q ->
