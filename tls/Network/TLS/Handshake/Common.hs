@@ -96,6 +96,9 @@ handleException ctx f = catchException f $ \exception -> do
                     sendPacket13 ctx $
                         Alert13 [errorToAlert tlserror]
             else sendPacket12 ctx $ Alert [errorToAlert tlserror]
+    -- The connection is over: 'bye' neither waits nor sends close_notify.
+    -- Both callers hold the read lock.
+    setEOF ctx
     handshakeFailed tlserror
   where
     ignoreIOErr :: E.IOException -> IO ()
