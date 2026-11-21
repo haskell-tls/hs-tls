@@ -146,7 +146,10 @@ sendNewSessionTicket
     -> IO ()
 sendNewSessionTicket sparams ctx usedCipher exts applicationSecret sfSentTime = when sendNST $ do
     cfRecvTime <- getCurrentTimeFromBase
-    let rtt = cfRecvTime - sfSentTime
+    -- The wall clock can go back, which must not wrap the RTT around.
+    let rtt
+            | cfRecvTime > sfSentTime = min maxRTT $ cfRecvTime - sfSentTime
+            | otherwise = 0
     nonce <- TicketNonce <$> getStateRNG ctx 32
     resumptionSecret <- calculateResumptionSecret ctx choice applicationSecret
     let life = adjustLifetime $ serverTicketLifetime sparams
