@@ -1,5 +1,10 @@
 # Change log for "tls"
 
+## Version 2.5.4
+
+* Use up a session for 0-RTT only after checking the ClientHello.
+  [#655](https://github.com/haskell-tls/hs-tls/pull/655)
+
 ## Version 2.5.3
 
 * Count milliseconds from the base without overflowing a 32-bit time_t.
