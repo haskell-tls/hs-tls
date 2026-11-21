@@ -21,6 +21,7 @@ module Network.TLS.Handshake.Common13 (
     isAgeValid,
     getAge,
     checkFreshness,
+    maxRTT,
     getCurrentTimeFromBase,
     getSessionData13,
     isHashSignatureValid13,
@@ -341,10 +342,16 @@ checkFreshness tinfo@TLS13TicketInfo{..} obfAge = do
     return $ isAlive && isFresh
   where
     serverSendTime = txrxTime
-    rtt = fromJust estimatedRTT
+    -- Capped also for a ticket issued before the RTT was capped.
+    rtt = min maxRTT $ fromJust estimatedRTT
     age = obfuscatedAgeToAge obfAge tinfo
     expectedArrivalTime = serverSendTime + rtt + fromIntegral age
     isAlive = isAgeValid age tinfo
+
+-- | The RTT kept in a ticket is capped: it widens the tolerance of the
+-- freshness check, and the client can delay its Finished to inflate it.
+maxRTT :: Millisecond
+maxRTT = 10000
 
 getCurrentTimeFromBase :: IO Millisecond
 getCurrentTimeFromBase = millisecondsFromBase <$> getUnixTime
