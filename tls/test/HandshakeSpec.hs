@@ -304,6 +304,10 @@ spec = do
             post_handshake_auth_async_wait True
         it "fails an asynchronous post-handshake auth with a rejected certificate" $
             post_handshake_auth_async_wait False
+        it "fails the waiter when the transport breaks" $
+            post_handshake_auth_async_reset
+        it "closes the connection when a synchronous post-handshake auth fails" $
+            post_handshake_auth_sync_fail
         it "commits the client certificate of a post-handshake auth at Finished" $
             post_handshake_auth_async_finished
         it
@@ -3384,6 +3388,24 @@ post_handshake_auth (CSP13 (clientParam, serverParam)) = do
         _ <- requestCertificate ctx -- two simultaneously
         sendData ctx "response 2"
 
+-- | After a rejected certificate, the alert has closed the connection.
+post_handshake_auth_sync_fail :: IO ()
+post_handshake_auth_sync_fail = do
+    params <- generate arbitraryPairParams13
+    cred <- generate arbitraryPHACredential
+    withPairContext (phaParams False cred params) $ \(cCtx, sCtx) ->
+        concurrently_ (hsServer sCtx) (hsClient cCtx)
+  where
+    hsClient ctx = do
+        handshake ctx
+        sendData ctx "request 1"
+        void (recvData ctx) `shouldThrow` anyTLSException
+    hsServer ctx = do
+        handshake ctx
+        recvDataAssert ctx "request 1"
+        void (requestCertificate ctx) `shouldThrow` anyTLSException
+        sendData ctx "response 1" `shouldThrow` anyTLSException
+
 type PairParams = (ClientParams, ServerParams)
 
 -- | Client and server parameters for post-handshake authentication with
@@ -3479,6 +3501,33 @@ post_handshake_auth_async_wait accept = do
                 void (recvData ctx) `shouldThrow` anyTLSException
                 takeMVar result >>= (`shouldSatisfy` isFailed)
     isFailed (PHAFailed _) = True
+    isFailed _ = False
+
+-- | The transport breaks while a response is pending: the waiter fails
+-- instead of blocking forever.
+post_handshake_auth_async_reset :: IO ()
+post_handshake_auth_async_reset = do
+    params <- generate arbitraryPairParams13
+    cred <- generate arbitraryPHACredential
+    let (cParams, sParams) = phaParams True cred params
+    pipe <- newPipe
+    _ <- runPipe pipe
+    broken <- newIORef False
+    let noop = return ()
+        sRecv n = do
+            b <- readIORef broken
+            if b then ioError (userError "reset") else readPipeS pipe n
+        cBackend = Backend noop noop (writePipeC pipe) (readPipeC pipe)
+        sBackend = Backend noop noop (writePipeS pipe) sRecv
+    cCtx <- contextNew cBackend cParams
+    sCtx <- contextNew sBackend sParams
+    concurrently_ (handshake cCtx) (handshake sCtx)
+    check <- requestCertificateAsync sCtx
+    writeIORef broken True
+    void (recvData sCtx) `shouldThrow` anyIOException
+    timeout 1000000 (check True) >>= (`shouldSatisfy` isFailed)
+  where
+    isFailed (Just (PHAFailed _)) = True
     isFailed _ = False
 
 -- | The client's Finished is held back after its CertificateVerify has been

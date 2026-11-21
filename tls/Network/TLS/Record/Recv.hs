@@ -4,6 +4,7 @@ module Network.TLS.Record.Recv (
     recvRecord13,
 ) where
 
+import qualified Control.Exception as E
 import qualified Data.ByteString as B
 
 import Network.TLS.Context.Internal
@@ -131,7 +132,9 @@ checkType header@(Header ty _ _)
 
 readExactBytes :: Context -> Int -> IO (Either TLSError ByteString)
 readExactBytes ctx sz = do
-    hdrbs <- contextRecv ctx sz
+    -- A broken transport ends the connection, which also wakes up those
+    -- waiting for a post-handshake authentication.
+    hdrbs <- contextRecv ctx sz `E.catch` broken
     if B.length hdrbs == sz
         then return $ Right hdrbs
         else do
@@ -146,3 +149,6 @@ readExactBytes ctx sz = do
                                 ++ " bytes, got: "
                                 ++ show (B.length hdrbs)
                             )
+  where
+    broken :: E.IOException -> IO a
+    broken e = setEOF ctx >> E.throwIO e

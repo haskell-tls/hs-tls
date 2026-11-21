@@ -410,21 +410,27 @@ terminate ctx err = do
     let (level, desc) = errorToAlert err
         reason = errorToAlertMessage err
         send = sendPacket13 ctx . Alert13
-    catchException (send [(level, desc)]) (\_ -> return ())
+    withWriteLock ctx $ catchException (send [(level, desc)]) (\_ -> return ())
     setEOF ctx
     E.throwIO $ Terminated False reason err
 
 handleEx :: Context -> IO Bool -> IO Bool
 handleEx ctx f = catchException f $ \exception -> do
+    -- The connection is closed already, e.g. by 'terminate' with its alert.
+    eof <- ctxEOF ctx
+    when eof $ E.throwIO exception
     -- If the error was an Uncontextualized TLSException, we replace the
-    -- context with HandshakeFailed. If it's anything else, we convert
-    -- it to a string and wrap it with Error_Misc and HandshakeFailed.
+    -- context with PostHandshake. If it's anything else, we convert
+    -- it to a string and wrap it with Error_Misc and PostHandshake.
     let tlserror = case E.fromException exception of
             Just e | Uncontextualized e' <- e -> e'
             _ -> Error_Misc (show exception)
-    sendPacket13 ctx $ Alert13 [errorToAlert tlserror]
-    void $ E.throwIO $ PostHandshake tlserror
-    return False
+    withWriteLock ctx $
+        catchException
+            (sendPacket13 ctx $ Alert13 [errorToAlert tlserror])
+            (\_ -> return ())
+    setEOF ctx
+    E.throwIO $ PostHandshake tlserror
 
 ----------------------------------------------------------------
 
