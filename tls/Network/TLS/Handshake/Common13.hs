@@ -324,7 +324,11 @@ getAge :: TLS13TicketInfo -> IO Second
 getAge TLS13TicketInfo{..} = do
     let clientReceiveTime = txrxTime
     clientSendTime <- getCurrentTimeFromBase
-    return $ fromIntegral (clientSendTime - clientReceiveTime) -- milliseconds
+    -- The wall clock can go back, which must not wrap the age around.
+    return $
+        if clientSendTime > clientReceiveTime
+            then fromIntegral (clientSendTime - clientReceiveTime) -- milliseconds
+            else 0
 
 checkFreshness :: TLS13TicketInfo -> Second -> IO Bool
 checkFreshness tinfo@TLS13TicketInfo{..} obfAge = do
