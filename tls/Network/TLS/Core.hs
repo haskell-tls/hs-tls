@@ -39,6 +39,7 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString.Lazy as L
 import Data.IORef
+import GHC.IO.Exception (IOErrorType (..), IOException (..))
 
 import Network.TLS.Backend (Backend (..), RecvWith (..))
 import Network.TLS.Context
@@ -133,7 +134,9 @@ getRTT ctx = do
 
 -- | Notify the peer that this side wants to close the connection, by
 -- sending close_notify.  It should be called before closing the backend.
--- This doesn't actually close the backend.
+-- This doesn't actually close the backend.  Nothing is sent after a failed
+-- handshake or a received alert, and a peer which has gone already is not
+-- an error.
 --
 -- Proper usage is as follows:
 --
@@ -200,7 +203,13 @@ bye ctx = liftIO $ do
             let giveUp = readTVar late >>= check
                 recv n = recvWith n giveUp >>= either (\() -> E.throwIO GaveUpRecv) return
                 ctx' = ctx{ctxBackend = (ctxBackend ctx){backendRecv = recv}}
-            void $ tryWithReadLock ctx $ E.try @GaveUpRecv $ recvHS13 ctx' chk
+            void $
+                tryWithReadLock ctx $
+                    recvHS13 ctx' chk `catchException` \e ->
+                        -- If the receive failed rather than gave up, the
+                        -- connection is gone and close_notify is not sent.
+                        when (isNothing (E.fromException @GaveUpRecv e)) $
+                            setEOF ctx
 
 -- | Thrown by a receive in 'bye' which has given up, and caught there.
 data GaveUpRecv = GaveUpRecv deriving (Show)
@@ -215,10 +224,17 @@ bye_ ctx = liftIO $ do
     eof <- ctxEOF ctx
     tls13 <- tls13orLater ctx
     unless eof $
-        withWriteLock ctx $
-            if tls13
-                then sendPacket13 ctx $ Alert13 [(AlertLevel_Warning, CloseNotify)]
-                else sendPacket12 ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
+        E.handleJust vanished return $
+            withWriteLock ctx $
+                if tls13
+                    then sendPacket13 ctx $ Alert13 [(AlertLevel_Warning, CloseNotify)]
+                    else sendPacket12 ctx $ Alert [(AlertLevel_Warning, CloseNotify)]
+  where
+    -- The peer may have closed the connection without close_notify:
+    -- EPIPE or ECONNRESET is then just the end of it.
+    vanished e
+        | ioe_type e == ResourceVanished = Just ()
+        | otherwise = Nothing
 
 -- | If the ALPN extension has been used, this will
 -- return the protocol agreed upon.

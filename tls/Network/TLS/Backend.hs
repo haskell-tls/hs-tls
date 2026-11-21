@@ -88,16 +88,20 @@ instance HasBackend Network.Socket where
 #if MIN_VERSION_network(3,2,12)
     getBackendRecvWith sock = Just $ RecvWith recvAllWith
       where
-        recvAllWith n giveUp = fmap B.concat . sequence <$> loop n
+        recvAllWith n giveUp = loop n []
           where
-            loop 0 = return []
-            loop left = do
+            done = return . Right . B.concat . reverse
+            loop 0 acc = done acc
+            loop left acc = do
                 r <- Network.recvWith sock left giveUp
                 case r of
-                    Left g -> return [Left g]
+                    -- Bytes already received are answered, not 'Left'.
+                    Left g
+                        | null acc -> return $ Left g
+                        | otherwise -> done acc
                     Right bs
-                        | B.null bs -> return []
-                        | otherwise -> (Right bs :) <$> loop (left - B.length bs)
+                        | B.null bs -> done acc
+                        | otherwise -> loop (left - B.length bs) (bs : acc)
 #endif
 
 instance HasBackend Handle where

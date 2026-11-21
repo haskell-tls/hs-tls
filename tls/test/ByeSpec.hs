@@ -1,13 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE TypeApplications #-}
 
 module ByeSpec where
 
 import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Concurrent.STM
+import qualified Control.Exception as E
 import Control.Monad (when)
 import Data.ByteString (ByteString)
+import Data.Either (isLeft)
 import Data.IORef
 import qualified Network.Socket as N
 import qualified Network.Socket.ByteString as NB
@@ -48,6 +51,10 @@ spec = describe "bye" $ do
                 recvWith 4 (readTVar late >>= check) `shouldReturn` Left ()
                 NB.sendAll ss "abcd"
                 recvWith 4 (retry :: STM ()) `shouldReturn` Right "abcd"
+                -- The bytes received before giving up are not lost.
+                NB.sendAll ss "ab"
+                late' <- registerDelay 50000
+                recvWith 4 (readTVar late' >>= check) `shouldReturn` Right "ab"
         N.close cs
         N.close ss
 #else
@@ -73,6 +80,41 @@ spec = describe "bye" $ do
         writeIORef armed True
         timeout 5000000 (bye cCtx) `shouldReturn` Just ()
         readIORef readAfter `shouldReturn` False
+
+    it "neither waits nor sends after a failed handshake" $ do
+        (cParams, sParams) <- generate arbitraryPairParams13
+        pipe <- newPipe
+        _ <- runPipe pipe
+        used <- newIORef False
+        let noop = return ()
+            cBackend = Backend noop noop (writePipeC pipe) (readPipeC pipe)
+            sBackend = Backend noop noop (writePipeS pipe) (readPipeS pipe)
+            reject _ = return $ CertificateUsageReject $ CertificateRejectOther "test"
+            sParams' =
+                sParams
+                    { serverWantClientCert = True
+                    , serverHooks = (serverHooks sParams){onClientCertificate = reject}
+                    }
+        cCtx <- contextNew cBackend cParams
+        sCtx <-
+            contextNew (GivingUp sBackend $ recvWithVia (readPipeS pipe) used) sParams'
+        (_, r) <-
+            concurrently
+                (E.try @E.SomeException $ handshake cCtx)
+                (E.try @TLSException $ handshake sCtx)
+        r `shouldSatisfy` isLeft
+        timeout 5000000 (bye sCtx) `shouldReturn` Just ()
+        readIORef used `shouldReturn` False
+
+    it "does not throw when the peer has gone" $ do
+        (cParams, sParams) <- generate arbitraryPairParams13
+        (cs, ss) <- N.socketPair N.AF_UNIX N.Stream N.defaultProtocol
+        cCtx <- contextNew cs cParams
+        sCtx <- contextNew ss sParams
+        concurrently_ (handshake cCtx) (handshake sCtx)
+        N.close ss
+        timeout 5000000 (bye cCtx) `shouldReturn` Just ()
+        N.close cs
 
 -- | A backend which can give up on a receive.
 data GivingUp = GivingUp Backend RecvWith
