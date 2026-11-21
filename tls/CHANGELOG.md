@@ -4,6 +4,8 @@
 
 * Make bye robust after a failed handshake or a vanished peer.
   [#657](https://github.com/haskell-tls/hs-tls/pull/657)
+* Close the connection when post-handshake auth fails.
+  [#659](https://github.com/haskell-tls/hs-tls/pull/659)
 
 ## Version 2.6.1
 
