@@ -207,6 +207,8 @@ spec = do
             handshake13_0rtt_only_once True
         it "refuses 0RTT, not the resumption, when the session is used up" $
             handshake13_0rtt_only_once False
+        it "caps the RTT of a ticket in the freshness check" $
+            handshake13_0rtt_wrapped_rtt
         it "authenticates a server rejecting the PSK of 0RTT" $
             handshake13_0rtt_psk_rejected False
         it "authenticates a server rejecting the PSK of 0RTT, asking a cert" $
@@ -2699,7 +2701,19 @@ handshake13_0rtt_fallback (CSP13 (cli, srv)) = do
 -- with a verified binder.  A stale one falls back to a full handshake
 -- without it; a session it has used up already is resumed without 0RTT.
 handshake13_0rtt_only_once :: Bool -> IO ()
-handshake13_0rtt_only_once stale = do
+handshake13_0rtt_only_once stale = handshake13_0rtt_aged $ if stale then Just id else Nothing
+
+-- | An RTT wrapped around by a wall clock going back does not make a stale
+-- ticket fresh.
+handshake13_0rtt_wrapped_rtt :: IO ()
+handshake13_0rtt_wrapped_rtt =
+    handshake13_0rtt_aged $ Just $ \t -> t{estimatedRTT = Just (maxBound - 4)}
+
+-- | With 'Just', the ticket is made an hour old and modified further.
+handshake13_0rtt_aged :: Maybe (TLS13TicketInfo -> TLS13TicketInfo) -> IO ()
+handshake13_0rtt_aged mmodify = do
+    let stale = isJust mmodify
+        modify = fromMaybe id mmodify
     (cli, srv) <- generate arbitraryPairParams13
     let supported =
             defaultSupported
@@ -2723,7 +2737,7 @@ handshake13_0rtt_only_once stale = do
         age sdata =
             sdata
                 { sessionTicketInfo =
-                    (\t -> t{txrxTime = txrxTime t - 3600000}) <$> sessionTicketInfo sdata
+                    (\t -> modify t{txrxTime = txrxTime t - 3600000}) <$> sessionTicketInfo sdata
                 }
         resume' f sid
             | stale = fmap age <$> f sid
