@@ -257,6 +257,8 @@ spec = do
             handshake13_0rtt_only_once False
         it "caps the RTT of a ticket in the freshness check" $
             handshake13_0rtt_wrapped_rtt
+        it "sends the age 0 of a ticket received in the client's future" $
+            handshake13_0rtt_client_clock_back
         it "authenticates a server rejecting the PSK of 0RTT" $
             handshake13_0rtt_psk_rejected False
         it "authenticates a server rejecting the PSK of 0RTT, asking a cert" $
@@ -3009,6 +3011,29 @@ handshake13_0rtt_only_once stale = handshake13_0rtt_aged $ if stale then Just id
 handshake13_0rtt_wrapped_rtt :: IO ()
 handshake13_0rtt_wrapped_rtt =
     handshake13_0rtt_aged $ Just $ \t -> t{estimatedRTT = Just (maxBound - 4)}
+
+-- | The client's clock went back by an hour after receiving the ticket.
+handshake13_0rtt_client_clock_back :: IO ()
+handshake13_0rtt_client_clock_back = do
+    (cli, srv) <- generate arbitraryPairParams13
+    let supported =
+            defaultSupported
+                { supportedCiphers = [cipher13_AES_128_GCM_SHA256]
+                , supportedGroups = [X25519]
+                , supportedGroupsTLS13 = [[X25519]]
+                }
+        params0 =
+            ( cli{clientSupported = supported}
+            , srv{serverSupported = supported, serverEarlyDataSize = 2048}
+            )
+    sessionRefs <- twoSessionRefs
+    let params = setPairParamsSessionManagers (twoSessionManagers sessionRefs) params0
+    runTLSSimple13 params FullHandshake
+    Just (sid, sdata) <- readClientSessionRef sessionRefs
+    let future t = t{txrxTime = txrxTime t + 3600000}
+        sdata' = sdata{sessionTicketInfo = future <$> sessionTicketInfo sdata}
+        (pc, ps) = setPairParamsSessionResuming (sid, sdata') params
+    runTLS0RTT (pc{clientUseEarlyData = True}, ps) RTT0 "early data"
 
 -- | With 'Just', the ticket is made an hour old and modified further.
 handshake13_0rtt_aged :: Maybe (TLS13TicketInfo -> TLS13TicketInfo) -> IO ()
