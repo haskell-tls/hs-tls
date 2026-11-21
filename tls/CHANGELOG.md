@@ -1,5 +1,10 @@
 # Change log for "tls"
 
+## Version 2.6.2
+
+* Make bye robust after a failed handshake or a vanished peer.
+  [#657](https://github.com/haskell-tls/hs-tls/pull/657)
+
 ## Version 2.6.1
 
 * Use up a session for 0-RTT only after checking the ClientHello.
