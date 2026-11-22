@@ -10,8 +10,10 @@ import Control.Concurrent.STM
 import qualified Control.Exception as E
 import Control.Monad (when)
 import Data.ByteString (ByteString)
+import qualified Data.ByteString as B
 import Data.Either (isLeft)
 import Data.IORef
+import GHC.Clock (getMonotonicTime)
 import qualified Network.Socket as N
 import qualified Network.Socket.ByteString as NB
 import Network.TLS
@@ -115,6 +117,109 @@ spec = describe "bye" $ do
         N.close ss
         timeout 5000000 (bye cCtx) `shouldReturn` Just ()
         N.close cs
+
+    it "sends close_notify when the last handshake message is cut short" $ do
+        (cParams, sParams) <- generate arbitraryPairParams13
+        pipe <- newPipe
+        _ <- runPipe pipe
+        let noop = return ()
+            cBackend = Backend noop noop (writePipeC pipe) (readPipeC pipe)
+            sBackend = Backend noop noop (writePipeS pipe) (readPipeS pipe)
+            -- Half of a record body arrives before giving up.
+            cut = RecvWith $ \n giveUp -> do
+                bs <- readPipeC pipe n
+                if n == 5
+                    then return $ Right bs
+                    else atomically giveUp >> return (Right $ B.take (n `div` 2) bs)
+        cCtx <- contextNew (GivingUp cBackend cut) cParams
+        sCtx <- contextNew sBackend sParams
+        concurrently_ (handshake cCtx) (handshake sCtx)
+        timeout 5000000 (concurrently (bye cCtx) (recvData sCtx))
+            `shouldReturn` Just ((), mempty)
+        closeNotifyReceived sCtx `shouldReturn` True
+
+    it "waits for the last handshake messages a few seconds at most" $ do
+        (cParams, sParams) <- generate arbitraryPairParams13
+        pipe <- newPipe
+        _ <- runPipe pipe
+        sent <- newIORef False
+        let noop = return ()
+            -- Every answer is late, which makes the RTT two seconds.
+            sendC bs = writeIORef sent True >> writePipeC pipe bs
+            recvC n = do
+                s <- atomicModifyIORef' sent (\x -> (False, x))
+                when s $ threadDelay 2000000
+                readPipeC pipe n
+            cBackend = Backend noop noop sendC recvC
+            sBackend = Backend noop noop (writePipeS pipe) (readPipeS pipe)
+            never = RecvWith $ \_ giveUp -> Left <$> atomically giveUp
+        cCtx <- contextNew (GivingUp cBackend never) cParams
+        sCtx <- contextNew sBackend sParams
+        concurrently_ (handshake cCtx) (handshake sCtx)
+        t0 <- getMonotonicTime
+        bye cCtx
+        t1 <- getMonotonicTime
+        (t1 - t0) `shouldSatisfy` (< 4)
+
+    it "sends nothing after a failed send" $ do
+        (cParams, sParams) <- generate arbitraryPairParams13
+        pipe <- newPipe
+        _ <- runPipe pipe
+        failing <- newIORef False
+        sent <- newIORef (0 :: Int)
+        let noop = return ()
+            sendS bs = do
+                f <- readIORef failing
+                when f $ E.throwIO E.ThreadKilled
+                modifyIORef' sent (+ 1)
+                writePipeS pipe bs
+            cBackend = Backend noop noop (writePipeC pipe) (readPipeC pipe)
+            sBackend = Backend noop noop sendS (readPipeS pipe)
+        cCtx <- contextNew cBackend cParams
+        sCtx <- contextNew sBackend sParams
+        concurrently_ (handshake cCtx) (handshake sCtx)
+        writeIORef failing True
+        E.try @E.AsyncException (sendData sCtx "abc") `shouldReturn` Left E.ThreadKilled
+        writeIORef failing False
+        n <- readIORef sent
+        timeout 5000000 (bye sCtx) `shouldReturn` Just ()
+        readIORef sent `shouldReturn` n
+
+    it "sends nothing after a handshake whose send failed" $ do
+        (cParams, sParams) <- generate arbitraryPairParams13
+        pipe <- newPipe
+        _ <- runPipe pipe
+        let noop = return ()
+            broken _ = E.throwIO $ E.ErrorCall "broken"
+            cBackend = Backend noop noop (writePipeC pipe) (readPipeC pipe)
+            sBackend = Backend noop noop broken (readPipeS pipe)
+        cCtx <- contextNew cBackend cParams
+        sCtx <- contextNew sBackend sParams
+        withAsync (handshake cCtx) $ \_ -> do
+            r <- E.try @TLSException $ handshake sCtx
+            r `shouldSatisfy` isLeft
+            timeout 5000000 (bye sCtx) `shouldReturn` Just ()
+
+    it "ends the connection when the answer to close_notify fails" $ do
+        (cParams, sParams) <- generate arbitraryPairParams13
+        pipe <- newPipe
+        _ <- runPipe pipe
+        failing <- newIORef False
+        let noop = return ()
+            sendS bs = do
+                f <- readIORef failing
+                when f $ E.throwIO E.ThreadKilled
+                writePipeS pipe bs
+            cBackend = Backend noop noop (writePipeC pipe) (readPipeC pipe)
+            sBackend = Backend noop noop sendS (readPipeS pipe)
+        cCtx <- contextNew cBackend cParams
+        sCtx <- contextNew sBackend sParams
+        concurrently_ (handshake cCtx) (handshake sCtx)
+        writeIORef failing True
+        withAsync (bye cCtx) $ \_ -> do
+            E.try @E.AsyncException (recvData sCtx) `shouldReturn` Left E.ThreadKilled
+            timeout 1000000 (E.try @TLSException (recvData sCtx))
+                `shouldReturn` Just (Left (PostHandshake Error_EOF))
 
 -- | A backend which can give up on a receive.
 data GivingUp = GivingUp Backend RecvWith

@@ -6,6 +6,7 @@ module Network.TLS.Record.Send (
 ) where
 
 import Control.Concurrent.MVar
+import qualified Control.Exception as E
 import Control.Monad.State.Strict
 import qualified Data.ByteString as B
 
@@ -57,5 +58,9 @@ prepareRecord13 = runTxRecordState
 
 sendBytes :: Context -> ByteString -> IO ()
 sendBytes ctx dataToSend = do
+    -- The record state has advanced already, so a failed send leaves the
+    -- peer unable to decrypt any later record.
+    broken <- ctxTxBroken ctx
+    when broken $ E.throwIO $ PostHandshake $ Error_Misc "a previous send failed"
     withLog ctx $ \logging -> loggingIOSent logging dataToSend
-    contextSend ctx dataToSend
+    contextSend ctx dataToSend `E.onException` setTxBroken ctx

@@ -45,6 +45,7 @@ import Network.TLS.Backend (Backend (..), RecvWith (..))
 import Network.TLS.Context
 import Network.TLS.Context.Internal (
     PHAResult (..),
+    ctxTxBroken,
     incrementTLS13KeyUpdateCount,
     resetTLS13KeyUpdateCount,
  )
@@ -69,6 +70,7 @@ import Network.TLS.Types (
     Bulk (..),
     Cipher (..),
     HostName,
+    Millisecond,
     Role (..),
  )
 import Network.TLS.Util (catchException, mapChunks_)
@@ -126,10 +128,15 @@ handshake ctx = do
 rttFactor :: Int
 rttFactor = 3
 
+-- | An upper bound of the RTT measured in the handshake, which sets how
+-- long to wait for the peer.
+maxWaitRTT :: Millisecond
+maxWaitRTT = 1000
+
 getRTT :: Context -> IO Int
 getRTT ctx = do
     rtt <- tls13stRTT <$> getTLS13State ctx
-    let rtt' = max (fromIntegral rtt) 10
+    let rtt' = max 10 $ fromIntegral $ min maxWaitRTT rtt
     return (rtt' * rttFactor * 1000) -- ms to us
 
 -- | Notify the peer that this side wants to close the connection, by
@@ -201,7 +208,13 @@ bye ctx = liftIO $ do
         Just (RecvWith recvWith) -> do
             late <- registerDelay rtt
             let giveUp = readTVar late >>= check
-                recv n = recvWith n giveUp >>= either (\() -> E.throwIO GaveUpRecv) return
+                -- Bytes received before giving up are not the end of the stream.
+                recv n = do
+                    r <- recvWith n giveUp
+                    expired <- readTVarIO late
+                    case r of
+                        Right bs | B.length bs == n || not expired -> return bs
+                        _ -> E.throwIO GaveUpRecv
                 ctx' = ctx{ctxBackend = (ctxBackend ctx){backendRecv = recv}}
             void $
                 tryWithReadLock ctx $
@@ -222,8 +235,9 @@ bye_ ctx = liftIO $ do
     -- to wrap ctxEOF with it, so that function bye can still be called
     -- concurrently to a blocked recvData.
     eof <- ctxEOF ctx
+    broken <- ctxTxBroken ctx
     tls13 <- tls13orLater ctx
-    unless eof $
+    unless (eof || broken) $
         E.handleJust vanished return $
             withWriteLock ctx $
                 if tls13
@@ -347,7 +361,7 @@ recvData12 ctx = do
     -- UserCanceled should be followed by a close_notify.
     -- fixme: is it safe to call recvData12?
     process (Alert [(AlertLevel_Warning, UserCanceled)]) = return B.empty
-    process (Alert [(AlertLevel_Warning, CloseNotify)]) = setCloseNotify ctx >> tryBye ctx >> setEOF ctx >> return B.empty
+    process (Alert [(AlertLevel_Warning, CloseNotify)]) = setCloseNotify ctx >> tryBye ctx >> return B.empty
     process (Alert [(AlertLevel_Fatal, desc)]) = do
         setEOF ctx
         E.throwIO
@@ -396,7 +410,7 @@ recvData13 ctx = do
     -- closure ones are error alerts, even at the warning level.
     -- UserCanceled MUST be followed by a CloseNotify.
     process (Alert13 [(_, UserCanceled)]) = return B.empty
-    process (Alert13 [(_, CloseNotify)]) = setCloseNotify ctx >> tryBye ctx >> setEOF ctx >> return B.empty
+    process (Alert13 [(_, CloseNotify)]) = setCloseNotify ctx >> tryBye ctx >> return B.empty
     process (Alert13 [(_, desc)]) = do
         setEOF ctx
         E.throwIO
@@ -535,7 +549,7 @@ recvHS13 ctx breakLoop = do
   where
     -- UserCanceled MUST be followed by a CloseNotify.
     process (Alert13 [(_, UserCanceled)]) = recvHS13 ctx breakLoop
-    process (Alert13 [(_, CloseNotify)]) = setCloseNotify ctx >> tryBye ctx >> setEOF ctx
+    process (Alert13 [(_, CloseNotify)]) = setCloseNotify ctx >> tryBye ctx
     process (Alert13 [(_, _desc)]) = setEOF ctx
     process (Handshake13 hs bs) = do
         loopHandshake13 $ zip hs bs
@@ -634,7 +648,7 @@ notAligned = "received message not aligned with record boundary"
 -- the other side could have close the connection already, so wrap
 -- this in a try and ignore all exceptions
 tryBye :: Context -> IO ()
-tryBye ctx = catchException (bye_ ctx) (\_ -> return ())
+tryBye ctx = catchException (bye_ ctx) (\_ -> return ()) `E.finally` setEOF ctx
 
 onError
     :: Monad m
