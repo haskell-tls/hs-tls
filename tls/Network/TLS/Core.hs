@@ -160,8 +160,10 @@ getRTT ctx = do
 bye :: MonadIO m => Context -> m ()
 bye ctx = liftIO $ do
     eof <- ctxEOF ctx
+    -- After a failed send, nothing is sent, so nothing is waited for either.
+    broken <- ctxTxBroken ctx
     tls13 <- tls13orLater ctx
-    when (tls13 && not eof) $ do
+    when (tls13 && not eof && not broken) $ do
         role <- usingState_ ctx getRole
         if role == ClientRole
             then do

@@ -185,6 +185,28 @@ spec = describe "bye" $ do
         timeout 5000000 (bye sCtx) `shouldReturn` Just ()
         readIORef sent `shouldReturn` n
 
+    it "does not wait after a failed send" $ do
+        (cParams, sParams) <- generate arbitraryPairParams13
+        pipe <- newPipe
+        _ <- runPipe pipe
+        failing <- newIORef False
+        used <- newIORef False
+        let noop = return ()
+            sendC bs = do
+                f <- readIORef failing
+                when f $ E.throwIO E.ThreadKilled
+                writePipeC pipe bs
+            cBackend = Backend noop noop sendC (readPipeC pipe)
+            sBackend = Backend noop noop (writePipeS pipe) (readPipeS pipe)
+        cCtx <-
+            contextNew (GivingUp cBackend $ recvWithVia (readPipeC pipe) used) cParams
+        sCtx <- contextNew sBackend sParams
+        concurrently_ (handshake cCtx) (handshake sCtx)
+        writeIORef failing True
+        E.try @E.AsyncException (sendData cCtx "abc") `shouldReturn` Left E.ThreadKilled
+        timeout 5000000 (bye cCtx) `shouldReturn` Just ()
+        readIORef used `shouldReturn` False
+
     it "sends nothing after a handshake whose send failed" $ do
         (cParams, sParams) <- generate arbitraryPairParams13
         pipe <- newPipe
