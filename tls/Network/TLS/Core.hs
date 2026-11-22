@@ -316,6 +316,9 @@ updateKeyBeforeLimit ctx = do
 -- ClientHello is received.  An empty result means EOF, after which it
 -- throws 'PostHandshake' 'Error_EOF'.  Use 'closeNotifyReceived' to tell
 -- an orderly closure from a truncation.
+--
+-- An exception from the backend's receive passes through.  See
+-- 'Network.TLS.backendRecv' for when it may be called again.
 recvData :: MonadIO m => Context -> m ByteString
 recvData ctx = liftIO $ do
     tls13 <- tls13orLater ctx

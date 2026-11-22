@@ -36,6 +36,13 @@ data Backend = Backend
     , backendRecv :: Int -> IO ByteString
     -- ^ Receive the specified number of bytes from the connection.
     -- Fewer bytes are returned only at the end of the stream.
+    --
+    -- An 'Control.Exception.IOException' means a broken connection: the
+    -- context is marked EOF and 'Network.TLS.bye' sends nothing.  Other
+    -- exceptions, including asynchronous ones, pass through as they are,
+    -- and 'Network.TLS.bye' can still send close_notify.  'Network.TLS.recvData'
+    -- may be called again only if the exception was thrown before any byte
+    -- of a record was taken; otherwise the stream is left inside the record.
     }
 
 -- | Types which a 'Network.TLS.Context' can be created on.

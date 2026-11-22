@@ -40,6 +40,12 @@ requestCertificate ctx =
 -- 'False' it returns 'PHAPending' meanwhile.  Only one request may be
 -- pending.  'Network.TLS.getClientCertificateChain' gives the authenticated chain.
 -- Server only.
+--
+-- The blocking wait ends with the response or with the end of the
+-- connection, e.g. a received alert or an 'Control.Exception.IOException'
+-- from the backend.  It waits as long as the client does not respond,
+-- and while 'Network.TLS.recvData' is stopped by another exception, so
+-- put a timeout on it if needed.
 requestCertificateAsync :: Context -> IO (Bool -> IO PHAResult)
 requestCertificateAsync ctx =
     checkValid ctx >> doRequestCertificateAsync_ (ctxRoleParams ctx) ctx
