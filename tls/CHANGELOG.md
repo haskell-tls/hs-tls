@@ -4,6 +4,8 @@
 
 * Never wrap around the RTT of a ticket, and cap it at 10 seconds.
   [#661](https://github.com/haskell-tls/hs-tls/pull/661)
+* Keep contexts closable after failures of the backend.
+  [#663](https://github.com/haskell-tls/hs-tls/pull/663)
 
 ## Version 2.6.2
 
