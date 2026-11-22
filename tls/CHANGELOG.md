@@ -6,6 +6,8 @@
   [#661](https://github.com/haskell-tls/hs-tls/pull/661)
 * Keep contexts closable after failures of the backend.
   [#663](https://github.com/haskell-tls/hs-tls/pull/663)
+* bye neither sends nor waits after a failed send.
+  [#664](https://github.com/haskell-tls/hs-tls/pull/664)
 
 ## Version 2.6.2
 
