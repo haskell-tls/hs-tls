@@ -174,6 +174,7 @@ contextNew backend params = liftIO $ do
     tlsstate <- newMVar st
     eof <- newIORef False
     closeNotify <- newIORef False
+    txBroken <- newIORef False
     established <- newIORef NotEstablished
     stats <- newIORef newMeasurement
     needEmptyPacket <- newIORef False
@@ -215,6 +216,7 @@ contextNew backend params = liftIO $ do
                 , ctxMeasurement = stats
                 , ctxEOF_ = eof
                 , ctxCloseNotify_ = closeNotify
+                , ctxTxBroken_ = txBroken
                 , ctxEstablished_ = established
                 , ctxNeedEmptyPacket = needEmptyPacket
                 , ctxHooks = hooks

@@ -24,12 +24,14 @@ module Network.TLS.Context.Internal (
     RoleParams (..),
     ctxEOF,
     ctxCloseNotify,
+    ctxTxBroken,
     ctxEstablished,
     withLog,
     ctxWithHooks,
     contextModifyHooks,
     setEOF,
     setCloseNotify,
+    setTxBroken,
     setEstablished,
     skipEarlyData,
     contextFlush,
@@ -139,6 +141,8 @@ data Context
     -- ^ has the handle EOFed or not.
     , ctxCloseNotify_ :: IORef Bool
     -- ^ has close_notify been received or not.
+    , ctxTxBroken_ :: IORef Bool
+    -- ^ has a send failed, leaving the TX record state ahead of the peer.
     , ctxEstablished_ :: IORef Established
     -- ^ has the handshake been done and been successful.
     , ctxTxRecordState :: MVar RecordState
@@ -436,6 +440,12 @@ ctxCloseNotify ctx = readIORef $ ctxCloseNotify_ ctx
 
 setCloseNotify :: Context -> IO ()
 setCloseNotify ctx = writeIORef (ctxCloseNotify_ ctx) True
+
+ctxTxBroken :: Context -> IO Bool
+ctxTxBroken ctx = readIORef $ ctxTxBroken_ ctx
+
+setTxBroken :: Context -> IO ()
+setTxBroken ctx = writeIORef (ctxTxBroken_ ctx) True
 
 ctxEstablished :: Context -> IO Established
 ctxEstablished ctx = readIORef $ ctxEstablished_ ctx
